@@ -124,7 +124,7 @@ def test_the_knob_defaults_to_shared_per_block_and_is_omitted_when_unset():
     assert TargetProfile.from_json(shared.to_json()) == shared and shared.effective_fp8_scale_construction() == "shared-per-block"
     for bad in ("per-coordinate", "shared", "per_coordinate", True):
         with pytest.raises(ValueError, match="fp8_scale_construction"):
-            TargetProfile(fp8_scale_construction=bad)
+            TargetProfile.default().with_overrides(fp8_scale_construction=bad)
 
 
 def test_the_vocabulary_binds_the_construction_it_is_given():

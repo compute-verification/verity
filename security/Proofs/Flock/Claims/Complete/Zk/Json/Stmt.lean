@@ -160,7 +160,7 @@ theorem helloZk_of {tags : Tags} {sigma : ByteArray} {mPts : ℕ}
 /-! ## The statement at a good masked case -/
 
 /-- A statement of the masked verifier decodes to inputs that `Raw.ins` read. -/
-theorem insOf_true {x : Claims.Msg} {s : Ins} (h : insOf true x = some s) :
+theorem insOf_true {x : Hash.Msg} {s : Ins} (h : insOf true x = some s) :
     ∃ w : Raw, w.zk = true ∧ w.ins = .ok s := by
   unfold insOf at h
   obtain ⟨w, -, h⟩ := Option.bind_eq_some_iff.1 h
@@ -172,7 +172,7 @@ theorem insOf_true {x : Claims.Msg} {s : Ins} (h : insOf true x = some s) :
     | error e => rw [hi] at h; cases h
     | ok s' => rw [hi] at h; cases h; rfl
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The masked case's one table**: its statement is `setupOne`'s, at the session's tags, coins and sample. -/
 theorem _root_.FlockComplete.CaseZk.one (c : CaseZk H rel) :

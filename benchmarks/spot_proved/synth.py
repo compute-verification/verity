@@ -71,7 +71,6 @@ def main() -> int:
     import a11
     import a11_kinds as K
     from verity.circuits.codec import canonical_json, encode_program
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity_vllm.pipeline import serving_rows as SRW
 
     out = Path(a.out)
@@ -97,7 +96,7 @@ def main() -> int:
                          "calls": [], "twin": {"agree": True, "calls": a.n, "compared": 0}}
         kinds[label] = {"gates": spec.gates, "outcome": "lowers"}
         print(f"synth {label}: {a.n} units of {spec.id[:90]}", flush=True)
-    (out / "units.json").write_bytes(canonical_json(encode_program(P.mixed_population_program([(u, 1) for u in units.values()]))))
+    (out / "units.json").write_bytes(canonical_json(encode_program(a11.listed([(u, 1) for u in units.values()])[0])))
     (out / "values.json").write_text(json.dumps({"staged": staged, "weights": {"from": "synthetic"}, "values": "synthetic",
                                                  "steps": "0", "layers": "", "per_kind": a.n}, indent=1, sort_keys=True))
     (out / "kinds.json").write_text(json.dumps({"kinds": kinds}, indent=1, sort_keys=True))

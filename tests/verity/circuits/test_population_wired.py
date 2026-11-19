@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from verity.circuits.codec import descriptor_id, program_digest
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.codec import decode_program, descriptor_id, encode_program, program_digest
+from verity.circuits.defs import CompositeDefinition, DefinitionTable, PrimitiveDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.population import BitsWord, WordBits, mixed_population_program, wired_population_program
+from verity.circuits.program import is_input
+from verity.circuits.refs import Concat, Grid, Strided
 from verity.circuits.types import Array, Value
 
 V16 = Value(16)
@@ -79,6 +83,66 @@ def test_a_program_with_no_width_changing_wire_keeps_its_digest():
     assert wired_population_program([(A, 2), (B, 2)], _record())[1]["params"]["templates"] == [IA, IB]
 
 
+def _parts(refs):
+    return [q for p in refs.parts for q in _parts(p)] if isinstance(refs, Concat) else [refs]
+
+
+def _root(prog):
+    nodes = [n for n in prog.root.body.nodes if not is_input(n.fn)]
+    return nodes, [len(_parts(a.refs)) for n in nodes for a in n.args]
+
+
+def _every_other(nb, order=None):
+    rec = _record(na=2 * nb, nb=nb, step=2)
+    return {**rec, **({"order": order} if order else {})}
+
+
+@pytest.mark.parametrize("nb", [2, 8, 64])
+def test_a_regular_run_of_edges_is_one_strided_part_whatever_the_units(nb):
+    prog = wired_population_program([(A, 2 * nb), (B, nb)], _every_other(nb))[0]
+    nodes, parts = _root(prog)
+    assert len(nodes) == 2 and parts == [1, 1, 1, 1]
+    assert isinstance(nodes[1].args[0].refs, Strided)
+    w, x, k = list(range(2 * nb)), list(range(1, 4 * nb + 1)), list(range(100, 100 + 4 * nb))
+    a = [evaluate(A, x[2 * u:2 * u + 2], k[2 * u:2 * u + 2]) for u in range(2 * nb)]
+    b = [evaluate(B, a[2 * u], w[2 * u:2 * u + 2]) for u in range(nb)]
+    assert evaluate(prog.fn, w, x, k) == tuple(v for out in a + b for v in out)
+
+
+def test_a_writer_row_read_twice_then_the_next_is_one_grid_of_two_levels_evaluated_as_its_references():
+    rec = _record(nb=4)
+    rec["wires"][0].update(radix=[2, 2], step=[1, 0])
+    prog = wired_population_program([(A, 2), (B, 4)], rec)[0]
+    nodes, parts = _root(prog)
+    y = nodes[1].args[0].refs
+    assert parts == [1, 1, 1, 1] and isinstance(y, Grid)
+    assert y.to_json() == {"grid": [2, [["n", 3, 0, 1, [[2, 0], [2, 2]]]]]}
+    w, x, k = list(range(8)), [1, 2, 3, 4], [100, 200, 300, 400]
+    a = [evaluate(A, x[2 * u:2 * u + 2], k[2 * u:2 * u + 2]) for u in range(2)]
+    b = [evaluate(B, a[u // 2], w[2 * u:2 * u + 2]) for u in range(4)]
+    assert evaluate(prog.fn, w, x, k) == tuple(v for out in a + b for v in out)
+    assert list(y) == [("n", 3, j) for j in (0, 1, 0, 1, 2, 3, 2, 3)]
+    reg = DefinitionTable()
+    reg.add(Add)
+    reg.add(Mul)
+    desc = json.loads(json.dumps(encode_program(prog)))
+    assert encode_program(decode_program(desc, reg)) == desc
+    text = json.dumps(desc).replace('[["n", 3, 0, 1, [[2, 0], [2, 2]]]]', '[["n", 3, 1, 1, [[2, 0], [2, 2]]]]')
+    with pytest.raises(ValueError, match="grid-overrun"):
+        decode_program(json.loads(text), reg)
+
+
+def test_a_reader_range_is_one_batch_whatever_writer_batches_it_reads():
+    order = [[IA, 0, 4], [IA, 4, 4], [IB, 0, 4]]
+    prog = wired_population_program([(A, 8), (B, 4)], _every_other(4, order))[0]
+    nodes, parts = _root(prog)
+    assert [(n.fn.id, n.n) for n in nodes] == [(A.id, 4), (A.id, 4), (B.id, 4)] and parts == [1, 1, 1, 1, 2, 1]
+    w, x, k = list(range(8)), list(range(1, 17)), list(range(100, 116))
+    a = [evaluate(A, x[2 * u:2 * u + 2], k[2 * u:2 * u + 2]) for u in range(8)]
+    b = [evaluate(B, a[2 * u], w[2 * u:2 * u + 2]) for u in range(4)]
+    assert evaluate(prog.fn, w, x, k) == tuple(v for out in a + b for v in out)
+
+
 BIT = Value(1)
 Xor = PrimitiveDefinition("TWiredXor1", 1, (("a", BIT), ("b", BIT)), BIT, lambda a, b: a ^ b, register=False)
 D = bind(CompositeDefinition("TWiredBits", 1, (), lambda S: ((("b", Array(32, BIT)), ("s", Array(32, BIT))), Array(32, BIT)),
@@ -86,43 +150,44 @@ D = bind(CompositeDefinition("TWiredBits", 1, (), lambda S: ((("b", Array(32, BI
 ID = descriptor_id(D)
 
 
-def _bits(words):
-    return [(v >> i) & 1 for v in words for i in range(16)]
-
-
-def _words(bits):
-    return [sum(b << i for i, b in enumerate(bits[h:h + 16])) for h in range(0, len(bits), 16)]
-
-
-def _widths(**wire):
-    return {"templates": [[IA, 2], [ID, 2], [IB, 2]],
-            "wires": [{"reader": ID, "port": "b", "writer": IA, "out": "o0", "at": 0, "radix": [2], "base": 0, "step": [1]},
-                      {"reader": IB, "port": "y", "writer": ID, "out": "o0", "at": 0, "radix": [2], "base": 0, "step": [1],
-                       **wire}],
-            "external": [f"{IA}/x", f"{IA}/k", f"{IB}/w"],
-            "registered": {"params": {"s": 4}, "tables": [], "roots": [], "openings": [],
+def _widths(wires=()):
+    return {"templates": [[IA, 2], [ID, 2]], "wires": list(wires),
+            "external": [f"{IA}/x", f"{IA}/k", f"{ID}/b"],
+            "registered": {"params": {"s": 8}, "tables": [], "roots": [], "openings": [],
                            "reads": [{"reader": ID, "port": "s", "param": "s", "at": 0, "radix": [2], "base": 0, "step": [2]}]}}
 
 
-def test_a_wire_or_read_between_words_and_bits_passes_through_their_wiring_least_significant_bit_first():
-    prog, query = wired_population_program([(A, 2), (D, 2), (B, 2)], _widths())
-    assert [n for n, _ in prog.fn.signature()[0]] == ["s", "0.x", "0.k", "2.w"]
-    assert query["params"]["templates"] == [IA, ID, IB, descriptor_id(bind(BitsWord, W=16)), descriptor_id(bind(WordBits, W=16))]
-    s, x, k, w = [0x8001, 0x00FF, 0x1234, 0xFFFF], [1, 2, 3, 4], [100, 200, 300, 400], [7, 9, 11, 13]
-    a = [evaluate(A, x[2 * u:2 * u + 2], k[2 * u:2 * u + 2]) for u in range(2)]
-    d = [tuple(p ^ q for p, q in zip(_bits(a[u]), _bits(s[2 * u:2 * u + 2]))) for u in range(2)]
-    b = [evaluate(B, _words(d[u]), w[2 * u:2 * u + 2]) for u in range(2)]
-    assert evaluate(prog.fn, s, x, k, w) == tuple(v for out in a + d + b for v in out)
+def test_a_read_into_a_row_of_narrower_leaves_reads_its_registered_leaves_recut_and_inserts_no_node():
+    prog, query = wired_population_program([(A, 2), (D, 2)], _widths())
+    assert dict(prog.fn.signature()[0])["s"] == Array(8, V16)
+    assert query["params"]["templates"] == [IA, ID]
+    nodes, _ = _root(prog)
+    (k,) = prog.root.body.recut
+    assert [n.fn.id for n in nodes] == [A.id, D.id] and prog.root.body.recut == {k: 16}
+    assert nodes[1].args[1].refs.to_json() == {"affine": ["n", k, 0, 64]}
+    with pytest.raises(ValueError, match="recut-gates"):
+        _ = prog.circuit
+    reg = DefinitionTable()
+    for f in (Add, Xor):
+        reg.add(f)
+    desc = json.loads(json.dumps(encode_program(prog)))
+    assert encode_program(decode_program(desc, reg)) == desc
+    text = json.dumps(desc).replace(f'["n", {k}, 0, 64]', json.dumps(["n", k, 8, 64]))
+    with pytest.raises(ValueError, match="recut-boundary"):
+        decode_program(json.loads(text), reg)
 
 
-def test_a_wire_between_two_word_widths_is_refused():
+def test_a_wire_between_leaves_of_two_widths_is_refused():
+    wire = {"reader": ID, "port": "b", "writer": IA, "out": "o0", "at": 0, "radix": [2], "base": 0, "step": [1]}
+    with pytest.raises(ValueError, match="wire-width"):
+        wired_population_program([(A, 2), (D, 2)], {**_widths([wire]), "external": [f"{IA}/x", f"{IA}/k"]})
     Neg = PrimitiveDefinition("TWiredNeg32", 1, (("a", Value(32)),), Value(32), lambda a: -a & 0xFFFFFFFF, register=False)
     G = bind(CompositeDefinition("TWiredWide", 1, (), lambda S: ((("z", Array(1, Value(32))),), Array(1, Value(32))),
                                  lambda B_, S, z: B_.batch(Neg, z, axes=(0,)), register=False))
     rec = {"templates": [[IA, 1], [descriptor_id(G), 1]], "external": [f"{IA}/x", f"{IA}/k"],
            "wires": [{"reader": descriptor_id(G), "port": "z", "writer": IA, "out": "o0", "at": 0, "radix": [1], "base": 0,
                       "step": [0]}]}
-    with pytest.raises(ValueError, match="only between W-bit words and their one-bit leaves"):
+    with pytest.raises(ValueError, match="wire-width"):
         wired_population_program([(A, 1), (G, 1)], rec)
 
 

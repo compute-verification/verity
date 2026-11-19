@@ -395,7 +395,7 @@ def test_the_statement_program_is_its_one_unit(P, S):
     so it evaluates to the execution phase's ok."""
     prog = WS.program(P, S)
     params, ret = prog.fn.signature()
-    assert [n for n, _t in params] == list(WS.PORTS) and ret.leaves == 1
+    assert [n for n, _t in params] == [f"0.{p}" for p in WS.PORTS] and ret.leaves == 1
     tp = PT.evaluate(prog, WS.query(P, S))
     assert tp.population == 1
     rng = random.Random(P + S)

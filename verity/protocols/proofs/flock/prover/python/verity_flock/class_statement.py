@@ -1,7 +1,7 @@
 """A size class of any partition (`verity.circuits.units`) as a ``verity/flock-circuit`` statement (M0, :mod:`circuit`), proved by
 ``flock-circuit`` per class.
 
-    python -m verity_flock.class_statement --model tiny --partition q-word --out DIR [--binary PATH] [--n 16] [--selftest]
+    python -m verity_flock.class_statement --definition ID --resolver MODULE:FUNC --partition q-word --out DIR [--binary PATH] [--n 16] [--selftest]
 
 M0's statement proves a template's identical units with every instance's input rows hashed in the circuit
 (``hm96-sha512/row/v1`` under frame-v3-sha512 trees). A class becomes such a template here:
@@ -210,12 +210,25 @@ class Wiring:
     (`link_triples`). This binds a public topology; it does not hide the topology: the verifiers derive the wiring from
     their own program, which is part of the circuit. ``strict`` False and ``writer_salts`` False stage what a cheating
     prover may commit instead (the negatives): a linked row that is not its writer's output row, or one under a salt of its
-    own."""
+    own.
+
+    ``tree`` (`registered_value.Registered` of the template's output field, leaf v the template's v-th unit in root order): each
+    instance's ``out`` row is its leaf's row under its leaf's salt, and each link row the writer's leaf, opened by path in
+    the header's ``registered`` (a tree port of the verifier's `--registered`), so a writer may lie in another statement.
+    Since a verifier given registered reads reads every port by path, each other input port is registered too, a value of
+    the statement's own table rows; `stage` returns the verifier's ports as ``registered_reads``."""
     program: Any
     query: dict
     indices: Sequence[int]
     strict: bool = True
     writer_salts: bool = True
+    tree: Any = None
+
+
+def tree_leaves(tp: PO.TemplatePartition, template: str) -> list[int]:
+    """The units of ``template`` in root order: unit ``tree_leaves(...)[i]`` is leaf ``i`` of its output field's tree
+    (Lean's `HmLinks.treeLeaf`)."""
+    return [u for _k, t, a, n in tp.ranges if t == template for u in range(a, a + n)]
 
 
 LINKS_FORMAT = "verity/flock-links/v1"
@@ -458,7 +471,7 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     from verity.circuits.codec import definition_digest, descriptor_id
     from verity.circuits.defs import CompositeDefinition
     from verity.circuits.program import Program
-    from verity_vllm.definitions.encoding import encode_specialization
+    from verity.circuits.codec import encode_specialization
 
     g = json.loads(open(graph_path).read()) if graph_path else {"groups": []}
     index = g.get("definitions_index") or {}
@@ -608,9 +621,10 @@ def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[
     return ins, want, rows
 
 
-def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes,
+def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path,
           packed: bool | None = None, core_rows: bool | None = None, wiring: Wiring | None = None, seg_ports: frozenset = frozenset(),
-          seg_out_rows: tuple = (), v2_out_rows: tuple = (), pad: int | None = None, share_rows: bool = True) -> dict:
+          seg_out_rows: tuple = (), v2_out_rows: tuple = (), pad: int | None = None, share_rows: bool = True,
+          salts: dict | None = None) -> dict:
     """``circuit.txt``, the prover's ``inst-n.bin`` and the verifier's ``pub-n.bin`` for one class: one row port per input source,
     and each source's row committed once, shared by every instance that reads it (``lanes_`` from `class_lanes`; lanes without
     source identities share equal rows; ``packed``: narrow words share leaves, default FLOCK_PACK_WORDS; ``core_rows``: an FP
@@ -632,7 +646,10 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
 
     ``share_rows=False``: every instance opens its own row per port, equal rows included, and the public file has no shared-row
     tables, the form a verifier without its own registered reads covers (``ProvedScope.sharedRowsOk``); a wired class's link
-    rows are then each reading instance's own, still under its writer's ``out`` salt."""
+    rows are then each reading instance's own, still under its writer's ``out`` salt. With ``wiring.tree`` the file keeps
+    tables, every instance its own row of each, since a registered read is a table's.
+
+    ``salts``: every row's (`circuit.write`'s), given as data, else fresh."""
     core_rows = CORE_ROWS if core_rows is None else core_rows
     packed = True if core_rows else PACK_WORDS if packed is None else packed
     act = units.activation(cl.definition)
@@ -669,17 +686,25 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
         reads = cut_reads(tp, wiring.indices)
         n_out = lambda v: len(tp.outputs(v))  # noqa: E731
         pos = {u: i for i, u in enumerate(wiring.indices)}
+        leaf = {u: i for i, u in enumerate(tree_leaves(tp, definition))} if wiring.tree is not None else None
         groups, origin, spans = link_ports(uc, groups, reads, n_out)
         packs = [packed and s is None for s in spans]
         for s in spans:
             ws = None
             if s is not None:
                 ws = [_whole_row(r[s[0]:s[1]], n_out) for r in reads]
-                if any(v is not None and v not in pos for v in ws):
-                    raise NotImplementedError(f"class {name}: a unit reads a unit outside this statement (its salts are another statement's)")
-                ws = [None if v is None else pos[v] for v in ws]
+                if leaf is not None:
+                    if None in ws:
+                        raise ValueError(f"class {name}: a tree port's every instance reads a writer's leaf, and one reads circuit "
+                                         "inputs at its link row: stage the writers and the readers apart")
+                    ws = [leaf[v] for v in ws]
+                elif any(v is not None and v not in pos for v in ws):
+                    raise NotImplementedError(f"class {name}: a unit reads a unit outside this statement (its salts are another statement's; give Wiring its tree)")
+                else:
+                    ws = [None if v is None else pos[v] for v in ws]
             writers.append(ws)
-        idents = [idents[o] if s is None else [("link", w, k) if w is not None else ("in", k) for k, w in enumerate(writers[i])]
+        idents = [idents[o] if s is None else [(("tree", w) if leaf is not None else ("link", w, k)) if w is not None else ("in", k)
+                                               for k, w in enumerate(writers[i])]
                   for i, (o, s) in enumerate(zip(origin, spans))]
     links = [{"port": f"p{i}", "leaves": list(s)} for i, s in enumerate(spans) if s is not None]
     low = class_lowering(act, uc, f"unit-class/{name}", groups, packs, blocks=not core_rows)
@@ -727,35 +752,65 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
             firsts[f"p{i}"] = at
             if not np.array_equal(tables[f"p{i}"][ref], per_port[f"p{i}"]):
                 raise AssertionError(f"class {name}: instances reading one source disagree on its row")
-    salts = None
-    if links:
+    salts = None if salts is None else {k: list(v) for k, v in salts.items()}
+    tree = wiring.tree if wiring is not None else None
+    registered = None
+    if tree is not None and not share_rows:
+        tables, refs = dict(per_port), {p: np.arange(n) for p in per_port}
+        firsts = {p: list(range(n)) for p in per_port}
+    if links or tree is not None:
         ports = FC._meta_ports(meta)
-        salts = FC.stage_salts(iset, 0, n, ports, salt_key,
-                               {p.name: len(tables[p.name]) if p.name in tables else n for p in ports} if share_rows else None)
+        salts = salts or FC.stage_salts(0, n, ports, {p.name: len(tables[p.name]) if p.name in tables else n for p in ports}
+                                        if share_rows or tree is not None else None)
         out_name = ports[-1].name
+        rows_of = lambda w: np.asarray(tree.rows[w], np.uint16)  # noqa: E731
+        if tree is not None:
+            own = [leaf[u] for u in wiring.indices]
+            for k, w in enumerate(own):
+                if wiring.strict and not np.array_equal(outs[k], rows_of(w)):
+                    raise AssertionError(f"class {name}: instance {k}'s output row is not its leaf {w}'s row of {tree.value}")
+                salts[out_name][k] = tree.salts[w]
+            registered = {out_name: {"value": tree.value, "positions": own, "paths": [tree.path(w).hex() for w in own]}}
         for i, ws in enumerate(writers):
             if ws is None:
                 continue
-            for r, k in enumerate(firsts[f"p{i}"] if share_rows else range(n)):
+            at = []
+            for r, k in enumerate(firsts[f"p{i}"] if share_rows or tree is not None else range(n)):
                 w = ws[k]
                 if w is None:
                     continue
-                row = tables[f"p{i}"][r] if share_rows else per_port[f"p{i}"][k]
-                if wiring.strict and (not np.array_equal(row[:outs.shape[1]], outs[w]) or row[outs.shape[1]:].any()):
-                    raise AssertionError(f"class {name}: instance {k}'s link row p{i} is not instance {w}'s output row")
+                row = tables[f"p{i}"][r] if share_rows or tree is not None else per_port[f"p{i}"][k]
+                want = rows_of(w) if tree is not None else outs[w]
+                if wiring.strict and (not np.array_equal(row[:outs.shape[1]], want) or row[outs.shape[1]:].any()):
+                    raise AssertionError(f"class {name}: instance {k}'s link row p{i} is not its writer's output row ({w})")
                 if wiring.writer_salts:
-                    salts[f"p{i}"][r] = salts[out_name][w]
-    if not share_rows:
+                    salts[f"p{i}"][r] = tree.salts[w] if tree is not None else salts[out_name][w]
+                at.append(w)
+            if tree is not None:
+                registered[f"p{i}"] = {"value": tree.value, "positions": at, "paths": [tree.path(w).hex() for w in at]}
+        if tree is not None:
+            own_reads = {out_name: {**tree.entry(), "reads": [leaf.get(u) for u in range(tp.population)]}}
+            own_reads |= {f"p{i}": {**tree.entry(), "tree": {"template": definition, "field": out_name}, "reads": []}
+                          for i, ws in enumerate(writers) if ws is not None}
+            for p in sorted(set(tables) - set(registered)):
+                reg = type(tree).commit(tree.program, f"{definition}/{name}/{p}", tables[p].tolist(), salts=salts[p])
+                registered[p] = {"value": reg.value, "positions": list(range(reg.leaves)),
+                                 "paths": [reg.path(r).hex() for r in range(reg.leaves)]}
+                at = dict(zip(wiring.indices, (int(x) for x in refs[p])))
+                own_reads[p] = {**reg.entry(), "reads": [at.get(u) for u in range(tp.population)]}
+    if not share_rows and tree is None:
         tables = refs = None
-    head = FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", salt_key, rows=per_port, outs={"out": outs},
-                    share_rows=share_rows, tables=tables, refs=refs, salts=salts, indices=list(wiring.indices) if wiring else None)
+    head = FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", rows=per_port, outs={"out": outs},
+                    share_rows=tables is not None, tables=tables, refs=refs, salts=salts, registered=registered,
+                    indices=list(wiring.indices) if wiring else None)
     return ({} if real is None else {"real": real, "fillers": n - real}) | \
         {"n": n, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_bytes": len(text), "w_in": low.definition.w_in,
             "w_out": low.definition.w_out, "unit_rows": low.layout.useful, "ports": list(low.definition.port_words),
             "shared_rows": head.get("shared_rows"), "ands": low.layout.counts["ands"], "k_log": meta["k_log"],
             "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)} | \
         ({"packed": True} if packed else {}) | ({"row_schemas": meta["row_schemas"]} if bits is not None else {}) | \
-        ({"links": links, "definition": definition} if wiring is not None else {})
+        ({"links": links, "definition": definition} if wiring is not None else {}) | \
+        ({"registered_reads": own_reads} if tree is not None else {})
 
 
 def _check_bit_rows(uc: ProofBlockCircuit, ins: Sequence[Sequence[int]], groups: list[list[int]], bits: list[int], per_port: dict,
@@ -791,7 +846,7 @@ def tile_lowering(low1: IL.Lowering, P: int, C: int, name: str) -> IL.Lowering:
     return IL.Lowering(name, ClassDefinition(name, ports, w1 * P * C), U, low1.circuit, low1.layout)
 
 
-def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes, P: int, C: int,
+def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, P: int, C: int,
                 n: int, real: int | None = None) -> dict:
     """As `stage`, for ``n`` P x C tiles of a two-port class: every row of every tile a distinct lane's port-0 row (a valid word
     vector; a dot product's two ports are alike), each unit's output the class lowering's own on its pair, checked through the
@@ -845,7 +900,7 @@ def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple,
             raise ValueError(f"class {name}: a statement padded to {n} instances is past --max-statement-bits")
         n = max(meta["vus_per_block"], 1 << ((cap_bits // per_instance).bit_length() - 1))
         outs, per_port = outs[:n], {k: v[:n] for k, v in per_port.items()}
-    FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", salt_key, rows=per_port, outs={"out": outs},
+    FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", rows=per_port, outs={"out": outs},
              share_rows=True)
     return ({} if real is None else {"real": real, "fillers": n - real}) | \
         {"n": n, "tile": [P, C], "coords_per_instance": P * C, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"],
@@ -1195,7 +1250,7 @@ class UnitStager:
         if bad.size:
             raise AssertionError(f"{self.name}: instance {bad[0]}'s outputs are not the IR reference's")
 
-    def stage(self, rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None,
+    def stage(self, rows: dict[str, np.ndarray], out_dir: Path, salts: dict | None = None,
               indices: Sequence[int] | None = None, set_name: str | None = None, tables: dict | None = None,
               refs: dict | None = None, registered: dict | None = None) -> dict:
         """A round's statement: ``rows`` each input row's words per instance ``(n, words)`` u16, and each public input's
@@ -1225,11 +1280,11 @@ class UnitStager:
                 if not np.array_equal(np.asarray(tables[r], dtype=np.uint16)[np.asarray(refs[r])], np.asarray(rows[r], dtype=np.uint16)):
                     raise ValueError(f"{self.name}: port {r}'s table rows at the instances' refs are not their rows")
         table_rows = None if tables is None else {p.name: len(tables[p.name]) if p.name in tables else n for p in self.ports}
-        salts = {**FC.stage_salts(iset, 0, n, self.ports, salt_key, table_rows), **(salts or {})}
+        salts = {**FC.stage_salts(0, n, self.ports, table_rows), **(salts or {})}
         out_dir.mkdir(parents=True, exist_ok=True)
         if self.circuit is None:
             (out_dir / "circuit.txt").write_text(self.text)
-        FC.write(self._text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
+        FC.write(self._text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin",
                  rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in self.in_rows}, outs=outs, salts=salts,
                  public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in self.public_inputs},
                  digests=(self.pin, self.class_sha512), indices=None if indices is None else [int(u) for u in indices],
@@ -1256,13 +1311,13 @@ def member_stager(definition, member, bind: dict | None, circuit: Path | None = 
 
 
 def stage_unit(definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]], out_rows: Sequence[tuple[str, Sequence[int]]],
-               rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None,
+               rows: dict[str, np.ndarray], out_dir: Path, salts: dict | None = None,
                public_inputs: dict | None = None, bind: dict | None = None, indices: Sequence[int] | None = None,
                packed: bool = False) -> dict:
     """One round of a `UnitStager` (its arguments as there and in its `stage`): writes ``circuit.txt``, ``inst.bin`` and
     ``pub.bin``; returns META, the outputs per port, every row's salts, and the unit's ANDs and matrix entries."""
-    return UnitStager(definition, name, in_rows, out_rows, public_inputs, bind=bind, packed=packed).stage(rows, out_dir, salt_key,
-                                                                                                         salts, indices)
+    return UnitStager(definition, name, in_rows, out_rows, public_inputs, bind=bind, packed=packed).stage(rows, out_dir, salts,
+                                                                                                         indices)
 
 
 def statement(binary: str, d: Path, n: int, timeout: int = 3600) -> dict:
@@ -1633,11 +1688,11 @@ def _stage_job_fresh(s: str) -> dict:
                 n = (auto_batch(P * C * cc.counts["ands"], max(1, (c["row_units"].get(s) or cl.units) // (P * C)))
                      if a.batch == "auto" else a.n)
                 lanes_ = class_lanes(units, cl, c["key"], (a.real or n) * (P + C), c["shared"])
-                rec["stage"] = stage_tiled(units, a.partition, s, cl, lanes_, c["out"] / s[:16], c["salt_key"], P, C, n, a.real)
+                rec["stage"] = stage_tiled(units, a.partition, s, cl, lanes_, c["out"] / s[:16], P, C, n, a.real)
             else:
                 n = auto_batch(cc.counts["ands"], c["row_units"].get(s) or cl.units) if a.batch == "auto" else a.n
                 lanes_ = class_lanes(units, cl, c["key"], a.real or n, c["shared"])
-                rec["stage"] = stage(units, a.partition, s, cl, lanes_, c["out"] / s[:16], c["salt_key"],
+                rec["stage"] = stage(units, a.partition, s, cl, lanes_, c["out"] / s[:16],
                                      pad=n if a.real is not None else None, share_rows=not OWN_ROWS)
             rec["stage_py_maxrss_gb"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)
         except Exception as e:  # noqa: BLE001  (a class that breaks is a result, recorded with where it broke)
@@ -1778,7 +1833,6 @@ def _selftest_cases(binary: str, d: Path, n: int, port: int, cases: Sequence[str
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     src = ap.add_mutually_exclusive_group(required=True)
-    src.add_argument("--model", choices=["tiny"])
     src.add_argument("--definition")
     src.add_argument("--program-module", help="MODULE:FUNC (FUNC() returns a Program); MODULE may be a .py path")
     src.add_argument("--program-graph", help="a served row's program graph: its distinct Call Definitions (distinct_calls)")
@@ -1855,7 +1909,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     units = PU.partition_units(program, a.partition)
     classes = units.classes()
     key = PU.derive(PU.SOURCE, PU.DOMAIN, {"program": program_digest(program), "seed": a.seed})
-    salt_key = hashlib.sha256(b"verity/flock/class-statement/stress-salts\0" + str(a.seed).encode()).digest()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     results = out / ("selftests.jsonl" if a.selftest_only else "staged.jsonl" if a.stage_only else "served.jsonl" if a.serve_only
@@ -1886,7 +1939,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         largest[cl.definition.id if hasattr(cl.definition, "id") else cl.definition] = sh
     jobs = [s for s, _cl in order if not (s in done or (a.only and not any(s.startswith(p) for p in a.only.split(",")))
                                           or (wanted is not None and not any(s.startswith(p) for p in wanted)))]
-    _CTX.update(units=units, classes=classes, row_units=row_units, shared=broadcast_params(units), key=key, salt_key=salt_key,
+    _CTX.update(units=units, classes=classes, row_units=row_units, shared=broadcast_params(units), key=key,
                 out=out, a=a, batch_ands=a.batch_ands, max_statement_bits=a.max_statement_bits, program_digest=program_digest(program))
     partition_binding(units, a.partition)
     # a shape taken from FLOCK_STAGE_CACHE composes nothing; built before _staged, so forked stagers share them

@@ -1,0 +1,31 @@
+# PoUW's word primitives beside useful work's other primitives under the circuits' ops: what `tools/move/layout.py --map
+# tools/move/pouw_words_ops_map.toml` moves and rewrites. `words` imports only `verity.circuits` (its defs, types, ops and
+# silicon), and registers Definitions whose ids are their names and versions, never their module's path, as
+# `ops.ncp`'s `PouwI32ToF32Rn` and `ops.sqrt`'s `PouwF32SqrtRn`, which PoUW registered there before, already sit. A reader
+# that only registers the primitives (the property red-team's cases) then loads no prover package `__init__`, with its
+# kernel table and the scheme declaration. Nothing is split, edited or deleted, and no file is added; it has no sidecar
+# and no pin, and its tests stay where they are.
+
+[roots]
+old = { verity = "verity", verity_vllm = "adapters/vllm/verity_vllm", circuit_check = "tools/verity/circuit_check/src/circuit_check" }
+new = { verity = "verity", verity_vllm = "adapters/vllm/verity_vllm", circuit_check = "tools/verity/circuit_check/src/circuit_check" }
+
+[paths]
+"verity/protocols/resource_accounting/compute/pouw/prover/circuit/words.py" = "verity/circuits/ops/words.py"
+
+[retired]
+paths = ["verity/protocols/resource_accounting/compute/pouw/prover/circuit/words.py"]
+
+[drop]
+paths = []
+
+[rewrite]
+words = []
+keep = []
+exclude = ["fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256", "**/*.lock", "uv.lock",
+           "tools/move/**", "tests/tools/move/**", "archive/**", "tools/research/src/research/store/moves.json",
+           "**/lean-audit.json", "tests/test_boundaries.py"]
+include = []
+
+[modules]
+"verity.protocols.resource_accounting.compute.pouw.prover.circuit.words" = "verity.circuits.ops.words"

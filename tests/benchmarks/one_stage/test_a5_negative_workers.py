@@ -42,6 +42,8 @@ import pytest
 
 from verity.commitments.periods import history as HW, interface as I, rows as CS
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R, verifier as V
+from verity.protocols.proofs.spot.prover import docket as DK
+from verity.commitments import randomness as RND
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -332,8 +334,8 @@ def _negatives_file(out: Path, n: int, passing: bool = False) -> bytes:
     record's re-decisions (`a0.audit_negatives`) and, between them, entries the audit makes itself. ``passing``: the R3
     task checks the honest ports instead, a negative that isn't refused."""
     rec, ports = TM._record(), TM._ports()
-    design, layer = TM.D.parse_design("subset:2"), "ab" * 64
-    sub = R.record(TM._program(), TM.QUERY, design, TM.S.SCHEME, rec["roots"], {"kind": "served", "run": TM.RUN, "row": 0},
+    design, layer = RND.parse_design("subset:2"), "ab" * 64
+    sub = DK.record(TM._program(), TM.QUERY, design, TM.S.SCHEME, rec["roots"], {"kind": "served", "run": TM.RUN, "row": 0},
                    leaf_layer=layer)
     session_roots = {r["port"]: r["root"] for r in sub["roots"]}
     sample = {**design, "population": sub["population"], "units": [1, 4]}

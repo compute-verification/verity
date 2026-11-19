@@ -17,7 +17,7 @@ __all__ = ["check_kinds", "project"]
 #: The two lists below are written out, not read from their sources, so that a field added at a source stays in the serve
 #: dir until it is listed here; a test holds each name to its source, and `LEFT_OUT` states what each source has that its
 #: list leaves out.
-#: `TargetProfile.to_json`'s fields
+#: `TargetProfile.to_json`'s fields but ``card`` (a file's name)
 _TARGET = {k: "structure" for k in (
     "compute_capability", "num_sms", "batch_invariant", "attention_backend", "vllm_revision", "numerics_profile",
     "flash_attn_version", "compilation", "fp8_block_gemm", "int8_exact", "moe_backend", "async_scheduling", "moe_construction",
@@ -28,7 +28,7 @@ _STATICS = {k: "structure" for k in (
     "R", "W", "A", "M", "T", "L", "B", "H", "CH", "WM", "FULL", "PC", "NB", "IW", "AS", "EW", "Q", "D", "P", "K", "CN", "CTW",
     "CU", "G")}
 #: the names `TargetProfile.to_json` and `compile_slice.STATICS` write that `_TARGET` and `_STATICS` leave out
-LEFT_OUT = {"target": (), "served_rows_statics": ()}
+LEFT_OUT = {"target": ("card",), "served_rows_statics": ()}
 
 #: Every field of the serve dir's records that may leave it for the run's ``$OUT`` (`Mirror`), by file, each with its kind
 #: (`KINDS`); a mapping names a record's nested fields. A field not named, and a file not here, stays in the serve dir: the

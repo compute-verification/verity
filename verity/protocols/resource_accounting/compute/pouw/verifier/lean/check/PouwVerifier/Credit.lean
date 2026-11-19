@@ -326,10 +326,10 @@ sample root `root` (its hex) under `k`, from the session's files `session` (`tru
 withheld (`withheldOn`); else the refusal (`coin`). -/
 def drawChallengePhase (ledger : Json) (k : ChallengerKey) (pins main session : Json) (root : String) :
     R (Spot.Challenger.LiveCommitment × Spot.Challenger.Roots) := do
-  let got ← (trustedChallengePhaseOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session).mapError
+  let (c, log) ← (trustedChallengePhaseOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session).mapError
     fun e => ("coin", s!"the draw's session is not trusted: {e}")
   unless Spot.Challenger.withheldOn ledger root do throw ("coin", Spot.Challenger.WITHHELD)
-  pure got
+  pure (c, Spot.Challenger.byFamily c log)
 
 /-- `credit._credited` up to the sample root: the verifier's challenger key, the credited calls' indices and the root
 `draw_root` gives over the execution phase's manifest, Commit record, receipts and round log; else the refusal. -/
@@ -996,7 +996,7 @@ def Internal.aLink (rounds entries : Json) (calls : Nat) (rows : List (String ×
         s!"rows are not the ones fixed under each round's root before that round's coin. Register the {what v} " ++
         "whose rows each round's root committed")
 
-/-- `credit._entry`: a registered value's entry as one-stage's registration names it (`registered.ENTRY_KEYS`, with
+/-- `credit._entry`: a registered value's entry as one-stage's registration names it (`registered_value.ENTRY_KEYS`, with
 `word_bits` only when it is not 16): its value printable ASCII, its root a SHA-512 digest, its rows at least 1 and its
 words from 1 to `MAX_ROWS`. Its rows have no other bound here: the verifier hashes pads only in `Internal.aLink`, which
 holds each value it hashes to the layout's rows (`tableRows`) or `MAX_ROWS`. -/
@@ -1142,7 +1142,7 @@ def partitionOf (program : String) (shape : Shape) : Json :=
 
 /-- `registered.READS_V1`: a `--registered` file's format, each port's reads from unit `reads_from` (`READS_FROM`). -/
 def READS : String := Flock.Registered.FORMAT
-/-- `registered.READS_FROM`: a port's first unit; every unit below it reads nothing (`Flock.Registered.Port.readAt`). -/
+/-- `registered_value.READS_FROM`: a port's first unit; every unit below it reads nothing (`Flock.Registered.Port.readAt`). -/
 def READS_FROM : String := Flock.Registered.READS_FROM_KEY
 def SCHEMA_KEY : String := "row_schema"
 

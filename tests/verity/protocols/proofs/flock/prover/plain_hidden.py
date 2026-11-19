@@ -76,7 +76,7 @@ def stage(out: Path, seed: int = SEED, n: int = N, vus_per_block: int | None = N
             words = {p.name: np.asarray(s.port(p.name, 0, N), dtype=np.uint16).reshape(N, -1) for p in ports}
             return {k: np.resize(w, (n, w.shape[1])) for k, w in words.items()}
         rows, outs = tiled(s.subcircuit.inputs), tiled(s.subcircuit.outputs)
-    FC.write(text, s, 0, n, out / f"inst-{n}.bin", out / f"pub-{n}.bin", None, list(range(n)), rows=rows, outs=outs)
+    FC.write(text, s, 0, n, out / f"inst-{n}.bin", out / f"pub-{n}.bin", list(range(n)), rows=rows, outs=outs)
     return {"n": n, "program": P.program_digest(prog), "partition": P.digest(part), "pin": FC.digest(text)}
 
 

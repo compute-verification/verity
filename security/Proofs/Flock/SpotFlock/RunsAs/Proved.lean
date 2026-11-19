@@ -61,9 +61,9 @@ theorem closure_not_key {samplingDesign : Json} {names : Array String} (hk : Spo
     have h1 : "closure" ∈ kvs.toArray.map Prod.fst := by
       rw [Array.mem_def, Array.toList_map]
       simpa [Spot.entries] using hc
-    have h2 := (FlockSoundness.Audit.SampleExec.mem_qsort _ (· < ·) _).2 h1
+    have h2 := (Spot.Sampling.SampleExec.mem_qsort _ (· < ·) _).2 h1
     rw [show (kvs.toArray.map Prod.fst).qsort (· < ·) = Spot.sortStrings names from hk] at h2
-    exact (FlockSoundness.Audit.SampleExec.mem_qsort _ _ _).1 h2
+    exact (Spot.Sampling.SampleExec.mem_qsort _ _ _).1 h2
   | _ => simp [Spot.keys?] at hk
 
 /-- **A select under a sampling design, with no closure map, accepted**: its sampling design `flockSamplingDesign` accepts, its sample object is the sampling design's

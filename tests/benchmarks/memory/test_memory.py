@@ -1169,11 +1169,10 @@ def test_local_runs_the_nodes_session_on_one_card_with_the_verifier_beside_it_an
     assert machine.fetches() == [[str(tmp_path / "vllm" / "python"), "-c", M.FETCH, pin["repo"], pin["revision"],
                                   *sorted(pin["files"])]]
     assert env["ENGINE_ARGS"] == f"--step-hz 2 --align-steps --arena-gib {ARENA} --util 0.88"
-    assert env["NODE_ARGS"] == (f"--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir {snap} "
-                                "--node local/h200-sxm-141gb-x1/serving")
+    assert env["NODE_ARGS"] == f"--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir {snap}"
+    assert env["SESSION_NODE"] == "local/h200-sxm-141gb-x1/serving"
     assert (env["PACED"], env["PACE_PASS_MS"]) == ("1:1000:2773:7", "0"), "run.sh passes the form, once"
-    assert env["VERIFIER_ARGS"] == (f"--node {env['RESEARCH_RUN_DIR']}/{M.NODE_FILE} "
-                                    f"--hbm-bytes {GPU_HBM['h200-sxm-141gb-x1']}")
+    assert "VERIFIER_ARGS" not in env, "the verifier states its node and its HBM from FIGURES"
     assert (env["JITTER_MS"], env["QUANTILE"]) == ("50", "max")
     assert (env["NODE_WORKSPACE"], env["HF_HOME"], env["UV_CACHE_DIR"], env["GPU_LEASE_DIR"]) == (
         str(work), str(work / "hf"), str(work / "cache/uv"), str(work / "gpu-lease"))
@@ -1181,6 +1180,8 @@ def test_local_runs_the_nodes_session_on_one_card_with_the_verifier_beside_it_an
         "the windowed form and the row are not passed"
     assert Path(env["RESEARCH_RUN_DIR"]).parent == work / "runs", "outside a research run its records are kept"
     assert json.loads((Path(env["RESEARCH_RUN_DIR"]) / M.NODE_FILE).read_text()) == M.one_card("h200-sxm-141gb-x1")[0]
+    assert env["FIGURES"] == f"{env['RESEARCH_RUN_DIR']}/{M.FIGURES_FILE}"
+    assert json.loads(Path(env["FIGURES"]).read_text()) == M.one_card_figures("h200-sxm-141gb-x1").to_json()
     text, doc, err = printed(capsys)
     assert text[0].startswith("memory: 0.199 of the node's memory read rate is left uncertified by this session")
     assert doc["audit"] is False and doc["ran_with"]["coins"] == "local challenger"
@@ -1213,7 +1214,7 @@ def test_the_arena_is_most_of_the_cards_memory_from_its_sheet(store, work, card,
 @pytest.mark.parametrize("name, sheets", [("NVIDIA H200", ("h200-sxm-141gb", "h200-sxm-141gb-x1")),
                                           ("NVIDIA RTX PRO 6000 Blackwell Server Edition",
                                            ("rtx-pro-6000-server", "rtx-pro-6000-server-x8")),
-                                          ("NVIDIA H100 80GB HBM3", ("h100-sxm-80gb", None))])
+                                          ("NVIDIA H100 80GB HBM3", ("h100-sxm-80gb", "h100-sxm-80gb-x1"))])
 def test_the_card_is_the_card_file_holding_its_name_and_the_node_the_one_file_carrying_that_card(name, sheets):
     assert M.sheet_of(name) == sheets
 
@@ -1235,15 +1236,20 @@ def test_a_card_two_node_files_carry_is_named_with_local_node(monkeypatch, tmp_p
      "of calibration/hardware/nodes/ carries h100-sxm-80gb, so no host of it is on record and no share is printed"),
     (a_local_record(a_refused_session(), arena=58), "the verifier refused session 0 at pass group 2"),
 ], ids=["accepted", "refused"])
-def test_an_h100_runs_the_session_on_the_card_alone_and_prints_no_share(store, capsys, work, record, why):
-    """No node file carries the H100, so no host of it is on record: the session runs on its 80 GiB, with no `--node`
+def test_an_h100_runs_the_session_on_the_card_alone_and_prints_no_share(store, capsys, work, record, why, monkeypatch,
+                                                                        tmp_path):
+    """Where no node file carries the H100, no host of it is on record: the session runs on its 80 GiB, with no figures
     for the verifier, and its verdict is printed with no share."""
+    for f in M.NODE_FILES.glob("*.toml"):
+        if f.stem != "h100-sxm-80gb-x1":
+            (tmp_path / f.name).write_text(f.read_text())
+    monkeypatch.setattr(M, "NODE_FILES", tmp_path)
     machine = Machine(card="NVIDIA H100 80GB HBM3, 9.0", record=record)
     assert bench(store, "--local", run=machine) == 1
     ((_, env),) = machine.runs()
     assert env["ENGINE_ARGS"] == "--step-hz 2 --align-steps --arena-gib 58 --util 0.88"
-    assert env["VERIFIER_ARGS"] == f"--hbm-bytes {80 * GIB}"
-    assert env["NODE_ARGS"].endswith("--node local/h100-sxm-80gb/serving")
+    assert "VERIFIER_ARGS" not in env
+    assert env["SESSION_NODE"] == "local/h100-sxm-80gb/serving"
     text, doc, _ = printed(capsys)
     assert text[0].startswith(f"memory: no number: {why}") and doc["value"] is None
 
@@ -1288,8 +1294,8 @@ def test_a_card_no_record_names_writes_the_share_and_no_pass_time_or_bare_read(s
     assert bench(store, "--local", run=Machine(card="NVIDIA H100 PCIe, 9.0", record=record)) == 0
     got = written(held)
     assert got[M.LOCAL_METRIC]["value"] == 0.199 and M.PASS_METRIC not in got and M.READ_METRIC not in got
-    assert (f"memory: no {M.PASS_METRIC} or {M.READ_METRIC} point: 0 card records under {M.CARD_FILES} have "
-            "'NVIDIA H100 PCIe', the card nvidia-smi names here, in `driver`") in printed(capsys)[2]
+    assert (f"memory: no {M.PASS_METRIC} or {M.READ_METRIC} point: 0 GPU card files under {M.CARD_FILES} have "
+            "'NVIDIA H100 PCIe', the name the device reports, in `driver`") in printed(capsys)[2]
 
 
 def test_a_local_record_with_no_calibration_writes_the_share_alone(store, work, monkeypatch, tmp_path):
@@ -1367,8 +1373,8 @@ def test_local_asks_the_node_for_the_leaf_pass_where_leaf_ctas_says_as_the_node_
     assert bench(store, "--local", run=machine) == 0
     ((_, env),) = machine.runs()
     snap = Path(env["MODEL"])
-    assert env["NODE_ARGS"] == (f"--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir {snap} "
-                                f"--node local/h200-sxm-141gb-x1/serving{leaf}")
+    assert env["NODE_ARGS"] == f"--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir {snap}{leaf}"
+    assert env["SESSION_NODE"] == "local/h200-sxm-141gb-x1/serving"
 
 
 @pytest.mark.parametrize("given, why", [
@@ -1505,9 +1511,9 @@ def test_local_states_the_arena_its_engine_recorded_and_not_its_own_arguments(st
     (Machine(driver=False), "--local serves on an NVIDIA GPU, and there is no nvidia-smi here, so no NVIDIA driver", 3),
     (Machine(smi_rc=9), "--local serves on an NVIDIA GPU, and nvidia-smi names none here (rc 9: NVIDIA-SMI has failed)",
      3),
-    (Machine(card="NVIDIA A100-SXM4-80GB, 8.0"), "0 card files of calibration/hardware/cards/ have 'NVIDIA A100-SXM4-80GB', "
-     "the card nvidia-smi names here, in `driver`: add { value = \"NVIDIA A100-SXM4-80GB\", source = ... } to its one "
-     "card file's `driver`, adding its <sku>.toml", 3),
+    (Machine(card="NVIDIA A100-SXM4-80GB, 8.0"), f"0 GPU card files under {M.CARD_FILES} have 'NVIDIA A100-SXM4-80GB', "
+     "the name the device reports, in `driver`: add { value = 'NVIDIA A100-SXM4-80GB', source = ... } to its one card "
+     "file's `driver`, adding its <sku>.toml if it has none, and give it a `short`", 3),
     (Machine(fetch_rc=1), "unsloth/Llama-3.2-1B@9535bd9b1d1d (config.json, generation_config.json, model.safetensors, "
      "special_tokens_map.json, tokenizer.json, tokenizer_config.json) couldn't be fetched into", 3),
     (Machine(rc=5), "the node's session failed (run.sh exited 5)", 3),
@@ -1666,11 +1672,12 @@ def test_from_a_records_directory_reads_it_with_nothing_of_ours(store, capsys, t
 
 def test_the_verifiers_node_is_the_one_card_of_the_tree_sheets():
     """`--local`'s share is of the card it ran on and its host: the verifier's node is one card of the node sheet,
-    read from the tree's data sheets, not the eight-card node `verifier_process.py` defaults to."""
+    read from the tree's data sheets, not the eight-card node."""
     from verity.protocols.resource_accounting.memory.poub.verifier import ledger, timing
-    eight = ledger.Node.stated(timing.RTX_PRO_6000_NODE)
+    figures = timing.Figures.of_json(json.loads((HERE.parents[2] / "tests/verity/protocols/resource_accounting/memory/poub/figures.json").read_text()))
+    eight = ledger.Node.stated(figures)
     rtx, rtx_hbm = M.one_card("rtx-pro-6000-server-x8")
-    assert rtx["spec_bytes_per_s"] == pytest.approx(eight.spec_bytes_per_s - 7 * timing.GPU_SPEC_BYTES_PER_S)
+    assert rtx["spec_bytes_per_s"] == pytest.approx(eight.spec_bytes_per_s - 7 * figures.gpu_spec_bytes_per_s)
     assert rtx_hbm == GPU_HBM["rtx-pro-6000-server-x8"]
     h200, h200_hbm = M.one_card("h200-sxm-141gb-x1")
     assert h200["spec_bytes_per_s"] == pytest.approx(4.916736e12 + 6.144e11), "the H200's and its host's, at the sheets"
@@ -1689,3 +1696,12 @@ def test_a_digest_changes_with_any_file_under_it(tmp_path, monkeypatch):
     assert M.digest(tmp_path / "v") == first, "caches and build trees are left out"
     (tmp_path / "v" / "lean" / "B.lean").write_text("b")
     assert M.digest(tmp_path / "v") != first
+
+
+def test_a_sessions_parameters_say_refresh_only_where_its_record_does():
+    off, on = a_session(), a_session() | {"refresh": True}
+    assert "refresh" not in M.parameters(a_record(off), off)
+    assert M.parameters(a_record(on), on) == M.parameters(a_record(off), off) | {"refresh": True}
+    slotted, stray = on | {"fresh_slots": 4}, off | {"fresh_slots": 4}
+    assert M.parameters(a_record(slotted), slotted) == M.parameters(a_record(on), on) | {"fresh_slots": 4}
+    assert "fresh_slots" not in M.parameters(a_record(stray), stray)

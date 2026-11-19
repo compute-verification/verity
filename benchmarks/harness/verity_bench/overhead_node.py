@@ -15,15 +15,18 @@ fastest kernel at every m, each round's process, and the card's identity and tim
 `run` times the scheme's arm beside its family's stock finalists and the fastest one's twin (`--twins`) at the stored points,
 in one `bench.py` process under Nsight Systems, the arm loading the cubin the run was sent (`$VERITY_BENCH_CUBIN`, which
 the SASS gate must pass): the timed pass untraced, then at each shape a traced pass of the same
-entries that nsys captures alone (SMs Active at 10 kHz, each item an NVTX range; `--traced`). It then runs the arm's
-reference verifier on every row (`verify.py --every-row`), reads each traced item's busy SM-time from the reports
+entries that nsys captures alone (SMs Active at 10 kHz, each item an NVTX range; `--traced`). The arm's passes (each
+shape's transcript and no-write control, with their rows, salts and manifests) go to ``--scratch``'s ``passes/``
+(`bench.py --passes`), never under `$OUT`. It then runs the arm's reference verifier on every row (`verify.py
+--every-row`), whose verdicts, coin records and Lean checks go to `$OUT/verdicts/`, and reads each traced item's busy
+SM-time from the reports
 (`nsys.report`, the reports kept in `--scratch`, outside `$OUT`; a report that collected past its traced pass, or a traced
 item no report holds, refuses the run; with `--keep-reports`, a profiling pass, they and their exports are kept in
 `$OUT/nsys/` and the run is not of record), and writes `overhead.json`: per point, the layer's γ over
 the fastest stock arm by wall time, beside it over the least-SM-time arm, with the weight side as a bound, the A/A control,
 the cross-check, ε from the scheme's function at the same point and card, and why each point's γ isn't of record. A kernel
 point runs no model, so it has no perplexity; nor does it serve requests, so it has no load counts to keep on the node.
-Beside the arm it records whether the arm's timed call commits y (`arm.commits_y`, the scheme's entry), which the table's
+Beside the arm it records whether the arm's timed call commits y (`arm.commits_y`, the scheme's declared ``y_committed``), which the table's
 note reads.
 
 Both records carry `phases` (`Phases`): the build, each bench.py process by stage, each Nsight export and the verifier.
@@ -47,6 +50,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_bench import kit, nsys
+from verity_bench.kit_report import PIECE
 from verity_bench import overhead as O
 
 HARNESS = Path("benchmarks/pouw/harness")
@@ -122,9 +126,10 @@ class Phases:
 
 
 def bench_argv(card: O.Gpu, uuid: str, shapes: Sequence[str], families: Sequence[str], out: Path,
-               extra: Sequence[str] = ()) -> list[str]:
+               extra: Sequence[str] = (), passes: Path | None = None) -> list[str]:
     return [sys.executable, str(HARNESS / "bench.py"), "--gpu", "lease", "--expect-uuid", uuid, "--shapes", *shapes,
-            "--families", *families, *(["--bridge"] if card.bridge else []), *extra, "--out", str(out)]
+            "--families", *families, *(["--bridge"] if card.bridge else []), *extra, "--out", str(out),
+            *(["--passes", str(passes)] if passes is not None else [])]
 
 
 def model_shapes(model: str, ms: Sequence[int]) -> list[str]:
@@ -133,13 +138,9 @@ def model_shapes(model: str, ms: Sequence[int]) -> list[str]:
 
 def _card_why(card: O.Gpu, result: dict) -> str | None:
     got = ((result.get("identity") or {}).get("card") or {}).get("name")
-    if got is None or card.name not in got:
+    if got is None or not kit.is_card(got, card.gpu):
         return f"the run's card is {got!r}, not the {card.name} the door was asked to measure"
     return None
-
-
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _write(path: Path, doc: dict) -> None:
@@ -266,7 +267,9 @@ def epsilon_at(sch: O.Scheme, card: O.Gpu, m: int, model: str) -> dict:
 
 
 def verified(result: dict, arm: str | None, m: int, model: str) -> dict:
-    """Each linear's verdict from the arm's reference verifier (`verify.py --every-row`), as the row carries it."""
+    """Each linear's verdict from the arm's reference verifier (`verify.py --every-row`), as the row carries it: this job
+    runs it on this node over the node's own transcript, so the verdict is the developer's side's (`checked_by`
+    `piece`), not the auditor's."""
 
     if arm is None:
         return {}
@@ -287,9 +290,12 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
     if sch.arm and a.cubin:
         cubin = (a.cubin if a.cubin.is_file() else a.run_dir / "inputs" / a.cubin).absolute()
     out, scratch = a.out, a.scratch
+    passes = a.scratch / "passes"
+    with sent.open("rb") as f:
+        points_sha = hashlib.file_digest(f, "sha256").hexdigest()
     phases = Phases(a.build_s)
     fingerprint = {"door": "run", "card": card.gpu, "scheme": sch.id, "point": a.point, "points_art": a.points_art,
-                   "points_sha256": _sha256(sent), "cubin_art": a.cubin_art if cubin else None}
+                   "points_sha256": points_sha, "cubin_art": a.cubin_art if cubin else None}
     doc: dict = {"schema": O.RUN_SCHEMA, "scheme": sch.id, "family": sch.family, "card": card.gpu,
                  "model": pts.get("model"), "points_art": a.points_art, "points_sha256": fingerprint["points_sha256"],
                  "cpu_sm_s_per_core_s": card.cpu_sm_s_per_core_s, "points": {}, "whys": []}
@@ -318,7 +324,7 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
     with phases("bench.py under nsys"):
         rc = run([*(["env", f"{CUBIN_ENV}={cubin}"] if cubin else []), a.nsys, *NSYS_PROFILE, "-o", str(prof),
                   *bench_argv(card, a.uuid, model_shapes(model, list(at.values())), [sch.family], bench_json,
-                              [*RUN_BENCH, *arm_args])], out / "bench.log")
+                              [*RUN_BENCH, *arm_args], passes if sch.arm else None)], out / "bench.log")
     result = json.loads(bench_json.read_text()) if bench_json.is_file() else {}
     phases.bench("bench.py under nsys", result)
     doc |= {"bench_exit": rc, "identity": result.get("identity"), "clocks": result.get("clocks"),
@@ -335,7 +341,10 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
         build = rec.get("build") or {}
         gated = [{k: b.get(k) for k in ("path", "sha256", "ok")}
                  for b in (result.get("sass_gate") or {}).get("binaries") or []]
-        sha = _sha256(cubin) if cubin else None
+        sha = None
+        if cubin:
+            with cubin.open("rb") as f:
+                sha = hashlib.file_digest(f, "sha256").hexdigest()
         doc["arm"] = {"name": arm, "cubin_art": a.cubin_art if cubin else None, "cubin_sha256": sha,
                       "binaries": build.get("binaries"), "gated": gated, "verifier": rec.get("verifier"),
                       "commits_y": sch.commits_y}
@@ -386,6 +395,7 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
             for name, m in at.items():
                 p = O.layer_gamma(result, busy, card, m, sch, model)
                 p["verified"] = verified(result, arm, m, model)
+                p["checked_by"] = None if arm is None else PIECE
                 p["epsilon"] = epsilon_at(sch, card, m, model)
                 p["perplexity"] = {"value": None, "why": "a kernel point runs no model: perplexity is a served point's"}
                 g = (p.get("gamma") or {}).get("gamma")
@@ -415,7 +425,7 @@ def parse(argv: Sequence[str] | None) -> argparse.Namespace:
     sub = p.add_subparsers(dest="command", required=True)
     for name in ("points", "run"):
         s = sub.add_parser(name)
-        s.add_argument("--card", required=True, choices=list(O.CARDS))
+        s.add_argument("--card", required=True, choices=list(O.cards()))
         s.add_argument("--uuid", required=True, help="the leased GPU's UUID, which bench.py must find")
         s.add_argument("--out", type=Path, required=True)
         s.add_argument("--run-dir", type=Path, required=True)
@@ -434,7 +444,8 @@ def parse(argv: Sequence[str] | None) -> argparse.Namespace:
             s.add_argument("--cubin-art", help="the art it was fetched from")
             s.add_argument("--point", choices=[*O.POINTS, "all"], default="all")
             s.add_argument("--commit", help="the run's source commit (the arm's verifier runs it)")
-            s.add_argument("--scratch", type=Path, required=True, help="where the nsys report goes, outside --out")
+            s.add_argument("--scratch", type=Path, required=True,
+                           help="a private directory outside --out: the nsys report and the arm's passes (passes/)")
             s.add_argument("--nsys", default="nsys")
             s.add_argument("--keep-reports", action="store_true",
                            help="keep the Nsight reports in --out's nsys/ instead of --scratch: a profiling pass, never of record")

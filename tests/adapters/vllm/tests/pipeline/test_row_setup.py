@@ -99,10 +99,10 @@ def test_a_row_whose_shape_is_not_read_yet_names_no_target_to_its_derives(tmp_pa
     assert cmd[-2:] == ["--out", "out"] and "--target" not in cmd and r.derive_timeout(256, 31) == 900
 
 
-def test_remote_verifier_reaches_the_single_gpu_commit_which_checks_its_session_before_anything_runs(tmp_path):
+def test_remote_verifier_reaches_the_single_gpu_commit_which_checks_its_session_before_anything_runs(tmp_path, monkeypatch):
     """REMOTE_VERIFIER reaches the single-GPU Commit as ``--remote-verifier``, and a TP row refuses it; the Commit
     refuses a bad address, a session of more than one mode or a Commit with no instrumented run to audit before anything
-    runs (`store.remote.CommitSession`)."""
+    runs (the session is the process memory-accounting registers by name, which the Commit looks up)."""
     from verity_vllm.pipeline import commit
 
     single = _row(tmp_path, environ={"REMOTE_VERIFIER": "10.0.0.7:7781"})
@@ -224,17 +224,22 @@ def test_a_leased_rows_stages_see_no_cuda_device_and_any_other_rows_see_the_call
     assert (r.child_env["CUDA_VISIBLE_DEVICES"], r.leased) == (devices, bool(lease))
 
 
+H200_ROW = "llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+
+
 def test_a_toolchain_whose_cuda_header_cannot_be_read_has_no_jit_key(tmp_path):
-    """The three packages' records are there and the toolkit's header is not: no key, so the row's caches stay its tree's own."""
+    """The three packages' records are there and the toolkit's header is not: no key, so the row's caches stay its tree's own.
+    A row whose target has no card file has none either."""
     site = tmp_path / "venv" / "lib" / "python3.12" / "site-packages"
     for name in ("triton", "torch", "vllm"):
         (site / f"{name}-1.0.dist-info").mkdir(parents=True)
         (site / f"{name}-1.0.dist-info" / "RECORD").write_text(f"{name}/__init__.py,sha256=x,1\n")
     py, cuda = str(tmp_path / "venv" / "bin" / "python"), tmp_path / "cuda"
-    assert RD.jit_key(py, str(cuda), ROW, str(tmp_path)) is None
+    assert RD.jit_key(py, str(cuda), H200_ROW, str(tmp_path)) is None
     (cuda / "include").mkdir(parents=True)
     (cuda / "include" / "cuda.h").write_text("#define CUDA_VERSION 12090\n")
-    assert re.fullmatch(r"[0-9a-f]{16}", RD.jit_key(py, str(cuda), ROW, str(tmp_path)) or "")
+    assert re.fullmatch(r"[0-9a-f]{16}", RD.jit_key(py, str(cuda), H200_ROW, str(tmp_path)) or "")
+    assert RD.jit_key(py, str(cuda), "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager", str(tmp_path)) is None
 
 
 # ---------------------------------------------------------------------------------------------------------------- cuBLAS names

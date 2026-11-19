@@ -117,14 +117,51 @@ def test_a_run_is_fetched_from_its_record_s_passes_alone(tmp_path) -> None:
         P.fetched("r2", tmp_path, "prod", "agentic@4", store=Store)
 
 
-def test_each_schedule_is_written_as_the_metric_marked_modeled(monkeypatch, tmp_path) -> None:
+def left(s) -> dict:
+    """A made-up capacity of schedule ``s``: its delay in GB, the world's year past every bound."""
+    rows = {f"{o}/{p}": {"GB": float(s.delay), "bits": 8e9 * s.delay, "bits_a_phase": 1.0, "bits_a_request": 2.0,
+                         "eps": 2.0 if (o, p) == ("world", "year") else 1e-9}
+            for o in P.SCOPES for p in P.PERIODS}
+    return {"argv": P.term_argv(s), "row": "scan", "at": "2", "request_count": "plan", "rows": rows}
+
+
+def test_each_schedule_is_written_as_both_metrics_under_one_member(monkeypatch, tmp_path) -> None:
     passes = [[user((0.0, 0.2, 0.5, 10, 12)), user((0.0, 1.5, 2.0, 10, 12))]]
-    doc = P.document("r1", "none", "prod", "agentic@4", {"slow": replace(WIDE, delay=30), "fast": WIDE}, passes)
+    doc = P.document("r1", "none", "prod", "agentic@4", {"slow": replace(WIDE, delay=30), "fast": WIDE}, passes,
+                     left=left)
     monkeypatch.setattr(kit, "host_stamp", lambda: STAMP)
     assert P.write(doc, tmp_path) == 2
-    got = {m["member"]: m for m in json.loads((tmp_path / "result.json").read_text())["measurements"]}
-    assert set(got) == {"slow/made-up/none", "fast/made-up/none"}
-    assert {m["name"] for m in got.values()} == {P.METRIC} and {m["mark"] for m in got.values()} == {"modeled"}
-    assert got["slow/made-up/none"]["value"] > 0 and got["fast/made-up/none"]["value"] is None
-    assert "fails at least 1 of 2 requests" in got["fast/made-up/none"]["why"]
-    assert "| fast |" in P.render(doc) and "none: fails" in P.render(doc)
+    ms = json.loads((tmp_path / "result.json").read_text())["measurements"]
+    assert {m["mark"] for m in ms} == {"modeled"}
+    slow = {m["member"]: m for m in ms if m["name"] == P.METRIC}
+    assert set(slow) == {"slow/made-up/none", "fast/made-up/none"}
+    assert slow["slow/made-up/none"]["value"] > 0 and slow["fast/made-up/none"]["value"] is None
+    assert "fails at least 1 of 2 requests" in slow["fast/made-up/none"]["why"]
+    cap = {(m["member"], m["over"], m["period"]): m for m in ms if m["name"] == P.CAPACITY}
+    assert set(cap) == {(m, o, p) for m in slow for o in P.SCOPES for p in P.PERIODS}
+    assert cap[("fast/made-up/none", "datacenter", "week")]["value"] == 10.0
+    assert cap[("slow/made-up/none", "world", "month")]["value"] == 30.0
+    assert cap[("fast/made-up/none", "world", "year")]["value"] is None
+    assert "no bound at this period" in cap[("fast/made-up/none", "world", "year")]["why"]
+    assert {m["unit"] for m in cap.values()} == {"GB"} and cap[("slow/made-up/none", "world", "week")]["bits"] == 2.4e11
+    table = P.render(doc)
+    assert "| fast |" in table and "none: fails" in table and "| 10 / 10 / 10 | 10 / 10 / 10 |" in table
+
+
+def test_the_calculator_s_arguments_are_the_schedule_s() -> None:
+    assert P.term_argv(replace(WIDE, bucket_ms=250, delay=6, ingress_buckets=8)) == [
+        "--bucket-s", "1/4", "--response-ids", "40", "--delay", "6", "--ingress-buckets", "6", "--phase-buckets", "512"]
+    with pytest.raises(SystemExit, match="doesn't divide"):
+        P.term_argv(replace(WIDE, bucket_ms=300))
+
+
+def test_the_capacity_is_the_calculator_s_term_of_record_at_the_card() -> None:
+    card = P.Schedule.of_card()
+    got = P.capacity(card)
+    ct = P.term_runner()
+    lb = ct.calculator()
+    doc = ct.document(lb, P.term_argv(card))
+    world_year = next(r for r in doc["rows"] if (r["row"], r["scope"], r["period"]) == (ct.ROW, "world", "year"))
+    assert got["rows"]["world/year"]["GB"] == world_year["term"][str(lb.OF_RECORD)]["GB"] == doc["value"]
+    assert set(got["rows"]) == {f"{o}/{p}" for o in P.SCOPES for p in P.PERIODS}
+    assert got["rows"]["datacenter/week"]["GB"] < got["rows"]["datacenter/year"]["GB"] < got["rows"]["world/week"]["GB"]

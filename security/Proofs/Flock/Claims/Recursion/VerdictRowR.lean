@@ -66,7 +66,7 @@ open FlockSoundness.Discharge.Recursion (HClass)
 
 namespace DecAt
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128) (i : ℕ) (r : Fin 2)
 
 /-- **Every part's residuals vanish at rep `r`'s values**: for each group `p` of S, the verifier's part `p` has every

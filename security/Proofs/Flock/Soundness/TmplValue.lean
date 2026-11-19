@@ -6,7 +6,7 @@ public import Flock.TmplAt
 import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.Nat.Totient
-import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Spot.Sampling.Circuit
 import Proofs.Flock.Soundness.ExecParse
 import Proofs.Flock.Soundness.SparseRows
 import Proofs.Flock.Soundness.TmplUnrollAt
@@ -24,7 +24,7 @@ Definition's value (`Tmpl.evalDef`) on its bound inputs (`unrollAt_eval`). A rea
 
 @[expose] public section
 
-open Flock Flock.Tmpl FlockSoundness.Audit FlockSoundness.SparseRows
+open Flock Flock.Tmpl Spot.Sampling FlockSoundness.SparseRows
 
 namespace FlockSoundness.TmplValue
 

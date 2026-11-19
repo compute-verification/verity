@@ -60,6 +60,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+from verity.circuits import population as PN
 from verity.protocols.resource_accounting.network.prover import leak_scan as LS, proof_drivers
 from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC
 from verity.circuits import boolean as BL
@@ -69,7 +70,8 @@ from verity.protocols.resource_accounting.network.verifier import network_attest
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, PAD
 from verity.protocols.resource_accounting.network.verifier.certificate import Certificate
 from verity.protocols.resource_accounting.network.verifier.network_attester import END, NetworkAttesterParams, cell
-from verity.protocols.proofs.spot.verifier.one_stage import produced, registered as G
+from verity.commitments import registered_value as RV
+from verity.commitments import randomness as RND
 
 #: the unit's ports: its input row and its output row
 PORTS = ("row", "o0")
@@ -199,21 +201,21 @@ def refused(at: SimpleNamespace, mr: SimpleNamespace, reads_from: int = 0) -> st
     return WR.refusal(port, at.dom, mr.entry, [WR.bc(r, s) for r, s in zip(mr.rows, mr.salts)])
 
 
-def committed_value(program: str, head: WR.CellsHead, port: str, rows: list[list[int]]) -> G.Registered:
+def committed_value(program: str, head: WR.CellsHead, port: str, rows: list[list[int]]) -> RV.Registered:
     """A member's own rows of a port no network attester row registration holds (one a unit, its u16 words), committed
     before staging as a value registered on `head`'s execution phase: each row under a salt of the prover's own, in a tree
     whose domain binds the statement's Program (its SHA-512, `program`) and the network attester's root, so the root,
     which the registration names before any coin, opens under no other execution phase's. The statement commits the port's
     rows under the same salts, so they open it."""
-    return G.Registered.commit(program, f"{head.value}/committed/{port}", rows, None, G.WORD_BITS, WR.SCHEMA,
+    return RV.Registered.commit(program, f"{head.value}/committed/{port}", rows, None, RV.WORD_BITS, WR.SCHEMA,
                                window=head.root.hex())
 
 
-def value_port(v: G.Registered, reads_from: int = 0) -> dict:
+def value_port(v: RV.Registered, reads_from: int = 0) -> dict:
     """The verifier's own `--registered` port of a registered value `v` at its root (a committed value's,
     `committed_value`, the one the registration names): unit `reads_from + i` reads its row i."""
-    return produced.port(v.value, v.entry(), v.root.hex(), list(range(v.leaves)), WR.SCHEMA) | \
-        ({G.READS_FROM: int(reads_from)} if reads_from else {})
+    return RV.port(v.value, v.entry(), v.root.hex(), list(range(v.leaves)), WR.SCHEMA) | \
+        ({RV.READS_FROM: int(reads_from)} if reads_from else {})
 
 
 # --- the audit (`n2_zk`'s flow on one-stage's a0, a7 and a8) ------------------------------------------------------------
@@ -231,9 +233,10 @@ def _statement():
 
 def _one_stage():
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D, docket as R, verifier as V
+    from verity.protocols.proofs.spot.prover import docket as DK
 
     d = proof_drivers.drivers()
-    return SimpleNamespace(**vars(_statement()), a0=d.a0, a7=d.a7, a8=d.a8, prove_subprotocol=d.prove_subprotocol, D=D, R=R, V=V)
+    return SimpleNamespace(**vars(_statement()), a0=d.a0, a7=d.a7, a8=d.a8, prove_subprotocol=d.prove_subprotocol, D=D, DK=DK, R=R, V=V)
 
 
 def check_shape(M, sg: SimpleNamespace) -> None:
@@ -253,7 +256,7 @@ def public_header(out: Path, n: int) -> dict:
 def stager(M, B: int, n: int, out: Path) -> SimpleNamespace:
     """The statement program and partition (one template, n proof blocks) and the proof block's stager."""
     defn = bind(WardenRowIdentity, B=B)
-    program = M.P.mixed_population_program([(defn, n)])
+    program = PN.mixed_population_program([(defn, n)])
     query = M.P.template_instances_query([defn])
     part = M.P.partition(program, query)
     out.mkdir(parents=True, exist_ok=True)
@@ -285,7 +288,7 @@ def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
     value = committed_value(sg.program_sha512, at.head, other, words.tolist())
     _w, salts, entry = value.statement(range(n))
     set_name = f"{st.iset.name}-{name}"
-    got = st.stage({"row": words}, out, os.urandom(32), salts={port: mr.salts, other: salts},
+    got = st.stage({"row": words}, out, salts={port: mr.salts, other: salts},
                    indices=range(sg.base, sg.base + n), set_name=set_name, tables={"row": words},
                    refs={"row": list(range(n))}, registered={port: mr.entry, other: entry})
     outs = M.np.asarray(got["outs"]["o0"], dtype=M.np.uint16)
@@ -342,7 +345,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
     """Member m registered (its frame ports and its committed value's root, `committed_roots`), sampled by the
     verifier's Lean (every unit), proved --zk behind the ZK server and held by Lean with the verifier's own registered
     reads. Writes what the verifier received under ``out / "verifier"``."""
-    a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
+    a0, a7, P, R, V, DK = M.a0, M.a7, M.P, M.R, M.V, M.DK
     out.mkdir(parents=True, exist_ok=True)
     n, name = m["n"], m["name"]
     want, roots = committed_roots(m)
@@ -351,14 +354,14 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
         want[f"{name}/{p_}"] = w
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
-    law = M.D.parse_design(f"stratified:{n}")
+    law = RND.parse_design(f"stratified:{n}")
     win = {"kind": "stand-in", "of": f"the bucket rows of {n} cells of connection {at.connection} in the network certifier's "
                                       f"egress execution phase {at.window} (network_attester_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "units": {"cells": [list(c) for c in at.units.cells], "digest": at.units.digest().hex()},
            "link": f"registered: port {m['port']} reads {at.units.value(at.head)} at the network certifier's signed root; "
                    f"{', '.join(m['committed'])} the member's committed value at its registered root"}
-    rec = R.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
+    rec = DK.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, sg.program, sg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json(),
               f"statement/{name}": a7.statement_checks(m, rec, want), "registered": registered_roots(m, rec)}

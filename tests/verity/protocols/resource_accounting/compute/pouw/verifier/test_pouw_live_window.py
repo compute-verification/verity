@@ -60,7 +60,7 @@ def test_a_round_coin_opened_before_its_rounds_root_was_recorded_is_refused():
     ch, roots, ops = window(k=2)
     early = ch.open(Wd.ROUND, 2, roots[1])
     assert Wd.rounds_reason(ch.commitment, roots, ops + [early]) == \
-        "pouw/round coin 2 was opened before its root was recorded"
+        "pouw/round coin 2 was opened with no root recorded before it"
     assert Wd.rounds_reason(ch.commitment, roots + [bytes([9]) * 64], ops + [early]) == \
         "pouw/round coin 2: coin was not opened after what the verifier recorded"
 

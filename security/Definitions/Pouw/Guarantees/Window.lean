@@ -5,8 +5,8 @@ public import Definitions.Pouw.Window
 /-!
 # A window's ε from its calls' (M2), with a sample that depends on the registration (C1) (trusted)
 
-C1, a sample that depends on the registration, is already expressed on main: `FlockSoundness.Audit.auditReg`
-(`Proofs/Flock/Soundness/Audit/RegDraw.lean`) and the keyed window's record theorem over it,
+C1, a sample that depends on the registration, is already expressed on main: `Pouw.Window.auditReg`
+(`Definitions/Pouw/Window.lean`) and the keyed window's record theorem over it,
 `keyedExecutionPhaseReg_extraction_audit_of_record` (`Proofs/Flock/Soundness/KeyedSample.lean`), which takes one
 `ExtractionAnalysis` of the whole window with state-dependent `ε_ks(R, τ)` and `ε_bind(R, τ)`. This module's own content
 is M2: what the window's `κ`, `coll(R, τ)` and `ε_bind(R, τ)` are in terms of its calls', for a window of `C` calls,
@@ -32,7 +32,7 @@ and `BindSound εbind`) at `εks R τ := max_c κ_c + coll R τ` with `coll := P
 **The deployed sample** (decision 102, `verity/protocols/accounting/pouw/verifier/window.py`). The window's calls are the service's
 sessions and its units the `N` tiles in each (`serviceSamplingDesign`): after the receipt the verifier samples one uniform
 `K′`-subset, and session `σ` proves the sampled tiles of rank `σ·cap` to `σ·cap + cap − 1`. The sessions' sampling designs `L σ` are
-uniform `share σ`-subsets on coins of their own (`sessionSamplingDesign`), so `η = 0` (`ServiceMissProb`). PoUW reads `ExecutionPhaseDelta` at
+uniform `share σ`-subsets on coins of their own (`Verity.SamplingDesign.permPrefix N (share K′ cap σ)`), so `η = 0` (`ServiceMissProb`). PoUW reads `ExecutionPhaseDelta` at
 `𝓑 = harmSets Wref ε ∧ CopyClosed`, where `Wref ⟨σ, t⟩` is tile `t`'s work: a copy-closed set holding the share `ε` of
 the work is every session's copy of a tile set holding the share `ε` of the window's, at least `ε·W/w_max` tiles, so
 the first term is at most `∏_σ (1 − ε·W/(N·w_max))^{share σ} = (1 − ε·W/(N·w_max))^{K′}`, which is at most `δ` where
@@ -44,7 +44,7 @@ decision 101's keyed sample) is retired.
 
 **Discharge table**: which deployed piece discharges each premise.
 * `MissProbWithin Lw L 𝓑 0`: the service's uniform subset after the receipt (`subset:K′`, `service.py`), by
-  `ServiceMissProb`. On the retired keyed sample it was A4, A5 and M1 (`keyedExecutionPhase_escape_le`).
+  `ServiceMissProb`. On the retired keyed sample it was A4, A5 and M1 (`keyedExecutionPhase_missProb_le`).
 * `CallAnalysis.cover`: each session's tile instances at the public input `t` from the verifier's own sample, the window
   root and domains from the registration (`PUBLIC_PORTS`, `public_inputs`), and the tile's place, rows and roots from
   `X`'s entries under that root (`tile_at`), so a unit's seed inputs are `UnitStmts.seedIn X ⟨σ, t⟩`.
@@ -86,7 +86,7 @@ three more links, each stated:
   `δ_in = 1`. It is discharged when the window's Program reads the `-h3` leaf in gates and `window_problem` is a
   Program the verifier requires: the outputs' half is that Program's opening of the `-h3` root, the inputs' half
   Flock's `AnchorsSound`
-  (`Proofs/Flock/Soundness/Audit/OneStage.lean`). PoUW's event, the window accepting while its committed transcript
+  (`Proofs/Spot/Sampling/OneStage.lean`). PoUW's event, the window accepting while its committed transcript
   isn't anchored, served and outside `𝓑`, is then at most `ExecutionPhaseDelta`'s bound plus `δ_in`
   (`Pouw.Window.executionPhase_served_le`, proved).
 * **Flock's analysis** (`Proofs/Pouw/Window/Flock.lean`): Flock's sessions are games of core's one game
@@ -145,18 +145,18 @@ def ExecutionPhaseDelta : Prop :=
     (∀ c, BindSoundIn Lw sess committed A c (εbind c)) →
     ∀ σ : Strategy (auditReg Lw (executionPhaseSession sess)),
       prob (fun o => o.1 = true ∧ 𝓑 (U.incorrect (committed (reg σ) (cont σ)))) (auditReg Lw (executionPhaseSession sess)) σ ≤
-        (⨆ (B : Finset (WUnit n)) (_ : 𝓑 B), (SamplingDesign.prod (L (reg σ))).missProb B) + η + (⨆ c, κ c) +
+        (⨆ (B : Finset (WUnit n)) (_ : 𝓑 B), (Verity.SamplingDesign.prod (L (reg σ))).missProb B) + η + (⨆ c, κ c) +
           coll Lw sess g (reg σ) (cont σ) + ∑ c, εbind c (reg σ) (cont σ)
 
 /-- **The service's sample is its sessions' sampling designs on copy-closed sets.** For `N` tiles, `K ≤ N` sampled and sessions of
 `cap > 0` instances, at every registration: a copy-closed set of units, every session's copy of a tile set `B₀`, escapes
 the service's sample (`serviceSamplingDesign`, one uniform `K`-subset in rank-ordered sessions) with probability at most its missProb
-under the sessions' own uniform `share σ`-subsets sampled independently (`sessionSamplingDesign`). Both are hypergeometric: the
+under the sessions' own uniform `share σ`-subsets sampled independently (`Verity.SamplingDesign.permPrefix`). Both are hypergeometric: the
 service's is `∏_{i<K} (N − |B₀| − i)/(N − i)`, and the product's is the same factors with `i` restarting at `0` in every
 session, each at least the service's. So `ExecutionPhaseDelta` reads the service with each session a call at `η = 0` on every
 family of copy-closed sets. -/
 def ServiceMissProb : Prop :=
   ∀ {Reg : Type} (N K cap : ℕ), 0 < cap → K ≤ N →
-    MissProbWithin (fun _ : Reg => serviceSamplingDesign N K cap) (fun _ σ => sessionSamplingDesign N K cap σ.val) CopyClosed 0
+    MissProbWithin (fun _ : Reg => serviceSamplingDesign N K cap) (fun _ σ => Verity.SamplingDesign.permPrefix N (share K cap σ.val)) CopyClosed 0
 
 end Pouw.Guarantees.Window

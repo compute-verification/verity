@@ -8,8 +8,8 @@
 #   research run --on auto --cwd source -- bash calibration/pouw/sass_census/lowering.sh
 set -uo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-NVCC=${NVCC:-$(ls -d /usr/local/cuda-13*/bin/nvcc 2>/dev/null | sort -V | tail -1)}
-[ -x "${NVCC:-}" ] || NVCC=$(command -v nvcc)
+NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13.0)/bin/nvcc} || { echo "lowering.sh: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
+[ -x "$NVCC" ] || { echo "lowering.sh: no nvcc at $NVCC" >&2; exit 2; }
 CUOBJDUMP=${CUOBJDUMP:-$(dirname "$NVCC")/cuobjdump}
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT

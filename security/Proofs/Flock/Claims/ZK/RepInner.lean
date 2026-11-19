@@ -59,7 +59,7 @@ open Flock Transcript Replay
 
 variable {α β γ δ : Type}
 
-theorem fw_coined {m : TMW PS α} (hm : Coined m) {t t' : Transcript} {l l' : Array Claims.Msg}
+theorem fw_coined {m : TMW PS α} (hm : Coined m) {t t' : Transcript} {l l' : Array Hash.Msg}
     (hl : l'.size = l.size) : Fw (· = ·) ((m.run t).go l) ((m.run t').go l') := by
   intro a t₁ L h
   obtain ⟨t₁', L', e, hL⟩ := hm t t' l l' a t₁ L h hl
@@ -67,7 +67,7 @@ theorem fw_coined {m : TMW PS α} (hm : Coined m) {t t' : Transcript} {l l' : Ar
 
 /-- **Two squeezes of nonzero sizes** each send one body, refused at the same log sizes. -/
 theorem fw_sampleVecP (coin : ℕ → ℕ → F128) (n : ℕ) {k k' : ℕ} (hk : k ≠ 0) (hk' : k' ≠ 0) {t t' : Transcript}
-    {l l' : Array Claims.Msg} (hl : l'.size = l.size) :
+    {l l' : Array Hash.Msg} (hl : l'.size = l.size) :
     Fw (fun _ _ => True) (((sampleVecP (asksCut coin n) k).run t).go l)
       (((sampleVecP (asksCut coin n) k').run t').go l') := by
   intro a t₁ L h
@@ -77,21 +77,21 @@ theorem fw_sampleVecP (coin : ℕ → ℕ → F128) (n : ℕ) {k k' : ℕ} (hk :
   exact ⟨_, _, _, rfl, by simp only [Array.size_push, hl], trivial⟩
 
 theorem fw_throw_bind {S : γ → δ → Prop} {e : String} {f : α → TMW PS γ}
-    {y : Except String (δ × Transcript) × Array Claims.Msg} {t : Transcript} {l : Array Claims.Msg} :
+    {y : Except String (δ × Transcript) × Array Hash.Msg} {t : Transcript} {l : Array Hash.Msg} :
     Fw S ((((throw e : TMW PS α) >>= f).run t).go l) y := by
   intro c t₂ L₂ h
   obtain ⟨_, _, _, h', _⟩ := run_ok h
   rw [_root_.Flock.ZkServer.Finish.throw_run_go] at h'
   cases h'
 
-theorem fw_throw {S : γ → δ → Prop} {e : String} {y : Except String (δ × Transcript) × Array Claims.Msg}
-    {t : Transcript} {l : Array Claims.Msg} : Fw S (((throw e : TMW PS γ).run t).go l) y := by
+theorem fw_throw {S : γ → δ → Prop} {e : String} {y : Except String (δ × Transcript) × Array Hash.Msg}
+    {t : Transcript} {l : Array Hash.Msg} : Fw S (((throw e : TMW PS γ).run t).go l) y := by
   intro c t₂ L₂ h
   rw [_root_.Flock.ZkServer.Finish.throw_run_go] at h
   cases h
 
 theorem fw_lift_pure_bind {S : γ → δ → Prop} {a : α} {f : α → TMW PS γ}
-    {y : Except String (δ × Transcript) × Array Claims.Msg} {t : Transcript} {l : Array Claims.Msg}
+    {y : Except String (δ × Transcript) × Array Hash.Msg} {t : Transcript} {l : Array Hash.Msg}
     (h : Fw S (((f a).run t).go l) y) : Fw S ((((StateT.lift (pure a) : TMW PS α) >>= f).run t).go l) y := by
   rw [bind_go (x := StateT.lift (pure a)) rfl]
   exact h
@@ -101,7 +101,7 @@ the ZK server's `innerP` at SHA-512 returns, `innerCut` from any source, commitm
 with a log of the same size. -/
 theorem innerP_cut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
     (ic ic' : InnerCommit) (finalC finalC' : F128) (src : RepSrc) (cons cons' : Array (String × Zk.Lin))
-    {t t' : Transcript} {l l' : Array Claims.Msg} (hl : l'.size = l.size) :
+    {t t' : Transcript} {l l' : Array Hash.Msg} (hl : l'.size = l.size) :
     Fw (fun _ _ => True) (((innerP (asksCut coin n) (Hashes.ofSha512 h) lay p ic finalC cons).run t).go l)
       (((innerCut (asksCut coin n) lay ic' finalC' src cons').run t').go l') := by
   unfold innerP innerCut

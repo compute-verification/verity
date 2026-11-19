@@ -11,7 +11,7 @@ process of its own (this file's ``serve`` verb, `auditor.run` with no coin link,
 
 1. ``served_verdicts.py pearlplus-period open``: the lane's Pearl-C period, cap 1.
 2. A salt-only session reserved in that period and opened on salt epoch 0's root over the passes' fixed operands' root
-   (`pouw_h1_window.reserve_salt` and ``open_session``, as `bench_arm.live_coins`' install does), its salt coin salting
+   (`pouw_h1_window.reserve_salt` and ``open_session``, as Pearl+'s attach does (`pouw.scheme.Attached.reserve`)), its salt coin salting
    a toy pass (the pouw suite's `proved_pass`, k = 128 and 16 x 16 tiles, in place of a GPU serve), then closed.
 3. ``served_verdicts.py pearlplus-period close``, once that session has ended.
 4. ``served_passes.py verify --tie W --test-instance`` under PEARLC_CHALLENGER_GATE/PEER/LANE: the verifier's sample a sample
@@ -45,12 +45,14 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+from verity.protocols.compose import schemes
+
 HERE = Path(__file__).resolve().parent
 TREE = HERE.parents[1]
 LANE, PEER, HOST = "vllm", "local", "local-challenger"
 #: the scratch challenger key's LMS (W, H): 2^6 signatures, over the ledger's and both sessions' few dozen
 PARAMS = (4, 6)
-SCHEME = "pearl-c-h100-v1-h3"
+SCHEME = schemes.get("pearl-plus").option.partition(":")[2]
 PERIOD = "pearlplus-e2e"
 #: the toy row's one refusal, after every other condition of record held: a test instance's passes credit nothing
 TOY_ROW = "the Lean verdict credits 0 MACs over {tiles} tiles: nothing"
@@ -227,7 +229,7 @@ def run(out: Path, lean: str | None = None) -> int:
 def _run(out: Path, root: Path, lean: str | None = None) -> int:
     from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
     from verity_vllm.pipeline.commit_coins import ChallengerGate
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
     sys.path[:0] = [str(HERE), str(TREE / "tests" / "benchmarks" / "pouw")]
     import served_verdicts as S

@@ -2,7 +2,7 @@
 // tcgen05 kind::mxf4 (UTCOMMA, E2M1 with UE8M0 block scales a 32-vector) and kind::mxf4nvf4 (UE4M3 a 16-vector), which
 // sm_100's DS_tensor row prices nowhere, and kind::f8f6f4 at E2M1 beside E4M3: does FP4 in an 8-bit container
 // run at FP8's rate or FP4's?
-// Built and gated by ../opcode_probe/probe.py build --arch sm_100a; rates.sh with SRC=unpriced_fp4.cu is the job.
+// Built and gated by ../opcode_probe/probe.py build on a B200; rates.sh with SRC=unpriced_fp4.cu is the job.
 //   k_<kind>   512 threads; thread 0 of warp 0 issues 4 tcgen05.mma 128x256xK an iteration into one TMEM accumulator
 //              (K 32 for i8 and f8f6f4, 64 for the packed fp4 kinds), the scales at 1.0 in TMEM beside it
 // A rate is warp instructions a SM a clock; MACs a SM-clock are 128 x 256 x K x it.

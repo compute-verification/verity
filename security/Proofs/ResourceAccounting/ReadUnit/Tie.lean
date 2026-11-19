@@ -3,7 +3,7 @@ module
 public import Proofs.ResourceAccounting.ReadUnit.Net
 public import Proofs.Core.Circuit
 public import Proofs.Flock.Bridge.CircuitOf
-public import Proofs.Flock.Soundness.Audit.Circuit
+public import Proofs.Spot.Sampling.Circuit
 public import Proofs.Flock.Soundness.Lowering
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

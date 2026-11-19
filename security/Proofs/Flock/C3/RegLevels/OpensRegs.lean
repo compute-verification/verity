@@ -48,7 +48,7 @@ import Proofs.Flock.Verifier.HmNets
 namespace FlockC3.RegLevels
 
 open Flock
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open FlockVBridge FlockVBridge.AccChain
 open FlockSoundness.Discharge.Hm (bitL)
 open FlockVBridge.Decode (RegBit)

@@ -18,8 +18,9 @@ ROOT=${BOOT_ROOT:-/workspace/cache/one-stage-bootstrap}
 mkdir -p "$ROOT/wheels" "$OUT" || exit 2
 arch=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader -i "$CARD" 2>/dev/null | head -1)
 [ -n "$arch" ] || { echo "kept_bootstrap.sh: nvidia-smi names no card $CARD" >&2; exit 2; }
-if [ -z "${CUDA_HOME:-}" ]; then for c in /usr/local/cuda-12.9 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA_HOME=$c; break; }; done; fi
-export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 12.9) \
+  || { echo "kept_bootstrap.sh: no CUDA 12.9 toolkit (benchmarks/kernels/machine.py toolkit 12.9, above)" >&2; exit 2; }
+export CUDA_HOME
 nvcc=$("$CUDA_HOME/bin/nvcc" --version 2>/dev/null | tail -2 | tr '\n' ' ')
 [ -n "$nvcc" ] || { echo "kept_bootstrap.sh: no nvcc under CUDA_HOME=$CUDA_HOME" >&2; exit 2; }
 torch=$(python3 - "$BOOT" "$ROOT/wheels" <<'EOF'

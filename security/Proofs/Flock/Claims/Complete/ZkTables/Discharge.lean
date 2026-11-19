@@ -52,7 +52,7 @@ open Flock FlockDeploy
 namespace FlockComplete.ZkTables
 
 /-- **One statement per table** (§3): the goal `TablesZk`. -/
-theorem tables_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : TablesZk H rel := by
+theorem tables_goal (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : TablesZk H rel := by
   intro o
   obtain ⟨hpos, -, hn, -⟩ := o.tables
   unfold Run.tabs tabsOf
@@ -60,7 +60,7 @@ theorem tables_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → R
   omega
 
 /-- **Each table has its `--zk` schedule**: the goal `SchedulesZk`. -/
-theorem schedules_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
+theorem schedules_goal (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) :
     SchedulesZk H rel := by
   intro o st hst
   obtain ⟨-, -, -, hall⟩ := o.tables
@@ -72,7 +72,7 @@ theorem schedules_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed �
   exact zkSchedule_ok h1 h2
 
 /-- **One proof file per rep stream**: the goal `ProofCountZk`. -/
-theorem proofCount_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
+theorem proofCount_goal (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) :
     ProofCountZk H rel := by
   intro o
   have := sessionPZk_proofs (Claims.hOf H) (fun j => (Claims.coinSeq o.r j).bytes) o.spec (tabsOf o.sts)

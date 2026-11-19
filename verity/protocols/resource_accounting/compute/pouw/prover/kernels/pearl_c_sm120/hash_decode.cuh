@@ -2,9 +2,9 @@
 // (hash_h3.cuh, hash_fast.cuh; every format is theirs and row_commit.cuh's, and every constant byte comes from their tables):
 //
 // * pd_commit, one launch for A's commitment: a CTA a row.  Its first warps hash the row's 1 KiB segments (a thread a
-//   segment, from hash_fast.cuh's header table) while two helper warps do what no data reaches: one the row's hm96 salt
-//   (ChaCha20, the byte-table mask M·y over the warp's lanes, and c = SHA-512(salt prefix ‖ y)), the other its frame leaf's
-//   first block, its share of the pads, and a lane a level the tree's node templates (below 256 a node's first block is
+//   segment, from hash_fast.cuh's header table) while two helper warps do what the row's words don't reach: one the row's
+//   hm96 salt (its 192 bytes read from the caller's buffer, the byte-table mask M·y over the warp's lanes, and
+//   c = SHA-512(salt prefix ‖ y)), the other its frame leaf's first block, its share of the pads, and a lane a level the tree's node templates (below 256 a node's first block is
 //   (dom_a, level) alone and the rest differs in the index byte).  Then thread 0 folds the row digest (`pd_fold`) and makes
 //   the hm96 leaf and frame leaf (3 compressions), while another warp makes the row's seed, line key and E_A line from the
 //   labels' midstates (PD_LABELS; 4 compressions; with PD_PAIR the counter below is taken after the leaf, so the last
@@ -451,16 +451,16 @@ DEV void pd_fold_sched(const uint64_t* dig, int s, int lane, uint64_t* kw) {
     pd_bar_arrive(1 + q, 64);
   }
 }
-// the hm96 salt pieces of leaf i (hm_leaves' work before x), by one whole warp: lanes 0-2 the three ChaCha20 blocks of y
-// (into shared ys), each lane 6 of the mask's 192 byte-table rows (4 q + r for y[q]'s byte r, an L2 or DRAM load each: one
-// lane alone waits on 192 of them in turn), XORed across the warp (`pd_hm_mask`), then lane 0 c's state.  Out on lane 0:
-// the mask M·y (8 little-endian limbs) and c's state
-DEV void pd_hm_mask(uint64_t salt_key, uint64_t nonce, uint64_t i, uint64_t hm, uint32_t* ys, int lane, uint64_t* mk) {
+// the hm96 salt pieces of leaf i (hm_leaves' work before x), by one whole warp: lanes 0-11 each load 16 bytes of y from the
+// caller's salts (leaf i's 192 bytes at salts + 192 i, hash_h3.cuh's `load_salt`) into shared ys, each lane 6 of the mask's
+// 192 byte-table rows (4 q + r for y[q]'s byte r, an L2 or DRAM load each: one lane alone waits on 192 of them in turn),
+// XORed across the warp (`pd_hm_mask`), then lane 0 c's state.  Out on lane 0: the mask M·y (8 little-endian limbs) and
+// c's state
+DEV void pd_hm_mask(uint64_t salts, uint64_t i, uint64_t hm, uint32_t* ys, int lane, uint64_t* mk) {
   const rc::PosTab<false> tables{reinterpret_cast<const uint8_t*>(hm + 128)};
-  if (lane < 3) {
-    uint32_t key[8];
-    load_key(salt_key, key);
-    chacha20_block(key, 3 * i + lane, nonce, ys + 16 * lane);
+  if (lane < HM_SALT / 16) {
+    const uint4 v = reinterpret_cast<const uint4*>(salts + HM_SALT * i)[lane];
+    ys[4 * lane] = v.x; ys[4 * lane + 1] = v.y; ys[4 * lane + 2] = v.z; ys[4 * lane + 3] = v.w;
   }
   __syncwarp();
   uint32_t m[16];
@@ -484,9 +484,8 @@ template <int V> struct PdSha {
   static DEV void compress(uint64_t* st, uint64_t* w) { pd_cmp<V>(st, w); }
 };
 template <int V>
-DEV void pd_hm_salt(uint64_t salt_key, uint64_t nonce, uint64_t i, uint64_t hm, uint32_t* ys, int lane, uint64_t* mk,
-                    uint64_t* c) {
-  pd_hm_mask(salt_key, nonce, i, hm, ys, lane, mk);
+DEV void pd_hm_salt(uint64_t salts, uint64_t i, uint64_t hm, uint32_t* ys, int lane, uint64_t* mk, uint64_t* c) {
+  pd_hm_mask(salts, i, hm, ys, lane, mk);
   if (lane) return;
   rc::salt_digest<PdSha<V>>(reinterpret_cast<const uint64_t*>(hm), rc::SaltU32{ys, 1}, c);
 }
@@ -929,7 +928,7 @@ extern "C" __global__ void __launch_bounds__(32) pd_heads(const Args) {
 // 0 and cw) and its seed chain pair 1's (warps 1 and cw + 1, or at cw = 1 warps 2 and 3); with PD_LATE the salt, the
 // templates and the frame leaf run while warp 0 folds, on warps 1, 2 and 3.  p0 A's rows (FP32, k words each), p1 row
 // digests out (64 B a row), p2 A's tree (level 0, then each level above), p3 row seeds out (32 B a row), p4 their line keys
-// out, p5 the unit block (salt ‖ root_B ‖ u64 LE index), p6 dom_a (64 B), p7 the prover's salt key, p8 the hm96 constants,
+// out, p5 the unit block (salt ‖ root_B ‖ u64 LE index), p6 dom_a (64 B), p7 the rows' hm96 salts (192 B a row, row r's at p7 + 192 r: the caller's bytes), p8 the hm96 constants,
 // p9 scratch (a u32 counter, zero before the first launch and left zero), p10 seed_A out, p11 line_a out, p12 E_A's codes
 // out (32 B a line: row r's line under its own line key, then the filler lines under line_a) or 0; i0 rows (at most
 // PD_MAX_ROWS), i1 k, i2 mode (0: the tree, seed_A and the filler lines too, 1: level 0 and the rows' lines only), i3 E_A's
@@ -967,7 +966,7 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r)
   const uint32_t* const seed_unit = PD_SM90_FORMS ? un : unit;   // the row's seed chain's sources
   const uint64_t* const seed_lab = PD_SM90_FORMS ? lab : &PD_LABELS[0][0];
   auto salt = [&] {                                 // the row's hm96 salt, by a whole warp
-    pd_hm_salt<V>(a.p[7], index, (uint64_t)r, a.p[8], ys, lane, mk, cc);
+    pd_hm_salt<V>(a.p[7], (uint64_t)r, a.p[8], ys, lane, mk, cc);
     if (lane == 0) pd_stamp<V>(sb, r, PS_SALT);
   };
   auto templates = [&](int l, uint64_t* buf) {      // level l's node template (l < levels), its builder at buf + 96 l

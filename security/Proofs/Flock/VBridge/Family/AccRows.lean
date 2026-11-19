@@ -49,7 +49,7 @@ all three hold where no read is segmented, `siteRowsShared` at `ReadsUnsegmented
 namespace FlockVBridge.Family
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Exec
-open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockSoundness.Model FlockSoundness.Audit
+open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockSoundness.Model Spot.Sampling
 open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBridge.Stages
 open Flock.RecAlgebra (structureOf verifierRows el valOf wi)
 open FlockVBridge.OfVStar (ReadCol rowCol partRep)
@@ -161,15 +161,15 @@ section Two
 open FlockSoundness.Registered (ReadsX TwoOpenings)
 open FlockSoundness.Binding (HmRowsX Collides hm96Pair hm96Pair_spec)
 
-variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
-  {decode : FlockSoundness.Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
+  {decode : Spot.Sampling.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
   {lay : FlockSoundness.Binding.Layout P plan tab decode} {rs : HmRowsX lay}
-  {C' : Verity.Boolean.Circuit} {n' : ℕ} {P' : FlockSoundness.Audit.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
+  {C' : Verity.Boolean.Circuit} {n' : ℕ} {P' : Spot.Sampling.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
   {plan' : Finset (Fin n') → Reg₁ → List (FlockSoundness.TabSpec mPts')}
   {tab' : (S : Finset (Fin n')) → (R : Reg₁) → Fin n' → Fin (plan' S R).length}
-  {decode' : FlockSoundness.Audit.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
+  {decode' : Spot.Sampling.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
   {lay' : FlockSoundness.Binding.Layout P' plan' tab' decode'} {rs' : HmRowsX lay'}
 
 /-- The verifier's leaf check reads a port's registration only (`opensLeaf`: its leaf count, domain, schema and root). -/

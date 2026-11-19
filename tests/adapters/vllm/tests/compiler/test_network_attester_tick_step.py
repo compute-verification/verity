@@ -15,8 +15,7 @@ from verity_vllm.pipeline.advice_code import tick_step as TS
 TODAY = TS.Rule(TT.TICK.bucket_us, TT.TICK.sat_us, TT.TICK.free_us)
 CHOSEN = TS.Rule(10**8, 6_303_000, 6_303_000, 18_126)
 SEVERAL = TS.Rule(10**8, 278_000_000, 152_000_000, 18_126)
-RULES = {f"{name}-{'quiet' if quiet else 'unqueued'}": dataclasses.replace(rule, quiet=quiet)
-         for name, rule in (("today", TODAY), ("chosen", CHOSEN), ("several", SEVERAL)) for quiet in (True, False)}
+RULES = {"today": TODAY, "chosen": CHOSEN, "several": SEVERAL}
 
 Step = tuple[TS.State, TS.Inputs, TS.Out]
 
@@ -24,7 +23,7 @@ Step = tuple[TS.State, TS.Inputs, TS.Out]
 def binding(e: SC.Engine, n: int, R: int, W: int, A: int, rule: TS.Rule, carry: int | None = None) -> dict:
     most = max(rule.sat, rule.free) + rule.token * e.max_num_batched_tokens
     return TK.statics(R, W, A, dataclasses.asdict(e), max(n - 1, 1).bit_length(), tau=rule.bucket, sat=rule.sat,
-                      free=rule.free, token=rule.token, quiet=rule.quiet,
+                      free=rule.free, token=rule.token,
                       carry=most // rule.bucket + 1 if carry is None else carry)
 
 
@@ -53,10 +52,10 @@ def seen(steps: list[Step], rule: TS.Rule) -> set[str]:
     out = set()
     for st, inp, o in steps:
         assert o.state is not None
-        jump = (not st.step.waiting and not (rule.quiet and st.step.running) and bool(inp.arrivals)
+        jump = (not st.step.waiting and not st.step.running and bool(inp.arrivals)
                 and st.clock < rule.close(inp.released[0]))
         if jump:
-            out.add("jumps while running" if st.step.running else "jumps")
+            out.add("jumps")
         elif o.rows and st.clock // rule.bucket != o.state.clock // rule.bucket:
             out.add("carries")
             if o.state.clock // rule.bucket - st.clock // rule.bucket > 1:
@@ -83,7 +82,6 @@ def test_the_circuit_is_the_reference_on_the_plan(name: str, asy: bool) -> None:
     steps = scan(SimpleNamespace(**st_), rule, ios, released)
     held(st_, steps)
     want = {"carries", "jumps"} | ({"saturates"} if rule.sat != rule.free else set()) | (
-        {"jumps while running"} if not rule.quiet and rule.free < rule.bucket else set()) | (
         {"carries several"} if rule.free > rule.bucket else set())
     assert want <= seen(steps, rule)
 
@@ -134,6 +132,13 @@ def test_a_bucket_count_past_32_bits_is_refused() -> None:
              (running, top * CHOSEN.bucket + CHOSEN.bucket - 1, RS.Inputs(()), ()),
              (running, (top - 1) * CHOSEN.bucket + CHOSEN.bucket - 1, RS.Inputs(()), ())]
     assert [o.ok for o, _ in TK.evaluate(st_, cases)] == [False, True, False, True]
+
+
+def test_the_catch_up_while_requests_run_is_refused() -> None:
+    e = SC.Engine(max_num_seqs=2, max_num_batched_tokens=64, max_model_len=64, num_gpu_blocks=16, block_size=16)
+    st_ = binding(e, 2, 2, 2, 3, CHOSEN)
+    with pytest.raises(ValueError, match="the tick step has no catch-up while requests run: CU = 0"):
+        TK.widths(SimpleNamespace(**{**st_, "CU": 1}))
 
 
 def test_a_remainder_at_a_bucket_or_past_it_is_refused() -> None:

@@ -42,7 +42,7 @@ done
 ln -s "$ROOT/verity/protocols/proofs/flock/prover/live" crates/flock-live
 grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml
 if [ "${1:-}" = test ]; then
-  # --lib: the live crate's bins hold no tests, and flock-pure-gpu and flock-gpu-link predate the SHA-512 patch
+  # --lib: the live crate's bins hold no tests, and flock-gpu-link predates the SHA-512 patch
   # sha512 alone is the proving build: its refusals of a fixed seed only mean something without seed-injection
   for features in sha512 sha512,glue,seed-injection; do
     echo "check_build: cargo test --release flock-live --lib --features $features"

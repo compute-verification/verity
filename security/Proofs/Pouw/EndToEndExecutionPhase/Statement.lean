@@ -3,9 +3,9 @@ module
 public import Definitions.Pouw.Game.Params
 public import Definitions.Pouw.Assumptions.Game
 public import Definitions.Pouw.Assumptions.NCP.Assumptions
-public import Proofs.Flock.Soundness.Audit.Extraction
-public import Proofs.Flock.Soundness.Audit.RegDraw
-public import Proofs.Flock.Soundness.Audit.Window
+public import Proofs.Spot.Sampling.Extraction
+public import Proofs.Spot.Sampling.RegDraw
+public import Proofs.Spot.Sampling.Window
 
 /-!
 # PoUW's work bound at the window audit (trusted)
@@ -60,7 +60,7 @@ on main), through a bridge from its play to PoUW's cost model, which is PoUW's g
 lands.
 
 **The window's sampling design** is the service's (decision 102, `window.py`): one uniform `K′`-subset of the `n` padded units
-(`subset:K′`, `SamplingDesign.subset`), the `N_real` real tiles padded with fillers to `pad(N_real + 1)`, sampled after the receipt,
+(`subset:K′`, `Verity.SamplingDesign.subset`), the `N_real` real tiles padded with fillers to `pad(N_real + 1)`, sampled after the receipt,
 each sampled proof block proved alone (no closures). `WindowWork.ExecutionPhaseBoundOfService` discharges `ExecutionPhaseBound` there, its first
 term the subset sampling design's own escape, which is 0 where `K′ = N`. The clear audit's
 `Sampled(t)` (`verity/protocols/accounting/pouw/prover/clear/clear_audit.py`) is `t` independent work-weighted samples
@@ -82,7 +82,7 @@ import it. `TileWork` and `StraightLineExtraction` are named premises awaiting t
 
 namespace Pouw.WindowWork
 
-open Finset FlockSoundness.Audit
+open Finset Spot.Sampling
 open scoped ENNReal
 
 variable {Q R S : Type}
@@ -187,13 +187,13 @@ counted by that program's calls:
 `EndToEndExecutionPhase` is true at any `sessCalls`, since `β` is its hypothesis; what is open is a number for `E[β]`. Before
 the card states one, `sessCalls` is tied to the play, with `CollCounted`'s restatement and one definition for both: the
 sessions as an oracle strategy of the window's game, one `QTree` per prover move with `H` only in the verdict, and
-`sessCalls` its calls (as `RegQueries` does for the registration). The window audit is `auditReg Lr (session H s)`:
+`sessCalls` its calls (as `RegQueries` does for the registration). The window audit is `Pouw.Window.auditReg Lr (session H s)`:
 `n` audit units, the sampling design `Lr R` at the registration `R`, and the session at the oracle `H` and the salt `s`. -/
 structure ProverModel (Q R S : Type) {n : ℕ} (Reg : Type) (Lr : Reg → SamplingDesign n)
     (session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool) where
   Prog : Type
   play : Prog → (H : Q → R) → Workload → (ℕ → Pouw.Mat) → Pouw.State → (s : S) →
-    FlockSoundness.Game.Strategy (auditReg Lr (session H s))
+    FlockSoundness.Game.Strategy (Pouw.Window.auditReg Lr (session H s))
   cost : Prog → (Q → R) → Workload → (ℕ → Pouw.Mat) → Pouw.State → S → ℝ
   received : Prog → (Q → R) → Workload → (ℕ → Pouw.Mat) → Pouw.State → S → ℕ
   cutoff : Prog → (Q → R) → Workload → (ℕ → Pouw.Mat) → Pouw.State → S → ℕ
@@ -222,7 +222,7 @@ structure Prover (PM : ProverModel Q R S Reg Lr session) where
 
 /-- **The prover's play** at the oracle `H` and the salt `s`: the strategy the window audit runs against. -/
 def Prover.play {PM : ProverModel Q R S Reg Lr session} (B : Prover PM) (U : Workload) (H : Q → R) (s : S) :
-    FlockSoundness.Game.Strategy (auditReg Lr (session H s)) :=
+    FlockSoundness.Game.Strategy (Pouw.Window.auditReg Lr (session H s)) :=
   PM.play B.online H U B.act (B.pre.eval H) s
 
 /-- The place of the prover's registration's receipt in the challenger's record. -/
@@ -314,11 +314,11 @@ Its discharges:
 def ExecutionPhaseBound (P : Protocol Q R S) (U : Workload) (ε : ℝ) {n : ℕ} {Reg : Type} {Lr : Reg → SamplingDesign n}
     {session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool}
     (Ccom : (Q → R) → S → Reg → Pouw.Trace)
-    (σ' : (H : Q → R) → (s : S) → FlockSoundness.Game.Strategy (auditReg Lr (session H s)))
+    (σ' : (H : Q → R) → (s : S) → FlockSoundness.Game.Strategy (Pouw.Window.auditReg Lr (session H s)))
     (β : (Q → R) → S → ℝ≥0∞) : Prop :=
   ∀ (H : Q → R) (s : S), FlockSoundness.Game.prob
       (fun o => o.1 = true ∧ ε * totalWref P U.layout ≤ incorrectWork P U H s (Ccom H s (σ' H s).1))
-      (auditReg Lr (session H s)) (σ' H s) ≤ β H s
+      (Pouw.Window.auditReg Lr (session H s)) (σ' H s) ≤ β H s
 
 /-- **The window realizes PoUW's units** at the oracle `H` and the salt `s`, for the incorrect proof blocks `incorrect` of an
 analysis's transcripts and the map `tx` from them to PoUW transcripts: at every trace `X`, the incorrect work of
@@ -381,7 +381,7 @@ $$\beta(H, s) = \mathrm{miss}_{K'}(b) + \varepsilon_{ks}(H, s, R, \tau) + \delta
   b = \lceil \varepsilon W / w_{max} \rceil,$$
 `(R, τ)` the play's registration and state. A incorrect set holding `ε·W` of incorrect work holds at least `b` units, and
 the first term is the subset sampling design's own escape of `b` units (`SamplingDesign.miss`), `C(N − b, K′)/C(N, K′)` for `b ≤ N` by
-`FlockSoundness.Audit.SamplingDesign.subset_miss` and `0` past it, the exact hypergeometric miss, so it needs no work table (over
+`Spot.Sampling.SamplingDesign.subset_miss` and `0` past it, the exact hypergeometric miss, so it needs no work table (over
 main's served levels it is at most `2^-40.6` at `(ε, δ) = (0.1%, 2^-40)` and `2^-128.5` at `(1%, 2^-128)`,
 the recheck's probe 2):
 * where `K′ = N` (`k_prime`'s answer when no `K < N` reaches `δ`), every unit is sampled and the first term is `0`
@@ -397,16 +397,16 @@ def ExecutionPhaseBoundOfService : Prop :=
     (ε : ℝ), 0 < ε → ε ≤ 1 →
     ∀ (N K : ℕ) (hK : K ≤ N) (m : ℕ) (σ : Fin N → Fin m) (w : Fin m → ℕ) (wmax : ℕ), (∀ t, w t ≤ wmax) →
     ∀ (Reg : Type) (session : (Q → R) → S → Finset (Fin N) → Reg → FlockSoundness.Game Bool)
-      (An : (H : Q → R) → (s : S) → ExtractionAnalysis (SamplingDesign.subset N K hK) Reg (session H s))
+      (An : (H : Q → R) → (s : S) → ExtractionAnalysis (Verity.SamplingDesign.subset N K hK) Reg (session H s))
       (tx : (H : Q → R) → (s : S) → (An H s).Tr → Pouw.Trace) (Ccom : (Q → R) → S → Reg → Pouw.Trace),
     (∀ H s R' τ, tx H s ((An H s).committed R' τ) = Ccom H s R') →
     (∀ H s, Realizes P U H s σ w (fun _ => ∅) (An H s).incorrect (tx H s)) →
-    ∀ εks εbind : (H : Q → R) → (s : S) → (R' : Reg) → Cont (SamplingDesign.subset N K hK) Reg (session H s) R' → ℝ≥0∞,
+    ∀ εks εbind : (H : Q → R) → (s : S) → (R' : Reg) → Cont (Verity.SamplingDesign.subset N K hK) Reg (session H s) R' → ℝ≥0∞,
     (∀ H s, (An H s).KnowledgeSound (εks H s)) → (∀ H s, (An H s).BindSound (εbind H s)) →
     ∀ σ' : (H : Q → R) → (s : S) →
-      FlockSoundness.Game.Strategy (auditReg (fun _ : Reg => SamplingDesign.subset N K hK) (session H s)),
+      FlockSoundness.Game.Strategy (Pouw.Window.auditReg (fun _ : Reg => Verity.SamplingDesign.subset N K hK) (session H s)),
       ExecutionPhaseBound P U ε Ccom σ' fun H s =>
-        (SamplingDesign.subset N K hK).miss ⌈ε * totalWref P U.layout / (wmax : ℝ)⌉₊ +
+        (Verity.SamplingDesign.subset N K hK).miss ⌈ε * totalWref P U.layout / (wmax : ℝ)⌉₊ +
           εks H s (reg (atReg (σ' H s))) (cont (atReg (σ' H s))) +
           εbind H s (reg (atReg (σ' H s))) (cont (atReg (σ' H s)))
 
@@ -414,7 +414,7 @@ end Pouw.WindowWork
 
 namespace Pouw.Guarantees
 
-open Finset FlockSoundness.Audit
+open Finset Spot.Sampling
 open scoped ENNReal
 
 /-- **PoUW's work bound at the window audit** (statement only, no proof yet), at the window's share `ε`
@@ -434,8 +434,8 @@ $$\mathbb{E}_{H,s}\Pr[\text{accept before the sample coin} \wedge T + T_{ext} < 
   \mathbb{E}_{H,s}\,\beta(H, s) + \varepsilon_{id}(q, N) + \eta(q + q_{ext}, N).$$
 The challenger's wall-clock deadline (`Check.registration_deadline`) only refuses more, so the bound holds of what the
 service accepts at any deadline.
-The audit is `FlockSoundness.Audit.auditReg` at the service's sampling design, one uniform `K`-subset of the `n` padded units
-(`SamplingDesign.subset n K`, `subset:K′` in `window.py`), with any sessions. `ε` is the window's, the `ε` its `K′` was sized at
+The audit is `Pouw.Window.auditReg` at the service's sampling design, one uniform `K`-subset of the `n` padded units
+(`Verity.SamplingDesign.subset n K`, `subset:K′` in `window.py`), with any sessions. `ε` is the window's, the `ε` its `K′` was sized at
 (`window.sampling`), so the statement covers each grid main serves, `(0.1%, 2^-40)` and `(1%, 2^-128)`.
 
 **What it assumes**, each a hypothesis:
@@ -465,7 +465,7 @@ def EndToEndExecutionPhase : Prop :=
       (session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool)
       (Ccom : (Q → R) → S → Reg → Trace)
     -- the prover model and the extraction of PoUW's adversary from its provers
-      (PM : WindowWork.ProverModel Q R S Reg (fun _ : Reg => SamplingDesign.subset n K hK) session) (Text : ℝ) (qext : ℕ)
+      (PM : WindowWork.ProverModel Q R S Reg (fun _ : Reg => Verity.SamplingDesign.subset n K hK) session) (Text : ℝ) (qext : ℕ)
       (εid : ℕ → ℕ → ℝ),
     PM.RegQueries → 0 ≤ Text → WindowWork.StraightLineExtraction PM CM WindowWork.coordDomain Ccom Text qext εid →
     ∀ U : Workload, U.InDomain WindowWork.coordDomain → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q + qext ≤ 2 ^ 64 →
@@ -476,7 +476,7 @@ def EndToEndExecutionPhase : Prop :=
         FlockSoundness.Game.prob
           (fun o => WindowWork.AcceptsBy B U x.1 x.2 o ∧
             T + Text < (1 - γu) * (1 - ε) * totalWref P U.layout)
-          (auditReg (fun _ : Reg => SamplingDesign.subset n K hK) (session x.1 x.2)) (B.play U x.1 x.2))
+          (Pouw.Window.auditReg (fun _ : Reg => Verity.SamplingDesign.subset n K hK) (session x.1 x.2)) (B.play U x.1 x.2))
         ≤ FlockSoundness.Game.avg (fun x : (Q → R) × S => β x.1 x.2) + ENNReal.ofReal (εid q U.layout.N) +
           ENNReal.ofReal (η (q + qext) U.layout.N)
 

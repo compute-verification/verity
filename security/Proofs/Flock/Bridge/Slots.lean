@@ -24,7 +24,7 @@ values.
 
 namespace Flock.Bridge
 
-open FlockSoundness.Audit Claims.Sampling
+open Spot.Sampling Claims.Sampling
 
 variable {C : Verity.Boolean.Circuit} {κ : Fin C.N → Option Bool}
 

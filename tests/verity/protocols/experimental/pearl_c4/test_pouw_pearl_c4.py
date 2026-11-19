@@ -989,13 +989,13 @@ def test_d_sb_rejects_a_non_finite_input_word(word):
     assert CW.check_opened(s, record, tile, a, b, None) == "A row 5 is malformed: non-finite FP32 word"
 
 
-def lifecycle(s: F.PearlC4, real=20, salt_key=None):
+def lifecycle(s: F.PearlC4, real=20):
     """32 x 128 x 16 on 16 x 16 tiles: A's rows 20 … 31 are zero filler and row 3 fails D-NF; B passes."""
     rows_a = V.rows("work-life", "A", real, K) + [F.bf16_row([0] * K)] * (32 - real)
     rows_a[3] = spiked(rows_a[3], value=2.0 ** 16)
     rows_b = V.rows("work-life", "B", 16, K)
     work = Workload((Matmul(3, Shape(32, K, 16), 9),))
-    prover = Prover(s, {9: rows_b}, salt_key=salt_key)
+    prover = Prover(s, {9: rows_b})
     epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
     return epoch, prover, prover.prove(epoch, {3: rows_a}), rows_a, rows_b
 
@@ -1086,7 +1086,7 @@ def test_the_work_sampling_design_audits_pearl_c4_under_h3():
     whether a row passes -h3's row cap changes with the salts: under this salt key none is over it, and the honest
     prover gives up nothing (`volunteer`)."""
     s = V.scheme("nvfp4", True, "h3")
-    epoch, prover, tr, rows_a, rows_b = lifecycle(s, salt_key=bytes(32))
+    epoch, prover, tr, rows_a, rows_b = lifecycle(s)
     splits = {9: W.Split(K)}
     records = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, transcript=tr)
     assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), ())]
@@ -1158,7 +1158,7 @@ def test_v_ex_past_its_count_cap_fails_the_audit():
         W.UnitRecord(u, 20, K, (3,), (), (3,))
 
 
-#: A salt key under which `lifecycle`'s A row 15 passes the per-row rules but its F1′ passes R1's bound (about 0.8% of
+#: A salt key whose stream (`PCW.keyed_salts`) puts `lifecycle`'s A row 15 where it passes the per-row rules but its F1′ passes R1's bound (about 0.8% of
 #: keys put an honest row there).
 R1_ROW_15_KEY = bytes.fromhex("d9e961187e3be9353349a07b9a22359e0586881919c91ee714ad84f07c92a8e6")
 
@@ -1167,7 +1167,7 @@ def failures(s, epoch, prover, tr, splits, records) -> set[str]:
     return {v.reason for v in CW.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8).audit.verdicts if not v.ok}
 
 
-def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_inert_bound():
+def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_inert_bound(monkeypatch):
     """`volunteer`, the honest prover's remedy for a tile over the cap, on a scheme whose debit puts tile position 7 at 20
     units per word against a cap of 1 per credited word, at a salt key where R1 also excludes A row 15.  R1's rows are
     `declare`'s on the transcript, excluded, so `volunteer` gives up only A row 7 (not a column, which leaves the tile
@@ -1179,7 +1179,8 @@ def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_inert_bound():
             return Fraction(20 * len(cols) * (7 in rows)), Fraction(len(rows) * len(cols))
 
     s = Heavy("nvfp4", k_min=128, tile=(16, 16), n_min=16)
-    epoch, prover, tr, rows_a, rows_b = lifecycle(s, salt_key=R1_ROW_15_KEY)
+    PCW.keyed_salts(monkeypatch, R1_ROW_15_KEY, 9, 3)
+    epoch, prover, tr, rows_a, rows_b = lifecycle(s)
     splits, u = {9: W.Split(K)}, epoch.workload.matmuls[0]
     declare = functools.partial(CW.declare, s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
     records = declare(transcript=tr)
@@ -1198,11 +1199,12 @@ def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_inert_bound():
         "matmul 3: more voluntary rows than V-EX allows (⌈m/64⌉ = 1 of A, ⌈n/64⌉ = 1 of B)"
 
 
-def test_volunteer_leaves_r1s_rows_to_the_declaration():
+def test_volunteer_leaves_r1s_rows_to_the_declaration(monkeypatch):
     """At the same salt key on the plain scheme, R1 excludes A row 15, no tile is over the cap, and `volunteer` gives
     up nothing."""
     s = F.PearlC4("nvfp4", k_min=128, tile=(16, 16), n_min=16)
-    epoch, prover, tr, rows_a, rows_b = lifecycle(s, salt_key=R1_ROW_15_KEY)
+    PCW.keyed_salts(monkeypatch, R1_ROW_15_KEY, 9, 3)
+    epoch, prover, tr, rows_a, rows_b = lifecycle(s)
     splits = {9: W.Split(K)}
     records = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, transcript=tr)
     assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3, 15), ())]
@@ -1295,7 +1297,7 @@ def test_both_constructions_take_the_one_shared_rule():
 
 
 def test_the_identifier_vectors_pearl_c4_cases_are_its_shapes():
-    """PoUW's identifier vectors name Pearl-C4 without checking its shapes (`schemes.EXPERIMENTAL`): each of its cases'
+    """PoUW's identifier vectors name Pearl-C4 without checking its shapes (its kernel scheme's ``seam``): each of its cases'
     matmuls is one the scheme takes, and the scheme is named by its registered name."""
     cases = [c for c in IV.CASES if c[1] == "pearl-c-nvfp4-v0"]
     assert len(cases) == 2

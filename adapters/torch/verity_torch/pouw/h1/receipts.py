@@ -112,15 +112,15 @@ def noise_blocks_cpu(seeds: list[bytes], n: int) -> torch.Tensor:
 
 
 def noise_cubin(arch: str) -> Path:
-    """`NOISE_CU` built with the nvcc on the path for ``sm_<arch>`` (``"90"``: an H200, ``"120"``: an RTX PRO 6000) into a
+    """`NOISE_CU` built with `pouw_device.nvcc` for ``sm_<arch>`` (``"90a"``: an H200, ``"120a"``: an RTX PRO 6000) into a
     cubin, with `verity.commitments.cuda`' ``sha512.cuh``, in the row-table build cache (`row_table_kernels.built`)."""
     from verity.commitments import cuda
 
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import row_table_kernels as RTD
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as pouw_device, row_table_kernels as RTD
 
-    tool = RTD.nvcc()
+    tool = pouw_device.nvcc()
     if tool is None:
-        raise RuntimeError(f"no nvcc on the path: the receipts' noise kernel ({NOISE_CU}) is built with it")
+        raise RuntimeError(f"no nvcc configured or on the path: the receipts' noise kernel ({NOISE_CU}) is built with it")
     inc = Path(cuda.__file__).resolve().parent
     return RTD.built(tool, (NOISE_CU,), ("-O3", "-std=c++17", f"-I{inc}", f"-gencode=arch=compute_{arch},code=sm_{arch}",
                                          "-cubin"), "noise.cubin", headers=(inc / "sha512.cuh",))
@@ -132,9 +132,10 @@ class Cubin:
 
     @classmethod
     def built(cls, device: Any = None) -> Cubin:
-        """`noise_cubin` for ``device``'s compute capability (torch's current device by default), loaded."""
-        major, minor = torch.cuda.get_device_capability(device)
-        return cls(noise_cubin(f"{major}{minor}"))
+        """`noise_cubin` for ``device``'s card's target (torch's current device by default, `row_table_device.arch`), loaded."""
+        from verity_torch.pouw import row_table_device as RTL
+
+        return cls(noise_cubin(RTL.arch(torch.cuda.get_device_name(device))))
 
     def __init__(self, path: str | Path) -> None:
         torch.zeros(1, device="cuda")

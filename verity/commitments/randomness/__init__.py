@@ -44,6 +44,7 @@ import re
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from fractions import Fraction
+from typing import Any
 
 DOMAIN = re.compile(r"verity/[a-z0-9-]+/[a-z0-9-]+/v[0-9]+")
 _DERIVE = b"verity/randomness/derive/v2\0"
@@ -201,4 +202,60 @@ def derive_wide(source: bytes, domain: str, context: Mapping[str, Part]) -> Wide
     return WideKey(hashlib.sha512(_DERIVE_WIDE + frame(source) + frame(domain) + frame(ctx)).digest())
 
 
-__all__ = ["DOMAIN", "Index", "Key", "Part", "WideKey", "derive", "derive_wide", "frame", "uniform_from_words"]
+def digits(s: str) -> bool:
+    """One or more ASCII digits, as the Lean verifier reads a number (`str.isdigit` alone admits other scripts' digits)."""
+    return s.isascii() and s.isdigit()
+
+
+def parse_design(text: str) -> dict[str, Any]:
+    """`subset:K` or `bernoulli:NUM/DEN` (`flock-circuit serve --draw`'s syntax), or `stratified:K` or `work:K` (rules, which SPOT's `draw.derive`
+    expands over a program and query, and for `work` a work table), as a sampling design object; numbers in ASCII digits, `K >= 1`.
+    A design outside the sampling claims' scope (`Claims.Sampling.OneStage.WellFormed`) is refused: `subset:0` samples
+    nothing, so its `P_a` is no acceptance probability."""
+    kind, _, arg = text.partition(":")
+    if kind == "subset" and digits(arg) and int(arg) >= 1:
+        return {"law": "subset", "k": int(arg)}
+    if kind in ("stratified", "work") and digits(arg) and int(arg) >= 1:
+        return {"law": kind, "k": int(arg)}
+    if kind == "bernoulli":
+        num, _, den = arg.partition("/")
+        if digits(num) and digits(den) and 0 < int(den) and int(num) <= int(den):
+            return {"law": "bernoulli", "p": f"{int(num)}/{int(den)}"}
+    raise ValueError(f"a law is subset:K, stratified:K, work:K or bernoulli:NUM/DEN, not {text!r}")
+
+
+def parse_rate(text: Any) -> tuple[int, int, int] | None:
+    """The rate sampling design `rate:NUM/DEN` or `rate:NUM/DEN:T` as `(NUM, DEN, T)`: a public rate NUM/DEN with 0 < NUM <= DEN over
+    T >= 1 tables (one when it names none), numbers in ASCII digits; None for any other text. A selection rule states it
+    (SPOT's `service.SamplingDesign`), and over a docket's N proof blocks it is `subset:K` at K = SPOT's `draw.rate_count` (`service.selection_sampling_design`)."""
+    if not isinstance(text, str):
+        return None
+    kind, _, arg = text.partition(":")
+    q, sep, t = arg.partition(":")
+    num, _, den = q.partition("/")
+    if not sep:
+        tables = 1
+    elif digits(t):
+        tables = int(t)
+    else:
+        return None
+    if kind == "rate" and digits(num) and digits(den) and 0 < int(num) <= int(den) and tables >= 1:
+        return int(num), int(den), tables
+    return None
+
+
+def parse_strata_rate(text: Any) -> tuple[bool, int, int] | None:
+    """The stratified rate sampling design `stratified-rate:NUM/DEN` or the work rate sampling design `work-rate:NUM/DEN` as
+    `(work, NUM, DEN)`, `work` True for the work rate: a public rate NUM/DEN with 0 < NUM <= DEN, numbers in ASCII digits; None
+    for any other text. The Lean's `Select.parseStrataRate` is this."""
+    if not isinstance(text, str):
+        return None
+    kind, _, arg = text.partition(":")
+    num, _, den = arg.partition("/")
+    if kind in ("stratified-rate", "work-rate") and digits(num) and digits(den) and 0 < int(num) <= int(den):
+        return kind == "work-rate", int(num), int(den)
+    return None
+
+
+__all__ = ["DOMAIN", "Index", "Key", "Part", "WideKey", "derive", "derive_wide", "digits", "frame", "parse_design", "parse_rate",
+           "parse_strata_rate", "uniform_from_words"]

@@ -1,14 +1,12 @@
 """The network attester's output value: the output it relayed, committed by the attester as a registered value
-(`one_stage.registered`) and its head signed with its key, never by the prover. The verifier pins the value's root from
-that attestation alone (`check_out`), so every output proof block's row is a registered read of it, opened against
-the attester's signed root by the Lean verifier's registered reads (`verity-verify-proof --registered`), not compared in the
-clear.
+(`one_stage.registered`) and its head signed with its key, never by the prover. `check_out` checks the record (its key,
+session, execution phase, shape, domain and LMS signature), and no verifier calls `check_out` or reads the record.
 
 **The commitment** is the reading program's registered value `value` (``out`` by default), as the prover would commit
 it, under the attester's salts: `rows` rows of `words` leaves of `word_bits` bits in the row format `schema` (by
 default `hm96-sha512/row/v2`, a proof block's bit-row port), committed as `Registered.commit` commits them, under
 
-    D = registered.domain(program, value, words, rows, word_bits)
+    D = registered_value.domain(program, value, words, rows, word_bits)
 
 the domain `registered_entries` derives for a value the verifier pins: `registration.check` holds its pinned values
 across windows, so D leaves the window's open root out. `program` is the reading program's digest
@@ -27,19 +25,19 @@ Its attestation is `Issuer.sign`'s of the out digest for the egress execution ph
 out of another's: `check_out` takes the window it expects. A record's, a clock's and the network attester cells'
 digests are under other tags, so none verifies as another.
 
-**The record** (`AttestedOut.public`) is the head and its attestation as one public JSON object, what the auditor
+**The record** (`AttestedOut.public`) is the head and its attestation as one public JSON object, which no party
 receives:
 
     {"format": RECORD, "link", "direction", "window", "session", "value", "program", "words", "rows", "word_bits",
      "row_schema", "domain", "root", "certificate": {"key", "digest", "signature"}}
 
-`check_out` is the verifier's read of it: the root to pin (`registration.check`'s `pinned`), or `OutRefused` naming the
+`check_out` checks it: the root it gives (`registration.check`'s `pinned`), or `OutRefused` naming the
 check that fails (`REFUSALS`).
 
 **The shape** (`OutShape`) is what both sides take from the reading program's registration, never from a flag: the
 value's program, name, `words` leaves a row (the row width of the port every read of the value names), `rows`, the
-leaves' `word_bits` and the row `schema`. The attester commits at it (`commit_out`), and the verifier holds a record
-to it (`check_out`): another width, word size or row schema is `out-width`, another row count `out-rows`.
+leaves' `word_bits` and the row `schema`. The attester commits at it (`commit_out`), and `check_out` holds a record
+to it: another width, word size or row schema is `out-width`, another row count `out-rows`.
 """
 
 from __future__ import annotations
@@ -57,6 +55,7 @@ from verity.protocols.resource_accounting.network.verifier.certificate import (D
                                                          Signer, SignerRefused, _text, _u)
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 OUT_TAG = "verity-network-certifier/out/v1"
 RECORD = "verity-network-certifier/out-record/v1"
@@ -110,7 +109,7 @@ class OutShape:
     value: str
     words: int
     rows: int
-    word_bits: int = G.WORD_BITS
+    word_bits: int = RV.WORD_BITS
     schema: str = G.SCHEMA_V2
 
     def __post_init__(self) -> None:
@@ -121,13 +120,13 @@ class OutShape:
             v = getattr(self, k)
             if not isinstance(v, int) or isinstance(v, bool) or v < 1:
                 raise ValueError(f"an out shape's {k} is a positive int, not {v!r}")
-        if self.schema not in G.SCHEMAS:
-            raise ValueError(f"an out shape's row schema is one of {list(G.SCHEMAS)}, not {self.schema!r}")
+        if self.schema not in RV.SCHEMAS:
+            raise ValueError(f"an out shape's row schema is one of {list(RV.SCHEMAS)}, not {self.schema!r}")
 
     @property
     def domain(self) -> CommitmentDomain:
         """The domain the verifier derives for the value, pinned (held across windows, `registered_entries`)."""
-        return G.domain(self.program, self.value, self.words, self.rows, self.word_bits)
+        return RV.domain(self.program, self.value, self.words, self.rows, self.word_bits)
 
     def doc(self) -> dict[str, Any]:
         return {"program": self.program, "value": self.value, "words": self.words, "rows": self.rows,
@@ -175,7 +174,7 @@ class AttestedOut:
     head: OutHead
     certificate: Certificate
     session: bytes
-    committed: G.Registered = field(repr=False, compare=False)
+    committed: RV.Registered = field(repr=False, compare=False)
 
     @property
     def root(self) -> str:
@@ -234,7 +233,7 @@ def commit_out(rows: Sequence[Sequence[int]], *, shape: OutShape, key: Signer | 
     issuer = key if isinstance(key, Issuer) else Issuer(key, session)
     if issuer.session != session:
         raise ValueError("the issuer signs in another attester session than `session`")
-    committed = G.Registered.commit(shape.program, shape.value, rows, salts, shape.word_bits, shape.schema)
+    committed = RV.Registered.commit(shape.program, shape.value, rows, salts, shape.word_bits, shape.schema)
     head = OutHead(shape.value, bytes.fromhex(committed.program), committed.words, committed.leaves, committed.word_bits,
                    committed.schema, committed.domain.domain_id, committed.root)
     certificate = issuer.sign(link, DIRECTION, window, head.digest())
@@ -265,8 +264,8 @@ def _read(doc: Any) -> tuple[OutHead, Certificate, bytes]:
         raise OutRefused("out-record", f"its certificate is an object of the hex strings {list(_CERT_KEYS)} alone")
     if not all(_HEX64.fullmatch(doc[k]) for k in ("program", "domain", "root")) or not _HEX.fullmatch(doc["session"]):
         raise OutRefused("out-record", "its program, domain and root are lowercase hex of 64 bytes, its session hex")
-    if doc["row_schema"] not in G.SCHEMAS:
-        raise OutRefused("out-record", f"its row_schema is {doc['row_schema']!r}, not one of {list(G.SCHEMAS)}")
+    if doc["row_schema"] not in RV.SCHEMAS:
+        raise OutRefused("out-record", f"its row_schema is {doc['row_schema']!r}, not one of {list(RV.SCHEMAS)}")
     try:
         direction = Direction(doc["direction"])
         head = OutHead(doc["value"], bytes.fromhex(doc["program"]), doc["words"], doc["rows"], doc["word_bits"],
@@ -313,7 +312,7 @@ def check_out(certificate: Any, key: PublicKey, session: bytes, shape: OutShape,
         raise OutRefused("out-domain", f"the record's domain is {head.domain.hex()[:16]}…, and the verifier's "
                                        f"{want[:16]}…")
     try:
-        own = G.domain(head.program.hex(), head.value, head.words, head.rows, head.word_bits).domain_id
+        own = RV.domain(head.program.hex(), head.value, head.words, head.rows, head.word_bits).domain_id
     except ValueError as e:
         raise OutRefused("out-domain", f"the record's fields name no domain: {e}") from None
     if own != head.domain:

@@ -75,7 +75,7 @@ theorem liftV_ret {α : Type} (v : V α) (t : Transcript) :
   exact ⟨hv, rfl⟩
 
 /-- **The inner proof only adds rounds.** -/
-theorem innerP_pre (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
+theorem innerP_pre (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
     (ic : InnerCommit) (finalC : F128) (cons : Array (String × Zk.Lin)) (t : Transcript) :
     Ret ((innerP (asksS resp) (Hashes.ofSha512 h) lay p ic finalC cons).run t) fun pt =>
       Prefix t.rounds pt.2.rounds := by
@@ -84,7 +84,7 @@ theorem innerP_pre (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (la
   exact ⟨rs.toArray, Array.toList_inj.1 (by simp [hrs])⟩
 
 /-- **A masked rep that returns had its replay return**, on rounds its final rounds begin with. -/
-theorem repPZk_replay (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
+theorem repPZk_replay (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) (t₀ : Transcript) :
@@ -108,7 +108,7 @@ theorem repPZk_replay (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) 
   rw [h1, ← h2, ← h4, ← h5]
   exact h6
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The masked replay passes** from the rep's recorded rounds: the goal `Replay`. -/
 theorem replay_goal (h64 : Claims.Out64 H) (hS : JsonRT.StmtOkZk H rel)

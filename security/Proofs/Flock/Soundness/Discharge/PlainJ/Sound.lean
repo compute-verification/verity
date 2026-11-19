@@ -42,7 +42,7 @@ The assumptions are `flock_headline_exec`'s: A3 (`hA3`), `cr/sha-512` for the kn
 
 namespace FlockSoundness.Discharge.PlainJ
 
-open Game Model Accounting Refine Audit Audit.Partition Flock
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition Flock
 open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.Tables
 open FlockSoundness.Discharge.DecodeZL
 open FlockSoundness.Discharge.Composed (TagsOkZJ)
@@ -94,7 +94,7 @@ theorem plain_session_soundJ
               ((rsPJ ht dj x₀ hc hpub hpt hU hscope).binding (rsPJ_computes ht dj x₀ hc hpub hpt hU hscope))
               (reg σ) (cont σ) k Rw))).card)
         (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfJ dg (planPJ ht dj x₀) N wr)) τ ≤
-      (SamplingDesign.subset n kd hkd).miss K +
+      (Verity.SamplingDesign.subset n kd hkd).miss K +
         StrictCR.ksAvgStrict (planPJ ht dj x₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).linkBoundE
           (L := SamplingDesign.execOS (n := n) src (.subset kd) n) (planPJ (Reg := Reg) ht dj x₀) (tabPJ (Reg := Reg) ht dj x₀)

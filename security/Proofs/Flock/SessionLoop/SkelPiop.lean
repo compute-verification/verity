@@ -75,7 +75,7 @@ def cntSum (rs : List (ByteArray × ℕ)) : ℕ := (rs.map Prod.snd).sum
 abbrev RecWF (s : Array (ByteArray × ℕ) × ℕ) : Prop := s.2 = cntSum s.1.toList ∧ ∀ p ∈ s.1.toList, p.2 = cntOf p.1
 
 /-- The session's log of the recorded rounds `rs`. -/
-def recLog (rs : Array (ByteArray × ℕ)) : List Claims.Msg := rs.toList.map fun p => Claims.toMsg p.1
+def recLog (rs : Array (ByteArray × ℕ)) : List Hash.Msg := rs.toList.map fun p => Claims.toMsg p.1
 
 /-- The session's coins at the final recording `fin`: round `j`'s are those `recAsks` answered `fin`'s round `j`. -/
 def skelCoin (fin : Array (ByteArray × ℕ)) (j i : ℕ) : F128 :=
@@ -85,7 +85,7 @@ def skelCoin (fin : Array (ByteArray × ℕ)) (j i : ℕ) : F128 :=
 where `s'`'s rounds are a prefix of `fin`, the session's run from a log of `s`'s rounds returns `a` with a log of
 `s'`'s. -/
 def skelSim (fin : Array (ByteArray × ℕ)) : _root_.Flock.With.Sim RecM PS where
-  R x y := ∀ s (l : Array Claims.Msg), RecWF s → l.toList = recLog s.1 → ∀ a s', x.run s = .ok (a, s') →
+  R x y := ∀ s (l : Array Hash.Msg), RecWF s → l.toList = recLog s.1 → ∀ a s', x.run s = .ok (a, s') →
     s.1.toList <+: s'.1.toList ∧ RecWF s' ∧
       (s'.1.toList <+: fin.toList → (y.go l).1 = .ok a ∧ (y.go l).2.toList = recLog s'.1)
   pure _ _ _ hs hl _ _ h := by

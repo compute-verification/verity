@@ -3,9 +3,12 @@ module
 public import InferenceOnlyVerifier.Record
 
 /-!
-# What `ownRows` reads off the root
+# What the record proofs read off the root
 
-`Record.ownRows` reads the root's body once. This module states what it found, by position: every part of every
+`OwnRuns` is the reading of the root the record proofs cover. `Record.ownRows` admits a root whose argument reads
+another unit's outputs (an edge, `edgeOf`); on a root with none (`EdgeFree`) it admits only roots `OwnRuns` holds of
+(`ownRuns_of_edgeFree`), and `EdgeFreeReads` is the hypothesis that every record `read` accepts is of such a root,
+false of any root with an edge. This module states what `OwnRuns` gives, by position: every part of every
 argument of a root node that is no input node is a run of leaves of one input node (`part_run`), a batch node of
 those has `dims` on every argument (`batch_dims`), and two such parts at two positions, each of some leaf, are runs
 that share none (`runs_apart`). The test sorts the runs and compares neighbours; sorted, neighbours apart are all
@@ -62,6 +65,7 @@ theorem runOf_some {P : Prog} {q : Part} {r : Nat × Nat × Nat} (h : runOf P q 
       · cases h
   | strided p i base inner os is count => cases h
   | explicit items => cases h
+  | grid run lanes => cases h
 
 /-- Where `removeAxis` strips an axis of a type, `axisDims` has that axis' length. -/
 theorem axisDims_of_removeAxis : ∀ (ax : Nat) (t : Ty) {n : Nat} {mt : Ty}, t.removeAxis ax = some (n, mt) →
@@ -99,12 +103,53 @@ theorem Apart.symm {a b : Nat × Nat × Nat} (h : Apart a b) : Apart b a := by
   unfold Apart at h ⊢
   omega
 
-theorem ownRows_eq (P : Prog) : ownRows P =
+/-- **The reading of the root the record proofs cover**: a batch that is no input node maps every argument, every
+part of every argument of a root node that is no input node is a run of an input node's leaves, and sorted, no two
+runs share a leaf. -/
+def OwnRuns (P : Prog) : Prop :=
     ((unitsOf P).all (fun n => n.form != .batch || n.args.all (·.dims.isSome)) &&
       (((unitsOf P).flatMap partsIn).filterMap (runOf P)).length == ((unitsOf P).flatMap partsIn).length &&
       ((((((unitsOf P).flatMap partsIn).filterMap (runOf P)).filter fun r => r.2.2 > 0).mergeSort runLe).zip
         (((((unitsOf P).flatMap partsIn).filterMap (runOf P)).filter fun r => r.2.2 > 0).mergeSort runLe).tail).all
-        fun (a, b) => a.1 != b.1 || a.2.1 + a.2.2 ≤ b.2.1) := rfl
+        fun (a, b) => a.1 != b.1 || a.2.1 + a.2.2 ≤ b.2.1) = true
+
+/-- **Part `q` reads another unit's outputs**: an affine or strided part over a node of the root that is no input
+node, an explicit part naming one, or a grid every lane of which reads one, as `Record.ownRows` tells an
+edge. -/
+def edgeOf (P : Prog) : Part → Bool
+  | .affine false i _ _ | .strided false i _ _ _ _ _ =>
+    ((P.defs[P.root]!).body.nodes[i]?.map fun n => !Desc.isInputNode P n).getD false
+  | .explicit it =>
+    it.any fun r => !r.p && ((P.defs[P.root]!).body.nodes[r.i]?.map fun n => !Desc.isInputNode P n).getD false
+  | .grid _ lanes =>
+    lanes.all fun l => !l.p && ((P.defs[P.root]!).body.nodes[l.i]?.map fun n => !Desc.isInputNode P n).getD false
+  | _ => false
+
+/-- **The root has no edge**: no part of an argument of a root node that is no input node reads another such node. -/
+def EdgeFree (P : Prog) : Prop := ∀ n ∈ unitsOf P, ∀ q ∈ partsIn n, edgeOf P q = false
+
+/-- **Every record `read` accepts is of a root with no edge.** False of any root with an edge; the record proofs that
+take it cover the roots with none, and restating them over `OwnRowsEdges` replaces it. -/
+def EdgeFreeReads : Prop := ∀ (j tr : Lean.Json) (c : Case), read j tr = .ok c → EdgeFree c.f.P
+
+private theorem flatMap_congr' {α β : Type} {l : List α} {f g : α → List β} (h : ∀ a ∈ l, f a = g a) :
+    l.flatMap f = l.flatMap g := by
+  induction l with
+  | nil => rfl
+  | cons x xs ih =>
+    simp only [List.flatMap_cons, h x List.mem_cons_self, ih fun a ha => h a (List.mem_cons_of_mem _ ha)]
+
+/-- **On a root with no edge, `own-rows` admits only roots the record proofs cover.** -/
+theorem ownRuns_of_edgeFree {P : Prog} (h : ownRows P = true) (hE : EdgeFree P) : OwnRuns P := by
+  have hp : ((unitsOf P).flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edgeOf P ·)) =
+      (unitsOf P).flatMap partsIn := by
+    refine flatMap_congr' fun n hn => ?_
+    rw [← List.filter_flatMap]
+    exact List.filter_eq_self.2 fun q hq => by simpa using hE n hn q hq
+  unfold ownRows at h
+  unfold OwnRuns
+  rw [← hp]
+  exact h
 
 theorem runLe_trans (a b c : Nat × Nat × Nat) (hab : runLe a b = true) (hbc : runLe b c = true) :
     runLe a c = true := by
@@ -175,13 +220,14 @@ theorem flatMap_in {α β : Type} {A : β → β → Prop} {l : List α} {f : α
   (List.pairwise_flatMap.1 h).1 a ha
 
 section
-variable {P : Prog} (h : ownRows P = true)
+variable {P : Prog} (h : OwnRuns P)
 include h
 
 /-- **A batch that is no input node maps every argument over its members.** -/
 theorem batch_dims {n : Node} (hn : n ∈ unitsOf P) (hb : n.form = .batch) {a : Arg} (ha : a ∈ n.args) :
     a.dims.isSome = true := by
-  rw [ownRows_eq, Bool.and_eq_true, Bool.and_eq_true] at h
+  unfold OwnRuns at h
+  rw [Bool.and_eq_true, Bool.and_eq_true] at h
   have h1 := List.all_eq_true.1 h.1.1 n hn
   rw [hb] at h1
   rcases Bool.or_eq_true_iff.1 h1 with hc | hc
@@ -190,13 +236,15 @@ theorem batch_dims {n : Node} (hn : n ∈ unitsOf P) (hb : n.form = .batch) {a :
 
 /-- **Every part of an argument of a node that is no input node is a run of leaves of an input node.** -/
 theorem part_run {n : Node} (hn : n ∈ unitsOf P) {q : Part} (hq : q ∈ partsIn n) : ∃ r, runOf P q = some r := by
-  rw [ownRows_eq, Bool.and_eq_true, Bool.and_eq_true] at h
+  unfold OwnRuns at h
+  rw [Bool.and_eq_true, Bool.and_eq_true] at h
   exact filterMap_all (runOf P) _ (by simpa using h.1.2) q (List.mem_flatMap.2 ⟨n, hn, hq⟩)
 
 /-- The runs of the parts `ownRows` reads, those of some leaf, are apart: as parts, in the order they stand in. -/
 theorem parts_apart : ((unitsOf P).flatMap partsIn).Pairwise fun q q' =>
     ∀ r, runOf P q = some r → ∀ r', runOf P q' = some r' → 0 < r.2.2 → 0 < r'.2.2 → Apart r r' := by
-  rw [ownRows_eq, Bool.and_eq_true, Bool.and_eq_true] at h
+  unfold OwnRuns at h
+  rw [Bool.and_eq_true, Bool.and_eq_true] at h
   have hsorted := apart_of_sorted _ (List.pairwise_mergeSort (le := runLe) runLe_trans runLe_total _) h.2
   have hperm := (List.Perm.pairwise_iff (R := Apart) (fun hab => Apart.symm hab)
     (List.mergeSort_perm ((((unitsOf P).flatMap partsIn).filterMap (runOf P)).filter fun r => r.2.2 > 0) runLe)).1
@@ -214,7 +262,7 @@ theorem parts_symm (P : Prog) (q q' : Part)
 
 /-- **Two parts at two positions, each a run of some leaf, are runs that share none.** Positions are a root node
 that is no input node, one of its arguments and one of that argument's parts. -/
-theorem runs_apart {P : Prog} (h : ownRows P = true) {k i q k' i' q' : Nat}
+theorem runs_apart {P : Prog} (h : OwnRuns P) {k i q k' i' q' : Nat}
     (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false)
     (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size)

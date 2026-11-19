@@ -53,13 +53,14 @@ With a `statement` enabled (and hashing), a whole capture also copies each call'
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, cast
 
 import numpy as np
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
 
 from verity_torch.pouw.pearl_c.ends import _RunState, _Stages
+from verity_torch.pouw.pearl_c.host import fresh_into
 from verity_torch.pouw.pearl_c.passes import call_index
 
 #: a deferred-a whole capture's side steps join the A trees forked so far only before the scatter, the one step that reads
@@ -71,13 +72,15 @@ TILES_BESIDE_TREE = True
 
 @dataclass(frozen=True)
 class WholeCall:
-    """One call of a forward vLLM captured whole: what its replay appends to the pass."""
+    """One call of a forward vLLM captured whole: what its replay appends to the pass, and the device bytes its A salts are
+    in (its pipeline's own), which each replay reads."""
     w: int
     m: int
     k: int
     n: int
     m16: int
     tiles: int
+    salts: Any = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)
@@ -241,7 +244,7 @@ class WholeCalls(_RunState):
         cur = self.cur
         for mm, c in zip(cur.matmuls[len(cur.matmuls) - len(calls):], calls, strict=True):
             xa, tree, y = cast("_Stages", self._stages)[c.w, c.m16]
-            self._retained(cur, mm, c.m, self.flag_buf[flags_at:flags_at + c.m], xa, tree, y=y[:c.m])
+            self._retained(cur, mm, c.m, self.flag_buf[flags_at:flags_at + c.m], xa, tree, c.salts, y=y[:c.m])
             flags_at += c.m
 
     def _slots(self, calls: tuple[WholeCall, ...], at: tuple[int, int, int]) -> _Slots:
@@ -259,8 +262,9 @@ class WholeCalls(_RunState):
 
     def whole_replay(self, calls: tuple[WholeCall, ...]) -> bool:
         """Before vLLM replays a forward captured whole, with hashing: every call's keys and offsets (its index, and the
-        pass's running tiles and screened rows) into its weight's slot, in one upload on the replaying stream.  Returns
-        whether `whole_replayed` had staged them, for these calls from where the pass is."""
+        pass's running tiles and screened rows) into its weight's slot, in one upload on the replaying stream, and every
+        call's A salts fresh (`host.fresh_into`) on that stream.  Returns whether `whole_replayed` had staged them, for these
+        calls from where the pass is."""
         cur = self.cur
         call_index(self, len(calls))
         self._unpoisoned()
@@ -281,6 +285,8 @@ class WholeCalls(_RunState):
         self.offs.copy_(self._host_offs, non_blocking=True)
         self._slots_copied = self._slots_copied or torch.cuda.Event()
         self._slots_copied.record()
+        for c in calls:
+            fresh_into(c.salts, c.m16)
         self._uploaded = s
         return staged
 

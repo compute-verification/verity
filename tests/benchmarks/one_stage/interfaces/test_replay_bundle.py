@@ -17,8 +17,7 @@ S = B.S
 SCHEMA = Path(B.__file__).parent / "schemas" / "drawn-unit-bundle.v2.schema.json"
 #: the bundle of units 5, 200, 300 and 511 (slot 0 layer 0, slot 0 layer 1, slot 1 layer 0, slot 1 layer 1) of a W8A8 MLP's
 #: window (two requests, one step, width 128: 512 units in members of 8) on the RTX PRO 6000's dot, under the window's
-#: registered subset:4, and that docket; `prove_bundle.py make` wrote them at bc24cf2713 from the retired torch loop,
-#: and the window itself is the registered fixture tests/benchmarks/one_stage/fixtures/bundle-window (prove_bundle.sh's BUNDLE_WINDOW)
+#: registered subset:4, and that docket, written from the retired torch loop
 FIXTURES = Path(__file__).parent / "fixtures"
 DRAW = (5, 200, 300, 511)
 PATHS = "its paths do not reach its unit, slot and step roots"
@@ -26,9 +25,9 @@ PATHS = "its paths do not reach its unit, slot and step roots"
 GOLDEN = {"json": "d00fd9f23632ac85627cda499654432a6bd547fd30f391760a08de62972b3b3171e549fd2c1c7512dbde8812177d5df394acfbb7e79be95f9e29e147594e3ea1",
           "bin": "183e9e504664b5d831135407b51246829dc10eedf9587917cd88cef516599d2c9685bb19e9b013f403bba1aba68e270495c2e830139fea7efa961f0c823b3db3"}
 #: SHA-512 of kernels' fixtures/commit-slots-v1.json, which `S.fixture()` writes as ``json.dumps(fixture, indent=1) + "\n"``;
-#: its roots and digests are those of the commit `B.REFERENCE` pins
-SLOTS_FIXTURE_SHA512 = ("b0af136a50096f7a769deca08c2c36a09129f43c688328a7e823597e835d9438"
-                        "80ca988e3b7a71da38cf60faf80617557f99957e22e2d121f997ba25d86d0ea0")
+#: its rows are under the test salts it holds as data
+SLOTS_FIXTURE_SHA512 = ("d7bca5ba1ff4322715e61e305a49edc6a4239f330a0e905f8a012af04f814310"
+                        "22bfbfd6a8eb9fe29c4ca1ca39fb5967050d0144095b96d0e94b439322e0acdf")
 
 
 @pytest.fixture(scope="module")

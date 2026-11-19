@@ -8,8 +8,8 @@
   and every reader takes the file through :func:`workload_file`, which fetches it by that id and checks the digest.
 * **What runs.**  :class:`RowConfig`, a row's one config (its file ``workloads/<row>.json``: the workload and the pinned
   :class:`RowEngine`), the done source a row of record must declare (``DONE_SOURCES``, :func:`done_source_refusal`: its public
-  cap), the row-id grammar (:class:`RowId`), the dtype vocabulary (``DTYPES``), the target table
-  (``TARGETS``), the protocol-set grammar (``PROTOCOLS``, :func:`parse_protocols`), and :class:`EnginePin`, the pinned
+  cap), the row-id grammar (:class:`RowId`), the dtype vocabulary (``DTYPES``), a row's target
+  card (:func:`target_card`, the card files'), the protocol-set grammar (``PROTOCOLS``, :func:`parse_protocols`), and :class:`EnginePin`, the pinned
   engine record every engine is built from: model, full revision and checkpoint role, checked against
   ``manifests/checkpoints.json``.
 * **How a stage runs.**  :class:`BuildConfig`, :class:`MatchConfig` and :class:`CommitConfig`: defaults in code,
@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import copy
+import functools
 import hashlib
 import importlib
 import json
@@ -42,11 +43,11 @@ from verity_vllm.records import workload as workload_record
 
 #: The names the library's other modules read here.
 __all__ = [
-    "CARD_FILES", "CHECKPOINTS", "DEFAULT_ROW_PROTOCOLS", "DTYPES", "MANIFESTS", "RECORDS", "ROOT", "TARGETS", "TARGET_NUM_SMS", "VLLM",
-    "WORKLOADS", "WORKLOAD_SCHEMA", "BuildConfig", "CommitConfig", "EnginePin", "MatchConfig", "RowConfig", "RowEngine",
-    "RowId", "RunEnv", "UsageError", "checkpoint_dir", "checkpoint_entries", "checkpoints_hf_home", "done_source_refusal",
+    "CARD_FILES", "CHECKPOINTS", "DEFAULT_ROW_PROTOCOLS", "DTYPES", "MANIFESTS", "RECORDS", "ROOT", "VLLM",
+    "WORKLOADS", "WORKLOAD_SCHEMA", "BuildConfig", "CommitConfig", "card_arch", "cuda_arch", "EnginePin", "MatchConfig", "RowConfig", "RowEngine",
+    "RowId", "RunEnv", "UsageError", "CONTENT", "checkpoint_digest", "checkpoint_dir", "checkpoint_entries", "checkpoints_hf_home", "done_source_refusal",
     "group", "option", "parse_protocols", "row_batch", "row_execution", "row_file", "row_path", "row_target", "row_tokens",
-    "row_world", "rows_of_record", "run_store", "vllm_revision", "workload_arg", "workload_file", "workload_files",
+    "row_world", "rows_of_record", "run_store", "target_card", "target_cc", "target_num_sms", "target_tokens", "vllm_revision", "workload_arg", "workload_file", "workload_files",
 ]
 
 #: The source tree holding the ``verity_vllm`` package, ``manifests/`` and ``workloads/``.
@@ -57,6 +58,21 @@ CHECKPOINTS = MANIFESTS / "checkpoints.json"
 #: The circuit database's index (`pipeline.config_record`, `verity-vllm records`); the rows it lists are the rows of record.
 RECORDS = MANIFESTS / "records.json"
 CARD_FILES = ROOT.parents[1] / "calibration/hardware/cards"
+
+
+def card_arch(sku: str) -> str:
+    """Card `sku`'s `arch` (sm_90a), refused unless it is a GPU card's sm_<major><minor>[a|f]."""
+    from verity.device import compute_capability, load_card
+
+    card = load_card(sku, directory=CARD_FILES)
+    compute_capability(card)
+    return card["arch"]
+
+
+def cuda_arch(sku: str) -> str:
+    """The `TORCH_CUDA_ARCH_LIST` entry of card `sku`'s `arch` (sm_90a -> 9.0a), which an extension built for it compiles to."""
+    m = re.fullmatch(r"sm_(\d+)(\d)([af]?)", card_arch(sku))
+    return f"{m[1]}.{m[2]}{m[3]}"
 
 
 def checkpoints_hf_home() -> str | None:
@@ -120,21 +136,41 @@ def environ_snapshot() -> Any:
 #: Row-id dtype token -> the checkpoint weight format the row serves.
 DTYPES: dict[str, str] = {"bf16": "bfloat16", "fp8": "float8_e4m3fn", "int8": "int8"}
 
-#: Row-id target token -> the device class's compute capability.  Extend by name; an unknown token is a refusal, not a guess.
-TARGETS: dict[str, tuple[int, int]] = {
-    "l40s": (8, 9), "l40": (8, 9), "l4": (8, 9), "rtx4090": (8, 9),
-    "a100": (8, 0),
-    "a10": (8, 6), "a10g": (8, 6), "a40": (8, 6),
-    "h100": (9, 0), "h200": (9, 0), "h20": (9, 0),
-    "b200": (10, 0), "gb200": (10, 0),
-    "rtxpro6000": (12, 0),
-}
+@functools.cache
+def _gpu_cards() -> tuple[dict, ...]:
+    from verity.device import load_card, skus
 
-#: Row-id target token -> the device class's SM count, for the classes where it is fixed by the class: such a row declares its whole
-#: Build target (capability + SM count) by its id, so its Build derives for it on any host, a GPU-free one included.  A class whose SM
-#: count varies by part (h100 SXM 132 / PCIe 114) is not listed: its Build target is the host GPU's unless the workload declares one.
-#: The H200 is 132 SMs as SXM and as NVL.
-TARGET_NUM_SMS: dict[str, int] = {"rtxpro6000": 188, "h200": 132}
+    return tuple(load_card(sku, directory=CARD_FILES) for sku in skus("gpu", directory=CARD_FILES))
+
+
+def _token(card: dict) -> str:
+    return str(card.get("short", "")).replace("-", "")
+
+
+def target_tokens() -> list[str]:
+    """The row-id target tokens: each GPU card file's `short` without its hyphens (rtx-pro-6000 is ``rtxpro6000``)."""
+    return sorted(_token(c) for c in _gpu_cards())
+
+
+def target_card(token: str) -> dict:
+    """The GPU card file a row id's target token names (`target_tokens`); a token no card file names is refused by name: its
+    rows wait for a card file in ``CARD_FILES``. A row's whole Build target (capability and SM count) is its card's, so its Build
+    derives on any host, a GPU-free one included."""
+    found = [c for c in _gpu_cards() if _token(c) == token]
+    if len(found) != 1:
+        raise UsageError(f"row target {token!r}: no GPU card file names it (the targets are {target_tokens()}, each a card's `short` "
+                         f"without hyphens); its rows wait for a card file under {CARD_FILES}")
+    return found[0]
+
+
+def target_cc(token: str) -> tuple[int, int]:
+    from verity.device import compute_capability
+
+    return compute_capability(target_card(token))
+
+
+def target_num_sms(token: str) -> int:
+    return int(target_card(token)["sm"]["count"]["value"])
 
 ROW_FIELDS = ("model", "dtype", "target", "world", "batch", "max_input", "max_output", "arrivals", "sampling", "execution")
 _ROW_INT_PREFIX = {"world": "tp", "batch": "b", "max_input": "i", "max_output": "o"}
@@ -214,9 +250,10 @@ def row_target(row: str) -> str | None:
     return parts[2] if len(parts) >= 4 and parts[3].startswith("tp") else None
 
 
-#: The protocols a run can enable (`verity_vllm.protocols`), in install order, innermost first: PoUW replaces the
-#: linear layers' GEMMs, POUS decodes the weights those GEMMs read, SPOT commits what the model computed.
-PROTOCOLS = ("pouw", "pous", "sampled-proofs")
+#: The protocols a run can enable, each with its adapter module in `verity_vllm.protocols`, in install order, innermost
+#: first: PoUW replaces the linear layers' GEMMs, POUS decodes the weights those GEMMs read, SPOT commits what the model
+#: computed.
+PROTOCOLS = {"pouw": "pouw", "sampled-proofs": "spot"}
 #: The set a row runs when its target declares none: SPOT alone, the Commit under its committer's scheme
 #: (rows-sha512 by default, `pipeline.commit --commit-scheme`).
 DEFAULT_ROW_PROTOCOLS = ("sampled-proofs:rows-sha512",)
@@ -251,9 +288,36 @@ def parse_protocols(value: str | Mapping[str, str] | Any | None) -> tuple[str, .
     return tuple(f"{n}:{got[n]}" for n in PROTOCOLS if n in got)
 
 
-#: pins kept beside a checkpoint manifest in `<stem>-<name>.json`, same schema and append-only too (the int8 recipe pins: the
-#: manifest itself sits at the repository's 256 KiB file cap); `checkpoint_entries` reads them after the manifest's own pins
-SIBLING_MANIFESTS = ("int8",)
+#: pins kept beside a checkpoint manifest in `<stem>-<name>.json`, same schema and append-only too (the int8 recipe pins, and
+#: the node-local checkpoints bound by their content: the manifest itself sits at the repository's 256 KiB file cap);
+#: `checkpoint_entries` reads them after the manifest's own pins
+SIBLING_MANIFESTS = ("int8", "local")
+#: the revision prefix of a node-local checkpoint's pin, whose ``repo`` and ``local_path`` are its directory and whose
+#: revision is this prefix and its `checkpoint_digest`
+CONTENT = "sha256:"
+
+
+def checkpoint_files(root: Path) -> list[Path]:
+    """The files that bind a node-local checkpoint: all but a Hub snapshot's repository metadata (dot-files such as
+    ``.gitattributes``, and Markdown), which no loader reads and which a re-fetched snapshot can add."""
+    return sorted(p for p in root.iterdir() if p.is_file() and not p.name.startswith(".") and p.suffix != ".md")
+
+
+def checkpoint_digest(root: str | Path) -> str:
+    """SHA-256 over each of `checkpoint_files`' name, size and SHA-256, in order: what a node-local pin's revision binds."""
+    files = checkpoint_files(Path(root))
+    if not files:
+        raise ValueError(f"checkpoint {root} has no files")
+    digest = hashlib.sha256()
+    for file in files:
+        name = file.name.encode()
+        digest.update(len(name).to_bytes(4, "big") + name + file.stat().st_size.to_bytes(8, "big"))
+        content = hashlib.sha256()
+        with file.open("rb") as stream:
+            while chunk := stream.read(8 << 20):
+                content.update(chunk)
+        digest.update(content.digest())
+    return digest.hexdigest()
 
 
 def sibling_manifests(checkpoints: str | Path = CHECKPOINTS) -> list[Path]:
@@ -273,7 +337,8 @@ def checkpoint_entries(checkpoints: str | Path = CHECKPOINTS) -> list[dict[str, 
 class EnginePin:
     """The pinned engine a row or :class:`verity_vllm.LLM` runs.
 
-    ``model`` is the HF repo id and ``revision`` its full commit sha, both as ``manifests/checkpoints.json`` pins them;
+    ``model`` is the HF repo id and ``revision`` its full commit sha, both as ``manifests/checkpoints.json`` pins them
+    (a node-local checkpoint: its directory and `CONTENT` with its `checkpoint_digest`);
     ``case`` is the pin's role (the engine profile's key) and ``local_path`` the snapshot on this host.  ``world`` is the
     tensor-parallel degree.  Build it with :meth:`resolve`, which refuses an unpinned model or another revision.
     """
@@ -724,13 +789,11 @@ class CommitConfig:
     serving_rows_tables: str | None = option("--serving-rows-tables", env="SERVING_ROWS_TABLES", default=None, metavar="REGISTRATION_JSON",
                                              help="the per-expert cut's tables registration (verity-vllm tp-register-tables --out; {rank} "
                                                   "in its path its rank's): the windows commit the tables their reads read under it, so "
-                                                  "their records declare them (verity_vllm.pipeline.expert_rows.of_request); needs "
-                                                  "SERVING_ROWS and SERVING_ROWS_TABLES_KEY")
-    serving_rows_tables_key: str | None = option("--serving-rows-tables-key", env="SERVING_ROWS_TABLES_KEY", default=None, metavar="KEY",
-                                                 help="the committer's key file SERVING_ROWS_TABLES is registered under (--new-key's)")
+                                                  "their records declare them (verity_vllm.pipeline.expert_rows.of_request), under the "
+                                                  "salts in the salt file beside it; needs SERVING_ROWS")
     remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
                                          help="the PoUB session's verifier: the Commit proves its store to it in lockstep "
-                                              "with its first instrumented run (verity_vllm.protocols.poub.remote; single-GPU rows)")
+                                              "with its first instrumented run (verity.protocols.resource_accounting.memory.poub.prover.commit_session; single-GPU rows)")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
                                 "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")
@@ -764,18 +827,21 @@ class RunEnv:
     sweep_dir: str = option("--sweep-dir", env="SWEEP_DIR", help="rows live in <sweep-dir>/<row>")
     hf_home: str = option("--hf-home", env="HF_HOME")
     cuda_home: str = option("--cuda-home", env="CUDA_HOME")
-    cuda_bin: str = option("--cuda-bin", help="put on the stages' PATH after the interpreter's directory")
+    cuda_bin: str | None = option("--cuda-bin", default=None,
+                                  help="put on the stages' PATH after the interpreter's directory (default: <cuda-home>/bin)")
     native_collect_build: str | None = option("--native-collect-build", env="NATIVE_COLLECT_BUILD", default=None,
                                               help="collector build dir (default: the release's, else --native-collect-default)")
-    native_collect_default: str = option("--native-collect-default")
+    build_root: str = option("--build-root", env="VERITY_BUILD_ROOT",
+                             help="the pod's build root: the collector build and the tap builds below are under it")
+    native_collect_default: str | None = option("--native-collect-default", default=None, help="(default: <build-root>/nc_build)")
     hidden_so: str | None = option("--hidden-so", env="HIDDEN_SO", default=None,
                                    help="M1 tap .so (default: the one of the row's attention implementation)")
-    hidden_so_fa2: str = option("--hidden-so-fa2")
-    hidden_so_fa3: str = option("--hidden-so-fa3")
-    hidden_so_fa2_guarded: str = option("--hidden-so-fa2-guarded", help="the guarded-max FA2 tap build (ops/pod_fa2_tap.sh, FA2_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
-    hidden_so_fa3_guarded: str = option("--hidden-so-fa3-guarded", help="the guarded-max FA3 tap build (ops/pod_fa3_tap.sh, FA3_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
-    norm_tap_so: str = option("--norm-tap-so", help="the norm-scale tap op (ops/pod_norm_tap.sh), used unless --norm-tap 0")
-    router_tap_so: str = option("--router-tap-so", help="the router-softmax tap op (ops/pod_router_tap.sh), used unless --router-tap 0")
+    hidden_so_fa2: str | None = option("--hidden-so-fa2", default=None)
+    hidden_so_fa3: str | None = option("--hidden-so-fa3", default=None)
+    hidden_so_fa2_guarded: str | None = option("--hidden-so-fa2-guarded", default=None, help="the guarded-max FA2 tap build (ops/pod_fa2_tap.sh, FA2_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
+    hidden_so_fa3_guarded: str | None = option("--hidden-so-fa3-guarded", default=None, help="the guarded-max FA3 tap build (ops/pod_fa3_tap.sh, FA3_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
+    norm_tap_so: str | None = option("--norm-tap-so", default=None, help="the norm-scale tap op (ops/pod_norm_tap.sh), used unless --norm-tap 0")
+    router_tap_so: str | None = option("--router-tap-so", default=None, help="the router-softmax tap op (ops/pod_router_tap.sh), used unless --router-tap 0")
     timeline: str | None = option("--timeline", env="VERITY_TIMELINE", default=None,
                                   help="stage telemetry file (default: <row dir>/timeline.jsonl)")
     verity_tree: str | None = option("--verity-tree", env="VERITY_TREE", default=None,
@@ -785,3 +851,21 @@ class RunEnv:
     guard_preserve_file: str = option("--guard-preserve-file", env="GUARD_PRESERVE_FILE")
     pod_guard: str = option("--pod-guard", help="the pod guard shell library (the tree's copy when absent)")
     environ: Mapping[str, str] = environ_snapshot()
+
+    def __post_init__(self) -> None:
+        for name, below in BUILT.items():
+            if getattr(self, name) is None:
+                object.__setattr__(self, name, os.path.join(self.build_root, below))
+
+
+#: Each build `RunEnv` takes, below its build root: the collector's (``commit/committer/native_jit.py``) and the taps'
+#: (``ops/pod_fa2_tap.sh``, ``pod_fa3_tap.sh``, ``pod_norm_tap.sh``, ``pod_router_tap.sh``).
+BUILT: dict[str, str] = {
+    "native_collect_default": "nc_build",
+    "hidden_so_fa2": "fa2/build/matReq/verity_fa2_matReq.so",
+    "hidden_so_fa3": "fa2/build/fa3_matReq/verity_fa3_matReq.so",
+    "hidden_so_fa2_guarded": "fa2/build/matReqG/verity_fa2_matReqG.so",
+    "hidden_so_fa3_guarded": "fa2/build/fa3_matReqG/verity_fa3_matReqG.so",
+    "norm_tap_so": "norm_tap/build/verity_norm_tap.so",
+    "router_tap_so": "router_tap/build/verity_router_tap.so",
+}

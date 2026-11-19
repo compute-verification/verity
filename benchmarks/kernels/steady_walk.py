@@ -29,10 +29,10 @@ class Pair(NamedTuple):
 
 
 PAIRS = (
-    Pair("glm53-flock-steady-head-block-h200", "glm53-flock-steady-head-block-h200-walk",
+    Pair("glm53-flock-steady-head-block", "glm53-flock-steady-head-block-walk",
          'census:SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},'
          'SCALE={"f64":"0x1.0000000000000p-4"}}'),
-    Pair("llama32-1b-flock-steady-gemm-h200", "llama32-1b-flock-steady-gemm-h200-walk",
+    Pair("llama32-1b-flock-steady-gemm", "llama32-1b-flock-steady-gemm-walk",
          'census:Gemm_v2{K=2048,N=16,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'),
 )
 
@@ -46,10 +46,9 @@ def machine(spec_card: str, reported: str) -> tuple[str, str | None]:
     """The member's card: the ``short`` of the card record whose ``driver`` holds ``reported`` (`kit.card_short`), else
     the spec's card and why."""
     from verity_bench import kit
-    from verity_bench.overhead import CARD_FILES
 
     try:
-        return kit.card_short(reported, directory=CARD_FILES), None
+        return kit.card_short(reported), None
     except SystemExit as refused:
         return spec_card, str(refused)
 

@@ -19,7 +19,7 @@ it.
   reveals for those rows alone), and the output rows it requires (``expect``: an ok bit). ``stage_kw`` passes a shared-row
   file's tables, refs and registered reads to `UnitStager.stage` for units that read registered values.
 * **The program.** The caller's (a window's, whose partition the statements bind), else the population program of the
-  members' templates (`partition.mixed_population_program`, `Q_template_instances`), one stratum a member.
+  members' templates (`population.wired_population_program`, `Q_template_instances`), one stratum a member.
 * **The docket** (`registration.record`): each statement's frame-v3 ports, the sampling design, the scheme and the
   leaf layer, checked by the verifier (R1-R7) and against each statement's header before the sample.
 * **The sample** (``coins``): ``"lean"``, the verifier's Lean (`verity-verify-proof draw --stratified K`) on a development
@@ -71,7 +71,6 @@ import gc
 import os
 import resource
 import shutil
-import socket
 import sys
 import time
 from dataclasses import dataclass, field, replace
@@ -85,9 +84,14 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import a7  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R  # noqa: E402
+from verity.commitments import docket_digest as DD
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
+from verity.ports import free_port  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
-from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.codec import canonical_json, descriptor_id, encode_program  # noqa: E402
+from verity.circuits.population import wired_population_program  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Statement  # noqa: E402
 
@@ -148,12 +152,6 @@ class Tools:
                              "flock-tmpl-unit places")
 
 
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 # --- staging ----------------------------------------------------------------------------------------------------------
 
 #: `stage`'s bound stagers by unit and partition inside `reuse_lowerings`, else None
@@ -187,7 +185,7 @@ class OutsideShape(ValueError):
         super().__init__(msg)
         self.k_log, self.per_block = k_log, per_block
 
-def _stage_forged(st, m: Member, d: Path, salt_key: bytes, indices: list[int], set_name: str) -> dict:
+def _stage_forged(st, m: Member, d: Path, indices: list[int], set_name: str) -> dict:
     """`UnitStager.stage` with bit 0 of the first output word of each instance in ``m.forge`` flipped before the set is
     committed (`forged_proofs.stage_case`): its rows and ``b || c`` agree with the outputs it commits, so only the proof
     can refuse it."""
@@ -209,9 +207,9 @@ def _stage_forged(st, m: Member, d: Path, salt_key: bytes, indices: list[int], s
         outs["o0"][i, 0] ^= 1
     tables = m.stage_kw.get("tables")
     table_rows = None if tables is None else {p.name: len(tables[p.name]) if p.name in tables else n for p in st.ports}
-    salts = {**FC.stage_salts(iset, 0, n, st.ports, salt_key, table_rows), **(m.stage_kw.get("salts") or {})}
+    salts = {**FC.stage_salts(0, n, st.ports, table_rows), **(m.stage_kw.get("salts") or {})}
     d.mkdir(parents=True, exist_ok=True)
-    FC.write(st.text, iset, 0, n, d / "inst.bin", d / "pub.bin", salt_key,
+    FC.write(st.text, iset, 0, n, d / "inst.bin", d / "pub.bin",
              rows={r: np.asarray(m.values[r], dtype=np.uint16) for r, *_ in st.in_rows}, outs=outs, salts=salts,
              public_words={}, digests=(st.pin, st.class_sha512), indices=indices, share_rows=tables is not None,
              tables=tables, refs=m.stage_kw.get("refs"), registered=m.stage_kw.get("registered"), meta=st.meta)
@@ -236,9 +234,9 @@ def _stager(m: Member, sd: Path, bound: dict, layout: str | None) -> tuple[Any, 
     return CS.UnitStager(m.defn, f"unit/{m.name}", m.rows, m.out_rows, reads=m.reads, **kw), why
 
 
-def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: dict, tools: Tools | None = None) -> dict:
+def stage(m: Member, base: int, bound: dict, out: Path, files: dict, tools: Tools | None = None) -> dict:
     """Member ``m``'s statement, bound to the partition (``bound``) at global units ``base ..``: its circuit lowered
-    once, its rows committed under salts from ``salt_key``; with ``tools.structural``, the templated statement where
+    once, its rows committed under fresh salts; with ``tools.structural``, the templated statement where
     `struct_lower` lowers its Definition, its unit placed by ``tools.tmpl_unit`` (`a0.templated`). Returns a0's statement
     dict (``dir``, ``pin``, the header, ``form``: its statement, its layout or why it is flat ...)."""
     from verity_flock import ir_lower as IL
@@ -266,9 +264,9 @@ def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: 
     set_name = f"{st.iset.name}-{m.name}"
     indices = list(range(base, base + m.n))
     if m.forge:
-        got = _stage_forged(st, m, d, salt_key, indices, set_name)
+        got = _stage_forged(st, m, d, indices, set_name)
     else:
-        got = st.stage(m.values, d, salt_key, indices=indices, set_name=set_name, **m.stage_kw)
+        got = st.stage(m.values, d, indices=indices, set_name=set_name, **m.stage_kw)
     (d / "inst.bin").rename(d / f"inst-{m.n}.bin")
     (d / "pub.bin").rename(d / f"pub-{m.n}.bin")
     (d / "tables").mkdir(exist_ok=True)
@@ -295,7 +293,7 @@ def _draw(coins, rec: dict, program_file: Path, partition_file: Path, k: int, le
     opened after the docket (``coins == "lean"``, `a0.challenger_sample`), or the caller's."""
     if coins == "lean":
         p = a0.challenger_sample(lean, ["--program", str(program_file), "--partition", str(partition_file),
-                                      "--stratified", str(k)], rec["law"], rec["population"], R.digest(rec),
+                                      "--stratified", str(k)], rec["law"], rec["population"], DD.digest(rec),
                                out / "draw.log")
         line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
         if line is None:
@@ -392,8 +390,8 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     if program is None:
-        program = P.mixed_population_program([(m.defn, m.n) for m in members])
-        query = P.template_instances_query([m.defn for m in members])
+        program, query = wired_population_program([(m.defn, m.n) for m in members],
+                                                  {"templates": [[descriptor_id(m.defn), m.n] for m in members]})
     part = P.partition(program, query)
     files = {"partition_file": out / "partition.json", "program_file": out / "program.json"}
     files["partition_file"].write_text(json.dumps(part, sort_keys=True))
@@ -412,13 +410,12 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
                            "program": bound["program"], "firewall": tools.zk_server is not None, "members": {},
                            "_out": str(out)}
 
-    salt_key = os.urandom(32)
     staged, by_name = [], {}
     for m in members:
         tid = P.template_id(m.defn)
         if tid not in bases or bases[tid][1] != m.n:
             raise ValueError(f"{m.name}: template {tid} has no range of {m.n} units in the program ({bases.get(tid)})")
-        s = stage(m, bases[tid][0], bound, out, salt_key, files, tools)
+        s = stage(m, bases[tid][0], bound, out, files, tools)
         staged.append(s)
         by_name[m.name] = (bases[tid][0], m.n)
         subprotocol["members"][m.name] = {"template": tid, "n": m.n, "base": s["base"], "ands": s["ands"], "unit_nnz": s["unit_nnz"],
@@ -437,18 +434,18 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
         publics[s["name"]] = a0.sha512_file(s["dir"] / f"pub-{s['n']}.bin")
     leaf_layer = hashlib.sha512(canonical_json(publics)).hexdigest()
     k = population if k is None else k
-    sampling_design = D.parse_design(f"stratified:{k}")
+    sampling_design = RND.parse_design(f"stratified:{k}")
     window = window or {"kind": "stand-in", "of": "the proof subprotocol's members (prove_subprotocol.py)",
                         "members": {s["name"]: {"template": P.template_id(s["defn"]), "units": [s["base"], s["base"] + s["n"]]}
                                     for s in staged}, "link": "none"}
-    honest = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    honest = DK.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     rec = mutate(copy.deepcopy(honest)) if mutate else honest
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for s in staged:
         checks[f"statement/{s['name']}"] = a7.statement_checks(s, rec, want)
     receipt = R.receipt(rec, "prove-leg verifier (prove_leg.py)")
-    subprotocol["registration"] = R.digest(rec)
+    subprotocol["registration"] = DD.digest(rec)
     subprotocol["checks_before_draw"] = {c: {"ok": v["ok"], "codes": v.get("codes")} for c, v in checks.items()}
     if not all(v["ok"] for v in checks.values()):
         subprotocol.update(accepted=False, refused="before the draw", seconds=round(time.time() - t0, 1))
@@ -690,7 +687,7 @@ def out_words(fn, *args: np.ndarray) -> np.ndarray:
 
 def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int = 20261024):
     """The stand-in with registered weights: a Program whose ``weights`` parameter (``table_rows`` bf16 rows of K, a
-    registered value committed once, `registered.Registered.commit`) unit i reads row ``positions[i]`` of as its ``w``,
+    registered value committed once, `registered_value.Registered.commit`) unit i reads row ``positions[i]`` of as its ``w``,
     and whose ``x`` (unit i's row i, the input the verifier holds) and output rows ``o0`` (unit i's row i) are registered
     values too, so every port of the statement is a port of the verifier's registered reads, which the Lean verifier opens
     (`Flock.Registered.checkComplete`). Returns ``(member, program, query, registered file)``: the verifier's own
@@ -698,6 +695,7 @@ def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int
     ``out``."""
     from circuit_check import targets as TG
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+    from verity.commitments import registered_value as RV
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.program import Program
     from verity.circuits.refs import coll_concat
@@ -720,12 +718,12 @@ def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int
     query = P.template_instance_query(fn)
     x, weights = bf16(rng.normal(0, 1, (n, K))), bf16(rng.normal(0, 0.02, (table_rows, K)))
     prog = P.program_digest(program)
-    reg = G.Registered.commit(prog, "weights", weights.tolist(), None, G.WORD_BITS, V2)
-    reg_x = G.Registered.commit(prog, xn, x.tolist(), None, G.WORD_BITS, V2)
-    reg_o = G.Registered.commit(prog, "dot", out_words(fn, x, weights[positions]).tolist(), None, G.WORD_BITS, V2)
+    reg = RV.Registered.commit(prog, "weights", weights.tolist(), None, RV.WORD_BITS, V2)
+    reg_x = RV.Registered.commit(prog, xn, x.tolist(), None, RV.WORD_BITS, V2)
+    reg_o = RV.Registered.commit(prog, "dot", out_words(fn, x, weights[positions]).tolist(), None, RV.WORD_BITS, V2)
     own = G.reads_file(program, query, {xn: K, "weights": K}, {xn: reg_x.root.hex(), "weights": reg.root.hex()},
                        schemas={xn: V2, "weights": V2})
-    own["ports"]["o0"] = {**reg_o.entry(), **G.width_entry(G.WORD_BITS), **G.schema_entry(V2), "reads": list(range(n))}
+    own["ports"]["o0"] = {**reg_o.entry(), **RV.width_entry(RV.WORD_BITS), **RV.schema_entry(V2), "reads": list(range(n))}
     out.mkdir(parents=True, exist_ok=True)
     (out / "registered.json").write_text(json.dumps(own, sort_keys=True))
     table, refs = G.table(positions)
@@ -739,22 +737,6 @@ def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int
                               "registered": {xn: x_entry, wn: entry, "o0": o_entry},
                               "salts": {xn: x_salts, wn: salts, "o0": o_salts}})
     return member, program, query, out / "registered.json"
-
-
-def n2_member(name: str, key: tuple[int, int, int], insts: Sequence, pubs: Sequence[Sequence[int]],
-              oks: Sequence[int] | None = None) -> Member:
-    """N2's head checks (`n2_zk`'s ``NetworkHeadCheckRows`` around `head_check.unit(L, T, COUNTS)`, ``key``) as one
-    member: instance i's ``pub`` and ``wit`` rows (`n2_zk.rows_of`), ``pub`` held to ``pubs[i]`` (the verifier's own
-    `n2_zk.public_words`: the registered root, the execution phase, the signed digest), ``o0`` required to ``oks[i]`` (default
-    every check passes)."""
-    from verity.protocols.resource_accounting.network.prover import n2_zk as N
-
-    bits = N.row_bits(N.HC.unit(key[0], key[1], bool(key[2])))
-    words = [N.rows_of(i) for i in insts]
-    values = {r: np.asarray([w[r] for w in words], dtype=np.uint16) for r in N.ROWS}
-    oks = [1] * len(insts) if oks is None else list(oks)
-    return Member(name, N.unit(key), [(r, V2, bits[r], [r]) for r in N.ROWS], [(V2, (0,))], values,
-                  held={"pub": np.asarray(pubs, dtype=np.uint16)}, expect={"o0": np.asarray(oks, dtype=np.uint16)[:, None]})
 
 
 # --- served Definitions -----------------------------------------------------------------------------------------------
@@ -773,7 +755,7 @@ CALLS = {"first": "AttnBlockFirst", "block": "AttnBlock", "end": "AttnHeadEnd"}
 STATE = {"m_prev": (2.0, 0.0), "l_prev": (4.0, 16.0), "o_prev": (4.0, 0.0), "l": (4.0, 16.0), "o": (4.0, 0.0)}
 #: the window circuit's units that no serving row commits (`serving_rows.template` refuses their one-bit leaves): their
 #: Definition is the window's own (`interface.resolve`), and they read no pinned table
-WINDOW_ONLY = ("EmbeddingRead_v1",)
+WINDOW_ONLY = ("EmbeddingRead_v2",)
 
 
 def _gen(rng: np.random.Generator, n: int, size: int, scale: float = 1.0, mean: float = 0.0) -> np.ndarray:
@@ -835,7 +817,7 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
         attention-v19:M:T:CALL  a Call of the RTX PRO 6000's decode head over T keys as the window circuit cuts it
                              (`attention_call`): first (AttnBlockFirst_v1), block (AttnBlock_v5) or end (AttnHeadEnd_v1)
         attention-v20:M:T:CALL  the same on the H200 (sm_90, FA3): AttnBlockFirst_v1, AttnBlock_v4 or AttnHeadEnd_v1
-        embedding-read:M[:V] EmbeddingRead_v1{V,H}, the window's embedding unit, each stand-in row opening at its token
+        embedding-read:M[:V] EmbeddingRead_v2{V,H}, the window's embedding unit, each stand-in row opening at its token
     """
     from verity.circuits.defs import bind
     from verity_vllm import TargetProfile
@@ -844,7 +826,9 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
 
     fam, model, *arg = shape.split(":")
     L = LLAMA[model]
-    pro = TargetProfile(compute_capability=(12, 0), num_sms=188)
+    from verity_bench import kit
+    t = kit.gpu_target("rtx-pro-6000-server")
+    pro = TargetProfile(compute_capability=tuple(t["compute_capability"]), num_sms=t["num_sms"])
     a = int(arg[0]) if arg else None
     H, D, V = L["H"], L["D"], a or L["V"]
     if fam == "gemm":

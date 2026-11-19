@@ -69,7 +69,7 @@ open With
 variable {wideLeaf : Bool}
 
 /-- **The masked zerocheck** sends at most `3 + (m − 6)` rounds. -/
-theorem zerocheckPZk_sends (resp : ℕ → Claims.Msg) (m : ℕ) (digest cap root : ByteArray) (lay : Zk.PadLayout)
+theorem zerocheckPZk_sends (resp : ℕ → Hash.Msg) (m : ℕ) (digest cap root : ByteArray) (lay : Zk.PadLayout)
     (h : Array F128) (tr : Trace) :
     (sendsC.st Transcript).P (zerocheckPZk (asksS resp) m digest cap root lay h tr) (3 + (m - 6)) := by
   apply (sendsC.st Transcript).mono
@@ -79,7 +79,7 @@ theorem zerocheckPZk_sends (resp : ℕ → Claims.Msg) (m : ℕ) (digest cap roo
     omega
 
 /-- **The masked lincheck** sends at most `3 + (kLog − 6)` rounds. -/
-theorem lincheckPZk_sends (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (h : Array F128)
+theorem lincheckPZk_sends (resp : ℕ → Hash.Msg) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (h : Array F128)
     (tr : Trace) (zc : ZcOut) :
     (sendsC.st Transcript).P (lincheckPZk (asksS resp) c m lay h tr zc) (3 + (c.kLog - 6)) := by
   apply (sendsC.st Transcript).mono
@@ -98,7 +98,7 @@ theorem sendsC_st_throw {α : Type} (e : String) : (sendsC.st Transcript).P (thr
   (sendsC.st Transcript).throw e 0
 
 /-- **The inner proof** sends at most `4` rounds. -/
-theorem innerP_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
+theorem innerP_sends (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
     (ic : InnerCommit) (finalC : F128) (cons : Array (String × Zk.Lin)) :
     (sendsC.st Transcript).P (innerP (asksS resp) (Hashes.ofSha512 h) lay p ic finalC cons) 4 := by
   apply (sendsC.st Transcript).mono
@@ -111,7 +111,7 @@ theorem sendsC_lp_throw {α : Type} (e : String) : ((sendsC.st Transcript).st Li
   ((sendsC.st Transcript).st LigState).throw e 0
 
 /-- **Level 0's masked Ligerito** sends at most `k0 + 11`, then `11` per recursive level but the last's `7`. -/
-theorem ligeritoPZk_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
+theorem ligeritoPZk_sends (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout) (hp : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) :
     (sendsC.st Transcript).P (ligeritoPZk (asksS resp) (Hashes.ofSha512 h) ms sch T cm0 t b lay hp rep tPad extra
@@ -154,7 +154,7 @@ theorem rankCheckP_sends (m kLog : ℕ) (prior : Array (List F128)) (words : Lis
     (Cost.ite _ (fun _ => (sendsC.st Transcript).pure ()) fun _ => (sendsC.st Transcript).throw _ 0) (by simp)
 
 /-- **A masked rep** sends at most the sum of its steps. -/
-theorem repPZk_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
+theorem repPZk_sends (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) :
@@ -177,7 +177,7 @@ theorem innerCommitP_quiet (h : ByteArray → ByteArray) (p : PadsZk) (salt : �
   sim_walk [leafWith_sim quietS hh]
 
 /-- **The masked session after the link** sends at most two masked reps' rounds. -/
-theorem afterLinkPZk_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Stmt)
+theorem afterLinkPZk_sends (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Stmt)
     (v : Schedule × ℕ) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk) (tbls : Array (Array F128))
     (cms : Array Commit) (c1 : ℕ → F128) (hspec : spec.tables.size = 1) :
     sendsC.P (afterLinkPZk (asksS resp) (Hashes.ofSha512 h) spec #[Setup.ofCircuit st] words trs tape #[v] tbls cms
@@ -260,7 +260,7 @@ theorem zkSchedule_shape {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule wideLe
       show ¬m ≤ 31 by omega, show ¬m ≤ 35 by omega] at hq0
 
 /-- **The masked sends fit the masked verifier's rounds**: the goal `SendCountZk`. -/
-theorem sendCountZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
+theorem sendCountZk_goal (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) :
     SendCountZk H rel := by
   intro o
   obtain ⟨st, hsts, hspec, hm1, -⟩ := o.table

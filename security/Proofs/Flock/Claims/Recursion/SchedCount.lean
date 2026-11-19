@@ -162,7 +162,7 @@ theorem flockRepRounds_eq {spec : SessionSpec} {st : Stmt} {rs : Array RecVStar.
 /-- **The plain verifier's count at a one-table inner statement of the verifier's shape**: where the plain verifier
 sets the inner statement up as the one table `st`, whose `m`, `k_log` and claims are the shape's, at `k_log ≥ 6`, it
 takes `2 + 2R` rounds, `R` the plain schedule's. -/
-theorem k_plain {xI : Claims.Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {st : Stmt} {sh : RecVStar.Inner}
+theorem k_plain {xI : Hash.Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {st : Stmt} {sh : RecVStar.Inner}
     {rs : Array RecVStar.SchedRound} (hset : FlockDeploy.setupOf false xI = some (s, spec, #[st]))
     (hm : sh.m = st.m) (hk : sh.kLog = st.c.kLog) (hc : sh.claims = 2 + spec.points * st.regions.size)
     (hk6 : 6 ≤ st.c.kLog) (hrs : RecVStar.repRounds sh.m sh.kLog sh.claims = some rs) :

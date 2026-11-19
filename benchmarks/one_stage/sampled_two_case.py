@@ -22,9 +22,10 @@ from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from verity.protocols.proofs.spot.verifier import levels as LV
 from verity_difftest import canonical
 
-FORM = "two-stage"
+LEVELS = 2
 
 
 @contextlib.contextmanager
@@ -64,21 +65,22 @@ def assemble(run: Mapping[str, Any], members: Mapping[str, Any]) -> dict[str, An
         raise ValueError("the interior's partition is not the object its members' sessions are verified against")
     key = run["key"]
     params = {
-        "form": FORM, "boundary": {**run["params"], "challenger": {"key": key, "label": run["family"]}},
+        LV.KEY: LEVELS, "boundary": {**run["params"], "challenger": {"key": key, "label": run["family"]}},
         "challenger": run["challenger"], "delta": run["delta"], "outputs": [], "public": run["public"],
         "rule": run["rule"], "values": run["values"],
         "interior": {"params": {**it["params"], "challenger": {"key": key, "label": it["family"]}, "partition": part},
                      "members": members["params"]["proofs"]["members"], "replay": it["replay"],
                      "values": it["values"]}}
-    evidence = {"form": FORM, "coins": run["coins"], "interior": ev, "received": run["received"],
+    evidence = {LV.KEY: LEVELS, "coins": run["coins"], "interior": ev, "received": run["received"],
                 "record": it["record"], "source": run["source"], "statements": it["statements"]}
+    LV.of_params(params)
     return {"params": params, "commitment": canonical(run["record"]).encode().hex(),
             "evidence": canonical(evidence).encode().hex(), "blobs": list(members["blobs"])}
 
 
 def write(case: Mapping[str, Any], out: Path) -> list[Path]:
-    """The case as ``sampled-two check``'s files under ``out``: params.json, commitment.json, evidence.json, then
-    the blobs' paths. -> the files in that order."""
+    """The case as ``vstar-recursive sampled check``'s files under ``out``: params.json, commitment.json,
+    evidence.json, then the blobs' paths. -> the files in that order."""
     out.mkdir(parents=True, exist_ok=True)
     files = [out / "params.json", out / "commitment.json", out / "evidence.json"]
     files[0].write_text(canonical(case["params"]))

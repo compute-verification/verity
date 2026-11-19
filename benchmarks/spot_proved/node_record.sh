@@ -24,7 +24,7 @@ nvidia-smi --query-gpu=index,name,compute_cap,memory.total,driver_version,vbios_
   echo "host=$(hostname) machine_id=$(cat /etc/machine-id 2>/dev/null) boot_id=$(cat /proc/sys/kernel/random/boot_id)"; } > "$O/ids.txt"
 "$PY" -c 'import torch; p = torch.cuda.get_device_properties(0)
 print(f"sms={p.multi_processor_count} torch={torch.__version__} cuda={torch.version.cuda} cudnn={torch.backends.cudnn.version()} nccl={torch.cuda.nccl.version()}")' >> "$O/gpu.txt"
-NVCC=${CUDA_HOME:-/usr/local/cuda-12.9}/bin/nvcc
+NVCC=${CUDA_HOME:-$(python3 "$(dirname "$0")/../kernels/machine.py" toolkit 12.9)}/bin/nvcc
 { echo "$NVCC"; "$NVCC" --version 2>&1 | tail -2; } > "$O/cuda.txt"
 "$PY" -c 'import importlib.metadata as m
 print("\n".join(sorted({d.metadata["Name"] + "==" + d.version for d in m.distributions()})))' > "$O/packages.txt"

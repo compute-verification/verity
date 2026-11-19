@@ -181,7 +181,7 @@ def test_kernel_constants_match_the_reference():
     assert int(n256, 16) == P.f32_to_bf16(P.NOISE_NORM * 32) and int(n16, 16) == P.f32_to_bf16(C.LINE_NORM_V1 * 32)
     block = F.unit_block(b"s" * 32, b"b" * 64, 7)
     assert len(block) == RUN.TIMING_KEYS["unit"] == 104 and block[96:] == (7).to_bytes(8, "little")
-    assert "unit[24] | (uint64_t)unit[25] << 32" in HASH_SOURCE and 'keys["unit"] + 96' in run
+    assert "unit[24] | (uint64_t)unit[25] << 32" in HASH_SOURCE
     assert RUN.VARIANT_G == {H100.name: H100.g} and F.VARIANTS == (H100,)
     assert {g for *_, g in gemms() if g} == {H100.g} and H100.window == const("BK")
     assert F.H100_UNPROMOTED.g is None and F.H100_UNPROMOTED.atom == H100.atom
@@ -272,9 +272,10 @@ def test_a_split_pd_pipeline_reads_a_calls_bf16_rows_only_from_a_cubin_that_take
             launched.append((name, tuple(p), tuple(i), kw))
 
     pipe = RUN.Pipeline.__new__(RUN.Pipeline)
-    pipe.b = dict.fromkeys(("xa", "rowdig_a", "tree_a", "seeds_a", "lkeys_a", "pd_count", "seed_a", "line_a", "ea_codes"), 1)
-    pipe.keys = dict.fromkeys(("unit", "dom_a", "salt_key", "hm"), 2)
+    pipe.b = dict.fromkeys(("xa", "rowdig_a", "tree_a", "seeds_a", "lkeys_a", "pd_count", "seed_a", "line_a", "ea_codes", "salts_a"), 16)
+    pipe.keys = dict.fromkeys(("unit", "dom_a", "hm"), 2)
     pipe.pd, pipe.split_a, pipe.stamps, pipe.k, pipe.m, pipe.m_real = 851, True, 0, 4096, 64, 16
+    pipe.salt_bytes = {"a": RUN.HM_SALT * 16}
     for marked in (True, False):
         pipe.dev, pipe.rows_bf16 = D(marked), None
         assert pipe.reads_bf16() is marked
@@ -349,9 +350,10 @@ def test_pd_shared_launches_the_same_pd_commit_and_pd_tree_in_half_an_sm():
         RUN.pd_setup(D({"pd_commit": 6000, "pd_tree": 70000}))
 
     pipe = RUN.Pipeline.__new__(RUN.Pipeline)
-    pipe.b = dict.fromkeys(("xa", "rowdig_a", "tree_a", "seeds_a", "lkeys_a", "pd_count", "seed_a", "line_a", "ea_codes"), 1)
-    pipe.keys = dict.fromkeys(("unit", "dom_a", "salt_key", "hm"), 2)
+    pipe.b = dict.fromkeys(("xa", "rowdig_a", "tree_a", "seeds_a", "lkeys_a", "pd_count", "seed_a", "line_a", "ea_codes", "salts_a"), 16)
+    pipe.keys = dict.fromkeys(("unit", "dom_a", "hm"), 2)
     pipe.dev, pipe.rows_bf16, pipe.fillers, pipe.split_a, pipe.k, pipe.m, pipe.m_real = d, None, True, True, 4096, 64, 32
+    pipe.salt_bytes = {"a": RUN.HM_SALT * 32}
     for pipe.pd in RUN.PD_SERVED:
         for pipe.stamps in (0, 9):
             got = {}
@@ -488,6 +490,19 @@ def test_sass_gate_allows_local_memory_only_in_the_reference_row_digest(monkeypa
     assert not S.gate(PTXAS_OK + rows, sass)[1]
     assert S.gate(PTXAS_OK + rows.replace("8 bytes stack", "24 bytes stack"), sass)[1]
     assert S.gate(PTXAS_OK.replace("0 bytes spill stores", "4 bytes spill stores") + rows, sass)[1]
+
+
+def test_the_build_says_its_one_target_with_no_toolkit():
+    """`build.sh --arch` prints the target the tree's kernels are built for, one word that names an architecture file, with
+    no toolkit and no GENCODE: `benchmarks/kernels/smoke_h100.sh` asks it before any step and holds the machine's record
+    and the held card's to it, so a build.sh that stops answering fails here rather than on a card.  (The smoke script
+    is no input of this suite, so the test reads the build's side alone.)"""
+    env = {k: v for k, v in os.environ.items() if k not in ("CUDA_HOME", "GENCODE")}
+    r = subprocess.run(["bash", str(HERE / "build.sh"), "--arch"], capture_output=True, text=True, env=env)
+    assert r.returncode == 0 and r.stderr == "", r.stderr
+    assert re.fullmatch(r"[a-z]+_[0-9]+[a-z]?\n", r.stdout), r.stdout
+    arch = r.stdout.strip()
+    assert (HERE.parents[7] / "calibration" / "hardware" / "architectures" / f"{arch}.toml").is_file()
 
 
 @pytest.mark.skipif(not of(__file__).VERITY_POUW_NVCC, reason="VERITY_POUW_NVCC names a CUDA >= 12.8 toolkit (about 30 s)")
@@ -673,7 +688,7 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         rows = {0: 4 * i[0] * k, 1: 64 * i[0] * (k // 256)} if name == "s512_row_segs_w" else {0: 64 * i[0] * (k // 256), 1: 64 * i[0]}
         return {**rows, **(heads if p[2] else {})}
     if name == "hm_leaves":
-        return {0: 64 * i[0], 1: 64 * i[0], 2: 32, 3: 128 + 192 * 256 * 64, 5: 8}
+        return {0: 64 * i[0], 1: 64 * i[0], 2: RUN.HM_SALT * i[0], 3: 128 + 192 * 256 * 64}
     if name == "s512_frame_leaves":
         return {0: 64 * i[1], 1: 64}
     if name == "s512_pads":
@@ -688,12 +703,12 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         tree = {2: 64 * (2 * RUN.pow2(rows) - 1), 5: 104, 6: 64, 10: 32, 11: 32, **stamps}
         if name.startswith("pd_tree_"):
             return {**tree, **({12: 32 * m} if p[12] else {})}
-        return {**tree, 0: 4 * rows * k, 1: 64 * rows, 3: 32 * rows, 4: 32 * rows, 7: 32, 8: 128 + 192 * 256 * 64, 9: 16,
+        return {**tree, 0: 4 * rows * k, 1: 64 * rows, 3: 32 * rows, 4: 32 * rows, 7: RUN.HM_SALT * rows, 8: 128 + 192 * 256 * 64, 9: 16,
                 12: 32 * m}
     if name.startswith("pd_tiles_"):
         return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: 64 * -(-i[0] // 64) * (i[1] // 64)}
     if name.startswith("pl_leaves_"):
-        return {0: 64 * i[0], 1: 64 * i[0], 2: 32, 3: 128 + 192 * 256 * 64, 4: 104, 5: 64}
+        return {0: 64 * i[0], 1: 64 * i[0], 2: RUN.HM_SALT * i[0], 3: 128 + 192 * 256 * 64, 5: 64}
     if name.startswith("pl_levels_"):
         width, _, levels = i[:3]
         return {0: 64 * sum(width >> q for q in range(levels + 1)), 1: 64}
@@ -799,14 +814,10 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     assert all(not v["pearl_c_ok"] and v["failed"] for v in rows[2]["variants"].values())
     failed = rows[2]["variants"]["h100"]["failed"]
     assert {f"y@gemm_pearlc/{t}/grid3" for t, *_ in RUN.TILES} <= set(failed)
-    # each tree's hm96 salt nonce is the fixture's: B's HM96_WEIGHTS + its weight, A's read from the unit block, the tiles'
-    # the transcript's
+    # each hm96 leaf launch reads its own tree's salts (`track` holds every launch's 192 bytes a leaf to its buffer)
     evs = [json.loads(x) for x in log.read_text().splitlines()]
-    unit = {ev["ptr"] for ev in evs if ev["op"] == "alloc" and ev["bytes"] == 104}
-    nonces = {(tuple(ev["i"][1:3]), ev["p"][5] - 96 in unit) for ev in evs if ev["op"] == "launch" and ev["name"] == "hm_leaves"}
-    assert json.loads((small_fixture / "check.json").read_text())["weight"] == F.WEIGHT != 0
-    assert nonces == {(RUN.nonce_args(F.HM96_WEIGHTS + F.WEIGHT), False), ((0, 0), True),
-                      (RUN.nonce_args(F.HM96_TRANSCRIPT), False)}, nonces
+    leaves = {(ev["p"][2], ev["i"][0]) for ev in evs if ev["op"] == "launch" and ev["name"] == "hm_leaves"}
+    assert len({at for at, _ in leaves}) == len(leaves) >= 2, leaves
     # check_pd's /shared forms: pd_commit in both modes and pd_tree, each a launch of a PD_WHOLE form but its shared memory
     pd: dict[int, set] = {}
     for ev in evs:
@@ -904,7 +915,7 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
     elif ev["op"] == "launch":
         name, p, i = ev["name"], ev["p"], ev["i"]
         for slot, n in needs(name, p, i).items():
-            if not p[slot] and (name, slot) in {("lines", 2), ("lines", 3), ("lines", 4), ("s512_seeds", 2), ("hm_leaves", 5)}:
+            if not p[slot] and (name, slot) in {("lines", 2), ("lines", 3), ("lines", 4), ("s512_seeds", 2)}:
                 continue
             assert room(allocs, p[slot]) >= n, (name, slot, room(allocs, p[slot]), n)
         g = ev["grid"]
@@ -1038,8 +1049,9 @@ spec.loader.exec_module(R)
 n, rows, chunk = (int(x) for x in sys.argv[3:6])
 dev = R.Dev(open(sys.argv[2], "rb").read())
 dev.open()
-keys = {name: dev.alloc(R.TIMING_KEYS[name]) for name in ("dom_b", "salt_key", "hm")}
-p = R.Pipeline(dev, R.BM, R.BM, n, "h100", keys, 0, 0, bufs={"tree_b": 0, "segdig_b": 0})
+keys = {name: dev.alloc(R.TIMING_KEYS[name]) for name in ("dom_b", "hm")}
+p = R.Pipeline(dev, R.BM, R.BM, n, "h100", keys, 0, 0,
+               bufs={"tree_b": 0, "segdig_b": 0, "salts_b": (dev.alloc(R.HM_SALT * rows), R.HM_SALT * rows)})
 p.b["tree_b"] = dev.alloc(R.NB * (2 * R.pow2(rows) - 1))
 dig, seg = dev.alloc(64 * rows), dev.alloc(64 * (n // 256) * chunk)
 for _, f in p.tree_setup("b", rows, "dom_b"):
@@ -1049,7 +1061,7 @@ for r in range(0, rows, chunk):
     p.row_digests(x, dig + 64 * r, seg, min(chunk, rows - r))
     dev.sync()
     dev.free(x)
-R.Pipeline.hm_level0(p, "b", dig, rows, "dom_b", nonce=R.nonce_args(7))
+R.Pipeline.hm_level0(p, "b", dig, rows, "dom_b")
 p.levels("b", rows, "dom_b")
 dev.sync()
 p.free()

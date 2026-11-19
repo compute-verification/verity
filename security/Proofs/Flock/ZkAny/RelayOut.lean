@@ -75,12 +75,12 @@ theorem prCoin_le_of_Pr {α β : Type} [Fintype α] [Nonempty α] [Fintype β] [
 
 /-- **`ZKOut` at one statement, witness and verifier is `PerOutcome`** over the protocol's randomness: the transcript
 against `V*`, its outcome read off it, the simulator given the outcome, the error read in `ℝ≥0∞`. -/
-theorem perOutcome_of_zkOut {W St : Type} {N Ω : Claims.Msg → Type} [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)]
-    [∀ x, Fintype (Ω x)] [∀ x, Nonempty (Ω x)] {H : Claims.Msg → Claims.Msg} {k : Claims.Msg → ℕ}
-    {P : W → (x : Claims.Msg) → Claims.Prover (N x × Ω x)} {R : Claims.Rel W}
-    {out : Claims.Msg → List (Claims.Msg × Claims.Out) → St} {S : Claims.SimOut St}
-    {ε : (x : Claims.Msg) → W → (Θ : Type) → Claims.VStar Θ → Θ → St → ℝ} (h : Claims.ZKOut N Ω H k P R out S ε)
-    {x : Claims.Msg} {w : W} (hR : R x w) {Θ : Type} (Vs : Claims.VStar Θ) (θ : Θ) (hk : Vs.k x = k x) :
+theorem perOutcome_of_zkOut {W St : Type} {N Ω : Hash.Msg → Type} [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)]
+    [∀ x, Fintype (Ω x)] [∀ x, Nonempty (Ω x)] {H : Hash.Msg → Hash.Msg} {k : Hash.Msg → ℕ}
+    {P : W → (x : Hash.Msg) → Claims.Prover (N x × Ω x)} {R : Claims.Rel W}
+    {out : Hash.Msg → List (Hash.Msg × Claims.Out) → St} {S : Claims.SimOut St}
+    {ε : (x : Hash.Msg) → W → (Θ : Type) → Claims.VStar Θ → Θ → St → ℝ} (h : Claims.ZKOut N Ω H k P R out S ε)
+    {x : Hash.Msg} {w : W} (hR : R x w) {Θ : Type} (Vs : Claims.VStar Θ) (θ : Θ) (hk : Vs.k x = k x) :
     PerOutcome (fun ω : N x × Ω x => out x (Claims.runStar H (P w x) Vs x ω θ).msgs)
       (fun ω => (Claims.runStar H (P w x) Vs x ω θ).msgs) (fun o (c : S.C x) => (S.given o).out H Vs θ x c)
       (fun o => ENNReal.ofReal (ε x w Θ Vs θ o)) :=

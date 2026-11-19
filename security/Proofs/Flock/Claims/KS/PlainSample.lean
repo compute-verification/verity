@@ -160,8 +160,8 @@ theorem setupAtD_plainInputs {r : Readable.Read} {spec : SessionSpec} {sts : Arr
 sample `d` with no `--public-inputs`, the last message's record and proof files are a record of the run's live outcome
 (`viewOf`) at the setup at `d`, at any `J` of the session's tables, whatever sample the record carries
 (`recordsLiveAtP_of_checks` without `hdraw`). -/
-theorem recordsLiveAtD_of_checks {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+theorem recordsLiveAtD_of_checks {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Hash.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     {J mPts : ℕ} {d : Json} (hs : s.setup = .ok (spec, sts)) (hzk : s.read.zk = false)
     (hpi : s.read.publicInputs = none) (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size)
     (hc : checks false s spec x link c₁ mids f = .ok ()) :
@@ -197,9 +197,9 @@ theorem recordsLiveAtD_of_checks {s : Ins} {spec : SessionSpec} {sts : Array Stm
 /-- **An accepting decision of `Deploy.V false` at SHA-512 is an accepting `verify` at the setup at its statement's
 sample**, on a record of its live outcome there, whatever sample the record carries (`accepts_of_decide_plain` without
 `hdraw`). -/
-theorem acceptsAtD_of_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+theorem acceptsAtD_of_decide {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} {J mPts : ℕ} {d : Json}
+    {mids : List (Hash.Msg × Coin)} {f : Final} {J mPts : ℕ} {d : Json}
     (ha : act false x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((next false x as cs).eval sha512).1 = .acc) (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size) :
     AcceptsAtD s.read.I (some d) ⟨f.record, f.proofs⟩ ∧
@@ -234,7 +234,7 @@ messages and coins, and at its statement's sample `d`, if the run's reader looks
 `plainVerdictAt` holds at the run's live outcome (`viewOf`, at any `mPts`) and its link's root, whatever sample its record
 carries: `verify` accepts the last message at the setup at `d` (`acceptsAtD_of_decide`), so it accepts what `wrPD`
 writes, which records the run's streams and proof files there, whose columns are the reader's (`cols_plain`). -/
-theorem plainVerdictAt_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plainVerdictAt_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {N : ℕ} (C : Fin N → List 𝔽)
     (h : (Claims.run sha512 P (V false) x ω r).out = .acc) :
     ∃ s spec sts link c₁ mids f,

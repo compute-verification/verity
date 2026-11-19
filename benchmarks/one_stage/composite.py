@@ -60,6 +60,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
+# `served_composite.sh` runs this file with an interpreter that may not import `verity`: the standard library only.
 PRODUCTS = {"onsite": "verity/onsite/v1", "remote": "verity/remote/v0", "remote-v1": "verity/remote/v1"}
 #: Each product's subprotocols, as `Core.Onsite.components`, `Core.Remote.components` and `Core.Remote.V1.components`
 #: list them; read only to name the missing ones.
@@ -112,6 +113,7 @@ class Leak(Exception):
 
 def canonical(x: Any) -> bytes:
     """`x` as `Core.canonicalJson` reads it, for the integers, strings, lists and objects of ASCII keys cases hold."""
+    # Not `codec.canonical_json`: a character outside ASCII stays raw (which `Core.canonicalJson` refuses), and NaN is refused.
     return json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()
 
 
@@ -190,14 +192,6 @@ def exceptions(product: str) -> list[str]:
     return [EXCEPTIONS[i] for i in COMPONENTS[product] if i in EXCEPTIONS]
 
 
-def file_sha512(path: Path) -> str:
-    h = hashlib.sha512()
-    with open(path, "rb") as f:
-        while chunk := f.read(1 << 20):
-            h.update(chunk)
-    return h.hexdigest()
-
-
 def provenance(product: str, exe: Path, tree: Path) -> dict[str, Any]:
     """What ran the check: the tree's commit (``commit``, None outside a git checkout) and whether its tracked files are
     that commit's (``clean``), the executable's SHA-512 (``verifier_sha512``), and the guarantee the product's accept
@@ -214,7 +208,9 @@ def provenance(product: str, exe: Path, tree: Path) -> dict[str, Any]:
         g = audit.get("guarantees", {}).get(cites)
         lock = {"listed": g is not None, "deployed": cites in audit.get("deployed", []),
                 "open": sorted(((g or {}).get("premises") or {}).get("open", []))}
-    return {"commit": commit, "clean": clean, "verifier_sha512": file_sha512(exe), "cites": cites, "lock": lock}
+    with open(exe, "rb") as f:
+        verifier = hashlib.file_digest(f, "sha512").hexdigest()
+    return {"commit": commit, "clean": clean, "verifier_sha512": verifier, "cites": cites, "lock": lock}
 
 
 def members_reached(cases: Sequence[dict[str, Any]]) -> tuple[int, int] | None:
@@ -231,6 +227,12 @@ def members_reached(cases: Sequence[dict[str, Any]]) -> tuple[int, int] | None:
         ms = proofs["members"].values()
         return sum(any(lo <= u < hi for u in sample for lo, hi in m["units"]) for m in ms), len(ms)
     return None
+
+
+def two_stage_accepted(cases: Sequence[dict[str, Any]]) -> bool:
+    """Whether SPOT's case is two levels and its verifier accepted it."""
+    return any(p["id"] == SAMPLED and p["params"].get("levels") == 2
+               and outcome(p["id"], p["answer"])["verdict"] == "accept" for p in cases)
 
 
 def uncited(p: dict[str, Any]) -> str | None:
@@ -325,6 +327,9 @@ def run(a: argparse.Namespace) -> int:
         if ran["cites"] is not None and (got := members_reached(cases)) is not None and got[0] < got[1]:
             ran["not_covered"] = {"id": SAMPLED, "members": {"sampled": got[0], "registered": got[1]}}
             lines.append(f"NOT_COVERED {SAMPLED} {got[0]} of {got[1]} members sampled: {ran['cites']} does not cover it")
+        if ran["cites"] is not None and two_stage_accepted(cases):
+            ran["not_covered"] = {"id": SAMPLED, "levels": 2}
+            lines.append(f"NOT_COVERED {SAMPLED} 2 levels: {ran['cites']} does not cover it, two levels are not yet proved")
         lines += [f"NOT_ESTABLISHED {why}"] if (why := unestablished(ran)) else []
         if rc == 0 and (why := uncited(ran)) is not None:
             lines.append(f"UNCITED {why}")

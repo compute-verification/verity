@@ -1,5 +1,5 @@
-"""Canonical GPU names; naming systems remain distinct fields.  A card's figures (memory, bandwidth, SMs, clocks) are
-the card files', not this registry's."""
+"""Canonical GPU names; naming systems remain distinct fields.  A card's figures (memory, bandwidth, SMs, clocks) and
+the names nvidia-smi gives it (`driver`) are the card files', not this registry's."""
 
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ REGISTRY = Path(__file__).with_name("registry")
 @dataclass(frozen=True)
 class Gpu:
     id: str
+    display_name: str
     census_id: str
-    nvidia_smi_name: str
-    nebius_platform: str
+    nebius_platforms: tuple[str, ...]
     nebius_preset: str
     runpod_type_id: str
     count_per_node: int

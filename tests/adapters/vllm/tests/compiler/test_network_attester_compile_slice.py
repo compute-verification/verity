@@ -17,13 +17,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from verity.protocols.resource_accounting.network.verifier import arith_encode as AE
-from verity.protocols.resource_accounting.network.verifier import charge_chain as CC
+from verity.protocols.interface.charge import arith_encode as AE
+from verity.protocols.interface.charge import charge_chain as CC
 
 from verity_vllm.compiler import compile_slice as CS
 
 FIXTURES = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "fixtures"
-FIXTURE = FIXTURES / "compile_slice_smallkv.json"
+FIXTURE = Path(__file__).parent / "fixtures" / "compile_slice_smallkv.json"
 
 
 def book() -> dict:

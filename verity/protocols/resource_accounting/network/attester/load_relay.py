@@ -12,7 +12,7 @@ each value's head (`transfer_rows.TransferHead`: kind ``load``, ingress, window 
 registrations the verifier pins each load value from (`blocks.pins`).
 
     python verity/protocols/resource_accounting/network/attester/load_relay.py relay --program HEX --out DIR [--shape h200|tiny] [--format plain|p2]
-      [--source PATH|-] [--sink PATH|-|none] [--salt HEX] [--witness PATH] [--key DIR] [--session HEX] [--workers N]
+      [--source PATH|-] [--sink PATH|-|none] [--salt HEX] --witness PATH --key DIR [--session HEX] [--workers N]
     python verity/protocols/resource_accounting/network/attester/load_relay.py write --store DIR [--shape h200|tiny] [--workers N] [--out FILE]
     python verity/protocols/resource_accounting/network/attester/load_relay.py sink --listen HOST:PORT --weights PATH --witness PATH [--streams 4]
 
@@ -54,8 +54,7 @@ The commit itself (`relay`, which ``relay`` runs end to end with a key of its ow
   every hm96 salt is the operating system's (A3 in
   ``security/Definitions/Assumptions/Flock.lean``), so nothing rests on a stream generator. ``--witness`` is
   where they go, every value's in manifest order, its rows in order (each value's `Transfer.witness`): the prover's
-  alone, 4.85 GB at H200 (25,284,864 rows). `keyed_salts` is interface 1's prover-side derivation (Flock's
-  ``hm96_salt``), here only to hold this commit to interface 1's fixture roots.
+  alone, 4.85 GB at H200 (25,284,864 rows).
 * **The domain** is a parameter, by default the one the verifier derives (`transfer_rows.domain`: the reading program's
   digest ``--program``, the value's leaf width, a value held across windows dropping only the window), interface 1's.
 * **The attester's key** is ``--key``'s (`attester_key.load_key`'s layout), one LMS leaf a value (733 at H200), in
@@ -89,7 +88,6 @@ from verity.commitments import hm96
 from verity.commitments.hm96 import batch as HB
 from verity.commitments.merkle import _FRAME, _LEAF, _NODE, CommitmentDomain, _uint, merkle_depth
 from verity.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix
-from verity.commitments.crypto import chacha20
 from verity.protocols.resource_accounting.network.verifier import transfer_rows as TR
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction, Issuer
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
@@ -293,18 +291,6 @@ def plan(values: Sequence[Value], fmt: str = "plain", shape: Shape | None = None
 def os_salts(value: int, first: int, n: int) -> bytes:
     """The attester's salts: `n` rows' 192 bytes each, fresh from the operating system."""
     return os.urandom(SALT_BYTES * n)
-
-
-@dataclass(frozen=True)
-class keyed_salts:
-    """Interface 1's prover-side salts (Flock's ``hm96_salt``): row r of the value at manifest index i, ChaCha20 blocks
-    3r .. 3r + 2 under `key` with nonce i. Only to hold this commit to interface 1's fixture roots."""
-
-    key: bytes
-
-    def __call__(self, value: int, first: int, n: int) -> bytes:
-        k = SALT_BYTES // chacha20.BLOCK_BYTES
-        return chacha20.keystream(self.key, value, k * first, k * n)
 
 
 class Frame:
@@ -1088,8 +1074,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--source", default="-")
     r.add_argument("--sink", default="none")
     r.add_argument("--salt", help="the store's P2 salt, hex (--format p2)")
-    r.add_argument("--witness", help="where the salts go (default OUT/load-witness.bin)")
-    r.add_argument("--key", help="the network attester's key directory (default OUT/certifier)")
+    r.add_argument("--witness", help="where the salts go, the prover's alone: outside the run's output")
+    r.add_argument("--key", help="the network attester's key directory: outside the run's output")
     r.add_argument("--height", type=int, default=12, help="a new key's LMS height")
     r.add_argument("--session", help="the attester's session, hex (default fresh)")
     r.add_argument("--link", default=LINK)
@@ -1148,11 +1134,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         values = first_values(values, a.bytes)
     from verity.protocols.resource_accounting.network.attester import attester_key as CK
     from verity.protocols.resource_accounting.network.verifier import record_files as RF
-    key_dir = Path(a.key) if a.key else out / "certifier"
+    for flag, given in (("--key", a.key), ("--witness", a.witness)):
+        if not given:
+            ap.error(f"relay needs {flag}: give {flag} a {'directory' if flag == '--key' else 'path'} outside the "
+                     "run's output, which custody uploads")
+    key_dir, witness = Path(a.key), a.witness
     signer = CK.signer(key_dir, a.height)
     session = bytes.fromhex(a.session) if a.session else os.urandom(32)
     dom = verifier_domain(a.program)
-    witness = a.witness or str(out / "load-witness.bin")
     src, snk = _open(a.source, "rb"), _open(a.sink, "wb")
     try:
         got = relay(values, src, snk, dom, fmt=a.format, shape=shape, params=params,

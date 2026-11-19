@@ -171,24 +171,24 @@ section Mal
 
 variable {N Ω W : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω]
 
-theorem zkOfMal_real_pr (H : Claims.Msg → Claims.Msg) (k : Claims.Msg → ℕ) (P : W → Claims.Prover (N × Ω))
-    (S : Claims.Simulator) (Θ : Type) (x : Claims.Msg) (w : W) (v : MalVerifier k Θ)
-    (E : List (Claims.Msg × Claims.Out) → Prop) :
+theorem zkOfMal_real_pr (H : Hash.Msg → Hash.Msg) (k : Hash.Msg → ℕ) (P : W → Claims.Prover (N × Ω))
+    (S : Claims.Simulator) (Θ : Type) (x : Hash.Msg) (w : W) (v : MalVerifier k Θ)
+    (E : List (Hash.Msg × Claims.Out) → Prop) :
     ((zkOfMal H k P S Θ).real x w v).pr E =
       ENNReal.ofReal (Claims.Pr fun ω : N × Ω => E (Claims.runStar H (P w) v.Vs x ω v.θ).msgs) :=
   pr_uniform _ E
 
-theorem zkOfMal_sim_pr (H : Claims.Msg → Claims.Msg) (k : Claims.Msg → ℕ) (P : W → Claims.Prover (N × Ω))
-    (S : Claims.Simulator) (Θ : Type) (x : Claims.Msg) (v : MalVerifier k Θ)
-    (E : List (Claims.Msg × Claims.Out) → Prop) :
+theorem zkOfMal_sim_pr (H : Hash.Msg → Hash.Msg) (k : Hash.Msg → ℕ) (P : W → Claims.Prover (N × Ω))
+    (S : Claims.Simulator) (Θ : Type) (x : Hash.Msg) (v : MalVerifier k Θ)
+    (E : List (Hash.Msg × Claims.Out) → Prop) :
     ((zkOfMal H k P S Θ).sim x v).pr E = ENNReal.ofReal (Claims.Pr fun c : S.C x => E (S.out H v.Vs v.θ x c)) :=
   pr_uniform _ E
 
 /-- **`ZKmalR` is `Zk.ZKAt`**: a record that is zero knowledge against malicious verifiers of its rounds, at
 `ε_zk(x) + γ(x)·Pr[Fork]` on every event, is a `Zk` (`zkOfMal`) whose honest view is close to its simulator's at that
 error (`malErr`), both ways. -/
-theorem zkOfMal_zkAt {H : Claims.Msg → Claims.Msg} {k : Claims.Msg → ℕ} {P : W → Claims.Prover (N × Ω)}
-    {R : Claims.Rel W} {S : Claims.Simulator} {εzk γ : Claims.Msg → ℝ} (h : Claims.ZKmalR H k P R S εzk γ)
+theorem zkOfMal_zkAt {H : Hash.Msg → Hash.Msg} {k : Hash.Msg → ℕ} {P : W → Claims.Prover (N × Ω)}
+    {R : Claims.Rel W} {S : Claims.Simulator} {εzk γ : Hash.Msg → ℝ} (h : Claims.ZKmalR H k P R S εzk γ)
     (Θ : Type) : (zkOfMal H k P S Θ).ZKAt R fun x w v => malErr H P εzk γ x w v := by
   intro x w hR v E
   have hb := abs_le.1 (h x w hR Θ v.Vs v.θ (v.hk x) E)
@@ -199,7 +199,7 @@ theorem zkOfMal_zkAt {H : Claims.Msg → Claims.Msg} {k : Claims.Msg → ℕ} {P
 end Mal
 
 /-- **Flock's masked session is zero knowledge at `flockErr`**: `Flock.SecurityProofs.MaskedZK`, as a `Zk`. -/
-theorem flockSession_zkAt (nr : Claims.Msg → ℕ → ℕ) (t : ℕ) (ht : 0 < t) (Θ : Type) :
+theorem flockSession_zkAt (nr : Hash.Msg → ℕ → ℕ) (t : ℕ) (ht : 0 < t) (Θ : Type) :
     (flockSession nr t Θ).ZKAt (Claims.Flock.R (flockZk nr t).parse) fun x w v => flockErr nr t x w v :=
   zkOfMal_zkAt (_root_.Flock.SecurityProofs.MaskedZK nr t ht).2 Θ
 

@@ -18,9 +18,7 @@ verifier that runs is `Spot.Run.run`. This module states, as `Prop`s, what ties 
 `SpotRunAcceptsPlay`), and the play's coins are the
 challenger's bytes the run read, in the order the guarantee assumes (`PlayCoins`).
 
-`AcceptedTwo` is stated of `Run.run` at `form := true`, the two-stage form allowed, as a caller that decides last by
-the switch (`SecondStage.FORM`) runs it; at the default the switch is off and the second stage's check refuses every
-two-stage run.
+`AcceptedTwo` is stated of `Run.run`, which runs the second stage wherever the parameters name two levels.
 
 What the run does not decide, each a named premise of `SpotRunAcceptsPlay`:
 
@@ -63,7 +61,9 @@ def runOwn (i : Spot.Run.Input) (it : Spot.Run.Interior) (sample : Array ℕ)
     returns := Spot.SecondStage.replayReturns i.params.verifier.program.prog it.replay.prog.programFn i.record,
     supplied := it.params.verifier.supplied,
     fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1), reads := it.reads,
-    tables := it.tables }
+    tables := it.tables,
+    held := some ⟨Flock.hexOf it.params.verifier.program.desc.sha512, it.params.verifier.windowRoot,
+      Spot.Docket.fixedOf it.params.verifier⟩ }
 
 /-- **No statement of the run is of only its part's sampled proof blocks** (`SecondStage.anySampled`), at every replay
 sample, strata and second-stage sample: where it holds, round 2's check (`SecondStage.checkAny`) is `SecondStage.check`
@@ -77,7 +77,7 @@ def NoSampledOnly (i : Spot.Run.Input) (it : Spot.Run.Interior) : Prop :=
 symbol `accept`, under a two-stage rule, with the interior registration `it`, none of whose statements is of only its
 part's sampled proof blocks (`NoSampledOnly`). -/
 structure AcceptedTwo (i : Spot.Run.Input) (it : Spot.Run.Interior) (j : Json) : Prop where
-  run : Spot.Run.run i true = .ok j
+  run : Spot.Run.run i = .ok j
   accept : Spot.getD j "symbol" = .str "accept"
   two : ∃ grain replay k, i.rule = .twoStage grain replay k
   interior : i.interior = some it
@@ -90,7 +90,8 @@ passes `Select.select` (the verifier's copies with the sampling design and work 
 map); the second stage's cells and counts are those `Run.run` computes; the design's links, wires and rows are the
 ones round 2 derives from the replay block's Definition; the templates' parts, at the replay sample the first stage
 selects on the run's bytes, are those the second stage's check reads; the reference
-headers and reads are the auditor's params'; and the second stage reads at most `stage` coins' bytes. Every other field
+headers and reads are the auditor's params'; the held registration's terms are the interior params' Program digest,
+window root and values held across windows (`Docket.fixedOf`); and the second stage reads at most `stage` coins' bytes. Every other field
 of `h` (the descriptor, the members' units, the reference statements, the frame) is the auditor's registered copy,
 which the run does not read. -/
 structure HeldMatches (i : Spot.Run.Input) (it : Spot.Run.Interior) (h : Held) : Prop where
@@ -114,6 +115,8 @@ structure HeldMatches (i : Spot.Run.Input) (it : Spot.Run.Interior) (h : Held) :
     Spot.SecondStage.parts rest.size strata = some (partsAt h rest.size)
   refs : refsOf h = it.circuits.map fun (t, _, hd, _) => (t, hd)
   refReads : refRegisteredOf h = it.circuits.map fun (t, _, _, r) => (t, r)
+  held : h.held = some ⟨Flock.hexOf it.params.verifier.program.desc.sha512, it.params.verifier.windowRoot,
+    Spot.Docket.fixedOf it.params.verifier⟩
 
 
 /-! ## The second stage's check: the hand-off
@@ -130,7 +133,7 @@ def RoundTwo (h : Held) : Prop :=
     (st : Roots) (rec draw : Json),
     decode x = some st → jsonMsg m₁ = some rec → secondDraw h c₀ c₁ = some draw → OwnAgrees h own st rec draw c₀ →
       StmtsAre h m₂ ss → RegistersNone rec → TwoHolds h → NamesDistinct h → RecordsHeld h x m₁ →
-        RoundsHeld h m₂ → ScopeHeld h m₂ → PinHeld h m₂ → (Spot.SecondStage.check true own (some ss)).codes = #[] →
+        RoundsHeld h m₂ → ScopeHeld h m₂ → PinHeld h m₂ → (Spot.SecondStage.check own (some ss)).codes = #[] →
           stmtOk h x m₁ m₂ c₀ c₁ = true
 
 /-! ## The sessions -/
@@ -205,7 +208,7 @@ def RunCoinsFromDevice : Prop :=
 /-! ## The top statement -/
 
 /-- **A two-stage run `Run.run` accepts is a play `SpotFlock.V h` accepts** (the inner statement: the form's check,
-`VStar.Recursive.SampledTwo.checkBlobsAtWith`, computes the sessions' verdicts and then runs `Run.run`). At every held
+`VStar.Recursive.SampledTwo.checkBlobsAtInner`, computes the sessions' verdicts and then runs `Run.run`). At every held
 copy `h` that agrees with what the run reads: if `Run.run` accepted the two-stage run `i` with interior `it`
 (`AcceptedTwo`), `x` and `m₁` are the boundary and interior records' bytes, round 2's check gives the model's checks
 (`RoundTwo`, part 3) and Flock accepts each template's session at the statement `m₂` states for it (`SessionsAccept`,

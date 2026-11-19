@@ -79,7 +79,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- **An opening of position `q` to `row`** under `ms` (`hm96-sha512/v1`, or plain SHA-512 leaves) at level `lv`
 against a cap that flattens to `root`, its siblings digests, with every SHA-512 input of the opening a query of `L`. -/
-def Opening (ms : MerkleScheme) (lv : Flock.Level) (lanes : ℕ) (root : ByteArray) (L : List (Claims.Msg × Claims.Msg))
+def Opening (ms : MerkleScheme) (lv : Flock.Level) (lanes : ℕ) (root : ByteArray) (L : List (Hash.Msg × Hash.Msg))
     (q : ℕ) (row : Array F128) : Prop :=
   (ms = MerkleScheme.hm96Sha512 ∨ ms = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") ∧
   ∃ (cap : Array ByteArray) (salt : ByteArray) (sibs : List ByteArray),
@@ -89,7 +89,7 @@ def Opening (ms : MerkleScheme) (lv : Flock.Level) (lanes : ℕ) (root : ByteArr
 
 /-- **Two openings of one position to different rows, against one root, collide in the joined logs.** -/
 theorem tiedColl_of_openings {ms : MerkleScheme} {lv : Flock.Level} {lanes : ℕ} {root : ByteArray}
-    {L₁ L₂ : List (Claims.Msg × Claims.Msg)} {q : ℕ} {row₁ row₂ : Array F128}
+    {L₁ L₂ : List (Hash.Msg × Hash.Msg)} {q : ℕ} {row₁ row₂ : Array F128}
     (h₁ : Opening ms lv lanes root L₁ q row₁) (h₂ : Opening ms lv lanes root L₂ q row₂)
     (hr : row₁ ≠ row₂) : Claims.TiedColl sha512 (L₁ ++ L₂) := by
   obtain ⟨hms, cap₁, y₁, s₁, hc₁, hw₁, hf₁, ho₁, hs₁, hl₁⟩ := h₁
@@ -185,7 +185,7 @@ theorem tabsOf_fold (sts : Array Stmt) : ∀ st ∈ tabsOf sts,
 
 /-- **The reader's table at a decided run**: what `runOf` takes, read off the decision's final message, setup and
 live session. -/
-theorem runOf_eq {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem runOf_eq {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {lv : Live} {rr : Claims.Flock.ZkRun} (hf : lastFinal seen = some f) (hx : f.stmt = x)
     (hs : setupOf zk x = some (s, spec, sts)) (hlv : liveOf spec f.record = .ok lv) (hr : runOf zk seen 0 = some rr) :
     ∃ st extras, sts[0]? = some st ∧ (Setup.ofCircuit st).extra lv.points = .ok extras ∧
@@ -313,9 +313,9 @@ theorem mem_plainRawCols {s : Claims.Seen} {p : ℕ × List 𝔽} (h : p ∈ col
 table 0's level 0 in `L`, at a statement that sets up, a final message `seen` ends on and checks that pass: a column `u`
 a rep opens at `q` is an opened row whose opening under table 0's scheme against `root_B[0]` of `link` passed. The
 shared step of `plain_opening_raw` (`keep := id`), `plainE_opening_raw` (`fun _ => true`) and `plainK_opening_raw`. -/
-theorem plain_opening_raw_of_verdictK (keep : Bool → Bool) {x : Claims.Msg} {seen : Claims.Seen}
-    {L : List (Claims.Msg × Claims.Msg)} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final} {q : ℕ}
+theorem plain_opening_raw_of_verdictK (keep : Bool → Bool) {x : Hash.Msg} {seen : Claims.Seen}
+    {L : List (Hash.Msg × Hash.Msg)} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final} {q : ℕ}
     {u : List 𝔽} (hs : setupOf false x = some (s, spec, sts)) (hf : lastFinal seen = some f)
     (hc : checks false s spec x link c₁ mids f = .ok ())
     (hv : verifyWithMK keep (hashesIn (L.map Prod.fst)) spec (tabsOf sts) f.record f.proofs = .ok ())
@@ -414,7 +414,7 @@ theorem plain_opening_raw_of_verdictK (keep : Bool → Bool) {x : Claims.Msg} {s
 the statement's setup, table 0's `fast100` schedule and the link of the tape's first message, a column `u` a rep opens
 at `q` is an opened row whose opening under table 0's scheme against `root_B[0]` of the link passed, every SHA-512
 input of it in the run's verifier log. -/
-theorem plain_opening_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plain_opening_raw {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
     (hu : (q, u) ∈ plainRawCols (Claims.run sha512 P (V false) x ω r).seen) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule)
@@ -433,7 +433,7 @@ theorem plain_opening_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {�
 
 /-- **An accepted plain run opens a column only as a Merkle opening** of table 0's level 0 in its own log: a column
 `u` the run's reader opens at `q` is one a rep opens (`plain_opening_raw`). -/
-theorem plain_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V false).k x) → Coin}
+theorem plain_opening {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {r : Fin ((V false).k x) → Coin}
     {q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
     (hu : Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) q = some u) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule)
@@ -451,7 +451,7 @@ theorem plain_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : 
 statement's setup, table 0's `--zk` schedule and the link of the tape's first message, a column `u` the run's reader
 opens at `q` is the witness lanes of an opened row whose opening against `root_B[0]` of the link passed, every SHA-512
 input of it in the run's verifier log. -/
-theorem zk_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
+theorem zk_opening {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
     {q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (hu : Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen 0) q = some u) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ)
@@ -577,7 +577,7 @@ theorem plain_conflictTied (rel : Readable.Parsed → Readable.Relation) :
   cases hlink'
   exact tiedColl_of_openings ho ho' fun e => huv (by rw [hu', hv', e])
 
-theorem tiedColl_of_append_self {H : Claims.Msg → Claims.Msg} {l : List (Claims.Msg × Claims.Msg)}
+theorem tiedColl_of_append_self {H : Hash.Msg → Hash.Msg} {l : List (Hash.Msg × Hash.Msg)}
     (h : Claims.TiedColl H (l ++ l)) : Claims.TiedColl H l := by
   obtain ⟨u, v, hc, hu, hv⟩ := h
   simp only [List.map_append, List.mem_append, or_self] at hu hv
@@ -585,7 +585,7 @@ theorem tiedColl_of_append_self {H : Claims.Msg → Claims.Msg} {l : List (Claim
 
 /-- **A self-clash among an accepted plain run's columns collides in its own log**: two columns table 0's reps open at
 one position that differ give a collision among the run's verifier calls, at SHA-512. -/
-theorem plain_selfClash_tied {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plain_selfClash_tied {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {q : ℕ} {u v : List 𝔽} (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
     (hu : (q, u) ∈ plainRawCols (Claims.run sha512 P (V false) x ω r).seen)
     (hv : (q, v) ∈ plainRawCols (Claims.run sha512 P (V false) x ω r).seen) (huv : u ≠ v) :

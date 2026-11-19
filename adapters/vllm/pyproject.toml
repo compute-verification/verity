@@ -18,6 +18,7 @@ verity-vllm = "verity_vllm.pipeline.cli:main"
 [project.entry-points."vllm.general_plugins"]
 verity_moe_align = "verity_vllm.engine.moe_align:register"
 verity_cut = "verity_vllm.pipeline.cut_plugin:register"
+verity_schemes = "verity_vllm.pipeline.scheme_plugin:register"
 
 [project.optional-dependencies]
 # The CPU half (compare / replay / gates / derivation tests) needs torch; the pod runtime adds vLLM through pod_bootstrap.sh.
@@ -46,3 +47,6 @@ plugins = ["pydantic.mypy"]
 ignore_missing_imports = true
 check_untyped_defs = true
 follow_imports = "silent"
+
+[tool.verity.tests]
+exports = ["adapters/vllm", "calibration/hardware/cards", "calibration/hardware/architectures"]

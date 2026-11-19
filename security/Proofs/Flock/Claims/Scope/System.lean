@@ -209,7 +209,7 @@ theorem bit_input {g : Fin S.size} (hg : g.val < S.J * S.N) :
 
 theorem bit_op {g : Fin S.size} (h : (S.gate g).isInput = false) :
     (S.circ.toCircuit.eval a g).getLsbD 0 = (S.gate g).apply fun y : Fin S.size => (S.circ.toCircuit.eval a y).getLsbD 0 :=
-  FlockSoundness.Audit.eval_toCircuit S.circ a h
+  Spot.Sampling.eval_toCircuit S.circ a h
 
 theorem xorSum_ins {v : Fin S.size → Bool} (hv : ∀ g : Fin S.size, g.val < S.J * S.N → v g = x g.val) {ts : List ℕ}
     (hts : ∀ t ∈ ts, t < S.J * S.N) : Verity.Boolean.xorSum (S.ins ts) v = (ts.map x).foldr xor false := by

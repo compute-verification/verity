@@ -5,6 +5,7 @@ session tests (`tests/benchmarks/poub_session/test_session.py` and the tests bes
 (`poub/attester/live_verifier/tests/stub_verifier.py`) run it."""
 from __future__ import annotations
 
+import json
 import os
 import queue
 import random
@@ -23,8 +24,9 @@ from verity.protocols.resource_accounting.memory.poub.verifier import timing  # 
 from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
 
+FIGURES = timing.Figures.of_json(json.loads((Path(__file__).resolve().parents[6] / "tests/verity/protocols/resource_accounting/memory/poub/figures.json").read_text()))
+
 P512 = rcodec.Codec(rcodec.P512, 2, False)
-FIGURES = timing.RTX_PRO_6000_NODE
 
 
 VERIFIER, PROVER = 0, 1
@@ -55,10 +57,11 @@ class PassClock:
     once time has moved, so whatever either side sends in answer reaches the other at the tick it was sent, and a
     session runs one schedule however its threads are scheduled. A wait returns the inbox's next message or None once
     the clock reaches its end, woken by either; once the prover has said its passes are done, time jumps to the wait's
-    end."""
+    end. Once the prover's thread has raised (`fail`), a wait raises what it raised, since no pass will come."""
 
     def __init__(self) -> None:
         self.t, self.done, self.inbox, self.parked, self.idle_at, self.ended = 0, False, None, None, None, False
+        self.failed: BaseException | None = None
         self.frames = threading.Condition()
         self.sent, self.asked = [0, 0], [0, 0]
 
@@ -107,6 +110,8 @@ class PassClock:
                 self.frames.notify_all()
         with inbox.not_empty:
             while True:
+                if self.failed is not None:
+                    raise self.failed
                 if until_ns is not None and self.done:
                     self.t = max(self.t, until_ns)
                 if until_ns is not None and self.t >= until_ns:
@@ -117,6 +122,13 @@ class PassClock:
                 self.parked.notify_all()
                 inbox.not_empty.wait()
                 self.idle_at = None
+
+    def fail(self, e: BaseException) -> None:
+        with self.frames:
+            self.failed, inbox = e, self.inbox
+        if inbox is not None:
+            with inbox.mutex:
+                inbox.not_empty.notify_all()
 
     def idle(self) -> None:
         with self.inbox.mutex:
@@ -148,24 +160,34 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int | None = None,
         layout: list | None = None, host_bytes: int = 0, paces: list | None = None, then=None,
         transcript: Path | None = None, challenger=None, appends: int | None = None, store=None,
-        groups_per_coin: int = 1, figures: timing.Figures = FIGURES, node=None, **kv):
+        groups_per_coin: int = 1, figures: timing.Figures = FIGURES, refresh: tuple = (), **kv):
     """The verifier's sessions and the prover's over one registration, each paced by its entry in
     `paces` if given, its coins from `challenger` (the verifier's own by default), `appends` append coins a session
     (by default as the prover's hello says, `Verifier.appends_of`), `groups_per_coin` windows a sample; `then(v)` once
-    they end. With `store` (a `poub.store.Store`) the prover's blocks are that store's, and with `node` its
-    ledgers are on that node."""
+    they end. With `store` (a `poub.store.Store`) the prover's blocks are that store's, and its ledgers
+    are on the node of `figures`; `refresh` sets each session's refresh (`Verifier.refresh`, off where it names
+    none). A prover that raises before the verifier has answered ends the run at once with what it raised."""
     clock = PassClock()
     vconn, pconn = clock.conns()
     backend = TickingBackend(clock, store.blocks if store else blocks, random.Random(7),
                              read_bytes_per_s=read_bytes_per_s, tiers=tiers, layout=layout, store=store)
     p = prover.ProverSide(pconn, backend, b"test-node", prover.parse_plan(plan), seed=11, log=lambda m: None, **kv)
-    results = []
+    results, raised = [], []
 
     def prove() -> None:
-        p.register(codec=P512)
-        for mode, fraction in p.plan:
-            head, _, _ = p.expect("session")
-            results.append(p.session(head, mode, fraction))
+        try:
+            p.register(codec=P512)
+            for mode, fraction in p.plan:
+                head, _, _ = p.expect("session")
+                results.append(p.session(head, mode, fraction))
+        except BaseException as e:
+            raised.append(e)
+            clock.fail(e)
+            # the verifier's reader reads the end, as of a prover process that exited: a wait off the clock wakes too.
+            # A close alone sends no end while the prover's own reader is blocked on the socket.
+            pconn.sock.shutdown(socket.SHUT_RDWR)
+            pconn.sock.close()
+            raise
 
     th = threading.Thread(target=prove, daemon=True)
     th.start()
@@ -173,7 +195,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
                           lifetime=lifetime, host_bytes=host_bytes, transcript=transcript,
                           challenger=challenger, appends=appends, groups_per_coin=groups_per_coin,
-                          node=node)
+                          refresh=refresh)
     try:
         v.register()
         allowance = v.allowance(v.ping(4))
@@ -185,6 +207,11 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
         th.join()
         if then is not None:
             then(v)
+    except BaseException as e:
+        if not raised or not (e is raised[0] or isinstance(e, wire.Closed)):
+            raise
+        th.join()
+        raise raised[0]
     finally:
         v.stop()
     return out, results

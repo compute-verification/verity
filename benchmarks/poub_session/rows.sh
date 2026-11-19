@@ -30,12 +30,12 @@
 #             are rows.py's own (--whole-store)
 #   session   PLAN's sessions at SESSION_ROWS rows over SESSION_GIB GiB on the first card, the verifier's process
 #             (on VERIFIER_CORES) beside the prover (on PROVER_CORES) on this machine, which audits nothing: a check
-#             of the kernels against the verifier; out/session/. It registers as SESSION_NODE (default: this
-#             machine's name, the card's index and its model)
+#             of the kernels against the verifier; out/session/. It registers as SESSION_NODE (default:
+#             `machine.py session-node` of the card: local/<its node file>/<its index>)
 #
 #   research run --on NODE --project verity --source TREE --cwd clone -- \
 #     env CARDS=0 CORES=0-7 ARCH=120a NOT_AFTER=2026-11-20T18:00Z bash benchmarks/poub_session/rows.sh
-#   ... env BUILD_ONLY=1 ARCH=120a CUDA_HOME=/usr/local/cuda-13.0 BASE_REV=REV bash benchmarks/poub_session/rows.sh
+#   ... env BUILD_ONLY=1 ARCH=120a CUDA_HOME="$(python3 benchmarks/kernels/machine.py toolkit 13.0)" BASE_REV=REV bash benchmarks/poub_session/rows.sh
 #   ... env CARDS=0 CORES=0-7 ARCH=120a STEPS=rows ROWS='64 16' GIB=62 CTAS_AT='64=96,128,188' ...
 set -uo pipefail
 TREE=$PWD
@@ -50,15 +50,22 @@ first() { local p; for p in "$@"; do [ -x "$p" ] && { echo "$p"; return; }; done
 pinned() { local cores=$1; shift; if [ -n "$cores" ]; then taskset -c "$cores" "$@"; else "$@"; fi; }
 
 session() {  # under the lease: PLAN's sessions, the verifier's process beside the prover
-  local port=$((7700 + RANDOM % 200)) sessions v p w
-  sessions=$(($(tr -cd , <<< "$PLAN" | wc -c) + 1))
+  local port=$((7700 + RANDOM % 200)) node=${SESSION_NODE:-} kind sessions v p w
+  [ -n "$node" ] || node=$(python3 benchmarks/kernels/machine.py session-node "$(nvidia-smi --query-gpu=name \
+    --format=csv,noheader -i "${CARDS%%,*}" 2> /dev/null)" "${CARDS%%,*}" 2>&1) \
+    || { say "SESSION: no node for it to register: $node"; return 3; }
+  kind=${node#*/} kind=${kind%/*}
   mkdir -p "$O/session"
+  "$PY" benchmarks/poub_session/sheets.py "${NODE_KIND:-$kind}" > "$O/session/figures.json" \
+    || { say "SESSION: no figures for its verifier (NODE_KIND names a node file)"; return 3; }
+  sessions=$(($(tr -cd , <<< "$PLAN" | wc -c) + 1))
   pinned "${VERIFIER_CORES:-}" "$PY" verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py \
     --port "$port" --out "$O/session" --windows "$WINDOWS" --window-ms "$WINDOW_MS" --samples "$SAMPLES" \
-    --jitter-ms "$JITTER_MS" --sessions "$sessions" --lean-exe "$LEAN_EXE" > "$O/session/verifier.log" 2>&1 & v=$!
+    --jitter-ms "$JITTER_MS" --sessions "$sessions" --lean-exe "$LEAN_EXE" --figures "$O/session/figures.json" \
+    > "$O/session/verifier.log" 2>&1 & v=$!
   pinned "${PROVER_CORES:-}" "$PY" $PR/poub_session/prover.py --connect "127.0.0.1:$port" --out "$O/session" \
     --plan "$PLAN" --rows "$SESSION_ROWS" --lib "$B/session.so" --kv "$B/kv.so" --gib "$SESSION_GIB" --gpus 1 \
-    --calibration-passes "$CAL" --sketch-ctas "$SKETCH_CTAS" --node "$SESSION_NODE" > "$O/session/prover.log" 2>&1
+    --calibration-passes "$CAL" --sketch-ctas "$SKETCH_CTAS" --node "$node" > "$O/session/prover.log" 2>&1
   p=$?
   [ $p = 0 ] || kill $v 2> /dev/null
   wait $v; w=$?
@@ -71,36 +78,30 @@ STEPS=${STEPS-rows session} ROWS=${ROWS:-64 16} GIB=${GIB:-16}
 LEASE_MIN=${LEASE_MIN:-30} LEASE_MEM_GB=${LEASE_MEM_GB:-64}
 export CAL=${CAL:-400} SKETCH_CTAS=${SKETCH_CTAS:-128} PLAN=${PLAN:-honest,skip:0.0625}
 export SESSION_ROWS=${SESSION_ROWS:-64} SESSION_GIB=${SESSION_GIB:-16}
-# The node a session registers: this machine, its first card and the card's model (prover.py's default names another
-# machine), in the 64 bytes the verifier takes.
-SESSION_NODE=${SESSION_NODE:-$(echo "$(hostname)/${CARDS%%,*}/$(nvidia-smi --query-gpu=name --format=csv,noheader \
-  -i "${CARDS%%,*}" 2> /dev/null | tr 'A-Z ' 'a-z-')" | cut -c1-64)}
-export SESSION_NODE
 export WINDOWS=${WINDOWS:-7} WINDOW_MS=${WINDOW_MS:-1000} SAMPLES=${SAMPLES:-2773} JITTER_MS=${JITTER_MS:-10}
 N=$(($(tr -cd , <<< "$CARDS" | wc -c) + 1))
 if [ -n "${TOOLKIT:-}" ]; then
   # shellcheck disable=SC1091
   . benchmarks/pouw/harness/jobs/toolkit.sh || { say "PREFLIGHT: the toolkit did not assemble"; exit 3; }
 fi
-NVCC=$(first "${CUDA_HOME:-/nonexistent}/bin/nvcc" /usr/local/cuda-12.9/bin/nvcc /usr/local/cuda-13.0/bin/nvcc \
-  /usr/local/cuda/bin/nvcc)
-[ -n "$NVCC" ] || { say "PREFLIGHT: no nvcc (CUDA_HOME, /usr/local/cuda-12.9, -13.0)"; exit 3; }
+[ -n "${CUDA_HOME:-}" ] || for v in 12.9 13.0; do CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit "$v" 2> /dev/null) && break; done
+NVCC=$(first "${CUDA_HOME:-/nonexistent}/bin/nvcc")
+[ -n "$NVCC" ] || { say "PREFLIGHT: no nvcc (CUDA_HOME, else the machine's toolkit at 12.9 or 13.0)"; exit 3; }
 if [ -n "${CUDA_HOME:-}" ] && [ "$NVCC" != "$CUDA_HOME/bin/nvcc" ]; then
   say "PREFLIGHT: CUDA_HOME=$CUDA_HOME has no bin/nvcc, so the build would be another toolkit's"; exit 3
 fi
 export CUDA_HOME=${NVCC%/bin/nvcc} PATH=${NVCC%/nvcc}:$PATH
 # `cuobjdump -sass` runs nvdisasm. Where NVCC's toolkit has none, another toolkit's goes last on the PATH: same_sass.py
 # compares two listings the same nvdisasm made, each instruction with its encoding.
-command -v nvdisasm > /dev/null || for d in /usr/local/cuda*/bin; do
-  [ -x "$d/nvdisasm" ] && { PATH=$PATH:$d; break; }
+command -v nvdisasm > /dev/null || for v in 12.9 13.0; do
+  d=$(python3 benchmarks/kernels/machine.py toolkit "$v" 2> /dev/null)/bin && [ -x "$d/nvdisasm" ] && { PATH=$PATH:$d; break; }
 done
 [ -x "$HOME/.elan/bin/lake" ] && export PATH=$HOME/.elan/bin:$PATH
 if [ -z "${ARCH:-}" ]; then
-  case $(nvidia-smi --query-gpu=name --format=csv,noheader -i "${CARDS%%,*}" 2> /dev/null) in
-    *H200* | *H100*) ARCH=90a ;;
-    *"RTX PRO 6000"*) ARCH=120a ;;
-    *) say "PREFLIGHT: ARCH (90a, 120a) is not given and the card's name does not tell it"; exit 3 ;;
-  esac
+  ARCH=$(python3 "$TREE/benchmarks/kernels/machine.py" arch \
+    "$(nvidia-smi --query-gpu=name --format=csv,noheader -i "${CARDS%%,*}" 2> /dev/null)" 2>&1) \
+    || { say "PREFLIGHT: ARCH is not given and the card's record doesn't give it: $ARCH"; exit 3; }
+  ARCH=${ARCH#sm_}
 fi
 B=$(mktemp -d /tmp/rows64.XXXXXX); trap 'rm -rf "$B"' EXIT
 export B
@@ -109,7 +110,9 @@ export B
   nvidia-smi topo -m
 } > "$O/machine.txt" 2>&1
 
-FLAGS=(-O3 -gencode "arch=compute_$ARCH,code=sm_$ARCH" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
+GENCODE=$(python3 "$TREE/benchmarks/kernels/machine.py" gencode "sm_$ARCH" 2>&1) ||
+  { say "PREFLIGHT: no build target for ARCH=$ARCH: $GENCODE"; exit 3; }
+FLAGS=(-O3 -gencode "$GENCODE" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
 LEAF64=() NO_LEAF64=(--no-leaf64)
 if [[ " $ROWS " == *" 64 "* && "${ROWS_ARGS:-}" == *--leaf-ctas* ]]; then LEAF64=(-DLEAF_PASS64) NO_LEAF64=(); fi
 BASE_REV=${BASE_REV:-$(git -C "$TREE" merge-base HEAD origin/main 2> /dev/null)}

@@ -6,7 +6,7 @@ stated squaring ceiling: the GPU's CUDA cores in every form, each gated against 
 the host's AVX-512 IFMA rate.
 
 **Backs:** these rates are
-the evidence for `timing.GPU_SQUARINGS_PER_S` and so for the stated ceiling C_sq (`timing.SQUARINGS_PER_S`), the `s` of
+the evidence for `timing.Figures.gpu_squarings_per_s` (`benchmarks/poub_session/sheets.py`'s `UNSHEETED`) and so for the stated ceiling C_sq (`timing.Figures.squarings_per_s`), the `s` of
 the named assumption `ResourceAccounting.Remote.Held.Assumptions.SquaringCeiling`, which `ResourceAccounting.Guarantees.Remote.Held`
 and `HeldOverTime` take.
 

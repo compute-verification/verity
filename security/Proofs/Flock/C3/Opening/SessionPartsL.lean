@@ -40,7 +40,7 @@ open Flock.HmNets hiding and
 open Flock FlockSoundness.Discharge.Hm
 open Flock.RecResiduals (groups partS)
 open FlockVBridge.PartS (wIdx)
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open FlockVBridge.Decode
 open FlockVBridge.AccChain (RegOut copyVal_regOut)
 

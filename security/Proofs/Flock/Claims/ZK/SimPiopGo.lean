@@ -59,7 +59,7 @@ namespace FlockComplete
 
 open Flock Transcript Replay
 
-theorem pure_inv {α : Type} {a b : α} {t t' : Transcript} {l l' : Array Claims.Msg}
+theorem pure_inv {α : Type} {a b : α} {t t' : Transcript} {l l' : Array Hash.Msg}
     (h : ((pure a : TMW PS α).run t).go l = (.ok (b, t'), l')) : a = b ∧ t = t' ∧ l = l' := by
   rw [pure_go] at h
   simp only [Prod.mk.injEq, Except.ok.injEq] at h
@@ -97,7 +97,7 @@ pads `h`, the two send the same `3 + (kLog − 6)` bodies, throw together, and r
 and `r_in` of those coins. -/
 theorem lincheckCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout)
     (h : Array F128) (tr : Trace) (mk : ℕ → F128) {zc zc' : ZcOut} (zo : ZcOut) (hz : zc.z = zo.z)
-    (hρ : zc.rho = zo.rho) (hz' : zc'.z = zo.z) (hρ' : zc'.rho = zo.rho) (t : Transcript) (l : Array Claims.Msg)
+    (hρ : zc.rho = zo.rho) (hz' : zc'.z = zo.z) (hρ' : zc'.rho = zo.rho) (t : Transcript) (l : Array Hash.Msg)
     (hq : ∀ full, c.fold (coin l.size 0) (skipWeights zo.z) (zo.rho.extract 0 (c.kLog - 6)) = .ok full →
       ∀ j < c.kLog - 6,
         mk (lay.lc j 0) = (LcZ.msg lay h c m tr zo full (lcCoins coin l.size (c.kLog - 6)) j).1 ∧
@@ -178,7 +178,7 @@ theorem lincheckCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) (c : CircuitFo
 body is sent (`l.size + k ≤ n`), the two run alike and return the same. -/
 theorem ringSwitchCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) (tr : Trace) (sv : ℕ → Array F128)
     {claims claims' : Array Claim} (hsz : claims.size = claims'.size) (hx : ∀ k : ℕ, claims[k]!.x = claims'[k]!.x)
-    (t : Transcript) (l : Array Claims.Msg) (hn : l.size ≤ n)
+    (t : Transcript) (l : Array Hash.Msg) (hn : l.size ≤ n)
     (hsv : ∀ k < claims'.size, l.size + k ≤ n → sv k = switchVec tr claims'[k]!) :
     GoAlike (fun a b _ => a = b)
       (((ringSwitchCut (asksCut coin n) sv claims).run t).go l)
@@ -253,7 +253,7 @@ on (`PiopSrc`), the cut's zerocheck, lincheck, rank check and ring switch return
 bodies, or throw the same error after the same bodies. -/
 theorem piopCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay : Zk.PadLayout) (h : Array F128)
     (tr : Trace) (src : RepSrc) (cap root : ByteArray) (extras : Array Claim) (prior : Array (List F128))
-    (words : List Nat) (hm : 14 ≤ st.m) (t : Transcript) (l : Array Claims.Msg)
+    (words : List Nat) (hm : 14 ≤ st.m) (t : Transcript) (l : Array Hash.Msg)
     (hv : PiopSrc coin n st lay h tr src extras l.size) :
     GoAlike (fun a b _ => a = b)
       (((piopCut (asksCut coin n) st lay src cap root extras prior words).run t).go l)

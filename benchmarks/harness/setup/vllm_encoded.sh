@@ -1,10 +1,12 @@
 # Sourced by run_point.sh (a spec's `setup`): the bandwidth arms' GPU libraries (benchmarks/vllm_encoded/bench_arm.py),
-# built from this source tree for ARCH (90a, 120a; where it isn't given, the node's first card's name tells it): the
+# built from this source tree for ARCH (an architecture file's name; where it isn't given, the `arch` of the card record
+# whose `driver` holds the node's first card's name, benchmarks/kernels/machine.py arch NAME), its -gencode the
+# architecture file's (machine.py gencode ARCH): the
 # encoded stack at its default field (1024, masked, FOLD6, 32 query heads) and the top-up, and the
 # VERITY_VLLM_BENCH_*_LIB names the arms read exported.
 #
 # wt.cu takes nvcc about 9 minutes, so a build is kept on the node in $VERITY_BENCH_LIB_CACHE/KEY (default
-# /workspace/research/cache/verity-bench-libs), KEY the hash of nvcc's version, the flags and every file each build reads
+# $XDG_CACHE_HOME/verity-bench-libs, ~/.cache's where XDG_CACHE_HOME is unset), KEY the hash of nvcc's version, the flags and every file each build reads
 # (nvcc -MM): a point whose sources match an earlier one's reuses its libraries, and one whose sources differ (another
 # commit's ctypes declarations) builds its own. One point builds a KEY while the others wait on its lock; each copies the
 # libraries into $RESEARCH_RUN_DIR/setup, so a retention sweep of the cache never removes a library a running point
@@ -12,19 +14,19 @@
 # ptxas's reports, every source's and library's sha256 and whether the point built or reused go to
 # $RESEARCH_RUN_DIR/out/setup.
 VE_RUN=${RESEARCH_RUN_DIR:-$PWD}
-VE_CACHE=${VERITY_BENCH_LIB_CACHE:-/workspace/research/cache/verity-bench-libs}
+VE_CACHE=${VERITY_BENCH_LIB_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/verity-bench-libs}
 if ! { mkdir -p "$VE_CACHE" 2> /dev/null && [ -w "$VE_CACHE" ]; }; then
   echo "setup: $VE_CACHE is not writable here; building in the run directory" >&2
   VE_CACHE=$VE_RUN/setup-build
 fi
 if [ -z "${ARCH:-}" ]; then
-  case $(nvidia-smi --query-gpu=name --format=csv,noheader -i 0 2> /dev/null || true) in
-    *H200* | *H100*) ARCH=90a ;;
-    *"RTX PRO 6000"*) ARCH=120a ;;
-    *) echo "setup: ARCH (90a, 120a) is not given and the card's name does not tell it" >&2; exit 3 ;;
-  esac
+  ve_card=$(nvidia-smi --query-gpu=name --format=csv,noheader -i 0 2> /dev/null || true)
+  ve_arch=$(python3 benchmarks/kernels/machine.py arch "$ve_card") \
+    || { echo "setup: ARCH (an architecture file's name) is not given and no card record's \`driver\` holds the name ${ve_card:-(none read)}" >&2; exit 3; }
+  ARCH=$ve_arch
 fi
-VE_GENCODE=(-gencode "arch=compute_$ARCH,code=sm_$ARCH")
+ve_gencode=$(python3 benchmarks/kernels/machine.py gencode "$ARCH") || exit 3
+VE_GENCODE=(-gencode "$ve_gencode")
 VE_FLAGS=(-O3 "${VE_GENCODE[@]}" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
 VE_FIELD=1024
 VE_ORDER=(wt reader paged topup)

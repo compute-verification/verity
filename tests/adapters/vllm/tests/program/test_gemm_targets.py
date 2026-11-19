@@ -91,7 +91,7 @@ def test_sm120_binds_the_hopper_gemm_and_hopper_step_fa2():
     `DOT=HopperBF16WgmmaDot16_v1`, `INV=Fa2InvSum_v1`) with FA2's own `Check_inf` placement, `Attention_v5`; never the Ampere-step
     `Attention_v3`; a declared FA3 is refused by name."""
     assert PRO6000_TP.tensor_core_family == "blackwell_consumer" and PRO6000_TP.effective_flash_attn_version() == 2
-    assert TargetProfile(compute_capability=(12, 1)).tensor_core_family == "unregistered:12.1"
+    assert TargetProfile.default().with_overrides(compute_capability=(12, 1)).tensor_core_family == "unregistered:12.1"
     assert TG.tensor_core_dot(PRO6000_TP) is TG.tensor_core_dot(HOPPER_TP) and not TG.uses_accepted_kinds(PRO6000_TP)
     assert TG.gemm_spec(PRO6000_TP, 2048, 3072).id == TG.gemm_spec(HOPPER_TP, 2048, 3072).id
     hopper_fa2 = HOPPER_TP.with_overrides(flash_attn_version=2)
@@ -123,7 +123,7 @@ def test_cc100_is_registered_for_served_builds_only():
     gt, refusal = GT.try_gemm_target_for((10, 0))
     assert gt is None and refusal.startswith("numerics_unregistered")
     with pytest.raises(GT.UnregisteredGemmTarget):
-        TargetProfile(compute_capability=(10, 0)).gemm_target()
+        TargetProfile.default().with_overrides(compute_capability=(10, 0)).gemm_target()
     assert all(t.batch_invariant_refusal is None for k, t in GT.REGISTERED.items() if k != "blackwell")
 
 
@@ -135,7 +135,7 @@ def test_unregistered_targets_are_refused_fail_closed(cc, fam):
     gt, refusal = GT.try_gemm_target_for(cc)
     assert gt is None and refusal.startswith("numerics_unregistered")
     with pytest.raises(GT.UnregisteredGemmTarget):
-        TargetProfile(compute_capability=cc).gemm_target()
+        TargetProfile.default().with_overrides(compute_capability=cc).gemm_target()
 
 
 def test_host_family_must_be_the_records_family():

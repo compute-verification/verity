@@ -17,10 +17,14 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
+from verity import hooks as H
+from verity.protocols.compose import schemes as declarations
+from verity.protocols.resource_accounting.network.prover import ids_protocol as idp
 from verity.protocols.resource_accounting.network.verifier import id_form as IDF
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
-from verity.protocols.resource_accounting.network.verifier import release as REL
+from verity import release as REL
 from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
+from verity.protocols.resource_accounting.scheme import Lacks
 
 from tests.pipeline import predicted
 from verity_vllm.commit import served_record as SR
@@ -29,6 +33,7 @@ from verity_vllm.compiler import served_rows as SRW
 from verity_vllm.engine import served_seed
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, derived
 from verity_vllm.engine.step_trace import scheduler_config
+from verity_vllm import messages as M
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
@@ -122,16 +127,17 @@ def test_ids_frames_are_the_scans_id_events():
     """`IdsProtocol`: each id its own `io_tie.id_event` of P bytes, however many ids a delta carries; the stream's end
     is the scan's trailer; no usage, and a stream returns its ids, whatever the request asks; P below an event's 138
     bytes is refused."""
-    p = proto.IdsProtocol(force_include_usage=True, payload=140, base=proto.PlainProtocol(True))
+    p = idp.IdsProtocol(payload=140, base=proto.PlainProtocol(True))
     assert (p.name, p.http, proto.PlainProtocol.http) == ("ids", False, True)
     assert p.events(token_ids=[4853, 4884], text="ab", finish_reason=None) + proto.SSE_DONE == TWO_IDS_AT_140
     assert proto.SSE_DONE == IT.TRAILER and p.events(token_ids=[]) == b""
     req = p.parse(dict(CERTIFIER_BODY, stream_options={"include_usage": True, "continuous_usage_stats": True}))
     assert (req.include_usage, req.continuous_usage, req.return_token_ids) == (False, False, True)
     assert not p.parse(dict(CERTIFIER_BODY, stream=False)).return_token_ids
-    assert proto.PROTOCOLS["ids"] is proto.IdsProtocol and proto.ID_PAYLOAD == 512 - HEADER.size
+    declared = {n: f for s in declarations.load().values() for n, f in s.framings.items()}
+    assert declared["ids"] is idp.IdsProtocol and "ids" in proto.framings() and idp.ID_PAYLOAD == 512 - HEADER.size
     with pytest.raises(ValueError, match="at least 138"):
-        proto.IdsProtocol(payload=137, base=proto.PlainProtocol())
+        idp.IdsProtocol(payload=137, base=proto.PlainProtocol())
 
 
 def test_command_is_registered_and_defaults_to_the_setting_that_fits_network_certifications_plan():
@@ -162,21 +168,103 @@ def test_every_precision_registers_the_verity_int8_method_before_the_engine(prec
 
 def test_preflight_refuses_a_commit_without_ninja_before_the_model_loads(tmp_path):
     man = predicted.row(tmp_path)
-    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man)], environ={})
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), "--out", str(tmp_path)],
+                     environ={})
     with pytest.raises(cli.UsageError, match=r"ninja is\) on PATH, or pass --no-commit$"):
         so.preflight(opts, which=lambda _: None)
     so.preflight(opts, which=lambda _: "/v/bin/ninja")
-    so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-commit"], environ={}), which=lambda _: None)
+    so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-commit", "--out", str(tmp_path)], environ={}),
+                 which=lambda _: None)
     with pytest.raises(cli.UsageError, match="window-steps"):
         so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--window-steps", "0"], environ={}),
                      which=lambda _: "/v/bin/ninja")
+
+
+def test_an_out_in_the_runs_directory_is_refused_by_name_and_none_names_the_flag(tmp_path):
+    """The serve's directory holds its private records (requests, step traces, salts), which a run uploads with no filter by
+    name: ``--out`` is refused as ``$RESEARCH_RUN_DIR`` or ``$OUT`` or inside either, and has no default."""
+    run = tmp_path / "run"
+    env = {"RESEARCH_RUN_DIR": str(run), "OUT": str(run / "out")}
+
+    def refusal(*out: str) -> str | None:
+        try:
+            so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-commit", *out], environ={}),
+                         which=lambda _: None, environ=env)
+        except cli.UsageError as e:
+            return str(e)
+        return None
+
+    assert refusal().startswith("--out DIR is required")
+    for inside in (run, run / "serve", run / "out"):
+        assert refusal("--out", str(inside)).startswith(f"--out {inside} is $RESEARCH_RUN_DIR ({run}) or inside it"), inside
+    assert refusal("--out", str(tmp_path / "serve")) is None
+
+
+def _stand_in(name: str, log: list) -> SimpleNamespace:
+    """A declared scheme's stand-in: its attach files a kernel that logs entering and leaving each block it wraps, and
+    returns a report whose release logs."""
+    def kernel(due, inner):
+        log.append(("in", name))
+        out = inner(None)
+        log.append(("out", name))
+        return out
+
+    def attach(ex, ctx):
+        log.append(("attach", name, dict(ctx["settings"])))
+        ex.request(name, H.ComputeBlockWith(kernel))
+        return SimpleNamespace(release=lambda: log.append(("release", name)))
+    return SimpleNamespace(name=name, option="", settings={"k": 0}, depends=(), resource=Lacks("a stand-in"), kernels=Lacks("a stand-in"), check_settings=lambda own: None, attach=attach,
+                           requests=lambda ctx: (), messages=())
+
+
+def _listing(monkeypatch, tmp_path, protocols: str, log: list) -> Any:
+    stand = {n: _stand_in(n, log) for n in ("a", "b")}
+    monkeypatch.setattr(declarations, "DECLARATIONS", dict.fromkeys(stand, "stand-in"))
+    monkeypatch.setattr(declarations, "get", stand.__getitem__)
+    return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), "--protocols", protocols,
+                                      "--protocols-config", json.dumps({"a": {"k": 1}})], environ={})
+
+
+def test_a_serve_attaches_each_listed_scheme_by_name_the_earlier_outer_and_releases_each(monkeypatch, tmp_path):
+    """``--protocols a,b`` attaches both declared schemes, each with its settings under its own name, through
+    `messages.attach_listed`; at a block both wrap, ``a``, listed first, is the outer; shutdown's `write_reports`
+    releases both."""
+    from verity_vllm.pipeline.scheme_plugin import write_reports
+
+    log: list = []
+    found = so.listed(_listing(monkeypatch, tmp_path, "a,b", log), tmp_path)
+    assert [(s.name, given) for s, given in found] == [("a", {"k": 1}), ("b", {})]
+    ex = M.Exchange()
+    assert [r.release is not None for r in M.attach_listed(ex, found)] == [True, True]
+    assert ex.attached == {"b": {"k": 0}, "a": {"k": 1}}
+    log.clear()
+    ex.compute(H.BlockDue("l0", 0, {}, "bf16", {}), lambda inputs: log.append(("block",)))
+    assert log == [("in", "a"), ("in", "b"), ("block",), ("out", "b"), ("out", "a")]
+    log.clear()
+    write_reports(ex, tmp_path)
+    assert sorted(log) == [("release", "a"), ("release", "b")]
+    with pytest.raises(M.Refused, match="a is listed 2 times"):
+        M.attach_listed(M.Exchange(), so.listed(_listing(monkeypatch, tmp_path, "a,a", log), tmp_path))
+
+
+def test_a_listed_scheme_that_is_not_declared_is_refused_by_name(monkeypatch, tmp_path):
+    with pytest.raises(cli.UsageError, match="--protocols a,nope: nope names no declared scheme"):
+        so.listed(_listing(monkeypatch, tmp_path, "a,nope", []), tmp_path)
+
+
+def test_a_declared_schemes_option_is_refused_naming_its_name(tmp_path):
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path),
+                                      "--protocols", "pouw:pearl-c-h100-v1-h3"])
+    with pytest.raises(cli.UsageError, match="pouw:pearl-c-h100-v1-h3 is pearl-plus's option: list it as --protocols "
+                                             "pearl-plus, its settings under 'pearl-plus'"):
+        so.listed(opts, tmp_path)
 
 
 def test_the_served_commit_is_rows_sha512_alone(tmp_path):
     """rows-sha512 is the one served scheme: a committing run is refused before the model loads until it names its bench
     row's manifest, and by the committer before it builds anything; vllm-v1 (SHA-256) is no longer a choice."""
     def parse(*more: str) -> so.Options:
-        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", *more], environ={})
+        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), *more], environ={})
 
     def refusal(opts: so.Options) -> str | None:
         try:
@@ -200,7 +288,7 @@ def test_the_served_commit_binds_only_the_build_of_record_predict_wrote(tmp_path
     with no record of predict's beside it (a traced Build's), another schema's, or a record naming other bytes is refused
     before the model loads, committing or not, and by the committer; the Build is the manifest's own dir (no --programs-root)."""
     def parse(*more: str) -> so.Options:
-        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", *more], environ={})
+        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), *more], environ={})
 
     def refusal(*more: str) -> str | None:
         try:
@@ -238,7 +326,7 @@ def test_retain_exclude_takes_the_attention_interiors_only_under_the_rows_sha512
     values no reader of a sealed window opens; anything else, and a run with no rows-sha512 Commit, is refused before the model
     loads, and by the committer before it builds anything."""
     man = predicted.row(tmp_path)
-    rows = ("--model", "m", "--revision", "r", "--required-manifest", str(man))
+    rows = ("--model", "m", "--revision", "r", "--required-manifest", str(man), "--out", str(tmp_path))
 
     def refusal(*more: str, environ: dict[str, str] | None = None) -> str | None:
         try:
@@ -406,14 +494,13 @@ class Serving:
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
                  idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
                  served: dict | None = None, marks: Any = None, block: int | None = None, protocol: Any = None,
-                 arm: Any = None, runner: Runner | None = None, pool: tuple[Any, int] | None = None,
+                 arm: Any = None, runner: Runner | None = None,
                  no_slice: str | None = None) -> None:
         self.runner = runner if runner is not None else Runner()
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
                                        clock=lambda: 0.0, wall=lambda: 0.0, served=served, no_slice=no_slice, marks=marks,
-                                       arm=arm(self.runner) if arm is not None else None,
-                                       **({"pool": pool[0], "pool_block": pool[1]} if pool else {})) if commit else None
+                                       arm=arm(self.runner) if arm is not None else None) if commit else None
         self.loop = so.EngineLoop(Engine(self.runner, seed_override), self.windows)
         self.server = so.Server(proto=protocol or proto.PlainProtocol(force_include_usage), served_name="m", max_model_len=512,
                                 tokenizer=Tokenizer(),
@@ -503,7 +590,7 @@ def test_errors_and_whole_response(tmp_path):
     assert body["choices"][0]["text"] == "".join(f" w{t}" for t in body["choices"][0]["token_ids"])
 
 
-def id_request(payload: int = proto.ID_PAYLOAD) -> bytes:
+def id_request(payload: int = idp.ID_PAYLOAD) -> bytes:
     """The network attester's id request in cells of P + 9 bytes (`id_form.id_request`, offset 0)."""
     return IDF.id_request(model="m", user="u", prompt=[128000, 791, 4062], max_tokens=2, frame_bytes=payload + HEADER.size,
                         offset=0)
@@ -533,7 +620,7 @@ def test_ids_answers_in_id_form_exactly_the_network_attesters_id_requests():
     """`IdsProtocol.of`: itself for an id request in its P + 9-byte cells, with or without the network attester's release
     headers (`release.with_release`: the release, the run and, as the network attester sends it, the release's bucket); its
     base for anything else, the shim's rebuilt POST, an id request in other cells, or bytes that aren't a request."""
-    p = proto.IdsProtocol(payload=proto.ID_PAYLOAD, base=proto.PlainProtocol())
+    p = idp.IdsProtocol(payload=idp.ID_PAYLOAD, base=proto.PlainProtocol())
     assert p.of(id_request()) is p and p.of(REL.with_release(id_request(), 3, b"run")) is p
     assert p.of(REL.with_release(id_request(), 3, b"run", 7)) is p
     assert p.of(shims_request(18097)) is p.base and p.of(id_request(140)) is p.base
@@ -548,8 +635,8 @@ def test_under_ids_the_network_attesters_id_request_streams_raw_id_events_then_d
     scan's P = 503 every P bytes are one id event, the cells the network attester makes of them, and the whole is what
     network_attester_serve's id-form parser (`parse_id_response`) takes: `io_tie.id_event`s, then `io_tie.TRAILER`. A whole
     response under ids is still the JSON one."""
-    for payload in (140, proto.ID_PAYLOAD):
-        ids = proto.IdsProtocol(True, payload=payload, base=proto.PlainProtocol(True))
+    for payload in (140, idp.ID_PAYLOAD):
+        ids = idp.IdsProtocol(payload=payload, base=proto.PlainProtocol(True))
         with Serving(tmp_path / str(payload), commit=False, protocol=ids) as s:
             raw = s.send(REL.with_release(id_request(payload), 0, b"run", 5))
             assert s.send(id_request(payload)) == raw
@@ -610,7 +697,7 @@ def test_under_ids_a_failed_stream_stops_unterminated():
     stream and fails it, where an END before the stop rule's position would read as a valid end. The reason is in the
     server's record. Under vLLM's framing (``--protocol vllm``, here its twin `PlainProtocol`) the error event is still
     sent before ``data: [DONE]``."""
-    ids = proto.IdsProtocol(True, payload=140, base=proto.PlainProtocol(True))
+    ids = idp.IdsProtocol(payload=140, base=proto.PlainProtocol(True))
     raw, server = failed_stream(ids, "RuntimeError: the engine broke")
     assert raw == IT.id_event(4853, 140) == failed_stream(ids, "the endpoint is stopping: SIGTERM")[0]
     assert IT.TRAILER not in raw
@@ -634,7 +721,7 @@ def test_under_ids_the_network_attesters_clients_get_vllms_http_and_json(tmp_pat
     endpoint): ``/v1/models`` and ``/tokenize`` as ever, its shim's streamed POST (the id request's fields with
     ``return_token_ids``) an HTTP response, chunked, of vLLM's JSON chunks carrying the token ids, and its probe's
     (urllib) the same."""
-    ids = proto.IdsProtocol(True, payload=proto.ID_PAYLOAD, base=proto.PlainProtocol(True))
+    ids = idp.IdsProtocol(payload=idp.ID_PAYLOAD, base=proto.PlainProtocol(True))
     with Serving(tmp_path, commit=False, protocol=ids) as s:
         assert [m["id"] for m in json.loads(urllib.request.urlopen(s.url + "/v1/models").read())["data"]] == ["m"]  # noqa: S310 (the test's own 127.0.0.1 endpoint)
         assert json.loads(s.post("/tokenize", {"model": "m", "prompt": "a bb ccc"})[1])["tokens"] == [1, 101, 102, 103]
@@ -853,6 +940,38 @@ def test_a_seedless_greedy_request_commits_the_default_a_stochastic_one_its_deri
     assert all(r["check"]["passed"] for r in by_rule.values()) and s.windows.summary()["passed"]
 
 
+def test_each_window_opens_and_closes_as_an_execution_phase_and_its_root_follows_its_close(tmp_path):
+    """Each Commit window is an execution phase on the exchange's ``steps``: `PhaseOpened` before any of its values is
+    committed, `PhaseClosed` with the committer's Program digest before the next opens, then `PhaseCommitted` with its
+    finalize's run root (empty for a window that committed no step)."""
+    from verity_vllm import messages
+
+    from verity import hooks as H
+
+    messages.close()
+    heard: list = []
+    off = messages.current().subscribe("test", "steps", heard.append)
+    try:
+        with Serving(tmp_path, window_steps=2) as s:
+            assert s.windows is not None
+            s.windows.com.program_digest = b"\x07" * 64
+            assert s.post("/v1/completions", dict(HOT, max_tokens=5, min_tokens=5))[0] == 200
+    finally:
+        off()
+        messages.close()
+    phases = [e for e in heard if isinstance(e, H.PhaseOpened | H.PhaseClosed | H.PhaseCommitted)]
+    lines = {w["window"]: w for w in records(tmp_path, "windows.jsonl")}
+    closed = [e.phase for e in phases if isinstance(e, H.PhaseCommitted)]
+    assert closed == sorted(lines) and len(closed) >= 3
+    for k in closed:
+        mine = [e for e in phases if e.phase == k]
+        assert [type(e) for e in mine] == [H.PhaseOpened, H.PhaseClosed, H.PhaseCommitted]
+        assert mine[1].program == b"\x07" * 64
+        assert mine[2].root == (b"" if lines[k].get("empty") else bytes.fromhex(lines[k]["run_root"]))
+    opened = [i for i, e in enumerate(phases) if isinstance(e, H.PhaseOpened)]
+    assert all(isinstance(phases[i - 1], H.PhaseClosed | H.PhaseCommitted) for i in opened[1:])
+
+
 def test_each_busy_period_flips_a_fresh_seed_coin_that_every_window_cut_from_it_keeps(tmp_path, monkeypatch):
     """One user's two requests, each into an idle engine, are seeded under two coins, so differently; the windows
     ``--window-steps`` cuts from a request's run keep the coin of the one before them, so every window holding one of its
@@ -972,16 +1091,17 @@ def test_each_window_commits_the_rows_it_ran_at_its_close_under_its_run_root(tmp
 
 
 def test_a_window_the_tick_admitted_names_no_slice_and_says_why(tmp_path):
-    """No compile slice replays the certified tick's admission. So under ``--admit tick`` (`serve_openai.no_slice`) each
+    """No compile slice replays the certified tick's admission. So under order ``tick`` (`serve_openai.no_slice`) each
     window's served rows record has a null ``slice`` and says why in ``no_slice``, and serve.json says it once
     (`serve_openai.no_slice_record`). Its rows are committed as under any other admission, where the record is, byte
     for byte, the commitment's with the statics and `SERVED_SLICE`, and serve.json has no field more."""
-    def opts(*more: str) -> so.Options:
+    def opts(order: str | None = None) -> so.Options:
+        more = ["--protocols-config", json.dumps({so.M.providing("admission").name: {"order": order}})] if order else []
         return cli.parse("serve-openai", ["--model", "m", "--revision", "r", *more], environ={})
 
-    why = so.no_slice(opts("--admit", "tick", "--tick-sat-ms", "30", "--tick-free-ms", "40"))
+    why = so.no_slice(opts("tick"))
     assert why == sc.NO_TICK_SLICE and sc.SERVED_SLICE in why
-    assert [so.no_slice(o) for o in (opts(), opts("--admit", "arrival"), opts("--admit", "release-order"))] == [None] * 3
+    assert [so.no_slice(o) for o in (opts(), opts("arrival"), opts("release-order"))] == [None] * 3
     statics = served_statics()
     for name, no_slice, named in (("named", None, {"slice": "CompileSlice_v7"}), ("tick", why, {"slice": None, "no_slice": why})):
         (out := tmp_path / name).mkdir()
@@ -1051,48 +1171,3 @@ def test_the_served_class_defaults_to_the_engines_and_refuses_too_few_rows():
         so.served_class(opts("--served-rows-class", '{"X": 1}'))
     with pytest.raises(cli.UsageError, match="under --max-num-seqs 8"):
         so.preflight(opts("--served-rows-class", '{"R": 4}'), which=lambda _: "/v/bin/ninja")
-
-
-# ---------------------------------------------------------------------------------------------------------------- pool rows
-
-def test_each_close_exports_the_prefix_cache_s_pool_row(tmp_path):
-    """With the engine's pool and its block size, each close writes the pool's row and root to pool_rows/w<k>.json and
-    its NB and root to the window's line. A pool a running request holds blocks of is refused by name in the line, and
-    the window, which no coin reads the row of yet, still passes."""
-    from verity.commitments import pool_row as R
-
-    from tests.engine.test_pool_row import WANT, B, pool
-
-    root = R.root(WANT).hex()
-    (tmp_path / "free").mkdir()
-    (tmp_path / "held").mkdir()
-    with Serving(tmp_path / "free", window_steps=2, pool=(pool, B)) as s:
-        serve_concurrently(s, [CERTIFIER_BODY, dict(CERTIFIER_BODY, prompt=[5, 6])])
-    wins = records(tmp_path / "free", "windows.jsonl")
-    assert len(wins) > 1 and all(w["passed"] and w["pool_row"] == {"nb": 6, "root": root} for w in wins)
-    assert json.loads((tmp_path / "free" / "pool_rows" / f"w{wins[-1]['window']}.json").read_text())["root"] == root
-    with Serving(tmp_path / "held", window_steps=4, pool=(lambda: pool(free=(3, 1, 5, 2), held=(4,)), B)) as s:
-        serve_concurrently(s, [CERTIFIER_BODY])
-    wins = records(tmp_path / "held", "windows.jsonl")
-    assert wins and all(w["passed"] and "1 blocks are held" in w["pool_row"]["refused"] for w in wins)
-    with pytest.raises(ValueError, match="needs both the live pool and its blocks' size"):
-        sc.CommitWindows(None, tmp_path, run_id="t", window_steps=4, pool=pool)
-
-
-def test_the_pool_row_setting_is_a_token_width_and_needs_the_prefix_cache(tmp_path, monkeypatch):
-    man = predicted.row(tmp_path)
-
-    def opts(*more: str) -> so.Options:
-        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), *more], environ={})
-
-    def ninja(_: str) -> str:
-        return "/v/bin/ninja"
-
-    so.preflight(opts(), which=ninja)
-    monkeypatch.setenv("VERITY_POOL_ROW", "18")
-    with pytest.raises(cli.UsageError, match="needs --prefix-caching and the Commit"):
-        so.preflight(opts(), which=ninja)
-    so.preflight(opts("--prefix-caching"), which=ninja)
-    monkeypatch.setenv("VERITY_POOL_ROW", "-1")
-    with pytest.raises(cli.UsageError, match="a token width is at least 1"):
-        so.preflight(opts("--prefix-caching"), which=ninja)

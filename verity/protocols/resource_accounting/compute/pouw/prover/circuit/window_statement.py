@@ -29,8 +29,8 @@ each call's record to its entry and each side row's index to its record's keep, 
 inside a call: a record is canonical JSON under a SHA-512 and the indices are leaves of the side trees, so that part is
 not this unit's, and no Program states it yet.
 
-**The Program** (`program`) is the one unit: `TemplateInstances_v1{template, N = 1}` over `template(P, S)`, its partition
-`Q_template_instances` (`query`). It is proved for the execution phase, never sampled. No verifier requires its proof yet:
+**The Program** (`program`) is the one unit: the wired population (`wired_population_program`, no wire) of `template(P, S)`
+once, its partition `Q_template_instances` (`query`). It is proved for the execution phase, never sampled. No verifier requires its proof yet:
 `core_check.opening_twin` checks one opened entry for each sampled tile, and nothing there reads this Program.
 """
 from __future__ import annotations
@@ -45,9 +45,9 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import (NOT, ONE, OR, ZERO, add, and_reduce, const_bits, multiply, mux, shl_window,
                                               sub)
 from verity.circuits.boolean.trace import Traced, emit, trace
+from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.circuits.partition_object import template_instances_query
-from verity.circuits.population import population_program
+from verity.circuits.population import wired_population_program
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Type
 
@@ -215,15 +215,20 @@ def template(P: int, S: int = Wd.GRID_BITS) -> Any:
     return bind(PouwWindowStatement, P=P, S=S)
 
 
+def _wired(P: int, S: int) -> tuple[Program, dict[str, Any]]:
+    t = template(P, S)
+    return wired_population_program([(t, 1)], {"templates": [[descriptor_id(t), 1]]})
+
+
 def program(P: int, S: int = Wd.GRID_BITS) -> Program:
     """The statement Program of an execution phase of P entries on the S-bit grid: its one unit, `template` (P, S) once
-    (`TemplateInstances_v1`, each parameter an array over the one instance)."""
-    return population_program(template(P, S), 1)
+    (`WiredPopulations_v1` with no wire, each parameter ``0.<port>`` an array over the one instance)."""
+    return _wired(P, S)[0]
 
 
 def query(P: int, S: int = Wd.GRID_BITS) -> dict[str, Any]:
     """The statement Program's partition query: its template's one instance, the unit."""
-    return template_instances_query([template(P, S)])
+    return _wired(P, S)[1]
 
 
 __all__ = ["FIELDS", "PORTS", "PUBLIC", "PouwWindowStatement", "ROOT_WORDS", "S_MAX", "program", "query", "template", "traced",

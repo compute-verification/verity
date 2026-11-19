@@ -59,14 +59,14 @@ def FilesSent (V : Vocab d α) (o : Exchange) : Prop :=
 open Classical in
 /-- **A member's file v2 reads on the blobs sent at other bytes than its registered file**, of one SHA-512 with it:
 at the first member's digest whose first blob sent and first registered file differ, the two. -/
-noncomputable def filesCollision (V : Vocab d α) (o : Exchange) : Option (Claims.Msg × Claims.Msg) :=
+noncomputable def filesCollision (V : Vocab d α) (o : Exchange) : Option (Hash.Msg × Hash.Msg) :=
   (memberDigests o.params).findSome? fun h =>
     match blobWith h o.sent.blobs, blobWith h (V.registered o.params) with
     | some a, some b => if a = b then none else some (a.data.toList, b.data.toList)
     | _, _ => none
 
 /-- What `filesCollision` outputs is a collision of `sha512Msg`. -/
-theorem filesCollision_valid {V : Vocab d α} {o : Exchange} {u v : Claims.Msg} (h : filesCollision V o = some (u, v)) :
+theorem filesCollision_valid {V : Vocab d α} {o : Exchange} {u v : Hash.Msg} (h : filesCollision V o = some (u, v)) :
     Claims.Collision Verity.sha512Msg u v := by
   obtain ⟨x, -, hx⟩ := List.exists_of_findSome?_eq_some h
   split at hx

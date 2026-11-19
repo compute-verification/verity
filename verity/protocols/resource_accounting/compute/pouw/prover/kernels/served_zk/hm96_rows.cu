@@ -1,8 +1,8 @@
-// The ZK statement's row commitment on the serving GPU, for served_zk's cost measurement (rows_bench.py): a call's rows as
+// The ZK statement's row commitment on the serving GPU, for the served pass's ZK statement (statement.py's Commit): a call's rows as
 // hm96-sha512 row leaves of a frame-v3-sha512 tree (verity.commitments: rowleaf's sha512/row-seg/v1 and
 // sha512/row/v2, hm96's SHA512 instance, merkle's frame-v3 leaf and node), the hashing being Flock's (verity/protocols/proofs/flock/prover/cuda/
 // sha512.cuh: s512_compress) and the frame messages, the mask, the salt digest and the hm96 leaf's value
-// verity/commitments/cuda/row_commit.cuh's over it.  Every launch takes rows_bench.py's Args (16 pointers, 16 ints).
+// verity/commitments/cuda/row_commit.cuh's over it.  Every launch takes the Dev launcher's Args (16 pointers, 16 ints).
 //   sz_mid       the SHA-512 state after each of `count` 128-byte first blocks (the segment prefixes S(j, s, m_j), Q, P,
 //                hm96's salt and leaf prefixes): constants of a shape and a key, computed once
 //   sz_segments  d_j = SHA-512(S(j, s, m_j) || segment j) for every segment of every row, a lane a segment, a warp's 32 segments'
@@ -33,7 +33,7 @@ struct SzC {
 };
 
 // SHA-512 of head || a || [u64be 64 || b] (b optional): a frame leaf (head || value) or node (head || left || len || right),
-// head being merkle's message up to its value or its left child (rows_bench.py's slots)
+// head being merkle's message up to its value or its left child (statement.py's slots)
 __device__ __noinline__ void sz_frame(const uint8_t* head_slot, const uint8_t* a, const uint8_t* b, uint8_t* out) {
     uint8_t m[512];
     int n = *(const uint32_t*)head_slot;

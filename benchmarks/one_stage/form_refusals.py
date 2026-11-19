@@ -23,7 +23,6 @@ every log."""
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import shutil
 import subprocess
@@ -38,7 +37,9 @@ sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
 import forged_proofs as FP  # noqa: E402
 from circuit_check import targets as TG  # noqa: E402
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.ports import free_port  # noqa: E402
 from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.circuits.ops.fp32 import F32AddFtz  # noqa: E402
 from verity.circuits.ops.mufu import MufuEx2Ftz, MufuRcpFtz  # noqa: E402
@@ -92,10 +93,9 @@ def main() -> int:
     a = ap.parse_args()
     work, fx = Path(a.work), Path(a.fixture)
     TG.load_registries()
-    salt_key = hashlib.sha256(b"verity/flock/form-refusals/salts").digest()
     cases: dict[str, dict] = {}
     for name, (fn, in_rows, out_rows, rows, kw, statement) in forms(np.random.default_rng(20261019)).items():
-        program = P.mixed_population_program([(fn, FP.N)])
+        program = PN.mixed_population_program([(fn, FP.N)])
         part = P.partition(program, P.template_instances_query([fn]))
         d = work / name
         stage = d / "stage"
@@ -104,7 +104,7 @@ def main() -> int:
         (stage / "program.json").write_bytes(canonical_json(encode_program(program)))
         st = CS.UnitStager(fn, f"unit/form-refusals-{name}", in_rows, out_rows, circuit=stage / "circuit.txt",
                            bind={"partition": P.digest(part), "program": part["program"]}, **kw)
-        FP.stage_case(st, rows, (), d, salt_key, f"{st.iset.name}-{name}")
+        FP.stage_case(st, rows, (), d, f"{st.iset.name}-{name}")
         (d / "tables").mkdir(exist_ok=True)
         if st.meta.get("lookups"):
             IL.write_tables(d / "tables")
@@ -119,7 +119,7 @@ def main() -> int:
             subprocess.run([a.tmpl_unit, str(d / "unit.tmpl"), "--layout", st.meta["layout"], "--out", str(d / "unit.placed")],
                            check=True, capture_output=True)
             sd["tmpl_unit"] = d / "unit.placed"
-        record, live = a0.session(a.bin, sd, FP.N, f"subset:{FP.N}", FP.free_port(), d / "run", zk=True)
+        record, live = a0.session(a.bin, sd, FP.N, f"subset:{FP.N}", free_port(), d / "run", zk=True)
         lean = a0.lean_verify(a.lean, sd, FP.N, d / "run", zk=True)
         cases[name] = {"definition": getattr(fn, "name", str(fn)), "statement": statement, "live": live, "m0": (record or {}).get("verdict"),
                        "lean": lean, "draw": (record or {}).get("unit_draw")}

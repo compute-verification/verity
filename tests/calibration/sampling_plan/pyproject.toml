@@ -17,7 +17,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 inputs = ["verity/__init__.py", "verity/errors.py", 
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/proofs/spot",
           "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py", "verity/protocols/resource_accounting/compute/pouw/verifier/window.py",
-          "verity/protocol.py", "verity/channel.py", "verity/commitments/periods",
+          "verity/protocol.py", "verity/channel.py", "verity/release.py", "verity/commitments/periods",
           "verity/circuits", "verity/circuits/kernels", "verity/commitments", "verity/commitments/crypto",
           "verity/commitments/randomness", "calibration/census/hardware.json",
           "verity/commitments/periods",  # inputs.cap reads Flock's composer's sizes (verity.commitments.periods.interface)

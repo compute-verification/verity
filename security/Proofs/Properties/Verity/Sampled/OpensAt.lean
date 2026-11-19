@@ -79,7 +79,7 @@ theorem sha512_hashOf : Flock.Bridge.Spec.HashOf Verity.sha512 := fun x => by
   rw [hx]
   rfl
 
-theorem sha512Msg_length (m : Claims.Msg) : (Claims.Sampling.sha512Msg m).length = 64 := by
+theorem sha512Msg_length (m : Hash.Msg) : (Claims.Sampling.sha512Msg m).length = 64 := by
   rw [Claims.Sampling.sha512Msg, bs_length, Flock.Sha512.hash_size]
 
 /-- **A port's row message hashes to its registered schema's `Hash.RowLeaf` digest** under SHA-512, whichever of
@@ -260,7 +260,7 @@ variable {hU} in
 SHA-512, at `placeAt`'s verifier, root and rank, its row holding the opened bit at the place's offset, at files that
 load to the commitment's data and pass the ports and roots check. -/
 theorem opens_rowLeaf (hL : Loads D n pi pub I) (hA : Ready I) {i : ℕ} {b : Bool}
-    {m : Claims.Msg} (h : (Cd D hU n pi pub).Opens Claims.Sampling.sha512Msg (roots D n pub) ⟨i, b, m⟩ = true) :
+    {m : Hash.Msg} (h : (Cd D hU n pi pub).Opens Claims.Sampling.sha512Msg (roots D n pub) ⟨i, b, m⟩ = true) :
     ∃ p, placeAt D hU n pi pub i = some p ∧ ∃ o : Hash.RowLeaf.Opening,
       Hash.RowLeaf.accepts Verity.sha512 Verity.sha512 p.verifier p.root p.rank o ∧ o.row[p.offset]? = some b := by
   have hR := hA.roots hL
@@ -410,7 +410,7 @@ theorem placeOf_words {i : ℕ} {r : Flock.Bridge.RowAt} (hr : Flock.Bridge.rowO
 
 /-- **An opening the deployed commitment accepts is a `Hash.RowLeaf` opening at the registered place**: under
 SHA-512, at `placeAt`'s verifier, root and rank, its row holding the opened bit at the place's offset. -/
-theorem opens_rowLeaf {A : Live} (hA : A.OpensReady) {i : ℕ} {b : Bool} {m : Claims.Msg}
+theorem opens_rowLeaf {A : Live} (hA : A.OpensReady) {i : ℕ} {b : Bool} {m : Hash.Msg}
     (h : A.Cd.Opens Claims.Sampling.sha512Msg A.roots ⟨i, b, m⟩ = true) :
     ∃ p, A.placeAt i = some p ∧ ∃ o : Hash.RowLeaf.Opening,
       Hash.RowLeaf.accepts Verity.sha512 Verity.sha512 p.verifier p.root p.rank o ∧ o.row[p.offset]? = some b :=
@@ -463,28 +463,23 @@ the ports and roots check being v2's own on the accepted play (`opensReady_of_ac
 `Instance.sessionRegistered`'s from the session's construction (`Instance.sessionOf`) and `FamiliesPinned`, which owes
 only that the coin commitment's families hold the family v2's parameters name; the coupling's, the device's log opening
 only the record's rounds (`LogOpensRecorded`), is v2's record check's, which refuses a session whose coin tree opens a
-round its record doesn't give (`Instance.logOpensRecorded`). The two statements on the committed files
-(`Vocab.WiresSound` at the deployed vocabulary, `GateARow`) are taken as they stand: no clause of the conclusion reads
-either, and neither is proved. -/
+round its record doesn't give (`Instance.logOpensRecorded`). -/
 theorem remote_soundness_deployedReady (I : Instance d α) (K₀ : Constructions I.base)
-    (reg : (A : Live) → Option Claims.Msg → A.Reg)
-    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (reg : (A : Live) → Option Hash.Msg → A.Reg)
+    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Hash.Msg)
+    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Hash.Msg)
     (hFP : I.FamiliesPinned .remote)
-    (hW : I.base.PouwSound .remote)
-    (hWi : (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).WiresSound .remote)
-    (hG : Verity.GateARow) :
+    (hTwo : TwoStageBound (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)) .remote)
+    (hW : I.base.PouwSound .remote) :
     (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).SoundnessAt .remote :=
   remote_soundness_deployedAt I K₀ reg record recordDigest I.opensAt I.registeredFiles
-    (I.sessionAt_of_registered .remote (I.sessionRegistered hFP)) (I.logOpensRecorded .remote) hW hWi hG
+    (I.sessionAt_of_registered .remote (I.sessionRegistered hFP)) (I.logOpensRecorded .remote) hTwo hW
 
 open scoped ENNReal in
 /-- **`remote_soundness_deployedReady`'s honest lemma**: its premises hold at the idle deployment's instance at v2's
 reading (`Instance.Honest.inst`), whose coin commitment holds the family v2's parameters name
 (`Instance.Honest.familiesPinned`) and whose base publishes `⊤` for every subprotocol, where the base's PoUW target
-holds. It concludes neither statement on the committed files: the instance runs sessions, at which SPOT's error
-is finite, so the wires' statement bounds something there and holds only by its proof, and `GateARow` reads no
-deployment, so no instance concludes it. -/
+holds. -/
 theorem remote_soundness_deployedReady_honest :
     (Instance.Honest.inst ⊤ Instance.Honest.bound).FamiliesPinned .remote ∧
       (Instance.Honest.inst ⊤ Instance.Honest.bound).base.PouwSound .remote :=
@@ -503,15 +498,17 @@ definition. `Deployed` is `Instance.deployed` at the openings every instance has
 coupling at each session is `couplingTarget_at`'s, its log premise discharged by v2's record check
 (`Instance.logOpensRecorded`). -/
 theorem spotSound_deployedReady (I : Instance d α) (K₀ : Constructions I.base) (k : Verity.Registration.Composite)
-    (reg : (A : Live) → Option Claims.Msg → A.Reg)
-    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
-    (hSr : I.SessionRegistered k) :
+    (reg : (A : Live) → Option Hash.Msg → A.Reg)
+    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Hash.Msg)
+    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Hash.Msg)
+    (hSr : I.SessionRegistered k)
+    (hTwo : TwoStageBound (I.vocab (I.constructionsAt K₀ k reg record recordDigest)) k) :
     (I.vocab (I.constructionsAt K₀ k reg record recordDigest)).SpotSound k :=
   spotSound_of_targets (I.vocab (I.constructionsAt K₀ k reg record recordDigest)) k
     (I.deployed (I.constructionsAt K₀ k reg record recordDigest) (fun _ _ _ _ => rfl) (fun _ _ _ _ => rfl)
       I.opensAt)
     (I.covers (I.constructionsAt K₀ k reg record recordDigest) k I.registeredFiles (I.sessionAt_of_registered k hSr))
+    hTwo
     fun θ F A h => I.couplingTarget_lift (I.constructionsAt K₀ k reg record recordDigest) k
       (I.couplingTarget_at K₀ k reg record recordDigest (I.logOpensRecorded k) θ F A h)
 
@@ -546,16 +543,17 @@ composite has verified; the premise stands for that until the period check reads
 bits that leave the device during the wipe are the vocabulary's (`Verity.Wipe.egress`), which no statement yet ties
 to the network attester's count over the wipe's span. -/
 theorem onsite_soundness_deployedReady (I : Instance d α) (K₀ : Constructions I.base)
-    (reg : (A : Live) → Option Claims.Msg → A.Reg)
-    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (reg : (A : Live) → Option Hash.Msg → A.Reg)
+    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Hash.Msg)
+    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Hash.Msg)
     (hFP : I.FamiliesPinned .onsite)
+    (hTwo : TwoStageBound (I.vocab (I.constructionsAt K₀ .onsite reg record recordDigest)) .onsite)
     (hW : I.base.PouwSound .onsite) (hI : I.base.InferenceOnlySound .onsite)
     (hP : I.base.PousSound .onsite) (hB : I.base.BandwidthAuditSound .onsite)
     (hN : I.base.NetworkAttesterSound .onsite) (hX : I.base.WipeSound .onsite) :
     (I.vocab (I.constructionsAt K₀ .onsite reg record recordDigest)).SoundnessAt .onsite :=
   Verity.soundness_of_subprotocols ι α d (I.vocab (I.constructionsAt K₀ .onsite reg record recordDigest))
-    (spotSound_deployedReady I K₀ .onsite reg record recordDigest (I.sessionRegistered hFP))
+    (spotSound_deployedReady I K₀ .onsite reg record recordDigest (I.sessionRegistered hFP) hTwo)
     (I.target_of_base _ .onsite .pouw (by decide) hW) (I.target_of_base _ .onsite .inferenceOnly (by decide) hI)
     (I.target_of_base _ .onsite .pous (by decide) hP) (I.target_of_base _ .onsite .poub (by decide) hB)
     (I.target_of_base _ .onsite .network (by decide) hN) (I.target_of_base _ .onsite .wipe (by decide) hX)

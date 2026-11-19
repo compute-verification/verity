@@ -58,10 +58,10 @@ STEP_GROUPS = {"pad_a": "row_seeds", "rowdig_a": "row_seeds", "hash_rows_a": "a_
 #: the steps this path can run on a side lane, with the per-call buffers they read and write (the constant keys and the pass's
 #: leaf buffer aside, which no later call rewrites): each shape rotates these, so a call never overwrites what the side lane
 #: still reads.  The tile hashing reads C~ and U; A's tree (``tree_seed_a``, only where the pipeline splits A's commitment,
-#: which then writes no padding rows' E_A lines) reads level 0 (outside pd, the row digests it hashes into level 0) and the
-#: call's keys and writes the levels, seed_A and line_a.  The screen runs on the main lane or the caller
+#: which then writes no padding rows' E_A lines) reads level 0 (outside pd, the row digests it hashes into level 0 with
+#: their salts) and the call's keys and writes the levels, seed_A and line_a.  The screen runs on the main lane or the caller
 SIDE_IO = {"hash_leaf": StepIO("tile_hash", frozenset({"c", "u"}), frozenset({"segdig_t"})),
-           "tree_seed_a": StepIO("a_tree", frozenset({"tree_a", "rowdig_a", "keys"}), frozenset({"tree_a", "seed_a", "line_a"}))}
+           "tree_seed_a": StepIO("a_tree", frozenset({"tree_a", "rowdig_a", "salts_a", "keys"}), frozenset({"tree_a", "seed_a", "line_a"}))}
 SIDE_GROUPS = frozenset(io.group for io in SIDE_IO.values())
 #: the rows (m₁₆) from which a call's A tree, where it is aside, runs on the side lane after the call's rather than on the
 #: call's own: on the H200 the own lane was the faster at m₁₆ 16 and the other at 64, at 7 of a measured model's 8 dense shapes each

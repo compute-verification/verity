@@ -336,7 +336,7 @@ theorem jc_step {P : LigeritoProof} {cf : ℕ → ℕ → F128} {sm : LState} {t
 variable {p : LigeritoProof} {L : ℕ}
 
 /-- **Level 0's `k0` challenges**, with the table and weight. -/
-theorem HRuns.initChals (resp : ℕ → Claims.Msg) (k0 N : ℕ) (sm : LState) (tm : Transcript)
+theorem HRuns.initChals (resp : ℕ → Hash.Msg) (k0 N : ℕ) (sm : LState) (tm : Transcript)
     (A W : Array F256) :
     HRuns p L (forIn [:k0] PUnit.unit fun j (_ : PUnit) => do
         let _ ← challengeP (asksS resp) (j + 1 == k0)
@@ -358,7 +358,7 @@ theorem HRuns.initChals (resp : ℕ → Claims.Msg) (k0 N : ℕ) (sm : LState) (
 /-- **A level's four challenges**, with the table and weight: three folds, then a fold whose table is kept, split. The
 claim is the kept table's sum against the folded weight, and in step with the split table and weight except at the
 last level (`last`), whose message is the unsplit table's. -/
-theorem HRuns.levelChals (resp : ℕ → Claims.Msg) (last : Bool) (sm : LState) (tm : Transcript) (A W : Array F256)
+theorem HRuns.levelChals (resp : ℕ → Hash.Msg) (last : Bool) (sm : LState) (tm : Transcript) (A W : Array F256)
     (M : ℕ) :
     HRuns p L (forIn [:4] (#[] : Array F256) fun i (f : Array F256) =>
         if (i + 1 == 4) = true then do

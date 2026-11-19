@@ -15,10 +15,12 @@ before it.  When the session ends, however it ends, the challenger signs its rel
 ~~~text
 frame       u32be len(head) ‖ u32be len(body) ‖ head ‖ body: head a JSON object with its "type", body empty
 client      {"type": "hello"} (with "secret" when the session has one), then {"type": "open", "label", "index", "after"}
-            per coin, {"type": "tree", "nonce", "spec"} per coin tree and {"type": "tree-open", "after", "n", "round",
-            "stream", "tree"} per round of one, then {"type": "close"}
-challenger  {"type": "commitment", "commitment"}, {"type": "opening", "opening"}, {"type": "tree", "tree"},
-            {"type": "tree-coins", "tree-coins"} and {"type": "closed"}, each answering the client's frame, or
+            per coin, {"type": "commit", "index", "label", "root"} per root with no coin, {"type": "tree", "nonce",
+            "spec"} per coin tree and {"type": "tree-open", "after", "n", "round", "stream", "tree"} per round of one,
+            then {"type": "close"}
+challenger  {"type": "commitment", "commitment"}, {"type": "opening", "opening"}, {"type": "committed", "committed"},
+            {"type": "tree", "tree"}, {"type": "tree-coins", "tree-coins"} and {"type": "closed"}, each answering the
+            client's frame, or
             {"type": "refused", "reason"}, which ends the session
 withheld    {"type": "layout", "layout"}, {"type": "coin", "coin"}, and {"type": "releasing", "releasing"} frames then
             {"type": "released", "released"}: a withheld session's answers (`open_session(..., withhold=True)`)
@@ -43,9 +45,10 @@ that isn't the next of the coins it was given (one missing, repeated or out of o
 checks the openings, each against the coin it was given.
 
 Every message is fail-closed.  The challenger refuses a frame that isn't the next of that sequence in exactly that form,
-a coin other than its family's next (coin i after the family's i-th root, once: `LiveRecord`) and a root that isn't 64
-bytes; a refusal or a broken stream ends the session, and no coin opens twice (a retry never resamples).  It appends each
-release to `releases.jsonl` (`LiveRecord.log`'s two events, a line each in canonical JSON, integer nanoseconds on its
+a coin its family doesn't hold or has opened (any of its coins once, in any order: `LiveRecord.record_slot`), a commit
+other than its family's next (`LiveRecord.commit`) and a root that isn't 64 bytes; a refusal or a broken stream ends the
+session, and no coin opens twice (a retry never resamples).  It appends each root, release and commit to
+`releases.jsonl` (`LiveRecord.log`'s events, a line each in canonical JSON, integer nanoseconds on its
 monotonic clock), fsynced, before the opening leaves its host, and answers the client's close only once its signed close
 is written.  A session served with a `secret` (the auditor device's gate gives one to the window's opener) refuses a hello
 that doesn't carry it, so no other process that reaches the port takes the session's coins first.  `greet` reads the
@@ -57,7 +60,7 @@ writes nothing, or ends the session with a named reason.  Each lives in one func
 
 - the release log's lines, `MAX_LOG_LINES`, and each line's characters, `MAX_LOG_LINE`: `_append`, the one place the
   log grows after its head (`open_session`).  Inside that, the log is its head, a root and a release a coin, each coin
-  once (`LiveChallenger.open`), and at most `MAX_TREE_LINES` coin-tree lines (`LiveChallenger._tree_line`);
+  once, a line a commit (`LiveChallenger.open`), and at most `MAX_TREE_LINES` coin-tree lines (`LiveChallenger._tree_line`);
 - the openings, `MAX_COINS`: `layout_problem`, in `LiveChallenger`'s constructor, each coin opened once; an opening's
   path, `MAX_PATH`, is its layout's depth (`merkle.merkle_depth`), at most that of `MAX_COINS` coins;
 - a coin tree's coins, `MAX_TREE_COINS`: `LiveChallenger.sample_tree`, before it samples;
@@ -67,7 +70,8 @@ writes nothing, or ends the session with a named reason.  Each lives in one func
   `verity/protocols/compose/verifier/live_challenger/auditor.py`'s `append`, the one place the ledger grows, the count before it signs;
 - the host's pins log lines, `MAX_PINS`: that file's `record_pin`, before it writes.
 
-`RemoteChallenger` is the client's `LiveChallenger`, its `commitment`, `open(label, index, after)` and `open_many`, so
+`RemoteChallenger` is the client's `LiveChallenger`, its `commitment`, `open(label, index, after)`, `open_many` and
+`commit(label, index, root)`, so
 `LiveRecord` (and a client's seam over it) runs on it unchanged.  `open_many` asks for several coins in one round trip:
 their frames back to back, then the replies in order, the wire and the release log as the same opens one at a time.  It
 raises `CoinError` on a refusal, a broken stream, or an opening that isn't the coin asked for opened against the
@@ -115,8 +119,9 @@ RELEASE_HEAD = MAX_HEAD // 2
 """The most bytes the head of a withheld session's release frame holds (`release_frames`): half of `MAX_HEAD`, so a
 relay that pads each frame to whole cells of up to that size (the network attester's coin link, `coin_link.recut`) passes it
 on."""
-SEQUENCE = ("a client's frames are hello, then open {label, index, after} per coin, tree {nonce, spec} per coin tree and "
-            "tree-open {after, n, round, stream, tree} per round of one, then close")
+SEQUENCE = ("a client's frames are hello, then open {label, index, after} per coin, commit {index, label, root} per root "
+            "with no coin, tree {nonce, spec} per coin tree and tree-open {after, n, round, stream, tree} per round of "
+            "one, then close")
 SESSION_ID = f"a session id is at most {Ch.MAX_SESSION_ID} ASCII letters, digits, '-', '.' and '_'"
 #: an open's label past ASCII is refused in these words alone, since the refusal is how the session ended, which its close
 #: signs and writes
@@ -275,10 +280,8 @@ def _release(head: dict, records: dict[str, LiveRecord], log: Any, lines: list[s
     record = records.get(label)
     if record is None:
         raise CoinError(f"the epoch's coins have no {label!r} family")
-    if type(index) is not int or index != len(record.roots):
-        raise CoinError(f"the next {label} coin is {len(record.roots)}, not {ascii(index)}")
     n = len(record.log)
-    opening = record.record(after)
+    opening = record.record_slot(index, after)
     try:
         new = [_line(e) for e in record.log[n:]]
     except TypeError as e:
@@ -286,6 +289,26 @@ def _release(head: dict, records: dict[str, LiveRecord], log: Any, lines: list[s
                         f"({e})") from e
     _append(log, lines, new, f"{label} coin {index}")
     return opening
+
+
+def _commit(head: dict, records: dict[str, LiveRecord], log: Any, lines: list[str]) -> int:
+    if sorted(head) != ["index", "label", "root", "type"]:
+        raise CoinError(SEQUENCE)
+    label, index = head["label"], head["index"]
+    record = records.get(label) if type(label) is str else None
+    if record is None:
+        raise CoinError(f"the epoch's coins have no {ascii(label)} family")
+    if type(index) is not int or index != record.commits:
+        raise CoinError(f"the next {label} commit is {record.commits}, not {ascii(index)}")
+    n = len(record.log)
+    record.commit(_root(head["root"]))
+    try:
+        new = [_line(e) for e in record.log[n:]]
+    except TypeError as e:
+        raise CoinError(f"the release log's clock reads other than integers, so {label} commit {index} is refused ({e})"
+                        ) from e
+    _append(log, lines, new, f"{label} commit {index}")
+    return index
 
 
 def _append(log: Any, lines: list[str], new: list[str], what: str) -> None:
@@ -412,6 +435,9 @@ def serve(sock: socket.socket, session: ChallengePhase, clock: Callable[[], int]
                     return None
                 if head.get("type") == "tree":
                     wire.send({"type": "tree", "tree": _drawn(head, challenger, log, session.lines)})
+                    continue
+                if head.get("type") == "commit":
+                    wire.send({"type": "committed", "committed": _commit(head, records, log, session.lines)})
                     continue
                 if head.get("type") == "tree-open":
                     wire.send({"type": "tree-coins", "tree-coins": _tree_coins(head, challenger, log, session.lines)})
@@ -564,6 +590,13 @@ class RemoteChallenger:
 
     def open(self, label: str, index: int, after: bytes) -> LiveOpening:
         return self.open_many([(label, index, after)])[0]
+
+    def commit(self, label: str, index: int, root: bytes) -> None:
+        """Family `label`'s commit `index` of `root`, a root with no coin after it, which the challenger logs before it
+        answers."""
+        if self._ask({"type": "commit", "index": index, "label": label, "root": bytes(root).hex()}, "committed",
+                     lambda c: c) != index:
+            raise self._end(f"the challenger did not take {label} commit {index}")
 
     def open_many(self, requests: Sequence[tuple[str, int, bytes]]) -> list[LiveOpening]:
         """`open` of each (label, index, after) of `requests` in one round trip: every open frame written back to back,
@@ -720,9 +753,9 @@ def log_lines(path: str | os.PathLike) -> list[str]:
 
 
 def released_roots(path: str | os.PathLike, commitment: LiveCommitment) -> dict[str, tuple[bytes, ...]]:
-    """The roots the release log at `path` shows the challenger received, by family in order (`released_roots_of`),
-    unsigned: a verifier reads them only through `trusted_session`."""
-    return Ch.released_roots_of(commitment, log_lines(path))
+    """The roots the release log at `path` shows the challenger received, by family in order (`by_family` of
+    `released_log_of`), unsigned: a verifier reads them only through `trusted_session`."""
+    return Ch.by_family(commitment, Ch.released_log_of(commitment, log_lines(path)))
 
 
 def log_hello(directory: str | os.PathLike, n: int, why: str) -> None:

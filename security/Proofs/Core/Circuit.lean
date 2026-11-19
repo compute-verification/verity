@@ -15,6 +15,8 @@ width:
 * `correct_congr`: a unit's correctness depends only on its committed inputs and outputs (`Partition.io`);
 * `Refines.exists_incorrect_fine`: when a fine partition refines a coarse one, a incorrect coarse unit has a incorrect fine unit
   inside it, whatever the values on the coarse unit's interior;
+* `Refines.glue`: fine traces that each agree with one coarse trace on its opened wires splice into one that does
+  and has, inside each coarse unit, that unit's trace's incorrect fine units;
 * `Containment.implementation`: a circuit that contains `C` implements it.
 -/
 
@@ -219,6 +221,54 @@ theorem correct_congr {X Y : C.Trace} {u : Fin n} (hXY : ∀ g ∈ P.io u, X g =
 
 /-! ## Refinement -/
 
+/-- Each unit's gates from its own trace `Y u`, every other gate from `X`. -/
+def splice (X : C.Trace) (Y : Fin n → C.Trace) : C.Trace := fun g =>
+  match P.unit g with
+  | some u => Y u g
+  | none => X g
+
+theorem splice_of_unit {X : C.Trace} {Y : Fin n → C.Trace} {g : Fin C.N} {u : Fin n} (h : P.unit g = some u) :
+    P.splice X Y g = Y u g := by
+  simp only [splice, h]
+
+theorem splice_of_none {X : C.Trace} {Y : Fin n → C.Trace} {g : Fin C.N} (h : P.unit g = none) :
+    P.splice X Y g = X g := by
+  simp only [splice, h]
+
+/-- Traces that each agree with `X` on the gates `S` splice to one that does too. -/
+theorem splice_agree {X : C.Trace} {Y : Fin n → C.Trace} {S : Finset (Fin C.N)} (hY : ∀ u, ∀ g ∈ S, Y u g = X g) :
+    ∀ g ∈ S, P.splice X Y g = X g := by
+  intro g hg
+  cases hu : P.unit g with
+  | none => exact P.splice_of_none hu
+  | some u => rw [P.splice_of_unit hu]; exact hY u g hg
+
+open Classical in
+/-- The units with a committed input or output among the gates `S` outside the opened gates `O`. -/
+noncomputable def unopened (S O : Finset (Fin C.N)) : Finset (Fin n) :=
+  univ.filter fun u => ∃ g ∈ P.io u, g ∈ S ∧ g ∉ O
+
+theorem unopened_self (S : Finset (Fin C.N)) : P.unopened S S = ∅ := by
+  classical
+  ext u
+  simp [unopened]
+
+theorem gates_nonempty_of_io {u : Fin n} {g : Fin C.N} (hg : g ∈ P.io u) : (P.gates u).Nonempty := by
+  obtain ⟨-, h | ⟨h, hh, -⟩⟩ := Finset.mem_filter.1 hg
+  · exact ⟨g, Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩⟩
+  · exact ⟨h, Finset.mem_filter.2 ⟨Finset.mem_univ _, hh⟩⟩
+
+theorem gates_nonempty_of_unopened {S O : Finset (Fin C.N)} {u : Fin n} (hu : u ∈ P.unopened S O) :
+    (P.gates u).Nonempty := by
+  obtain ⟨g, hg, -⟩ := (Finset.mem_filter.1 hu).2
+  exact P.gates_nonempty_of_io hg
+
+theorem gates_nonempty_of_incorrect {X : C.Trace} {u : Fin n} (hu : u ∈ P.incorrect X) : (P.gates u).Nonempty := by
+  classical
+  simp only [incorrect, Correct, Finset.mem_filter, Finset.mem_univ, true_and, not_forall] at hu
+  obtain ⟨g, -, h, -⟩ := hu
+  exact ⟨g, Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩⟩
+
 namespace Refines
 
 variable {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc} (r : Refines Pf Pc)
@@ -289,6 +339,47 @@ theorem card_incorrect_le {X Y : C.Trace} (hY : ∀ g ∈ Pc.committed, Y g = X 
         obtain ⟨v, hv, hvw⟩ := r.exists_incorrect_fine hY hu
         exact Finset.mem_image.2 ⟨v, hvw, hv⟩
     _ ≤ (Pf.incorrect Y).card := Finset.card_image_le
+
+/-- A fine unit's committed input or output outside its coarse unit is a coarse committed wire. -/
+theorem mem_committed_of_io {v : Fin nf} {g : Fin C.N} (hg : g ∈ Pf.io v) (hk : Pc.unit g ≠ some (r.parent v)) :
+    g ∈ Pc.committed := by
+  simp only [io, Finset.mem_filter] at hg
+  rcases hg.2 with hv | ⟨h, hh, hgh⟩
+  · exact absurd (by rw [r.sub g, hv]; rfl : Pc.unit g = some (r.parent v)) hk
+  · exact Pc.mem_committed_of_read hgh (by rw [r.sub h, hh]; simpa using Ne.symm hk)
+
+/-- Inside coarse unit `k`, a fine unit whose coarse committed inputs and outputs are all opened holds in the splice
+what it holds in `Y k`. -/
+theorem splice_io {X : C.Trace} {Y : Fin nc → C.Trace} {O : Finset (Fin C.N)} (hY : ∀ k, ∀ g ∈ O, Y k g = X g)
+    {v : Fin nf} (hv : ∀ g ∈ Pf.io v, g ∈ Pc.committed → g ∈ O) :
+    ∀ g ∈ Pf.io v, Pc.splice X Y g = Y (r.parent v) g := by
+  intro g hg
+  by_cases hk : Pc.unit g = some (r.parent v)
+  · exact Pc.splice_of_unit hk
+  · have hO := hv g hg (r.mem_committed_of_io hg hk)
+    rw [Pc.splice_agree hY g hO, hY _ g hO]
+
+/-- **Gluing**: fine traces `Y k` that each agree with `X` on the opened gates `O` splice to one fine trace that
+agrees with `X` there and has, inside every coarse unit `k`, exactly `Y k`'s incorrect fine units, beside those with a
+coarse committed wire left unopened. The best interior for one coarse unit does not depend on the others'. -/
+theorem glue {X : C.Trace} {Y : Fin nc → C.Trace} {O : Finset (Fin C.N)} (hY : ∀ k, ∀ g ∈ O, Y k g = X g) :
+    (∀ g ∈ O, Pc.splice X Y g = X g) ∧
+      ∀ k, (Pf.unopened Pc.committed O ∪ Pf.incorrect (Pc.splice X Y)).filter (r.parent · = k) =
+        (Pf.unopened Pc.committed O ∪ Pf.incorrect (Y k)).filter (r.parent · = k) := by
+  classical
+  refine ⟨Pc.splice_agree hY, fun k => ?_⟩
+  ext v
+  simp only [Finset.mem_filter, Finset.mem_union]
+  refine and_congr_left fun hk => ?_
+  by_cases hu : v ∈ Pf.unopened Pc.committed O
+  · simp only [hu, true_or]
+  simp only [hu, false_or]
+  have hv : ∀ g ∈ Pf.io v, g ∈ Pc.committed → g ∈ O := fun g hg hc => by
+    by_contra hO
+    exact hu (by simp only [unopened, Finset.mem_filter, Finset.mem_univ, true_and]; exact ⟨g, hg, hc, hO⟩)
+  have h := r.splice_io hY hv
+  rw [Pf.mem_incorrect, Pf.mem_incorrect, ← hk]
+  exact not_congr ⟨fun hc => Pf.correct_congr (fun g hg => (h g hg).symm) hc, fun hc => Pf.correct_congr h hc⟩
 
 end Refines
 

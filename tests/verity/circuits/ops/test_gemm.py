@@ -243,6 +243,32 @@ def test_the_s8_coordinate_scales_as_steps_int8_linear_and_the_row_is_its_coordi
     assert np.array_equal(accw.astype(np.uint32).view(np.int32), acc[:, 0])
 
 
+def test_the_s8_row_on_u16_words_is_the_row_on_the_codes_and_scales_they_hold() -> None:
+    import numpy as np
+
+    from verity.circuits import evaluation as E
+
+    rng = np.random.default_rng(37)
+    n, K, N = 200, 64, 3
+    x = rng.integers(-128, 128, (n, K)).astype(np.int8)
+    w = rng.integers(-128, 128, (n, N, K)).astype(np.int8)
+    sx = (np.abs(rng.standard_normal(n)) / 127).astype(np.float32)
+    sw = (np.abs(rng.standard_normal((n, N))) * 0.02 / 127).astype(np.float32)
+
+    def words(a, m):
+        b = np.ascontiguousarray(a).view(np.uint8).reshape(n, N, m, 2).astype(np.uint16)
+        return b[..., 0] | b[..., 1] << 8
+
+    want = E.evaluate_batch(bind(G.ScaledMmS8, K=K, N=N, **G.GEMM_SM120_S8), x.view(np.uint8), sx.view(np.uint32),
+                            w.view(np.uint8), sw.view(np.uint32), kernel="reference")
+    got = E.evaluate_batch(bind(G.ScaledMmS8V3, K=K, N=N, **G.GEMM_SM120_S8), x.view(np.uint8), sx.view(np.uint32),
+                           words(w, K // 2), words(sw[:, :, None], 2), kernel="reference")
+    assert np.array_equal(got, want)
+    assert not np.array_equal(E.evaluate_batch(bind(G.ScaledMmS8V3, K=K, N=N, **G.GEMM_SM120_S8), x.view(np.uint8),
+                                               sx.view(np.uint32), words(w, K // 2).byteswap(), words(sw[:, :, None], 2),
+                                               kernel="reference"), want)
+
+
 def test_the_row_split_s8_coordinate_is_the_coordinate_on_its_parts_concatenated() -> None:
     """`ScaledMmS8CoordinateRows_v1{K, R}` is `ScaledMmS8Coordinate_v1{K}` on x's and W's row's R parts, for R = 1, 2 and 4.
     At K = 65,536 (the demo's MLP down projection) R = 2 makes each s8 operand one `SIZE_CLASS_MAX` row, where the unsplit

@@ -22,11 +22,14 @@ import types
 from fractions import Fraction
 from pathlib import Path
 from typing import ClassVar
+from unittest.mock import patch
 
 import numpy as np
 import pytest
+from verity.commitments import docket_digest as DD
+from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as PCU
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+from verity_torch.pouw.pearl_c import ends as ENDS
 from verity_torch.pouw.pearl_c import host as PH
 from verity_torch.pouw.pearl_c import served_y_device as SYD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
@@ -37,6 +40,7 @@ from verity.commitments import MerkleTree
 from verity.commitments.merkle import tree_levels
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
+    HM96_SALT,
     HM96_TRANSCRIPT,
     HM96_WEIGHTS,
     ROW_SCHEMA,
@@ -45,6 +49,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     Workload,
     activation_binding,
     commit_rows,
+    fresh_salts,
     hm96_kernel_constants,
     hm96_salt,
     opened_value,
@@ -65,6 +70,8 @@ from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pea
 from verity.protocols.resource_accounting.compute.pouw.verifier.serving import SchemeId
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
+from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import names as kernel_names
 from verity_torch.pouw.pearl_c import run_device as PPDR
 
 torch = pytest.importorskip("torch")
@@ -78,7 +85,11 @@ KERNEL = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resourc
 POUW = (Path(__file__).resolve().parents[3] / "benchmarks" / "pouw")
 SCHEME = "pearl-c-sm120-v1-h3"
 SEED = bytes(range(32))
-SALT_KEY = bytes(range(100, 132))
+
+
+def salts_b(weights) -> dict[int, bytes]:
+    """Each weight's B-row salts as a registration would hand them, seeded so two runs over the same weights share them."""
+    return {w: hashlib.shake_256(b"salts_b %d" % w).digest(HM96_SALT * t.shape[0]) for w, t in weights.items()}
 RUN = "r20260930-120000-test"
 
 
@@ -110,7 +121,7 @@ F = load("pearl_c_sm120_fixture", POUW / "pearl_c_sm120" / "fixture.py")
 VR = load("pearl_c_vllm_verify_run", POUW / "pearl_c_vllm" / "verify_run.py")
 SD = load("pearl_c_vllm_served_inert_work", POUW / "pearl_c_vllm" / "served_inert_work.py")
 #: the device path's schemes whose device record is a variant of KERNEL's pipeline (pearl_c_sm90 runs h100's)
-KERNEL_SCHEMES = sorted(s for s in PPD.SCHEMES if SchemeId.parse(s).device in R.VARIANT_G)
+KERNEL_SCHEMES = sorted(s for s in kernel_names("pearl-c") if SchemeId.parse(s).device in R.VARIANT_G)
 
 
 def bf16_words(rng, rows: int, k: int, scale: float = 1.0) -> np.ndarray:
@@ -164,7 +175,7 @@ def test_an_unsure_row_is_decided_exactly():
 
 @pytest.mark.parametrize("scheme", KERNEL_SCHEMES)
 def test_call_keys_are_the_fixtures_keys_of(scheme):
-    s = PPD.scheme_of(scheme)
+    s = pouw_schemes.get(scheme)
     roots = {0: bytes([1]) * 32, 1: bytes([2]) * 32}
     work = Workload((Matmul(0, Shape(16, 1024, 256), 0), Matmul(1, Shape(16, 1024, 128), 1)))
     epoch = Epoch.unverified(work, roots, SEED)
@@ -227,14 +238,15 @@ def device_run():
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     kernel = PPD.Kernel(R, RecordingDev(), "0" * 64)
-    roots = PPDR.weight_roots(kernel, weights, SCHEME, salt_key=SALT_KEY)
+    roots = PPDR.weight_roots(kernel, weights, SCHEME, weight_salts=salts_b(weights))
     declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
     coins = salt_coin(roots)
     salt = Epoch.start(declared, roots, *coins).salt
 
     def make(hashing=True, schedule="serial", flag_rows=PPD.FLAG_ROWS, **kw):
-        return PPDR.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, hashing=hashing,
-                                   capacity=1 << 12, schedule=schedule, flag_rows=flag_rows, salt_key=SALT_KEY, **kw)
+        return PPDR.PearlCDeviceRun(pouw_schemes.get(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, hashing=hashing,
+                                   capacity=1 << 12, schedule=schedule, flag_rows=flag_rows,
+                                   weight_salts=salts_b(weights), **kw)
     return make, kernel, weights, roots, salt
 
 
@@ -270,6 +282,25 @@ def test_each_call_runs_the_pipelines_call_steps_at_its_offset_and_keys(device_r
     assert dev.log[-2][3] == (0, 10)
     assert out["units"] == 3 and out["tiles"] == 10 and len(out["transcript_root"]) == 128
     assert run.commits["transcript_root"] == out["transcript_root"]
+
+
+def test_the_transcripts_leaves_are_hashed_under_its_salts_with_their_length_stated(device_run, monkeypatch):
+    """A pass's end hands `hm_level0` the transcript's salts buffer and its length, `HM_SALT` bytes a tile, so the kernels'
+    own refusal of a wrong length guards it, and its hm_leaves launch reads that buffer."""
+    make, kernel, weights, *_ = device_run
+    run = make()
+    run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+    given, level0 = [], R.Pipeline.hm_level0
+
+    def spy(p, tag, *a, **kw):
+        given.append((tag, kw))
+        return level0(p, tag, *a, **kw)
+    monkeypatch.setattr(R.Pipeline, "hm_level0", staticmethod(spy))
+    kernel.dev.log.clear()
+    tiles = run.end()["tiles"]
+    (tag, kw), = given
+    assert tag == "t" and kw["salt_bytes"] == R.HM_SALT * tiles
+    assert [p[2] for n, _, p, _ in kernel.dev.log if n == "hm_leaves"] == [kw["salts"]]
 
 
 def test_a_call_over_whole_128_row_tiles_runs_the_128_tile_chain(device_run):
@@ -370,8 +401,43 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
     assert (tmp_path / man["weights"]["0"]["rows"]["path"]).stat().st_size == 2 * 256 * 1024
     for u in man["matmuls"]:
         y, tree = (tmp_path / u["y"]["rows"]["path"]).read_bytes(), (tmp_path / u["y"]["tree"]["path"]).read_bytes()
-        root, want = SY.commit_y(y, u["n"], salt, u["index"], SALT_KEY)
+        root, want = SY.commit_y(y, u["n"], salt, u["index"], split_salts((tmp_path / u["y"]["salts"]["path"]).read_bytes()))
         assert len(y) == 2 * u["real_rows"] * u["n"] and tree == want and u["y"]["root"] == root.hex() == tree[-64:].hex()
+
+
+def test_a_retained_pass_refuses_a_weight_tree_whose_root_moved_after_the_build(device_run, tmp_path):
+    """A retained pass writes each weight's tree from the device beside the build's root: a tree_b whose root bytes were
+    written after the build is refused by the weight's name before any of the pass's last files is written, and an
+    untouched one is retained."""
+    make, _, weights, roots, _ = device_run
+    for touched in (True, False):
+        run = make()
+        d = tmp_path / str(touched)
+        run.begin(retain=str(d))
+        run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+        if touched:
+            run.weights[1].b["tree_b"][-64:] ^= 0x5A
+            with pytest.raises(ValueError, match=r"weight 1's tree on the device roots at [0-9a-f]{16}, not its build's "
+                                                  f"{roots[1].hex()[:16]}: its tree_b was written after the build"):
+                run.end()
+            assert not (d / "weights").exists() and not (d / "leaves").exists()
+        else:
+            man = json.loads(Path(run.end()["manifest"]).read_text())
+            assert (d / man["weights"]["1"]["tree"]["path"]).read_bytes()[-64:] == roots[1]
+
+
+@pytest.mark.parametrize("dtype", ["float16", "float32"])
+def test_the_weight_build_refuses_a_weight_that_is_not_bfloat16(device_run, dtype):
+    """Pearl+ commits a weight's FP32 words and retains its rows as BF16, so a weight in another format (whose words BF16
+    does not hold) is refused by name and dtype, by `weight_roots` and by a run's own build, before either allocates."""
+    make, kernel, weights, roots, _ = device_run
+    bad = {0: weights[0].to(getattr(torch, dtype)), 1: weights[1]}
+    refusal = f"weight 0 is torch.{dtype}: Pearl\\+ commits a weight's FP32 words and retains its rows as BF16"
+    with pytest.raises(ValueError, match=refusal):
+        PPDR.weight_roots(kernel, bad, SCHEME, weight_salts=salts_b(bad))
+    with pytest.raises(ValueError, match=refusal):
+        PPDR.PearlCDeviceRun(pouw_schemes.get(SCHEME), f"pouw:{SCHEME}", kernel, bad, roots, *salt_coin(roots),
+                             capacity=1 << 12, weight_salts=salts_b(bad))
 
 
 def test_a_retained_call_given_its_y_tree_retains_that_tree_and_never_makes_one(device_run, tmp_path, monkeypatch):
@@ -383,10 +449,12 @@ def test_a_retained_call_given_its_y_tree_retains_that_tree_and_never_makes_one(
     run.begin(retain=str(tmp_path))
     retained, given = run._retained, {}
 
-    def with_tree(cur, mm, m, flags, xa, tree, y=None, y_tree=None):
-        honest = SY.commit_y(PPDR._bytes(y.contiguous().view(torch.uint8)), y.shape[1], salt, mm.index, SALT_KEY)[1]
+    def with_tree(cur, mm, m, flags, xa, tree, salts, y=None, y_tree=None, y_salts=None):
+        ys = fresh_salts(y.shape[0])
+        honest = SY.commit_y(PPDR._bytes(y.contiguous().view(torch.uint8)), y.shape[1], salt, mm.index, ys)[1]
         given[mm.index] = bytes([0xA5]) * len(honest) if given else honest
-        return retained(cur, mm, m, flags, xa, tree, y=y, y_tree=torch.frombuffer(bytearray(given[mm.index]), dtype=torch.uint8))
+        return retained(cur, mm, m, flags, xa, tree, salts, y=y,
+                        y_tree=torch.frombuffer(bytearray(given[mm.index]), dtype=torch.uint8), y_salts=torch.frombuffer(bytearray(b"".join(ys)), dtype=torch.uint8))
     monkeypatch.setattr(run, "_retained", with_tree)
     monkeypatch.setattr(SYD, "y_tree", lambda *_: pytest.fail("a given y tree is never made again"))
     run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
@@ -438,7 +506,8 @@ def test_a_retained_calls_files_are_written_behind_it_and_the_passs_end_joins_th
     assert (tmp_path / "ok" / u["y"]["rows"]["path"]).read_bytes() == served
     ytree = (tmp_path / "ok" / u["y"]["tree"]["path"]).read_bytes()
     assert u["y"]["tree"]["sha256"] == hashlib.sha256(ytree).hexdigest()
-    assert u["y"]["root"] == ytree[-64:].hex() == SY.commit_y(served, 256, run.salt, index, run.salt_key)[0].hex()
+    assert u["y"]["root"] == ytree[-64:].hex() == SY.commit_y(served, 256, run.salt, index, split_salts(
+        (tmp_path / "ok" / u["y"]["salts"]["path"]).read_bytes()))[0].hex()
 
     def fails(path, *_):
         raise OSError(f"no space left for {path.name}")
@@ -468,37 +537,96 @@ def test_a_retained_pass_starts_from_poisoned_outputs_and_omit_drops_a_step(devi
 
 
 def test_the_e2e_gate_fails_a_device_that_writes_nothing(device_run):
-    """On the recording stand-in nothing is written, so every pass commits the poison: the repeat holds, and only the negative
-    control (the call with its tile leaves omitted) can tell. It must, for every shape."""
+    """On the recording stand-in nothing is written, so every pass's tile digests are the poison: the repeat holds, and
+    the negative control (the call with its tile leaves omitted) and the fresh salts' differing roots must tell, for every
+    shape."""
     make, _, weights, *_ = device_run
     E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
     rows = E2E.gate(make(), weights)
     calls = [r for r in rows if r["check"] == "call"]
     assert [(r["n"], r["m"]) for r in calls] == [(256, 8192), (256, 32), (128, 8192), (128, 32)]
-    assert all(r["commitment_repeats"] and not r["omitted_leaves_rejected"] and not r["ok"] for r in calls)
+    assert all(r["digests_repeat"] and not r["omitted_leaves_rejected"] and not r["salts_fresh"] and not r["ok"]
+               for r in calls)
     (check,) = [r for r in rows if r["check"] == "screen"]
     assert check["ok"] and check["flags_equal"] and check["screen"] == "torch"
 
 
+def test_the_call_check_compares_under_the_salt():
+    """`call_verdict`: with every leaf's salt fresh, the same call twice passes on equal tile digests under different
+    roots; equal roots (salts not fresh), differing digests (a call that isn't deterministic) and an omitted call whose
+    digests are the first's (leaves the call didn't write) each fail; y beyond `ERR` fails; a call without hashing checks
+    y alone."""
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
+    a, b, omitted = ({"transcript_root": r, "digests": d} for r, d in ((b"r1", b"d"), (b"r2", b"d"), (b"r3", b"\xa5")))
+    assert E2E.call_verdict([a, b, omitted], 0.05)["ok"]
+    assert not E2E.call_verdict([a, b, omitted], 0.09)["ok"]
+    got = E2E.call_verdict([a, {**b, "transcript_root": b"r1"}, omitted], 0.05)
+    assert not got["ok"] and not got["salts_fresh"] and got["digests_repeat"]
+    got = E2E.call_verdict([a, {**b, "digests": b"e"}, omitted], 0.05)
+    assert not got["ok"] and not got["digests_repeat"]
+    got = E2E.call_verdict([a, b, {**omitted, "digests": b"d"}], 0.05)
+    assert not got["ok"] and not got["omitted_leaves_rejected"]
+    assert E2E.call_verdict([{"units": 1}], 0.05)["ok"] and not E2E.call_verdict([{"units": 1}], 0.09)["ok"]
+
+
+def test_the_whole_check_compares_a_pass_without_hashing():
+    """`unsalted` of a pass ended without hashing, which has no transcript root, no tiles and no leaves (the gate's second
+    pass, `--whole-step`): its units and tiles under the digest of nothing, with `run.leaves` unread."""
+    import hashlib
+    from types import SimpleNamespace
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
+    ended = {"units": 3, "base": 0, "tiles": 0, "hashing": False, "schedule": "serial"}
+    assert E2E.unsalted(SimpleNamespace(nb=64), ended) == {"digests": hashlib.sha512(b"").hexdigest(), "units": 3, "tiles": 0}
+    with pytest.raises(KeyError, match="transcript_root"):
+        E2E.under_salt(SimpleNamespace(nb=64), ended)
+
+
 def test_the_whole_retained_check_names_the_first_call_and_field_that_differ(tmp_path):
-    """`retained_differences`: two retained passes the same but for one call's A tree names that call, its matmul and
+    """`retained_differences`: two retained passes the same but for one call's A rows names that call, its matmul and
     its entry's differing field, and the one file on disk; two passes the same are ok."""
     from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
     E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
     mms = [Matmul(i, Shape(16, 2048, 3072), 7 + i) for i in range(3)]
-    files = [{"rows": {"path": f"calls/{i}.rows.bf16", "bytes": 4}, "tree": {"path": f"calls/{i}.tree", "bytes": 8, "sha256": "a"}}
-             for i in range(3)]
-    moved = [*files[:1], {**files[1], "tree": {**files[1]["tree"], "sha256": "b"}}, *files[2:]]
+    files = [{"rows": {"path": f"calls/{i}.rows.bf16", "bytes": 4, "sha256": "a"}} for i in range(3)]
+    moved = [*files[:1], {**files[1], "rows": {**files[1]["rows"], "sha256": "b"}}, *files[2:]]
     dirs = [tmp_path / "eager", tmp_path / "replayed"]
-    for d, tree in zip(dirs, (b"x", b"y"), strict=True):
+    for d, rows in zip(dirs, (b"x", b"y"), strict=True):
         (d / "calls").mkdir(parents=True)
-        (d / "calls" / "1.tree").write_bytes(tree)
+        (d / "calls" / "1.rows.bf16").write_bytes(rows)
     want, got = ([None] * 3, files, {"tiles": 3}, mms), ([None] * 3, moved, {"tiles": 3}, mms)
     assert E2E.retained_differences(want, got, dirs) == {
-        "ok": False, "disk": {"differ": 1, "first": ["calls/1.tree"]},
+        "ok": False, "disk": {"differ": 1, "first": ["calls/1.rows.bf16"]},
         "call_files": {"calls": [3, 3], "first": 1, "matmul": {"index": 1, "shape": [16, 2048, 3072], "weight": 8},
-                       "fields": ["tree.sha256"]}}
+                       "fields": ["rows.sha256"]}}
     assert E2E.retained_differences(want, want, [dirs[0], dirs[0]]) == {"ok": True}
+
+
+def test_the_whole_retained_check_sets_aside_what_fresh_salts_make_differ(tmp_path):
+    """Each pass draws its own salts, so two retained passes of the same calls differ in A's tree and salts and y's root,
+    tree and salts, in their entries and on disk: `retained_differences` passes them, and still names a y rows file that
+    differs."""
+    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
+    mms = [Matmul(0, Shape(16, 2048, 3072), 7)]
+
+    def call(tag: str, y_rows: str = "r") -> dict:
+        return {"rows": {"path": "calls/0.rows.bf16", "bytes": 4},
+                "tree": {"path": "calls/0.tree", "bytes": 8, "sha256": tag}, "salts": {"path": "calls/0.salts", "bytes": 4},
+                "y": {"root": tag, "rows": {"path": "y/0.rows.bf16", "bytes": 4, "sha256": y_rows},
+                      "tree": {"path": "y/0.tree", "bytes": 8, "sha256": tag}, "salts": {"path": "y/0.salts", "bytes": 4}}}
+    dirs = [tmp_path / "eager", tmp_path / "replayed"]
+    for d, salt in zip(dirs, (b"s", b"t"), strict=True):
+        for sub in ("calls", "y"):
+            (d / sub).mkdir(parents=True)
+            (d / sub / "0.rows.bf16").write_bytes(b"rows")
+            for name in ("0.tree", "0.salts"):
+                (d / sub / name).write_bytes(salt)
+    want = ([None], [call("a")], {"digests": "d", "units": 1, "tiles": 1}, mms)
+    assert E2E.retained_differences(want, ([None], [call("b")], want[2], mms), dirs) == {"ok": True}
+    (dirs[1] / "y" / "0.rows.bf16").write_bytes(b"rowz")
+    got = E2E.retained_differences(want, ([None], [call("b", "q")], want[2], mms), dirs)
+    assert got["disk"] == {"differ": 1, "first": ["y/0.rows.bf16"]} and got["call_files"]["fields"] == ["y.rows.sha256"]
+    assert not E2E.retained_differences(want, ([None], [call("a")], {**want[2], "digests": "e"}, mms), dirs)["ok"]
 
 
 def test_a_retained_pass_is_read_after_its_end_fills_its_records_in():
@@ -513,292 +641,80 @@ def test_a_retained_pass_is_read_after_its_end_fills_its_records_in():
         return {"tiles": 2, "manifest": "m"}
 
     run = types.SimpleNamespace(cur=cur, end=end)
-    assert E2E.retained_end(run, ("tiles",)) == (["first", "behind"], [{}, {}], {"tiles": 2}, [0, 1])
+    assert E2E.retained_end(run, lambda _, e: {"tiles": e["tiles"]}) == (["first", "behind"], [{}, {}], {"tiles": 2}, [0, 1])
 
 
-# ---- one pass per engine step, through the PoUW option (`Option.end_pass`) ---------------------------------------------
+# ---- one pass per engine step, through Pearl+ attached by name (`pouw.scheme.Attached`) ---------------------------------
 
-class _Linear:
-    """A stand-in for vLLM's ``LinearBase``: its weight and its own ``quant_method``, which the PoUW option executes."""
+def seeded_device_salts(monkeypatch, seed=11):
+    """Every salt the device run draws (A's and the tiles', `host.fresh_into`, wherever imported; y's) from streams seeded
+    with `seed`, so two runs making the same calls draw the same salts and commit the same bytes."""
+    import sys
 
-    def __init__(self, weight):
-        self.weight, self.quant_method = weight, types.SimpleNamespace(apply=None)
+    rng, ys = random.Random(f"{seed} fresh_into"), random.Random(f"{seed} y")
 
-
-class _Model:
-    def __init__(self, weights):
-        self.layers = [_Linear(weights[w]) for w in sorted(weights)]
-
-    def modules(self):
-        return iter(self.layers)
-
-
-class _Engine:
-    """A stand-in for vLLM's ``llm_engine``: each `step` runs its step's calls, (weight, rows), through the model's linears,
-    as the step's forward does, on rows sampled from `seed`."""
-
-    def __init__(self, model, steps, seed=0):
-        self.model, self.steps, self.rng, self.at = model, steps, np.random.default_rng(seed), 0
-
-    def step(self):
-        for w, m in self.steps[self.at]:
-            layer = self.model.layers[w]
-            x = torch.from_numpy(bf16_words(self.rng, m, layer.weight.shape[1]).view(np.float32).copy()).to(torch.bfloat16)
-            layer.quant_method.apply(layer, x)
-        self.at += 1
-        return []
+    def fresh_into(dst, n, raw=None):
+        dst[:HM96_SALT * n].copy_(torch.frombuffer(bytearray(rng.randbytes(HM96_SALT * n)), dtype=torch.uint8))
+    for name in ("ends", "graphs", "grouped", "host", "lanes_device", "run_device", "whole_calls"):
+        mod = sys.modules.get(f"verity_torch.pouw.pearl_c.{name}")
+        if hasattr(mod, "fresh_into"):
+            monkeypatch.setattr(mod, "fresh_into", fresh_into)
+    monkeypatch.setattr(SYD, "fresh_salts", lambda m: [ys.randbytes(HM96_SALT) for _ in range(m)])
 
 
-def _served(monkeypatch, kernel, weights, more=None, **run):
-    """`weights` served under the PoUW option as `verity_vllm.LLM` installs it (`protocol_options.install`), on `kernel`,
-    with the execution phase's coins from a seeded challenger, the further pouw settings `more` and the hm96 key `SALT_KEY` (an
-    install samples a fresh one, so two installs compared byte for byte share it); `run` overrides the device run's buffer
+class _Steps:
+    """Pearl+ attached by name (`pouw.scheme.Attached`) over `weights` on `kernel`, as an engine's exchange drives it: the
+    weights registered, then each `step` its calls (weight, rows) as the step's blocks (`BlockDue`, through
+    `Attached.kernel`) between its `StepBegan` (its slots the step's most rows) and its `StepComputed` and `StepEnded`, on
+    rows sampled from `seed`.  Its coins are in-process from a seeded challenger, the weights' B salts `salts_b`, every other
+    fresh salt `seeded_device_salts`'; ``more`` are further Pearl+ settings and ``run`` overrides the device run's buffer
     sizes."""
-    import functools
 
-    from verity_vllm import protocols as PO
-    from verity_vllm.protocols import pouw
-    monkeypatch.setattr(pouw, "linear_types", lambda: (_Linear,))
-    monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: kernel))
-    monkeypatch.setattr(pouw, "pearl_c_salt_key", lambda scheme: SALT_KEY)
-    if run:
-        monkeypatch.setattr(pouw, "PearlCDeviceRun", functools.partial(PPDR.PearlCDeviceRun, **run))
-    model = _Model(weights)
-    settings = {"pouw": {"coins": Challenger(0, random.Random(7).randbytes), "device": "cuda", "kernel": "k", **(more or {})}}
-    comp = PO.install(model, PO.Context(stage="serve", enabled=(f"pouw:{SCHEME}",), settings=settings))
-    return model, comp, comp.get("pouw")
+    def __init__(self, monkeypatch, kernel, weights, steps, more=None, seed=0, **run):
+        import functools
 
+        from verity import hooks as H
+        from verity.protocols.resource_accounting.compute.pouw import scheme as PP
+        from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
+        from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
 
-def _per_step(engine, end):
-    """`engine.step` wrapped so that `end` closes each step's pass; each step's commitment, with the bytes it commits (the
-    tile leaves, A's roots and the screen's flags), in order."""
-    from verity_vllm.engine.hooks import Hooks
-    hooks, out = Hooks(), []
+        monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: kernel))
+        seeded_device_salts(monkeypatch)
+        by_rows = {weights[w].shape[0]: b for w, b in salts_b(weights).items()}
+        monkeypatch.setattr(SV, "fresh_salts", lambda m: [by_rows[m][i * HM96_SALT:(i + 1) * HM96_SALT] for i in range(m)],
+                            raising=False)
+        monkeypatch.setattr(verifier, "coins", random.Random(7).randbytes)
+        monkeypatch.setattr(PPDR, "PearlCDeviceRun", functools.partial(PPDR.PearlCDeviceRun, **run))
+        self.H, self.weights, self.steps, self.rng, self.at = H, weights, steps, np.random.default_rng(seed), 0
+        self.scheme = PP.Attached({"settings": {"kernel": "k", "coins": "in-process", **(more or {})}})
+        self.scheme.registered(H.RegisteredValues(tuple((f"l{w}.weight", t) for w, t in weights.items()), 0,
+                                                  {f"l{w}.weight": w for w in weights}))
 
-    def make(original):
-        def step(*a, **kw):
-            run, got, served = end(original, a, kw)
-            out.append({**got, "leaves": PPDR._bytes(run.leaves[:run.nb * got["tiles"]]),
-                        "roots_a": PPDR._bytes(run.roots_buf[:run.nb * got["units"]]),
-                        "flags": PPDR._bytes(run.flag_buf[:got.get("screened_rows", 0)].contiguous().view(-1))})
-            return served
-        return step
-    hooks.wrap(engine, "step", make)
-    return hooks, out
-
-
-def _reach_in(option):
-    """The per-step pass as benchmarks' harness made it before `Option.end_pass` (`verity_bench`'s ``_pass_per_step``): the
-    device run found through the option's private ``release``, a pass begun before each engine step and ended after it."""
-    run = option.release.__self__
-
-    def end(original, a, kw):
-        run.begin()
-        served = original(*a, **kw)
-        return run, run.end(), served
-    return end
-
-
-def _end_pass(option):
-    def end(original, a, kw):
-        served = original(*a, **kw)
-        return option.end_pass.__self__, option.end_pass(), served
-    return end
-
-
-#: engine steps, each its calls (weight, rows): prefill chunks, decodes, a step with no forward, a call over 128 rows
-SERVED_STEPS = [[(0, 40), (1, 40)], [(0, 3), (1, 3)], [], [(1, 130), (0, 17), (1, 17)], [(0, 1), (1, 1)], [(0, 64)]]
-
-
-@pytest.mark.parametrize("dev", ["recording", pytest.param("twin", marks=[
-    pytest.mark.slow, pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")])])
-def test_end_pass_commits_each_engine_step_as_the_per_step_reach_in_did(monkeypatch, tmp_path, dev):
-    """The PoUW option's `end_pass` at each engine step's end commits what the harness's reach-in (begin before the step, end
-    after it) committed: per step, the same pass commitment (transcript root, A roots' digest, units, tiles, screened,
-    failing and unsure rows), the same tile leaves, A roots and screen flags.  On ``twin`` the hash kernels run on the host
-    (`TwinDev`), so the roots are real; on ``recording`` nothing is written and only the counts and the flags differ by
-    step.  After close the passes are the steps' own: `end_pass` leaves the next pass open and empty, so `finish` ends
-    nothing twice."""
-    rng = np.random.default_rng(13)
-    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
-               for w, n in ((0, 256), (1, 128))}
-    got, pd = {}, HD.build(tmp_path) if dev == "twin" else None
-    for name, end in (("reach-in", _reach_in), ("end_pass", _end_pass)):
-        kernel = PPD.Kernel(R, TwinDev(pd) if dev == "twin" else RecordingDev(), "0" * 64)
-        model, comp, option = _served(monkeypatch, kernel, weights)
-        engine = _Engine(model, SERVED_STEPS)
-        hooks, out = _per_step(engine, end(option))
-        for _ in SERVED_STEPS:
-            engine.step()
-        hooks.uninstall()
-        got[name] = out, [dict(p) for p in option.details["passes"]], dict(option.commitment())
-        comp.close()
-        if name == "end_pass":
-            assert len(option.details["passes"]) == len(SERVED_STEPS)
-    (a, a_passes, a_commits), (b, b_passes, b_commits) = got["reach-in"], got["end_pass"]
-    assert [(p["units"], p["tiles"], p.get("screened_rows", 0)) for p in b] == [
-        (2, 6, 80), (2, 6, 6), (0, 0, 0), (3, 6 + 4 + 2, 164), (2, 6, 2), (1, 4, 64)]
-    assert a == b and a_passes == b_passes and a_commits == b_commits
-    if dev == "twin":
-        assert len({p["activation_roots"] for p in b if p["units"]}) == 5
-
-
-@pytest.mark.slow
-def test_a_long_served_run_ending_a_pass_each_engine_step_never_overflows(monkeypatch):
-    """A pass holds 32 tiles and 512 screened rows, and each step takes 24 tiles and 400 rows: with `end_pass` at each step's
-    end, 256 steps (6,144 tiles) each commit in a pass of their own; without it, the install's one pass overflows at the
-    second step, as served Pearl-C did within a few prefill steps (the default buffers hold 8M tiles and 4M rows). Its
-    length is the point: a few steps would not show a buffer that grows across passes."""
-    rng = np.random.default_rng(17)
-    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
-               for w, n in ((0, 256), (1, 128))}
-    steps = [[(0, 200), (1, 200)]] * 256
-    kernel = PPD.Kernel(R, RecordingDev(), "0" * 64)
-    model, comp, option = _served(monkeypatch, kernel, weights, capacity=32, flag_rows=512)
-    engine = _Engine(model, steps)
-    hooks, out = _per_step(engine, _end_pass(option))
-    for _ in steps:
-        engine.step()
-    hooks.uninstall()
-    comp.close()
-    assert [(p["units"], p["tiles"], p["screened_rows"]) for p in out] == [(2, 24, 400)] * len(steps)
-    assert len(option.details["passes"]) == len(steps)
-    model, comp, option = _served(monkeypatch, kernel, weights, capacity=32, flag_rows=512)
-    engine = _Engine(model, steps)
-    engine.step()
-    with pytest.raises(RuntimeError, match="over its capacity"):
-        engine.step()
-    comp.close()
-
-
-# ---- one pass per engine step, ended by the PoUW option itself at the model runner's step ----------------------------
-
-class _Runner:
-    """A stand-in for vLLM's ``GPUModelRunner``: ``execute_model`` runs one step's forward, `_Engine.step`'s calls."""
-
-    engine: ClassVar[_Engine | None] = None
-
-    def execute_model(self, scheduler_output=None):
-        return type(self).engine.step()
-
-
-def _runners(monkeypatch, *modules):
-    """vLLM's model runner modules as this process holds them once an engine is built (`pouw_pass.MODEL_RUNNERS`), each
-    with a fresh `_Runner` subclass, each module's a subclass of the one before; the classes, in order."""
-    out, base = [], _Runner
-    for mod in modules or ("vllm.v1.worker.gpu.model_runner",):
-        base = type("GPUModelRunner", (base,), {})
-        monkeypatch.setitem(sys.modules, mod, types.SimpleNamespace(GPUModelRunner=base))
-        out.append(base)
-    return out
-
-
-class _Core:
-    """A stand-in for vLLM's in-process engine core: each `step` schedules and calls the runner's ``execute_model`` once,
-    and nothing else touches the PoUW option (no harness wrapper, no ``end_pass``)."""
-
-    def __init__(self, runner, engine):
-        self.runner = runner
-        type(runner).engine = engine
+    def begin(self):
+        calls = self.steps[self.at]
+        self.scheme.step(self.H.StepBegan(self.at, slots=max((m for _, m in calls), default=0)))
+        return calls
 
     def step(self):
-        return self.runner.execute_model(object())
+        for w, m in self.begin():
+            weight = self.weights[w]
+            x = torch.from_numpy(bf16_words(self.rng, m, weight.shape[1]).view(np.float32).copy()).to(torch.bfloat16)
+            due = self.H.BlockDue(f"l{w}", w, {"m": m}, "bf16", {"x": x, "weight": weight}, self.at)
+            self.scheme.kernel(due, lambda _: None)
+        self.scheme.step(self.H.StepComputed(self.at))
+        self.scheme.step(self.H.StepEnded(self.at))
+        self.at += 1
 
-
-def _hooked(option):
-    def end(original, a, kw):
-        served = original(*a, **kw)
-        return option.end_pass.__self__, option.details["passes"][-1], served
-    return end
-
-
-@pytest.mark.parametrize("dev", ["recording", pytest.param("twin", marks=[
-    pytest.mark.slow, pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")])])
-def test_the_model_runner_hook_commits_each_engine_step_as_end_pass_did(monkeypatch, tmp_path, dev):
-    """Served with a model runner in the process, the PoUW option ends its pass when ``execute_model`` returns, so plain
-    serving commits per step exactly what `Option.end_pass` at each step's end committed without one: per step the same
-    commitment, tile leaves, A roots and screen flags, the same passes and the same commitment after close.  A caller that
-    still calls ``end_pass`` after each hooked step (benchmarks' harness) ends nothing: it gets the step's commitment back
-    and the passes stay the steps' own."""
-    rng = np.random.default_rng(13)
-    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
-               for w, n in ((0, 256), (1, 128))}
-    got, pd = {}, HD.build(tmp_path) if dev == "twin" else None
-    for name in ("end_pass", "hook", "hook and end_pass"):
-        with monkeypatch.context() as mp:
-            kernel = PPD.Kernel(R, TwinDev(pd) if dev == "twin" else RecordingDev(), "0" * 64)
-            runners = _runners(mp) if name != "end_pass" else []
-            model, comp, option = _served(mp, kernel, weights)
-            engine = _Engine(model, SERVED_STEPS)
-            stepper = _Core(runners[0](), engine) if runners else engine
-            hooks, out = _per_step(stepper, _hooked(option) if name == "hook" else _end_pass(option))
-            for _ in SERVED_STEPS:
-                stepper.step()
-            hooks.uninstall()
-            got[name] = out, [dict(p) for p in option.details["passes"]], dict(option.commitment())
-            assert option.details["pass_ends"].startswith("the caller's end_pass" if name == "end_pass" else "each engine step")
-            comp.close()
-            assert not runners or "execute_model" not in vars(runners[0])
-            assert len(option.details["passes"]) == len(SERVED_STEPS)
-    assert [(p["units"], p["tiles"], p.get("screened_rows", 0)) for p in got["hook"][0]] == [
-        (2, 6, 80), (2, 6, 6), (0, 0, 0), (3, 6 + 4 + 2, 164), (2, 6, 2), (1, 4, 64)]
-    assert got["end_pass"] == got["hook"] == got["hook and end_pass"]
-    if dev == "twin":
-        assert len({p["activation_roots"] for p in got["hook"][1] if p["units"]}) == 5
-
-
-def test_plain_serving_with_a_model_runner_never_overflows(monkeypatch):
-    """`test_a_long_served_run_ending_a_pass_each_engine_step_never_overflows` with nothing but the engine core's steps:
-    256 steps of 24 tiles and 400 rows, under a pass of 32 tiles and 512 rows, each commit in a pass of their own."""
-    rng = np.random.default_rng(17)
-    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
-               for w, n in ((0, 256), (1, 128))}
-    steps = [[(0, 200), (1, 200)]] * 256
-    (runner,) = _runners(monkeypatch)
-    model, comp, option = _served(monkeypatch, PPD.Kernel(R, RecordingDev(), "0" * 64), weights, capacity=32, flag_rows=512)
-    core = _Core(runner(), _Engine(model, steps))
-    for _ in steps:
-        core.step()
-    comp.close()
-    assert [(p["units"], p["tiles"], p["screened_rows"]) for p in option.details["passes"]] == [(2, 24, 400)] * len(steps)
-
-
-def test_a_manual_end_pass_ends_only_what_no_engine_step_ended(monkeypatch):
-    """The two ways a pass ends can't end one twice.  After a hooked step, ``end_pass`` returns that step's commitment and
-    ends nothing, however often it is called, and arguments it is given apply to the open pass.  A call made outside any
-    step is the caller's to end: ``end_pass`` ends it.  With V1's and V2's runner modules both loaded, V2's class a
-    subclass of V1's, each step still ends one pass, and a forward that raises leaves its calls in the open pass."""
-    rng = np.random.default_rng(19)
-    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
-               for w, n in ((0, 256), (1, 128))}
-    v1, v2 = _runners(monkeypatch, "vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
-    model, comp, option = _served(monkeypatch, PPD.Kernel(R, RecordingDev(), "0" * 64), weights)
-    run, passes = option.end_pass.__self__, option.details["passes"]
-    engine = _Engine(model, [[(0, 40)], [(1, 3)], [(0, 5), (1, 5)], [(0, 7)]])
-    core = _Core(v2(), engine)
-    core.step()
-    assert [(p["units"], p["tiles"]) for p in passes] == [(1, 4)]
-    assert option.end_pass() is passes[-1] and option.end_pass() is passes[-1] and len(passes) == 1
-    assert run.end_pass(run="r-next") is passes[-1] and (run.cur.run, run.cur.stepped, len(passes)) == ("r-next", True, 1)
-    core.step()
-    layer = model.layers[0]
-    layer.quant_method.apply(layer, torch.zeros(16, 1024, dtype=torch.bfloat16))
-    assert option.end_pass()["units"] == 1 and len(passes) == 3
-    engine.steps[2] = [(0, 5), (1, 5), (2, 5)]
-    with pytest.raises(IndexError):
-        core.step()
-    assert (len(passes), len(run.cur.matmuls)) == (3, 2)
-    engine.at = 3
-    core.step()
-    comp.close()
-    assert [p["units"] for p in passes] == [1, 1, 1, 3]
-    assert "execute_model" not in vars(v1) and "execute_model" not in vars(v2)
+    def release(self):
+        """The scheme released, as at serving's end; the run's details."""
+        self.scheme.release()
+        return self.scheme.life["summary"]
 
 
 @pytest.mark.parametrize("dev", ["recording", pytest.param("twin", marks=[
     pytest.mark.slow, pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")])])
 def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, dev):
-    """Plain serving (a model runner, nothing else ending passes) under ``transcript_dir``, three steps: each pass is one
+    """Pearl+ attached by name under ``transcript_dir``, three engine steps: each pass is one
     step's forward over every weight, retained in ``pass-NNNNN`` in the order the passes began (the one the install began
     first among them), its manifest's commitment the one it published and its calls the step's, numbered on from the last
     pass's (the execution phase's call indices, so the passes together hold each index once), its weights' files hard links to the
@@ -808,18 +724,15 @@ def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, d
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     steps = [[(0, 200), (1, 200)], [(0, 120), (1, 120)], [(0, 3), (1, 3)]]
-    kernel = PPD.Kernel(R, TwinDev(HD.build(tmp_path)) if dev == "twin" else RecordingDev(), "0" * 64)
-    (runner,) = _runners(monkeypatch)
+    kernel = PPD.Kernel(R90, H100TwinDev(HD.build(tmp_path)) if dev == "twin" else H100Dev(), "0" * 64)
     root = tmp_path / "passes"
-    model, comp, option = _served(monkeypatch, kernel, weights, {"transcript_dir": str(root)}, capacity=32, flag_rows=512)
-    core = _Core(runner(), _Engine(model, steps))
+    served = _Steps(monkeypatch, kernel, weights, steps, {"transcript_dir": str(root)}, capacity=32, flag_rows=512)
     for _ in steps:
-        core.step()
-    comp.close()
-    passes = option.details["passes"]
+        served.step()
+    passes = served.release()["passes"]
     assert [(p["units"], p["tiles"], p["screened_rows"]) for p in passes] == [(2, 24, 400), (2, 12, 240), (2, 6, 6)]
     assert [Path(p["manifest"]) for p in passes] == [root / f"pass-{i:05d}" / "manifest.json" for i in range(3)]
-    assert sorted(d.name for d in root.iterdir()) == [f"pass-{i:05d}" for i in range(3)]
+    assert sorted(d.name for d in root.iterdir() if d.is_dir()) == [f"pass-{i:05d}" for i in range(3)]
     mans = []
     for i, (p, step) in enumerate(zip(passes, steps)):
         man = json.loads(Path(p["manifest"]).read_text())
@@ -836,18 +749,20 @@ def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, d
 
 
 #: `_retained_files`' digest of the three steps below as the retention path wrote them when each call's copies, its record,
-#: y's root and the pass's files and manifest were all waited for in its step
-RETAINED_DIGEST = "87ec23c3532ef5596a14787aaf69d3983a4565cbe3ce55c95b24a6e0cde11485"
+#: y's root and the pass's files and manifest were all waited for in its step, under Pearl+'s kernel scheme
+#: (``pearl-c-h100-v1-h3``), every fresh salt `seeded_device_salts`'
+RETAINED_DIGEST = "5ab93ab77cd0f996a83ffcce36a8ac89ec0f8df4175c930caaa9b6b747c6751f"
 
 
 def _retained_files(root: Path) -> dict[str, str]:
-    """Every file under `root` and its bytes' SHA-256."""
-    return {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(root.rglob("*")) if p.is_file()}
+    """Every file of `root`'s passes (``pass-NNNNN``) and its bytes' SHA-256."""
+    return {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(root.glob("pass-*/**/*"))
+            if p.is_file()}
 
 
 def test_a_step_completed_behind_it_retains_the_bytes_a_waiting_end_retains(monkeypatch, tmp_path):
     """`PassEnds.retain_behind`: three served steps, each pass's files, records and manifest completed behind its step
-    (`retained_ends`, which the install's close waits for), retain every byte that ends completing them in the step do, the
+    (`retained_ends`, which the run's finish waits for), retain every byte that ends completing them in the step do, the
     same files as the path that waited for each call's copies (`RETAINED_DIGEST`); each file is the owner's alone (0600)
     and each directory of a pass too (0700)."""
     zeroed_y(monkeypatch)
@@ -858,19 +773,16 @@ def test_a_step_completed_behind_it_retains_the_bytes_a_waiting_end_retains(monk
     got, cls = {}, PPDR.PearlCDeviceRun
     for behind in (False, True):
         monkeypatch.setattr(cls, "retain_behind", behind)
-        (runner,) = _runners(monkeypatch)
         root = tmp_path / f"behind-{behind}"
-        model, comp, option = _served(monkeypatch, PPD.Kernel(R, RecordingDev(), "0" * 64), weights,
-                                      {"transcript_dir": str(root)}, capacity=32, flag_rows=512)
-        core = _Core(runner(), _Engine(model, steps))
+        served = _Steps(monkeypatch, PPD.Kernel(R90, H100Dev(), "0" * 64), weights, steps,
+                        {"transcript_dir": str(root)}, capacity=32, flag_rows=512)
         for _ in steps:
-            core.step()
-        comp.close()
-        assert all(p["manifest"] and p["excluded_rows"] is not None for p in option.details["passes"])
+            served.step()
+        assert all(p["manifest"] and p["excluded_rows"] is not None for p in served.release()["passes"])
         got[behind] = _retained_files(root)
-        modes = {p.stat().st_mode & 0o777 for p in root.rglob("*")}
+        modes = {p.stat().st_mode & 0o777 for p in root.glob("pass-*/**/*")} | {p.stat().st_mode & 0o777 for p in root.glob("pass-*")}
         assert modes == {0o600, 0o700}, sorted(map(oct, modes))
-    assert got[True] == got[False] and len(got[True]) == 3 * (1 + 2 + 2 * 2 * 2 + 2 * 2)
+    assert got[True] == got[False] and len(got[True]) == 3 * (1 + 3 + 2 * 2 * 3 + 2 * 3)
     assert hashlib.sha256(json.dumps(got[True], sort_keys=True).encode()).hexdigest() == RETAINED_DIGEST
 
 
@@ -881,23 +793,23 @@ def test_a_pass_poisons_again_only_the_shapes_a_call_took_since_the_last_poison(
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     steps = [[(0, 200), (1, 200)], [(0, 3), (1, 3)], [(0, 3), (1, 3)]]
-    (runner,) = _runners(monkeypatch)
-    model, comp, option = _served(monkeypatch, PPD.Kernel(R, RecordingDev(), "0" * 64), weights,
-                                  {"transcript_dir": str(tmp_path)}, capacity=32, flag_rows=512)
-    run, core, fills, fill = option.end_pass.__self__, _Core(runner(), _Engine(model, steps)), [], torch.Tensor.fill_
+    served = _Steps(monkeypatch, PPD.Kernel(R90, H100Dev(), "0" * 64), weights, steps,
+                    {"transcript_dir": str(tmp_path)}, capacity=32, flag_rows=512)
+    fills, fill = [], torch.Tensor.fill_
     monkeypatch.setattr(torch.Tensor, "fill_", lambda t, v: (fills.append(t.data_ptr()), fill(t, v))[1])
 
     def buffers(rows):
+        run = served.scheme.run
         return [t for (m16, _, _), sh in run.shapes.items() if (m16 > 16) == rows for t in run._buffers(sh)]
-    core.step()
+    served.step()
     big = buffers(True)
     assert big and {t.data_ptr() for t in big} <= set(fills)
     fills.clear()
-    core.step()
+    served.step()
     assert not {t.data_ptr() for t in big} & set(fills) and all(bool((t == 0xA5).all()) for t in big)
     assert {t.data_ptr() for t in buffers(False)} <= set(fills)
-    core.step()
-    comp.close()
+    served.step()
+    served.release()
 
 
 def test_the_record_decided_from_the_rows_bytes_is_the_devices(monkeypatch):
@@ -935,26 +847,44 @@ def test_the_pinned_ring_hands_out_disjoint_regions_and_frees_them_in_order(monk
     assert not ring.live and ring.take(1000)[0][:2] == [0, 1000]
 
 
+def test_an_attached_pearl_plus_after_its_first_step_holds_the_run_the_harness_gate_reads(monkeypatch):
+    """`Attached.run` after the first step with tokens is the device run `verity_bench.vllm.runner._pearl_c_gate` checks,
+    with every name that gate and `bench_arm.PearlCArm.gate` read on it, its ``weights_root`` in the commits the run
+    itself made."""
+    rng = np.random.default_rng(41)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    cls = PPDR.PearlCDeviceRun
+    served = _Steps(monkeypatch, PPD.Kernel(R90, H100Dev(), "0" * 64), weights, [[(0, 8), (1, 8)]])
+    assert served.scheme.run is None
+    served.step()
+    run = served.scheme.run
+    assert isinstance(run, cls) and isinstance(run.schedule.name, str) and run.omit == frozenset()
+    assert all(callable(getattr(run, f)) for f in ("begin", "end", "gemm", "poison", "epoch_calls"))
+    assert isinstance(run.details, dict) and run.scheme is not None
+    assert {w: x.tensor.data_ptr() for w, x in run.weights.items()} == {w: t.data_ptr() for w, t in weights.items()}
+    assert run.commits["weights_root"] == run.epoch.weights_root.hex() and "registration" in run.commits
+    assert run.commits.get("coin_source", "in-process") == "in-process"
+    served.release()
+
+
 def test_a_step_over_one_pass_is_refused_before_its_forward(monkeypatch):
-    """`pouw_pass.step_tokens`: weights of n 256 and 128 take 4 + 2 tiles a 64-row tile, so a pass of 32 tiles holds 5 tile
+    """`passes.step_tokens`: weights of n 256 and 128 take 4 + 2 tiles a 64-row tile, so a pass of 32 tiles holds 5 tile
     rows (320 tokens) and one of 512 screened rows 256 tokens over its two calls a step: a step is held to 256 tokens
-    (``details["max_step_tokens"]``).  A step scheduled over it is refused before its forward runs, leaving the open pass
-    empty and nothing committed; a step at the limit commits as one pass, within both caps."""
+    (``details["max_step_tokens"]``).  Pearl+ refuses a step begun over it before any block, leaving the open pass empty
+    and nothing committed; a step at the limit commits as one pass, within both caps."""
     rng = np.random.default_rng(29)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
-    (runner,) = _runners(monkeypatch)
-    model, comp, option = _served(monkeypatch, PPD.Kernel(R, RecordingDev(), "0" * 64), weights, capacity=32, flag_rows=512)
-    assert option.details["max_step_tokens"] == 256
-    r = runner()
-    type(r).engine = _Engine(model, [[(0, 257), (1, 257)], [(0, 256), (1, 256)]])
+    served = _Steps(monkeypatch, PPD.Kernel(R90, H100Dev(), "0" * 64), weights,
+                    [[(0, 257), (1, 257)], [(0, 256), (1, 256)]], capacity=32, flag_rows=512)
     with pytest.raises(RuntimeError, match=r"a step of 257 tokens is over one pass \(256 tokens a step"):
-        r.execute_model(types.SimpleNamespace(total_num_scheduled_tokens=257))
-    assert not option.end_pass.__self__.cur.matmuls and option.details["passes"] == []
-    type(r).engine.at = 1
-    r.execute_model(types.SimpleNamespace(total_num_scheduled_tokens=256))
-    comp.close()
-    assert [(p["units"], p["tiles"], p["screened_rows"]) for p in option.details["passes"]] == [(2, 24, 512)]
+        served.begin()
+    run = served.scheme.run
+    assert run.details["max_step_tokens"] == 256 and not run.cur.matmuls and run.details["passes"] == []
+    served.at = 1
+    served.step()
+    assert [(p["units"], p["tiles"], p["screened_rows"]) for p in served.release()["passes"]] == [(2, 24, 512)]
 
 
 # ---- the trees, their hash kernels run on the host ----------------------------------------------------------------
@@ -993,54 +923,57 @@ class TwinDev(RecordingDev):
 
 @pytest.mark.parametrize("scheme", KERNEL_SCHEMES)
 def test_the_device_paths_keys_and_tree_hash_are_the_schemes(scheme):
-    """The constants the pipeline reads (the prover's salt key, then `audit.hm96_kernel_constants`) and a run's tree hash are
-    the scheme's: hm96-sha512's.  Without the prover's 32-byte key the constants are refused."""
-    s = PPD.scheme_of(scheme)
+    """The constants the pipeline reads (`audit.hm96_kernel_constants`, and no salt key: a tree's salts are its buffer's
+    bytes) and a run's tree hash are the scheme's: hm96-sha512's."""
+    s = pouw_schemes.get(scheme)
     kernel = PPD.Kernel(R, RecordingDev(), "0" * 64)
-    for bad in (None, bytes(31)):
-        with pytest.raises(ValueError, match="salt key"):
-            PPDR._constants(s, torch.device("cpu"), bad)
-    t = PPDR._constants(s, torch.device("cpu"), SALT_KEY)
-    assert PPDR._bytes(t) == SALT_KEY.ljust(256, b"\0") + hm96_kernel_constants()
-    assert PPDR._constant_keys(t) == {"salt_key": t.data_ptr(), "hm": t.data_ptr() + 256}
+    t = PPDR._constants(torch.device("cpu"))
+    assert PPDR._bytes(t) == hm96_kernel_constants()
+    assert PPDR._constant_keys(t) == {"hm": t.data_ptr()}
     rng = np.random.default_rng(1)
     weights = {0: torch.from_numpy(bf16_words(rng, 128, 1024).view(np.float32).copy()).to(torch.bfloat16)}
-    roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
-    run = PPDR.PearlCDeviceRun(s, f"pouw:{scheme}", kernel, weights, roots, *salt_coin(roots), capacity=16, salt_key=SALT_KEY)
+    roots = PPDR.weight_roots(kernel, weights, scheme, weight_salts=salts_b(weights))
+    run = PPDR.PearlCDeviceRun(s, f"pouw:{scheme}", kernel, weights, roots, *salt_coin(roots), capacity=16,
+                               weight_salts=salts_b(weights))
     assert run.tree_hash == s.commitment_hash == C.TREE_HASH["h3"] == HM96 and PPDR._bytes(run.const) == PPDR._bytes(t)
 
 
 @pytest.mark.slow
 @pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
 @pytest.mark.parametrize("scheme", KERNEL_SCHEMES)
-def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_path):
+def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_path, monkeypatch):
     """B's roots, each call's A root over its m₁₆ rows (filler zero), and the pass's tile tree over the leaves the calls wrote,
     their kernels run by `simt_twin` and hash_decode.cuh's host build: each is `MerkleTree`'s root in hm96-sha512
-    (frame-v3-sha512 over values salted by the prover's key).  A decode call's commitment is pd_commit's: each row digest
+    (frame-v3-sha512 over values salted with the salts the run was handed or drew: B's, each call's A's, the tiles').  A decode call's commitment is pd_commit's: each row digest
     `pearl_c.row_digest` of its row, the row seeds the scheme's `row_seeds` with their line keys, seed_A the scheme's, and E_A's
     lines the m₁₆ committed rows' under their own keys and the filler rows' under line_a; its tile leaves (pd_tiles') over
     the zero C~ and U are `pearl_c.leaf`'s."""
-    s = PPD.scheme_of(scheme)
-    h, nb, key = s.commitment_hash, 64, SALT_KEY
+    s = pouw_schemes.get(scheme)
+    h, nb = s.commitment_hash, 64
     rng = np.random.default_rng(5)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16) for w, n in ((0, 256), (1, 128))}
     rows = lambda x: [r.tobytes() for r in x.float().numpy()]  # noqa: E731
     kernel = PPD.Kernel(R, TwinDev(HD.build(tmp_path)), "0" * 64)
-    roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=key)
-    assert roots == {w: commit_rows(weight_binding(w), -2, rows(t), h, key, HM96_WEIGHTS + w).commitment.root
+    key = salts_b(weights)
+    roots = PPDR.weight_roots(kernel, weights, scheme, weight_salts=key)
+    assert roots == {w: commit_rows(weight_binding(w), -2, rows(t), h,
+                                    [key[w][i:i + HM96_SALT] for i in range(0, len(key[w]), HM96_SALT)]).commitment.root
                      for w, t in weights.items()}
     declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
     coins = salt_coin(roots)
     salt = Epoch.start(declared, roots, *coins).salt
-    run = PPDR.PearlCDeviceRun(s, f"pouw:{scheme}", kernel, weights, roots, *coins, capacity=1 << 12, salt_key=key)
+    run = PPDR.PearlCDeviceRun(s, f"pouw:{scheme}", kernel, weights, roots, *coins, capacity=1 << 12, weight_salts=key)
     calls = [(0, torch.from_numpy(bf16_words(rng, 20, 1024).view(np.float32).copy()).to(torch.bfloat16)),
              (1, torch.from_numpy(bf16_words(rng, 32, 1024).view(np.float32).copy()).to(torch.bfloat16))]
+    a_salts = []
     for w, x in calls:
         kernel.dev.log.clear()
         run.gemm(w, x, weights[w], None)
         names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
         assert names[0] == "pd_commit_851" and names[-1] == "pd_tiles_851", names
         sh, index = run.shapes[(32, weights[w].shape[0], 1024)], len(run.cur.matmuls) - 1
+        got = PPDR._bytes(sh.buf("salts_a")[:HM96_SALT * 32])
+        a_salts.append([got[i:i + HM96_SALT] for i in range(0, len(got), HM96_SALT)])
         a = torch.zeros((32, 1024), dtype=torch.float32)
         a[:x.shape[0]] = x.float()
         mm = Matmul(index, Shape(32, 1024, weights[w].shape[0]), w)
@@ -1059,7 +992,7 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_p
     for index, (w, x) in enumerate(calls):
         a = torch.zeros((32, 1024), dtype=torch.float32)
         a[:x.shape[0]] = x.float()
-        want = commit_rows(activation_binding(salt, index), index, rows(a), h, key, index).commitment.root
+        want = commit_rows(activation_binding(salt, index), index, rows(a), h, a_salts[index]).commitment.root
         assert PPDR._bytes(run.roots_buf[nb * index:nb * index + nb]) == want, index
     count = run.cur.tiles
     assert count == 4 + 2
@@ -1068,10 +1001,17 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_p
     leaves = rng.integers(0, 256, nb * count, dtype=np.uint8).tobytes()      # no GEMM ran: every tile's leaf is the same
     run.leaves[:nb * count] = torch.frombuffer(bytearray(leaves), dtype=torch.uint8)
     kernel.dev.log.clear()
+    drawn, fresh = [], ENDS.fresh_into
+
+    def recorded(dst, n, raw=None):
+        fresh(dst, n, raw)
+        drawn.append(PPDR._bytes(dst[:HM96_SALT * n]))
+    monkeypatch.setattr(ENDS, "fresh_into", recorded)
     out = run.end()
     assert [n for n, *_ in kernel.dev.log][-2] == "s512_frame_leaves"
+    (salts_t,) = drawn
     dt = transcript_domain(Epoch(Workload(tuple(run.cur.matmuls)), roots, salt), count, h)
-    tree = MerkleTree(dt, {i: leaves[nb * i:nb * i + nb] + hm96_salt(key, HM96_TRANSCRIPT, i) for i in range(count)},
+    tree = MerkleTree(dt, {i: leaves[nb * i:nb * i + nb] + salts_t[HM96_SALT * i:HM96_SALT * (i + 1)] for i in range(count)},
                       lambda _: TILE_SCHEMA)
     assert out["transcript_root"] == tree.commitment.root.hex()
 
@@ -1101,12 +1041,45 @@ def reference_y(s, ctx: Context, a_rows: list[bytes], b_rows: list[bytes]) -> by
 
 
 #: the reference verifier's Skip debit has no rule without promotion, so v2 (sm120-unpromoted) isn't provable here
-PROMOTED = sorted(s for s in PPD.SCHEMES if "unpromoted" not in s)
+PROMOTED = sorted(s for s in kernel_names("pearl-c") if "unpromoted" not in s)
 
 
 @pytest.fixture(params=PROMOTED)
 def honest_pass(tmp_path, request):
     return proved_pass(tmp_path, request.param)
+
+
+def seeded_salts(seed: int):
+    """192-byte salts drawn from `seed`, a fixture's stand-in for fresh ones, the same on every run."""
+    rng = random.Random(seed)
+    return lambda n: [rng.randbytes(HM96_SALT) for _ in range(n)]
+
+
+def pinned_salts(key: bytes, nonces: list[int]):
+    """A stand-in for the reference prover's `audit.fresh_salts` that hands it, as data and in the order it draws them
+    (`nonces`, one a tree), the salts `proved_pass`'s passes are pinned under: `audit.hm96_salt`'s stream under `key`.
+    The facts these tests hold a pass to (which credited rows are over their caps, which blocks a row's words flag) follow
+    A's salted roots, so they are the pinned salts' facts."""
+    left = iter(nonces)
+
+    def draw(n: int) -> list[bytes]:
+        nonce = next(left)
+        return [hm96_salt(key, nonce, i) for i in range(n)]
+    return draw
+
+
+def split_salts(kept: bytes) -> list[bytes]:
+    """A salts file's salts, `HM96_SALT` bytes each in rank order."""
+    return [kept[i:i + HM96_SALT] for i in range(0, len(kept), HM96_SALT)]
+
+
+def kept_salts(tree: MerkleTree) -> bytes:
+    """The salts of an hm96 tree's values in rank order, each value's last `HM96_SALT` bytes: a pass's salts file."""
+    return b"".join(tree.open(i).value[-HM96_SALT:] for i in range(tree.domain.count))
+
+
+def kept_leaves(d, tree: MerkleTree, schema: str = ROW_SCHEMA) -> list[bytes]:
+    return [d.leaf(i, i, schema, tree.open(i).value) for i in range(tree.domain.count)]
 
 
 def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), key: bytes | None = None,
@@ -1115,12 +1088,13 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
                 load: tuple[int, int] | None = None):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
-    salts under the prover's key, which the manifest retains; the unpromoted record's debit isn't stated, so clear_work can't
-    audit it).  The key is fixed per scheme unless `key` names one: -h3's row seeds follow A's salted roots, and under some
-    keys (about 2 in 15) a credited row of a sampled tile is over its own cap, which the sampling design and verify_run both reject.  On the
-    h100 record (Hopper's 14-bit atom) 2 of the first 8 keys are, the zero key among them: at k = 128 a row's cap admits
-    one flagged atom-word (at k = 2,048 and 6,144 the worst of 96 Gaussian rows each is at 0.27 and 0.11 of its cap).
-    The calls have the execution phase's indices `indices`, and every pass built here is of the one execution phase (the same weights, key and
+    salts the prover's, kept in the pass's salts files beside the rows; the unpromoted record's debit isn't stated, so
+    clear_work can't audit it).  The prover's salts are the pinned ones under `key` (`pinned_salts`), fixed per scheme unless
+    `key` names one: -h3's row seeds follow A's salted roots, and under some keys (about 2 in 15) a credited row of a
+    sampled tile is over its own cap, which the sampling design and verify_run both reject.  On the h100 record (Hopper's
+    14-bit atom) 2 of the first 8 keys are, the zero key among them: at k = 128 a row's cap admits one flagged atom-word
+    (at k = 2,048 and 6,144 the worst of 96 Gaussian rows each is at 0.27 and 0.11 of its cap).
+    The calls have the execution phase's indices `indices`, and every pass built here is of the one execution phase (the same weights, salts and
     salt coin), as passes of one install are.  With `live` the salt coin is a live session's, opened after salt execution phase
     `live`'s root over the weights' root (`live_coin`), and the manifest names that execution phase (``pass_index``).  `seed` samples
     the rows: under another, the weights are others, and so is the salt the one coin gives them.  With `spike`, credited
@@ -1133,7 +1107,7 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     the first call's failing row its row 1."""
     if key is None:
         key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
-    s = PPD.scheme_of(scheme, k_min=32, tile=tile)
+    s = pouw_schemes.get(scheme, k_min=32, tile=tile)
     rng, k = np.random.default_rng(seed), 128
     n0, n1 = max(16, tile[1]), max(32, tile[1])
     wrows = {0: bf16_words(rng, n0, k), 1: bf16_words(rng, n1, k)}
@@ -1154,15 +1128,17 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     def rows(x):
         return [r.tobytes() for r in x]
     work = Workload((Matmul(i0, Shape(m0, k, n0), 0), Matmul(i1, Shape(m1, k, n1), 1)))
-    prover = Prover(s, {w: rows(x) for w, x in wrows.items()}, salt_key=key)
-    salted = lambda v, nonce, i: v + hm96_salt(prover.salt_key, nonce, i)  # noqa: E731
+    drawn = pinned_salts(key, [HM96_WEIGHTS + w for w in wrows] + [u.index for u in work.matmuls] + [HM96_TRANSCRIPT])
+    with patch.object(sys.modules["clear_audit"], "fresh_salts", drawn):
+        prover = Prover(s, {w: rows(x) for w, x in wrows.items()})
     if live is None:
         coins = salt_coin(prover.weight_roots)
         epoch = Epoch.start(work, prover.weight_roots, *coins)
     else:
         coins = live_coin(PS.epoch_open_root(weights_root(prover.weight_roots), live))
         epoch = PPD.epoch_of(work, prover.weight_roots, *coins, live)
-    tr = prover.prove(epoch, {i: rows(x) for i, x in acts.items()})
+    with patch.object(sys.modules["clear_audit"], "fresh_salts", drawn):
+        tr = prover.prove(epoch, {i: rows(x) for i, x in acts.items()})
     splits = {w: PW.Split(k) for w in wrows}
     records = CW.declare(s, epoch, {i: rows(x) for i, x in acts.items()}, {w: rows(x) for w, x in wrows.items()}, splits,
                          real_rows={i0: real, **({i1: real} if load else {})})
@@ -1175,11 +1151,10 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
         d = rows_domain(weight_binding(w), -2, len(x), s.commitment_hash)
         weights[str(w)] = {"n": len(x), "k": k, "root": prover.weight_roots[w].hex(), "excluded_b": list(records[0 if w == 0 else 1].excluded_b),
                            "rows": PPDR._write(tmp_path / "weights" / f"{w}.rows.bf16", bf16_file(rows(x)), digest=False),
-                           "tree": PPDR._write(tmp_path / "weights" / f"{w}.tree",
-                                              laid_out(d, [d.leaf(j, j, ROW_SCHEMA, salted(r, HM96_WEIGHTS + w, j))
-                                                           for j, r in enumerate(rows(x))]))}
+                           "tree": PPDR._write(tmp_path / "weights" / f"{w}.tree", laid_out(d, kept_leaves(d, prover.weight_trees[w]))),
+                           "salts": PPDR._write(tmp_path / "weights" / f"{w}.salts", kept_salts(prover.weight_trees[w]))}
     matmuls = []
-    for u, rec, root in zip(work.matmuls, records, tr.activation_roots):
+    for u, rec, root, at in zip(work.matmuls, records, tr.activation_roots, prover._act_trees):
         x = rows(acts[u.index])
         d = rows_domain(activation_binding(epoch.salt, u.index), u.index, u.shape.m, s.commitment_hash)
         y = reference_y(s, Context(epoch.salt, u, root, epoch.weight_roots[u.weight]), x, rows(wrows[u.weight]))
@@ -1187,9 +1162,9 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
         matmuls.append({"index": u.index, "m": u.shape.m, "k": k, "n": u.shape.n, "weight": u.weight, "real_rows": rec.real_rows,
                         "k_kept": rec.k_kept, "excluded_a": list(rec.excluded_a), "root_a": root.hex(),
                         "rows": PPDR._write(tmp_path / "calls" / f"{u.index}.rows.bf16", bf16_file(x), digest=False),
-                        "tree": PPDR._write(tmp_path / "calls" / f"{u.index}.tree",
-                                           laid_out(d, [d.leaf(i, i, ROW_SCHEMA, salted(r, u.index, i)) for i, r in enumerate(x)])),
-                        "y": SY.retain_y(tmp_path, u.index, y, u.shape.n, epoch.salt, prover.salt_key)})
+                        "tree": PPDR._write(tmp_path / "calls" / f"{u.index}.tree", laid_out(d, kept_leaves(d, at))),
+                        "salts": PPDR._write(tmp_path / "calls" / f"{u.index}.salts", kept_salts(at)),
+                        "y": SY.retain_y(tmp_path, u.index, y, u.shape.n, epoch.salt)})
     count = tr.commitment.count
     leaves = [prover.digest(t) for t in range(count)]
     dt = transcript_domain(epoch, count, s.commitment_hash)
@@ -1200,9 +1175,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
             "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
             "commitment": {"root": tr.commitment.root.hex(), "count": count},
             "leaves": PPDR._write(tmp_path / "leaves", b"".join(leaves)),
-            "tree_t": PPDR._write(tmp_path / "tree_t", laid_out(dt, [dt.leaf(i, i, TILE_SCHEMA, salted(v, HM96_TRANSCRIPT, i))
-                                                                    for i, v in enumerate(leaves)]))}
-    head["hm96_salt_key"] = prover.salt_key.hex()
+            "tree_t": PPDR._write(tmp_path / "tree_t", laid_out(dt, kept_leaves(dt, prover._tree, TILE_SCHEMA))),
+            "salts_t": PPDR._write(tmp_path / "salts_t", kept_salts(prover._tree))}
     path = PPDR.write_manifest(tmp_path, head, weights, matmuls)
     (tmp_path / "coins.json").write_text(json.dumps(coins[0].to_json()))
     return path, s, epoch, prover, tr, splits, records
@@ -1287,8 +1261,8 @@ def test_answer_names_its_schemes_assumption():
     assert all(name.startswith("Pouw.PearlC.Assumptions.") for name in (VR.ASSUMPTION_H100, VR.ASSUMPTION_DEV))
     assert f"def {dev} " in lean, dev
     assert re.search(rf"^def {h100} .*\n(?:.*\n)*?  {dev} CM devH100 sem ρ$", records, re.M), h100
-    assert VR.assumption_of(PPD.scheme_of("pearl-c-h100-v1-h3")) == VR.ASSUMPTION_H100
-    for scheme in map(PPD.scheme_of, PPD.SCHEMES):
+    assert VR.assumption_of(pouw_schemes.get("pearl-c-h100-v1-h3")) == VR.ASSUMPTION_H100
+    for scheme in map(pouw_schemes.get, kernel_names("pearl-c")):
         got = VR.assumption_of(scheme)
         assert got == (VR.ASSUMPTION_H100 if scheme.device.name == "h100" else f"{VR.ASSUMPTION_DEV} at {scheme.device.name}")
         assert "pearl_kw" not in got
@@ -1313,7 +1287,7 @@ def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepte
     work = answer["public"]["work"]
     assert work["credited"] == 0 < work["macs"] and work["credited_tiles"] > 0 and answer["profile"]["delta"] == "1/100"
     assert answer["profile"]["test_instance"] and "a test instance's, credited nothing" in doc["line"]
-    named = VR.assumption_of(PPD.scheme_of(answer["public"]["scheme"]))
+    named = VR.assumption_of(pouw_schemes.get(answer["public"]["scheme"]))
     assert answer["public"]["assumption"] == named and f"({named})" in doc["line"]
     assert len(answer["profile"]["tiles"]) == 4 and {i for i, _ in answer["profile"]["tiles"]} == {0}
     man = json.loads(path.read_text())
@@ -1342,7 +1316,7 @@ def test_a_served_y_that_is_not_the_unscale_of_its_u_rejects_the_run(tmp_path):
     for u in man["matmuls"]:
         y = bytearray((path.parent / u["y"]["rows"]["path"]).read_bytes())
         y[0::2] = bytes(b ^ 0x01 for b in y[0::2])
-        u["y"] = SY.retain_y(path.parent, u["index"], bytes(y), u["n"], bytes.fromhex(man["salt"]), bytes.fromhex(man["hm96_salt_key"]))
+        u["y"] = SY.retain_y(path.parent, u["index"], bytes(y), u["n"], bytes.fromhex(man["salt"]))
     path.write_text(json.dumps(man))
     lied = VR.verify_passes([path], 3, 1, "test", published(path), b"verifier" * 4, test_instance=True)
     assert lied["answer"]["verdict"] == "reject" and "is not the unscale of the tile's U" in lied["answer"]["reason"], lied["line"]
@@ -1380,16 +1354,17 @@ def short_y(path: Path, pos: int, drop: int) -> None:
     manifest then names: a prover's own y whose last real row is short, and opens."""
     man = json.loads(path.read_text())
     u = man["matmuls"][pos]
-    key, n, real = bytes.fromhex(man["hm96_salt_key"]), u["n"], u["real_rows"]
+    n, real = u["n"], u["real_rows"]
+    ys = (path.parent / u["y"]["salts"]["path"]).read_bytes()
     file = path.parent / u["y"]["rows"]["path"]
     data = file.read_bytes()
     data = data[:len(data) - drop]
     rows = [data[2 * n * i:2 * n * (i + 1)] for i in range(real)]
     d = SY.y_domain(bytes.fromhex(man["salt"]), u["index"], real)
-    tree = laid_out(d, [d.leaf(i, i, ROW_SCHEMA, VR.f32_row(r[:len(r) & ~1], len(r), 0) + hm96_salt(key, SY.HM96_Y + u["index"], i))
+    tree = laid_out(d, [d.leaf(i, i, ROW_SCHEMA, VR.f32_row(r[:len(r) & ~1], len(r), 0) + ys[HM96_SALT * i:HM96_SALT * (i + 1)])
                         for i, r in enumerate(rows)])
     u["y"] = {"root": tree[-64:].hex(), "rows": PPDR._write(file, data, digest=False),
-              "tree": PPDR._write(path.parent / u["y"]["tree"]["path"], tree)}
+              "tree": PPDR._write(path.parent / u["y"]["tree"]["path"], tree), "salts": u["y"]["salts"]}
     path.write_text(json.dumps(man))
 
 
@@ -1419,7 +1394,8 @@ def test_check_y_holds_each_opened_row_to_its_tiles_columns():
     +0 at α = 1 on both, so every cell's unscale is +0.  A row that covers the columns passes; one that ends at column 3,
     or before the tile, or holds half a word past column 2, is refused by its length (and nothing raises); a whole row
     is still held to the unscale, word by word."""
-    real, index, salt, key = 8, 3, bytes(64), bytes(32)
+    real, index, salt = 8, 3, bytes(64)
+    salts = fresh_salts(real)
     d = SY.y_domain(salt, index, real)
     tile = types.SimpleNamespace(rows=(7,), cols=(2, 3))
     side = lambda n: types.SimpleNamespace(alpha=[PCU.ONE] * n)  # noqa: E731
@@ -1427,7 +1403,7 @@ def test_check_y_holds_each_opened_row_to_its_tiles_columns():
     assert PCU.y(0, PCU.ONE, PCU.ONE) == 0
 
     def reason(row: bytes) -> str | None:
-        values = [(row if i == 7 else bytes(16)) + hm96_salt(key, SY.HM96_Y + index, i) for i in range(real)]
+        values = [(row if i == 7 else bytes(16)) + salts[i] for i in range(real)]
         tree = laid_out(d, [d.leaf(i, i, ROW_SCHEMA, x) for i, x in enumerate(values)])
         p = types.SimpleNamespace(scheme=types.SimpleNamespace(commitment_hash=HM96, forming="v1", name="stand-in"),
                                   epoch=types.SimpleNamespace(salt=salt, workload=types.SimpleNamespace(
@@ -1563,23 +1539,23 @@ def test_served_passes_verify_refuses_a_serve_that_retained_no_pass(tmp_path):
     assert answer["verdict"] == "reject" and answer["reason"].startswith("unretained: the serve retained no pass")
 
 
-def test_a_seeded_serve_draws_the_same_coins_and_salt_key_and_takes_no_retention_or_live_coins(tmp_path, monkeypatch):
+def test_a_seeded_serve_draws_the_same_coins_and_no_salt_key_and_takes_no_retention_or_live_coins(tmp_path, monkeypatch):
     """`serve --seeded`'s streams (`served_passes.seeded`) give one label's bytes however they are sampled, so two seeded
-    installs (`seed_install`) hold challengers of one coin commitment and take one hm96 salt key (`pearl_c.new_salt_key`,
-    which the install's weight commitment calls); ``--seeded`` is refused beside retention and beside the challenger gate,
-    before anything is built."""
+    installs (`seed_install`) give the attached scheme's in-process challenger (`serving.in_process_coins`) one coin
+    commitment, and seed nothing else: every leaf's salt is fresh, so there is no salt key to seed; ``--seeded`` is
+    refused beside retention and beside the challenger gate, before anything is built."""
+    from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
+    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
+
     SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     a, b = SP.seeded("coins"), SP.seeded("coins")
-    assert a(3) + a(70) + a(1) == b(74) and SP.seeded("salt key")(32) != SP.seeded("coins")(32)
-    from verity_vllm.protocols import pouw
-
-    monkeypatch.setattr(PPD, "new_salt_key", PPD.new_salt_key)
-    monkeypatch.setattr(pouw, "pearl_c_salt_key", pouw.pearl_c_salt_key)
-    one, two = {"coins": None}, {}
-    SP.seed_install(one)
-    SP.seed_install(two)
-    assert one["coins"].commitment.to_json() == two["coins"].commitment.to_json()
-    assert PPD.new_salt_key(SCHEME) == pouw.pearl_c_salt_key(SCHEME) == SP.seeded("salt key")(32)
+    assert a(3) + a(70) + a(1) == b(74) and SP.seeded("salts")(32) != SP.seeded("coins")(32)
+    monkeypatch.setattr(verifier, "coins", verifier.coins)
+    SP.seed_install()
+    one = SV.in_process_coins(0).commitment.to_json()
+    SP.seed_install()
+    assert SV.in_process_coins(0).commitment.to_json() == one
+    assert not hasattr(PPD, "new_salt_key") and not hasattr(PPD, "no_salt_key")
     argv = ["serve", "--seeded", "--passes", str(tmp_path), "--out", str(tmp_path / "served.json")]
     with pytest.raises(SystemExit, match="takes --no-retain and no PEARLC_CHALLENGER_GATE"):
         SP.main(argv)
@@ -1872,6 +1848,7 @@ def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row
     p = VR.load(path, coins)
     over = _replay_every_tile(p)
     assert over and all("replayed debit" in r for r in over.values()), over
+    exclusion = len(p.tile_ids(CW.exclusion_tiles(p.scheme, p.records)))
     d, source = _serve_dir(tmp_path, [path]), b"verifier" * 4
     (d / SP.COIN).write_text(json.dumps({"commitment": VR.run_commitment([p]).hex(), "source": source.hex()}))
     takes = {}
@@ -1885,11 +1862,11 @@ def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row
             assert yes in ("yes", "no") and took in SP.OVER_INERT_BOUND and took == (rule or took)
             if verdict == "run":
                 _, doc, answer = served_verify(d, tmp_path / "verify.json", "--draws", "32", *flag)
-                drawn = {v["tile"] for v in doc["verdicts"]}
+                drawn = {v["tile"] for v in doc["verdicts"][:len(doc["verdicts"]) - exclusion]}
                 rejects = answer["verdict"] == "reject" and "replayed debit" in answer["reason"]
             else:
                 r = VR.verify(path, 32, 1, "test", source, coins=coins, **({} if rule is None else {"over_cap": rule}))
-                drawn, rejects = set(r["tiles"]), not r["accepted"] and "replayed debit" in r["line"]
+                drawn, rejects = set(r["tiles"][:r["drawn"]]), not r["accepted"] and "replayed debit" in r["line"]
             assert drawn & set(over), (verdict, rule, sorted(drawn), sorted(over))
             assert (yes == "yes") == rejects, (
                 f"volunteer-needed --verdict {verdict} says {yes} under over-cap rule {took}, but the verdict "
@@ -2011,7 +1988,7 @@ def window_record(*paths: Path, version: int = 2) -> dict:
                 "value": f"pearl-b/{u['weight']}", "root": man["weights"][str(u["weight"])]["root"], "leaves": u["n"],
                 "words": u["k"], "word_bits": 32,
                 "domain": rows_domain(weight_binding(u["weight"]), -2, u["n"], HM96).domain_id.hex()})
-    return {"format": REG.FORMAT_V2, "window": {"kind": "served", **({"version": 2} if version == 2 else {})},
+    return {"format": DM.REGISTRATION, "window": {"kind": "served", **({"version": 2} if version == 2 else {})},
             "registered": [*reg, *(weights[w] for w in sorted(weights) if version == 2),
                            {"value": "input-ids/0", "root": "00", "leaves": 1, "words": 1, "domain": "00"}]}
 
@@ -2032,8 +2009,8 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_
     coins, w, man = published(path), window_record(path), json.loads(path.read_text())
     (wfile := tmp_path / "w.json").write_text(json.dumps(w))
     rc, doc, answer = served_verify(path.parent, tmp_path / "verify.json", "--manifest", str(path), "--tie", str(wfile))
-    assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 6}, doc["line"]
-    assert f"tied to W {REG.digest(w)[:16]} on its 6 tables" in doc["line"] and doc["tie_record"] == str(wfile)
+    assert rc == 0 and answer["public"]["tie"] == {"record": DD.digest(w), "tables": 6}, doc["line"]
+    assert f"tied to W {DD.digest(w)[:16]} on its 6 tables" in doc["line"] and doc["tie_record"] == str(wfile)
     salt, (u0, u1) = bytes.fromhex(man["salt"]), man["matmuls"]
     b0, b1 = (next(e for e in w["registered"] if e["value"] == f"pearl-b/{x}") for x in (0, 1))
     n1 = b1["leaves"]
@@ -2068,14 +2045,14 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_
               f"{VR.V1_WEIGHTS} pearl-b/0: a W that registers the weights states version 2"),
              ({**w, "window": {"kind": "served", "version": 1}}, PWR.UNKNOWN_VERSION),
              ({**w, "window": {"kind": "served", "version": 3}}, PWR.UNKNOWN_VERSION),
-             ({**w, "format": REG.FORMAT}, f"W is no {REG.FORMAT_V2} record")]
+             ({**w, "format": DM.REGISTRATION_V1}, f"W is no {DM.REGISTRATION} record")]
     for bad, why in cases:
         r = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4, window=bad, test_instance=True)
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
     (lfile := tmp_path / "legacy.json").write_text(json.dumps(legacy))
     rc, doc, answer = served_verify(path.parent, tmp_path / "legacy-verify.json", "--manifest", str(path), "--tie", str(lfile))
     assert rc != 0 and answer["verdict"] == "reject" and VR.UNTIED_WEIGHTS in answer["reason"], doc["line"]
-    untied = {"record": REG.digest(old), "tables": 4, "weights": VR.WEIGHTS_UNTIED}
+    untied = {"record": DD.digest(old), "tables": 4, "weights": VR.WEIGHTS_UNTIED}
     r = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4, window=old, test_instance=True)
     assert r["answer"]["verdict"] == "accept" and r["answer"]["public"]["tie"] == untied, r["line"]
     (ofile := tmp_path / "v1.json").write_text(json.dumps(old))
@@ -2116,12 +2093,12 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
     r = VR.verify_passes([warm, a, b], 3, 1, "test", coins, b"verifier" * 4, window=w, test_instance=True)
     assert r["answer"]["verdict"] == "reject" and "W registers no pearl-a/0/0" in r["answer"]["reason"], r["line"]
     first, chained = tmp_path / "first.json", tmp_path / "w-chained.json"
-    first.write_text(json.dumps({"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "registered": [], "previous": None}))
+    first.write_text(json.dumps({"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "registered": [], "previous": None}))
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(chained), "--previous-record", str(first)]) == 0
     wc = json.loads(chained.read_text())
-    assert w["previous"] is None and wc == {**w, "previous": REG.digest(json.loads(first.read_text()))}
-    assert VR.tie(wc, [VR.load(x, published(x)) for x in (a, b)], [1, 2], (0,)) == {"record": REG.digest(wc), "tables": 10}
-    assert REG.digest(wc) != REG.digest(w)
+    assert w["previous"] is None and wc == {**w, "previous": DD.digest(json.loads(first.read_text()))}
+    assert VR.tie(wc, [VR.load(x, published(x)) for x in (a, b)], [1, 2], (0,)) == {"record": DD.digest(wc), "tables": 10}
+    assert DD.digest(wc) != DD.digest(w)
     with pytest.raises(SystemExit):
         SP.main(["retain", "--passes", str(d), "--previous-record", str(first)])
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(tmp_path / "none.json"),
@@ -2132,14 +2109,14 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
                     "--day-declaration", str(declared)]) == 0
     wn = json.loads(named.read_text())
     assert wn == {**wc, "window": {**wc["window"], "day": 3, "declaration": "5d" * 64}}
-    assert VR.tie(wn, [VR.load(x, published(x)) for x in (a, b)], [1, 2], (0,)) == {"record": REG.digest(wn), "tables": 10}
+    assert VR.tie(wn, [VR.load(x, published(x)) for x in (a, b)], [1, 2], (0,)) == {"record": DD.digest(wn), "tables": 10}
     with pytest.raises(SystemExit):
         SP.main(["retain", "--passes", str(d), "--day-declaration", str(declared)])
     declared.write_text(json.dumps({"day": 3}))
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(tmp_path / "none.json"),
                     "--day-declaration", str(declared)]) == 1 and not (tmp_path / "none.json").exists()
     rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile))
-    assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 10}, doc["line"]
+    assert rc == 0 and answer["public"]["tie"] == {"record": DD.digest(w), "tables": 10}, doc["line"]
     assert (answer["public"]["rounds"], answer["public"]["dropped"], doc["timed"]["passes"]) == ([1, 2], [0], 2)
     before = wfile.read_text()
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(wfile)]) == 1 and wfile.read_text() == before
@@ -2318,8 +2295,8 @@ def test_the_live_draw_reserves_a_withheld_draw_session_outside_any_period_and_o
     --withhold``), marks the record with the reserve before its open, and returns the session's ``pouw/draw`` coin 0
     after C with the record's sample.  It refuses before reserving while the lane's period is open, and before its open
     when the gate reserves it plain or into a period; `live_draw` is None with neither setting and refused with one."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
     BA = load("pearl_c_vllm_bench_arm", POUW / "pearl_c_vllm" / "bench_arm.py")
     gate, root = "ssh -i KEY -o BatchMode=yes research@gate", b"\xc1" * 64
@@ -2381,7 +2358,7 @@ def test_the_live_draw_after_the_runs_pearl_c_period_is_the_lanes_first_reserve_
     is lane vllm's first reserve after P's close, the one a compose takes (`pouw_h1_window.after_close`): it is refused
     before reserving while the ledger doesn't close P or the lane (``for``, else ``by``) reserved since, and before its
     coin is asked when another reserve of the lane reached the gate first; another lane's reserve doesn't count."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
     BA = load("pearl_c_vllm_bench_arm", POUW / "pearl_c_vllm" / "bench_arm.py")
     gate, root, sid = "ssh -i KEY -o BatchMode=yes research@gate", b"\xc1" * 64, "s20261104T120000Z-dr01"
@@ -2490,7 +2467,7 @@ def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path, monkeypatch):
 
     r = run([a, b], window_class=cls)
     assert r["answer"]["verdict"] == "accept", r["line"]
-    assert r["answer"]["public"]["tie"] == {"record": REG.digest(w), "tables": 10, "load": [2, 8, 2]} == r["tie"]
+    assert r["answer"]["public"]["tie"] == {"record": DD.digest(w), "tables": 10, "load": [2, 8, 2]} == r["tie"]
     assert "on its 10 tables, at its class's fixed load (2, 8, 2)" in r["line"]
     # held to the class, the work is in the grid form and the exact credit is the profile's; a test instance's credits 0
     passes = [VR.load(x, coins) for x in (a, b)]
@@ -2578,7 +2555,7 @@ def class_run(excluded: tuple[int, int, int, int] = (0, 0, 0, 0)) -> list:
     layers of four linears (k, n), q, k and v as one (2048, 3072), o (2048, 2048), gate and up as one (2048, 16384) and
     down (8192, 2048), round 0's calls of 128 rows and each later round's of 4 in 16, on the served scheme.  Round 0's
     first call of each of the four shapes excludes ``excluded``'s rows of that shape."""
-    shapes, scheme = [(2048, 3072), (2048, 2048), (2048, 16384), (8192, 2048)], PPD.scheme_of("pearl-c-h100-v1-h3")
+    shapes, scheme = [(2048, 3072), (2048, 2048), (2048, 16384), (8192, 2048)], pouw_schemes.get("pearl-c-h100-v1-h3")
 
     def records(real: int, m: int, ex: tuple[int, ...]) -> list:
         return [PW.UnitRecord(Matmul(c, Shape(m, *shapes[c % 4]), c), real, shapes[c % 4][0],
@@ -2669,12 +2646,12 @@ def record_size_passes(tmp_path: Path, seed: int = 1) -> list[Path]:
 
     Each root is an hm96 root over seeded fake row digests and salts, not over rows: the tree of the real number of leaves
     (a weight's n, a call's m16 or real rows) under the real domain, each leaf `Hm96Domain`'s of a 64-byte digest no row
-    was hashed to and 192 bytes no key gave. The weights' real rows are 3.9 GB of FP32 words, and their `hm96_salt`s
-    a ChaCha20 stream over all of them. The transcript root is 64 seeded bytes, and no row, tree or leaf file is written
+    was hashed to and 192 seeded bytes in place of its salt. The weights' real rows are 3.9 GB of FP32 words, and their
+    salts 192 bytes a row more. The transcript root is 64 seeded bytes, and no row, tree, salts or leaf file is written
     (the manifests name them as a device run does), so the passes load and tie, and nothing of them opens."""
     layers, linears = LLAMA32_1B
     slots, prompt, outputs = RECORD_CLASS
-    s, rng = PPD.scheme_of(H100_SCHEME), np.random.default_rng(seed)
+    s, rng = pouw_schemes.get(H100_SCHEME), np.random.default_rng(seed)
     shapes = {len(linears) * layer + j: nk for layer in range(layers) for j, nk in enumerate(linears)}
 
     def root(binding: bytes, owner: int, count: int) -> str:
@@ -2689,7 +2666,8 @@ def record_size_passes(tmp_path: Path, seed: int = 1) -> list[Path]:
 
     roots = {w: root(weight_binding(w), -2, n) for w, (n, _) in shapes.items()}
     weights = {str(w): {"n": n, "k": k, "root": roots[w], "excluded_b": [],
-                        "rows": named(f"weights/{w}.rows.bf16", 2 * n * k), "tree": tree(f"weights/{w}.tree", n)}
+                        "rows": named(f"weights/{w}.rows.bf16", 2 * n * k), "tree": tree(f"weights/{w}.tree", n),
+                        "salts": named(f"weights/{w}.salts", HM96_SALT * n)}
                for w, (n, k) in shapes.items()}
     committed = {w: bytes.fromhex(r) for w, r in roots.items()}
     coins, paths = salt_coin(committed), []
@@ -2704,15 +2682,18 @@ def record_size_passes(tmp_path: Path, seed: int = 1) -> list[Path]:
                     "k_kept": u.shape.k, "excluded_a": [],
                     "root_a": root(activation_binding(epoch.salt, u.index), u.index, m),
                     "rows": named(f"calls/{u.index}.rows.bf16", 2 * m * u.shape.k), "tree": tree(f"calls/{u.index}.tree", m),
+                    "salts": named(f"calls/{u.index}.salts", HM96_SALT * m),
                     "y": {"root": root(SY.y_binding(epoch.salt, u.index), u.index, real),
-                          "rows": named(f"y/{u.index}.rows.bf16", 2 * real * u.shape.n), "tree": tree(f"y/{u.index}.tree", real)}}
+                          "rows": named(f"y/{u.index}.rows.bf16", 2 * real * u.shape.n), "tree": tree(f"y/{u.index}.tree", real),
+                          "salts": named(f"y/{u.index}.salts", HM96_SALT * real)}}
                    for u in work.matmuls]
         count = sum(len(s.tiles(u.shape)) for u in work.matmuls)
         head = {"schema": CC.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{s.name}", "scheme": s.name,
                 "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(), "salt": epoch.salt.hex(),
                 "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
                 "commitment": {"root": rng.bytes(64).hex(), "count": count},
-                "leaves": named("leaves", 64 * count), "tree_t": tree("tree_t", count), "hm96_salt_key": SALT_KEY.hex()}
+                "leaves": named("leaves", 64 * count), "tree_t": tree("tree_t", count),
+                "salts_t": named("salts_t", HM96_SALT * count)}
         (d := tmp_path / f"pass-{r:05d}").mkdir(parents=True)
         paths.append(PPDR.write_manifest(d, head, weights, matmuls))
         (d / "coins.json").write_text(json.dumps(coins[0].to_json()))
@@ -2749,7 +2730,7 @@ def test_the_version_2_tie_holds_a_run_of_the_run_of_records_size_to_its_64_weig
     passes = [VR.load(p, coins) for p in paths]
     assert sum(len(p.records) for p in passes) == 256 and all(len(p.epoch.workload.weights()) == 64 for p in passes)
     tied, seconds = timed(lambda: VR.tie(w, passes))
-    assert tied == {"record": REG.digest(w), "tables": 576}
+    assert tied == {"record": DD.digest(w), "tables": 576}
     want = VR.tie_entries(passes)
     assert list(want) == names
     for x in range(64):
@@ -2793,7 +2774,7 @@ def test_volunteer_words_gives_up_one_a_row_a_band_and_a_b_row_once_the_a_count_
     rule leaves the other no credit, so it needs no B row.  With V-EX's ⌈m/64⌉ = 2 A rows of a 128-row unit already
     spent, the row furthest over gives up the B row holding its flagged atom-word, whose block of 64 columns is the
     weight's every column, and no tile is left over."""
-    s = PPD.scheme_of("pearl-c-h100-v1-h3", k_min=32, tile=(16, 16))
+    s = pouw_schemes.get("pearl-c-h100-v1-h3", k_min=32, tile=(16, 16))
     rec = PW.UnitRecord(Matmul(7, Shape(128, 128, 32), 2), 128, 128)
     tiles = s.tiles(rec.matmul.shape)
     first = next(t for t, x in enumerate(tiles) if x.rows[0] == 0 and x.cols[0] == 0)
@@ -2894,7 +2875,7 @@ def test_volunteer_words_ranks_a_units_rows_over_their_inert_bounds_in_one_scan(
     """`volunteer_words` gives up a unit's A rows over their caps from one scan of its tiles, one a band, since an A row
     given up takes its band out and leaves every other band's rows' sums and caps as they were: on seeded counts with more rows over their caps than ⌈m/64⌉ allows, filler
     rows, and B rows over theirs, across three units, it gives up the A and B rows the one-row-at-a-time statement does."""
-    s = PPD.scheme_of("pearl-c-h100-v1-h3", k_min=32, tile=(16, 16))
+    s = pouw_schemes.get("pearl-c-h100-v1-h3", k_min=32, tile=(16, 16))
     rng = np.random.default_rng(7)
     most = 0
     for trial in range(24):
@@ -2908,30 +2889,6 @@ def test_volunteer_words_ranks_a_units_rows_over_their_inert_bounds_in_one_scan(
     assert most == CW.voluntary_cap(192) == 3
 
 
-@pytest.mark.slow
-def test_h3_screens_check_holds_a_pass_to_the_reference(honest_pass):
-    """h3_screen's check on a pass the reference proved: every tile's leaf is the reference's, and a call's dumped row digests,
-    row seeds, seed_A and E_A lines (16 padding rows under seed_A) are; a wrong line or row digest is caught."""
-    path, s, epoch, prover, tr, splits, records = honest_pass
-    HS = load("pearl_c_vllm_h3_screen", POUW / "pearl_c_vllm" / "h3_screen.py")
-    d = path.parent
-    assert HS._tiles(d, 1) == {"tiles": tr.commitment.count, "failed": 0, "failures": []}
-    for u in epoch.workload.matmuls:
-        ctx = Context(epoch.salt, u, tr.activation_roots[u.index], epoch.weight_roots[u.weight])
-        data = VR.Files(d)(json.loads(path.read_text())["matmuls"][u.index]["rows"])
-        rows = [VR.f32_row(data, u.shape.k, i) for i in range(u.shape.m)]
-        seeds, seed_a = s.row_seeds(ctx, rows, range(u.shape.m)), s.noise(ctx).seed_a
-        lines = [C.sample_line(x, 0, 0, 0) for x in seeds] + [C.sample_line(seed_a, 0, 0, r) for r in range(u.shape.m, u.shape.m + 16)]
-        (d / f"call{u.index}.seeds_a").write_bytes(b"".join(seeds))
-        (d / f"call{u.index}.seed_a").write_bytes(seed_a)
-        (d / f"call{u.index}.ea_codes").write_bytes(b"".join(bytes(x) for x in lines))
-        (d / f"call{u.index}.rowdig_a").write_bytes(b"".join(C.row_digest(r) for r in rows))
-    got = HS._calls(d)
-    assert got["ok"] and [c["padded"] - c["m16"] for c in got["calls"]] == [16, 16]
-    (d / "call1.ea_codes").write_bytes(bytes(32) + (d / "call1.ea_codes").read_bytes()[32:])
-    assert HS._calls(d)["calls"][1]["ea_rows_wrong"] == [0]
-    (d / "call1.rowdig_a").write_bytes(bytes(64) + (d / "call1.rowdig_a").read_bytes()[64:])
-    assert not HS._calls(d)["calls"][1]["row_digests"]
 def test_verify_run_refuses_a_v1_manifest(honest_pass):
     """A v1 manifest (a pass recorded before the execution phase's coins) is refused, as the Lean `PouwCheck.PearlPlus`
     refuses it, and so is a manifest of another schema; there is no ``--recorded`` reading of one."""
@@ -3023,8 +2980,8 @@ def test_the_device_run_takes_a_live_sessions_salt_opened_after_its_epochs_root(
     r = PS.epoch_open_root(root, 1)
 
     def make(c, o, k=1):
-        return PPDR.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, c, o,
-                                   capacity=1 << 12, salt_key=SALT_KEY, pass_index=k)
+        return PPDR.PearlCDeviceRun(pouw_schemes.get(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, c, o,
+                                   capacity=1 << 12, weight_salts=salts_b(weights), pass_index=k)
     c, o = live_coin(r)
     run = make(c, o)
     assert run.epoch.salt == salt_of(c, o.coin, root) and run.commits["coins"] == c.to_json()
@@ -3109,55 +3066,6 @@ def test_served_passes_verify_accepts_a_run_salted_by_a_live_session(tmp_path):
                                                                                  "manifest": str(path)}]}))
     rc, doc, answer = served_verify(path.parent, tmp_path / "verify.json")
     assert rc == 0 and answer["verdict"] == "accept" and doc["line"].startswith("ACCEPT"), doc["line"]
-
-
-def test_live_coins_reserve_a_salt_only_session_whose_settings_the_install_takes():
-    """`bench_arm.live_coins` (``served_passes.py serve``'s and ``served_step.py``'s): given the gate and this node's peer
-    name, the PoUW settings drop their in-process coins and take a salt-only session the gate reserves under the lane once
-    its ledger shows the lane's open period (``reserve --peer P --scheme S --families [["pouw/salt",1]] --epoch N``): the
-    challenger on this node, the reserve answer, the gate's open and that period, which `pouw.Settings` reads and the
-    adapter's refusals (`pouw.refusals`) refuse nothing of.  Neither given leaves the settings, and their coins
-    in-process, untouched; one alone is refused, and a reserve while the lane's open period is H1's is refused before it
-    is asked."""
-    from verity_vllm.protocols import pouw
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
-
-    BA = load("pearl_c_vllm_bench_arm", POUW / "pearl_c_vllm" / "bench_arm.py")
-    gate = "ssh -i KEY -o BatchMode=yes research@gate"
-    reserved = {"session": "s20261103T140000Z-0001", "seq": 7, "peer": "vy-dc-h200", "by": "vllm",
-                "expires_utc": "2026-11-03T16:00:00Z"}
-    ledger, asked = [], []
-
-    def run(argv):
-        assert argv[:-1] == shlex.split(gate)
-        asked.append(shlex.split(argv[-1]))
-        if asked[-1][0] == "ledger":
-            return 0, "".join(json.dumps(e) + "\n" for e in ledger)
-        return 0, json.dumps(reserved)
-
-    base = {"device": "cuda", "kernel": "k", "transcript_dir": "passes", "coins": Challenger(0, random.Random(7).randbytes)}
-    assert BA.live_coins(base, None, None, 5, "vllm", run) == (base, None) and asked == []
-    got, answer = BA.live_coins(base, gate, "vy-dc-h200", 5, "vllm", run)
-    assert answer == reserved and "coins" not in got and "coins" in base
-    assert {k: got[k] for k in ("device", "kernel", "transcript_dir", "challenger", "session", "period")} == {
-        "device": "cuda", "kernel": "k", "transcript_dir": "passes", "challenger": "127.0.0.1:0", "session": reserved,
-        "period": None}
-    assert asked == [["ledger"], ["reserve", "--peer", "vy-dc-h200", "--scheme", Wd.LIVE_SCHEME, "--families",
-                                  json.dumps([list(f) for f in Wd.SALT_FAMILIES], separators=(",", ":")), "--epoch", "5"]]
-    settings = pouw.Settings.of(got)
-    assert (settings.coins, settings.challenger, settings.session, settings.period) == (None, "127.0.0.1:0", reserved, None)
-    serving = types.SimpleNamespace(stage="serve", world=1, enforce_eager=True, settings_of=lambda name: got,
-                                    filled_of=lambda name: ())
-    assert pouw.refusals(SCHEME, serving) == ()
-    for one in ((gate, None), (None, "vy-dc-h200")):
-        with pytest.raises(ValueError, match="together"):
-            BA.live_coins(base, *one, 5, "vllm", run)
-    ledger.append({"kind": "period-open", "session": None, "body": {"period": "p1", "lane": "vllm",
-                                                                     **dict.fromkeys(PHW.H1_PERIOD, 1)}})
-    asked.clear()
-    with pytest.raises(ValueError, match="refused before reserving a salt-only session: the lane's open period p1 is H1's"):
-        BA.live_coins(base, gate, "vy-dc-h200", 5, "vllm", run)
-    assert asked == [["ledger"]]
 
 
 @pytest.mark.slow
@@ -3533,7 +3441,7 @@ def _inert_work_codes(rng, rows: int, k: int, zero_first: bool) -> list[list[int
 
 
 def test_the_batch_inert_work_is_the_scalar_inert_work_and_a_nan_code_is_the_scalars_rejection():
-    FT, s = SD.FT, PPD.scheme_of(SCHEME)
+    FT, s = SD.FT, pouw_schemes.get(SCHEME)
     rng, seen = np.random.default_rng(3), set()
     for trial in range(8):
         a, b = _inert_work_codes(rng, 3, 384, trial % 2 == 0), _inert_work_codes(rng, 4, 384, trial % 2 == 0)
@@ -3554,7 +3462,7 @@ def test_the_batch_tile_inert_work_is_the_scalar_tile_inert_work():
     elements (accumulators past both ends' saturation, and at 0), a zero row whose every block every word flags, B rows
     whose ends make dead pairs and forced zeros with them, and a row whose accumulator overflows, where both reject
     alike."""
-    FT, s = SD.FT, PPD.scheme_of(SCHEME)
+    FT, s = SD.FT, pouw_schemes.get(SCHEME)
     rng, seen = np.random.default_rng(7), set()
     one = 0x3F800000
     for trial in range(6):
@@ -3587,7 +3495,7 @@ def test_the_batch_tile_inert_work_is_the_scalar_tile_inert_work():
 def test_the_batch_inert_work_word_by_word_is_each_words_scalar_inert_work():
     """`fast_tile.words_inert_work` is `pearl_c_inert_work.word_inert_work` on every word, and its sums `chain_inert_work`'s on any rows and
     columns, so the remedy's row and column debits are the verifier's."""
-    FT, s = SD.FT, PPD.scheme_of(SCHEME)
+    FT, s = SD.FT, pouw_schemes.get(SCHEME)
     rng = np.random.default_rng(3)
     for trial in range(4):
         a, b = _inert_work_codes(rng, 3, 384, trial % 2 == 0), _inert_work_codes(rng, 4, 384, trial % 2 == 0)
@@ -3603,7 +3511,7 @@ def test_the_batch_inert_work_word_by_word_is_each_words_scalar_inert_work():
 def test_the_batch_forms_encode_and_check_a_tile_as_the_scalar_ones():
     """`fast_tile.install`'s forms (forming, the peel factors, G, C̃ and U, the debit, native BLAKE3) give a tile's encoding,
     check and debit field for field as the scalar reference, and its undo puts every scalar function back."""
-    FT, s = SD.FT, PPD.scheme_of(SCHEME)
+    FT, s = SD.FT, pouw_schemes.get(SCHEME)
     rng = np.random.default_rng(5)
     shape = Shape(8, 256, 64)
     mm, tile = Matmul(0, shape, 0), s.tiles(shape)[0]
@@ -3632,7 +3540,7 @@ def test_the_batch_forms_encode_and_check_a_tile_as_the_scalar_ones():
     assert (fast[0].pa, fast[0].pb) == (ref[0].pa, ref[0].pb)
     assert (fast[1].c, fast[1].u) == (ref[1].c, ref[1].u) and fast[2:] == ref[2:]
     with pytest.raises(ValueError):
-        FT.install(PPD.scheme_of("pearl-c-sm120-unpromoted-v1-h3"))
+        FT.install(pouw_schemes.get("pearl-c-sm120-unpromoted-v1-h3"))
 
 
 @pytest.mark.slow
@@ -3668,7 +3576,7 @@ def test_served_inert_work_share_is_the_tile_rules_inert_work_over_its_rev1_cred
     """served_inert_work's credit is the tile rule's cap over ρ, `creditDevRev1`'s share of the credited cells, with the first
     promotion add of every word out once: every share it records is `tileInertWorkRev1` over that credit, none with the add
     taken out a second time."""
-    s = PPD.scheme_of(SCHEME)
+    s = pouw_schemes.get(SCHEME)
     rng, shape, rows, cols = np.random.default_rng(11), Shape(64, 512, 48), 3, 2
     rec = PW.UnitRecord(Matmul(0, shape, 0), shape.m, shape.k, (), ())
     def codes(r):
@@ -3915,13 +3823,13 @@ def test_the_smoke_starts_both_engines_and_records_a_failure_to_stay_resident(tm
 
     monkeypatch.setattr(E2E, "Worker", Fake)
     args = types.SimpleNamespace(out=tmp_path / "smoke.json")
-    E2E.smoke(args)
+    assert E2E.smoke(args)
     got = json.loads(args.out.read_text())
     assert got["resident"] and got["gate_ok"] and "error" not in got and not Fake.live
     assert [s["step"].split(":")[0] for s in got["steps"]][1::2] == ["fp8", "bf16"] and len(got["steps"]) == 5
     assert got["token_agreement_vs_bf16"] == {"fp8": 1.0, "pearlc": 2 / 3}
     Fake.refuse_arm = True
-    E2E.smoke(args)
+    assert not E2E.smoke(args)
     got = json.loads(args.out.read_text())
     assert not got["resident"] and "OutOfMemoryError" in got["error"] and len(got["steps"]) == 2 and not Fake.live
 
@@ -4325,12 +4233,12 @@ def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
     run = make()
     fmt = hash_format(run.scheme)
     assert fmt is HASH_FORMATS["h3"] and run.tree_hash == fmt.tree_hash == run.scheme.commitment_hash == HM96
-    assert PPDR._bytes(run.const[:32]) == SALT_KEY and set(HASH_FORMATS) == {"h0", "h3"}
-    assert not hasattr(PPD, "TREE_HASH") and all(SchemeId.parse(n).name == n for n in PPD.SCHEMES)
+    assert PPDR._bytes(run.const) == hm96_kernel_constants() and set(HASH_FORMATS) == {"h0", "h3"}
+    assert not hasattr(PPD, "TREE_HASH") and all(SchemeId.parse(n).name == n for n in kernel_names("pearl-c"))
     assert not hasattr(PPD, "tree_hash") and not hasattr(PPD, "variant")
     assert C.PearlC(forming="v1", hashing="h0").commitment_hash == "sha256"
-    with pytest.raises(KeyError, match="this device path runs"):
-        PPD.scheme_of("pearl-c-sm120-v1-h0")
+    with pytest.raises(KeyError, match="no PoUW scheme"):
+        pouw_schemes.get("pearl-c-sm120-v1-h0")
 
 
 def test_each_device_records_kernels_refuse_their_own_grain():
@@ -4372,12 +4280,12 @@ def sm90_run():
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     kernel = PPD.Kernel(R90, H100Dev(), "0" * 64)
-    roots = PPDR.weight_roots(kernel, weights, H100_SCHEME, salt_key=SALT_KEY)
+    roots = PPDR.weight_roots(kernel, weights, H100_SCHEME, weight_salts=salts_b(weights))
     coins = salt_coin(roots)
 
     def make(schedule="deferred-a"):
-        return PPDR.PearlCDeviceRun(PPD.scheme_of(H100_SCHEME), f"pouw:{H100_SCHEME}", kernel, weights, roots, *coins,
-                                   capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
+        return PPDR.PearlCDeviceRun(pouw_schemes.get(H100_SCHEME), f"pouw:{H100_SCHEME}", kernel, weights, roots, *coins,
+                                   capacity=1 << 12, schedule=schedule, weight_salts=salts_b(weights))
     return make, kernel, weights, roots
 
 
@@ -4387,7 +4295,7 @@ def test_a_schedule_this_path_the_kernel_or_the_format_cannot_run_is_refused(dev
     sm_120's), each with the buffers it touches rotated.  The screen stays on the caller."""
     from verity.protocols.resource_accounting.compute.pouw.verifier.serving import Schedule
     make, kernel, *_ = device_run
-    s = PPD.scheme_of(SCHEME)
+    s = pouw_schemes.get(SCHEME)
     assert PPD.schedule_of("deferred-a", s).name == "deferred-a" and PPD.splits(kernel)
     assert make(schedule="deferred-a").schedule.name == "deferred-a"
     whole = types.SimpleNamespace(run=types.SimpleNamespace(Pipeline=types.SimpleNamespace(FUSED={"commit_a": ()})))
@@ -4400,8 +4308,8 @@ def test_a_schedule_this_path_the_kernel_or_the_format_cannot_run_is_refused(dev
     with pytest.raises(ValueError, match="a side lane needs ring >= 2"):
         PPD.schedule_of(Schedule("one-set", frozenset({"tile_hash"}), ring=1), s)
     assert PPD.rotated(PPD.schedule_of("deferred", s)) == ("c", "segdig_t", "u") and PPD.rotated(PPD.SERIAL) == ()
-    assert PPD.rotated(PPD.SCHEDULES["deferred-a"]) == ("c", "keys", "line_a", "rowdig_a", "seed_a", "segdig_t", "tree_a",
-                                                     "u")
+    assert PPD.rotated(PPD.SCHEDULES["deferred-a"]) == ("c", "keys", "line_a", "rowdig_a", "salts_a", "seed_a", "segdig_t",
+                                                     "tree_a", "u")
     assert PPDR.PearlCExecutor(sm90_run[0]()).schedules == {"serial", "deferred", "deferred-caller", "deferred-a"}
 
 
@@ -4411,7 +4319,7 @@ def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm
     call's side lane runs pd_tree (A's levels, seed_A and line_a, and no padding rows' E_A lines, though m₁₆ = 32 has
     them), then the tile leaves, on the run's side lanes in turn (1, then 3); from a full tile (64) the call's side lane
     runs the tile leaves and the side lane after it pd_tree (tiles on 1, then 3; the tree on 3, then 1); no further
-    stream.  The lanes use the ring's set for the call: A's tree, seed_A, line_a, the keys, C~ and U; E_A's lines are the
+    stream.  The lanes use the ring's set for the call: A's tree and salts, seed_A, line_a, the keys, C~ and U; E_A's lines are the
     shape's own, which only the main lane touches.  The call's keys are uploaded into its set's, and A's root is copied
     to the pass from its set."""
     make, kernel, weights, roots = sm90_run
@@ -4446,7 +4354,7 @@ def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm
         assert (tp[10], tp[11]) == (ptr(j, "seed_a"), ptr(j, "line_a"))
         assert cp[6] == tp[6] == ptr(j, "keys") and cp[5] == tp[5] == ptr(j, "keys") + nb
         assert by["gemm_pearlc_d"][c][0][2:4] == by["pd_tiles_851"][c][0][:2] == (ptr(j, "c"), ptr(j, "u"))
-    assert len({ptr(j, x) for j in (0, 1) for x in PPD.rotated(run.schedule)}) == 16
+    assert len({ptr(j, x) for j in (0, 1) for x in PPD.rotated(run.schedule)}) == 18
     for j, index in ((0, 2), (1, 1)):
         keys = sh.keys if j == 0 else sh.sets[j]["keys"]
         assert PPDR._bytes(keys[:168]) == PPDR.call_keys(run.salt, roots[0], index, 32, run.tree_hash)
@@ -4594,7 +4502,7 @@ def test_deferred_a_runs_sm120s_split_on_the_lanes(device_run, tmp_path):
     kept_run = make(schedule="deferred-a")
     kept_run.begin(retain=str(tmp_path / "kept"), run=RUN)
     kept = []
-    kept_run._retained = lambda cur, mm, m, flags, xa, tree, y=None: kept.append(tree.data_ptr())
+    kept_run._retained = lambda cur, mm, m, flags, xa, tree, salts, y=None: kept.append(tree.data_ptr())
     kernel.dev.log.clear()
     kept_run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
     pd = [(n, st, p, i) for n, st, p, i in kernel.dev.log if n.startswith("pd_") and not n.endswith("_smem")]
@@ -4610,7 +4518,7 @@ def test_an_eager_forward_under_whole_eager_runs_a_prefills_calls_with_as_tree_a
     GEMMs, and never A's level 0; from a full tile of rows the side lane after the call's runs A's level 0 over the row
     digests of the call's set, its levels and seed_A, and the call's side lane the tile leaves.  A second eager_forward,
     after a call, changes nothing; the next pass is back on its own schedule, and without whole_eager nothing moves.  A
-    level 0 reads its unit index (its salt nonce) from its own set's keys."""
+    level 0 reads A's salts from its own set's."""
     make, kernel, weights, *_ = device_run
     assert make().whole_eager is None and (r := make()) and (r.eager_forward() or r.schedule.name) == "serial"
     run = make(whole_eager="deferred-a")
@@ -4640,8 +4548,7 @@ def test_an_eager_forward_under_whole_eager_runs_a_prefills_calls_with_as_tree_a
     leaves = [p for n, st, p, i in log if n == "hm_leaves"]
     for c, j in enumerate((0, 1)):
         assert folds[c][1] == leaves[c][0] == ptr(j, "rowdig_a") and leaves[c][1] == ptr(j, "tree_a")
-        keys = sh.keys if j == 0 else sh.sets[j]["keys"]
-        assert leaves[c][5] == keys.data_ptr() + run.nb + 96      # A's unit index, its salt nonce: the set's own keys
+        assert leaves[c][2] == ptr(j, "salts_a")                  # A's salts: the set's own
     assert run.end()["schedule"] == "deferred-a"
     run.begin()
     assert run.schedule.name == "serial" and run._eager_from is None
@@ -4669,7 +4576,7 @@ def test_deferred_a_runs_as_tree_aside_in_a_retained_pass_too_and_writes_no_padd
     run = make()
     run.begin(retain=str(tmp_path / "kept"), run=RUN)
     kept = []
-    run._retained = lambda cur, mm, m, flags, xa, tree, y=None: kept.append(tree.data_ptr())
+    run._retained = lambda cur, mm, m, flags, xa, tree, salts, y=None: kept.append(tree.data_ptr())
     kernel.dev.log.clear()
     run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
     pd = [(n, st, p, i) for n, st, p, i in kernel.dev.log if n.startswith("pd_") and not n.endswith("_smem")]
@@ -4758,7 +4665,7 @@ class H100TwinDev(TwinDev):
 @pytest.mark.slow
 @pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
 @pytest.mark.parametrize("arch", ["sm90", "sm120"])
-def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_lines(tmp_path, arch):
+def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_lines(tmp_path, arch, monkeypatch):
     """Under ``deferred-a`` (A's commitment split, its tree on the side lane, no padding rows' E_A lines) a retained pass
     commits what the serial one commits, on sm_90a's pipeline and on sm_120's, its trees computed on the host
     (`H100TwinDev` or `TwinDev`: hash_decode.cuh's host build and simt_twin): the records root, the commitment and each
@@ -4774,11 +4681,12 @@ def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_l
     scheme = H100_SCHEME if arch == "sm90" else SCHEME
     kernel = (PPD.Kernel(R90, H100TwinDev(pd), "0" * 64) if arch == "sm90" else
               PPD.Kernel(R, TwinDev(pd), "0" * 64))
-    roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
+    roots = PPDR.weight_roots(kernel, weights, scheme, weight_salts=salts_b(weights))
     got = {}
     for schedule in ("serial", "deferred-a"):
-        run = PPDR.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots,
-                                  *salt_coin(roots), capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
+        seeded_device_salts(monkeypatch)
+        run = PPDR.PearlCDeviceRun(pouw_schemes.get(scheme), f"pouw:{scheme}", kernel, weights, roots,
+                                  *salt_coin(roots), capacity=1 << 12, schedule=schedule, weight_salts=salts_b(weights))
         run.begin(retain=str(tmp_path / schedule), run=RUN)
         lines = []
         for w, x in xs:
@@ -4800,7 +4708,7 @@ def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_l
 @pytest.mark.slow
 @pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
 @pytest.mark.parametrize("arch", ["sm90", "sm120"])
-def test_deferred_a_at_a_prefills_rows_commits_what_the_serial_one_commits(tmp_path, arch):
+def test_deferred_a_at_a_prefills_rows_commits_what_the_serial_one_commits(tmp_path, arch, monkeypatch):
     """Past pd's rows (a prefill's: A's commitment split over the generic kernels, `run.Pipeline.FUSED_GENERIC`, on sm_90a
     over chain "pl"'s), two calls of each shape in a pass under ``deferred-a`` take the ring's two sets, each call's A tree
     under its own set's keys, and the pass commits what the serial one commits (`H100TwinDev` over hash_prefill.cuh's host
@@ -4815,11 +4723,12 @@ def test_deferred_a_at_a_prefills_rows_commits_what_the_serial_one_commits(tmp_p
     scheme = H100_SCHEME if arch == "sm90" else SCHEME
     kernel = (PPD.Kernel(R90, H100TwinDev(pd), "0" * 64) if arch == "sm90" else
               PPD.Kernel(R, TwinDev(pd), "0" * 64))
-    roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
+    roots = PPDR.weight_roots(kernel, weights, scheme, weight_salts=salts_b(weights))
     got = {}
     for schedule in ("serial", "deferred-a"):
-        run = PPDR.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, *salt_coin(roots),
-                                  capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
+        seeded_device_salts(monkeypatch)
+        run = PPDR.PearlCDeviceRun(pouw_schemes.get(scheme), f"pouw:{scheme}", kernel, weights, roots, *salt_coin(roots),
+                                  capacity=1 << 12, schedule=schedule, weight_salts=salts_b(weights))
         run.begin(retain=str(tmp_path / schedule), run=RUN)
         for w, x in xs:
             run.gemm(w, x, weights[w], None)
@@ -4833,11 +4742,11 @@ def test_deferred_a_at_a_prefills_rows_commits_what_the_serial_one_commits(tmp_p
 
 def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm90_run, monkeypatch):
     """A replayed call (`_replay_lanes`) keeps `_lanes`'s events: the main lane waits for the side steps of its set's last
-    call and uploads the slot, then waits for the caller and replays its graph; the side lane after the call's replays
-    A's tree behind the main graph's own event (where A's tree is aside, from a full tile of rows), and the call's side
-    lane the rest behind the main lane's end, then waits for the tree; below a full tile the call's side lane replays the
-    tree, then the rest, with no event between them; the caller waits for the main lane.  A set's first call waits for
-    nothing, and its side lane's end becomes the set's event."""
+    call, uploads the slot and writes the set's A salts fresh, then waits for the caller and replays its graph; the side
+    lane after the call's replays A's tree behind the main graph's own event (where A's tree is aside, from a full tile of
+    rows), and the call's side lane the rest behind the main lane's end, then waits for the tree; below a full tile the
+    call's side lane replays the tree, then the rest, with no event between them; the caller waits for the main lane.  A
+    set's first call waits for nothing, and its side lane's end becomes the set's event."""
     from verity_torch.pouw.pearl_c import host as PPH
     from verity_torch.pouw.pearl_c import lanes_device as PPL
     make, *_ = sm90_run
@@ -4850,9 +4759,11 @@ def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm
 
     monkeypatch.setattr(PPH, "_event", lambda: "slot")
     monkeypatch.setattr(PPL, "_event", lambda: "done0")
+    monkeypatch.setattr(PPL, "fresh_into", lambda dst, n, raw=None: calls.append(("fresh", dst, n, raw)))
+    monkeypatch.setattr(run, "salts_a", lambda sh, pipe: "salts")
     run.driver = Driver()
     side0, side1 = (types.SimpleNamespace(raw=raw, event=f"side{raw // 2}", tree_event=f"tree{raw // 2}") for raw in (1, 3))
-    main, sh = types.SimpleNamespace(raw=2, event="main"), types.SimpleNamespace(done=[None, "done1"])
+    main, sh = types.SimpleNamespace(raw=2, event="main"), types.SimpleNamespace(done=[None, "done1"], m16=16)
     up, i = run.uploads, run.uploads.i
 
     def src(k):
@@ -4864,13 +4775,15 @@ def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm
     run._replay_lanes(types.SimpleNamespace(execs=(30, 31, 32), slot_ptr=4096, ev_tree="cut2"), sh, 1, side0, side0, 0, main,
                       b"k" * 200)
     assert calls == [
-        ("wait", 2, "done1"), ("copy_in", 4096, src(0), 200, 2), ("record", "slot", 2), ("record", "main", 0),
+        ("wait", 2, "done1"), ("copy_in", 4096, src(0), 200, 2), ("record", "slot", 2), ("fresh", "salts", 16, 2),
+        ("record", "main", 0),
         ("wait", 2, "main"), ("launch", 10, 2), ("record", "side1", 2), ("wait", 1, "cut"), ("launch", 11, 1),
         ("record", "tree1", 1), ("wait", 3, "side1"), ("launch", 12, 3), ("wait", 3, "tree1"), ("record", "done1", 3),
         ("record", "main", 2), ("wait", 0, "main"),
-        ("copy_in", 8192, src(1), 200, 0), ("record", "slot", 0), ("launch", 20, 0), ("record", "side0", 0),
-        ("wait", 1, "side0"), ("launch", 22, 1), ("record", "done0", 1),
-        ("wait", 2, "done1"), ("copy_in", 4096, src(2), 200, 2), ("record", "slot", 2), ("record", "main", 0),
+        ("copy_in", 8192, src(1), 200, 0), ("record", "slot", 0), ("fresh", "salts", 16, 0), ("launch", 20, 0),
+        ("record", "side0", 0), ("wait", 1, "side0"), ("launch", 22, 1), ("record", "done0", 1),
+        ("wait", 2, "done1"), ("copy_in", 4096, src(2), 200, 2), ("record", "slot", 2), ("fresh", "salts", 16, 2),
+        ("record", "main", 0),
         ("wait", 2, "main"), ("launch", 30, 2), ("record", "side0", 2), ("wait", 1, "cut2"), ("launch", 31, 1),
         ("wait", 1, "side0"), ("launch", 32, 1), ("record", "done1", 1), ("record", "main", 2), ("wait", 0, "main")]
     assert sh.done == ["done0", "done1"] and bytes(up.view[i, :200]) == b"k" * 200
@@ -4979,10 +4892,10 @@ def test_the_gates_schedule_check_compares_with_serial_and_keeps_the_runs_schedu
 
 def test_the_unpromoted_scheme_runs_gpu_1s_unpromoted_kernels(device_run):
     _, kernel, weights, roots, salt = device_run
-    s = PPD.scheme_of("pearl-c-sm120-unpromoted-v1-h3")
-    assert s.device.name == "sm120-unpromoted" and "pearl-c-sm120-unpromoted-v1-h3" in PPD.SCHEMES
+    s = pouw_schemes.get("pearl-c-sm120-unpromoted-v1-h3")
+    assert s.device.name == "sm120-unpromoted" and "pearl-c-sm120-unpromoted-v1-h3" in kernel_names("pearl-c")
     run = PPDR.PearlCDeviceRun(s, "pouw:pearl-c-sm120-unpromoted-v1-h3", kernel, weights, roots, *salt_coin(roots), capacity=1 << 12,
-                              salt_key=SALT_KEY)
+                              weight_salts=salts_b(weights))
     kernel.dev.log.clear()
     run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
     names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
@@ -5120,14 +5033,15 @@ def _stack_sites(weights):
     return [LinearSite(w, w, f"model.layers.{w}", t.shape[0], t.shape[1], "bf16") for w, t in weights.items()]
 
 
-class _Layer:
-    def __init__(self, weight):
-        self.weight = weight
+def _due(site, x, weight):
+    from verity.hooks import BlockDue
+    return BlockDue(site.qualname, site.weight_id, {"n": site.n, "k": site.k}, site.weight_format,
+                    {"x": x, "weight": weight, "bias": None})
 
 
 def test_the_run_behind_the_stack_commits_what_the_run_commits_alone(device_run, tmp_path, monkeypatch):
     """e2e's install path (`Stack` + `PearlCExecutor`, the arm from `arm_of`) retains the same manifest and files as the run
-    driven directly, byte for byte."""
+    driven directly, byte for byte, each drawing its fresh salts from `seeded_device_salts`."""
     import dataclasses
 
     from verity_vllm.protocols.linear.api import Stack
@@ -5136,11 +5050,13 @@ def test_the_run_behind_the_stack_commits_what_the_run_commits_alone(device_run,
     E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
     xs = [(w, torch.from_numpy(bf16_words(np.random.default_rng(60 + i), m, 1024).view(np.float32).copy()).to(torch.bfloat16))
           for i, (w, m) in enumerate(((0, 32), (1, 16), (0, 128), (1, 20)))]
+    seeded_device_salts(monkeypatch)
     direct = make()
     direct.begin(retain=str(tmp_path / "direct"), run=RUN)
     for w, x in xs:
         direct.gemm(w, x, weights[w], None)
     want = direct.end()
+    seeded_device_salts(monkeypatch)
     run = make()
     sites = _stack_sites(weights)
     stack = Stack(sites, PPDR.PearlCExecutor(run))
@@ -5148,7 +5064,7 @@ def test_the_run_behind_the_stack_commits_what_the_run_commits_alone(device_run,
     stack.activate(E2E.arm_of("pearlc", run, types.SimpleNamespace(schedule="serial")))
     with stack.pass_(dataclasses.replace(stack.active.spec, retain=str(tmp_path / "stack"), run_id=RUN)):
         for w, x in xs:
-            stack.apply(sites[w], _Layer(weights[w]), x, None, lambda *a: pytest.fail("the stack called vLLM's own apply"))
+            stack(_due(sites[w], x, weights[w]), lambda given: pytest.fail("the stack called vLLM's own apply"))
     got = stack.passes[-1]
     assert {k: v for k, v in got.items() if k != "manifest"} == {k: v for k, v in want.items() if k != "manifest"}
     a, b = Path(want["manifest"]).parent, Path(got["manifest"]).parent
@@ -5169,13 +5085,13 @@ def test_the_modes_are_arms_and_the_negative_control_is_a_pass_control(device_ru
     sites = _stack_sites(weights)
     stack = Stack(sites, PPDR.PearlCExecutor(run))
     stack.activate(arms["bf16"])
-    assert stack.apply(sites[0], _Layer(weights[0]), "x", None, lambda layer, x, bias: ("stock", x)) == ("stock", "x")
+    assert stack(_due(sites[0], "x", weights[0]), lambda given: ("stock", given)) == ("stock", None)
     stack.activate(arms["pearlc"])
     kernel.dev.log.clear()
     spec = arms["pearlc"].spec.__class__(controls=(Control("omit", E2E.CONTROL_OMITS),), schedule="deferred")
     with stack.pass_(spec):
         assert run.omit == E2E.CONTROL_OMITS
-        stack.apply(sites[0], _Layer(weights[0]), torch.randn(32, 1024).to(torch.bfloat16), None, None)
+        stack(_due(sites[0], torch.randn(32, 1024).to(torch.bfloat16), weights[0]), None)
     names = {n for n, *_ in kernel.dev.log}
     assert not names & {"s512_tile_segs", "s512_row_segs", "s512_tile_leaves", "s512_rows", "pd_commit_851", "pd_tiles_851"}
     assert run.omit == frozenset()
@@ -5219,6 +5135,16 @@ def _served_step_profile(path: Path) -> Path:
         kernel(s + 7_100_000, s + 7_500_000, s + 7_600_000, 6)
     con.commit()
     return path
+
+
+def test_served_step_refuses_the_rtx_pro_6000s_pearl_c_arm_by_name():
+    """No declared scheme serves Pearl-C on sm_120, so ``served_step.py run`` refuses an arm of that entry by name
+    (`undeclared`, which `_engine` asks before any engine) and passes the H100's, and ``served_step.sh``'s RTX PRO 6000
+    default arms are stock FP8's alone."""
+    S = load("pearl_c_vllm_served_step", POUW / "pearl_c_vllm" / "served_step.py")
+    assert S.undeclared(["pouw:pearl-c-sm120-v1-h3"]).startswith("pouw:pearl-c-sm120-v1-h3 is no declared scheme's name")
+    assert S.undeclared(["pearl-plus"]) is None
+    assert "ARMS=${ARMS:-stock-fp8@compiled,stock-fp8}; SPEC" in (POUW / "pearl_c_vllm" / "served_step.sh").read_text()
 
 
 def test_the_served_step_profile_splits_each_decode_step_into_kernels_and_host_ranges(tmp_path):

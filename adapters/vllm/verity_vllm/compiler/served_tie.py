@@ -1,6 +1,8 @@
-"""The served rows' tie to the compute: a window's committed served rows (`served_rows`) held to the positions its steps'
-Commit holds, so a prover can't register cheaper rows at serve time than the batch it ran. The six-pass run's rows
-(user-1 never admitted) leave step 6's 29 prefill tokens of the honest batch uncovered, and the tie refuses them.
+"""The served rows' tie to the compute, a Definition: it states that a window's committed served rows (`served_rows`)
+are the positions its steps' Commit holds, which is built to keep a prover from registering cheaper rows at serve time
+than the batch it ran; no proof of it runs, so today the rows registered at serve time are the prover's word. The
+six-pass run's rows (user-1 never admitted) leave step 6's 29 prefill tokens of the honest batch uncovered, and `check`
+refuses them.
 
     ServedRowsTie_v2{R, P, G, IW, L, T, IB, PB} (pub, srv, pos_<g>_<k> …, sw_<g> …) -> verdict[16]
         G steps of a P-step window, block j of its P / G
@@ -19,11 +21,11 @@ from the same chunks through the same layout (`positions` and `ids`, the shared 
 - ``pub``, public: the proof block's block j of the window (JW = bitlen(P / G − 1) bits, none when G = P), then each of
   its G steps' token count N (TW bits a step), the binding map's element count of the positions;
 - ``srv``, the window's served rows, row w of the served-rows registration (`served_rows`: P steps of R slots of (valid,
-  request, kind, start, n), `compile_slice.rows_bits`' packing), whole in every proof block so that its b‖c is the
-  registration's leaf, checked natively;
-- ``pos_<g>_<k>``, the proof block's step g's k-th positions chunk, a 4096-byte leaf of the step's tree, its b‖c checked
-  natively against that leaf (`chunk_ok`) at its public index, and the tree's root through the step root to the run
-  root;
+  request, kind, start, n), `compile_slice.rows_bits`' packing), whole in every proof block so that a proof of the tie
+  would check natively that its b‖c is the registration's leaf;
+- ``pos_<g>_<k>``, the proof block's step g's k-th positions chunk, a 4096-byte leaf of the step's tree, its b‖c for a
+  proof of the tie to check natively against that leaf (`chunk_ok`) at its public index, and the tree's root through the
+  step root to the run root;
 - ``sw_<g>``, witness: the prover's switches of step g's routing (`route`).
 
 **The statement** (`check`). Per step, the slots in batch order cover the step's tokens in turn: slot k's run is [lo_k,
@@ -43,11 +45,12 @@ token t − 1's position plus one, compared on X = max(LW, TW) + 1 bits with the
 t − lo < 2^LW + 2^TW), so with the honest switches (`route`) the verdict is `check`'s, and with any switches it accepts
 only what `check` accepts (`reference` is the circuit in integers).
 
-**Selection: every proof block, always proved** (`Selection` All, as a transfer-gate proof block is). The tie is a
-binding, not a check on work: a step left untied makes that step's served rows the prover's word, and one such step can
-lower a window's charge (the six passes are one). The charge it protects feeds the network verdict, an AND over every
-window with no ε, so a tie sampled at ε would leave each untied step's charge free with probability 1 − ε. A window is
-its P / G proof blocks, block j = 0 … P / G − 1 each once, under one template.
+**Selection: every proof block** (`Selection` All, as a transfer-gate proof block is), under a proof of the tie; no
+proof of it runs, so today the rows registered at serve time are the prover's word. The tie is a binding, not a check on
+work: a step left untied makes that step's served rows the prover's word, and one such step can lower a window's charge
+(the six passes are one). The charge it protects feeds the network verdict, an AND over every window with no ε, so a tie
+sampled at ε would leave each untied step's charge free with probability 1 − ε. A window is its P / G proof blocks,
+block j = 0 … P / G − 1 each once, under one template.
 
 **Cost** (`size`, `step_size`): a step is the routing, about (M / 2)(2D − 1)·(TW + LW) ANDs less the switches a zero record
 folds away, and about 3·TW + 2·X + 8·PB ANDs a token for the scan; a proof block is G steps and, when G < P, P·TB ANDs
@@ -79,8 +82,8 @@ from verity.commitments import hm96
 from verity.commitments.gates.frame_v3 import _part, _refs
 from verity.commitments.merkle import CommitmentDomain, merkle_depth
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf
-from verity.protocols.resource_accounting.network.verifier import head_check as HC
-from verity.protocols.resource_accounting.network.verifier import io_tie as IT
+from verity.commitments.gates import bits as GB
+from verity.circuits.boolean import benes as BN
 
 from verity_vllm.compiler import replay_chain as RC
 
@@ -105,7 +108,7 @@ def _sizes(S, *names: str) -> None:
 def _step_widths(S) -> SimpleNamespace:
     _sizes(S, "R", "L", "T")
     LW, TW = _bitlen(S.L), _bitlen(S.T)
-    D = IT.route_depth(S.T, S.R)
+    D = BN.route_depth(S.T, S.R)
     return SimpleNamespace(LW=LW, TW=TW, W=TW + _bitlen(S.R), X=max(LW, TW) + 1, V=TW + LW, D=D, M=1 << D,
                            SW=(2 * D - 1) << (D - 1))
 
@@ -252,12 +255,12 @@ def _sig_step(S):
 
 
 def _body_step(B, S, step, n, chunks, switches):
-    Z, K = _step_widths(S), HC._Consts(B)
+    Z, K = _step_widths(S), GB._Consts(B)
     sl = _refs(B.call(bind(ServedTieSlots, R=S.R, L=S.L, T=S.T), step, n))
-    recs = HC._coll(Array(Z.M, Array(Z.V, BIT)), sl[2:] + K.bits(0, (Z.M - S.R) * Z.V))
-    routed = B.call(bind(IT.IoTieRoute, W=Z.V, D=Z.D), recs, switches)
-    pos = B.call(bind(ServedTieScan, R=S.R, L=S.L, T=S.T, IB=S.IB, PB=S.PB), routed, n, chunks, HC._coll(BIT, [sl[1]]))
-    return HC._coll(Array(2, BIT), [sl[0], *_refs(pos)])
+    recs = GB._coll(Array(Z.M, Array(Z.V, BIT)), sl[2:] + K.bits(0, (Z.M - S.R) * Z.V))
+    routed = B.call(bind(BN.IoTieRoute, W=Z.V, D=Z.D), recs, switches)
+    pos = B.call(bind(ServedTieScan, R=S.R, L=S.L, T=S.T, IB=S.IB, PB=S.PB), routed, n, chunks, GB._coll(BIT, [sl[1]]))
+    return GB._coll(Array(2, BIT), [sl[0], *_refs(pos)])
 
 
 ServedTieStep = CompositeDefinition(
@@ -304,31 +307,31 @@ def _sig(S):
 def _all(B, refs: list):
     if len(refs) == 1:
         return refs[0]
-    return _refs(B.call(BL.and_gate(len(refs)), HC._coll(Array(len(refs), BIT), refs)))[0]
+    return _refs(B.call(BL.and_gate(len(refs)), GB._coll(Array(len(refs), BIT), refs)))[0]
 
 
 def _body(B, S, pub, srv, *rest):
-    Z, G, K = widths(S), geometry(S), HC._Consts(B)
+    Z, G, K = widths(S), geometry(S), GB._Consts(B)
     pr, sr = _refs(pub), _refs(srv)
     pos, sw = rest[:S.G * G.K], rest[S.G * G.K:]
     counts, poss = [], []
     tie = [b for i in range(S.P) for b in _tie(S, sr[i * Z.SB:(i + 1) * Z.SB])]
     if Z.U > 1:
-        sel = _refs(B.call(bind(ServedTieSelect, P=S.P, G=S.G, SB=Z.TB), HC._coll(Array(Z.JW, BIT), pr[:Z.JW]),
-                              HC._coll(Array(S.P * Z.TB, BIT), tie)))
+        sel = _refs(B.call(bind(ServedTieSelect, P=S.P, G=S.G, SB=Z.TB), GB._coll(Array(Z.JW, BIT), pr[:Z.JW]),
+                              GB._coll(Array(S.P * Z.TB, BIT), tie)))
         recs = sel[:-1]
         counts.append(sel[-1])
     else:
         recs = tie
     step = bind(ServedTieStep, **{k: getattr(S, k) for k in STEP})
     for g in range(S.G):
-        o = _refs(B.call(step, HC._coll(Array(Z.TB, BIT), recs[g * Z.TB:(g + 1) * Z.TB]),
-                            HC._coll(Array(Z.TW, BIT), pr[Z.JW + g * Z.TW:Z.JW + (g + 1) * Z.TW]),
-                            HC._coll(Array(G.K, Array(8 * CHUNK, BIT)), [r for c in pos[g * G.K:(g + 1) * G.K] for r in _refs(c)]),
-                            HC._coll(Array(Z.SW, BIT), _refs(sw[g])[:Z.SW])))
+        o = _refs(B.call(step, GB._coll(Array(Z.TB, BIT), recs[g * Z.TB:(g + 1) * Z.TB]),
+                            GB._coll(Array(Z.TW, BIT), pr[Z.JW + g * Z.TW:Z.JW + (g + 1) * Z.TW]),
+                            GB._coll(Array(G.K, Array(8 * CHUNK, BIT)), [r for c in pos[g * G.K:(g + 1) * G.K] for r in _refs(c)]),
+                            GB._coll(Array(Z.SW, BIT), _refs(sw[g])[:Z.SW])))
         counts.append(o[0])
         poss.append(o[1])
-    return HC._coll(Array(16, BIT), [_all(B, counts), _all(B, poss), *K.bits(0, 16 - len(FLAGS))])
+    return GB._coll(Array(16, BIT), [_all(B, counts), _all(B, poss), *K.bits(0, 16 - len(FLAGS))])
 
 
 ServedRowsTie = CompositeDefinition(
@@ -396,7 +399,7 @@ def _live(S, a: int, n: int, N: int) -> bool:
 
 
 def reference(S, unit_rows: dict) -> dict[str, bool]:
-    """The circuit's flags in integers, the switches read: each step's records routed (`io_tie.benes_apply`) and scanned."""
+    """The circuit's flags in integers, the switches read: each step's records routed (`benes.benes_apply`) and scanned."""
     Z = widths(S)
     inside, steps = _steps(S, unit_rows)
     count, pos = inside, True
@@ -404,7 +407,7 @@ def reference(S, unit_rows: dict) -> dict[str, bool]:
         runs, end = _runs(S, f)
         count &= end == N and N <= S.T
         xs = [(a + 1 if _live(S, a, n, N) else 0, s) for a, n, s in runs] + [(0, 0)] * (Z.M - S.R)
-        routed = IT.benes_apply(xs, sw)
+        routed = BN.benes_apply(xs, sw)
         ok = end >= N and all(v in (0, t + 1) if t < S.T else v == 0 for t, (v, _s) in enumerate(routed))
         for t in range(min(N, S.T)):
             v, s = routed[t]
@@ -421,7 +424,7 @@ def route(S, f: dict, N: int) -> list[int]:
         if _live(S, a, n, N):
             perm[k] = a
     rest = iter(sorted(set(range(Z.M)) - set(perm)))
-    return IT.benes([p if p >= 0 else next(rest) for p in perm])
+    return BN.benes([p if p >= 0 else next(rest) for p in perm])
 
 
 def verdict(flags: dict) -> int:
@@ -497,11 +500,11 @@ def evaluate(st: dict, cases: Sequence[Case]) -> list[int]:
 
 def _build_route(C, S, xs: list, sw: list) -> list:
     """`IoTieRoute{W, D}` on C's wires as Flock lowers it, each `IoTieSwitch` activation by its builder, the switch bits
-    in `IT.benes`' order: the input column, the upper half's, the lower half's, the output column."""
+    in `benes.benes`' order: the input column, the upper half's, the lower half's, the output column."""
     it = iter(sw)
 
     def column(pairs: list) -> list:
-        return [IT.IoTieSwitch.build(C, S, a, b, [next(it)]) for a, b in pairs]
+        return [BN.IoTieSwitch.build(C, S, a, b, [next(it)]) for a, b in pairs]
 
     def run(v: list) -> list:
         if len(v) == 2:

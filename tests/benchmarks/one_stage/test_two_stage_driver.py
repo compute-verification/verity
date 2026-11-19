@@ -23,6 +23,8 @@ from types import SimpleNamespace as NS
 import numpy as np
 import pytest
 
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
@@ -30,7 +32,9 @@ from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
+from verity.circuits import replay_links as RL
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as RG, docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments import history as HT
 from verity.commitments.gates import embedding as E
 from verity_vllm.pipeline import (boundary_rows as BR, boundary_stop as BS, boundary_tables as BT, chunk_rows as CR,
@@ -84,12 +88,12 @@ def _interior(layout: BR.Layout, previous: str, program: Program | None = None) 
     """The replay side's interior docket over the Q sampled spans' proof blocks (PAIR's instances, or
     ``program``'s, a window of templates'), at stand-in roots."""
     m = Q * P.units(Program(layout.replay), layout.query)
-    program, query = program or P.population_program(PAIR, m), layout.query
+    program, query = program or PN.population_program(PAIR, m), layout.query
     part = P.partition(program, query)
     ports = {v: {"leaves": m, "domain": R.window_domain(part["program"], P.digest(part), v, s, m, layout.run)}
              for v, s in INTERIOR}
     roots = [{"port": v, "root": f"{i + 1:02x}" * 64, **ports[v]} for i, (v, _) in enumerate(INTERIOR)]
-    rec = R.record(program, query, {"law": "subset", "k": m}, S.SCHEME, roots,
+    rec = DK.record(program, query, {"law": "subset", "k": m}, S.SCHEME, roots,
                    {"kind": "served", "run": layout.run, "row": 0, "interior": True}, previous=previous)
     return rec, ports
 
@@ -434,8 +438,8 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
     opening = tuple(IR.Operand(tid, p, f"{key}/{p}", cells, tuple(range(cells)), w) for p, w in member.rows
                     if p not in IR.TABLE)
     links = (*table, *opening)
-    w = IR.interior_window(member, cells, "00", [0], values=IR.link_values(links, Q))
-    rule = TS.Rule(f"rate:{Q}/{N}", K, tuple(v for m in w.members for v in TS.interior_values(m)), 60.0,
+    w = IR.interior_window(member, cells, "00", [0], links=links)
+    rule = TS.Rule(f"rate:{Q}/{N}", K, TS.interior_values(w), 60.0,
                    IR.span_values(links))
     pub = json.loads(json.dumps(BR.commit(spans, layout, 0, tables={t: h.root for t, h in hs.items()}).public()))
     got = TS.first(pub, check, rule, _placed(pub))
@@ -447,8 +451,8 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
 
     defs = definitions(got.layout.program)
     cs = SS._callers_of(defs, defs[key])
-    shares = [x for k, node in enumerate(defs[key].body.nodes) for x in SS._node_links(cs, defs[key], k, node)]
-    runs = SS._gather(lambda x: (x.template, x.port), lambda a, b: a.value == b.value, cs.units, shares)
+    shares = [x for k, node in enumerate(defs[key].body.nodes) for x in RL._node_links(cs, defs[key], k, node)]
+    runs = RL._gather(lambda x: (x.template, x.port), lambda a, b: a.value == b.value, cs.units, shares)
     assert SS.replay_links(got.layout.program, key, got.record) is None
     assert {(x.template, x.port, SS._port_of(named, key, x.value), per, tuple(SS.row_at(rs, j) for j in range(cells)))
             for x, per, rs in runs} == {(x.template, x.port, x.value, x.per, x.at) for x in links}
@@ -516,11 +520,12 @@ class _Decided:
 
 def test_no_outcome_of_a_stand_in_replay_block_says_it_is_complete(monkeypatch):
     """`outcome_of` reports ``complete`` beside ``accepted``. The replay block here is a stand-in for the class's
-    request Definition (`REQUEST_DEFINITION`) and the two-stage form is off (`second_stage.FORM`), so an outcome whose
-    stream accepted on two audit records that accepted and are complete is still not complete; nor is it with either
-    one switched on alone. Completeness is Lean's (`second_stage.complete`), which no entry answers yet, so with both on
-    it is not either. With Lean's answer (its twin standing in) and both on it is, and then only for an accepted
-    outcome whose records both accepted and are complete. A refused outcome is not."""
+    request Definition (`REQUEST_DEFINITION`), so an outcome whose stream accepted on two audit records that accepted and
+    are complete is still not complete. Completeness is
+    Lean's (`second_stage.complete`), which no entry answers yet, so with the request Definition on it is not either.
+    With Lean's answer (its twin standing in) and the request Definition on it is, and then only for an accepted outcome
+    whose records both accepted and are complete. A refused outcome is not. An accepted outcome says its
+    form is not yet proved (`not_covered`), whatever it says of its completeness."""
     handed = {"sessions": [], "verdicts": {}, "statement": {}, "proved_units": [], "instances": 0, "served": [],
               "session_roots": {}}
     whole = {"accepted": True, "complete": True, "checks": {}}
@@ -528,22 +533,16 @@ def test_no_outcome_of_a_stand_in_replay_block_says_it_is_complete(monkeypatch):
     def said(stream: _Decided) -> bool:
         return TS.outcome_of(stream, None, handed, [None, None], [], {})["complete"]
 
-    assert TS.REQUEST_DEFINITION is False and SS.FORM is False
+    assert TS.REQUEST_DEFINITION is False
     assert TS.outcome_of(_Decided(True, whole, whole), None, handed, [None, None], [], {})["accepted"] is True
+    assert TS.outcome_of(_Decided(True, whole, whole), None, handed, [None, None], [], {})["not_covered"] == TS.NOT_COVERED
+    assert TS.outcome_of(_Decided(False, whole, whole), None, handed, [None, None], [], {})["not_covered"] is None
     assert said(_Decided(True, whole, whole)) is False
     with monkeypatch.context() as m:
-        m.setattr(SS, "FORM", True)
         m.setattr(TS, "REQUEST_DEFINITION", True)
         assert said(_Decided(True, whole, whole)) is False
     monkeypatch.setattr(SS, "complete", SS.complete_twin)
     assert said(_Decided(True, whole, whole)) is False
-    with monkeypatch.context() as m:
-        m.setattr(SS, "FORM", True)
-        assert said(_Decided(True, whole, whole)) is False
-    with monkeypatch.context() as m:
-        m.setattr(TS, "REQUEST_DEFINITION", True)
-        assert said(_Decided(True, whole, whole)) is False
-    monkeypatch.setattr(SS, "FORM", True)
     monkeypatch.setattr(TS, "REQUEST_DEFINITION", True)
     assert said(_Decided(True, whole, whole)) is True
     assert said(_Decided(False, whole, whole)) is False
@@ -969,7 +968,7 @@ def test_the_writer_reads_a_stop_class_as_the_driver_and_the_stop_audit_write_it
     assert r.docket.digest == first["stop"]["registration"] and first["stop"]["record"]["previous"] == r.boundary
     interior = _record(4, 4, previous=r.boundary, interior=True)
     second = {"first_stage": {"registration": r.first.docket.digest}, "held": True, "outcome": {"accepted": False},
-              "second_stage": {"registration": R.digest(interior)}}
+              "second_stage": {"registration": DD.digest(interior)}}
     assert VR.record("second_stage", first, second, stream=interior, **NAMES)["verdict"] == "withheld"
 
 
@@ -1002,6 +1001,6 @@ def test_the_long_rows_class_over_a_131072_id_prompt_has_its_rule_from_its_repla
     rule = TS.rule_of(layout, "rate:1/1", 1)
     d = TS.design(layout, unlinked=True)
     assert d.rows == tuple(SS.replay_rows(layout.program, d.key)) and d.rows
-    assert rule.interior == tuple(v for m in d.window("00", [0]).members for v in TS.interior_values(m)) and rule.interior
+    assert rule.interior == TS.interior_values(d.window("00", [0])) and rule.interior
     with pytest.raises(ValueError, match="reads a writer of 2 units a block.*give the replay block's rows"):
         replace(d, rows=()).window("00", [0])

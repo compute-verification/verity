@@ -86,32 +86,41 @@ def check(env: dict[str, str], gpu: int, device_count: int, uuid: str, expected_
             "cuda_visible_devices": cvd, "cuda_device_order": env["CUDA_DEVICE_ORDER"]}
 
 
-#: what the card must be (the pods' bootstrap check), by its name within the device's: its compute capability, its card
-#: file (calibration/hardware/cards/), whose `sm.count` is the SMs it must have, its oldest driver and its build target. An RTX PRO
-#: 6000 Blackwell, sm_120, driver 575 or later; or an H200 or H100 (`verity bench overhead`'s cards), sm_90, driver 550 or
-#: later
-CARDS = {"RTX PRO 6000": ("12.0", "rtx-pro-6000-server", 575, "sm_120a"),
-         "H200": ("9.0", "h200-sxm-141gb", 550, "sm_90a"),
-         "H100": ("9.0", "h100-sxm-80gb", 550, "sm_90a")}
+def _release(driver: str) -> tuple[int, ...]:
+    return tuple(int(p) if p.isdecimal() else -1 for p in driver.split("."))
+
+
+#: the CUDA toolkit native/build.sh builds the harness with
+TOOLKIT = "12.9"
 
 
 def check_card(name: str, capability: str, sms: int, driver: str) -> dict:
-    known = next((c for c in CARDS if c in name), None)
-    if known is None:
-        raise IdentityError(f"not the card: name {name!r} is none of {', '.join(map(repr, CARDS))}")
-    from verity.device import load_card, number  # here: loading the harness needs the standard library alone
+    """Refuses the run unless the device is the card file (calibration/hardware/cards/) whose `driver` holds `name`, the
+    name the device gives: its `arch`'s architecture file's (calibration/hardware/architectures/) compute capability, its
+    `sm.count` SMs, and a driver no older than the `driver_min` of that file's `[[toolkit]]` gate for `TOOLKIT`. The
+    build target is the card's `arch`."""
+    # here: loading the harness needs the standard library alone
+    from verity.device import gpu_card_reporting, load_architecture, number, skus
 
-    want_capability, sku, min_driver, arch = CARDS[known]
-    want_sms = int(number(load_card(sku, directory=CARD_FILES)["sm"]["count"]))
+    try:
+        card = gpu_card_reporting(name, directory=CARD_FILES)
+        architecture = load_architecture(card["arch"], directory=CARD_FILES.parent / "architectures")
+    except KeyError as e:
+        raise IdentityError(f"not the card: {e.args[0]} (the GPU card files: "
+                            f"{', '.join(skus('gpu', directory=CARD_FILES))})") from None
+    arch, want_capability = card["arch"], architecture["capability"]
+    min_driver = {g["version"]: g["driver_min"] for g in architecture["toolkit"]}.get(TOOLKIT)
+    if min_driver is None:
+        raise IdentityError(f"not the card: {name} ({card['sku']}) builds for {arch}, whose architecture file has no "
+                            f"[[toolkit]] gate for CUDA {TOOLKIT}, the harness's toolkit: add it")
+    want_sms = int(number(card["sm"]["count"]))
     problems = []
     if capability != want_capability:
         problems.append(f"compute capability {capability}, not {want_capability}")
     if sms != want_sms:
         problems.append(f"{sms} SMs, not {want_sms}")
-    head = driver.split(".")[0]
-    major = int(head) if head.isdecimal() else -1
-    if major < min_driver:
+    if _release(driver) < _release(min_driver):
         problems.append(f"driver {driver!r}, need {min_driver} or later")
     if problems:
         raise IdentityError("not the card: " + "; ".join(problems))
-    return {"name": name, "capability": capability, "sms": sms, "driver": driver, "arch": arch}
+    return {"name": name, "capability": capability, "sms": sms, "driver": driver, "arch": arch, "short": card["short"]}

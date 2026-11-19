@@ -98,15 +98,3 @@ def class_manifest(subcircuit, lo: int, hi: int) -> bytes:
     m = {"format": CLASS_FORMAT, "template": subcircuit.id, "T": [lo, hi], "key_port": "k", "words_per_key": D, "unit_rows": rows.pop(),
          "nets": nets}
     return (json.dumps(m, sort_keys=True, separators=(",", ":")) + "\n").encode()
-
-
-def key_counts(input_set, lo: int = 0, hi: int | None = None) -> list[int]:
-    D = int(input_set.subcircuit.params["D"])
-    return [len(k) // D for k in input_set.port("k", lo, hi)]
-
-
-def stage(input_set, lo, hi, out_dir):
-    """The frame-v3 instance file for ids [lo, hi) of a one-T set (``verity_flock.ir_frame.stage``): each pod stages its own."""
-    from verity_flock import ir_frame
-
-    return ir_frame.stage(lowering_for_set(input_set), input_set, lo, hi, out_dir)

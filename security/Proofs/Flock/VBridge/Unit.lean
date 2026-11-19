@@ -20,7 +20,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Spot.Sampling.Circuit
 import Proofs.Flock.Soundness.ExecRows
 import Proofs.Flock.Soundness.SparseRows
 import VCVio.Prelude.Core
@@ -43,7 +43,7 @@ at the unit's local evaluation (`unit_recOpen`, over `copyVal`). The copy's inpu
 
 namespace FlockVBridge
 
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge.Hm
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge.Hm
 
 /-! ## A unit's rows hold at its local evaluation -/
 

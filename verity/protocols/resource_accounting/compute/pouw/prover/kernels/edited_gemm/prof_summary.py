@@ -1,5 +1,5 @@
-"""Summarize profile.sh's run dir: the parts of the slice's edited GEMM at o_proj against plain cuBLASLt int8, and ncu's
-counters per kernel. Usage: prof_summary.py OUT_DIR"""
+"""Summarize benchmarks/pouw/edited_gemm/profile.sh's run dir: the parts of the slice's edited GEMM at o_proj against
+plain cuBLASLt int8, and ncu's counters per kernel. Usage: prof_summary.py OUT_DIR"""
 from __future__ import annotations
 
 import csv
@@ -20,7 +20,7 @@ def ncu_rows(path: str) -> list[dict[str, str]]:
 
 
 def main(out: str) -> None:
-    """Print the summary of profile.sh's run directory ``out``."""
+    """Print the summary of benchmarks/pouw/edited_gemm/profile.sh's run directory ``out``."""
     with open(os.path.join(out, "bench.jsonl")) as fh:
         bench = [json.loads(line) for line in fh if line.strip()]
     print("# The slice's edited GEMM at o_proj, by part\n")

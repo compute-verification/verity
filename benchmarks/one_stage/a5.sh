@@ -19,6 +19,7 @@
 # audit, the binaries' sha256 and the circuit's pin; never a prover's file (inst-*, m*-private.bin, v*-private.bin: the rows
 # and their salts), a challenger's key or secret (challenger-work/), nor the 56 MB circuit (its pin is).
 set -uxo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 if [ "${COMMIT_SCHEME:-rows-sha512}" != rows-sha512 ]; then
   echo "a5.sh: COMMIT_SCHEME=$COMMIT_SCHEME: the fixture commits under rows-sha512 only (vllm-v1 is kept to read recorded runs)" >&2; exit 2
 fi
@@ -81,5 +82,5 @@ $PY benchmarks/one_stage/a5.py --bundle $BUNDLE --row-dir $ROWD --partition $PAR
 rc=${PIPESTATUS[0]}
 mkdir -p $O/a5
 (cd $W/a5 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -path './*/archive/*' ! -path '*/challenger-work/*' -print0 \
-  | xargs -0 -I{} cp --parents {} $O/a5/)
+  | python3 "$PUBF" filter | xargs -0 -I{} cp --parents {} $O/a5/)
 exit $rc

@@ -139,6 +139,9 @@ The rules in force, each stated as itself; the friction skill has the standing r
   boundary are committed, each under a hiding leaf; the values inside a block never are. Each such wire is to have one
   commitment that every block reading or writing it shares, so there is no wire check to switch on; today each
   block commits its own rows, and a wiring check (`HmLinks`) ties them only where an audit's case names a wiring.
+  A hiding leaf's salt is fresh operating-system bytes, or the randomness module's keyed SHA-512 stream under a key
+  drawn fresh for the one step, pass or registration it salts. No other derivation salts a leaf, and no verifier
+  chooses or learns a key (`verity/commitments/hm96/PROTOCOL.md`, section 3; `tests/test_no_keyed_salts.py` enforces it).
 - **Everything zero-knowledge.** Every protocol is, PoUS included. Only four kinds of things are public, each with its
   reason: protocol structure, the protocol's outputs, the verifier's coins and samples, and hiding commitments. Partitions
   are private and their properties public: a proof block's outputs fit its Definition's public size class, a power of two
@@ -315,9 +318,10 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
 
 - **Soundness is one theorem.** Protocol soundness (`Verity.Soundness`) is to be one theorem over everything the compiled
   Lean verifier accepts, for arbitrary Boolean circuits, with no hypothesis on the circuit file or the statement's form;
-  this is a requirement, not a claim that `main` proves it. The verifier refuses any form the proof doesn't cover and
-  gains none ahead of its proof. Circuit inputs and outputs use one canonical format, proved in general, so a new
-  workload needs no verifier or proof change.
+  this is a requirement, not a claim that `main` proves it. The verifier refuses any form its proof does not cover, except
+  the two-stage form, which runs ahead of its proof: the verifier accepts a two-stage run whose every check passes, and
+  the accept's record says what is not covered, so nothing quotes a guarantee for such a run. Circuit inputs and outputs
+  use one canonical format, proved in general, so a new workload needs no verifier or proof change.
 - **The math is modular.** Soundness and zero knowledge are each one theorem in layers, each layer proved once over the
   guarantee of the layer below: one session's knowledge soundness for sampling, sampling's for recursion and for an
   audit, an audit's for an accounting bound, and every protocol's for compose's verdict. Each configuration

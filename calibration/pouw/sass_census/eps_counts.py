@@ -1,12 +1,12 @@
 """ε_skip's per-instruction counts from SASS, on any architecture the kernels build for.
 
-    python eps_counts.py OUT --src TAG=APV_CU [--src ...] [--json FILE]
+    python eps_counts.py OUT --src TAG=APV_CU [--src ...] --ref ARCH [--json FILE]
 
 eps_budget.py prices a peel design's ε_skip with the checked kernels' and the D2S kernels' exact ncu counts on
 sm_120: APV_TAIL (apv_l7qs's tail stage, warp instructions a 128-cell tile by class: IMMA 4, IMAD 4.0, the rest 11.5,
 which ncu read as apv_l7qs − apv_cc), c_apv_serve (the served f over a plain epilogue, 4.4 a tile) and c_vfold (vfold −
 vfold_x, 0.6884 / 0.7265 / 0.7221 warp instructions an entry at 2K / 8K / 32K). Off sm_120 it reads the same numbers.
-This counts the same differences from each architecture's SASS (eps_counts.sh's `nvdisasm -c -gi` dumps): every
+This counts the same differences from each architecture's SASS (`nvdisasm -c -gi` dumps of each kernel's cubin): every
 instruction a converged warp can reach (`reach`: `BRA.DIV`'s out-of-line paths never run) is placed by the source lines
 its inline chain passes through, and each region is weighted by how often a warp runs it at the shape ncu measured
 (Llama-3.1-8B, 32 query and 8 KV heads):
@@ -310,7 +310,7 @@ def flat(c: dict) -> dict[str, float]:
     return out
 
 
-def against(res: dict, ref: str = "sm_120a") -> dict:
+def against(res: dict, ref: str) -> dict:
     """Each architecture against `ref` from the same tree, by the same rule: the difference, and sm_120's ncu count plus
     it (what eps_budget would read there)."""
     rec = {f"tail.{k}": v for k, v in RECORDED["tail"].items()}
@@ -339,8 +339,10 @@ def delta_table(d: dict) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("out", type=Path, help="eps_counts.sh's OUT (TAG/ARCH/apv.gi.sass.gz)")
+    p.add_argument("out", type=Path, help="the dumps, OUT/TAG/ARCH/apv.gi.sass.gz")
     p.add_argument("--src", action="append", required=True, help="TAG=path to that tree's apv.cu")
+    p.add_argument("--ref", required=True,
+                   help="the architecture RECORDED's ncu counts are from, its architecture file's name")
     p.add_argument("--json", type=Path)
     a = p.parse_args(argv)
     res: dict = {}
@@ -352,8 +354,8 @@ def main(argv: list[str] | None = None) -> int:
             if f.exists():
                 log = (d / "build.log").read_text() if (d / "build.log").exists() else ""
                 res.setdefault(tag, {})[d.name] = counts(gzip.decompress(f.read_bytes()).decode(), src, log)
-    d = against(res)
-    print(table(res) + "\n\nAgainst sm_120a, same tree and rule: the difference (sm_120's ncu count plus it)\n\n"
+    d = against(res, a.ref)
+    print(table(res) + f"\n\nAgainst {a.ref}, same tree and rule: the difference ({a.ref}'s ncu count plus it)\n\n"
           + delta_table(d))
     if a.json:
         a.json.write_text(json.dumps({"recorded_sm120": RECORDED, "counts": res, "against_sm120a": d}, indent=1,

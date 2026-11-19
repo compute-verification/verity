@@ -62,16 +62,28 @@ def lib() -> ctypes.CDLL:
     global _lib
     if _lib is None:
         _lib = _jit.load(build, SOURCES)
-        _lib.fa2_rows.restype = None
-        _lib.fa2_rows.argtypes = (
-            [ctypes.c_void_p] * 3 + [ctypes.c_int, ctypes.c_int] + [ctypes.c_void_p] * 3
-            + [ctypes.c_int, ctypes.c_int, ctypes.c_float] + [ctypes.c_void_p] * 9 + [ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
-        )
+        _jit.declare(_lib, "fa2_rows", ROWS_ARGTYPES)
         for name in ("mufu_ex2_words", "mufu_rcp_words"):
-            fn = getattr(_lib, name)
-            fn.restype = None
-            fn.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long, ctypes.c_void_p]
+            _jit.declare(_lib, name, [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long, ctypes.c_void_p])
+        _jit.declare(_lib, "fa_s_words", [ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
+                                          ctypes.c_int, ctypes.c_void_p])
     return _lib
+
+
+#: `fa2_rows`' and `fa3_rows`' arguments: Q, K, V, KVH, D, kvh, col_limit, n_block_max, nrows, kBlockN, scale_log2, the ex2 and
+#: rcp tables, out, out_f32, flags
+ROWS_ARGTYPES = ([ctypes.c_void_p] * 3 + [ctypes.c_int, ctypes.c_int] + [ctypes.c_void_p] * 3
+                 + [ctypes.c_int, ctypes.c_int, ctypes.c_float] + [ctypes.c_void_p] * 5)
+
+
+def s_words(q: np.ndarray, k: np.ndarray, *, hopper: bool = False) -> np.ndarray:
+    """The S words `fa2_rows` (``hopper``: `fa3_rows`) computes for each query row of ``q`` (n, D) u16 against each key row of
+    ``k`` (nkeys, D) u16: (n, nkeys) u32, the chain of that entry point's own tensor-core step (`fa_s_words`)."""
+    q, k = np.ascontiguousarray(q, dtype=np.uint16), np.ascontiguousarray(k, dtype=np.uint16)
+    (n, D), nk = q.shape, k.shape[0]
+    s = np.zeros((n, nk), np.uint32)
+    lib().fa_s_words(int(hopper), q.ctypes.data, k.ctypes.data, n, nk, D, s.ctypes.data)
+    return s
 
 
 # ---- MUFU tables --------------------------------------------------------------------------------
@@ -150,23 +162,17 @@ def kernel_geometry(seqlen_q: int, seqlen_k: int, rows: list[int] | np.ndarray) 
     return col_limit.astype(np.int32), nb.astype(np.int32)
 
 
-def _nudge(x: np.float32, ulps: int) -> np.float32:
-    if not ulps:
-        return x
-    return (np.array([x], np.float32).view(np.int32) + np.int32(ulps)).view(np.float32)[0]
-
 
 @dataclass
 class RowsResult:
     out: np.ndarray        # (n, D) u16 BF16 words
     out_f32: np.ndarray    # (n, D) u32 words before the BF16 cast
-    dbg: dict | None = None
     nonfinite: np.ndarray | None = None  # (n,) bool: a non-finite intermediate occurred -> the row is `unresolved`
 
 
 def attention_rows(
     q: np.ndarray, k: np.ndarray, v: np.ndarray, kvh: np.ndarray, col_limit: np.ndarray, n_block_max: np.ndarray,
-    softmax_scale: float, tables: MufuTables, *, debug: bool = False, variant: int = 0, scale_log2_nudge: int = 0,
+    softmax_scale: float, tables: MufuTables,
 ) -> RowsResult:
     """``q`` (n, D) u16 words (one head's query per row); ``k``/``v`` (Lk, KVH, D) u16 canonical KV rows;
     ``kvh`` (n,) KV head per row; ``col_limit``/``n_block_max`` from :func:`kernel_geometry`."""
@@ -185,30 +191,17 @@ def attention_rows(
     out = np.zeros((n, D), np.uint16)
     out_f32 = np.zeros((n, D), np.uint32)
     flags = np.zeros(n, np.uint8)
-    max_blocks = int(n_block_max.max(initial=1))
-    dbg = None
-    ptrs = [None] * 5
-    if debug:
-        dbg = {
-            "s": np.zeros((n, max_blocks * KBLOCK_N), np.uint32),
-            "p": np.zeros((n, max_blocks * KBLOCK_N), np.uint32),
-            "m": np.zeros((n, max_blocks), np.uint32),
-            "l": np.zeros((n, 4), np.uint32),
-            "o_pre": np.zeros((n, D), np.uint32),
-        }
-        ptrs = [dbg[x].ctypes.data for x in ("s", "p", "m", "l", "o_pre")]
     lib().fa2_rows(
         q.ctypes.data, k.ctypes.data, v.ctypes.data, KVH, D, kvh.ctypes.data, col_limit.ctypes.data,
-        n_block_max.ctypes.data, n, KBLOCK_N, ctypes.c_float(float(_nudge(scale_log2(softmax_scale), scale_log2_nudge))),
-        tables.ex2.ctypes.data, tables.rcp.ctypes.data, out.ctypes.data, out_f32.ctypes.data, *ptrs, max_blocks, int(variant),
-        flags.ctypes.data,
+        n_block_max.ctypes.data, n, KBLOCK_N, ctypes.c_float(float(scale_log2(softmax_scale))),
+        tables.ex2.ctypes.data, tables.rcp.ctypes.data, out.ctypes.data, out_f32.ctypes.data, flags.ctypes.data,
     )
-    return RowsResult(out, out_f32, dbg, (flags & 1).astype(bool))
+    return RowsResult(out, out_f32, (flags & 1).astype(bool))
 
 
 def attention_call(
     q: np.ndarray, k: np.ndarray, v: np.ndarray, rows: np.ndarray, seqlen_q: int, seqlen_k: int, softmax_scale: float,
-    tables: MufuTables, *, debug: bool = False, variant: int = 0, scale_log2_nudge: int = 0,
+    tables: MufuTables,
 ) -> RowsResult:
     """One kernel call for one sequence: ``q`` (len(rows), H, D) words for the query rows ``rows``
     (0-based in the sequence), ``k``/``v`` (>= seqlen_k, KVH, D).  Returns (len(rows), H, D) words."""
@@ -219,8 +212,7 @@ def attention_call(
     col_limit, nb = kernel_geometry(seqlen_q, seqlen_k, rows)
     qf = q.reshape(nrow * H, D)
     kvh = np.repeat(np.arange(H, dtype=np.int32) // ngroups, 1)[None, :].repeat(nrow, 0).reshape(-1)
-    res = attention_rows(qf, k[:seqlen_k], v[:seqlen_k], kvh, np.repeat(col_limit, H), np.repeat(nb, H), softmax_scale, tables,
-                         debug=debug, variant=variant, scale_log2_nudge=scale_log2_nudge)
+    res = attention_rows(qf, k[:seqlen_k], v[:seqlen_k], kvh, np.repeat(col_limit, H), np.repeat(nb, H), softmax_scale, tables)
     res.out = res.out.reshape(nrow, H, D)
     res.out_f32 = res.out_f32.reshape(nrow, H, D)
     res.nonfinite = res.nonfinite.reshape(nrow, H)
@@ -241,15 +233,9 @@ MEASURED = {
 
 
 def arch_of(consts: dict, arch: str | None = None) -> str | None:
-    """Declared arch: explicit argument, ``consts['arch']`` or a GPU name in ``consts['gpu'|'gpu_name']``.
-    None when nothing is declared."""
+    """Declared arch: explicit argument or ``consts['arch']``. None when nothing is declared."""
     a = arch or consts.get("arch")
-    if a:
-        return str(a)
-    name = str(consts.get("gpu") or consts.get("gpu_name") or "")
-    if any(t in name for t in ("4090", "4080", "4070", "4060", "RTX 40", "L40", "L4", "6000 Ada")):
-        return "sm_89"
-    return None
+    return str(a) if a else None
 
 
 def coverage(seqlen_q: int, seqlen_k: int, H: int, KVH: int, D: int, consts: dict, *, arch: str | None = None) -> str | None:
@@ -263,7 +249,7 @@ def coverage(seqlen_q: int, seqlen_k: int, H: int, KVH: int, D: int, consts: dic
     """
     a = arch_of(consts, arch)
     if a is None:
-        return "arch not declared (consts.arch / consts.gpu); measured only on sm_89"
+        return "arch not declared (consts.arch); measured only on sm_89"
     if a not in MEASURED["arch"]:
         return f"arch {a} not measured (measured: {MEASURED['arch']})"
     if D != HEAD_DIM:

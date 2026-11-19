@@ -191,7 +191,7 @@ theorem getD_sample_units (sample ns ks : Array ℕ) (m : ℕ) (units : Array �
 theorem proved_units (draw : Json) (units : Array ℕ) (hd : getD draw "units" = natsJson units)
     (u : ℕ) (hu : u ∈ units) : (u : Int) ∈ Draw.proved draw := by
   unfold Draw.proved
-  rw [FlockSoundness.Audit.SampleExec.mem_qsort]
+  rw [Spot.Sampling.SampleExec.mem_qsort]
   refine Array.mem_append_left _ ?_
   dsimp only
   rw [hd]

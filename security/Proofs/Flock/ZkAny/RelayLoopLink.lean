@@ -395,7 +395,7 @@ open Claims.ZKMal in
 /-- **The history's link coins are the auditor's answer to the run's second message**, at the loop's count: where
 `V*` answered that message with `m`, the first coins past the history's `Hello` at the loop's count for opening `0`
 are `m`'s first words there (`Frames.feedOf`). -/
-theorem wordsAt_hist_two {W Rr : Type} (M : LoopModel W Rr) {c : Nat} {m : Claims.Msg} (hj : c < M.τ.length)
+theorem wordsAt_hist_two {W Rr : Type} (M : LoopModel W Rr) {c : Nat} {m : Hash.Msg} (hj : c < M.τ.length)
     (hc : c = 1) (h1 : (M.τ[c]'hj).2 = .msg m) :
     Loop.wordsAt M.x ((M.hist (c + 1)).tail.map fun e => ZKMal.CoinLayer.rd e.2) 0 =
       _root_.Flock.ZkServer.Frames.feedOf (Loop.loopNr M.x 0) m := by

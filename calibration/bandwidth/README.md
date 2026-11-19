@@ -13,9 +13,9 @@ check as the validation, with no number.
 
 | Probe | What it measures | What it writes under `$OUT` |
 | --- | --- | --- |
-| `write_gpu` | The write ceilings' GPU half (`timing.GPU_WRITE_BYTES_PER_S`), on one card | `write.jsonl` |
-| `write_host` | The write ceilings' host half (`timing.HOST_WRITE_BYTES_PER_S`), on the host's cores | `write_host.jsonl` |
-| `chip` | What an RTX PRO 6000 holds on chip (`timing.GPU_CHIP_BYTES`) | `chip.json` and `ur.jsonl` |
+| `write_gpu` | The write ceilings' GPU half (`timing.Figures.gpu_write_bytes_per_s`), on one card | `write.jsonl` |
+| `write_host` | The write ceilings' host half (`timing.Figures.host_write_bytes_per_s`), on the host's cores | `write_host.jsonl` |
+| `chip` | What an RTX PRO 6000 holds on chip (`timing.Figures.gpu_chip_bytes`, the card's `store.chip`) | `chip.json` and `ur.jsonl` |
 
 `run.sh`'s header lists each probe's files, beside the build's and the device's logs. `node.py` reads what a node file
 (`calibration/hardware/nodes/`) states and no card states: its interfaces off the node, its disks' links, and what each card's

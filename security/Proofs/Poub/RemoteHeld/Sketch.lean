@@ -433,6 +433,12 @@ theorem SketchBoundRun : ResourceAccounting.Guarantees.Remote.SketchBoundRun := 
   rw [hpr, ← hδ']
   exact ENNReal.toReal_mono (ENNReal.add_ne_top.2 ⟨hfin, ENNReal.ofReal_ne_top⟩) hout
 
+/-- `δSketch` is its expression: a proof that unfolds a conclusion stated through it is mended by this rewrite. -/
+theorem δSketch_eq (g b Q P N : ℕ) (εrank : ℝ) :
+    ResourceAccounting.Guarantees.Remote.δSketch g b Q P N εrank =
+      (Q : ℝ) / 2 ^ g + ((Q : ℝ) + P) * (εrank + N / 2 ^ 512) + ((Q : ℝ) + P) ^ 2 / 2 ^ b :=
+  rfl
+
 /-- **The sketch bound at the deployed receipts** (`ResourceAccounting.Guarantees.Remote.SketchBoundDeployed`):
 `SketchBoundRun` at `m = 128`, 64 rows, `h = 512`, `r = 27`, with at most `Q + P` candidate seeds and `Q` queries,
 at `ε_ro = (Q + P)²/2^513`. -/
@@ -441,6 +447,7 @@ theorem SketchBoundDeployed : ResourceAccounting.Guarantees.Remote.SketchBoundDe
   have h := SketchBoundRun β Hs P N 128 512 S L q 64 27 G qtot ε (((Q : ℝ) + P) ^ 2 / 2 ^ 513) A T (by norm_num)
     hε (by positivity) hP hRank hH hq hrec hpres
   unfold SketchBound Trace.Holds at h ⊢
+  rw [δSketch_eq]
   rw [show (8 * 27 : ℕ) = 216 from rfl] at h
   refine h.trans ?_
   have hG' : ((∑ j, G j : ℕ) : ℝ) ≤ (Q : ℝ) + P := by exact_mod_cast hG

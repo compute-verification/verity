@@ -24,6 +24,7 @@ import pytest
 
 HERE = ((Path(__file__).resolve().parents[3] / "benchmarks" / "network_traces"))
 sys.path.insert(0, str(HERE))
+from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.network.attester import connection_rows_run as CR  # noqa: E402
 import leak_bounds as LB  # noqa: E402
 from verity.protocols.resource_accounting.network.prover import stop_verdicts as SV  # noqa: E402
@@ -35,7 +36,6 @@ from verity.protocols.resource_accounting.network.verifier import connection_row
 from verity.protocols.resource_accounting.network.verifier import content_rows as CT  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier.certificate import Certificate, Direction  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
 
 LINK = "responses"
 ZEROS = bytes(64)
@@ -513,7 +513,7 @@ def test_a_class_is_held_only_at_the_rate_its_streams_registrations_register_for
     assert (SV.RATE, SV.EVERY_BLOCK) == ("rate", "1/1") and SV.RATED == (CC.STOP_RECORD, CC.RESPONSE_TIE)
     assert (SV.STREAM, SV.PREVIOUS, SV.POPULATION, SV.DESIGN, SV.SUBSET) == (
         "stream_registration", "previous", "population", "law", "subset")
-    assert REGISTERED == R.digest(SERVED) != OTHER and len(REGISTERED) == 128
+    assert REGISTERED == DD.digest(SERVED) != OTHER and len(REGISTERED) == 128
     first, second, whole = head(3, 5, 0), head(4, 2, 0), LB.table(LB.inputs())
     one = [registration(first)]
     at = f"the link {LINK}, execution phase 3, class 0: held to its whole schedule by the rate: "

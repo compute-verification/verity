@@ -79,7 +79,7 @@ theorem shapeOf_salt (st : Setup) (sch : Schedule) (n : ℕ) :
     exact Or.inl ⟨rfl, h.1⟩
   · exact Or.inr rfl
 
-theorem repP_shape (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Stmt) (hk : 6 ≤ st.c.kLog)
+theorem repP_shape (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Stmt) (hk : 6 ≤ st.c.kLog)
     (hkm : st.c.kLog ≤ st.m) (hs : ∀ r ∈ st.c.ranges.toList, SlotOk st.c r)
     (hn : ∀ l r v, (st.merkle.opsWith (Hashes.ofSha512 h : Hashes V)).node l r = .ok v → v.size = st.merkle.digestLen)
     (hlf : ∀ row salt v, (st.merkle.opsWith (Hashes.ofSha512 h : Hashes V)).leaf row salt = .ok v →
@@ -197,7 +197,7 @@ theorem extraClaims_size {st : Stmt} {pts : Array (Array F128)} {e : Array Claim
 /-- **The honest rep proof fits its shape**: at every good case, on its table's trace, the trace's packed table
 committed at the schedule's first level (`cm`, under any salts), and the table's extra claims at the link's points
 (`e`), each proof a rep returns is `ProofShaped` at the shape the verifier decodes it at. -/
-def RepShaped (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def RepShaped (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : Case H rel, ∀ st sch cm e, c.sts = #[st] → fast100 (Setup.ofCircuit st).m = some sch →
     ∀ salt₀, commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle
       (sch.levels.getD 0 default) (packed (tracesOf c.sts c.w)[0]! (Setup.ofCircuit st).m) salt₀ = .ok cm →
@@ -207,14 +207,14 @@ def RepShaped (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readabl
       (Transcript.init #[] d)) fun pt => FlockVBridge.Family.ProofShaped (shapeOf (Setup.ofCircuit st) sch e.size) pt.1
 
 /-- **The case's table has a registered scheme and at most 1,024 regions.** -/
-theorem _root_.FlockComplete.Case.scheme {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+theorem _root_.FlockComplete.Case.scheme {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (c : Case H rel) :
     ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧ st.merkle ∈ MerkleScheme.all ∧ st.regions.size ≤ 1024 := by
   obtain ⟨st, h1, h2, h3⟩ := c.one
   exact ⟨st, h1, h2, setupOne_scheme h3⟩
 
 /-- **The honest rep proof fits its shape**: the goal `RepShaped`, at an oracle of 64-byte outputs. -/
-theorem repShaped {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (h64 : Claims.Out64 H) :
+theorem repShaped {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (h64 : Claims.Out64 H) :
     RepShaped H rel := by
   intro c st sch cm e hst hsch salt₀ hcm he salt nonce d
   obtain ⟨st', hst', hspec, -, hm35, ⟨tags, file, tables, hty, hcirc⟩, hm, hk⟩ := c.table

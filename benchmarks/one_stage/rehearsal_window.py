@@ -52,7 +52,7 @@ def advice_compile() -> Any:
 
 def serve_dir(d: Path, phi: dict, cls: Any, engine: dict) -> bytes:
     """The stand-in serve dir at `d` (module docstring) -> its window 0's advice, I1's canonical bytes."""
-    import verity.protocols.resource_accounting.network.verifier.advice as I1
+    import verity_vllm.pipeline.advice_code.format as I1
 
     users = [f"fixed.{j:05d}" for j in range(cls.slots)]
     (d / "advice" / "w0").mkdir(parents=True)
@@ -137,7 +137,8 @@ def served_rows(PP: Any, run: Path, data: bytes, cls: Any, tables: Any, builds: 
 
 
 def cut(PP: Any, serve: dict, cls: Any, tables: Any, scheme: str, w: Path) -> dict[str, Any]:
-    """CUT (module docstring), W written to `w`."""
+    """CUT (module docstring), W written to `w`. Its lowering sizes W's values and doesn't refuse a class no proof block
+    takes (`check_provable`): ``rehearsal_limits.py`` and ``prove_path.py``'s class-circuit refuse that class."""
     import served_compare as SC
     from verity_vllm.program.predict import window_circuit as WC
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR

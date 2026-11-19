@@ -174,10 +174,10 @@ theorem getElem!_append_length {L : List F128} {a : Array F128} (t : ℕ) :
 `cs`: at its position on its table's chain (`chainPos` at the schedule `sideAt` reads), the chain's next row's first two
 elements are its opening's consistency terms (`consTerm`) of the row it opens (as `sideAt`'s Ligerito proof opens it),
 the chain's row at its position, and the `coef` `coefAt` reads off the coins. -/
-def accHolds (sideAt : Claims.Msg → List Claims.Msg → OpenPiece → OpenSide)
-    (coefAt : Claims.Msg → List Coin → OpenPiece → Array F128)
-    (chainAt : Claims.Msg → List Claims.Msg → ℕ → ℕ → Array F128) (q : OpenPiece) (x : Claims.Msg)
-    (ms : List Claims.Msg) (cs : List Coin) : Prop :=
+def accHolds (sideAt : Hash.Msg → List Hash.Msg → OpenPiece → OpenSide)
+    (coefAt : Hash.Msg → List Coin → OpenPiece → Array F128)
+    (chainAt : Hash.Msg → List Hash.Msg → ℕ → ℕ → Array F128) (q : OpenPiece) (x : Hash.Msg)
+    (ms : List Hash.Msg) (cs : List Coin) : Prop :=
   ∀ k < 2, (chainAt x ms q.table (chainPos (sideAt x ms q).sch q.rep q.level q.query + 1))[k]! =
     FlockVBridge.consTerm (2 ^ ((sideAt x ms q).sch.levels[q.level]!).lanes)
       (openAt (sideAt x ms q).lig ((sideAt x ms q).sch.levels.size - 1) q.level).1[q.query]!
@@ -185,14 +185,14 @@ def accHolds (sideAt : Claims.Msg → List Claims.Msg → OpenPiece → OpenSide
 
 namespace DecAt
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass)
 
 /-! ## The accumulators -/
 
 /-- **Rep `k`'s accumulators**: for `k = 2i + r`, the rows of table `i`'s chain at rep `r`'s ends, `r · N` and
 `r · N + N` (`N` the rep's openings at the table's schedule), in `accNames`' order: `acc0 0, acc0 1, acc1 0, acc1 1`. -/
-def accE (chainAt : Claims.Msg → List Claims.Msg → ℕ → ℕ → Array F128) (k : ℕ) : Array F128 :=
+def accE (chainAt : Hash.Msg → List Hash.Msg → ℕ → ℕ → Array F128) (k : ℕ) : Array F128 :=
   #[(chainAt x ms (k / 2) (k % 2 * nOpen ((fast100 (tabsOf D.sts)[k / 2]!.m).getD default)))[0]!,
     (chainAt x ms (k / 2) (k % 2 * nOpen ((fast100 (tabsOf D.sts)[k / 2]!.m).getD default)))[1]!,
     (chainAt x ms (k / 2) (k % 2 * nOpen ((fast100 (tabsOf D.sts)[k / 2]!.m).getD default) +
@@ -200,10 +200,10 @@ def accE (chainAt : Claims.Msg → List Claims.Msg → ℕ → ℕ → Array F12
     (chainAt x ms (k / 2) (k % 2 * nOpen ((fast100 (tabsOf D.sts)[k / 2]!.m).getD default) +
       nOpen ((fast100 (tabsOf D.sts)[k / 2]!.m).getD default)))[1]!]
 
-theorem accE_size (chainAt : Claims.Msg → List Claims.Msg → ℕ → ℕ → Array F128) (k : ℕ) :
+theorem accE_size (chainAt : Hash.Msg → List Hash.Msg → ℕ → ℕ → Array F128) (k : ℕ) :
     (D.accE chainAt k).size = 4 := rfl
 
-theorem accE_rep (chainAt : Claims.Msg → List Claims.Msg → ℕ → ℕ → Array F128) (i : ℕ) (r : Fin 2) :
+theorem accE_rep (chainAt : Hash.Msg → List Hash.Msg → ℕ → ℕ → Array F128) (i : ℕ) (r : Fin 2) :
     D.accE chainAt (2 * i + r) =
       #[(chainAt x ms i (r * nOpen (D.files cls i).sch))[0]!, (chainAt x ms i (r * nOpen (D.files cls i).sch))[1]!,
         (chainAt x ms i (r * nOpen (D.files cls i).sch + nOpen (D.files cls i).sch))[0]!,
@@ -258,7 +258,7 @@ theorem w_tail (hG : D.RowG cls acc i) (hpts : D.sess.points = pointsOf D.spec D
 /-- **V\*'s algebra reads the chain at rep `r`'s ends**, at `acc := accE`: its `acc0`, `acc1` are w's tail
 (`wi_acc0`, `wi_acc1`, `w_tail`), which `accE` fills with the chain's rows at `r · N` and `r · N + N`, the openings'
 first position and the one past their last (`Openings.start` at the schedule's levels). -/
-theorem readsEnds_accE (chainAt : Claims.Msg → List Claims.Msg → ℕ → ℕ → Array F128)
+theorem readsEnds_accE (chainAt : Hash.Msg → List Hash.Msg → ℕ → ℕ → Array F128)
     (hG : D.RowG cls (D.accE chainAt) i) (hpts : D.sess.points = pointsOf D.spec D.d.c₁)
     (hk : 2 * i + r < D.d.f.ps.size)
     (hsh : ProofShaped (shapeAt (tabsOf D.sts) (pointsOf D.spec D.d.c₁) (2 * i + r)) D.d.f.ps[2 * i + r]) :
@@ -282,9 +282,9 @@ theorem getD_default {α : Type} [Inhabited α] (a : Array α) (n : ℕ) : a.get
 /-- **The pieces' running sums chain at rep `r`**: where every query of every level of rep `r` is a piece's
 (`hcover`), the pieces of rep `r` read its side (`hside`) and the verifier's `coef` (`hcoef`, the coin tie), and every
 piece holds (`accHolds`), the chain `chainAt x ms i` from `r · N` adds each opening's consistency terms (`UnitSums`). -/
-theorem unitSums_of_pieces (pieces : List OpenPiece) (sideAt : Claims.Msg → List Claims.Msg → OpenPiece → OpenSide)
-    (coefAt : Claims.Msg → List Coin → OpenPiece → Array F128)
-    (chainAt : Claims.Msg → List Claims.Msg → ℕ → ℕ → Array F128)
+theorem unitSums_of_pieces (pieces : List OpenPiece) (sideAt : Hash.Msg → List Hash.Msg → OpenPiece → OpenSide)
+    (coefAt : Hash.Msg → List Coin → OpenPiece → Array F128)
+    (chainAt : Hash.Msg → List Hash.Msg → ℕ → ℕ → Array F128)
     (hholds : ∀ q ∈ pieces, accHolds sideAt coefAt chainAt q x ms cs)
     (hside : ∀ q ∈ pieces, q.table = i → q.rep = r.val → sideAt x ms q = D.side cls i r)
     (hcoef : ∀ q ∈ pieces, q.table = i → q.rep = r.val → coefAt x cs q = D.coefAt cls acc i r q.level q.query)
@@ -307,14 +307,14 @@ theorem unitSums_of_pieces (pieces : List OpenPiece) (sideAt : Claims.Msg → Li
 /-- **Row E from the `rec-open` pieces' running sums**, at `acc := accE`: `rowE_of_units` at the chain `chainAt x ms i`
 from `r · N`, its `UnitSums` from the pieces (`unitSums_of_pieces`) and its `ReadsEnds` from `accE`
 (`readsEnds_accE`). -/
-theorem rowE_of_pieces (chainAt : Claims.Msg → List Claims.Msg → ℕ → ℕ → Array F128)
+theorem rowE_of_pieces (chainAt : Hash.Msg → List Hash.Msg → ℕ → ℕ → Array F128)
     (hG : D.RowG cls (D.accE chainAt) i) (hpts : D.sess.points = pointsOf D.spec D.d.c₁)
     (hk : 2 * i + r < D.d.f.ps.size)
     (hsh : ProofShaped (shapeAt (tabsOf D.sts) (pointsOf D.spec D.d.c₁) (2 * i + r)) D.d.f.ps[2 * i + r])
     (hfit : ∃ y, verifierRows (D.sh cls i) (D.rep cls (D.accE chainAt) i r).rounds
       (D.rep cls (D.accE chainAt) i r).extras (D.rep cls (D.accE chainAt) i r).comb = .ok y)
-    (pieces : List OpenPiece) (sideAt : Claims.Msg → List Claims.Msg → OpenPiece → OpenSide)
-    (coefAt : Claims.Msg → List Coin → OpenPiece → Array F128)
+    (pieces : List OpenPiece) (sideAt : Hash.Msg → List Hash.Msg → OpenPiece → OpenSide)
+    (coefAt : Hash.Msg → List Coin → OpenPiece → Array F128)
     (hholds : ∀ q ∈ pieces, accHolds sideAt coefAt chainAt q x ms cs)
     (hside : ∀ q ∈ pieces, q.table = i → q.rep = r.val → sideAt x ms q = D.side cls i r)
     (hcoef : ∀ q ∈ pieces, q.table = i → q.rep = r.val →
@@ -330,9 +330,9 @@ theorem rowE_of_pieces (chainAt : Claims.Msg → List Claims.Msg → ℕ → ℕ
 the chain `chainAt x ms i` from `r · N` for rep `r`, its `UnitSums` from row D's pieces holding `accHolds` (at D's
 `sideAt`, `hside` and `hcover`, and the coin tie `hcoef`) and its `ReadsEnds` from `accE`. Every other hypothesis is
 `runs_assembled`'s. -/
-theorem runs_assembledE {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
+theorem runs_assembledE {xo : Hash.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
-    (hti : i < D.spec.tables.size) (chainAt : Claims.Msg → List Claims.Msg → ℕ → ℕ → Array F128)
+    (hti : i < D.spec.tables.size) (chainAt : Hash.Msg → List Hash.Msg → ℕ → ℕ → Array F128)
     (hframed : ∀ r : Fin 2, FramedAt ((D.files cls i).stream r).rounds 0 (repFrames (D.files cls i).st
       (D.files cls i).sch ((D.files cls i).spec.domain (D.files cls i).spec.tables[(D.files cls i).i]! r).toUTF8
       (2 + (D.files cls i).extras.size) ((D.files cls i).proof r)
@@ -343,8 +343,8 @@ theorem runs_assembledE {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatem
     (hsh : ∀ r : Fin 2,
       ProofShaped (shapeAt (tabsOf D.sts) (pointsOf D.spec D.d.c₁) (2 * i + r)) (D.d.f.ps[2 * i + r]'(hk r)))
     (hL : ∀ r, D.RowL cls (D.accE chainAt) i r)
-    (pieces : List OpenPiece) (sideAt : Claims.Msg → List Claims.Msg → OpenPiece → OpenSide)
-    (posAt : Claims.Msg → List Coin → OpenPiece → ℕ)
+    (pieces : List OpenPiece) (sideAt : Hash.Msg → List Hash.Msg → OpenPiece → OpenSide)
+    (posAt : Hash.Msg → List Coin → OpenPiece → ℕ)
     (hholds : ∀ q ∈ pieces, openHolds sideAt posAt q x ms cs)
     (hside : ∀ r : Fin 2, ∀ q ∈ pieces, q.table = i → q.rep = r.val → sideAt x ms q = D.side cls i r)
     (hpos : ∀ r : Fin 2, ∀ v info kappa,
@@ -358,7 +358,7 @@ theorem runs_assembledE {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatem
     (hsz : ∀ r : Fin 2, (D.rep cls (D.accE chainAt) i r).rounds.toList.map Array.size = roundSizes (D.sh cls i))
     (hw : ∀ r : Fin 2, (D.rep cls (D.accE chainAt) i r).w.size = S.nw)
     (hparts : ∀ r : Fin 2, D.PartsZero cls (D.accE chainAt) i r gs)
-    (coefAt : Claims.Msg → List Coin → OpenPiece → Array F128)
+    (coefAt : Hash.Msg → List Coin → OpenPiece → Array F128)
     (hholdsE : ∀ q ∈ pieces, accHolds sideAt coefAt chainAt q x ms cs)
     (hcoef : ∀ r : Fin 2, ∀ q ∈ pieces, q.table = i → q.rep = r.val →
       coefAt x cs q = D.coefAt cls (D.accE chainAt) i r q.level q.query) :

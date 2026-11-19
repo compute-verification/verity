@@ -71,7 +71,7 @@ from ..schemes.pearl_c_device import DEVICES
 from . import anchors as A
 from . import leaves as L
 from . import tile_units as U
-from . import words as W
+from verity.circuits.ops import words as W
 
 F32, BF16, E4M3, OK = W.F32, W.BF16, Value(8), L.OK
 R, SLICE, PEEL = C.R, C.SLICE, C.PEEL_K

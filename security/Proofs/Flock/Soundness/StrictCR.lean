@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Assumptions
-public import Proofs.Flock.Soundness.Audit.FlockBatchedAcc
+public import Proofs.Flock.SpotFlock.Sampling.FlockBatchedAcc
 public import Definitions.Flock.Game
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
@@ -566,7 +566,7 @@ omit [Inhabited D] in
 /-- **The knowledge term under `SHA512CRStrict`**: after each sample, the largest over the plan's tables of
 `ksStrict/(1 − N₀/(ek))`, averaged over the sample. It reads no prover: the budgets stand in for its finders. -/
 noncomputable def ksAvgStrict {n : ℕ} {Reg : Type} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
-    (L : Audit.SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg) : ℝ≥0∞ :=
+    (L : Spot.Sampling.SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg) : ℝ≥0∞ :=
   avg fun ω : L.Ω => ⨆ j : Fin (plan (L.draw ω) R).length,
     ENNReal.ofReal (ksStrict (plan (L.draw ω) R) j k qF qS / (1 - rateB (plan (L.draw ω) R) j k))
 
@@ -576,12 +576,12 @@ end Session
 at a prover each of whose tables' finders, after each sample, satisfies `SHA512CRStrict` at budgets `qF`, `qS`
 (`TableCR`). -/
 theorem ksAvgBE_le_strict {n : ℕ} {Reg D : Type} [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
-    {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) {L : Audit.SamplingDesign n} (k : ℕ) {qF qS : ℝ} (R : Reg)
-    (τ : Audit.Cont L Reg (Audit.Partition.batchedSession H E plan) R)
-    (hCR : ∀ ω j, TableCR execArith H E (plan (L.draw ω) R) j (Audit.Partition.batchStrat H E plan (τ ω)) qF qS) :
-    Audit.Partition.ksAvgBE H E plan k R τ ≤ ksAvgStrict plan L k qF qS R := by
+    {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) {L : Spot.Sampling.SamplingDesign n} (k : ℕ) {qF qS : ℝ} (R : Reg)
+    (τ : Spot.Sampling.Cont L Reg (Spot.Sampling.Partition.batchedSession H E plan) R)
+    (hCR : ∀ ω j, TableCR execArith H E (plan (L.draw ω) R) j (Spot.Sampling.Partition.batchStrat H E plan (τ ω)) qF qS) :
+    Spot.Sampling.Partition.ksAvgBE H E plan k R τ ≤ ksAvgStrict plan L k qF qS R := by
   refine avg_mono fun ω => iSup_mono fun j => ?_
-  have ha := ksBoundAccB_nonneg execArith H E (plan (L.draw ω) R) j k (Audit.Partition.batchStrat H E plan (τ ω))
+  have ha := ksBoundAccB_nonneg execArith H E (plan (L.draw ω) R) j k (Spot.Sampling.Partition.batchStrat H E plan (τ ω))
   rcases le_or_gt (1 - rateB (plan (L.draw ω) R) j k) 0 with h0 | h0
   · exact (le_of_eq (ENNReal.ofReal_of_nonpos (div_nonpos_of_nonneg_of_nonpos ha h0))).trans zero_le
   · exact ENNReal.ofReal_le_ofReal (div_le_div_of_nonneg_right

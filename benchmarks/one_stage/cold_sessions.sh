@@ -19,6 +19,7 @@
 # logs under 8 MB, the stamps, binaries.sha256 and the command line; never a circuit, a proof or an archive.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:?}/out}; mkdir -p "$O"
 STAGE=${COLD_STAGE:?probe, build or run}
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$FLOCK_WORK" || exit 1
@@ -114,7 +115,7 @@ if [ "$STAGE" = probe ]; then
   {
     echo "prover build key $KEY: $(ls -d "$FLOCK_WORK"/flock-circuit/bin-"$KEY"-* 2>/dev/null | tr '\n' ' ')"
     echo "Lean build key $LKEY: $(ls "$PT_WORK/lean-$LKEY/.lake/build/bin/" 2>/dev/null | tr '\n' ' ')"
-    echo "nvcc 13.3: $(ls /usr/local/cuda-13.3/bin/nvcc "$FLOCK_WORK"/cuda-root/usr/local/cuda-13.3/bin/nvcc 2>/dev/null | tr '\n' ' ')"
+    echo "CUDA 13.3: $(python3 benchmarks/kernels/machine.py toolkit 13.3 2>&1) unpacked: $(find "$FLOCK_WORK/cuda-root" -path '*/bin/nvcc' 2>/dev/null | tr '\n' ' ')"
     echo "lake: $(command -v lake || ls "$HOME"/.elan/bin/lake 2>/dev/null)  uv: $(command -v uv || ls "$HOME"/.local/bin/uv 2>/dev/null)  zstd: $(command -v zstd)"
     echo "lease: ${LEASE[*]}"; echo "pool: $(cat /run/gpu-lease/pool.gpus 2>/dev/null | tr '\n' ' ')"
     echo "other leases:"; others; echo "compute processes:"; apps
@@ -124,11 +125,13 @@ if [ "$STAGE" = probe ]; then
   log "probe: rc $rc"; exit "$rc"
 fi
 
-for c in "$FLOCK_WORK/cuda-root" /workspace/cache/flock/cuda-root; do
-  [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x "$c/usr/local/cuda-13.3/bin/nvcc" ] && export CUDA_TK=$c/usr/local/cuda-13.3
-done
-[ -x /usr/local/cuda-13.3/bin/nvcc ] || [ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 here (zk_cost.sh unpacks one)"; exit 1; }
-C13=${CUDA_TK:-/usr/local/cuda-13.3}; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
+# CUDA 13.3: CUDA_TK where given, else the machine's toolkit at 13.3 (benchmarks/kernels/machine.py), else the one
+# verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh finds or unpacks under FLOCK_WORK
+[ -n "${CUDA_TK:-}" ] || CUDA_TK=$(python3 benchmarks/kernels/machine.py toolkit 13.3 2> "$O/cuda.log") \
+  || { CUDA_TK=; ( . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh ) >> "$O/cuda.log" 2>&1 \
+       && . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh >> "$O/cuda.log" 2>&1; }
+[ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 here ($O/cuda.log)"; exit 1; }
+export CUDA_TK; C13=$CUDA_TK; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 OUT=$O/build bash verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM="${COLD_SM:-90}" > "$O/build.txt" 2>&1 &
 OUT=$O/lean bash benchmarks/proof_throughput/verify.sh BUILD_ONLY=1 PT_WORK="$PT_WORK" > "$O/lean-build.txt" 2>&1 &
 wait
@@ -161,7 +164,7 @@ est() { local v="COLD_EST_$1_$2" w="COLD_EST_$1"; echo "${!v:-${!w:-1800}}"; }
 end_of() { local v="COLD_END_$1"; echo "${!v:-$END}"; }
 keep() {
   (cd "$S" && find . -type f -size -8M ! -name circuit.txt ! -name 'inst*.bin' ! -name 'pub*.bin' ! -path '*/archive/*' \
-    \( ! -path '*/sessions/*/*' -o -name session.json \) -print0 | xargs -0 -r -I{} cp --parents {} "$O/sessions/")
+    \( ! -path '*/sessions/*/*' -o -name session.json \) -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$O/sessions/")
   cp "$STAMPED/stamps.txt" "$O/" 2>/dev/null
 }
 mkdir -p "$O/sessions"

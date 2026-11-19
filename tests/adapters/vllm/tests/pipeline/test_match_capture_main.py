@@ -27,6 +27,7 @@ pytest.importorskip("torch")
 import torch
 
 import verity_vllm.pipeline.match_capture as M1
+from verity_vllm import messages
 from verity_vllm.acquire import install, stage
 from verity_vllm.observe import capture as OC
 from verity_vllm.observe import capture_types
@@ -190,8 +191,8 @@ class World:
         runtime: Any = SimpleNamespace(modules=["m0", "m1"], buffers=["b0"])
         return stage.StageDocs(runtime=runtime, plan=self.plan, paths={"runtime_tree": "runtime_tree.json"})
 
-    def install_from_plan(self, plan: Any, model: Any, runner: Any = None, *, sink: Any = None) -> Hooks:
-        self.calls.append(("hooks", plan, runner, sink))
+    def install_from_plan(self, plan: Any, model: Any, runner: Any = None) -> Hooks:
+        self.calls.append(("hooks", plan, runner))
         return Hooks(self)
 
     def capture_protocols(self, wl: Record, args: Any, model: Any) -> tuple[Protocols | None, list[str]]:
@@ -449,8 +450,8 @@ def test_the_plan_s_hooks_count_beside_the_observer_and_come_off_before_it_close
         TREE, f"[m1] acquisition plan {'d' * 16}: 2 Value classes, 0 unsupported, 3 hooks, 0 residuals -> None", WARMED, INSTALLED,
         hooked, f"[m1] acquisition observed: 7 occurrences over 2 sites -> {observed}", OBSERVED]
     assert world.called("stage") == [("the runner", "/row/required_manifest.json", world.out, "m1_capture")]
-    (plan, runner, sink), = world.called("hooks")
-    assert plan is world.plan and runner == "the runner" and isinstance(sink, Sink)
+    (plan, runner), = world.called("hooks")
+    assert plan is world.plan and runner == "the runner" and not messages.current().wants("values")
     assert world.names()[-5:] == ["installed", "hooks", "run", "hooks removed", "closed"]
     assert json.loads(observed.read_text()) == {
         "sites": [{"site": "s0", "occurrences": 5}, {"site": "s1", "occurrences": 2}], "plan_digest": "d" * 64,

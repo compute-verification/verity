@@ -75,7 +75,7 @@ namespace FlockComplete.Replay
 open Flock Transcript FlockDeploy
 
 /-- **`complete_plain`'s goals**, at the record's JSON and the oracle's 64-byte outputs. -/
-theorem goals_plain (H : Claims.Msg → Claims.Msg) (h64 : Claims.Out64 H) :
+theorem goals_plain (H : Hash.Msg → Hash.Msg) (h64 : Claims.Out64 H) :
     Goals H Readable.relation := by
   have hP : JsonRT.ProverOk H Readable.relation := proverOk h64
   have hW : SchemeWidths H Readable.relation := schemeWidths h64
@@ -127,7 +127,7 @@ namespace FlockComplete.JsonRT
 open Flock Transcript FlockComplete FlockDeploy
 open Lean (Json JsonNumber)
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The honest run's record, read as a value**: `Run.json`'s single table, streams, rounds and session, the printed
 record printable, and every value alike it decoding as `sessOf`. -/

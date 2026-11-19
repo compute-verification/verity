@@ -470,7 +470,7 @@ end FlockC3.Reps.RowRead
 
 namespace FlockC3.Reps
 
-open FlockSoundness FlockSoundness.Audit
+open FlockSoundness Spot.Sampling
 open FlockVBridge.OfVStar (ReadCol)
 
 /-- **The opening unit reads its row and sibling columns, under any name**: the net `netOf name (unitLaid LANES H)`, at

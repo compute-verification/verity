@@ -170,9 +170,9 @@ none of the live rounds picks in an opening frame `.opening i s n` that some rou
 such round does; the cuts `q` fixes are at the bytes it answers (`CutsAt`), and every description of `q`'s opening asks
 for its `n` coins (`OpeningAt.n_eq`). -/
 theorem RoundsReach.stop_frame {P : Fin R → List Release → Frame → Prop}
-    {rv : Fin R → Exchange → Option Claims.Msg} {sg : Signer} {θ : ByteArray} {F : Array ByteArray}
+    {rv : Fin R → Exchange → Option Hash.Msg} {sg : Signer} {θ : ByteArray} {F : Array ByteArray}
     {c rq : ByteArray} (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n)
-    {Ks₀ : Fin R → DigestCut Claims.Msg g} {q : Pos g σ Claims.Msg (Fin R)} (hi : q.Inv Ks₀)
+    {Ks₀ : Fin R → DigestCut Hash.Msg g} {q : Pos g σ Hash.Msg (Fin R)} (hi : q.Inv Ks₀)
     {pre₀ : List Release} {f : List Release → Game Exchange} {a : Fin R → Prop}
     (hf : ∀ log, f log = finish sg θ F c rq (pre₀ ++ log)) (hS : StopOf P rv pre₀ f a q)
     (hK : ¬ ∀ j, q.Ks j = .skip) {φ : CoinTape q.g' q.s' → CoinTape q.g' q.s'} {β : Type}
@@ -233,14 +233,14 @@ theorem firstOpened_noPick {P : Fin R → List Release → Frame → Prop} (tabl
 /-- **A trace off `B` is one off `B'`** wherever, at every position `Q` holds of, each stop the trace answers there is
 off `B'`, and `Q` holds of each answered stop's next position. -/
 theorem RoundsReach.weaken {B' : RoundHold} {β : Type} {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray}
-    {pts : Fin 2 → Fin mPts → 𝔽} {o : β × CoinTape g σ} (Q : Pos g σ Claims.Msg (Fin R) → Prop)
+    {pts : Fin 2 → Fin mPts → 𝔽} {o : β × CoinTape g σ} (Q : Pos g σ Hash.Msg (Fin R) → Prop)
     (hstep : ∀ q (φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'), Q q →
       Q (q.toStop.rewrite φ).consume)
     (hB : ∀ q (s : SubmitJ J) (c : Fin s.n → 𝔽) (N : ℕ) (rs : Fin J → Fin 2 → List Flock.Round), Q q →
       D.sub J q.toStop.modes = some s → ¬ B q.toStop.g' J s c →
       RoundsReach D M dg J B fin rootB pts N rs (q.toStop.rewrite (M.round q.toStop J s c)).consume o →
       ¬ B' q.toStop.g' J s c)
-    {N : ℕ} {rs : Fin J → Fin 2 → List Flock.Round} {p : Pos g σ Claims.Msg (Fin R)} (hp : Q p)
+    {N : ℕ} {rs : Fin J → Fin 2 → List Flock.Round} {p : Pos g σ Hash.Msg (Fin R)} (hp : Q p)
     (hr : RoundsReach D M dg J B fin rootB pts N rs p o) : RoundsReach D M dg J B' fin rootB pts N rs p o := by
   revert hB hp
   induction hr with
@@ -263,16 +263,16 @@ the record's tree shows opened (`opening_count`), which `sessionTreeReason` hold
 (`Trees.round_counted`, `recordCount_decode`), `tailCount` of the round's message (`rep_tailCount_accepted`), which is
 `w` (`RoundsReach.stop_modes_reveal`). -/
 theorem stop_count {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {A : Live}
-    {tables : Array String} {L : Fin A.rounds → Slot} {record : Exchange → Option Claims.Msg}
-    {recordDigest : Claims.Msg} {rd : Reading A.rounds} (hrd : rd = readingAt tables L record recordDigest)
+    {tables : Array String} {L : Fin A.rounds → Slot} {record : Exchange → Option Hash.Msg}
+    {recordDigest : Hash.Msg} {rd : Reading A.rounds} (hrd : rd = readingAt tables L record recordDigest)
     {σ : Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg} {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP}
     {B : RoundHold} {J N : ℕ} {β : Type} {fin : LiveOutJ J A.mP → β} {rootB : Array ByteArray}
     {pts : Fin 2 → Fin A.mP → 𝔽} {rs : Fin J → Fin 2 → List Flock.Round}
-    {q : Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds)} (hq : q.Inv (roundCuts V θ F c rd))
+    {q : Pos (V.game θ F c) σ Hash.Msg (Fin A.rounds)} (hq : q.Inv (roundCuts V θ F c rd))
     {φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'} {o : β × CoinTape (V.game θ F c) σ}
     (hr : RoundsReach D M A.dg J B fin rootB pts N rs (q.toStop.rewrite φ).consume o)
     (hn : NoMiss V θ F c rd σ o.2) {j : Fin A.rounds} {r : Fin 2} {k : ℕ} (hLj : L j = .rep 0 r k)
-    (hj : (q.toStop.Ks j).isHere = true) {w : Claims.Msg} (hw : q.toStop.modes j = some w)
+    (hj : (q.toStop.Ks j).isHere = true) {w : Hash.Msg} (hw : q.toStop.modes j = some w)
     {m L' : List Release} {i s n : ℕ} {b : ByteArray} {bits : List Bool}
     (hlog : (CoinTape.run (V.game θ F c) σ o.2).log = m ++ ⟨.opening i s n, b, bits⟩ :: L')
     (hcut : CutsAt rd.reveal q.toStop m (CoinTape.run (V.game θ F c) σ o.2).log) (hk : openedOf m i s = k)
@@ -406,8 +406,8 @@ stop's frame is round `k` of the first table's rep stream at its fixed round's s
 message's count (`stop_count`). So no stop off the first events is in the second (`RoundsReach.weaken`). -/
 theorem ReachesOff.counts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
-    (reg : Option Claims.Msg → A.Reg)
-    (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
+    (reg : Option Hash.Msg → A.Reg)
+    (record : Exchange → Option Hash.Msg) (recordDigest : Hash.Msg) {rd : Reading A.rounds}
     (hrd : rd = readingAt A.tables A.layout record recordDigest) {σ : Strategy (V.game θ F c)}
     {D : Decoders A.rounds A.Reg} (hD : D = decodersAt reg A.layout) {label : String} {after : ByteArray} {m : ℕ}
     {κ : A.Ω → Fin m → Fin 512 → Bool} (hm : _root_.Spot.Challenger.MAX_COINS ≤ m)
@@ -502,8 +502,8 @@ the device's log and each pinned table at its registered file (`TablesSent`) and
 of stated for every tape, as `movesReach_layout` takes it. -/
 theorem countsReach_layout {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
-    (reg : Option Claims.Msg → A.Reg)
-    (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
+    (reg : Option Hash.Msg → A.Reg)
+    (record : Exchange → Option Hash.Msg) (recordDigest : Hash.Msg) {rd : Reading A.rounds}
     (hrd : rd = readingAt A.tables A.layout record recordDigest) {σ : Strategy (V.game θ F c)}
     {D : Decoders A.rounds A.Reg} (hD : D = decodersAt reg A.layout) {label : String} {after : ByteArray} {m : ℕ}
     {κ : A.Ω → Fin m → Fin 512 → Bool} (hm : _root_.Spot.Challenger.MAX_COINS ≤ m)
@@ -526,9 +526,9 @@ theorem countsReach_layout {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} 
 /-- **`CountsReach` at the deployment**: `countsReach_layout` at `movesReachAt`'s readings, decoders, family, digest
 and coins, its premises on the sample closed as `movesReachAt` closes them. -/
 theorem countsReachAt {V : Vocab d α} {T : PinnedTables} {k : Verity.Registration.Composite} {θ : ByteArray}
-    {F : Array ByteArray} {A : Live} (reg : Option Claims.Msg → A.Reg)
-    (record : ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : ByteArray → Claims.Msg) (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
+    {F : Array ByteArray} {A : Live} (reg : Option Hash.Msg → A.Reg)
+    (record : ByteArray → Exchange → Option Hash.Msg)
+    (recordDigest : ByteArray → Hash.Msg) (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (hL : A.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64)
     (hO : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
@@ -552,9 +552,9 @@ deployed device's history and `movesReachAt`'s readings, decoders, family, diges
 `θ` is the deployment's (`hD`) and `movesReachAt`'s premises hold, with no bound on the stops' term. -/
 theorem couplingTargetAt_counts {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V)
     (T : PinnedTables) (P : Device.Deployment) {θ : ByteArray} {F : Array ByteArray} {A : Live}
-    (reg : (A : Live) → Option Claims.Msg → A.Reg)
-    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (reg : (A : Live) → Option Hash.Msg → A.Reg)
+    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Hash.Msg)
+    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Hash.Msg)
     (hD : V.signer θ = P.signer V.families θ)
     (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ) (hL : A.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64)
     (hO : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),

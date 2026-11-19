@@ -29,7 +29,7 @@ is every unit (`execOS_sample_card_or`).
 
 namespace FlockSoundness.Discharge.Exec
 
-open FlockSoundness.Audit FlockSoundness.Audit.SamplingDesign Finset
+open Spot.Sampling Spot.Sampling.SamplingDesign Finset
 
 /-- **`uniform m` returns a value below `m`.** -/
 theorem uniform_lt {m : ℕ} {src : ByteArray} : ∀ {fuel pos r p : ℕ},

@@ -124,7 +124,7 @@ open Flock Transcript
 /-- **The PIOP's run is its three runs**: where `piopFw` returned, so did its zerocheck, its lincheck and its ring
 switch, in turn, as `tauFw_at` reads them. -/
 theorem piopFw_split {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {lay : Zk.PadLayout} {g : Array F128}
-    {mk : ℕ → F128} {cap root : ByteArray} {extras : Array Claim} {t₀ : Transcript} {l : Array Claims.Msg}
+    {mk : ℕ → F128} {cap root : ByteArray} {extras : Array Claim} {t₀ : Transcript} {l : Array Hash.Msg}
     {zp lp ss T sws t₃ l₃}
     (h : ((piopFw (FlockComplete.asksCut coin n) st lay g mk cap root extras).run t₀).go l =
       (.ok ((zp, lp, ss, T, sws), t₃), l₃)) :

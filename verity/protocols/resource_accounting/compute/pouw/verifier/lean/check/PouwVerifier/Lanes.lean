@@ -303,7 +303,7 @@ def rootsAt (roots : Json) (v : String) : List Json :=
 
 private def regErr {α : Type} (x : Flock.V α) : R α := x.mapError fun e => ("registration", e)
 
-/-- A `--registered` port (`produced.port`) of `value` at row `row`, a `row/v2` value of 16-bit leaves. -/
+/-- A `--registered` port (`registered_value.port`) of `value` at row `row`, a `row/v2` value of 16-bit leaves. -/
 def portJson (value root : String) (leaves words : Nat) (domain : ByteArray) (row : Nat) : Json :=
   Json.mkObj [("value", Json.str value), ("root", Json.str root), ("leaves", toJson leaves), ("words", toJson words),
     ("word_bits", toJson (16 : Nat)), ("domain", Json.str (Flock.hexOf domain)),

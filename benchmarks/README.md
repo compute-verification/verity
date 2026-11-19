@@ -15,14 +15,15 @@ and `uv run verity bench NAME [ARGS]` runs one. What each measures is its row in
 header gives its machine, its arguments and what it writes. These are the directories that have one, with a runner's
 subcommands or defaults in parentheses: `attester_load`, `bool_build_cost`, `certifier_term`, `codec_tensor` (the
 tensor-core wide-word codec on one GPU), `compile_cost`, `compute`, `dsa_topk`, `exfiltration`, `flock_s8_block`, `inference_only`, `landing`, `lean_unread_gate`
-(`--against REV`, its guard), `memory`, `mempool` (`--quick`), `network_traces`, `numerical` (one of
+(`--against REV`, its guard), `memory`, `network_traces`, `numerical` (one of
 `verity_numerical`'s tools by name; `numerical judge` compares two results under the proof campaign's contract), `overhead` (`points`, `run`,
 `table`), `pouw NAME` (`pouw/NAME/`'s runner; given no NAME, the names), `ppl` (`eval`, `submit`, `report`,
 `baseline`), `prod_repro`, `proof_throughput` (`record`: one prover and two at once on one node's H200s), `prove`
 (`--system flock|spot`; `lean-verify`, the Lean verifier timed on one kept proof; `layers`, the proof benchmark by
 layer from its four runs, as `prove/README.md` says), `prove_path`, `poub_session`, `recursion_e2e` (`plan`, `run`,
 `result`, `table`, `store`), `replay_ladder`, `route_capture`, `scan_cost`, `serve_tax`, `serving_cost` (`minify RUN`,
-`exact`, `capture RUN`, `price`, `confirm`: "The serving cost in five stages"), `served_commit`, `served_errors`,
+`exact`, `capture RUN`, `price`, `confirm`: "The serving cost in five stages"; `profile RUN`, a serving
+profile's stored result), `served_commit`, `served_errors`,
 `served_units` (`fp8-coord:K=6144`), `unit_block`, `unit_lowering`, `unit_walk`, `verifier_cost` and `word_codec`.
 
 `verity calibrate NAME [ARGS]` runs `calibration/NAME/`'s runner the same way. These measurements live there, not
@@ -30,7 +31,8 @@ here: `attester_timing` (`run`, `guard`, `serve`, `observe`, `score`, `table`, `
 ceilings PoUB's timing cites, one probe a run: `chip` and `write_gpu` on one GPU, `write_host` on the host's CPUs),
 `circuit_properties` (`--models llama32-1b --out DIR`, Llama 3.2 1B's layer alone and its point, on a CPU),
 `f32_exhaustive`, `native_peak` (bf16 at 8192^3), `rate_squaring` (`sq` on one GPU, `ifma` on the host's CPUs),
-`tc_probe` (`sm120.mma.m16n8k32.e4m3`'s canary), `tc_probe_fp4` (`nvf4` with its SASS check), `tensor_duty` and
+`tc_probe` (`--instruction`, no default; built for the run's card, which must be of its architecture),
+`tc_probe_fp4` (`nvf4` with its SASS check, built for the card the run opened), `tensor_duty` and
 `training` (`CONFIG`, the training slowdown; `ENTRY --library --root DIR`, one library entry's step traced on a CPU).
 
 A directory without a runner is run by the commands its README names, or its main module's docstring where it has no
@@ -307,11 +309,11 @@ no slot of ours (its memory limit is Slurm's `--mem`), its node is shared with o
 nothing preserves it while it runs (`research run-preserve` doesn't reach it). The nodes
 have network, Python 3.12 and no root. The DGX's driver is CUDA 13.0's, which `main`'s torch needs;
 `h100-nvl-1-1-cc`'s is CUDA 12.8's, too old for it, and `h100-nvl-1-0-cc` refuses any GPU request. No node has `nvcc` or `ncu` on
-its PATH. The H100 has a card file (`calibration/hardware/cards/h100-sxm-80gb.toml`), but a card-bound benchmark of the
-harness still can't start there: its served run launches only on our machines, which an open change is curing. Use only idle
-capacity: one job at a time, at most 30 minutes, one GPU and 16 CPUs. A job that pends on `Resources` while the
-DGX's GPUs are idle may find them held by a reservation of the account (`scontrol show reservation`), which
-`--reservation=NAME` runs it in.
+its PATH. A harness spec's point runs there as the job's command, `verity-bench run SPEC`
+(`benchmarks/harness/README.md`), with no lease or slot of ours. Use only idle
+capacity: one job at a time, at most 30 minutes, one GPU and 16 CPUs; `vcf-job-run.sh` cancels a job still pending
+after 20 minutes. A job that pends on `Resources` while the DGX's GPUs are idle may find them held by a reservation
+of the account (`scontrol show reservation`), which `--reservation=NAME` runs it in.
 
 ## Index
 
@@ -351,7 +353,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `hash/` | GPU kernels for PoUW's Dither prover (`dither/`: the no-fold and J10-R units, their gates and harnesses) and the served path's SHA-512 commitment library (`lib/`) | maintained |
-| `kernels/` | the served path's exact kernels and what a kernel build ships with: the exact W8A8 linear (`s8_linear`), vLLM's int8-exact linear kernels' gates and benches (`exactlin`), the ship frame every build here sources (`ship.sh`, `ship_clock.c`, `ship_nvcc.sh`, `ship_probe.sh`), the nvcc a job's own library compiles with (`job_nvcc.sh`), and the Marlin MoE path's `moe_align_block_size` made a function of its inputs by the integration's `verity_vllm.engine.moe_align`, checked run to run and against the pin's op and timed against it (`moe_align`) | maintained |
+| `kernels/` | the served path's exact kernels and what a kernel build ships with: vLLM's int8-exact linear kernels' gates and benches (`exactlin`), the ship frame every build here sources (`ship.sh`, `ship_clock.c`, `ship_nvcc.sh`, `ship_probe.sh`), and the Marlin MoE path's `moe_align_block_size` made a function of its inputs by the integration's `verity_vllm.engine.moe_align`, checked run to run and against the pin's op and timed against it (`moe_align`) | maintained |
 | `pouw/` | Pearl-C's kernels on the RTX PRO 6000, their harness, and the served vLLM path and its audits; `contents.py` lists the rest | maintained |
 | `../calibration/tc_probe/` | tensor-core instructions bit for bit against their silicon models, and the trust each instruction's evidence earns | maintained |
 | `../calibration/tc_probe_fp4/` | the FP4 path on Blackwell: its conversions bit for bit, and each sm_120a multiplier priced against dense NVFP4 | maintained |
@@ -378,7 +380,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `verifier_cost/` | a verifier's time against the size of the circuit description it reads and of the circuit that description unrolls to | maintained |
 | `recursion_e2e/` | recursive witness zero knowledge, timed step by step: the inner proof, V* proved with `--zk`, and the Lean verifier | maintained |
 | `recursion_figures/` | a recursion bench result's session scaled over the census's fleets and the monitoring periods: its cost, knowledge-soundness error and stop-leak bound per window and pooled | maintained |
-| `remote_error/` | SPOT's cryptographic error in the remote application: the remote guarantee's cryptographic terms of SPOT at the application's parameters against a prover's SHA-512 calls, per window and pooled over the census's fleets and the monitoring periods (its README says what is proved and what is open) | maintained |
+| `remote_error/` | SPOT's cryptographic error in the remote application: the remote guarantee's cryptographic terms of SPOT, evaluated at the application's parameters against a prover's SHA-512 calls, per window and pooled over the census's fleets and the monitoring periods (bound's formula proved in Lean under the open premises its lock lists; value evaluated in Python; PoUW's and the policy's parts open) | maintained |
 
 ### Checks
 
@@ -415,7 +417,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `../calibration/attester_timing/` | the bits an interval a server moves through when the network attester releases its bytes: one number from a server that times its writes by a bit, with a guard, a target and the candidate fixes as flags | maintained |
 | `scan_cost/` | what the network attester's scan costs for each second of execution phase it covers: proving seconds (the round's sessions and their staging) and the Lean verifier's CPU seconds on one core, at a fixed identity, each with its stages, a guard on the round's answer, a baseline and two targets | maintained |
 | `attester_load/` | what the network attester costs the requests it carries, at the application's schedule: the added time to a response's first and last byte through it against straight to the endpoint, the ticks' lateness at the capacity its schedule states, on a stub endpoint on a CPU and on a model on a card. The model arm's network attester runs in the bytes form, relaying vLLM's own framing, where the application's runs in the id form: the schedule and its cells' buckets are the same, and only what a cell may carry differs | maintained |
-| `mempool/` | the network attester's prefix-cache pool as memory-checked RAM (`pool_ram`, held to vLLM's pool on the encodings' traces; `stream.py` holds `CacheStep_v3`'s stream to it after every call): a window's cost at its busiest stretch, and `MemCheck_v1`'s and `CacheStep_v3`'s vectors | maintained |
+| `mempool/` | vLLM's page pool as memory-checked RAM (`pool_ram`), held to vLLM's own pool on the encodings' traces (`difftest.py`), and `MemCheck_v1`'s pool vectors (`vectors.py`) | maintained |
 | `datacenter/` | a datacenter as Verity accounts for it, in a small Python API: the Program, hardware, binding, plan, run, claims and account | maintained |
 
 ### Memory

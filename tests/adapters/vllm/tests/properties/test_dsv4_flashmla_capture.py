@@ -65,7 +65,7 @@ def test_the_statics_are_dsv4s() -> None:
     indexer's top 1024; FlashMLA's MODEL1 page of 64 tokens is 37440 bytes (quant.py:142), and the planner's 132 partitions."""
     assert (X.NH, X.H_Q, X.DN, X.DR, X.D, X.QT, X.BN) == (16, 64, 448, 64, 512, 64, 64)
     assert X.SCALE == 512 ** -0.5 == F.FLASHMLA_DSV4["SCALE"] and X.WINDOW == 128 and X.C4_TOPK == 1024
-    assert X.page_bytes(64) == 37440 and X.page_bytes(2) == 1728 and T.num_sm_parts(X.H_Q) == 132
+    assert X.page_bytes(64) == 37440 and X.page_bytes(2) == 1728 and T.num_sm_parts(X.H_Q, 1, X.SMS) == X.SMS == 132
     assert list(X.CASE_LAYERS) == DECODE and list(X.PREFILL_CASE_LAYERS) == PREFILL and len(X.EDGE_SINKS) == X.NH
 
 
@@ -282,14 +282,14 @@ def test_every_batch_to_vllms_default_plans_into_the_definitions(layer: str) -> 
         lens = [X.token_lens(layer, int(p)) for p in np.exp2(rng.uniform(0, 20, b)).astype(np.int64) - 1]
         lens += [(0, None if layer == "swa" else 0)] * ((min(g for g in X.GRAPH_SIZES if g >= b) if b <= 512 else b) - b)
         metas, ns = T.sched_meta([s for s, _ in lens], [e for _, e in lens] if w else None, topk=X.WINDOW, extra_topk=w,
-                                 parts=T.num_sm_parts(X.H_Q))
+                                 parts=T.num_sm_parts(X.H_Q, 1, X.SMS))
         for r, (s, e) in enumerate(lens):
             sp = T.request_splits(metas, ns, r, T.request_blocks(s, e)[1] // X.BN)
             assert F.check_splits(sp) == T.request_blocks(s, e)[1] // X.BN and len(sp) - 1 <= 127
             if len(sp) > 2:
                 F.check_combine_statics(len(sp) - 1)
     if w:
-        alone = {e: int(np.diff(T.sched_meta([X.WINDOW], [e], topk=X.WINDOW, extra_topk=w, parts=132)[1])[0])
+        alone = {e: int(np.diff(T.sched_meta([X.WINDOW], [e], topk=X.WINDOW, extra_topk=w, parts=X.SMS)[1])[0])
                  for e in range(0, w + 1, X.BN)}
         assert max(alone.values()) == (127 if layer == "c128l" else 18) and alone.get(8000, 127) == 127
 

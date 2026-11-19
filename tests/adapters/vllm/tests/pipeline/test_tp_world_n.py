@@ -13,6 +13,7 @@ from verity.circuits.evaluation.reference import evaluate_region
 from verity.circuits.layout import resolve
 from verity.circuits.program import Program
 
+from tests.row_paths import row_paths
 from verity_vllm.definitions.registry import b1_tp2 as TP2
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.program.frontend import collective_kinds
@@ -348,7 +349,7 @@ def test_rank_commit_takes_worlds_2_4_and_8(world_args, W, tmp_path):
 
 
 @pytest.mark.parametrize("W", [2, 4, 8])
-def test_config_run_row_takes_worlds_2_4_and_8(W, monkeypatch):
+def test_config_run_row_takes_worlds_2_4_and_8(W, monkeypatch, tmp_path):
     from verity_vllm.pipeline import cli, row_tp
     from verity_vllm.pipeline import row as ROW
     seen = {}
@@ -362,7 +363,7 @@ def test_config_run_row_takes_worlds_2_4_and_8(W, monkeypatch):
 
     monkeypatch.setattr(row_tp, "TpRow", Rec)
     o = cli.parse("row", ["run", f"qwen3-14b__bf16__rtxpro6000__tp{W}__b1__i256__o32__mixed__greedy__bi-eager", "QWEN3_14B", "Qwen/Qwen3-14B",
-                          "a" * 40, "--config-run", "1", "--replay-k", "460", "--world", str(W)])
+                          "a" * 40, "--config-run", "1", "--replay-k", "460", "--world", str(W)], row_paths(tmp_path))
     assert ROW.run_row(o, "build,commit") == 0 and seen["world"] == W and seen["commit"].config_run == "1"
 
 

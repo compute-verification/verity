@@ -11,7 +11,7 @@ file carries an event of the sample too, and bounds the sampled proof blocks' co
 
 * `execRefinesZK_tables_sampled`: `execRefinesZK_tables` with an event `E` of the sample on both sides. Both audits'
   outcomes carry the sample, and the refinement is one inequality at each of the sampling design's samples, where `E` is fixed;
-* `ZkLink.zk_flock_sampledC_reg`: `Audit.extraction_audit_sampled` at `analysisZCReg`, so in the compiled batched audit
+* `ZkLink.zk_flock_sampledC_reg`: `Spot.Sampling.extraction_audit_sampled` at `analysisZCReg`, so in the compiled batched audit
   `Pr[accepts ∧ some drawn unit is in incorrectRegZ] ≤ ε_ks + ε_bind`;
 * `zk_session_soundJ_custody_sampled_reg`: the same at verity-verify-proof's acceptance, at the challenger's live-coin part's custody, with
   `ksAvgStrictZ` for `ε_ks`. Its bound has no miss term, so it needs no A3.
@@ -21,7 +21,7 @@ file carries an event of the sample too, and bounds the sampled proof blocks' co
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed DecodeZL
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed DecodeZL
 open FlockSoundness.Discharge.Tables (LiveOutJ DecodesTable)
 open scoped ENNReal
 
@@ -77,7 +77,7 @@ end FlockSoundness.Discharge.Composed
 
 namespace FlockSoundness.Discharge.ZkLink
 
-open Game Model Accounting Audit ZkSession
+open Game Model Accounting Spot.Sampling ZkSession
 open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
@@ -126,7 +126,7 @@ end FlockSoundness.Discharge.ZkLink
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 

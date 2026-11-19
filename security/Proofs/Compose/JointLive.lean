@@ -69,7 +69,7 @@ theorem JointPeriodLive : ResourceAccounting.Guarantees.JointPeriodLive := by
 
 /-- A finder meeting `ecr/sha-512` within `q` expected calls outputs a collision with probability at most
 `q / 2^256`. -/
-theorem Live.pr_le_of_expectedCR {H : Claims.Msg → Claims.Msg} {F : Claims.Finder} {q : ℝ}
+theorem Live.pr_le_of_expectedCR {H : Hash.Msg → Hash.Msg} {F : Claims.Finder} {q : ℝ}
     (hF : Claims.ExpectedCR H F) (hq : Claims.Ex (fun x => (F.cost x : ℝ)) ≤ q) :
     F.Pr H ≤ q / 2 ^ (256 : ℝ) :=
   hF.trans (div_le_div_of_nonneg_right hq (by positivity))
@@ -90,7 +90,7 @@ acceptance as `Accepts ∧ ¬ Break`) has its per-period guarantee at `PeriodLiv
 every strategy is at most its loss at the probability that its finder, built from that strategy, outputs a collision:
 the break is charged as its own term rather than folded into the acceptance. -/
 theorem Live.sound_of_break {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit} {O : Type}
-    {G : Game O} (r : PeriodLive d α C G) (H : Claims.Msg → Claims.Msg) (c : Certificates) (a : Audit)
+    {G : Game O} (r : PeriodLive d α C G) (H : Hash.Msg → Hash.Msg) (c : Certificates) (a : Audit)
     (δ : Strategy G → ℝ≥0∞) (loss : ℝ≥0∞ → ℝ≥0∞) (Break : Strategy G → O → Prop)
     (hoff : ∀ s, prob (fun o => r.accepts a o ∧ ¬ Break s o ∧ ¬ r.Holds c s a o) G s ≤ δ s)
     (hbreak : ∀ s, prob (Break s) G s ≤ loss (r.collides H a s)) :

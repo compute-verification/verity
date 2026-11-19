@@ -33,12 +33,12 @@ verity bench recursion_e2e table RESULT... [--merge] [--json]     the table from
 verity bench recursion_e2e store RESULT... [--merge] --dir DIR    the results and their table as one art's tree in DIR,
                                                                    and the `research data put` command that stores it
 POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes zk_server --oprove-runs 1 --lease-min M --neg challenge,query
-       --forge KINDS [--no-forge-after] --cpu --on MACHINE --cores 0-31 [--preemptible] --mem-gb G --cpus 32 --max-min M --env KEY=VALUE ...
+       --forge KINDS [--no-forge-after] --cpu --on MACHINE [--direct --cores 0-31] [--preemptible] --mem-gb G --cpus 32 --max-min M --env KEY=VALUE ...
        --window DIR --member K --units A-B --subcircuit ID --serves NAME
 ~~~
 
-`--window` runs `stage.sh` over a served window where it lies, on `--on`'s machine (on a window node, a plain run on its
-calendar row's `--cores`): the staging is the job's work tree there, removed at its end, and `record.py job` deletes from
+`--window` runs `stage.sh` over a served window where it lies, on `--on`'s machine (with `--direct`, a plain run on its
+calendar row's `--cores`, which it then requires): the staging is the job's work tree there, removed at its end, and `record.py job` deletes from
 `out/` any file that holds one of the window's private files and fails the run's validation. Its measurements' member is
 `--serves` and N, `llama-3.2-1b-h200-n16`.
 

@@ -11,6 +11,7 @@
 # Kept in $OUT: a8's records and logs and the sessions' records; never a circuit, a prover's file or a proof's archive.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:?}/out}; mkdir -p "$O"
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
 PT_WORK=${PT_WORK:-/workspace/cache/proof-throughput}
@@ -19,11 +20,9 @@ S=$(mktemp -d "$FLOCK_WORK/a8.XXXXXX"); trap 'rm -rf "$S"' EXIT
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
 export PYTHONDONTWRITEBYTECODE=1
 unset CARGO_TARGET_DIR
-for c in "$FLOCK_WORK/cuda-root" /workspace/cache/flock/cuda-root; do
-  [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x "$c/usr/local/cuda-13.3/bin/nvcc" ] && export CUDA_TK=$c/usr/local/cuda-13.3
-done
-[ -x /usr/local/cuda-13.3/bin/nvcc ] || [ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 on this node"; exit 1; }
-C13=${CUDA_TK:-/usr/local/cuda-13.3}; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
+. benchmarks/one_stage/toolkit.sh
+cuda_13_3 "$O/cuda.log" || { log "no CUDA 13.3 on this node ($O/cuda.log)"; exit 1; }
+C13=$CUDA_TK; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 { lscpu | grep -E 'Model name|^CPU\(s\)'; nproc; free -g; nvidia-smi -L; } > "$O/host.txt" 2>&1
 
 log "a8-gpu: source ${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)}, builds under $FLOCK_WORK and $PT_WORK"
@@ -64,6 +63,6 @@ log "a8-gpu: samples ${A8_SAMPLES:-64}, points ${A8_POINTS:-1,8,32,64}, arms ${A
 rc=${PIPESTATUS[0]}
 mkdir -p "$O/a8"
 (cd "$S/a8" && find . -type f -size -8M ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' \
-  \( ! -path '*/sessions/*/*' -o -name session.json \) -print0 | xargs -0 -r -I{} cp --parents {} "$O/a8/")
+  \( ! -path '*/sessions/*/*' -o -name session.json \) -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$O/a8/")
 log "a8-gpu: done, rc $rc"
 exit "$rc"

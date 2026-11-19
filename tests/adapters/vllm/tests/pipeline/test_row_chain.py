@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from tests.row_paths import row_paths
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -83,7 +84,7 @@ def research(monkeypatch):
 
 def _chain(tmp_path: Path, *flags: str, stages: str = "build,match,commit", environ: dict[str, str] | None = None) -> int:
     o = cli.parse("row", ["chain", "--stages", stages, *flags, ROW, "R", "o/r", "rev", "--sweep-dir", str(tmp_path)],
-                  {"PY": sys.executable, **(environ or {})})
+                  {**row_paths(tmp_path), **(environ or {})})
     return row.main(o)
 
 

@@ -15,6 +15,7 @@ test's teardown has finalized every fixture, so a change the test's `monkeypatch
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 
 import pytest
@@ -149,10 +150,25 @@ def pytest_collection_modifyitems(items) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _one_exchange_a_test():
+    """What a test files on or subscribes to the process's exchange (`messages.current`) never reaches the next test."""
+    yield
+    if (m := sys.modules.get("verity_vllm.messages")) is not None:
+        m.close()
+
+
+@pytest.fixture(autouse=True)
 def _sweep_dir_in_tmp(tmp_path_factory, monkeypatch):
     """`verity-vllm row`'s sweep directory default (`cli.MACHINE`'s /workspace/cp/sweep) exists on a GPU node, so a test that leaves
     SWEEP_DIR unset would write its workload dirs there; every test gets its own instead, which a test can still override."""
     monkeypatch.setenv("SWEEP_DIR", str(tmp_path_factory.mktemp("sweep")))
+
+
+@pytest.fixture(autouse=True)
+def _private_dir_in_tmp(tmp_path_factory, monkeypatch):
+    """A launcher's VERITY_PROTOCOLS_CONFIG names the private directory a replay bundle's keys and salts go to
+    (`replay_bundle.private_root`); every test gets one of its own, which a test can still override."""
+    monkeypatch.setenv("VERITY_PROTOCOLS_CONFIG", json.dumps({"private": str(tmp_path_factory.mktemp("private"))}))
 
 
 @pytest.fixture

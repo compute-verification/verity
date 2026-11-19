@@ -40,7 +40,7 @@ local notation "𝔽" => FlockLevel3.GF128
 `P`'s run accepts and `verify` accepts what `wrPD` writes for the live outcome, in an output whose rep `k` records the
 deployed rep's later openings (`LaterEntriesAt`), each level-`ℓ ≥ 1` opening `(q, v)` is one of the run's level-`ℓ`
 columns of rep `k`: `plain_liveOpening`'s proof up to `rawLevelCols_plain`. -/
-theorem plain_liveRow {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plain_liveRow {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
     (hd : ins.read.draw = some d) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) {u : plainTape x}
@@ -109,15 +109,15 @@ theorem plain_liveRow {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false
 
 /-- **The plain table-0 setup of `x`**: its session spec, table 0's statement and that statement's `fast100`
 schedule, where they exist. -/
-def depSetup (x : Claims.Msg) : Option (SessionSpec × Stmt × Flock.Schedule) :=
+def depSetup (x : Hash.Msg) : Option (SessionSpec × Stmt × Flock.Schedule) :=
   (setupOf false x).bind fun t => (t.2.2[0]?).bind fun st => (fast100 st.m).map fun sch => (t.2.1, st, sch)
 
-theorem depSetup_eq {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
+theorem depSetup_eq {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     {sch : Flock.Schedule} (hs : setupOf false x = some (s, spec, sts)) (hst : sts[0]? = some st)
     (hsch : fast100 st.m = some sch) : depSetup x = some (spec, st, sch) := by
   simp [depSetup, hs, hst, hsch]
 
-theorem depSetup_some {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} {sch : Flock.Schedule}
+theorem depSetup_some {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} {sch : Flock.Schedule}
     (hd : depSetup x = some (spec, st, sch)) :
     ∃ s sts, setupOf false x = some (s, spec, sts) ∧ sts[0]? = some st ∧ fast100 st.m = some sch := by
   unfold depSetup at hd
@@ -132,28 +132,28 @@ theorem depSetup_some {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} {sch : F
   exact ⟨s, sts, rfl, hst, hsch⟩
 
 /-- The cap slots of `x`: one per level after level 0 but the last, whose cap is the next level's root. -/
-def depL (x : Claims.Msg) : ℕ :=
+def depL (x : Hash.Msg) : ℕ :=
   match depSetup x with
   | some (_, _, sch) => sch.levels.size - 1
   | none => 0
 
 /-- The positions of level `ℓ` of `x`'s schedule are `2 ^ depLogLen x ℓ`. -/
-def depLogLen (x : Claims.Msg) (ℓ : ℕ) : ℕ :=
+def depLogLen (x : Hash.Msg) (ℓ : ℕ) : ℕ :=
   match depSetup x with
   | some (_, _, sch) => (lvOf (schedOf sch) ℓ).logLen
   | none => 0
 
 /-- **A cap position of `x`**: a rep `r < 2`, a slot `ℓ` (level `ℓ + 1`) and a position of that level. -/
-abbrev DepIdx (x : Claims.Msg) : Type := Σ (_ : Fin 2) (ℓ : Fin (depL x)), Fin (2 ^ depLogLen x (ℓ.val + 1))
+abbrev DepIdx (x : Hash.Msg) : Type := Σ (_ : Fin 2) (ℓ : Fin (depL x)), Fin (2 ^ depLogLen x (ℓ.val + 1))
 
 /-- A position's round: the plain fork round of its rep and slot. -/
-def depRound (x : Claims.Msg) (j : DepIdx x) : ℕ :=
+def depRound (x : Hash.Msg) (j : DepIdx x) : ℕ :=
   match depSetup x with
   | some (spec, st, sch) => forkRound spec st sch.k0 j.1.val j.2.1.val
   | none => 0
 
 /-- Whether coins `cs` query a position: its level's query coin samples it. -/
-def depOpens (x : Claims.Msg) (j : DepIdx x) (cs : ℕ → Coin) : Bool :=
+def depOpens (x : Hash.Msg) (j : DepIdx x) (cs : ℕ → Coin) : Bool :=
   match depSetup x with
   | some (spec, st, sch) =>
     decide (j.2.2.val ∈ positions (sch.levels.getD (j.2.1.val + 1) default)
@@ -171,7 +171,7 @@ noncomputable def CpDep : Claims.Recursion.Caps Coin where
 open Classical in
 /-- **What an aborting run reads at rep `r`'s level `ℓ + 1` position `q`**, as rows of `lanes` lanes: where it
 accepts, the rows its level columns hold at `q`; nothing elsewhere. -/
-noncomputable def rdAt {Ω A : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
+noncomputable def rdAt {Ω A : Type} (P : Claims.Prover Ω) (x : Hash.Msg)
     (keep : Ω → (Fin ((V false).k x) → Coin) → A → Bool) (r ℓ q lanes : ℕ) (ω : Ω)
     (d : (Fin ((V false).k x) → Coin) × A) : Finset (Fin (2 ^ lanes) → 𝔽) :=
   if (Claims.Recursion.abortRun sha512 P (V false) x keep ω d).out = .acc then
@@ -182,7 +182,7 @@ noncomputable def rdAt {Ω A : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
 open Classical in
 /-- **What an aborting run reads at rep `r`'s level `ℓ + 1` position `q`**, as rows of `lanes` lanes: where it
 accepts, the rows its level columns hold at `q`; nothing elsewhere. -/
-noncomputable def rdAtK (keepV : Bool → Bool) {Ω A : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
+noncomputable def rdAtK (keepV : Bool → Bool) {Ω A : Type} (P : Claims.Prover Ω) (x : Hash.Msg)
     (keep : Ω → (Fin ((V false).k x) → Coin) → A → Bool) (r ℓ q lanes : ℕ) (ω : Ω)
     (d : (Fin ((V false).k x) → Coin) × A) : Finset (Fin (2 ^ lanes) → 𝔽) :=
   if (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω d).out = .acc then
@@ -190,7 +190,7 @@ noncomputable def rdAtK (keepV : Bool → Bool) {Ω A : Type} (P : Claims.Prover
       fun e => e.1 = q).map fun e => rowFin lanes e.2).toFinset
   else ∅
 
-theorem mem_rdAtK (keepV : Bool → Bool) {Ω A : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
+theorem mem_rdAtK (keepV : Bool → Bool) {Ω A : Type} {P : Claims.Prover Ω} {x : Hash.Msg}
     {keep : Ω → (Fin ((V false).k x) → Coin) → A → Bool} {r ℓ q lanes : ℕ} {ω : Ω}
     {d : (Fin ((V false).k x) → Coin) × A} {u : Fin (2 ^ lanes) → 𝔽} :
     u ∈ rdAtK keepV P x keep r ℓ q lanes ω d ↔ keep ω d.1 d.2 = true ∧
@@ -216,7 +216,7 @@ theorem mem_rdAtK (keepV : Bool → Bool) {Ω A : Type} {P : Claims.Prover Ω} {
       (keep := keep) (ω := ω) (d := d)).2 ⟨hk, hr⟩) hacc
 
 /-- `mem_rdAtK` at the deployed plain verifier (`keep := id`). -/
-theorem mem_rdAt {Ω A : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
+theorem mem_rdAt {Ω A : Type} {P : Claims.Prover Ω} {x : Hash.Msg}
     {keep : Ω → (Fin ((V false).k x) → Coin) → A → Bool} {r ℓ q lanes : ℕ} {ω : Ω}
     {d : (Fin ((V false).k x) → Coin) × A} {u : Fin (2 ^ lanes) → 𝔽} :
     u ∈ rdAt P x keep r ℓ q lanes ω d ↔ keep ω d.1 d.2 = true ∧
@@ -227,7 +227,7 @@ theorem mem_rdAt {Ω A : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
 
 /-- **`CpDep`'s position `i` at a statement with a plain table-0 schedule**: its round and query coins are its
 decoded rep, slot and position's. -/
-theorem CpDep_at {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
+theorem CpDep_at {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     {sch : Flock.Schedule} (hs : setupOf false x = some (s, spec, sts)) (hst : sts[0]? = some st)
     (hsch : fast100 st.m = some sch) (i : Fin (CpDep.width x)) :
     CpDep.round x i = forkRound spec st sch.k0 ((Fintype.equivFin (DepIdx x)).symm i).1.val
@@ -247,7 +247,7 @@ theorem CpDep_at {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array St
     rw [hd]
 
 /-- The slots of a statement with a plain table-0 schedule are its levels after level 0 but the last. -/
-theorem depL_eq {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
+theorem depL_eq {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     {sch : Flock.Schedule} (hs : setupOf false x = some (s, spec, sts)) (hst : sts[0]? = some st)
     (hsch : fast100 st.m = some sch) : depL x = sch.levels.size - 1 := by
   unfold depL
@@ -258,7 +258,7 @@ position `i` and `rdAt` at its rep, slot and position. Where a run reads somethi
 position (`plain_levelCols_queried`), and two runs sharing the coins before the plain fork round reading two rows
 there tie a collision (`plain_levelTie`). -/
 theorem Pr_rdAt_le_capHitK (keepV : Bool → Bool) {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (P : Claims.Prover Ω)
-    (x : Claims.Msg) (keep : Ω → (Fin ((V false).k x) → Coin) → A → Bool) (M : ℕ) (i : Fin (CpDep.width x))
+    (x : Hash.Msg) (keep : Ω → (Fin ((V false).k x) → Coin) → A → Bool) (M : ℕ) (i : Fin (CpDep.width x))
     (lanes : ℕ) (ω : Ω) :
     (Claims.Pr fun d => (rdAtK keepV P x keep ((Fintype.equivFin (DepIdx x)).symm i).1.val
         ((Fintype.equivFin (DepIdx x)).symm i).2.1.val ((Fintype.equivFin (DepIdx x)).symm i).2.2.val lanes ω d).Nonempty ∧
@@ -312,7 +312,7 @@ theorem Pr_rdAt_le_capHitK (keepV : Bool → Bool) {Ω A : Type} [Fintype Ω] [N
 
 /-- `Pr_rdAt_le_capHitK` at the deployed plain verifier (`keep := id`). -/
 theorem Pr_rdAt_le_capHit {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (P : Claims.Prover Ω)
-    (x : Claims.Msg) (keep : Ω → (Fin ((V false).k x) → Coin) → A → Bool) (M : ℕ) (i : Fin (CpDep.width x))
+    (x : Hash.Msg) (keep : Ω → (Fin ((V false).k x) → Coin) → A → Bool) (M : ℕ) (i : Fin (CpDep.width x))
     (lanes : ℕ) (ω : Ω) :
     (Claims.Pr fun d => (rdAt P x keep ((Fintype.equivFin (DepIdx x)).symm i).1.val
         ((Fintype.equivFin (DepIdx x)).symm i).2.1.val ((Fintype.equivFin (DepIdx x)).symm i).2.2.val lanes ω d).Nonempty ∧

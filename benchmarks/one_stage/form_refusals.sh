@@ -7,6 +7,7 @@
 # Kept in $OUT: fixture/ (the tree to put as fixture/v1), form-refusals.log and work/'s logs and records (never an inst file
 # nor a circuit).
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 export HZ_CONFIGS=form-refusals HZ_MEM_GB=${FP_MEM_GB:-32}
 [ -n "${FP_CACHE:-}" ] && export HZ_CACHE=$FP_CACHE
 source benchmarks/pouw/hidden_zk/job.sh
@@ -19,6 +20,6 @@ sha256sum "$TU" | tee -a "$OUT/binaries.sha256"
   --fixture "$OUT/fixture" 2>&1 | tee -a "$OUT/form-refusals.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/work"
-(cd "$W/form" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -I{} cp --parents {} "$OUT/work/")
+(cd "$W/form" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | python3 "$PUBF" filter | xargs -0 -I{} cp --parents {} "$OUT/work/")
 log "form-refusals: done, rc $rc"
 exit "$rc"

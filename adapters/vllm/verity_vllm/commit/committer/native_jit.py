@@ -5,7 +5,8 @@ mtimes into one pod-wide build directory (/workspace/cp/nc_build) lets an .so bu
 tree's sources, and load() adopts it: every Commit then dies at the first plan-hit step (`Collector.plan_version` absent, rc 134) while a canary that hits no plan passes.  Two rules,
 both torch-free so the laptop and the pod CPU gate test them:
 
-  * `source_set_digest()`   sha256 over the source files (bytes, in a fixed order), the compiler flags and the torch/CUDA version strings;
+  * `source_set_digest()`   sha256 over the source files (bytes, in a fixed order), the compiler flags, the torch/CUDA version strings
+    and the arch;
     `keyed_build_dir(bd, digest)` = `<bd>/<digest12>` -- a different source set can never find another's .so, shared dirs are safe,
     mtimes are irrelevant.  The digest is recorded beside the .so (RELEASE.json artifacts.verity_native_collect.so.source_digest).
   * `binding_names(cpp)` / `missing_bindings(module, cpp)`   every pybind `.def*("name"` of the source must be an attribute of the loaded
@@ -28,6 +29,7 @@ from typing import Any
 
 from verity.commitments.cuda import ROW_COMMIT, SHA512
 
+from verity_vllm import settings
 from verity_vllm.log import init_logger
 
 __all__ = ["CUDA_CFLAGS"]
@@ -101,10 +103,11 @@ def local_headers(sources: Sequence[str], shared: dict[str, str] = SHARED) -> li
     return sorted(found.items())
 
 
-def source_set_digest(paths: list[str] | None = None, *, cflags=CFLAGS, cuda_cflags=CUDA_CFLAGS, torch_version: str = "",
+def source_set_digest(paths: list[str] | None = None, *, arch: str, cflags=CFLAGS, cuda_cflags=CUDA_CFLAGS, torch_version: str = "",
                       cuda_version: str = "") -> str:
     """sha256 of the source SET: each file's basename + bytes in the fixed SOURCES order, then each local header's relative path + bytes
-    (`local_headers`; nothing when there is none, so a header-free set keeps its digest), then the flags and the toolchain versions."""
+    (`local_headers`; nothing when there is none, so a header-free set keeps its digest), then the flags, the toolchain versions and
+    `arch`, the `TORCH_CUDA_ARCH_LIST` entry it compiles to."""
     h = hashlib.sha256()
     paths = paths if paths is not None else source_paths()
     for p in paths:
@@ -119,7 +122,7 @@ def source_set_digest(paths: list[str] | None = None, *, cflags=CFLAGS, cuda_cfl
             h.update(f.read())
         h.update(b"\0")
     h.update(("cflags=" + " ".join(cflags) + "|cuda_cflags=" + " ".join(cuda_cflags)).encode())
-    h.update(("|torch=" + torch_version + "|cuda=" + cuda_version).encode())
+    h.update(("|torch=" + torch_version + "|cuda=" + cuda_version + "|arch=" + arch).encode())
     return h.hexdigest()
 
 
@@ -176,12 +179,12 @@ def build_lock(build_dir: str):
         os.close(fd)
 
 
-def jit_load(name: str, sources: Sequence[str], *, parent: str | None = None, cflags: Sequence[str] = (), cuda_cflags: Sequence[str] = (),
+def jit_load(name: str, sources: Sequence[str], *, arch: str, parent: str | None = None, cflags: Sequence[str] = (), cuda_cflags: Sequence[str] = (),
              with_cuda: bool = True, verbose: bool = False, loader: Callable[..., Any] | None = None, torch_version: str | None = None,
              cuda_version: str | None = None) -> tuple[Any, str, str]:
     """torch's `cpp_extension.load` for one extension into `<parent>/<digest12>` (`parent`: the caller's, else torch's default for
-    `name`), under `build_lock`, compiled from the dir's staged copy of `sources` (`staged_sources`); a torch `lock` found in the dir while
-    holding it is removed.  `loader` and the toolchain versions are
+    `name`), under `build_lock`, compiled from the dir's staged copy of `sources` (`staged_sources`) for `arch` (`TORCH_CUDA_ARCH_LIST`,
+    which this sets); a torch `lock` found in the dir while holding it is removed.  `loader` and the toolchain versions are
     torch's unless given (tests).  Returns (module, build dir, source-set digest)."""
     if loader is None or torch_version is None or cuda_version is None:
         import torch
@@ -190,7 +193,7 @@ def jit_load(name: str, sources: Sequence[str], *, parent: str | None = None, cf
         loader = loader or load
         torch_version = str(torch.__version__) if torch_version is None else torch_version
         cuda_version = str(torch.version.cuda) if cuda_version is None else cuda_version
-    digest = source_set_digest(list(sources), cflags=tuple(cflags), cuda_cflags=tuple(cuda_cflags), torch_version=torch_version,
+    digest = source_set_digest(list(sources), arch=arch, cflags=tuple(cflags), cuda_cflags=tuple(cuda_cflags), torch_version=torch_version,
                                cuda_version=cuda_version)
     bd = keyed_build_dir(parent or default_parent(name), digest)
     os.makedirs(bd, exist_ok=True)
@@ -200,6 +203,7 @@ def jit_load(name: str, sources: Sequence[str], *, parent: str | None = None, cf
             logger.warning("[jit] removing %s: no live build holds %s.build-lock, so a killed build left it", stale, bd)
             with contextlib.suppress(FileNotFoundError):
                 os.remove(stale)
+        settings.put("TORCH_CUDA_ARCH_LIST", arch)
         module = loader(name=name, sources=staged_sources(bd, sources), extra_cflags=list(cflags), extra_cuda_cflags=list(cuda_cflags),
                         with_cuda=with_cuda, build_directory=bd, verbose=verbose)
     return module, bd, digest

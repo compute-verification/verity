@@ -2,7 +2,7 @@
 that registration's roots and domains, so the honest round's ``scan/state`` and ``scan/prog<j>`` are the roots the
 consistency check (`NetworkCheck.Period`'s rows form: `stateTied`, `wired`) holds to V3c's audit, and no block round
 is proved. The window here is `prove_path.py window-commit`'s layout with roots made by the implementations the window
-commit uses (the `SCAN_STATE` by `registered.Registered`, each `SelectEntry_v1` chunk's o0 by
+commit uses (the `SCAN_STATE` by `registered_value.Registered`, each `SelectEntry_v1` chunk's o0 by
 `windows.rows.commit_ports`), so a held tree's root is theirs; a window whose rows, roots or chunks aren't the scan's
 is refused by name."""
 from __future__ import annotations
@@ -17,6 +17,7 @@ import pytest
 from test_scan_zk import sz
 
 from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments import registered_value as RV
 from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.periods import rows as RWS
 
@@ -37,7 +38,7 @@ def v3c_window(d: Path, states: list[list[int]], entries: list[list[list[int]]])
     ``entries`` as its `SelectEntry_v1` chunk j's o0."""
     d.mkdir(parents=True)
     words = [sz._words(r) for r in states]
-    st = sz.REG.Registered.commit(PROGRAM, sz.SCAN_STATE, words, schema=V2, window=RUN)
+    st = RV.Registered.commit(PROGRAM, sz.SCAN_STATE, words, schema=V2, window=RUN)
     (d / sz.SCAN_STATE_FILE).write_bytes(np.asarray(words, "<u2").tobytes() + b"".join(st.salts))
     members, roots = [{"k": 0, "name": "ScanSlots_v2{x}/c0", "template": "ScanSlots_v2{x}", "n": 1}], []
     for j, lane in enumerate(entries):

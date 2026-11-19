@@ -240,6 +240,8 @@ def main(args: Options) -> int:
     if args.replay_deferred and (not args.required_manifest or args.no_sampled_replay):
         raise SystemExit("--replay-deferred defers the ranks' sampled replay: it needs --required-manifest and no --no-sampled-replay")
     deferral_skipped = C2.deferral_skipped(args)
+    if args.replay_deferred and not deferral_skipped and (why := RB.private_refusal()):
+        raise SystemExit(f"--replay-deferred: {why}")
     relabel = None
     if args.relabel_rank:
         relabel_from, relabel_to = args.relabel_rank.split(":")
@@ -260,7 +262,9 @@ def main(args: Options) -> int:
     wl = va.load_workload(args.workload, None)
     coins = CC.of_options(args, sum(a != "control" for _p, a in schedule(args.pairs, args.only_arm)))    # before any root (None: a measurement)
     TPL.acquire()             # a leased Commit's GPUs, all at once, to its last run's finalize (pipeline.tp.lease); the target reads the device
-    target = PO.commit_guard(va.target_of_workload(wl), world=args.tp, installs=False)      # exit 3 when the target declares protocols
+    if (target := va.target_of_workload(wl)) is not None and target.protocols is not None:    # this Commit installs no composition
+        print(f"[delta] REFUSE (fail-closed): {PO.refused(['this Commit (TP) installs no protocol options yet'])}", flush=True)
+        raise SystemExit(3)
     target_env, target_kw = TT.apply(target, wl["execution"])    # as `tp-capture` applies it, and every rank's engine checked against it (`tp.target`)
     case = va.case_of(wl, args.case)
     env_flags = {**prof.apply_env(), **target_env}

@@ -36,6 +36,7 @@ from pathlib import Path
 
 import numpy as np
 import run_result
+from verity.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_E4M3_K32
 
 # ---- E4M3 codec -------------------------------------------------------------------------------------------------------
 MAG = np.zeros(128, dtype=np.float64)
@@ -51,8 +52,9 @@ OFF, PSHIFT = -14, 17        # verity.circuits.silicon.term.E4M3: product_expone
 
 # The accumulator step's adder width and exponent floor (`verity.circuits.silicon.models.GroupSum`, one group of 32): HOPPER_E4M3_K32, or
 # the RTX PRO 6000's BLACKWELL_SM120_E4M3_M16N8K32 (mma.sync kind::f8f6f4 m16n8k32).
-ATOMS = {"hopper": (14, -139), "sm120": (26, -133)}
-ATOM = "hopper"
+MODELS = {m.name: m for m in (HOPPER_E4M3_K32, BLACKWELL_SM120_E4M3_M16N8K32)}
+ATOMS = {name: (m.width, m.zero_exponent) for name, m in MODELS.items()}
+ATOM = HOPPER_E4M3_K32.name
 WIDTH, ZERO_EXP = ATOMS[ATOM]
 
 
@@ -63,12 +65,7 @@ def set_atom(name: str) -> None:
 
 
 def reference_atom(name: str):
-    from verity.circuits.silicon.models import HOPPER_E4M3_K32, GroupSum
-    if name == "hopper":
-        return HOPPER_E4M3_K32
-    width, zero = ATOMS[name]
-    return GroupSum(name="blackwell_sm120_e4m3_m16n8k32", arch="sm_120", dtype="e4m3", operand_bits=8, groups=(32,),
-                    width=width, zero_exponent=zero, validated="BLACKWELL_SM120_E4M3_M16N8K32 at verity 8eed14b0")
+    return MODELS[name]
 
 
 def enc(x: np.ndarray) -> np.ndarray:
@@ -142,7 +139,7 @@ def step(C: np.ndarray, a: np.ndarray, b: np.ndarray):
     return np.where(m24 == 0, 0.0, np.where(neg, -v, v)), ~lost
 
 
-def selftest(cases: int = 3000, atom: str = "hopper") -> int:
+def selftest(cases: int = 3000, atom: str = HOPPER_E4M3_K32.name) -> int:
     H = reference_atom(atom)
     rng = np.random.default_rng(7)
     a = (rng.integers(0, 0x7F, (cases, 32)) | rng.integers(0, 2, (cases, 32)) * 0x80).astype(np.uint8)
@@ -662,7 +659,7 @@ def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming
                "skippable_share": skip / T, "atom": ATOM,
                "word_exact_share": round(float((words[G] == exact).mean()), 6),
                "promoted_equals_unpromoted_share": round(float((words[0] == words[4]).mean()), 6)}
-        if not G and with_inert_work and ATOM != "hopper":
+        if not G and with_inert_work and ATOM != HOPPER_E4M3_K32.name:
             flags = inert_work_pure(A, B)
             per_word = flags.sum(1)
             row.update({"debit_share": round(float(per_word.mean()) / T, 6), "debit_max_word_share": round(float(per_word.max()) / T, 6),
@@ -739,7 +736,7 @@ def main() -> None:
     ap.add_argument("--transfer-words", type=int, default=0,
                     help="with --debit and --forming s5: the reviewer's transfer test (greedy sets found on a simulated noise sample, "
                          "skipped on the real one)")
-    ap.add_argument("--atom", choices=tuple(ATOMS), default="hopper",
+    ap.add_argument("--atom", choices=tuple(ATOMS), default=HOPPER_E4M3_K32.name,
                     help="the accumulator step: HOPPER_E4M3_K32, or the RTX PRO 6000's BLACKWELL_SM120_E4M3_M16N8K32")
     ap.add_argument("--out", default="pearlc_census.json")
     args = ap.parse_args()

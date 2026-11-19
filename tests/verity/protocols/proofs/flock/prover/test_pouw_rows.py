@@ -277,10 +277,10 @@ def _unit_toy(m: str, role: str, d: Path, n: int = 2) -> tuple[dict, dict, list,
     got = got.astype(np.uint16)
     outs = {f"o{j}": got[:, at[j]:at[j + 1]] for j in range(len(out_words))}
     meta = json.loads(text.split("\n", 2)[1][5:])
-    salts = FC.stage_salts(iset, 0, n, FC._meta_ports(meta), b"k" * 32)
+    salts = FC.stage_salts(0, n, FC._meta_ports(meta))
     d.mkdir(parents=True, exist_ok=True)
     (d / "circuit.txt").write_text(text)
-    FC.write(text, iset, 0, n, d / "inst.bin", d / "pub.bin", b"k" * 32, rows=in_rows, outs=outs, salts=salts)
+    FC.write(text, iset, 0, n, d / "inst.bin", d / "pub.bin", rows=in_rows, outs=outs, salts=salts)
     return meta, in_rows, got, salts
 
 
@@ -402,7 +402,7 @@ def test_a_real_pouw_unit_is_staged_and_composed_on_its_rows(m, tmp_path):
     assert [[s, b] for _r, s, b, _ps in in_rows] == L.statement_rows(MODS[m].PORTS["tile"], k)["row_schemas"][:2]
     n = 4
     rows = {r: np.array([V.words(row, V.inputs(f"stage-unit-{m}-{r}-{i}", row, k)) for i in range(n)], dtype=np.uint16) for r in ("a", "b")}
-    got = CS.stage_unit(d, f"unit/pouw-{m}-tile", in_rows, [(SCHEMA_HM96_SHA512_ROW_V2, (0, 1))], rows, tmp_path, b"k" * 32)
+    got = CS.stage_unit(d, f"unit/pouw-{m}-tile", in_rows, [(SCHEMA_HM96_SHA512_ROW_V2, (0, 1))], rows, tmp_path)
     meta = got["meta"]
     assert meta["row_schemas"][2] == [SCHEMA_HM96_SHA512_ROW_V2, 64] and meta["out_row_ports"] == [2]
     assert got["circuit_sha512"] == want["circuit_sha512"]
@@ -450,7 +450,7 @@ def test_pouw_anchors_are_public_input_ports_held_to_the_verifiers_recomputation
     own.write_bytes(t.public_inputs("row_a", indexes))
 
     def stage(sub, rows):
-        CS.stage_unit(d, "unit/pouw-anchor-stand-in", in_rows, [(SCHEMA_HM96_SHA512_ROW_V2, (0,))], rows, tmp_path / sub, b"k" * 32,
+        CS.stage_unit(d, "unit/pouw-anchor-stand-in", in_rows, [(SCHEMA_HM96_SHA512_ROW_V2, (0,))], rows, tmp_path / sub,
                       public_inputs=public_ports(t.shape, "row_a"))
         return tmp_path / sub
 

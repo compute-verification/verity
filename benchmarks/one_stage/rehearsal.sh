@@ -413,9 +413,10 @@ check() {
     echo "memory scope: NONE (this node makes no user scope): the audit's and the compose's node must" > "$OUT/scope.txt"
   fi
   local WANT_CLASS=${CLASS:-}  # a class the caller names, which the settings must serve
-  local TREE S=$OUT/steps.txt failed=0 scratch PY D CLASS SCHEME=${SCHEME:-pearl-c-h100-v1-h3}
+  local TREE S=$OUT/steps.txt failed=0 scratch PY D CLASS SCHEME=${SCHEME:-}
   TREE=$(cd "$HERE/../.." && pwd)
   cd "$TREE" || exit 3
+  SCHEME=${SCHEME:-$(python3 -m verity.protocols.compose.schemes pearl-plus option)} || exit 3; SCHEME=${SCHEME#*:}
   SETTINGS=${SETTINGS:-${RESEARCH_RUN_DIR:-.}/inputs/record.env}
   CLASS=$(settings_class "$SETTINGS")
   step() {  # NAME LIMIT CMD...
@@ -450,8 +451,11 @@ check() {
 import json, sys
 from verity_vllm import TargetProfile
 from verity_vllm.engine.served_seed import DEFAULT_SEED
+from verity_bench import kit
+t = kit.gpu_target("h200-sxm-141gb")
 doc = {"model": sys.argv[1], "revision": sys.argv[2], "default_seed": DEFAULT_SEED,
-       "target": TargetProfile.default().with_overrides(compute_capability=(9, 0), num_sms=132).to_json(),
+       "target": TargetProfile.default().with_overrides(compute_capability=tuple(t["compute_capability"]),
+                                                        num_sms=t["num_sms"]).to_json(),
        "execution": "bi-eager"}
 open(sys.argv[3], "w").write(json.dumps(doc, indent=1) + "\n")
 print(json.dumps(doc, sort_keys=True))

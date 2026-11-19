@@ -68,7 +68,10 @@ from typing import BinaryIO
 
 import numpy as np
 
-from verity.commitments.domains import FLOCK_CIRCUIT_BINDING
+from verity.commitments.domains import (
+    FLOCK_CIRCUIT_BINDING, FLOCK_CIRCUIT_BLOCK_COVER, FLOCK_PUBLIC_INPUTS, HM96_SHA512, HM96_SHA512_ROW_V1,
+    PARTITION,
+)
 from verity.commitments.periods.interface import K_MAX, K_MIN, MASK_LOG, PACK_LOG, PER_SLOT, SLOT_LOG
 
 from . import ir_lower as IL
@@ -81,7 +84,7 @@ TMPL_STATEMENT = "verity/flock-circuit/tmpl"
 #: The header of a templated statement's template section (:func:`template_section`)
 TMPL_SECTION = "TEMPLATE"
 SCHEME = "frame-v3-sha512/hm96-sha512"
-ROW_SCHEMA = "hm96-sha512/row/v1"
+ROW_SCHEMA = HM96_SHA512_ROW_V1
 INST_FORMAT = "flock-circuit-inputs"
 #: Each row tree's frame domain: owner ``OWNER``, binding ``identity_digest_sha512(BINDING_TAG, {set, lo, hi, port, schema})``
 #: (64 bytes), so a root is bound to its input set, its range of instances, its port and the port's row schema.
@@ -98,7 +101,7 @@ OWNER = -1
 #: both reps (one root). Key: the scheme's ``default_key``, one constant of the statement for every
 #: tree, pinned by its SHA-512. Never a witness: a prover choosing the key after commitment solves for one that opens a leaf to
 #: any value.
-LEAF_SCHEME = {"id": "hm96-sha512/v1", "inner": "sha512 column digest", "salt_bytes": 192,
+LEAF_SCHEME = {"id": HM96_SHA512, "inner": "sha512 column digest", "salt_bytes": 192,
                "salt_source": "os bytes (getrandom), 192 per leaf, each tree's read once, never reused or stored",
                "key": "default_key, a statement constant for every tree",
                "key_sha512": "afc5a60c85d8aa75cb4c7f726588d299a1712e1c6a621f09ca64809a5fedd744"
@@ -114,11 +117,11 @@ SHA_LOG = HM_LOG = SLOT_LOG
 #: The partition is a named query of the program, P = Q(C): its digest is SHA-512 over the tag and
 #: canon({program, query, version, params}). Without a verity/partition/v1 object, the query here is this lowering's
 #: own split of a VU into slots (its unit circuit, leaf and output maps, wires), under a provisional tag.
-PARTITION_RULE = "flock-circuit/unit-cover/v0"
+PARTITION_RULE = FLOCK_CIRCUIT_BLOCK_COVER
 SALT_BYTES, BC_BYTES = 192, 128
 
 
-PARTITION_V1 = "verity/partition/v1"
+PARTITION_V1 = PARTITION
 #: META's bindings: what the statement binds about the circuit, not the circuit. A unit's class (:func:`class_digest`) leaves
 #: them out, so a partition can name the class its digest is bound beside.
 BINDING_KEYS = ("partition", "program_sha512", "program_digests")
@@ -1137,18 +1140,11 @@ def statement(ports: list[Port], input_set, lo: int, hi: int, rows: dict, salts:
             "row_key_sha512": hashlib.sha512(inst.default_key).hexdigest()}, bcs
 
 
-def stage_salts(input_set, lo: int, hi: int, ports: list[Port], key: bytes | None, tables: dict | None = None) -> dict[str, list[bytes]]:
-    """Every row's salt (instances [lo, hi); ``tables``, a shared-row file's ``{port: R_p}``: every table row's): fresh from the
-    OS generator, or (``key``) SHAKE-256 of the key, the set and the row, so a benchmark's verifier pod can stage its own public
-    file. A key makes the salts known to whoever holds it; the verifier's checking process never reads them either way (its file
-    has none). A serving committer samples its own."""
+def stage_salts(lo: int, hi: int, ports: list[Port], tables: dict | None = None) -> dict[str, list[bytes]]:
+    """Every row's salt (instances [lo, hi); ``tables``, a shared-row file's ``{port: R_p}``: every table row's), fresh from the
+    OS generator. A caller that needs given salts (a public benchmark's, a registration's) hands them to :func:`write` as data."""
     rows = {p.name: range(tables[p.name]) if tables else range(lo, hi) for p in ports}
-    if key is None:
-        return {p.name: [os.urandom(SALT_BYTES) for _ in rows[p.name]] for p in ports}
-    tag = b"verity/flock-circuit/stage-salt/v1\0" + key + bytes.fromhex(input_set.content_digest)
-    kind = b"table\0" if tables else b""
-    return {p.name: [hashlib.shake_256(tag + p.name.encode() + b"\0" + kind + i.to_bytes(8, "big")).digest(SALT_BYTES) for i in rows[p.name]]
-            for p in ports}
+    return {p.name: [os.urandom(SALT_BYTES) for _ in rows[p.name]] for p in ports}
 
 
 def share(rows: dict) -> tuple[dict, dict]:
@@ -1211,7 +1207,7 @@ def check_shared_reads(meta: dict, n: int, counts: dict | None, refs: dict | Non
             raise ValueError(f"shared read {port}: instance {i} reads table row {int(ref[i])}, not its group's {i // g}")
 
 
-PUBLIC_INPUTS_FORMAT = "verity/flock-public-inputs/v1"
+PUBLIC_INPUTS_FORMAT = FLOCK_PUBLIC_INPUTS
 
 
 def _public_bytes(pins: list[dict], words: dict, n: int) -> bytes:
@@ -1239,7 +1235,7 @@ def public_file(head: dict, public: bytes) -> bytes:
     return line.encode() + b"\n" + public
 
 
-def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None,
+def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, indices: list | None = None,
           share_rows: bool = False, rows: dict | None = None, outs: dict | None = None, tables: dict | None = None,
           refs: dict | None = None, salts: dict | None = None, registered: dict | None = None,
           public_words: dict | None = None, identifier: dict | None = None, digests: tuple[str, str] | None = None,
@@ -1339,7 +1335,7 @@ def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, sa
         refs.update({p.name: np.arange(n) for p in orows})
     check_shared_reads(meta, n, {p.name: len(rows[p.name]) for p in ins} if refs is not None else None, refs)
     if salts is None:
-        salts = stage_salts(input_set, lo, hi, ports, salt_key, {p.name: len(rows[p.name]) for p in ports} if share_rows else None)
+        salts = stage_salts(lo, hi, ports, {p.name: len(rows[p.name]) for p in ports} if share_rows else None)
     elif any(len(salts[p.name]) != len(rows[p.name]) or any(len(s) != SALT_BYTES for s in salts[p.name]) for p in ports):
         raise ValueError("salts: one 192-byte salt per row")
     fv, bcs = statement(ports, input_set, lo, hi, rows, salts)
@@ -1381,18 +1377,18 @@ def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, sa
     return head
 
 
-def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: bool = False, salt_key: bytes | None = None,
+def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: bool = False, salts: dict | None = None,
           indices: list | None = None, partition: str | None = None, program: str | None = None, share_rows: bool = False,
           public_inputs: dict | None = None, identifier: dict | None = None, leaf_scheme: dict | None = None) -> Path:
     """``<out_dir>/circuit.txt`` (the composite circuit), the prover's ``<out_dir>/inst-<n>.bin`` and the verifier's own
     ``pub-<n>.bin`` from the same salts (``share_rows``: shared-row files, :func:`write`); returns the prover's path, or
-    (``public_only``: a verifier staging its own public file, which needs the prover's ``salt_key``) writes and returns only
-    ``pub-<n>.bin``. ``public_inputs`` (:func:`compose`): also the verifier's ``public-inputs-<n>.bin``, from the set's words, which
+    (``public_only``: a verifier staging its own public file, which needs the prover's ``salts``, public in a benchmark) writes
+    and returns only ``pub-<n>.bin``. ``salts``: every row's (:func:`write`), else fresh. ``public_inputs`` (:func:`compose`): also the verifier's ``public-inputs-<n>.bin``, from the set's words, which
     stand in for the verifier's own recomputation (a caller that holds the derivation writes it with
     :func:`write_public_inputs`). ``identifier``: both files' header ``identifier`` (:func:`write`). ``leaf_scheme``
     (:func:`compose`): the proof's own Merkle leaves."""
-    if public_only and salt_key is None:
-        raise ValueError("a verifier stages its own public file only from the prover's staging salt key (salts are otherwise fresh)")
+    if public_only and salts is None:
+        raise ValueError("a verifier stages its own public file only from the prover's salts (salts are otherwise fresh)")
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     statics = set_statics(input_set)
@@ -1405,7 +1401,8 @@ def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: b
             (out / "circuit-forged.txt").write_text(compose(low, input_set.subcircuit, forged=True, partition=partition, program=program,
                                                             statics=statics, public_inputs=public_inputs, leaf_scheme=leaf_scheme))
     inst, pub = out / f"inst-{hi - lo}.bin", out / f"pub-{hi - lo}.bin"
-    write(text, input_set, lo, hi, None if public_only else inst, pub, salt_key, indices, share_rows=share_rows, identifier=identifier)
+    write(text, input_set, lo, hi, None if public_only else inst, pub, indices, share_rows=share_rows, identifier=identifier,
+          salts=salts)
     if public_inputs:
         write_public_inputs(text, {nm: input_set.port(nm, lo, hi) for nm in public_inputs}, hi - lo, out / f"public-inputs-{hi - lo}.bin")
     return pub if public_only else inst

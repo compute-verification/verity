@@ -87,7 +87,7 @@ def test_the_member_takes_the_card_record_short_of_the_reported_name(
     e, rows = sw.measure(None, sw.PAIRS[0])
     assert (e["member"], e["value"]) == (member, pytest.approx(0.8) if value else None)
     if value is None:
-        assert e["why"].startswith("0 card records under ") and "'NVIDIA A100-SXM4-80GB'" in e["why"] and rows == {}
+        assert e["why"].startswith("0 GPU card files under ") and "'NVIDIA A100-SXM4-80GB'" in e["why"] and rows == {}
 
 
 def test_a_run_where_no_member_has_a_value_is_refused(sw: types.ModuleType, tmp_path: Path) -> None:

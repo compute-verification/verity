@@ -97,6 +97,7 @@
 #   `verify` on each member's session as a process of its own, and fails where that prints another verdict line than the
 #   audit's.
 set -uxo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; mkdir -p $O
 PY=${PY:-$REPO/.venv/bin/python}; VV=${VV:-$REPO/.venv/bin/verity-vllm}
 if [ -n "${A5_DRY:-}" ]; then W=$A5_DRY; else W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; fi
@@ -130,9 +131,9 @@ keep() {  # NAME: $W/NAME's records into $O/NAME (never the MUFU tables a circui
       || MSEC_RC=1
     grep '^MEMBER-SECONDS' $O/$1/member-seconds.log | cut -c1-4000
   fi
-  (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' \
+  (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -path './*/archive/*' \
     ! -path '*/tables/*.u32' -print0 \
-    | xargs -0 -r -I{} cp --parents {} $O/$1/)
+    | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} $O/$1/)
   store $1 || STORE_RC=1
 }
 if [ -n "${A5_DRY:-}" ]; then
@@ -201,7 +202,8 @@ audit() {  # NAME TP_COMMIT BUILD WORKLOAD WINDOWS PARTITION [A5 ARGS...]: WORKL
 
 public() {  # WINDOWS DEST: serving's public files of every rank
   for d in $1/rank*; do
-    mkdir -p $2/$(basename $d) && cp $d/{registration,window,partition,index}.json $d/m*-public.bin $2/$(basename $d)/
+    mkdir -p $2/$(basename $d) && (cd $d && printf '%s\0' {registration,window,partition,index}.json m*-public.bin \
+      | python3 "$PUBF" filter | xargs -0 -r -I{} cp {} $2/$(basename $d)/)
   done
   cp $1/tp.json $2/ 2>/dev/null
 }
@@ -316,7 +318,7 @@ else
     fi
     # the record's files, never a sealed bundle (its store holds the prover's values)
     public $S/serving-rows $O/standin-i$I/window && mkdir -p $O/standin-i$I/commit && cp $S/workload.json $S/partition.json $O/standin-i$I/ \
-      && find $S/commit -maxdepth 1 -type f -exec cp {} $O/standin-i$I/commit/ \;
+      && (cd $S/commit && find . -maxdepth 1 -type f -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp {} $O/standin-i$I/commit/)
     audit standin-i$I $S/commit $S/build "$WL" $S/serving-rows $S/partition.json "${ADV[@]}" || rc=1
   done
 fi

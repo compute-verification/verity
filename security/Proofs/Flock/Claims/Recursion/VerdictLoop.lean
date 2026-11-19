@@ -123,11 +123,11 @@ theorem verifyJPWith_ok (hs : Flock.Hashes Flock.V) (spec : SessionSpec) (tabs :
 
 namespace DecAt
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs)
 
 /-- **A dense inner statement's decision sets up one table**, and the session spec names one. -/
-theorem tables_of_dense {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
+theorem tables_of_dense {xo : Hash.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) :
     D.sts.size = 1 ∧ D.spec.tables.size = 1 := by
   obtain ⟨s, spec, st, sch, hset, htags, hpi, -⟩ := dense_inner hst hf

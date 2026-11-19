@@ -1,4 +1,4 @@
-"""A served tree registered as a port, end to end (`one_stage.served.register_served`, `served_registered.py`): a
+"""A served tree registered as a port, end to end (`prover.served.register_served`, `served_registered.py`): a
 RoPE d64 statement whose 32 units each read their `cs` row from the served tree `cs_table`, proved by Flock in one
 loopback `--zk` session under a subset sample of 16 (`pod/89-served-registered.sh`, `FIXTURES`), once for each row format a
 served tree may be: `row/v1`, and `row/v2` and `row-seg/v1` bit rows (the circuit's rows bit rows of their words, `cs` a
@@ -31,7 +31,8 @@ import pytest
 
 from verity.circuits.codec import canonical_json, encode_program
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage.served import register_served
+from verity.commitments import registered_value as RV
+from verity.protocols.proofs.spot.prover.served import register_served
 
 LEAN = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 VERIFIER = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement"
@@ -40,7 +41,7 @@ BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 #: partition.json, served.json, registered.json, tables/), session/ (the sampled --zk session's record and proofs), live.json
 #: (the prover's LIVE record)
 FIXTURES = {
-    G.SCHEMA: "art:54456e32d1e801018ba6c9da92548482a0e9c8c8fd5c2fc956086cb6e3d8bd4b",
+    RV.SCHEMA: "art:54456e32d1e801018ba6c9da92548482a0e9c8c8fd5c2fc956086cb6e3d8bd4b",
     G.SCHEMA_V2: "art:f14126710f23f62410d0387454ab8c69b236f75f5b92df10ddc214ebc45f37e6",
     G.SCHEMA_SEG: "art:ae8f5cf2b166710fd2418eea10dddc217102587c75d00db85abf2474b2d0864c",
 }
@@ -92,7 +93,7 @@ def test_a_session_verified_on_the_file_register_served_wrote_is_accepted_and_a_
     assert tree.row_schema == schema
     doc = SR.registered_file(program, query, tree, x_tree, out_port)
     assert canonical_json(doc) == (fx / "stage" / "registered.json").read_bytes()
-    assert doc["ports"]["cs"].get(G.SCHEMA_KEY, G.SCHEMA) == schema
+    assert doc["ports"]["cs"].get(RV.SCHEMA_KEY, RV.SCHEMA) == schema
     sr = register_served(program, query, [tree, x_tree])
     assert sr.partition == json.loads((fx / "stage" / "partition.json").read_text())
     ok = _verify(fx, SR.write_registered(doc, tmp_path / "registered.json"))
@@ -157,7 +158,7 @@ def test_a_bit_row_port_whose_words_and_width_are_not_its_rows_is_refused(fx, tm
     import served_registered as SR
 
     schema, fx = fx
-    if schema == G.SCHEMA:
+    if schema == RV.SCHEMA:
         pytest.skip("a row/v1 row pads to whole blocks: its width check is test_lean_registered_reads.py's")
     program, query = SR.program()
     tree, x_tree, out_port = SR.load(fx / "stage")

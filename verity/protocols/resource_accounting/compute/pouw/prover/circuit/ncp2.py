@@ -54,7 +54,7 @@ from verity.circuits.ops.ncp import NcpDequant, NcpDequantDef  # noqa: F401  (th
 
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError
 from ..schemes.ncp import BETA, admissible_perm, shift_perm, word_perm
-from . import words as W
+from verity.circuits.ops import words as W
 from .hashes import Emit, keccak_lanes, sha512, sha_words, shake256
 
 U32, U8, I7, F32, BF16 = W.U32, W.U8, W.I7, Value(32), Value(16)

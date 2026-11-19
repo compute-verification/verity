@@ -1,4 +1,5 @@
-"""The tensor-core receipts' cost table from tb_run.sh's bench.jsonl (and ncu's counts when the run dir has them), as Markdown.
+"""The tensor-core receipts' cost table from benchmarks/pouw/floored_gemm/tb_run.sh's bench.jsonl (and ncu's counts
+when the run dir has them), as Markdown.
 
 PYTHONPATH=. python3 verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm/tb_table.py BENCH.jsonl [RUN_OUT_DIR]
 

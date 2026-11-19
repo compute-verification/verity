@@ -1,6 +1,6 @@
 """The served window's table for `verity run` (`verity_cli.run.Registry`): onsite's and remote's components as a
 configuration declares them (`MANIFESTS`), the ``served-window`` workload (`SERVED`), each application's subprotocols and the
-configuration its file holds (`DEMOS`, `configuration`), each party's piece (`PARTIES`), the parties `verity run`
+configuration its file holds (`listed`, `configuration`), each party's piece (`PIECES`), the parties `verity run`
 starts first (`STARTS`), and the run of the pieces placed on a machine (`live`).
 
 A piece is what one party does in the run (`Piece`), in one of four ways (``runs``):
@@ -20,7 +20,8 @@ A piece is what one party does in the run (`Piece`), in one of four ways (``runs
   this machine hands it its party key (`held`). What doesn't reach the table yet (the served store, the card, setup's
   request, the party key) raises `NotImplementedError` (`NOT_YET`) before anything starts;
 - ``check``: the verifier's onsite check, `served_verdicts.py record` over the served window's public record, whose
-  composed verdict is the period's; under remote, the record the compose answer holds (`remote_check`). PoUW's row
+  composed verdict is the period's; under remote, the record the compose answer holds, else the
+  served node's own over its composite (`remote_check`). PoUW's row
   there is Pearl+'s verdict under ``pearl-plus`` (the runner's ``POUW=pearlplus``), H1's under ``pouw``.
 
 A piece names the scripts it runs (``scripts``), which must be in the tree, and the deploy bindings it reads: those of
@@ -45,6 +46,7 @@ import time
 import tomllib
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -52,9 +54,10 @@ from typing import Any, NamedTuple
 from verity import config as K
 from verity.commitments.crypto import lms
 from verity.config import Component, Workload
-from verity.protocol import Channel, Manifest, ProtocolDef, Role, Starter
+from verity.protocol import Channel, ProtocolDef, Role, Starter
+from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting.network.verifier import parties as NC
-from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
+from verity.protocols.resource_accounting.scheme import Lacks, Launch, Scheme, declared, settings
 from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties as P2
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.registration.verifier import registration as RL
@@ -63,11 +66,11 @@ from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parti
 from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.challenger import challenger_party as CP
-from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_rate, parse_strata_rate
+from verity.commitments.randomness import parse_rate, parse_strata_rate
 from verity.channel import Refused
 from verity.runtime import runner
 from verity.runtime.sources import MONOTONIC, RealClock
-from verity_cli import settings
+from verity_cli import settings as machine_settings
 from verity_cli.run import Start
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -85,18 +88,23 @@ REMOTE = "verity/remote/v1"
 #: the deploy bindings `begin` keeps beside the run (`verity_cli.run.BINDINGS`)
 BINDINGS = "bindings.json"
 #: the parties `verity run` starts first where ``--bindings`` gives none of what they write, each registered once by
-#: its own `STARTS[PARTY] = Start(...)`, never by assigning the table again
+#: its own `STARTS[PARTY] = started(PARTY, ...)`, never by assigning the table again
 STARTS: dict[str, Start] = {}
 WORKERS, ZK_SERVER, PROVER, VERIFIER = SP.WORKERS, SP.ZK_SERVER, WP.PROVER, SP.VERIFIER
 CHALLENGER, MEMORY_ATTESTER = SP.CHALLENGER, WP.CHALLENGER
 BANDWIDTH_VERIFIER, NETWORK_ATTESTER = P2.CLOSER_PARTY, NC.NETWORK_ATTESTER
-#: served_verdicts.py's record reads each piece's answer by its runner name, and the subprotocol each row is, by its
-#: configuration's name: PoUW's row (``work``) is Pearl+'s verdict or H1's, as the configuration lists
-RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only": "inference-only", "space": "pous",
-                "bandwidth": "bandwidth", "communication": "certifier", "wipe": "wipe"}
-ROWS = {**{v: k for k, v in RECORD_NAMES.items()}, "pearl-plus": "work"}
 #: served_verdicts.py's ``answer_from`` for a row it carries from a file the served node wrote (its ``AS_WRITTEN``)
 AS_WRITTEN = "as the served node wrote it"
+#: remote's line read from a record the prover composed, not a compose gate's answer: the serving node's own
+#: (``out``) or a deferral's follow-on's on a prover node (its ``OUT`` copied to ``out/follow-on``), each its ``source``
+#: and the sentence that leads its reason; each accept in it, a row's or the composed verdict, reads `DEVELOPMENT_VERDICT`,
+#: so nothing that counts accepts counts the prover's word that it passed
+SERVING_NODE, FOLLOW_ON = "serving-node", "follow-on"
+FROM_SERVING_NODE = ("read from the serving node's own record: a development verdict; the auditor's device did not "
+                     "compose it")
+FROM_FOLLOW_ON = ("read from a deferral's follow-on record, composed on a prover node: a development verdict; the "
+                  "auditor's device did not compose it")
+DEVELOPMENT_VERDICT = "development"
 
 
 # --- what each component and the workload declare -------------------------------------------------------------------
@@ -112,32 +120,40 @@ def _design(sampling_design: str, params: Mapping[str, Any]) -> None:
                              "the proof blocks N the window's class registers: rate:K/N, or stratified-rate:K/N")
 
 
-def _pous(params: Mapping[str, Any]) -> dict[str, Any]:
-    """PoUS's served piece: ``challenges``, the memory attester's reads in the period (320: ε = 1% + 2^-128,
-    ``period.certify``'s, since more reads than a certificate's keep its ε)."""
-    if extra := sorted(set(params) - {"challenges"}):
-        raise Refused("unknown-key", f"[params.\"{SP.IDS['pous']}\"]: {', '.join(extra)} (known: challenges)")
-    k = params["challenges"]
-    if type(k) is not int or k < 1:
-        raise Refused("params", f"challenges is a positive integer, not {k!r}")
-    return {"challenges": k}
+def _settings(scheme: Scheme, given: Mapping[str, Any]) -> dict[str, Any]:
+    """``scheme``'s `settings` over ``given``, refused as ``unknown-key`` where it has no such setting and as ``params``
+    where it refuses a value, with `settings`' own text: every scheme's settings are checked here."""
+    try:
+        return settings(scheme, given)
+    except ValueError as e:
+        raise Refused("unknown-key" if set(given) - set(scheme.settings) else "params", str(e)) from None
 
 
 _CLASS = re.compile(r"[1-9][0-9]*,[1-9][0-9]*,[1-9][0-9]*")
 
 
-def _pearlplus_params(params: Mapping[str, Any]) -> dict[str, Any]:
-    if extra := sorted(set(params) - {"class", "tie-uniform"}):
-        raise Refused("unknown-key", f"[params.\"{SP.IDS['pearl-plus']}\"]: {', '.join(extra)} (known: class, tie-uniform)")
+#: Pearl+'s settings that are the application's parameters, which its hash covers; its other settings are values a
+#: launch gives `attach` (a kernel's path, the challenger's address). Provisional, until the interface says which is which.
+PEARLPLUS_PARAMS = ("tie-uniform",)
+
+
+def _pearlplus_params(scheme: Scheme, cid: str, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Pearl+'s served piece, under its id ``cid``: its scheme's settings that are the application's (`PEARLPLUS_PARAMS`,
+    checked by `_settings`), and ``class``, the table's own."""
+    own = {k: v for k, v in params.items() if k != "class"}
+    if extra := sorted(set(own) - set(PEARLPLUS_PARAMS)):
+        known = ", ".join(["class", *PEARLPLUS_PARAMS])
+        raise Refused("unknown-key", f"[params.\"{cid}\"]: {', '.join(extra)} (known: {known})")
     if "class" in params and not (isinstance(params["class"], str) and _CLASS.fullmatch(params["class"])):
         raise Refused("params", f"class is SLOTS,PROMPT,OUTPUTS, three positive integers, not {params['class']!r}")
-    if type(params["tie-uniform"]) is not bool:
-        raise Refused("params", f"tie-uniform is true or false, not {params['tie-uniform']!r}")
-    return {k: params[k] for k in ("class", "tie-uniform") if k in params}
+    own = _settings(scheme, own)
+    return {**({"class": params["class"]} if "class" in params else {}), **{k: own[k] for k in PEARLPLUS_PARAMS}}
 
 
 _COMMIT = re.compile(r"[0-9a-f]{40}")
-LOADS = ("varied", "fixed")
+#: the served window's loads (served_verdicts.sh's LOAD); ``front``, network-accounting's: the network attester's front's
+#: group is the run's one load and its audited window
+LOADS = ("varied", "fixed", "front")
 
 
 def _served(params: Mapping[str, Any]) -> dict[str, Any]:
@@ -163,55 +179,46 @@ _VERIFIER = Role(VERIFIER, "auditor", needs=("audit", "component", "product"))
 _PROVER = Role(PROVER, "developer", per="server", needs=("store",))
 
 
-def _named(manifest: Manifest, names: Mapping[str, str]) -> tuple[tuple[Role, ...], tuple[Channel, ...]]:
-    """``manifest``'s parties and channels with each of its roles as the configuration names its party (``names``)."""
-    def n(role: str) -> str:
-        return names.get(role, role)
+def _declared(name: str, check: Callable[[Scheme, str, Mapping[str, Any]], dict[str, Any]] | None = None) -> Component:
+    """The `Component` of the scheme ``name`` declares (`schemes.get`): its parties, channels, colocated pairs, needs,
+    and as ``requires`` its ``depends``. Its parameters are its settings (`_settings`, over their defaults), or what
+    ``check`` makes of them, given the scheme and the id. Its id is the one `SP.IDS` gives, the key of its ``[params]``,
+    which may differ from the declared ``protocol``."""
+    s = schemes.get(name)
+    cid = SP.IDS.get(name, s.protocol)
+    params = ({"params": partial(check, s, cid)} if check else
+              {"params": partial(_settings, s), "default_params": dict(s.settings)} if s.settings else {})
+    return Component(name, cid, parties=declared(s, "parties"), channels=declared(s, "channels"),
+                     colocated=declared(s, "colocated"), needs=declared(s, "needs"), requires=declared(s, "depends"),
+                     **params)
 
-    return (tuple(replace(r, name=n(r.name)) for r in manifest.parties),
-            tuple(replace(c, sender=n(c.sender), receiver=n(c.receiver)) for c in manifest.channels))
 
-
-#: PoUB's P2 parties and channels, its verifier the configuration's bandwidth verifier (its ``verifier`` is onsite's)
-_P2_PARTIES, _P2_CHANNELS = _named(P2.MANIFEST, {P2.VERIFIER: BANDWIDTH_VERIFIER})
-MANIFESTS: dict[str, Component] = {c.name: c for c in (
-    Component("sampled-proofs", SP.IDS["sampled-proofs"], parties=SP.MANIFEST.parties, channels=SP.MANIFEST.channels,
-              needs=frozenset({"windows"}), sampling_design=_design, default_sampling_design="rate:1/3481648"),
-    Component("pouw", SP.IDS["pouw"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
-                                               Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
-              channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
-                        Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
-              needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)),
-    Component("pearl-plus", SP.IDS["pearl-plus"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
-                                                           Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
-              channels=(Channel(CHALLENGER, WORKERS, ("PearlSalt",), carries_coins=True),),
-              needs=frozenset({"windows"}), params=_pearlplus_params, default_params={"tie-uniform": False}),
-    Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
-    Component("pous", SP.IDS["pous"], parties=(*CS.MANIFEST.parties, _VERIFIER),
-              channels=(*CS.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER, ("SignedRun",), after=("End",))),
-              needs=frozenset({"store"}), params=_pous, default_params={"challenges": 320}),
-    Component("bandwidth", SP.IDS["bandwidth"], parties=(*_P2_PARTIES, _VERIFIER),
-              channels=(*_P2_CHANNELS, Channel(BANDWIDTH_VERIFIER, VERIFIER, ("BandwidthAnswer",), after=("Openings",))),
-              needs=frozenset({"receipts"})),
-    Component("certifier", SP.IDS["certifier"], parties=NC.MANIFEST.parties, channels=NC.MANIFEST.channels,
-              needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
-              colocated=((CHALLENGER, NETWORK_ATTESTER),)),
-    Component("wipe", "verity/wipe/v0", parties=(*WP.MANIFEST.parties, _VERIFIER),
-              channels=(*WP.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER, ("WipeReport",), after=("End",)))),
+#: the components no scheme declares yet, each with its row in the record, which only shrinks
+#: (`tests/tools/verity/cli/test_undeclared_rows.py`)
+UNDECLARED: dict[str, tuple[Component, str, Mapping[str, Launch]]] = {c.name: (c, row, pieces) for c, row, pieces in (
+    (Component("pouw", SP.IDS["pouw"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
+                                                Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
+               channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
+                         Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
+               needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)), "work",
+     {WORKERS: Launch(binds=("gate", "peer", "key-sha512"), optional=("main-file",))}),
 )}
+MANIFESTS: dict[str, Component] = {**{n: c for n, (c, _, _) in UNDECLARED.items()}, **{c.name: c for c in (
+    replace(_declared("sampled-proofs"), sampling_design=_design, default_sampling_design="rate:1/3481648"),
+    _declared("inference-only"),
+    _declared("pearl-plus", _pearlplus_params),
+    _declared("pous"),
+    _declared("bandwidth"),
+    _declared("wipe"),
+    _declared("network-attester"),
+)}}
+#: each component's row in the record, the one its scheme declares (`record`)
+ROWS: dict[str, str] = {n: row for n, (_, row, _) in UNDECLARED.items()} | {
+    n: declared(schemes.get(n), "record") for n in MANIFESTS if n not in UNDECLARED}
 SERVED = Workload(SERVED_WINDOW, frozenset({"windows", "noise", "store", "receipts", "ingress-relay"}),
                   (Role(WORKERS, "developer", needs=("serve",)),), _served,
                   {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d400d796ee589e7737d03a919526bf800",
                    "precision": "verity_int8", "slots": 4, "window-steps": 16, "load": "varied"})
-#: onsite's subprotocols, the seven `Core.Composites.composites` holds for it, PoUW's Pearl+'s run verdict
-ONSITE_COMPONENTS = ("sampled-proofs", "pearl-plus", "inference-only", "pous", "bandwidth", "certifier", "wipe")
-PROTOCOLS = ONSITE_COMPONENTS
-#: each application's subprotocols, the file `applications/NAME.toml` that `verity run NAME` runs: onsite's seven, its two smaller
-#: sets (`verity.config.UNACCEPTED`) and remote's
-DEMOS = {"onsite_full": ONSITE_COMPONENTS,
-         "onsite_compute": ("sampled-proofs", "pouw", "inference-only", "certifier", "wipe"),
-         "onsite_network": ("sampled-proofs", "certifier", "wipe"),
-         "remote": ("sampled-proofs", "pearl-plus", "inference-only")}
 PROVER_NODE, AUDITOR_HOST, GATE_HOST = "prover-node", "auditor-host", "gate-host"
 #: remote's auditor parties' machine, which isn't at the site: remote puts no auditor's device there
 AUDITOR_REMOTE = "auditor-remote"
@@ -219,8 +226,9 @@ AUDITOR_REMOTE = "auditor-remote"
 PLACEMENT = {WORKERS: PROVER_NODE, ZK_SERVER: PROVER_NODE, PROVER: PROVER_NODE, CHALLENGER: GATE_HOST,
              NETWORK_ATTESTER: GATE_HOST, MEMORY_ATTESTER: AUDITOR_HOST, BANDWIDTH_VERIFIER: AUDITOR_HOST,
              VERIFIER: AUDITOR_HOST}
+APPLICATIONS = ROOT / "applications"
 #: the configuration this table's application runs, whose `[[pin]]` entries are the only statement of the keys the auditor pinned
-CONFIG = ROOT / "applications" / "onsite_full.toml"
+CONFIG = APPLICATIONS / "onsite_full.toml"
 _UNDECIDED = ("`verity run` records each period's verdict under that id, undecided unless the line says who",
               "combined it: no composite takes it.")
 #: the header of each application's file
@@ -231,13 +239,17 @@ HEADERS = {
         "FILE` (tools/verity/cli/README.md); the deploy bindings hold every host and address, this file none.",
         "`verity run THIS --dry-run` resolves it all."),
     "onsite_compute": (
-        "The served window under SPOT, PoUW, the inference-only policy, the network certifier and the memory",
+        "The served window under SPOT, PoUW, the inference-only policy, the network attester and the memory",
         "wipe (verity/onsite-compute/v0, a deployment of its own, never onsite): onsite without PoUS and PoUB,",
         "each party on its machine, and the key the auditor pinned for its memory attester.", *_UNDECIDED),
     "onsite_network": (
-        "The served window under the network certifier, SPOT and the memory wipe (verity/onsite-network/v0, a",
+        "The served window under the network attester, SPOT and the memory wipe (verity/onsite-network/v0, a",
         "deployment of its own, never onsite), each party on its machine, and the key the auditor pinned for",
         "its memory attester.", *_UNDECIDED),
+    "onsite_network_front": (
+        "onsite_network.toml with the network attester's front as the run's one load (load front): the one run in",
+        "which the network attester's chain and the window's compute audit see the same window, so the period check",
+        "can reach its tied form.", *_UNDECIDED),
     "remote": (
         "The served window under remote's subprotocols (verity/remote/v1): SPOT, PoUW's Pearl+ run verdict and the",
         "inference-only policy. No auditor's device is at the site: the developer's parties are on the prover node",
@@ -246,28 +258,40 @@ HEADERS = {
 HEADER = HEADERS["onsite_full"]
 
 
-#: an application's own workload values and component parameters over the shared defaults: those Pearl+'s tie takes,
-#: which remote and onsite both serve
-_TIED = ({"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
-          "precision": "bfloat16", "slots": 4, "window-steps": 2, "load": "fixed"},
-         {SP.IDS["pearl-plus"]: {"class": "4,27,2", "tie-uniform": True}})
-DEMO_VALUES = {"remote": _TIED, "onsite_full": _TIED}
+def listed(demo: str) -> tuple[str, ...]:
+    """The subprotocols `applications/<demo>.toml` lists, in its order (its ``protocols``)."""
+    return tuple(tomllib.loads((APPLICATIONS / f"{demo}.toml").read_text())["protocols"])
+
+
+#: an application's own workload values over the shared defaults, each of whose listed schemes then states its declared
+#: `Scheme.tie` over its parameters' defaults; remote and onsite both serve the tie, and onsite_network_front only the
+#: front's load
+_TIED = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+         "precision": "bfloat16", "slots": 4, "window-steps": 2, "load": "fixed"}
+DEMO_VALUES = {"remote": _TIED, "onsite_full": _TIED, "onsite_network_front": {"load": "front"}}
+
+
+def tied(protocols: Sequence[str]) -> dict[str, dict[str, Any]]:
+    """Each listed declared scheme's `Scheme.tie`, by its component's id."""
+    return {MANIFESTS[n].id: dict(s.tie) for n in protocols if n in schemes.DECLARATIONS and (s := schemes.get(n)).tie}
 
 
 def configuration(commit: str, demo: str = "onsite_full",
                   pins: Sequence[Mapping[str, str]] | None = None) -> dict[str, Any]:
     """The configuration `applications/<demo>.toml` holds, at program ``commit``: `config new`'s over the application's subprotocols
-    (`DEMOS`), each party at its `PLACEMENT` (remote's auditor parties at `AUDITOR_REMOTE`), the workload's and PoUS's
-    parameters stated (with the application's own, `DEMO_VALUES`), and ``pins``, the keys the auditor pinned for its devices (by default `CONFIG`'s own `[[pin]]`
+    (`listed`), each party at its `PLACEMENT` (remote's auditor parties at `AUDITOR_REMOTE`), the workload's and PoUS's
+    parameters stated (with the application's own, `DEMO_VALUES`, and its listed schemes' `tied`), and ``pins``, the keys the auditor pinned for its devices (by default `CONFIG`'s own `[[pin]]`
     entries for the subprotocols the application lists: no code states a key)."""
-    protocols = DEMOS[demo]
+    protocols = listed(demo)
     cfg = K.new(SERVED_WINDOW, list(protocols), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
-    workload, params = DEMO_VALUES.get(demo, ({}, {}))
+    workload = DEMO_VALUES.get(demo, {})
+    params = tied(protocols) if demo in DEMO_VALUES else {}
     cfg["workload"]["params"] = {**SERVED.default_params, **workload}
-    if "pous" in protocols:
-        cfg["params"] = {SP.IDS["pous"]: {"challenges": 320}}
-    if params:
-        cfg["params"] = {**cfg.get("params", {}), **params}
+    stated = {c.id: dict(c.default_params) for c in map(MANIFESTS.__getitem__, protocols) if c.default_params}
+    for cid, own in params.items():
+        stated[cid] = {**stated.get(cid, {}), **own}
+    if stated:
+        cfg["params"] = stated
     for p in cfg["party"]:
         remote = demo == "remote" and p["principal"] == "auditor"
         p["machine"] = AUDITOR_REMOTE if remote else PLACEMENT[p["name"]]
@@ -280,10 +304,10 @@ def configuration(commit: str, demo: str = "onsite_full",
 
 # --- the pieces ------------------------------------------------------------------------------------------------------
 
-Hooks = Callable[[Mapping[str, Any], Mapping[str, Any], Mapping[str, str]], dict[str, str]]
+Hooks = Callable[[Mapping[str, Any], Mapping[str, Any], Mapping[str, str], list[str]], dict[str, str]]
 
 
-def _none(cfg: Mapping[str, Any], params: Mapping[str, Any], bound: Mapping[str, str]) -> dict[str, str]:
+def _none(cfg: Mapping[str, Any], params: Mapping[str, Any], bound: Mapping[str, str], pinned: list[str]) -> dict[str, str]:
     return {}
 
 
@@ -341,10 +365,11 @@ def held(piece: Piece, role: Role) -> Held:
 
 @dataclass(frozen=True)
 class Piece:
-    """One party's piece of the served window (module docstring): ``hooks(cfg, params, bound)`` gives the runner's
-    variables for it from the configuration, the component's checked parameters and the bindings of the party it
+    """One party's piece of the served window (module docstring): ``hooks(cfg, params, bound, pinned)`` gives the
+    runner's variables for it from the configuration, the component's checked parameters, the bindings of the party it
     reaches (``bound``: each of ``binds``, a ``<party.component.key>`` placeholder while unbound, and each bound one of
-    ``optional``). A ``runtime`` piece's ``session`` is the protocol it is a party of. A piece with a ``development``
+    ``optional``) and that party's key pinned for this component (``pinned``: the configuration's one pin, or none,
+    and none while the piece's ``development`` binding is unbound). A ``runtime`` piece's ``session`` is the protocol it is a party of. A piece with a ``development``
     binding left unbound starts the party it reaches on its own machine, under a key and coins made for the run, in a
     development run (`coins_on`), and takes none of its other bindings; one that ``follows`` a listed component's piece
     of the same party is unbound exactly when that piece is, since its attester signs under that one's key. The
@@ -366,6 +391,8 @@ class Piece:
     follows: str = ""
     verbs: tuple[str, ...] = ()
     writes: tuple[str, ...] = ()
+    starts: tuple[str, ...] = ()
+    starts_optional: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.runs not in RUNS:
@@ -394,7 +421,7 @@ class Piece:
                                      f"run, and the deploy bindings bind {', '.join(map(self.key, given))} beside it: "
                                      f"bind {self.key(self.development)} too, or none of them")
         if self.follows in cfg["protocols"] and (self.development in mine) != (
-                (lead := PARTIES[self.follows][self.party]).development in lead._bindings(bindings)):
+                (lead := PIECES[self.follows][self.party]).development in lead._bindings(bindings)):
             given, alone = (self, lead) if self.development in mine else (lead, self)
             raise Refused("unbound", f"{self.component}'s attester signs under {self.follows}'s key, and the deploy "
                                      f"bindings bind {given.key(given.development)} but not "
@@ -403,7 +430,8 @@ class Piece:
         bound = {**{k: f"<{self.key(k)}>" for k in self.binds},
                  **{k: str(v) for k, v in mine.items() if k in self.binds or k in self.optional}}
         params = cfg["params"].get(MANIFESTS[self.component].id, {}) if self.component in MANIFESTS else {}
-        return self.hooks(cfg, params, bound)
+        dev = not self.development or self.development in mine
+        return self.hooks(cfg, params, bound, _pinned(cfg, self.reaches or self.party, self.component) if dev else [])
 
     def describe(self, cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, Any]:
         """What `verity run --dry-run` prints of it; `verity_cli.run` refuses ``no-piece`` while ``missing`` names a
@@ -428,7 +456,7 @@ class Piece:
                               "carries_coins": c.carries_coins} for c in m.channels if role in (c.sender, c.receiver)]}
 
 
-def _serve(cfg, params, bound):
+def _serve(cfg, params, bound, pinned):
     w = cfg["workload"]["params"]
     return {"REPO": w["model"], "REV": w["revision"], "PRECISION": w["precision"], "SLOTS": str(w["slots"]),
             "WINDOW_STEPS": str(w["window-steps"]), "LOAD": w["load"], "V3C_LAW": cfg["service"]["law"]}
@@ -439,18 +467,21 @@ _PP = {"gate": "PP_CHALLENGER", "peer": "PP_PEER", "key": "PP_CHALLENGER_KEY", "
        "main-file": "MAIN_FILE"}
 
 
-def _spot_challenger(cfg, params, bound):
-    """The live challenger's bindings; with no gate bound the sample's coins are the challenger party's loopback host's
-    where ``loopback`` is bound, else a local development session's, simulated either way, which served_verdicts.sh
-    takes under VERITY_HOLD_PLACEMENT=1 only in a development run."""
+def _spot_challenger(cfg, params, bound, pinned):
+    """The window's values committed under hiding leaves and sealed, its registration before the sample, and the sampled
+    proof blocks proved in Flock --zk; the sample on the live challenger when its gate is bound, else on the challenger
+    party's loopback host's coins where ``loopback`` is bound, else on a local development session's, simulated either
+    way, which served_verdicts.sh takes under VERITY_HOLD_PLACEMENT=1 only in a development run."""
     hooks = {v: f"gate:{bound[k]}" if k == "gate" else bound[k] for k, v in _PP.items() if k in bound}
     if "gate" in bound:
         return hooks
     hooks |= {"PP_CHALLENGER": f"loopback:{bound['loopback']}"} if "loopback" in bound else {}
-    return {**hooks, "DEVELOPMENT": "1"} if settings.hold_placement() else hooks
+    return {**hooks, "DEVELOPMENT": "1"} if machine_settings.hold_placement() else hooks
 
 
-def _pouw(cfg, params, bound):
+def _pouw(cfg, params, bound, pinned):
+    """H1 on the serving engine (--protocols pouw:...), its coins the gate's; served_verdicts.py pouw checks them
+    against the gate's session under its key."""
     return {"H1_GATE": bound["gate"], "H1_PEER": bound["peer"], "H1_KEY_SHA512": bound["key-sha512"],
             **({"MAIN_FILE": bound["main-file"]} if "main-file" in bound else {})}
 
@@ -465,20 +496,18 @@ WIPE_SCRIPT = "benchmarks/pous/streamed_wipe/served_wipe.sh"
 _WIPE = {"address": "WIPE_ADDRESS", "host": "WIPE_CHALLENGER", "command": "WIPE_COMMAND"}
 
 
-def _wipe(cfg, params, bound):
-    """The key is the configuration's pin alone, on the command line, so neither the environment nor a binding gives
+def _wipe(cfg, params, bound, pinned):
+    """The streamed wipe of the card before the workload's engine loads (WIPE_CMD, served_wipe.sh). The key is the configuration's pin alone, on the command line, so neither the environment nor a binding gives
     another; with no pin served_wipe.sh refuses. Unbound, the key is the run's (`RUN_KEYS`), and no pin is passed."""
     if "address" not in bound:
         return {"WIPE_CMD": f'bash {WIPE_SCRIPT} "$1" "$2" "$3" {RUN_KEYS}', **DEVELOPMENT}
-    pin = next((p["key-sha512"] for p in cfg.get("pin", [])
-                if (p["party"], p["protocol"]) == (MEMORY_ATTESTER, "wipe")), "")
-    return {"WIPE_CMD": f'WIPE_KEY_SHA512={pin} bash {WIPE_SCRIPT} "$1" "$2" "$3"',
+    return {"WIPE_CMD": f'WIPE_KEY_SHA512={"".join(pinned)} bash {WIPE_SCRIPT} "$1" "$2" "$3"',
             **{v: bound[k] for k, v in _WIPE.items() if k in bound}}
 
 
 POUS_SCRIPT, ONSITE_PIECES = "benchmarks/pous/served_piece.sh", "benchmarks/pous/onsite_pieces.sh"
 ATTESTER_SCRIPT = "benchmarks/pous/run_attester.sh"
-BANDWIDTH_SCRIPT = "benchmarks/one_stage/served_bandwidth.py"
+BANDWIDTH_SCRIPT = "benchmarks/pous/served_piece.py"
 #: served_piece.py's flag for each binding of PoUS's memory attester, and of PoUB's bandwidth verifier
 _POUS = {"address": "--challenger-address", "host": "--challenger-host", "command": "--challenger-command"}
 _BANDWIDTH = {"host": "--bw-host", "command": "--bw-party"}
@@ -488,32 +517,35 @@ def _pinned(cfg: Mapping[str, Any], party: str, protocol: str) -> list[str]:
     return [p["key-sha512"] for p in cfg.get("pin", []) if (p["party"], p["protocol"]) == (party, protocol)][:1]
 
 
-def _pous_piece(cfg, params, bound):
-    """The memory attester's key is the configuration's pin alone, on the command line; with no pin the piece
+def _pous_piece(cfg, params, bound, pinned):
+    """PoUS's prover after the workload (POUS_CMD, served_piece.sh): the memory attester's timed reads answered from
+    the served weights held as P2's C* on the card, with the memory attester on the workload's machine in a development
+    run. The memory attester's key is the configuration's pin alone, on the command line; with no pin the piece
     trusts no session. Unbound, the key is the run's (`RUN_KEYS`), and no pin is passed."""
-    pin = _pinned(cfg, MEMORY_ATTESTER, "pous") if "address" in bound else []
-    words = [*(["--trusted-sha512", *pin] if pin else []), *([] if "address" in bound else [RUN_KEYS]),
+    words = [*(["--trusted-sha512", *pinned] if pinned else []), *([] if "address" in bound else [RUN_KEYS]),
              "--rounds", str(params["challenges"]),
              *(w for k, flag in _POUS.items() if k in bound for w in (flag, bound[k]))]
     return {"POUS_CMD": f'bash {POUS_SCRIPT} "$@"', "POUS_ARGS": shlex.join(words), "ONSITE_PIECES": ONSITE_PIECES,
             **({} if "address" in bound else DEVELOPMENT)}
 
 
-def _bandwidth_piece(cfg, params, bound):
-    """The close's key is the configuration's pin for the bandwidth verifier alone; with no pin the session has no
+def _bandwidth_piece(cfg, params, bound, pinned):
+    """PoUB's prover inside PoUS's piece (served_piece.py's --bw-*): the held store proved to the bandwidth verifier a
+    pass at a time, its answer collected by BANDWIDTH_CMD. The close's key is the configuration's pin for the bandwidth verifier alone; with no pin the session has no
     case. Unbound, PoUS's `RUN_KEYS` starts the bandwidth party too, under PoUS's key made for the run."""
-    pin = _pinned(cfg, BANDWIDTH_VERIFIER, P2.COMPONENT) if "host" in bound else []
-    words = [*(["--bw-trusted-sha512", *pin] if pin else []),
+    words = [*(["--bw-trusted-sha512", *pinned] if pinned else []),
              *(w for k, flag in _BANDWIDTH.items() if k in bound for w in (flag, bound[k]))]
     return {**({"POUS_ARGS": shlex.join(words)} if words else DEVELOPMENT),
-            "BANDWIDTH_CMD": f'"$PY" {BANDWIDTH_SCRIPT} collect --serve-dir "$1" --window "$2" --out "$3"'}
+            "BANDWIDTH_CMD": f'"$PY" {BANDWIDTH_SCRIPT} collect-bandwidth --serve-dir "$1" --window "$2" --out "$3"'}
 
 
 _PEARLPLUS_LIVE = {"gate": "PEARLC_CHALLENGER_GATE", "peer": "PEARLC_CHALLENGER_PEER", "key-sha512": "H1_KEY_SHA512"}
 
 
-def _pearlplus(cfg, params, bound):
-    """With no gate bound the gate variables are set empty, since unset served_verdicts.sh takes the lane's gate: Pearl+'s
+def _pearlplus(cfg, params, bound, pinned):
+    """Pearl+ on the workload's engine (POUW=pearlplus, PEARLPLUS_TIE=1): each engine step's passes retained under the
+    gate's salts, Pearl+'s window record tied to the execution phase, then its verdict and the Lean verifier
+    (served_pearlplus.sh). With no gate bound the gate variables are set empty, since unset served_verdicts.sh takes the lane's gate: Pearl+'s
     epoch coins are then an in-process challenger's on the workload's machine, its verdict claims none, and the run is a
     development one."""
     product = "remote" if K.composite(cfg["protocols"], MANIFESTS) == REMOTE else "onsite"
@@ -577,11 +609,10 @@ def _serve_challenger(cfg: Mapping[str, Any], state: Path, machines: Sequence[st
         raise Refused("challenger", f"Pearl+'s gate pins {gate['pin']}, not the run's commit {main[0]}")
     host = _HOSTS[state] = CP.Host(mine / "sampled-proofs", main, _deployed_local)
     spot = host.start()
-    written = {"sampled-proofs": {"loopback": spot["address"], "main-file": str(line)},
-               "pearl-plus": {"gate": gate["gate"], "peer": gate["peer"], "lane": gate["lane"],
-                              "key-sha512": gate["key_sha512"], "main-file": str(line)}}
+    made = {"loopback": spot["address"], "main-file": str(line), "gate": gate["gate"], "peer": gate["peer"],
+            "lane": gate["lane"], "key-sha512": gate["key_sha512"]}
     part = public / f".{BINDINGS}"
-    part.write_text(json.dumps(written, sort_keys=True))
+    part.write_text(json.dumps(_written(CHALLENGER, made), sort_keys=True))
     part.replace(public / BINDINGS)
 
 
@@ -598,16 +629,6 @@ def _stop_challenger(cfg: Mapping[str, Any], state: Path) -> None:
         if p.returncode:
             raise Refused("challenger", f"{PEARLPLUS_GATE} stop exited {p.returncode}, so Pearl+'s gate's public "
                                         f"files are not all in the run's record: {p.stderr.strip()[-800:]}")
-
-
-#: the challenger, whose coins SPOT's sample and Pearl+'s salt and sample read; its Lean coins' verifier is built when
-#: missing and SPOT's key is made at the deployed parameters, so it waits long. The auditor's own gate (`run.sh
-#: bindings`) gives only Pearl+'s gate, peer and key, and SPOT its gate in the loopback's place
-STARTS[CHALLENGER] = Start(writes={"sampled-proofs": ("loopback", "main-file"),
-                                   "pearl-plus": ("gate", "peer", "lane", "key-sha512", "main-file")},
-                           serve=_serve_challenger, stop=_stop_challenger, within=1800,
-                           optional=frozenset({("sampled-proofs", "loopback"), ("sampled-proofs", "main-file"),
-                                               ("pearl-plus", "lane"), ("pearl-plus", "main-file")}))
 
 
 #: PoUS's timed rounds (`challenger_session`'s parties), beside the served window: the challenger's header names the
@@ -639,10 +660,13 @@ SCAN_CLASS = "8,32,4,4,16"
 FRONT_TOKENS = 4
 
 
-def _attester_piece(cfg, params, bound):
-    """Under Pearl+'s tie (``pearl-plus`` listed, whose piece sets ``PEARLPLUS_TIE``) the tied class is Pearl+'s and
-    V3c runs after the pieces, so the piece is whole (``CERTIFIER_CMD``) on the front's own window, sets no class, and
-    the front's requests ask for at most the window's steps, so each is in one window."""
+def _attester_piece(cfg, params, bound, pinned):
+    """The network attester's developer side: its front before the requests (CERTIFIER_FRONT, which the served window
+    runs), and its piece split around V3c: the chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period
+    check on V3c's period.json (CERTIFIER_PERIOD_CMD). Under Pearl+'s tie (``pearl-plus`` listed, whose piece sets
+    ``PEARLPLUS_TIE``) the tied class is Pearl+'s and V3c runs after the pieces, so the piece is whole
+    (``CERTIFIER_CMD``) on the front's own window, sets no class, and the front's requests ask for at most the
+    window's steps, so each is in one window."""
     py = ".venv/bin/python"
     gate = f'--gate {shlex.quote(bound["gate"])} --peer {shlex.quote(bound["peer"])}'
     front = f'{py} {ATTESTER_PIECE} front "$1" "$2" "$3" {gate}'
@@ -663,12 +687,8 @@ def _local_gate(cfg: Mapping[str, Any], state: Path, machines: Sequence[str] = (
     f = state / "public" / NETWORK_ATTESTER / BINDINGS
     f.parent.mkdir(parents=True, exist_ok=True)
     part = f.with_name(f".{BINDINGS}")
-    part.write_text(json.dumps({"certifier": {"gate": "local", "peer": machine}}, sort_keys=True))
+    part.write_text(json.dumps(_written(NETWORK_ATTESTER, {"gate": "local", "peer": machine}), sort_keys=True))
     part.replace(f)
-
-
-STARTS[NETWORK_ATTESTER] = Start(writes={"certifier": ("gate", "peer")}, serve=_local_gate,
-                                  stop=lambda cfg, state: None, within=60)
 
 
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
@@ -678,91 +698,100 @@ SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on
               verbs=("predict", "serve", "seal", "window", "advice", "circuits", "publish"),
               writes=("D/requests.jsonl", "D/windows.jsonl", "D/seals.jsonl", "D/serve.json", "D/windows/w<K>/",
                       "D/advice/w<K>/", "OUT/serve/", "OUT/machine.txt"))
-#: each listed component's party -> its piece
-PARTIES: dict[str, dict[str, Piece]] = {
-    "sampled-proofs": {
-        CHALLENGER: Piece("sampled-proofs", CHALLENGER, GATE, "the gate: the auditor's live challenger, whose coins "
-                          "sample the proof blocks after the window's commitment"),
-        ZK_SERVER: Piece("sampled-proofs", ZK_SERVER, SERVED_WINDOW, "the Lean ZK server every outer proof goes through, "
-                        "one at a time, in the records audit"),
-        WORKERS: Piece("sampled-proofs", WORKERS, SERVED_WINDOW, "the window's values committed under hiding leaves "
-                       "and sealed, its registration before the sample, and the sampled proof blocks proved in Flock --zk; "
-                       "the sample on the live challenger when its gate is bound, else on the challenger party's loopback "
-                       "host's coins, or with neither a local development session's, in a development run", reaches=CHALLENGER, optional=(*_PP, "loopback"),
-                       hooks=_spot_challenger),
-        VERIFIER: Piece("sampled-proofs", VERIFIER, CHECK, "the onsite check: the record the served window "
-                        "published, of the execution phase its seal's digest names (serve/phase.json): its rows (the "
-                        "records audit's verdict the integrity row) and its composed verdict"),
-    },
-    "pouw": {
-        CHALLENGER: Piece("pouw", CHALLENGER, GATE, "the gate: each window's H1 coins from a session of its own"),
-        WORKERS: Piece("pouw", WORKERS, SERVED_WINDOW, "H1 on the serving engine (--protocols pouw:...), its coins "
-                       "the gate's; served_verdicts.py pouw checks them against the gate's session under its key",
-                       reaches=CHALLENGER, binds=("gate", "peer", "key-sha512"), optional=("main-file",), hooks=_pouw),
-        VERIFIER: Piece("pouw", VERIFIER, CHECK, "PoUW's row"),
-    },
-    "pearl-plus": {
-        CHALLENGER: Piece("pearl-plus", CHALLENGER, GATE, "the gate: each epoch's Pearl+ salt from a session of its own"),
-        WORKERS: Piece("pearl-plus", WORKERS, SERVED_WINDOW, "Pearl+ on the workload's engine (POUW=pearlplus, "
-                       "PEARLPLUS_TIE=1): each engine step's passes retained under the gate's salts when its gate is "
-                       "bound, else under an in-process challenger's on the workload's machine in a development run "
-                       "whose Pearl+ verdict claims none, Pearl+'s window "
-                       "record tied to the execution phase, then its verdict and the Lean verifier "
-                       "(served_pearlplus.sh)", scripts=(PEARLPLUS_SCRIPT,), reaches=CHALLENGER,
-                       optional=("gate", "peer", "key-sha512", "lane", "main-file"), hooks=_pearlplus),
-        VERIFIER: Piece("pearl-plus", VERIFIER, CHECK, "Pearl+'s row"),
-    },
-    "inference-only": {
-        VERIFIER: Piece("inference-only", VERIFIER, CHECK, "the inference-only policy's row: no served window produces "
-                        "the declared division yet, so the record has none and the onsite check stays undecided"),
-    },
-    "pous": {
-        PROVER: Piece("pous", PROVER, SERVED_WINDOW, "PoUS's prover after the workload (POUS_CMD, served_piece.sh): "
-                      "the memory attester's timed reads answered from the served weights held as P2's C* on the "
-                      "card, its session trusted only under the key the configuration pins for the memory attester's "
-                      "PoUS sessions; unbound, under a key made for the run, with the memory attester on the "
-                      "workload's machine in a development run", scripts=(POUS_SCRIPT, ONSITE_PIECES, ATTESTER_SCRIPT),
-                      reaches=MEMORY_ATTESTER, optional=("address", "host", "command"), hooks=_pous_piece,
-                      development="address"),
-        MEMORY_ATTESTER: Piece("pous", MEMORY_ATTESTER, GATE, "the gate: PoUS's memory attester, on its own "
-                               "coins and clock, signing the session"),
-        VERIFIER: Piece("pous", VERIFIER, CHECK, "PoUS's row"),
-    },
-    "bandwidth": {
-        PROVER: Piece("bandwidth", PROVER, SERVED_WINDOW, "PoUB's prover inside PoUS's piece (served_piece.py's "
-                      "--bw-*): the held store proved to the bandwidth verifier a pass at a time, the session's close "
-                      "trusted only under the key the configuration pins for the bandwidth verifier, its answer "
-                      "collected by BANDWIDTH_CMD; unbound, the bandwidth party on the workload's machine under PoUS's "
-                      "key made for the run, in a development run", scripts=(BANDWIDTH_SCRIPT,),
-                      reaches=BANDWIDTH_VERIFIER, optional=("host", "command"), hooks=_bandwidth_piece,
-                      development="host", follows="pous"),
-        BANDWIDTH_VERIFIER: Piece("bandwidth", BANDWIDTH_VERIFIER, GATE, "the gate: the bandwidth verifier and its "
-                                  "challenger, on its own coins and clock"),
-        VERIFIER: Piece("bandwidth", VERIFIER, CHECK, "PoUB's row"),
-    },
-    "certifier": {
-        WORKERS: Piece("certifier", WORKERS, SERVED_WINDOW, "the network attester's developer side: its front before the "
-                       "requests (CERTIFIER_FRONT, which the served window runs), and its piece split around V3c: the "
-                       "chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period check on V3c's "
-                       "period.json (CERTIFIER_PERIOD_CMD); under Pearl+'s tie, whole on its front's own window "
-                       "(CERTIFIER_CMD)", scripts=(ATTESTER_PIECE,),
-                       reaches=NETWORK_ATTESTER, binds=("gate", "peer"), hooks=_attester_piece),
-        NETWORK_ATTESTER: Piece("certifier", NETWORK_ATTESTER, GATE, "the network certifier behind the gate, "
-                                 "in front of serve-openai before the requests"),
-        VERIFIER: Piece("certifier", VERIFIER, CHECK, "the network certifier's row"),
-    },
-    "wipe": {
-        PROVER: Piece("wipe", PROVER, SERVED_WINDOW, "the streamed wipe of the card before the workload's engine loads "
-                      "(WIPE_CMD, served_wipe.sh), its session trusted only under the key the configuration pins for "
-                      "the memory attester's wipe; unbound, under a key made for the run, with the memory "
-                      "attester on the workload's machine in a development run", scripts=(WIPE_SCRIPT,),
-                      reaches=MEMORY_ATTESTER, optional=("address", "host", "command"), hooks=_wipe,
-                      development="address"),
-        MEMORY_ATTESTER: Piece("wipe", MEMORY_ATTESTER, GATE, "the gate: the wipe's memory attester, on its own "
-                               "coins and raw clock, signing the session"),
-        VERIFIER: Piece("wipe", VERIFIER, CHECK, "the wipe's row"),
-    },
+class Launcher(NamedTuple):
+    """A declared piece's entry (`Launch`): ``hooks(cfg, params, bound, pinned)``, the runner's variables for it, whose
+    docstring says what the piece does, and the scripts it runs."""
+
+    hooks: Hooks
+    scripts: tuple[str, ...] = ()
+
+
+#: each declared piece's entry, by component and party (`Scheme.pieces`, and `UNDECLARED`'s for its rows)
+ENTRIES: dict[tuple[str, str], Launcher] = {
+    ("sampled-proofs", WORKERS): Launcher(_spot_challenger),
+    ("pouw", WORKERS): Launcher(_pouw),
+    ("pearl-plus", WORKERS): Launcher(_pearlplus, (PEARLPLUS_SCRIPT,)),
+    ("pous", PROVER): Launcher(_pous_piece, (POUS_SCRIPT, ONSITE_PIECES, ATTESTER_SCRIPT)),
+    ("bandwidth", PROVER): Launcher(_bandwidth_piece, (BANDWIDTH_SCRIPT,)),
+    ("network-attester", WORKERS): Launcher(_attester_piece, (ATTESTER_PIECE,)),
+    ("wipe", PROVER): Launcher(_wipe, (WIPE_SCRIPT,)),
 }
+
+
+def launches(name: str) -> Mapping[str, Launch]:
+    """The pieces the component ``name`` declares, by developer-side party (`Scheme.pieces`; `UNDECLARED`'s own)."""
+    if name in UNDECLARED:
+        return UNDECLARED[name][2]
+    said = schemes.get(name).pieces
+    return {} if isinstance(said, Lacks) else said
+
+
+def _reaches(c: Component, party: str, said: str) -> str:
+    """The auditor party other than the verifier that ``party`` shares a declared channel with; ``said`` only where
+    there is none."""
+    auditor = {r.name for r in c.parties if r.principal == "auditor"} - {VERIFIER}
+    joined = {o for ch in c.channels for a, o in ((ch.sender, ch.receiver), (ch.receiver, ch.sender))
+              if a == party and o in auditor}
+    if said and joined:
+        raise ValueError(f"{c.name}: {party} reaches {sorted(joined)} by its declared channels, so its piece says no "
+                         f"reaches (it says {said!r})")
+    if len(joined) > 1:
+        raise ValueError(f"{c.name}: {party} shares declared channels with {sorted(joined)}: its piece says which it "
+                         "reaches")
+    return said or next(iter(joined), "")
+
+
+def _pieces(c: Component) -> dict[str, Piece]:
+    """Each of ``c``'s declared parties' piece: the verifier's at the check, another auditor party's at the gate, a
+    developer party's in the served window; a declared piece (`launches`) with its entry, the party it reaches, and the
+    declared ``depends`` it ``follows``, the one whose piece of the same party also has a development binding."""
+    mine, out = launches(c.name), {}
+    for r in c.parties:
+        runs = CHECK if r.name == VERIFIER else GATE if r.principal == "auditor" else SERVED_WINDOW
+        if r.name not in mine:
+            out[r.name] = Piece(c.name, r.name, runs, f"{c.name}'s row" if runs == CHECK else
+                                f"the gate: {c.name}'s {r.name}" if runs == GATE else f"{c.name}'s {r.name}")
+            continue
+        if (c.name, r.name) not in ENTRIES:
+            raise ValueError(f"{c.name} declares a piece for {r.name} and served_table.ENTRIES has no entry for it: "
+                             f"add ({c.name!r}, {r.name!r}) to ENTRIES")
+        said, entry = mine[r.name], ENTRIES[c.name, r.name]
+        follows = next((d for d in c.requires if said.development and launches(d).get(r.name, Launch()).development),
+                       "")
+        out[r.name] = Piece(c.name, r.name, runs, " ".join((entry.hooks.__doc__ or "").split()), scripts=entry.scripts,
+                            reaches=_reaches(c, r.name, said.reaches), binds=said.binds, optional=said.optional,
+                            hooks=entry.hooks, development=said.development, follows=follows, starts=said.starts,
+                            starts_optional=said.starts_optional)
+    return out
+
+
+#: each listed component's pieces by party, from its declaration (`_pieces`)
+PIECES: dict[str, dict[str, Piece]] = {n: _pieces(c) for n, c in MANIFESTS.items()}
+
+
+def _starting(party: str) -> dict[str, Piece]:
+    """The pieces, by component, whose declared ``starts`` (`Launch.starts`) ``party``'s start writes."""
+    return {c: x for c, ps in PIECES.items() for x in ps.values() if x.reaches == party and x.starts}
+
+
+def started(party: str, **kw: Any) -> Start:
+    """``party``'s `Start`: what it writes and may leave out, as each piece that reaches it declares (`_starting`)."""
+    mine = _starting(party)
+    return Start(writes={c: x.starts for c, x in mine.items()},
+                 optional=frozenset((c, k) for c, x in mine.items() for k in x.starts_optional), **kw)
+
+
+def _written(party: str, made: Mapping[str, str]) -> dict[str, dict[str, str]]:
+    """What ``party``'s start writes for each component it starts for: of the values it ``made``, each one that
+    component's piece declares it writes (`STARTS`)."""
+    return {c: {k: made[k] for k in ks if k in made} for c, ks in STARTS[party].writes.items()}
+
+
+#: the challenger, whose coins SPOT's sample and Pearl+'s salt and sample read; its Lean coins' verifier is built when
+#: missing and SPOT's key is made at the deployed parameters, so it waits long. The auditor's own gate (`run.sh
+#: bindings`) gives only Pearl+'s gate, peer and key, and SPOT its gate in the loopback's place
+STARTS[CHALLENGER] = started(CHALLENGER, serve=_serve_challenger, stop=_stop_challenger, within=1800)
+STARTS[NETWORK_ATTESTER] = started(NETWORK_ATTESTER, serve=_local_gate, stop=lambda cfg, state: None, within=60)
 WORKLOADS: dict[str, tuple[Workload, Piece]] = {SERVED_WINDOW: (SERVED, SERVE)}
 #: no party here runs as an entry of its own: every piece is the served window's, the gate's, the runtime's or the check's
 ORDER: tuple[str, ...] = ()
@@ -782,10 +811,22 @@ def bindings_of(state: Path) -> dict[str, Any]:
     return json.loads(f.read_text()) if f.exists() else {}
 
 
+def launched(name: str) -> Mapping[str, Piece]:
+    """The pieces of the component ``name`` by party (`PIECES`), refused (``unknown-protocol``) by name where no scheme
+    declares it and `UNDECLARED` doesn't hold it, or where this table has no pieces for it."""
+    if name not in schemes.DECLARATIONS and name not in UNDECLARED:
+        raise Refused("unknown-protocol", f"{name} is no declared scheme (verity.protocols.compose.schemes) and no "
+                                          "row of served_table.UNDECLARED: declare it, or list a declared one")
+    if name not in PIECES:
+        raise Refused("unknown-protocol", f"{name} is declared, but served_table.PIECES has no pieces for it: "
+                                          "list it in MANIFESTS, or list another")
+    return PIECES[name]
+
+
 def pieces(cfg: Mapping[str, Any], party: str) -> list[Piece]:
     """``party``'s pieces under ``cfg``: the workload's, then each listed component's."""
     out = [SERVE] if party == WORKERS else []
-    return out + [PARTIES[c][party] for c in cfg["protocols"] if party in PARTIES.get(c, {})]
+    return out + [launched(c)[party] for c in cfg["protocols"] if party in launched(c)]
 
 
 #: the runner's variables that are flags, serve-openai's and served_piece.py's, which each piece adds its own to
@@ -802,7 +843,7 @@ def variables(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, 
     in the pieces' order; any other is one piece's."""
     out = {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": json.dumps(cfg.get("pin", []), sort_keys=True)}
     by: dict[str, str] = {}
-    for p in [SERVE, *(x for c in cfg["protocols"] for x in PARTIES.get(c, {}).values())]:
+    for p in [SERVE, *(x for c in cfg["protocols"] for x in launched(c).values())]:
         for k, v in p.variables(cfg, bindings).items():
             if k in CLASS_KEYS and k in by and out[k] != v:
                 raise Refused("params", f"{k} is {out[k]} in {by[k]}'s piece and {v} in {p.component}'s: the runner "
@@ -814,7 +855,7 @@ def variables(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, 
 
 def unbound(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> list[str]:
     """Every listed piece's unbound bindings, each once: a runtime session's two sides read one ``address``."""
-    return list(dict.fromkeys(k for p in [SERVE, *(x for c in cfg["protocols"] for x in PARTIES.get(c, {}).values())]
+    return list(dict.fromkeys(k for p in [SERVE, *(x for c in cfg["protocols"] for x in launched(c).values())]
                               for k in p.unbound(bindings)))
 
 
@@ -880,12 +921,17 @@ def placement(cfg: Mapping[str, Any], piece: Piece, outcome: Mapping[str, Any] |
                                           committed=mc.committed())}
 
 
-def attested(state: Path) -> str | None:
-    """`trusted-device`'s premise for the network attester, as its piece's answer places it (``out/pieces/certifier``,
-    the profile's ``placement``); ``None`` where the piece answered without one."""
-    f = state / "out" / "pieces" / "certifier" / "answer.json"
-    where = (json.loads(f.read_text()).get("profile") or {}).get("placement") if f.is_file() else None
-    return mc.premise(where) if where else None
+def attested(cfg: Mapping[str, Any], state: Path) -> dict[str, str]:
+    """`trusted-device`'s premise for each listed component whose piece's answer places it: an
+    ``out/pieces/*/answer.json`` whose ``protocol`` is the component's id, by its profile's ``placement``; a piece that
+    answered without one places nothing."""
+    ids = {MANIFESTS[c].id: c for c in cfg["protocols"] if c in MANIFESTS}
+    out = {}
+    for f in sorted((state / "out" / "pieces").glob("*/answer.json")):
+        doc = json.loads(f.read_text())
+        if (c := ids.get(doc.get("protocol"))) and (where := (doc.get("profile") or {}).get("placement")):
+            out[c] = mc.premise(where)
+    return out
 
 
 def composite(env: Mapping[str, str]) -> dict[str, str]:
@@ -893,7 +939,7 @@ def composite(env: Mapping[str, str]) -> dict[str, str]:
     caller that runs a composer there, or its default under ``VERITY_HOLD_PLACEMENT=1``), where onsite's composite, which
     reads PoUS's and the wipe's cases that only the node's card writes, can't be made, and it refuses to start. ``env``
     is what the runner gets before it; a caller that names ``COMPOSITE`` or ``COMPOSE_OFF_NODE=0`` keeps what it named."""
-    off = env.get("COMPOSE_OFF_NODE", "1" if env.get("VERITY_HOLD_PLACEMENT") == "1" else "0")
+    off = env.get("COMPOSE_OFF_NODE", "1" if machine_settings.hold_placement(env) else "0")
     return {} if "COMPOSITE" in env or off == "0" else {"COMPOSITE": ""}
 
 
@@ -915,6 +961,26 @@ def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, An
 VERDICTS = {"accept": "accept", "reject": "reject", "pending": "undecided"}
 
 
+def charges_nothing(component: str) -> str | None:
+    """Why a component whose declared scheme names no resource has no figure: its `Lacks`'s why ("charges nothing:
+    ..."), which a check's line reads where a figure would be (its ``charges_nothing``), never in place of the
+    component's verdict; None for any other component, declared or not."""
+    if component not in schemes.DECLARATIONS:
+        return None
+    resource = schemes.get(component).resource
+    return (resource.why or "charges nothing") if isinstance(resource, schemes.S.Lacks) else None
+
+
+def unchecked(components: Sequence[str], said: Mapping[str, str]) -> dict[str, str]:
+    """``said``, each component's stated source, with each sentence of what its declared scheme's run has that no
+    auditor-side entry checks (`scheme.sentences`) at its end, for each of ``components`` whose declaration lists any,
+    whatever its row; a sentence the stated source says already (the launcher's record ends it so,
+    `served_verdicts.declared_unchecked`) is not said twice."""
+    return {**said, **{c: "; ".join([*filter(None, [said.get(c)]), *(w for w in why if w not in said.get(c, ""))])
+                       for c in components
+                       if c in schemes.DECLARATIONS and (why := schemes.S.sentences(schemes.get(c)))}}
+
+
 #: what the served window publishes of the execution phase its record is of, under ``out/serve``: its seal's SHA-512
 #: (``seal_sha512``), never its number or steps, which `served_verdicts.py publish` keeps on the node
 PHASE = "phase.json"
@@ -925,8 +991,10 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     nothing else: the record (``record/verdicts.json``) of the execution phase ``serve/phase.json`` names, the line's
     ``block`` its seal's SHA-512, in `verity_cli.run`'s verdict form: its verdicts as the record has them, each row's
     ``answer_from`` (printed, deciding nothing) saying who wrote it. Under ``VERITY_HOLD_PLACEMENT=1``
-    (`settings.hold_placement`), since the workload's node composed that record, each of its accepts, each row's and the
-    combined verdict, reads undecided, `AS_WRITTEN` in the reason; a reject or an error stands either way. Refused
+    (`verity_cli.settings.hold_placement`), since the workload's node composed that record, each of its accepts, each
+    row's and the combined verdict, reads undecided, `AS_WRITTEN` in the reason; a reject or an error stands either way.
+    A component that charges nothing keeps its row's verdict like any other; the line's ``charges_nothing`` says why it
+    has no figure. Refused
     (``window``, ``record``) when either file isn't there."""
     out = state / "out"
     phase, report = out / "serve" / PHASE, out / "record" / "verdicts.json"
@@ -937,8 +1005,10 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     seal = json.loads(phase.read_text())["seal_sha512"]
     doc = json.loads(report.read_text())
     rows = doc["protocols"]
+    free = {c: why for c in cfg["protocols"] if (why := charges_nothing(c))}
     components = {c: rows.get(ROWS[c], {}).get("verdict", "absent") for c in cfg["protocols"]}
-    answer_from = {c: rows[ROWS[c]].get("answer_from", AS_WRITTEN) for c in cfg["protocols"] if ROWS[c] in rows}
+    answer_from = unchecked(cfg["protocols"], {c: rows[ROWS[c]].get("answer_from", AS_WRITTEN)
+                                               for c in cfg["protocols"] if ROWS[c] in rows})
     absent = sorted(c for c, v in components.items() if v == "absent")
     missing = sorted(c for c, v in components.items() if v == "missing")
     composed = doc.get("composed") or {}
@@ -947,7 +1017,7 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     reason = (wrong or composed.get("reason")) if verdict == "reject" else \
         (f"missing {missing}" if missing else None) or (f"no row for {absent}" if absent else None) \
         or (composed.get("lean") if verdict != "accept" else None)
-    if settings.hold_placement():
+    if machine_settings.hold_placement():
         # The workload's node composed this record, so none of its accepts stands; one recomputed by the verifier would.
         held = (["the composed verdict"] if verdict == "accept" else []) + \
             sorted(c for c, v in components.items() if v == "accept")
@@ -956,12 +1026,11 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
             verdict = "undecided"
         if held and verdict == "undecided":
             reason = "; ".join(x for x in (reason, "not accepted: " + ", ".join(f"{h} {AS_WRITTEN}" for h in held)) if x)
-    on = coins_on(cfg, bound := bindings_of(state))
-    on |= {c: m for c, m in gate_coins_on(cfg, bound).items() if c == "pearl-plus"}
+    on = coins_on(cfg, bindings_of(state))
     developer = {p["machine"] for p in cfg["party"] if p["principal"] == "developer"}
     return {"block": seal, "components": components, "answer_from": answer_from, "product": product, "reason": reason,
             "registration": None, "coins": "simulated" if developer & set(on.values()) else coins_of(cfg),
-            "coins_on": on, "verdict": verdict}
+            "coins_on": on, "verdict": verdict, **({"charges_nothing": free} if free else {})}
 
 
 def _record_line(said: Path) -> dict[str, Any] | None:
@@ -969,34 +1038,68 @@ def _record_line(said: Path) -> dict[str, Any] | None:
     return next((json.loads(x.split(" ", 1)[1]) for x in reversed(lines) if x.startswith("RECORD ")), None)
 
 
+def _composed(d: Path) -> bool:
+    return (d / "record" / "verdicts.json").is_file()
+
+
 def remote_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
+    """Remote's verifier line over its final record: the compose gate's answer (``out/compose``, `served_verdicts.sh
+    gate-compose`'s) where one was written; else a deferral's follow-on's record (its ``OUT`` copied to
+    ``out/follow-on``), composed on a prover node over its composite; else the served node's own record (``out``),
+    composed over its composite (``out/composite``, served_composite.sh's, under ``COMPOSE_OFF_NODE=0`` with
+    ``COMPOSITE`` not set empty). A record the prover composed says so: its ``source`` (`SERVING_NODE`, `FOLLOW_ON`),
+    its reason led by `FROM_SERVING_NODE` or `FROM_FOLLOW_ON`, and each of its accepts, a row's or the composed
+    verdict, reads `DEVELOPMENT_VERDICT`, or under ``VERITY_HOLD_PLACEMENT=1`` undecided, `AS_WRITTEN` in the reason, as
+    onsite's. Refused by name: ``record`` where the record can't be read or is another product's, ``deferred`` where
+    the served node deferred its composite to a follow-on whose record isn't here, ``composite`` where the record it
+    reads has no composite beside it."""
     out = state / "out"
-    answer = out / "compose"
-    composed = (answer / "record" / "verdicts.json").is_file()
-    base = answer if composed else out
+    answer, follow = out / "compose", out / "follow-on"
+    source = None if _composed(answer) else FOLLOW_ON if _composed(follow) else SERVING_NODE
+    base = {None: answer, FOLLOW_ON: follow, SERVING_NODE: out}[source]
     line, f = _record_line(base / "verdicts.txt"), base / "record" / "verdicts.json"
     if line is None or not f.is_file():
         raise Refused("record", f"remote's verifier reads the record in {base}, which has "
                                 + ("no RECORD line in verdicts.txt" if line is None else "no record/verdicts.json"))
     if line.get("product") != "remote":
         raise Refused("record", f"the record in {base} is composed for {line.get('product')!r}, not remote")
+    if source and not any((base / "composite").glob("*/composite.json")):
+        if source == SERVING_NODE and line.get("deferred"):
+            raise Refused("deferred", f"the served node deferred its composite to a follow-on on a prover node "
+                                      f"({line['deferred']}), and no follow-on record is here: the line reads the "
+                                      f"follow-on's OUT copied to {follow}, or the compose gate's answer in {answer}")
+        raise Refused("composite", f"remote's record is composed over a composite, and there is none: no compose answer "
+                                   f"in {answer} and no composite in {base / 'composite'} (the record there says "
+                                   f"{line.get('composed')!r}: {line.get('lean')}): compose on the served node "
+                                   "(COMPOSE_OFF_NODE=0, COMPOSITE not set empty) or answer through the compose gate")
     report = json.loads(f.read_text())
-    rows = report.get("protocols", {}) if composed else {}
+    rows = report.get("protocols", {})
+    free = {c: why for c in cfg["protocols"] if (why := charges_nothing(c))}
     components = {c: rows.get(ROWS.get(c, c), {}).get("verdict", "absent") for c in cfg["protocols"]}
-    held = sorted(f"{c} {v}" for c, v in components.items() if v != "accept")
+    held = {f"{c} {v}" for c, v in components.items() if v != "accept"}
     if components.get("inference-only") == "accept" \
             and str(rows[ROWS["inference-only"]].get("answer_from", AS_WRITTEN)).startswith(AS_WRITTEN):
-        held.append(f"inference-only {AS_WRITTEN}")
-    verdict = VERDICTS.get(line.get("composed"), "undecided") if composed else "undecided"
-    reason = (None if composed else f"no compose answer in {answer}: remote's final record is composed off the "
-                                    "served node, from its compose hand-off (the served node's own record says "
-                                    f"{line.get('composed')!r})") \
-        or line.get("why") or (f"missing {sorted(line['missing'])}" if line.get("missing") else None) \
-        or (f"not accepted: {', '.join(held)}" if held else None)
+        held.add(f"inference-only {AS_WRITTEN}")
+    verdict = VERDICTS.get(line.get("composed"), "undecided")
+    reason = line.get("why") or (f"missing {sorted(line['missing'])}" if line.get("missing") else None) \
+        or (line.get("lean") if source and verdict != "accept" else None)
+    if source:
+        word = "undecided" if machine_settings.hold_placement() else DEVELOPMENT_VERDICT
+        if word == "undecided":
+            held |= {f"{c} {AS_WRITTEN}" for c, v in components.items() if v == "accept"}
+            held |= {f"the composed verdict {AS_WRITTEN}"} if verdict == "accept" else set()
+        components = {c: word if v == "accept" else v for c, v in components.items()}
+        verdict = word if verdict == "accept" else verdict
+    reason = reason or (f"not accepted: {', '.join(sorted(held))}" if held else None)
+    if source:
+        reason = "; ".join(x for x in ({SERVING_NODE: FROM_SERVING_NODE, FOLLOW_ON: FROM_FOLLOW_ON}[source], reason) if x)
     on, workload = gate_coins_on(cfg, bindings_of(state)), {p["name"]: p["machine"] for p in cfg["party"]}[WORKERS]
     return {"block": report.get("window"), "components": components, "product": REMOTE, "reason": reason,
             "registration": None, "coins": "simulated" if workload in on.values() else coins_of(cfg), "coins_on": on,
-            "verdict": "undecided" if verdict == "accept" and held else verdict}
+            "verdict": "undecided" if verdict == "accept" and held else verdict,
+            **({"charges_nothing": free} if free else {}),
+            **({"answer_from": said} if (said := unchecked(cfg["protocols"], {})) else {}),
+            **({"source": source} if source else {})}
 
 
 def pending(cfg: Mapping[str, Any], state: Path, rc: int) -> str | None:
@@ -1045,7 +1148,7 @@ def coins_on(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, s
     ``development`` binding: the attester's where it is bound, else the piece's own."""
     at = {p["name"]: p["machine"] for p in cfg["party"]}
     return {c: at[x.reaches] if x.development in x._bindings(bindings) else at[x.party] for c in cfg["protocols"]
-            for x in PARTIES.get(c, {}).values() if x.development}
+            for x in launched(c).values() if x.development}
 
 
 def gate_coins_on(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, str]:
@@ -1054,14 +1157,14 @@ def gate_coins_on(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[s
     at = {p["name"]: p["machine"] for p in cfg["party"]}
     return {c: at[CHALLENGER] if {"gate", "loopback"} & set(x._bindings(bindings)) else at[WORKERS]
             for c in cfg["protocols"]
-            if (x := PARTIES.get(c, {}).get(WORKERS)) and x.reaches == CHALLENGER and "gate" in x.optional}
+            if (x := launched(c).get(WORKERS)) and x.reaches == CHALLENGER and "gate" in x.optional}
 
 
 def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     """The pieces of the parties ``here`` (module docstring): each runtime party's run beside the served window; the
     execution phase when the workload's party is here; a gate's side as started by the gate; and the onsite check
     (`remote_check` under remote) when the verifier is here, its line with each memory attester's `trusted-device`
-    premise as `placement` read it from the challenger's outcome here, and the network attester's as `attested` reads
+    premise as `placement` read it from the challenger's outcome here, and each listed component's as `attested` reads
     it (``trusted-device``: component -> premise). Refused by name (``unbound``) while a listed piece's
     binding is missing, and raised while a runtime party's `held` does, before anything starts."""
     bindings = bindings_of(state)
@@ -1104,8 +1207,7 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
                       "refused": None}
     if VERIFIER in here:
         devices = {c: where[mc.PREMISE] for x in out.values() for c, where in x.get("placement", {}).items()}
-        if "certifier" in cfg["protocols"] and (premise := attested(state)) is not None:
-            devices["certifier"] = premise
+        devices |= attested(cfg, state)
         try:
             check = remote_check if K.composite(cfg["protocols"], MANIFESTS) == REMOTE else onsite_check
             out[VERIFIER] = {"outcome": {"verdicts": [{**check(cfg, state), mc.PREMISE: devices}]},
@@ -1115,7 +1217,7 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     return Result(out)
 
 
-__all__ = ["DEMOS", "HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "PROTOCOLS", "REGISTRATION_GOAL", "SERVED",
-           "STARTS", "WORKLOADS", "Held", "Piece", "Result", "Session", "attested", "held", "live", "onsite_check",
-           "pending", "pieces", "placement", "prepare", "registration", "remote_check", "request_bound", "served_window",
-           "unbound", "variables"]
+__all__ = ["DEMO_VALUES", "HEADERS", "MANIFESTS", "NOT_YET", "ENTRIES", "ORDER", "PIECES", "REGISTRATION_GOAL", "SERVED", "STARTS",
+           "WORKLOADS", "Held", "Piece", "Result", "Session", "attested", "held", "launched", "listed", "live",
+           "onsite_check", "pending", "pieces", "placement", "prepare", "registration", "remote_check",
+           "request_bound", "served_window", "unbound", "variables"]

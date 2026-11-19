@@ -47,7 +47,7 @@ import a5  # noqa: E402
 from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC  # noqa: E402
 from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
 from tests.pipeline import test_serving_rows_splits as TS  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity.commitments.periods import rows as CS  # noqa: E402
 
@@ -73,7 +73,7 @@ def committed(w: CS.Binding, got: list, out: Path, of: dict, module: str) -> CS.
     ``of``, committed by ``module``."""
     c = CS.commit(w, TS.held_values(w, got))
     CS.write(c, out, {"of": of, "committer": {"module": module}}, IX.index_doc(w.members, [e for _g, e in got], w.run),
-             kind="stand-in", registrar=R)
+             kind="stand-in", registrar=DK)
     return w
 
 
@@ -128,7 +128,7 @@ def audited(a: argparse.Namespace, mine: CS.Binding, of: dict, root: str, rule: 
     summary = {"root": root, "session": (published.get("plan") or {}).get("session"),
                "window": {"population": mine.population, "members": [[m.key, m.n] for m in mine.members],
                           "templates": {t: {"units": n, "sampled": sampled.get(t, 0)} for t, n in held.items()},
-                          "wired": {m.key: [[p, o, list(ws)] for p, o, ws in m.wired] for m in mine.members if m.wired}},
+                          "wired": {m.key: [w.doc() for w in m.wired] for m in mine.members if m.wired}},
                "challenger": {x: published.get(x) for x in ("trusted", "error")},
                "rank0": {x: s.get(x) for x in RANK},
                "accepted": ok and not published.get("error")}

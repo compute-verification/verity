@@ -194,8 +194,8 @@ local notation "𝔽" => FlockLevel3.GF128
 each submission decoded there, is within `Γ` at the stop's node, the rounds' error from a position it reaches is
 within the charge from the next stop, over the tapes from the position; the play's end costs nothing. -/
 theorem avg_roundsErr_le {g : Game Exchange} {σ : Strategy g} {R : ℕ} {Reg : Type} (D : Decoders R Reg) (J : ℕ)
-    (γ : Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞) (Γ : Game Exchange → ℝ≥0∞)
-    (hret : ∀ a, Γ (.ret a) = 0) (Ks₀ : Fin R → DigestCut Claims.Msg g)
+    (γ : Pos g σ Hash.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞) (Γ : Game Exchange → ℝ≥0∞)
+    (hret : ∀ a, Γ (.ret a) = 0) (Ks₀ : Fin R → DigestCut Hash.Msg g)
     (hγ : ∀ q, Pos.Reached Ks₀ q → ∀ s, D.sub J q.modes = some s → γ q J s ≤ Γ q.g') (N : ℕ) :
     ∀ p, Pos.Reached Ks₀ p → Pos.resample (roundsErr D J γ N) p ≤ Pos.resample (Pos.stopCharge Γ) p := by
   induction N with
@@ -491,7 +491,7 @@ theorem openGap_add_openEmptyAt_le_openErr_link {g' : Game β} (m : ℕ) :
 submission decoded there, the opening frame at the stop's node asks for the submission's count of coins. -/
 def RoundCounts (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (D : Decoders A.rounds A.Reg) :
     Prop :=
-  ∀ q : Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds), Pos.Reached (roundCuts V θ F c rd) q →
+  ∀ q : Pos (V.game θ F c) σ Hash.Msg (Fin A.rounds), Pos.Reached (roundCuts V θ F c rd) q →
     ∀ (dr : Finset (Fin A.n)) (s : SubmitJ (A.J dr (regOf V θ F c A rd σ D))),
       D.sub (A.J dr (regOf V θ F c A rd σ D)) q.modes = some s →
         ∀ o, openingOf (finish (V.signer θ) θ F c σ.1) q.g' = some o → o.n = s.n
@@ -509,12 +509,12 @@ projection reaches are within `Γ` at the stop's node, the play's end costs noth
 the first stop fresh and is the uniform tape, the stops' term is within the charge along a play over a uniform tape. -/
 theorem couplesErr_le_of_charge (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP)
-    {γ : Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞}
-    {γL : Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) → ℝ≥0∞} {b : ℝ≥0∞}
+    {γ : Pos (V.game θ F c) σ Hash.Msg (Fin A.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞}
+    {γL : Pos (V.game θ F c) σ Hash.Msg (Fin A.rounds) → ℝ≥0∞} {b : ℝ≥0∞}
     (Γ : Game Exchange → ℝ≥0∞) (hret : ∀ a, Γ (.ret a) = 0) (hF : FirstStopFresh V θ F c A rd σ M)
     (hS : ∀ H : CoinTape (V.game θ F c) σ → ℝ≥0∞,
       avg (fun ω : (A.extend M.widening).L.Ω => H (M.start ω)) = avg H)
-    (hγ : ∀ (dr : Finset (Fin A.n)) (q : Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds)),
+    (hγ : ∀ (dr : Finset (Fin A.n)) (q : Pos (V.game θ F c) σ Hash.Msg (Fin A.rounds)),
       Pos.Reached (roundCuts V θ F c rd) q → ∀ s : SubmitJ (A.J dr (regOf V θ F c A rd σ D)),
         D.sub (A.J dr (regOf V θ F c A rd σ D)) q.modes = some s →
           γ q (A.J dr (regOf V θ F c A rd σ D)) s ≤ Γ q.g')

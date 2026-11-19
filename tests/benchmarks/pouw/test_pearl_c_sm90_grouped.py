@@ -5,6 +5,7 @@ alone, at the unit's offsets; a call is eight launches whatever its experts; and
 and retained records are those of each unit called alone through `PearlCDeviceRun.gemm`, in unit order."""
 from __future__ import annotations
 
+import hashlib
 import json
 import struct
 
@@ -14,17 +15,17 @@ from conftest import load
 
 torch = pytest.importorskip("torch")
 
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96_SALT, weights_root  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes  # noqa: E402
 from verity_torch.pouw.pearl_c import run_device as PPDR
 from verity_torch.pouw.pearl_c import grouped as PG  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY  # noqa: E402
 from verity_torch.pouw.pearl_c.host import joined  # noqa: E402
 
 SCHEME = "pearl-c-h100-v1-h3"
-SALT_KEY = bytes(range(100, 132))
 STEPS = ["pd_commit_gm_851", "stats_s5", "eprime", "form_s5_g", "gemm_words_g_d", "pa", "gemm_pearlc_g_d", "pd_tiles_g_979"]
 
 
@@ -99,10 +100,10 @@ def test_rows_order_puts_the_units_rows_apart_on_the_sms_and_filler_rows_past_th
 
 def grouped(n=128, k=1024, experts=4, rows=1024, count=16):
     dev = RecordingDev()
-    sizes = {**G.sizes(R, rows, count, n, k), **{x: 1 << 30 for x in G.STACKED}}
+    sizes = {**G.sizes(R, rows, count, n, k), **{x: 1 << 30 for x in G.STACKED}, "salts_a": R.HM_SALT * rows}
     b = {x: (j + 1) << 32 for j, x in enumerate(sorted(sizes))}
-    keys = {"salt_key": 7 << 40, "hm": (7 << 40) + 256}
-    return G.Grouped(R, dev, n, k, experts, rows, count, b, keys), dev, b, keys
+    keys = {"hm": (7 << 40) + 256}
+    return G.Grouped(R, dev, n, k, experts, rows, count, {**b, "salts_a": (b["salts_a"], sizes["salts_a"])}, keys), dev, b, keys
 
 
 @pytest.mark.parametrize("split", [False, True])
@@ -128,7 +129,8 @@ def test_each_units_record_is_its_own_calls_launches(split):
         bufs = {"rowdig_a": b["rowdig_a"] + 64 * u.row, "tree_a": b["tree_a"] + G.tree_bytes(R) * j,
                 "seeds_a": b["seeds_a"] + 32 * u.row, "lkeys_a": b["lkeys_a"] + 32 * u.row, "pd_count": b["pd_count"] + 16 * j,
                 "seed_a": b["seed_a"] + 32 * j, "line_a": b["line_a"] + 32 * j, "ea_codes": b["ea_codes"] + 32 * u.row,
-                "c": b["c"] + 4 * n * u.row, "u": b["u"] + 4 * n * u.row, "leaves": leaves + 64 * u.tile}
+                "c": b["c"] + 4 * n * u.row, "u": b["u"] + 4 * n * u.row, "leaves": leaves + 64 * u.tile,
+                "salts_a": (b["salts_a"] + R.HM_SALT * u.row, R.HM_SALT * u.m16)}
         full = {"dom_a": key, "unit": key + 64, "dom_b": 0, "dom_t": 0, "line_b": 0, **kk}
         pipe = R.Pipeline(dev, u.seg, n, k, "h100", full, b["xa"] + 4 * k * u.row, 0, bufs=bufs, m_real=u.m16,
                           split_a=split, fillers=not split)
@@ -258,11 +260,12 @@ def device_run(experts: int, n: int = 128, k: int = 1024, retain=None, schedule=
     weights = {w: torch.from_numpy(rng.standard_normal((n, k)).astype(np.float32) * 0.05).to(torch.bfloat16)
                for w in range(experts)}
     kernel = PPD.Kernel(R, dev or RecordingDev(), "0" * 64)
-    roots = PPDR.weight_roots(kernel, weights, SCHEME, salt_key=SALT_KEY)
+    salts = {w: hashlib.shake_256(b"salts_b %d" % w).digest(HM96_SALT * n) for w in weights}   # one install's, run to run
+    roots = PPDR.weight_roots(kernel, weights, SCHEME, weight_salts=salts)
     ch = Challenger(0, np.random.default_rng(7).bytes)
     coins = ch.commitment, ch.open("salt", weights_root(roots))
-    run = PPDR.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, capacity=1 << 12,
-                              schedule=schedule, salt_key=SALT_KEY)
+    run = PPDR.PearlCDeviceRun(pouw_schemes.get(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, capacity=1 << 12,
+                              schedule=schedule, weight_salts=salts)
     run.begin(retain=retain)
     return run, weights
 
@@ -328,7 +331,9 @@ def test_a_retained_grouped_calls_units_commit_the_rows_of_y_it_returns(tmp_path
     for u, f, mm in zip(us, files, mms, strict=True):
         got = (tmp_path / "grouped" / f["y"]["rows"]["path"]).read_bytes()
         assert got == y[u.src:u.src + u.m].contiguous().view(torch.uint8).numpy().tobytes() and len(got) == 2 * u.m * n
-        assert f["y"]["root"] == SY.commit_y(got, n, run.salt, mm.index, run.salt_key)[0].hex()
+        kept = (tmp_path / "grouped" / f["y"]["salts"]["path"]).read_bytes()
+        salts = [kept[i:i + HM96_SALT] for i in range(0, len(kept), HM96_SALT)]
+        assert f["y"]["root"] == SY.commit_y(got, n, run.salt, mm.index, salts)[0].hex()
 
 
 @pytest.mark.parametrize("schedule", ["deferred", "deferred-caller", "deferred-a"])
@@ -400,8 +405,8 @@ def test_each_calls_table_is_its_layouts_with_its_keys_leaves_and_pass_offsets(s
 
 def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_path, monkeypatch):
     """grouped_check's `_same` over a grouped call's retained pass under ``deferred-a`` and its units called alone under the
-    serial schedule: their manifests (each unit's y root too) differ in the schedule they ran under alone, which it doesn't
-    count, and a changed A rows file it does.  The recording stand-in runs no GEMM, so a call alone's y is whatever
+    serial schedule: their manifests less what each pass's fresh salts make differ (`SALTED`) differ in the schedule they
+    ran under alone, which it doesn't count, and a changed A rows file it does.  The recording stand-in runs no GEMM, so a call alone's y is whatever
     ``torch.empty`` left: zeroed, as the grouped call's buffers start."""
     C = load("pearl_c_sm90/grouped_check.py")
     empty = torch.empty
@@ -416,11 +421,39 @@ def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_
     run.end_pass()
     alone.end_pass()
     a, b = (json.loads((tmp_path / d / "manifest.json").read_text()) for d in ("alone", "grouped"))
-    assert [kk for kk in a if a[kk] != b.get(kk)] == ["schedule"] and all("y" in u for u in b["matmuls"])
+    ua, ub = C._unsalted(a), C._unsalted(b)
+    assert [kk for kk in ua if ua[kk] != ub.get(kk)] == ["schedule"] and all("y" in u for u in b["matmuls"])
+    assert a["salts_t"] != b["salts_t"] and a["matmuls"][0]["salts"] != b["matmuls"][0]["salts"]
     assert C._same(tmp_path / "alone", tmp_path / "grouped") == []
     rows = tmp_path / "grouped" / b["matmuls"][1]["rows"]["path"]
     rows.write_bytes(bytes(c ^ 1 for c in rows.read_bytes()))
     assert C._same(tmp_path / "alone", tmp_path / "grouped") == ["matmul 1 rows"]
+
+
+def test_grouped_check_keeps_a_pass_s_roots_in_out_and_never_its_manifest(tmp_path, capsys):
+    """What grouped_check puts in --out of a retained pass is its roots, counts and its manifest's sha256: no file the pass
+    keeps (its salts, its rows) is named.  And --passes is refused where it is, holds or sits in --out."""
+    C = load("pearl_c_sm90/grouped_check.py")
+    d = tmp_path / "pass"
+    (d / "y").mkdir(parents=True)
+    for f in ("rows-0.bin", "rows-0.salts", "y/0.salts", "y/0.tree"):
+        (d / f).write_bytes(b"\xa5" * 192)
+    man = d / "manifest.json"
+    man.write_text(json.dumps({"scheme": "pearl-c-h100-v1-h3", "units": 2, "tiles": 4, "transcript_root": "ab" * 64,
+                               "run": "grouped-check", "matmuls": [
+                                   {"index": 0, "rows": {"path": "rows-0.bin"}, "salts": {"path": "rows-0.salts"},
+                                    "y": {"tree": "y/0.tree", "salts": "y/0.salts"}}]}))
+    got = C.public_of(man)
+    assert got["manifest_sha256"] == hashlib.sha256(man.read_bytes()).hexdigest() and got["transcript_root"]
+    assert set(got) <= {"manifest_sha256", *C.PUBLIC}
+    kept = {p.name for p in (tmp_path / "pass").rglob("*") if p.is_file() and p.name != "manifest.json"}
+    assert kept and not any(name in json.dumps(got) for name in kept)
+    out = tmp_path / "run" / "out"
+    for passes in (out, out / "passes", tmp_path / "run" / "out" / ".."):
+        with pytest.raises(SystemExit) as ex:
+            C.main(["--out", str(out), "--passes", str(passes)])
+        assert ex.value.code == 2 and "never go under --out" in capsys.readouterr().err
+    assert not out.exists()
 
 
 def test_the_vllm_call_runs_unsplit_on_a_cubin_without_pd_tree_g():

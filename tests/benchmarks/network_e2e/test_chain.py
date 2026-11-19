@@ -1,9 +1,7 @@
-"""The chain's stages (`chain.py`) on fakes: the advice read in each of its forms (I1 v0's JSON and bytes, and a prove-path
-stand-in's from before v0, upgraded with each kept output released in its step's bucket); its bits per execution phase, v0's
-summing to I1's total and the residual's giving back every step from the config alone, and with the attested I/O the
-whole advice (bound), or nothing when the I/O certifies other requests; a prove path's output adopted, held to the given
-advice, with a forged arm that passes only when Lean refused its unit; and the endpoint's own advice, bound to the
-runs by its Commit windows."""
+"""The chain's stages (`chain.py`) on fakes: the advice's bits per execution phase, v0's summing to I1's total and the
+residual's giving back every step from the config alone, and with the attested I/O the whole advice (bound), or nothing
+when the I/O certifies other requests; a prove path's output adopted beside the endpoint's own advice; and the endpoint's
+own advice, bound to the runs by its Commit windows."""
 
 from __future__ import annotations
 
@@ -15,7 +13,6 @@ import shutil
 import sys
 from pathlib import Path
 
-import pytest
 
 HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "network_e2e")
 
@@ -41,36 +38,6 @@ def _io(users=("q0", "q1")) -> list[dict]:
     """The attested I/O of `_advice`'s requests as a varied run's check writes it (``io.json``), in ingress order."""
     return [{"user": users[0], "prompt": [1, 2, 3, 4], "max_tokens": 2, "output": [5, 6]},
             {"user": users[1], "prompt": [1, 2, 3], "max_tokens": 4, "output": [9]}]
-
-
-def _standin() -> dict:
-    """A prove-path stand-in's advice as the prove path's first runs wrote it: no schema, no sources, no release."""
-    return {"requests": [{"id": "r0", "prompt_len": 4, "output_len": 3, "finish": "length"}], "release": [],
-            "steps": [{"rows": [{"request": 0, "kind": "prefill", "start": 0, "n": 4, "cache_hit": 0,
-                                 "preempted": False}]}]
-            + [{"rows": [{"request": 0, "kind": "decode", "start": 4 + j, "n": 1, "cache_hit": 0, "preempted": False}]}
-               for j in range(2)]}
-
-
-def test_the_advice_is_read_as_v0_json_as_its_bytes_and_as_an_upgraded_standin(tmp_path):
-    adv = _advice()
-    (tmp_path / "a.json").write_text(json.dumps(I1.to_json(adv)))
-    (tmp_path / "a.bin").write_bytes(I1.encode(adv))
-    (tmp_path / "s.json").write_text(json.dumps(_standin()))
-    for name, form in (("a.json", "I1 v0 JSON"), ("a.bin", "I1 v0 bytes")):
-        got, info = chain.advice(tmp_path / name)
-        assert got == adv and info["form"] == form and info["bits"] == I1.total_bits(adv), name
-        assert info["v0_sha512"] == hashlib.sha512(I1.encode(adv)).hexdigest()
-    got, info = chain.advice(tmp_path / "s.json")
-    assert got.release == (0, 1, 2) and all(r.sources == () for st in got.steps for r in st.rows)
-    assert "upgraded" in info["form"] and info["file_sha512"] == hashlib.sha512((tmp_path / "s.json").read_bytes()).hexdigest()
-    chunked = _standin()
-    chunked["steps"][0]["rows"][0]["n"] = 2
-    chunked["steps"].insert(1, {"rows": [{"request": 0, "kind": "prefill", "start": 2, "n": 2, "cache_hit": 0,
-                                          "preempted": False}]})
-    (tmp_path / "c.json").write_text(json.dumps(chunked))
-    with pytest.raises(I1.MalformedAdvice, match="release buckets"):
-        chain.advice(tmp_path / "c.json")
 
 
 def test_the_bits_per_window_are_v0s_and_the_residuals_and_the_attested_io_binds_and_rebuilds_the_advice():
@@ -108,36 +75,6 @@ def _arm(d: Path, name: str, advice: dict, *, ok=True, forged=False, negatives=N
                                                        "ranks": {"0": rank}}))
 
 
-def test_a_prove_paths_output_is_adopted_and_held_to_the_given_advice(tmp_path):
-    (tmp_path / "s.json").write_text(json.dumps(_standin()))
-    _, info = chain.advice(tmp_path / "s.json")
-    d = tmp_path / "pp"
-    _arm(d, "glm", {"digest": info["file_sha512"], "bits": 8 * 100})
-    _arm(d, "glm-forged", {"digest": info["file_sha512"]}, forged=True)
-    (d / "advice").mkdir()
-    got = chain.prove_path(d, info)
-    assert got["ok"] is True and got["committed_is_the_advice_file"] is True and sorted(got["arms"]) == ["glm", "glm-forged"]
-    assert got["bound"] is False and got["bound_why"] == "the --advice file isn't these runs' advice"
-    assert chain.prove_path(d, info, True)["bound_why"].startswith("the Commit it proves isn't held to these runs'")
-    assert got["arms"]["glm"]["ranks"]["0"] == {"ok": True, "accepted": True, "population": 10, "drawn": 2,
-                                                "wrong_units_bound": 3, "negatives_refused": True,
-                                                "forged_refused": None, "seconds": 1.5, "source": "stand-in",
-                                                "per_unit": {}}
-    assert got["arms"]["glm-forged"]["ranks"]["0"]["forged_refused"] is True
-    _, other = chain.advice(tmp_path / "s.json")
-    assert chain.prove_path(d, other | {"file_sha512": "0"})["ok"] is False
-    v0 = tmp_path / "v0"
-    _arm(v0, "honest", {"root": "r", "bits": info["bits"]}, negatives={"a": {"refused": False}})
-    assert chain.prove_path(v0, info)["committed_is_the_advice_file"] is True and chain.prove_path(v0, info)["ok"] is True
-    assert chain.prove_path(v0, info)["arms"]["honest"]["ranks"]["0"]["negatives_refused"] is False
-    assert chain.prove_path(v0, info)["arms"]["honest"]["advice_held_by"].startswith("its bits only")
-    assert got["arms"]["glm"]["advice_held_by"] == "the file's SHA-512"
-    shutil.rmtree(d / "glm")
-    assert chain.prove_path(d, info)["ok"] is False
-    with pytest.raises(SystemExit, match="no prove-path arm"):
-        chain.prove_path(tmp_path, info)
-
-
 def test_the_prove_paths_time_is_per_sampled_block_and_beside_the_endpoints_advice_it_is_the_fixed_workloads(tmp_path):
     rank = {"draw_counts": {"S": 2}, "timing": {"S": {"lean_verify_s": 47.0, "timing": {
         "prove_total_s": 428.9, "units": 16384, "proof_bytes": [830330, 830330]}}}}
@@ -145,8 +82,7 @@ def test_the_prove_paths_time_is_per_sampled_block_and_beside_the_endpoints_advi
                                           "lean_verify_s_per_unit": 23.5}}
     _arm(tmp_path / "pp", "llama", {"root": "r", "bits": 2695})
     _arm(tmp_path / "pp", "llama-forged", {"root": "r", "bits": 2695}, forged=True)
-    got = chain.prove_path(tmp_path / "pp", {"served": "r-ep", "bits": 100, "file_sha512": None, "v0_sha512": None},
-                           True)
+    got = chain.prove_path(tmp_path / "pp", {"served": "r-ep", "bits": 100}, True)
     assert got["ok"] is True and got["committed_is_the_advice_file"] is None and got["bound"] is False
     assert got["bound_why"].startswith("from the fixed workload, not this run")
 
@@ -251,15 +187,6 @@ def test_a_serve_run_audit_is_bound_to_the_runs_by_the_endpoints_commit_window_i
     assert w0c["tied"] is True and w0c["registration"] == str(ep / "advice" / "w0")
     assert w0c["registered"]["at_serve_time"] is True and w0c["registered"]["after_close_s"] == -0.5
     assert w0c["registered"]["before_next_close_s"] == 1.2 and w0c["registered"]["before_draw"] is True
-    md = "\n".join(chain.markdown({"advice": info, "bits": b, "prove_path": got}))
-    assert "\n## Prove path\n" in md and "fixed workload" not in md and "Bound to these runs: True (every arm's" in md
-    assert (f"| w1 served | 1 | {commits[1]['run_id']} | {commits[1]['run_root'][:16]}… | True | True | True | "
-            f"{apart[:16]}… | {row[1]['v0_bits']} | False | True | True | True | after serving, by the lane (r-reg), "
-            "1503.6 s after its Commit window closed, 1502.9 s after the next window closed, 852.6 s before the first "
-            "sample |") in md
-    assert f"| w0 served | 0 | {commits[0]['run_id']} |" in md
-    assert md.count("| — | True | True | True | by vllm at serve time, 0.5 s before its Commit window closed, before "
-                    "its sample and 1.2 s before the next window closed |") == 2
     stub = [x for x in chain.stubs({"chain": {"advice": info, "bits": b, "prove_path": got}}, True)
             if x.startswith("Prove path")]
     assert stub == [f"Prove path: the served run's own Commit windows (w0, w1), adopted from {w1}, {w0}; w1's advice "
@@ -517,8 +444,6 @@ def test_commit_windows_that_carry_a_request_across_their_close_bind_as_one_advi
     assert b["v0_total"] == info["bits"] == sum(x["v0_bits"] for x in b["windows"]) \
         == sum(x["v0_bits"] for x in rows.values())
     assert all(0 < x["derived_bits"] < x["v0_bits"] for w, x in rows.items() if w != 115)
-    md = "\n".join(chain.markdown({"advice": info, "bits": b}))
-    assert "(windows 114–115)" in md and "| requests admitted | carried in |" in md
 
     ep = tmp_path / "ep"
     shutil.copytree(CARRY, ep)

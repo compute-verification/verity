@@ -4,27 +4,32 @@
 #   research run --on auto --cwd source -- bash verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh
 #
 # P2's prover's libp2v1.so (p2_store's), unchanged, by its own Makefile (FAST's default: v4 keys by p2keys4.cuh, p2sq.cuh's
-# Karatsuba squaring), at ARCH (default sm_90a) with CGBN at p2_gpu/CGBN.commit. Writes into OUT (default $OUT):
+# Karatsuba squaring), at ARCH (default the `arch` of CARD's card record, CARD default h200-sxm-141gb) with CGBN at p2_gpu/CGBN.commit. Writes into OUT (default $OUT):
 #   lib/libp2v1.so, lib/libp2v1.so.ptxas   the library and ptxas's report (registers, spills)
 #   lib/libp2v1.so.cubins/                 the library's cubins (ship.sh's ship_cubins)
 #   elf.txt                                cuobjdump --list-elf: the SASS targets the library holds
 #   toolchain.txt                          nvcc --version and the make line
 #   source.txt                             the commit, and the sha256 of every source the Makefile names
 #   MANIFEST.sha256                        every file above
-# CUDA names a toolkit (nvcc >= 12.8); else the node's /usr/local/cuda-13.0 or /usr/local/cuda. It builds in ship.sh's
+# CUDA_HOME names the toolkit (nvcc >= 12.8), given by the caller and refused by name where unset. It builds in ship.sh's
 # frame from its loaded sources, with ship.sh's SHIP_NVCC as the Makefile's NVCC, so a rebuild at the same commit and
 # toolkit path reproduces the cubins, and so does one after a source or a header only moved (ship_nvcc.sh's header).
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/../../../../../../../../benchmarks/kernels/ship.sh"
-OUT=${1:-${OUT:?usage: build.sh OUT}}; ARCH=${ARCH:-sm_90a}
+OUT=${1:-${OUT:?usage: build.sh OUT}}
+if [ -z "${ARCH:-}" ]; then
+  ROOT=$(cd "$HERE/../../../../../../../.." && pwd)
+  ARCH=$(PYTHONPATH="$ROOT" python3 -c 'import sys; from pathlib import Path; from verity.device import load_card
+print(load_card(sys.argv[1], directory=Path(sys.argv[2]))["arch"])' "${CARD:-h200-sxm-141gb}" "$ROOT/calibration/hardware/cards")
+fi
 P2=$(dirname verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/Makefile)
 ship_stage "$P2" "$(dirname verity/protocols/resource_accounting/memory/pous/prover/p2/p2_gpu/p2dec.cu)" verity/commitments/cuda
 P2=$SRC/$P2
 S=$(mktemp -d "${TMPDIR:-/tmp}/p2-stage-build.XXXXXX"); trap 'rm -rf "$S"' EXIT
 mkdir -p "$OUT/lib"
 
-ship_cuda /usr/local/cuda-13.0 /usr/local/cuda
+CUDA=${CUDA_HOME:?set CUDA_HOME to a CUDA 13.0 toolkit}; ship_cuda
 
 GMPINC=
 if ! echo '#include <gmp.h>' | cpp >/dev/null 2>&1; then

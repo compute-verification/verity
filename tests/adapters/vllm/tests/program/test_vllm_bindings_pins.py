@@ -112,7 +112,7 @@ def test_x01_num_sms_is_the_one_target_profile_fact():
     assert GEMM_PINS["NUM_SMS"] == DEFAULT_TARGET.num_sms
     try:
         for sms in (142, 108, 132, 188):
-            observe_target_profile(TargetProfile(num_sms=sms))
+            observe_target_profile(TargetProfile.default().with_overrides(num_sms=sms))
             pins, _ = gemm_pins_for(8, 960, 576)
             assert pins["NUM_SMS"] == sms and pins["constexprs"] == GEMM_PINS["constexprs"]
             assert _pins_ok(_gemm_meta(NUM_SMS=sms), pins) is None

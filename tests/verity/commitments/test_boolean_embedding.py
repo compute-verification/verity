@@ -11,9 +11,9 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
+from verity.circuits.evaluation.batch import evaluate_batch
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.commitments import row_table as RT
 from verity.commitments.gates import embedding as E
@@ -26,8 +26,8 @@ from verity.commitments.rowleaf import bit_row
 SELECT = {(128256, 2048): (32792, 0, 61464), (128256, 4096): (65560, 0, 122904)}
 #: (V, H) -> the read's gates (`SpecializedDefinition.gates`): the size a unit holding it is cut to. Each SHA-512 compression is
 #: a call of `Sha512CompressFolded`, which XORs its arguments from the bits they hold: 9,033 more XORs than the compressions' gates
-#: written out, the same ANDs
-READS = {(128256, 2048): 32331889, (128256, 4096): 45303919}
+#: written out, the same ANDs; and the token's bits and the row's words are a gate each (`BitOf`, `WordOf`), 32 + H
+READS = {(128256, 2048): 32333969, (128256, 4096): 45308047}
 
 
 def _table(rng: random.Random, V: int, H: int) -> tuple[CommitmentDomain, list[list[int]], list[bytes], RT.RowTable]:
@@ -68,9 +68,10 @@ def _columns(rows) -> list[np.ndarray]:
 
 
 def _evaluate(V: int, H: int, cases: list[tuple]) -> list[tuple[list[int], int]]:
-    got = evaluate_bits(E.read(V, H), *_columns([E.arguments(V, *c) for c in cases])).reshape(len(cases), -1)
-    return [([int(sum(int(b) << j for j, b in enumerate(g[16 * w:16 * w + 16]))) for w in range(H)], int(g[16 * H]))
-            for g in got]
+    args = [E.arguments(V, *c) for c in cases]
+    toks = np.array([[c[0] & 0xFFFFFFFF] for c in cases], dtype=object)
+    got = evaluate_batch(E.read(V, H), toks, *(np.array([a[k] for a in args], dtype=object) for k in range(1, 6)))
+    return [([int(w) for w in g[:H]], int(g[H])) for g in np.asarray(got).reshape(len(cases), -1)]
 
 
 def test_the_read_is_typed_by_its_shape() -> None:
@@ -78,9 +79,8 @@ def test_the_read_is_typed_by_its_shape() -> None:
         target = E.read(V, H)
         assert target is E.read(V, H)
         assert merkle_depth(V) == D
-        assert [t.leaves for _, t in target.signature()[0]] == [32, 512, 512, 16 * H, 1536, 512 * D]
-        assert target.signature()[1].leaves == 16 * H + 1
-        assert BL.elements(target.signature()[1]) == [16] * H + [1]
+        assert [t.leaf_widths() for _, t in target.signature()[0]] == [[32], *([1] * n for n in (512, 512, 16 * H, 1536, 512 * D))]
+        assert target.signature()[1].leaf_widths() == [16] * H + [1]
 
 
 def test_malformed_bindings_are_refused() -> None:

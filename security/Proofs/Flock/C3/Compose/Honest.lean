@@ -41,7 +41,7 @@ R's opening is at `7 ≤ mReg`, which the padding gives (`seven_le_mReg`).
 namespace FlockC3.Compose
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 open FlockVBridge.InnerAccepts (firstSteps)
 open FlockVBridge.Family (skOf cmtOf wmsgOf msgOf)

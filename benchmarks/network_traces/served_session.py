@@ -57,7 +57,7 @@ is each request's max_tokens, at most KO. ``--scan-class`` asks the gate for ano
   its rc (or 1) when it didn't, 2 when the gate refused the request.
 * **io** writes the kept network attester run's attested I/O (`network_attester_chain.io`: each request's prompt and streamed ids as the
   network attester's cells carry them) and its deployment.json to KEEP/RUN/certified-io.json (0600), on `AUDITOR`, and
-  prints only its path and counts.
+  prints only its path and the network attester run.
 * **endpoint** is the chain's endpoint step on the served node, where the endpoint's records stay: serve-openai's serve
   dir (``--from``, its ``--out``) holds requests.jsonl and advice_trace.jsonl, whose arrive, step and finish records
   carry each request's prompt length, sampling (its seed), rows and emitted ids. It copies the trace, windows.jsonl,
@@ -201,7 +201,8 @@ LATE_S, POLL_S = 60, 15
 SSH = ("ssh", "-T", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "ServerAliveInterval=15")
 #: the flags the endpoint serves the session with: the network attester's id form, in its release order, each window
 #: sealed without the attention interiors (about 1 GB a request at 256 ids)
-ENDPOINT = "verity-vllm serve-openai --host 127.0.0.1 --port {port} --protocol ids --id-payload 503 --admit release-order " \
+ENDPOINT = "verity-vllm serve-openai --host 127.0.0.1 --port {port} --protocol ids --id-payload 503 " \
+           "--protocols-config '{{\"network-attester\": {{\"order\": \"release-order\"}}}}' " \
            "--scheme rows-sha512 --seal --retain-exclude hidden_m1"
 #: serve-openai's default --max-model-len, which the endpoint's flags name only past it
 CONTEXT = 512
@@ -215,10 +216,11 @@ ART = "report.json"
 SERVED = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json", USERS)
 #: the attested I/O file `io` writes in KEEP/RUN and the endpoint step reads
 CERTIFIED = "certified-io.json"
-HAND_START = ("serve-openai run directly (--required-manifest "
+HAND_START = ("serve-openai run directly (--out SERVE_DIR, the serve dir `endpoint` reads as --from, outside every "
+              "run's directory, where the serve refuses it; --required-manifest "
               "ROW/manifest.json, the int8 B4 row's Build of record, with the served node's own taps as "
-              "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
-              "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start). VERITY_STAGING_BOUNDED stays unset: bounded "
+              "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40, which --seal requires "
+              "(72 GB of seals then needs about 112 GB free at the start). VERITY_STAGING_BOUNDED stays unset: bounded "
               "staging, on by default under windowed staging, is what --retain-exclude needs, and the collector refuses "
               "VERITY_STAGING_BOUNDED=0 beside it. Its --copy-records-to copies requests.jsonl and advice_trace.jsonl "
               "too, so it is left off or points at a private dir on the served node: the serve dir's records stay "
@@ -637,14 +639,14 @@ def certified(a: argparse.Namespace) -> int:
         raise Refused(f"no kept fetch {fetch}: the session's run writes it")
     dep, io = attested_io(fetch)
     if not io["accepted"]:
-        raise Refused(f"the kept network attester run's I/O doesn't read whole off its cells: {io['violations'][:3]}")
+        raise Refused(f"the kept network attester run's I/O doesn't read whole off its cells: "
+                      f"{len(io['violations'])} violation(s)")
     dest = a.keep / a.run / CERTIFIED
     fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         json.dump({"deployment": dep, "io": io}, f)
     dest.chmod(0o600)
-    print(json.dumps({"io": str(dest), "warden_run": dep["run_id"], "requests": io["requests"],
-                      "tokens": io["tokens"]}), flush=True)
+    print(json.dumps({"io": str(dest), "warden_run": dep["run_id"]}), flush=True)
     return 0
 
 
@@ -686,6 +688,8 @@ def served_as(serve: dict, port: int) -> list[str]:
             continue
         v = words[i + 1] if i + 1 < len(words) and not words[i + 1].startswith("--") else None
         flag = w[2:]
+        if flag == "protocols-config":                  # serve.json records the order it read there as admit
+            flag, v = "admit", next(iter(json.loads(v).values()))["order"]
         have = {"host": host, "port": at, "seal": serve.get("sealed")}.get(flag, serve.get(flag.replace("-", "_")))
         if (have is None) if v is None else str(have) != v:
             off.append(f"{w}{' ' + v if v else ''} (serve.json: {have!r})")

@@ -89,7 +89,7 @@ theorem insO_nil : insO [] = none := by
 
 /-- What `readX` read: the inner statement, the verifier's own inner shape, the partition, and V*'s list at the
 shape. -/
-theorem readX_spec {x : Claims.Msg} {r : XR} (h : readX x = some r) :
+theorem readX_spec {x : Hash.Msg} {r : XR} (h : readX x = some r) :
     (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)).toOption = some r.shape ∧
       (r.innerRaw.partition.mapM (jsonOf "partition")).toOption = some r.partition ∧
       (RecVStar.statements r.shape).isOk = true := by
@@ -147,7 +147,7 @@ theorem checkInner_checkShape {i : Option RecVStar.Inner} {src : Option RecCoins
     | error e => simp [hc, hs, bind, Except.bind] at h
 
 /-- Part `s`'s staged statement, where it reads back, is `partRaw`'s. -/
-theorem staged_decode {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ}
+theorem staged_decode {st : Stage} {x : Hash.Msg} {ms : List (Hash.Msg × Claims.Out)} {s : ℕ}
     (hne : staged st x ms s ≠ []) :
     ∃ r p, readX x = some r ∧ r.w.parts[s]? = some p ∧
       decodeRec (staged st x ms s) = some (partRaw r st x ms s p) := by
@@ -161,14 +161,14 @@ theorem staged_decode {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Cl
   · exact absurd (by simp [staged, hr, hp, hd]) hne
 
 /-- A staged statement says the inner statement is set up as `x`'s inner statement is (`innerFormOf`). -/
-theorem formOf_partRaw (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (s : ℕ)
+theorem formOf_partRaw (r : XR) (st : Stage) (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out)) (s : ℕ)
     (p : PartX) : formOf (partRaw r st x ms s p) = .ok (some (innerFormOf r.innerRaw)) := rfl
 
 /-- **A staged statement's inner shape and check 5 are `x`'s**: where it reads, the verifier's inner shape is the one
 `x` carries, `RecCoins.checkAtC3` and `RecSetup.checkShape` at its source are the same checks at the files `x`
 carries (`filesOf`), neither of which reads the record, and `x` carries them: a staged statement carries the inner
 statement's circuit and public file, so `sourceOf` refuses one without its partition. -/
-theorem insO_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {i : RecIns}
+theorem insO_staged {st : Stage} {x : Hash.Msg} {ms : List (Hash.Msg × Claims.Out)} {s : ℕ} {i : RecIns}
     (h : insO (staged st x ms s) = some i) :
     ∃ r, readX x = some r ∧ i.inner = some r.shape ∧
       RecCoins.checkAtC3 i.inner i.src = RecCoins.checkAtC3 (some r.shape) (filesOf r) ∧
@@ -231,8 +231,8 @@ theorem insO_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Clai
 
 /-- **The custody checks refuse a record without a sample**: its sample must be the statement's (`sampleEq`), and a
 statement without one is refused (`ProvedScope.sampleDesign`). -/
-theorem checks_recordSample {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+theorem checks_recordSample {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Hash.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : (Witness.recordDraw f.record).isSome = true := by
   have he : Witness.recordDraw f.record = FlockSoundness.Discharge.Exec.recordDraw f.record := rfl
   rw [he]
@@ -252,16 +252,16 @@ theorem checks_recordSample {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Clai
 
 /-! ## The refusals -/
 
-variable {IV : Claims.Verifier Coin} {st : Stage} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+variable {IV : Claims.Verifier Coin} {st : Stage} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
 
 /-- **The compiled verifier refuses a session decision out of scope.** Where session `s`'s outer verifier decides on
 the final message `f`, the compiled verifier answers other than `.rej` only where the setup's checks accept the inner
 shape `x` carries (`RecScope.accepts` on `readOf`: `RecVStar.statements` in `readX`, `RecCoins.checkAtC3` and
 `RecSetup.checkShape` in the staged statement's setup, whose readers refuse it without the inner statement's files) and `f`'s record samples every unit of its population (`RecScope.fullSampleOk` under that shape:
 `ProvedScope.sampleDesign` in the custody checks, then `RecSetup.fullSample`). -/
-theorem decide_scope (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg}
+theorem decide_scope (H : Hash.Msg → Hash.Msg) {s j : ℕ} {xO : Hash.Msg} {as' : List Hash.Msg}
     {cs' : List Coin} {i : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
-    {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final} (h : ract IV st x as cs = .sess s j xO as' cs')
+    {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final} (h : ract IV st x as cs = .sess s j xO as' cs')
     (ha : actO xO as' cs' = .decide i spec sts link c₁ mids f) (hn : ((next IV st x as cs).eval H).1 ≠ .rej) :
     ∃ r, readX x = some r ∧ RecScope.accepts (readOf r) = true ∧ RecScope.fullSampleOk r.shape f.record = true := by
   rw [next_sess H h] at hn
@@ -299,9 +299,9 @@ theorem decide_scope (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Ms
 /-- **The compiled verifier refuses a session decision at a holo or sparse inner shape**: the verdict's last refusal
 (`RecSetup.denseOnly`, in `fullSampleO`) runs under the staged statement's inner shape, which is `x`'s, so a decision the
 compiled verifier doesn't refuse has `x`'s inner shape neither holo nor sparse. -/
-theorem decide_dense (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg}
+theorem decide_dense (H : Hash.Msg → Hash.Msg) {s j : ℕ} {xO : Hash.Msg} {as' : List Hash.Msg}
     {cs' : List Coin} {i : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
-    {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final} (h : ract IV st x as cs = .sess s j xO as' cs')
+    {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final} (h : ract IV st x as cs = .sess s j xO as' cs')
     (ha : actO xO as' cs' = .decide i spec sts link c₁ mids f) (hn : ((next IV st x as cs).eval H).1 ≠ .rej) :
     ∃ r, readX x = some r ∧ r.shape.holo = false ∧ r.shape.sparse = none := by
   rw [next_sess H h] at hn
@@ -325,17 +325,17 @@ theorem decide_dense (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Ms
 /-! ## In scope -/
 
 /-- A session decision of `x` that the compiled verifier doesn't refuse, on the final record `rec`. -/
-def Decided (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (st : Stage) (x : Claims.Msg) (rec : String) :
+def Decided (H : Hash.Msg → Hash.Msg) (IV : Claims.Verifier Coin) (st : Stage) (x : Hash.Msg) (rec : String) :
     Prop :=
-  ∃ (as : List Claims.Msg) (cs : List Coin) (s j : ℕ) (xO : Claims.Msg) (as' : List Claims.Msg) (cs' : List Coin)
+  ∃ (as : List Hash.Msg) (cs : List Coin) (s j : ℕ) (xO : Hash.Msg) (as' : List Hash.Msg) (cs' : List Coin)
     (i : Ins) (spec : SessionSpec) (sts : Array Stmt) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) (f : Final), ract IV st x as cs = .sess s j xO as' cs' ∧
+    (mids : List (Hash.Msg × Coin)) (f : Final), ract IV st x as cs = .sess s j xO as' cs' ∧
       actO xO as' cs' = .decide i spec sts link c₁ mids f ∧ f.record = rec ∧ ((next IV st x as cs).eval H).1 ≠ .rej
 
 /-- **The decided records are in scope**: for records `recs`, at least one, each the final record of a session
 decision of `x` that the compiled verifier doesn't refuse, what the verifier reads of `x` with those records is in
 `InScope`: the inner shape candidate 3's and dense, and every sample `DrawRecord.Full` (`RecScope.inScope_iff`). -/
-theorem decide_inScope (H : Claims.Msg → Claims.Msg) {r : XR} (hr : readX x = some r) {recs : List String}
+theorem decide_inScope (H : Hash.Msg → Hash.Msg) {r : XR} (hr : readX x = some r) {recs : List String}
     (hne : recs ≠ []) (hd : ∀ rec ∈ recs, Decided H IV st x rec) :
     Claims.Recursion.InScope (RecScope.toStmt { readOf r with records := recs }) := by
   have hrec : ∀ rec ∈ recs, RecScope.accepts (readOf r) = true ∧ RecScope.fullSampleOk r.shape rec = true ∧
@@ -354,7 +354,7 @@ theorem decide_inScope (H : Claims.Msg → Claims.Msg) {r : XR} (hr : readX x = 
 
 /-- **An accepting step parses in scope**: where the compiled verifier accepts (at the last session's decision,
 `next_acc`), `parse` reads `x` as what the verifier reads of it, which is in `InScope`. -/
-theorem acc_parse (H : Claims.Msg → Claims.Msg) (h : ((next IV st x as cs).eval H).1 = .acc) :
+theorem acc_parse (H : Hash.Msg → Hash.Msg) (h : ((next IV st x as cs).eval H).1 = .acc) :
     ∃ r, readX x = some r ∧ parse x = some (RecScope.toStmt (readOf r)) ∧
       Claims.Recursion.InScope (RecScope.toStmt (readOf r)) := by
   obtain ⟨s, j, xO, as', cs', hr, -, -, ho⟩ := next_acc H h
@@ -373,7 +373,7 @@ theorem acc_parse (H : Claims.Msg → Claims.Msg) (h : ((next IV st x as cs).eva
 /-- **An accepted statement is dense**: where the compiled verifier accepts, every parse of `x` has a dense inner form
 (`Form.Dense`: not holo, no sparse phase), so `DenseAt x`, the class `RecursiveKS` is stated at, holds at every
 statement the compiled verifier accepts. -/
-theorem acc_dense (H : Claims.Msg → Claims.Msg) (h : ((next IV st x as cs).eval H).1 = .acc) :
+theorem acc_dense (H : Hash.Msg → Hash.Msg) (h : ((next IV st x as cs).eval H).1 = .acc) :
     ∀ p, parse x = some p → p.form.holo = false ∧ p.form.sparse = none := by
   obtain ⟨r, -, he, hin⟩ := acc_parse H h
   intro p hp

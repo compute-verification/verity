@@ -60,14 +60,14 @@ namespace FlockComplete.JsonRT
 open Flock Transcript FlockComplete FlockDeploy
 
 /-- `y` returns from the sends `l`, with `P` of its value and the sends after. -/
-def Runs {α : Type} (y : PS α) (l : Array Claims.Msg) (P : α → Array Claims.Msg → Prop) : Prop :=
+def Runs {α : Type} (y : PS α) (l : Array Hash.Msg) (P : α → Array Hash.Msg → Prop) : Prop :=
   ∃ a l', y.go l = (.ok a, l') ∧ P a l'
 
-theorem Runs.pure {α : Type} {a : α} {l : Array Claims.Msg} {P : α → Array Claims.Msg → Prop} (h : P a l) :
+theorem Runs.pure {α : Type} {a : α} {l : Array Hash.Msg} {P : α → Array Hash.Msg → Prop} (h : P a l) :
     Runs (Pure.pure a : PS α) l P := ⟨a, l, rfl, h⟩
 
-theorem Runs.bind {α β : Type} {x : PS α} {f : α → PS β} {l : Array Claims.Msg} {Q : α → Array Claims.Msg → Prop}
-    {P : β → Array Claims.Msg → Prop} (hx : Runs x l Q) (hf : ∀ a l', Q a l' → Runs (f a) l' P) :
+theorem Runs.bind {α β : Type} {x : PS α} {f : α → PS β} {l : Array Hash.Msg} {Q : α → Array Hash.Msg → Prop}
+    {P : β → Array Hash.Msg → Prop} (hx : Runs x l Q) (hf : ∀ a l', Q a l' → Runs (f a) l' P) :
     Runs (x >>= f) l P := by
   obtain ⟨a, l', e, hq⟩ := hx
   obtain ⟨b, l'', e', hp⟩ := hf a l' hq
@@ -75,11 +75,11 @@ theorem Runs.bind {α β : Type} {x : PS α} {f : α → PS β} {l : Array Claim
   rw [go_bind, e]
   exact e'
 
-theorem Runs.of_go {α : Type} {y : PS α} {l l' : Array Claims.Msg} {a : α} {P : α → Array Claims.Msg → Prop}
+theorem Runs.of_go {α : Type} {y : PS α} {l l' : Array Hash.Msg} {a : α} {P : α → Array Hash.Msg → Prop}
     (e : y.go l = (.ok a, l')) (h : P a l') : Runs y l P := ⟨a, l', e, h⟩
 
 theorem Runs.forIn_list {α β : Type} (f : α → β → PS (ForInStep β)) (s : List α)
-    (inv : β → Array Claims.Msg → Prop)
+    (inv : β → Array Hash.Msg → Prop)
     (hf : ∀ a ∈ s, ∀ b l, inv b l → Runs (f a b) l fun r l' => ∃ b', r = .yield b' ∧ inv b' l') :
     ∀ xs : List α, (∀ a ∈ xs, a ∈ s) → ∀ b l, inv b l → Runs (forIn xs b f) l inv
   | [], _, b, l, h => by
@@ -92,14 +92,14 @@ theorem Runs.forIn_list {α β : Type} (f : α → β → PS (ForInStep β)) (s 
     exact Runs.forIn_list f s inv hf xs (fun x hx' => hx x (List.mem_cons_of_mem a hx')) b' l' hb'
 
 theorem Runs.forIn_array {α β : Type} (xs : Array α) (f : α → β → PS (ForInStep β))
-    (inv : β → Array Claims.Msg → Prop)
+    (inv : β → Array Hash.Msg → Prop)
     (hf : ∀ a ∈ xs, ∀ b l, inv b l → Runs (f a b) l fun r l' => ∃ b', r = .yield b' ∧ inv b' l')
-    {b : β} {l : Array Claims.Msg} (h : inv b l) : Runs (forIn xs b f) l inv := by
+    {b : β} {l : Array Hash.Msg} (h : inv b l) : Runs (forIn xs b f) l inv := by
   rw [← Array.forIn_toList]
   exact Runs.forIn_list f xs.toList inv (fun a ha => hf a (Array.mem_toList_iff.1 ha)) xs.toList (fun _ h => h) b l h
 
-theorem Runs.mapM_singleton {α β : Type} (f : α → PS β) (a : α) {l : Array Claims.Msg}
-    {P : Array β → Array Claims.Msg → Prop} (h : Runs (f a) l fun b l' => P #[b] l') : Runs (#[a].mapM f) l P := by
+theorem Runs.mapM_singleton {α β : Type} (f : α → PS β) (a : α) {l : Array Hash.Msg}
+    {P : Array β → Array Hash.Msg → Prop} (h : Runs (f a) l fun b l' => P #[b] l') : Runs (#[a].mapM f) l P := by
   rw [Array.mapM_eq_mapM_toList]
   simp only [List.mapM_cons, List.mapM_nil, bind_pure_comp, map_pure, Functor.map_map]
   refine Runs.bind (Q := fun b l' => P #[b] l') h fun b l' hb => ?_
@@ -205,12 +205,12 @@ theorem extraClaims_ok (st : Flock.Stmt) (h : RegionsFit st) (pts : Array (Array
   refine ok_bind (g := ForInStep.yield) (forIn_array_ok _ _ _ fun r _ out => ?_) fun _ => ⟨_, rfl⟩
   exact ok_bind (g := ForInStep.yield) (regionValue_ok st reg (h reg hreg) r) fun _ => ⟨_, rfl⟩
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The prover's reps return**, at every good case's table with its schedule: each rep returns on the level-0
 commitment of the trace's packed table (under any salts) and the extra claims at the link's points, under any salts,
 nonces and domain, from any sends. -/
-def ProverRuns (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def ProverRuns (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : Case H rel, ∀ st sch, c.sts = #[st] → fast100 (Setup.ofCircuit st).m = some sch →
     ∀ salt₀ cm e, commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle
       (sch.levels.getD 0 default) (packed (tracesOf c.sts c.w)[0]! (Setup.ofCircuit st).m) salt₀ = .ok cm →

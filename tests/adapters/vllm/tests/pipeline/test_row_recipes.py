@@ -28,6 +28,7 @@ import pytest
 from verity_vllm.pipeline import cli, research_tools
 from verity_vllm.pipeline.research_tools import STAGES, row_config
 from verity_vllm.pipeline.research_tools import parse as tool_parse
+from tests.row_paths import row_paths
 
 TREE = (Path(__file__).resolve().parents[5] / "adapters" / "vllm")
 SCRIPTS = (".sh", ".yaml", ".yml", ".toml")
@@ -165,7 +166,7 @@ ROW_RECIPES = [(where, n, argv) for where, n, command, argv in RECIPES if comman
 
 def parsed(command: str, argv: list[str], capsys: pytest.CaptureFixture[str]) -> Any:
     try:
-        return cli.parse(command, argv, {})
+        return cli.parse(command, argv, row_paths("/a/machine"))
     except SystemExit:
         pytest.fail(f"`verity-vllm {command} {shlex.join(argv)}` is not a command line of this tree: "
                     + capsys.readouterr().err.strip().rpartition("\n")[2])

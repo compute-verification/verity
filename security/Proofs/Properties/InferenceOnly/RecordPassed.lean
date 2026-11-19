@@ -57,6 +57,7 @@ def partOn (every : List Nat) (reach : Array (List Nat)) : Part → List Nat
   | .affine p i _ count | .strided p i _ _ _ _ count =>
     if count == 0 then [] else if p then [i] else reach[i]?.getD every
   | .explicit items => items.toList.flatMap fun r => if r.p then [r.i] else reach[r.i]?.getD every
+  | .grid _ lanes => lanes.toList.flatMap fun l => if l.p then [l.i] else reach[l.i]?.getD every
 
 /-- The parameters a sequence's references may be leaves of. -/
 def seqOn (every : List Nat) (reach : Array (List Nat)) (s : Seq) : List Nat :=
@@ -146,6 +147,20 @@ theorem partOn_get (every : List Nat) (reach : Array (List Nat)) (q : Part) (t :
     refine ⟨fun hp => ?_, fun hp j hj => ?_⟩
     · exact List.mem_flatMap.2 ⟨it[t], by simp, by simp [hp]⟩
     · exact List.mem_flatMap.2 ⟨it[t], by simp, by simpa [hp] using hj⟩
+  | grid run lanes =>
+    simp only [Part.count] at ht
+    have hg : 0 < lanes.size * run := Nat.pos_of_ne_zero fun h => by rw [h, Nat.zero_mul] at ht; omega
+    have hrun : 0 < run := Nat.pos_of_ne_zero fun h => by simp [h] at hg
+    have hl : t % (lanes.size * run) / run < lanes.size := by
+      rw [Nat.div_lt_iff_lt_mul hrun]; exact Nat.mod_lt _ hg
+    have hp : ((Part.grid run lanes).get t).p = (lanes[t % (lanes.size * run) / run]'hl).p := by
+      simp only [Part.get, getElem!_pos lanes (t % (lanes.size * run) / run) hl]
+    have hi : ((Part.grid run lanes).get t).i = (lanes[t % (lanes.size * run) / run]'hl).i := by
+      simp only [Part.get, getElem!_pos lanes (t % (lanes.size * run) / run) hl]
+    rw [hp, hi]
+    refine ⟨fun hp => ?_, fun hp j hj => ?_⟩
+    · exact List.mem_flatMap.2 ⟨_, Array.getElem_mem_toList hl, by simp [hp]⟩
+    · exact List.mem_flatMap.2 ⟨_, Array.getElem_mem_toList hl, by simpa [hp] using hj⟩
 
 /-- What `passedOn` holds as it reads Definition `d`: the entries of the Definitions before it. -/
 def accAt (P : Prog) (d : Nat) : Array (List Nat) :=

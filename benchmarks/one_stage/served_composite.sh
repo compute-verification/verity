@@ -14,7 +14,7 @@
 # and the inference-only case from the window's records audit
 # (SERVE_DIR/v3c-w*/audit; in a run without V3c whose H1 windows weren't tied, so with no SERVE_DIR/h1/log.jsonl,
 # `served_verdicts.sh`'s step 3's,
-# SERVE_DIR/sampled-proofs-served), the latter with the policy's α and Γ read off the case's own division
+# SERVE_DIR/private/logs/sampled-proofs/keep/served), the latter with the policy's α and Γ read off the case's own division
 # (`--from-division`), or ALPHA and GAMMA where both are set, and its log the serve's H1 log through R's previous record,
 # or, on a serve with no H1 log, the serve's own records walked back from R's previous to its first (on a
 # serve tied to Pearl+, the window's W and the serve's first record, which a compose hand-off carries);
@@ -38,7 +38,7 @@
 # each case not written or left out by its protocol, each case whose check was not started (`served_cases.py`'s
 # NOT_STARTED: no check runs outside a memory limit of its own, CHECK_MEM_GB, or on blob files that sum past
 # CHECK_BLOBS_GB, and the per-member sampled case is not asked) with why, its blob files' sum and the limit, each
-# product's NOT_ESTABLISHED and VERDICT lines, and the host it composed on
+# product's NOT_ESTABLISHED and VERDICT lines, and the node it composed on, named by its role
 # (the serve dir's: the served node's, or, where SERVED_NODE names another, the node a compose follow-on composed on from
 # the served node's compose hand-off, COMPOSE_HANDOFF set, or a deferral's follow-on copied the serve dir's audit inputs
 # to), headed COMPOSITE, and nothing else. Without composite.py in the tree, or under PRODUCT=onsite without
@@ -70,6 +70,7 @@ TPY=${TPY:-$TREE/.venv/bin/python}
 [ -x "$TPY" ] || TPY=$PY
 P=$D/private/composite
 say() { echo "$*" | tee -a "$OUT/verdicts.txt"; }
+. "$(dirname "${BASH_SOURCE[0]}")/placement.sh" || exit 2  # hold_placement
 dev=()
 if [ -n "${COMPOSE_DEVELOPMENT:-}" ]; then
   dev=(--development "$COMPOSE_DEVELOPMENT")
@@ -77,15 +78,15 @@ if [ -n "${COMPOSE_DEVELOPMENT:-}" ]; then
 elif [ -n "${COMPOSE_ON_NODE:-}" ]; then
   say "COMPOSITE ON-NODE: $COMPOSE_ON_NODE"
 elif [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
-  if [ "${VERITY_HOLD_PLACEMENT:-}" != 1 ]; then
-    say "COMPOSITE ON-NODE: composed on the served node $(hostname -s), which the prover controls"
+  if ! hold_placement; then
+    say "COMPOSITE ON-NODE: composed on the served node (SERVED_NODE), which the prover controls"
   elif [ "${COMPOSE_OFF_NODE:-1}" != 0 ]; then
-    say "COMPOSITE refused: this is the served node $(hostname -s), which the prover controls, so a composite here claims" \
+    say "COMPOSITE refused: this is the served node (SERVED_NODE), which the prover controls, so a composite here claims" \
         "no record; served_verdicts.sh composes it off the node from its compose hand-off (COMPOSE_OFF_NODE=0 composes it" \
         "here as a development check, VERITY_HOLD_PLACEMENT unset composes it here)"
     exit 1
   else
-    dev=(--development "composed on the served node $(hostname -s), which the prover controls: a development check, no claim of record (COMPOSE_OFF_NODE=0)")
+    dev=(--development "composed on the served node, which the prover controls: a development check, no claim of record (COMPOSE_OFF_NODE=0)")
     say "COMPOSITE DEVELOPMENT: ${dev[1]}"
   fi
 fi
@@ -139,7 +140,7 @@ if [ -f benchmarks/one_stage/served_cases.py ]; then
   [ -n "${ALPHA:-}" ] && [ -n "${GAMMA:-}" ] && ag=(--alpha "$ALPHA" --gamma "$GAMMA")
   where=(--serve-dir "$D")
   compgen -G "$D/v3c-w*/audit/window/case.json" > /dev/null || [ -f "$D/h1/log.jsonl" ] \
-    || { [ -f "$D/sampled-proofs-served/window/case.json" ] && where=(--audit "$D/sampled-proofs-served"); }
+    || { [ -f "$D/private/logs/sampled-proofs/keep/served/window/case.json" ] && where=(--audit "$D/private/logs/sampled-proofs/keep/served"); }
   "$TPY" benchmarks/one_stage/served_cases.py "${where[@]}" --private "$D/private" "${ag[@]}" > "$P/served_cases.log" 2>&1
   rc=$?
   grep -hE '^(CASE|NOT_WRITTEN|NOT_STARTED) \{' "$P/served_cases.log" | "$PY" -c '
@@ -192,10 +193,10 @@ EOF
   esac
 done
 if [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
-  say "COMPOSITE: composed on $(hostname -s), which holds the serve dir, from the cases the served node wrote there, not from the parties that produced them"
+  say "COMPOSITE: composed on the node that holds the serve dir, from the cases the served node wrote there, not from the parties that produced them"
 elif [ -n "${COMPOSE_HANDOFF:-}" ]; then
-  say "COMPOSITE: composed on $(hostname -s), not the served node $SERVED_NODE: from its compose hand-off (verifier-side files, no witness) and the cases written and checked here from it, not from the parties that produced them"
+  say "COMPOSITE: composed on COMPOSE_NODE, not the served node: from its compose hand-off (verifier-side files, no witness) and the cases written and checked here from it, not from the parties that produced them"
 else
-  say "COMPOSITE: composed on $(hostname -s), not the served node $SERVED_NODE: from a prover-side copy of its serve dir's audit inputs and the cases written here from it, not from the parties that produced them"
+  say "COMPOSITE: composed on a follow-on node, not the served node: from a prover-side copy of its serve dir's audit inputs and the cases written here from it, not from the parties that produced them"
 fi
 exit "$bad"

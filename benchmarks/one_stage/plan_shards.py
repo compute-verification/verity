@@ -97,8 +97,7 @@ def stage(defn, S, a: dict, scratch: Path) -> dict:
     st = CS.UnitStager(defn, "unit/plan-shard", [(r, V2, b, ps) for r, b, ps in rows], [(V2, (0,))], circuit=scratch / "circuit.txt")
     composed = time.time() - t0
     words = RU.row_words(S, rows, a)
-    got = st.stage({r: np.asarray([words[r]], dtype=np.uint16) for r, _b, _ps in rows}, scratch / "round",
-                   hashlib.sha256(b"verity/one-stage/plan-shards/salts").digest())
+    got = st.stage({r: np.asarray([words[r]], dtype=np.uint16) for r, _b, _ps in rows}, scratch / "round")
     return {"k_log": st.meta["k_log"], "unit_log": st.meta["unit_log"], "vus_per_block": st.meta["vus_per_block"],
             "ranges": st.meta["ranges"], "rows": [[r, b] for r, b, _ps in rows], "ands": got["ands"],
             "ok": int(np.asarray(got["outs"]["o0"])[0, 0]), "pin": st.pin,

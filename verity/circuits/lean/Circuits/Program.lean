@@ -199,21 +199,88 @@ structure Ref where
 
 def Ref.toJson (r : Ref) : Json := Json.arr #[Json.str (if r.p then "p" else "n"), Lean.toJson r.i, Lean.toJson r.j]
 
+/-- A lane of a grid (PROTOCOL.md §3): its collection `(p, i)`, base `b`, inner stride `e` and levels `(radix, step)`,
+innermost first, the last one unbounded. -/
+structure Lane where
+  p : Bool
+  i : Nat
+  b : Int
+  e : Int
+  lv : List (Nat × Int)
+  deriving Inhabited, BEq
+
+/-- The periods a lane's levels count: their radices' product. -/
+def Lane.periods (l : Lane) : Nat := l.lv.foldl (fun a (r, _) => a * r) 1
+
+/-- The leaf of lane `l` at period `t`, offset `o` in its run (`refs.grid_ref`'s arithmetic). -/
+def Lane.leafAt (l : Lane) (t o : Nat) : Int :=
+  let rec go : List (Nat × Int) → Nat → Int
+    | [], _ => 0
+    | [(_, d)], t => (t : Int) * d
+    | (r, d) :: rest, t => ((t % r : Nat) : Int) * d + go rest (t / r)
+  l.b + (o : Int) * l.e + go l.lv t
+
+/-- The least and greatest leaf lane `l` of a whole grid of runs of `run` reaches (`refs.lane_bounds`). -/
+def Lane.bounds (run : Nat) (l : Lane) : Int × Int :=
+  ((run, l.e) :: l.lv).foldl (fun (lo, hi) (r, d) => (lo + ((r : Int) - 1) * min d 0, hi + ((r : Int) - 1) * max d 0))
+    (l.b, l.b)
+
 inductive Part where
   | affine (p : Bool) (i base count : Nat)
   | strided (p : Bool) (i : Nat) (base : Int) (inner : Nat) (os is : Int) (count : Nat)
   | explicit (items : Array Ref)
+  | grid (run : Nat) (lanes : Array Lane)
   deriving Inhabited
 
 def Part.count : Part → Nat
   | .affine _ _ _ c => c
   | .strided _ _ _ _ _ _ c => c
   | .explicit it => it.size
+  | .grid run lanes => lanes.size * run * ((lanes[0]?.map Lane.periods).getD 0)
 
 @[inline] def Part.get : Part → Nat → Ref
   | .affine p i b _, k => ⟨p, i, b + k⟩
   | .strided p i b inner os is _, k => ⟨p, i, (b + ((k / inner : Nat) : Int) * os + ((k % inner : Nat) : Int) * is).toNat⟩
   | .explicit it, k => it[k]!
+  | .grid run lanes, k =>
+    let l := lanes[k % (lanes.size * run) / run]!
+    ⟨l.p, l.i, (l.leafAt (k / (lanes.size * run)) (k % run)).toNat⟩
+
+/-- Adjacent levels where one continues the other, merged (`refs._merged_levels`). -/
+def mergedLevels (lv : List (Nat × Int)) : List (Nat × Int) :=
+  (lv.foldl (fun out (r, d) => match out with
+    | (r', d') :: rest => if d == (r' : Int) * d' then (r' * r, d') :: rest else (r, d) :: out
+    | [] => [(r, d)]) []).reverse
+
+/-- Whether the grid `(run, lanes)` needs the grid form: no affine, strided or explicit part spells it (`refs.spell`,
+which tries those first, after merging). -/
+def gridNeeded (run : Nat) (lanes : Array Lane) : Bool := Id.run do
+  let mut lanes := lanes.map fun l => { l with lv := mergedLevels l.lv }
+  let mut run := run
+  let g := lanes.size
+  if g ≥ 2 then
+    let l0 := lanes[0]!
+    if lanes.all (fun l => l.p == l0.p && l.i == l0.i && l.e == l0.e && l.lv == l0.lv) then
+      let c := lanes[1]!.b - l0.b
+      if (List.range g).all (fun j => lanes[j]!.b == l0.b + (j : Int) * c) && (run == 1 || c == (run : Int) * l0.e) then
+        lanes := #[{ l0 with e := if run == 1 then c else l0.e }]
+        run := run * g
+  if lanes.size == 1 then
+    let l := lanes[0]!
+    let mut e := l.e
+    let mut lv := l.lv
+    for _ in [0:l.lv.length] do
+      match lv with
+      | (r, d) :: rest =>
+        if run == 1 || d == (run : Int) * e then
+          e := if run == 1 then d else e
+          run := run * r
+          lv := mergedLevels rest
+        else break
+      | [] => break
+    if lv.length ≤ 1 then return false
+  if run == 1 && lanes.all (·.lv.isEmpty) then return false
+  return true
 
 /-- A flat sequence of parts (a concatenation spliced in), with each part's first index. -/
 structure Seq where
@@ -241,6 +308,62 @@ def Seq.get (s : Seq) (k : Nat) : Ref := Id.run do
 /-- The references in order, repeats kept. -/
 def Seq.toArray (s : Seq) : Array Ref :=
   s.parts.foldl (fun acc q => (Array.range q.count).foldl (fun acc k => acc.push (q.get k)) acc) #[]
+
+/-- The least leaf position or step a grid states. -/
+def gridLow : Int := -(2 ^ 62 : Nat)
+
+/-- A lane's level `[radix, step]`; `shape` is the refusal. -/
+def gridLevel (shape : String) (x : Json) : V (Nat × Int) := match x with
+  | .arr #[r, d] => match natJ? r, intJ? d with
+    | some r, some d => if r < 2 || d < gridLow then throw shape else pure (r, d)
+    | _, _ => throw shape
+  | _ => throw shape
+
+/-- A lane's space, `"p"` or `"n"`; `shape` is the refusal. -/
+def gridSpace (shape : String) (s : Json) : V Bool := match s with
+  | .str "p" => pure true
+  | .str "n" => pure false
+  | _ => throw shape
+
+/-- A lane `[space, index, base, inner_stride, [[radix, step], ...]]`; `shape` is the refusal. -/
+def gridLane (shape : String) (l : Json) : V Lane := match l with
+  | .arr #[sp, i, b, e, .arr lv] => do
+    let p ← gridSpace shape sp
+    match natJ? i, intJ? b, intJ? e with
+    | some i, some b, some e =>
+      if b < gridLow || e < gridLow then throw shape
+      else do
+        let levels ← lv.mapM (gridLevel shape)
+        pure { p, i, b, e, lv := levels.toList }
+    | _, _, _ => throw shape
+  | _ => throw shape
+
+/-- Whether lane `l`'s extremes over runs of `run` lie inside its parameter or node. -/
+def Lane.fits (leaves : Bool → Nat → Option Nat) (run : Nat) (l : Lane) : Bool :=
+  match leaves l.p l.i with
+  | some n => 0 ≤ (l.bounds run).1 && (l.bounds run).2 < n
+  | none => false
+
+/-- The checks on a grid's parsed lanes; `j` and `g` only name the refusals. -/
+def gridChecks (j g : Json) (run : Nat) (lanes : Array Lane) (leaves : Bool → Nat → Option Nat) : V (Array Part) :=
+  if lanes.any (·.periods != lanes[0]!.periods) then
+    throw s!"grid-shape: grid {g.compress}: its lanes' radices multiply to different period counts"
+  else if !gridNeeded run lanes then
+    throw s!"grid-spelled: grid {g.compress}: an affine, strided or explicit part spells it"
+  else if !lanes.all (·.fits leaves run) then
+    throw s!"grid-overrun: references {j.compress} reach outside a lane's parameter or node"
+  else pure #[.grid run lanes]
+
+/-- A `grid` part `g` of references `j` (PROTOCOL.md §3), checked as `refs.Grid` checks it: its shape (`grid-shape`),
+that no affine, strided or explicit part spells it (`grid-spelled`), and every lane's extremes inside its parameter or
+node (`grid-overrun`), by arithmetic a lane. -/
+def parseGrid (j g : Json) (leaves : Bool → Nat → Option Nat) : V (Array Part) := do
+  let shape := s!"grid-shape: grid {g.compress} is not [run, [[space, index, base, inner_stride, [[radix, step], ...]], ...]]"
+  let .arr #[run, .arr ls] := g | throw shape
+  let some run := natJ? run | throw shape
+  if run == 0 || ls.isEmpty then throw shape
+  let lanes ← ls.mapM (gridLane shape)
+  gridChecks j g run lanes leaves
 
 /-- A sequence's JSON parts, checked as `codec._checked_refs` checks them: every reference names a leaf of a parameter of the
 body (`p`) or of a node's declared output (`n`); a strided sequence by the extremes of its pattern. `leaves p i` is that
@@ -299,7 +422,32 @@ def parsePartsIn (fuel : Nat) (j : Json) (leaves : Bool → Nat → Option Nat) 
         | none => throw s!"references {j.compress} name no leaf of a parameter or a node"
       | _ => throw s!"references {j.compress} name no leaf of a parameter or a node"
     return #[.explicit rs]
-  throw s!"references {j.compress}: not affine, strided, explicit, concat or alias"
+  match j.getObjVal? "grid" with
+  | .ok g => parseGrid j g leaves
+  | .error _ => throw s!"references {j.compress}: not affine, strided, explicit, grid, concat or alias"
+
+private def lane (s : String) (i b l : Nat) (axes : List (Nat × Nat)) : Json :=
+  .arr #[.str s, i, b, l, .arr (axes.map fun (c, d) => Json.arr #[c, d]).toArray]
+
+/-- The name the grid `[len, lanes]` is refused by over collections of `n` leaves, or `ok` (`test_grid.py` holds the
+same table). -/
+private def gridRefusal (len : Nat) (lanes : List Json) (n : Nat) : String :=
+  match parsePartsIn 4 (Json.mkObj [("grid", .arr #[len, .arr lanes.toArray])]) (fun _ _ => some n) (fun _ _ => none) with
+  | .ok _ => "ok"
+  | .error e => (e.splitOn ":")[0]!
+
+#guard gridRefusal 64 [lane "n" 2091 0 1 [(4, 0), (32, 64)]] 2048 == "ok"
+#guard gridRefusal 64 [lane "n" 2091 0 1 [(4, 0), (32, 64)]] 2047 == "grid-overrun"
+#guard gridRefusal 0 [lane "n" 1 0 1 []] 4096 == "grid-shape"
+#guard gridRefusal 2 [] 4096 == "grid-shape"
+#guard gridRefusal 2 [lane "n" 1 0 1 [(1, 4)]] 4096 == "grid-shape"
+#guard gridRefusal 2 [lane "n" 1 0 1 [(2, 4)], lane "n" 2 0 1 [(3, 4)]] 4096 == "grid-shape"
+#guard gridRefusal 2 [lane "q" 1 0 1 [], lane "n" 2 0 1 []] 4096 == "grid-shape"
+#guard gridRefusal 2 [lane "n" 1 0 1 [(3, 10)]] 4096 == "grid-spelled"
+#guard gridRefusal 1 [lane "n" 1 0 1 [], lane "n" 2 0 1 []] 4096 == "grid-spelled"
+#guard gridRefusal 2 [lane "n" 1 0 1 [(3, 10)], lane "n" 1 2 1 [(3, 10)]] 4096 == "grid-spelled"
+#guard gridRefusal 2048 [lane "n" 108 0 1 [(192, 0), (4, 2048)]] 8192 == "ok"
+#guard gridRefusal 2048 [lane "n" 108 0 1 [(192, 0), (4, 2048)]] 8191 == "grid-overrun"
 
 def parseParts (j : Json) (leaves : Bool → Nat → Option Nat) (args : Nat → Nat → Option Seq) : V (Array Part) :=
   parsePartsIn Steps.FUEL j leaves args
@@ -442,8 +590,11 @@ def recordFunctionIds (fid : String) : Array String :=
 earlier node (any node, for the return) of another width than its own type gives that position is a silent
 reinterpretation, and the decoder refuses the Definition as it finishes decoding it, with the codec's message. A reference
 to the node itself or a later one is not this check's. The check reads the description: each reference part is compared
-by the structure of the two types, and leaves are walked one by one only where the structure doesn't decide, at most
-`WALK` of them in a Program, past which it is refused (`E_REINTERPRET unchecked`). -/
+by the structure of the two types, against the widths its own slice of the type it is read as gives it. A strided or
+grid part is decided lane by lane, by the source's widths between the lane's extremes or by the residues the lane
+reaches in the period of the array holding them (`laneWidth`); one neither decides is refused by name as not decided
+by structure (`E_REINTERPRET unchecked`), never walked. Only an affine part's elements are walked where its two types'
+shapes differ, and the first wrong leaf of a refused part is found leaf by leaf, at most `WALK` of them in a Program. -/
 
 namespace Widths
 
@@ -558,7 +709,59 @@ def residues (stride : Int) (count L cap : Nat) : Option (List Nat) :=
   let s := (stride % (L : Int)).toNat
   let g := Nat.gcd s L
   if count ≥ L / g then (if L / g ≤ cap then some ((List.range (L / g)).map (· * g)) else none)
-  else if count ≤ cap then some ((List.range count).map fun k => k * s % L).eraseDups else none
+  else if count ≤ cap then some ((List.range count).map fun k => k * s % L) else none
+
+/-- `{(x + y) mod L : x ∈ A, y ∈ B}`. -/
+def sumMod (L : Nat) (A B : List Nat) : List Nat := A.flatMap fun x => B.map fun y => (x + y) % L
+
+/-- The residues mod `L` that `Lane.leafAt`'s levels `lv` add at the periods they count, where each level's and each
+sum's have at most `cap` members. -/
+def levelRes (L cap : Nat) : List (Nat × Int) → Option (List Nat)
+  | [] => some [0]
+  | [(r, d)] => residues d r L cap
+  | (r, d) :: rest => do
+    let A ← residues d r L cap
+    let B ← levelRes L cap rest
+    if A.length * B.length ≤ cap then some (sumMod L A B) else none
+
+/-- The residues mod `L`, from leaf `off` on, of the leaves `b + o · e + ⋯` a lane of runs of `run` reaches over its
+levels `lv` (a strided part is the lane of runs of `inner` with one level), where each set has at most `cap` members. -/
+def laneRes (b : Int) (off run : Nat) (e : Int) (lv : List (Nat × Int)) (L cap : Nat) : Option (List Nat) := do
+  let O ← residues e run L cap
+  let G ← levelRes L cap lv
+  if O.length * G.length ≤ cap then
+    some ((sumMod L O G).map fun x => (((b - (off : Int)) % (L : Int)).toNat + x) % L)
+  else none
+
+/-- The most residues a lane is decided by. -/
+def RCAP : Nat := 2 ^ 16
+
+/-- Whether every leaf of `S` that a lane reaches between its extremes `lo … hi` has width `w`, by structure: `S`'s
+widths between the extremes, or the residues the lane reaches in the period of the array holding them all, each of
+which it reaches where `exact`. `none` where neither decides; `some false` only where a leaf the lane reaches has
+another width. -/
+def laneWidth (S : Ty) (w lo hi : Nat) (b : Int) (run : Nat) (e : Int) (lv : List (Nat × Int)) (exact : Bool) :
+    Option Bool :=
+  match rangeWidths S lo (hi + 1) with
+  | [x] => some (x == w)
+  | _ =>
+    match cover S lo (hi + 1) with
+    | (.array _ f, off) =>
+      if f.leaves == 0 then none else
+      match laneRes b off run e lv f.leaves RCAP with
+      | some R => if R.all fun r => wAt f r == w then some true else if exact then some false else none
+      | none => none
+    | _ => none
+
+def formName : Part → String
+  | .affine .. => "affine"
+  | .strided .. => "strided"
+  | .explicit .. => "explicit"
+  | .grid .. => "grid"
+
+/-- The refusal of a part whose widths the structure of its types does not decide, which the check never walks. -/
+def undecided (q : Part) (why : String) : String :=
+  s!"a {formName q} part of {q.count} references, not decided by structure: {why}"
 
 /-- Whether `t`'s leaves `a … a + n - 1` have the widths of `S`'s leaves `b … b + n - 1`. -/
 def eqRange : Nat → Ty → Nat → Ty → Nat → Nat → M Bool
@@ -637,27 +840,29 @@ def partOk (s : Src) (t : Ty) (ht : Option Nat) (a : Nat) (q : Part) : M Bool :=
   | .strided p i base inner os is n =>
     let some S := s.ty? p i | return true
     if n == 0 || (ht.isSome && ht == s.homo? p i) then return true
-    let at_ := fun (k : Nat) => (base + ((k / inner : Nat) : Int) * os + ((k % inner : Nat) : Int) * is).toNat
-    if let some w := ht then
-      let q' := (n - 1) / inner
-      let corners : List (Nat × Nat) := [(0, 0), (0, min inner n - 1), (q', 0), (q', (n - 1) % inner)] ++
-        (if q' > 0 then [(q' - 1, inner - 1)] else [])
-      let vals := corners.map fun (x, y) => (base + (x : Int) * os + (y : Int) * is).toNat
-      let lo := vals.foldl min vals.head!
-      let hi := vals.foldl max vals.head!
-      if rangeWidths S lo (hi + 1) == [w] then return true
-      let (cs, off) := cover S lo (hi + 1)
-      if let .array _ f := cs then
-        let L := f.leaves
-        if L > 0 then
-          if let (some A, some B) := (residues os ((n + inner - 1) / inner) L 4096, residues is inner L 4096) then
-            if A.length * B.length ≤ 4096 then
-              let r0 := (base - (off : Int)) % (L : Int)
-              if A.all fun x => B.all fun y => wAt f ((r0 + x + y) % (L : Int)).toNat == w then return true
-    for k in [0:n] do
-      step
-      if wAt S (at_ k) != wAt t (a + k) then return false
-    return true
+    let some w := ht | throw (undecided q "the type it is read as has leaves of several widths along it")
+    let q' := (n - 1) / inner
+    let corners : List (Nat × Nat) := [(0, 0), (0, min inner n - 1), (q', 0), (q', (n - 1) % inner)] ++
+      (if q' > 0 then [(q' - 1, inner - 1)] else [])
+    let vals := corners.map fun (x, y) => (base + (x : Int) * os + (y : Int) * is).toNat
+    let lo := vals.foldl min vals.head!
+    let hi := vals.foldl max vals.head!
+    match laneWidth S w lo hi base inner is [((n + inner - 1) / inner, os)] (n % inner == 0) with
+    | some true => return true
+    | some false => return false
+    | none => throw (undecided q s!"the leaves of {if p then "parameter" else "node"} {i} it reads are of several widths")
+  | .grid run lanes =>
+    let some w := ht | throw (undecided q "the type it is read as has leaves of several widths along it")
+    let verdict := fun (l : Lane) => match s.ty? l.p l.i with
+      | none => some true
+      | some S =>
+        if s.homo? l.p l.i == some w then some true else
+        let (lo, hi) := l.bounds run
+        laneWidth S w lo.toNat hi.toNat l.b run l.e l.lv true
+    let vs := lanes.map verdict
+    if vs.all (· == some true) then return true
+    if vs.any (· == some false) then return false
+    throw (undecided q "a lane reads leaves of several widths")
 
 /-- The first leaf of part `q`, read as `t`'s leaves `a …`, that names a leaf of another width than `t` gives it, as an
 offset into `q`, where `partOk` found one: an affine part's by bisection over its prefixes (`eqRange` on each), any
@@ -684,11 +889,16 @@ def firstBad (s : Src) (t : Ty) (a : Nat) (q : Part) : M (Option Nat) := do
       if bad k then return some k
     return none
 
+/-- The one width of `t`'s leaves `a … a + n`, if they have one. -/
+def sliceWidth (t : Ty) (a n : Nat) : Option Nat :=
+  match rangeWidths t a (a + n) with
+  | [w] => some w
+  | _ => none
+
 /-- The first part of the references `seq`, read as a `t`, that names leaves of another width, with the leaf it starts at. -/
 def seqBad (s : Src) (t : Ty) (seq : Seq) : M (Option (Nat × Part)) := do
-  let ht := homo t
   for q in seq.parts, a in seq.starts do
-    if !(← partOk s t ht a q) then return some (a, q)
+    if !(← partOk s t (sliceWidth t a q.count) a q) then return some (a, q)
   return none
 
 def TAIL : String :=
@@ -1200,6 +1410,7 @@ def Prog.orderViolation (P : Prog) : Option Json := Id.run do
             | .affine p idx _ c => if c > 0 then #[(p, idx)] else #[]
             | .strided p idx _ _ _ _ c => if c > 0 then #[(p, idx)] else #[]
             | .explicit it => it.map fun r => (r.p, r.i)
+            | .grid _ lanes => lanes.map fun l => (l.p, l.i)
           for (p, idx) in names do
             if !(if p then idx < body.params.size else idx < k) then
               return some (Json.mkObj [("definition", Json.str defn.key), ("node", Lean.toJson k), ("arg", Lean.toJson i),

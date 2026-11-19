@@ -380,7 +380,7 @@ end Lc
 
 /-! ## At the deployed relation -/
 
-variable {H : Claims.Msg → Claims.Msg}
+variable {H : Hash.Msg → Hash.Msg}
 
 /-- The A side of the trace of a witness's bits, as a bit of GF(2): `aVec` of the statement whose matrices are its
 table's. -/
@@ -405,7 +405,7 @@ theorem toZ_mulBlocks (st : Stmt) (hwf : StmtWF st) (w : Claims.Flock.Wit)
   rw [Nat.mul_one, Nat.add_zero]
 
 /-- **The lincheck's algebra at the deployed relation**, from `RelS` alone. -/
-theorem lcAlgebra (H : Claims.Msg → Claims.Msg) : LcAlgebra H Readable.relation := by
+theorem lcAlgebra (H : Hash.Msg → Hash.Msg) : LcAlgebra H Readable.relation := by
   intro o i hi r _ hfold
   obtain ⟨st, hsts, hwf, -, hmat, hsat⟩ := o.model
   have hsz : o.tabs.size = 1 := by simp [Run.tabs, FlockDeploy.tabsOf, hsts]
@@ -448,7 +448,7 @@ theorem lcAlgebra (H : Claims.Msg → Claims.Msg) : LcAlgebra H Readable.relatio
   exact Lc.lcAlgebra_of _ _ hc hfd _ hm _ hsat.2.1 _ hzb (fun a => (hab a).1) (fun a => (hab a).2) _ _ _ hfold
 
 /-- **The lincheck goal at the deployed relation**, at every rep the session walk aligns. -/
-theorem lincheck_relation (H : Claims.Msg → Claims.Msg)
+theorem lincheck_relation (H : Hash.Msg → Hash.Msg)
     (hzc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r)
     (hlc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, LcAt o i r) : Lincheck H Readable.relation :=
   lincheck_goal' H hzc hlc (lcAlgebra H)

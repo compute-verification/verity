@@ -217,6 +217,7 @@ def separable (P : Prog) (d : Nat) : Option (Array (Nat × Nat)) := Id.run do
           | .affine p _ _ c => p || c == 0
           | .strided p _ _ _ _ _ _ => p
           | .explicit it => it.all (·.p)
+          | .grid _ lanes => lanes.all (·.p)
         if !pOnly then return none
   let mut covered : Array (Array Bool) := body.nodes.map fun x => Array.replicate x.out.leaves false
   for r in body.ret.toArray do

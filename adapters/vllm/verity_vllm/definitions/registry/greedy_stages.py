@@ -37,7 +37,7 @@ Definitions take any such N, and `GreedyChunk_v2` any OFF that is a multiple of 
 
 **Each chunk position is its own Definition.**  OFF is a static, so the K - 1 chunks before the last are K - 1 templates,
 and the combine reads each one's result through one parameter.  In the second stage's interior a wired parameter is held at its
-writer's output port (`second_stage._held_port`), and a session two of whose ports are held at one port is a form Flock's
+writer's output port (`second_stage.placings`), and a session two of whose ports are held at one port is a form Flock's
 verifier refuses (`Flock.PortRoots.dupId`): so no two parameters of a unit read one template's output, and a chunk's result
 is one field, not a field a word.
 
@@ -77,6 +77,7 @@ from verity.circuits.defs import SpecializedDefinition, bind, composite
 from verity.circuits.ops.argmax import U16, SelectU16, U16Add
 from verity.circuits.ops.prims import const
 from verity.circuits.ops.scalar import BitNot
+from verity.circuits.population import BitsWord, WordBits
 from verity.circuits.refs import Coll, array_of, concat
 from verity.circuits.types import Array, Tuple
 
@@ -206,6 +207,19 @@ def GreedyCombine(B, S, logits, *results):
         if c < n - 1:
             best = B.call(P.SelectBf16, keep, best, b)
     return array_of([lo, hi])
+
+
+def _token_sig(S):
+    return _combine_sig(S)[0], I32
+
+
+@composite("GreedyCombineToken", 1, ["V", "N"], _token_sig, conformance=_CONF)
+def GreedyCombineToken(B, S, logits, *results):
+    """`GreedyCombine_v2{V, N}`'s token as one 32-bit leaf, its low word first: the width an embedding read's ``tok`` and a
+    length check's ids take."""
+    words = B.call(bind(GreedyCombine, V=S.V, N=S.N), logits, *results)
+    bits = B.batch(bind(WordBits, W=16), words, axes=(0,))
+    return B.call(bind(BitsWord, W=32), Coll(Array(32, BIT), bits.refs))
 
 
 STAGE_DEFINITIONS = [GreedyChunk, GreedyCombine]

@@ -315,6 +315,14 @@ def summary(steps: list[dict]) -> dict:
     return res
 
 
+def record(info: dict, checks: dict | None, a: argparse.Namespace, d: Path, decode_calls: int, steps: list[dict]) -> dict:
+    """The engine's record for --out (the run's output): its export without the IPC handle and its checks without the
+    probe's token ids (`keep`); those stay in `d/engine.<g>.json` and `d/status.<g>.json`, the prover's scratch."""
+    return {"schema": "verity/remote-session/engine/v0", **keep.export_kept(info), "checks": keep.checks_kept(checks),
+            "args": vars(a) | {"dir": str(d), "out": str(a.out)}, "decode_calls": decode_calls, "phases": summary(steps),
+            "errors": sum(1 for s in steps if "error" in s)}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--gpu", type=int, required=True, help="this engine's place among the node's (its shard's)")
@@ -437,10 +445,7 @@ def main() -> int:
         if len(steps) % 64 == 0:
             log.flush()
     log.close()
-    out = {"schema": "verity/remote-session/engine/v0", **keep.export_kept(info), "checks": keep.checks_kept(checks),
-           "args": vars(a) | {"dir": str(d),
-           "out": str(a.out)}, "decode_calls": hooks.calls if hooks else 0, "phases": summary(steps),
-           "errors": sum(1 for s in steps if "error" in s)}
+    out = record(info, checks, a, d, hooks.calls if hooks else 0, steps)
     write_json(a.out / f"engine.{g}.json", out)
     status("stopped", phases=out["phases"])
     sys.stdout.flush()

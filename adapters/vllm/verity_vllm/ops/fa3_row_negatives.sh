@@ -17,7 +17,7 @@ ROW=${1:?row id}; ROLE=${2:?case role, e.g. LLAMA32_1B}
 REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"
 D=${SWEEP_DIR:-/workspace/cp/sweep}/$ROW; POS=${3:-$D/commit}; OUT=$D/negatives; mkdir -p "$OUT"
 WL=workloads/$ROW.json; MAN=$D/manifest.json
-PY=${PY:-/workspace/venv-cu129/bin/python}; export PATH=$(dirname "$PY"):${CUDA_HOME:-/usr/local/cuda}/bin:$PATH
+PY=${PY:-/workspace/venv-cu129/bin/python}; export PATH=$(dirname "$PY"):"${CUDA_HOME:?CUDA_HOME is not set: set it to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)}"/bin:$PATH
 export PYTHONPATH=$REPO HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 VLLM_BATCH_INVARIANT=1 TOKENIZERS_PARALLELISM=false
 export VERITY_TREE=$REPO NATIVE_COLLECT_BUILD=${NATIVE_COLLECT_BUILD:-/workspace/cp/nc_build}
 GPU_UTIL=${GPU_UTIL:-0.5}

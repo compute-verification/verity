@@ -42,7 +42,7 @@ def Good (f : Frame) : Prop := midFrame f ∧ plainFrame f ∧ noDom f
 
 /-- **A body past level 0's close**: the frames `pre`, good frames, then a squeeze of `n ≠ 0` coins below `2 ^ 64` as the
 frame takes it. -/
-def Body (pre : List Frame) (b : Claims.Msg) : Prop :=
+def Body (pre : List Frame) (b : Hash.Msg) : Prop :=
   ∃ fs k n, b = encs (pre ++ fs) ++ (Frame.sq k n).enc ∧ (∀ f ∈ fs, Good f) ∧ (k = 2 ∨ (k = 1 ∧ n = 1)) ∧ n ≠ 0 ∧
     n < 2 ^ 64
 
@@ -50,23 +50,23 @@ def Body (pre : List Frame) (b : Claims.Msg) : Prop :=
 def preAt (P p : ℕ) : List Frame := if p = P then [.label Zk.LABEL_CLOSE.toUTF8] else []
 
 /-- **A log's bodies from the close round `P` on.** -/
-def LogQ (P : ℕ) (L : Array Claims.Msg) : Prop :=
+def LogQ (P : ℕ) (L : Array Hash.Msg) : Prop :=
   ∀ p (hp : p < L.size), P ≤ p → Body (preAt P p) L[p]
 
 /-- **Past level 0's close at round `P`**: the log reached it, its bodies from it on are `LogQ`'s, and the pending bytes
 are the closing label at round `P`, then good frames. -/
-def Inv (P : ℕ) (t : Transcript) (l : Array Claims.Msg) : Prop :=
+def Inv (P : ℕ) (t : Transcript) (l : Array Hash.Msg) : Prop :=
   P ≤ l.size ∧ LogQ P l ∧ ∃ fs, t.pending.data.toList = encs (preAt P l.size ++ fs) ∧ ∀ f ∈ fs, Good f
 
 /-- Level 0's log of `s` bodies. -/
-def Sz (s : ℕ) (_ : Transcript) (l : Array Claims.Msg) : Prop := l.size = s
+def Sz (s : ℕ) (_ : Transcript) (l : Array Hash.Msg) : Prop := l.size = s
 
 variable {P : ℕ}
 
-theorem logQ_le {l : Array Claims.Msg} (h : l.size ≤ P) : LogQ P l :=
+theorem logQ_le {l : Array Hash.Msg} (h : l.size ≤ P) : LogQ P l :=
   fun p hp hP => absurd hp (by omega)
 
-theorem logQ_push {l : Array Claims.Msg} {b : Claims.Msg} (h : LogQ P l) (hb : P ≤ l.size → Body (preAt P l.size) b) :
+theorem logQ_push {l : Array Hash.Msg} {b : Hash.Msg} (h : LogQ P l) (hb : P ≤ l.size → Body (preAt P l.size) b) :
     LogQ P (l.push b) := by
   intro p hp hP
   rw [Array.size_push] at hp
@@ -91,13 +91,13 @@ theorem body_framed {t : Transcript} {pre fs : List Frame} (ht : t.pending.data.
 variable {α β σ : Type}
 
 /-- **`x` from `Pre`**: wherever it stops its log is `LogQ`'s, and where it returns `a` it ends in `Post a`. -/
-def HT (P : ℕ) (Pre : Transcript → Array Claims.Msg → Prop) (Post : α → Transcript → Array Claims.Msg → Prop)
+def HT (P : ℕ) (Pre : Transcript → Array Hash.Msg → Prop) (Post : α → Transcript → Array Hash.Msg → Prop)
     (x : TMW PS α) : Prop :=
   ∀ t l, Pre t l → (∀ e L, (x.run t).go l = (.error e, L) → LogQ P L) ∧
     ∀ a t' L, (x.run t).go l = (.ok (a, t'), L) → Post a t' L
 
-theorem ht_bind {Pre : Transcript → Array Claims.Msg → Prop} {Mid : α → Transcript → Array Claims.Msg → Prop}
-    {Post : β → Transcript → Array Claims.Msg → Prop} {x : TMW PS α} {f : α → TMW PS β} (hx : HT P Pre Mid x)
+theorem ht_bind {Pre : Transcript → Array Hash.Msg → Prop} {Mid : α → Transcript → Array Hash.Msg → Prop}
+    {Post : β → Transcript → Array Hash.Msg → Prop} {x : TMW PS α} {f : α → TMW PS β} (hx : HT P Pre Mid x)
     (hf : ∀ a, HT P (Mid a) Post (f a)) : HT P Pre Post (x >>= f) := by
   intro t l hp
   obtain ⟨he, hok⟩ := hx t l hp
@@ -114,7 +114,7 @@ theorem ht_bind {Pre : Transcript → Array Claims.Msg → Prop} {Mid : α → T
     obtain ⟨a, t'⟩ := p
     exact hf a t' L (hok a t' L e)
 
-theorem ht_pure {Pre : Transcript → Array Claims.Msg → Prop} {Post : α → Transcript → Array Claims.Msg → Prop} {a : α}
+theorem ht_pure {Pre : Transcript → Array Hash.Msg → Prop} {Post : α → Transcript → Array Hash.Msg → Prop} {a : α}
     (hP : ∀ t l, Pre t l → Post a t l) : HT P Pre Post (pure a) := by
   intro t l hp
   refine ⟨fun e L h => ?_, fun a' t' L h => ?_⟩
@@ -125,13 +125,13 @@ theorem ht_pure {Pre : Transcript → Array Claims.Msg → Prop} {Post : α → 
     obtain ⟨⟨rfl, rfl⟩, rfl⟩ := e
     exact hP t l hp
 
-theorem ht_mono {Pre Pre' : Transcript → Array Claims.Msg → Prop} {Post Post' : α → Transcript → Array Claims.Msg → Prop}
+theorem ht_mono {Pre Pre' : Transcript → Array Hash.Msg → Prop} {Post Post' : α → Transcript → Array Hash.Msg → Prop}
     {x : TMW PS α} (h : HT P Pre Post x) (hpre : ∀ t l, Pre' t l → Pre t l)
     (hpost : ∀ a t l, Post a t l → Post' a t l) : HT P Pre' Post' x := fun t l hp =>
   ⟨(h t l (hpre t l hp)).1, fun a t' L e => hpost a t' L ((h t l (hpre t l hp)).2 a t' L e)⟩
 
 /-- A transcript action, where `Pre` stops only at a `LogQ` log and holds after the action. -/
-theorem ht_liftTM {Pre : Transcript → Array Claims.Msg → Prop} (x : TM α) (he : ∀ t l, Pre t l → LogQ P l)
+theorem ht_liftTM {Pre : Transcript → Array Hash.Msg → Prop} (x : TM α) (he : ∀ t l, Pre t l → LogQ P l)
     (hx : ∀ t a t' l, x t = .ok (a, t') → Pre t l → Pre t' l) : HT P Pre (fun _ => Pre) (liftTM x) := by
   intro t l hp
   rw [liftTM_go]
@@ -144,7 +144,7 @@ theorem ht_liftTM {Pre : Transcript → Array Claims.Msg → Prop} (x : TM α) (
     exact hx t a t' l h.1 hp
 
 /-- A computation of the pure session that sends nothing, lifted to the transcript. -/
-theorem ht_liftPS {Pre : Transcript → Array Claims.Msg → Prop} {Q : α → Prop} (y : PS α)
+theorem ht_liftPS {Pre : Transcript → Array Hash.Msg → Prop} {Q : α → Prop} (y : PS α)
     (hy : ∀ l, (y.go l).2 = l) (he : ∀ t l, Pre t l → LogQ P l) (hq : ∀ l a L, y.go l = (.ok a, L) → Q a) :
     HT P Pre (fun a t l => Pre t l ∧ Q a) (StateT.lift y) := by
   intro t l hp
@@ -176,48 +176,48 @@ theorem ht_liftPS {Pre : Transcript → Array Claims.Msg → Prop} {Q : α → P
 /-! ## Through the prover's state -/
 
 /-- `HT` from every prover state, the postcondition on the value. -/
-def HL (P : ℕ) (Pre : Transcript → Array Claims.Msg → Prop) (Post : α → Transcript → Array Claims.Msg → Prop)
+def HL (P : ℕ) (Pre : Transcript → Array Hash.Msg → Prop) (Post : α → Transcript → Array Hash.Msg → Prop)
     (x : LP PS α) : Prop :=
   ∀ s, HT P Pre (fun p => Post p.1) (x.run s)
 
-theorem hl_bind {Pre : Transcript → Array Claims.Msg → Prop} {Mid : α → Transcript → Array Claims.Msg → Prop}
-    {Post : β → Transcript → Array Claims.Msg → Prop} {x : LP PS α} {f : α → LP PS β} (hx : HL P Pre Mid x)
+theorem hl_bind {Pre : Transcript → Array Hash.Msg → Prop} {Mid : α → Transcript → Array Hash.Msg → Prop}
+    {Post : β → Transcript → Array Hash.Msg → Prop} {x : LP PS α} {f : α → LP PS β} (hx : HL P Pre Mid x)
     (hf : ∀ a, HL P (Mid a) Post (f a)) : HL P Pre Post (x >>= f) := fun s => by
   rw [StateT.run_bind]
   exact ht_bind (hx s) fun p => hf p.1 p.2
 
-theorem hl_pure {Pre : Transcript → Array Claims.Msg → Prop} {Post : α → Transcript → Array Claims.Msg → Prop} {a : α}
+theorem hl_pure {Pre : Transcript → Array Hash.Msg → Prop} {Post : α → Transcript → Array Hash.Msg → Prop} {a : α}
     (h : ∀ t l, Pre t l → Post a t l) : HL P Pre Post (pure a) := fun s => by
   rw [StateT.run_pure]
   exact ht_pure h
 
-theorem hl_mono {Pre Pre' : Transcript → Array Claims.Msg → Prop} {Post Post' : α → Transcript → Array Claims.Msg → Prop}
+theorem hl_mono {Pre Pre' : Transcript → Array Hash.Msg → Prop} {Post Post' : α → Transcript → Array Hash.Msg → Prop}
     {x : LP PS α} (h : HL P Pre Post x) (hpre : ∀ t l, Pre' t l → Pre t l)
     (hpost : ∀ a t l, Post a t l → Post' a t l) : HL P Pre' Post' x :=
   fun s => ht_mono (h s) hpre fun p t l hp => hpost p.1 t l hp
 
-theorem hl_liftT {Pre : Transcript → Array Claims.Msg → Prop} {Post : α → Transcript → Array Claims.Msg → Prop}
+theorem hl_liftT {Pre : Transcript → Array Hash.Msg → Prop} {Post : α → Transcript → Array Hash.Msg → Prop}
     {x : TMW PS α} (h : HT P Pre Post x) : HL P Pre Post (liftT x) := fun s => by
   unfold liftT
   rw [StateT.run_lift]
   exact ht_bind h fun a => ht_pure fun _ _ hp => hp
 
-theorem hl_get {Pre : Transcript → Array Claims.Msg → Prop} : HL P Pre (fun _ => Pre) (get : LP PS LigState) :=
+theorem hl_get {Pre : Transcript → Array Hash.Msg → Prop} : HL P Pre (fun _ => Pre) (get : LP PS LigState) :=
   fun s => by
     rw [StateT.run_get]
     exact ht_pure fun _ _ hp => hp
 
-theorem hl_set {Pre : Transcript → Array Claims.Msg → Prop} (s' : LigState) :
+theorem hl_set {Pre : Transcript → Array Hash.Msg → Prop} (s' : LigState) :
     HL P Pre (fun _ => Pre) (set s' : LP PS PUnit) := fun s => by
   rw [StateT.run_set]
   exact ht_pure fun _ _ hp => hp
 
-theorem hl_modify {Pre : Transcript → Array Claims.Msg → Prop} (F : LigState → LigState) :
+theorem hl_modify {Pre : Transcript → Array Hash.Msg → Prop} (F : LigState → LigState) :
     HL P Pre (fun _ => Pre) (modify F : LP PS PUnit) := fun s => by
   rw [StateT.run_modify]
   exact ht_pure fun _ _ hp => hp
 
-theorem hl_ite {Pre : Transcript → Array Claims.Msg → Prop} {Post : α → Transcript → Array Claims.Msg → Prop}
+theorem hl_ite {Pre : Transcript → Array Hash.Msg → Prop} {Post : α → Transcript → Array Hash.Msg → Prop}
     (c : Prop) [Decidable c] {x x' : LP PS α} (h1 : c → HL P Pre Post x) (h2 : ¬ c → HL P Pre Post x') :
     HL P Pre Post (if c then x else x') := by
   by_cases hc : c
@@ -226,7 +226,7 @@ theorem hl_ite {Pre : Transcript → Array Claims.Msg → Prop} {Post : α → T
   · rw [ite_eq_right hc]
     exact h2 hc
 
-theorem hl_throw_bind {Pre : Transcript → Array Claims.Msg → Prop} {Post : β → Transcript → Array Claims.Msg → Prop}
+theorem hl_throw_bind {Pre : Transcript → Array Hash.Msg → Prop} {Post : β → Transcript → Array Hash.Msg → Prop}
     (e : String) {f : α → LP PS β} (he : ∀ t l, Pre t l → LogQ P l) : HL P Pre Post (throw e >>= f) := by
   intro s t l hp
   have h' : ((((throw e : LP PS α) >>= f).run s).run t).go l = (.error e, l) := rfl
@@ -238,7 +238,7 @@ theorem hl_throw_bind {Pre : Transcript → Array Claims.Msg → Prop} {Post : �
   · simp at h
 
 /-- **A loop over `[0:n]`**, step `i` from `J i u` yielding a value `v` with `J (i + 1) v`. -/
-theorem hl_forIn (n : ℕ) (J : ℕ → σ → Transcript → Array Claims.Msg → Prop) (body : ℕ → σ → LP PS (ForInStep σ))
+theorem hl_forIn (n : ℕ) (J : ℕ → σ → Transcript → Array Hash.Msg → Prop) (body : ℕ → σ → LP PS (ForInStep σ))
     (hb : ∀ i < n, ∀ u, HL P (J i u) (fun r t l => ∃ v, r = .yield v ∧ J (i + 1) v t l) (body i u)) (u : σ) :
     HL P (J 0 u) (fun r => J n r) (forIn [:n] u body) := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range']
@@ -259,23 +259,23 @@ theorem hl_forIn (n : ℕ) (J : ℕ → σ → Transcript → Array Claims.Msg �
     obtain ⟨v, rfl, hv⟩ := hr
     exact ih (a + 1) v (by omega) s t l hv
 
-theorem hl_forIn_bind {n : ℕ} (J : ℕ → σ → Transcript → Array Claims.Msg → Prop)
-    {Pre : Transcript → Array Claims.Msg → Prop} {Post : β → Transcript → Array Claims.Msg → Prop}
+theorem hl_forIn_bind {n : ℕ} (J : ℕ → σ → Transcript → Array Hash.Msg → Prop)
+    {Pre : Transcript → Array Hash.Msg → Prop} {Post : β → Transcript → Array Hash.Msg → Prop}
     {body : ℕ → σ → LP PS (ForInStep σ)} {u : σ} {f : σ → LP PS β} (h0 : ∀ t l, Pre t l → J 0 u t l)
     (hb : ∀ i < n, ∀ u, HL P (J i u) (fun r t l => ∃ v, r = .yield v ∧ J (i + 1) v t l) (body i u))
     (hf : ∀ r, HL P (J n r) Post (f r)) : HL P Pre Post (forIn [:n] u body >>= f) :=
   hl_mono (hl_bind (hl_forIn n J body hb u) hf) h0 fun _ _ _ h => h
 
 /-- A fact the precondition carries beside `Pre`, taken out. -/
-theorem hl_pre_and {Q : Prop} {Pre : Transcript → Array Claims.Msg → Prop}
-    {Post : α → Transcript → Array Claims.Msg → Prop} {x : LP PS α} (h : Q → HL P Pre Post x) :
+theorem hl_pre_and {Q : Prop} {Pre : Transcript → Array Hash.Msg → Prop}
+    {Post : α → Transcript → Array Hash.Msg → Prop} {x : LP PS α} (h : Q → HL P Pre Post x) :
     HL P (fun t l => Q ∧ Pre t l) Post x := fun s t l hp => h hp.1 s t l hp.2
 
-theorem hl_pre_and' {Q : Prop} {Pre : Transcript → Array Claims.Msg → Prop}
-    {Post : α → Transcript → Array Claims.Msg → Prop} {x : LP PS α} (h : Q → HL P Pre Post x) :
+theorem hl_pre_and' {Q : Prop} {Pre : Transcript → Array Hash.Msg → Prop}
+    {Post : α → Transcript → Array Hash.Msg → Prop} {x : LP PS α} (h : Q → HL P Pre Post x) :
     HL P (fun t l => Pre t l ∧ Q) Post x := fun s t l hp => h hp.2 s t l hp.1
 
-theorem hl_forIn_list {Pre : Transcript → Array Claims.Msg → Prop} {τ : Type} (l : List τ)
+theorem hl_forIn_list {Pre : Transcript → Array Hash.Msg → Prop} {τ : Type} (l : List τ)
     (body : τ → σ → LP PS (ForInStep σ))
     (hb : ∀ x u, HL P Pre (fun r t l => (∃ v, r = .yield v) ∧ Pre t l) (body x u)) (u : σ) :
     HL P Pre (fun _ => Pre) (forIn l u body) := by
@@ -288,15 +288,15 @@ theorem hl_forIn_list {Pre : Transcript → Array Claims.Msg → Prop} {τ : Typ
     obtain ⟨⟨v, rfl⟩, hp⟩ := hr
     exact ih v s t L hp
 
-theorem hl_forIn_array {Pre : Transcript → Array Claims.Msg → Prop} {τ : Type} (l : Array τ)
+theorem hl_forIn_array {Pre : Transcript → Array Hash.Msg → Prop} {τ : Type} (l : Array τ)
     (body : τ → σ → LP PS (ForInStep σ))
     (hb : ∀ x u, HL P Pre (fun r t l => (∃ v, r = .yield v) ∧ Pre t l) (body x u)) (u : σ) :
     HL P Pre (fun _ => Pre) (forIn l u body) := by
   rw [← Array.forIn_toList]
   exact hl_forIn_list l.toList body hb u
 
-theorem ht_run_bind {Pre : Transcript → Array Claims.Msg → Prop} {Mid : α → Transcript → Array Claims.Msg → Prop}
-    {Post : β → Transcript → Array Claims.Msg → Prop} {p : LP PS α} {st : LigState} {f : α × LigState → TMW PS β}
+theorem ht_run_bind {Pre : Transcript → Array Hash.Msg → Prop} {Mid : α → Transcript → Array Hash.Msg → Prop}
+    {Post : β → Transcript → Array Hash.Msg → Prop} {p : LP PS α} {st : LigState} {f : α × LigState → TMW PS β}
     (hp : HL P Pre Mid p) (hf : ∀ a, HT P (Mid a.1) Post (f a)) : HT P Pre Post (p.run st >>= f) :=
   ht_bind (hp st) hf
 
@@ -676,7 +676,7 @@ theorem ligeritoPZk_shape (coin : ℕ → ℕ → F128) (N : ℕ) (sch : Schedul
 /-- **Ligerito's log from round `s + k_0 + 4` on**, cut past it: bodies, the first after level 0's closing label. -/
 theorem ligeritoPZk_logQ (coin : ℕ → ℕ → F128) (N : ℕ) (sch : Schedule) (T : F128) (cm0 : Commit)
     (t b : Array F128) (lay : Zk.PadLayout) (h : Array F128) (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128)
-    (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (tr : Transcript) (l : Array Claims.Msg)
+    (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (tr : Transcript) (l : Array Hash.Msg)
     (hk : 1 ≤ sch.k0) (hn0 : sch.n ≠ 0) (hn : sch.n + 1 < 2 ^ 64) (hq : ∀ i, (sch.levels.getD i default).q < 2 ^ 64)
     (htp : 2 * tPad < 2 ^ 64) (hd : ∀ i, 64 * 2 ^ (sch.levels.getD i default).d < 2 ^ 64)
     (hN : l.size + sch.k0 + 4 ≤ N) :

@@ -10,7 +10,7 @@ sessions.
     python benchmarks/one_stage/zk_cost.py fit    --out DIR [--run RUN_ID]
     python benchmarks/one_stage/zk_cost.py overhead --out DIR [--card rtx-pro-6000-server]
 
-* **Statements.** For each K and c, a one-template program of c units (`mixed_population_program`), its
+* **Statements.** For each K and c, a one-template program of c units (`wired_population_program`), its
   `Q_template_instances` partition, and one statement staged by A6's `stage_template` bound to it (stand-in values; a
   Boolean circuit's cost doesn't depend on them). Its stage seconds exclude building the circuit, which a template pays
   once.
@@ -61,7 +61,6 @@ import argparse
 import hashlib
 import json
 import os
-import socket
 import subprocess
 import sys
 import time
@@ -76,8 +75,11 @@ CARD_FILES = REPO / "calibration/hardware/cards"
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
-from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.codec import canonical_json, descriptor_id, encode_program  # noqa: E402
+from verity.ports import free_port  # noqa: E402
+from verity.circuits.population import wired_population_program  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 from verity.protocols.proofs.spot.prover.optimize import SHA512_ANDS  # noqa: E402
 
 #: a templated statement's id (`verity_flock.circuit.TMPL_STATEMENT`): its prover and server read the placed unit
@@ -112,12 +114,6 @@ def draws(c: int, spec: str = "1,8,64,c") -> list[tuple[int, list[str] | None]]:
             prev = got.get(k, set())
             got[k] = None if not arms or prev is None else prev | set(arms.split("+"))
     return [(k, None if got[k] is None else sorted(got[k])) for k in sorted(got)]
-
-
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
 
 
 def proc_cpu(pids) -> tuple[float, float, int]:
@@ -295,8 +291,7 @@ def stage(a) -> int:
         for c in (int(x) for x in a.sizes.split(",")):
             sd = out / f"k{K}-c{c}"
             sd.mkdir(parents=True, exist_ok=True)
-            program = P.mixed_population_program([(d, c)])
-            query = P.template_instances_query([d])
+            program, query = wired_population_program([(d, c)], {"templates": [[descriptor_id(d), c]]})
             part = P.partition(program, query)
             (sd / "partition.json").write_text(json.dumps(part, sort_keys=True))
             (sd / "program.json").write_bytes(canonical_json(encode_program(program)))
@@ -310,7 +305,7 @@ def stage(a) -> int:
             jsonl(out / "records" / "stage.jsonl", rec)
             statement = hashlib.sha512(canonical_json({"partition": P.digest(part), "pin": st["pin"]})).hexdigest()
             for k, arms in draws(c, a.draws):
-                sampling_design = D.derive(program, query, D.parse_design(f"stratified:{k}"))
+                sampling_design = D.derive(program, query, RND.parse_design(f"stratified:{k}"))
                 p = a0.challenger_sample(a.lean, ["--program", str(sd / "program.json"), "--partition",
                                                 str(sd / "partition.json"), "--stratified", str(k)], sampling_design, c, statement,
                                        sd / f"draw-k{k}.log")
@@ -690,6 +685,9 @@ PARTS = {"witness": lambda x: x.get("witness_s") or 0.0, "proving": lambda x: x[
 
 def overhead(a) -> int:
     from verity.device import load_card, rate
+    if a.card is None:
+        raise SystemExit("overhead: --card SKU, the run's GPU's card file (rtx-pro-6000-server, h200-sxm-141gb, ...), or "
+                         "--card none for a CPU node's sessions")
     out = Path(a.out)
     # --card none: a CPU node's sessions, which no GPU's peak divides
     card = None if a.card == "none" else load_card(a.card, directory=CARD_FILES)
@@ -822,8 +820,9 @@ def main() -> int:
     ap.add_argument("--ks", default="4096,14336")
     ap.add_argument("--units", default="", help="stage: served types (stage.py's TYPE[:S=V,...]), space-separated, instead of --ks")
     ap.add_argument("--sizes", default=None, help="stage: staged units a statement (default 1,8,64,512; with --units half,full)")
-    ap.add_argument("--card", default="rtx-pro-6000-server",
-                    help="overhead: the card whose datasheet peak divides (verity.device.load_card); none: a CPU node's sessions")
+    ap.add_argument("--card", default=None,
+                    help="overhead: the card whose datasheet peak divides (verity.device.load_card), no default; none: a CPU "
+                    "node's sessions")
     ap.add_argument("--draws", default="1,8,64,c", help="stage: the sample sizes a statement is proved at, c meaning all its units")
     ap.add_argument("--points", default=None, help="prove: only these indices of plan.json (one GPU lease a point)")
     ap.add_argument("--arms", default="fw,nofw", help="fw: the ZK server's send check on (the design's path); nofw: off; "

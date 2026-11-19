@@ -105,8 +105,8 @@ from verity.protocols.resource_accounting.network.verifier.certificate import (D
 from verity.protocols.resource_accounting.network.verifier.grid import BlockGrid
 from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
-from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 DOMAIN_TAG = "verity-network-warden/cells-domain/v2"
 CELLS_TAG = "verity-network-warden/cells/v2"
@@ -488,8 +488,8 @@ def _schedules(head: CellsHead, params: NetworkAttesterParams) -> None:
 def _port(head: CellsHead, value: str, rows: Sequence[int], reads_from: int) -> dict[str, Any]:
     e = {"leaves": head.rows, "words": head.slots * head.cell_bytes // 2, "word_bits": WORD_BITS,
          "domain": head.domain.hex()}
-    return produced.port(value, e, head.root.hex(), rows, SCHEMA) | \
-        ({G.READS_FROM: int(reads_from)} if reads_from else {})
+    return RV.port(value, e, head.root.hex(), rows, SCHEMA) | \
+        ({RV.READS_FROM: int(reads_from)} if reads_from else {})
 
 
 def port(head: CellsHead, wiring_: Wiring, params: NetworkAttesterParams, reads: Units | Sequence[tuple[int, int]],
@@ -535,7 +535,7 @@ def refusal(port_: Mapping[str, Any], dom: CommitmentDomain, entry: Mapping[str,
     for r, (p, b, path) in enumerate(zip(positions, bcs, paths)):
         if not opens(dom, root, p, b, bytes.fromhex(path)):
             return f"registered reads: table row {r} does not open the registered root at position {p}"
-    reads, base = list(port_["reads"]), int(port_.get(G.READS_FROM, 0))
+    reads, base = list(port_["reads"]), int(port_.get(RV.READS_FROM, 0))
     if len(positions) != len(reads):
         return f"registered reads: {len(positions)} rows for the {len(reads)} units the verifier's program reads"
     for i, (p, want) in enumerate(zip(positions, reads)):

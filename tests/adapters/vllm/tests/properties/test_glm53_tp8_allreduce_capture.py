@@ -179,7 +179,7 @@ def test_the_dispatch_at_glm53s_boundaries() -> None:
         assert [X.expected_comm(M, setting) for M in (1, 21, 22, 42, 43, 256, 2048, 5461, 5462)] == \
             ["fi_ar_comm"] * 4 + ["symm_mem_comm"] * 4 + ["pynccl_comm"]
     assert [X.expected_comm(M, "switch") for M in (42, 43, 682, 683)] == ["fi_ar_comm", "ca_comm", "ca_comm", "pynccl_comm"]
-    assert {M: T.mnnvl_grid(M, X.HIDDEN)[1] for M in (16, 17, 33, 34)} == {16: 8, 17: 4, 33: 4, 34: 2}
+    assert {M: T.mnnvl_grid(M, X.HIDDEN, T.UNSTATED_NODE[0][1])[1] for M in (16, 17, 33, 34)} == {16: 8, 17: 4, 33: 4, 34: 2}
     assert X.SWITCH_ENV["VLLM_ALLREDUCE_USE_SYMM_MEM"] == "0" and X.SERVED_ENV["VLLM_ALLREDUCE_USE_SYMM_MEM"] == "1"
 
 
@@ -296,7 +296,8 @@ def test_the_special_tokens_hold_what_they_name(tmp_path) -> None:
 def test_probe_tokens_tell_the_contractions_apart(small) -> None:
     for shot, M in X.PROBE_M.items():
         parts, res, w, info = X.probe_tokens(np.random.default_rng(shot), M, shot)
-        a, b = (K.mnnvl_norm_rows(parts, res, w, shot, T.mnnvl_grid(M, X.HIDDEN)[1], X.EPS, f)[0] for f in (False, True))
+        cluster = T.mnnvl_grid(M, X.HIDDEN, T.UNSTATED_NODE[0][1])[1]
+        a, b = (K.mnnvl_norm_rows(parts, res, w, shot, cluster, X.EPS, f)[0] for f in (False, True))
         assert info["found"] == M and parts.shape == (X.WORLD, M, X.HIDDEN) and (a != b).any(axis=1).all()
 
 

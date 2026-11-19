@@ -2,8 +2,8 @@
 
     python tools/admit_rows_check.py SERVE_DIR [--json OUT]
 
-The advice numbers requests in order of their first row (step, then place in the step's batch), so under ``--admit
-release-order`` that order must be the admission order (``requests.jsonl``'s ``admitted``, the order the engine added them).
+The advice numbers requests in order of their first row (step, then place in the step's batch), so under order
+``release-order`` that order must be the admission order (``requests.jsonl``'s ``admitted``, the order the engine added them).
 Two sources hold each request's first row, and both are checked:
 
 - ``advice_trace.jsonl``, the scheduler step trace the advice reads (`engine.step_trace`): each step's rows in the model

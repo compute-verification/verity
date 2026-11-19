@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Lines
 public import Proofs.Properties.Verity.Sampled.Binding
+public import Proofs.Properties.Verity.SampledRead
 public import Proofs.Properties.Certifier.Check.TransferBlocks
 public import Proofs.Core.Game.Tape
 import all Init.Data.Ord.String
@@ -32,9 +33,10 @@ what the play's signatures are on (`signsPlay_dev`), so `Binding.logged_le` hold
   the play's log releases more of a family's coins than the setup's layout holds (`Fits`), which no play under that
   layout does (`coins_fit`). At every play it is the history's one run (`dev_play`), and every run in it prints the
   play's log (`prints_dev`).
-* **The roots v2 reads** (`view`, `RootsAfter`, `rootsOf_ok`, `prints_pairs`): where `releasedRootsOf` accepts a run's
-  release log, each family's roots are the ones the first lines of its pairs of lines after the head, but the coin
-  trees', show, in order; of lines the device printed, the bytes each fresh release of that family answered.
+* **The coins v2 reads released** (`printLog_noCommit`, `printLog_selI`): the device prints no commit line, so where
+  `releasedLogOf` accepts a run's release log it commits no root (`Sampled.releasedLogOf_lines`), and each family's
+  releases after a root are the coins its pairs' root lines name (`Sampled.releasedLogOf_ok`): of lines the device
+  printed, the family's fresh releases that answered that root, each by its index among the family's.
 * **The coins it released** (`fold_released`, `position_place`, `holds_dev`): `Run.released` concatenates the run's
   coins at the positions of the family's coins whose root is the bytes after. Each has a position its layout places as
   that coin (`position_place`), where the run holds the play's coin, `COIN_BYTES` bytes of it (`coinAt`,
@@ -56,8 +58,6 @@ fixes from what the play fixed (`Deployment.setupOf`).
 @[expose] public section
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
-
-open private pairs from Spot.ChallengerSession
 
 namespace Verity.Sampled.Device
 
@@ -441,7 +441,7 @@ def coinAt (S : RunSetup) (log : List Release) (p : ℕ) : ByteArray :=
     | none => S.coins p
   | none => S.coins p
 
-/-- The release log's head, naming the coin commitment's root, as `releasedRootsOf` reads it. -/
+/-- The release log's head, naming the coin commitment's root, as `releasedLogOf` reads it. -/
 def headLine (c : Option LiveCommitment) : String :=
   (c.map fun c => "{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf c.root ++ "\"}").getD ""
 
@@ -589,216 +589,6 @@ theorem prints_dev (S : Exchange → RunSetup) (o : Exchange) {pk : ByteArray} {
     · cases hr
   · cases hr
 
-/-! ## The roots v2 reads of the run's release log -/
-
-/-- **The roots `releasedRootsOf` holds of family `L` in the state `s`**: its first entry's of that family, as
-`Run.released` reads them; none where no entry is of that family. -/
-def view (s : Array (String × Array ByteArray)) (L : String) : List ByteArray :=
-  ((s.toList.find? (·.1 == L)).map (·.2.toList)).getD []
-
-theorem find?_modify {label L : String} {b : ByteArray} :
-    ∀ {xs : List (String × Array ByteArray)} {k : ℕ}, xs.findIdx? (·.1 == label) = some k →
-      (xs.modify k fun x => (x.fst, x.snd.push b)).find? (·.1 == L) =
-        (xs.find? (·.1 == L)).map fun x => if x.1 = label then (x.fst, x.snd.push b) else x
-  | [], _, h => by simp at h
-  | x :: xs, k, h => by
-    simp only [List.findIdx?_cons] at h
-    by_cases hx : x.1 = label
-    · rw [ite_eq_left (by simpa using hx)] at h
-      cases h
-      rw [List.modify_zero_cons, List.find?_cons, List.find?_cons]
-      by_cases hL : x.1 = L
-      · subst hL
-        simp [hx]
-      · simp only [beq_eq_false_iff_ne.2 hL]
-        cases hf : xs.find? (·.1 == L) with
-        | none => rfl
-        | some y =>
-          have hy : y.1 = L := by simpa using List.find?_some hf
-          rw [Option.map_some, ite_eq_right fun e => hL (hx.trans (hy.symm.trans e).symm)]
-    · rw [ite_eq_right (by simpa using hx)] at h
-      obtain ⟨k', hk', rfl⟩ := Option.map_eq_some_iff.1 h
-      rw [List.modify_succ_cons, List.find?_cons, List.find?_cons]
-      by_cases hL : x.1 = L
-      · simp only [hL, beq_self_eq_true, Option.map_some]
-        rw [ite_eq_right (by rw [← hL] at *; exact hx)]
-      · simp only [beq_eq_false_iff_ne.2 hL]
-        exact find?_modify hk'
-
-theorem view_modify {s : Array (String × Array ByteArray)} {label : String} {k : ℕ} {b : ByteArray}
-    (h : s.findIdx? (·.1 == label) = some k) (L : String) :
-    view (s.modify k fun x => (x.fst, x.snd.push b)) L = view s L ++ if label = L then [b] else [] := by
-  rcases s with ⟨xs⟩
-  have h' : xs.findIdx? (·.1 == label) = some k := by simpa using h
-  unfold view
-  rw [Array.toList_modify, find?_modify h']
-  cases hf : xs.find? (·.1 == L) with
-  | none =>
-    simp only [Option.map_none, Option.getD_none, List.nil_append]
-    split
-    · rename_i hl
-      subst hl
-      obtain ⟨hk, hp, -⟩ := List.findIdx?_eq_some_iff_getElem.1 h'
-      exact absurd hp (by simpa using List.find?_eq_none.1 hf _ (List.getElem_mem hk))
-    · rfl
-  | some y =>
-    have hy : y.1 = L := by simpa using List.find?_some hf
-    simp only [Option.map_some, Option.getD_some]
-    by_cases hl : label = L
-    · rw [ite_eq_left (hy.trans hl.symm), ite_eq_left hl, Array.toList_push]
-    · rw [ite_eq_right (fun e => hl (e.symm.trans hy)), ite_eq_right hl, List.append_nil]
-
-theorem view_init (fs : Families) (L : String) :
-    view (fs.map fun x => (x.fst, (#[] : Array ByteArray))).toArray L = [] := by
-  unfold view
-  cases hf : (fs.map fun x => (x.fst, (#[] : Array ByteArray))).toArray.toList.find? (·.1 == L) with
-  | none => rfl
-  | some y =>
-    have hy := List.mem_of_find?_eq_some hf
-    simp only [List.mem_map] at hy
-    obtain ⟨a, -, rfl⟩ := hy
-    rfl
-
-/-- **What `releasedRootsOf`'s loop holds after the pairs of lines `pre`**: each pair's lines parse (`event`), and each
-family's roots in the state `s` are the ones `Verity.Sampled.rootOf` reads of those pairs' first lines, in order. -/
-def RootsAfter (pre : List (String × String)) (s : Array (String × Array ByteArray)) : Prop :=
-  (∀ p ∈ pre, (∃ j, event p.1 = .ok j) ∧ ∃ j, event p.2 = .ok j) ∧
-    ∀ L, view s L = ((pre.filterMap fun p => Verity.Sampled.rootOf p.1).filter (·.1 == L)).map (·.2)
-
-theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
-    ∃ a, x = .ok a ∧ f a = .ok b := by
-  cases x with
-  | error e => cases h
-  | ok a => exact ⟨a, rfl, h⟩
-
-/-- **The roots `releasedRootsOf` accepts are its loop's** (`RootsAfter`) over the pairs of its log's lines after the
-head that are no coin tree's, an even number of them. -/
-theorem rootsOf_ok {c : LiveCommitment} {log : List String} {roots : Roots} (h : releasedRootsOf c log = .ok roots) :
-    ∃ res, RootsAfter (pairs (log.tail.filter fun l => !treeLine l)) res ∧
-      (log.tail.filter fun l => !treeLine l).length % 2 = 0 ∧
-      roots = res.toList.map fun x => (x.fst, x.snd.toList) := by
-  unfold releasedRootsOf at h
-  dsimp only at h
-  split at h
-  · split at h
-    · cases h
-    · rename_i hodd
-      obtain ⟨res, hres, hpure⟩ := bind_ok h
-      refine ⟨res, ?_, by simp only [beq_iff_eq] at hodd; omega, (Except.ok.inj hpure).symm⟩
-      have hI := Verity.Sampled.Trees.forIn_inv (I := RootsAfter) ?_ _ [] _ res
-        ⟨fun _ h => absurd h List.not_mem_nil, fun L => by rw [view_init]; rfl⟩ hres
-      · simpa using hI
-      intro pre x s r hI hr
-      cases hev : event x.fst with
-      | error e => rw [hev] at hr; cases hr
-      | ok ja =>
-        rw [hev, Verity.Sampled.Trees.ok_bind] at hr
-        cases hev' : event x.snd with
-        | error e => rw [hev'] at hr; cases hr
-        | ok jb =>
-          rw [hev', Verity.Sampled.Trees.ok_bind] at hr
-          split at hr
-          · rename_i label hlab
-            split at hr
-            · rename_i k hk
-              split at hr
-              · rename_i root hroot
-                split at hr
-                · rename_i bytes hbytes
-                  split at hr
-                  · cases hr
-                    have hro : Verity.Sampled.rootOf x.fst = some (label, bytes) := by
-                      have h1 : (event x.fst).toOption = some ja := by rw [hev]; rfl
-                      unfold Verity.Sampled.rootOf
-                      rw [h1]
-                      simp only [Option.bind_eq_bind, Option.bind_some, hlab, hroot, hbytes]
-                      rfl
-                    refine ⟨_, rfl, fun p hp => ?_, fun L => ?_⟩
-                    · rcases List.mem_append.1 hp with hp | hp
-                      · exact hI.1 p hp
-                      · rw [List.mem_singleton.1 hp]
-                        exact ⟨⟨ja, hev⟩, ⟨jb, hev'⟩⟩
-                    · rw [view_modify hk L, hI.2 L, List.filterMap_append, List.filter_append, List.map_append]
-                      congr 1
-                      simp only [List.filterMap_cons, hro, List.filterMap_nil]
-                      by_cases hL : label = L
-                      · simp [hL]
-                      · simp [hL]
-                  · cases hr
-                · cases hr
-              · cases hr
-            · cases hr
-          · cases hr
-  · cases h
-
-theorem mem_pairs :
-    ∀ {rest : List String}, rest.length % 2 = 0 → ∀ l ∈ rest, ∃ p ∈ pairs rest, l = p.1 ∨ l = p.2
-  | [], _, _, hl => absurd hl List.not_mem_nil
-  | [_], h, _, _ => by simp at h
-  | a :: b :: rest, h, l, hl => by
-    rcases List.mem_cons.1 hl with rfl | hl
-    · exact ⟨(l, b), List.mem_cons_self, .inl rfl⟩
-    · rcases List.mem_cons.1 hl with rfl | hl
-      · exact ⟨(a, l), List.mem_cons_self, .inr rfl⟩
-      · obtain ⟨p, hp, he⟩ := mem_pairs (rest := rest) (by simp only [List.length_cons] at h; omega) l hl
-        exact ⟨p, List.mem_cons_of_mem _ hp, he⟩
-
-/-- The family and the bytes each fresh release of `log` answered, in order. -/
-def freshRoots : List Release → List (String × ByteArray)
-  | [] => []
-  | x :: xs => match x.frame with
-    | .fresh l => (l, x.answers) :: freshRoots xs
-    | _ => freshRoots xs
-
-/-- **The roots v2 reads of lines the device printed are its fresh releases'**: where each line `releasedRootsOf` keeps
-(no coin tree's) parses, its pairs' first lines read (`Verity.Sampled.rootOf`) as each fresh release's family and the
-bytes it answered. -/
-theorem prints_pairs : ∀ {ts : List (ByteArray × Flock.CoinTree.Spec)} {lines : List String} {log : List Release},
-    Prints ts lines log → (∀ l ∈ lines.filter (fun l => !treeLine l), ∃ j, event l = .ok j) →
-      (pairs (lines.filter fun l => !treeLine l)).filterMap (fun p => Verity.Sampled.rootOf p.1) = freshRoots log := by
-  intro ts lines log hp
-  induction hp with
-  | nil ts => intro _; rfl
-  | @fresh ts lines log d d' l l' lab b cs hd hr hd' hp' _ ih =>
-    intro hev
-    have hf : (l :: l' :: lines).filter (fun l => !treeLine l) = l :: l' :: lines.filter (fun l => !treeLine l) := by
-      simp [Lines.treeLine_plain hd hr.plain, Lines.treeLine_plain hd' hp']
-    rw [hf] at hev ⊢
-    obtain ⟨j, hj⟩ := hev l List.mem_cons_self
-    show List.filterMap _ ((l, l') :: pairs _) = (lab, b) :: freshRoots log
-    rw [List.filterMap_cons_some (f := fun p : String × String => Verity.Sampled.rootOf p.1) (a := (l, l'))
-      (Lines.rootOf_value hj hd hr), ih fun x hx => hev x (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hx))]
-  | @hello ts lines log d l spec ν root key hd hh _ ih =>
-    intro hev
-    cases hevl : event l with
-    | error e =>
-      obtain ⟨j, hj⟩ := hev l (by simp [Lines.treeLine_error hevl])
-      rw [hevl] at hj
-      cases hj
-    | ok j =>
-      have hT : treeLine l = true := by
-        rw [Lines.treeLine_ok hevl, Lines.str_of hevl hd hh.event]
-        simp [jsonStrIs]
-      have hf : (l :: lines).filter (fun l => !treeLine l) = lines.filter (fun l => !treeLine l) := by
-        simp [hT]
-      rw [hf] at hev ⊢
-      exact ih hev
-  | @opening ts lines log d l i s n k root b cb spec stream hi hs hd ho _ ih =>
-    intro hev
-    cases hevl : event l with
-    | error e =>
-      obtain ⟨j, hj⟩ := hev l (by simp [Lines.treeLine_error hevl])
-      rw [hevl] at hj
-      cases hj
-    | ok j =>
-      have hT : treeLine l = true := by
-        rw [Lines.treeLine_ok hevl, Lines.str_of hevl hd ho.event]
-        simp [jsonStrIs]
-      have hf : (l :: lines).filter (fun l => !treeLine l) = lines.filter (fun l => !treeLine l) := by
-        simp [hT]
-      rw [hf] at hev ⊢
-      exact ih hev
-
 /-! ## The coins the run released -/
 
 local instance lawfulBEqByteArrayDevice : LawfulBEq ByteArray where
@@ -838,19 +628,6 @@ theorem freshOf_eq (L : String) (after : ByteArray) : ∀ log : List Release,
       · simp [hl, freshOf_eq L after xs]
     · exact freshOf_eq L after xs
     · exact freshOf_eq L after xs
-
-theorem freshRoots_filter (L : String) : ∀ log : List Release,
-    ((freshRoots log).filter (·.1 == L)).map (·.2) = (freshList L log).map (·.1)
-  | [] => rfl
-  | x :: xs => by
-    rcases x with ⟨_ | _ | _, b, cs⟩
-    · rename_i l
-      simp only [freshRoots, freshList]
-      by_cases hl : l = L
-      · simp [hl, freshRoots_filter L xs]
-      · simp [hl, freshRoots_filter L xs]
-    · exact freshRoots_filter L xs
-    · exact freshRoots_filter L xs
 
 /-- The bytes of the coins `css`, each coin's (`Lines.coinBytes`) in order. -/
 def catBytes : List (List Bool) → ByteArray
@@ -950,13 +727,139 @@ theorem commitment_families {s : Run} {c : LiveCommitment} (h : s.commitment = s
     rfl
   · cases h
 
+theorem selI_cons {ℓ : String} {x : ByteArray} {ps : List (String × String)} {a b l : String} {r : ByteArray}
+    {i : ℕ} (ha : Verity.Sampled.rootOf a = some (l, r)) (hi : indexOf a = some i) :
+    selI ℓ x ((a, b) :: ps) = (if l = ℓ ∧ r = x then [i] else []) ++ selI ℓ x ps := by
+  unfold selI
+  by_cases h : l = ℓ ∧ r = x <;> simp [ha, hi, h]
+
+theorem filter_tree {d : Json} {l : String} {ls : List String} (hd : Canon d l)
+    (he : getD d "event" = .str TREE_EVENT ∨ getD d "event" = .str OPEN_EVENT)
+    (hev : ∀ l' ∈ (l :: ls).filter (fun l => !treeLine l), ∃ j, event l' = .ok j) :
+    (l :: ls).filter (fun l => !treeLine l) = ls.filter (fun l => !treeLine l) := by
+  cases hevl : event l with
+  | error e =>
+    obtain ⟨j, hj⟩ := hev l (by simp [Lines.treeLine_error hevl])
+    rw [hevl] at hj
+    cases hj
+  | ok j =>
+    have hT : treeLine l = true := by
+      rw [Lines.treeLine_ok hevl]
+      rcases he with he | he <;> rw [Lines.str_of hevl hd he] <;> simp [jsonStrIs]
+    simp [hT]
+
+theorem not_commit {d j : Json} {l e : String} (hj : event l = .ok j) (hd : Canon d l) (he : getD d "event" = .str e)
+    (hne : e ≠ "commit") : jsonStrIs (getD j "event") "commit" = false := by
+  rw [Lines.str_of hj hd he]
+  simpa [jsonStrIs] using hne
+
+/-- **The device prints no commit line**. -/
+theorem printLog_noCommit (time : ℕ → ℕ) :
+    ∀ (st : PrintState) (log : List Release) {lines : List String}, printLog time st log = some lines →
+      ∀ x ∈ lines, ∀ j, event x = .ok j → jsonStrIs (getD j "event") "commit" = false
+  | _, [], lines, h => by
+    simp only [printLog, Option.some.injEq] at h
+    subst h
+    intro x hx
+    cases hx
+  | st, ⟨.fresh label, b, cs⟩ :: log, lines, h => by
+    simp only [printLog] at h
+    split at h
+    · obtain ⟨ls, hls, rfl⟩ := Option.map_eq_some_iff.1 h
+      intro x hx j hj
+      rcases List.mem_cons.1 hx with rfl | hx
+      · exact not_commit hj (canon_root ..) (e := "root") rfl (by decide)
+      rcases List.mem_cons.1 hx with rfl | hx
+      · exact not_commit hj (canon_release ..) (e := "release") rfl (by decide)
+      exact printLog_noCommit time _ log hls x hx j hj
+    · cases h
+  | st, ⟨.hello spec, ν, cs⟩ :: log, lines, h => by
+    simp only [printLog] at h
+    split at h
+    · obtain ⟨ls, hls, rfl⟩ := Option.map_eq_some_iff.1 h
+      intro x hx j hj
+      rcases List.mem_cons.1 hx with rfl | hx
+      · exact not_commit hj (canon_hello ..) (hello_value ..).event (by decide)
+      exact printLog_noCommit time _ log hls x hx j hj
+    · cases h
+  | st, ⟨.opening i s n, b, cs⟩ :: log, lines, h => by
+    simp only [printLog] at h
+    split at h
+    · cases h
+    · split at h
+      · cases h
+      · split at h
+        · obtain ⟨ls, hls, rfl⟩ := Option.map_eq_some_iff.1 h
+          intro x hx j hj
+          rcases List.mem_cons.1 hx with rfl | hx
+          · exact not_commit hj (canon_open ..) (open_value ..).event (by decide)
+          exact printLog_noCommit time _ log hls x hx j hj
+        · cases h
+
+/-- **The coins of a family the device's lines release after a root**: where its lines that are no coin tree's parse,
+the coins their pairs' root lines of family `ℓ` and root `x` name are the family's fresh releases that answered `x`, each
+by its index among the family's, counted from the state's. -/
+theorem printLog_selI (time : ℕ → ℕ) (ℓ : String) (x : ByteArray) :
+    ∀ (st : PrintState) (log : List Release) {lines : List String}, printLog time st log = some lines →
+      (∀ l ∈ lines.filter (fun l => !treeLine l), ∃ j, event l = .ok j) →
+      selI ℓ x (pairs (lines.filter fun l => !treeLine l)) =
+        ((((freshList ℓ log).map (·.1)).zipIdx (st.fresh ℓ)).filter (·.1 == x)).map (·.2)
+  | _, [], lines, h, _ => by
+    simp only [printLog, Option.some.injEq] at h
+    subst h
+    rfl
+  | st, ⟨.fresh label, b, cs⟩ :: log, lines, h, hev => by
+    simp only [printLog] at h
+    split at h
+    · obtain ⟨ls, hls, rfl⟩ := Option.map_eq_some_iff.1 h
+      rw [List.filter_cons_of_pos (by simp [Lines.treeLine_plain (canon_root ..) (root_value ..).plain]),
+        List.filter_cons_of_pos (by simp [Lines.treeLine_plain (canon_release ..) (release_plain ..)])] at hev ⊢
+      obtain ⟨j, hj⟩ := hev _ List.mem_cons_self
+      have hro := Lines.rootOf_value hj (canon_root ..) (root_value ..)
+      have hio : indexOf (lineOf (rootValue label (st.fresh label) (time st.line) b)) = some (st.fresh label) :=
+        indexOf_eq hj (Lines.nat_of hj (canon_root ..)
+          (by show nat? (Lean.toJson (st.fresh label)) = _; exact nat_toJson _))
+      have ih := printLog_selI time ℓ x (st.coin label) log hls
+        (fun l hl => hev l (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hl)))
+      show selI ℓ x ((_, _) :: pairs _) = _
+      rw [selI_cons hro hio, ih]
+      by_cases hl : label = ℓ
+      · subst hl
+        by_cases hb : b = x
+        · simp [freshList, PrintState.coin, List.zipIdx_cons, hb]
+        · simp [freshList, PrintState.coin, List.zipIdx_cons, hb]
+      · simp [freshList, PrintState.coin, hl, Ne.symm hl]
+    · cases h
+  | st, ⟨.hello spec, ν, cs⟩ :: log, lines, h, hev => by
+    simp only [printLog] at h
+    split at h
+    · obtain ⟨ls, hls, rfl⟩ := Option.map_eq_some_iff.1 h
+      have hf := filter_tree (canon_hello ..) (.inl (hello_value ..).event) hev
+      rw [hf] at hev ⊢
+      rw [printLog_selI time ℓ x _ log hls hev]
+      rfl
+    · cases h
+  | st, ⟨.opening i s n, b, cs⟩ :: log, lines, h, hev => by
+    simp only [printLog] at h
+    split at h
+    · cases h
+    · split at h
+      · cases h
+      · split at h
+        · obtain ⟨ls, hls, rfl⟩ := Option.map_eq_some_iff.1 h
+          have hf := filter_tree (canon_open ..) (.inr (open_value ..).event) hev
+          rw [hf] at hev ⊢
+          rw [printLog_selI time ℓ x _ log hls hev]
+          rfl
+        · cases h
+
 /-- **Where v2 reads a run of the device's history, it released of each family after each root the play's coins**
-(`Lines.PrintsLog`'s second part): at the run's commitment, where `releasedRootsOf` accepts its release log, the roots
-it reads are the play's fresh releases' (`rootsOf_ok`, `prints_pairs`), each coin has a position its layout places as
-that coin (`position_place`, where the play's log fits the layout), and the run's coin there is the play's
-(`coinAt`). -/
+(`Lines.PrintsLog`'s second part): at the run's commitment, where `releasedLogOf` accepts its release log, which
+commits no root (`printLog_noCommit`), the coins it releases after a root are the play's fresh releases' that answered it
+(`printLog_selI`), each coin has a position its layout places as that coin (`position_place`, where the play's log fits
+the layout), and the run's coin there is the play's (`coinAt`). -/
 theorem holds_dev (S : Exchange → RunSetup) (o : Exchange) {pk : ByteArray} {r : Run} (hr : r ∈ (dev S o).runs pk)
-    {c : LiveCommitment} {roots : Roots} (hc : r.commitment = some c) (hroots : releasedRootsOf c r.log = .ok roots)
+    {c : LiveCommitment} {entries : Log} (hc : r.commitment = some c) (hroots : releasedLogOf c r.log = .ok entries)
     (label : String) (after : ByteArray) :
     Lines.Holds (r.released label after) (Lines.freshOf label after o.log) := by
   simp only [dev] at hr
@@ -967,22 +870,18 @@ theorem holds_dev (S : Exchange → RunSetup) (o : Exchange) {pk : ByteArray} {r
       rw [List.mem_singleton] at hr
       subst hr
       have hfam : c.families = (S o).families := commitment_families hc
-      have hp := prints_printLog (S o).time PrintState.init o.log hl
-      obtain ⟨res, hI, hev2, hres⟩ := rootsOf_ok hroots
       have e : (runOf (S o) o.log lines).log.tail = lines := rfl
-      rw [e] at hI hev2
-      have hevs : ∀ l ∈ lines.filter (fun l => !treeLine l), ∃ j, event l = .ok j := by
-        intro l hl
-        obtain ⟨p, hp, he⟩ := mem_pairs hev2 l hl
-        rcases he with rfl | rfl
-        · exact (hI.1 p hp).1
-        · exact (hI.1 p hp).2
-      have hrs : ((roots.find? (·.1 == label)).map (·.2)).getD [] = (freshList label o.log).map (·.1) := by
-        rw [hres, List.find?_map, Option.map_map]
-        rw [← freshRoots_filter, ← prints_pairs hp hevs, ← hI.2 label]
-        rfl
+      have hnc : ∀ x ∈ (runOf (S o) o.log lines).log.tail.filter (fun l => !treeLine l), ∀ j, event x = .ok j →
+          jsonStrIs (getD j "event") "commit" = false := by
+        rw [e]
+        exact fun x hx => printLog_noCommit _ _ _ hl x (List.mem_filter.1 hx).1
+      obtain ⟨hcm, hev⟩ := releasedLogOf_lines hroots hnc
+      have hE := (releasedLogOf_ok hroots hcm).2.2.2.2 label after
+      rw [e] at hE hev
+      rw [printLog_selI _ label after _ _ hl hev] at hE
       simp only [Properties.Challenger.Run.released, hc, hroots]
-      rw [hrs, fold_released after _ _ 0 .empty, ByteArray.empty_append, freshOf_eq]
+      rw [hE, List.foldl_map, show PrintState.init.fresh label = 0 from rfl, fold_released after _ _ 0 .empty,
+        ByteArray.empty_append, freshOf_eq]
       · exact holds_catBytes fun cs hcs => by
           obtain ⟨q, hq, rfl⟩ := List.mem_map.1 hcs
           exact printLog_fresh _ label _ _ hl q (List.mem_filter.1 hq).1

@@ -15,7 +15,6 @@ public import InferenceOnlyVerifier.RecordChosen
 public import InferenceOnlyVerifier.RecordDifftest
 public import InferenceOnlyVerifier.ThetaDifftest
 public import InferenceOnlyVerifier.Protocol
-public import InferenceOnlyVerifier.RowsProtocol
 public import InferenceOnlyVerifier.Count
 public import InferenceOnlyVerifier.CountDifftest
 public import InferenceOnlyVerifier.DefinitionDigest
@@ -51,11 +50,6 @@ files, each template's rows of one unit from a table it is handed, and decides t
 every slot, and of them the bits the prover chose, which no wire, ingress or θ fills.
 `RecordDifftest` holds the five to the Python reference, and the wiring the form reads to the one SPOT's reader
 reads. `RecordCount` is a library: no protocol or verdict reads it.
-
-`RowsProtocol` is the check of a circuit record in rows as a core protocol, `verity/inference-only/rows/v1` (the
-`inference-only-rows` exe): `Record`'s reading of the record, `RecordRows`' rule on it and `RecordChosen`'s count,
-with each template's rows of one unit read from its circuit file, a blob named by its SHA-512 in the params, by the
-reader SPOT's one-stage check reads a file with (`Spot.OneStageZk`, `Spot.FilePart`). No system lists it.
 
 `InferenceOnlyCheck.Protocol` is the policy's check as a core protocol, `verity/inference-only/v0` (the `inference-only` exe):
 the inference-only policy's subprotocol of onsite and remote, on the core interface (`CoreProtocol`).

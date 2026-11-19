@@ -2,7 +2,7 @@
 
 * the lowering projected from a probe of 3 positions is, template for template, TINY's exact lowering at a class of 7
   positions (`window_circuit.class_circuit`) and at a class of two lanes (its scan state row another): every template but
-  the heads is a fixed count a position, `TokenFeed_v1` one a prompt position past the first, `ScanSlots_v2` and
+  the heads is a fixed count a position, `TokenFeed_v1` one a prompt position past the first, `ScanSlots_v3` and
   `SelectEntry_v1` one a Program and `SelectCollect_v1` one at every other position;
 * so it is for int8 Llama-3.2-1B on the H200, whose first blocks read a key's value as slices (`AttnBlockFirst_v2`);
 * v19's heads, at a block of 3 keys: a head over T keys is its first block, ceil(T / 3) - 1 full ones (none
@@ -29,7 +29,7 @@ from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit
 
 sys.path.insert(0, str(((Path(__file__).resolve().parents[3] / "benchmarks" / "prove_path"))))
-from verity.protocols.proofs.spot.prover.audit import class_size as CZ  # noqa: E402
+import class_size as CZ  # noqa: E402
 
 SOURCES = json.loads((Path(__file__).resolve().parents[3] / "benchmarks" / "prove_path" / "sources.json").read_text())
 
@@ -53,14 +53,14 @@ def _project(probe: dict[str, int], at: WindowClass, cls: WindowClass) -> dict[s
 
 
 def _census(cls: WindowClass, config: dict = TINY, grain: Grain = GRAIN) -> dict[str, int]:
-    return CZ.census(class_circuit(_registered(config), cls, 1, grain, provable=False))
+    return CZ.census(class_circuit(_registered(config), cls, 1, grain))
 
 
 def test_the_lowering_projected_from_a_probe_is_the_exact_lowering_at_a_larger_class():
     probe, at, two = _census(PROBE), WindowClass(1, 5, 3), WindowClass(2, 5, 3)
     assert PROBE.positions == 3 and at.positions == 7
     assert _project(probe, PROBE, at) == _census(at)
-    assert _project(probe, PROBE, two) == _census(two) and "ScanSlots_v2{NS=4550,NP=5,IDB=17,K0=12,K=45}" in _census(two)
+    assert _project(probe, PROBE, two) == _census(two) and "ScanSlots_v3{NS=4550,NP=5,IDB=17,K0=12,K=45}" in _census(two)
 
 
 def test_first_blocks_of_value_slices_project_as_the_exact_lowering():
@@ -70,7 +70,7 @@ def test_first_blocks_of_value_slices_project_as_the_exact_lowering():
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg},
               target={"compute_capability": [9, 0], "num_sms": 132, "int8_exact": "linears"})
     reg, at = Registered.of(phi, default_seed=7), WindowClass(1, 5, 3)
-    probe, exact = (CZ.census(class_circuit(reg, c, 1, provable=False)) for c in (PROBE, at))
+    probe, exact = (CZ.census(class_circuit(reg, c, 1)) for c in (PROBE, at))
     assert {lab for lab in exact if lab.startswith("AttnBlockFirst")} == {
         f"AttnBlockFirst_v2{{D=64,NVIS={t},BN=192,VS=32}}" for t in range(1, at.positions + 1)}
     assert _project(probe, PROBE, at) == exact
@@ -110,7 +110,7 @@ def test_size_prices_the_measured_units_and_refuses_the_unmeasured(monkeypatch):
     with pytest.raises(ValueError, match=r"Foo_v1\{\} \(2\^28\): an instance needs a block past 2\^27 bits"):
         CZ.size({"Gemm_v2{K=2048,N=1}": 4, "Foo_v1{}": 2}, SOURCES)
     assert [CZ.measured(f"TokenFeed_v1{{NP={n},FIRST=false}}", SOURCES)[:2] for n in (1024, 2048)] == [(62, 23), (62, 24)]
-    assert [CZ.measured(lab, SOURCES)[:2] for lab in ("ScanSlots_v2{NS=9353,NP=1024,IDB=17,K0=12,K=45}",
+    assert [CZ.measured(lab, SOURCES)[:2] for lab in ("ScanSlots_v3{NS=9353,NP=1024,IDB=17,K0=12,K=45}",
                                              "OutCollect_v1{KO=64,FIRST=true}", "OutCollect_v1{KO=64,FIRST=false}",
                                              "SlotEntry_v1{KO=64,IDB=17,NP=1024}")] == [
         (120, 24), (155, 22), (2_141, 22), (5_676, 22)]

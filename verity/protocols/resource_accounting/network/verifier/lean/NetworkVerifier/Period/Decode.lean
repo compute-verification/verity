@@ -421,6 +421,7 @@ def partNames : Flock.Program.Part → Array (Bool × Nat)
   | .affine p i _ _ => #[(p, i)]
   | .strided p i _ _ _ _ _ => #[(p, i)]
   | .explicit it => it.map fun r => (r.p, r.i)
+  | .grid _ lanes => lanes.map fun l => (l.p, l.i)
 
 /-- Per Definition, whether every leaf it returns is a gate it computes, never a parameter's leaf passed through: each
 part of its return names nodes of its body, none a scan, each calling a primitive or a Definition decoded before it of

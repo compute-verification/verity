@@ -8,6 +8,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+from conftest import load
+
 HERE = Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "pearl_c_vllm"
 #: sourced by the jobs, never started
 SOURCED = {"flashinfer_env.sh"}
@@ -58,3 +61,13 @@ def test_a_job_gets_the_arguments_the_environment_and_the_exit_code(tmp_path):
     r = subprocess.run(["bash", str(tmp_path / "run.sh"), "verify", "a run", "48"], capture_output=True, text=True,
                        env={"PATH": "/usr/bin:/bin", "MODE": "smoke"})
     assert (r.returncode, r.stdout, r.stderr) == (7, "a run|48|smoke|", "")
+
+
+def test_a_served_arm_runs_only_declared_schemes_by_name_and_names_any_other():
+    from verity.protocols.compose import schemes
+
+    SS = load("pearl_c_vllm/served_step.py")
+    assert SS.undeclared(["pearl-plus"]) is None
+    for other in ("pouw:pearl-c-nvfp4-v0", "pouw:pearl-c-sm120-v1-h3", "pouw:pearl-c-nope", schemes.get("pearl-plus").option):
+        assert SS.undeclared(["pearl-plus", other]).startswith(f"{other} is no declared scheme's name (")
+        assert "pearl-plus" in SS.undeclared([other]).partition("(")[2]

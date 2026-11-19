@@ -45,7 +45,7 @@ from typing import Any
 
 from verity.circuits import codec, refs
 from verity.circuits.call_scope import spec_base, spec_statics
-from verity.circuits.defs import DefinitionTable
+from verity.circuits.defs import DefinitionTable, recut_unread
 from verity.circuits.program import is_input
 from verity.circuits.types import RecordType, Type
 from verity.circuits.types import Tuple as TupleT
@@ -755,6 +755,7 @@ def from_descriptor(desc: dict[str, Any] | str, registry: DefinitionTable | None
     else:
         # the program function is inlined into the root (`codec.encode_program`): its Input nodes are the view's parameters
         body = decoded.root.body
+        recut_unread(body, "program_view.from_descriptor")
         inputs = {k: j for j, k in enumerate(k for k, n in enumerate(body.nodes) if is_input(n.fn))}
         params = _params_view((hints.get(k) or getattr(body.nodes[k], "name", "") or f"input{j}", body.nodes[k].out)
                               for k, j in inputs.items())

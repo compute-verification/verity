@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 FUSED = {"w13": "MoeExpertFp8ReadGemm_v1", "w2": "MoeExpertFp8ReadGemmW_v1"}
 SCALES = {"s13": 96, "s2": 4}
-READ = "EmbeddingRead_v1"
+READ = "EmbeddingRead_v2"
 
 
 def pick(members: list[dict], proj: str, n: int, swap: int | None) -> int:

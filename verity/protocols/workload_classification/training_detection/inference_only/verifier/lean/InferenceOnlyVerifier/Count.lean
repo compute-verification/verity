@@ -54,7 +54,7 @@ declaration's blocks and name the one that failed, and stay in the private recor
 
 In the order checked: `instance` (a field missing or of the wrong JSON kind), `params` (`c`, `k` or `n` not a natural, an
 entry of `blocks` not a string, a value of `table` not a natural), then the Program's refusals in `InferenceOnlyCheck.Desc`'s order
-(`program`, `not-topological`, `program` for `rootLaidOut`, `inputsAtRoot` and `walkable`, and `program` or `unwalked`
+(`program`, `not-topological`, `program` for `rootLaidOut`, `inputsAtRoot` and `walkable`, `unwalked` for `Desc.gridWalk`, and `program` or `unwalked`
 from the summaries), then θ entry by entry as `InferenceOnlyCheck.Desc` reads it (`theta-unknown`, `theta-not-input`,
 `theta-not-registered`, `theta-duplicate`), then `blocks` entry by entry (`block-unknown`: no Definition the root
 reaches, `block-root`, `block-input`: an input primitive, `block-duplicate`), then `gate-in-no-block`, then `gate-table`
@@ -132,6 +132,7 @@ def argTheta (root : Bool) (mask : Array Bool) (th : Option (Array Bool)) (a : A
     | .affine p i _ c => c == 0 || names p i
     | .strided p i _ _ _ _ c => c == 0 || names p i
     | .explicit it => it.all fun r => names r.p r.i
+    | .grid _ lanes => lanes.all fun l => names l.p l.i
 
 /-- What `walk` gives, per Definition: its activations outside every block (`mult`), its blocks when it is a block
 Definition (`count`), and which of its parameters are θ at every call site outside every block (`theta`: none where it
@@ -260,6 +261,7 @@ def evaluate (j : Json) : Except String Json := do
   if P.orderViolation.isSome then throw "not-topological"
   if !(Desc.rootLaidOut P && Desc.inputsAtRoot P) then throw "program"
   if !Desc.walkable P then throw "program"
+  Desc.gridWalk P
   let memo ← match summaries P with
     | .ok m => pure m
     | .error e => throw (Desc.analyzeCode e)

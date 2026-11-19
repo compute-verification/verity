@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypeGuard
 
-from verity_bench import steady
+from verity_bench import kit, steady
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, records
 
 CARD_SCHEMA = "spot-card/v1"
@@ -27,23 +27,41 @@ CENSUS, CUT, STEADY, SINGLE, SAMPLING = "census", "cut", "flock-steady", "flock-
 LEAN, WARMED = "lean-verify", "flock-warm"
 
 
+#: the card a workload's serving is priced on, by its card file's name (`calibration/hardware/cards/<sku>.toml`)
+SERVING_CARD = "h200-sxm-141gb"
+
+
 @dataclass(frozen=True)
 class Workload:
-    """A workload the command prices: the model its records name, the card its prover and its serving run on
-    (`overhead.CARDS`), and the fleet whose serving MFU prices a served token (`FLEETS`). A `steady_only` workload's
-    census is printed on its own first (`prove_census`), and its totals are given only where every block type with
-    blocks is measured at steady state, its census holds no gap and every other slot is labelled; else they are refused
-    by name. `member`: the member of each metric's line its measurements are."""
+    """A workload the command prices: the model its records name and the card its prover and its serving run on, by its
+    card file's name (`card`), whose `short` names it to the door (`overhead.card`), its fleet (`world-<short>` of
+    `FLEETS`, whose serving MFU prices a served token) and its members. A `steady_only` workload's census is printed on
+    its own first (`prove_census`), and its totals are given only where every block type with blocks is measured at
+    steady state, its census holds no gap and every other slot is labelled; else they are refused by name. `measured_as`:
+    the model's part of the member of each metric's line its measurements are, the card's `short` after it."""
 
     name: str
     model: str
-    card: str
-    fleet: str
     steady_only: bool = False
-    member: str | None = None
+    measured_as: str | None = None
+    card: str = SERVING_CARD
 
     def record(self, slot: str) -> str:
         return record_name(self.name, slot)
+
+    @property
+    def short(self) -> str:
+        from verity.device import load_card
+
+        return load_card(self.card, directory=kit.cards_directory())["short"]
+
+    @property
+    def fleet(self) -> str:
+        return f"world-{self.short}"
+
+    @property
+    def member(self) -> str | None:
+        return None if self.measured_as is None else f"{self.measured_as}-{self.short}"
 
 
 def record_name(workload: str, slot: str) -> str:
@@ -52,16 +70,11 @@ def record_name(workload: str, slot: str) -> str:
     return f"prove-{workload}-{slot}"
 
 
-WORKLOADS = {w.name: w for w in (Workload("glm53", "GLM-5.3", "h200", "world-h200"),
-                                 Workload("llama32-1b", "Llama-3.2-1B", "h200", "world-h200", steady_only=True,
-                                          member="llama-3.2-1b-h200"))}
+WORKLOADS = {w.name: w for w in (Workload("glm53", "GLM-5.3"),
+                                 Workload("llama32-1b", "Llama-3.2-1B", steady_only=True, measured_as="llama-3.2-1b"))}
 
 
 # ---- records ---------------------------------------------------------------------------------------------------------------
-
-
-def _superseded(store: Any, target: str) -> list[str]:
-    return [str(lab.value) for lab in store.labels(target, key=SUPERSEDED_BY)]
 
 
 def _label(name: str) -> str:
@@ -77,10 +90,10 @@ def of_record(store: Any, name: str, what: str, given: str | None = None) -> str
     found = labelled if given is None else [given]
     if not found:
         raise ValueError(f"no {what} of record: nothing in the store carries `{RUN_OF_RECORD}={name}` (label one: {_label(name)})")
-    live = [t for t in found if not _superseded(store, t)]
+    live = [t for t in found if not kit.superseded(store, t)]
     if not live:
         raise ValueError(f"the {what} of record is superseded: "
-                         + ", ".join(f"{t} by {', '.join(_superseded(store, t))}" for t in found)
+                         + ", ".join(f"{t} by {', '.join(kit.superseded(store, t))}" for t in found)
                          + f" (label what replaces it: {_label(name)})")
     if len(live) > 1:
         raise ValueError(f"{len(live)} targets carry `{RUN_OF_RECORD}={name}` and none is superseded: {', '.join(live)}; "

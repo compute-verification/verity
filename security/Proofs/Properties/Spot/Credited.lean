@@ -244,6 +244,7 @@ theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : On
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
   have hsz : e.sessions.size = 1 := by
     unfold OneStageZk.oneSession at h1
     by_contra hne

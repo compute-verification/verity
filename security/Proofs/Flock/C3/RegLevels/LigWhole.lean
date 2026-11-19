@@ -32,7 +32,7 @@ Ligerito never stops early (`ligeritoC_exact`) and its shape ends in the last le
 namespace FlockC3.RegLevels
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockC3.Compose
 
 /-- **A whole play of compiled Ligerito at a `fast100` schedule ends in a coin** (`ligEndsInCoin`): such a schedule

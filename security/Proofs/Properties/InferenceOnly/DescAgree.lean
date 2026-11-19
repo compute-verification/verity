@@ -94,6 +94,8 @@ theorem descEvaluate_ok (j out : Json) (h : Desc.evaluate j = .ok out) :
   by_cases h4w : (!Desc.walkable P) = true
   · simp only [h4w, ite_true, throw, throwThe, MonadExceptOf.throw] at h; cases h
   simp only [h4w, Bool.false_eq_true, ite_false] at h
+  rcases hg : Desc.gridWalk P with e | u <;> simp only [hg] at h
+  · cases h
   rcases h5 : Desc.analyze P with e | reads <;> simp only [h5] at h
   · cases h
   rcases h6 : nodeThetaFold P i.theta with e | mask <;> simp only [nodeThetaFold, inputs, registered, rootBody, nodeCount] at h6 <;> simp only [h6] at h

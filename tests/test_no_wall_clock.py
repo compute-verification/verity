@@ -45,14 +45,10 @@ ALLOWED: dict[str, str] = {
         "drives the native collector's dead-watchdog, a C++ timer with no injectable clock; CUDA only, never in check",
     "tests/adapters/vllm/tests/engine/int8_decode_split_gpu.py":
         "a GPU probe script (not collected) that measures the int8 LM head's share of decode time; no test reads it",
-    "tests/adapters/vllm/tests/engine/int8_attention_tpot_gpu.py::generate":
-        "a GPU timing script (not collected) that measures int8_exact decode TPOT, batched against the reference; no test reads it",
     "tests/adapters/vllm/tests/protocols/h1_zy_gpu.py::wall":
         "the GPU timing script (not collected) records each arm's seconds from launch to every result on the host; no test reads them",
     "tests/adapters/vllm/tests/protocols/pouw_h1_rehearsal.py::_poll_end":
         "the by-hand live rehearsal (not collected) polls the live gate's status for a session's end entry: it has no wait verb",
-    "tests/adapters/vllm/tests/protocols/pous_gpu.py":
-        "the PoUS option's GPU smoke (not collected) records its load, install, decode and step seconds; nothing reads them",
     "tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py::run": "the GPU run records its install, serve and compile seconds; nothing reads them",
     "tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py::compile_from": "the host compile records its seconds; nothing reads them",
     "tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py::fill": "the GPU run records its serve and step seconds; nothing reads them",
@@ -66,7 +62,6 @@ ALLOWED: dict[str, str] = {
         "the GPU run records its step seconds and when serving ended; nothing reads them",
     "tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py::hand_off": "the GPU run records its suspend's seconds; nothing reads them",
     "tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py::fill_close": "the close stage records its seconds; nothing reads them",
-    "tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py::credit_check": "the credit check records its seconds; nothing reads them",
     "tests/adapters/vllm/tests/protocols/pouw_h1_ranks_gpu.py::serve":
         "the GPU run records its build, serve and release seconds; nothing reads them",
     "tests/adapters/vllm/tests/protocols/pouw_h1_ranks_gpu.py::commit_window":

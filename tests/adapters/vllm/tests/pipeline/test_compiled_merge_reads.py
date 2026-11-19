@@ -15,6 +15,7 @@ import pytest
 
 import verity_vllm.pipeline.compiled_merge as cm
 from verity_vllm.pipeline import cli
+from verity_vllm.pipeline.research_outputs import TOKENS_DIGESTS
 
 #: the compile settings both arms report, and the generated kernels each identifies
 COMPILATION: dict[str, Any] = {"compilation_mode": "VLLM_COMPILE", "cudagraph_mode": "PIECEWISE", "cudagraph_capture_sizes": [1, 2],
@@ -36,12 +37,12 @@ PARTS = [("openings", "openings_verified"), ("coverage", "coverage"), ("value_co
 def process(taps: str, root: str | None = None) -> dict[str, Any]:
     """One process's records as its output directory holds them: a control's, or a treatment's whose one run committed under
     `root`."""
-    run: dict[str, Any] = {"wall_s": 1.0, "step_wall_decode_mean_s": 0.5, "step_wall_prefill_s": 0.25, "tokens_digest": "t" * 16}
+    run: dict[str, Any] = {"wall_s": 1.0, "step_wall_decode_mean_s": 0.5, "step_wall_prefill_s": 0.25}
     if root is not None:
         run["commit"] = {"commit_pass": True, "run_root": root, "openings": {"verified": True}, "coverage": {"ok": True},
                          "value_correspondence": {"result": True}, "compiled_source": {"stats": {"pieces": 3}}}
     return {"versions": {"compilation": {**COMPILATION, "compiled_taps": taps, "generated_kernels": copy.deepcopy(KERNELS)}},
-            "runs": [run],
+            "runs": [run], "digests": ["t" * 16],
             "verdict": {"run_roots": [] if root is None else [root], "runs_instrumented": int(root is not None), "runs_failed": 0}}
 
 
@@ -62,6 +63,8 @@ def merge(tmp_path: Path, control: list[dict[str, Any]], treatment: list[dict[st
             d.mkdir()
             (d / "versions.json").write_text(json.dumps(records["versions"]))
             (d / "runs.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records["runs"]))
+            (d / TOKENS_DIGESTS).write_text("".join(json.dumps({"pair": i, "tokens_digest": x}) + "\n"
+                                                    for i, x in enumerate(records["digests"][:len(records["runs"])])))
             (d / "verdict.json").write_text(json.dumps(records["verdict"]))
             argv += [f"--{arm}", str(d)]
     out = tmp_path / "merged"
@@ -188,10 +191,11 @@ def test_an_arm_of_no_runs_is_refused_and_pairs_nothing(tmp_path: Path, empty: t
     for arm in empty:
         arms[arm]["runs"] = []
     rc, summary, verdict = merge(tmp_path, [arms["control"]], [arms["treatment"]])
-    tokens = dict.fromkeys(("control", "treatment"), "['tttttttttttt']") | dict.fromkeys(empty, "[]")
+    n = {arm: int(arm not in empty) for arm in ("control", "treatment")}
     assert rc == 3 and summary["commit_pass"] is False and summary["pairs"] == 0 and summary["per_pair"] == []
     assert summary["problems"] == [*(f"{arm}: no runs" for arm in empty),
-                                   f"generated tokens differ across arms/runs: control {tokens['control']} treatment {tokens['treatment']}"]
+                                   f"generated tokens differ across arms/runs: {int(len(empty) < 2)} distinct in {TOKENS_DIGESTS} over "
+                                   f"{n['control']} control and {n['treatment']} treatment runs, of {n['control']} and {n['treatment']} in runs.jsonl"]
     assert verdict["first_fail_reason"] == f"{empty[0]}: no runs" and summary["tokens_equal"] is False
 
 
@@ -202,10 +206,10 @@ def test_runs_of_other_tokens_across_or_within_the_arms_are_refused(tmp_path: Pa
     for arm, letters in (("control", control), ("treatment", treatment)):
         for i, letter in enumerate(letters):
             records = process("off") if arm == "control" else process("served", f"{i:02x}")
-            records["runs"][0]["tokens_digest"] = letter * 16
+            records["digests"] = [letter * 16]
             arms[arm].append(records)
     rc, summary, _ = merge(tmp_path, arms["control"], arms["treatment"])
-    differ = (f"generated tokens differ across arms/runs: control {sorted({x * 12 for x in control})} "
-              f"treatment {sorted({x * 12 for x in treatment})}")
+    differ = (f"generated tokens differ across arms/runs: {len({*control, *treatment})} distinct in {TOKENS_DIGESTS} over "
+              f"{len(control)} control and {len(treatment)} treatment runs, of {len(control)} and {len(treatment)} in runs.jsonl")
     assert rc == 3 and summary["commit_pass"] is False and summary["tokens_equal"] is False
     assert summary["problems"] == [differ]

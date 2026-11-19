@@ -5,7 +5,7 @@ The form's own refusals (`split`'s form, the keys, `OUTPUTS_REFUSED`, a rule tha
 name, the declared items, `ONE_DEFINITION`, `ONE_KEY`) are mirrored word for word. The parts it hands to the one-stage
 audit's decoders are the one-stage difftest's mirrors of them (`_rule` for `Select.Rule.ofJson`, `decode_params` for
 `OneStage.paramsParsed`, `template_circuits` for `Run.templateCircuits`), which that difftest holds to the Lean by
-verdict; `reason_mirrored` says which reasons are the form's own. Past the template circuits (the replay program, the
+verdict; a `Delegated` refusal is a decoder's, every other the form's own. Past the template circuits (the replay program, the
 members' audit, the refusal of an interior audit on the boundary registration's window, `ONE_WINDOW`, the evidence, its
 refusal of `2^64` statements or more, `STMTS_COUNT`, and the check, its refusals of a session's statement of `2^64`
 bytes or more, `STMT_BYTES`, of a stage's bytes past one coin's, `STAGE_PAST`, of first-stage bytes past what the run read, `SOURCE_READ`, of a first session showing second-stage coins
@@ -13,8 +13,7 @@ on two windows, `INTERIOR_SHOWN`, or a coin tree's line there, `FIRST_TREE`, of 
 text does not read back, `RECORD_READ`, of a boundary record so read without the commitment's digest, `RECORD_DIGEST`,
 of an interior record, as given or so read, without the interior commitment's digest, `INTERIOR_DIGEST`, and of a second
 session's log that does not open a coin tree's rounds stream by stream, `REP_STREAM_ORDER`, included; the form's
-`#guard`s pin those) is outside the mirror: while `Spot.SecondStage.FORM` is false the form accepts nothing, which its
-Lean proves at every input (`checkBlobs_refuses`). The check's statement-and-session refusal is the one of those
+`#guard`s pin those) is outside the mirror: the form accepts where every step passes. The check's statement-and-session refusal is the one of those
 mirrored here: `stmts_sessions` is the difftest's reference for `STMT_COUNT` and `STMT_SESSION`, which the difftest holds
 the Lean to by mutating a kept honest play; it decides no verdict."""
 
@@ -25,10 +24,7 @@ from typing import Any
 from reference import ONE_STAGE
 from verity_difftest import Reject
 from verity_difftest import canonical
-from verity_difftest import protocol as P
 
-PROTOCOL = "verity/sampled-proofs/two-stage/v1"
-TWO_STAGE = "two-stage"
 ONE_DEFINITION = ("the boundary program's proof blocks under its query are not one stratum: the two-stage form's replay "
                   "blocks are one Definition's, so a share of them by count is a share by weight")
 ONE_KEY = "the boundary and the interior name one challenger key: both stages' coins are read under the run's one key"
@@ -52,14 +48,14 @@ def _get(j: Any, k: str) -> Any:
 
 
 def split(j: Any, what: str) -> dict:
-    """`SampledTwo.split`: an object naming the form ``two-stage``, without its ``form``."""
+    """`SampledTwo.split`: an object whose ``levels`` is 2, without it."""
     if not isinstance(j, dict):
         raise Reject(f"the {what} is not an object")
-    if not isinstance(j.get("form"), str):
-        raise Reject(f"the {what} names no form")
-    if j["form"] != TWO_STAGE:
-        raise Reject(f"the {what} name the form {j['form']}, not \"{TWO_STAGE}\"")
-    return {k: v for k, v in j.items() if k != "form"}
+    if "levels" not in j:
+        raise Reject(f"levels-mismatch: the {what} name no levels, not 2")
+    if not (type(j["levels"]) is int and j["levels"] == 2):
+        raise Reject(f"levels-mismatch: the {what}' levels is {canonical(j['levels'])}, not 2")
+    return {k: v for k, v in j.items() if k != "levels"}
 
 
 def _delegated(decode, *args) -> Any:
@@ -109,32 +105,6 @@ def params_of_json(j: Any) -> dict:
     raise ValueError("outside the mirror: the interior's replay program and members")
 
 
-def _outside(*_: Any) -> Any:
-    raise ValueError("outside the mirror: the evidence and the check")
-
-
-def answer(case: Any) -> dict:
-    """`SampledTwo.protocol` on a `serve` case, on the cases the mirror decides: those its parameters refuse."""
-    return P.answer(PROTOCOL, case, params=params_of_json, commitment=ONE_STAGE.decode_commitment,
-                    evidence=_outside, digest=lambda c: c[1], check=_outside)
-
-
-def refusal(params: Any) -> Exception:
-    """What `params_of_json` raises on the parameters: the form's own refusal, a delegated decoder's (`Delegated`), or
-    the `ValueError` at the mirror's end."""
-    try:
-        params_of_json(params)
-    except (Reject, ValueError) as e:
-        return e
-    raise AssertionError("params_of_json returned: it raises on every input")
-
-
-def reason_mirrored(params: Any) -> bool:
-    """Whether the parameters' refusal is the form's own, whose reason the twin gives word for word, rather than a
-    delegated decoder's, which is held to the Lean by its verdict."""
-    return not isinstance(refusal(params), Delegated)
-
-
 #: The check's refusal of a count of sessions other than the count of statements (`SampledTwo.STMT_COUNT`).
 STMT_COUNT = ("the sessions are not as many as the statements: round 2 reads one statement a session, in order, so a "
               "session past the last statement or a statement with no session is refused")
@@ -152,7 +122,7 @@ def stmts_sessions(own: list, stmts: list) -> str | None:
     verdict"): `own` is the statement each session makes, in order (for a kept honest play, the evidence's own
     `statements`, which pass); `stmts` is the evidence's. It returns the refusal a play reaches — `STMT_COUNT` where the
     counts differ, `STMT_SESSION t` where position `t`'s statement is not its session's (`jeq` by canonical text) — or
-    None, and the difftest holds the Lean's `sampled-two-on` refusal of a mutated honest play to it."""
+    None, and the difftest holds the Lean's (`vstar-recursive sampled check`) refusal of a mutated honest play to it."""
     if len(own) != len(stmts):
         return STMT_COUNT
     for t in range(len(stmts)):

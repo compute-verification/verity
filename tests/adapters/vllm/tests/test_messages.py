@@ -5,9 +5,15 @@ from __future__ import annotations
 
 import dataclasses
 import json
-from types import SimpleNamespace
+import re
+import subprocess
+import sys
+from types import SimpleNamespace as NS
 
 import pytest
+from verity import hooks as H
+from verity.protocols.compose import schemes as declarations
+from verity.protocols.resource_accounting import scheme as schemes
 
 from verity.channel import Body, MessageTypes, Refused
 from verity_vllm import messages as M
@@ -15,11 +21,21 @@ from verity_vllm.config import UsageError
 from verity_vllm.pipeline import advice as A
 from verity_vllm.pipeline import serve_day as SD
 from verity_vllm.pipeline import serve_h1 as SH
-from verity_vllm.pipeline import serve_pearl as SPL
+
+
+def test_useful_works_workload_messages_are_types_with_no_scheme_declared():
+    """H1's messages (`pouw.prover.workload.MESSAGES`), which no scheme declares, are types before any declaration is
+    imported: Pearl+'s declaration isn't what finds them."""
+    probe = ("import sys\nfrom verity_vllm import messages as M\n"
+             "assert {'H1Registration', 'H1Record', 'H1Program'} <= M.types().types\n"
+             f"assert {declarations.DECLARATIONS['pearl-plus']!r} not in sys.modules\n")
+    got = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True)
+    assert got.returncode == 0, got.stderr[-2000:]
 
 
 def test_every_declared_message_is_a_type():
-    assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows", "PoUSStore"} <= M.TYPES.types
+    declarations.load()
+    assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows"} <= M.types().types
 
 
 def test_a_type_no_protocol_declares_is_refused():
@@ -27,15 +43,16 @@ def test_a_type_no_protocol_declares_is_refused():
         M.body("Summary", b"{}")
 
 
-@pytest.mark.parametrize("entry", ["serve_h1.config_of", "serve_pearl.config_of", "serve_day.declare"])
+@pytest.mark.parametrize("entry", ["serve_h1.config_of", "serve_day.declare"])
 def test_a_body_its_declaration_refuses_is_a_usage_error_naming_the_bound(tmp_path, monkeypatch, entry):
     type_ = "MonitoringPeriodDeclaration" if entry == "serve_day.declare" else "PoUWScheme"
-    monkeypatch.setattr(M, "TYPES", MessageTypes(dataclasses.replace(s, body=Body(max=8)) if s.type == type_ else s
-                                                 for s in M.TYPES.schemas.values()))
+    narrowed = MessageTypes(dataclasses.replace(s, body=Body(max=8)) if s.type == type_ else s
+                            for s in M.types().schemas.values())
+    monkeypatch.setattr(M, "types", lambda: narrowed)
     (big := tmp_path / "big.json").write_text(json.dumps({"pouw": {}}))
     day = SD.DayOptions(day=0, day_log=str(tmp_path / "log.json"), day_program="5a" * 64, day_params=str(big))
-    call = {"serve_h1.config_of": lambda: SH.config_of(str(big)), "serve_pearl.config_of": lambda: SPL.config_of(str(big)),
-            "serve_day.declare": lambda: SD.declare(SimpleNamespace(day=day), tmp_path)}[entry]
+    call = {"serve_h1.config_of": lambda: SH.config_of(str(big)),
+            "serve_day.declare": lambda: SD.declare(NS(day=day), tmp_path)}[entry]
     with pytest.raises(UsageError, match=f"oversized: {type_}'s body is at most 8 bytes, not 12"):
         call()
 
@@ -167,3 +184,381 @@ def test_request_program_bytes_unchanged(tmp_path):
         (tmp_path / f"before-{name}").write_text(json.dumps(doc, indent=1) + "\n")
         M.write(tmp_path / f"after-{name}", "RequestProgram", (json.dumps(doc, indent=1) + "\n").encode())
         assert (tmp_path / f"after-{name}").read_bytes() == (tmp_path / f"before-{name}").read_bytes()
+
+
+def test_exchange_answers_requests_by_name_before_serving():
+    ex = M.Exchange()
+    seen = []
+    ex.subscribe("a", "declared", seen.append)
+    ex.request("a", H.RequireProperty("eager", True, "its taps read eager modules", fixes=True))
+    ex.request("b", H.RequireProperty("world", 1, "one rank only"))
+    declared = H.Declared("card:h100", {"eager": True, "world": 2})
+    with pytest.raises(Refused, match="b: requires world = 1: one rank only"):
+        ex.answer(declared)
+    ex.requests.pop()
+    assert ex.answer(declared) is True and seen == [declared]
+    with pytest.raises(Refused, match="after the build was answered"):
+        ex.request("c", H.RequireProperty("world", 1, "one rank"))
+    off = ex.subscribe("c", "values", seen.append)
+    ex.emit(H.ValueProduced("layers.0", "producer_output", 0, "rows"))
+    off()
+    ex.emit(H.ValueProduced("layers.0", "producer_output", 1, "rows"))
+    assert seen[1:] == [H.ValueProduced("layers.0", "producer_output", 0, "rows")]
+    ex.emit(H.StepBegan(4))
+    assert ex.step == 4
+
+
+def test_exchange_refuses_an_unknown_hook():
+    with pytest.raises(Refused, match="not a hook"):
+        M.Exchange().subscribe("a", "tokens", print)
+
+
+def test_exchange_nests_kernels_and_hands_inputs_inward():
+    ex = M.Exchange()
+    seen = []
+    ex.subscribe("s", "blocks", seen.append)
+    ex.request("outer", H.ComputeBlockWith(lambda due, original: original({"weight": "decoded"})))
+    ex.request("inner", H.ComputeBlockWith(lambda due, original: ("inner", due.inputs["weight"], original(None))))
+    due = H.BlockDue("layers.0.mlp", 1, {"n": 2, "k": 2}, "bf16", {"x": "x", "weight": "stored"})
+    assert ex.compute(due, lambda given: ("stock", given)) == ("inner", "decoded", ("stock", {"weight": "decoded"}))
+    assert seen == [due] and ex.computes()
+    assert M.Exchange().compute(due, lambda given: ("stock", given)) == ("stock", None)
+
+
+def test_exchange_starts_through_every_gate_and_holds():
+    class Gate:
+        def __init__(self):
+            self.held = []
+
+        def add(self, input, start):
+            self.held.append(start)
+
+        def pending(self):
+            return bool(self.held)
+
+    ex, g1, g2, started = M.Exchange(), Gate(), Gate(), []
+    ex.request("a", H.StartOnBoundary(g1))
+    ex.request("b", H.StartOnBoundary(g2))
+    ex.start("in-0", lambda: started.append("in-0"))
+    assert ex.pending() and not started
+    g1.held.pop()()
+    assert not started
+    g2.held.pop()()
+    assert started == ["in-0"] and not ex.pending()
+
+
+def test_one_exchange_a_build_and_the_build_in_scope_is_current():
+    M.close()
+    ex = M.current()
+    try:
+        assert M.current() is ex and M.build() is ex and not ex.wants("values")
+        ex.answer(H.Declared("", {}))
+        later = M.build()
+        assert later is not ex and M.current() is later and M.build() is later
+        with M.using(ex):
+            assert M.current() is ex
+        assert M.current() is later
+    finally:
+        M.close()
+    assert M.current() is not ex
+
+
+def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_entries_and_its_requests_filed_once(tmp_path, monkeypatch):
+    """`Exchange.attach` hands ``attach`` and ``requests`` one ``ctx``, files each request ``attach`` did not, and keeps
+    the scheme's settings under its name for the build's `Declared` and what ``attach`` returns for the run's record; a
+    setting it does not have is refused."""
+    for name in ("VERITY_PINS", "VERITY_CONFIGURATION"):
+        monkeypatch.delenv(name, raising=False)
+    seen: list = []
+    eager = H.RequireProperty("eager", True, "its kernels")
+    world = H.RequireProperty("world", 1, "its passes")
+
+    def attach(ex, ctx):
+        seen.append(ctx)
+        ex.request("pearl", eager)
+        return "front"
+
+    pearl = NS(name="pearl", settings={"coins": "", "tie": False}, check_settings=lambda s: None, attach=attach, requests=lambda ctx: (eager, world))
+    ex = M.Exchange()
+    assert ex.attach(pearl, {"coins": "live"}, submit=print) == "front"
+    assert seen == [{"settings": {"coins": "live", "tie": False}, "build": ex.key, "gate": None, "private": None,
+                     "submit": print, "pins": None, "configuration": None}]
+    assert ex.requests == [("pearl", eager), ("pearl", world)] and ex.attached == {"pearl": {"coins": "live", "tie": False}}
+    assert ex.reports == {"pearl": "front"}
+    assert M.Exchange().key != ex.key
+    with pytest.raises(ValueError, match=r"pearl has no setting \['salt'\]"):
+        ex.attach(pearl, {"salt": 1})
+    ex.attach(pearl, private=tmp_path)
+    assert seen[-1]["private"] == tmp_path / "pearl" and (tmp_path / "pearl").is_dir()
+
+
+PIN = {"party": "memory-challenger", "protocol": "wipe", "scheme": "lms-sha512/n64-w1-h20/v0", "key-sha512": "ab" * 64}
+
+
+def _seeing(name="probe"):
+    seen: list = []
+    return seen, NS(name=name, settings={}, check_settings=lambda s: None, attach=lambda ex, ctx: seen.append(ctx),
+                    requests=lambda ctx: ())
+
+
+@pytest.fixture
+def unset(monkeypatch):
+    for name in ("VERITY_PINS", "VERITY_CONFIGURATION"):
+        monkeypatch.delenv(name, raising=False)
+    return monkeypatch
+
+
+def test_handed_pins_reach_the_scheme_exactly_and_read_only(unset):
+    """The launcher's ``pins`` reach ``ctx["pins"]`` entry for entry, as mappings the scheme can't change; ``()`` is
+    an application that pins nothing, distinct from None, none handed."""
+    seen, probe = _seeing()
+    M.Exchange().attach(probe, pins=[PIN], configuration="c" * 64)
+    got = seen[0]["pins"]
+    assert got == (PIN,) and seen[0]["configuration"] == "c" * 64
+    with pytest.raises(TypeError):
+        got[0]["key-sha512"] = "cd" * 64
+    M.Exchange().attach(probe, pins=[])
+    M.Exchange().attach(probe)
+    assert seen[1]["pins"] == () and seen[2]["pins"] is None and seen[2]["configuration"] is None
+
+
+def test_the_setting_alone_reaches_the_attach(unset):
+    unset.setenv("VERITY_PINS", json.dumps([PIN]))
+    unset.setenv("VERITY_CONFIGURATION", "c" * 64)
+    seen, probe = _seeing()
+    M.Exchange().attach(probe)
+    assert seen[0]["pins"] == (PIN,) and seen[0]["configuration"] == "c" * 64
+    M.Exchange().attach(probe, pins=[dict(PIN)], configuration="c" * 64)
+    assert seen[1]["pins"] == (PIN,)
+
+
+@pytest.mark.parametrize("key, name, given", [
+    ("pins", "VERITY_PINS", [PIN | {"key-sha512": "cd" * 64}]), ("configuration", "VERITY_CONFIGURATION", "d" * 64)])
+def test_a_keyword_and_a_setting_that_differ_are_refused_by_name(unset, key, name, given):
+    unset.setenv("VERITY_PINS", json.dumps([PIN]))
+    unset.setenv("VERITY_CONFIGURATION", "c" * 64)
+    seen, probe = _seeing()
+    with pytest.raises(ValueError, match=rf"probe: the launcher's {key} differ from {name}"):
+        M.Exchange().attach(probe, **{key: given})
+    assert seen == []
+
+
+def test_an_engine_attach_after_the_weights_are_registered_is_refused():
+    """An engine's attach after `RegisteredValues` is refused by name; one that names no engine process (admission on
+    the loaded engine's exchange) still attaches."""
+    seen, probe = _seeing()
+    ex = M.Exchange()
+    ex.attach(probe, process=H.ENGINE)
+    ex.emit(H.RegisteredValues((("w", "W"),), operands={"w": 0}))
+    with pytest.raises(RuntimeError, match="probe attached after the model's weights were registered: an attach in "
+                                           "the engine runs before the load"):
+        ex.attach(probe, process=H.ENGINE)
+    ex.attach(probe)
+    assert len(seen) == 2 and M.Exchange().registered is False
+
+
+def test_a_scheme_that_reads_its_pin_gets_the_settings_and_refuses_by_name_without_one(unset):
+    """A stand-in for the wipe's attach, which reads its memory challenger's key from ``ctx["pins"]``: the setting's
+    pin reaches it through the exchange alone, and with none handed it refuses by name."""
+    def attach(ex, ctx):
+        if not ctx["pins"]:
+            raise ValueError("wipe: no pin was handed to it (ctx['pins'], the application's [[pin]] entries)")
+        return [p["key-sha512"] for p in ctx["pins"] if p["party"] == "memory-challenger"]
+
+    wipe = NS(name="wipe", settings={}, check_settings=lambda s: None, attach=attach, requests=lambda ctx: ())
+    with pytest.raises(ValueError, match=re.escape("wipe: no pin was handed to it")):
+        M.Exchange().attach(wipe, process=H.ENGINE)
+    unset.setenv("VERITY_PINS", json.dumps([PIN]))
+    assert M.Exchange().attach(wipe, process=H.ENGINE) == [PIN["key-sha512"]]
+
+
+def test_a_process_beside_is_started_with_the_readers_the_launcher_offers(monkeypatch):
+    monkeypatch.setattr(schemes, "PROCESSES", {"id-front": lambda request, ids: ("relay", request(), ids())})
+    ex = M.Exchange()
+    ex.request("network", H.StartBeside("id-front", ("server-request", "stream-token-ids")))
+    with pytest.raises(Refused, match=r"network: starts id-front beside the workload with readers \['server-request', "
+                                      r"'stream-token-ids'\] no launcher here offers"):
+        ex.answer(H.Declared("", {}))
+    ex.readers = {"server-request": lambda: "req", "stream-token-ids": lambda: [1, 2]}
+    ex.answer(H.Declared("", {}))
+    ((process, start),) = ex.beside()
+    assert process == "id-front" and start() == ("relay", "req", [1, 2])
+    other = M.Exchange()
+    other.request("network", H.StartBeside("tap"))
+    with pytest.raises(Refused, match="starts tap beside the workload, which no scheme registered"):
+        other.answer(H.Declared("", {}))
+
+
+def test_a_build_request_is_filed_before_the_build_and_any_other_before_the_first_step():
+    ex = M.Exchange()
+    ex.answer(H.Declared("", {}))
+    with pytest.raises(Refused, match="pouw: files RequireProperty after the build was answered"):
+        ex.request("pouw", H.RequireProperty("eager", True, "its kernels"))
+    ex.request("pouw", H.ComputeBlockWith(lambda due, original: original(None)))
+    ex.step = 0
+    with pytest.raises(Refused, match=r"pouw: files ReuseOldestFreed after serving began \(step 0\)"):
+        ex.request("pouw", H.ReuseOldestFreed())
+
+
+def test_a_route_has_one_scheme_and_an_input_is_refused_while_serving():
+    ex = M.Exchange()
+    serve = lambda first_line, headers, body: (200, headers["run"] + b"".join(body).decode())  # noqa: E731
+    ex.request("network", H.ServeRoute("/watermark", serve))
+    with pytest.raises(Refused, match="poub: serves route /watermark, which network serves"):
+        ex.request("poub", H.ServeRoute("/watermark", serve))
+    name, answer = ex.route("/watermark")
+    assert answer("POST /watermark HTTP/1.1", {"run": "r"}, iter([b"7", b"3"])) == (200, "r73")
+    assert name == "network" and ex.route("/other") is None
+    ex.step = 0
+    told: list = []
+    ex.refuse = lambda input, why: told.append((input, why))
+    ex.request("network", H.RefuseInput("in-1", "no release stamp"))
+    assert ex.refused("in-1") == [("network", "no release stamp")] and ex.refused("in-2") == []
+    assert told == [("in-1", "no release stamp")]
+    assert H.InputArrived("in-1", 3, 0, {"x-release": "4"}, "POST /v1/completions HTTP/1.1").headers["x-release"] == "4"
+
+
+def test_the_scheme_that_provides_admission_is_found_by_its_role():
+    assert M.providing("admission").name == "network-attester"
+    with pytest.raises(LookupError, match="one scheme whose provides is 'nothing', not 0"):
+        M.providing("nothing")
+
+
+def _declared(name: str, **declared) -> NS:
+    attached = []
+    return NS(**{"name": name, "settings": {}, "check_settings": lambda own: None, "requests": lambda ctx: (),
+                 "attach": lambda ex, ctx: attached.append(name), "attached": attached, "resource": "compute", "kernels": schemes.Lacks("a stand-in"),
+                 "needs": frozenset(), "depends": (), "keeps_weight_copy": schemes.UNDECLARED, **declared})
+
+
+STORE = {"resource": "memory", "needs": frozenset({"store"})}
+
+
+RULED = "the ruling's sentence"
+
+
+@pytest.mark.parametrize("order", [("store", "copy"), ("copy", "store")])
+def test_storage_beside_a_keeper_whose_copy_beside_storage_is_not_ruled_is_refused_by_both_names_before_any_attaches(order):
+    made = {"store": _declared("storage", **STORE), "copy": _declared("keeps-copy", keeps_weight_copy=True)}
+    listed = [made[k] for k in order]
+    assert M.weight_copy_refusals(listed) == [
+        "storage is storage (it needs the workload's store) and keeps-copy keeps a weight-derived copy "
+        "(keeps_weight_copy), and keeps-copy's declaration does not say that its copy beside storage has been ruled "
+        "(copy_beside_storage_ruled is undeclared or empty), so the two are not attached in one process"]
+    with pytest.raises(Refused, match="storage is storage .* and keeps-copy keeps a weight-derived copy"):
+        M.attach_listed(M.Exchange(), [(s, {}) for s in listed])
+    assert made["store"].attached == made["copy"].attached == []
+
+
+def test_a_keeper_whose_ruling_is_empty_is_refused_as_one_without_it():
+    store, copy = _declared("storage", **STORE), _declared("keeps-copy", keeps_weight_copy=True, copy_beside_storage_ruled=" ")
+    assert M.weight_copy([store, copy]) == (M.weight_copy([store, _declared("keeps-copy", keeps_weight_copy=True)])[0], [])
+    assert M.weight_copy_refusals([store, copy])
+
+
+def test_storage_beside_a_keeper_whose_copy_beside_storage_is_ruled_attaches_storage_first_with_the_ruling_noted():
+    store, copy = _declared("storage", **STORE), _declared("keeps-copy", keeps_weight_copy=True, copy_beside_storage_ruled=RULED)
+    ex = M.Exchange()
+    M.attach_listed(ex, [(store, {}), (copy, {})])
+    assert list(ex.attached) == ["storage", "keeps-copy"] and store.attached == ["storage"] and copy.attached == ["keeps-copy"]
+    assert ex.allowed == [M.WeightCopyNote("storage", "keeps-copy", RULED, schemes.BESIDE_STORAGE_NOT_SHOWN)]
+    record = ex.allowed[0].record()
+    assert record == {"storage": "storage", "keeps_weight_copy": "keeps-copy", "copy_beside_storage_ruled":
+                      {"ruling": RULED, "not_shown": list(schemes.BESIDE_STORAGE_NOT_SHOWN)}}
+    assert record["copy_beside_storage_ruled"]["not_shown"] and all(
+        isinstance(s, str) and s.strip() for s in record["copy_beside_storage_ruled"]["not_shown"])
+
+
+def test_a_ruled_keeper_listed_before_storage_is_refused_by_the_order_rule_and_installs_nothing():
+    store, copy = _declared("storage", **STORE), _declared("keeps-copy", keeps_weight_copy=True, copy_beside_storage_ruled=RULED)
+    assert M.weight_copy([copy, store]) == ([], [M.WeightCopyNote("storage", "keeps-copy", RULED, schemes.BESIDE_STORAGE_NOT_SHOWN)])
+    ex = M.Exchange()
+    with pytest.raises(Refused) as e:
+        M.attach_listed(ex, [(copy, {}), (store, {})])
+    assert e.value.detail == ("outer: storage is storage (it needs the workload's store) and is listed after keeps-copy, "
+                              "useful work (resource compute); where both wrap one site the earlier listed is the outer, so "
+                              "protocols lists storage before keeps-copy")
+    assert ex.attached == {} and ex.allowed == [] and store.attached == copy.attached == []
+
+
+def _state(ex: M.Exchange) -> tuple:
+    return (dict(ex.attached), dict(ex.schemes), list(ex.requests), dict(ex.reports),
+            {h: list(s) for h, s in ex.subscribers.items()}, ex.declared, ex.fixed)
+
+
+@pytest.mark.parametrize("keeps", [True, schemes.UNDECLARED], ids=["keeps-copy", "undeclared"])
+@pytest.mark.parametrize("first", ["store", "other"])
+def test_a_bare_attach_beside_an_attached_scheme_is_refused_by_the_same_sentence_and_installs_nothing(first, keeps, tmp_path):
+    made = {"store": _declared("storage", **STORE), "other": _declared("other", keeps_weight_copy=keeps)}
+    second = "other" if first == "store" else "store"
+    ex = M.Exchange()
+    ex.attach(made[first])
+    before = _state(ex)
+    with pytest.raises(Refused) as e:
+        ex.attach(made[second], private=tmp_path)
+    assert str(e.value) == f"{made[second].name}: " + "; ".join(M.listed_refusals([made["store"], made["other"]]))
+    assert _state(ex) == before and made[second].attached == [] and not (tmp_path / made[second].name).exists()
+
+
+def test_a_bare_attach_of_storage_beside_one_that_declares_no_copy_is_attached_either_way():
+    for first, second in ((_declared("storage", **STORE), _declared("plain", keeps_weight_copy=False)),
+                          (_declared("plain", keeps_weight_copy=False), _declared("storage", **STORE))):
+        ex = M.Exchange()
+        ex.attach(first)
+        ex.attach(second)
+        assert list(ex.attached) == [first.name, second.name] and first.attached == [first.name]
+
+
+def test_a_bare_attach_of_the_remote_session_on_an_exchange_holding_pous_is_refused_before_its_attach_runs():
+    pous, remote = M.named("pous"), M.named("poub")
+    assert remote.keeps_weight_copy is True and isinstance(getattr(remote, schemes.BESIDE_STORAGE), schemes.Lacks)
+    ex = M.Exchange()
+    ex.schemes[pous.name] = pous
+    with pytest.raises(Refused, match="pous is storage .* and poub keeps a weight-derived copy .* has been ruled"):
+        ex.attach(remote)
+    assert remote.name not in ex.attached and ex.requests == [] and ex.allowed == []
+
+
+@pytest.mark.parametrize("order", [("store", "other"), ("other", "store")])
+def test_storage_beside_a_scheme_that_has_not_declared_whether_it_keeps_a_copy_is_refused_naming_the_declaration(order):
+    made = {"store": _declared("storage", **STORE), "other": _declared("other")}
+    assert M.weight_copy_refusals([made[k] for k in order]) == [
+        "storage is storage (it needs the workload's store) and other's declaration does not say whether it keeps a "
+        "weight-derived copy (keeps_weight_copy is undeclared), so storage is not attached beside it until it declares "
+        "that, and a scheme that keeps one beside storage is refused until its copy beside storage is ruled"]
+
+
+def test_storage_beside_one_that_declares_no_copy_and_a_copy_without_storage_are_attached():
+    store, plain, copy = _declared("storage", **STORE), _declared("plain", keeps_weight_copy=False, resource="egress"), _declared("keeps-copy", keeps_weight_copy=True)
+    wipe = _declared("wipe", resource="memory")
+    for listed in ([store, plain], [plain, store], [copy, plain], [copy, wipe]):
+        assert M.listed_refusals(listed) == []
+        M.attach_listed(M.Exchange(), [(s, {}) for s in listed])
+    assert store.attached == ["storage", "storage"] and copy.attached == ["keeps-copy", "keeps-copy"]
+
+
+def test_a_list_in_a_refused_order_is_refused_by_name_before_any_attaches():
+    base, dep = _declared("base"), _declared("dep", resource="egress", depends=("base",))
+    ex = M.Exchange()
+    before = _state(ex)
+    with pytest.raises(Refused) as e:
+        M.attach_listed(ex, [(dep, {}), (base, {})])
+    assert (e.value.name, e.value.detail) == ("listed schemes", "order: dep requires base, so protocols lists base before dep")
+    assert _state(ex) == before and dep.attached == base.attached == []
+
+
+def test_storage_beside_the_network_attester_is_not_refused_for_a_weight_copy():
+    pous, attester = M.named("pous"), M.named("network-attester")
+    assert attester.keeps_weight_copy is False and M.storage(pous)
+    assert M.weight_copy_refusals([pous, attester]) == M.weight_copy_refusals([attester, pous]) == []
+
+
+def test_pous_beside_pearl_plus_is_allowed_storage_first_with_pearl_pluss_declared_ruling():
+    pous, pearl = M.named("pous"), M.named("pearl-plus")
+    ruled = getattr(pearl, schemes.BESIDE_STORAGE)
+    assert isinstance(ruled, str) and ruled.strip()
+    assert pearl.keeps_weight_copy is True and M.storage(pous) and not M.storage(M.named("wipe"))
+    assert M.weight_copy([pous, pearl]) == M.weight_copy([pearl, pous]) == (
+        [], [M.WeightCopyNote("pous", "pearl-plus", ruled, schemes.BESIDE_STORAGE_NOT_SHOWN)])
+    assert M.listed_refusals([pous, pearl]) == []
+    assert [r.split(":")[0] for r in M.listed_refusals([pearl, pous])] == ["outer"]

@@ -3,11 +3,17 @@
 - `lease(gpus, minutes, on=None, cores=None)`: the `gpu-lease` argv a job's command follows, with its bound.
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
-- `card_short(name, directory=...)`: the card's name in a measurement's member, from the one card record whose `driver`
-  holds the stamp's `card` exactly.
+- `card_short(name)`: the card's name in a measurement's member, from the one card record under `cards_directory()` whose
+  `driver` holds the stamp's `card` exactly; `is_card(card, short)` says whether a stamp's card is the one a workload
+  names, and `wrong_card(workload, short, card)` why not.
 - `machine_properties(name, directory=...)`: a machine record's `[properties]` (what a job may do there: its toolkit, profiler,
   clock lock, lease and the rest), each with the command that read it, from ``directory/<name>.toml``, checked field by field;
   with neither given, the run's own machine's, which `research run --on` put in ``$RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml``.
+- `toolkit(version)`: the CUDA toolkit's directory at that version, ``$CUDA_HOME`` where set and not another, else the run's machine's
+  `[properties]`'; `card_sku(name)` and `card_arch(name)`: the `sku` and `arch` of the card `card_short` finds;
+  `datasheet_bandwidth(name)` its data sheet's stated memory bandwidth; `card_nodes(sku)` the node files carrying a card, and `session_node(name, slot)` the node a PoUB session on it registers;
+  `machine_arch()` the run's machine's card's; `run_card_sku()` the `sku` of the card the run is on (its host stamp's).
+  `benchmarks/kernels/machine.py` prints them for a shell script.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
 - `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
   (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
@@ -159,13 +165,13 @@ def _run(argv: Sequence[str]) -> tuple[int, str]:
     return r.returncode, r.stdout if r.returncode == 0 else r.stderr or r.stdout
 
 
-def _commit() -> str | None:
-    """The commit of the tree the job runs: the one `research run` shipped, else this checkout's HEAD; None where neither
-    says."""
+def commit(root: Path | None = None) -> str | None:
+    """The commit of the tree the job runs: the one `research run` shipped, else the HEAD of the checkout at `root` (this
+    file's where None); None where neither says."""
 
     if sha := settings.RESEARCH_SOURCE_SHA:
         return sha
-    rc, out = _run(["git", "-C", str(Path(__file__).resolve().parent), "rev-parse", "HEAD"])
+    rc, out = _run(["git", "-C", str(root or Path(__file__).resolve().parent), "rev-parse", "HEAD"])
     return out.strip() or None if rc == 0 else None
 
 
@@ -208,26 +214,156 @@ def host_stamp() -> dict:
         "card": ", ".join(dict.fromkeys(g["name"] for g in gpus)) or "none",
         "gpus": [{"uuid": g["uuid"], "sm_mhz": _mhz(g["clocks.sm"]), "mem_mhz": _mhz(g["clocks.mem"])} for g in gpus],
         "driver": ", ".join(dict.fromkeys(g["driver_version"] for g in gpus)) or None,
-        "cuda": cuda, "node": platform.node(), "commit": _commit()}
+        "cuda": cuda, "node": platform.node(), "commit": commit()}
     if why:
         stamp["why"] = why
     return stamp
 
 
-def card_short(name: str, *, directory: Path) -> str:
-    """The ``short`` of the card record in ``directory`` (``verity.device.load_card``) whose ``driver`` has ``name``, the
-    name nvidia-smi gives the card (a stamp's `card`), exactly; refused, naming what to add, unless exactly one record
-    holds it and has a ``short``, the card's name in a measurement's member."""
+def cards_directory() -> Path:
+    return Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
+
+
+def nodes_directory() -> Path:
+    return cards_directory().parent / "nodes"
+
+
+def _gpu_cards(directory: Path) -> list[dict]:
     from verity.device import load_card, skus
 
-    cards = [load_card(sku, directory=directory) for sku in skus("gpu", directory=directory)]
-    found = [c for c in cards if name and name in {d["value"] for d in c.get("driver", ())}]
-    if len(found) != 1 or not found[0].get("short"):
-        raise SystemExit(
-            f"{len(found)} card records under {directory} have {name!r}, the card nvidia-smi names here, in `driver`: add "
-            f"{{ value = {json.dumps(name)}, source = ... }} to its one record's `driver` and give it a `short`, the "
-            "card's name in a measurement's member, adding its <sku>.toml there if it has none")
-    return found[0]["short"]
+    return [load_card(sku, directory=directory) for sku in skus("gpu", directory=directory)]
+
+
+def card_record(name: str, *, directory: Path | None = None) -> dict:
+    """The card record in ``directory`` (`cards_directory` by default) whose ``driver`` has ``name``, the name nvidia-smi
+    gives the card (a stamp's `card`), exactly (`verity.device.gpu_card_reporting`); refused, naming what to add, unless
+    exactly one record holds it and has a ``short``, the card's name in a measurement's member."""
+
+    from verity.device import gpu_card_reporting
+
+    directory = directory or cards_directory()
+    try:
+        card = gpu_card_reporting(name, directory=directory)
+    except KeyError as e:
+        raise SystemExit(f"{e.args[0]}, and give it a `short`, the card's name in a measurement's member") from None
+    if not card.get("short"):
+        raise SystemExit(f"card record {card['sku']!r} under {directory} has {name!r} in `driver` and no `short`: give it "
+                         "one, the card's name in a measurement's member")
+    return card
+
+
+def card_short(name: str, *, directory: Path | None = None) -> str:
+    """The ``short`` of `card_record`'s record for ``name``."""
+    return card_record(name, directory=directory)["short"]
+
+
+def card_sku(name: str, *, directory: Path | None = None) -> str:
+    """The ``sku`` of `card_record`'s record for ``name``: its file's name in ``directory``."""
+    return card_record(name, directory=directory)["sku"]
+
+
+def card_nodes(sku: str, *, directory: Path | None = None, cards: Path | None = None) -> list[str]:
+    """The node files' kinds in ``directory`` (`nodes_directory` by default) whose ``device.sku`` is ``sku``."""
+    from verity.device import load_node, node_kinds
+
+    cards = cards or cards_directory()
+    directory = directory or nodes_directory()
+    return [k for k in node_kinds(directory=directory)
+            if load_node(k, directory=directory, cards_directory=cards)["device"]["sku"] == sku]
+
+
+def session_node(name: str | None, slot: str | int, *, kind: str | None = None, directory: Path | None = None,
+                 cards: Path | None = None) -> str:
+    """The node a PoUB session registers, ``local/<kind>/<slot>``: ``kind`` where given, else the one node file carrying
+    the card nvidia-smi names ``name``, else that card's ``sku`` where none does, and ``cpu`` for a session with no card
+    (``name`` None); refused, naming the files, where several node files carry the card."""
+    if kind is not None:
+        return f"local/{kind}/{slot}"
+    if name is None:
+        return f"local/cpu/{slot}"
+    sku = card_sku(name, directory=cards)
+    nodes = card_nodes(sku, directory=directory, cards=cards)
+    if len(nodes) > 1:
+        raise SystemExit(f"the node files {', '.join(nodes)} all carry {sku}, the card here: name the session's node "
+                         "with --node")
+    return f"local/{nodes[0] if nodes else sku}/{slot}"
+
+
+def datasheet_bandwidth(name: str, *, directory: Path | None = None) -> int:
+    """``memory.datasheet_bandwidth`` of `card_record`'s record for ``name``, bytes a second: the data sheet's stated
+    memory bandwidth; refused by name where the record has none."""
+    directory = directory or cards_directory()
+    card = card_record(name, directory=directory)
+    entry = card.get("memory", {}).get("datasheet_bandwidth")
+    if entry is None:
+        raise SystemExit(f"the card record {card['sku']} ({directory}/{card['sku']}.toml) has no "
+                         "memory.datasheet_bandwidth, the data sheet's stated memory bandwidth: add it, its source the "
+                         "data sheet")
+    return int(entry["value"])
+
+
+def run_card_sku(*, directory: Path | None = None) -> str:
+    """The ``sku`` of the card the run is on: `card_sku` of `host_stamp`'s card, the lease's GPUs' name, else the host's;
+    refused by name on a host with no GPU."""
+    stamp = host_stamp()
+    if stamp["card"] == "none":
+        raise SystemExit(f"no GPU here ({stamp.get('why')}), so no card the run is on: run it on its GPU, or name the card's sku")
+    return card_sku(stamp["card"], directory=directory)
+
+
+def card_arch(name: str | None = None, *, sku: str | None = None, directory: Path | None = None) -> str:
+    """The ``arch`` of `card_record`'s record for ``name``, or, for a build on a machine with no card, of the record
+    ``sku`` (its file's name in ``directory``): the target (``sm_90a``) machine code is built for."""
+    from verity.device import load_card
+
+    if (name is None) == (sku is None):
+        raise TypeError("card_arch takes the name nvidia-smi gives a card or a card file's sku, one of them")
+    if sku is None:
+        return card_record(name, directory=directory)["arch"]
+    directory = directory or cards_directory()
+    try:
+        card = load_card(sku, directory=directory)
+    except KeyError as e:
+        raise SystemExit(e.args[0]) from None
+    if card["kind"] != "gpu" or not card.get("arch"):
+        raise SystemExit(f"card {sku!r} ({directory}/{sku}.toml) is no build target: it needs kind \"gpu\" and an `arch`")
+    return card["arch"]
+
+
+def _gencode(arch: str) -> str:
+    from verity.device import load_architecture
+
+    found = load_architecture(arch, directory=cards_directory().parent / "architectures")
+    return f"arch={found['virtual']},code={found['name']}"
+
+
+def arch_gencode(arch: str) -> str:
+    """nvcc's ``-gencode`` value for the target ``arch`` (``sm_90a``): ``arch=<virtual>,code=<name>`` of its architecture
+    file (`verity.device.load_architecture`, in the architectures beside the cards); refused by name where none states it."""
+    try:
+        return _gencode(arch)
+    except KeyError as e:
+        raise SystemExit(f"target {arch!r}: {e.args[0]}") from None
+
+
+def card_gencode(name: str | None = None, *, sku: str | None = None, directory: Path | None = None) -> str:
+    """`arch_gencode` of the card `card_arch` finds for ``name`` or ``sku``; refused by the card's name where no
+    architecture file states its ``arch``."""
+    try:
+        return _gencode(card_arch(name, sku=sku, directory=directory))
+    except KeyError as e:
+        raise SystemExit(f"{f'card {sku!r}' if sku else f'the card nvidia-smi names {name!r}'}: {e.args[0]}") from None
+
+
+def machine_arch(*, directory: Path | None = None) -> str:
+    """The ``arch`` of the run's machine's card: `machine_properties()`'s ``card``, a card record's name in ``directory``,
+    with no card needed; refused by name where it is unread."""
+    from verity.device import load_card
+
+    card = machine_properties()["card"]["value"]
+    if card == "unread":
+        raise SystemExit(f"machine {settings.RESEARCH_MACHINE!r}: its [properties] have card unread: read it there")
+    return load_card(card, directory=directory or cards_directory())["arch"]
 
 
 def _text(v: Any) -> bool:
@@ -244,7 +380,7 @@ def _texts(v: Any, *keys: str) -> bool:
 
 #: a machine record's `[properties]`, each field with the check its value passes unless it is ``"unread"``
 MACHINE_PROPERTIES: dict[str, Any] = {
-    "kind": _text, "card": _text, "cards": _count, "cpus": _count, "threads_per_core": _count,
+    "kind": _text, "card": _text, "cards": lambda v: type(v) is int and v >= 0, "cpus": _count, "threads_per_core": _count,
     "numa": lambda v: isinstance(v, list) and all(
         isinstance(e, dict) and set(e) == {"card", "node", "cpus"} and type(e["card"]) is int and type(e["node"]) is int
         and _text(e["cpus"]) for e in v),
@@ -261,7 +397,8 @@ def machine_properties(name: str | None = None, *, directory: Path | None = None
     field of `MACHINE_PROPERTIES` ``{ value, read }``, `read` the command that read `value`, and `value` ``"unread"`` or one
     its check takes: a `toolkit` is ``{ directory, version, loader }`` (`others`: more ``{ directory, version }``) or
     ``"none"``, `numa` a list of ``{ card, node, cpus }``, `launcher` ``{ start, sets }``, `profiler` ``"allowed"``,
-    ``"needs-root"`` or ``"refused"``, `job_cap_minutes` minutes or ``"none"``. Refused by name otherwise.
+    ``"needs-root"`` or ``"refused"``, `job_cap_minutes` minutes or ``"none"``; `cards` 0 for a machine with no card, which
+    then names none (`card` ``"none"`` or ``"unread"``, `numa` empty). Refused by name otherwise.
     Unnamed, the machine is ``$RESEARCH_MACHINE`` and the directory ``$RESEARCH_RUN_DIR/inputs``, where `research run --on`
     puts the copy; a run with no ``RESEARCH_MACHINE`` (a local one) is refused."""
     run_copy = directory is None
@@ -293,7 +430,104 @@ def machine_properties(name: str | None = None, *, directory: Path | None = None
             raise refuse(f"gives {field_} as {entry!r}, not {{ value, read }} with read the command that read it")
         if entry["value"] != "unread" and not check(entry["value"]):
             raise refuse(f"gives {field_} the value {entry['value']!r}, which its check refuses (machine_properties' docstring)")
+    if table["cards"]["value"] == 0:
+        if (card := table["card"]["value"]) not in ("none", "unread"):
+            raise refuse(f"gives cards 0 and yet names the card {card!r}: a machine with no card gives card \"none\"")
+        if isinstance(numa := table["numa"]["value"], list) and numa:
+            raise refuse(f"gives cards 0 and yet places cards {[e['card'] for e in numa]} in numa: a machine with no card "
+                         "gives numa []")
     return table
+
+
+class NotListed(SystemExit):
+    """The run's machine's `[properties]` are read and list no CUDA toolkit at the version asked for."""
+
+
+def toolkit(version: str) -> str:
+    """The directory of CUDA toolkit `version` (major.minor, as a machine's `[properties]` write it): ``$CUDA_HOME`` where it
+    is set and its ``version.json``, where it has one, is that version; else the one the run's machine's properties
+    (`machine_properties()`) list at exactly that version, the version asked for and not the first listed. Refused by name
+    otherwise, as `NotListed` where the properties list none, and where ``$CUDA_HOME``'s ``version.json`` gives no
+    ``cuda.version``."""
+    from verity_config.settings import SHARED
+
+    if home := SHARED.get("CUDA_HOME"):
+        if not (said_in := Path(home) / "version.json").is_file():
+            return home
+        try:
+            said = json.loads(said_in.read_text())["cuda"]["version"]
+        except (ValueError, KeyError, TypeError) as e:
+            raise SystemExit(f"CUDA_HOME={home}: {said_in} gives no cuda.version ({type(e).__name__}: {e})") from None
+        if said == version or said.startswith(f"{version}."):
+            return home
+    try:
+        found = machine_properties()["toolkit"]["value"]
+    except SystemExit as e:
+        raise SystemExit(f"no CUDA toolkit {version}: set CUDA_HOME to its directory, or run on a machine `research run --on` "
+                         f"names: {e}") from None
+    name = settings.RESEARCH_MACHINE
+    if found == "unread":
+        raise SystemExit(f"machine {name!r}: its [properties] have toolkit unread: read it there, or set CUDA_HOME")
+    listed = [] if found == "none" else [found, *found.get("others", [])]
+    at = [t["directory"] for t in listed if t["version"] == version]
+    if not at:
+        raise NotListed(f"machine {name!r}: its [properties] list no CUDA toolkit {version} under toolkit (they list "
+                        f"{', '.join(t['version'] for t in listed) or 'none'}): set CUDA_HOME")
+    return at[0]
+
+
+def machine_toolkit() -> str:
+    """The directory of the CUDA toolkit the run's machine's properties (`machine_properties()`) list first, its
+    default; refused by name where they list none or it is unread."""
+    found = machine_properties()["toolkit"]["value"]
+    name = settings.RESEARCH_MACHINE
+    if found in ("unread", "none"):
+        raise SystemExit(f"machine {name!r}: its [properties] have toolkit {found}: set CUDA_HOME")
+    return found["directory"]
+
+
+def gpu_target(sku: str, *, directory: Path | None = None) -> dict[str, Any]:
+    from verity.device import load_architecture, load_card, number
+
+    directory = directory or cards_directory()
+    card = load_card(sku, directory=directory)
+    names = [d["value"] for d in card.get("driver", ())]
+    if card["kind"] != "gpu" or len(names) != 1:
+        raise SystemExit(f"card {sku!r} ({directory}/{sku}.toml) is no compile target: it needs kind \"gpu\" and one `driver` "
+                         f"name, and has kind {card['kind']!r}, driver {names}")
+    try:
+        arch = load_architecture(str(card.get("arch")), directory=cards_directory().parent / "architectures")
+    except KeyError as e:
+        raise SystemExit(f"card {sku!r} ({directory}/{sku}.toml) is no compile target: its {e.args[0]}") from None
+    return {"device_name": names[0], "compute_capability": [int(x) for x in arch["capability"].split(".")],
+            "num_sms": int(number(card["sm"]["count"]))}
+
+
+def is_card(card: str, short: str, *, directory: Path | None = None) -> bool:
+    """Whether every card a stamp's `card` names (``, ``-joined) is one record's whose ``short`` is ``short``; a name
+    no single record holds, or one without a ``short``, is not."""
+
+    def held(name: str) -> bool:
+        try:
+            return card_record(name, directory=directory)["short"] == short
+        except SystemExit:
+            return False
+
+    return all(held(name) for name in card.split(", "))
+
+
+def wrong_card(workload: str, short: str, card: str, *, directory: Path | None = None) -> str | None:
+    directory = directory or cards_directory()
+    if is_card(card, short, directory=directory):
+        return None
+    from verity.device import gpu_card_called
+
+    try:
+        want = " or ".join(d["value"] for d in gpu_card_called(short, directory=directory).get("driver", ()))
+    except KeyError as e:
+        return f"spec {workload!r} names no one card: {e.args[0]}"
+    return (f"the card is a {card}, not the {short} of spec {workload!r} ({want}): run it on a node whose card is a "
+            f"{want}, or name this card where the spec lists it (`SPEC@CARD`)")
 
 
 # ---- the paired ratio --------------------------------------------------------------------------------------------------------
@@ -417,6 +651,14 @@ def is_trial(environ: Mapping[str, str] | None = None) -> bool:
     this process's environment."""
 
     return (settings.get(TRIAL, environ) or "0") != "0"
+
+
+def superseded(store: Any, target: str) -> list[str]:
+    """What supersedes a record's run or art: the values of its `served_table.SUPERSEDED_BY` labels, empty where none."""
+
+    from verity_bench.served_table import SUPERSEDED_BY
+
+    return [str(lab.value) for lab in store.labels(target, key=SUPERSEDED_BY)]
 
 
 def trial_attempt(attempt: Mapping[str, Any]) -> bool:

@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from test_class_statement_unit_stager import TOY, TOY_ROWS
-from test_tmpl_statement import _tmpl
+from tmpl_toy import toy_tmpl
 from verity.circuits.boolean import BIT
 from verity.circuits.boolean.forms import add
 from verity.circuits.boolean.trace import definition
@@ -56,9 +56,9 @@ def _stand_in(tmp_path: Path, body: str) -> Path:
 
 def test_the_read_template_is_the_executables_text_parsed_once_a_shape(tmp_path, monkeypatch, fresh):
     """`read_tmpl.template` runs the executable ``V H`` once a shape and parses its text; `read_tmpl.of` asks it for a bound
-    ``EmbeddingRead_v1`` at its V and H and for nothing else. A refusal is the executable's own words, and a missing
+    ``EmbeddingRead_v2`` at its V and H and for nothing else. A refusal is the executable's own words, and a missing
     executable says how to build it."""
-    text = T.write(_tmpl())
+    text = T.write(toy_tmpl())
     (tmp_path / "t.txt").write_text(text)
     monkeypatch.setattr(RT, "EXE", str(_stand_in(tmp_path, f"cat {tmp_path / 't.txt'}")))
     assert T.write(RT.template(7, 3)) == text
@@ -127,7 +127,7 @@ def test_a_structural_unit_the_verifier_has_a_template_for_is_staged_on_it(tmp_p
     assert st.low.template is given and FC.template_of(st.text) == T.write(given)
     rng = np.random.default_rng(7)
     rows = {r: rng.integers(0, 1 << 16, (6, bits // 16), dtype=np.uint16) for r, _s, bits, _ps in PAIR_ROWS}
-    got = st.stage(rows, tmp_path / "round", b"k" * 32)
+    got = st.stage(rows, tmp_path / "round")
     a, b, w = rows["a"][:, 0].astype(int), rows["b"][:, 0].astype(int), rows["w"].astype(int)
     assert [int(o[0]) | int(o[1]) << 16 for o in got["outs"]["o0"]] == list(a + b | (w[:, 0] & w[:, 127] >> 15 & 1) << 17)
     with pytest.raises(ValueError, match="give each parameter a row of its own, in order"):
@@ -164,7 +164,7 @@ def _reads(V: int, H: int) -> list[tuple]:
 
 @pytest.mark.slow
 def test_a_read_unit_is_the_verifiers_template_and_stages_a_round_of_reads(verifiers, tmp_path, monkeypatch, fresh):
-    """A structural ``EmbeddingRead_v1{V = 5, H = 2}`` on the rows serving commits (`interface.unit_rows`): its unit is the
+    """A structural ``EmbeddingRead_v2{V = 5, H = 2}`` on the rows serving commits (`interface.unit_rows`): its unit is the
     template ``flock-read-tmpl 5 2`` writes, the tree's build found with nothing named, byte for byte its template section, and a
     round of honest reads, a read under another salt and one past V stages on it, each read's row and verdict the IR
     reference's (`gates.embedding.reference`). The verifier's check accepts the statement's circuit file as that read,
@@ -179,7 +179,7 @@ def test_a_read_unit_is_the_verifiers_template_and_stages_a_round_of_reads(verif
     cases = _reads(V, H)
     rows = {r: np.stack([np.packbits(np.array(E.arguments(V, *c)[g], np.uint8), bitorder="little").view("<u2") for c in cases])
             for g, (r, *_rest) in enumerate(in_rows)}
-    got = st.stage(rows, tmp_path / "round", b"k" * 32)
+    got = st.stage(rows, tmp_path / "round")
     want = [E.reference(V, *c) for c in cases]
     assert [list(map(int, w)) for w in got["outs"]["o0"]] == [h for h, _ok in want]
     assert [int(w[0]) for w in got["outs"]["o1"]] == [ok for _h, ok in want] == [1] * V + [0, 1]

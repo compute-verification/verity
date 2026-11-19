@@ -10,7 +10,6 @@ DeepGEMM row's coordinates in the same template read its committed q and s, unwi
 from __future__ import annotations
 
 import json
-from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -25,11 +24,12 @@ from verity_vllm.definitions.registry import fp8 as F8
 from verity_vllm.definitions.registry.fp8 import FP8_BLOCK
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
-from verity.commitments.periods import wiring as WI
+from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_flock.class_statement import UnitStager
+from tests.fixed_salts import fixed
 
 K, N = 256, 200
 NB, KG = -(-N // FP8_BLOCK), K // FP8_BLOCK
@@ -187,14 +187,14 @@ def test_each_coordinate_s_q_and_s_are_wired_to_its_row_s_quantisation(served):
     assert [(m.base, m.n) for m in coords] == [(2 + lo, min(16, 2 * WN - lo)) for lo in range(0, 2 * WN, 16)]
     for m in coords:
         want = tuple((m.base + i - 2) // WN for i in range(m.n))
-        assert m.wired == (("in0", "o0", want), ("in1", "o1", want))
+        assert CH.writer_units(ms, m) == (("in0", "o0", want), ("in1", "o1", want))
     got = SRW.read_all(ms, rows, x["store"], None)
     for m, (g, _e) in zip(ms, got):
         if m.template == TG:
             stager(TG).reference_check(g["rows"], g["outs"])
     q = [g for m, (g, _e) in zip(ms, got) if m.template == TQ]
     for m, (g, _e) in zip(ms, got):
-        for port, out, writers in m.wired:
+        for port, out, writers in CH.writer_units(ms, m):
             assert all(g["rows"][port][i].tobytes() == q[u]["outs"][out][0].tobytes() for i, u in enumerate(writers))
     y = np.concatenate([g["outs"]["o0"] for m, (g, _e) in zip(ms, got) if m.template == TG]).reshape(-1)
     assert y.tolist() == x["words"][op(7)]["out"].tolist() + x["words"][op(8)]["out"].tolist()
@@ -209,7 +209,7 @@ def test_a_deepgemm_row_s_coordinates_beside_them_read_its_committed_q_and_s_unw
     ends = [2, 18, 34, 2 + WN, 50, 66, 2 + 2 * WN]
     assert [(m.name, m.base, m.n, bool(m.wired)) for m in coords] == [
         (f"{TG}/c{j}", a, b - a, a < 2 + WN) for j, (a, b) in enumerate(zip(ends, ends[1:]))]
-    assert all(m.wired == (("in0", "o0", (0,) * m.n), ("in1", "o1", (0,) * m.n)) for m in coords if m.wired)
+    assert all(CH.writer_units(ms, m) == (("in0", "o0", (0,) * m.n), ("in1", "o1", (0,) * m.n)) for m in coords if m.wired)
     got = SRW.read_all(ms, rows, x["store"], None)
     for m, (g, _e) in zip(ms, got):
         if m.template == TG:
@@ -224,29 +224,24 @@ def test_a_deepgemm_row_s_coordinates_beside_them_read_its_committed_q_and_s_unw
 @pytest.mark.parametrize("kinds, tmpls", [(("fi", "fi"), [TQ, TG]), (("fi", "dg"), [TQ, TDQ, TG])], ids=["two-flashinfer", "mixed"])
 def test_the_wires_hold_on_the_window_s_commitment(served, kinds, tmpls):
     """The window `serving_rows.population` derives has the members above; its circuit record counts the coordinates' q and s
-    rows as wired; each quantisation chunk's Boolean Definition on its rows is its committed q and s; the window commits each
-    wired row under its writer's salt, so the verifier's check on the public bodies holds, and refuses a wire to another
-    quantisation and a wired row that is not its writer's output.  Slow (about 10 s a quantisation family): the population
+    rows as wired, once a row of each chunk's table (its one quantisation unit); each quantisation chunk's Boolean Definition on its rows is its committed q and s; a wired
+    row commits nothing, given as its writer's output row (`chain_rows.held_rows`, as the population's commit gives it),
+    and a wired row that is not its writer's output is refused.  Slow (about 10 s a quantisation family): the population
     program and the stager's check trace each quantisation's Boolean Definition, which the tests above never build."""
     x = served(kinds, n=WN)
     caps = {**{t: 1 for t in tmpls[:-1]}, TG: 16}
     w, rows = SRW.population({"r0": {}}, {"templates": tmpls, "law": "subset:2", "chunk_cap": caps}, "ab" * 64)
-    assert w.members == tuple(wired(tmpls, caps)[0])
+    assert w.members == tuple(CH.shared_tables(wired(tmpls, caps)[0]))
     doc = json.loads(IF.circuit_bytes(SRW.circuit_record(w, rows)))
-    assert IF.input_count(doc)["wired"] == kinds.count("fi") * WN * (8 * K + 32 * KG)
+    assert IF.input_count(doc)["wired"] == kinds.count("fi") * -(-WN // caps[TG]) * (8 * K + 32 * KG)
     got = SRW.read_all(w.members, rows, x["store"], None)
     for m, (g, _e) in zip(w.members, got):
         stager(m.template).reference_check(g["rows"], g["outs"])
-    c = CS.commit(w, [g for g, _e in got], salt_key=bytes(32))
-    publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
-    assert WI.check(w.members, publics) == {}
+    assert CS.commit(w, CH.held_rows(w, [g for g, _e in got]), salts_of=fixed(w)).window.population == w.population
     k = next(k for k, m in enumerate(w.members) if m.wired)
-    other = replace(w, members=tuple(replace(m, wired=tuple((p, o, tuple(1 - u for u in ws)) for p, o, ws in m.wired)) if j == k
-                                     else m for j, m in enumerate(w.members)))
-    assert list(WI.check(other.members, publics)) == [w.members[k].key]
     bad = [dict(g, rows={**g["rows"], "in1": g["rows"]["in1"] ^ np.uint16(1)}) if j == k else g for j, (g, _e) in enumerate(got)]
-    with pytest.raises(ValueError, match=f"{w.members[k].key}: a in1 row is not the o1 row"):
-        CS.commit(w, bad, salt_key=bytes(32))
+    with pytest.raises(ValueError, match=f"{w.members[k].key}: its 'in1' rows are not the 'o1' rows"):
+        CH.held_rows(w, bad)
 
 
 def test_a_partition_without_the_quantisation_s_chunks_is_refused(served):

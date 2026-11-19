@@ -91,7 +91,7 @@ open FlockSoundness FlockSoundness.Discharge Exec
 
 /-- **Each table of the masked scope is a parsed one** (`StmtT`): the scope's parse is untyped, has no public input
 ports and has the setup's tables. -/
-theorem stmtT_of_scope {rel : Parsed → Relation} {x : Claims.Msg} {s : FlockDeploy.Ins} {spec : SessionSpec}
+theorem stmtT_of_scope {rel : Parsed → Relation} {x : Hash.Msg} {s : FlockDeploy.Ins} {spec : SessionSpec}
     {sts : Array Stmt} (hsc : Claims.Flock.Scope (FlockDeploy.deployZk rel) x)
     (hset : FlockDeploy.setupOf true x = some (s, spec, sts)) {j : ℕ} (hj : j < sts.size) :
     FlockComplete.ZkTables.StmtT sts[j] := by
@@ -130,7 +130,7 @@ theorem piopCut_ret (coin : ℕ → ℕ → F128) (n : ℕ) {st : Setup} (hm : 1
     (hf : ∀ (a : F128) (lw ρ : Array F128), lw.size = 64 → ρ.size = st.fold.kLog - 6 →
       ∃ v, st.fold.fold a lw ρ = .ok v)
     (lay : Zk.PadLayout) (src : RepSrc) (cap root : ByteArray) (extras : Array Claim) (prior : Array (List F128))
-    (words : List ℕ) (t₀ : Transcript) (l : Array Claims.Msg)
+    (words : List ℕ) (t₀ : Transcript) (l : Array Hash.Msg)
     (hN : l.size + 3 + (st.m - 6) + (3 + (st.fold.kLog - 6)) + (2 + extras.size) + 1 ≤ n)
     (hrk : ∀ zp zc t₁ l₁ lp lc t₂ l₂,
       ((zerocheckCut (asksCut coin n) st.m st.digest cap root lay src.masked).run t₀).go l = (.ok ((zp, zc), t₁), l₁) →
@@ -168,7 +168,7 @@ theorem piopCut_ret (coin : ℕ → ℕ → F128) (n : ℕ) {st : Setup} (hm : 1
 /-- **The cut's inner proof returns where `β ≠ 0`**: answered by `asksCut` with room for its `4` sends, from any
 source and constraints, at `4` sends. -/
 theorem innerCut_ret (coin : ℕ → ℕ → F128) (n : ℕ) (lay : Zk.PadLayout) (ic : InnerCommit) (finalC : F128)
-    (src : RepSrc) (cons : Array (String × Zk.Lin)) (t : Transcript) (l : Array Claims.Msg) (hl : l.size + 4 ≤ n)
+    (src : RepSrc) (cons : Array (String × Zk.Lin)) (t : Transcript) (l : Array Hash.Msg) (hl : l.size + 4 ≤ n)
     (hb : (coin (l.size + 2) 0).isZero = false) :
     ∃ p t' l', ((innerCut (asksCut coin n) lay ic finalC src cons).run t).go l = (.ok (p, t'), l') ∧
       l'.size = l.size + 4 := by
@@ -201,10 +201,10 @@ its `k₀ + 7 + 11R` sends at a `--zk` schedule of `m ∈ [25, 35]`, from any so
 layout's shape. `ligeritoPZk` returns at the replies (`ligeritoPZk_ret`), so at the cut's coins, where the coupling
 (`ligeritoPZk_agree`) throws only at send `n + 1`, past its send count; the cut opening returns with it
 (`ligeritoPZk_cut_fw`), at its exact send count (`ligeritoCut_eqAt`). -/
-theorem ligeritoCut_ret (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claims.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
+theorem ligeritoCut_ret (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Hash.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
     {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35) {sch : Schedule} {tPad : ℕ} (hz : Zk.schedule wideLeaf m = .ok (sch, tPad))
     (ms : MerkleScheme) (T : F128) (cm0 : Commit) (b : Array F128) (lay : Zk.PadLayout) (src : RepSrc)
-    (t : Transcript) (l : Array Claims.Msg) (hN : l.size + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) ≤ n)
+    (t : Transcript) (l : Array Hash.Msg) (hN : l.size + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) ≤ n)
     (hρ : Zk.rhoIndependent ((⟨coin (l.size + 2 + sch.k0) 0, coin (l.size + 2 + sch.k0) 1⟩ : F256),
       (⟨coin (l.size + 3 + sch.k0) 0, coin (l.size + 3 + sch.k0) 1⟩ : F256)) = true) :
     ∃ lg zl rec t' l', ((ligeritoCut (asksCut coin n) (Hashes.ofSha512 Sha512.hash) ms sch T cm0 b lay src).run t).go l =
@@ -254,7 +254,7 @@ set_option maxHeartbeats 4000000 in
 schedule of `m ∈ [25, 35]` and a fold defined at every point of the lincheck's shape, from any source, level-0
 commitment, pads commitment and extra claims, the rep returns at `repSends` sends wherever its rank check passes, its
 pair's coins are independent and its `β` is nonzero. -/
-theorem repCut_ret (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claims.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
+theorem repCut_ret (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Hash.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
     {st : Setup} (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hkm : st.fold.kLog ≤ st.m) (hkk : st.kLog = st.fold.kLog)
     (hfold : ∀ (a b : F128) (lw ρ ts : Array F128), lw.size = 64 → ρ.size = st.fold.kLog - 6 →
       ts.size = st.fold.kLog - 6 → ∃ w, st.fold.folded a b lw ρ ts = .ok w ∧ w.size = 64)
@@ -262,7 +262,7 @@ theorem repCut_ret (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claim
       ∃ v, st.fold.fold a lw ρ = .ok v)
     {sch : Schedule} {tPad : ℕ} (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (rep : ℕ) (dom : ByteArray) (cm0 : Commit)
     (extras : Array Claim) (ic : InnerCommit) (src : RepSrc) (prior : Array (List F128)) (words : List ℕ)
-    (l : Array Claims.Msg) (hN : l.size + CutEq.repSends st sch extras ≤ n)
+    (l : Array Hash.Msg) (hN : l.size + CutEq.repSends st sch extras ≤ n)
     (hrk : ∀ zp zc t₁ l₁ lp lc t₂ l₂,
       ((zerocheckCut (asksCut coin n) st.m st.digest (flat cm0.cap) ic.root (Zk.PadLayout.new st.m st.kLog sch.k0)
           src.masked).run (Transcript.init #[] dom)).go l = (.ok ((zp, zc), t₁), l₁) →

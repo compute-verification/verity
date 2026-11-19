@@ -143,14 +143,14 @@ ledger, pins log and session files for its coins (`evidenceAt`), is one-stage v2
 them, publishing what `a` holds. -/
 def AuditedAt (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) (r : Read)
     (w : _root_.Spot.MonitoringPeriod.Run) (we : RunEvidence) (before : Array Json) (record : Json) (a : Audit) : Prop :=
-  ∃ (au : Audited) (opened : Json) (lc : LiveCommitment) (roots : Roots) (k : Case) (cm : OneStage.Commitment)
-      (q : OneStageZk.Params) (ev : OneStageZk.Evidence),
+  ∃ (au : Audited) (opened : Json) (lc : LiveCommitment) (log : _root_.Spot.Challenger.Log) (k : Case)
+      (cm : OneStage.Commitment) (q : OneStageZk.Params) (ev : OneStageZk.Evidence),
     auditedIn r.wins r.periods (Json.mkObj [("root", Json.str w.root)]) = .ok (au, opened) ∧
     pinsReason au.session opened e.pins = none ∧
     firstParentReason au.session au.pinned p.main = none ∧
-    challengePhaseNamed au p.ledger.key we.session = .ok (lc, roots) ∧
+    challengePhaseNamed au p.ledger.key we.session = .ok (lc, log) ∧
     withheldOn c.ledger w.root = true ∧
-    sampledOn w.root roots = #[a.registration] ∧
+    sampledOn w.root (byFamily lc log) = #[a.registration] ∧
     we.audits = #[k] ∧
     (Flock.canon k.registration >>= fun s => OneStage.commitmentOf s.toUTF8) = .ok cm ∧
     Flock.hexOf cm.digest = a.registration ∧ record = cm.record ∧

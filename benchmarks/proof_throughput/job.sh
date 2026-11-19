@@ -42,10 +42,8 @@ unset CARGO_TARGET_DIR
 S=$(mktemp -d "$FLOCK_WORK/scratch.XXXXXX"); trap 'rm -rf "$S"' EXIT
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
 ph() { printf '%s\t%s\t%s\n' "$1" "$2" "$(date +%s.%N)" >> "$O/phases.tsv"; }
-for c in "$FLOCK_WORK/cuda-root" /workspace/cache/flock/cuda-root; do
-  [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x "$c/usr/local/cuda-13.3/bin/nvcc" ] && export CUDA_TK=$c/usr/local/cuda-13.3
-done
-[ -x /usr/local/cuda-13.3/bin/nvcc ] || [ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 on this node (71-gemm-slowdown.sh unpacks it)"; exit 1; }
+. benchmarks/one_stage/toolkit.sh
+cuda_13_3 "$O/cuda.log" || { log "no CUDA 13.3 on this node ($O/cuda.log)"; exit 1; }
 export PT_CUDA=13.3
 SWEEP=verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh
 # this run's records the bundle carries for verify.sh, beside the circuit, the public file and the sessions

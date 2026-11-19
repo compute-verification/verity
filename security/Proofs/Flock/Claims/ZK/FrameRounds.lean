@@ -100,13 +100,13 @@ def zcBind (digest cap root : ByteArray) : List Frame :=
 alone; `round1_ab`'s and `round1_c`'s masked values and `z`'s squeeze; then each residual round's two masked values and
 its coin's squeeze. -/
 def zcBodies (m : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128)
-    (P : List UInt8) : List Claims.Msg :=
+    (P : List UInt8) : List Hash.Msg :=
   (P ++ encs (zcBind digest cap root) ++ (Frame.sq 2 6).enc) :: (Frame.sq 2 (m - 13)).enc ::
     (encs [.vec ((List.range 64).map fun i => mk (lay.r1ab i)), .vec ((List.range 64).map fun i => mk (lay.r1c i))] ++
       (Frame.sq 1 1).enc) ::
     (List.range (m - 6)).map fun i => encs [.one (mk (lay.ml i 0)), .one (mk (lay.ml i 1))] ++ (Frame.sq 1 1).enc
 
-theorem sampleVecP_cut_ok (coin : ℕ → ℕ → F128) {n k : ℕ} (hk : k ≠ 0) (t : Flock.Transcript) {l : Array Claims.Msg}
+theorem sampleVecP_cut_ok (coin : ℕ → ℕ → F128) {n k : ℕ} (hk : k ≠ 0) (t : Flock.Transcript) {l : Array Hash.Msg}
     (hl : l.size < n) :
     ((sampleVecP (asksCut coin n) k).run t).go l =
       (.ok ((Array.range k).map (coin l.size), afterSq t 2 k (coin l.size)),
@@ -116,14 +116,14 @@ theorem sampleVecP_cut_ok (coin : ℕ → ℕ → F128) {n k : ℕ} (hk : k ≠ 
 /-- **A loop of `n` steps whose every step yields**, as `Replay.forIn_go`, with each step's hypothesis below `n` only:
 under `asksCut` a step past the openings throws. -/
 theorem forIn_go_lt {σ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (S : ℕ → σ) (T : ℕ → Flock.Transcript)
-    (B : ℕ → Claims.Msg) (L n : ℕ)
-    (hbody : ∀ i < n, ∀ (l : Array Claims.Msg), l.size = L + i →
+    (B : ℕ → Hash.Msg) (L n : ℕ)
+    (hbody : ∀ i < n, ∀ (l : Array Hash.Msg), l.size = L + i →
       ((body i (S i)).run (T i)).go l = (.ok (.yield (S (i + 1)), T (i + 1)), l.push (B i)))
-    (l : Array Claims.Msg) (hl : l.size = L) :
+    (l : Array Hash.Msg) (hl : l.size = L) :
     ((forIn [:n] (S 0) body).run (T 0)).go l = (.ok (S n, T n), l ++ ((List.range n).map B).toArray) := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range']
   simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
-  suffices h : ∀ k a (l : Array Claims.Msg), a + k ≤ n → l.size = L + a →
+  suffices h : ∀ k a (l : Array Hash.Msg), a + k ≤ n → l.size = L + a →
       ((forIn (List.range' a k) (S a) body).run (T a)).go l =
         (.ok (S (a + k), T (a + k)), l ++ ((List.range' a k).map B).toArray) by
     simpa [List.range_eq_range'] using h n 0 l (by omega) (by simpa using hl)
@@ -142,10 +142,10 @@ theorem forIn_go_lt {σ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (S
 
 /-- `forIn_go_lt` from any transcript `t`, the loop's transcripts `T t` a function of where it starts. -/
 theorem forIn_go_from {σ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (S : ℕ → σ)
-    (T : Flock.Transcript → ℕ → Flock.Transcript) (B : Flock.Transcript → ℕ → Claims.Msg) (L n : ℕ) (hT : ∀ t, T t 0 = t)
-    (hbody : ∀ t, ∀ i < n, ∀ (l : Array Claims.Msg), l.size = L + i →
+    (T : Flock.Transcript → ℕ → Flock.Transcript) (B : Flock.Transcript → ℕ → Hash.Msg) (L n : ℕ) (hT : ∀ t, T t 0 = t)
+    (hbody : ∀ t, ∀ i < n, ∀ (l : Array Hash.Msg), l.size = L + i →
       ((body i (S i)).run (T t i)).go l = (.ok (.yield (S (i + 1)), T t (i + 1)), l.push (B t i)))
-    (t : Flock.Transcript) (l : Array Claims.Msg) (hl : l.size = L) :
+    (t : Flock.Transcript) (l : Array Hash.Msg) (hl : l.size = L) :
     ((forIn [:n] (S 0) body).run t).go l = (.ok (S n, T t n), l ++ ((List.range n).map (B t)).toArray) := by
   have h := forIn_go_lt body S (T t) (B t) L n (hbody t) l hl
   rwa [hT] at h
@@ -162,7 +162,7 @@ def pairLoopT (g : ℕ → ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ)
   | i + 1 => afterSq (pairPre g i (pairLoopT g coin L t₀ i)) 1 1 (coin (L + i))
 
 /-- The body such a loop's round `i` sends. -/
-def pairLoopB (g : ℕ → ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Flock.Transcript) (i : ℕ) : Claims.Msg :=
+def pairLoopB (g : ℕ → ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Flock.Transcript) (i : ℕ) : Hash.Msg :=
   Claims.toMsg (framed (pairPre g i (pairLoopT g coin L t₀ i)) 1 1)
 
 theorem pairLoopT_pending (g : ℕ → ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ) {t₀ : Flock.Transcript}
@@ -184,7 +184,7 @@ theorem pairLoopB_enc (g : ℕ → ℕ → F128) (coin : ℕ → ℕ → F128) (
 round `n`, it returns, having sent `zcBodies` after `t`'s pending bytes, and leaves the finals' two masked values
 pending. -/
 theorem zerocheckCut_bodies (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray)
-    (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (t : Flock.Transcript) (l : Array Claims.Msg)
+    (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (t : Flock.Transcript) (l : Array Hash.Msg)
     (hl : l.size + 3 + (m - 6) ≤ n) :
     ∃ res t' L', ((zerocheckCut (asksCut coin n) m digest cap root lay mk).run t).go l = (.ok (res, t'), L') ∧
       L'.toList = l.toList ++ zcBodies m digest cap root lay mk t.pending.data.toList ∧
@@ -376,7 +376,7 @@ theorem zcBodies_frame (m : ℕ) (digest cap : ByteArray) (c : Cfg) (lay : _root
 /-- **The cut's lincheck bodies** after the pending bytes `P` (the zerocheck's finals): the lincheck's label and `α`'s
 squeeze; `β`'s squeeze alone; each round's two masked values and its coin's squeeze; then `zp`'s masked values and
 `r'`'s squeeze. -/
-def lcBodies (kLog : ℕ) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (P : List UInt8) : List Claims.Msg :=
+def lcBodies (kLog : ℕ) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (P : List UInt8) : List Hash.Msg :=
   (P ++ (Frame.label "flock-lincheck-v0".toUTF8).enc ++ (Frame.sq 1 1).enc) :: (Frame.sq 1 1).enc ::
     ((List.range (kLog - 6)).map fun j =>
       encs [.one (mk (lay.lc j 0)), .one (mk (lay.lc j 1))] ++ (Frame.sq 1 1).enc) ++
@@ -387,7 +387,7 @@ round `n` and the circuit's fold defined at `α`, it returns, having sent `lcBod
 nothing pending. -/
 theorem lincheckCut_bodies (coin : ℕ → ℕ → F128) (n : ℕ) (c : _root_.Flock.CircuitFold) (m : ℕ)
     (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (zc : _root_.Flock.ZcOut) (t : Flock.Transcript)
-    (l : Array Claims.Msg) (hl : l.size + 3 + (c.kLog - 6) ≤ n)
+    (l : Array Hash.Msg) (hl : l.size + 3 + (c.kLog - 6) ≤ n)
     (hf : ∃ v, c.fold (coin l.size 0) (_root_.Flock.skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) = .ok v) :
     ∃ res t' L', ((lincheckCut (asksCut coin n) c m lay mk zc).run t).go l = (.ok (res, t'), L') ∧
       L'.toList = l.toList ++ lcBodies c.kLog lay mk t.pending.data.toList ∧ t'.pending = ByteArray.empty := by
@@ -808,9 +808,9 @@ namespace LeanRelease
 /-- **The live frame rounds in frames**: at every live frame round `LiveRoundEq` reads, the worker's round and the
 session's switched message are a frame round in frames of a rep that has not stopped (`RoundFrames`). -/
 def LiveFrames (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
-    (H : Claims.Msg → Claims.Msg) (wk : L.toSrv.Worker) (x : Claims.Msg) (w : Flock.Wit) : Prop :=
-  ∀ (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Claims.Msg) (ops : List (Claims.Msg × Claims.Msg))
-    (v : Claims.Msg),
+    (H : Hash.Msg → Hash.Msg) (wk : L.toSrv.Worker) (x : Hash.Msg) (w : Flock.Wit) : Prop :=
+  ∀ (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Hash.Msg) (ops : List (Hash.Msg × Hash.Msg))
+    (v : Hash.Msg),
     0 < ops.length → ops.length < refK x → L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true →
     ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true →
     L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false →
@@ -819,17 +819,17 @@ def LiveFrames (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.re
 
 /-- **`LiveRoundEq` from the live frame rounds in frames.** -/
 theorem liveRoundEq_of_frames (S : RefSession) (vs : S.SwVals)
-    (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Claims.Msg → Claims.Msg) (wk : L.toSrv.Worker)
-    (x : Claims.Msg) (w : Flock.Wit) (hF : LiveFrames S vs L H wk x w) : LiveRoundEq S vs L H wk x w :=
+    (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Hash.Msg → Hash.Msg) (wk : L.toSrv.Worker)
+    (x : Hash.Msg) (w : Flock.Wit) (hF : LiveFrames S vs L H wk x w) : LiveRoundEq S vs L H wk x w :=
   fun ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv =>
     L.release_of_roundFrames x _ _ false v _ (hF ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv)
 
 /-- **The live frame rounds of an honest device**: at every live frame round `LiveRoundEq` reads, the worker's round is
 the honest device's round of the session's switched message (`RoundHonest`). -/
 def LiveHonest (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
-    (H : Claims.Msg → Claims.Msg) (wk : L.toSrv.Worker) (x : Claims.Msg) (w : Flock.Wit) : Prop :=
-  ∀ (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Claims.Msg) (ops : List (Claims.Msg × Claims.Msg))
-    (v : Claims.Msg),
+    (H : Hash.Msg → Hash.Msg) (wk : L.toSrv.Worker) (x : Hash.Msg) (w : Flock.Wit) : Prop :=
+  ∀ (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Hash.Msg) (ops : List (Hash.Msg × Hash.Msg))
+    (v : Hash.Msg),
     0 < ops.length → ops.length < refK x → L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true →
     ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true →
     L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false →
@@ -838,8 +838,8 @@ def LiveHonest (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.re
 
 /-- **`LiveRoundEq` from an honest device's live frame rounds.** -/
 theorem liveRoundEq_of_honest (S : RefSession) (vs : S.SwVals)
-    (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Claims.Msg → Claims.Msg) (wk : L.toSrv.Worker)
-    (x : Claims.Msg) (w : Flock.Wit) (hF : LiveHonest S vs L H wk x w) : LiveRoundEq S vs L H wk x w :=
+    (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Hash.Msg → Hash.Msg) (wk : L.toSrv.Worker)
+    (x : Hash.Msg) (w : Flock.Wit) (hF : LiveHonest S vs L H wk x w) : LiveRoundEq S vs L H wk x w :=
   liveRoundEq_of_frames S vs L H wk x w fun ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv =>
     L.roundFrames_of_honest x _ _ v _ (hF ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv)
 
@@ -847,8 +847,8 @@ theorem liveRoundEq_of_honest (S : RefSession) (vs : S.SwVals)
 round, at the values its transcript reports, and the session's switched message are a frame round in frames of a
 stopped rep (`RoundFrames`), whose masked values the frame releases as their pads alone. -/
 def FillFrames (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
-    (H : Claims.Msg → Claims.Msg) (wk : L.toSrv.Worker) (x : Claims.Msg) (w : Flock.Wit) : Prop :=
-  ∀ (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Claims.Msg) (ops : List (Claims.Msg × Claims.Msg)),
+    (H : Hash.Msg → Hash.Msg) (wk : L.toSrv.Worker) (x : Hash.Msg) (w : Flock.Wit) : Prop :=
+  ∀ (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Hash.Msg) (ops : List (Hash.Msg × Hash.Msg)),
     0 < ops.length → ops.length < refK x → L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = false →
     ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true →
     L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false →
@@ -858,8 +858,8 @@ def FillFrames (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.re
 
 /-- **`FillRoundEq` from the stand-in frame rounds in frames.** -/
 theorem fillRoundEq_of_frames (S : RefSession) (vs : S.SwVals)
-    (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Claims.Msg → Claims.Msg) (wk : L.toSrv.Worker)
-    (x : Claims.Msg) (w : Flock.Wit) (hF : FillFrames S vs L H wk x w) : FillRoundEq S vs L H wk x w :=
+    (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Hash.Msg → Hash.Msg) (wk : L.toSrv.Worker)
+    (x : Hash.Msg) (w : Flock.Wit) (hF : FillFrames S vs L H wk x w) : FillRoundEq S vs L H wk x w :=
   fun ν t κ m₀ ρ₀ ops h0 hlt hl hok hr =>
     L.release_of_roundFrames x _ _ true _ _ (hF ν t κ m₀ ρ₀ ops h0 hlt hl hok hr)
 

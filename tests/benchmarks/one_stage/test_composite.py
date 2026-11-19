@@ -57,7 +57,7 @@ def git_tree(d: Path, guarantees: list[str], dirty: bool = False) -> Path:
 def no_tree(exe: str, product: str = "remote") -> list[str]:
     """What an accept's check prints after its verdict when ``--tree`` is no git checkout."""
     cites = C.CITES.get(product)
-    return [f"RAN None clean=False sha512={C.file_sha512(Path(exe))} cites={cites}",
+    return [f"RAN None clean=False sha512={hashlib.sha512(Path(exe).read_bytes()).hexdigest()} cites={cites}",
             f"NOT_ESTABLISHED {'the tree is no git checkout' if cites else 'the product cites no listed guarantee'}"]
 
 
@@ -143,6 +143,26 @@ def test_a_per_member_accept_that_missed_a_member_says_the_cite_does_not_cover_i
             assert "not_covered" not in ran and not any(ln.startswith("NOT_COVERED") for ln in lines)
 
 
+def test_a_two_level_accept_says_the_cite_does_not_cover_it_and_two_levels_are_not_yet_proved(tmp_path):
+    product = next(iter(C.CITES))
+    tree = git_tree(tmp_path / "tree", [C.CITES[product]])
+    for levels in (1, 2):
+        d, cases = tmp_path / f"levels-{levels}", []
+        for n, id in enumerate(C.COMPONENTS[product]):
+            p = put(d / f"p{n}", id, {"levels": levels} if id == SAMPLED else {}, bytes([n]), b"{}", bytes([n]) * 64,
+                    verdict="accept")
+            cases += ["--cases", str(p)]
+        assert C.main([product, *cases, *outs(d, tree=tree), "--exe", lean(d, {"verdict": "accept"}, 0)]) == 0
+        ran = json.loads((d / "public" / "composite.json").read_bytes())["ran"]
+        lines = (d / "public" / "verdicts.txt").read_text().splitlines()
+        assert ran["cites"] == C.CITES[product]
+        said = f"NOT_COVERED {SAMPLED} 2 levels: {C.CITES[product]} does not cover it, two levels are not yet proved"
+        if levels == 2:
+            assert ran["not_covered"] == {"id": SAMPLED, "levels": 2} and said in lines
+        else:
+            assert "not_covered" not in ran and not any(ln.startswith("NOT_COVERED") for ln in lines)
+
+
 def test_a_cases_dir_of_case_dirs_reads_each(tmp_path):
     put(tmp_path / "cases" / "v1", SAMPLED, {}, b"\x01", b"{}", b"\xaa" * 64)
     put(tmp_path / "cases" / "pouw", POUW, {}, b"\x02", b"{}", b"\xbb" * 64)
@@ -187,13 +207,15 @@ def test_the_public_output_holds_no_evidence_and_no_params_bodies(tmp_path):
 
 
 def test_remote_v1_takes_pearl_plus_in_the_period_s_place_and_publishes_its_digest_not_its_commitment(tmp_path):
-    """Pearl+'s commitment holds its passes' manifests and their salt key, so it is witness: the public record names the
-    digest its answer gives, a public output holding the commitment is refused, and without its case remote-v1 names it
-    missing."""
-    key = os.urandom(32).hex()
-    commitment = C.canonical({"manifests": [{"hm96_salt_key": key}], "record": "aa" * 64})
-    pp = put(tmp_path / "pearlplus", PEARL_PLUS, {"draws": 3}, commitment, b'{"files":[{}]}', b"\xdd" * 64,
-             verdict="accept")
+    """Pearl+'s commitment holds its passes' manifests, which name the salts files each pass kept (their paths, sizes and
+    digests), and its evidence holds those salts, so both are witness: the public record names the digest its answer gives,
+    holds none of the salts files' names, digests or contents, a public output holding the commitment is refused, and
+    without its case remote-v1 names it missing."""
+    salts = os.urandom(2 * 192)
+    entry = {"path": "salts_t", "bytes": len(salts), "sha256": hashlib.sha256(salts).hexdigest()}
+    commitment = C.canonical({"manifests": [{"salts_t": entry}], "record": "aa" * 64})
+    evidence = json.dumps({"files": [{"salts_t": salts.hex()}]}).encode()
+    pp = put(tmp_path / "pearlplus", PEARL_PLUS, {"draws": 3}, commitment, evidence, b"\xdd" * 64, verdict="accept")
     v1 = put(tmp_path / "v1", SAMPLED, {}, b"\x01" * 64, b"{}", b"\xaa" * 64, verdict="accept")
     io = policy(tmp_path)
     exe = lean(tmp_path, {"protocol": "verity/remote/v1", "verdict": "accept"}, 0)
@@ -202,7 +224,9 @@ def test_remote_v1_takes_pearl_plus_in_the_period_s_place_and_publishes_its_dige
     params = json.loads((tmp_path / "private" / "params.json").read_bytes())
     assert [c["id"] for c in params["components"]] == list(C.COMPONENTS["remote-v1"]) == [POLICY, PEARL_PLUS, SAMPLED]
     public = b"".join(f.read_bytes() for f in sorted((tmp_path / "public").iterdir()))
-    assert key.encode() not in public and b"hm96_salt_key" not in public
+    for e in (salts, salts.hex().encode(), entry["sha256"].encode()):
+        assert not any(e[i:i + 16] in public for i in range(len(e) - 15))
+    assert b"salts_t" not in public
     record = json.loads((tmp_path / "public" / "composite.json").read_bytes())
     assert (record["product"], record["missing"]) == ("verity/remote/v1", [])
     assert [c["commitment"] for c in record["cases"]] == ["cc" * 64, "dd" * 64, "aa" * 64]
@@ -329,8 +353,9 @@ def test_an_accept_records_its_commit_its_executable_and_the_listed_guarantee_it
     tree = git_tree(tmp_path / "tree", [C.CITES["remote-v1"]])
     rc, record, lines = remote_accepted(tmp_path, tree)
     commit = subprocess.run(["git", "-C", str(tree), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    verifier = hashlib.sha512((tmp_path / "lean-check").read_bytes()).hexdigest()
     assert rc == 0
-    assert record["ran"] == {"commit": commit, "clean": True, "verifier_sha512": C.file_sha512(tmp_path / "lean-check"),
+    assert record["ran"] == {"commit": commit, "clean": True, "verifier_sha512": verifier,
                              "cites": C.CITES["remote-v1"], "lock": {"listed": True, "deployed": False, "open": ["P.Open"]}}
     assert not any(ln.startswith(("NOT_ESTABLISHED", "UNCITED")) for ln in lines)
 
@@ -361,3 +386,10 @@ def test_onsite_cites_no_listed_guarantee(tmp_path):
     assert record["ran"]["cites"] is None and record["ran"]["lock"] is None
     assert "NOT_ESTABLISHED the product cites no listed guarantee" in \
         (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
+
+
+def test_the_products_ids_are_the_domains_constants():
+    """composite.py imports the standard library alone, so it spells each product's protocol id; these are
+    `verity.commitments.domains`'."""
+    from verity.commitments import domains as DM
+    assert C.PRODUCTS == {"onsite": DM.ONSITE_PROTOCOL, "remote": DM.REMOTE_PROTOCOL, "remote-v1": DM.REMOTE_V1_PROTOCOL}

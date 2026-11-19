@@ -144,7 +144,7 @@ def test_hopper_binds_the_version_1_forms(scale) -> None:
 
 @pytest.mark.parametrize("cc", [(8, 9), (10, 0)])
 def test_a_target_without_a_blockwise_step_is_refused(cc) -> None:
-    tp = TargetProfile(compute_capability=cc)
+    tp = TargetProfile.default().with_overrides(compute_capability=cc)
     with pytest.raises(TG.UnregisteredTarget):
         TG.scaled_mm_fp8_block_spec(tp, 2560, 6144, 128)
     if cc != (10, 0):                                                     # cc 10.0 has no GEMM target at all

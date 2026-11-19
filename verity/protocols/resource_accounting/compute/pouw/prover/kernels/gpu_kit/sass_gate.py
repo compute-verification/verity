@@ -23,9 +23,11 @@ kernel `--kernels` names (fnmatch on the mangled name, or on the name the mangli
 
 A refusal names the kernel, the check and the fix.
 
-  python sass_gate.py BINARY --kernels K... [--expect OP=N[,OP=N...]]... [--forbid LDL,STL] [--smem FILE] [--numeric]
-                         [--json OUT]
+  python sass_gate.py BINARY --cuda-bin DIR --kernels K... [--expect OP=N[,OP=N...]]... [--forbid LDL,STL] [--smem FILE]
+                         [--numeric] [--json OUT]
   # exit 0: every kernel passes; 8: one is refused (named, with its reasons); `--numeric` also runs the numeric gate
+
+DIR is the bin directory of the toolkit whose cuobjdump and nvdisasm read the SASS, the one the caller resolved.
 """
 from __future__ import annotations
 
@@ -368,9 +370,9 @@ def judge_kernel(fn, expect: list[dict[str, int]], forbid=FORBID, smem: list[dic
 # ---- a binary ----------------------------------------------------------------------------------------------------------
 
 
-def functions(path: Path, tools: dict | None = None) -> list:
-    """Every .text section of every cubin in `path` (a cubin, a fatbin, or a host ELF), as harness `Function`s."""
-    tools = tools or H.find_tools()
+def functions(path: Path, tools: dict) -> list:
+    """Every .text section of every cubin in `path` (a cubin, a fatbin, or a host ELF), as harness `Function`s, read with
+    `tools` (the harness's `find_tools(BIN_DIR)`)."""
     cubins, _ = H.device_code(path.read_bytes(), str(path))
     return [H.Function(f) for funcs, _notes in H._disassemble(cubins, tools) for f in funcs]
 
@@ -385,6 +387,9 @@ def select(fns: list, patterns: list[str]) -> tuple[dict[str, list], list[str]]:
 
 def gate(path: Path, kernels: list[str], expect: list[dict[str, int]], forbid=FORBID, smem=None, numeric: bool = False,
          tools: dict | None = None, fns: list | None = None) -> dict:
+    """`tools` (the harness's `find_tools(BIN_DIR)`) reads the binary unless `fns` holds its functions and `numeric` is off."""
+    if tools is None and (fns is None or numeric):
+        raise H.SassGateFailed(f"gate {path}: no tools to read its SASS with (pass find_tools(BIN_DIR))")
     fns = functions(path, tools) if fns is None else fns
     picked, missing = select(fns, kernels)
     recs = []
@@ -395,7 +400,7 @@ def gate(path: Path, kernels: list[str], expect: list[dict[str, int]], forbid=FO
     out = {"version": VERSION, "binary": str(path), "kernels": recs, "missing": missing,
            "ok": not missing and bool(recs) and all(r["ok"] for r in recs)}
     if numeric:
-        out["numeric"] = H.scan(path, tools or H.find_tools(), cache=None)
+        out["numeric"] = H.scan(path, tools, cache=None)
         out["ok"] = out["ok"] and out["numeric"]["ok"]
     return out
 
@@ -417,11 +422,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--smem", type=Path, help="JSON: each shared-memory access's op and 32 lane byte offsets")
     p.add_argument("--numeric", action="store_true", help="also run the numeric gate on the binary")
     p.add_argument("--json", type=Path, help="write the verdict here")
+    p.add_argument("--cuda-bin", type=Path, required=True,
+                   help="the bin directory of the toolkit whose cuobjdump and nvdisasm read the SASS")
     a = p.parse_args(argv)
     try:
         expect = [parse_expect(e) for e in a.expect]
         smem = json.loads(a.smem.read_text()) if a.smem else None
-        v = gate(a.binary, a.kernels, expect, tuple(filter(None, a.forbid.split(","))), smem, a.numeric)
+        v = gate(a.binary, a.kernels, expect, tuple(filter(None, a.forbid.split(","))), smem, a.numeric,
+                 tools=H.find_tools(a.cuda_bin))
     except (GateError, H.SassGateFailed) as e:
         print(f"sass_gate: {e}", file=sys.stderr)
         return EXIT_FAIL

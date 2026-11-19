@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits import partition_object as PO
 from verity.commitments.periods import links as LK
 from verity.commitments.periods import rows as CS
 
@@ -74,7 +75,7 @@ def assignment(window: int, layout: Any, spans: Sequence[Any]) -> dict[str, Any]
     rows, words = layout.logit_rows
     return {"window": int(window), "run": layout.run, "prompt": layout.prompt, "outputs": layout.outputs,
             "stopped": layout.held if layout.stop is not None else None, "program": layout.partition["program"],
-            "partition": BR.P.digest(layout.partition), "value": layout.logits_port, "rows": rows, "words": words,
+            "partition": PO.digest(layout.partition), "value": layout.logits_port, "rows": rows, "words": words,
             "spans": [[s.engine_id, len(s.served), s.finish] for s in spans]}
 
 

@@ -410,7 +410,7 @@ end valid
 section family
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Recursion FlockSoundness.Model
-open FlockSoundness.Audit FlockLevel3 FlockVBridge.InnerAccepts
+open Spot.Sampling FlockLevel3 FlockVBridge.InnerAccepts
 
 variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 variable {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}

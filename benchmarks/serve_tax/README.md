@@ -16,12 +16,10 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `bi-compiled` | `VLLM_BATCH_INVARIANT=1`: vLLM's batch-invariant kernels | `compiled` |
 | `bi-eager` | `VLLM_BATCH_INVARIANT=1`, eager: the committing path's execution (`TargetProfile`'s `bi-eager`), nothing committed | `eager` |
 | `record` | the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`), written by a thread of its own | `compiled` |
-| `release-order` | requests added in the network attester's release order (`serve_admit.ReleaseOrder`, in the engine core) | `record` |
-| `tick` | admission on the certified tick (`verity_vllm.pipeline.tick_plugin`), τ calibrated on `record` | `record` |
+| `tick` | admission on the certified tick (`verity_vllm.pipeline.scheme_plugin`, the network attester's scheme turned on by name), τ calibrated on `record` | `record` |
 | `tokens` | each window's tokens, 4 bytes each, committed in `rows-sha512` rows off the engine loop | `tick` |
-| `kv` | the whole paged KV pool hashed in place on a side stream at each window edge | `tokens` |
 | `tokens-only` | each Commit period's tokens committed as `tokens` commits them, without the tick | `record` |
-| `boundary` | the boundary commitment at each replay block's edge, as a server would take it: drained, the KV pool hashed by the row-table kernels under a fresh key and copied to host memory, the scheduler's state and each rank's runner rows and generators taken and kept | `tokens-only` |
+| `boundary` | the boundary commitment at each replay block's edge, as a server would take it: drained, the KV pool hashed by the row-table kernels under salts fixed for its life and copied to host memory, the scheduler's state and each rank's runner rows and generators taken and kept | `tokens-only` |
 | `boundary-rows` | the two-stage audit's boundary commitment at serve, vLLM's prefix cache left on: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), under the arm's object (`serve_tax.ROWS`) and the model's check template (`Model.check`) | `record` |
 | `canonical-topk` | the canonical DSA top-k: `benchmarks/dsa_topk`'s plugin loaded and `VERITY_DSA_TOPK=canonical`, its counters kept on the node | `compiled` |
 | `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`), and prefix caching off, which the tables need | `boundary-rows` |
@@ -170,7 +168,9 @@ research run --on NODE --source . --cwd source --env GPU_LEASE_ON=4 --env PRIVAT
   sizes each rung's pass by the rung instead, K prompts for each request it holds in flight and the load's own at
   least, which makes that end the same share at every rung: for a ladder read for the rung where tokens a second
   stop rising.
-- **The dataset file** of `chat` is pinned (`serve_tax.Dataset`: its repository, revision, file and SHA-512). A node
+- **The dataset file** of `chat` is pinned (`serve_tax.Dataset`: its repository, revision, file and SHA-512), as the
+  sessions loads' are, by the serving profiles' file (`benchmarks/production.toml`), which also holds the loads'
+  prompts, `long`'s input length, the sessions' turns at each context and the SLO. A node
   keeps one copy, in its Hugging Face cache outside every run's directory; `serve_tax.py passes --fetch`, which
   `run.sh` runs before it holds a GPU, downloads it there where there is none, and a download or a copy whose SHA-512
   is not the pinned one is refused. No run sends the file or keeps it: an arm's `meta.json` records its path and
@@ -209,7 +209,7 @@ research run --on NODE --source . --cwd source --env GPU_LEASE_ON=4 --env PRIVAT
   the model's SLO (TTFT and time per output token). Each side's best is at the rung where its mean over reps is
   largest, so each arm is read at its own operating point. It is the cost only where both sides meet the SLO for
   every request. No target or verdict is of it: the model's target is of GPU time at equal tokens, and the SLO
-  (`Model.slo`) is the benchmark's own constant. An arm that meets the SLO for no request at any rung has no finite
+  (`Model.slo`) is the serving profiles' response-time bounds (`benchmarks/production.toml`). An arm that meets the SLO for no request at any rung has no finite
   cost within it.
 - **The Commit period** of an arm with a boundary commitment is 30 s in this form (`WINDOW_S`), shorter than a pass,
   so that a pass holds the commits of the requests it finishes. At a period longer than a pass the commits would fall
@@ -449,13 +449,10 @@ reads as more than it is:
 - **τ.** The tick's bucket is the network attester's 100 ms; τ_sat and τ_free are 0.9 and 1.1 times the mean engine
   cycle of a `prod-record` step trace on the agentic load at four users (`serve_tax.py tick OUT/prod-record.1 --load
   agentic@4`, which prints them), given as `TICK_MS`.
-- **The chosen rule, measured beside the registered one** (`TICK_RULE='{"token_ns": N}'`, with `TICK_MS=B,B`): at
-  each engine step the tick's clock advances by a fixed amount plus a fixed amount for each non-draft token the step
-  schedules, and that token count is the one the replay's own step computes from its state and the inputs it already
-  holds, never a number the engine reports. The gate counts it as the step's scheduled tokens less its draft tokens
-  (`tick_plugin.non_draft_tokens`), the sum of the rows' n that `replay_step.reference` forms as the batch's token
-  limit less the budget left, on a clock of nanoseconds. `serve_tax.py tick` prints the two amounts fitted to the
-  trace's busy cycles (`per_token`: `base_us`, `token_ns`).
+- **The token term** (`TICK_RULE='{"token_ns": N}'`, with `TICK_MS=B,B`): each engine step also advances the tick's
+  clock `token_ns` ns per non-draft token it schedules (`engine.admission.non_draft_tokens`), the count the replay's
+  own step computes, never one the engine reports. `serve_tax.py tick` prints both amounts fitted to the trace's busy
+  cycles (`per_token`: `base_us`, `token_ns`).
 - **The edge snapshot** is taken every `EDGES_EVERY_S` seconds of a load's serving, counted on through the load's
   passes and users (`servetax_plugin.edge_load`) and again from a new load: the engine drains, every rank's KV
   cache is hashed where it lies (its root is part of the snapshot) and copied to host memory on every rank
@@ -488,20 +485,135 @@ On a node with the pinned vLLM venv, under `research run`, the C4 shard `benchma
 research run --on NODE --source . --cwd source --send C4.json.gz --env CAPACITY=1 -- bash benchmarks/serve_tax/run.sh
 # the arms at three loads, then the replay of the record arm's saturated load
 research run --on NODE --source . --cwd source --send C4.json.gz \
-  --env 'ARMS=compiled eager record release-order tick tokens kv' --env RATES=light=R1,medium=R2,saturated=R3 \
+  --env 'ARMS=compiled eager record tick tokens kv' --env RATES=light=R1,medium=R2,saturated=R3 \
   --env REPLAY=saturated -- bash benchmarks/serve_tax/run.sh
 ~~~
 
-`run.sh`'s header lists its parameters (the model, reps, the loads' span, the Commit period and the KV edge's window).
-`MODEL_ID=glm53` serves GLM-5.3 at TP8 on an 8-GPU node, with the GLM-5.3 TP drivers' checkpoint; `kv` there needs the
-edge in each worker process, which the plugin's model runner hook gives where vLLM loads general plugins in its workers.
-The `tick`, `tokens` and `kv` arms need `verity_vllm.pipeline.tick_plugin` and the corpus client's stand-in attester,
+`run.sh`'s header lists its parameters (the model, reps, the loads' span and the Commit period).
+`MODEL_ID=glm53` serves GLM-5.3 at TP8 on an 8-GPU node, with the GLM-5.3 TP drivers' checkpoint.
+The `tick` and `tokens` arms need `verity_vllm.pipeline.scheme_plugin` and the corpus client's stand-in attester,
 and refuse a tree without them. `tick-certifier` is two jobs: the node's (`SIDE=server`, in `run.sh`'s header),
 then the network attester's host's (`serve_tax.py run --side client`), which needs no GPU. A saturated load keeps a connection open for every request queued in the server, so the
 client raises its open-file limit to the hard limit first.
 
 On one GPU, `MODEL_ID` is `moonlight` (the default), `glm53-standin`, `llama8b`, `qwen3-30b` or `llama32-1b`, the last three read
 from their pinned snapshots under `HF_HOME` (`serve_tax.py checkpoint --model-id ID` prints the path).
+
+### A serving profile
+
+`--profile NAME` (`coding-agent`, `chat` or `fixed-size`) serves a profile of `benchmarks/production.toml`, read through
+`verity_bench.profiles`, with this job's own server and client (`serve_tax.profile_run`). The profile sets the stock arm:
+`prod` for GLM-5.3, and stock vLLM at vLLM's own limits for the 1B, with no context limit or limit on the requests at once
+of ours. It also sets the load (its dataset, the cut and turns for the model's context, and its users or requests in
+flight), the sampling (no flag, so the model's generation_config applies, and each request stops at its recorded length,
+fixed-size's at 1,024 tokens) and the bounds a request is counted within. The flags it fixes (`--arms`, `--loads`,
+`--reps`, `LIFETIMES`, `SAMPLED`, `MAX_MODEL_LEN`, `PASS_PROMPTS`, the published arm's flags, `--target`, `WITH`) are
+refused if given too, each refusal naming the flag to drop. `--profile`, `--feature` and `--find-load` are flags alone:
+`PROFILE`, `FEATURE` and `FIND_LOAD` in the environment are refused. Without `--profile` the job is as it was.
+
+On this branch the profiles stand beside the free-form path; they do not replace it yet. The dashboard's serving-cost
+line (`vllm/serving-cost-glm53`) still runs on the free-form path: `two-stage` against `compiled` over `chat,long`.
+Three things make it one path: `--feature sampled-proofs levels=2` resolving on GLM-5.3's stock (`verity config
+check`'s `sampled-proofs` declaring `levels`, and an arm over `prod` that serves it), found loads for chat and
+fixed-size on the H200, and the free-form `long` load going when the free-form path goes.
+
+A model's stock launch is the same on each of its cards, and a profile's load is the model's on one card
+(`llama32-1b.h100`). The card is the card file whose driver name nvidia-smi gives this host's cards (`profile_card`),
+never a flag or a machine's name. The same command runs on a machine that is not ours, under `research run --local-only`
+(VCF's Slurm cluster, `benchmarks/README.md`): with no `gpu-lease` the job waits for its own cards
+(`CUDA_VISIBLE_DEVICES`) to be free, `VENV` must name an environment holding the pinned vLLM, `HF_HOME` is the hub's own
+place under `XDG_CACHE_HOME` unless given, and the commit is research run's `--tree-sha` or `RESEARCH_SOURCE_COMMIT`, with
+no `.git` needed. A tree that none of these names is refused before anything is served.
+
+- `--find-load` serves stock alone over the profile's ladder (`[profiles.NAME.ladder]`): the load's unit, users for
+  coding-agent and requests in flight for chat and fixed-size, from `start`, each rung `factor` times the last, up to
+  `most`. The load is the fewest at which doubling raises stock's output tokens a second by less than `gain` (5%); where
+  they rise by 5% or more at every rung served, it cannot tell. It prints the file's line for this host's card, the
+  profile's version raised by one and the digest `tests/benchmarks/harness/test_profiles.py` then pins. It edits no
+  file. A profile whose load is still `not found yet` refuses `--feature` until that line is in: every load is, GLM-5.3's
+  coding-agent load on the H200 among them. The production run `r20261117-112411-576f` stays a point at 4 users: its
+  +2.11 points over prod-trace (+2.27% against stock) are the cost at 4 users, a load no ladder found.
+- `--feature NAME [KEY=VALUE ...]` names an application's component and its settings as the application's
+  `protocols` and `[params."<id>"]` lines state them (`--feature pearl-plus`, `--feature sampled-proofs levels=2`):
+  the name one of `verity config check`'s components, each setting checked by that component's own check. A name no
+  component has, or a setting it doesn't declare, is refused by name. The job serves the arm of ours whose `feature`
+  is that component at those settings (`serve_tax.feature`); `two-stage` serves `sampled-proofs` at `levels` 2, which
+  the config check refuses until its `sampled-proofs` declares `levels`. A component that no arm over the model's
+  stock serves yet raises `NotImplementedError`, naming the goal and what it lacks (Pearl+: the settings its attach
+  needs under vLLM's scheme plugin). It serves stock and that arm in turn at the profile's one load:
+  two server lifetimes each, three reps a lifetime, which makes six paired reps. Its result is the run's result (kind `serve-tax-profile/v1`), written
+  through the kit's report: the cost under the model's metric id (`vllm/serving-cost-glm53`), its member the arm over
+  stock and the profile (`glm-5.3-h200-prod-record-over-prod-coding-agent`), with its interval, and each side's latencies
+  and share within the bounds as measurements beside it. `verity bench serving_cost profile RUN` reads it back. The
+  result prints three lines in this order:
+  - our extra card time a token. On a load of requests in flight, stock's output tokens a second at full load over
+    ours, less one: the median of the six paired ratios with the kit's interval (`serving_cost`), its noise floor
+    stock's two lifetimes. On coding-agent's sessions, our seconds for the same requests over stock's, less one, with a
+    server lifetime its unit: the mean of the two lifetimes' costs with Student's t interval (`session_cost`), and
+    that cost's noise floor. It is `cannot tell` where the interval, widened by the noise floor, holds zero, or where
+    the two sides did not do the same work. A rep whose two sides served different numbers of output tokens is refused;
+  - time to first token and time per output token, median and P99, ours beside stock;
+  - the share of requests within the profile's bounds.
+
+  Then come the profile's name, version and digest, the model and whether its result is a quick check, the vLLM pin,
+  and the differences from the published command that apply.
+- An arm that refuses what the profile has on gives `cannot run` in the refusal's own words, stored as the result: the
+  cost with no value and the refusal as its why. The
+  job then exits 1, as it does for an arm whose run refuses it. Where a change on our side alone lets the same prompts
+  through, the arm is served with that change as a second line, labelled with it (`seeded for ours`, `prefix cache off
+  for ours`); stock is never changed. Where no such change exists, no arm is served and no GPU is held.
+
+The passes are planned within the model's `cap_minutes`: an arm starts no pass it cannot finish by then, and a side cut
+short makes the first line `cannot tell`.
+
+~~~text
+research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model llama32-1b \
+  --profile coding-agent --find-load
+research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model llama32-1b \
+  --profile chat --feature sampled-proofs levels=2
+~~~
+
+The first number, coding-agent on one card with Llama 3.2 1B and Pearl+, in order. `NODE` is an H100 or H200 node of
+ours (Pearl+'s kernel is sm_90's), and the find-load and the pair run on the same card model.
+
+1. Stock alone over coding-agent's ladder (1 to 64 users). It prints the line for `llama32-1b.h200` (or `.h100`)
+   under `[profiles.coding-agent.users]`, the version to raise (2 to 3) and the pin for
+   `tests/benchmarks/harness/test_profiles.py`, and keeps them in `OUT/find_load.json`. Write the three into the
+   tree and land them; until then `--feature` refuses with "the load is not found yet".
+
+   ~~~text
+   research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model llama32-1b \
+     --profile coding-agent --find-load
+   ~~~
+
+2. Two salt-only sessions reserved at infra's challenger gate, one for each of the Pearl+ arm's two server lifetimes
+   (a reserved session opens once). Run this from a machine that holds the lane's gate key. `GATE` is the gate command
+   (`ssh -i KEY -o IdentitiesOnly=yes research@HOST`), `LANE` the lane whose key it holds, and `PEER` the node's name
+   among the auditor device's peers. Run it once per session, close enough to the launch that neither reserve expires
+   (`expires_utc`) before its lifetime opens it.
+
+   ~~~text
+   uv run python -c 'import json, sys
+   from verity_vllm.pipeline.commit_coins import ChallengerGate
+   from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.window import reserve_salt
+   g = ChallengerGate(sys.argv[1]); print(json.dumps(reserve_salt(g.call, g.ledger, sys.argv[2], sys.argv[3], 0)[0]))' \
+     "$GATE" LANE PEER
+   ~~~
+
+3. The pair, stock (`compiled`) and `pearl-plus` (the same server, eager, Pearl+ turned on by name through vllm's
+   scheme plugin), at the found load: two lifetimes each, three reps a lifetime, in the model's 20 minutes.
+   `SCHEME_SETTINGS` holds one object per lifetime: the gate command, Pearl+'s kernel directory in the run's tree,
+   the challenger at the node's `127.0.0.1` (the port comes from the gate's open), and that lifetime's reserve
+   answer. The plan refuses a missing or shared session by name before any GPU is held.
+
+   ~~~text
+   research run --on NODE --source . --cwd source \
+     --env 'SCHEME_SETTINGS=[{"gate": "GATE", "pearl-plus": {"kernel": "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90", "challenger": "127.0.0.1:0", "session": RESERVE_1}}, {"gate": "GATE", "pearl-plus": {"kernel": "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90", "challenger": "127.0.0.1:0", "session": RESERVE_2}}]' \
+     -- bash benchmarks/serve_tax/run.sh --model llama32-1b --profile coding-agent --feature pearl-plus
+   ~~~
+
+GLM-5.3's `prod-pearl-plus` is refused at the plan, naming vllm's goal `vllm/scheme-on-in-vllm-server`: the scheme
+plugin turns schemes on in a one-GPU server, and GLM-5.3 serves on 8.
 
 Under a deployment's traffic, the job serves the replay ladder's plan (`benchmarks/replay_ladder/prod_plan.py`: ShareGPT,
 multi-turn and 8k-32k-token prompts, half of them sampled at temperature 0.7 under the public seed rule, each stopping at
@@ -552,10 +664,6 @@ replay matches serving's values only when both picked the same; a window served 
 replay with it. A finished run's large files (`plan.jsonl`, `client.jsonl`) are
 evicted to its files artifact (`run-files.evicted.json` names it) after custody; `research data fetch ART --path GLOB
 --to RUN_DIR` puts them back first.
-
-The `kv` arm hashes the whole pool, free blocks too, at each edge: an upper bound on hashing the blocks live there, and a
-measurement of the cost, not a commitment of the state (a block written after the edge before the side stream reads it
-is hashed as written). With a KV window shorter than the Commit's, its tax scales down with the window's length.
 
 A restore arm (`EDGES_S`, `SAVE_KV`, `RESTORE`, `NUM_GPU_BLOCKS` in `run.sh`'s header) takes its edges at fixed seconds
 after its load's first request. Each edge first drains: the engine core schedules nothing until both batches in flight

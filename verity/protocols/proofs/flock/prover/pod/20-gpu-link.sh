@@ -2,12 +2,13 @@
 # flock-gpu-link: build flock-gpu-link (Flock b684b12 + flock-link + flock-gpu-link patches, the live crate, the CUDA chunk
 # prover) and run it. Run from the verity tree (research run --source . --cwd source).
 # env: MODE=all|build|selftest|serve|prove  VUS="8 64" (selftest) SESS_VUS=4096 RUNS=3 VERIFIER=host:port (prove; empty =
-#      a loopback verifier process) LISTEN=0.0.0.0:7300 SESSIONS=N (serve) OPERATOR=lane  GPU=1 (0: CPU-only build)  SM=90
+#      a loopback verifier process) LISTEN=0.0.0.0:7300 SESSIONS=N (serve) OPERATOR=lane  GPU=1 (0: CPU-only build)  SM (GPU=1: the target's compute capability, 90 for sm_90)
 #      DRV (the driver's major version; set, a GPU build runs no nvidia-smi, as beside another lane's GPU work)
 #      FLOCK_CUDA_LINEINFO=1 (the device code with its line table, for a listing with source lines; the cubin then names
 #      the tree's path, so it differs by where the tree sits)
 set -uxo pipefail
-SRC=$(pwd); SM=${SM:-90}; MODE=${MODE:-all}; GPU=${GPU:-1}
+SRC=$(pwd); MODE=${MODE:-all}; GPU=${GPU:-1}
+[ "$GPU" = 1 ] && : "${SM:?set SM to the compute capability of the target, 90 for sm_90: a GPU build has no default}"
 W=${FLOCK_WORK:-/workspace}/flock-gpu-link; F=$W/flock; O=${RESEARCH_RUN_DIR:-/tmp/fgl}/out; mkdir -p $W $O
 nproc; cat /sys/fs/cgroup/cpu.max 2>/dev/null; free -g | head -2
 read -r Q PER < /sys/fs/cgroup/cpu.max 2>/dev/null || { read -r Q < /sys/fs/cgroup/cpu/cpu.cfs_quota_us && read -r PER < /sys/fs/cgroup/cpu/cpu.cfs_period_us; } 2>/dev/null || { Q=max; PER=100000; }; [ "$Q" = -1 ] && Q=max
@@ -35,14 +36,15 @@ cp -r $SRC/verity/protocols/proofs/flock/prover/live crates/flock-live
 grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml
 LI=; [ "${FLOCK_CUDA_LINEINFO:-0}" = 1 ] && LI=--lineinfo
 FEAT=; if [ "$GPU" = 1 ]; then SM=$SM CUDA=$C13 python3 $SRC/verity/protocols/proofs/flock/prover/cuda_chunk_patch.py $LI || exit 1; FEAT="--features gpu"; fi
-cargo build --release -p flock-live $FEAT --bin flock-gpu-link --bin flock-pure-gpu -j $TH > $O/build.txt 2>&1 || { tail -40 $O/build.txt; exit 1; }
-B=$F/target/release/flock-gpu-link; sha256sum $B $F/target/release/flock-pure-gpu | tee $O/binary.sha256
+cargo build --release -p flock-live $FEAT --bin flock-gpu-link -j $TH > $O/build.txt 2>&1 || { tail -40 $O/build.txt; exit 1; }
+B=$F/target/release/flock-gpu-link; sha256sum $B | tee $O/binary.sha256
 [ "$MODE" = build ] && exit 0
 G=; [ "$GPU" = 1 ] && G=--gpu
+. $SRC/verity/protocols/proofs/flock/prover/pod/selftest.sh
 if [ "$MODE" = all ] || [ "$MODE" = selftest ]; then
   for v in ${VUS:-8 64}; do
-    $B selftest --vus $v > $O/selftest-cpu-$v.txt 2>&1; grep -h SELFTEST $O/selftest-cpu-$v.txt
-    [ -n "$G" ] && { $B selftest --vus $v --gpu > $O/selftest-gpu-$v.txt 2>&1; grep -h SELFTEST $O/selftest-gpu-$v.txt; grep -h '"pass":false' $O/selftest-gpu-$v.txt | cut -c1-400; }
+    selftest_run cpu-$v $O/selftest-cpu-$v.txt $O/selftest-cpu-$v.err $B selftest --vus $v
+    [ -n "$G" ] && selftest_run gpu-$v $O/selftest-gpu-$v.txt $O/selftest-gpu-$v.err $B selftest --vus $v --gpu
   done
 fi
 if [ "$MODE" = serve ]; then
@@ -62,4 +64,4 @@ if [ "$MODE" = all ] || [ "$MODE" = prove ]; then
     [ -n "${SP:-}" ] && { kill $SP; wait $SP 2>/dev/null; unset SP; }
   done
 fi
-true
+selftest_end

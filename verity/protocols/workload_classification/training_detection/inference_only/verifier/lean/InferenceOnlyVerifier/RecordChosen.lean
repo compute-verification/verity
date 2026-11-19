@@ -7,8 +7,7 @@ public import InferenceOnlyVerifier.Record
 
 `Record.summarize` counts a block: of each kind of input bits, the most one slot holds. This module counts the
 **whole execution phase**: of each kind, the bits of every unit of every slot (`executionPhaseBits`), and of them
-the bits the prover chose (`chosen`). It has a difftest (`RecordDifftest`), and the rows protocol (`RowsProtocol`)
-reports `chosen` in its profile, which no verdict reads.
+the bits the prover chose (`chosen`). It has a difftest (`RecordDifftest`), and no verdict reads it.
 
 ## What it counts
 

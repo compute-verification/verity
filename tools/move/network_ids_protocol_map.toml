@@ -1,0 +1,29 @@
+# The network attester's id egress form into the network protocol's package: what `tools/move/layout.py --map
+# tools/move/network_ids_protocol_map.toml` moves and rewrites. `ids_protocol.py` (`IdsProtocol`, `id_request_fields`,
+# `ID_PAYLOAD`) imports no adapter module, its completion protocol `base` handed in by the adapter.
+# Nothing is split, edited or deleted, and no file is added. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", slowdown = "benchmarks/slowdown/slowdown" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", slowdown = "benchmarks/slowdown/slowdown" }
+
+[paths]
+"adapters/vllm/verity_vllm/pipeline/ids_protocol.py" = "verity/protocols/resource_accounting/network/prover/ids_protocol.py"
+
+[retired]
+paths = ["adapters/vllm/verity_vllm/pipeline/ids_protocol.py"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), files
+# whose bytes a digest pins, the archive, `move_check.py` and its test, and `tests/tree.toml`, the layout of record.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**", "archive/**",
+           "tools/check/tests/test_move_check.py", "tools/check/move_check.py",
+           "tools/research/src/research/store/moves.json", "tests/tree.toml"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+
+[modules]
+"verity_vllm.pipeline.ids_protocol" = "verity.protocols.resource_accounting.network.prover.ids_protocol"

@@ -1,0 +1,86 @@
+module
+
+public import Definitions.Core.Draw
+public import Definitions.Core.Game
+public import Mathlib.Data.Fintype.Fin
+public import Mathlib.Data.Fintype.Powerset
+public import Mathlib.Data.Nat.Choose.Basic
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
+
+/-!
+# Sampling designs
+
+A sampling design is the verifier's coin space `Ω`, uniform, and the set of units each coin samples, core's `Verity.SamplingDesign`
+(`Definitions.Core.Draw`) over `Fin n`. What a sampling design gives a consumer is its escape function: the probability that a sample
+misses a set `B` of units.
+
+* `escape L B`: the sample is disjoint from `B`;
+* `miss L K`: the largest escape over sets of at least `K` units, the sampling term of the count
+  curve `δ(K) = miss K + ε`, zero for `K ≥ 1` at a sampling design that samples every unit (`miss_eq_zero_of_sample_univ`);
+* `incl L u`: the probability that `u` is sampled; a single unit escapes with `1 - incl L u`
+  (`missProb_singleton`), and a set escapes with at most that for each of its members
+  (`missProb_le_of_mem`).
+
+Core's uniform `k`-subset of `n` units, `Verity.SamplingDesign.subset n k`, has a hypergeometric escape:
+`C(n - |B|, k) / C(n, k)` (`Verity.SamplingDesign.subset_missProb`), so its count curve is `C(n - K, k) / C(n, k)`
+(`subset_miss`).
+
+The lemmas named here are `Proofs/Spot/Sampling/SamplingDesign.lean`'s.
+-/
+
+@[expose] public section
+
+namespace Spot.Sampling
+
+open Verity.Game
+open scoped ENNReal
+
+/-- A sampling design over `n` units: core's sampling design over `Fin n`. -/
+abbrev SamplingDesign (n : ℕ) : Type 1 := Verity.SamplingDesign (Fin n)
+
+namespace SamplingDesign
+
+variable {n : ℕ}
+
+/-! ## Bernoulli samples -/
+
+/-- Each unit `u` sampled independently with probability `num u / den`. -/
+abbrev bernoulliOf (num : Fin n → ℕ) (den : ℕ) [NeZero den] : SamplingDesign n where
+  Ω := Fin n → Fin den
+  draw ω := Finset.univ.filter fun u => (ω u).val < num u
+
+/-- One Bernoulli coordinate's average of `a` when sampled and `1` when not. -/
+noncomputable def bernFactor (num den : ℕ) (a : ℝ≥0∞) : ℝ≥0∞ :=
+  ((num : ℝ≥0∞) * a + ((den - num : ℕ) : ℝ≥0∞)) / den
+
+/-! ## Stratified draws -/
+
+section Stratified
+
+variable {m : ℕ}
+
+/-- Stratum `s` of the assignment `σ`: the units it assigns to `s`. -/
+def stratum (σ : Fin n → Fin m) (s : Fin m) : Finset (Fin n) := Finset.univ.filter (σ · = s)
+
+/-- **Independent uniform subsets inside the strata of `σ`**, `k s` of stratum `s`. -/
+def stratified (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) : SamplingDesign n where
+  Ω := (s : Fin m) → ((stratum σ s).powersetCard (k s))
+  nonempty := ⟨fun s => ⟨_, (Finset.powersetCard_nonempty.2 (hk s)).choose_spec⟩⟩
+  draw ω := Finset.univ.biUnion fun s => (ω s).1
+
+end Stratified
+
+/-! ## The uniform subset is optimal
+
+Averaging `escape B` over a uniformly random `K`-set `B` gives `E[C(n - |S|, K)] / C(n, K)` for any
+sampling design (`avg_missProb_subsets`). The map `s ↦ C(n - s, K)` is convex on `ℕ` (its drops fall,
+`drop_anti`), so it lies above its supporting line at `k` (`choose_support`), and Jensen's
+inequality at a mean of `k` gives `C(n - k, K)`, which is the uniform `k`-subset's value. -/
+
+/-- The drop of `s ↦ C(n - s, K)` at `s`. -/
+def drop (n K s : ℕ) : ℕ := (n - s).choose K - (n - (s + 1)).choose K
+
+end SamplingDesign
+
+end Spot.Sampling

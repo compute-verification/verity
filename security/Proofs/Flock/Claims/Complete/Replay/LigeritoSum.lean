@@ -223,12 +223,12 @@ theorem rsSum_eq (tr : Trace) (m : ℕ) (claims : Array Claim) (cs : Rs.Challeng
 end Lg
 
 /-- **`RsSum` at the deployed relation**: at every rep, ring switching's claim is the packed table's. -/
-theorem rsSum_relation (H : Claims.Msg → Claims.Msg) : RsSum H Readable.relation :=
+theorem rsSum_relation (H : Hash.Msg → Hash.Msg) : RsSum H Readable.relation :=
   fun o i hi r _ => Lg.rsSum_eq (o.trace i) _ (o.claims i r) (o.rsCoins i r) (o.claims_xsize hi r)
 
 /-- **Ligerito's final identity at the deployed relation** (`LgFinal`), at every rep the walk runs on its packed table,
 from the honest Ligerito's. -/
-theorem lgFinal_relation (H : Claims.Msg → Claims.Msg)
+theorem lgFinal_relation (H : Hash.Msg → Hash.Msg)
     (hw : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, RepWalkP o i r) (hH : Lg.Honest) :
     LgFinal H Readable.relation :=
   lgFinal_of H _ hw hH (rsSum_relation H) (basisOk_relation H)

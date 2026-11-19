@@ -133,7 +133,7 @@ def _gate(stage, inst) -> bool:
 
 def _profile():
     from verity_vllm import TargetProfile
-    return TargetProfile(compute_capability=(9, 0), batch_invariant=False)
+    return TargetProfile.default().with_overrides(compute_capability=(9, 0), batch_invariant=False)
 
 
 @pytest.mark.slow

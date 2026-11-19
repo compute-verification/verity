@@ -1,8 +1,12 @@
-"""H32 on the H200 (sm_90a): the timed H32 probes (probes/sm90_h32*.cu) in MH100's unit, as a `Prices100` table.
+"""H32 on the card the run opened (sm_90a): the timed H32 probes (probes/sm90_h32*.cu) in MH100's unit, as a
+`Prices100` table.
 
+  bash emp.sh run h32                    # on the card: build, time, then this into h32.txt, h32.json and h32.lean
   python3 h32.py RUN_OUT... [--json OUT] [--lean OUT]
 
-RUN_OUT is `emp.sh time`'s output, each binary's rows.jsonl under RUN_OUT/<binary>/. A probe's note names its class and
+RUN_OUT is `emp.sh run h32`'s output (or `emp.sh time`'s), each binary's rows.jsonl under RUN_OUT/<binary>/, and the
+card it ran on in RUN_OUT/env/device.csv (nvidia-smi's name). The runs handed together must name one card, and the Lean
+table is named for it: its card file's `short` (`kit.card_short`) and `Measured`. A probe's note names its class and
 the 32-bit registers one warp instruction of each counted pattern writes a lane:
 
   c=CLASS [s=SHAPE] w=PATTERN:REGS,...
@@ -25,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import csv
 import math
 import sys
 from pathlib import Path
@@ -119,8 +124,34 @@ def table(priced: list[dict]) -> dict:
     return out
 
 
-def lean(t: dict) -> str:
-    """The table as a Lean `Prices100` literal (namespace Pouw.Dimension.H100)."""
+def card(run_outs: list[Path]) -> str:
+    """The one card ``run_outs`` ran on, from each one's env/device.csv; refused where one names none or they differ."""
+    names = set()
+    for d in run_outs:
+        f = d / "env" / "device.csv"
+        found = {r["name"].strip() for r in csv.DictReader(f.open(), skipinitialspace=True)} if f.is_file() else set()
+        if len(found - {""}) != 1:
+            raise SystemExit(f"h32: {d} names no one card (env/device.csv, nvidia-smi's name): nothing priced")
+        names |= found
+    if len(names) != 1:
+        raise SystemExit(f"h32: the runs handed together ran on {len(names)} cards ({', '.join(sorted(names))}), "
+                         "and a table is one card's: nothing priced")
+    return names.pop()
+
+
+def short(name: str) -> str:
+    """The ``short`` of the card file whose card nvidia-smi calls ``name`` (`kit.card_short`)."""
+    root = Path(__file__).resolve().parents[3]
+    for path in (root, root / "benchmarks" / "harness", root / "tools" / "config"):
+        if str(path) not in sys.path:
+            sys.path.insert(0, str(path))
+    from verity_bench import kit
+
+    return kit.card_short(name)
+
+
+def lean(t: dict, card_short: str) -> str:
+    """The table as a Lean `Prices100` literal named ``card_short`` and `Measured` (namespace Pouw.Dimension.H100)."""
     if t["missing"]:
         raise ValueError(f"no probe for {t['missing']}")
     mac = t["mac"]
@@ -129,7 +160,7 @@ def lean(t: dict) -> str:
     else:
         body = ["  mac"] + [f"    | .{c} => {mac[c]['mac']}" for c, *_ in SHAPES.values()]
     body += [f"  {f} := {t['fields'][f]['value']}" for f in FIELDS]
-    return "def h200Measured : Prices100 where\n" + "\n".join(body) + "\n"
+    return f"def {card_short}Measured : Prices100 where\n" + "\n".join(body) + "\n"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -138,6 +169,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", type=Path)
     ap.add_argument("--lean", type=Path)
     a = ap.parse_args(argv)
+    card_short = short(card(a.run_out))
     priced = [p for d in a.run_out for p in read(d)]
     t = table(priced)
     for p in sorted(priced, key=lambda p: (p["class"], p["price"])):
@@ -158,7 +190,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.json:
         a.json.write_text(json.dumps({"probes": priced, "table": t}, indent=1) + "\n")
     if a.lean and not t["missing"]:
-        a.lean.write_text(lean(t))
+        a.lean.write_text(lean(t, card_short))
     return 0 if not t["missing"] else 1
 
 

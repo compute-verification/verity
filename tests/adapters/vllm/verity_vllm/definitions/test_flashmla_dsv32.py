@@ -294,12 +294,12 @@ def test_a_tokens_body_is_its_cut():
                            "FlashMlaV32DecodeHead_v1{SPLITS=(0,2,3),DK=48,DV=32,BN=16,DOT=HopperBF16WgmmaDot16_v1,SCALE=0.25}": 2}
     head = bind(V.FlashMlaV32DecodeHead, SPLITS=(0, 2, 3), **HEAD)
     assert V.decode_cut(dec) == [(bind(V.FlashMlaV32KvRow, DN=32, DR=16, QT=16), 48)] + [(u, 2 * n) for u, n in V.head_cut(head)]
-    glm = bind(V.FlashMlaV32Decode, **{**V.FLASHMLA_GLM53, "SPLITS": TV.step_splits(1, topk=V.GLM53_TOPK)})
+    glm = bind(V.FlashMlaV32Decode, **{**V.FLASHMLA_GLM53, "SPLITS": TV.step_splits(1, topk=V.GLM53_TOPK, num_sms=132)})
     blk = "FlashMlaV32Block_v1{DK=576,DV=512,BN=64,FIRST=True,DOT=HopperBF16WgmmaDot16_v1,SCALE=0.0625}"
     assert [(u.id, n) for u, n in V.decode_cut(glm)] == [
         ("FlashMlaV32KvRow_v1{DN=512,DR=64,QT=128}", 2048), (blk, 256), ("FlashMlaV32SplitEnd_v1{DV=512,PARTIAL=True}", 256),
         ("FlashMlaV32CombineWeights_v1{NS=32}", 8), ("FlashMlaV32CombineValues_v1{NS=32,G=256}", 16)]
-    one = bind(V.FlashMlaV32Decode, **{**V.FLASHMLA_GLM53, "SPLITS": TV.step_splits(67, topk=V.GLM53_TOPK)})
+    one = bind(V.FlashMlaV32Decode, **{**V.FLASHMLA_GLM53, "SPLITS": TV.step_splits(67, topk=V.GLM53_TOPK, num_sms=132)})
     assert [(u.id, n) for u, n in V.decode_cut(one)] == [
         ("FlashMlaV32KvRow_v1{DN=512,DR=64,QT=128}", 2048), (blk, 8), (blk.replace("FIRST=True", "FIRST=False"), 248),
         ("FlashMlaV32SplitEnd_v1{DV=512,PARTIAL=False}", 8)]
@@ -332,7 +332,7 @@ def test_a_steps_token_count_gives_its_splits():
     """One call holds the step's T tokens as one request, so the planner has max(132 / T, 1) partitions for a token's 32 blocks
     and 5 blocks of fixed overhead: a partition's payload is ceil(37 / parts) + 5 blocks, less the 5 a request costs."""
     first = {1: 32, 4: 16, 7: 11, 11: 8, 14: 7, 17: 6, 19: 5, 23: 4, 27: 4, 34: 3, 45: 2, 67: 1}
-    cuts = {t: TV.step_splits(t, topk=V.GLM53_TOPK) for t in range(1, 140)}
+    cuts = {t: TV.step_splits(t, topk=V.GLM53_TOPK, num_sms=132) for t in range(1, 140)}
     assert {t: len(cuts[t]) - 1 for t in first} == first
     assert sorted(t for t in cuts if t == 1 or cuts[t] != cuts[t - 1]) == sorted(first)
     assert cuts[1] == tuple(range(33)) and cuts[3] == cuts[1]
@@ -348,5 +348,5 @@ def test_glm53_statics():
     assert S["DN"] + 4 * (S["DN"] // S["QT"]) + 2 * S["DR"] == 656
     assert V.GLM53_TOPK == 32 * S["BN"]
     assert F.scale_log2_bits(S["SCALE"]) == T.scale_log2(S["SCALE"])
-    dec = bind(V.FlashMlaV32Decode, **{**S, "SPLITS": TV.step_splits(14, topk=V.GLM53_TOPK)})
+    dec = bind(V.FlashMlaV32Decode, **{**S, "SPLITS": TV.step_splits(14, topk=V.GLM53_TOPK, num_sms=132)})
     assert dec.out_leaves == 8 * 512

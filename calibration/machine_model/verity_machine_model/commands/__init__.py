@@ -3,7 +3,9 @@ other file.
 
 A command module `NAME.py` (`list_.py` for `list`, a builtin's name; `lean_headline.py` for `lean-headline`) holds its
 usage as its docstring, which `machine-model` prints with no command, `add(sub)`, which adds its parser to `sub`
-(argparse's subparsers), and `run(args) -> int`. A module whose name starts with `_` holds what several commands share.
+(argparse's subparsers), and `run(args) -> int`. `cli` refuses a command given no device unless its module sets
+`READS_DEVICE = False`: it reads every device it covers. A module whose name starts with `_` holds what several
+commands share.
 """
 from __future__ import annotations
 

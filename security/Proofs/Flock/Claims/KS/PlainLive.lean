@@ -50,9 +50,9 @@ theorem heq_coin {C : Type} {iF iF' : Fintype C} {iN : Nonempty C} {k k' : C →
 end Casts
 
 /-- `liveStrat` at the link points `pts` is the bytes prover's strategy of the session's explicit game there. -/
-theorem liveStrat_snd_heq {nMax : ℕ} (J mPts N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray)
-    (w : (x : Claims.Msg) → Wire nMax (J x) (mPts x)) (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.Prover Ω)
-    (x : Claims.Msg) (ω : Ω) (pts : Fin 2 → Fin (mPts x) → 𝔽) :
+theorem liveStrat_snd_heq {nMax : ℕ} (J mPts N : Hash.Msg → ℕ) (dg : ByteArray → ByteArray)
+    (w : (x : Hash.Msg) → Wire nMax (J x) (mPts x)) (H : Hash.Msg → Hash.Msg) {Ω : Type} (P : Claims.Prover Ω)
+    (x : Hash.Msg) (ω : Ω) (pts : Fin 2 → Fin (mPts x) → 𝔽) :
     HEq ((liveStrat J mPts N dg w H P x ω).2 pts)
       ((stratG H P (fun x => sessionK dg (J x) (mPts x) (N x)) (fun x => sessionIf (w x) dg (N x)) x ω).2 pts) := by
   have h : HEq (liveStrat J mPts N dg w H P x ω)
@@ -101,9 +101,9 @@ theorem schedL_of_schedK' {rootB' : Array ByteArray} (hB : rootB = rootB') (n : 
 
 /-- A bytes prover whose next submission is `s` keeps `SchedK` for one more round when `s` is on the scheduled rep and
 it keeps `SchedK` after each of the round's coins. -/
-theorem schedK_some {nMax : ℕ} (w : Wire nMax 1 mPts) (H : Claims.Msg → Claims.Msg) {Ω : Type}
-    (Q : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (n : ℕ) (rs : Fin 1 → Fin 2 → List Flock.Round) (r₀ : ℕ)
-    (hist : List (Claims.Msg × Claims.Msg)) (a : Claims.Msg) (o : Option (SubmitJ 1))
+theorem schedK_some {nMax : ℕ} (w : Wire nMax 1 mPts) (H : Hash.Msg → Hash.Msg) {Ω : Type}
+    (Q : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) (n : ℕ) (rs : Fin 1 → Fin 2 → List Flock.Round) (r₀ : ℕ)
+    (hist : List (Hash.Msg × Hash.Msg)) (a : Hash.Msg) (o : Option (SubmitJ 1))
     (hle : ∀ s, o = some s → s.n ≤ nMax) (s : SubmitJ 1) (ho : o = some s)
     (h₁ : s.rep = if r₀ = 0 then 1 else 0)
     (h₂ : ∀ c, SchedK dg rootB pts n (addRoundJ rs s.tab s.rep (roundOf dg s.bytes s.n c)) (r₀ - 1)
@@ -126,11 +126,11 @@ end Sched
 
 section Plain
 
-variable (keep : Bool → Bool) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (hw : 2 * spec.mPts ≤ 65536) {Ω : Type}
+variable (keep : Bool → Bool) (x : Hash.Msg) (spec : SessionSpec) (st : Stmt) (hw : 2 * spec.mPts ≤ 65536) {Ω : Type}
   (P : Claims.Prover Ω) (ω : Ω) (u : plainTape x)
 
 /-- **The simulator's submission after `k + 1` messages**, `k < plainN x`, is on rep `plainRep (k + 1)`. -/
-theorem plainSim_subK (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ) (hl : hist.length = k + 1)
+theorem plainSim_subK (hist : List (Hash.Msg × Hash.Msg)) (k : ℕ) (hl : hist.length = k + 1)
     (hk : k + 1 ≤ plainN x) :
     ∃ s : SubmitJ 1, (plainW spec hw x).sub (((plainSimK keep P x spec st).next x hist (ω, u)).eval sha512).1 = some s ∧
       s.rep.val = plainRep spec st (k + 1) := by
@@ -149,7 +149,7 @@ theorem plainSim_subK (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ) (hl : h
 left. -/
 theorem schedK_plainK (rootB : Array ByteArray) (pts : Fin 2 → Fin spec.mPts → 𝔽)
     (hR : (plainRepNs spec st).length ≤ plainN x) :
-    ∀ (n : ℕ) (rs : Fin 1 → Fin 2 → List Flock.Round) (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ),
+    ∀ (n : ℕ) (rs : Fin 1 → Fin 2 → List Flock.Round) (hist : List (Hash.Msg × Hash.Msg)) (k : ℕ),
       hist.length = k + 1 → k + n = plainN x →
       SchedK (plainDg spec) rootB pts n rs ((plainRepNs spec st).length - k)
         (toStrat _ (roundsIf (plainW spec hw x) (plainDg spec) rootB pts n rs)
@@ -178,7 +178,7 @@ theorem schedK_plainK (rootB : Array ByteArray) (pts : Fin 2 → Fin spec.mPts �
 /-- `schedK_plainK` at the deployed plain verifier (`keep := id`). -/
 theorem schedK_plain (rootB : Array ByteArray) (pts : Fin 2 → Fin spec.mPts → 𝔽)
     (hR : (plainRepNs spec st).length ≤ plainN x) :
-    ∀ (n : ℕ) (rs : Fin 1 → Fin 2 → List Flock.Round) (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ),
+    ∀ (n : ℕ) (rs : Fin 1 → Fin 2 → List Flock.Round) (hist : List (Hash.Msg × Hash.Msg)) (k : ℕ),
       hist.length = k + 1 → k + n = plainN x →
       SchedK (plainDg spec) rootB pts n rs ((plainRepNs spec st).length - k)
         (toStrat _ (roundsIf (plainW spec hw x) (plainDg spec) rootB pts n rs)
@@ -237,7 +237,7 @@ theorem plainRepNs_length {spec : SessionSpec} {st : Stmt} {s : Flock.Schedule} 
 
 /-- **The plain simulator's live strategy submits `repRounds` rounds on rep 0 first** at a plain statement of one
 table whose schedule has at least two levels. -/
-theorem plainLive_schedLK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
+theorem plainLive_schedLK (keep : Bool → Bool) {x : Hash.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) (ht : tables false x = [(spec, st)])
     {sch : FlockSoundness.Accounting.Schedule} (hsch : Accounting.fast100 st.m = some sch) (h2 : 2 ≤ sch.levels.length)
     (hw : 2 * spec.mPts ≤ 65536) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : plainTape x)
@@ -258,7 +258,7 @@ theorem plainLive_schedLK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {s
   exact plainLive_schedK keep x spec st hw P ω u pts (by unfold plainN; omega)
 
 /-- `plainLive_schedLK` at the deployed plain verifier (`keep := id`). -/
-theorem plainLive_schedL {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
+theorem plainLive_schedL {x : Hash.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) (ht : tables false x = [(spec, st)])
     {sch : FlockSoundness.Accounting.Schedule} (hsch : Accounting.fast100 st.m = some sch) (h2 : 2 ≤ sch.levels.length)
     (hw : 2 * spec.mPts ≤ 65536) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : plainTape x)
@@ -268,7 +268,7 @@ theorem plainLive_schedL {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts 
   plainLive_schedLK id (x := x) (ins := ins) (spec := spec) (sts := sts) (st := st) (hset := hset) (ht := ht) (sch := sch) (hsch := hsch) (h2 := h2) (hw := hw) (Ω := Ω) (P := P) (ω := ω) (u := u) (pts := pts)
 
 /-- **`PlainSchedAlign` holds at every statement.** -/
-theorem plainSchedAlign (x : Claims.Msg) : PlainSchedAlign x := by
+theorem plainSchedAlign (x : Hash.Msg) : PlainSchedAlign x := by
   intro s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω
   have hS := fun u => plainLive_schedL hset ht hsch (by simp) (plain_mPts hs hin hset).1 P ω u
   refine ⟨fun hh C u => ?_, fun hh hl C u => ?_⟩

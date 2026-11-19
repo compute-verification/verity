@@ -13,6 +13,7 @@ else:
     torch = pytest.importorskip("torch")
     nn = torch.nn
 
+from verity_vllm import messages
 from verity_vllm.acquire import plan as P
 from verity_vllm.acquire.install import (
     IncompletePlan,
@@ -26,6 +27,13 @@ from verity_vllm.query.manifest import format as RM
 from verity_vllm.records.runtime_tree import runtime_tree_of
 
 PD = "0" * 64
+
+
+def observe(plan, model, runner, sink):
+    """The plan installed, with ``sink`` subscribed to the values its sites emit."""
+    inst = install_from_plan(plan, model, runner)
+    messages.current().subscribe("acquisition", "values", lambda e: sink((e.block, e.port, e.slot), e.value))
+    return inst
 TABLES: dict[str, set[str]] = {"HAZARD_LEAVES": set(), "GATHER_FLUSH_LEAVES": set(), "PRE_FLUSH_LEAVES": set()}
 
 
@@ -102,7 +110,7 @@ def test_installs_exactly_the_sites_and_observes_them():
     plan, rt = make(base_rows(), model, runner)
     assert plan.complete, [v.why for v in plan.unsupported]
     sink = OccurrenceSink()
-    inst = install_from_plan(plan, model, runner, sink=sink)
+    inst = observe(plan, model, runner, sink)
     expect = [("blocks.0.norm", "producer_output", "0"), ("blocks.0.norm", "producer_output", "1"), ("blocks.0.proj", "producer_output", "out"),
               ("embed", "consumer_input", "in[0]"), ("embed", "producer_output", "out"), ("logits", "producer_output", "out"),
               ("runner.sampler", "runner_return", ".sampled_token_ids")]
@@ -132,9 +140,9 @@ def test_installs_exactly_the_sites_and_observes_them():
 def test_a_second_installation_on_the_runner_observes_its_own_sites_alone():
     model, runner = Tiny(), Runner()
     plan, _ = make(base_rows(), model, runner)
-    install_from_plan(plan, model, runner, sink=OccurrenceSink()).remove()
+    observe(plan, model, runner, OccurrenceSink()).remove()
     sink = OccurrenceSink()
-    inst = install_from_plan(plan, model, runner, sink=sink)
+    inst = observe(plan, model, runner, sink)
     runner.sample(model(torch.tensor([[1, 2, 3]])))
     assert sink.counts[("runner.sampler", "runner_return", ".sampled_token_ids")] == 1 and set(sink.counts.values()) == {1}
     inst.remove()
@@ -146,7 +154,7 @@ def test_a_whole_return_site_of_a_module_returning_several_records_each_tensor()
     rows = [r for r in base_rows() if r["op_path"] != "blocks.0.norm"] + [row("instance_outputs", "blocks.0.norm", "out")]
     plan, _ = make(rows, model, runner)
     sink = OccurrenceSink()
-    inst = install_from_plan(plan, model, runner, sink=sink)
+    inst = observe(plan, model, runner, sink)
     model(torch.tensor([[1, 2]]))
     key = ("blocks.0.norm", "producer_output", "out")
     assert sink.counts[key] == 1 and sink.shapes[key] == [[1, 2, 4]] and key not in sink.non_tensor
@@ -208,7 +216,7 @@ def test_a_site_whose_slot_names_no_place_of_its_call_hands_the_sink_nothing():
              P.AcquisitionSite("consumer_input", "logits", "in[1]"), second]
     plan = P.AcquisitionPlan(PD, PD, "tiny", [P.ValuePlan(s.module, s.slot, "instance_outputs", 1, chosen=s, status="chosen") for s in sites])
     sink = OccurrenceSink()
-    inst = install_from_plan(plan, model, sink=sink)
+    inst = observe(plan, model, None, sink)
     assert inst.keys() == sorted(s.key() for s in sites) and not inst.missing
     model(torch.tensor([[1, 2, 3]]))
     assert sink.counts == {second.key(): 1} and sink.shapes == {second.key(): [[1, 3, 4]]}
@@ -221,7 +229,7 @@ def test_promoted_consumer_pre_hook_only():
     plan, _ = make(rows, model, runner)
     assert plan.complete
     sink = OccurrenceSink()
-    inst = install_from_plan(plan, model, runner, sink=sink)
+    inst = observe(plan, model, runner, sink)
     assert ("logits", "consumer_input", "in[0]") in set(inst.keys()) and not any(s.module == "blocks.0" for s in inst.installed)
     model(torch.tensor([[1, 2]]))
     assert sink.counts[("logits", "consumer_input", "in[0]")] == 1 and sink.shapes[("logits", "consumer_input", "in[0]")] == [[1, 2, 4]]

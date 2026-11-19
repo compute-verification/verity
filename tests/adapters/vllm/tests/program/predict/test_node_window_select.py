@@ -80,7 +80,7 @@ def window(program):
 
 
 def _select_templates(circuit: IF.Circuit) -> list[str]:
-    return [t for t in circuit.units if re.match(r"Greedy(Chunk|Combine)_v2\{", t)]
+    return [t for t in circuit.units if re.match(r"Greedy(Chunk_v2|Combine_v2|CombineToken_v1)\{", t)]
 
 
 def test_select_units(program, window):
@@ -89,7 +89,7 @@ def test_select_units(program, window):
     circuit, w = window
     assert "TokenSelect" not in w.census(circuit)["unlowered"]
     ts = _select_templates(circuit)
-    want = [descriptor_id(u.defn) for u in G.plan(V)]
+    want = [descriptor_id(fn) for _u, fn in NSEL.stages(V)]
     assert sorted(ts) == sorted(want) and len(ts) == K
     fns = dict(zip(circuit.ids, (f for f, _n in circuit.templates)))
     for t in ts:
@@ -142,7 +142,7 @@ def test_joined_with_select():
     families = {**FAMILIES, **NS.FAMILIES, **NM.FAMILIES, **NE.FAMILIES}
     circuit, w = NW.node_window(glm_request(IDS, 1).program.fn, families=families)
     assert w.census(circuit)["unlowered"] == {}
-    combine = descriptor_id(G.plan(V)[-1].defn)
+    combine = descriptor_id(NSEL.stages(V)[-1][1])
     (stop,) = [t for t in circuit.units if t.startswith("GreedyStopCheck_v1{")]
     ids = sorted((x.at, x.cut, x.writer, x.base) for x in circuit.wires if x.reader == stop and x.port == "ids")
     assert circuit.units[stop] == 1 and ids == [(0, (0, 1), combine, 0), (0, (1, 1), combine, 1)]
@@ -151,7 +151,7 @@ def test_joined_with_select():
         (f"r{c}", descriptor_id(G.plan(V)[c].defn), 1) for c in range(K - 1)}
     assert not [f for f in w.free if f.tid == stop and f.port != "logits"]
     assert not [f for f in w.free if f.family == "TokenSelect"]
-    (read,) = [t for t in circuit.units if t.startswith("EmbeddingRead_v1{")]
+    (read,) = [t for t in circuit.units if t.startswith("EmbeddingRead_v2{")]
     blocks = 6144 // NE.WIDTH
     tok = [(x.writer, x.out, x.at, x.radix, x.base, x.step, x.cut)
            for x in circuit.wires if x.reader == read and x.port == "tok"]

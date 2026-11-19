@@ -367,7 +367,7 @@ theorem verdictJ_calls_sub {spec : SessionSpec} {tabs : Array Setup} {j j' : Lea
   · exact .inr hb
 
 /-- **The plain verdict's oracle log at a parsed value is its logged run's**, and the two runs agree. -/
-theorem verifyJ_log (H : Claims.Msg → Claims.Msg) (spec : SessionSpec) (tabs : Array Setup) (j : Lean.Json)
+theorem verifyJ_log (H : Hash.Msg → Hash.Msg) (spec : SessionSpec) (tabs : Array Setup) (j : Lean.Json)
     (proofs : Array ByteArray) :
     ((verifyJWithM Claims.Hashes.oc spec tabs j proofs).run.eval H).2.map (fun p => Claims.ofMsg p.1) =
         ((verifyJWithMK id (Hashes.logged (Claims.hOf H)) spec tabs j proofs).go #[]).2.toList ∧
@@ -400,7 +400,7 @@ theorem verdictJ_toFinset {spec : SessionSpec} {tabs : Array Setup} {j j' : Lean
   have hl := (verifyJ_log sha512 spec tabs j proofs).1
   have hl' := (verifyJ_log sha512 spec tabs j' proofs).1
   rw [hOf_sha512] at hl hl'
-  have hq : ∀ {A B : List (Claims.Msg × Claims.Msg)} {LA LB : Array ByteArray},
+  have hq : ∀ {A B : List (Hash.Msg × Hash.Msg)} {LA LB : Array ByteArray},
       A.map (fun p => Claims.ofMsg p.1) = LA.toList → B.map (fun p => Claims.ofMsg p.1) = LB.toList →
       (∀ b ∈ LA.toList, b ∈ LB.toList) → ∀ p ∈ A, ∃ p' ∈ B, p'.1 = p.1 := by
     intro A B LA LB hA hB hAB p hp
@@ -416,8 +416,8 @@ theorem verdictJ_toFinset {spec : SessionSpec} {tabs : Array Setup} {j j' : Lean
 /-! ## A decision's calls -/
 
 /-- `decisionAtE_log` at `decisionAtJ`. -/
-theorem decisionAtJ_log (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
-    (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin))
+theorem decisionAtJ_log (H : Hash.Msg → Hash.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
+    (x : Hash.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin))
     (f : FinalJ) :
     ((decisionAtJ s spec sts x link c₁ mids f).run.eval H).2 =
       ((verifyJWithM Claims.Hashes.oc spec (tabsOf sts) (coinSubJ spec c₁ mids f.j) f.proofs).run.eval H).2 := by
@@ -427,8 +427,8 @@ theorem decisionAtJ_log (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : Sessio
   cases r <;> exact List.append_nil l
 
 /-- **`decisionAtS` calls the files' digests, then the verdict at `jAt`.** -/
-theorem decisionAtS_log (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
-    (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin))
+theorem decisionAtS_log (H : Hash.Msg → Hash.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
+    (x : Hash.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin))
     (f : FinalP) :
     ((decisionAtS s spec sts x link c₁ mids f).run.eval H).2 =
       (((filesAt (tabsOf sts) (pointsOf spec c₁) f.ps).mapM (spec.dgWith Claims.Hashes.oc)).run.eval H).2 ++
@@ -451,9 +451,9 @@ theorem decisionAtS_log (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : Sessio
   rfl
 
 /-- **A decision of `nextR` calls the setup's digests, then `decisionAtS`'s** (`nextE_decide_calls` at `nextR`). -/
-theorem nextR_calls (H : Claims.Msg → Claims.Msg) {rd : Claims.Msg → Option FinalP} {x : Claims.Msg}
-    {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalP}
+theorem nextR_calls (H : Hash.Msg → Hash.Msg) {rd : Hash.Msg → Option FinalP} {x : Hash.Msg}
+    {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : FinalP}
     (h : actR rd x as cs = .decide s spec sts link c₁ mids f)
     (hs : ((setupM Claims.Hashes.oc s.read).run.eval H).1 = .ok (spec, sts)) :
     ((nextR rd x as cs).eval H).2 = ((setupM Claims.Hashes.oc s.read).run.eval H).2 ++
@@ -470,9 +470,9 @@ theorem nextR_calls (H : Claims.Msg → Claims.Msg) {rd : Claims.Msg → Option 
 /-- **Two accepted decisions of `nextR` at one setup, first coin and round messages, on the same proof files, call
 SHA-512 on one set**: the setup's and the files' digests are one, and the verdicts' calls are one set
 (`plainE_calls_agree`'s at `nextR`). -/
-theorem callsR_of_files {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as as' : List Claims.Msg}
+theorem callsR_of_files {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as as' : List Hash.Msg}
     {cs cs' : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f f' : FinalP}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f f' : FinalP}
     (ha : actR rd x as cs = .decide s spec sts link c₁ mids f)
     (ha' : actR rd x as' cs' = .decide s spec sts link c₁ mids f')
     (hacc : ((nextR rd x as cs).eval sha512).1 = .acc) (hacc' : ((nextR rd x as' cs').eval sha512).1 = .acc)
@@ -536,7 +536,7 @@ open FlockDeploy (Coin FinalP nextR actR)
 coins share the setup, the first coin and the round messages (`nextR_shared`); on the same proof files they call
 SHA-512 on one set (`callsR_of_files`), and on different ones two openings collide among their calls
 (`filesR_tied`). -/
-theorem rCallsBind_sha512 (rd : Claims.Msg → Option FinalP) : RCallsBind FlockDeploy.sha512 rd := by
+theorem rCallsBind_sha512 (rd : Hash.Msg → Option FinalP) : RCallsBind FlockDeploy.sha512 rd := by
   intro x ms l l' cs hk _ _ hacc hacc' hne
   obtain ⟨s, spec, sts, link, c₁, mids, f, ha⟩ := FlockDeploy.KS.actR_of_acc hacc
   obtain ⟨s', spec', sts', link', c₁', mids', f', ha'⟩ := FlockDeploy.KS.actR_of_acc hacc'
@@ -552,8 +552,8 @@ theorem rCallsBind_sha512 (rd : Claims.Msg → Option FinalP) : RCallsBind Flock
 /-- **What `StepsBase` reads of the last step at the deployed reader, at SHA-512, with no premise**: `LastBindsEC` and
 `LastCoinFree` at `bdR`, whatever the code side's join, `final` and weights. -/
 theorem lastR_sha512 (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
-    (rd : Claims.Msg → Option FinalP) (wE : Claims.Msg → ℝ) (join : List Claims.Msg → Claims.Msg)
-    (final : Claims.Msg → Option (List (List (Claims.Msg × Salt)) × Claims.Msg)) (w : Claims.Msg → ℝ) :
+    (rd : Hash.Msg → Option FinalP) (wE : Hash.Msg → ℝ) (join : List Hash.Msg → Hash.Msg)
+    (final : Hash.Msg → Option (List (List (Hash.Msg × Salt)) × Hash.Msg)) (w : Hash.Msg → ℝ) :
     (FlockDeploy.KS.bdR rel rd wE join rowInDeployed final w).LastBindsEC FlockDeploy.sha512 ∧
       (FlockDeploy.KS.bdR rel rd wE join rowInDeployed final w).LastCoinFree FlockDeploy.sha512 :=
   lastR_of rel rd wE join final w (rColsBind_sha512 rd) (rCallsBind_sha512 rd)

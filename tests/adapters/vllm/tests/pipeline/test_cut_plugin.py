@@ -302,20 +302,13 @@ def test_a_timed_edge_that_falls_while_idle_cuts_once(engine) -> None:
     assert [(e["due"], e["at"]) for e in cut.edges] == [(10.0, 35.0), (40.0, 40.0)]
 
 
-def test_reads_outputs_and_the_pool_export_are_recorded(engine, tmp_path) -> None:
-    """A request whose sampling reads its outputs is listed; the export runs after the cut, when no block is held."""
-    seen = []
-
-    def export(sched, k):
-        seen.append(dict(sched.held))
-        return {"nb": 8, "root": f"r{k}"}
+def test_reads_outputs_are_recorded(engine, tmp_path) -> None:
+    """A request whose sampling reads its outputs is listed."""
     log = tmp_path / "cut.jsonl"
-    sched, cut = Sched(), CP.Cut(every_steps=3, export=export, log=log)
+    sched, cut = Sched(), CP.Cut(every_steps=3, log=log)
     serve(engine(lambda core: cut), sched, [Req(0, frequency_penalty=0.5), Req(1)])
-    assert seen and all(h == {} for h in seen)
     lines = [json.loads(x) for x in log.read_text().splitlines()]
     assert lines == cut.edges and lines[0]["reads_outputs"] == ["req-0"]
-    assert [x["pool_row"]["root"] for x in lines] == [f"r{k}" for k in range(len(lines))]
 
 
 def test_make_refuses_what_it_cannot_cut_and_register_adds_the_edge_to_the_seam(engine, monkeypatch, tmp_path) -> None:

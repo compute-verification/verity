@@ -1,6 +1,6 @@
 """`population.sh`'s inputs: per N, DIR/pop-N.json, `{"descriptor", "query", "population"}` for a template-instance
 population of about N units over a layered call hierarchy (a served window's shape): `--roots` root batches cycling over
-`--templates` distinct templates, each template the top of `--levels` levels of composites, every composite calling
+`--templates` distinct templates (the wired record's `order`, a range a root batch), each template the top of `--levels` levels of composites, every composite calling
 three of the level below (at most `--width` per level) and XOR-ing their results, under `Q_template_instances` over the
 templates. `--input-members M` widens each of the root's input nodes to M members (its first ones the population's
 operands, as before), so the root's input gates, which only `Slots.layout`'s input class reads, number about M times
@@ -17,6 +17,7 @@ from pathlib import Path
 
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.circuits import codec
+from verity.circuits.population import wired_population_program
 from verity.circuits.program import input_id
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value
@@ -58,8 +59,15 @@ def case(n: int, roots: int, templates: int, levels: int, width: int, input_memb
     tops = [node(levels - 1, t % width, width) for t in range(templates)]
     each, extra = divmod(n, roots)
     members = [(tops[r % templates], each + (1 if r < extra else 0)) for r in range(roots)]
-    program = P.mixed_population_program([(t, k) for t, k in members if k > 0])
-    query = P.template_instances_query(list(dict.fromkeys(t.id for t, k in members if k > 0)))
+    units = {codec.descriptor_id(t): [t, 0] for t, k in members if k > 0}
+    order = []
+    for t, k in members:
+        if k > 0:
+            u = units[codec.descriptor_id(t)]
+            order.append([codec.descriptor_id(t), u[1], k])
+            u[1] += k
+    record = {"templates": [[tid, n] for tid, (_, n) in units.items()], "order": order}
+    program, query = wired_population_program([(t, n) for t, n in units.values()], record)
     desc = widen(codec.encode_program(program), input_members)
     return {"descriptor": desc, "query": query, "population": P.units(program, query)}
 

@@ -75,7 +75,7 @@ files where it holds them, its own inner shape, each V* session's record, and th
 where the statement carries them (`--rec-links ROOT:N`, which V*'s link part holds to the inner statement's rows,
 `RecLinkPart.check`). -/
 structure Read where
-  inner : Claims.Msg
+  inner : Hash.Msg
   src : Option RecCoins.Source
   shape : RecVStar.Inner
   records : List String
@@ -138,10 +138,10 @@ def accepts (r : Read) : Bool :=
     (RecSetup.checkShape (some r.shape) r.src).isOk && r.src.isSome
 
 /-- What the verifier reads of a statement's bytes (`decode`), where its setup accepts the inner shape. -/
-def parseBytes (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option Read := (decode x).filter accepts
+def parseBytes (decode : Hash.Msg → Option Read) (x : Hash.Msg) : Option Read := (decode x).filter accepts
 
 /-- **The deployed parser**: what the verifier reads where its setup accepts, readable. -/
-def parseOf (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option Claims.Recursion.CompiledStatement :=
+def parseOf (decode : Hash.Msg → Option Read) (x : Hash.Msg) : Option Claims.Recursion.CompiledStatement :=
   (parseBytes decode x).map toStmt
 
 /-- **A V* session's sample passes the verdict's refusals** under the verifier's inner shape `i`: its record holds a sample
@@ -170,7 +170,7 @@ theorem dense_iff (i : RecVStar.Inner) : dense i = true ↔ i.holo = false ∧ i
 /-- **The deployed scope check**: the parser accepts, the inner scope check `ivScope` takes the inner statement, every
 V* session's sample passes, and the verifier's inner shape is dense (`RecSetup.denseOnly`, the verdict's refusal of the
 forms `RecursiveKS` doesn't cover). -/
-def scopeCheckOf (ivScope : Claims.Msg → Bool) (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Bool :=
+def scopeCheckOf (ivScope : Hash.Msg → Bool) (decode : Hash.Msg → Option Read) (x : Hash.Msg) : Bool :=
   match parseBytes decode x with
   | some r => ivScope r.inner && r.records.all (fullSampleOk r.shape) && dense r.shape
   | none => false
@@ -351,8 +351,8 @@ theorem inScope_iff {r : Read} (hr : accepts r = true) :
 /-- **The readable scope at the verifier's parser**: the setup accepts what the verifier reads, the inner statement is
 in the inner scope, every V* session's sample passes, and the verifier's inner shape is dense. -/
 theorem scope_iff {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-    (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W) (decode : Claims.Msg → Option Read)
-    (hparse : D.parse = parseOf decode) (x : Claims.Msg) :
+    (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W) (decode : Hash.Msg → Option Read)
+    (hparse : D.parse = parseOf decode) (x : Hash.Msg) :
     Claims.Recursion.Scope D I x ↔
       ∃ r, parseBytes decode x = some r ∧ I.Scope r.inner ∧ r.records.all (fullSampleOk r.shape) = true ∧
         dense r.shape = true := by
@@ -370,8 +370,8 @@ theorem scope_iff {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin
 /-- **`ScopeMatches` at the compiled verifier's parser and scope check**, at every inner protocol whose readable scope
 its scope check `ivScope` matches. -/
 theorem scopeMatches {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-    (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W) (decode : Claims.Msg → Option Read)
-    (ivScope : Claims.Msg → Bool) (hparse : D.parse = parseOf decode)
+    (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W) (decode : Hash.Msg → Option Read)
+    (ivScope : Hash.Msg → Bool) (hparse : D.parse = parseOf decode)
     (hcheck : D.scopeCheck = scopeCheckOf ivScope decode) (hI : Claims.ScopeMatches I.Scope ivScope) :
     Claims.Recursion.ScopeMatches D I := by
   intro x
@@ -393,7 +393,7 @@ wherever the inner Flock's readable scope is its scope check (`Claims.Flock.Scop
 meet: `FlockDeploy.scopeMatches_plain`, `scopeMatches_zk`). -/
 theorem scopeMatches_flock {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     (D : Claims.Recursion.Deploy Coin) (DI : Claims.Flock.Deploy Coin Col T) (decI : List (ℕ × Col) → List T)
-    (decode : Claims.Msg → Option Read) (hparse : D.parse = parseOf decode)
+    (decode : Hash.Msg → Option Read) (hparse : D.parse = parseOf decode)
     (hcheck : D.scopeCheck = scopeCheckOf DI.scopeCheck decode) (hI : Claims.Flock.ScopeMatches DI) :
     Claims.Recursion.ScopeMatches D (Claims.Recursion.Inner.ofFlock DI decI) :=
   scopeMatches D _ decode DI.scopeCheck hparse hcheck hI
@@ -402,7 +402,7 @@ theorem scopeMatches_flock {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [I
 scope check is the deployed plain verifier's (`FlockDeploy.deployPlain`), whose readable scope it is
 (`FlockDeploy.scopeMatches_plain`), at every inner decoder. -/
 theorem scopeMatches_deployed (rel : Readable.Parsed → Readable.Relation) (D : Claims.Recursion.Deploy FlockDeploy.Coin)
-    (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (decode : Claims.Msg → Option Read)
+    (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (decode : Hash.Msg → Option Read)
     (hparse : D.parse = parseOf decode)
     (hcheck : D.scopeCheck = scopeCheckOf (FlockDeploy.deployPlain rel).scopeCheck decode) :
     Claims.Recursion.ScopeMatches D (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) :=

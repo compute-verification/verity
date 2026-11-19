@@ -57,7 +57,7 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- `PlainSchedAlign` at `VK keep`. -/
-def PlainSchedAlignK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
+def PlainSchedAlignK (keep : Bool → Bool) (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
     (h : tables false x = [(spec, st)]) (d : Json) (hd : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
@@ -79,7 +79,7 @@ def PlainSchedAlignK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
           (plain_hdecHAtK keep hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C u))
 
 /-- `plainSlotAlign_of_sched` at `VK keep`. -/
-theorem plainSlotAlign_of_schedK (keep : Bool → Bool) {x : Claims.Msg} (h : PlainSchedAlignK keep x) : PlainSlotAlignK keep x :=
+theorem plainSlotAlign_of_schedK (keep : Bool → Bool) {x : Hash.Msg} (h : PlainSchedAlignK keep x) : PlainSlotAlignK keep x :=
   fun s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω =>
     ⟨fun hh C r ℓ u => slotRSL_lead L (plain_mPts hs hin hset).2.2 _ _ _ _ m k0 l₀ l₁ rest ext hsch hk0 hm _ _ _
         ((h s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω).1 hh C u) r ℓ.val,
@@ -91,7 +91,7 @@ theorem leadsAfter_plainSimAtK (keep : Bool → Bool) {spec : SessionSpec} {st :
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (I : Exec.Inputs) (d : Json)
-    (x : Claims.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
+    (x : Hash.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
     (hdec : PlainHDecK keep L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn) (hw : 2 * spec.mPts ≤ 65536) {Ω : Type}
     (P : Claims.Prover Ω) (ω : Ω) (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x) {n : ℕ}
     (hS : ∀ pts, SchedL (plainDg spec) (plainLiveK keep x spec st hw P ω u).1 pts (plainN x) (fun _ _ => []) n
@@ -106,7 +106,7 @@ theorem leadsAfter_plainSimAtK (keep : Bool → Bool) {spec : SessionSpec} {st :
     (plainLiveK keep x spec st hw P ω u) (plainSim_rootK keep P x spec st ω hw u) hS
 
 /-- `plainSchedAlign` at `VK keep`. -/
-theorem plainSchedAlignK (keep : Bool → Bool) (x : Claims.Msg) : PlainSchedAlignK keep x := by
+theorem plainSchedAlignK (keep : Bool → Bool) (x : Hash.Msg) : PlainSchedAlignK keep x := by
   intro s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω
   have hS := fun u => plainLive_schedLK keep hset ht hsch (by simp) (plain_mPts hs hin hset).1 P ω u
   refine ⟨fun hh C u => ?_, fun hh hl C u => ?_⟩

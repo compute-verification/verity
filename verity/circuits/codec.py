@@ -34,7 +34,7 @@ from .defs import (Body, Builder, CompositeDefinition, FunctionDefinition, Ident
                    SpecializedDefinition, _static_key, bind)
 from . import ports as P
 from .program import input_id, input_prim, is_input
-from .refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, refs_from_json
+from .refs import Affine, Coll, Concat, Explicit, Grid, PartLog, Refs, Strided, lane_bounds, refs_from_json
 from .types import type_from_json
 
 SCHEMA_V0 = "verity-ir/descriptor/v0"
@@ -134,6 +134,8 @@ def _part_key(p: Refs) -> tuple:
         return ("a", p.space, p.idx, p.base, p.count)
     if isinstance(p, Strided):
         return ("s", p.space, p.idx, p.base, p.inner, p.outer_stride, p.inner_stride, p.count)
+    if isinstance(p, Grid):
+        return ("g", p.run, p.lanes)
     assert isinstance(p, Explicit)
     return ("e", p.items)
 
@@ -790,6 +792,9 @@ def _checked_refs(r: Refs, leaves: Callable[[str, int], int | None] | None) -> R
     elif isinstance(r, Affine):
         ok = _int(r.base) and _nat(r.count)
         spans = [(r.space, r.idx, r.base, r.base + r.count - 1)] if ok and r.count else []
+    elif isinstance(r, Grid):
+        ok = True
+        spans = [(ln[0], ln[1], *lane_bounds(r.run, ln)) for ln in r.lanes]
     else:
         ok = all(map(_int, (r.base, r.outer_stride, r.inner_stride))) and _nat(r.count) and _int(r.inner) and r.inner >= 1
         spans = []
@@ -801,6 +806,8 @@ def _checked_refs(r: Refs, leaves: Callable[[str, int], int | None] | None) -> R
     for s, i, lo, hi in spans:
         n = leaves(s, i) if s in ("p", "n") and _nat(i) else None
         ok = ok and n is not None and 0 <= lo and hi < n
+    if not ok and isinstance(r, Grid):
+        raise ValueError(f"grid-overrun: references {r.to_json()} reach outside a lane's parameter or node")
     if not ok:
         raise ValueError(f"references {r.to_json()} name no leaf of a parameter or a node")
     return r
@@ -918,6 +925,8 @@ def definition_decoder(desc: dict, registry: DefinitionTable, built: dict[str, A
         def leaves(space: str, idx: int) -> int | None:
             if space == "p":
                 return params[idx][1].leaves if idx < len(params) else None
+            if idx < len(nodes) and is_input(nodes[idx].fn):
+                return outs[idx].leaves * (outs[idx].homogeneous_width() or 1)
             return outs[idx].leaves if idx < len(outs) else None
 
         for nd in b["nodes"]:
@@ -981,3 +990,41 @@ def decode_program(desc: dict, registry: DefinitionTable) -> DecodedProgram:
     pfn_fns = tuple(get(fid) for fid in _record_function_ids(desc["program_fn"]) if fid in desc["definitions"])
     P.check(root)
     return DecodedProgram(root, built, desc, pfn_fns)
+
+
+def encode_specialization(fn) -> tuple[str, dict[str, dict[str, Any]]]:
+    """(the specialization's id, every definition it uses in the codec's v0 form): `encode_program` of a one-node
+    Program that calls it, keeping the definitions reachable from it (not the wrapper, its lowered root or their Input gates)."""
+    from .program import Program
+    if isinstance(fn, PrimitiveDefinition):
+        return fn.id, {fn.id: {"form": "primitive", "id": fn.id}}
+    params, ret = fn.signature()
+    shell = CompositeDefinition(f"Show[{fn.id}]", 1, (), lambda S: (tuple(params), ret), lambda B, S, *a: B.call(fn, *a), register=False)
+    desc = encode_program(Program(shell), schema=SCHEMA_V0)
+    defs = desc["definitions"]
+    top = next(n["fn"] for n in defs[desc["root"]]["body"]["nodes"] if n["form"] != "primitive" and n["fn"] in defs
+               and defs[n["fn"]].get("form") == "composite")
+    keep, todo = {}, [top]
+    while todo:
+        k = todo.pop()
+        if k in keep or k not in defs:
+            continue
+        keep[k] = defs[k]
+        todo += [n["fn"] for n in (defs[k].get("body") or {}).get("nodes", [])]
+    return top, keep
+
+
+#: a varying group with more values than this is partitioned at fewer: with a key-block size BN (attention's T), at its first values and
+#: every multiple of BN with the value before it and the three after it -- a head's unit count is affine in T between those, its gates
+#: and committed words nearly so (the k16 PV steps; within 0.1 % of the exact count) -- else at WORD_SAMPLES values; the rest
+#: are interpolated
+WORD_EXACT = 320
+WORD_SAMPLES = 12
+
+
+def word_values(vals: list[int], block: int | None = None) -> list[int]:
+    if len(vals) <= WORD_EXACT:
+        return vals
+    if block:
+        return sorted(set(vals[:4]) | {vals[-1]} | {v for v in vals if v % block in (block - 1, 0, 1, 2, 3)})
+    return sorted({vals[round(i * (len(vals) - 1) / (WORD_SAMPLES - 1))] for i in range(WORD_SAMPLES)})

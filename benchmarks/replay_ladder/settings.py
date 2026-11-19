@@ -19,7 +19,7 @@ REGISTRY = Registry(
       "loads it in both servers, each writing its capture under its own route_capture/ (ROUTECAP_OUT); replays never "
       "load it"),
     S("LADDER_TOPK_PROBE", choice("record", "sort"), None, VALUE,
-      "probe each replay's DSA prefill top-k (topk_probe.py): record its checksums per call under replay-I/topk, and in "
+      "probe each replay's DSA prefill top-k (topk_probe.py): record its checksums per call, sums of its inputs, under the private replay-I/topk, and in "
       "sort mode also sort each row's indices before attention reads them"),
     S("LADDER_TOPK_PROBE_REAL", str, None, VALUE,
       "module:function, a replacement for vLLM's top_k_per_row_prefill (its signature, writing the rows in place) that the "

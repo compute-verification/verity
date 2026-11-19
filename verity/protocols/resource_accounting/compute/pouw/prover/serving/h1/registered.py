@@ -1,17 +1,16 @@
-"""H1's served tables registered at serving scale: `registered.Registered.commit` of rows of 16-bit words as
-``hm96-sha512/row/v2`` bit rows, row j salted `audit.hm96_salt` of the run's key at the value's nonce, with the same
-salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words instead of Python ints.
+"""H1's served tables registered at serving scale: `registered_value.Registered.commit` of rows of 16-bit words as
+``hm96-sha512/row/v2`` bit rows, row j salted with its 192 given bytes (the run's fresh salts at the value's nonce,
+`pouw_h1_prover.RunSalts`), with the same salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words instead of Python ints.
 
 * **The rows' digests.** Row j's bit row is its words little-endian, so ``x_j = SHA-512(sha512_row_v2_prefix(16 W) ||
   words[j])`` is hashed straight from the array's memory, rows split among threads (`hashlib` releases the GIL on a
   buffer of 2 KiB or more, which every H1 row is: a z/y record is 6 KiB, an A or B row K + 4 bytes).
-* **The salts.** ChaCha20 blocks 3j, 3j + 1, 3j + 2 under the key at the nonce, every row's at once
-  (`crypto.chacha20.keystream`, `audit.chacha20_block`'s layout).
+* **The salts.** The caller's: fresh operating-system bytes, 192 a row, handed in as data.
 * **The commit strings.** ``b = x ⊕ M y`` gathers hm96's byte tables over every row (`hm96.batch.masks`), ``c``
   and the tree leaf hash from the instance's one-block prefixes, and the frame-v3-sha512 leaves, nodes and pads from
   their tag's and domain's constant prefix (`merkle.frame_hash`'s message), so a row costs a few short SHA-512 calls.
-* **What it holds.** The ``b || c`` strings and the tree's levels, 64 bytes a node. The salts are sampled again on read
-  (`Salts`, or a public table's `PublicSalts`), and the rows are kept only with ``keep_rows`` (`Rows`), or stand for
+* **What it holds.** The ``b || c`` strings and the tree's levels, 64 bytes a node. The salts are held as the bytes handed in
+  (`Salts`), or a public table's are sampled again on read (`PublicSalts`), and the rows are kept only with ``keep_rows`` (`Rows`), or stand for
   themselves (``rows``, a public table's, built again on read): a window's call tables and its own ``b/<K>`` are
   rebuilt by the prover from what it keeps (`pouw_h1_prover.keep_call`, its weights), so `Served` keeps none of their
   rows and a window holds a few hundred bytes a row (its ``b || c`` and about two tree nodes, as Python bytes), where
@@ -25,7 +24,7 @@ salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words i
   only when it needs it. The NumPy path above is the reference the device is held to
   (``tests/protocols/test_pouw_h1_registered_device.py``) and the fallback everywhere else.
 
-`commit` returns a `registered.Registered` whose ``rows`` and ``salts`` are those sequences; everything `Served`,
+`commit` returns a `registered_value.Registered` whose ``rows`` and ``salts`` are those sequences; everything `Served`,
 `ServedTree.of`, `registered.verify_read` and the record read of it (``root``, ``levels``, ``bcs``, ``entry()``,
 ``path``) is what `Registered.commit` gives over the same rows and salts (``tests/protocols/
 test_pouw_h1_registered.py`` holds it to core's on small windows).
@@ -42,7 +41,6 @@ from typing import Any
 
 import numpy as np
 from verity.commitments import hm96
-from verity.commitments.crypto import chacha20
 from verity.commitments.hm96 import batch
 from verity.commitments.merkle import merkle_depth
 from verity.commitments.rowleaf import (
@@ -52,8 +50,8 @@ from verity.commitments.rowleaf import (
     sha512_row_seg_segments,
     sha512_row_v2_prefix,
 )
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.tensors import dtype_name, h1_device, tensors
 
@@ -61,18 +59,13 @@ _INST = hm96.SHA512
 _FRAME = b"veritor/protocol/merkle/frame/v3\0"
 #: `commit`'s path (`path`): ``"auto"``, ``"gpu"`` or ``"numpy"``, set by the caller that configures the run
 MODE = "auto"
-#: rows a salt pass, rows a digest task
-_SALTED, _ROWS = 1 << 16, 1 << 11
+#: rows a digest task
+_ROWS = 1 << 11
 
 
 @cache
 def _pool() -> ThreadPoolExecutor:
     return ThreadPoolExecutor(max(1, min(16, os.cpu_count() or 1)), thread_name_prefix="h1-registered")
-
-
-def salts(key: bytes, nonce: int, n: int) -> bytes:
-    """Rows 0 .. n - 1's salts, concatenated: row j's `audit.hm96_salt(key, nonce, j)`."""
-    return b"".join(chacha20.keystream(key, nonce, 3 * lo, 3 * min(_SALTED, n - lo)) for lo in range(0, n, _SALTED))
 
 
 def _digests(words: np.ndarray, lo: int, hi: int, head: Any, out: np.ndarray) -> None:
@@ -93,7 +86,7 @@ def _seg_digests(rows: np.ndarray, lo: int, hi: int, heads: list[Any], outer: An
 
 
 def row_digests(words: np.ndarray, schema: str = G.SCHEMA_V2) -> np.ndarray:
-    """Each row's ``x``, ``(n, 64)`` u8: `registered.row_digest(row, 16, schema)` of ``words`` ``(n, W)`` u16, ``schema``
+    """Each row's ``x``, ``(n, 64)`` u8: `registered_value.row_digest(row, 16, schema)` of ``words`` ``(n, W)`` u16, ``schema``
     ``SCHEMA_V2`` or ``SCHEMA_SEG``."""
     words = np.ascontiguousarray(words, "<u2")
     n, w = words.shape
@@ -146,11 +139,13 @@ class _Frame:
 
 
 class Salts(Sequence):
-    """A registered value's salts, sampled again on read: item j is `audit.hm96_salt(key, nonce, j)`; `at` samples many at
-    once."""
+    """A registered value's salts, the n given salts concatenated (``data``): item j is bytes [192 j, 192 j + 192); `at`
+    gathers many at once."""
 
-    def __init__(self, key: bytes, nonce: int, n: int) -> None:
-        self.key, self.nonce, self.n = bytes(key), int(nonce), int(n)
+    def __init__(self, data: bytes, n: int) -> None:
+        self.data, self.n = bytes(data), int(n)
+        if len(self.data) != _INST.salt_bytes * self.n:
+            raise ValueError(f"{len(self.data)} bytes of salts for {self.n} rows, not {_INST.salt_bytes} a row")
 
     def __len__(self) -> int:
         return self.n
@@ -160,14 +155,15 @@ class Salts(Sequence):
             return [self[i] for i in range(*j.indices(self.n))]
         if not -self.n <= j < self.n:
             raise IndexError(j)
-        return hm96_salt(self.key, self.nonce, j % self.n)
+        j %= self.n
+        return self.data[_INST.salt_bytes * j:_INST.salt_bytes * (j + 1)]
 
     def at(self, positions: Sequence[int] | np.ndarray) -> bytes:
-        """Items ``positions`` (each in [0, n)) concatenated, sampled in one pass (`hm96.batch.salts`)."""
-        at = np.asarray(positions)
+        """Items ``positions`` (each in [0, n)) concatenated."""
+        at = np.asarray(positions, dtype=np.int64)
         if at.size and (int(at.min()) < 0 or int(at.max()) >= self.n):
             raise IndexError(f"a position outside the value's {self.n} rows")
-        return batch.salts(self.key, self.nonce, at)
+        return np.frombuffer(self.data, np.uint8).reshape(self.n, _INST.salt_bytes)[at].tobytes()
 
 
 def _public_salt(head: bytes, position: int, ok: bool) -> bytes:
@@ -262,15 +258,15 @@ def _host(words: Any) -> np.ndarray:
 
 class Later:
     """A `commit` whose hash runs on the GPU meanwhile (its ``later``): ``ready()`` without blocking, ``result()`` its
-    `registered.Registered`, waited for."""
+    `registered_value.Registered`, waited for."""
 
-    def __init__(self, hashing: Any, made: Callable[..., G.Registered]) -> None:
+    def __init__(self, hashing: Any, made: Callable[..., RV.Registered]) -> None:
         self.hashing, self.made = hashing, made
 
     def ready(self) -> bool:
         return self.hashing.ready()
 
-    def result(self) -> G.Registered:
+    def result(self) -> RV.Registered:
         return self.made(*self.hashing.result())
 
     def also(self) -> bytes:
@@ -278,19 +274,19 @@ class Later:
         return self.hashing.also()
 
 
-def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_rows: bool = False,
-           row_salts: bytes | PublicSalts | None = None, schema: str = G.SCHEMA_V2, later: bool = False,
-           rows: Sequence | None = None, also: tuple[bytes, int] | None = None, **binding: Any) -> G.Registered | Later:
-    """`registered.Registered.commit(program, value, rows, salts, schema=schema, **binding)` of ``words`` ``(n, W)``
-    u16, ``rows`` their rows and ``salts`` row j's `audit.hm96_salt(key, nonce, j)`, or with ``row_salts`` (n salts
-    concatenated, each used once, or a public table's `PublicSalts`, which the GPU path derives where it hashes) those,
-    ``key`` and ``nonce`` unread. ``schema``: ``SCHEMA_V2``, or ``SCHEMA_SEG`` (an
+def commit(program: str, value: str, words: Any, row_salts: bytes | PublicSalts, keep_rows: bool = False,
+           schema: str = G.SCHEMA_V2, later: bool = False, rows: Sequence | None = None,
+           also: tuple[bytes, bytes] | None = None, **binding: Any) -> RV.Registered | Later:
+    """`registered_value.Registered.commit(program, value, rows, salts, schema=schema, **binding)` of ``words`` ``(n, W)``
+    u16, ``rows`` their rows and ``salts`` ``row_salts``: n salts concatenated, each used once (the run's fresh bytes,
+    `pouw_h1_prover.RunSalts.at` the value's nonce), or a public table's `PublicSalts`, which the GPU path derives where
+    it hashes. ``schema``: ``SCHEMA_V2``, or ``SCHEMA_SEG`` (an
     embedding table's rows, hashed with NumPy wherever `path` says). ``binding``: the domain's other arguments
     (``window``, ``produced``, ``session``). ``keep_rows``: hold the rows (`Rows`), else none; ``rows``: hold these,
     a sequence of the same n rows that builds them on read. Hashed where `path` says;
     ``words`` an array, or a u16 tensor, which the GPU path hashes where it is when that is a CUDA device and every
     other path reads on the host. ``later``: on the GPU path, a `Later` of it, the hash left running on the device's
-    stream; elsewhere the `Registered` itself. ``also`` ``(domain id, nonce)``: the rows (a call's z/y records, on the
+    stream; elsewhere the `Registered` itself. ``also`` ``(domain id, salts)``: the rows (a call's z/y records, on the
     device) are its call z table's too, committed from the same read (`pouw_h1_registered_device.device_hash`'s), that
     root `Later.also`; only with ``later`` on the GPU path."""
     if schema not in (G.SCHEMA_V2, G.SCHEMA_SEG):
@@ -304,28 +300,27 @@ def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_ro
     if len(words.shape) != 2 or not words.shape[0] or not words.shape[1] or dtype_name(words) != "uint16":
         raise ValueError("a registered value is at least one row of 16-bit words, every row the same width")
     n, w = (int(d) for d in words.shape)
-    dom = G.domain(program, value, w, n, G.WORD_BITS, **binding)
+    dom = RV.domain(program, value, w, n, RV.WORD_BITS, **binding)
     public = row_salts if isinstance(row_salts, PublicSalts) else None
-    given = None if row_salts is None or public is not None else bytes(row_salts)
-    fixed = None if given is None else tuple(given[192 * j:192 * (j + 1)] for j in range(n))
-    if (given is not None and len(given) != 192 * n or fixed is not None and len(set(fixed)) != n
+    given = None if public is not None else bytes(row_salts)
+    if (given is not None and (len(given) != 192 * n or len({given[192 * j:192 * (j + 1)] for j in range(n)}) != n)
             or public is not None and len(public) != n):
         raise ValueError(f"one {_INST.salt_bytes}-byte salt per row, never reused")
     if rows is not None and len(rows) != n:
         raise ValueError(f"{len(rows)} rows held for a value of {n}")
 
-    def made(bcs: Sequence[bytes], levels: Sequence[Sequence[bytes]]) -> G.Registered:
+    def made(bcs: Sequence[bytes], levels: Sequence[Sequence[bytes]]) -> RV.Registered:
         held = rows if rows is not None else Rows(np.ascontiguousarray(_host(words)) if keep_rows else None, n)
-        salts = public if public is not None else Salts(key, nonce, n) if fixed is None else fixed
-        return G.Registered(program=program, value=value, words=int(w), word_bits=G.WORD_BITS, rows=held, salts=salts,
+        salts = public if public is not None else Salts(given, n)
+        return RV.Registered(program=program, value=value, words=int(w), word_bits=RV.WORD_BITS, rows=held, salts=salts,
                             bcs=bcs, levels=levels, schema=schema, **binding)
     if gpu:
-        hashing = h1_device().device_hash(words, key, nonce, given, dom.domain_id,
+        hashing = h1_device().device_hash(words, given, dom.domain_id,
                                 None if public is None else (public.head, public.first, public.ok), also)
         return Later(hashing, made) if later else made(*hashing.result())
     if public is not None:
         given = public_salts(public.head, public.first, n, public.ok)
-    return made(*_numpy(words, key, nonce, given, dom.domain_id, schema))
+    return made(*_numpy(words, given, dom.domain_id, schema))
 
 
 def public_salts(head: bytes, first: int, n: int, ok: bool = False) -> bytes:
@@ -338,11 +333,10 @@ def public_salts(head: bytes, first: int, n: int, ok: bool = False) -> bytes:
     return b"".join(_public_salt(head, u, ok) for u in range(first, first + n))
 
 
-def _numpy(words: np.ndarray, key: bytes, nonce: int, given: bytes | None, domain_id: bytes,
+def _numpy(words: np.ndarray, ys: bytes, domain_id: bytes,
            row_schema: str = G.SCHEMA_V2) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
-    """`commit`'s ``b || c`` strings and tree levels from NumPy and `hashlib`: the reference."""
+    """`commit`'s ``b || c`` strings and tree levels from NumPy and `hashlib` under the salts ``ys``: the reference."""
     n = words.shape[0]
-    ys = salts(key, nonce, n) if given is None else given
     b = (row_digests(words, row_schema)
          ^ np.frombuffer(batch.masks(_INST, _INST.default_key, ys), np.uint8).reshape(n, 64)).tobytes()
     salt_h, leaf_h = hashlib.sha512(_INST.salt_prefix), hashlib.sha512(_INST.leaf_prefix(_INST.default_key))
@@ -360,4 +354,4 @@ def _numpy(words: np.ndarray, key: bytes, nonce: int, given: bytes | None, domai
     return tuple(bcs), frame.levels(leaves)
 
 
-__all__ = ["MODE", "Later", "PublicSalts", "Rows", "Salts", "commit", "path", "public_salts", "row_digests", "salts"]
+__all__ = ["MODE", "Later", "PublicSalts", "Rows", "Salts", "commit", "path", "public_salts", "row_digests"]

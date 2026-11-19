@@ -10,8 +10,10 @@ import argparse
 import collections
 import json
 import re
+import tomllib
+from pathlib import Path
 
-__all__ = ["CC_ARCH", "count", "parse"]
+__all__ = ["arch_of", "count", "parse"]
 
 IMAD = re.compile(r"^(IMAD|IMUL)$")
 ALU = re.compile(r"^(IADD3|IADD|LOP3|LOP|SHF|PRMT|LEA)$")
@@ -19,8 +21,15 @@ MODES = {0: "cpw_none", 1: "cpw_redux", 2: "cpw_red64", 3: "cpw_atoms64", 4: "cp
          6: "cpw_pair2", 7: "cpw_st256", 8: "cpw_pair64"}
 INS = re.compile(r"^\s+/\*([0-9a-f]{4,})\*/\s+(@!?U?P\w+\s+)?([A-Z][A-Z0-9_.]*)(.*)$")
 LABEL = re.compile(r"^\s*\.(L_x_\d+):")
-CC_ARCH = {"12.0": "sm_120a"}
+ARCHITECTURES = Path(__file__).resolve().parents[2] / "hardware" / "architectures"
 UNITS = 8
+
+
+def arch_of(capability: str) -> str | None:
+    """The name of the one architecture file whose `capability` is the device's (None: none, or more than one)."""
+    names = [p.stem for p in sorted(ARCHITECTURES.glob("*.toml"))
+             if tomllib.loads(p.read_text(encoding="utf-8"))["capability"] == capability]
+    return names[0] if len(names) == 1 else None
 
 
 def cls(op: str) -> str:
@@ -94,7 +103,7 @@ def device(path: str) -> tuple[str | None, dict[str, list[dict[str, float]]]]:
     for line in lines:
         m = re.match(r"device cc=(\S+)", line)
         if m:
-            arch = CC_ARCH.get(m.group(1))
+            arch = arch_of(m.group(1))
         m = re.match(r"(cpw_\w+) (.*)", line)
         if m:
             row = {k: float(v) for k, v in re.findall(r"(\w+)=([0-9.]+)", m.group(2))}

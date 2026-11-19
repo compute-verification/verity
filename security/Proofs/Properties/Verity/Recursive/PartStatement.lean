@@ -151,7 +151,7 @@ theorem toOption_ok {ε α : Type} {e : Except ε α} {a : α} (h : e.toOption =
 
 /-- **What `readXPre` reads**: `x`'s fields (`decodeX`), the inner statement's (`FlockDeploy.decode`), the verifier's
 own inner shape and the inner statement's partition, each as `readXPre` reads it. -/
-theorem readXPre_spec {x : Claims.Msg} {r : XR} (h : readXPre x = some r) :
+theorem readXPre_spec {x : Hash.Msg} {r : XR} (h : readXPre x = some r) :
     decodeX x = some r.w ∧ FlockDeploy.decode r.w.inner = some r.innerRaw ∧
       (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)) = .ok r.shape ∧
       r.innerRaw.partition.mapM (jsonOf "partition") = .ok r.partition := by
@@ -230,8 +230,8 @@ theorem partx_len (p : PartX) : p.base.encode.length + p.bindings.size ≤ p.enc
 /-- **Part `s`'s statement fits** where the files the run stages for it do: every field it takes from `x` fits, since
 `x` decodes, Flock's statement with the staged public file is no longer than `x` and that file together, and `x`
 carries no link table. -/
-theorem partRaw_fits {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stage}
-    {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {q : PartX} (hq : r.w.parts[s]? = some q) (hP : PartForm q.base)
+theorem partRaw_fits {x : Hash.Msg} {r : XR} (hr : readX x = some r) {st : Stage}
+    {ms : List (Hash.Msg × Claims.Out)} {s : ℕ} {q : PartX} (hq : r.w.parts[s]? = some q) (hP : PartForm q.base)
     (hlinks : r.w.links = none)
     (hpub : x.length + (st.pub x ms s).size < 2 ^ 64)
     (hrec : (st.record x ms).size < 2 ^ 64) (htr : (st.transcript x ms).size < 2 ^ 64)
@@ -302,7 +302,7 @@ theorem partRaw_fits {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Sta
   · intro b hb; have := encOpt_le (o := r.innerRaw.program) b hb; omega
 
 /-- **Part `s`'s staged statement is `partRaw`'s encoding** where it fits. -/
-theorem staged_eq {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stage} {ms : List (Claims.Msg × Claims.Out)}
+theorem staged_eq {x : Hash.Msg} {r : XR} (hr : readX x = some r) {st : Stage} {ms : List (Hash.Msg × Claims.Out)}
     {s : ℕ} {q : PartX} (hq : r.w.parts[s]? = some q) (hfit : RecRawFits (partRaw r st x ms s q)) :
     staged st x ms s = (partRaw r st x ms s q).encode := by
   unfold staged
@@ -311,8 +311,8 @@ theorem staged_eq {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stage}
 
 /-- **The outer verifier reads part `s`'s staged statement as `partRaw`'s inputs** (`RecRaw.ins`), where it fits and is
 a `--zk` statement. -/
-theorem insO_staged {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stage}
-    {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {q : PartX} (hq : r.w.parts[s]? = some q)
+theorem insO_staged {x : Hash.Msg} {r : XR} (hr : readX x = some r) {st : Stage}
+    {ms : List (Hash.Msg × Claims.Out)} {s : ℕ} {q : PartX} (hq : r.w.parts[s]? = some q)
     (hfit : RecRawFits (partRaw r st x ms s q)) (hzk : q.base.zk = true) :
     insO (staged st x ms s) = (partRaw r st x ms s q).ins.toOption := by
   rw [staged_eq hr hq hfit]
@@ -322,7 +322,7 @@ theorem insO_staged {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stag
   simp only [Option.bind_eq_bind, Option.bind_some, hz, Bool.true_eq_false, ite_false]
 
 /-- **Where part `s`'s staged numbers are `nums`', its V\* statement is the staged one.** -/
-theorem vstarAt_eq_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ}
+theorem vstarAt_eq_staged {st : Stage} {x : Hash.Msg} {ms : List (Hash.Msg × Claims.Out)} {s : ℕ}
     (hn : numsOf (staged st x ms s) = nums st x s) : vstarAt st x ms s = staged st x ms s := by
   unfold vstarAt
   rw [if_pos hn]
@@ -775,7 +775,7 @@ theorem reg_text {bs : Core.Blobs} {rd : Option String} {rw : Option ByteArray} 
 
 /-- **The verifier's readers take part `s`'s statement to compiled part `s`'s inputs**: `RecRaw.ins` on `partRaw`,
 under `insO_staged_partIns`' hypotheses. -/
-theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {q : PartX}
+theorem ins_partRaw {r : XR} {st : Stage} {x : Hash.Msg} {ms : List (Hash.Msg × Claims.Out)} {s : ℕ} {q : PartX}
     {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs : Core.Blobs} {h : VStar.Recursive.InnerHeld}
     (hh : VStar.Recursive.innerHeld o pr bs = .ok h)
     {pj : VStar.Recursive.PartOwn} {tags0 : Tags} (htags : Tags.find? VStar.Recursive.STATEMENT = some tags0)
@@ -932,8 +932,8 @@ public file; its rows are `innerHeld`'s). Suppose:
   more, `fits`).
 
 Then the outer verifier reads part `s`'s staged statement (`insO`) as `partIns`: compiled part `s`'s inputs. -/
-theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stage}
-    {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {q : PartX} (hq : r.w.parts[s]? = some q)
+theorem insO_staged_partIns {x : Hash.Msg} {r : XR} (hr : readX x = some r) {st : Stage}
+    {ms : List (Hash.Msg × Claims.Out)} {s : ℕ} {q : PartX} (hq : r.w.parts[s]? = some q)
     {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs : Core.Blobs} {h : VStar.Recursive.InnerHeld}
     (hh : VStar.Recursive.innerHeld o pr bs = .ok h)
     {pj : VStar.Recursive.PartOwn} {tags0 : Tags} (htags : Tags.find? VStar.Recursive.STATEMENT = some tags0)

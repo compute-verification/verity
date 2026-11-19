@@ -32,7 +32,7 @@ probability at most `k_s·2⁻⁶⁴` (`SamplingDesign.subset_prefix_none_le`), 
 
 namespace Properties.Spot.SecurityProofs
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Audit.SampleExec Finset
+open FlockSoundness FlockSoundness.Game Spot.Sampling Spot.Sampling.SampleExec Finset
 open scoped ENNReal
 
 /-! ## Every stage's first read samples -/
@@ -337,7 +337,7 @@ theorem strata_fail_le (St : Array Flock.Draw.Stratum) (hks : ∀ s ∈ St.toLis
       (·.need)).sum ≤ L) :
     prCoin (fun f : Fin L → Fin 256 => ¬ Properties.Spot.SecurityProofs.FirstOk
       ((List.range' 0 St.size).map fun i => Properties.Spot.SecurityProofs.stage St[i]! fun _ => True)
-      (Audit.SamplingDesign.streamOf f) 0) ≤ (((St.toList.map (·.k)).sum : ℕ) : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ := by
+      (Spot.Sampling.SamplingDesign.streamOf f) 0) ≤ (((St.toList.map (·.k)).sum : ℕ) : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ := by
   have hb := Properties.Spot.SecurityProofs.firstOk_fail_le
     (fun i : ℕ => Properties.Spot.SecurityProofs.stage St[i]! fun _ => True) (fun i : ℕ => St[i]!.k)
     (List.range' 0 St.size)
@@ -356,7 +356,7 @@ theorem units_error_le {samplingDesign : Flock.Draw.SamplingDesign} {ns : List �
       (kd : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ := by
   refine le_trans (prCoin_mono (q := fun f : Fin L → Fin 256 =>
     ¬ Properties.Spot.SecurityProofs.FirstOk (Properties.Spot.SecurityProofs.samplingDesignStages samplingDesign n fun _ _ => True)
-      (Audit.SamplingDesign.streamOf f) 0) fun f hf hok =>
+      (Spot.Sampling.SamplingDesign.streamOf f) 0) fun f hf hok =>
         hf (Properties.Spot.SecurityProofs.units_ok_of_firstOk samplingDesign n _ _ hok)) ?_
   cases samplingDesign with
   | subset k =>
@@ -368,7 +368,7 @@ theorem units_error_le {samplingDesign : Flock.Draw.SamplingDesign} {ns : List �
       (fun _ => k) [0]
       (fun _ _ => by
         intro L' hL'
-        exact Audit.SamplingDesign.subset_prefix_none_le n k hk' (2 * k * Flock.Draw.width n + 64) L'
+        exact Spot.Sampling.SamplingDesign.subset_prefix_none_le n k hk' (2 * k * Flock.Draw.width n + 64) L'
           (by rw [Nat.mul_assoc]; omega) hL') L hL
     have hsum1 : ([0].map fun _ : ℕ => k).sum = k := by simp
     rw [hsum1] at hb
@@ -432,6 +432,6 @@ theorem execSel_card_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fi
       | .error _ => univ) = univ.filter fun u : Fin n => u.val ∈ units
     rw [hu]
   rw [hd]
-  exact (Audit.SamplingDesign.card_filter_mem_le n units).trans (le_of_eq (sampleUnits_size hlaw hu))
+  exact (Spot.Sampling.SamplingDesign.card_filter_mem_le n units).trans (le_of_eq (sampleUnits_size hlaw hu))
 
 end Flock.Bridge

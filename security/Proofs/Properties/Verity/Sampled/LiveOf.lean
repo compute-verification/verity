@@ -72,7 +72,7 @@ theorem oneStageZk_paramsOfJson_program {j : Json} {p : _root_.Spot.OneStageZk.P
 /-- **v2's parameters in `θ` name a verifier program some descriptor parses to**: in either form their v1 part is
 parsed parameters' (`paramsEitherOfJson_base`), whose program `paramsParsed_program` parses. -/
 theorem program_of_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp : ParamsAt θ p) :
-    ∃ desc : Claims.Msg, _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program := by
+    ∃ desc : Hash.Msg, _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program := by
   obtain ⟨_, -, x, -, hj⟩ := hp
   obtain ⟨_, -, hj⟩ := ebind_ok hj
   obtain ⟨_, hr⟩ := dispatch_params hj
@@ -99,7 +99,7 @@ theorem kindOf_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp
 to, under the sampling design object `Draw.derive` writes, a sample `sampledFrom` makes is under `sampledDesign`'s design
 (`samplesUnder_of_sampledFrom`), which is `designAt`'s there and the one `samplingDesignAt` reads: the design `deriveSamplingDesign` expands,
 else the one `flockSamplingDesign` parses from the object. -/
-theorem samplingDesignAt_designAt {desc : Claims.Msg} {v : _root_.Spot.Docket.Verifier} {lo : Json}
+theorem samplingDesignAt_designAt {desc : Hash.Msg} {v : _root_.Spot.Docket.Verifier} {lo : Json}
     (hp : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program)
     (hlo : _root_.Spot.Draw.derive v.program v.query v.samplingDesign v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
     {r : Array ℕ × ℕ} (h : _root_.Spot.OneStage.sampledFrom v lo n src = .ok r) :
@@ -399,7 +399,7 @@ theorem proved_of_recordDrawn {m n : ℕ} {units : Array ℕ} {record : String}
 
 /-- **The design `designAt` reads samples `samplingDesignK` of it** wherever the registration's population is the descriptor's
 (`Live.hlaw`'s proof, at any parameters). -/
-theorem samplingDesignOn_designAt {desc : Claims.Msg} {qr lj : Json} {tb : Option Json} {n : ℕ}
+theorem samplingDesignOn_designAt {desc : Hash.Msg} {qr lj : Json} {tb : Option Json} {n : ℕ}
     (hpop : Flock.Bridge.PopMatches desc qr n) :
     Flock.Bridge.SamplingDesignOn (Flock.Bridge.designAt desc qr lj tb n) (Flock.Bridge.nsOf desc qr)
       (Flock.Bridge.samplingDesignK (Flock.Bridge.designAt desc qr lj tb n)) := by
@@ -595,7 +595,7 @@ theorem session_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD :
     (hone : OneStatement θ) (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
     (ht : TablesSent T o.sent) (hT : TablesRegistered T o.sent) :
     ∃ (p : _root_.Spot.OneStageZk.Params) (n : ℕ) (I : FlockSoundness.Discharge.Exec.Inputs) (D : Flock.Desc)
-      (pubO : Flock.Public) (desc : Claims.Msg), ParamsAt θ p ∧
+      (pubO : Flock.Public) (desc : Hash.Msg), ParamsAt θ p ∧
       Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some I.tags ∧ I.count = 1 ∧ I.work = none ∧
       I.stratified = none ∧ I.closure = none ∧ I.circuitFile = V.circuitFile θ F ∧
       I.publicFile = V.publicFile θ F ∧ I.tables = pinnedTables T (V.circuitFile θ F) ∧
@@ -666,7 +666,7 @@ theorem hr_planZHJP {n mPts : ℕ} {I : FlockSoundness.Discharge.Exec.Inputs} {o
 program reads a subset sampling design off the verifier's query, sampling design and work table (`designAt`), at every
 population. -/
 def SubsetDesign (θ : ByteArray) : Prop :=
-  ∀ p, ParamsAt θ p → ∀ (desc : Claims.Msg) n,
+  ∀ p, ParamsAt θ p → ∀ (desc : Hash.Msg) n,
     _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program →
     Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.samplingDesign p.base.verifier.workTable n =
       .subset (Flock.Bridge.samplingDesignK

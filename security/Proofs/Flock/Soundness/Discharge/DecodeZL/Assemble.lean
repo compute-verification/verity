@@ -44,7 +44,7 @@ accepts:
 
 namespace FlockSoundness.Discharge.DecodeZL
 
-open Flock Refine Exec Game Model Accounting Audit
+open Flock Refine Exec Game Model Accounting Spot.Sampling
 open FlockSoundness.Discharge.Integrate
 
 local notation "𝔽" => FlockLevel3.GF128

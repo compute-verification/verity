@@ -28,7 +28,7 @@ set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
 D=benchmarks/pous/p2_v1
 PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
-CUDA=${CUDA:-/usr/local/cuda-13.0}
+CUDA=${CUDA:-$(python3 benchmarks/kernels/machine.py toolkit 13.0)} || { echo "no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
 ENC=${ENC:-/workspace/research/pous-store/mem69-v2}
 NODE=${NODE:-vy-dc-h200-2}
 REG=verity/protocols/resource_accounting/memory/poub/verifier/bandwidth-mem69-v2.json
@@ -61,7 +61,7 @@ if [ -f "$LIB_TAR" ]; then
 elif [ -f "$BUILD/MANIFEST.sha256" ]; then
   cp -r "$BUILD/." "$S/lib/"; LIB_FROM=$BUILD
 else
-  bash verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh "$S/lib" > "$O/build.log" 2>&1; LIB_FROM="build.sh at this commit"
+  CUDA_HOME=$CUDA bash verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh "$S/lib" > "$O/build.log" 2>&1; LIB_FROM="build.sh at this commit"
 fi
 (cd "$S/lib" && sha256sum -c --quiet MANIFEST.sha256) \
   && [ "$(tail -n +2 "$S/lib/source.txt" | sha256sum | cut -c1-64)" = "$LIB_SOURCES_SHA256" ] \

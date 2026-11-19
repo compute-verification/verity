@@ -52,6 +52,7 @@ from verity_vllm.definitions.registry import sampling as SA  # noqa: E402
 from verity_vllm.definitions.registry import topp_keep_builder as K  # noqa: E402
 from verity_vllm.definitions.registry import topp_stages as T  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 
 #: the stand-in's session root, as a TP Commit's run root is its ranks' session root
@@ -86,10 +87,10 @@ def select_alone(ms: list[CS.Member]) -> list[CS.Member]:
     window does not hold, are plain input rows that no unit of the window writes."""
     mine = [m for m in ms if SRW.template(m.template).fn.name == SELECT]
     lo = min(m.base for m in mine)
-    if any(m.base > lo for m in ms if m not in mine) or any(min(ws) < lo <= max(ws) for m in mine for _p, _o, ws in m.wired):
-        raise ValueError("the select chunks are not the row's last units, each wire's writers all before them or all among them")
-    return [replace(m, base=m.base - lo, wired=tuple((p, o, tuple(u - lo for u in ws)) for p, o, ws in m.wired if min(ws) >= lo))
-            for m in mine]
+    if any(m.base > lo for m in ms if m not in mine):
+        raise ValueError("the select chunks are not the row's last units")
+    keep = {m.template for m in mine}
+    return [replace(m, base=m.base - lo, wired=tuple(w for w in m.wired if w.writer in keep)) for m in mine]
 
 
 def commit(out: Path, v: int, splits: tuple[int, ...], rows: int, stages: str, select_only: bool = False
@@ -112,7 +113,7 @@ def commit(out: Path, v: int, splits: tuple[int, ...], rows: int, stages: str, s
     ms = TS.members(s, tmpls, dict.fromkeys(tmpls, MEMBER_UNITS))
     ms = select_alone(ms) if select_only else ms
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in held]
-    w = a5.rated(CS.Binding(*CS.population_program(defs, several=True), a5.D.parse_design("stratified:1"), f"{ROOT}/rank0",
+    w = a5.rated(CS.Binding(*CS.population_program(defs, several=True), RND.parse_design("stratified:1"), f"{ROOT}/rank0",
                             tuple(ms)), SM.RULE)
     of = {"fixture": FIXTURE, "row": spec, "rows": rows, "splits": list(splits), "stages": stages}
     if select_only:

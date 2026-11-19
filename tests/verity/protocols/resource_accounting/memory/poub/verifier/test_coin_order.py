@@ -139,7 +139,7 @@ def test_the_end_refuses_a_coin_the_commitment_doesnt_open_as_it_was_sent(ended)
     assert "opened twice" in C.received_reason(commitment, sent, openings + openings[:1])
     forged = dataclasses.replace(openings[1], coin=flipped.coin)
     why = C.received_reason(commitment, [sent[0], flipped], (openings[0], forged) + openings[2:])
-    assert why is not None and why.startswith("the challenge coin 1 the prover was sent: ")
+    assert why is not None and why.startswith("the poub/challenge coin 1 the prover was sent: ")
     other = C.local(b"\x01" * 64, 0, 2, Entropy(b"other")).commitment
     assert C.received_reason(other, sent, openings) is not None
     with pytest.raises(ValueError, match="has no opening"):

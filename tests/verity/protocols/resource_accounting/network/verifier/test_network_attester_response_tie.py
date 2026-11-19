@@ -21,7 +21,7 @@ from verity_vllm.definitions.registry import stop_rule
 from verity.protocols.resource_accounting.network.prover import response_tie as RT
 from verity.protocols.resource_accounting.network.prover.response_tie import ACCEPT
 from verity.protocols.resource_accounting.network.verifier import content_rows as CT
-from verity.protocols.resource_accounting.network.verifier import head_check as HC
+from verity.commitments.gates import bits as GB
 
 #: every size of row the widest public size class holds
 SIZES = tuple(1 << k for k in range(1, 13))
@@ -468,7 +468,7 @@ def test_the_blocks_ands():
     for O in SIZES:
         for stop, _ in FORMS:
             sh = RT.Shape(O, stop)
-            assert HC.ands(RT.block(sh)) == sh.ands, (O, stop)
+            assert GB.ands(RT.block(sh)) == sh.ands, (O, stop)
     pinned = [RT.Shape(O, stop) for O, stop in ((16, True), (16, False), (1024, True), (2, False), (4096, True))]
     assert {RT.block(sh).id: sh.ands for sh in pinned} == ANDS
     assert RT.Shape(1024, True).ands - 33 * 1024 == 2 * 32 + 10 + 49

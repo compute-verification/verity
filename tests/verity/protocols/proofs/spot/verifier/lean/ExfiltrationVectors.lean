@@ -1,5 +1,5 @@
-import Proofs.Flock.Soundness.Audit.Influence
-import Proofs.Flock.Soundness.Audit.StratifiedMiss
+import Proofs.Spot.Sampling.Influence
+import Proofs.Spot.Sampling.StratifiedMiss
 import Mathlib.Algebra.BigOperators.Fin
 
 /-!
@@ -11,7 +11,7 @@ from the soundness package's `audit_exfiltration` on the uniform `k`-subset of `
 
 * `K` is the least `K` that meets `audit_exfiltration`'s `hk : miss (K + 1) < δ`. By `SamplingDesign.subset_miss`,
   `miss (K + 1) = C(n - (K + 1), k) / C(n, k)`, so `hk` is `C(n - (K + 1), k) · 2^e < C(n, k)`.
-* `H = b · K` is its `hH`'s harm bound: a set `B` with `δ ≤ escape B = miss |B|` (`SamplingDesign.subset_escape`) has
+* `H = b · K` is its `hH`'s harm bound: a set `B` with `δ ≤ escape B = miss |B|` (`SamplingDesign.subset_missProb`) has
   `|B| ≤ K`, so it holds at most `b · K` output bits.
 * `admissible = ∑ j ∈ range (K + 1), n.choose j`, and the bound's first term is `numerator n H K / |M|` with
   `numerator n H K = 2 ^ H * admissible`. `audit_exfiltration_numerator` checks that `numerator` is that term.
@@ -21,7 +21,7 @@ Regenerate with `verifier/tests/lean/generate.sh`.
 
 namespace OneStageExfiltrationVectors
 
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Game Finset
+open FlockSoundness Spot.Sampling FlockSoundness.Game Finset
 open scoped ENNReal
 
 /-- The numerator of `audit_exfiltration`'s bound. -/
@@ -64,8 +64,8 @@ def meets (n k e K : ℕ) : Bool :=
 /-- `meets` is `miss (K + 1) < 2^-e ≤ miss K` for the uniform `k`-subset: `K` meets `audit_exfiltration`'s `hk`, and it is
 the least that does, since `miss` is antitone. -/
 theorem miss_of_meets {n k e K : ℕ} (h : meets n k e K = true) :
-    ∃ hk : k ≤ n, (SamplingDesign.subset n k hk).miss (K + 1) < ((2 ^ e : ℕ) : ℝ≥0∞)⁻¹ ∧
-      ((2 ^ e : ℕ) : ℝ≥0∞)⁻¹ ≤ (SamplingDesign.subset n k hk).miss K := by
+    ∃ hk : k ≤ n, (Verity.SamplingDesign.subset n k hk).miss (K + 1) < ((2 ^ e : ℕ) : ℝ≥0∞)⁻¹ ∧
+      ((2 ^ e : ℕ) : ℝ≥0∞)⁻¹ ≤ (Verity.SamplingDesign.subset n k hk).miss K := by
   simp only [meets, Bool.and_eq_true, decide_eq_true_eq, chooseD_eq] at h
   obtain ⟨⟨⟨hk, hK⟩, hlt⟩, hle⟩ := h
   have hB : (n.choose k : ℝ≥0∞) ≠ 0 := by exact_mod_cast (Nat.choose_pos hk).ne'
@@ -90,8 +90,8 @@ theorem grid_meets : grid.all (fun (n, k, e, _) => meets n k e (countBound n k e
 
 /-- **Each vector's `K` meets `hk`, and no smaller count does**: `miss (K + 1) < 2^-e ≤ miss K`. -/
 theorem grid_counts : ∀ c ∈ grid, ∃ hk : c.2.1 ≤ c.1,
-    (SamplingDesign.subset c.1 c.2.1 hk).miss (countBound c.1 c.2.1 c.2.2.1 + 1) < ((2 ^ c.2.2.1 : ℕ) : ℝ≥0∞)⁻¹ ∧
-      ((2 ^ c.2.2.1 : ℕ) : ℝ≥0∞)⁻¹ ≤ (SamplingDesign.subset c.1 c.2.1 hk).miss (countBound c.1 c.2.1 c.2.2.1) :=
+    (Verity.SamplingDesign.subset c.1 c.2.1 hk).miss (countBound c.1 c.2.1 c.2.2.1 + 1) < ((2 ^ c.2.2.1 : ℕ) : ℝ≥0∞)⁻¹ ∧
+      ((2 ^ c.2.2.1 : ℕ) : ℝ≥0∞)⁻¹ ≤ (Verity.SamplingDesign.subset c.1 c.2.1 hk).miss (countBound c.1 c.2.1 c.2.2.1) :=
   fun c hc => miss_of_meets (List.all_eq_true.1 grid_meets c hc)
 
 /-! ## Stratified samplingDesigns
@@ -303,5 +303,5 @@ end OneStageExfiltrationVectors
 open OneStageExfiltrationVectors in
 def main : IO Unit :=
   IO.println ("{\"source\": \"verifier/tests/lean/ExfiltrationVectors.lean via verifier/tests/lean/generate.sh\", " ++
-    "\"statement\": \"FlockSoundness.Audit.Partition.audit_exfiltration\", \"vectors\": [\n" ++
+    "\"statement\": \"Spot.Sampling.Partition.audit_exfiltration\", \"vectors\": [\n" ++
     ",\n".intercalate (grid.map row) ++ "\n], \"stratified\": [\n" ++ ",\n".intercalate (gridS.map rowS) ++ "\n]}")

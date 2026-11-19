@@ -127,7 +127,7 @@ class DraftEngine(Engine):
 class Tick:
     """The certified tick's registered constants, in microseconds: the network attester's bucket τ_b, and the engine
     class's step times τ_sat (a step after which the waiting queue is nonempty) and τ_free (one after which it is empty).
-    The serving side's is `verity_vllm.pipeline.serve_admit.Tick`; this stdlib copy keeps the replay loadable alone."""
+    The serving side's is `verity.protocols.resource_accounting.network.prover.admission.Tick`; this stdlib copy keeps the replay loadable alone."""
 
     bucket_us: int
     sat_us: int
@@ -146,15 +146,14 @@ class Tick:
 
 @dataclass(frozen=True)
 class Rule:
-    """The tick's constants in the clock's unit, a `Tick`'s being microseconds with ``token`` 0 and ``quiet``. A step with
-    rows also advances T by ``token`` for each token it schedules that is not a draft. With ``quiet`` T jumps to the next
-    arrival's bucket close only when nothing runs or waits, else whenever nothing waits."""
+    """The tick's constants in the clock's unit, a `Tick`'s being microseconds with ``token`` 0. A step with rows also
+    advances T by ``token`` for each token it schedules that is not a draft. T jumps to the next arrival's bucket close
+    only when nothing runs or waits."""
 
     bucket: int
     sat: int
     free: int
     token: int = 0
-    quiet: bool = True
 
     def close(self, a: int) -> int:
         return (a + 1) * self.bucket

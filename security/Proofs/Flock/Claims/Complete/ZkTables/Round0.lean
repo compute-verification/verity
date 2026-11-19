@@ -277,7 +277,7 @@ end Rows
 
 /-- **The first body is the link message**: once the schedules and the level-0 commitments return, the pure masked
 session's first body is the link message of the caps, with no public words, whatever the session does after its coin. -/
-theorem sessionPZk_go_head (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (spec : SessionSpec)
+theorem sessionPZk_go_head (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg) (spec : SessionSpec)
     (tabs : Array Setup) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk) {schs : Array (Schedule × ℕ)}
     {cms : Array Commit} (hs : (schedsPZk tabs : V _) = .ok schs)
     (hc : (commitsPZk (Hashes.ofSha512 (Claims.hOf H)) tabs schs (tablesP tabs trs) tape : V _) = .ok cms) :
@@ -290,14 +290,14 @@ theorem sessionPZk_go_head (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claim
   rw [go_bind, asksS_link_go]
   dsimp only
   obtain ⟨bs, -, hl⟩ := afterLinkPZk_sim H resp spec tabs words trs tape schs (tablesP tabs trs) cms
-    (coinOf (resp (#[] : Array Claims.Msg).size)) (#[].push (linkBody (cms.map fun c => flat c.cap).toList
+    (coinOf (resp (#[] : Array Hash.Msg).size)) (#[].push (linkBody (cms.map fun c => flat c.cap).toList
       (tabs.map fun _ => ByteArray.empty).toList))
   rw [hl]
   simp
 
 /-- **`ZkTables.honestPR`'s first message is the link message of the level-0 caps**: before any reply, at a statement
 that sets up, once the schedules and the level-0 commitments of the tables at the tape's mask words return. -/
-theorem honestPR_first (H : Claims.Msg → Claims.Msg) (w : Claims.Flock.Wit) (x : Claims.Msg) (ω : TapeZk)
+theorem honestPR_first (H : Hash.Msg → Hash.Msg) (w : Claims.Flock.Wit) (x : Hash.Msg) (ω : TapeZk)
     {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} (hset : setupOf true x = some (s, spec, sts))
     {schs : Array (Schedule × ℕ)} {cms : Array Commit} (hs : (schedsPZk (tabsOf sts) : V _) = .ok schs)
     (hc : (commitsPZk (Hashes.ofSha512 (Claims.hOf H)) (tabsOf sts) schs

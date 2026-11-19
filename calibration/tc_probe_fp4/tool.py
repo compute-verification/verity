@@ -1,4 +1,5 @@
-"""Store declaration for the Blackwell FP4 tensor-core probe (research.store README §6.1), probe.py on an sm_120a GPU:
+"""Store declaration for the Blackwell FP4 tensor-core probe (research.store README §6.1), probe.py on a card of its kernels'
+architecture (probe.py's ``SOURCE_ARCH``):
 
     python calibration/tc_probe_fp4/probe.py --instruction nvf4 --out DIR --sass-check --sweep --n-random 4096 \
         --replay-autoproof FILE
@@ -32,6 +33,7 @@ def parse(argv: list[str]) -> dict:
     ap = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     ap.add_argument("--instruction", default="nvf4")
     ap.add_argument("--arch", default=None)
+    ap.add_argument("--card", default=None)
     ap.add_argument("--out", default=None)
     ap.add_argument("--replay-autoproof", action="append", default=[])
     ap.add_argument("--sweep", action="store_true")
@@ -63,8 +65,9 @@ def parse(argv: list[str]) -> dict:
     out.pop("prebuilt")
     out.pop("library")
     out["collect"] = out["collect"] is not None
-    if out["arch"] is None:  # probe.py's default: sm_120a for the mma.sync instructions, sm_100a for the tcgen05 ones
-        out["arch"] = "sm_100a" if str(out["instruction"]).startswith("tcgen05") else "sm_120a"
+    for k in ("arch", "card"):  # a run builds for the card it opened (hw.family); --card names an offline build's
+        if out[k] is None:
+            out.pop(k)
     out["n"] = out.pop("n_random")
     out.pop("expect_uuid")
     out["replay_autoproof"] = sorted(out["replay_autoproof"])
@@ -95,9 +98,12 @@ def parse_price(argv: list[str]) -> dict:
     ap.add_argument("--corrupt-word", action="store_true")
     ap.add_argument("--fake-silicon", action="store_true")
     ap.add_argument("--sass-only", action="store_true")
+    ap.add_argument("--card", default=None)
     ns, unknown = ap.parse_known_args(argv[idx + 1:])
     out = vars(ns)
     out.pop("out")
+    if out["card"] is None:
+        out.pop("card")
     out.pop("max_seconds")
     out.pop("expect_uuid")
     for k in ("rows", "ops"):
@@ -113,7 +119,7 @@ def parse_f1(argv: list[str]) -> dict:
     rest = argv[idx + 1:]
     ap = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     ap.add_argument("cmd", nargs="?", default=None)
-    for flag in ("--out", "--build", "--runs", "--libscan", "--expect-uuid", "--forms", "--family", "--libs"):
+    for flag in ("--out", "--build", "--runs", "--libscan", "--expect-uuid", "--forms", "--family", "--libs", "--card"):
         ap.add_argument(flag, default=None)
     ap.add_argument("--jobs", type=int, default=None)
     ap.add_argument("--reps", type=int, default=5)
@@ -131,6 +137,8 @@ def parse_f1(argv: list[str]) -> dict:
         out.pop(k)
     if out["forms"]:
         out["forms"] = ",".join(sorted(f for f in out["forms"].split(",") if f))
+    if out["card"] is None:
+        out.pop("card")
     if unknown:
         out["_unknown"] = unknown
     return out
@@ -140,7 +148,7 @@ TC_RATES_FP4 = Tool(
     name="tc_rates_fp4", version="1",
     command=["python", "calibration/tc_probe_fp4/f1_rates.py"],
     closure=["calibration/tc_probe_fp4/**", *package_paths(TREE, "verity.circuits.silicon", "**")],
-    key_params=["cmd", "forms", "family", "libs", "reps", "target_ms", "sustain_s", "seed", "locked_mhz", "corrupt_word", "fake_silicon",
+    key_params=["cmd", "card", "forms", "family", "libs", "reps", "target_ms", "sustain_s", "seed", "locked_mhz", "corrupt_word", "fake_silicon",
                 "tolerance"],
     key_conditions=["hw.family"],
     caches=["nvcc"],
@@ -154,7 +162,7 @@ TC_PRICE_FP4 = Tool(
     command=["python", "calibration/tc_probe_fp4/w1_price.py"],
     closure=["calibration/tc_probe_fp4/**", *package_paths(TREE, "verity.circuits.silicon", "**")],
     key_params=["rows", "ops", "reps", "target_ms", "sustain_s", "warps_per_sm", "op_warps_per_sm", "latency_iters", "no_scale_update",
-                "seed", "locked_mhz", "corrupt_word", "fake_silicon", "sass_only"],
+                "seed", "locked_mhz", "corrupt_word", "fake_silicon", "sass_only", "card"],
     key_conditions=["hw.family"],
     caches=["nvcc"],
     produces=["bench-result/v1", "run-files/v1"],
@@ -166,7 +174,7 @@ TC_PROBE_FP4 = Tool(
     name="tc_probe_fp4", version="1",
     command=["python", "calibration/tc_probe_fp4/probe.py"],
     closure=["calibration/tc_probe_fp4/**", *package_paths(TREE, "verity.circuits.silicon", "**")],
-    key_params=["instruction", "arch", "families", "seed", "n", "group", "sweep", "golden_per_family", "replay_autoproof", "sass_check",
+    key_params=["instruction", "arch", "card", "families", "seed", "n", "group", "sweep", "golden_per_family", "replay_autoproof", "sass_check",
                 "chain2", "smem_strides", "chain", "expect_model", "corrupt_word", "fake_silicon", "sass_only", "vectors",
                 "vector_list", "vector_ids", "chain_ids", "special_ids", "collect"],
     key_conditions=["hw.family"],

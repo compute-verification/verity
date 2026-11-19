@@ -34,7 +34,7 @@ fixes its round-`k` message before `ρ_k`. A plurality over the extraction's ope
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Audit StrictCR
+open Game Spot.Sampling StrictCR
 open scoped ENNReal
 
 /-- **Openings of a binding commitment**, as the stage binding reads them: an opening `o` opens the digest `com o` to the

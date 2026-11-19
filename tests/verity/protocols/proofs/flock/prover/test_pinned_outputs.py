@@ -79,7 +79,7 @@ def test_a_pinned_output_has_no_row_and_meta_names_it(pinned_words, rowed, tmp_p
     got, _cut, ok = low.evaluate(s.astype(np.uint64))
     assert int(ok) == (1 << n) - 1 and not got[:, rowed:].any()
     outs = {"d": got[:, rowed:].astype(np.uint16), **({"a0": got[:, :1].astype(np.uint16)} if rowed else {})}
-    FC.write(text, iset, 0, n, tmp_path / "inst.bin", tmp_path / "pub.bin", b"k" * 32, rows={"p0": s}, outs=outs)
+    FC.write(text, iset, 0, n, tmp_path / "inst.bin", tmp_path / "pub.bin", rows={"p0": s}, outs=outs)
     head, body = (tmp_path / "pub.bin").read_bytes().split(b"\n", 1)
     assert sorted(json.loads(head)["frame_v3"]["roots"]) == sorted(["p0"] + ["a0"] * rowed)
     assert len(body) == 128 * n * (1 + rowed)
@@ -111,7 +111,7 @@ def test_the_prover_proves_a_zero_pinned_output_and_no_nonzero_one(pinned_words,
         assert got[:, rowed:].any() != zero
         outs = {"d": got[:, rowed:].astype(np.uint16), **({"a0": got[:, :1].astype(np.uint16)} if rowed else {})}
         (d / "circuit.txt").write_text(text)
-        FC.write(text, iset, 0, n, d / "inst.bin", d / "pub.bin", b"k" * 32, rows={"p0": s}, outs=outs)
+        FC.write(text, iset, 0, n, d / "inst.bin", d / "pub.bin", rows={"p0": s}, outs=outs)
         r = subprocess.run([os.environ["FLOCK_CIRCUIT"], "selftest", "--only", "honest", "--instances", str(d / "inst.bin"),
                             "--circuit", str(d / "circuit.txt"), "--tables", str(d / "tables"), "--forged", str(d / "none.txt")],
                            capture_output=True, text=True, check=False)

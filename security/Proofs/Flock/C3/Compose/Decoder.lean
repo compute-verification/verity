@@ -49,7 +49,7 @@ namespace FlockC3.Compose
 noncomputable section
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 open FlockVBridge.Family (skOf wmsgOf maskOf coinSteps roundMsgs toSs roundMsgs_toSs)
 open FlockC3.Sparse FlockC3.Opening FlockC3.RegLevels FlockC3.PubRows

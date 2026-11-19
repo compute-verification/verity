@@ -11,7 +11,7 @@ open Spot
 
 namespace Properties.Spot.SecurityProofs
 
-open FlockSoundness FlockSoundness.Audit
+open FlockSoundness Spot.Sampling
 
 /-- A `repeat` loop in `StateT σ (Except ε)`, by an invariant `I` and a measure `μ` that each `yield` lowers: when it
 returns, its value and state meet `Q`. -/

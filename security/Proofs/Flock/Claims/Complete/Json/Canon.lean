@@ -301,7 +301,7 @@ end Ascii
 
 /-- **`canon` writes ASCII without DEL.** -/
 theorem canon_ascii (j : Json) {s : String} (h : canon j = .ok s) : Claims.Json.Ascii s :=
-  Ascii.canon_ascii_lt (fun a x hx => (FlockSoundness.Audit.SampleExec.mem_qsort a _ x).1 hx) _ j (Nat.lt_succ_self _) h
+  Ascii.canon_ascii_lt (fun a x hx => (Spot.Sampling.SampleExec.mem_qsort a _ x).1 hx) _ j (Nat.lt_succ_self _) h
 
 /-- **Alike values are equivalent** (`FlockDeploy.JsonEquiv`): one form, whatever their objects' key order. -/
 theorem same_jsonEquiv : ∀ {a b : Json}, Same a b → FlockDeploy.JsonEquiv a b

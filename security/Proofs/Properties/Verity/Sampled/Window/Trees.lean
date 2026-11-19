@@ -444,8 +444,8 @@ whose trees each name their streams distinctly and are no more than the sessions
 is session `j / per`'s, the link's at the session's first place. The closing round's pick, as a rep round's, is an
 opening of the tree the session's link opened. -/
 theorem sessionPicks_executionPhaseReadingAt {R : ℕ} {tables : Array String} (ht : tables.toList.Nodup)
-    (hT : 0 < tables.size) {per : ℕ} (hper : 1 < per) (reveal : ℕ → Slot → Exchange → Option Claims.Msg)
-    (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {Lg : List Release}
+    (hT : 0 < tables.size) {per : ℕ} (hper : 1 < per) (reveal : ℕ → Slot → Exchange → Option Hash.Msg)
+    (record : Exchange → Option Hash.Msg) (recordDigest : Hash.Msg) {Lg : List Release}
     (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup) (hS : LogServed Lg)
     (hR : (openedTrees Lg).length * per ≤ R) :
     SessionPicks (executionPhaseReadingAt (R := R) tables per reveal record recordDigest).round (fun j => j.val / per)

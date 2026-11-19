@@ -35,7 +35,7 @@ for a in ${ARMS//,/ }; do
     served-commit-rows-hiprio) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS_HIPRIO);;
   esac
 done
-bench=("$VENV/bin/python" -m verity_bench vllm --preset "${SPEC:?SPEC names a served spec, e.g. llama32-1b-bf16-rtx-served-arm}" --out "$OUT/bench" --arms "$ARMS" "${mods[@]}"
+bench=("$VENV/bin/python" -m verity_bench vllm --preset "${SPEC:?SPEC names a served spec, e.g. llama32-1b-bf16-served-arm@rtx-pro-6000}" --out "$OUT/bench" --arms "$ARMS" "${mods[@]}"
        --sweep "${SWEEP:-b32}" --reps "${REPS:-1}")
 if [ "${NSYS:-1}" = 1 ]; then
   nsys profile -t cuda,nvtx -s none --cpuctxsw=none --cuda-graph-trace=node --trace-fork-before-exec=true -f true -o "$OUT/served" \

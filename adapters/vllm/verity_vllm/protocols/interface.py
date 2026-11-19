@@ -1,24 +1,20 @@
 """What every protocol option implements, and what the selector hands it (`verity_vllm.protocols`).
 
-An adapter is one module of this package (`spot`, `pous`, `pouw`) that defines:
+An adapter is one module of this package (`spot`, `pouw`) that defines:
 
 * ``NAME``: its protocol, one of `config.PROTOCOLS`;
 * ``schemes() -> tuple[str, ...]``: the scheme names its protocol package registers;
 * ``refusals(scheme, ctx) -> tuple[str, ...]``: why this run cannot enable it (empty: it can), decided from the `Context`
   alone, before the engine is built;
 * ``install(scheme, target) -> Installed``: install it on the built model;
-* optionally ``requires_build(scheme, ctx) -> bool``: True when the option's
-  computation is defined by the row's Build, so serving cannot override engine
-  settings that select different kernels;
+* optionally ``requests(scheme, ctx) -> tuple[verity.hooks.Request, ...]``: what it requires or refuses of the workload
+  (`verity.hooks.RequireProperty`), read against `Context.properties`; one whose computation is the
+  row's Build requires the profile's kernels (`BUILD_BOUND`, with ``fixes``);
 * optionally ``EXECUTES: tuple[str, ...]``: the sites where the option replaces the computation rather than wrapping
   it (PoUW: ``LinearBase.quant_method.apply``).  A site has at most one executor, innermost; the others wrap it from
-  outside (`protocol_options.SITES`).  What SPOT traces an executed site as is not the adapter's to say: it
-  is the protocol package's circuit (`protocol_options.CIRCUITS`, `protocol_options.traced_as`), and an executor whose
-  scheme has none is refused beside SPOT, since it would be traced as the stock computation.  An adapter
+  outside (`protocol_options.SITES`).  An executor is refused beside SPOT, since SPOT would trace it as the stock
+  computation.  An adapter
   whose sites depend on the scheme defines ``executes(scheme) -> tuple[str, ...]`` instead (PoUW's H1 executes nowhere);
-* optionally ``keeps_weight_copy(scheme, ctx) -> bool``: True when the installed option keeps a weight-derived copy
-  (PoUW's prepared int7 or FP10 operands) resident across forwards.  With POUS enabled, the selector refuses such an
-  option (`protocol_options.refusals`): its GEMMs would read the copy, not what POUS stores.  Absent means False;
 * optionally ``commit_weights(scheme, target) -> Mapping``: its commitment to the plaintext weights of record, made in
   the composition's first phase, before any option changes the model or reads a beacon (`install`).  ``install`` then
   finds every option's in ``target.weight_commitments``;
@@ -29,7 +25,7 @@ An adapter is one module of this package (`spot`, `pous`, `pouw`) that defines:
   (`Context.filled`), and the install's refusals read the filled settings, so a key left unfilled is refused there.
 
 An adapter holds no protocol logic: the scheme, its commitments, the salt and the audit are its protocol package's
-(`verity.protocols.resource_accounting.compute.pouw.verifier`, `verity.protocols.resource_accounting.memory.pous.verifier`, `verity.protocols.proofs.spot.verifier`), which never import this one.  It finds its hook sites by type,
+(`verity.protocols.resource_accounting.compute.pouw.verifier`, `verity.protocols.proofs.spot.verifier`), which never import this one.  It finds its hook sites by type,
 never by module name, and makes every patch and service through ``target.hooks(entry)``: an `engine.hooks.Hooks` tagged
 with its entry, so the composition uninstalls it and a committer recognises it (`engine.hooks.live(tag)`).
 """
@@ -39,14 +35,18 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
+from verity import hooks as H
 from verity_vllm.engine.hooks import Hooks
 
-__all__ = ["Context", "Option", "Target"]
+__all__ = ["BUILD_BOUND", "Context", "Option", "Target"]
 
 #: Where a composition runs: ``serve`` is `verity_vllm.LLM`; ``capture`` is a row's Match capture (its executors only, so the
-#: observed run executes what the Commit serves); ``commit`` is a Commit: a row's Commit stage, or serve-openai's Commit
-#: windows, whose composition states the executor beside the server's own Commit (`serve_pearl`).
+#: observed run executes what the Commit serves); ``commit`` is a row's Commit stage.
 STAGES = ("serve", "capture", "commit")
+#: An adapter's request whose served computation is the row Build's: the engine serves the profile's kernels.
+BUILD_BOUND = H.RequireProperty("kernels", "profile", "its served computation is the row's Build, and engine overrides can "
+                                "change the served kernels so they no longer match it; use the pinned engine profile",
+                                fixes=True)
 
 
 @dataclass(frozen=True)
@@ -54,7 +54,8 @@ class Context:
     """What an adapter's refusals read.  ``enabled`` is the whole set in its one spelling (`config.parse_protocols`), so
     an adapter sees what it is composed with; ``settings`` holds each protocol's own keys of the protocols config
     (``{name: {...}}``), which are never hashed.  ``filled`` names, per protocol, the settings the built engine will
-    supply (`protocol_options.engine_fills`): set only for `verity_vllm.LLM`'s check before its engine exists."""
+    supply (`protocol_options.engine_fills`): set only for `verity_vllm.LLM`'s check before its engine exists.
+    ``kernels`` is what the engine's arguments make of its kernels (`engine.served.kernels`)."""
 
     stage: str
     enabled: tuple[str, ...]
@@ -62,10 +63,15 @@ class Context:
     enforce_eager: bool = True
     settings: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     filled: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    kernels: str | tuple[str, ...] = "profile"
 
     def __post_init__(self) -> None:
         if self.stage not in STAGES:
             raise ValueError(f"stage must be one of {STAGES}, got {self.stage!r}")
+
+    def properties(self) -> dict[str, Any]:
+        """What the run declares of its workload, as `verity.hooks.Declared.properties` names it."""
+        return {"eager": self.enforce_eager, "world": self.world, "kernels": self.kernels}
 
     def scheme(self, name: str) -> str | None:
         """The scheme ``name`` is enabled with, None when it is off."""
@@ -95,7 +101,7 @@ class Target:
     weight_commitments: dict[str, Mapping[str, Any]] = field(default_factory=dict)
 
     def hooks(self, entry: str) -> Hooks:
-        """A fresh `Hooks` tagged with ``entry`` (``pous:p2-16448/v4``), for every patch and service the option makes."""
+        """A fresh `Hooks` tagged with ``entry`` (``pouw:ncp-v1``), for every patch and service the option makes."""
         h = Hooks(tag=entry)
         self.made.append(h)
         return h

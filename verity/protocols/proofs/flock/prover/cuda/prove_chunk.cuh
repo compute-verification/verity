@@ -380,7 +380,7 @@ __global__ void pure_unit_region_copy(F128* __restrict__ w, F128* __restrict__ c
 }
 
 // Unit 31's output words of every real block, read from the witness.
-// verity/flock-vllm-block/v1: Flock's SHA-256 compression witness (flock-prover r1cs_hashes/sha2.rs
+// Flock's SHA-256 compression witness (flock-prover r1cs_hashes/sha2.rs
 // build_block_ab_packed_into, Option F: fused 4-op / 3-op carry-save adders, constant add of K[r], E/A materialised every
 // other round), one thread per compression, written straight into slot ci % slots of block ci / slots (2^15 bits). The
 // destinations must be zero on entry.
@@ -565,7 +565,7 @@ typedef struct {
     // per VU; dummy_keyed: dummy blocks keep the role keys and chunk counters (fp8, where they are per-slot constants)
     int per_role, chunks_per_block, chunk_nb0, chunk_nb1, blocks_per_vu, dummy_keyed;
     // mode 1, host witness: the whole packed z, a = A z, b = B z ([2^(m-7)] F128, lo then hi) from the host (the
-    // selftest's tampered SHA-256 witnesses, verity/flock-vllm-block/v1)
+    // selftest's tampered witnesses)
     const uint64_t* host_z; const uint64_t* host_a; const uint64_t* host_b;
     // mode 1, sha256 = 1: the compression slots are SHA-256 (2^15 bits), witnessed on the device. With rows_x the chains
     // are built from the rows (from sha_mid[role] ([2][8]) to the last block, whose words past last_data_words are

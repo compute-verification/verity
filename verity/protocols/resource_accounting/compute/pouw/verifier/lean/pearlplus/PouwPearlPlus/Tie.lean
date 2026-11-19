@@ -29,7 +29,7 @@ the fixed operands: it is held to the calls alone, as it was then, and the answe
 one that registers a ``pearl-b/`` value is refused (`V1_WEIGHTS`), and a W stating any other version is refused
 (`UNKNOWN_VERSION`).
 
-An entry that names no ``word_bits`` is at `registered.WORD_BITS` (16). The answer is `{record: digest(W), tables}`, with
+An entry that names no ``word_bits`` is at `registered_value.WORD_BITS` (16). The answer is `{record: digest(W), tables}`, with
 `weights` for a version-1 W; the first mismatch is Python's `ValueError`, in its words. Every JSON comparison is by a
 match (`Want.holds`).
 
@@ -77,7 +77,7 @@ def wVersion (w : Json) : Except String Nat :=
 
 /-- `verify_run._owner`: what a value is of, in a mismatch's words. -/
 def tieOwner (v : String) : String := if v.startsWith "pearl-b/" then "weight" else "call"
-/-- `registered.WORD_BITS`: the word width of an entry that names none. -/
+/-- `registered_value.WORD_BITS`: the word width of an entry that names none. -/
 def REGISTERED_WORD_BITS : Nat := 16
 
 /-- A value an entry must hold: a string, or a JSON integer (Python's `int`, never a `bool` or a `float`). -/

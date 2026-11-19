@@ -15,7 +15,9 @@ One connection serves one registration and then `--sessions` sessions over it, e
 3. each session: `Params` with the allowance A = `timing.deadline` at a high percentile of the calibration's passes
    and gaps and of the measured round trip (`--quantile`), `--jitter-ms`, and the lifetime cap L on an appended block
    (`--lifetime`, windows, by default those of `--window-ms` in 30 s, `audit.lifetime_windows`, sent with the
-   session so the prover re-keys in time); chal_0, then a boundary message every window, each coin sent as its value and
+   session so the prover re-keys in time), and refresh where `--refresh` sets it for the session
+   (`audit.Params.refresh`, off by default; the session's message then says `"refresh": true`, and an absent key is
+   off, so a session without it is sent and recorded as before); chal_0, then a boundary message every window, each coin sent as its value and
    the root it was opened after (`coins.Released`), each append answered with its coin (`Verifier.append`), each root
    fed to `AuditRun.receive` stamped with the time its last byte was read (with the releases its message carries first, and
    the withdrawn blocks among them, its plan as a change when it carries one, and the step its pass covers:
@@ -25,8 +27,8 @@ One connection serves one registration and then `--sessions` sessions over it, e
    the next window's passes arrive; once every window is accepted the record (`AuditRun.record`), its declared outputs
    (`ledger.declared`'s: γ at both R and the memory line, snapshot and, paced, time-held and link-charged), and as
    diagnostics the node's HBM it shows held by kind (`memory`: the credited share and the residual, at ε, held at
-   every pass and held on average), and with `--host-bytes` the same by kind against the node's HBM and host DRAM
-   (`node_line`); last, once the prover has answered the session's `end` with `ended`, the coin commitment and every
+   every pass and held on average), and the same by kind against the node's HBM and host DRAM (`node_line`, the
+   figures' `host_dram_bytes`); last, once the prover has answered the session's `end` with `ended`, the coin commitment and every
    released coin's opening (`coins`, `audit.AuditRun.disclose`), which the prover checks each coin it was sent against.
 
 With `--paced K:T_MS:DRAWS:WINDOWS[:F]` each session is paced (`pace_of`, `audit.Pace(K, T, F)`): a coin every K
@@ -93,15 +95,15 @@ Its process is `verity/protocols/resource_accounting/memory/poub/verifier/poub_s
 the LMS verify a served or gate session's signatures are checked with, and the challenger's process `--challenger
 serve` starts.
 
-    python verifier_process.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
-                               [--registry REGISTRY.json] [--lean-exe PATH]
+    python verifier_process.py --port 7781 --out OUT --figures FIGURES.json [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
+                               [--figures-sha512 HEX] [--registry REGISTRY.json] [--lean-exe PATH]
                                [--paced K:T_MS:SAMPLES:WINDOWS[:F] ...] [--transcript DIR]
                                [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
                                [--groups-per-coin G]
                                [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
                                 --challenger-period P --challenger-main FILE [--challenger-minutes M]]
     python verifier_process.py --registry REGISTRY.json --close NODE_HEX
-    python verifier_process.py --memory-of VERIFIER_JSON [--host-bytes N]
+    python verifier_process.py --memory-of VERIFIER_JSON --figures FIGURES.json
 """
 from __future__ import annotations
 
@@ -121,7 +123,7 @@ from collections.abc import Sequence
 from fractions import Fraction
 from pathlib import Path
 
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger, line, timing
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger, line, rota, timing
 from verity.protocols.resource_accounting.memory.poub.verifier.session import challengers, wire
 from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv
 from verity.protocols.resource_accounting.memory.poub.verifier.session.checks import Checks
@@ -423,6 +425,21 @@ def node_line(mem: dict, *, host_bytes: int) -> dict:
 
 TIME_HELD = "held over time"
 """The paced session's third form (`paced_line`): the blocks in node memory at each instant, averaged over time."""
+
+
+def refresh_of(words: str | None, sessions: int) -> tuple[bool, ...]:
+    """`--refresh`'s word as each of `sessions` sessions' setting: none (or an empty word) is off for all, one word
+    (`0` or `1`) is every session's, and `0,1` is one word a session. Refused otherwise."""
+    if not words:
+        return (False,) * sessions
+    each = words.split(",")
+    if any(w not in ("0", "1") for w in each):
+        raise ValueError(f"--refresh takes 0 or 1, one for every session or one a session (0,1): {words!r}")
+    if len(each) == 1:
+        each = each * sessions
+    if len(each) != sessions:
+        raise ValueError(f"--refresh {words} sets {len(each)} session(s), and the run has {sessions}")
+    return tuple(w == "1" for w in each)
 
 
 def pace_of(spec: str, pass_ms: float) -> dict:
@@ -862,10 +879,12 @@ class Pair:
             raise audit.SessionError(f"the verifiers disagree on window {t}'s boundary")
         return out
 
-    def append(self, root: bytes, count: int):
-        return self._step(self.s.filling, lambda: {"kind": "append", "root": root.hex(), "count": count},
-                          lambda: self.s.append(root, count), lv.appended_json,
-                          coin=lambda out: out[1] if isinstance(out, tuple) else None)[0]
+    def append(self, root: bytes, count: int, origin: audit.Origin | None = None, slot: int | None = None):
+        named = ({} if origin is None else {"origin": wire.origin_json(origin)}) | ({} if slot is None else {"slot": slot})
+        return self._step(self.s.filling, lambda: {"kind": "append", "root": root.hex(), "count": count} | named,
+                          lambda: self.s.append(root, count, *(() if origin is None else (origin,)),
+                                                **({} if slot is None else {"slot": slot})),
+                          lv.appended_json, coin=lambda out: out[1] if isinstance(out, tuple) else None)[0]
 
     def release(self, runs, withdrawn=()):
         return self._step(self.s.filling, lambda: lv.release_event(runs, withdrawn),
@@ -956,6 +975,11 @@ class Pair:
                 else None}
         if got != mine:
             self._disagree(len(self.s.windows) - 1, "record", got, mine)
+        elif (getattr(self.s.params, "refresh", False) and got.get("outcome") == "accepted"
+              and (got.get("record") or {}).get("refresh") is not True):
+            # a Lean verifier that doesn't read the setting ran the session under the other rule
+            self._disagree(len(self.s.windows) - 1, "refresh", {"refresh": (got.get("record") or {}).get("refresh")},
+                           {"refresh": True})
 
     def record(self) -> audit.Record:
         """The accepted session's record: the Lean's (its `outcome` at `end`, as `lv.record_of` reads it, with the
@@ -969,11 +993,13 @@ class Pair:
                      str(failure["failure"]))
 
 
-def node_refused(node: ledger.Node) -> str | None:
-    """Why the session's ledger can't take `node` handed in, or None: its tiers must be the two the ledger reads."""
-    if sorted(node.tiers) != ["dram", "hbm"]:
-        return "a node handed in states its tiers, every GPU's HBM (hbm) and the host's DRAM (dram)"
-    return None
+def figures_record(figures: timing.Figures, *, pinned: bool, ingress_bytes_per_s: float) -> dict:
+    """What `verifier.json` names the session's figures by: the figures whole, their `timing.Figures.sha512`, and
+    whether a configuration pinned that digest (`--figures-sha512`); unpinned, the figures are the launcher's own, as
+    where both parties run on the developer's machine.  Beside them the one capacity they don't carry, the ingress
+    rate the paced line charges."""
+    return {"figures": figures.to_json(), "figures_sha512": figures.sha512(), "figures_pinned": pinned,
+            "ingress_bytes_per_s": ingress_bytes_per_s}
 
 
 class Verifier:
@@ -985,15 +1011,9 @@ class Verifier:
                  transcript: Path | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0,
                  disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None,
                  challenger: challengers.Local | challengers.Serve | challengers.ChallengerGate | None = None,
-                 appends: int | None = None, groups_per_coin: int = 1,
-                 node: ledger.Node | None = None) -> None:
+                 appends: int | None = None, groups_per_coin: int = 1, refresh: Sequence[bool] = ()) -> None:
         coins.openings_coins(1, groups_per_coin)
-        if node is not None and (disk_bytes_per_s or link_bytes_per_s or disk_burst_bytes is not None
-                                 or link_burst_bytes is not None):
-            raise ValueError("a node handed in states its own disk and link ceilings and bursts: give them in it")
-        if node is not None and (why := node_refused(node)) is not None:
-            raise ValueError(why)
-        self.node = node
+        self.refresh = tuple(refresh)
         self.groups_per_coin = groups_per_coin
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
         self.transcript = transcript
@@ -1116,10 +1136,13 @@ class Verifier:
         self.calibration = ready["calibration"]
         return self.registration, self.calibration
 
-    def appends_of(self) -> int:
-        """A session's append coins (`coins.families`): `appends` if given, else `coins.APPENDS`, or none, and no append
-        family, when the hello said the prover's sessions append nothing (`prover.BANDWIDTH`).  That says only what
-        the prover will forgo: an append it sends then has no coin and refuses the session."""
+    def appends_of(self, params: audit.Params | None = None) -> int:
+        """A session's append coins (`coins.families`): with refresh, one a slot of its schedule (T, whose re-keys are
+        appends); else `appends` if given, else `coins.APPENDS`, or none, and no append family, when the hello said the
+        prover's sessions append nothing (`prover.BANDWIDTH`).  That says only what the prover will forgo: an append it
+        sends then has no coin and refuses the session."""
+        if params is not None and params.refresh:
+            return params.schedule.total
         if self.appends is not None:
             return self.appends
         return coins.APPENDS if self.appending else 0
@@ -1162,23 +1185,33 @@ class Verifier:
         samples, window_ns = (self.samples, self.T) if pace is None else (pace["draws"], 1)
         life = self.lifetime if self.lifetime is not None else audit.lifetime_windows(
             self.T if pace is None else round(pace["t_ms"] * 1e6) // pace["groups"], self.deferred)
+        # the one setting, named only when on: the parameters, the session's message and its result are today's without it
+        refresh = {"refresh": True} if k < len(self.refresh) and self.refresh[k] else {}
+        fields = {f.name for f in dataclasses.fields(audit.Params)}
+        if refresh and "refresh" not in fields:
+            raise ValueError(f"session {k} is set to refresh, and this tree's audit.Params has no `refresh`")
+        # F, the fresh slots a window, goes wherever the setting goes and is no setting of its own
+        slots = {"fresh_slots": rota.FRESH_SLOTS} if refresh else {}
         params = audit.Params(reg.blocks, allowance_ns, W, samples, self.delta, window_ns=window_ns, codec=reg.codec,
                               receipt=reg.receipt, rows=reg.rows, lifetime=life, deferred=self.deferred,
                               pace=None if pace is None else audit.Pace(K, round(pace["t_ms"] * 1e6)),
-                              groups_per_coin=self.groups_per_coin)
+                              groups_per_coin=self.groups_per_coin, **refresh,
+                              **(slots if "fresh_slots" in fields else {}))
+        refresh |= slots
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
         one = {} if pace is None or pace.get("in_flight", 2) == 2 else {"in_flight": pace["in_flight"]}
         if one:
             params = dataclasses.replace(params, pace=dataclasses.replace(params.pace, **one))
         g = params.groups_per_coin
         shared, per = ({}, {}) if g == 1 else ({"groups_per_coin": g}, {"per_coin": g})
-        appends = self.appends_of()
+        appends = self.appends_of(params)
         books = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k,
                                       challenger=lambda e: self.challenger.open(reg.digest, e, W, appends, **per))
         case = None if self.transcript is None else lv.DifftestCase(
             self.transcript / f"{reg.digest.hex()[:16]}-session-{k}.json", reg, params, not_before_ns)
         session = Pair(self, books, k, case)
-        self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime, "pace": K} | one | shared)
+        self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime, "pace": K} | one | shared
+                       | refresh)
         self.expect("armed")
         while self.clock.now() < not_before_ns:
             item = self.clock.wait(self.inbox, not_before_ns)
@@ -1406,7 +1439,7 @@ class Verifier:
                 break
         commitment, opened = session.disclose()
         self.conn.send({"type": "coins", "k": k, "commitment": commitment.to_json()}, wire.openings_json(opened))
-        out = shared | {"k": k, "accepted": accepted, "failure": failure, "allowance_ns": allowance_ns,
+        out = shared | refresh | {"k": k, "accepted": accepted, "failure": failure, "allowance_ns": allowance_ns,
                "samples": samples, "delta": self.delta, "window_ns": window_ns, "windows": W, "pace": pace,
                "lifetime": params.lifetime,
                "registration": reg.digest.hex(), "coins": session.commitment.root.hex(),
@@ -1448,10 +1481,12 @@ class Verifier:
 
     @staticmethod
     def append(session: audit.AuditRun, head: dict) -> dict | audit.Verdict:
-        """An append's message to the session (`AuditRun.append`), `{"type": "append", "root": hex, "count": n}`: the
-        reply `{"type": "appended", "first": j, "coin": hex}`, its first index and its coin `c_a`, sampled now, or the
-        rejection."""
-        got = session.append(bytes.fromhex(head["root"]), head["count"])
+        """An append's message to the session (`AuditRun.append`), `{"type": "append", "root": hex, "count": n}`, and
+        under refresh its `"slot"` and a re-key's `"origin"` (`origin_of`): the reply `{"type": "appended", "first": j,
+        "coin": hex}`, its first index and its coin `c_a`, sampled now, or the rejection."""
+        origin = wire.origin_of(head.get("origin"))
+        got = session.append(bytes.fromhex(head["root"]), head["count"], *(() if origin is None else (origin,)),
+                             **({"slot": head["slot"]} if "slot" in head else {}))
         if isinstance(got, audit.Verdict):
             return got
         first, coin = got
@@ -1478,9 +1513,8 @@ class Verifier:
 
     def ledgers(self, record: audit.Record, arrivals: list[list[int]] = (), plans=None) -> dict:
         """The session's declared outputs (`declared`), the protocol's (`ledger`: γ against the node's R at spec and
-        measured, per window as declared, and the memory line's forms), on the verifier's node (the one handed in,
-        `--node`, else `ledger.Node.stated`: every GPU's HBM and the host's DRAM, the node's S_chip and squaring
-        ceiling, `--disk-bytes-per-s` and `--link-bytes-per-s`, and their bursts), whatever share of the node the
+        measured, per window as declared, and the memory line's forms), on the verifier's node (`ledger.Node.stated`
+        of its figures: every GPU's HBM and the host's DRAM, the node's S_chip and squaring ceiling, `--disk-bytes-per-s` and `--link-bytes-per-s`, and their bursts), whatever share of the node the
         store is on, published whole as `inputs`' `capacities`.  Both R are the verifier's, which the
         prover's calibration can only raise: a prover reporting a slower read would shrink every term but the timing.
         Each reading (`spec`, `measured`) also carries the session's terms (`audit.GammaTerms`) and its
@@ -1501,9 +1535,9 @@ class Verifier:
         (`slack_log2`); a record without it was charged `UNRECORDED_SLACK_LOG2`."""
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
-        stated = (self.node if self.node is not None else ledger.Node.stated(
+        stated = ledger.Node.stated(
             self.figures, disk_bytes_per_s=self.disk_bytes_per_s, link_bytes_per_s=self.link_bytes_per_s,
-            disk_burst_bytes=self.disk_burst_bytes, link_burst_bytes=self.link_burst_bytes)).raised(reported)
+            disk_burst_bytes=self.disk_burst_bytes, link_burst_bytes=self.link_burst_bytes).raised(reported)
         spec, measured = stated.spec_bytes_per_s, stated.read_bytes_per_s
         rebuild = stated.rebuild(record.codec)
         hbm, dram = stated.tiers["hbm"], stated.tiers["dram"]
@@ -1589,18 +1623,25 @@ def save_registry(path: Path | None, registry: audit.Registry | dict) -> None:
         tmp.replace(path)
 
 
-def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: Verify | None = None,
+def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
          served_verify: Verify | None = None, serve: Sequence[str] | None = None) -> int:
-    """The verifier's process on `argv` (the command line's by default), for the node of `figures`. A gate session's
+    """The verifier's process on `argv` (the command line's by default), for the node whose figures `--figures` names
+    (`timing.Figures.to_json`'s form), which it refuses to run without but to close a registration. A gate session's
     signatures are checked with `verify` and a served one's with `served_verify` (`challengers.of`), and `--challenger
     serve` starts the challenger's process `serve`,
-    which the process's entry hands in with the figures
+    which the process's entry hands in
     (`verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py`): without them, those two refuse
     the run."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=7781)
     ap.add_argument("--out", type=Path, help="required unless --close")
+    ap.add_argument("--figures", type=Path, metavar="FILE",
+                    help="the node's figures, as `timing.Figures.to_json` writes them (`benchmarks/poub_session/"
+                         "sheets.py NODE`); required unless --close")
+    ap.add_argument("--figures-sha512", metavar="HEX",
+                    help="the figures' `timing.Figures.sha512` as the verifier's configuration pins it: a --figures "
+                         "file with another is refused")
     ap.add_argument("--windows", type=int, default=7)
     ap.add_argument("--window-ms", type=float, default=1000.0)
     ap.add_argument("--samples", type=int, default=2773)
@@ -1611,6 +1652,10 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
                     help="L: windows (a paced session's groups) an appended block may stay in plans after the window "
                          "it joined (default: those of the window, or of the nominal group, in 30 s, "
                          "`audit.lifetime_windows`)")
+    ap.add_argument("--refresh", metavar="0|1[,...]",
+                    help="refresh (`audit.Params.refresh`), off by default: 1 sets it for every session, and one "
+                         "word a session, as 0,1, sets it for each (two sessions on one registration, the first "
+                         "under today's rule and the second under refresh)")
     ap.add_argument("--pings", type=int, default=1000)
     ap.add_argument("--check-workers", type=int, default=len(os.sched_getaffinity(0)) - 1,
                     help="processes computing each window's exact bound on wrong receipts (`checks.Checks.bounds`; 0: "
@@ -1620,22 +1665,10 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
     ap.add_argument("--registry", type=Path,
                     help="the verifier's registrations, kept across its processes (`audit.Registry`): a node with a "
                          "live registration there is refused (default: this process's own)")
-    ap.add_argument("--hbm-bytes", type=int,
-                    help="the node's HBM, the memory line's capacity (default: its GPUs', `figures.hbm_bytes`)")
-    ap.add_argument("--host-bytes", type=int, default=0,
-                    help="the node's host DRAM: with it the memory line is also by kind against HBM and DRAM "
-                         "(`node_line`)")
     ap.add_argument("--disk-bytes-per-s", type=float, default=0.0,
                     help="the node's disks' measured read rate (`Disks`' β), charged in the memory line (`ledger.Node`)")
     ap.add_argument("--link-bytes-per-s", type=float, default=0.0,
                     help="the node's boundary links' read ceiling, charged in the link-charged memory line")
-    ap.add_argument("--disk-burst-bytes", type=float,
-                    help="the most the disks bring back at once beyond their ceiling (default: a second of it)")
-    ap.add_argument("--link-burst-bytes", type=float,
-                    help="one link burst, charged with the links (default: `figures.link_burst_bytes`)")
-    ap.add_argument("--node", type=Path, metavar="FILE",
-                    help="the node's capacities, as `ledger.Node.to_json` writes them (default: `ledger.Node.stated`'s, "
-                         "with the disk and link flags, which a node handed in states itself)")
     ap.add_argument("--close", metavar="NODE_HEX",
                     help="close the node's live registration in --registry, its sessions counted as they stood, "
                          "and exit")
@@ -1687,25 +1720,26 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
                          "flight (a `--paced` F = 1), which no property covers (`line.SHARED`)")
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
                     help="print each accepted session's memory line in both forms from a verifier.json written "
-                         "before the average form (`recorded_memory`, with --host-bytes the node line), and a paced "
+                         "before the average form (`recorded_memory`, with the node line), and a paced "
                          "session's paced line with --ingress-bytes-per-s (`recorded_paced`), and exit")
     a = ap.parse_args(argv)
-    a.hbm_bytes = figures.hbm_bytes if a.hbm_bytes is None else a.hbm_bytes
-    capacities = None
-    if a.node is not None:
-        if a.disk_bytes_per_s or a.link_bytes_per_s or a.disk_burst_bytes is not None or a.link_burst_bytes is not None:
-            ap.error("--node states the disk and link ceilings and bursts: drop --disk-* and --link-*")
+    figures = None
+    if a.figures is None and a.close is None:
+        ap.error("--figures FILE: the node's figures, which every ledger term reads, are handed in "
+                 "(`benchmarks/poub_session/sheets.py NODE` writes them from the node's data sheets)")
+    if a.figures is not None:
         try:
-            capacities = ledger.Node.of_json(json.loads(a.node.read_text()))
-        except (OSError, TypeError, ValueError) as e:
-            ap.error(f"--node {a.node}: {e}")
-        if (why := node_refused(capacities)) is not None:
-            ap.error(f"--node {a.node}: {why}")
+            figures = timing.Figures.of_json(json.loads(a.figures.read_text()))
+        except (OSError, ValueError) as e:
+            ap.error(f"--figures {a.figures}: {e}")
+        if a.figures_sha512 is not None and figures.sha512() != a.figures_sha512.lower():
+            ap.error(f"--figures {a.figures}: its SHA-512 is {figures.sha512()}, not {a.figures_sha512}, the one "
+                     "--figures-sha512 pins: the figures are the verifier's configuration's, never the prover's")
     if a.memory_of is not None:
         v = json.loads(a.memory_of.read_text())
         print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, chip_bytes=figures.chip_bytes,
-                                                                  host_bytes=a.host_bytes)} | (
-            {"paced": recorded_paced(s, v["registration"], figures=figures, host_bytes=a.host_bytes,
+                                                                  host_bytes=figures.host_dram_bytes)} | (
+            {"paced": recorded_paced(s, v["registration"], figures=figures, host_bytes=figures.host_dram_bytes,
                                      ingress_bytes_per_s=a.ingress_bytes_per_s)} if s.get("pace") else {})
                           for s in v["sessions"] if s["accepted"]], indent=1))
         return 0
@@ -1729,6 +1763,10 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
         ap.error("--out is required")
     if a.appends is not None and a.appends < 0:
         ap.error("--appends is a count, 0 or more")
+    try:
+        refresh = refresh_of(a.refresh, len(a.paced) if a.paced else a.sessions)
+    except ValueError as e:
+        ap.error(str(e))
     if a.groups_per_coin > 1 and any(pace_of(x, 1.0).get("in_flight") == 1 for x in a.paced or ()):
         ap.error("--groups-per-coin above 1 takes no --paced session at one window in flight (F = 1): the Lean "
                  "verifier refuses one, as no property covers it; drop :1 or --groups-per-coin")
@@ -1758,12 +1796,10 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
     v = Verifier(conn, figures=figures, source=os.urandom(32), windows=a.windows, window_ns=round(a.window_ms * 1e6),
                  samples=a.samples, delta=2.0 ** a.delta_log2, jitter_ns=round(a.jitter_ms * 1e6),
                  log=lambda m: print(m, flush=True), checks=checks, lifetime=a.lifetime, registry=registry,
-                 hbm_bytes=a.hbm_bytes, host_bytes=a.host_bytes, ingress_bytes_per_s=a.ingress_bytes_per_s,
+                 host_bytes=figures.host_dram_bytes, ingress_bytes_per_s=a.ingress_bytes_per_s,
                  lean_exe=a.lean_exe, transcript=a.transcript, disk_bytes_per_s=a.disk_bytes_per_s,
-                 link_bytes_per_s=a.link_bytes_per_s, disk_burst_bytes=a.disk_burst_bytes,
-                 link_burst_bytes=a.link_burst_bytes,
-                 challenger=challenger, appends=a.appends, groups_per_coin=a.groups_per_coin,
-                 node=capacities)
+                 link_bytes_per_s=a.link_bytes_per_s,
+                 challenger=challenger, appends=a.appends, groups_per_coin=a.groups_per_coin, refresh=refresh)
     c0 = time.process_time_ns()
     try:
         reg, cal = v.register()
@@ -1773,7 +1809,9 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
         save_registry(a.registry, kept)
         (a.out / "verifier.json").write_text(json.dumps(
             {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "verdict": "lean",
-             "refused": str(e), "registry": kept}, indent=1))
+             "refused": str(e), "registry": kept,
+             **figures_record(figures, pinned=a.figures_sha512 is not None,
+                                ingress_bytes_per_s=a.ingress_bytes_per_s)}, indent=1))
         if checks:
             checks.close(wait=True)
         v.stop()
@@ -1791,7 +1829,9 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
         (a.out / "verifier.json").write_text(json.dumps(
             {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "registration": wire.registration_json(reg),
              "verdict": "lean", "calibration": cal, "rtt": rtt, "allowance_ns": allowance, "sessions": results,
-             "process_cpu_ns": time.process_time_ns() - c0, "wire": conn.totals(), "registry": kept}, indent=1))
+             "process_cpu_ns": time.process_time_ns() - c0, "wire": conn.totals(), "registry": kept,
+             **figures_record(figures, pinned=a.figures_sha512 is not None,
+                                ingress_bytes_per_s=a.ingress_bytes_per_s)}, indent=1))
         save_registry(a.registry, kept)
 
     record()
@@ -1843,6 +1883,7 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
 __all__ = ["AVERAGE", "Pair", "TIME_HELD", "UNRECORDED_SLACK_LOG2", "Verifier",
            "WORST_PASS", "accepts", "gamma_answer", "ingress_bursts", "lean_record", "load_registry", "main", "memory",
            "memory_error",
-           "node_line", "node_refused", "pace_of", "paced_groups", "paced_line", "recorded_inputs", "recorded_line", "recorded_memory",
+           "node_line", "pace_of", "paced_groups", "paced_line", "recorded_inputs", "recorded_line", "recorded_memory",
+           "refresh_of",
            "recorded_paced", "recorded_queries", "recorded_rates", "recorded_windows", "regions_of", "save_registry",
            "sketch_at", "timing_parts"]

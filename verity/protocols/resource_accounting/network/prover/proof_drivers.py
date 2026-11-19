@@ -1,6 +1,6 @@
 """What network attestation's zero-knowledge drivers take from code `verity` does not load.
 
-The drivers (`scan_zk`, `egress_zk`, `network_attester_zk`, `n2_zk`, `n2_tie_zk`, `leak_scan`) stage, prove and verify through the
+The drivers (`scan_zk`, `network_attester_zk`, `n2_zk`, `n2_tie_zk`, `leak_scan`) stage, prove and verify through the
 one-stage audit's benchmark drivers under `benchmarks/one_stage/`, Flock's own distribution and Flock's proof-format
 reader, and read a network attester's run through the chain's reader under `benchmarks/network_traces/`. `verity` loads
 none of them, so they come in as one `ProofDrivers`, installed by the command line that runs a driver
@@ -50,3 +50,4 @@ def drivers() -> ProofDrivers:
         raise RuntimeError("no proof drivers installed: run the driver through benchmarks/network_traces/zk_drivers.py, "
                            "or call proof_drivers.install first")
     return _installed
+

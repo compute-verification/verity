@@ -172,7 +172,7 @@ theorem arr_mapStream (g : String → ℕ → Json → Json) (s : Json) :
 def eraseG : String → ℕ → Json → Json := fun _ _ => mapKey "coins" fun _ => .null
 
 /-- What `fillCoins` does to round `k` of stream `name`, at the streams' offsets `off`. -/
-def fillG (mids : List (Claims.Msg × Coin)) (off : String → ℕ) (name : String) (k : ℕ) (r : Json) : Json :=
+def fillG (mids : List (Hash.Msg × Coin)) (off : String → ℕ) (name : String) (k : ℕ) (r : Json) : Json :=
   match mids[off name + k]? with
   | some (_, c) => mapKey "coins" (fun _ => hexArr (c.vals (nOf r))) r
   | none => r
@@ -183,7 +183,7 @@ theorem arr_eraseCoins (j : Json) :
   rw [arr_mapKey_mapArr, arr_mapKey_ne _ _ (by decide : "streams" ≠ "link")]
   rfl
 
-theorem arr_coinSubJ (spec : SessionSpec) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (j : Json) :
+theorem arr_coinSubJ (spec : SessionSpec) (c₁ : Coin) (mids : List (Hash.Msg × Coin)) (j : Json) :
     Record.arr (coinSubJ spec c₁ mids j) "streams" =
       (·.map (mapStream (fillG mids (streamOffset spec (eraseCoins j))))) <$> Record.arr (eraseCoins j) "streams" := by
   simp only [coinSubJ, FlockDeploy.fillCoins, FlockDeploy.mapRounds, FlockDeploy.setPoints]
@@ -197,7 +197,7 @@ theorem arr_shaSubJ (spec : SessionSpec) (ds : Array ByteArray) (j : Json) :
 /-- **A substituted round reads the live coin**: where the decoder reads a round the substitution filled from an
 honest round `rd₀`, there is a coin at its index, and the round counts `rd₀.n` and holds that coin's first `rd₀.n`
 values. -/
-theorem round_coins {mids : List (Claims.Msg × Coin)} {off : String → ℕ} {w : String} {j : ℕ} {spec : SessionSpec}
+theorem round_coins {mids : List (Hash.Msg × Coin)} {off : String → ℕ} {w : String} {j : ℕ} {spec : SessionSpec}
     {H : ByteArray → ByteArray} {rd₀ rd : Round}
     (h : RoundR (fillG mids off w j (eraseG w j (roundObj spec H j rd₀))) rd) :
     ∃ m c, mids[off w + j]? = some (m, c) ∧ rd.n = rd₀.n ∧ rd.coins = c.vals rd₀.n := by
@@ -293,7 +293,7 @@ theorem cutLens_map_length {α : Type} : ∀ (L : List (List α)), cutLens (L.ma
 /-- **Rep `k`'s block of round messages has its schedule's rounds**: each rep's messages are its proof's framed
 bytes, one per opened round (`FitsRep.rounds`), and the opened rounds are the `k`-th block of `repLens`. -/
 theorem readPs_blocks {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray}
-    {rss : List (List ByteArray)} {cs : List Coin} {fl : FinalP} {pf : Array Flock.Proof × List Claims.Msg}
+    {rss : List (List ByteArray)} {cs : List Coin} {fl : FinalP} {pf : Array Flock.Proof × List Hash.Msg}
     (h : readPs spec sts c₁ r₀ rss cs fl = some pf) (k : ℕ) :
     ((cutLens (repLens spec sts) pf.2).getD k []).length = (repLens spec sts).getD k 0 := by
   unfold readPs at h
@@ -318,11 +318,11 @@ theorem readPs_blocks {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r�
   · rw [if_neg hc] at h
     cases h
 
-theorem recStreams_size (spec : SessionSpec) (sts : Array Stmt) (ms : List Claims.Msg) (cs : List Coin) :
+theorem recStreams_size (spec : SessionSpec) (sts : Array Stmt) (ms : List Hash.Msg) (cs : List Coin) :
     (recStreams spec sts ms cs).size = 2 * sts.size := by
   simp [recStreams]
 
-theorem recStreams_get {spec : SessionSpec} {sts : Array Stmt} {ms : List Claims.Msg} {cs : List Coin} {k : ℕ}
+theorem recStreams_get {spec : SessionSpec} {sts : Array Stmt} {ms : List Hash.Msg} {cs : List Coin} {k : ℕ}
     (hk : k < (recStreams spec sts ms cs).size) :
     (recStreams spec sts ms cs)[k].size = ((cutLens (repLens spec sts) ms).getD k []).length ∧
       ∀ j < (recStreams spec sts ms cs)[k].size,
@@ -344,7 +344,7 @@ def canonRounds (spec : SessionSpec) (sts : Array Stmt) (cs : List Coin) (k : �
 `k`'s stream has `canonRounds`' coins, at rep streams of distinct names and round messages whose blocks have the
 schedule's rounds. -/
 theorem coins_of_decode (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {ms : List Claims.Msg} {cs : List Coin}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {ms : List Hash.Msg} {cs : List Coin}
     {ps : Array Flock.Proof} {ds : Array ByteArray} {sess : RunRecord}
     (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup)
     (hlen : ∀ k, ((cutLens (repLens spec sts) ms).getD k []).length = (repLens spec sts).getD k 0)
@@ -490,7 +490,7 @@ theorem verifierRows_comb (sh : Shape) (rounds : Array (Array F128)) (extras : A
 verifier rows at table `table`'s shape (its `fast100` schedule and its extra claims at the first coin's link points),
 those extra claims, rep `k = 2 table + rep`'s `canonRounds` at the coins after the link, and no comb (`info` doesn't
 read it, `verifierRows_comb`); the position they sample for query `query` of level `level`. -/
-def posAt (x : Claims.Msg) (cs : List Coin) (q : OpenPiece) : ℕ :=
+def posAt (x : Hash.Msg) (cs : List Coin) (q : OpenPiece) : ℕ :=
   match setupOf false x with
   | some v =>
     match verifierRows
@@ -504,12 +504,12 @@ def posAt (x : Claims.Msg) (cs : List Coin) (q : OpenPiece) : ℕ :=
 
 namespace DecAt
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128) (i : ℕ)
 
 /-- **The rep streams' names are distinct** at a decision of an inner statement read at the dense form: the read
 carries no public inputs (`dense_inner`), so its tables are distinct (`KS.tables_nodup`). -/
-theorem names_nodup {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
+theorem names_nodup {xo : Hash.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) :
     (D.spec.repStreams.toList.map (·.2.2)).Nodup := by
   obtain ⟨s, spec, st, sch, hset, -, hpi, -⟩ := dense_inner hst hf
@@ -586,7 +586,7 @@ theorem posAt_eq (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) (hi : i <
 /-- **`hpos`, the coin tie, in `runs_assembled`'s form**: at a decision of an inner statement read at the dense form
 and a table `i` of the statement, at the verifier rows at rep `r`'s values, every piece of rep `r` of table `i` reads
 the position the rows sample for its query through `posAt`. -/
-theorem hpos {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
+theorem hpos {xo : Hash.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size) (pieces : List OpenPiece) :
     ∀ r : Fin 2, ∀ v info kappa,

@@ -60,7 +60,7 @@ theorem pinnedChallengePhase_eq (ledger window : Json) (key : ChallengerKey) (pi
 
 /-- `trustedChallengePhaseOf` with `replay` its ledger's replay. -/
 def trustedChallengePhaseOfWith (replay : Replay) (window : Json) (key : ChallengerKey) (pins main session : Json)
-    : V (LiveCommitment × Roots) := do
+    : V (LiveCommitment × Log) := do
   challengePhaseNamed (← pinnedChallengePhaseWith replay window key pins main) key session
 
 theorem trustedChallengePhaseOf_eq (ledger window : Json) (key : ChallengerKey) (pins main session : Json) :
@@ -113,8 +113,9 @@ open Spot.Challenger.Once (Replay trustedChallengePhaseOfWith)
 /-- `roundsCheck` with `replay` its ledger's replay. -/
 def roundsCheckWith (replay : Replay) (key : Json) (pins main window session roots openings : Json) : R Unit := do
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
-  let (c, received) ← (trustedChallengePhaseOfWith replay window k pins main session).mapError fun e =>
+  let (c, log) ← (trustedChallengePhaseOfWith replay window k pins main session).mapError fun e =>
     ("coin", s!"the challenger's session is not trusted: {e}")
+  let received := Spot.Challenger.byFamily c log
   let some rs := (match roots with
       | .arr rs => rs.toList.mapM fun r => if (str? r).any isHexDigest then hex? r else none
       | _ => none) | throw ("rounds", "the round roots are not a list of SHA-512 digests")
@@ -142,10 +143,10 @@ open PouwVerifier.Once (roundsCheckWith)
 /-- `drawChallengePhase` with `replay` its ledger's replay. -/
 def drawSessionWith (replay : Replay) (ledger : Json) (k : ChallengerKey) (pins main session : Json) (root : String) :
     R (Spot.Challenger.LiveCommitment × Spot.Challenger.Roots) := do
-  let got ← (trustedChallengePhaseOfWith replay (Json.mkObj [("root", Json.str root)]) k pins main session).mapError
+  let (c, log) ← (trustedChallengePhaseOfWith replay (Json.mkObj [("root", Json.str root)]) k pins main session).mapError
     fun e => ("coin", s!"the draw's session is not trusted: {e}")
   unless Spot.Challenger.withheldOn ledger root do throw ("coin", Spot.Challenger.WITHHELD)
-  pure got
+  pure (c, Spot.Challenger.byFamily c log)
 
 theorem drawSession_eq (ledger : Json) (k : ChallengerKey) (pins main session : Json) (root : String) :
     drawChallengePhase ledger k pins main session root =

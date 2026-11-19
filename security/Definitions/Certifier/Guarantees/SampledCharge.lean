@@ -106,7 +106,7 @@ def EncardAccSeqsSampledLe : Prop :=
 public only where something binds them, as the registration's commitment binds the registered inputs. -/
 def SampledLeakAccepted : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-    (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
+    (H : Hash.Msg → Hash.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
     (reg : AuditStatement → Finset ℕ) (β : AuditStatement → ℕ) (Dj : ℕ)
     (hβ : ∀ s P, D.partition s = some P → ∀ F ∈ incorrectSets s.design P δ, faultyBits s.prog P F ≤ β s),
@@ -129,7 +129,7 @@ trace's commitment also binds (`CommitmentScheme.Binds`) and each statement's re
 * those sequences number at most `2^#(freeInputs \ reg) · #incorrectSets(δ) · 2^β · Dj^k`. -/
 def SampledLeakRegistered : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-    (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (hb : D.commit.Binds H) (L K S : ℕ)
+    (H : Hash.Msg → Hash.Msg) (D : Compiled Coin A) (hks : D.KS H) (hb : D.commit.Binds H) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
     (reg : AuditStatement → Finset ℕ) (ops : AuditStatement → List (Opening Bool)) (β : AuditStatement → ℕ) (Dj : ℕ)
     (hβ : ∀ s P, D.partition s = some P → ∀ F ∈ incorrectSets s.design P δ, faultyBits s.prog P F ≤ β s),

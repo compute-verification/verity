@@ -202,7 +202,7 @@ theorem zkTab_committed {st : Stmt} (L : Layout st) {sch : Flock.Schedule} {tPad
 /-- **The live sessions' bound at a masked statement**: `ZkLiveAt` at the deployed hashes (`hs512`) and tables of
 full-width columns, at `zkTab`, wherever the setup has the one table `st`, at its every layout, link layout at
 `PT_LOCAL`, and `Zk.schedule`'s schedule. -/
-def ZkLive (x : Claims.Msg) : Prop :=
+def ZkLive (x : Hash.Msg) : Prop :=
   ∀ (spec : SessionSpec) (st : Stmt) (_ : tables true x = [(spec, st)]) (L : Layout st) (sch : Flock.Schedule)
     (tPad : ℕ) (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hk : st.c.kLog ≤ 27)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts),
@@ -213,7 +213,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- The readable statement's `k_log` is table 0's. -/
-theorem parse_kLog {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse zk Readable.relation x = some s)
+theorem parse_kLog {zk : Bool} {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse zk Readable.relation x = some s)
     {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts))
     (h0 : 0 < sts.size) : s.kLog = sts[0].c.kLog := by
   obtain ⟨p, hp, rfl⟩ := Option.map_eq_some_iff.1 hs
@@ -224,14 +224,14 @@ theorem parse_kLog {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : pa
 end Gen
 
 /-- The readable statement's `k_log` is table 0's. -/
-theorem parse_kLog {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse zk Readable.relation x = some s)
+theorem parse_kLog {zk : Bool} {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse zk Readable.relation x = some s)
     {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts))
     (h0 : 0 < sts.size) : s.kLog = sts[0].c.kLog :=
   Gen.parse_kLog (S := S₀) (zk := zk) (x := x) (s := s) (hs := hs) (ins := ins) (spec := spec) (sts := sts)
     (hset := hset) (h0 := h0)
 
 /-- **Table 0 of a masked statement in scope**: its layout and its link layout at `PT_LOCAL` (`plain_table0`). -/
-theorem zk_table0 {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+theorem zk_table0 {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size) :
     ∃ L : Layout (sts[0]'h0), (L.model (Refine.regionsOf (sts[0]'h0))).LinkLayout PT_LOCAL spec.mPts := by
@@ -254,7 +254,7 @@ theorem zk_table0 {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Read
 
 /-- **The masked table bound at a statement in scope of one table, from the live sessions' bound**: at tables of
 full-width columns, where the statement parses in scope and sets up one table. -/
-theorem zk_tableBoundθAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem zk_tableBoundθAt_live {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h1 : sts.size = 1)
     (hl : ZkLive x) :

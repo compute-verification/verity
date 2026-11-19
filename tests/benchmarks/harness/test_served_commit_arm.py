@@ -184,17 +184,6 @@ def test_ready_gives_the_committer_the_private_engines_fields_from_llms_public_n
     assert arm.windows == {"windows": {"envelope": com.envelope}} and com.kw["commit_scheme"] == "rows-sha512"
 
 
-def test_a_local_checkpoint_commits_under_vllms_model_path_without_the_private_engine(monkeypatch):
-    from verity_bench.vllm.engine import _DirectLLM
-
-    runner = _Runner()
-    direct = _DirectLLM(_vllm(runner), {})
-    com = _ready(monkeypatch, direct).committer
-    assert (com.engine.runner, com.engine.model) == (runner, runner.model)
-    assert com.engine.cp == {"repo": "/models/local", "revision": None}
-    assert len(_geo_digest(com.engine)) == 64
-
-
 def _prof_module(monkeypatch) -> tuple[ModuleType, list[str]]:
     """prof_arm.py with torch's NVTX ranges recorded; the module and the ranges."""
     ranges: list[str] = []
@@ -205,18 +194,6 @@ def _prof_module(monkeypatch) -> tuple[ModuleType, list[str]]:
     prof = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(prof)
     return prof, ranges
-
-
-def test_the_stock_profiling_arm_ranges_the_runner_of_a_local_checkpoint_without_the_private_engine(monkeypatch):
-    from verity_bench.vllm.engine import _DirectLLM
-
-    prof, ranges = _prof_module(monkeypatch)
-    runner = _Runner()
-    direct = _DirectLLM(_vllm(runner), {})
-    prof.StockProfArm("stock-prof").ready(SimpleNamespace(engine=direct))
-    assert runner.execute_model(SimpleNamespace(total_num_scheduled_tokens=7)) == "executed"
-    assert runner.sample() == "sampled"
-    assert ranges == ["exec:7", "pop", "sample", "pop"]
 
 
 class _RootsCommitter(_Committer):

@@ -423,7 +423,7 @@ def test_the_opening_statement_reads_rec_claim_at_rows_0_and_1(sess, tmp_path):
     bit off in the prover's ``rec-claim`` (the verifier's reads file naming the honest root), residual 1 alone fails. When
     Lean is built, its `statement` accepts the honest files and refuses the forged claim row. About 3 minutes, most of it
     building the statement (1,839,105 unit rows) twice."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+    from verity.commitments import registered_value as RV
     from verity.commitments import hm96
     from verity_flock.rec_outer import CLAIM_VALUE
 
@@ -434,13 +434,13 @@ def test_the_opening_statement_reads_rec_claim_at_rows_0_and_1(sess, tmp_path):
                    cons=_cons(s["cons"]))
     rows = RR.opening_rows(OPEN, Wt)
     salts = [hm96.SHA512.fresh_salt() for _ in range(2)]
-    claim = RG.Registered.commit(program, CLAIM_VALUE, [rows["claim0"], rows["claim1"]], salts)
+    claim = RV.Registered.commit(program, CLAIM_VALUE, [rows["claim0"], rows["claim1"]], salts)
     inst = RS.session_rows(SPARSE, [{k: x for k, x in m.items() if k != "tau"} for _, m, _ in s["reps"]],
                            [RS.verifier_row(SPARSE, c) for c, _, _ in s["reps"]], s["tau"])
     assert [r["claim"] for r in inst] == [rows["claim0"], rows["claim1"]]
     assert RS.registrations(SPARSE, program, inst, {"claim": salts})["claim"].entry() == claim.entry()
-    acc = RG.Registered.commit(program, "rec-acc", [rows["acc0"], rows["acc1"]])
-    regs = {f"m{i}": RG.Registered.commit(program, f"rec-opening-c{i}", [rows[f"m{i}"]]) for i in range(len(A.rounds(OPEN)))}
+    acc = RV.Registered.commit(program, "rec-acc", [rows["acc0"], rows["acc1"]])
+    regs = {f"m{i}": RV.Registered.commit(program, f"rec-opening-c{i}", [rows[f"m{i}"]]) for i in range(len(A.rounds(OPEN)))}
     [h] = RR.stage_opening(OPEN, {**regs, "claim": claim}, (acc, 0, 1), V, tmp_path / "honest")
     assert h["holds"] == [True] and h["unit_agrees"] == [True] and h["nonzero_residuals"] == [[]]
     assert h["products"] == OPENING[0] and h["residuals"] == 5 and h["unit_rows"] == 1_839_105
@@ -449,12 +449,12 @@ def test_the_opening_statement_reads_rec_claim_at_rows_0_and_1(sess, tmp_path):
     assert reads["claim0"]["reads"] == [0] and reads["claim1"]["reads"] == [1]
     assert reads["claim0"]["root"] == reads["claim1"]["root"] == claim.root.hex() and reads["claim0"]["value"] == "rec-claim"
     assert reads["acc0"]["reads"] == [0] and reads["acc1"]["reads"] == [1]
-    zero = RG.Registered.commit(h["program_sha512"], RR.ZERO_VALUE, [[0] * RR.OUT_WORDS],
+    zero = RV.Registered.commit(h["program_sha512"], RR.ZERO_VALUE, [[0] * RR.OUT_WORDS],
                                 salts=RR.zero_salts(RR.ZERO_VALUE, 1))
     assert reads["out"] == {**zero.entry(), "word_bits": 16, "reads": [0]}  # `RecCoins.checkOpening`'s `checkZero`
     assert h["zero_root"] == zero.root.hex()
     assert "rec-opening/m22-c2-p0" in (d / "circuit.txt").read_text()
-    bad = RG.Registered.commit(program, CLAIM_VALUE, [rows["claim0"], [rows["claim1"][0] ^ 1] + rows["claim1"][1:]], salts)
+    bad = RV.Registered.commit(program, CLAIM_VALUE, [rows["claim0"], [rows["claim1"][0] ^ 1] + rows["claim1"][1:]], salts)
     [f] = RR.stage_opening(OPEN, {**regs, "claim": bad}, (acc, 0, 1), V, tmp_path / "forged", evaluate=False,
                            own={"claim0": claim.entry(), "claim1": claim.entry()})
     assert f["holds"] == [False] and f["nonzero_residuals"] == [[1]]

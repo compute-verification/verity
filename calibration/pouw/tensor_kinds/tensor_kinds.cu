@@ -13,7 +13,7 @@
 #include <cstdlib>
 #include <vector>
 
-// TK_SM: the target, 120 (RTX PRO 6000, the default), 90 (H200, H100), 100 (B200) or 89 (L40S, RTX 4090); each but
+// TK_SM: the target, 120 (RTX PRO 6000, the default), 90 (H200, H100) or 100 (B200); each but
 // 120 has its own form list and an alone4 point a form. TK_GROUP: build one group of the target's forms (-1: all), so run.sh compiles the groups in parallel.
 #ifndef TK_SM
 #define TK_SM 120
@@ -116,7 +116,7 @@ Timing run_timed(F launch, int nblocks, BlockClk* d_rec, int reps = 5) {
   return best;
 }
 
-// Dynamic shared memory that keeps a second block off an SM (sm_120 and sm_89: 100 KB a SM; sm_100 and sm_90: 228 KB).
+// Dynamic shared memory that keeps a second block off an SM (sm_120: 100 KB a SM; sm_100 and sm_90: 228 KB).
 #if TK_SM == 100 || TK_SM == 90
 constexpr int ONE_BLOCK_SMEM = 120 * 1024;
 #else
@@ -356,88 +356,8 @@ struct QmmaSpE4m3k64 {  // 2:4 sparse FP8, 32 useful MACs an output
   }
 };
 
-// ---- sm_89 (Ada) forms: every native mma.sync shape sm_89 has beyond the ones above (PTX ISA 9.7.16) -----------------
-// INT4 and binary are native on sm_80-sm_89 (absent on sm_120); FP8 takes the sm_89 syntax (no kind::), with f16
-// accumulate at m16n8k16 and m16n8k32 too; 2:4 sparse covers s4, f16, tf32 and e4m3.
-struct ImmaS4k64 {
-  static constexpr uint32_t W = 0x12345671u;
-  using Acc = int32_t;
-  static constexpr int NC = 4;
-  static constexpr double MACS = 16 * 8 * 64, SLOTS = 128;
-  static constexpr const char* NAME = "imma_s4_m16n8k64";
-  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t) {
-    asm volatile("mma.sync.aligned.m16n8k64.row.col.s32.s4.s4.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
-                 : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3]) : A4, B2);
-  }
-};
-struct ImmaS4k32 {
-  static constexpr uint32_t W = 0x12345671u;
-  using Acc = int32_t;
-  static constexpr int NC = 4;
-  static constexpr double MACS = 16 * 8 * 32, SLOTS = 128;
-  static constexpr const char* NAME = "imma_s4_m16n8k32";
-  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t) {
-    asm volatile("mma.sync.aligned.m16n8k32.row.col.s32.s4.s4.s32 {%0,%1,%2,%3}, {%4,%5}, {%6}, {%0,%1,%2,%3};"
-                 : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3]) : A2, "r"(b[0]));
-  }
-};
-struct ImmaS4m8k32 {
-  static constexpr uint32_t W = 0x12345671u;
-  using Acc = int32_t;
-  static constexpr int NC = 2;
-  static constexpr double MACS = 8 * 8 * 32, SLOTS = 64;
-  static constexpr const char* NAME = "imma_s4_m8n8k32";
-  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t) {
-    asm volatile("mma.sync.aligned.m8n8k32.row.col.s32.s4.s4.s32 {%0,%1}, {%2}, {%3}, {%0,%1};"
-                 : "+r"(d[0]), "+r"(d[1]) : "r"(a[0]), "r"(b[0]));
-  }
-};
-struct BmmaAndK256 {  // b1 AND+POPC: 256 one-bit products an output
-  static constexpr uint32_t W = 0x5a3c96e1u;
-  using Acc = int32_t;
-  static constexpr int NC = 4;
-  static constexpr double MACS = 16 * 8 * 256, SLOTS = 128;
-  static constexpr const char* NAME = "bmma_and_m16n8k256";
-  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t) {
-    asm volatile("mma.sync.aligned.m16n8k256.row.col.s32.b1.b1.s32.and.popc {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, "
-                 "{%0,%1,%2,%3};"
-                 : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3]) : A4, B2);
-  }
-};
-struct BmmaXorK256 {
-  static constexpr uint32_t W = 0x5a3c96e1u;
-  using Acc = int32_t;
-  static constexpr int NC = 4;
-  static constexpr double MACS = 16 * 8 * 256, SLOTS = 128;
-  static constexpr const char* NAME = "bmma_xor_m16n8k256";
-  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t) {
-    asm volatile("mma.sync.aligned.m16n8k256.row.col.s32.b1.b1.s32.xor.popc {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, "
-                 "{%0,%1,%2,%3};"
-                 : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3]) : A4, B2);
-  }
-};
-struct BmmaAndK128 {
-  static constexpr uint32_t W = 0x5a3c96e1u;
-  using Acc = int32_t;
-  static constexpr int NC = 4;
-  static constexpr double MACS = 16 * 8 * 128, SLOTS = 128;
-  static constexpr const char* NAME = "bmma_and_m16n8k128";
-  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t) {
-    asm volatile("mma.sync.aligned.m16n8k128.row.col.s32.b1.b1.s32.and.popc {%0,%1,%2,%3}, {%4,%5}, {%6}, {%0,%1,%2,%3};"
-                 : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3]) : A2, "r"(b[0]));
-  }
-};
-struct BmmaAndM8k128 {
-  static constexpr uint32_t W = 0x5a3c96e1u;
-  using Acc = int32_t;
-  static constexpr int NC = 2;
-  static constexpr double MACS = 8 * 8 * 128, SLOTS = 64;
-  static constexpr const char* NAME = "bmma_and_m8n8k128";
-  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t) {
-    asm volatile("mma.sync.aligned.m8n8k128.row.col.s32.b1.b1.s32.and.popc {%0,%1}, {%2}, {%3}, {%0,%1};"
-                 : "+r"(d[0]), "+r"(d[1]) : "r"(a[0]), "r"(b[0]));
-  }
-};
+// ---- the native mma.sync shapes sm_90 and sm_100 time beyond the ones above (PTX ISA 9.7.16) ------------------------
+// FP8 takes the syntax with no kind::; 2:4 sparse covers f16, tf32 and e4m3.
 struct HmmaF16k8F32 {
   static constexpr uint32_t W = 0x14001400u;
   using Acc = float;
@@ -482,54 +402,6 @@ struct QmmaE4m3k16F32 {
                  : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]) : A2, "r"(b[0]));
   }
 };
-struct QmmaE4m3k16F16 {  // f16 accumulate: 128 outputs in 64 slots
-  static constexpr uint32_t W = 0x08080808u;
-  using Acc = uint32_t;
-  static constexpr int NC = 2;
-  static constexpr double MACS = 16 * 8 * 16, SLOTS = 64;
-  static constexpr const char* NAME = "qmma_e4m3_m16n8k16_f16";
-  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t) {
-    asm volatile("mma.sync.aligned.m16n8k16.row.col.f16.e4m3.e4m3.f16 {%0,%1}, {%2,%3}, {%4}, {%0,%1};"
-                 : "+r"(d[0]), "+r"(d[1]) : A2, "r"(b[0]));
-  }
-};
-struct QmmaE4m3k32F16 {
-  static constexpr uint32_t W = 0x08080808u;
-  using Acc = uint32_t;
-  static constexpr int NC = 2;
-  static constexpr double MACS = 16 * 8 * 32, SLOTS = 64;
-  static constexpr const char* NAME = "qmma_e4m3_m16n8k32_f16";
-  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t) {
-    asm volatile("mma.sync.aligned.m16n8k32.row.col.f16.e4m3.e4m3.f16 {%0,%1}, {%2,%3,%4,%5}, {%6,%7}, {%0,%1};"
-                 : "+r"(d[0]), "+r"(d[1]) : A4, B2);
-  }
-};
-struct ImmaSpS4k64 {  // 2:4 sparse s4, 32 useful MACs an output
-  static constexpr uint32_t W = 0x12345671u;
-  using Acc = int32_t;
-  static constexpr int NC = 4;
-  static constexpr double MACS = 16 * 8 * 32, SLOTS = 128;
-  static constexpr const char* NAME = "imma_sp_s4_m16n8k64";
-  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t e) {
-    asm volatile(
-        "mma.sp::ordered_metadata.sync.aligned.m16n8k64.row.col.s32.s4.s4.s32 {%0,%1,%2,%3}, {%4,%5}, {%6,%7}, "
-        "{%0,%1,%2,%3}, %8, 0x0;"
-        : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3]) : A2, B2, "r"(e));
-  }
-};
-struct ImmaSpS4k128 {  // 2:4 sparse s4, 64 useful MACs an output
-  static constexpr uint32_t W = 0x12345671u;
-  using Acc = int32_t;
-  static constexpr int NC = 4;
-  static constexpr double MACS = 16 * 8 * 64, SLOTS = 128;
-  static constexpr const char* NAME = "imma_sp_s4_m16n8k128";
-  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t e) {
-    asm volatile(
-        "mma.sp::ordered_metadata.sync.aligned.m16n8k128.row.col.s32.s4.s4.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
-        "{%8,%9,%10,%11}, {%0,%1,%2,%3}, %12, 0x0;"
-        : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3]) : A4, B4, "r"(e));
-  }
-};
 struct HmmaSpF16k16 {  // 2:4 sparse f16, 8 useful MACs an output
   static constexpr uint32_t W = 0x14001400u;
   using Acc = float;
@@ -556,7 +428,7 @@ struct HmmaSpTf32k16 {  // 2:4 (1:2) sparse tf32, 8 useful MACs an output
         : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]) : A4, B4, "r"(e));
   }
 };
-struct QmmaSpE4m3k64Ada {  // 2:4 sparse FP8 (sm_89 syntax), 32 useful MACs an output
+struct QmmaSpE4m3k64Ada {  // 2:4 sparse FP8 (no kind::), 32 useful MACs an output
   static constexpr uint32_t W = 0x20202020u;
   using Acc = float;
   static constexpr int NC = 4;
@@ -573,8 +445,7 @@ struct QmmaSpE4m3k64Ada {  // 2:4 sparse FP8 (sm_89 syntax), 32 useful MACs an o
 // Small operands of each form's type, so no accumulator chain of millions of MMAs reaches inf or NaN; the integer
 // forms wrap. The sparse metadata 0x4444 4444 selects positions (0, 1) of every group of four (ordered, valid). z is 0
 // at run time (iters >= 0) but not to ptxas: an operand it can prove constant, or equal to another, it rematerializes
-// with IMAD.MOV inside the timed loop, and the first MMA of each trip waits on those (1/64 of the m16n8 forms' rate on
-// sm_89).
+// with IMAD.MOV inside the timed loop, and the first MMA of each trip waits on those.
 template <class F>
 __device__ __forceinline__ void init_ops(uint32_t lane, int iters, uint32_t* a, uint32_t* b, uint32_t& e) {
   const uint32_t w = F::W, z = (uint32_t)iters >> 31;
@@ -850,54 +721,7 @@ static void setup() {
 #ifndef TENSOR_KINDS_NO_MAIN
 int main() {
   setup();
-#if TK_SM == 89
-  // Reference first (group 0) and last (group 3), so drift across the run shows as a difference between its passes.
-#if TK_IN(0)
-  opalone<LANE_IADD3>("iadd3");
-  opalone<LANE_FFMA>("ffma");
-  opalone<LANE_MIX>("iadd3_ffma");
-  form<ImmaS8k32>();
-  form<ImmaU8S8k32>();
-  form<ImmaS8k32Sat>();
-  form<ImmaS8k16>();
-  form<ImmaS8m8k16>();
-  form<ImmaS4k64>();
-  form<ImmaS4k32>();
-  form<ImmaS4m8k32>();
-#endif
-#if TK_IN(1)
-  form<BmmaAndK256>();
-  form<BmmaXorK256>();
-  form<BmmaAndK128>();
-  form<BmmaAndM8k128>();
-  form<HmmaF16k16F32>();
-  form<HmmaF16k16F16>();
-  form<HmmaBf16k16F32>();
-  form<HmmaF16k8F32>();
-#endif
-#if TK_IN(2)
-  form<HmmaF16k8F16>();
-  form<HmmaBf16k8F32>();
-  form<HmmaTf32k8>();
-  form<HmmaTf32k4>();
-  form<QmmaE4m3k32>();
-  form<QmmaE5m2k32>();
-  form<QmmaE4m3k16F32>();
-  form<QmmaE4m3k16F16>();
-  form<QmmaE4m3k32F16>();
-#endif
-#if TK_IN(3)
-  form<ImmaSpS8k32>();
-  form<ImmaSpS8k64>();
-  form<ImmaSpS4k64>();
-  form<ImmaSpS4k128>();
-  form<HmmaSpF16k16>();
-  form<HmmaSpF16k32>();
-  form<HmmaSpTf32k16>();
-  form<QmmaSpE4m3k64Ada>();
-  form<ImmaS8k32>();
-#endif
-#elif TK_SM == 100
+#if TK_SM == 100
   // B200: the legacy mma.sync forms, premise (M′) of the slot lemma: a shallow shape
   // holds no less of the tensor pipe a slot than its kind's full-depth step. Group 0 is int8 and its 2:4 shapes, the
   // reference first and last; group 1 the other shallow shapes.

@@ -14,6 +14,8 @@ from verity_machine_model import cover as C
 from verity_machine_model import theta as T
 from verity_machine_model.model import device
 
+READS_DEVICE = False
+
 
 def add(sub: argparse._SubParsersAction) -> None:
     c = sub.add_parser("cover")

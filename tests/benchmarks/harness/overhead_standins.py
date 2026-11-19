@@ -3,6 +3,7 @@ verify.py), the scheme, and a machine that runs the door on a real store with a 
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import math
@@ -18,7 +19,7 @@ from verity_bench import overhead as O
 from verity_bench import overhead_records as R
 
 REPO = Path(__file__).resolve().parents[3]
-H200 = O.CARDS["h200"]
+H200 = O.card("h200")
 LINEARS = O.MODELS[O.KERNEL_MODEL]
 UUID = "GPU-11111111-2222-3333-4444-555555555555"
 ARM = "pearl_plus"
@@ -228,6 +229,15 @@ INSERT INTO TARGET_INFO_GPU_METRICS VALUES (1, 'GR Active [Throughput %]'), (3, 
 """
 
 
+@dataclasses.dataclass(frozen=True)
+class StandinScheme(O.Scheme):
+    """A made-up entry beside pearl-plus's binding: its ``family`` and its timed call's ``commits_y`` its own, not a
+    declaration's."""
+
+    family: str = ""
+    commits_y: bool = False
+
+
 @pytest.fixture
 def scheme(tmp_path, monkeypatch):
     """pearl-plus with its arm and ε in a directory of the test's own: ε a stand-in function."""
@@ -236,8 +246,8 @@ def scheme(tmp_path, monkeypatch):
     arm_dir.mkdir()
     (arm_dir / "overhead_eps_standin.py").write_text(
         "def epsilon(m, n, k, card):\n    return {'epsilon': 2.0 ** -40 * n / 8192, 'delta': 1e-9, 'basis': 'stand-in'}\n")
-    sch = O.Scheme("pearl-plus", O.SCHEMES["pearl-plus"].family, "overhead_arm:PearlPlus", str(arm_dir),
-                   "overhead_eps_standin:epsilon")
+    sch = StandinScheme("pearl-plus", "overhead_arm:PearlPlus", str(arm_dir), "overhead_eps_standin:epsilon",
+                        family=O.SCHEMES["pearl-plus"].family)
     monkeypatch.setitem(O.SCHEMES, "pearl-plus", sch)
     return sch
 

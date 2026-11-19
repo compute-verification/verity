@@ -442,7 +442,7 @@ theorem laid_linkUnit {UB PB : ℕ} {U : VStar.UnitC} (hU : VStar.linkUnit UB PB
 
 section Unit
 
-open FlockSoundness FlockSoundness.Audit
+open FlockSoundness Spot.Sampling
 
 /-- **A copy of V*'s laid-out `RecLink` unit, in a unit of any partition, computes its reference outputs**
 (`laid_linkUnit`): let the verifier build `net` from the layout of `VStar.linkUnit UB PB` (`netOf`), and let unit `u` be

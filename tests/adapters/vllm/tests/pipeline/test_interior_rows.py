@@ -18,8 +18,10 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
+from verity.circuits import population as PN
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.program import Program
@@ -39,7 +41,6 @@ ROPE = "RoPEHead_v1{D=64}"
 PROMPTS = {"r0": [1, 2], "r1": [5, 3], "r2": [4, 6]}
 UNITS = 16                        # a request's RoPE heads: 4 tokens (2 prefill, 2 decode) x (3 query + 1 key heads)
 N_RHO, Q, K = 16, 2, 1
-SALT = bytes(range(32))
 ROW = "interior-rows-test"
 DELTA = 2.0 ** -40
 
@@ -166,7 +167,7 @@ BLOCK = _block(N_RHO)
 
 def _boundary_window(n: int, block=BLOCK) -> CS.Binding:
     """The stand-in boundary: ``n`` request spans, each its certified prompt ids in and its sampled tokens out."""
-    return CS.Binding(P.population_program(block, n), P.template_instance_query(block), {"law": "subset", "k": Q}, "b0" * 64,
+    return CS.Binding(PN.population_program(block, n), P.template_instance_query(block), {"law": "subset", "k": Q}, "b0" * 64,
                       (CS.Member(P.template_id(block), (("ingress", 64),), (("egress", 64),), n),))
 
 
@@ -184,15 +185,15 @@ def _tokens(world) -> dict[str, list[int]]:
 def _boundary(world, block=BLOCK) -> tuple[dict, dict, str]:
     window, tokens = _boundary_window(len(PROMPTS), block), _tokens(world)
     c = CS.commit(window, [{"rows": {"ingress": np.stack([_ids(p) for p in PROMPTS.values()])},
-                            "outs": {"egress": np.stack([_ids(tokens[r]) for r in PROMPTS])}}], salt_key=SALT)
-    rec = CS.registration(c, {"stand_in": "boundary"}, None, registrar=R)
+                            "outs": {"egress": np.stack([_ids(tokens[r]) for r in PROMPTS])}}])
+    rec = CS.registration(c, {"stand_in": "boundary"}, None, registrar=DK)
     return rec, CS.expected_ports(window), CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)})
 
 
 def _spec(member: CS.Member, unit=UNIT, block=BLOCK, n_rho: int = N_RHO) -> S.Spec:
     names: dict[str, tuple[str, str]] = {}
     for phase, w in (("serve", _boundary_window(len(PROMPTS), block)), ("interior", IR.interior_window(member, n_rho, "00", [0]))):
-        names |= {m.port(p): (m.schema(p), phase) for m in w.members for p in CS.port_leaves(m)}
+        names |= {t: (schema, phase) for t, (schema, _n) in w.trees.items()}
     public = (S.Public("population", "structure", "N, the sample's range"),
               S.Public("window", "structure", "provenance: served, on test prompts"),
               S.Public("leaf_layer", "structure", "the members' public bodies' digest"),
@@ -255,14 +256,14 @@ def test_the_interior_is_one_shared_row_member_of_its_word_rows_roots(spans):
     """The interior's member is a shared-row member, each input port a table of its own Q·n_rho rows and unit i reading row
     i, so every row a second-stage session proves is a registered read of the interior record. Under the same salts its
     roots and every row's b || c are the word-row layout's: only the public body, and so the leaf layer, differs."""
-    it = IR.interior([spans["r0"], spans["r2"]], N_RHO, "aa" * 64, [0, 2], row=ROW, salt_key=SALT)
+    it = IR.interior([spans["r0"], spans["r2"]], N_RHO, "aa" * 64, [0, 2], row=ROW)
     w = it.committed.window
     m, = w.members
     assert dict(m.tables) == {p: Q * N_RHO for p, _ in m.rows} and m.n == Q * N_RHO
     assert np.array_equal(it.committed.refs[0], np.tile(np.arange(Q * N_RHO)[:, None], (1, len(m.all_rows))))
     padded = [spans[r].padded(N_RHO) for r in ("r0", "r2")]
     data = {k: {p: np.concatenate([d[k][p] for d in padded]) for p in padded[0][k]} for k in ("rows", "outs")}
-    plain = CS.commit(replace(w, members=(replace(m, tables=()),)), [data], salt_key=SALT)
+    plain = CS.commit(replace(w, members=(replace(m, tables=()),)), [data], salts_of=dict(it.committed.salts))
     assert plain.roots == it.committed.roots and plain.bc == it.committed.bc
     assert plain.public_body(0) != it.committed.public_body(0)
 
@@ -272,7 +273,7 @@ def test_a_commitment_made_on_the_rows_device_registers_as_the_hosts_would(world
     rows, it registers the record, ports and leaf layer the host's commitment of the rows makes under the same salts, and
     the stream accepts it. A commitment missing a port, or with a short root, b || c or salts, is refused by name."""
     stream, reg, first = _first(world, spans)
-    host = IR.interior([spans["r0"], spans["r2"]], N_RHO, reg.digest, first.units, row=ROW, salt_key=SALT)
+    host = IR.interior([spans["r0"], spans["r2"]], N_RHO, reg.digest, first.units, row=ROW)
     c = host.committed
     device = IR.DeviceCommit(c.roots, c.bc, c.salts)
     bare = [replace(spans[r], data={}) for r in ("r0", "r2")]
@@ -299,19 +300,18 @@ def test_an_interior_registration_is_refused_by_name(world, spans):
     stream, reg, first = _first(world, spans)
     with pytest.raises(ValueError, match="not one: a size class's spans share its replay Definition"):
         IR.interior([spans["r0"], replace(spans["r2"], program="p" * 64)], N_RHO, reg.digest, first.units, row=ROW)
-    honest = IR.interior([spans["r0"], spans["r2"]], N_RHO, reg.digest, first.units, row=ROW, salt_key=SALT)
+    honest = IR.interior([spans["r0"], spans["r2"]], N_RHO, reg.digest, first.units, row=ROW)
     bad = spans["r2"].data["outs"]["out"].copy()
     bad[3, 5] ^= 1
     forged = replace(spans["r2"], data={**spans["r2"].data, "outs": {"out": bad}})
-    lie = IR.interior([spans["r0"], forged], N_RHO, reg.digest, first.units, row=ROW, salt_key=SALT)
+    lie = IR.interior([spans["r0"], forged], N_RHO, reg.digest, first.units, row=ROW)
     assert lie.ports == honest.ports and lie.leaf_layer != honest.leaf_layer
     assert _refused(lambda: IR.register(stream, first, lie, leaf_layer=honest.leaf_layer)) == ("R4-leaf-layer",)
-    late = IR.interior([spans["r0"], spans["r2"]], N_RHO, reg.digest, first.units, row=ROW, previous="00" * 64,
-                       salt_key=SALT)
+    late = IR.interior([spans["r0"], spans["r2"]], N_RHO, reg.digest, first.units, row=ROW, previous="00" * 64)
     assert _refused(lambda: IR.register(stream, first, late)) == ("R6-previous",)
-    wide = IR.interior([spans["r0"], spans["r2"]], N_RHO + 1, reg.digest, first.units, row=ROW, salt_key=SALT)
+    wide = IR.interior([spans["r0"], spans["r2"]], N_RHO + 1, reg.digest, first.units, row=ROW)
     assert _refused(lambda: IR.register(stream, first, wide)) == ("interior-population",)
-    swapped = IR.interior([spans["r2"], spans["r0"]], N_RHO, reg.digest, [2, 0], row=ROW, salt_key=SALT)
+    swapped = IR.interior([spans["r2"], spans["r0"]], N_RHO, reg.digest, [2, 0], row=ROW)
     assert _refused(lambda: IR.register(stream, first, swapped, ports=honest.ports)) == ("R3-domain",)
     assert IR.register(stream, first, honest).record["population"] == Q * N_RHO
 
@@ -536,14 +536,14 @@ def test_a_token_selects_interior_is_template_major_one_shared_row_member_a_piec
     reads row k, over the verifier's mixed population program; spans of other templates or cells of another count are
     refused before any commitment."""
     per = [IR.pieces(s) for s in _selects(tmp_path, 128).values()]
-    it = IR.interior(per, (12, 6), "aa" * 64, [0, 2], row=ROW, salt_key=SALT)
+    it = IR.interior(per, (12, 6), "aa" * 64, [0, 2], row=ROW)
     w = it.committed.window
     assert [(m.template, m.base, m.n) for m in w.members] == [(per[0][0].member.template, 0, Q * 12),
                                                                (per[0][1].member.template, Q * 12, Q * 6)]
     assert all(dict(m.tables) == {p: m.n for p, _ in m.rows} for m in w.members)
     assert all(np.array_equal(it.committed.refs[j], np.tile(np.arange(m.n)[:, None], (1, len(m.all_rows))))
                for j, m in enumerate(w.members))
-    mixed = P.mixed_population_program([(SRW.template(m.template).fn, m.n) for m in w.members])
+    mixed = PN.mixed_population_program([(SRW.template(m.template).fn, m.n) for m in w.members])
     assert w.program.root.id == mixed.root.id
     assert it.ports == IR.interior_ports([s.member for s in per[0]], (12, 6), "aa" * 64, [0, 2])
     with pytest.raises(ValueError, match="not the same templates'"):
@@ -552,7 +552,7 @@ def test_a_token_selects_interior_is_template_major_one_shared_row_member_a_piec
         IR.interior(per, 12, "aa" * 64, [0, 2], row=ROW)
 
 
-def test_a_token_selects_pieces_pad_by_whole_tokens_as_its_inlined_replay_blocks_instances(tmp_path):
+def test_a_token_selects_pieces_pad_by_whole_tokens_as_its_inlined_replay_blocks_instances(tmp_path, monkeypatch):
     """A replay block inlining `TokenSelect_v4` holds one instance a served token, each its V / C chunks then its combine,
     so the pieces are the templates its body calls in the order of their first call and a span of fewer tokens than its
     class pads by its last token: the chunk cell repeats that token's V / C chunks, not its last chunk, and the interior is
@@ -569,7 +569,8 @@ def test_a_token_selects_pieces_pad_by_whole_tokens_as_its_inlined_replay_blocks
     fn = SRW.template(t).fn
     SC.write(tmp_path / "whole", t, {"b": {"logits": whole, "tokens": [int(evaluate(fn, r.tolist())[0]) for r in whole],
                                           "steps": list(range(len(whole))), "program": "p" * 64}})
-    got, want = (IR.interior([IR.pieces(x)], (14, 7), "aa" * 64, [0], row=ROW, salt_key=SALT)
+    monkeypatch.setattr(IR.os, "urandom", bytes)  # one salt draw for both interiors, so their records compare
+    got, want = (IR.interior([IR.pieces(x)], (14, 7), "aa" * 64, [0], row=ROW)
                  for x in (s, IR.captured(tmp_path / "whole", "b")))
     assert (got.record, got.leaf_layer) == (want.record, want.leaf_layer)
     with pytest.raises(ValueError, match="in whole instances of 2 units"):

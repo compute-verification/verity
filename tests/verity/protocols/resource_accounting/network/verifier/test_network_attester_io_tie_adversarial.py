@@ -22,7 +22,8 @@ import numpy as np
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
-from verity.protocols.resource_accounting.network.verifier import head_check as HC, io_tie as IT
+from verity.protocols.resource_accounting.network.verifier import io_tie as IT
+from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER
 
 from test_network_attester_io_tie import (BIG, V, _cell_tampers, _content_ok, busiest, busy, commit, serve, network_attesters,
@@ -33,7 +34,7 @@ P = B - HEADER.size
 
 
 def _cell_circuit(cells):
-    out = np.asarray(evaluate_bits(bind(IT.IoTieCell, B=B), np.asarray([HC._bytes_bits(c) for c in cells], dtype=np.uint8)))
+    out = np.asarray(evaluate_bits(bind(IT.IoTieCell, B=B), np.asarray([GB._bytes_bits(c) for c in cells], dtype=np.uint8)))
     return [tuple(int(x) for x in o[:2]) for o in out.reshape(len(cells), IT.CELL_OUT)]
 
 

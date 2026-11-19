@@ -16,12 +16,13 @@ export HF_HOME=${HF_HOME:-/workspace/hf}
 [ $# -eq 1 ] || { echo "prod: name one model (ladder.py's LADDER)"; exit 2; }
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 [ -f "$C4" ] || { echo "prod: no C4 shard (--send it, or C4=PATH)"; exit 2; }
-mkdir -p "$OUT/plan"
+[ -n "${PRIVATE:-}" ] || { echo "prod: PRIVATE: a directory outside every run's, where the plan, which holds the prompts, stays on the node"; exit 2; }
+mkdir -p "$PRIVATE/plan"
 sg=$("$PY" "$here/../serve_tax/serve_tax.py" dataset chat --fetch) || exit 2
 ck=$("$PY" -c "import sys; sys.path.insert(0, '$here'); import ladder; print(ladder.entry('$1')['local_path'])") || exit 2
-HF_HUB_OFFLINE=1 "$PY" "$here/prod_plan.py" build --checkpoint "$ck" --sharegpt "$sg" --c4 "$C4" --out "$OUT/plan/plan.jsonl" \
+HF_HUB_OFFLINE=1 "$PY" "$here/prod_plan.py" build --checkpoint "$ck" --sharegpt "$sg" --c4 "$C4" --out "$PRIVATE/plan/plan.jsonl" \
   --n "${N:-8000}" --seed "${SEED:-0}" || exit 2
-PLAN=$OUT/plan/plan.jsonl MAX_MODEL_LEN=${MAX_MODEL_LEN:-40960} FLASHINFER=${FLASHINFER:-1} C4=$C4 bash "$here/run.sh" "$1"
+PLAN=$PRIVATE/plan/plan.jsonl MAX_MODEL_LEN=${MAX_MODEL_LEN:-40960} FLASHINFER=${FLASHINFER:-1} C4=$C4 bash "$here/run.sh" "$1"
 rc=$?
 for d in "$OUT"/*/"$1"/; do
   [ -f "$d/record/meta.json" ] && "$PY" "$here/prod_plan.py" kinds "$d" | tee "$d/kinds.line" || rc=1

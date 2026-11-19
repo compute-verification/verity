@@ -118,7 +118,7 @@ theorem repCons_cut (st : Setup) (hms : st.merkle = MerkleScheme.hm96Sha512) (sc
     (tr : Transcript) {r : Proof × Zk.Level0Msgs × Array (String × Zk.Lin)} {t : Transcript} {k' : ℕ}
     (h : ((repCons (asksOf coins) (fun lv g s => pure (commitFw lv g s)) st sch tPad rep dom g cm0 extras pads ic vals
       extra lanePad salt).run tr).run 0 = .ok ((r, t), k'))
-    (l : Array Claims.Msg) (hl : l.size = base) :
+    (l : Array Hash.Msg) (hl : l.size = base) :
     (((repConsC (FlockComplete.asksCut coin N) st sch tPad rep dom g cm0.toC extras pads.toC ic.toC vals extra lanePad
         salt).run tr).go l).1 = .ok (r, t) ∧
       (((repConsC (FlockComplete.asksCut coin N) st sch tPad rep dom g cm0.toC extras pads.toC ic.toC vals extra

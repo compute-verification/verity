@@ -48,7 +48,7 @@ parse and load, `pub.tables = none`, `scopeOk`, retained rounds and `hm96-sha512
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
 /-- **The tags at the named statement**: a verify command under `--statement verity/flock-circuit@967b8d06` with one

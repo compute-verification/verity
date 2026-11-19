@@ -25,7 +25,7 @@ import numpy as np
 
 from verity.commitments.periods import rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, SEED_PARAM, const_word
-from verity_vllm.pipeline import slice_rows as SL
+from verity_vllm.pipeline import chain_rows as CH, slice_rows as SL
 from verity_vllm.pipeline.serving_templates import STAGE_OF, STAGE_PLANS, Template, template
 from verity_vllm.program.compact import runs_from_file_items
 from verity_vllm.query.program_view import spec_base
@@ -184,8 +184,8 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
 
 def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]]) -> list[CS.Member]:
     """``ms`` with each stage member's wired parameters (its plan's ``Unit.wires``) wired to the output rows of the units that
-    write them (the same row's; each template's units in the module's order); refused when such a unit's template is not in
-    the partition."""
+    write them (the same row's; each template's units in the module's order), as leaves of their template's tree
+    (`chain_rows.pieces`); refused when such a unit's template is not in the partition."""
     of = {t: rs for t, rs in zip(tmpls, rows, strict=True) if template(t).layout == "stage"}
     base = {t: min(m.base for m in ms if m.template == t) for t in of}
     unit: dict[tuple[str, int, tuple], int] = {}
@@ -217,6 +217,7 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
     for m in ms:
         if writers.get(m.template):
             lo = m.base - base[m.template]
-            m = replace(m, wired=m.wired + tuple((p, o, tuple(int(x) for x in w[lo:lo + m.n])) for p, o, w in writers[m.template]))
+            m = replace(m, wired=m.wired + tuple(x for p, o, w in writers[m.template]
+                                                 for x in CH.pieces(ms, m, p, o, w[lo:lo + m.n])))
         out.append(m)
     return out

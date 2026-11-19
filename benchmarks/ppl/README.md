@@ -17,7 +17,8 @@ It prints a Markdown table: each arm's scope, seeds, calibration, the plain int8
 description. The other commands, `run.py`'s docstring has in full:
 
 ~~~text
-verity bench ppl submit --model llama-3.1-8b --set c4 --ctx 2048 adopted        # a `research run` on vy-nebius-2
+verity bench ppl submit --model llama-3.1-8b --set c4 --ctx 2048 adopted \
+    --on MACHINE --card NAME --python PY --hf-home DIR                          # a `research run` on MACHINE, card NAME
 verity bench ppl eval --model M --set S --ctx T --out DIR SPEC...                 # the same, on a GPU node
 verity bench ppl report DIR/results.json...                                       # a run's tables
 verity bench ppl baseline [DIR/results.json...]                                   # the locked baseline (and a check)
@@ -35,7 +36,8 @@ research run --on NODE --gpus 1 --project verity --source . --cwd source --timeo
 
 `h200.sh` takes an idle H100 or H200 (under `gpu-lease` where the node has it), the venv and HF cache
 `benchmarks/compute/serve.sh` uses (`$WORK/venv312`, bootstrapped as serve.sh does when absent; `$WORK/hf`, where the
-checkpoint is fetched once, 2.5 GB), builds the sm_90a cubin (`benchmarks/harness/setup/pearl_c_sm90.sh`), fetches the
+checkpoint is fetched once, 2.5 GB), builds the sm_90a cubin (`benchmarks/harness/setup/pearl_c_sm90.sh`) and, for
+`pearl-c-linears`, whose salt is the in-process challenger's coin, `pouw-verifier-difftest` with elan's `lake`, fetches the
 C4 shard from the hub into the same cache (its sha256 held to `datasets.json`'s), runs `run.py eval ... pearl-c-linears`
 and then `run.py metrics`. `env GPU=I CORES=A-B` pins its lease to card I and those cores, for which the command drops
 `--gpus 1` (research's own lease would take any card and leave the script none to pin). `SET=wikitext2` measures
@@ -46,7 +48,7 @@ C4 at 2048, `metrics.toml`'s axis, writes the metrics: `run.py metrics` refuses 
 its table alone.
 
 `pearl-c-linears` is the compute benchmark's served arithmetic (`pearl-c-h100-v1-h3` in
-`benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml`): its one step, `linear.pearl_c`, calls the
+`benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served.toml`): its one step, `linear.pearl_c`, calls the
 served engine's own kernel, `verity_torch.pouw.PearlCDeviceRun.gemm` on the sm_90a cubin, with x and W in BF16, so
 every decoder linear is the FP8 E4M3 forming with Pearl's noise, the K32 chain and the noise peeled off that serving
 runs; `lm_head` and attention stay bf16, as served (PoUW's executor sits at vLLM's `LinearBase` only). The bench keeps

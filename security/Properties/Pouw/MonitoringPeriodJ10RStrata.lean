@@ -45,7 +45,7 @@ except with probability `∑_{s ∈ S} (δ_s(s) + n·(δ_bind(s) + δ_ks(s)))`, 
 window `Credit.window` refuses.
 
 * `BlockDraw`, `Rest`, `StrataCoin`: the sampling block's stratified sample, one permutation of each of its strata, sampled
-  independently (`FlockSoundness.Audit.SamplingDesign.stratified`'s coordinates; stratum `s`'s sample is its permutation's first
+  independently (`Spot.Sampling.SamplingDesign.stratified`'s coordinates; stratum `s`'s sample is its permutation's first
   `k s` images, `tileDraw`); the rest of it beside stratum `s`; and a window's coins, its rounds' coins and the block's
   sample.
 * `atStratum`, `pathsCongr`, `pathsAt`, `pullAt`, `creditAt`: stratum `s`'s view. A window's coins split at `s`

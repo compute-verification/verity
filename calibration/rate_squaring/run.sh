@@ -3,8 +3,9 @@
 # `research run`. Each writes its records in $RESEARCH_RUN_DIR/out and the run's result.json through the harness's kit
 # (`result.py`), mod 2^$BITS - $C (default 2^512 - 569):
 #
-#   sq      sq.cu on one GPU, built for ARCH (90a, 120a; where it isn't given, the node's first card's name tells
-#           it), for every (FOLD, ILP) in $FORMS, each gated against Python's pow (512 words at K = 1, 777 and 1,000)
+#   sq      sq.cu on one GPU, with toolkit 13.0 ($CUDA_HOME, else the machine's record: `machine.py toolkit 13.0`;
+#           refused without one), built for CARD (required: the `short` of the card's file under
+#           calibration/hardware/cards), whose `arch` gives nvcc's -gencode (`machine.py card-arch`, `gencode`), for every (FOLD, ILP) in $FORMS, each gated against Python's pow (512 words at K = 1, 777 and 1,000)
 #           before it is timed, with the SASS opcode mix of every kernel, ncu's pipe and issue counts and its stall
 #           reasons; then each pipe probe in $PROBES (P:W:A; set it empty for none), its digests checked against the
 #           host's before it is timed. Timed and profiled in blocks of $TPB threads (default 128, the most the kernels
@@ -14,7 +15,7 @@
 #           before it is timed: on one thread, on one thread a physical core of the mask, and on every CPU of the mask.
 #           Its result is the fastest timing as metrics.toml's number where every build passed its gate (else exit 5).
 #
-#   GPU_LEASE_WHO=ra-squaring-ceiling taskset -c 48-95 verity calibrate rate_squaring sq
+#   CARD=SHORT GPU_LEASE_WHO=ra-squaring-ceiling taskset -c 48-95 verity calibrate rate_squaring sq
 #   taskset -c 48-95 verity calibrate rate_squaring ifma
 set -uo pipefail
 USAGE="usage: verity calibrate rate_squaring sq|ifma"
@@ -22,20 +23,17 @@ USAGE="usage: verity calibrate rate_squaring sq|ifma"
 sq() {
 set -x
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
-export PATH=/usr/local/cuda-13.0/bin:$PATH
+[ -n "${CARD:-}" ] || { echo "sq: CARD is not given: the short name of the card's file under calibration/hardware/cards" >&2; exit 3; }
+CARD_ARCH=$(python3 benchmarks/kernels/machine.py card-arch "$CARD") || exit 3
+GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$CARD_ARCH") || exit 3
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 3
+export PATH=$CUDA_HOME/bin:$PATH
 export D=calibration/rate_squaring
 export B; B=$(mktemp -d /tmp/rate-squaring.XXXXXX); trap 'rm -rf "$B"' EXIT
 export FORMS=${FORMS:-"0:1 0:2 1:1 1:2 1:4 2:1 2:2 2:4 3:1 3:2 4:1 4:2"}
 export PROBES=${PROBES-"0:16:0 0:16:16 0:16:32 1:16:0 1:16:16"}
 BITS=${BITS:-512}; C=${C:-569}; export TPB=${TPB:-128}
-if [ -z "${ARCH:-}" ]; then
-  case $(nvidia-smi --query-gpu=name --format=csv,noheader -i 0 2> /dev/null || true) in
-    *H200* | *H100*) ARCH=90a ;;
-    *"RTX PRO 6000"*) ARCH=120a ;;
-    *) echo "sq: ARCH (90a, 120a) is not given and the card's name does not tell it" >&2; exit 3 ;;
-  esac
-fi
-nvcc -O3 -gencode "arch=compute_$ARCH,code=sm_$ARCH" -std=c++17 -Xptxas -v -DSQ_BITS="$BITS" -DSQ_C="$C" -o "$B/sq" $D/sq.cu \
+nvcc -O3 -gencode "$GENCODE" -std=c++17 -Xptxas -v -DSQ_BITS="$BITS" -DSQ_C="$C" -o "$B/sq" $D/sq.cu \
   > "$O/build.log" 2>&1 \
   || { tail -40 "$O/build.log"; exit 4; }
 nvcc --version > "$O/nvcc.txt"

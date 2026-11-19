@@ -17,14 +17,13 @@ OWN = ("seconds", "maxrss_gb", "staging")
 
 @pytest.mark.slow
 def test_fast_staging_writes_the_library_bytes(tmp_path):
-    """About 20 s: the (1,1) tile at K=64 staged both ways, each in its own process, since fast_stage patches the library in
-    place. Nothing cheaper catches a library change under one of those patches that makes fast staging write other bytes."""
-    runs = {mode: subprocess.Popen([sys.executable, str(STAGE), "tile", "64", "2", str(tmp_path / mode)], text=True,
-                                   env={**os.environ, "HZ_STAGE": mode}, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            for mode in ("fast", "library")}
-    for mode, p in runs.items():
-        _, err = p.communicate()
-        assert p.returncode == 0, f"{mode}: {err[-2000:]}"
+    """About 40 s: the (1,1) tile at K=64 staged both ways, each in its own process, since fast_stage patches the library in
+    place, the fast staging under the library staging's salts. Nothing cheaper catches a library change under one of those
+    patches that makes fast staging write other bytes."""
+    for mode in ("library", "fast"):
+        p = subprocess.run([sys.executable, str(STAGE), "tile", "64", "2", str(tmp_path / mode)], text=True, capture_output=True,
+                           env={**os.environ, "HZ_STAGE": mode, "HZ_SALTS": str(tmp_path / "salts.json")})
+        assert p.returncode == 0, f"{mode}: {p.stderr[-2000:]}"
     fast, lib = tmp_path / "fast", tmp_path / "library"
     files = sorted(f.name for f in lib.iterdir())
     assert sorted(f.name for f in fast.iterdir()) == files

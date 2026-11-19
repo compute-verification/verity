@@ -269,11 +269,12 @@ def _retained(lane: Lane, sid: str, base: dict) -> bytes:
             "cubin_sha256": rng.randbytes(32).hex(), "kernel_source_sha256": rng.randbytes(32).hex(),
             "schedule": "deferred", "records_root": rng.randbytes(64).hex(),
             "commitment": {"root": rng.randbytes(64).hex(), "count": len(man["matmuls"])},
-            "hm96_salt_key": rng.randbytes(32).hex(), "leaves": file("leaves"), "tree_t": file("tree_t")}
+            "leaves": file("leaves"), "tree_t": file("tree_t"), "salts_t": file("salts_t")}
     weights = {w: {**v, "excluded_b": [], "rows": file(f"weights/{w}.rows.bf16", False),
-                   "tree": file(f"weights/{w}.tree")} for w, v in man["weights"].items()}
+                   "tree": file(f"weights/{w}.tree"), "salts": file(f"weights/{w}.salts")} for w, v in man["weights"].items()}
     matmuls = [{**u, "k_kept": u["k"], "excluded_a": [], "root_a": rng.randbytes(64).hex(),
-                "rows": file(f"calls/{u['index']}.rows.bf16", False), "tree": file(f"calls/{u['index']}.tree")}
+                "rows": file(f"calls/{u['index']}.rows.bf16", False), "tree": file(f"calls/{u['index']}.tree"),
+                "salts": file(f"calls/{u['index']}.salts")}
                for u in man["matmuls"]]
     return (json.dumps({**head, "weights": weights, "matmuls": matmuls}, indent=1) + "\n").encode()
 

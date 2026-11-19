@@ -10,7 +10,6 @@ partition query are `program_of`'s, the verifier's ``--registered`` file of a un
 """
 from __future__ import annotations
 
-import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -23,6 +22,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import core_chec
 from verity.protocols.resource_accounting.compute.pouw.verifier import live_reads as LR
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 if TYPE_CHECKING:
     from verity.circuits.program import Program
@@ -57,7 +57,7 @@ def files(pub: dict, u: int, m: int) -> dict:
                               pub["max_tokens"], pub["prefix"])
 
 
-def known_rows(pub: dict, u: int, m: int) -> dict[str, tuple[G.Registered, int]]:
+def known_rows(pub: dict, u: int, m: int) -> dict[str, tuple[RV.Registered, int]]:
     """The verifier's own registered rows of unit u, round s's piece j: ``m@<s>`` at m (row 0), ``round@<s>`` (row 0),
     ``caps`` (row i for ``cap_<i>``), ``live-ok`` (row u), and when the round is cut by rows ``base@<j>`` (row 0)."""
     prog, prefix, window = pub["program"], pub["prefix"], pub["window"]
@@ -108,11 +108,11 @@ def check_openings(pub: dict, u: int, opening: dict, reg: dict) -> list[str]:
         if "known" in e:
             continue
         op = opening.get(port)
-        dom = G.domain(pub["program"], e["value"], e["words"], e["leaves"],
+        dom = RV.domain(pub["program"], e["value"], e["words"], e["leaves"],
                        **({"session": pub["session"]} if e["value"].endswith(f"{LR.REQUESTS}@0") else {"window": pub["window"]}))
         if op is None or op["value"] != e["value"] or op["index"] != e["reads"][u] or dom.domain_id.hex() != e["domain"] or \
                 not G.verify_read(dom, bytes.fromhex(e["root"]), op["index"], bytes.fromhex(op["bc"]),
-                                  bytes.fromhex(op["path"]), e.get(G.SCHEMA_KEY, G.SCHEMA)):
+                                  bytes.fromhex(op["path"]), e.get(RV.SCHEMA_KEY, RV.SCHEMA)):
             bad.append(f"{label(pub, u)}: port {port}'s opened row is not row {e['reads'][u]} of {e['value']}'s registered root")
     return bad
 
@@ -159,7 +159,7 @@ def stage(stager: UnitStager, z: dict, out: Path, u: int) -> dict:
     """One unit's statement on the prover's rows ``z`` (`window.py open`'s form), instance unit u."""
     st = U.statement_tables(z, stager.row_ports, [p.name for p in stager.ports if p.name not in stager.row_ports])
     out.mkdir(parents=True, exist_ok=True)
-    got = stager.stage({p: z[f"w_{p}"] for p in stager.row_ports}, out, os.urandom(32), salts=st["salts"], indices=[u],
+    got = stager.stage({p: z[f"w_{p}"] for p in stager.row_ports}, out, salts=st["salts"], indices=[u],
                        set_name=f"live-{u}", tables=st["tables"], refs=st["refs"], registered=st["registered"])
     return {"ok": int(got["outs"]["o0"][0][0]), "ands": got["ands"]}
 

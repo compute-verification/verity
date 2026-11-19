@@ -80,7 +80,7 @@ def refusal(ns: argparse.Namespace, harness_opts: list[str], command: list[str],
     instead = (
         ("--pool", ns.pool, f"{name} has no pool or slot of ours: drop it; Slurm gives the job the cores, memory and cards that "
                             "--cpus, --mem-gb and --gpus ask"),
-        ("--gpu-ids", ns.gpu_ids, "Slurm picks the cards: ask how many with --gpus N"),
+        ("--card", ns.card, "Slurm picks the cards: ask how many with --gpus N"),
         ("--gpu-host", ns.gpu_host, f"no card lease of ours runs on {name}: ask the cards with --gpus N, which the job holds whole"),
         ("--queue", ns.queue, "the cluster queues the job itself: drop --queue"),
         ("--wait", ns.wait, "its records reach the store only once `via` publishes them: launch without --wait, then "

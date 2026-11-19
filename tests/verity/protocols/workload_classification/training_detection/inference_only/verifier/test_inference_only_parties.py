@@ -19,7 +19,7 @@ SITE = site_of([{"name": "auditor", "owner": "auditor", "provides": ["component"
                 {"name": "node", "owner": "developer", "provides": ["component"]}])
 
 
-MANIFESTS = (IO.MANIFEST, IO.ROWS_MANIFEST)
+MANIFESTS = (IO.MANIFEST,)
 
 
 @pytest.mark.parametrize("m", MANIFESTS, ids=lambda m: m.protocol)
@@ -49,8 +49,7 @@ def test_it_places_the_verifier_on_the_auditors_machine(m) -> None:
 
 @pytest.mark.parametrize(("m", "params"), [
     (IO.MANIFEST, ["alpha", "gamma", "log", "parameters", "program"]),
-    (IO.ROWS_MANIFEST, ["alpha", "circuits", "gamma", "log", "pins", "program"]),
-], ids=["v0", "rows-v1"])
+], ids=["v0"])
 def test_its_id_its_check_and_its_parameters_keys_are_the_leans(m, params) -> None:
     exe, command, argument = m.params.split()
     assert (command, argument) == ("check", "PARAMS")

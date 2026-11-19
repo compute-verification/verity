@@ -3,8 +3,8 @@ judged against its declared c, k and n. On a small circuit (two catalog template
 gates, its gate table and its verdict agree with `InferenceOnlyCheck.Count`'s Python reference (`inference_only_reference.check_count_detail`
 and `check_count`, which `inference-only-count-difftest` holds the Lean to) on the session Program, m activations of the block
 Definition; the public judgment holds only its record's fields and no count, so days of different counts under n publish
-the same bytes, and a refusal past n names n; the exact counts are in the private file alone (0600); a block reaching an
-unpriced primitive leaves the gates undecided; on `test_window_circuit`'s TINY window a block's fresh bits are B's k
+the same bytes, and a refusal past n names n; the exact counts are in the private file alone (0600); the wiring between
+leaf widths prices at no gate; a block reaching an unpriced primitive leaves the gates undecided; on `test_window_circuit`'s TINY window a block's fresh bits are B's k
 (`inference_blocks.budgets`); and the module's import alone loads no registry module, which `resolve` loads on its first
 call."""
 from __future__ import annotations
@@ -20,9 +20,10 @@ from pathlib import Path
 import pytest
 from verity.circuits import codec
 from verity.circuits import partition_v2 as PV2
-from verity.circuits.defs import REGISTRY
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.ops import gemm as GEMM_OPS
 from verity.circuits.ops.boolean.versions import gate_table
-from verity.circuits.population import population_program
+from verity.circuits.population import BitsWord, WordBits, wired_population_program
 from verity.commitments.periods import interface as IF
 
 import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
@@ -83,8 +84,9 @@ def test_the_count_is_ncicheck_counts_on_the_session_program(small):
     fn, m, steps = BC.session(small)
     assert (m, steps, cls.slots, cls.steps, private["total"], private["windows"]) == (2, 3, 2, 3, 2, 1)
     assert cls.definition == PV2.id_digest(fn) and not cls.unpriced and private["blocks"] == {cls.definition: 2}
-    text = codec.canonical_json(codec.encode_program(population_program(fn, m))).decode()
     key = codec.descriptor_id(fn)
+    program, _ = wired_population_program([(fn, m)], {"templates": [[key, m]]})
+    text = codec.canonical_json(codec.encode_program(program)).decode()
     for n, verdict in ((2, "accept"), (1, "refuse")):
         inst = {"program": text, "theta": [], "blocks": [key], "table": dict(pub.table), "c": cls.gates, "k": 10 ** 12,
                 "n": n}
@@ -177,6 +179,20 @@ def test_a_primitive_with_no_boolean_version_is_unpriced():
     assert BC.gates(tanh, {}) == (0, {"F32TanhRn_v1": 1})
 
 
+def test_the_wiring_between_leaf_widths_is_priced_at_no_gate():
+    """`WordBits{16}` and `BitsWord{32}` only rename wires (`BitOf{W}x{I}`, `WordOf{W}`, whose Boolean versions hold no gate), so
+    the table prices each at 0 and an int8 product reading its weights as u16 words prices as its coordinates; a block reaching
+    them beside `F32TanhRn_v1`, which has no Boolean version, still lists that apart."""
+    wiring = [bind(WordBits, W=16), bind(BitsWord, W=32)]
+    assert gate_table(wiring) == ({**{f"BitOf16x{i}_v1": 0 for i in range(16)}, "WordOf32_v1": 0}, [])
+    table, unpriced = gate_table([*wiring, REGISTRY["F32TanhRn_v1"]])
+    assert unpriced == ["F32TanhRn_v1"] and BC.gates(REGISTRY["F32TanhRn_v1"], table) == (0, {"F32TanhRn_v1": 1})
+    mm = bind(GEMM_OPS.ScaledMmS8V3, K=64, N=8, **GEMM_OPS.GEMM_SM120_S8)
+    coordinate = bind(GEMM_OPS.ScaledMmS8Coordinate, K=64, **GEMM_OPS.GEMM_SM120_S8)
+    table, unpriced = gate_table([mm])
+    assert not unpriced and BC.gates(mm, table) == (8 * BC.gates(coordinate, table)[0], {}) and mm.gates > 8 * coordinate.gates
+
+
 def test_a_block_with_an_unpriced_primitive_leaves_the_gates_undecided():
     """Its gates are a lower bound: under c the gates rule is undecided and the day refused, naming the primitive and c; a
     lower bound already over c refuses on the gates."""
@@ -215,3 +231,32 @@ def test_the_import_alone_loads_no_registry_module():
                        env=dict(os.environ))
     assert r.returncode == 0, r.stderr[-4000:]
     assert json.loads(r.stdout.splitlines()[-1]) == {"loaded": [], "before": None, "after": ON_DEMAND}
+
+
+def _json_values(rng, depth: int = 0):
+    """JSON values of every kind a declaration file can hold, as `json.loads` gives them."""
+    leaves = [None, True, False, 0, -1, 10 ** 12, 2 ** 63 + 5, -0.0, 1.5, 1e-7, 1e21, 0.1 + 0.2, "", "note", "é",
+              "\u2028", "\U0001f600", "\x00\x1f\x7f", '"\\/']
+    k = rng.randrange(8 if depth < 3 else 6)
+    if k < 6:
+        return rng.choice(leaves)
+    n = rng.randrange(4)
+    if k == 6:
+        return [_json_values(rng, depth + 1) for _ in range(n)]
+    return {rng.choice(["c", "k", "n", "note", "Z", "é", "\U0001f600", "a b", ""]) + str(i): _json_values(rng, depth + 1)
+            for i in range(n)}
+
+
+def test_a_declaration_s_digest_is_its_bytes_as_compact_sorted_ascii_json():
+    import hashlib
+    import random
+
+    rng = random.Random(0)
+    docs = [{"c": 10 ** 12, "k": 10 ** 12, "n": 40, "note": "anything else the declaration holds"}, {"c": 0, "k": 0, "n": 0}]
+    docs += [{"c": rng.randrange(10 ** 15), "k": rng.randrange(10 ** 15), "n": rng.randrange(10 ** 6),
+              **{f"x{i}": _json_values(rng) for i in range(rng.randrange(6))}} for _ in range(500)]
+    for doc in docs:
+        doc = json.loads(json.dumps(doc))
+        want = json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()
+        assert codec.canonical_json(doc) == want
+        assert BC.declaration(doc)[0] == hashlib.sha512(want).hexdigest()

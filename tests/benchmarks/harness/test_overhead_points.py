@@ -81,7 +81,7 @@ def test_a_calls_cost_is_its_traced_busy_sm_time_and_the_hosts_enqueue_at_the_ca
     assert O.traced_cost({"burst": 4}, {"sm_ns": 8e9, "occupied_sm_ns": 1e10}) == pytest.approx(
         {"sm_s": 2.0, "occupied_sm_s": 2.5, "sm_ns": 8e9, "occupied_sm_ns": 1e10})
     assert O.traced_cost({"burst": 4}, {"sm_ns": None}) is None and O.traced_cost({"burst": 4}, None) is None
-    assert O.host_cost({"burst": 4, "cpu_s": 2.0}, H200) == pytest.approx(0.48 * 2 / 4)
+    assert O.host_cost({"burst": 4, "cpu_s": 2.0}, H200) == pytest.approx(95 / 198 * 2 / 4)
 
 
 def test_periods_scale_gamma_to_the_datacenter_and_the_world():

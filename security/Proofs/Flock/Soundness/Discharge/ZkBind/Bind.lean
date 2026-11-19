@@ -29,10 +29,10 @@ registered one.
 
 namespace FlockSoundness.Discharge.ZkBind
 
-open Game Model Accounting Refine Audit ZkSession ZkLink Binding
+open Game Model Accounting Refine Spot.Sampling ZkSession ZkLink Binding
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
-  (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Audit.Partition C n) {Reg : Type}
+  (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Spot.Sampling.Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 

@@ -135,7 +135,12 @@ class Program:
 
     @property
     def circuit(self) -> Circuit:
+        """The gate layout. Refused (ValueError) while the root reads an input node recut (`refs.recut`): a gate is one
+        leaf of its width, and the layout has no operand of part of a gate."""
         if self._circuit is None:
+            if self.root.body.recut:
+                raise ValueError(f"recut-gates: input nodes {sorted(self.root.body.recut)} are read in leaves of part of "
+                                 "their width, which the gate layout doesn't lay out")
             self._circuit = Circuit(self.root)
         return self._circuit
 
@@ -190,7 +195,7 @@ def _refuse_inner_inputs(root: SpecializedDefinition) -> None:
 
 
 def _gate_refs(r, body: Body):
-    from .refs import Affine, Concat, Explicit, Strided, concat
+    from .refs import Affine, Concat, Explicit, Grid, Strided, concat
     if isinstance(r, Affine):
         assert r.space == "n"
         return Affine("g", 0, body.offsets[r.idx] + r.base, r.count)
@@ -199,6 +204,9 @@ def _gate_refs(r, body: Body):
         return Strided("g", 0, body.offsets[r.idx] + r.base, r.inner, r.outer_stride, r.inner_stride, r.count)
     if isinstance(r, Concat):
         return Concat([_gate_refs(p, body) for p in r.parts])
+    if isinstance(r, Grid):
+        assert all(s == "n" for s, *_x in r.lanes)
+        return Grid(r.run, tuple(("g", 0, body.offsets[i] + b, e, lv) for _s, i, b, e, lv in r.lanes))
     parts = []
     for space, k, leaf in r:
         assert space == "n"

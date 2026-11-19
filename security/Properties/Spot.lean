@@ -478,25 +478,25 @@ def publicOf (p : Params) (e : Evidence) (samplingDesign : Json) (d : Core.Sampl
     complete := Record.allRan e.verdicts }
 
 /-- The integrity profile at δ: the record's program; one level `unit`, the record's partition, of `n` units, sampled by
-`d`; and the number of units sampled. -/
+`d`; the number of units sampled; and the credited blocks the parameters name. -/
 def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.SamplingDesign) (n : Nat) : Core.Integrity :=
   let str := fun (k : String) => match getD c.record k with | .str s => s | _ => ""
   { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
     levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := n, draw := some d }],
-    delta := p.delta, drawn := #[(Record.LEVEL, (sampledNats e.draw).size)] }
+    delta := p.delta, drawn := #[(Record.LEVEL, (sampledNats e.draw).size)], credited := p.credited }
 
 /-- What the check accepts: the registration keeps R1–R8 with `samplingDesign` the verifier's agreed sampling design as derived, the sample is a
 sample of `samplingDesign` over the registered population, the units were proved and served as sampled under the registered roots and
 values with the receipt naming the commitment's digest, and the verdicts accept; `samplingDesign` has a profile's sample `d`
 (`Record.profileSample`) and the registered population is a natural number `n`, and the check publishes `publicOf` and
-the profile `profileOf`. -/
+the profile `profileOf`, whose credited blocks `Core.Integrity.creditedProblem` does not refuse. -/
 def AcceptMeans : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     OneStage.check p c e = .accept pub prof →
       ∃ samplingDesign d n, Registered p.verifier c.record samplingDesign ∧ Drawn e.draw (getD c.record "population") samplingDesign ∧
         UnitsProved p.windowValues c e ∧ VerdictsAccept e.verdicts ∧
         Record.profileSample samplingDesign = some d ∧ nat? (getD c.record "population") = some n ∧
-        pub = publicOf p e samplingDesign d n ∧ prof = profileOf p c e d n
+        pub = publicOf p e samplingDesign d n ∧ prof = profileOf p c e d n ∧ prof.creditedProblem = none
 
 /-- The commitment's digest, which the receipt is held to, is the window record's digest of the record it decodes:
 `SHA-512(format || 0 || canon(record))`, the record's own format (v1 or v2) as the tag. -/

@@ -66,8 +66,8 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **The checks after the verdict refuse a session without a sample** (`sampleDesign zk tags false none`). -/
-theorem checks_sample {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+theorem checks_sample {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Hash.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : ∃ d, s.read.draw = some d := by
   unfold checks at h
   obtain ⟨_, -, h⟩ := Refine.ebind_ok h
@@ -86,8 +86,8 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The checks after the verdict refuse a session without a sample** (`sampleDesign zk tags false none`). -/
-theorem checks_sample {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+theorem checks_sample {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Hash.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : ∃ d, s.read.draw = some d :=
   _root_.FlockDeploy.KS.checks_sample (checks_base h)
 
@@ -97,7 +97,7 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-theorem next_acc_sample {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem next_acc_sample {zk : Bool} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     (h : ((next zk x as cs).eval sha512).1 = .acc) :
     ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
   cases ha : act zk x as cs with
@@ -110,7 +110,7 @@ theorem next_acc_sample {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs 
 
 end Gen
 
-theorem next_acc_sample {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem next_acc_sample {zk : Bool} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     (h : ((next zk x as cs).eval sha512).1 = .acc) :
     ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d :=
   Gen.next_acc_sample (S := S₀) (zk := zk) (x := x) (as := as) (cs := cs) (h := h)
@@ -120,7 +120,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **A statement some run accepts at SHA-512 sets up at a sample.** -/
-theorem acc_sample {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
+theorem acc_sample {zk : Bool} {x : Hash.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
     ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
   unfold Claims.Flock.NoAcc at hacc
   push Not at hacc
@@ -131,7 +131,7 @@ theorem acc_sample {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sh
 end Gen
 
 /-- **A statement some run accepts at SHA-512 sets up at a sample.** -/
-theorem acc_sample {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
+theorem acc_sample {zk : Bool} {x : Hash.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
     ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d :=
   Gen.acc_sample (S := S₀) (zk := zk) (x := x) (hacc := hacc)
 
@@ -162,7 +162,7 @@ open Classical Discharge.Tables in
 with `wrP`'s verdict and decoder at the statement's inputs `I` and sample `d` (`plainVerdict`, `plainDec`) and openings
 `opn` whose decoders are right at `plainTab` (`hdec`), so it asks for the mixture of live strategies and its bounds
 only. -/
-def PlainLiveWrPAt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
+def PlainLiveWrPAt {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -218,7 +218,7 @@ def PlainLiveWrPAt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables
 open Classical Discharge.Tables in
 /-- **`PlainLiveWrPAt` gives `PlainLiveAccAt`**, at `wrP`'s verdict and decoder and the openings `opn`, whose decoders
 `hdec` says are right at `plainTab`. -/
-theorem plainLiveAccAt_of_wrP {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} {h : tables false x = [(spec, st)]}
+theorem plainLiveAccAt_of_wrP {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} {h : tables false x = [(spec, st)]}
     {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level} {rest : List Accounting.Level} {ext : ℕ}
     {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩} {hk0 : l₀.lanes = k0}
     {hm : 13 ≤ (L.model (Refine.regionsOf st)).m}
@@ -247,7 +247,7 @@ theorem plainLiveAccAt_of_wrP {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} 
 up at a sample, `PlainLiveWrPAt` at `wrP`'s openings, `plainOpn` where the outputs are public (`plain_hdec`) and
 `plainOpnH` where they are hidden under `hm96-sha512/v1` leaves (`plain_hdecH`); where they are hidden under any other
 leaf the scope admits (plain SHA-512 leaves), `PlainLiveAccAt` itself. -/
-def PlainLiveW (x : Claims.Msg) : Prop :=
+def PlainLiveW (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
     (h : tables false x = [(spec, st)]) (d : Json) (hd : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
@@ -268,7 +268,7 @@ def PlainLiveW (x : Claims.Msg) : Prop :=
 
 /-- **`PlainLiveW` gives `PlainLiveAcc`** where some run accepts: the statement parses in scope (`acc_inScope`) and sets
 up at a sample (`acc_sample`). -/
-theorem plainLiveAcc_of_w {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V false) x) (hl : PlainLiveW x) :
+theorem plainLiveAcc_of_w {x : Hash.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V false) x) (hl : PlainLiveW x) :
     PlainLiveAcc x := by
   intro spec st h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay
   obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno

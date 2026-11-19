@@ -115,7 +115,7 @@ from verity_vllm.definitions.registry import ref_prims as RP
 from verity_vllm.definitions.registry import sparse_mla as M
 from verity_vllm.definitions.registry import sparse_mla_split as W
 from verity_vllm.engine.env import served_defaults
-from verity_vllm.pipeline.cli import MACHINE
+from verity_vllm import settings
 from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-dsa-capture/v3"
@@ -164,13 +164,13 @@ def _error(e: BaseException) -> str:
 
 # ------------------------------------------------------------------------------------------------------------------------- env
 def environment(work: Path) -> tuple[dict[str, str], dict[str, str]]:
-    """vLLM's defaults (`served_defaults`), a served engine's toolchain (`CUDA_HOME`, an exported one winning, and `RunEnv.cuda_bin`
+    """vLLM's defaults (`served_defaults`), a served engine's toolchain (`CUDA_HOME` and its `bin`
     on `PATH` after the interpreter's directory, as `pipeline.row_driver` sets them) and the caches in scratch, set before vLLM is
     imported: (the env set, the switches cleared)."""
     cleared = served_defaults()
     env = {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "TRITON_CACHE_DIR": str(work / "triton_cache"), "DG_JIT_CACHE_DIR": str(work / "deep_gemm"),
-           "CUDA_HOME": os.environ.get("CUDA_HOME") or MACHINE["RunEnv.cuda_home"],
-           "PATH": f"{os.path.dirname(sys.executable)}:{MACHINE['RunEnv.cuda_bin']}:{os.environ.get('PATH', '')}"}
+           "CUDA_HOME": settings.cuda_home(),
+           "PATH": f"{os.path.dirname(sys.executable)}:{os.path.join(settings.cuda_home(), 'bin')}:{os.environ.get('PATH', '')}"}
     os.environ.update(env)
     return env, cleared
 

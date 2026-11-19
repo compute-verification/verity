@@ -28,8 +28,12 @@ and their decisions (`bit`). A slot that doesn't ask changes nothing, so the cha
 slots that ask, in order: the execution phase's decision stream, a `List Bool`. The run's decision stream is one per execution phase. The
 asks themselves are not advice: the compile slice, its charge included, is proved on every advised execution phase and never
 sampled, so `en` is the scan that slice proves, pinned by it. The carry from execution phase to execution phase (the KT counts and the
-run) is committed across windows and chained from the book's priors (`charge_chain.check_chain`), as `charges`
-starts from `priors` and passes each execution phase's carry on.
+run) is committed in each window's rows (rows 0 and 1 of the charge's value, its carry-in and carry-out), and the honest
+prover chains it from the book's priors, as `charges` starts from `priors` and passes each execution phase's carry on.
+No verifier holds one window's carry-out row to the next window's carry-in, so the chain is the honest prover's and not
+a checked fact: the check that would hold it is
+`verity/protocols/resource_accounting/network/verifier/charge_check.py`'s `check_chain` over
+`interface/charge/charge_chain.check_rows`, and no verifier calls it.
 
 **What is left.** That `ChargeCount_v1`'s circuit computes `executionPhase` is not proved in Lean. circuit-check holds the circuit
 to the Python reference, and these definitions are held to that reference by the charge difftest: the certifier

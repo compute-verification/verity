@@ -551,7 +551,6 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="frozen input sets on silicon (see the module docstring)")
     ap.add_argument("--instances", required=True, metavar="DATASET/TIER", help=", ".join(DATASETS))
     ap.add_argument("--instruction", default=None, help="instruction id (default: the set's target's; see tc_probe.INSTRUCTIONS)")
-    ap.add_argument("--arch", default=None, help="override the instruction's nvcc arch")
     ap.add_argument("--root", default=None, help="bench-instances/v1 directory holding the built arrays (default: the manifest's directory)")
     ap.add_argument("--manifest", default=None, help="the pinned bench-instances/v1 manifest (default benchmarks/numerical/bench-instances/v1/manifest.json)")
     ap.add_argument("--range", default=None, metavar="LO:HI", help="instance ids [LO, HI) (default: the whole tier)")
@@ -570,12 +569,15 @@ def main(argv: list[str] | None = None) -> int:
     if ins_id not in P.INSTRUCTIONS:
         ap.error(f"unknown instruction {ins_id!r}; known: {', '.join(P.INSTRUCTIONS)}")
     ins = P.INSTRUCTIONS[ins_id]
-    arch = args.arch or ins.arch
+    from verity_bench import kit
+
+    card = kit.host_stamp()["card"]
+    arch = P.card_target(card, [ins.id])
     print("instances", json.dumps({"dataset": inst.dataset, "tier": inst.tier, "n": inst.n, "of": inst.total_n, "steps": inst.steps, "k": inst.k,
                                    "ids": [int(inst.ids[0]), int(inst.ids[-1])], "manifest_sha256": inst.manifest_sha256,
                                    "target": inst.target, "model": inst.model, "instruction": ins.id, "epilogue": inst.epilogue}), flush=True)
 
-    so, nvcc = P.build(ins.tu, arch, out)
+    so, nvcc = P.build(ins.tu, card, out)
     results: dict = {"schema": "instances-hw/v1", "instruction": ins.describe(), "arch": arch}
     if args.sass_check:
         results["sass"] = P.sass_check(so, ins.kernel, out, ins.sass_mma)

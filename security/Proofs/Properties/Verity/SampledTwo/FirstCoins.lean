@@ -130,7 +130,7 @@ private theorem ite_eq_ok {c : Prop} [Decidable c] {a j : Json} {rest : Flock.V 
 set_option maxHeartbeats 8000000 in
 /-- **A run's answer**, at either value of the form's switch: refused at a step, or past every step, its first stage
 on its bytes with coins that hold, its second stage over the first stage's proved units, and the run's interior audit. -/
-private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run i form = .ok j) :
+private theorem run_path {i : Spot.Run.Input} {j : Json} (h : Spot.Run.run i = .ok j) :
     (∃ (step : String) (codes : Array String),
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
     ∃ (workTable : Option Json) (resolved : Spot.Select.Rule) (draw : Json) (rest : Array ℕ) (read : ℕ),
@@ -145,7 +145,7 @@ private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot
       ∃ (inner : Option (Spot.Run.Interior × Json × Json × Json × ℕ)) (acc₂ : Bool)
         (staged : List (String × Json)) (receipt symbol shown audit : Json),
         Spot.Run.secondStage i ((Spot.Draw.proved draw).map Int.toNat) = .ok (.ok inner) ∧
-        Spot.Run.interiorAudit form i ((Spot.Draw.proved draw).map Int.toNat) inner = .ok (acc₂, staged) ∧
+        Spot.Run.interiorAudit i ((Spot.Draw.proved draw).map Int.toNat) inner = .ok (acc₂, staged) ∧
         j = Json.mkObj ([("receipt", receipt), ("draw", draw), ("read", Lean.toJson read), ("symbol", symbol),
           ("public", shown), ("audit", audit)] ++ staged) := by
   unfold Spot.Run.run at h
@@ -160,9 +160,9 @@ private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot
         _, _, _, _, _, _, _, by assumption, by assumption, (Except.ok.inj h).symm⟩
 
 /-- **The interior audit stages at most its `interior` entry.** -/
-private theorem interiorAudit_staged {form : Bool} {i : Spot.Run.Input} {s : Array ℕ}
+private theorem interiorAudit_staged {i : Spot.Run.Input} {s : Array ℕ}
     {inner : Option (Spot.Run.Interior × Json × Json × Json × ℕ)} {acc : Bool} {staged : List (String × Json)}
-    (h : Spot.Run.interiorAudit form i s inner = .ok (acc, staged)) :
+    (h : Spot.Run.interiorAudit i s inner = .ok (acc, staged)) :
     staged = [] ∨ ∃ x, staged = [("interior", x)] := by
   unfold Spot.Run.interiorAudit at h
   simp only [bind, Except.bind, pure, Except.pure] at h
@@ -192,7 +192,7 @@ private theorem getD_answer_read {receipt draw symbol shown audit : Json} {read 
 
 /-- **An accepted run's first stage read its bytes with coins that hold, and it answers what it read**, at either
 value of the form's switch. -/
-theorem run_read {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run i form = .ok j)
+theorem run_read {i : Spot.Run.Input} {j : Json} (h : Spot.Run.run i = .ok j)
     (hs : Spot.jeq (Spot.getD j "symbol") (Json.str "accept") = true) :
     ∃ read, FirstRead i read ∧ Spot.nat? (Spot.getD j "read") = some read := by
   rcases run_path h with ⟨step, codes, rfl⟩ |
@@ -203,7 +203,7 @@ theorem run_read {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run
       getD_answer_read (interiorAudit_staged hia)⟩
 
 /-- **An accepted run's first stage read its bytes with coins that hold**, at either value of the form's switch. -/
-theorem run_firstRead {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run i form = .ok j)
+theorem run_firstRead {i : Spot.Run.Input} {j : Json} (h : Spot.Run.run i = .ok j)
     (hs : Spot.jeq (Spot.getD j "symbol") (Json.str "accept") = true) : ∃ read, FirstRead i read :=
   (run_read h hs).imp fun _ h => h.1
 
@@ -224,10 +224,10 @@ theorem inputOn_accepts {C : CaseOf} {o : Verity.Exchange} {i : Spot.Run.Input} 
     (hi : inputOn C o = some i) :
     ∃ k p c e c₂ ξ₂ r run, C o = some k ∧ Decoded k p c e ∧
       VStar.Recursive.SampledTwo.inputAt p c e.source e k.blobs = .ok (c₂, ξ₂, r, i) ∧
-      Spot.Run.run i true = .ok run ∧ VStar.Recursive.SampledTwo.sourceRead e.source run = .ok () ∧
+      Spot.Run.run i = .ok run ∧ VStar.Recursive.SampledTwo.sourceRead e.source run = .ok () ∧
       Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true := by
   obtain ⟨k, hk, p, c, e, pub, prof, hd, hc⟩ := ha
-  obtain ⟨-, c₂, ξ₂, r, i', run, hin, hrun, hsr, -, hsym, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hc
+  obtain ⟨c₂, ξ₂, r, i', run, hin, hrun, hsr, -, hsym, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hc
   have hik : inputOfCase k = some i' := by
     obtain ⟨h1, h2, h3⟩ := hd
     unfold inputOfCase

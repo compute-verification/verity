@@ -13,8 +13,7 @@
 //   output: out_j = bf16_rn( (inv * x_j) * w_j )                    -- two FMULs, F2FP.BF16.F32.PACK_AB
 //
 // MUFU.RCP and MUFU.SQRT are the hardware tables measured on the RTX 4090 (cuda/mufu_probe.cu, cuda/rms_probe.cu;
-// both verified on all 2^32 inputs).  The ``variant`` bit mask deliberately breaks single dataflow choices so
-// the check harness can show that each alternative mismatches the serving kernel (0 = the model).
+// both verified on all 2^32 inputs).
 
 #include <cmath>
 #include <cstdint>
@@ -72,90 +71,49 @@ inline DivFull div_full_parts(float a, float b, const uint32_t* R) {
     return {a, u2f(mufu_rcp(f2u(b), R))};
 }
 
-enum Variant {
-    V_NO_EPS_FUSION = 1,      // mean = RN(rcp(n) * sum); mean_eps = RN(mean + eps)
-    V_SEQUENTIAL_SUM = 2,     // sum = sequential fp32 accumulation of RN(x^2)
-    V_IEEE_SQRT = 4,          // sqrtf
-    V_IEEE_RCP = 8,           // 1.0f / x and sum / n correctly rounded (mean_eps = RN(sum / n + eps))
-    V_THREAD_ORDER_X0 = 16,   // acc = x0^2 ; fma x1 .. x7
-    V_FP64_SUM = 32,          // sum in double, rounded once
-    V_OUT_XW_FIRST = 64,      // out = RN(RN(x * w) * inv)
-    V_UNFUSED_SQUARES = 128,  // acc = RN(acc + RN(x^2))
-};
-
 }  // namespace
 
 extern "C" void rms_triton_rows(const uint16_t* x, const uint16_t* w, long rows, int n_cols, float eps,
-                                const uint32_t* rcp_tab, const uint32_t* sqrt_tab, uint16_t* out, float* dbg,
-                                float* pre, int variant) {
+                                const uint32_t* rcp_tab, const uint32_t* sqrt_tab, uint16_t* out) {
     const int BLOCK = 1024, THREADS = 128, PER = 8;
 #pragma omp parallel for schedule(dynamic, 16)
     for (long r = 0; r < rows; ++r) {
         const uint16_t* xr = x + r * n_cols;
         uint16_t* orow = out + r * n_cols;
         float sum = 0.0f;
-        if (variant & V_FP64_SUM) {
-            double d = 0.0;
-            for (int j = 0; j < n_cols; ++j) { double v = bf16_f32(xr[j]); d += v * v; }
-            sum = (float)d;
-        } else if (variant & V_SEQUENTIAL_SUM) {
-            for (int j = 0; j < n_cols; ++j) { float v = bf16_f32(xr[j]); sum = sum + v * v; }
-        } else {
-            for (int off = 0; off < n_cols; off += BLOCK) {
-                float lane[THREADS];
-                for (int t = 0; t < THREADS; ++t) {
-                    int c0 = off + PER * t;
-                    if (c0 >= n_cols) { lane[t] = 0.0f; continue; }
-                    float v[PER];
-                    for (int j = 0; j < PER; ++j) v[j] = (c0 + j < n_cols) ? bf16_f32(xr[c0 + j]) : 0.0f;
-                    float acc;
-                    if (variant & V_UNFUSED_SQUARES) {
-                        acc = v[1] * v[1];
-                        acc = acc + v[0] * v[0];
-                        for (int j = 2; j < PER; ++j) acc = acc + v[j] * v[j];
-                    } else if (variant & V_THREAD_ORDER_X0) {
-                        acc = v[0] * v[0];
-                        for (int j = 1; j < PER; ++j) acc = std::fmaf(v[j], v[j], acc);
-                    } else {
-                        acc = v[1] * v[1];
-                        acc = std::fmaf(v[0], v[0], acc);
-                        for (int j = 2; j < PER; ++j) acc = std::fmaf(v[j], v[j], acc);
-                    }
-                    lane[t] = acc;
-                }
-                float wsum[4];
-                for (int wp = 0; wp < 4; ++wp) {
-                    float v[32], nv[32];
-                    for (int i = 0; i < 32; ++i) v[i] = lane[32 * wp + i];
-                    for (int s = 16; s >= 1; s >>= 1) {
-                        for (int i = 0; i < 32; ++i) nv[i] = v[i] + v[i ^ s];
-                        for (int i = 0; i < 32; ++i) v[i] = nv[i];
-                    }
-                    wsum[wp] = v[0];
-                }
-                float chunk = (wsum[0] + wsum[2]) + (wsum[1] + wsum[3]);
-                sum = sum + chunk;
+        for (int off = 0; off < n_cols; off += BLOCK) {
+            float lane[THREADS];
+            for (int t = 0; t < THREADS; ++t) {
+                int c0 = off + PER * t;
+                if (c0 >= n_cols) { lane[t] = 0.0f; continue; }
+                float v[PER];
+                for (int j = 0; j < PER; ++j) v[j] = (c0 + j < n_cols) ? bf16_f32(xr[c0 + j]) : 0.0f;
+                float acc = v[1] * v[1];
+                acc = std::fmaf(v[0], v[0], acc);
+                for (int j = 2; j < PER; ++j) acc = std::fmaf(v[j], v[j], acc);
+                lane[t] = acc;
             }
+            float wsum[4];
+            for (int wp = 0; wp < 4; ++wp) {
+                float v[32], nv[32];
+                for (int i = 0; i < 32; ++i) v[i] = lane[32 * wp + i];
+                for (int s = 16; s >= 1; s >>= 1) {
+                    for (int i = 0; i < 32; ++i) nv[i] = v[i] + v[i ^ s];
+                    for (int i = 0; i < 32; ++i) v[i] = nv[i];
+                }
+                wsum[wp] = v[0];
+            }
+            float chunk = (wsum[0] + wsum[2]) + (wsum[1] + wsum[3]);
+            sum = sum + chunk;
         }
-        float mean_eps, rms, inv;
-        if (variant & V_IEEE_RCP) {
-            float mean = sum / (float)n_cols;
-            mean_eps = mean + eps;
-        } else {
-            DivFull d = div_full_parts(sum, (float)n_cols, rcp_tab);
-            if (variant & V_NO_EPS_FUSION) { float mean = d.a * d.r; mean_eps = mean + eps; }
-            else mean_eps = std::fmaf(d.r, d.a, eps);
-        }
-        if (variant & V_IEEE_SQRT) rms = std::sqrt(mean_eps);
-        else rms = u2f(mufu_sqrt(f2u(mean_eps), sqrt_tab));
-        if (variant & V_IEEE_RCP) inv = 1.0f / rms;
-        else { DivFull d = div_full_parts(1.0f, rms, rcp_tab); inv = d.a * d.r; }
-        if (dbg) { dbg[4 * r] = sum; dbg[4 * r + 1] = mean_eps; dbg[4 * r + 2] = rms; dbg[4 * r + 3] = inv; }
+        DivFull q = div_full_parts(sum, (float)n_cols, rcp_tab);
+        float mean_eps = std::fmaf(q.r, q.a, eps);
+        float rms = u2f(mufu_sqrt(f2u(mean_eps), sqrt_tab));
+        DivFull d = div_full_parts(1.0f, rms, rcp_tab);
+        float inv = d.a * d.r;
         for (int j = 0; j < n_cols; ++j) {
             float xv = bf16_f32(xr[j]), wv = bf16_f32(w[j]);
-            float o = (variant & V_OUT_XW_FIRST) ? (xv * wv) * inv : (inv * xv) * wv;
-            if (pre) pre[r * n_cols + j] = o;
-            orow[j] = f32_bf16_rn(o);
+            orow[j] = f32_bf16_rn((inv * xv) * wv);
         }
     }
 }
@@ -189,20 +147,10 @@ inline float rsqrt_nonftz(float x, const uint32_t* T) {
     if (!p0) r = r * 4096.0f;
     return r;
 }
-enum CudaVariant {
-    C_BUTTERFLY_WARP = 1,     // Triton-style xor butterfly instead of cub's shfl_down tree
-    C_SEQUENTIAL_SUM = 2,     // sequential fp32 sum of squares
-    C_IEEE_RSQRT = 4,         // 1.0f / sqrtf(arg)
-    C_DIV_FULL = 8,           // mean via MUFU.RCP * agg (div.full) instead of IEEE division
-    C_FP64_SUM = 32,          // sum in double
-    C_OUT_XW_FIRST = 64,      // out = RN(RN(x * w) * s)
-    C_WARP_TREE_REVERSED = 128,  // warp aggregates summed from the last warp
-};
 }  // namespace
 
 extern "C" void rms_cuda_rows(const uint16_t* x, const uint16_t* w, long rows, int n_cols, float eps,
-                              const uint32_t* rcp_tab, const uint32_t* rsq_tab, uint16_t* out, float* dbg, float* pre,
-                              int variant) {
+                              const uint32_t* rsq_tab, uint16_t* out) {
     const int VEC = 8;
     if (n_cols % VEC != 0) return;  // other VEC_SIZE instantiations: not modelled (caller gates)
     const int nvec = n_cols / VEC;
@@ -212,53 +160,30 @@ extern "C" void rms_cuda_rows(const uint16_t* x, const uint16_t* w, long rows, i
     for (long r = 0; r < rows; ++r) {
         const uint16_t* xr = x + r * n_cols;
         uint16_t* orow = out + r * n_cols;
-        float agg = 0.0f;
-        if (variant & C_FP64_SUM) {
-            double d = 0.0;
-            for (int j = 0; j < n_cols; ++j) { double v = bf16_f32(xr[j]); d += v * v; }
-            agg = (float)d;
-        } else if (variant & C_SEQUENTIAL_SUM) {
-            for (int j = 0; j < n_cols; ++j) { float v = bf16_f32(xr[j]); agg = std::fmaf(v, v, agg); }
-        } else {
-            std::vector<float> lane(block, 0.0f);
-            for (int t = 0; t < block; ++t) {
-                float acc = 0.0f;
-                for (int i = t; i < nvec; i += block)
-                    for (int j = 0; j < VEC; ++j) { float v = bf16_f32(xr[i * VEC + j]); acc = std::fmaf(v, v, acc); }
-                lane[t] = acc;
-            }
-            std::vector<float> wagg(nwarps);
-            for (int wp = 0; wp < nwarps; ++wp) {
-                int valid = block - 32 * wp; if (valid > 32) valid = 32;
-                float v[32], nv[32];
-                for (int i = 0; i < 32; ++i) v[i] = (i < valid) ? lane[32 * wp + i] : 0.0f;
-                if (variant & C_BUTTERFLY_WARP) {
-                    for (int s = 16; s >= 1; s >>= 1) {
-                        for (int i = 0; i < 32; ++i) nv[i] = v[i] + v[i ^ s];
-                        for (int i = 0; i < 32; ++i) v[i] = nv[i];
-                    }
-                } else {
-                    for (int off = 1; off <= 16; off <<= 1) {
-                        for (int i = 0; i < 32; ++i) nv[i] = (i + off < valid) ? v[i] + v[i + off] : v[i];
-                        for (int i = 0; i < 32; ++i) v[i] = nv[i];
-                    }
-                }
-                wagg[wp] = v[0];
-            }
-            if (variant & C_WARP_TREE_REVERSED) { agg = wagg[nwarps - 1]; for (int k = nwarps - 2; k >= 0; --k) agg = agg + wagg[k]; }
-            else { agg = wagg[0]; for (int k = 1; k < nwarps; ++k) agg = agg + wagg[k]; }
+        std::vector<float> lane(block, 0.0f);
+        for (int t = 0; t < block; ++t) {
+            float acc = 0.0f;
+            for (int i = t; i < nvec; i += block)
+                for (int j = 0; j < VEC; ++j) { float v = bf16_f32(xr[i * VEC + j]); acc = std::fmaf(v, v, acc); }
+            lane[t] = acc;
         }
-        float mean;
-        if (variant & C_DIV_FULL) { DivFull d = div_full_parts(agg, (float)n_cols, rcp_tab); mean = d.a * d.r; }
-        else mean = agg / (float)n_cols;
-        float arg = mean + eps;
-        float s = (variant & C_IEEE_RSQRT) ? 1.0f / std::sqrt(arg) : rsqrt_nonftz(arg, rsq_tab);
-        if (dbg) { dbg[4 * r] = agg; dbg[4 * r + 1] = arg; dbg[4 * r + 2] = mean; dbg[4 * r + 3] = s; }
+        std::vector<float> wagg(nwarps);
+        for (int wp = 0; wp < nwarps; ++wp) {
+            int valid = block - 32 * wp; if (valid > 32) valid = 32;
+            float v[32], nv[32];
+            for (int i = 0; i < 32; ++i) v[i] = (i < valid) ? lane[32 * wp + i] : 0.0f;
+            for (int off = 1; off <= 16; off <<= 1) {
+                for (int i = 0; i < 32; ++i) nv[i] = (i + off < valid) ? v[i] + v[i + off] : v[i];
+                for (int i = 0; i < 32; ++i) v[i] = nv[i];
+            }
+            wagg[wp] = v[0];
+        }
+        float agg = wagg[0];
+        for (int k = 1; k < nwarps; ++k) agg = agg + wagg[k];
+        float s = rsqrt_nonftz(agg / (float)n_cols + eps, rsq_tab);
         for (int j = 0; j < n_cols; ++j) {
             float xv = bf16_f32(xr[j]), wv = bf16_f32(w[j]);
-            float o = (variant & C_OUT_XW_FIRST) ? (xv * wv) * s : (s * xv) * wv;
-            if (pre) pre[r * n_cols + j] = o;
-            orow[j] = f32_bf16_rn(o);
+            orow[j] = f32_bf16_rn((s * xv) * wv);
         }
     }
 }

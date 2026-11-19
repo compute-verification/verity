@@ -96,7 +96,7 @@ theorem flat_two_getElem? {α : Type} (a : Array (Array α)) (h2 : 2 ≤ a.size)
 /-- **An accepted plain run decides on `P`'s messages along its coins**: it decides at the statement's setup, on its
 last message read as a final message, with the custody checks passing and the shipped verdict accepting within its
 verifier log, and its round messages are `P`'s messages `1` to `plainN x` after their tags, each with its coin. -/
-theorem plain_acc_midsK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {c : Fin ((V false).k x) → Coin}
+theorem plain_acc_midsK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {c : Fin ((V false).k x) → Coin}
     (h : (Claims.run sha512 P (VK keep) x ω c).out = .acc) :
     ∃ s spec sts link c₁ mids f, setupOf false x = some (s, spec, sts) ∧
       lastFinal (Claims.run sha512 P (VK keep) x ω c).seen = some f ∧ checks false s spec x link c₁ mids f = .ok () ∧
@@ -126,7 +126,7 @@ theorem plain_acc_midsK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω
   rfl
 
 /-- `plain_acc_midsK` at the deployed plain verifier (`keep := id`). -/
-theorem plain_acc_mids {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {c : Fin ((V false).k x) → Coin}
+theorem plain_acc_mids {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {c : Fin ((V false).k x) → Coin}
     (h : (Claims.run sha512 P (V false) x ω c).out = .acc) :
     ∃ s spec sts link c₁ mids f, setupOf false x = some (s, spec, sts) ∧
       lastFinal (Claims.run sha512 P (V false) x ω c).seen = some f ∧ checks false s spec x link c₁ mids f = .ok () ∧
@@ -142,7 +142,7 @@ of table 0, its proof file decoded at the table's `fast100` schedule and `|regio
 message `r · repRounds + j + 1` after its tag: the verdict accepts the rep (`verifyWithMK_tables`), at the shipped
 oracle (`sub`) and the table's named scheme, so its stream's rounds retained its chunks (`rep_rounds`), and the
 stream's rounds are the live ones (`decodeWithK_live`), which custody makes the round messages (`custody_ok`). -/
-theorem plain_capChunkK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {c : Fin ((V false).k x) → Coin}
+theorem plain_capChunkK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {c : Fin ((V false).k x) → Coin}
     (h : (Claims.run sha512 P (VK keep) x ω c).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {st : Stmt} {sch : Flock.Schedule} {f : Final} {p : Proof} {r : ℕ} (hs : setupOf false x = some (s, spec, sts))
     (hst : sts[0]? = some st) (hsch : fast100 st.m = some sch) (hr : r < 2)
@@ -234,7 +234,7 @@ theorem plain_capChunkK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω
   simpa using e.symm
 
 /-- `plain_capChunkK` at the deployed plain verifier (`keep := id`). -/
-theorem plain_capChunk {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {c : Fin ((V false).k x) → Coin}
+theorem plain_capChunk {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {c : Fin ((V false).k x) → Coin}
     (h : (Claims.run sha512 P (V false) x ω c).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {st : Stmt} {sch : Flock.Schedule} {f : Final} {p : Proof} {r : ℕ} (hs : setupOf false x = some (s, spec, sts))
     (hst : sts[0]? = some st) (hsch : fast100 st.m = some sch) (hr : r < 2)
@@ -253,7 +253,7 @@ recursive cap, for each `ℓ + 1` below the schedule's levels: its round's chunk
 (`plain_capChunk`), the same message (`depMsg_congr`), and two frame lists with one header list (`repFrames_hds`) split
 at their `ℓ`-th caps after as many closing squeezes (`repFrames_capSplit`) whose rounds there have the same bytes split
 at one cap (`capFr_eq_of_chunk`). -/
-theorem plain_capPrefixK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plain_capPrefixK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {c₁ c₂ : Fin ((V false).k x) → Coin} (h₁ : (Claims.run sha512 P (VK keep) x ω c₁).out = .acc)
     (h₂ : (Claims.run sha512 P (VK keep) x ω c₂).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {st : Stmt} {sch : Flock.Schedule} {r ℓ : ℕ} (hs : setupOf false x = some (s, spec, sts))
@@ -301,7 +301,7 @@ theorem plain_capPrefixK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover �
   · simp only [Claims.coinSeq, hk, ↓reduceDIte]
 
 /-- `plain_capPrefixK` at the deployed plain verifier (`keep := id`). -/
-theorem plain_capPrefix {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plain_capPrefix {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {c₁ c₂ : Fin ((V false).k x) → Coin} (h₁ : (Claims.run sha512 P (V false) x ω c₁).out = .acc)
     (h₂ : (Claims.run sha512 P (V false) x ω c₂).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {st : Stmt} {sch : Flock.Schedule} {r ℓ : ℕ} (hs : setupOf false x = some (s, spec, sts))
@@ -320,7 +320,7 @@ rows, tie a collision among their verifier calls**: each row is an `Opening` of 
 the run's rep-`r` flattened `ℓ`-th recursive cap (`plain_levelOpening` at level `ℓ + 1`), the two caps are one
 (`plain_capPrefix`), and two openings of one position against one root to different rows tie a collision
 (`tiedColl_of_openings`). -/
-theorem plain_levelTieK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plain_levelTieK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {c₁ c₂ : Fin ((V false).k x) → Coin} (h₁ : (Claims.run sha512 P (VK keep) x ω c₁).out = .acc)
     (h₂ : (Claims.run sha512 P (VK keep) x ω c₂).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {st : Stmt} {sch : Flock.Schedule} {r ℓ : ℕ} (hs : setupOf false x = some (s, spec, sts))
@@ -349,7 +349,7 @@ theorem plain_levelTieK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω
   exact tiedColl_of_openings hop₁ hop₂ fun he => hab (by rw [hra, hrb, he])
 
 /-- `plain_levelTieK` at the deployed plain verifier (`keep := id`). -/
-theorem plain_levelTie {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plain_levelTie {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {c₁ c₂ : Fin ((V false).k x) → Coin} (h₁ : (Claims.run sha512 P (V false) x ω c₁).out = .acc)
     (h₂ : (Claims.run sha512 P (V false) x ω c₂).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {st : Stmt} {sch : Flock.Schedule} {r ℓ : ℕ} (hs : setupOf false x = some (s, spec, sts))

@@ -1,5 +1,6 @@
 """Pearl+ for `verity bench overhead`: the PoUW harness's arm (`benchmarks/pouw/harness/arm.py`, v0.6) over the served
-Pearl-C call on an H100 or H200 (`verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c` under `SERVED`, on the kernel's, the
+Pearl-C call on an H100 or H200 (`verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c` under the
+kernel scheme Pearl+ declares on the run's card, `PearlPlus.served`, on the kernel's, the
 serial schedule), and its ε. The door registers both in `verity_bench.overhead.SCHEMES`; the three names it fixes are each
 one definition here: `SCHEME` (Pearl+'s id in the door), `verifier` (the verifier's declaration, whose verdict is the
 Lean's) and `epsilon`.
@@ -60,12 +61,8 @@ HERE = Path(__file__).resolve().parent
 KERNEL = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
 #: Pearl+'s id in the door (`verity_bench.overhead.SCHEMES`), and the arm's name in its transcripts' paths
 SCHEME = "pearl-plus"
-#: the served scheme the arm runs: `verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.SCHEMES`' H100 record, the kernel's
-SERVED = "pearl-c-h100-v1-h3"
 #: the stock scaling the door times beside it, its useful output's (`baselines.FAMILIES`)
 FAMILY = "fp8-e4m3-rowwise"
-#: the build target the kernel's cubin is for (`identity.CARDS`)
-ARCH = "sm_90a"
 #: where the door's cubin arrives (`verity_bench.overhead_node.CUBIN_ENV`)
 CUBIN_ENV = "VERITY_BENCH_CUBIN"
 #: the cubin of record (``cubin``: its art id, sha256 and size) and, once one is stated, the window of record `epsilon`
@@ -89,7 +86,8 @@ DELTA = Fraction(1, 100)
 def verifier() -> dict:
     """The build record's ``verifier`` (`arm.check_verifier`): Pearl+'s verdict on each shape's retained pass alone, the
     Lean's. First the Python twin (`served_passes.py verify --manifest`) judges the pass under the coins `dump` writes
-    beside it, at `DRAWS` samples on the node's sample, and writes its document and the verifier's coin record there; its
+    beside it, at `DRAWS` samples on the node's sample, and writes its document and the verifier's coin record into the
+    shape's ``{verdicts}`` (the run's ``verdicts/``; the pass stays in the private passes directory); its
     line names no transcript, so the harness never reads it as a verdict, and a twin that rejects ends the shape's commands
     unaccepted. Then the Lean step (`served_passes.py lean`, PouwVerifier.PearlPlus's ``pouw-pearlplus`` built in the tree)
     judges the same pass, coins, samples and coin record, held to the twin's verdict: only its line starts ``ACCEPT`` or
@@ -99,10 +97,10 @@ def verifier() -> dict:
     return {"name": "served_passes.py lean: Pearl+'s verdict in Lean (PouwVerifier.PearlPlus) on a retained Pearl-C pass, "
                     "held to its Python twin", "per": "shape",
             "transcript": "transcripts/{arm}/{shape}/manifest.json", "control": "negative/{arm}/{shape}/manifest.json",
-            "commands": [["{python}", SERVED_PASSES, "verify", *pass_, "--coin-record", "{dir}/coin.json",
-                          "--out", "{dir}/pearlplus-verify.json", "--draws", str(DRAWS), "--commit", "{commit}"],
-                         ["{python}", SERVED_PASSES, "lean", *pass_, "--verify", "{dir}/pearlplus-verify.json",
-                          "--exe", "build", "--out", "{dir}/pearlplus-lean.json"]]}
+            "commands": [["{python}", SERVED_PASSES, "verify", *pass_, "--coin-record", "{verdicts}/coin.json",
+                          "--out", "{verdicts}/pearlplus-verify.json", "--draws", str(DRAWS), "--commit", "{commit}"],
+                         ["{python}", SERVED_PASSES, "lean", *pass_, "--verify", "{verdicts}/pearlplus-verify.json",
+                          "--exe", "build", "--out", "{verdicts}/pearlplus-lean.json"]]}
 
 
 def epsilon(m: int, n: int, k: int, card: str, delta: Fraction = DELTA) -> dict:
@@ -151,10 +149,6 @@ def build_dev(out: Path) -> Path:
     return out / "pearl_c_sm90.cubin"
 
 
-def sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def m16(m: int) -> int:
     """The served call's rows: m rounded up to the domain's row granularity, the filler rows zero."""
     return -(-m // 16) * 16
@@ -191,16 +185,22 @@ class PearlPlus:
 
     def __init__(self) -> None:
         self.cubin: Path | None = None
+        #: the kernel scheme Pearl+ declares on the run's card, which `build` resolves
+        self.served: str | None = None
         self._kernel: Any = None
         self._held: dict[tuple, _Held] = {}
         self._streams: dict[int, Any] = {}
 
     def build(self, ctx: dict) -> dict:
-        if ctx["arch"] != ARCH:
-            raise RuntimeError(f"{SCHEME} runs on {ARCH} (an H100 or H200), not {ctx['arch']}: time it with --card h200")
+        """Refuses a card Pearl+ runs no build on (``ctx["card"]``, its short name), naming the cards it runs on."""
+        from verity_bench.schemes import kernel_scheme
+
+        self.served = kernel_scheme(SCHEME, ctx["card"], pinned=True)
         cubin, source = cubin_of(settings().VERITY_BENCH_CUBIN, Path(ctx["out_dir"]))
-        self.cubin, sha, pin = cubin, sha256(cubin), pinned()
-        return {"scheme": SCHEME, "served": SERVED, "binaries": [str(cubin)],
+        with cubin.open("rb") as f:
+            sha = hashlib.file_digest(f, "sha256").hexdigest()
+        self.cubin, pin = cubin, pinned()
+        return {"scheme": SCHEME, "served": self.served, "binaries": [str(cubin)],
                 "cubin": {"path": str(cubin), "sha256": sha, "source": source,
                           "art": pin["art"] if sha == pin["sha256"] else None},
                 "schedule": "serial", "graphs": False, "index": INDEX,
@@ -211,7 +211,7 @@ class PearlPlus:
     def domain(self, shape: Shape) -> str | None:
         from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
 
-        bad = PPD.refusals(SERVED, {0: (shape.n, shape.k)})
+        bad = PPD.refusals(self.served, {0: (shape.n, shape.k)})
         if bad:
             return "; ".join(b.split(": ", 1)[-1] for b in bad)
         R = kernels()
@@ -230,9 +230,9 @@ class PearlPlus:
         rows (FP32 words) the call hashes, and B's rows its weight side does."""
         from arm import Work
         from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Shape as Unit
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+        from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
 
-        s, m = PPD.scheme_of(SERVED), m16(shape.m)
+        s, m = pouw_schemes.get(self.served), m16(shape.m)
         unit = Unit(m, shape.k, shape.n)
         return Work(tensor_macs={FAMILY: m * shape.k * shape.n}, w_ref=str(s.wref(unit)), credited=str(s.credit_of(unit)),
                     unit=UNIT, hashed_bytes={"a_rows": 4 * m * shape.k, "tile_leaves": 8 * m * shape.n,
@@ -319,26 +319,28 @@ class _Held:
         from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
         from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
         from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+        from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
         from verity_torch.pouw.pearl_c import run_device as PPDR
         from verity_torch.pouw.pearl_c.served_y_device import DeviceTrees
 
         self.arm, self.key, self.users = arm, key, 0
         self.w = _bf16(operands.b, shape.n, shape.k)
         kernel = arm.kernel()
-        salt_key = PPD.new_salt_key(SERVED)
-        roots = PPDR.weight_roots(kernel, {0: self.w}, SERVED, salt_key=salt_key)
+        weight_salts = PPDR.fresh_weight_salts({0: self.w})
+        roots = PPDR.weight_roots(kernel, {0: self.w}, arm.served, weight_salts=weight_salts)
         ch = Challenger(EPOCH, PV.coins)
-        self.run = PPDR.PearlCDeviceRun(PPD.scheme_of(SERVED), f"pouw:{SERVED}", kernel, {0: self.w}, roots, ch.commitment,
+        self.run = PPDR.PearlCDeviceRun(pouw_schemes.get(arm.served), f"pouw:{arm.served}", kernel, {0: self.w}, roots, ch.commitment,
                                        ch.open("salt", weights_root(roots)), capacity=tiles_of(shape.m, shape.n),
-                                       flag_rows=m16(shape.m), salt_key=salt_key)
+                                       flag_rows=m16(shape.m), weight_salts=weight_salts)
         R, wt = kernel.run, self.run.weights[0]
         size = R.Pipeline.sizes(R.BM, wt.n, wt.k, R.BM)
         self.xb = torch.empty((wt.n, wt.k), dtype=torch.float32, device=self.run.device)
         self.seg = PPDR._zeros(size["segdig_b"], self.run.device)
         self.wpipe = PPDR._pipeline(kernel, R.BM, wt.n, wt.k,
-                                   {**{x: t.data_ptr() for x, t in wt.b.items()}, "line_a": 0, "segdig_b": self.seg.data_ptr()},
+                                   {**{x: t.data_ptr() for x, t in wt.b.items()}, "line_a": 0, "segdig_b": self.seg.data_ptr(),
+                                    "salts_b": (wt.b["salts_b"].data_ptr(), size["salts_b"])},
                                    self.xb.data_ptr(), {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 64,
-                                                        **self.run.const_keys}, variant=self.run.variant, weight=0)
+                                                        **self.run.const_keys}, variant=self.run.variant)
         self.wsteps = PPDR._steps(self.wpipe, PPD.EPOCH_STEPS + PPD.JOB_STEPS)
         self.ytrees = DeviceTrees(self.run)
 
@@ -370,13 +372,15 @@ class _YTree:
     """A call's y commitment on the device, the served call's bytes made serially: the pipeline of `trees`
     (`served_y_device.DeviceTrees`, its width's, held to `commit_y` at its first use) and `served_y.tree_launches`, over buffers
     made here, at prepare: y's tree in `commit_y`'s layout, the row digests, one chunk's FP32 words and segment scratch
-    (`served_y.chunk_rows`), and y's domain id at the call's index in the pipeline's ``dom_b``.  `launch` widens y's m real
+    (`served_y.chunk_rows`), y's rows' fresh salts (`served_y_device.y_salts`, kept as ``salts`` for the call's retained
+    pass), and y's domain id at the call's index in the pipeline's ``dom_b``.  `launch` widens y's m real
     rows into the words a chunk at a time (`widen_a`, exact: `served_y.f32_rows`) and digests them: device launches alone,
     no allocation and no torch."""
 
     def __init__(self, trees: Any, m: int, n: int, index: int) -> None:
         from verity_torch.pouw.pearl_c import run_device as PPDR
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+        from verity_torch.pouw.pearl_c.served_y_device import y_salts
 
         run = trees.run
         self.R, self.dev, self.m, self.n, self.index = run.kernel.run, run.kernel.dev, m, n, index
@@ -387,7 +391,9 @@ class _YTree:
         self.p, self.rows, self.launches = trees.pipe(n, index), SY.chunk_rows(m, n), SY.tree_launches
         self.tree = PPDR._zeros(self.R.NB * (2 * self.R.pow2(m) - 1), run.device)
         self.bufs = [self.tree] + [PPDR._zeros(size, run.device) for size in (64 * m, 64 * (n // 256) * self.rows, 4 * n * self.rows)]
-        self.at = tuple(t.data_ptr() for t in self.bufs)
+        self.salts = y_salts(m).to(run.device)
+        self.at, self.salts_at = tuple(t.data_ptr() for t in self.bufs), self.salts.data_ptr()
+        self.salts_n = self.salts.numel()
         PPDR._put(trees.dom, SY.y_domain(run.salt, index, m).domain_id)
 
     def launch(self, y: int) -> None:
@@ -397,7 +403,8 @@ class _YTree:
         def widened(r: int, count: int) -> int:
             R.widen_a(dev, y + 2 * n * r, words, count, count, n, pdl=False)
             return words
-        self.launches(R, self.p, tree, dig, seg, self.m, self.rows, self.index, widened)
+        self.launches(R, self.p, tree, dig, seg, self.m, self.rows, self.index, widened, self.salts_at,
+                      self.salts_n)
 
 
 class _Call:
@@ -423,7 +430,7 @@ class _Call:
         self.views = {"y": self.y[:self.m]}
         if hashing:
             ytree, y = _YTree(held.ytrees, self.m, self.n, INDEX), self.y.data_ptr()
-            self.y_steps = [lambda: ytree.launch(y)]
+            self.y_steps, self.y_salts = [lambda: ytree.launch(y)], ytree.salts
             self.views |= {"tree_y": ytree.tree, "root_a": run.roots_buf[:nb], "leaves": run.leaves[:nb * self.tiles],
                            "flags": run.flag_buf[:self.m]}
         self.outputs = {name: _buffer(t) for name, t in self.views.items()}
@@ -480,7 +487,7 @@ class _Call:
         y = self.reference()
         ref = {"y": y} | {name: t for name, t in self.views.items() if name not in ("y", "tree_y")}
         if "tree_y" in mine:
-            ref["tree_y"] = SYD.y_tree(self.held.run, y, INDEX)
+            ref["tree_y"] = SYD.y_tree(self.held.run, y, INDEX, self.y_salts)
         same = {name: bool(torch.equal(mine[name], ref[name])) for name in mine}
         return all(same.values()), {name: "all" for name in mine}, {"equal_to_served_call": same, "index": INDEX}
 
@@ -503,8 +510,9 @@ class _Call:
         mm = Matmul(PPDR.call_index(run), Unit(self.m16, self.k, self.n), 0)
         cur.matmuls.append(mm)
         cur.flag_rows, cur.tiles = self.m, self.tiles
-        run._retained(cur, mm, self.m, self.views["flags"], *run._kept(self.sh, self.pipe), y=self.views["y"],
-                      y_tree=self.views["tree_y"])
+        run._retained(cur, mm, self.m, self.views["flags"], *run._kept(self.sh, self.pipe),
+                      run.salts_a(self.sh, self.pipe), y=self.views["y"],
+                      y_tree=self.views["tree_y"], y_salts=self.y_salts)
         run.end()
         (out / "coins.json").write_text(json.dumps(run.coins.to_json()) + "\n")
 

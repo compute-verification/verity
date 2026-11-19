@@ -36,7 +36,7 @@ rows are `Rows.ofNet`'s:
 
 namespace FlockC3.Reps
 
-open FlockSoundness FlockSoundness.Audit
+open FlockSoundness Spot.Sampling
 open FlockVBridge.OfVStar (ReadCol)
 
 /-- **The opening unit reads its row columns**: at the net of `unitLaid LANES H`, a computed row reads each of the

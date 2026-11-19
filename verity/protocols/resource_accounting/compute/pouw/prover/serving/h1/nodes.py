@@ -1,4 +1,4 @@
-"""A registered value's ``b || c`` strings or one level of its tree as `registered.Registered` holds them, read out of the
+"""A registered value's ``b || c`` strings or one level of its tree as `registered_value.Registered` holds them, read out of the
 array the hash wrote: item i is node i's bytes, made on read, so a value whose nodes are never opened makes none. It is
 equal to the tuple of the same byte strings, and hashes as that tuple does."""
 from __future__ import annotations

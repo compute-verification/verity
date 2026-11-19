@@ -384,19 +384,171 @@ private theorem field_cases {j j' : Json} (hj : Wf j) (hj' : Wf j') (he : JsonEq
   cases h : j.getObjVal? k <;> cases h' : j'.getObjVal? k <;> rw [h, h'] at F <;>
     simp_all [OptEquiv, Except.toOption]
 
+private theorem gridLevel_jsonEquiv {m m' : String} {x x' : Json} {v : Nat × Int} (h : gridLevel m x = .ok v)
+    (he : JsonEquiv x x') : gridLevel m' x' = .ok v := by
+  rcases x with _ | _ | _ | _ | ⟨⟨l⟩⟩ | _
+  all_goals try (delta gridLevel at h; injection h; done)
+  obtain ⟨⟨l'⟩, rfl, hsz, hel⟩ := arr_of_jsonEquiv he
+  rcases l with _ | ⟨r, _ | ⟨d, _ | ⟨y, l⟩⟩⟩
+  all_goals try (delta gridLevel at h; injection h; done)
+  rcases l' with _ | ⟨r', _ | ⟨d', _ | ⟨y', l'⟩⟩⟩
+  all_goals try simp at hsz
+  have hr : natJ? r = natJ? r' := natJ_jsonEquiv (hel 0 (by simp) (by simp))
+  have hd : intJ? d = intJ? d' := intJ_jsonEquiv (hel 1 (by simp) (by simp))
+  delta gridLevel at h ⊢
+  conv at h => lhs; whnf
+  conv => lhs; whnf
+  dsimp only [Array.getLit, List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ] at h ⊢
+  rw [← hr, ← hd]
+  split at h
+  · split at h
+    · exact absurd h (by intro h; injection h)
+    · rw [ite_f (by assumption)]; exact h
+  · exact absurd h (by intro h; injection h)
+
+private theorem gridSpace_jsonEquiv {m m' : String} {s s' : Json} {p : Bool} (h : gridSpace m s = .ok p)
+    (he : JsonEquiv s s') : gridSpace m' s' = .ok p := by
+  have : s' = s := by
+    cases s <;> cases s' <;> simp_all [JsonEquiv, jsonForm, gridSpace]
+  subst this
+  unfold gridSpace at h ⊢
+  split at h
+  · exact h
+  · exact h
+  · exact absurd h (by intro h; injection h)
+
+
+private theorem gridLane_jsonEquiv {m m' : String} {x x' : Json} {v : Lane} (h : gridLane m x = .ok v)
+    (he : JsonEquiv x x') : gridLane m' x' = .ok v := by
+  rcases x with _ | _ | _ | _ | ⟨⟨l⟩⟩ | _
+  all_goals try (delta gridLane at h; injection h; done)
+  obtain ⟨⟨l'⟩, rfl, hsz, hel⟩ := arr_of_jsonEquiv he
+  rcases l with _ | ⟨sp, _ | ⟨i, _ | ⟨b, _ | ⟨e, _ | ⟨lv, _ | ⟨y, l⟩⟩⟩⟩⟩⟩
+  all_goals try (delta gridLane at h; injection h; done)
+  rcases l' with _ | ⟨sp', _ | ⟨i', _ | ⟨b', _ | ⟨e', _ | ⟨lv', _ | ⟨y', l'⟩⟩⟩⟩⟩⟩
+  all_goals try simp at hsz
+  have hsp : JsonEquiv sp sp' := hel 0 (by simp) (by simp)
+  have hi : natJ? i = natJ? i' := natJ_jsonEquiv (hel 1 (by simp) (by simp))
+  have hb : intJ? b = intJ? b' := intJ_jsonEquiv (hel 2 (by simp) (by simp))
+  have he' : intJ? e = intJ? e' := intJ_jsonEquiv (hel 3 (by simp) (by simp))
+  have hlv : JsonEquiv lv lv' := hel 4 (by simp) (by simp)
+  rcases lv with _ | _ | _ | _ | ⟨⟨ls⟩⟩ | _
+  all_goals try (delta gridLane at h; injection h; done)
+  obtain ⟨⟨ls'⟩, rfl, hlsz, hlel⟩ := arr_of_jsonEquiv hlv
+  delta gridLane at h ⊢
+  conv at h => lhs; whnf
+  conv => lhs; whnf
+  dsimp only [Array.getLit, List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ] at h ⊢
+  obtain ⟨p, hp, h⟩ := except_bind_ok h
+  rw [gridSpace_jsonEquiv hp hsp]
+  show (match natJ? i', intJ? b', intJ? e' with
+    | some i, some b, some e =>
+      if b < gridLow || e < gridLow then throw m'
+      else do
+        let levels ← (Array.mk ls').mapM (gridLevel m')
+        pure ({ p, i, b, e, lv := levels.toList } : Lane)
+    | _, _, _ => throw m') = _
+  rw [← hi, ← hb, ← he']
+  split at h
+  · rename_i i0 b0 e0 hi0 hb0 he0
+    rw [hi0, hb0, he0]
+    dsimp only
+    split at h
+    · exact absurd h (by intro h; injection h)
+    · rw [ite_f (by assumption)]
+      obtain ⟨levels, hl, h⟩ := except_bind_ok h
+      simp only [Array.mapM_eq_mapM_toList] at hl ⊢
+      cases hll : ls.mapM (gridLevel m) with
+      | error e => rw [hll] at hl; cases hl
+      | ok xs =>
+        rw [hll] at hl
+        rw [list_mapM_transport (fun r r' x hr h => gridLevel_jsonEquiv h hr) ls ls' xs hlsz
+          (fun k h₁ h₂ => hlel k h₁ h₂) hll]
+        cases hl
+        exact h
+  · exact absurd h (by intro h; injection h)
+
+private theorem gridChecks_names {j g j' g' : Json} {run : Nat} {lanes : Array Lane} {leaves : Bool → Nat → Option Nat}
+    {qs : Array Part} (h : gridChecks j g run lanes leaves = .ok qs) : gridChecks j' g' run lanes leaves = .ok qs := by
+  unfold gridChecks at h ⊢
+  split at h
+  · exact absurd h (by intro h; injection h)
+  rw [ite_f (by assumption)]
+  split at h
+  · exact absurd h (by intro h; injection h)
+  rw [ite_f (by assumption)]
+  split at h
+  · exact absurd h (by intro h; injection h)
+  rw [ite_f (by assumption)]
+  exact h
+
+theorem parseGrid_jsonEquiv {j j' g g' : Json} {leaves : Bool → Nat → Option Nat} {qs : Array Part}
+    (h : parseGrid j g leaves = .ok qs) (he : JsonEquiv g g') : parseGrid j' g' leaves = .ok qs := by
+  rcases g with _ | _ | _ | _ | ⟨⟨l⟩⟩ | _
+  all_goals try (delta parseGrid at h; injection h; done)
+  obtain ⟨⟨l'⟩, rfl, hsz, hel⟩ := arr_of_jsonEquiv he
+  rcases l with _ | ⟨run, _ | ⟨ls, _ | ⟨y, l⟩⟩⟩
+  all_goals try (delta parseGrid at h; injection h; done)
+  rcases l' with _ | ⟨run', _ | ⟨ls', _ | ⟨y', l'⟩⟩⟩
+  all_goals try simp at hsz
+  have hr : natJ? run = natJ? run' := natJ_jsonEquiv (hel 0 (by simp) (by simp))
+  have hls : JsonEquiv ls ls' := hel 1 (by simp) (by simp)
+  rcases ls with _ | _ | _ | _ | ⟨⟨ls⟩⟩ | _
+  all_goals try (delta parseGrid at h; injection h; done)
+  obtain ⟨⟨ls'⟩, rfl, hlsz, hlel⟩ := arr_of_jsonEquiv hls
+  delta parseGrid at h ⊢
+  conv at h => lhs; whnf
+  conv => lhs; whnf
+  dsimp only [Array.getLit, List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ] at h ⊢
+  rw [← hr]
+  split at h
+  · rename_i n hn
+    have he0 : (Array.mk ls).isEmpty = (Array.mk ls').isEmpty := by
+      unfold Array.isEmpty; rw [hlsz]
+    rw [← he0]
+    split at h
+    · exact absurd h (by intro h; injection h)
+    rw [ite_f (by assumption)]
+    obtain ⟨lanes, hl, h⟩ := except_bind_ok h
+    simp only [Array.mapM_eq_mapM_toList] at hl ⊢
+    cases hll : ls.mapM (gridLane _) with
+    | error e => rw [hll] at hl; cases hl
+    | ok xs =>
+      rw [hll] at hl
+      rw [list_mapM_transport (fun r r' x hr h => gridLane_jsonEquiv h hr) ls ls' xs (by simpa using hlsz)
+        (fun k h₁ h₂ => hlel k h₁ h₂) hll]
+      cases hl
+      exact gridChecks_names h
+  · exact absurd h (by intro h; injection h)
+
+
 private theorem parse_none {n : Nat} {j : Json} {leaves : Bool → Nat → Option Nat} {args : Nat → Nat → Option Seq}
-    {qs : Array Part} {e1 e2 e3 e4 e5 : String} (h1 : j.getObjVal? "alias" = .error e1)
+    {qs : Array Part} {e1 e2 e3 e4 e5 e6 : String} (h1 : j.getObjVal? "alias" = .error e1)
     (h2 : j.getObjVal? "concat" = .error e2) (h3 : j.getObjVal? "affine" = .error e3)
-    (h4 : j.getObjVal? "strided" = .error e4) (h5 : j.getObjVal? "explicit" = .error e5) :
+    (h4 : j.getObjVal? "strided" = .error e4) (h5 : j.getObjVal? "explicit" = .error e5)
+    (h6 : j.getObjVal? "grid" = .error e6) :
     parsePartsIn (n + 1) j leaves args ≠ .ok qs := by
   intro h
   delta parsePartsIn parsePartsIn._f at h
   cases j with
   | obj kvs =>
     dsimp only at h
-    rw [h1, h2, h3, h4, h5] at h
+    rw [h1, h2, h3, h4, h5, h6] at h
     injection h
   | _ => cases h
+
+private theorem parse_grid {n : Nat} {j g : Json} {leaves : Bool → Nat → Option Nat} {args : Nat → Nat → Option Seq}
+    {e1 e2 e3 e4 e5 : String} (h1 : j.getObjVal? "alias" = .error e1)
+    (h2 : j.getObjVal? "concat" = .error e2) (h3 : j.getObjVal? "affine" = .error e3)
+    (h4 : j.getObjVal? "strided" = .error e4) (h5 : j.getObjVal? "explicit" = .error e5)
+    (h6 : j.getObjVal? "grid" = .ok g) :
+    parsePartsIn (n + 1) j leaves args = parseGrid j g leaves := by
+  delta parsePartsIn parsePartsIn._f
+  cases j with
+  | obj kvs =>
+    dsimp only
+    rw [h1, h2, h3, h4, h5, h6]
+  | _ => cases h6
 
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
@@ -448,7 +600,12 @@ theorem part_jsonEquiv {n m : Nat} {j j' : Json} {leaves : Bool → Nat → Opti
     rw [← spaceOf_jsonEquiv hs, ← withinOf_jsonEquiv hs hi]
     exact hq
   obtain ⟨e5, e5', h5, h5'⟩ | ⟨a, a', h5, h5', hae⟩ := C "explicit"
-  case inl => exact absurd h (parse_none h1 h2 h3 h4 h5)
+  case inl =>
+    obtain ⟨e6, e6', h6, h6'⟩ | ⟨g, g', h6, h6', hge⟩ := C "grid"
+    · exact absurd h (parse_none h1 h2 h3 h4 h5 h6)
+    rw [parse_grid h1 h2 h3 h4 h5 h6] at h
+    rw [parse_grid h1' h2' h3' h4' h5' h6']
+    exact parseGrid_jsonEquiv h hge
   obtain ⟨items, msg, rs, rfl, hrs, rfl⟩ := parse_explicit h h1 h2 h3 h4 h5
   obtain ⟨items', rfl, hsz, hel⟩ := arr_of_jsonEquiv hae
   refine explicit_fwd h1' h2' h3' h4' h5' fun msg' => ?_

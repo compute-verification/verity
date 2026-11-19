@@ -164,7 +164,7 @@ PRO6000 = dict(compute_capability=(12, 0), num_sms=188)
 def test_every_attention_chain_has_its_value_input_twin(target, cap, const_base, value_base):
     """`targets.attention_spec(..., scale_input=True)` is the constant chain's twin with its statics, less `CAP`; the builder's kind for
     the target names the same Definition."""
-    tp = TargetProfile(**target)
+    tp = TargetProfile.default().with_overrides(**target)
     T, NH, KVH, D = 33, 8, 4, 64
     const = TG.attention_spec(tp, T, NH, KVH, D, 1, row=0, own_rows=1, cap=cap)
     value = TG.attention_spec(tp, T, NH, KVH, D, 1, row=0, own_rows=1, cap=cap, scale_input=True)

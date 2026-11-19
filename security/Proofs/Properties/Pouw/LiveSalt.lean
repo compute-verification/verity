@@ -33,7 +33,7 @@ open Lean (Json)
 open Std.Do
 open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj)
 open Spot.Challenger (Audited ChallengerKey LedgerEntry LiveCommitment LiveOpening Roots familiesJson liveReason
-  pinnedChallengePhase challengePhaseNamed)
+  pinnedChallengePhase challengePhaseNamed byFamily)
 open Properties.Pouw.LiveSalt.Ledger (bind_ok of_triple ok_spec throw_spec ledgerShows_of challengePhaseNamed_root)
 
 /-- The epoch's root is the port's: `PouwCheck.epochOpenRoot`. -/
@@ -122,8 +122,8 @@ theorem map_ok {ε α β : Type} {x : Except ε α} {f : α → β} {b : β} :
 
 theorem saltChallengePhase_ok {key ledger pins main window session : Json} {res : Audited × LiveCommitment × Roots}
     (h : PouwVerifier.saltChallengePhase key ledger pins main window session = .ok res) :
-    ∃ ck, ChallengerKey.ofJson key = .ok ck ∧ pinnedChallengePhase ledger window ck pins main = .ok res.1 ∧
-      challengePhaseNamed res.1 ck session = .ok res.2 := by
+    ∃ ck l, ChallengerKey.ofJson key = .ok ck ∧ pinnedChallengePhase ledger window ck pins main = .ok res.1 ∧
+      challengePhaseNamed res.1 ck session = .ok (res.2.1, l) ∧ byFamily res.2.1 l = res.2.2 := by
   unfold PouwVerifier.saltChallengePhase at h
   rw [bind_ok] at h
   obtain ⟨ck, hck, h⟩ := h
@@ -131,8 +131,8 @@ theorem saltChallengePhase_ok {key ledger pins main window session : Json} {res 
   rw [bind_ok] at h
   obtain ⟨a, ha, h⟩ := h
   rw [map_ok] at h
-  obtain ⟨cr, hcr, rfl⟩ := h
-  exact ⟨ck, hck, ha, hcr⟩
+  obtain ⟨⟨c, l⟩, hcr, rfl⟩ := h
+  exact ⟨ck, l, hck, ha, hcr, rfl⟩
 
 theorem field_eq (j : Json) (k : String) : PouwWindow.field? j k = Spot.field? j k := by
   cases j <;> rfl
@@ -249,11 +249,12 @@ theorem accepted_of {key ledger pins main session : Json} {kv : Std.TreeMap.Raw 
       (PouwVerifier.epochOpenRoot (PouwVerifier.weightsRootAt 64 "verity/pouw/weights/v1" us.2) k) res.1.commitment = true) :
     ∃ w k a c o, Accepted key ledger pins main session (Json.obj kv) w k a c o
       (FlockSoundness.Randomness.stream seed [.str "salt"] 32) := by
-  obtain ⟨ck, hck, hpin, hnamed⟩ := saltChallengePhase_ok hsess
+  obtain ⟨ck, l, hck, hpin, hnamed, hfl⟩ := saltChallengePhase_ok hsess
+  rw [← hfl] at hrecv
   rw [sameCommitment_eq hsame] at hcoins
   obtain rfl : lr = none := none_of hlr
   obtain ⟨hpi, hk64⟩ := filter_some hk
-  exact ⟨_, k, res.1, res.2.1, o, ck, op.seq, res.2.2, hck, jsonStrIs_eq hschema,
+  exact ⟨_, k, res.1, res.2.1, o, ck, op.seq, l, hck, jsonStrIs_eq hschema,
     ⟨⟨us.1, us.2, hwork, hcw, rfl⟩, hpi, hk64⟩, hpin, hnamed, ⟨saltEpoch_of hreason hre, beq_iff_eq.1 hrecv⟩,
     ledgerShows_of (hexOf_ne (epochOpenRoot_size _ _)) hpin hfind hfam hres hcomp, carries_names hcarries, hcoins,
     hopen, hlive, by unfold liveSalt; rw [hseed]; rfl, jsonStrIs_eq hsalt⟩

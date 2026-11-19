@@ -1,0 +1,85 @@
+"""The served window's table holds a component of its own only where no scheme declares it (`served_table.UNDECLARED`),
+a table that only shrinks; every other component is its scheme's declaration (`schemes.get`), and a declared
+``depends`` is a requirement a configuration is refused without."""
+from __future__ import annotations
+
+import sys
+
+import pytest
+
+from verity import config as K
+from verity.channel import Refused
+from verity.protocols.compose import schemes
+from verity_cli import run as R
+
+REG = R.registry()
+T = sys.modules["served_table"]
+#: who declares each undeclared row's scheme, and then deletes the row
+OWNERS = {"pouw": "compute-accounting"}
+
+
+def test_the_undeclared_rows_only_shrink() -> None:
+    grown = sorted(set(T.UNDECLARED) - set(OWNERS))
+    assert not grown, (f"served_table.UNDECLARED gained {grown}: a component is a scheme's declaration "
+                       "(verity.protocols.compose.schemes), never a new row here")
+    now = sorted(n for n in T.UNDECLARED if n in schemes.DECLARATIONS)
+    assert not now, "; ".join(f"{n} is declared now: {OWNERS[n]} deletes its row from served_table.UNDECLARED "
+                              "(and from OWNERS here)" for n in now)
+
+
+@pytest.mark.parametrize("name", sorted(set(T.MANIFESTS) - set(OWNERS)))
+def test_a_declared_component_is_its_declaration(name: str) -> None:
+    s, c = schemes.get(name), T.MANIFESTS[name]
+    assert (c.parties, c.channels, c.colocated, c.needs, c.requires, T.ROWS[name]) == (
+        s.parties, s.channels, s.colocated, s.needs, s.depends, s.record)
+
+
+def test_the_bandwidth_audit_without_storage_is_refused_by_name() -> None:
+    """The bandwidth audit runs over storage's store (its declared ``depends``)."""
+    without = [n for n in K.COMPOSITES[T.ONSITE] if n != "pous"]
+    with pytest.raises(Refused, match="bandwidth requires pous, which protocols doesn't list"):
+        K.new(T.SERVED_WINDOW, without, REG.components, REG.workloads, "0" * 40)
+
+
+@pytest.mark.parametrize(("name", "why"), [("nonesuch", "nonesuch is no declared scheme"),
+                                           ("dither", "dither is declared, but served_table.PIECES has no pieces")])
+def test_the_launch_data_refuses_a_name_it_has_no_pieces_for_by_name(name: str, why: str) -> None:
+    cfg = R.load(R.ROOT / "applications" / "onsite_full.toml", REG)
+    cfg["protocols"] = [*cfg["protocols"], name]
+    for read in (lambda: T.pieces(cfg, T.WORKERS), lambda: T.variables(cfg, {}), lambda: T.unbound(cfg, {})):
+        with pytest.raises(Refused, match=why):
+            read()
+
+
+@pytest.mark.parametrize(("given", "name", "detail"), [
+    ({"extra": 1}, "unknown-key", "pous has no setting ['extra']: its settings are ['challenges']"),
+    ({"challenges": 0}, "params", "pous: challenges is a positive integer, not 0"),
+    ({"challenges": "x"}, "params", "pous.challenges is a int, not 'x'")])
+def test_a_declared_schemes_parameters_are_its_settings_refused_by_name(given: dict, name: str, detail: str) -> None:
+    pous = T.MANIFESTS["pous"]
+    assert pous.default_params == schemes.get("pous").settings
+    with pytest.raises(Refused) as e:
+        pous.params({**pous.default_params, **given})
+    assert (e.value.name, e.value.detail) == (name, detail)
+
+
+def test_every_declared_piece_has_an_entry_and_every_entry_a_declared_piece() -> None:
+    declared = {(n, p) for n in T.MANIFESTS for p in T.launches(n)}
+    assert declared == set(T.ENTRIES), (f"declared without an entry: {sorted(declared - set(T.ENTRIES))}; an entry "
+                                        f"without a declared piece: {sorted(set(T.ENTRIES) - declared)}")
+
+
+def test_a_piece_reaches_its_declared_channels_gate_party_and_says_one_only_where_none_joins() -> None:
+    from dataclasses import replace
+
+    from verity.protocol import Channel
+    pous = T.MANIFESTS["pous"]
+    assert T._reaches(pous, T.PROVER, "") == T.MEMORY_ATTESTER
+    with pytest.raises(ValueError, match="by its declared channels, so its piece says no reaches"):
+        T._reaches(pous, T.PROVER, T.MEMORY_ATTESTER)
+    spot = T.MANIFESTS["sampled-proofs"]
+    assert T._reaches(spot, T.WORKERS, "") == "" and T.PIECES["sampled-proofs"][T.WORKERS].reaches == T.CHALLENGER
+    joined = replace(spot, channels=(*spot.channels, Channel(T.CHALLENGER, T.WORKERS, ("Sample",))))
+    with pytest.raises(ValueError, match="so its piece says no reaches"):
+        T._reaches(joined, T.WORKERS, T.CHALLENGER)
+    assert T.PIECES["bandwidth"][T.PROVER].follows == "pous" and not T.PIECES["network-attester"][T.WORKERS].follows

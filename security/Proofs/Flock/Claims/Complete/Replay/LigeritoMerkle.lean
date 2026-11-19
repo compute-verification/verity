@@ -386,8 +386,8 @@ theorem merkle_open {ops : MerkleOps V} {ms : MerkleScheme} {lv : Level} {cm : C
 /-- **The prover's step `y` from round `k` to round `k'`**: every run from round `k` with `L + k` bodies sent ends at
 round `k'` with `L + k'` bodies sent, and returns a value with `Q`. -/
 def KRuns (L : ℕ) {β : Type} (y : LP PS β) (k k' : ℕ) (Q : β → Prop) : Prop :=
-  ∀ (st : LigState) (t : Transcript) (l : Array Claims.Msg) (b : β) (st' : LigState) (t' : Transcript)
-    (l' : Array Claims.Msg), t.k = k → l.size = L + k → ((y.run st).run t).go l = (.ok ((b, st'), t'), l') →
+  ∀ (st : LigState) (t : Transcript) (l : Array Hash.Msg) (b : β) (st' : LigState) (t' : Transcript)
+    (l' : Array Hash.Msg), t.k = k → l.size = L + k → ((y.run st).run t).go l = (.ok ((b, st'), t'), l') →
     t'.k = k' ∧ l'.size = L + k' ∧ Q b
 
 theorem KRuns.bind {L : ℕ} {α β : Type} {x : LP PS α} {f : α → LP PS β} {k₁ k₂ k₃ : ℕ} {Qa : α → Prop}
@@ -452,21 +452,21 @@ theorem KRuns.pow {L : ℕ} (nonce : ℕ → ℕ → UInt64) (kind : ℕ) (k : �
   · exact ⟨(), { st with cn := st.cn.push 0 }, pN 0, rfl, trivial⟩
   · exact ⟨(), { st with cbn := st.cbn.push 0 }, pN 0, rfl, trivial⟩
 
-theorem KRuns.sampleVec {L : ℕ} (resp : ℕ → Claims.Msg) {n : ℕ} (hn : n ≠ 0) (k : ℕ) :
+theorem KRuns.sampleVec {L : ℕ} (resp : ℕ → Hash.Msg) {n : ℕ} (hn : n ≠ 0) (k : ℕ) :
     KRuns L (liftT (sampleVecP (asksS resp) n)) k (k + 1) fun v => v = (Array.range n).map (coinOf (resp (L + k))) := by
   intro st t l b st' t' l' hk hl h
   rw [liftT_go (sampleVecP_go resp hn t l) st] at h
   obtain ⟨rfl, rfl, rfl, rfl⟩ := ok_inj h
   exact ⟨by simp [hk], by rw [Array.size_push, hl, Nat.add_assoc], by rw [hl]⟩
 
-theorem KRuns.sample {L : ℕ} (resp : ℕ → Claims.Msg) (k : ℕ) :
+theorem KRuns.sample {L : ℕ} (resp : ℕ → Hash.Msg) (k : ℕ) :
     KRuns L (liftT (sampleP (asksS resp))) k (k + 1) fun _ => True := by
   intro st t l b st' t' l' hk hl h
   rw [liftT_go (sampleP_go resp t l) st] at h
   obtain ⟨rfl, rfl, rfl, rfl⟩ := ok_inj h
   exact ⟨by simp [hk], by rw [Array.size_push, hl, Nat.add_assoc], trivial⟩
 
-theorem KRuns.sampleK {L : ℕ} (resp : ℕ → Claims.Msg) (k : ℕ) :
+theorem KRuns.sampleK {L : ℕ} (resp : ℕ → Hash.Msg) (k : ℕ) :
     KRuns L (liftT (sampleKP (asksS resp))) k (k + 1) fun _ => True := by
   intro st t l b st' t' l' hk hl h
   rw [liftT_go (sampleKP_go resp t l) st] at h
@@ -517,7 +517,7 @@ theorem KRuns.loop {L : ℕ} {σ : Type} (body : ℕ → σ → LP PS (ForInStep
     obtain ⟨s₁, rfl, hI⟩ := hr
     exact ih (a + 1) s₁ (by omega) hI
 
-theorem KRuns.challenge {L : ℕ} (resp : ℕ → Claims.Msg) (split : Bool) (k : ℕ) :
+theorem KRuns.challenge {L : ℕ} (resp : ℕ → Hash.Msg) (split : Bool) (k : ℕ) :
     KRuns L (challengeP (asksS resp) split) k (k + 1) fun _ => True := by
   unfold challengeP
   refine (KRuns.sampleK resp k).bind fun r _ => (KRuns.modify _ _).bind fun _ _ => ?_
@@ -537,7 +537,7 @@ theorem KRuns.oodPush {L : ℕ} {β : Type} (y : F128) {c : PUnit → LP PS β} 
     ok_inj (show (Except.ok (((), { st with oods := st.oods.push y }), ap (pF y) t), l) = _ from h3)
   exact h _ _ _ b st' t' l' (by rw [ap_k]; exact hk) hl h4
 
-theorem KRuns.oodIntro {L : ℕ} (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) {dim : ℕ}
+theorem KRuns.oodIntro {L : ℕ} (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) {dim : ℕ}
     (hdim : dim ≠ 0) (k : ℕ) : KRuns L (oodIntroP (asksS resp) nonce g dim) k (k + 2) fun _ => True := by
   unfold oodIntroP
   refine (KRuns.sampleVec resp hdim k).bind fun z _ => KRuns.oodPush (mleF g z) ?_
@@ -545,7 +545,7 @@ theorem KRuns.oodIntro {L : ℕ} (resp : ℕ → Claims.Msg) (nonce : ℕ → �
     (KRuns.sample resp _).bind fun _ _ => KRuns.cast (KRuns.modify _ _) rfl (by omega)
 
 /-- **A level's query** opens the commitment at the positions of its first round's coins. -/
-theorem KRuns.query {L : ℕ} (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level)
+theorem KRuns.query {L : ℕ} (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level)
     (cm : Commit) (hq : lv.q ≠ 0) (k : ℕ) :
     KRuns L (queryP (asksS resp) nonce ms lv cm) k (k + 2)
       fun r => r.1 = openP ms cm lv (positions lv ((Array.range lv.q).map (coinOf (resp (L + k))))) := by
@@ -554,7 +554,7 @@ theorem KRuns.query {L : ℕ} (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ �
   refine (KRuns.pow nonce 1 _).bind fun _ _ => (KRuns.sampleVec resp (Nat.succ_ne_zero _) _).bind fun _ _ => ?_
   exact KRuns.pure (by rw [hc]) rfl
 
-theorem levelChalsK {L : ℕ} (resp : ℕ → Claims.Msg) (last : Bool) (k : ℕ) :
+theorem levelChalsK {L : ℕ} (resp : ℕ → Hash.Msg) (last : Bool) (k : ℕ) :
     KRuns L (forIn [:4] (#[] : Array F256) fun i (f : Array F256) =>
         if (i + 1 == 4) = true then do
           let r ← liftT (sampleKP (asksS resp))
@@ -584,7 +584,7 @@ theorem KRuns.absorbAll {L : ℕ} (ws : Array F128) (k : ℕ) :
     KRuns L (ForIn.forIn ws PUnit.unit fun w (_ : PUnit) => do
         liftT (liftTM (Transcript.absorbF w))
         Pure.pure (ForInStep.yield PUnit.unit)) k k fun _ => True := by
-  have key : ∀ (xs : List F128) (st : LigState) (t : Transcript) (l : Array Claims.Msg),
+  have key : ∀ (xs : List F128) (st : LigState) (t : Transcript) (l : Array Hash.Msg),
       (((ForIn.forIn xs PUnit.unit fun w (_ : PUnit) => do
         liftT (liftTM (Transcript.absorbF w))
         Pure.pure (ForInStep.yield PUnit.unit) : LP PS PUnit).run st).run t).go l =
@@ -634,11 +634,11 @@ def LoopOk (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (cf : ℕ → �
 
 /-- **The honest prover's Ligerito opens honestly**: run from round `k` with `L + k` bodies sent, it opens level `j`'s
 commitment at the positions of round `k + qOff sch j`'s coins, the replies' coins (`cfOf resp L`). -/
-theorem ligeritoP_opens (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
+theorem ligeritoP_opens (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (tb b : Array F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (L : ℕ)
     (hn : sch.n ≠ 0) (hL : 2 ≤ sch.levels.size) (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0)
-    {t : Transcript} {l : Array Claims.Msg} (hl : l.size = L + t.k) {P : LigeritoProof} {t' : Transcript}
-    {l' : Array Claims.Msg}
+    {t : Transcript} {l : Array Hash.Msg} (hl : l.size = L + t.k) {P : LigeritoProof} {t' : Transcript}
+    {l' : Array Hash.Msg}
     (hrun : ((ligeritoP (asksS resp) (Hashes.ofSha512 h) ms sch T cm0 tb b salt nonce).run t).go l =
       (.ok (P, t'), l')) :
     Opens (Hashes.ofSha512 h : Hashes V) ms sch cm0 P (cfOf resp L) t.k := by

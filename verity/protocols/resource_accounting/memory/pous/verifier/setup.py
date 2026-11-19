@@ -3,15 +3,19 @@
 1. the server commits to `W` (`commit`) before any salt exists;
 2. the verifier samples the salt after the commitment (`sample_salt`, from its own secret or a later beacon round);
 3. the server encodes, `C* = Enc(W, salt)`, and sends it segment by segment.  The verifier builds `vk` one of two ways:
-   - **public encoder** (the default, POUS `docs/public-encoder/protocol.md`, milestone 1): it decodes each segment of
-     `C*`, streams `Dec(C*)` into `commit`'s framing, accepts iff the digest equals the commitment, and builds `vk`
-     from the labels it decoded (`verifier_key_from_encoding`).  It never runs the encoder and never holds `W`;
-   - **private encoder** (`public_encoder=False`): it encodes `W` itself and builds `vk` from its own encoding
-     (`verifier_key`); comparing roots (`check_server_root`) catches a wrong server encoding at setup.
+   - **public encoder** (every served path, POUS `docs/public-encoder/protocol.md`, milestone 1): it decodes each
+     segment of `C*`, streams `Dec(C*)` into `commit`'s framing, accepts iff the digest equals the commitment, and builds
+     `vk` from the labels it decoded (`verifier_key_from_encoding`).  It never runs the encoder and never holds `W`;
+   - **private encoder** (`verifier_key`): it encodes `W` itself and builds `vk` from its own encoding.
 
-`verifier_setup` picks between them.  The encoder is deterministic and public given `W`, the salt and the primitives,
-so the server running it changes nothing in the timed game; a server-chosen or predictable salt would break the
-model's "`W` before coins" order.  Everything here works one segment at a time.
+On a served run setup is checked by the developer, not the auditor (`challenger_session.SETUP`): the developer's tie on
+the prover's case (`period.tie`, and `PousCheck.RunProtocol.tie` with `SetupProtocol.check`, in the prover's piece on the
+developer's node) decodes the case's `C*` and holds `vk.root` to the root the run published, and no auditor-side entry
+compares that root with anything.  The signed run takes setup's acceptance as the open premise `period.SETUP_ACCEPTED`.
+
+The encoder is deterministic and public given `W`, the salt and the primitives, so the server running it changes nothing
+in the timed game; a server-chosen or predictable salt would break the model's "`W` before coins" order.  Everything
+here works one segment at a time.
 """
 
 from __future__ import annotations
@@ -90,27 +94,3 @@ def verifier_key_from_encoding(params: Geometry, prims, commitment: bytes, salt:
     if h.digest() != commitment:
         raise ValueError("Dec(C*) does not match the commitment to W")
     return VerifierKey.from_leaves(params, salt, leaves)
-
-
-PUBLIC_ENCODER = True
-"""The default setup: the verifier decodes the server's `C*` (milestone 1).  `False` restores the private-encoder path,
-in which the verifier encodes `W` itself."""
-
-
-def verifier_setup(params: Geometry, prims, commitment: bytes, salt: bytes, *,
-                   encoded: Iterable[Sequence[bytes]] | None = None, w: bytes | Sequence[bytes] | None = None,
-                   public_encoder: bool | None = None, codec: Codec | None = None) -> VerifierKey:
-    """Setup step 3 on the verifier's side: `verifier_key_from_encoding` of the server's `encoded` segments, or with
-    `public_encoder=False` (or `PUBLIC_ENCODER = False`) `verifier_key` of `w`, which the verifier then encodes."""
-    public = PUBLIC_ENCODER if public_encoder is None else public_encoder
-    if public:
-        if encoded is None:
-            raise ValueError("the public-encoder path needs the server's C*")
-        return verifier_key_from_encoding(params, prims, commitment, salt, encoded, codec)
-    if w is None:
-        raise ValueError("the private-encoder path needs W")
-    return verifier_key(params, prims, w, commitment, salt, codec=codec)
-
-
-def check_server_root(vk: VerifierKey, root: bytes) -> bool:
-    return root == vk.root

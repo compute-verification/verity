@@ -238,7 +238,7 @@ abbrev Finders (Mc : Machine) (S : Service) (R : ℕ) : Type 1 :=
 /-- **An adversary's finder term at one value of its coins, at the budget `q`**: the `ecr/sha-512` bounds of its
 finders for every round (`Claims.ecrBound` at the hash `sha` and the budget), summed: `R · q / 2^256` where every
 finder meets the assumption within `q` calls in expectation, `⊤` otherwise. -/
-noncomputable def finderTerm {Mc : Machine} {S : Service} {R : ℕ} (sha : Claims.Msg → Claims.Msg)
+noncomputable def finderTerm {Mc : Machine} {S : Service} {R : ℕ} (sha : Hash.Msg → Hash.Msg)
     (fd : Finders Mc S R) (q : ℝ) (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)) (r : Ω) :
     ENNReal :=
   ∑ w, Claims.ecrBound sha (fd Ω M r w) q
@@ -255,7 +255,7 @@ reruns of `M` per unit of `M`'s time, and the calls they make besides). `M`'s ti
 (`Machine.time`), which `M` can't set low, and the finders' declared costs only have to fit under the budgets. Where
 every finder fits and meets `ecr/sha-512`, the error is
 `ε + R (δb + δz) + R (βb (cb · time M + db) + βz (cz · time M + dz)) / 2^256`, capped at 1. -/
-noncomputable def breakBound {Mc : Machine} {S : Service} {R : ℕ} (sha : Claims.Msg → Claims.Msg)
+noncomputable def breakBound {Mc : Machine} {S : Service} {R : ℕ} (sha : Hash.Msg → Hash.Msg)
     (fb fz : Finders Mc S R) (cb db cz dz : ℝ) (ε δb βb δz βz : ℝ) (Ω : Type) [Fintype Ω]
     (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)) : ENNReal :=
   ∑ r : Ω, (Fintype.card Ω : ENNReal)⁻¹ *

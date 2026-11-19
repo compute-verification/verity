@@ -273,4 +273,4 @@ def test_the_default_target_derives_on_words():
     assert TargetProfile.from_json(on_bits.to_json()) == on_bits
     for bad in ("word", "bits", ""):
         with pytest.raises(ValueError, match="ir must be None"):
-            TargetProfile(ir=bad)
+            TargetProfile.default().with_overrides(ir=bad)

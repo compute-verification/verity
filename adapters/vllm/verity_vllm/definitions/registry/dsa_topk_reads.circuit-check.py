@@ -44,9 +44,11 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("DsaPositionsChunk_v1", lambda: bind(R.DsaPositionsChunk, K=4, W=2)),
         ("DsaPositionsChunk_v1-odd", lambda: bind(R.DsaPositionsChunk, K=5, W=2)),
         ("DsaPositionsChunk_v1-served", lambda: bind(R.DsaPositionsChunk, K=2048, W=R.CHUNK)),
-        ("DsaPositionsSlot_v1", lambda: bind(R.DsaPositionsSlot, K=4, N=20)),
-        ("DsaPositionsSlot_v1-odd", lambda: bind(R.DsaPositionsSlot, K=5, N=12)),
-        ("DsaPositionsSlot_v1-served", lambda: bind(R.DsaPositionsSlot, K=R.CHUNK, N=131072)),
+        ("DsaPositionsSlotBits_v1", lambda: bind(R.DsaPositionsSlotBits, K=4, N=20)),
+        ("DsaPositionsSlotBits_v1-served", lambda: bind(R.DsaPositionsSlotBits, K=R.CHUNK, N=131072)),
+        ("DsaPositionsSlot_v2", lambda: bind(R.DsaPositionsSlot, K=4, N=20)),
+        ("DsaPositionsSlot_v2-odd", lambda: bind(R.DsaPositionsSlot, K=5, N=12)),
+        ("DsaPositionsSlot_v2-served", lambda: bind(R.DsaPositionsSlot, K=R.CHUNK, N=131072)),
         ("DsaTopKReadRows_v1", lambda: bind(R.DsaTopKReadRows, N=12, TOPK=2, BLOCK=4, READ=read(16, 1))),
     ]
 

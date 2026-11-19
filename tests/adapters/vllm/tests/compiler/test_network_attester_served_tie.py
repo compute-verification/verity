@@ -24,19 +24,19 @@ from verity.commitments.rowleaf import (
     row_leaf,
     sha512_row_v2_digest,
 )
-from verity.protocols.resource_accounting.network.verifier import io_tie as IT
+from verity.circuits.boolean import benes as BN
 
 from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import served_rows as SR
 from verity_vllm.compiler import served_tie as ST
 
-FIXTURE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "fixtures" / "compile_slice_smallkv.json"
+FIXTURE = Path(__file__).parent / "fixtures" / "compile_slice_smallkv.json"
 COUNT, POS = 1 << ST.FLAGS.index("count"), 1 << ST.FLAGS.index("pos")
 
 
 def _book() -> dict:
     """The registered book the compile slice's charge reads (as `test_network_attester_compile_slice.book`)."""
-    streams = json.loads((FIXTURE.parent / "arith_encode_vectors.json").read_text())["streams"]
+    streams = json.loads((Path(__file__).parents[4] / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "fixtures" / "arith_encode_vectors.json").read_text())["streams"]
     return next(s for s in streams if s["source"].startswith("async-light"))["decisions"]["book"]
 
 
@@ -191,7 +191,7 @@ def test_a_run_start_routed_away_is_refused(x):
     T, Z = x.T, ST.widths(x.T)
     f = ST._fields(T, _srv(x, x.rows)[6 * Z.SB:7 * Z.SB])
     for perm in ([1, 0] + list(range(2, Z.M)), [0, 30] + [i for i in range(1, Z.M) if i != 30]):
-        moved = replace(x.honest, rows={**x.honest.rows, "sw_6": IT.benes(perm) + [0] * (len(x.honest.rows["sw_6"]) - Z.SW)})
+        moved = replace(x.honest, rows={**x.honest.rows, "sw_6": BN.benes(perm) + [0] * (len(x.honest.rows["sw_6"]) - Z.SW)})
         assert ST.reference(T, moved.rows) == {"count": True, "pos": False}
         assert ST.evaluate(x.st, [moved]) == [COUNT]
     assert ST.route(T, f, 30) == x.honest.rows["sw_6"][:Z.SW]

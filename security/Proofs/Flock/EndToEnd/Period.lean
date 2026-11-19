@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.EndToEnd.Period.Statement
 public import Proofs.Flock.EndToEnd.Period.Union
 public import Proofs.Flock.EndToEndHidden
-public import Proofs.Flock.Soundness.Audit.Pooled
+public import Proofs.Spot.Sampling.Pooled
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -18,7 +18,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Flock.Soundness.Audit.SamplingDesign
+import Proofs.Spot.Sampling.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -32,7 +32,7 @@ import Proofs.Flock.Soundness.Game
   `monitoringPeriod_union` over `Flock.SecurityProofs.EndToEndHiddenSampled` (`SamplingBlock.accepted_drawnIncorrect_le`), or every
   sampling block's sample misses its incorrect proof blocks with at least `M` of them in all, at most `(1 − q)^M` by
   `monitoringPeriod_horizon`: sampling block `w`'s sample misses its `|W|` incorrect proof blocks with probability at most
-  `C(n − |W|, kd)/C(n, kd) ≤ (1 − kd/n)^{|W|}` under A3 (`SamplingBlock.sampleMiss_le`; `SamplingDesign.execOS_subset_escape_le`,
+  `C(n − |W|, kd)/C(n, kd) ≤ (1 − kd/n)^{|W|}` under A3 (`SamplingBlock.sampleMiss_le`; `SamplingDesign.execOS_subset_missProb_le`,
   `SamplingDesign.choose_div_le_one_sub_pow`). At `M = ⌈ln(1/δ)/q⌉`, `(1 − q)^M ≤ e^{−qM} ≤ δ`.
 -/
 
@@ -58,7 +58,7 @@ end Flock.SecurityProofs
 
 namespace Flock.Guarantees.SamplingBlock
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
 open scoped ENNReal
@@ -122,8 +122,8 @@ theorem sampleMiss_le (hA3 : FlockSoundness.Assumptions.UniformRandomBytes w.Lb 
     (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ ≤ (1 - (w.kd : ℝ≥0∞) / w.n) ^ B.card := by
   rw [prob_sampleMiss]
-  refine (SamplingDesign.execOS_subset_escape_le w.n w.kd w.hkd w.Lb w.src hA3 B).trans ?_
-  rw [SamplingDesign.subset_escape]
+  refine (SamplingDesign.execOS_subset_missProb_le w.n w.kd w.hkd w.Lb w.src hA3 B).trans ?_
+  rw [Verity.SamplingDesign.subset_missProb]
   exact SamplingDesign.choose_div_le_one_sub_pow w.hkd (by simpa using B.card_le_univ)
 
 

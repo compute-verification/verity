@@ -2,16 +2,19 @@
 # A new target's SASS-gate pin, on a card of that target, in a `--cwd clone` run (it rewrites sass_pins.json):
 #
 #   research run --on MACHINE --project verity --source . --cwd clone --env GPU_LEASE_WHO=<you> \
-#       -- bash benchmarks/pouw/harness/jobs/pin_target.sh 13.0.1-sm_90a /usr/local/cuda-13.0
+#       -- bash benchmarks/pouw/harness/jobs/pin_target.sh 13.0.1-sm_90a
 #
-# Builds ieee_pin.cu's pinned builds for TOOLKIT's target (ieee_pin.arch_of) with CUDA_HOME's nvcc, pins them as TOOLKIT
+# Builds ieee_pin.cu's pinned builds for TOOLKIT's target (ieee_pin.arch_of) with the nvcc of CUDA_HOME, else of the
+# machine's toolkit of TOOLKIT's version (benchmarks/kernels/machine.py toolkit 13.0), pins them as TOOLKIT
 # (sass_gate.py --pin --toolkit), then runs ieee_pin.py on that entry alone, which gates the builds and the controls and runs
 # them on one leased GPU. Leaves the repinned sass_pins.json and ieee-pin.json in $OUT; the entry lands with this run as
 # its ``numeric``, and exempts nothing before.
 set -euo pipefail
-TK=$1; CUDA=$2
+TK=$1
 H=$(cd "$(dirname "$0")/.." && pwd)
 ROOT=$(cd "$(dirname "$0")/../../../.." && pwd)
+V=${TK%%-*}
+CUDA=$(python3 "$ROOT/benchmarks/kernels/machine.py" toolkit "${V%.*}")
 W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
 python3 - "$H" "$TK" > "$W/builds" <<'EOF'
 import sys
@@ -24,6 +27,6 @@ while read -r i args; do
   # shellcheck disable=SC2086
   (cd "$W" && "$CUDA/bin/nvcc" $args "$ROOT/verity/protocols/resource_accounting/compute/pouw/prover/ieee_pin.cu" -o "$W/pin$i")
 done < "$W/builds"
-POUW_CUDA_BIN="$CUDA/bin" python3 "$ROOT/verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py" "$W"/pin? --pin --toolkit "$TK"
+python3 "$ROOT/verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py" --cuda-bin "$CUDA/bin" "$W"/pin? --pin --toolkit "$TK"
 cp "$ROOT/verity/protocols/resource_accounting/compute/pouw/prover/sass_pins.json" "$OUT/sass_pins.json"
 python3 "$H/ieee_pin.py" --toolkit "$TK=$CUDA" --out "$OUT/ieee-pin.json"

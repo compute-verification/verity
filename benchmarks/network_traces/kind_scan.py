@@ -79,9 +79,9 @@ def under(prefix: str, table: Mapping[str, Any]) -> dict[str, Any]:
 
 #: a Program's descriptor (``verity-ir/descriptor/v1``): the circuit, every field of it structure
 DESCRIPTOR = {"**": S}
-#: a registered value's entry (`registered.Registered.entry`)
+#: a registered value's entry (`registered_value.Registered.entry`)
 ENTRY = {"value": S, "root": M, "leaves": S, "words": S, "word_bits": S, "domain": S}
-#: a one-stage registration (`one_stage.docket.record`): the digests and population of the Program and query, the
+#: a one-stage registration (`prover.docket.record`): the digests and population of the Program and query, the
 #: verifier's sampling design over them, the roots and registered values hiding commitments under domains of
 #: their structure; its window the provenance of a committed window: its run root, circuit record, class, per-window
 #: values, registered roots and index leaf. The window's own number is none of them, the advice's binding
@@ -137,7 +137,7 @@ STEP = {"verdict": O, "in_the_clear": S, "eps_at_delta": O,
         "eps_at_delta.incorrect_at_delta.*": O}
 #: the chain's report less what `attester_piece.PUBLIC` drops: its verdict, each `STEPS` step's and what the path stubs
 REPORT = {
-    "schema": S, "verdict": O, "path": S, "scope": S, "stubbed[]": S, "negatives_refused.*": O,
+    "schema": S, "verdict": O, "path": S, "scope": S, "stubbed[]": S, "negatives_refused.*": O, "tied_form": O,
     **{k: v for s in STEPS for k, v in under(f"steps.{s}", STEP).items()},
     "steps.endpoint.**": ENDPOINT,
 }

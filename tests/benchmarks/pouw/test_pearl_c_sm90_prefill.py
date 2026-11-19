@@ -97,17 +97,18 @@ def test_both_chains_write_pearl_c_h3s_bytes_and_the_no_write_control_fails(host
     m = R.cdiv(mr, R.BM_D) * R.BM_D
     rng = np.random.default_rng(mr)
     a_rows = [rng.integers(0, 256, 4 * k, dtype=np.uint8).tobytes() for _ in range(mr)]
-    salt, salt_key, root_b = bytes(range(32)), bytes(range(100, 132)), hashlib.sha512(b"root_b").digest()
+    salt, root_b = bytes(range(32)), hashlib.sha512(b"root_b").digest()
     dom_a = rows_domain(activation_binding(salt, idx), idx, mr, audit.HM96)
-    keys = {"salt_key": salt_key, "hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
+    keys = {"hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
             "dom_a": dom_a.domain_id}
     sizes = R.Pipeline.sizes(m, n, k, mr)
     bufs = {x: host.alloc(sizes[x]) for x in (*R.CHAIN_OUTPUTS, "segdig_a")}
+    salts = HD.salts_into(host, bufs, {"salts_a": sizes["salts_a"]})
     keys = {name: host.put(v) for name, v in keys.items()}
     xa = host.put(b"".join(a_rows) + bytes(4 * k * (m - mr)))
 
     digests = [C.row_digest(r) for r in a_rows]
-    tree_a = HD.levels(dom_a, a_rows, ROW_SCHEMA, salt_key, idx)
+    tree_a = HD.levels(dom_a, a_rows, ROW_SCHEMA, salts["a"])
     seeds = [C.row_seed(salt, d, root_b, idx, r, "h3") for r, d in enumerate(digests)]
     seed_a = C.unit_seed_a(salt, tree_a[-64:], root_b, idx, "h3")
     want = {"rowdig_a": b"".join(digests), "tree_a": tree_a, "seed_a": bytes(seed_a), "line_a": C.line_key(seed_a),
@@ -155,12 +156,13 @@ def test_a_split_commitment_writes_the_unsplit_steps_bytes_under_each_chain(host
     split, fillers = form != "serial", form != "split-nofill"
     rng = np.random.default_rng(1000 + mr)
     a_rows = [rng.integers(0, 256, 4 * k, dtype=np.uint8).tobytes() for _ in range(mr)]
-    salt, salt_key, root_b = bytes(range(32)), bytes(range(100, 132)), hashlib.sha512(b"root_b").digest()
+    salt, root_b = bytes(range(32)), hashlib.sha512(b"root_b").digest()
     dom_a = rows_domain(activation_binding(salt, idx), idx, mr, audit.HM96)
-    keys = {"salt_key": salt_key, "hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
+    keys = {"hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
             "dom_a": dom_a.domain_id, "dom_b": bytes(64), "dom_t": bytes(64), "line_b": bytes(32)}
     sizes, outs = R.Pipeline.sizes(m, n, k, mr), (*R.CHAIN_OUTPUTS, "ea_codes")
     bufs = {name: host.alloc(size) for name, size in sizes.items()}
+    salts = HD.salts_into(host, bufs, sizes)
     keys = {name: host.put(v) for name, v in keys.items()}
     xa = host.put(b"".join(a_rows) + bytes(4 * k * (m - mr)))
     pipe = R.Pipeline(host, m, n, k, "h100", keys, xa, 0, bufs=bufs, m_real=mr, chain=chain, split_a=split, fillers=fillers)
@@ -177,7 +179,7 @@ def test_a_split_commitment_writes_the_unsplit_steps_bytes_under_each_chain(host
         names = ("pad_a",) * ("pad_a" in by) + tuple(commit) + ("lines_ea",)
 
     digests = [C.row_digest(r) for r in a_rows]
-    tree_a = HD.levels(dom_a, a_rows, ROW_SCHEMA, salt_key, idx)
+    tree_a = HD.levels(dom_a, a_rows, ROW_SCHEMA, salts["a"])
     seeds = [C.row_seed(salt, d, root_b, idx, r, "h3") for r, d in enumerate(digests)]
     seed_a = C.unit_seed_a(salt, tree_a[-64:], root_b, idx, "h3")
     want = {"rowdig_a": b"".join(digests), "tree_a": tree_a, "seed_a": bytes(seed_a), "line_a": C.line_key(seed_a),

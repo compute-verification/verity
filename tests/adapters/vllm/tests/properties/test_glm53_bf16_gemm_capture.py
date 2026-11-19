@@ -608,12 +608,13 @@ def test_the_cublas_version_is_read_from_the_library_torch_mapped(tmp_path, monk
                     f"7f06-7f07 rw-p 00000000 00:00 0\n")
     assert X.loaded_cublas(str(maps)) == [torch_lib] and X.loaded_cublas(str(tmp_path / "absent")) == []
     opened: list[str] = []
-    monkeypatch.setattr(X.ctypes.util, "find_library", lambda name: "/usr/local/cuda/lib/libcublas.so.13")
+    system_lib = str(tmp_path / "toolkit/lib/libcublas.so.13")
+    monkeypatch.setattr(X.ctypes.util, "find_library", lambda name: system_lib)
     monkeypatch.setattr(X, "_load_library", lambda p: opened.append(p))
     assert X.cublas_version(str(maps)) is None and opened == [torch_lib]
     opened.clear()
     X.cublas_version(str(tmp_path / "absent"))
-    assert opened[0] == "/usr/local/cuda/lib/libcublas.so.13"
+    assert opened[0] == system_lib
 
 
 def test_the_programs_bind_at_every_models_shapes() -> None:

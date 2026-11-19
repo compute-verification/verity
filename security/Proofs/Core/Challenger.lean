@@ -19,6 +19,11 @@ blocks, a uniform coin's sample misses it with probability the sampling design's
 Its witnesses: `SampleAfterRecorded_honest`, a log that releases coins around a recorded commitment and meets every
 premise, where the bound holds; and `SampleAfterRecorded_nontrivial`, at a log that flips before it records and meets the
 other two premises (`SampleAfterRecorded_nontrivial_log`), where the bound fails.
+
+The log's order: what is recorded before coin `i` (`Log.recordedBefore_congr`) and a value derived from the log's
+prefix before it (`DerivedBefore.congr`) are fixed before coin `i`, by `FlipsAfterRecorded`; the set
+`SampleAfterRecorded` samples against is such a value (`derivedBefore_before`). A value derived before coin 0 is one
+value on every run (`DerivedBefore.const`), and roots recorded in order join in order (`Log.JoinsAt.mono`).
 -/
 
 @[expose] public section
@@ -53,10 +58,11 @@ namespace Challenger
 
 open Verity.Assumptions
 
-/-- A coin the verifier reads from a challenger's log at index `i` is the challenger's flip `i`. -/
-theorem coin_of_log {R C : Type} {n : Nat} {log : (Fin n → C) → Log R C} {vc : (Fin n → C) → List C}
-    (hlog : ChallengerLogsCoins log) (hread : VerifierReadsLog vc log) {ω : Fin n → C} {i : Nat} {c : C}
-    (hc : (vc ω)[i]? = some c) : ∃ h : i < n, ω ⟨i, h⟩ = c := by
+/-- A coin the verifier reads from a challenger's log at index `i` is the challenger's flip `i`, as the log shows it. -/
+theorem coin_of_log {R T : Type} {n : Nat} {C : Fin n → Type} {tag : (i : Fin n) → C i → T}
+    {log : ((i : Fin n) → C i) → Log R T} {vc : ((i : Fin n) → C i) → List T}
+    (hlog : ChallengerLogsCoins tag log) (hread : VerifierReadsLog vc log) {ω : (i : Fin n) → C i} {i : Nat} {c : T}
+    (hc : (vc ω)[i]? = some c) : ∃ h : i < n, tag ⟨i, h⟩ (ω ⟨i, h⟩) = c := by
   rw [hread ω, List.prefix_iff_eq_take.mp (hlog ω), List.getElem?_take, List.getElem?_ofFn] at hc
   split_ifs at hc with h1 h2
   exact ⟨h2, Option.some_injective _ hc⟩
@@ -77,10 +83,12 @@ theorem before_map_released (l : List C) (i : Nat) :
   | cons c l ih => cases i <;> simp [before, ih]
 
 /-- **A challenger that releases its flips in order, with nothing else in its log, meets both of its premises**, so
-they are not contradictory. -/
-theorem released_in_order {n : Nat} :
-    ChallengerLogsCoins (fun ω : Fin n → C => (List.ofFn ω).map (Entry.released (R := R))) ∧
-      FlipsAfterRecorded (fun ω : Fin n → C => (List.ofFn ω).map (Entry.released (R := R))) := by
+they are not contradictory, whatever the coins' types and however the log shows them. -/
+theorem released_in_order {n : Nat} {T : Fin n → Type} (tag : (i : Fin n) → T i → C) :
+    ChallengerLogsCoins tag
+        (fun ω : (i : Fin n) → T i => (List.ofFn fun i => tag i (ω i)).map (Entry.released (R := R))) ∧
+      FlipsAfterRecorded
+        (fun ω : (i : Fin n) → T i => (List.ofFn fun i => tag i (ω i)).map (Entry.released (R := R))) := by
   refine ⟨fun ω => by rw [coins_map_released], fun i ω ω' h => ?_⟩
   simp only [before_map_released]
   congr 1
@@ -88,7 +96,44 @@ theorem released_in_order {n : Nat} :
   simp only [List.getElem?_take, List.getElem?_ofFn]
   split_ifs with h1 h2 <;> first | rfl | simp [h ⟨j, h2⟩ h1]
 
+/-- **What the log records before coin `i` is fixed before coin `i`**: under `FlipsAfterRecorded`, two runs whose
+flips agree before `i` record the same commitments before it. -/
+theorem recordedBefore_congr {n : Nat} {T : Fin n → Type} {log : ((i : Fin n) → T i) → Log R C}
+    (hflip : FlipsAfterRecorded log) {i : Nat} {ω ω' : (i : Fin n) → T i} (h : ∀ j : Fin n, j.val < i → ω j = ω' j)
+    (r : R) :
+    (log ω).RecordedBefore r i ↔ (log ω').RecordedBefore r i := by
+  unfold RecordedBefore
+  rw [hflip i ω ω' h]
+
+/-- **Roots recorded in order join in order**: when the log records the roots `root t` in the order of `t`, the coin
+each joins at never decreases in `t`. -/
+theorem JoinsAt.mono {l : Log R C} {root : Nat → R} {j : Nat → Nat} (hj : l.JoinsAt root j)
+    (hord : l.RecordsInOrder root) : Monotone j := fun t t' htt =>
+  (hj t (j t')).1 (hord t t' htt _ ((hj t' (j t')).2 le_rfl))
+
 end Log
+
+/-- **A value derived from the log's prefix before coin `i` is fixed before coin `i`**: under `FlipsAfterRecorded`,
+it is the same on two runs whose flips agree before `i`, so it reads no coin from `i` on. -/
+theorem DerivedBefore.congr {R T V : Type} {n : Nat} {C : Fin n → Type} {log : ((i : Fin n) → C i) → Log R T}
+    {v : ((i : Fin n) → C i) → V} {i : Nat} (hflip : FlipsAfterRecorded log) (hv : DerivedBefore log v i)
+    {ω ω' : (i : Fin n) → C i} (h : ∀ j : Fin n, j.val < i → ω j = ω' j) : v ω = v ω' := by
+  obtain ⟨f, hf⟩ := hv
+  rw [hf, hf, hflip i ω ω' h]
+
+/-- **A value derived from the log before its first coin is one value on every run**: a map the log fixes before
+coin 0 reads no coin at all. -/
+theorem DerivedBefore.const {R T V : Type} {n : Nat} {C : Fin n → Type} {log : ((i : Fin n) → C i) → Log R T}
+    {v : ((i : Fin n) → C i) → V} (hflip : FlipsAfterRecorded log) (hv : DerivedBefore log v 0)
+    (ω ω' : (i : Fin n) → C i) : v ω = v ω' :=
+  hv.congr hflip fun _ hj => absurd hj (Nat.not_lt_zero _)
+
+/-- What `SampleAfterRecorded` samples against, a set `bad` reads off the log before coin `i`, is a value derived
+from the log's prefix. -/
+theorem derivedBefore_before {R T V : Type} {n : Nat} {C : Fin n → Type} (log : ((i : Fin n) → C i) → Log R T)
+    (bad : Log R T → V) (i : Nat) :
+    DerivedBefore log (fun ω => bad ((log ω).before i)) i :=
+  ⟨bad, fun _ => rfl⟩
 
 end Challenger
 
@@ -134,7 +179,7 @@ commitment the prover made after seeing it, then releases coin 1 meets all three
 coins from its log; and for the block set the log fixes before coin 1 (the complement of coin 0, one block) the
 sample of coin 1, one fair bit, misses it at most as often as that sampling design's `miss 1`. -/
 theorem SampleAfterRecorded_honest :
-    ChallengerLogsCoins (fun ω : Fin 2 → Bool => [Entry.released (ω 0), Entry.recorded (ω 0), Entry.released (ω 1)]) ∧
+    ChallengerLogsCoins (fun _ c => c) (fun ω : Fin 2 → Bool => [Entry.released (ω 0), Entry.recorded (ω 0), Entry.released (ω 1)]) ∧
       FlipsAfterRecorded
         (fun ω : Fin 2 → Bool => [Entry.released (ω 0), Entry.recorded (ω 0), Entry.released (ω 1)]) ∧
       VerifierReadsLog (fun ω : Fin 2 → Bool => [ω 0, ω 1])
@@ -146,7 +191,7 @@ theorem SampleAfterRecorded_honest :
           ((Log.before [Entry.released (ω 0), Entry.recorded (ω 0), Entry.released (ω 1)] 1).coins.map
             (!·)).toFinset)
         ≤ ({ Ω := Bool, draw := fun c => {c} } : SamplingDesign Bool).miss 1 := by
-  have hlog : ChallengerLogsCoins
+  have hlog : ChallengerLogsCoins (fun _ c => c)
       (fun ω : Fin 2 → Bool => [Entry.released (ω 0), Entry.recorded (ω 0), Entry.released (ω 1)]) := fun ω => by
     simp [Log.coins, List.ofFn_succ]
   have hflip : FlipsAfterRecorded
@@ -169,7 +214,7 @@ theorem SampleAfterRecorded_honest :
 bit, then releases its flip. It logs its coins and the verifier reads them from its log, but the commitment it records
 before the coin depends on the coin, so it doesn't flip after what it records. -/
 theorem SampleAfterRecorded_nontrivial_log :
-    ChallengerLogsCoins (fun ω : Fin 1 → Bool => [Entry.recorded (!ω 0), Entry.released (ω 0)]) ∧
+    ChallengerLogsCoins (fun _ c => c) (fun ω : Fin 1 → Bool => [Entry.recorded (!ω 0), Entry.released (ω 0)]) ∧
       VerifierReadsLog (fun ω : Fin 1 → Bool => [ω 0])
         (fun ω : Fin 1 → Bool => [Entry.recorded (!ω 0), Entry.released (ω 0)]) ∧
       ¬ FlipsAfterRecorded (fun ω : Fin 1 → Bool => [Entry.recorded (!ω 0), Entry.released (ω 0)]) := by

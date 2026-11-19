@@ -1,12 +1,11 @@
 /-
-SPOT's two-stage form (`verity/sampled-proofs/v1`, params and evidence `{"form": "two-stage", ...}`): a boundary
+SPOT at two levels (`verity/sampled-proofs/v1`, params and evidence `{"levels": 2, ...}`): a boundary
 registration sampled once on the challenger's coins (the first stage, its replay blocks), the interior registration
 over the sampled replay blocks' proof blocks sampled once more on a challenger session of its own (the second stage),
 the second stage's sessions verified as one-stage v2's per-member form verifies its members' sessions, and the stream's
 run of record over both stages (`Spot.Run.run`), whose second stage holds the sessions' statements to the verdicts. It
-refuses last, behind one switch (`FORM`, which is `Spot.SecondStage.FORM`): every check runs, then a two-stage audit is
-refused while the two-stage form is outside the soundness theorem (`checkBlobsAt_refuses`). `VStar.Recursive.Sampled` reads
-the form and runs this check. The package's root imports it, so the package's audit builds and reads it.
+accepts a two-stage audit that passes every check, ahead of its soundness proof. `VStar.Recursive.Sampled` reads
+the levels and runs this check at two. The package's root imports it, so the package's audit builds and reads it.
 
 * **params**: exactly `{"boundary", "challenger", "delta", "interior", "outputs", "public", "rule", "values"}`, the
   auditor's, fixed before any coin:
@@ -83,7 +82,7 @@ the form and runs this check. The package's root imports it, so the package's au
      before the message of an earlier round is fixed;
   5. the interior audit's verdict at its coins under the second stage's sampling design (`secondCheck`), which gives
      the public output and the integrity profile;
-  6. last, the switch (`finish`): the run must accept, and the form is refused while `FORM` is off.
+  6. last (`finish`): the run must accept.
 
 **The last step** (`secondCheck`, step 5) is the form's own variant of `OneStage.checkAt`, since the interior
 registration is sampled under two sampling designs: its record's, a subset of all its `m` proof blocks (`subsetDesign`), which R1
@@ -125,14 +124,6 @@ namespace VStar.Recursive.SampledTwo
 open Lean (Json)
 open Flock (V)
 open Spot
-
-def TWO_STAGE : String := "two-stage"
-
-/-- **The switch**: the two-stage form accepts only where `Spot.SecondStage.FORM` lets the second-stage statement check
-accept, so one change flips both. -/
-def FORM : Bool := SecondStage.FORM
-
-theorem form_off : FORM = false := rfl
 
 /-- The refusal of a boundary population whose replay blocks are not one Definition's. -/
 def ONE_DEFINITION : String :=
@@ -205,12 +196,13 @@ def valuesOf (j : Json) (what : String) : V (Array Service.Value) := do
 def paramsAt (j : Json) : V OneStage.Params := do
   OneStage.paramsParsed (← Core.canonicalJson (← Flock.canon j).toUTF8)
 
-/-- The form's rest: the object less its `form`, which must be `two-stage`. -/
+/-- The rest of two levels' object: the object less its `levels`, which is `2`. -/
 def split (j : Json) (what : String) : V Json := do
   let .obj _ := j | throw s!"the {what} is not an object"
-  let .str form := getD j "form" | throw s!"the {what} names no form"
-  if form != TWO_STAGE then throw s!"the {what} name the form {form}, not \"{TWO_STAGE}\""
-  pure (Json.mkObj (without j "form"))
+  match field? j "levels" with
+  | some (.num ⟨2, 0⟩) => pure (Json.mkObj (without j "levels"))
+  | some v => throw s!"levels-mismatch: the {what}' levels is {v.compress}, not 2"
+  | none => throw s!"levels-mismatch: the {what} name no levels, not 2"
 
 /-- The parameters' parse (module docstring, **params**), before the two stages' windows are held apart
 (`paramsOfJson`). -/
@@ -618,9 +610,9 @@ def interiorUnshown (p : Params) (e : Evidence) : V Unit :=
   | some (k, label), some w =>
     if some w == p.audit.base.verifier.windowRoot then .ok () else do
       let after ← Docket.digest e.record
-      let (_, roots) ← Challenger.trustedChallengePhaseOf (getD e.coins "ledger") (Json.mkObj [("root", Json.str w)])
+      let (c, log) ← Challenger.trustedChallengePhaseOf (getD e.coins "ledger") (Json.mkObj [("root", Json.str w)])
         k (getD e.coins "pins") (getD e.coins "main") (getD e.coins "session")
-      if interiorShown roots label after then .error INTERIOR_SHOWN else .ok ()
+      if interiorShown (Challenger.byFamily c log) label after then .error INTERIOR_SHOWN else .ok ()
   | _, _ => .ok ()
 
 def LEDGER_PREFIX : String :=
@@ -676,7 +668,7 @@ def firstLines (e : Evidence) : V (List String) := do
 window is not the boundary registration's, no line of the first stage's session's release log (`firstLines`) is a
 coin tree's, one the challenger wrote when it sampled a tree or opened a round of one (`FIRST_TREE`). The interior
 audit reads its sessions' coin trees in order from its own session's log's first, and the first stage's coin check
-drops such lines unread (`Challenger.releasedRootsOf`), so nothing else refuses a first session that sampled one. A
+drops such lines unread (`Challenger.releasedLogOf`), so nothing else refuses a first session that sampled one. A
 first stage only samples its sample, so no honest play has such a line. On one window both stages read one session,
 whose log holds the second stage's trees, and this adds nothing. -/
 def firstTreeless (p : Params) (e : Evidence) : V Unit :=
@@ -829,15 +821,15 @@ def stmtsBytesFit (p : Params) (e : Evidence) (bs : Core.Blobs) : V Unit :=
     bytesFit OneStageZk.WORD s.name (stmtSizeAt p bs tables st s)
 
 /-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output, its second-stage
-statement check at the switch `form`, neither stage's bytes past one coin's, its first stage having read every byte of
+statement check, neither stage's bytes past one coin's, its first stage having read every byte of
 `ξ`, the first session releasing none of the second stage's coins, the stages' sessions in order on one ledger, the
 first session's log holding no coin tree's line, the second session's log opening each coin tree's rounds stream by
 stream. -/
-def prepareRun (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
+def prepareRun (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (Core.Outcome OneStage.Public Core.Integrity × Json) := do
   let (c₂, ξ₂, r, i) ← inputAt p c ξ e bs
   stagesFit ξ ξ₂
-  let run ← Spot.Run.run i form
+  let run ← Spot.Run.run i
   sourceRead ξ run
   interiorUnshown p e
   stagesOrdered p e
@@ -848,14 +840,14 @@ def prepareRun (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteAr
 
 /-- Check steps 0 to 5: the sessions' statements' bytes (`stmtsBytesFit`), that each statement is its session's and
 the counts agree (`stmtsSessions`), then `prepareRun`. -/
-def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
+def prepare (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (Core.Outcome OneStage.Public Core.Integrity × Json) :=
   match stmtsBytesFit p e bs with
   | .error err => .error err
   | .ok () =>
     match stmtsSessions p e bs with
     | .error err => .error err
-    | .ok () => prepareRun form p c ξ e bs
+    | .ok () => prepareRun p c ξ e bs
 
 theorem bytesFit_ok {limit : Nat} {session : String} {n : Nat}
     (h : bytesFit limit session (some n) = .ok ()) : n < limit := by
@@ -874,9 +866,9 @@ theorem stmtsBytesFit_at {p : Params} {e : Evidence} {bs : Core.Blobs} (h : stmt
   exact bytesFit_ok h'
 
 /-- **Steps 0 to 5 return only where `prepareRun` returns the same and every session's statement fits.** -/
-theorem prepare_ok {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+theorem prepare_ok {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {r : Core.Outcome OneStage.Public Core.Integrity × Json}
-    (h : prepare form p c ξ e bs = .ok r) : prepareRun form p c ξ e bs = .ok r ∧ stmtsBytesFit p e bs = .ok () := by
+    (h : prepare p c ξ e bs = .ok r) : prepareRun p c ξ e bs = .ok r ∧ stmtsBytesFit p e bs = .ok () := by
   unfold prepare at h
   split at h
   · cases h
@@ -886,9 +878,9 @@ theorem prepare_ok {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : By
     · exact ⟨h, hw⟩
 
 /-- **Steps 0 to 5 return only where each statement is its session's and the counts agree** (`stmtsSessions`). -/
-theorem prepare_sessions {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+theorem prepare_sessions {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {r : Core.Outcome OneStage.Public Core.Integrity × Json}
-    (h : prepare form p c ξ e bs = .ok r) : stmtsSessions p e bs = .ok () := by
+    (h : prepare p c ξ e bs = .ok r) : stmtsSessions p e bs = .ok () := by
   unfold prepare at h
   split at h
   · cases h
@@ -896,37 +888,31 @@ theorem prepare_sessions {form : Bool} {p : Params} {c : OneStage.Commitment} {�
     · cases h
     · exact ‹stmtsSessions p e bs = .ok ()›
 
-/-- **The last step** (check, 6) at the switch `form`: the interior audit's verdict where it doesn't accept; where it
-does, the run of record must accept, and then the form is refused while `form` is off. -/
-def finishWith (form : Bool) (two : Core.Outcome OneStage.Public Core.Integrity) (run : Json) :
+/-- **The last step** (check, 6): the interior audit's verdict where it doesn't accept; where it does, the run of
+record must accept. -/
+def finish (two : Core.Outcome OneStage.Public Core.Integrity) (run : Json) :
     Core.Outcome OneStage.Public Core.Integrity :=
   match two with
   | .reject why => .reject s!"two-stage: the interior's audit: {why}"
   | .undecided why => .undecided s!"two-stage: the interior's audit: {why}"
   | .accept pub prof =>
     if !jeq (getD run "symbol") (Json.str "accept") then .reject s!"two-stage: the run of record: {run.compress}"
-    else if form then .accept pub prof
-    else .reject s!"two-stage: {SecondStage.FORM_WHY}"
+    else .accept pub prof
 
-/-- The last step at the switch (`FORM`). -/
-def finish : Core.Outcome OneStage.Public Core.Integrity → Json → Core.Outcome OneStage.Public Core.Integrity :=
-  finishWith FORM
-
-/-- **The check at the first stage's bytes `ξ`, at the switch `form`** (module docstring, **check**). The proofs about
-an accepted two-stage audit read it at `form = true`, so that nothing they prove rests on the switch being off. -/
-def checkBlobsAtWith (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence)
+/-- **The check at the first stage's bytes `ξ`** (module docstring, **check**), before the caller's check. -/
+def checkBlobsAtInner (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence)
     (bs : Core.Blobs) : Core.Outcome OneStage.Public Core.Integrity :=
-  match prepare form p c ξ e bs with
+  match prepare p c ξ e bs with
   | .error err => .reject s!"two-stage: {err}"
-  | .ok (two, run) => finishWith form two run
+  | .ok (two, run) => finish two run
 
-/-- **The check at the first stage's bytes `ξ`**, at the switch (`FORM`), held to the caller's check
+/-- **The check at the first stage's bytes `ξ`**, held to the caller's check
 (`Caller.gate`) on the boundary's record at its verifier and on the interior's at the verifier the last step reads:
 neither the run of record nor the last step (`Spot.Run.run`, `secondChecked`) makes the caller's codes. -/
 def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   Caller.gate e.record p.audit.base.verifier
-    (Caller.gate c.record p.boundary.verifier (checkBlobsAtWith FORM p c ξ e bs))
+    (Caller.gate c.record p.boundary.verifier (checkBlobsAtInner p c ξ e bs))
 
 /-- The check at the bytes the evidence says the first stage read, which the run of record holds to the
 challenger's coins (`Run.coinsHold`). -/
@@ -934,59 +920,23 @@ def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.
     Core.Outcome OneStage.Public Core.Integrity :=
   checkBlobsAt p c e.source e bs
 
-theorem finish_refuses (hF : FORM = false) (two : Core.Outcome OneStage.Public Core.Integrity) (run : Json)
-    (pub : OneStage.Public) (prof : Core.Integrity) : finish two run ≠ .accept pub prof := by
-  unfold finish finishWith
-  split
-  · simp
-  · simp
-  · split
-    · simp
-    · simp [hF]
-
-/-- **The two-stage form accepts nothing while the switch is off**: whatever the parameters, the registration, the
-bytes, the evidence and the blobs. -/
-theorem checkBlobsAt_refuses (hF : FORM = false) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray)
-    (e : Evidence) (bs : Core.Blobs) (pub : OneStage.Public) (prof : Core.Integrity) :
-    checkBlobsAt p c ξ e bs ≠ .accept pub prof := by
-  intro h
-  have h₁ := (Caller.gate_accept (Caller.gate_accept h).2).2
-  revert h₁
-  unfold checkBlobsAtWith
-  split
-  · simp
-  · exact finish_refuses hF _ _ _ _
-
-theorem checkBlobs_refuses (hF : FORM = false) (p : Params) (c : OneStage.Commitment) (e : Evidence)
-    (bs : Core.Blobs) (pub : OneStage.Public) (prof : Core.Integrity) : checkBlobs p c e bs ≠ .accept pub prof :=
-  checkBlobsAt_refuses hF p c e.source e bs pub prof
-
-def PROTOCOL : String := "verity/sampled-proofs/two-stage/v1"
-
-def protocol : Core.BlobProtocol where
-  id := PROTOCOL
-  Params := Params
-  Commitment := OneStage.Commitment
-  Evidence := Evidence
-  Public := OneStage.Public
-  Profile := Core.Integrity
-  params := paramsOfJson
-  commitment := OneStage.commitmentOf
-  evidence := evidenceOf
-  digest c := c.digest
-  check p c e := checkBlobs p c e Core.Blobs.empty
-  publicJson := OneStage.publicJson
-  profileJson := Core.Integrity.toJson
-  checkBlobs := checkBlobs
-
-#guard (paramsOfJson (Json.mkObj [("form", "one-stage")])).toOption.isNone
-#guard match paramsOfJson (Json.mkObj [("form", TWO_STAGE), ("outputs", Json.arr #["y"])]) with
+#guard (paramsOfJson (Json.mkObj [("levels", Json.num 1)])).toOption.isNone
+#guard match split (Json.mkObj [("levels", Json.num 1)]) "parameters" with
+  | .error e => e == "levels-mismatch: the parameters' levels is 1, not 2"
+  | .ok _ => false
+#guard match split (Json.mkObj [("levels", Json.num 2), ("a", Json.num 0)]) "parameters" with
+  | .ok j => j == Json.mkObj [("a", Json.num 0)]
+  | .error _ => false
+#guard match split (Json.mkObj [("a", Json.num 0)]) "parameters" with
+  | .error e => e == "levels-mismatch: the parameters name no levels, not 2"
+  | .ok _ => false
+#guard match paramsOfJson (Json.mkObj [("levels", Json.num 2), ("outputs", Json.arr #["y"])]) with
   | .error e => e.startsWith "the keys of the parameters"
   | .ok _ => false
-#guard match evidenceOf "{\"form\":\"two-stage\"}".toUTF8 with
+#guard match evidenceOf "{\"levels\":2}".toUTF8 with
   | .error e => e.startsWith "the keys of the evidence"
   | .ok _ => false
-#guard match evidenceOf ("{\"coins\":null,\"form\":\"two-stage\",\"interior\":{},\"received\":\"r\",\"record\":{}," ++
+#guard match evidenceOf ("{\"coins\":null,\"interior\":{},\"levels\":2,\"received\":\"r\",\"record\":{}," ++
     "\"source\":\"\",\"statements\":[]}").toUTF8 with
   | .error e => e == FIRST_COINS_NULL
   | .ok _ => false

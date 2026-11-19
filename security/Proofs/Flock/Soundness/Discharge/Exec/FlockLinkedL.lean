@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
-public import Proofs.Flock.Soundness.Audit.FlockLinked
+public import Proofs.Flock.SpotFlock.Sampling.FlockLinked
 import Mathlib.Combinatorics.Matroid.Init
 
 /-!
@@ -29,7 +29,7 @@ session run.
 
 namespace FlockSoundness.Discharge.Exec
 
-open Game Model Accounting Extract LinkFinder Audit Audit.Partition
+open Game Model Accounting Extract LinkFinder Spot.Sampling Spot.Sampling.Partition
 open scoped ENNReal
 
 /-- The executable's field. -/

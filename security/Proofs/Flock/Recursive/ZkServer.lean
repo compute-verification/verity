@@ -126,8 +126,8 @@ noncomputable def fwRealPr {Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Finty
   avg fun r : Fin nr → ZkView.Salt => prCoin fun z : ((Ωa × Ωp) × (Fin nh → Fin 192 → Fin 256)) × V.Ωo =>
     E (regLeaves rows pub P r, z.1.1.1,
       Flock.ZkServer.run s (reqs P w r z.1.1.1 z.1.1.2 (zkServerStrings (msgs P w r z.1.1.1 z.1.1.2)
-          fun i => FlockSoundness.Audit.SamplingDesign.streamOf (z.1.2 i)))
-        (List.ofFn fun i => FlockSoundness.Audit.SamplingDesign.streamOf (z.1.2 i)),
+          fun i => Spot.Sampling.SamplingDesign.streamOf (z.1.2 i)))
+        (List.ofFn fun i => Spot.Sampling.SamplingDesign.streamOf (z.1.2 i)),
       V.view prover (OuterZK.hctxAt msgs P w r z.1.1.1 z.1.1.2 fun i => ZkView.saltOfBytes (z.1.2 i)) z.2)
 
 /-- **The simulated view at the ZK server**, the probability of the event `E`: the simulator registers the fixed private

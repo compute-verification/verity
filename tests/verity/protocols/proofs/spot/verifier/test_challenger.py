@@ -59,8 +59,9 @@ def test_a_coin_opened_twice_is_refused():
 def test_a_coin_opened_before_its_root_was_recorded_is_refused():
     ch, roots, ops = family(k=2)
     early = ch.open(LABEL, 2, roots[1])
-    assert C.order_reason(ch.commitment, LABEL, roots, ops + [early]) == "commit coin 2 was opened before its root was recorded"
-    assert C.order_reason(ch.commitment, LABEL, roots[:1], ops) == "commit coin 1 was opened before its root was recorded"
+    assert C.order_reason(ch.commitment, LABEL, roots, ops + [early]) == \
+        "commit coin 2 was opened with no root recorded before it"
+    assert C.order_reason(ch.commitment, LABEL, roots[:1], ops) == "commit coin 1 was opened with no root recorded before it"
     assert C.order_reason(ch.commitment, LABEL, roots + [bytes([9]) * 64], ops + [early]) == \
         "commit coin 2: coin was not opened after what the verifier recorded"
 
@@ -79,11 +80,11 @@ def test_a_foreign_epochs_coin_is_refused():
 
 def test_every_recorded_root_has_its_coin_and_each_coin_its_place():
     ch, roots, ops = family()
-    assert C.order_reason(ch.commitment, LABEL, roots, ops[:3]) == "commit coin 3 was never opened"
+    assert C.order_reason(ch.commitment, LABEL, roots, ops[:3]) == "commit root 3 has no coin opened after it"
     assert C.order_reason(ch.commitment, LABEL, roots + [roots[0]], ops) == \
         "5 roots recorded, more than the epoch's 4 commit coins"
     assert C.order_reason(ch.commitment, LABEL, roots, [ops[1], ops[0]] + ops[2:]) == \
-        "commit coin 0: coin is the epoch's commit coin 1, not its commit coin 0"
+        "commit coin 1: coin was not opened after what the verifier recorded"
     other = ch.open("other", 0, roots[0])
     assert C.order_reason(ch.commitment, LABEL, roots[:1], [other]) == \
         "commit coin 0: coin is the epoch's other coin 0, not its commit coin 0"
@@ -134,7 +135,7 @@ def test_the_record_logs_each_release_after_the_root_it_follows():
     ch.open(LABEL, 0, b"\x09" * 64)
     with pytest.raises(C.CoinError, match="commit coin 0 is already open"):
         early.record(b"\x01" * 64)
-    assert [e["event"] for e in early.log] == ["root"] and early.reason() == "commit coin 0 was never opened"
+    assert [e["event"] for e in early.log] == ["root"] and early.reason() == "commit root 0 has no coin opened after it"
 
 
 def test_record_many_records_every_root_then_asks_for_their_coins_at_once():

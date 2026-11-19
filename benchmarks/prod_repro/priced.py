@@ -31,6 +31,12 @@ from bisect import bisect_left
 from collections.abc import Sequence
 from pathlib import Path
 
+from verity.device import gpu_card_called
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "benchmarks/serve_tax"))
+import serve_tax as S
+
+CARDS = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
 METRIC = "vllm/prod-serving-cost-glm53"
 #: the id a priced point goes under, which the serving cost's door declares
 PRICED = "benchmarks/serving-cost-priced"
@@ -109,19 +115,20 @@ def at(table: dict, rows: int, keys: int, end: int) -> float:
 
 
 def steps(trace: Path, draft_rows: int | None = None) -> tuple[list[dict], int]:
-    """The step trace's steps, each with its ``step``, ``T`` and ``t``, its decode rows past `K` keys (``rows``) and
-    their most keys (``keys``), and its prefill rows past `K` and their most keys (``prefill_rows``,
-    ``prefill_keys``); and the rows a decode request runs a step (1 and its drafts, from the trace's header)."""
+    """A lifetime's public steps (`serve_tax.public_steps`), each with its ``step``, ``T`` and ``t``, its decode rows
+    past `K` keys (``rows``) and their most keys (``keys``), and its prefill rows past `K` and their most keys
+    (``prefill_rows``, ``prefill_keys``); and the rows a decode request runs a step (1 and its drafts, from the
+    header)."""
     out, n = [], draft_rows
     with gzip.open(trace, "rt") as f:
         for line in f:
             r = json.loads(line)
             if r["kind"] == "header" and n is None:
-                n = 1 + ((r.get("config") or {}).get("speculative") or {}).get("num_speculative_tokens", 0)
+                n = 1 + r["num_speculative_tokens"]
             if r["kind"] != "step":
                 continue
             rows = keys = pre = pre_keys = 0
-            for _, start, m in r["rows"]:
+            for start, m in r["rows"]:
                 long_ = max(0, start + m - max(start, K))
                 if m <= (n or 1):
                     rows += long_
@@ -228,7 +235,7 @@ def kind_seconds(trace: Path, windows: list[dict], per_request: int) -> dict:
             if r["kind"] != "step":
                 continue
             if prev is not None and any(w["t0"] <= r["t"] <= w["t1"] for w in windows):
-                k = "prefill" if any(m > per_request for _, _, m in r["rows"]) else "decode"
+                k = "prefill" if any(m > per_request for _, m in r["rows"]) else "decode"
                 out[k] += r["t"] - prev
                 out[f"{k}_steps"] += 1
             prev = r["t"]
@@ -236,9 +243,9 @@ def kind_seconds(trace: Path, windows: list[dict], per_request: int) -> dict:
 
 
 def trace_of(d: Path) -> Path:
-    traces = sorted((d / "server").glob("step_trace.*.jsonl.gz"))
+    traces = sorted((d / "server").glob(S.STEPS.format("*")))
     if not traces:
-        raise SystemExit(f"{d.name}: no step trace, so no schedule to price")
+        raise SystemExit(f"{d.name}: no public steps (`serve_tax.public_steps`), so no schedule to price")
     return traces[0]
 
 
@@ -310,7 +317,7 @@ def lifetime(d: Path, ref: Path, u: dict, counters: dict | None, pu: dict | None
     ref_s = sum(w["seconds"] for w in ref_windows)
     ours_k = kind_seconds(trace_of(d), windows, per_request)
     ref_k = (kind_seconds(trace_of(ref), ref_windows, per_request)
-             if any((ref / "server").glob("step_trace.*.jsonl.gz")) else None)
+             if any((ref / "server").glob(S.STEPS.format("*"))) else None)
     pre_measured = ours_k["prefill"] - ref_k["prefill"] if ref_k else None
     priced = added(base, failed) if priced_prefill is None else added(added(base, failed), priced_prefill)
     return {"dir": d.name, "reference": ref.name, "pass": p, "cards": cards, "decode_steps": len(decode),
@@ -438,7 +445,7 @@ def point(priced: dict, below: dict, tested_by: str, units_from: str, member: st
 
 
 def price(out: Path, u: dict, *, tested_by: str, units_from: str, ours: Sequence[str] = OURS,
-          reference: str = "prod-trace", stock: str = "prod", model: str = "glm-5.3", card: str = "h200",
+          card: str, reference: str = "prod-trace", stock: str = "prod", model: str = "glm-5.3",
           pu: dict | None = None, name: str = PRICED) -> dict:
     """Each served arm of ``ours`` priced over ``reference`` (`layer`, with its measured and step-adjusted layers
     beside it), and the first one's point under ``name`` over ``stock`` (`point`) with its ``member``; where none
@@ -522,9 +529,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ours", nargs="+", default=list(OURS))
     ap.add_argument("--tested-by")
     ap.add_argument("--model", default="glm-5.3")
-    ap.add_argument("--card", default="h200")
+    ap.add_argument("--card", required=True, help="the served card's `short` in calibration/hardware/cards, a member's name part")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
+    try:
+        gpu_card_called(a.card, directory=CARDS)
+    except KeyError as e:
+        raise SystemExit(f"--card {a.card!r}: {e.args[0]}") from None
     rep = json.loads((a.out / "prod_repro.json").read_text()) if (a.out / "prod_repro.json").is_file() else {}
     r = price(a.out, units(a.units), tested_by=a.tested_by or rep.get("run") or "not named", units_from=a.units.name,
               ours=a.ours, reference=a.reference, stock=a.stock, model=a.model, card=a.card,

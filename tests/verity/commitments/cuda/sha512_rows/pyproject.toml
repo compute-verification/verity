@@ -9,4 +9,6 @@ untraced = ["test_engine.py"]
 # engine.py reads no settings; the tests read the H200 layer's rows from commit_slots' frozen layout (slots.py).
 # The tests import `verity` by its dotted names: what they load of it is listed after slots.py.
 inputs = ["verity/commitments/cuda/commit_slots/slots.py",
-          "verity/__init__.py", "verity/errors.py", "verity/commitments", "verity/circuits"]
+          "verity/__init__.py", "verity/errors.py", "verity/commitments", "verity/circuits",
+          # a CUDA engine's target is its device's card file's arch, which the tests read as the engine's callers do
+          "verity/device.py", "verity/channel.py", "calibration/hardware/cards"]

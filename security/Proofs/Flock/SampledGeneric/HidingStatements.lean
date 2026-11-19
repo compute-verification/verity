@@ -35,24 +35,24 @@ open scoped ENNReal
 open Claims.ZKMal.Masked FlockSoundness.Discharge in
 /-- **Flock's deployed masked session** (`Flock.Guarantees.MaskedZK`'s record), at the rep rounds' coin counts `nr` and
 the repetition count `t`. -/
-noncomputable def flockZk (nr : Claims.Msg → ℕ → ℕ) (t : ℕ) :
+noncomputable def flockZk (nr : Hash.Msg → ℕ → ℕ) (t : ℕ) :
     Claims.Flock.ZkDeploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace :=
   Claims.ZKMal.zkDeployed _root_.Flock.Readable.relation nr
     (tableData PE (RoundPlan.stop (czExe PE) (encStop (encExe PE)) (finExe PE)) UE) t
 
 /-- The masked session's rounds at `x`: the masked verifier's and the `Hello`. -/
-noncomputable def flockRounds (nr : Claims.Msg → ℕ → ℕ) (t : ℕ) : Claims.Msg → ℕ := fun x => (flockZk nr t).V.k x + 1
+noncomputable def flockRounds (nr : Hash.Msg → ℕ → ℕ) (t : ℕ) : Hash.Msg → ℕ := fun x => (flockZk nr t).V.k x + 1
 
 /-- **Flock's masked session as a `Zk`**, at SHA-512: the reference prover's transcript against a malicious verifier of
 the session's rounds, and the record's simulator's. -/
-noncomputable def flockSession (nr : Claims.Msg → ℕ → ℕ) (t : ℕ) (Θ : Type) :
-    Zk Claims.Msg Claims.Flock.Wit (MalVerifier (flockRounds nr t) Θ) (List (Claims.Msg × Claims.Out)) :=
+noncomputable def flockSession (nr : Hash.Msg → ℕ → ℕ) (t : ℕ) (Θ : Type) :
+    Zk Hash.Msg Claims.Flock.Wit (MalVerifier (flockRounds nr t) Θ) (List (Hash.Msg × Claims.Out)) :=
   zkOfMal FlockDeploy.sha512 (flockRounds nr t) (flockZk nr t).prover (flockZk nr t).S Θ
 
 /-- **The masked session's error** at `(x, w)` against `v`: `ε_zk(x) + 4·t·3^t·Pr[Fork]`, with `ε_zk` `MaskedZK`'s
 (`8·n_L(x)·δ₁ + 8·t·n_L(x)·δ₁ + 2·3^{-t}` at a statement in scope, else `1`) and `Fork` the real game's collision
 finder at SHA-512: two runs of the reference prover at `w` against `v`'s `V*` on one nonce. -/
-noncomputable def flockErr (nr : Claims.Msg → ℕ → ℕ) (t : ℕ) {Θ : Type} (x : Claims.Msg) (w : Claims.Flock.Wit)
+noncomputable def flockErr (nr : Hash.Msg → ℕ → ℕ) (t : ℕ) {Θ : Type} (x : Hash.Msg) (w : Claims.Flock.Wit)
     (v : MalVerifier (flockRounds nr t) Θ) : ℝ≥0∞ :=
   malErr FlockDeploy.sha512 (flockZk nr t).prover (Claims.Witness.SamplingGeneric.zkEps t)
     (Claims.Witness.SamplingGeneric.zkγ t) x w v
@@ -107,9 +107,9 @@ $$2N\delta_1+\mathbb E_r\bigl[\varepsilon_{zk}(x_r)+4t\,3^t\Pr[\mathrm{Fork}(P(w
 with `δ₁` hm96's hiding gap at the pinned key (`hm96Gap`), `ε_zk` and the fork factor `MaskedZK`'s (`flockErr`), and
 the average over the prover's salts. -/
 def SpotFlockZK : Prop :=
-  ∀ (nr : Claims.Msg → ℕ → ℕ) (t : ℕ), 0 < t →
+  ∀ (nr : Hash.Msg → ℕ → ℕ) (t : ℕ), 0 < t →
   ∀ (ι : Type) [Fintype ι] [DecidableEq ι] (n : ℕ) (Θ : Type)
-    (stmt : (ι → ByteArray) × Finset (Fin n) → Claims.Msg)
+    (stmt : (ι → ByteArray) × Finset (Fin n) → Hash.Msg)
     (samp : ((ι → ByteArray) × Finset (Fin n) → MalVerifier (flockRounds nr t) Θ) →
       (ι → ByteArray) → Finset (Fin n))
     (wit : (ι → ByteArray) → (ι → Discharge.ZkView.Salt) → Finset (Fin n) → Claims.Flock.Wit)
@@ -179,16 +179,16 @@ to the simulator's at any fixed trace `X₀` at
 $$2N\delta_1+\mathbb E_r\sum_j\mathbb E\bigl[\varepsilon_{zk}(x_{r,j})+4t\,3^t\Pr[\mathrm{Fork}(P(w_{r,j}),V^*_j)]\bigr],$$
 session `j`'s error averaged over the honest transcripts of the sessions before it. -/
 def SpotFlockSessionsZK : Prop :=
-  ∀ (nr : Claims.Msg → ℕ → ℕ) (t : ℕ), 0 < t →
+  ∀ (nr : Hash.Msg → ℕ → ℕ) (t : ℕ), 0 < t →
   ∀ (ι : Type) [Fintype ι] [DecidableEq ι] (n : ℕ) (Θ : Type)
-    (stmts : (ι → ByteArray) × Finset (Fin n) → List Claims.Msg)
-    (samp : ((ι → ByteArray) × Finset (Fin n) → List Claims.Msg → List (List (Claims.Msg × Claims.Out)) →
+    (stmts : (ι → ByteArray) × Finset (Fin n) → List Hash.Msg)
+    (samp : ((ι → ByteArray) × Finset (Fin n) → List Hash.Msg → List (List (Hash.Msg × Claims.Out)) →
         MalVerifier (flockRounds nr t) Θ) → (ι → ByteArray) → Finset (Fin n))
     (wits : (ι → ByteArray) → (ι → Discharge.ZkView.Salt) → Finset (Fin n) → List Claims.Flock.Wit)
     (Xt : ι → ByteArray),
     (∀ r S, List.Forall₂ (Claims.Flock.R (flockZk nr t).parse) (stmts ((hm96Exe ι).commit Xt r, S)) (wits Xt r S)) →
     ∀ (X₀ : ι → ByteArray)
-      (v : (ι → ByteArray) × Finset (Fin n) → List Claims.Msg → List (List (Claims.Msg × Claims.Out)) →
+      (v : (ι → ByteArray) × Finset (Fin n) → List Hash.Msg → List (List (Hash.Msg × Claims.Out)) →
         MalVerifier (flockRounds nr t) Θ),
       Close (auditView (hm96Exe ι) ((flockSession nr t Θ).seq.after stmts) samp wits Xt v)
         (auditSim (hm96Exe ι) ((flockSession nr t Θ).seq.after stmts) samp X₀ v)

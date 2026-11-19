@@ -78,7 +78,7 @@ def _plan_counts(layout: S.CommitShape) -> dict[str, int]:
         m.setattr(S.CommitShape, "manifest", manifest)
         m.setattr(G.Plan, "_shape", shape)
         plan = G.Plan(CTX, layout, "host", build=BUILD)
-        G.StepCommitter(plan, 0, 2, bytes(32))
+        G.StepCommitter(plan, 0, 2)
         S.unit_domain(CTX, layout, layout.unit_count - 1)
     return n
 

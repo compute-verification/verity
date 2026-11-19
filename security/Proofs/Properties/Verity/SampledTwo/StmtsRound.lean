@@ -81,7 +81,7 @@ theorem pinOk_agree {t : ℕ} {w w' : FlockDeploy.Raw} (hp : pinOk h t w = true)
 record read, the second stage samples, the statement decodes and reads as round 2 reads one, round 2's statement check
 passes it against what the verifier holds of the run (`codesOk` at `ownOf`), and it is the template's reference
 statement but for the run's fields (`pinOk`). -/
-theorem reads_of_stmtOk {x m₁ m₂ : Claims.Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
+theorem reads_of_stmtOk {x m₁ m₂ : Hash.Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
     (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ} (ht : t < h.ms.length) :
     ∃ st rec draw w S, decode x = some st ∧ jsonMsg m₁ = some rec ∧ secondDraw h c₀ c₁ = some draw ∧
       FlockDeploy.decode (stmtAt h m₂ t) = some w ∧ stmtJsonOf h t w = some S ∧
@@ -113,7 +113,7 @@ theorem reads_of_stmtOk {x m₁ m₂ : Claims.Msg} {c₀ : FlockDeploy.Coin} {c�
 second stage samples at the stage coins, and the statement's sample, read as JSON, has the canonical text of the
 verifier's own sample for the template's part (`Spot.SecondStage.ownSample`): the second sample's units among the part's
 slots in the replay sample round 0's coin gives. -/
-theorem sample_of_stmtOk {x m₁ m₂ : Claims.Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
+theorem sample_of_stmtOk {x m₁ m₂ : Hash.Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
     (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ} (ht : t < h.ms.length) :
     ∃ draw w b d, secondDraw h c₀ c₁ = some draw ∧ FlockDeploy.decode (stmtAt h m₂ t) = some w ∧
       pinOk h t w = true ∧ w.draw = some b ∧ FlockDeploy.jsonOf "draw" b = .ok d ∧
@@ -127,7 +127,7 @@ theorem sample_of_stmtOk {x m₁ m₂ : Claims.Msg} {c₀ : FlockDeploy.Coin} {c
 template by template, and differ only in the run's fields**: the two statements of template `t` decode, are equal in
 every field but the sample, the registered reads and the public file (`pinOk`), and their samples read as JSON values
 of one canonical text. The run's statement and round 1's message may differ between the two. -/
-theorem sample_canon_of_stmtOk {x x' m₁ m₁' m₂ m₂' : Claims.Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
+theorem sample_canon_of_stmtOk {x x' m₁ m₁' m₂ m₂' : Hash.Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
     (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) (hok' : stmtOk h x' m₁' m₂' c₀ c₁ = true) {t : ℕ}
     (ht : t < h.ms.length) :
     ∃ w w' b b' d d' s, FlockDeploy.decode (stmtAt h m₂ t) = some w ∧

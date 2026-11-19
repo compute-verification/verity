@@ -168,7 +168,7 @@ theorem repsTape_round {c c' p p' : Msg} {w w' : Fin 2 → List Step} {i : ℕ} 
     rw [s, s', h₁ (j + 1) (by omega)]
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 open FlockVBridge.Family (skOf maskOf)
 open FlockC3.Compose

@@ -36,7 +36,7 @@ open Flock (V)
 open Flock.Program (Ty)
 open Flock.TemplateQuery (Desc)
 
-/- A registered value's domain, its leaf widths, its row formats (`registered.SCHEMAS`) and the default width, which the
+/- A registered value's domain, its leaf widths, its row formats (`registered_value.SCHEMAS`) and the default width, which the
 domain and the entry name only by leaving `word_bits` out: Flock's, which reads the same registered values. -/
 export Flock.Registered (REGISTERED_DOMAIN SCHEMAS WORD_BITS WIDTHS WIDTH_KEY domain)
 
@@ -157,7 +157,7 @@ def width (p : Param) : V Nat :=
 def domainBound (program value : String) (words leaves wordBits : Nat) (key r : String) : V ByteArray :=
   Flock.Registered.domainWith program value words leaves wordBits [(key, Json.str r)]
 
-/-- `registered.domain(program, value, words, leaves, word_bits, window).domain_id`: `domain`, and for a per-window value
+/-- `registered_value.domain(program, value, words, leaves, word_bits, window).domain_id`: `domain`, and for a per-window value
 (`some r`, `r` the window's open root) the same with `"window": r` in the binding. -/
 def domainAt (program value : String) (words leaves wordBits : Nat) : Option String → V ByteArray
   | none => domain program value words leaves wordBits

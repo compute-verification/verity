@@ -38,7 +38,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.Draws
-import Proofs.Flock.Soundness.Audit.Periods
+import Proofs.Spot.Sampling.Periods
 import Proofs.Flock.Soundness.Game
 import Proofs.Certifier.MonitoringPeriodSum
 import Proofs.Certifier.Pooled
@@ -52,7 +52,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 
 The probability half: each window's audit, given the earlier windows' coins, accepts with probability at most
 `(1 - q)^|W_i| + e_i`, and the escapes multiply over the windows with the errors adding (`pr_adaptive_add_le`). That is
-the monitoring-period step (`FlockSoundness.Audit.Periods.prCoin_forall_prod_le`) at each window's bound capped at `1`,
+the monitoring-period step (`Spot.Sampling.Periods.prCoin_forall_prod_le`) at each window's bound capped at `1`,
 whose product is at most the product of the escapes plus the errors' sum (`prod_min_add_le`); a union bound adds the
 leak relations' errors `e' i`.
 
@@ -122,7 +122,7 @@ theorem pr_adaptive_add_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0
     rw [hupd, ← ENNReal.ofReal_toReal (ne_top_of_le_ne_top ENNReal.one_ne_top (hle1 _)),
       ← Claims.Sampling.Pr_eq_toReal_prCoin]
     exact ENNReal.ofReal_le_ofReal (le_min (Pr_le_one _) (hesc t ω))
-  have key := FlockSoundness.Audit.Periods.prCoin_forall_prod_le (Ω := fun _ : Fin m => Ω)
+  have key := Spot.Sampling.Periods.prCoin_forall_prod_le (Ω := fun _ : Fin m => Ω)
     (fun t ω => A t ω (ω t)) (fun t ω => ENNReal.ofReal (min 1 (r ^ f t ω + e t)))
     (fun t ω ω' h => by
       show A t ω (ω t) = A t ω' (ω' t)

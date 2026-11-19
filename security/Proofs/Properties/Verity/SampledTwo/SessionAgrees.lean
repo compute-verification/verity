@@ -27,7 +27,7 @@ namespace Verity.SampledTwo.SessionCoins
 agreement, at the session-round locator): on an accepted play whose log is the device's, at coins the coin map's
 agreement `Ag` holds of, the release for a session's round the run's verifier reads and the run's coin there have the
 same elements below the count the releases the locator puts on the round carry, in the play's log. -/
-def DevElems (A : Live₂) (x : Claims.Msg) (loc : List Release → Verity.Frame → Option ℕ)
+def DevElems (A : Live₂) (x : Hash.Msg) (loc : List Release → Verity.Frame → Option ℕ)
     (dev : List Release → ℕ → Option FlockDeploy.Coin) (Acc Good : Exchange → Prop)
     (Ag : Exchange → Coins A x → Prop) : Prop :=
   ∀ o, Acc o → Good o → ∀ r : Coins A x, Ag o r → ∀ i : Fin (A.L.V.k x), readsAt A.h i.val →
@@ -66,7 +66,7 @@ takes it): `SessionsAgree` at the sessions' reading `withCoins`, from the coin m
 locator (`DevElems`), `InteriorLogged` and the read's existence on an accepted play (`InteriorReads`). A read
 round past the statements' is in a session's rounds (`slot_exists`), and the releases the locator puts on it carry the
 same elements in the log the check read as in the play's (`located_widths`). -/
-theorem sessionsAgree (A : Live₂) (x : Claims.Msg) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String)
+theorem sessionsAgree (A : Live₂) (x : Hash.Msg) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String)
     (dev : List Release → ℕ → Option FlockDeploy.Coin) (Good : Exchange → Prop) (Ag : Exchange → Coins A x → Prop)
     (hread : InteriorReads C) (hlog : InteriorLogged C Good)
     (hE : DevElems A x (locOf A tab) dev (FormAccepts C) Good Ag) :
@@ -102,7 +102,7 @@ theorem sessionsAgree (A : Live₂) (x : Claims.Msg) (C : CaseOf) (Ms : SessionR
 
 /-- **The sessions' releases agree with the run's coins** (`SessionsAgree`), at the form's acceptance: from the coin
 map's agreement at the session-round locator (`DevElems`) and `InteriorLogged`. -/
-theorem sessionsAgree_accepted (A : Live₂) (x : Claims.Msg) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String)
+theorem sessionsAgree_accepted (A : Live₂) (x : Hash.Msg) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String)
     (dev : List Release → ℕ → Option FlockDeploy.Coin) (Good : Exchange → Prop) (Ag : Exchange → Coins A x → Prop)
     (hsz : HeldSize) (hlog : InteriorLogged C Good) (hE : DevElems A x (locOf A tab) dev (FormAccepts C) Good Ag) :
     SessionsAgree A x (withCoins A C tab dev Ms) dev (FormAccepts C) Good Ag :=

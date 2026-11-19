@@ -12,7 +12,7 @@ when those values are the ones the verifier computes here, from the inner sessio
 * each rep's v, its points and κ (`RecAlgebra.verifierRows` at the rep's coins), and the comb at the lincheck's fold points
   (`CircuitFold.folded`), computed only for a part whose v holds it;
 * opening `j` of level `ℓ`'s coefficients `κ[ℓ][r][l] · eq(α_ℓ)[j]` (`coefAt`), its position's low `H` bits (`dirsRow`),
-  and part `p`'s v elements (`RecResiduals.groups`), each row committed as `registered.Registered.commit` commits it
+  and part `p`'s v elements (`RecResiduals.groups`), each row committed as `registered_value.Registered.commit` commits it
   (registered.py:139) under `verifierSalt`.
 
 Every statement table row of `coef`, `dirs` or `v` must be the verifier's row at its position, and the registered root the
@@ -92,7 +92,7 @@ def coefAt (kap : Array (Array F128)) (LANES : Nat) (e : F128) : Array F128 :=
 def dirsRow (pos H : Nat) : Array Nat :=
   #[pos % 2 ^ H % 2 ^ 16, pos % 2 ^ H / 2 ^ 16] ++ Array.replicate (DIRS_WORDS - 2) 0
 
-/-- A registered row's `b ‖ c` under `salt` (`registered.Registered.commit`, registered.py:139: `sha512/row/v1` of its
+/-- A registered row's `b ‖ c` under `salt` (`registered_value.Registered.commit`: `sha512/row/v1` of its
 u16 words, zero-padded to whole blocks, under hm96-sha512's default key). -/
 def commitRow (row : Array Nat) (salt : ByteArray) : ByteArray :=
   Hm96.Default512.commitString (ZkServer.rowDigest (padTo row (Registered.rowWords row.size 16))) salt

@@ -54,9 +54,10 @@ from verity.commitments import coin_tree as CT
 from . import rec_algebra as A
 from . import rec_live as RL
 from .record_text import session_text
+from verity.commitments.domains import FLOCK_IR_BLOCK
 
 HIDDEN = ("unit",)
-UNIT_FORMAT = "flock-ir-unit/v2"
+UNIT_FORMAT = FLOCK_IR_BLOCK
 #: the sparse streams' Open label
 SPARSE_LABEL = b"verity/rec-sparse/v1"
 
@@ -245,7 +246,7 @@ def staged_stacked(stage: Path) -> tuple[dict, str, dict]:
     """The circuit registration META binds in ``stage`` (`inner_registered.bound`), its digest, and the `rec_live.Proxy`'s
     ``registered`` opening of its `rec_live.STACKED` entry (`inner_registered.private`, its ``top`` the nodes' ``b || c``
     under their salts); refused when the record carries no ``stacked`` entry or the prover holds no opening of it."""
-    from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+    from verity.commitments import docket_digest as DD
 
     from . import inner_registered as IR
 
@@ -255,7 +256,7 @@ def staged_stacked(stage: Path) -> tuple[dict, str, dict]:
     own = IR.private(stage, RL.STACKED)
     cap = bytes.fromhex("".join(own["nodes"]))
     top = RL.commit_top(cap, [bytes.fromhex(s) for s in own["salts"]])
-    return rec, R.digest(rec), {**own, "top": [b.hex() for b in top]}
+    return rec, DD.digest(rec), {**own, "top": [b.hex() for b in top]}
 
 
 def stacked_shape(stage: Path, sparse) -> int:

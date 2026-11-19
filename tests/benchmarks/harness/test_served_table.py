@@ -10,14 +10,15 @@ import pytest
 from verity_bench import served_render, served_table
 from verity_bench.cli import main
 from verity_bench.vllm.arms import Arm
-from verity_bench.vllm.presets import FORMER_SPECS, expand_sweep, load_spec, resolve_spec
+from verity_bench.vllm import presets
+from verity_bench.vllm.presets import FORMER_SPECS, expand_sweep, resolve_spec
 from verity_bench.vllm.runner import run_benchmark
 
 COMMIT_SPEC = "llama31-8b-fp8-1gpu-commit-served"
 ADDED = calendar.timegm((2026, 10, 24, 1, 0, 0))
 COMMIT = served_table.Protocol("Commit", (COMMIT_SPEC,), "commit@compiled", "stock-fp8", own_arm="commit")
 BY_SPEC = {
-    "protocols": (served_table.Protocol("PoUS bandwidth audit", ("llama31-8b-fp8-1gpu-bandwidth-served-r6",),
+    "protocols": (served_table.Protocol("PoUS bandwidth audit", ("llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000",),
                                         "bandwidth-audit", None), COMMIT),
     "factors": served_table.Protocol("conversion factor", ("llama31-8b-fp8-1gpu-compiled-full",), served_table.SERVED,
                                      "stock-fp8"),
@@ -27,11 +28,15 @@ LIVE_ARM, LIVE_CONTROL = "dither-a@x", "exact-fused"
 # Time per output token by arm; every arm slows by the same factor each rep, so the paired ratios are exact.
 SCALE = {"stock-fp8": 2.0, "commit": 2.4, "stock-fp8@compiled": 1.0, "commit@compiled": 1.2, "bandwidth-audit": 1.0,
          "pouw:pearl-c-h100-v1-h3": 12.4}
-R6, BIG, SMALL = ("llama31-8b-fp8-1gpu-bandwidth-served-r6", "llama31-8b-fp8-1gpu-bandwidth-served-h200",
-                  "llama32-1b-fp8-1gpu-bandwidth-served-h200")
-WIDTH_H200 = "llama31-8b-fp8-1gpu-commit-served-width-h200"
-POUW, POUW_H100, POUW_ARM = ("benchmarks/served-overhead-pouw", "llama32-1b-1gpu-pouw-protocol-served-h100",
+R6, BIG, SMALL = ("llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000", "llama31-8b-fp8-1gpu-bandwidth-served-reps6@h200",
+                  "llama32-1b-fp8-1gpu-bandwidth-served")
+WIDTH_H200 = "llama31-8b-fp8-1gpu-commit-served-width@h200"
+#: POUW_ARM is the arm id the PoUW spec's runs were recorded under before the arm took the declared scheme's name
+#: (`presets.former_arm`), which the stand-in run of record keeps
+POUW, POUW_H100, POUW_ARM = ("benchmarks/served-overhead-pouw", "llama32-1b-1gpu-pouw-protocol-served@h100",
                              "pouw:pearl-c-h100-v1-h3")
+#: the id the PoUW spec's H100 runs were recorded under before its spec named no card (`presets.FORMER_IDS`)
+FORMER_H100 = "llama32-1b-1gpu-pouw-protocol-served-h100"
 
 
 class ScaledEngine:
@@ -77,21 +82,21 @@ def _result(point_id: str, commit_scale: float, reps: int = 2, gpu: str = RTX) -
     [point] = [p for p in expand_sweep("quick") if p.id == point_id]
     arms = (Arm("stock-fp8"), Arm("commit", control="stock-fp8"), Arm("stock-fp8@compiled"),
             Arm("commit@compiled", control="stock-fp8@compiled"))
-    return run_benchmark(load_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=reps,
+    return run_benchmark(resolve_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=reps,
                          factory=ScaledFactory(commit_scale, gpu), git_commit="c" * 40)
 
 
 def _audit(point_id: str, scale: float, gpu: str) -> dict:
     [point] = [p for p in expand_sweep("quick") if p.id == point_id]
     arms = (Arm("stock-fp8@compiled"), Arm("bandwidth-audit", control="stock-fp8@compiled"))
-    return run_benchmark(load_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=2,
+    return run_benchmark(resolve_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=2,
                          factory=ScaledFactory(scale, gpu), git_commit="c" * 40)
 
 
 def _pouw(point_id: str, gpu: str) -> dict:
     [point] = [p for p in expand_sweep("quick") if p.id == point_id]
     arms = (Arm("stock-fp8"), Arm(POUW_ARM), Arm("stock-fp8@compiled"))
-    return run_benchmark(load_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=2,
+    return run_benchmark(resolve_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=2,
                          factory=ScaledFactory(1.0, gpu), git_commit="c" * 40)
 
 
@@ -227,10 +232,10 @@ def test_the_served_table_takes_each_points_newest_passing_unsuperseded_run_from
     markdown = served_render.render(table)
     [line] = [line for line in markdown.splitlines() if line.startswith("| Commit |") and "b8-p512-mixed" in line]
     assert line.startswith(f"| Commit | {RTX} | `{COMMIT_SPEC}` | b8-p512-mixed |")
-    assert "| 1.500× ± 0.000 | 1.500× ± 0.000 | 1.500× ± 0.000 | 3 | r20261024-030000-0002 |" in line
+    assert "| 1.500× ± 0.000 | 1.500× ± 0.000 | 1.500× ± 0.000 | piece | 3 | r20261024-030000-0002 |" in line
     assert "served Commit at b8 \\| mechanism evidence only / no pinned sm_120 build" in line
-    assert ("| PoUS bandwidth audit | — | `llama31-8b-fp8-1gpu-bandwidth-served-r6` | b8-p512-mixed | — | — | — | — "
-            "| no passing run |") in markdown
+    assert ("| PoUS bandwidth audit | — | `llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000` | b8-p512-mixed | — | — | — | — "
+            "| — | no passing run |") in markdown
     assert "r20261024-030000-0005" in markdown.split("Passed over")[1]
 
 
@@ -245,6 +250,28 @@ def test_a_trial_run_is_never_a_points_row_however_new(tmp_path):
     assert (b8["run"], b8["art"]) == ("r20261024-020000-0001", kept)
     assert table["skipped"] == [{"spec": COMMIT_SPEC, "point": "b8-p512-mixed", "run": "r20261024-030000-0002", "art": trial,
                                  "why": "a trial run (VERITY_BENCH_TRIAL): its measurements are its own, never a row"}]
+
+
+def test_a_row_says_who_ran_its_results_gates_and_not_recorded_for_a_result_that_predates_the_field(tmp_path):
+    """A row stands on its result's gates, which the served run's own process ran: the row says so from the result
+    (`checked_by`), and a result stored before the field says `not recorded`, never a runner read into it."""
+
+    producer = Producer(tmp_path)
+    old = _result("b8-p512-mixed", 1.0)
+    old["gates"] = [{k: v for k, v in g.items() if k != "checked_by"} for g in old["gates"]]
+    producer.ran("r20261024-020000-0001", COMMIT_SPEC, "b8-p512-mixed", old)
+    producer.ran("r20261024-020000-0002", COMMIT_SPEC, "b32-p512-mixed", _result("b32-p512-mixed", 1.0))
+    table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, added=lambda spec: ADDED,
+                               log=lambda line: None, **BY_SPEC)
+    rows = _commit_rows(table)
+    assert (rows["b8-p512-mixed"]["checked_by"], rows["b32-p512-mixed"]["checked_by"]) == (None, "piece")
+    markdown = served_render.render(table)
+    cells = {point: line.split(" | ")[7] for point in rows for line in markdown.splitlines()
+             if line.startswith("| Commit |") and f"| {point} |" in line}
+    assert cells == {"b8-p512-mixed": "not recorded", "b32-p512-mixed": "piece"}
+    assert "`gates checked by` is who ran them as the result says (`piece`: run by the developer's piece; no auditor-side" in markdown
+    assert "its record doesn't say who ran its gates, so `checked by` is `not recorded` until it does" in markdown
+    assert " verified" not in markdown
 
 
 def test_a_run_recorded_under_the_specs_former_directory_counts_beside_one_under_todays(tmp_path, monkeypatch):
@@ -442,7 +469,7 @@ def test_a_live_pouw_row_is_its_runs_median_decode_step_over_its_controls_and_st
     assert why["r20991231-000000-0000"] == "not in the store or on its remote"
 
     markdown = served_render.render(table)
-    assert (f"| H200 | vy-dc-h200 | 32 | 64 | 16.480 | `{LIVE_CONTROL}` | 3.744 | 4.402× | 3 | off-node | "
+    assert (f"| H200 | vy-dc-h200 | 32 | 64 | 16.480 | `{LIVE_CONTROL}` | 3.744 | 4.402× | 3 | off-node | not recorded | "
             f"r20261024-210000-0001 | `{record[:16]}` | H200 gated live: gamma 4.40 |") in markdown
     assert "per step, not per token" in markdown
     with pytest.raises(ValueError, match="label that art instead"):
@@ -489,7 +516,7 @@ def test_under_a_research_run_the_served_table_records_its_metrics(tmp_path, mon
     monkeypatch.setattr(served_table, "FACTORS", BY_SPEC["factors"])
     monkeypatch.setattr(served_table, "BREAKDOWNS", BY_SPEC["breakdowns"])
     metrics = {"benchmarks/served-overhead-commit": f"{COMMIT_SPEC}/b8-p512-mixed",
-               "benchmarks/served-overhead-pous-bandwidth-audit": "llama31-8b-fp8-1gpu-bandwidth-served-r6/b8-p512-mixed"}
+               "benchmarks/served-overhead-pous-bandwidth-audit": "llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000/b8-p512-mixed"}
 
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     assert main(["served-table"], metrics=metrics) == 0 and not list(tmp_path.rglob(kit.RESULT))
@@ -507,7 +534,7 @@ def test_under_a_research_run_the_served_table_records_its_metrics(tmp_path, mon
     assert commit["value"] == pytest.approx((1.2 * 1.25 - 1) * 100) and commit["ci95"] == pytest.approx([50.0, 50.0])
     assert commit["inputs"] == ["measured", "r20261024-020000-0001", art]
     assert (commit["protocol"], commit["device"], commit["reps"], commit["caveats"]) == ("Commit", RTX, 3, "no pinned sm_120 build")
-    assert pous["value"] is None and pous["why"] == ("no served ratio at llama31-8b-fp8-1gpu-bandwidth-served-r6/b8-p512-mixed: "
+    assert pous["value"] is None and pous["why"] == (f"no served ratio at {R6}/b8-p512-mixed: "
                                                      "no passing run of it in the store")
     assert got["measurement_files"] == [served_render.TABLE]
     assert json.loads((run_dir / served_render.TABLE).read_text())["schema"] == served_table.SCHEMA
@@ -584,7 +611,7 @@ def test_the_bandwidth_audits_members_are_written_from_their_records_runs_and_sa
                               *((audit, member) for member in members), (POUW, "llama-3.2-1b-h100")}
     assert got["by"][audit, None]["value"] == pytest.approx(500.0) and got["by"][audit, None]["device"] == RTX
     for member, spec in members.items():
-        assert f"| PoUS bandwidth audit | — | `{spec}` | — | — | — | — | — | {none} | — |" in out
+        assert f"| PoUS bandwidth audit | — | `{spec}` | — | — | — | — | — | — | {none} | — |" in out
         assert (got["by"][audit, member]["value"], got["by"][audit, member]["why"]) == (
             None, f"no served ratio at {spec}/b32-p512-mixed: {none}")
     assert got["validation"]["status"] == "passed"
@@ -593,7 +620,7 @@ def test_the_bandwidth_audits_members_are_written_from_their_records_runs_and_sa
     producer.label("r20261117-170000-0004", "run_of_record", "pous-bandwidth-audit", "2026-11-17T18:00:00Z")
     out, got = table("after")
     assert f"| PoUS bandwidth audit | {H200} | `{BIG}` | b32-p512-mixed | 2.500× ± 0.000 |" in out
-    assert f"| PoUS bandwidth audit | — | `{SMALL}` | — | — | — | — | — | {none} | — |" in out
+    assert f"| PoUS bandwidth audit | — | `{SMALL}` | — | — | — | — | — | — | {none} | — |" in out
     member = got["by"][audit, "llama-3.1-8b-h200"]
     assert (member["value"], member["device"], member["inputs"][1]) == (pytest.approx(150.0), H200,
                                                                         "r20261117-170000-0004")
@@ -609,19 +636,16 @@ def test_the_bandwidth_audits_member_specs_are_its_record_spec_on_one_h200_and_t
         for name in ("arms", "arm_modules", "arm_settings", "sweep", "reps", "eager", "warmups", "max_warmups", "setup",
                      "admission"):
             assert getattr(member, name) == getattr(r6, name), (spec, name)
-        settings = {k: v for k, v in member.preset.engine_settings.items() if k != "batch_invariant"}
-        assert settings == dict(r6.preset.engine_settings), spec
+        assert dict(member.preset.engine_settings) == dict(r6.preset.engine_settings), spec
         assert dict(member.env) == {k: v for k, v in r6.env.items() if k != "FLASHINFER_CUDA_ARCH_LIST"}, spec
         assert (member.preset.gpu_id, member.preset.gpu_count, member.preset.precision, member.preset.vllm_pin) == (
             "h200", 1, r6.preset.precision, r6.preset.vllm_pin), spec
     big, small = resolve_spec(BIG).preset, resolve_spec(SMALL).preset
-    assert (big.model, big.revision, big.case, big.model_digest) == (
-        r6.preset.model, r6.preset.revision, r6.preset.case, r6.preset.model_digest)
-    pinned = resolve_spec("llama32-1b-1gpu-pouw-protocol-served-h200").preset
-    assert (small.model, small.revision, small.case, small.model_digest) == (
-        pinned.model, pinned.revision, pinned.case, None)
+    assert (big.model, big.revision, big.case) == (r6.preset.model, r6.preset.revision, r6.preset.case)
+    pinned = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200").preset
+    assert (small.model, small.revision, small.case) == (pinned.model, pinned.revision, pinned.case)
     [protocol] = [p for p in served_table.PROTOCOLS if p.record == "pous-bandwidth-audit"]
-    assert protocol.members == (("llama-3.1-8b-h200", BIG), ("llama-3.2-1b-h200", SMALL))
+    assert [(m.name, m.key) for m in protocol.members] == [("llama-3.1-8b-h200", BIG), ("llama-3.2-1b-h200", SMALL)]
 
 
 def _row(protocol: str, spec: str, mean: float, member: str | None = None) -> dict:
@@ -639,8 +663,8 @@ def test_a_metric_of_members_only_leaves_every_other_metrics_readings_byte_for_b
     metrics = _served_overhead_metrics()
     before = served_render.measurements(table, {k: v for k, v in metrics.items() if k != POUW})
     assert hashlib.sha256(json.dumps(before, sort_keys=True).encode()).hexdigest() == (
-        "c1149f548cd05469475102ceba333171c5ec4fea48dac2c7c27acc8dace55bbc")
-    table["rows"].append(_row("PoUW served on sm_90a", POUW_H100, 12.4, "llama-3.2-1b-h100"))
+        "d50ef6dae84589eca812f209a93d096b8be477f32c57c6dd01c5ddba4f9974c3")
+    table["rows"].append(_row("Pearl+ served", POUW_H100, 12.4, "llama-3.2-1b-h100"))
     after = served_render.measurements(table, metrics)
     assert [m for m in after if m["name"] != POUW] == before
     [pouw] = [m for m in after if m["name"] == POUW]
@@ -678,7 +702,9 @@ def test_the_pouw_metric_is_its_members_readings_from_their_records_runs_and_nev
     assert got["by"][POUW, "llama-3.2-1b-h100"]["value"] is None
     assert got["validation"]["status"] == "passed" and got["validation"]["detail"].startswith("2 of 2 metrics")
 
-    producer.ran("r20261117-221551-8a0b", POUW_H100, "b32-p512-mixed", _pouw("b32-p512-mixed", H100))
+    [pearl] = [p for p in served_table.PROTOCOLS if p.record == "pouw-served-sm90"]
+    assert pearl.arm == "pearl-plus" == presets.former_arm(POUW_ARM) != POUW_ARM
+    producer.ran("r20261117-221551-8a0b", FORMER_H100, "b32-p512-mixed", _pouw("b32-p512-mixed", H100))
     producer.label("r20261117-221551-8a0b", "run_of_record", "pouw-served-sm90", "2026-11-17T23:00:00Z")
     member = table("after")["by"][POUW, "llama-3.2-1b-h100"]
     assert (member["value"], member["unit"], member["mark"], member["device"]) == (

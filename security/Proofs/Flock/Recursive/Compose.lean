@@ -34,7 +34,7 @@ case `same k := Eq`.
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Audit
+open Game Spot.Sampling
 open scoped ENNReal
 
 theorem prob_exists_finset_le {α ι : Type} (S : Finset ι) (p : ι → α → Prop) (g : Game α) (s : Strategy g) :

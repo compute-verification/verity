@@ -20,9 +20,9 @@ class TorchH1Device:
     def available(self) -> bool:
         return RD.available()
 
-    def device_hash(self, words: Any, key: bytes, nonce: int, row_salts: bytes | None, domain_id: bytes,
-                    public: tuple[bytes, int, bool] | None = None, also: tuple[bytes, int] | None = None) -> Any:
-        return RD.device_hash(words, key, nonce, row_salts, domain_id, public, also)
+    def device_hash(self, words: Any, row_salts: bytes | None, domain_id: bytes,
+                    public: tuple[bytes, int, bool] | None = None, also: tuple[bytes, bytes] | None = None) -> Any:
+        return RD.device_hash(words, row_salts, domain_id, public, also)
 
     def device_public_salts(self, head: bytes, first: int, n: int, ok: bool = False) -> bytes:
         return RD.device_public_salts(head, first, n, ok)
@@ -39,7 +39,7 @@ class TorchH1Device:
     def flush(self, run: Any) -> None:
         TD.flush(run)
 
-    def take_z(self, run: Any, call: Any, words: Any) -> tuple[bytes, int] | None:
+    def take_z(self, run: Any, call: Any, words: Any) -> tuple[bytes, bytes] | None:
         return TD.take_z(run, call, words)
 
     def row_words(self, t: Any, m: int, dtype: str) -> np.ndarray:

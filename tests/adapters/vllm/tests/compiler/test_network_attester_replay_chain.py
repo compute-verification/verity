@@ -1,8 +1,7 @@
 """The replay's state chain (`replay_chain`): the rows' layout and their refusals, sync and with async scheduling (AS)
 and the walk entries (EW), each shape's state and arrivals `ReplayStep_v1`'s fields and bits, `ReplayAdvance`,
 `ReplayLoad` and `ReplayClose` against `advance`, `load` and `close` on random and edge cases, the front's log shifter
-against slicing, the window's produced values opened at every proof block's read, the carry and the empty start
-(`check_chain`), a two-window session through all three parts, decisions a window leaves unread carried to the next and
+against slicing, the window's produced values opened at every proof block's read, the carried rows' openings, a two-window session through all three parts, decisions a window leaves unread carried to the next and
 refused only at the session's end, and the cost `size` reports."""
 from __future__ import annotations
 
@@ -10,7 +9,7 @@ import random
 
 import pytest
 from verity.circuits.boolean.forms import Circuit
-from verity.protocols.resource_accounting.network.verifier.head_check import ands
+from verity.commitments.gates.bits import ands
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from verity_vllm.compiler import replay_chain as RC
@@ -21,7 +20,7 @@ NARROW = RC.Shape(R=2, W=1, A=4, L=16, NB=8, IW=3, Q=6, D=1, P=1, K=2)
 #: async scheduling and 5-bit walk entries; walk entries alone
 ASYNC = RC.Shape(**{**SMALL.statics(), "AS": 1, "EW": 5})
 WALK = RC.Shape(**{**NARROW.statics(), "EW": 3})
-#: The served vLLM run's engine class (verifier/protocol/served-shape.md) under its AsyncScheduler
+#: The served vLLM run's engine class (verity_vllm/compiler/served-shape.md) under its AsyncScheduler
 SERVED = RC.Shape(R=8, W=1, A=9, L=512, NB=101626, IW=9, Q=4, D=32, P=54, K=4, AS=1)
 SHAPES = (SMALL, NARROW, ASYNC, WALK, SERVED)
 PROGRAM, REGISTRATION = "replay-chain-test", "ab" * 64
@@ -564,38 +563,7 @@ def test_a_session_through_the_chain(S):
             assert G.verify_read(value.domain, value.root, p, value.bcs[p], value.path(p), RC.SCHEMA)
             end[name] = RC.unrow(value.rows[p])
     assert RC.evaluate_close(S, [[list(end["row"]), list(end["window"])]]) == [1]
-    ops = [RC.openings(v) for v in values]
-    assert (ops[0][0][0], ops[0][1][0]) == RC.empty_openings(PROGRAM, S)
-    assert ops[1][0][0] == ops[0][0][-1] and ops[1][1][0] == ops[0][1][-1]
-    assert RC.check_chain(ops, PROGRAM, S) is None
-
-
-def _fresh(S, value, rows):
-    return G.Registered.commit(PROGRAM, value, [RC.row(r) for r in rows], word_bits=16, schema=RC.SCHEMA,
-                               produced=REGISTRATION)
-
-
-def test_check_chain_refuses():
-    S, rng = SMALL, random.Random(5)
-    (rows0, win0, _), (rows1, win1, _) = _session(S, rng)
-    v0 = RC.commit_window(PROGRAM, rows0, win0, S, REGISTRATION)
-    v1 = RC.commit_window(PROGRAM, rows1, win1, S, REGISTRATION, carry=v0)
-    (s0, w0), (s1, w1) = RC.openings(v0), RC.openings(v1)
-    assert RC.check_chain([(s0[:-1], w0), (s1, w1)], PROGRAM, S).startswith("C-rows")
-    assert RC.check_chain([(s0, w0[:1]), (s1, w1)], PROGRAM, S).startswith("C-rows")
-    fresh = list(_fresh(S, RC.VALUE, [RC.encode(r, S) for r in rows0]).bcs)
-    assert RC.check_chain([(fresh, w0), (s1, w1)], PROGRAM, S).startswith("C-first"), "the empty state under a fresh salt"
-    wfresh = list(_fresh(S, RC.WINDOW, [RC.encode_window(RC.QueueRow(), S), RC.encode_window(win0, S)]).bcs)
-    assert RC.check_chain([(s0, wfresh), (s1, w1)], PROGRAM, S).startswith("C-first"), "the empty window under a fresh salt"
-    assert RC.check_chain([(s0, w0), (s1, w1)], "another-program", S).startswith("C-first"), "another program's public salts"
-    other = list(_fresh(S, RC.VALUE, [RC.encode(r, S) for r in rows1]).bcs)
-    assert RC.check_chain([(s0, w0), (other, w1)], PROGRAM, S).startswith("C-carry"), "the carried state under a fresh salt"
-    wother = list(_fresh(S, RC.WINDOW, [RC.encode_window(win0, S), RC.encode_window(win1, S)]).bcs)
-    assert RC.check_chain([(s0, w0), (s1, wother)], PROGRAM, S).startswith("C-carry"), "the carried window under a fresh salt"
-    swapped = list(s1)
-    swapped[0] = s0[-2]
-    assert RC.check_chain([(s0, w0), (swapped, w1)], PROGRAM, S).startswith("C-carry"), "another row of the last window"
-    assert RC.check_chain([], PROGRAM, S) is None
+    assert values[1].state.bcs[0] == values[0].state.bcs[-1] and values[1].window.bcs[0] == values[0].window.bcs[-1]
 
 
 def test_commit_window_refuses():

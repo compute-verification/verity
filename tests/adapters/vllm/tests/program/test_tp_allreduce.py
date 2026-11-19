@@ -55,7 +55,7 @@ def test_the_kernels_vllm_launches_at_glm53() -> None:
     custom all-reduce 1-stage below 256 KiB."""
     assert TA.fused_max_tokens(H, 8) == 42
     assert [TA.mnnvl_shot(m, H, 8) for m in (1, 10, 11, 42)] == [1, 1, 2, 2]
-    grid = {m: TA.mnnvl_grid(m, H) for m in range(1, 70)}
+    grid = {m: TA.mnnvl_grid(m, H, TA.UNSTATED_NODE[0][1]) for m in range(1, 70)}
     assert {m for m, g in grid.items() if g == (96, 8)} == set(range(1, 17))
     assert {m for m, g in grid.items() if g == (192, 4)} == set(range(17, 34))
     assert {m for m, g in grid.items() if g == (384, 2)} == set(range(34, 67))

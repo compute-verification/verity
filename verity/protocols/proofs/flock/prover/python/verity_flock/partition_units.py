@@ -1,8 +1,8 @@
 """Flock over an arbitrary partition: every size class (`verity.circuits.units`) lowered once to AND/XOR/NOT with Flock's pieces,
 and checked against the reference evaluator on synthetic inputs lifted through the unit's flat Definition.
 
-    uv run python -m verity_flock.partition_units --model tiny [--partition q-word|blocks:64|scatter:8]
-    uv run python -m verity_flock.partition_units --definition 'RoPE_v1{NHEADS=32,D=64}' --resolver MODULE:FUNC --vectors 32
+    uv run python -m verity_flock.partition_units --definition 'RoPE_v1{NHEADS=32,D=64}' --resolver MODULE:FUNC --vectors 32 \
+        [--partition q-word|blocks:64|scatter:8]
 
 ``--definition`` names a Definition by its id, which ``--resolver``'s FUNC(id) binds: a registered Definition is registered by
 the module that defines it, so binding one by id takes a resolver that has loaded them all (`resolver`).
@@ -265,21 +265,12 @@ def resolver(spec: str | None, what: str) -> Callable[[str], Any]:
 
 
 def _program(a: argparse.Namespace) -> Any:
-    from verity.circuits.defs import bind
-    from verity.circuits.program import Program
-
-    if a.model == "tiny":
-        from verity_vllm.definitions.registry import b1
-        from verity.circuits.tiny import TINY
-        return Program(bind(b1.Serve, C=TINY, LP=3, STEPS=2))
     return one_call(resolver(a.resolver, "--definition")(a.definition))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    src = ap.add_mutually_exclusive_group(required=True)
-    src.add_argument("--model", choices=["tiny"], help="the tiny Serve_v1 Program (`verity.circuits.tiny`, 38 Calls)")
-    src.add_argument("--definition", help="a registered Definition id, as a one-Call Program (bound by --resolver)")
+    ap.add_argument("--definition", required=True, help="a registered Definition id, as a one-Call Program (bound by --resolver)")
     ap.add_argument("--resolver", default=None, help="MODULE:FUNC (MODULE may be a .py path): FUNC(id), the registered "
                     "Definition an id names")
     ap.add_argument("--partition", default="q-word", help="q-word[:X/W], q-template-instance[:TEMPLATE], blocks[:B] or scatter[:k[/seed]]")

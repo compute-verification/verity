@@ -38,7 +38,7 @@ open Flock Transcript FlockComplete FlockDeploy With
 
 /-- **A transcript computation that sends one body for each round it takes**, where it returns. -/
 def Paces {α : Type} (y : TMW PS α) : Prop :=
-  ∀ (t : Transcript) (l : Array Claims.Msg) (a : α) (t' : Transcript) (l' : Array Claims.Msg),
+  ∀ (t : Transcript) (l : Array Hash.Msg) (a : α) (t' : Transcript) (l' : Array Hash.Msg),
     (y.run t).go l = (.ok (a, t'), l') → l'.size + t.k = l.size + t'.k
 
 /-- **The simulation of `Paces`**: a transcript computation of the pure session is related to itself when it paces. -/
@@ -140,7 +140,7 @@ zerocheck's `3 + (m − 6)` (`zerocheckCut_at`), the lincheck's `3 + (k_log − 
 check (`rankCheckP_go`) and the ring switch's one per claim and one (`ringSwitchCut_sws`), each a round. -/
 theorem piopCut_counts (st : Setup) (lay : Zk.PadLayout) (src : RepSrc) (cap root : ByteArray)
     (extras : Array Claim) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) {t t' : Transcript}
-    {l l' : Array Claims.Msg} {o : ZerocheckProof × LincheckProof × Array (Array F128) × F128 × Array Switched}
+    {l l' : Array Hash.Msg} {o : ZerocheckProof × LincheckProof × Array (Array F128) × F128 × Array Switched}
     (h : ((piopCut (asksCut coin n) st lay src cap root extras prior words).run t).go l = (.ok (o, t'), l')) :
     l'.size = l.size + piopZk st extras ∧ l'.size + t.k = l.size + t'.k := by
   unfold piopCut at h

@@ -25,7 +25,7 @@ Nothing here reads how `kp` or `C` is built: the key program's `LaysOut` and `Un
 
 namespace Flock.Bridge
 
-open FlockSoundness.Audit
+open Spot.Sampling
 open Properties.Spot (bitsGate bitsProg)
 
 /-- **The Bits key program `kp` lays out the circuit `C`**: as many gates; an input where `kp` has no row, and a row

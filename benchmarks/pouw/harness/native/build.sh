@@ -1,24 +1,28 @@
 #!/usr/bin/env bash
-# Builds libpouw_harness.so for sm_120a (no GPU needed): the harness's device side, cuBLASLt, the CUTLASS baselines, and the
-# plain NVFP4 and FP8 GEMMs of ../../nvfp4_sm120/nvf4_plain.cu (no CUTLASS). PH_ARCH=sm_90a builds it for the H100 and H200:
-# the device side and cuBLASLt only, since the CUTLASS baselines and the plain GEMMs are sm_120 kernels (bench.py --bridge
-# times the H200's CUTLASS and DeepGEMM through vLLM's and DeepGEMM's own builds).
+# Builds libpouw_harness.so (no GPU needed) for PH_ARCH, by default the run's machine's card's `arch` (../../../kernels/
+# machine.py arch): the harness's device side, cuBLASLt, and on sm_120a the CUTLASS baselines and the plain NVFP4 and FP8
+# GEMMs of ../../nvfp4_sm120/nvf4_plain.cu (no CUTLASS), which are sm_120a kernels; on any other target with an architecture
+# file (sm_90a) the device side and cuBLASLt only (bench.py --bridge times an sm_90a card's CUTLASS and DeepGEMM through
+# vLLM's and DeepGEMM's own builds).
 #
 #   export POUW_HARNESS_LIB="$(benchmarks/pouw/harness/native/build.sh [OUT_DIR])"
 #       env: POUW_HARNESS_BUILD (the build cache, default native/build), CUDA_HOME, CUTLASS_DIR, JOBS, PH_NO_CUTLASS=1,
-#            PH_ARCH (sm_120a, the default, or sm_90a),
+#            PH_ARCH (a target with an architecture file, sm_120a or sm_90a; default the machine's card's),
 #            LT2_HOME (a second cuBLASLt's root, include/ and lib64/: also builds libpouw_lt2.so, lt.cu alone against it)
 #
 # The output directory is keyed by a hash of these sources, nvcc's version and the cuBLAS headers' (OUT_DIR overrides it); a
 # build that exists there is reused, so a timed run never compiles. Each object is cached under objects/ by the hash of its own
 # unit, the headers, its flags and those versions, so editing one unit recompiles only that one. CUTLASS is header-only, pinned
-# below (cloned into the cache if absent). Without a CUDA 12.9 toolkit, source jobs/toolkit.sh first.
+# below (cloned into the cache if absent). The CUDA toolkit is ../identity.py's TOOLKIT: CUDA_HOME, else the run's
+# machine's (machine.py toolkit); a machine without it sources jobs/toolkit.sh first, which sets CUDA_HOME.
 # Writes libpouw_harness.so, libpouw_lt2.so with LT2_HOME, and build.json (the key, versions, and each kernel's SASS MMA counts
 # and registers, stack, shared and spill bytes); prints only the library's path on stdout.
 set -euo pipefail
 exec 3>&1 1>&2
 HERE="$(cd "$(dirname "$0")" && pwd)"
-CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
+MACHINE="$HERE/../../../kernels/machine.py"
+TOOLKIT="$(python3 -c 'import sys; sys.path[:0] = [sys.argv[1]]; import identity; print(identity.TOOLKIT)' "$HERE/..")"
+CUDA_HOME="$(python3 "$MACHINE" toolkit "$TOOLKIT")"
 NVCC="$CUDA_HOME/bin/nvcc"
 CACHE="${POUW_HARNESS_BUILD:-$HERE/build}"
 CUTLASS_TAG="v4.8.0"
@@ -29,12 +33,12 @@ NVCC_VERSION="$("$NVCC" --version | tail -1)"
 cublas_version() { awk '/^#define CUBLAS_VER_(MAJOR|MINOR|PATCH|BUILD) /{printf "%s%s", s, $3; s="."}' "$1/include/cublas_api.h"; }
 CUBLAS_VERSION="$(cublas_version "$CUDA_HOME")"
 LT2_VERSION="$([[ -n "${LT2_HOME:-}" ]] && cublas_version "$LT2_HOME" || true)"
-PH_ARCH="${PH_ARCH:-sm_120a}"
-case "$PH_ARCH" in
-  sm_120a) ;;
-  sm_90a) PH_NO_CUTLASS=1 ;;
-  *) echo "PH_ARCH is sm_120a or sm_90a, not $PH_ARCH" >&2; exit 2 ;;
-esac
+PH_ARCH="${PH_ARCH:-$(python3 "$MACHINE" arch)}"
+GENCODE="$(python3 "$MACHINE" gencode "$PH_ARCH")"  # refuses a target without an architecture file
+# The plain units and the CUTLASS 3.x baselines are sm_120's block-scaled mma.sync, which no architecture file states yet:
+# until one does, they are sm_120a's alone, and any other target builds the device side and cuBLASLt without CUTLASS.
+block_scaled=1
+[[ "$PH_ARCH" == sm_120a ]] || { block_scaled=; PH_NO_CUTLASS=1; }
 PLAIN=../../nvfp4_sm120/nvf4_plain  # a unit's path from here, without .cu; mainloop_nvf4.cuh beside it
 [[ -f "$HERE/$PLAIN.cu" && -f "$HERE/${PLAIN%/*}/mainloop_nvf4.cuh" ]] || { echo "no $HERE/$PLAIN.cu or its header" >&2; exit 2; }
 KEY="$(cat "$HERE/build.sh" "$HERE"/*.h "$HERE"/*.cu "$HERE/$PLAIN.cu" "$HERE/${PLAIN%/*}"/*.cuh <("$NVCC" --version) \
@@ -54,7 +58,7 @@ if [[ -z "${PH_NO_CUTLASS:-}" ]]; then
   [[ "$got" == "$CUTLASS_COMMIT" ]] || { echo "CUTLASS at $got, want $CUTLASS_COMMIT ($CUTLASS_TAG)" >&2; exit 2; }
 fi
 
-ARCH=(-gencode "arch=compute_${PH_ARCH#sm_},code=$PH_ARCH")
+ARCH=(-gencode "$GENCODE")
 FLAGS=(-O3 -std=c++17 "${ARCH[@]}" -Xcompiler -fPIC --expt-relaxed-constexpr)  # ptxas gets -arch $PH_ARCH -m 64, as pinned
 CUT=(-I"$CUTLASS_DIR/include" -I"$CUTLASS_DIR/tools/util/include" -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1)
 
@@ -75,7 +79,7 @@ compile() {  # SRC DEF OBJ CUTLASS(0|1): SRC is the unit's path from here withou
   cp "$o" "$OUT/$obj.o"
 }
 units=("harness - harness 0" "lt - lt 0")
-if [[ "$PH_ARCH" == sm_90a ]]; then
+if [[ -z "$block_scaled" ]]; then
   units+=("cutlass_registry -DPH_NO_PLAIN cutlass_registry 0")
 elif [[ -z "${PH_NO_CUTLASS:-}" ]]; then
   units+=("$PLAIN - nvf4_plain 0")

@@ -692,7 +692,7 @@ def halvesReg : Lean.Json := sampleReg 16 (strataDesign 8 4 8 4)
 
 /-- One-stage's profile of that sample at δ = 1/10: one level of 16 units, stratified as registered. -/
 def halvesProfile : Core.Integrity :=
-  ⟨#[], #[], false, #[], #[⟨"unit", none, 16, some (.stratified #[⟨"a", 8, 4⟩, ⟨"b", 8, 4⟩])⟩], ⟨1, 10⟩, #[]⟩
+  ⟨#[], #[], false, #[], #[⟨"unit", none, 16, some (.stratified #[⟨"a", 8, 4⟩, ⟨"b", 8, 4⟩])⟩], ⟨1, 10⟩, #[], #[]⟩
 
 /-- An answer's public that states the bound `b`. -/
 def statedBound (b : ℕ) : Lean.Json := Lean.Json.mkObj [("bound", Lean.toJson b)]

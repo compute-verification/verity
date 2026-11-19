@@ -468,7 +468,7 @@ theorem plainTableCols_nodup (s : Claims.Seen) (j : ℕ) : ((plainTableCols s j)
 /-! ## The numbers -/
 
 /-- The session's tables with its spec; none where the statement does not set up. -/
-def tables (zk : Bool) (x : Claims.Msg) : List (SessionSpec × Stmt) :=
+def tables (zk : Bool) (x : Hash.Msg) : List (SessionSpec × Stmt) :=
   match setupOf zk x with
   | some (_, spec, sts) => sts.toList.map fun st => (spec, st)
   | none => []
@@ -479,7 +479,7 @@ namespace KS.Gen
 variable [S : ZkSetup]
 
 /-- The session's tables with its spec; none where the statement does not set up. -/
-def tables (zk : Bool) (x : Claims.Msg) : List (SessionSpec × Stmt) :=
+def tables (zk : Bool) (x : Hash.Msg) : List (SessionSpec × Stmt) :=
   match setupOf zk x with
   | some (_, spec, sts) => sts.toList.map fun st => (spec, st)
   | none => []
@@ -500,7 +500,7 @@ noncomputable def tableErr (zk : Bool) (spec : SessionSpec) (st : Stmt) : ℝ :=
   else Accounting.tableError ((Accounting.fast100 st.m).getD default) (acct spec st)
 
 /-- **`ε_table`**: the session's tables' errors, summed. -/
-noncomputable def εtable (zk : Bool) (x : Claims.Msg) : ℝ := ((tables zk x).map fun p => tableErr zk p.1 p.2).sum
+noncomputable def εtable (zk : Bool) (x : Hash.Msg) : ℝ := ((tables zk x).map fun p => tableErr zk p.1 p.2).sum
 
 
 namespace KS.Gen
@@ -508,7 +508,7 @@ namespace KS.Gen
 variable [S : ZkSetup]
 
 /-- **`ε_table`**: the session's tables' errors, summed. -/
-noncomputable def εtable (zk : Bool) (x : Claims.Msg) : ℝ := ((tables zk x).map fun p => tableErr zk p.1 p.2).sum
+noncomputable def εtable (zk : Bool) (x : Hash.Msg) : ℝ := ((tables zk x).map fun p => tableErr zk p.1 p.2).sum
 
 end KS.Gen
 
@@ -517,7 +517,7 @@ noncomputable def tableLen (zk : Bool) (st : Stmt) : ℝ :=
   2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).d
 
 /-- **`N₀`**: the session's tables' level-0 codeword lengths, summed: table 0's `2^{d₀}` at one table. -/
-noncomputable def N₀ (zk : Bool) (x : Claims.Msg) : ℝ := ((tables zk x).map fun p => tableLen zk p.2).sum
+noncomputable def N₀ (zk : Bool) (x : Hash.Msg) : ℝ := ((tables zk x).map fun p => tableLen zk p.2).sum
 
 
 namespace KS.Gen
@@ -525,7 +525,7 @@ namespace KS.Gen
 variable [S : ZkSetup]
 
 /-- **`N₀`**: the session's tables' level-0 codeword lengths, summed: table 0's `2^{d₀}` at one table. -/
-noncomputable def N₀ (zk : Bool) (x : Claims.Msg) : ℝ := ((tables zk x).map fun p => tableLen zk p.2).sum
+noncomputable def N₀ (zk : Bool) (x : Hash.Msg) : ℝ := ((tables zk x).map fun p => tableLen zk p.2).sum
 
 end KS.Gen
 
@@ -537,7 +537,7 @@ noncomputable def tableWeight (zk : Bool) (st : Stmt) : ℝ :=
   else Claims.Flock.Numbers.weightOf ((Accounting.fast100 st.m).getD default) 0
 
 /-- **The weight `C` of `γ`**: the session's tables' weights, summed. -/
-noncomputable def weight (zk : Bool) (x : Claims.Msg) : ℝ := ((tables zk x).map fun p => tableWeight zk p.2).sum
+noncomputable def weight (zk : Bool) (x : Hash.Msg) : ℝ := ((tables zk x).map fun p => tableWeight zk p.2).sum
 
 
 namespace KS.Gen
@@ -545,7 +545,7 @@ namespace KS.Gen
 variable [S : ZkSetup]
 
 /-- **The weight `C` of `γ`**: the session's tables' weights, summed. -/
-noncomputable def weight (zk : Bool) (x : Claims.Msg) : ℝ := ((tables zk x).map fun p => tableWeight zk p.2).sum
+noncomputable def weight (zk : Bool) (x : Hash.Msg) : ℝ := ((tables zk x).map fun p => tableWeight zk p.2).sum
 
 end KS.Gen
 

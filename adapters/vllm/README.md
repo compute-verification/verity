@@ -101,8 +101,9 @@ finish inside one served window. The parts, in the order they run:
 - **The stages around it** (`benchmarks/one_stage/two_stage.py`). `first` registers each size class's boundary
   commitment, names the window's advice registration (`--advice`) and samples the class's replay blocks once on the
   challenger's coins. `resume` gives the replay side the same stream for the interior registration and the second
-  stage. The verifier refuses every two-stage run at its last check (`FORM` in
-  `verity/protocols/proofs/spot/verifier/second_stage.py`) until the soundness proof covers that form.
+  stage. The verifier accepts a two-stage run whose every check passes (`FORM` in
+  `verity/protocols/proofs/spot/verifier/second_stage.py`), ahead of the soundness proof of that form, and the accept's
+  record says its form is not yet proved.
 
 The commands are `benchmarks/serve_tax/run.sh`'s, and its header documents each variable. `ARMS=two-stage` serves with
 the boundary commitment, which it writes under `PRIVATE/two-stage/boundary`. `REPLAY=LOAD REPLAY_FROM=ARM_DIR
@@ -159,7 +160,9 @@ Imports point down a fixed layer order, with `pipeline` at the top and `config` 
 ## Running
 
 `uv sync --all-packages --extra torch-cpu` installs it with CPU-only torch. The `torch` extra is the CUDA build, and
-vLLM serves only on a GPU node, whose runtime `verity_vllm/ops/pod_bootstrap.sh` builds. The tools read their inputs
+vLLM serves only on a GPU node, whose runtime `verity_vllm/ops/pod_bootstrap.sh` builds; it records the environment's
+path for this user (`${XDG_STATE_HOME:-$HOME/.local/state}/verity-bench/venv`, which the benchmarks' `env.sh` reads), and
+`--record-venv PATH` records one a machine bootstrapped before it already has. The tools read their inputs
 relative to this directory, so run them from here. The suite runs from its own directory, remotely like every suite
 (`uv run tools/check/suites.py verity-vllm` from the root), and `python3 tools/suite_parts.py launch` splits it into
 parallel `research run` jobs.
@@ -177,7 +180,7 @@ one request with every value committed, and seals it, all under `./.verity-work`
 names. `--gpu N` picks the card by its `nvidia-smi` index; without it the script takes `CUDA_VISIBLE_DEVICES`, else the
 first card of compute capability 9.0. The tree does not make the machine:
 - an H100 or H200 (the row is H200's, compute capability 9.0) and an NVIDIA driver that runs CUDA 12.9;
-- the CUDA 12.9 toolkit with `nvcc`, at `/usr/local/cuda-12.9` or `/usr/local/cuda` or where `CUDA_HOME` names (where it
+- the CUDA 12.9 toolkit with `nvcc`, where `CUDA_HOME` names it (the script refuses without it; where it
   lacks the math headers the script takes them from the environment's NVIDIA wheels), and a C++ compiler (`g++`) for it;
 - `uv` ([its installer](https://docs.astral.sh/uv/getting-started/installation/)) and `curl` 7.66 or later on the `PATH`;
 - 35 GB free at the work directory (the install holds the environment twice until it removes its cache, where the disk

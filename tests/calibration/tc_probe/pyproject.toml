@@ -24,7 +24,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 inputs = ["calibration/census", "benchmarks/numerical/bench-instances", "verity/circuits/silicon/discrepancy_log.json",
           "tools/config/verity_config",
           "verity/__init__.py", "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/silicon/__init__.py", "calibration/tc_probe",
-          "benchmarks/harness/verity_bench", "calibration/hardware/cards", "verity/device.py", "verity/channel.py", "verity/errors.py"]
+          "benchmarks/harness/verity_bench", "calibration/hardware/cards", "calibration/hardware/architectures", "verity/device.py", "verity/channel.py", "verity/errors.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

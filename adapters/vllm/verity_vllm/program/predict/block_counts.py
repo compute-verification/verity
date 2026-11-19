@@ -5,7 +5,7 @@ c, k and n (`InferenceOnlyCheck.Count`'s rule): ``verity-vllm block-counts``. Th
 **Blocks.** A window's inference blocks are B's (`inference_blocks`): one a slot, its class Program over every step, which is
 one session, since no request is carried across windows. A block holds, of each template, the units of its slot's digit in
 the template's inference entries, the template's units over the window's m slots. As a Definition the block is the
-window's session (`session`): ``TemplatePopulations_v1`` of each template at its units a slot, one specialized Definition
+window's session (`session`): ``WiredPopulations_v1`` of each template at its units a slot, one specialized Definition
 a window circuit, and a window is m activations of it. A block class is that Definition, which the report names by its
 SHA-512 (`partition_v2.id_digest`).
 
@@ -55,7 +55,7 @@ from verity.circuits import partition_v2 as PV2
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.ops.boolean.versions import gate_table
 from verity.circuits.parts import n_members
-from verity.circuits.population import mixed_population_program
+from verity.circuits.population import wired_population_program
 from verity.circuits.program import is_input
 from verity.commitments.periods import interface as IF
 
@@ -77,7 +77,8 @@ def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
     for e in blocks.inference:
         per[e.template] += e.units // m
     members = [(resolve(t), per[t]) for t, _ in doc["templates"]]
-    return mixed_population_program(members).fn, m, blocks.steps
+    program, _ = wired_population_program(members, {"templates": [[codec.descriptor_id(fn), n] for fn, n in members]})
+    return program.fn, m, blocks.steps
 
 
 def resolve(tid: str) -> Any:
@@ -129,7 +130,7 @@ def fresh(doc: Mapping[str, Any], m: int, pins: Mapping[str, str] | None, roots:
 
 
 def declaration(doc: Any) -> tuple[str, int, int, int]:
-    """A declaration's SHA-512 (its JSON, sorted keys, compact) and its natural ``c``, ``k`` and ``n``; refused
+    """A declaration's SHA-512 (its canonical JSON) and its natural ``c``, ``k`` and ``n``; refused
     (ValueError) where it isn't a JSON object holding them."""
     if not isinstance(doc, Mapping):
         raise ValueError(f"the declaration is a {type(doc).__name__}, not a JSON object")
@@ -137,7 +138,7 @@ def declaration(doc: Any) -> tuple[str, int, int, int]:
     if not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in got):
         raise ValueError(f"the declaration's c, k and n are {got}, not natural numbers")
     c, k, n = got
-    return hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), c, k, n
+    return hashlib.sha512(codec.canonical_json(doc)).hexdigest(), c, k, n
 
 
 def judge(classes: tuple[RBC.BlockClass, ...] | list[RBC.BlockClass], total: int, c: int, k: int, n: int) -> tuple[dict[str, str], str | None]:

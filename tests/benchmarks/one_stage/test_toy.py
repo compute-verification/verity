@@ -19,6 +19,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
 from verity.protocols.proofs.spot.verifier.one_stage import (
@@ -27,6 +28,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     docket as R,
     verifier as V,
 )
+from verity.commitments import registered_value as RV
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.program import Program
@@ -37,17 +39,16 @@ import toy as T
 
 N, Q = 6, 3
 SAMPLE = (4, 1, 5)
-KEY = b"\x07" * 32
 
 
 @pytest.fixture(scope="module")
 def run(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("two-stage-toy")
     u = T.ingress(N)
-    bc = T.boundary(u, Q, salt_key=KEY)
+    bc = T.boundary(u, Q)
     brec = T.write(bc, tmp / "boundary", {"toy": "boundary"}, index_salt=b"\x01" * 192)
-    digest = R.digest(brec)
-    it = T.interior(bc, digest, SAMPLE, salt_key=b"\x08" * 32)
+    digest = DD.digest(brec)
+    it = T.interior(bc, digest, SAMPLE)
     irec = T.write(it.committed, tmp / "interior", {"interior": True, "boundary": digest, "replay_sample": list(SAMPLE)},
                    previous=digest, registered=it.registered, index_salt=b"\x02" * 192)
     return {"tmp": tmp, "u": u, "bc": bc, "brec": brec, "digest": digest, "it": it, "irec": irec}
@@ -99,18 +100,17 @@ def test_the_interior_is_template_major_and_wired_as_the_replay_blocks_edges(run
     assert [m.n for m in win.members] == [Q * n for n in T.N_T] and win.population == Q * T.N_RHO
     assert P.in_order(win.program, win.query, Q * T.N_RHO)
     assert win.members[0].wired == () and T.WRITERS[0] is None
+    pub = publics(c)
     for t, m in enumerate(win.members[1:], 1):
         w, spans = T.WRITERS[t], tuple(i for i in range(Q) for _ in range(T.N_T[t]))
-        (p, o, writers), = m.wired
-        assert (p, o, writers) == (T.LAYOUT[t][0][0][0], "o0", tuple(T.offsets(Q)[w] + i for i in spans))
-        assert win.held(m, p) == win.members[w].port("o0") and win.held_leaves(m, p) == spans
+        (wire,) = m.wired
+        p, wm = wire.port, win.members[w]
+        assert (p, wire.writer, wire.out) == (T.LAYOUT[t][0][0][0], wm.template, "o0")
+        assert win.tree(m, p) == WI.tree(wm.template, "o0") and tuple(win.reads(m, p).tolist()) == spans
         assert m.port(p) not in c.roots and m.port(p) not in T.CS.expected_ports(win)
-        assert dict(m.tables)[p] == win.members[w].n == Q and tuple(c.refs[t][:, 0].tolist()) == spans
-        assert c.bc[m.port(p)] == c.bc[win.members[w].port("o0")]
-    assert set(c.roots) == set(T.CS.expected_ports(win)) == {
-        m.port(p) for m in win.members for p, _ in m.all_rows if win.held(m, p) == m.port(p)}
-    WI.validate(win.members)
-    assert WI.check(win.members, publics(run["it"].committed)) == {}
+        assert dict(m.tables)[p] == wm.n == Q and tuple(c.refs[t][:, 0].tolist()) == spans
+        assert np.array_equal(WI.strings(pub, m, p), WI.strings(pub, wm, "o0")[win.reads(m, p) - win.owns[wm.key]])
+    assert set(c.roots) == set(T.CS.expected_ports(win)) == set(win.trees)
 
 
 def test_each_link_row_is_the_boundary_row_at_its_spans_leaf_and_opens_the_boundary_root(run):
@@ -128,8 +128,8 @@ def test_each_link_row_is_the_boundary_row_at_its_spans_leaf_and_opens_the_bound
         file = reads[m.key]
         assert file["format"] == REG.READS_V1 and list(file["ports"]) == [x for x, _ in m.all_rows]
         e = file["ports"][p]
-        assert e["value"] == value == links[(m.template, p)] and e["reads"] == list(SAMPLE) and e[REG.READS_FROM] == m.base
-        assert (e["leaves"], e["domain"], e[REG.SCHEMA_KEY]) == (N, roots[value]["domain"], T.V2)
+        assert e["value"] == value == links[(m.template, p)] and e["reads"] == list(SAMPLE) and e[RV.READS_FROM] == m.base
+        assert (e["leaves"], e["domain"], e[RV.SCHEMA_KEY]) == (N, roots[value]["domain"], T.V2)
         assert e["words"] == dict(m.all_rows)[p] == port.words
         header = T.CS.registered_header(head, t)[p]
         assert header["value"] == value and header["positions"] == list(SAMPLE)
@@ -150,17 +150,16 @@ def test_every_other_port_reads_the_interior_record_at_its_own_leaves_or_its_wri
         for p, words in m.all_rows:
             if p == T.link(t):
                 continue
-            value, leaves = win.held(m, p), list(win.held_leaves(m, p))
-            assert (value == m.port(p)) == (p not in {x for x, _o, _ws in m.wired})
+            value, wire = win.tree(m, p), win.wire(m, p)
+            assert (value == m.port(p)) == (wire is None)
             e, header = reads[m.key]["ports"][p], T.CS.registered_header(head, t)[p]
             n = roots[value]["leaves"]
-            assert (e["value"], e["root"], e["leaves"], e["domain"]) == (value, roots[value]["root"], n,
-                                                                         roots[value]["domain"])
-            assert e["reads"] == leaves and (e[REG.READS_FROM], e["words"]) == (m.base, words)
-            assert header["positions"] == list(range(n)) == list(range(dict(m.tables).get(p, m.n)))
-            held = rows_bc(c, value, n)
-            assert all(REG.verify_read(c.domains[value], c.roots[value], i, held[i], bytes.fromhex(path), T.V2)
-                       for i, path in zip(range(n), header["paths"], strict=True))
+            assert (e["value"], e["root"], e["leaves"], e["domain"]) == (value, roots[value]["root"], n, roots[value]["domain"])
+            assert e["reads"] == win.reads(m, p).tolist() and (e[RV.READS_FROM], e["words"]) == (m.base, words)
+            assert header["positions"] == win.leaves(m, p).tolist()
+            held = rows_bc(c, m.port(p), len(header["positions"]))
+            assert all(REG.verify_read(c.domains[value], c.roots[value], i, x, bytes.fromhex(path), T.V2)
+                       for i, x, path in zip(header["positions"], held, header["paths"], strict=True))
 
 
 def test_both_registrations_pass_the_verifiers_check_and_the_interior_follows_the_boundary(run):
@@ -186,7 +185,7 @@ def test_a_link_row_off_another_leaf_and_a_broken_wire_are_refused(run):
     assert not REG.verify_read(bc.domains[value], port.root, SAMPLE[1], honest[0], path, T.V2)
     off = T.one_bit_off(port.rows_at(SAMPLE))
     assert int((T.bits(off) != T.bits(port.rows_at(SAMPLE))).sum()) == 1
-    bad = T.interior(bc, run["digest"], SAMPLE, salt_key=b"\x08" * 32, replayed=off)
+    bad = T.interior(bc, run["digest"], SAMPLE, replayed=off)
     x = rows_bc(bad.committed, lin.port("row"), Q)[0]
     assert x != honest[0] and not REG.verify_read(bc.domains[value], port.root, SAMPLE[0], x, path, T.V2)
     lout, egress = it.window.members[4], T.boundary_ports(bc.window)["o0"]
@@ -197,9 +196,13 @@ def test_a_link_row_off_another_leaf_and_a_broken_wire_are_refused(run):
     body = bytearray(pub[flip.key])
     body[0] ^= 1                                        # unit 0's x string, which the fold unit's output wires
     broken = {**pub, flip.key: bytes(body)}
-    assert set(WI.check(it.window.members, broken)) == {flip.key}
-    assert set(WI.check_drawn(it.window.members, broken, [flip.base])) == {flip.key}
-    assert WI.check_drawn(it.window.members, broken, [flip.base + 1]) == {}
+    p = flip.wired[0].port
+    tree, c = it.window.tree(flip, p), it.committed
+    header = T.CS.registered_header(json.loads((run["tmp"] / "interior" / "window.json").read_text()), 2)[p]
+    pos, path = header["positions"][0], bytes.fromhex(header["paths"][0])
+    honest, bad = (bytes(WI.strings(x, flip, p)[0]) for x in (pub, broken))
+    assert REG.verify_read(c.domains[tree], c.roots[tree], pos, honest, path, T.V2)
+    assert bad != honest and not REG.verify_read(c.domains[tree], c.roots[tree], pos, bad, path, T.V2)
 
 
 @pytest.mark.slow
@@ -212,7 +215,8 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
     and the wires the replay block's Definition makes (`second_stage.replay_wires`: each member's input its writer's
     output, `toy.WRITERS`), while without the params' headers every one fails ``second-header``, without their reads or with
     a link port's read of another boundary port ``second-values``, without the verifier ``second-verified``,
-    without the wires ``second-header`` and ``second-read`` (a wired port is bound and read at its writer's port), with
+    without the wires ``second-header``, ``second-read`` and ``second-place-none`` (a wired port is bound and read at its
+    writer's port, and no rule places it without its wire), with
     none derived ``second-wires``, and against S reversed ``second-interior-order`` fails. Slow (about 15 s): the only
     test that lowers the templates, whose circuit SHA-512s and classes are in both headers."""
     from verity_flock.class_statement import member_stager
@@ -256,13 +260,13 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
     def check(sample, refs, verified=verified, ref_reads=ref_reads, wires=wires, rows=rows) -> dict:
         own = SS.Own(tuple(sample), parts, irec, brec, tuple(sampled), links, SS.statement_reads(stmts),
                      verified=verified, refs=refs, ref_reads=ref_reads, wires=wires, rows=rows)
-        return SS.check_twin(True, own, stmts).to_json()
+        return SS.check_twin(own, stmts).to_json()
     assert check(SAMPLE, refs) == {"ok": True, "codes": [], "detail": {}}
     assert check(SAMPLE, ())["codes"] == ["second-header"]
     assert check(SAMPLE, refs, ref_reads=())["codes"] == ["second-values"]
     assert check(SAMPLE, refs, ref_reads=((t0, other), *ref_reads[1:]))["codes"] == ["second-values"]
     assert check(SAMPLE, refs, ())["codes"] == ["second-verified"]
-    assert check(SAMPLE, refs, wires=())["codes"] == ["second-header", "second-read"]
+    assert check(SAMPLE, refs, wires=())["codes"] == ["second-header", "second-read", "second-place-none"]
     assert check(SAMPLE, refs, wires=None)["codes"] == ["second-wires"]
     assert check(SAMPLE, refs, rows=())["codes"] == ["second-links", "second-wires"]
     assert "second-interior-order" in check(SAMPLE[::-1], refs)["codes"]

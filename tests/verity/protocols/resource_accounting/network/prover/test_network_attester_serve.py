@@ -27,7 +27,7 @@ import pytest
 
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA
 from verity.protocols.resource_accounting.network.verifier.grid import Reason
-from verity.protocols.resource_accounting.network.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
+from verity.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
 from verity.protocols.resource_accounting.network.verifier.network_attester import (END, audit, cells, reason_frame)
 from verity.protocols.resource_accounting.network.verifier import load_check as LK, relay_check as RC, record_files as RF
 from verity.protocols.resource_accounting.network.attester import runner_parts as rp, network_attester_serve as ws
@@ -495,7 +495,7 @@ def test_a_session_serves_its_length_to_clients_not_its_own_and_its_check_accept
 
         def __init__(self, argv, **kw):
             a = ws.parser().parse_args(argv[2:])
-            assert a.command == "serve" and ws._params(a) == p
+            assert a.command == "serve" and ws._params(a) == p and a.session == SESSION.hex()
             served.append((a, _run(a.out, a.key, requests, responses, windows=a.windows, params=p,
                                    id_payload=p.payload, arrive=dict(enumerate(arrive)))))
             own.update(json.loads((a.out / "client.json").read_text()))
@@ -508,6 +508,7 @@ def test_a_session_serves_its_length_to_clients_not_its_own_and_its_check_accept
         poll = wait
 
     monkeypatch.setattr(ws, "subprocess", types.SimpleNamespace(Popen=Serve, PIPE=None))
+    monkeypatch.setattr(ws, "secrets", types.SimpleNamespace(token_hex=lambda n: SESSION[:n].hex()))
     assert ws.rehearse(args) == 0
     ((a, relay),) = served
     out = args.out

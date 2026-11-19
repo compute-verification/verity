@@ -27,11 +27,11 @@ else:
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import live as L
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import credit_gate as CG
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import records as ZR
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import requests as RQ
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
@@ -43,7 +43,7 @@ from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
 from verity.protocols.proofs.spot.verifier.challenger import remote as R
 from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveOpening, LiveRecord
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity_torch.pouw import credit_gate_device as CGD
 
 from tests.protocols import challenger_host as CH
@@ -740,7 +740,7 @@ def test_an_honest_served_windows_weights_are_its_periods_and_its_evidence_carri
     r0 = ev["rounds"][0]
     assert r0["request_table"] == c["request_table"] == run._tables[0].commitment.root.hex()
     assert r0["requests"] == CR.requests_root(bytes.fromhex(r0["request_table"]), bytes.fromhex(ids0["root"])).hex()
-    assert ids0["domain"] == G.domain(run.served.program_digest, ids0["value"], ids0["words"], ids0["leaves"],
+    assert ids0["domain"] == RV.domain(run.served.program_digest, ids0["value"], ids0["words"], ids0["leaves"],
                                       session=auditor.session_id).domain_id.hex()
 
 
@@ -1002,9 +1002,7 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     file credit builds from the window's entries (the call tables' domains bound to the window's open root, the
     weights' to none), and credits the gate-passed call only when every sampled proof block's release is accepted and each
     round's live@<s> proves its step's served rows: none, a rejected one, another circuit's descriptor, or no live
-    evidence refuses the whole window. The closed period's credit
-    (`period_credit`) is that window's, its period opened with ``--model`` (the auditor's registration, whose
-    key salted the window's b/<K>), and a window whose ``b/<K>`` aren't the period's is refused there too."""
+    evidence refuses the whole window."""
     k = PHC.draw_k(LAYOUT)
     auditor = periodic(k, files=FILES)
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
@@ -1028,37 +1026,17 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     root, digest = auditor.window["root"], _circuit()
     for port, e in got["registered"]["ports"].items():
         held = CR.is_held(e["value"])
-        assert e["domain"] == G.domain(digest, e["value"], e["words"], e["leaves"], window=None if held else root
+        assert e["domain"] == RV.domain(digest, e["value"], e["words"], e["leaves"], window=None if held else root
                                        ).domain_id.hex(), port
     failed = _credit(auditor, rec, st, run=_verifier(drawn, reject=drawn[-1:]))
     assert failed["window"][0] == "failed" and failed["credit"] is None
     other = _descriptor(((64, K), (32, K)), ("q", "k"))
     assert _credit(auditor, rec, st, descriptor=other, run=_verifier(drawn))["credit"] is None
-    auditor.ledger.period_close(PERIOD)
-    ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN)
-    evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, st, _descriptor(), live, _draw_dir(auditor))
-    got, why = PHC.period_credit(ledger, PERIOD, [evidence], run=_verifier(drawn))
-    assert why is None and got == {"windows": [[0]], "work": [CR.credited_work(LAYOUT, [0], served)], "k": k,
-                                   "delta": str(CR.DELTA), "eps": [out["eps"]]}, why
-    unpinned = PHC.Ledger.load([auditor.ledger.path], auditor.key, main=CH.MAIN)
-    assert PHC.period_credit(unpinned, PERIOD, [evidence], run=_verifier(drawn))[1] == (
-        "circuit", f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: {LC.NO_PINS}")
-    off_main = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN[:1])
-    assert PHC.period_credit(off_main, PERIOD, [evidence], run=_verifier(drawn))[1] == (
-        "circuit", (f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: "
-                    f"{LC.first_parent_reason(auditor.session_id, CH.PINNED, list(CH.MAIN[:1]))}"))
-    assert PHC.period_credit(ledger, PERIOD, [{**evidence, "descriptor": other.hex()}], run=_verifier(drawn))[1][0] == \
-        "circuit"
-    b = SV.register_weights(_circuit(), [(64, K)], {0: _rows("s_w")}, _model_key().key).registered[K].entry()
-    forged = {**evidence, "entries": [b if CR.is_held(e["value"]) else e for e in evidence["entries"]]}
-    refused = PHC.period_credit(ledger, PERIOD, [forged], run=_verifier(drawn))[1]
-    assert refused[0] == "window" and refused[1].startswith(f"window 0 of period {PERIOD} is refused, so the period "
-                                                            "earns nothing: weights: "), refused
 
 
 def test_a_period_open_without_draw_k_is_refused(periodic):
     """The proof system commits the sample's K in the period's open (`credit.K_FIELD`) before any sample; a period
-    opened without one leaves its windows no K to be sampled with, so the window, the period's reading and its credit are
+    opened without one leaves its windows no K to be sampled with, so the window and the period's reading are
     each refused (``budget``), and a window in no period has no committed K either."""
     auditor = periodic(None, files=FILES)
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
@@ -1072,9 +1050,6 @@ def test_a_period_open_without_draw_k_is_refused(periodic):
     reasons = PHC.period_reason(ledger, PERIOD, [auditor.session_id, auditor.draw.session_id],
                                 [auditor.window["root"], rec["commitment"]["draw"]["root"]])
     assert len(reasons) == 1 and reasons[0].startswith(f"budget: period {PERIOD}'s open commits no draw K"), reasons
-    evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, [], _descriptor(),
-                                   draw_directory=_draw_dir(auditor))
-    assert PHC.period_credit(ledger, PERIOD, [evidence])[1][0] == "budget"
     with pytest.raises(ValueError, match="layout"):
         PHC.draw_k(None)
 
@@ -1303,7 +1278,7 @@ def _two_window_period(tmp_path):
 def test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused(tmp_path):
     """A period earns only as its close lists it (`credit.period`): exactly its windows, each once, in the
     close's order. Presented out of order, with one missing, with one past the close, or with a window not its own, the
-    period is refused, by `period_reason` and by `period_credit` before any window is read. Each window's sample
+    period is refused by `period_reason`. Each window's sample
     challenge phase is one of the close's, right after its window, presented as its sample root."""
     ledger, sessions, (a, da, b, db) = _two_window_period(tmp_path)
     other = hashlib.sha512(b"another window").hexdigest()
@@ -1318,13 +1293,6 @@ def test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused
     assert why([a, da, b, db, a]).startswith("period: the sessions presented run past the 4")
     assert why([other, a, da, b, db]).startswith(
         f"period: session {other[:16]}... is not one of period {PERIOD}'s sessions")
-    stub = dict.fromkeys(CR.PERIOD_KEYS)
-
-    def window(root, draw):
-        return {**stub, "window": {"root": root}, "draw": {"root": draw}}
-    got, refused = PHC.period_credit(ledger, PERIOD, [window(b, db), window(a, da)])
-    assert got is None and refused[0] == "order"
-    assert PHC.period_credit(ledger, PERIOD, [window(a, da)])[1][0] == "missing"
 
 
 def test_a_credit_bit_changed_after_the_sampling_coin_is_refused(periodic):
@@ -1354,15 +1322,16 @@ def test_a_credit_bit_changed_after_the_sampling_coin_is_refused(periodic):
     assert credited(c, no_z) == ("credit", CR.no_z(0))
 
 
-def test_the_salt_key_and_a_calls_values_outlive_the_close_in_the_provers_directory_only(tmp_path):
-    """DRAWN1: with a prover directory the run keeps its salt key and each served call's A rows, scales and z/y records
-    there, owner-only, past the close; the run's published output (its transcript) holds neither the key's bytes nor
-    its hex; and the call's A and z tables rebuilt from them have the roots its manifest row carries, so a sampled proof block
-    opens after the close, while a kept row changed afterwards is refused."""
-    prover, out, key = tmp_path / "prover", tmp_path / "out", bytes(range(32))
+def test_the_salts_and_a_calls_values_outlive_the_close_in_the_provers_directory_only(tmp_path):
+    """DRAWN1: with a prover directory the run keeps its fresh salts (the salt file `pouw_h1_prover.SALTS`) and each
+    served call's A rows, scales and z/y records there, owner-only, past the close; the run's published output (its
+    transcript) holds no salt's bytes nor their hex; and the call's A and z tables rebuilt from them have the roots its
+    manifest row carries, so a sampled proof block opens after the close, while a kept row changed afterwards is
+    refused."""
+    prover, out = tmp_path / "prover", tmp_path / "out"
     salt = hashlib.sha512(b"salt").digest()
     rounds = LiveRecord(Wd.live_challenger(0, 1, random.Random(1).randbytes), Wd.ROUND, clock=lambda: 0.0)
-    run = PH.H1Run("t", salt, {0: "q"}, [(64, K)], ROWS, 1, transcript_dir=str(out), rounds=rounds, key=key,
+    run = PH.H1Run("t", salt, {0: "q"}, [(64, K)], ROWS, 1, transcript_dir=str(out), rounds=rounds,
                    prover=str(prover))
     layer = Linear(64, 1, None)
     x = (torch.randn(3, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()
@@ -1371,11 +1340,15 @@ def test_the_salt_key_and_a_calls_values_outlive_the_close_in_the_provers_direct
     run.record(0, xq, s_a, layer.weight, layer.weight_scale, zy)
     run.finish()
     del run
-    assert PV.key_of(prover) == key
+    kept_salts = PV.salts_of(prover)
+    a_nonce = RQ.TABLES_NONCE + RQ.TABLE_NONCES["a"]
+    salts = [kept_salts.at(a_nonce, ROWS)[192 * j:192 * (j + 1)] for j in range(ROWS)]
+    assert len(set(salts)) == ROWS
     assert stat.S_IMODE(prover.stat().st_mode) == 0o700
     assert all(stat.S_IMODE(p.stat().st_mode) == 0o600 for p in prover.rglob("*") if p.is_file())
     published = [p for p in out.rglob("*") if p.is_file()]
-    assert published and not any(key in p.read_bytes() or key.hex().encode() in p.read_bytes() for p in published)
+    assert published and not any(y in p.read_bytes() or y.hex().encode() in p.read_bytes() for p in published
+                                 for y in salts)
     record = json.loads((out / PH.CALLS_FILE).read_text())
     assert PV.locate(record["calls"], 1) == (0, 1)
     opened = PV.open_call(prover, record, 0, salt)

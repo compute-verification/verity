@@ -32,14 +32,14 @@ open Flock Transcript Replay LigLock
 /-! ## Logs that agree from a body on -/
 
 /-- **Two logs agreeing from body `B` on**: the same length, and the same body at each index `≥ B`. -/
-structure LogEq (B : ℕ) (l l' : Array Claims.Msg) : Prop where
+structure LogEq (B : ℕ) (l l' : Array Hash.Msg) : Prop where
   size : l.size = l'.size
   get : ∀ k, B ≤ k → l[k]? = l'[k]?
 
-theorem LogEq.of_size {B : ℕ} {l l' : Array Claims.Msg} (hl : l.size = l'.size) (hB : l.size ≤ B) : LogEq B l l' :=
+theorem LogEq.of_size {B : ℕ} {l l' : Array Hash.Msg} (hl : l.size = l'.size) (hB : l.size ≤ B) : LogEq B l l' :=
   ⟨hl, fun k hk => by rw [Array.getElem?_eq_none (by omega), Array.getElem?_eq_none (by omega)]⟩
 
-theorem LogEq.push {B : ℕ} {l l' : Array Claims.Msg} (h : LogEq B l l') {m m' : Claims.Msg}
+theorem LogEq.push {B : ℕ} {l l' : Array Hash.Msg} (h : LogEq B l l') {m m' : Hash.Msg}
     (hm : B ≤ l.size → m = m') : LogEq B (l.push m) (l'.push m') := by
   refine ⟨by simp [h.size], fun k hk => ?_⟩
   rw [Array.getElem?_push, Array.getElem?_push, ← h.size]
@@ -50,8 +50,8 @@ theorem LogEq.push {B : ℕ} {l l' : Array Claims.Msg} (h : LogEq B l l') {m m' 
 
 /-- **Two runs in lockstep from body `B` on**: logs agreeing from `B` on; both refused, or both returned, with pendings
 equal where `Q` holds of the log's length and values related by `R`. -/
-structure Lk {α β : Type} (B : ℕ) (Q : ℕ → Prop) (R : α → β → Array Claims.Msg → Prop)
-    (x : Except String (α × Transcript) × Array Claims.Msg) (y : Except String (β × Transcript) × Array Claims.Msg) :
+structure Lk {α β : Type} (B : ℕ) (Q : ℕ → Prop) (R : α → β → Array Hash.Msg → Prop)
+    (x : Except String (α × Transcript) × Array Hash.Msg) (y : Except String (β × Transcript) × Array Hash.Msg) :
     Prop where
   log : LogEq B x.2 y.2
   res : (∃ e e', x.1 = .error e ∧ y.1 = .error e') ∨
@@ -60,8 +60,8 @@ structure Lk {α β : Type} (B : ℕ) (Q : ℕ → Prop) (R : α → β → Arra
 variable {α β γ δ : Type} {B : ℕ} {Q Q' : ℕ → Prop}
 
 /-- **A bind in lockstep**, the continuations from every pair of returns. -/
-theorem lk_bind {R : α → β → Array Claims.Msg → Prop} {S : γ → δ → Array Claims.Msg → Prop} {x : TMW PS α}
-    {y : TMW PS β} {f : α → TMW PS γ} {g : β → TMW PS δ} {t t' : Transcript} {l l' : Array Claims.Msg}
+theorem lk_bind {R : α → β → Array Hash.Msg → Prop} {S : γ → δ → Array Hash.Msg → Prop} {x : TMW PS α}
+    {y : TMW PS β} {f : α → TMW PS γ} {g : β → TMW PS δ} {t t' : Transcript} {l l' : Array Hash.Msg}
     (hxy : Lk B Q R ((x.run t).go l) ((y.run t').go l'))
     (hfg : ∀ a b t₁ t₁' l₁ l₁', LogEq B l₁ l₁' → (Q l₁.size → t₁.pending = t₁'.pending) → R a b l₁ →
       Lk B Q' S (((f a).run t₁).go l₁) (((g b).run t₁').go l₁')) :
@@ -77,15 +77,15 @@ theorem lk_bind {R : α → β → Array Claims.Msg → Prop} {S : γ → δ →
   · rw [bind_go hx, bind_go hy]
     exact hfg a b t₁ t₁' Lx Ly hL hp hR
 
-theorem lk_pure {R : α → β → Array Claims.Msg → Prop} {a : α} {b : β} {t t' : Transcript} {l l' : Array Claims.Msg}
+theorem lk_pure {R : α → β → Array Hash.Msg → Prop} {a : α} {b : β} {t t' : Transcript} {l l' : Array Hash.Msg}
     (hL : LogEq B l l') (hp : Q l.size → t.pending = t'.pending) (hR : R a b l) :
     Lk B Q R (((pure a : TMW PS α).run t).go l) (((pure b : TMW PS β).run t').go l') :=
   ⟨hL, .inr ⟨a, b, t, t', rfl, rfl, hp, hR⟩⟩
 
 /-- **An `LP` bind in lockstep.** -/
-theorem lk_lbind {R : α × LigState → β × LigState → Array Claims.Msg → Prop}
-    {S : γ × LigState → δ × LigState → Array Claims.Msg → Prop} {x : LP PS α} {y : LP PS β} {f : α → LP PS γ}
-    {g : β → LP PS δ} {s s' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg}
+theorem lk_lbind {R : α × LigState → β × LigState → Array Hash.Msg → Prop}
+    {S : γ × LigState → δ × LigState → Array Hash.Msg → Prop} {x : LP PS α} {y : LP PS β} {f : α → LP PS γ}
+    {g : β → LP PS δ} {s s' : LigState} {t t' : Transcript} {l l' : Array Hash.Msg}
     (hxy : Lk B Q R (((x.run s).run t).go l) (((y.run s').run t').go l'))
     (hfg : ∀ a s₁ b s₁' t₁ t₁' l₁ l₁', LogEq B l₁ l₁' → (Q l₁.size → t₁.pending = t₁'.pending) →
       R (a, s₁) (b, s₁') l₁ → Lk B Q' S ((((f a).run s₁).run t₁).go l₁) ((((g b).run s₁').run t₁').go l₁')) :
@@ -94,8 +94,8 @@ theorem lk_lbind {R : α × LigState → β × LigState → Array Claims.Msg →
   exact lk_bind (f := fun p => (f p.1).run p.2) (g := fun p => (g p.1).run p.2) hxy
     fun ⟨a, s₁⟩ ⟨b, s₁'⟩ t₁ t₁' l₁ l₁' hL hp hR => hfg a s₁ b s₁' t₁ t₁' l₁ l₁' hL hp hR
 
-theorem lk_lpure {S : α × LigState → β × LigState → Array Claims.Msg → Prop} {a : α} {b : β} {s s' : LigState}
-    {t t' : Transcript} {l l' : Array Claims.Msg} (hL : LogEq B l l') (hp : Q l.size → t.pending = t'.pending)
+theorem lk_lpure {S : α × LigState → β × LigState → Array Hash.Msg → Prop} {a : α} {b : β} {s s' : LigState}
+    {t t' : Transcript} {l l' : Array Hash.Msg} (hL : LogEq B l l') (hp : Q l.size → t.pending = t'.pending)
     (hS : S (a, s) (b, s') l) :
     Lk B Q S ((((pure a : LP PS α).run s).run t).go l) ((((pure b : LP PS β).run s').run t').go l') :=
   ⟨hL, .inr ⟨(a, s), (b, s'), t, t', rfl, rfl, hp, hS⟩⟩
@@ -113,22 +113,22 @@ theorem pend_absorbK (v : F256) : PendOnly (absorbK v) (pSlice #[v.c0, v.c1]) :=
 theorem pend_absorbBytes (b : ByteArray) : PendOnly (absorbBytes b) (pBytes b) := fun _ => rfl
 theorem pend_pow (n : UInt64) : PendOnly (pow n) (pBytes (le64 n)) := fun _ => rfl
 
-variable {S : γ → δ → Array Claims.Msg → Prop}
+variable {S : γ → δ → Array Hash.Msg → Prop}
 
 /-- **Two absorbs** of the transcript's monad. -/
 theorem lk_tabs {x x' : TM Unit} {P P' : ByteArray → ByteArray} (hx : PendOnly x P) (hx' : PendOnly x' P')
-    {f : Unit → TMW PS γ} {g : Unit → TMW PS δ} {t t' : Transcript} {l l' : Array Claims.Msg}
+    {f : Unit → TMW PS γ} {g : Unit → TMW PS δ} {t t' : Transcript} {l l' : Array Hash.Msg}
     (k : Lk B Q S (((f ()).run { t with pending := P t.pending }).go l)
       (((g ()).run { t' with pending := P' t'.pending }).go l')) :
     Lk B Q S (((liftTM x >>= f).run t).go l) (((liftTM x' >>= g).run t').go l') := by
   rw [bind_go (liftTM_ok (hx t) l), bind_go (liftTM_ok (hx' t') l')]
   exact k
 
-variable {S : γ × LigState → δ × LigState → Array Claims.Msg → Prop}
+variable {S : γ × LigState → δ × LigState → Array Hash.Msg → Prop}
 
 /-- **Two absorbs** of the opening's monad. -/
 theorem lk_labsorb {x x' : TM Unit} {P P' : ByteArray → ByteArray} (hx : PendOnly x P) (hx' : PendOnly x' P')
-    {f : Unit → LP PS γ} {g : Unit → LP PS δ} {s s' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg}
+    {f : Unit → LP PS γ} {g : Unit → LP PS δ} {s s' : LigState} {t t' : Transcript} {l l' : Array Hash.Msg}
     (k : Lk B Q S ((((f ()).run s).run { t with pending := P t.pending }).go l)
       ((((g ()).run s').run { t' with pending := P' t'.pending }).go l')) :
     Lk B Q S ((((liftT (liftTM x) >>= f).run s).run t).go l) ((((liftT (liftTM x') >>= g).run s').run t').go l') := by
@@ -136,7 +136,7 @@ theorem lk_labsorb {x x' : TM Unit} {P P' : ByteArray → ByteArray} (hx : PendO
   exact k
 
 theorem lk_lF {v v' : F128} {f : Unit → LP PS γ} {g : Unit → LP PS δ} {s s' : LigState} {t t' : Transcript}
-    {l l' : Array Claims.Msg}
+    {l l' : Array Hash.Msg}
     (k : ∀ t₁ t₁' : Transcript, (v = v' → t.pending = t'.pending → t₁.pending = t₁'.pending) →
       Lk B Q S ((((f ()).run s).run t₁).go l) ((((g ()).run s').run t₁').go l')) :
     Lk B Q S ((((liftT (liftTM (absorbF v)) >>= f).run s).run t).go l)
@@ -146,7 +146,7 @@ theorem lk_lF {v v' : F128} {f : Unit → LP PS γ} {g : Unit → LP PS δ} {s s
     exact congrArg (pF v) hp)
 
 theorem lk_lK {v v' : F256} {f : Unit → LP PS γ} {g : Unit → LP PS δ} {s s' : LigState} {t t' : Transcript}
-    {l l' : Array Claims.Msg}
+    {l l' : Array Hash.Msg}
     (k : ∀ t₁ t₁' : Transcript, (v = v' → t.pending = t'.pending → t₁.pending = t₁'.pending) →
       Lk B Q S ((((f ()).run s).run t₁).go l) ((((g ()).run s').run t₁').go l')) :
     Lk B Q S ((((liftT (liftTM (absorbK v)) >>= f).run s).run t).go l)
@@ -156,7 +156,7 @@ theorem lk_lK {v v' : F256} {f : Unit → LP PS γ} {g : Unit → LP PS δ} {s s
     exact congrArg (pSlice #[v.c0, v.c1]) hp)
 
 theorem lk_lSl {vs vs' : Array F128} {f : Unit → LP PS γ} {g : Unit → LP PS δ} {s s' : LigState}
-    {t t' : Transcript} {l l' : Array Claims.Msg}
+    {t t' : Transcript} {l l' : Array Hash.Msg}
     (k : ∀ t₁ t₁' : Transcript, (vs = vs' → t.pending = t'.pending → t₁.pending = t₁'.pending) →
       Lk B Q S ((((f ()).run s).run t₁).go l) ((((g ()).run s').run t₁').go l')) :
     Lk B Q S ((((liftT (liftTM (absorbSlice vs)) >>= f).run s).run t).go l)
@@ -166,7 +166,7 @@ theorem lk_lSl {vs vs' : Array F128} {f : Unit → LP PS γ} {g : Unit → LP PS
     exact congrArg (pSlice vs) hp)
 
 theorem lk_lBy {b b' : ByteArray} {f : Unit → LP PS γ} {g : Unit → LP PS δ} {s s' : LigState} {t t' : Transcript}
-    {l l' : Array Claims.Msg}
+    {l l' : Array Hash.Msg}
     (k : ∀ t₁ t₁' : Transcript, (b = b' → t.pending = t'.pending → t₁.pending = t₁'.pending) →
       Lk B Q S ((((f ()).run s).run t₁).go l) ((((g ()).run s').run t₁').go l')) :
     Lk B Q S ((((liftT (liftTM (absorbBytes b)) >>= f).run s).run t).go l)
@@ -176,7 +176,7 @@ theorem lk_lBy {b b' : ByteArray} {f : Unit → LP PS γ} {g : Unit → LP PS δ
     exact congrArg (pBytes b) hp)
 
 theorem lk_lLab (str : String) {f : Unit → LP PS γ} {g : Unit → LP PS δ} {s s' : LigState} {t t' : Transcript}
-    {l l' : Array Claims.Msg}
+    {l l' : Array Hash.Msg}
     (k : ∀ t₁ t₁' : Transcript, (t.pending = t'.pending → t₁.pending = t₁'.pending) →
       Lk B Q S ((((f ()).run s).run t₁).go l) ((((g ()).run s').run t₁').go l')) :
     Lk B Q S ((((liftT (liftTM (label str)) >>= f).run s).run t).go l)
@@ -185,7 +185,7 @@ theorem lk_lLab (str : String) {f : Unit → LP PS γ} {g : Unit → LP PS δ} {
 
 /-- **Two messages sent**: each state records its own; the pendings agree where the messages and the pendings did. -/
 theorem lk_send {m m' : F256 × F256} {f : Unit → LP PS γ} {g : Unit → LP PS δ} {s s' : LigState}
-    {t t' : Transcript} {l l' : Array Claims.Msg}
+    {t t' : Transcript} {l l' : Array Hash.Msg}
     (k : ∀ t₁ t₁' : Transcript, (m = m' → t.pending = t'.pending → t₁.pending = t₁'.pending) →
       Lk B Q S ((((f ()).run { s with msgs := s.msgs.push m }).run t₁).go l)
         ((((g ()).run { s' with msgs := s'.msgs.push m' }).run t₁').go l')) :
@@ -199,7 +199,7 @@ theorem lk_send {m m' : F256 × F256} {f : Unit → LP PS γ} {g : Unit → LP P
 
 /-- **Two grinding nonces**: the tables and weights untouched. -/
 theorem lk_powP {nonce nonce' : ℕ → ℕ → UInt64} {kind : ℕ} {f : Unit → LP PS γ} {g : Unit → LP PS δ}
-    {s s' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg}
+    {s s' : LigState} {t t' : Transcript} {l l' : Array Hash.Msg}
     (k : ∀ s₁ s₁' : LigState, s₁.tab = s.tab → s₁.w = s.w → s₁'.tab = s'.tab → s₁'.w = s'.w →
       ∀ t₁ t₁' : Transcript, (t.pending = t'.pending → t₁.pending = t₁'.pending) →
       Lk B Q S ((((f ()).run s₁).run t₁).go l) ((((g ()).run s₁').run t₁').go l')) :
@@ -212,10 +212,10 @@ theorem lk_powP {nonce nonce' : ℕ → ℕ → UInt64} {kind : ℕ} {f : Unit �
 
 /-- **Two squeezes of `k ≠ 0` coins** at the same round: both refused past round `N`, else the same coins and both
 pendings empty; the bodies agree from `B` on where the pendings did. -/
-theorem lk_tsq {S : γ → δ → Array Claims.Msg → Prop} (coin : ℕ → ℕ → F128) (N : ℕ) (kind : UInt8) {k : ℕ}
+theorem lk_tsq {S : γ → δ → Array Hash.Msg → Prop} (coin : ℕ → ℕ → F128) (N : ℕ) (kind : UInt8) {k : ℕ}
     (hk : k ≠ 0) {f : Array F128 → TMW PS γ} {g : Array F128 → TMW PS δ} {t t' : Transcript}
-    {l l' : Array Claims.Msg} (hL : LogEq B l l') (hp : B ≤ l.size → t.pending = t'.pending)
-    (kont : l.size < N → ∀ t₁ t₁' : Transcript, t₁.pending = t₁'.pending → ∀ l₁ l₁' : Array Claims.Msg,
+    {l l' : Array Hash.Msg} (hL : LogEq B l l') (hp : B ≤ l.size → t.pending = t'.pending)
+    (kont : l.size < N → ∀ t₁ t₁' : Transcript, t₁.pending = t₁'.pending → ∀ l₁ l₁' : Array Hash.Msg,
       LogEq B l₁ l₁' → l₁.size = l.size + 1 →
       Lk B Q S (((f ((Array.range k).map (coin l.size))).run t₁).go l₁)
         (((g ((Array.range k).map (coin l.size))).run t₁').go l₁')) :
@@ -234,8 +234,8 @@ theorem lk_tsq {S : γ → δ → Array Claims.Msg → Prop} (coin : ℕ → ℕ
 
 theorem lk_lsq (coin : ℕ → ℕ → F128) (N : ℕ) (kind : UInt8) {k : ℕ} (hk : k ≠ 0)
     {f : Array F128 → LP PS γ} {g : Array F128 → LP PS δ} {s s' : LigState} {t t' : Transcript}
-    {l l' : Array Claims.Msg} (hL : LogEq B l l') (hp : B ≤ l.size → t.pending = t'.pending)
-    (kont : l.size < N → ∀ t₁ t₁' : Transcript, t₁.pending = t₁'.pending → ∀ l₁ l₁' : Array Claims.Msg,
+    {l l' : Array Hash.Msg} (hL : LogEq B l l') (hp : B ≤ l.size → t.pending = t'.pending)
+    (kont : l.size < N → ∀ t₁ t₁' : Transcript, t₁.pending = t₁'.pending → ∀ l₁ l₁' : Array Hash.Msg,
       LogEq B l₁ l₁' → l₁.size = l.size + 1 →
       Lk B Q S ((((f ((Array.range k).map (coin l.size))).run s).run t₁).go l₁)
         ((((g ((Array.range k).map (coin l.size))).run s').run t₁').go l₁')) :
@@ -246,8 +246,8 @@ theorem lk_lsq (coin : ℕ → ℕ → F128) (N : ℕ) (kind : UInt8) {k : ℕ} 
 
 theorem lk_lsampleVec (coin : ℕ → ℕ → F128) (N : ℕ) {k : ℕ} (hk : k ≠ 0)
     {f : Array F128 → LP PS γ} {g : Array F128 → LP PS δ} {s s' : LigState} {t t' : Transcript}
-    {l l' : Array Claims.Msg} (hL : LogEq B l l') (hp : B ≤ l.size → t.pending = t'.pending)
-    (kont : l.size < N → ∀ t₁ t₁' : Transcript, t₁.pending = t₁'.pending → ∀ l₁ l₁' : Array Claims.Msg,
+    {l l' : Array Hash.Msg} (hL : LogEq B l l') (hp : B ≤ l.size → t.pending = t'.pending)
+    (kont : l.size < N → ∀ t₁ t₁' : Transcript, t₁.pending = t₁'.pending → ∀ l₁ l₁' : Array Hash.Msg,
       LogEq B l₁ l₁' → l₁.size = l.size + 1 →
       Lk B Q S ((((f ((Array.range k).map (coin l.size))).run s).run t₁).go l₁)
         ((((g ((Array.range k).map (coin l.size))).run s').run t₁').go l₁')) :
@@ -257,8 +257,8 @@ theorem lk_lsampleVec (coin : ℕ → ℕ → F128) (N : ℕ) {k : ℕ} (hk : k 
   exact lk_lsq coin N 2 hk hL hp kont
 
 theorem lk_lsampleP (coin : ℕ → ℕ → F128) (N : ℕ) {f : F128 → LP PS γ} {g : F128 → LP PS δ} {s s' : LigState}
-    {t t' : Transcript} {l l' : Array Claims.Msg} (hL : LogEq B l l') (hp : B ≤ l.size → t.pending = t'.pending)
-    (kont : l.size < N → ∀ t₁ t₁' : Transcript, t₁.pending = t₁'.pending → ∀ l₁ l₁' : Array Claims.Msg,
+    {t t' : Transcript} {l l' : Array Hash.Msg} (hL : LogEq B l l') (hp : B ≤ l.size → t.pending = t'.pending)
+    (kont : l.size < N → ∀ t₁ t₁' : Transcript, t₁.pending = t₁'.pending → ∀ l₁ l₁' : Array Hash.Msg,
       LogEq B l₁ l₁' → l₁.size = l.size + 1 →
       Lk B Q S ((((f (coin l.size 0)).run s).run t₁).go l₁) ((((g (coin l.size 0)).run s').run t₁').go l₁')) :
     Lk B Q S ((((liftT (sampleP (asksCut coin N)) >>= f).run s).run t).go l)
@@ -272,8 +272,8 @@ theorem lk_lsampleP (coin : ℕ → ℕ → F128) (N : ℕ) {f : F128 → LP PS 
   exact kont hn t₁ t₁' ht l₁ l₁' hL₁ hs
 
 theorem lk_lsampleKP (coin : ℕ → ℕ → F128) (N : ℕ) {f : F256 → LP PS γ} {g : F256 → LP PS δ} {s s' : LigState}
-    {t t' : Transcript} {l l' : Array Claims.Msg} (hL : LogEq B l l') (hp : B ≤ l.size → t.pending = t'.pending)
-    (kont : l.size < N → ∀ t₁ t₁' : Transcript, t₁.pending = t₁'.pending → ∀ l₁ l₁' : Array Claims.Msg,
+    {t t' : Transcript} {l l' : Array Hash.Msg} (hL : LogEq B l l') (hp : B ≤ l.size → t.pending = t'.pending)
+    (kont : l.size < N → ∀ t₁ t₁' : Transcript, t₁.pending = t₁'.pending → ∀ l₁ l₁' : Array Hash.Msg,
       LogEq B l₁ l₁' → l₁.size = l.size + 1 →
       Lk B Q S ((((f ⟨coin l.size 0, coin l.size 1⟩).run s).run t₁).go l₁)
         ((((g ⟨coin l.size 0, coin l.size 1⟩).run s').run t₁').go l₁')) :
@@ -291,8 +291,8 @@ theorem lk_lsampleKP (coin : ℕ → ℕ → F128) (N : ℕ) {f : F256 → LP PS
 /-- **Two squeezes of any count from equal pendings**: the same coins, equal pendings after, logs agreeing. -/
 theorem lk_lsqAny (coin : ℕ → ℕ → F128) (N : ℕ) (kind : UInt8) (k : ℕ)
     {f : Array F128 → LP PS γ} {g : Array F128 → LP PS δ} {s s' : LigState} {t t' : Transcript}
-    {l l' : Array Claims.Msg} (hL : LogEq B l l') (hp : t.pending = t'.pending)
-    (kont : ∀ t₁ t₁' : Transcript, t₁.pending = t₁'.pending → ∀ l₁ l₁' : Array Claims.Msg, LogEq B l₁ l₁' →
+    {l l' : Array Hash.Msg} (hL : LogEq B l l') (hp : t.pending = t'.pending)
+    (kont : ∀ t₁ t₁' : Transcript, t₁.pending = t₁'.pending → ∀ l₁ l₁' : Array Hash.Msg, LogEq B l₁ l₁' →
       Lk B Q S ((((f ((Array.range k).map (coin l.size))).run s).run t₁).go l₁)
         ((((g ((Array.range k).map (coin l.size))).run s').run t₁').go l₁')) :
     Lk B Q S ((((liftT (squeezeP (asksCut coin N) kind k) >>= f).run s).run t).go l)
@@ -313,8 +313,8 @@ theorem lk_lsqAny (coin : ℕ → ℕ → F128) (N : ℕ) (kind : UInt8) (k : �
 
 theorem lk_lsampleVecAny (coin : ℕ → ℕ → F128) (N : ℕ) (k : ℕ)
     {f : Array F128 → LP PS γ} {g : Array F128 → LP PS δ} {s s' : LigState} {t t' : Transcript}
-    {l l' : Array Claims.Msg} (hL : LogEq B l l') (hp : t.pending = t'.pending)
-    (kont : ∀ t₁ t₁' : Transcript, t₁.pending = t₁'.pending → ∀ l₁ l₁' : Array Claims.Msg, LogEq B l₁ l₁' →
+    {l l' : Array Hash.Msg} (hL : LogEq B l l') (hp : t.pending = t'.pending)
+    (kont : ∀ t₁ t₁' : Transcript, t₁.pending = t₁'.pending → ∀ l₁ l₁' : Array Hash.Msg, LogEq B l₁ l₁' →
       Lk B Q S ((((f ((Array.range k).map (coin l.size))).run s).run t₁).go l₁)
         ((((g ((Array.range k).map (coin l.size))).run s').run t₁').go l₁')) :
     Lk B Q S ((((liftT (sampleVecP (asksCut coin N) k) >>= f).run s).run t).go l)
@@ -323,16 +323,16 @@ theorem lk_lsampleVecAny (coin : ℕ → ℕ → F128) (N : ℕ) (k : ℕ)
   exact lk_lsqAny coin N 2 k hL hp kont
 
 theorem lk_lsamplePAny (coin : ℕ → ℕ → F128) (N : ℕ) {f : F128 → LP PS γ} {g : F128 → LP PS δ}
-    {s s' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg} (hL : LogEq B l l') (hp : t.pending = t'.pending)
-    (kont : ∀ t₁ t₁' : Transcript, t₁.pending = t₁'.pending → ∀ l₁ l₁' : Array Claims.Msg, LogEq B l₁ l₁' →
+    {s s' : LigState} {t t' : Transcript} {l l' : Array Hash.Msg} (hL : LogEq B l l') (hp : t.pending = t'.pending)
+    (kont : ∀ t₁ t₁' : Transcript, t₁.pending = t₁'.pending → ∀ l₁ l₁' : Array Hash.Msg, LogEq B l₁ l₁' →
       Lk B Q S ((((f (coin l.size 0)).run s).run t₁).go l₁) ((((g (coin l.size 0)).run s').run t₁').go l₁')) :
     Lk B Q S ((((liftT (sampleP (asksCut coin N)) >>= f).run s).run t).go l)
       ((((liftT (sampleP (asksCut coin N)) >>= g).run s').run t').go l') :=
   lk_lsampleP coin N hL (fun _ => hp) fun _ t₁ t₁' h₁ l₁ l₁' hL₁ _ => kont t₁ t₁' h₁ l₁ l₁' hL₁
 
 theorem lk_lsampleKPAny (coin : ℕ → ℕ → F128) (N : ℕ) {f : F256 → LP PS γ} {g : F256 → LP PS δ}
-    {s s' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg} (hL : LogEq B l l') (hp : t.pending = t'.pending)
-    (kont : ∀ t₁ t₁' : Transcript, t₁.pending = t₁'.pending → ∀ l₁ l₁' : Array Claims.Msg, LogEq B l₁ l₁' →
+    {s s' : LigState} {t t' : Transcript} {l l' : Array Hash.Msg} (hL : LogEq B l l') (hp : t.pending = t'.pending)
+    (kont : ∀ t₁ t₁' : Transcript, t₁.pending = t₁'.pending → ∀ l₁ l₁' : Array Hash.Msg, LogEq B l₁ l₁' →
       Lk B Q S ((((f ⟨coin l.size 0, coin l.size 1⟩).run s).run t₁).go l₁)
         ((((g ⟨coin l.size 0, coin l.size 1⟩).run s').run t₁').go l₁')) :
     Lk B Q S ((((liftT (sampleKP (asksCut coin N)) >>= f).run s).run t).go l)
@@ -342,7 +342,7 @@ theorem lk_lsampleKPAny (coin : ℕ → ℕ → F128) (N : ℕ) {f : F256 → LP
 /-! ## Commitments and loops -/
 
 theorem lift_quiet_go {m : PS α} {r : Except String α} (h : ∀ l, m.go l = (r, l)) (t : Transcript)
-    (l : Array Claims.Msg) : ((StateT.lift m : TMW PS α).run t).go l = ((fun a => (a, t)) <$> r, l) := by
+    (l : Array Hash.Msg) : ((StateT.lift m : TMW PS α).run t).go l = ((fun a => (a, t)) <$> r, l) := by
   rw [StateT.run_lift, go_bind, h l]
   cases r <;> rfl
 
@@ -362,7 +362,7 @@ theorem commitV_congr (hs : Hashes V) (ms : MerkleScheme) (lv : Level) (g : Arra
 theorem lk_commit (H : ByteArray → ByteArray) {ms ms' : MerkleScheme} {lv lv' : Level} {g g' : Array F128}
     {salt salt' : ℕ → ByteArray}
     (hc : (commitP (Hashes.ofSha512 H) ms lv g salt : V Commit) = commitP (Hashes.ofSha512 H) ms' lv' g' salt')
-    {f : Commit → LP PS γ} {f' : Commit → LP PS δ} {s s' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg}
+    {f : Commit → LP PS γ} {f' : Commit → LP PS δ} {s s' : LigState} {t t' : Transcript} {l l' : Array Hash.Msg}
     (hL : LogEq B l l') (k : ∀ cm, Lk B Q S ((((f cm).run s).run t).go l) ((((f' cm).run s').run t').go l')) :
     Lk B Q S ((((liftT (StateT.lift (commitP (Hashes.ofSha512 H) ms lv g salt)) >>= f).run s).run t).go l)
       ((((liftT (StateT.lift (commitP (Hashes.ofSha512 H) ms' lv' g' salt')) >>= f').run s').run t').go l') := by
@@ -375,19 +375,19 @@ theorem lk_commit (H : ByteArray → ByteArray) {ms ms' : MerkleScheme} {lv lv' 
 /-- **A loop in lockstep**: if step `i`, from values, states and logs related by `I i`, yields ones related by
 `I (i + 1)`, the loops over `[0:n]` end related by `I n`. -/
 theorem lk_forIn {σ τ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (body' : ℕ → τ → LP PS (ForInStep τ))
-    (I : ℕ → σ × LigState → τ × LigState → Array Claims.Msg → Prop) (n : ℕ)
-    (hb : ∀ i < n, ∀ (u : σ) (s : LigState) (u' : τ) (s' : LigState) (t t' : Transcript) (l l' : Array Claims.Msg),
+    (I : ℕ → σ × LigState → τ × LigState → Array Hash.Msg → Prop) (n : ℕ)
+    (hb : ∀ i < n, ∀ (u : σ) (s : LigState) (u' : τ) (s' : LigState) (t t' : Transcript) (l l' : Array Hash.Msg),
       LogEq B l l' → (Q l.size → t.pending = t'.pending) → I i (u, s) (u', s') l →
       Lk B Q (fun r r' l₁ => ∃ v v', r.1 = .yield v ∧ r'.1 = .yield v' ∧ I (i + 1) (v, r.2) (v', r'.2) l₁)
         ((((body i u).run s).run t).go l) ((((body' i u').run s').run t').go l'))
-    {u : σ} {u' : τ} {s s' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg} (hL : LogEq B l l')
+    {u : σ} {u' : τ} {s s' : LigState} {t t' : Transcript} {l l' : Array Hash.Msg} (hL : LogEq B l l')
     (hp : Q l.size → t.pending = t'.pending) (h₀ : I 0 (u, s) (u', s') l) :
     Lk B Q (fun r r' l₁ => I n r r' l₁)
       ((((forIn [:n] u body).run s).run t).go l) ((((forIn [:n] u' body').run s').run t').go l') := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.forIn_eq_forIn_range']
   simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
   suffices key : ∀ k a (u : σ) (s : LigState) (u' : τ) (s' : LigState) (t t' : Transcript)
-      (l l' : Array Claims.Msg), a + k = n → LogEq B l l' → (Q l.size → t.pending = t'.pending) →
+      (l l' : Array Hash.Msg), a + k = n → LogEq B l l' → (Q l.size → t.pending = t'.pending) →
       I a (u, s) (u', s') l →
       Lk B Q (fun r r' l₁ => I n r r' l₁)
         ((((forIn (List.range' a k) u body).run s).run t).go l)
@@ -412,7 +412,7 @@ theorem lk_forIn {σ τ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (bo
 theorem absorbs_go (body : F128 → PUnit → LP PS (ForInStep PUnit))
     (hb : ∀ x u, body x u = liftT (liftTM (absorbF x)) >>= fun _ => pure (ForInStep.yield PUnit.unit))
     (xs : List F128) (s : LigState) :
-    ∀ (t : Transcript) (l : Array Claims.Msg), (((forIn xs PUnit.unit body).run s).run t).go l =
+    ∀ (t : Transcript) (l : Array Hash.Msg), (((forIn xs PUnit.unit body).run s).run t).go l =
       (.ok ((PUnit.unit, s), { t with pending := xs.foldl (fun P x => pF x P) t.pending }), l) := by
   induction xs with
   | nil => intro t l; rfl
@@ -428,7 +428,7 @@ theorem lk_absorbs (body body' : F128 → PUnit → LP PS (ForInStep PUnit))
     (hb : ∀ x u, body x u = liftT (liftTM (absorbF x)) >>= fun _ => pure (ForInStep.yield PUnit.unit))
     (hb' : ∀ x u, body' x u = liftT (liftTM (absorbF x)) >>= fun _ => pure (ForInStep.yield PUnit.unit))
     {xs xs' : Array F128} {f : PUnit → LP PS γ} {g : PUnit → LP PS δ} {s s' : LigState} {t t' : Transcript}
-    {l l' : Array Claims.Msg}
+    {l l' : Array Hash.Msg}
     (k : ∀ t₁ t₁' : Transcript, (xs = xs' → t.pending = t'.pending → t₁.pending = t₁'.pending) →
       Lk B Q S ((((f PUnit.unit).run s).run t₁).go l) ((((g PUnit.unit).run s').run t₁').go l')) :
     Lk B Q S ((((forIn xs PUnit.unit body >>= f).run s).run t).go l)
@@ -445,9 +445,9 @@ theorem lk_absorbs (body body' : F128 → PUnit → LP PS (ForInStep PUnit))
 
 /-- **Two challenges** (no split) from equal tables and weights: the same coin, equal tables and weights after. -/
 theorem lk_challenge (coin : ℕ → ℕ → F128) (N : ℕ) {f : F256 → LP PS γ} {g : F256 → LP PS δ}
-    {s s' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg} (hL : LogEq B l l')
+    {s s' : LigState} {t t' : Transcript} {l l' : Array Hash.Msg} (hL : LogEq B l l')
     (hp : t.pending = t'.pending) (htab : s.tab = s'.tab) (hw : s.w = s'.w)
-    (k : ∀ (r : F256) (s₁ s₁' : LigState) (t₁ t₁' : Transcript) (l₁ l₁' : Array Claims.Msg), LogEq B l₁ l₁' →
+    (k : ∀ (r : F256) (s₁ s₁' : LigState) (t₁ t₁' : Transcript) (l₁ l₁' : Array Hash.Msg), LogEq B l₁ l₁' →
       t₁.pending = t₁'.pending → s₁.tab = s₁'.tab → s₁.w = s₁'.w →
       Lk B Q S ((((f r).run s₁).run t₁).go l₁) ((((g r).run s₁').run t₁').go l₁')) :
     Lk B Q S ((((challengeP (asksCut coin N) false >>= f).run s).run t).go l)
@@ -461,9 +461,9 @@ theorem lk_challenge (coin : ℕ → ℕ → F128) (N : ℕ) {f : F256 → LP PS
 /-- **Two out-of-domain samples** of equal tables from equal tables, weights and pendings. -/
 theorem lk_ood (coin : ℕ → ℕ → F128) (N : ℕ) (nonce nonce' : ℕ → ℕ → UInt64) {g g' : Array F128}
     (hg : g = g') {dim : ℕ} (hdim : dim ≠ 0) {f : Unit → LP PS γ} {f' : Unit → LP PS δ} {s s' : LigState}
-    {t t' : Transcript} {l l' : Array Claims.Msg} (hL : LogEq B l l') (hp : t.pending = t'.pending)
+    {t t' : Transcript} {l l' : Array Hash.Msg} (hL : LogEq B l l') (hp : t.pending = t'.pending)
     (htab : s.tab = s'.tab) (hw : s.w = s'.w)
-    (k : ∀ (s₁ s₁' : LigState) (t₁ t₁' : Transcript) (l₁ l₁' : Array Claims.Msg), LogEq B l₁ l₁' →
+    (k : ∀ (s₁ s₁' : LigState) (t₁ t₁' : Transcript) (l₁ l₁' : Array Hash.Msg), LogEq B l₁ l₁' →
       t₁.pending = t₁'.pending → s₁.tab = s₁'.tab → s₁.w = s₁'.w →
       Lk B Q S ((((f ()).run s₁).run t₁).go l₁) ((((f' ()).run s₁').run t₁').go l₁')) :
     Lk B Q S ((((oodIntroP (asksCut coin N) nonce g dim >>= f).run s).run t).go l)
@@ -483,10 +483,10 @@ theorem lk_ood (coin : ℕ → ℕ → F128) (N : ℕ) (nonce nonce' : ℕ → �
 where the commitments are. -/
 theorem lk_query (coin : ℕ → ℕ → F128) (N : ℕ) (nonce nonce' : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level)
     (cm cm' : Commit) {f : LevelProof × Array F128 → LP PS γ} {f' : LevelProof × Array F128 → LP PS δ}
-    {s s' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg} (hL : LogEq B l l')
+    {s s' : LigState} {t t' : Transcript} {l l' : Array Hash.Msg} (hL : LogEq B l l')
     (hp : t.pending = t'.pending) (htab : s.tab = s'.tab) (hw : s.w = s'.w)
     (k : ∀ (op op' : LevelProof) (v : Array F128) (s₁ s₁' : LigState) (t₁ t₁' : Transcript)
-      (l₁ l₁' : Array Claims.Msg), (cm = cm' → op = op') → LogEq B l₁ l₁' → t₁.pending = t₁'.pending →
+      (l₁ l₁' : Array Hash.Msg), (cm = cm' → op = op') → LogEq B l₁ l₁' → t₁.pending = t₁'.pending →
       s₁.tab = s₁'.tab → s₁.w = s₁'.w →
       Lk B Q S ((((f (op, v)).run s₁).run t₁).go l₁) ((((f' (op', v)).run s₁').run t₁').go l₁')) :
     Lk B Q S ((((queryP (asksCut coin N) nonce ms lv cm >>= f).run s).run t).go l)
@@ -507,7 +507,7 @@ one length `p₀`, where the source holds the session's `y₁'`, `ȳ` and levels
 theorem ligeritoCut_lock (H : ByteArray → ByteArray) (coin : ℕ → ℕ → F128) (N : ℕ) (ms : MerkleScheme)
     (sch : Schedule) (T T' : F128) (cm0 cm0' : Commit) (t b : Array F128) (lay : Zk.PadLayout) (h : Array F128)
     (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
-    (src : RepSrc) (tr tr' : Transcript) (l l' : Array Claims.Msg) (hl : l.size = l'.size) (hk0 : 1 ≤ sch.k0)
+    (src : RepSrc) (tr tr' : Transcript) (l l' : Array Hash.Msg) (hl : l.size = l'.size) (hk0 : 1 ≤ sch.k0)
     (hn0 : sch.n ≠ 0) (hlev : 2 ≤ sch.levels.size)
     (hy1 : l.size + 3 + sch.k0 < N → Zk.rhoIndependent (rhoS coin l.size sch.k0) = true →
       src.y1 = (Array.range (tabS coin l.size t sch.k0).size).map fun c =>
@@ -553,7 +553,7 @@ theorem ligeritoCut_lock (H : ByteArray → ByteArray) (coin : ℕ → ℕ → F
     refine lk_send fun t₅ t₅' _ => ?_
     -- the lane rounds and the restart
     refine lk_lbind (Q := fun k => l.size + sch.k0 + 4 ≤ k)
-      (lk_forIn _ _ (fun j (p p' : (Array F256 × (F256 × F256) × Zk.Level0Msgs) × LigState) (L : Array Claims.Msg) =>
+      (lk_forIn _ _ (fun j (p p' : (Array F256 × (F256 × F256) × Zk.Level0Msgs) × LigState) (L : Array Hash.Msg) =>
         (j < sch.k0 → L.size = l.size + 2 + j ∧ p.2.w = wS coin l.size b sch.n j ∧
           p'.2.w = wS coin l.size b sch.n j ∧ p'.2.tab = tabS coin l.size t j ∧
           p'.1.1 = (Array.range j).map (chS coin l.size)) ∧

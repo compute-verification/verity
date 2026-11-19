@@ -144,7 +144,7 @@ theorem framedAt_of_rounds {rs : Array Round} {fs : List Frame}
 
 namespace DecAt
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) {i : ℕ}
 
 /-- **S11 finds rep `r`'s stream** of a table of the statement. -/

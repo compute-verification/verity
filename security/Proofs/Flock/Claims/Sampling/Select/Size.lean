@@ -10,7 +10,7 @@ open Spot
 
 namespace Properties.Spot.SecurityProofs
 
-open FlockSoundness FlockSoundness.Audit
+open FlockSoundness Spot.Sampling
 
 /-- `subset k n` samples `k` units when it samples. -/
 theorem subset_size {k n : ℕ} {src : ByteArray} {D : Array ℕ} (h : Flock.Draw.subset k n src = some D) :

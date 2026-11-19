@@ -14,6 +14,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 from verity import config as K
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity_cli import run as R
@@ -98,24 +100,18 @@ def test_without_bindings_no_key_blocks_and_pearl_pluss_coins_are_the_workloads_
     assert {k: variables.get(k) for k in LOCAL} == LOCAL and "H1_KEY_SHA512" not in variables
 
 
-#: onsite's subprotocols with Pearl+ in H1's place
-ONSITE_PEARLPLUS = tuple("pearl-plus" if c == "pouw" else c for c in T.ONSITE_COMPONENTS)
 ONSITE_UNBOUND = [k for k in T.unbound(R.load(ONSITE, REG), {}) if k.split(".")[1] != "pouw"]
 
 
-def onsite_pearlplus(tmp: Path, monkeypatch) -> Path:
-    monkeypatch.setitem(T.DEMOS, "onsite_full", ONSITE_PEARLPLUS)
-    cfg = T.configuration(K.parse(ONSITE.read_text())["program"]["commit"])
-    monkeypatch.setitem(T.DEMOS, "onsite_full", T.ONSITE_COMPONENTS)
+def onsite_pearlplus(tmp: Path) -> Path:
     f = tmp / "onsite.toml"
-    f.write_text(K.render(cfg))
+    f.write_text(K.render(T.configuration(K.parse(ONSITE.read_text())["program"]["commit"])))
     return f
 
 
-def test_under_onsite_pearl_plus_takes_h1s_place_with_its_product_and_no_compute_key_blocks(tmp_path, capsys,
-                                                                                           monkeypatch):
-    monkeypatch.setitem(K.COMPOSITES, T.ONSITE, ONSITE_PEARLPLUS)
-    f = onsite_pearlplus(tmp_path, monkeypatch)
+def test_under_onsite_pearl_plus_takes_h1s_place_with_its_product_and_no_compute_key_blocks(tmp_path, capsys):
+    assert "pearl-plus" in T.listed("onsite_full") and "pouw" not in T.listed("onsite_full")
+    f = onsite_pearlplus(tmp_path)
     rc, got, err = dry(capsys, config=f)
     written = {f"{p}.{c}.{k}" for p, s in T.STARTS.items() for c, ks in s.writes.items() for k in ks}
     assert rc == 0 and got["dry"][0]["unbound"] == sorted(set(ONSITE_UNBOUND) - written), err
@@ -131,11 +127,13 @@ def test_under_onsite_pearl_plus_takes_h1s_place_with_its_product_and_no_compute
 
 
 def test_a_part_of_pearl_pluss_live_challenger_is_refused_by_name(tmp_path, capsys):
-    for part, lacking in (({"gate": "gate-command"}, "challenger.pearl-plus.peer, challenger.pearl-plus.key-sha512"),
-                          ({"peer": "peer-1", "key-sha512": KEY}, "challenger.pearl-plus.gate")):
-        rc, _, err = dry(capsys, "--bindings", bindings(tmp_path, {"challenger": {"pearl-plus": part}}))
-        assert rc == 2 and "refused unbound: Pearl+'s live challenger takes gate, peer, key-sha512 together" in err, err
-        assert f"without {lacking}: bind them" in err, err
+    rc, _, err = dry(capsys, "--bindings", bindings(tmp_path, {"challenger": {"pearl-plus": {"gate": "gate-command"}}}))
+    assert rc == 2 and "refused unbound: Pearl+'s live challenger takes gate, peer, key-sha512 together" in err, err
+    assert "without challenger.pearl-plus.peer, challenger.pearl-plus.key-sha512: bind them" in err, err
+    rc, _, err = dry(capsys, "--bindings", bindings(tmp_path, {"challenger": {"pearl-plus": {"peer": "peer-1",
+                                                                                              "key-sha512": KEY}}}))
+    assert rc == 2 and "refused unbound: challenger.pearl-plus.gate is unbound" in err, err
+    assert "bind challenger.pearl-plus.peer, challenger.pearl-plus.key-sha512 beside it" in err, err
 
 
 def test_the_runners_variables_under_remote_are_pearl_pluss():
@@ -173,7 +171,7 @@ def test_the_uniform_tie_is_set_only_when_asked(tmp_path, capsys):
                            config=remote(tmp_path, {"tie-uniform": asked}))
         assert rc == 0 and hooks_of(got).get("PEARLPLUS_TIE_UNIFORM") == want, err
     rc, _, err = dry(capsys, config=remote(tmp_path, {"tie-uniform": 1}))
-    assert rc == 2 and "refused params: tie-uniform is true or false" in err
+    assert rc == 2 and "refused params: pearl-plus.tie-uniform is a bool, not 1" in err
 
 
 #: coreutils' env by path: agent VMs put a redacting `env` ahead of it on PATH (`tools/agent-guard/env_guard.py`)
@@ -271,8 +269,7 @@ def written(base: Path, line: dict | None, rows: dict | None, inference_only: di
 ACCEPTED = {"integrity": {"verdict": "accept"}, "work": {"verdict": "accept"}}
 #: inference-only's row as a verifier-side run would write it: its answer recomputed off the served node
 CHECKED = {"verdict": "accept", "answer_from": "recomputed on this host by its Lean verifier"}
-ALL_ACCEPTED = {c: "accept" for c in T.DEMOS["remote"]}
-ABSENT = {c: "absent" for c in T.DEMOS["remote"]}
+ALL_ACCEPTED = {c: "accept" for c in T.listed("remote")}
 YES = {"composed": "accept", "product": "remote"}
 
 
@@ -286,6 +283,58 @@ def test_remotes_verifier_reads_the_compose_answers_record_pearl_plus_under_work
     written(tmp_path / "out" / "compose", {"composed": "reject", "product": "remote"},
             {**ACCEPTED, "work": {"verdict": "reject"}})
     assert T.remote_check(cfg, tmp_path)["verdict"] == "reject"
+
+
+@pytest.mark.parametrize("work, verdict", [("accept", "accept"), ("reject", "reject"), ("missing", "undecided")])
+def test_pearl_plus_row_says_what_the_auditor_leaves_unchecked_on_every_verdict(tmp_path, work, verdict):
+    """Its coins' signatures, and the CUDA-graph rows its tie doesn't cover."""
+    cfg = R.load(CONFIG, REG)
+    written(tmp_path / "out" / "compose", {**YES, "composed": {"missing": "pending"}.get(work, work)},
+            {**ACCEPTED, "work": {"verdict": work}, "inference-only": CHECKED})
+    got = T.remote_check(cfg, tmp_path)
+    assert got["verdict"] == verdict and got["answer_from"] == {
+        "pearl-plus": "coins' signatures checked on the served node only; not checked by the auditor; the tie covers a "
+                      "workload served eager (vLLM's graph mode NONE): under a CUDA graph (FULL or PIECEWISE) a step's "
+                      "linear runs at the capture size, with rows no request owns, and those rows are outside what the "
+                      "tie covers"}
+
+
+def test_a_component_that_charges_nothing_reads_why_for_its_figure_and_shows_its_verdict(tmp_path, monkeypatch):
+    """A stand-in declaration under inference-only's name whose resource is a `Lacks`: the check's line says why it
+    has no figure (``charges_nothing``) and keeps its verdict among the components and in the combined verdict, as
+    any component's: a reject of it makes the line reject and names it, and a missing row holds the line open."""
+    from verity.protocols.resource_accounting import scheme as S
+    nothing = S.Lacks("charges nothing: a stand-in that checks a policy")
+    standin = S.Scheme("inference-only", "verity/inference-only/v0", nothing, nothing, (), (), ())
+    monkeypatch.setattr(T.schemes, "DECLARATIONS", {**T.schemes.DECLARATIONS, "inference-only": "stand-in"})
+    monkeypatch.setitem(S.SCHEMES, "inference-only", standin)
+    assert T.charges_nothing("inference-only") == nothing.why and T.charges_nothing("pouw") is None
+    cfg = R.load(CONFIG, REG)
+    base = tmp_path / "out" / "compose"
+    written(base, YES, {**ACCEPTED, "inference-only": CHECKED})
+    got = T.remote_check(cfg, tmp_path)
+    assert (got["verdict"], got["reason"], got["components"]) == ("accept", None, ALL_ACCEPTED)
+    assert got["charges_nothing"]["inference-only"] == nothing.why
+    written(base, {"composed": "reject", "product": "remote"}, {**ACCEPTED, "inference-only": {"verdict": "reject"}})
+    got = T.remote_check(cfg, tmp_path)
+    assert (got["verdict"], got["components"]["inference-only"]) == ("reject", "reject")
+    assert got["reason"] == "not accepted: inference-only reject"
+    written(base, YES, ACCEPTED)
+    got = T.remote_check(cfg, tmp_path)
+    assert (got["verdict"], got["components"]["inference-only"]) == ("undecided", "absent")
+
+
+@pytest.mark.parametrize("name,row", [("sampled-proofs", "integrity"), ("inference-only", "inference-only")])
+def test_a_reject_of_a_declared_component_that_charges_nothing_is_named_and_rejects_the_line(tmp_path, name, row):
+    """The sampled proofs and the inference-only check as declared (no stand-in): each charges nothing, and a reject
+    of it is still its verdict among the components and makes the line reject."""
+    assert T.charges_nothing(name)
+    cfg = R.load(CONFIG, REG)
+    written(tmp_path / "out" / "compose", {"composed": "reject", "product": "remote"},
+            {**ACCEPTED, "inference-only": CHECKED, row: {"verdict": "reject"}})
+    got = T.remote_check(cfg, tmp_path)
+    assert (got["verdict"], got["components"][name]) == ("reject", "reject")
+    assert name in got["reason"] and name in got["charges_nothing"]
 
 
 def test_inference_onlys_row_is_the_composed_records_and_no_file_of_the_prover_nodes_side_changes_a_cell(tmp_path):
@@ -318,16 +367,110 @@ def test_inference_onlys_row_as_the_served_node_wrote_it_holds_the_verdict(tmp_p
     assert f'AS_WRITTEN = "{T.AS_WRITTEN}"' in text
 
 
-def test_without_a_compose_answer_no_cell_reads_the_prover_nodes_own_record(tmp_path):
+def test_without_a_compose_answer_or_the_nodes_composite_remotes_line_is_refused_by_name(tmp_path):
+    """A record the served node wrote with no composite (``COMPOSITE`` set empty, or nothing composed) is no line:
+    refused by name, where it once read silently undecided."""
     cfg = R.load(CONFIG, REG)
-    written(tmp_path / "out", YES, {**ACCEPTED, "inference-only": CHECKED}, {"verdict": "accept"})
+    written(tmp_path / "out", {**YES, "lean": "no composite was read"}, {**ACCEPTED, "inference-only": CHECKED})
+    with pytest.raises(T.Refused) as e:
+        T.remote_check(cfg, tmp_path)
+    assert e.value.name == "composite"
+    assert f"no compose answer in {tmp_path / 'out' / 'compose'}" in e.value.detail
+    assert f"no composite in {tmp_path / 'out' / 'composite'}" in e.value.detail
+    assert "'accept': no composite was read" in e.value.detail
+
+
+def nodes_composite(out: Path) -> None:
+    (out / "composite" / "remote").mkdir(parents=True, exist_ok=True)
+    (out / "composite" / "remote" / "composite.json").write_text(json.dumps({"product": "remote"}))
+
+
+def test_with_no_gate_answer_the_nodes_own_record_reads_development_never_the_auditors_accept(tmp_path, monkeypatch):
+    """Gate's answer absent, the serving node's record and composite present: the record is the prover's own word that
+    it passed, so each of its accepts, the line's and each row's, reads `T.DEVELOPMENT_VERDICT`, never accept (under the
+    placement hold, undecided); a reject stands, and a Lean that gave no answer reads undecided with its reason."""
+    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+    cfg = R.load(CONFIG, REG)
+    nodes_composite(tmp_path / "out")
+    written(tmp_path / "out", YES, {**ACCEPTED, "inference-only": CHECKED})
     got = T.remote_check(cfg, tmp_path)
-    assert got["verdict"] == "undecided" and got["components"] == ABSENT
-    assert got["reason"].startswith(f"no compose answer in {tmp_path / 'out' / 'compose'}")
-    assert got["reason"].endswith("(the served node's own record says 'accept')")
-    written(tmp_path / "out", {"composed": "reject", "product": "remote"}, {"work": {"verdict": "reject"}})
+    assert (got["verdict"], got["reason"], got["block"], got["source"]) == (
+        T.DEVELOPMENT_VERDICT, T.FROM_SERVING_NODE, 3, T.SERVING_NODE)
+    assert set(got["components"].values()) == {T.DEVELOPMENT_VERDICT} and "accept" not in json.dumps(got["components"])
+    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
     got = T.remote_check(cfg, tmp_path)
-    assert got["verdict"] == "undecided" and got["components"] == ABSENT
+    assert got["verdict"] == "undecided" and set(got["components"].values()) == {"undecided"}
+    assert f"the composed verdict {T.AS_WRITTEN}" in got["reason"]
+    monkeypatch.delenv("VERITY_HOLD_PLACEMENT")
+    written(tmp_path / "out", {"composed": "reject", "product": "remote"}, {**ACCEPTED, "work": {"verdict": "reject"}})
+    got = T.remote_check(cfg, tmp_path)
+    assert (got["verdict"], got["components"]["pearl-plus"], got["components"]["sampled-proofs"]) == (
+        "reject", "reject", T.DEVELOPMENT_VERDICT)
+    written(tmp_path / "out", {"composed": "pending", "product": "remote", "lean": "its Lean gave no answer"},
+            {**ACCEPTED, "inference-only": CHECKED})
+    got = T.remote_check(cfg, tmp_path)
+    assert (got["verdict"], got["reason"]) == ("undecided", f"{T.FROM_SERVING_NODE}; its Lean gave no answer")
+
+
+def test_with_the_gates_answer_and_the_nodes_record_both_present_the_gates_answer_wins(tmp_path, monkeypatch):
+    """Both present: the line is the compose gate's answer, its accept the auditor's, with no ``source`` and no
+    development sentence, whatever the node's own record says."""
+    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+    cfg = R.load(CONFIG, REG)
+    nodes_composite(tmp_path / "out")
+    for node, gate, want in ((YES, {"composed": "reject", "product": "remote"}, "reject"),
+                             ({"composed": "reject", "product": "remote"}, YES, "accept")):
+        written(tmp_path / "out", node, {**ACCEPTED, "inference-only": CHECKED})
+        written(tmp_path / "out" / "compose", gate,
+                {**ACCEPTED, "inference-only": CHECKED, **({"work": {"verdict": "reject"}} if want == "reject" else {})})
+        got = T.remote_check(cfg, tmp_path)
+        assert got["verdict"] == want and "source" not in got, got
+        assert T.FROM_SERVING_NODE not in str(got["reason"]) and T.DEVELOPMENT_VERDICT not in got["components"].values()
+
+
+def test_a_deferred_composite_is_refused_as_deferred_until_the_follow_ons_record_is_here(tmp_path, monkeypatch):
+    """A served node short of the audit's memory defers the tied audit and the composite to a follow-on on a prover
+    node: until that follow-on's ``OUT`` is copied to ``out/follow-on``, the line is refused as ``deferred``, naming
+    where it reads it; then it is the follow-on's record, `T.FOLLOW_ON` its source, its accepts development."""
+    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+    cfg = R.load(CONFIG, REG)
+    written(tmp_path / "out", {"composed": "pending", "product": "remote", "deferred": "196 GB, under 290"},
+            {**ACCEPTED, "work": {"verdict": "missing"}})
+    with pytest.raises(T.Refused) as e:
+        T.remote_check(cfg, tmp_path)
+    assert e.value.name == "deferred" and "196 GB, under 290" in e.value.detail
+    assert str(tmp_path / "out" / "follow-on") in e.value.detail
+    follow = tmp_path / "out" / "follow-on"
+    nodes_composite(follow)
+    written(follow, YES, {**ACCEPTED, "inference-only": CHECKED})
+    got = T.remote_check(cfg, tmp_path)
+    assert (got["verdict"], got["source"], got["reason"]) == (T.DEVELOPMENT_VERDICT, T.FOLLOW_ON, T.FROM_FOLLOW_ON)
+    assert set(got["components"].values()) == {T.DEVELOPMENT_VERDICT}
+
+
+def test_a_line_from_the_serving_nodes_own_record_says_so_and_a_gates_does_not(tmp_path, capsys, monkeypatch):
+    """Nothing the prover runs is trusted: a line read from the serving node's own record says so in words, leading
+    its reason, and by its ``source``, in the VERDICT line and the record `verity run` writes; a line read from the
+    compose gate's answer carries neither."""
+    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+    assert T.FROM_SERVING_NODE == ("read from the serving node's own record: a development verdict; the auditor's "
+                                   "device did not compose it")
+    for gate in (False, True):
+        state = tmp_path / str(gate)
+        nodes_composite(state / "out")
+        written(state / "out", YES, {**ACCEPTED, "inference-only": CHECKED})
+        if gate:
+            written(state / "out" / "compose", YES, {**ACCEPTED, "inference-only": CHECKED})
+        R.run_main([str(CONFIG), "--on", T.AUDITOR_REMOTE, "--bindings", bindings(tmp_path, STARTED), "--state",
+                    str(state)], REG)
+        line, = said(capsys.readouterr().out, "VERDICT")
+        kept, = (json.loads(x) for x in (state / "record" / "verdicts.jsonl").read_text().splitlines())
+        for got in (line, kept):
+            if gate:
+                assert "source" not in got and T.FROM_SERVING_NODE not in str(got["reason"]), got
+            else:
+                assert got["source"] == T.SERVING_NODE and got["reason"].startswith(T.FROM_SERVING_NODE), got
+                assert got["verdict"] == T.DEVELOPMENT_VERDICT, got
 
 
 def test_remotes_verifier_refuses_by_name_a_record_it_cannot_read_or_of_another_product(tmp_path):
@@ -360,13 +503,13 @@ def test_remotes_verifier_gives_its_verdict_line_on_its_own_machine(tmp_path, ca
     cfg = R.load(CONFIG, REG)
     gate = {p["name"]: p["machine"] for p in cfg["party"]}[T.CHALLENGER]
     assert lines[0]["coins"] == T.coins_of(cfg)
-    assert lines[0]["coins_on"] == {T.RECORD_NAMES["integrity"]: gate, "pearl-plus": gate}
+    assert lines[0]["coins_on"] == {SP.COMPONENT: gate, "pearl-plus": gate}
 
 
 def test_the_verifiers_line_names_the_challengers_machine_for_a_bound_gate(tmp_path):
     cfg = R.load(CONFIG, REG)
     written(tmp_path / "out" / "compose", YES, {**ACCEPTED, "inference-only": CHECKED})
-    spot = T.RECORD_NAMES["integrity"]
+    spot = SP.COMPONENT
     at = {p["name"]: p["machine"] for p in cfg["party"]}
     for tables, want in ((BINDINGS, {spot: at[T.WORKERS], "pearl-plus": at[T.CHALLENGER]}),
                          ({"challenger": {**BINDINGS["challenger"], spot: {"gate": "user@gate-1"}}},

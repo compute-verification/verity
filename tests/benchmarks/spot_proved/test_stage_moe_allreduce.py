@@ -85,7 +85,7 @@ def test_the_w13_launch_is_staged_beside_w2_each_pair_on_its_own_a_row_and_the_r
     l13, l2 = _launch(t, 1, False), _launch(t, 2, True)
     other = (E - 1) - t[(0, "w13.ids")].reshape(M, TOPK)
     cap = _Cap([0], {0: [_router(t, 0, other), l13, l2]}, t)
-    insts = list(stage.moe_instances(cap, TargetProfile(compute_capability=(9, 0), batch_invariant=False)))
+    insts = list(stage.moe_instances(cap, TargetProfile.default().with_overrides(compute_capability=(9, 0), batch_invariant=False)))
     assert [i[0].split("_K")[0] for i in insts] == ["MoeExpertFp8Gemm", "MoeExpertFp8GemmW"]
     assert insts[0][1].id.startswith("MoeExpertFp8Gemm_v1{") and insts[1][1].id.startswith("MoeExpertFp8GemmW_v1{")
     j, col = 3, 130
@@ -101,7 +101,7 @@ def test_the_w13_launch_is_staged_beside_w2_each_pair_on_its_own_a_row_and_the_r
     assert np.array_equal(y2()[0], t[(0, "w2.C")][j // TOPK, j % TOPK, col:col + 1])
     for events in ([l13], [_router(t, 0, other, layer=4), l13]):
         with pytest.raises(LookupError, match="align's schedule"):
-            list(stage.moe_instances(_Cap([0], {0: events}, t), TargetProfile(compute_capability=(9, 0), batch_invariant=False)))
+            list(stage.moe_instances(_Cap([0], {0: events}, t), TargetProfile.default().with_overrides(compute_capability=(9, 0), batch_invariant=False)))
 
 
 def _allreduce_cap(rows_of: list[int], multimem: bool = False, W: int = 8, Hd: int = 6144) -> _Cap:

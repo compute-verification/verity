@@ -161,9 +161,9 @@ theorem ligeritoPZk_grows (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch
 /-- **The rounds a zerocheck and lincheck leave from no rounds**: `m + k_log − 6` of them, round `j` answered by
 `coin (l.size + j)`, round `1` with `m − 13` coins. -/
 theorem cut_coins {m : ℕ} (hm : 14 ≤ m) {fold : CircuitFold} (hk : 6 ≤ fold.kLog) {digest cap root : ByteArray}
-    {lay : Zk.PadLayout} {mk : ℕ → F128} {t₀ : Transcript} (ht₀ : t₀.rounds = #[]) {l : Array Claims.Msg}
-    {zp : ZerocheckProof} {zc : ZcOut} {t₁ : Transcript} {l₁ : Array Claims.Msg} {lp : LincheckProof} {lc : LcOut}
-    {t₂ : Transcript} {l₂ : Array Claims.Msg}
+    {lay : Zk.PadLayout} {mk : ℕ → F128} {t₀ : Transcript} (ht₀ : t₀.rounds = #[]) {l : Array Hash.Msg}
+    {zp : ZerocheckProof} {zc : ZcOut} {t₁ : Transcript} {l₁ : Array Hash.Msg} {lp : LincheckProof} {lc : LcOut}
+    {t₂ : Transcript} {l₂ : Array Hash.Msg}
     (h₁ : ((zerocheckCut (asksCut coin n) m digest cap root lay mk).run t₀).go l = (.ok ((zp, zc), t₁), l₁))
     (h₂ : ((lincheckCut (asksCut coin n) fold m lay mk zc).run t₁).go l₁ = (.ok ((lp, lc), t₂), l₂)) :
     CoinsAt coin l.size t₂.rounds ∧ t₂.rounds.size = m + fold.kLog - 6 ∧ t₂.rounds[1]!.n = m - 13 := by
@@ -187,7 +187,7 @@ theorem cut_coins {m : ℕ} (hm : 14 ≤ m) {fold : CircuitFold} (hk : 6 ≤ fol
 
 /-- **A lincheck that returns had its fold defined** at its `α`, the coin of its first send. -/
 theorem lincheckCut_fold {c : CircuitFold} {m : ℕ} {lay : Zk.PadLayout} {mk : ℕ → F128} {zc : ZcOut}
-    {t t' : Transcript} {l l' : Array Claims.Msg} {res : LincheckProof × LcOut}
+    {t t' : Transcript} {l l' : Array Hash.Msg} {res : LincheckProof × LcOut}
     (h : ((lincheckCut (asksCut coin n) c m lay mk zc).run t).go l = (.ok (res, t'), l')) :
     ∃ w, c.fold (coin l.size 0) (skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) = .ok w := by
   unfold lincheckCut at h
@@ -220,7 +220,7 @@ theorem tauFw_at_replay {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : Co
     (coin : ℕ → ℕ → Flock.F128) (n : ℕ) (st : Flock.Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray)
     (g : Array Flock.F128) (cm0 : FlockComplete.Commit) (extras : Array Flock.Claim) (pads : FlockComplete.PadsZk)
     (ic : FlockComplete.InnerCommit) (vals : Array Flock.F128) (extra lanePad : ℕ → ℕ → Flock.F128)
-    (salt : ℕ → ℕ → ByteArray) {t₀ : Flock.Transcript} (ht₀ : t₀.rounds = #[]) {l : Array _root_.Claims.Msg}
+    (salt : ℕ → ℕ → ByteArray) {t₀ : Flock.Transcript} (ht₀ : t₀.rounds = #[]) {l : Array _root_.Hash.Msg}
     (hm : 14 ≤ st.m) (hk6 : 6 ≤ st.kLog) (hSm : st.m = stm.m) (hSk : st.kLog = stm.c.kLog)
     (hkL : st.fold.kLog = st.kLog) (hlay : layOf Tz stm = Zk.PadLayout.new st.m st.kLog sch.k0)
     (hmk : ∀ k < (layOf Tz stm).zp 64, (msgAt v k).val = vals[k]! + pads.h[k]!)
@@ -350,7 +350,7 @@ theorem tauFw_at {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (
     (coin : ℕ → ℕ → Flock.F128) (n : ℕ) (st : Flock.Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray)
     (g : Array Flock.F128) (cm0 : FlockComplete.Commit) (extras : Array Flock.Claim) (pads : FlockComplete.PadsZk)
     (ic : FlockComplete.InnerCommit) (vals : Array Flock.F128) (extra lanePad : ℕ → ℕ → Flock.F128)
-    (salt : ℕ → ℕ → ByteArray) {t₀ : Flock.Transcript} (ht₀ : t₀.rounds = #[]) {l : Array _root_.Claims.Msg}
+    (salt : ℕ → ℕ → ByteArray) {t₀ : Flock.Transcript} (ht₀ : t₀.rounds = #[]) {l : Array _root_.Hash.Msg}
     (hm : 14 ≤ st.m) (hk6 : 6 ≤ st.kLog) (hSm : st.m = stm.m) (hSk : st.kLog = stm.c.kLog)
     (hkL : st.fold.kLog = st.kLog) (hlay : layOf Tz stm = Zk.PadLayout.new st.m st.kLog sch.k0)
     (hmk : ∀ k < (layOf Tz stm).zp 64, (msgAt v k).val = vals[k]! + pads.h[k]!)
@@ -438,7 +438,7 @@ theorem tauFw_at_coef {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : Coin
     (coin : ℕ → ℕ → Flock.F128) (n : ℕ) (st : Flock.Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray)
     (g : Array Flock.F128) (cm0 : FlockComplete.Commit) (extras : Array Flock.Claim) (pads : FlockComplete.PadsZk)
     (ic : FlockComplete.InnerCommit) (vals : Array Flock.F128) (extra lanePad : ℕ → ℕ → Flock.F128)
-    (salt : ℕ → ℕ → ByteArray) {t₀ : Flock.Transcript} (ht₀ : t₀.rounds = #[]) {l : Array _root_.Claims.Msg}
+    (salt : ℕ → ℕ → ByteArray) {t₀ : Flock.Transcript} (ht₀ : t₀.rounds = #[]) {l : Array _root_.Hash.Msg}
     (hm : 14 ≤ st.m) (hk6 : 6 ≤ st.kLog) (hSm : st.m = stm.m) (hSk : st.kLog = stm.c.kLog)
     (hkL : st.fold.kLog = st.kLog) (hlay : layOf Tz stm = Zk.PadLayout.new st.m st.kLog sch.k0)
     (hmk : ∀ k < (layOf Tz stm).zp 64, (msgAt v k).val = vals[k]! + pads.h[k]!)
@@ -519,7 +519,7 @@ theorem tauFw {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (Res
     (coin : ℕ → ℕ → Flock.F128) (n : ℕ) (st : Flock.Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray)
     (g : Array Flock.F128) (cm0 : FlockComplete.Commit) (extras : Array Flock.Claim) (pads : FlockComplete.PadsZk)
     (ic : FlockComplete.InnerCommit) (vals : Array Flock.F128) (extra lanePad : ℕ → ℕ → Flock.F128)
-    (salt : ℕ → ℕ → ByteArray) {t₀ : Flock.Transcript} (ht₀ : t₀.rounds = #[]) {l : Array _root_.Claims.Msg}
+    (salt : ℕ → ℕ → ByteArray) {t₀ : Flock.Transcript} (ht₀ : t₀.rounds = #[]) {l : Array _root_.Hash.Msg}
     (hm : 14 ≤ st.m) (hk6 : 6 ≤ st.kLog) (hSm : st.m = stm.m) (hSk : st.kLog = stm.c.kLog)
     (hkL : st.fold.kLog = st.kLog) (hlay : layOf Tz stm = Zk.PadLayout.new st.m st.kLog sch.k0)
     (hmk : ∀ k < (layOf Tz stm).zp 64, (msgAt v k).val = vals[k]! + pads.h[k]!)
@@ -558,7 +558,7 @@ theorem tauFw {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (Res
           (Zk.PadLayout.new st.m st.kLog sch.k0) pads.h rep tPad extra lanePad salt (fun _ _ => 0)).run t₃).go l₃ =
         (.ok ((lg, zl, rec), t₄), l₄) →
       _root_.Claims.ZKMal.Masked.LaneAt Tz stm c r v sh T' lg rec zl)
-    {p : Zk.ZkProof} {t : Flock.Transcript} {l' : Array _root_.Claims.Msg}
+    {p : Zk.ZkProof} {t : Flock.Transcript} {l' : Array _root_.Hash.Msg}
     (h : ((Flock.ZkServer.Finish.repFwC (FlockComplete.asksCut coin n) (Flock.Hashes.ofSha512 Flock.Sha512.hash) st sch
       tPad rep dom g cm0 extras pads ic vals extra lanePad salt).run t₀).go l = (.ok (p, t), l')) :
     ∃ (rp : Zk.Replayed) (ss : Array (Array Flock.F128)) (lgc : Array (String × Zk.Lin)),

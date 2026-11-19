@@ -91,8 +91,8 @@ bounds the deployed runs accepting on `C` by its acceptance with no opening off 
 `Adv`s and self-clash; and no table `Ok` allows that does not extract is committed to `T`. -/
 theorem zk_tableBoundθAt_of_sessions {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
     [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
-    (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → List 𝔽 → Prop)
-    {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables true x = [(spec, st)]) {mPts : ℕ}
+    (rel : Readable.Parsed → Readable.Relation) (Ok : Hash.Msg → List 𝔽 → Prop)
+    {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (h : tables true x = [(spec, st)]) {mPts : ℕ}
     (T : TabZK 𝔽 mPts) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hsch : T.sch = Accounting.m1Schedule st.wideLeaf st.m)
     (ht : T.t = Accounting.m1Pad st.wideLeaf st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st) (hN : T.N ≤ 2 ^ 13)
     (hq : T.q = 168) (hδ : 7 / 16 ≤ T.δ)
@@ -195,7 +195,7 @@ table `C`, live strategies `σL` whose roots agree bound the deployed runs accep
 decoder is right for `pL` accepting with no opening off `C`, and the escapes' events bound the simulated strategies'
 `Adv`s and self-clash. -/
 def ZkLiveAt {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
-    (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Claims.Msg → List 𝔽 → Prop) (x : Claims.Msg) {mPts : ℕ}
+    (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Hash.Msg → List 𝔽 → Prop) (x : Hash.Msg) {mPts : ℕ}
     (T : TabZK 𝔽 mPts) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
       ∃ (j : Claims.Flock.IZ T.sch.levels.length → Fin ((V true).k x)) (_ : Function.Injective j)
@@ -245,8 +245,8 @@ right for the verdict accepting with no opening off `C`, and that the escapes' e
 `Adv`s and self-clash (`ZkLiveAt`). -/
 theorem zk_tableBoundθAt_of_live {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
     [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
-    (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → List 𝔽 → Prop)
-    {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables true x = [(spec, st)]) {mPts : ℕ}
+    (rel : Readable.Parsed → Readable.Relation) (Ok : Hash.Msg → List 𝔽 → Prop)
+    {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (h : tables true x = [(spec, st)]) {mPts : ℕ}
     (T : TabZK 𝔽 mPts) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hsch : T.sch = Accounting.m1Schedule st.wideLeaf st.m)
     (ht : T.t = Accounting.m1Pad st.wideLeaf st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st) (hN : T.N ≤ 2 ^ 13)
     (hq : T.q = 168) (hδ : 7 / 16 ≤ T.δ)

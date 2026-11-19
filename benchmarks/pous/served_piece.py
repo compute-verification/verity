@@ -24,11 +24,11 @@ same sessions, which no second session replaces. With neither, one process does 
    the window's serve ended. The rest of the checkpoint is outside ``W`` (the profile's ``outside``), and so is what
    serving adds: the KV cache's pages and the activations, which the weights-only obligation doesn't cover and an honest
    run doesn't need.
-2. **Setup** by the vLLM adapter (`verity_vllm.protocols.pous`, ``pous:p2-16448/v4``, its registered point): the
-   commitment to ``W``, then the salt, which the memory attester samples after it from its own host's OS and logs under
-   the window's binding (`binding`; `challenger_session.salt`, the gate's ``challenger_party`` verb on a salt request),
-   ``C*`` encoded on the card (``libp2v1.so``, ``--p2-lib``), the memory attester's table and the root. Setup's own
-   inputs are kept as it sent them, for the tie. A challenger that samples no salt leaves the period undecided.
+2. **Setup** by PoUS's scheme, ``compose.schemes.get("pous")`` attached on an exchange (`verity_vllm.messages.Exchange`)
+   with ``W`` registered as its weight operands (`memory/pous/prover/served.py`): the commitment to ``W``, then the
+   salt, which the memory attester samples after it from its own host's OS and logs under the window's binding (`binding`; `challenger_session.salt`, the gate's ``challenger_party``
+   verb on a salt request), ``C*`` encoded on the card (``libp2v1.so``, ``--p2-lib``), the memory attester's table and
+   the root. Setup's own inputs are kept as it sent them, for the tie. A challenger that samples no salt leaves the period undecided.
 3. **The session**: the memory attester's side started on its host by ``--challenger-command`` (the auditor gate's
    ``challenger_party`` verb), the prover connecting to ``--challenger-address`` and answering each of ``--rounds``
    indices (`ROUNDS` by default) from ``C*`` on the card (`challenger_prover.session`). The request names the window's
@@ -64,15 +64,16 @@ same sessions, which no second session replaces. With neither, one process does 
    is `challenger_session.SETUP`: the tie ran on the developer's node, so every verdict rests on setup checked by the
    developer, not the auditor, which the ``POUS`` line prints after the premise.
 
-6. **The bandwidth session** (`held_bandwidth.py`): once PoUS's session completed, before either is answered and
-   before ``C*`` is released, the same process runs PoUB-P2's session over the store it holds on the card, so both
-   audits are of one store and no second one is encoded. The session's request carried setup's published outputs and P2's parameters (`challenger_session.request_of`'s
+6. **The bandwidth session**: the bandwidth audit, ``compose.schemes.get("bandwidth")``, attached by name on the same
+   exchange after PoUS's scheme, reads the store PoUS binds (`p2_stage.bandwidth.Attached`); once PoUS's session
+   completed, before either is answered and before ``C*`` is released, it runs PoUB-P2's session over that store on
+   the card (`Attached.session`), so both audits are of one store and no second one is encoded. The session's request carried setup's published outputs and P2's parameters (`challenger_session.request_of`'s
    ``published`` and ``params``), which the challenger kept on its host with the session's id; the bandwidth party there (``--bw-party``, the gate's
    ``bw_party --pous-session SID`` with ``--bw-minutes`` its cap) builds its registration from that record, never from
    the prover. The session's case and its answer go to ``--bw-private`` (by default ``SERVE_DIR/private/bandwidth``,
    0700), held to PoUS's run case as one store (`p2_case.same_store`); its public answer, under a hiding commitment to the
    case's digest, to ``--bw-out`` (by default ``DIR``'s sibling ``bandwidth``, where the composed run reads the bandwidth
-   piece's, `served_bandwidth.py collect`). With ``--bw-case-exe`` (``poub-p2-protocol``) the Lean answers the
+   piece's, ``served_piece.py collect-bandwidth``, `collect_bandwidth`). With ``--bw-case-exe`` (``poub-p2-protocol``) the Lean answers the
    case, and its answer is the one written; without it the session's accept is undecided (`p2_case.unjudged`).
    ``--bw-windows``, ``--bw-passes``, ``--bw-samples``, ``--bw-window-s`` and
    ``--bw-deadline-s`` are the session's request, by default the auditor's (`p2_parties.SESSION`: two minutes), which
@@ -114,7 +115,9 @@ from typing import Any
 
 import torch
 
+from verity import hooks as H
 from verity.runtime.stream import Side
+from verity.protocols.compose import schemes as table
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
@@ -123,19 +126,20 @@ from verity.protocols.resource_accounting.memory.pous.verifier import run as R
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
-from verity_vllm import protocols as PO
+from verity.protocols.resource_accounting.scheme import answering
+from verity_vllm import messages
 
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import held_bandwidth as HB
 import served_case as SC
 
-pous = PO.adapter("pous")
+POUS, BANDWIDTH = table.get("pous"), table.get("bandwidth")
+BW = answering(BANDWIDTH)
 ROOT = Path(__file__).resolve().parents[2]
 #: the manifests a served model's pin is read from, the first that names it at its revision
 PINS = tuple(ROOT / "adapters" / "vllm" / "manifests" / name for name in ("checkpoints-int8.json", "checkpoints.json"))
-ENTRY = f"pous:{pous.DEFAULT_SCHEME}"
+ENTRY = POUS.option
 #: each linear as vLLM's Llama holds it, from the checkpoint's tensors concatenated by rows in this order
 MERGED = (("self_attn.qkv_proj", ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj")),
           ("self_attn.o_proj", ("self_attn.o_proj",)),
@@ -143,6 +147,9 @@ MERGED = (("self_attn.qkv_proj", ("self_attn.q_proj", "self_attn.k_proj", "self_
           ("mlp.down_proj", ("mlp.down_proj",)))
 SERVING = ("the KV cache's pages and the activations: serving state, which the weights-only obligation doesn't cover and "
            "an honest run doesn't need")
+#: who graded PoUS's answer, its placement's ``graded_by``
+GRADED_BY = ("graded by the developer's piece (benchmarks/pous/served_piece.py: period.answer, with setup's tie, and "
+             "pous-run-protocol) on the served node; no auditor-side entry runs it")
 #: the auditor's device and how the card reaches its challenger: the gate's `challenger_party` verb under the card's key,
 #: and the port the side listens on, which the security groups open from the card only
 CHALLENGER_HOST = "vy-auditor-2"
@@ -159,8 +166,9 @@ BINDING_TAG = b"verity/pous/served-window/v1"
 #: what `sessions` keeps in the private directory beside the run's record and the table until `answers` has answered:
 #: ``C*`` as setup sent it, its blocks end to end, and the summary so far
 STORE, HELD = "cstar.bin", "held.json"
-#: the period's challenges: the 320-read window's (`ObligationWide320`); an accepted run certifies at `1% + 2^-128`
-ROUNDS = P2.CERT_K_WIDE320
+#: the period's challenges: PoUS's declared `challenges`, the 320-read window's (`ObligationWide320`); an accepted run
+#: certifies at `1% + 2^-128`
+ROUNDS = POUS.settings["challenges"]
 DTYPES = {"I8": torch.int8, "F32": torch.float32, "BF16": torch.bfloat16, "F16": torch.float16}
 SIZES = {"I8": 1, "U8": 1, "F16": 2, "BF16": 2, "F32": 4, "I32": 4, "F64": 8, "I64": 8}
 
@@ -169,45 +177,26 @@ class Refusal(Exception):
     """No answer can be made: what the piece needs isn't there."""
 
 
-class _Unused:
-    """The layers' ``quant_method``, whose ``apply`` the adapter wraps; the piece runs no forward."""
-
-    def apply(self, layer: Any, x: Any, bias: Any = None) -> Any:
-        raise RuntimeError("the PoUS piece runs no forward")
-
-
 class Linear:
-    """A linear as the adapter reads one: its weight and, in the int8 form, its per-row scales."""
+    """A linear as vLLM holds one: its weight and, in the int8 form, its per-row scales."""
 
     def __init__(self, weight: torch.Tensor, scale: torch.Tensor | None = None) -> None:
         self.weight = torch.nn.Parameter(weight, requires_grad=False)
         if scale is not None:
             self.weight_scale = torch.nn.Parameter(scale, requires_grad=False)
-        self.quant_method = _Unused()
 
 
 class Model:
-    """The served model's linears, as the adapter reads a model: by module and by parameter."""
+    """The served model's linears, by module name in vLLM's order."""
 
     def __init__(self, layers: dict[str, Linear]) -> None:
         self.layers = layers
 
-    def named_modules(self):
-        yield "", self
-        yield from self.layers.items()
 
-    def named_parameters(self):
-        for n, m in self.layers.items():
-            yield f"{n}.weight", m.weight
-            if hasattr(m, "weight_scale"):
-                yield f"{n}.weight_scale", m.weight_scale
-
-    def named_buffers(self):
-        return iter(())
-
-
-def _linear_types() -> tuple[type, ...]:
-    return (Linear,)
+def _unnamed(why: str, node: str, party: Side) -> str:
+    """A refusal's ``why`` with the machines' own names put by party (`memory_attester.unnamed`): the side's errors name
+    its host and the address it was reached at, and the system's name this node and ``node``."""
+    return mc.unnamed(why, (node, socket.gethostname()), (party.host, *(party.address or ())[:1]))
 
 
 class NoSalt(Exception):
@@ -408,15 +397,16 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
              private: Path | None = None, pins: Sequence[Path] = PINS, protocol: str = period.PROTOCOL,
              rounds: int = ROUNDS, bw_party: str | None = None, bw_host: str = BW_PARTY_HOST,
              bw_request: Mapping[str, Any] | None = None, bw_out: Path | None = None,
-             bw_private: Path | None = None, bw_trusted_sha512: str | None = None,
+             bw_private: Path | None = None, bw_trusted_sha512: str | None = None, bw_card: str | None = None,
              deployment: Mapping[str, Any] | None = None) -> dict[str, Any] | None:
     """The piece's part on the card (module docstring, 1 to 3 and 6's session): the weights, setup, PoUS's session
     of ``rounds`` challenges and, with ``bw_party`` (the bandwidth party's command), PoUB-P2's over the held store
-    (`held_bandwidth.held`, under ``bw_request``, by default `held_bandwidth.request`'s). Where they leave an answer
+    (`p2_stage.bandwidth.Attached.session`, under ``bw_request``, by default `p2_stage.bandwidth.request`'s). Where they leave an answer
     already (weights that aren't the pin's, no salt, a session that didn't complete or ran under another id), it is
     written as `answers` writes one and returned, never an accept. Else None: what the sessions left is kept for
     `answers`, in ``private`` (``run.json`` and the table, `STORE`, `HELD`) and ``bw_private`` (by default
-    ``SERVE_DIR/private/bandwidth``). `Refusal` when no answer can be made."""
+    ``SERVE_DIR/private/bandwidth``). The bandwidth session's γ is against the data sheet of ``bw_card``, the card's name
+    as nvidia-smi gives it (by default torch's for a CUDA ``device``). `Refusal` when no answer can be made."""
     repo, rev, reg_sha, bind = _window(serve_dir, window)
     snapshot = hf_home / "hub" / f"models--{repo.replace('/', '--')}" / "snapshots" / rev
     if not snapshot.is_dir():
@@ -430,7 +420,8 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
     out.mkdir(parents=True, exist_ok=True)
     for name in (STORE, HELD):   # what an earlier run kept is never answered as this one's
         (private / name).unlink(missing_ok=True)
-    summary: dict[str, Any] = {"window": window, "model": repo, "revision": rev, "node": node, "challenger": party.host,
+    prover, attester = mc.machines(node, party.host)
+    summary: dict[str, Any] = {"window": window, "model": repo, "revision": rev, "node": prover, "challenger": attester,
                                "binding": bind.hex(), "registration_sha512": reg_sha,
                                "decided_by": period.decided_by(None)}
 
@@ -447,87 +438,96 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
     if wrong:
         why = "the served weights are not the pinned checkpoint's: " + "; ".join(wrong)
         if bw_party is not None:
-            HB.missing(bw_out, window, f"no PoUS session bound a store: {why}")
+            BW.missing(bw_out, window, f"no PoUS session bound a store: {why}")
         return done(_no("reject", why, None, protocol))
     dev = torch.device(device)
+    bw_card = bw_card or (torch.cuda.get_device_name(dev) if dev.type == "cuda" else None)
     model, outside = linears(ck, dev)
     total = sum(ck.bytes_of(k) for k in ck.tensors)
     del ck
     load_s = round(time.monotonic() - t0, 3)
     _stamp(out, "the weights loaded")
 
-    types = pous.linear_types
-    pous.linear_types = _linear_types
+    values = {name: m.weight for name, m in model.layers.items()}
+    ex = messages.Exchange()
+    held = None
     try:
-        ctx = PO.Context(stage="serve", enabled=PO.parse([ENTRY]), settings={"pous": {
-            "salt_source": _salt_source(party, bind), "p2_lib": p2_lib, "experimental": True}})
         t = time.monotonic()
         try:
-            comp = PO.install(model, ctx)
+            held = ex.attach(POUS, {"challenges": rounds}, salt_source=_salt_source(party, bind), p2_lib=p2_lib,
+                             experimental=True)
+            bw = None if bw_party is None else ex.attach(BANDWIDTH)
+            ex.answer(H.Declared(bw_card or str(dev), {"eager": True}, tuple(ex.attached),
+                                 {n: dict(v) for n, v in ex.attached.items()}))
+            ex.emit(H.RegisteredValues(tuple(values.items()), operands={n: i for i, n in enumerate(values)}))
         except NoSalt as e:
-            why = f"the memory attester on {party.host} drew no salt for the setup: {e}"[:1000]
+            why = _unnamed(f"the memory attester on {mc.ATTESTER_MACHINE} drew no salt for the setup: {e}", node,
+                           party)[:1000]
             if bw_party is not None:
-                HB.missing(bw_out, window, f"no PoUS session bound a store: {why}")
+                BW.missing(bw_out, window, f"no PoUS session bound a store: {why}")
             return done(_no("undecided", why, None, protocol))
         install_s = round(time.monotonic() - t, 3)
         _stamp(out, "setup done")
+        s = held.store
+        point = replace(s.point, k=rounds)
+        store = s.segments()
+        details = held.details()
+        weights = {"model": repo, "revision": rev, "covers": "linears", "linears": len(model.layers),
+                   "bytes": details["tensor_bytes"], "used_blocks": details["used_blocks"],
+                   "blocks": details["blocks"], "checkpoint_bytes": total,
+                   "share": str(Fraction(details["tensor_bytes"], total))}
+        summary |= {"load_s": load_s, "install_s": install_s, "weights": weights, "outside": outside,
+                    "details": details}
+        published = s.published()
+        sid = CS.session_id(bind, s.commitment, s.salt)
+        t = time.monotonic()
         try:
-            opt = comp.get("pous")
-            s = opt.store
-            point = replace(s.point, k=rounds)
-            store = s.segments()
-            details = opt.details
-            weights = {"model": repo, "revision": rev, "covers": pous.COVERS, "linears": details["layers"], "bytes": details["tensor_bytes"],
-                       "used_blocks": details["used_blocks"], "blocks": details["blocks"], "checkpoint_bytes": total,
-                       "share": str(Fraction(details["tensor_bytes"], total))}
-            summary |= {"load_s": load_s, "install_s": install_s, "weights": weights, "outside": outside,
-                        "details": details}
-            published = s.published()
-            sid = CS.session_id(bind, s.commitment, s.salt)
-            t = time.monotonic()
-            try:
-                rep = CR.session(party, CS.request_of(node, point, s.root, audit=bind, published=published),
-                                 opt.prover(()))
-                key = bytes.fromhex(rep["public_key"])
-                session = R.ChallengePhaseRecord.from_json(rep["session"])
-            except (OSError, RuntimeError, ValueError, KeyError, TypeError) as e:
-                why = (f"the memory attester's session on {party.host} did not complete: "
-                       f"{type(e).__name__}: {e}"[:1000])
-                if bw_party is not None:
-                    HB.missing(bw_out, window, f"no PoUS session bound a store: {why}")
-                return done(_no("undecided", why, None, protocol), session_s=round(time.monotonic() - t, 3))
-            session_s = round(time.monotonic() - t, 3)
-            _stamp(out, "PoUS's session done")
-            if rep.get("session_id") != sid.hex():
-                return done(_no("reject", "the memory attester's report is of a session under another id than the one "
-                                "the window's binding and its setup fix (challenger_session.session_id)", None, protocol),
-                            session_s=session_s)
-            _private(private, {
-                "run.json": {"point": period.point_json(point), "published": published.to_json(),
-                             "session": rep["session"], "session_id": sid.hex(), "public_key": key.hex(),
-                             "host": rep.get("host"), "rounds_answered": rep.get("rounds"),
-                             "warmups": rep.get("warmups"), "latency": _latencies(session, point.limit_ns)}},
-                     s.digests)
-            _keep(private, store)
-            del store
-            bandwidth = None
+            rep = CR.session(party, CS.request_of(node, point, s.root, audit=bind, published=published),
+                             held.prover(()))
+            key = bytes.fromhex(rep["public_key"])
+            session = R.ChallengePhaseRecord.from_json(rep["session"])
+        except (OSError, RuntimeError, ValueError, KeyError, TypeError) as e:
+            why = _unnamed(f"the memory attester's session on {mc.ATTESTER_MACHINE} did not complete: "
+                           f"{type(e).__name__}: {e}", node, party)[:1000]
             if bw_party is not None:
-                _stamp(out, "PoUB's session start")
-                t = time.monotonic()
-                deployed = from_runner() if deployment is None else deployment
-                HB.held(s, node=node, party=bw_party, party_host=bw_host, sid=sid,
-                        request_=bw_request or HB.request(node.encode()), private=bw_private,
-                        trusted_sha512=HB.key_of(deployed, bw_trusted_sha512))
-                bandwidth = {"session_s": round(time.monotonic() - t, 3)}
-                _stamp(out, "PoUB's session done")
-            (private / HELD).write_text(json.dumps({"summary": summary | {"session_s": session_s},
-                                                    "bandwidth": bandwidth}, indent=1, sort_keys=True, default=str)
-                                        + "\n")
-            return None
-        finally:
-            comp.close()
+                BW.missing(bw_out, window, f"no PoUS session bound a store: {why}")
+            return done(_no("undecided", why, None, protocol), session_s=round(time.monotonic() - t, 3))
+        session_s = round(time.monotonic() - t, 3)
+        _stamp(out, "PoUS's session done")
+        if rep.get("session_id") != sid.hex():
+            return done(_no("reject", "the memory attester's report is of a session under another id than the one "
+                            "the window's binding and its setup fix (challenger_session.session_id)", None, protocol),
+                        session_s=session_s)
+        _private(private, {
+            "run.json": {"point": period.point_json(point), "published": published.to_json(),
+                         "session": rep["session"], "session_id": sid.hex(), "public_key": key.hex(),
+                         "host": rep.get("host"), "rounds_answered": rep.get("rounds"),
+                         "warmups": rep.get("warmups"), "latency": _latencies(session, point.limit_ns)}},
+                 s.digests)
+        _keep(private, store)
+        del store
+        bandwidth = None
+        if bw_party is not None:
+            if bw_card is None:
+                raise Refusal(f"no card on {device} whose data sheet's memory bandwidth the bandwidth session is "
+                              "against: name it with --bw-card")
+            _stamp(out, "PoUB's session start")
+            t = time.monotonic()
+            deployed = from_runner() if deployment is None else deployment
+            from verity_bench import kit
+
+            bw.session(node=node, card=bw_card, r_bytes_per_s=kit.datasheet_bandwidth(bw_card), party=bw_party,
+                       party_host=bw_host, sid=sid, request_=bw_request or BW.request(node.encode()),
+                       private=bw_private, trusted_sha512=BW.key_of(deployed, bw_trusted_sha512))
+            bandwidth = {"session_s": round(time.monotonic() - t, 3)}
+            _stamp(out, "PoUB's session done")
+        (private / HELD).write_text(json.dumps({"summary": summary | {"session_s": session_s},
+                                                "bandwidth": bandwidth}, indent=1, sort_keys=True, default=str)
+                                    + "\n")
+        return None
     finally:
-        pous.linear_types = types
+        if held is not None:
+            held.release()
 
 
 def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | None = None,
@@ -537,7 +537,7 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | No
             bw_trusted_sha512: str | None = None, pool: Executor | None = None) -> dict[str, Any]:
     """The piece's part that needs no card (module docstring, 4 to 6): the answers to what `sessions` kept, read
     back from ``private``, all three at once on ``pool`` (by default three threads of this process): PoUB-P2's
-    (`held_bandwidth.decide`, the Lean's with ``bw_case_exe``), to ``bw_out`` (by default ``out``'s sibling
+    (`p2_stage.bandwidth.decide`, the Lean's with ``bw_case_exe``), to ``bw_out`` (by default ``out``'s sibling
     ``bandwidth``) and ``bw_private``, and PoUS's on its case by the Python and by the Lean, written with
     ``pous.json`` to ``out`` and returned. ``schemes`` and ``protocol`` are the signatures the verifier accepts and the
     id it answers under (a test signer's in tests), ``deployment`` what `trusted-device`'s premise reads
@@ -569,7 +569,7 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | No
     out.mkdir(parents=True, exist_ok=True)
     session, digests = R.ChallengePhaseRecord.from_json(kept["session"]), (private / "digests.bin").read_bytes()
     deployed = from_runner() if deployment is None else dict(deployment)
-    pinned = mc.pinned(deployed["pins"], CS.CHALLENGER, "pous")
+    pinned = mc.pinned(deployed["pins"], CS.CHALLENGER, POUS.name)
     if trusted_sha512 is None:
         trusted_sha512 = min(pinned, default=None)
     key_sha = hashlib.sha512(key).hexdigest()
@@ -577,10 +577,10 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | No
 
     def bandwidth_answer() -> dict[str, Any]:
         _stamp(out, "PoUB's answer start")
-        bw = HB.decide(bw_private, bw_out, bind=HB.binding(repo, rev, window),
+        bw = BW.decide(bw_private, bw_out, bind=BW.binding(repo, rev, window),
                        window=window, pous_case={"commitment": canonical_json_bytes(published.to_json()).hex()},
                        case_exe=bw_case_exe, trusted_sha512=bw_trusted_sha512, deployment=deployed)
-        print(HB.line(bw), flush=True)
+        print(BW.line(bw), flush=True)
         _stamp(out, "PoUB's answer done")
         return bw
 
@@ -646,7 +646,8 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | No
                            "of": "the run protocol's commitment, the SHA-512 of setup's published outputs"},
             "placement": CS.placement(node, host, key_sha, **deployed) | {
                 "salt": f"drawn by the memory challenger on {host} from its OS after the commitment, "
-                        "logged under the window's binding, with the session's id derived from both"},
+                        "logged under the window's binding, with the session's id derived from both",
+                "graded_by": GRADED_BY},
             "weights": summary["weights"] | {"held": "loaded from the served snapshot on the card the window served "
                                                      "on, after its serve ended"},
             "outside": summary["outside"], "window": window}
@@ -655,9 +656,9 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | No
           private=str(private), public=inner["public"], bandwidth=bandwidth,
           decided_by=decided, setup=CS.SETUP, **lean)
     # last, and only once each Lean asked for has answered its case: until then the same sessions can be answered again
-    unanswered = not agreed or (bw is not None and bw["verdict"] == "undecided" and (bw_private / HB.HELD).is_file())
+    unanswered = not agreed or (bw is not None and bw["verdict"] == "undecided" and (bw_private / BW.held).is_file())
     if not unanswered:
-        for kept_file in (private / STORE, private / HELD, bw_private / HB.HELD):
+        for kept_file in (private / STORE, private / HELD, bw_private / BW.held):
             kept_file.unlink(missing_ok=True)
     return answer
 
@@ -668,13 +669,13 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
         protocol: str = period.PROTOCOL, rounds: int = ROUNDS, bw_party: str | None = None,
         bw_host: str = BW_PARTY_HOST, bw_request: Mapping[str, Any] | None = None, bw_out: Path | None = None,
         bw_private: Path | None = None, bw_case_exe: str | None = None,
-        case_exe: str | None = None, bw_trusted_sha512: str | None = None) -> dict[str, Any]:
+        case_exe: str | None = None, bw_trusted_sha512: str | None = None, bw_card: str | None = None) -> dict[str, Any]:
     """The piece (module docstring) in one process, `sessions` and then `answers`: its answer, written with
     ``pous.json`` to ``out``; `Refusal` when none can be made."""
     early = sessions(serve_dir, window, out, hf_home=hf_home, device=device, p2_lib=p2_lib, node=node, party=party,
                      private=private, pins=pins, protocol=protocol, rounds=rounds, bw_party=bw_party, bw_host=bw_host,
                      bw_request=bw_request, bw_out=bw_out, bw_private=bw_private,
-                     bw_trusted_sha512=bw_trusted_sha512, deployment=deployment)
+                     bw_trusted_sha512=bw_trusted_sha512, bw_card=bw_card, deployment=deployment)
     if early is not None:
         return early
     return answers(serve_dir, window, out, trusted_sha512=trusted_sha512, deployment=deployment, private=private,
@@ -704,7 +705,53 @@ def line(answer: Mapping[str, Any]) -> str:
     return f"POUS: {answer['verdict']}: {answer['reason']}"
 
 
+def collect_bandwidth(out: Path, window: int) -> dict[str, Any] | None:
+    """The bandwidth answer this piece wrote to ``out`` (`--bw-out`) for ``window``, None when it wrote none (the runner's
+    ``BANDWIDTH_CMD``); one of another window's is replaced by an undecided one saying whose it is. ValueError when what
+    it wrote isn't a core answer of PoUB."""
+    sys.path.insert(0, str(ROOT / "benchmarks" / "one_stage"))
+    import served_verdicts as S
+
+    files = [out / f for f in ("answer.json", "bandwidth.json")]
+    if not all(f.exists() for f in files):
+        return None
+    a, summary = (json.loads(f.read_text()) for f in files)
+    S.check_answer(a)
+    if a.get("protocol") != BANDWIDTH.protocol:
+        raise ValueError(f"the answer in {out} is {a.get('protocol')!r}'s, not PoUB's")
+    if summary.get("window") != window:
+        a = {"commitment": None, "profile": None, "protocol": BANDWIDTH.protocol, "public": None,
+             "reason": f"the bandwidth answer in {out} is window {summary.get('window')}'s, not window {window}'s: the "
+                       f"PoUS piece ran no bandwidth session for window {window}", "verdict": "undecided"}
+        (out / "answer.json").write_text(json.dumps(a, indent=1, sort_keys=True) + "\n")
+    return a
+
+
+def _collect_main(argv: Sequence[str]) -> int:
+    c = argparse.ArgumentParser(prog="served_piece.py collect-bandwidth", description=collect_bandwidth.__doc__)
+    c.add_argument("--serve-dir", type=Path, required=True)
+    c.add_argument("--window", type=int, required=True)
+    c.add_argument("--out", type=Path, required=True)
+    a = c.parse_args(argv)
+    a.out.mkdir(parents=True, exist_ok=True)
+    try:
+        got = collect_bandwidth(a.out, a.window)
+    except ValueError as e:
+        print(f"BANDWIDTH error: {e}", flush=True)
+        return 1
+    if got is None:
+        print(f"MISSING the bandwidth audit: the PoUS piece wrote no bandwidth answer to {a.out} for window "
+              f"{a.window} (its session runs over the store the PoUS piece holds, POUS_CMD, before this piece)",
+              flush=True)
+        return 2
+    print(f"BANDWIDTH {json.dumps({k: got[k] for k in ('verdict', 'reason', 'public')}, sort_keys=True)}", flush=True)
+    return 0 if got["verdict"] == "accept" else 1
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["collect-bandwidth"]:
+        return _collect_main(argv[1:])
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("serve_dir", type=Path)
     ap.add_argument("window", type=int)
@@ -727,16 +774,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                               "--answers (exit 0), or the answer they leave already")
     part.add_argument("--answers", action="store_true", help="only the part that needs no card: the answers to the "
                                                              "sessions --sessions kept")
-    bw = ap.add_argument_group("the bandwidth session over the held store (held_bandwidth.py)")
+    bw = ap.add_argument_group("the bandwidth session over the held store (p2_stage/bandwidth.py)")
     bw.add_argument("--bw-party", default=BW_PARTY, help="the shell command that starts the bandwidth party (the gate's "
                                                          "bw_party verb), to which --minutes and --pous-session are added")
     bw.add_argument("--bw-host", default=BW_PARTY_HOST, help="where the party's port is reached from here")
     bw.add_argument("--bw-minutes", type=int, default=BW_MINUTES, help="the party's minutes, the gate's cap on the session")
-    bw.add_argument("--bw-windows", type=int, default=HB.WINDOWS)
-    bw.add_argument("--bw-passes", type=int, default=HB.PASSES)
-    bw.add_argument("--bw-samples", type=int, default=HB.SAMPLES)
-    bw.add_argument("--bw-window-s", type=float, default=HB.WINDOW_S)
-    bw.add_argument("--bw-deadline-s", type=float, default=HB.DEADLINE_S)
+    bw.add_argument("--bw-windows", type=int, default=BW.session["windows"])
+    bw.add_argument("--bw-passes", type=int, default=BW.session["passes"])
+    bw.add_argument("--bw-samples", type=int, default=BW.session["samples"])
+    bw.add_argument("--bw-window-s", type=float, default=BW.session["window_s"])
+    bw.add_argument("--bw-deadline-s", type=float, default=BW.session["deadline_s"])
     bw.add_argument("--bw-out", type=Path, help="the bandwidth piece's directory (default: DIR's sibling bandwidth)")
     bw.add_argument("--bw-private", type=Path, help="its private directory (default SERVE_DIR/private/bandwidth)")
     bw.add_argument("--bw-case-exe", help="poub-p2-protocol, which answers the case (else "
@@ -744,16 +791,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     bw.add_argument("--bw-trusted-sha512", help="the SHA-512 of the key the bandwidth session's close is trusted under, "
                                                 "a rehearsal's (default: the one VERITY_PINS pins for the bandwidth "
                                                 "verifier's bandwidth sessions; none: no session has a case)")
+    bw.add_argument("--bw-card", help="the card's name as nvidia-smi gives it, whose data sheet's memory bandwidth γ is "
+                                      "against (default: torch's for a CUDA --device)")
     bw.add_argument("--no-bandwidth", action="store_true", help="no bandwidth session")
     a = ap.parse_args(argv)
     command = tuple(shlex.split(a.challenger_command)) if a.challenger_command else CHALLENGER_COMMAND
     party = Side(a.challenger_host, tuple(os.path.expanduser(x) for x in command), _address(a.challenger_address))
     node = a.node or socket.gethostname()
     bw_party = None if a.no_bandwidth else f"{a.bw_party} --minutes {a.bw_minutes}"
-    bw_request = HB.request(node.encode(), windows=a.bw_windows, passes=a.bw_passes, samples=a.bw_samples,
+    bw_request = BW.request(node.encode(), windows=a.bw_windows, passes=a.bw_passes, samples=a.bw_samples,
                             window_s=a.bw_window_s, deadline_s=a.bw_deadline_s)
     card = {"hf_home": a.hf_home, "device": a.device, "p2_lib": a.p2_lib, "node": node, "party": party,
-            "rounds": a.rounds, "bw_party": bw_party, "bw_host": a.bw_host, "bw_request": bw_request}
+            "rounds": a.rounds, "bw_party": bw_party, "bw_host": a.bw_host, "bw_request": bw_request,
+            "bw_card": a.bw_card}
     both = {"private": a.private, "bw_out": a.bw_out, "bw_private": a.bw_private,
             "bw_trusted_sha512": a.bw_trusted_sha512}
     none = {"trusted_sha512": a.trusted_sha512, "bw_case_exe": a.bw_case_exe, "case_exe": a.case_exe}

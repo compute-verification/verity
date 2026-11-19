@@ -41,8 +41,10 @@ def test_width_refusals_agree_with_the_codec(tmp_path):
     """The inference-only difftest's 335 descriptors whose references name leaves of other widths than their types give them, and
     their well-typed neighbours (`desc_difftest_vectors.mistyped`), and a PoUW window's shape reading a word as a
     template's bits and its bits as them (`_tile_window`): the Lean decoder, which Flock's verifier, `InferenceOnlyCheck` and
-    PoUW's `Credit.programOf` share, refuses as `E_REINTERPRET` exactly those the codec does, with the codec's message
-    (`verity/protocols/proofs/flock/prover/agreement/README.md`'s D22; `qword_program_agree.py --widths`)."""
+    PoUW's `Credit.programOf` share, refuses as `E_REINTERPRET` every one the codec refuses as a reinterpretation or a recut
+    read: with the codec's message where the codec says `E_REINTERPRET`, and where the codec names the read a recut
+    (`recut-width`, `recut-boundary`) as the reinterpretation it is to the decoder; it says `E_REINTERPRET` on none of the
+    others (`verity/protocols/proofs/flock/prover/agreement/README.md`'s D22; `qword_program_agree.py --widths`)."""
     spec = importlib.util.spec_from_file_location("desc_difftest_vectors", INFERENCE_ONLY_SCRIPTS / "desc_difftest_vectors.py")
     V = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(V)
@@ -60,4 +62,5 @@ def test_width_refusals_agree_with_the_codec(tmp_path):
                         "--out", str(tmp_path / "out"), "--widths", str(tmp_path / "widths.jsonl")],
                        capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
-    assert json.loads(p.stdout.strip().splitlines()[-1])["widths"] == {"both_refuse": 211, "neither": 126}
+    widths = json.loads(p.stdout.strip().splitlines()[-1])["widths"]
+    assert widths == {"both_refuse": 122, "named_pair": {"recut-width": 51, "recut-boundary": 38}, "neither": 126}, widths

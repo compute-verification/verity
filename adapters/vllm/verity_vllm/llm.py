@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import asdict, dataclass
+from collections.abc import Mapping
 from typing import Any
 
-from verity_vllm import config
+from verity import hooks as H
+from verity_vllm import config, messages
 from verity_vllm import protocols as PO
 from verity_vllm.config import EnginePin
 from verity_vllm.engine import served
@@ -21,7 +23,7 @@ from verity_vllm.errors import Refused
 
 #: The names the library's other modules and files outside the adapter read here.  Outside the distribution the class is
 #: ``from verity_vllm import LLM``.
-__all__ = ["LLM", "protocol_context", "resolve_options"]
+__all__ = ["LLM", "option_settings", "protocol_context", "resolve_options"]
 
 
 @dataclass(frozen=True)
@@ -66,16 +68,15 @@ SUPPORTED: dict[str, Supported] = {
     "attention_config": Supported((dict, type(None)), None, "vLLM attention settings, such as {'flash_attn_version': 2}"),
     "moe_backend": Supported((str, type(None)), None, "vLLM's MoE backend, such as triton (default: vLLM's auto)"),
     "seed": Supported(int, 0, "the engine seed"),
-    "protocols": Supported((str, dict, list, tuple), None, "protocol options installed on the engine: 'pouw:<scheme>,pous:<scheme>' "
-                                                             "or {name: scheme} (verity_vllm.protocols); default none"),
+    "protocols": Supported((str, dict, list, tuple), None, "declared schemes attached by name, and protocol options "
+                                                             "installed on the engine: 'pouw:<scheme>' or {name: scheme} "
+                                                             "(verity_vllm.protocols); default none"),
     "protocols_config": Supported(dict, None, "each enabled protocol's settings, {name: {...}}; never hashed"),
 }
 #: Options passed to vLLM only when the caller sets them; unset, the engine profile's value stands.
 ENGINE_ARGS = ("max_num_batched_tokens", "long_prefill_token_threshold", "max_model_len", "gpu_memory_utilization",
                "kv_cache_memory_bytes", "enable_chunked_prefill", "enable_prefix_caching", "async_scheduling", "dtype",
                "quantization", "compilation_config", "attention_backend", "attention_config", "moe_backend", "seed")
-#: Explicit overrides that can select kernels outside a protocol option's Build.
-KERNEL_PROFILE_OVERRIDES = ("dtype", "quantization", "compilation_config", "attention_backend", "attention_config", "moe_backend")
 #: The keyword arguments ``generate`` accepts beside the prompts and sampling parameters.
 GENERATE_SUPPORTED = ("use_tqdm",)
 
@@ -116,7 +117,7 @@ def class_options(options: dict[str, Any]) -> dict[str, Any]:
     execution = options.get("execution") if options.get("execution") in EC.EXECUTIONS.get(name, {}) else None
     fixed, most = EC.options(name, execution), EC.max_num_seqs(name)
     bad = [f"{k}={options[k]!r}, where the class serves {v!r}" for k, v in fixed.items() if k in options and options[k] != v]
-    bad += [f"{k}={options[k]!r}: the class serves the engine profile's" for k in KERNEL_PROFILE_OVERRIDES
+    bad += [f"{k}={options[k]!r}: the class serves the engine profile's" for k in served.KERNEL_PROFILE_OVERRIDES
             if k not in fixed and options.get(k) is not None]
     if options.get("max_num_seqs", most) > most:
         bad.append(f"max_num_seqs={options['max_num_seqs']}, over the class's {most}")
@@ -129,6 +130,33 @@ def class_options(options: dict[str, Any]) -> dict[str, Any]:
     return {**fixed, **options, "max_num_seqs": options.get("max_num_seqs", most)}
 
 
+def option_settings(entry: str, doc: Mapping[str, Any]) -> dict[str, Any]:
+    """The settings of the declared scheme ``entry`` names (its name, or its option's protocol): ``doc``'s entry under
+    that less its ``device``, which is ``cuda`` (``ValueError`` otherwise)."""
+    own = dict(doc.get(entry.partition(":")[0], {}))
+    if own.pop("device", "cuda") != "cuda":
+        raise ValueError(f"{entry} runs on cuda")
+    return own
+
+
+def listed_by_name(value: Any) -> tuple[list[str], list[str]]:
+    """``protocols``' entries that are a declared scheme's name, in their order, and the rest, which the selector's
+    grammar reads (`config.parse_protocols`), refusing a declared scheme's option (`protocols.refusals`).
+    ``ValueError`` where an entry names the protocol a declared scheme's option names."""
+    if value is None or (isinstance(value, str) and value.strip() in ("", "none")):
+        return [], []
+    items = ([f"{k}:{v}" for k, v in value.items()] if isinstance(value, Mapping)
+             else [x.strip() for x in value.split(",")] if isinstance(value, str) else [str(x).strip() for x in value])
+    declared = messages.declarations.load()
+    named = [e for e in items if e in declared]
+    for e in named:
+        for other in items:
+            if other != e and declared[e].option and other.partition(":")[0] == declared[e].option.partition(":")[0]:
+                raise ValueError(f"protocol {other.partition(':')[0]!r} is enabled twice ({e!r} and {other!r}); a run "
+                                 "enables one scheme per protocol")
+    return named, [e for e in items if e not in named]
+
+
 def protocol_context(opts: dict[str, Any], explicit: dict[str, Any] | None = None) -> Any:
     """The protocol options' serving context for resolved options, None when none is enabled; ``ValueError`` names every
     refusal, before any engine exists.  The settings an adapter takes from the built engine (`protocol_options.engine_fills`)
@@ -139,20 +167,9 @@ def protocol_context(opts: dict[str, Any], explicit: dict[str, Any] | None = Non
             raise ValueError("verity_vllm.LLM: protocols_config without protocols")
         return None
     ctx = PO.Context(stage="serve", enabled=enabled, world=opts["tensor_parallel_size"], enforce_eager=opts["enforce_eager"],
-                     settings=PO.load_settings(opts["protocols_config"]))
+                     settings=PO.load_settings(opts["protocols_config"]), kernels=served.kernels(explicit))
     ctx = dataclasses.replace(ctx, filled=PO.engine_fills(ctx))
-    overrides = tuple(k for k in KERNEL_PROFILE_OVERRIDES if explicit and explicit.get(k) is not None)
-    bad = []
-    for entry in enabled:
-        try:
-            needs_build = PO.requires_build(entry, ctx)
-        except PO.Refused:
-            continue
-        if needs_build and overrides:
-            bad.append(f"{entry}: engine overrides {', '.join(overrides)} can change the served kernels and no longer match its "
-                       "Build; use the pinned engine profile")
-    bad.extend(PO.refusals(ctx))
-    if bad:
+    if bad := PO.refusals(ctx):
         raise PO.refused(bad)
     return ctx
 
@@ -182,8 +199,10 @@ class LLM:
         llm = LLM("unsloth/Llama-3.2-1B", revision="9535bd9b1d1dea6acafbdc4813b728796aeb28da")
         outputs = llm.generate(["The capital of France is"], SamplingParams(temperature=0.0, max_tokens=16))
 
-    ``model`` is a Hugging Face repo id and ``revision`` its full commit sha; both must be pinned in
-    ``manifests/checkpoints.json`` with the snapshot on this host, else the constructor raises ``ValueError``.  The dtype,
+    ``model`` is a Hugging Face repo id and ``revision`` its full commit sha, or a node-local checkpoint's directory and
+    ``"sha256:"`` with its content digest (`config.checkpoint_digest`, refused at build where the files hash otherwise);
+    both must be pinned in ``manifests/checkpoints.json`` or a sibling manifest with the snapshot on this host, else the
+    constructor raises ``ValueError``.  The dtype,
     tokenizer, attention backend and the rest of the engine come from the pin's engine profile, as in every
     ``verity-vllm`` stage; prefix caching is off unless ``enable_prefix_caching=True``.
 
@@ -228,7 +247,7 @@ class LLM:
     * ``moe_backend`` (str): vLLM's MoE backend, such as ``"triton"``; default vLLM's ``"auto"``.
     * ``seed`` (int, default 0): the engine seed.
     * ``protocols`` (str or mapping): protocol options installed on the engine once it is built
-      (:mod:`verity_vllm.protocols`), ``"pouw:<scheme>,pous:<scheme>"`` or ``{"pous": "<scheme>"}``; default none.
+      (:mod:`verity_vllm.protocols`), ``"pouw:<scheme>"`` or ``{"pouw": "<scheme>"}``; default none.
       A set the options refuse raises ``ValueError`` before the engine is built.  SPOT runs in the Commit stage
       of a row, not here.  Settings an option takes from the engine are filled from this one after the build
       (`protocol_options.from_engine`), and one it can't fill there is refused by name: PoUW's H1
@@ -241,18 +260,34 @@ class LLM:
     and ``engine_record`` the engine as built: the ``vllm.LLM`` keyword arguments, the environment flags the profile
     set, and the execution vLLM reports back.  ``protocols`` is the installed
     :class:`~verity_vllm.protocols.Composition` (None without protocols); ``close()`` uninstalls it, and
-    ``reinstall(protocols_config=None)`` installs the same set afresh (H1's next window).  The engine is always built
-    here; an engine built elsewhere is not accepted.
+    ``reinstall(protocols_config=None)`` installs the same set afresh (H1's next window).  An entry of ``protocols`` that
+    is a declared scheme's name (``pearl-plus``, ``pous``) is attached by name on the build instead, with its settings
+    under that name, every such entry in its order (`messages.attach_listed`), with `option_settings`, its coins in-process
+    unless they name a ``challenger``; ``schemes`` is what each attach returned, and ``close()`` releases them.  The engine is always built
+    here; an engine built elsewhere is not accepted.  Each LLM's build has its own exchange (`messages.build`), on which
+    its protocols' requests are filed before the build and which is the exchange in scope while it generates.
     """
 
     def __init__(self, model: str, *, revision: str, **options: Any) -> None:
         options = class_options(options)
         opts = resolve_options(options)
         self.options = opts
-        self.engine_overrides = {k: options[k] for k in KERNEL_PROFILE_OVERRIDES if options.get(k) is not None}
+        self.engine_overrides = {k: options[k] for k in served.KERNEL_PROFILE_OVERRIDES if options.get(k) is not None}
         self.pin = EnginePin.resolve(model, revision, world=opts["tensor_parallel_size"])
         if opts["engine_class"] is not None:
             EC.check_model(opts["engine_class"], self.pin.model, self.pin.revision)
+        by_name, selected = listed_by_name(opts["protocols"])
+        enabled = config.parse_protocols(selected)
+        named = {e: messages.declarations.load()[e] for e in by_name}
+        doc = PO.load_settings(opts["protocols_config"])
+        listed = [(s, option_settings(e, doc)) for e, s in named.items()]
+        for s, own in listed:
+            if "coins" in s.settings and not own.get("challenger"):
+                own.setdefault("coins", "in-process")
+        if named:
+            rest = {k: v for k, v in doc.items() if k not in named}
+            opts = {**opts, "protocols": [e for e in enabled if e not in named], "protocols_config": rest or None}
+        self._served = opts
         ctx = protocol_context(opts, options)
         from verity_vllm.engine import vllm_adapter as va
 
@@ -260,6 +295,10 @@ class LLM:
         if self.pin.world > 1:
             engine_args["tensor_parallel_size"] = self.pin.world
         env: dict[str, Any] = {} if opts["engine_class"] is None else {"env": EC.env(opts["engine_class"])}
+        ex = messages.build()
+        self.schemes = messages.attach_listed(ex, listed, process=H.ENGINE)
+        for entry, request in PO.requests(ctx) if ctx is not None else ():
+            ex.request(entry, request)
         self._engine = va.build_engine(config.CHECKPOINTS, max_num_seqs=opts["max_num_seqs"], case=self.pin.case,
                                        engine_args=engine_args,
                                        execution=opts["execution"] or va.execution_label_of(opts["enforce_eager"]), **env)
@@ -287,14 +326,23 @@ class LLM:
         ``protocols_config`` in place of the constructor's when given, and return the new composition.  The settings
         taken from the engine are filled again, with fresh in-process coins of the next epoch: for H1, one window.
         ``ValueError`` without ``protocols``, or naming every refusal of the new settings."""
-        opts = {**self.options, **({} if protocols_config is None else {"protocols_config": protocols_config})}
+        opts = {**self._served, **({} if protocols_config is None else {"protocols_config": protocols_config})}
         if not config.parse_protocols(opts["protocols"]):
             raise ValueError("verity_vllm.LLM.reinstall: this LLM was built without protocols")
         ctx = protocol_context(opts, self._explicit)
-        self.close()
-        self.protocols = None
-        self._install(ctx)
+        with messages.using(self._engine.exchange):
+            if self.protocols is not None:
+                self.protocols.close()
+            self.protocols = None
+            self._install(ctx)
         return self.protocols
+
+    @property
+    def scheme(self) -> Any:
+        """What the one scheme attached by name returned, None with none; `ValueError` with several."""
+        if len(self.schemes) > 1:
+            raise ValueError(f"verity_vllm.LLM: {len(self.schemes)} schemes attached by name, not one")
+        return self.schemes[0] if self.schemes else None
 
     @classmethod
     def from_spec(cls, spec: Any) -> LLM:
@@ -308,9 +356,14 @@ class LLM:
         return llm
 
     def close(self) -> None:
-        """Uninstall the protocol options.  Idempotent."""
-        if self.protocols is not None:
-            self.protocols.close()
+        """Uninstall the protocol options and release the schemes attached by name.  Idempotent."""
+        with messages.using(self._engine.exchange):
+            if self.protocols is not None:
+                self.protocols.close()
+            schemes, self.schemes = self.schemes, []
+            for scheme in schemes:
+                if callable(getattr(scheme, "release", None)):
+                    scheme.release()
 
     def close_window(self) -> None:
         """Close a Commit window on this engine.  Under an engine class, `errors.Refused` while a request is in flight or once the
@@ -332,7 +385,8 @@ class LLM:
         if unknown:
             raise TypeError(f"verity_vllm.LLM.generate does not support {', '.join(map(repr, unknown))}; "
                             f"supported: prompts, sampling_params, {', '.join(GENERATE_SUPPORTED)}")
-        outputs = self._engine.llm.generate(prompts, sampling_params, **kwargs)
+        with messages.using(self._engine.exchange):
+            outputs = self._engine.llm.generate(prompts, sampling_params, **kwargs)
         self.records.append(GenerateRecord.of(outputs, sampling_params))
         return outputs
 

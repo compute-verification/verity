@@ -1,0 +1,21 @@
+{
+ "params": {
+  "big": {
+   "file": "0.bin",
+   "rows": 2
+  },
+  "proj.bias": {
+   "file": "1.bin",
+   "rows": 1
+  },
+  "proj.weight": {
+   "file": "2.bin",
+   "rows": 5
+  },
+  "scale": {
+   "file": "3.bin",
+   "rows": 1
+  }
+ },
+ "schema": "verity/salt-file/v1"
+}

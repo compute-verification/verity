@@ -28,14 +28,15 @@ from typing import Any, Mapping, Sequence
 
 from verity.circuits.codec import canonical_json
 from verity.circuits.partition import Level
+from verity.commitments import domains as DM
 from verity.protocols.proofs.spot.verifier.profile import (Bernoulli, IntegrityProfile, SamplingDesign, Stratified, Stratum, Subset, Work,
                                           WorkStratum)
 
 from .draw import check_draw, check_proved, sampling_design_of
-from verity.protocols.proofs.spot.verifier.one_stage.docket import PROTOCOL, digest as registration_digest
+from verity.commitments.docket_digest import digest as registration_digest
 
-FORMAT = "verity/one-stage/audit/v0"
-PROFILE = "verity/integrity-profile/v1"
+FORMAT = DM.ONE_STAGE_AUDIT
+PROFILE = DM.INTEGRITY_PROFILE
 LEVEL = "unit"
 
 
@@ -43,10 +44,13 @@ def _sha512(obj: Any) -> str:
     return hashlib.sha512(canonical_json(obj)).hexdigest()
 
 
-def profile(docket: Mapping[str, Any], draw: Mapping[str, Any], delta: float) -> IntegrityProfile:
-    """The audit's integrity profile under any of the four sampling designs. The work sampling design is the stratified sampling design at its sizes (Lean
-    `SamplingDesign.work`), so its profile is the same `Stratified` one, counting the sampled proof blocks (a closure proves more, and only
-    helps)."""
+def profile(docket: Mapping[str, Any], draw: Mapping[str, Any], delta: float,
+            credited: frozenset[int] = frozenset()) -> IntegrityProfile:
+    """The audit's integrity profile under any of the four sampling designs. The work sampling design is the
+    stratified sampling design at its sizes (Lean `SamplingDesign.work`), so its profile is the same `Stratified`
+    one, counting the sampled proof blocks (a closure proves more, and only helps). ``credited`` is the first-level
+    numbers `resource_accounting.scheme.credited` returns; it refuses them unless each is a block of every level
+    (`profile.CREDITED_UNSPLIT`)."""
     if draw["law"] == "subset":
         sampling_design = Subset(draw["k"])
     elif draw["law"] == "bernoulli":
@@ -57,7 +61,7 @@ def profile(docket: Mapping[str, Any], draw: Mapping[str, Any], delta: float) ->
         raise ValueError(f"no profile for a {draw['law']!r} sample")
     return IntegrityProfile(levels=(Level(LEVEL, docket["partition"]),), sizes=(docket["population"],),
                             draws={LEVEL: sampling_design}, delta=delta, programs=(docket["program"],),
-                            drawn={LEVEL: len(draw["units"])})
+                            drawn={LEVEL: len(draw["units"])}, credited=credited)
 
 
 def core_sampling_design(sampling_design: Mapping[str, Any], population: int) -> Stratified | None:
@@ -149,7 +153,7 @@ def less_own_reads(opened: Mapping[str, Any] | None, docket: Mapping[str, Any]) 
     return {v: r for v, r in opened.items() if not (v in roots and _jeq(roots[v], r))}
 
 
-#: the public output of an accept that says whether every verdict ran (`answer`), read by `answer_complete`
+#: the public output of an accept that says whether every verdict ran (`answer`)
 COMPLETE = "complete"
 
 
@@ -166,19 +170,11 @@ def answer(record: Mapping[str, Any], delta: Fraction) -> dict[str, Any]:
     p = profile(docket, sample, delta).to_json()
     p["delta"] = str(delta)
     wrong = wrong_units(docket, sample, delta)
-    return {"commitment": registration_digest(docket), "profile": p, "protocol": PROTOCOL,
+    return {"commitment": registration_digest(docket), "profile": p, "protocol": DM.ONE_STAGE_PROTOCOL,
             "public": {"bound": wrong["bound"], COMPLETE: record.get("complete") is True,
                        "drawn": sorted(sample["units"]), "per_template": wrong.get("per_template"),
                        "proved": sorted(record["proved_units"])},
             "reason": None, "verdict": "accept"}
-
-
-def answer_complete(answer: Any) -> bool:
-    """Whether `answer` is an accept that says every verdict ran: its verdict is ``accept`` and its public `COMPLETE`
-    is true. An answer without the field, as one written before the field was, is not complete, and neither is a
-    reject or an undecided, which has no public outputs."""
-    public = answer.get("public") if isinstance(answer, Mapping) else None
-    return isinstance(public, Mapping) and answer.get("verdict") == "accept" and public.get(COMPLETE) is True
 
 
 def _field(j: Any, k: str) -> Any:

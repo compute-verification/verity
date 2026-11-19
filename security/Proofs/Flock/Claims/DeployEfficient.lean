@@ -117,7 +117,7 @@ noncomputable def zkStepPoly : Polynomial ℕ :=
 /-- **Flock: efficiency at the deployed plain verifier**, at every `H`: `E^rep`'s reruns, and the record's decoder, the
 counted plain radius decoder, meets `ListWithin` at the record's `len`, `enc` and `θ`, with its count and its lists at
 most `plainStepPoly` at the opened word's encoded length. -/
-theorem efficient_plain (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
+theorem efficient_plain (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.Efficient H (deployPlainTrim rel) plainStepPoly := by
   refine Claims.Flock.Efficient_of_size H (deployPlainTrim rel) Claims.GS.plainSizeRD _ _ ?_
     (fun os => (Claims.GS.plainDecodeRD_complexity os).2) ?_
@@ -130,7 +130,7 @@ theorem efficient_plain (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed �
 /-- **Flock: efficiency at the deployed masked (`--zk`) verifier**, at every `H`: `E^rep`'s reruns, and the record's
 decoder, the counted masked radius decoder, meets `ListWithin` at the record's `len`, `enc` and `θ`, with its count and
 its lists at most `zkStepPoly` at the opened word's encoded length. -/
-theorem efficient_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
+theorem efficient_zk (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.Efficient H (deployZkTrim rel) zkStepPoly := by
   refine Claims.Flock.Efficient_of_size H (deployZkTrim rel) Claims.GS.zkSizeRD _ _ ?_
     (fun os => (Claims.GS.zkDecodeRD_complexity os).2) ?_
@@ -142,18 +142,18 @@ theorem efficient_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → 
 
 /-- **A bound too small fails at the plain record**: its decoder counts a step on no columns, whose encoded length is
 `0`, so it is not `Efficient` at any `p` with `p(0) = 0`. -/
-theorem not_efficient_plain (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem not_efficient_plain (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (p : Polynomial ℕ) (hp : p.eval 0 = 0) : ¬ Claims.Flock.Efficient H (deployPlainTrim rel) p :=
   Claims.Flock.not_efficient_of_nil H _ p (by rw [hp]; exact Claims.GS.plainCountedRD_nil_pos)
 
 /-- **A bound too small fails at the masked record**: not `Efficient` at any `p` with `p(0) = 0`. -/
-theorem not_efficient_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem not_efficient_zk (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (p : Polynomial ℕ) (hp : p.eval 0 = 0) : ¬ Claims.Flock.Efficient H (deployZkTrim rel) p :=
   Claims.Flock.not_efficient_of_nil H _ p (by rw [hp]; exact Claims.GS.zkCountedRD_nil_pos)
 
 /-- **`E^rep`'s reruns at the deployed plain verifier**, at every decoder: at most `1 + 210·2^256`, and
 `1 + 210·⌈4·N₀/e⌉` in expectation. -/
-theorem erepRuns_plain (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem erepRuns_plain (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (decode : List (ℕ × List 𝔽) → List Claims.Flock.PlainTrace) :
     Claims.ExtractRunsLe H (Claims.Flock.E (deployPlainTrim rel) decode) (fun _ => 1 + 210 * 2 ^ 256) ∧
       Claims.ExtractRunsExpLe H (Claims.Flock.E (deployPlainTrim rel) decode)
@@ -162,7 +162,7 @@ theorem erepRuns_plain (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed �
 
 /-- **`E^rep`'s reruns at the deployed masked verifier**, at every decoder: at most `1 + 210·2^256`, and
 `1 + 210·⌈4·N₀/e⌉` in expectation. -/
-theorem erepRuns_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem erepRuns_zk (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (decode : List (ℕ × List 𝔽) → List Claims.Flock.ZkTrace) :
     Claims.ExtractRunsLe H (Claims.Flock.E (deployZkTrim rel) decode) (fun _ => 1 + 210 * 2 ^ 256) ∧
       Claims.ExtractRunsExpLe H (Claims.Flock.E (deployZkTrim rel) decode)

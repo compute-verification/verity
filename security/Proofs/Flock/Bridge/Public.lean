@@ -64,7 +64,7 @@ at the knowledge finders' budgets `q_F = 2(t' + v)` and `q_S = t' + v` and the l
 
 namespace Flock.Guarantees
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
 open FlockSoundness.Discharge.Tables (LiveOutJ)
@@ -73,7 +73,7 @@ open scoped ENNReal
 /-- **The committed wires the units read or write, summed over the units**: `Σ_u |io u|`, a bound on the commit strings
 any sample reads. -/
 noncomputable def _root_.Flock.Bridge.ioSum {C : Verity.Boolean.Circuit} {n : ℕ}
-    (P : FlockSoundness.Audit.Partition C n) : ℕ :=
+    (P : Spot.Sampling.Partition C n) : ℕ :=
   ∑ u, (P.io u).card
 
 /-- **The sampled audit's public error**: the sample's miss, the knowledge term at Flock ZK's parameters
@@ -99,7 +99,7 @@ def SampledKSLivePub : Prop :=
     (_hrows : Bridge.RowsOk D.unroll)
     (_hdup : Flock.PortRoots.dupId D.unroll pub = false) (_hroots : Bridge.PortRoots.rootsColl D.unroll pub n = none)
     -- the statement's descriptor, and the registration's query, whose population is the game's n units in order
-    (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
+    (desc : Hash.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)

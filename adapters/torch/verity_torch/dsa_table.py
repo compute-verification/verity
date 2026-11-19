@@ -12,7 +12,7 @@ INDEX_TOPK keys in place of the rows network (`DsaButterflySettings_v1`, `DsaBut
 So `DsaHistoryReads_v1` at `DsaTopKIndex_v1` of a counted mask of TOPK members is the row `DsaButterflyRowsPad_v1` routes at that
 mask's settings (tests/program/test_dsa_table.py).  An indexer layer computes the index once per long row and an IndexShare layer
 reads its own history at it, so the index and the reads are two Calls.  Serving cuts a reads Call into TOPK reads of the
-(request, layer) history table, `EmbeddingRead_v1{V=2^17,H}` each, read j's ``tok`` wired to index output j.
+(request, layer) history table, `EmbeddingRead_v2{V=2^17,H}` each, read j's ``tok`` wired to index output j.
 
 These are stand-ins: the Boolean index units and table read (`commitments.gates.embedding`) are on bits only, with no word view a
 Program can call.  Once `verity_vllm.definitions.registry` holds word Definitions of these two names with their Boolean versions, the

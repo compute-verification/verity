@@ -1,16 +1,12 @@
 // The commitment's hashes as host+device functions, one thread's work each (engine.py is the call, README.md the formats):
 // nvcc builds rows.cu (the kernels), g++ builds rows_host.cpp (the host twin, a loop a kernel), and both run what is below.
 // The frame-v3-sha512 leaf, node and pad and the hm96 leaf's mask, salt digest and value are row_commit.cuh's; this file
-// keeps the schedule: the row digest, the layout engine.py fills, the salts and each lane's column order.
+// keeps the schedule: the row digest, the layout engine.py fills, where each leaf's salt is read and each lane's column
+// order. A leaf's salt is data: 192 bytes the caller drew for it, read from the caller's buffer and derived from nothing.
 // A digest is 8 u64 words, each the big-endian value of its 8 bytes. C is a compression, row_commit.cuh's policy:
-// C::compress(st, w) has sx::compress's contract, C::compress_kw(st, kw) sx::compress_kw's. SXR_COUNT_CHACHA(), if defined,
-// runs once a ChaCha20 block (the host twin's count).
+// C::compress(st, w) has sx::compress's contract, C::compress_kw(st, kw) sx::compress_kw's.
 #pragma once
 #include "../row_commit.cuh"
-
-#ifndef SXR_COUNT_CHACHA
-#define SXR_COUNT_CHACHA()
-#endif
 
 #ifndef __CUDACC__
 struct uint4 {
@@ -36,9 +32,9 @@ struct RowSpec {     // 752 bytes: row g's bytes in slot s are a_len at a + s a_
 };
 static_assert(sizeof(RowSpec) == 752, "RowSpec is 752 bytes");
 
-struct LeafRow {     // 224 bytes: row g's frame leaf, rank and position in the domain dids[did]; its salt is row salt_row's
+struct LeafRow {     // 224 bytes: row g's frame leaf, rank and position in the domain dids[did]
   u64 rank, position;
-  u32 did, salt_row;
+  u32 did, pad0_;
   u32 q, pad_;       // leaf_setup: the leaf prefix's bytes after its first block
   u64 mid[8];        // leaf_setup: the chaining value after that block
   u64 tail[16];      // leaf_setup: those q bytes, big-endian packed
@@ -145,47 +141,15 @@ SX_HD void row_digest(const RowSpec& r, u64 s, u64* x) {
 
 // --- hm96-sha512 under hiding leaves, then the frame-v3-sha512 leaf ------------------------------------------------------
 
-// ChaCha20 (20 rounds, 64-bit counter in words 12-13, 64-bit nonce in 14-15: verity.commitments.crypto.chacha20)
-#define SXR_QR(a, b, c, d)                                                                                                 \
-  x[a] += x[b]; x[d] ^= x[a]; x[d] = (x[d] << 16) | (x[d] >> 16);                                                          \
-  x[c] += x[d]; x[b] ^= x[c]; x[b] = (x[b] << 12) | (x[b] >> 20);                                                          \
-  x[a] += x[b]; x[d] ^= x[a]; x[d] = (x[d] << 8) | (x[d] >> 24);                                                           \
-  x[c] += x[d]; x[b] ^= x[c]; x[b] = (x[b] << 7) | (x[b] >> 25);
-SX_HD void chacha20(const u32* key, u64 counter, u64 nonce, u32* out) {
-  SXR_COUNT_CHACHA();
-  const u32 st[16] = {0x61707865u, 0x3320646eu, 0x79622d32u, 0x6b206574u, key[0], key[1], key[2], key[3], key[4], key[5],
-                      key[6], key[7], (u32)counter, (u32)(counter >> 32), (u32)nonce, (u32)(nonce >> 32)};
-  u32 x[16];
-  for (int i = 0; i < 16; ++i) x[i] = st[i];
-#ifdef __CUDA_ARCH__
-#pragma unroll 1
-#endif
-  for (int r = 0; r < 10; ++r) {
-    SXR_QR(0, 4, 8, 12) SXR_QR(1, 5, 9, 13) SXR_QR(2, 6, 10, 14) SXR_QR(3, 7, 11, 15)
-    SXR_QR(0, 5, 10, 15) SXR_QR(1, 6, 11, 12) SXR_QR(2, 7, 8, 13) SXR_QR(3, 4, 9, 14)
-  }
-  for (int i = 0; i < 16; ++i) out[i] = x[i] + st[i];
-}
-#undef SXR_QR
-
-// y as SALT_U32 little-endian words, word w at y[w ys]: ChaCha20 blocks 3 salt_row .. 3 salt_row + 2 under key with nonce
-// (Flock's hm96_salt)
-SX_HD void salt_key_words(const u32* key, u64 nonce, u64 salt_row, u32* y, u32 ys) {
-  for (int c = 0; c < 3; ++c) {
-    u32 o[16];
-    chacha20(key, 3 * salt_row + c, nonce, o);
-    for (int i = 0; i < 16; ++i) y[(16 * c + i) * ys] = o[i];
-  }
-}
-
 struct LeafArgs {
   const LeafRow* rows;
   const u64* x;          // (G, S, 8) inner digests
   u64* out;              // (G, S, 8) leaves; with frames, (rest, S, 8): the leaves of the rows whose unit has several
   const uint8_t* T;      // hm96's Hankel table (engine.hankel_table): T_v, 256 rows of 256 bytes
-  const uint8_t* salts;  // (G, S, 192) the caller's y, or null for the salt key's
-  u32 key[8];            // the salt key (ChaCha20's key words), when salts is null
-  u64 nonce0;            // slot s's nonce is nonce0 + s
+  const uint8_t* salts;  // the caller's y, 192 bytes a leaf: row g's in slot s at salts + g salt_g + s salt_s, byte n of
+                         // the salt at offset n
+  u64 salt_g, salt_s;    // the bytes from a row's salts to the next row's and from a slot's to the next slot's (192 S and
+                         // 192 for a (G, S, 192) buffer); on the device they and salts are multiples of 16
   u64 ms_salt[8];        // the chaining value after hm96's salt prefix
   u64 ms_leaf[8];        // after its leaf prefix (the key's)
   u32 G, S;
@@ -215,7 +179,7 @@ SX_HD void leaf_setup(LeafRow& r, const u64* dids, const uint8_t* schema, u32 sc
 template <class C>
 SX_HD void frame_setup(LeafRow& r, u64 rank, const u64* did, const uint8_t* schema, u32 schema_len) {
   r.rank = r.position = rank;
-  r.did = r.salt_row = r.pad_ = 0;
+  r.did = r.pad0_ = r.pad_ = 0;
   leaf_setup<C>(r, did, schema, schema_len);
 }
 
@@ -240,25 +204,22 @@ struct LaneColumns {
   SX_HD u32 operator()(int k) const { return mask_column(k, l); }
 };
 
-// row g's leaf in slot s: b = x ^ M y, c = SHA-512(salt_prefix || y), h = SHA-512(leaf_prefix(key) || b || c), then the frame
-// leaf SHA-512(leaf prefix || h), and with A.frames, for a unit of this row alone, its slot-tree leaf over that (the unit's
-// root). T is A.T's table (in shared memory on the device), y the thread's SALT_U32 words of scratch, ys apart (in shared
-// memory on the device, so that y's 48 registers are free), and l the thread's lane in its group of 8 (mask_column).
+// row g's leaf in slot s under its salt y, the 192 bytes the caller gave for it (A.salts): b = x ^ M y, c =
+// SHA-512(salt_prefix || y), h = SHA-512(leaf_prefix(key) || b || c), then the frame leaf SHA-512(leaf prefix || h), and with
+// A.frames, for a unit of this row alone, its slot-tree leaf over that (the unit's root). T is A.T's table (in shared memory
+// on the device), y the thread's SALT_U32 words of scratch, ys apart (in shared memory on the device, so that y's 48
+// registers are free), and l the thread's lane in its group of 8 (mask_column).
 template <class C>
 SX_HD void leaf(const LeafArgs& A, const uint8_t* T, u32* y, u32 ys, u32 l, u32 g, u32 s) {
   const LeafRow& r = A.rows[g];
   const u64 gs = (u64)g * A.S + s;
-  if (A.salts) {
-    const uint8_t* sp = A.salts + 192 * gs;
-    for (int i = 0; i < 12; ++i) {
-      const uint4 u = ld16(sp + 16 * i);
-      y[4 * i * ys] = u.x;
-      y[(4 * i + 1) * ys] = u.y;
-      y[(4 * i + 2) * ys] = u.z;
-      y[(4 * i + 3) * ys] = u.w;
-    }
-  } else {
-    salt_key_words(A.key, A.nonce0 + s, r.salt_row, y, ys);
+  const uint8_t* sp = A.salts + g * A.salt_g + s * A.salt_s;
+  for (int i = 0; i < 12; ++i) {
+    const uint4 u = ld16(sp + 16 * i);
+    y[4 * i * ys] = u.x;
+    y[(4 * i + 1) * ys] = u.y;
+    y[(4 * i + 2) * ys] = u.z;
+    y[(4 * i + 3) * ys] = u.w;
   }
   u64 bc[16];
   {

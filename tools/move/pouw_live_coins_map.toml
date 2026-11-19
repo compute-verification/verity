@@ -1,0 +1,39 @@
+# PoUW's live coins out of H1's serving package: what `tools/move/layout.py --map tools/move/pouw_live_coins_map.toml`
+# moves and rewrites. The coin window, its challenger, the request rows, the sample session and the salt names
+# (`serving/h1/{window,challenger,requests,sample,names}.py`) go to `serving/coins/`, so a reader of the coins no longer
+# loads `serving/h1/__init__` (commit, prover, records, tables, static, the H1 tile). Nothing is split, edited or
+# deleted; `serving/coins/__init__.py` lands before the move. Their tests stay where they are. The format is
+# `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", slowdown = "benchmarks/slowdown/slowdown" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", slowdown = "benchmarks/slowdown/slowdown" }
+
+[paths]
+"verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/window.py" = "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/window.py"
+"verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/challenger.py" = "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/challenger.py"
+"verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/requests.py" = "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/requests.py"
+"verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sample.py" = "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/sample.py"
+"verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/names.py" = "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/names.py"
+
+[retired]
+paths = ["verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/window.py", "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/challenger.py", "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/requests.py", "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sample.py", "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/names.py"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), files
+# whose bytes a digest pins, the archive, `move_check.py` and its test, and `tests/tree.toml`, the layout of record.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**", "archive/**",
+           "tools/check/tests/test_move_check.py", "tools/check/move_check.py",
+           "tools/research/src/research/store/moves.json", "tests/tree.toml"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+
+[modules]
+"verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.window" = "verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.window"
+"verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.challenger" = "verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.challenger"
+"verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.requests" = "verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.requests"
+"verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sample" = "verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.sample"
+"verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.names" = "verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.names"

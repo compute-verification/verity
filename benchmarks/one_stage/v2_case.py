@@ -54,8 +54,9 @@ import a5
 from composite import canonical, write_private
 
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.commitments.domains import ONE_STAGE_PROTOCOL_V2
 
-ID = "verity/sampled-proofs/one-stage/v2"
+ID = ONE_STAGE_PROTOCOL_V2
 TREE = Path(__file__).resolve().parents[2]
 CASE_FILES = ("case.json", "params.json", "commitment.bin", "evidence.json", "answer.json")
 

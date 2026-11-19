@@ -201,7 +201,7 @@ end FlockSoundness.Accounting
 
 namespace FlockSoundness.Discharge.ZkSession
 
-open Game Model Accounting Audit
+open Game Model Accounting Spot.Sampling
 open scoped ENNReal NNReal
 
 variable {F : Type} [Field F] [Fintype F] [DecidableEq F] {mPts : ℕ}
@@ -269,7 +269,7 @@ end FlockSoundness.Discharge.ZkSession
 
 namespace FlockSoundness.Discharge.ZkLink
 
-open Game Model Accounting Audit ZkSession StrictCR
+open Game Model Accounting Spot.Sampling ZkSession StrictCR
 open scoped ENNReal
 
 variable {F : Type} [Field F] [Fintype F] [DecidableEq F] {mPts : ℕ}
@@ -366,7 +366,7 @@ theorem ksAvgStrictZ_le_closed (hF : Fintype.card F = 2 ^ 128) {n : ℕ} {Reg : 
 section Qs
 
 variable {K : Type} [Field K] (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ}
-  (P : Audit.Partition C n) {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
+  (P : Spot.Sampling.Partition C n) {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
   {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ValueBindingZ A P planZ tab decode Hc)
@@ -415,7 +415,7 @@ end FlockSoundness.Discharge.ZkLink
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game Audit Exec Flock FlockLevel3 Model Accounting Refine ZkSession ZkLink ZkExec Composed
+open Game Spot.Sampling Exec Flock FlockLevel3 Model Accounting Refine ZkSession ZkLink ZkExec Composed
 
 variable {n mPts : ℕ}
 

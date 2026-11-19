@@ -86,8 +86,9 @@ from typing import Any
 
 from .rec_live import (REQ_FINISH, REQ_PING, REQ_PROOF, RESP_REFUSED, RESP_VERDICT, decode_resp, read_frame, refused,
                        resp_ok, resp_str, write_frame)
+from verity.commitments.domains import ZK_SERVER_RECORD
 
-KIND = "firewall/v0"
+KIND = ZK_SERVER_RECORD
 INNER = "inner"
 #: an outer session's proofs, one a rep (2 at K = 4096)
 PROOFS = 2

@@ -28,7 +28,7 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   `spot-one-stage check` on the case, goes to the verdicts alone.
 * **`verity/sampled-proofs/v1`** (`sampled_case`, `SAMPLED`): both composites' SPOT subprotocol
   (`Core.Remote.components`, `Core.Onsite.components`, `VStar.Recursive.Sampled`), v2's case (`v2_case`, below) with
-  ``form`` ``one-stage`` in its params and its evidence (`with_form`), which the dispatcher splits off before one-stage
+  one level's form in its params and its evidence (`with_levels`), which the dispatcher splits off before one-stage
   v2's decoders read the rest:
   its params name ``proofs`` and its evidence the proofs' files in place of v1's verdicts, as the dispatcher requires.
   None when v2's case is refused, which the refusal says, and each composite then names SPOT missing. a5
@@ -65,9 +65,6 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   compose its v0, which publishes the division and its blocks' profiles, as a stated exception (`composite.EXCEPTIONS`).
   The policy's Lean package and the Python its check is held to are named by the module `POLICY`, loaded when this
   case is asked for; on a tree that leaves the policy out the case is refused saying so.
-* **The inference-only rows case** (`inference_only_rows_case`, `INFERENCE_ONLY_ROWS`: `verity/inference-only/rows/v1`,
-  the policy's check counted in rows of the templates' circuit files) is an interface whose body is not written; no
-  composite lists the protocol, and `produce` makes no such case.
 * **PoUW's period case** (`period_case`, `PERIOD`: `verity/pouw/period/v1`, both composites' work subprotocol):
   `pouw_piece.py period`'s case and answer as it wrote them (``--period``; with ``--serve-dir``, `served_pouw.sh`'s
   ``D/private/pouw/period`` when it holds a case), taken once every window of the period names R as its Commit record
@@ -141,30 +138,25 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+from verity.commitments import docket_digest as DD
+from verity.commitments import domains as DM
+from verity.protocols.proofs.spot.verifier import levels as LV
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
 from verity.protocols.resource_accounting.compute.pouw.verifier import period_check as PC
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as VF
 from verity.circuits import codec
 
 ROOT = Path(__file__).resolve().parents[2]
-V1 = R.PROTOCOL
+V1 = DM.ONE_STAGE_PROTOCOL
 V1_LEAN = (VF.PACKAGE, "spot-one-stage")
 SAMPLED = "verity/sampled-proofs/v1"
 SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/spot_flock_recursion/verifier/lean", "vstar-recursive")
 #: `vstar-recursive`'s command for SPOT (`VStarRecursiveMain.main` sends ``sampled`` to
 #: `VStar.Recursive.Sampled.protocol`), ahead of ``check``
 SAMPLED_CMD = ("sampled",)
-#: The form remote's SPOT case names: one-stage v2's audit (`VStar.Recursive.Sampled.ONE_STAGE`)
-ONE_STAGE = "one-stage"
 V2 = PF.V2
 INFERENCE_ONLY = "verity/inference-only/v0"
-#: the policy's check in rows of the templates' circuit files (`InferenceOnly.RowsProtocol`), whose case
-#: `inference_only_rows_case` makes
-INFERENCE_ONLY_ROWS = "verity/inference-only/rows/v1"
-#: the goal `inference_only_rows_case` serves
-ROWS_GOAL = "network/policy-check-counts-rows"
 #: the module beside this file that says where the tree holds the policy's check: its Lean package and executable
 #: (``LEAN``) and the Python that check is held to (``reference``), which `policy` loads by name
 POLICY = "inference_only_lean"
@@ -321,7 +313,7 @@ def record_of(case: Mapping[str, Any]) -> tuple[dict[str, Any], str]:
         raise Refused(f"the case's commitment is not a registration record: {type(e).__name__}: {e}") from None
     _need(isinstance(rec, dict) and codec.canonical_json(rec) == b,
           "the case's commitment is not a registration record as canonical JSON")
-    return rec, R.digest(rec)
+    return rec, DD.digest(rec)
 
 
 def window_case(audit: Path) -> dict[str, Any]:
@@ -354,23 +346,18 @@ def v2_case(audit: Path) -> dict[str, Any]:
     return case
 
 
-def with_form(case: Mapping[str, Any], form: str = ONE_STAGE) -> dict[str, Any]:
-    """``case`` as SPOT reads it (`VStar.Recursive.Sampled`): its params and its evidence each with ``form``,
-    which the dispatcher splits off before that form's decoders read the rest."""
+def with_levels(case: Mapping[str, Any], levels: int = 1) -> dict[str, Any]:
+    """``case`` as SPOT reads it (`VStar.Recursive.Sampled`) at ``levels`` (`levels.with_levels`): its params and its
+    evidence each naming the levels' form, which the dispatcher splits off before that form's decoders read the rest."""
     try:
-        evidence = json.loads(bytes.fromhex(case["evidence"]))
+        return LV.with_levels(case, levels, codec.canonical_json)
     except (KeyError, TypeError, ValueError) as e:
-        raise Refused(f"the case's evidence is not JSON: {type(e).__name__}: {e}") from None
-    _need(isinstance(case.get("params"), Mapping) and isinstance(evidence, dict)
-          and "form" not in case["params"] and "form" not in evidence,
-          "the case's params and evidence must be objects that name no form")
-    return {**case, "evidence": codec.canonical_json(evidence | {"form": form}).hex(),
-            "params": {**case["params"], "form": form}}
+        raise Refused(f"the case is not SPOT's at {levels} level(s): {type(e).__name__}: {e}") from None
 
 
 def sampled_case(audit: Path) -> dict[str, Any]:
-    """Remote's SPOT case (module docstring): v2's (`v2_case`) in the form ``one-stage``."""
-    return with_form(v2_case(audit))
+    """Remote's SPOT case (module docstring): v2's (`v2_case`) at one level."""
+    return with_levels(v2_case(audit))
 
 
 def period_case(d: Path, digest: str) -> tuple[dict[str, Any], str, Any]:
@@ -467,7 +454,7 @@ def _chain(log: Sequence[Mapping[str, Any]], rec: Mapping[str, Any]) -> None:
         _need(isinstance(r, Mapping) and r.get("previous") == prev,
               "the log and the record don't chain: each record's previous is the digest of the one before"
               + ("; the record names a previous record, so pass the deployment's log (--log)" if not log else ""))
-        prev = R.digest(r)
+        prev = DD.digest(r)
 
 
 def h1_log(path: Path, rec: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -486,7 +473,7 @@ def h1_log(path: Path, rec: Mapping[str, Any]) -> list[dict[str, Any]]:
         _need(isinstance(x, dict) and isinstance(x.get("file"), str) and isinstance(x.get("digest"), str),
               f"a line of the serve's H1 log names no record file and digest: {str(x)[:200]}")
         r = _json(path.parent / x["file"])
-        _need(isinstance(r, dict) and R.digest(r) == x["digest"],
+        _need(isinstance(r, dict) and DD.digest(r) == x["digest"],
               f"the serve's H1 log names {x['file']} as the record of digest {x['digest'][:16]}…, which it isn't")
         log.append(r)
         if x["digest"] == rec["previous"]:
@@ -511,7 +498,7 @@ def pearl_log(serve: Path | None, parts: Path | None, rec: Mapping[str, Any]) ->
     if parts is not None:
         w = (_json(parts / "parts.json").get("window") or {}).get("record")
         if isinstance(w, dict):
-            held[R.digest(w)] = w
+            held[DD.digest(w)] = w
     if serve is not None:
         found = [_json(serve / DEPLOYMENT)] if (serve / DEPLOYMENT).is_file() else []
         for f in sorted(f for pattern in RECORDS for f in serve.glob(pattern) if f.is_file()):
@@ -521,7 +508,7 @@ def pearl_log(serve: Path | None, parts: Path | None, rec: Mapping[str, Any]) ->
                 unread.append(f"{f.relative_to(serve)} ({type(e).__name__})")
         for r in found:
             if isinstance(r, dict):
-                held[R.digest(r)] = r
+                held[DD.digest(r)] = r
     log: list[dict[str, Any]] = []
     at = rec.get("previous")
     while at is not None:
@@ -555,12 +542,61 @@ def _values(given: Any, members: Sequence[tuple[Any, int]]) -> tuple[tuple[str, 
     return tuple(values)
 
 
+def circuit_of(audit: Path) -> dict[str, Any] | None:
+    """The window's registered circuit record, ``circuit.json`` in the window directory beside its audit, when there."""
+    path = audit.parent / "window" / "circuit.json"
+    return _json(path) if path.is_file() else None
+
+
+def wired(root: Any, circuit: Mapping[str, Any]) -> Any:
+    """`population.wired_population_program` of the circuit record ``circuit``, each template the root's batch of its id."""
+    from verity.circuits.population import wired_population_program
+    from verity.circuits.program import is_input
+
+    fns = {codec.descriptor_id(n.fn): n.fn for n in root.body.nodes if not is_input(n.fn)}
+    named = circuit.get("templates")
+    _need(isinstance(named, list) and all(isinstance(t, list) and len(t) == 2 and t[0] in fns for t in named),
+          "the circuit record's templates aren't the root's")
+    try:
+        return wired_population_program([(fns[t], int(n)) for t, n in named], circuit)[0]
+    except (ValueError, TypeError, KeyError) as e:
+        raise Refused(f"the circuit record's wired Program doesn't build: {type(e).__name__}: {e}") from None
+
+
+def recorded(desc: Mapping[str, Any], root: Any, want: str, given: Any = None,
+             circuit: Mapping[str, Any] | None = None) -> tuple[dict[str, Any], list[list[Any]]]:
+    """The Program the record's ``program`` (``want``) names and its program function's ``[[name, type], ...]``, which
+    the descriptor doesn't carry, by which Program's digest ``want`` is: with ``circuit``, the window's circuit record,
+    its wired Program (`wired`) or that Program with no wires (the wired builder over the record less its wires),
+    else the population program (`parameters`). v1's descriptor ``desc`` is that Program, or the one with no wires
+    where ``want`` is the wired Program's, which the case then carries."""
+    mine, why = codec.program_digest(dict(desc)), "a circuit record (none is beside the audit)"
+    if circuit is not None:
+        try:
+            whole, bare = wired(root, circuit), wired(root, {**circuit, "wires": []})
+        except Refused as e:
+            whole = bare = None
+            why = f"the window's circuit record, which builds none: {e}"
+        else:
+            why = "the window's circuit record"
+            for p in (whole, bare):
+                if codec.program_digest(p) == want and mine in (want, codec.program_digest(bare)):
+                    got = [[n, t.to_json()] for n, t in p.fn.signature()[0]]
+                    _need(given is None or given == got, "v1's params' parameters aren't its Program's program function's")
+                    return (dict(desc) if mine == want else json.loads(codec.canonical_json(codec.encode_program(p)))), got
+    _need(mine == want, f"the record names another Program than v1's params, and no Program of {why}")
+    try:
+        return dict(desc), parameters(desc, root, given)
+    except Refused as e:
+        raise Refused(f"{e}, nor the wired Program of {why}") from None
+
+
 def parameters(desc: Mapping[str, Any], root: Any, given: Any = None) -> list[list[Any]]:
     """The program function's ``[[name, type], ...]``, which the descriptor doesn't carry (it inlines the function into
     its root): the population program (`population.mixed_population_program`, or `population_program` for one template)
-    rebuilt over the root's template batches in order, held to the descriptor's digest. ``given``, v1's own copy where
-    its params carry one, names the registered values the population takes ahead of its templates' parameters
-    (`_values`), and must be the rebuilt program's."""
+    rebuilt over the root's template batches in order, held to the descriptor's digest, a recorded run's whose record
+    names its population program. ``given``, v1's own copy where its params carry one, names the registered values the
+    population takes ahead of its templates' parameters (`_values`), and must be the rebuilt program's."""
     from verity.circuits.population import POPULATION_VERSIONS, mixed_population_program, population_program
     from verity.circuits.program import is_input
 
@@ -588,44 +624,36 @@ def parameters(desc: Mapping[str, Any], root: Any, given: Any = None) -> list[li
 
 
 def inference_only_case(v1: Mapping[str, Any], alpha: Fraction | int | str, gamma: int,
-                      log: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """The inference-only case (module docstring) from v1's case of the window's audit."""
+                        log: Sequence[Mapping[str, Any]] = (), circuit: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """The inference-only case (module docstring) from v1's case of the window's audit, on the Program its record names
+    (`recorded`; ``circuit``, the window's circuit record, `circuit_of`)."""
     rec, _ = record_of(v1)
     desc = v1["params"].get("program") if isinstance(v1.get("params"), Mapping) else None
     _need(isinstance(desc, dict), "v1's params hold no Program descriptor")
-    _need(codec.program_digest(desc) == rec.get("program"), "the record names another Program than v1's params")
     _need(isinstance(gamma, int) and not isinstance(gamma, bool) and gamma >= 0, f"Γ is a natural, not {gamma!r}")
     _chain(log, rec)
-    text = codec.canonical_json(desc).decode()
     NR = _reference()
     try:
-        inputs, _registered, _spans = NR.root_nodes(text)
         root = codec.decode_program(desc, NR.declared(desc)).root
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         raise Refused(f"v1's Program doesn't decode: {type(e).__name__}: {e}") from None
-    params = {"alpha": _ratio(alpha), "gamma": gamma, "log": [dict(r) for r in log],
-              "parameters": parameters(desc, root, v1["params"].get("parameters")), "program": text}
+    program, names = recorded(desc, root, rec.get("program"), v1["params"].get("parameters"), circuit)
+    text = codec.canonical_json(program).decode()
+    try:
+        inputs, _registered, _spans = NR.root_nodes(text)
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
+        raise Refused(f"the record's Program doesn't decode: {type(e).__name__}: {e}") from None
+    params = {"alpha": _ratio(alpha), "gamma": gamma, "log": [dict(r) for r in log], "parameters": names, "program": text}
     evidence = {"owner": ["input" if i else 0 for i in inputs], "provenance": [], "theta": []}
     return {"commitment": v1["commitment"], "evidence": codec.canonical_json(evidence).hex(), "params": params}
 
 
-def inference_only_rows_case(v1: Mapping[str, Any], record: str, circuits: Sequence[tuple[str, Path]],
-                             alpha: Fraction | int | str, gamma: int, log: Sequence[Mapping[str, Any]] = (),
-                             pins: Sequence[str] = (), order: Any = None) -> dict[str, Any]:
-    """The rows case (`INFERENCE_ONLY_ROWS`) from v1's case of the window's audit: params ``alpha`` and ``gamma`` (α
-    and Γ in rows), ``circuits`` (each of ``record``'s templates, in its order, with the SHA-512 of its circuit file
-    in ``circuits``), ``log``, ``pins`` and ``program`` (v1's params' Program as canonical text); commitment R;
-    evidence ``{"record"}``, or ``{"order", "record"}`` given ``order``: the execution phase's circuit record ``record``
-    (the text R commits); blobs the circuit files."""
-    raise NotImplementedError(f"{INFERENCE_ONLY_ROWS}'s served case is not written: goal {ROWS_GOAL}")
-
-
 def division_policy(v1: Mapping[str, Any], log: Sequence[Mapping[str, Any]], exe: str | os.PathLike,
-                    scratch: Path) -> tuple[Fraction, int]:
+                    scratch: Path, circuit: Mapping[str, Any] | None = None) -> tuple[Fraction, int]:
     """α and Γ read off the case's own division (``--from-division``): the policy's Lean check at no budget
     (`UNBOUNDED`) profiles each block's gates and fresh-input bits; Γ is the largest block's gates and α the most bits a
     gate of any block, so the check at them confirms that the division complies."""
-    answer, _ = lean_answer(exe, inference_only_case(v1, *UNBOUNDED, log), scratch)
+    answer, _ = lean_answer(exe, inference_only_case(v1, *UNBOUNDED, log, circuit), scratch)
     profile = answer.get("profile")
     blocks = profile.get("blocks") if isinstance(profile, Mapping) else None
     _need(answer.get("verdict") == "accept",
@@ -790,10 +818,10 @@ def produce(a: argparse.Namespace) -> int:
         if not a.from_division:
             _need(a.alpha is not None and a.gamma is not None, "α and Γ are the policy's, not the run's: pass --alpha "
                   "and --gamma, or --from-division")
-            return inference_only_case(v1, a.alpha, a.gamma, log)
-        alpha, gamma = division_policy(v1, log, inference_only_exe(), private / "scratch")
+            return inference_only_case(v1, a.alpha, a.gamma, log, circuit_of(audit))
+        alpha, gamma = division_policy(v1, log, inference_only_exe(), private / "scratch", circuit_of(audit))
         kept[INFERENCE_ONLY] = {"policy.json": {"alpha": _ratio(alpha), "gamma": gamma, "read": FROM_DIVISION}}
-        return inference_only_case(v1, alpha, gamma, log)
+        return inference_only_case(v1, alpha, gamma, log, circuit_of(audit))
 
     one(INFERENCE_ONLY, inference_only, inference_only_exe)
     if period is not None:

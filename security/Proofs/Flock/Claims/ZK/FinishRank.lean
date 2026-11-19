@@ -89,12 +89,12 @@ theorem coinsAt_push {coin : ℕ → ℕ → F128} {L : ℕ} {R : Array Round} (
     exact ⟨Nat.pos_of_ne_zero hn, rfl⟩
 
 /-- The rounds from the log's `L`th send on are answered by their sends' coins, one round to each send. -/
-def Inv (coin : ℕ → ℕ → F128) (L : ℕ) (t : Transcript) (l : Array Claims.Msg) : Prop :=
+def Inv (coin : ℕ → ℕ → F128) (L : ℕ) (t : Transcript) (l : Array Hash.Msg) : Prop :=
   CoinsAt coin L t.rounds ∧ l.size = L + t.rounds.size
 
 /-- **A transcript computation that only adds rounds**, each answered by its send's coin. -/
 def Grows (coin : ℕ → ℕ → F128) (L : ℕ) {α : Type} (y : TMW PS α) : Prop :=
-  ∀ (t : Transcript) (l : Array Claims.Msg) (a : α) (t' : Transcript) (l' : Array Claims.Msg),
+  ∀ (t : Transcript) (l : Array Hash.Msg) (a : α) (t' : Transcript) (l' : Array Hash.Msg),
     (y.run t).go l = (.ok (a, t'), l') → Replay.Prefix t.rounds t'.rounds ∧ (Inv coin L t l → Inv coin L t' l')
 
 /-- **The simulation of `Grows`**: a transcript computation of the pure session is related to itself when it grows. -/
@@ -191,21 +191,21 @@ theorem lincheckCut_grows (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (mk :
   unfold lincheckCut
   sim_walk [sampleP_grows coin n L, label_grows coin L, absorbSlice_grows coin L, absorbF_grows coin L]
 
-theorem run_bind_ok {α β : Type} {x : TMW PS α} {f : α → TMW PS β} {t : Transcript} {l : Array Claims.Msg} {b : β}
-    {t'' : Transcript} {l'' : Array Claims.Msg} (h : ((x >>= f).run t).go l = (.ok (b, t''), l'')) :
+theorem run_bind_ok {α β : Type} {x : TMW PS α} {f : α → TMW PS β} {t : Transcript} {l : Array Hash.Msg} {b : β}
+    {t'' : Transcript} {l'' : Array Hash.Msg} (h : ((x >>= f).run t).go l = (.ok (b, t''), l'')) :
     ∃ a t' l', (x.run t).go l = (.ok (a, t'), l') ∧ ((f a).run t').go l' = (.ok (b, t''), l'') := by
   rw [StateT.run_bind] at h
   obtain ⟨⟨a, t'⟩, l', h1, h2⟩ := JsonRT.go_bind_ok h
   exact ⟨a, t', l', h1, h2⟩
 
 theorem prefix_of_grows {α : Type} {y : TMW PS α} (hy : (growS coin L).R y y) {t t' : Transcript}
-    {l l' : Array Claims.Msg} {a : α} (h : (y.run t).go l = (.ok (a, t'), l')) : Replay.Prefix t.rounds t'.rounds :=
+    {l l' : Array Hash.Msg} {a : α} (h : (y.run t).go l = (.ok (a, t'), l')) : Replay.Prefix t.rounds t'.rounds :=
   (hy t l a t' l' h).1
 
 /-- **Round `1` of a zerocheck that returned** holds its `m − 13` outer coins, and its first send was before round
 `n`. -/
 theorem zerocheckCut_round1 {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray) (lay : Zk.PadLayout)
-    (mk : ℕ → F128) {t t' : Transcript} {l l' : Array Claims.Msg} {res : ZerocheckProof × ZcOut}
+    (mk : ℕ → F128) {t t' : Transcript} {l l' : Array Hash.Msg} {res : ZerocheckProof × ZcOut}
     (h : ((zerocheckCut (asksCut coin n) m digest cap root lay mk).run t).go l = (.ok (res, t'), l')) :
     l.size < n ∧ t'.rounds[t.rounds.size + 1]!.n = m - 13 := by
   unfold zerocheckCut at h
@@ -232,8 +232,8 @@ theorem zerocheckCut_round1 {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArr
 first send `l.size`. -/
 theorem roundPoints_cut {m kLog : ℕ} (hm : 14 ≤ m) (hk : 6 ≤ kLog) (digest cap root : ByteArray)
     (lay : Zk.PadLayout) (mk : ℕ → F128) (fold : CircuitFold) (hfk : fold.kLog = kLog) {t₀ : Transcript}
-    (ht₀ : t₀.rounds = #[]) {l : Array Claims.Msg} {zp : ZerocheckProof} {zc : ZcOut} {t₁ : Transcript}
-    {l₁ : Array Claims.Msg} {lp : LincheckProof} {lc : LcOut} {t₂ : Transcript} {l₂ : Array Claims.Msg}
+    (ht₀ : t₀.rounds = #[]) {l : Array Hash.Msg} {zp : ZerocheckProof} {zc : ZcOut} {t₁ : Transcript}
+    {l₁ : Array Hash.Msg} {lp : LincheckProof} {lc : LcOut} {t₂ : Transcript} {l₂ : Array Hash.Msg}
     (h₁ : ((zerocheckCut (asksCut coin n) m digest cap root lay mk).run t₀).go l = (.ok ((zp, zc), t₁), l₁))
     (h₂ : ((lincheckCut (asksCut coin n) fold m lay mk zc).run t₁).go l₁ = (.ok ((lp, lc), t₂), l₂)) :
     MaskRank.roundPoints m kLog t₂.rounds = MaskRank.claimPoints m kLog fun j e => coin (l.size + j) e := by

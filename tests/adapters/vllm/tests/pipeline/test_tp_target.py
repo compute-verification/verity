@@ -75,9 +75,7 @@ def vllm(monkeypatch) -> fake_vllm.FakeVllm:
 
 @pytest.fixture
 def stand_ins(monkeypatch, vllm):
-    """The drivers' engine-side calls stood in, and the target's environment knobs restored after the test; ``use(llm, target)``
-    returns the profiles the Commit's guard was given."""
-    from verity_vllm import protocols as PO
+    """The drivers' engine-side calls stood in, and the target's environment knobs restored after the test."""
     from verity_vllm.engine import engine_profile as prof
     from verity_vllm.engine import handle
     from verity_vllm.engine import vllm_adapter as va
@@ -88,13 +86,7 @@ def stand_ins(monkeypatch, vllm):
     for k in ("VLLM_BATCH_INVARIANT", "VLLM_USE_DEEP_GEMM"):
         monkeypatch.setenv(k, "1")
 
-    def use(llm: _LLM, target) -> list:
-        guarded: list = []
-
-        def commit_guard(profile, **k):
-            guarded.append(profile)
-            return profile
-
+    def use(llm: _LLM, target) -> None:
         vllm.set("vllm:LLM", llm)
         for owner, name, value in [(prof, "apply_env", lambda: {"VLLM_BATCH_INVARIANT": "1"}), (prof, "checkpoint_for", lambda case, path: {"repo": "org/model"}),
                                    (prof, "engine_kwargs", lambda cp, **kw: dict(kw)), (handle, "model_runner", lambda llm: 1 / 0),
@@ -102,11 +94,9 @@ def stand_ins(monkeypatch, vllm):
                                    (va, "target_of_workload", lambda wl, *a: target), (va, "case_of", lambda wl, case: case),
                                    (va, "throwaway_requests", lambda eng, reqs, seed=0: reqs), (va, "versions_doc", lambda eng: {}),
                                    (va, "run_requests", lambda eng, reqs, sampling: ({"q0": [5, 6]}, {"wall_s": 0.5, "engine_steps": 2})),
-                                   (PO, "commit_guard", commit_guard),
                                    (PC, "git_head", lambda: None), (PC, "run_workload", lambda eng, reqs, sampling: dict(RUN)),
                                    (TPCM, "tree_of_record", lambda: {}), (GL, "_ENVIRON", []), (GL, "_HELD", [])]:
             monkeypatch.setattr(owner, name, value)
-        return guarded
     return use
 
 
@@ -181,13 +171,10 @@ def test_an_int8_targets_ranks_register_its_parts_through_their_extension(tmp_pa
 
 def _commit(tmp_path: Path, llm: _LLM, target, stand_ins) -> Path:
     from verity_vllm.pipeline.tp import commit as TPCM
-    guarded = stand_ins(llm, target)
+    stand_ins(llm, target)
     out = tmp_path / "commit"
-    try:
-        TPCM.main(cli.parse("tp-commit", ["--workload", str(tmp_path / "w.json"), "--out", str(out), "--case", "C", "--pairs", "1",
-                                          "--warmup", "0", "--engine-arg", "max_num_batched_tokens=2048"], environ={}))
-    finally:
-        assert guarded == [target]
+    TPCM.main(cli.parse("tp-commit", ["--workload", str(tmp_path / "w.json"), "--out", str(out), "--case", "C", "--pairs", "1",
+                                      "--warmup", "0", "--engine-arg", "max_num_batched_tokens=2048"], environ={}))
     return out
 
 

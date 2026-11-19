@@ -19,15 +19,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = [
     "test_arena_layout.py",
     "test_challenger_audit.py",
-    "test_circuit.py",
-    "test_class_statement.py",
     "test_class_statement_redteam_1178.py",
-    "test_flock_rows.py",
     "test_flock_rows_vectors.py",
     "test_hm96_leaves.py",
     "test_inner_registered.py",
-    "test_ir_lowering.py",
-    "test_ir_sampling.py",
     "test_lean_coin_tree.py",
     "test_lean_forged_proofs.py",
     "test_lean_hidden_outputs.py",
@@ -41,7 +36,6 @@ untraced = [
     "test_lean_session_tables.py",
     "test_lean_shared_reads.py",
     "test_lean_typed_reads.py",
-    "test_lean_typed_statement.py",
     "test_lean_typed_template.py",
     "test_lean_verifier.py",
     "test_lean_verify_members.py",
@@ -50,15 +44,14 @@ untraced = [
     "test_lean_zk_mask.py",
     "test_ligerito_folds.py",
     "test_pod_lean_verdicts.py",
+    "test_pod_selftest.py",
     "test_pouw_rows.py",
     "test_read_tmpl.py", "test_read_tmpl_stager.py",
     "test_rec_algebra.py",
     "test_rec_inner_stage.py",
     "test_ring_switch.py",
     "test_sha512_leaves.py",
-    "test_stage_typed.py",
     "test_stream_zk_server.py",
-    "test_typed_statement.py",
     "test_witness_host.py", "test_zc_round1.py", "test_zerocheck_fused.py",
 ]
 # Test-only. Of Security, only what the tests and their Lean read: Lake and `lean` run outside the read guard, so
@@ -72,14 +65,14 @@ inputs = [
     "security/lakefile.toml", "security/lake-manifest.json", "security/lean-toolchain",
     "security/Properties/lakefile.toml", "security/Properties/lake-manifest.json", "security/Properties/lean-toolchain",
     # test_lean_verifier.py and test_audit_profile.py read the audit layer's files and its lifted statements
-    "security/Proofs/Flock/Soundness/Audit", "security/Proofs/Flock/Lemmas/Audit.lean",
+    "security/Proofs/Spot/Sampling", "security/Proofs/Flock/SpotFlock/Sampling", "security/Proofs/Flock/Lemmas/Audit.lean",
     # test_randomness_spec.py hashes the spec fixtures/randomness_lean.json was generated from
     "security/Proofs/Flock/Soundness/PlanDraw.lean",
     # tests import circuit-check's targets and read the census
     "tools/verity/circuit_check", "calibration/census",
     # the Lean verifier's stratified sample against the one-stage protocol's, and the Lean spec of verity.commitments.randomness against
     # its pinned vectors
-    "verity/protocols/proofs/spot", "verity/commitments/randomness", "tests/verity/commitments/randomness",
+    "verity/protocols/proofs/spot", "verity/circuits/partition_query.py", "verity/commitments/rate.py", "verity/commitments/randomness", "tests/verity/commitments/randomness",
     # the Lean decoder's width refusals against the codec, on the inference-only difftest's mistyped descriptors
     "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts",
     # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's, and test_rec_live.py the inner coin
@@ -124,14 +117,6 @@ tests = ["test_recorded_texts.py"]
 paths = ["verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs", "verity/protocols/proofs/flock/verifier/Flock/Tags.lean"]
 
 [[tool.verity.tests.reads]]
-tests = ["test_backend.py"]
-paths = ["verity/protocols/proofs/flock/prover/python/verity_flock"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_backend_bench.py"]
-paths = ["benchmarks/numerical/python/verity_numerical/bench", "verity/protocols/proofs/flock/prover/python/verity_flock"]
-
-[[tool.verity.tests.reads]]
 tests = ["test_challenger_audit.py"]
 # `lake build spot-difftest`: its package and those it requires by path
 paths = [
@@ -161,24 +146,10 @@ paths = [
 
 [[tool.verity.tests.reads]]
 tests = [
-    "test_circuit.py",
     "test_inner_registered.py",
-    "test_ir_lowering.py",
-    "test_ir_sampling.py",
     "test_lean_registered_bit_rows.py",
-    "test_stage_typed.py",
-    "test_typed_statement.py",
 ]
 paths = ["verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_class_statement.py"]
-paths = [
-    "benchmarks/numerical/python/verity_numerical/bench",
-    "adapters/vllm/verity_vllm",
-    "tools/verity/circuit_check/src/circuit_check",
-    "verity",
-]
 
 [[tool.verity.tests.reads]]
 tests = ["test_class_statement_redteam_1178.py"]
@@ -188,18 +159,8 @@ paths = ["adapters/vllm/verity_vllm", "tools/verity/circuit_check/src/circuit_ch
 tests = [
     "test_class_statement_unit_stager.py",
     "test_lean_hello.py",
-    "test_tmpl_statement.py",
-    "test_unit_range.py",
 ]
 paths = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier", "tests/verity/protocols/experimental/pearl_c4"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_derive.py"]
-paths = ["adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_flock_rows.py"]
-paths = ["verity/circuits/ops", "adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_keyed.py"]
@@ -224,19 +185,10 @@ tests = [
     "test_lean_served_registered.py",
     "test_lean_session_tables.py",
     "test_lean_typed_reads.py",
-    "test_lean_typed_statement.py",
     "test_lean_typed_template.py",
     "test_lean_verify_members.py",
 ]
 paths = ["tools/research/src/research"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_ir_lowering_bench.py"]
-paths = [
-    "benchmarks/numerical/python/verity_numerical/bench",
-    "tools/research/src/research",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/templates",
-]
 
 [[tool.verity.tests.reads]]
 tests = ["test_lean_verifier.py", "test_lean_width_refusals.py"]
@@ -253,7 +205,7 @@ tests = [
 paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json"]
 
 [[tool.verity.tests.reads]]
-tests = ["test_partition_units.py", "test_rec_shape.py"]
+tests = ["test_rec_shape.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "verity/protocols/resource_accounting/network",

@@ -12,11 +12,14 @@ from types import SimpleNamespace
 
 import pytest
 
+from verity.circuits import population as PN
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
+from verity.commitments import randomness as RND
 
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
@@ -62,7 +65,7 @@ def args(outputs=OUTPUTS) -> SimpleNamespace:
 
 
 def program() -> Program:
-    return P.mixed_population_program([(PAIR, N)])
+    return PN.mixed_population_program([(PAIR, N)])
 
 
 def _ports() -> dict:
@@ -73,7 +76,7 @@ def _ports() -> dict:
 
 def _record() -> dict:
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **e} for i, (p, e) in enumerate(_ports().items())]
-    return R.record(program(), QUERY, S.selection_sampling_design(RULE, N), S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0},
+    return DK.record(program(), QUERY, S.selection_sampling_design(RULE, N), S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0},
                     work_table=S.selection_table(RULE, program(), QUERY, TABLE))
 
 
@@ -100,7 +103,7 @@ def test_an_output_class_the_design_samples_whole_needs_no_closure_map():
     a5 takes it; at K of N the same class is refused, and a class split across a whole stratum and a sampled one is refused
     for the sampled one's units alone."""
     table = S.selection_table(RULE, program(), QUERY, TABLE)
-    whole, part = (D.derive(program(), QUERY, D.parse_design(f"work:{k}"), table) for k in (N, K))
+    whole, part = (D.derive(program(), QUERY, RND.parse_design(f"work:{k}"), table) for k in (N, K))
     assert [s["k"] for s in whole["strata"]] == [N]
     assert A5.output_refusal(args(), whole) is None
     assert A5.output_refusal(args(), part) == {"output-class-needs-a-closure-map": {"units": len(OUTS)}}

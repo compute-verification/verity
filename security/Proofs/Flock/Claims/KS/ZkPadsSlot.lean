@@ -168,7 +168,7 @@ variable [S : ZkSetup]
 and the link coin (`zkB2`); the simulated strategy follows `SchedC` at `r · repRounds` (`schedC_simAtJZ` on
 `zkStreams`, as `zkBatchAlign`), so it reaches the pads node there (`slotPadsZ_of_batch`), and `advPadsSZ_le_forkC`
 gives the alignment, table `j`'s position in the session being `j` (`take_gamesZC_length`). -/
-theorem zkPadsAlign (x : Claims.Msg) : ZkPadsAlign x := by
+theorem zkPadsAlign (x : Hash.Msg) : ZkPadsAlign x := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r u
   have hjS : j < sts.size := by rw [← zk_tables_length hset]; exact hj
   have ht : zkTbl sts j = j := by unfold zkTbl; exact ite_eq_left hjS
@@ -216,7 +216,7 @@ end Gen
 and the link coin (`zkB2`); the simulated strategy follows `SchedC` at `r · repRounds` (`schedC_simAtJZ` on
 `zkStreams`, as `zkBatchAlign`), so it reaches the pads node there (`slotPadsZ_of_batch`), and `advPadsSZ_le_forkC`
 gives the alignment, table `j`'s position in the session being `j` (`take_gamesZC_length`). -/
-theorem zkPadsAlign (x : Claims.Msg) : ZkPadsAlign x :=
+theorem zkPadsAlign (x : Hash.Msg) : ZkPadsAlign x :=
   Gen.zkPadsAlign (S := S₀) (x := x)
 
 namespace Gen
@@ -224,13 +224,13 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The masked simulator's fork bound at the pads holds at every message.** -/
-theorem zkSimForkLePads (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsPadsEvZ i :=
+theorem zkSimForkLePads (x : Hash.Msg) : ZkSimForkLeOn x fun _ i => IsPadsEvZ i :=
   zkSimForkLePads_of (zkPadsAlign x)
 
 end Gen
 
 /-- **The masked simulator's fork bound at the pads holds at every message.** -/
-theorem zkSimForkLePads (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsPadsEvZ i :=
+theorem zkSimForkLePads (x : Hash.Msg) : ZkSimForkLeOn x fun _ i => IsPadsEvZ i :=
   Gen.zkSimForkLePads (S := S₀) (x := x)
 
 end FlockDeploy.KS

@@ -85,12 +85,12 @@ theorem opsWith_hm96 (hs : Hashes Claims.OCV) : MerkleScheme.hm96Sha512.opsWith 
 
 /-! ## Runs of the Merkle check's steps -/
 
-theorem Runs.throw {H : Claims.Msg → Claims.Msg} {α : Type} {e : String} {a : α} {L : List Claims.Msg}
+theorem Runs.throw {H : Hash.Msg → Hash.Msg} {α : Type} {e : String} {a : α} {L : List Hash.Msg}
     (h : Runs H (throw e : Claims.OCV α) a L) : False := by
   have := h.1
   cases this
 
-theorem Runs.hash {b y : ByteArray} {L : List Claims.Msg} (h : Runs sha512 (Claims.Hashes.oc.sha512 b) y L) :
+theorem Runs.hash {b y : ByteArray} {L : List Hash.Msg} (h : Runs sha512 (Claims.Hashes.oc.sha512 b) y L) :
     y = Sha512.hash b ∧ Claims.toMsg b ∈ L := by
   obtain ⟨h1, h2⟩ := h
   refine ⟨?_, h2 (Claims.toMsg b, sha512 (Claims.toMsg b)) ?_⟩
@@ -101,7 +101,7 @@ theorem Runs.hash {b y : ByteArray} {L : List Claims.Msg} (h : Runs sha512 (Clai
       (Claims.OC.eval sha512 (Claims.OC.query (Claims.toMsg b) fun a => Claims.OC.ret (Except.ok (Claims.ofMsg a)))).2
     exact List.Mem.head _
 
-theorem Runs.leafW {x salt y : ByteArray} {L : List Claims.Msg}
+theorem Runs.leafW {x salt y : ByteArray} {L : List Hash.Msg}
     (h : Runs sha512 (Hm96.Default512.leafWith Claims.Hashes.oc x salt) y L) :
     y = Hm96.Default512.leaf x salt ∧ Claims.toMsg (Hm96.Default512.saltPrefix ++ salt) ∈ L ∧
       Claims.toMsg (Hm96.Default512.leafPrefix ++ (Hm96.xor64 x (Hm96.Default512.mask salt) ++
@@ -112,7 +112,7 @@ theorem Runs.leafW {x salt y : ByteArray} {L : List Claims.Msg}
   obtain ⟨rfl, hlm⟩ := Runs.hash h
   exact ⟨rfl, hcm, hlm⟩
 
-theorem Runs.leafW' {row : Array F128} {salt y : ByteArray} {L : List Claims.Msg}
+theorem Runs.leafW' {row : Array F128} {salt y : ByteArray} {L : List Hash.Msg}
     (h : Runs sha512 ((MerkleOps.hm96With Claims.Hashes.oc).leaf row salt) y L) :
     y = MerkleScheme.hm96Sha512.leaf row salt ∧ ∀ b ∈ leafIns row salt, Claims.toMsg b ∈ L := by
   obtain ⟨x, hx, h⟩ := Runs.bind h
@@ -125,7 +125,7 @@ theorem Runs.leafW' {row : Array F128} {salt y : ByteArray} {L : List Claims.Msg
   · exact hs
   · exact hl
 
-theorem Runs.climbW {acc : ByteArray} {idx : ℕ} {sibs : List ByteArray} {top : ByteArray} {L : List Claims.Msg}
+theorem Runs.climbW {acc : ByteArray} {idx : ℕ} {sibs : List ByteArray} {top : ByteArray} {L : List Hash.Msg}
     (h : Runs sha512 (climbWith (MerkleOps.hm96With Claims.Hashes.oc) acc idx sibs) top L) :
     top = climb MerkleScheme.hm96Sha512 acc idx sibs ∧ ∀ b ∈ climbIns acc idx sibs, Claims.toMsg b ∈ L := by
   induction sibs generalizing acc idx with
@@ -159,7 +159,7 @@ theorem Runs.climbW {acc : ByteArray} {idx : ℕ} {sibs : List ByteArray} {top :
         · exact hrest b hb
 
 theorem Runs.opensW {cap : Array ByteArray} {c d lanes pos : ℕ} {row : Array F128} {salt : ByteArray}
-    {sibs : List ByteArray} {L : List Claims.Msg}
+    {sibs : List ByteArray} {L : List Hash.Msg}
     (h : Runs sha512 (opensWith (MerkleOps.hm96With Claims.Hashes.oc) MerkleScheme.hm96Sha512 cap c d lanes pos row
       salt sibs) true L) :
     opens MerkleScheme.hm96Sha512 cap c d lanes pos row salt sibs = true ∧
@@ -181,7 +181,7 @@ theorem Runs.opensW {cap : Array ByteArray} {c d lanes pos : ℕ} {row : Array F
       · exact hlt b hb
   · cases Runs.pure h
 
-theorem Runs.findM?_none {α : Type} {p : α → Claims.OCV Bool} {L : List Claims.Msg} :
+theorem Runs.findM?_none {α : Type} {p : α → Claims.OCV Bool} {L : List Hash.Msg} :
     ∀ {l : List α}, Runs sha512 (l.findM? p) none L → ∀ a ∈ l, Runs sha512 (p a) false L
   | [], _, a, ha => by cases ha
   | x :: xs, h, a, ha => by
@@ -197,7 +197,7 @@ theorem Runs.findM?_none {α : Type} {p : α → Claims.OCV Bool} {L : List Clai
 /-- **The shipped `hm96-sha512/v1` Merkle check logs every opening**: run against `sha512` within `L`, the compiled
 check passed, and every SHA-512 input of query `j`'s opening is a message of `L`. -/
 theorem merkleCheck_logs {cap : Array ByteArray} {c d : ℕ} {positions : Array ℕ} {rows : Array (Array F128)}
-    {siblings salts : Array ByteArray} {lanes : ℕ} {L : List Claims.Msg}
+    {siblings salts : Array ByteArray} {lanes : ℕ} {L : List Hash.Msg}
     (h : Runs sha512 (merkleCheckWith (MerkleOps.hm96With Claims.Hashes.oc) MerkleScheme.hm96Sha512 cap c d positions
       rows siblings salts lanes) () L) :
     merkleCheck MerkleScheme.hm96Sha512 cap c d positions rows siblings salts lanes = .ok () ∧
@@ -332,7 +332,7 @@ theorem toMsg_injective : Function.Injective Claims.toMsg := fun a b h => by
 
 /-- **Two accepted openings of one position against one cap, with different rows, collide in the two logs.** -/
 theorem tiedColl_of_opens {cap : Array ByteArray} {c d lanes pos : ℕ} {r1 r2 : Array F128} {y1 y2 : ByteArray}
-    {s1 s2 : List ByteArray} {l : List (Claims.Msg × Claims.Msg)}
+    {s1 s2 : List ByteArray} {l : List (Hash.Msg × Hash.Msg)}
     (hw1 : ∀ x ∈ s1, x.size = MerkleScheme.hm96Sha512.digestLen)
     (hw2 : ∀ x ∈ s2, x.size = MerkleScheme.hm96Sha512.digestLen)
     (h1 : opens MerkleScheme.hm96Sha512 cap c d lanes pos r1 y1 s1 = true)
@@ -389,7 +389,7 @@ theorem climb_sha512 (id : String) : climb (MerkleScheme.sha512 id) = climb Merk
     simp only [climb]
     exact ih _ _
 
-theorem Runs.leafWP {row : Array F128} {salt y : ByteArray} {L : List Claims.Msg}
+theorem Runs.leafWP {row : Array F128} {salt y : ByteArray} {L : List Hash.Msg}
     (h : Runs sha512 ((MerkleOps.sha512With Claims.Hashes.oc).leaf row salt) y L) :
     y = (MerkleScheme.sha512 "flock-leaf/sha512-unsalted").leaf row salt ∧
       ∀ b ∈ leafInsP row, Claims.toMsg b ∈ L := by
@@ -400,7 +400,7 @@ theorem Runs.leafWP {row : Array F128} {salt y : ByteArray} {L : List Claims.Msg
   exact hxm
 
 theorem Runs.opensWP {cap : Array ByteArray} {c d lanes pos : ℕ} {row : Array F128} {salt : ByteArray}
-    {sibs : List ByteArray} {L : List Claims.Msg}
+    {sibs : List ByteArray} {L : List Hash.Msg}
     (h : Runs sha512 (opensWith (MerkleOps.sha512With Claims.Hashes.oc)
       (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") cap c d lanes pos row salt sibs) true L) :
     opens (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") cap c d lanes pos row salt sibs = true ∧
@@ -426,7 +426,7 @@ theorem Runs.opensWP {cap : Array ByteArray} {c d lanes pos : ℕ} {row : Array 
 /-- **The shipped plain-leaves Merkle check logs every opening**: run against `sha512` within `L`, the compiled check
 passed, and every SHA-512 input of query `j`'s opening is a message of `L`. -/
 theorem merkleCheck_logsP {cap : Array ByteArray} {c d : ℕ} {positions : Array ℕ} {rows : Array (Array F128)}
-    {siblings salts : Array ByteArray} {lanes : ℕ} {L : List Claims.Msg}
+    {siblings salts : Array ByteArray} {lanes : ℕ} {L : List Hash.Msg}
     (h : Runs sha512 (merkleCheckWith (MerkleOps.sha512With Claims.Hashes.oc)
       (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") cap c d positions rows siblings salts lanes) () L) :
     merkleCheck (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") cap c d positions rows siblings salts lanes =
@@ -466,7 +466,7 @@ theorem merkleCheck_logsP {cap : Array ByteArray} {c d : ℕ} {positions : Array
 theorem merkleCheck_logsOf {ms : MerkleScheme}
     (hms : ms = MerkleScheme.hm96Sha512 ∨ ms = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")
     {cap : Array ByteArray} {c d : ℕ} {positions : Array ℕ} {rows : Array (Array F128)}
-    {siblings salts : Array ByteArray} {lanes : ℕ} {L : List Claims.Msg}
+    {siblings salts : Array ByteArray} {lanes : ℕ} {L : List Hash.Msg}
     (h : Runs sha512 (merkleCheckWith (ms.opsWith Claims.Hashes.oc) ms cap c d positions rows siblings salts lanes)
       () L) :
     merkleCheck ms cap c d positions rows siblings salts lanes = .ok () ∧
@@ -576,7 +576,7 @@ theorem opensPair_memP (pos : ℕ) (r1 : Array F128) (y1 : ByteArray) (s1 : List
 /-- **Two accepted plain-leaves openings of one position against one cap, with different rows, collide in the two
 logs.** -/
 theorem tiedColl_of_opensP {cap : Array ByteArray} {c d lanes pos : ℕ} {r1 r2 : Array F128} {y1 y2 : ByteArray}
-    {s1 s2 : List ByteArray} {l : List (Claims.Msg × Claims.Msg)}
+    {s1 s2 : List ByteArray} {l : List (Hash.Msg × Hash.Msg)}
     (hw1 : ∀ x ∈ s1, x.size = (MerkleScheme.sha512 "flock-leaf/sha512-unsalted").digestLen)
     (hw2 : ∀ x ∈ s2, x.size = (MerkleScheme.sha512 "flock-leaf/sha512-unsalted").digestLen)
     (h1 : opens (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") cap c d lanes pos r1 y1 s1 = true)

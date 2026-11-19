@@ -13,77 +13,69 @@ from tests.pipeline.test_row import _row, _tp_row
 from verity_vllm import target_family as tf
 
 TREE = (Path(__file__).resolve().parents[4] / "adapters" / "vllm")
-ROW_L40S = "mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
+ROW_PRO = "llama32-1b__bf16__rtxpro6000__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
 ROW_H100 = "qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
 ROW_H200_TP8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager"
 
 
 def test_row_id_grammar_names_the_device_class():
-    assert tf.device_token_of_row(ROW_L40S) == "l40s"
-    assert tf.row_family(ROW_L40S) == ("l40s", (8, 9))
+    assert tf.device_token_of_row(ROW_PRO) == "rtxpro6000"
+    assert tf.row_family(ROW_PRO) == ("rtxpro6000", (12, 0))
     assert tf.row_family(ROW_H100) == ("h100", (9, 0))
-    assert tf.row_family("llama32-1b__bf16__a100__tp1__b1__i256__o32__mixed__greedy__bi-eager")[1] == (8, 0)
-    assert tf.row_family("olmoe-1b-7b-padded__bf16__l40s__tp1__b1__i1024__o128__mixed__greedy__bi-eager")[1] == (8, 9)
     assert tf.row_family("nonsense")[1] is None
 
 
-def test_60_shape_hopper_build_for_an_l40s_row_fails_by_name():
-    """A Build whose build_summary step.target is cc 9.0 (an H100 host) for an __l40s__ workload fails by name."""
+def test_60_shape_hopper_build_for_an_rtxpro6000_row_fails_by_name():
+    """A Build whose build_summary step.target is cc 9.0 (an H100 host) for an __rtxpro6000__ workload fails by name."""
     bs = {"step": {"target": {"compute_capability": [9, 0], "num_sms": 132}, "applicability": {"gemm_target": "hopper", "flash_attn_version_applied": 3}}}
-    rec = tf.check(ROW_L40S, {"sweep": {}}, ["build"], want_device=False, build_summary=bs)
+    rec = tf.check(ROW_PRO, {"sweep": {}}, ["build"], want_device=False, build_summary=bs)
     assert rec["verdict"] == "FAIL" and rec["fail_class"] == "PRECHECK_FAIL_TARGET_FAMILY"
-    assert rec["built"] == [9, 0] and rec["row_family"] == [8, 9]
+    assert rec["built"] == [9, 0] and rec["row_family"] == [12, 0]
     assert [m["fact"] for m in rec["mismatches"]] == ["built"]
-    assert tf.summary_line(rec).startswith("PRECHECK_FAIL_TARGET_FAMILY: Build target 9.0 != row family 8.9")
+    assert tf.summary_line(rec).startswith("PRECHECK_FAIL_TARGET_FAMILY: Build target 9.0 != row family 12.0")
 
 
 def test_declared_target_of_another_family_fails_before_build():
     wl = {"engine": {"target": {"compute_capability": [9, 0], "num_sms": 132, "flash_attn_version": 3}}}
-    rec = tf.check(ROW_L40S, wl, ["build"], want_device=False)
+    rec = tf.check(ROW_PRO, wl, ["build"], want_device=False)
     assert rec["verdict"] == "FAIL" and rec["fail_class"] == "PRECHECK_FAIL_TARGET_FAMILY"
     assert rec["declared"] == [9, 0] and [m["fact"] for m in rec["mismatches"]] == ["declared"]
 
 
 def test_matching_declared_target_and_matching_build_pass():
-    wl = {"engine": {"target": {"compute_capability": [8, 9], "num_sms": 142}}}
-    bs = {"step": {"target": {"compute_capability": [8, 9]}}}
-    rec = tf.check(ROW_L40S, wl, ["build"], want_device=False, build_summary=bs)
+    wl = {"engine": {"target": {"compute_capability": [12, 0], "num_sms": 188}}}
+    bs = {"step": {"target": {"compute_capability": [12, 0]}}}
+    rec = tf.check(ROW_PRO, wl, ["build"], want_device=False, build_summary=bs)
     assert rec["verdict"] == "PASS" and rec["ok"] and rec["fail_class"] is None and rec["mismatches"] == []
-    assert tf.summary_line(rec).startswith("TARGET-FAMILY-OK row=l40s(8.9) declared=8.9")
+    assert tf.summary_line(rec).startswith("TARGET-FAMILY-OK row=rtxpro6000(12.0) declared=12.0")
 
 
 def test_pod_device_of_another_family_fails_for_a_gpu_stage(monkeypatch):
     monkeypatch.setattr(tf, "device_cc", lambda: ((9, 0), "test"))
-    rec = tf.check(ROW_L40S, {"sweep": {}}, ["match", "commit"])
+    rec = tf.check(ROW_PRO, {"sweep": {}}, ["match", "commit"])
     assert rec["verdict"] == "FAIL" and rec["device"] == [9, 0]
-    assert rec["mismatches"][0]["fact"] == "device" and "9.0 != row family 8.9" in rec["mismatches"][0]["why"]
+    assert rec["mismatches"][0]["fact"] == "device" and "9.0 != row family 12.0" in rec["mismatches"][0]["why"]
     # the same device IS the family of an __h100__ workload
     assert tf.check(ROW_H100, {"sweep": {}}, ["match", "commit"])["verdict"] == "PASS"
 
 
-def test_device_target_build_reads_the_pod_device_declared_target_build_does_not(monkeypatch):
-    monkeypatch.setattr(tf, "device_cc", lambda: ((9, 0), "test"))
-    assert tf.check(ROW_L40S, {"sweep": {}}, ["build"])["verdict"] == "FAIL"          # target=device -> the Build would be Hopper
-    wl = {"engine": {"target": {"compute_capability": [8, 9]}}}
-    assert tf.check(ROW_L40S, wl, ["build"])["verdict"] == "PASS"                       # declared L40S target on a Hopper host: Build is portable
+def test_a_carded_row_s_build_reads_no_device(monkeypatch):
+    """A row whose target has a card file declares the card's whole target, so its Build is portable and reads no device."""
+    monkeypatch.setattr(tf, "device_cc", lambda: (_ for _ in ()).throw(AssertionError("device read for a declared Build")))
+    assert tf.check(ROW_PRO, {"sweep": {}}, ["build"])["verdict"] == "PASS"
+    assert tf.check(ROW_PRO, {"sweep": {}}, ["build"], devices="")["verdict"] == "PASS", "a leased row's Build needs no GPU"
 
 
-def test_a_leased_row_s_device_target_build_is_refused_and_its_gpu_stages_still_read_the_node(monkeypatch):
-    """A leased workload hides every GPU from its stages (CUDA_VISIBLE_DEVICES empty), so a Build that targets the device sees none and
-    derives for the default target; nvidia-smi, which ignores the variable, would have read the node's GPU and passed it."""
-    monkeypatch.setattr(tf, "device_cc", lambda: (_ for _ in ()).throw(AssertionError("device read for a Build that cannot see it")))
-    rec = tf.check(ROW_L40S, {"sweep": {}}, ["build"], devices="")
-    assert rec["verdict"] == "FAIL" and [m["fact"] for m in rec["mismatches"]] == ["device"]
-    assert "CUDA_VISIBLE_DEVICES hides" in tf.summary_line(rec)
-    monkeypatch.setattr(tf, "device_cc", lambda: ((8, 9), "test"))
-    assert tf.check(ROW_L40S, {"sweep": {}}, ["build", "match"], devices="0")["verdict"] == "PASS"
-    assert tf.check(ROW_L40S, {"engine": {"target": {"compute_capability": [8, 9]}}}, ["build", "match"], devices="")["verdict"] == "PASS"
-    assert tf.check(ROW_L40S, {"sweep": {}}, ["match", "commit"], devices="")["verdict"] == "PASS", "a GPU stage takes the node's GPU by its lease"
+def test_a_leased_row_s_gpu_stages_still_read_the_node(monkeypatch):
+    """A leased workload hides every GPU from its stages (CUDA_VISIBLE_DEVICES empty); its GPU stages take the node's GPU by its lease."""
+    monkeypatch.setattr(tf, "device_cc", lambda: ((12, 0), "test"))
+    assert tf.check(ROW_PRO, {"sweep": {}}, ["build", "match"], devices="0")["verdict"] == "PASS"
+    assert tf.check(ROW_PRO, {"sweep": {}}, ["match", "commit"], devices="")["verdict"] == "PASS", "a GPU stage takes the node's GPU by its lease"
 
 
 def test_no_visible_gpu_for_a_gpu_stage_fails_closed(monkeypatch):
     monkeypatch.setattr(tf, "device_cc", lambda: (None, "torch.cuda.is_available() False"))
-    rec = tf.check(ROW_L40S, {"sweep": {}}, ["commit"])
+    rec = tf.check(ROW_PRO, {"sweep": {}}, ["commit"])
     assert rec["verdict"] == "FAIL" and rec["mismatches"][0]["fact"] == "device"
 
 
@@ -119,8 +111,8 @@ def test_rtxpro6000_rows_are_the_cc_12_0_family(monkeypatch):
     monkeypatch.setattr(tf, "device_cc", lambda: ((12, 0), "test"))
     bs = {"step": {"target": {"compute_capability": [12, 0], "num_sms": 188}}}
     assert tf.check(row, {"engine": {"target": {"compute_capability": [12, 0]}}}, ["build", "match", "commit"], build_summary=bs)["verdict"] == "PASS"
-    assert tf.check(ROW_L40S, {"sweep": {}}, ["match"])["mismatches"][0]["why"].startswith("pod device 12.0 != row family 8.9")
-    monkeypatch.setattr(tf, "device_cc", lambda: ((8, 9), "test"))
+    assert tf.check(ROW_H100, {"sweep": {}}, ["match"])["mismatches"][0]["why"].startswith("pod device 12.0 != row family 9.0")
+    monkeypatch.setattr(tf, "device_cc", lambda: ((9, 0), "test"))
     assert tf.check(row, {"sweep": {}}, ["match"])["verdict"] == "FAIL"
     hopper_build = tf.check(row, None, ["build"], want_device=False, build_summary={"step": {"target": {"compute_capability": [9, 0]}}})
     assert hopper_build["verdict"] == "FAIL" and [m["fact"] for m in hopper_build["mismatches"]] == ["built"]
@@ -133,7 +125,7 @@ def test_unknown_device_class_is_a_refusal_not_a_guess():
 
 def test_waiver_records_the_would_be_failure_by_name_and_never_upgrades_a_pass(monkeypatch):
     monkeypatch.setattr(tf, "device_cc", lambda: ((9, 0), "test"))
-    rec = tf.check(ROW_L40S, {"sweep": {}}, ["match"], waiver="canary r18-int-2")
+    rec = tf.check(ROW_PRO, {"sweep": {}}, ["match"], waiver="canary r18-int-2")
     assert rec["verdict"] == "WAIVED" and rec["ok"] and rec["fail_class"] is None and rec["would_fail_class"] == "PRECHECK_FAIL_TARGET_FAMILY"
     assert rec["waiver"] == "canary r18-int-2" and rec["mismatches"]
     assert tf.summary_line(rec).startswith("TARGET-FAMILY-WAIVED (canary r18-int-2)")
@@ -147,18 +139,18 @@ def test_cli_fails_by_name_with_rc_3_and_writes_the_record(tmp_path):
     out = tmp_path / "target_family.json"
     env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(TREE), str(TREE / "vllm-poc"), os.environ.get("PYTHONPATH")]))}
     env.pop("TARGET_FAMILY_WAIVER", None)
-    r = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "target-family", "--row", ROW_L40S, "--stages", "build", "--no-device",
+    r = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "target-family", "--row", ROW_PRO, "--stages", "build", "--no-device",
                         "--build-summary", str(bs), "--out", str(out)], capture_output=True, text=True, env=env, cwd=TREE)
     assert r.returncode == 3, r.stderr
-    assert r.stderr.startswith("PRECHECK_FAIL_TARGET_FAMILY:") and "Build target 9.0 != row family 8.9" in r.stderr
+    assert r.stderr.startswith("PRECHECK_FAIL_TARGET_FAMILY:") and "Build target 9.0 != row family 12.0" in r.stderr
     rec = json.loads(out.read_text())
     assert rec["schema"] == "verity-sweep/target-family/v1" and rec["fail_class"] == "PRECHECK_FAIL_TARGET_FAMILY"
     # the waiver from the environment (canary.sh exports TARGET_FAMILY_WAIVER) turns it into a named WAIVED, rc 0
-    r2 = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "target-family", "--row", ROW_L40S, "--stages", "build", "--no-device",
+    r2 = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "target-family", "--row", ROW_PRO, "--stages", "build", "--no-device",
                          "--build-summary", str(bs), "--out", str(out)], capture_output=True, text=True, env={**env, "TARGET_FAMILY_WAIVER": "canary t"}, cwd=TREE)
     assert r2.returncode == 0 and r2.stdout.startswith("TARGET-FAMILY-WAIVED (canary t)")
     assert json.loads(out.read_text())["verdict"] == "WAIVED"
-    r3 = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "target-family", "--row", ROW_L40S, "--stages", "build", "--out", str(out)],
+    r3 = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "target-family", "--row", ROW_PRO, "--stages", "build", "--out", str(out)],
                         capture_output=True, text=True, env={**env, "CUDA_VISIBLE_DEVICES": ""}, cwd=TREE)
     assert r3.returncode == 3 and "CUDA_VISIBLE_DEVICES hides" in r3.stderr, "the row's empty CUDA_VISIBLE_DEVICES reaches the check"
 
@@ -170,7 +162,7 @@ def _main_reads(tmp_path, option: str) -> list:
     recs = []
     names: list[Any] = [os.fsencode(f), os.open(f, os.O_RDONLY)]  # the option's annotation promises a str; main opens what it is handed
     for name in names:
-        assert tf.main(tf.Options(row=ROW_L40S, stages="build", no_device=True, out=str(out), **{option: name})) == 3
+        assert tf.main(tf.Options(row=ROW_PRO, stages="build", no_device=True, out=str(out), **{option: name})) == 3
         recs.append(json.loads(out.read_text()))
     return recs
 
@@ -215,5 +207,5 @@ def test_a_builds_target_reads_a_summary_whose_step_target_or_applicability_is_a
         assert tf.built_target({"step": {**target, "applicability": {"gemm_target": "hopper"}}}) == (9, 0)
         for app in (None, {}, {"gemm_target": "ampere"}, {"tensor_core_family": None, "gemm_target": None}):
             assert tf.built_target({"step": {**target, "applicability": app}}) is None
-    assert tf.built_target({"step": {"target": {"compute_capability": [8, 9]}, "applicability": hopper}}) == (8, 9)
+    assert tf.built_target({"step": {"target": {"compute_capability": [12, 0]}, "applicability": hopper}}) == (12, 0)
     assert tf.built_target({"step": {"target": {"compute_capability": "9.0"}}}) == (9, 0)

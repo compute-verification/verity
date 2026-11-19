@@ -93,7 +93,7 @@ def test_try_refuses_a_file_in_no_package_and_remote_options_without_on(tmp_path
         verity_cli.main(["lean", "try", str(loose)])
     with pytest.raises(SystemExit):
         verity_cli.main(["lean", "try", str(loose), "--pool", "P"])
-    assert "--pool and --as go with --on" in capsys.readouterr().err
+    assert "--pool, --as and --tree go with --on" in capsys.readouterr().err
     assert not called.exists()
 
 
@@ -189,6 +189,46 @@ def test_try_on_auto_fetches_the_run_from_the_machine_it_landed_on(checkouts, tm
     assert argv[argv.index("--on") + 1] == "auto" and "--pool" not in argv
     assert fetched == [[run_id, "--on", machine, "--all"]]
     assert f"verity lean try: run {run_id} on {machine}: exit 0" in capsys.readouterr().out
+
+
+def test_try_on_a_named_tree_stays_on_its_machine_and_names_the_tree(checkouts, tmp_path, monkeypatch, capsys):
+    """`--tree NAME` sends the try to the tree NAME that the one machine `--on` names keeps (a branch's kept tree): the run
+    stays there (`research run --stay`, no late twin on a machine without it) and lean_changed.py takes `--tree NAME`."""
+    _, wt = checkouts
+    for k in ("GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"):
+        monkeypatch.setenv(k, "t@t")
+    monkeypatch.setenv("RESEARCH_RUNS", str(tmp_path / "runs"))
+    monkeypatch.chdir(wt)
+    launched, real_run, real_popen = [], subprocess.run, subprocess.Popen
+
+    class Launch:
+        stderr = iter(["research: run r1 launched on m-14 (p) pid=1 -> /r\n"])
+
+        def wait(self):
+            return 0
+
+    def popen(argv, **kw):
+        if argv[3:4] != ["run"]:
+            return real_popen(argv, **kw)
+        launched.append(argv)
+        return Launch()
+
+    def run(argv, **kw):
+        if argv[3:4] == ["fetch"]:
+            return subprocess.CompletedProcess(argv, 0)
+        return real_run(argv, **kw)
+
+    monkeypatch.setattr(verity_cli.subprocess, "Popen", popen)
+    monkeypatch.setattr(verity_cli.subprocess, "run", run)
+    assert verity_cli.main(["lean", "try", "A.lean", "--on", "m-14", "--pool", "research", "--tree", "interfaces"]) == 0
+    argv = launched[0]
+    cut = argv.index("--")
+    assert "--stay" in argv[:cut] and argv[argv.index("--on") + 1] == "m-14"
+    assert argv[cut + 1:][-2:] == ["--tree", "interfaces"] and "--try" in argv[cut + 1:]
+    for bad in (["--on", "auto", "--tree", "interfaces"], ["--on", "m-14", "--tree", "a/b"], ["--tree", "interfaces"]):
+        with pytest.raises(SystemExit):
+            verity_cli.main(["lean", "try", "A.lean", *bad])
+    assert "--tree takes a tree's NAME" in capsys.readouterr().err
 
 
 def test_local_try_elaborates_the_current_worktrees_file(checkouts, tmp_path, monkeypatch):

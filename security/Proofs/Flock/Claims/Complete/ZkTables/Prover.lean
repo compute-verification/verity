@@ -64,7 +64,7 @@ namespace FlockComplete.ZkTables
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Exec JsonRT
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **At a good case the session links at two points and every table has at most 1,024 regions.** -/
 theorem Case.points_regions (c : Case H rel) : c.spec.points = 2 ∧ ∀ st ∈ c.sts, st.regions.size ≤ 1024 := by

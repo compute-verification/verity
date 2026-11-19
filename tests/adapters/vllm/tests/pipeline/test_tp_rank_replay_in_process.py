@@ -30,7 +30,7 @@ class _Committer:
         if saved is not None:
             self.weights = saved
 
-    def register_weights(self) -> dict:
+    def register_weights(self, replay: bool = False) -> dict:
         self.registered.append(self.model)
         if self._fails is not None:
             raise self._fails

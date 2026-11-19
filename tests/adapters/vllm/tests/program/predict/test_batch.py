@@ -15,7 +15,7 @@ import pytest
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Tuple, Value
-from verity.protocols.resource_accounting.network.verifier import advice as I1
+from verity_vllm.pipeline.advice_code import format as I1
 
 from verity_vllm.check.batch import BATCH, SHARED, check, own, report
 from verity_vllm.program.frontend.seed_rule import rid_of
@@ -106,7 +106,7 @@ def test_the_registered_split_count_keeps_one_nucleus_at_every_batch_size_and_po
 def test_the_frozen_v0_models_templates_hold_their_declared_verdicts():
     """The frozen v0 registration's own kinds (Llama-3.2-1B, V 128,256, on the RTX PRO 6000): a vocabulary change that moves one of
     them (a launch static on a GEMM at its N, a sampler construction at its V) shows only at the model's shapes (about 60 s)."""
-    vs = _verdicts(registered_phi("LLAMA32_1B", "rtxpro6000"))
+    vs = _verdicts(registered_phi("LLAMA32_1B", "rtx-pro-6000-server"))
     assert sum(1 for v in vs if v.got == (True, True)) == 13
 
 
@@ -435,7 +435,7 @@ def test_compile_steps_passes_its_own_rule():
     from verity_vllm.definitions.registry.topp_geometry import registered_splits
     from verity_vllm.engine.served_seed import derived
     steps = pytest.importorskip("verity_vllm.program.predict.steps")
-    I1 = pytest.importorskip("verity.protocols.resource_accounting.network.verifier.advice")
+    I1 = pytest.importorskip("verity_vllm.pipeline.advice_code.format")
     cfg = {**TINY, "max_position_embeddings": 64}
     reg = steps.Registered.of(Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=dict(RTX)), default_seed=7)
     greedy = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 3}

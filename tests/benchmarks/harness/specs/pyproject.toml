@@ -19,13 +19,16 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # In place of verity-vllm's whole tree (`inputs_only`), what resolving a preset reads: the engine spec, the checkpoint pins
-# (`config.EnginePin`, with the manifests it reads), the workload record `config` loads, and the config loader they stand on.
+# (`config.EnginePin`, with the manifests it reads), the workload record `config` loads, and the config loader they stand on;
+# and the serving profiles (`verity_bench.profiles`, `benchmarks/production.toml`), whose revision a spec naming none runs.
 inputs_only = true
 inputs = ["adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
           "adapters/vllm/verity_vllm/settings.py",
           "adapters/vllm/verity_vllm/pipeline/__init__.py", "adapters/vllm/verity_vllm/engine/spec.py",
           "adapters/vllm/verity_vllm/engine/__init__.py", "adapters/vllm/verity_vllm/records",
-          "adapters/vllm/manifests/checkpoints.json", "adapters/vllm/manifests/checkpoints-int8.json",
+          "adapters/vllm/manifests/checkpoints.json", "adapters/vllm/manifests/checkpoints-int8.json", "adapters/vllm/manifests/checkpoints-local.json",
            "tools/config/verity_config", "benchmarks/harness/specs/README.md", "verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/protocols/resource_accounting/compute/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/proofs/spot/verifier/challenger/__init__.py",
-          "adapters/vllm/verity_vllm/definitions/__init__.py", "benchmarks/harness/specs"]
+          "adapters/vllm/verity_vllm/definitions/__init__.py", "benchmarks/harness/specs",
+          "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/profiles.py",
+          "benchmarks/production.toml"]

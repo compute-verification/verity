@@ -9,8 +9,7 @@
 //                                 cases on the first threads (0, ±(2^29 - 1), alternating, the exact range, any s32) and
 //                                 seeded in ±2^27 on the rest
 //   python3 ffill_ref.py check DIR
-// Build: nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a ffill.cu -o ffill   (ffill.sh; no --use_fast_math or
-// -ftz, which ff_fma's explicit fma.rn.f32 ignores anyway)
+// No --use_fast_math or -ftz in its build: ff_fma's explicit fma.rn.f32 ignores them anyway.
 #include <cuda_runtime.h>
 
 #include <cstdint>

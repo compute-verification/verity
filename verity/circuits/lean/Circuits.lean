@@ -9,3 +9,4 @@ public import Circuits.Partition
 public import Circuits.Program
 public import Circuits.Qword
 public import Circuits.Steps
+public import Circuits.Wire

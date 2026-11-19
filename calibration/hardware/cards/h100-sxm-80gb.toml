@@ -61,6 +61,7 @@ bus = { value = 5120, unit = "bit", mark = "ceiling", source = "H100 whitepaper 
 transfers = { value = 2, unit = "transfer/clock", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3: 'Memory Data Rate 2619 MHz DDR', two transfers a clock" }
 bandwidth = { value = 3.35232e12, unit = "B/s", mark = "ceiling", source = "clock.memory x memory.transfers x memory.bus / 8, at or above the H100 data sheet's 'GPU Memory Bandwidth 3.35TB/s' and the H100 whitepaper V1.04 Table 3's 'Memory Bandwidth 3352 GB/sec' (printed over the 'Not Finalized for H100' footnote of the Memory Data Rate row, though the cover says 'Includes final GPU / memory clocks'); not measured on an H100" }
 read = { value = 3.35232e12, unit = "B/s", mark = "placeholder", source = "no read measured on an H100: memory.bandwidth until a measured read replaces it; the H200's measured read is of HBM3e at 4.8 TB/s and is not the H100's" }
+datasheet_bandwidth = { value = 3350000000000, unit = "B/s", mark = "placeholder", source = "the data sheet's stated memory bandwidth, 'GPU Memory Bandwidth 3.35TB/s' (H100 data sheet, H100 SXM): what a γ against the card's stated rate reads, neither a ceiling (memory.bandwidth is at or above it) nor a measurement (memory.read)" }
 
 # The tensor units a MAC of each operand format uses (rate.tensor counts s8 MACs).
 [weight]

@@ -1,13 +1,14 @@
 """`pouw_h1_registered.commit`'s hashing on the GPU: a registered value's ``b || c`` strings and every level of its
 frame-v3-sha512 tree, computed by `verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/registered_rows.cu` from the
-rows' words, the salts sampled on the device (ChaCha20 under the run's key at the value's nonce, `audit.hm96_salt`) or given,
-under the domain id the host computes (`registered.domain`).
+rows' words, under the salts the caller hands in (its fresh bytes, 192 a row, copied to the device and read there as
+data) or a public table's, derived on the device, under the domain id the host computes (`registered_value.domain`).
 
 A call's z/y records are two tables' rows: its registered ``zy@<c>`` and its call z table (`pouw_h1_tables_device`, under
 ``hm96-sha512/row-seg/v1``). With ``also``, `device_hash` commits both from one read of each record
 (`pouw_cuda/zy_commit.cu`, on `verity.commitments.cuda`' ``row_commit.cuh``): each record's two row digests from the same loads,
-each table's leaf, the value's tree as before and the call table's a level at a time, the call table's root `Hashing.also`.
-`host_zy` is its twin on the CPU (`zy_commit_host.cpp`).
+each table's leaf under that table's own given salts (two buffers of 192 bytes a record, the caller's fresh bytes, read as
+data: `zy_commit` derives none), the value's tree as before and the call table's a level at a time, the call table's root
+`Hashing.also`. `host_zy` is its twin on the CPU (`zy_commit_host.cpp`).
 
 `device_commit` copies the rows to the device in chunks of at most `CHUNK_BYTES` (rows already there, as a call's z/y
 records are, it reads in place), hashes each row (its ``sha512/row/v2`` digest, salt, hm96-sha512 string, tree leaf and
@@ -23,7 +24,6 @@ hold to `pouw_h1_registered.commit`'s NumPy path on machines without a GPU. Buil
 from __future__ import annotations
 
 import ctypes
-import shutil
 import subprocess
 import warnings
 from collections.abc import Iterator
@@ -61,7 +61,7 @@ ZY_SEGS = 8
 HM_KEY = hm96.SHA512.default_key
 #: bytes of rows a chunk copies to the device
 CHUNK_BYTES = 1 << 28
-#: rows a value may have: row j's salt is ChaCha20 blocks 3j .. 3j + 2 under a 32-bit low counter word
+#: rows a value may have, the kernels' bound
 MAX_ROWS = (1 << 32) // 3
 #: a public salt head's words (`registered_rows.cuh`'s ``PUB_WORDS``)
 PUB_WORDS = 40
@@ -74,9 +74,9 @@ class Table(ctypes.Structure):
                 ("did", ctypes.c_uint64 * 8)]
 
 
-def table(n: int, row_bytes: int, key: bytes, nonce: int, salted: bool, domain_id: bytes) -> Table:
-    """The layout of a value of ``n`` rows of ``row_bytes`` bytes under ``domain_id``, its salts given (``salted``) or
-    ChaCha20's under the 32-byte ``key`` at the u64 ``nonce``; the rows' and salts' addresses zero until bound."""
+def table(n: int, row_bytes: int, domain_id: bytes) -> Table:
+    """The layout of a value of ``n`` rows of ``row_bytes`` bytes under ``domain_id``, its salts given or public; the rows'
+    and salts' addresses zero until bound, and every launch binds the salts'."""
     if not 0 < n <= MAX_ROWS or row_bytes < 1 or len(domain_id) != 64:
         raise ValueError(f"{n} rows of {row_bytes} bytes under a {len(domain_id)}-byte domain id: not 1 to {MAX_ROWS} rows "
                          "under a 64-byte id")
@@ -84,11 +84,6 @@ def table(n: int, row_bytes: int, key: bytes, nonce: int, salted: bool, domain_i
     t.n, t.row_bytes = n, row_bytes
     t.W = 1 << max(0, (n - 1).bit_length())
     t.depth = t.W.bit_length() - 1
-    if not salted:
-        if len(key) != 32 or not 0 <= nonce < 1 << 64:
-            raise ValueError("ChaCha20's salts take a 32-byte key and a u64 nonce")
-        t.key[:] = np.frombuffer(key, "<u4").tolist()
-        t.nonce[:] = [0, nonce & 0xFFFFFFFF, nonce >> 32, 0]
     t.did[:] = np.frombuffer(domain_id, ">u8").tolist()
     return t
 
@@ -99,12 +94,11 @@ class Pub(ctypes.Structure):
 
 
 class ZyArgs(ctypes.Structure):
-    """`zy_commit.cuh`'s ``Args``: the call table's then the value's domain id, the hm96 key, the prefix blocks, each
-    table's salt key words and nonce, and the records' count and bytes."""
+    """`zy_commit.cuh`'s ``Args``: the call table's then the value's domain id, the hm96 key, the prefix blocks, and the
+    records' count and bytes."""
     _fields_ = [("did", (ctypes.c_uint8 * 64) * 2), ("hm_key", ctypes.c_uint8 * 256), ("pre_v2", ctypes.c_uint8 * 128),
                 ("pre_seg_outer", ctypes.c_uint8 * 128), ("pre_seg", (ctypes.c_uint8 * 128) * ZY_SEGS),
-                ("key", (ctypes.c_uint32 * 8) * 2), ("nonce", ctypes.c_uint64 * 2), ("n", ctypes.c_uint32),
-                ("R", ctypes.c_uint32)]
+                ("n", ctypes.c_uint32), ("R", ctypes.c_uint32)]
 
 
 def zy_fits(n: int, row_bytes: int) -> bool:
@@ -113,26 +107,23 @@ def zy_fits(n: int, row_bytes: int) -> bool:
     return 0 < n <= MAX_ROWS and row_bytes % ROW_SEG_BYTES == 0 and 0 < row_bytes // ROW_SEG_BYTES <= ZY_SEGS
 
 
-def zy_args(n: int, row_bytes: int, key: bytes, call: tuple[bytes, int], value: tuple[bytes, int]) -> ZyArgs:
-    """The layout of ``n`` records of ``row_bytes`` committed as the call table ``call`` and the value ``value``, each
-    ``(domain id, nonce)``, both salted by ChaCha20 under the 32-byte ``key``."""
-    if not zy_fits(n, row_bytes) or len(key) != 32 or any(len(d) != 64 or not 0 <= s < 1 << 64 for d, s in (call, value)):
-        raise ValueError(f"{n} records of {row_bytes} bytes under a {len(key)}-byte key: not 1 to {MAX_ROWS} rows of 1 to "
-                         f"{ZY_SEGS} whole {ROW_SEG_BYTES}-byte segments under a 32-byte key, 64-byte ids, u64 nonces")
+def zy_args(n: int, row_bytes: int, call: bytes, value: bytes) -> ZyArgs:
+    """The layout of ``n`` records of ``row_bytes`` committed as the call table of domain id ``call`` and the value of
+    domain id ``value``; each table's salts are handed to the hash as data, beside the records."""
+    if not zy_fits(n, row_bytes) or len(call) != 64 or len(value) != 64:
+        raise ValueError(f"{n} records of {row_bytes} bytes under {len(call)}- and {len(value)}-byte domain ids: not 1 to "
+                         f"{MAX_ROWS} rows of 1 to {ZY_SEGS} whole {ROW_SEG_BYTES}-byte segments under 64-byte ids")
     bits, segs = 8 * row_bytes, sha512_row_seg_segments(8 * row_bytes)
     blocks = [sha512_row_v2_prefix(bits), sha512_row_seg_prefix(bits)]
     blocks += [sha512_row_seg_segment_prefix(j, len(segs), m) for j, m in enumerate(segs)]
     if len(HM_KEY) != 256 or any(len(b) != 128 for b in blocks):
         raise AssertionError("zy_commit.cuh takes a 256-byte hm96 key and one-block prefixes")
     a = ZyArgs()
-    ctypes.memmove(a.did, call[0] + value[0], 128)
+    ctypes.memmove(a.did, call + value, 128)
     ctypes.memmove(a.hm_key, HM_KEY, 256)
     ctypes.memmove(a.pre_v2, blocks[0], 128)
     ctypes.memmove(a.pre_seg_outer, blocks[1], 128)
     ctypes.memmove(a.pre_seg, b"".join(blocks[2:]), 128 * len(segs))
-    words = np.frombuffer(key, "<u4").tolist()
-    a.key[0][:], a.key[1][:] = words, words
-    a.nonce[:] = [call[1], value[1]]
     a.n, a.R = n, row_bytes
     return a
 
@@ -160,10 +151,12 @@ _vp, _u64 = ctypes.c_void_p, np.ctypeslib.ndpointer(np.uint64, flags="C_CONTIGUO
 
 @cache
 def host_lib() -> ctypes.CDLL:
-    """`registered_rows_host.cpp` built with the system C++ compiler."""
-    cxx = next((c for c in ("g++", "c++", "clang++") if shutil.which(c)), None)
+    """`registered_rows_host.cpp` built with `pouw_device.compiler`."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as pouw_device
+
+    cxx = pouw_device.compiler()
     if cxx is None:
-        raise RuntimeError("no C++ compiler on the path")
+        raise RuntimeError("no C++ compiler configured or on the path")
     dll = RTD._build(cxx, HOST_SOURCES, RTD.CFLAGS, "libregistered_rows_host.so")
     dll.rr_commit_host.argtypes = [ctypes.POINTER(Table), _u64, _u64, _u64, _u64]
     dll.rr_commit_host.restype = ctypes.c_int
@@ -198,12 +191,14 @@ def _zy_sizes(dll: ctypes.CDLL) -> ctypes.CDLL:
 
 @cache
 def zy_host_lib() -> ctypes.CDLL:
-    """`zy_commit_host.cpp` built with the system C++ compiler."""
-    cxx = next((c for c in ("g++", "c++", "clang++") if shutil.which(c)), None)
+    """`zy_commit_host.cpp` built with `pouw_device.compiler`."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as pouw_device
+
+    cxx = pouw_device.compiler()
     if cxx is None:
-        raise RuntimeError("no C++ compiler on the path")
+        raise RuntimeError("no C++ compiler configured or on the path")
     dll = _zy_sizes(RTD._build(cxx, ZY_HOST_SOURCES, (*RTD.CFLAGS, *ZY_FLAGS), "libzy_commit_host.so"))
-    dll.zy_commit_host.argtypes = [ctypes.POINTER(ZyArgs), ctypes.POINTER(Table), _vp, _u64, _u64, _u64]
+    dll.zy_commit_host.argtypes = [ctypes.POINTER(ZyArgs), ctypes.POINTER(Table), _vp, _vp, _vp, _u64, _u64, _u64]
     dll.zy_commit_host.restype = ctypes.c_int
     return dll
 
@@ -220,7 +215,7 @@ def zy_device_lib(arch: str) -> ctypes.CDLL:
     dll.zy_plan_bytes.restype = ctypes.c_uint64
     dll.zy_plan.argtypes = [ctypes.POINTER(ZyArgs), _vp]
     dll.zy_nibbles.argtypes = [_vp, _vp]
-    dll.zy_records.argtypes = [_vp, _vp, ctypes.c_uint32, _vp, _vp, _vp, _vp, _vp]
+    dll.zy_records.argtypes = [_vp, _vp, ctypes.c_uint32, _vp, _vp, _vp, _vp, _vp, _vp, _vp]
     dll.zy_call_tree.argtypes = [_vp, _vp, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32, _vp]
     dll.zy_plan.restype = dll.zy_records.restype = dll.zy_call_tree.restype = ctypes.c_int
     dll.zy_nibbles.restype = None
@@ -231,16 +226,26 @@ def _root(words: np.ndarray) -> bytes:
     return np.asarray(words).view(np.uint64).astype(">u8").tobytes()
 
 
-def host_zy(words: np.ndarray, key: bytes, nonce: int, domain_id: bytes, also: tuple[bytes, int]
+def _zy_salts(row_salts: bytes, also: tuple[bytes, bytes], n: int) -> tuple[bytes, np.ndarray, np.ndarray]:
+    """``also``'s domain id, then the call table's and the value's salts as ``n`` x 192 bytes each: each table's leaves
+    take that table's own fresh salts as data."""
+    did, call_salts = also
+    return bytes(did), _salts(bytes(call_salts), n), _salts(bytes(row_salts), n)
+
+
+def host_zy(words: np.ndarray, row_salts: bytes, domain_id: bytes, also: tuple[bytes, bytes]
             ) -> tuple[bytes, Nodes, tuple[Nodes, ...]]:
-    """`device_hash`'s ``also`` on the CPU, the device path's twin: the call table ``also`` ``(domain id, nonce)``'s root,
-    then the value's ``b || c`` strings and tree levels, of ``words`` ``(n, W)`` u16."""
+    """`device_hash`'s ``also`` on the CPU, the device path's twin: the call table ``also`` ``(domain id, salts)``'s root,
+    then the value's ``b || c`` strings and tree levels under ``row_salts``, of ``words`` ``(n, W)`` u16. Each table's
+    salts are ``n`` 192-byte salts concatenated, record u's at byte 192 u, the caller's fresh bytes."""
     rows = _rows(words)
     n, rb = rows.shape
-    t = table(n, rb, key, nonce, False, domain_id)
-    a = zy_args(n, rb, key, also, (domain_id, nonce))
+    did, call_salts, reg_salts = _zy_salts(row_salts, also, n)
+    t = table(n, rb, domain_id)
+    a = zy_args(n, rb, did, domain_id)
     call, bcs, levels = (np.empty(k, np.uint64) for k in (8 * (2 * t.W - 1), 16 * n, 8 * (2 * t.W - 1)))
-    rc = zy_host_lib().zy_commit_host(ctypes.byref(a), ctypes.byref(t), rows.ctypes.data, call, bcs, levels)
+    rc = zy_host_lib().zy_commit_host(ctypes.byref(a), ctypes.byref(t), rows.ctypes.data, call_salts.ctypes.data,
+                                      reg_salts.ctypes.data, call, bcs, levels)
     if rc:
         raise ValueError(f"zy_commit_host refused the records' layout ({rc})")
     return (_root(call[-8:]), *_out(bcs, levels, t.W))
@@ -270,15 +275,14 @@ def _out(bcs: np.ndarray, levels: np.ndarray, W: int) -> tuple[Nodes, tuple[Node
     return Nodes(bcs.byteswap().view(np.uint8), 128), tuple(out)
 
 
-def host_commit(words: np.ndarray, key: bytes, nonce: int, row_salts: bytes | None,
-                domain_id: bytes) -> tuple[Nodes, tuple[Nodes, ...]]:
-    """The ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16 by the kernels' functions on the CPU: the device
-    path's twin."""
+def host_commit(words: np.ndarray, row_salts: bytes, domain_id: bytes) -> tuple[Nodes, tuple[Nodes, ...]]:
+    """The ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16 under ``row_salts`` by the kernels' functions on
+    the CPU: the device path's twin."""
     rows = _rows(words)
     n = rows.shape[0]
-    t = table(n, rows.shape[1], key, nonce, row_salts is not None, domain_id)
-    salts = None if row_salts is None else _salts(row_salts, n)
-    t.rows, t.salts = rows.ctypes.data, 0 if salts is None else salts.ctypes.data
+    t = table(n, rows.shape[1], domain_id)
+    salts = _salts(row_salts, n)
+    t.rows, t.salts = rows.ctypes.data, salts.ctypes.data
     bcs, levels = np.empty(16 * n, np.uint64), np.empty(8 * (2 * t.W - 1), np.uint64)
     rc = host_lib().rr_commit_host(ctypes.byref(t), RTD.hm_tables(), RTD.leaf_prefixes(), bcs, levels)
     if rc:
@@ -324,8 +328,7 @@ def _zy(torch: Any) -> tuple[ctypes.CDLL, Any, int]:
     index = torch.cuda.current_device()
     if index not in _ZY_LIBS:
         d = _device(torch)
-        major, minor = torch.cuda.get_device_capability(index)
-        lib = zy_device_lib(f"{major}{minor}")
+        lib = zy_device_lib(RTL.arch(torch.cuda.get_device_name(index)))
         key, tab = np.frombuffer(HM_KEY, np.uint8).copy(), np.empty(1 << 13, np.uint8)
         lib.zy_nibbles(key.ctypes.data, tab.ctypes.data)
         with torch.cuda.stream(d.stream):
@@ -376,23 +379,24 @@ class Hashing:
         return _root(self._also.numpy())
 
 
-def device_commit(words: Any, key: bytes, nonce: int, row_salts: bytes | None,
-                  domain_id: bytes) -> tuple[Nodes, tuple[Nodes, ...]]:
+def device_commit(words: Any, row_salts: bytes, domain_id: bytes) -> tuple[Nodes, tuple[Nodes, ...]]:
     """`device_hash`'s strings and levels, waited for."""
-    return device_hash(words, key, nonce, row_salts, domain_id).result()
+    return device_hash(words, row_salts, domain_id).result()
 
 
-def device_hash(words: Any, key: bytes, nonce: int, row_salts: bytes | None, domain_id: bytes,
-                public: tuple[bytes, int, bool] | None = None, also: tuple[bytes, int] | None = None) -> Hashing:
+def device_hash(words: Any, row_salts: bytes | None, domain_id: bytes,
+                public: tuple[bytes, int, bool] | None = None, also: tuple[bytes, bytes] | None = None) -> Hashing:
     """The ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16 hashed on the current CUDA device, on its own
     stream, nothing waiting on the host but a host ``words``' copy. ``words`` on the host are copied there; a u16 tensor
     on that device is read in place, after everything its current stream has enqueued (the stream that wrote it), and is
-    held until the hash is done. ``public`` ``(head, first, ok)``: the rows' salts are the public salts from position
+    held until the hash is done. ``row_salts``: the rows' salts, n x 192 bytes, copied to the device and read there as
+    data. ``public`` ``(head, first, ok)``: the rows' salts are the public salts from position
     ``first`` under ``head`` (`device_public_salts`'), derived on the stream where the hash reads them, ``row_salts``
-    unread. ``also`` ``(domain id, nonce)``: the same rows are a call's z table too (`pouw_h1_tables_device`'s
-    ``hm96-sha512/row-seg/v1`` rows, salted under ``key`` at that nonce), committed from the same read of each row
-    (`zy_commit.cu`), its root `Hashing.also`: rows on the device, of whole segments (`zy_fits`), 16-byte aligned, salted
-    by ChaCha20 (no ``row_salts`` or ``public``)."""
+    unread. ``also`` ``(domain id, salts)``: the same rows are a call's z table too (`pouw_h1_tables_device`'s
+    ``hm96-sha512/row-seg/v1`` rows, under that table's own ``salts``, n x 192 bytes), committed from the same read of
+    each row (`zy_commit.cu`), its root `Hashing.also`: rows on the device, of whole segments (`zy_fits`), 16-byte
+    aligned, the value's leaves under ``row_salts`` (given, no ``public``); both tables' salts are the caller's fresh
+    bytes, copied to the device and read there as data."""
     import torch
 
     d = _device(torch)
@@ -402,26 +406,28 @@ def device_hash(words: Any, key: bytes, nonce: int, row_salts: bytes | None, dom
         raise ValueError(f"words {tuple(words.shape)} of {words.dtype} on {words.device}: not (n, W) u16 on {dev}")
     rows = words.contiguous().view(torch.uint8) if held else _rows(words)
     n, rb = (int(v) for v in rows.shape)
-    t = table(n, rb, key, nonce, row_salts is not None or public is not None, domain_id)
+    if (row_salts is None) == (public is None):
+        raise ValueError("a value's salts are given (row_salts) or public, one of the two")
+    t = table(n, rb, domain_id)
     per = max(1, CHUNK_BYTES // rb)
-    if also is not None and not (held and row_salts is None and public is None and zy_fits(n, rb)
-                                 and rows.data_ptr() % 16 == 0):
+    if also is not None and not (held and public is None and zy_fits(n, rb) and rows.data_ptr() % 16 == 0):
         raise ValueError(f"also: {n} rows of {rb} bytes ({'on the device' if held else 'on the host'}, "
-                         f"{'salted by ChaCha20' if row_salts is None and public is None else 'given salts'}): a call's "
-                         "z table is committed beside its value only from 16-byte aligned device rows of whole "
-                         "segments under ChaCha20's salts")
+                         f"{'given' if public is None else 'public'} salts): a call's z table is "
+                         "committed beside its value only from 16-byte aligned device rows of whole segments, each "
+                         "table under its own given salts")
+    both = None if also is None else _zy_salts(row_salts, also, n)
     if held:
         written = torch.cuda.Event()
         written.record(torch.cuda.current_stream(dev))
         st.wait_event(written)
     if also is not None:
-        return _hash_both(torch, d, words, rows, t, key, nonce, domain_id, also)
+        return _hash_both(torch, d, words, rows, t, domain_id, *both)
     with torch.cuda.stream(st):
         if public is not None:
             salts = _public_salts(d, pub(public[0], public[1], n), public[2])
         else:
-            salts = None if row_salts is None else torch.from_numpy(_salts(row_salts, n)).to(dev)
-        t.salts = 0 if salts is None else salts.data_ptr()
+            salts = torch.from_numpy(_salts(row_salts, n)).to(dev)
+        t.salts = salts.data_ptr()
         bcs = torch.empty(16 * n, dtype=torch.int64, device=dev)
         levels = torch.empty(8 * (2 * t.W - 1), dtype=torch.int64, device=dev)
         chunks = []
@@ -446,21 +452,27 @@ def device_hash(words: Any, key: bytes, nonce: int, row_salts: bytes | None, dom
     return Hashing(done, got_bcs, got_levels, t.W, (words, rows, salts, bcs, levels, chunks))
 
 
-def _hash_both(torch: Any, d: Any, words: Any, rows: Any, t: Table, key: bytes, nonce: int, domain_id: bytes,
-               also: tuple[bytes, int]) -> Hashing:
-    """`device_hash` with ``also``, its stream already behind the rows' writer."""
+def _hash_both(torch: Any, d: Any, words: Any, rows: Any, t: Table, domain_id: bytes, call: bytes,
+               call_salts: np.ndarray, reg_salts: np.ndarray) -> Hashing:
+    """`device_hash` with ``also``, its stream already behind the rows' writer: the call table of domain id ``call`` under
+    ``call_salts`` and the value under ``reg_salts`` (each n x 192 bytes on the host), copied to the device on the hash's
+    stream and held there until the hash is read."""
     lib, nib, plan_bytes = _zy(torch)
     dev, st, n = d.hm.device, d.stream, t.n
-    a = zy_args(n, t.row_bytes, key, also, (domain_id, nonce))
+    a = zy_args(n, t.row_bytes, call, domain_id)
     staged = torch.empty(plan_bytes, dtype=torch.uint8, pin_memory=True)
     if lib.zy_plan(ctypes.byref(a), staged.data_ptr()):
         raise ValueError("zy_plan refused the records' layout")
     nodes = 8 * (2 * t.W - 1)
     with torch.cuda.stream(st):
         plan = staged.to(dev, non_blocking=True)
+        salts = [torch.from_numpy(y).to(dev) for y in (call_salts, reg_salts)]
+        if any(y.data_ptr() % 16 for y in salts):
+            raise RuntimeError("zy_records reads each salt by 16-byte loads: a salt buffer on the device is not 16-byte "
+                               "aligned")
         call, bcs, levels = (torch.empty(k, dtype=torch.int64, device=dev) for k in (nodes, 16 * n, nodes))
-        rc = lib.zy_records(st.cuda_stream, plan.data_ptr(), n, nib.data_ptr(), rows.data_ptr(), call.data_ptr(),
-                            bcs.data_ptr(), levels.data_ptr())
+        rc = lib.zy_records(st.cuda_stream, plan.data_ptr(), n, nib.data_ptr(), rows.data_ptr(), salts[0].data_ptr(),
+                            salts[1].data_ptr(), call.data_ptr(), bcs.data_ptr(), levels.data_ptr())
         if rc:
             raise RuntimeError(f"zy_records: CUDA error {rc}")
         rc = d.lib.rr_tree(st.cuda_stream, ctypes.byref(t), levels.data_ptr())
@@ -477,7 +489,7 @@ def _hash_both(torch: Any, d: Any, words: Any, rows: Any, t: Table, key: bytes, 
         got_root.copy_(call[-8:], non_blocking=True)
         done = torch.cuda.Event()
         done.record(st)
-    return Hashing(done, got_bcs, got_levels, t.W, (words, rows, staged, plan, call, bcs, levels), got_root)
+    return Hashing(done, got_bcs, got_levels, t.W, (words, rows, staged, plan, salts, call, bcs, levels), got_root)
 
 
 def _public_salts(d: Any, p: Pub, ok: bool) -> Any:

@@ -41,7 +41,7 @@ with `ρ ≥ N₀/(ek)` for every table, `N₀` its level-0 positions.
 
 namespace FlockSoundness.Discharge.ZkLink
 
-open Game Model Accounting Extract LinkFinder Audit Audit.Partition ZkSession
+open Game Model Accounting Extract LinkFinder Spot.Sampling Spot.Sampling.Partition ZkSession
 open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}

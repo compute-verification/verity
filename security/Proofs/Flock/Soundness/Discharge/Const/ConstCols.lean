@@ -26,7 +26,7 @@ reads would make `ConstCols` false.
 
 namespace FlockSoundness.Discharge.Const
 
-open FlockSoundness Audit
+open FlockSoundness Spot.Sampling
 
 section places
 

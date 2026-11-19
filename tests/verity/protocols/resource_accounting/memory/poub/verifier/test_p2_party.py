@@ -86,7 +86,7 @@ def _held(params) -> tuple[int, ...]:
 
 def test_the_honest_request_passes_and_the_params_are_the_auditors(store) -> None:
     """A request carrying the auditor's values as they are passes, and `audit.Params` gets the auditor's: `SESSION`,
-    the served bandwidth piece's (`benchmarks/pous/held_bandwidth.py`'s defaults), by default, or the values a toy party
+    the served bandwidth piece's (`p2_stage/bandwidth.py`'s defaults), by default, or the values a toy party
     is held to."""
     reg = store.registration
     assert p2_parties.SESSION == {"deadline_ns": 10**9, "passes": 4, "samples": 1024, "window_ns": 20 * 10**9, "windows": 6}
@@ -144,6 +144,7 @@ def test_an_accepted_answer_is_a_core_accept_with_its_eps_and_gamma() -> None:
     assert a["public"]["q_bytes"] == 60 * p2.UNIT_BYTES and a["public"]["span_ns"] == 2 * 10**9
     assert Fraction(a["public"]["gamma"]) == 1 - Fraction(60 * p2.UNIT_BYTES, 2 * 10**6)
     assert a["profile"]["wrong"] == 4 and a["profile"]["plan_units"] == 32 and a["profile"]["delta"] == "1/1099511627776"
+    assert a["profile"]["verifier_host"] == p2_parties.mc.UNNAMED, "the verifier's machine is named by no name it goes by"
     without = p2_parties.core_answer({k: v for k, v in ACCEPTED.items() if k != "plan_units"})
     assert "gamma" not in without["public"] and without["profile"]["plan_units"] == 40
 

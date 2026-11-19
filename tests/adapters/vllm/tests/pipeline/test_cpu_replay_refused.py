@@ -72,6 +72,7 @@ def test_a_bundle_s_tensor_of_another_size_than_registered_is_read_and_does_not_
     one of the registered size with other bytes says its root."""
     (tmp_path / "weights" / "extra").mkdir(parents=True)
     tree = OF_RECORD.weights_tree({ROPE: ("float32", OF_RECORD.COS_SIN)}) | {"extra": {ROPE: 0}}
+    OF_RECORD.write_salts(tmp_path, tree)
     (tmp_path / "weights" / "extra" / "0.bin").write_bytes(held)
     assert CPU._open_one(tmp_path, tree, 0, None) == ("bundle", None, f"{len(held)} B, registered {len(COS_SIN)} B", True)
     (tmp_path / "weights" / "extra" / "0.bin").write_bytes(bytes(len(COS_SIN)))

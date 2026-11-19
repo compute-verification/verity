@@ -176,7 +176,7 @@ theorem unit_callee {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Rea
 /-- **A leaf of a unit's parameter is no gate of the unit**: it is a gate of an input node of the root, and the
 unit's gates are inside a root node that is no input node. -/
 theorem unit_param_out {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
-    (hO : InferenceOnlyVerifier.Record.ownRows P = true)
+    (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {i t g : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
     (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves)
@@ -245,7 +245,7 @@ theorem outLeaf_intro {ts : Array String} (hP : ReadProg P)
   exact ⟨g, f, rfl, hf, hl, hg, rfl, rfl⟩
 
 /-- A leaf of a unit's reader row is a leaf of the record's circuit, at its bits in the row. -/
-theorem rowLeaf_intro {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.ownRows P = true)
+theorem rowLeaf_intro {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {r : Row} {sc : Scope}
     (hu : UnitAt P rs r.tid r.unit sc) {i : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
     (hp : (P.defs[sc.d]!).params[i]!.1 = r.port) (hrow : r.row < W.cutsOf r.tid r.port) {l : ℕ}
@@ -264,7 +264,7 @@ theorem rowLeaf_intro {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyV
 unit's Definition passes on. A leaf a unit of a composite returns is a gate of the unit, which no leaf of a
 parameter is, or a leaf of a parameter the Definition passes on, and a gate is one leaf of one parameter of the
 unit at most. A unit of a primitive returns its own gate. -/
-theorem closed_not_returned {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.ownRows P = true)
+theorem closed_not_returned {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {i t g : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
     (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves)
@@ -373,7 +373,7 @@ theorem wired_row {tids : Array String} (hP : ReadProg P)
 /-! ## Aligned and Filled -/
 
 /-- **Every wire lands whole** (`Aligned`), of a record whose wires pass the check's `unwhole`. -/
-theorem aligned (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.ownRows P = true)
+theorem aligned (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
     (hts : templatesOf P doc = .ok ts)

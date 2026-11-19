@@ -38,9 +38,21 @@ for s in $STMTS; do for f in circuit.txt pub.bin inst.bin stage.json; do
 WARM=${WARM:-1}; RUNS=${RUNS:-3}; NSESS=$((WARM + RUNS)); SM=${SM:-120}; STEPS=${STEPS:-"build stage prove"}
 TIMEV="/usr/bin/time -v -o"  # each step's time-*.txt record, where GNU time is installed
 [ -x /usr/bin/time ] || { TIMEV=; echo "no GNU time at /usr/bin/time (apt-get install time): no time-*.txt records"; }
+CARD=${PT_CARD:-}
+if [ $DEV = gpu ] && [ -z "$CARD" ]; then
+  CARD=$(PYTHONPATH=$REPO:$REPO/tools/config python3 -c 'import sys; from pathlib import Path; from verity.device import gpu_card_reporting; print(gpu_card_reporting(sys.argv[1], directory=Path(sys.argv[2]))["sku"])' "$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)" "$REPO/calibration/hardware/cards") || exit 1
+fi
 if [ $DEV = gpu ]; then
-  . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh
-  C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH LD_LIBRARY_PATH=$C13/lib64:${LD_LIBRARY_PATH:-}
+  if C13=$(python3 benchmarks/kernels/machine.py toolkit 13.3 2> $O/cuda.log); then
+    export CUDA_TK=$C13
+  else
+    unset CUDA_TK
+    . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh >> $O/cuda.log 2>&1
+    [ -n "${CUDA_TK:-}" ] || { cat $O/cuda.log; echo "prove_time.sh: the node has its own CUDA 13.3, which the run's machine's" \
+      "[properties] don't list under toolkit: list it there, or set CUDA_HOME"; exit 1; }
+    C13=$CUDA_TK
+  fi
+  export PATH=$C13/bin:$PATH LD_LIBRARY_PATH=$C13/lib64:${LD_LIBRARY_PATH:-}
 fi
 set -f  # a census name's brackets are not a glob
 export PATH=$HOME/.cargo/bin:$PATH FC_COINS=os FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
@@ -206,11 +218,5 @@ if has prove; then
   fi
 fi
 echo "== summary $(date -u +%T)"
-CARD=${PT_CARD:-}
-if [ $DEV = gpu ] && [ -z "$CARD" ]; then
-  case "$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)" in
-    *H200*) CARD=h200-sxm-141gb ;; *B200*) CARD=b200-sxm-180gb ;; *"RTX PRO 6000"*) CARD=rtx-pro-6000-server ;;
-  esac
-fi
 python3 $REPO/benchmarks/served_units/prove_time.py $O ${CARD:+--card $CARD} > $O/summary.json
 python3 -c "import json, sys; [print(r) for r in json.load(open(sys.argv[1]))['table']]" $O/summary.json

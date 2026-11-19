@@ -18,8 +18,8 @@ from typing import Any
 
 from . import tmpl as TM
 
-#: the read's Definition, `verity.commitments.gates.embedding.EmbeddingRead_v1{V, H}`, by its base id
-READ = "EmbeddingRead_v1"
+#: the read's Definition, `verity.commitments.gates.embedding.EmbeddingRead_v2{V, H}`, by its base id
+READ = "EmbeddingRead_v2"
 #: the executable a caller names (a test's stand-in, a job's own build); None: `BUILT`, else the path's
 EXE: str | None = None
 #: where ``lake build flock-read-tmpl`` puts the executable in this tree's Flock package

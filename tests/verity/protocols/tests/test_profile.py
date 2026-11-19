@@ -20,8 +20,9 @@ from verity.circuits import Program, bind
 from verity.circuits import query_ast as G
 from verity.circuits.partition import Level, validate_partition
 from verity.circuits.ops import gemm
-from verity.protocols.proofs.spot.verifier.profile import (ESCAPE_TERMS, HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified,
-                                                    Stratum, Subset, Work, WorkStratum, neg_log_escape)
+from verity.protocols.proofs.spot.verifier.profile import (CREDITED_UNSPLIT, ESCAPE_TERMS, HARM_MARGIN, MARGIN, Bernoulli,
+                                                    IntegrityProfile, Stratified, Stratum, Subset, Work, WorkStratum,
+                                                    neg_log_escape)
 
 
 def two_level(n_r, n_v, p, k, delta, **facts) -> IntegrityProfile:
@@ -812,3 +813,20 @@ def test_a_work_design_keeps_each_k_as_recorded():
     assert [s["k"] for s in off.to_json()["strata"]] == [1, 1]
     a = IntegrityProfile((Level("unit", "q"),), (10,), {"unit": off}, 0.1, drawn={"unit": 2})
     assert a.strata() == off.stratified and a.bound() == off.stratified.count_bound(0.1)
+
+
+def test_credited_at_level_one_accepted():
+    one = IntegrityProfile(("unit",), (8,), {"unit": Subset(2)}, 0.01, credited={0, 7})
+    assert one.to_json()["credited"] == [0, 7]
+    assert two_level(8, 1, Fraction(1, 2), 1, 0.01, credited={3}).credited == {3}
+    assert "credited" not in two_level(8, 2, Fraction(1, 2), 1, 0.01).to_json()
+
+
+def test_credited_split_at_level_two_refused():
+    with pytest.raises(ValueError, match=f"{CREDITED_UNSPLIT}: level 'check' splits"):
+        two_level(8, 2, Fraction(1, 2), 1, 0.01, credited={3})
+
+
+def test_credited_absent_from_level_one_refused():
+    with pytest.raises(ValueError, match=f"{CREDITED_UNSPLIT}: credited block 8 is not one"):
+        IntegrityProfile(("unit",), (8,), {"unit": Subset(2)}, 0.01, credited={8})

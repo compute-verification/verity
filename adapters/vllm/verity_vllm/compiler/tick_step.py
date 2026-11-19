@@ -22,9 +22,11 @@ def widths(S: SimpleNamespace) -> SimpleNamespace:
     """`replay_step.widths` with RW = bitlen(TAU − 1). Refuses amounts whose largest advance reaches CARRY buckets, and a
     class that can't see the first arrival a step leaves (A ≥ min(M, R) + 1)."""
     Z = RS.widths(S)
-    if min(S.TAU, S.CSAT, S.CFREE, S.CARRY) < 1 or S.C1 < 0 or S.CU not in (0, 1):
-        raise ValueError(f"tick statics TAU={S.TAU}, CSAT={S.CSAT}, CFREE={S.CFREE}, C1={S.C1}, CU={S.CU}, CARRY={S.CARRY}: "
-                         "TAU, CSAT, CFREE and CARRY positive, C1 at least 0, CU 0 or 1")
+    if min(S.TAU, S.CSAT, S.CFREE, S.CARRY) < 1 or S.C1 < 0:
+        raise ValueError(f"tick statics TAU={S.TAU}, CSAT={S.CSAT}, CFREE={S.CFREE}, C1={S.C1}, CARRY={S.CARRY}: "
+                         "TAU, CSAT, CFREE and CARRY positive, C1 at least 0")
+    if S.CU:
+        raise ValueError("the tick step has no catch-up while requests run: CU = 0")
     if (most := max(S.CSAT, S.CFREE) + S.C1 * S.T) >= S.CARRY * S.TAU:
         raise ValueError(f"the largest advance max(CSAT, CFREE) + C1·T = {most} reaches CARRY = {S.CARRY} buckets of "
                          f"TAU = {S.TAU}: the advance is under CARRY buckets, so the count grows by at most CARRY")
@@ -56,7 +58,7 @@ def _build(C, S, *elements):
     q, r, bucket = ins["tick_q"][0], ins["tick_r"][0], ins["arr_bucket"]
     valid = [e[0] for e in ins["arr_valid"]]
     waits = ins["wait_valid"][0][0]
-    idle = waits.inv() if S.CU else C.AND(waits.inv(), or_reduce(C, [e[0] for e in ins["run_valid"]]).inv())
+    idle = C.AND(waits.inv(), or_reduce(C, [e[0] for e in ins["run_valid"]]).inv())
     a1 = add(C, list(bucket[0]), const_bits(1, QW + 1), width=QW + 1)
     jump = and_reduce(C, [idle, valid[0], RS._lt(C, q, a1)])
     bad = [RS._lt(C, r, const_bits(S.TAU, Z.RW + 1)).inv(), C.AND(jump, a1[QW])]
@@ -108,7 +110,7 @@ def _sig(S):
 TickStep = _part(
     "TickStep", STATICS, _sig, _build,
     "one step of the certified tick (`ReplayStep_v1`'s step with every given arrival asked): the clock T = q·TAU + r jumps "
-    "to the next arrival's bucket close when nothing runs or waits (CU = 0) or nothing waits (CU = 1); the step is given "
+    "to the next arrival's bucket close when nothing runs or waits (CU = 0); the step is given "
     "the leading arrivals whose buckets have closed; after a step with rows T advances by CSAT if it preempted, left a "
     "request waiting or left a given arrival, else CFREE, plus C1 for each token it schedules, an advance "
     "under CARRY buckets, so the bucket count grows by at most CARRY; 0 for ok to refuse what "
@@ -118,11 +120,10 @@ TickStep = _part(
 
 
 def statics(R: int, W: int, A: int, engine: dict, IW: int, *, tau: int, sat: int, free: int, token: int = 0,
-            quiet: bool = True, carry: int = 1, EW: int = 0) -> dict:
+            carry: int = 1, EW: int = 0) -> dict:
     """`replay_step.statics` with the tick's amounts in one unit of time (the bucket ``tau``, the advances ``sat``,
-    ``free`` and ``token``), its catch-up (``quiet``: only when nothing runs or waits) and the most buckets a step
-    carries, refused as `widths` refuses."""
-    st = {**RS.statics(R, W, A, engine, IW, EW), "TAU": tau, "CSAT": sat, "CFREE": free, "C1": token, "CU": int(not quiet),
+    ``free`` and ``token``) and the most buckets a step carries, refused as `widths` refuses."""
+    st = {**RS.statics(R, W, A, engine, IW, EW), "TAU": tau, "CSAT": sat, "CFREE": free, "C1": token, "CU": 0,
           "CARRY": carry}
     widths(SimpleNamespace(**st))
     return st

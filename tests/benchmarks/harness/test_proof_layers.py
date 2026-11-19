@@ -52,7 +52,48 @@ def prove_path_arm(out: Path, name: str, *, proof: str = "zk", forged: bool = Fa
     return arm
 
 
-MACHINE = ("ubuntu\nnode\nabc\nrow dir /w/r/llama32-1b__int8__h200__tp1__b4\nCUDA_HOME /usr/local/cuda\n"
+def held_arm(out: Path, name: str, keep: Path | None = None) -> Path:
+    """`prove_path_arm` as prove_path's public log writes it since 5e1564861b9: no ``draw_counts`` or
+    ``population``, and of ``per_unit`` only ``proof_bytes``; with ``keep``, its whole copy there, named in the run's
+    `PL.PRIVATE_PATHS`."""
+    whole = prove_path_arm((keep or out.parent / "whole"), name)
+    timing = {"SiluMul_v2{I=8192}": {"lean_verify_s": 2.0, "timing": {"prove_total_s": 6.0, "proof_bytes": [1700000, 1700000]}}}
+    (whole / "rank0").mkdir()
+    (whole / "rank0" / "summary.json").write_text(json.dumps({"draw_counts": {"SiluMul_v2{I=8192}": 2}, "timing": timing}))
+    arm = out / name
+    (arm / "rank0").mkdir(parents=True)
+    (arm / "rank0" / "summary.json").write_text(json.dumps({"timing": timing}))
+    lines = []
+    for line in (whole / "audit.log").read_text().splitlines():
+        if line.startswith("PROVE-PATH "):
+            pp = json.loads(line[len("PROVE-PATH "):])
+            pp["ranks"] = {r: {"accepted": x["accepted"], "per_unit": {t: {"proof_bytes": u["proof_bytes"]} for t, u in x["per_unit"].items()}}
+                           for r, x in pp["ranks"].items()}
+            line = "PROVE-PATH " + json.dumps(pp)
+        lines.append(line)
+    (arm / "audit.log").write_text("\n".join(lines) + "\n")
+    (arm / "summary.json").write_text((whole / "summary.json").read_text())
+    if keep:
+        (out.parent / PL.PRIVATE_PATHS).write_text(json.dumps({"schema": "private-paths/v1", "private": [str(keep)]}))
+    return arm
+
+
+def test_a_new_runs_public_copy_alone_refuses_its_figures_a_proof_block_by_name(tmp_path):
+    result = PL.read("zk", str(held_arm(tmp_path / "out", "llama")))
+    assert result.accepted and (result.prover_s, result.lean_s, result.proof_bytes) == (None, None, None)
+    assert result.workload == f"arm llama: {PL.NO_COUNT}" and result.uncounted == PL.NO_COUNT
+    assert f"no figure a proof block: {PL.NO_COUNT}" in result.notes
+    assert PL.render([result]).startswith(f"prove layers: no number: zk: {PL.NO_COUNT}\n")
+
+
+def test_a_new_run_reads_its_draw_counts_from_the_keep_its_run_names(tmp_path):
+    result = PL.read("zk", str(held_arm(tmp_path / "run" / "out", "llama", keep=tmp_path / "keep")))
+    assert result.accepted and (result.prover_s, result.lean_s, result.proof_bytes) == (3.0, 1.0, 850000.0)
+    assert result.per_block and result.uncounted is None
+    assert result.workload == f"arm llama: SiluMul_v2{{I=8192}} x 2 sampled of 8 proof blocks ({PL.FROM_KEEP})"
+
+
+MACHINE = ("ubuntu\nnode\nabc\nrow dir /w/r/llama32-1b__int8__h200__tp1__b4\nCUDA_HOME /w/cuda\n"
            "GPU 0: NVIDIA H200 (UUID: GPU-0)\nGPU 1: NVIDIA H200 (UUID: GPU-1)\n"
            "HF_HOME /w/hf VENV /w/venv312 A5_COINS challenger: card 1 and CPUs 40-59 leased by gpu-lease for Match and Commit\n")
 SERVES = "llama-3.2-1b-h200"
@@ -184,6 +225,24 @@ def table_lines(text: str) -> dict[str, str]:
     return {x.split(" | ")[0][2:]: x for x in text.splitlines() if x.startswith("| ") and not x.startswith("| layer ")}
 
 
+def test_an_a5_run_without_its_draw_counts_writes_null_under_its_figures_a_proof_block_and_names_why(tmp_path):
+    out = a5_out(tmp_path)
+    for f in (f for f in out.rglob("*") if f.is_file() and "draw_counts" in f.read_text()):
+        if f.suffix == ".json":
+            f.write_text(json.dumps({k: v for k, v in json.loads(f.read_text()).items() if k != "draw_counts"}))
+            continue
+        lines = []
+        for line in f.read_text().splitlines():
+            tag, _, rest = line.partition(" ")
+            if rest.startswith("{") and "draw_counts" in rest:
+                line = f"{tag} " + json.dumps({k: v for k, v in json.loads(rest).items() if k != "draw_counts"})
+            lines.append(line)
+        f.write_text("\n".join(lines) + "\n")
+    results = [PL.read("flock", None), PL.read("zk", None), PL.read("sampling", str(out))]
+    own = [m for m in PL.measured(results, IDS) if m["member"] == SERVES and IDS[m["name"]] != "build_s"]
+    assert own and all(m["value"] is None and m["why"] == PL.NO_COUNT for m in own)
+
+
 def test_a_plain_sampling_result_writes_null_with_why_under_every_id(tmp_path):
     results = [PL.read("flock", None), PL.read("zk", None), PL.read("sampling", str(a5_out(tmp_path, plain=True)))]
     own = [m for m in PL.measured(results, IDS) if m["member"] == SERVES]
@@ -240,8 +299,8 @@ def test_a_card_name_no_record_holds_writes_no_measurement_and_says_why(tmp_path
     sampling = PL.read("sampling", str(out))
     assert sampling.serves is None
     assert PL.measured([PL.read("flock", None), PL.read("zk", None), sampling], IDS) == []
-    assert "- with sampling: no member, so no measurement: 0 card records under " in PL.render([sampling])
-    assert "have 'NVIDIA H300', the card nvidia-smi names here" in PL.render([sampling])
+    assert "- with sampling: no member, so no measurement: 0 GPU card files under " in PL.render([sampling])
+    assert "have 'NVIDIA H300', the name the device reports" in PL.render([sampling])
 
 
 def test_the_layers_write_nothing_unless_their_outputs_state_one_model_and_card(tmp_path):
@@ -291,6 +350,9 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
     for title in PL.LAYERS.values():
         assert f"| {title} |" in text
     assert "| Flock | not run |" in text and "- Flock: no number: not run" in text
+    assert text.splitlines()[-1] == ("- Lean verdicts: checked by: lean (recomputed by the Lean verifier in the run's own "
+                                     "job, on the developer's node), under the coins each benchmark result's `ran with:` "
+                                     "line names")
     doc = json.loads(line)
     assert doc["schema"] == PL.SCHEMA and [r["layer"] for r in doc["results"]] == list(PL.LAYERS)
     assert json.loads((tmp_path / "report" / "proof-layers.json").read_text()) == doc

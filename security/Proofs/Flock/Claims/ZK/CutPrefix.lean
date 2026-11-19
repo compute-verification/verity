@@ -59,8 +59,8 @@ open Flock Transcript FlockComplete FlockDeploy With JsonRT PrefixAgree
 
 /-- **Where the later run ends past body `n`**, returned or not, the run stopped at `n` threw, with its bodies the later
 run's first `n + 1`. -/
-theorem prefix_of_agree {n : ℕ} {α : Type} {x y : PS α} (h : Agree n x y) {l : Array Claims.Msg} (hl : l.size ≤ n)
-    {v : Except String α} {l' : Array Claims.Msg} (hx : x.go l = (v, l')) (hn : n < l'.size) :
+theorem prefix_of_agree {n : ℕ} {α : Type} {x y : PS α} (h : Agree n x y) {l : Array Hash.Msg} (hl : l.size ≤ n)
+    {v : Except String α} {l' : Array Hash.Msg} (hx : x.go l = (v, l')) (hn : n < l'.size) :
     (∃ e, (y.go l).1 = .error e) ∧ (y.go l).2.size = n + 1 ∧ ∀ i < n + 1, (y.go l).2[i]! = l'[i]! := by
   rcases h.2 l hl with ⟨-, hs⟩ | ⟨he, hs, bs, hbs⟩
   · rw [hx] at hs
@@ -74,15 +74,15 @@ theorem prefix_of_agree {n : ℕ} {α : Type} {x y : PS α} (h : Agree n x y) {l
     rw [getElem!_pos _ i hi', getElem!_pos _ i (by rw [Array.size_append]; omega), Array.getElem_append_left hi']
 
 /-- `prefix_of_agree` with the stopped run's end named. -/
-theorem prefix_of_agree' {n : ℕ} {α : Type} {x y : PS α} (h : Agree n x y) {l : Array Claims.Msg} (hl : l.size ≤ n)
-    {v : Except String α} {l' : Array Claims.Msg} (hx : x.go l = (v, l')) (hn : n < l'.size) :
+theorem prefix_of_agree' {n : ℕ} {α : Type} {x y : PS α} (h : Agree n x y) {l : Array Hash.Msg} (hl : l.size ≤ n)
+    {v : Except String α} {l' : Array Hash.Msg} (hx : x.go l = (v, l')) (hn : n < l'.size) :
     ∃ e L, y.go l = (.error e, L) ∧ L.size = n + 1 ∧ ∀ i < n + 1, L[i]! = l'[i]! := by
   obtain ⟨⟨e, he⟩, hs, hi⟩ := prefix_of_agree h hl hx hn
   exact ⟨e, (y.go l).2, Prod.ext he rfl, hs, hi⟩
 
 /-- **Where the later run returns by body `n`**, the run stopped at `n` is the same run. -/
-theorem eq_of_agree {n : ℕ} {α : Type} {x y : PS α} (h : Agree n x y) {l : Array Claims.Msg} (hl : l.size ≤ n)
-    {a : α} {l' : Array Claims.Msg} (hx : x.go l = (.ok a, l')) (hn : l'.size ≤ n) : y.go l = (.ok a, l') := by
+theorem eq_of_agree {n : ℕ} {α : Type} {x y : PS α} (h : Agree n x y) {l : Array Hash.Msg} (hl : l.size ≤ n)
+    {a : α} {l' : Array Hash.Msg} (hx : x.go l = (.ok a, l')) (hn : l'.size ≤ n) : y.go l = (.ok a, l') := by
   rcases h.2 l hl with ⟨he, -⟩ | ⟨-, hs, bs, hbs⟩
   · rw [← he, hx]
   · rw [hx] at hbs
@@ -215,7 +215,7 @@ variable (coin : ℕ → ℕ → F128)
 
 /-- **Two runs from histories of one size**: the same end, after the same bodies. -/
 def Shift {α : Type} (x y : PS α) : Prop :=
-  ∀ l l' : Array Claims.Msg, l.size = l'.size → ∃ r bs, x.go l = (r, l ++ bs) ∧ y.go l' = (r, l' ++ bs)
+  ∀ l l' : Array Hash.Msg, l.size = l'.size → ∃ r bs, x.go l = (r, l ++ bs) ∧ y.go l' = (r, l' ++ bs)
 
 theorem Shift.still {α : Type} {v : Except String α} {y : PS α} (h : ∀ l, y.go l = (v, l)) : Shift y y :=
   fun l l' _ => ⟨v, #[], by rw [h l, Array.append_empty], by rw [h l', Array.append_empty]⟩
@@ -244,7 +244,7 @@ def shiftS : With.Sim PS PS where
   lift v := Shift.still (v := v) fun l => monadLift_go v l
 
 /-- **A run from a history of the same size** ends the same way, after the same bodies. -/
-theorem go_of_shift {α : Type} {x : PS α} (h : shiftS.R x x) {l l' L : Array Claims.Msg} (hs : l.size = l'.size)
+theorem go_of_shift {α : Type} {x : PS α} (h : shiftS.R x x) {l l' L : Array Hash.Msg} (hs : l.size = l'.size)
     {r : Except String α} (hx : x.go l = (r, L)) : ∃ bs, L = l ++ bs ∧ x.go l' = (r, l' ++ bs) := by
   obtain ⟨r', bs, h1, h2⟩ := h l l' hs
   rw [hx] at h1

@@ -24,6 +24,7 @@ from hypothesis import strategies as st
 from verity_difftest import settings
 
 import verity_difftest as D
+from verity.circuits import population as PN
 from verity.circuits.boolean.forms import Circuit
 from verity.circuits.ops.boolean import gf2k as G
 from verity_flock import circuit as FC
@@ -811,7 +812,7 @@ def _stage(sh: A.Shape) -> list[tuple[str, dict, object]]:
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
     def bindings(defn, n: int, sub) -> dict:
-        program = P.population_program(defn, n)
+        program = PN.population_program(defn, n)
         return {"partition": P.digest(P.partition(program, P.template_instance_query(defn))),
                 "program": P.program_sha512(program), "program_digests": FC.program_digests(sub)}
 

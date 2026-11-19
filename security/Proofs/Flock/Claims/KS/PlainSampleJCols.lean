@@ -67,7 +67,7 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **What the column reader takes of a `nextJ` decision's table `j`** (`runOf` at a parsed value): the table's `m`,
 `kLog`, claim count and Merkle widths at the link points `liveOfJ` reads at the substituted value, and its two reps'
 rounds there and proof files. None where the step does not decide. -/
-def runOfJ (rd : Claims.Msg → Option FinalJ) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) (j : ℕ) :
+def runOfJ (rd : Hash.Msg → Option FinalJ) (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin) (j : ℕ) :
     Option Claims.Flock.ZkRun :=
   match actJ rd x as cs with
   | .decide _ spec sts _ c₁ mids f => do
@@ -82,7 +82,7 @@ def runOfJ (rd : Claims.Msg → Option FinalJ) (x : Claims.Msg) (as : List Claim
   | _ => none
 
 /-- **The opened level-0 columns of a `nextJ` decision's table `j`** (`cols false` at a parsed value). -/
-def colsJ (rd : Claims.Msg → Option FinalJ) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) (j : ℕ) :
+def colsJ (rd : Hash.Msg → Option FinalJ) (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin) (j : ℕ) :
     List (ℕ × List 𝔽) :=
   match runOfJ rd x as cs j with
   | some r => Claims.Flock.plainRunCols r
@@ -103,9 +103,9 @@ local notation "𝔽" => FlockLevel3.GF128
 it with the proof files, the reader's table-0 columns are `plainRepColsOf` at `shapeOf` with `2 · |regions|` extra
 claims, on `liveOfJ`'s first two rep streams and the proof files, below level 0's `2^d` (`cols_plain` at a parsed
 value). -/
-theorem colsJ_plain {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem colsJ_plain {rd : Hash.Msg → Option FinalJ} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalJ} {lv : Live} {st : Stmt} {sch : Schedule}
+    {mids : List (Hash.Msg × Coin)} {f : FinalJ} {lv : Live} {st : Stmt} {sch : Schedule}
     (ha : actJ rd x as cs = .decide s spec sts link c₁ mids f)
     (hlv : liveOfJ spec (coinSubJ spec c₁ mids f.j) = .ok lv)
     (hv : verifyJWithMK id With.std spec (tabsOf sts) (coinSubJ spec c₁ mids f.j) f.proofs = .ok ())
@@ -148,9 +148,9 @@ whose statement carries the sample `d`, if the step's reader looks up no column 
 deployed plain reader looks up none in the step's own parsed session at the setup at `d` (`TxNoOffAtJK id`). The
 decoder's table-0 rep streams have `liveOfJ`'s coins at the substituted value (`decodeJWithK_live`), and those are the
 reader's columns (`colsJ_plain`). -/
-theorem txNoOffAtJK_of_colsJ {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg} {as : List Claims.Msg}
+theorem txNoOffAtJK_of_colsJ {rd : Hash.Msg → Option FinalJ} {x : Hash.Msg} {as : List Hash.Msg}
     {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
-    {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ} {d : Json} {N : ℕ} (C : Fin N → List 𝔽)
+    {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : FinalJ} {d : Json} {N : ℕ} (C : Fin N → List 𝔽)
     (ha : actJ rd x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((nextJ rd x as cs).eval sha512).1 = .acc) (hd : s.read.draw = some d)
     (hno : ¬ ∃ (p : Fin N) (u : List 𝔽), Claims.Flock.lookCol (colsJ rd x as cs 0) p.val = some u ∧ u ≠ C p) :
@@ -188,9 +188,9 @@ theorem txNoOffAtJK_of_colsJ {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg
 /-- **An accepting `nextJ` step gives the verdict at the sample, at its reader's columns**: `plainVerdictAtJK_of_nextJ`
 with the step's reader looking up no column off `C` at table 0 (`colsJ … 0`) for the premise at its parsed session
 (`txNoOffAtJK_of_colsJ`). -/
-theorem plainVerdictAtJK_of_nextJ_cols (mPts : ℕ) {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg}
-    {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ} {d : Json}
+theorem plainVerdictAtJK_of_nextJ_cols (mPts : ℕ) {rd : Hash.Msg → Option FinalJ} {x : Hash.Msg}
+    {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : FinalJ} {d : Json}
     {N : ℕ} (C : Fin N → List 𝔽) (ha : actJ rd x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((nextJ rd x as cs).eval sha512).1 = .acc) (hd : s.read.draw = some d)
     (hno : ¬ ∃ (p : Fin N) (u : List 𝔽), Claims.Flock.lookCol (colsJ rd x as cs 0) p.val = some u ∧ u ≠ C p) :

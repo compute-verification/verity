@@ -279,9 +279,11 @@ def offline_engine(args: argparse.Namespace, commit: bool, meta: dict, mix: Sequ
     token, hashing on host threads (`native_host`) can't keep up with the mixes. The staging is sized from the mix's
     envelope as the Commit stage arms it (`size_arena`) over the windowed worker's device ring (`enable_windows`), and
     refused here, before any request, when it doesn't fit beside the engine."""
+    from verity_bench import kit
     from verity_vllm.engine import vllm_adapter as va
 
     eng = va.build_engine(CHECKPOINTS, max_num_seqs=args.max_num_seqs, case=ROLES[args.model], execution="bi-eager",
+                          card=kit.run_card_sku(),
                           engine_args={"max_model_len": args.max_model_len,
                                        "max_num_batched_tokens": args.max_num_batched_tokens,
                                        "gpu_memory_utilization": args.gpu_memory_utilization})
@@ -534,12 +536,6 @@ def identity() -> dict:
                                                    "GPU_LEASE_WHO", "VLLM_BATCH_INVARIANT", "FLASHINFER_CUDA_ARCH_LIST")}}
 
 
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 def wait_ready(server: subprocess.Popen, port: int, deadline: float) -> None:
     while clock() < deadline:
         if server.poll() is not None:
@@ -582,6 +578,8 @@ def local_model(name: str, hf_home: Path) -> str:
 
 
 def run(args: argparse.Namespace) -> int:
+    from verity.ports import free_port
+
     start = clock()
     deadline = start + 60 * args.minutes
     if args.mode in OFFLINE and args.model not in ROLES:
@@ -832,9 +830,8 @@ def member(model: str, card: str, mode: str) -> str:
     """The measurement's member: the model's name, the card's `short` in its card record (`kit.card_short`, refused
     unless one record names the card) and the mode, so `llama-3.2-1b-h200-plaintext`."""
     from verity_bench import kit
-    from verity_bench.overhead import CARD_FILES
 
-    return f"{model.rsplit('/', 1)[-1].lower()}-{kit.card_short(card, directory=CARD_FILES)}-{mode}"
+    return f"{model.rsplit('/', 1)[-1].lower()}-{kit.card_short(card)}-{mode}"
 
 
 def record_metric(out: Path, summary: dict, meta: dict) -> dict:

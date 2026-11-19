@@ -1,0 +1,81 @@
+{
+ "params": {
+  "final_norm": {
+   "file": "0.bin",
+   "rows": 32
+  },
+  "head": {
+   "file": "1.bin",
+   "rows": 512
+  },
+  "head.scale": {
+   "file": "2.bin",
+   "rows": 256
+  },
+  "l0.attn_norm": {
+   "file": "3.bin",
+   "rows": 32
+  },
+  "l0.mlp_norm": {
+   "file": "4.bin",
+   "rows": 32
+  },
+  "l0.wdown": {
+   "file": "5.bin",
+   "rows": 128
+  },
+  "l0.wdown.scale": {
+   "file": "6.bin",
+   "rows": 32
+  },
+  "l0.wk": {
+   "file": "7.bin",
+   "rows": 32
+  },
+  "l0.wk.scale": {
+   "file": "8.bin",
+   "rows": 16
+  },
+  "l0.wo": {
+   "file": "9.bin",
+   "rows": 64
+  },
+  "l0.wo.scale": {
+   "file": "10.bin",
+   "rows": 32
+  },
+  "l0.wq": {
+   "file": "11.bin",
+   "rows": 64
+  },
+  "l0.wq.scale": {
+   "file": "12.bin",
+   "rows": 32
+  },
+  "l0.wup": {
+   "file": "13.bin",
+   "rows": 128
+  },
+  "l0.wup.scale": {
+   "file": "14.bin",
+   "rows": 64
+  },
+  "l0.wv": {
+   "file": "15.bin",
+   "rows": 32
+  },
+  "l0.wv.scale": {
+   "file": "16.bin",
+   "rows": 16
+  },
+  "pos": {
+   "file": "17.bin",
+   "rows": 256
+  },
+  "tok": {
+   "file": "18.bin",
+   "rows": 32
+  }
+ },
+ "schema": "verity/salt-file/v1"
+}

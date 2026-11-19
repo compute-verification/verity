@@ -143,7 +143,7 @@ theorem repStreams_one {spec : Flock.SessionSpec} {tb : String} (h : spec.tables
 /-- **A session's proof files, decoded from its evidence `w`** at the one table `tb`: of the evidence's parts after
 the record, a name then a file by twos, the file under each rep stream's file name, in the rep streams' order.
 Empty where `w` is no parts' bytes. -/
-def statementFiles (tb : String) (w : Claims.Msg) : Array ByteArray :=
+def statementFiles (tb : String) (w : Hash.Msg) : Array ByteArray :=
   match _root_.Spot.OneStageZk.evidenceParts ⟨w.toArray⟩ with
   | some ps => ((repsAt tb).toList.filterMap fun x => fileNamed (repFile x.2.2) (ps.toList.drop 1)).toArray
   | none => #[]

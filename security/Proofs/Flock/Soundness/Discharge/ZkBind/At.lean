@@ -47,7 +47,7 @@ None of them takes a sample premise: like `tablesAtZK` they are defined at every
 
 namespace FlockSoundness.Discharge.ZkBind
 
-open Flock FlockLevel3 Game Model Accounting Refine Audit ZkSession ZkLink ZkExec Integrate Placed
+open Flock FlockLevel3 Game Model Accounting Refine Spot.Sampling ZkSession ZkLink ZkExec Integrate Placed
 open FlockSoundness.Discharge.Exec (Inputs)
 open scoped ENNReal
 

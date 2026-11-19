@@ -42,7 +42,6 @@ def _commit(tmp_path: Path, monkeypatch, *flags: str) -> tuple[int, list[str], P
     """Inductor's config is unloaded for the test: another test in the same worker may have imported it before the engine's pin,
     which `engine.env.require_inductor` refuses."""
     pytest.importorskip("torch")
-    from verity_vllm import protocols as PO
     from verity_vllm.engine import engine_profile as prof
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline import commit as PC
@@ -64,7 +63,7 @@ def _commit(tmp_path: Path, monkeypatch, *flags: str) -> tuple[int, list[str], P
     for owner, name, value in [(prof, "apply_env", lambda: {}), (prof, "checkpoint_for", lambda case, path: {"repo": "org/model"}),
                                (prof, "engine_kwargs", lambda cp, **kw: dict(kw)), (va, "load_workload", lambda path, max_tokens: WORKLOAD),
                                (va, "target_of_workload", lambda wl, *a: None), (va, "case_of", lambda wl, case: case),
-                               (va, "throwaway_requests", lambda eng, reqs, seed=0: reqs), (PO, "commit_guard", lambda *a, **k: None),
+                               (va, "throwaway_requests", lambda eng, reqs, seed=0: reqs),
                                (PC, "git_head", lambda: None), (PC, "run_workload", run), (TPCM, "tree_of_record", lambda: {}),
                                (GL, "_ENVIRON", []), (GL, "_HELD", []),
                                (TPL, "stop", lambda llm, timeout, after: events.append(f"stop after {after}"))]:

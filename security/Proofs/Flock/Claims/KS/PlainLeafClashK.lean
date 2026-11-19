@@ -129,7 +129,7 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample, at hidden outputs under plain SHA-512
 leaves**, at `keep` (`plain_clash₀HUAt`). -/
 theorem plain_clash₀HUAtK (keep : Bool → Bool)
-    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true)
@@ -152,7 +152,7 @@ theorem plain_clash₀HUAtK (keep : Bool → Bool)
 /-- **The deployed plain decoders' later entries at `plainTab`, at the sample, at hidden outputs under plain SHA-512
 leaves**, at `keep` (`plain_laterEntriesHUAt`). -/
 theorem plain_laterEntriesHUAtK (keep : Bool → Bool)
-    {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
@@ -175,7 +175,7 @@ theorem plain_laterEntriesHUAtK (keep : Bool → Bool)
 /-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the sample, at hidden outputs under plain
 SHA-512 leaves**, at `keep` (`plain_laterClashHUAt`). -/
 theorem plain_laterClashHUAtK (keep : Bool → Bool)
-    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "flock-leaf/sha512-unsalted")

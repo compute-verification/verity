@@ -126,7 +126,7 @@ print(sorted(m for m in sys.modules if m.split(".")[0] == "verity"))
 
 
 def test_a_dense_threads_cap_needs_no_core():
-    r = subprocess.run([sys.executable, "-c", _WITHOUT_CORE], env={**os.environ, "VERITY_DENSE_THREADS": "16"},
+    r = subprocess.run([sys.executable, "-c", _WITHOUT_CORE], env={**os.environ, "VERITY_DENSE_THREADS": "16", "CUDA_HOME": "/a/toolkit"},
                        capture_output=True, text=True, check=False)
     assert r.returncode == 0, r.stderr
     assert r.stdout.split("\n")[:2] == ["Stage", "[]"]

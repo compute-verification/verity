@@ -16,4 +16,5 @@ untraced = ["test_slowdown_code.py"]
 # VERITY_GRADER_SLOWDOWN_CODE names this tree's.
 inputs = ["verity", "adapters/vllm/verity_vllm", "tests/adapters/torch/tests/frontend/train_step_lf.py",
           "tools/config/verity_config", "calibration/training/training_slowdown",
-          "tests/adapters/vllm/tests/__init__.py", "tests/adapters/vllm/tests/program/__init__.py", "adapters/torch", "calibration/training/grader"]
+          "tests/adapters/vllm/tests/__init__.py", "tests/adapters/vllm/tests/program/__init__.py", "adapters/torch", "calibration/training/grader",
+          "calibration/hardware/cards"]

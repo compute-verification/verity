@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 import tensor_kinds as TK
+from verity_bench import kit
 
 
 def test_kernel_key_reads_the_struct_by_its_length():
@@ -79,7 +80,7 @@ def test_an_add_moved_to_the_fma_pipe_still_counts_as_an_add():
 
 def test_kernel_key_reads_alone4():
     assert TK.kernel_key("_Z8k_alone4I9ImmaS8k16EviPjP8BlockClk") == ("alone4", "imma_s8_m16n8k16", 0)
-    assert TK.kernel_key("_Z6k_specI11BmmaAndK256Li32ELi0EEviPjP8BlockClk") == ("spec_iadd3", "bmma_and_m16n8k256", 32)
+    assert TK.kernel_key("_Z6k_specI12HmmaF16k8F32Li32ELi0EEviPjP8BlockClk") == ("spec_iadd3", "hmma_f16_m16n8k8_f32", 32)
 
 
 def test_a_form_cheaper_in_issue_a_slot_is_flagged(tmp_path: Path):
@@ -135,7 +136,7 @@ def test_a_card_no_record_holds_or_an_arch_with_no_forms_refuses(tmp_path: Path)
         TK.target("NVIDIA L40S")
     with pytest.raises(SystemExit, match="have 'NVIDIA H200, NVIDIA H100 80GB HBM3'"):
         TK.target("NVIDIA H200, NVIDIA H100 80GB HBM3")
-    text = (TK.CARDS / "h200-sxm-141gb.toml").read_text()
+    text = (kit.cards_directory() / "h200-sxm-141gb.toml").read_text()
     (tmp_path / "h200-sxm-141gb.toml").write_text(text.replace('arch = "sm_90a"', 'arch = "sm_80"'))
     with pytest.raises(SystemExit, match="the h200 card's arch is 'sm_80'"):
         TK.target("NVIDIA H200", tmp_path)

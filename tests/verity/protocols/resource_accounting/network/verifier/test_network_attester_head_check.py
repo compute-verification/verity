@@ -10,6 +10,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.commitments.identity import tagged_sha512
 from verity.protocols.resource_accounting.network.verifier import head_check as HC
+from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.verifier.certificate import RECORD_TAG, CertifiedRecord, certificate_digest, parameters_digest
 from verity.protocols.resource_accounting.network.verifier.grid import Reason, Status
 
@@ -90,9 +91,9 @@ def _parts(inst):
 
 def test_the_count_check_is_32t_minus_1_ands_and_the_fields_736_plus_8l_minus_1():
     for T in (1, 4, 600):
-        assert HC.ands(bind(HC.NetworkHeadCounts, T=T)) == 32 * T - 1
+        assert GB.ands(bind(HC.NetworkHeadCounts, T=T)) == 32 * T - 1
     for L in (1, 9, 40):
-        assert HC.ands(bind(HC.NetworkHeadFields, L=L)) == 736 + 8 * L - 1
+        assert GB.ands(bind(HC.NetworkHeadFields, L=L)) == 736 + 8 * L - 1
 
 
 def test_each_part_is_its_reference_and_each_wrong_input_is_refused_where_it_belongs(cases, bare):
@@ -123,6 +124,6 @@ def test_the_head_check_is_its_reference(cases, bare):
     assert HC.evaluate(*bare) == [1] * len(bare)
     size = HC.size(HC.unit(9, 600, True))
     assert (size["fields"], size["counts"], size["other"]) == (807, 19_199, 3)
-    assert size["opening"] == HC.ands(bind(HC.NetworkHidingRead, N_BITS=8 * HC.Shape(9, 600).HL, D=2)) > 32 * 600
-    assert size["signed"] == (HC.ands(bind(HC.NetworkRecordDigest, HL=HC.Shape(9, 600).HL))
-                              + HC.ands(bind(HC.NetworkSignedDigest))) == 1_333_292
+    assert size["opening"] == GB.ands(bind(HC.NetworkHidingRead, N_BITS=8 * HC.Shape(9, 600).HL, D=2)) > 32 * 600
+    assert size["signed"] == (GB.ands(bind(HC.NetworkRecordDigest, HL=HC.Shape(9, 600).HL))
+                              + GB.ands(bind(HC.NetworkSignedDigest))) == 1_333_292

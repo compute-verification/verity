@@ -637,38 +637,38 @@ def test_hm96_salts_are_chacha20s_stream():
 
 def test_h3_lifecycle_commits_hm96_sha512_trees():
     """An -h3 transcript is accepted by an -h3 verifier.  Every tree is ``frame-v3-sha512`` with hm96-sha512 leaves under
-    the pinned key and the prover's salts, rebuilt here from core's pieces: A's and B's rows over their ``sha512/row-seg/v1``
+    the prover's fresh salts, rebuilt here from core's pieces: A's and B's rows over their ``sha512/row-seg/v1``
     digests, the tiles over their 64-byte leaves.  A wrong salt, or h0's verifier (SHA-256 trees), refuses the opening."""
     from dataclasses import replace
 
     from verity.commitments import CommitmentDomain, hm96
     from verity.commitments.merkle import tree_levels
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, row_leaf
-    from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (HM96_TRANSCRIPT, HM96_WEIGHTS, Epoch, Workload, activation_binding, hm96_salt,
-                                                  rows_domain, transcript_domain, weight_binding)
+    from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (HM96_SALT, Epoch, Workload, activation_binding, rows_domain,
+                                                  transcript_domain, weight_binding)
     from verity.protocols.resource_accounting.compute.pouw.prover.clear.clear_audit import Prover, Sampled, Verifier
 
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), 128
     rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
     work = Workload((Matmul(3, Shape(32, k, 16), 9),))
-    key = bytes(range(100, 132))
-    prover = Prover(s, {9: rows_b}, salt_key=key)
+    prover = Prover(s, {9: rows_b})
     epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
     tr = prover.prove(epoch, {3: rows_a})
     assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
     K = hm96.SHA512.default_key
 
-    def root(hm, xs, nonce):
+    def root(hm, xs, tree):
         dom = CommitmentDomain(hm.binding, hm.owner, hm.positions, hash="sha512")
-        hls = [hm96.SHA512.tree_leaf(K, hm96.SHA512.commit_string(K, x, hm96_salt(key, nonce, i))) for i, x in enumerate(xs)]
+        salts = [tree.open(i).value[-HM96_SALT:] for i in range(len(xs))]
+        hls = [hm96.SHA512.tree_leaf(K, hm96.SHA512.commit_string(K, x, y)) for x, y in zip(xs, salts)]
         return tree_levels(dom, [row_leaf(dom, i, hl, SCHEMA_HM96_SHA512_ROW_SEG) for i, hl in enumerate(hls)])[-1][0]
 
     da, db = rows_domain(activation_binding(epoch.salt, 3), 3, 32, "hm96-sha512"), rows_domain(weight_binding(9), -2, 16, "hm96-sha512")
     assert da.hash == db.hash == "sha512" and len(tr.activation_roots[0]) == 64
-    assert tr.activation_roots[0] == root(da, [C.row_digest(r) for r in rows_a], 3)
-    assert prover.weight_roots[9] == root(db, [C.row_digest(r) for r in rows_b], HM96_WEIGHTS + 9)
+    assert tr.activation_roots[0] == root(da, [C.row_digest(r) for r in rows_a], prover._act_trees[0])
+    assert prover.weight_roots[9] == root(db, [C.row_digest(r) for r in rows_b], prover.weight_trees[9])
     digests = [prover.digest(t) for t in range(2)]
-    assert tr.commitment.root == root(transcript_domain(epoch, 2, "hm96-sha512"), digests, HM96_TRANSCRIPT)
+    assert tr.commitment.root == root(transcript_domain(epoch, 2, "hm96-sha512"), digests, prover._tree)
     opening = prover.open(epoch, 0)
     bad = replace(opening, a=(replace(opening.a[0], value=opening.a[0].value[:-1] + b"\0"),) + opening.a[1:])
     assert Verifier(s, epoch).check_tile(tr, bad).reason == "activation opening"

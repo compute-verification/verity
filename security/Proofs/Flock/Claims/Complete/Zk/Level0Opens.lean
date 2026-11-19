@@ -270,13 +270,13 @@ theorem KRuns.throwBind {L : ℕ} {α β : Type} (e : String) (f : α → LP PS 
 /-- **The honest masked prover's Ligerito opens honestly**: run from round `k` with `L + k` bodies sent, it opens
 level `j`'s commitment at the positions of round `k + 2 + qOff sch j`'s coins, the replies' coins (`cfOf resp L`):
 plain's `ligeritoP_opens`, two rounds later, after the pair's coins. -/
-theorem ligeritoPZk_opens (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
+theorem ligeritoPZk_opens (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (L : ℕ)
     (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0) (hL : 2 ≤ sch.levels.size)
-    (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0) {t : Transcript} {l : Array Claims.Msg}
+    (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0) {t : Transcript} {l : Array Hash.Msg}
     (hl : l.size = L + t.k) {P : LigeritoProof} {zl : Zk.Level0Msgs} {rc : Zk.L0Rec} {t' : Transcript}
-    {l' : Array Claims.Msg}
+    {l' : Array Hash.Msg}
     (hrun : ((ligeritoPZk (asksS resp) (Hashes.ofSha512 h) ms sch T cm0 tb b lay hv rep tPad extra lanePad salt
       nonce).run t).go l = (.ok ((P, zl, rc), t'), l')) :
     Opens (Hashes.ofSha512 h : Hashes V) ms sch cm0 P (cfOf resp L) (t.k + 2) := by

@@ -94,7 +94,7 @@ namespace FlockComplete.ZkTables
 
 open Flock Transcript FlockComplete FlockDeploy FlockComplete.Replay
 
-variable {H : Claims.Msg → Claims.Msg}
+variable {H : Hash.Msg → Hash.Msg}
 
 /-- **A masked rep that returns records `repRoundsT` rounds**, given level 0's verifier premise, at a statement of
 `25 ≤ m ≤ 35` under `hm96-sha512/v1` with `k_log ≤ m`. -/
@@ -103,12 +103,12 @@ theorem rep_rounds_of (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.
     (ω : TapeZk) (i : ℕ) (d : ByteArray) {k : ℕ} (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit)
     (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ) (ic : InnerCommit)
     (hin : RepIn H st tr ω i v cm pts e rep ic) (hrep : rep < 2) (prior : Array (List F128)) (ws : List ℕ)
-    (l : Array Claims.Msg) (p : Zk.ZkProof) (t' : Transcript) (l' : Array Claims.Msg)
+    (l : Array Hash.Msg) (p : Zk.ZkProof) (t' : Transcript) (l' : Array Hash.Msg)
     (hgo : (repT H r st tr ω i d v cm e rep ic prior ws).go l = (.ok (p, t'), l')) :
     t'.rounds.size = repRoundsT st v e := by
   have hm14 : 14 ≤ (Setup.ofCircuit st).m := by show 14 ≤ st.m; omega
   have hmerk : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 := hms
-  set resp : ℕ → Claims.Msg := fun j => (Claims.coinSeq r j).bytes with hresp
+  set resp : ℕ → Hash.Msg := fun j => (Claims.coinSeq r j).bytes with hresp
   set lay := Zk.PadLayout.new (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog v.1.k0 with hlay
   set pads := padsOf ω i rep lay with hpads
   unfold repT at hgo
@@ -163,7 +163,7 @@ theorem rep_rounds (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.Stm
     (ω : TapeZk) (i : ℕ) (d : ByteArray) {k : ℕ} (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit)
     (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ) (ic : InnerCommit)
     (hin : RepIn H st tr ω i v cm pts e rep ic) (hrep : rep < 2) (prior : Array (List F128)) (ws : List ℕ)
-    (l : Array Claims.Msg) (p : Zk.ZkProof) (t' : Transcript) (l' : Array Claims.Msg)
+    (l : Array Hash.Msg) (p : Zk.ZkProof) (t' : Transcript) (l' : Array Hash.Msg)
     (hgo : (repT H r st tr ω i d v cm e rep ic prior ws).go l = (.ok (p, t'), l')) :
     t'.rounds.size = repRoundsT st v e := by
   obtain ⟨h25, h35, hms, -, p0, w, hpe, hR0, -⟩ := hT

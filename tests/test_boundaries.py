@@ -143,14 +143,13 @@ BASE_LEAN = {"core_base": (), "core_circuits": ("core_base",), "core_commitments
 #: through a card file citing an ``art:`` id, never as an import, and code a protocol runs moves out to the package that
 #: uses it.  It only shrinks.
 BENCHMARKS_IMPORTERS = {
-    # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
+    # Flock's measurement campaign and its tests
     **dict.fromkeys((
-        "verity/protocols/proofs/flock/prover/pod/gemm_hill.py", "verity/protocols/proofs/flock/prover/pod/read_gadget.py",
-        "verity/protocols/proofs/flock/prover/python/verity_flock/bench.py", "verity/protocols/proofs/flock/prover/python/verity_flock/circuit_bench.py",
-        "verity/protocols/proofs/flock/prover/python/verity_flock/instances.py", "verity/protocols/proofs/flock/prover/python/verity_flock/ir_bench.py",
+        "verity/protocols/proofs/flock/prover/pod/read_gadget.py",
+        "verity/protocols/proofs/flock/prover/python/verity_flock/circuit_bench.py",
         "verity/protocols/proofs/flock/prover/python/verity_flock/register.py",
-        "tests/verity/protocols/proofs/flock/prover/test_backend_bench.py", "tests/verity/protocols/proofs/flock/prover/test_class_statement.py",
-        "tests/verity/protocols/proofs/flock/prover/test_gemm_hill.py", "tests/verity/protocols/proofs/flock/prover/test_ir_lowering_bench.py",
+        "tests/adapters/vllm/flock/test_class_statement.py",
+        "tests/adapters/vllm/flock/test_ir_lowering_bench.py",
     ), "proofs: `verity_numerical.bench` (`benchmarks/numerical`)'s contract, cell, generator suites and frozen instances"),
     # research's registry of measuring tools
     **dict.fromkeys(("tools/research/src/research/store/tools_registry.py", "tests/tools/research/test_store_prov.py"),
@@ -1006,6 +1005,163 @@ def test_a_runtime_import_is_found() -> None:
         "verity/protocols/x/c.py": ["1: verity.runtime", "2: verity.runtime"],
     }
 
+#: The modules of a resource-accounting protocol: useful work, memory and network, and the experimental schemes of useful
+#: work.
+RESOURCE_ACCOUNTING = ("verity.protocols.resource_accounting", "verity.protocols.experimental")
+#: The modules of ``RESOURCE_ACCOUNTING`` the vLLM adapter may name: the one scheme interface, whose served-run messages
+#: are `verity.hooks`.
+RESOURCE_ACCOUNTING_SHARED = ("verity.protocols.resource_accounting", "verity.protocols.resource_accounting.scheme")
+
+
+#: a shell file's Python: a ``python``/``python3``/``$PY`` ``-c`` body in single or double quotes, or a heredoc
+SHELL_PYTHON = re.compile(r"""(?:python3?|\$\{?PY\}?)"?\s+-c\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)")"""
+                          r"""|(?:python3?|\$\{?PY\}?)"?\s+-\s[^\n]*<<-?\s*['"]?(\w+)['"]?[^\n]*\n(.*?)^\s*\3$""", re.S | re.M)
+
+
+def _python_of(rel: str, text: str) -> list[tuple[int, ast.AST]]:
+    """Each Python body of ``rel`` with the number of lines before it: the file itself, or a shell file's
+    (`SHELL_PYTHON`)."""
+    if not rel.endswith(".sh"):
+        return [(0, ast.parse(text, filename=rel))]
+    out = []
+    for m in SHELL_PYTHON.finditer(text):
+        i = next(g for g in (1, 2, 4) if m[g] is not None)
+        # a double-quoted body is the shell's expansion: an unescaped ``$VAR`` stands for a name
+        body = m[i] if i != 2 else re.sub(r"\\([\"\\$`])", r"\1", re.sub(r"(?<!\\)\$\{?\w+\}?", "_", m[i]))
+        out.append((text.count("\n", 0, m.start(i)), ast.parse(body, filename=rel)))
+    return out
+
+
+def _adapter_importers(texts: dict[str, str], modules: tuple[str, ...], shared: tuple[str, ...] = ()) -> dict[str, list[str]]:
+    """``{file: ["line: module", ...]}`` for each file of the vLLM adapter outside its tests that names a module under
+    ``modules`` but ``shared``: in an import statement, or as a whole string (an import call's argument, a
+    ``"module:attr"``, a registry's entry), in a Python file or a shell file's Python (`SHELL_PYTHON`)."""
+    found: dict[str, list[str]] = {}
+    for rel, text in sorted(texts.items()):
+        if not rel.startswith("adapters/vllm/") or _is_test(rel) or not any(r in text for r in modules):
+            continue
+        hits = set()
+        for before, node in ((b, n) for b, tree in _python_of(rel, text) for n in ast.walk(tree)):
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                names = [node.module]
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                names = [node.value.partition(":")[0]]
+            else:
+                continue
+            named = {n for n in names if any(n == r or n.startswith(r + ".") for r in modules)}
+            hits |= {(before + node.lineno, n) for n in named if n not in shared}
+        if hits:
+            found[rel] = [f"{line}: {name}" for line, name in sorted(hits)]
+    return found
+
+#: Files of the vLLM adapter that name a module of a resource-accounting protocol all the same. It only shrinks: a scheme
+#: attaches through `verity_vllm.messages` and `verity.hooks`, and its own code moves to its package.
+RESOURCE_ACCOUNTING_IMPORTERS = (
+    "adapters/vllm/verity_vllm/acquire/h1_commit.py",
+    "adapters/vllm/verity_vllm/commit/history_tables_device.py",
+    "adapters/vllm/verity_vllm/commit/row_tables_device.py",
+    "adapters/vllm/verity_vllm/definitions/registry/catalog.circuit-check.py",
+    "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
+    "adapters/vllm/verity_vllm/pipeline/expert_rows.py",
+    "adapters/vllm/verity_vllm/pipeline/expert_tables.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_h1.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_tie.py",
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py",
+    "adapters/vllm/verity_vllm/program/predict/window_class.py",
+    "adapters/vllm/verity_vllm/program/predict/window_rows.py",
+    "adapters/vllm/verity_vllm/program/predict/window_weights.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
+    # the shell files', by owning lane
+    "adapters/vllm/tools/served_run/h100_smoke.sh",  # compute: Pearl+'s tie class
+)
+
+
+def test_the_vllm_adapter_imports_no_resource_accounting_protocol() -> None:
+    """No file of the vLLM adapter, outside its tests, names a module of a resource-accounting protocol, in its Python
+    or a shell file's (`SHELL_PYTHON`), apart from ``RESOURCE_ACCOUNTING_IMPORTERS``, which only shrinks."""
+    shell = {rel: (ROOT / rel).read_text(encoding="utf-8") for rel in _tracked("adapters/vllm/*.sh") if (ROOT / rel).is_file()}
+    found = _adapter_importers(_tracked_python() | shell, RESOURCE_ACCOUNTING, RESOURCE_ACCOUNTING_SHARED)
+    offenders = [f"{f}:{hit}" for f, hits in found.items() if f not in RESOURCE_ACCOUNTING_IMPORTERS for hit in hits]
+    assert not offenders, ("the vLLM adapter imports no resource-accounting protocol: emit the event or answer the request "
+                           "through `verity_vllm.messages` (the types are `verity.hooks`), and leave the scheme's code in "
+                           "its package. RESOURCE_ACCOUNTING_IMPORTERS only shrinks.\n" + "\n".join(offenders))
+    stale = sorted(set(RESOURCE_ACCOUNTING_IMPORTERS) - set(found))
+    assert not stale, f"RESOURCE_ACCOUNTING_IMPORTERS entries that no longer import one; remove them: {stale}"
+
+
+def test_a_resource_accounting_import_is_found() -> None:
+    """The check above isn't vacuous: a statement, a ``from`` import, an import call, a registry's string, an
+    experimental scheme and a shell file's ``-c`` and heredoc Python are found; the scheme interface, a shell file's
+    text outside its Python, a test and a file outside the adapter are not."""
+    pouw = "verity.protocols.resource_accounting.compute.pouw.prover.serving"
+    texts = {
+        "adapters/vllm/x/a.py": f"import {pouw}\nfrom {pouw} import Challenger\n",
+        "adapters/vllm/x/b.py": f"import importlib\nimportlib.import_module('{pouw}')\nT = {{'pouw': '{pouw}:X'}}\n",
+        "adapters/vllm/x/c.py": "from verity.protocols.experimental.dither import scheme\n",
+        "adapters/vllm/x/clean.py": "from verity.protocols.resource_accounting import scheme\nfrom verity import hooks\n",
+        "adapters/vllm/x/tests/test_a.py": f"import {pouw}\n",
+        "verity/protocols/x/d.py": f"import {pouw}\n",
+        "adapters/vllm/x/e.sh": f"""set -e\nN=$("$PY" -c 'from {pouw} import X; print(X)')\npython3 -c "import $M; import {pouw}"\n"""
+                                f"$PY - <<'EOF'\nimport os\nfrom {pouw} import Y\nEOF\n",
+        "adapters/vllm/x/clean.sh": f"""echo {pouw}\n"$PY" -c 'from verity_vllm.messages import providing'\n""",
+    }
+    assert _adapter_importers(texts, RESOURCE_ACCOUNTING, RESOURCE_ACCOUNTING_SHARED) == {
+        "adapters/vllm/x/a.py": [f"1: {pouw}", f"2: {pouw}"],
+        "adapters/vllm/x/b.py": [f"2: {pouw}", f"3: {pouw}"],
+        "adapters/vllm/x/c.py": ["1: verity.protocols.experimental.dither"],
+        "adapters/vllm/x/e.sh": [f"2: {pouw}", f"3: {pouw}", f"6: {pouw}"],
+    }
+
+
+#: The sampled proofs' verifier, its challenger included.
+SPOT_VERIFIER = ("verity.protocols.proofs.spot.verifier",)
+#: Files of the vLLM adapter that name a module of the sampled proofs' verifier all the same. It only shrinks: a record
+#: format or a re-export is read where it is defined (`verity.commitments`, `verity.circuits`), and verifier code stays in
+#: the verifier.
+SPOT_VERIFIER_IMPORTERS = (
+    "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
+    "adapters/vllm/verity_vllm/pipeline/serving_rows.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
+)
+
+
+def test_the_vllm_adapter_imports_no_spot_verifier() -> None:
+    """No file of the vLLM adapter, outside its tests, names a module of the sampled proofs' verifier or its challenger,
+    apart from ``SPOT_VERIFIER_IMPORTERS``, which only shrinks."""
+    found = _adapter_importers(_tracked_python(), SPOT_VERIFIER)
+    offenders = [f"{f}:{hit}" for f, hits in found.items() if f not in SPOT_VERIFIER_IMPORTERS for hit in hits]
+    assert not offenders, ("the vLLM adapter imports no module of the sampled proofs' verifier: read a format or a "
+                           "re-exported name where it is defined (`verity.commitments.rowleaf`, `verity.commitments.scheme`, "
+                           "`verity.circuits.partition_object`, `verity.circuits.codec`), and leave the verifier's checks "
+                           "in the verifier. SPOT_VERIFIER_IMPORTERS only shrinks.\n" + "\n".join(offenders))
+    stale = sorted(set(SPOT_VERIFIER_IMPORTERS) - set(found))
+    assert not stale, f"SPOT_VERIFIER_IMPORTERS entries that no longer import one; remove them: {stale}"
+
+
+def test_a_spot_verifier_import_is_found() -> None:
+    """The check above isn't vacuous: a statement, a ``from`` import, the challenger and an import call are found; SPOT's
+    prover, a test and a file outside the adapter are not."""
+    one = "verity.protocols.proofs.spot.verifier.one_stage"
+    texts = {
+        "adapters/vllm/x/a.py": f"import {one}.docket\nfrom {one} import registered as G\n",
+        "adapters/vllm/x/b.py": "from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveRecord\n",
+        "adapters/vllm/x/c.py": f"import importlib\nimportlib.import_module('{one}.draw')\n",
+        "adapters/vllm/x/clean.py": "from verity.protocols.proofs.spot.prover import workload\n",
+        "adapters/vllm/x/tests/test_a.py": f"from {one} import registered\n",
+        "verity/protocols/x/d.py": f"from {one} import registered\n",
+    }
+    assert _adapter_importers(texts, SPOT_VERIFIER) == {
+        "adapters/vllm/x/a.py": [f"1: {one}.docket", f"2: {one}"],
+        "adapters/vllm/x/b.py": ["1: verity.protocols.proofs.spot.verifier.challenger.challenger"],
+        "adapters/vllm/x/c.py": [f"2: {one}.draw"],
+    }
+
 
 def _uses(tree: ast.AST, names: set[str]) -> list[tuple[str, int]]:
     """``(name, line)`` for each use of one of ``names``: a name, an attribute, an imported name, or a string equal to one
@@ -1091,12 +1247,6 @@ WORLD_PATHS_ALLOWED: dict[str, str] = {
     "circuits/silicon/instructions.py":
         "circuits: each instruction's source string cites the probe run that measured it",
     "circuits/silicon/models.py": "circuits: each model's source string cites the probe run that measured it",
-    "protocols/proofs/spot/prover/cost/inputs.py":
-        "proofs: `MEASURED`, the sampling plan's measured inputs, read by default until every caller passes them",
-    "protocols/resource_accounting/memory/poub/verifier/timing.py":
-        "memory-accounting: each bound's note cites the probe that measured it",
-    "protocols/proofs/spot/prover/cost/transformer.py":
-        "proofs: a table row saying `SERVERS` is assumed, not in the census",
 }
 
 
@@ -1725,6 +1875,23 @@ def test_a_file_in_no_place_imports_the_standard_library_alone() -> None:
     assert not offenders, ("Python of verity in no `place` of tests/import_order.toml only groups packages and imports the "
                            "standard library alone: give a new package its place, with what it loads, or move what the "
                            "file needs out of it:\n" + "\n".join(offenders))
+
+
+def test_ports_imports_no_unit_and_no_verifier_imports_it() -> None:
+    listing = _listing()
+    assert _place("verity/ports.py", listing.places) is None, "verity/ports.py is in no place of tests/import_order.toml"
+    assert not [n for n, _, _ in _imports(SRC / "ports.py") if n.split(".")[0] not in sys.stdlib_module_names], \
+        "verity/ports.py imports the standard library alone"
+    offenders = []
+    for path in _sources():
+        rel = path.relative_to(ROOT).as_posix()
+        place = _place(rel, listing.places)
+        if _trusted(rel) is None and (place is None or not _trusted_place(listing.places[place])):
+            continue
+        text = path.read_text(encoding="utf-8")
+        offenders += [f"{rel}:{line}" for name, line, _ in _imports(path) if name == "verity.ports"]
+        offenders += [rel] if re.search(r"from verity import [^\n]*\bports\b", text) else []
+    assert not offenders, "no verifier or device imports verity.ports: take a port from the caller:\n" + "\n".join(offenders)
 
 
 def test_the_listing_is_what_its_generator_writes() -> None:

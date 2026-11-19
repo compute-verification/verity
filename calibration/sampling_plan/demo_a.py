@@ -54,7 +54,7 @@ from fractions import Fraction
 from math import ceil, comb, floor, inf, log, log2, nextafter
 from pathlib import Path
 
-from verity.protocols.proofs.spot.prover.cost import h200 as H
+import h200 as H
 
 from verity.protocols.resource_accounting.compute.pouw.verifier.window import eps_at
 from verity.protocols.proofs.spot.verifier.consumers import entropy_bits

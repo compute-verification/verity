@@ -1,6 +1,6 @@
 """`served_pearlplus.sh` in toy trees whose steps each note their argv.
 
-Under PEARLPLUS_TIE: Pearl+'s piece over the window's own epoch, which serve-openai's Pearl+ arm (`serve_pearl`) retained
+Under PEARLPLUS_TIE: Pearl+'s piece over the window's own epoch, which serve-openai's Pearl+ (`serve_openai.scheme_settings`) retained
 in the serve dir's ``pearl/w<k>/``: the epoch taken as the piece's passes, the give-up on the card, ``retain
 --window-record W``, PEARLPLUS_TIE_CMD's window commit before the coin, and ``verify --tie W``.
 

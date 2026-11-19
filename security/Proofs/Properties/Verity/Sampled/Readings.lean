@@ -47,14 +47,14 @@ def slotRound (tables : Array String) : Slot → List Release → Frame → Prop
 
 /-- **What the play reveals for the round at the slot**: the link's message, or round `k`'s on table `t`'s rep `r`
 stream, in the record v2 reads. -/
-def slotReveal (tables : Array String) : Slot → Exchange → Option Claims.Msg
+def slotReveal (tables : Array String) : Slot → Exchange → Option Hash.Msg
   | .link => linkIn tables
   | .rep t r k => fun o => tables[t]?.bind fun a => roundIn (repStreamName a r.val) k o
 
 /-- **The readings at the layout `L`** of the tables `tables`, with the record the play's output reveals (`record`)
 and the record's digest (`recordDigest`). -/
-def readingAt {R : ℕ} (tables : Array String) (L : Fin R → Slot) (record : Exchange → Option Claims.Msg)
-    (recordDigest : Claims.Msg) : Reading R where
+def readingAt {R : ℕ} (tables : Array String) (L : Fin R → Slot) (record : Exchange → Option Hash.Msg)
+    (recordDigest : Hash.Msg) : Reading R where
   round j := slotRound tables (L j)
   reveal j := slotReveal tables (L j)
   record := record
@@ -71,8 +71,8 @@ theorem slotRound_opening {tables : Array String} {σ : Slot} {pre : List Releas
     exact ⟨i, s, n, h⟩
 
 /-- **Each round's reading picks only openings.** -/
-theorem readingAt_picks {R : ℕ} (tables : Array String) (L : Fin R → Slot) (record : Exchange → Option Claims.Msg)
-    (recordDigest : Claims.Msg) :
+theorem readingAt_picks {R : ℕ} (tables : Array String) (L : Fin R → Slot) (record : Exchange → Option Hash.Msg)
+    (recordDigest : Hash.Msg) :
     ∀ j pre fr, (readingAt tables L record recordDigest).round j pre fr → ∃ i s n, fr = .opening i s n :=
   fun _ _ _ h => slotRound_opening h
 
@@ -118,7 +118,7 @@ theorem slotRound_unique {tables : Array String} (ht : tables.toList.Nodup) {σ 
 
 /-- **No two rounds pick one frame** after one log, where the layout is injective and the tables distinct. -/
 theorem readingAt_unique {R : ℕ} {tables : Array String} {L : Fin R → Slot} (hL : Function.Injective L)
-    (ht : tables.toList.Nodup) (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {j j' : Fin R}
+    (ht : tables.toList.Nodup) (record : Exchange → Option Hash.Msg) (recordDigest : Hash.Msg) {j j' : Fin R}
     {pre : List Release} {fr : Frame} (h : (readingAt tables L record recordDigest).round j pre fr)
     (h' : (readingAt tables L record recordDigest).round j' pre fr) : j = j' :=
   hL (slotRound_unique ht h h')

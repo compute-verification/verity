@@ -10,9 +10,11 @@
 //   d_j   = SHA-512(S_j || rec[1024 j : 1024 (j + 1)])          S_j segment j's prefix block, j < s = R / 1024
 //   x_seg = SHA-512(Q || d_0 || ... || d_(s-1))                 Q the row-seg/v1 prefix block
 // The prefix blocks come from the host, as `verity.commitments.rowleaf` builds them. Each table's leaf u is then its
-// hm96-sha512 leaf of its x under its salt, ChaCha20 blocks 3u .. 3u + 2 of its key at its nonce (`rowtab::chacha20_block`),
-// and that leaf's frame leaf at rank u: `row_commit.cuh`'s salt digest, mask and `finish_leaf`. The call table's tree is
-// built here a level at a time (`row_commit.cuh`'s node and pad), the registered value's by `registered_rows.cuh`'s.
+// hm96-sha512 leaf of its x under its own salt, and that leaf's frame leaf at rank u: `row_commit.cuh`'s salt digest, mask
+// and `finish_leaf`. A salt is data: the caller hands each table a buffer of 192-byte salts, leaf u's at byte 192 u, no
+// header and no gaps (16-byte aligned on the device), its fresh bytes drawn before the launch; the two tables' buffers are
+// different bytes, and nothing here derives a salt or holds a key for one. The call table's tree is built here a level at
+// a time (`row_commit.cuh`'s node and pad), the registered value's by `registered_rows.cuh`'s.
 #pragma once
 #include "registered_rows.cuh"
 // ncp2.cuh (through registered_rows.cuh) and sha512.cuh (through row_commit.cuh) each define HD, ncp2's static inline on the
@@ -28,18 +30,17 @@ using rc::u64;
 constexpr u32 SEG = 1024;
 constexpr int MAX_SEGS = 8;
 constexpr int CALL = 0, REG = 1;
+constexpr u32 SALT = 192;
 // the two tables' schemas: row-seg/v1 is 22 bytes (SX 4), row/v2 18 (SX 0)
 #define ZYC_SEG_SCHEMA "hm96-sha512/row-seg/v1"
 #define ZYC_ROW_SCHEMA "hm96-sha512/row/v2"
 
-// What a launch's two tables fix, as the host gives it (`pouw_h1_registered_device.ZyArgs`): each table's domain id, salt key
-// and nonce, the hm96 key, the prefix blocks, and the records' count and bytes.
+// What a launch's two tables fix, as the host gives it (`pouw_h1_registered_device.ZyArgs`): each table's domain id, the
+// hm96 key, the prefix blocks, and the records' count and bytes.
 struct Args {
   uint8_t did[2][64];             // CALL's then REG's domain id
   uint8_t hm_key[256];            // the hm96 key
   uint8_t pre_v2[128], pre_seg_outer[128], pre_seg[MAX_SEGS][128];
-  uint32_t key[2][8];             // each table's ChaCha20 key words
-  uint64_t nonce[2];              // each table's u64 ChaCha20 nonce
   uint32_t n, R;                  // records and their bytes
 };
 
@@ -49,15 +50,12 @@ struct Plan {
   rc::NodeK node;                 // CALL's nodes
   rc::Hm96K hm;
   u64 mid_v2[8], mid_outer[8], mid_seg[MAX_SEGS][8];
-  u32 key[2][8];
-  u32 nonce[2][3];                // 0, then the nonce's low and high words
   u32 n, R, s;
 };
 
-// The plan of ``a``: 0, or -1 for what the functions here can't commit (R not 1024 to 8 KiB in whole segments, no record,
-// a salt counter past 32 bits).
+// The plan of ``a``: 0, or -1 for what the functions here can't commit (R not 1024 to 8 KiB in whole segments, no record).
 RC_HD int plan(const Args& a, Plan& p) {
-  if (a.n == 0 || a.R == 0 || a.R % SEG || a.R / SEG > (u32)MAX_SEGS || (u64)a.n > (1ull << 32) / 3) return -1;
+  if (a.n == 0 || a.R == 0 || a.R % SEG || a.R / SEG > (u32)MAX_SEGS) return -1;
   if (rc::frame_plan(a.did[CALL], (const uint8_t*)ZYC_SEG_SCHEMA, 22, p.leaf[CALL]) ||
       rc::frame_plan(a.did[REG], (const uint8_t*)ZYC_ROW_SCHEMA, 18, p.leaf[REG]) || rc::node_plan(a.did[CALL], p.node))
     return -1;
@@ -66,10 +64,6 @@ RC_HD int plan(const Args& a, Plan& p) {
   rc::midstate(a.pre_v2, p.mid_v2);
   rc::midstate(a.pre_seg_outer, p.mid_outer);
   for (u32 j = 0; j < p.s; ++j) rc::midstate(a.pre_seg[j], p.mid_seg[j]);
-  for (int t = 0; t < 2; ++t) {
-    for (int i = 0; i < 8; ++i) p.key[t][i] = a.key[t][i];
-    p.nonce[t][0] = 0, p.nonce[t][1] = (u32)a.nonce[t], p.nonce[t][2] = (u32)(a.nonce[t] >> 32);
-  }
   return 0;
 }
 
@@ -126,16 +120,19 @@ RC_HD void digests(const Plan& p, const uint8_t* rec, u64* x_v2, u64* x_seg) {
   C::compress(x_v2, w);
 }
 
-// Table ``t``'s leaf u from its row digest ``x``: b || c into ``bc`` (16 words) and the frame leaf into ``out``. ``T`` the
-// hm96 key's mask table (`rc::NibTab`, `rc::ByteTab`).
+// Table ``t``'s leaf u from its row digest ``x`` under the 192 bytes at ``salt`` (16-byte aligned on the device), read
+// once: b || c into ``bc`` (16 words) and the frame leaf into ``out``. ``T`` the hm96 key's mask table (`rc::NibTab`,
+// `rc::ByteTab`).
 template <int SX, class Tab, class C = rc::Sha>
-RC_HD void leaf(const Plan& p, int t, const Tab& T, u32 u, const u64* x, u64* bc, u64* out) {
-  u32 y[48], mk[16];
+RC_HD void leaf(const Plan& p, int t, const Tab& T, u32 u, const uint8_t* salt, const u64* x, u64* bc, u64* out) {
+  u32 mk[16];
   u64 Y[24], my[8], c[8];
-  RC_UNROLL1
-  for (u32 k = 0; k < 3; ++k) rowtab::chacha20_block(p.key[t], 3 * u + k, p.nonce[t], y + 16 * k);
   RC_UNROLL
-  for (int i = 0; i < 24; ++i) Y[i] = sx::be64(y[2 * i], y[2 * i + 1]);
+  for (int i = 0; i < 12; ++i) {
+    const rc::q4 v = rc::ldg16(salt + 16 * i);
+    Y[2 * i] = sx::be64(v.x, v.y);
+    Y[2 * i + 1] = sx::be64(v.z, v.w);
+  }
   rc::mask<false>(T, Y, mk);
   rc::mask_words(mk, my);
   rc::salt_digest<C>(p.hm, Y, c);
@@ -145,14 +142,15 @@ RC_HD void leaf(const Plan& p, int t, const Tab& T, u32 u, const u64* x, u64* bc
   rc::finish_leaf<SX, true, C>(p.leaf[t], p.hm, u, x, my, c, out, nullptr, nullptr);
 }
 
-// Record u at ``rec``: the call table's leaf into ``call_leaf``, the registered value's b || c into ``reg_bc`` and its leaf
-// into ``reg_leaf``.
+// Record u at ``rec``: the call table's leaf under the salt at ``call_salt`` into ``call_leaf``, the registered value's
+// b || c under the salt at ``reg_salt`` into ``reg_bc`` and its leaf into ``reg_leaf``.
 template <class Tab, class C = rc::Sha>
-RC_HD void record(const Plan& p, const Tab& T, u32 u, const uint8_t* rec, u64* call_leaf, u64* reg_bc, u64* reg_leaf) {
+RC_HD void record(const Plan& p, const Tab& T, u32 u, const uint8_t* rec, const uint8_t* call_salt,
+                  const uint8_t* reg_salt, u64* call_leaf, u64* reg_bc, u64* reg_leaf) {
   u64 x_v2[8], x_seg[8], bc[16];
   digests<C>(p, rec, x_v2, x_seg);
-  leaf<4, Tab, C>(p, CALL, T, u, x_seg, bc, call_leaf);
-  leaf<0, Tab, C>(p, REG, T, u, x_v2, reg_bc, reg_leaf);
+  leaf<4, Tab, C>(p, CALL, T, u, call_salt, x_seg, bc, call_leaf);
+  leaf<0, Tab, C>(p, REG, T, u, reg_salt, x_v2, reg_bc, reg_leaf);
 }
 
 // The call table's tree in ``levels`` (level 0 its W leaves and pads, then each level above, the root last: 2 W - 1 nodes,

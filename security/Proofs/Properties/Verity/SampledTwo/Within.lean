@@ -259,7 +259,7 @@ theorem closure_of_held {i : Spot.Run.Input} {it : Spot.Run.Interior} {h : SpotF
 theorem closure_of_formAccepts {C : CaseOf} {o : Verity.Exchange} {i : Spot.Run.Input} (hA : FormAccepts C o)
     (hi : inputOn C o = some i) : i.closure = none := by
   obtain ⟨k, hk, p, cm, e, pub, prof, ⟨h1, h2, h3⟩, hacc⟩ := hA
-  obtain ⟨-, c₂, ξ₂, r, i', run, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
+  obtain ⟨c₂, ξ₂, r, i', run, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
   obtain ⟨-, -, -, -, vs, rc, j₁, j₂, -, hieq, -, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
   have hik : inputOfCase k = some i' := by
     unfold inputOfCase

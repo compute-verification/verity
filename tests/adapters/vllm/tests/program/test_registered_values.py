@@ -123,11 +123,11 @@ def test_derive_registered_values_evaluates_like_the_constants_program():
 def test_target_profile_registered_values_is_declared_true_or_absent():
     from verity_vllm.program.frontend.target_profile import TargetProfile
 
-    assert "registered_values" not in TargetProfile().to_json()
-    assert TargetProfile(registered_values=True).to_json()["registered_values"] is True
+    assert "registered_values" not in TargetProfile.default().to_json()
+    assert TargetProfile.default().with_overrides(registered_values=True).to_json()["registered_values"] is True
     with pytest.raises(ValueError, match="None"):
-        TargetProfile(registered_values=False)
-    both = TargetProfile(registered_values=True, ir="boolean").to_json()
+        TargetProfile.default().with_overrides(registered_values=False)
+    both = TargetProfile.default().with_overrides(registered_values=True, ir="boolean").to_json()
     assert both["registered_values"] is True and both["ir"] == "boolean"
 
 

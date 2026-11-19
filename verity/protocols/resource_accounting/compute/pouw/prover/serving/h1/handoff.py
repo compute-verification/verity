@@ -4,9 +4,9 @@ GPU lease ends only when it exits.
 
 * **The window.** Once its last step is served, the serving process saves its `pouw_h1.H1Run` as it stands (`suspend`):
   its calls and their tables, its round log with each coin, its request entries and slot owners, its receipts, verdicts
-  and retained calls, its hm96 salt key, and its `pouw_h1_served.Served` (each call's registered tables, each linear's
-  weight codes), every tensor as its host copy. `resume` rebuilds it in another process, each round's request and slot
-  table again from the entries, owners, salt and key, and the window Program from its public shapes and key
+  and retained calls, its salts (`pouw_h1_prover.RunSalts`), and its `pouw_h1_served.Served` (each call's registered
+  tables, each linear's weight codes), every tensor as its host copy. `resume` rebuilds it in another process, each round's request and slot
+  table again from the entries, owners, salt and salts, and the window Program from its public shapes and key
   (`pouw_h1_served.declared`), and refuses a table whose root isn't the one its round's root is over, or a Program whose
   digest isn't the one its tables were registered under.
   It drops the run's listeners (the resuming process adds its own) and its opener (the salt is open). A window with the
@@ -22,7 +22,7 @@ GPU lease ends only when it exits.
   of the first step past the last served one. The sampling coin is the window's sample session's
   (`pouw_h1_window.DrawSession`), not yet opened at the hand-off: its reserve answer travels in the file, and the
   resuming process opens it through the gate it is given, withheld on the sample root, as the serving process would have.
-* **The file** holds the run's salt key, which nothing else persists, so it is the prover's scratch (mode 0600, outside a
+* **The file** holds the run's salts, which only the window's close keeps elsewhere, so it is the prover's scratch (mode 0600, outside a
   run's published directory), and its holder deletes it once the window has closed.
 """
 from __future__ import annotations
@@ -40,9 +40,9 @@ from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveComm
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import requests as RQ
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.tensors import Tensors, has_tensors, tensors
 
 #: a suspended window's hand-off state's schema, which `suspend` writes and `resume` refuses any other than
@@ -164,8 +164,8 @@ def resume(directory: str | Path, fd: int, gate: PHW.Gate | None = None) -> tupl
     rounds, draw, served = state.pop("rounds"), state.pop("draw"), state.pop("served", None)
     run = doc["type"].__new__(doc["type"])
     run.__dict__.update(state)
-    run._tables = {r: RQ.request_table(run.salt, r, run.rows, run.admitted.get(r, []), run._key) for r in tables}
-    run._slot_tables = {r: RQ.slot_table(run.salt, r, run.rows, run.owners.get(r, []), run._key) for r in slot_tables}
+    run._tables = {r: RQ.request_table(run.salt, r, run.rows, run.admitted.get(r, []), run._salts) for r in tables}
+    run._slot_tables = {r: RQ.slot_table(run.salt, r, run.rows, run.owners.get(r, []), run._salts) for r in slot_tables}
     for x in run.round_log:
         r = x["round"]
         if (run._tables[r].commitment.root.hex(), run._slot_tables[r].commitment.root.hex()) != (x["requests"], x["slots"]):

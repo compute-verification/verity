@@ -43,7 +43,7 @@ Each takes the circuit, the public file and the conditions `scopeGenH` gives fro
 
 namespace FlockSoundness.Discharge.FailClosed
 
-open Game Model Accounting Refine Audit Audit.Partition Flock
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition Flock
 open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Inst
 open scoped ENNReal
 
@@ -120,7 +120,7 @@ end Hidden
 
 section Zk
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec HiddenDec
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec HiddenDec
   Composed Placed StrictCR DecodeZL ZkHidden
 open FlockSoundness.Discharge.General (rsZG rsZG_computes rsZHJG rsZHJG_computes layShHJG rsShHJG)
 open FlockSoundness.Discharge.ZkReg (AcceptsZKR LiveAcceptsZKR OwnReadsHJ regPathsHJ acceptsZK_of_R
@@ -228,7 +228,7 @@ theorem zk_session_soundHJG
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveI I hs.typed (hs.parseHG hh hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
-        (SamplingDesign.subset n kd hkd).miss K₀ +
+        (Verity.SamplingDesign.subset n kd hkd).miss K₀ +
         ksAvgStrictZ (planZHJ dj y₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((instProg (circZ I) n).partition (outsOfI (circZ I) n)) (planZHJ dj y₀)
           (tabZHJ dj y₀)
@@ -288,7 +288,7 @@ theorem zk_session_soundHJRG
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveI I hs.typed (hs.parseHG hh hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
-        (SamplingDesign.subset n kd hkd).miss K₀ +
+        (Verity.SamplingDesign.subset n kd hkd).miss K₀ +
         ksAvgStrictZ (planZHJ dj y₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((instProg (circZ I) n).partition (outsOfI (circZ I) n)) (planZHJ dj y₀)
           (tabZHJ dj y₀)

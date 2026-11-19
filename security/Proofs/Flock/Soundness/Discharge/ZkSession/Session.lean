@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Table
 public import Proofs.Flock.Soundness.SessionBatch
-public import Proofs.Flock.Soundness.Audit.Extraction
+public import Proofs.Spot.Sampling.Extraction
 public import Proofs.Flock.Soundness.Lowering
 public import Proofs.Flock.Soundness.ExecSampleOS
 
@@ -20,7 +20,7 @@ its schedule and padded level 0, its link layout, its pads' layout and its inner
 (`CommittedPad`) with probability at most table `j`'s `padLinkError + (padRepError + εInner)²` (`TabZK.bound`), whatever
 the other tables do (`value_batch_getD_le`). Over every table at once the bound is the sum (`sessionZK_sound_any`).
 
-**The audit** (`analysisZK`, in the shape of `Audit.FlockBatched`): the verifier samples units by a sampling design `L`, plans the
+**The audit** (`analysisZK`, in the shape of `Spot.Sampling.FlockBatched`): the verifier samples units by a sampling design `L`, plans the
 `--zk` tables from the sample and the registration (`planZ`), and reads each sampled proof block from one table (`tab`). A sampled
 proof block incorrect in the committed transcript `Xc` is charged to its table: either the table's oracle is not `CommittedPad`
 (`ks`), or it is, and every satisfying padded witness near it decodes, on the unit's wires, to values other than `Xc`'s
@@ -34,7 +34,7 @@ averaged over the sample (`ksAvgZK`). The lowering comes from each sampled proof
 `Pr[accept ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks^zk + ε_bind`, with
 * `miss(K)`: `SamplingDesign.stratified`'s count curve at the live sample, under A3 (`uniform/io-getrandombytes`);
 * `ε_ks^zk = ksAvgZK`: per table `padLinkError + (padRepError + εInner)²`, proved here;
-* `ε_bind`: the named `BindSound` hypothesis, as `Audit.flock_batched_count` leaves it without `--zk`.
+* `ε_bind`: the named `BindSound` hypothesis, as `Spot.Sampling.flock_batched_count` leaves it without `--zk`.
 
 **Open guarantees** (what this statement does not cover, each a separate piece of work):
 * *The compiled `--zk` layer.* Here every oracle is a message. Under `--zk` the level-0 table, the pads (`Ch, Cμ`), the
@@ -59,7 +59,7 @@ averaged over the sample (`ksAvgZK`). The lowering comes from each sampled proof
 
 namespace FlockSoundness.Discharge.ZkSession
 
-open Game Model Accounting Audit
+open Game Model Accounting Spot.Sampling
 open scoped ENNReal NNReal
 
 /-- **A `--zk` table of a batched session**: the statement and its schedule, the padded level 0 (`t` padding columns,
@@ -221,7 +221,7 @@ theorem prob_batchedSessionZK (S : Finset (Fin n)) (R : Reg) (τ : Strategy (bat
 abbrev DecoderZK := (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) →
   Message F (tabOfZ planZ tab S R u).sch.k0 (tabOfZ planZ tab S R u).sch.level₀.logCols → (Fin C.N → Bool)
 
-/-- **The lowering, per `--zk` table** (`Audit.Partition.LoweringSoundB`'s form): a message packing a witness that
+/-- **The lowering, per `--zk` table** (`Spot.Sampling.Partition.LoweringSoundB`'s form): a message packing a witness that
 satisfies the statement of sampled proof block `u`'s table decodes to values on which `u` is correct. -/
 def LoweringSoundZK (decode : DecoderZK (C := C) planZ tab) : Prop :=
   ∀ S R u, u ∈ S → ∀ M, (tabOfZ planZ tab S R u).S.Satisfies

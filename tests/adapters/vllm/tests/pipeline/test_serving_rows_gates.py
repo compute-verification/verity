@@ -7,7 +7,6 @@ template is the word template's layout on the same rows, its reads inline, and i
 ``--zk`` takes (`one_stage.proofs.ks_form_why`)."""
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 
 import numpy as np
@@ -64,7 +63,7 @@ def _stage(tp, wt, out: Path, reads: str) -> Path:
     rows = {r: np.concatenate([vals[p] for p in ps], axis=1) for r, _s, _b, ps in in_rows}
     out.mkdir()
     st = CS.UnitStager(tp.fn, "unit/serving-rows", in_rows, out_rows, circuit=out / "circuit.txt", reads=reads)
-    st.stage(rows, out, hashlib.sha256(b"tests/verity/serving-rows-gates").digest())
+    st.stage(rows, out)
     return out
 
 

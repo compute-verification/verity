@@ -15,6 +15,7 @@ import threading
 from collections import deque
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import nullcontext
 from functools import partial
 from pathlib import Path
 from typing import Any, ClassVar
@@ -25,6 +26,7 @@ from verity.commitments.merkle import domain_message
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
+    HM96_SALT,
     activation_binding,
     hm96_kernel_constants,
     rows_domain,
@@ -77,20 +79,30 @@ def _put(t: Any, data: bytes) -> None:
     t[:len(data)].copy_(host.pin_memory() if t.is_cuda else host, non_blocking=t.is_cuda)
 
 
-def _constants(scheme: Any, device: Any, salt_key: bytes | None) -> Any:
-    """The pipeline's constant keys on the device: the prover's hm96 salt key and, from byte 256,
-    `audit.hm96_kernel_constants`."""
-    if salt_key is None or len(salt_key) != 32:
-        raise ValueError(f"{scheme.name}: -h3's trees take the prover's 32-byte hm96 salt key")
+def fresh_into(dst: Any, n: int, raw: int | None = None) -> None:
+    """`n` leaves' hm96 salts into device bytes `dst`, `HM96_SALT` bytes a leaf in leaf order, fresh from the operating
+    system and never derived; on raw stream `raw` where given (a lane's or a replay's), else the current stream.  The pinned
+    staging copy is torch's to keep alive until the copy is done."""
+    import torch
+    host = torch.frombuffer(bytearray(os.urandom(HM96_SALT * n)), dtype=torch.uint8)
+    if not dst.is_cuda:
+        dst[:host.numel()].copy_(host)
+        return
+    with torch.cuda.stream(torch.cuda.ExternalStream(raw, device=dst.device)) if raw is not None else nullcontext():
+        dst[:host.numel()].copy_(host.pin_memory(), non_blocking=True)
+
+
+def _constants(device: Any) -> Any:
+    """The pipeline's constant key on the device: `audit.hm96_kernel_constants`.  The trees' hm96 salts are no key's: each
+    tree's are bytes in its pipeline's ``salts_<tree>`` buffer (the kernel's `run.Pipeline.salts`)."""
     consts = hm96_kernel_constants()
-    t = _zeros(256 + len(consts), device)
-    _put(t, salt_key.ljust(256, b"\0") + consts)
+    t = _zeros(len(consts), device)
+    _put(t, consts)
     return t
 
 
 def _constant_keys(t: Any) -> dict[str, int]:
-    p = t.data_ptr()
-    return {"salt_key": p, "hm": p + 256}
+    return {"hm": t.data_ptr()}
 
 
 class _TorchStream:
@@ -467,10 +479,12 @@ def _linked(path: Path, kept: dict[str, tuple[Path, dict]], data: Callable[[], b
 def write_manifest(d: Path, head: dict, weights: dict[str, dict], matmuls: list[dict]) -> Path:
     """The pass's manifest, which `verify_run.py` reads: `head` (the scheme and its arguments, the epoch's coin commitment
     and its salt coin's opening, the salt, the live session that gave it if one did (`pouw_pearl_c_manifest.session_head`),
-    the records root, the commitment, the leaves and the tile tree), every weight (n, k, root, excluded B rows, its rows and
-    tree levels) and every matmul in order (index, m, k, n, weight, real rows, |K|, excluded A rows, A's root, rows and tree
-    levels).  Trees are the device's layout: level 0 padded to a power of two, then each level above it, 64 bytes a node; the
-    head also holds the prover's hm96 salt key.  It appears whole or not at all."""
+    the records root, the commitment, the leaves, the tile tree and the tiles' salts ``salts_t``), every weight (n, k, root,
+    excluded B rows, its rows, tree levels and row salts) and every matmul in order (index, m, k, n, weight, real rows, |K|,
+    excluded A rows, A's root, rows, tree levels and row salts, and its y's).  Trees are the device's layout: level 0 padded
+    to a power of two, then each level above it, 64 bytes a node; salts are 192 bytes a position in rank order, each file
+    the pass's own (mode 0600), and the manifest names them by path, size and sha256 alone.  It appears whole or not at
+    all."""
     path, part = d / "manifest.json", d / "manifest.json.part"
     _write(part, (json.dumps({**head, "weights": weights, "matmuls": matmuls}, indent=1) + "\n").encode(), digest=False)
     os.replace(part, path)

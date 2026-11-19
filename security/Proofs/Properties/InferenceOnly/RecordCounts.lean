@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.InferenceOnly.LeafWidths
 public import Proofs.Properties.InferenceOnly.LeafWidthsType
 public import Proofs.Properties.InferenceOnly.RecordBlockSize
+public import Proofs.Properties.InferenceOnly.RecordEdgesOf
 public import Proofs.Properties.InferenceOnly.RecordGates
 public import Proofs.Properties.InferenceOnly.RecordLaidOut
 public import Proofs.Properties.InferenceOnly.RecordLanding
@@ -27,5 +28,6 @@ a block's size is its units' gates (`RecordBlockSize`), where the wires rank the
 are a circuit's (`RecordWired`), and the gates a row's reads land on are together no wider than the row
 (`RecordLanding`). Of a Program the check reads, a gate inside a unit is computed and every gate has its place
 (`RecordGates`). What the decoder's width check leaves of a body, reference by reference, is `LeafWidths`, and
-what it computes of a type's leaves, leaf by leaf, `LeafWidthsType`.
+what it computes of a type's leaves, leaf by leaf, `LeafWidthsType`. That the wires a Program's root states are each of one digit, and
+none where no part of the root reads a node, is `RecordEdgesOf`.
 -/

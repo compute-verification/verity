@@ -132,7 +132,7 @@ the inner population's link table as its root and row count (`--rec-links`), whi
 (`linksOf`) and holds to the inner shape (`RecLinkPart.checkShape`), and the link table's part checks
 (`RecLinkPart.check`). -/
 structure RecX where
-  inner : Claims.Msg
+  inner : Hash.Msg
   recInner : ByteArray
   registration : Option ByteArray
   parts : List PartX
@@ -141,10 +141,10 @@ structure RecX where
 /-- The compiled statement's format string, its first field: `v4` carries the link table, and `decodeX` refuses `v3`. -/
 def XFORMAT : String := "flock-verify-recursion/v4"
 
-def PartX.encode (p : PartX) : Claims.Msg := encBytes ⟨p.base.encode.toArray⟩ ++ encBytes p.bindings
+def PartX.encode (p : PartX) : Hash.Msg := encBytes ⟨p.base.encode.toArray⟩ ++ encBytes p.bindings
 
 /-- **The compiled statement's canonical bytes.** -/
-def RecX.encode (w : RecX) : Claims.Msg :=
+def RecX.encode (w : RecX) : Hash.Msg :=
   encStr XFORMAT ++ encNat w.inner.length ++ w.inner ++ encBytes w.recInner ++
     encOpt encBytes w.registration ++ encList PartX.encode w.parts ++ encOpt (fun l => encBytes l.1 ++ encNat l.2) w.links
 
@@ -168,12 +168,12 @@ def RecX.read : Rd RecX := do
   pure ⟨inner, recInner, registration, parts, links⟩
 
 /-- **The compiled statement's decoder**: `RecX.read` on all of `x`, kept only when its encoding is `x`. -/
-def decodeX (x : Claims.Msg) : Option RecX :=
+def decodeX (x : Hash.Msg) : Option RecX :=
   match RecX.read.run x with
   | some (w, []) => if w.encode = x then some w else none
   | _ => none
 
-theorem decodeX_encode {x : Claims.Msg} {w : RecX} (h : decodeX x = some w) : w.encode = x := by
+theorem decodeX_encode {x : Hash.Msg} {w : RecX} (h : decodeX x = some w) : w.encode = x := by
   unfold decodeX at h
   split at h
   · split_ifs at h with he
@@ -181,7 +181,7 @@ theorem decodeX_encode {x : Claims.Msg} {w : RecX} (h : decodeX x = some w) : w.
     exact he
   · cases h
 
-theorem decodeX_injective {x y : Claims.Msg} {w : RecX} (hx : decodeX x = some w) (hy : decodeX y = some w) : x = y :=
+theorem decodeX_injective {x y : Hash.Msg} {w : RecX} (hx : decodeX x = some w) (hy : decodeX y = some w) : x = y :=
   (decodeX_encode hx).symm.trans (decodeX_encode hy)
 
 /-! ## Its parser -/
@@ -218,7 +218,7 @@ statement check passes (`Readable.Read.check`, `ProvedScope.check`), it carries 
 session whose record holds none (`RecSetup.innerSampled`, `noInnerSample`), and at one table the public file's header
 carries that sample (`sampleTiedB`): the deployed verifier refuses a record whose sample is not the session's (`Draw.check`,
 U1, in `Record.check`), and at one table the session's is the header's. -/
-def innerOk (inner : Claims.Msg) : Except String Unit :=
+def innerOk (inner : Hash.Msg) : Except String Unit :=
   match FlockDeploy.setupOf false inner with
   | some (s, spec, sts) => do
     s.read.check
@@ -280,7 +280,7 @@ statement's decode and set up (`RecVStar.innerOf`) and pass Flock's own setup an
 (`innerOk`), the verifier's own inner shape reads (`RecVStar.Inner.ofJson`), and there is one part per V* statement of
 that shape, whose circuit names the statement's message-round ports (`portsNamed`), the last part's RecCap's port
 `top` (`capPorted`). -/
-def readXPre (x : Claims.Msg) : Option XR := do
+def readXPre (x : Hash.Msg) : Option XR := do
   let w ← decodeX x
   let ri ← FlockDeploy.decode w.inner
   let shape ← (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" w.recInner)).toOption
@@ -296,13 +296,13 @@ def readXPre (x : Claims.Msg) : Option XR := do
 /-- **The compiled statement's reader**: `readXPre`, where each part's circuit is V\*'s statement's of its index
 (`partsVStar`). Each part's session refuses a part without (`RecSetup.checks` runs `RecVStar.checkStmt`, which runs
 `checkCircuit`), so a statement every part's session sets up at passes (`readX_of_sessions`). -/
-def readX (x : Claims.Msg) : Option XR := do
+def readX (x : Hash.Msg) : Option XR := do
   let r ← readXPre x
   let vs ← (RecVStar.statements r.shape).toOption
   if partsVStar r.shape r.w.parts vs = false then none
   pure r
 
-theorem readXPre_of_readX {x : Claims.Msg} {r : XR} (h : readX x = some r) : readXPre x = some r := by
+theorem readXPre_of_readX {x : Hash.Msg} {r : XR} (h : readX x = some r) : readXPre x = some r := by
   unfold readX at h
   cases hr : readXPre x with
   | none => simp [hr] at h
@@ -315,7 +315,7 @@ theorem readXPre_of_readX {x : Claims.Msg} {r : XR} (h : readX x = some r) : rea
       · simp [hr, hv, hp] at h
         rw [h]
 
-theorem readX_parts {x : Claims.Msg} {r : XR} (h : readX x = some r) :
+theorem readX_parts {x : Hash.Msg} {r : XR} (h : readX x = some r) :
     ∃ vs, RecVStar.statements r.shape = .ok vs ∧ partsVStar r.shape r.w.parts vs = true := by
   unfold readX at h
   cases hr : readXPre x with
@@ -332,7 +332,7 @@ theorem readX_parts {x : Claims.Msg} {r : XR} (h : readX x = some r) :
 
 /-- **`readX` refuses only what `partsVStar` refuses**: where `readXPre` reads and every part's circuit is V\*'s
 statement's of its index, `readX` reads the same. -/
-theorem readX_of_pre {x : Claims.Msg} {r : XR} (h : readXPre x = some r) {vs : Array VStar.Stmt}
+theorem readX_of_pre {x : Hash.Msg} {r : XR} (h : readXPre x = some r) {vs : Array VStar.Stmt}
     (hvs : RecVStar.statements r.shape = .ok vs) (hp : partsVStar r.shape r.w.parts vs = true) :
     readX x = some r := by
   unfold readX
@@ -357,23 +357,23 @@ count. -/
 def readOf (r : XR) : RecScope.Read := ⟨r.w.inner, filesOf r, r.shape, [], r.w.links⟩
 
 /-- The statement's reading, where `readX` reads it. -/
-def decodeR (x : Claims.Msg) : Option RecScope.Read := (readX x).map readOf
+def decodeR (x : Hash.Msg) : Option RecScope.Read := (readX x).map readOf
 
 /-- **The claims' parser**: the deployed parser (`RecScope.parseOf`) at `decodeR`: where the setup's checks accept the
 inner shape (`RecScope.accepts`), the inner statement's bytes, its dimensions as check 5 sets it up, no circuit
 commitment, the form off the verifier's own inner shape, and no sample (the V* records are run messages; their samples are
 refused at the run, `DeployScope`). -/
-def parse (x : Claims.Msg) : Option Claims.Recursion.CompiledStatement := RecScope.parseOf decodeR x
+def parse (x : Hash.Msg) : Option Claims.Recursion.CompiledStatement := RecScope.parseOf decodeR x
 
 /-- **The claims' scope check**: the deployed one (`RecScope.scopeCheckOf`) at `decodeR`, which reads only what the
 statement carries: the setup's checks accept its inner shape and the inner scope check takes its inner statement. -/
-def scopeCheck (ivScope : Claims.Msg → Bool) (x : Claims.Msg) : Bool := RecScope.scopeCheckOf ivScope decodeR x
+def scopeCheck (ivScope : Hash.Msg → Bool) (x : Hash.Msg) : Bool := RecScope.scopeCheckOf ivScope decodeR x
 
 /-- The inner statement's bytes. -/
-def xIOf (x : Claims.Msg) : Claims.Msg := ((parse x).map Claims.Recursion.CompiledStatement.inner).getD []
+def xIOf (x : Hash.Msg) : Hash.Msg := ((parse x).map Claims.Recursion.CompiledStatement.inner).getD []
 
 /-- The V* parts' count. -/
-def nS (x : Claims.Msg) : ℕ :=
+def nS (x : Hash.Msg) : ℕ :=
   match readX x with
   | some r => r.w.parts.length
   | none => 0
@@ -384,17 +384,17 @@ def nS (x : Claims.Msg) : ℕ :=
 shows them: each part's public file, the inner session's record, the challenger's live-coin part's transcript, and V*'s shared rows
 (`--rec-rows`), one set every part reads. -/
 structure Stage where
-  pub : Claims.Msg → List (Claims.Msg × Claims.Out) → ℕ → ByteArray
-  record : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArray
-  transcript : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArray
-  rows : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArray
+  pub : Hash.Msg → List (Hash.Msg × Claims.Out) → ℕ → ByteArray
+  record : Hash.Msg → List (Hash.Msg × Claims.Out) → ByteArray
+  transcript : Hash.Msg → List (Hash.Msg × Claims.Out) → ByteArray
+  rows : Hash.Msg → List (Hash.Msg × Claims.Out) → ByteArray
 
 /-- The staging rounds: one, whose message holds every part's public file, the inner session's record and V*'s shared
 rows. -/
-def kS (_ : Claims.Msg) : ℕ := 1
+def kS (_ : Hash.Msg) : ℕ := 1
 
 /-- **The staging message**: each part's public file, then the inner session's record, then V*'s shared rows. -/
-def encStage (pubs : List ByteArray) (record rows : ByteArray) : Claims.Msg :=
+def encStage (pubs : List ByteArray) (record rows : ByteArray) : Hash.Msg :=
   encList encBytes pubs ++ encBytes record ++ encBytes rows
 
 def readStage : Rd (List ByteArray × ByteArray × ByteArray) := do
@@ -404,19 +404,19 @@ def readStage : Rd (List ByteArray × ByteArray × ByteArray) := do
   pure (pubs, record, rows)
 
 /-- The staging message read back, on all of it. -/
-def decodeStage (m : Claims.Msg) : Option (List ByteArray × ByteArray × ByteArray) :=
+def decodeStage (m : Hash.Msg) : Option (List ByteArray × ByteArray × ByteArray) :=
   match readStage.run m with
   | some (p, []) => some p
   | _ => none
 
 /-- The staging message of rounds `ms`: their last message. -/
-def stageOf (ms : List (Claims.Msg × Claims.Out)) : Option (List ByteArray × ByteArray × ByteArray) :=
+def stageOf (ms : List (Hash.Msg × Claims.Out)) : Option (List ByteArray × ByteArray × ByteArray) :=
   decodeStage ((ms.getLast?.map Prod.fst).getD [])
 
 /-- **The staged inputs as the compiled verifier reads them** off the rounds `ms` before the sessions: each part's
 public file, the inner session's record and V*'s shared rows off the staging message, `ms`' last, and the challenger's
 live-coin part's transcript `tr` of the inner rounds before it; empty where the staging message doesn't read. -/
-def Stage.ofMsg (tr : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArray) : Stage where
+def Stage.ofMsg (tr : Hash.Msg → List (Hash.Msg × Claims.Out) → ByteArray) : Stage where
   pub _ ms s := ((stageOf ms).bind fun p => p.1[s]?).getD ByteArray.empty
   record _ ms := ((stageOf ms).map (·.2.1)).getD ByteArray.empty
   transcript x ms := tr x ms.dropLast
@@ -426,7 +426,7 @@ def Stage.ofMsg (tr : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArr
 `--rec-part s`, the part's bindings, the staged shared rows, the inner statement's files, the staged record and
 transcript, the registration, how the inner statement is set up (`innerFormOf`), the link table, and the inner
 statement's program. -/
-def partRaw (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (s : ℕ) (p : PartX) :
+def partRaw (r : XR) (st : Stage) (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out)) (s : ℕ) (p : PartX) :
     RecRaw where
   base := { p.base with publicFile := st.pub x ms s }
   recInner := some r.w.recInner
@@ -449,7 +449,7 @@ def partRaw (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Cla
 open Classical in
 /-- **Part `s`'s statement as staged** at the rounds `ms` before the sessions: its encoding, where that reads back as
 it (`decodeRec`), as every statement short of `2^64`-byte fields does; else none. -/
-noncomputable def staged (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (s : ℕ) : Claims.Msg :=
+noncomputable def staged (st : Stage) (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out)) (s : ℕ) : Hash.Msg :=
   match readX x with
   | some r =>
     match r.w.parts[s]? with
@@ -462,57 +462,57 @@ noncomputable def staged (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg ×
 /-- A V* statement's numbers as the compiled verifier checks them: `VO`'s rounds, and `deployZkRec`'s table error,
 `N₀`, weight, waits and truncation. No check reads the `--zk` leaf counts, left `0` here; the record's are
 `numsZk`'s. -/
-noncomputable def numsOf (xO : Claims.Msg) : Claims.Recursion.Nums :=
+noncomputable def numsOf (xO : Hash.Msg) : Claims.Recursion.Nums :=
   ⟨εtableO xO, N₀Oq xO, weightO xO, VO.k xO, Claims.Flock.Numbers.waits, Claims.Flock.Numbers.cap, 0, 0⟩
 
-theorem numsOf_N₀ (xO : Claims.Msg) : ((numsOf xO).N₀ : ℝ) = N₀O xO := N₀Oq_cast xO
+theorem numsOf_N₀ (xO : Hash.Msg) : ((numsOf xO).N₀ : ℝ) = N₀O xO := N₀Oq_cast xO
 
-theorem numsOf_k (xO : Claims.Msg) : (numsOf xO).k = ⌈4 * N₀O xO / Real.exp 1⌉₊ := by
+theorem numsOf_k (xO : Hash.Msg) : (numsOf xO).k = ⌈4 * N₀O xO / Real.exp 1⌉₊ := by
   rw [Claims.Recursion.Nums.k_eq, numsOf_N₀]
 
 open Classical in
 /-- Inner rounds at which part `s`'s staged statement sets up, when there are any. -/
-noncomputable def pick (st : Stage) (x : Claims.Msg) (s : ℕ) : List (Claims.Msg × Claims.Out) :=
+noncomputable def pick (st : Stage) (x : Hash.Msg) (s : ℕ) : List (Hash.Msg × Claims.Out) :=
   if h : ∃ ms, (setupO (staged st x ms s)).isSome then Classical.choose h else []
 
 /-- **Part `s`'s numbers at `x`**: those of its staged statement at inner rounds where it sets up, when there are
 any. -/
-noncomputable def nums (st : Stage) (x : Claims.Msg) (s : ℕ) : Claims.Recursion.Nums :=
+noncomputable def nums (st : Stage) (x : Hash.Msg) (s : ℕ) : Claims.Recursion.Nums :=
   numsOf (staged st x (pick st x s) s)
 
 open Classical in
 /-- **Part `s`'s V* statement**: the staged one where its numbers are `nums`', else the one at `pick`. -/
-noncomputable def vstarAt (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (s : ℕ) : Claims.Msg :=
+noncomputable def vstarAt (st : Stage) (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out)) (s : ℕ) : Hash.Msg :=
   if numsOf (staged st x ms s) = nums st x s then staged st x ms s else staged st x (pick st x s) s
 
 /-- **The V* statements of a run**, read off its inner rounds. -/
-noncomputable def vstar (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) : List Claims.Msg :=
+noncomputable def vstar (st : Stage) (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out)) : List Hash.Msg :=
   (List.range (nS x)).map (vstarAt st x ms)
 
 /-- **Part `s`'s numbers in the record**: `nums`', with the outer session's `--zk` leaf counts at its V* statement
 (`zl`: Flock's `n_L`, the leaves before the coins, and `n_B`, those of one sample's answers). -/
-noncomputable def numsZk (zl : Claims.Msg → ℕ × ℕ) (st : Stage) (x : Claims.Msg) (s : ℕ) : Claims.Recursion.Nums :=
+noncomputable def numsZk (zl : Hash.Msg → ℕ × ℕ) (st : Stage) (x : Hash.Msg) (s : ℕ) : Claims.Recursion.Nums :=
   { nums st x s with
     leaves := (zl (staged st x (pick st x s) s)).1
     coinLeaves := (zl (staged st x (pick st x s) s)).2 }
 
-theorem numsOf_vstarAt (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (s : ℕ) :
+theorem numsOf_vstarAt (st : Stage) (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out)) (s : ℕ) :
     numsOf (vstarAt st x ms s) = nums st x s := by
   unfold vstarAt
   split_ifs with h
   · exact h
   · rfl
 
-theorem vstar_getD (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) {s : ℕ} (hs : s < nS x) :
+theorem vstar_getD (st : Stage) (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out)) {s : ℕ} (hs : s < nS x) :
     (vstar st x ms).getD s [] = vstarAt st x ms s := by
   simp [vstar, List.getD_eq_getElem?_getD, hs]
 
-theorem vstar_length (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) :
+theorem vstar_length (st : Stage) (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out)) :
     (vstar st x ms).length = nS x := by
   simp [vstar]
 
 /-- **Every V* statement's rounds are its numbers'.** -/
-theorem vstar_map_k (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) :
+theorem vstar_map_k (st : Stage) (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out)) :
     (vstar st x ms).map VO.k = (List.range (nS x)).map fun s => (nums st x s).rounds := by
   unfold vstar
   rw [List.map_map]
@@ -523,7 +523,7 @@ theorem vstar_map_k (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Clai
 /-! ## The verifier -/
 
 /-- The inner rounds as a run shows them: each message with its coin's bytes. -/
-def innerPairs (kI : ℕ) (as : List Claims.Msg) (cs : List Coin) : List (Claims.Msg × Claims.Out) :=
+def innerPairs (kI : ℕ) (as : List Hash.Msg) (cs : List Coin) : List (Hash.Msg × Claims.Out) :=
   (as.take kI).zip ((cs.take kI).map fun c => .msg c.bytes)
 
 /-- The session of round `i` past the inner rounds, at the sessions' rounds `ks`: its index and its round in it. -/
@@ -544,7 +544,7 @@ theorem locate_lt : ∀ {ks : List ℕ} {i s j : ℕ}, locate ks i = some (s, j)
       exact ⟨by simpa using h1, by simpa using h2⟩
 
 /-- Whether a session's rounds `as`, `cs` at `xO` ended on a decision rather than a coin. -/
-def decided (xO : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : Bool :=
+def decided (xO : Hash.Msg) (as : List Hash.Msg) (cs : List Coin) : Bool :=
   match actO xO as cs with
   | .decide .. => true
   | _ => false
@@ -554,13 +554,13 @@ def decided (xO : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : Bool :=
 inductive RAct where
   | rej
   | coin (c : Coin)
-  | sess (s j : ℕ) (xO : Claims.Msg) (as : List Claims.Msg) (cs : List Coin)
+  | sess (s j : ℕ) (xO : Hash.Msg) (as : List Hash.Msg) (cs : List Coin)
 
 open Classical in
 /-- **The compiled verifier's step** at the prover's messages `as` and the coins `cs`: a statement that doesn't parse,
 refuse; an inner or staging round, answer its coin; past them, the round's V* session, refused where the part's staged
 numbers are not `x`'s, or, at its first round, where the session before it ended on a coin. -/
-noncomputable def ract (IV : Claims.Verifier Coin) (st : Stage) (x : Claims.Msg) (as : List Claims.Msg)
+noncomputable def ract (IV : Claims.Verifier Coin) (st : Stage) (x : Hash.Msg) (as : List Hash.Msg)
     (cs : List Coin) : RAct :=
   match readX x with
   | none => .rej
@@ -592,7 +592,7 @@ def sessOut (last atEnd : Bool) : Claims.Out → Claims.Out
   | .rej => .rej
 
 /-- The compiled verifier's next message. -/
-noncomputable def next (IV : Claims.Verifier Coin) (st : Stage) (x : Claims.Msg) (as : List Claims.Msg)
+noncomputable def next (IV : Claims.Verifier Coin) (st : Stage) (x : Hash.Msg) (as : List Hash.Msg)
     (cs : List Coin) : Claims.OC Claims.Out :=
   match ract IV st x as cs with
   | .rej => .ret .rej
@@ -609,7 +609,7 @@ noncomputable def V (IV : Claims.Verifier Coin) (st : Stage) : Claims.Verifier C
 /-! ## What the record reads off a run -/
 
 /-- An accepted session's answer, `.msg []` before the last session, as its verifier's `.acc`. -/
-def fixLast (last : Bool) (k : ℕ) (seg : List (Claims.Msg × Claims.Out)) : List (Claims.Msg × Claims.Out) :=
+def fixLast (last : Bool) (k : ℕ) (seg : List (Hash.Msg × Claims.Out)) : List (Hash.Msg × Claims.Out) :=
   if seg.length == k && !last then
     match seg.getLast? with
     | some (a, .msg []) => seg.dropLast ++ [(a, .acc)]
@@ -617,7 +617,7 @@ def fixLast (last : Bool) (k : ℕ) (seg : List (Claims.Msg × Claims.Out)) : Li
   else seg
 
 /-- A session's decision, off its last answer. -/
-def segOut (seg : List (Claims.Msg × Claims.Out)) : Claims.Out :=
+def segOut (seg : List (Hash.Msg × Claims.Out)) : Claims.Out :=
   match seg.getLast? with
   | some (_, .acc) => .acc
   | _ => .rej
@@ -625,7 +625,7 @@ def segOut (seg : List (Claims.Msg × Claims.Out)) : Claims.Out :=
 /-- **Session `s`'s view in a run's view**: its rounds' messages, after the inner and staging rounds and the earlier
 sessions' rounds at the V* statements read off the view's inner and staging rounds, its acceptance shown as its
 verifier's; accepted where the run is, else its last answer's decision. -/
-noncomputable def session (IV : Claims.Verifier Coin) (st : Stage) (x : Claims.Msg) (s : ℕ) (v : Claims.Seen) :
+noncomputable def session (IV : Claims.Verifier Coin) (st : Stage) (x : Hash.Msg) (s : ℕ) (v : Claims.Seen) :
     Claims.Seen :=
   let kI := IV.k (xIOf x) + kS x
   let xs := vstar st x (v.msgs.take kI)
@@ -637,19 +637,19 @@ noncomputable def session (IV : Claims.Verifier Coin) (st : Stage) (x : Claims.M
 /-- What the outer witnesses give: the inner session's messages, and the SHA-512 evaluations session `s`'s witness
 records. -/
 structure Readers where
-  msgs : Claims.Msg → List Claims.Flock.Wit → List Claims.Msg
-  calls : Claims.Msg → ℕ → Claims.Flock.Wit → List (Claims.Msg × Claims.Msg)
+  msgs : Hash.Msg → List Claims.Flock.Wit → List Hash.Msg
+  calls : Hash.Msg → ℕ → Claims.Flock.Wit → List (Hash.Msg × Hash.Msg)
 
 /-- **The inner session's view**: `IV`'s run at `H` of the inner messages the outer witnesses give, at the run's first
 `k_I` coins. -/
-def innerView (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (rd : Readers) (x : Claims.Msg) {k : ℕ}
+def innerView (H : Hash.Msg → Hash.Msg) (IV : Claims.Verifier Coin) (rd : Readers) (x : Hash.Msg) {k : ℕ}
     (r : Fin k → Coin) (ws : List Claims.Flock.Wit) : Claims.Seen :=
   (Claims.run H (Claims.replay (rd.msgs x ws)) IV (xIOf x) () fun i => Claims.coinSeq r i.val).seen
 
 /-- **The inputs of the SHA-512 evaluations the inner verifier makes on the inner messages the outer witnesses give**:
 its run's calls at `H`, at the coins `c` (a sample's, whose first are the inner session's). -/
-def innerCallsOf (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (rd : Readers) (x : Claims.Msg)
-    (c : ℕ → Coin) (ws : List Claims.Flock.Wit) : List Claims.Msg :=
+def innerCallsOf (H : Hash.Msg → Hash.Msg) (IV : Claims.Verifier Coin) (rd : Readers) (x : Hash.Msg)
+    (c : ℕ → Coin) (ws : List Claims.Flock.Wit) : List Hash.Msg :=
   (Claims.run H (Claims.replay (rd.msgs x ws)) IV (xIOf x) () fun i => c i.val).vLog.map Prod.fst
 
 /-! ## The reference prover -/
@@ -662,17 +662,17 @@ structure RefParts where
   TI : Type
   [ne : Nonempty TI]
   PI : Claims.Flock.Wit → Claims.Prover TI
-  digests : Claims.Flock.Wit → TI → List (Claims.Msg × Claims.Msg) → List (Fin 64 → UInt8)
-  wit : Claims.Flock.Wit → TI → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit
+  digests : Claims.Flock.Wit → TI → List (Hash.Msg × Hash.Msg) → List (Fin 64 → UInt8)
+  wit : Claims.Flock.Wit → TI → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit
 
 attribute [instance] RefParts.ne
 
 /-- **A stager**, `vstar stage`'s layout: each part's public file, the inner session's record and V*'s shared rows, at
 the statement, the inner rounds and the hm96 commit strings the staging message holds. -/
 structure Stager where
-  pub : Claims.Msg → List (Claims.Msg × Claims.Out) → List Claims.Msg → ℕ → ByteArray
-  record : Claims.Msg → List (Claims.Msg × Claims.Out) → List Claims.Msg → ByteArray
-  rows : Claims.Msg → List (Claims.Msg × Claims.Out) → List Claims.Msg → ByteArray
+  pub : Hash.Msg → List (Hash.Msg × Claims.Out) → List Hash.Msg → ℕ → ByteArray
+  record : Hash.Msg → List (Hash.Msg × Claims.Out) → List Hash.Msg → ByteArray
+  rows : Hash.Msg → List (Hash.Msg × Claims.Out) → List Hash.Msg → ByteArray
 
 /-- **What the deployment brings** besides the inner verifier: the challenger's live-coin part's transcript of the inner rounds (`tr`),
 the stager the record's `stage` reads (`hs`) and the number of commit strings it lays out (`nC`), the outer witnesses'
@@ -680,21 +680,21 @@ readers (`rd`), each V* statement's `--zk` leaf counts (`zl`: Flock's `n_L` and 
 `Flock.zk_deployZk_of_models` takes as its parameters), the reference prover's pieces (`ref`), and the inputs of the
 SHA-512 evaluations the V* setup makes outside the oracle at each V* statement (`setup`, which `Br` reads). -/
 structure Brings where
-  tr : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArray
+  tr : Hash.Msg → List (Hash.Msg × Claims.Out) → ByteArray
   hs : Stager
-  nC : Claims.Msg → ℕ
+  nC : Hash.Msg → ℕ
   rd : Readers
-  zl : Claims.Msg → ℕ × ℕ
+  zl : Hash.Msg → ℕ × ℕ
   ref : RefParts
-  setup : Claims.Msg → List Claims.Msg := fun _ => []
+  setup : Hash.Msg → List Hash.Msg := fun _ => []
 
 /-- The staged inputs the compiled verifier reads: the staging message's, at the challenger's live-coin part's transcript. -/
 def Brings.st (b : Brings) : Stage := Stage.ofMsg b.tr
 
 /-- **The staging message of a stager** at the inner rounds `ms` and the commit strings `cs`: its public file of each
 part, its inner session record, and its shared rows. -/
-def stageMsg (hs : Stager) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (cs : List Claims.Msg) :
-    Claims.Msg :=
+def stageMsg (hs : Stager) (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out)) (cs : List Hash.Msg) :
+    Hash.Msg :=
   encStage ((List.range (nS x)).map (hs.pub x ms cs)) (hs.record x ms cs) (hs.rows x ms cs)
 
 /-- A salt at the pinned hm96 key. -/
@@ -705,14 +705,14 @@ def maskOf (y : Salt) (i : Fin 64) : UInt8 := (Hm96.Default512.mask ⟨Array.ofF
 
 /-- **Commit strings, then `k` at them**: for each digest `d` and salt `y` of `ps`, in order, hm96's `b ‖ c` at the
 pinned key, `b = d ⊕ Φy` and `c = H(p_salt ‖ y)` the oracle's answer, appended to `cs`. -/
-def commitThen (k : List Claims.Msg → Claims.OC Claims.Msg) :
-    List ((Fin 64 → UInt8) × Salt) → List Claims.Msg → Claims.OC Claims.Msg
+def commitThen (k : List Hash.Msg → Claims.OC Hash.Msg) :
+    List ((Fin 64 → UInt8) × Salt) → List Hash.Msg → Claims.OC Hash.Msg
   | [], cs => k cs
   | (d, y) :: ps, cs => .query (Claims.toMsg Hm96.Default512.saltPrefix ++ List.ofFn y) fun c =>
       commitThen k ps (cs ++ [List.ofFn (fun i => d i ^^^ maskOf y i) ++ c])
 
 /-- A prover's history as the run shows its rounds, each answer a message. -/
-def asRounds (hist : List (Claims.Msg × Claims.Msg)) : List (Claims.Msg × Claims.Out) :=
+def asRounds (hist : List (Hash.Msg × Hash.Msg)) : List (Hash.Msg × Claims.Out) :=
   hist.map fun p => (p.1, .msg p.2)
 
 /-- The reference prover's tapes: the inner prover's, the staging salts, and the masked prover's of each V* session. -/
@@ -742,21 +742,21 @@ noncomputable def refP (IV : Claims.Verifier Coin) (b : Brings) (w : Claims.Floc
 `flock-circuit --zk` prover of a plain statement (`FlockDeploy.V true`'s, where `Assembled` takes its completeness as
 `hComplete`); on a V* session it runs at the recursive outer record `deployZkRec`, whose statements set up at the
 recursive setup (`setupO`), and is to be complete there, with error `δ`. -/
-def OuterRef (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) (δ : Claims.Msg → ℝ) : Prop :=
+def OuterRef (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) (δ : Hash.Msg → ℝ) : Prop :=
   FlockComplete.CompleteWith H (deployZkRec rel) FlockComplete.honestPZk δ
 
 /-! ## The completeness error -/
 
 /-- **A V\* session's zerocheck outer coins**: the masked verifier's (`FlockComplete.outerSlotsZk`) at the recursive
 setup. -/
-def outerSlotsO (x : Claims.Msg) : List (ℕ × ℕ) :=
+def outerSlotsO (x : Hash.Msg) : List (ℕ × ℕ) :=
   match setupO x with
   | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
       (List.range (sts[q / 2]!.m - 13)).map fun i => (FlockComplete.repStartZk spec sts q + 1, i)
   | none => []
 
 /-- **A V\* session's level-0 pair coins** (`FlockComplete.rhoSlotsZk` at the recursive setup). -/
-def rhoSlotsO (x : Claims.Msg) : List ℕ :=
+def rhoSlotsO (x : Hash.Msg) : List ℕ :=
   match setupO x with
   | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
       match Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m with
@@ -766,7 +766,7 @@ def rhoSlotsO (x : Claims.Msg) : List ℕ :=
   | none => []
 
 /-- **A V\* session's inner `β`s** (`FlockComplete.betaSlotsZk` at the recursive setup). -/
-def betaSlotsO (x : Claims.Msg) : List ℕ :=
+def betaSlotsO (x : Hash.Msg) : List ℕ :=
   match setupO x with
   | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
       match Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m with
@@ -777,13 +777,13 @@ def betaSlotsO (x : Claims.Msg) : List ℕ :=
   | none => []
 
 /-- `εO`: a V\* session's outer coins, `β`s and twice its pairs, over `2^128` (`FlockComplete.εZk`). -/
-noncomputable def εO (x : Claims.Msg) : ℝ :=
+noncomputable def εO (x : Hash.Msg) : ℝ :=
   ((outerSlotsO x).length + (betaSlotsO x).length + 2 * (rhoSlotsO x).length) / 2 ^ 128
 
 open Classical in
 /-- **The V\* statements the masked verifier can accept** against `H` (`FlockComplete.readyZk` at the recursive setup):
 one table, its setup against `H` the one at SHA-512, a sampled session, under `2^56` bytes, and the keyed coin tree. -/
-noncomputable def readyO (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
+noncomputable def readyO (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) : Bool :=
   match setupO x with
   | some (s, spec, sts) => sts.size == 1 && s.base.read.draw.isSome && decide (x.length < 2 ^ 56) &&
       decide (FlockDeploy.setupWith (Claims.hOf H) s.base.read = .ok (spec, sts)) && spec.coinTree.isSome
@@ -791,18 +791,18 @@ noncomputable def readyO (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool
 
 /-- **A V\* session's masked `δc`** against `H`: `εO` where the masked verifier can accept at the recursive setup, else
 `1` (`FlockComplete.δcZk`). -/
-noncomputable def δcO (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : ℝ := if readyO H x then εO x else 1
+noncomputable def δcO (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) : ℝ := if readyO H x then εO x else 1
 
 open Classical in
 /-- **The statements the compiled verifier can accept** against `H`: the inner session's plain verifier can accept the
 inner statement (`FlockComplete.ready`), and the masked verifier each part's V\* statement as `nums` reads it, the
 staged one at `pick`'s inner rounds (`readyO`). -/
-noncomputable def readyRec (st : Stage) (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
+noncomputable def readyRec (st : Stage) (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) : Bool :=
   FlockComplete.ready H (xIOf x) && decide (∀ s < nS x, readyO H (staged st x (pick st x s) s) = true)
 
 /-- **The compiled verifier's `δc`** against `H`: where it can accept (`readyRec`), the inner session's plain `δc`
 (`FlockComplete.δc`) plus each V\* session's masked one (`δcO`), a union bound over the sessions; else `1`. -/
-noncomputable def δcRec (st : Stage) (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : ℝ :=
+noncomputable def δcRec (st : Stage) (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) : ℝ :=
   if readyRec st H x then
     FlockComplete.δc H (xIOf x) + ∑ s ∈ Finset.range (nS x), δcO H (staged st x (pick st x s) s)
   else 1
@@ -812,7 +812,7 @@ noncomputable def δcRec (st : Stage) (H : Claims.Msg → Claims.Msg) (x : Claim
 /-- **The inputs of the SHA-512 evaluations the plain inner verifier's setup makes at the inner statement `xI`**: the
 calls its run logs at SHA-512, at the statement's own setup (`FlockDeploy.setupOf`), and none where it sets up none.
 A function of the statement alone, which no deployment choice moves. -/
-noncomputable def innerSetupIns (xI : Claims.Msg) : List Claims.Msg :=
+noncomputable def innerSetupIns (xI : Hash.Msg) : List Hash.Msg :=
   match FlockDeploy.setupOf false xI with
   | some (s, _, _) => ((FlockDeploy.setupM Claims.Hashes.oc s.read).run.eval FlockDeploy.sha512).2.map Prod.fst
   | none => []
@@ -823,7 +823,7 @@ one (`Hm96.Default512`: its salt prefix, and its salt mask `Φ` as 64 bytes). It
 reads the inner session as the deployed plain verifier's (`FlockComplete.δc`), the one the claims instantiate `IV`
 with; its inner setup's calls are the plain setup's at SHA-512 (`innerSetupIns`), and its inner verifier's calls on the
 inner messages `IV`'s run's at the coins it is handed (`innerCallsOf`). -/
-noncomputable def deployRec (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings) :
+noncomputable def deployRec (IV : Claims.Verifier Coin) (ivScope : Hash.Msg → Bool) (b : Brings) :
     Claims.Recursion.Deploy Coin where
   V := V IV b.st
   parse := parse
@@ -847,27 +847,27 @@ noncomputable def deployRec (IV : Claims.Verifier Coin) (ivScope : Claims.Msg �
   innerSetup := innerSetupIns
   innerCalls H := innerCallsOf H IV b.rd
 
-theorem xI_deployRec (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings) (x : Claims.Msg) :
+theorem xI_deployRec (IV : Claims.Verifier Coin) (ivScope : Hash.Msg → Bool) (b : Brings) (x : Hash.Msg) :
     Claims.Recursion.xI (deployRec IV ivScope b) x = xIOf x := rfl
 
 /-! ## The verifier's steps against `H` -/
 
 section Steps
 
-variable {IV : Claims.Verifier Coin} {st : Stage} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+variable {IV : Claims.Verifier Coin} {st : Stage} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
 
-theorem next_rej (H : Claims.Msg → Claims.Msg) (h : ract IV st x as cs = .rej) :
+theorem next_rej (H : Hash.Msg → Hash.Msg) (h : ract IV st x as cs = .rej) :
     (next IV st x as cs).eval H = (.rej, []) := by
   simp only [next, h, Claims.OC.eval]
 
 /-- **An inner or staging round is answered by its coin, with no query.** -/
-theorem next_coin (H : Claims.Msg → Claims.Msg) {c : Coin} (h : ract IV st x as cs = .coin c) :
+theorem next_coin (H : Hash.Msg → Hash.Msg) {c : Coin} (h : ract IV st x as cs = .coin c) :
     (next IV st x as cs).eval H = (.msg c.bytes, []) := by
   simp only [next, h, Claims.OC.eval]
 
 /-- **A session's round is the outer verifier's**, its answer as `sessOut` gives it and its oracle log the outer
 verifier's. -/
-theorem next_sess (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg} {cs' : List Coin}
+theorem next_sess (H : Hash.Msg → Hash.Msg) {s j : ℕ} {xO : Hash.Msg} {as' : List Hash.Msg} {cs' : List Coin}
     (h : ract IV st x as cs = .sess s j xO as' cs') :
     (next IV st x as cs).eval H =
       (sessOut (s + 1 == nS x) (j + 1 == VO.k xO) ((nextO xO as' cs').eval H).1, ((nextO xO as' cs').eval H).2) := by
@@ -875,7 +875,7 @@ theorem next_sess (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Msg} 
 
 /-- **A session's round is part `s`'s, at its staged statement**: `s` is a part, `j` a round of its outer verifier,
 and the V* statement is the one the prover staged, read off the inner and staging rounds. -/
-theorem ract_sess {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg} {cs' : List Coin}
+theorem ract_sess {s j : ℕ} {xO : Hash.Msg} {as' : List Hash.Msg} {cs' : List Coin}
     (h : ract IV st x as cs = .sess s j xO as' cs') :
     s < nS x ∧ j < VO.k xO ∧ xO = staged st x (innerPairs (IV.k (xIOf x) + kS x) as cs) s := by
   unfold ract at h
@@ -902,7 +902,7 @@ theorem ract_sess {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg} {cs' : L
     simp [vstarAt, not_not.1 hn]
 
 /-- **The compiled verifier accepts a run only at the last session's last round**, where the outer verifier accepts. -/
-theorem next_acc (H : Claims.Msg → Claims.Msg) (h : ((next IV st x as cs).eval H).1 = .acc) :
+theorem next_acc (H : Hash.Msg → Hash.Msg) (h : ((next IV st x as cs).eval H).1 = .acc) :
     ∃ s j xO as' cs', ract IV st x as cs = .sess s j xO as' cs' ∧ s + 1 = nS x ∧ j + 1 = VO.k xO ∧
       ((nextO xO as' cs').eval H).1 = .acc := by
   cases hr : ract IV st x as cs with
@@ -927,9 +927,9 @@ exactly when this is the session's last round and the deployed `verity-verify-pr
 inputs, `Zk.verify` at the statement's recursive setup (`actO_decide`, `RecIns.setup`), accepts the record and proof
 files with the custody checks and the verdict's last refusals; else it refuses. The statement is the part's as the prover
 staged it (`ract_sess`). -/
-theorem next_decide_sha512 {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg} {cs' : List Coin} {i : Ins}
+theorem next_decide_sha512 {s j : ℕ} {xO : Hash.Msg} {as' : List Hash.Msg} {cs' : List Coin} {i : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (h : ract IV st x as cs = .sess s j xO as' cs')
+    {mids : List (Hash.Msg × Coin)} {f : Final} (h : ract IV st x as cs = .sess s j xO as' cs')
     (ha : actO xO as' cs' = .decide i spec sts link c₁ mids f) :
     ((next IV st x as cs).eval sha512).1 = (if s + 1 = nS x then .acc else .msg []) ↔
       j + 1 = VO.k xO ∧ Zk.verify spec (tabsOf sts) f.record f.proofs = .ok () ∧

@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT))
 from benchmarks.serving_cost import run as S  # noqa: E402
 from verity_bench import kit  # noqa: E402
 
-MINIFY, EXACT, CAPTURE, PRICE, MEASURED, UNITS, REPLAY, CC = (f"r20261118-0000{i}0-000{i}" for i in range(1, 9))
+MINIFY, EXACT, CAPTURE, PRICE, MEASURED, UNITS, REPLAY, CC, PROFILE = (f"r20261118-0000{i}0-000{i}" for i in range(1, 10))
 #: (rows, keys): (base present, base cut, a call with every row failed, present then cut), µs over the fast kernel
 SHAPES = {(6, 20000): (7.0, 12.0, 100.0, 22.0), (6, 131072): (12.0, 16.0, 1000.0, 50.0),
           (24, 20000): (10.0, 15.0, 100.0, 34.0), (24, 131072): (24.0, 28.0, 1000.0, 110.0)}
@@ -73,12 +73,12 @@ def lifetime(out: Path, name: str, seconds: float, mode: str | None, decode: tup
         (p / "result.json").write_text(json.dumps({"duration": seconds}))
     (d / "meta.json").write_text(json.dumps({"left_out": 1, "env": {"VERITY_DSA_TOPK": mode} if mode else {},
                                              "server_argv": ["--tensor-parallel-size", "8"]}))
-    steps = [{"kind": "header", "config": {"speculative": {"num_speculative_tokens": 5}}},
-             {"kind": "step", "step": 0, "rows": [["p", 0, 4000]] if prefill else [], "t": 101.0}]
-    steps += [{"kind": "step", "step": i + 1, "rows": [[f"r{j}", start, 6] for j in range(n)], "t": 102.0 + i}
+    steps = [{"kind": "header", "num_speculative_tokens": 5},
+             {"kind": "step", "step": 0, "rows": [[0, 4000]] if prefill else [], "t": 101.0}]
+    steps += [{"kind": "step", "step": i + 1, "rows": [[start, 6] for _ in range(n)], "t": 102.0 + i}
               for i, (n, start) in enumerate(decode)]
     (d / "server").mkdir()
-    with gzip.open(d / "server" / "step_trace.1.jsonl.gz", "wt") as f:
+    with gzip.open(d / "server" / "steps.1.jsonl.gz", "wt") as f:
         f.write("".join(json.dumps(r) + "\n" for r in steps))
 
 
@@ -285,6 +285,7 @@ def test_capture_checks_the_exact_run_it_names(store, tmp_path, capsys):
     ({"minify": None}, True, "names no minify run"),
     ({"card": None}, True, "names no member parts .*`card` None"),
     ({"card": "NVIDIA H200"}, True, "names no member parts"),
+    ({"card": "h900"}, True, "fingerprint's `card`: 0 GPU card files under .* have `short` 'h900': the shorts are .*'h200'"),
     ({}, False, "holds no arm's lifetimes"),
 ])
 def test_capture_refuses_a_record_that_breaks_the_contract(store, tmp_path, fingerprint, lifetimes, why):
@@ -292,6 +293,29 @@ def test_capture_refuses_a_record_that_breaks_the_contract(store, tmp_path, fing
     store[CAPTURE] = capture_record(tmp_path, lifetimes=lifetimes, **fingerprint)
     with pytest.raises(SystemExit, match=f"capture run {CAPTURE}'s .*{why}"):
         S.main(["capture", CAPTURE])
+
+
+def test_profile_prints_a_passed_profile_records_cost_and_what_is_under_it(store, tmp_path, capsys):
+    fp = {"profile": "coding-agent", "version": 1, "digest": "54ef9ec108314bdd", "model": "glm53", "card": "h200",
+          "stock": "prod", "feature": "prod-record"}
+    member = "glm-5.3-h200-prod-record-over-prod-coding-agent"
+    held = [{"name": "vllm/serving-cost-glm53", "value": 11.11, "unit": "percent", "member": member,
+             "ci95": [11.1, 11.12], "label": "our extra card time a token", "cost_unit": "lifetime",
+             "reading": "ours slower"},
+            {"name": "ttft_p50_s", "value": 0.2, "unit": "s", "member": member, "under": "vllm/serving-cost-glm53"}]
+    store[PROFILE] = record(tmp_path, PROFILE, S.PROFILE_KIND, fingerprint=fp, measurements=held)
+    assert S.main(["profile", PROFILE]) == 0
+    said = capsys.readouterr().out.splitlines()
+    assert said == [f"profile run {PROFILE}: a passed profile record, coding-agent v1 (54ef9ec10831), prod-record "
+                    "beside prod on glm53.h200",
+                    f"  our extra card time a token, {member}: +11.11% [+11.10, +11.12], a lifetime its unit: ours slower",
+                    f"  beside it: ttft_p50_s {member} 0.2 s"]
+    store[PROFILE] = record(tmp_path / "none", PROFILE, S.PROFILE_KIND, fingerprint=fp, measurements=held[1:])
+    with pytest.raises(SystemExit, match="holds no figure of our extra card time a token"):
+        S.main(["profile", PROFILE])
+    store[PROFILE] = record(tmp_path / "failed", PROFILE, S.PROFILE_KIND, status="failed", fingerprint=fp)
+    with pytest.raises(SystemExit, match=f"run {PROFILE}'s profile record did not pass"):
+        S.main(["profile", PROFILE])
 
 
 def test_a_path_in_place_of_a_run_id_is_refused(store, tmp_path):
@@ -484,3 +508,12 @@ def test_price_refuses_arms_the_capture_did_not_serve(store, tmp_path):
     with pytest.raises(SystemExit, match="the capture served none of prod-record-bisect: give --ours an arm it served"):
         S.main(["price", "--capture", CAPTURE, "--minify", MINIFY, "--ours", "prod-record-bisect", "--out",
                 str(tmp_path / "price")])
+
+
+def test_price_refuses_a_capture_that_holds_no_public_steps_and_names_the_converter(store, tmp_path):
+    store[MINIFY], store[CAPTURE] = minify_record(tmp_path), capture_record(tmp_path)
+    for f in (store[CAPTURE] / "out").glob(S.STEPS):
+        f.unlink()
+    with pytest.raises(SystemExit, match=f"capture run {CAPTURE} holds no public steps .*which `benchmarks/serve_tax/"
+                                         "serve_tax.py steps-of-trace RUN_OUT"):
+        price(tmp_path / "price")

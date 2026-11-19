@@ -68,7 +68,7 @@ theorem rep_div_two (i : ℕ) (r : Fin 2) : (2 * i + r) / 2 = i := by
   have := r.isLt
   omega
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128) (i : ℕ) (r : Fin 2)
 
 /-- **Table `i`'s file shape is V\*'s**, at extra claims the link's points give. -/

@@ -46,8 +46,9 @@ sys.path.insert(0, str(HERE))
 
 import stop_audit as SA  # noqa: E402
 import two_stage as TS  # noqa: E402
+from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import audit as A, docket as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import audit as A  # noqa: E402
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS  # noqa: E402
 
 SERVE = "stop-audit-small"
@@ -105,7 +106,7 @@ def unlogged(handoff: Mapping[str, Any], check: Any = None) -> dict[str, Any]:
     check = TS.template_fn(pub["check"]) if check is None else check
     other = {**handoff["record"], "previous": "5a" * 64}
     record = BS.stop_record(pub, check, BS.Stop.of(pub["stop"]), s["record"]["law"], other)
-    assert record["previous"] == R.digest(other) != handoff["registration"]
+    assert record["previous"] == DD.digest(other) != handoff["registration"]
     return {**handoff, "stop": {**s, "record": record}}
 
 

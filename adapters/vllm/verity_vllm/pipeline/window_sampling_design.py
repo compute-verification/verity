@@ -7,13 +7,13 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
+from verity.commitments import randomness as RND
 
 
 def sampling_design_of(sampling_design: str | Mapping[str, Any]) -> dict[str, Any]:
     """The partition file's sampling design as one-stage's sampling design object; a rate's is its kind and ``rate`` until `population` resolves it."""
-    kind = (s := DR.parse_strata_rate(sampling_design)) and ("work" if s[0] else "stratified") or DR.parse_rate(sampling_design) and "subset"
-    return {"law": kind, "rate": sampling_design} if kind else DR.parse_design(sampling_design) if isinstance(sampling_design, str) else dict(sampling_design)
+    kind = (s := RND.parse_strata_rate(sampling_design)) and ("work" if s[0] else "stratified") or RND.parse_rate(sampling_design) and "subset"
+    return {"law": kind, "rate": sampling_design} if kind else RND.parse_design(sampling_design) if isinstance(sampling_design, str) else dict(sampling_design)
 
 
 def work_table_of(sampling_design: Mapping[str, Any], counts: Mapping[str, int], transfer_gates: Sequence[str] = ()) -> dict[str, Any] | None:

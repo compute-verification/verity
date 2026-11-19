@@ -328,7 +328,7 @@ theorem fld_of_gv {j : Json} {k : String} {v : Json} (h : j.getObjVal? k = .ok v
 def eraseG : String → ℕ → Json → Json := fun _ _ => mapKey "coins" fun _ => .null
 
 /-- The fill's round map, at the erased value `j`. -/
-def fillG (spec : SessionSpec) (mids : List (Claims.Msg × Coin)) (j : Json) : String → ℕ → Json → Json :=
+def fillG (spec : SessionSpec) (mids : List (Hash.Msg × Coin)) (j : Json) : String → ℕ → Json → Json :=
   fun name k r => match mids[streamOffset spec j name + k]? with
     | some (_, c) => mapKey "coins" (fun _ => hexArr (c.vals (nOf r))) r
     | none => r
@@ -336,7 +336,7 @@ def fillG (spec : SessionSpec) (mids : List (Claims.Msg × Coin)) (j : Json) : S
 theorem eraseCoins_eq (j : Json) : eraseCoins j = mapRounds eraseG (setPoints .null j) := rfl
 
 /-- **The coin substitution as five key maps**: the link's points and the streams' rounds erased, then filled. -/
-theorem coinSubJ_eq (spec : SessionSpec) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (j : Json) :
+theorem coinSubJ_eq (spec : SessionSpec) (c₁ : Coin) (mids : List (Hash.Msg × Coin)) (j : Json) :
     coinSubJ spec c₁ mids j =
       mapKey "streams" (mapArr (mapStream (fillG spec mids (eraseCoins j))))
         (mapKey "link" (mapKey "points" fun _ => .arr ((pointsOf spec c₁).map hexArr))
@@ -512,7 +512,7 @@ theorem same_link_points (spec : SessionSpec) (h : ByteArray → ByteArray) (rb 
 /-- **A rep stream at its coin offset**, each round's coin opening to the round's coins, is alike itself with its
 rounds' coins erased and filled. -/
 theorem same_stream_fill (spec : SessionSpec) (h : ByteArray → ByteArray) (rb : Array ByteArray)
-    (q : (ℕ × ℕ × String) × Array Round) (mids : List (Claims.Msg × Coin)) (E : Json) (off : ℕ)
+    (q : (ℕ × ℕ × String) × Array Round) (mids : List (Hash.Msg × Coin)) (E : Json) (off : ℕ)
     (hoff : streamOffset spec E q.1.2.2 = off)
     (hmid : ∀ (k : ℕ) (hk : k < q.2.size), ∃ m c, mids[off + k]? = some (m, c) ∧ c.vals q.2[k].n = q.2[k].coins) :
     Same (streamObj spec h rb q) (mapStream (fillG spec mids E) (mapStream eraseG (streamObj spec h rb q))) := by
@@ -559,7 +559,7 @@ theorem same_stream_fill (spec : SessionSpec) (h : ByteArray → ByteArray) (rb 
 coins from the live coins, where each rep stream's round `k` takes, at its offset, a coin that opens to its coins, the
 value is alike the record. -/
 theorem same_coinSub_recordObj (spec : SessionSpec) (h : ByteArray → ByteArray) (rb : Array ByteArray) (c₁ : Coin)
-    (S : Array (Array Round)) (proofs : Array ByteArray) (mids : List (Claims.Msg × Coin))
+    (S : Array (Array Round)) (proofs : Array ByteArray) (mids : List (Hash.Msg × Coin))
     (hR : Good (recordObj spec h rb (pointsOf spec c₁) S proofs))
     (hss : S.size = spec.repStreams.size) (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup)
     (hmid : ∀ (i : ℕ) (hi : i < S.size) (k : ℕ) (hk : k < S[i].size), ∃ m c,

@@ -21,7 +21,7 @@ _LOADED: dict[str, list[str]] = {}
 def load(scope: str | tuple[str, ...] = "registry", _package: ModuleType | None = None,
          _errors: list[str] | None = None) -> tuple[DefinitionTable, list[str]] | None:
     """(REGISTRY, import errors) with every module of each package `scope` names (`SCOPES`) imported, its subpackages' too, in
-    `pkgutil.walk_packages` order (`quarantine`, `tests` and this module aside), each package once a process.  A module that fails
+    `pkgutil.walk_packages` order (`tests` and this module aside), each package once a process.  A module that fails
     to import is named in the errors, never read as "not registered".
 
     ``_package`` and ``_errors`` are its own descent into a subpackage, which imports that package's modules in name order, each
@@ -34,7 +34,7 @@ def load(scope: str | tuple[str, ...] = "registry", _package: ModuleType | None 
     if _package is not None:
         errors = _errors
         for m in sorted(pkgutil.iter_modules(_package.__path__), key=lambda m: m.name):
-            if m.name in ("quarantine", "tests") or f"{_package.__name__}.{m.name}" == __name__:
+            if m.name == "tests" or f"{_package.__name__}.{m.name}" == __name__:
                 continue
             try:
                 # the literal prefix is how tests/dead_code_census.py sees every registry module reached from here

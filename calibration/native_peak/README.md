@@ -1,6 +1,6 @@
 # native_peak: a GPU's measured dense peak
 
-Verity takes a card's peak rates from its data sheet (`calibration/census/hardware.json`). This benchmark measures what
+Verity takes a card's peak rates from its data sheet (`calibration/hardware/cards/`, else `calibration/census/hardware.json`'s vendor figure for a card with no card file). This benchmark measures what
 the card really sustains on dense tensor-core work for one datatype, beside the data-sheet peak for that card and
 datatype. It is the native anchor that overhead figures such as `overhead.vs_native_peak` compare against. Nothing
 here is a proof.
@@ -27,4 +27,4 @@ It writes `DIR/result.json`, whose top level holds the measured and the data-she
 sustained and timed, and how each product is checked.
 
 `tool.py` is the evidence store's declaration of the result, and the store's tool registry loads it by name. The
-tests hold the data-sheet table to every census line and check the result document without a GPU.
+tests hold each line read from a card to `verity.device`'s rate and every other line to its census line, and check the result document without a GPU.

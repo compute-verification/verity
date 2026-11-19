@@ -17,8 +17,6 @@
     {"file": "verity_vllm/program/frontend/relabel.py", "kind": "refusal-class", "symbol": "<module>", "detail": "RelabelRefused"},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "canonical-json", "symbol": "canonical_bytes", "detail": "verity.circuits.codec.canonical_json"},
     {"file": "verity_vllm/commit/committer/acquired.py", "kind": "refusal-class", "symbol": "<module>", "detail": "SkipRefused"},
-    {"file": "verity_vllm/compiler/advice_check.py", "kind": "refusal-class", "symbol": "<module>", "detail": "_Refused"},
-    {"file": "verity_vllm/compiler/cache_step_v3.py", "kind": "refusal-class", "symbol": "<module>", "detail": "Refused"},
-    {"file": "verity_vllm/compiler/compile_slice_v4.py", "kind": "refusal-class", "symbol": "<module>", "detail": "Refused"}
+    {"file": "verity_vllm/compiler/advice_check.py", "kind": "refusal-class", "symbol": "<module>", "detail": "_Refused"}
   ]
 }

@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from verity_vllm.pipeline import advice as ADV
+from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_seal as ss
 from verity_vllm.records.commit_run import CommitRun
@@ -55,7 +56,7 @@ def test_a_sealed_rows_sha512_window_opens_as_a_deferred_commits_row_dir(tmp_pat
     rc, d, s = _sealed(tmp_path)
     assert s["commit_scheme"] == "rows-sha512" and len(rc.run_root) == DR.SERVED_ROOT and "error" not in s
     v = json.loads((d / "commit" / "verdict.json").read_text())
-    assert v["run_root"] == rc.run_root.hex() and v["replay_deferred"]["bundles"][0]["manifest_sha256"] == s["manifest_sha256"]
+    assert v["run_root"] == rc.run_root.hex() and v["replay_deferred"]["bundles"][0]["manifest_sha256"] == RB.open_bundle(s["bundle"])["manifest_sha256"]
     r = DR.of_record(s["bundle"], str(d))
     assert r.run.run_root == rc.run_root and r.ctx["served_window"]["window"] == 5 and r.ctx["code"] == "c0de"
     assert r.programs == {} and r.arrivals == {"alice": 0, "cmpl-2": 0} and r.ctx["tokens"] == {"alice": [7, 9], "cmpl-2": [8]}
@@ -570,7 +571,7 @@ def test_a_cap_that_is_not_a_bit_count_is_refused(cap):
 # ------------------------------------------------------------------------------------------------- in the seal's own process
 
 #: what a seal's result says of when and how long, which two seals of the same execution block needn't share
-TIMES = ("manifest_sha256", "seal_s", "phases_s", "engine_s")
+TIMES = ("seal_s", "phases_s", "engine_s")
 
 
 @pytest.fixture(scope="module")

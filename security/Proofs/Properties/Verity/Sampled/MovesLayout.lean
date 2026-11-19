@@ -194,8 +194,8 @@ round and its `N` live rounds from `Live.rounds_eq`. The roots (`firstStop_rootB
 the same first opening. -/
 theorem ReachesOff.movesOf {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
-    (reg : Option Claims.Msg → A.Reg)
-    (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
+    (reg : Option Hash.Msg → A.Reg)
+    (record : Exchange → Option Hash.Msg) (recordDigest : Hash.Msg) {rd : Reading A.rounds}
     (hrd : rd = readingAt A.tables A.layout record recordDigest) {σ : Strategy (V.game θ F c)}
     {D : Decoders A.rounds A.Reg} (hD : D = decodersAt reg A.layout) {label : String} {after : ByteArray} {m : ℕ}
     {κ : A.Ω → Fin m → Fin 512 → Bool} (hm : _root_.Spot.Challenger.MAX_COINS ≤ m)
@@ -259,8 +259,8 @@ play the sampled verdict accepts and whose log v2's check read is the device's, 
 those whose sample answers `after`. -/
 theorem movesReach_layout {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
-    (reg : Option Claims.Msg → A.Reg)
-    (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
+    (reg : Option Hash.Msg → A.Reg)
+    (record : Exchange → Option Hash.Msg) (recordDigest : Hash.Msg) {rd : Reading A.rounds}
     (hrd : rd = readingAt A.tables A.layout record recordDigest) {σ : Strategy (V.game θ F c)}
     {D : Decoders A.rounds A.Reg} (hD : D = decodersAt reg A.layout) {label : String} {after : ByteArray} {m : ℕ}
     {κ : A.Ω → Fin m → Fin 512 → Bool} (hm : _root_.Spot.Challenger.MAX_COINS ≤ m)

@@ -52,8 +52,7 @@ def _registered(g) -> bool:
 
 def reference(j) -> dict:
     """`Spot.SecondWindow.piece`'s reading of ``j``, then `second_window.failures` on it."""
-    if not isinstance(j, dict) or not isinstance(j.get("allow"), bool):
-        raise D.Reject("allow is not a boolean")
+    j = j if isinstance(j, dict) else {}
     g = j.get("given") if isinstance(j.get("given"), dict) else {}
     if not isinstance(g.get("dockets"), list):
         raise D.Reject("given.dockets is not a list")
@@ -77,7 +76,7 @@ def reference(j) -> dict:
     given = W.Given(dockets=tuple(g["dockets"]), boundary=g.get("boundary"),
                     verified=tuple(SS.Checked(v["header"], v.get("registered"), v.get("draw"), v.get("tables")) for v in vs),
                     refs=tuple(refs), ref_reads=tuple(ref_reads))
-    fs = W.failures(j["allow"], given, record, records, served, regs, j["root"], lambda c: c in logged, sample, statements)
+    fs = W.failures(given, record, records, served, regs, j["root"], lambda c: c in logged, sample, statements)
     return {"failures": json.loads(json.dumps([[c, d] for c, d in fs]))}
 
 
@@ -135,8 +134,7 @@ def joins(draw) -> dict:
                  st.one_of(st.none(), st.integers(0, 2)), max_size=2))}
         reg = draw(st.sampled_from([None, {"ports": {draw(st.sampled_from(["x", "z", "w"])): e}}]))
         statements.append({"template": m[1], "header": {}, "draw": {}, "registered": reg})
-    return {"allow": draw(st.booleans()), "given": {"dockets": dockets, "boundary": None, "verified": [], "refs": [],
-                                                    "ref_reads": []},
+    return {"given": {"dockets": dockets, "boundary": None, "verified": [], "refs": [], "ref_reads": []},
             "record": record, "records": records, "served": [[windows[r], f"c{r}"] for r in range(n)],
             "registrations": regs, "root": ROOT, "logged": [f"c{r}" for r in range(n)], "sample": sample,
             "statements": statements}
@@ -182,7 +180,7 @@ def instances(draw, broken: bool = False) -> dict:
     elif change == "docket":
         j["given"]["dockets"] = j["given"]["dockets"][:-1]
     if broken:
-        key = draw(st.sampled_from(["allow", "given", "record", "records", "served", "registrations", "root", "logged",
+        key = draw(st.sampled_from(["given", "record", "records", "served", "registrations", "root", "logged",
                                     "sample", "statements"]))
         j[key] = draw(JUNK)
     return j
@@ -211,4 +209,4 @@ def test_both_sides_reach_every_code_the_generator_aims_at(pieces):
     port = D.Port(PIECES, "second_window", counting, INPUTS, package=PACKAGE, of_record="lean")
     D.run(port, examples=1500, server=pieces)
     assert {"ranks-window", "ranks-run", "ranks-members", "ranks-units", "ranks-wires", "ranks-reads", "second-read",
-            "second-order", "second-cover", "two-stage-form"} <= seen, sorted(seen)
+            "second-order", "second-cover"} <= seen, sorted(seen)

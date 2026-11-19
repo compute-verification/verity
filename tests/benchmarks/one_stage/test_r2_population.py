@@ -10,9 +10,11 @@ from pathlib import Path
 
 import pytest
 
+from verity.circuits import population as PN
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.types import Value as Bits
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
@@ -35,8 +37,8 @@ def _ports(program, query) -> dict:
 
 def _own(population, mixed: bool):
     if mixed:
-        return P.mixed_population_program(population), P.template_instances_query([d for d, _ in population])
-    return P.population_program(*population[0]), P.template_instance_query(population[0][0])
+        return PN.mixed_population_program(population), P.template_instances_query([d for d, _ in population])
+    return PN.population_program(*population[0]), P.template_instance_query(population[0][0])
 
 
 @pytest.mark.parametrize(("population", "mixed", "counts"), [
@@ -53,7 +55,7 @@ def test_r2_registers_another_nonempty_partition(population, mixed, counts):
     assert P.units(other, query) == sum(counts)
     assert P.digest(P.partition(other, query)) != P.digest(P.partition(own, query))
     ports = _ports(own, query)
-    rec = R.record(own, query, SAMPLING_DESIGN, SCHEME, [{"port": p, "root": "ab" * 64, **w} for p, w in ports.items()], WINDOW,
+    rec = DK.record(own, query, SAMPLING_DESIGN, SCHEME, [{"port": p, "root": "ab" * 64, **w} for p, w in ports.items()], WINDOW,
                    leaf_layer="ee" * 64)
     assert R.check(rec, own, query, SAMPLING_DESIGN, SCHEME, ports, leaf_layer="ee" * 64).ok
     v = R.check(rec, other, query, SAMPLING_DESIGN, SCHEME, ports, leaf_layer="ee" * 64)
@@ -74,7 +76,7 @@ VALUES = (("row-table/0/k8", 4, 16), ("input-ids/0", 2, 16))
 def test_r2s_partition_takes_the_windows_values(population):
     """A window whose program takes values (a served window's tables, ahead of its templates' parameters): R2's other
     partition takes the same values as the same parameters, and its partition is still another."""
-    own = P.mixed_population_program(population, values=VALUES)
+    own = PN.mixed_population_program(population, values=VALUES)
     query = P.template_instances_query([d for d, _ in population])
     other = R2.program(population, mixed=True, values=VALUES)
     assert other.fn.bindings["values"] == own.fn.bindings["values"] == VALUES

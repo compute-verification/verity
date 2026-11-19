@@ -22,6 +22,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO, Protocol, TypeVar
 
+from verity.protocols.resource_accounting.memory.poub.scheme import BANDWIDTH
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, receipts, wire
 from verity.protocols.resource_accounting.memory.poub.verifier import coins as C
@@ -131,14 +132,14 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     (`side_of(period, node, key, local)`, which the caller that starts the run hands in, the runtime's `Side.of`; on
     this node by default, as a process of its own, with its own coins) and the prover here. With `poub-protocol`
     among the period's tools the Lean verifier answers and must agree with the Python; it writes
-    `out/bandwidth.case.json` (onsite's bandwidth case) and `out/bandwidth.json`. Which host ran each party, and whether
+    `out/bandwidth.case.json` (onsite's bandwidth case) and `out/bandwidth.json`. Which machine ran each party, by its party, and whether
     `trusted-device`'s premise holds (`verifier_party.placement`), go in `bandwidth.json` and in an accepted answer's
     profile (`placement`); `bandwidth.json` names the term its `eps` leaves out beside it (`ledger.NAMED_TERMS`)."""
     from verity.protocols.resource_accounting.memory.poub.verifier import ledger, verifier_party
 
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools = doc.get("tools") or {}
-    party = side_of(doc, node, "bandwidth", verifier_party.command())
+    party = side_of(doc, node, BANDWIDTH.name, verifier_party.command())
     store = records(period_dir)
     t = time.monotonic()
     period, side = period_with(party, verifier_party.request_of(node), store)
@@ -156,7 +157,7 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     (out / "bandwidth.case.json").write_text(json.dumps(period.case, sort_keys=True))
     (out / "bandwidth.json").write_text(json.dumps({"answer": answer_, "eps": str(period.eps), "lean": lean,
                                                     "named": ledger.NAMED_TERMS,
-                                                    "placement": where | {"reported_host": side["host"]},
+                                                    "placement": where,
                                                     "q_bytes": period.public("q_bytes"), "seconds": seconds,
                                                     "store_bytes": len(store)}, sort_keys=True, indent=1))
     return answer_

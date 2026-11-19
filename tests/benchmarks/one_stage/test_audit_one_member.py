@@ -15,6 +15,7 @@ real audit's files with the session on the window's challenger, where every othe
 for the prover, the verifier or the coins."""
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -24,11 +25,22 @@ import pytest
 
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.periods import interface as IF
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R, draw as D, proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.prover import docket as DK
+from verity.commitments import randomness as RND
 
 import test_audit_two_members as T
 from test_audit_two_members import binaries  # noqa: F401 -- the fixture, under the name the test takes
 from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # beside a5, on the path `test_audit_two_members` put there
+
+
+def fixed(w, seed: int = 0) -> dict[str, bytes]:
+    """Salts a test hands in for every port a commit takes in full (`rows.full_ports`), so two commits of one period are
+    one commitment."""
+    from verity.commitments.periods import rows
+
+    w = getattr(w, "window", w)
+    return {p: hashlib.shake_256(f"{seed} {p}".encode()).digest(n * rows.SALT_BYTES) for p, n in rows.full_ports(w).items()}
 
 pytestmark = pytest.mark.slow
 
@@ -41,13 +53,13 @@ RATE = "rate:1/1"
 
 def _window(d: Path) -> Path:
     t, k = T.TEMPLATES[0], T.KS[0]
-    win = IF.Window(IF.Circuit("one-member", ((t, N),)), T.RUN, D.parse_design(DESIGN), 4)
+    win = IF.Window(IF.Circuit("one-member", ((t, N),)), T.RUN, RND.parse_design(DESIGN), 4)
     rng = np.random.default_rng(0)
     x, w = (rng.integers(-128, 128, (N, k)).astype(np.int8) for _ in range(2))
     sx, sw = ((np.abs(rng.standard_normal(N)) / 127).astype(np.float32) for _ in range(2))
     ins = [x.view(np.uint8), sx.view(np.uint32), w.view(np.uint8), sw.view(np.uint32)]
     win.record(t, ins, [np.asarray(evaluate_batch(t, *ins, kernel="reference"), dtype=np.uint16)])
-    win.write(win.close(salt_key=bytes(32)), d, {"label": "test"}, registrar=R)
+    win.write(win.close(salts_of=fixed(win)), d, {"label": "test"}, registrar=DK)
     return d
 
 
@@ -56,7 +68,7 @@ def test_one_member_on_the_windows_challenger_session_is_accepted_by_the_compile
     one tree with no closing round, as the driver's check reads it; and Lean's check on the case accepts, crediting the
     drawn unit as proved."""
     window = _window(tmp_path / "window")
-    assert T.RA.verifier_window(window, RATE, None)[0].law == D.parse_design(DESIGN)
+    assert T.RA.verifier_window(window, RATE, None)[0].law == RND.parse_design(DESIGN)
     rc, row, out, said = T._audit(tmp_path, window, binaries, "--deployed-key", more={"FLOCK_CHALLENGER": "1"},
                                   design=RATE)
     assert rc == 0 and row.get("ok") is True, said

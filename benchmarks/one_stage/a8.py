@@ -70,9 +70,12 @@ from verity.protocols.resource_accounting.memory.poub.prover import audit_prover
 from verity.protocols.resource_accounting.memory.poub.prover import opening_prover  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, opening as C3, receipts  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.receipts import Plan  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
-from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
+from verity.circuits.codec import canonical_json, descriptor_id, encode_program  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
+from verity.circuits.population import wired_population_program  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.commitments.gates import block_check as BC  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import circuit as FC, class_statement as CS  # noqa: E402
@@ -155,8 +158,7 @@ def stager(S, n: int, out: Path) -> SimpleNamespace:
     """The statement's program and partition (one template, n proof blocks) and its one stager (the circuit lowered once)."""
     defn = bind(BC.BlockOpeningCheck, **vars(S))
     rows = BC.opening_rows(S)
-    program = P.mixed_population_program([(defn, n)])
-    query = P.template_instances_query([defn])
+    program, query = wired_population_program([(defn, n)], {"templates": [[descriptor_id(defn), n]]})
     part = P.partition(program, query)
     n_all, ranges = P.units(program, query), P.ranges(program, query)
     out.mkdir(parents=True, exist_ok=True)
@@ -174,9 +176,9 @@ def stager(S, n: int, out: Path) -> SimpleNamespace:
                            lower_s=lower_s, partition_file=out / "partition.json", program_file=out / "program.json")
 
 
-def stage(sg: SimpleNamespace, S, args: list[dict], name: str, plan_salts: list[bytes], salt_key: bytes) -> dict:
+def stage(sg: SimpleNamespace, S, args: list[dict], name: str, plan_salts: list[bytes]) -> dict:
     """One round's statement on the stager: proof block i's plan row under ``plan_salts[i]``, every other row under a salt
-    from the prover's ``salt_key``."""
+    fresh."""
     t0 = time.time()
     st, n, out = sg.st, len(args), sg.out / f"stage-{name}"
     k_log = st.meta["k_log"]
@@ -186,10 +188,9 @@ def stage(sg: SimpleNamespace, S, args: list[dict], name: str, plan_salts: list[
     words = [BC.row_words(sg.rows, a) for a in args]
     data = {r: np.asarray([w[r] for w in words], dtype=np.uint16) for r, _b, _ps in sg.rows}
     set_name = f"{st.iset.name}-{name}"
-    iset = SimpleNamespace(**{**vars(st.iset), "name": set_name})
-    salts = FC.stage_salts(iset, 0, n, st.ports, salt_key)
+    salts = FC.stage_salts(0, n, st.ports)
     salts["plan"] = list(plan_salts)
-    got = st.stage(data, out, salt_key, salts=salts, indices=range(sg.base, sg.base + n), set_name=set_name)
+    got = st.stage(data, out, salts=salts, indices=range(sg.base, sg.base + n), set_name=set_name)
     (out / "inst.bin").rename(out / f"inst-{n}.bin")
     (out / "pub.bin").rename(out / f"pub-{n}.bin")
     (out / "tables").mkdir(exist_ok=True)
@@ -258,12 +259,12 @@ def audit_round(a, sg, m: dict, rs, c3, draws, out: Path, port: int) -> dict:
         want[f"{name}/{p_}"] = w
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
-    sampling_design = D.parse_design(f"stratified:{n}")
+    sampling_design = RND.parse_design(f"stratified:{n}")
     win = {"kind": "stand-in", "of": "the openings of one window of a remote bandwidth session (a8.py), on a "
                                       f"{rs.store.registration.blocks}-chunk registered store",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "link": "opening.plan_link: the plan row by its b || c to the verifier's own copy of the pass's plan"}
-    rec = R.record(sg.program, sg.query, sampling_design, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
+    rec = DK.record(sg.program, sg.query, sampling_design, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, sg.program, sg.query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json(),
               f"statement/{name}": a7.statement_checks(m, rec, want)}
@@ -489,10 +490,9 @@ def main() -> int:
     sg = stager(S, len(draws), out)
     summary["lower_s"] = sg.lower_s
     log(f"stager: {sg.lower_s} s, k_log {sg.st.meta['k_log']}, pin {sg.st.pin[:16]}")
-    salt_key = hashlib.sha512(secret + b"row salts").digest()[:32]
     members = {}
     for name, (r, st_, ds, wits, ref) in prepared.items():
-        m = stage(sg, S, wits, name, [c3.plan_salts[d.step] for d in ds], salt_key)
+        m = stage(sg, S, wits, name, [c3.plan_salts[d.step] for d in ds])
         if [BC.verdict(w) for w in m["oks"]] != ref:
             raise SystemExit(f"{name}: the staged verdict words {m['oks']} are not the reference's {ref}")
         members[name] = (m, r, ds, ref)

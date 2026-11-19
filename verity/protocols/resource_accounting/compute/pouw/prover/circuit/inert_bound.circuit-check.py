@@ -15,14 +15,14 @@ def _pouw_roots() -> list[Any]:
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import inert_bound, pc8
     from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Shape
     from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
-    from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import H100
 
     out = [*inert_bound.templates(256, "sm120").values()]
     out += [t for r, t in inert_bound.unit_templates(256, "sm120").items()
             if r in ("strip", "word", "row_digest", "row_tally", "tile", "tally")]
     out += [bind(inert_bound.Pc8CapRowDigestDef, TN=64), bind(inert_bound.Pc8CapRowTallyDef, K=256, TN=64)]
     split = pc8.Shape(1, 256, 1, tile=(1, 1), dev="sm120", hidden=True, cap=True, row_rho=250)
-    served = inert_bound.served(C.PearlC(forming="v1", device=DEVICES["h100"], hashing="h3"), Shape(64, 256, 6144))
+    served = inert_bound.served(C.PearlC(forming="v1", device=H100, hashing="h3"), Shape(64, 256, 6144))
     return out + [inert_bound.templates(256, "sm120", row_rho=250)["tile"], inert_bound.unit_templates(256, "sm120", row_rho=250)["tally"],
                   pc8.call(split), pc8.check(split),
                   inert_bound.unit_templates(served.k, served.dev, served.tile, served.n, row_rho=served.row_rho)["tally"]]

@@ -75,7 +75,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- `FlockDeploy.act`'s step at a session's setup: the last message of tag `0`, answer its coin; of tag `1`, after the
 link message, decide; anything else, refuse. -/
-def actAt (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (as : List Claims.Msg) (cs : List Coin) : Act :=
+def actAt (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (as : List Hash.Msg) (cs : List Coin) : Act :=
   match as.getLast?, cs.getLast? with
   | some (0 :: _), some c => .coin c
   | some a, _ =>
@@ -88,35 +88,35 @@ def actAt (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (as : List Claims.Ms
   | none, _ => .rej
 
 /-- **The outer verifier's step**: no recursive setup, refuse; else `FlockDeploy.act`'s step at it. -/
-def actO (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : Act :=
+def actO (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin) : Act :=
   match setupO x with
   | none => .rej
   | some (s, spec, sts) => actAt s.base spec sts as cs
 
 /-- The verifier's own inner shape (`--rec-inner`) at the statement, where it reads. -/
-def innerOfO (x : Claims.Msg) : Option RecVStar.Inner := (insO x).bind (·.inner)
+def innerOfO (x : Hash.Msg) : Option RecVStar.Inner := (insO x).bind (·.inner)
 
 /-- Whether the statement is a recursive session (`--rec-part`, `--rec-bindings` or `--rec-rows`), where it reads. -/
-def recOfO (x : Claims.Msg) : Bool :=
+def recOfO (x : Hash.Msg) : Bool :=
   match insO x with
   | some s => s.part.isSome || s.bindings.isSome || s.rows.isSome
   | none => false
 
 /-- Check 5's source at the statement (`RecCoins.filesInput`'s, with the inner session's record), where it reads. -/
-def srcOfO (x : Claims.Msg) : Option RecCoins.Source := (insO x).bind (·.src)
+def srcOfO (x : Hash.Msg) : Option RecCoins.Source := (insO x).bind (·.src)
 
 /-- **The verdict's last refusals**, as `verifyCmd` calls them: `RecSetup.fullSample` at the record's sample (a recursive
 session without the verifier's inner shape, `RecSetup.noInner`, and under that shape a V* session whose record's sample is
 not every unit of its population), then `RecSetup.innerSampled` (a session over an inner session whose record holds no
 sample), then `RecSetup.denseOnly` (a session at a holo or sparse inner shape, which `RecursiveKS` doesn't cover). -/
-def fullSampleO (x : Claims.Msg) (f : Final) : Bool :=
+def fullSampleO (x : Hash.Msg) (f : Final) : Bool :=
   (do
     RecSetup.fullSample (innerOfO x) (recOfO x) (Witness.recordDraw f.record) f.record
     RecSetup.innerSampled (srcOfO x)
     RecSetup.denseOnly (innerOfO x)).isOk
 
 /-- Where the verdict's last refusals pass, so does `RecSetup.denseOnly`, the last of them. -/
-theorem fullSampleO_denseOnly {x : Claims.Msg} {f : Final} (h : fullSampleO x f = true) :
+theorem fullSampleO_denseOnly {x : Hash.Msg} {f : Final} (h : fullSampleO x f = true) :
     RecSetup.denseOnly (innerOfO x) = .ok () := by
   unfold fullSampleO at h
   cases hd : RecSetup.denseOnly (innerOfO x) with
@@ -128,7 +128,7 @@ theorem fullSampleO_denseOnly {x : Claims.Msg} {f : Final} (h : fullSampleO x f 
       simp [ha, hb, hd, bind, Except.bind, Except.isOk, Except.toBool] at h
 
 /-- Where the verdict's last refusals pass, so does `RecSetup.fullSample`, the first of them. -/
-theorem fullSampleO_fullSample {x : Claims.Msg} {f : Final} (h : fullSampleO x f = true) :
+theorem fullSampleO_fullSample {x : Hash.Msg} {f : Final} (h : fullSampleO x f = true) :
     (RecSetup.fullSample (innerOfO x) (recOfO x) (Witness.recordDraw f.record) f.record).isOk = true := by
   unfold fullSampleO at h
   cases hf : RecSetup.fullSample (innerOfO x) (recOfO x) (Witness.recordDraw f.record) f.record with
@@ -139,7 +139,7 @@ theorem fullSampleO_fullSample {x : Claims.Msg} {f : Final} (h : fullSampleO x f
 
 /-- The outer verifier's next message: at a decision, the decision, then the verdict's last refusals (`fullSampleO`), which
 make no SHA-512 call. -/
-def nextO (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : Claims.OC Claims.Out :=
+def nextO (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin) : Claims.OC Claims.Out :=
   match actO x as cs with
   | .rej => .ret .rej
   | .coin c => .ret (.msg c.bytes)
@@ -154,21 +154,26 @@ def VO : Claims.Verifier Coin where
     | none => 1
   next := nextO
 
+/-- The outer verifier has at least one message, the last. -/
+theorem VO_k_pos (x : Hash.Msg) : 0 < VO.k x := by
+  simp only [VO]
+  split <;> omega
+
 /-! ## Its steps against `H` -/
 
-theorem nextO_rej (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem nextO_rej (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     (h : actO x as cs = .rej) : (nextO x as cs).eval H = (.rej, []) := by
   simp only [nextO, h, Claims.OC.eval]
 
-theorem nextO_coin (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem nextO_coin (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {c : Coin} (h : actO x as cs = .coin c) : (nextO x as cs).eval H = (.msg c.bytes, []) := by
   simp only [nextO, h, Claims.OC.eval]
 
 /-- At a decision, the step is the decision's, refused where the verdict's last refusals fail, with the decision's oracle
 log. -/
-theorem nextO_decide_eval (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem nextO_decide_eval (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
+    {mids : List (Hash.Msg × Coin)} {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
     (nextO x as cs).eval H =
       (if fullSampleO x f then ((outOf (decision true s x link c₁ mids f)).eval H).1 else .rej,
         ((outOf (decision true s x link c₁ mids f)).eval H).2) := by
@@ -176,8 +181,8 @@ theorem nextO_decide_eval (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as :
 
 /-- **The decision itself against `H`**: it accepts exactly when Flock's setup with SHA-512 replaced by `H` is `.ok`,
 and at its session `Zk.verifyWith (hOf H)` and the custody checks are `.ok`. -/
-theorem outO_decide (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (s : Ins) (link : List ByteArray × List ByteArray)
-    (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : Final) :
+theorem outO_decide (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) (s : Ins) (link : List ByteArray × List ByteArray)
+    (c₁ : Coin) (mids : List (Hash.Msg × Coin)) (f : Final) :
     ((outOf (decision true s x link c₁ mids f)).eval H).1 = .acc ↔
       ∃ spec' sts', FlockDeploy.setupWith (Claims.hOf H) s.read = .ok (spec', sts') ∧
         verdictWith true (Claims.hOf H) spec' (tabsOf sts') f.record f.proofs = .ok () ∧
@@ -198,9 +203,9 @@ theorem outO_decide (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (s : Ins) (
 
 /-- **The outer verifier's decision against `H`**: it accepts exactly when the decision does (`outO_decide`) and the
 verdict's last refusals pass. -/
-theorem nextO_decide (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem nextO_decide (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
+    {mids : List (Hash.Msg × Coin)} {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
     ((nextO x as cs).eval H).1 = .acc ↔
       (∃ spec' sts', FlockDeploy.setupWith (Claims.hOf H) s.read = .ok (spec', sts') ∧
         verdictWith true (Claims.hOf H) spec' (tabsOf sts') f.record f.proofs = .ok () ∧
@@ -209,9 +214,9 @@ theorem nextO_decide (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List
   by_cases hf : fullSampleO x f = true <;> simp [hf]
 
 /-- A decision accepts or rejects. -/
-theorem nextO_decide_out (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem nextO_decide_out (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
+    {mids : List (Hash.Msg × Coin)} {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
     ((nextO x as cs).eval H).1 = .acc ∨ ((nextO x as cs).eval H).1 = .rej := by
   rw [nextO_decide_eval H h]
   simp only [outOf, Claims.OC.eval_bind, Claims.OC.eval]
@@ -221,9 +226,9 @@ theorem nextO_decide_out (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : 
 
 /-- **The decision's oracle log**: Flock's setup's `setupCallsOf (hOf H)` entries, then, where it is `.ok`, the
 shipped verdict's `Zk.shaCalls (hOf H)` at its session. -/
-theorem nextO_decide_log (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem nextO_decide_log (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
+    {mids : List (Hash.Msg × Coin)} {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
     ((nextO x as cs).eval H).2.length =
       FlockDeploy.setupCallsOf (Claims.hOf H) s.read +
         match FlockDeploy.setupWith (Claims.hOf H) s.read with
@@ -237,8 +242,8 @@ theorem nextO_decide_log (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : 
 /-! ## At SHA-512 -/
 
 /-- A decision is made only on a statement that sets up, at its recursive setup. -/
-theorem actO_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
-    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
+theorem actO_decide {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)}
     {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
     ∃ i, setupO x = some (i, spec, sts) ∧ i.base = s := by
   unfold actO at h
@@ -251,7 +256,7 @@ theorem actO_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s 
 
 /-- **At SHA-512 the shipped verdict is the deployed `Zk.verify`**, at every session the statement's recursive setup
 sets up. -/
-theorem verdictWithO_sha512 {x : Claims.Msg} {i : RecIns} {spec : SessionSpec} {sts : Array Stmt}
+theorem verdictWithO_sha512 {x : Hash.Msg} {i : RecIns} {spec : SessionSpec} {sts : Array Stmt}
     (h : setupO x = some (i, spec, sts)) (record : String) (proofs : Array ByteArray) :
     verdictWith true (Claims.hOf sha512) spec (tabsOf sts) record proofs =
       Zk.verify spec (tabsOf sts) record proofs := by
@@ -260,8 +265,8 @@ theorem verdictWithO_sha512 {x : Claims.Msg} {i : RecIns} {spec : SessionSpec} {
   exact (Zk.verify_eq_verifyWith_of_setupTables _ _ _ _ _ _ _ _ _ _ _ _ _ hr record proofs).symm
 
 /-- On a decision, Flock's setup at the SHA-512 oracle is the recursive setup's session. -/
-theorem actO_decide_setupWith {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
-    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
+theorem actO_decide_setupWith {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)}
     {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
     FlockDeploy.setupWith (Claims.hOf sha512) s.read = .ok (spec, sts) := by
   obtain ⟨i, hi, rfl⟩ := actO_decide h
@@ -271,8 +276,8 @@ theorem actO_decide_setupWith {x : Claims.Msg} {as : List Claims.Msg} {cs : List
 /-- **The outer verifier's decision at SHA-512**: it accepts exactly when the deployed `verify --zk` with the recursive
 inputs (`Zk.verify` at the recursive setup's tables) accepts the record and proof files, the custody checks pass, and
 the verdict's last refusals pass. -/
-theorem nextO_decide_sha512 {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
-    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
+theorem nextO_decide_sha512 {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)}
     {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
     ((nextO x as cs).eval sha512).1 = .acc ↔
       Zk.verify spec (tabsOf sts) f.record f.proofs = .ok () ∧ checks true s spec x link c₁ mids f = .ok () ∧
@@ -318,26 +323,26 @@ theorem colsO_nodup (s : Claims.Seen) (j : ℕ) : ((colsO s j).map Prod.fst).Nod
 /-! ## The numbers -/
 
 /-- The session's tables with its spec, at the recursive setup; none where the statement does not set up. -/
-def tablesO (x : Claims.Msg) : List (SessionSpec × Stmt) :=
+def tablesO (x : Hash.Msg) : List (SessionSpec × Stmt) :=
   match setupO x with
   | some (_, spec, sts) => sts.toList.map fun st => (spec, st)
   | none => []
 
 /-- **`ε_table`**: the session's tables' masked errors, summed (`FlockDeploy.tableErr true`). -/
-noncomputable def εtableO (x : Claims.Msg) : ℝ := ((tablesO x).map fun p => tableErr true p.1 p.2).sum
+noncomputable def εtableO (x : Hash.Msg) : ℝ := ((tablesO x).map fun p => tableErr true p.1 p.2).sum
 
 /-- **`N₀`**: the session's tables' masked level-0 codeword lengths, summed (`FlockDeploy.tableLen true`), as
 `FlockDeploy.N₀ true` sums them: table 0's `2^{d₀}` at one table. -/
-noncomputable def N₀O (x : Claims.Msg) : ℝ := ((tablesO x).map fun p => tableLen true p.2).sum
+noncomputable def N₀O (x : Hash.Msg) : ℝ := ((tablesO x).map fun p => tableLen true p.2).sum
 
 /-- **`N₀` on `ℚ`**, as an outer session's numbers carry it (`Claims.Recursion.Nums`): `N₀O`'s sum (`N₀Oq_cast`). -/
-noncomputable def N₀Oq (x : Claims.Msg) : ℚ := ((tablesO x).map fun p => (2 : ℚ) ^ (Claims.Flock.zkLevel0 p.2.wideLeaf p.2.m).d).sum
+noncomputable def N₀Oq (x : Hash.Msg) : ℚ := ((tablesO x).map fun p => (2 : ℚ) ^ (Claims.Flock.zkLevel0 p.2.wideLeaf p.2.m).d).sum
 
-theorem N₀Oq_cast (x : Claims.Msg) : (N₀Oq x : ℝ) = N₀O x := by
+theorem N₀Oq_cast (x : Hash.Msg) : (N₀Oq x : ℝ) = N₀O x := by
   simp [N₀Oq, N₀O, tableLen, Rat.cast_list_sum, List.map_map, Function.comp_def]
 
 /-- **Table `j`'s word's length**: its masked level-0 codeword length `2^d`; `0` past the statement's tables. -/
-def wordLenJO (x : Claims.Msg) (j : ℕ) : ℕ :=
+def wordLenJO (x : Hash.Msg) (j : ℕ) : ℕ :=
   match (tablesO x)[j]? with
   | some (_, st) => 2 ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d
   | none => 0
@@ -355,7 +360,7 @@ private theorem sum_range_getD_le {α : Type} (g : α → ℕ) : ∀ (l : List �
 
 /-- **The words together are no longer than `N₀O`** (`FlockDeploy.KS.sum_wordLenJ_le` at the recursive setup): the
 `hN` of `Claims.Flock.oneWait_of_tableBoundJR` at `deployZkRec`. -/
-theorem sum_wordLenJO_le (x : Claims.Msg) (n : ℕ) : ((∑ j : Fin n, wordLenJO x j : ℕ) : ℝ) ≤ N₀O x := by
+theorem sum_wordLenJO_le (x : Hash.Msg) (n : ℕ) : ((∑ j : Fin n, wordLenJO x j : ℕ) : ℝ) ≤ N₀O x := by
   set g : SessionSpec × Stmt → ℕ := fun p => 2 ^ (Claims.Flock.zkLevel0 p.2.wideLeaf p.2.m).d with hg
   have hw : ∀ j, wordLenJO x j = ((tablesO x)[j]?.map g).getD 0 := by
     intro j
@@ -371,7 +376,7 @@ theorem sum_wordLenJO_le (x : Claims.Msg) (n : ℕ) : ((∑ j : Fin n, wordLenJO
   simp only [hw]
   exact_mod_cast sum_range_getD_le g (tablesO x) n
 
-theorem N₀O_nonneg (x : Claims.Msg) : 0 ≤ N₀O x := by
+theorem N₀O_nonneg (x : Hash.Msg) : 0 ≤ N₀O x := by
   unfold N₀O
   exact List.sum_nonneg fun a ha => by
     obtain ⟨p, -, rfl⟩ := List.mem_map.1 ha
@@ -379,9 +384,9 @@ theorem N₀O_nonneg (x : Claims.Msg) : 0 ≤ N₀O x := by
     positivity
 
 /-- **The weight `C` of `γ`**: the session's tables' masked weights, summed (`FlockDeploy.tableWeight true`). -/
-noncomputable def weightO (x : Claims.Msg) : ℝ := ((tablesO x).map fun p => tableWeight true p.2).sum
+noncomputable def weightO (x : Hash.Msg) : ℝ := ((tablesO x).map fun p => tableWeight true p.2).sum
 
-theorem εtableO_nonneg (x : Claims.Msg) : 0 ≤ εtableO x := by
+theorem εtableO_nonneg (x : Hash.Msg) : 0 ≤ εtableO x := by
   unfold εtableO
   exact List.sum_nonneg fun a ha => by
     obtain ⟨p, -, rfl⟩ := List.mem_map.1 ha

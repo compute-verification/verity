@@ -39,7 +39,7 @@ from verity.commitments.rowleaf import (
 )
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pc8, plan
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import words as W
+from verity.circuits.ops import words as W
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.anchors import TileAnchors
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P

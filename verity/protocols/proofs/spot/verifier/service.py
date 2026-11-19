@@ -168,6 +168,8 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Any, Callable, Iterable, Mapping, NoReturn, Sequence, TypeVar
 
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.partition import Level
@@ -184,21 +186,23 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     docket as R,
     verifier as V,
 )
+from verity.commitments import randomness as RND, rate as RT
 from .one_stage.verdict import Verdict, _Collect
 from verity.protocols.proofs.spot.verifier.challenger.challenger import ChallengerKey
 from verity.protocols.proofs.spot.verifier.challenger.coins import ChallengerCoins, OwnRandomness, closure_of, draw_first, draw_seed_salt
+from verity.commitments.domains import FRAME_V3_SHA512_ROOT, PROOF_SERVICE_OUTCOME, PROOF_SERVICE_STREAM
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
 HIDING = "hm96-sha512/"
 #: A tree over the roots of hiding trees (`row_table.ROOTS_SCHEMA`); a Value of it names its leaves' schema (`over`).
-ROOTS = "frame-v3-sha512/root/v1"
+ROOTS = FRAME_V3_SHA512_ROOT
 KINDS = ("structure", "output", "coins", "commitment")
 SOURCES = ("parameter", "window")
 PHASES = ("epoch", "serve", "interior", "in-deadline")
 #: A two-stage outcome's profile's level of replay blocks, above one-stage's `audit.LEVEL` of proof blocks.
 REPLAY = "replay"
-STREAM = "verity/proof-service/stream/v0"
-OUTCOME = "verity/proof-service/outcome/v0"
+STREAM = PROOF_SERVICE_STREAM
+OUTCOME = PROOF_SERVICE_OUTCOME
 ACCEPT, REJECT, LATE, HALTED = "accept", "reject", "late", "halted"
 #: The most rounds (dockets) one proof session covers.
 ROUNDS = 4
@@ -299,13 +303,13 @@ def fixed(text: Any) -> str:
 
 
 def rate(text: Any) -> bool:
-    """Whether a sampling design text is a rate: a rate sampling design (`draw.parse_rate`), a stratified or work rate sampling design
-    (`draw.parse_strata_rate`), or `bernoulli:NUM/DEN`, which `Stream.register` refuses (`bernoulli`). The Lean verifier's
+    """Whether a sampling design text is a rate: a rate sampling design (`randomness.parse_rate`), a stratified or work rate sampling design
+    (`randomness.parse_strata_rate`), or `bernoulli:NUM/DEN`, which `Stream.register` refuses (`bernoulli`). The Lean verifier's
     `Select.rate?` is this."""
-    if D.parse_rate(text) is not None or D.parse_strata_rate(text) is not None:
+    if RND.parse_rate(text) is not None or RND.parse_strata_rate(text) is not None:
         return True
     try:
-        return D.parse_design(text)["law"] == "bernoulli"
+        return RND.parse_design(text)["law"] == "bernoulli"
     except (ValueError, TypeError, AttributeError):
         return False
 
@@ -313,8 +317,8 @@ def rate(text: Any) -> bool:
 @dataclass(frozen=True)
 class SamplingDesign:
     """A one-stage sampling design, a rate (`rate`): the rate sampling design `rate:NUM/DEN` or `rate:NUM/DEN:T`
-    (`draw.parse_rate`), the stratified rate `stratified-rate:NUM/DEN` or the work rate `work-rate:NUM/DEN`
-    (`draw.parse_strata_rate`), or `bernoulli:NUM/DEN`, which `Stream.register` refuses. A docket's N proof blocks
+    (`randomness.parse_rate`), the stratified rate `stratified-rate:NUM/DEN` or the work rate `work-rate:NUM/DEN`
+    (`randomness.parse_strata_rate`), or `bernoulli:NUM/DEN`, which `Stream.register` refuses. A docket's N proof blocks
     are the prover's to size, so a fixed count, `subset:K`, `stratified:K` or `work:K`, which samples each proof block with
     K/N as the prover pads N, is refused (`fixed`). A rate samples `subset:K` at K = ceil(NUM N / DEN) rounded up to a
     multiple of the T tables (`draw.rate_count`) over the N proof blocks each docket brings, so every proof block is
@@ -344,7 +348,7 @@ def _grain(g: Any) -> bool:
 def _replay_sampling_design(text: Any) -> bool:
     """`Select.replaySamplingDesign?`: a rate sampling design, a uniform sample of replay blocks at the rate however many the prover
     registers."""
-    return D.parse_rate(text) is not None
+    return RND.parse_rate(text) is not None
 
 
 @dataclass(frozen=True)
@@ -740,7 +744,7 @@ def selection_sizes(rule: Selection, program: Program, query: Mapping[str, Any])
     """The strata sizes a stratified rate's K reads (`draw.strata_sizes` of `program` under `query`), none for any other rule.
     Raises `Refused` (`rate`) where the query doesn't apply to a stratified rate, as `selection_table` does for a work rate.
     The Lean verifier's `Select.strataSizes`, which `Rule.over` reads only for a stratified rate, is this."""
-    strata = D.parse_strata_rate(rule.text) if isinstance(rule, SamplingDesign) else None
+    strata = RND.parse_strata_rate(rule.text) if isinstance(rule, SamplingDesign) else None
     if strata is None or strata[0]:
         return []
     try:
@@ -759,9 +763,9 @@ def selection_sampling_design(rule: Selection, n: int, sizes: Sequence[int] = ()
     if isinstance(rule, All):
         return {"law": "subset", "k": n}
     text = rule.replay if isinstance(rule, TwoStage) else rule.text
-    rate, strata = D.parse_rate(text), D.parse_strata_rate(text)
+    rate, strata = RND.parse_rate(text), RND.parse_strata_rate(text)
     if rate is None and strata is None:
-        return D.parse_design(text)
+        return RND.parse_design(text)
     if rate is not None:
         kind, k = "subset", D.rate_count(*rate, n)
     elif strata[0]:
@@ -776,14 +780,14 @@ def selection_sampling_design(rule: Selection, n: int, sizes: Sequence[int] = ()
 def selection_table(rule: Selection, program: Program, query: Mapping[str, Any],
                     work_table: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
     """The work table a selection rule's sampling design (`selection_sampling_design`'s) is expanded over, from the challenger's own
-    `work_table`: a work rate's, each stratum of `program` under `query` with its floor at the rate (`draw.rate_table`), else
+    `work_table`: a work rate's, each stratum of `program` under `query` with its floor at the rate (`rate.rate_table`), else
     `work_table` itself. Raises `Refused` (`rate`) where the query doesn't apply, a work rate has no work table or it names
     no work for a stratum's template. The Lean verifier's `Select.Rule.tableOver` is this."""
-    strata = D.parse_strata_rate(rule.text) if isinstance(rule, SamplingDesign) else None
+    strata = RND.parse_strata_rate(rule.text) if isinstance(rule, SamplingDesign) else None
     if strata is None or not strata[0]:
         return work_table
     try:
-        return D.rate_table(program, query, strata[1], strata[2], work_table)
+        return RT.rate_table(program, query, strata[1], strata[2], work_table)
     except (P.QueryRefused, ValueError) as e:
         raise _refuse("rate", {"law": rule.text, "reason": str(e)}) from None
 
@@ -791,13 +795,13 @@ def selection_table(rule: Selection, program: Program, query: Mapping[str, Any],
 def params_sampling_design(sampling_design: Any, program: Program, query: Mapping[str, Any],
                work_table: Mapping[str, Any] | None) -> tuple[Any, Mapping[str, Any] | None]:
     """One-stage's parameters' agreed sampling design and the work table it is expanded over: a sampling design object as given, with
-    `work_table`, or a rate as a selection rule states it (`draw.parse_rate`, `draw.parse_strata_rate`), its sampling design
+    `work_table`, or a rate as a selection rule states it (`randomness.parse_rate`, `randomness.parse_strata_rate`), its sampling design
     over the population of `program` under `query` and its strata (`selection_sampling_design`) and its work table (`selection_table`). Raises
     `ValueError` for any other text, a query that doesn't apply, or a rate `selection_sampling_design` or `selection_table` refuses.
     The Lean verifier's `OneStage.design` is this."""
     if not isinstance(sampling_design, str):
         return sampling_design, work_table
-    if D.parse_rate(sampling_design) is None and D.parse_strata_rate(sampling_design) is None:
+    if RND.parse_rate(sampling_design) is None and RND.parse_strata_rate(sampling_design) is None:
         raise ValueError("a law stated as text is a rate, rate:NUM/DEN[:T], stratified-rate:NUM/DEN or work-rate:NUM/DEN, "
                          f"not {sampling_design!r}")
     rule = SamplingDesign(sampling_design)
@@ -1587,7 +1591,7 @@ class Stream:
     challenger builds each docket's population program from it and the docket's N. Or `unit` is a window's
     templates, a sequence of Definitions (a TP rank's served window: each provable family of the step): the check's
     `program` is their digests and its query `Q_template_instances` over them, both in the window's order, and each
-    docket's population program is their mixed population (`partition.mixed_population_program`) at the counts
+    docket's population program is their mixed population (`population.mixed_population_program`) at the counts
     `register` is given, under one sample by the Spec's sampling design (`stratified:K`: a stratum per template, each sampled at least
     once; `work:K`: at least the work table's floor). It is one program and one query, as for one template, so the
     verifier's sample and run (`Select.select`, `Run.run`) read it in the same form. `budget` (b), `delta`
@@ -1632,7 +1636,7 @@ class Stream:
     history (`_earlier`), with the verdicts the whole log gives.
 
     A window's stream may take `values`, the values its mixed population takes ahead of its templates' parameters
-    (`partition.mixed_population_program`'s, `(name, leaves, width)` each, `width` an integer or a leaf type's shape, a
+    (`population.mixed_population_program`'s, `(name, leaves, width)` each, `width` an integer or a leaf type's shape, a
     `Digest`'s `(8, 64, 1)`), which a registration registers as its program's (R7, which reads each by its type: a
     supplied value of `Digest`s in Digest order); the stream's digest names them. Or a window's stream takes `program`, the challenger's own copy of
     the window's Program where it is another form than the mixed population (the network attester's scan in its
@@ -1697,7 +1701,7 @@ class Stream:
             raise ValueError("a stream's per-span values are a two-stage window's interior values: give its unit as a "
                              "sequence of templates and its replay block")
         if values or span_values:
-            P.mixed_population_program([(u, 1) for u in units], values=values + span_values)
+            PN.mixed_population_program([(u, 1) for u in units], values=values + span_values)
         if program is not None:
             if isinstance(unit, SpecializedDefinition) or values or replay is not None:
                 raise ValueError("a stream's program is a window's, of its templates, given in place of their mixed "
@@ -1712,7 +1716,7 @@ class Stream:
                 raise ValueError(f"the window's program's proof blocks are not one range a template, in the window's "
                                  f"order: its ranges are {got}")
         try:
-            earlier = [(dict(r), R.digest(r)) for r in log]
+            earlier = [(dict(r), DD.digest(r)) for r in log]
             R.held_roots(r for r, _d in earlier)
         except (AttributeError, KeyError, TypeError, ValueError) as e:
             raise ValueError("a stream's earlier log is the prover's records, each a JSON object whose registered "
@@ -2073,7 +2077,7 @@ class Stream:
         `program` where its ranges are `counts`; None when `counts` don't fit the stream. A two-stage stream's is
         `replay`'s N instances, its replay blocks."""
         if self.templates is None or self.replay is not None:
-            return P.population_program(self.replay or self.unit, n) if counts is None else None
+            return PN.population_program(self.replay or self.unit, n) if counts is None else None
         ids = [P.template_id(t) for t in self.templates]
         if not (isinstance(counts, Mapping) and set(counts) == set(ids)
                 and all(type(counts[i]) is int and counts[i] >= 1 for i in ids) and sum(counts.values()) == n):
@@ -2081,7 +2085,7 @@ class Stream:
         if self.program is not None:
             ranges = {tid: m for tid, _lo, m in P.ranges(self.program, self.query)}
             return self.program if ranges == dict(counts) else None
-        return P.mixed_population_program([(t, counts[i]) for t, i in zip(self.templates, ids)], values=self.values)
+        return PN.mixed_population_program([(t, counts[i]) for t, i in zip(self.templates, ids)], values=self.values)
 
     def _public(self, record: Mapping[str, Any], interior: bool = False) -> Verdict:
         """`check_public` by the verifier (`verifier.check_public`): on a docket's values under its query, or on
@@ -2100,7 +2104,7 @@ class Stream:
                       received_at: float | None = None, fanout: int | None = None,
                       rests_on_period_check: tuple[str, ...] = (), returned: int | None = None) -> WindowCommitmentRecord:
         return WindowCommitmentRecord(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))),
-                                      R.digest(record), order, salted_at, received_at, fanout, rests_on_period_check,
+                                      DD.digest(record), order, salted_at, received_at, fanout, rests_on_period_check,
                                       returned)
 
     def _returned(self, program: Program) -> int | None:
@@ -2234,9 +2238,9 @@ class Stream:
         `span_values`, each at its leaves times Q."""
         assert self.n_rho is not None
         if self.templates is None:
-            return P.population_program(self.unit, q * self.n_rho)
+            return PN.population_program(self.unit, q * self.n_rho)
         spans = tuple((name, leaves * q, width) for name, leaves, width in self.span_values)
-        return P.mixed_population_program([(t, q * n) for t, n in zip(self.templates, self.cells)],
+        return PN.mixed_population_program([(t, q * n) for t, n in zip(self.templates, self.cells)],
                                           values=self.values + spans)
 
     def _sampled_op(self, draw: Draw) -> dict[str, Any]:
@@ -2448,8 +2452,7 @@ class Stream:
         challenger's. `statements` are the second-stage sessions' (`second_stage`), which round 2
         holds to the verdicts of record that checked them (each one's header, registered reads and sample, by the digests
         and sample a verdict names), the interior docket and the second stage's cells as the interior
-        docket's audit record's `statements` check: a two-stage outcome without them fails it, and so does every
-        one while `second_stage.FORM` refuses the two-stage form. `proofs` is the auditor's params naming each template's
+        docket's audit record's `statements` check: a two-stage outcome without them fails it. `proofs` is the auditor's params naming each template's
         circuit file and the reference header and registered reads round 2 holds its statements to (`template_circuits`;
         without them every statement fails ``second-header`` and ``second-values``), which the run of record reads from
         its interior params. The outcome accepts
@@ -2602,8 +2605,10 @@ class Stream:
                      returns=SS.replay_returns(e.program, descriptor_id(self.replay), reg.record),
                      supplied=SS.supplied_of(R.resolved(e.interior_copies[5], e.interior_history)),
                      fixed=(*(e.interior_copies[6] or ()), *(e.interior_copies[10] or ())),
-                     reads=template_reads(proofs), tables=pinned_tables(proofs))
-        rec = SS.attach(rec, SS.check_twin(SS.FORM, own, statements), SS.interior_reads(own, statements or ()))
+                     reads=template_reads(proofs), tables=pinned_tables(proofs),
+                     held=SS.held_of(P.program_digest(e.interior_program), e.interior_copies[8], e.interior_copies[9],
+                                     e.interior_copies[6], e.interior_copies[5], e.interior_copies[10]))
+        rec = SS.attach(rec, SS.check_twin(own, statements), SS.interior_reads(own, statements or ()))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
                                   verdicts, self.delta, e.sessions, None, replay_session_roots,
                                   certified=sorted(e.certified or ()))

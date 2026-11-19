@@ -41,6 +41,9 @@ from pathlib import Path
 
 import pytest
 
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
+from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as PW
 from verity.protocols.proofs.spot.verifier import service as S
@@ -49,6 +52,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.circuits import codec, partition_object as PO
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
@@ -92,7 +96,7 @@ def audited_v1_case(program, query, accepted: bool = True) -> dict:
                  "leaves": leaves}
              for p, schema, leaves in (("out", "u16", 2 * population), ("x", "hm96-sha512/row/v1", population))}
     roots = {"out": "cd" * 64, "x": "ab" * 64}
-    rec = R.record(program, query, sampling_design, S.SCHEME, [{"port": p, "root": roots[p], **ports[p]} for p in ports],
+    rec = DK.record(program, query, sampling_design, S.SCHEME, [{"port": p, "root": roots[p], **ports[p]} for p in ports],
                    {"kind": "served", "row": 101, "run": "r-test"}, leaf_layer=leaf)
     drawn = DR.derive(program, query, sampling_design)
     units = sorted(u for s in drawn["strata"] for u in [u for lo, hi in s["units"] for u in range(lo, hi)][:s["k"]])
@@ -110,7 +114,7 @@ def audited_v1_case(program, query, accepted: bool = True) -> dict:
 
 def toy() -> tuple[object, dict]:
     templates = [PAIR, TRIPLE]
-    return P.mixed_population_program([(t, SLOTS) for t in templates]), P.template_instances_query(templates)
+    return PN.mixed_population_program([(t, SLOTS) for t in templates]), P.template_instances_query(templates)
 
 
 def audit_dir(root: Path, v1: dict, *, v2: bool | str = True) -> Path:
@@ -142,7 +146,7 @@ def audit_dir(root: Path, v1: dict, *, v2: bool | str = True) -> Path:
 
 
 def digest_of(v1: dict) -> str:
-    return R.digest(json.loads(bytes.fromhex(v1["commitment"])))
+    return DD.digest(json.loads(bytes.fromhex(v1["commitment"])))
 
 
 def stand_in(tmp_path: Path, name: str, answer: dict | None) -> Path:
@@ -240,7 +244,7 @@ def h1_docket(previous: str | None = None, entry: int = 0) -> dict:
     for _, value, leaves in TABLES:
         e = {"value": value, "leaves": leaves, "words": 1, "root": "ab" * 64}
         entries.append({**e, "domain": Cr.domain_of(H1, OPEN, e)})
-    return {"format": R.FORMAT_V2, "protocol": R.PROTOCOL, "program": H1,
+    return {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "program": H1,
             "window": {"kind": "served", "entry": entry, "open_root": OPEN, "refused": []},
             "registered": entries, "previous": previous}
 
@@ -251,17 +255,17 @@ def tied_v1_case(w: dict) -> dict:
     root, domain and leaves, chained right after W; its params the v2 params as a5 writes them under the tie
     (`replay.params` with ``log`` [W], the registered words, ``outputs`` and ``schemas``, `a5.tie`)."""
     templates = [PAIR, TRIPLE]
-    program = P.mixed_population_program([(t, SLOTS) for t in templates],
+    program = PN.mixed_population_program([(t, SLOTS) for t in templates],
                                          values=[(name, leaves, 16) for name, _, leaves in TABLES])
     query = P.template_instances_query(templates)
     sampling_design, ports = {"law": "stratified", "k": 1}, {"x": {"leaves": 8, "domain": "02" * 64}}
     reused = {e["value"]: e for e in w["registered"]}
-    rec = R.record(program, query, sampling_design, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
-                   {"kind": "served", "run": "r-served-cases", "row": 0}, previous=R.digest(w),
+    rec = DK.record(program, query, sampling_design, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
+                   {"kind": "served", "run": "r-served-cases", "row": 0}, previous=DD.digest(w),
                    registered=[{**reused[value], "value": name} for name, value, _ in TABLES])
     params = RP.params(program, query, sampling_design, ports, None, "1/100", partition=P.partition(program, query), log=[w],
                        registered={name: 1 for name, _, _ in TABLES},
-                       outputs={name: {"record": R.digest(w), "value": value} for name, value, _ in TABLES},
+                       outputs={name: {"record": DD.digest(w), "value": value} for name, value, _ in TABLES},
                        schemas={name: G.SCHEMA_V2 for name, _, _ in TABLES})
     evidence = {"draw": {"units": [0]}, "sessions": ["5e" * 64], "verdicts": {"m0": {"accepted": True}}}
     return {"commitment": codec.canonical_json(rec).hex(), "evidence": codec.canonical_json(evidence).hex(),
@@ -276,7 +280,7 @@ def h1_log(h1: Path, records: list[tuple[int, str, dict]]) -> None:
         f = h1 / f"w{k}" / f"{kind}.json"
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_text(json.dumps(r, sort_keys=True))
-        lines.append({"digest": R.digest(r), "file": f"w{k}/{kind}.json", "kind": kind, "window": k})
+        lines.append({"digest": DD.digest(r), "file": f"w{k}/{kind}.json", "kind": kind, "window": k})
     (h1 / "log.jsonl").write_text("".join(json.dumps(x, sort_keys=True) + "\n" for x in lines))
 
 
@@ -352,8 +356,8 @@ def test_each_case_goes_private_beside_an_answer_naming_the_records_digest(tmp_p
     assert json.loads((private / "sampled-proofs-v1" / "case.json").read_text()) == v1
     assert json.loads((private / "sampled-proofs-v2" / "case.json").read_text()) == v2_case
     sampled = json.loads((private / "sampled-proofs" / "case.json").read_text())
-    assert sampled == {**v2_case, "params": {**v2_case["params"], "form": "one-stage"}, "evidence": codec.canonical_json(
-        {**json.loads(bytes.fromhex(v2_case["evidence"])), "form": "one-stage"}).hex()}
+    assert sampled == {**v2_case, "params": {**v2_case["params"], "levels": 1}, "evidence": codec.canonical_json(
+        {**json.loads(bytes.fromhex(v2_case["evidence"])), "levels": 1}).hex()}
     assert "proofs" in sampled["params"] and "verdicts" not in json.loads(bytes.fromhex(sampled["evidence"]))
     reg = json.loads((private / "inference-only" / "case.json").read_text())
     assert sorted(reg) == ["commitment", "evidence", "params"]
@@ -680,7 +684,7 @@ def test_spot_lean_names_the_records_digest_and_refuses_v1_by_name(tmp_path, cap
     assert [c["verdict"] for c in cases if c["protocol"] == SAMPLED] == ["reject"]
     got = json.loads((tmp_path / "private" / "sampled-proofs" / "answer.json").read_text())
     assert got["protocol"] == SAMPLED and got["commitment"] == digest_of(v1), got
-    got, _ = SC.lean_answer(sampled_exe, SC.with_form(v1), tmp_path / "scratch", SC.SAMPLED_CMD)
+    got, _ = SC.lean_answer(sampled_exe, SC.with_levels(v1), tmp_path / "scratch", SC.SAMPLED_CMD)
     assert got["protocol"] == SAMPLED and got["verdict"] == "reject", got
     assert got["reason"].startswith("params: the parameters name no proofs: one-stage v1 "), got
     assert "is refused" in got["reason"], got
@@ -711,7 +715,7 @@ def test_the_producer_refuses_an_inference_only_case_that_would_not_be_the_windo
     if change != "no-alpha-gamma":
         argv += ["--alpha", "1", "--gamma", 1]
     if change == "log-unchained":
-        (tmp_path / "log.json").write_text(json.dumps([{"format": R.FORMAT_V2, "previous": "66" * 64}]))
+        (tmp_path / "log.json").write_text(json.dumps([{"format": DM.REGISTRATION, "previous": "66" * 64}]))
         argv += ["--log", tmp_path / "log.json"]
     if change == "gamma-bool":
         with pytest.raises(SC.Refused, match=reason):
@@ -777,19 +781,55 @@ def test_from_division_is_accepted_at_the_divisions_own_budgets(tmp_path, capsys
 def test_the_parameters_are_the_population_programs_and_no_other_programs():
     """The program function's parameters come from the population program rebuilt over the root's templates, one
     template's included; a Program that isn't one (here a template on its own) is refused, its parameters unknown."""
-    one = v1_case(P.population_program(PAIR, SLOTS), P.template_instance_query(PAIR))
+    one = v1_case(PN.population_program(PAIR, SLOTS), P.template_instance_query(PAIR))
     assert SC.inference_only_case(one, 1, 1)["params"]["parameters"] == [["x", Array(SLOTS, Array(2, Bits(8))).to_json()]]
     lone = Program(PAIR)
     desc = json.loads(codec.canonical_json(codec.encode_program(lone)))
-    rec = {"format": R.FORMAT_V2, "previous": None, "program": codec.program_digest(desc)}
+    rec = {"format": DM.REGISTRATION, "previous": None, "program": codec.program_digest(desc)}
     with pytest.raises(SC.Refused, match="isn't the population program over its root's templates"):
         SC.inference_only_case({"commitment": codec.canonical_json(rec).hex(), "params": {"program": desc}}, 1, 1)
 
 
+def _wired_pair() -> tuple[dict, tuple, tuple]:
+    """A circuit record of `PAIR`'s units, unit 1's first row wired from unit 0, its wired Program and that Program with no
+    wires, each with its query."""
+    tid = codec.descriptor_id(PAIR)
+    record = {"templates": [[tid, SLOTS]], "cuts": {tid: {"x": 2}}, "external": [], "order": [[tid, 0, 1], [tid, 1, SLOTS - 1]],
+              "wires": [{"reader": tid, "port": "x", "writer": tid, "out": "o0", "at": 1, "cut": [0, 1], "radix": [1],
+                         "base": 0, "step": [1]}]}
+    return (record, PN.wired_population_program([(PAIR, SLOTS)], record),
+            PN.wired_population_program([(PAIR, SLOTS)], {**record, "wires": []}))
+
+
+def _naming(v1: dict, program) -> dict:
+    rec = json.loads(bytes.fromhex(v1["commitment"]))
+    return {**v1, "commitment": codec.canonical_json({**rec, "program": codec.program_digest(program)}).hex()}
+
+
+def test_the_case_takes_the_program_its_record_names_wired_or_with_no_wires():
+    """With the window's circuit record, a record naming its wired Program, or that Program with no wires, takes its
+    parameters from that Program rebuilt; a record naming the wired Program over v1's Program with no wires carries
+    the wired one. With no circuit record a wired Program is refused, the population program being no other's."""
+    record, (whole, wq), (bare, bq) = _wired_pair()
+    sig = [[n, t.to_json()] for n, t in whole.fn.signature()[0]]
+    for program, query in ((whole, wq), (bare, bq)):
+        case = SC.inference_only_case(v1_case(program, query), 1, 1, circuit=record)
+        assert case["params"]["parameters"] == sig
+        assert codec.program_digest(json.loads(case["params"]["program"])) == codec.program_digest(program)
+    case = SC.inference_only_case(_naming(v1_case(bare, bq), whole), 1, 1, circuit=record)
+    assert codec.program_digest(json.loads(case["params"]["program"])) == codec.program_digest(whole)
+    with pytest.raises(SC.Refused, match=r"nor the wired Program of a circuit record \(none is beside the audit\)"):
+        SC.inference_only_case(v1_case(whole, wq), 1, 1)
+    with pytest.raises(SC.Refused, match="another Program than v1's params, and no Program of the window's circuit record"):
+        SC.inference_only_case(_naming(v1_case(whole, wq), bare), 1, 1, circuit=record)
+    with pytest.raises(SC.Refused, match="the circuit record's templates aren't the root's"):
+        SC.inference_only_case(v1_case(whole, wq), 1, 1, circuit={**record, "templates": [["Other_v1", SLOTS]]})
+
+
 def test_a_log_that_chains_to_the_record_is_the_cases_log(tmp_path):
     program, query = toy()
-    first = {"format": R.FORMAT_V2, "previous": None, "program": "11" * 64}
-    v1 = v1_case(program, query, previous=R.digest(first))
+    first = {"format": DM.REGISTRATION, "previous": None, "program": "11" * 64}
+    v1 = v1_case(program, query, previous=DD.digest(first))
     assert SC.inference_only_case(v1, 1, 1, [first])["params"]["log"] == [first]
 
 
@@ -900,7 +940,7 @@ def test_under_h1s_tie_every_case_commits_to_the_record_h1_named(tmp_path, capsy
     Commit record, so the three name one record, the tie remote checks."""
     serve, v1, w = tied_serve(tmp_path / "serve")
     rec, d = json.loads(bytes.fromhex(v1["commitment"])), digest_of(v1)
-    assert rec["previous"] == R.digest(w) and Cr.commit_of(v1["commitment"])[0][0].hex() == d
+    assert rec["previous"] == DD.digest(w) and Cr.commit_of(v1["commitment"])[0][0].hex() == d
     private = serve / "private"
     rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", private, "--alpha", "1", "--gamma", 1,
                                   *stand_ins(tmp_path, v1))
@@ -941,7 +981,7 @@ def test_a_period_on_another_record_is_refused_before_any_composite(tmp_path, ca
     w = h1_docket()
     on_r, on_w = tied_v1_case(w)["commitment"], codec.canonical_json(w).hex()
     commits = {"h1-registration": [on_w], "second-window": [on_r, on_w], "no-commit": [None], "no-windows": [],
-               "v1-record": [codec.canonical_json({**w, "format": R.FORMAT}).hex()]}.get(change)
+               "v1-record": [codec.canonical_json({**w, "format": DM.REGISTRATION_V1}).hex()]}.get(change)
     serve, v1, _ = tied_serve(tmp_path / "serve", commits)
     piece = serve / SC.PERIOD_PIECE
     if change == "other-answer":
@@ -953,14 +993,18 @@ def test_a_period_on_another_record_is_refused_before_any_composite(tmp_path, ca
     rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", serve / "private", "--alpha", "1",
                                   "--gamma", 1, *stand_ins(tmp_path, v1))
     assert rc == 1 and [c["protocol"] for c in cases] == [V1, SAMPLED, INF], out
-    want = reason.format(w=R.digest(w)[:16], r=digest_of(v1)[:16])
+    want = reason.format(w=DD.digest(w)[:16], r=digest_of(v1)[:16])
     assert [r["protocol"] for r in refused] == [SC.PERIOD] and want in refused[0]["reason"], refused
     assert not (serve / "private" / "pouw-period").exists()
 
 
+#: the salts a Pearl+ pass kept beside its tiles' leaves, two of 192 bytes
+SALTS = bytes(range(192)) * 2
+
+
 def pearlplus_parts(serve: Path, w: dict | None = None) -> tuple[Path, dict]:
     """Pearl+'s case's parts as `served_passes.py case` writes them in the serve dir (`PEARL_PLUS_PIECE`): one pass's
-    manifest (its salt key among its fields), the window record W the pass is held to as round 1 of a retention that
+    manifest (naming the salts file the pass kept, `SALTS`, by path, size and digest), the window record W the pass is held to as round 1 of a retention that
     dropped round 0 (``w``, else a record of no entries), the one file its opened tile reads by the blob holding it, and
     the Lean verdict of record's verdict, tiles sampled and work, in the grid form with the exact work beside it."""
     piece = serve / SC.PEARL_PLUS_PIECE
@@ -971,7 +1015,8 @@ def pearlplus_parts(serve: Path, w: dict | None = None) -> tuple[Path, dict]:
              "params": {"coins": {"epoch": 0, "root": "c0" * 64, "scheme": "s"}, "draws": 3,
                         "record": {"commitment": "d0" * 64, "source": "e0" * 32, "schema": "verity-pouw/pearl-plus-coin/v2",
                                    "draw": {"from": "challenger"}}},
-             "manifests": [{"hm96_salt_key": "5a" * 32, "run": "r"}],
+             "manifests": [{"salts_t": {"path": "salts_t", "bytes": len(SALTS), "sha256": hashlib.sha256(SALTS).hexdigest()},
+                            "run": "r"}],
              "window": {"dropped": [0], "rounds": [1],
                         "record": w or {"window": {"version": 2}, "registered": [], "previous": None}},
              "evidence": {"files": [{"pearl/w0/rows.bin": hashlib.sha512(blob).hexdigest()}]},
@@ -1016,7 +1061,8 @@ def test_pearl_plus_s_case_is_its_piece_s_parts_naming_the_records_digest(tmp_pa
         "commitment": hashlib.sha512(b"verity/pouw/pearl-plus/manifests/v1\0" + commitment).hexdigest(),
         "public": {"credited": 7, "credited_tiles": 1, "macs": 9, "rho": "1/4", "epsilon": "1/8", "delta": "1/100"},
         "profile": {"draws": 3, "drawn": 3, "passes": 1}}
-    assert "5a" * 32 not in out and case["commitment"] not in out
+    assert case["commitment"] not in out
+    assert SALTS.hex() not in out and hashlib.sha256(SALTS).hexdigest() not in out and "salts_t" not in out
     (piece / "blobs" / h).unlink()
     rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / "p2", "--alpha", "1",
                                   "--gamma", 1, *stand_ins(tmp_path, v1))
@@ -1059,10 +1105,10 @@ def test_the_policys_log_is_the_serves_h1_log_through_the_records_previous(tmp_p
     """Over a serve of several windows, each window's W then R, the log before a window's R is every record through its
     own W, which chains from the deployment's first record (null previous) to R; later windows' records aren't in it."""
     w0 = h1_docket()
-    r0 = {"format": R.FORMAT_V2, "previous": R.digest(w0), "program": "11" * 64}
-    w1 = h1_docket(R.digest(r0), entry=1)
-    r1 = {"format": R.FORMAT_V2, "previous": R.digest(w1), "program": "11" * 64}
-    w2 = h1_docket(R.digest(r1), entry=2)
+    r0 = {"format": DM.REGISTRATION, "previous": DD.digest(w0), "program": "11" * 64}
+    w1 = h1_docket(DD.digest(r0), entry=1)
+    r1 = {"format": DM.REGISTRATION, "previous": DD.digest(w1), "program": "11" * 64}
+    w2 = h1_docket(DD.digest(r1), entry=2)
     h1_log(tmp_path, [(0, "registration", w0), (0, "record", r0), (1, "registration", w1), (1, "record", r1),
                       (2, "registration", w2)])
     assert SC.h1_log(tmp_path / "log.jsonl", r1) == [w0, r0, w1]
@@ -1079,7 +1125,7 @@ def test_on_a_serve_tied_to_pearl_plus_the_policys_log_is_w_and_the_serves_first
     serve dir doesn't hold, and one naming another than it holds are refused: the log would not chain from the
     deployment's first record."""
     first = FIRST
-    w, alone = h1_docket(R.digest(first)), h1_docket()
+    w, alone = h1_docket(DD.digest(first)), h1_docket()
 
     def serve(name: str, held: dict, start: dict | None) -> tuple[Path, Path]:
         d = tmp_path / name
@@ -1090,7 +1136,7 @@ def test_on_a_serve_tied_to_pearl_plus_the_policys_log_is_w_and_the_serves_first
         return d, d / SC.PEARL_PLUS_PIECE
 
     def after(x: dict) -> dict:
-        return {"format": R.FORMAT_V2, "previous": R.digest(x), "program": "11" * 64}
+        return {"format": DM.REGISTRATION, "previous": DD.digest(x), "program": "11" * 64}
 
     assert SC.pearl_log(*serve("chained", w, first), after(w)) == [first, w]
     SC._chain([first, w], after(w))
@@ -1125,7 +1171,7 @@ def test_without_an_h1_log_the_policys_case_takes_its_log_from_pearl_plus_parts(
     assert "doesn't chain from the deployment's first record" in refused[0]["reason"]
 
 
-FIRST = {"format": R.FORMAT_V2, "protocol": R.PROTOCOL, "deployment": {"kind": "weights"}, "registered": [],
+FIRST = {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "deployment": {"kind": "weights"}, "registered": [],
          "previous": None}
 
 
@@ -1135,7 +1181,7 @@ def handed_serve(root: Path, w: dict | None, first: dict | None = FIRST) -> tupl
     them (`SC.DEPLOYMENT`, `SC.RECORDS`), and nothing else: no H1 log and no part of Pearl+'s case. R is chained right
     after `h1_docket`'s W over ``first``; ``w`` is what the W file holds (None: no such file). The dir and v1's
     case."""
-    v1 = tied_v1_case(h1_docket(R.digest(first) if first is not None else None))
+    v1 = tied_v1_case(h1_docket(DD.digest(first) if first is not None else None))
     audit = audit_dir(root / "v3c-w0-4-27-2", v1)
     (audit / "window" / "registration.json").write_text(bytes.fromhex(v1["commitment"]).decode())
     if first is not None:
@@ -1152,7 +1198,7 @@ def test_a_copy_of_the_compose_hand_off_alone_writes_the_policys_case_with_the_w
     the W the hand-off lists, each taken by the digest the next names, and its commitment v1's own, the record R. A
     hand-off whose W file holds another W than R names, or none, refuses the policy's case alone, before its check
     runs."""
-    w = h1_docket(R.digest(FIRST))
+    w = h1_docket(DD.digest(FIRST))
     serve, v1 = handed_serve(tmp_path / "serve", w)
     assert sorted(p.name for p in serve.iterdir()) == ["deployment-registration.json", "pearlplus", "v3c-w0-4-27-2"]
     private = tmp_path / "private"
@@ -1163,14 +1209,14 @@ def test_a_copy_of_the_compose_hand_off_alone_writes_the_policys_case_with_the_w
     case = json.loads((private / "inference-only" / "case.json").read_text())
     assert case["params"]["log"] == [FIRST, w] and case["commitment"] == v1["commitment"]
     assert json.loads((tmp_path / "reg.seen").read_text())["commitment"] == v1["commitment"]
-    for name, held in (("other-w", h1_docket(R.digest(FIRST), entry=5)), ("no-w", None)):
+    for name, held in (("other-w", h1_docket(DD.digest(FIRST), entry=5)), ("no-w", None)):
         (tmp_path / "reg.seen").unlink(missing_ok=True)
         serve, v1 = handed_serve(tmp_path / name, held)
         rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / f"private-{name}",
                                       "--alpha", "1", "--gamma", 1, *stand_ins(tmp_path, v1))
         assert rc == 1 and [c["protocol"] for c in cases] == [V1, SAMPLED], out
         assert [r["protocol"] for r in refused] == [INF], refused
-        assert (f"none is the record of digest {R.digest(w)[:16]}…, which the record names as its previous, so its log "
+        assert (f"none is the record of digest {DD.digest(w)[:16]}…, which the record names as its previous, so its log "
                 "doesn't chain from the deployment's first record") in refused[0]["reason"]
         assert not (tmp_path / f"private-{name}" / "inference-only").exists() and not (tmp_path / "reg.seen").exists()
 
@@ -1182,11 +1228,11 @@ def test_the_log_is_walked_back_to_the_deployments_first_record_however_long_and
     for the earlier window's R. Where a link is missing, the first record's or one in the middle, it refuses at that
     link, naming the digest no record answers; a record nobody names is no part of any log."""
     def after(x: dict) -> dict:
-        return {"format": R.FORMAT_V2, "previous": R.digest(x), "program": "11" * 64}
+        return {"format": DM.REGISTRATION, "previous": DD.digest(x), "program": "11" * 64}
 
-    w0 = h1_docket(R.digest(FIRST))
+    w0 = h1_docket(DD.digest(FIRST))
     r0 = after(w0)
-    w1 = h1_docket(R.digest(r0), entry=1)
+    w1 = h1_docket(DD.digest(r0), entry=1)
     r1 = after(w1)
     files = {SC.DEPLOYMENT: FIRST, "pearlplus/w0/registration.json": w0, "pearlplus/w1/registration.json": w1,
              "v3c-w0-4-27-2/audit/window/registration.json": r0, "v3c-w1-4-27-2/audit/window/registration.json": r1,
@@ -1208,8 +1254,8 @@ def test_the_log_is_walked_back_to_the_deployments_first_record_however_long_and
                           ("v3c-w0-4-27-2/audit/window/registration.json", r0, "the earliest of them found"),
                           ("pearlplus/w1/registration.json", w1, "the record")):
         with pytest.raises(SC.Refused) as e:
-            SC.pearl_log(serve(f"without-{R.digest(at)[:8]}", gone), None, r1)
-        assert (f"none is the record of digest {R.digest(at)[:16]}…, which {who} names as its previous, so its log doesn't "
+            SC.pearl_log(serve(f"without-{DD.digest(at)[:8]}", gone), None, r1)
+        assert (f"none is the record of digest {DD.digest(at)[:16]}…, which {who} names as its previous, so its log doesn't "
                 "chain from the deployment's first record") in str(e.value)
 
 
@@ -1217,8 +1263,8 @@ def test_a_record_file_that_does_not_parse_is_no_part_of_the_log_but_the_deploym
     """An empty or a truncated file under `SC.RECORDS` beside a whole log is skipped, as a record nobody names is, so the
     walk gives the same log, and a walk refused at a missing link names each skipped file; the serve's first
     registration record (`SC.DEPLOYMENT`) truncated is still refused."""
-    w0 = h1_docket(R.digest(FIRST))
-    r0 = {"format": R.FORMAT_V2, "previous": R.digest(w0), "program": "11" * 64}
+    w0 = h1_docket(DD.digest(FIRST))
+    r0 = {"format": DM.REGISTRATION, "previous": DD.digest(w0), "program": "11" * 64}
     files = {SC.DEPLOYMENT: json.dumps(FIRST), Path("pearlplus/w0/registration.json"): json.dumps(w0),
              Path("pearlplus/w9/registration.json"): "",
              Path("v3c-w9-4-27-2/audit/window/registration.json"): '{"format": '}
@@ -1253,12 +1299,12 @@ def test_the_lean_check_refuses_a_log_whose_w_is_not_the_record_r_names(tmp_path
     after the same first record, alone or after it, or the right W without the first record before it, it rejects
     ``trusted``: whoever hands the log over, the check holds each record's ``previous`` to the digest of the one before
     it, R's included, and the first's to null."""
-    w = h1_docket(R.digest(FIRST))
+    w = h1_docket(DD.digest(FIRST))
     v1 = tied_v1_case(w)
     case = SC.inference_only_case(v1, *SC.UNBOUNDED, [FIRST, w])
     got, _ = SC.lean_answer(inference_only_exe, case, tmp_path / "s")
     assert (got["protocol"], got["commitment"], got["verdict"]) == (INF, digest_of(v1), "accept"), got
-    other = h1_docket(R.digest(FIRST), entry=5)
+    other = h1_docket(DD.digest(FIRST), entry=5)
     for log in ([FIRST, other], [other], [w]):
         case["params"]["log"] = log
         got, _ = SC.lean_answer(inference_only_exe, case, tmp_path / "s")
@@ -1284,7 +1330,7 @@ def test_the_policy_case_is_refused_when_the_serves_h1_log_does_not_reach_its_re
     if change == "other-file":
         (h1 / "w0" / "registration.json").write_text(json.dumps({**w, "window": {**w["window"], "entry": 9}}))
     elif change == "no-file":
-        (h1 / "log.jsonl").write_text(json.dumps({"digest": R.digest(w), "kind": "registration", "window": 0}) + "\n")
+        (h1 / "log.jsonl").write_text(json.dumps({"digest": DD.digest(w), "kind": "registration", "window": 0}) + "\n")
     elif change == "unchained":
         h1_log(h1, [(0, "registration", h1_docket(entry=5))])
     elif change == "not-json":
@@ -1376,16 +1422,16 @@ def test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets(
     from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class_circuit
 
     reg = Registered.of(Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, target=H200), default_seed=7)
-    circuit = class_circuit(reg, WindowClass(4, 32, 4), None, Grain(gemm_words=1024, rows=256, select=64),
-                            provable=False)
+    circuit = class_circuit(reg, WindowClass(4, 32, 4), None, Grain(gemm_words=1024, rows=256, select=64))
     program, query = circuit.program()
+    record = {**circuit.description(), "external": list(circuit.external)}
     v1 = v1_case(program, query)
-    alpha, gates = SC.division_policy(v1, [], inference_only_exe, tmp_path / "s")
+    alpha, gates = SC.division_policy(v1, [], inference_only_exe, tmp_path / "s", record)
     bits = alpha * gates
     assert bits.denominator == 1, (alpha, gates)
     bits = bits.numerator
     for gamma, verdict in ((gates, "accept"), (gates - 1, "reject")):
-        got, _ = SC.lean_answer(inference_only_exe, SC.inference_only_case(v1, alpha, gamma), tmp_path / "s")
+        got, _ = SC.lean_answer(inference_only_exe, SC.inference_only_case(v1, alpha, gamma, circuit=record), tmp_path / "s")
         assert (got["protocol"], got["commitment"], got["verdict"]) == (INF, digest_of(v1), verdict), got
     print(json.dumps({"class": "4,32,4", "templates": len(circuit.templates), "gates": gates, "input_bits": bits,
                       "program_bytes": len(codec.canonical_json(v1["params"]["program"]))}, sort_keys=True))

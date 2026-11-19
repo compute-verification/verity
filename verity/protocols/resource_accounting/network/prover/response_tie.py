@@ -113,9 +113,9 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.protocols.resource_accounting.network.verifier import content_rows as CT
-from verity.protocols.resource_accounting.network.verifier import head_check as HC
+from verity.commitments.gates import bits as GB
 
-BIT = HC.BIT
+BIT = GB.BIT
 U16 = Array(16, BIT)
 #: o0 of a row whose checks all hold
 ACCEPT = 1
@@ -265,14 +265,14 @@ def outputs(sh: Shape, egress: Sequence[int], end: bytes, stop: int | None = Non
 def arguments(sh: Shape, egress: Sequence[int], end: bytes, stop: int | None = None) -> list[list[int]]:
     """The shape's Definition's arguments in its signature's order, each its leaves' bits."""
     ids, _, _ = _ids(sh, egress), _end(end), _word(sh, stop)
-    word = [HC._int_bits(stop, STOP_BITS)] if sh.stop else []
-    return [[b for t in ids for b in HC._int_bits(t, ID_BITS)], *word, HC._bytes_bits(end)]
+    word = [GB._int_bits(stop, STOP_BITS)] if sh.stop else []
+    return [[b for t in ids for b in GB._int_bits(t, ID_BITS)], *word, GB._bytes_bits(end)]
 
 
 def output_bits(sh: Shape, egress: Sequence[int], end: bytes, stop: int | None = None) -> list[int]:
     """The shape's Definition's outputs as its leaves' bits: o0's 16, then the row's, bit 8b + i bit i of byte b."""
     verdict, row = outputs(sh, egress, end, stop)
-    return HC._int_bits(verdict, 16) + HC._bytes_bits(row)
+    return GB._int_bits(verdict, 16) + GB._bytes_bits(row)
 
 
 def block(sh: Shape):

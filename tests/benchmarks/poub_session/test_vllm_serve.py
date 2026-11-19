@@ -34,15 +34,16 @@ def test_the_prover_serve_proves_by_loads_without_a_card_or_the_adapter_and_its_
     serve_py = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(serve_py)
     adapter = {m for m in sys.modules if m.partition(".")[0] == "verity_vllm"}
-    serving, memory = serve_py.provers()
-    assert issubclass(serve_py.backend_class(serving), serving.StoreBackend) and callable(memory)
+    serving = serve_py.provers()
+    assert issubclass(serve_py.backend_class(serving), serving.StoreBackend)
     assert {m for m in sys.modules if m.partition(".")[0] == "verity_vllm"} == adapter
     inspect.signature(serving.prove).bind(None, "127.0.0.1:0", "serve", node=b"n", codec=None, log=print)
 
 
 def serve(out: Path, plan: str, code: int) -> dict:
     """`serve.py --local` under ``plan``, which must exit ``code``: 0 only for an accepted session."""
-    r = subprocess.run([sys.executable, str(SERVE), "--local", "--plan", plan, "--out", str(out)],
+    r = subprocess.run([sys.executable, str(SERVE), "--local", "--figures-node", "rtx-pro-6000-server-x8", "--plan", plan,
+                        "--out", str(out)],
                        capture_output=True, text=True)
     assert r.returncode == code, r.stdout[-4000:] + r.stderr[-4000:]
     return json.loads((out / "serve.json").read_text())

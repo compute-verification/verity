@@ -370,7 +370,7 @@ namespace FlockDeploy.KS
 open Flock
 
 /-- **The plain fork rounds are past round 0**: each is after the link message. -/
-theorem plainJ_ne_zero {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+theorem plainJ_ne_zero {x : Hash.Msg} {spec : SessionSpec} {st : Stmt}
     (h0 : (tables false x).head? = some (spec, st)) {sch : FlockSoundness.Accounting.Schedule}
     (hsch : FlockSoundness.Accounting.fast100 st.m = some sch) (r : Fin 2) (ℓ : Fin sch.levels.length) :
     (plainJ h0 hsch r ℓ).val ≠ 0 := by
@@ -381,7 +381,7 @@ theorem plainJ_ne_zero {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
 most level 0's `2·2^{d₀}·Q₀`: the plain fork rounds are distinct and past round 0, so with one more event a round and
 the fork at round 0 there are two a round, and `plain_fork_room` leaves that much of the weight. -/
 theorem slackEsc_fitsFork_plain (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
-    (x : Claims.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables false x).head? = some (spec, st))
+    (x : Hash.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables false x).head? = some (spec, st))
     {sch : FlockSoundness.Accounting.Schedule} (hsch : FlockSoundness.Accounting.fast100 st.m = some sch)
     (ev : Fin 2 → Fin sch.levels.length → Ω → (Fin ((deployPlain rel).V.k x) → Coin) →
       (Fin ((deployPlain rel).V.k x) → Coin) → Prop)
@@ -448,7 +448,7 @@ when each fork term's mean `Adv` is at most its fork event's probability and the
 the mean self-clash at most the one-run event's (`mean_epsSL_le` at `slackEsc_term`). -/
 theorem mean_epsSL_le_slack {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
     {D Sl : Type} [Inhabited D] [Inhabited Sl] (A : FlockSoundness.Model.Arith F K) (Hc : List UInt8 → D)
-    (E : FlockSoundness.Merkle.Enc (List F) D) (Lf : FlockSoundness.Merkle.Leaf (List F) Sl D Hc) {x : Claims.Msg}
+    (E : FlockSoundness.Merkle.Enc (List F) D) (Lf : FlockSoundness.Merkle.Leaf (List F) Sl D Hc) {x : Hash.Msg}
     {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)]) (L : FlockSoundness.Layout st)
     (m k0 : ℕ) (l₀ l₁ : FlockSoundness.Accounting.Level) (rest : List FlockSoundness.Accounting.Level) (ext : ℕ)
     (hsch : FlockSoundness.Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -457,7 +457,7 @@ theorem mean_epsSL_le_slack {F K : Type} [Field F] [Fintype F] [DecidableEq F] [
     (cap₀ : FlockSoundness.Model.Cap D) {τ : Type} [Fintype τ] [Nonempty τ]
     (σ : τ → FlockSoundness.Game.Strategy (sessAfterL A Hc E Lf (L.model (FlockSoundness.Refine.regionsOf st))
       ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal spec.mPts pre post cap₀))
-    {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) (V : Claims.Verifier Coin)
+    {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Hash.Msg → Hash.Msg) (V : Claims.Verifier Coin)
     (P : Claims.Prover Ω) (j : Fin 2 → Fin (l₀ :: l₁ :: rest).length → Fin (V.k x))
     (ev : Fin 2 → Fin (l₀ :: l₁ :: rest).length → Ω → (Fin (V.k x) → Coin) → (Fin (V.k x) → Coin) → Prop)
     (ev₁ : Ω → (Fin (V.k x) → Coin) → Prop)

@@ -49,9 +49,8 @@ def test_an_honest_pair_passes_and_each_edit_fails_one_code():
         ["ranks-members", *built]
     assert codes(record={**RECORD, "templates": [["T", 4]]}) == ["ranks-units", *built]
     assert codes(record={**RECORD, "ranks": {**RANKS, "prefix": "r/"}}) == ["ranks-shape"]
-    assert [c for c, _ in W.failures(False, W.Given(dockets=()), RECORD, [{}, {}], SERVED, REGS, "root", lambda c: True, [], [])] == \
-        ["two-stage-form"]
-    assert [c for c, _ in W.failures(False, W.Given(dockets=()), RECORD, [{}, {}], SERVED, REGS, "root", lambda c: True, [("T", 5)], [])] == \
+    assert [c for c, _ in W.failures(W.Given(dockets=()), RECORD, [{}, {}], SERVED, REGS, "root", lambda c: True, [], [])] == []
+    assert [c for c, _ in W.failures(W.Given(dockets=()), RECORD, [{}, {}], SERVED, REGS, "root", lambda c: True, [("T", 5)], [])] == \
         ["ranks-members"]
 
 
@@ -159,6 +158,29 @@ def test_a_wired_read_opens_the_writer_ranks_tree_and_an_own_read_its_own():
         return W.window_read_ok(EX_RANKS, W.Index(ws), dockets, own, True, W.SS.Part("A", 0, 2), 0, port, j)
     assert ok("x", e("B/o0", "b1", [0, 1])) and not ok("x", e("B/o0", "b1", [1, 0])) and not ok("x", e("A/y", "a0", [0, 1]))
     assert ok("y", e("A/y", "a0", [0, 1])) and not ok("y", e("A/y", "a0", [1, 0])) and not ok("y", e("B/o0", "b1", [0, 1]))
+
+
+def test_a_join_wire_opened_in_the_readers_own_tree_of_the_writers_template_is_refused():
+    """A cheat: rank 0's reader opens its join-wired ``x`` against rank 0's own ``B/o0`` tree, at the rows rank 1's would
+    be: ``second-read`` reads the writer unit's rank from the wire and the ranks, never from the opening."""
+    def root(port: str, r: str) -> dict:
+        return {"domain": "d" + r, "leaves": 2, "port": port, "root": r}
+    dockets = ({"roots": [root("A/y", "a0"), root("B/o0", "b0")]}, {"roots": [root("B/o0", "b1")]})
+    ws = [_w("A", "x", "B", 0, 2, 2)]
+    own = W.own_for(W.Given(dockets=dockets), [], (0, "A", 0, 0, 2), [0], [W.SS.Wire("A", "x", "B", "o0")])
+
+    def ok(root: str) -> bool:
+        e = {"domain": "d" + root, "leaves": 2, "reads": [0, 1], "root": root, "value": "B/o0"}
+        return W.window_read_ok(EX_RANKS, W.Index(ws), dockets, own, True, W.SS.Part("A", 0, 2), 0, "x", e)
+    assert ok("b1") and not ok("b0")
+
+
+def test_a_ranks_doc_that_moves_a_unit_between_ranks_is_refused_by_the_members():
+    """A cheat: the ranks doc states rank 0's ``T`` units as 2 and rank 1's as 3, the same total, so each segment is
+    mis-stated while ``ranks-units`` holds: each rank's registered members tile its own count, so ``ranks-members``."""
+    moved = {**RANKS, "of": [{**RANKS["of"][0], "units": {"T": 2}}, {**RANKS["of"][1], "units": {"T": 3}}]}
+    found = W.rank_failures({**RECORD, "ranks": moved}, [{}, {}], SERVED, REGS, "root", lambda c: True)
+    assert [c for c, _ in found] == ["ranks-members"]
 
 
 def test_the_statements_are_the_sampled_members_by_position():

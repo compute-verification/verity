@@ -483,7 +483,7 @@ end FlockSoundness.Discharge.ZkExec
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed DecodeZL
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed DecodeZL
 open FlockSoundness.Discharge.Tables (LiveOutJ DecodesTable repTapeJ)
 
 local notation "𝔽" => FlockLevel3.GF128
@@ -689,7 +689,7 @@ end FlockSoundness.Discharge.Composed
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Placed DecodeZL
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Placed DecodeZL
   HiddenExec Composed
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open FlockSoundness.Discharge.DecodeZLJ (partJson)
@@ -939,7 +939,7 @@ variable [S : ZkSetup]
 
 /-- **The deployed `--zk` decoders are right at `zkTabs` at the rows at a masked statement in scope, at one outcome**:
 `decodesTableR_zkTabs` at public outputs, `decodesTableHR_zkTabs` at hidden outputs (`decodesTableW_deploy`). -/
-theorem decodesTableR_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem decodesTableR_deploy {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -976,7 +976,7 @@ end Gen
 
 /-- **The deployed `--zk` decoders are right at `zkTabs` at the rows at a masked statement in scope, at one outcome**:
 `decodesTableR_zkTabs` at public outputs, `decodesTableHR_zkTabs` at hidden outputs (`decodesTableW_deploy`). -/
-theorem decodesTableR_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem decodesTableR_deploy {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])

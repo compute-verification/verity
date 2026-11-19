@@ -2,7 +2,7 @@ module
 
 public import Properties.Pous.Pooled
 public import Proofs.Pous.PeriodDeployed
-public import Proofs.Flock.Soundness.Audit.Periods
+public import Proofs.Spot.Sampling.Periods
 public import Proofs.Flock.Claims.Sampling.Draws
 public import Mathlib.Analysis.Complex.ExponentialBounds
 public import Batteries.Data.ByteArray
@@ -14,7 +14,7 @@ public import Properties.Pous.Period
 `PeriodHeld` bounds one window: at every value of the other audits' coins, the verifier accepts the window's PoUS audit
 with no break in its data while the capacity account held fewer than `S · len` bit-ticks (`ShortAccepted`) with
 probability at most `p = δ + ε_max` (`1% + 2^-128`) over the window's capacity coins. Over `U` windows whose capacity
-coins are flipped independently, window after window, the monitoring-period step (`FlockSoundness.Audit.Periods`) pools
+coins are flipped independently, window after window, the monitoring-period step (`Spot.Sampling.Periods`) pools
 it, given that each window is fixed before its own capacity coins (`FixedBefore`): window `u`'s joint run, its audit
 and the other audits' coins are functions of the earlier windows' capacity coins, so `PeriodHeld` applies to window `u`,
 at its strategy under the device model and the instantiation (`DeviceModel`, `Instantiates`), whatever the earlier
@@ -41,7 +41,7 @@ unlikely only for `M` above `p · U`, and `p^M` bounds only the windows short wh
 
 namespace Pous.Period.SecurityProofs
 
-open Pous.EndToEnd PousVerifier PousVerifier.Properties FlockSoundness.Audit FlockSoundness.Game
+open Pous.EndToEnd PousVerifier PousVerifier.Properties Spot.Sampling FlockSoundness.Game
 open scoped ENNReal
 
 set_option exponentiation.threshold 20000

@@ -39,11 +39,12 @@ inputs = ["verity/protocols/resource_accounting/memory/poub/prover/poub_session/
           # the sessions' harness (PoUB's own tests'), and the verifier host whose run's out/ auditor_line.py reads
           # (test_live_verifier_host.py: its gate, its stub verifier and the challenger's tunnel client)
           "tests/verity/protocols/resource_accounting/memory/poub/__init__.py", "tests/verity/protocols/resource_accounting/memory/poub/session_harness.py",
+          "tests/verity/protocols/resource_accounting/memory/poub/figures.json",
           "verity/protocols/resource_accounting/memory/poub/attester/live_verifier", "verity/protocols/compose/verifier/live_challenger/serve.py",
           "verity/protocols/resource_accounting/memory/poub/prover/audit_prover.py",
           "verity/protocols/resource_accounting/memory/poub/prover/poub_session/device.py",
           "verity/protocols/resource_accounting/memory/poub/prover/poub_session/session.cu", "verity/__init__.py",
-          "tools/config/verity_config/verity_settings.py", "verity/errors.py",
+          "tools/config/verity_config/verity_settings.py", "verity/errors.py", "verity/ports.py",
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/resource_accounting/memory/poub/verifier",
           "verity/channel.py",
           "verity/circuits", "verity/commitments/crypto", "verity/commitments", "verity/commitments/randomness",
@@ -75,6 +76,9 @@ inputs = ["verity/protocols/resource_accounting/memory/poub/prover/poub_session/
           "verity/protocols/resource_accounting/memory/poub/prover/word_codec/cuda_lib.py",
           # sheets.py: the node's figures, read from its node file and cards
           "verity/device.py", "calibration/hardware/cards", "calibration/hardware/nodes",
+          # test_run_serve.py: a node's machine properties by the harness kit's `MACHINE_PROPERTIES`
+          "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
+          "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py", "tools/config/verity_config",
           # test_sampling_inputs.py: sampling_inputs.py prices an opening with SPOT's one cost fit; and the
           # ledger and credit checks' Lean verifier, `spot-verifier` (`coins.lean_answer`), with the
           # interface its package requires
@@ -83,7 +87,7 @@ inputs = ["verity/protocols/resource_accounting/memory/poub/prover/poub_session/
           "verity/protocols/compose/verifier/live_challenger/auditor.py", "verity/protocols/compose/verifier/live_challenger/host.json", "verity/protocols/compose/verifier/live_challenger/serve.py",
           "tests/verity/protocols/compose/verifier/live_challenger/stub_serve.py",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
-          "adapters/vllm/verity_vllm/engine", "adapters/vllm/verity_vllm/protocols/poub",
+          "adapters/vllm/verity_vllm/engine",
           "verity/protocols/__init__.py",
           # auditor_line.py: a line whose summed error is 1 or more holds no share, by the reporting grid's one rule
           "verity/protocol.py", "verity/protocols/proofs/__init__.py",
@@ -96,8 +100,13 @@ inputs = ["verity/protocols/resource_accounting/memory/poub/prover/poub_session/
           # CPU test loads without the adapter
           "verity/protocols/resource_accounting/memory/poub/prover/node_store", "benchmarks/poub_session",
           # keep.py: the private names it refuses, the vLLM integration's one list, and the one matcher it loads by path
-          "adapters/vllm/verity_vllm/pipeline/private_names.json", "adapters/vllm/verity_vllm/pipeline/private_names.py",
-          "adapters/vllm/verity_vllm/pipeline/research_outputs.py"]
+          "adapters/vllm/verity_vllm/pipeline/private_names.json",
+          "adapters/vllm/verity_vllm/pipeline/private_names.py",
+          "adapters/vllm/verity_vllm/pipeline/research_outputs.py",
+          # test_refresh_glue.py: refresh_result.py writes its result through the harness kit's writer
+          "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
+          "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
+          "tools/config/verity_config"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

@@ -431,7 +431,7 @@ REGISTRY = EnvSettings(
             "never what a verdict says"),
     # ---- PoUW's prover suite
     Setting("VERITY_SUITE_ROOT", stripped, "", WHERE, "the tree the suite runner (tools/check/suites.py) runs a suite in, "
-            "set under check, where test_pouw_device's CPU build runs and fails without a C++ compiler instead of skipping: "
+            "set under check, where a test that builds on the CPU fails without a C++ compiler instead of skipping: "
             "which tests run, never what a commitment holds"),
     Setting("VERITY_POUW_H1_PIN", present, False, WHERE, "set, test_h1_pin.py builds the H1 unit's circuit at K = 64 and "
             "holds it to its pin (about 3.5 minutes, 9.5 GB): which tests run, never what a circuit computes"),

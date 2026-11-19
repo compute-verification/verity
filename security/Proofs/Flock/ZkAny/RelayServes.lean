@@ -34,7 +34,7 @@ open _root_.Flock (SessionSpec Stmt)
 /-- **What the relay's IO code does at a slot of kind `k` of session `sid`**: `LoopRead`'s clauses but the run's
 couplings to the model's (the auditor's answers, at the `Finish` the run having a message, and the worker's values), a
 frame round running on the worker's round value `rv` at the model's history. -/
-def LoopServe {W Rr : Type} (M : LoopModel W Rr) (rv : List (Claims.Msg × Claims.Msg) → Option Claims.Msg)
+def LoopServe {W Rr : Type} (M : LoopModel W Rr) (rv : List (Hash.Msg × Hash.Msg) → Option Hash.Msg)
     (sid : Nat) (spec : SessionSpec) (sts : Array Stmt) (nonce : ByteArray) :
     Session.Kind → State → Placed → Env → LoopAt → LoopAt → Prop
   | .hello, _, _, e, σ, σ' =>
@@ -58,7 +58,7 @@ def LoopServe {W Rr : Type} (M : LoopModel W Rr) (rv : List (Claims.Msg × Claim
             (((st.answer .commit a).2.size - 5) / 16))) ∧
       Between sid σ.R σ'.R ∧ σ'.c = σ.c + 1
   | .round stream n, st, pl, e, σ, σ' =>
-    (∃ i r dom, ∃ v : Claims.Msg, rv (M.hist σ.c) = some v ∧
+    (∃ i r dom, ∃ v : Hash.Msg, rv (M.hist σ.c) = some v ∧
       RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R ∧
       (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) ∧ InnerSrc M sid i r σ ∧
       StartOk sts sid i r σ) ∧
@@ -115,7 +115,7 @@ loop's other requests between the session's (`Between`, `Stays`), with the rep f
 `Finish.serve` keeps (`SaltsSrc`), each against the model's run `M`; a frame round's content being the worker's round
 value `rv` at the model's history (`WorkerDeterministic`). Why it is reasonable: each clause is one IO function's
 effect on the loop's references or the auditor's connection, stated with the pure functions the function calls. -/
-def RelayServes {W Rr : Type} (M : LoopModel W Rr) (rv : List (Claims.Msg × Claims.Msg) → Option Claims.Msg)
+def RelayServes {W Rr : Type} (M : LoopModel W Rr) (rv : List (Hash.Msg × Hash.Msg) → Option Hash.Msg)
     (aud : List ByteArray → Option ByteArray) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt) (nonce : ByteArray)
     (σ : LoopAt) (ins : List (ByteArray × Env)) : Prop :=
   ReadsBy (LoopServe M rv sid spec sts nonce) σ {} {} (pick true {} {} ins) ∧
@@ -128,7 +128,7 @@ since its previous squeeze), the model's worker gives `v` there and goes on. Why
 honest prover behind the ZK server, whose round contents its code computes from the statement, the witness, its tapes
 and the coins it received, the history. -/
 def WorkerDeterministic {W Rr : Type} (M : LoopModel W Rr)
-    (rv : List (Claims.Msg × Claims.Msg) → Option Claims.Msg) : Prop :=
+    (rv : List (Hash.Msg × Hash.Msg) → Option Hash.Msg) : Prop :=
   ∀ h v, rv h = some v → M.wk M.x M.w M.ρ h 0 = some (v, false)
 
 /-- **What `LoopRead` asks of a slot of kind `k` beyond what the IO code serves and the worker's values**, with the
@@ -150,10 +150,10 @@ theorem AnsPart.of_ctl {W Rr : Type} {M : LoopModel W Rr} {c : Nat} {e : Env} {k
 model's worker gives the worker's round values (`hw`), and it answers the `Finish` with the ZK server's own message
 (`hfw`). -/
 theorem loopRead_of_serve {W Rr : Type} {M : LoopModel W Rr}
-    {rv : List (Claims.Msg × Claims.Msg) → Option Claims.Msg} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
+    {rv : List (Hash.Msg × Hash.Msg) → Option Hash.Msg} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {nonce : ByteArray} {k : Session.Kind} {st : State} {pl : Placed} {e : Env} {σ σ' : LoopAt}
     (hs : LoopServe M rv sid spec sts nonce k st pl e σ σ') (hw : WorkerDeterministic M rv)
-    (hfw : ∀ h : List (Claims.Msg × Claims.Msg), h.length = M.L.last M.x →
+    (hfw : ∀ h : List (Hash.Msg × Hash.Msg), h.length = M.L.last M.x →
       M.wk M.x M.w M.ρ h 0 = some (M.L.ownMsg M.x M.w M.ρ h, false))
     (hA : AnsPart M σ.c e k) :
     LoopRead M sid spec sts nonce k st pl e σ σ' := by

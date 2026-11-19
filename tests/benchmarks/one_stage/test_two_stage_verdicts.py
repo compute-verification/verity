@@ -22,8 +22,10 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import ONE
 from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import bind
+from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.population import BitsWord, WordBits
+from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates import embedding as EMB
 from verity_vllm.definitions.registry import boolean_fp8_moe as BM
@@ -43,14 +45,24 @@ PARAMS = tuple(f"weights/model.layers.0.mlp.experts.{p}@{H}/b0/table" for p in (
 AT = tuple(j // W for j in range(CELLS))
 
 
-def _read_signature(S_):
-    return EMB.read(S_.V, S_.H).signature()[0], Tuple(Array(S_.H, EMB.BF16), BL.BIT)
+def _bits_signature(S_):
+    params = EMB.read(S_.V, S_.H).signature()[0]
+    return (("tok", EMB.TOKEN), *params[1:]), Tuple(Array(S_.H, EMB.BF16), BL.BIT)
+
+
+_READ_BITS = TR.part("TwoStageVerdictsTestReadBits", ("V", "H"), _bits_signature,
+                     lambda C, S_, *e: [*e[17:17 + S_.H], [ONE]], "h = row, ok = 1: a read's bits with none of its hashes",
+                     version=0)
+
+
+def _read_body(B_, S_, tok, *rest):
+    h, ok = B_.call(bind(_READ_BITS, V=S_.V, H=S_.H), B_.call(bind(WordBits, W=32), tok), *rest)
+    return coll_concat(EMB.read(S_.V, S_.H).signature()[1], [B_.batch(bind(BitsWord, W=16), h, axes=(0,)), ok])
 
 
 #: registered, so the adapter's served templates resolve the block by its id: SPOT's test holds none of them itself
-READ = TR.part("TwoStageVerdictsTestRead", ("V", "H"), _read_signature,
-               lambda C, S_, *e: [*e[17:17 + S_.H], [ONE]], "h = row, ok = 1: a read's ports with none of its hashes",
-               version=0)
+READ = CompositeDefinition("TwoStageVerdictsTestRead", 0, ("V", "H"), lambda S_: EMB.read(S_.V, S_.H).signature(),
+                           _read_body, doc="h = row, ok = 1: a read's ports with none of its hashes")
 FUSED = bind(BM.MoeExpertFp8ReadGemmV1, READ=bind(READ, V=E, H=H), K=K, N=1, G=K, KB=K, SWAP=False,
              DOT=BG.HopperE4m3MmaV2Dot32)
 TID = descriptor_id(FUSED)
@@ -91,7 +103,7 @@ def _interior(d: TS.Design, window, *, verdicts: bool = True) -> dict:
     registered += [{"value": x.value, "root": "0e" * 64, "leaves": Q * x.per, "domain": "d1" * 64}
                    for x in d.verdicts if verdicts]
     linked = {x.port for x in d.links}
-    roots = [{"port": window.held(m, p), "root": "aa" * 64, "leaves": max(window.held_leaves(m, p)) + 1,
+    roots = [{"port": window.tree(m, p), "root": "aa" * 64, "leaves": int(window.leaves(m, p).max()) + 1,
               "domain": "da" * 64} for p, _w in m.all_rows if p not in linked]
     return {"registered": registered, "roots": roots}
 
@@ -127,7 +139,7 @@ def test_the_verifier_reads_the_verdict_at_its_value_and_never_at_the_blocks_own
     assert all(got[p]["value"] == f"{KEY}/{p}" and got[p]["reads"] == rows for p in IR.TABLE)
     before = replace(d, verdicts=())
     own = TS.verifier_reads(before, window, _interior(before, window), {"roots": []}, SAMPLE)[m.key]["ports"]
-    assert own[SS.OPENING_VERDICT]["value"] == window.held(m, SS.OPENING_VERDICT) != o1["value"]
+    assert own[SS.OPENING_VERDICT]["value"] == window.tree(m, SS.OPENING_VERDICT) != o1["value"]
     with pytest.raises(ValueError, match=f"'o1' reads {KEY}/root/opened, which the interior registration doesn't register"):
         TS.verifier_reads(d, window, _interior(d, window, verdicts=False), {"roots": []}, SAMPLE)
 
@@ -168,7 +180,7 @@ def test_round_two_takes_a_fused_blocks_tables_from_the_auditors_pins():
     statement is given here, so ``second-statements`` or the design's own codes refuse it before the form's."""
     own = _pinned_round_two(PINS)
     assert SS.inputs_failure(own) is None
-    first = SS.check_twin(SS.FORM, own, None)
+    first = SS.check_twin(own, None)
     assert "second-inputs" not in first.codes and not first.ok
     for changed in (replace(own, tables=()),
                     replace(own, tables=tuple((p, {**e, "root": "ee" * 64}) for p, e in own.tables)),
@@ -177,7 +189,7 @@ def test_round_two_takes_a_fused_blocks_tables_from_the_auditors_pins():
                     replace(own, tables=own.tables[:1])):
         assert SS.inputs_failure(changed) == f"{KEY}/row"
         assert dict(SS._interior_failures(changed))["second-inputs"] == {"value": f"{KEY}/row", "why": SS.INPUTS_WHY}
-        assert "second-inputs" in SS.check_twin(SS.FORM, changed, None).codes
+        assert "second-inputs" in SS.check_twin(changed, None).codes
     recorded = {"roots": [{"port": f"t{k}", **{x: e[x] for x in ("root", "domain", "leaves")}}
                           for k, e in enumerate(PINS.values())]}
     assert SS.inputs_failure(replace(own, boundary=recorded, tables=())) is None

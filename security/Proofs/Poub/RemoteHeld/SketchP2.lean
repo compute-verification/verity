@@ -55,6 +55,7 @@ theorem SketchBoundP2 : ResourceAccounting.Guarantees.Remote.SketchBoundP2 := by
   have h := SketchBoundRun β Hs P N 257 512 S L q 16 12 G qtot ε (((Q : ℝ) + P) ^ 2 / 2 ^ 257) A T (by norm_num)
     hε (by positivity) hP hRank hH hq hrec hpres
   unfold SketchBound Trace.Holds at h ⊢
+  rw [δSketch_eq]
   rw [show (8 * 12 : ℕ) = 96 from rfl] at h
   refine h.trans ?_
   have hG' : ((∑ j, G j : ℕ) : ℝ) ≤ (Q : ℝ) + P := by exact_mod_cast hG

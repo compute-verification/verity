@@ -304,9 +304,9 @@ def executionPhaseAt (inner : Inner) (p : AuditParams) (r : Read) (ledger pins :
   let (a, opened) ← coinOf (Challenger.auditedIn r.wins r.periods (Json.mkObj [("root", Json.str w.root)]))
   if let some why := Challenger.pinsReason a.session opened pins then throw (Code.coin, why)
   if let some why := Challenger.firstParentReason a.session a.pinned p.main then throw (Code.coin, why)
-  let (_, roots) ← coinOf (Challenger.challengePhaseNamed a p.ledger.key ev.session)
+  let (c, log) ← coinOf (Challenger.challengePhaseNamed a p.ledger.key ev.session)
   unless Challenger.withheldOn ledger w.root do throw (Code.coin, Challenger.WITHHELD)
-  let sampled := sampledOn w.root roots
+  let sampled := sampledOn w.root (Challenger.byFamily c log)
   let want ← match sampled.toList with
     | [] => throw (Code.missing, s!"session {w.session} received no registration in any family: its root was " ++
         "committed and never sampled")

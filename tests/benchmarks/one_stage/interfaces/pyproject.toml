@@ -10,7 +10,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # `verity`: windows, commitments, the Definitions a unit replays and core's registered values.
 # `verity/commitments/cuda/commit_slots/slots.py`: kernels' commit call, which builds the bundle's step commitments.
 # `calibration/census/deployments.json`: the reference deployment test_block_record holds the block record's to.
-inputs = ["verity", "verity/commitments/cuda/commit_slots/slots.py", "calibration/census/deployments.json", "benchmarks/one_stage/interfaces"]
+# block_record derives the record's subprotocols from the onsite application
+inputs = ["applications/onsite_full.toml", "verity", "verity/commitments/cuda/commit_slots/slots.py", "calibration/census/deployments.json", "benchmarks/one_stage/interfaces"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

@@ -18,7 +18,7 @@ from verity.protocols.resource_accounting.network.verifier.id_form import ID_DIG
 from tests.verity.protocols.resource_accounting.network.verifier.test_network_attester import EOF, reasons, records, request, run
 from verity.protocols.resource_accounting.network.verifier.network_attester import (END, FAIL, INTEGER_FIELDS, OPTIONAL_FIELDS, Released, NetworkAttesterParams,
                                                     audit, cells, read_reason, reason_frame)
-from verity.protocols.resource_accounting.network.verifier.release import WATERMARK_END, watermark_chunk, watermark_head
+from verity.release import WATERMARK_END, watermark_chunk, watermark_head
 
 #: a schedule whose cells hold an id request's head, and the same with lengths rows
 PLAIN = NetworkAttesterParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,

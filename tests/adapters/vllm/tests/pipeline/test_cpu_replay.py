@@ -11,13 +11,15 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from verity.commitments import salt_file as SF
+
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.commit import step_rows
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 
 GEO = bytes(range(64))
-WK = bytes(37 * i % 256 for i in range(64, 128))            # no run of the committed steps' bytes: a keep holding it holds the key
+SALTS: dict[tuple[str, int], bytes] = {}
 RNG = np.random.default_rng(7)
 PARTS = {"model.layers.0.self_attn.q_proj.weight": RNG.integers(0, 1 << 16, (4, 8), dtype=np.uint16),
          "model.layers.0.self_attn.k_proj.weight": RNG.integers(0, 1 << 16, (2, 8), dtype=np.uint16),
@@ -45,15 +47,25 @@ def _served():
             "model.unknown.weight": ("bfloat16", np.zeros(4, np.uint16))}
 
 
+def tensor_salts(name: str, nbytes: int) -> bytes:
+    """A registered tensor's row salts, one fresh draw per name and size for the whole module."""
+    return SALTS.setdefault((name, nbytes), step_rows.fresh_tensor_salts(nbytes))
+
+
 def weights_tree(tensors: dict[str, tuple[str, np.ndarray]]) -> dict:
-    """The registered tensors' weights tree as `register_weights` keeps it."""
+    """The registered tensors' weights tree as `register_weights` keeps it, under `tensor_salts`."""
     names, roots = [], []
     for i, (name, (dt, a)) in enumerate(tensors.items()):
         raw = np.ascontiguousarray(a).reshape(-1).view(np.uint8)
         entry = [name, dt, list(a.shape), int(raw.size)]
-        roots.append(step_rows.tensor_root(GEO, i, entry, raw, WK))
+        roots.append(step_rows.tensor_root(GEO, i, entry, raw, tensor_salts(name, int(raw.size))))
         names.append(entry)
-    return step_rows.weights_tree(GEO, names, roots, WK)
+    return step_rows.weights_tree(GEO, names, roots)
+
+
+def write_salts(bundle: Path, tree: dict) -> None:
+    """The registration's salt file beside the bundle's weights tree, as `replay_bundle.write_store_files` writes it."""
+    SF.write(CPU.salts_path(bundle), {n: tensor_salts(n, int(nb)) for n, _dt, _s, nb in tree["names"] if int(nb)})
 
 
 @pytest.fixture
@@ -69,6 +81,7 @@ def world(tmp_path):
             (bundle / "weights" / "extra" / f"{i}.bin").write_bytes(np.ascontiguousarray(a).tobytes())
             extra[name] = i
     tree["extra"] = extra
+    write_salts(bundle, tree)
     return {"ck": ckd, "bundle": bundle, "tree": tree, "root": tree["root"], "other_root": "00" * (len(tree["root"]) // 2)}
 
 
@@ -145,19 +158,26 @@ def test_only_a_rows_sha512_tree_under_a_rows_sha512_root_of_record_is_read(worl
 
 
 def test_a_rows_sha512_tree_names_its_scheme_and_a_sha512_root_and_its_tensor_roots_are_the_rows_trees():
-    """Under rows-sha512 a tensor's root is the root of its rows' frame-v3-sha512 tree (`step_rows.levels` over its zero-padded
-    ROW_BYTES rows, under the tensor's domain and salt key), and the weights root is 64 bytes; another key gives other roots."""
+    """Under rows-sha512 a tensor's root is the root of its rows' frame-v3-sha512 tree (hiding leaves over its zero-padded ROW_BYTES
+    rows, row i under the salt file's 192 bytes i, under the tensor's domain), the tree holds no salt, and the weights root is 64
+    bytes; other salts give other roots."""
+    from verity.commitments.merkle import tree_levels
+
     a = RNG.integers(0, 256, step_rows.ROW_BYTES + 100, dtype=np.uint8)
     entry = ["model.x.weight", "uint8", [a.size], int(a.size)]
     dom = step_rows.weights_domain(GEO, 0, entry)
     rows = [a[:step_rows.ROW_BYTES].tobytes(), a[step_rows.ROW_BYTES:].tobytes() + bytes(step_rows.ROW_BYTES - 100)]
-    lv = step_rows.levels(dom, rows, step_rows.tensor_key(WK, 0), 8 * step_rows.ROW_BYTES)
-    assert dom.count == 2 and step_rows.tensor_root(GEO, 0, entry, a, WK) == lv[-1][0]
+    ys = tensor_salts("model.x.weight", a.size)
+    hs = [step_rows.hiding_leaf(r, ys[192 * i:192 * (i + 1)], 8 * step_rows.ROW_BYTES)[1] for i, r in enumerate(rows)]
+    want = tree_levels(dom, [step_rows.leaf(dom, i, h) for i, h in enumerate(hs)])[-1][0]
+    assert dom.count == 2 and len(ys) == 2 * step_rows.SALT_BYTES and step_rows.tensor_root(GEO, 0, entry, a, ys) == want
     tree = weights_tree({"model.x.weight": ("uint8", a)})
-    assert (tree["scheme"], len(bytes.fromhex(tree["root"])), tree["key"]) == (step_rows.NAME, step_rows.ROOT_BYTES, WK.hex())
-    assert CPU.folded_root(tree) == tree["root"] and tree["tensor_roots"] == [lv[-1][0].hex()]
-    assert step_rows.tensor_root(GEO, 0, entry, a, bytes(64)) != lv[-1][0]
-    assert step_rows.tensor_root(GEO, 1, entry, a, WK) != lv[-1][0], "each tensor has its own domain and salt key"
+    assert (tree["scheme"], len(bytes.fromhex(tree["root"])), "key" in tree) == (step_rows.NAME, step_rows.ROOT_BYTES, False)
+    assert CPU.folded_root(tree) == tree["root"] and tree["tensor_roots"] == [want.hex()]
+    assert step_rows.tensor_root(GEO, 0, entry, a, bytes(len(ys))) != want
+    assert step_rows.tensor_root(GEO, 1, entry, a, ys) != want, "each tensor has its own domain"
+    with pytest.raises(ValueError, match="2 rows take 384 bytes of salts"):
+        step_rows.tensor_root(GEO, 0, entry, a, ys[:192])
 
 
 def test_on_read_opens_a_tensor_on_its_first_read_as_open_weights_does_and_refuses_one_by_name(world):
@@ -193,6 +213,7 @@ def test_an_int32_table_opens_as_the_checkpoints_i64_words_in_range(tmp_path):
         (ckd / "config.json").write_text("{}")
         _safetensors(ckd / "model.safetensors", {name: ("I64", ck_table)})
         tree = weights_tree({name: ("int32", table.astype(np.int32))}) | {"extra": {}}
+        write_salts(bundle, tree)
         return CPU.open_weights(bundle, tree, tree["root"], WR.CheckpointIndex(str(ckd), verify_shards=False), threads=1)
 
     words, wc = opened(table)
@@ -219,6 +240,7 @@ def _deferred(tmp_path, steps=None, tree=None):
     (p / "weights" / "extra").mkdir(parents=True)
     tree = tree or weights_tree({"model.rotary_emb.cos_sin_cache": ("float32", COS_SIN)}) | {"extra": {"model.rotary_emb.cos_sin_cache": 0}}
     (p / "weights" / "tree.json").write_text(json.dumps(tree))
+    write_salts(p, tree)
     for i in tree["extra"].values():
         (p / "weights" / "extra" / f"{i}.bin").write_bytes(COS_SIN.tobytes())
     (tmp_path / "binding_map_p1.json").write_text(json.dumps({"entries": []}))
@@ -322,24 +344,24 @@ def test_the_slim_keep_is_written_only_for_the_replay_s_own_draw(tmp_path):
     assert not list(out.glob("replay_slim_p*"))
 
 
-def test_a_rows_sha512_keep_carries_only_the_salt_keys_of_the_tensors_its_replay_opened_never_the_registrations_key(tmp_path):
-    """``Kw`` opens every weights leaf (each tensor's salt key derives from it), and a keep is read by later replays: no file of a
-    rows-sha512 keep holds ``Kw`` or an unopened tensor's ``tensor_key(Kw, t)``, only those of the tensors the replay opened, with the
-    bundle's bytes of those alone.  A replay from the keep opens the same tensors and reports the rest unopened, not mismatched."""
+def test_a_rows_sha512_keep_carries_only_the_salts_of_the_tensors_its_replay_opened(tmp_path):
+    """A tensor's salts open its weights leaves, and a keep is read by later replays: no file of a rows-sha512 keep holds an unopened
+    tensor's salts, only those of the tensors the replay opened (its salt file), with the bundle's bytes of those alone.  A replay
+    from the keep opens the same tensors and reports the rest unopened, not mismatched."""
     tree = weights_tree(_served()) | {"extra": {"model.rotary_emb.cos_sin_cache": 2}}
     out, b, store, run, t, _want, c, plan = _kept(tmp_path, tree)
-    names = [n for n, *_r in tree["names"]]
-    assert WK.hex().encode() in (Path(b["path"]) / "weights" / "tree.json").read_bytes(), "the private bundle holds Kw"
+    salts = {n: tensor_salts(n, int(nb)) for n, _dt, _s, nb in tree["names"] if int(nb)}
+    assert SF.params(CPU.salts_path(Path(b["path"]))).keys() == salts.keys(), "the private bundle holds every tensor's salts"
     for opened in ({QKV, "model.rotary_emb.cos_sin_cache"}, {QKV}):
         CPU.keep(out, b, store, run, t, plan, c, opened=opened)
         k = CPU.slim_path(out, 1)
-        held = [i for i, n in enumerate(names) if n in opened]
-        secret = [WK, *(step_rows.tensor_key(WK, i) for i in range(len(names)) if i not in held)]
+        secret = [ys[:64] for n, ys in salts.items() if n not in opened]
         for f in (x for x in k.rglob("*") if x.is_file()):
             data = f.read_bytes()
-            assert not [s for s in secret if s in data or s.hex().encode() in data], f"{f.relative_to(k)} holds Kw or an unopened tensor's key"
+            assert not [s for s in secret if s in data or s.hex().encode() in data], f"{f.relative_to(k)} holds an unopened tensor's salts"
         kt = json.loads((k / "weights" / "tree.json").read_text())
-        assert "key" not in kt and kt["tensor_keys"] == {str(i): step_rows.tensor_key(WK, i).hex() for i in held}
+        assert not {"key", "tensor_keys"} & kt.keys()
+        assert {n: SF.read(CPU.salts_path(k), n) for n in SF.params(CPU.salts_path(k))} == {n: salts[n] for n in opened}
         assert (kt["root"], kt["tensor_roots"], kt["names"]) == (tree["root"], tree["tensor_roots"], tree["names"])
         assert kt["extra"] == {n: i for n, i in tree["extra"].items() if n in opened}
         assert sorted(x.name for x in (k / "weights" / "extra").glob("*")) == [f"{i}.bin" for i in sorted(kt["extra"].values())]
@@ -352,9 +374,9 @@ def test_a_rows_sha512_keep_carries_only_the_salt_keys_of_the_tensors_its_replay
     words, wc = CPU.open_weights(k, json.loads((k / "weights" / "tree.json").read_text()), tree["root"],
                                  WR.CheckpointIndex(str(ckd), verify_shards=False), threads=2)
     assert wc["equal"] is True and set(words) == {QKV, "model.rotary_emb.cos_sin_cache"} and wc["mismatched_n"] == 0, wc
-    assert {u["name"]: u["why"] for u in wc["unopened"]} == {n: "the slim keep carries no salt key for it" for n in ("model.norm.weight", "model.unknown.weight")}
-    with pytest.raises(KeyError, match="carries no salt key"):
-        CPU.tensor_root_of(json.loads((k / "weights" / "tree.json").read_text()), 1, PARTS["model.norm.weight"].view(np.uint8))
+    assert {u["name"]: u["why"] for u in wc["unopened"]} == {n: "the salt file holds no salts for it" for n in ("model.norm.weight", "model.unknown.weight")}
+    with pytest.raises(KeyError, match="holds no salts for it"):
+        CPU.tensor_root_of(k, json.loads((k / "weights" / "tree.json").read_text()), 1, PARTS["model.norm.weight"].view(np.uint8))
 
 
 def _decided(tmp_path):

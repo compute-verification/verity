@@ -8,7 +8,9 @@
 #
 # It builds the binary (CUDA 13.0) into $OUT/bin and dumps its SASS into $OUT/sass; the device part runs under one
 # gpu-lease (device.txt, env/gpu.csv), and cpw_sass_count.py --device sets the rates beside the counts (cpw.json).
-# Exit: 0 done, 1 build failed, 2 no nvcc, 3 a route not bit-exact.
+# The card's record's `arch` is the target, its architecture file nvcc's -gencode (probe.py arch, gencode); another
+# card than an sm_120a one is refused before anything is built.
+# Exit: 0 done, 1 build failed, 2 no nvcc or another card, 3 a route not bit-exact.
 set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -16,16 +18,21 @@ export PYTHONDONTWRITEBYTECODE=1
 
 if [ "${CPW_LEASED:-}" != 1 ]; then
   mkdir -p "$OUT/sass" "$OUT/env" "$OUT/bin"
-  NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
-  [ -x "$NVCC" ] || NVCC=$(command -v nvcc) || { echo "cpw_sass.sh: no nvcc (CUDA 13.0)" >&2; exit 2; }
+  NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13.0)/bin/nvcc} || { echo "cpw_sass.sh: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
+  [ -x "$NVCC" ] || { echo "cpw_sass.sh: no nvcc at $NVCC" >&2; exit 2; }
   "$NVCC" --version >"$OUT/env/nvcc.txt" 2>&1
+  PROBE="$HERE/../opcode_probe/probe.py"
+  ARCH=$(python3 "$PROBE" arch) || exit 2
+  WANT=$(python3 "$PROBE" arch --sku rtx-pro-6000-server) || exit 2
+  [ "$ARCH" = "$WANT" ] || { echo "cpw_sass.sh: the card's target is $ARCH, and cpw_sass.cu has forms for $WANT only: nothing built" >&2; exit 2; }
+  GENCODE=$(python3 "$PROBE" gencode) || exit 2
   BIN="$OUT/bin/cpw_sass"
-  flags=(-O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v)
+  flags=(-O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v)
   # st256 (mode 7) only where ptxas takes st.global.v8.b32; build_st256.log keeps a refusal
   if "$NVCC" "${flags[@]}" -DCPW_ST256 "$HERE/cpw_sass.cu" -o "$BIN" >"$OUT/build_st256.log" 2>&1; then
     mv "$OUT/build_st256.log" "$OUT/build.log"
   else
-    echo "cpw_sass.sh: st.global.v8.b32 refused on sm_120a (build_st256.log); building without mode 7" >&2
+    echo "cpw_sass.sh: st.global.v8.b32 refused on $ARCH (build_st256.log); building without mode 7" >&2
     "$NVCC" "${flags[@]}" "$HERE/cpw_sass.cu" -o "$BIN" >"$OUT/build.log" 2>&1 || { cat "$OUT/build.log" >&2; exit 1; }
   fi
   sha256sum "$BIN" >"$OUT/bin/cpw_sass.sha256"

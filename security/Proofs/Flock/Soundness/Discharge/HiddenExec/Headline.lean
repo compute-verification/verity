@@ -24,7 +24,7 @@ binding (`lay`, `rs`, `hHm`) at those tables. What it leaves open is named in it
 
 namespace FlockSoundness.Discharge.HiddenExec
 
-open Game Model Accounting Refine Audit Audit.Partition Flock
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition Flock
 open FlockSoundness.Discharge.Exec
 open scoped ENNReal
 

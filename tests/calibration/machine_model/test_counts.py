@@ -76,7 +76,7 @@ def test_refuses_what_the_kernel_does_not_run():
 
 
 def test_cli(capsys):
-    assert main(["counts", "e-l7qs", "--check", "--vector", "VF3l-16"]) == 0
+    assert main(["--device", "sm_120", "counts", "e-l7qs", "--check", "--vector", "VF3l-16"]) == 0
     assert "pass: 22 observations" in capsys.readouterr().out
-    assert main(["counts", "e-l7qs", "2048", "28672", "4096", "--vector", "VF3l-16"]) == 0
+    assert main(["--device", "sm_120", "counts", "e-l7qs", "2048", "28672", "4096", "--vector", "VF3l-16"]) == 0
     assert "e_l7qs at 2048 x 28672 x 4096: bound 22.5157" in capsys.readouterr().out

@@ -1,6 +1,6 @@
 """Install EXACTLY the plan's hooks (module path -> hook kind -> slot) on a built module tree, and the committer adapter.
 
-    inst = install_from_plan(plan, model, runner, sink=...)     forward hooks (producer_output), forward pre-hooks (consumer_input), the
+    inst = install_from_plan(plan, model, runner)               forward hooks (producer_output), forward pre-hooks (consumer_input), the
                                                                runner `sample()` wrap (runner_return); `inst.installed` lists what went in,
                                                                `inst.deferred` the plan's sites of other kinds (taps, registered inputs,
                                                                runner state, launch proxies, prescribed): those belong to their sources
@@ -12,22 +12,21 @@
     plan_selection(plan, model)                                 that module set and consumer-input set
 
 A plan with an UNSUPPORTED Value is refused by name (`IncompletePlan`) -- fail closed.
-`sink(site_key, tensor)` receives the observed tensor at each site; `OccurrenceSink` counts occurrences and records shapes only (no
-value reads, no synchronisation): the GPU gate's non-interference observer.
+Each site's observed tensor is a `verity.hooks.ValueProduced` (block, port, slot = the site's module, kind and slot) emitted to the
+process's exchange (`messages.current`) while a subscriber wants ``values``; `OccurrenceSink`, called with a site's key and tensor,
+counts occurrences and records shapes only (no value reads, no synchronisation): the GPU gate's non-interference observer.
 """
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from verity import hooks as H
+from verity_vllm import messages
 from verity_vllm.acquire.plan import HOOK_KINDS, AcquisitionPlan, AcquisitionSite
 from verity_vllm.engine import hooks as engine_hooks
 from verity_vllm.records.runtime_tree import RUNNER_PATH
 from verity_vllm.records.schema_ids import ACQUISITION_OBSERVED_SCHEMA
-
-Sink = Callable[[tuple[str, str, str], Any], None]
-
 
 class IncompletePlan(RuntimeError):
     """The plan names UNSUPPORTED Values: nothing is installed."""
@@ -108,11 +107,15 @@ class OccurrenceSink:
              "dtypes": sorted(self.dtypes.get(k, ())), "non_tensor": self.non_tensor.get(k, 0)} for k in keys]}
 
 
-def install_from_plan(plan: AcquisitionPlan, model: Any, runner: Any = None, *, sink: Sink | None = None) -> Installation:
+def _emit(key: tuple[str, str, str], t: Any) -> None:
+    if (ex := messages.current()).wants("values"):
+        ex.emit(H.ValueProduced(*key, t, ex.step))
+
+
+def install_from_plan(plan: AcquisitionPlan, model: Any, runner: Any = None) -> Installation:
     hooks, deferred, unsupported = _sites_of(plan)
     if unsupported:
         raise IncompletePlan(f"{len(unsupported)} unsupported Value(s): " + "; ".join(f"{u.get('value')}: {u.get('why')}" for u in unsupported[:6]))
-    sink = sink or (lambda key, t: None)
     inst = Installation(deferred=list(deferred))
     mods = dict(model.named_modules()) if model is not None else {}
     for s in hooks:
@@ -126,7 +129,7 @@ def install_from_plan(plan: AcquisitionPlan, model: Any, runner: Any = None, *, 
             def hook(_m, _args, output, *, _key=key, _slot=s.slot):
                 t = _slot_of_output(output, _slot)
                 if t is not None:
-                    sink(_key, t)
+                    _emit(_key, t)
 
             inst.handles.append(m.register_forward_hook(hook))
             inst.installed.append(s)
@@ -139,7 +142,7 @@ def install_from_plan(plan: AcquisitionPlan, model: Any, runner: Any = None, *, 
             def pre(_m, args, *, _key=key, _slot=s.slot):
                 t = _slot_of_args(args, _slot)
                 if t is not None:
-                    sink(_key, t)
+                    _emit(_key, t)
 
             inst.handles.append(m.register_forward_pre_hook(pre))
             inst.installed.append(s)
@@ -156,7 +159,7 @@ def install_from_plan(plan: AcquisitionPlan, model: Any, runner: Any = None, *, 
                     for k, attr in _attrs:
                         t = getattr(so, attr, None)
                         if t is not None:
-                            sink(k, t)
+                            _emit(k, t)
                     return res
 
                 inst._sample_patch = engine_hooks.patch(runner, "sample", sample)

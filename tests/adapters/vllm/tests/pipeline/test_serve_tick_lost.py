@@ -1,4 +1,4 @@
-"""`verity-vllm serve-openai` under ``--admit tick`` with a Commit, when the watermark names a release lost: what the
+"""`verity-vllm serve-openai` under order ``tick`` with a Commit, when the watermark names a release lost: what the
 Commit, the scheduler's trace and each window's advice hold of its request, and that the run still encodes under the
 certified tick. The stand-in server of `test_serve_advice` (its HTTP side, engine loop and Commit as `main` runs them),
 the gate over its advice trace as `main` puts it, serves one run whose watermark the test sends as the network attester
@@ -16,15 +16,16 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
-from verity.protocols.resource_accounting.network.verifier import release as REL
+from verity import release as REL
 
 from tests.pipeline.test_serve_admit_tick import RUN, TICK, read_all, request
 from tests.pipeline.test_serve_advice import REG, C, SchedEngine, Server, _body
 from tests.pipeline.test_serve_openai import Tokenizer, records
+from verity_vllm import messages
+from verity_vllm.engine import admission
 from verity_vllm.engine import step_trace as ST
 from verity_vllm.engine.engine_driver import external_id
 from verity_vllm.pipeline import advice as ADV
-from verity_vllm.pipeline import serve_admit as sa
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.advice_code import codec as V1
 from verity_vllm.pipeline.advice_code import schedule as SC
@@ -69,17 +70,14 @@ class TickEngine(SchedEngine):
 
 
 class TickServer(Server):
-    """`Server` under ``--admit tick``, as `serve_openai.main` wires it: the gate over the advice trace's wrappers, the
+    """`Server` under order ``tick``, as `serve_openai.main` wires it: the gate over the advice trace's wrappers, the
     engine loop waiting on it, and the frontend's `TickAdmit`. ``added`` counts the requests the engine loop has added,
     each in the engine (through the gate) and then in the Commit, and ``lines`` the watermark lines the frontend has
     read."""
 
     engine_of = TickEngine
 
-    def order(self) -> sa.TickAdmit:
-        self.gate = self.loop.gate = sa.TickGate(TICK, hold_s=60.0, clock=lambda: 0.0)
-        self.loop.sched = self.engine.sched
-        self.ticked = sa.install(self.loop.sched, self.gate, key=external_id)
+    def order(self) -> Any:
         self.added, self.lines = threading.Semaphore(0), threading.Semaphore(0)
         admitted = self.windows.admitted
 
@@ -93,13 +91,20 @@ class TickServer(Server):
                 self.lines.release()
 
         self.windows.admitted = counted
-        return sa.TickAdmit(self.submit, self.loop.abort, take)
+        ex = messages.current()
+        got = messages.providing("admission").attach(ex, {"settings": {"order": "tick", "hold_ms": 60_000, **TICK.record()},
+                                              "submit": self.submit, "abort": self.loop.abort, "take": take,
+                                              "clock": lambda: 0.0})
+        self.gate = self.loop.gate = got.gate
+        self.ticked = self.loop.hook = admission.install(self.engine.sched, ex, external_id)
+        return got.front
 
     def __exit__(self, *exc: Any) -> None:
         self.loop.stop()
         self.engine_thread.join()
-        self.ticked.uninstall()                          # before the trace's wrappers, which it sits on
+        self.ticked.uninstall()
         super().__exit__(*exc)
+        messages.close()
 
 
 def test_a_run_with_a_lost_release_commits_it_as_an_abort_after_0_and_encodes_under_the_tick_without_it(tmp_path):

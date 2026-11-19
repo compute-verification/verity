@@ -64,7 +64,7 @@ from .cut import (CALL_X, RECOMPUTE, WIRING, CallCut, CallGates, CallGraph, Defi
 from .layout import resolve
 from .partition import CutVerdict
 from .program import is_input
-from .refs import Concat, Explicit
+from .refs import Concat, Explicit, Grid
 
 FORMAT = "verity/partition/v1"
 _KEYS = {"format", "program", "query"}
@@ -85,6 +85,7 @@ def _templates_ok(t: Any) -> bool:
 Q_TEMPLATE_INSTANCE = ("Q_template_instance", 0)
 Q_TEMPLATE_INSTANCES = ("Q_template_instances", 0)
 Q_CALL = ("Q_call", 1)
+Q_WORD = ("Q_word", 1)
 
 def _word_params_ok(p: Mapping[str, Any]) -> bool:
     return all(_is_int(v) and 0 < v <= PARAM_MAX for v in p.values())
@@ -408,10 +409,10 @@ def _out_of_order(refs: Any, params: int, nodes: int) -> list | None:
     parts = [refs]
     while parts:
         r = parts.pop()
-        if isinstance(r, Concat):
-            parts.extend(reversed(r.parts))
+        if isinstance(r, (Concat, Grid)):
+            parts.extend(reversed(r.parts if isinstance(r, Concat) else r.pieces()))
             continue
-        names = [(x[0], x[1]) for x in r.items] if isinstance(r, Explicit) else ([(r.space, r.idx)] if r.count else [])
+        names = [(x[0], x[1]) for x in r.items] if isinstance(r, Explicit) else [(r.space, r.idx)] if r.count else []
         for space, idx in names:
             if not (_is_int(idx) and 0 <= idx < (params if space == "p" else nodes if space == "n" else 0)):
                 return [space, idx]
@@ -517,6 +518,6 @@ def _verdict(bad: dict[str, list]) -> CutVerdict:
     return CutVerdict(not codes, codes, {k: {"n": len(x), "gates": x[:64]} for k, x in bad.items()})
 
 
-__all__ = ["FORMAT", "QUERIES", "PARAM_MAX", "QueryInapplicable", "QueryRefused", "Q_TEMPLATE_INSTANCE", "Q_TEMPLATE_INSTANCES", "Q_CALL",
+__all__ = ["FORMAT", "QUERIES", "PARAM_MAX", "QueryInapplicable", "QueryRefused", "Q_TEMPLATE_INSTANCE", "Q_TEMPLATE_INSTANCES", "Q_CALL", "Q_WORD",
            "call_query", "CallPartition", "template_id", "template_instance_query", "template_instances_query", "TemplatePartition", "ranges_digest", "query", "build", "canonical", "digest", "validate", "calls", "Partition", "evaluate",
            "owners_digest", "program_sha512", "verify"]

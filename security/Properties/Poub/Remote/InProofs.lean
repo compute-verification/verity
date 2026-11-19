@@ -120,20 +120,20 @@ assumption `OpeningComputesCheck` at the circuit reading `read` and the decoding
 by rerunning any prover, one unit a sample such that `checkWindow` accepts their openings, except when the SHA-512 inputs
 the span's `o0` openings read at those units hold a collision, `n · (εKs + εBind)` and `Claims.KS`'s collision term at
 `γ`. -/
-def SpanInProofsDeployed (H : Claims.Msg → Claims.Msg) (εKs εBind γ : ℝ) : Prop :=
+def SpanInProofsDeployed (H : Hash.Msg → Hash.Msg) (εKs εBind γ : ℝ) : Prop :=
   ∀ (a : Auditor) (reg : Registration) (w : WindowRecord) (sampled : Array (Nat × Nat)) (n : ℕ)
     {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (V : Claims.Verifier Coin)
-    (spanOf : List Claims.Msg → Option Span)
+    (spanOf : List Hash.Msg → Option Span)
     (read : Layout → Option ((C : Verity.Boolean.Circuit) × (String → List (Fin C.N)) × List (Fin C.N)))
     (decode : (String → List Bool) → Opening),
-    (∀ (x : Claims.Msg) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (V.k x) → Coin),
+    (∀ (x : Hash.Msg) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (V.k x) → Coin),
       (Claims.run H P V x ω r).out = .acc →
         ∃ sp, spanOf ((Claims.run H P V x ω r).msgs.map Prod.fst) = some sp ∧ sp.statements.size ≤ n ∧
           checkSpan a reg w sampled sp = .accept) →
     RowsBind →
     OpeningComputesCheck a reg w sampled read decode →
     ∃ E : Claims.Extractor Coin (Array UnitVals) V,
-      ∀ (x : Claims.Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
+      ∀ (x : Hash.Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
         Claims.Pr (fun s : Ω × (Fin (V.k x) → Coin) × E.C x =>
           let t := Claims.run H P V x s.1 s.2.1
           t.out = .acc ∧ ∃ sp, spanOf (t.msgs.map Prod.fst) = some sp ∧
