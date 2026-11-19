@@ -439,18 +439,42 @@ def units_exactly(units: Sequence[Sequence[int]], indices: Sequence[int]) -> boo
     return list(indices) == [u for lo, hi in sorted(map(tuple, units)) for u in range(lo, hi)]
 
 
-def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], block: int,
+def drawn_block(program: bytes, partition: Mapping[str, Any], draw: Mapping[str, Any], public: Path,
+                ) -> tuple[int, list[tuple[int, int]]] | tuple[None, tuple[str, str]]:
+    """The proof block of the partition object a statement's proof is of, and its units, taken from the challenger's
+    `draw` (`service.select_draw`, `coins.draw_first`: its ``units`` and ``closure`` over the partition's blocks): the drawn
+    block holding the first unit the proof's public file names. None and the refusal otherwise (``circuit``: a drawn
+    block the partition object has not, `one_circuit.block`; ``proof``: a public file naming no unit; ``undrawn``: a
+    draw that sampled no block holding it)."""
+    ks = [*draw.get("units", ()), *draw.get("closure", ())] if isinstance(draw, Mapping) else []
+    try:
+        blocks = {k: OC.block(program, partition, k) for k in ks}
+    except OC.Refused as e:
+        return None, ("circuit", str(e))
+    try:
+        u = _header(public)["units"]["indices"][0]
+    except (OSError, ValueError, LookupError, TypeError):
+        return None, ("proof", "the statement's public file names no unit")
+    k = next((k for k, units in sorted(blocks.items()) if any(lo <= u < hi for lo, hi in units)), None)
+    if k is None:
+        return None, ("undrawn", f"the proof is of the proof block holding unit {u}, which the draw did not sample "
+                                 f"(its blocks {sorted(blocks)})")
+    return k, blocks[k]
+
+
+def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], draw: Mapping[str, Any],
            registered: Mapping[str, Any] | None = None,
            strata: Sequence[tuple[str, Sequence[Sequence[int]]]] | None = None,
            ) -> tuple[list[Finding] | None, tuple[str, str] | None]:
     """Each of `proof`'s sessions verified by Flock's Lean verifier against the verifier's own `program` (C, its
     descriptor's bytes), `partition` and `registered` file (theta's registration; None only for a program that reads no
     registered value, such as N2's, whose proof block opens the committed value inside its circuit), on the circuit file
-    of the drawn proof block, the partition object's block `block` (`one_circuit.block`), derived from C and the
-    partition (`one_circuit.restrict`), never `proof`'s own circuit file; the findings in session order and None, or None
-    and the refusal (``registered``: `registered` is None and the program reads registered values, `reads_registered`;
-    ``circuit``: C and the partition give no block `block` or no C_S of it, or its base circuit is not derived yet,
-    `one_circuit.lower`; ``proof``: a file is missing or the
+    of the drawn proof block, the block of the partition object `draw` sampled that the proof is of (`drawn_block`),
+    derived from C and the partition (`one_circuit.restrict`), never `proof`'s own circuit file; the findings in session
+    order and None, or None and the refusal (``registered``: `registered` is None and the program reads registered
+    values, `reads_registered`; ``undrawn``: the proof is of a block `draw` did not sample; ``circuit``: C and the
+    partition give no drawn block or no C_S of it, or its base circuit is not derived yet, `one_circuit.lower`;
+    ``proof``: a file is missing or the
     verifier's answer is not one verdict a session naming the
     partition object's program; ``form``: the verifier accepted a session whose files `ks_form_why` refuses). A session
     the verifier rejects is a finding, not a refusal, and so is one it accepts on a circuit `template_why` refuses,
@@ -472,8 +496,11 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], block:
     if registered is None and reads_registered(program):
         return None, ("registered", "the program reads registered values (a RegisteredInput among its definitions) and "
                                     "the verifier holds no registered reads: verify with its own registered file")
+    k, units = drawn_block(program, partition, draw, proof.public)
+    if k is None:
+        return None, units
     try:
-        derived = OC.restrict(program, partition, OC.block(program, partition, block))
+        derived = OC.restrict(program, partition, units)
     except (OC.NotDerived, OC.Refused) as e:
         return None, ("circuit", str(e))
     if not (proof.public.is_file() and proof.sessions and all((s / "session.json").is_file() for s in proof.sessions)):
@@ -685,6 +712,6 @@ def verdicts_v2(proof: Proof, *, program: Mapping[str, Any], partition: Mapping[
 
 __all__ = ["EXE", "FITS", "MUFU_SHA512", "NO_ROW_WHY", "NO_TABLES", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY",
            "SIZE_CLASS_MAX", "V2", "V2_EXE", "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "circuit_lookups",
-           "draw_fits_why", "evidence_v2", "executable", "file_sha512", "fits_why", "ks_form_why", "lookups_of",
+           "draw_fits_why", "drawn_block", "evidence_v2", "executable", "file_sha512", "fits_why", "ks_form_why", "lookups_of",
            "order_why", "own_tables", "population_why", "printed", "printed_size", "proved_units", "reads_registered",
            "tables_match_why", "tables_why", "template_why", "units_exactly", "v2_executable", "verdicts_v2", "verify"]
