@@ -24,7 +24,6 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
-from verity import hooks as H
 from verity.circuits.refs import runs
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import seeds as SD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
