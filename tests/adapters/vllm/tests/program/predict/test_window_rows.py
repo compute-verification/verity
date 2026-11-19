@@ -39,12 +39,11 @@ from tests.program.predict.test_window_circuit import (
     GRAIN,
     SPLIT,
     SPLIT_GRAIN,
-    _labels,
     entry_of,
     state_row,
 )
 from tests.program.predict.test_window_circuit import SLOTS as SLOTS_CLASS
-from tests.program.predict.test_window_circuit_fa3 import H200
+from tests.program.predict.test_window_circuit_fa3 import H200, _wired_in_slot_and_step
 from verity_vllm.check.replay.checks import check_rows
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
@@ -424,23 +423,16 @@ def test_a_window_of_lanes_1_and_3_of_four_has_an_entry_a_lane_and_the_scan_take
     """Requests in lanes 1 and 3 of a class of four lanes: the window's one `SlotEntry_v1` has four units in lane order,
     lanes 0 and 2 each on its occupancy word and a collector of its own (`OutCollect_v1{FIRST}`), both in lane 1's
     Program's slot, so no wire but the scan's crosses slots: every slot's `ScanSlots_v3` reads its start, and its
-    ingress units read entry j at port ``prog<j>``. Their
-    entries read 0 and the occupied lanes' read 1 with their 2 outputs, and the network attester's scan step takes that
-    Programs' row at the lanes' anchor, where it refuses the two occupied lanes' entries as the first two of the row."""
+    ingress units read entry j at port ``prog<j>``. Their entries read 0 and the occupied lanes' read 1 with their 2
+    outputs, and the network attester's scan step takes that Programs' row at the lanes' anchor, where it refuses the
+    two occupied lanes' entries as the first two of the row."""
     cls = WC.WindowClass(4, 4, 2)
     lanes = [(0, 0, 0, [0] * 4), (1, 3, 2, [5, 77, 42, 0]), (0, 0, 0, [0] * 4), (1, 2, 2, [9, 8, 0, 0])]
     requests = tuple(WC.Request(cls.anchor(k), cls.lane(k), lp, m) for k, (occ, lp, m, _ids) in enumerate(lanes) if occ)
     reg = _registered()
     low = WC.lower(reg, cls, None, GRAIN, requests=requests)
-    labels, bucket = _labels(low.circuit), descriptor_id(cls.scan.bucket)
-    scan_ids = {descriptor_id(f) for f in (cls.scan.start, cls.scan.egress)} | {bucket}
-    assert all((lab >= 0).all() for lab in labels.values())
-    for w in low.circuit.wires:
-        i = np.arange(w.units, dtype=np.int64)
-        reader, writer = labels[w.reader][w.at + i // w.cut[1]], labels[w.writer][w.source(i)]
-        assert {w.reader, w.writer} & scan_ids or (
-            (reader[:, 0] == writer[:, 0]).all() and (writer[:, 1] <= reader[:, 1]).all())
-    et = low.programs[0].entry_unit[0]
+    _wired_in_slot_and_step(low.circuit)
+    bucket, et = descriptor_id(cls.scan.bucket), low.programs[0].entry_unit[0]
     assert {(w.port, int(w.source(0))) for w in low.circuit.wires if (w.reader, w.writer) == (bucket, et)} == {
         (f"prog{j}", j) for j in range(cls.lanes)}
     assert [(s, k) for s, k, _c, _e in low.empty] == [(0, 0), (2, 0)] and low.programs[0].lane == 1

@@ -61,9 +61,15 @@ def _registered(target: dict = H200, config: dict = S.TINY):
 
 
 def _wired_in_slot_and_step(circuit) -> None:
+    """Every wire but the scan's, which reads every slot's entry and gives every slot its start, is in its slot at its
+    step or before."""
     labels = _labels(circuit)
     assert all((lab >= 0).all() for lab in labels.values())
+    scan = {IF.descriptor_id(fn) for fn, _ in circuit.templates
+            if fn.name in ("IngressScanStart", "IngressScanBucket", "EgressBucket")}
     for w in circuit.wires:
+        if {w.reader, w.writer} & scan:
+            continue
         i = np.arange(w.units, dtype=np.int64)
         reader, writer = labels[w.reader][w.at + i // w.cut[1]], labels[w.writer][w.source(i)]
         assert (reader[:, 0] == writer[:, 0]).all() and (writer[:, 1] <= reader[:, 1]).all(), w.doc()
