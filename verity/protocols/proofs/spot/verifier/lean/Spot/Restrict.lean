@@ -16,7 +16,8 @@ and the block's units (`Spot.BlockFront.members`), with in(S) and out(S) as `Spo
   member, its arguments cut on their mapped axis. Each argument leaf is the port or the earlier node that carries its gate
   of C, the first to carry it;
 * its return is out(S), a tuple of `Array<n, Value<w>>`, one for each maximal run of one width;
-* every Definition the root reaches is C's, and the Boolean map is C's on the word primitives it reaches.
+* every Definition the root reaches is C's, and the Boolean map is C's on the word primitives it reaches;
+* its `sha512` is empty: nothing names the block's Program by a digest this function did not compute.
 
 It refuses a scan, a member's argument mapped over an axis other than its first, and a leaf no port or earlier node carries.
 -/
@@ -140,7 +141,8 @@ def restrict (P : Prog) (units : Array Nat) : V Prog := do
   let blk : Defn := { key := ROOT, id := ROOT, prim := false, params := #[], ret := retType, gates := offsets.back!,
                       paramLeaves := 0, outLeaves := retType.leaves,
                       body := { params := #[], retType, nodes, ret := runs ret, offsets } }
-  return { P with defs := defs.push blk, index := index.insert ROOT defs.size, root := defs.size, programFn := FN }
+  let Q : Prog := { P with defs := defs.push blk, index := index.insert ROOT defs.size, root := defs.size, programFn := FN }
+  return { Q with sha512 := ByteArray.empty }
 
 /-- A Program as `restrict`'s difference test compares it: its root's key, its Program function, every Definition the root
 reaches by key (`defJson`, with whether it is a primitive and its binding), and the Boolean map on the word primitives it
