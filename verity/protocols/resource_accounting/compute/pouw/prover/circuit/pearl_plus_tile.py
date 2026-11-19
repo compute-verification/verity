@@ -6,9 +6,6 @@ reader of the linear takes y by wire from the node that wrote it and the verifie
         (a: Array<TM, f32[K]>, b: Array<TN, f32[K]>, cert, salt: u8[32], root: u8[64], unit: u32, rows: Array<TM, u32>,
          eb: Array<TN, e4m3[32]>, fa, fb: Array<K, e4m3[32]>, g: Array<32, f32[32]>)
         -> (digest: u8[64], y: Array<TR, bf16[TN]>, ok: bit)
-    PearlPlusTileLeaf_v1{D}                             on bits
-        (x: u8[64], y: u8[192], root, domain: u8[64], pos: Array<D, bit>, path: Array<D, u8[64]>) -> bit
-        1 iff the hm96-sha512 leaf of digest x under salt y opens at pos to root (`Hm96Sha512Leaf_v1`, `FrameV3Read_v1`)
 
 The core, from the registry's call Definitions (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_call`) and PoUW's inert-work bound (`inert_bound`):
 
@@ -50,7 +47,6 @@ from fractions import Fraction
 from typing import Any, Sequence
 
 from verity.circuits import boolean as BL
-from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.circuits.ops.fp32 import F32MulV2
 from verity.circuits.ops.prims import Bf16ToF32, F32ToE4m3Sat
@@ -58,10 +54,6 @@ from verity.circuits.ops.scalar import Bf16GtStrict, BitAnd, F32IsFinite, I32Eq,
 from verity.circuits.refs import Coll, array_of, tuple_of
 from verity.circuits.silicon import fp32
 from verity.circuits.types import Array, Tuple, Value
-from verity.commitments.gates import frame_v3 as F3
-from verity.commitments.gates.hm96 import Hm96Sha512Leaf
-from verity.commitments.gates.hm96 import reference as hm96_reference
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
 from verity.circuits.ops.boolean.versions import lift_body
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_call import PearlCRowA, PearlCRowB
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_forming import LINE
@@ -81,10 +73,9 @@ from . import leaves as L
 from verity.circuits.ops import words as W
 
 __all__ = ["PUBLIC", "PearlPlusAdmit", "PearlPlusAdmitV2", "PearlPlusSaltDead", "PearlPlusSaltDeadV2", "PearlPlusTileCoreV3",
-           "PearlPlusTileLeaf", "core", "leaf_reference", "reference", "served"]
+           "core", "reference", "served"]
 
 F32, U32, BIT, I32, BF16 = Value(32), Value(32), Value(1), Value(32), Value(16)
-HM96_SALT = Array(192, Value(8))
 R = pc8.R
 SLICE = C.SLICE
 
@@ -247,38 +238,7 @@ _CORE = CompositeDefinition(
 PearlPlusTileCoreV3 = _on_bits(_CORE, 3)
 
 
-# ---- the leaf and the unit ----------------------------------------------------------------------------------------------
-
-def _refs(c: Coll) -> list:
-    return [c.refs[t] for t in range(c.refs.count)]
-
-
-def _words(c: Coll) -> Coll:
-    """A byte string's bits (bytes of 8 bits, LSB first) as hm96's and frame-v3's 64-bit words: LSB first, bytes big-endian."""
-    data = _refs(c)
-    out = [data[8 * (8 * w + 7 - b) + j] for w in range(len(data) // 64) for b in range(8) for j in range(8)]
-    return Coll(Array(len(data) // 64, F3.WORD), TR._refs(out))
-
-
-def _leaf_sig(S):
-    F3._check_depth(S.D)
-    byte = BL.bit_type(BYTES64)
-    return ((("x", byte), ("y", BL.bit_type(HM96_SALT)), ("root", byte), ("domain", byte), ("pos", Array(S.D, BIT)),
-             ("path", Array(S.D, byte))), BIT)
-
-
-def _leaf_body(B, S, x, y, root, domain, pos, path):
-    leaf = B.call(Hm96Sha512Leaf, _words(x), _words(y))[2]
-    sibs = Coll(Array(S.D, F3.DIGEST), TR._refs([r for k in range(S.D) for r in _refs(_words(path[k]))]))
-    return B.call(F3.read(S.D, SCHEMA_HM96_SHA512_ROW_SEG), _words(root), _words(domain), leaf, pos, sibs)
-
-
-PearlPlusTileLeaf = CompositeDefinition(
-    "PearlPlusTileLeaf", 1, ("D",), _leaf_sig, _leaf_body, conformance="exact-model-tested",
-    doc="1 iff the hm96-sha512 leaf of the 64-byte digest x under the 192-byte salt y, framed under hm96-sha512/row-seg/v1 "
-        "at rank = position = pos, opens along path to root in the depth-D frame-v3-sha512 tree of domain id domain "
-        "(`audit.Hm96Domain` with digests)")
-
+# ---- the unit -------------------------------------------------------------------------------------------------------
 
 def core(scheme: C.PearlC, k: int, tm: int, tn: int, n: int, tr: int | None = None) -> SpecializedDefinition:
     """`PearlPlusTileCore_v3` for ``scheme`` (forming v1, -h3) at depth ``k``, a TM × TN tile of a linear of ``n`` columns
@@ -364,7 +324,3 @@ def _cap_ok(d, k: int, n: int, rho: int, ac, bc, sd) -> bool:
     bound = at.cap * C.PearlC(forming="v1", device=at, hashing="h0").credit_of(Shape(m, k, n)) * len(ac) * len(bc) / (m * n)
     return debit <= bound
 
-
-def leaf_reference(digest: bytes, hsalt: bytes, root: bytes, domain: bytes, pos: int, path: Sequence[bytes]) -> int:
-    """`PearlPlusTileLeaf_v1` on bytes: 1 iff the digest's hm96 leaf under ``hsalt`` opens at ``pos`` to ``root``."""
-    return F3.opens(SCHEMA_HM96_SHA512_ROW_SEG, root, domain, hm96_reference(digest, hsalt)[2], pos, path)
