@@ -176,11 +176,7 @@ CIRCUIT_CHECK_IMPORTS = {
 }
 #: Functions past a guard, which tests alone may name, since a guard never fails open (AGENTS.md "Working principles"): each
 #: with the file that defines it and why tests need it.
-TEST_ONLY = {
-    "_build_unchecked": ("verity/circuits/partition_v2.py",
-                         "`partition_v2.build` without its refusal of units of several size classes, for the tests "
-                         "of `check` on advice past the builder's scope, as a prover may send it"),
-}
+TEST_ONLY: dict[str, tuple[str, str]] = {}
 
 #: The runtime, its package and each module in it: what runs parties over channels and what starts a side as another
 #: process (the layout's ``verity/runtime/``, ``tests/tree.toml``).
@@ -1179,6 +1175,8 @@ def _uses(tree: ast.AST, names: set[str]) -> list[tuple[str, int]]:
 def test_only_tests_call_a_function_past_a_guard() -> None:
     """No tracked Python file but a test (under a ``tests/`` directory, a ``test_*.py`` or a ``conftest.py``) uses a
     function of ``TEST_ONLY``, its own file included; each is still defined there, and some test still uses it."""
+    if not TEST_ONLY:
+        return
     tracked = subprocess.run(["git", "ls-files", "-z", "--", "*.py"], cwd=ROOT, check=True, capture_output=True).stdout
     word = re.compile(r"\b(?:" + "|".join(map(re.escape, sorted(TEST_ONLY))) + r")\b")
     offenders, used, defined = [], set(), set()

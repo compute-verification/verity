@@ -195,8 +195,8 @@ A proof splits a Program into proof blocks, each proved on its own, which read e
   bits, or one value of at most `W` bits, with no value computed in two proof blocks; v2 is a delta on it. `Q_call` v1
   bounds only what a proof block outputs (at most `X` bits); its inputs are unbounded.
 - `partition_object`: `verity/partition/v1`, a Program's partition named as a query the verifier evaluates on the
-  circuit it holds. `partition_v2`: `verity/partition/v2`, a private partition registered as advice under a hidden
-  root, with the public predicates it satisfies.
+  circuit it holds. `partition_v2`: `verity/partition/v2`, the same object's `blocks` private, registered as advice rows
+  under a hidden root, with the public predicates they meet; opened, the rows are the object's `blocks`.
 - `partition`: checks that a family used as a partition is one (every gate in exactly one proof block) and meets the
   width rule.
 - `units`: each proof block as a standalone word circuit; `boundary`, `parts` and `intervals`: the boundary sets, part
