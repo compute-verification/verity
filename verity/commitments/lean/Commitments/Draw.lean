@@ -120,6 +120,139 @@ def workK (k work size total floor : Nat) : Nat := min size (max floor ((k * wor
 /-- A work samplingDesign's population work, `Σ_s work_s · n_s`. -/
 def totalWork (strata : Array WorkStratum) : Nat := strata.foldl (fun acc s => acc + s.work * s.size) 0
 
+/-- An entry of a rated law: an amount table, by its id (`plain`, one for every proof block, or `work`, the verifier's
+work table), and its rate `num/den` per unit of amount. -/
+structure RateEntry where
+  table : String
+  num : Nat
+  den : Nat
+  deriving BEq, Inhabited
+
+/-- A stratum of the rated design: a stratified design's stratum and the amount of each of its units in each entry's
+table, in the entries' order. -/
+structure RatedStratum extends Stratum where
+  amounts : Array Nat
+  deriving BEq, Inhabited
+
+/-- One entry's demand on a stratum of `size` units of amount `amount`: `⌈size · amount · num / den⌉`, at least one and
+at most `size`. -/
+def rateDemand (num den amount size : Nat) : Nat := min size (max 1 ((size * amount * num + den - 1) / den))
+
+/-- A stratum's draw under the rated rule: the largest demand over the entries, each at the stratum's amount in its
+entry's table. -/
+def rateK (rates : Array RateEntry) (amounts : Array Nat) (size : Nat) : Nat :=
+  (rates.toList.zip amounts.toList).foldl (fun acc p => max acc (rateDemand p.1.num p.1.den p.2 size)) 0
+
+/-- A uniform `k`-subset of `n` units, each of amount `c`, meets the rate `num/den`: `k = n`, or `k · den ≥ n · c · num`. -/
+def meetsAt (num den n c k : Nat) : Bool := k == n || n * c * num ≤ k * den
+
+/-- Why stratum `s` misses a rate of `rates`, else none: one amount for each entry, at most its size drawn,
+at least one drawn from a non-empty stratum, and each entry's rate met at its amount (`meetsAt`). -/
+def rateMiss (rates : Array RateEntry) (s : RatedStratum) : Option String :=
+  if s.amounts.size != rates.size then
+    some s!"stratum '{s.template}': {s.amounts.size} amounts, not one for each of the {rates.size} rates"
+  else if s.k > s.size then some s!"stratum '{s.template}': k = {s.k} exceeds its {s.size} proof blocks"
+  else if s.k = 0 ∧ 0 < s.size then some s!"stratum '{s.template}': k = 0, and every stratum draws at least one"
+  else (rates.toList.zip s.amounts.toList).findSome? fun p =>
+    if meetsAt p.1.num p.1.den s.size p.2 s.k then none
+    else some (s!"stratum '{s.template}' misses the rate {p.1.num}/{p.1.den} of table '{p.1.table}': " ++
+      s!"k * DEN = {s.k * p.1.den} < n * c * NUM = {s.size * p.2 * p.1.num} (n = {s.size}, c = {p.2}, k = {s.k})")
+
+/-- Whether rated strata meet every entry's rate, each stratum at its amounts (`rateMiss`), else why not. A rated law
+has at least one entry, and each entry's `DEN` is positive. Then every set of a stratum's proof blocks of total amount
+`m` in an entry's table is missed with probability at most `exp(−m · NUM/DEN)`. -/
+def meetsRate (rates : Array RateEntry) (strata : Array RatedStratum) : Except String Unit :=
+  if rates.size = 0 then .error "a rated law needs at least one rate"
+  else match rates.toList.find? (·.den == 0) with
+  | some e => .error s!"table '{e.table}': a rate needs DEN > 0, not {e.num}/{e.den}"
+  | none => match strata.toList.findSome? (rateMiss rates) with
+    | none => .ok ()
+    | some why => .error why
+
+theorem le_foldl_max {α : Type} (f : α → Nat) (l : List α) (acc : Nat) :
+    acc ≤ l.foldl (fun a x => max a (f x)) acc := by
+  induction l generalizing acc with
+  | nil => exact Nat.le_refl _
+  | cons x xs ih => exact Nat.le_trans (Nat.le_max_left _ _) (ih _)
+
+theorem le_foldl_max_of_mem {α : Type} (f : α → Nat) {l : List α} {x : α} (h : x ∈ l) (acc : Nat) :
+    f x ≤ l.foldl (fun a x => max a (f x)) acc := by
+  induction l generalizing acc with
+  | nil => cases h
+  | cons y ys ih =>
+    cases h with
+    | head => exact Nat.le_trans (Nat.le_max_right _ _) (le_foldl_max f ys _)
+    | tail _ h => exact ih h _
+
+theorem foldl_max_le {α : Type} (f : α → Nat) {l : List α} {acc b : Nat} (ha : acc ≤ b) (hf : ∀ x ∈ l, f x ≤ b) :
+    l.foldl (fun a x => max a (f x)) acc ≤ b := by
+  induction l generalizing acc with
+  | nil => exact ha
+  | cons x xs ih =>
+    exact ih (Nat.max_le.2 ⟨ha, hf x (List.mem_cons_self ..)⟩) fun y hy => hf y (List.mem_cons_of_mem _ hy)
+
+theorem rateK_le (rates : Array RateEntry) (amounts : Array Nat) (size : Nat) : rateK rates amounts size ≤ size :=
+  foldl_max_le _ (Nat.zero_le _) fun _ _ => Nat.min_le_left _ _
+
+theorem one_le_rateK {rates : Array RateEntry} {amounts : Array Nat} {size : Nat} (hr : 0 < rates.size)
+    (ha : amounts.size = rates.size) (hs : 0 < size) : 1 ≤ rateK rates amounts size := by
+  unfold rateK
+  have hl : rates.toList.length = amounts.toList.length := by simp [ha]
+  have hp : 0 < rates.toList.length := by simpa using hr
+  match hrl : rates.toList, hal : amounts.toList with
+  | e :: _, a :: _ =>
+    refine Nat.le_trans ?_ (le_foldl_max_of_mem (fun p : RateEntry × Nat => rateDemand p.1.num p.1.den p.2 size)
+      (x := (e, a)) (by simp) 0)
+    unfold rateDemand
+    omega
+  | [], _ => simp [hrl] at hp
+  | _ :: _, [] => simp [hrl, hal] at hl
+
+theorem le_ceilDiv_mul (x den : Nat) (hd : 0 < den) : x ≤ (x + den - 1) / den * den := by
+  have h1 := Nat.div_add_mod (x + den - 1) den
+  have h2 := Nat.mod_lt (x + den - 1) hd
+  rw [Nat.mul_comm ((x + den - 1) / den) den]
+  generalize (x + den - 1) / den = q at *
+  generalize (x + den - 1) % den = r at *
+  generalize den * q = m at *
+  omega
+
+theorem meetsAt_of_demand_le {num den n c k : Nat} (hd : 0 < den) (hk : k ≤ n) (h : rateDemand num den c n ≤ k) :
+    meetsAt num den n c k = true := by
+  unfold meetsAt
+  unfold rateDemand at h
+  have hq := le_ceilDiv_mul (n * c * num) den hd
+  generalize (n * c * num + den - 1) / den = q at h hq
+  simp only [Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq]
+  by_cases hkn : k = n
+  · exact Or.inl hkn
+  · have hqk : q ≤ k := by omega
+    exact Or.inr (Nat.le_trans hq (Nat.mul_le_mul_right den hqk))
+
+/-- **The rated rule meets its rates**: strata each drawing `rateK` at one amount for each entry meet every entry's
+rate (`meetsRate`), for every positive `DEN`. -/
+theorem meetsRate_of_rateK {rates : Array RateEntry} {strata : Array RatedStratum} (hr : 0 < rates.size)
+    (hd : ∀ e ∈ rates.toList, 0 < e.den)
+    (hs : ∀ s ∈ strata.toList, s.amounts.size = rates.size ∧ s.k = rateK rates s.amounts s.size) :
+    meetsRate rates strata = .ok () := by
+  unfold meetsRate
+  simp only [show ¬rates.size = 0 by omega, ↓reduceIte]
+  rw [List.find?_eq_none.2 fun e he => by have := hd e he; simp only [beq_iff_eq]; omega]
+  rw [List.findSome?_eq_none_iff.2]
+  intro s hsm
+  obtain ⟨ha, hk⟩ := hs s hsm
+  unfold rateMiss
+  have hle : s.k ≤ s.size := by rw [hk]; exact rateK_le _ _ _
+  have hfl : ¬(s.k = 0 ∧ 0 < s.size) := fun ⟨h0, hp⟩ => by
+    have := one_le_rateK hr ha hp
+    rw [hk] at h0
+    omega
+  simp only [ha, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte, Nat.not_lt.2 hle, hfl]
+  rw [List.findSome?_eq_none_iff.2]
+  intro p hp
+  have hm := le_foldl_max_of_mem (fun p : RateEntry × Nat => rateDemand p.1.num p.1.den p.2 s.size) hp 0
+  simp only [meetsAt_of_demand_le (hd p.1 (List.of_mem_zip hp).1) hle (by rw [hk]; exact hm), ↓reduceIte]
+
 inductive SamplingDesign where
   | subset (k : Nat)
   | bernoulli (num den : Nat)

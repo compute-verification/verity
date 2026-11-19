@@ -105,6 +105,50 @@ def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
     return min(size, max(floor, (k * work * size + total - 1) // total))
 
 
+def rate_demand(num: int, den: int, amount: int, size: int) -> int:
+    """One rated entry's demand on a stratum of `size` proof blocks of amount `amount` (Lean `Flock.Draw.rateDemand`):
+    ceil(size * amount * num / den), at least one and at most `size`."""
+    return min(size, max(1, (size * amount * num + den - 1) // den))
+
+
+def rate_k(rates: Sequence[tuple[str, int, int]], amounts: Sequence[int], size: int) -> int:
+    """A stratum's draw under the rated rule (Lean `Flock.Draw.rateK`): the largest demand over the entries
+    `(table, num, den)`, each at the stratum's amount in its table."""
+    return max([0, *(rate_demand(num, den, a, size) for (_, num, den), a in zip(rates, amounts))])
+
+
+def meets_at(num: int, den: int, n: int, c: int, k: int) -> bool:
+    """A uniform k-subset of n proof blocks, each of amount c, meets the rate num/den (Lean `Flock.Draw.meetsAt`)."""
+    return k == n or n * c * num <= k * den
+
+
+def rate_miss(rates: Sequence[tuple[str, int, int]], s: Mapping[str, Any]) -> str | None:
+    """Why rated stratum `s` misses a rate of `rates`, or None (Lean `Flock.Draw.rateMiss`)."""
+    t, amounts, k, n = s["template"], s["amounts"], s["k"], _size(s["units"])
+    if len(amounts) != len(rates):
+        return f"stratum '{t}': {len(amounts)} amounts, not one for each of the {len(rates)} rates"
+    if k > n:
+        return f"stratum '{t}': k = {k} exceeds its {n} proof blocks"
+    if k == 0 and n > 0:
+        return f"stratum '{t}': k = 0, and every stratum draws at least one"
+    for (table, num, den), c in zip(rates, amounts):
+        if not meets_at(num, den, n, c, k):
+            return (f"stratum '{t}' misses the rate {num}/{den} of table '{table}': "
+                    f"k * DEN = {k * den} < n * c * NUM = {n * c * num} (n = {n}, c = {c}, k = {k})")
+    return None
+
+
+def meets_rate(rates: Sequence[tuple[str, int, int]], strata: Sequence[Mapping[str, Any]]) -> str | None:
+    """Why rated strata miss an entry's rate, or None (Lean `Flock.Draw.meetsRate`): at least one entry, each DEN
+    positive, and every stratum meeting every entry (`rate_miss`)."""
+    if not rates:
+        return "a rated law needs at least one rate"
+    for table, num, den in rates:
+        if den == 0:
+            return f"table '{table}': a rate needs DEN > 0, not {num}/{den}"
+    return next((why for s in strata if (why := rate_miss(rates, s)) is not None), None)
+
+
 def derive(program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any],
            table: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The verifier's sampling design for its program and query: `stratified` (the rule, or an expanded sampling design, whose strata are ignored)
