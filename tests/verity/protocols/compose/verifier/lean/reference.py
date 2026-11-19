@@ -305,10 +305,16 @@ def _two_stage_evidence(j: Any) -> dict:
     raise ValueError("outside the mirror: the two-stage form's evidence past its keys")
 
 
+#: `VStar.Recursive.Sampled.TWO_LEVELS_REFUSED`: two levels' parameters that parse, refused by name.
+TWO_LEVELS_REFUSED = ("levels-not-proved: the parameters name 2 levels: the two-level audit is built and refused, "
+                      "since no soundness theorem covers its accept; an audit is accepted at one level")
+
+
 def _form_params(j: Any) -> dict:
     n, rest = _split(j, "parameters", params=True)
     if n == 2:
-        return _two_stage().params_of_json(j)
+        _two_stage().params_of_json(j)
+        raise Reject(TWO_LEVELS_REFUSED)
     return _one_stage_params(rest)
 
 
