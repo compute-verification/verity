@@ -91,7 +91,6 @@ class Node:
     smt_pairs: bool = True
     pools: dict[str, frozenset[int]] = field(default_factory=dict)
     gpu_model: str = ""
-    gpu_executor: str = ""  # what runs a GPU job here besides gpu-lease's own node: "n1-lease" (node 1's Kueue-lent leases)
 
     @property
     def cpus(self) -> frozenset[int]:
@@ -129,9 +128,9 @@ class Share:
 
 @dataclass(frozen=True)
 class Workstream:
-    """A part of a node's owner that owns `gpus` of the node's GPUs (Kueue's nominal quota). Its jobs within them run in
-    share; beyond them they borrow idle GPUs, at most `borrow_gpus` more (`None`: any; 0: it never borrows), and a job
-    running in anyone's share outranks every borrower."""
+    """A part of a node's owner that owns `gpus` of the node's GPUs. Its jobs within them run in share; beyond them they
+    borrow idle GPUs, at most `borrow_gpus` more (`None`: any; 0: it never borrows), and a job running in anyone's share
+    outranks every borrower."""
     name: str
     node: str
     gpus: int
@@ -281,8 +280,7 @@ def from_dict(d: dict[str, Any]) -> Cluster:
             numa=numa, system_cpus=cpuset.parse(nd.get("system_cpus", "")), memory_gib=int(nd["memory_gib"]),
             stops_at=instant(nd.get("stops_at")), drain_s=int(nd.get("drain_s", meta.get("drain_s", 0))),
             smt_pairs=bool(nd.get("smt_pairs", True)),
-            pools={k: cpuset.parse(v) for k, v in nd.get("pools", {}).items()}, gpu_model=str(nd.get("gpu_model", "")),
-            gpu_executor=str(nd.get("gpu_executor", "")))
+            pools={k: cpuset.parse(v) for k, v in nd.get("pools", {}).items()}, gpu_model=str(nd.get("gpu_model", "")))
     shares = tuple(
         Share(project=s["project"], node=s["node"], cpus=cpuset.parse(s["cpus"]) if "cpus" in s else None,
               max_gpus=s.get("max_gpus"), max_cpus=s.get("max_cpus"), max_memory_gib=s.get("max_memory_gib"),

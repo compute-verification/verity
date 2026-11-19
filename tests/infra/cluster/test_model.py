@@ -22,23 +22,16 @@ def test_cpuset_rejects_by_name(bad, why):
 
 def test_the_nebius_description_loads():
     c = model.load(NEBIUS)
-    n1, n2 = c.nodes["vy-nebius-1"], c.nodes["vy-nebius-2"]
-    assert (n1.owner, n2.owner) == ("verity", "pous")
-    assert len(n1.cpus) == 184 and len(n2.cpus) == 192 and len(n1.gpus) == len(n2.gpus) == 8
+    n2 = c.nodes["vy-nebius-2"]
+    assert list(c.nodes) == ["vy-nebius-2"] and n2.owner == "pous"
+    assert len(n2.cpus) == 192 and len(n2.gpus) == 8
     assert n2.admission_ends == model.instant("2026-10-24T13:00:00Z")
-    assert c.standing("verity", "vy-nebius-2") == c.standing("pous", "vy-nebius-1") == model.GUEST
+    assert c.standing("verity", "vy-nebius-2") == model.GUEST
     share = c.share("verity", "vy-nebius-2")
-    # decision 1's defaults: Verity's node-2 share gets GPUs; PoUW overflows onto node 1 off its reserved CPUs
     assert cpuset.format(share.cpus) == "48-95" and share.max_job_memory_gib == 256 and share.max_gpus is None
-    assert share.until is None and c.share("pous", "vy-nebius-1").until is None, "each share lasts until its node's stop"
+    assert share.until is None, "the share lasts until its node's stop"
     assert n2.stops_at_source == model.DESCRIBED
-    assert cpuset.format(c.share("pous", "vy-nebius-1").cpus) == "96-191"
-    assert cpuset.format(n1.pools["checks"]) == "8-95,128-159" and cpuset.format(n1.pools["provers"]) == "160-191"
-    assert n2.pools == {}
-    assert [(w.name, w.gpus, w.borrow_gpus) for w in c.workstreams] == [("provers", 2, 6), ("deployments-gpu", 6, 2)]
-    order = sorted(c.priorities, key=c.priorities.get, reverse=True)
-    # kueue.yaml's order is policy
-    assert order.index("capture") < order.index("work") < order.index("bench") < order.index("dev") < order.index("fill")
+    assert n2.pools == {} and c.workstreams == ()
 
 
 def test_a_nodes_live_deadline_file_replaces_the_described_stop_and_says_so(tmp_path):

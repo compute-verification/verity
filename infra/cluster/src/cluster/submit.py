@@ -14,20 +14,8 @@ The executors, as they stand:
   orders nothing between scopes. The scope holds the CPUs itself (`AllowedCPUs=`), so a workload's own `taskset` can't
   leave them; systemd drops that without a word where user@.service doesn't delegate cpuset (research's
   pods/nebius/user-cpuset.conf), so the wrapper starts nothing (exit 70) unless the scope's cpuset is the pin.
-- **vy-nebius-1, CPUs only:** the same scope on the CPUs outside the reserved pools, idle (`CPUWeight=idle`): GPU jobs' host
-  threads share those CPUs, and network's timing chunks among them stalled for seconds behind Lean audits' replays
-  (network-accounting, art:894c0447). An idle scope runs only on CPU time its siblings leave. A job that takes its GPUs
-  with gpu-lease itself, around each GPU step (`gpu_host`, `research run --queue --gpu-host`), is a GPU job's host: its scope
-  runs at normal weight, as a GPU job's runner does, so its verifier and replays between leases don't wait on idle CPU time.
-  Its runner names the node's lease tool in `GPU_LEASE` (node 1's with its pool's `N1_LEASE_ENV` beside it), so the workload
-  takes its leases where the queue would.
-- **vy-nebius-1, GPUs:** Kueue's, lent per process by `n1_lease.py` (infra/nebius): node 1's `gpu-lease` copy waits on
-  `/run/gpu-lease`, the controller grows its pool of 1-GPU holder Jobs in `provers` for the waiter, and the lease takes a holder's
-  GPU. Only with `gpu_executor = "n1-lease"` on the node in the description (the cutover's one-line switch); without it such
-  a job goes to node 2 or is refused. A timed job never runs there: node 1 has no window protocol. A job that isn't
-  preemptible gets at most `provers`' own quota there, so a larger one is refused, not left waiting forever. Only a job
-  pinned there (`--on vy-nebius-1`) is sent: the submit path sees neither node's live state, so the router, which prefers the owner's
-  node, would queue every Verity GPU job on node 1's pool (`provers`' unborrowed quota) while node 2 had GPUs free.
+- **vy-nebius-2, a job that takes its GPUs with gpu-lease itself:** around each GPU step (`gpu_host`, `research run --queue
+  --gpu-host`). Its runner names the node's lease tool in `GPU_LEASE`, so the workload takes its leases where the queue would.
 
 A job asks for `max_s` of its own. A CPU job's allocation also covers `custody_s` (the runner's publish), so its `max_s` in the
 model is their sum; a GPU job's lease covers the workload alone, and custody runs in its CPU allocation after the lease ends.
@@ -45,11 +33,7 @@ from .plan import allowed_cpus, static_refusal
 from .route import place
 
 GPU_LEASE = "/workspace/pouw/infra/bin/gpu-lease"
-GPU_LEASE_N1 = "/workspace/verity-guest/bin/gpu-lease"
-N1_LEASE_ENV = ["GPU_LEASE_DIR=/run/gpu-lease", "GPU_LEASE_ALLOWED_FILE=/run/gpu-lease/pool.gpus"]
-NODE1, NODE2 = "vy-nebius-1", "vy-nebius-2"
-N1_POOL_QUEUE = "provers"
-UNSEEN_POOL = f"{NODE1} lends GPUs only to a job pinned there (--on {NODE1}): the submit path can't see its lease pool"
+NODE2 = "vy-nebius-2"
 CPUSET_CHECK = ('c=$(cut -d: -f3 /proc/self/cgroup); '
                 '[ "$(cat "/sys/fs/cgroup$c/cpuset.cpus" 2>/dev/null)" = "$1" ] && shift && exec "$@"; '
                 'echo "cluster: scope $c does not hold CPUs $1 (is cpuset delegated to user@.service?)" >&2; exit 70')
@@ -75,29 +59,19 @@ def wrappers(cluster: Cluster, j: Job, node: str, run_id: str, kind: str | None 
     """The runner's wrapper (the job's CPU allocation, which holds the run through custody) and the workload's (a GPU phase's
     lease, around the workload alone, so the GPU is booked for the GPU phase only); Refused when the node has no executor.
     A kind is named in the lease's holder, `who=<kind>:<submitter>`, as the fill runner's leases are `fill:<owner>`."""
-    if node not in (NODE1, NODE2):
+    if node != NODE2:
         raise Refused(f"no executor on {node}")
-    if j.gpus and node == NODE1 and cluster.nodes[node].gpu_executor != "n1-lease":
-        raise Refused(f"{node}'s GPUs are Kueue's, and its lease executor isn't switched on (gpu_executor = \"n1-lease\")")
-    if j.gpus and node == NODE1 and j.quiet:
-        raise Refused(f"{node} has no timed windows")
-    own = cluster.workstream(N1_POOL_QUEUE, node) if j.gpus and node == NODE1 and j.preempt != "requeue" else None
-    if own and j.gpus > own.gpus:
-        raise Refused(f"{node}'s lease pool grants a lease that isn't --preemptible at most {N1_POOL_QUEUE}' own quota, {own.gpus} "
-                      f"GPUs (n1_lease.py borrows beyond it only while every waiter is --preemptible), and this asks for {j.gpus}")
     guest = cluster.standing(j.project, node) != OWNER
     pin = cpuset.format(allowed_cpus(cluster, cluster.nodes[node], j))
     nice = guest and not claims_cores(cluster, j, node)
-    host_lease = ([*N1_LEASE_ENV, f"GPU_LEASE={GPU_LEASE_N1}"] if node == NODE1 else [f"GPU_LEASE={GPU_LEASE}"]) if gpu_host else []
+    host_lease = [f"GPU_LEASE={GPU_LEASE}"] if gpu_host else []
     runner = ["env", f"GPU_LEASE_WHO={f'{kind}:' if kind else ''}{j.submitter}", f"RESEARCH_RUN_ID={run_id}", "CUDA_VISIBLE_DEVICES=",
               *host_lease, "systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit", f"cluster-{run_id}",
-              "-p", f"MemoryMax={j.memory_gib}G", "-p", "MemorySwapMax=0", "-p", f"AllowedCPUs={pin}",
-              *(["-p", "CPUWeight=idle"] if node == NODE1 and not j.gpus and not gpu_host else []), "--",
+              "-p", f"MemoryMax={j.memory_gib}G", "-p", "MemorySwapMax=0", "-p", f"AllowedCPUs={pin}", "--",
               "sh", "-c", CPUSET_CHECK, "cpuset-check", pin, "taskset", "-c", pin, *(["nice", "-n", "19"] if nice else [])]
     if not j.gpus:
         return runner, []
-    lease = ["env", *N1_LEASE_ENV, GPU_LEASE_N1] if node == NODE1 else [GPU_LEASE]
-    lease += [str(j.gpus), "--wait", "--max-min", str(math.ceil(j.max_s / 60)), "--mem-gb", str(j.memory_gib)]
+    lease = [GPU_LEASE, str(j.gpus), "--wait", "--max-min", str(math.ceil(j.max_s / 60)), "--mem-gb", str(j.memory_gib)]
     lease += ["--preemptible"] if j.preempt == "requeue" else []
     lease += ["--timed"] if j.quiet else []
     lease += ["--on", ",".join(map(str, j.gpu_ids))] if j.gpu_ids else []
@@ -120,7 +94,7 @@ def resolve(cluster: Cluster, j: Job, run_id: str, now: int, kind: str | None = 
     reasons = []
     for name in [first.node, *(n for n in sorted(cluster.nodes) if n != first.node and not j.node)]:
         pinned = replace(j, node=name)
-        why = static_refusal(cluster, name, pinned, now) or (UNSEEN_POOL if j.gpus and name == NODE1 and not j.node else None)
+        why = static_refusal(cluster, name, pinned, now)
         if why:
             reasons.append(f"{name}: {why}")
             continue
@@ -170,4 +144,4 @@ def submit(cluster: Cluster, registry: dict[str, Kind], *, run_id: str, now: int
     return out
 
 
-__all__ = ["CPUSET_CHECK", "claims_cores", "GPU_LEASE", "GPU_LEASE_N1", "N1_POOL_QUEUE", "UNSEEN_POOL", "Refused", "job", "wrappers", "resolve", "submit"]
+__all__ = ["CPUSET_CHECK", "claims_cores", "GPU_LEASE", "Refused", "job", "wrappers", "resolve", "submit"]
