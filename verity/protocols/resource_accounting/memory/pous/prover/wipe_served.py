@@ -31,7 +31,7 @@ the facts:
 - ``trusted``: a key the run pins for the wipe itself (the launcher's ``WIPE_KEY_SHA512``), trusted in place of the pins'
   key; the pins still decide the premise, so a key they don't give reads rehearsal (`wipe_party.placement`);
 - ``node``: the wiped server's id (this host's name by default);
-- ``judge``: the Lean ``wipe-protocol`` executable. Without it the Python's accept decides nothing (`wipe_period.NO_JUDGE`);
+- ``judge``: the Lean ``wipe-protocol`` executable. Without it the wipe is undecided (`wipe_period.NO_JUDGE`);
 - ``wipe_stream``: the native streamer (``wipe_stream.c``) its launcher built where programs run, `period.json`'s
   ``tools.wipe-stream``, which the memory attester on this node gates and runs in place of building one beside its key
   (whose scratch, under the serve dir, may be mounted noexec); refused beside a bound host, which builds its own;

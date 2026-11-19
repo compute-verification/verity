@@ -179,7 +179,7 @@ def test_with_no_executable_an_accepted_sessions_case_is_refused_and_never_the_s
     assert answer["verdict"] == "accept" and case is not None
     with pytest.raises(ValueError, match="no poub-p2-protocol to answer the case"):
         p2_case.judged(case, answer, None)
-    assert p2_case.unjudged(case, answer)["verdict"] == "undecided"
+    assert p2_case.unjudged(case)["verdict"] == "undecided"
 
 
 def test_a_case_before_its_last_window_is_verified_is_undecided(exe, lean, store) -> None:

@@ -1025,7 +1025,7 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     assert case["params"]["request"] == toy and own["verdict"] == "accept"
     session = json.loads((private / "session.json").read_text())["answer"]
     assert own == p2_case.answer(case, session)
-    assert p2_case.unjudged(case, session) == own | {"profile": None, "public": None, "reason": p2_case.NO_JUDGE,
+    assert p2_case.unjudged(case) == own | {"profile": None, "public": None, "reason": p2_case.NO_JUDGE,
                                                      "verdict": "undecided"}
     lean, = p2_case.serve(case_exe, [case])
     why = "; ".join(f"the request's {k} is not the auditor's ({toy[k]}, not {v})"

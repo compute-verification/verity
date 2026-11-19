@@ -188,18 +188,14 @@ def judged(case: Mapping[str, Any], session: Mapping[str, Any], exe: str | os.Pa
     return serve(exe, [case])[0]
 
 
-#: why a case no `poub-p2-protocol` answered is undecided where its session accepted (`unjudged`)
-NO_JUDGE = ("no poub-p2-protocol answered the case: the Lean decides it, and the session's own accept decides "
-            "nothing alone")
+#: why a case no `poub-p2-protocol` answered is undecided, whatever its session said (`unjudged`)
+NO_JUDGE = ("no poub-p2-protocol answered the case: the Lean decides it, and no Python verdict stands")
 
 
-def unjudged(case: Mapping[str, Any], session: Mapping[str, Any]) -> dict[str, Any]:
-    """The case's answer with no Lean to ask: `answer`'s reject or undecided, which the Python may give alone, and
-    undecided for its accept (`NO_JUDGE`)."""
-    a = answer(case, session)
-    if a["verdict"] != "accept":
-        return a
-    return a | {"profile": None, "public": None, "reason": NO_JUDGE, "verdict": "undecided"}
+def unjudged(case: Mapping[str, Any]) -> dict[str, Any]:
+    """The case's answer with no Lean to ask: undecided (`NO_JUDGE`), whatever its session said."""
+    return {"commitment": digest(case).hex(), "profile": None, "protocol": PROTOCOL, "public": None, "reason": NO_JUDGE,
+            "verdict": "undecided"}
 
 
 def write(private: Path, case: Mapping[str, Any], answer_: Mapping[str, Any]) -> Path:

@@ -207,8 +207,8 @@ def test_sessions_reach_a_listening_verifier_which_records_their_answers(tmp_pat
     assert mine[1]["verdict"] == "reject" and mine[1]["failure"] == "receipt"
 
 
-#: a case's verdict with no `--case-exe`: the Python may only refuse, so its reject stands and its accept is undecided
-WITHOUT_LEAN = {"accept": "undecided", "reject": "reject"}
+#: a case's verdict with no `--case-exe`: undecided, whatever its session said; no Python verdict stands
+WITHOUT_LEAN = {"accept": "undecided", "reject": "undecided"}
 
 
 def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(tmp_path) -> None:
@@ -242,7 +242,7 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
         assert "verifier_record_agrees=True" in doc["verdict_line"]
         case, answer = (json.loads((private / f).read_text()) for f in (p2_case.CASE, p2_case.ANSWER))
         assert [(private / f).stat().st_mode & 0o777 for f in ("", p2_case.CASE, p2_case.ANSWER)] == [0o700, 0o600, 0o600]
-        assert answer == p2_case.unjudged(case, doc["answer"]) and answer["verdict"] == WITHOUT_LEAN[expect]
+        assert answer == p2_case.unjudged(case) and answer["verdict"] == WITHOUT_LEAN[expect]
         assert case["params"]["store_root"] == reg.root.hex()
         assert doc["case"] == {"commitment": p2_case.digest(case).hex(), "dir": str(private), "judge": "none",
                                "store_root": reg.root.hex(), "verdict": WITHOUT_LEAN[expect]}

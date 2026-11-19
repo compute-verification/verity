@@ -38,8 +38,8 @@ cache under the pass's seed, so a sample of a later pass is rejected (`receipt`)
 
 **The case.** The verifier sends the session's core case before its answer (`p2_parties`'s `{"case": ...}`, `p2_case`):
 `--case-dir DIR` writes it with its answer, `case.json` and `answer.json`, into DIR (0700, each file 0600), the
-answer `Poub.P2Protocol`'s with `--case-exe` (`poub-p2-protocol`); without it the Python only refuses,
-so an accepted session's case is undecided (`p2_case.unjudged`). The case
+answer `Poub.P2Protocol`'s with `--case-exe` (`poub-p2-protocol`); without it the case is undecided, whatever the
+session said (`p2_case.unjudged`). The case
 holds the store's opened blocks and the verifier's coins, so DIR is private and never under OUT: `session.json` says
 only where it went, its commitment's digest, its store and its verdict. A session the verifier refused, or one that
 ended in the prover's error, writes none.
@@ -741,8 +741,8 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
     public answer, also returned. With `pous_case` (PoUS's run case), the case is held to PoUS's store
     (`p2_case.storing`), which the Lean refuses a session over another store by. With `case_exe` (``poub-p2-protocol``) the Lean answers the case and
     its answer is the one written, in ``lean_s`` seconds; a Lean that doesn't answer leaves the session undecided and no
-    case written; without it the session's reject or undecided stands and its accept is undecided
-    (`p2_case.unjudged`). With no key `key_of` gives, the session is undecided (`NO_KEY`). The summary names the program whose verdict the answer is and the machine it ran on, the
+    case written; without it, a session that made no case and a close that doesn't decode are undecided, never a verdict
+    of this Python's (`p2_case.unjudged`). With no key `key_of` gives, the session is undecided (`NO_KEY`). The summary names the program whose verdict the answer is and the machine it ran on, the
     prover's (``decided_by``, `period.decided_by`): the Lean where it answered the case, else this Python. `HELD` stays, so the
     same session can be answered again; the caller removes it once it needs no other answer."""
     public.mkdir(parents=True, exist_ok=True)
@@ -763,8 +763,7 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
     if trusted_sha512 is None:
         out = _no("undecided", f"{NO_KEY}; {scope}")
     elif kept is None:
-        verdict = "undecided" if answer.get("verdict") in ("prover-error", "refused", None) else "reject"
-        out = _no(verdict, f"the session made no case: {answer.get('verdict')}: {answer.get('reason')}"[:1000]
+        out = _no("undecided", f"the session made no case: {answer.get('verdict')}: {answer.get('reason')}"[:1000]
                   + f"; {scope}")
     else:
         summary["same_store"] = pous_case is not None
@@ -772,13 +771,13 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
             kept = p2_case.trusting(kept, trusted_sha512)
             kept = kept if pous_case is None else p2_case.storing(kept, pous_case)
         except (AttributeError, KeyError, TypeError, ValueError) as e:
-            out = _no("reject", f"the session's close doesn't decode: {type(e).__name__}: {e}"[:1000] + f"; {scope}")
+            out = _no("undecided", f"the session's close doesn't decode: {type(e).__name__}: {e}"[:1000] + f"; {scope}")
         else:
             summary |= key_record(kept, trusted_sha512, deployed)
             t = time.perf_counter()
             try:
                 judged = (p2_case.judged(kept, answer, case_exe) if case_exe is not None
-                          else p2_case.unjudged(kept, answer))
+                          else p2_case.unjudged(kept))
             except (OSError, IndexError, ValueError, subprocess.CalledProcessError) as e:
                 out = _no("undecided",
                           f"{case_exe} doesn't answer the case: {type(e).__name__}: {e}"[:1000] + f"; {scope}")
@@ -1114,7 +1113,7 @@ def session(a: argparse.Namespace) -> int:
         if a.case_dir is not None and prover.kept is not None and answer.get("verdict") in ("accept", "reject",
                                                                                            "undecided"):
             judged = (p2_case.judged(prover.kept, answer, a.case_exe) if a.case_exe
-                      else p2_case.unjudged(prover.kept, answer))
+                      else p2_case.unjudged(prover.kept))
             p2_case.write(a.case_dir, prover.kept, judged)
             case = {"dir": str(a.case_dir), "commitment": judged["commitment"],
                     "store_root": prover.kept["params"]["store_root"], "verdict": judged["verdict"], "judge": "lean" if a.case_exe else "none"}
@@ -1171,7 +1170,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     s.add_argument("--readers", type=int, default=6)
     s.add_argument("--workers", type=int, default=max(1, min(12, (os.cpu_count() or 2) - 2)))
     s.add_argument("--case-dir", type=Path, help="the private directory the session's core case and its answer go to")
-    s.add_argument("--case-exe", help="poub-p2-protocol, which answers the case (else an accept is "
+    s.add_argument("--case-exe", help="poub-p2-protocol, which answers the case (else it is "
                    "undecided: p2_case.unjudged)")
     a = ap.parse_args(argv)
     if a.command == "session" and a.case_dir is not None and a.case_dir.resolve().is_relative_to(a.out.resolve()):

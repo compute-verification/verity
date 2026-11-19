@@ -412,8 +412,7 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     before its session. A `wipe_store` prover gates its store before the session.
     With `wipe-protocol` among the period's tools, the Lean answers alone (the verifier), held to this node
     (``--server NODE serve``), once `ready` returns for it (a caller whose build runs beside the wipe waits there);
-    without it the Python may only refuse: its reject or undecided stands,
-    and its accept is undecided (`wipe_period.NO_JUDGE`). It writes `out/wipe.case.json` (onsite's wipe case) and
+    without it the wipe is undecided, whatever the Python said (`wipe_period.NO_JUDGE`). It writes `out/wipe.case.json` (onsite's wipe case) and
     `out/wipe.json`, which names the program that answered and the host it ran on (`decided_by`, `period.decided_by`).
     Which host ran each party, whether `trusted-device`'s premise holds (the session's key against the pins of
     `period.json`'s `deployment`, `period.deployment`), what the prover's store leaves out (`wipe_period.store_gaps`),
@@ -483,7 +482,7 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     if "wipe-protocol" in tools:
         ready(tools["wipe-protocol"])
         answer = lean = serve(tools["wipe-protocol"], [wipe.case], "--server", node)[0]
-    elif answer["verdict"] == "accept":
+    else:
         answer = answer | {"profile": None, "public": None, "reason": W.NO_JUDGE, "verdict": "undecided"}
     if answer["profile"] is not None:
         answer = answer | {"profile": answer["profile"] | {"placement": where}}

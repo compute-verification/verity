@@ -72,7 +72,7 @@ same sessions, which no second session replaces. With neither, one process does 
    0700), held to PoUS's run case's store (`p2_case.storing`), which the Lean refuses another store by; its public answer, under a hiding commitment to the
    case's digest, to ``--bw-out`` (by default ``DIR``'s sibling ``bandwidth``, where the composed run reads the bandwidth
    piece's, ``served_piece.py collect-bandwidth``, `collect_bandwidth`). With ``--bw-case-exe`` (``poub-p2-protocol``) the Lean answers the
-   case, and its answer is the one written; without it the session's accept is undecided (`p2_case.unjudged`).
+   case, and its answer is the one written; without it the case is undecided (`p2_case.unjudged`).
    ``--bw-windows``, ``--bw-passes``, ``--bw-samples``, ``--bw-window-s`` and
    ``--bw-deadline-s`` are the session's request, by default the auditor's (`p2_parties.SESSION`: two minutes), which
    its party holds every request to: it refuses one with another value before its first coin, naming each, and the
@@ -773,7 +773,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     bw.add_argument("--bw-out", type=Path, help="the bandwidth piece's directory (default: DIR's sibling bandwidth)")
     bw.add_argument("--bw-private", type=Path, help="its private directory (default SERVE_DIR/private/bandwidth)")
     bw.add_argument("--bw-case-exe", help="poub-p2-protocol, which answers the case (else "
-                                          "p2_case.answer's accept is undecided)")
+                                          "it is undecided)")
     bw.add_argument("--bw-trusted-sha512", help="the SHA-512 of the key the bandwidth session's close is trusted under, "
                                                 "a rehearsal's (default: the one VERITY_PINS pins for the bandwidth "
                                                 "verifier's bandwidth sessions; none: no session has a case)")
