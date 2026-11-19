@@ -21,6 +21,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.serving import S
 from verity_torch.pouw.pearl_c import graphs as PG
 from verity_torch.pouw.pearl_c import lanes_device as L
 from verity_torch.pouw.pearl_c import run_device as PPDR
+from verity_torch.pouw.pearl_c.host import PassSalts
 from verity_torch.pouw.pearl_c.whole import WholeStep
 
 from verity_vllm.protocols import pouw as P
@@ -119,7 +120,8 @@ def test_lane_graphs_without_a_driver_upload_the_slot_and_fail_at_the_first_laun
     lane = SimpleNamespace(raw=9, event=object(), tree_event=object())
     graph = SimpleNamespace(slot_ptr=7, execs=("main", None, "side"), ev_tree=object())
     with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'launch'"):
-        L.LaneCalls._replay_lanes(SimpleNamespace(driver=None, uploads=uploads, salts_a=lambda sh, pipe: salts), graph,
+        L.LaneCalls._replay_lanes(SimpleNamespace(driver=None, uploads=uploads, salts_a=lambda sh, pipe: salts,
+                                                  cur=SimpleNamespace(salts=PassSalts())), graph,
                                   SimpleNamespace(done=[None], m16=1), 0, lane, lane, 5, None, b"slot")
     assert uploads.put == [(7, b"slot", 5, None)] and salts.any()
 
