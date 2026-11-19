@@ -15,8 +15,7 @@ untraced = ["test_pf_rounds.py", "test_pfill_fold.py", "test_pfill_r9.py", "test
 # and manifest model would refuse (arms.record_problems), so the tests import both; the ledger takes its variant record's
 # schema from verity.protocols.resource_accounting.compute.pouw.verifier.serving and a scheme's family and device from its
 # kernel_schemes, both of which it imports outright. pfill.cuh and pfill_ref.py take
-# their folds, key rules and lane starts from the receipts reference. capacity_of.py reads its σ through machine_model's
-# capacity over its data's Π. The ledger reads its variables through PoUW's benchmarks' registry (benchmarks/pouw/settings.py).
+# their folds, key rules and lane starts from the receipts reference. The ledger reads its variables through PoUW's benchmarks' registry (benchmarks/pouw/settings.py).
 inputs = ["benchmarks/pouw/harness", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler", "benchmarks/pouw/settings.py", "tools/config/verity_config",
           "verity/protocols/resource_accounting/compute/pouw/verifier/receipts", "calibration/machine_model/verity_machine_model",
           "calibration/machine_model/data", "tools/research/src/research/__init__.py",
@@ -31,7 +30,7 @@ inputs = ["benchmarks/pouw/harness", "verity/protocols/resource_accounting/compu
           "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/protocols/__init__.py",
           "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/circuits/kernels/__init__.py",
           "verity/protocols/resource_accounting/compute/pouw/__init__.py", "benchmarks/pouw/filler",
-          # arms, capacity_of and share read the RTX PRO 6000's card file through verity.device, in the kit's cards directory
+          # arms and share read the RTX PRO 6000's card file through verity.device, in the kit's cards directory
           "verity/device.py", "verity/channel.py", "calibration/hardware/cards/rtx-pro-6000-server.toml", "benchmarks/harness/verity_bench/__init__.py",
           "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
           "benchmarks/harness/verity_bench/settings.py"]
