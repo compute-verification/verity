@@ -1434,7 +1434,7 @@ def shared_entries(window_dir: str | Path, win: Mapping[str, Any], k: int,
     holds, its table's row t at the tree's leaf the wiring gives in closed form, with its path. The tree is made from its
     writers' public bodies under ``window_dir`` under its window domain (cached in ``levels`` by tree); the verifier holds
     its root to the registration's."""
-    d, levels = Path(window_dir), {} if levels is None else levels
+    d, levels, mem = Path(window_dir), {} if levels is None else levels, win["members"][k]
     out = {}
     for p, (tid, o, tree, at) in shared_ports(win, k).items():
         docs = _template_docs(win, tid)

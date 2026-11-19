@@ -956,7 +956,8 @@ def public_ports(rec: Mapping[str, Any]) -> dict[str, Any]:
         if not port.startswith(name + "/") and port != name and "/" in port and port.rsplit("/", 1)[0] in ts:
             t, f = port.rsplit("/", 1)
             if name.rsplit("/", 1)[0] == t and f not in fields:
-                fields[f] = {"domain": r.get("domain"), "leaves": r.get("leaves"), "port": f, "root": r.get("root")}
+                fields[f] = {"domain": r.get("domain"), "leaves": r.get("leaves"), "port": f, "root": r.get("root"),
+                             "tree": port}
             continue
         bare = port[len(name) + 1:]
         out.pop(bare, None)
