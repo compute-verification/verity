@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Sampling.Select.Misses
+import Proofs.Flock.Soundness.ExecStrataOf
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
@@ -397,7 +398,11 @@ theorem first_wf (d : Program) (query : Json) (table : Option Json) (n : ℕ) (n
     rcases hlaw with hder | ⟨t, tab, ht, hwork⟩
     · obtain ⟨hk1, hkn⟩ := derive_bounds k _ samplingDesign' hder
       obtain rfl := derive_ok k _ samplingDesign' hder
-      exact ⟨hk1, by rw [hsum']; rw [hsum] at hkn; exact hkn, hpos⟩
+      refine ⟨hk1, by rw [hsum']; rw [hsum] at hkn; exact hkn, hpos, by simp, fun p hp => ?_⟩
+      simp only [Array.toList_map, List.map_map, Function.comp_def, List.zip_map'] at hp
+      obtain ⟨q, hq, rfl⟩ := List.mem_map.1 hp
+      exact ⟨le_max_left _ _, Spot.Sampling.StrataExec.stratumK_le
+        (hpos _ (List.mem_map_of_mem (f := fun p => rsSize p.2) hq)) hkn hk1⟩
     · obtain ⟨ws, hF, htot, rfl⟩ := deriveWork_wf k _ tab samplingDesign' hwork
       have hunits := units_of_forall₂ _ _ (hF.imp fun _ _ h => h.1)
       have hsz : S.toList.map (fun p => rsSize p.2) = ws.toList.map (·.size) := by
