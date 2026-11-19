@@ -678,7 +678,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
     let units := match getD e.draw "units" with | .arr us => us.filterMap nat? | _ => #[]
     let str := fun (k : String) => match getD rec_ k with | .str s => s | _ => ""
     let strata := Bound.strataOf population draw
-    let perTemplate := if jeq (getD samplingDesign "law") "stratified" || jeq (getD samplingDesign "law") "work" then
+    let perTemplate := if ["stratified", "work", "rated"].any (jeq (getD samplingDesign "law") ·) then
       strata.map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none
     let profile : Core.Integrity :=
       { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
