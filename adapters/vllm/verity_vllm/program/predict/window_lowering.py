@@ -734,12 +734,17 @@ def _row_tiles(credited: Credited, k: int, m: int, n: int) -> tuple[int, int, li
     return tm, tn, [bind(REGISTRY[port.definition], **lay.statics) for lay in lays]
 
 
+#: the tile's ports `credit` fills itself; every other port of its Definition is its public row
+_WIRED = ("a", "b", "cert", "salt", "root")
+
+
 def credit(b: _Builder, progs: Sequence[_Program], j: int, node: Any, credited: Credited) -> None:
     """Credited linear ``j`` (`Credited`) once every Program has lowered it: its M rows, each Program's A row in Program order
     (`LinearARow_v3`), as the grid of units of the declared scheme's tile (`_row_tiles`), row tile by row tile, each a column
     tile a unit labelled with its first row's slot. A unit reads its real rows' A rows by wire (filler rows free, which the core
     holds to zero), its weight columns by registered read, the epoch's salt and that read's registered root supplied, its
-    place and noise as registered values (`pearlplus/<port>@<words>`) and its certificates free; each of its rows of y is
+    certificates free, and each other port of the tile's Definition (`_WIRED`) as a registered value
+    (`pearlplus/<port>@<words>`), one row a unit in allocation order; each of its rows of y is
     handed on by a `LinearYRow_v1` unit of that row's slot, in rows of the words the uncredited slices write, which that
     Program's readers read by wire, one field a row."""
     rows = [(P, P.pending.pop(j)) for P in progs if j in P.pending]
@@ -760,8 +765,9 @@ def credit(b: _Builder, progs: Sequence[_Program], j: int, node: Any, credited: 
     b.params[salt], b.params[root] = 16, 32
     b.supplied[salt] = {"supplied": "pouw.pearlplus.salt/v1", "args": {}, "layout": "le", "bits": 256}
     b.supplied[root] = {"supplied": "registered.root/v1", "args": {"value": name}, "layout": "le", "bits": 512}
+    public = [p for p in types if p not in _WIRED]
     first: dict[str, int] = {}
-    for port, count in (("unit", 1), ("fa", 1), ("fb", 1), ("g", 1), ("eb", ct), ("rows", -(-len(rows) // TM))):
+    for port in public:
         v = f"pearlplus/{port}@{words[port]}"
         if v not in b.params:
             b.params[v] = 0
@@ -769,7 +775,7 @@ def credit(b: _Builder, progs: Sequence[_Program], j: int, node: Any, credited: 
             if (bits := types[port].homogeneous_width()) > 16:
                 b.formats[v] = {"row_schema": IF.V2, "word_bits": bits}
         first[port] = b.params[v] // words[port]
-        b.params[v] += count * words[port]
+        b.params[v] += len(cores) * ct * words[port]
     groups: list[tuple[Any, list[int]]] = []
     for r, core in enumerate(cores):
         if groups and groups[-1][0].id == core.id:
@@ -777,6 +783,7 @@ def credit(b: _Builder, progs: Sequence[_Program], j: int, node: Any, credited: 
         else:
             groups.append((core, [r]))
     split: dict[tuple[int, int], tuple[str, int]] = {}
+    done = 0
     for core, rts in groups:
         TR, count = core.bindings["TR"], len(rts) * ct
         labels = [(rows[r * TM][0].slot_index, step) for r in rts for _c in range(ct)]
@@ -790,12 +797,11 @@ def credit(b: _Builder, progs: Sequence[_Program], j: int, node: Any, credited: 
         b.free.append(IF.Free(tid, "cert", u0, count, "advice"))
         b.reads += [IF.Read(tid, "salt", salt, at=u0, radix=(count,), base=0, step=(0,)),
                     IF.Read(tid, "root", root, at=u0, radix=(count,), base=0, step=(0,))]
-        for port in ("unit", "fa", "fb", "g", "eb", "rows"):
+        for port in public:
             w = words[port]
-            digits = {"eb": [(len(rts), 0), (ct, w)], "rows": [(len(rts), w), (ct, 0)]}.get(port, [(count, 0)])
-            base = (first[port] + (rts[0] if port == "rows" else 0)) * w
-            radix, st = _digits(digits)
-            b.reads.append(IF.Read(tid, port, f"pearlplus/{port}@{w}", at=u0, radix=radix, base=base, step=st))
+            b.reads.append(IF.Read(tid, port, f"pearlplus/{port}@{w}", at=u0, radix=(count,), base=(first[port] + done) * w,
+                                   step=(w,)))
+        done += count
         for i in range(TR):
             stid, su0 = b.allocation(bind(LC.LinearYRow, TR=TR, TN=TN, W=n, I=i),
                                      [(rows[r * TM + i][0].slot_index, step) for r in rts for _c in range(ct)])

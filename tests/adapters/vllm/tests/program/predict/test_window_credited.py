@@ -27,17 +27,19 @@ from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pea
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import CLASS, GRAIN, WINDOW, made_up, wired
 from tests.program.predict.test_window_rows import STATE
+from verity_vllm import messages
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_circuit as WC
+from verity_vllm.program.predict import window_lowering as WL
 from verity_vllm.program.predict.build import Unexpressible
-from verity_vllm.program.predict.window_class import Credited, PearlTables
+from verity_vllm.program.predict.window_class import TILE_PORT, Credited, PearlTables
 
 SCHEME = "pearl-c-h100-v1-h3"
 CFG = {**S.TINY, "intermediate_size": 256, "num_hidden_layers": 1}
 #: down_proj, a position's fourth `Gemm_v2`
 DOWN = 3
 CREDITED = Credited(frozenset({(3, DOWN), (4, DOWN)}), tile=(2, 8))
-TILE = "PearlPlusTileCoreWords_v2"
+TILE = next(p.definition for p in messages.declaring(TILE_PORT).ports if p.name == TILE_PORT)
 K, N, DIGEST = 256, 64, 512
 
 
@@ -82,8 +84,10 @@ def test_a_credited_linear_is_its_tiles_their_a_rows_and_their_y_rows_in_the_sli
     prog, _q = wired(c)
     assert len(prog.annotations["free"]) == 3
     assert sorted(m["supplied"] for m in c.registered.supplied.values()) == ["pouw.pearlplus.salt/v1", "registered.root/v1"]
-    assert [v.split("@")[0] for v in c.registered.values if v.startswith("pearlplus/")] == [
-        "pearlplus/" + p for p in ("unit", "fa", "fb", "g", "eb", "rows")]
+    public = [p for p, _t in _units(c, TILE)[0][0].signature()[0] if p not in WL._WIRED]
+    assert [v.split("@")[0] for v in c.registered.values if v.startswith("pearlplus/")] == ["pearlplus/" + p for p in public]
+    assert {(r.param.split("@")[0], r.radix, r.step) for r in c.reads if r.reader.startswith(TILE) and r.port in public} == {
+        (f"pearlplus/{p}", (8,), (dict(IF.layout(fn).rows)[p],)) for fn, _n in _units(c, TILE) for p in public}
 
 
 def test_a_credited_linear_is_refused_beside_tables_and_where_its_tile_cant_be():
@@ -119,17 +123,16 @@ def _tiles(requests: list[Any]) -> dict[tuple[str, int], tuple[int, Any]]:
 
 
 def _public(tiles: dict, salt: bytes, root: bytes) -> dict[str, list[int]]:
-    """The public row as its registered values' leaves, in `credit`'s order: one row a linear of unit, fa, fb and g, a
-    column tile's of eb, a row tile's of rows; a port of 32-bit leaves its leaves, any other its 16-bit words."""
-    rows: dict[str, dict[tuple[int, int], list[int]]] = {p: {} for p in ("unit", "fa", "fb", "g", "eb", "rows")}
+    """The public row as its registered values' leaves: each tile's row of each port `credit` doesn't wire, tile by tile in
+    `credit`'s allocation order; a port of 32-bit leaves its leaves, any other its 16-bit words."""
+    rows: dict[str, list[int]] = {}
     for i, t in tiles.values():
         pub, types, words = PC.public(SCHEME, K, t, 7 + i, salt, root), dict(t.core.signature()[0]), dict(IF.layout(t.core).rows)
-        for p in rows:
-            key = (i, t.col if p == "eb" else t.rows[0] if p == "rows" else 0)
+        for p in (p for p in types if p not in WL._WIRED):
             leaves = _flat(pub[p])
-            rows[p][key] = leaves if types[p].homogeneous_width() == 32 else IF.rows_of_leaves(
-                np.asarray([leaves], dtype=np.uint64), types[p], words[p])[0].tolist()
-    return {p: [w for _k, r in sorted(rs.items()) for w in r] for p, rs in rows.items()}
+            rows.setdefault(p, []).extend(leaves if types[p].homogeneous_width() == 32 else IF.rows_of_leaves(
+                np.asarray([leaves], dtype=np.uint64), types[p], words[p])[0].tolist())
+    return rows
 
 
 def _honest(t: Any, unit: int, salt: bytes, root: bytes, a: np.ndarray, b: np.ndarray, m: int) -> tuple[list[int], list[int]]:
