@@ -24,9 +24,11 @@ stratum, cuts it (`restrict`), lowers it by the door (`one_circuit.lower` under 
 of its input rows' writers in C: a row C wires from more than one writer unit (the core's fa and fb, K lines; g, 32 Gram
 rows) is no one writer's output field, which Lean's registered reads refuse (`Flock.Registered.treeReads`,
 ``FIELD_WHY``) unless the lowering cuts it into one row a writer (``p#j``, `Flock.OneCircuit.io`), and the stage stops
-there when it does not (``WIRED-ROWS``, exit 4); a row one writer's field feeds is the writer's committed output, which
-this stage does not commit, so it stops there too (``WRITER-ROWS``, exit 4); otherwise it stages the block for
-``flock-circuit``.
+there when it does not (``WIRED-ROWS``, exit 4). A row one writer's field feeds, whole and in order (`wired_rows`, which
+refuses any other row by name, ``FIELD``), is read by path in that field's one tree (``KEY/oJ``,
+`Flock.Registered.fieldTree`), which the stage commits under hiding salts from the writer template's units' outputs,
+each root node of the laid C evaluated on C's values (`node_outputs`, `field_tree`), and opens at the writer's leaf
+(`tree_leaf`) in the drawn block's statement; then it stages the block for ``flock-circuit``.
 ``door`` hands each proof to `proofs.verify` with the verifier's own program, partition, draw and registered file, and
 nothing of Pearl+'s. `credited_in_c.sh` builds, proves and verifies; run it on a node."""
 from __future__ import annotations
@@ -292,9 +294,125 @@ def output(program, value: str, rows: list[list[int]], supplied: bool):
                                 word_bits=16, schema=RV.SCHEMA_HM96_SHA512_ROW_V2)
 
 
+def _field_starts(t) -> list[int]:
+    """Where each output field (`verity.circuits.edges`' fields: a Tuple's or Record's members, else the whole) of a
+    return type ``t`` starts, in leaves, and its end."""
+    from verity.circuits.types import RecordType, Tuple
+    fs = list(t.fields) if isinstance(t, Tuple) else [f for _, f in t.fields] if isinstance(t, RecordType) else [t]
+    out = [0]
+    for f in fs:
+        out.append(out[-1] + f.leaves)
+    return out
+
+
+def node_outputs(program, values: dict, skip: set[str]) -> dict[int, np.ndarray]:
+    """Each root node of the laid ``program`` but its inputs and the nodes of ``skip``'s templates, evaluated on C's
+    ``values`` one node at a time (`evaluate_batch` of the node's Definition on the leaves each member reads, by C's
+    gates): its members' outputs, one row a member."""
+    from verity.circuits.cut import member_refs
+    from verity.circuits.evaluation import evaluate_batch
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.layout import resolve
+    from verity.circuits.program import is_input
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+    scope, at = program.circuit.root_scope, {}
+    for v, x in values.items():
+        gates = REG.parameter_gates(program, v)
+        words = _flat(x)
+        assert len(gates) == len(words), (v, len(gates), len(words))
+        at.update(zip(gates, words))
+    out = {}
+    for k, nd in enumerate(program.root.body.nodes):
+        if is_input(nd.fn) or descriptor_id(nd.fn) in skip:
+            continue
+        n = nd.n if nd.form == "batch" else 1
+        axes = nd.axes if nd.form == "batch" else (None,) * len(nd.args)
+        args = []
+        for arg, ax in zip(nd.args, axes):
+            rows = []
+            for m in range(n):
+                rs = member_refs(arg, ax, m) if nd.form == "batch" else arg.refs
+                rows.append([at[resolve(scope, rs[j])] for j in range(rs.count)])
+            args.append(np.asarray(rows, dtype=np.int64))
+        got = np.asarray(evaluate_batch(nd.fn, *args)).reshape(n, -1)
+        per = got.shape[1]
+        for m in range(n):
+            for j in range(per):
+                at[resolve(scope, ("n", k, m * per + j))] = int(got[m, j])
+        out[k] = got
+    return out
+
+
+def wired_rows(program, node: int, port_rows: list[str], cut: dict) -> dict[str, tuple[int, int, int]]:
+    """Each input row of in(S) of the reader at root ``node`` (a call) that C wires from another unit: its writer's root
+    node, member and output field, the row being that field whole and in order. A row that is part of a field, or of
+    more than one, is refused by name (``FIELD``): Lean's registered reads read one field's tree."""
+    sig = dict(program.root.body.nodes[node].fn.signature()[0])
+    args = dict(zip(sig, program.root.body.nodes[node].args))
+    nodes, out = program.root.body.nodes, {}
+    for name in port_rows:
+        p, _, j = name.partition("#")
+        if p not in args:
+            continue
+        rows, ln = cut.get(p, 1), sig[p].leaves
+        lo, hi = (int(j) * ln // rows, (int(j) + 1) * ln // rows) if j else (0, ln)
+        refs = args[p].refs
+        got = [tuple(refs[i]) for i in range(lo, hi)]
+        if not any(r[0] == "n" and r[1] != node for r in got):
+            continue
+        kw = got[0][1]
+        wn = nodes[kw]
+        starts = _field_starts(wn.fn.signature()[1])
+        per = starts[-1]
+        m, at = divmod(got[0][2], per)
+        if at not in starts[:-1]:
+            raise SystemExit(f"FIELD: row {name} of the reader at node {node} starts at leaf {at} of its writer's output, "
+                             "no field's first")
+        f = starts.index(at)
+        want = [("n", kw, m * per + x) for x in range(starts[f], starts[f + 1])]
+        if got != want:
+            raise SystemExit(f"FIELD: row {name} of the reader at node {node} is no one output field of node {kw}, whole "
+                             "and in order")
+        out[name] = (kw, m, f)
+    return out
+
+
+def field_tree(program, outs: dict[int, np.ndarray], kw: int, f: int, words: int) -> tuple[str, list[list[int]]]:
+    """Output field ``f`` of the template of root node ``kw`` as the one tree a reader opens (`Flock.Registered.fieldTree`,
+    ``KEY/oJ``): one row a unit of the template, in the root body's order (`HmLinks.treeLeaf`), the field's bits in
+    16-bit words, ``words`` of them."""
+    from verity.circuits import boolean as BL
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.types import RecordType, Tuple
+    nodes = program.root.body.nodes
+    t = descriptor_id(nodes[kw].fn)
+    ret = nodes[kw].fn.signature()[1]
+    ft = (list(ret.fields) if isinstance(ret, Tuple) else [x for _, x in ret.fields] if isinstance(ret, RecordType)
+          else [ret])[f]
+    starts, widths = _field_starts(ret), BL.elements(ft)
+    rows = []
+    for k, nd in enumerate(nodes):
+        if k in outs and descriptor_id(nd.fn) == t:
+            for m in range(outs[k].shape[0]):
+                leaves = outs[k][m, starts[f]:starts[f + 1]].tolist()
+                bits = [(w >> j) & 1 for w, wd in zip(leaves, widths) for j in range(wd)]
+                row = words16(bits)
+                assert len(row) == words, (t, f, len(row), words)
+                rows.append(row)
+    return f"{t}/o{f}", rows
+
+
+def tree_leaf(program, kw: int, m: int) -> int:
+    """Unit (node ``kw``, member ``m``)'s row in its template's field trees (`HmLinks.treeLeaf`)."""
+    from verity.circuits.codec import descriptor_id
+    nodes = program.root.body.nodes
+    t = descriptor_id(nodes[kw].fn)
+    return sum(nd.n if nd.form == "batch" else 1 for nd in nodes[:kw] if descriptor_id(nd.fn) == t) + m
+
+
 def reads(program, partition, rows: dict, roots: dict[str, str], outs: dict) -> dict:
     """The verifier's ``--registered`` file over its program and the partition's query, position-free
-    (`registered.reads_file`), with each output field of ``outs``."""
+    (`registered.reads_file`), with each committed field of ``outs`` (an output row's or a wired input row's)."""
     from verity.commitments import registered_value as RV
     from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
     f = REG.reads_file(program, partition["query"], {v: len(rs[0]) for v, rs in rows.items()}, roots,
@@ -482,17 +600,16 @@ def stage(a) -> int:
         print("WIRED-ROWS " + json.dumps(rec["wired_rows"]), flush=True)
         (a.out / "stage.json").write_text(json.dumps(rec, indent=1, default=str))
         return 4
-    if fed := {p: [r for r in rows if r == p or r.startswith(p + "#")] for p in wired}:
-        rec["writer_rows"] = {
-            "rows": {p: len(rs) for p, rs in fed.items()},
-            "refused": "the drawn block reads these rows each from one writer unit's output field (in(S)'s cut, "
-                       "one_circuit.cuts), which the door takes from each writer's committed output, as the period's "
-                       "members' rows (flock_inputs); this stage registers only C's registered values and the drawn "
-                       "block's own outputs (registered.reads_file), so it commits no writer's output and stages no "
-                       "proof"}
-        print("WRITER-ROWS " + json.dumps(rec["writer_rows"]), flush=True)
-        (a.out / "stage.json").write_text(json.dumps(rec, indent=1, default=str))
-        return 4
+    node = m_.units[blk[0][0]][0]
+    fed = wired_rows(program, node, rows, rec["lower"]["cut"])
+    trees = sorted({(kw, f) for kw, _m, f in fed.values()})
+    rec["writer_rows"] = {"of": "each input row of in(S) C wires from a writer is that writer's output field whole, read "
+                                "by path in the field's one tree (KEY/oJ, one row a unit of the writer's template), "
+                                "committed under hiding salts",
+                          "rows": len(fed),
+                          "trees": sorted({f"{descriptor_id(program.root.body.nodes[kw].fn)}/o{f}" for kw, f in trees})}
+    print("WRITER-ROWS " + json.dumps(rec["writer_rows"]), flush=True)
+    skip = {descriptor_id(core), descriptor_id(bind(Bf16AddRow, N=n))}
     verifier_row = public_values(ln, k, unit, salt, w_reg["w"].root)
     verifier_roots = {v: r.root.hex() for v, r in register(program, rows_of(ln, verifier_row), supplied).items()}
     rec["public_row"] = {"of": "the verifier's: `public_values` from the salt, W's registered root and the tiles' places "
@@ -515,20 +632,31 @@ def stage(a) -> int:
         outs = {"o0": output(program, f"{key}/o0", out_rows["o0"], False),
                 "o1": output(program, f"{key}/o1", out_rows["o1"], False),
                 "o2": output(program, f"{key}/o2", out_rows["o2"], True)}
-        (d / "registered.json").write_text(json.dumps(reads(program, part, rows, roots, outs)))
+        made = node_outputs(program, vals, skip)
+        words_of = {(kw, f): widths[p] for p, (kw, _m, f) in fed.items()}
+        committed = {}
+        for kw, f in trees:
+            name, trows = field_tree(program, made, kw, f, words_of[kw, f])
+            committed[kw, f] = output(program, name, trows, False)
+        held = {p: committed[kw, f] for p, (kw, _m, f) in fed.items()}
+        (d / "registered.json").write_text(json.dumps(reads(program, part, rows, roots, outs | held)))
         if tag == "honest":
             bad_roots = roots | {"unit": register(program, wrong_unit, supplied)["unit"].root.hex()}
-            (d / "registered-wrong.json").write_text(json.dumps(reads(program, part, rows, bad_roots, outs)))
+            (d / "registered-wrong.json").write_text(json.dumps(reads(program, part, rows, bad_roots, outs | held)))
             zero = [list(r) for r in out_rows["o2"]]
             zero[index][0] = 0
             not_ok = outs | {"o2": output(program, f"{key}/o2", zero, True)}
-            (d / "registered-not-ok.json").write_text(json.dumps(reads(program, part, rows, roots, not_ok)))
+            (d / "registered-not-ok.json").write_text(json.dumps(reads(program, part, rows, roots, not_ok | held)))
         at = {p: r for p, r in ln.reads[index].items() if p in dict(core.signature()[0])}
         tables, salts, registered = {}, {}, {}
         for p, (v, j) in at.items():
             rs, ss, entry = regs[v].statement([j])
             tables[p] = np.asarray([RV.row_words(r, regs[v].word_bits, RV.SCHEMA_HM96_SHA512_ROW_V2) for r in rs],
                                    dtype=np.uint16)
+            salts[p], registered[p] = ss, entry
+        for p, (kw, m, f) in fed.items():
+            rs, ss, entry = held[p].statement([tree_leaf(program, kw, m)])
+            tables[p] = np.asarray([RV.row_words(r, 16, RV.SCHEMA_HM96_SHA512_ROW_V2) for r in rs], dtype=np.uint16)
             salts[p], registered[p] = ss, entry
         for p, o in outs.items():
             _rs, ss, entry = o.statement([index])
