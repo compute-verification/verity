@@ -110,7 +110,7 @@ from verity.circuits.refs import Affine, Concat, Explicit, Grid, Refs, Strided
 from verity.circuits.types import Array, Tuple, Type
 
 TAG = "verity/stacking-property"
-VERSION = 2
+VERSION = 3
 SCHEMA = f"{TAG}/v{VERSION}"
 
 BUDGETED = ("roundings", "compare_select", "gathers", "folds")
@@ -192,7 +192,7 @@ CLASSES: dict[str, str] = {
         "BlackwellE4m3QmmaDot32_v1 BlackwellE5m2QmmaDot32_v1 BlackwellMxf4OmmaDot64_v1 "
         "BlackwellNvf4OmmaDot64_v1 DivFullRcp_v1 DivFullScaleA_v1 DivFullScaleA_v2 E2m1ToBf16_v1 E4m3ToF32_v1 "
         "E8m0DequantBf16_v1 E8m0ShlBf16_v1 E8m0ToBf16_v1 F2fpBf16_v1 F32AddFtz_v1 F32AddFtz_v2 F32Add_v1 F32Add_v2 "
-        "F32BitsShl23_v1 F32CeilFtz_v1 F32Div_v1 F32Div_v2 F32ErfRn_v1 F32ExpRn_v1 F32Fabs_v1 F32FmaFtz_v1 F32FmaFtz_v2 "
+        "F32BitsShl23_v1 F32CeilFtz_v1 F32Div_v1 F32Div_v2 F32ExpRn_v1 F32Fabs_v1 F32FmaFtz_v1 F32FmaFtz_v2 "
         "F32FmaRm_v1 F32FmaRm_v2 F32FmaSubFtz_v1 F32FmaSubFtz_v2 F32Fma_v1 F32Fma_v2 F32MulFtz_v1 F32MulFtz_v2 F32Mul_v1 "
         "F32MulWide_v1 F32Mul_v2 F32Neg_v1 F32Rint_v1 F32Sqrt_v1 F32SubFtz_v1 F32SubFtz_v2 F32Sub_v1 F32Sub_v2 "
         "F32TanhRn_v1 F32ToBf16Rn_v1 F32ToE2m1Sat_v1 F32ToE4m3Sat_v1 F32ToS8Rzi_v1 F32ToU32RzByte_v1 F64Mul_v1 "

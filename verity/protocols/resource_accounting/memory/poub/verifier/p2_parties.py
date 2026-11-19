@@ -30,7 +30,7 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
   registration, the request, the verifier's clock floor, the session id and the memory attester's close of the case
   (its registration's digest, its clock floor and its log), signed with its key (`Closer`), which
   `Poub.P2Protocol` checks and replays; it is witness, which the prover
-  keeps private. A session the books vetoed, or one with no memory attester to sign it, has none.
+  keeps private. A session with no memory attester to sign it has none.
 - `{"answer": {...}}` ends the session (`answer`): the verdict, the failure and where, and on acceptance the credited
   reads `q_bytes`, the receipts less the wrong ones the pooled bound leaves (`pooled.bound` at δ = 2^-40), a unit's
   8,224 bytes each, over the session's span. `core_answer` puts it in the core interface's form.
@@ -47,23 +47,23 @@ The verifier is the Lean, since the trusted base is the compiled Lean verifier, 
 untrusted provenance, and Python is never trusted: the process `poub-verifier` (`p2_lean.py`,
 `Poub.P2Session`) holds the registration file's bytes, recomputes the registration's digest from its fields, and
 reads the prover's request and every root and openings line as the prover sent it, each opening's four blocks checked
-on the registered vk root, and its answer is the session's. The Python's books (`Books`, `audit.AuditRun` over the
-P2 codec) take every event beside it and can only veto (`Twin`): an event, a held store or an answer on which the two
-differ, or one the Lean answers with an error, rejects the session `disagreement` at that window, and no event follows
-it. What the
-Lean takes as given is the clock's readings and the coins the challenger (`coins.local`, on this host) releases.
+on the registered vk root, and its answer is the session's alone (`LeanSession`). What the Lean takes as given is the
+clock's readings and the coins the challenger (`Challenger`, `coins.local` on this host) releases after the roots the
+Lean took, which decide nothing.
 
 `python -m verity.protocols.resource_accounting.memory.poub.verifier.p2_parties (--registration FILE | --pous-record DIR --pous-session SID)
-(--stdio | --listen HOST:PORT [--sessions N]) [--answer FILE | --device DIR] [--lean-exe EXE] [--challenger DIR
+(--stdio | --listen HOST:PORT [--sessions N]) [--device DIR] [--lean-exe EXE] [--challenger DIR
 --session SID --trusted-sha512 HEX]` is the verifier's side (`main`), each session with fresh coins, the memory
 attester's key and session log in `--challenger`'s directory (the key loaded by the `device_key` the caller hands
 `main`, PoUS's device's `onsite.device_key` in the auditor's gate, refused unless `--trusted-sha512` pins it) signing the
 close of the one session the auditor named `--session SID`, which is claimed in its log before the session's first coin, the
 Lean built in its package (`lake build poub-verifier`) unless `--lean-exe` names a built one, or, without `lake`
-on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `{"listening": port}` and then each
-session's `{"answer"}` on stdout, the shape of a party the auditor's gate starts over ssh with its `--device` directory
+on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `{"listening": port}` on stdout and no
+record of any answer: the answer of record is the replay of the memory attester's signed close (`Poub.P2Protocol`), and
+the session's own is the Lean's, sent to the prover alone. It is the shape of a party the auditor's gate starts over ssh
+with its `--device` directory
 (`verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py`'s party verbs), where it keeps each session's case's
-digest too, the chain its signed close signs, a line of `private/case-digests.txt` (`CASE_DIGESTS`, `case_digest`;
+digest, the chain its signed close signs, a line of `private/case-digests.txt` (`CASE_DIGESTS`, `case_digest`;
 0700, the file 0600), and none of the case's values.
 """
 
@@ -78,7 +78,7 @@ import secrets
 import socket
 import sys
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, BinaryIO
@@ -90,7 +90,7 @@ from verity.protocols.resource_accounting.memory.pous.attester import challenger
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
 
-from . import audit, p2, p2_lean, pooled
+from . import audit, p2, p2_lean
 from . import coins as C
 from . import period as P
 from .p2_lean import Lean, LeanError
@@ -129,8 +129,6 @@ assumed)."""
 DELTA = 2.0 ** -40
 """PoUB-P2's δ, its own (`P2Session.DELTA`): each window's profile δ and the pooled bound's.  It is not PoUB's
 `audit.DELTA`, and not at an error of 2^-100."""
-REFUSED = {"refused": True}
-DISAGREEMENT = "disagreement"
 #: The samples a thread of the Lean checks at once (`P2Session.checkOpeningsChunked`).
 CHUNK = 64
 #: what an accepted session's `eps` sums (`core_answer`)
@@ -142,7 +140,6 @@ GAMMA_TERMS = ("μ_timing + μ_sample only, 1 − q_bytes/(R · span), R the rea
                "before μ_chip, λ, μ_rebuild, μ_host, μ_link and μ_carrier, which `audit.ledger` does not take off a P2 "
                "record")
 _HEX = re.compile(r"(?:[0-9a-f]{2})*")
-_ANSWER_ERRORS = (ValueError, TypeError, KeyError, IndexError, ZeroDivisionError, audit.SessionError)
 
 
 def send(f: BinaryIO, doc: Mapping[str, Any]) -> None:
@@ -150,15 +147,48 @@ def send(f: BinaryIO, doc: Mapping[str, Any]) -> None:
     f.flush()
 
 
-def message(line: bytes, key: str | None = None) -> Any:
-    """The message `line` carries (its one key `key`'s value, if given; `P2Session.messageOf`): ConnectionError for a
-    line its sender didn't end, ValueError for one that isn't UTF-8 JSON, an object of one key (`key`)."""
-    if not line.endswith(b"\n"):
-        raise ConnectionError("the peer closed mid-session")
+def _pairs(kvs: list) -> dict:
+    if len({k for k, _ in kvs}) != len(kvs):
+        raise ValueError("an object names a key twice")
+    return dict(kvs)
+
+
+def _refused(text: str) -> Any:
+    raise ValueError(f"{text} is not an integer or a JSON constant")
+
+
+def _strings(doc: Any) -> Iterator[str]:
+    if isinstance(doc, str):
+        yield doc
+    elif isinstance(doc, list):
+        for x in doc:
+            yield from _strings(x)
+    elif isinstance(doc, dict):
+        for k, v in doc.items():
+            yield k
+            yield from _strings(v)
+
+
+def line_json(b: bytes) -> Any:
+    """A line's JSON as the prover alone reads it (`P2Session.lineJsonOf`): ValueError for bytes that aren't UTF-8 JSON,
+    or name a key twice in an object, or hold a number with a fraction or an exponent, `NaN` or `Infinity`, or a string
+    with a surrogate or U+FFFD (which Lean's reader makes of a lone surrogate escape)."""
     try:
-        doc = json.loads(line.decode())
+        doc = json.loads(b.decode(), object_pairs_hook=_pairs, parse_float=_refused, parse_constant=_refused)
     except RecursionError:
         raise ValueError("a message nests too deep") from None
+    if any(c == "\ufffd" or "\ud800" <= c <= "\udfff" for s in _strings(doc) for c in s):
+        raise ValueError("a string holds a surrogate or U+FFFD")
+    return doc
+
+
+def message(line: bytes, key: str | None = None) -> Any:
+    """The message `line` carries (its one key `key`'s value, if given; `P2Session.messageOf`): ConnectionError for a
+    line its sender didn't end, ValueError for one that isn't JSON as `line_json` reads it, an object of one key
+    (`key`)."""
+    if not line.endswith(b"\n"):
+        raise ConnectionError("the peer closed mid-session")
+    doc = line_json(line[:-1])
     if not isinstance(doc, dict) or len(doc) != 1:
         raise ValueError("a message is a JSON object of one key")
     if key is None:
@@ -298,50 +328,6 @@ def params_of(reg: p2.Registration, request: Mapping[str, Any],
                         rows=reg.rows)
 
 
-def verdict_json(v: audit.Verdict) -> dict[str, Any]:
-    """A verdict as the Lean writes a result (`Difftest.resultJ`)."""
-    return {"accepted": v.window} if v.accepted else {
-        "at": None if v.at is None else list(v.at), "failure": v.failure, "window": v.window}
-
-
-def _done(v: audit.Verdict | None) -> dict[str, Any]:
-    return {"ok": True} if v is None else verdict_json(v)
-
-
-def answer(s: audit.AuditRun, reason: str | None = None, plan: Plan | None = None) -> dict[str, Any]:
-    """The session's answer (`P2Session.answer`, with `reason`): `accept` with the credited reads, `reject` with the
-    failure and the sample it failed at, or `undecided`; `units` are the store's and `plan_units` those each pass
-    reads."""
-    reg = s.registration
-    out: dict[str, Any] = {"protocol": PROTOCOL, "registration": reg.digest.hex(), "unit_bytes": p2.UNIT_BYTES,
-                           "units": reg.blocks, "plan_units": (plan or Plan.whole(reg.blocks)).length, "windows": [],
-                           "reason": reason}
-    for w in s.windows:
-        out["windows"].append({"passes": len(w.roots), "draws": None if w.draws is None else len(w.draws),
-                               "verdict": None if w.verdict is None else
-                               {"accepted": w.verdict.accepted, "failure": w.verdict.failure, "at": w.verdict.at}})
-    outcome = s.outcome
-    if outcome is None:
-        return out | {"verdict": "undecided"}
-    if outcome != "accepted":
-        f = s.failed
-        return out | {"verdict": "reject", "failure": f.failure, "at": f.at, "window": f.window}
-    record = s.record()
-    ws, delta = audit.pooled_windows(record)
-    us = sum(u for u, _ in ws)
-    try:
-        b = pooled.bound(ws, delta)
-        wrong = -(-b.wrong.numerator // b.wrong.denominator)
-        bound: dict[str, Any] = b.to_json()
-    except pooled.Refused as e:
-        wrong, bound = us, {"refused": str(e)}
-    q_bytes = (us - wrong) * p2.UNIT_BYTES
-    span = record.span_ns
-    return out | {"verdict": "accept", "receipts": us, "wrong_at_most": wrong, "delta": str(delta), "bound": bound,
-                  "draws": [s for _, s in ws], "q_bytes": q_bytes, "span_ns": span,
-                  "credited_bytes_per_s": q_bytes * 10**9 // span if span > 0 else None}
-
-
 def core_answer(a: Mapping[str, Any], r_bytes_per_s: int | None = None) -> dict[str, Any]:
     """The session's answer `a` (`answer`, as the verifier sent it) in the core interface's form (`period.answer`'s),
     its commitment the registration's digest. Accepted, its public outputs are the credited reads `q_bytes` over the
@@ -376,120 +362,104 @@ def core_answer(a: Mapping[str, Any], r_bytes_per_s: int | None = None) -> dict[
                   "verdict": "reject"}
 
 
-class _Out:
-    """A line out of form."""
-
-
-_OUT = _Out()
-
-
-class Books:
-    """The Python's books of one P2 session, the veto beside the Lean (`Twin`): `audit.AuditRun` over the P2 codec on
-    the clock each event sets (`period._Held`), and each event's result as the Lean writes it (`Difftest.resultJ`), a
-    call the session refuses `REFUSED`. A root or openings line is read as `P2Session` reads it: a line out of form
-    rejects the session `malformed` at the window filling (`fail`), and `why` says what was out of form. `released` is
-    the coin the last event released: a start's or a boundary's challenge, or a close's openings coin."""
-
-    def __init__(self, params: audit.Params, registration: p2.Registration, coins_: C.SessionCoins, plan: Plan,
-                 not_before_ns: int) -> None:
-        self.clock, self.plan = P._Held(), plan
-        self.s = audit.AuditRun(params, registration, None, coins_, not_before_ns=not_before_ns, clock=self.clock)
-        self.released: C.LiveOpening | None = None
-        self.why: str | None = None
-
-    def _at(self, now: int, call: Callable[[], dict[str, Any]]) -> dict[str, Any]:
-        self.clock.now, self.released = now, None
-        try:
-            return call()
-        except audit.SessionError:
-            return dict(REFUSED)
-
-    def _line(self, line: bytes, key: str) -> Any:
-        try:
-            return message(line, key)
-        except (ConnectionError, ValueError) as e:
-            self.why = f"the prover's side failed: {type(e).__name__}: {e}"
-            return _OUT
-
-    def start(self, now: int) -> dict[str, Any]:
-        def call() -> dict[str, Any]:
-            self.released = self.s.start()
-            return {"released": self.released.index}
-        return self._at(now, call)
-
-    def boundary(self, now: int) -> dict[str, Any]:
-        def call() -> dict[str, Any]:
-            self.released = c = self.s.boundary()
-            return {"released": None if c is None else c.index}
-        return self._at(now, call)
-
-    def root(self, t: int, i: int, line: bytes, now: int) -> dict[str, Any]:
-        got = self._line(line, "root")
-        if got is _OUT:
-            return self.fail()
-        root = bytes.fromhex(got) if type(got) is str and _HEX.fullmatch(got) else b""
-        return self._at(now, lambda: _done(self.s.receive(t, i, root, self.plan.runs, step=self.s._step + 1)))
-
-    def close(self, t: int, now: int) -> dict[str, Any]:
-        def call() -> dict[str, Any]:
-            n = len(self.s.coins.opened(C.OPENINGS))
-            out = self.s.close(t)
-            opened = self.s.coins.opened(C.OPENINGS)
-            self.released = opened[-1] if len(opened) > n else None
-            return verdict_json(out) if isinstance(out, audit.Verdict) else {"draws": [list(d) for d in out]}
-        return self._at(now, call)
-
-    def openings(self, t: int, line: bytes) -> dict[str, Any]:
-        got = self._line(line, "openings")
-        if got is _OUT:
-            return self.fail()
-        openings = [opening_of(x) for x in got] if isinstance(got, list) else []
-        if any(o is None for o in openings):
-            openings = []
-        return self._at(self.clock.now, lambda: verdict_json(self.s.verify(t, openings)))
-
-    def fail(self) -> dict[str, Any]:
-        """The session rejected `malformed` at the window filling (the prover's line out of form, or the prover gone),
-        or `REFUSED` once it has its outcome."""
-        self.released = None
-        if self.s.outcome is not None:
-            return dict(REFUSED)
-        return verdict_json(self.s._fail(self.s.filling, "malformed"))
-
-
 class _Refused(Exception):
     """The session is refused before its first coin."""
 
 
 class _Ended(Exception):
-    """The session has its outcome: a root or a window rejected, or the verifiers disagree."""
+    """The session has its outcome: a root or a window rejected, or the Lean answered otherwise than it goes on."""
 
     def __init__(self, reason: str | None = None) -> None:
         super().__init__(reason)
         self.reason = reason
 
 
-class Twin:
-    """A P2 session through the Lean verifier (session `k` of `lean`, `Poub.P2Session`) with the
-    Python's books beside it (`books`), which can only veto: each event goes to both and its result is the Lean's
-    where the two agree; where they differ, or the Lean answers an error, the session is rejected `disagreement` at
-    the event's window (`disagreement` says where and what each answered) and the event raises `_Ended`."""
+class Challenger:
+    """The session's challenger on the verifier's host (`coins.local`, on coins from `secret`) and the clock's schedule
+    it keeps, which decide nothing: each coin is released in order after the last root the Lean took (the
+    registration's window root before any), a window's openings coin after its last root once it holds the auditor's
+    passes, and a window's boundary is due `window_ns` after its challenge left and its deadline `deadline_ns` after
+    its boundary. `released` is the coin the last step released, None for none."""
 
-    def __init__(self, lean: Lean, k: int, books: Books, request: dict[str, Any] | None = None,
-                 not_before_ns: int = 0) -> None:
-        self.lean, self.k, self.books = lean, k, books
+    def __init__(self, registration: p2.Registration, auditor: Mapping[str, int], secret: bytes) -> None:
+        self.coins = C.local(registration.digest, 0, auditor["windows"], P._Stream(secret, registration.node))
+        self.auditor, self.latest = auditor, self.coins.window
+        self.roots: list[list[bytes]] = []
+        self.released_ns: list[int] = []
+        self.boundary_ns: list[int | None] = []
+        self.released: C.LiveOpening | None = None
+
+    def _challenge(self, t: int, now: int) -> C.LiveOpening:
+        self.released = self.coins.challenge(t, self.latest)
+        self.roots.append([])
+        self.released_ns.append(now)
+        self.boundary_ns.append(None)
+        return self.released
+
+    def start(self, now: int) -> None:
+        self._challenge(0, now)
+
+    def _unended(self) -> int | None:
+        return next((t for t, b in enumerate(self.boundary_ns) if b is None), None)
+
+    def boundary(self, now: int) -> None:
+        t = self._unended()
+        self.released = None
+        if t is None:
+            return
+        self.boundary_ns[t] = now
+        if t + 1 < self.auditor["windows"]:
+            self._challenge(t + 1, now)
+
+    def root(self, t: int, root: bytes) -> None:
+        self.roots[t].append(root)
+        self.latest = root
+
+    def close(self, t: int) -> None:
+        rs = self.roots[t] if 0 <= t < len(self.roots) else []
+        self.released = self.coins.openings(t, rs[-1]) if len(rs) >= self.auditor["passes"] else None
+
+    def next_boundary_ns(self) -> int | None:
+        t = self._unended()
+        return None if t is None else self.released_ns[t] + self.auditor["window_ns"]
+
+    def deadline(self, t: int) -> int | None:
+        b = self.boundary_ns[t]
+        return None if b is None else b + self.auditor["deadline_ns"]
+
+    def disclose(self) -> tuple[C.LiveCommitment, tuple[C.LiveOpening, ...]]:
+        """The coin commitment and every coin released, opened, family by family (`audit.AuditRun.disclose`)."""
+        c = self.coins
+        return c.commitment, tuple(o for label, _ in c.commitment.families for o in c.opened(label))
+
+
+def _why(line: bytes, key: str) -> str | None:
+    """Why the prover's `line` is out of form as a `key` line, for the answer's reason; None when it isn't."""
+    try:
+        message(line, key)
+    except (ConnectionError, ValueError) as e:
+        return f"the prover's side failed: {type(e).__name__}: {e}"
+    return None
+
+
+class LeanSession:
+    """A P2 session decided by the Lean verifier alone (session `k` of `lean`, `Poub.P2Session`), on the coins its
+    `challenger` releases: each event's result is the Lean's, a Lean that fails answering `{"error"}`."""
+
+    def __init__(self, lean: Lean, k: int, registration: p2.Registration, challenger: Challenger,
+                 request: dict[str, Any], not_before_ns: int = 0) -> None:
+        self.lean, self.k, self.registration, self.challenger = lean, k, registration, challenger
         self.request, self.not_before_ns = request, not_before_ns
-        self.disagreement: dict[str, Any] | None = None
+        self.why: str | None = None
         self.log: list[dict[str, Any]] = []
         """Every request after the session opened, as `Poub.P2Protocol` replays them (`p2_case`), each coin
         whole, as the challenger released it, where the Lean is sent its first `coins.COIN_BYTES`."""
 
     @classmethod
-    def open(cls, lean: Lean, registration: p2.Registration, plan: Plan, line: bytes, secret: bytes,
-             not_before_ns: int, auditor: Mapping[str, int] = SESSION) -> Twin:
+    def open(cls, lean: Lean, registration: p2.Registration, line: bytes, secret: bytes, not_before_ns: int,
+             auditor: Mapping[str, int] = SESSION) -> LeanSession:
         """The session the prover's request `line` asks for, on coins from `secret`: `_Refused` where the Lean refuses
-        it, as for a request off the auditor's parameters it holds (`hold`), or the Python does where the Lean doesn't
-        (the veto), as for one off `auditor` (`params_of`)."""
+        it, as for a request off the auditor's parameters it holds (`hold`)."""
         try:
             got = lean.call({"op": "p2_session", "bytes": len(line), "not_before_ns": not_before_ns}, line)
         except LeanError as e:
@@ -497,15 +467,8 @@ class Twin:
         if not isinstance(got, dict) or type(got.get("session")) is not int:
             why = got.get("refused") if isinstance(got, dict) else None
             raise _Refused(why if type(why) is str else f"the Lean verifier answered {got}")
-        try:
-            request = message(line, "request")
-            params = params_of(registration, request, auditor)
-        except (ConnectionError, ValueError, KeyError, TypeError) as e:
-            raise _Refused(f"{DISAGREEMENT}: the Lean verifier takes the request, the Python refuses it: "
-                           f"{type(e).__name__}: {e}") from None
-        coins_ = C.local(registration.digest, 0, params.windows, P._Stream(secret, registration.node))
-        return cls(lean, got["session"], Books(params, registration, coins_, plan, not_before_ns), request,
-                   not_before_ns)
+        return cls(lean, got["session"], registration, Challenger(registration, auditor, secret),
+                   message(line, "request"), not_before_ns)
 
     def _ask(self, request: dict[str, Any], body: bytes = b"") -> Any:
         try:
@@ -513,107 +476,74 @@ class Twin:
         except LeanError as e:
             return {"error": str(e)}
 
-    def _veto(self, t: int, event: str, got: Any, mine: Any) -> None:
-        self.disagreement = {"event": event, "lean": got, "python": mine, "t": t}
-        self.books.s._fail(t, DISAGREEMENT)
-
-    def _settle(self, t: int, event: str, got: Any, mine: dict[str, Any]) -> dict[str, Any]:
-        if got != mine:
-            self._veto(t, event, got, mine)
-            raise _Ended(f"{DISAGREEMENT}: the Lean verifier and the Python differ on window {t}'s {event}")
-        return got
-
-    def _event(self, t: int, event: dict[str, Any], mine: dict[str, Any]) -> dict[str, Any]:
-        c = self.books.released
-        coin = None if c is None else C.coin(c).hex()
+    def _event(self, event: dict[str, Any]) -> Any:
+        c = self.challenger.released
         self.log.append({"coin": None if c is None else c.coin.hex(), "event": event, "op": "p2_event"})
-        got = self._ask({"op": "p2_event", "session": self.k, "event": event, "coin": coin})
-        return self._settle(t, event["kind"], got, mine)
+        return self._ask({"op": "p2_event", "session": self.k, "event": event,
+                          "coin": None if c is None else C.coin(c).hex()})
 
-    def start(self, now: int) -> tuple[dict[str, Any], C.LiveOpening | None]:
+    def start(self, now: int) -> tuple[Any, C.LiveOpening | None]:
         """The session's first coin at `now`: the result, and the challenge to send."""
-        mine = self.books.start(now)
-        return self._event(0, {"kind": "start", "now": now}, mine), self.books.released
+        self.challenger.start(now)
+        return self._event({"kind": "start", "now": now}), self.challenger.released
 
-    def boundary(self, now: int) -> tuple[dict[str, Any], C.LiveOpening | None]:
+    def boundary(self, now: int) -> tuple[Any, C.LiveOpening | None]:
         """The next unended window's boundary at `now`: the result, and the next window's challenge, or None."""
-        t = max(0, len(self.books.s.windows) - 1)
-        mine = self.books.boundary(now)
-        return self._event(t, {"kind": "boundary", "now": now}, mine), self.books.released
+        self.challenger.boundary(now)
+        return self._event({"kind": "boundary", "now": now}), self.challenger.released
 
-    def root(self, t: int, i: int, line: bytes, now: int) -> dict[str, Any]:
-        """Root i of window t from the prover's `line`, arriving at `now`."""
-        mine = self.books.root(t, i, line, now)
+    def root(self, t: int, i: int, line: bytes, now: int) -> Any:
+        """Root i of window t from the prover's `line`, arriving at `now`; the challenger's next coin follows it once
+        the Lean takes it."""
         self.log.append({"i": i, "line": line.hex(), "now": now, "op": "p2_root", "t": t})
         got = self._ask({"op": "p2_root", "session": self.k, "t": t, "i": i, "now": now, "bytes": len(line)}, line)
-        return self._settle(t, "root", got, mine)
-
-    def close(self, t: int, now: int) -> dict[str, Any]:
-        """Window t's samples at `now`."""
-        mine = self.books.close(t, now)
-        return self._event(t, {"kind": "close", "now": now, "t": t}, mine)
-
-    def openings(self, t: int, line: bytes) -> dict[str, Any]:
-        """Window t's openings from the prover's `line`: the Lean checks them while the books do."""
-        got = None
-        self.log.append({"line": line.hex(), "op": "p2_openings", "t": t})
-        try:
-            self.lean.send({"op": "p2_openings", "session": self.k, "t": t, "bytes": len(line)}, line)
-        except LeanError as e:
-            got = {"error": str(e)}
-        mine = self.books.openings(t, line)
-        if got is None:
-            try:
-                got = self.lean.read()
-            except LeanError as e:
-                got = {"error": str(e)}
-        return self._settle(t, "openings", got, mine)
-
-    def fail(self) -> dict[str, Any]:
-        """The session rejected `malformed` at the window filling: the prover is gone."""
-        t = self.books.s.filling
-        mine = self.books.fail()
-        self.log.append({"op": "p2_fail"})
-        got = self._ask({"op": "p2_fail", "session": self.k})
-        if got != mine:
-            self._veto(t, "fail", got, mine)
+        if got == {"ok": True}:
+            self.challenger.root(t, bytes.fromhex(message(line, "root")))
+        else:
+            self.why = _why(line, "root")
         return got
 
-    def answer(self, reason: str | None) -> dict[str, Any]:
-        """The session's answer, the Lean's (`P2Session.answer`) with `reason`, where the Python's is the same;
-        otherwise, or after a disagreement, the session rejected `disagreement` (the Python's `answer` of its books,
-        which a disagreement rejected), with the `disagreement`."""
-        got = self._ask({"op": "p2_answer", "session": self.k})
-        if self.disagreement is None:
-            try:
-                mine = json.loads(json.dumps(answer(self.books.s, plan=self.books.plan)))
-                mine.pop("reason")
-            except _ANSWER_ERRORS as e:
-                mine = {"error": f"{type(e).__name__}: {e}"}
-            if got == mine:
-                return got | {"reason": reason}
-            self._veto(self.books.s.filling, "answer", got, mine)
-        d = self.disagreement
-        why = reason or f"{DISAGREEMENT}: the Lean verifier and the Python differ on window {d['t']}'s {d['event']}"
-        return answer(self.books.s, why, self.books.plan) | {"disagreement": d}
+    def close(self, t: int, now: int) -> Any:
+        """Window t's samples at `now`."""
+        self.challenger.close(t)
+        return self._event({"kind": "close", "now": now, "t": t})
 
+    def openings(self, t: int, line: bytes) -> Any:
+        """Window t's openings from the prover's `line`."""
+        self.log.append({"line": line.hex(), "op": "p2_openings", "t": t})
+        got = self._ask({"op": "p2_openings", "session": self.k, "t": t, "bytes": len(line)}, line)
+        if not (isinstance(got, dict) and "accepted" in got):
+            self.why = _why(line, "openings")
+        return got
 
-def held_json(r: p2.Registration, plan: Plan) -> dict[str, Any]:
-    """What the Lean answers on holding the store (`P2Session.Held.json`): its digest, units and plan."""
-    return {"digest": r.digest.hex(), "plan": [list(run) for run in plan.runs], "plan_units": plan.length,
-            "units": r.blocks}
+    def fail(self) -> Any:
+        """The session rejected `malformed` at the window filling: the prover is gone."""
+        self.log.append({"op": "p2_fail"})
+        return self._ask({"op": "p2_fail", "session": self.k})
+
+    def _answer(self) -> Any:
+        return self._ask({"op": "p2_answer", "session": self.k})
+
+    def end(self, reason: str | None) -> dict[str, Any]:
+        """The session's answer, the Lean's (`P2Session.answer`) with `reason`, the window filling failed first while
+        the session is undecided (the prover gone); undecided, saying why, where the Lean gives none."""
+        got = self._answer()
+        if isinstance(got, dict) and got.get("verdict") == "undecided":
+            self.fail()
+            got = self._answer()
+        if isinstance(got, dict) and got.get("protocol") == PROTOCOL and "error" not in got:
+            return got | {"reason": reason}
+        return {"protocol": PROTOCOL, "registration": self.registration.digest.hex(), "verdict": "undecided",
+                "reason": f"the Lean verifier gave no answer: {got}"}
 
 
 def hold(lean: Lean, data: bytes, chunk: int = CHUNK,
          auditor: Mapping[str, int] = SESSION) -> tuple[p2.Registration, Plan]:
-    """The registration file's bytes `data`, held by both verifiers: the Python's registration and plan
-    (`registration_of`, `plan_of`), refused (ValueError) unless the Lean holds the same store and holds every request to
-    the auditor's session parameters `auditor`, every `chunk` samples checked on a thread (`P2Session.heldOf`). The Lean
-    is sent `auditor` only when it isn't `SESSION` (a toy party's): otherwise it holds its own pinned
-    `P2Session.SESSION`, which must be this one's."""
-    doc = json.loads(data.decode())
-    reg = registration_of(doc)
-    plan = plan_of(doc, reg)
+    """The registration file's bytes `data`, held by the Lean, which holds every request to the auditor's session
+    parameters `auditor`, every `chunk` samples checked on a thread (`P2Session.heldOf`): the registration
+    (`registration_of`) and the plan the Lean holds. The Lean is sent `auditor` only when it isn't `SESSION` (a toy
+    party's): otherwise it holds its own pinned `P2Session.SESSION`. ValueError where the Lean refuses it."""
+    reg = registration_of(json.loads(data.decode()))
     request = {"op": "p2_hold", "bytes": len(data), "chunk": chunk}
     if dict(auditor) != SESSION:
         request["session"] = {k: auditor[k] for k in SESSION}
@@ -621,10 +551,9 @@ def hold(lean: Lean, data: bytes, chunk: int = CHUNK,
         got = lean.call(request, data)
     except LeanError as e:
         raise ValueError(f"the Lean verifier refuses the registration: {e}") from None
-    mine = held_json(reg, plan) | {"session": {k: auditor[k] for k in SESSION}}
-    if got != mine:
-        raise ValueError(f"{DISAGREEMENT}: the Lean verifier holds {got}, the Python {mine}")
-    return reg, plan
+    if not isinstance(got, dict) or "plan" not in got:
+        raise ValueError(f"the Lean verifier refuses the registration: {got}")
+    return reg, Plan(tuple(tuple(r) for r in got["plan"]), reg.blocks)
 
 
 class Closer:
@@ -711,7 +640,7 @@ def drive(party: Any, params: Mapping[str, Any], identity: Identity, f_in: Binar
 
 
 class Verifier:
-    """The verifier and its challenger: one session, decided by the Lean beside the books (`Twin`), on its clock and
+    """The verifier and its challenger: one session, decided by the Lean alone (`LeanSession`), on its clock and
     coins. Its capabilities are `lean` (holding `registration` and `plan`: `hold`), the auditor's session parameters
     `auditor`, its `host`'s name, the memory attester signing the close (`closer`, or None), where its case is kept
     (`keep`, or None) and a progress `log`.
@@ -728,7 +657,7 @@ class Verifier:
         self.auditor, self.host = c.get("auditor", SESSION), c["host"]
         self.keep: Callable[[dict[str, Any]], None] | None = c.get("keep")
         self.log: Callable[[str], None] = c.get("log") or (lambda _m: None)
-        self.twin: Twin | None = None
+        self.twin: LeanSession | None = None
         self.coins = b""
         self.due: Callable[[bytes], list[Any]] | None = self._request
         self.then: Callable[[int], list[Any]] | None = None
@@ -789,11 +718,10 @@ class Verifier:
 
     def _open(self, now: int) -> list[Any]:
         try:
-            self.twin = Twin.open(self.lean, self.registration, self.plan, self.line, self.coins, now, self.auditor)
+            self.twin = LeanSession.open(self.lean, self.registration, self.line, self.coins, now, self.auditor)
         except _Refused as e:
             return self._refused(str(e))
-        params = self.twin.books.s.params
-        self.windows, self.passes, self.t, self.i = params.windows, params.min_passes, 0, 0
+        self.windows, self.passes, self.t, self.i = self.auditor["windows"], self.auditor["passes"], 0, 0
         hold = line_of("hold", {"registration": registration_json(self.registration, self.plan)})
         return [Send(PROVER, Message("Hold", body=hold)), *self._read(self._start)]
 
@@ -821,8 +749,8 @@ class Verifier:
     def _rooted(self, now: int) -> list[Any]:
         t, i = self.t, self.i
         if self.twin.root(t, i, self.line, now) != {"ok": True}:
-            raise _Ended(self.twin.books.why)
-        self.previous = self.twin.books.s.windows[t].roots[i]
+            raise _Ended(self.twin.why)
+        self.previous = self.twin.challenger.roots[t][i]
         self.log(f"window {t} pass {i}: root {self.previous.hex()[:16]}")
         if i == 0 and t > 0:
             self.after = self._next
@@ -833,22 +761,22 @@ class Verifier:
         self.i += 1
         if self.i < self.passes:
             return self._run()
-        return self._alarm(self.twin.books.s.next_boundary_ns(), self._boundary)
+        return self._alarm(self.twin.challenger.next_boundary_ns(), self._boundary)
 
     def _boundary(self, now: int) -> list[Any]:
         got, self.challenge = self.twin.boundary(now)
-        if "released" not in got:
+        if not isinstance(got, dict) or "released" not in got:
             raise _Ended(f"window {self.t}'s boundary was refused")
         self.t, self.i = self.t + 1, 0
         if self.t < self.windows:
             return self._run()
         self.after = self._done
-        return self._alarm(self.twin.books.s.deadline(self.windows - 1) + 1, self._close)
+        return self._alarm(self.twin.challenger.deadline(self.windows - 1) + 1, self._close)
 
     def _close(self, now: int) -> list[Any]:
         t = self.t - 1
         got = self.twin.close(t, now)
-        if "draws" not in got:
+        if not isinstance(got, dict) or "draws" not in got:
             raise _Ended
         self.draws = len(got["draws"])
         return self._expect(self._openings, Message("Open", body=line_of("open", {"draws": got["draws"], "t": t})))
@@ -859,7 +787,7 @@ class Verifier:
         self.log(f"window {t}: {self.draws} openings, "
                  f"{'accepted' if 'accepted' in v else 'rejected ' + str(v.get('failure'))}")
         if v != {"accepted": t}:
-            raise _Ended(self.twin.books.why)
+            raise _Ended(self.twin.why)
         return self.after()
 
     def _done(self) -> list[Any]:
@@ -872,17 +800,15 @@ class Verifier:
                 Finish({"answer": out, "case": None}, kind="private")]
 
     def _end(self, reason: str | None) -> list[Any]:
-        """The session's end (`reason`, None when it ran to its last window): the books' outcome, the prover gone
-        failing the window filling, its coins disclosed, its case unless the books vetoed it or no closer signs its
-        close, and the answer, each sent while the prover is there to read them."""
+        """The session's end (`reason`, None when it ran to its last window): the Lean's answer, the prover gone failing
+        the window filling (`LeanSession.end`), its coins disclosed, its case unless no closer signs its close, and the
+        answer, each sent while the prover is there to read them."""
         self.due = self.then = self.at = None
         twin = self.twin
-        if twin.books.s.outcome is None:
-            twin.fail()
-        commitment, openings = twin.books.s.disclose()
-        out = twin.answer(reason) | {"host": self.host}
+        out = twin.end(reason) | {"host": self.host}
+        commitment, openings = twin.challenger.disclose()
         case = None
-        if twin.disagreement is None and self.closer is not None:
+        if self.closer is not None:
             from verity.commitments.identity import canonical_json_bytes
 
             from . import p2_case
@@ -953,11 +879,8 @@ def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.L
                                     "(default: SESSION's, the served bandwidth piece's; the auditor's gate passes none)")
     for k, v in SESSION.items():
         held_to.add_argument("--" + k.replace("_", "-"), type=int, default=v, metavar="N")
-    record = ap.add_mutually_exclusive_group()
-    record.add_argument("--answer", type=Path, help="a file each session's answer is appended to, a JSON line each: "
-                                                    "the verifier's own record of them")
-    record.add_argument("--device", type=Path, help="the party's directory, as the auditor's gate gives it: --answer "
-                                                    "is its answers.jsonl")
+    ap.add_argument("--device", type=Path, help="the party's directory, as the auditor's gate gives it: each "
+                                                "session's case digest is kept in it")
     ap.add_argument("--lean-exe", type=Path, help=f"the built {p2_lean.EXE}, the Lean verifier (default: built "
                                                   "in its Lake package, or without lake on the PATH, the one built "
                                                   "there)")
@@ -994,16 +917,12 @@ def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.L
     cases = None
     if a.device is not None:
         a.device.mkdir(parents=True, exist_ok=True)
-        a.answer = a.device / "answers.jsonl"
         cases = a.device / "private" / CASE_DIGESTS
 
     def log(m: str) -> None:
         print(f"p2_parties {time.strftime('%H:%M:%SZ', time.gmtime())}: {m}", file=sys.stderr, flush=True)
 
     def done(out: dict[str, Any]) -> None:
-        if a.answer is not None:
-            with a.answer.open("a") as f:
-                f.write(json.dumps(out, sort_keys=True) + "\n")
         log(f"answer {out['verdict']} {out.get('failure') or ''} q_bytes={out.get('q_bytes')} "
             f"host={socket.gethostname()}")
 
@@ -1038,7 +957,6 @@ def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.L
             with conn, conn.makefile("rb") as r, conn.makefile("wb") as w:
                 out = served(r, w)
             done(out)
-            print(json.dumps({"answer": out}, sort_keys=True), flush=True)
     return 0
 
 
@@ -1067,12 +985,12 @@ def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Pat
 PROTOCOLS = {ID: ProtocolDef(MANIFEST, {VERIFIER: Verifier})}
 
 
-__all__ = ["Books", "CASE_DIGESTS", "CLOSER_PARTY", "COIN_BYTES", "COMPONENT", "Closer", "DELTA", "EPS_TERMS", "GAMMA_TERMS", "GOAL",
-           "ID", "LINES", "Lines", "MANIFEST", "PROTOCOL", "PROTOCOLS", "PROVER", "SESSION", "Twin",
-           "VERIFIER", "VERSION", "Verifier", "answer", "broken", "case_digest", "core_answer", "deployed_request",
-           "drive", "held_json", "hold", "line_of", "main", "message", "opening_json", "opening_of", "params_of",
+__all__ = ["CASE_DIGESTS", "CLOSER_PARTY", "COIN_BYTES", "COMPONENT", "Closer", "DELTA", "EPS_TERMS", "GAMMA_TERMS", "GOAL",
+           "ID", "LINES", "Lines", "MANIFEST", "PROTOCOL", "PROTOCOLS", "PROVER", "SESSION", "Challenger", "LeanSession",
+           "VERIFIER", "VERSION", "Verifier", "broken", "case_digest", "core_answer", "deployed_request",
+           "drive", "hold", "line_of", "main", "message", "opening_json", "opening_of", "params_of",
            "plan_of", "pous_record", "recv", "registration_json", "registration_of",
-           "registration_of_setup", "request_of", "send", "session", "start", "starts", "verdict_json"]
+           "registration_of_setup", "request_of", "send", "session", "start", "starts"]
 
 if __name__ == "__main__":
     sys.exit(main())

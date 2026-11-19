@@ -47,7 +47,7 @@ def exe(tmp_path, monkeypatch) -> Path:
     exe = tmp_path / "verity-verify-proof"
     exe.write_text(kit().FAKE)
     exe.chmod(0o755)
-    monkeypatch.setattr(PF, "executable", lambda: exe)
+    kit().stand_in(monkeypatch, exe)
     return exe
 
 
@@ -152,7 +152,7 @@ CHANGES = {
         shutil.copytree(proof.sessions[0], proof.sessions[0].with_name("moved")),
         PF.Proof(proof.circuit, proof.public, (proof.sessions[0].with_name("moved"),)), kw),
     "the executable": lambda proof, kw, exe: (exe.write_text(exe.read_text() + "# another build\n"), proof, kw),
-    "the circuit digest": lambda proof, kw, exe: (None, proof, {**kw, "circuit_sha512": "0" * 128}),
+    "the draw": lambda proof, kw, exe: (None, proof, {**kw, "draw": {"units": [*kw["draw"]["units"], 0]}}),
     "the program": lambda proof, kw, exe: (None, proof, {**kw, "program": kw["program"] + b" "}),
     "the partition": lambda proof, kw, exe: (None, proof, {**kw, "partition": {**kw["partition"], "format": "other"}}),
     "the registered file": lambda proof, kw, exe: (None, proof, {**kw, "registered": {**kw["registered"], "ports": {}}}),

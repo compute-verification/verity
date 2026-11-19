@@ -23,7 +23,7 @@ Each gate's value is the Python evaluator's, transcribed on `Nat`, its operands 
 - E2: the FP32 and BF16 arithmetic of `Evaluate.Fp32` and the casts of `Evaluate.Casts`.
 - E3: the tensor-core dot steps of `Evaluate.TC.Dots`, an array operand's words in leaf order.
 - E4: PoUW's and NCP's word primitives (`Evaluate.Words`), the sampler's (`Evaluate.Libdevice`), the MUFU primitives
-  (`Evaluate.Mufu`), the reference kinds' correctly rounded exp, erf and tanh (`Evaluate.Decimal`), the activations and
+  (`Evaluate.Mufu`), the reference kinds' correctly rounded exp, log and tanh (`Evaluate.Decimal`), the activations and
   RoPE's outputs (`Evaluate.Act`), and the lazy families `TableRead{IB}x{EW}_v1`, `GatherBf16x{V}_v1` and `GatherF32x{V}_v1`,
   which read their operands by index.
 
@@ -253,7 +253,7 @@ signatures the registry holds for them. -/
 def decimals : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
   open Decimal in
   [("F32ExpRn_v1", #[("x", f32)], f32, unary f32ExpRn), ("F32LogRn_v1", #[("x", f32)], f32, unary f32LogRn),
-   ("F32ErfRn_v1", #[("x", f32)], f32, unary f32ErfRn), ("F32TanhRn_v1", #[("x", f32)], f32, unary f32TanhRn)]
+   ("F32TanhRn_v1", #[("x", f32)], f32, unary f32TanhRn)]
 
 /-- The activations and RoPE's outputs by id (the vLLM integration's `prims`, `act` and `dense`), with the signatures the
 registry holds for them. -/
