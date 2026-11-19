@@ -481,7 +481,7 @@ private theorem up_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.r
 
 /-- **A member's argument leaf is as wide as the callee's parameter leaf, for any callee.** Member `m` of node `k`
 of an activation's body reads leaf `j` of its parameter `i` at a reference of the node's argument `i`: reference
-`j` where the node is a call, reference `Resolve.memberIdx _ m j` where it is a batch. The leaf that reference
+`j` where the node is a primitive's or a call, reference `Resolve.memberIdx _ m j` where it is a batch. The leaf that reference
 names in the activation's body is as wide as leaf `j` of the callee's parameter, the callee a composite or a
 primitive: nothing here reads the callee's body. -/
 theorem arg_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
@@ -492,7 +492,7 @@ theorem arg_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).
     (hm : m < ((P.defs[parent.d]!).body.nodes[k]!).members) (i : ℕ)
     (hi : i < (P.defs[((P.defs[parent.d]!).body.nodes[k]!).fn]!).params.size) (j : ℕ)
     (hj : j < ((P.defs[((P.defs[parent.d]!).body.nodes[k]!).fn]!).params[i]!).2.leaves) :
-    (((P.defs[parent.d]!).body.nodes[k]!).form = .call →
+    (((P.defs[parent.d]!).body.nodes[k]!).form = .prim ∨ ((P.defs[parent.d]!).body.nodes[k]!).form = .call →
       Widths.wAt (tyOf P parent ((((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get j))
           ((((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get j).j =
         Widths.wAt ((P.defs[((P.defs[parent.d]!).body.nodes[k]!).fn]!).params[i]!).2 j) ∧
@@ -515,8 +515,9 @@ theorem arg_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).
         Widths.wAt (((P.defs[parent.d]!).body.nodes[k]!).args[i]!).ty t :=
     fun t ht => seq_wide P parent.d parent rfl k _ _ (Nat.le_of_lt hk) hsw t ht (hargs i t ht)
   refine ⟨fun hf => ?_, fun hf => ?_⟩
-  · simp only [hf, BodiesOk.Shape] at hshape
-    have hty := hshape.2 i hia
+  · have hty : (((P.defs[parent.d]!).body.nodes[k]!).args[i]!).ty =
+        ((P.defs[((P.defs[parent.d]!).body.nodes[k]!).fn]!).params[i]!).2 := by
+      rcases hf with hf | hf <;> (simp only [hf, BodiesOk.Shape] at hshape; exact hshape.2 i hia)
     rw [harg j (by rw [hc, hty]; exact hj), hty]
   · simp only [hf, BodiesOk.Shape] at hshape
     rcases hshape.2 i hia with ⟨hdn, hty⟩ | ⟨ax, mt, hrem, hmt, hdims⟩
