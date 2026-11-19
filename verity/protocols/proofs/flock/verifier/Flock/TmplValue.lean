@@ -8,8 +8,7 @@ path reads this file.
 `eval` is a Definition's columns on its inputs and the constant's value, in column order: a column one of its rows
 writes is that row's `(⊕A) ∧ (⊕B)` over its references, a column a copy writes is the callee's on the copy's bound
 values, and a column nothing writes is 0, as an empty row forces. `Holds` is the same equations as a relation, every
-row, copy and gap at once: `Flock.TmplEval.SatAt` (`rows_sat`) is its row and call clauses, and a value needs the gap
-clause too, since a row may read a column nothing writes. The proof has two halves:
+row, copy and gap at once; a value needs the gap clause, since a row may read a column nothing writes. The proof has two halves:
 
 - `place_holds`, an induction over the copies `place` writes: a copy whose columns were unwritten before it, and whose
   rows hold after it, satisfies `Holds`. A row's column keeps its rows once written (`write` refuses a written column),

@@ -63,8 +63,6 @@
   "Flock.Test.RecordText",
   "Flock.Test.Tmpl",
   "Flock.TmplOrder",
-  "Flock.TmplEval",
-  "Flock.Test.TmplEval",
   "Flock.TmplRows",
   "Flock.TmplApart",
   "Flock.TmplUnroll",
