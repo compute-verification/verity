@@ -245,12 +245,13 @@ def memberIx (a : Arg) (m t : Nat) : Nat :=
 
 /-- Where the batch's members from `m0 < n` stop sharing one CALL: `some m1` when each mapped input's references for
 members `[m0, m1)` lie in one affine part (`m1` as far as they all do), `none` when one of member `m0`'s is in an explicit
-part, which binds member `m0` alone. `ins` are the callee's inputs, each an argument and its leaf. -/
+part, which binds member `m0` alone. `ins` are the callee's inputs, each an argument and its leaf, so a mapped argument's
+member has a leaf `t < L` (`Work.batch` holds `L` to its parameter's leaves): an `L` of 0 is refused. -/
 def pieceEnd (ins : Array (Arg × Nat)) (n m0 : Nat) : V (Option Nat) := do
   let mut m1 := n
   for (a, t) in ins do
     if let some (_, L) := a.dims then
-      if L == 0 then continue
+      if L == 0 then throw "a batch argument of members of no leaves"
       let k := memberIx a m0 t
       if a.seq.count ≤ k then throw s!"{PAST}: a batch argument's reference {k} of {a.seq.count}"
       let i := partAt a.seq k
@@ -385,6 +386,10 @@ def Work.batch (w : Work) (st : Array Nat) (callee : Defn) (x : Node) (e cols : 
   if x.n == 0 then
     let (w', bs) ← w.binds st callee x
     return w'.place e cols 0 bs rets
+  for h : i in [0:x.args.size] do
+    if let some (_, L) := x.args[i].dims then
+      let some (_, t) := callee.params[i]? | throw s!"{callee.id}: a batch argument {i} past its parameters"
+      if L != t.leaves then throw s!"{callee.id}: a batch argument {i} of members of {L} leaves, its parameter's {t.leaves}"
   let ins := (List.range x.args.size).foldl (fun acc i =>
     let a := x.args[i]!
     let cnt := if a.dims.isSome then (callee.params[i]!.2).leaves else a.seq.count

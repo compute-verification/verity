@@ -168,6 +168,51 @@ def permOk (ps : Array Program.Part) (calls : Nat) : Bool := match permTmpl ps w
   | .error e => e == "a batch argument stepping through strided or grid references"
   | .ok _ => false
 
+-- a mapped argument whose members' leaves are not its parameter's is refused by name, before any member is bound
+#guard match Lower.lower { defs := #[xorDef, { permDef LISTED with body := { (permDef LISTED).body with
+    nodes := (permDef LISTED).body.nodes.map fun x => { x with args := x.args.map ({ · with dims := some (4, 0) }) } } }],
+    index := {}, root := 1, programFn := "", sha512 := ByteArray.empty } 1 #[16] #[16] with
+  | .error e => e == "Xor2_v1: a batch argument 0 of members of 0 leaves, its parameter's 2"
+  | .ok _ => false
+
+/-! ## The lift's refusals
+
+`Lift.liftDef` and `Lift.closure` refuse by name what they would otherwise read with a default: a reference to a
+collection or a leaf the body has not, a callee C has not, and a word primitive's Boolean Definition of another bit
+signature than the primitive's. -/
+
+def withRet (s : Program.Seq) : Program.Defn :=
+  { permDef LISTED with body := { (permDef LISTED).body with ret := s } }
+
+#guard match Lift.liftDef (withRet (Program.Seq.ofParts #[.affine false 5 0 4])) id fun _ => some xorDef with
+  | .error e => e == "the lift to bits: 'Perm_v1' references node 5, which it has not"
+  | .ok _ => false
+
+#guard match Lift.liftDef { withRet (Program.Seq.ofParts #[.explicit #[pa 7]]) with
+    params := #[("a", .tuple #[.value 1, .value 2])],
+    body := { (withRet (Program.Seq.ofParts #[.explicit #[pa 7]])).body with nodes := #[] } } id fun _ => some xorDef with
+  | .error e => e == "the lift to bits: 'Perm_v1' references leaf 7 of parameter 0, past its leaves"
+  | .ok _ => false
+
+#guard match Lift.liftDef (permDef LISTED) id fun _ => none with
+  | .error e => e == "the lift to bits: 'Perm_v1' calls Definition 0, which C has not"
+  | .ok _ => false
+
+-- the lift of a Definition on bits that reaches no word primitive is itself
+#guard match Lift.liftDef (permDef LISTED) id fun _ => some xorDef with
+  | .ok l => l.body.nodes.size == 1 && l.paramLeaves == 4 && l.outLeaves == 4
+  | .error _ => false
+
+def mixDef : Program.Defn :=
+  { key := "Mix_v1", id := "Mix_v1", prim := true, params := #[("x", .array 2 (.value 2))], ret := .value 2, gates := 1,
+    paramLeaves := 2, outLeaves := 1 }
+
+#guard match Lift.lift { defs := #[mixDef, xorDef], index := ({} : Std.HashMap String Nat).insert "Mix_v1" 0 |>.insert "Xor2_v1" 1,
+    root := 0, programFn := "", sha512 := ByteArray.empty,
+    boolean := ({} : Std.HashMap String String).insert "Mix_v1" "Xor2_v1" } 0 with
+  | .error e => e == "the lift to bits: 'Mix_v1''s Boolean Definition 'Xor2_v1' has not its word primitive's bit signature"
+  | .ok _ => false
+
 -- a template the reader refuses is refused under the self-check's own name, not as a refusal of the input
 #guard match tmpl with
   | .ok t => match Lower.selfCheck { t with root := t.defs.size } with
