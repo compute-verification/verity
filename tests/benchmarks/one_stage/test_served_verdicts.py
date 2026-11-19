@@ -4469,13 +4469,11 @@ def test_the_run_keeps_the_builds_checkpoint_config_beside_its_predicted_json(tm
     ({"PEARLC_CHALLENGER_GATE": ""}, False),
     ({"PEARLC_CHALLENGER_GATE": "", "PEARLC_CHALLENGER_PEER": ""}, False),
     ({"PEARLC_CHALLENGER_GATE": "a gate", "PEARLC_CHALLENGER_PEER": "vy-peer"}, False),
-    ({"POUW": "h1", "H1_GATE": "", "PEARLC_CHALLENGER_GATE": "", "PEARLC_CHALLENGER_PEER": "vy-peer"}, False),
 ])
 def test_the_preflight_refuses_a_pearlplus_challenger_peer_with_no_gate(tmp_path, extra, refused):
     """Under POUW=pearlplus a peer set with PEARLC_CHALLENGER_GATE empty is a pair Pearl+'s serve and verify refuse
     (bench_arm.py's live coins), the verify only once the window is served and tied: the preflight
-    refuses it before anything runs, naming both ways out. A peer with a gate, no peer, and the pair under H1, which
-    reads neither, pass."""
+    refuses it before anything runs, naming both ways out. A peer with a gate, and no peer, pass."""
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     tree.mkdir()
     _script(venv / "python", f'exec {sys.executable} "$@"')
@@ -8215,3 +8213,39 @@ def test_the_launcher_takes_the_served_arm_into_the_keep_and_leaves_none_of_it_u
 
 
 S_ARM = "private/logs/sampled-proofs/keep/served"
+
+
+@pytest.mark.parametrize("env, line", [
+    ({"POUW": "h1"}, "PREFLIGHT: POUW=h1 is refused: PoUW H1 is deleted, and PoUW's piece is Pearl+'s: POUW=pearlplus"),
+    ({"POUW": ""}, "PREFLIGHT: POUW names PoUW's scheme, and the one left is Pearl+: POUW=pearlplus"),
+    ({"POUW": "other"}, "PREFLIGHT: POUW is pearlplus, not other"),
+    *[({name: "x"}, f"PREFLIGHT: {name} is PoUW H1's setting, and PoUW H1 is deleted")
+      for name in ("H1_GATE", "H1_TIE", "H1_CIRCUITS", "H1_STATEMENTS", "H1_LIVE_EVIDENCE", "H1_RECEIPTS", "H1_PROTOCOLS_CONFIG")],
+])
+def test_a_request_for_poow_h1_or_no_scheme_is_refused_by_name_before_anything_runs(tmp_path, env, line):
+    """PoUW H1 is deleted: POUW=h1, an empty POUW, another name, and each of H1's settings are refused with one sentence
+    that names them, exit 3, before anything is kept, built or served."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    tree.mkdir()
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"), "POUW": "pearlplus", **env}
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree,
+                        env=env, check=False).returncode
+    assert rc == 3 and (tmp_path / "out" / "verdicts.txt").read_text().splitlines() == [line]
+
+
+def test_the_tie_command_of_h1_is_refused_by_name(tmp_path):
+    """``served_verdicts.sh tie``, the command serve-openai's H1 window commit ran, is refused with one sentence, exit 2."""
+    out = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "tie"], cwd=tmp_path,
+                         env={"PATH": os.defpath, "OUT": str(tmp_path / "out")}, check=False, capture_output=True, text=True)
+    assert out.returncode == 2
+    assert out.stderr.strip() == ("served_verdicts.sh tie: refused: PoUW H1 is deleted, so its window commit at its close is; "
+                                  "Pearl+'s is pearl-tie (PEARLPLUS_TIE)")
+
+
+@pytest.mark.parametrize("command", ["program", "period", "pouw"])
+def test_the_commands_of_h1s_piece_are_refused_by_name(capsys, command):
+    """`served_verdicts.py program`, `period` and `pouw` are PoUW H1's: each is refused with the one sentence
+    (`H1_DELETED`), exit 2, whatever its arguments."""
+    assert S.main([command, "x"]) == 2
+    assert capsys.readouterr().err.strip() == f"served_verdicts.py {command}: refused: {S.H1_DELETED[command]}"

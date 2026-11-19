@@ -87,7 +87,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   (`benchmarks/pous/served_piece.py`), and `BANDWIDTH_CMD` collects its answer (`served_piece.py collect-bandwidth`).
   Finally the all-protocols window report and the block record, which accepts only when every subprotocol accepted on this
   node and names each one missing, rejecting or about another server, with its reason (PoUW's development piece: development
-  run, credits nothing). `PRODUCT=remote` composes SPOT and PoUW alone: the onsite pieces are dropped, not run
+  run, credits nothing). `POUW` names PoUW's scheme and the one left is `pearlplus`: `POUW=h1`, an unset `POUW` and H1's settings are refused by name. `PRODUCT=remote` composes SPOT and PoUW alone: the onsite pieces are dropped, not run
   and not composed, and the preflight refuses any onsite piece's command. An accept's clause says when its weights were held and their share of the checkpoint, where its
   profile says so (PoUS's), each δ of the block record's at which its quantity is not established, and the bandwidth audit's error with the term it leaves out beside it (the block record's `named_terms`). V3c runs last, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`, since nothing before it reads it, and writes its audit as the network
   attester's period reads it (`period.json`). With `V3C_WARM_JOBS` its warm step (`records_audit.py warm`) composes the
@@ -105,7 +105,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   tokens and span, which `publish` holds in the serve dir's private/out. It holds there too what Pearl+'s documents say
   of its exclusion tiles, their count and every replayed tile's id, which the retained values decide, and the exact
   credit of a run held to its class's fixed load (`exact_work`): such a run publishes its work in the grid form, the
-  class's structural credit less the give-up padded up to H1's window grid (`verify_run.grid_work`). And the give-up
+  class's structural credit less the give-up padded up to the window grid (`verify_run.grid_work`). And the give-up
   before the coin itself: the piece's give-up document (`development.json`'s and its line's `give_up`: the A and B rows
   given up, the tiles over the inert-work bound before and left after, those replayed on the CPU) and the same counts in
   `served_passes.py volunteer`'s and `retain`'s lines in the piece's log.
