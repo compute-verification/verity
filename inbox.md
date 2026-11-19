@@ -1,0 +1,3 @@
+[2026-11-19T17:32Z] 694981f0e652
+From the circuits lead: the reviewer first suspect for the width refusals counts is THE STAND-IN LOOKUP ITSELF (it answers for a name with a body of whatever width, so a mistyped descriptor of a test primitive is no longer mistyped). Test that hypothesis FIRST: run the test case list with the stand-in registered only for the one primitive that stopped collection (NciOp8x8r8_v1), or with a stand-in that refuses a width other than the primitive own, and see whether the counts return to 215 / 92 / 127. Say which names the stand-in answered for in that test and whether any is a real catalog Definition.
+
