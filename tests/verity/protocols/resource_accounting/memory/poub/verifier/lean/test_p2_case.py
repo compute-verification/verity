@@ -353,31 +353,36 @@ def test_a_session_on_pous_setups_store_names_pous_store_and_is_accepted(exe, le
                        clock=lambda: 10 ** 9)
     assert R.Setup.from_json(json.loads(bytes.fromhex(space.case["commitment"]))).root == reg.root
     answer, case = session(exe, store)
-    assert answer["verdict"] == "accept"
+    assert answer["verdict"] == "accept" and case["params"]["store_root"] == reg.root.hex()
     stored = p2_case.storing(case, space.case)
     assert stored["params"]["store_root"] == reg.root.hex()
     assert replayed(lean, stored)["verdict"] == "accept"
+    other = json.loads(bytes.fromhex(space.case["commitment"]))
+    other["root"] = _flip(other["root"])
+    moved = p2_case.storing(case, space.case | {"commitment": canonical_json_bytes(other).hex()})
+    assert moved == case | {"params": case["params"] | {"store_root": other["root"]}}
+    assert replayed(lean, moved)["reason"] == NOT_POUS_STORE
+    for bad in ({}, space.case | {"commitment": "00"}, space.case | {"commitment": case["commitment"]}):
+        with pytest.raises(ValueError, match="^PoUS's case names no setup: "):
+            p2_case.storing(case, bad)
 
 
-@pytest.mark.parametrize("root", [lambda h: _flip(h), lambda h: "00" * 64, lambda h: h[:-2], lambda h: ""],
-                         ids=["another-store", "zeros", "short", "empty"])
-def test_a_case_held_to_another_store_than_its_registrations_is_refused_by_name(lean, honest, root) -> None:
-    """The honest case held to another store than the one its registration names (another PoUS run's `C*`, or bytes
-    that are no store's root): refused by name before its close or its log is read."""
-    edited = honest | {"params": honest["params"] | {"store_root": root(honest["params"]["store_root"])}}
+@pytest.mark.parametrize("root, reason", [
+    (_flip, NOT_POUS_STORE), (lambda h: "00" * 64, NOT_POUS_STORE), (lambda h: h[:-2], NOT_POUS_STORE),
+    (lambda h: "", NOT_POUS_STORE), *((lambda h, r=r: r, "params: params.store_root: ") for r in (None, 7, "zz" * 64, "0")),
+    (None, "params: ")], ids=["another-store", "zeros", "short", "empty", "null", "integer", "not-hex", "odd", "missing"])
+def test_a_case_held_to_another_store_than_its_registrations_is_refused_by_name(lean, honest, root, reason) -> None:
+    """The honest case, accepted, held to another store than the one its registration names (another PoUS run's `C*`,
+    or bytes that are no store's root): refused by name before its close or its log is read; a root that isn't hex, or
+    none, doesn't decode."""
+    params = {k: v for k, v in honest["params"].items() if k != "store_root"}
+    edited = honest | {"params": params if root is None else params | {"store_root": root(honest["params"]["store_root"])}}
     got = replayed(lean, edited)
-    assert got == {"commitment": p2_case.digest(honest).hex(), "profile": None, "protocol": p2_case.PROTOCOL,
-                   "public": None, "reason": NOT_POUS_STORE, "verdict": "reject"}, got
+    assert got["verdict"] == "reject" and got["reason"].startswith(reason), got
+    if reason == NOT_POUS_STORE:
+        assert got == {"commitment": p2_case.digest(honest).hex(), "profile": None, "protocol": p2_case.PROTOCOL,
+                       "public": None, "reason": NOT_POUS_STORE, "verdict": "reject"}, got
     assert replayed(lean, honest)["verdict"] == "accept"
-
-
-@pytest.mark.parametrize("root", [None, 7, "zz" * 64, "0"], ids=["null", "integer", "not-hex", "odd"])
-def test_a_case_whose_store_root_is_not_hex_does_not_decode(lean, honest, root) -> None:
-    edited = honest | {"params": honest["params"] | {"store_root": root}}
-    got = replayed(lean, edited)
-    assert got["verdict"] == "reject" and got["reason"].startswith("params: params.store_root: "), got
-    missing = honest | {"params": {k: v for k, v in honest["params"].items() if k != "store_root"}}
-    assert replayed(lean, missing)["verdict"] == "reject"
 
 
 def test_the_trusted_keys_are_the_pins_and_never_the_cases_own() -> None:

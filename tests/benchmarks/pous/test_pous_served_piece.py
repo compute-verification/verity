@@ -825,7 +825,7 @@ def run_exe(tmp_path_factory) -> Path:
 
 @pytest.mark.slow
 def test_with_its_lean_the_answer_is_the_leans_and_the_summary_names_it(served, tmp_path, monkeypatch, run_exe):
-    """With ``--case-exe``, `pous-run-protocol` answers the case the piece holds, and its answer, which the Python's
+    """With ``case_exe``, `pous-run-protocol` answers the case the piece holds, and its answer, which the Python's
     (`pous_reference`) is held to here as a difference test, is the one written: the summary names the program and this host under ``decided_by``, with the Lean's
     seconds, and the private answer is what the Lean says of the private case."""
     answer, _ = _run(served, tmp_path, monkeypatch, case_exe=str(run_exe))
@@ -1115,7 +1115,7 @@ def _bandwidth_files(s: Served, answer: str = period.ANSWER) -> tuple[Path, dict
 @pytest.mark.slow
 def test_with_its_lean_the_bandwidth_answer_is_the_leans_and_the_summary_names_it(registered, tmp_path, monkeypatch,
                                                                                   case_exe):
-    """With ``--bw-case-exe``, `poub-p2-protocol` answers the case of the session over the held store, and its
+    """With ``bw_case_exe``, `poub-p2-protocol` answers the case of the session over the held store, and its
     answer is the one written, privately and under the hiding commitment publicly, whatever the session's own party
     said of it: the summary names the program and this host under ``decided_by``, with the Lean's seconds, where a run
     without it names the Python. PoUS's answer is its own. Run in the piece's two parts: both sessions leave only what
