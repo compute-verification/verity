@@ -451,7 +451,7 @@ definitions, relating them by their fields, since `security` requires nothing bu
   with the same fields (the charge difftest's `charges`);
 - `CodeChargesWhole`: `NetworkAttester.WindowCharge.charges` of the execution phases is `WindowCharge.charges` for books with
   the same tables and priors and execution phases with the same decisions, hits and order entries
-  (`certifier-window-difftest`'s `charges`).
+  (the window difftest's `charges`).
 
 They aren't guarantees because `four_names` holds every `NetTiming` guarantee to `SecurityProofs.G : Guarantees.G`,
 and a `Guarantees` module can't state them: it would have to import the program. They are built and checked like every

@@ -5,7 +5,7 @@
   "NetworkVerifier.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkVerifier.Difftest.main, audited under NetworkVerifier, a test and not a proof",
   "NetworkVerifier.Main": "the network-verifier executable's entry point, one line; its command is Core.Protocol.main of NetworkVerifier.Check.protocol, audited under NetworkVerifier",
   "NetworkVerifier.PeriodMain": "the network-period executable's entry point, one line; its command is Core.Protocol.main of NetworkVerifier.Period.protocol, audited under NetworkVerifier",
-  "NetworkVerifier.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkVerifier.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) of N2's execution phase verdict of record (execution phase, NetworkVerifier.TransferBlocks.transferBlocksFn) and of the client's check of a window's served certificates (certificates, NetworkVerifier.TransferBlocks.certificatesFn), audited under NetworkVerifier",
+  "NetworkVerifier.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkVerifier.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) of N2's execution phase verdict of record (execution phase, NetworkVerifier.TransferBlocks.transferBlocksFn) of the client's check of a window's served certificates (certificates, NetworkVerifier.TransferBlocks.certificatesFn), of the check of a load's registrations (load, NetworkVerifier.Load.loadFn) and of one transfer registration (transfer-registration, NetworkVerifier.Load.registrationFn), audited under NetworkVerifier",
   "NetworkVerifier.SpanMain": "the network-span executable's entry point, one line; its command is Core.Protocol.main of NetworkVerifier.Span.protocol, audited under NetworkVerifier",
   "NetworkVerifier.RowsMain": "the network-rows executable's entry point, one line; its command is Core.Protocol.main of NetworkVerifier.RowsAudit.protocol, audited under NetworkVerifier"
  },
@@ -60,6 +60,11 @@
    "imports": ["NetworkVerifier.Check", "Lms.Verify", "Flock.Hm96", "Flock.Canon", "Flock.FV3", "Identity.Tagged"],
    "except": [],
    "why": "N2's execution phase verdict of record is code: v4's certificate, its one LMS check and its encodings, the LMS verifier, C-Flock's hm96 row commitment, canonical JSON and frame-v3-sha512 domain, and core's identity hash, no Mathlib and nothing of Security"
+  },
+  "NetworkVerifier.Load": {
+   "imports": ["NetworkVerifier.Check", "Flock.Registered"],
+   "except": [],
+   "why": "the check of a load's registrations is code: v4's certificate, its one LMS check and its encodings, and C-Flock's registered value's domain, no Mathlib and nothing of Security"
   },
   "NetworkVerifier.Clocks": {
    "imports": ["NetworkVerifier.Check"],

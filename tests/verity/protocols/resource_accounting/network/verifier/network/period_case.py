@@ -3115,8 +3115,10 @@ def bad_scans(p: dict) -> list[dict]:
             *(q for q, _ in scan_negatives(p).values())]
 
 
-#: A primitive that is no input, a constant gate the `row` negative binds bucket 0's row to.
+#: A primitive that is no input, a constant gate the `row` negative binds bucket 0's row to, and its one Boolean
+#: Definition there: the constant gate of a 0 bit.
 ZERO = "NetworkPeriodScanZero_v1"
+ZERO_BODY = codec.definition_entry(BL.constant(0))
 #: Members of each of the `walk` negative's nested batches: three deep, past `Flock.Steps.FUEL`'s walk.
 DEEP = 2 ** 30
 
@@ -3204,6 +3206,8 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
     d, nodes, ts = parts()
     k0 = nodes[ts[1]]["args"][0]["refs"]["affine"][1]
     d["definitions"][ZERO] = {"form": "primitive", "id": ZERO, "params": [], "ret": ["Value", 1]}
+    d["definitions"][ZERO_BODY["id"]] = dict(ZERO_BODY)
+    d["boolean"][ZERO] = ZERO_BODY["id"]
     d["callees"].append(ZERO)
     nodes.append(dict(nodes[k0]))
     nodes[k0] = nodes[k0] | {"fn": len(d["callees"]) - 1}
