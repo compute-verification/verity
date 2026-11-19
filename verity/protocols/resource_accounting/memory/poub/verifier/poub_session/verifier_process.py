@@ -13,13 +13,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[7]))
 
+from verity.commitments.crypto import lms
+from verity.commitments.scheme import DIGEST_BYTES
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
-from verity.protocols.proofs.spot.verifier.challenger.challenger_session import lms_verify
 from verity.protocols.resource_accounting.memory.poub.verifier import coins
 from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier
 
 ROOT = Path(__file__).resolve().parents[7]
 SERVE = ROOT / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "serve.py"
+
+
+def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
+    """`challenger.Verify`: LMS over SHA-512 at the key's (64, W, H)."""
+    p = lms.Params(DIGEST_BYTES["sha512"], key.W, key.H)
+    try:
+        return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))
+    except ValueError:
+        return False
 
 
 def lms_answer(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
