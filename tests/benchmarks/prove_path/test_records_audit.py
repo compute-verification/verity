@@ -163,6 +163,12 @@ def test_the_verifiers_window_is_the_circuit_record_under_verity_s_catalog(writt
         RA.verifier_window(written.dir, RND.parse_design(SAMPLING_DESIGN), None)
 
 
+def test_the_advice_binding_is_the_registrations_alone_and_leaves_the_circuit_record_as_it_is(written, tmp_path):
+    bare = _write(tmp_path / "bare", advice=False)
+    assert bare.doc == written.doc
+    assert not {"compiler", "advice"} & set(bare.rec["window"]) and {"compiler", "advice"} <= set(written.rec["window"])
+
+
 def test_a_registry_template_resolves_in_a_fresh_audit_process():
     """A window's io shell (`ScanSlots_v4`) is a registry Definition, which `interface.resolve`'s own walk doesn't import: in a
     fresh process, which has loaded nothing else, `catalog_resolve` resolves its id to itself."""
