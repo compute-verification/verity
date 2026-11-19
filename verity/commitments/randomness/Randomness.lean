@@ -26,8 +26,8 @@ FIPS 180-4 SHA-512 (`Flock.Sha512.hash`). The Python is tied to them by vectors:
   out, which the Python's unbounded stream never does.
 * `subsetOn k n streams`, `subset`: `Key.subset`'s sparse partial Fisher–Yates, swap `i` drawing `uniformOn (n − i)` on
   its own stream, index `("s", *index, i)`, and the values sorted.
-* `uniform`, `subset` and `bernoulli` read each stream to a fixed length `L`; `uniformExact` is `Key.uniform` exactly,
-  the read doubling until it lands, as the Python's unbounded stream does.
+* `uniform`, `subset` and `bernoulli` read each stream to a fixed length `L`; `uniformExact` and `subsetExact` are
+  `Key.uniform` and `Key.subset` exactly, the read doubling until it lands, as the Python's unbounded stream does.
 -/
 
 @[expose] public section
@@ -137,5 +137,15 @@ where
       match uniformOn n (stream key (.str "u" :: index) (64 * blocks)) with
       | some x => some x
       | none => go fuel (2 * blocks)
+
+/-- `Key.subset(k, n, index)` exactly: each swap's stream read far enough (a draw fails to land in 64 bytes with
+probability below 2^-256, and the read doubles until it does). -/
+def subsetExact (key : ByteArray) (k n : Nat) (index : List Part) : Option (Array Nat) :=
+  Id.run do
+  let mut len := 64
+  for _ in [0:24] do
+    if let some out := subset key k n index len then return some out
+    len := 2 * len
+  return none
 
 end FlockSoundness.Randomness
