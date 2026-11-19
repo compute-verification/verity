@@ -3,6 +3,8 @@ module
 public import Properties.Poub.Remote
 import Proofs.Properties.Poub.Remote.Bisect
 import Proofs.Properties.Poub.Remote.Sort
+import Proofs.Flock.SpotFlock.SampleBelow
+import Proofs.Flock.Claims.Sampling.Select.SecondUnits
 import Std.Data.HashMap.Lemmas
 
 /-!
@@ -12,7 +14,9 @@ import Std.Data.HashMap.Lemmas
 function that keeps `[0, n)` and is injective there, and swap `i` composes it with the transposition of `i` and
 `i + r`, `r < n − i` (`loopSwK_perm`). So a subset that succeeds with `k ≤ n` is `k` distinct values below `n`
 (`subsetOn_spec`). Core randomness's `subsetExact` returns the subset at the first read length that succeeds
-(`subsetExact_some`), and `draws` maps each value to its receipt by the passes' running ends (`locate`).
+(`subsetExact_some`). A window's sample is the proof system's draw on its sample's coins (`Spot.Draw.sampleUnits`'s
+subset law), which, when it ends, is `k` distinct units below `U` (`sampleUnits_subset_spec`), and `receiptSample` maps
+each to its receipt by the passes' running ends (`locate`).
 -/
 
 @[expose] public section
@@ -240,9 +244,43 @@ theorem subsetExact_some (key : ByteArray) (k n : Nat) (index : List FlockSoundn
 
 /-! ## The samples -/
 
+open Properties.Spot.SecurityProofs (bind_ok bind_error onWith_take) in
+/-- **A `subset` sample that ends is `k` distinct units below `n`**: `sampleUnits`' units are `Draw.subset`'s
+(`Flock.Bridge.sampleUnits_subset_lt`'s reading), of size `k` (`subset_size`) and distinct (`subset_nodup`). -/
+theorem sampleUnits_subset_spec {k n : ℕ} {src : ByteArray} {units : Array ℕ} {read : ℕ}
+    (h : Spot.Draw.sampleUnits (.subset k) n src = .ok (units, read)) :
+    units.size = k ∧ units.toList.Nodup ∧ ∀ x ∈ units.toList, x < n := by
+  unfold Spot.Draw.sampleUnits at h
+  cases hw : (Flock.Draw.drawWith (fun _ need => Spot.Draw.take src need) (.subset k) n).run 0 with
+  | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
+  | ok y =>
+    obtain ⟨r, read'⟩ := y
+    rw [hw, bind_ok] at h
+    obtain ⟨d, rfl⟩ : ∃ d, r = some d := by
+      cases r with
+      | none => exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw])
+      | some d => exact ⟨d, rfl⟩
+    dsimp only at h
+    obtain ⟨hd, -⟩ := Prod.mk.inj (Except.ok.inj h)
+    subst hd
+    unfold Flock.Draw.drawWith at hw
+    dsimp only at hw
+    rw [StateT.run_bind] at hw
+    cases ho : (Flock.Draw.onWith (fun need => Spot.Draw.take src need)
+        (2 * k * Flock.Draw.width n + 64) (Flock.Draw.subset k n)).run 0 with
+    | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
+    | ok z =>
+      obtain ⟨v, p⟩ := z
+      obtain ⟨j, D, rfl, -, hst⟩ := onWith_take src _ (by omega) _ 0 _ _ ho
+      obtain ⟨-, -, hrun, -⟩ := hst
+      rw [ho, bind_ok, StateT.run_pure] at hw
+      obtain ⟨h1, -⟩ := Prod.mk.inj (Except.ok.inj hw)
+      obtain rfl := (Option.some.inj h1).symm
+      exact ⟨Flock.Bridge.subset_size hrun, Properties.Spot.SecurityProofs.subset_nodup hrun⟩
+
 theorem sampleIsSubset : SampleIsSubset := by
-  intro registration t coin samples lengths sampled h
-  unfold receiptSample at h
+  intro samples coin lengths sampled h
+  unfold receiptSample receiptSampleRead at h
   dsimp only at h
   have hP := prefixSums_fold (fun n => n) lengths
   simp only [List.map_id'] at hP
@@ -250,19 +288,23 @@ theorem sampleIsSubset : SampleIsSubset := by
     at h hP
   have htotal := back_getD_of_prefix hP
   rw [htotal] at h
-  cases hu : FlockSoundness.Randomness.subsetExact (openingsKey registration t coin) (min samples lengths.toList.sum) lengths.toList.sum
-    [.str "openings"] with
-  | none =>
-    simp only [openingsKey] at hu
+  by_cases hk0 : min samples lengths.toList.sum = 0
+  · rw [if_pos hk0] at h
+    replace h := (Option.some.inj h).symm
+    subst h
+    exact ⟨#[], Or.inl ⟨hk0, rfl⟩, rfl, by simp [hk0], fun k hk => absurd hk (by simp),
+      fun k₁ _ h₁ => absurd h₁ (by simp)⟩
+  rw [if_neg hk0] at h
+  cases hu : Spot.Draw.sampleUnits (.subset (min samples lengths.toList.sum)) lengths.toList.sum coin with
+  | error e =>
     rw [hu] at h
     cases h
-  | some us =>
-    simp only [openingsKey] at hu
+  | ok x =>
+    obtain ⟨us, read⟩ := x
     rw [hu] at h
     change some _ = some sampled at h
     replace h := (Option.some.inj h).symm
-    obtain ⟨L, hL⟩ := subsetExact_some _ _ _ _ _ hu
-    obtain ⟨hsize, hlt, hnodup⟩ := subsetOn_spec _ _ _ (Nat.min_le_right _ _) us hL
+    obtain ⟨hsize, hnodup, hlt⟩ := sampleUnits_subset_spec hu
     have hdsize : sampled.size = us.size := by rw [h]; simp
     have hk : ∀ k (hk : k < sampled.size), sampled[k].1 < lengths.size ∧ sampled[k].2 < lengths[sampled[k].1]! ∧
         receiptIndex lengths sampled[k].1 sampled[k].2 = us[k]! := by
@@ -287,7 +329,7 @@ theorem sampleIsSubset : SampleIsSubset := by
       · simp only [receiptIndex]
         rw [hoff]
         omega
-    refine ⟨L, us, hL, hdsize, hsize, hk, fun k₁ k₂ h₁ h₂ heq => ?_⟩
+    refine ⟨us, Or.inr ⟨Nat.pos_of_ne_zero hk0, read, hu⟩, hdsize, hsize, hk, fun k₁ k₂ h₁ h₂ heq => ?_⟩
     have e₁ := (hk k₁ h₁).2.2
     have e₂ := (hk k₂ h₂).2.2
     rw [heq] at e₁
