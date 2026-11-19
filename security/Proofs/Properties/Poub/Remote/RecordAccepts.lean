@@ -44,10 +44,6 @@ attribute [local irreducible] zeroRoot
 
 /-! ## The sample of one receipt among one -/
 
-theorem hash_size (m : ByteArray) : (Flock.Sha512.hash m).size = 64 := by
-  unfold Flock.Sha512.hash
-  exact Array.size_ofFn
-
 theorem beNat_lt_aux (b : ByteArray) (off : ℕ) : ∀ (l : List ℕ) (acc k : ℕ), acc < 256 ^ k →
     l.foldl (fun acc i => acc * 256 + (b.get! (off + i)).toNat) acc < 256 ^ (k + l.length)
   | [], acc, k, h => by simpa using h
@@ -65,25 +61,6 @@ theorem beNat_lt (b : ByteArray) (off len : ℕ) : Flock.Draw.beNat b off len < 
 theorem width_one : Flock.Draw.width 1 = 9 := by
   have h : Nat.log2 1 = 0 := (Nat.log2_eq_iff (by decide)).2 ⟨by decide, by decide⟩
   simp [Flock.Draw.width, h]
-
-/-- One uniform sample in `[0, 1)` from 64 bytes is 0: its 9-byte word is below `2^72`, which 1 divides. -/
-theorem uniformOn_one (s : ByteArray) (hs : s.size = 64) : FlockSoundness.Randomness.uniformOn 1 s = some 0 := by
-  have hx : Flock.Draw.beNat s 0 9 < 4722366482869645213696 := by
-    have h := beNat_lt s 0 9
-    norm_num at h
-    exact h
-  unfold FlockSoundness.Randomness.uniformOn
-  rw [hs]
-  show (Flock.Draw.uniform 1 s (64 + 1) 0).map (·.1) = some 0
-  rw [Flock.Draw.uniform]
-  simp only [width_one, hs]
-  simp [hx, Nat.mod_one]
-
-theorem bisectRight_one : bisectRight #[1] 0 = 0 := by
-  first
-    | rfl
-    | decide
-    | decide +kernel
 
 /-- One uniform draw in `[0, 1)` from a stream of 82 bytes is 0, at its first 9-byte word, below `2^72`. -/
 theorem uniform_one (s : ByteArray) (hs : s.size = 82) : Flock.Draw.uniform 1 s (s.size + 1) 0 = some (0, 9) := by
@@ -123,6 +100,12 @@ theorem sampleUnits_one : Spot.Draw.sampleUnits (.subset 1) 1 (zeros 128) = .ok 
   simp only [width_one]
   simp [h]
   rfl
+
+theorem bisectRight_one : bisectRight #[1] 0 = 0 := by
+  first
+    | rfl
+    | decide
+    | decide +kernel
 
 /-- A window of one pass of one receipt samples that receipt on a sample's coins of 128 zero bytes, the session's
 `sampleBytes 1 1`. -/
