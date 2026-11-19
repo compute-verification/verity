@@ -21,8 +21,9 @@ the gates before g (`Bits.base`), and are, in place:
 Every gate of C on bits reads only earlier gates.
 
 **The block.** S is the gates of C inside the block's units, each unit the instance the partition's template query numbers
-(`TemplatePartition.gates`). in(S) is the gates outside S that a gate of S reads, out(S) the gates of S that a gate outside S
-reads or that C returns, each in increasing index of C (`ports`).
+(`TemplatePartition.gates`). in(S) is the gates outside S that the units' parameter leaves name, out(S) the gates of S that C
+returns or that a root node's argument outside S names, each once in increasing index of C (`front`), read from the
+descriptor and never by a pass over C.
 
 **The object** (`restrict`): the Program whose root
 - has a parameter for each maximal run of in(S) of one width and one binding, in order, `p<i>` of type `Array<n, Value<w>>`,
@@ -46,7 +47,7 @@ from __future__ import annotations
 
 import bisect
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
 from typing import Any, Mapping, Sequence
 
@@ -55,7 +56,7 @@ from . import partition_object as PO
 from . import program as P
 from .codec import DecodedProgram, decode_program, descriptor_chunks, lookup_primitive
 from .defs import CompositeDefinition, DefinitionTable, PrimitiveDefinition, bind
-from .layout import Circuit, resolve
+from .layout import Circuit, FunctionCall, resolve
 from .program import REGISTRATION, RUN, input_id, input_prim
 from .refs import Affine, Coll, concat
 from .types import Array, Tuple, Value, remove_axis, type_from_json
@@ -235,15 +236,73 @@ def unit_gates(D: DecodedProgram, partition: Mapping[str, Any], units: Sequence[
     return out
 
 
-def ports(bits: Bits, words: Sequence[tuple[int, int]]) -> tuple[list[int], list[int]]:
-    """in(S) and out(S) of S, the gates of C in ``words``, each in increasing index."""
-    inside = [False] * len(bits.word)
-    for lo, hi in words:
-        inside[lo:hi] = [True] * (hi - lo)
-    ins = {o for lo, hi in words for g in range(lo, hi) for o in bits.word[g].operands if not inside[o]}
-    outs = {o for g in range(len(bits.word)) if not inside[g] for o in bits.word[g].operands if inside[o]}
-    outs |= {g for g in bits.C.root_outputs() if inside[g]}
+def front(D: DecodedProgram, words: Sequence[tuple[int, int]]) -> tuple[list[int], list[int]]:
+    """in(S) and out(S) from the root's nodes, with no pass over C: in(S) the gates the units' parameter leaves name outside
+    S (the door's `Spot.BlockFront.front`), out(S) the gates of S that C returns or that a root node outside S, or a member
+    outside S of a batch S holds in part, takes as an argument, each once, in increasing index."""
+    C = D.circuit
+
+    def inside(g: int) -> bool:
+        return any(lo <= g < hi for lo, hi in words)
+
+    body, scope = D.root.body, C.root_scope
+    kept = _nodes(D, words)
+    held = {k: (m0, m1) for k, m0, m1 in kept}
+    ins: set[int] = set()
+    for k, m0, m1 in kept:
+        for m in range(m0, m1):
+            ins.update(g for g in FunctionCall(C, scope, k, m).args if not inside(g))
+
+    def held_leaf(r) -> bool:
+        if r[0] != "n" or r[1] not in held:
+            return False
+        node = body.nodes[r[1]]
+        m0, m1 = held[r[1]]
+        return m0 <= r[2] // (node.out.leaves // (node.n if node.form == "batch" else 1)) < m1
+
+    reads = [body.ret]
+    for k, node in enumerate(body.nodes):
+        m0, m1 = held.get(k, (0, 0))
+        if node.form != "batch":
+            if k not in held:
+                reads += [x.refs for x in node.args]
+            continue
+        for m in [m for m in range(node.n) if not m0 <= m < m1]:
+            for x, ax in zip(node.args, node.axes):
+                if ax is None:
+                    reads.append(x.refs)
+                elif ax == 0:
+                    L = x.type.elem.leaves
+                    reads.append(x.refs.slice(m * L, (m + 1) * L))
+                else:
+                    reads.append(x.take(ax, m).refs)
+    outs = {resolve(scope, r) for rs in reads for r in rs if held_leaf(r)}
     return sorted(ins), sorted(outs)
+
+
+class _Gates:
+    """Each gate's width and binding, read from the root node that holds it: once a root input node, and
+    down C's hierarchy for any other."""
+
+    def __init__(self, D: DecodedProgram) -> None:
+        self.D, self.body = D, D.root.body
+        self.memo: dict[int, tuple[int, str]] = {}
+
+    def of(self, g: int) -> tuple[int, str]:
+        k = self.body.node_at(g)
+        if k in self.memo:
+            return self.memo[k]
+        fn = self.body.nodes[k].fn
+        if isinstance(fn, PrimitiveDefinition) and (inp := input_id(fn.id)) is not None:
+            self.memo[k] = (_width(fn), inp[0])
+            return self.memo[k]
+        return _width(self.D.circuit.gate(g).prim), RUN
+
+    def width(self, g: int) -> int:
+        return self.of(g)[0]
+
+    def binding(self, g: int) -> str:
+        return self.of(g)[1]
 
 
 def _runs(gates: Sequence[int], key) -> list[list[int]]:
@@ -266,14 +325,9 @@ def _spell(items: Sequence[tuple]) -> Any:
     return concat([Affine(s, i, b, n) for s, i, b, n in parts])
 
 
-def _binding(bits: Bits, g: int) -> str:
-    k, v = bits.kind[g]
-    return v if k == "input" else RUN
-
-
-def _nodes(bits: Bits, words: Sequence[tuple[int, int]]) -> list[tuple[int, int, int]]:
+def _nodes(D: DecodedProgram, words: Sequence[tuple[int, int]]) -> list[tuple[int, int, int]]:
     """The root nodes of C the gates ``words`` are, each ``(k, first member, end member)``."""
-    body, out = bits.D.root.body, []
+    body, out = D.root.body, []
     for lo, hi in words:
         for k, node in enumerate(body.nodes):
             a, b = body.offsets[k], body.offsets[k + 1]
@@ -299,7 +353,13 @@ class Block:
     outputs: tuple[int, ...]
     program: Any
     descriptor: bytes
-    bits: Bits
+    D: DecodedProgram
+    given: Bits | None = field(default=None, repr=False, compare=False)
+
+    @cached_property
+    def bits(self) -> Bits:
+        """C on bits, built here on first read (a pass over C): the block's statement and counts read it, its Program never."""
+        return self.given if self.given is not None else Bits(self.D)
 
     @cached_property
     def input_bits(self) -> list[int]:
@@ -373,14 +433,14 @@ def listing_of(c: bytes) -> bytes:
     return _text(bits, ins, body, bits.bits_of(bits.C.root_outputs()), {b: b for b in range(bits.size)})
 
 
-def _build(bits: Bits, words: Sequence[tuple[int, int]], ins: list[int], outs: list[int]) -> Any:
-    D, C = bits.D, bits.C
+def _build(D: DecodedProgram, words: Sequence[tuple[int, int]], ins: list[int], outs: list[int]) -> Any:
+    C, gates = D.circuit, _Gates(D)
     body, scope = D.root.body, C.root_scope
-    in_runs = _runs(ins, lambda g: (bits.width[g], _binding(bits, g)))
-    out_runs = _runs(outs, lambda g: bits.width[g])
-    params = tuple((f"p{i}", Array(len(r), Value(bits.width[r[0]]))) for i, r in enumerate(in_runs))
-    ret = Tuple(*[Array(len(r), Value(bits.width[r[0]])) for r in out_runs])
-    kept = _nodes(bits, words)
+    in_runs = _runs(ins, gates.of)
+    out_runs = _runs(outs, gates.width)
+    params = tuple((f"p{i}", Array(len(r), Value(gates.width(r[0])))) for i, r in enumerate(in_runs))
+    ret = Tuple(*[Array(len(r), Value(gates.width(r[0]))) for r in out_runs])
+    kept = _nodes(D, words)
 
     def build(B, S, *colls):
         ref: dict[int, tuple] = {}
@@ -422,7 +482,7 @@ def _build(bits: Bits, words: Sequence[tuple[int, int]], ins: list[int], outs: l
         return Coll(ret, concat([_spell([ref[g] for g in r]) for r in out_runs]))
 
     fn = CompositeDefinition("Block", 1, (), lambda S: (params, ret), build, register=False)
-    registered = [n for (n, _), r in zip(params, in_runs) if _binding(bits, r[0]) == REGISTRATION]
+    registered = [n for (n, _), r in zip(params, in_runs) if gates.binding(r[0]) == REGISTRATION]
     saved = list(P._BODY_LOOKUP)
 
     def lookup(p):
@@ -440,12 +500,12 @@ def _build(bits: Bits, words: Sequence[tuple[int, int]], ins: list[int], outs: l
 
 def restrict(c: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, int]], bits: Bits | None = None) -> Block:
     """`compact (restrict C S)` for S the gates of ``units`` (module docstring: the index, the block and the object)."""
-    bits = Bits(program(c)) if bits is None else bits
-    words = unit_gates(bits.D, partition, units)
-    ins, outs = ports(bits, words)
-    prog = _build(bits, words, ins, outs)
+    D = program(c) if bits is None else bits.D
+    words = unit_gates(D, partition, units)
+    ins, outs = front(D, words)
+    prog = _build(D, words, ins, outs)
     return Block(tuple(tuple(u) for u in units), tuple(words), tuple(ins), tuple(outs), prog,
-                 b"".join(descriptor_chunks(prog)), bits)
+                 b"".join(descriptor_chunks(prog)), D, bits)
 
 
 def evaluate(text: bytes, inputs: Sequence[int]) -> list[int]:
@@ -475,5 +535,5 @@ def evaluate(text: bytes, inputs: Sequence[int]) -> list[int]:
     return [v[int(next(it).split()[1])] for _ in range(O)]
 
 
-__all__ = ["Bits", "Block", "FORMAT", "REGISTRATION", "RUN", "Refused", "WIRE", "evaluate", "listing_of", "ports", "program", "restrict",
+__all__ = ["Bits", "Block", "FORMAT", "REGISTRATION", "RUN", "Refused", "WIRE", "evaluate", "listing_of", "program", "restrict",
            "split", "unit_gates"]
