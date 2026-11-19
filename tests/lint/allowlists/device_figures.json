@@ -13,7 +13,6 @@
     {"file": "adapters/vllm/verity_vllm/definitions/registry/sparse_mla_split.py", "count": 1, "lane": "proofs"},
     {"file": "adapters/vllm/verity_vllm/definitions/registry/tp_allreduce_nodes.json", "count": 2, "lane": "proofs"},
     {"file": "calibration/census/workloads.json", "count": 2, "lane": "compute-accounting"},
-    {"file": "benchmarks/datacenter/datacenter/examples.py", "count": 1, "lane": "network-accounting"},
     {"file": "calibration/machine_model/data/devices/sm_100/sheet.toml", "count": 1, "lane": "compute-accounting"},
     {"file": "calibration/machine_model/data/devices/sm_90/sheet.toml", "count": 1, "lane": "compute-accounting"},
     {"file": "calibration/machine_model/data/table.toml", "count": 1, "lane": "compute-accounting"},
