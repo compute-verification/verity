@@ -1266,7 +1266,7 @@ theorem outRows_setupOne {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {ta
   exact (FlockSoundness.Discharge.Hidden.committed_of_commit s.parse).outRows ht fun p hp => (hv1 p hp).1
 
 /-- `FlockDeploy.Raw.ins` reads its tags from `--statement`'s name, and C's are them. -/
-theorem raw_ins_tags {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) :
+theorem raw_ins_tags {w : FlockDeploy.Raw} {read : Lean.Json → Flock.V (Array Flock.Registered.Port)} {s : FlockDeploy.Ins} (h : w.ins read = .ok s) :
     Tags.byName? w.statement = some s.stmtTags ∧ s.read.I.tags = s.stmtTags := by
   unfold FlockDeploy.Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h

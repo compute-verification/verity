@@ -41,7 +41,7 @@ theorem insOf_ins {zk : Bool} {x : Hash.Msg} {s : Ins} (h : insOf zk x = some s)
       cases h2
       rfl
 
-theorem Raw.ins_tags {w : Raw} {s : Ins} (h : w.ins = .ok s) :
+theorem Raw.ins_tags {w : Raw} {read : Lean.Json → Flock.V (Array Flock.Registered.Port)} {s : Ins} (h : w.ins read = .ok s) :
     ∃ t, Tags.byName? w.statement = some t ∧ s.read.I.tags = t := by
   unfold Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h
@@ -50,7 +50,7 @@ theorem Raw.ins_tags {w : Raw} {s : Ins} (h : w.ins = .ok s) :
 
 open FlockSoundness.Refine in
 /-- A masked statement's tags have no plain leaves (`Raw.ins` refuses them). -/
-theorem Raw.ins_plain {w : Raw} {s : Ins} {t : Tags} (h : w.ins = .ok s) (hb : Tags.byName? w.statement = some t)
+theorem Raw.ins_plain {w : Raw} {read : Lean.Json → Flock.V (Array Flock.Registered.Port)} {s : Ins} {t : Tags} (h : w.ins read = .ok s) (hb : Tags.byName? w.statement = some t)
     (hz : w.zk = true) : t.plainLeaves = false := by
   by_contra hn
   have hp : t.plainLeaves = true := by simpa using hn
