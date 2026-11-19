@@ -99,7 +99,7 @@ from verity.circuits.refs import Coll, array_of, broadcast, concat
 from verity.circuits.types import Array, Type
 
 from verity_vllm.definitions.evidence import EVIDENCE
-from verity_vllm.definitions.registry import mhc as MHC
+from verity_vllm.definitions.registry import tf32_wgmma as TW
 
 __all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "CublasSerialSplitKGemm", "CublasSerialSplitKGemmAligned",
            "CublasSerialSplitKGemmAlignedWord", "CublasSerialSplitKGemmWord", "CublasSplitKGemm", "CublasSplitKGemmAligned",
@@ -599,7 +599,7 @@ def _refuse_k8(b: dict) -> str | None:
 def _dot_tf32(B, S, x, wrow):
     acc = B.call(P.ZERO32)
     for s in range(S.K // 8):
-        acc = B.call(MHC.HopperTf32WgmmaDot8, acc, x[8 * s:8 * s + 8], wrow[8 * s:8 * s + 8])
+        acc = B.call(TW.HopperTf32WgmmaDot8, acc, x[8 * s:8 * s + 8], wrow[8 * s:8 * s + 8])
     return acc
 
 

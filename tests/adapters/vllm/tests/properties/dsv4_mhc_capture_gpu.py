@@ -88,7 +88,9 @@ from verity.circuits.silicon.models import GroupSum
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.definitions.numerics import mhc_twin as W
+from verity_vllm.definitions.numerics import tf32_twin as TT
 from verity_vllm.definitions.registry import mhc as R
+from verity_vllm.definitions.registry import tf32_wgmma as TW
 from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-mhc-capture/v1"
@@ -284,7 +286,7 @@ def step_models() -> list[GroupSum]:
             for f in (STEP_FLOORS if len(g) < 8 else STEP_FLOORS[:1])]
 
 
-CANDIDATE_NAME = model_name(W.CANDIDATE)
+CANDIDATE_NAME = model_name(TT.CANDIDATE)
 
 
 def _pow2_bf16(sign, e) -> np.ndarray:
@@ -384,8 +386,8 @@ def probe_tables(launches: list[dict[str, Any]], models: list[GroupSum] | None =
     models = step_models() if models is None else models
     step = {model_name(m): [None if L["family"] == "round" else W.prenorm_tf32(L["a"], L["b"], L["NS"], m)[0] for L in launches]
             for m in models}
-    rounding = {r: [W.prenorm_tf32(L["a"], L["b"], L["NS"], W.CANDIDATE, r)[0] if L["family"] == "round" else None
-                    for L in launches] for r in W.B_ROUNDINGS}
+    rounding = {r: [W.prenorm_tf32(L["a"], L["b"], L["NS"], TT.CANDIDATE, r)[0] if L["family"] == "round" else None
+                    for L in launches] for r in TT.B_ROUNDINGS}
     sqrsum = {s: [W.prenorm_sqrsum(L["a"], L["NS"], s) for L in launches] for s in W.SQR_FORMS}
     return {"step": step, "rounding": rounding, "sqrsum": sqrsum}
 
@@ -763,7 +765,7 @@ def sources(outdir: Path) -> dict[str, Any]:
 def served_bindings() -> dict[str, Any]:
     norm = {"REPEAT": REPEAT, "EPS": EPS, "HC_EPS": HC_EPS}
     out: dict[str, Any]
-    out = {"HopperTf32WgmmaDot8_v1": lambda: R.HopperTf32WgmmaDot8, "MhcSigmoid_v1": lambda: bind(R.MhcSigmoid),
+    out = {"HopperTf32WgmmaDot8_v1": lambda: TW.HopperTf32WgmmaDot8, "MhcSigmoid_v1": lambda: bind(R.MhcSigmoid),
            "MhcSinkhorn_v1{4,20}": lambda: bind(R.MhcSinkhorn, HC=HC, REPEAT=REPEAT, EPS=HC_EPS),
            "MhcPreNorm_v1{4,7168,64}": lambda: bind(R.MhcPreNorm, HC=HC, H=H, TN=TN, EPS=EPS),
            "MhcPreNormBroadcast_v1{4,7168,64}": lambda: bind(R.MhcPreNormBroadcast, HC=HC, H=H, TN=TN, EPS=EPS),

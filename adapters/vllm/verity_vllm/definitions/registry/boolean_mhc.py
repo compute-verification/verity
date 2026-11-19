@@ -26,9 +26,7 @@ is over circuit-check's cost target (``partition_max_gates``).
 from __future__ import annotations
 
 from verity.circuits import boolean as BL
-from verity.circuits.boolean.forms import OR, add, and_reduce, mux, or_reduce
 from verity.circuits.boolean.trace import definition
-from verity.circuits.census import silicon_step
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.refs import Coll, concat
@@ -39,6 +37,7 @@ from verity_vllm.definitions.registry import boolean_dsa as BD
 from verity_vllm.definitions.registry import boolean_moe as BMOE
 from verity_vllm.definitions.registry import mhc as M
 from verity_vllm.definitions.registry.boolean_attention import _Bits
+from verity_vllm.definitions.registry.boolean_tf32_wgmma import HopperTf32WgmmaDot8V2
 
 BIT = BL.BIT
 BF16 = Array(16, BIT)
@@ -59,26 +58,6 @@ def bit_ops(B) -> M.Ops:
     c = _Bits(B)
     return M.Ops(B, BITS, lambda v: c.word(v, 32),
                  lambda x: Coll(F32, concat([x.refs.slice(0, 31), B.call(BL.NOT, x[31]).refs])))
-
-
-def _tf32_rne(C, w):
-    """A 32-bit f32 word rounded RNE to TF32's sign, exponent and ten mantissa bits, LSB first."""
-    high = list(w[13:])
-    special = and_reduce(C, w[23:31])
-    nan = C.AND(special, or_reduce(C, w[:23]))
-    inc = C.AND(w[12], OR(C, or_reduce(C, w[:12]), high[0]))
-    rounded = add(C, high, [inc], width=19)
-    kept = list(high)
-    kept[0] = OR(C, kept[0], nan)
-    return mux(C, special, kept, rounded)
-
-
-HopperTf32WgmmaDot8V2 = silicon_step(definition(
-    "HopperTf32WgmmaDot8", 2,
-    lambda C, acc, *ab: FP.tc_dot_tf32(C, acc, [_tf32_rne(C, x) for x in ab[:8]], [_tf32_rne(C, y) for y in ab[8:16]],
-                                       M.TF32_GROUPS, M.TF32_WIDTH, M.TF32_FLOOR),
-    (("acc", F32), ("a", Array(8, F32)), ("b", Array(8, F32))), F32, word=M.HopperTf32WgmmaDot8,
-    doc="the candidate wgmma.m64nNk8 tf32 step on bits: HopperTf32WgmmaDot8_v1"), M.HopperTf32WgmmaDot8.silicon)
 
 
 def _sigmoid(B, S, z):
