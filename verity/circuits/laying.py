@@ -463,4 +463,14 @@ def pack(program: Any, fits: Fits, q: Any = None, m: Measure | None = None) -> l
     return out
 
 
-__all__ = ["Fits", "Measure", "Unlaid", "lay", "pack", "query"]
+ZK_M_MIN = 25
+
+
+def zk_min_units(k_log: int, g: int) -> int:
+    """The fewest units of ``2^k_log`` rows, ``g`` a VU, that a zero-knowledge Flock statement holds (``m = k_log +
+    max(3, ⌈log₂⌈n/g⌉⌉) >= 25``); `flock-circuit`'s ``zk_min_units`` is its twin."""
+    g = max(g, 1)
+    return 1 if k_log + 3 >= ZK_M_MIN else (g << (ZK_M_MIN - 1 - k_log)) + 1
+
+
+__all__ = ["Fits", "Measure", "Unlaid", "lay", "pack", "query", "zk_min_units"]
