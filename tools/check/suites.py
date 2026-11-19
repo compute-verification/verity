@@ -300,6 +300,31 @@ CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY
 #: starts one: how many such lines, or (fewest, most) for lines that run only sometimes}). A file past its count fails the
 #: suite naming each line; a run of every test that finds fewer fails asking for the entry to be lowered, and one at zero deleted.
 STRIPPED: dict[str, tuple[str, dict[str, int | tuple[int, int]]]] = {
+    "benchmarks/prove_path": ("network-accounting", {"benchmarks/prove_path/records_audit.py": 1}),
+    "research": ("ci", {
+        "tests/tools/research/test_at_main.py": 1,
+        "tests/tools/research/test_launcher_tree.py": 1,
+        "tests/tools/research/test_monitors.py": 1,
+        "tests/tools/research/test_queue.py": 2,
+        "tests/tools/research/test_remote_version.py": 1,
+        "tests/tools/research/test_research_cancel.py": 2,
+        "tests/tools/research/test_run_custody.py": 1,
+        "tests/tools/research/test_slack.py": 3,
+        "tests/tools/research/test_telemetry.py": 4,
+        "tools/research/src/research/jobs/dispatch.py": 1,
+        "tools/research/src/research/pods/nebius/dispatch.py": 1,
+        "tools/research/src/research/pods/nebius/sky/commit_pack.py": 1,
+        "tools/research/src/research/queue.py": 1,
+        "tools/research/src/research/quick_tier.py": 2,
+        "tools/research/src/research/remote.py": 1,
+        "tools/research/src/research/telemetry/run.py": 1,
+    }),
+    "verity-circuit-check": ("circuits", {
+        "tests/tools/verity/circuit_check/conftest.py": 1,
+        "tests/tools/verity/circuit_check/test_catalog_fixture.py": 1,
+        "tools/verity/circuit_check/src/circuit_check/ambient.py": 1,
+    }),
+    "verity-ops": ("infra", {"infra/control/nightly_check.py": 1, "tests/infra/ops/test_deploy.py": 1}),
 }
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-verifier", "core-identity", "verity-core-composition",
               "verity", "verity-core-evaluate", "verity-core-zk-server",
