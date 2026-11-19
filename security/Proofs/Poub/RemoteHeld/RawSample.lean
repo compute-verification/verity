@@ -6,6 +6,7 @@ public import Poub.Shared
 import Proofs.Flock.Claims.Sampling.Select.Bounds
 import Proofs.Spot.Sampling.Work
 import Proofs.Core.Game.Tape
+public import Proofs.Spot.Sampling.Periods
 
 /-!
 # The openings' pooled bound on the raw coin: the statement, not yet a guarantee
@@ -162,5 +163,59 @@ def PooledSampleRaw : Prop :=
     (T : Trace (SampleCoins n κ X)) (R : Receipts n κ X)
     (δ : ℝ), 0 ≤ δ → Live D → RefusedRaw D T R → Counted D T →
     T.Holds (δ + (R.binding (openings D)).toReal) fun ω => (T.incorrect ω : ℝ) ≤ D.pooled δ ω
+
+/-! ## The windows as periods -/
+
+section Periods
+
+variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : ResourceAccounting.Remote.Sample.Run n m s κ X)
+
+/-- **Window `t` lands** at coins `ω`: its draw ended, in its correct receipts. -/
+def Lands (t : Fin n) (ω : SampleCoins n κ X) : Prop :=
+  ∃ S, openedRaw D t ω = some S ∧ S ⊆ D.correct t ω
+
+theorem lands_iff (t : Fin n) (ω : SampleCoins n κ X) :
+    Lands D t ω ↔ ∃ us read, Spot.Draw.sampleUnits (.subset (D.samples t ω)) (D.size t ω)
+      (Properties.Spot.bytesOf (coinBytes (ω.2 t))) = .ok (us, read) ∧ us.toList.toFinset ⊆ D.correct t ω := by
+  unfold Lands openedRaw
+  rcases Spot.Draw.sampleUnits (.subset (D.samples t ω)) (D.size t ω)
+    (Properties.Spot.bytesOf (coinBytes (ω.2 t))) with e | ⟨us, rd⟩ <;> simp
+
+/-- At fixed other coins `x`, window `t`'s landing reads only the windows' coins up to its own (`Live`). -/
+theorem lands_adapted (hL : Live D) (x : X) :
+    Spot.Sampling.Periods.Adapted (Ω := fun _ : Fin n => Pous.Bits κ) fun t w => Lands D t (x, w) := by
+  intro t w w' h
+  obtain ⟨e1, e2⟩ := hL t (x, w) (x, w') rfl fun j hj => h j hj.le
+  refine propext ?_
+  dsimp only
+  rw [lands_iff, lands_iff]
+  dsimp only
+  unfold Run.samples
+  rw [e1, e2, h t le_rfl]
+
+/-- At fixed other coins `x`, window `t`'s bound is fixed before its coin (`Live`). -/
+theorem bound_predictable (hL : Live D) (x : X) :
+    Spot.Sampling.Periods.Predictable (Ω := fun _ : Fin n => Pous.Bits κ)
+      fun t w => ENNReal.ofReal (D.bound t (x, w)) := by
+  intro t w w' h
+  obtain ⟨e1, e2⟩ := hL t (x, w) (x, w') rfl h
+  dsimp only
+  unfold Run.bound Run.good Run.samples
+  rw [e1, e2]
+
+/-- Given the windows before it, window `t` lands with probability at most its bound (`window_le`). -/
+theorem lands_le (hL : Live D) (x : X) (t : Fin n) (w : Fin n → Pous.Bits κ) :
+    Verity.Game.prCoin (fun a : Pous.Bits κ => Lands D t (x, Function.update w t a)) ≤
+      ENNReal.ofReal (D.bound t (x, w)) := by
+  have hk : D.samples t (x, w) ≤ D.size t (x, w) := min_le_right _ _
+  refine (Verity.Game.prCoin_mono fun a ha => ?_).trans (window_le (κ := κ) _ _ (D.correct t (x, w)) hk)
+  obtain ⟨e1, e2⟩ := hL t (x, Function.update w t a) (x, w) rfl fun j hj =>
+    Function.update_of_ne (ne_of_lt hj) _ _
+  rw [lands_iff] at ha
+  dsimp only at ha
+  unfold Run.samples at ha ⊢
+  rwa [e1, e2, Function.update_self] at ha
+
+end Periods
 
 end ResourceAccounting.SecurityProofs.Remote.RawSample
