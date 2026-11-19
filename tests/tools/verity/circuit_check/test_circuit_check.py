@@ -1671,17 +1671,24 @@ def test_a_template_s_unit_is_checked_as_its_lowering_built_it_and_traced_only_t
     assert len(traced) == 1
 
 
-def _whole_boolean(name, build):
-    """`checks.whole_lowering` of the Boolean Definition of three bits that ``build`` computes: its record and findings."""
+def _three_bits(name, build):
+    """The Boolean Definition of three bits that ``build`` computes."""
     from verity.circuits.boolean.trace import definition
     from verity.circuits.defs import bind
-    from verity.circuits.evaluation.reference import resolve, signature_of
+    from verity.circuits.evaluation.reference import resolve
     from verity.circuits.ops.boolean import scalar as SB
 
-    t = resolve(bind(definition(name, 1, build, (("a", SB.BIT), ("b", SB.BIT), ("c", SB.BIT)), SB.BIT, register=False)))
+    return resolve(bind(definition(name, 1, build, (("a", SB.BIT), ("b", SB.BIT), ("c", SB.BIT)), SB.BIT, register=False)))
+
+
+def _whole_boolean(name, build, pins=PINS):
+    """`checks.whole_lowering` of `_three_bits`' Definition, against ``pins``: its record and findings."""
+    from verity.circuits.evaluation.reference import signature_of
+
+    t = _three_bits(name, build)
     F = CK.Findings()
     _corr, arrays, ref = CK.correspondence(t, OPTS, F)
-    return CK.whole_lowering(t, signature_of(t)[0], arrays, ref, OPTS, F, PINS), F
+    return CK.whole_lowering(t, signature_of(t)[0], arrays, ref, OPTS, F, pins), F
 
 
 def test_a_builders_commit_is_a_row_of_its_lowering_and_no_redundant_gate():
@@ -1706,7 +1713,32 @@ def test_a_builders_commit_is_a_row_of_its_lowering_and_no_redundant_gate():
     assert redundant(F) == [] and F.failures == []
     rec, F = _whole_boolean("CircuitCheckCommitTwice", twice)
     assert (rec["mismatches"], rec["ands"], rec["commits"], rec["definition_ands"], rec["redundant_ands"]) == (0, 4, 2, 1, 1)
-    assert redundant(F) == [1] and [f["code"] for f in F.failures] == ["ands-added"]
+    assert redundant(F) == [1] and [f["code"] for f in F.failures] == ["and-count"]
+
+
+def _once(C, a, b, c):
+    (x,) = C.commit([a[0] ^ b[0]])
+    return [C.AND(x, c[0]) ^ C.AND(a[0], c[0])]
+
+
+def test_a_definitions_pin_counts_its_ands_as_count_does_and_its_commits_apart():
+    """A Boolean Definition whose builder commits pins ``and`` as `verity.circuits.count` counts the Definition (its lowering's
+    ANDs less its commit rows) and ``commits`` apart; a pin whose ``and`` is the lowering's rows, commits and all, fails by
+    name."""
+    from verity.circuits import codec
+    from verity.circuits import count as CN
+    from verity.circuits.program import Program
+
+    rec, F = _whole_boolean("CircuitCheckCommitPin", _once, pins={})
+    t = rec["pin"]["pin"]
+    counted = CN.count(codec.encode_program(Program(_three_bits("CircuitCheckCommitPin", _once))))[f"Root[{t}]_v1"].ands
+    assert (rec["ands"], rec["commits"], counted) == (3, 1, 2) and F.failures == []
+    assert {k: rec["pin"]["counts"][k] for k in ("and", "commits")} == {"and": counted, "commits": 1}
+    typ = rec["pin"]["counts"]["type"]
+    _rec, F = _whole_boolean("CircuitCheckCommitPin", _once, pins={"definitions": {t: {"and": 2, "commits": 1, "type": typ}}})
+    assert F.failures == []
+    _rec, F = _whole_boolean("CircuitCheckCommitPin", _once, pins={"definitions": {t: {"and": 3, "type": typ}}})
+    assert [(f["code"], f["definition"]) for f in F.failures] == [("pin-mismatch", t)]
 
 
 @pytest.mark.slow

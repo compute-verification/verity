@@ -60,8 +60,10 @@
     lowering pins    a lowering's AND/XOR/NOT counts and its circuit's digest (``type``, `lowering_type`) against its pin, which
                      must hold both (a piece's, a Boolean Definition's whole lowering's,
                      a template proof block's, in the sidecar of the module that defines it or its file in ``pins/``,
-                     `sidecars`; a Boolean Definition's lowering has at most its own And gates, besides its builder's
-                     commits), a template proof block's circuit digest against its Flock module's `PINS`, and the Boolean
+                     `sidecars`; a Boolean Definition's whole lowering pins ``and``, its ANDs less its builder's commits,
+                     which is `verity.circuits.count`'s count of the Definition and is refused (``and-count``) when it is
+                     not, and ``commits`` apart: a commit is a row of the lowering, no AND of the circuit), a template
+                     proof block's circuit digest against its Flock module's `PINS`, and the Boolean
                      export's gate lists checked against the proof block's circuit (`verity_flock.boolean_export`); a gated
                      Definition's circuit digest (``gated``: a Program holds it as one gate naming the digest, such as N2's
                      head check) against its ``digests`` pin, as is any Definition's that holds one (a served-size binding)
@@ -1003,10 +1005,13 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
 
         own = rec["definition_ands"] = compile_bits(t).counts["and"]
         commits = rec["commits"] = sum(1 for v in C.live() if is_commit(C, v))
-        if counts["ands"] - commits > own:
-            F.fail("lowering", "ands-added", t.id, f"[c-flock]: {counts['ands'] - commits} ANDs (and {commits} commits) for the "
-                   f"Definition's {own} And gates", via="c-flock:ir_lower", ands=counts["ands"], commits=commits, definition_ands=own)
-        rec["pin"] = _counts_against_pin("definitions", t.id, {"and": counts["ands"], "type": lowering_type(C)}, pins, F, t.id)
+        ands = counts["ands"] - commits
+        if ands != own:
+            F.fail("lowering", "and-count", t.id, f"[c-flock]: {ands} ANDs (and {commits} commits) for the Definition's {own} "
+                   "And gates (`verity.circuits.count`'s count)", via="c-flock:ir_lower", ands=counts["ands"], commits=commits,
+                   definition_ands=own)
+        rec["pin"] = _counts_against_pin("definitions", t.id, {"and": ands, "commits": commits, "type": lowering_type(C)}, pins,
+                                         F, t.id)
     return rec
 
 
