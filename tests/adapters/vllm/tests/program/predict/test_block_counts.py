@@ -224,12 +224,14 @@ def test_a_block_with_an_unpriced_primitive_leaves_the_gates_undecided():
 @pytest.mark.slow
 def test_on_the_tiny_window_a_blocks_fresh_bits_are_bs_k():
     """TINY's fixed load at its class (2 slots, the class circuit): two blocks a window, each of the session's gates, and fresh bits B's k with the
-    weights held (its slot's lane of the scan state)."""
-    from tests.program.predict.test_window_circuit import FULL, _circuit
+    weights held (the scan state its lanes' units read)."""
+    from tests.program.predict import test_steps as S
+    from tests.program.predict.test_window_circuit import CLASS, GRAIN
     from verity_vllm.program.predict import inference_blocks as IB
     from verity_vllm.program.predict.window_builder import WEIGHTS
+    from verity_vllm.program.predict.window_circuit import class_circuit
 
-    circuit = _circuit(FULL)
+    circuit = class_circuit(S._registered(), CLASS, None, GRAIN)
     doc = {**circuit.description(), "name": circuit.name, "partition": "",
            "blocks": circuit.blocks.doc(sum(circuit.units.values()), "")}
     roots = {p: "ab" * 64 for p in circuit.registered.params if p.split("/", 1)[0] == WEIGHTS}

@@ -14,8 +14,8 @@ attention isn't the Program's one-row decode's, though at as few keys as one blo
 A unit its node's lowering filled holds its rows of that value (`_Program.outs`), and so does each add part of a fused norm
 cut at its residual add (`_Program.norms`): part AT its words of the node's second field, the sum.
 Every other unit holds its Definition's function of the window's values:
-- a slot's `ScanSlots_v3` every lane's first token and slot, occupancy word and head of the scan state row at its anchor
-  (`io_shell.scan_reference`; its lane's row is the slot's, `scan_slots`), every later position's `TokenFeed_v1` below the
+- a lane's `ScanSlots_v4` its first token and slot, occupancy word and head of the scan state row at its anchor
+  (`io_shell.scan_reference`; a slot's lane's row is the slot's, `scan_slots`), every later position's `TokenFeed_v1` below the
   prompt bound its token and the slot it carries (`io_shell.feed_reference`), each token select's `SelectCollect_v1` its
   second row, the select collected on from the lane's head (`io_shell.collect_reference`), and the last position's
   `SelectEntry_v1` the slot's entry (`io_shell.entry_reference`);
@@ -462,8 +462,8 @@ class Rows:
     registered values by parameter (`window_weights.weight_values` with their rows kept, the scan's start row
     `scan_state.SCAN_STATE` and the network attester's ingress rows `scan_state.INGRESS_ROWS`, each with its rows), of
     which an embedding read opens its table's (its ``rows``, ``salts`` and ``path``). The scan's units are filled a
-    boundary at a time (`window_circuit`'s module docstring), each its Definition on its inputs, so a slot's `ScanSlots_v3`
-    reads the state row its ingress units computed. Refused unless every unit's every row is filled once."""
+    boundary at a time (`window_circuit`'s module docstring), each its Definition on its inputs, so a lane's
+    `ScanSlots_v4` reads the state row its ingress units computed. Refused unless every unit's every row is filled once."""
 
     def __init__(self, lowered: Lowered, slots: Sequence[Slot], registered: Mapping[str, Any]) -> None:
         if lowered.requests is None:
@@ -499,21 +499,21 @@ class Rows:
                        for t, lay in self.lays.items()}
         for P, S in zip(lowered.programs, slots):
             self._slot(P, S)
-        P0, cls = lowered.programs[0], lowered.programs[0].cls
+        cls = lowered.programs[0].cls
         start, bucket, egress = (descriptor_id(f) for f in (cls.scan.start, cls.scan.bucket, cls.scan.egress))
         ingress = registered[SS.INGRESS_ROWS].rows
         entries = {**{(P.anchor, P.lane): P.entry_unit for P in lowered.programs},
                    **{(cls.anchor(s), cls.lane(s)): e for s, _k, _c, e in lowered.empty}}
-        starts = {0: 0, **{a: k + 1 for k, (a, _) in enumerate(lowered.scans)}}
-        for a in cls.boundaries:
+        units = {(a, j): unit for a, j, unit in lowered.scans}
+        for n, a in enumerate(cls.boundaries):
             for o in ("o0", "o1"):
-                self._put(start, starts[a], o, np.asarray([self.state[a]], dtype=np.uint16), EVALUATED)
-            for _, (tid, u) in [x for x in lowered.scans if x[0] == a]:
-                for k, lane in enumerate(_lanes(P0, self.state, IO.scan_reference, a)):
-                    for i, v in enumerate(lane):
-                        self._put(tid, u, f"o{4 * k + i}", _i32(v if isinstance(v, list) else [v]), EVALUATED)
-            for s, _k, c, e in [x for x in lowered.empty if cls.anchor(x[0]) == a]:
-                self._empty(P0, s, c, e)
+                self._put(start, n, o, np.asarray([self.state[a]], dtype=np.uint16), EVALUATED)
+            for j in range(cls.lanes):
+                tid, u = units[(a, j)]
+                for i, v in enumerate(_lane(self.fns[tid], self.state, a, IO.scan_reference)):
+                    self._put(tid, u, f"o{i}", _i32(v if isinstance(v, list) else [v]), EVALUATED)
+            for s, k, c, e in [x for x in lowered.empty if cls.anchor(x[0]) == a]:
+                self._empty(lowered.programs[k], units[(a, cls.lane(s))], s, c, e)
             progs = [self.outs[et][0][eu] for et, eu in (entries[(a, j)] for j in range(cls.lanes))]
             for t in range(a, a + cls.every):
                 self.state[t + 1] = self._evaluate(bucket, t, [ingress[t], self.state[t], *progs])["o1"][0]
@@ -598,16 +598,11 @@ class Rows:
             self._heads(nodes[j], plan, calls, S)
 
     def _scan(self, P: Any, S: Slot, picks: Sequence[int]) -> None:
-        """The slot's scan units: its `ScanSlots_v3` every lane's first token and slot, occupancy word and head of the scan
-        state row at its anchor (its lane's row the slot's, refused by name where it isn't); its collectors on from the
-        lane's head, a prompt position's before the last (`OutCollect_v1`) on its token, a select's (`SelectCollect_v1`, its
+        """The slot's scan units, its lane's row of the scan state row at its anchor the slot's (refused by name where it
+        isn't): its collectors on from the lane's head, a prompt position's before the last (`OutCollect_v1`) on its token, a select's (`SelectCollect_v1`, its
         ``o1``; its select ``o0`` is the node's) on its pick and KO - O pads on the last pick; and its `SlotEntry_v1` entry
         of the scan's Programs' row."""
-        tid, u = P.scan_unit
-        for k, lane in enumerate(_lanes(P, self.state, IO.scan_reference)):
-            for i, v in enumerate(lane):
-                self._put(tid, u, f"o{4 * k + i}", _i32(v if isinstance(v, list) else [v]), EVALUATED)
-        row, a = _lanes(P, self.state)[P.lane]
+        row, a = _lane(P.scan, self.state, P.anchor)
         if row != S.row:
             raise ValueError(f"{P.name}: its slot's row isn't lane {P.lane}'s of the scan state row at bucket {P.anchor}")
         KO = P.cls.outputs
@@ -623,11 +618,11 @@ class Rows:
         et, eu = P.entry_unit
         self._put(et, eu, "o0", np.array([entry], dtype=np.uint16), EVALUATED)
 
-    def _empty(self, P: Any, s: int, collect: tuple[str, int], entry: tuple[str, int]) -> None:
-        """Empty slot ``s``'s collector and entry (`_Program.place_empty`), on its lane of the scan state row at its
-        anchor."""
-        a, lane = P.cls.anchor(s), P.cls.lane(s)
-        (row, head), tok = _lanes(P, self.state, anchor=a)[lane], _lanes(P, self.state, IO.scan_reference, a)[lane][0]
+    def _empty(self, P: Any, scan: tuple[str, int], s: int, collect: tuple[str, int], entry: tuple[str, int]) -> None:
+        """Empty slot ``s``'s collector and entry (`_Program.place_empty`), on its lane's ``scan`` unit's read of the scan
+        state row at its anchor."""
+        fn, a = self.fns[scan[0]], P.cls.anchor(s)
+        (row, head), tok = _lane(fn, self.state, a), _lane(fn, self.state, a, IO.scan_reference)[0]
         KO, e = P.cls.outputs, P.entry.bindings
         a = IO.collect_reference(head, tok, KO, True)
         self._put(*collect, "o0", _i32(a), EVALUATED)
@@ -695,12 +690,11 @@ def _elements(words: np.ndarray, width: int) -> np.ndarray:
     return np.ascontiguousarray(words, dtype=np.uint16).view(f"<u{width // 8}")
 
 
-def _lanes(P: Any, state: Sequence[Any], of: Callable[..., list] = IO.slots_reference,
-           anchor: int | None = None) -> list[Any]:
-    """Every lane of ``state``'s row at Program ``P``'s anchor (or ``anchor``): its row and head
-    (`io_shell.slots_reference`), or ``of``'s (`io_shell.scan_reference`: `ScanSlots_v3`'s outputs)."""
-    b = P.scan.bindings
-    row = np.asarray(state[P.anchor if anchor is None else anchor], dtype=np.uint16).reshape(-1)
+def _lane(scan: Any, state: Sequence[Any], anchor: int, of: Callable[..., Any] = IO.slots_reference) -> Any:
+    """The lane of `ScanSlots_v4` binding ``scan`` in ``state``'s row ``anchor``: its row and head
+    (`io_shell.slots_reference`), or ``of``'s (`io_shell.scan_reference`: the binding's outputs)."""
+    b = scan.bindings
+    row = np.asarray(state[anchor], dtype=np.uint16).reshape(-1)
     return of(row.tolist(), b["NP"], b["IDB"], b["K0"], b["K"], b["OCC"], b["LP"], b["MAX"], b["IDS"])
 
 
@@ -708,7 +702,7 @@ def scan_slots(lowered: Lowered, state: Sequence[Any]) -> list[tuple[list[int], 
     """Each Program's slot as the scan state's rows ``state`` (`scan_state.SCAN_STATE`'s, a row a bucket of the
     window) give it, in slot order: its lane's row (occupancy, prompt length, ids; a `Slot`'s ``row``) and head (prompt
     length, ``max_tokens``) of the row at its anchor."""
-    return [_lanes(P, state)[P.lane] for P in lowered.programs]
+    return [_lane(P.scan, state, P.anchor) for P in lowered.programs]
 
 
 def state_value(program: str, cls: WindowClass, row: Sequence[int], *, window: str) -> RV.Registered:

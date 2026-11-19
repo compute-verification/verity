@@ -1,4 +1,4 @@
-"""A credited linear of C as Pearl+'s tile check (`pearl_plus_credited`): its grid's units of `PearlPlusTileCoreWords_v1`,
+"""A credited linear of C as Pearl+'s product (`pearl_plus_credited`): its grid's units of `PearlPlusTileCoreWords_v2`,
 each one proof block whose amount is its credited MACs, and each unit's public row. That the core on these ports evaluates and
 one drawn unit goes through the door is ``benchmarks/pouw/credited_in_c.py``'s run."""
 from __future__ import annotations
@@ -54,4 +54,4 @@ def test_a_units_public_row_is_the_noise_pearl_plus_forms_its_tile_with() -> Non
     assert got["fa"] == [list(x) for x in C._basis(seed_b, 0, K, C.LINE_NORM_V1)]
     assert got["fb"] == [list(x) for x in C._basis(seed_b, 1, K, C.LINE_NORM_V1)]
     assert got["g"] == [list(r) for r in C.gram(seed_b, K, C.LINE_NORM_V1, s.device)]
-    assert (got["salt"], got["root"], got["unit"], got["rows"], got["col"]) == (salt, root, unit, [1], 1)
+    assert (got["salt"], got["root"], got["unit"], got["rows"]) == (salt, root, unit, [1])

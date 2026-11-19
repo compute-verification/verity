@@ -78,14 +78,15 @@ def _wired_in_slot_and_step(circuit) -> None:
 def _reads_its_keys_and_values(circuit, head: str) -> None:
     """Position 4's heads (T = 5): slot 0's heads 0 and 1 read KV group 0's keys a row a position, the RoPE'd keys of
     positions 0..4 (RoPE units r(p) + 8, r(p) the units before position p: 24 a position, 16 at the prompt's positions 0
-    to 2, which have no last-layer queries), and its values the value projection's slice g(p) + 6 (g(p): 128 a position,
-    64 at those three); slot 1's head 0 its own (r(p) + 10 and g(p) + 14). A head's queries are its own RoPE unit's."""
+    to 2, which have no last-layer queries), and its values the value projection's slice g(p) + 12 (g(p): 128 a position,
+    64 at those three, the queries', keys' and values' slices an allocation each); slot 1's head 0 its own (r(p) + 10
+    and g(p) + 14). A head's queries are its own RoPE unit's."""
     ids = {_label(fn): IF.descriptor_id(fn) for fn, _ in circuit.templates}
     tid, rope, v = ids[head], ids["RoPEHead_v1{D=16}"], ids["Gemm_v2{K=64,N=16}"]
     assert circuit.cuts[tid] == {"k": 5, "v": 5}
     r, g = ([a * min(p, 3) + b * max(p - 3, 0) for p in range(5)] for a, b in ((16, 24), (64, 128)))
     assert [_source(circuit, tid, "q", u) for u in range(8)] == [(rope, r[4] + u, "o0") for u in range(8)]
-    for u, k, val in ((0, 8, 6), (1, 8, 6), (2, 9, 7), (4, 10, 14)):
+    for u, k, val in ((0, 8, 12), (1, 8, 12), (2, 9, 13), (4, 10, 14)):
         assert [_source(circuit, tid, "k", u, p) for p in range(5)] == [(rope, r[p] + k, "o0") for p in range(5)]
         assert [_source(circuit, tid, "v", u, p) for p in range(5)] == [(v, g[p] + val, "o0") for p in range(5)]
 
@@ -203,10 +204,10 @@ def test_bf16_llama_3_2_1b_on_sm_90_lowers_wired_at_4_27_2(tied):
     n = {_label(fn): k for fn, k in circuit.templates}
     norms = {lab: k for lab, k in n.items() if lab.startswith("RMSNormFused")}
     if tied:
-        assert (len(n), norms) == (48, {"RMSNormFusedCuda_v2{N=2048}": 3584})
+        assert (len(n), norms) == (51, {"RMSNormFusedCuda_v2{N=2048}": 3584})
         return
     assert {lab for lab in n if lab.startswith("Gemm_v2")} >= {"Gemm_v2{K=2048,N=8}", "Gemm_v2{K=8192,N=4}"}
-    assert (len(n), norms) == (60, {"RMSNormFusedCudaTail_v1{N=2048}": 3584,
+    assert (len(n), norms) == (63, {"RMSNormFusedCudaTail_v1{N=2048}": 3584,
                                     **{ADD.format(at, r): 1792 for at in range(8) for r in (32, 64)}})
     ids = {_label(fn): IF.descriptor_id(fn) for fn, _ in circuit.templates}
     assert all(circuit.cuts[ids[ADD.format(at, r)]] == {"x": r} for at in range(8) for r in (32, 64))

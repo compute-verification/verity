@@ -335,6 +335,7 @@ def rootStep (ts : Std.HashSet String) (acc : Std.HashMap String (Array Json)) (
     V (Std.HashMap String (Array Json)) := do
   let .str port := getD r "port" | throw "roots: a root of the registration names no port"
   if port == TABLE_PORT then throw ROW_TABLES
+  if Flock.Registered.isFreshValue port then return acc
   match (splitsOf port).filter fun x => acc.contains x.1 with
   | [(name, bare)] =>
     pure (acc.modify name (·.push (Json.mkObj [("domain", getD r "domain"), ("leaves", getD r "leaves"),
@@ -403,6 +404,10 @@ def OWN_FIELD (name field : String) : String :=
   s!"roots: the member {name} holds a root of its own at {field}, a field its template has a window's tree of: a " ++
     "member reads its template's field at the window's one tree, which every wire into the field reads"
 
+/-- The refusal of a member named `input` (`rootsOf`), whose roots would read as run input nodes' trees. -/
+def INPUT_MEMBER : String :=
+  "roots: a member is named input: a root input/n<w> is the window's tree of run input node w, no member's"
+
 /-- The refusal of a member `name` that is another member's template (`rootsOf`). -/
 def NAME_TEMPLATE (name : String) : String :=
   s!"roots: the member {name}'s name is another member's template: a root {name}/<field> would read both as the " ++
@@ -428,13 +433,15 @@ with its template's fields' trees at its fields, of which it holds no root of it
 member's (`Member.slice`). A registration of two members or more has no name every such root's port reads as, and
 refuses (`NOT_ONE_MEMBER`). A function of the record alone, fixed before any coin. -/
 def publicPorts (rec : Json) : V (Array (String × Json)) := do
-  let rs := match getD rec "roots" with | .arr rs => rs | _ => #[]
+  let rs := (match getD rec "roots" with | .arr rs => rs | _ => #[]).filter fun r =>
+    !(match getD r "port" with | .str p => Flock.Registered.isFreshValue p | _ => false)
+  let rec' := rec.setObjVal! "roots" (.arr rs)
   let ports := rs.toList.filterMap fun r => match getD r "port" with | .str p => some p | _ => none
-  if ports.all fun p => (splitsOf p).isEmpty then return Record.byPort rec
+  if ports.all fun p => (splitsOf p).isEmpty then return Record.byPort rec'
   let ts := templatesOf (ports.filterMap fun p => (templateOf p).map (·.1))
   let some n := commonMember (ports.filter fun p => !(templateOf p).any (ts.contains ·.1)) | throw NOT_ONE_MEMBER
   let acc ← rs.foldlM (rootStep ts) (({} : Std.HashMap String (Array Json)).insert n #[])
-  let ft := fieldTreesOf ts rec
+  let ft := fieldTreesOf ts rec'
   ownFieldsHeld ft n (acc.getD n #[])
   return Record.byPort (Json.mkObj [("roots", .arr (ownFieldsOf ft n (acc.getD n #[])))])
 
@@ -450,9 +457,11 @@ def rootsByPort (rec : Json) : Std.HashMap String Json :=
 def COMMITTED : String := "committed/"
 
 /-- The record's port of the tree a registered port `q` opens: `<port>` for a port read as `committed/<port>`
-(`COMMITTED`); none for a registered value's port. -/
+(`COMMITTED`), and `input/n<w>` for run input node `w`'s tree (`Flock.Registered.isFreshValue`), which the record holds
+once for the window, by node; none for a registered value's port. -/
 def treePortOf (q : Flock.Registered.Port) : Option String :=
-  if q.value.startsWith COMMITTED then some (q.value.drop COMMITTED.length).toString else none
+  if q.value.startsWith COMMITTED then some (q.value.drop COMMITTED.length).toString
+  else if Flock.Registered.isFreshValue q.value then some q.value else none
 
 /-- Whether `v` is a field tree's name `<template>/o<j>` (`Flock.Registered.fieldTree`), the value `treeReads`
 holds a wired row of in(S) to. -/
@@ -1267,6 +1276,7 @@ def rootsOf (ms : Array Member) (rec : Json) : V (Std.HashMap String (Array Json
   let .arr rs := getD rec "roots" | throw "roots: the registration's roots are not a list"
   let ts := templatesOf (ms.toList.map (·.name))
   if let some m := ms.find? (ts.contains ·.name) then throw (NAME_TEMPLATE m.name)
+  if ms.any (·.name == "input") then throw INPUT_MEMBER
   let acc ← rs.foldlM (rootStep ts) (ms.foldl (fun acc m => acc.insert m.name #[]) {})
   let ft := fieldTreesOf ts rec
   ms.forM fun m => ownFieldsHeld ft m.name (acc.getD m.name #[])

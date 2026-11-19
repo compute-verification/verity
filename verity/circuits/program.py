@@ -5,9 +5,10 @@ emitted first and in parameter order as `batch(Input<w>, n)` nodes, then the pro
 input values as its arguments. The input gates are the canonical references of the prescribed inputs.
 
 A parameter is bound per run (`Input<w>_v1`: a request's data and parameters, such as tokens, temperature, top-p and
-Philox positions) or at registration (`RegisteredInput<w>_v1`: what the program brings, such as weights, a norm's epsilon,
-the attention scale, a softcap and the program's tables). `Program(fn, registered=names)` names the parameters bound at
-registration. Both are inputs: the program holds neither's value.
+Philox positions), at registration (`RegisteredInput<w>_v1`: what the program brings, such as weights, a norm's epsilon,
+the attention scale, a softcap and the program's tables), or supplied (`SuppliedInput<w>_v1`: a value the verifier computes
+by a public function, PROTOCOL.md §5.4). `Program(fn, registered=names, supplied=marks)` names the parameters bound at
+registration and the supplied ones, each with its mark. All three are inputs: the program holds none's value.
 
 `Program(fn, theta=names)` names the parameters that are the model's weights, whatever their binding time. Their input nodes
 are listed in `annotations["theta"]`, outside every digest, and their leaves have origin ``theta`` in the port facts
@@ -19,9 +20,11 @@ commitment.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from typing import Any, Callable
 
 from . import ports
+from .supplied import SUPPLIED, SUPPLIED_ID
 from .defs import Body, Builder, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from .layout import Circuit
 from .refs import Coll, coll_concat, runs as ref_runs
@@ -36,6 +39,7 @@ REGISTERED_ID = re.compile(r"^RegisteredInput([1-9][0-9]*)_v1$")
 
 RUN = "run"
 REGISTRATION = "registration"
+BINDINGS = (RUN, REGISTRATION, SUPPLIED)
 
 #: the catalog's lookup of a word primitive's one Boolean Definition (`register_boolean_bodies`), which `Program` calls at
 #: build; a decoder never calls it, as the descriptor holds every body
@@ -102,13 +106,14 @@ def is_registered(fn: Any) -> bool:
 
 
 def is_input(fn: Any) -> bool:
-    """An input gate's primitive: `Input<w>_v1` (bound per run) or `RegisteredInput<w>_v1` (bound at registration)."""
-    return isinstance(fn, PrimitiveDefinition) and (INPUT_ID.fullmatch(fn.id) is not None or REGISTERED_ID.fullmatch(fn.id) is not None)
+    """An input gate's primitive: `Input<w>_v1` (bound per run), `RegisteredInput<w>_v1` (bound at registration) or
+    `SuppliedInput<w>_v1` (supplied)."""
+    return isinstance(fn, PrimitiveDefinition) and input_id(fn.id) is not None
 
 
 def input_id(fid: str) -> tuple[str, int] | None:
     """(binding time, width) of an input id, or None for any other id."""
-    for when, rx in ((RUN, INPUT_ID), (REGISTRATION, REGISTERED_ID)):
+    for when, rx in ((RUN, INPUT_ID), (REGISTRATION, REGISTERED_ID), (SUPPLIED, SUPPLIED_ID)):
         m = rx.fullmatch(fid)
         if m is not None:
             return when, int(m[1])
@@ -116,19 +121,20 @@ def input_id(fid: str) -> tuple[str, int] | None:
 
 
 def input_prim(w: int, binding: str = RUN) -> PrimitiveDefinition:
-    """`Input<w>` (``run``) or `RegisteredInput<w>` (``registration``): a zero-operand gate whose value is prescribed (asserted
-    equal to the claimed input), never held by the program."""
+    """`Input<w>` (``run``), `RegisteredInput<w>` (``registration``) or `SuppliedInput<w>` (``supplied``): a zero-operand
+    gate whose value is prescribed (asserted equal to the claimed input), never held by the program."""
     key = (binding, w)
     p = _INPUT_PRIMS.get(key)
     if p is None:
-        if binding not in (RUN, REGISTRATION):
-            raise ValueError(f"an input is bound per {RUN!r} or at {REGISTRATION!r}, not {binding!r}")
+        if binding not in BINDINGS:
+            raise ValueError(f"an input is bound per {RUN!r}, at {REGISTRATION!r} or {SUPPLIED!r}, not {binding!r}")
 
         def _no_eval(*_a: int) -> int:
             raise ValueError("Input gates take their value from the trace, they are not evaluated")
 
-        name, doc = (("Input", f"prescribed input leaf of width {w}, bound per run") if binding == RUN else
-                     ("RegisteredInput", f"prescribed input leaf of width {w}, bound at registration"))
+        name, doc = {RUN: ("Input", f"prescribed input leaf of width {w}, bound per run"),
+                     REGISTRATION: ("RegisteredInput", f"prescribed input leaf of width {w}, bound at registration"),
+                     SUPPLIED: ("SuppliedInput", f"prescribed input leaf of width {w}, supplied")}[binding]
         p = PrimitiveDefinition(f"{name}{w}", 1, (), Value(w), _no_eval, doc=doc, conformance="exact-model-tested")
         p.family = "Input"  # type: ignore[attr-defined]
         p.binding = binding  # type: ignore[attr-defined]
@@ -158,7 +164,9 @@ def _lower_input(B: Builder, t: Type, name: str, binding: str = RUN) -> Coll:
 
 class Program:
     """`Program(fn)` where `fn` is a fully-bound `SpecializedDefinition` (or a static-free `CompositeDefinition`).
-    `registered`: the names of `fn`'s parameters bound at registration; every other parameter is bound per run. `theta`: the
+    `registered`: the names of `fn`'s parameters bound at registration; `supplied`: the supplied ones, each name to its mark
+    (`supplied`, PROTOCOL.md §5.4; None where only the kind is known, as in a block `restrict` cuts); every other parameter
+    is bound per run. `theta`: the
     names of `fn`'s parameters that are the model's weights. `annotations["theta"]` is the Program's own (their input nodes):
     one passed in, which may name another layout's nodes, is dropped. `boolean`: each word primitive's one Boolean Definition
     (`boolean_map`), computed once here; a Program with a word primitive that has none is refused (`NoBooleanBody`).
@@ -168,19 +176,25 @@ class Program:
     def __init__(self, fn: SpecializedDefinition | CompositeDefinition, annotations: dict[str, Any] | None = None,
                  registered: tuple[str, ...] | list[str] | frozenset[str] = (),
                  strict: Callable[[Any], dict] | None = None,
-                 theta: tuple[str, ...] | list[str] | frozenset[str] = ()) -> None:
+                 theta: tuple[str, ...] | list[str] | frozenset[str] = (),
+                 supplied: Mapping[str, Mapping[str, Any] | None] | tuple[str, ...] | list[str] = ()) -> None:
         if isinstance(fn, CompositeDefinition):
             fn = bind(fn)
         if not fn.complete:
             raise TypeError(f"program function {fn.id} is not fully bound")
         names = [n for n, _t in fn.signature()[0]]
-        for what, given in (("register", registered), ("mark theta", theta)):
+        supplied = dict(supplied) if isinstance(supplied, Mapping) else dict.fromkeys(supplied)
+        for what, given in (("register", registered), ("mark theta", theta), ("supply", supplied)):
             unknown = sorted(set(given) - set(names))
             if unknown:
                 raise ValueError(f"program function {fn.id} has no parameter {unknown} to {what} (it has {names})")
         self.fn = fn
         self.annotations: dict[str, Any] = {k: v for k, v in (annotations or {}).items() if k != "theta"}
-        self.bindings: tuple[str, ...] = tuple(REGISTRATION if n in set(registered) else RUN for n in names)
+        if both := sorted(set(registered) & set(supplied)):
+            raise ValueError(f"program function {fn.id}: {both} both registered and supplied")
+        self.bindings: tuple[str, ...] = tuple(REGISTRATION if n in set(registered) else SUPPLIED if n in supplied else RUN
+                                               for n in names)
+        self.supplied: dict[str, Mapping[str, Any] | None] = {n: supplied[n] for n in names if n in supplied}
         self.theta: tuple[str, ...] = tuple(n for n in names if n in set(theta))
         self.root = _lower_root(fn, self.bindings, frozenset(theta))
         if self.root.theta:

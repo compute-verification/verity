@@ -30,8 +30,9 @@ TEMPLATE_IDS = {
            "fb95db196ed9c54304c5a9acaf65cfa244252c9964fe6c7e0f93d6ca60aa5488d65664abd958baee233bb118b7969c275d0ec3cc9478a30762311d45e299a0e9"),
 }
 
-#: `P.program_digest(HW.program([("q", 64, 8)], [("q", 0)], 4, (4, 8)))`: a change to the execution phase's layout moves it
-PROGRAM_64 = ("e009cbeb20775cd21cb183eab99a34432e130840d90a66b8110a34a776c05669d9043c3bdfbe78cc21570f8a9b8a27c925263e4e5cf8a544f11ff8d9053b0c17")
+#: `P.program_digest(HW.program([("q", 64, 8)], [("q", 0)], 4, (4, 8)))`: a change to the execution phase's layout moves it,
+#: and so does one to the descriptor's encoding (schema v2, each word primitive's Boolean Definition inside C, moved it)
+PROGRAM_64 = ("0a8544cf97753f59a1fcacf1a20fe9414f445396fde339214b3f20bbe7d4a2048efdffdb24af7700b9696b4ff72f2514f4c64d93c341cc52e5519618dddce9f1")
 
 
 def _template_id(k: int, definition, **arch) -> str:

@@ -37,20 +37,22 @@ def is_constant(fn: Any) -> bool:
 
 
 def binding_time(circuit: Circuit, gate: int) -> str | None:
-    """``registration`` for a `RegisteredInput` gate, ``run`` for an `Input` gate, ``None`` for any other gate."""
+    """``registration`` for a `RegisteredInput` gate, ``supplied`` for a `SuppliedInput` gate, ``run`` for an `Input` gate,
+    ``None`` for any other gate."""
     prim = circuit.gate(gate).prim
     return getattr(prim, "binding", None) if is_input(prim) else None
 
 
 def inputs(circuit: Circuit) -> dict[str, list[int]]:
-    """The Program's input gates by binding time: ``{registration: [...], run: [...]}``, ascending."""
+    """The Program's input gates by binding time: ``{registration: [...], run: [...]}``, ascending, and ``supplied``'s
+    when it has any."""
     out: dict[str, list[int]] = {REGISTRATION: [], RUN: []}
     scope = circuit.root_scope
     body = scope.spec.body
     for k, node in enumerate(body.nodes):
         if is_input(node.fn):
             lo = scope.offset + body.offsets[k]
-            out[node.fn.binding].extend(range(lo, lo + body.offsets[k + 1] - body.offsets[k]))
+            out.setdefault(node.fn.binding, []).extend(range(lo, lo + body.offsets[k + 1] - body.offsets[k]))
     return out
 
 

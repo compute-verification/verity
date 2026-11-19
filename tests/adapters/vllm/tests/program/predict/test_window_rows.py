@@ -203,7 +203,7 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
     """Every unit is filled: an embedding read's row is the table's at its token and its opening (row, salt and path, as
     `gates.embedding.arguments` encodes them) opens to the table's root, its verdict 1; each token select's group units, ``x0``
     and combine give the node's token, a row of its collector; each feed (every position but the first below its prompt
-    length) holds its token and carried slot; each slot's scan read every lane's first token and
+    length) holds its token and carried slot; each slot's lane's scan unit its lane's first token and
     carried slot, occupancy word and head of the state row at its anchor (`io_shell.scan_reference`), its last collector
     (the last position's) its outputs from its prompt's last position on and its entry the read bit (its
     occupancy word's bit 0), the 2 outputs' count and ids; each head's first
@@ -245,9 +245,10 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
             (_, _, r), = P.outs[j]
             assert run_i == token and _i32(rows.outs[r.tid][0][r.unit]) == [token]
         st, su = P.scan_unit
-        lanes = [[[r[2]], s_.carried[0], r[:1], [r[1], 2]] for r, s_ in zip(SLOTS, slots)]
-        assert [_i32(rows.outs[st][k][su]) for k in range(8)] == [v for lane in lanes for v in lane]
-        assert lanes == [[[tok], slot, [occ], head] for tok, slot, occ, head in WR._lanes(P, STATE, IO.scan_reference)]
+        lane = [[row[2]], s.carried[0], row[:1], [row[1], 2]]
+        assert [_i32(rows.outs[st][k][su]) for k in range(4)] == lane
+        tok, slot, occ, head = WR._lane(P.scan, STATE, P.anchor, IO.scan_reference)
+        assert lane == [[tok], slot, [occ], head]
         lp, outs = row[1], [int(s.values[j][0][0]) for j in P.selects]
         (ct, cu), (et, eu) = P.collects[-1], P.entry_unit
         assert len(P.collects) == lp - 1 + CLASS.outputs and len(outs) == P.positions - lp + 1 == CLASS.outputs
@@ -266,7 +267,7 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
 
 
 def test_a_slots_row_is_its_lanes_of_the_scan_state_row_at_its_anchor(window):
-    """Each slot's row and head are its lane's of the scan state row its `ScanSlots_v3` reads, the one at its anchor
+    """Each slot's row and head are its lane's of the scan state row its lane's `ScanSlots_v4` reads, the one at its anchor
     (`scan_slots`; both of TINY's slots at bucket 0, lanes 0 and 1): a slot of another row than its lane's, a class
     circuit, slots of other Programs than the circuit's, or no scan state's value, are refused by name."""
     low, _f, values, weights, slots = window
@@ -854,14 +855,13 @@ def _packed(bits: np.ndarray, width: int) -> np.ndarray:
 
 def test_a_bit_leaf_ports_elements_are_its_bits_least_significant_first():
     """`_packed` against `SlotEntry_v1`'s entry, words of bit leaves, which pack to `entry_reference`'s words; and
-    `ScanSlots_v3`, whose ports are words, on a state row of u16 words gives `scan_reference`'s lanes."""
-    scan = SS.bridge(CLASS.scan, CLASS.prompt)
+    each lane's `ScanSlots_v4`, whose ports are words, on a state row of u16 words gives `scan_reference`'s lane."""
     row: np.ndarray = np.asarray([state_row(CLASS.scan, LANES)], dtype=np.uint64)
-    (_, t), = scan.signature()[0]
-    out = np.asarray(evaluate_batch(scan, _as_leaves(row, 16, t.leaves), kernel="reference")).reshape(-1).astype(np.uint64)
-    b = scan.bindings
-    ref = IO.scan_reference(row[0].tolist(), b["NP"], b["IDB"], b["K0"], b["K"], b["OCC"], b["LP"], b["MAX"], b["IDS"])
-    assert scan.name == "ScanSlots" and out.tolist() == [v for k, s, o, h in ref for v in (k, *s, o, *h)]
+    for scan in SS.bridge(CLASS.scan, CLASS.prompt):
+        (_, t), = scan.signature()[0]
+        out = np.asarray(evaluate_batch(scan, _as_leaves(row, 16, t.leaves), kernel="reference")).reshape(-1).astype(np.uint64)
+        k, s, o, h = WR._lane(scan, row.tolist(), 0, IO.scan_reference)
+        assert scan.name == "ScanSlots" and out.tolist() == [k, *s, o, *h]
     entry = bind(IO.SlotEntry, KO=2, IDB=17, NP=4, STOP=())
     state = [(2 - 4 - 2) & IO.M32, 2, 17, 3]
     bits = np.asarray(evaluate_batch(entry, np.array([[1]], np.uint32), np.array([state], np.uint32), kernel="reference"))

@@ -251,6 +251,8 @@ def test_a_rounds_live_file_reads_its_slot_table_the_request_table_and_the_known
     assert ports["s"]["root"] != LR.reads_file(prog, T, S, 0, roots, window, session, 2, "h1/")["ports"]["s"]["root"]
     ok = ports[LR.OK_PORT]
     assert ok["leaves"] == S and ok["reads"] == [None] * s + [s] and ok["known"]["rows"] == [[1]] * S
+    assert LR.reads_file(prog, T, S, s, roots, window, session, 2, "h1/", positions=False) == {
+        "format": G.READS_V2, "ports": {p: {k: v for k, v in e.items() if k != "reads"} for p, e in ports.items()}}
     with pytest.raises(ValueError, match="none of the window's"):
         LR.reads_file(prog, T, S, S, roots, window, session, 2, "h1/")
     with pytest.raises(ValueError, match="doesn't register"):

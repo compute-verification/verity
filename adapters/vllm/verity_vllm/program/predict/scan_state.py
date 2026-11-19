@@ -4,7 +4,7 @@ The Programs at a boundary b read the scan's state row S_{b − 1} (`ingress_sca
 state's at b = 0: NS u16 words, its fields bit-packed least significant bit first in `ingress_scan.layout`'s order, slot
 j's ``j.<field>``. A slot's Program reads its ``occ`` (a 0/1 word: 1 when the slot carries a request whose Program starts
 at b), its prompt's length ``fields``, its ``max_tokens`` and its ``ids`` (prompt position p at `io_shell.position`'s
-index), through `boolean_io_shell.ScanSlots_v3` (`bridge`), which also gives each lane its first position's token and the
+index), through its lane's `boolean_io_shell.ScanSlots_v4` (`bridge`), which also gives its first position's token and the
 slot it carries on. The window's registered `SCAN_STATE` is the rows
 `ingress_scan.window_state` gives for its window: for the window of ``buckets`` buckets from scan bucket t0, the
 scan's rows t0 − 1 … t0 + buckets − 2, its row a S_{t0 + a − 1}, the one the Programs anchored at the window's bucket a
@@ -110,14 +110,13 @@ def words(scan: Scan) -> int:
     return scan.layout.bits // 16
 
 
-def bridge(scan: Scan, prompt: int) -> Any:
-    """`boolean_io_shell.ScanSlots_v3` at ``scan``'s state row for prompts of at most ``prompt`` ids: each lane's occupancy
-    word, prompt length, ``max_tokens`` and ids where its layout puts them."""
+def bridge(scan: Scan, prompt: int) -> tuple[Any, ...]:
+    """`boolean_io_shell.ScanSlots_v4` at ``scan``'s state row for prompts of at most ``prompt`` ids, lane j's at j: its
+    occupancy word, prompt length, ``max_tokens`` and ids where its layout puts them."""
     lay = scan.layout.fields
     lanes = sum(1 for k in lay if k.endswith(".occ"))
-    at = {f: tuple(lay[f"{j}.{f}"][0] for j in range(lanes)) for f in ("occ", "fields", "max_tokens", "ids")}
-    return bind(BIO.ScanSlotsV3, NS=words(scan), NP=prompt, IDB=scan.IDB, K0=scan.K0, K=scan.K, OCC=at["occ"],
-                LP=at["fields"], MAX=at["max_tokens"], IDS=at["ids"])
+    return tuple(bind(BIO.ScanSlotsV4, NS=words(scan), NP=prompt, IDB=scan.IDB, K0=scan.K0, K=scan.K, OCC=lay[f"{j}.occ"][0],
+                      LP=lay[f"{j}.fields"][0], MAX=lay[f"{j}.max_tokens"][0], IDS=lay[f"{j}.ids"][0]) for j in range(lanes))
 
 
 __all__ = ["INGRESS", "INGRESS_ROWS", "OK", "OK_MARK", "OK_VALUE", "PORT", "RELEASED", "RELEASED_ROWS", "SCAN_STATE", "Scan", "bridge", "scan_class", "words"]

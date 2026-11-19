@@ -1,6 +1,6 @@
 """verity_vllm.program.predict.inference_blocks: B's partition of a window circuit into inference blocks, one a slot, as a
-private table under a hiding root with its budgets and padded counts public. Held, on `test_window_circuit`'s TINY window
-circuit (its class, windows and grain), to the circuit unrolled unit by unit; with ``VERITY_VLLM_FA3_LLAMA_1B=1``, on int8
+private table under a hiding root with its budgets and padded counts public. Held, on `test_window_circuit`'s TINY class
+circuit (its class and grain), to the circuit unrolled unit by unit; with ``VERITY_VLLM_FA3_LLAMA_1B=1``, on int8
 Llama-3.2-1B's window circuit on the H200 at 4,32,4 too.
 """
 from __future__ import annotations
@@ -16,7 +16,7 @@ from verity.commitments import advice as AC
 from verity.commitments.periods import interface as IF
 
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import FULL, WINDOW, _circuit, _labels, held
+from tests.program.predict.test_window_circuit import CLASS, GRAIN, WINDOW, _circuit, _labels, held
 from tests.program.predict.test_window_circuit_fa3 import H200, LLAMA_1B
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict import inference_blocks as IB
@@ -37,7 +37,7 @@ def _registered(config: dict = S.TINY):
 
 @pytest.fixture(scope="module")
 def window():
-    return _circuit(FULL), PROGRAM
+    return class_circuit(S._registered(), CLASS, None, GRAIN), PROGRAM
 
 
 def _slots(circuit, rs) -> dict[str, np.ndarray]:
@@ -87,11 +87,12 @@ def test_the_table_is_the_windows_entries_one_block_a_slot(window):
 
 def test_every_block_has_c_gates_and_k_fresh_input_bits(window):
     """Every block has exactly c gates and takes k fresh-input bits, the circuit unrolled unit by unit agreeing: no wire
-    crosses blocks, and a block's fresh input is its slot's lane of the scan state (4,548 words), the weights θ."""
+    crosses blocks, and a block's fresh input is the scan state row (4,548 words) each of its lanes' units reads, the
+    weights θ."""
     circuit, program = window
     c, k = IB.budgets(circuit)
     gates, fresh = _unrolled(circuit, _slots(circuit, IB.rows(circuit, program)))
-    assert gates == [c, c] and fresh == [k, k] and k == 4548 * 16
+    assert gates == [c, c] and fresh == [k, k] and k == 2 * 4548 * 16
     assert {r.param for r in circuit.registered.reads if r.param.split("/", 1)[0] != WEIGHTS} == {SCAN_STATE}
 
 
@@ -116,7 +117,7 @@ def test_the_statement_is_the_budgets_and_padded_counts_under_a_hiding_root(wind
     circuit, program = window
     st, reg = IB.commit(circuit, program)
     rs = IB.rows(circuit, program)
-    assert st == {"format": IB.FORMAT, "query": IB.QUERY, "c": IB.budgets(circuit)[0], "k": 4548 * 16, "blocks": 2,
+    assert st == {"format": IB.FORMAT, "query": IB.QUERY, "c": IB.budgets(circuit)[0], "k": 2 * 4548 * 16, "blocks": 2,
                   "rows": PV2.grid(len(rs)), "root": reg.root.hex()}
     assert list(reg.rows[:len(rs)]) == rs and set(reg.rows[len(rs):]) <= {bytes(IB.ROW_BYTES)}
     root = bytes.fromhex(st["root"])

@@ -45,7 +45,8 @@
 # ~/.local/state/remote-session/registry.json on its own machine, across its runs: a node with a live registration there
 # is refused), and leaves out/verifier.json, out/registry.json (REGISTRY when it ends) and out/address.json, the address
 # the prover connects to: PEER's 127.0.0.1:PORT, a Commit's REMOTE_VERIFIER. VERIFIER_ARGS go to verifier.py as shell
-# words (quotes group one, as `--challenger-ssh '-i KEY HOST'` needs), under ROLE=both too: with `--challenger serve
+# words, split and never evaluated (quotes group one, as `--challenger-ssh '-i KEY HOST'` needs; --lean-exe refused),
+# under ROLE=both too: with `--challenger serve
 # --challenger-key DIR` each session's coins come from the challenger's own process,
 # `verity/protocols/compose/verifier/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under out/challenger; with `--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
 # --challenger-period P --challenger-main FILE` (FILE: `git rev-list --first-parent origin/main`, the auditor's own),
@@ -97,7 +98,7 @@
 #      at exit, as the native collector's build, NATIVE_COLLECT_BUILD; never inside the run's directory: the row's
 #      public records, keep.py's ROW, are kept in out/row, and nothing else of it). Every `row run` gets VLLM_PY as its stages' interpreter (--py: PY may be the fill's venv, which
 #      holds no vLLM), CUDA_HOME/bin (--cuda-bin) and ROW_ARGS (such as --norm-tap-so PATH);
-#   3. ROLE=both: builds the Lean verifier (LEAN_EXE: that executable instead), starts the verifier on VERIFIER_CPUS
+#   3. ROLE=both: builds the Lean verifier (LEAN_EXE, naming another, is refused), starts the verifier on VERIFIER_CPUS
 #      and goes on once it listens;
 #   4. takes the lease and runs the prover on PROVER_CPUS, with OMP_NUM_THREADS and MKL_NUM_THREADS their count
 #      (defaults: this process's cores, under ROLE=both the last quarter the verifier's and the rest the prover's).
@@ -248,13 +249,26 @@ if [ "$ROLE" != verifier ] && [ -z "${CPU:-}" ] && [ "${SERVE:-}" != tiny ]; the
   [ "${SERVE:-}" != row ] || [ "$CARD_CODEC" = "$DEPLOYED" ] ||
     refuse "SERVE=row's Commit registers the deployed $DEPLOYED, not CODEC=$CARD_CODEC"
 fi
-[ "$ROLE" != both ] || [ -z "${LEAN_EXE:-}" ] || [ -x "$LEAN_EXE" ] || refuse "LEAN_EXE=$LEAN_EXE is not an executable"
-lean_exe() { # LEAN_EXE, else the Lean verifier built in its package
-  [ -n "${LEAN_EXE:-}" ] && return 0
-  LEAN_EXE=$("$PY" -c 'from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv; print(lv.build())' \
+[ -z "${LEAN_EXE:-}" ] || refuse "LEAN_EXE names a Lean verifier of the caller's: the session's is the one" \
+  "lean_verifier.build builds in its package, and nothing else; unset it"
+lean_exe() { # the Lean verifier built in its package
+  [ -n "${LEAN:-}" ] && return 0
+  LEAN=$("$PY" -c 'from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv; print(lv.build())' \
     2> "$O/lean-build.log") ||
-    { tail -20 "$O/lean-build.log"; echo "run.sh: the Lean verifier's build failed (LEAN_EXE names a built one)"; exit 4; }
+    { tail -20 "$O/lean-build.log"; echo "run.sh: the Lean verifier's build failed"; exit 4; }
 }
+# VERIFIER_ARGS as shell words, split and never evaluated, into VA; one naming a Lean verifier is refused
+VA=()
+if [ -n "${VERIFIER_ARGS:-}" ]; then
+  python3 -c 'import shlex, sys; sys.stdout.write("".join(w + "\0" for w in shlex.split(sys.argv[1])))' \
+    "$VERIFIER_ARGS" > "$O/verifier-args.bin" || refuse "VERIFIER_ARGS is not shell words"
+  mapfile -d '' VA < "$O/verifier-args.bin"
+  rm -f "$O/verifier-args.bin"
+  for w in "${VA[@]}"; do
+    case $w in --lean-exe | --lean-exe=*) refuse "VERIFIER_ARGS names --lean-exe: the session's Lean verifier is the" \
+      "one lean_verifier.build builds in its package, and nothing else" ;; esac
+  done
+fi
 if [ -n "${SERVE:-}" ]; then
   export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HOME=${HF_HOME:-$WS/hf} PATH=$(dirname "$VPY"):$PATH
   export PYTHONPATH=$PWD/adapters/vllm:$PWD/adapters/torch:$PWD/tools/config:$PWD/verity/protocols/proofs/flock/prover/python:$PWD${PYTHONPATH:+:$PYTHONPATH}
@@ -338,7 +352,7 @@ VERIFY=(--port "$PORT" --out "$O" "${FORM[@]}" ${QUANTILE:+--quantile "$QUANTILE
   ${CHECK_WORKERS:+--check-workers "$CHECK_WORKERS"} ${LIFETIME:+--lifetime "$LIFETIME"} ${REFRESH:+--refresh "$REFRESH"})
 if [ "${SERVE:-}" = node ] && [ "$ROLE" = both ]; then
   lean_exe
-  VERIFY+=(--lean-exe "$LEAN_EXE")
+  VERIFY+=(--lean-exe "$LEAN")
 fi
 if [ "$ROLE" != prover ] && [ -z "${CLOSE:-}" ]; then
   if [ -z "${FIGURES:-}" ]; then
@@ -354,11 +368,10 @@ if [ "$ROLE" != prover ] && [ -z "${CLOSE:-}" ]; then
   fi
   VERIFY+=(--figures "$FIGURES")
 fi
-eval "KEYARGS=(${VERIFIER_ARGS:-})"
-for ((k = 0; k < ${#KEYARGS[@]}; k++)); do
-  case ${KEYARGS[k]} in
-    --challenger-key=*) KEYDIR=${KEYARGS[k]#*=} ;;
-    --challenger-key) KEYDIR=${KEYARGS[k + 1]:-} ;;
+for ((k = 0; k < ${#VA[@]}; k++)); do
+  case ${VA[k]} in
+    --challenger-key=*) KEYDIR=${VA[k]#*=} ;;
+    --challenger-key) KEYDIR=${VA[k + 1]:-} ;;
     *) continue ;;
   esac
   case $(realpath -m "$KEYDIR")/ in
@@ -385,7 +398,6 @@ if [ "$ROLE" = verifier ]; then
   # interactive session's packets on a 20 ms clock.
   ssh -tt -o ObscureKeystrokeTiming=no -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 \
     -R "127.0.0.1:$PORT:127.0.0.1:$PORT" "${TO[@]}" "sleep 86400" < /dev/null > "$O/tunnel.log" 2>&1 & T=$!
-  eval "VA=(${VERIFIER_ARGS:-})"
   # shellcheck disable=SC2086
   "$PY" verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py --host 127.0.0.1 "${VERIFY[@]}" --registry "$REGISTRY" "${VA[@]}" \
     > "$O/verifier.log" 2>&1 & V=$!
@@ -522,10 +534,9 @@ print(f"sm_{major}{minor}")' "$ROW_FILE" 2> /dev/null)}
   fi
   if [ "$ROLE" = both ]; then
     lean_exe
-    eval "VA=(${VERIFIER_ARGS:-})"
     set -m # a process group of its own: stopping it stops its Lean verifier and its check workers with it
     taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py --host 127.0.0.1 \
-      "${VERIFY[@]}" --lean-exe "$LEAN_EXE" "${VA[@]}" < /dev/null > "$O/verifier.log" 2>&1 &
+      "${VERIFY[@]}" --lean-exe "$LEAN" "${VA[@]}" < /dev/null > "$O/verifier.log" 2>&1 &
     SV=$!
     set +m
     until grep -q '^verifier: listening' "$O/verifier.log"; do
@@ -601,7 +612,6 @@ fi
   fi
   V=
   if [ "$ROLE" = both ]; then
-    eval "VA=(${VERIFIER_ARGS:-})"
     # shellcheck disable=SC2086
     taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py $VERIFY_ARGS "${VA[@]}" > "$O/verifier.log" 2>&1 & V=$!
   fi
