@@ -22,8 +22,15 @@ select. Each select is collected in the unit that makes it (`io_shell.SelectColl
 `stop_ids`) as a u32, then its ids cut to the scan's 17 bits, all zero for an empty slot (the entry reads the occupancy
 word, so no select is masked on the way); a request the class can't hold (a prompt
 past ``prompt`` ids, or outputs that don't end within ``outputs``) has ``outputs`` + 1 and no ids, which the scan refuses at
-the anchor and the egress never renders. A collector's rows and an entry's are a few words at a small class, too narrow for
-a proof block of their own, so none is a unit of its own. The state rows and the entries are the circuit's external ports.
+the anchor and the egress never renders. A served request's Program is built at the prompt length L its advice gives: each
+position below L feeds its prompt's id (`io_shell.TokenFeed_v1{FIRST=True}`, no select), and a prompt position before the
+last builds nothing a later token doesn't read (its LM head, select and final norm, and its last layer's query and that
+layer from its attention on), its select's collector `io_shell.OutCollect_v1` alone. Its last select is collected like the
+others, then ``outputs`` - O pads shift its O outputs to the front, and its entry is `io_shell.SlotEntry_v1{NP=1}`, which
+fits only where the scan's prompt length is L: an advice of another prompt length gives ``outputs`` + 1. A Program past the
+positions a key block holds at the model and grain is refused at the first position past them, naming that bound. A
+collector's rows and an entry's are a few words at a small class, too narrow for a proof block of their own, so none is a
+unit of its own. The state rows and the entries are the circuit's external ports.
 A slot's Program
 hands all its outputs to the scan at its anchor, which carries them across windows (`SC_GROUP`), so no Program runs into the
 next window. `window_circuit(registered, compiled, cls, grain, placed=...)` refuses a window past the class's envelope and
@@ -235,7 +242,8 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
         scan = SS.bridge(cls.scan, cls.prompt)
     except ValueError as e:
         raise Unexpressible(f"{cls}: its slots aren't a scan state row's lanes ({e})") from None
-    entry = bind(IO.SlotEntry, KO=cls.outputs, IDB=cls.scan.IDB, NP=cls.prompt, STOP=stop_ids(registered))
+    entry = bind(IO.SlotEntry, KO=cls.outputs, IDB=cls.scan.IDB, NP=1 if requests is not None else cls.prompt,
+                 STOP=stop_ids(registered))
     b = _Builder(grain, programs)
     if order is None:
         fn = class_program(registered, cls.positions).program.fn
@@ -257,10 +265,15 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     ends = [len(f.body.nodes) for f in fns]
     for j, node in enumerate(fn.body.nodes):
         active = sum(1 for e in ends if e > j)
-        b.among, b.ending = (0, active), sum(1 for e in ends if e > j + 1)
-        for r, f in zip(progs[:active], fns):
+        kinds = [r.kind(j, f.body.nodes[j]) for r, f in zip(progs[:active], fns)]
+        lo = 0
+        for k, (r, f) in enumerate(zip(progs[:active], fns)):
+            if kinds[k] != kinds[lo]:
+                lo = k
+            hi = next((i for i in range(k, active) if kinds[i] != kinds[k]), active)
+            b.among = (lo, hi)
             r.lower(j, f.body.nodes[j])
-    b.among = b.ending = None
+    b.among = None
     for r in progs:
         if r.position != r.positions:
             raise Unexpressible(f"{r.name}: {r.position} positions, not its {r.positions}")
@@ -281,7 +294,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     reg = IF.Registered(dict(sorted(params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
                         tuple(openings), values=(*held, SS.SCAN_STATE),
                         formats={v: ROW_FORMAT for v in held} if layout is not None else {})
-    wires = tuple(IF.coalesce(b.wires))
+    wires = tuple(IF.coalesce(b.wires if order is None else b.allocation_wires()))
     entry_units = {r.entry_unit[0] for r in progs if r.entry_unit is not None}
     if len(entry_units) != 1 or any(r.entry_unit is None for r in progs):
         raise Unexpressible(f"the Programs' entries are units of {sorted(entry_units)}, not each one of one template")
