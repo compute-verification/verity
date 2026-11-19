@@ -74,7 +74,7 @@ def host_plan(manifest: Mapping[str, Any], *roots: str | None) -> Plan | None:
 def call_boundaries_of(manifest: Mapping[str, Any], plan: Plan | None) -> dict[str, Any]:
     """`call_boundaries` of `manifest` with its host plan given (None when it names no identity the call-boundary source evaluates)."""
     classes = classes_of_identities(manifest)
-    on = taps.attached(classes)
+    on = [*taps.attached(classes), *([CB.CallBoundarySource.short_name] if plan and plan.covered else [])]
     ids = len(classes)
     uncovered, unattached = (plan.uncovered if plan else []), CB.unattached(classes, on)
     return {"schema": CALL_BOUNDARIES_SCHEMA, "pass": not uncovered and not unattached, "identities": ids,
