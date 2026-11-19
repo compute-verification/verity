@@ -139,7 +139,7 @@ theorem sclose_spec {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s'
       t.toNat + 1 = min (t.toNat / g * g + g) s.params.windows ∧
       (∀ j, j < t.toNat / g * g → (dr s.windows j).isSome) ∧
       (∀ u ∈ grp g t.toNat, s.params.minPasses ≤ s.windows[u]!.roots.size) ∧
-      receiptSample s.digest (t.toNat / g) s.coins[s.params.windows + t.toNat / g]! s.params.samples
+      receiptSample s.params.samples s.coins[s.params.windows + t.toNat / g]!
         (sampleLengths g s (t.toNat / g)) = some sampled ∧
       s' = { s with windows := ((grp g t.toNat).foldl (sampleStep sampled now)
         (finalize (grp g t.toNat) s.windows, 0)).1 }) := by
@@ -159,7 +159,7 @@ theorem sclose_spec {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s'
     have hm := ‹¬t.toNat + 1 ≠ min (t.toNat / g * g + g) s.params.windows›
     have hord := ‹¬((s.windows.extract 0 (t.toNat / g * g)).any fun x => x.drawn.isNone) = true›
     have hfew := ‹∀ (u : Nat), List.find? _ _ = some u → False›
-    have hdraws := ‹receiptSample _ _ _ _ _ = some _›
+    have hdraws := ‹receiptSample _ _ _ = some _›
     simp only [Bool.or_eq_true, decide_eq_true_eq, not_or] at hb
     have hm' : t.toNat + 1 = min (t.toNat / g * g + g) s.params.windows := by simpa using hm
     have hlen : (List.foldl (fun acc u => acc ++ Array.map (fun x => x.length)
@@ -198,8 +198,8 @@ theorem sampleIsSubset : SampleIsSubset := by
   · cases hr
   · cases hr
   cases hr
-  obtain ⟨L, us, hs, h1, h2, h3, h4⟩ := Properties.Poub.sampleIsSubset _ _ _ _ _ _ hdraws
-  refine ⟨L, us, hs, h1, h2, h3, h4, fun u hu => ?_⟩
+  obtain ⟨us, hs, h1, h2, h3, h4⟩ := Properties.Poub.sampleIsSubset _ _ _ _ hdraws
+  refine ⟨us, hs, h1, h2, h3, h4, fun u hu => ?_⟩
   obtain ⟨j, hj, rfl⟩ := List.mem_map.1 hu
   rw [List.mem_range] at hj
   have hle : t.toNat / g * g ≤ t.toNat := Nat.div_mul_le_self _ _
@@ -285,8 +285,8 @@ theorem shareOf_mem (sampled : Array (Nat × Nat)) (base n k : Nat) (hk : k < sa
 
 theorem acceptSamplesOpenable : AcceptSamplesOpenable := by
   intro reg appends c coin samples ws sampled hd
-  obtain ⟨L, us, hs, hsz, -, hrange, -⟩ := Properties.Poub.sampleIsSubset _ _ _ _ _ _ hd
-  refine ⟨L, us, hs, fun openings hacc v hv => ?_⟩
+  obtain ⟨us, hs, hsz, -, hrange, -⟩ := Properties.Poub.sampleIsSubset _ _ _ _ hd
+  refine ⟨us, hs, fun openings hacc v hv => ?_⟩
   obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 hv
   have hjd : j < sampled.size := by omega
   obtain ⟨hi, hp, hidx⟩ := hrange j hjd
@@ -918,12 +918,12 @@ theorem acceptSamplesOpenable_one (h : AcceptSamplesOpenable) : Properties.Poub.
   intro reg appends w coin samples openings hv
   obtain ⟨sampled, hd, hc⟩ := verifyWindow_accept hv
   have hl : lengthsOf [w] = w.passes.map (·.plan.length) := by apply Array.ext'; simp [lengthsOf]
-  obtain ⟨_, _, _, _, _, hrange, _⟩ := Properties.Poub.sampleIsSubset _ _ _ _ _ _ hd
+  obtain ⟨_, _, _, _, hrange, _⟩ := Properties.Poub.sampleIsSubset _ _ _ _ hd
   have hsh : shareOf sampled 0 w.passes.size = sampled :=
     shareOf_all sampled _ fun k hk => by simpa using (hrange k hk).1
-  obtain ⟨L, us, hs, hus⟩ := h reg appends w.index coin samples [w] sampled (by rw [hl]; exact hd)
+  obtain ⟨us, hs, hus⟩ := h reg appends w.index coin samples [w] sampled (by rw [hl]; exact hd)
   rw [hl] at hs
-  refine ⟨L, us, hs, fun v hv => ?_⟩
+  refine ⟨us, hs, fun v hv => ?_⟩
   obtain ⟨k, hk, -, ho⟩ := hus (fun _ => openings) (fun k hk => by
       have : k = 0 := by simp at hk; omega
       subst this

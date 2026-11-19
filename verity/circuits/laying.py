@@ -26,7 +26,7 @@ from . import partition_object as PO
 from .count import count
 from .codec import descriptor_id
 from .defs import CompositeDefinition, PrimitiveDefinition, bind
-from .program import REGISTRATION, RUN, Program, input_id, is_input
+from .program import REGISTRATION, RUN, SUPPLIED, Program, input_id, is_input
 from .refs import Affine, Coll, Concat, Explicit, Grid, Strided, concat
 from .restrict import _spell
 from .types import Value, axis_runs
@@ -79,7 +79,8 @@ def _laid(program: Any, over: set[int]) -> Program:
     fn = bind(CompositeDefinition(f"{fn0.name}Laid", fn0.version, (), lambda S: (params, ret), body, register=False))
     names = [n for n, _t in params]
     return Program(fn, annotations=program.annotations, theta=program.theta,
-                   registered=[n for n, b in zip(names, program.bindings) if b == REGISTRATION])
+                   registered=[n for n, b in zip(names, program.bindings) if b == REGISTRATION],
+                   supplied={n: program.supplied[n] for n, b in zip(names, program.bindings) if b == SUPPLIED})
 
 
 def _emit(B, node, args: list) -> Any:

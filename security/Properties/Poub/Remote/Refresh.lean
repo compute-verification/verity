@@ -99,7 +99,7 @@ def OpensOrigin : Prop :=
   ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (coin : ByteArray) (samples : Nat)
     (openings : Array Opening),
     verifyWindow reg appends w coin samples openings = some .accept →
-      ∃ sampled, receiptSample reg.digest w.index coin samples (w.passes.map (·.plan.length)) = some sampled ∧
+      ∃ sampled, receiptSample samples coin (w.passes.map (·.plan.length)) = some sampled ∧
         openings.size = sampled.size ∧
         ∀ k (hk : k < sampled.size) (a : Append) q oroot odom,
           let o := openings[k]!

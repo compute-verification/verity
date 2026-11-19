@@ -8,10 +8,8 @@ from the verifier's secret and a nonce. `test_session.py` holds the whole verifi
 
 from __future__ import annotations
 
-import bisect
 import functools
 import hashlib
-import itertools
 import shutil
 
 import pytest
@@ -27,7 +25,6 @@ from verity.commitments import (
     RangeIndexedDomain,
     verify_opening,
 )
-from verity.commitments.randomness import derive
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, receipts
 from verity.protocols.resource_accounting.memory.poub.verifier.receipts import Plan
 
@@ -320,30 +317,31 @@ def test_leaf_receipt(server) -> None:
     assert stats.outputs > 150, stats
 
 
-def draws(v) -> list:
-    """`AuditRun.close`'s sample from window t's openings coin, on the passes' lengths."""
-    coin, registration, t, samples = M.hex_(v, "coin"), M.hex_(v, "registration"), M.nat(v, "window"), M.nat(v, "samples")
-    lengths = M._list(v, "lengths")
+def draws(v) -> list | None:
+    """`AuditRun.close`'s sample from its sample's coins `src` (`audit.receipt_sample`), on the passes' lengths; None
+    when the draw runs out of them."""
+    src, samples, lengths = M.hex_(v, "src"), M.nat(v, "samples"), M._list(v, "lengths")
     if not lengths or any(not isinstance(n, int) or isinstance(n, bool) or n < 1 for n in lengths):
         raise D.Reject("a window's passes are each one or more receipts")
-    key = derive(coin, audit.OPENINGS_DOMAIN, {"registration": registration, "window": t})
-    ends = tuple(itertools.accumulate(lengths))
-    out = []
-    for u in key.subset(min(samples, ends[-1]), ends[-1], "openings"):
-        i = bisect.bisect_right(ends, u)
-        out.append([i, u - (ends[i - 1] if i else 0)])
-    return out
+    try:
+        return [list(d) for d in audit.receipt_sample(samples, src, lengths)]
+    except ValueError as e:
+        if str(e) != audit.RAN_OUT:
+            raise
+        return None
 
 
 @st.composite
 def samples_inputs(take) -> dict:
-    """A coin of one or more bytes (`derive` refuses an empty one, which no session has), and lengths now and then
-    empty or with a pass of none."""
+    """The sample's coins, now and then too few for the draw's first stream (2k · width U + 64 bytes, the k = min(s, U)
+    receipts of U), and lengths now and then empty or with a pass of none."""
     lengths = take(mostly(st.lists(st.integers(1, 40), min_size=1, max_size=4),
                           st.sampled_from([[], [0], [3, 0], [-1]])))
-    return {"coin": expand(take(st.binary(max_size=8)), take(st.sampled_from([32, 32, 1, 64]))).hex(),
-            "registration": take(sized(64, near=False)), "window": take(st.integers(0, 2 ** 33)),
-            "samples": take(mostly(st.integers(1, 60), st.just(0), 9)), "lengths": lengths}
+    samples = take(mostly(st.integers(1, 60), st.just(0), 9))
+    total = sum(n for n in lengths if isinstance(n, int) and n > 0)
+    need = 2 * min(samples, total) * ((total.bit_length() + 64 + 7) // 8) + 64
+    size = take(mostly(st.just(-(-need // 64) * 64), st.sampled_from([0, 64, need - 1, need, 2 * need]), 6))
+    return {"src": expand(take(st.binary(max_size=8)), max(size, 0)).hex(), "samples": samples, "lengths": lengths}
 
 
 def test_samples(server) -> None:

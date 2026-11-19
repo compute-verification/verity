@@ -75,7 +75,7 @@ sys.path.insert(0, str(STAGE))
 
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
-from verity.commitments.merkle import merkle_depth
+from verity.commitments.merkle import levels, merkle_depth
 from verity.protocols.resource_accounting.memory.poub.prover import p2_party_prover
 from verity.protocols.resource_accounting.memory.poub.verifier import coins, ledger, p2, p2_case, p2_parties, receipts
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
@@ -295,34 +295,14 @@ class RefDecode:
 
 # --- the receipt tree and PoUS's vk paths, in worker processes ---------------------------------------------------------
 
-def _domain(seed: bytes, runs: tuple, blocks: int) -> tuple[Any, int]:
-    """The receipt tree's domain under the plan `runs` of a store of `blocks` units, and the plan's positions: a
-    worker's task carries the plan's runs, as a `Plan` doesn't pickle."""
-    plan = receipts.Plan(runs, blocks)
-    return receipts.domain(seed, plan), plan.length
-
-
-def _leaves(args: tuple) -> bytes:
-    seed, runs, blocks, lo, hi, ys, salts = args
-    d, n = _domain(seed, runs, blocks)
-    out = bytearray()
-    for c in range(lo, hi):
-        a, b = (PER_LEAF * c - PER_LEAF * lo) * DIGEST, (min(PER_LEAF * (c + 1), n) - PER_LEAF * lo) * DIGEST
-        out += d.leaf(c, c, receipts.SCHEMA, receipts.hidden(ys[a:b], salts[SALT * (c - lo):SALT * (c - lo + 1)]))
-    return bytes(out)
-
-
-def _pads(args: tuple) -> bytes:
-    seed, runs, blocks, lo, hi = args
-    d, _ = _domain(seed, runs, blocks)
-    return b"".join(d.pad(r) for r in range(lo, hi))
-
-
-def _nodes(args: tuple) -> bytes:
-    seed, runs, blocks, level, lo, below = args
-    d, _ = _domain(seed, runs, blocks)
-    return b"".join(d.node(level, lo + k, below[2 * DIGEST * k:2 * DIGEST * k + DIGEST],
-                           below[2 * DIGEST * k + DIGEST:2 * DIGEST * (k + 1)]) for k in range(len(below) // (2 * DIGEST)))
+def _chunk(args: tuple) -> list[bytes]:
+    d, n, lo, hi, leaves, ys, salts = args
+    nodes = [d.leaf(c, c, receipts.SCHEMA, receipts.hidden(ys[(PER_LEAF * c - PER_LEAF * lo) * DIGEST:
+                                                              (min(PER_LEAF * (c + 1), n) - PER_LEAF * lo) * DIGEST],
+                                                           salts[SALT * (c - lo):SALT * (c - lo + 1)]))
+             for c in range(lo, min(hi, leaves))]
+    nodes += [d.pad(r) for r in range(max(lo, leaves), hi)]
+    return [b"".join(level) for level in levels(d.domain_id, nodes, lo, 0, d.hash)]
 
 
 def _run(pool: ProcessPoolExecutor | None, fn, tasks: list[tuple]) -> list[bytes]:
@@ -330,8 +310,9 @@ def _run(pool: ProcessPoolExecutor | None, fn, tasks: list[tuple]) -> list[bytes
 
 
 class ReceiptTree:
-    """`receipts.tree(seed, plan, ys, salts)` built level by level in `pool`'s processes: its `root`, and `path(c)`,
-    leaf c's siblings from the leaf up, as `MerkleTree.open(c).path`."""
+    """`receipts.tree(seed, plan, ys, salts)` built in `pool`'s processes: `merkle.levels` over each aligned chunk of
+    `CHUNK` leaves and pads (`CHUNK` a power of two) and over the chunks' roots; its `root`, and `path(c)`, leaf c's
+    siblings from the leaf up, as `MerkleTree.open(c).path`."""
 
     CHUNK = 1 << 14
 
@@ -340,22 +321,17 @@ class ReceiptTree:
         L, n = plan.length, receipts.leaves(plan.length)
         if ys.shape != (L, DIGEST) or len(salts) != SALT * n:
             raise ValueError(f"{L} receipts in {n} leaves")
-        raw, C, p = ys.tobytes(), self.CHUNK, (seed, plan.runs, plan.blocks)
-        tasks = [(*p, lo, min(n, lo + C), raw[PER_LEAF * DIGEST * lo:PER_LEAF * DIGEST * min(n, lo + C)],
-                  salts[SALT * lo:SALT * min(n, lo + C)]) for lo in range(0, n, C)]
-        width = 1 << merkle_depth(n)
-        level = b"".join(_run(pool, _leaves, tasks))
-        level += b"".join(_run(pool, _pads, [(*p, lo, min(width, lo + C)) for lo in range(n, width, C)]))
-        self.levels = [level]
-        depth = 0
-        while len(level) > DIGEST:
-            pairs = len(level) // (2 * DIGEST)
-            tasks = [(*p, depth, lo, level[2 * DIGEST * lo:2 * DIGEST * min(pairs, lo + C)])
-                     for lo in range(0, pairs, C)]
-            level = b"".join(_run(pool, _nodes, tasks))
-            self.levels.append(level)
-            depth += 1
-        self.root = level[:DIGEST]
+        if self.CHUNK < 1 or self.CHUNK & (self.CHUNK - 1):
+            raise ValueError(f"CHUNK {self.CHUNK} is not a power of two")
+        raw, width = ys.tobytes(), 1 << merkle_depth(n)
+        C, d = min(self.CHUNK, width), receipts.domain(seed, plan)
+        chunks = _run(pool, _chunk, [(d, L, lo, lo + C, n, raw[PER_LEAF * DIGEST * lo:PER_LEAF * DIGEST * min(n, lo + C)],
+                                      salts[SALT * lo:SALT * min(n, lo + C)]) for lo in range(0, width, C)])
+        self.levels = [b"".join(c[k] for c in chunks) for k in range(len(chunks[0]))]
+        if len(chunks) > 1:
+            self.levels += [b"".join(lv) for lv in levels(d.domain_id, [c[-1] for c in chunks], 0, C.bit_length() - 1,
+                                                           d.hash)[1:]]
+        self.root = self.levels[-1][:DIGEST]
 
     def path(self, c: int) -> tuple[bytes, ...]:
         return tuple(lv[DIGEST * ((c >> k) ^ 1):DIGEST * ((c >> k) ^ 1) + DIGEST]
