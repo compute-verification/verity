@@ -6,7 +6,6 @@ Its check is the Lean program ``network-period`` alone (`verifier.period_check.a
 
 from __future__ import annotations
 
-import shlex
 from collections.abc import Callable, Mapping
 from fractions import Fraction
 from typing import Any
@@ -170,35 +169,11 @@ NETWORK_ATTESTER = register(Scheme(
 ))
 
 ATTESTER_PIECE = "benchmarks/network_traces/attester_piece.py"
-#: what the network attester's front asks of serve-openai: its id-form requests answered in the id form, an id event the
-#: 503-byte payload of the front's 512-byte cells; every other request is answered as before
-ID_FORM = "--protocol ids --id-payload 503"
-#: network attestation's scan class (`attester_piece.V3C_SCAN_CLASS`, w63k4) as served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,
-#: LANES,EVERY, V3c's class, so the period check's compute audit is V3c's of the served window; CLASSES holds it beside
-#: served_verdicts.sh's default class
-SCAN_CLASS = "8,32,4,4,16"
-#: the most output tokens a front request asks for (`attester_piece.TOKENS`): its group stays in one execution phase
-FRONT_TOKENS = 4
+NOT_RUN = "the network audit is not run: its checks are being moved into the workload's circuit"
 
 
 def _attester_hooks(cfg, params, bound, pinned):
-    """The network attester's developer side: its front before the requests (CERTIFIER_FRONT, which the served window
-    runs), and its piece split around V3c: the chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period
-    check on V3c's period.json (CERTIFIER_PERIOD_CMD). Under Pearl+'s tie (``pearl-plus`` listed, whose piece sets
-    ``PEARLPLUS_TIE``) the tied class is Pearl+'s and V3c runs after the pieces, so the piece is whole
-    (``CERTIFIER_CMD``) on the front's own window, sets no class, and the front's requests ask for at most the
-    window's steps, so each is in one window."""
-    py = ".venv/bin/python"
-    gate = f'--gate {shlex.quote(bound["gate"])} --peer {shlex.quote(bound["peer"])}'
-    front = f'{py} {ATTESTER_PIECE} front "$1" "$2" "$3" {gate}'
-    if "pearl-plus" in cfg["protocols"]:
-        tokens = min(FRONT_TOKENS, cfg["workload"]["params"]["window-steps"])
-        return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": f"{front} --tokens {tokens}",
-                "CERTIFIER_CMD": f'{py} {ATTESTER_PIECE} piece "$@"'}
-    return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": front,
-            "CERTIFIER_CHAIN_CMD": f'{py} {ATTESTER_PIECE} chain "$@"',
-            "CERTIFIER_PERIOD_CMD": f'{py} {ATTESTER_PIECE} period "$@"',
-            "V3C_CLASS": SCAN_CLASS, "CLASSES": f"4,32,4 {SCAN_CLASS}"}
+    raise S.LaunchRefused("not-run", NOT_RUN)
 
 
 def launch_attester(declaration: Scheme) -> tuple[Any, tuple[str, ...]]:
@@ -207,5 +182,5 @@ def launch_attester(declaration: Scheme) -> tuple[Any, tuple[str, ...]]:
     return _attester_hooks, (ATTESTER_PIECE,)
 
 
-__all__ = ["ATTESTER_PIECE", "DEFINITIONS", "FRONT_TOKENS", "ID_FORM", "NETWORK_ATTESTER", "SCAN_CLASS", "SETTINGS",
+__all__ = ["ATTESTER_PIECE", "DEFINITIONS", "NETWORK_ATTESTER", "NOT_RUN", "SETTINGS",
            "START_ID_RELAY", "attach", "launch_attester", "output_bits", "requests", "settings"]
