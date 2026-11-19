@@ -42,6 +42,8 @@ import Proofs.Flock.Claims.Prob
 The exfiltration bound at the footprint: on fixed inputs, the boundary traces `RTwo` takes serve at most
 `Σ_{T admissible} 2^{b(T)}` outputs (`card_influenceTwo_le`), and `CompilerExfilTwo` from `CompilerKSTwo`.
 
+* `stratumOf_lt`, `replayOf_lt`: a proof block's stratum is one of `Pt`'s strata, and its replay block one of the
+  replay partition's blocks.
 * `BGate.val_congr`, `Prog.runIn_congr`, `Prog.correct_congr` (`Claims.Sampling.ProgReads`): a proof block's
   correctness reads a trace only at its gates and the gates they read.
 * `eq_of_mem_of_nodup`, `gateBlock`, `glue`, `glue_correct_iff`: **one trace at interiors `ι`**. Replay blocks are
@@ -70,6 +72,26 @@ The exfiltration bound at the footprint: on fixed inputs, the boundary traces `R
 namespace Claims.Sampling
 
 open Finset
+
+theorem stratumIdx_lt : ∀ (ns : List ℕ) {v : ℕ}, v < ns.sum → stratumIdx ns v < ns.length
+  | [], v, h => by simp at h
+  | n :: ns, v, h => by
+    unfold stratumIdx
+    split_ifs with hv
+    · simp
+    · have := stratumIdx_lt ns (v := v - n) (by simp only [List.sum_cons] at h; omega)
+      simp only [List.length_cons]
+      omega
+
+/-- Every proof block's stratum is one of `Pt`'s strata. -/
+theorem stratumOf_lt {P : Partition} {v : ℕ} (hv : v < P.blocks.length) : P.stratumOf v < P.strata.length := by
+  have h := stratumIdx_lt (P.strata.map List.length) (v := v) (by rw [← List.length_flatten]; exact hv)
+  simpa [Partition.stratumOf] using h
+
+/-- A proof block's replay block is one of the replay partition's blocks. -/
+theorem replayOf_lt {Pt Pρ : Partition} {v ρ : ℕ} (h : replayOf Pt Pρ v = some ρ) : ρ < Pρ.blocks.length := by
+  unfold replayOf at h
+  exact List.mem_range.1 (List.mem_of_find?_eq_some h)
 
 theorem eq_of_getD_eq {a b : Option Bool} (ha : a ≠ none) (hb : b ≠ none) (h : a.getD false = b.getD false) :
     a = b := by
