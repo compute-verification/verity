@@ -427,6 +427,40 @@ def test_a_registered_files_committed_trees_are_its_windows(tmp_path):
     assert why(value="a/o0") == M.wired_tree_why(B, "x")
 
 
+@lean
+def test_a_fresh_input_opens_the_windows_one_root_of_its_node(tmp_path):
+    """A registered port of run input node 3, its value ``input/n3``, opens the record's one root of the node, the
+    window's and no member's (`OneStageZk.rootsOf`, `public_ports`): the fresh row changed after the coin (another
+    root), a node the record holds no root of, and two members opening node 3 under two roots are each refused by name
+    before any session, and a member named ``input`` is refused."""
+    w = Window(tmp_path)
+    ms = w.params["proofs"]["members"]
+    tree = {"domain": "cc" * 64, "leaves": 4, "port": "input/n3", "root": "33" * 64}
+    record = RECORD | {"roots": [*RECORD["roots"], tree]}
+
+    def reg(root: str = tree["root"], value: str = "input/n3") -> dict:
+        return {"format": "verity/registered-reads/v2",
+                "ports": {"x": {"value": value, "root": root, "domain": tree["domain"], "leaves": 4}}}
+
+    def why(a: dict | None = None, b: dict | None = None) -> str | None:
+        members = {A: ms[A] | {"registered": a}, B: ms[B] | {"registered": b if b is not None else reg()}}
+        return w.run(record=record, params=w.params | {"proofs": {"members": members}})[1]
+    assert "input/n3" not in (why() or "")
+    assert M.slices(UNITS, record) == M.slices(UNITS, RECORD)
+    assert set(DK.public_ports({"roots": [RECORD["roots"][0], tree]})) == {"out"}
+    assert why(b=reg(root="44" * 64)) == (
+        f"registered: member {B}'s port x opens the committed tree input/n3 at another root than the registration's: a "
+        "statement opens its window's registered tree, never another window's or another member's")
+    assert why(b=reg(value="input/n4")) == (
+        f"registered: member {B}'s port x opens the committed tree input/n4, and the registration holds no root "
+        "input/n4: a committed tree a statement opens is one its window registered before any coin")
+    assert why(reg(root="44" * 64), reg()).startswith(
+        f"registered: members {A} and {B} read the registered value input/n3 as two (root")
+    with pytest.raises(ValueError) as e:
+        M.slices({"input": [[0, 2]], B: [[2, 5]]}, RECORD)
+    assert str(e.value) == M.INPUT_MEMBER
+
+
 def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):
     """Parameters or evidence the per-member parsers refuse (among them ``proved_units`` that are no list of natural
     numbers, which the run compares with the members' units), a program other than the parameters', a registered

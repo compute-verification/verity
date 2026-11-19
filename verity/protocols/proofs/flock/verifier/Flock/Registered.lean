@@ -321,6 +321,15 @@ def runNode (P : Program.Prog) (k : Nat) : Bool := ((rootNodes P)[k]?).any (runD
 once, in one tree, each row a leaf, at the position C gives (`OneCircuit.pos`). -/
 def freshValue (w : Nat) : String := s!"input/n{w}"
 
+/-- Whether `v` is `freshValue w` for some node `w`: a name reserved for a run input node's tree. -/
+def isFreshValue (v : String) : Bool :=
+  let d := (v.drop 7).toString
+  v.startsWith "input/n" && !d.isEmpty && d.all Char.isDigit && freshValue d.toNat! == v
+
+/-- The refusal of a port `name` of role `role` registered as `v`, a run input node's tree's name (`isFreshValue`). -/
+def RESERVED_WHY (role name v : String) : String :=
+  s!"registered reads: {role} {name} is registered as {v}, a run input node's tree: that name is the node's alone"
+
 /-- The first value two of `ps` name with another root, domain or row count: a value is one commitment. -/
 def splitValue? : List Port → Option String
   | [] => none
@@ -441,6 +450,7 @@ def treeReads (P : Program.Prog) (indices : Array Nat) (lo : Nat) (reg : Port) :
     let fs := Program.fieldsOf (P.defs[body.nodes[k]!.fn]!).ret
     if fs.length != 1 then
       throw s!"registered reads: row {reg.name} of in(S) reads unit {v} of {t}, of {fs.length} output fields, and a row reads its writer's whole output, one field's tree"
+    if isFreshValue reg.value then throw (RESERVED_WHY "row of in(S)" reg.name reg.value)
     if reg.value != fieldTree t 0 then
       throw s!"registered reads: row {reg.name} of in(S) is committed as {reg.value}, and C wires it from {fieldTree t 0}: a crossing wire is committed once, in its writer's output field's tree, and the reader's row opens that tree by path"
     rel := rel.set! (u - first) (some leaf)
@@ -457,6 +467,7 @@ so `reg` must be that tree and each unit reads its own leaf in it by `HmLinks.tr
 a reader of the field. An output of several fields in fewer rows, a row of another width or offset, a port registered
 as another value and a unit of another template are refused by name. -/
 def outReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (j : Nat) (reg : Port) : V Port := do
+  if isFreshValue reg.value then throw (RESERVED_WHY "output row" reg.name reg.value)
   let some (t, _) := HmRow.queryTemplate c
     | throw s!"registered reads: output row {reg.name}: the circuit names no template of C (META program_digests)"
   let some f := (rootNodes P).findSome? fun x => (P.defs[x.fn]?).filter (·.key == t)

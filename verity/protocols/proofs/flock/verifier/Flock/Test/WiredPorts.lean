@@ -81,6 +81,10 @@ def x : Registered.Port := match ofJson (fileJ [("x", portJ (fieldTree (wkey 19)
 #guard match treeReads prog #[19] 0 { x with value := "r/x" } with
   | .error e => e.startsWith s!"registered reads: row x of in(S) is committed as r/x, and C wires it from {fieldTree (wkey 19) 0}"
   | .ok _ => false
+-- a run input node's tree's name is the node's alone: a row of in(S) under it is refused by that name
+#guard match treeReads prog #[19] 0 { x with value := freshValue 3 } with
+  | .error e => e == RESERVED_WHY "row of in(S)" "x" "input/n3"
+  | .ok _ => false
 -- a row whose units read no writer is an ordinary input row, returned unread; one some of whose units do is refused
 #guard (treeReads prog #[0] 0 x).toOption.map (·.readsRel.isEmpty) == some true
 #guard (treeReads prog #[0, 19] 0 x).toOption.isNone
@@ -213,6 +217,9 @@ def outRel (c : Circuit) (P : Program.Prog) (j : Nat) (units : Array Nat) (reg :
 #guard (outWhy outC regP 0 #[0] { o0 with value := "o0" }).startsWith
   "registered reads: output row o0 is registered as o0, and it is T's output field 0, committed once in T/o0"
 #guard (outWhy outC regP 0 #[0] { o0 with value := fieldTree "T" 1 }).startsWith "registered reads: output row o0 is registered as T/o1"
+#guard outWhy outC regP 0 #[0] { o0 with value := freshValue 0 } == RESERVED_WHY "output row" "o0" "input/n0"
+#guard isFreshValue "input/n3" && isFreshValue "input/n0" && !isFreshValue "input/n03" && !isFreshValue "input/n"
+  && !isFreshValue "input/x3" && !isFreshValue "committed/input/n3" && !isFreshValue "input/n3/x"
 -- a row of another width than its field's whole words, a circuit naming no template, or one C's root never calls
 #guard (outWhy { outC with ports := #[oPort "w" 2, oPort "o0" 2], outPorts := #[("o0", 2)] } regP 0 #[0] o0).startsWith
   "registered reads: output row o0 is output words [0, 2), and T's output field 0 is bits [0, 16)"
