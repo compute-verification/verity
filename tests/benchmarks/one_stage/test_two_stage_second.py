@@ -278,7 +278,7 @@ def test_round_2_takes_the_hand_over_with_the_return_read_at_round_1s_rows_but_f
     assert (mine.partition_digest, mine.run, mine.population) == (w.partition_digest, w.run, w.population)
     assert CS.expected_ports(mine) == r.interior.ports
     check = R.check(r.record, mine.program, mine.query, mine.law, CS.SCHEME, CS.expected_ports(mine), r.interior.leaf_layer,
-                    (), [brec], registered=r.tie["registered"], schemas=r.tie["schemas"])
+                    (), [brec], mine.partition, registered=r.tie["registered"], schemas=r.tie["schemas"])
     assert check.ok, check.codes
     assert TS.interior_source(mine, sample)(r.record["window"])["ok"]
     assert TS.interior_source(mine, sample[::-1])(r.record["window"])["codes"] == ["replay_sample"]
