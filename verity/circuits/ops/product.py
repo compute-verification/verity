@@ -55,7 +55,7 @@ def example(rows: int, k: int) -> tuple[np.ndarray, np.ndarray]:
 
 
 def product(weight: Any = None, x: Any = None, *, k: int = 64, s: int = 1, units: int = 256, block: int = 16,
-            k_log: int = 22, g: int = 2, dot: dict = G.GEMM_HOPPER) -> Product:
+            k_log: int = 22, g: int = 2, dot: dict = G.GEMM_HOPPER, registered: bool = True) -> Product:
     if weight is None and x is None:
         weight, x = example(units * s, k)
     w, x = bf16(weight), bf16(x)
@@ -79,7 +79,7 @@ def product(weight: Any = None, x: Any = None, *, k: int = 64, s: int = 1, units
               "boundary_reads": [{"reader": tid, "port": "x", "param": "x", "at": 0, "radix": [units], "base": 0,
                                   "step": [0]}]}
     wired, query = wired_population_program([(t, units)], record)
-    program = Program(wired.fn, annotations=wired.annotations, registered=("w",))
+    program = Program(wired.fn, annotations=wired.annotations, registered=("w",) if registered else ())
     if [n for n, _ in program.fn.signature()[0]] != ["w", "x"]:
         raise AssertionError(program.fn.signature()[0])
     outputs = np.array(evaluate(program.fn, [int(v) for v in w.flat], [int(v) for v in x]), np.uint16).reshape(units, s)
