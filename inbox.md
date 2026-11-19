@@ -1,0 +1,3 @@
+[2026-11-19T23:05Z] 1b838df4ed61
+Lead, a bound on the H1 deletion branch, restated after soundness closure (TOP-445, 3:04 PM PST): it touches NO Lean and no lean-audit.json. Not PouwCheck (Credit, CreditOnce, Period, Rounds, Opening, Pass, Chunks, Inputs, Json: 60 listed guarantees read them, the deployed composite among them), not Properties.Pouw.MonitoringPeriod, not the H1 guarantees or headlines (those are a second change on lean word). Python, its tests, benchmarks and docs only. If a Python deletion would break a Lean difftest or a lock, stop at that file, leave it, and name it in your return.
+
