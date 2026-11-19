@@ -442,12 +442,22 @@ def rootsByPort (rec : Json) : Std.HashMap String Json :=
 `committed/<port>`, `<port>` the record's root's. -/
 def COMMITTED : String := "committed/"
 
-/-- The record's port of the tree a registered port `q` opens: `<template>/<field>` for a tree port (`q.tree`),
-`<port>` for a port read as `committed/<port>` (`COMMITTED`); none for a registered value's port. -/
+/-- The record's port of the tree a registered port `q` opens: `<port>` for a port read as `committed/<port>`
+(`COMMITTED`); none for a registered value's port. -/
 def treePortOf (q : Flock.Registered.Port) : Option String :=
-  match q.tree with
-  | some (t, f) => some s!"{t}/{f}"
-  | none => if q.value.startsWith COMMITTED then some (q.value.drop COMMITTED.length).toString else none
+  if q.value.startsWith COMMITTED then some (q.value.drop COMMITTED.length).toString else none
+
+/-- Whether `v` is a field tree's name `<template>/o<j>` (`Flock.Registered.fieldTree`), the value `treeReads`
+holds a wired row of in(S) to. -/
+def fieldTreeName (v : String) : Bool :=
+  match (v.splitOn "/").reverse with
+  | l :: _ :: _ => l.startsWith "o" && l.length > 1 && (l.drop 1).toString.all Char.isDigit
+  | _ => false
+
+/-- The refusal of a registered port `port` of `who` whose value is a field tree's name (`fieldTreeName`): which
+writer's tree a wired port reads is C's, and until it is derived from C here the port is refused. -/
+def WIRED_TREE_WHY (who port : String) : String :=
+  s!"registered: {who}'s port {port}: a wired port's tree is not derived from C yet"
 
 /-- The refusal of a registered port `port` of `who` that opens a committed tree `tree` the record holds no root of
 (`registeredTreesHeld`). -/
@@ -463,8 +473,10 @@ def TREE_OTHER (who port tree what : String) : String :=
 
 /-- A registered port `q` of `who` that opens a committed tree (`treePortOf`) held to the record's root at that
 tree's port among `byPort` (`rootsByPort`): its root, domain and leaf count are the record's, refused by name
-(`TREE_UNHELD`, `TREE_OTHER`). The domain binds the window, so a tree of another window refuses. -/
+(`TREE_UNHELD`, `TREE_OTHER`). The domain binds the window, so a tree of another window refuses. A port whose value
+is a field tree's name refuses first (`WIRED_TREE_WHY`). -/
 def portTreeHeld (byPort : Std.HashMap String Json) (who : String) (q : Flock.Registered.Port) : V Unit :=
+  if !q.value.startsWith COMMITTED && fieldTreeName q.value then throw (WIRED_TREE_WHY who q.name) else
   match treePortOf q with
   | none => pure ()
   | some t =>

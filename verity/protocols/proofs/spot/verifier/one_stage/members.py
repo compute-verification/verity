@@ -151,6 +151,19 @@ _HEX = frozenset("0123456789abcdef")
 COMMITTED = "committed/"
 
 
+def wired_tree_why(name: str, port: str) -> str:
+    """`OneStageZk.WIRED_TREE_WHY`: the refusal of member ``name``'s registered port whose value is a field tree's
+    name."""
+    return f"registered: member {name}'s port {port}: a wired port's tree is not derived from C yet"
+
+
+def _field_tree_name(v: str) -> bool:
+    """`OneStageZk.fieldTreeName`: ``v`` is ``<template>/o<j>`` (`Flock.Registered.fieldTree`)."""
+    parts = v.split("/")
+    j = parts[-1][1:]
+    return len(parts) >= 2 and parts[-1][:1] == "o" and j.isascii() and j.isdigit()
+
+
 class Outside(ValueError):
     """An input `members_run` does not decide: one the per-member parsers refuse, a registered file or a verifier's
     answer it cannot read. Never a pass."""
@@ -438,9 +451,9 @@ def _own_fields(ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]], name:
 
 
 def _tree_ports_held(ms: Mapping[str, Any], record: Mapping[str, Any]) -> None:
-    """`OneStageZk.treePortsHeld`: every port of a member's registered file that opens a committed tree, a tree port's
-    ``<template>/<field>`` or a value ``committed/<port>``, is the record's root of it, its root, domain and leaf
-    count (`OneStageZk.portTreeHeld`)."""
+    """`OneStageZk.treePortsHeld`: every port of a member's registered file that opens a committed tree, a value
+    ``committed/<port>``, is the record's root of it, its root, domain and leaf count (`OneStageZk.portTreeHeld`); a
+    port whose value is a field tree's name refuses first (`wired_tree_why`)."""
     roots = record.get("roots")
     by_port = {r["port"]: r for r in (roots if isinstance(roots, list) else ())
                if isinstance(r, dict) and type(r.get("port")) is str}
@@ -448,9 +461,10 @@ def _tree_ports_held(ms: Mapping[str, Any], record: Mapping[str, Any]) -> None:
         reg = m["registered"]
         for port in sorted(reg["ports"]) if reg is not None else ():
             e = reg["ports"][port]
-            tree, value = e.get("tree"), e["value"]
-            t = (f"{tree['template']}/{tree['field']}" if isinstance(tree, dict) else
-                 value[len(COMMITTED):] if value.startswith(COMMITTED) else None)
+            value = e["value"]
+            if not value.startswith(COMMITTED) and _field_tree_name(value):
+                raise _Refused(wired_tree_why(name, port))
+            t = value[len(COMMITTED):] if value.startswith(COMMITTED) else None
             if t is None:
                 continue
             r = by_port.get(t)
@@ -812,4 +826,4 @@ def run_reason(run: Run | None, refused: str | None) -> str | None:
 __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO_CHALLENGER",
            "Outside", "POPULATION_ORDER", "PROVED_UNITS", "ROW_TABLES", "Run", "Statement", "TABLES",
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
-           "members_run", "population_why", "run_reason", "unwired_why"]
+           "members_run", "population_why", "run_reason", "unwired_why", "wired_tree_why"]

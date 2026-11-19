@@ -385,19 +385,19 @@ def test_a_member_named_as_another_members_template_is_refused():
 
 
 def test_a_registered_files_committed_trees_are_its_windows(tmp_path):
-    """A member's registered port that opens a committed tree, a tree port of a writer's field or a value
-    ``committed/<port>``, is held to the record's root of it (`OneStageZk.treePortsHeld`) before any session: a genuine
-    tree of the field at another root (the last window's), the window's root under another domain, another leaf
-    count, another member's own tree, and a tree the record holds no root of are each refused by name."""
+    """A member's registered port that opens a committed tree, a value ``committed/<port>``, is held to the record's
+    root of it (`OneStageZk.treePortsHeld`) before any session: a genuine tree at another root (the last window's), the
+    window's root under another domain, another leaf count, another member's own tree, and a tree the record holds no
+    root of are each refused by name, and a port whose value is a writer's field tree's name is refused by name."""
     w = Window(tmp_path)
     ms = w.params["proofs"]["members"]
     tree = {"domain": "cc" * 64, "leaves": 4, "port": "a/out", "root": "33" * 64}
     record = RECORD | {"roots": [*RECORD["roots"], tree]}
 
-    def why(root: str = tree["root"], domain: str = tree["domain"], leaves: int = 4, value: str = "committed/a/out",
-            at: dict | None = {"template": "a", "field": "out"}) -> str | None:
-        port = {"value": value, "root": root, "domain": domain, "leaves": leaves, "reads": []}
-        reg = {"format": "verity/registered-reads/v1", "ports": {"x": port | ({"tree": at} if at else {})}}
+    def why(root: str = tree["root"], domain: str = tree["domain"], leaves: int = 4,
+            value: str = "committed/a/out") -> str | None:
+        port = {"value": value, "root": root, "domain": domain, "leaves": leaves}
+        reg = {"format": "verity/registered-reads/v2", "ports": {"x": port}}
         return w.run(record=record, params=w.params | {"proofs": {"members": {A: ms[A], B: ms[B] | {"registered": reg}}}})[1]
 
     def other(t: str, what: str) -> str:
@@ -409,12 +409,13 @@ def test_a_registered_files_committed_trees_are_its_windows(tmp_path):
     assert why(domain="dd" * 64) == other("a/out", "domain")
     assert why(leaves=5) == other("a/out", "leaf count")
     assert why(root=ROOTS[A][0], domain=ROOTS[A][1]) == other("a/out", "root")
-    assert why(at={"template": "z", "field": "out"}) == (
+    assert why(value="committed/z/out") == (
         f"registered: member {B}'s port x opens the committed tree z/out, and the registration holds no root z/out: "
         "a committed tree a statement opens is one its window registered before any coin")
-    assert "opens the committed tree" not in (why(value=f"committed/{A}/out", root=ROOTS[A][0], domain=ROOTS[A][1],
-                                                  at=None) or "")
-    assert why(value=f"committed/{A}/out", at=None) == other(f"{A}/out", "root")
+    assert "opens the committed tree" not in (why(value=f"committed/{A}/out", root=ROOTS[A][0], domain=ROOTS[A][1])
+                                              or "")
+    assert why(value=f"committed/{A}/out") == other(f"{A}/out", "root")
+    assert why(value="a/o0") == M.wired_tree_why(B, "x")
 
 
 def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):

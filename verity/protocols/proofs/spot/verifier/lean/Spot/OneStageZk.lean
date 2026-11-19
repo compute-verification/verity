@@ -121,9 +121,9 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   output field's tree, by C's wiring under the partition (`derivedWiring`: one tree for each writer template and output
   field, the record's root `<template>/<field>`, `fieldTreesOf`), which the slice holds under the reader's port
   (`membersRootsOf`, `fieldRoots`); a port of the public file with no root in the slice is refused by name
-  (`UNWIRED_WHY`). Every committed tree a member's registered file opens, a tree port of a writer's field or its own
-  `committed/<port>`, is the record's root of it, its root, domain and leaf count (`treePortsHeld`): a genuine tree of
-  another window or another member's refuses. A member may read registered values, with its own
+  (`UNWIRED_WHY`). Every committed tree a member's registered file opens, its own `committed/<port>`, is the record's
+  root of it, its root, domain and leaf count (`treePortsHeld`): a genuine tree of another window or another member's
+  refuses; a port whose value is a writer's field tree's name refuses (`WIRED_TREE_WHY`). A member may read registered values, with its own
   registered file as the one statement's, and a value is one tree for every member (`classHeld`): two members' ports of
   one value that differ in its root, leaves, row width, domain or leaf schema refuse, whether or not either is sampled.
 
@@ -499,8 +499,9 @@ def classHeld (ms : Array Member) : V Unit :=
   ms.foldlM classStep {} >>= fun _ => pure ()
 
 /-- **Every member's registered file opens only its window's committed trees** (`registeredTreesHeld` at the record
-`rec`'s roots by port, `rootsByPort`, built once): a tree port of a writer's field, or a member's own committed port,
-at another root, domain or leaf count than the record's (another window's tree, another member's) refuses by name.
+`rec`'s roots by port, `rootsByPort`, built once): a member's own committed port at another root, domain or leaf
+count than the record's (another window's tree, another member's) refuses by name, and so does a port whose value is a
+writer's field tree's name (`WIRED_TREE_WHY`).
 One pass over the record's roots and the members' registered files. -/
 def treePortsHeld (ms : Array Member) (rec : Json) : V Unit :=
   let byPort := rootsByPort rec
@@ -1436,16 +1437,12 @@ private def treeRecT : Json :=
   Json.mkObj [("population", Lean.toJson (4 : Nat)), ("roots", Json.arr #[hexRootT "W/y" 'a', hexRootT "R/c0/z" 'b']),
     ("scheme", Json.str "s")]
 
-/-- A registered file of one port `x`: a tree port of `tree` (none: a port read as `value` alone), its root the hex
-digit `c` repeated, its domain `d`'s, `leaves` leaves. -/
-private def treeRegT (c : Char) (leaves : Nat := 2) (tree : Option (String × String) := some ("W", "y"))
-    (value : String := "committed/W/y") (d : Char := 'd') : Json :=
-  Json.mkObj [("format", Json.str Flock.Registered.FORMAT), ("ports", Json.mkObj [("x", Json.mkObj ([
-      ("domain", Json.str ("".pushn d 128)), ("leaves", Lean.toJson leaves), ("reads", Json.arr #[]),
-      ("root", Json.str ("".pushn c 128)), ("value", Json.str value)] ++
-      match tree with
-      | some (t, f) => [("tree", Json.mkObj [("template", Json.str t), ("field", Json.str f)])]
-      | none => []))])]
+/-- A registered file of one port `x` read as `value`, its root the hex digit `c` repeated, its domain `d`'s, `leaves`
+leaves. -/
+private def treeRegT (c : Char) (leaves : Nat := 2) (value : String := "committed/W/y") (d : Char := 'd') : Json :=
+  Json.mkObj [("format", Json.str Flock.Registered.FORMAT), ("ports", Json.mkObj [("x", Json.mkObj [
+      ("domain", Json.str ("".pushn d 128)), ("leaves", Lean.toJson leaves), ("root", Json.str ("".pushn c 128)),
+      ("value", Json.str value)])])]
 
 #guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'a')] treeRecT) == ""
 -- a genuine tree of `W`'s `y` at another root (the last window's): refused
@@ -1456,12 +1453,17 @@ private def treeRegT (c : Char) (leaves : Nat := 2) (tree : Option (String × St
 #guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'a' 3)] treeRecT) == TREE_OTHER "member R/c0" "x" "W/y" "leaf count"
 -- the member's own tree `R/c0/z` named as the tree of `W`'s `y`: refused
 #guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'b')] treeRecT) == TREE_OTHER "member R/c0" "x" "W/y" "root"
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'a' (tree := some ("V", "y")))] treeRecT) ==
+#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'a' (value := "committed/V/y"))] treeRecT) ==
   TREE_UNHELD "member R/c0" "x" "V/y"
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'b' (tree := none) (value := "committed/R/c0/z"))] treeRecT) == ""
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'a' (tree := none) (value := "committed/R/c0/z"))] treeRecT) ==
+#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'b' (value := "committed/R/c0/z"))] treeRecT) == ""
+#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'a' (value := "committed/R/c0/z"))] treeRecT) ==
   TREE_OTHER "member R/c0" "x" "R/c0/z" "root"
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'c' (tree := none) (value := "w"))] treeRecT) == ""
+#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'c' (value := "w"))] treeRecT) == ""
+-- a wired port, its value `W`'s field tree's name: refused whatever its root
+#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'a' (value := "W/o0"))] treeRecT) == WIRED_TREE_WHY "member R/c0" "x"
+#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'a' (value := "committed/W/o0"))] treeRecT) ==
+  TREE_UNHELD "member R/c0" "x" "W/o0"
+#guard !fieldTreeName "o0" && !fieldTreeName "W/o" && !fieldTreeName "W/ox" && fieldTreeName "a/b/o12"
 #guard refusal (treePortsHeld #[memberT "R/c0" #[(0, 1)]] treeRecT) == ""
 
 /-- A writer `W/c0`, template `W`'s two units, and a reader `R/c0`, template `R`'s two after them. -/
