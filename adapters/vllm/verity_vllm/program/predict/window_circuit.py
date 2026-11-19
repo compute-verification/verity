@@ -163,6 +163,7 @@ from .window_builder import WEIGHTS, Grain, Row, _Builder, check_provable, infer
 from .window_class import (
     CLASS_OF_RECORD,
     GREEDY,
+    Credited,
     FixedLoad,
     PearlTables,
     Request,
@@ -172,7 +173,7 @@ from .window_class import (
     takes,
 )
 from .window_cut import ROW_FORMAT, cut_values, linears
-from .window_lowering import CUTS, FAMILIES, _Program
+from .window_lowering import CUTS, FAMILIES, _Program, credit
 
 NAME = "verity-vllm/window"
 
@@ -214,18 +215,20 @@ class Lowered:
 
 
 def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
-                  tables: FixedLoad | None = None, requests: Sequence[Request] | None = None) -> IF.Circuit:
+                  tables: FixedLoad | None = None, requests: Sequence[Request] | None = None,
+                  credited: Credited | None = None) -> IF.Circuit:
     """``cls``'s circuit (module docstring): the class Program lowered once a slot, node by node, slot k reading its lane of the
     scan state row before its anchor (`WindowClass.anchor`), each allocation's slots side by side in its template; its blocks'
     slots are the slots. Its registered parameters are the weights (`window_builder.weight_param`) and ``SCAN_STATE``'s
     ``cls.buckets`` rows, row a the scan's state row before bucket a (`ingress_scan.window_state`), and with ``tables`` H1's
     tables (`Tables`) or Pearl+'s (`PearlTables`). A window's circuit is every slot's; ``programs`` is the first slots only, a probe's census
     (`class_size`). With ``requests``, the served window's circuit instead (`lower`)."""
-    return lower(registered, cls, programs, grain, tables=tables, requests=requests).circuit
+    return lower(registered, cls, programs, grain, tables=tables, requests=requests, credited=credited).circuit
 
 
 def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
-          tables: FixedLoad | None = None, requests: Sequence[Request] | None = None) -> Lowered:
+          tables: FixedLoad | None = None, requests: Sequence[Request] | None = None,
+          credited: Credited | None = None) -> Lowered:
     """`class_circuit`'s circuit with its lowering (`Lowered`). With ``tables``,
     refused unless the class is one boundary; with H1's, unless round 0's rows (each slot's prompt) fit a table's ``m`` rows
     a call and every position has ``tables.calls`` int8 linears of K = ``tables.k``; with Pearl+'s, unless every position's
@@ -234,9 +237,12 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     its anchor, so it holds exactly the requests' positions, and one `ScanSlots_v4` unit a lane of each boundary, one
     allocation each, and one entry a slot of the class in slot order, an empty lane's units in the slot of the first
     Program at its boundary (`_Program.place_empty`), or of the first Program at a boundary no request is anchored at;
-    refused with ``tables`` or ``programs``, or for a window of no request."""
+    refused with ``tables`` or ``programs``, or for a window of no request. With ``credited``, its credited linears are
+    Pearl+'s units (`window_lowering.credit`), refused with ``tables``."""
     if requests is not None and (tables is not None or programs is not None):
         raise Unexpressible("a served window's circuit is every request's Program, reading no tables")
+    if credited is not None and tables is not None:
+        raise Unexpressible("a circuit with credited linears computes them, reading no tables")
     if requests is not None and not requests:
         raise Unexpressible("a window of no request has no circuit")
     order = sorted(range(len(requests)), key=lambda i: -requests[i].positions) if requests is not None else None
@@ -258,16 +264,16 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     if order is None:
         fn = class_program(registered, cls.positions).program.fn
         layout = linears(fn, tables.words, grain.rows) if isinstance(tables, PearlTables) else None
-        progs = [_Program(b, fn, cls, f"class Program {k}", k, scans[cls.lane(k)], entry, tables, layout)
-                 for k in range(programs)]
+        progs = [_Program(b, fn, cls, f"class Program {k}", k, scans[cls.lane(k)], entry, tables, layout,
+                          credited=credited) for k in range(programs)]
         fns = [fn] * programs
     else:
         assert requests is not None
         layout, built = None, {n: class_program(registered, n).program.fn for n in {r.positions for r in requests}}
         fns = [built[requests[i].positions] for i in order]
         fn = fns[0]
-        progs = [_Program(b, f, cls, f"request {i}'s Program", k, scans[requests[i].lane], entry, at=requests[i])
-                 for k, (i, f) in enumerate(zip(order, fns))]
+        progs = [_Program(b, f, cls, f"request {i}'s Program", k, scans[requests[i].lane], entry, at=requests[i],
+                          credited=credited) for k, (i, f) in enumerate(zip(order, fns))]
         ids = [n.fn.id for n in fn.body.nodes]
         for i, f in zip(order, fns):
             if [n.fn.id for n in f.body.nodes] != ids[:len(f.body.nodes)]:
@@ -300,6 +306,8 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
             hi = next((i for i in range(k, active) if kinds[i] != kinds[k]), active)
             b.among = (lo, hi)
             r.lower(j, f.body.nodes[j])
+        if credited is not None and credited.linears:
+            credit(b, progs[:active], j, node, credited)
     b.among = None
     empty: list[tuple[int, int, tuple[str, int], tuple[str, int]]] = []
     if order is not None:
@@ -335,8 +343,8 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     else:
         held = ()
     reg = IF.Registered(dict(sorted(params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
-                        tuple(openings), values=(*held, SS.SCAN_STATE),
-                        formats={v: ROW_FORMAT for v in held} if layout is not None else {})
+                        tuple(openings), values=(*held, *b.values, SS.SCAN_STATE),
+                        formats={v: ROW_FORMAT for v in held} if layout is not None else {}, supplied=b.supplied)
     wires = tuple(IF.coalesce(b.wires if order is None else b.allocation_wires()))
     entry_units = {r.entry_unit[0] for r in progs if r.entry_unit is not None}
     if len(entry_units) != 1 or any(r.entry_unit is None for r in progs):
@@ -345,6 +353,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
                          external=(*(f"{descriptor_id(s)}/state" for s in scans if descriptor_id(s) in b.units),
                                    f"{entry_units.pop()}/o0"),
                          wires=wires, cuts=b.cuts, registered=reg, order=IF.ordered(b.units, wires, b.starts) if wires else None,
+                         free=tuple(b.free),
                          blocks=IF.Blocks(programs, max(r.positions for r in progs), tuple(inference(b.spans, programs))))
     return Lowered(circuit, fn, tuple(progs), b.spans, None if order is None else tuple(order), tuple(empty),
                    tuple(sorted(scanned)))
@@ -362,6 +371,7 @@ class WindowCompiler:
     registered: Any
     cls: WindowClass
     grain: Grain = _GRAIN
+    credited: Credited | None = None
 
     def lower(self, advice: bytes) -> Lowered:
         """`__call__`'s circuit with its lowering (`Lowered`)."""
@@ -393,7 +403,8 @@ class WindowCompiler:
         if type(advice) is not bytes:
             raise Unexpressible(f"the advice is a bit string, bytes, not a {type(advice).__name__}")
         decoded = advice_of(self.registered, advice)
-        return decoded, lower(self.registered, self.cls, None, self.grain, requests=requests_of(decoded, self.cls))
+        return decoded, lower(self.registered, self.cls, None, self.grain, requests=requests_of(decoded, self.cls),
+                              credited=self.credited)
 
 
 class Scheduled(NamedTuple):
@@ -405,7 +416,7 @@ class Scheduled(NamedTuple):
 
 def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN,
                    placed: Sequence[tuple[int, int | None]] | None = None,
-                   tables: FixedLoad | None = None) -> IF.Circuit:
+                   tables: FixedLoad | None = None, credited: Credited | None = None) -> IF.Circuit:
     """``compiled``'s window (`steps.Compiled`, of ``registered``) as its circuit, refused where it is past ``cls``'s envelope
     (`takes`): a Program a request, each of the request's own positions (`lower`). ``placed`` is each request's anchor bucket
     and the bucket of its last output, in its request order, as the network attester's scan placed it (the end None:
@@ -414,12 +425,12 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     (`Tables`) or the circuit cut at its linears (`PearlTables`), ``cls``'s class circuit, refused unless the window is the
     fixed load."""
     if tables is None:
-        return class_circuit(registered, cls, None, grain, requests=takes(compiled, cls, placed))
+        return class_circuit(registered, cls, None, grain, requests=takes(compiled, cls, placed), credited=credited)
     takes(compiled, cls, placed)
     tables.held(compiled, cls)
     return class_circuit(registered, cls, None, grain, tables)
 
 
-__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Request", "Row", "Scheduled", "Tables",
+__all__ = ["CLASS_OF_RECORD", "CUTS", "Credited", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Request", "Row", "Scheduled", "Tables",
            "WEIGHTS", "WindowClass", "WindowCompiler", "check_provable", "class_circuit", "class_program", "lower", "requests_of", "stop_ids",
            "takes", "window_circuit"]

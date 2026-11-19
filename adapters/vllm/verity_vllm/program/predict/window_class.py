@@ -212,6 +212,25 @@ class PearlTables(FixedLoad):
 
 
 @dataclass(frozen=True)
+class Credited:
+    """The linears whose products PoUW credits under Pearl+'s ``scheme``: each ``(position, call)`` of ``linears``, call c
+    the c-th `Gemm_v2` of the position's forward in node order, is its grid's units at ``tile`` (TM × TN, the scheme's when
+    None), which write its y (`window_lowering.credit`). None credited, the circuit is the uncredited one."""
+    scheme: str
+    linears: frozenset[tuple[int, int]] = frozenset()
+    tile: tuple[int, int] | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "linears", frozenset(tuple(x) for x in self.linears))
+        if self.scheme not in SCHEMES:
+            raise ValueError(f"{self.scheme!r} is no PoUW scheme ({', '.join(SCHEMES)})")
+        if not all(len(x) == 2 and all(type(v) is int and v >= 0 for v in x) for x in self.linears):
+            raise ValueError(f"credited linears {sorted(self.linears)}: each (position, call), naturals")
+        if self.tile is not None and not (len(self.tile) == 2 and all(type(v) is int and v >= 1 for v in self.tile)):
+            raise ValueError(f"a tile is (TM, TN), positive integers, not {self.tile!r}")
+
+
+@dataclass(frozen=True)
 class Request:
     """A served request as its window's circuit lowers it: the boundary bucket it is anchored at, its lane there (its slot
     of the scan state row), its prompt ids and its outputs."""
@@ -288,5 +307,5 @@ def _placed(cls: WindowClass, sizes: Sequence[tuple[int, int, int]],
     return tuple(out)
 
 
-__all__ = ["CLASS_OF_RECORD", "FixedLoad", "GREEDY", "PearlTables", "Request", "Tables", "WindowClass", "requests_of",
+__all__ = ["CLASS_OF_RECORD", "Credited", "FixedLoad", "GREEDY", "PearlTables", "Request", "Tables", "WindowClass", "requests_of",
            "takes"]

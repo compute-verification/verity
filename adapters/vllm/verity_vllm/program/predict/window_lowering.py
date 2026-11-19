@@ -16,8 +16,10 @@ from verity.circuits.refs import Refs, runs
 from verity.circuits.types import Tuple
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
 
 from verity_vllm.definitions.registry import int8_exact as IX
+from verity_vllm.definitions.registry import linear_cut as LC
 from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.definitions.registry import rmsnorm_fused_split as NS
 from verity_vllm.definitions.registry.attention_cuts import CUTS, heads
@@ -28,7 +30,7 @@ from verity_vllm.definitions.registry.dead_free import (
 
 from .build import Unexpressible
 from .window_builder import WEIGHTS, Row, _Builder, _spans, _step, _word, weight_run
-from .window_class import FixedLoad, PearlTables, Request, Tables, WindowClass
+from .window_class import Credited, FixedLoad, PearlTables, Request, Tables, WindowClass
 from .window_cut import Linears, cut_linear
 
 PROMPT = "prompt"
@@ -63,10 +65,11 @@ class _Program:
     consecutive units (none for the last position's select, which nothing reads). With ``tables`` it reads H1's tables
     (`Tables`), or Pearl+'s (`PearlTables`) cut at its linears, ``cut`` their layout (`window_cut.linears`). With ``at``,
     a served request's Program instead, at the request's anchor and lane and of its positions (`_dead`, `_token`,
-    `_collect`)."""
+    `_collect`). With ``credited``, each credited linear is its x widened to an A row, which `credit` reads."""
 
     def __init__(self, b: _Builder, fn: Any, cls: WindowClass, name: str, slot: int, scan: Any, entry: Any,
-                 tables: FixedLoad | None = None, cut: Linears | None = None, at: Request | None = None) -> None:
+                 tables: FixedLoad | None = None, cut: Linears | None = None, at: Request | None = None,
+                 credited: Credited | None = None) -> None:
         self.b, self.fn, self.cls, self.name, self.slot_index = b, fn, cls, name, slot
         self.anchor, self.lane = (cls.anchor(slot), cls.lane(slot)) if at is None else (at.anchor, at.lane)
         self.positions = cls.positions if at is None else at.positions
@@ -123,6 +126,18 @@ class _Program:
         self.ys: dict[int, Row] = {}
         #: each linear's runs of units, ``(position, tid, at, count)``: the calls PoUW credits (`WindowCompiler.schedule`)
         self.calls: list[tuple[int, str, int, int]] = []
+        #: with ``credited``: each linear's (position, call), and each credited one lowered so far, its A row, its weight's
+        #: first word and the words of the rows its readers read (`credit`)
+        self.credited = credited
+        self.linear: dict[int, tuple[int, int]] = {}
+        self.pending: dict[int, tuple[Row, int, int]] = {}
+        if credited is not None:
+            p, c = -1, 0
+            for k, nd in enumerate(self.fn.body.nodes):
+                if nd.fn.name == "Embedding":
+                    p, c = p + 1, 0
+                elif nd.fn.name == "Gemm":
+                    self.linear[k], c = (p, c), c + 1
 
     def segments(self, refs: Refs) -> list[tuple[str, Any, int, int]]:
         """``refs`` as word ranges: ``("n", node, lo, hi)`` of a node's output or ``("p", name, lo, hi)`` of a parameter."""
@@ -410,6 +425,11 @@ class _Program:
         while n > 1 and any(self.b.read_rows.get((descriptor_id(bind(node.fn.defn, **{**b, "N": m})), "x"), len(xs)) != len(xs)
                             for m in (n, N % n) if m):
             n //= 2
+        if self.credited is not None and self.linear.get(j) in self.credited.linears:
+            tid, u = self.b.unit(bind(LC.LinearARow, K=K, R=len(xs)))
+            self.b.feed(tid, "x", u, 1, xs)
+            self.pending[j] = (Row(tid, u, "o0", 2 * K), lo, n)
+            return
         pieces = []
         for s0, m, count in self._slices(j, N, n):
             if not count:
@@ -692,6 +712,82 @@ class _Program:
         self.b.feed(ctid, "tok", cu, 1, self.tok_rows[p] if tok is None else tok)
         self.collect = Row(ctid, cu, "o0", 2 * (KO + 2))
         self.collects.append((ctid, cu))
+
+
+def _digits(pairs: Sequence[tuple[int, int]]) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    kept = [d for d in pairs if d[0] > 1] or [(1, 0)]
+    return tuple(r for r, _ in kept), tuple(s for _, s in kept)
+
+
+def credit(b: _Builder, progs: Sequence[_Program], j: int, node: Any, credited: Credited) -> None:
+    """Credited linear ``j`` (`Credited`) once every Program has lowered it: its M rows, each Program's A row in Program order
+    (`LinearARow_v3`), as Pearl+'s grid of units (`pearl_plus_credited.tiles`), row tile by row tile, each a column tile a
+    unit labelled with its first row's slot. A unit reads its real rows' A rows by wire (filler rows free, which the core
+    holds to zero), its weight columns by registered read, the epoch's salt and that read's registered root supplied, its
+    place and noise as registered values (`pearlplus/<port>@<words>`) and its certificates free; its y is handed on by a
+    `LinearYRows_v1` unit in rows of the words the uncredited slices write, which each Program's readers read by wire."""
+    rows = [(P, P.pending.pop(j)) for P in progs if j in P.pending]
+    if not rows:
+        return
+    K, N = node.fn.bindings["K"], node.fn.bindings["N"]
+    _a, lo, n = rows[0][1]
+    try:
+        tiles = PC.tiles(credited.scheme, K, len(rows), N, credited.tile)
+    except ValueError as e:
+        raise Unexpressible(f"{node.fn.id}: credited at {len(rows)} rows under {credited.scheme}: {e}") from None
+    TM, TN, step = len(tiles[0].rows), len(tiles[0].cols), rows[0][0].position - 1
+    ct = N // TN
+    if TN % n:
+        raise Unexpressible(f"{node.fn.id}: its readers read rows of {n} words, which don't divide a tile's {TN} columns")
+    name, off = b.weight(lo, lo + N * K, TN * K)
+    salt, root = "pearlplus/salt", f"{name}/root"
+    b.params[salt], b.params[root] = 16, 32
+    b.supplied[salt] = {"supplied": "pouw.pearlplus.salt/v1", "args": {}, "layout": "le", "bits": 256}
+    b.supplied[root] = {"supplied": "registered.root/v1", "args": {"value": name}, "layout": "le", "bits": 512}
+    lay = IF.layout(tiles[0].core)
+    words = dict(lay.rows)
+    first: dict[str, int] = {}
+    for port, count in (("unit", 1), ("fa", 1), ("fb", 1), ("g", 1), ("eb", ct), ("rows", -(-len(rows) // TM))):
+        v = f"pearlplus/{port}@{words[port]}"
+        if v not in b.params:
+            b.params[v] = 0
+            b.values.append(v)
+        first[port] = b.params[v] // words[port]
+        b.params[v] += count * words[port]
+    groups: list[tuple[Any, list[int]]] = []
+    for r in range(len(tiles) // ct):
+        core = tiles[r * ct].core
+        if groups and groups[-1][0] is core:
+            groups[-1][1].append(r)
+        else:
+            groups.append((core, [r]))
+    split: dict[int, tuple[str, int]] = {}
+    for core, rts in groups:
+        TR, count = core.bindings["TR"], len(rts) * ct
+        labels = [(rows[r * TM][0].slot_index, step) for r in rts for _c in range(ct)]
+        tid, u0 = b.allocation(core, labels)
+        for i, r in enumerate(rts):
+            b.feed(tid, "a", u0 + i * ct, ct, tuple(a for _P, (a, _lo, _n) in rows[r * TM:r * TM + TR]), cut=TM)
+            if TR < TM:
+                b.free.append(IF.Free(tid, "a", u0 + i * ct, ct, "advice", cut=(TR, TM - TR)))
+        radix, st = _digits([(len(rts), 0), (ct, TN * K)])
+        b.reads.append(IF.Read(tid, "b", name, at=u0, radix=radix, base=off, step=st))
+        b.free.append(IF.Free(tid, "cert", u0, count, "advice"))
+        b.reads += [IF.Read(tid, "salt", salt, at=u0, radix=(count,), base=0, step=(0,)),
+                    IF.Read(tid, "root", root, at=u0, radix=(count,), base=0, step=(0,))]
+        for port in ("unit", "fa", "fb", "g", "eb", "rows"):
+            w = words[port]
+            digits = {"eb": [(len(rts), 0), (ct, w)], "rows": [(len(rts), w), (ct, 0)]}.get(port, [(count, 0)])
+            base = (first[port] + (rts[0] if port == "rows" else 0)) * w
+            radix, st = _digits(digits)
+            b.reads.append(IF.Read(tid, port, f"pearlplus/{port}@{w}", at=u0, radix=radix, base=base, step=st))
+        stid, su0 = b.allocation(bind(LC.LinearYRows, TR=TR, TN=TN, W=n), labels)
+        b.feed(stid, "y", su0, count, (Row(tid, u0, "o1", TR * TN),), ((count, 1),))
+        split.update((r, (stid, su0 + i * ct)) for i, r in enumerate(rts))
+    for g, (P, _pending) in enumerate(rows):
+        (stid, su), i = split[g // TM], g % TM
+        P.outs[j] = [(c * TN + q * n, c * TN + (q + 1) * n, Row(stid, su + c, f"o{i * (TN // n) + q}", n))
+                     for c in range(ct) for q in range(TN // n)]
 
 
 FAMILIES = ("Embedding", "RMSNormTriton", "RMSNormFusedCuda", "Gemm", "Int8RowQuant", "ScaledMmS8", "RoPE", "Attention", "SiluMul",

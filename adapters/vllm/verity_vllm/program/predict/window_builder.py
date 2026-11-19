@@ -91,6 +91,7 @@ class _Feed:
     count: int
     rows: tuple[Row, ...]
     lead: tuple[tuple[int, int], ...] = ()
+    cut: int | None = None
 
 
 def _runs_of(rows: Sequence[Row]) -> list[tuple[int, int, int]]:
@@ -160,6 +161,10 @@ class _Builder:
     #: the weights record's weights, ``(label, first word, words)`` in order, and the registered parameters read of them
     weights: tuple[tuple[str, int, int], ...] = ()
     params: dict[str, int] = field(default_factory=dict)
+    #: rows no wire or read fills (`interface.Free`), the supplied parameters' marks and the values the program takes
+    free: list[IF.Free] = field(default_factory=list)
+    supplied: dict[str, dict[str, Any]] = field(default_factory=dict)
+    values: list[str] = field(default_factory=list)
 
     def unit(self, fn: Any, count: int = 1, among: tuple[int, int] | None = None) -> tuple[str, int]:
         """``count`` new units of ``fn`` at the current label: its descriptor id and the first one's index. The slots
@@ -211,13 +216,17 @@ class _Builder:
         return [x for g in by.values() for x in IF.coalesce(g)]
 
     def feed(self, tid: str, port: str, at: int, count: int, rows: Sequence[Row],
-             lead: tuple[tuple[int, int], ...] = ()) -> None:
+             lead: tuple[tuple[int, int], ...] = (), cut: int | None = None) -> None:
+        """Units ``[at, at + count)`` read ``port`` as ``rows``; with ``cut``, its first ``len(rows)`` of ``cut`` rows, the
+        rest filled otherwise."""
         if not rows:
             raise Unexpressible(f"{tid} {port}: reads no unit's rows")
         if lead and math.prod(r for r, _ in lead) != count:
             raise ValueError(f"{tid} {port}: reader digits {lead} for {count} units")
-        self.feeds.append(_Feed(tid, port, at, count, tuple(rows), lead))
-        self.read_rows.setdefault((tid, port), len(rows))
+        if cut is not None and cut < len(rows):
+            raise ValueError(f"{tid} {port}: {len(rows)} rows of a port cut {cut} ways")
+        self.feeds.append(_Feed(tid, port, at, count, tuple(rows), lead, cut))
+        self.read_rows.setdefault((tid, port), cut or len(rows))
 
     def _weight(self, lo: int, hi: int, words: int) -> tuple[str, int, int]:
         """The one weight words [lo, hi) of the weights record lie in, read in rows of ``words``: its label, its words and
@@ -274,11 +283,12 @@ class _Builder:
         """Units ``[at, at + count)`` read ``rows`` (each shifted by ``lead``'s digits, `_Feed`) as their port's rows
         ``0 .. len(rows) - 1``: one pattern per run of rows from one writer's output at a constant unit step."""
         lead_ = [d for d in (lead or ((count, 0),)) if d[0] > 1]
+        whole = self.cuts.get(tid, {}).get(port, 1) == 1
         for j, C, unit_step in _runs_of(rows):
             r = rows[j]
             digits = lead_ + ([(C, unit_step)] if C > 1 else []) or [(1, 0)]
             self.wires.append(IF.Wire(tid, port, r.tid, r.out, at=at, radix=tuple(a for a, _ in digits), base=r.unit,
-                                      step=tuple(s for _, s in digits), cut=(j, C) if len(rows) > 1 else (0, 1)))
+                                      step=tuple(s for _, s in digits), cut=(0, 1) if whole else (j, C)))
 
     def settle(self) -> None:
         """Each port read as m writer rows cut m ways (`interface.Layout.cut`: row j its outer elements
@@ -288,7 +298,7 @@ class _Builder:
         counts: dict[tuple[str, str], set[int]] = {}
         widths: dict[tuple[str, str], set[int]] = {}
         for f in self.feeds:
-            counts.setdefault((f.tid, f.port), set()).add(len(f.rows))
+            counts.setdefault((f.tid, f.port), set()).add(f.cut or len(f.rows))
             widths.setdefault((f.tid, f.port), set()).update(r.words for r in f.rows)
         why = []
         for (tid, port), ms in counts.items():
