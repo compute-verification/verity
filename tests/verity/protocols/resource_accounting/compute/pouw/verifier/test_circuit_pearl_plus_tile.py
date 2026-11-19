@@ -92,7 +92,7 @@ class Tile:
                            self.rows, self.cols, self.col, self.rho, self.rhor)
 
     def declare(self, tr: int) -> None:
-        """Bind the tile at ``tr`` real rows, y its first ``tr`` rows, as a builder that called its later rows filler would."""
+        """Bind the tile at ``tr`` real rows, y its first ``tr`` rows, as a builder calling its later rows filler would."""
         self.tr, self.y = tr, self.y[:tr]
 
     def core(self):
@@ -162,10 +162,12 @@ def test_a_nonzero_filler_row_fails(tm, tr, word):
     assert t.on_words() == (digest, 0)
 
 
-@pytest.mark.parametrize("tm,tr", [pytest.param(2, 2, id="2x1-tr2"), pytest.param(16, 4, id="16x1-tr4", marks=pytest.mark.slow)])
+@pytest.mark.parametrize("tm,tr", [pytest.param(2, 2, id="2x1-tr2"),
+                                   pytest.param(16, 4, id="16x1-tr4", marks=pytest.mark.slow)])
 def test_a_real_row_declared_filler_fails(tm, tr):
     """A live row bound as filler by a smaller TR fails: TR is the record's real rows, so a builder that called a real
-    row filler gets ok = 0, never a pass that skips the row's admission, cap and y.  The digest still covers every row."""
+    row filler gets ok = 0, never a pass that skips the row's admission, inert-work bound and y.  The digest still covers
+    every row."""
     t = _filler(tm, tr, "declared")
     assert t.ok == 1
     t.declare(tr - 1)
@@ -203,7 +205,8 @@ def test_core_sigma_is_its_words():
 def test_filler_sigma_is_its_words():
     """The σ core equals the word core on a 2 × 1 tile whose second row is filler, zero (ok 1) and with a nonzero word
     (ok 0), in one batch.  Slow: as `test_core_sigma_is_its_words`, and the only check that the σ of the real-row rule
-    (the filler rows' zero test, their cap word and the real rows' y) computes what its words do."""
+    (the filler rows' zero test, their constant admission word in the inert-work bound and the real rows' y) computes
+    what its words do."""
     t = Tile("h100", 256, 2, 1, 1, 0, 1, "sigma/filler", tr=1)
     honest = t.core_args()
     t.a = [t.a[0], [1] + t.a[1][1:]]

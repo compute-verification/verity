@@ -19,8 +19,8 @@ The core, from the registry's call Definitions (`verity.protocols.resource_accou
     are the call's, and rows TR .. TM − 1 are the zero rows a call's A is padded with to a multiple of 16 (filler).  It is
     bound from the call's record (`UnitRecord.real_rows`), never an input: a count the prover chose could call a live row
     filler.  Lean's tile rule (`PouwPearlPlus/Rule.lean` `rowsFailure`, `Records.lean` `credited`, `Tile.lean`) is the
-    same: a filler row is held to zero, word for word (−0 is not zero), and is neither admitted, capped, credited nor
-    y-checked; it is formed and in the tile's digest like any row.
+    same: a filler row is held to zero, word for word (−0 is not zero), and is neither admitted, in the inert-work bound,
+    credited nor y-checked; it is formed and in the tile's digest like any row.
   - **rows.** Row i of A (``a[i]``, the tile's row ``rows[i]`` of unit ``unit``) by `PearlCRowA_v1`: its line E_A from the
     salt, the row's own digest and B's root (``root``), its codes A′_i, its peel factors P_A,i and its statistics; row j
     of B by `PearlCRowB_v1` against its line ``eb[j]``.  R = 32, the device's atom and promotion period.
@@ -28,9 +28,9 @@ The core, from the registry's call Definitions (`verity.protocols.resource_accou
     returned: every word finite, the noise floor ρ·α >= 1 and at most k/64 dead words (`pc8`'s module docstring,
     `PearlC.admissible`).
   - **caps.** A's salt-dead counts (`PearlPlusSaltDead_v1`, `Pc8RowACap`'s), then `Pc8TileCap_v2` on the codes, the
-    factors, the admission words (a filler row's the constant 0, so its words are outside the cap's debit and its |R|)
-    and the prover's certificates (``cert``): C̃ and U, and the verdict of the tile's cap at ρ = 1/RHO and each admitted
-    row's at ρr = 1/RHOR (`inert_bound.row_rho`: 4ρ at a census k, else ρ).
+    factors, the admission words (a filler row's the constant 0, so its words are outside the bound's debit and its
+    |R|) and the prover's certificates (``cert``): C̃ and U, and the verdict of the tile's cap at ρ = 1/RHO and each
+    admitted row's at ρr = 1/RHOR (`inert_bound.row_rho`: 4ρ at a census k, else ρ).
   - **leaf.** The tile's ``sha512/row-seg/v1`` digest of its messages (`leaves.tile_messages`, `PearlCRowDigest_v1`): the
     preimage of its leaf in the transcript tree.
   - **y.** Each real row's TN served words from U (`PearlCUnscale_v1`, no bias), held to the row's committed y (``y[i]``,
@@ -269,8 +269,8 @@ PearlPlusTileCore = CompositeDefinition(
                                                  "(tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_pearl_plus_tile.py)",
     doc="A drawn -h3 tile on words: its rows formed against the salt's noise (`PearlCRowA`, `PearlCRowB`), and (the "
         "sha512/row-seg/v1 digest of its C̃ and U over all TM rows, ok: its first TR rows (the real rows) and B's admitted, "
-        "the tile's and each real row's cap, each real row's served y its committed y at column tile col, and each later "
-        "row (filler) zero word for word).")
+        "the tile's and each real row's inert-work bound, each real row's served y its committed y at column tile col, "
+        "and each later row (filler) zero word for word).")
 PearlPlusTileCoreV2 = _on_bits(PearlPlusTileCore, 2)
 
 
@@ -344,8 +344,8 @@ def tile(scheme: C.PearlC, k: int, tm: int, tn: int, n: int, depth: int, tr: int
     d = scheme.device
     if scheme.forming != "v1" or scheme.hashing != "h3" or DEVICES.get(d.name) != d:
         raise DomainError(f"{scheme.name}: Pearl+'s tile unit is forming v1 under -h3 on a device record")
-    return bind(PearlPlusTile, K=k, TM=tm, TR=tm if tr is None else tr, TN=tn, N=n, D=depth, RHO=inert_bound._rho(d.name, None),
-                RHOR=inert_bound.row_rho(scheme, k), DEV=d.name)
+    return bind(PearlPlusTile, K=k, TM=tm, TR=tm if tr is None else tr, TN=tn, N=n, D=depth,
+                RHO=inert_bound._rho(d.name, None), RHOR=inert_bound.row_rho(scheme, k), DEV=d.name)
 
 
 # ---- the statement's ports ----------------------------------------------------------------------------------------------
