@@ -698,3 +698,87 @@ def test_a_request_off_the_auditors_session_is_refused_in_lean_by_name(server, c
     assert json.loads(out) == {"refused": "request", "reason": why}
     toy = p2_parties.SESSION | off
     assert "answer" in json.loads(committed_session(server, committed, toy, toy)[1])
+
+
+WS = st.text(" \t\n\r", max_size=2)
+
+
+def spelled(c: str, take) -> str:
+    """`c` as a JSON string writes it: raw where it may be, a short escape, or `\\uXXXX` (two of them past U+FFFF)."""
+    short = {'"': '\\"', "\\": "\\\\", "/": "\\/", "\b": "\\b", "\f": "\\f", "\n": "\\n", "\r": "\\r", "\t": "\\t"}
+    v = ord(c)
+    units = [v] if v < 0x10000 else [0xD800 + ((v - 0x10000) >> 10), 0xDC00 + ((v - 0x10000) & 0x3FF)]
+    escaped = "".join(f"\\u{x:04X}" if take(st.booleans()) else f"\\u{x:04x}" for x in units)
+    forms = [escaped] + ([short[c]] if c in short else []) + ([c] if c not in '"\\' and v >= 0x20 else [])
+    return forms[take(st.integers(0, len(forms) - 1))]
+
+
+@st.composite
+def json_string(draw) -> str:
+    """A JSON string's text: sampled characters spelled every way, now and then a lone surrogate escape, a raw control
+    character, an unknown escape or no closing quote."""
+    chars = draw(st.text(st.one_of(st.characters(blacklist_categories=("Cs",)), st.sampled_from('a"\\/\b\n\t\x7f\ufffd')),
+                         max_size=6))
+    body = "".join(spelled(c, draw) for c in chars)
+    odd = draw(st.integers(0, 12))
+    if odd == 1:
+        body += draw(st.sampled_from(["\\ud800", "\\udc00", "\\udbff\\u0041", "\\ud83d"]))
+    elif odd == 2:
+        body += draw(st.sampled_from(["\x00", "\x1f", "\\x41", "\\", "\\u12"]))
+    return '"' + body + ('"' if odd != 3 else "")
+
+
+NUMBERS = st.one_of(st.integers(-2**80, 2**80).map(str), st.just("-0"),
+                    st.sampled_from(["1.0", "1e2", "1E+2", "-0.5e-3", "0e0", "01", "1.", "-", "+1", ".5", "NaN",
+                                     "Infinity", "-Infinity", "0x10"]))
+ATOMS = st.one_of(NUMBERS, json_string(), st.sampled_from(["true", "false", "null", "True", "nul"]))
+
+
+@st.composite
+def json_text(draw, depth: int = 3) -> str:
+    """A JSON value's text with whitespace anywhere JSON allows it, before a colon among them; objects whose keys may
+    repeat, spelled the same or escaped otherwise; and now and then a trailing comma or a missing one."""
+    kind = draw(st.integers(0, 2)) if depth else 0
+    if kind == 0:
+        return draw(ATOMS)
+    w = lambda: draw(WS)
+    if kind == 1:
+        items = [draw(json_text(depth - 1)) for _ in range(draw(st.integers(0, 3)))]
+        sep = "," if draw(st.integers(0, 15)) else ""
+        tail = "," if items and not draw(st.integers(0, 15)) else ""
+        return "[" + w() + (w() + sep + w()).join(items) + tail + w() + "]"
+    names: list[str] = []
+    for _ in range(draw(st.integers(0, 3))):
+        again = names and draw(st.integers(0, 3)) == 0
+        names.append(draw(st.sampled_from(names)) if again else
+                     draw(st.text(st.sampled_from("ab\"\\é\U0001F600"), min_size=1, max_size=3)))
+    keys = ['"' + "".join(spelled(c, draw) for c in k) + '"' for k in names]
+    members = [k + w() + ":" + w() + draw(json_text(depth - 1)) for k in keys]
+    return "{" + w() + ("," + w()).join(members) + w() + "}"
+
+
+@st.composite
+def lines(draw) -> dict:
+    """A line's bytes without its newline: `json_text`'s, encoded, now and then with a byte not UTF-8 in it or a second
+    value after it."""
+    b = (draw(WS) + draw(json_text()) + draw(WS)).encode()
+    odd = draw(st.integers(0, 20))
+    if odd == 1:
+        at = draw(st.integers(0, len(b)))
+        b = b[:at] + draw(st.sampled_from([b"\xff", b"\xc3", b"\xed\xa0\x80", b"\xef\xbb\xbf"])) + b[at:]
+    elif odd == 2:
+        b += b" 1"
+    return {"line": b.hex()}
+
+
+def line_json(v: dict):
+    return p2_parties.line_json(bytes.fromhex(v["line"]))
+
+
+def test_p2_line_json(server) -> None:
+    """`P2Session.lineJsonOf`, the reading of every line of a P2 session (`scan` and Lean's reader), against Python's
+    strict reader (`p2_parties.line_json`: `json.loads` refusing a key named twice, a float, `NaN` and `Infinity`, and a
+    surrogate or U+FFFD) on 3,000 seeded lines: escapes of every spelling, nested objects and arrays, whitespace before
+    the colon, a key repeated under another spelling, exponents and fractions, constants, and what JSON refuses."""
+    stats = D.run(port("p2_line_json", line_json, lines()), examples=3000, server=server)
+    assert stats.outputs >= 300 and stats.rejects >= 300, stats.counts

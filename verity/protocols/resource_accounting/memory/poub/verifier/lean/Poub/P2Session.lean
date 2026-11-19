@@ -131,14 +131,23 @@ def scan (b : ByteArray) : Nat × Bool := Id.run do
       else inNum := false
   return (keys, frac)
 
+/-- Whether a string of `j`, a key or a value, holds U+FFFD: what Lean's reader makes of a lone surrogate escape, which
+Python's reader keeps as the surrogate. -/
+partial def replaced : Json → Bool
+  | .str s => s.contains '\ufffd'
+  | .obj kvs => kvs.toArray.any fun (k, v) => k.contains '\ufffd' || replaced v
+  | .arr xs => xs.any replaced
+  | _ => false
+
 /-- A line's JSON as the prover alone reads it, so no reader could read it otherwise: `jsonOf`'s, refused when an object
 in it names a key twice (Lean's reader keeps the last, another reader the first), a number in it has a fraction or an
-exponent (`1.0` or `1e2` for an integer, which Lean's reader takes as one where Python's reads a float), or it isn't
-JSON (`NaN`, which Python's reader takes). -/
+exponent (`1.0` or `1e2` for an integer, which Lean's reader takes as one where Python's reads a float), a string in it
+holds U+FFFD (`replaced`), or it isn't JSON (`NaN`, which Python's reader takes). `p2_parties.line_json` is its Python,
+held to it by `poub-difftest` (`p2_line_json`). -/
 def lineJsonOf (b : ByteArray) : Option Json := do
   let j ← jsonOf b
   let (keys, frac) := scan b
-  if frac || keys != members j then none
+  if frac || keys != members j || replaced j then none
   pure j
 
 /-- `p2_parties.message(line, key)`: the value of a line's one key `key`; `none` for a line its sender didn't end (a
@@ -406,5 +415,8 @@ private def summaryOf (ws : Array Session.WindowSummary) : Session.Summary :=
 #guard (messageOf "{\"root\": NaN}\n".toUTF8 "root").isNone
 #guard (messageOf "{\"request\": {\"passes\": 1.0}}\n".toUTF8 "request").isNone
 #guard (messageOf "{\"request\": {\"passes\": 1e2}}\n".toUTF8 "request").isNone
+#guard (messageOf "{\"root\": \"\\ud800\"}\n".toUTF8 "root").isNone
+#guard (messageOf "{\"root\": \"\\ufffd\"}\n".toUTF8 "root").isNone
+#guard (messageOf "{\"root\": \"\\ud83d\\ude00\"}\n".toUTF8 "root") == some (.str "\u{1F600}")
 
 end Poub.P2Session

@@ -78,7 +78,7 @@ import secrets
 import socket
 import sys
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, BinaryIO
@@ -147,15 +147,48 @@ def send(f: BinaryIO, doc: Mapping[str, Any]) -> None:
     f.flush()
 
 
-def message(line: bytes, key: str | None = None) -> Any:
-    """The message `line` carries (its one key `key`'s value, if given; `P2Session.messageOf`): ConnectionError for a
-    line its sender didn't end, ValueError for one that isn't UTF-8 JSON, an object of one key (`key`)."""
-    if not line.endswith(b"\n"):
-        raise ConnectionError("the peer closed mid-session")
+def _pairs(kvs: list) -> dict:
+    if len({k for k, _ in kvs}) != len(kvs):
+        raise ValueError("an object names a key twice")
+    return dict(kvs)
+
+
+def _refused(text: str) -> Any:
+    raise ValueError(f"{text} is not an integer or a JSON constant")
+
+
+def _strings(doc: Any) -> Iterator[str]:
+    if isinstance(doc, str):
+        yield doc
+    elif isinstance(doc, list):
+        for x in doc:
+            yield from _strings(x)
+    elif isinstance(doc, dict):
+        for k, v in doc.items():
+            yield k
+            yield from _strings(v)
+
+
+def line_json(b: bytes) -> Any:
+    """A line's JSON as the prover alone reads it (`P2Session.lineJsonOf`): ValueError for bytes that aren't UTF-8 JSON,
+    or name a key twice in an object, or hold a number with a fraction or an exponent, `NaN` or `Infinity`, or a string
+    with a surrogate or U+FFFD (which Lean's reader makes of a lone surrogate escape)."""
     try:
-        doc = json.loads(line.decode())
+        doc = json.loads(b.decode(), object_pairs_hook=_pairs, parse_float=_refused, parse_constant=_refused)
     except RecursionError:
         raise ValueError("a message nests too deep") from None
+    if any(c == "\ufffd" or "\ud800" <= c <= "\udfff" for s in _strings(doc) for c in s):
+        raise ValueError("a string holds a surrogate or U+FFFD")
+    return doc
+
+
+def message(line: bytes, key: str | None = None) -> Any:
+    """The message `line` carries (its one key `key`'s value, if given; `P2Session.messageOf`): ConnectionError for a
+    line its sender didn't end, ValueError for one that isn't JSON as `line_json` reads it, an object of one key
+    (`key`)."""
+    if not line.endswith(b"\n"):
+        raise ConnectionError("the peer closed mid-session")
+    doc = line_json(line[:-1])
     if not isinstance(doc, dict) or len(doc) != 1:
         raise ValueError("a message is a JSON object of one key")
     if key is None:
