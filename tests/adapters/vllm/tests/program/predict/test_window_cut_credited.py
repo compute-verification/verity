@@ -14,7 +14,7 @@ from verity.circuits import count as CT
 from verity.circuits import restrict as R
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.codec import descriptor_chunks, descriptor_id
-from verity.circuits.evaluation import evaluate, evaluate_words
+from verity.circuits.evaluation import evaluate, evaluate_bits
 from verity.circuits.ops.boolean.versions import block_circuit, boolean_table
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import inert_bound, pc8
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as T
@@ -135,8 +135,8 @@ def test_the_block_on_bits_is_its_word_view_and_the_scheme():
     assert want[0][-1] == 1 and [w[-1] for w in want[1:]] == [0, 0, 0]
     word = word_of(WK.credited_product(SCHEME, K, TM, TN, N))
     assert [list(evaluate(word, *(_flat(a) for a in args))) for args, _ref in vectors] == want
-    got = evaluate_words(block_circuit(b.program.fn, boolean_table(b.program)),
-                         np.asarray([_bits(args) for args, _ref in vectors], dtype=np.uint64))
+    got = evaluate_bits(block_circuit(b.program.fn, boolean_table(b.program)),
+                        np.asarray([_bits(args) for args, _ref in vectors], dtype=np.uint8))
     got = got.reshape(len(vectors), -1).tolist()
     assert [[sum(g[8 * i + j] << j for j in range(8)) for i in range(64)] + [g[512]] for g in got] == want
 

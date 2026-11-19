@@ -69,17 +69,18 @@ def block(scheme: str, k: int, tm: int, tn: int, n: int, bits: bool = False) -> 
                                  key=lambda r: -r["gates"])
     out["sum_of_bodies"] = sum(r["gates"] for r in out["by_primitive"])
     phase("count")
+    print("CREDITED-COUNT", k, tm, tn, n, "gates", out["gates"], "ands", out["ands"], flush=True)
     if bits:
         import random
 
         import numpy as np
-        from verity.circuits.evaluation import evaluate_words
+        from verity.circuits.evaluation import evaluate_bits
         from verity.circuits.ops.boolean.versions import block_circuit, boolean_table
         fn = block_circuit(b.program.fn, boolean_table(b.program))
         phase("lift")
         rng = random.Random(0)
-        got = evaluate_words(fn, *(np.asarray([[rng.getrandbits(t.elem.w) for _ in range(t.n)]], dtype=np.uint64)
-                                   for _p, t in params))
+        got = evaluate_bits(fn, *(np.asarray([[rng.getrandbits(1) for _ in range(t.leaves)]], dtype=np.uint8)
+                                  for _p, t in params))
         out["bits_out"] = got.reshape(-1).tolist()[-1:]
         phase("bits")
     out["peak_gib"] = _peak_gib()
