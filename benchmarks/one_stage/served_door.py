@@ -122,7 +122,8 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
     """A STAGED witness for the block of the template's first unit ``u``: every input port is a row of in(S) read from
     one writer (else refused here by name). Each writer template's output field is one tree, a leaf for each of its
     units in root order (`_rank`) holding its whole output, its rows random but for nothing: the writer is not evaluated,
-    so its rows are no served values. A port that reads part of its writer's output is ``partial``: its row is that
+    so its rows are no served values. A port whose leaves are one run of a run input node ``w`` reads row ``r`` of
+    the tree ``input/n<w>``, the node's leaves in rows of the port's, random at ``r`` and zero elsewhere. A port that reads part of its writer's output is ``partial``: its row is that
     part, which no leaf of the tree holds, so its files are only for the registered reads, never a proof. ``u``'s output is the template evaluated on those rows (`reference.evaluate`), at ``u``'s
     leaf of its own template's tree, the other leaves zero. Writes ``stage-u/``: the prover's and verifier's files
     (`FC.write`, as `credited_door` stages a block) and the verifier's position-free ``--registered`` file."""
@@ -131,6 +132,7 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
     import numpy as np
     from verity.circuits import partition_object as PO
     from verity.circuits.evaluation.reference import evaluate
+    from verity.circuits.program import REGISTERED_ID, is_input
     from verity.commitments import registered_value as RV
     from verity_flock import circuit as FC
     part, k, u, pop = _partition(d, template)
@@ -168,14 +170,29 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
     trees: dict[str, dict[int, list[int]]] = {}
     reads: dict[str, tuple[str, int]] = {}
     partial: list[str] = []
+    fresh: dict[str, tuple[int, int, int, list[int]]] = {}
     tree_widths: dict[str, list[int]] = {}
     args, at = [], 0
     for p, t in params:
         n = len(widths[p])
         ws = [writer(g) for g in gates[at:at + n]]
         at += n
+        if all(w is None for w in ws):
+            g0 = gates[at - n]
+            w = bisect.bisect_right(offs, g0) - 1
+            fn_w = program.root.body.nodes[w].fn
+            if not is_input(fn_w) or REGISTERED_ID.fullmatch(fn_w.id) or gates[at - n:at] != list(range(g0, g0 + n)):
+                raise SystemExit(f"STAGE-REFUSED port {p}: its leaves are no run input node's one run of leaves")
+            node_leaves = (offs[w + 1] if w + 1 < len(offs) else program.root.gates) - offs[w]
+            if node_leaves % n or (g0 - offs[w]) % n:
+                raise SystemExit(f"STAGE-REFUSED port {p}: run input node {w}'s {node_leaves} leaves are no rows of {n}")
+            vals = [rng.getrandbits(x) for x in widths[p]]
+            fresh[p] = (w, (g0 - offs[w]) // n, node_leaves // n, vals)
+            rec["ports"][p] = {"run_input_node": w, "row": fresh[p][1], "rows": fresh[p][2], "leaves": n}
+            args.append(vals)
+            continue
         if any(w is None for w in ws):
-            raise SystemExit(f"STAGE-REFUSED port {p}: a leaf reads no unit's output (a circuit input): not staged here")
+            raise SystemExit(f"STAGE-REFUSED port {p}: some leaves read a circuit input and some a unit's output")
         v = ws[0][0]
         if any(w[0] != v for w in ws):
             raise SystemExit(f"STAGE-REFUSED port {p}: its {n} leaves read more than one writer: {ws[:6]}")
@@ -210,11 +227,17 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
     orow = _words16(_bits(ow, list(out)), on)
     orows = [orow if i == my else [0] * on for i in range(mine_units)]
     oreg = RV.Registered.commit(prog, f"{template}/o0", orows, word_bits=16, schema=RV.SCHEMA_HM96_SHA512_ROW_V2)
+    for p, (w, r, rows, vals) in fresh.items():
+        wn = ports[p][1]
+        regs[p] = RV.Registered.commit(prog, f"input/n{w}", [_words16(_bits(widths[p], vals), wn) if i == r else [0] * wn
+                                                              for i in range(rows)],
+                                       word_bits=16, schema=RV.SCHEMA_HM96_SHA512_ROW_V2)
+        reads[p] = (p, r)
     s = d / f"stage-{u}"
     (s / "tables").mkdir(parents=True, exist_ok=True)
     (s / "circuit.txt").write_text(text)
-    tables = {p: np.asarray([_words16(_bits(widths[p], a), ports[p][1])], dtype=np.uint16)
-              for (p, (tw, leaf)), a in zip(reads.items(), args)}
+    arg = dict(zip((p for p, _t in params), args))
+    tables = {p: np.asarray([_words16(_bits(widths[p], arg[p]), ports[p][1])], dtype=np.uint16) for p in reads}
     salts = {p: [regs[tw].salts[leaf]] for p, (tw, leaf) in reads.items()} | {"o0": [oreg.salts[my]]}
     registered = {p: regs[tw].statement([leaf])[2] for p, (tw, leaf) in reads.items()} | {"o0": oreg.statement([my])[2]}
     iset = SimpleNamespace(name=f"served-{u}", subcircuit=SimpleNamespace(id=fn.id, inputs=[], outputs=[]))
