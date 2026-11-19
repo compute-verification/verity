@@ -2753,8 +2753,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
              "from": HANDED_FROM if off_node else COMPOSED_FROM if host == node else COPIED_FROM,
              "auditor_device": auditor_device(host, manifest, host == node), **(tree or {})}
     cli = placement_settings()
-    if not cli.hold_placement():
-        where["placement_hold"] = f"lifted ({cli.LIFT_PLACEMENT_HOLD}=1)"
+    if lifted := cli.placement_hold_record():
+        where["placement_hold"] = lifted
     left = {k: v for k, v in (("deferred", deferred), ("served_compare", served_compare)) if v}
     report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": rows,
               "servers": {k: at[k][0] for k in rows}, "composed_on": where, **left}

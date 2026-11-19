@@ -1017,16 +1017,29 @@ def test_a_lifted_onsite_accept_is_printed_as_lifted_on_the_verdict_and_each_row
     rows = sorted(c for c, v in line["components"].items() if v == "accept")
     assert rows and set(line["components"].values()) == {"accept"}
     assert "placement hold lifted" not in out.out
+    assert line["placement_hold"] == "lifted (VERITY_LIFT_PLACEMENT_HOLD=1)"
     assert out.err.strip().splitlines() == [f"verity run: block {SEAL}: verdict accept (placement hold lifted); "
                                             + "; ".join(f"{c} accept (placement hold lifted)" for c in rows)]
-    assert json.loads((tmp_path / "state" / "record" / "verdicts.jsonl").read_text())["verdict"] == "accept"
+    assert json.loads((tmp_path / "state" / "record" / "verdicts.jsonl").read_text()) == line
 
 
 def test_a_held_onsite_run_prints_no_lifted_note_and_reads_undecided(tmp_path, capsys, monkeypatch):
     monkeypatch.delenv("VERITY_LIFT_PLACEMENT_HOLD", raising=False)
     rc, line, out = _accepting_run(tmp_path, capsys)
     assert rc == 2 and line["verdict"] == "undecided" and "accept" not in line["components"].values()
-    assert "placement hold lifted" not in out.out + out.err
+    assert "placement hold lifted" not in out.out + out.err and "placement_hold" not in line
+    assert "placement_hold" not in (tmp_path / "state" / "record" / "verdicts.jsonl").read_text()
+
+
+@pytest.mark.parametrize("value", ["", "0", "1"])
+def test_the_retired_hold_switch_refuses_the_run_before_any_party_or_verdict_is_printed(tmp_path, capsys, monkeypatch, value):
+    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", value)
+    state = tmp_path / "state"
+    published(state, {"bandwidth": "accept", "inference-only": "accept"}, "accept")
+    assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
+    out = capsys.readouterr()
+    assert out.out == "" and "refused placement-hold: VERITY_HOLD_PLACEMENT is retired" in out.err
+    assert "VERITY_LIFT_PLACEMENT_HOLD=1 lifts it" in out.err
 
 
 @pytest.mark.parametrize("lift, word, printed", [

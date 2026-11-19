@@ -79,7 +79,8 @@ one, read ``undecided`` (`served_table.AS_WRITTEN` in the reason).
 remote's line read from a record the prover composed, the serving node's own or a deferral's follow-on's, not a compose
 gate's answer, has ``source`` (``serving-node``, ``follow-on``), its reason led by a sentence saying so, and
 ``development`` where the record says accept, a row's or the line's (`served_table.DEVELOPMENT_VERDICT`): no accept of it counts.
-Under the lifted hold, `verity run` also prints to stderr each line's accepts, the verdict and each row, as
+Under the lifted hold each line also has ``placement_hold`` (the record's text, `settings.placement_hold_record`), and
+`verity run` prints to stderr each line's accepts, the verdict and each row, as
 ``accept (placement hold lifted)`` (`settings.printed_verdict`); the VERDICT line's own values stay ``accept``.
 onsite's line also has ``trusted-device``: each memory attester's premise that its device ran on a machine the
 developer doesn't control (`memory_attester.trusted_device`), by component, from the outcome of its run here, and the
@@ -680,6 +681,8 @@ def _parties(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequenc
         lines = [{**x, "product": cid} if x.get("combined_by") else
                  {**x, "product": cid, "verdict": "undecided", "reason": x.get("reason") or f"no composite takes {cid}"}
                  for x in lines]
+    lifted = settings.placement_hold_record()
+    lines = [{**x, "placement_hold": lifted} if lifted else x for x in lines]
     for line in lines:
         say("VERDICT", line)
         if line.get("combined_by"):
@@ -749,6 +752,10 @@ def run_main(argv: Sequence[str], reg: Registry | None = None, in_process: bool 
             if a.bindings and unbound:
                 raise Refused("unbound", f"{a.bindings} doesn't bind {', '.join(unbound)}")
             return 0
+        try:
+            settings.placement_hold_record()
+        except ValueError as e:
+            raise Refused("placement-hold", str(e)) from e
         state = Path(a.state or tempfile.mkdtemp(prefix="verity-run-")).resolve()
         chosen = plan(cfg, reg, machines, a.party)
         starts = starting(reg, chosen, bound)

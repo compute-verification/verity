@@ -28,6 +28,12 @@ def hold_placement(env: Mapping[str, str] | None = None) -> bool:
     return env.get(LIFT_PLACEMENT_HOLD) != "1"
 
 
+def placement_hold_record(env: Mapping[str, str] | None = None) -> str | None:
+    """What a record and a VERDICT line say of a run that lifted the placement hold (``lifted (VERITY_LIFT_PLACEMENT_HOLD=1)``),
+    None while it is held. The one place that text is made; ValueError while the retired switch is set."""
+    return None if hold_placement(env) else f"lifted ({LIFT_PLACEMENT_HOLD}=1)"
+
+
 #: what follows ``accept`` where a lifted run's accept is printed
 LIFTED_NOTE = "placement hold lifted"
 
