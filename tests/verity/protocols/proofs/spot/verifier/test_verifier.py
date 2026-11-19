@@ -97,6 +97,17 @@ def test_every_check_runs_both_and_records_them():
     assert not bad["accepted"] and bad["verifiers"]["agree"] and bad["verifiers"]["lean"]["failed"] == ["roots"]
 
 
+def test_both_take_a_registered_law_that_meets_the_rate_and_refuse_one_short():
+    program = PN.population_program(PAIR, 6)
+    mine, _ = S.params_sampling_design("rate:1/3", program, QUERY, None)
+    assert mine == {"law": "subset", "k": 2}
+    for k, ok, rate_law in ((2, True, "rate:1/3"), (3, True, "rate:1/3"), (1, False, "rate:1/3"), (3, False, None)):
+        rec = _record(sampling_design={"law": "subset", "k": k})
+        v = V.check(rec, program, QUERY, mine, S.SCHEME, _ports(6), rate_law=rate_law)
+        side = {"ok": ok, "codes": [] if ok else ["R1-law"]}
+        assert v.ok is ok and v.verifiers == {"of_record": "lean", "lean": side, "python": side}, (k, rate_law)
+
+
 def test_the_declared_day_is_held_by_both():
     """R2's declared day (`registration._declared`, `VStar.Recursive.Caller.declaredCode`) by the verifier: the day's own program,
     another day's, a day with no declaration, an empty log and a day declared twice give the same codes in the Lean and the

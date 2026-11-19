@@ -163,7 +163,8 @@ def test_a_work_sample_carries_its_closure():
 
 
 def test_sample_first_refuses_what_lean_refuses():
-    for sampling_design, n in (({"law": "subset", "k": 4}, 3), (_stratified(), 9), ({**_stratified(), "k": 5}, 10),
+    for sampling_design, n in (({"law": "subset", "k": 4}, 3), (_stratified(), 9),
+                   ({**_stratified(), "strata": [{**_stratified()["strata"][0], "k": 8}, _stratified()["strata"][1]]}, 10),
                    ({"law": "bernoulli", "p": "1/0"}, 10), ({"law": "uniform", "k": 1}, 10)):
         with pytest.raises(ValueError):
             draw_first(_seeded(0), sampling_design, n)

@@ -80,7 +80,7 @@ private def stratum? (work : Bool) (s : Json) : Option Flock.Draw.WorkStratum :=
 
 /-- `draw.strata_problem`: whether a stratified or work sampling design is not well formed over `population` units. Each stratum is
 exactly its keys with a distinct template, its ranges ascending, disjoint, not adjacent and tiling `[0, population)`, and
-its `k` the rule's; the problems after parsing are Flock's (`Flock.Draw.strataProblem`, `Flock.Draw.workProblem`). -/
+its `k` in `[1, n_s]` (a work stratum's the work rule's); the problems after parsing are Flock's (`Flock.Draw.strataProblem`, `Flock.Draw.workProblem`). -/
 def strataProblem (samplingDesign : Json) (population : Int) : Bool := Id.run do
   let work := jeq (getD samplingDesign "law") "work"
   let .arr ss := getD samplingDesign "strata" | return true
@@ -148,11 +148,11 @@ def strataMessage (samplingDesign : Json) (population : Int) : Option String := 
     let floor := (int? (getD s "floor")).getD 0
     if work && floor < 1 then return some s!"stratum {pyRepr t}: a floor is at least one"
     let size := sumSizes rs
-    let rule : Int := if work then
-        Flock.Draw.workK k.toNat ((int? (getD s "work")).getD 0).toNat size.toNat total.toNat floor.toNat
-      else Flock.Draw.stratumK k.toNat size.toNat population.toNat
-    if int? (getD s "k") != some rule then
-      return some s!"stratum {pyRepr t}: k is not the {if work then "work " else ""}rule's"
+    if work then
+      let rule := Flock.Draw.workK k.toNat ((int? (getD s "work")).getD 0).toNat size.toNat total.toNat floor.toNat
+      if int? (getD s "k") != some (rule : Int) then return some s!"stratum {pyRepr t}: k is not the work rule's"
+    else if !((int? (getD s "k")).any fun ks => 1 ≤ ks && ks ≤ size) then
+      return some s!"stratum {pyRepr t}: k is not in [1, {size}]"
     ranges := ranges ++ rs
   let mut at_ : Int := 0
   for (lo, hi) in ranges.qsort (fun a b => a.1 < b.1 || (a.1 == b.1 && a.2 < b.2)) do
@@ -286,6 +286,41 @@ def flockSamplingDesign (samplingDesign : Json) (population : Nat) : Except Stri
       let some strata := ss.mapM (stratum? (kind == "work")) | throw s!"the {kind} law's strata"
       pure (if kind == "work" then .work k strata else .stratified k (strata.map (·.toStratum)))
     | _ => throw "a one-stage law is subset, bernoulli, stratified or work"
+
+/-- `draw.rate_agreed`: under a rate rule `NUM/DEN`, the registered sampling design `law` when it is the rule's expansion
+`mine`'s law (`subset` or `stratified`) and meets the rate over the population's `strata` at amount 1 a proof block
+(`Flock.Draw.meetsRate`), so it covers every stratum of the population exactly; else why not. A stratified `law`'s `k`
+is the sum of its strata's `k_s`, so a law other than the rule's expansion has one registered form. -/
+def rateAgreed (num den : Nat) (strata : Array (String × Array (Nat × Nat))) (mine law : Json) : Except String Json := do
+  let kind := getD mine "law"
+  if !(jeq kind "subset" || jeq kind "stratified") || !jeq (getD law "law") kind then
+    throw "rate: the registered law is not the rule's, subset or stratified"
+  let n := strata.foldl (fun a (_, rs) => a + rs.foldl (fun b (lo, hi) => b + (hi - lo)) 0) 0
+  let d ← if jeq kind "subset" then do
+      if keys? law != some (sortStrings #["law", "k"]) then throw "rate: a subset law is exactly {law, k}"
+      let some k := nat? (getD law "k") | throw "rate: a subset law's k is a natural number"
+      pure (Flock.Draw.SamplingDesign.subset k)
+    else do
+      if keys? law != some (sortStrings #["law", "k", "strata"]) then throw "rate: a stratified law is exactly {law, k, strata}"
+      if let some why := strataMessage law n then throw s!"rate: {why}"
+      let (some k, .arr ss) := (nat? (getD law "k"), getD law "strata") | throw "rate: a stratified law's k and strata"
+      let some st := ss.mapM (stratum? false) | throw "rate: a stratified law's strata"
+      let total := st.foldl (fun a s => a + s.k) 0
+      if k != total then throw s!"rate: the stratified law's k = {k} is not the sum of its strata's k_s = {total}"
+      pure (Flock.Draw.SamplingDesign.stratified k (st.map (·.toStratum)))
+  Flock.Draw.meetsRate num den (strata.map fun (t, _) => (t, 1, 1)) strata d
+  pure law
+
+/-- `draw.agreed`: the sampling design the verifier agrees to for the registered `law`: `derive`'s expansion, or under a
+rate rule (`rate = some (NUM, DEN)`) a different `law` that meets it (`rateAgreed`). -/
+def agreed (p : Program) (query samplingDesign : Json) (table : Option Json) (rate : Option (Nat × Nat)) (law : Json) :
+    V Json := do
+  let mine ← derive p query samplingDesign table
+  match rate with
+  | some (num, den) =>
+    if sameSamplingDesign law mine then return mine
+    rateAgreed num den (← Partition.strata p query) mine law
+  | none => return mine
 
 /-- The units `samplingDesign` samples over `[0, population)` as `Flock.Draw.drawWith` samples them from `src` read in order (`take`):
 `subset` and `bernoulli` on one stream, `stratified` and `work` one stream per stratum, each extended and rerun when it

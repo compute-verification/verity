@@ -1214,7 +1214,8 @@ def test_the_second_stage_samples_k_in_each_cell():
         assert D.strata_problem(sampling_design, 3 * sum(ns)) is None
         stratified = {"law": "stratified", "k": 3 * sum(ks),
                       "strata": [{v: s[v] for v in ("template", "units", "k")} for s in sampling_design["strata"]]}
-        assert "k is not the rule's" in D.strata_problem(stratified, 3 * sum(ns))
+        assert D.strata_problem(stratified, 3 * sum(ns)) is None
+        assert not D.same_design(stratified, sampling_design)
         obj = S.select_second([0, 2, 5], ns, ks, random.Random(7).randbytes)
         assert len(obj["units"]) == 3 * sum(ks)
     assert S.second_counts(2, ["a", "b"], (3, 1)) == (2, 1) and S.second_counts({"b": 1, "a": 3}, ["a", "b"], (3, 2)) == (3, 1)
