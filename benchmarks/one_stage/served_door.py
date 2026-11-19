@@ -119,10 +119,11 @@ def _words16(bits: list[int], words: int) -> list[int]:
 
 
 def stage(d: Path, template: str, seed: int = 7) -> dict:
-    """A STAGED witness for the block of the template's first unit ``u``: every input port is a row of in(S) and reads
-    its writer's whole output (else refused here by name). Each writer template's output field is one tree, a leaf for
-    each of its units in root order (`_rank`), its rows random but for nothing: the writer is not evaluated, so its
-    rows are no served values. ``u``'s output is the template evaluated on those rows (`reference.evaluate`), at ``u``'s
+    """A STAGED witness for the block of the template's first unit ``u``: every input port is a row of in(S) read from
+    one writer (else refused here by name). Each writer template's output field is one tree, a leaf for each of its
+    units in root order (`_rank`) holding its whole output, its rows random but for nothing: the writer is not evaluated,
+    so its rows are no served values. A port that reads part of its writer's output is ``partial``: its row is that
+    part, which no leaf of the tree holds, so its files are only for the registered reads, never a proof. ``u``'s output is the template evaluated on those rows (`reference.evaluate`), at ``u``'s
     leaf of its own template's tree, the other leaves zero. Writes ``stage-u/``: the prover's and verifier's files
     (`FC.write`, as `credited_door` stages a block) and the verifier's position-free ``--registered`` file."""
     import random
@@ -166,6 +167,8 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
     rec: dict = {"unit": u, "block": k, "staged": "writer rows random, not served values", "ports": {}}
     trees: dict[str, dict[int, list[int]]] = {}
     reads: dict[str, tuple[str, int]] = {}
+    partial: list[str] = []
+    tree_widths: dict[str, list[int]] = {}
     args, at = [], 0
     for p, t in params:
         n = len(widths[p])
@@ -174,14 +177,21 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
         if any(w is None for w in ws):
             raise SystemExit(f"STAGE-REFUSED port {p}: a leaf reads no unit's output (a circuit input): not staged here")
         v = ws[0][0]
-        if any(w != (v, j) for j, w in enumerate(ws)) or len(owner_cache[v]) != n:
-            raise SystemExit(f"STAGE-REFUSED port {p}: its {n} leaves are not one writer's whole output in order: {ws[:6]}")
+        if any(w[0] != v for w in ws):
+            raise SystemExit(f"STAGE-REFUSED port {p}: its {n} leaves read more than one writer: {ws[:6]}")
         tw, leaf = _rank(tp, v)
         reads[p] = (tw, leaf)
-        rec["ports"][p] = {"writer": v, "template": tw, "leaf": leaf, "leaves": n}
-        vals = [rng.getrandbits(w) for w in widths[p]]
-        args.append(vals)
-        trees.setdefault(tw, {})[leaf] = vals
+        whole = program.defs[tw].signature()[1].leaf_widths()
+        at_w = [j for _v, j in ws]
+        rec["ports"][p] = {"writer": v, "template": tw, "leaf": leaf, "leaves": n, "writer_leaves": len(whole),
+                           "writer_fields": len(getattr(program.defs[tw].signature()[1], "fields", ()) or ()) or 1,
+                           "reads_writer_leaves": at_w[:8] + (["..."] if n > 8 else [])}
+        full = trees.setdefault(tw, {}).get(leaf) or [rng.getrandbits(w) for w in whole]
+        trees[tw][leaf] = full
+        if at_w != list(range(len(whole))):
+            partial.append(p)
+        args.append([full[j] for j in at_w])
+        tree_widths[tw] = whole
     out = evaluate(fn, *args)
     ow = ret.leaf_widths()
     ports = {q[0]: q for q in meta["ports"]}
@@ -190,9 +200,9 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
     regs = {}
     for tw, rows in trees.items():
         units = sum(n for _k, tt, _a, n in tp.ranges if tt == tw)
-        wn = next(ports[p][1] for p, (t2, _l) in reads.items() if t2 == tw)
-        tw_widths = next(widths[p] for p, (t2, _l) in reads.items() if t2 == tw)
-        full = [_words16(_bits(tw_widths, rows[i]), wn) if i in rows else [0] * wn for i in range(units)]
+        whole_words = 32 * -(-sum(tree_widths[tw]) // 512)
+        wn = next((ports[p][1] for p, (t2, _l) in reads.items() if t2 == tw and p not in partial), whole_words)
+        full = [_words16(_bits(tree_widths[tw], rows[i]), wn) if i in rows else [0] * wn for i in range(units)]
         regs[tw] = RV.Registered.commit(prog, f"{tw}/o0", full, word_bits=16, schema=RV.SCHEMA_HM96_SHA512_ROW_V2)
     mine_units = sum(n for _k, tt, _a, n in tp.ranges if tt == template)
     _t, my = _rank(tp, u)
@@ -203,7 +213,8 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
     s = d / f"stage-{u}"
     (s / "tables").mkdir(parents=True, exist_ok=True)
     (s / "circuit.txt").write_text(text)
-    tables = {p: np.asarray([regs[tw].rows[leaf]], dtype=np.uint16) for p, (tw, leaf) in reads.items()}
+    tables = {p: np.asarray([_words16(_bits(widths[p], a), ports[p][1])], dtype=np.uint16)
+              for (p, (tw, leaf)), a in zip(reads.items(), args)}
     salts = {p: [regs[tw].salts[leaf]] for p, (tw, leaf) in reads.items()} | {"o0": [oreg.salts[my]]}
     registered = {p: regs[tw].statement([leaf])[2] for p, (tw, leaf) in reads.items()} | {"o0": oreg.statement([my])[2]}
     iset = SimpleNamespace(name=f"served-{u}", subcircuit=SimpleNamespace(id=fn.id, inputs=[], outputs=[]))
@@ -225,7 +236,7 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
     wrong = dict(file, ports=dict(file["ports"], o0=dict(file["ports"]["o0"], root="00" * 64)))
     (s / "registered-wrong-out.json").write_text(json.dumps(wrong))
     rec |= {"trees": {tw: {"leaves": r.leaves, "root": r.root.hex()[:16]} for tw, r in regs.items()},
-            "out_tree": {"leaves": oreg.leaves, "leaf": my}, "out_words": on}
+            "out_tree": {"leaves": oreg.leaves, "leaf": my}, "out_words": on, "partial": partial}
     (s / "stage.json").write_text(json.dumps(rec, default=str))
     return rec
 
