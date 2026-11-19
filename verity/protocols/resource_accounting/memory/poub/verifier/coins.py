@@ -5,14 +5,15 @@ their commitment released to the prover only at the session's end.
 
 ~~~text
 scheme     verity/remote-bandwidth/coins/v1, epoch k: the session's index over its registration
-families   challenge W, openings ⌈W/g⌉, append A: window t's challenge chal_t, the openings coin of the sample over
-           windows cg … (c + 1)g − 1 (g = `groups_per_coin`, 1 by default: window t's own), and append coin i, c_a; no
-           append family when the session takes no appends (A = 0)
-coin       the first 32 bytes (COIN_BYTES) of the challenger's 64-byte coin, which its commitment holds whole
+families   challenge W, sample ⌈W/g⌉·m, append A: window t's challenge chal_t, the m coins of the sample over windows
+           cg … (c + 1)g − 1 (g = `groups_per_coin`, 1 by default: window t's own; m = `sample_coins`), and append coin
+           i, c_a; no append family when the session takes no appends (A = 0)
+coin       a challenge's or an append's: the first 32 bytes (COIN_BYTES) of the challenger's 64-byte coin, which its
+           commitment holds whole; a sample's: its m coins whole, in order, the draw's raw bytes (`AuditRun.close`)
 R          SHA512("verity/remote-bandwidth/window/v1\0" ‖ registration digest ‖ u64be k): the session's window, {root} in
            the auditor's ledger, which opens one challenger session a root, ever
-after      chal_0 after R; chal_t (t ≥ 1) after the last root the verifier had received when it left; flip c's openings
-           coin after the last root of its last window, min((c + 1)g, W) − 1; append coin i after the root of the append
+after      chal_0 after R; chal_t (t ≥ 1) after the last root the verifier had received when it left; sample c's coins
+           after the last root of its last window, min((c + 1)g, W) − 1; append coin i after the root of the append
            that takes it: the i-th append, or under refresh the append naming slot i (an empty slot's coin never leaves)
 released   (epoch, label, index, after, coin): what the prover is sent when a coin leaves (`Released`), no salt or path
 end        once the session has its outcome, so no root can follow: the commitment and every released coin's opening
@@ -27,7 +28,8 @@ the commitment and their openings (`received_reason`), so the record's commitmen
 no coin was chosen after a root is the challenger's to keep, as the auditor's device (`Faithful`): it commits before the
 session, logs each root before its coin leaves and signs the log, which the verifier holds the session to
 (`released_reason`).  Within a window the passes' seeds are Fiat–Shamir, chained from the coin through the prover's
-roots (`receipts.seed`); the openings are sampled from a coin of their own.  An append's coin answers the append's root, a
+roots (`receipts.seed`); the openings are sampled from coins of their own, by the proof system's draw on their raw
+bytes.  An append's coin answers the append's root, a
 commitment the prover has already made: committed before the session like every coin, it opens after that root, once.
 
 `SessionCoins` is the verifier's side: the challenger (a `LiveChallenger`, or a `remote.RemoteChallenger` on the challenger's
@@ -36,7 +38,7 @@ takes from the challenger afterwards, the commitment it signed and the roots its
 (`trusted`: `remote.trusted_session` under the auditor's ledger, whose window `{root: R}` opens exactly one session,
 inside the period holding it, read only through `challenger.pinned_session`, so the session ran a tree the host's pins
 log records on main's first-parent line), `released_reason` holds to the session's own record: the same commitment,
-the same roots in the same order, chal_0 after R, and each sample's openings coin after its last window's last root, so
+the same roots in the same order, chal_0 after R, and each sample's coins after its last window's last root, so
 a coin opened before its window's root, or a session whose coins are another challenger session's, is refused.
 `trusted` acts on the Lean verifier's answers (`lean_answer`: the ledger's head, the pinned session and the session's
 commitment and roots), and the Python mirror's may only refuse.
@@ -73,31 +75,45 @@ from verity.protocols.proofs.spot.verifier.challenger.challenger import (
 )
 
 SCHEME = "verity/remote-bandwidth/coins/v1"
-CHALLENGE, OPENINGS, APPEND = "poub/challenge", "poub/openings", "poub/append"
-LABELS = (CHALLENGE, OPENINGS, APPEND)
-FORMER = {"challenge": CHALLENGE, "openings": OPENINGS, "append": APPEND}
+CHALLENGE, SAMPLE, APPEND = "poub/challenge", "poub/sample", "poub/append"
+LABELS = (CHALLENGE, SAMPLE, APPEND)
+FORMER = {"challenge": CHALLENGE, "append": APPEND}
 """Each label's former name, the one release logs written from 21 Oct 2026 until the `poub/` labels reached `main`
 carry: read as that label by what reads those logs (`auditor_line`, `gate_whatif`), never sent or committed under.
 Deleted once no line of record or gate what-if is to be recomputed over a release log of that range."""
 COIN_BYTES = 32
+RAW_BYTES = 64
+"""The challenger's coin, whole: a sample's coins are read at this many bytes each."""
+RECEIPT_LIMIT = 1 << 64
+"""A window's receipts, its passes' lengths summed, stay below this (`AuditRun.receive` rejects with `plan` a pass that
+would take them to it), so a sample over g windows draws over fewer than g · RECEIPT_LIMIT receipts."""
 APPENDS = 1024
 """A session's append coins unless it names its own: one an append, so a session appends at most this many times."""
 WINDOW_DOMAIN = b"verity/remote-bandwidth/window/v1\0"
 
 
-def openings_coins(windows: int, per_coin: int = 1) -> int:
-    """⌈W/g⌉: the openings coins of `windows` windows sampled `per_coin` (g) consecutive windows a coin."""
+def draws(windows: int, per_coin: int = 1) -> int:
+    """⌈W/g⌉: the samples of `windows` windows sampled `per_coin` (g) consecutive windows a sample."""
     if type(per_coin) is not int or per_coin < 1:
         raise ValueError("groups_per_coin is a positive integer")
     return -(-windows // per_coin)
 
 
-def families(windows: int, appends: int = APPENDS, per_coin: int = 1) -> tuple[tuple[str, int], ...]:
-    """The session's coin layout: W challenges, ⌈W/g⌉ openings coins (`openings_coins`, W at g = `per_coin` = 1) and
-    `appends` append coins, with no append family when `appends` is 0.  A session reserves exactly the coins it will
-    use, so a challenger that released every coin it committed to (the gate's `complete`) served a session that ran to
-    its end."""
-    return layout(((CHALLENGE, windows), (OPENINGS, openings_coins(windows, per_coin)))
+def sample_coins(samples: int, per_coin: int = 1) -> int:
+    """m, the coins a sample of `samples` receipts over `per_coin` windows reserves (Lean `Poub.sampleCoins`): enough
+    for the draw's first stream, 2k · width(U) + 64 bytes (`draw_first`), at any U below g · RECEIPT_LIMIT."""
+    if type(samples) is not int or samples < 1:
+        raise ValueError("samples is a positive integer")
+    width = ((max(1, per_coin) * RECEIPT_LIMIT - 1).bit_length() + 64 + 7) // 8
+    return -(-(2 * samples * width + 64) // RAW_BYTES)
+
+
+def families(windows: int, appends: int = APPENDS, per_coin: int = 1, *, samples: int) -> tuple[tuple[str, int], ...]:
+    """The session's coin layout: W challenges, ⌈W/g⌉ samples' m coins each (`draws`, `sample_coins`, at g =
+    `per_coin`) and `appends` append coins, with no append family when `appends` is 0.  A session reserves exactly the
+    coins it will use, so a challenger that released every coin it committed to (the gate's `complete`) served a
+    session that ran to its end."""
+    return layout(((CHALLENGE, windows), (SAMPLE, draws(windows, per_coin) * sample_coins(samples, per_coin)))
                   + (((APPEND, appends),) if appends != 0 else ()))
 
 
@@ -178,20 +194,20 @@ def coin(opening: LiveOpening | Released) -> bytes:
     return opening.coin[:COIN_BYTES]
 
 
-def layout_reason(commitment: Any, session: int, windows: int, per_coin: int = 1) -> str | None:
-    """Why `commitment` is not session `session`'s coin commitment for `windows` windows sampled `per_coin` a coin; None
-    when it is."""
+def layout_reason(commitment: Any, session: int, windows: int, per_coin: int = 1, *, samples: int) -> str | None:
+    """Why `commitment` is not session `session`'s coin commitment for `windows` windows sampled `per_coin` a sample of
+    `samples` receipts; None when it is."""
     if type(commitment) is not LiveCommitment:
         return "a session's coin commitment is a live coin commitment"
     if commitment.scheme != SCHEME or commitment.epoch != session:
         return (f"the coins are {commitment.scheme} epoch {commitment.epoch}'s, not {SCHEME} epoch {session}'s: "
                 "session k's coins are their own epoch")
     labels = tuple(label for label, _ in commitment.families)
-    openings = openings_coins(windows, per_coin)
+    reserved = draws(windows, per_coin) * sample_coins(samples, per_coin)
     if (labels not in (LABELS, LABELS[:2]) or commitment.family(CHALLENGE) != windows
-            or commitment.family(OPENINGS) != openings):
-        return (f"the coins' layout is {[list(f) for f in commitment.families]}, not challenge {windows}, openings "
-                f"{openings} and, if any, append A")
+            or commitment.family(SAMPLE) != reserved):
+        return (f"the coins' layout is {[list(f) for f in commitment.families]}, not challenge {windows}, sample "
+                f"{reserved} and, if any, append A")
     return None
 
 
@@ -234,17 +250,17 @@ def received_reason(commitment: Any, received: Sequence[Released], openings: Seq
 
 class SessionCoins:
     """Session `session`'s coins over the registration whose digest is `registration`, `windows` windows sampled
-    `per_coin` a coin (`openings_coins`), through `challenger` (a `LiveChallenger` or a `remote.RemoteChallenger`),
+    `per_coin` a sample of `samples` receipts (`draws`, `sample_coins`), through `challenger` (a `LiveChallenger` or a `remote.RemoteChallenger`),
     committed before the session.  Each family's coins open in order, each once, after the root recorded for it
     (`LiveRecord`, on `clock`); two the session asks for one behind the other may go in one round trip (`ahead`)."""
 
-    def __init__(self, challenger: Any, registration: bytes, session: int, windows: int, *, per_coin: int = 1,
-                 clock: Callable[[], float] = time.monotonic) -> None:
-        why = layout_reason(challenger.commitment, session, windows, per_coin)
+    def __init__(self, challenger: Any, registration: bytes, session: int, windows: int, *, samples: int,
+                 per_coin: int = 1, clock: Callable[[], float] = time.monotonic) -> None:
+        why = layout_reason(challenger.commitment, session, windows, per_coin, samples=samples)
         if why is not None:
             raise CoinError(why)
         self.challenger, self.registration, self.session, self.windows = challenger, registration, session, windows
-        self.per_coin = per_coin
+        self.per_coin, self.samples, self.m = per_coin, samples, sample_coins(samples, per_coin)
         self.window = window_root(registration, session)
         self._records = {label: LiveRecord(challenger, label, clock) for label, _ in challenger.commitment.families}
         self._ahead: tuple[str, int, bytes] | None = None
@@ -293,10 +309,37 @@ class SessionCoins:
         """chal_t, released now, after `after`: R for chal_0, else the last root received."""
         return self._open(CHALLENGE, t, after)
 
-    def openings(self, c: int, after: bytes) -> LiveOpening:
-        """Flip c's openings coin (window c's at one window a coin), released now, after the last root `after` of its
-        last window."""
-        return self._open(OPENINGS, c, after)
+    def sample(self, c: int, after: bytes) -> bytes:
+        """Sample c's m coins (`sample_coins`), released now, after the last root `after` of its last window, in
+        rounds of at most `remote.MAX_BATCH`: their bytes, each coin whole, in order, the stream its draw reads.  Inside
+        `ahead`, the coin asked for ahead goes in the last round, and is held."""
+        r = self._records[SAMPLE]
+        if len(r.roots) != c * self.m:
+            raise CoinError(f"the next sample is {len(r.roots) // self.m}, not {c}")
+        ahead, self._ahead = self._ahead, None
+        q = None
+        if ahead is not None:
+            if ahead[0] not in self._records:
+                raise CoinError(f"the session's coins have no {ahead[0]} family")
+            q = self._records[ahead[0]]
+            following = len(q.roots) + (q is r) * self.m
+            if ahead[1] != following:
+                raise CoinError(f"the {ahead[0]} coin asked for ahead is {ahead[1]}, not the next, {following}")
+        batches = [min(remote.MAX_BATCH, self.m - lo) for lo in range(0, self.m, remote.MAX_BATCH)]
+        for n, last in zip(batches, [False] * (len(batches) - 1) + [True]):
+            asks = [(r, bytes(after))] * n
+            with_ahead = last and q is not None and n < remote.MAX_BATCH
+            got = record_many(asks + ([(q, ahead[2])] if with_ahead else []))
+            if with_ahead:
+                self._held[ahead[0], ahead[1]] = got[-1]
+        if q is not None and (ahead[0], ahead[1]) not in self._held:
+            self._held[ahead[0], ahead[1]] = record_many([(q, ahead[2])])[0]
+        return self.sample_bytes(c)
+
+    def sample_bytes(self, c: int) -> bytes | None:
+        """Sample c's coins as `sample` returned them, once all m are released; None before."""
+        opened = self.opened(SAMPLE)[c * self.m:(c + 1) * self.m] if c >= 0 else ()
+        return b"".join(o.coin for o in opened) if len(opened) == self.m else None
 
     def append(self, root: bytes, slot: int | None = None) -> LiveOpening:
         """Append coin `slot` (None: the next, `appends`), released now, after the append's root: each coin once, in
@@ -333,11 +376,11 @@ def by_slot(coins: SessionCoins) -> list[bytes]:
     return out
 
 
-def local(registration: bytes, session: int, windows: int, entropy: Callable[[int], bytes], *,
+def local(registration: bytes, session: int, windows: int, entropy: Callable[[int], bytes], *, samples: int,
           appends: int = APPENDS, per_coin: int = 1, clock: Callable[[], float] = time.monotonic) -> SessionCoins:
     """Session `session`'s coins from a challenger in the verifier's process, sampling from `entropy`."""
-    return SessionCoins(LiveChallenger(SCHEME, session, families(windows, appends, per_coin), entropy), registration,
-                        session, windows, per_coin=per_coin, clock=clock)
+    return SessionCoins(LiveChallenger(SCHEME, session, families(windows, appends, per_coin, samples=samples), entropy),
+                        registration, session, windows, samples=samples, per_coin=per_coin, clock=clock)
 
 
 def released_reason(coins: SessionCoins, windows: Sequence[Sequence[bytes]], appends: Sequence[bytes],
@@ -349,8 +392,8 @@ def released_reason(coins: SessionCoins, windows: Sequence[Sequence[bytes]], app
     coins weren't opened in order, once, each after the root recorded for it, or whose recorded roots aren't the ones
     the challenger received; chal_0 opened after anything but R, or chal_t after a root that isn't R or an earlier
     window's, and at one window in flight (`in_flight` 1, `audit.Pace.in_flight`) after anything but the last root of
-    windows 0 … t − 1 (R if they have none), so before a root of window t − 1; a sample's openings coin opened after
-    anything but its last window's last root (so before it); an append's coin after anything but its own root."""
+    windows 0 … t − 1 (R if they have none), so before a root of window t − 1; a sample's coin opened after anything
+    but its last window's last root (so before it); an append's coin after anything but its own root."""
     c = coins.commitment
     if signed != c:
         return "the challenger signed another coin commitment than the one the session's coins open against"
@@ -373,10 +416,10 @@ def released_reason(coins: SessionCoins, windows: Sequence[Sequence[bytes]], app
             return f"σ_{t} was opened after a root that is neither R nor an earlier window's"
         if in_flight == 1 and after != last:
             return f"σ_{t} was opened before window {t - 1}'s last root, at one window in flight"
-    for c, after in enumerate(coins.afters(OPENINGS)):
-        t = min((c + 1) * coins.per_coin, coins.windows) - 1
+    for j, after in enumerate(coins.afters(SAMPLE)):
+        t = min((j // coins.m + 1) * coins.per_coin, coins.windows) - 1
         if t >= len(windows) or not windows[t] or after != windows[t][-1]:
-            return f"window {t}'s openings coin was opened before its window's root"
+            return f"window {t}'s sample's coin {j % coins.m} was opened before its window's root"
     if coins.afters(APPEND) != tuple(appends):
         return "an append's coin was opened after a root that is not its append's"
     return None
@@ -426,7 +469,7 @@ def lean_answer(piece: str, request: Mapping[str, Any], python: Any) -> Any:
     return got
 
 
-__all__ = ["APPEND", "APPENDS", "CHALLENGE", "COIN_BYTES", "FORMER", "LABELS", "OPENINGS", "RELEASED_FORM", "Released",
-           "SCHEME", "SessionCoins", "UNWRITTEN", "Undecided", "WINDOW_DOMAIN", "by_slot", "coin", "coin_reason", "families",
-           "layout_reason", "lean_answer", "local", "openings_coins", "received_reason", "released", "released_reason",
-           "trusted", "undecided", "window", "window_root"]
+__all__ = ["APPEND", "APPENDS", "CHALLENGE", "COIN_BYTES", "FORMER", "LABELS", "RAW_BYTES", "RECEIPT_LIMIT",
+           "RELEASED_FORM", "Released", "SAMPLE", "SCHEME", "SessionCoins", "UNWRITTEN", "Undecided", "WINDOW_DOMAIN",
+           "by_slot", "coin", "coin_reason", "draws", "families", "layout_reason", "lean_answer", "local", "received_reason",
+           "released", "released_reason", "sample_coins", "trusted", "undecided", "window", "window_root"]

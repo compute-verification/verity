@@ -459,7 +459,6 @@ KNOWN_SITES = {
     ("adapters/torch/verity_torch/frontend/rules/training_emit.py", "verity_vllm.definitions.registry.torch_words"): _SHARED_WORDS,
     ("adapters/torch/verity_torch/frontend/rules/training_loss.py", "verity_vllm.definitions.registry.torch_embedding_f32"): _SHARED_WORDS,
     ("adapters/torch/verity_torch/frontend/rules/training_masks.py", "verity_vllm.definitions.registry.torch_words"): _SHARED_WORDS,
-    ("adapters/torch/verity_torch/frontend/rules/training_masks.py", "verity_vllm.definitions.registry.dsv4_decode_indices"): _SHARED_WORDS,
     ("adapters/torch/verity_torch/frontend/rules/training_reduce.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
     ("adapters/torch/verity_torch/frontend/rules/vocab.py", "verity_vllm.definitions.registry.value_inputs"): _SHARED_WORDS,
 }
