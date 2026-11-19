@@ -53,16 +53,16 @@ def toy() -> Program:
     return _program(body, Tuple(Array(2, PAIR), A4))
 
 
-MARK = {"supplied": "LayingToySalt", "args": [], "layout": "bits", "bits": 4}
+MARK = {"supplied": "const.uint/v1", "args": {"value": 5, "bits": 8}, "layout": "le", "bits": 8}
 
 
 @functools.cache
 def with_s(binding: str) -> Program:
-    params = (("x", Array(2, A4)), ("k", A4), ("s", A4))
+    params = (("x", Array(2, A4)), ("k", A4), ("s", Array(8, BL.BIT)))
 
     def body(B, S, x, k, s):
         vs = B.batch(V, x, k, axes=(0, None))
-        return tuple_of(vs, B.call(T, vs[1][0], s))
+        return tuple_of(vs, B.call(T, vs[1][0], array_of([s[i] for i in range(4)])))
     fn = CompositeDefinition(f"LayingToyS{binding}", 1, (), lambda S: (params, Tuple(Array(2, PAIR), A4)), body, register=False)
     return Program(fn, registered=["k"] + (["s"] if binding == "registration" else []),
                    supplied={"s": MARK} if binding == "supplied" else {})
@@ -174,15 +174,3 @@ def test_a_body_with_a_scan_is_refused():
         LY.lay(_program(body, A4), lambda *_a: False)
     assert e.value.code == "lay-scan"
 
-
-def test_laying_keeps_a_supplied_parameter_and_its_mark():
-    mark = {"supplied": "const.uint/v1", "args": {"value": 5, "bits": 8}, "layout": "le", "bits": 8}
-    params = (("x", Array(2, A4)), ("s", Array(8, BL.BIT)))
-
-    def body(B, S, x, s):
-        return B.batch(V, x, array_of([s[i] for i in range(4)]), axes=(0, None))
-    P0 = Program(CompositeDefinition("LayingToySupplied", 1, (), lambda S: (params, Array(2, PAIR)), body, register=False),
-                 supplied={"s": mark})
-    P1 = LY.lay(P0, ands(3))
-    assert P1.bindings == P0.bindings == ("run", "supplied") and P1.supplied == {"s": mark}
-    assert P1.root.inputs == P0.root.inputs

@@ -205,7 +205,8 @@ def supplied() -> Program:
                 supplied={"s": S_MARK})
 
 
-SALT = {"supplied": "pous.setup.salt/v1", "args": {}, "layout": "le", "bits": 4}
+#: the wired toy's supplied s: 64 one-bit leaves, a 64-bit constant
+S_WORD = {"supplied": "const.uint/v1", "args": {"value": 5, "bits": 64}, "layout": "le", "bits": 64}
 
 
 def wired() -> Program:
@@ -216,7 +217,7 @@ def wired() -> Program:
         "wires": [{"reader": t, "port": "a", "writer": t, "out": "o0", "at": 1, "radix": [2], "base": 0, "step": [1]}],
         "registered": {"params": {"s": 4}, "formats": {"s": {"word_bits": 1}}, "tables": [], "roots": [], "openings": [],
                        "reads": [{"reader": t, "port": "k", "param": "s", "at": 0, "radix": [3], "base": 0, "step": [0]}],
-                       "supplied": {"s": SALT}}})[0]
+                       "supplied": {"s": S_WORD}}})[0]
 
 
 TOYS = {"fanout": (fanout, [[(0, 1)], [(1, 3)], [(0, 3)], [(2, 3)]]),
@@ -287,7 +288,7 @@ def test_a_supplied_value_is_a_supplied_input_of_the_block(units):
 @pytest.mark.parametrize("units", TOYS["wired"][1])
 def test_a_wired_populations_supplied_value_is_a_supplied_input_of_each_block_that_reads_it(units):
     program, c, bits = toy("wired")
-    assert program.bindings == ("supplied", "run") and program.supplied == {"s": SALT}
+    assert program.bindings == ("supplied", "run") and program.supplied == {"s": S_WORD}
     b = R.restrict(c, TOY_PARTITION, units, bits)
     assert b.program.bindings.count(R.SUPPLIED) == 1
     assert R.listing_of(b.descriptor).split(b"\n")[2:2 + len(b.input_bits)].count(b"supplied") == 4
