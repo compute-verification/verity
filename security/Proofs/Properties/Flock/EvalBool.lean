@@ -2,6 +2,7 @@ module
 
 public import Properties.Flock.EvalBool
 public import Flock.Test.Lower
+public import Proofs.Properties.Flock.EvalBool.Fuel
 meta import Properties.Flock.EvalBool
 meta import Flock.Test.Lower
 

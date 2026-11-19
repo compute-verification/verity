@@ -22,10 +22,8 @@ tree):
 * `LowerEval`: rows of the net the template `Flock.Lower.lower` writes unrolls to, satisfied with the constant 1, hold at
   each output port bit the value `Prog.evalBool` gives the block's Definition on the input port bits.
 * `BlockEval`: the block's Program (`Spot.BlockFront.program`) evaluates, on C's values at its input ports, to block `u`'s
-  local evaluation (`Partition.localEval`) at its output ports, where each word primitive evaluates as the Boolean
-  Definition C's Boolean map names for it (`BooleanAgrees`).
-* `LiftEval`: the lift to bits (`Spot.BlockFront.program`) keeps every Definition's value, each word primitive
-  evaluating as its Boolean Definition (`BodyAgrees`).
+  local evaluation (`Partition.localEval`) at its output ports, where each word primitive evaluates as its Boolean
+  Definition in `P`'s own map (`BodyAgrees`).
 * `BlockCorrect`: those rows, agreeing with a trace of C at the ports, make block `u` correct.
 * `PortsBind`: the trace a proof block's openings show (`Partition.Rblk`) and the statement's own openings at the same
   positions (`PortsOpenAt`) agree at the ports, so the rows agree with C's committed values there, or SHA-512 collides.
@@ -96,30 +94,23 @@ def LowerEval : Prop :=
 /-- **`BlockEval`, MERGE's (C).** The block's Program evaluates, on C's values at its input ports, to block `u`'s local
 evaluation at its output ports, bit for bit. -/
 def BlockEval : Prop :=
-  ∀ (P : Prog) (units : Array ℕ) (boolean : Std.HashMap String String) (fr : Spot.BlockFront.Front) (Q : Prog),
-    Spot.BlockFront.front P units boolean = .ok fr → Spot.BlockFront.program P units boolean = .ok Q →
-    BooleanAgrees P boolean →
+  ∀ (P : Prog) (units : Array ℕ) (fr : Spot.BlockFront.Front) (Q : Prog),
+    Spot.BlockFront.front P units = .ok fr → Spot.BlockFront.program P units = .ok Q →
+    BodyAgrees P →
     ∀ (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size), BlockIs P blocks u fr →
     ∀ X : (ofProgram P).Trace,
       Prog.evalBool Q Q.root (portBits X fr.ins) = portBits ((partOf P blocks).localEval X u.castSucc) fr.outs
-
-/-- **`LiftEval`, MERGE's (C2): the lift to bits keeps every Definition's value.** In the block's Program `Q`, each of
-`P`'s Definitions (a lifted word composite keeps its index) evaluates on the same bits as in `P`: a word leaf is its
-`bitAt` bits, consecutive and low bit first, as `Prog.evalBool` reads it. -/
-def LiftEval : Prop :=
-  ∀ (P : Prog) (units : Array ℕ) (Q : Prog), Spot.BlockFront.program P units P.boolean = .ok Q → BodyAgrees P →
-    ∀ d < P.defs.size, Prog.evalBool Q d = Prog.evalBool P d
 
 /-- **`BlockCorrect`, (J): the block is correct.** Rows of the net `lower`'s template of the block's Program unrolls to,
 satisfied by `z` with the constant 1 (`LowerEval`'s form) and agreeing with a trace `X` of C at
 the input and output port bits, make block `u` correct in C. -/
 def BlockCorrect : Prop :=
-  ∀ (P : Prog) (units : Array ℕ) (boolean : Std.HashMap String String) (fr : Spot.BlockFront.Front) (Q : Prog)
+  ∀ (P : Prog) (units : Array ℕ) (fr : Spot.BlockFront.Front) (Q : Prog)
     (t : Tmpl.Tmpl) (nt : Net),
-    Spot.BlockFront.front P units boolean = .ok fr → Spot.BlockFront.program P units boolean = .ok Q →
+    Spot.BlockFront.front P units = .ok fr → Spot.BlockFront.program P units = .ok Q →
     Flock.Lower.lower Q Q.root (fr.ins.map (·.width)) (fr.outs.map (·.width)) = .ok t → Tmpl.unroll t = .ok nt →
     nt.unitLog ≤ 32 → ∀ (hb : Built nt) (z : ℕ → Bool), (Rows.ofNet hb).Sat (fun c => z c.val) → z t.constPos = true →
-    BooleanAgrees P boolean →
+    BooleanAgrees P P.boolean →
     ∀ (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size), BlockIs P blocks u fr →
     ∀ X : (ofProgram P).Trace,
       (∀ i < portWidth fr.ins, (portBits X fr.ins).getD i false = z (Flock.Lower.inBit t i)) →
@@ -148,7 +139,7 @@ def PortsBind : Prop :=
     (enc : (g : Fin (ofProgram P).N) → BitVec ((ofProgram P).w g) → α) (blocks : Array (Array (ℕ × ℕ)))
     (u : Fin blocks.size) (L : Verity.Layout (ofProgram P)) (c : Verity.Root → Sc.Com) (X : (ofProgram P).Trace)
     (π π' : Fin (ofProgram P).N → Sc.Op) (z : ℕ → Bool),
-    Spot.BlockFront.front P units P.boolean = .ok fr → BlockIs P blocks u fr → (∀ g, Function.Injective (enc g)) →
+    Spot.BlockFront.front P units = .ok fr → BlockIs P blocks u fr → (∀ g, Function.Injective (enc g)) →
     (∀ q ∈ fr.ins ++ fr.outs, ∃ h : q.gate < (ofProgram P).N, ⟨q.gate, h⟩ ∈ (partOf P blocks).io u.castSucc) →
     Sc.Binds H → (partOf P blocks).Rblk Sc H enc L c u.castSucc X π →
     PortsOpenAt Sc H enc (partOf P blocks) L c fr t z π' →
