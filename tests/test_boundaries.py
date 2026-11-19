@@ -1066,8 +1066,6 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
-    # the shell files', by owning lane
-    "adapters/vllm/tools/served_run/h100_smoke.sh",  # compute: Pearl+'s tie class
 )
 
 
