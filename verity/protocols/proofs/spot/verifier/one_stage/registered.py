@@ -109,6 +109,18 @@ SHORT_BITS = 65536
 _INST = hm96.SHA512
 _HEX = re.compile(r"[0-9a-f]+")
 _DEC = re.compile(r"0|[1-9][0-9]*")
+#: `Flock.Registered.freshValue`'s prefix: ``input/n<w>`` is run input node ``w``'s one tree
+FRESH = "input/n"
+
+
+def fresh_value(w: int) -> str:
+    """`Flock.Registered.freshValue`."""
+    return f"{FRESH}{w}"
+
+
+def is_fresh_value(v: Any) -> bool:
+    """`Flock.Registered.isFreshValue`: ``v`` is ``fresh_value(w)`` for some node ``w``."""
+    return type(v) is str and v.startswith(FRESH) and _DEC.fullmatch(v[len(FRESH):]) is not None
 
 
 def width(program: Program, value: str) -> int:
