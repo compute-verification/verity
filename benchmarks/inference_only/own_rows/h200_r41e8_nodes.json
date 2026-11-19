@@ -1,0 +1,1460 @@
+{
+ "summary": {
+  "case": "/workspace/research/runs/r20261119-120632-a29a/out/r41e8-nodes.case.json",
+  "program_sha256": "7780bc898ebd365cd4561a362efe4803a9423bf0c6c535152867d7b73a29f8c7",
+  "program_schema": "verity-ir/descriptor/v1",
+  "record_sha512": "81c2c8a5880b87d8ec273ece873ae785c6bd35636a338dd286472ae9be9c3072b70eb72927fe01f2f7b349cfafdc237d94eea7a6a6c360548f8148dd4c5be90e",
+  "record_name": "verity-vllm/window",
+  "record_run": "2510728651a4e6575ed4a48695a36bca7882ea83a24b7b89076b05b601cb5e251fa4f648522114266705be2d18807bc823354928cb4ed142c63b770e87332411",
+  "declared": 103,
+  "by": {
+   "run": 65,
+   "deployment": 36,
+   "neither": 2
+  }
+ },
+ "nodes": [
+  {
+   "node": 1,
+   "key": "Input32_v1",
+   "members": 331776,
+   "declared": {
+    "node": 1,
+    "offset": 0,
+    "param": "pearl-y/0/0"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 3,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 3,
+    "offset": 0,
+    "param": "pearl-y/0/1"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 5,
+   "key": "Input32_v1",
+   "members": 1769472,
+   "declared": {
+    "node": 5,
+    "offset": 0,
+    "param": "pearl-y/0/2"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 7,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 7,
+    "offset": 0,
+    "param": "pearl-y/0/3"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 9,
+   "key": "Input32_v1",
+   "members": 331776,
+   "declared": {
+    "node": 9,
+    "offset": 0,
+    "param": "pearl-y/0/4"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 11,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 11,
+    "offset": 0,
+    "param": "pearl-y/0/5"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 13,
+   "key": "Input32_v1",
+   "members": 1769472,
+   "declared": {
+    "node": 13,
+    "offset": 0,
+    "param": "pearl-y/0/6"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 15,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 15,
+    "offset": 0,
+    "param": "pearl-y/0/7"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 17,
+   "key": "Input32_v1",
+   "members": 331776,
+   "declared": {
+    "node": 17,
+    "offset": 0,
+    "param": "pearl-y/0/8"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 19,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 19,
+    "offset": 0,
+    "param": "pearl-y/0/9"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 21,
+   "key": "Input32_v1",
+   "members": 1769472,
+   "declared": {
+    "node": 21,
+    "offset": 0,
+    "param": "pearl-y/0/10"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 23,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 23,
+    "offset": 0,
+    "param": "pearl-y/0/11"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 25,
+   "key": "Input32_v1",
+   "members": 331776,
+   "declared": {
+    "node": 25,
+    "offset": 0,
+    "param": "pearl-y/0/12"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 27,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 27,
+    "offset": 0,
+    "param": "pearl-y/0/13"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 29,
+   "key": "Input32_v1",
+   "members": 1769472,
+   "declared": {
+    "node": 29,
+    "offset": 0,
+    "param": "pearl-y/0/14"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 31,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 31,
+    "offset": 0,
+    "param": "pearl-y/0/15"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 33,
+   "key": "Input32_v1",
+   "members": 331776,
+   "declared": {
+    "node": 33,
+    "offset": 0,
+    "param": "pearl-y/0/16"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 35,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 35,
+    "offset": 0,
+    "param": "pearl-y/0/17"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 37,
+   "key": "Input32_v1",
+   "members": 1769472,
+   "declared": {
+    "node": 37,
+    "offset": 0,
+    "param": "pearl-y/0/18"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 39,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 39,
+    "offset": 0,
+    "param": "pearl-y/0/19"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 41,
+   "key": "Input32_v1",
+   "members": 331776,
+   "declared": {
+    "node": 41,
+    "offset": 0,
+    "param": "pearl-y/0/20"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 43,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 43,
+    "offset": 0,
+    "param": "pearl-y/0/21"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 45,
+   "key": "Input32_v1",
+   "members": 1769472,
+   "declared": {
+    "node": 45,
+    "offset": 0,
+    "param": "pearl-y/0/22"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 47,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 47,
+    "offset": 0,
+    "param": "pearl-y/0/23"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 49,
+   "key": "Input32_v1",
+   "members": 331776,
+   "declared": {
+    "node": 49,
+    "offset": 0,
+    "param": "pearl-y/0/24"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 51,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 51,
+    "offset": 0,
+    "param": "pearl-y/0/25"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 53,
+   "key": "Input32_v1",
+   "members": 1769472,
+   "declared": {
+    "node": 53,
+    "offset": 0,
+    "param": "pearl-y/0/26"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 55,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 55,
+    "offset": 0,
+    "param": "pearl-y/0/27"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 57,
+   "key": "Input32_v1",
+   "members": 331776,
+   "declared": {
+    "node": 57,
+    "offset": 0,
+    "param": "pearl-y/0/28"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 59,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 59,
+    "offset": 0,
+    "param": "pearl-y/0/29"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 61,
+   "key": "Input32_v1",
+   "members": 1769472,
+   "declared": {
+    "node": 61,
+    "offset": 0,
+    "param": "pearl-y/0/30"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 63,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 63,
+    "offset": 0,
+    "param": "pearl-y/0/31"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 65,
+   "key": "Input32_v1",
+   "members": 331776,
+   "declared": {
+    "node": 65,
+    "offset": 0,
+    "param": "pearl-y/0/32"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 67,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 67,
+    "offset": 0,
+    "param": "pearl-y/0/33"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 69,
+   "key": "Input32_v1",
+   "members": 1769472,
+   "declared": {
+    "node": 69,
+    "offset": 0,
+    "param": "pearl-y/0/34"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 71,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 71,
+    "offset": 0,
+    "param": "pearl-y/0/35"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 73,
+   "key": "Input32_v1",
+   "members": 331776,
+   "declared": {
+    "node": 73,
+    "offset": 0,
+    "param": "pearl-y/0/36"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 75,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 75,
+    "offset": 0,
+    "param": "pearl-y/0/37"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 77,
+   "key": "Input32_v1",
+   "members": 1769472,
+   "declared": {
+    "node": 77,
+    "offset": 0,
+    "param": "pearl-y/0/38"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 79,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 79,
+    "offset": 0,
+    "param": "pearl-y/0/39"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 81,
+   "key": "Input32_v1",
+   "members": 331776,
+   "declared": {
+    "node": 81,
+    "offset": 0,
+    "param": "pearl-y/0/40"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 83,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 83,
+    "offset": 0,
+    "param": "pearl-y/0/41"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 85,
+   "key": "Input32_v1",
+   "members": 1769472,
+   "declared": {
+    "node": 85,
+    "offset": 0,
+    "param": "pearl-y/0/42"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 87,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 87,
+    "offset": 0,
+    "param": "pearl-y/0/43"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 89,
+   "key": "Input32_v1",
+   "members": 331776,
+   "declared": {
+    "node": 89,
+    "offset": 0,
+    "param": "pearl-y/0/44"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 91,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 91,
+    "offset": 0,
+    "param": "pearl-y/0/45"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 93,
+   "key": "Input32_v1",
+   "members": 1769472,
+   "declared": {
+    "node": 93,
+    "offset": 0,
+    "param": "pearl-y/0/46"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 95,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 95,
+    "offset": 0,
+    "param": "pearl-y/0/47"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 97,
+   "key": "Input32_v1",
+   "members": 331776,
+   "declared": {
+    "node": 97,
+    "offset": 0,
+    "param": "pearl-y/0/48"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 99,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 99,
+    "offset": 0,
+    "param": "pearl-y/0/49"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 101,
+   "key": "Input32_v1",
+   "members": 1769472,
+   "declared": {
+    "node": 101,
+    "offset": 0,
+    "param": "pearl-y/0/50"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 103,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 103,
+    "offset": 0,
+    "param": "pearl-y/0/51"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 105,
+   "key": "Input32_v1",
+   "members": 331776,
+   "declared": {
+    "node": 105,
+    "offset": 0,
+    "param": "pearl-y/0/52"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 107,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 107,
+    "offset": 0,
+    "param": "pearl-y/0/53"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 109,
+   "key": "Input32_v1",
+   "members": 1769472,
+   "declared": {
+    "node": 109,
+    "offset": 0,
+    "param": "pearl-y/0/54"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 111,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 111,
+    "offset": 0,
+    "param": "pearl-y/0/55"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 113,
+   "key": "Input32_v1",
+   "members": 331776,
+   "declared": {
+    "node": 113,
+    "offset": 0,
+    "param": "pearl-y/0/56"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 115,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 115,
+    "offset": 0,
+    "param": "pearl-y/0/57"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 117,
+   "key": "Input32_v1",
+   "members": 1769472,
+   "declared": {
+    "node": 117,
+    "offset": 0,
+    "param": "pearl-y/0/58"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 119,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 119,
+    "offset": 0,
+    "param": "pearl-y/0/59"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 121,
+   "key": "Input32_v1",
+   "members": 331776,
+   "declared": {
+    "node": 121,
+    "offset": 0,
+    "param": "pearl-y/0/60"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 123,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 123,
+    "offset": 0,
+    "param": "pearl-y/0/61"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 125,
+   "key": "Input32_v1",
+   "members": 1769472,
+   "declared": {
+    "node": 125,
+    "offset": 0,
+    "param": "pearl-y/0/62"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 127,
+   "key": "Input32_v1",
+   "members": 221184,
+   "declared": {
+    "node": 127,
+    "offset": 0,
+    "param": "pearl-y/0/63"
+   },
+   "registered_by": "run",
+   "readers": [
+    "LinearOut_v3.y"
+   ]
+  },
+  {
+   "node": 256,
+   "key": "Input16_v1",
+   "members": 145440,
+   "declared": {
+    "node": 256,
+    "offset": 0,
+    "param": "verity/certifier/scan-state/v1"
+   },
+   "registered_by": "run",
+   "readers": [
+    "ScanSlots_v3.state"
+   ]
+  },
+  {
+   "node": 260,
+   "key": "Input16_v1",
+   "members": 262668288,
+   "declared": {
+    "node": 260,
+    "offset": 0,
+    "param": "weights/model.embed_tokens.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "Gemm_v2.w"
+   ]
+  },
+  {
+   "node": 261,
+   "key": "Input1_v1",
+   "members": 512,
+   "declared": {
+    "node": 261,
+    "of": "domain",
+    "table": "table/weights/model.embed_tokens.weight@2048+0"
+   },
+   "registered_by": "neither",
+   "readers": [
+    "EmbeddingRead_v2.domain"
+   ]
+  },
+  {
+   "node": 262,
+   "key": "Input1_v1",
+   "members": 512,
+   "declared": {
+    "node": 262,
+    "of": "root",
+    "table": "table/weights/model.embed_tokens.weight@2048+0"
+   },
+   "registered_by": "neither",
+   "readers": [
+    "EmbeddingRead_v2.root"
+   ]
+  },
+  {
+   "node": 263,
+   "key": "Input16_v1",
+   "members": 262668288,
+   "declared": {
+    "node": 263,
+    "offset": 0,
+    "param": "weights/model.embed_tokens.weight@32768"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "Gemm_v2.w"
+   ]
+  },
+  {
+   "node": 264,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 264,
+    "offset": 0,
+    "param": "weights/model.layers.0.input_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormTriton_v5.w"
+   ]
+  },
+  {
+   "node": 265,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 265,
+    "offset": 0,
+    "param": "weights/model.layers.0.post_attention_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 266,
+   "key": "Input16_v1",
+   "members": 8388608,
+   "declared": {
+    "node": 266,
+    "offset": 0,
+    "param": "weights/model.layers.0.self_attn.rotary_emb.cos_sin_cache@64"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RoPEHead_v1.cs"
+   ]
+  },
+  {
+   "node": 267,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 267,
+    "offset": 0,
+    "param": "weights/model.layers.1.input_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 268,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 268,
+    "offset": 0,
+    "param": "weights/model.layers.1.post_attention_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 269,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 269,
+    "offset": 0,
+    "param": "weights/model.layers.10.input_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 270,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 270,
+    "offset": 0,
+    "param": "weights/model.layers.10.post_attention_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 271,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 271,
+    "offset": 0,
+    "param": "weights/model.layers.11.input_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 272,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 272,
+    "offset": 0,
+    "param": "weights/model.layers.11.post_attention_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 273,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 273,
+    "offset": 0,
+    "param": "weights/model.layers.12.input_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 274,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 274,
+    "offset": 0,
+    "param": "weights/model.layers.12.post_attention_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 275,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 275,
+    "offset": 0,
+    "param": "weights/model.layers.13.input_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 276,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 276,
+    "offset": 0,
+    "param": "weights/model.layers.13.post_attention_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 277,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 277,
+    "offset": 0,
+    "param": "weights/model.layers.14.input_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 278,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 278,
+    "offset": 0,
+    "param": "weights/model.layers.14.post_attention_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 279,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 279,
+    "offset": 0,
+    "param": "weights/model.layers.15.input_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 280,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 280,
+    "offset": 0,
+    "param": "weights/model.layers.15.post_attention_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 281,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 281,
+    "offset": 0,
+    "param": "weights/model.layers.2.input_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 282,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 282,
+    "offset": 0,
+    "param": "weights/model.layers.2.post_attention_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 283,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 283,
+    "offset": 0,
+    "param": "weights/model.layers.3.input_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 284,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 284,
+    "offset": 0,
+    "param": "weights/model.layers.3.post_attention_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 285,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 285,
+    "offset": 0,
+    "param": "weights/model.layers.4.input_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 286,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 286,
+    "offset": 0,
+    "param": "weights/model.layers.4.post_attention_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 287,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 287,
+    "offset": 0,
+    "param": "weights/model.layers.5.input_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 288,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 288,
+    "offset": 0,
+    "param": "weights/model.layers.5.post_attention_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 289,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 289,
+    "offset": 0,
+    "param": "weights/model.layers.6.input_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 290,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 290,
+    "offset": 0,
+    "param": "weights/model.layers.6.post_attention_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 291,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 291,
+    "offset": 0,
+    "param": "weights/model.layers.7.input_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 292,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 292,
+    "offset": 0,
+    "param": "weights/model.layers.7.post_attention_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 293,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 293,
+    "offset": 0,
+    "param": "weights/model.layers.8.input_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 294,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 294,
+    "offset": 0,
+    "param": "weights/model.layers.8.post_attention_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 295,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 295,
+    "offset": 0,
+    "param": "weights/model.layers.9.input_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 296,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 296,
+    "offset": 0,
+    "param": "weights/model.layers.9.post_attention_layernorm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  },
+  {
+   "node": 297,
+   "key": "Input16_v1",
+   "members": 2048,
+   "declared": {
+    "node": 297,
+    "offset": 0,
+    "param": "weights/model.norm.weight@2048"
+   },
+   "registered_by": "deployment",
+   "readers": [
+    "RMSNormFusedCuda_v2.w"
+   ]
+  }
+ ]
+}

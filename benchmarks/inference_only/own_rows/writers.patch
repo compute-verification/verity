@@ -1,0 +1,38 @@
+diff --git a/verity/commitments/periods/interface.py b/verity/commitments/periods/interface.py
+index c9331612426..d15646223fd 100644
+--- a/verity/commitments/periods/interface.py
++++ b/verity/commitments/periods/interface.py
+@@ -807,6 +807,7 @@ class Registered:
+     formats: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+     histories: tuple[History, ...] = ()
+     supplied: tuple[str, ...] = ()
++    nodes: tuple[Mapping[str, Any], ...] = ()
+ 
+     def __post_init__(self) -> None:
+         if self.supplied:
+@@ -831,20 +832,22 @@ class Registered:
+                 "openings": [o.doc() for o in self.openings], **({"values": list(self.values)} if self.values else {}),
+                 **({"formats": dict(sorted(self.formats.items()))} if self.formats else {}),
+                 **({"histories": [h.doc() for h in self.histories]} if self.histories else {}),
+-                **({"supplied": list(self.supplied)} if self.supplied else {})}
++                **({"supplied": list(self.supplied)} if self.supplied else {}),
++                **({"nodes": [dict(n) for n in self.nodes]} if self.nodes else {})}
+ 
+     @classmethod
+     def of(cls, d: Any) -> Registered:
+         try:
+             if not {"params", "tables", "reads", "roots", "openings"} <= set(d) <= {"params", "tables", "reads", "roots",
+                                                                                     "openings", "values", "formats",
+-                                                                                    "histories", "supplied"}:
++                                                                                    "histories", "supplied", "nodes"}:
+                 raise ValueError(sorted(d))
+             return cls({str(k): v for k, v in d["params"].items()}, tuple(Table(**t) for t in d["tables"]),
+                        tuple(Read.of(r) for r in d["reads"]), tuple(TableRead(**r) for r in d["roots"]),
+                        tuple(TableOpening(**{**o, "ports": tuple(o["ports"])}) for o in d["openings"]),
+                        tuple(d.get("values", ())), d.get("formats", {}),
+-                       tuple(History(**h) for h in d.get("histories", ())), tuple(d.get("supplied", ())))
++                       tuple(History(**h) for h in d.get("histories", ())), tuple(d.get("supplied", ())),
++                       tuple(dict(n) for n in d.get("nodes", ())))
+         except (TypeError, ValueError, KeyError, AttributeError) as e:
+             raise ValueError(f"a circuit's registered reads are {{params, tables, reads, roots, openings}}, its values, "
+                              f"their formats and its histories: {e}") from e
