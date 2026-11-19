@@ -1,7 +1,6 @@
 # The advice's encodings (network attestation for arbitrary vLLM usage). `derived.py`: the fields of advice v0 (I1) that
 # cost zero bits, the residual that remains and its bits per attester window; `cache_vectors.py`: the attester's
-# CacheStep_v1 against derived's prefix rules, and its difftest vectors; `replay_input.py`: a step trace or a
-# derived-format one as the replay's input; `arith_vectors.py`:
+# CacheStep_v1 against derived's prefix rules, and its difftest vectors; `arith_vectors.py`:
 # network attestation's arithmetic encoder against code.py, v1 and code_v1; `sched_trace.py`: step traces from
 # vLLM's own scheduler, which the tests read as fixtures (it needs vLLM).
 # Those fixtures (`tests/fixtures/`; `tests/fixtures_draft/`, `vllm_trace.py`'s with a draft) and the attester's

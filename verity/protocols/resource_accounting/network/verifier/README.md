@@ -77,14 +77,14 @@ Open premises (`open`):
     `benchmarks/network_traces/attester_piece.py` runs it in step 1 of each of its steps, on the kept network
     attester run (`network_attester_chain.rows_audit_case`);
   - `network-records verdicts`, the process `lean_audit` starts and `service` asks (`VERITY_NETWORK_RECORDS_EXE` names
-    a built one); `benchmarks/network_e2e` and `benchmarks/network_traces` build and run it;
-  - `network-check-difftest INSTANCES PYTHON N`, which holds `certificate.py`'s encodings to
-    `NetworkCheck.Certificate`'s.
+    a built one); `benchmarks/network_e2e` and `benchmarks/network_traces` build and run it.
+
+  The module `NetworkVerifier.DifftestMain`, `INSTANCES PYTHON N`, holds `certificate.py`'s encodings to
+  `NetworkVerifier.Certificate`'s: no executable, the Lean check runs it interpreted (`runs` in `lean/lean-audit.json`).
 - **Lean beside it**: `../attester/program/lean/`, the network attester's program, is the Lake package `certifier_program`, whose
-  library `NetworkAttester` the packages at `lean` and `security/Proofs` require by path. Its
-  executables (`lake exe`): `certifier-difftest`, `certifier-charge-difftest` and `certifier-window-difftest`, each
-  `INSTANCES PYTHON N`. The Lean check runs each `../attester/program/lean/scripts` script, then its difftest
-  (`../attester/program/lean/lean-audit.json`). Its `NetworkAttester.Rows` is the active network attester's records
+  library `NetworkAttester` the packages at `lean` and `security/Proofs` require by path. It has no
+  executable: the Lean check runs each `../attester/program/lean/scripts` script, then its difftest's module interpreted
+  (`runs` in `../attester/program/lean/lean-audit.json`). Its `NetworkAttester.Rows` is the active network attester's records
   as rows and their audit, the code form of `RecordRows` over the network attester's lanes with `network_attester.py`'s `audit`
   its reference, which `network-rows` (`lean/`) runs on a run's attested records; no proof ties it to `RecordRows`.
   Against the reference it refuses three kinds of run the network attester never writes and holds two things less:
@@ -289,8 +289,12 @@ A spec-level reference for network attestation's timing channel:
   ``load``, ingress), committed as a registered value under the network attester's own salts at the reading port's
   leaf width and row format, its root in a head the network attester signs for the session's first execution phase
   (`TransferHead`, `registration`); every other row into the host is the scan's state, with no head of its own.
-  `check_registration` reads it for the transfer it expects (`benchmarks/one_stage/a5_network_attester.py` calls it; no
-  verifier does yet), and `port` the verifier's own
+  `check_registration` reads it for the transfer it expects (`benchmarks/one_stage/a5_network_attester.py` and
+  `blocks.pins` call it). The check of a run's load, one registration of each value of its shape's manifest
+  (`load_check.manifest`) under the deployment's key and session, is the Lean verifier's:
+  `NetworkVerifier.Load.loadCheck`, the `load` function of `network-records verdicts`, which `relay_check.check_load`
+  asks and whose verdict it gives, with `check_registration` its reference in the agreement test
+  (`tests/verity/protocols/resource_accounting/network/verifier/network/test_network_load_agreement.py`). `port` is the verifier's own
   `--registered` port of the value at the signed root (the load relayed and committed as it crosses,
   `verity/protocols/resource_accounting/network/attester/load_relay.py`);
 - the class circuit's check (`blocks`): a circuit record is one host's class execution phase circuit, and which host runs which
