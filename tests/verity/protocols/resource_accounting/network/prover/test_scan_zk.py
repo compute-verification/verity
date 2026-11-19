@@ -1069,7 +1069,8 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
     assert out["public"]["start"] == 0
     assert p["circuit"] == audit["registration"]["program"]
     window_record = tmp_path / "window-circuit.json"
-    window_record.write_text(json.dumps({"format": SP.CIRCUIT, "program": audit["registration"]["program"]}))
+    window_record.write_text(json.dumps({"format": SP.CIRCUIT, "program": audit["registration"]["program"],
+                                         "registered": {"values": ["h1/a/0", sz.SCAN_STATE]}}))
     for k in (1, 2):
         (v3c := tmp_path / f"period-subset-{k}.json").write_text(json.dumps(block_audit(progs, sampled=k)))
         got = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit=SP.circuit_of_record(window_record)))
@@ -1473,3 +1474,17 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     assert sz.S.Stream(spec, units, budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER, coins=sz.CC.ChallengerCoins(None)).digest
     with pytest.raises(ValueError, match="not the check's program"):
         sz.S.Stream(spec, units[::-1], budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER)
+
+
+def test_a_served_windows_circuit_record_is_refused_by_name(tmp_path):
+    """The window-circuit record `window_circuit` writes without tables is a served window's circuit, whose entries are
+    its Programs' longest first, not slot k's at k: `circuit_of_record` refuses it, and a record that registers no value
+    or no `registered` at all, by `SERVED`; one that registers a table's value beside the scan state names its program."""
+    from verity.protocols.resource_accounting.network.prover import scan_period as SP
+    head = {"format": SP.CIRCUIT, "program": "c3" * 64}
+    for i, rest in enumerate(({"registered": {"values": [sz.SCAN_STATE]}}, {"registered": {}}, {})):
+        (served := tmp_path / f"served-{i}.json").write_text(json.dumps({**head, **rest}))
+        with pytest.raises(SystemExit, match=re.escape(SP.SERVED)):
+            SP.circuit_of_record(served)
+    (tabled := tmp_path / "class.json").write_text(json.dumps({**head, "registered": {"values": ["h1/a/0", sz.SCAN_STATE]}}))
+    assert SP.circuit_of_record(tabled) == "c3" * 64
