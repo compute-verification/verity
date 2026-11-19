@@ -150,7 +150,7 @@ def test_a_session_lean_accepts_in_a_form_the_mirror_refuses_is_refused(tmp_path
     _derived(monkeypatch, circuit)
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
-    verdict = {"session": str(tmp_path / "s"), "accepted": True, "why": "", "program_sha512": "p"}
+    verdict = {"session": str(tmp_path / "s"), "accepted": True, "why": "", "program_sha512": "p", "zk": True}
     monkeypatch.setattr(PF, "executable", lambda: Path("verity-verify-proof"))
     monkeypatch.setattr(PF.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
         a, 0, f"VERDICT {json.dumps(verdict)}\n", ""))
@@ -165,7 +165,7 @@ def test_the_verifier_runs_under_its_allocator_setting_unless_the_caller_sets_it
     _derived(monkeypatch, circuit)
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
-    verdict = {"session": str(tmp_path / "s"), "accepted": False, "why": "refused"}
+    verdict = {"session": str(tmp_path / "s"), "accepted": False, "why": "refused", "zk": True}
     children = []
 
     def child(cmd, **kw):
@@ -270,7 +270,7 @@ def test_a_session_lean_accepts_on_a_template_the_mirror_refuses_is_rejected_wit
     public.write_bytes(b'{"units": {"indices": [0]}}\n')
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
-    verdict = {"session": str(tmp_path / "s"), "accepted": True, "why": "", "program_sha512": "p"}
+    verdict = {"session": str(tmp_path / "s"), "accepted": True, "why": "", "program_sha512": "p", "zk": True}
     monkeypatch.setattr(PF, "executable", lambda: Path("verity-verify-proof"))
     monkeypatch.setattr(PF.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
         a, 0, f"VERDICT {json.dumps(verdict)}\n", ""))
@@ -401,7 +401,7 @@ def test_the_verifier_runs_on_c_s_and_never_on_the_statements_own_circuit_file(t
     _derived(monkeypatch, circuit)
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
-    verdict = {"session": str(tmp_path / "s"), "accepted": False, "why": "refused"}
+    verdict = {"session": str(tmp_path / "s"), "accepted": False, "why": "refused", "zk": True}
     ran = []
 
     def child(cmd, **kw):
@@ -430,7 +430,7 @@ def test_the_door_proves_only_a_block_the_draw_sampled_and_refuses_an_undrawn_on
     monkeypatch.setattr(OC, "block", lambda c, partition, k: [(k, k + 1)])
     monkeypatch.setattr(OC, "restrict", lambda c, partition, units: derived.append(units) or circuit.read_bytes())
     monkeypatch.setattr(OC, "lower", lambda c_s: c_s)
-    verdict = {"session": str(tmp_path / "s"), "accepted": False, "why": "refused"}
+    verdict = {"session": str(tmp_path / "s"), "accepted": False, "why": "refused", "zk": True}
     monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
     monkeypatch.setattr(PF.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(
         cmd, 0, f"VERDICT {json.dumps(verdict)}\n", ""))
@@ -441,6 +441,32 @@ def test_the_door_proves_only_a_block_the_draw_sampled_and_refuses_an_undrawn_on
         assert derived == []
     else:
         assert why is None and derived == [want] and [f.why for f in got] == ["refused"], (why, derived)
+
+
+NOT_ZK = {"no zk": {}, "zk false": {"zk": False}, "zk a string": {"zk": "true"}}
+
+
+@pytest.mark.parametrize("accepted", [True, False])
+@pytest.mark.parametrize("zk", NOT_ZK.values(), ids=NOT_ZK.keys())
+def test_a_verdict_line_that_does_not_say_zk_true_is_refused(tmp_path, monkeypatch, zk, accepted):
+    """Flock's verifier says ``zk`` on every verdict line: the door refuses a line that does not say it true, accepted or
+    not, as no zero-knowledge session's, and so does a member's verdict (`members.flock_verdict`)."""
+    circuit, public = _files(tmp_path)
+    _derived(monkeypatch, circuit)
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "session.json").write_text("{}")
+    verdict = {"session": str(tmp_path / "s"), "accepted": accepted, "why": "", "program_sha512": "p", **zk}
+    monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(
+        cmd, 0, f"VERDICT {json.dumps(verdict)}\n", ""))
+    got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), program=RUN_ONLY, partition={"program": "p"},
+                         draw={"units": [0]}, registered=None)
+    assert got is None and why == ("proof", PF.not_zk_why(verdict)) and "not true: no --zk session's" in why[1], why
+    st = M.Statement(circuit, public, RUN_ONLY, {"program": "p"}, None, (), tmp_path / "s" / "session.json", ())
+    with pytest.raises(M.Outside, match="not true: no --zk session's"):
+        M.flock_verdict(st)
+    verdict["zk"] = True
+    assert M.flock_verdict(st) == verdict and PF.not_zk_why(verdict) is None
 
 
 def _tmpl(d: Path, **meta) -> Path:
