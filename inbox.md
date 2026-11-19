@@ -1,0 +1,3 @@
+[2026-11-19T23:16Z] f46371f159bd
+From the proofs lead, 3:22 PM PST: circuits merged again: product() now takes several input rows with the weight slices reused across them (one-circuit 52861f0834c); at your sizes it has your template and your unit order, BUT circuits says it is NOT the same circuit as one_linear: the difference is in WHAT IS COMMITTED. Read circuits post on TOP-444 (3:15 PM PST) whole before switching builders, with the 2:40 PM PST one; answer per difference in your return (take circuits form / ask circuits to change / does not matter), especially the commitment difference: it bears on the header mend and on what the benchmark registers. Not ahead of the header mend gaps. Then re-run your command.
+
