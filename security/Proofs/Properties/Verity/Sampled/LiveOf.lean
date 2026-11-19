@@ -662,22 +662,6 @@ theorem hr_planZHJP {n mPts : ℕ} {I : FlockSoundness.Discharge.Exec.Inputs} {o
 
 /-! ## The session at an accepted play -/
 
-/-- **The registration samples by a subset design**: at v2's parameters in `θ`, every descriptor of the verifier's
-program reads a subset sampling design off the verifier's query, sampling design and work table (`designAt`), at every
-population. -/
-def SubsetDesign (θ : ByteArray) : Prop :=
-  ∀ p, ParamsAt θ p → ∀ (desc : Hash.Msg) n,
-    _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program →
-    Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.samplingDesign p.base.verifier.workTable n =
-      .subset (Flock.Bridge.samplingDesignK
-        (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.samplingDesign p.base.verifier.workTable n))
-
-/-- **v2's registration samples by a subset design** where its parameters name no members (`OneStatement`): their
-sampling design object is of kind `subset` (`kindOf_paramsAt`), under which `designAt` is a subset design
-(`designAt_subset`). -/
-theorem subsetDesign (θ : ByteArray) (hone : OneStatement θ) : SubsetDesign θ :=
-  fun p hp _ n _ => Flock.Bridge.designAt_subset n (kindOf_paramsAt hp (hone p hp))
-
 /-- **The bound's parameters are in range**: `k`, `Rw` and `M` at least one, a rate below one, and `2^23 ≤ ρ·(e·k)`,
 the count curve `hr_planZHJP` reads at `Zk.schedule`'s cap. -/
 structure SessionBound.Ok (b : SessionBound) : Prop where
@@ -691,7 +675,7 @@ open FlockSoundness.Discharge.Composed (inputsJ nTab) in
 /-- **Wherever v2 accepts a play, a session `LiveSpec` holds of exists**: on the committed files `F` at the parameters
 `θ` the sampled verdict accepts, the inputs, descriptor, public file and design v2's session reads (`session_parts`),
 the reference setup at the record's sample (`y₀_of_setup`), the circuit with no public input port and the public file
-with none (`pub_of_setup`), the subset design v2's parameters name (`subsetDesign`), the deployed sample's bytes
+with none (`pub_of_setup`), the deployed sample's bytes
 (`Live.deployed`) and the bound's parameters make a `Live`, where the bound's parameters are in range. -/
 theorem liveSpec_of_accepted {V : Vocab d α} {T : PinnedTables} {b : SessionBound} (hb : b.Ok) {θ : ByteArray}
     (hD : DigestsAt V T θ)
@@ -718,7 +702,7 @@ theorem liveSpec_of_accepted {V : Vocab d α} {T : PinnedTables} {b : SessionBou
   let A : Live :=
     { n, I, own := none, ht := htyp, D, hD := hDp, hU, hpi := hpiD, pub, hpub, pubO, hpubO, hscope, hdup, hn, hnO,
       desc, qr := p.base.verifier.query, hpop, lj := p.base.verifier.samplingDesign, tb := p.base.verifier.workTable,
-      hsub := subsetDesign θ hone p hpa desc n hdesc, hdiv := by rw [hn1]; exact Nat.mod_one _, S₀, d₀,
+      hdiv := by rw [hn1]; exact Nat.mod_one _, S₀, d₀,
       y₀ := Classical.choice hy,
       Ω := DeployedCoins, fΩ := inferInstance, nΩ := inferInstance, Lb := deployedLb, src := deployedSrc,
       hA3 := uniformRandomBytes_deployed, hTags, k := b.k, Rw := b.Rw, M := b.M, hk := hb.k, hRw := hb.Rw,

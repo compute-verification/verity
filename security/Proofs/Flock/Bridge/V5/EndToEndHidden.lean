@@ -113,9 +113,9 @@ open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Z
 whose missProb of `W` is at most the sampling design's `P_a` of `W` under A3 (`execSel_missProb_le`). -/
 theorem endToEndHiddenV5_of (hOC : OpeningsCanonTargetV5) : EndToEndHiddenV5 := by
   intro n Reg I own ht D hD hU pi hpi pub hpub hscope samplingDesign kd ns hns hlaw hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags
-    hCust k Rw M hk hRw hM ρ hρ hr t' ht' W τ qF qS L P vb σ Cc Lm rows κ hCR hA2
+    pd hpd hCust k Rw M hk hRw hM ρ hρ hr t' ht' W τ qF qS L P vb σ Cc Lm rows κ hCR hA2
   have h := Discharge.ZkHidden.zk_session_soundHJ_custody_escCP I own ht (Flock.Desc.parseStmt_stmt hD) hU hpi hpub
-    hscope samplingDesign kd hdiv dj y₀ wr dg N L hTags hCust (samplingDesignOn_size hlaw hCust.2) hk hRw hM hρ hr ht' W
+    hscope pd kd hdiv dj y₀ wr dg N L hTags hCust (samplingDesignSized_size hpd hCust.2) hk hRw hM hρ hr ht' W
     (fun g o => canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2)
     (hOC n Reg I own ht D hD hU pi hpi pub hpub hscope kd dj S₀ d₀ y₀) τ
     (qF := qF) (qS := qS) hCR

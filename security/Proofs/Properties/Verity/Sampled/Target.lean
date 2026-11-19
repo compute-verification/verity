@@ -85,7 +85,7 @@ open Classical in
 charged `t + w` per run and the tables' finders at `2t + 2v` and `t + v`, at a sample `L` that is `Flock.Bridge.execSel`
 at the session's bytes and sampling design; at `L = A.L` (`Live.L_eq`) its simulator and extractor are the session's
 (`Live.sim`, `Live.Xr`). The session's `--zk` tags are in `TagsOkZHJ` (`Live.hTags`), so V5's bound is the one it states
-there, and `live-verifier` at the registration's sampling design is the sample file's (`Live.hsub`, `Live.hCust`). -/
+there, and `live-verifier` is at the sample file's print, `subset kd` (`Live.hCust`). -/
 theorem v5_at (L : Spot.Sampling.SamplingDesign A.n) (hL : Flock.Bridge.execSel (n := A.n) A.src A.design A.n = L) (t : ℕ)
     (B : Finset ℕ) (τ : FlockSoundness.Game.Strategy (auditLive L A.Reg (liveOfZJ A.dg (planZHJP A.dj A.y₀) A.N A.wr))) :
     let σ := simZJA execArith hs512 (planZHJP A.dj A.y₀) (AcceptsZKP A.I A.own) A.wr
@@ -110,14 +110,9 @@ theorem v5_at (L : Spot.Sampling.SamplingDesign A.n) (hL : Flock.Bridge.execSel 
             (1 - A.ρ)) +
         A.rootsErr := by
   subst hL
-  have hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw (mPts := mPtsOf A.D.unroll.g (A.kd / nTab A.I))
-      A.I A.own A.dj (fun S R => (planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length) A.wr fun _ => A.design :=
-    (congrArg (fun l => FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw
-      (mPts := mPtsOf A.D.unroll.g (A.kd / nTab A.I)) A.I A.own A.dj
-      (fun S R => (planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length) A.wr fun _ => l) A.hsub).mpr A.hCust
   have h := Flock.SecurityProofs.SampledKSLiveV5 A.n A.Reg A.I A.own A.ht A.D (Flock.Desc.parseStmt_of_parse A.hD)
     {} A.hpi A.pub A.hpub A.hscope (Flock.Bridge.rowsOk_of_scopeOkH A.hscope) A.hdup A.desc A.qr A.hpop A.lj A.tb
-    A.hdiv A.dj A.S₀ A.d₀ A.y₀ A.wr A.dg A.N A.Ω A.Lb A.src A.hA3 hCust A.k A.Rw A.M A.hk A.hRw A.hM A.ρ A.hρ A.hr
+    A.hdiv A.dj A.S₀ A.d₀ A.y₀ A.wr A.dg A.N A.Ω A.Lb A.src A.hA3 (.subset A.kd) rfl A.hCust A.k A.Rw A.M A.hk A.hRw A.hM A.ρ A.hρ A.hr
     (A.tL t) (by unfold Live.tL; positivity) B τ (A.qF t) (A.qS t) ⟨"", 0, []⟩
   rw [dif_pos A.hTags] at h
   exact h

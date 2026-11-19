@@ -123,11 +123,11 @@ open scoped ENNReal
 /-- **The session v2 sets up on the parameters and the committed files**: V5's binders, each the value v2's check
 derives (the files' parse, the public file over the circuit's empty public input ports, the ports' published domains
 distinct, the population, the registration's descriptor, query, sampling-design object and work table and the
-population's order, and the sampling design the verifier samples under from them, a subset one), the device's byte
+population's order, and the sampling design the verifier samples under from them), the device's byte
 stream the sample reads, A3 at those bytes and the verify command's tags as fields, and the bound's parameters. The
 registration, the sample file (the printed one), the writer and the rounds' digest are the ones the period's
 registration fixes (`Live.Reg`, `Live.dj`, `Live.wr`, `Live.dg`), and `live-verifier` holds at the writer under the
-sample file's sampling design (`Live.hCust`). The live rounds' count and the tree openings the session reads after a
+sample file's print, `subset kd`, whatever sampling design the verifier samples under (`Live.hCust`). The live rounds' count and the tree openings the session reads after a
 digest are its coin tree's (`Live.N`, `Live.rounds`). -/
 structure Live where
   /-- the population: the public file's proof blocks -/
@@ -160,9 +160,6 @@ structure Live where
   /-- the registration's sampling-design object and work table -/
   lj : Lean.Json
   tb : Option Lean.Json
-  /-- the sampling design the verifier samples under from the registration (`Flock.Bridge.designAt`) is the sample
-  file's, its proof blocks sampled uniformly (`Live.hCust`) -/
-  hsub : Flock.Bridge.designAt desc qr lj tb n = .subset (Flock.Bridge.samplingDesignK (Flock.Bridge.designAt desc qr lj tb n))
   hdiv : Flock.Bridge.samplingDesignK (Flock.Bridge.designAt desc qr lj tb n) % nTab I = 0
   S₀ : Finset (Fin n)
   d₀ : Lean.Json
