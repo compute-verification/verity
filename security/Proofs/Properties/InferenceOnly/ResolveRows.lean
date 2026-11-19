@@ -13,7 +13,9 @@ there to a gate of an input node, since the reference lies in a part that is a r
 lies (`ref_leaf`, `arg_part`); in a strided part, the leaf a member's stretch reads (`strided_leaf`). So the leaf is gate `j` of input node `n` (`unit_leaf`), and no two leaves of units are one gate
 (`unit_leaf_inj`): a gate of the root names its node and the leaf (`node_of_gate`), a leaf of an input node lies in
 one run at one place (`leafAt_inj`, from `Record.SecurityProofs.runs_apart`), and a batch's members read an argument
-at references of their own (`memberIdx_inj`).
+at references of their own (`memberIdx_inj`). Of a record that declares root input nodes and whose root reads no
+edge, every reference of a unit's argument is a leaf of an input node (`arg_input_leaf`): a run's, or a declared
+node's.
 -/
 
 @[expose] public section
@@ -22,7 +24,8 @@ namespace InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
 
 open Flock.Program
 open InferenceOnlyVerifier.Record.SecurityProofs (runOf unitsOf partsIn Apart runs_apart part_run batch_dims runOf_some
-  axisDims_of_removeAxis)
+  axisDims_of_removeAxis edgeOf)
+open InferenceOnlyVerifier.Record (overDeclared)
 
 /-- A walk whose first step moves on and whose second ends has the second's result. -/
 theorem run_two {α β : Type} {what : String} {step : α → Flock.V (β ⊕ α)} {a a' : α} {b b' : β}
@@ -430,5 +433,72 @@ theorem unit_leaf_inj {k k' : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
       exact ⟨rfl, hmm, rfl, htt⟩
 
 end
+
+/-- **A reference of an argument of a root unit is a leaf of an input node, and resolves from the root to that node's
+gate of the leaf**, of a record declaring the root input nodes `D` whose root reads no edge: a part `own-rows` reads
+is a run (`ownPart_run`), and a part over a declared node, affine or strided, reads a leaf of that node, an input
+node (`hD`, the `nodes` stage's). -/
+theorem arg_input_leaf (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
+    (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) {D : List ℕ}
+    (hown : InferenceOnlyVerifier.Record.SecurityProofs.OwnRunsOf P D)
+    (hne : ∀ nd ∈ unitsOf P, ∀ q ∈ partsIn nd, edgeOf P q = false)
+    (hD : ∀ n, D.contains n = true → n < (P.defs[P.root]!).body.nodes.size ∧
+      Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true ∧
+      (((P.defs[P.root]!).body.nodes[n]!).form = .prim ∨ ((P.defs[P.root]!).body.nodes[n]!).form = .batch))
+    {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
+    (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false) {i : ℕ}
+    (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size) {x : ℕ}
+    (hx : x < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).count)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
+    ∃ n j, n < (P.defs[P.root]!).body.nodes.size ∧
+      Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true ∧
+      j < ((P.defs[P.root]!).body.nodes[n]!).out.leaves ∧
+      resolveStep P (P.rootScope, (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get x) =
+        .ok (.inl ((P.defs[P.root]!).body.offsets[n]! + j)) := by
+  obtain ⟨q, hq, h1, h2, hget⟩ := arg_part bytes P hdec hov hlay hk hi hx
+  have hunit : (P.defs[P.root]!).body.nodes[k]! ∈ unitsOf P := by
+    refine List.mem_filter.2 ⟨?_, by simp [hu]⟩
+    rw [getElem!_pos _ k hk]
+    exact Array.mem_toList_iff.2 (Array.getElem_mem hk)
+  have hpart : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]! ∈
+      partsIn ((P.defs[P.root]!).body.nodes[k]!) := by
+    refine List.mem_flatMap.2 ⟨((P.defs[P.root]!).body.nodes[k]!).args[i]!, ?_, ?_⟩
+    · rw [getElem!_pos _ i hi]
+      exact Array.mem_toList_iff.2 (Array.getElem_mem hi)
+    · rw [getElem!_pos _ q hq]
+      exact Array.mem_toList_iff.2 (Array.getElem_mem hq)
+  cases hdq : overDeclared D ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]!) with
+  | false =>
+    obtain ⟨⟨n, base, count⟩, hr⟩ :=
+      InferenceOnlyVerifier.Record.SecurityProofs.ownPart_run hown hunit hpart (hne _ hunit _ hpart) hdq
+    obtain ⟨hqe, hn, hin, hform⟩ := runOf_some hr
+    have hqe' : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]! = .affine false n base count := hqe
+    rw [hqe'] at hget
+    have hget' : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get x =
+        ⟨false, n, base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!)⟩ := hget
+    obtain ⟨hjlt, -, hres⟩ := ref_leaf bytes P hdec hov hlay hk hi hx hget' hn hin hform
+    exact ⟨n, _, hn, hin, hjlt, hres⟩
+  | true =>
+    cases hp : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]! with
+    | affine fl n base count =>
+      rw [hp] at hdq hget
+      cases fl with
+      | true => cases hdq
+      | false =>
+        obtain ⟨hn, hin, hform⟩ := hD n hdq
+        have hget' : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get x =
+            ⟨false, n, base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!)⟩ := hget
+        obtain ⟨hjlt, -, hres⟩ := ref_leaf bytes P hdec hov hlay hk hi hx hget' hn hin hform
+        exact ⟨n, _, hn, hin, hjlt, hres⟩
+    | strided fl n b inner os is c =>
+      rw [hp] at hdq
+      cases fl with
+      | true => cases hdq
+      | false =>
+        obtain ⟨hn, hin, hform⟩ := hD n hdq
+        obtain ⟨hjlt, hres⟩ := strided_leaf bytes P hdec hov hlay hk hi hx h1 h2 hget hp hn hin hform
+        exact ⟨n, _, hn, hin, hjlt, hres⟩
+    | explicit items => rw [hp] at hdq; cases hdq
+    | grid run lanes => rw [hp] at hdq; cases hdq
 
 end InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
