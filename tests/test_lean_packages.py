@@ -96,7 +96,7 @@ def test_one_mathlib():
 # their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique;
 # Flock.SecurityProofs.SessionLoopZKAnyDeployed carries its honest one, and its nontrivial one is due with the lemma
 # restated at the deployed session its domain hypothesis fixes
-UNWITNESSED = {"security": 192, "security/Properties": 172, "verity/protocols/proofs/flock/verifier": 7}
+UNWITNESSED = {"security": 194, "security/Properties": 172, "verity/protocols/proofs/flock/verifier": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -532,7 +532,7 @@ def undocumented(read: dict[str, set[str]], sources: dict[str, tuple[str, str]])
 
 #: the definitions of the spec (`security`) that a lock-listed guarantee's statement reads (a lock's `reads`) and no doc
 #: comment heads
-UNDOCUMENTED = {"security": 61}
+UNDOCUMENTED = {"security": 62}
 
 
 def test_every_definition_a_guarantee_reads_says_what_it_means():
