@@ -27,8 +27,6 @@ from typing import Any
 
 from .schemes.p2 import P2Params
 
-GOAL = "memory-accounting/pous-setup-as-proof"
-
 #: the setup's supplied salt, every unit's, and its mark (PROTOCOL.md §5.4): unit u builds its base
 #: expand_prefix(params, salt) || u64be(u / S) || u64be(u mod S) inside
 SALT = "setup/salt"
@@ -126,5 +124,5 @@ class Claim:
         return json.dumps(self.to_json(), sort_keys=True, separators=(",", ":")).encode()
 
 
-__all__ = ["CONSTANTS", "Claim", "GOAL", "NOT_BOUND", "NotBound", "SALT", "SALT_MARK", "Undrawn", "bound", "check",
+__all__ = ["CONSTANTS", "Claim", "NOT_BOUND", "NotBound", "SALT", "SALT_MARK", "Undrawn", "bound", "check",
            "salted"]

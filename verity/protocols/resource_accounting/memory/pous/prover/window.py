@@ -1,7 +1,6 @@
-"""PoUS's prover's statements, handed to the proof system as any integration hands a window over
-(`verity.commitments.periods.interface`): its circuit in proof blocks of PoUS's Definitions (`decode_circuit`,
-`answer_circuit`, `verdict_circuit`), its values recorded into a `Window`, and the window's four records written for the
-workers, which stage from them as they do from an adapter's.
+"""PoUS's prover's statements, handed to the proof layer as any integration hands a window over
+(`verity.commitments.periods.interface`): its circuits in proof blocks of PoUS's Definitions and their values recorded
+into a `Window`.
 
 `Setup` is the setup's one circuit C (the setup unit over every block of the store), an `Integration`: its `circuit()`
 and its `run(window)`. `session_units` is a session's units in the registered circuit, its circuit alone: no values are
@@ -25,12 +24,11 @@ from verity.commitments.gates.embedding import MAX_V, read as table_read
 from verity.commitments.periods.interface import Circuit, Read, Registered, Table, TableOpening, TableRead, Window, Wire
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 
-from . import answer_circuit, decode_circuit, session_circuit, verdict_circuit
+from . import session_circuit
 from . import setup_circuit as SC
 from .setup_proof import payload_bytes, place, setup_unit, unit_inputs
 from verity.protocols.resource_accounting.memory.pous.verifier.setup_proof import SALT, SALT_MARK
 
-DEFINITIONS = (decode_circuit, answer_circuit, verdict_circuit, session_circuit)
 #: the store, one registered value, and its table of one block a row; W's rows; the memory attester's public key
 STORE, STORE_TABLE, WEIGHTS, ATTESTER_KEY = "store", "store/blocks", "weights", "attester-key"
 #: the units of a proof block of the setup's C: one store block each

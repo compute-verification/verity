@@ -21,9 +21,6 @@ from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
 
 from .setup_circuit import PousP2SetupCheck, slot_payload, slots
 
-GOAL = "memory-accounting/pous-setup-as-proof"
-
-
 def payload_bytes(w: int) -> int:
     """P: the bytes of W a block of `w` bits carries."""
     return (w - 16) // 8
@@ -68,4 +65,4 @@ def unit_inputs(w: int, salt: bytes, blocks_per_segment: int, block: bytes, row:
     return block, salt, at(blocks_per_segment, u), row, place(w, row_bytes, u)[1]
 
 
-__all__ = ["GOAL", "at", "padded", "payload_bytes", "place", "setup_unit", "unit_inputs"]
+__all__ = ["at", "padded", "payload_bytes", "place", "setup_unit", "unit_inputs"]
