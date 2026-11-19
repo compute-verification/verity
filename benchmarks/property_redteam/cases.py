@@ -39,9 +39,7 @@ from verity.circuits.ops import (
 )
 from verity_vllm.definitions.registry import (  # noqa: F401
     dsa,
-    dsv4_qnorm_insert,
     flashmla,
-    marlin_moe,
     topp_word_gates,
 )
 from verity_vllm.definitions.registry.ref_prims import gather_f32
