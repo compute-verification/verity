@@ -57,7 +57,8 @@ def stand_in(monkeypatch):
 
     def attach(exchange, ctx):
         got.append((exchange, ctx))
-        exchange.request("stand-in", H.RequireProperty("ranges", 64, "a stand-in"))
+        if exchange.declared is None:
+            exchange.request("stand-in", H.RequireProperty("ranges", 64, "a stand-in"))
         return held
     monkeypatch.setitem(S.SCHEMES, "stand-in", SimpleNamespace(name="stand-in", messages=(), settings={"k": 0}, depends=(), resource=S.Lacks("a stand-in"), kernels=S.Lacks("a stand-in"), check_settings=lambda s: None, attach=attach,
                                                                requests=lambda ctx: ()))

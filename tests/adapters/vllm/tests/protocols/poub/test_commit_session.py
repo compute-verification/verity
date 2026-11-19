@@ -53,7 +53,7 @@ def test_the_commits_session_requests_the_engine_it_serves_and_refuses_the_rest(
     a build declaring otherwise is refused under the scheme's name."""
     cs = remote.CommitSession("127.0.0.1:7781", kv_pages=8)
     assert {(r.property, r.value) for r in cs.requests() if isinstance(r, H.RequireProperty)} == {
-        ("world", 1), ("async_steps", False), ("prefix_cache", False), ("ranges", 8)}
+        ("world", 1), ("async_steps", False), ("prefix_cache", False), ("ranges", 8), ("reuse", "oldest-freed")}
     assert not any(r.property == "ranges" for r in remote.CommitSession("127.0.0.1:7781", kv_pages=None).requests())
     good = {"world": 1, "async_steps": False, "prefix_cache": False, "ranges": 8, "reuse": "oldest-freed"}
     for bad in ({"world": 2}, {"async_steps": True}, {"async_steps": None}, {"prefix_cache": True}):
