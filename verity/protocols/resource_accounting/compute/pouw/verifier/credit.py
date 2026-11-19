@@ -2356,7 +2356,8 @@ def _live_asks(files: Any, statements: Any, raw: bytes, got: dict, roots: dict, 
             return out, (LIVE, f"round {s} has {'two live statements' if s in seen else 'a live statement'} and the "
                                f"window has {got['S']} rounds: each round's live@<s> is one statement, verified once")
         seen.add(s)
-        reg = LR.reads_file(program, got["T"], got["S"], s, roots, window, session, ms[s], got["prefix"], max_tokens)
+        reg = LR.reads_file(program, got["T"], got["S"], s, roots, window, session, ms[s], got["prefix"], max_tokens,
+                            positions=False)
         out.append({"statement": i, "circuit_sha512": files[LIVE], "registered": reg, "partition": partition})
     return out, None
 
