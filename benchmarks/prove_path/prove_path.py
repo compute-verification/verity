@@ -359,7 +359,8 @@ def ran_with(challenger: str, key_record: Mapping[str, Any] | None = None) -> st
     hands the verifier (Lean's `verify` takes none of its own): a local challenger's key is at
     `challenger_session.LOCAL_PARAMS`, development; a gate's is its key record's, deployed only at `lms.DEPLOYED`'s W and H.
     A gate without its key record states none. The challenger party's host on this machine (``loopback:HOST:PORT``) is a
-    development session whatever its key's parameters, which its record states the same way."""
+    development session: its parameters read ``development`` whatever its key's W and H, which a key record adds as detail,
+    so no reader of the line takes its coins for a deployed challenger's."""
     from verity.commitments.crypto import lms
     from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
     from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
@@ -371,7 +372,11 @@ def ran_with(challenger: str, key_record: Mapping[str, Any] | None = None) -> st
                 f"H={at.H}, not the deployed W={dep.W}, H={dep.H})")
     if challenger.startswith("loopback:"):
         coins = f"coins the challenger party's host on this machine ({challenger}), a development session's, not an auditor's"
-    elif challenger.startswith("gate:"):
+        if key_record is None:
+            return f"ran with: {coins}; parameters development (the party's own LMS key, no key record given)"
+        key = Ch.key_of_record(dict(key_record))
+        return f"ran with: {coins}; parameters development (the party's own LMS key at W={key.W}, H={key.H}, its key record's)"
+    if challenger.startswith("gate:"):
         coins = f"coins the auditor device's challenger ({challenger})"
     else:
         raise ValueError(f"PP_CHALLENGER {challenger!r}: local, loopback:HOST:PORT or gate:USER@HOST")
