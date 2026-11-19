@@ -20,14 +20,14 @@ on this branch yet, so the statement takes them as parameters at the signature i
 
 **The setup.** `C*` and `W` never reach the auditor. The auditor decides by SETUPUNIT's `PousCheck.SetupInProofs.check`
 (`PousCheck/SetupInProofs.lean`, memory-accounting/pous-setup-as-proof) on the setup's claim: the sampled audit at
-`rate:8828/B` of one `PousP2SetupCheck_v1` instance a block of `C*`. `SetupInProofsDeployed` says that a fixed extractor
-recovers a store `C*` of which at most `⌊B/100⌋` blocks fail to decode to their slice of the registered `W`, except
-`ε_Pa + ε_ks + ε_bind` (`ε_Pa ≤ 0.99^8828`, the chance the sample misses `⌊B/100⌋ + 1` wrong blocks) and the collision
-term. It takes the named assumption `SetupComputesBlockOk`, that the registered setup circuit computes the per-block
-check wherever its `o0` reads the supplied row `setup/ok`: the claim's `unit` digest covers only the Definition, and the
-`o0` read is among the circuit record's registered reads, so the premise is stated over that read and not over the
-digest. It is in `OpeningComputesCheck`'s form, over a reading of the circuit record this tree does not name yet, so
-until it does the premise holds of a reading that registers nothing.
+`rate:8828/B` of the setup's C, one `PousP2SetupCheck` unit a block of `C*`. `SetupInProofsDeployed` says that a fixed
+extractor recovers a store `C*` of which at most `⌊B/100⌋` blocks fail to decode to their slice of the registered `W`,
+except `ε_Pa + ε_ks + ε_bind` (`ε_Pa ≤ 0.99^8828`, the chance the sample misses `⌊B/100⌋ + 1` wrong blocks) and the
+collision term. It takes the named assumption `SetupComputesBlockOk`, that the registered setup circuit computes the
+per-block check: the one value the verifier supplies is the salt (`pous.setup.salt/v1`), each unit builds its base from
+it and its block's constants, its slot is a constant of the unit in C, and its `ok` output is held to `1`. It is in
+`OpeningComputesCheck`'s form, over a reading of the circuit record this tree does not name yet, so until it does the
+premise holds of a reading that registers nothing.
 
 Both are stated and not proved. What closes them is proofs' two forms, through the lemmas of
 `Proofs.Properties.Pous.InProofs` and `Proofs.Properties.Pous.SetupInProofs`:
@@ -35,7 +35,8 @@ Both are stated and not proved. What closes them is proofs' two forms, through t
   whose conclusion is `Verity.InProofs.Gives` at `K₀ = 1` with each carried leaf (the digest `m`, each round's record)
   read at its one value in every statement that shares it, which is `Carried`;
 - for the setup, the sampled period form with carried leaves, `Flock.Guarantees.IntegrityPooledCarried` at
-  `q = 8828/B`, whose conclusion gives `Gives` at `K₀ = ⌊B/100⌋ + 1` with `W`'s rows carried, which is `CarriedW`.
+  `q = 8828/B`, through `SetupGives` (the shared sampling theorem's count, `Spot.Sampling.extraction_audit_count`,
+  with `W` held to its registration by `RegisteredW`).
 -/
 
 @[expose] public section
@@ -82,41 +83,45 @@ noncomputable def undecoded (q : P2.Params) (salt W : ByteArray) (cs : Fin q.blo
     (W.extract (u.val * q.payloadBytes) (u.val * q.payloadBytes + q.payloadBytes))
 
 /-- **Named assumption: the registered setup circuit computes the per-block check.** `read` is the verifier's parsed
-circuit file of the setup unit `PousP2SetupCheck_v1`, read as a Boolean circuit with each port's wires in its signature's
-order and `o0`'s output wires, where the circuit record's registered reads hold `o0` to the supplied row `setup/ok`, and
-`none` where they do not or no such circuit is registered; this tree does not name that reading yet. `supplied u` is the
-verifier's supplied rows for block `u` as the circuit reads them (`setup_proof.supplied`: `setup/base`, `setup/slot` and
-`setup/ok`), and `decode` reads a block and its payload from the unit's port rows. For every block `u` and every
-assignment whose `setup/base` and `setup/slot` wires carry the verifier's rows for `u`, an `o0` that equals the
-`setup/ok` row decodes to a block that decodes canonically under `salt` to its payload, as `BlockDecodes` checks it. -/
+circuit file of the setup's C, read as a Boolean circuit with unit `u`'s wires by port (`r.2.1 u name`, in its
+signature's order) and its `ok` output's wires (`r.2.2 u`), the output the circuit record holds to the supplied constant
+`1` (`const.u16/v1`); `none` where no such circuit is registered; this tree does not name that reading yet. The one
+value the verifier supplies is the salt (`pous.setup.salt/v1`), which every unit reads at its `salt` port, its bits in
+byte order (`le`); unit `u` builds its base `expand_prefix(params, salt) ‖ u64be(u / S) ‖ u64be(u mod S)` inside from the
+salt and its block's constants, and its slot `u mod n` is a constant of the unit in C, so no assignment reaches either.
+`decode` reads a block and its payload from the unit's port rows. For every block `u` and every assignment whose salt
+wires carry `salt`, an `ok` of `1` (least significant bit first) decodes to a block that decodes canonically under `salt`
+to its payload, as `BlockDecodes` checks it. -/
 def SetupComputesBlockOk (q : P2.Params) (salt : ByteArray)
-    (read : Option ((C : Verity.Boolean.Circuit) × (String → List (Fin C.N)) × List (Fin C.N)))
-    (supplied : Nat → String → List Bool) (decode : (String → List Bool) → ByteArray × ByteArray) : Prop :=
+    (read : Option ((C : Verity.Boolean.Circuit) × (Fin q.blocks → String → List (Fin C.N)) ×
+      (Fin q.blocks → List (Fin C.N))))
+    (decode : (String → List Bool) → ByteArray × ByteArray) : Prop :=
   ∀ r ∈ read, ∀ (u : Fin q.blocks) (x : Fin r.1.N → Bool),
-    (∀ name ∈ ["setup/base", "setup/slot"], ∀ j (h : j < (r.2.1 name).length),
-      x ((r.2.1 name).get ⟨j, h⟩) = (supplied u.val name).getD j false) →
-    r.2.2.map (r.1.eval x) = supplied u.val "setup/ok" →
+    (∀ j (h : j < (r.2.1 u "salt").length),
+      x ((r.2.1 u "salt").get ⟨j, h⟩) = (salt.get! (j / 8)).toNat.testBit (j % 8)) →
+    (r.2.2 u).map (r.1.eval x) = (List.range (r.2.2 u).length).map (· == 0) →
     BlockDecodes q salt (u.val / q.blocksPerSegment) (u.val % q.blocksPerSegment)
-      (decode fun name => (r.2.1 name).map (r.1.eval x)).1 (decode fun name => (r.2.1 name).map (r.1.eval x)).2
+      (decode fun name => (r.2.1 u name).map (r.1.eval x)).1 (decode fun name => (r.2.1 u name).map (r.1.eval x)).2
 
 /-- **PoUS's setup checked inside proofs, as deployed: stated and unproved**; proofs' `IntegrityPooledCarried` at
-`q = 8828/B` closes it through `setupGives`, its `right ≤ BlockOk` from `SetupComputesBlockOk`. For the parameters `q`,
+`q = 8828/B` closes it through `setupGives`, its `right` from `SetupComputesBlockOk`. For the parameters `q`,
 the commitment `c`, the registered weights `W` (each row padded to its slots, SETUPUNIT's `padded`), a setup verifier `V`
 that accepts only a claim (`claimOf`) that `SetupInProofs.check` accepts, and the named assumption
-`SetupComputesBlockOk` at the circuit record's reading `read`, the supplied rows `supplied` and the decoding `decode`: a
+`SetupComputesBlockOk` at the circuit record's reading `read` and the decoding `decode`: a
 fixed extractor `E` recovers, by rerunning any prover, a store `C*` of which at most `⌊B/100⌋` blocks fail to decode to
 their slice of `W`, except `εPa + εKs + εBind` and `Claims.KS`'s collision term at `γ`. -/
 def SetupInProofsDeployed (H : Hash.Msg → Hash.Msg) (εPa εKs εBind γ : ℝ) : Prop :=
   ∀ (q : P2.Params) (c : SetupProtocol.Commitment) (W : ByteArray)
     {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (V : Claims.Verifier Coin)
     (claimOf : List Hash.Msg → Option _root_.PousVerifier.SetupInProofs.Claim)
-    (read : Option ((C : Verity.Boolean.Circuit) × (String → List (Fin C.N)) × List (Fin C.N)))
-    (supplied : Nat → String → List Bool) (decode : (String → List Bool) → ByteArray × ByteArray),
+    (read : Option ((C : Verity.Boolean.Circuit) × (Fin q.blocks → String → List (Fin C.N)) ×
+      (Fin q.blocks → List (Fin C.N))))
+    (decode : (String → List Bool) → ByteArray × ByteArray),
     (∀ (x : Hash.Msg) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (V.k x) → Coin),
       (Claims.run H P V x ω r).out = .acc →
         ∃ cl pub, claimOf ((Claims.run H P V x ω r).msgs.map Prod.fst) = some cl ∧
           _root_.PousVerifier.SetupInProofs.check q c cl = .accept pub ()) →
-    SetupComputesBlockOk q c.salt read supplied decode →
+    SetupComputesBlockOk q c.salt read decode →
     ∃ E : Claims.Extractor Coin (Fin q.blocks → ByteArray) V,
       Claims.KS H V (fun _ cs => (undecoded q c.salt W cs).card ≤ q.blocks / 100) E (fun _ => εPa + εKs + εBind)
         fun _ => γ

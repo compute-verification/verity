@@ -19,8 +19,8 @@ evidence  {"law":"rate:8828/B"|null,"outcome":hex,"store":hex}   canonical JSON
 
 It decides the parameters' validity, the salt's size and that the claim's sampling design is `samplingDesign q`. Its
 acceptance is to be the door's acceptance of the sampled blocks of `C`, and two places stop it, each refused by name:
-`C`'s base and slot inputs are bound to the salt and to the unit's position by no input kind yet (`notBound`), and the
-door's statement of a block is not derived (`Flock.OneCircuit.notDerived`, at `Spot.OneStageZkStatement.restrict`). On
+the salt, the one value the verifier supplies to `C` (`pous.setup.salt/v1`), is bound to `C` by no supplied input yet
+(`notBound`), and the door's statement of a block is not derived (`Flock.OneCircuit.notDerived`, at `Spot.OneStageZkStatement.restrict`). On
 acceptance it publishes `SetupProtocol.Public` with the store's root as `root`, so the timed audit's input keeps its form.
 -/
 
@@ -59,14 +59,16 @@ def claim (b : ByteArray) : V Claim := do
     | _ => throw s!"{ctx}: law is a string or null"
   return ⟨← Flock.unhex (← Flock.J.str j "store" ctx), samplingDesign, ← Flock.unhex (← Flock.J.str j "outcome" ctx)⟩
 
-/-- Where `C`'s base and slot inputs wait on an input kind bound to the verifier's coins and to a unit's position: the
-Python `setup_proof.NotBound`'s message. -/
+/-- Where `C`'s one supplied value, the salt, waits on the supplied input: the Python `setup_proof.NotBound`'s message. Each
+unit builds its base from the salt and its block's constants, and its slot is a constant of the unit in `C`. -/
 def notBound : String :=
-  "pous setup: no coin-bound input kind yet: base(u) = expand_prefix(params, salt) || u64be(u / S) || u64be(u mod S), " ++
-    "the salt the verifier's coin after W is committed; slot(u) = u mod n, of unit u's position in C"
+  "pous setup: no supplied input yet: salt = pous.setup.salt/v1, the memory attester's coin drawn after W is " ++
+    "committed, the one value the verifier supplies; unit u builds its base expand_prefix(params, salt) || " ++
+    "u64be(u / S) || u64be(u mod S) inside, its block's u64be(u / S) || u64be(u mod S) and its slot u mod n " ++
+    "constants of the unit in C, and its ok a public output held to 1"
 
 /-- The setup check in proofs: the door's acceptance of the sampled blocks of the setup's `C`, refused where `C`'s
-inputs are bound to nothing (`notBound`). -/
+supplied value is bound to nothing (`notBound`). -/
 def check (q : P2.Params) (c : SetupProtocol.Commitment) (cl : Claim) : Core.Outcome SetupProtocol.Public Unit :=
   match q.validate with
   | .error m => .reject s!"params: {m}"
