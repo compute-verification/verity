@@ -173,3 +173,54 @@ def test_a_body_with_a_scan_is_refused():
     with pytest.raises(LY.Unlaid) as e:
         LY.lay(_program(body, A4), lambda *_a: False)
     assert e.value.code == "lay-scan"
+
+
+class _Line:
+    def __init__(self, ands):
+        self.w, self.units = list(ands), list(range(len(ands)))
+
+    def block(self, a, b):
+        return (), (), sum(self.w[a:b])
+
+    def grow(self, a):
+        for b in range(a + 1, len(self.w) + 1):
+            yield b, self.block(a, b)
+
+
+def _packed(ands_, ends=()):
+    return LY.pack(None, ands(12), m=_Line(ands_), enough=lambda _i, _o, n, _u: n >= 4, ends=ends)
+
+
+@pytest.mark.parametrize("units, blocks", [
+    ([5, 5, 1, 12], [(0, 3), (3, 4)]),
+    ([5, 6, 6, 5, 1], [(0, 2), (2, 5)]),
+    ([2, 1, 3, 12, 4], [(0, 3), (3, 4), (4, 5)]),
+])
+def test_a_block_under_the_floor_takes_the_units_after_it_or_joins_the_block_before(units, blocks):
+    assert _packed(units) == blocks
+
+
+@pytest.mark.parametrize("units, ends", [([12, 1, 12], ()), ([1, 1], ()), ([5, 5, 1, 12], (2,))])
+def test_a_block_under_the_floor_that_nothing_takes_is_refused(units, ends):
+    with pytest.raises(LY.Unlaid) as e:
+        _packed(units, ends)
+    assert e.value.code == "pack-floor"
+
+
+def test_a_floor_every_block_meets_leaves_the_packing_and_a_trailing_block_under_it_is_refused():
+    P = laid(3)
+    assert LY.pack(P, ands(10), enough=lambda _i, _o, n, _u: n >= 4) == LY.pack(P, ands(10))
+    with pytest.raises(LY.Unlaid) as e:
+        LY.pack(P, ands(10), enough=lambda _i, _o, n, _u: n >= 5)
+    assert e.value.code == "pack-floor"
+
+
+def test_a_level_packed_within_a_coarser_levels_ends_refines_it():
+    P = laid(3)
+    coarse = LY.pack(P, ands(12))
+    fine = LY.pack(P, ands(5), ends=[b for _a, b in coarse])
+    assert {b for _a, b in coarse} <= {b for _a, b in fine} and len(fine) > len(coarse)
+    assert PO.validate(PO.build(P, LY.query(P), [coarse, fine])).ok
+    with pytest.raises(LY.Unlaid) as e:
+        LY.pack(P, ands(5), ends=[0])
+    assert e.value.code == "pack-ends"
