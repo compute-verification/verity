@@ -29,7 +29,6 @@ from verity.circuits.ops.scalar import I32Le
 from verity.circuits.program import Program
 from verity.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_E4M3_K32
 from verity.circuits.types import Array
-from verity.commitments.randomness import derive
 from verity.commitments.rowleaf import (
     ROLE_W,
     ROLE_X,
@@ -38,7 +37,7 @@ from verity.commitments.rowleaf import (
     sha512_row_seg_digest,
 )
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pc8, plan
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pc8
 from verity.circuits.ops import words as W
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.anchors import TileAnchors
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
@@ -433,8 +432,7 @@ def test_the_window_tile_reads_its_side_rows_index_fields():
 
 @pytest.mark.parametrize("dev", ["h100", "sm120"])
 def test_the_verifier_derives_the_anchored_inputs(dev):
-    """`TileAnchors.of` derives the scheme's E_A, E_B, F_A, F_B and G (on the record's chain) from its seeds, and the tile
-    layout is `pc4`'s on Pearl-C's Programs."""
+    """`TileAnchors.of` derives the scheme's E_A, E_B, F_A, F_B and G (on the record's chain) from its seeds."""
     shape = pc8.Shape(16, K, 16, tile=(8, 16), dev=dev)
     s, ctx, _ops, a, ea, b, eb, fa, fb, g = _case(f"pc8-anchors-{dev}", (16, K, 16), dev)
     t = TileAnchors.of(s, ctx, shape)
@@ -444,10 +442,6 @@ def test_the_verifier_derives_the_anchored_inputs(dev):
     assert t.regions("row_b", 5) == {"e": eb[160:192], "fb": fb, "fa": fa, "g": [h for w in g for h in (w & 0xFFFF, w >> 16)]}
     with pytest.raises(DomainError):
         t.check_inputs(pc8.weight(shape), [b, eb, fa, fb, g[:-1] + [g[-1] ^ 1]])
-    lay = plan.tile_layout(replace(shape, hidden=True), 1)
-    lay.check()
-    assert lay.closure == {16: (16, *range(8)), 17: (17, *range(8, 16))} and lay.b_rows == {16: tuple(range(16)),
-                                                                                             17: tuple(range(16))}
 
 
 # ---- a short last tile row --------------------------------------------------------------------------------------------
@@ -537,36 +531,6 @@ def test_a_short_tile_row_is_its_own_template_instance(side, hidden):
     assert verdict.ok, verdict.codes
 
 
-def test_a_short_tile_is_proved_with_its_rows_in_its_own_stratum():
-    """`plan.tile_layout` at m = 80 proves a 16-row tile with its 16 `RowA` units, in its own stratum at 16/64 of a whole
-    tile's W_ref.  That is two tile strata, which the work sampling design refuses (`check_work_strata`, the window pin's `hone`) and
-    the count sampling design samples; a W_ref with no whole quarter is refused.  At m = 32, one tile row, the work
-    sampling design samples, and `unsound_work_bound` reads the short tile's W_ref."""
-    key = derive(bytes(32), plan.DRAW_DOMAIN, {"test": "pc8-short"})
-    lay = plan.tile_layout(replace(SHORT, hidden=True), 64)
-    lay.check()
-    us = lay.units
-    assert [(s.role, len(s.units), s.work) for s in lay.strata] == [("row_a", 80, 0), ("tile", 2, 2 * 64), ("tile", 2, 2 * 16)]
-    for t in (u for u in us if u.role == "tile"):
-        rs, cs = t.where
-        rows = range(64) if rs == 0 else range(64, 80)
-        assert [(us[i].role, us[i].where) for i in lay.closure[t.index][1:]] == [("row_a", (i,)) for i in rows]
-        assert lay.b_rows[t.index] == (cs,)
-    for refused in (lambda: plan.WorkSamplingDesign().sizes(lay.strata), lambda: plan.work_table(lay), lambda: plan.draw(key, lay, plan.WorkSamplingDesign())):
-        with pytest.raises(ValueError, match="one stratum"):
-            refused()
-    p = plan.draw(key, lay, plan.CountSamplingDesign(4))
-    assert set(p.proved) == set(p.drawn) | {i for t in p.drawn if us[t].role == "tile" for i in lay.closure[t]}
-    with pytest.raises(DomainError):
-        plan.tile_layout(SHORT, 2)
-    decode = plan.tile_layout(pc8.Shape(32, K, 2, tile=(64, 1), hidden=True), 64)
-    tile = next(s for s in decode.strata if s.role == "tile")
-    assert [(s.role, s.work) for s in decode.strata] == [("row_a", 0), ("tile", 2 * 32)]
-    p = plan.draw(key, decode, plan.WorkSamplingDesign(2))
-    assert set(p.proved) == set(range(34)) and p.proved_b == (0, 1)
-    assert 32 <= plan.unsound_work_bound(decode, {tile.name: 1}, 0.25) < 64
-
-
 #: each whole-tile shape's Programs (their ids, queries and, up to 4,096 words, digests) and tile layout, pinned: a short
 #: last tile row leaves every whole-tile shape as it is, with the row cut (``row_k``) or without
 WHOLE = {
@@ -597,9 +561,9 @@ WHOLE = {
                                                     f"{'-hidden' * s.hidden}{f'-rowk{s.row_k}' * (s.row_k is not None)}"
                                                     for s in WHOLE])
 def test_whole_tile_programs_and_layouts_are_pinned(shape):
-    """`Pc8Weight`, `Pc8Call` and `Pc8Check` (or their hiding forms), their queries and `plan.tile_layout` at W_ref 4,096
-    are the pinned ones on every whole-tile shape."""
-    row = {"layout": CF.layout_sha(plan.tile_layout(shape, 4096))}
+    """`Pc8Weight`, `Pc8Call` and `Pc8Check` (or their hiding forms) and their queries are the pinned ones on every
+    whole-tile shape."""
+    row = {}
     for side, build in (("weight", pc8.weight), ("call", pc8.call), ("check", pc8.check)):
         fn = build(shape)
         row[side] = {"id": fn.id, "query": json.dumps(pc8.query(shape, side), sort_keys=True)}
@@ -626,13 +590,11 @@ def test_shapes_outside_the_circuit_are_refused():
 
 def test_the_row_cut_refuses_a_short_tile_row():
     """The row cut (``row_k``) takes whole tiles only: 80 rows and decode's 32 at 64-row tiles, admitted without it, are
-    refused with it by every root and by the tile layout, and 64 rows are admitted with it."""
+    refused with it by every root, and 64 rows are admitted with it."""
     pc8.Shape(64, 256, 64, row_k=128).check()
     for m in (80, 32):
         pc8.Shape(m, 256, 64).check()
         shape = pc8.Shape(m, 256, 64, row_k=128)
-        for refused in (pc8.check, pc8.weight, pc8.call, lambda s: plan.tile_layout(s, 4096)):
+        for refused in (pc8.check, pc8.weight, pc8.call):
             with pytest.raises(DomainError, match="row cut takes whole tiles only"):
                 refused(shape)
-        with pytest.raises(DomainError, match="row cut takes whole tiles only"):
-            plan.tile_layout(replace(shape, hidden=True), 4096)

@@ -547,9 +547,6 @@ loads = [
 reaches = [
     "verity/circuits",
 ]
-loaded_by = [
-    "verity/protocols/resource_accounting/compute/pouw/prover/circuit/plan.py",
-]
 
 [[place]]
 paths = [
@@ -582,7 +579,7 @@ loads = [
     "verity/protocols/proofs/spot/prover/produced.py",
     "verity/protocols/proofs/spot/prover/served.py",
     "verity/protocols/proofs/spot/verifier",
-    "verity/protocols/proofs/spot/verifier/profile.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover",
     "verity/protocols/resource_accounting/compute/pouw/scheme.py",
     "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/protocols/resource_accounting/scheme.py",
@@ -595,6 +592,7 @@ paths = [
 ]
 loads = [
     "verity/protocols/resource_accounting/compute/pouw/prover",
+    "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/protocols/resource_accounting/scheme.py",
     "verity/runtime",
 ]
@@ -642,7 +640,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/ncp2.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/pc8.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/pearl_plus_tile.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/circuit/plan.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/rowk.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/window_statement.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_audit.py",
