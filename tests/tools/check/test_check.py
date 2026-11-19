@@ -1826,16 +1826,18 @@ def test_a_prebuild_that_fails_refuses_the_run_with_its_output_and_exit_status_e
     assert (tmp_path / "prebuild.log").read_text() == '{"tc_model": "libtc_model.so"}\n'
 
 
-def test_a_failed_preflight_starts_nothing_else_even_under_keep_going(tmp_path, monkeypatch):
-    """Every train's check runs with --keep-going: a failed preflight must still end it in seconds, not hold its slot."""
+def test_a_failed_preflight_is_reported_and_the_groups_start_under_keep_going(tmp_path, monkeypatch):
+    """Under --keep-going a failed preflight is reported and the groups start all the same, so one run lists every red; the run
+    is still not ok."""
     marker = tmp_path / "ran"
     touch = _py("open(__import__('sys').argv[1], 'w')", marker)
     for failing in ("preflight-lock", "preflight-lints"):
+        marker.unlink(missing_ok=True)
         monkeypatch.setenv("CHECK_CACHE", str(tmp_path / f"cache-{failing}"))     # else the first's lints pass is reused
         pre = [(n, _py("raise SystemExit(1)") if n == failing else _py("pass"), tmp_path) for n in ("preflight-lock", "preflight-lints")]
         _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=pre)
         ok, done = CHECK.run(tmp_path, 2, keep_going=True)
-        assert not ok and "pytest" not in {s["step"] for s in done} and not marker.exists(), failing
+        assert not ok and "pytest" in {s["step"] for s in done} and marker.exists(), failing
         assert {s["step"]: s["status"] for s in done}[failing] == "failed"
 
 

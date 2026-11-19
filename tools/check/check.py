@@ -142,8 +142,8 @@ once it passes, so a check that one of them fails ends in seconds, not hours.
 A step that fails stops the others: each running step's processes get SIGINT (Python code runs its `finally`s, so the Lean audit
 removes its scratch tree) and whatever is left of them SIGKILL after `STOP_GRACE_S`, and no group starts another step. Such a
 step's status is `stopped`. `--keep-going` lets every group run to its end instead, keeping the verdicts its passing steps store,
-so one run lists every red: only a failed preflight, which starts no group, or a step whose log has the text ci.toml names for it
-(`halts_on`, `HALTS_ON`; none names one) stops the others. A failed step still ends its own group, so a step after it there
+so one run lists every red, a failed preflight's beside the groups' (it is reported and the groups start all the same): only a step
+whose log has the text ci.toml names for it (`halts_on`, `HALTS_ON`; none names one) stops the others. A failed step still ends its own group, so a step after it there
 (flock-rust-tests after flock-circuit-build) doesn't start.
 A step whose outputs (its log, the run dir's files named after it, `WATCH`'s) haven't changed for `IDLE_S`, or that is still
 running after `STEP_BUDGET_S`, is stopped the same way (SIGTERM, then SIGKILL) and fails, `hung: no output for N min` or `over
@@ -3487,9 +3487,9 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
         pre = preflight()
         steps.live.plan([name for name, _, _ in pre])
         results = [_step(name, argv, cwd, out, cache, steps) for name, argv, cwd in pre]
-        if not steps.stopping and all(r["status"] == "passed" for r in results) and (refused := prebuild(out, steps)):
+        if not steps.stopping and (keep_going or all(r["status"] == "passed" for r in results)) and (refused := prebuild(out, steps)):
             results.append(refused)
-        if not steps.stopping and all(r["status"] == "passed" for r in results):
+        if not steps.stopping and (keep_going or all(r["status"] == "passed" for r in results)):
             if reused is not None:
                 reused.start()
             gs = groups(out, n, cache, urls, only=only, regenerate=regenerate, circuit_cache=circuit_cache, splits=splits,
