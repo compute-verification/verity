@@ -12,7 +12,7 @@ verifier.
 * **commitment**: the registration record (`OneStage.commitmentOf`);
 * **evidence**: `{"levels", ...}` likewise; two levels' read the evidence's whole bytes (`SampledTwo.evidenceOf`);
 * **check**: that count's check on the blobs, its acceptance held to the caller's check (`Caller.gate`) and its profile
-  listing that many levels (`levelsHeld`); evidence of another count than the params' rejects (`MISMATCH`).
+  listing one entry per level (`Levels.check`); evidence of another count than the params' rejects (`MISMATCH`).
 
 The recursive audit's own command, `vstar-recursive` with any first word but `sampled`, is dispatched by the
 executable's root, not here.
@@ -106,45 +106,54 @@ def designCount : Core.SamplingDesign → Nat
   | .work k _ => k
   | .bernoulli _ => 0
 
-/-- A two-level accept's coarse level and how many of its members are sampled: the replay blocks, the boundary
-registration's population (`c`) under the replay grain's query, at the first stage's sampling design as the run of
-record derives it (`Select.Rule.samplingDesignOver`, `Draw.derive`). None where that design has no profile. -/
-def boundaryLevel (p : SampledTwo.Params) (c : OneStage.Commitment) : Option (Core.Level × Nat) := do
-  let v := p.boundary.verifier
+/-- **A level** as the auditor fixes it before any coin (`Verity.Level`): its name, and the design that draws its
+blocks, over their number; none where that design has no profile. -/
+structure Level where
+  name : String
+  design : Nat → Option Core.SamplingDesign
+
+/-- Level `l`'s entry in an accept's profile, and how many of its blocks are sampled: the commitment's record's
+`population` blocks under its `partition`, drawn under `l`'s design. None where the record names no population or the
+design has no profile. -/
+def Level.entry (l : Level) (c : OneStage.Commitment) : Option (Core.Level × Nat) := do
   let n ← nat? (getD c.record "population")
-  let rule ← p.rule.over n (Select.strataSizes v.program v.query)
-  let design ← (rule.samplingDesignOver n).toOption
-  let table ← (p.rule.tableOver v.program v.query v.workTable).toOption
-  let draw ← Record.profileSample (← (Draw.derive v.program v.query design table).toOption)
+  let draw ← l.design n
   let partition := match getD c.record "partition" with | .str s => s | _ => ""
-  pure ({ name := BOUNDARY_LEVEL, query := some partition, size := n, draw := some draw }, designCount draw)
+  pure ({ name := l.name, query := some partition, size := n, draw := some draw }, designCount draw)
 
-/-- `prof` with level `l`, `k` of its members sampled, before its own levels, coarse to fine. -/
-def coarser (l : Core.Level) (k : Nat) (prof : Core.Integrity) : Core.Integrity :=
-  { prof with levels := #[l] ++ prof.levels, drawn := #[(l.name, k)] ++ prof.drawn }
-
-/-- A two-stage accept with its coarse level (`boundaryLevel`) before the interior's, coarse to fine. -/
-def withBoundary (p : SampledTwo.Params) (c : OneStage.Commitment) :
+/-- `o`'s accept with level `l`'s entry (`Level.entry`) before its profile's own levels, coarse to fine. -/
+def Level.atop (c : OneStage.Commitment) (l : Level) :
     Core.Outcome OneStage.Public Core.Integrity → Core.Outcome OneStage.Public Core.Integrity
   | .accept pub prof =>
-    match boundaryLevel p c with
-    | some (l, k) => .accept pub (coarser l k prof)
-    | none => .reject "two-stage: the boundary's sampling design has no profile"
+    match l.entry c with
+    | some (e, k) => .accept pub { prof with levels := #[e] ++ prof.levels, drawn := #[(e.name, k)] ++ prof.drawn }
+    | none => .reject OneStage.NO_PROFILE
   | o => o
 
-theorem withBoundary_accept {p : SampledTwo.Params} {c : OneStage.Commitment}
+theorem Level.atop_accept {c : OneStage.Commitment} {l : Level}
     {o : Core.Outcome OneStage.Public Core.Integrity} {pub : OneStage.Public} {prof : Core.Integrity}
-    (h : withBoundary p c o = .accept pub prof) : ∃ prof', o = .accept pub prof' := by
+    (h : l.atop c o = .accept pub prof) : ∃ prof', o = .accept pub prof' := by
   cases o with
   | accept pub' prof' =>
-    cases hb : boundaryLevel p c with
-    | some lk =>
-      obtain ⟨l, k⟩ := lk
-      simp only [withBoundary, hb, Core.Outcome.accept.injEq] at h
+    cases hb : l.entry c with
+    | some ek =>
+      obtain ⟨e, k⟩ := ek
+      simp only [Level.atop, hb, Core.Outcome.accept.injEq] at h
       exact ⟨prof', by rw [h.1]⟩
-    | none => simp [withBoundary, hb] at h
-  | reject s => simp [withBoundary] at h
-  | undecided s => simp [withBoundary] at h
+    | none => simp [Level.atop, hb] at h
+  | reject s => simp [Level.atop] at h
+  | undecided s => simp [Level.atop] at h
+
+/-- Two levels' coarse level: the replay blocks, at the first stage's sampling design as the run of record derives it
+(`Select.Rule.samplingDesignOver`, `Draw.derive`). -/
+def outer (p : SampledTwo.Params) : Level where
+  name := BOUNDARY_LEVEL
+  design n := do
+    let v := p.boundary.verifier
+    let rule ← p.rule.over n (Select.strataSizes v.program v.query)
+    let design ← (rule.samplingDesignOver n).toOption
+    let table ← (p.rule.tableOver v.program v.query v.workTable).toOption
+    Record.profileSample (← (Draw.derive v.program v.query design table).toOption)
 
 /-- The refusal of an accept whose profile lists `got` levels where the parameters name `n`. -/
 def LEVELS_PROFILE (n got : Nat) : String :=
@@ -167,15 +176,28 @@ theorem levelsHeld_accept {n : Nat} {o : Core.Outcome OneStage.Public Core.Integ
   | reject s => simp [levelsHeld] at h
   | undecided s => simp [levelsHeld] at h
 
-/-- That count's check, its accept's profile listing that many levels (`levelsHeld`): one, or two, whose coarse
-level is the boundary's (`withBoundary`); evidence of another count than the params' rejects
-(`MISMATCH`). -/
+/-- **The audit over its levels**, coarsest first: the last level's check (`last`), its accept's profile one entry per
+level, each coarser level's (`Level.atop`) before the last's own, and as many as the levels (`levelsHeld`). -/
+def Levels.check (c : OneStage.Commitment) (coarse : List Level)
+    (last : Core.Outcome OneStage.Public Core.Integrity) : Core.Outcome OneStage.Public Core.Integrity :=
+  levelsHeld (coarse.length + 1) (coarse.foldr (Level.atop c) last)
+
+/-- That count's check (`Levels.check`): one level's, held to the caller's check (`Caller.gate`), or two levels', the
+replay blocks (`outer`) above it; evidence of another count than the params' rejects (`MISMATCH`). -/
 def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   match p, e with
-  | .inl p, .inl e => levelsHeld 1 (Caller.gate c.record p.base.verifier (OneStageZk.checkBlobs p c e bs))
-  | .inr p, .inr e => levelsHeld 2 (withBoundary p c (SampledTwo.checkBlobs p c e bs))
+  | .inl p, .inl e => Levels.check c [] (Caller.gate c.record p.base.verifier (OneStageZk.checkBlobs p c e bs))
+  | .inr p, .inr e => Levels.check c [outer p] (SampledTwo.checkBlobs p c e bs)
   | p, e => .reject (MISMATCH (levelsOfCase p) (levelsOfCase e))
+
+theorem checkBlobs_one (p : OneStageZk.Params) (c : OneStage.Commitment) (e : OneStageZk.Evidence) (bs : Core.Blobs) :
+    checkBlobs (.inl p) c (.inl e) bs = levelsHeld 1 (Caller.gate c.record p.base.verifier (OneStageZk.checkBlobs p c e bs)) :=
+  rfl
+
+theorem checkBlobs_two (p : SampledTwo.Params) (c : OneStage.Commitment) (e : SampledTwo.Evidence) (bs : Core.Blobs) :
+    checkBlobs (.inr p) c (.inr e) bs = levelsHeld 2 ((outer p).atop c (SampledTwo.checkBlobs p c e bs)) :=
+  rfl
 
 def protocol : Core.BlobProtocol where
   id := PROTOCOL
@@ -238,7 +260,10 @@ private def interiorProfile : Core.Integrity :=
   { programs := #[], prescribed := #[], linked := false, covered := #[], delta := ⟨1, 2⟩, drawn := #[("unit", 2)],
     levels := #[{ name := "unit", query := none, size := 4, draw := some (.subset 2) }] }
 private def twoLevelProfile : Core.Integrity :=
-  coarser { name := BOUNDARY_LEVEL, query := some "p", size := 6, draw := some (.subset 3) } 3 interiorProfile
+  match Level.atop { record := Json.mkObj [("population", Json.num 6), ("partition", "p")], digest := ByteArray.empty }
+      { name := BOUNDARY_LEVEL, design := fun _ => some (.subset 3) } (.accept ⟨#[], #[], 0, none, true⟩ interiorProfile) with
+  | .accept _ prof => prof
+  | _ => interiorProfile
 #guard twoLevelProfile.levels.map (·.name) == #[BOUNDARY_LEVEL, "unit"]
 #guard twoLevelProfile.levels.map (·.size) == #[6, 4]
 #guard twoLevelProfile.levels.map (·.draw) == #[some (.subset 3), some (.subset 2)]

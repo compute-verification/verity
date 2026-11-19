@@ -619,6 +619,9 @@ def creditedGate {α : Type} (prof : Core.Integrity) (o : Core.Outcome α Core.I
   | some why => .reject why
   | none => o
 
+/-- The refusal of an accept whose draw's design has no profile, at any level. -/
+def NO_PROFILE : String := "the law the draw passed under has no profile"
+
 /-- R1–R8, the sample's checks under the level's sampling design `design` (the verifier's as derived, or one the level
 above computes), the record's checks and the verdicts (module docstring, **check**), at no coins: the check `checkAtIn`
 runs once the coins drew the sample. R1–R8 is SPOT's check alone (`Docket.check`): this audit
@@ -657,7 +660,7 @@ def checkIn (p : Params) (c : Commitment) (e : Evidence) (design : Except String
       { drawn := units, proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
         bound := Bound.boundOf population draw p.delta, perTemplate, complete := Record.allRan e.verdicts }
       profile
-  | _, _ => .reject "the law the draw passed under has no profile"
+  | _, _ => .reject NO_PROFILE
 
 /-- The check at the verifier's sampling design as derived (`checkIn`). -/
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Core.Integrity :=
