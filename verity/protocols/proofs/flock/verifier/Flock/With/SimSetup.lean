@@ -98,14 +98,6 @@ theorem readWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws 
   sim_walk [typedClassOfWith_sim S tM tN hh, templateOfWith_sim S tM tN hh]
   iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [typedClassOfWith_sim S tM tN hh, templateOfWith_sim S tM tN hh])
 
-theorem descParseWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
-    {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (bytes : ByteArray) :
-    S.R (TemplateQuery.Desc.parseWith hs.sha512 bytes) (TemplateQuery.Desc.parseWith hs'.sha512 bytes) := by
-  unfold TemplateQuery.Desc.parseWith
-  simp -zeta only [tM.bind, tN.bind]
-  sim_walk
-  iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk)
-
 /-- `discard`'s `mapConst` on `StateT`: a bind and a `pure`, so it needs no lawful monad. -/
 theorem Sim.st_mapConst (S : Sim M N) {σ α β : Type} (b : β) {x : StateT σ M α} {y : StateT σ N α}
     (h : (S.st σ).R x y) : (S.st σ).R (Functor.mapConst b x) (Functor.mapConst b y) :=
@@ -141,6 +133,14 @@ theorem programDigestWith_sim (S : Sim M N) {h : ByteArray → M ByteArray}
   unfold Program.programDigestWith
   sim_walk [definitionDigestsWith_sim S hh j, hh _]
   iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [definitionDigestsWith_sim S hh j, hh _])
+
+theorem descParseWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
+    {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (bytes : ByteArray) :
+    S.R (TemplateQuery.Desc.parseWith hs.sha512 bytes) (TemplateQuery.Desc.parseWith hs'.sha512 bytes) := by
+  unfold TemplateQuery.Desc.parseWith
+  simp -zeta only [tM.bind, tN.bind]
+  sim_walk [programDigestWith_sim S hh.sha512 _]
+  iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [programDigestWith_sim S hh.sha512 _])
 
 theorem programDecodeWith_sim (S : Sim M N) (tM : Throws M) (tN : Throws N) {hs : Flock.Hashes M}
     {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (bytes : ByteArray) :

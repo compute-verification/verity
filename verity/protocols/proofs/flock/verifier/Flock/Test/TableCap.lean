@@ -49,16 +49,22 @@ def whyP (tags : Tags) (count : Nat) : String :=
 def bound (m : Option String) : Circuit :=
   { (default : Circuit) with metaJ := Lean.Json.mkObj (m.toList.map fun h => ("program_sha512", Lean.Json.str h)) }
 
-def prog : ByteArray := "{\"root\":\"r\",\"definitions\":[1,2],\"annotations\":{\"x\":1}}".toUTF8
+/-- A descriptor of one primitive Definition, its root `root`. -/
+def desc (root : String) (rest : String := "") : ByteArray :=
+  ("{" ++ rest ++ "\"schema\":\"verity-ir/descriptor/v2\",\"callees\":[],\"definitions\":{\"" ++ root ++
+    "\":{\"form\":\"primitive\",\"id\":\"" ++ root ++ "\",\"params\":[],\"ret\":[\"Value\",1]}}," ++
+    "\"inputs\":[],\"program_fn\":\"" ++ root ++ "\",\"root\":\"" ++ root ++ "\",\"types\":[]}").toUTF8
 
-/-- `program_digest` of `{"root": "r", "definitions": [1, 2]}` (`verity.circuits.codec`, which drops `annotations`). -/
+def prog : ByteArray := desc "R_v1" "\"annotations\":{\"x\":1},"
+
+/-- `program_digest` of `desc "R_v1"` (`verity.circuits.codec`, which drops `annotations`). -/
 def progSha : String :=
-  "2ddb1d2afb53742ae98210afa683ceb6842b10625d88ff0ad16eca0de13512b40226451238d1cf430a87db6db4e6d34629a43fd5ee5609bd8e23bd191e6b96a4"
+  "6c1fe3b1e3f2bd59d18e62aae46b1666a7586234ae0490cf13601d1f1fbd84b0cbccbdb0bf38377e2815572b6fb4552416016d70535280b3ab4f7f0821400572"
 
 #guard ProvedScope.programDigest prog == some progSha
 #guard ProvedScope.programWhyP (bound (some progSha)) (some prog) == none
-#guard ProvedScope.programWhyP (bound (some progSha)) (some "{\"root\":\"s\"}".toUTF8) ==
-  some s!"refused: the verifier's program (--program, program_sha512 {(ProvedScope.programDigest "{\"root\":\"s\"}".toUTF8).getD ""}) is not the circuit's (META program_sha512 {progSha})"
+#guard ProvedScope.programWhyP (bound (some progSha)) (some (desc "S_v1")) ==
+  some s!"refused: the verifier's program (--program, program_sha512 {(ProvedScope.programDigest (desc "S_v1")).getD ""}) is not the circuit's (META program_sha512 {progSha})"
 #guard ProvedScope.programWhyP (bound (some progSha)) none == some ProvedScope.NO_PROGRAM
 #guard ProvedScope.programWhyP (bound (some progSha)) (some "not json".toUTF8) ==
   some "refused: the verifier's program (--program) is not a JSON descriptor"

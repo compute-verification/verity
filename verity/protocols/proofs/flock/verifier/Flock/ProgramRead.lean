@@ -39,9 +39,6 @@ def Desc.parseOfWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [Mon
     | .error e => throw s!"program: not JSON: {e}"
   if (j.getObjValAs? String "schema").toOption != some "verity-ir/descriptor/v2" then
     throw "program: not a verity-ir/descriptor/v2 descriptor"
-  let bare := match j with
-    | .obj kvs => Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
-    | x => x
   let callees ← match j.getObjVal? "callees" with
     | .ok (.arr a) => a.mapM fun c => match c.getStr? with | .ok s => pure s | .error _ => throw "program: a callee is not a string"
     | _ => throw "program: callees"
@@ -62,7 +59,7 @@ def Desc.parseOfWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [Mon
     | _ => throw "program: definitions"
   let some root := (j.getObjValAs? String "root").toOption | throw "program: root"
   if (defs.find? (·.1 == root)).isNone then throw "program: the root is not a definition"
-  return { callees, defs, root, sha512 := ← sha512 (← canon bare).toUTF8 }
+  return { callees, defs, root, sha512 := ← Program.programDigestWith sha512 j }
 
 theorem Desc.parseWith_eq_of {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
     (sha512 : ByteArray → M ByteArray) (bytes : ByteArray) :
@@ -84,10 +81,7 @@ namespace ProvedScope
 /-- `programDigest` from the program's bytes as `Program.readJson` read them (`programDigest_eq_of`). -/
 def programDigestOf (read : Option (Except String Lean.Json)) : Option String := do
   let j ← (← read).toOption
-  let bare := match j with
-    | .obj kvs => Lean.Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
-    | x => x
-  return hexOf (Sha512.hash (← (canon bare).toOption).toUTF8)
+  return hexOf (← (Program.programDigestWith (M := V) (fun b => pure (Sha512.hash b)) j).toOption)
 
 theorem programDigest_eq_of (bytes : ByteArray) : programDigest bytes = programDigestOf (Program.readJson bytes) := by
   unfold programDigest programDigestOf Program.readJson
