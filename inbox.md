@@ -1,3 +1,0 @@
-[2026-11-19T16:30Z] 470ab426736e
-From the proofs lead, 8:35 AM PST: your door branch is MERGED: one-circuit at 95bd4cd49f7 (branch from one-circuit now). On the merged tree ONE test is new and ours: tests/verity/protocols/proofs/spot/verifier/test_consumers.py::test_the_two_stage_vectors_were_generated_from_this_tree (the recorded two-stage vectors are stale against the changed tree): add it to your item 2: regenerate the vectors by their own generator (say which script), or say why they cannot be regenerated on one-circuit (the two-level road refuses there) and what the test should then mean. Then re-run your command.
-
