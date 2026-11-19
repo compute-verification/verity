@@ -1563,6 +1563,16 @@ private def chainRootsT (roots : List (String × String)) : V (Std.HashMap Strin
     (fieldTreesOf (templatesOf (chainMs.toList.map (·.name))) (chainRecT roots)) (← rootsOf chainMs (chainRecT roots))
 
 #guard (ioCuts chainP chainRs).toOption == some []
+
+/-- `chain()` with its last root node a scan. -/
+private def chainScanP : Flock.Program.Prog :=
+  let root := chainP.defs[2]!
+  let nodes := root.body.nodes.modify 4 fun n => { n with form := .scan }
+  { chainP with defs := chainP.defs.set! 2 { root with body := { root.body with nodes } } }
+
+-- owed: a scan node at C's root has no closed form for in(S)'s row cuts yet
+#guard refusal (discard (ioCuts chainScanP chainRs)) ==
+  Flock.OneCircuit.notDerived "ioCuts : a scan node of C's root (edge-form: no closed form yet)"
 #guard ((derivedWiring chainP chainRs).toOption.map (·.wires.map fun w => (w.start, w.radix, w.base, w.out))) ==
   some [(2, [2], 0, "o0"), (4, [2], 2, "o0"), (6, [2], 4, "o0")]
 #guard ((chainRootsT [("G/c0/x", "bb")]).toOption.map fun r =>

@@ -132,8 +132,9 @@ def tabs : Tables := { counts := #[8, 8], starts := #[0, 8], refs := (Array.rang
 def inP : Flock.Port := { name := "x", words := 4, chunks := 1, nb := 0 }
 def outP : Flock.Port := { name := "out", words := 4, chunks := 1, nb := 0 }
 def block : Circuit := { (default : Circuit) with ports := #[inP, outP], outRowPorts := #[1] }
+-- by design: a block circuit is a template's, so one naming no template of C is refused
 #guard match OneCircuit.io block prog with
-  | .error e => e.startsWith "one-circuit: not derived yet: io : a block circuit that names no template"
+  | .error e => e == OneCircuit.notDerived "io : a block circuit that names no template of C (META program_digests)"
   | .ok _ => false
 
 def dom : ByteArray := ByteArray.mk (Array.replicate 64 7)
@@ -199,6 +200,25 @@ def theta : Registered.Port := { x with name := "w", value := "theta", leaves :=
 #guard (OneCircuit.pos regP #[0, 1] { theta with leaves := 3 }).toOption.isNone
 #guard (OneCircuit.pos regP #[2] theta).toOption.isNone
 #guard (OneCircuit.pos regP #[0] { theta with name := "v" }).toOption.isNone
+
+-- owed (`regRow`, no closed form yet): T's row read across members, across two parts, or from an explicit part
+def regArg (seq : Program.Seq) (dims : Option (Nat × Nat)) : Program.Prog :=
+  let root := regP.defs[2]!
+  let n1 := root.body.nodes[1]!
+  let nodes := root.body.nodes.set! 1 { n1 with args := #[{ n1.args[0]! with seq, dims }] }
+  { regP with defs := regP.defs.set! 2 { root with body := { root.body with nodes } } }
+def whyRow (P : Program.Prog) : String :=
+  match OneCircuit.regRow P 1 0 "w" with
+  | .error e => e
+  | .ok _ => ""
+def rowCtx : String := "pos : registered reads: parameter w of root node 1"
+#guard whyRow (regArg (Program.Seq.ofParts #[.affine false 0 2 4]) (some (2, 1))) ==
+  OneCircuit.notDerived s!"{rowCtx}: a row across members"
+#guard whyRow (regArg (Program.Seq.ofParts #[.affine false 0 2 1, .affine false 0 3 3]) (some (2, 2))) ==
+  OneCircuit.notDerived s!"{rowCtx}: a row across parts"
+#guard whyRow (regArg (Program.Seq.ofParts #[.explicit #[⟨false, 0, 2⟩, ⟨false, 0, 3⟩, ⟨false, 0, 4⟩, ⟨false, 0, 5⟩]])
+    (some (2, 2))) ==
+  OneCircuit.notDerived s!"{rowCtx}: a row of no lane's run (an explicit part, or across lanes)"
 
 -- a fresh input: node 0 a run input, its rows read at the positions C gives from its one tree `input/n0`, the row count
 -- held as a registered value's; a run input named as another value, and a registered one named as a fresh input, refused
