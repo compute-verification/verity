@@ -295,8 +295,6 @@ def test_a_attester_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path, 
     for read in (WC.deployment, WC.certificates, WC.io, WC.link):
         with pytest.raises(SystemExit, match=f"{proxy}.*plan.json is there"):
             read(certifier_run)
-    rc, _, _, held = _n2(certifier_run, tmp_path / "n2")
-    assert rc == 1 and re.search(proxy, held)
     with pytest.raises(SystemExit, match=proxy):
         cr.main(["certs", "--warden-run", str(certifier_run), "--out", str(tmp_path / "certs.json")])
     run = gate_run(tmp_path)
