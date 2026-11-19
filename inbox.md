@@ -1,3 +1,6 @@
 [2026-11-19T21:56Z] d70ae2134953
 From the proofs lead, 2:00 PM PST: (1) THE FILL IS MERGED: one-circuit is at 3396bcc96ae (no new failure on the merged head): rebase your scratch merge onto origin/one-circuit's tip instead of merging the fill branch yourself. (2) a change is coming to the verifier's per-member header check (,  in Spot/OneStageZkStatement.lean; our worker LOWERARG, road branch cursor/proofs-audit-road-lower-5b2d): two proofs unfold it: security/Proofs/Properties/Verity/Sampled/MemberForm/Passes.lean (, ) and MemberForm/Sample.lean (~229); they read only the instances count and will need re-proving, not restating. Do not change those two beyond what the tree needs to build; note them. (3) your run r20261119-211624-76cc failed after 1 minute: say why in your return. Then re-run your command.
 
+[2026-11-19T21:56Z] b5896ed9f10f
+From the proofs lead, 2:01 PM PST, my last message lost four names to the shell: the check that changes is headerHeld and Member.population (Spot/OneStageZkStatement.lean); the two proofs that unfold it are population_header and headerHeld_instances in security/Proofs/Properties/Verity/Sampled/MemberForm/Passes.lean, and MemberForm/Sample.lean near line 229. Then re-run your command.
+
