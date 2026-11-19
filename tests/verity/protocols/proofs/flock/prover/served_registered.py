@@ -32,6 +32,7 @@ from pathlib import Path
 
 import numpy as np
 
+from verity.circuits import partition_object as PO
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
@@ -80,7 +81,7 @@ def stage(out: Path, seed: int = SEED, schema: str = RV.SCHEMA) -> dict:
 
     out.mkdir(parents=True, exist_ok=True)
     prog, query = program()
-    part = P.partition(prog, query)
+    part = PO.build(prog, query, [(0, N)])
     s = InputSet.open(synthetic_set(TM.rope_head(64), N, seed, out / "set")["path"])
     low = FC.lowering_for_set(s)
     x = np.asarray(s.port("x", 0, N), np.uint16).reshape(N, -1)
