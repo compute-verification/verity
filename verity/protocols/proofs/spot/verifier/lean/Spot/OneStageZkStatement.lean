@@ -1033,31 +1033,35 @@ def checkOneAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evid
 
 /-! ## The per-member form (module docstring, **per member**) -/
 
-/-- The ranges ascend from `at_`: each `[lo, hi)` holds a unit and starts at or after the end of the one before. -/
-def ascending : Nat → List (Nat × Nat) → Bool
-  | _, [] => true
-  | at_, (lo, hi) :: rs => decide (at_ ≤ lo) && decide (lo < hi) && ascending hi rs
+/-- The refusal of a member whose parameters hand it units: its units are its block of the partition object's. -/
+def UNITS_HANDED : String :=
+  "units: a member's units are its block of the partition object's blocks, never the parameters' own"
+
+/-- The refusal of member `name`'s block where the partition object names no blocks, or no block `k` among its `n`. -/
+def NO_BLOCK (name : String) : Option (Nat × Nat) → String
+  | none => s!"proofs: member {name}: partition: E_BLOCKS: the partition object names no blocks"
+  | some (k, n) => s!"proofs: member {name}: partition: E_BLOCKS: no block {k} among the partition's {n}"
 
 /-- The per-member form's `members`, on the program and the partition `shared` every member's statement reads: each a
 nonempty name with exactly its keys, its circuit and public files' digests and registered file as the one statement's
-(`committedOf`), its units ranges `[lo, hi)` of naturals, ascending (`ascending`), its circuit's units a proof block
-positive, and no unit in two members' ranges. -/
+(`committedOf`), its `block` an index into the partition object's `blocks` (`Flock.HmRow.blocksOf`, which hold them to
+C's population), whose range is its units, its circuit's units a proof block positive, and no unit in two members'
+ranges. A member handed `units` is refused by name (`UNITS_HANDED`), and a block the partition lacks by `NO_BLOCK`. -/
 def membersOf (shared : Own) (j : Json) : V (Array Member) := do
   let .obj _ := j
-    | throw "proofs: members is not an object from a member's name to its files, its units and its vus_per_block"
+    | throw "proofs: members is not an object from a member's name to its files, its block and its vus_per_block"
+  let bs ← (Flock.HmRow.blocksOf shared.partition shared.program).mapError ("proofs: " ++ ·)
   let ms ← (entries j).mapM fun (name, m) => do
     if name.isEmpty then throw "proofs: a member's name is empty"
-    exactly m #["public", "registered", "units", "vus_per_block"] s!"member {name}"
+    if (field? m "units").isSome then throw s!"proofs: member {name}: {UNITS_HANDED}"
+    exactly m #["public", "registered", "block", "vus_per_block"] s!"member {name}"
     let (pub, registered) ← committedOf m
-    let some units := (Draw.ranges? (getD m "units")).bind fun rs =>
-        rs.mapM fun (lo, hi) => if 0 ≤ lo then some (lo.toNat, hi.toNat) else none
-      | throw s!"proofs: member {name}'s units are not a nonempty list of [lo, hi] with 0 <= lo < hi"
-    if !ascending 0 units.toList then
-      throw s!"proofs: member {name}'s units are not ascending, each range after the one before"
+    let some k := nat? (getD m "block") | throw s!"proofs: member {name}'s block is not a natural number"
     let some g := (nat? (getD m "vus_per_block")).filter (0 < ·)
       | throw s!"proofs: member {name}'s vus_per_block is not a positive natural number"
-    pure ({ name, units, g,
-            own := { shared with pub := pub, registered := registered, first := (units[0]?.map (·.1)).getD 0 } } :
+    let some bs := bs | throw (NO_BLOCK name none)
+    let some u := bs[k]? | throw (NO_BLOCK name (some (k, bs.size)))
+    pure ({ name, units := #[u], g, own := { shared with pub := pub, registered := registered, first := u.1 } } :
       Member)
   if ms.isEmpty then throw "proofs: members names no member"
   let rs := (ms.foldl (fun acc m => acc ++ m.units) #[]).qsort (·.1 < ·.1)
@@ -1079,20 +1083,19 @@ runs for `membersOf` (`membersOf_eq_membersOfApart`). Compiled as one function, 
 quadratic in the members; with the loop apart, the parse takes time linear in them. -/
 def membersOfApart (shared : Own) (j : Json) : V (Array Member) := do
   let .obj _ := j
-    | throw "proofs: members is not an object from a member's name to its files, its units and its vus_per_block"
+    | throw "proofs: members is not an object from a member's name to its files, its block and its vus_per_block"
+  let bs ← (Flock.HmRow.blocksOf shared.partition shared.program).mapError ("proofs: " ++ ·)
   let ms ← (entries j).mapM fun (name, m) => do
     if name.isEmpty then throw "proofs: a member's name is empty"
-    exactly m #["public", "registered", "units", "vus_per_block"] s!"member {name}"
+    if (field? m "units").isSome then throw s!"proofs: member {name}: {UNITS_HANDED}"
+    exactly m #["public", "registered", "block", "vus_per_block"] s!"member {name}"
     let (pub, registered) ← committedOf m
-    let some units := (Draw.ranges? (getD m "units")).bind fun rs =>
-        rs.mapM fun (lo, hi) => if 0 ≤ lo then some (lo.toNat, hi.toNat) else none
-      | throw s!"proofs: member {name}'s units are not a nonempty list of [lo, hi] with 0 <= lo < hi"
-    if !ascending 0 units.toList then
-      throw s!"proofs: member {name}'s units are not ascending, each range after the one before"
+    let some k := nat? (getD m "block") | throw s!"proofs: member {name}'s block is not a natural number"
     let some g := (nat? (getD m "vus_per_block")).filter (0 < ·)
       | throw s!"proofs: member {name}'s vus_per_block is not a positive natural number"
-    pure ({ name, units, g,
-            own := { shared with pub := pub, registered := registered, first := (units[0]?.map (·.1)).getD 0 } } :
+    let some bs := bs | throw (NO_BLOCK name none)
+    let some u := bs[k]? | throw (NO_BLOCK name (some (k, bs.size)))
+    pure ({ name, units := #[u], g, own := { shared with pub := pub, registered := registered, first := u.1 } } :
       Member)
   if ms.isEmpty then throw "proofs: members names no member"
   unitsApart ((ms.foldl (fun acc m => acc ++ m.units) #[]).qsort (·.1 < ·.1)) ms

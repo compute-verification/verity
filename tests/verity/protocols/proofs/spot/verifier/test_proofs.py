@@ -38,6 +38,7 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.proofs.spot.verifier.one_stage import members as M, one_circuit as OC, proofs as PF
+from verity.circuits import partition_object as PO
 from verity.commitments import hm96
 
 from holes import waits_on
@@ -307,7 +308,7 @@ def _verify(fx: Path, session: Path, public: str = "pub-32.bin", own: bool = Tru
 def _block(public: Path, partition: dict) -> int:
     """The partition's block holding the statement's first unit, as its public file names it."""
     u = PF._header(public)["units"]["indices"][0]
-    return next(k for k, (lo, hi) in enumerate(partition.get("blocks", [[0, u + 1]])) if lo <= u < hi)
+    return next(k for k, (lo, hi) in enumerate((PO.levels(partition) or [[(0, u + 1)]])[0]) if lo <= u < hi)
 
 
 @lean
@@ -598,10 +599,11 @@ def test_the_door_under_the_templated_statement_refuses_a_flat_file(tmp_path, mo
 
 def test_a_members_own_units_are_refused_and_its_block_is_the_partitions():
     """A member's units are its block of the partition object's ``blocks`` (`one_circuit.block`): units its parameters
-    hand it are refused, and a partition naming no blocks gives it none."""
-    with pytest.raises(M._Refused, match=M.UNITS_HANDED):
+    hand it are refused, and a partition naming no blocks gives it none, each as Lean's parse refuses the parameters
+    (`Outside`, with its ``params:`` reason)."""
+    with pytest.raises(M.Outside, match=f"^params: proofs: member a/c0: {M.UNITS_HANDED}$"):
         M._block("a/c0", {"block": 0, "units": [[0, 1]]}, b"", {})
-    with pytest.raises(M._Refused, match="partition: E_PARTITION"):
+    with pytest.raises(M.Outside, match="^params: proofs: member a/c0: partition: E_PARTITION"):
         M._block("a/c0", {"block": 0}, b"", {"program": "p"})
 
 
