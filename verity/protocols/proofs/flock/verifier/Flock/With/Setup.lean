@@ -786,7 +786,6 @@ def workSamplingDesignWith (hs : Hashes M) (obj : Json) (program : ByteArray) (k
 
 /-- `checkPublic` through the oracle. -/
 def checkPublicWith (hs : Hashes M) (c : Circuit) (pub : Public) : M Unit := do
-  if J.has c.metaJ "links" then throw "META links: a statement with public outputs has no output row to link (links are a hidden-output statement's: `HmOut`)"
   let fv ← pub.frameV3
   if (← J.str fv "frame" "public file") != "frame-v3-sha512"
       || (← J.str fv "row_key_sha512" "public file") != Pinned.rowKey then
@@ -1033,10 +1032,9 @@ open HmRow
 
 /-- `HmLinks.check` through the oracle. -/
 def checkWith (hs : Hashes M) (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) : M Nat := do
-  let links ← parse c
   let P ← Program.decodeWith hs.sha512 program
   let ns := nodes P
-  checkAt c pop P links (unitAt ns) (ownerAt ns) (count ns) readers
+  checkAt c pop P (unitAt ns) (ownerAt ns) (count ns) readers
 
 end HmLinks
 
@@ -1060,7 +1058,6 @@ def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
       let (samplingDesign, _) ← HmRow.stratifiedSamplingDesignWith hs obj prog k
       if samplingDesign != Draw.SamplingDesign.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
   HmOut.checkPublicWith hs c pub
-  let linked := J.has c.metaJ "links"
   let finding ← match finding0, partition, program with
     | some f, some obj, some prog =>
       let q := (obj.getObjVal? "query").toOption.getD Json.null
@@ -1068,14 +1065,11 @@ def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
         let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
         let note ← HmRow.deriveTemplateUnitsWith hs c obj prog indices
         let wires ← HmLinks.checkWith hs c pop (HmLinks.readersOf draw) prog
-        let linking := if wires == 0 && !linked then "; no cut wire between the statement's units"
-          else s!"; Linking checked: {wires} cut wire(s) into the {pub.n} proved units of the population's {pop.n}"
+        let linking := if wires == 0 then "; no wire between the statement's units"
+          else s!"; Linking checked: {wires} wire(s) into the {pub.n} proved units of the population's {pop.n}"
         pure (some { f with derived := true, note := note ++ linking })
-      else if linked then throw "META links: Linking is checked under a template query (Q_template_instance v0, Q_template_instances v0) only"
       else HmRow.qwordFindingWith hs c pub obj prog f
-    | f, _, _ =>
-      if linked then throw "META links: Linking needs the verifier's own program and partition (--program, --partition)"
-      pure f
+    | f, _, _ => pure f
   let n := pub.n
   let blocksReal := (n + c.g - 1) / c.g
   let nbl := max 3 (log2ceil (max blocksReal 1))

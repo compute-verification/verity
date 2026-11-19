@@ -34,10 +34,10 @@ open Flock (V)
 /-- What `members` says of what it prints: the two files were parsed, and no check of the audit ran. -/
 def PARSED : String := "parsed, not checked"
 
-/-- A member as `members` prints it: its name, its circuit and public files' digests, whether the parameters name a
-registered file for it, its units' ranges and its circuit's units a proof block. -/
+/-- A member as `members` prints it: its name, its public file's digest, whether the parameters name a registered file
+for it, its units' ranges and its circuit's units a proof block. -/
 def Member.parsed (m : Member) : Json :=
-  Json.mkObj [("circuit", .str m.own.circuit), ("name", .str m.name), ("public", .str m.own.pub),
+  Json.mkObj [("name", .str m.name), ("public", .str m.own.pub),
     ("registered", .bool m.own.registered.isSome),
     ("units", Json.arr (m.units.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi])),
     ("vus_per_block", Lean.toJson m.g)]
@@ -77,14 +77,14 @@ def membersMain (args : List String) : IO UInt32 := do
   | _ => main args
 
 private def own0 : Own :=
-  { programJ := .null, program := .empty, partition := .null, circuit := "c", pub := "p", registered := none }
+  { programJ := .null, program := .empty, partition := .null, pub := "p", registered := none }
 
 private def own1 : Own := { own0 with registered := some .null }
 
 #guard (Member.parsed { name := "t/c0", units := #[(2, 5)], g := 4, own := own0 }).compress ==
-  "{\"circuit\":\"c\",\"name\":\"t/c0\",\"public\":\"p\",\"registered\":false,\"units\":[[2,5]],\"vus_per_block\":4}"
+  "{\"name\":\"t/c0\",\"public\":\"p\",\"registered\":false,\"units\":[[2,5]],\"vus_per_block\":4}"
 #guard (Member.parsed { name := "t", units := #[(0, 1), (3, 4)], g := 1, own := own1 }).compress ==
-  "{\"circuit\":\"c\",\"name\":\"t\",\"public\":\"p\",\"registered\":true,\"units\":[[0,1],[3,4]],\"vus_per_block\":1}"
+  "{\"name\":\"t\",\"public\":\"p\",\"registered\":true,\"units\":[[0,1],[3,4]],\"vus_per_block\":1}"
 #guard (StatementFiles.parsed
     { member := some "t/c0", sessions := #[{ name := "s", record := "r", reps := #[] }] }).compress ==
   "{\"member\":\"t/c0\",\"sessions\":[\"s\"]}"
@@ -96,8 +96,8 @@ private def parsedWhy (r : V Json) : String :=
 
 #guard parsedWhy (membersParsed "{}".toUTF8 "{}".toUTF8) ==
   "params: the parameters name no proofs (the members and their statements' files)"
-#guard parsedWhy (membersParsed "{\"proofs\":{\"circuit\":\"\",\"public\":\"\",\"registered\":null}}".toUTF8
+#guard parsedWhy (membersParsed "{\"proofs\":{\"public\":\"\",\"registered\":null}}".toUTF8
     "{}".toUTF8) ==
-  "params: the keys of proofs are not members, or members and wiring"
+  "params: the keys of proofs are not members"
 
 end Spot.OneStageZk

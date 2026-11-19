@@ -45,12 +45,12 @@ def checks(rec: dict) -> set[str]:
 
 
 def lm_off(slot: int, lane: int, warp: int, it: int) -> int:
-    """probes/lm.cu's ring: lane l's row is base + l + 8 slot, the base moving 64 rows a warp and an iteration."""
+    """sm90_emp.cu's emp_smem ring: lane l's row is base + l + 8 slot, the base moving 64 rows a warp and an iteration."""
     return (((lane + 64 * (warp + it)) & 2047) + 8 * slot) * 16
 
 
 def r7_off(slot: int, lane: int, warp: int, it: int = 0) -> int:
-    """Round 7's lm.cu address, sh16(smem, threadIdx.x * 8 + u): a 128-B lane stride."""
+    """A 128-B lane stride address, sh16(smem, threadIdx.x * 8 + u)."""
     return ((((warp * 32 + lane) * 8 + slot) * 4) & 4095) * 4
 
 

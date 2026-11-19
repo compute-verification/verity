@@ -132,14 +132,13 @@ def _dot_body_b(B, S, x, w):
 
 def test_two_bodies_for_one_fully_qualified_specialization_are_rejected():
     """Within one program a fully qualified specialization resolves to one body; a conflicting definition is an
-    `IdentityConflict`, never first-wins."""
+    `IdentityConflict` at the Program's build, never first-wins."""
     da, db = _dot_like(_dot_body_a), _dot_like(_dot_body_b)
     top = CompositeDefinition("TopConflict", 1, (), lambda S: ((("x", A2), ("w", A2)), Array(2, V16)),
                               lambda B, S, x, w: __import__("verity.circuits.refs", fromlist=["array_of"]).array_of(
                                   [B.call(da, x, w), B.call(db, x, w)]), register=False)
-    P = Program(bind(top))
     with pytest.raises(IdentityConflict, match="DotConflict_v1"):
-        encode_program(P)
+        Program(bind(top))
     # ... whichever order the two are met in
     top2 = CompositeDefinition("TopConflict2", 1, (), lambda S: ((("x", A2), ("w", A2)), Array(2, V16)),
                                lambda B, S, x, w: __import__("verity.circuits.refs", fromlist=["array_of"]).array_of(

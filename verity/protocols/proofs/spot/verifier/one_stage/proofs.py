@@ -69,6 +69,7 @@ from verity.circuits.library import TABLES
 
 from verity.protocols.proofs.spot.verifier.challenger.challenger import SAMPLE_LINK_FIRST, sample_link_first
 from verity.commitments.docket_digest import digest as registration_digest
+from . import one_circuit as OC
 from .verifier import BUILD_LOCK, ROOT
 from .verifier import PACKAGE as V2_PACKAGE
 from verity.commitments.domains import ONE_STAGE_PROTOCOL_V2
@@ -81,7 +82,13 @@ EXE = "verity-verify-proof"
 VERIFIER_ENV = {"MIMALLOC_PURGE_DELAY": "-1"}
 #: the statement every sampled proof block's session proves
 STATEMENT = "verity/flock-circuit"
-_DIGEST = re.compile(r"[0-9a-f]{128}")
+#: the door's templated statement (`Tags.byName`), the one statement the door sets up under `TMPL_SWITCH`
+TMPL_STATEMENT = "verity/flock-circuit/tmpl"
+TMPL_FORMAT = "flock-circuit/tmpl"
+#: the environment variable that, at ``1``, puts the door on `TMPL_STATEMENT`; unset, the served default stays `STATEMENT`
+TMPL_SWITCH = "VERITY_DOOR_TMPL"
+TMPL_FLAT_WHY = "a circuit file that is not templated (its head is not flock-circuit/tmpl) under the templated statement"
+TMPL_DEFINITION_WHY = "a templated circuit whose META names a definition (a proof-block class has no templated statement)"
 #: an input bound at docket (`program.REGISTERED_ID`, Lean's `Program.inputId?`), a descriptor's `definitions` key
 _REGISTERED_INPUT = re.compile(r"RegisteredInput[1-9][0-9]*_v1")
 #: `Flock.KsScope.SCOPE_WHY` (`ks_form_why`) and `TABLES_WHY`, the head of `verify --zk`'s refusals of a shared-row file
@@ -180,6 +187,30 @@ def _unit_head(circuit: Path) -> tuple[dict, list[str]] | None:
                 return (m, f.readline().decode().split()) if isinstance(m, dict) else None
             for _ in range(int(head[2])):
                 f.readline()
+    return None
+
+
+def statement() -> str:
+    """The statement the door sets up: `TMPL_STATEMENT` where `TMPL_SWITCH` is ``1``, else `STATEMENT`."""
+    return TMPL_STATEMENT if os.environ.get(TMPL_SWITCH) == "1" else STATEMENT
+
+
+def tmpl_why(circuit: Path) -> str | None:
+    """The templated reader's refusals (`HmOut.parseTmpl`) on the circuit file's head: a file not in the templated form
+    (`TMPL_FLAT_WHY`: its format line and META's ``format`` and ``statement`` not the templated ones), and a META naming
+    a ``definition`` (`TMPL_DEFINITION_WHY`); None when neither applies."""
+    with open(circuit, "rb") as f:
+        fmt = f.readline().decode(errors="replace").split(" ")[0]
+        line = f.readline().decode(errors="replace")
+    try:
+        meta = json.loads(line[len("META "):]) if line.startswith("META ") else None
+    except ValueError:
+        meta = None
+    if fmt != TMPL_FORMAT or not isinstance(meta, dict) or meta.get("format") != TMPL_FORMAT \
+            or meta.get("statement") != TMPL_STATEMENT:
+        return TMPL_FLAT_WHY
+    if "definition" in meta:
+        return TMPL_DEFINITION_WHY
     return None
 
 
@@ -408,16 +439,19 @@ def units_exactly(units: Sequence[Sequence[int]], indices: Sequence[int]) -> boo
     return list(indices) == [u for lo, hi in sorted(map(tuple, units)) for u in range(lo, hi)]
 
 
-def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapping[str, Any],
+def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], block: int,
            registered: Mapping[str, Any] | None = None,
            strata: Sequence[tuple[str, Sequence[Sequence[int]]]] | None = None,
            ) -> tuple[list[Finding] | None, tuple[str, str] | None]:
-    """Each of `proof`'s sessions verified by Flock's Lean verifier against the verifier's own `program` (its
-    descriptor's bytes), `partition` and `registered` file (None only for a program that reads no registered value, such
-    as N2's, whose proof block opens the committed value inside its circuit), on the circuit file the auditor committed as
-    `circuit_sha512`; the findings in session order and None, or None and the refusal (``registered``: `registered` is
-    None and the program reads registered values, `reads_registered`; ``circuit``: the circuit file is not the
-    committed one; ``proof``: a file is missing or the verifier's answer is not one verdict a session naming the
+    """Each of `proof`'s sessions verified by Flock's Lean verifier against the verifier's own `program` (C, its
+    descriptor's bytes), `partition` and `registered` file (theta's registration; None only for a program that reads no
+    registered value, such as N2's, whose proof block opens the committed value inside its circuit), on the circuit file
+    of the drawn proof block, the partition object's block `block` (`one_circuit.block`), derived from C and the
+    partition (`one_circuit.restrict`), never `proof`'s own circuit file; the findings in session order and None, or None
+    and the refusal (``registered``: `registered` is None and the program reads registered values, `reads_registered`;
+    ``circuit``: C and the partition give no block `block` or no C_S of it, or its base circuit is not derived yet,
+    `one_circuit.lower`; ``proof``: a file is missing or the
+    verifier's answer is not one verdict a session naming the
     partition object's program; ``form``: the verifier accepted a session whose files `ks_form_why` refuses). A session
     the verifier rejects is a finding, not a refusal, and so is one it accepts on a circuit `template_why` refuses,
     rejected with that reason as v2 rejects it.
@@ -438,36 +472,43 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
     if registered is None and reads_registered(program):
         return None, ("registered", "the program reads registered values (a RegisteredInput among its definitions) and "
                                     "the verifier holds no registered reads: verify with its own registered file")
-    if not (isinstance(circuit_sha512, str) and _DIGEST.fullmatch(circuit_sha512)):
-        return None, ("circuit", "the committed circuit file's digest is not a SHA-512 digest (128 lowercase hex)")
-    if not (proof.circuit.is_file() and proof.public.is_file() and proof.sessions
-            and all((s / "session.json").is_file() for s in proof.sessions)):
-        return None, ("proof", "the statement's proof files are not a circuit file, a public file and at least one session "
-                               "directory holding its session.json")
-    if file_sha512(proof.circuit) != circuit_sha512:
-        return None, ("circuit", "the statement's circuit file is not the one the auditor committed for its stratum (its "
-                                 "SHA-512 is not the period-open's): prove on the circuit file the auditor built")
+    try:
+        derived = OC.restrict(program, partition, OC.block(program, partition, block))
+    except (OC.NotDerived, OC.Refused) as e:
+        return None, ("circuit", str(e))
+    if not (proof.public.is_file() and proof.sessions and all((s / "session.json").is_file() for s in proof.sessions)):
+        return None, ("proof", "the statement's proof files are not a public file and at least one session directory "
+                               "holding its session.json")
+    try:
+        base = OC.lower(derived)
+    except OC.NotDerived as e:
+        return None, ("circuit", str(e))
+    name = statement()
     with tempfile.TemporaryDirectory(prefix="verity-proofs-") as d:
-        files = {"program": Path(d, "program.json"), "partition": Path(d, "partition.json"),
-                 "registered": Path(d, "registered.json")}
+        files = {"circuit": Path(d, "circuit.txt"), "program": Path(d, "program.json"),
+                 "partition": Path(d, "partition.json"), "registered": Path(d, "registered.json")}
+        files["circuit"].write_bytes(base)
+        if name == TMPL_STATEMENT and (why := tmpl_why(files["circuit"])) is not None:
+            return None, ("circuit", why)
         files["program"].write_bytes(program)
         files["partition"].write_text(json.dumps(partition))
         reads = []
         if registered is not None:
             files["registered"].write_text(json.dumps(registered))
             reads = ["--registered", str(files["registered"])]
-        p = subprocess.run([str(executable()), "verify", "--zk", "--statement", STATEMENT, "--circuit", str(proof.circuit),
+        p = subprocess.run([str(executable()), "verify", "--zk", "--statement", name, "--circuit", str(files["circuit"]),
                             "--public", str(proof.public), "--partition", str(files["partition"]),
                             "--program", str(files["program"]), *reads,
                             "--session", *map(str, proof.sessions)], capture_output=True, text=True, env=verifier_env())
+        accepted = any(json.loads(x[len("VERDICT "):]).get("accepted") is True
+                       for x in p.stdout.splitlines() if x.startswith("VERDICT "))
+        form = ks_form_why(files["circuit"], proof.public) if accepted else None
+        template = template_why(files["circuit"]) if accepted else None
     lines = [json.loads(x[len("VERDICT "):]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
     if [v.get("session") for v in lines] != [str(s) for s in proof.sessions]:
         return None, ("proof", f"the verifier answered no verdict for each session in order (exit {p.returncode}): "
                                f"{(p.stderr or p.stdout)[-400:]}")
     want = partition.get("program")
-    accepted = any(v.get("accepted") is True for v in lines)
-    form = ks_form_why(proof.circuit, proof.public) if accepted else None
-    template = template_why(proof.circuit) if accepted else None
     population = (population_why(_header(proof.public)["units"]["indices"], strata)
                   if accepted and strata is not None else None)
     out = []
@@ -550,12 +591,11 @@ PARSED = "parsed, not checked"
 @dataclass(frozen=True)
 class Member:
     """One member of a window in v2's per-member form (`OneStageZk.membersOf`): its name, its statement's files (`Proof`,
-    with no session for a member the sample missed), the SHA-512s the auditor committed for its circuit and public files
-    before any coin, the verifier's registered file for it, its units' ranges ``[lo, hi)`` of the docket's
-    population, ascending, and its circuit's ``vus_per_block``."""
+    with no session for a member the sample missed), the SHA-512 the auditor committed for its public file before any
+    coin, theta's registered file for it, its units' ranges ``[lo, hi)`` of the docket's population, ascending, and its
+    circuit's ``vus_per_block``. Its circuit file is C_S, which the verifier derives (`one_circuit.restrict`)."""
     name: str
     proof: Proof
-    circuit_sha512: str
     public_sha512: str
     registered: Mapping[str, Any] | None
     units: tuple[tuple[int, int], ...]
@@ -565,7 +605,8 @@ class Member:
 def members_v2(members: Sequence[Member],
                names: Mapping[str, Sequence[str]] | None = None) -> tuple[dict, dict, list[Path]]:
     """v2's per-member form of ``proofs`` for a window's `members`, every one of them: the parameters'
-    (``{"members": {name: {circuit, public, registered, units, vus_per_block}}}``), the evidence's
+    (``{"members": {name: {public, registered, block, vus_per_block}}}``, ``block`` its rank by first unit, its block of
+    the partition object's ``blocks``), the evidence's
     (``{"statements": [{member, sessions}]}``: one statement for each member with a session, in the members' order by
     first unit, its session as `evidence_v2` names it, under `names`' for that member), and the blobs: the
     statements' files, then the circuit and public files of each member with no session, since the form's check reads
@@ -581,9 +622,10 @@ def members_v2(members: Sequence[Member],
         if len(m.proof.sessions) > 1:
             raise ValueError(f"member {m.name} has {len(m.proof.sessions)} sessions: a statement is exactly one session "
                              f"on live coins, never retried")
-    params = {"members": {m.name: {"circuit": m.circuit_sha512, "public": m.public_sha512,
+    rank = {m.name: k for k, m in enumerate(sorted(members, key=lambda m: min(lo for lo, _ in m.units)))}
+    params = {"members": {m.name: {"public": m.public_sha512,
                                    "registered": None if m.registered is None else dict(m.registered),
-                                   "units": [[lo, hi] for lo, hi in m.units], "vus_per_block": m.vus_per_block}
+                                   "block": rank[m.name], "vus_per_block": m.vus_per_block}
                           for m in members}}
     statements, blobs = [], []
     for m in sorted((m for m in members if m.proof.sessions), key=lambda m: min(lo for lo, _ in m.units)):
@@ -615,7 +657,7 @@ def members_parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tu
     return got, None
 
 
-def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any], partition: Mapping[str, Any],
+def verdicts_v2(proof: Proof, *, program: Mapping[str, Any], partition: Mapping[str, Any],
                 registered: Mapping[str, Any] | None = None, tables: Sequence[Path] = ()) -> tuple[list[Finding] | None, str | None]:
     """`verify`, by the v2 audit's own run of the verifier on `proof`'s files as blobs
     (`spot-one-stage-zk verdicts`): the findings in session order (``session`` the directory's name) and None,
@@ -623,7 +665,7 @@ def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any]
     reads, blobs beside the files (`OneStageZk.tablesOf` finds them by SHA-512)."""
     pr, blobs = evidence_v2(proof)
     blobs += list(tables)
-    own = {"circuit": circuit_sha512, "partition": dict(partition), "program": dict(program),
+    own = {"partition": dict(partition), "program": dict(program),
            "public": file_sha512(proof.public), "registered": None if registered is None else dict(registered)}
     with tempfile.TemporaryDirectory(prefix="verity-proofs-v2-") as d:
         paths = (Path(d, "own.json"), Path(d, "proofs.json"))

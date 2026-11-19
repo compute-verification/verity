@@ -144,7 +144,7 @@ def value_salts(v: RV.Registered) -> bytes:
 
 def _fields(registered: Any) -> tuple[Any, list[tuple[str, list[int], int]]]:
     """The class Program the weights are read of and its weights record's fields (name, shape, value bits)."""
-    r = class_program(registered, WEIGHTS_CLASS)
+    r = class_program(registered, WEIGHTS_CLASS.positions)
     return r, [(n, list(_arr_shape(t)), next(iter(t.width_set()))) for n, t in dict(r.program.fn.signature()[0])[WEIGHTS].fields]
 
 

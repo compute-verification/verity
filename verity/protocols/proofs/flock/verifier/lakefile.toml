@@ -68,3 +68,7 @@ root = "FlockRecLinks"
 [[lean_exe]]
 name = "flock-read-tmpl"
 root = "FlockReadTmpl"
+
+[[lean_exe]]
+name = "flock-compose-check"
+root = "FlockComposeCheck"

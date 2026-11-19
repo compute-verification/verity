@@ -34,7 +34,7 @@ reads anyway. The case goes to ``--out`` private as `composite.py` reads it (070
 from that file by name, and Lean is given the three files beside it. A blob with no file, or a refused public file,
 leaves only ``missing.json`` saying why, so `composite.py` leaves the protocol out.
 
-Prints one ``V2CASE`` line (the pin, the label, the sessions and blobs; for a refused public file, the refusal; for a
+Prints one ``V2CASE`` line (the files, the sessions and blobs; for a refused public file, the refusal; for a
 window with no case, why) and, with ``--exe``, one ``V2`` line with the answer's verdict only: the whole answer is
 witness-adjacent (its query is the partition's digest) and stays in ``--out``. Exits as the check does (0 accept, 1
 reject, 2 undecided), 2 for a missing case or a refused public file, 0 without ``--exe``.
@@ -141,7 +141,7 @@ def case(window: Path, scratch: Path) -> tuple[dict | None, str, int]:
     else:
         digest = "case-v2.json's, taken when the audit staged the file, before the sample"
     how = f"circuit file {how}; public digest {digest}"
-    v2 = a5.case_v2(v1, names, proof=PF.Proof(circuit, pub, sessions), circuit=pin, public=public, registered=reads,
+    v2 = a5.case_v2(v1, names, proof=PF.Proof(circuit, pub, sessions), public=public, registered=reads,
                     tables=tables)
     return v2, how, len(sessions)
 
@@ -188,8 +188,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if v2 is None:
         print("V2CASE " + json.dumps({"no_case": how}), flush=True)
         return 2
-    print("V2CASE " + json.dumps({"circuit": v2["params"]["proofs"]["circuit"], "files": how, "sessions": n,
-                                  "blobs": len(v2["blobs"]), "missing": gone}), flush=True)
+    print("V2CASE " + json.dumps({"files": how, "sessions": n, "blobs": len(v2["blobs"]), "missing": gone}), flush=True)
     if gone:
         return 2
     if not a.exe:

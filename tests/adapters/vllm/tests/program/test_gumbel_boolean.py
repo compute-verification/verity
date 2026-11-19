@@ -2,7 +2,8 @@
 `NvLogf_v3` agrees with `NvLogf_v2`, `NvLogf_v5` with `NvLogf_v4` (and with `NvLogf_v3` but on a subnormal input), and the
 log1pf builder with `nv_log1pf_gpu`, on every special word, every exponent of both signs, the sweeps around their branch points,
 and random words. The uniform and noise of a Philox word agree on its
-edges (0, all ones, the floor, the f32 rounding of large words). `GumbelStreamKey_v2` agrees with `GumbelStreamKey_v1`;
+edges (0, all ones, the floor, the f32 rounding of large words), and `GumbelNoiseLane_v4` with `GumbelNoiseLane_v2` on random
+and edge lanes. `GumbelStreamKey_v2` agrees with `GumbelStreamKey_v1`;
 `GumbelSetup_v1{N}`'s outputs are the lane operands restated; `GumbelLane_v1` on those operands is ``x + GumbelNoiseLane_v1(key,
 v)`` (or ``x``) at every lane index; and `GumbelSelectF32_v2{V}` agrees with `GumbelSelectF32_v1{V}` on logit rows (ties,
 signed zeros, subnormals, infinities, NaNs, a NaN first logit; temp 1, +0, -0, a subnormal and a NaN) at one and two levels
@@ -266,6 +267,36 @@ def test_stream_key_agrees_with_its_word_definition() -> None:
     ref = E.evaluate_batch(TR.word_of(target), seed, pos).astype(np.uint64).reshape(-1)
     bad = np.flatnonzero(got != ref)
     assert not bad.size, f"{bad.size} of {n} keys differ, first {[(int(seed[i]), int(pos[i])) for i in bad[:5]]}"
+
+
+def _rand_noise_gpu(w: int) -> int:
+    """`_rand_noise` through the GPU-NaN logs, `GumbelNoiseLane_v2`'s."""
+    xi = w - (1 << 32) if w >> 31 else w
+    if xi < 0:
+        xi = -xi - 1
+    u = max(SM.mul_ftz(struct.unpack("<I", struct.pack("<f", float(xi)))[0], SM.TL_RAND_SCALE_BITS), SM.TL_RAND_MIN_BITS)
+    return SM.nv_logf_gpu(SM.nv_log1pf_gpu(u ^ 0x80000000) ^ 0x80000000) ^ 0x80000000
+
+
+@pytest.mark.slow
+def test_the_noise_lane_v4_is_v2_and_reaches_no_nan_where_v1_and_v2_differ() -> None:
+    """`GumbelNoiseLane_v4` is `GumbelNoiseLane_v2` on random keys and lanes with their edges. The two words differ only
+    where a log returns a NaN; the logs see only the uniform, whose extremes are the Philox words 0, all ones and those
+    beside every power of two (the floor 2^-31' and 1.0), so there and on random words `_v1`'s chain and `_v2`'s agree."""
+    target = bind(GB.GumbelNoiseLaneV4)
+    assert TR.word_of(target).id == "GumbelNoiseLane_v2"
+    rng = _rng("lane-v4")
+    n = 4096
+    key, v = (rng.integers(0, 1 << 32, n, dtype=np.uint64) for _ in range(2))
+    g = np.array(np.meshgrid(KEY_EDGES, LANE_EDGES)).reshape(2, -1)
+    key[:g.shape[1]], v[:g.shape[1]] = g
+    got = BS.evaluate_words(target, key.astype(np.uint32), v.astype(np.uint32)).astype(np.uint64).reshape(-1)
+    want = np.array([SM.GumbelNoiseLaneV2.evaluate(int(a), int(b)) for a, b in zip(key, v)], np.uint64)
+    bad = np.flatnonzero(got != want)
+    assert not bad.size, f"{bad.size} of {n} lanes differ, first {[(int(key[i]), int(v[i])) for i in bad[:5]]}"
+    p = np.array([(1 << k) + d for k in range(32) for d in (-2, -1, 0, 1, 2)], np.int64)
+    w = np.concatenate([p, -p - 1, rng.integers(0, 1 << 32, 20_000)]).astype(np.int64).astype(np.uint64) & np.uint64(M32)
+    assert [hex(int(x)) for x in w if _rand_noise(int(x)) != _rand_noise_gpu(int(x))] == []
 
 
 def lane_values(key: int, n: int = GB.G) -> tuple[list[int], list[int], list[int]]:

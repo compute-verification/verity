@@ -76,6 +76,7 @@ parameters. -/
 theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∃ st, P.defs = DecState.defs st ∧ Inv st ∧ (P.defs[P.root]!).prim = false ∧ P.root < P.defs.size ∧
       (P.defs[P.root]!).params.size = 0 := by
+  revert hr
   unfold decode at h
   extract_lets k1 at h
   split at h
@@ -122,6 +123,7 @@ theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) (h
   obtain ⟨c, -, h⟩ := Walk.except_bind_ok h
   injection h with h
   subst h
+  intro hr
   have hgo' := decodeDefs_plain hgo hr
   unfold goOf at hgo'
   obtain ⟨hinv, hlt⟩ := go_inv _ _ _ _ _ _ hgo'

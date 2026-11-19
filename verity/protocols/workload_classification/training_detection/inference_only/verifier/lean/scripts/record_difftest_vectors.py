@@ -144,7 +144,7 @@ BROKEN = {
                "registered-keys", "format-schema", "format-bits", "format-keys", "format-table", "format-param",
                "format-default", "format-whole", "format-read"],
     "formats": ["format-width", "format-none", "format-unregistered", "format-weight", "format-root"],
-    "blocks": ["no-blocks", "slot-radix", "two-slots", "gap", "twice", "entry-template"],
+    "blocks": ["no-blocks", "slot-radix", "two-slots", "gap", "twice", "entry-template", "slot-base"],
     "reader-layout": ["reader-other"],
     "reader-roles": ["key-port", "key-row", "root-row", "domain-row", "rows-swapped", "port-out", "ports-order",
                      "verdict-out"],
@@ -1923,6 +1923,8 @@ def _break(rng, made: dict, how: str) -> bool:
                 e.update(rng.choice([{"axes": ["slot", *e["axes"]], "radix": [c.slots, *e["radix"]]},
                                      {"axes": ["-" if a == "slot" else a for a in e["axes"]]},
                                      {"axes": e["axes"][1:]}, {"radix": []}]))
+            elif how == "slot-base":
+                e["slot"] = rng.choice([0, -1, None, 1, c.slots])
             elif how == "gap":
                 es.remove(e)
             elif how == "twice":

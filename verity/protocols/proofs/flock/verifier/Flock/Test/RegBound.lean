@@ -65,7 +65,7 @@ def run (f : Json) (program : Option ByteArray := some plain) (declared : Option
     Except String Unit := do
   let bound ← RegBound.ofJson f
   let own ← Registered.ofJson (RegBound.ownOf f)
-  Registered.check laneT pubF (some own) true
+  Registered.check laneT pubF (some (Flock.Test.RegFormats.derivedReads own)) true
   RegBound.check laneT pubF program own bound declared
 
 def msg (r : Except String Unit) : String :=
@@ -105,9 +105,7 @@ def lane3 : Circuit := { laneT with ports := lane.ports.push { pubPort with name
     #[{ name := "pub", root, domain := dom }] (some decl)) ==
   "registered reads (complete): the statement's port idx is neither a port of the verifier's registered reads nor bound to the window's committed values (bound): its rows would be committed afresh, stated by the public file"
 
--- the file's form: a v1 key, an object of ports each of a 64-byte root and domain alone
-#guard (why (file (boundOf [("pub", root, dom)]) Registered.FORMAT_V0)).startsWith
-  "registered reads: bound is a verity/registered-reads/v1 key"
+-- the file's form: an object of ports each of a 64-byte root and domain alone
 #guard why (file (Json.mkObj [])) == "registered reads: bound names no port"
 #guard why (file (Json.arr #[])) == "registered reads: bound is not an object"
 #guard (why (file (Json.mkObj [("pub", Json.mkObj [("root", Json.str (hexOf root)), ("domain", Json.str (hexOf dom)),

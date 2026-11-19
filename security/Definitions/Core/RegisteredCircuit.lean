@@ -73,8 +73,9 @@ theorem θ_input : ∀ g ∈ d.θ, d.D.isInput g = true := d.out.θ_input
 /-- Each proof block lies inside one inference block. -/
 @[reducible] def refines : d.P.Refines d.𝓘 := d.out.refines
 
-/-- Each gate's position in the committed trace, the compiler's. -/
-@[reducible] def pos : Fin d.D.N → Option ℕ := d.out.pos
+/-- **Each gate's position**, a root and a leaf (`Partition.pos`): the proof blocks' boundary under the compiler's
+layout, `none` off it. -/
+@[reducible] noncomputable def pos : Fin d.D.N → Option (Root × ℕ) := d.P.pos d.out.L
 
 /-- The builder of the one-block compiler of `o`, with no digest or advice format. -/
 @[reducible] def constBuilder (o : Compiler.Output) : Registration.Builder := ⟨"", "", .const o⟩
@@ -84,10 +85,10 @@ theorem θ_input : ∀ g ∈ d.θ, d.D.isInput g = true := d.out.θ_input
   ⟨[.information "" [.builder (constBuilder o)]], constBuilder o, rfl, [], by simp⟩
 
 /-- The circuit `C` with registered inputs `θ` and inference blocks `I`, each its own proof block, registered by its
-one-block compiler with no advice and no positions in a trace. -/
+one-block compiler with no advice, every value in one phase (`Layout.flat`). -/
 @[reducible] def ofPartition (C : Circuit) (θ : Finset (Fin C.N)) (h : ∀ g ∈ θ, C.isInput g = true) (n : ℕ)
     (I : Partition C n) : RegisteredCircuit :=
-  ofOutput ⟨C, θ, h, n, I, n, I, ⟨id, fun g => by simp⟩, fun _ => none⟩
+  ofOutput ⟨C, θ, h, n, I, n, I, ⟨id, fun g => by simp⟩, .flat C, 0, fun _ => le_rfl⟩
 
 /-- The circuit `C` with registered inputs `θ`, each computed gate its own block, registered by its one-block compiler
 with no advice. -/

@@ -20,6 +20,7 @@ import pytest
 import test_partition_object as T1
 import test_template_instance as TT
 
+import stand_in  # noqa: F401  (the test primitives' Boolean bodies, also when run as a script)
 from verity.circuits import codec, cut, partition_object as PO, partition_v2 as V
 from verity.circuits.defs import REGISTRY
 from verity.circuits.evaluation import evaluate_region

@@ -8,6 +8,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from bench_standins import on_stand_in_machine
 from verity_bench import jobs, settings
 from verity_bench.cli import main
 from verity_config.settings import DEBUG, REDACTED, VALUE, WHERE, Registry, Setting, UnknownSetting, direct_uses
@@ -125,6 +126,7 @@ def test_a_point_writes_its_settings_record_beside_its_result(tmp_path: Path, mo
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20261027-000000-0000")
     monkeypatch.delenv("OUT", raising=False)
     monkeypatch.chdir(root)
+    on_stand_in_machine(monkeypatch, tmp_path)
     monkeypatch.setattr(cli, "run_benchmark", lambda *a, **k: {"gates": [], "points": []})
     monkeypatch.setattr(cli, "write", lambda doc, path: path.write_text(json.dumps(doc)))
     monkeypatch.setattr(cli, "render", lambda doc: "")

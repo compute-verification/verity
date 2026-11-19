@@ -747,9 +747,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     ``layout`` (a layout mode, `tmpl.mode_of`; TMPL1's is ``iv/hybrid/4``): the templated statement
     (:data:`TMPL_STATEMENT`, the Lean verifier's ``HmOut.parseTmpl``), the same statement with its unit given as
     the unit's ``flock-ir-tmpl/v2`` template (`tmpl.emit` of the flat unit, or a structural lowering's own template,
-    `class_statement.TmplLowering`, whose only statement this is and whose ``unit_sha256`` is over the template's text):
-    its template section right after META (:func:`template_section`) in place of the ``CIRCUIT unit`` section, and META
-    ``layout`` the mode. The verifier unrolls the template and commits its columns at the layout's positions (`tmpl.layout`), so
+    `class_statement.TmplLowering`, whose only statement this is):
+    its template section right after META (:func:`template_section`) in place of the ``CIRCUIT unit`` section, META
+    ``layout`` the mode, and no META ``subcircuit`` or ``unit_sha256`` (the template is in the file). The verifier unrolls the template and commits its columns at the layout's positions (`tmpl.layout`), so
     the unit's range and ``unit_log`` are that net's slot. A size class's ``definition`` has no templated form.
 
     ``out`` (a binary file, `compose_to`'s): the text is written there, UTF-8, as it is rendered, and only its first two lines
@@ -894,6 +894,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         raise ValueError(f"{low.name}: the all-zero instance's pinned outputs are not zero (it pads every block)")
     if template is not None:
         meta.update(format=TMPL_FORMAT, statement=TMPL_STATEMENT, layout=layout)
+        del meta["subcircuit"], meta["unit_sha256"]
     if extra_meta:
         if clash := sorted(set(extra_meta) & set(meta)):
             raise ValueError(f"extra_meta: {clash} are META's own keys")

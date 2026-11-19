@@ -12,8 +12,7 @@ Setup fixes the public parameters, among them the advice cap `ℓa`, and registe
 commits every value it computes (the committed trace) and reports its advice `a_j`, at most `ℓa` bits that Verity never
 interprets, committed with the trace. At the start of verification phase `j`, before any of its coins, `B` runs on
 `a_j`. Its output is that phase's **execution block** `E_j`, the gates it appends to the registered circuit so far,
-partitioned into inference blocks, each partitioned into proof blocks, with each committed gate's position in the
-committed trace. The registered circuit after `n` phases is `B.init θ ‖ E_1 ‖ … ‖ E_n`, and its partitions are the
+partitioned into inference blocks, each partitioned into proof blocks, its gates in phase `j`. The registered circuit after `n` phases is `B.init θ ‖ E_1 ‖ … ‖ E_n`, and its partitions are the
 blocks' side by side (`Compiler.run`). `B.init θ` is `B`'s output at setup on the registered information `θ`, before any
 advice: the gates holding θ's values, which were committed beforehand.
 
@@ -22,9 +21,12 @@ advice: the gates holding θ's values, which were committed beforehand.
   say). `C.append E` (`Circuit.append`) is the circuit with the block appended; `C`'s gates keep their indices.
 * **What the compiler outputs** (`Compiler.Output`): a circuit file, its registered input gates `θ`, its partition `𝓘`
   into inference blocks, which the inference-only check reads, its partition `P` into proof blocks, which SPOT
-  prove, nested in `𝓘` (`Partition.Refines`), and each gate's position in the committed trace (`pos`).
-* **One phase's output** (`Compiler.Phase o`): the execution block over `o`'s circuit, its proof blocks, each proof
-  block's inference block, and its gates' positions, numbered after `o`'s (`Compiler.Output.append`).
+  prove, nested in `𝓘` (`Partition.Refines`), and where its values are committed (`L`, a `Layout`: the registered
+  values' rows, and each gate's phase, none after the `phases` so far). A gate's position is `P.pos L`.
+* **One phase's output** (`Compiler.Phase o`): the execution block over `o`'s circuit, its proof blocks and each proof
+  block's inference block. Appending it (`Compiler.Output.append`) puts its gates in phase `o.phases + 1` and
+  registers none of them. Each window value is committed in the phase that writes it, so a phase that reads only
+  earlier boundary values and declares no earlier gate an output keeps every earlier position.
 * **The compiler** (`Compiler`): its advice cap, its output at setup on θ, and its output on each phase's advice over
   the circuit so far. It is what the registration's builder item holds (`Registration.Builder`).
 
@@ -119,8 +121,8 @@ end Circuit
 
 /-- **What the registered compiler outputs**: a circuit file `D`, its registered input gates `θ` (the gates of the
 registered information, whose values were committed beforehand), its partition `𝓘` into `n` inference blocks, each
-partitioned into proof blocks (`P`, `m` of them, refining `𝓘`), and each gate's position in the committed trace
-(`pos`, `none` for a gate whose value isn't committed there). -/
+partitioned into proof blocks (`P`, `m` of them, refining `𝓘`), and where its values are committed (`L`): the
+registered values' rows and each gate's execution phase, none after `phases`. -/
 structure Compiler.Output where
   D : Circuit
   θ : Finset (Fin D.N)
@@ -130,11 +132,15 @@ structure Compiler.Output where
   m : ℕ
   P : Partition D m
   refines : P.Refines 𝓘
-  pos : Fin D.N → Option ℕ
+  L : Layout D
+  phases : ℕ
+  phase_le : ∀ g, L.phase g ≤ phases
 
 /-- **One execution phase's output** over the compiler's output `o` so far: the execution block `E` over `o`'s circuit,
 its partition into `m` proof blocks, which hold the block's computed gates, each proof block's inference block among
-`n` (`parent`), and each gate's position in the committed trace. -/
+`n` (`parent`). It extends `o`'s boundary and no more: it names no gate of `o` an output that was not one already
+(`outputs_old`), and of `o`'s gates it reads only `o`'s boundary gates (`reads_boundary`), whose values `o`'s phases
+committed before this phase's coin. -/
 structure Compiler.Phase (o : Compiler.Output) where
   E : o.D.Extension
   n : ℕ
@@ -142,7 +148,8 @@ structure Compiler.Phase (o : Compiler.Output) where
   unit : Fin E.n → Option (Fin m)
   input_iff : ∀ i, unit i = none ↔ E.isInput i = true
   parent : Fin m → Fin n
-  pos : Fin E.n → Option ℕ
+  outputs_old : ∀ g : Fin o.D.N, Fin.castAdd E.n g ∈ E.outputs → g ∈ o.D.outputs
+  reads_boundary : ∀ (i : Fin E.n) (g : Fin o.D.N), Fin.castAdd E.n g ∈ E.reads i → g ∈ o.P.boundary
 
 namespace Compiler
 
@@ -154,11 +161,57 @@ def Phase.empty (o : Output) : Phase o where
   unit := Fin.elim0
   input_iff i := i.elim0
   parent := Fin.elim0
-  pos := Fin.elim0
+  outputs_old _ h := absurd h (Finset.notMem_empty _)
+  reads_boundary i := i.elim0
+
+/-- `o`'s layout with the block `E` appended: `o`'s for `o`'s gates; for `E`'s, none registered and phase
+`o.phases + 1`. -/
+def Output.appendLayout (o : Output) (E : o.D.Extension) : Layout (o.D.append E) where
+  reg := Fin.append o.L.reg fun _ => none
+  reg_input g hs := by
+    cases g using Fin.addCases with
+    | left g =>
+      simp only [Fin.append_left] at hs
+      show Fin.append o.D.isInput E.isInput (Fin.castAdd E.n g) = true
+      rw [Fin.append_left]
+      exact o.L.reg_input g hs
+    | right i => simp at hs
+  reg_inj g h hs he := by
+    cases g using Fin.addCases with
+    | left g =>
+      cases h using Fin.addCases with
+      | left h =>
+        simp only [Fin.append_left] at hs he
+        rw [o.L.reg_inj g h hs he]
+      | right j =>
+        simp only [Fin.append_left, Fin.append_right] at hs he
+        rw [he] at hs
+        simp at hs
+    | right i => simp at hs
+  phase := Fin.append o.L.phase fun _ => o.phases + 1
+  phase_reads g a ha := by
+    cases g using Fin.addCases with
+    | left g =>
+      have key : ∀ a : Fin (o.D.N + E.n), a ∈ o.D.appendReads E (Fin.castAdd E.n g) →
+          Fin.append o.L.phase (fun _ => o.phases + 1) a ≤
+            Fin.append o.L.phase (fun _ => o.phases + 1) (Fin.castAdd E.n g) := by
+        intro a ha
+        rw [Circuit.appendReads, Fin.append_left, Finset.mem_map] at ha
+        obtain ⟨a, ha, rfl⟩ := ha
+        rw [Fin.castAddEmb_apply, Fin.append_left, Fin.append_left]
+        exact o.L.phase_reads g a ha
+      exact key a ha
+    | right i =>
+      simp only [Fin.append_right]
+      cases a using Fin.addCases with
+      | left a =>
+        simp only [Fin.append_left]
+        exact (o.phase_le a).trans (Nat.le_succ _)
+      | right j => simp
 
 /-- **`o ‖ b`**: the compiler's output `o` with the phase `b` appended: the circuit `o.D ‖ b.E`, the same registered
-gates, the inference blocks and proof blocks of `o` followed by `b`'s, and the positions of `o`'s gates followed by
-`b`'s. -/
+gates, the inference blocks and proof blocks of `o` followed by `b`'s, and `b`'s gates in one more phase
+(`appendLayout`). -/
 def Output.append (o : Output) (b : Phase o) : Output where
   D := o.D.append b.E
   θ := o.θ.map (Fin.castAddEmb b.E.n)
@@ -199,7 +252,14 @@ def Output.append (o : Output) (b : Phase o) : Output where
           (fun g => ?_) (fun i => ?_) g
         · simp [o.refines.sub g, Option.map_map, Function.comp_def]
         · simp [Option.map_map, Function.comp_def] }
-  pos := Fin.append o.pos b.pos
+  L := o.appendLayout b.E
+  phases := o.phases + 1
+  phase_le g := by
+    cases g using Fin.addCases with
+    | left g =>
+      simp only [Output.appendLayout, Fin.append_left]
+      exact (o.phase_le g).trans (Nat.le_succ _)
+    | right i => simp [Output.appendLayout]
 
 end Compiler
 
@@ -239,6 +299,14 @@ compiled over the output before it. -/
 @[reducible] def const (o : Output) : Compiler := ⟨0, fun _ => o, fun o _ => .empty o⟩
 
 end Compiler
+
+/-- **The one-phase layout** of `C`: nothing registered, every gate in phase `0`. -/
+def Layout.flat (C : Circuit) : Layout C where
+  reg _ := none
+  reg_input _ h := by simp at h
+  reg_inj _ _ h := by simp at h
+  phase _ := 0
+  phase_reads _ _ _ := le_rfl
 
 /-- The partition of a circuit's computed gates into one block each. -/
 def Partition.singletons (C : Circuit) : Partition C C.N where

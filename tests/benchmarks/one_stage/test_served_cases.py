@@ -139,7 +139,7 @@ def audit_dir(root: Path, v1: dict, *, v2: bool | str = True) -> Path:
             "blobs": [str(b) for b in blobs], "commitment": v1["commitment"],
             "evidence": codec.canonical_json(evidence).hex(),
             "params": {**v1["params"], "challenger": {"key": key, "label": "draw"},
-                       "proofs": {"circuit": "cc" * 64, "public": "aa" * 64, "registered": None},
+                       "proofs": {"public": "aa" * 64, "registered": None},
                        "window_root": "0f" * 64}},
             sort_keys=True))
     return root / "audit"
