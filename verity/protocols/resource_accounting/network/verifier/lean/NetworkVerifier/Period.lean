@@ -352,8 +352,8 @@ root, which `okChecks` holds to the constant), which one-stage's verifier checks
 answer, each connection's cap against its lane (the parameters' `cells`; the network attester holds a lane to
 `egress_cells`), and that the scan's answer carries every Input its registration check let through (`tiedInputWired`
 reads the names the answer's public outputs hold, and takes one with no `rests_on_period_check` to name none); that a
-tied audit's `SelectEntry_v1` units read their `occ` from its `ScanSlots_v3` units, which read
-its `SCAN_STATE` (the check reads no wires of an audit's Program, only its root templates' ids and closure digests);
+tied audit's `ScanSlots_v3` units compute the occupancy (its id is read, not its body) and that the input node their
+state reads is its `SCAN_STATE` (`slotRead` reads only the entries' `occ` and the scan slots' `state` arguments);
 and that the audits' answers are the SPOT component's own,
 which the composition's theorem is to bind. Of a session's signed start: where the session before it stopped, which
 no start says (a session that ends early still moves its key's life on by its whole span, so the numbers up to the
