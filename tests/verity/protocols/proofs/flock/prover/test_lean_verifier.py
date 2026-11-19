@@ -770,6 +770,14 @@ def test_template_queries_agree_with_the_vectors(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
 
 
+@pytest.mark.skipif(shutil.which("lake") is None or _template_vectors() is None, reason="no Lean toolchain or no template vectors")
+def test_partition_object_blocks_agree_with_the_python(tmp_path):
+    lake_build(LEAN)
+    p = subprocess.run(["python3", str(VERIFIER / "partition_object_agree.py"), "--lean", str(LEAN / ".lake/build/bin/verity-verify-proof"),
+                        "--vectors", str(_template_vectors()), "--out", str(tmp_path)], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+
+
 def _has_check_cut():
     try:
         from verity.circuits.cut import check_cut  # noqa: F401
