@@ -21,9 +21,8 @@ tags' `merkleLeaf`, and `Stmt.setupH` takes its Merkle scheme from that id (`Mer
   `pre` first, or a typed template) and `parseTyped` accept has the tags' leaf scheme. The proofs walk `parse` as
   `parse_facts_pre` and `parse_facts_tmpl` do, keeping the leaf-scheme check.
 * `setupH_find`: a statement `setupH` accepts has the tags' leaf scheme, and its Merkle scheme is `find?` of it.
-* `setupH_hm96`, `setupH_tagsAt_hm96`: for tags whose `merkleLeaf` is `hm96-sha512/v1` (every `hm96Rows` statement
-  pinned today: `merkleLeaf_circuitEb90718f`, `merkleLeaf_circuit`, `merkleLeaf_circuit967b8d06`,
-  `merkleLeaf_circuitTypes`), each table's Merkle scheme is `hm96Sha512`.
+* `setupH_hm96`, `setupH_tagsAt_hm96`: for tags whose `merkleLeaf` is `hm96-sha512/v1` (every statement a prover
+  writes today: `merkleLeaf_circuit`, `merkleLeaf_circuitTypes`), each table's Merkle scheme is `hm96Sha512`.
 * `accepts_tables_hm96_of_leaf`: `accepts_tables_hm96` with `hms` discharged.
 -/
 
@@ -494,9 +493,7 @@ theorem setupH_tagsAt_hm96 {tags : Tags} {count j : ℕ} {cf pf : ByteArray} {co
     st.merkle = MerkleScheme.hm96Sha512 :=
   setupH_hm96 ((tagsAt_merkleLeaf tags count j).trans hl) h
 
-theorem merkleLeaf_circuitEb90718f : Tags.circuitEb90718f.merkleLeaf = "hm96-sha512/v1" := rfl
 theorem merkleLeaf_circuit : Tags.circuit.merkleLeaf = "hm96-sha512/v1" := rfl
-theorem merkleLeaf_circuit967b8d06 : Tags.circuit967b8d06.merkleLeaf = "hm96-sha512/v1" := rfl
 theorem merkleLeaf_circuitTypes : Tags.circuitTypes.merkleLeaf = "hm96-sha512/v1" := rfl
 
 section Accepts
