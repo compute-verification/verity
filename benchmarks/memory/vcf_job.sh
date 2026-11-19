@@ -201,7 +201,7 @@ s = gen_sampling_module(); s.build_and_load(); print("loaded", s.build_dir)' > "
 got "FlashInfer's sampler built and loaded (nvcc $("$CUDA_HOME/bin/nvcc" --version | sed -n 's/.*release \([0-9.]*\),.*/\1/p'), ninja $(ninja --version), $("$CXX" --version | head -1))"
 say "CUDA_HOME=$CUDA_HOME CXX=$CXX nvcc=$(command -v nvcc) ninja=$(command -v ninja)"
 export VLLM_PY=$KEEP/vllm/bin/python LOCAL_WORK=$KEEP/work \
-  LEAN_EXE=$T/$LEAN_PKG/.lake/build/bin/poub-verifier RESEARCH_SOURCE_SHA=$COMMIT VERITY_BENCH_TRIAL=1 GPU=$CARD \
+  RESEARCH_SOURCE_SHA=$COMMIT VERITY_BENCH_TRIAL=1 GPU=$CARD \
   GPU_LEASE_ALLOWED_FILE=$KEEP/work/allowed-gpus
 say "verity bench memory --local on card $CARD (sm_$SM), $(( $(left) / 60 )) min left"
 timeout --signal=INT --kill-after=60 "$(left)" .venv/bin/verity bench memory --local > "$J/result/bench.out" 2> "$J/result/bench.err"

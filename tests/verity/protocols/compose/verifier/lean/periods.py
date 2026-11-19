@@ -141,7 +141,7 @@ def build(tmp: Path) -> None:
         proved, answer = T.run(exe, store, lambda c: Keeping(store, c, **kw), T.request(store, p2_parties.SESSION),
                                auditor=p2_parties.SESSION)
         assert proved == answer and len(kept) == 1, answer
-        assert p2_case.same_store(kept[0], honest.case) is None
+        assert kept[0]["params"]["store_root"] == root(honest.case).hex()
         return _served(kept[0]), p2_case.answer(kept[0], answer)
 
     accepted, rejected = reads(), reads(skip=1)

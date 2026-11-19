@@ -2495,7 +2495,6 @@
     {"file": "tests/verity/protocols/resource_accounting/memory/pous/attester/lean/test_protocol.py", "count": 1},
     {"file": "tests/verity/protocols/resource_accounting/memory/pous/attester/lean/test_verdict.py", "count": 1},
     {"file": "tests/verity/protocols/resource_accounting/memory/pous/verifier/check/test_run.py", "count": 3},
-    {"file": "tests/verity/protocols/resource_accounting/memory/pous/verifier/check/test_signed_run.py", "count": 1},
     {"file": "tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_challenger_loop.py", "count": 3},
     {"file": "tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_challenger_party.py", "count": 3},
     {"file": "tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_memory_attester.py", "count": 2},
