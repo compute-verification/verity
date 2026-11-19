@@ -91,6 +91,7 @@ from types import MappingProxyType
 from typing import Any, Protocol
 
 from verity.attested import Attested, AttestedLog, LogRefused
+from verity.clock import resolution_ns as clock_resolution_ns
 from verity.commitments import hm96
 from verity.commitments.crypto import lms
 from verity.commitments.indexed import RangeIndexedDomain
@@ -677,7 +678,7 @@ def coin_key(raw: bytes) -> bytes:
 def resolution_of(clock: Callable[[], int]) -> float:
     """How finely `clock` ticks, in ns: the monotonic clock's resolution for `time.perf_counter_ns`, else 1 (an injected
     clock's readings are taken as given)."""
-    return time.clock_getres(time.CLOCK_MONOTONIC) * 1e9 if clock is time.perf_counter_ns else 1
+    return clock_resolution_ns(time.CLOCK_MONOTONIC) if clock is time.perf_counter_ns else 1
 
 
 class MemoryAttester:

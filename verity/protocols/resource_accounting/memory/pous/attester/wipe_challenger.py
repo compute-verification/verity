@@ -47,6 +47,7 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from verity.party import Finish, Identity, Received, LogEntry, Send, Timer
+from verity.clock import resolution_ns as clock_resolution_ns
 from verity.protocol import ProtocolDef, Start
 from verity.channel import Message, Phase, Refused
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
@@ -100,7 +101,7 @@ class WipeMemoryAttester:
                  log: SessionLog, clock: Callable[[], int] = raw_clock_ns, resolution_ns: int | None = None,
                  coin_secret: bytes | None = None, mark_source: Callable[[bytes], bytes] | None = None) -> None:
         if resolution_ns is None:
-            resolution_ns = time.clock_getres(time.CLOCK_MONOTONIC_RAW) * 1e9 if clock is raw_clock_ns else 1
+            resolution_ns = clock_resolution_ns(time.CLOCK_MONOTONIC_RAW) if clock is raw_clock_ns else 1
         if resolution_ns > CLOCK_RESOLUTION_NS:
             raise ValueError(f"the clock ticks every {resolution_ns} ns, coarser than {CLOCK_RESOLUTION_NS} ns")
         self.key = wipe_key(secret, server, session)
