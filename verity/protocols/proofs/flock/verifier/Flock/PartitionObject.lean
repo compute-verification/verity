@@ -1,9 +1,11 @@
 module
 
+public import Flock.Draw
 public import Flock.Qcall
 public import Flock.TemplateQuery
 
-/-! A `verity/partition/v1` object's form (`Flock.HmRow`'s names), which `HmRow` checks before it reads the object. -/
+/-! A `verity/partition/v1` object's form (`Flock.HmRow`'s names), which `HmRow` checks before it reads the object, and a
+template query's ranges and strata over the verifier's own program, where its `blocks` are held to cover the units. -/
 
 @[expose] public section
 
@@ -104,5 +106,36 @@ def checkPartitionObject (obj : Json) : V (String × Nat) := do
   if let some bs ← blocksIn (obj.getObjVal? "blocks").toOption then
     checkBlocks (TemplateQuery.templatesOf name version ps).isSome bs
   return (name, version)
+
+/-- Template query `name` v`version`'s templates and ranges over the verifier's own program, read by `readDesc`: the program
+is the object's, and the object's `blocks`, where it has them, cover the population (`checkBlocksCover`). `refusal` refuses
+a query that is not a template query. -/
+def templateRangesBy {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
+    (readDesc : ByteArray → M TemplateQuery.Desc) (refusal name : String) (version : Nat) (obj : Json)
+    (program : ByteArray) : M (Array String × Array TemplateQuery.TRange) := do
+  let q := (obj.getObjVal? "query").toOption.getD Json.null
+  let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
+    | throw refusal
+  let ts ← ts
+  let d ← readDesc program
+  if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
+    throw "partition: the verifier's program is not the one the partition object names"
+  let rs ← match TemplateQuery.evaluate d ts with
+    | .ok rs => pure rs
+    | .error e => throw s!"partition: {e}"
+  checkBlocksCover obj (TemplateQuery.population rs)
+  return (ts, rs)
+
+/-- The strata of the verifier's own program, read by `readDesc`, and partition object, and the population: the query applied
+to the program, its units grouped by template descriptor id (`Draw.strataOf`). Only `Q_template_instance` v0 and
+`Q_template_instances` v0 define strata; `samplingDesign` names the sampling design that asks, in the refusal. -/
+def templateStrataBy {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
+    (readDesc : ByteArray → M TemplateQuery.Desc) (samplingDesign : String) (obj : Json) (program : ByteArray) :
+    M (Array (String × Array (Nat × Nat)) × Nat) := do
+  let (name, version) ← checkPartitionObject obj
+  let (_, rs) ← templateRangesBy readDesc
+    s!"{samplingDesign}: {name} v{version} defines no strata (Q_template_instance v0 and Q_template_instances v0 do)"
+    name version obj program
+  return (Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)), TemplateQuery.population rs)
 
 end Flock.HmRow
