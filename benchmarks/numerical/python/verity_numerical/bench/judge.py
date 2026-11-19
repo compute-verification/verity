@@ -107,7 +107,7 @@ def judge(base_dir: Path, cand_dir: Path, allow: list[str]) -> dict[str, Any]:
         "refused": [{"field": f, "baseline": _show(a), "candidate": _show(b)} for f, a, b in refused]
         + ([{"field": contract.INSTANCES_FIELD, "baseline": conflict[0], "candidate": conflict[1]}] if conflict else []),
         "warnings": warnings,
-        "contract": {"baseline": contract.validate(rb), "candidate": contract.validate(rc)},
+        "contract": {"baseline": contract.validate(rb, recorded=True), "candidate": contract.validate(rc, recorded=True)},
     }
     refused = rep["refused"]
     if refused:

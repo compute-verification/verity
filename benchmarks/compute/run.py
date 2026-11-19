@@ -686,11 +686,17 @@ def made_up_text(said: str) -> str:
     return f"  what the record says of itself: {said}"
 
 
+def ceiling_clock(card: dict, reading: str) -> int | float:
+    """The clock of ``card``'s ``reading`` in MHz where its entry is a ceiling, else `clock.sm`'s, the tensor's ceiling: a card
+    whose `clock.tensor` is a vendor's figure and no ceiling has its capacity at that reading taken at the ceiling's clock."""
+    return card["clock"][reading if card["clock"][reading]["mark"] == "ceiling" else "sm"]["value"]
+
+
 def capacity(site: Site, span_s: Fraction) -> dict[str, int]:
     """The registered hardware's MACs over `span_s` seconds at each data-sheet reading (`READINGS`): each registered
-    device's peak `FORMAT` MACs a second at its card's clock of that reading (`verity.device.rate` on the card
-    file of its sheet's SKU), summed over the devices, times the span, rounded up. `Unreadable` where the site registers
-    no device, or a device names no registered sheet or an SKU with no card file."""
+    device's peak `FORMAT` MACs a second at its card's clock of that reading, or at `clock.sm` where that clock is no
+    ceiling (`ceiling_clock`; `verity.device.rate` on the card file of its sheet's SKU), summed over the devices, times
+    the span, rounded up. `Unreadable` where the site registers no device, or a device names no registered sheet or an SKU with no card file."""
     if not site.units:
         raise Unreadable("the registered hardware holds no device")
     total = dict.fromkeys(READINGS, Fraction(0))
@@ -702,7 +708,7 @@ def capacity(site: Site, span_s: Fraction) -> dict[str, int]:
         except KeyError as e:
             raise Unreadable(f"the registered device {d}'s SKU has no card file: {e}") from e
         for r in READINGS:
-            total[r] += rate(card, fmt=FORMAT, mhz=card["clock"][r]["value"]) * span_s
+            total[r] += rate(card, fmt=FORMAT, mhz=ceiling_clock(card, r)) * span_s
     return {r: math.ceil(v) for r, v in total.items()}
 
 

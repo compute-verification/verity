@@ -765,9 +765,11 @@ def validate_measurements(measurements: Any, proof_class: str | None = None) -> 
     return p
 
 
-def validate(result: Any) -> list[str]:
+def validate(result: Any, *, recorded: bool = False) -> list[str]:
     """Every way ``result`` (a parsed ``result.json``) fails the campaign contract; ``[]`` means it conforms.
-    The envelope is checked as far as the fingerprint and measurements need; ``research inspect`` owns the rest."""
+    The envelope is checked as far as the fingerprint and measurements need; ``research inspect`` owns the rest.
+    ``recorded`` is a reader's: a result already on disk is read, and its native peak may be the figure one of its census line's
+    named readings gave when it was recorded (`native_peak_reading`); a result being produced (the default) states its line's own."""
 
     if not isinstance(result, Mapping):
         return ["result must be an object"]
@@ -786,7 +788,7 @@ def validate(result: Any) -> list[str]:
     p += validate_fingerprint(fp)
     pc = fp.get("proof_class") if isinstance(fp, Mapping) else None
     p += validate_measurements(result.get("measurements"), pc if pc in PROOF_CLASSES else None)
-    p += _check_rates(fp, result.get("measurements"))
+    p += _check_rates(fp, result.get("measurements"), recorded)
     p += _check_verifier_rates(result.get("measurements"))
     return p
 
@@ -809,10 +811,19 @@ def _check_verifier_rates(measurements: Any) -> list[str]:
             if not _is_number(values[n]) or abs(values[n] - want[n][0]) > RATE_TOLERANCE * want[n][0]]
 
 
-def _check_rates(fp: Any, measurements: Any) -> list[str]:
+def native_peak_reading(profile: str, got: Any) -> str | None:
+    """Which figure of ``profile``'s census line a reported native peak is: ``"line"`` for the line's own, the name of the
+    named reading (``"datasheet"``) it was recorded at, else None."""
+    line = native_reference(profile)
+    named = [("line", line.flop_per_second), *((r.name, r.flop_per_second) for r in getattr(line, "readings", ()))]
+    return next((n for n, q in named if _is_number(got) and abs(got - q) <= RATE_TOLERANCE * q), None)
+
+
+def _check_rates(fp: Any, measurements: Any, recorded: bool = False) -> list[str]:
     """The rate measurements, when reported, must be what the contract computes from the fingerprint's ``profile`` and
     ``K`` and the result's ``t.total`` and ``vu.count``: ``rate.proved_flop_per_second`` = 2 K vu.count / t.total and
-    ``rate.native_peak_flop_per_second`` = :func:`native_reference` (profile), or a named reading of its census line, to :data:`RATE_TOLERANCE`;
+    ``rate.native_peak_flop_per_second`` = :func:`native_reference` (profile) (a ``recorded`` result may instead state a named reading
+    of its census line), to :data:`RATE_TOLERANCE`;
     ``overhead.vs_native_peak`` = their ratio, i.e. :func:`overhead` at the fingerprint's ``K`` **and profile**, at the peak
     the result reports, to
     :data:`TOLERANCE`.  An overhead divided by another target's peak fails here.  A profile that is not a target is
@@ -832,12 +843,12 @@ def _check_rates(fp: Any, measurements: Any) -> list[str]:
     p: list[str] = []
     line = native_reference(profile)
     native = line.flop_per_second
-    quoted = [native, *(r.flop_per_second for r in getattr(line, "readings", ()))]
     got = reported.get(RATE_NATIVE)
-    held = next((q for q in quoted if _is_number(got) and abs(got - q) <= RATE_TOLERANCE * q), None)
-    at = native if held is None else held
-    if got is not None and held is None:
-        p.append(f"{RATE_NATIVE} {got!r} is neither the native peak of profile {profile!r}, {native:.6g} FLOP/s, nor a named reading of it")
+    held = native_peak_reading(profile, got)
+    at = got if held not in (None, "line") and recorded else native
+    if got is not None and (held is None or (held != "line" and not recorded)):
+        p.append(f"{RATE_NATIVE} {got!r} is not the native peak of profile {profile!r}, {native:.6g} FLOP/s"
+                 + (f" ({held!r}, a reading of its line, is a recorded result's)" if held else ""))
     if RATE_PROVED not in reported and OVERHEAD not in reported:
         return p
     K, total, count = fp.get("K"), values.get(T_TOTAL), values.get("vu.count")

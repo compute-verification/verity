@@ -518,6 +518,31 @@ def test_rate_measurements_are_three_consistent_numbers_the_validator_recomputes
     assert any("needs K in the fingerprint and positive t.total and vu.count" in p for p in contract.validate(bare))
 
 
+def test_a_native_peak_at_a_named_reading_is_a_recorded_results_and_no_new_ones(conforming: dict) -> None:
+    """The H100's FP8 line is its card's ceiling (2141.06 TFLOPS), and its named `datasheet` reading, 1978.9, the vendor's
+    clock: a result recorded at it is read (`recorded=True`) with its overhead checked at that peak, and a new result at it
+    is refused."""
+
+    t_total, B, K = 1.643, 4096, 1536
+    line = contract.native_reference(FP8_HOPPER_WGMMA.name)
+    sheet = next(r for r in line.readings if r.name == "datasheet").flop_per_second
+    assert contract.native_peak_reading(FP8_HOPPER_WGMMA.name, line.flop_per_second) == "line"
+    assert contract.native_peak_reading(FP8_HOPPER_WGMMA.name, sheet) == "datasheet" and sheet != line.flop_per_second
+    assert contract.native_peak_reading(FP8_HOPPER_WGMMA.name, 1.0e15) is None
+    res = json.loads(json.dumps(conforming))
+    res["workload_fingerprint"].update(profile=FP8_HOPPER_WGMMA.name, K=K, B=B)
+    res["measurements"] = [m for m in res["measurements"] if not m["name"].startswith(("t.", "vu."))]
+    ms = contract.rate_measurements(t_total, B, K, FP8_HOPPER_WGMMA.name)
+    res["measurements"] += [contract.measurement("t.arithmetic", t_total), contract.measurement("t.total", t_total), contract.measurement("vu.count", B), *ms]
+    assert contract.validate(res) == contract.validate(res, recorded=True) == []
+    old = json.loads(json.dumps(res))
+    old["measurements"][-2]["value"] = sheet
+    old["measurements"][-1]["value"] = t_total / B * sheet / (2 * K)
+    problems = contract.validate(old)
+    assert len(problems) == 2 and problems[0].startswith("rate.native_peak_flop_per_second") and "'datasheet'" in problems[0], problems
+    assert contract.validate(old, recorded=True) == []
+
+
 def test_the_verifiers_derived_numbers_are_recomputed_from_its_cpu_seconds(conforming: dict) -> None:
     """``verifier_rates``: CPU seconds per VU and verifier cores per prover, from ``verify.cpu_s``, ``vu.count`` and
     ``t.total``; a tampered one, or one without the numbers it is checked against, is a problem."""
