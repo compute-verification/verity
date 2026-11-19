@@ -80,8 +80,9 @@ def _tree(pearl_dom, want: str, program: str, value: str, rows, salts, window) -
             "pearl_is_manifest": pearl.hex() == want, "device_is_port": under_port == registered}
 
 
-def check(base: Path, call: int | None = None, round_: int = 0, program: str | None = None,
-          window: str | None = None) -> dict:
+def inputs(base: Path, call: int | None = None, round_: int = 0, program: str | None = None,
+           window: str | None = None) -> tuple[dict, dict]:
+    """The call's facts and, for A, y and B, `_tree`'s arguments."""
     man = json.loads((base / "manifest.json").read_text())
     mms = man["matmuls"]
     c = min(range(len(mms)), key=lambda i: (mms[i]["n"] * mms[i]["k"], i)) if call is None else call
@@ -90,16 +91,21 @@ def check(base: Path, call: int | None = None, round_: int = 0, program: str | N
     wt = man["weights"][str(w)]
     prog = program or STAND_IN_PROGRAM
     win = window or STAND_IN_WINDOW
-    a = _tree(rows_domain(activation_binding(salt, index), index, m, HM96), u["root_a"], prog, a_value(round_, c),
-              _f32_rows(_file(base, u["rows"]), k, m), _salts(_file(base, u["salts"]), m), win)
-    y = _tree(SY.y_domain(salt, index, real), u["y"]["root"], prog, y_value(round_, c),
-              _f32_rows(_file(base, u["y"]["rows"]), n, real), _salts(_file(base, u["y"]["salts"]), real), win)
-    b = _tree(rows_domain(weight_binding(w), -2, n, HM96), bytes.fromhex(wt["root"]).hex(), prog, b_value(w),
-              _f32_rows(_file(base, wt["rows"]), k, n), _salts(_file(base, wt["salts"]), n), None)
-    trees = {"a": a, "y": y, "b": b}
-    return {"call": c, "index": index, "k": k, "n": n, "m16": m, "real_rows": real, "weight": w, "round": round_,
-            "program": prog, "window": win, "stand_in": {"program": program is None, "window": window is None},
-            "trees": trees, "ok": all(t["pearl_is_manifest"] and t["device_is_port"] for t in trees.values())}
+    args = {"a": (rows_domain(activation_binding(salt, index), index, m, HM96), u["root_a"], prog, a_value(round_, c),
+                  _f32_rows(_file(base, u["rows"]), k, m), _salts(_file(base, u["salts"]), m), win),
+            "y": (SY.y_domain(salt, index, real), u["y"]["root"], prog, y_value(round_, c),
+                  _f32_rows(_file(base, u["y"]["rows"]), n, real), _salts(_file(base, u["y"]["salts"]), real), win),
+            "b": (rows_domain(weight_binding(w), -2, n, HM96), bytes.fromhex(wt["root"]).hex(), prog, b_value(w),
+                  _f32_rows(_file(base, wt["rows"]), k, n), _salts(_file(base, wt["salts"]), n), None)}
+    return ({"call": c, "index": index, "k": k, "n": n, "m16": m, "real_rows": real, "weight": w, "round": round_,
+             "program": prog, "window": win, "stand_in": {"program": program is None, "window": window is None}}, args)
+
+
+def check(base: Path, call: int | None = None, round_: int = 0, program: str | None = None,
+          window: str | None = None) -> dict:
+    facts, args = inputs(base, call, round_, program, window)
+    trees = {t: _tree(*a) for t, a in args.items()}
+    return {**facts, "trees": trees, "ok": all(t["pearl_is_manifest"] and t["device_is_port"] for t in trees.values())}
 
 
 def reuse(w_path: Path, dirs: list[Path]) -> dict:
