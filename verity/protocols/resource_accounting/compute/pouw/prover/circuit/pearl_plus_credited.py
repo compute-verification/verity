@@ -35,8 +35,10 @@ each a Call or a map member: `PearlPlusTileSeed_v1` (the line key and each line'
 over eb's TN indices and over F's K for fa and for fb, `PearlPlusGramRow_v2` mapped over F_B's 32 columns, and
 `PearlPlusTileCoreWired_v1`, eb, fa, fb and g crossing as values C wires from each producer's output row to its consumer's
 input row.  No K that the core takes fits the node whole in one proof block (the noise alone is about 370k · K ANDs), so
-C's laying (`verity.circuits.laying.lay`) opens it into those units (`cut`), each in range at every served K, each its
-own block; the credited block is the wired core.  It writes ``y``,
+C's laying (`verity.circuits.laying.lay`) opens it into those units (`cut`), each its own block: a line is 73,459 ANDs and
+a Gram row 32 chains (about 7,000 · K), in range at every K up to the served 2048; the wired core is in range whole at
+K = 256 (about 16.6M ANDs) and is the credited block there, and at K = 2048 (about 5.1G ANDs at a 16 × 64 tile) laying
+opens it too.  It writes ``y``,
 its TR real rows' TN words of the linear's y (Pearl+'s served product, `pearl_plus_tile.served`): the one y C holds,
 which every reader of the linear takes by wire, a row of y the concatenation of its column tiles' words in column order.
 Its ``ok`` is one u16 word held to 1; its digest is a committed value no unit reads. A unit's amount is its credited
