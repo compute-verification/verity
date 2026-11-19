@@ -714,7 +714,6 @@ hand = [
     "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/CommittedFiles.lean",
     "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/Credit.lean",
     "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/CreditDifftest.lean",
-    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/CreditUnwritten.lean",
     "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/Difftest.lean",
     "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/DifftestMain.lean",
     "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/Lanes.lean",

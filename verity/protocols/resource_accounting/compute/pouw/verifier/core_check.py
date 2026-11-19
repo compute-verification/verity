@@ -1719,18 +1719,6 @@ def live_salt_twin(key: Any, ledger: Any, pins: Any, main: Any, session: Any, ma
     return salt, None
 
 
-def live_epoch(raw: bytes) -> tuple[dict, bytes, int]:
-    """A live Pearl-C pass's manifest, read from its bytes `raw`, and its salt execution phase as `live_salt` reads it: W,
-    `audit.weights_root` of its workload's weights, and k, its ``pass_index``, an integer in [0, 2^64). Raises `Refused`
-    when the manifest names none (`PASS_FORM` among them), `DomainError` when its workload is malformed."""
-    m = _manifest(raw)
-    _, roots = _workload(m)
-    k = m.get("pass_index")
-    if not (_int(k) and 0 <= k < U64):
-        raise Refused(PASS_FORM)
-    return m, weights_root(Co.SCHEME, roots), k
-
-
 def salt_twin(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, weights_root: Any, requests_root: Any,
          opening: Any, verify: Ch.Verify) -> tuple[str, str] | None:
     """None when `opening` is a live execution phase's salt coin, opened after the execution phase's own open root, every coin and root of
@@ -1915,7 +1903,7 @@ def line(a: dict) -> str:
 __all__ = ["ANSWER_KEYS", "COIN_KEY", "EXE", "FORMATS", "ID", "LEVEL", "LIVE", "ONE_STAGE", "SCHEME", "SIGNED_LIVE",
            "VALUES_TAG", "WINDOW_VALUES", "Refused", "answer", "answer_of", "answer_twin", "canonical", "case",
            "case_twin", "check_twin", "commitment", "digest", "draw_twin", "evidence", "integrity", "integrity_json",
-           "sampling_design_name", "line", "live_epoch", "live_salt", "live_salt_twin", "lms_verify", "opening_twin", "params",
+           "sampling_design_name", "line", "live_salt", "live_salt_twin", "lms_verify", "opening_twin", "params",
            "pass_epoch_twin", "ratio", "recorded_reason", "registered_twin", "rounds", "rounds_twin", "salt_of_record",
            "salt_twin", "serve_case", "unit_draw", "values_root", "verify_path", "window_anchors", "window_domain",
            "window_salt", "work_k", "work_units"]

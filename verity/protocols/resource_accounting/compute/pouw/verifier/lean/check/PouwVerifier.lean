@@ -9,7 +9,6 @@ public import PouwVerifier.Opening
 public import PouwVerifier.Pass
 public import PouwVerifier.Rounds
 public import PouwVerifier.Credit
-public import PouwVerifier.CreditUnwritten
 public import PouwVerifier.Period
 public import PouwVerifier.Chunks
 public import PouwVerifier.LeafOwn

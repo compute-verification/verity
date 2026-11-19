@@ -125,11 +125,6 @@
    "imports": ["CoreProtocol.Account", "CoreProtocol.Cli", "PouwVerifier.Credit", "PouwVerifier.CreditOnce"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
-  },
-  "PouwVerifier.CreditUnwritten": {
-   "imports": ["PouwVerifier.Credit"],
-   "except": [],
-   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   }
  },
  "guarantees": {},
