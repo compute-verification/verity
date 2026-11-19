@@ -33,12 +33,13 @@ def sizes_of_class(cls: str, scheme: str) -> list:
             "sizes": window_cut.credited_sizes(low), "templates": len(low.circuit.templates)}
 
 
-def block(scheme: str, k: int, tm: int, tn: int, n: int, bits: bool = False, restrict: bool = True) -> dict:
+def block(scheme: str, k: int, tm: int, tn: int, n: int, bits: bool = False, restrict: bool = True,
+          depth: int | None = None) -> dict:
     from verity.circuits import count as CT
     from verity.circuits import restrict as R
     from verity.circuits.codec import descriptor_chunks, descriptor_id
     from verity_vllm.program.predict import window_cut
-    out, t = {"scheme": scheme, "k": k, "tm": tm, "tn": tn, "n": n, "phases": {}}, time.perf_counter()
+    out, t = {"scheme": scheme, "k": k, "tm": tm, "tn": tn, "n": n, "depth": depth, "phases": {}}, time.perf_counter()
 
     def phase(name: str) -> None:
         nonlocal t
@@ -47,7 +48,7 @@ def block(scheme: str, k: int, tm: int, tn: int, n: int, bits: bool = False, res
         print(f"{name}: {out['phases'][name]}", flush=True)
         t = now
 
-    program, part = window_cut.credited(scheme, k, tm, tn, n)
+    program, part = window_cut.credited(scheme, k, tm, tn, n, depth)
     phase("program")
     c = b"".join(descriptor_chunks(program))
     out["descriptor_bytes"] = len(c)
@@ -104,6 +105,7 @@ def main() -> int:
     ap.add_argument("--size", help="K,TM,TN,N")
     ap.add_argument("--cls", help="a window class, e.g. 4,27,2: its cut calls' credited sizes on Llama 3.2 1B")
     ap.add_argument("--bits", action="store_true", help="also evaluate the block on bits once, on random inputs")
+    ap.add_argument("--depth", type=int, help="the tile with its leaf opening in a transcript tree of this depth")
     ap.add_argument("--no-restrict", action="store_true",
                     help="count the Program's one unit from its descriptor, with no restrict: the block is the whole Program")
     ap.add_argument("--out", type=Path, required=True)
@@ -116,7 +118,7 @@ def main() -> int:
         print("CREDITED-SIZES", a.cls, got["sizes"], "templates", got["templates"], flush=True)
     if a.size:
         k, tm, tn, n = map(int, a.size.split(","))
-        got = block(a.scheme, k, tm, tn, n, a.bits, not a.no_restrict)
+        got = block(a.scheme, k, tm, tn, n, a.bits, not a.no_restrict, a.depth)
         (a.out / f"block-{k}-{tm}-{tn}-{n}.json").write_text(json.dumps(got, indent=1))
         if "sum_of_bodies" not in got:
             return 0

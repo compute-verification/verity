@@ -29,11 +29,12 @@ from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_cut as WK
 
 K, TM, TN, N = 256, 1, 1, 1
+D = 3
 
 
 @functools.cache
-def credited():
-    program, part = WK.credited(SCHEME, K, TM, TN, N)
+def credited(depth: int | None = None):
+    program, part = WK.credited(SCHEME, K, TM, TN, N, depth)
     c = b"".join(descriptor_chunks(program))
     return program, part, c, R.restrict(c, part, [(0, 1)])
 
@@ -109,6 +110,22 @@ def test_the_credited_block_is_the_tile_with_its_bit_ports():
     assert {R._Gates(b.D).binding(g) for g in b.inputs} == {R.REGISTRATION}
     assert [(t.n, t.elem.w) for t in ret.fields] == [(64 * 8 + 1, 1)]
     assert [n.fn.id for n in b.program.root.body.nodes if n.form == "call"] == [core.id]
+
+
+@pytest.mark.slow
+def test_the_credited_block_with_its_leaf_is_the_tile_unit_with_one_output():
+    """At a depth, the block is `PearlPlusTile_v1`: the core's ports with the leaf's hsalt and path after its first four and
+    troot, tdomain and tpos last, all registered bits, and ok its one output. Slow: as above."""
+    _program, part, _c, b = credited(D)
+    tile = WK.credited_product(SCHEME, K, TM, TN, N, D)
+    assert tile.defn is T.PearlPlusTile and part["query"]["params"]["template"] == descriptor_id(tile)
+    params, ret = b.program.fn.signature()
+    core, _ = WK.credited_product(SCHEME, K, TM, TN, N).signature()
+    leaf = 8 * (192 + 64 * D + 2 * 64) + D
+    assert [(t.n, t.elem.w) for _p, t in params] == [(sum(t.leaves for _n, t in core) + leaf, 1)]
+    assert {R._Gates(b.D).binding(g) for g in b.inputs} == {R.REGISTRATION}
+    assert [(t.n, t.elem.w) for t in ret.fields] == [(1, 1)]
+    assert [n.fn.id for n in b.program.root.body.nodes if n.form == "call"] == [tile.id]
 
 
 @pytest.mark.slow

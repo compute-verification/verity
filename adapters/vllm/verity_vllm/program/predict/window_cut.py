@@ -145,13 +145,15 @@ def census(lowered: Any) -> list[dict[str, Any]]:
     return out
 
 
-def credited_product(scheme: str, k: int, tm: int, tn: int, n: int) -> SpecializedDefinition:
-    unit = PT.tile(PS.get(scheme), k, tm, tn, n, 1)
+def credited_product(scheme: str, k: int, tm: int, tn: int, n: int, depth: int | None = None) -> SpecializedDefinition:
+    unit = PT.tile(PS.get(scheme), k, tm, tn, n, 1 if depth is None else depth)
+    if depth is not None:
+        return unit
     return bind(PT.PearlPlusTileCoreV2, **{s: unit.bindings[s] for s in PT.PearlPlusTileCoreV2.statics})
 
 
-def credited(scheme: str, k: int, tm: int, tn: int, n: int) -> tuple[Program, dict[str, Any]]:
-    core = credited_product(scheme, k, tm, tn, n)
+def credited(scheme: str, k: int, tm: int, tn: int, n: int, depth: int | None = None) -> tuple[Program, dict[str, Any]]:
+    core = credited_product(scheme, k, tm, tn, n, depth)
     params, ret = core.signature()
     root = CompositeDefinition("PearlPlusCredited", 1, (), lambda S: (params, ret),
                                lambda B, S, *a: B.call(core, *a), register=False)
