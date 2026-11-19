@@ -17,7 +17,6 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   (`verity/protocols/proofs/spot/prover/audit/README.md`).
 - `stage_subset.py`, `stage_tampered.py`: helpers that run inside the circuit prover's tree (its `verity_flock`), as
   `compose_circuit.py` does.
-- `pod.sh`: the entry point on a CPU pod.
 - `a5_llama1b_h200.sh`: A5 over a GPU-served window, in one job on an H200 node, from a clone of the tree
   (`bash benchmarks/one_stage/a5_llama1b_h200.sh`). Llama-3.2-1B int8's B4 workload on one H200 under `gpu-lease`: its Build and
   Match, then a deferred config-run Commit under rows-sha512 whose `--serving-rows` window
@@ -238,7 +237,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   (`tests/verity/protocols/proofs/spot/verifier/test_form_refusals.py`), on the same builds (`form_refusals.py`): honest
   `--zk` sessions of that proof block flat, of it as its template, and of a toy whose last stage returns the outputs, with the
   flat session's verdicts under four statements `verify --zk` must refuse.
-- `a11.sh`: run A11's entry point, on A6's builds. A11 is GLM-5.3 TP8 B1's served step, rank 0: `a11_kinds.py` censuses
+- A11 is GLM-5.3 TP8 B1's served step, rank 0: `a11_kinds.py` censuses
   the request Program's root Calls by Definition kind and tries one proof block of each through the circuit prover (a kind whose word proof blocks it
   refuses, through its Boolean version's); `a11_slice.py` cuts the
   capture's values and the checkpoint's tensors for a few layers off the serving node; `a11.py` stages each lowering kind's
@@ -351,16 +350,6 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   on the class's own Program with the settings' `ALPHA`, `GAMMA` and `DAY_PROGRAM` held to what it answers and
   `HELD_ALPHA` and `HELD_GAMMA` to the record form's pair of the class (`rehearsal_limits.py`), the day's declaration,
   the Lean the verbs run, and Pearl+ against this tree's own gate code.
-
-Flock's circuit prover (`verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
-`pod.sh` takes `git archive`s of the circuit prover's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
-inputs sent with the run; it builds `flock-circuit` and `verity-verify-proof` once per pod, then runs the driver, whose
-`--m0-pythonpath` names that tree. The drivers' checks go through the verifier
-(`one_stage.verifier`), which builds the SPOT Lean in the run's tree on its first check, hence `--cwd clone`:
-
-~~~sh
-bash benchmarks/one_stage/pod.sh    # a job run from a clone of the tree, with m0.tar, lean.tar and set.tar sent
-~~~
 
 `check` runs nothing here.
 
