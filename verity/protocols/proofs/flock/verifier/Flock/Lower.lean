@@ -154,6 +154,9 @@ def WIDE : String := "a parameter or return leaf wider than one bit, not lifted 
 /-- Every parameter and return leaf of `d` one bit wide. -/
 def onBits (d : Defn) : Bool := d.ret.bits && d.params.all (·.2.bits)
 
+/-- `d` refused under `WIDE` unless `onBits d`; a bind, not an `if`, in `lowerDef`, where each `if` doubles what follows. -/
+def bitsOk (d : Defn) : V Unit := if onBits d then pure () else throw s!"{d.id}: {WIDE}"
+
 /-- Reference `r`'s form, the same for every copy. -/
 def Work.formOf (w : Work) (st : Array Nat) (r : Ref) : V Form :=
   if r.p then match st[r.i]? with
@@ -489,7 +492,7 @@ def lowerDef (P : Prog) : Nat → Nat → M (Nat × Array Nat)
     if let some r := (← get).done[d]? then return r
     let defn := P.defs[d]!
     if defn.prim then throw s!"{defn.id}: a primitive is not lowered as a Definition"
-    if !onBits defn then throw s!"{defn.id}: {WIDE}"
+    StateT.lift (bitsOk defn)
     let body := defn.body
     let st := starts defn.params
     if (defn.params.foldl (fun a p => a + p.2.leaves) 0) != defn.paramLeaves then
