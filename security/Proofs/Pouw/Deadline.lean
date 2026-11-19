@@ -145,7 +145,7 @@ theorem realWindow_site (Δ : ℕ) : realWindow site key Δ = Δ := by
 theorem inTime {Out : Type} (a b Δ : ℕ) (hab : a ≤ b) (hbΔ : b ≤ a + Δ) (H : Q → R) (s : S) (e : Out) :
     InTime (docket S Out) (stamps Q R S a b) Δ H s e :=
   ⟨List.mem_singleton_self _, ⟨a⟩, ⟨b⟩, ⟨⟨trivial, List.mem_singleton_self _⟩, rfl, rfl⟩,
-    by unfold Reading.elapsed; omega, by unfold Reading.elapsed; omega⟩
+    by simp only [Reading.elapsed]; omega, by simp only [Reading.elapsed]; omega⟩
 
 theorem stamps_ts (a b : ℕ) (s : S) : (stamps Q R S a b).ts s = a := by
   simp [Stamps.ts, stamps, stamp, real]
