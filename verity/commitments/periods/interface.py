@@ -2828,7 +2828,8 @@ class Window:
         ``strings``: by each of `leaf_rows`' ports, every row's salt and ``b || c`` (`rows.row_strings`) in the template's
         unit order, which the period leafs as given and never re-hashes from the rows: a string that isn't its row's is a
         leaf no opening of the row matches. Refused by name for a port missing or not `leaf_rows`', a length that isn't
-        whole salts and strings, or a count that isn't the port's rows."""
+        whole salts and strings, or a count that isn't the port's rows. Only the weights' tie, the members' stand-in and the
+        direct `rows.commit` callers pass no ``strings``; a served window always passes them."""
         data, salts_of_, strings_of, need, unplaced = self._plan()
         if strings is not None:
             if unplaced:
