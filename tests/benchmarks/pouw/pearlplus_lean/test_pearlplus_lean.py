@@ -382,7 +382,7 @@ def test_an_epochs_passes(exe, tmp_path):
 def test_a_served_runs_tile_and_salt(exe, tmp_path):
     """Read as a served run's, a test instance's pass is refused before the coin: its instance is k_min 32 at 16 x 16 or
     64 x 64 tiles, not the served k_min 1,024 at 64 x 64. Passes of two salts (other fixed operands under the one coin), each
-    holding calls 0 and 1, are refused, test instance or not."""
+    at its place, are refused, test instance or not."""
     a = T.proved_pass(tmp_path / "a", H100)[0]
     wide = T.proved_pass(tmp_path / "wide", H100, tile=(64, 64))[0]
     for path, tile in ((a, 16), (wide, 64)):
@@ -391,7 +391,7 @@ def test_a_served_runs_tile_and_salt(exe, tmp_path):
         assert served["reason"] == (f"ValueError: pass 0's instance is k_min 32 at {tile} x {tile} tiles, not the served "
                                     "1024 at 64 x 64: a test instance is read only as one, crediting nothing")
     assert same(exe, [wide])["verdict"] == "accept"
-    b = T.proved_pass(tmp_path / "b", H100, seed=12)[0]
+    b = T.proved_pass(tmp_path / "b", H100, 1, seed=12)[0]
     for test_instance in (False, True):
         two = same(exe, [a, b], test_instance=test_instance)
         assert two["reason"] == "ValueError: the passes are not all of one salt" and two["refused"] is None
@@ -429,8 +429,8 @@ def test_a_live_epoch_and_a_challenger_draw(exe, tmp_path):
     mine = lean(exe, [a, b], 8, SOURCE, lr, test_instance=True)
     assert mine["verdict"] == "accept" and json.loads(lr.read_text())["draw"] == {"from": "node", "claim": VR.NODE_CLAIM}
     assert lean(exe, [a, b], 8, None, lr, test_instance=True) == mine
-    edit(b, lambda m: m.update(pass_index=1))
-    late = same(exe, [b], 3, SOURCE)
+    edit(a, lambda m: m.update(pass_index=1))
+    late = same(exe, [a], 3, SOURCE)
     assert late["verdict"] == "reject" and "the salt's coin was not opened after what the verifier recorded" in late["reason"]
 
 
