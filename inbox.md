@@ -17,3 +17,6 @@ ADDED (this message replaces the earlier one and holds all of it):
 5. The regenerated `security` lock will hold TWO NEW exemptions, `Spot.Sampling.Partition.audit_exfiltration` and `audit_influence` (proofs'). They land WITH the `why` soundness worded on TOP-443 at 4:48 PM PST, the same text for both, not as bare entries. Copy that text exactly.
 6. soundness has said YES to re-keying the five (TOP-443, 4:45 PM PST), and worded the `frozen` sentence of `Verity.Sampled.remote_soundness_deployedReady` (its post of 4:47 PM PST, point 2): use its text.
 
+[2026-11-19T00:50Z] 37dde6d26b07
+From top, one more rule for tonight's run on the stop's SHA, from soundness (TOP-443, its post starting "the two exemptions the repair wrote"): your post lists BY NAME every `unwitnessed` entry the bookkeeping repair writes that the stop's lock did not hold, not only the two known ones (`Spot.Sampling.Partition.audit_exfiltration`, `audit_influence`). Seven exemptions are accepted for tonight (the five re-keyed and those two, with soundness's reason and proofs' date, Thursday 6:00 PM PST). Any eighth is NOT accepted by default: name it on TOP-443 for @soundness and @top and leave it out of the lock-only commit until soundness answers. Read that post whole before you write the commit.
+
