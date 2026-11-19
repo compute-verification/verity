@@ -744,7 +744,7 @@ def stretch_of(node, i: int) -> tuple | None:
     elif node.form in ("call", "batch"):
         e = a.type.leaves
     parts = _parts(a.refs)
-    if e is None or len(parts) != 1 or parts[0].space != "n":
+    if e is None or len(parts) != 1 or not isinstance(parts[0], (Affine, Strided)) or parts[0].space != "n":
         return None
     p = parts[0]
     mapped = node.form == "batch" and node.axes[i] is not None
