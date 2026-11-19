@@ -254,3 +254,18 @@ def test_a_grinding_try_costs_what_the_reference_hashes(monkeypatch: pytest.Monk
     for n in (1, 2, 4, 8, 2 ** 17):
         assert timing.grind_compressions(n) == hide + leaf + node * math.ceil(math.log2(n)) + next_seed + signs
     assert (timing.grind_compressions(1), timing.grind_compressions(2 ** 21 // receipts.PER_LEAF)) == (15, 66)
+
+
+@pytest.mark.parametrize(("rows", "term"), [(16, "bandwidth"), (64, "poub")])
+def test_the_ledgers_sketch_term_is_the_schemes_delta_sketch(rows, term) -> None:
+    """`timing.sketch_failure` at the rows of each declared term, exactly (as Fractions), equals the declared
+    `delta_sketch` at the same Q, P, N and the rank tail it reads at r*: two formulas of one constant."""
+    from verity.protocols.resource_accounting.memory.poub import scheme as declared
+
+    r, _ = timing.sketch_reading(rows)
+    tail = timing.SECTORS * timing.sign_rank_at_most(rows, r - 1)
+    delta = declared.DELTA_SCHEME[term]
+    assert delta.lean.endswith(f" {8 * r} {timing.sign_key_bits(rows) + 1}")
+    for q, passes, blocks in itertools.product((1, 7, 2 ** 20, 2 ** audit.QUERIES_LOG2), (0, 1, 30, 10 ** 4, 2 ** 30),
+                                               (0, 1, 4096, 2 ** 30, 2 ** 40)):
+        assert timing.sketch_failure(passes, rows, blocks=blocks, queries=q) == delta.value(q, passes, blocks, tail)
