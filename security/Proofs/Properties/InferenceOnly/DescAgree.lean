@@ -85,6 +85,9 @@ theorem descEvaluate_ok (j out : Json) (h : Desc.evaluate j = .ok out) :
   rcases h2 : decodeProgram i.program with e | P <;> simp only [h2] at h
   · cases h
   simp only [pure, Except.pure] at h
+  by_cases h3r : (!(P.defs[P.root]!).body.recut.isEmpty) = true
+  · simp only [h3r, ite_true, throw, throwThe, MonadExceptOf.throw] at h; cases h
+  simp only [h3r, Bool.false_eq_true, ite_false] at h
   by_cases h3 : P.orderViolation.isSome = true
   · simp only [h3, ite_true, throw, throwThe, MonadExceptOf.throw] at h; cases h
   simp only [h3, Bool.false_eq_true, ite_false] at h
@@ -341,7 +344,7 @@ theorem gate_input (P : Prog) (hl : Desc.rootLaidOut P = true) (hi : Desc.inputs
     (hg : (rootOffs P)[k]! ≤ g ∧ g < (rootOffs P)[k + 1]!) :
     Flock.Program.isInputId (P.defs[p]!).key = (inputs P)[k]! := by
   obtain ⟨-, -, -, hmono⟩ := rootLaidOut_spec P hl
-  unfold Flock.Program.Prog.gate at h
+  rw [Flock.Program.Prog.gate_of (Flock.Program.Prog.gate_recut h)] at h
   by_cases hge : g ≥ (P.defs[P.root]!).gates
   · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
   simp only [hge, ite_false, bind, Except.bind] at h
@@ -396,7 +399,7 @@ theorem gate_input_fn (P : Prog) (hl : Desc.rootLaidOut P = true) {g p : ℕ}
     p = ((rootBody P).nodes[k]!).fn := by
   obtain ⟨-, -, -, hmono⟩ := rootLaidOut_spec P hl
   rw [inputs_get P hk] at hin
-  unfold Flock.Program.Prog.gate at h
+  rw [Flock.Program.Prog.gate_of (Flock.Program.Prog.gate_recut h)] at h
   by_cases hge : g ≥ (P.defs[P.root]!).gates
   · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
   simp only [hge, ite_false, bind, Except.bind] at h

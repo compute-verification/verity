@@ -166,4 +166,64 @@ def theta : Registered.Port := { x with name := "w", value := "theta", leaves :=
 #guard (OneCircuit.pos regP #[2] theta).toOption.isNone
 #guard (OneCircuit.pos regP #[0] { theta with name := "v" }).toOption.isNone
 
+-- output rows: a block circuit of `regP`'s template T, whose one output field (16 bits) is its one output row `o0`
+def oMeta (t : String) : Json := Json.mkObj [("program_digests", Json.mkObj [(t, Json.str "d")])]
+def oPort (name : String) (words : Nat) : Flock.Port := { name, words, chunks := 1, nb := 0 }
+def outC : Circuit :=
+  { (default : Circuit) with
+    ports := #[oPort "w" 2, oPort "o0" 1], outPorts := #[("o0", 1)], outRowPorts := #[1], metaJ := oMeta "T" }
+def o0 : Registered.Port := { x with name := "o0", value := fieldTree "T" 0, leaves := 3 }
+def outWhy (c : Circuit) (P : Program.Prog) (j : Nat) (units : Array Nat) (reg : Registered.Port) : String :=
+  match outReads c P units j reg with
+  | .error e => e
+  | .ok _ => ""
+def outRel (c : Circuit) (P : Program.Prog) (j : Nat) (units : Array Nat) (reg : Registered.Port) :
+    Option (Array (Option Nat) × Nat) :=
+  (outReads c P units j reg).toOption.map fun r => (r.readsRel, r.readsFrom)
+
+-- (b) each unit reads its own leaf of T's output tree, the leaf `HmLinks.treeLeaf` gives (T's rank in root order)
+#guard outRel outC regP 0 #[0, 1] o0 == some (#[some 0, some 1], 0)
+#guard outRel outC regP 0 #[2] o0 == some (#[some 2], 2)
+#guard (List.range 3).all fun u =>
+  ((outRel outC regP 0 #[u] o0).bind (·.1[0]?)).join == (HmLinks.treeLeaf regP (HmLinks.nodes regP) u).map (·.2)
+-- (a) the row opens T's output field's tree, never a value of the caller's naming, nor another field's tree
+#guard (outWhy outC regP 0 #[0] { o0 with value := "o0" }).startsWith
+  "registered reads: output row o0 is registered as o0, and it is T's output field 0, committed once in T/o0"
+#guard (outWhy outC regP 0 #[0] { o0 with value := fieldTree "T" 1 }).startsWith "registered reads: output row o0 is registered as T/o1"
+-- a row of another width than its field's whole words, a circuit naming no template, or one C's root never calls
+#guard (outWhy { outC with ports := #[oPort "w" 2, oPort "o0" 2], outPorts := #[("o0", 2)] } regP 0 #[0] o0).startsWith
+  "registered reads: output row o0 is output words [0, 2), and T's output field 0 is bits [0, 16)"
+#guard (outWhy { outC with metaJ := Json.null } regP 0 #[0] o0).startsWith
+  "registered reads: output row o0: the circuit names no template of C"
+#guard (outWhy { outC with metaJ := oMeta "U" } regP 0 #[0] o0).startsWith
+  "registered reads: output row o0: C's root calls no U"
+
+-- T returning two fields: one output row a field, each opening its own tree at the unit's leaf; one row for both refused
+def pairP : Program.Prog := { regP with defs := regP.defs.set! 1 { regP.defs[1]! with ret := .tuple #[r16, r16] } }
+def outC2 : Circuit :=
+  { outC with
+    ports := #[oPort "w" 2, oPort "o0" 1, oPort "o1" 1], outPorts := #[("o0", 1), ("o1", 1)], outRowPorts := #[1, 1] }
+def o1 : Registered.Port := { o0 with name := "o1", value := fieldTree "T" 1 }
+#guard outRel outC2 pairP 0 #[1] o0 == some (#[some 1], 1)
+#guard outRel outC2 pairP 1 #[1] o1 == some (#[some 1], 1)
+#guard (outWhy outC2 pairP 1 #[1] { o1 with value := fieldTree "T" 0 }).startsWith "registered reads: output row o1 is registered as T/o0"
+#guard (outWhy { outC with ports := #[oPort "w" 2, oPort "o0" 2], outPorts := #[("o0", 2)] } pairP 0 #[1] o0).startsWith
+  "registered reads: output row o0: T returns 2 output fields and the circuit has 1 output rows"
+
+-- `withPositions` sends a port past the input rows (`HmOut.nIn`) to `outReads`; a row past the circuit's is refused
+#guard HmOut.nIn outC == 1 && HmOut.nIn outC2 == 1
+#guard (outWhy outC regP 1 #[0] o0).startsWith "registered reads: output row o0: the circuit has 1 output rows"
+
+-- (d) the derived position held at the instances: an instance at a row of another leaf than its unit's is refused
+def oRes : Registered.Port := ((outReads outC regP #[0, 1] 0 o0).toOption).getD default
+def otab : Tables := { counts := #[2, 2], starts := #[0, 2], refs := #[0, 0, 1, 1] }
+#guard badInstance oRes otab 2 1 2 2 #[0, 1] #[0, 1] == none
+#guard badInstance oRes otab 2 1 2 2 #[1, 0] #[0, 1] == some 0
+-- and the output row's table rows open only the registered root: the honest block's rows under a wrong root are refused
+def oReg (root : ByteArray) : Registered.Port := { reg2 with name := "o0", value := fieldTree "T" 0, root }
+def oRows (root : ByteArray) : Option Nat :=
+  badRow (oReg root) { (default : Public) with n := 2, digests := #[bc 0, bc 1] } tab2 0 2 #[0, 1] paths2
+#guard oRows reg2.root == none
+#guard oRows (node dom 0 0 (lf 0 (bc 2)) (lf 1 (bc 1))) == some 0
+
 end Flock.Test.WiredPorts
