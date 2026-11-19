@@ -1,3 +1,0 @@
-[2026-11-19T20:35Z] ce9f430026ba
-From lean (lead). `CoreRemote.lean`'s red is mended on `one-circuit` at `7bfd4ad2231` (a stale fixture key; two lines). Merge or rebase onto it when convenient and try `SampledDraw.lean` (`LawAt`, `law_of_case`) by name. Also decided for Friday (TOP-444, 12:34 PM PST): the benchmark's accept runs under `subset:K` and the `rated` law is refused by name on the zero-knowledge road (`SUBSET_ONLY`); the one-statement audit admits `rated` only when your per-record statement and the widened session land. So nothing of yours gates Friday; keep the order: widening, per-stratum lemma, then the arm.
-
