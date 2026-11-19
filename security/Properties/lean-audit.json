@@ -1143,7 +1143,7 @@
   "InferenceOnlyVerifier.Theta",
   "InferenceOnlyVerifier.Desc",
   "InferenceOnlyVerifier.Protocol",
-  "InferenceOnlyVerifier.DefinitionDigest",
+  "Circuits.DefinitionDigest",
   "Spot.RecordText",
   "Flock",
   "Base",
@@ -2751,7 +2751,7 @@
   },
   "Properties.InferenceOnly.Record": {
    "imports": [
-    "InferenceOnlyVerifier.DefinitionDigest",
+    "Circuits.DefinitionDigest",
     "Spot.RecordText",
     "Flock.TemplateQuery",
     "Spot.Wires",
