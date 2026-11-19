@@ -93,7 +93,8 @@ open Flock.Program BodiesOk
 
 /-- **Every body resolution reaches holds its references in range.** -/
 theorem bodiesOk : BodiesOk := by
-  intro bytes P hdec hov _ _ _ _ sc hg
+  intro bytes P hdec hov _ _ hwk _ sc hg
+  have hrc := Resolve.walkable_recut P hwk
   obtain ⟨st, hP, hinv, hroot⟩ := decode_spec bytes P hdec
   obtain ⟨S, hS0, hS⟩ := order_closed P hov
   have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1

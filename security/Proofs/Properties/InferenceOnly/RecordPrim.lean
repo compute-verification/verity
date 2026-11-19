@@ -74,18 +74,19 @@ theorem resolveStep_default (P : Prog) (sc : Scope) (k j : ℕ) (hb : (P.defs[sc
 primitive's Definition has the default body (`BodiesOk.CalleeOk`), so in the activation of a unit of a primitive
 `⟨false, 0, j⟩` resolves to the unit's one gate. It holds by the decoder's defaults, not by a rule of the format:
 the default body has no node, the default node's form is a primitive's, and an offset out of range reads 0. -/
-theorem resolve_default (P : Prog) (sc : Scope) (k j : ℕ) (hb : (P.defs[sc.d]!).body = default) :
+theorem resolve_default (P : Prog) (sc : Scope) (k j : ℕ) (hb : (P.defs[sc.d]!).body = default)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     resolve P sc ⟨false, k, j⟩ = .ok sc.off := by
   obtain ⟨n, hn⟩ : ∃ n, Flock.Steps.FUEL = n + 1 :=
     ⟨Flock.Steps.FUEL - 1, by unfold Flock.Steps.FUEL; omega⟩
-  unfold resolve
-  rw [hn]
+  rw [Flock.Program.resolve_eq hrc, hn]
   exact run_one (resolveStep_default P sc k j hb) n
 
 /-- **Every leaf an activation whose body is the default returns is the activation's own gate**: reference `t` of
 the default body's return is `⟨false, 0, t⟩` (`default_get`), which `resolve_default` resolves. As
 `resolve_default`, it holds by the decoder's defaults, not by a rule of the format. -/
-theorem ret_default (P : Prog) (sc : Scope) (t : ℕ) (hb : (P.defs[sc.d]!).body = default) :
+theorem ret_default (P : Prog) (sc : Scope) (t : ℕ) (hb : (P.defs[sc.d]!).body = default)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     resolve P sc ((P.defs[sc.d]!).body.ret.get t) = .ok sc.off := by
   rw [hb]
   show resolve P sc ((default : Seq).get t) = _
@@ -139,7 +140,8 @@ theorem unit_leaf_ok {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hf : ((P.defs[P.root]!).body.nodes[k]!).form = .call ∨ ((P.defs[P.root]!).body.nodes[k]!).form = .batch)
     {m : ℕ} (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members) {i : ℕ}
     (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size) {t : ℕ}
-    (ht : t < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[i]!).2.leaves) (d off : ℕ) :
+    (ht : t < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[i]!).2.leaves) (d off : ℕ)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∃ g, resolveStep P (P.rootScope, (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get
         (argIdx ((P.defs[P.root]!).body.nodes[k]!) i m t)) = .ok (.inl g) ∧
       resolve P (.child P.rootScope d off k m) ⟨true, i, t⟩ = .ok g := by
@@ -148,8 +150,7 @@ theorem unit_leaf_ok {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
   obtain ⟨fuel, hfuel⟩ : ∃ fuel, Flock.Steps.FUEL = fuel + 2 :=
     ⟨Flock.Steps.FUEL - 2, by unfold Flock.Steps.FUEL; omega⟩
   refine ⟨_, hstep, ?_⟩
-  unfold resolve
-  rw [hfuel]
+  rw [Flock.Program.resolve_eq hrc, hfuel]
   exact run_two_ok (rs_unit P d off k m i t hf) hstep fuel
 
 end
@@ -339,7 +340,7 @@ theorem prim_unit_operands {P : Prog} {ts : Array String} {rs : Array TRange} (h
   have hog : o = g := by
     obtain ⟨fuel, hfuel⟩ : ∃ fuel, Flock.Steps.FUEL = fuel + 1 :=
       ⟨Flock.Steps.FUEL - 1, by unfold Flock.Steps.FUEL; omega⟩
-    unfold Flock.Program.resolve at hres'
+    replace hres' := Flock.Program.resolve_run hres'
     rw [hfuel, Resolve.run_one hstep fuel] at hres'
     exact (Except.ok.inj hres').symm
   refine ⟨i, t, Nat.lt_of_lt_of_eq hi hno.1, ht', ?_⟩

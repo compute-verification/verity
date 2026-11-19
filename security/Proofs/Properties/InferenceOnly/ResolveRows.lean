@@ -119,7 +119,8 @@ theorem input_node (c : Defn) (nd : Node) (hc : BodiesOk.CalleeOk c) (hn : Bodie
     rw [bs_members nd (Or.inl hf), hsh.1, BodiesOk.leaves_array, hw, BodiesOk.leaves_value, Nat.mul_one]
 
 /-- What the decoder establishes of each node of the root and of the Definition it calls. -/
-theorem decoded_root (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P) :
+theorem decoded_root (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∀ k < (P.defs[P.root]!).body.nodes.size,
       ((P.defs[P.root]!).body.nodes[k]!).fn < P.defs.size ∧
         BodiesOk.CalleeOk (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!) ∧

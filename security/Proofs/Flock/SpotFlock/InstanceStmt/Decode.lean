@@ -253,6 +253,11 @@ theorem slice_A : Widths.sliceWidth (.array 2 (.value 16)) 0 2 = some 16 := by
   simp only [leaves_V, rangeWidths_V]
   decide
 
+/-- The plain width check holds no input widths, so `recutOk` leaves every part to the rest of `partOk`. -/
+theorem recutOk_plain (params nodes : Array Ty) (hp hn : Array (Option ℕ)) (below : ℕ) (t : Ty) (ht : Option ℕ) (a : ℕ)
+    (q : Part) : Widths.recutOk { params, nodes, hp, hn, below, inp := #[], first := #[] } t ht a q = pure none := by
+  cases q <;> simp [Widths.recutOk, Widths.Src.inW?]
+
 /-- A body of one node without arguments, of type `Array 2 (Value 16)` as its return is, returning that node's leaves
 `0 … 1` as one part, reads no leaf at another width. -/
 theorem bodyBad_one (defs : Array Defn) (key : String) (B : Body) (w : Nat)
@@ -260,7 +265,7 @@ theorem bodyBad_one (defs : Array Defn) (key : String) (B : Body) (w : Nat)
     (ho : (B.nodes[0]!).out = .array 2 (.value 16)) (ht : B.retType = .array 2 (.value 16))
     (hr : B.ret.parts = #[.affine false 0 0 2]) (hs : B.ret.starts = #[0]) :
     (Widths.bodyBad defs key B).run w = .ok none w := by
-  obtain ⟨params, retType, nodes, ret, offsets⟩ := B
+  obtain ⟨params, retType, nodes, ret, offsets, recut⟩ := B
   obtain ⟨parts, starts, count⟩ := ret
   simp only at hn ha ho ht hr hs
   subst ht hr hs
@@ -272,7 +277,7 @@ theorem bodyBad_one (defs : Array Defn) (key : String) (B : Body) (w : Nat)
     subst ho
     rw [Array.eq_empty_of_size_eq_zero ha]
     obtain ⟨s', hs'⟩ : ∃ s', Std.Stream.next? (Std.toStream (#[0] : Array ℕ)) = some (0, s') := ⟨_, rfl⟩
-    simp only [hs', Widths.bodyBad, List.size_toArray, List.length_cons, List.length_nil, Nat.zero_add,
+    simp only [hs', recutOk_plain, Widths.bodyBad, List.size_toArray, List.length_cons, List.length_nil, Nat.zero_add,
       List.getElem!_toArray, List.getElem!_eq_getElem?_getD, Widths.seqBad, Widths.partOk, Widths.Src.ty?,
       Array.getElem?_map, List.map_toArray, List.map_cons, List.map_nil, List.getElem?_toArray, Widths.Src.homo?,
       homo_A, Part.count, slice_A, Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true, gt_iff_lt, Nat.div_pos_iff, List.cons_append,
@@ -345,6 +350,7 @@ theorem dup_empty {α β : Type} [BEq α] [Hashable α] (f : Std.HashSet α → 
     ((Array.foldl f (∅ : Std.HashSet α) (#[] : Array β)).size != (#[] : Array β).size) = false := by
   simp
 
+set_option maxHeartbeats 1600000 in
 fwd_def progX decode_prog : Program.decode progBytes by [fromUTF8?_toUTF8, parse_prog, domainError_fuel 12,
     hm_get_insert, hm_get_empty, hs_contains_insert, hs_contains_erase, hs_contains_empty, hm_get_foldl,
     hm_contains_foldl, mapM_nil, mapM_one, mapM_pair, ofJson_V, ofJson_A, beq_of_A, beq_of_V, leaves_of_A,

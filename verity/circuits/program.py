@@ -153,6 +153,14 @@ def _lower_input(B: Builder, t: Type, name: str, binding: str = RUN) -> Coll:
     raise TypeError(t)
 
 
+def refuse_recut(root: SpecializedDefinition) -> None:
+    """Refused (ValueError, `recut-gates`) where `root` reads an input node in leaves of part of its width (`refs.recut`):
+    the gate layout has no operand of part of a gate. Lean's decoder refuses the same Program with the same message."""
+    if root.body.recut:
+        raise ValueError(f"recut-gates: input nodes {sorted(root.body.recut)} are read in leaves of part of "
+                         "their width, which the gate layout doesn't lay out")
+
+
 class Program:
     """`Program(fn)` where `fn` is a fully-bound `SpecializedDefinition` (or a static-free `CompositeDefinition`).
     `registered`: the names of `fn`'s parameters bound at registration; every other parameter is bound per run. `theta`: the
@@ -196,9 +204,7 @@ class Program:
         """The gate layout. Refused (ValueError) while the root reads an input node recut (`refs.recut`): a gate is one
         leaf of its width, and the layout has no operand of part of a gate."""
         if self._circuit is None:
-            if self.root.body.recut:
-                raise ValueError(f"recut-gates: input nodes {sorted(self.root.body.recut)} are read in leaves of part of "
-                                 "their width, which the gate layout doesn't lay out")
+            refuse_recut(self.root)
             self._circuit = Circuit(self.root)
         return self._circuit
 

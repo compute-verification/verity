@@ -1210,12 +1210,13 @@ def refusal (B : Body) (key what : String) (s : Src) (t : Ty) (a : Nat) (q : Par
       s!"than its type {t.render} gives them: {TAIL}"
 
 /-- Where the body `B` of composite `key` reads a leaf at another width (`defs.Builder.finish`'s order: each node's
-arguments, then the return), as its refusal; `defs` holds its callees. -/
-def bodyBad (defs : Array Defn) (key : String) (B : Body) : M (Option String) := do
+arguments, then the return), as its refusal; `defs` holds its callees. With `recut`, an input node may be read at a width
+dividing its own (§4.4, `recutOk`); without, every leaf is read at its own width. -/
+def bodyBad (defs : Array Defn) (key : String) (B : Body) (recut : Bool := false) : M (Option String) := do
   let outs := B.nodes.map (·.out)
-  let inp := inputWidths defs B
+  let inp := if recut then inputWidths defs B else #[]
   let s : Src := { params := B.params.map (·.2), nodes := outs, hp := B.params.map (homo ·.2), hn := outs.map homo,
-                   below := 0, inp, first := firstReads inp B }
+                   below := 0, inp, first := if recut then firstReads inp B else #[] }
   for k in [0:B.nodes.size] do
     let node := B.nodes[k]!
     let callee := defs[node.fn]!
@@ -1316,16 +1317,23 @@ private def buildNode (fid : String) (k : Nat) (form : Form) (callee : Defn) (ar
     if lengths.size == 1 && lengths[0]! != n then throw s!"{pre}: scan: explicit n disagrees with xs length"
     return (.tuple #[carry, .array n y], out)
 
-/-- The leaf counts references are parsed against (`codec`'s `leaves`): an input node among `nodes` as leaves of one bit, `N·W`
-(§4.4: read at a width that divides `W`, `refs.recut` then holds its references under `N·q`), every other collection
-as `leaves` gives it. -/
-private def inputLeaves (defs : Array Defn) (nodes : Array Node) (leaves : Bool → Nat → Option Nat) :
-    Bool → Nat → Option Nat := fun p i =>
+/-- The leaf counts references are parsed against (`codec`'s `leaves`). With `recut`, an input node among `nodes` as leaves
+of one bit, `N·W` (§4.4: read at a width that divides `W`, `refs.recut` then holds its references under `N·q`); every other
+collection, and every one without `recut`, as `leaves` gives it. -/
+def leavesFor (recut : Bool) (defs : Array Defn) (nodes : Array Node) (leaves : Bool → Nat → Option Nat) :
+    Bool → Nat → Option Nat := if !recut then leaves else fun p i =>
   match p, nodes[i]? with
   | false, some nd => match defs[nd.fn]? with
     | some c => if c.prim && c.binding.isSome then some (nd.out.leaves * (Widths.homo nd.out).getD 1) else leaves p i
     | none => leaves p i
   | _, _ => leaves p i
+
+theorem leavesFor_false (defs : Array Defn) (nodes : Array Node) (leaves : Bool → Nat → Option Nat) :
+    leavesFor false defs nodes leaves = leaves := rfl
+
+/-- The input nodes `B` reads at another width, with `recut`; none without. -/
+def recutFor (recut : Bool) (defs : Array Defn) (B : Body) : Array (Nat × Nat) :=
+  if recut then Widths.recutOf defs B else #[]
 
 private def nodeKeys : Form → List String
   | .batch => ["args", "axes", "fn", "form", "n", "out"]
@@ -1335,8 +1343,8 @@ private def nodeKeys : Form → List String
 mutual
 
 /-- Decode definition `fid` (core's `decode_program.get`), and first every definition it depends on, through at most `fuel`
-nested definitions and static values. -/
-private def getDef (fuel : Nat) (desc : Desc) (fid : String) : D Nat := do
+nested definitions and static values; with `recut`, a body may read an input node at a width dividing its own (§4.4). -/
+private def getDef (fuel : Nat) (desc : Desc) (fid : String) (recut : Bool := false) : D Nat := do
   let n + 1 := fuel | throw "definitions nest deeper than this verifier follows"
   if let some i := (← get).index[fid]? then return i
   if (← get).busy.contains fid then throw s!"definition '{fid}' depends on itself"
@@ -1353,12 +1361,13 @@ private def getDef (fuel : Nat) (desc : Desc) (fid : String) : D Nat := do
         if !(params.isEmpty && w == iw) then throw s!"primitive {fid} signature differs from the registry"
       pure ({ key := fid, id, prim := true, params, ret, binding := input.map (·.1), gates := 1,
               paramLeaves := params.foldl (· + ·.2.leaves) 0, outLeaves := 1 } : Defn)
-    else composite n desc fid d form id
+    else composite n desc fid d form id recut
   let s ← get
   set { s with defs := s.defs.push defn, index := s.index.insert fid s.defs.size, busy := s.busy.erase fid }
   return s.defs.size
 
-private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form id : String) : D Defn := do
+private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form id : String) (recut : Bool := false) :
+    D Defn := do
   let n + 1 := fuel | throw "definitions nest deeper than this verifier follows"
   let parts := id.splitOn "_v"
   let name := "_v".intercalate parts.dropLast
@@ -1379,7 +1388,7 @@ private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form
   let key := id ++ (if statics.isEmpty then "" else "{" ++ ",".intercalate rec_.toList ++ "}")
   modify fun s => { s with busy := s.busy.insert fid }
   if key != fid then throw s!"definition '{fid}': a composite is keyed by its id and binding record, '{key}'"
-  for (_, v) in bkv.toArray do staticFns n desc v
+  for (_, v) in bkv.toArray do staticFns n desc v recut
   let b := (d.getObjVal? "body").toOption.getD Json.null
   let params ← liftV (paramsOf ((b.getObjVal? "params").toOption.getD Json.null) s!"definition '{fid}'")
   let retType ← liftV (Ty.ofJson ((b.getObjVal? "ret_type").toOption.getD Json.null))
@@ -1393,8 +1402,9 @@ private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form
     let pre := s!"definition '{fid}' node {k}"
     let fname ← liftV (at_ desc.callees ((nd.getObjVal? "fn").toOption.getD Json.null) "callees")
     let .str fname := fname | throw s!"KeyError: no definition {fname.compress}"
-    let ci ← getDef n desc fname
-    let callee := (← get).defs[ci]!
+    let ci ← getDef n desc fname recut
+    let st ← get
+    let callee := st.defs[ci]!
     let fstr := (nd.getObjValAs? String "form").toOption.getD ""
     let keys : Array String := match nd with
       | .obj kvs => (kvs.toArray.map (fun (kv : String × Json) => kv.1)).qsort (· < ·)
@@ -1429,7 +1439,7 @@ private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form
         | none => throw s!"{pre}: scan counts"
       else pure 0
     let earlier := fun (k2 a : Nat) => if k2 < nodes.size then nodes[k2]!.args[a]?.map (·.seq) else none
-    let leavesK := inputLeaves (← get).defs nodes leaves
+    let leavesK := leavesFor recut (← get).defs nodes leaves
     let args ← liftV (ajs.mapM fun aj => do
       let ty ← at_ desc.types ((aj.getObjVal? "type").toOption.getD Json.null) "types"
       let ps ← match parseParts ((aj.getObjVal? "refs").toOption.getD Json.null) leavesK earlier with
@@ -1444,35 +1454,34 @@ private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form
     nodes := nodes.push node
     offsets := offsets.push (offsets.back! + (if form == .prim then 1 else node.members * callee.gates))
   let earlier := fun (k2 a : Nat) => nodes[k2]?.bind fun x => x.args[a]?.map (·.seq)
-  let ret ← match parseParts ((b.getObjVal? "ret").toOption.getD Json.null) (inputLeaves (← get).defs nodes leaves) earlier with
+  let st ← get
+  let ret ← match parseParts ((b.getObjVal? "ret").toOption.getD Json.null) (leavesFor recut st.defs nodes leaves) earlier with
     | .ok ps => pure (Seq.ofParts ps)
     | .error e => throw s!"definition '{fid}' ret: {e}"
   if ret.count != retType.leaves then
     throw s!"definition '{fid}' ret: reference count {ret.count} does not match type {retType.render} ({retType.leaves} leaves)"
   let body : Body := { params, retType, nodes, ret, offsets }
-  let st ← get
-  match (Widths.bodyBad st.defs fid body).run st.walked with
+  match (Widths.bodyBad st.defs fid body recut).run st.walked with
   | .ok (some m) _ => throw m
   | .ok none w => set { st with walked := w }
   | .error e _ => throw (if e.startsWith "recut-" then e else s!"definition '{fid}': E_REINTERPRET unchecked: {e}")
-  let body := { body with recut := Widths.recutOf st.defs body }
-  return { key := fid, id, prim := false, params, ret := retType, body,
+  return { key := fid, id, prim := false, params, ret := retType, body := { body with recut := recutFor recut st.defs body },
            gates := offsets.back!, paramLeaves := params.foldl (· + ·.2.leaves) 0, outLeaves := retType.leaves }
 
 /-- The functions a static value names (`static_of`): `{"fn": id}` decodes `id`. -/
-private def staticFns (fuel : Nat) (desc : Desc) (v : Json) : D Unit := do
+private def staticFns (fuel : Nat) (desc : Desc) (v : Json) (recut : Bool := false) : D Unit := do
   let n + 1 := fuel | throw "definitions nest deeper than this verifier follows"
   match v with
   | .obj _ =>
     if let .ok f := v.getObjVal? "fn" then
       let .str f := f | throw s!"KeyError: no definition {f.compress}"
-      discard (getDef n desc f)
+      discard (getDef n desc f recut)
     else if let .ok f := v.getObjVal? "f64" then
       let .str _ := f | throw s!"a float static is written as its hex string, not {f.compress}"
     else if let .ok d := v.getObjVal? "dict" then
       let .obj kvs := d | throw s!"a dict static is an object, not {d.compress}"
-      for (_, x) in kvs.toArray do staticFns n desc x
-  | .arr a => for x in a do staticFns n desc x
+      for (_, x) in kvs.toArray do staticFns n desc x recut
+  | .arr a => for x in a do staticFns n desc x recut
   | _ => pure ()
 
 end
@@ -1565,6 +1574,76 @@ private def decodeBodies (desc : Desc) (rootKey : String) (pairs : Array (String
 private def primEntries (dkv : Array (String × Json)) : Array String :=
   dkv.filterMap fun (k, d) => if (d.getObjValAs? String "form").toOption == some "primitive" then some k else none
 
+/-- The Definitions the root and the program record's functions need, decoded (`decode_program`'s walk), each body read as
+`getDef` reads it with `recut`. -/
+private def goOf (desc : Desc) (rootId programFn : String) (recut : Bool) : D Nat := do
+  let r ← getDef Steps.FUEL desc rootId recut
+  for f in recordFunctionIds programFn do
+    if desc.ddefs.contains f then discard (getDef Steps.FUEL desc f recut)
+  return r
+
+/-- The codec's refusal of a Program whose Definitions the plain walk refuses with `e`, from the walk `r` that reads an input
+node at a width dividing its own (§4.4) and reads none in its root: its refusal; else the root's and the input nodes'
+(`decode`'s, in its order); else `e`. -/
+private def recutRefusal (e rootId : String) (r : Except String (Nat × DecState)) : String :=
+  match r with
+  | .error e' => e'
+  | .ok (root, st) =>
+    let rd := st.defs[root]!
+    if rd.prim || !rd.params.isEmpty then s!"root '{rootId}': the root is a composite without parameters" else
+    let input := st.defs.toList.findSome? fun d => if d.prim || d.key == rootId then none else
+      (List.range d.body.nodes.size).findSome? fun k =>
+        let c := st.defs[d.body.nodes[k]!.fn]!
+        if c.prim && (isInputId c.key || (c.key.startsWith "Registered" && isInputId (c.key.drop 10).toString)) then
+          some s!"definition '{d.key}' node {k}: an input node ({c.key}) appears only in the root's body"
+        else none
+    input.getD e
+
+/-- The decoded Definitions and the root's place: the plain walk's, every body read at its own widths, where it accepts; where
+it refuses, the walk that reads an input node at a width dividing its own (§4.4) where that one accepts with its root reading
+one (`Body.recut`), else the codec's refusal (`recutRefusal`). So a decoded Program is the plain walk's or has a recut root. -/
+private def decodeDefs (desc : Desc) (rootId programFn : String) : V (Nat × DecState) :=
+  match (goOf desc rootId programFn false).run {} with
+  | .ok r => .ok r
+  | .error e => match (goOf desc rootId programFn true).run {} with
+    | .ok (root, st) =>
+      if (st.defs[root]!).body.recut.isEmpty then .error (recutRefusal e rootId (.ok (root, st))) else .ok (root, st)
+    | r => .error (recutRefusal e rootId r)
+
+/-- Decoded Definitions are one walk's. -/
+private theorem decodeDefs_walk {desc : Desc} {rootId programFn : String} {r : Nat × DecState}
+    (h : decodeDefs desc rootId programFn = .ok r) : ∃ recut, (goOf desc rootId programFn recut).run {} = .ok r := by
+  unfold decodeDefs at h
+  split at h
+  next r' hp => exact ⟨false, hp.trans h⟩
+  next =>
+    split at h
+    next root' st' hp =>
+      split at h
+      · cases h
+      · exact ⟨true, hp.trans h⟩
+    next => cases h
+
+/-- Decoded Definitions whose root reads no input node at another width are the plain walk's. -/
+private theorem decodeDefs_plain {desc : Desc} {rootId programFn : String} {root : Nat} {st : DecState}
+    (h : decodeDefs desc rootId programFn = .ok (root, st)) (hr : (st.defs[root]!).body.recut = #[]) :
+    (goOf desc rootId programFn false).run {} = .ok (root, st) := by
+  unfold decodeDefs at h
+  split at h
+  next r hp => rw [hp]; exact h
+  next =>
+    split at h
+    next root' st' _ =>
+      split at h
+      · cases h
+      · rename_i hne
+        have h0 := Except.ok.inj h
+        have h1 : root' = root := congrArg Prod.fst h0
+        have h2 : st' = st := congrArg Prod.snd h0
+        rw [h1, h2, hr] at hne
+        exact absurd rfl hne
+    next => cases h
+
 /-- `decode_program` on a descriptor's bytes: the refusals of PROTOCOL.md §4.6 (a primitive's signature is the descriptor's own,
 see the module docstring), then the program's SHA-512. -/
 def decode (bytes : ByteArray) : V Prog := do
@@ -1595,12 +1674,7 @@ def decode (bytes : ByteArray) : V Prog := do
   let desc : Desc := { ddefs := dkv.toArray.foldl (fun m (k, v) => m.insert k v) {}, callees, types }
   let some rootId := (j.getObjValAs? String "root").toOption | throw "program: root"
   let some programFn := (j.getObjValAs? String "program_fn").toOption | throw "program: program_fn"
-  let go : D Nat := do
-    let r ← getDef Steps.FUEL desc rootId
-    for f in recordFunctionIds programFn do
-      if desc.ddefs.contains f then discard (getDef Steps.FUEL desc f)
-    return r
-  let (root, st) ← go.run {}
+  let (root, st) ← decodeDefs desc rootId programFn
   let rd := st.defs[root]!
   if rd.prim || !rd.params.isEmpty then throw s!"root '{rootId}': the root is a composite without parameters"
   -- an input node (`Input<w>_v1` or `RegisteredInput<w>_v1`) appears only in the root's body (PROTOCOL.md §5.2)
@@ -1653,12 +1727,7 @@ def decodeOf (read : Option (Except String Json)) : V Prog := do
   let desc : Desc := { ddefs := dkv.toArray.foldl (fun m (k, v) => m.insert k v) {}, callees, types }
   let some rootId := (j.getObjValAs? String "root").toOption | throw "program: root"
   let some programFn := (j.getObjValAs? String "program_fn").toOption | throw "program: program_fn"
-  let go : D Nat := do
-    let r ← getDef Steps.FUEL desc rootId
-    for f in recordFunctionIds programFn do
-      if desc.ddefs.contains f then discard (getDef Steps.FUEL desc f)
-    return r
-  let (root, st) ← go.run {}
+  let (root, st) ← decodeDefs desc rootId programFn
   let rd := st.defs[root]!
   if rd.prim || !rd.params.isEmpty then throw s!"root '{rootId}': the root is a composite without parameters"
   -- an input node (`Input<w>_v1` or `RegisteredInput<w>_v1`) appears only in the root's body (PROTOCOL.md §5.2)
@@ -1712,12 +1781,7 @@ def decodeWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLift
   let desc : Desc := { ddefs := dkv.toArray.foldl (fun m (k, v) => m.insert k v) {}, callees, types }
   let some rootId := (j.getObjValAs? String "root").toOption | throw "program: root"
   let some programFn := (j.getObjValAs? String "program_fn").toOption | throw "program: program_fn"
-  let go : D Nat := do
-    let r ← getDef Steps.FUEL desc rootId
-    for f in recordFunctionIds programFn do
-      if desc.ddefs.contains f then discard (getDef Steps.FUEL desc f)
-    return r
-  let (root, st) ← (go.run {} : V _)
+  let (root, st) ← (decodeDefs desc rootId programFn : V _)
   let rd := st.defs[root]!
   if rd.prim || !rd.params.isEmpty then throw s!"root '{rootId}': the root is a composite without parameters"
   for d in st.defs do
@@ -1743,11 +1807,6 @@ inductive Scope where
   | top (d : Nat) (off : Nat) (starts : Option (Array Nat))
   | child (parent : Scope) (d : Nat) (off : Nat) (node : Nat) (member : Nat)
   deriving Inhabited
-
-/-- The Definition whose activation `sc`'s chain of parents starts from. -/
-def Scope.base : Scope → Nat
-  | .top d _ _ => d
-  | .child parent _ _ _ _ => parent.base
 
 def Scope.d : Scope → Nat
   | .top d _ _ => d
@@ -1801,12 +1860,10 @@ def resolveStep (P : Prog) : Scope × Ref → V (Nat ⊕ (Scope × Ref))
       pure (.inr (.child sc node.fn (o + m * callee.gates) k m, callee.body.ret.get jj))
 
 /-- `layout.resolve`: the gate a body-scoped reference denotes in an activation, up through parameters and down through node
-outputs until a primitive. Refused (`recut-gates`, `Program.circuit`'s refusal) in an activation under the root's while
-the root reads an input node recut (`Body.recut`): a gate is one leaf of its width, and the layout has no operand of part
-of a gate. An activation of a Definition taken on its own (`Scope.top d _ (some starts)`, `d` not the root) resolves to
-its own parameters and gates, and never reads the root's. -/
+outputs until a primitive. Refused (`recut-gates`, `Program.circuit`'s refusal) while the root reads an input node recut
+(`Body.recut`): a gate is one leaf of its width, and the layout has no operand of part of a gate. -/
 def resolve (P : Prog) (sc : Scope) (r : Ref) : V Nat :=
-  if sc.base != P.root || (P.defs[P.root]!).body.recut.isEmpty then Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r)
+  if (P.defs[P.root]!).body.recut.isEmpty then Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r)
   else throw (s!"recut-gates: input nodes {((P.defs[P.root]!).body.recut.map (·.1)).toList} are read in leaves of part " ++
     "of their width, which the gate layout doesn't lay out")
 
@@ -1820,13 +1877,14 @@ theorem resolve_run {P : Prog} {sc : Scope} {r : Ref} {a : Nat} (h : resolve P s
 theorem resolve_eq {P : Prog} (h : (P.defs[P.root]!).body.recut = #[]) (sc : Scope) (r : Ref) :
     resolve P sc r = Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r) := by
   unfold resolve
-  rw [ite_cond_eq_true _ _ (by rw [h]; simp)]
+  rw [h]
+  rfl
 
-theorem resolve_recut {P : Prog} {sc : Scope} {r : Ref} {a : Nat} (hb : sc.base = P.root)
-    (h : resolve P sc r = .ok a) : (P.defs[P.root]!).body.recut = #[] := by
+theorem resolve_recut {P : Prog} {sc : Scope} {r : Ref} {a : Nat} (h : resolve P sc r = .ok a) :
+    (P.defs[P.root]!).body.recut = #[] := by
   unfold resolve at h
   split at h
-  · next hc => simpa [hb, Array.isEmpty_iff] using hc
+  · exact Array.isEmpty_iff.mp (by assumption)
   · cases h
 
 /-- `partition_object.order_violation`: the first reference naming neither a parameter of its body nor an earlier node of it
