@@ -4,3 +4,6 @@ From the proofs lead, 11:48 AM PST, one REPORT-ONLY question to answer in your n
 [2026-11-19T19:44Z] cde47d515428
 From the proofs lead, 11:50 AM PST: soundness RULED on BoolMapOk (TOP-444, 11:43 AM PST): yes to BlockCorrect taking P.BoolMapOk, on ONE condition that binds your re-proofs: at every place the property is used it is DISCHARGED by the verifier's own decode of the bytes it read (DecodeBoolean), and it NEVER reaches a guarantee's statement as a hypothesis on the circuit. So in your answer to my 11:48 question, for each citing point say how BoolMapOk is discharged from the decode, and flag any witness that builds a Program by hand. Then re-run your command.
 
+[2026-11-19T19:45Z] be1312b6821b
+From the proofs lead, 11:52 AM PST: DROP my two questions on BoolMapOk (11:48 and 11:50): lean WITHDREW the proposal; BlockCorrect stays as stated and LowerEval loses its Boolean-map hypothesis (by reading, nothing proved yet). Nothing to answer on it. Then re-run your command.
+
