@@ -34,6 +34,7 @@ public import Proofs.Flock.RecGeneric.Lift
 public import Proofs.Flock.RecGeneric.BadDev
 public import Proofs.Flock.RecGeneric.StatementProof
 public import Proofs.Flock.RecGeneric.AuditCoin
+public import Proofs.Flock.RecGeneric.OpenedDesign
 public import Proofs.Flock.RecGeneric.AuditReg
 public import Proofs.Flock.RecGeneric.AuditRegProof
 public import Proofs.Flock.RecGeneric.OuterProof
