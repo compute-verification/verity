@@ -242,9 +242,10 @@ theorem samplingDesign_bound (d : Program) (query : Lean.Json) (rs : Array Flock
   have hns : pop.toList.map (·.size) = S.toList.map fun p => rsSize p.2 := (laysOut_units _ _ hlays).2
   have hsum : (pop.toList.map (·.size)).sum = (popUnits S).length := by rw [hns, length_popUnits]
   rcases deriveSamplingDesign_cases d query named table derived hd with ⟨rfl, hk1, hk2, hk3⟩ | ⟨S', k, samplingDesign', hS', rfl, hlaw⟩ |
-      ⟨-, rates, works, samplingDesign', -, -, rfl, hrated⟩
+      ⟨S'', rates, works, samplingDesign', hkr, hS'', hdr, hrated⟩
   rotate_right
-  · obtain ⟨ss, rfl, -⟩ := Flock.Draw.deriveRated_meetsRate hrated
+  · subst hdr
+    obtain ⟨ss, rfl, -⟩ := Flock.Draw.deriveRated_meetsRate hrated
     simp only [Option.getD_some, oneStageOf, OneStage.Pa, Nat.choose_zero_right, Nat.cast_one, div_one]
     exact Claims.Pr_le_one _
   · obtain ⟨hU, hcard⟩ := image_units _ hnd hlt W hW
