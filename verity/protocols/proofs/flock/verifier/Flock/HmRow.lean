@@ -1521,7 +1521,7 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
   let blocksReal := (n + c.g - 1) / c.g
   let nbl := max 3 (log2ceil (max blocksReal 1))
   let m := c.kLog + nbl
-  if c.kLog > 27 || m > 35 then throw s!"m = {m}: no fast100 schedule (or k_log > 27)"
+  if c.kLog > HmRow.MAX_K_LOG || m > 35 then throw s!"m = {m}: no fast100 schedule (or k_log > 27)"
   let pin ← HmRow.pin c
   let (da, db) := HmRow.delta c pin
   let regions ← HmRow.regions c pub
@@ -2383,7 +2383,7 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   let blocksReal := (n + c.g - 1) / c.g
   let nbl := max 3 (log2ceil (max blocksReal 1))
   let m := c.kLog + nbl
-  if c.kLog > 27 || m > 35 then throw s!"m = {m}: no fast100 schedule (or k_log > 27)"
+  if c.kLog > HmRow.MAX_K_LOG || m > 35 then throw s!"m = {m}: no fast100 schedule (or k_log > 27)"
   let pin ← HmRow.pin c
   let (da, db) := HmIn.delta c pi pin
   let regions := (← HmOut.regions c pub) ++ (← HmIn.regions c pi pub)
@@ -2536,7 +2536,7 @@ def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArra
   let blocksReal := (n + c.g - 1) / c.g
   let nbl := max 3 (log2ceil (max blocksReal 1))
   let m := c.kLog + nbl
-  if c.kLog > 27 || m > 35 then throw s!"m = {m}: no fast100 schedule (or k_log > 27)"
+  if c.kLog > HmRow.MAX_K_LOG || m > 35 then throw s!"m = {m}: no fast100 schedule (or k_log > 27)"
   let pin ← HmRow.pin c
   let (da, db) := HmIn.delta c pi pin
   let regions := (← HmOut.regions c pub) ++ (← HmIn.regions c pi pub)
