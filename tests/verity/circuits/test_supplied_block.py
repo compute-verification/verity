@@ -18,7 +18,7 @@ from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple
 
 A4, A16 = Array(4, BL.BIT), Array(16, BL.BIT)
-MARK = {"supplied": "const.u16/v1", "args": {"value": 5}, "layout": "le", "bits": 16}
+MARK = {"supplied": "const.uint/v1", "args": {"bits": 16, "value": 5}, "layout": "le", "bits": 16}
 
 
 def _t_body(B, S, a, k):

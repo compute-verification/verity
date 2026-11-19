@@ -330,12 +330,13 @@ theorem decode_walk (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
   simp (config := { zeta := false }) only [k1] at h
   split at h
   swap; · exact absurd h (by intro h; injection h)
-  extract_lets bm bareJ jpS at h
+  extract_lets bm jpS at h
   split at h
   swap; · exact (ex_throw_bind h).elim
   split at h
   · exact (ex_throw_bind h).elim
   simp (config := { zeta := false }) only [jpS] at h
+  obtain ⟨_, -, h⟩ := Walk.except_bind_ok h
   split at h
   swap; · exact absurd h (by intro h; injection h)
   obtain ⟨u, h1, h⟩ := Walk.except_bind_ok h
@@ -365,6 +366,8 @@ theorem decode_walk (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
   obtain ⟨⟨⟨⟩, st1⟩, hall, h⟩ := Walk.except_bind_ok h
   obtain ⟨pairs, hbk, h⟩ := Walk.except_bind_ok h
   obtain ⟨⟨⟨⟩, st2⟩, hbod, h⟩ := Walk.except_bind_ok h
+  obtain ⟨_, -, h⟩ := Walk.except_bind_ok h
+  obtain ⟨_, -, h⟩ := Walk.except_bind_ok h
   try extract_lets boolean at h
   obtain ⟨c, -, h⟩ := Walk.except_bind_ok h
   injection h with h

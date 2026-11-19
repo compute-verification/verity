@@ -528,7 +528,10 @@ list names whose body is not there yet.
 | `registered.root/v1` (the verifier's pin, never a prover's row) | commitment | supplied | `value` | 512 |
 | `record.root/v1` (a port root the record names) | commitment | supplied | `port` | 512 |
 | `log.base/v1` (the first position after the log's records) | commitment | supplied | | 64 |
-| `const.u16/v1` | constant | supplied | `value` | 16 |
+| `pouw.pearlplus.eb/v1` (E_B's lines of column tile `col`) | coin, commitment | supplied | `col`, `tn` | 256 tn |
+| `pouw.pearlplus.fa/v1`, `pouw.pearlplus.fb/v1` (F_A's, F_B's lines) | coin, commitment | supplied | `k` (a multiple of 32) | 256 k |
+| `pouw.pearlplus.gram/v1` (32 by 32 FP32 words) | coin, commitment | supplied | `k` (a multiple of 32), `dev` | 32768 |
+| `const.uint/v1` | constant | supplied | `value`, `bits` (a multiple of 8, up to 64; `value` < 2^bits) | `bits` |
 
 **A supplied value is short.** No supplied input is as long as a population: where a unit's row is a function of its index
 and a short value, the verifier supplies the short value and the units compute the row inside. Either each unit reads the
@@ -564,7 +567,7 @@ folds and seeds, and a value computed from a coin (a round's index) reaches any 
 is never `"kind": "static"` or `"kind": "position"`, and it is `"kind": "coin"` exactly when its origin is (`E_PORT_KIND`).
 
 **Held outputs.** A root `ret` port row may carry `"equals": [name, at, n]`: leaf `lo + i` of the row is held to leaf
-`at + (i mod n)` of the supplied input `name`, of the same width. With `const.u16/v1` at 1 and `n` = 1 it holds every
+`at + (i mod n)` of the supplied input `name`, of the same width. With `const.uint/v1` at 1 (16 bits) and `n` = 1 it holds every
 unit's verdict word to 1, which is what an opening's verdict and a check's `ok` are; a block whose held output differs is
 refused inside the proof, since its row opens no root the verifier holds.
 
