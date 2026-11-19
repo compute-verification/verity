@@ -224,3 +224,12 @@ def test_a_level_packed_within_a_coarser_levels_ends_refines_it():
     with pytest.raises(LY.Unlaid) as e:
         LY.pack(P, ands(5), ends=[0])
     assert e.value.code == "pack-ends"
+
+
+def test_the_provers_floor_is_a_floor_pack_takes():
+    floor = lambda _i, _o, _n, u: u >= LY.zk_min_units(21, 1)
+    assert LY.zk_min_units(21, 1) == 9 and LY.zk_min_units(21, 2) == 17 and LY.zk_min_units(22, 64) == 1
+    assert LY.pack(None, ands(12), m=_Line([1] * 21), enough=floor) == [(0, 12), (12, 21)]
+    with pytest.raises(LY.Unlaid) as e:
+        LY.pack(None, ands(12), m=_Line([1] * 20), enough=floor)
+    assert e.value.code == "pack-floor"
