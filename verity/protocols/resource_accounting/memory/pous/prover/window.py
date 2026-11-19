@@ -34,24 +34,25 @@ CAP = 1
 
 
 class Setup:
-    """PoUS's setup as one circuit C: the setup unit (`setup_proof.setup_unit`, ``PousP2SetupCheck_v1``) over every block
+    """PoUS's setup as one circuit C: the setup unit (`setup_proof.setup_unit`, ``PousP2SetupCheck_v2``) over every block
     of the store in order, unit u block u, one proof block a store block (`CAP`, `interface.partition_blocks`). Each unit
     reads its block of the registered ``store`` and the registered row of ``weights`` that holds its payload (`reads`),
-    and takes its base and its slot (`setup_proof.place`) as C's input nodes, committed once at C's input, their writer;
-    its ok output is C's. Which blocks are proved is the proof system's sample on its live coins after the store is
-    committed, and which units a block holds the partition's: the setup lists neither.
+    and takes the setup's salt, its place ``u64be(s) ‖ u64be(v)`` and its slot (`setup_proof.at`, `setup_proof.place`)
+    as C's input nodes; its ok word is C's output. Which blocks are proved is the proof system's sample on its live coins
+    after the store is committed, and which units a block holds the partition's: the setup lists neither.
 
-    The base is a function of the verifier's salt and the slot of the unit's position, and nothing in C binds them yet:
-    the verifier refuses there (`setup_proof.bound`) until circuits' coin-bound input kind does.
+    The salt is the one value the verifier supplies (`pous.setup.salt/v1`), and each unit's place and slot are constants
+    of the unit in C; nothing in C binds them yet, and its ok word is held to 1 by nothing yet: the verifier refuses
+    there (`setup_proof.bound`) until the supplied input does.
 
     `w`, `c0` are P2's point, `row_bytes` W's rows' bytes N, `rows` how many, `blocks_per_segment` the store's segment
-    length; `prefix` is the salt's 128-byte expansion and `store` and `weights` the store's blocks and W's rows, which
-    only `registered` and `run` read."""
+    length; `salt` is the setup's salt and `store` and `weights` the store's blocks and W's rows, which only
+    `registered` and `run` read."""
 
-    def __init__(self, w: int, c0: int, row_bytes: int, rows: int, blocks_per_segment: int, prefix: bytes | None = None,
+    def __init__(self, w: int, c0: int, row_bytes: int, rows: int, blocks_per_segment: int, salt: bytes | None = None,
                  store: Sequence[bytes] | None = None, weights: Sequence[bytes] | None = None) -> None:
         self.w, self.c0, self.row_bytes, self.rows = w, c0, row_bytes, rows
-        self.blocks_per_segment, self.prefix, self.store, self.weights = blocks_per_segment, prefix, store, weights
+        self.blocks_per_segment, self.salt, self.store, self.weights = blocks_per_segment, salt, store, weights
         self.unit = setup_unit(w, c0, row_bytes)
         self.slots = SC.slots(row_bytes, payload_bytes(w))
 
@@ -70,7 +71,7 @@ class Setup:
     def circuit(self) -> Circuit:
         tid = descriptor_id(self.unit)
         params = {STORE: self.blocks * (self.w // 16), WEIGHTS: self.rows * (self.row_bytes // 2)}
-        return Circuit("pous-setup", ((self.unit, self.blocks),), external=(f"{tid}/base", f"{tid}/slot"),
+        return Circuit("pous-setup", ((self.unit, self.blocks),), external=(f"{tid}/salt", f"{tid}/at", f"{tid}/slot"),
                        registered=Registered(params, reads=self.reads()))
 
     def registered(self, program: str) -> dict[str, RV.Registered]:
@@ -86,18 +87,20 @@ class Setup:
                 for p, rows in ((STORE, self.store), (WEIGHTS, self.weights))}
 
     def run(self, window: Window) -> None:
-        """Every unit recorded: its block and row by reference, its base and slot as 16-bit words, and its bit."""
-        if self.prefix is None or self.store is None or self.weights is None:
-            raise ValueError("Setup.run reads the salt's expansion, the store's blocks and W's rows")
-        cases = [unit_inputs(self.w, self.prefix, self.blocks_per_segment, self.store[u],
+        """Every unit recorded: its block and row by reference, the salt, its place and its slot as 16-bit words, and its
+        ok word."""
+        if self.salt is None or self.store is None or self.weights is None:
+            raise ValueError("Setup.run reads the salt, the store's blocks and W's rows")
+        cases = [unit_inputs(self.w, self.salt, self.blocks_per_segment, self.store[u],
                              self.weights[place(self.w, self.row_bytes, u)[0]], u, self.row_bytes)
                  for u in range(self.blocks)]
-        block, base, row = (_bit_rows([c[k] for c in cases]) for k in range(3))
-        slot = np.array([[c[3] >> i & 1 for i in range(SC.SLOT_BITS)] for c in cases], dtype=np.uint8)
-        ok = EB.evaluate_bits(self.unit, block, base, row, slot)
-        bases = np.frombuffer(b"".join(c[1] for c in cases), dtype="<u2").reshape(self.blocks, -1)
-        slots = np.array([[c[3]] for c in cases], dtype=np.uint16)
-        window.record(self.unit, [None, bases, None, slots], [ok[:, 0].astype(np.uint16)])
+        block, salt, at, row = (_bit_rows([c[k] for c in cases]) for k in range(4))
+        slot = np.array([[c[4] >> i & 1 for i in range(SC.SLOT_BITS)] for c in cases], dtype=np.uint8)
+        ok = EB.evaluate_bits(self.unit, block, salt, at, row, slot)
+        words = lambda k: np.frombuffer(b"".join(c[k] for c in cases), dtype="<u2").reshape(self.blocks, -1)  # noqa: E731
+        slots = np.array([[c[4]] for c in cases], dtype=np.uint16)
+        oks = (ok.astype(np.uint16) << np.arange(16, dtype=np.uint16)).sum(axis=1, dtype=np.uint16)[:, None]
+        window.record(self.unit, [None, words(1), words(2), None, slots], [oks])
 
 
 def _bit_rows(rows: Sequence[bytes]) -> np.ndarray:
