@@ -3,17 +3,20 @@
 lowering's own query) with blocks ``[0, u), [u, u + 1), [u + 1, population)``, ``u`` a template's first unit.
 
   python served_door.py build --tree TREE --out DIR                     # DIR/C.json, DIR/query.json
-  python served_door.py step block|restrict|lower|door|one --dir DIR --template ID
+  python served_door.py step block|restrict|lower|door|one|stage --dir DIR --template ID
+  python served_door.py step verify --dir DIR --template ID --unit U --lower EXE --lean EXE --session S...
 
 ``block``, ``restrict`` and ``lower`` are the door's own steps (`one_circuit.block`, `.restrict`, `.lower`), each in its
 own process; ``door`` is `proofs.verify` on the drawn block, whose proof files (a public file naming the block's unit and
 an empty session) and registered file (empty) carry the call to the first step that refuses, and are read by no step
-before it; ``one`` is `TemplatePartition` under ``Q_template_instance`` of the template alone. Each prints one
+before it; ``one`` is `TemplatePartition` under ``Q_template_instance`` of the template alone; ``stage`` stages the block's
+proof on a STAGED witness (`stage`) and ``verify`` puts its proved session through the door. Each prints one
 ``STEP {json}`` line."""
 from __future__ import annotations
 
 import argparse
 import bisect
+import dataclasses
 import hashlib
 import json
 import resource
@@ -98,13 +101,156 @@ def _ports(c: bytes, query: dict, u: int) -> dict:
     return {**counts, "writers": writers, "leaves": len(tp.inputs(u))}
 
 
+def _rank(tp, v: int) -> tuple[str, int]:
+    """Unit ``v``'s template and its leaf in the template's output field's tree: its rank among the template's units in
+    root order (Lean's `HmLinks.treeLeaf`)."""
+    t = next(t for _k, t, a, n in tp.ranges if a <= v < a + n)
+    before = sum(min(n, max(0, v - a)) for _k, tt, a, n in tp.ranges if tt == t)
+    return t, before
+
+
+def _bits(widths: list[int], values: list[int]) -> list[int]:
+    return [(x >> j) & 1 for x, w in zip(values, widths) for j in range(w)]
+
+
+def _words16(bits: list[int], words: int) -> list[int]:
+    bits = bits + [0] * (16 * words - len(bits))
+    return [sum(bits[16 * w + j] << j for j in range(16)) for w in range(words)]
+
+
+def stage(d: Path, template: str, seed: int = 7) -> dict:
+    """A STAGED witness for the block of the template's first unit ``u``: every input port is a row of in(S) and reads
+    its writer's whole output (else refused here by name). Each writer template's output field is one tree, a leaf for
+    each of its units in root order (`_rank`), its rows random but for nothing: the writer is not evaluated, so its
+    rows are no served values. ``u``'s output is the template evaluated on those rows (`reference.evaluate`), at ``u``'s
+    leaf of its own template's tree, the other leaves zero. Writes ``stage-u/``: the prover's and verifier's files
+    (`FC.write`, as `credited_door` stages a block) and the verifier's position-free ``--registered`` file."""
+    import random
+    from types import SimpleNamespace
+    import numpy as np
+    from verity.circuits import boolean as BL
+    from verity.circuits import partition_object as PO
+    from verity.circuits.codec import program_digest
+    from verity.circuits.evaluation.reference import evaluate
+    from verity.commitments import registered_value as RV
+    from verity_flock import circuit as FC
+    part, k, u, pop = _partition(d, template)
+    c = (d / "C.json").read_bytes()
+    text = (d / f"circuit-{u}.txt").read_text()
+    meta = FC.meta_of(text)
+    program = _program(c)
+    tp = PO.TemplatePartition(program, json.loads((d / "query.json").read_text()))
+    fn = program.defs[template]
+    params, ret = fn.signature()
+    widths = {p: BL.elements(t) for p, t in params}
+    gates = list(tp.inputs(u))
+    rng = random.Random(seed)
+    owner_cache: dict[int, list[int]] = {}
+    offs = list(program.root.body.offsets)
+    unit_of = {kk: a for kk, _t, a, _n in tp.ranges}
+
+    def writer(g: int) -> tuple[int, int] | None:
+        kk = bisect.bisect_right(offs, g) - 1
+        if kk not in unit_of:
+            return None
+        lo = unit_of[kk]
+        n = next(n for k2, _t, a, n in tp.ranges if k2 == kk)
+        for v in range(lo, lo + n):
+            outs = owner_cache.setdefault(v, list(tp.outputs(v)))
+            if outs and outs[0] <= g <= outs[-1] and g in outs:
+                return v, outs.index(g)
+        return None
+
+    rec: dict = {"unit": u, "block": k, "staged": "writer rows random, not served values", "ports": {}}
+    trees: dict[str, dict[int, list[int]]] = {}
+    reads: dict[str, tuple[str, int]] = {}
+    args, at = [], 0
+    for p, t in params:
+        n = len(widths[p])
+        ws = [writer(g) for g in gates[at:at + n]]
+        at += n
+        if any(w is None for w in ws):
+            raise SystemExit(f"STAGE-REFUSED port {p}: a leaf reads no unit's output (a circuit input): not staged here")
+        v = ws[0][0]
+        if any(w != (v, j) for j, w in enumerate(ws)) or len(owner_cache[v]) != n:
+            raise SystemExit(f"STAGE-REFUSED port {p}: its {n} leaves are not one writer's whole output in order: {ws[:6]}")
+        tw, leaf = _rank(tp, v)
+        reads[p] = (tw, leaf)
+        rec["ports"][p] = {"writer": v, "template": tw, "leaf": leaf, "leaves": n}
+        vals = [rng.getrandbits(w) for w in widths[p]]
+        args.append(vals)
+        trees.setdefault(tw, {})[leaf] = vals
+    out = evaluate(fn, *args)
+    ow = BL.elements(ret)
+    ports = {q[0]: q for q in meta["ports"]}
+    rec["meta_ports"] = meta["ports"]
+    prog = program_digest(json.loads(c))
+    regs = {}
+    for tw, rows in trees.items():
+        units = sum(n for _k, tt, _a, n in tp.ranges if tt == tw)
+        wn = next(ports[p][1] for p, (t2, _l) in reads.items() if t2 == tw)
+        tw_widths = next(widths[p] for p, (t2, _l) in reads.items() if t2 == tw)
+        full = [_words16(_bits(tw_widths, rows[i]), wn) if i in rows else [0] * wn for i in range(units)]
+        regs[tw] = RV.Registered.commit(prog, f"{tw}/o0", full, word_bits=16, schema=RV.SCHEMA_HM96_SHA512_ROW_V2)
+    mine_units = sum(n for _k, tt, _a, n in tp.ranges if tt == template)
+    _t, my = _rank(tp, u)
+    on = ports["o0"][1]
+    orow = _words16(_bits(ow, list(out)), on)
+    orows = [orow if i == my else [0] * on for i in range(mine_units)]
+    oreg = RV.Registered.commit(prog, f"{template}/o0", orows, word_bits=16, schema=RV.SCHEMA_HM96_SHA512_ROW_V2)
+    s = d / f"stage-{u}"
+    (s / "tables").mkdir(parents=True, exist_ok=True)
+    (s / "circuit.txt").write_text(text)
+    tables = {p: np.asarray([regs[tw].rows[leaf]], dtype=np.uint16) for p, (tw, leaf) in reads.items()}
+    salts = {p: [regs[tw].salts[leaf]] for p, (tw, leaf) in reads.items()} | {"o0": [oreg.salts[my]]}
+    registered = {p: regs[tw].statement([leaf])[2] for p, (tw, leaf) in reads.items()} | {"o0": oreg.statement([my])[2]}
+    iset = SimpleNamespace(name=f"served-{u}", subcircuit=SimpleNamespace(id=fn.id, inputs=[], outputs=[]))
+    FC.write(text, iset, 0, 1, s / "inst-1.bin", s / "pub-1.bin", indices=[u], tables=tables,
+             refs={p: [0] for p in reads}, share_rows=True, salts=salts, registered=registered,
+             outs={"o0": np.asarray([orow], dtype=np.uint16)})
+    (s / "unit.tmpl").write_text(FC.template_of(text))
+    (s / "partition.json").write_text(json.dumps(part))
+    (s / "program.json").write_bytes(c)
+    (s / "draw.json").write_text(json.dumps({"units": [k]}))
+
+    def port(r) -> dict:
+        return {"value": r.value, "root": r.root.hex(), "leaves": r.leaves, "words": r.words, "word_bits": 16,
+                "domain": r.domain.domain_id.hex(), RV.SCHEMA_KEY: r.schema}
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+    file = {"format": REG.READS_V2,
+            "ports": {p: port(regs[tw]) for p, (tw, _l) in reads.items()} | {"o0": port(oreg)}}
+    (s / "registered.json").write_text(json.dumps(file))
+    wrong = dict(file, ports=dict(file["ports"], o0=dict(file["ports"]["o0"], root="00" * 64)))
+    (s / "registered-wrong-out.json").write_text(json.dumps(wrong))
+    rec |= {"trees": {tw: {"leaves": r.leaves, "root": r.root.hex()[:16]} for tw, r in regs.items()},
+            "out_tree": {"leaves": oreg.leaves, "leaf": my}, "out_words": on}
+    (s / "stage.json").write_text(json.dumps(rec, default=str))
+    return rec
+
+
 def step(a) -> int:
     from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
     d = Path(a.dir)
     c = (d / "C.json").read_bytes()
     t = time.perf_counter()
     rec: dict = {"step": a.name, "template": a.template}
-    if a.name == "one":
+    if a.name == "stage":
+        rec |= stage(d, a.template)
+    elif a.name == "verify":
+        from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+        import os
+        s = d / f"stage-{a.unit}"
+        os.environ[PF.TMPL_SWITCH] = "1"
+        PF.lower_executable = lambda: Path(a.lower)
+        PF.executable = lambda: Path(a.lean)
+        found, refusal = PF.verify(PF.Proof(s / "circuit.txt", s / "pub-1.bin", tuple(Path(x) for x in a.session)),
+                                   program=(s / "program.json").read_bytes(),
+                                   partition=json.loads((s / "partition.json").read_text()),
+                                   draw=json.loads((s / "draw.json").read_text()),
+                                   registered=json.loads((s / a.registered).read_text()))
+        rec |= {"registered": a.registered, "refusal": refusal,
+                "findings": [dataclasses.asdict(f) for f in found or []]}
+    elif a.name == "one":
         from verity.circuits import partition_object as PO
         try:
             PO.TemplatePartition(_program(c), PO.template_instance_query(a.template))
@@ -126,7 +272,7 @@ def step(a) -> int:
                 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
                 t = time.perf_counter()
                 try:
-                    exe = PF.lower_executable()
+                    exe = Path(a.lower) if a.lower else PF.lower_executable()
                     rec["build_s"] = round(time.perf_counter() - t, 1)
                     t = time.perf_counter()
                     text = OC.lower(c_s, part, lambda: exe)
@@ -159,9 +305,14 @@ def main() -> int:
     b.add_argument("--tree", required=True)
     b.add_argument("--out", required=True)
     s = sub.add_parser("step")
-    s.add_argument("name", choices=("block", "restrict", "lower", "door", "one"))
+    s.add_argument("name", choices=("block", "restrict", "lower", "door", "one", "stage", "verify"))
     s.add_argument("--dir", required=True)
     s.add_argument("--template", required=True)
+    s.add_argument("--unit", type=int, help="verify: the staged block's unit")
+    s.add_argument("--lower", help="lower, verify: flock-lower-check (else built)")
+    s.add_argument("--lean", help="verify: verity-verify-proof")
+    s.add_argument("--registered", default="registered.json", help="verify: the stage's registered file")
+    s.add_argument("--session", nargs="*", default=[], help="verify: the session directories")
     a = ap.parse_args()
     return build(a) if a.cmd == "build" else step(a)
 
