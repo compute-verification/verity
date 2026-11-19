@@ -108,7 +108,8 @@ def gateStep (P : Prog) (done : Array GateW) (g : ℕ) : Build GateW := do
       | none => zeroW
     return { bits := ws.toArray, lo, hi := (← get).size }
 
-/-- The walk over C's gates in increasing index, after the `0` gate and before the closing one. -/
+/-- The walk over C's gates in increasing index, after gate 0 and before the closing gate, both `.zero` (`toOp`'s empty
+row, a constant `0`); every read past a list (`refVal`'s `default`) and every `0` bit reads gate 0. -/
 def walk (P : Prog) : Array GateW × Array RawOp :=
   let r := ((List.range (size P)).foldlM (init := (#[] : Array GateW))
     (fun done g => done.push <$> gateStep P done g) : Build (Array GateW)).run #[.zero]
