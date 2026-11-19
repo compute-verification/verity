@@ -1,5 +1,5 @@
 """The program decoder's difftest data (PROTOCOL.md §4): descriptors and the Python reference's verdict on each, for the Lean
-decoder (`Circuits/Program.lean`'s `decode`).
+decoder (`Circuits/Descriptor.lean`'s `decode`).
 
     uv run python tests/verity/circuits/decode_difftest.py --out DIR
 
