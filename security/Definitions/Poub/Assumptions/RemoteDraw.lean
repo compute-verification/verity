@@ -84,7 +84,7 @@ fallbacks `rest`, is among its correct ones or moved: presented, accepted at its
 the one its root holds. -/
 def Refused [Fintype X] (D : Run n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (T : Trace (SampleCoins n κ X)) (R : Receipts n κ X) : Prop :=
-  ∀ ω, T.accepts ω → ∀ t, ∀ p ∈ D.opened prf rest t ω, p ∈ D.correct t ω ∨ R.Moved D prf rest t ω p
+  ∀ ω, T.accepts ω → ∀ t, ∀ p ∈ D.opened prf rest t ω, p ∈ D.correct t ω ∨ R.Moved (D.opened prf rest) t ω p
 
 /-- **Counted**: on every accepting outcome, the credited passes' wrong receipts of registered blocks are at most the
 windows' wrong receipts. -/

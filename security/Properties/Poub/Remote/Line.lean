@@ -47,7 +47,7 @@ claim, bits read (`ResourceAccounting.PeriodRun.Holds` at `.poub`), is that its 
 one of the `N` registered blocks but the W wrong: `8·b·(P·N − W)` bits read on the node (`ReadAt`, `Trace.reads`).
 `LineHeld` is the one statement that this is true of the trace that produced the record wherever the network
 attesters observed nothing but the verifier's messages entering the node, at any windows a sample (`Node.groupsPerCoin`
-g, `groups_per_coin`: one openings coin over windows `c·g … (c + 1)·g − 1`, the session run by `Shared.run g`, which at
+g, `groups_per_coin`: one sample's coins over windows `c·g … (c + 1)·g − 1`, the session run by `Shared.run g`, which at
 g = 1 is `Session.run`):
 
 * **LineHeld**: on any node, trace and correct receipts, with the prover's records read through the coin commitment
@@ -66,7 +66,7 @@ g = 1 is `Session.run`):
   blocks the record's) credits more bits read than the trace's passes read (`ReadAt`) is at most
   `δs + δ_net + (δ + Σ_c s / 2^256 + Σ_c adv_c + Σ_c hide_c + bind)`, `δ` the one the line reads its pooled bound at
   (`Node.delta`, a nonnegative rational; the line computes at none outside `(0, 1)`), `adv_c` the advantage on `prf c`
-  of sample `c`'s distinguisher at that `δ` (`Session.distinguisher`) with openings coin `c`'s commitment leaf
+  of sample `c`'s distinguisher at that `δ` (`Session.distinguisher`) with sample's coins `c`'s commitment leaf
   committing zeros (`Committed.junk`), `hide_c` sample `c`'s hiding term (`Committed.hide`, hm96's, at most `n·2^-191`
   over the session's `n` samples in all), and `bind` the receipts' binding term over the session's samples
   (`Receipts.binding`: some opened receipt presented with an accepted row other than the one its root holds). The
@@ -226,6 +226,6 @@ def LineHeld : Prop :=
       δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
-        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
+        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding ((F.play com).opened prf rest)).toReal)
 
 end Properties.Poub.Line

@@ -825,6 +825,21 @@ def served_advice(a: argparse.Namespace) -> tuple[list[dict], dict, dict]:
     return requests, bound, opening
 
 
+def served_binding(a: argparse.Namespace, compiler: Capped, data: bytes, r: SimpleNamespace) -> dict[str, Any]:
+    """A served window's advice binding (`interface.advice_binding`), the one the server committed: the root and length its
+    opening (``advice/w<K>/private/opening.json``) opens under ``compiler`` (`advice_windows.opened`), refused unless that
+    opening holds ``data`` and the published records pass `serve_check` against the row dir's record ``r``."""
+    s = serve_window(str(a.serve_run), int(a.window))
+    opening = json.loads(Path(s.opening).read_text())
+    if opened_bytes(opening) != data:
+        raise ValueError(f"advice: {a.advice} is other advice than window {a.window}'s committed opening {s.opening}")
+    _advice, bound = AW.opened(compiler, opening, advice_codec(a))
+    if not (v := serve_check(s, bound, bytes(r.run.run_root).hex(), r.store.commit_scheme, data))["ok"]:
+        raise ValueError(f"serve-openai window {a.window}'s published records are refused ({', '.join(v['codes'])}): "
+                         f"{json.dumps(v['detail'], sort_keys=True)}")
+    return bound
+
+
 def stand_in1(r: SimpleNamespace) -> dict[str, Any]:
     """A single-GPU window's link to its Commit's commitment: ``of`` the commitment its store names (``rows-sha512``), the run
     root, the bundle's manifest digest and the command that made the rows, and ``link``."""
@@ -1693,7 +1708,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
         raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
     lap("lower")
     r = record1(str(a.bundle), str(a.row_dir))
-    run = bytes(r.run.run_root).hex()
+    run, bound = bytes(r.run.run_root).hex(), served_binding(a, compiler, data, r)
     p = compiler.load(0, 1, requests)
     k0 = next(iter(p.progs))
     tree = json.loads((r.bdir / "weights" / "tree.json").read_text())
@@ -1744,7 +1759,8 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     lap("weights")
     filled = WRS.Rows(low, slots, values)
     lap("rows")
-    win = IF.Window(low.circuit, run, window_design(a.sampling_design, low.circuit), a.cap, registered=values, forms=WRS.FORMS)
+    win = IF.Window(low.circuit, run, window_design(a.sampling_design, low.circuit), a.cap, advice=bound, registered=values,
+                    forms=WRS.FORMS)
     win.supply()
     filled.record(win)
     lap("record")

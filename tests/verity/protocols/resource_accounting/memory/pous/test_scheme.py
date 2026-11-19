@@ -5,6 +5,8 @@ from __future__ import annotations
 from fractions import Fraction
 from pathlib import Path
 
+import pytest
+
 from verity.protocols.compose import schemes as table
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.memory.pous.scheme import POUS, POUS_TERM, WIPE
@@ -43,3 +45,22 @@ def test_pous_says_its_own_term_and_is_refused_a_bound_while_its_help_is_unbound
     assert POUS.delta_scheme == Fraction(1, 2**128) and isinstance(WIPE.delta_scheme, S.Lacks)
     assert [c.name for c in POUS.charges if not c.bounded] == ["help"]
     assert all((s.over, s.under) for s in (POUS, WIPE))
+
+
+@pytest.mark.slow
+def test_pous_credits_every_store_block_at_its_bits() -> None:
+    """PoUS's blocks are the store's: on the setup's registered C, every unit of `PousP2SetupCheck_v2` is credited, each
+    at the bits one store block holds (P2's w, the unit's W), and `bound` still refuses PoUS by its unbounded help. Slow:
+    building the setup's Program takes about 15 s, and no smaller circuit is the setup's."""
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+    from verity.protocols.resource_accounting.memory.pous.prover import window as WIN
+
+    setup = WIN.Setup(64, 189, 16, 4, 4)
+    strata = P.strata(*setup.circuit().program())
+    assert [t.split("{")[0] for t, _ in strata] == ["PousP2SetupCheck_v2"]
+    assert S.credited([POUS], strata) == frozenset(range(setup.blocks)) and setup.blocks == 12
+    (block,) = POUS.blocks
+    assert block.cost({"W": 64, "C0": 189, "N": 16}) == 64 and block.cost({"W": 16448, "C0": 21065}) == 16448
+    with pytest.raises(S.Unbounded, match="known charges nothing bounds yet: help") as e:
+        S.bound(POUS, Fraction(1, 100), 0, {"chip": 0, "side-channels": 0, "help": 0}, epsilon=Fraction(0))
+    assert e.value.terms == ("help",)

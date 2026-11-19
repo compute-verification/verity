@@ -73,12 +73,12 @@ class Lean:
         self.lean.call({"op": "init", "source": SOURCE.hex(), "registry": audit.Registry().to_json(), "chunk": 64})
         got = self.lean.call(lv.register_request(NODE, N, reg.payload_root, P512, reg.receipt, reg.rows, bytes(32)))
         assert got == {"codec_seed": reg.codec_seed.hex(), "digest": reg.digest.hex()}
-        params = audit.Params(blocks=N, deadline_ns=DEADLINE_NS, windows=WINDOWS, samples=10**6, delta=1e-6,
+        params = audit.Params(blocks=N, deadline_ns=DEADLINE_NS, windows=WINDOWS, samples=1024, delta=1e-6,
                               window_ns=WINDOW_NS, codec=P512, lifetime=LIFETIME)
         named = {"refresh": True, "fresh_slots": FRESH} if refresh else {}
         assert self.lean.call({"op": "session", "node": NODE.hex(), "params": lv.params_json(params) | named,
                                "coins": None, "append_coins": [], "not_before_ns": 0, "index": 0}) == {"session": 0}
-        self.coins = coins.local(reg.digest, 0, WINDOWS, Entropy(b"coins"),
+        self.coins = coins.local(reg.digest, 0, WINDOWS, Entropy(b"coins"), samples=params.samples,
                                  **({"appends": Schedule(N, LIFETIME, WINDOWS, FRESH).total} if refresh else {}))
         self.now, self.latest, self.checks = 0, reg.digest, 0
 
@@ -100,13 +100,15 @@ class Lean:
 
 
 def session(exe, refresh: bool = True, freed: dict[int, list[int]] | None = None, tamper=None,
-            late: dict[int, tuple[int, ...]] | None = None) -> tuple[list, dict, list, list]:
+            late: dict[int, tuple[int, ...]] | None = None,
+            withhold: str | None = None) -> tuple[list, dict, list, list]:
     """W windows of L = 2 over N registered blocks, each opened by its due re-keys, pages in windows 0, 1 (two appends,
     F = 2) and 2, `PASSES` passes a window over the refresh plan (every block without refresh); `freed` names the chunks
     freed at the start of a window; `late` the appends of pages made after a window's last root, sent in the next
     window, whose re-key slots then stay empty (`ServingTrace`'s).  Every receipt is sampled and opened, `tamper`
     rewriting each opening.  The windows' settled verdicts, the session's outcome, the appends sent as (slot, origin,
-    count) and the blocks withdrawn.  Without refresh the session appends nothing."""
+    count) and the blocks withdrawn.  Without refresh the session appends nothing.  `withhold` sends window 0's boundary
+    ("challenge") or close ("sample") without the challenger's coin, or its close with the coin a byte short ("short")."""
     payloads = [payload(b"weights %d" % j) for j in range(N)]
     ys = salts(b"payload salts", N)
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
@@ -169,12 +171,13 @@ def session(exe, refresh: bool = True, freed: dict[int, list[int]] | None = None
         if t + 1 < WINDOWS:
             challenge = lean.coins.challenge(t + 1, lean.latest)
             challenges.append(challenge)
-        coin = coins.coin(challenge) if t + 1 < WINDOWS else None
+        coin = coins.coin(challenge) if t + 1 < WINDOWS and (t, withhold) != (0, "challenge") else None
         assert lean.event({"kind": "boundary"}, coin, at=lean.now + WINDOW_NS) == {
             "released": t + 1 if t + 1 < WINDOWS else None}
     verdicts = []
     for t in range(WINDOWS):
-        coin = coins.coin(lean.coins.openings(t, passes[t, PASSES - 1].root))
+        coin = lean.coins.sample(t, passes[t, PASSES - 1].root)
+        coin = {"sample": None, "short": coin[:-1]}.get(withhold, coin) if t == 0 else coin
         drew = lean.event({"kind": "close", "t": t}, coin, at=CLOSE_NS + t)
         opened = [prover.open(passes[t, i], q) for i, q in drew["draws"]]
         verdicts.append(lean.verdict(t, [tamper(s, o) if tamper else o for o in opened]))
@@ -222,3 +225,18 @@ def test_with_refresh_off_the_reference_prover_s_session_is_accepted_and_names_n
     verdicts, outcome, sent, _ = session(exe, refresh=False)
     assert outcome["outcome"] == "accepted" and "refresh" not in outcome["record"], (verdicts, outcome)
     assert all(k is None and o is None for k, o, _ in sent)
+
+
+def test_a_step_that_reads_a_coin_the_session_holds_empty_is_refused_by_name(exe):
+    """A coin the session holds empty is one no step reads: the honest session is accepted, and the same session with
+    window 0's boundary sent without the challenger's coin is refused there by name (`Verifier.unset`); its close sent
+    without its sample's coins is refused by the draw, which reads them and runs out, and with them a byte short as it
+    arrives (`withCoin`). So a replay padded with empty coins and the live run can't differ."""
+    _, outcome, *_ = session(exe, refresh=False)
+    assert outcome["outcome"] == "accepted", outcome
+    with pytest.raises(lv.LeanError, match="window 1's challenge left without the challenger's coin"):
+        session(exe, refresh=False, withhold="challenge")
+    with pytest.raises(lv.LeanError, match="the randomness source ran out"):
+        session(exe, refresh=False, withhold="sample")
+    with pytest.raises(lv.LeanError, match=r"the coin is \d+ bytes"):
+        session(exe, refresh=False, withhold="short")

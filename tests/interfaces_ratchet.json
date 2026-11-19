@@ -169,7 +169,6 @@
   "benchmarks/pouw/h1_lanes/j10r.py": 5,
   "benchmarks/pouw/h1_lanes/leaf.py": 5,
   "benchmarks/pouw/h1_lanes/served.py": 10,
-  "benchmarks/pouw/h1_prove/drawn.py": 4,
   "benchmarks/pouw/h1_prove/h1form.py": 1,
   "benchmarks/pouw/h1_prove/live.py": 1,
   "benchmarks/pouw/h1_prove/recorded.py": 5,
