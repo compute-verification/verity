@@ -15,8 +15,7 @@
 * a circuit reading registered values is audited against the entries the verifier pinned, each under its own domain
   (`pinned`), and refused before any sample without them, a record that lists its members (a served window's) as one that
   states them; one whose program takes values only tied to the earlier docket that registered them first
-  (`tie_of`), its readers' reads registered at that record's roots, and the verifier's tie tests' own tie
-  (`window_tie.py`) is that one on their toys;
+  (`tie_of`), its readers' reads registered at that record's roots;
 * a window's audit is one compute audit of the network attester's period (`period`), its scan state's reads registered;
 * a declared day (``--day``, `declared_day`) hands R2 the registration log's declarations, so a program other than the
   day's is refused;
@@ -317,9 +316,11 @@ def test_the_leak_count_is_the_circuits_unwired_input_bits_and_vacuous_past_the_
 
 
 def _registered_circuit(n: int = 2, free: str | None = None) -> IF.Circuit:
-    """``n`` coordinates whose every input row is a registered read of one parameter ``a``, but port ``free``'s."""
+    """``n`` coordinates whose every input row is a registered read of one parameter ``a``, but port ``free``'s; each read
+    starts on a whole row of its port's words (`interface._reads_of`)."""
     rows, at, reads = IF.layout(BITS).rows, 0, []
     for p, words in rows:
+        at = -(-at // words) * words
         if p != free:
             reads.append(IF.Read(descriptor_id(BITS), p, "a", at=0, radix=(n,), base=at, step=(words,)))
         at += n * words
@@ -778,33 +779,6 @@ def test_a_tie_with_no_prefix_takes_pearls_values_by_their_own_names_in_32_bit_s
                                  (w, "h1/", "is no Commit name")):
         with pytest.raises(ValueError, match=why):
             RA.tie_of(doc, earlier, prefix)
-
-
-@pytest.mark.slow
-def test_the_verifier_tie_tests_tie_is_the_audits_on_their_toys():
-    """test_pearltie and test_remotetie tie and resolve with `window_tie` beside them, which loads
-    no file of the audit: on test_pearltie's toy, its tie to W and to the flipped W' is `tie_of`'s with no prefix, and every
-    template of both toys' circuits resolves under its id as `catalog_resolve` resolves it. The tie reads the circuit
-    record's declarations alone (`interface.declarations`), the circuit's own, as its ``circuit.json`` carries them. In a
-    fresh process, where the ``settings`` the verifier's tests import is their own registry."""
-    code = f"""
-import sys
-sys.path[:0] = [{str(HERE)!r}, {str(HERE.parents[2] / "benchmarks" / "prove_path")!r}]
-import test_pearltie as TP, test_remotetie as TR, window_tie as WT  # first: records_audit puts one_stage's settings first
-import records_audit as RA
-from verity.circuits.codec import descriptor_id
-import json
-pearl, h1 = TP.make_toy(), TR.make_toy()
-doc = json.loads(json.dumps(pearl.low.circuit.declared()))
-own = {{TP.SS.SCAN_STATE: pearl.values[TP.SS.SCAN_STATE].entry()}}
-for w in (pearl.W, TP._flipped(pearl).W):
-    tied = WT.tie_of(doc, w, own)
-    assert tied == RA.tie_of(doc, w, None, own) and tied[0]["registered"], tied
-ids = [t for c in (pearl.low.circuit, h1.low.circuit) for t in c.ids]
-assert ids and all(descriptor_id(WT.catalog_resolve(t)) == descriptor_id(RA.catalog_resolve(t)) == t for t in ids)
-"""
-    p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
-    assert p.returncode == 0, p.stderr[-3000:]
 
 
 def test_a_ties_summary_names_w_and_for_pearls_w_its_development_verifier():

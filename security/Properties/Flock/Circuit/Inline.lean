@@ -3,6 +3,7 @@ module
 public import Definitions.Core.Boolean
 public import Properties.Flock.Circuit.OfProgram
 public import Properties.Flock.DecodeBoolean
+public import InferenceOnlyVerifier.Count
 
 /-!
 # C's Boolean inlining (`inline`)
@@ -32,6 +33,7 @@ callee's. A figure that credits reads `andSize (inline P)` itself; a report or a
 namespace Flock.OfProgram
 
 open Flock.Program
+open InferenceOnlyVerifier
 
 /-- A gate of the inlining as it is built, its operands by index. -/
 inductive RawOp where
@@ -187,22 +189,16 @@ def blockGates (P : Prog) (S : Finset (Fin (ofProgram P).N)) : Finset (Fin (inli
   Finset.univ.filter fun x => ∃ g ∈ S, ((walk P).1.getD g.val default).lo ≤ x.val ∧
     x.val < ((walk P).1.getD g.val default).hi
 
-/-- Definition `d`'s ANDs by circuits' rule, at most `fuel` calls deep. -/
-def andsDef (P : Prog) : ℕ → ℕ → ℕ
-  | 0, _ => 0
-  | fuel + 1, d =>
-    let defn := P.defs[d]!
-    if defn.prim then
-      match gateKind? defn.id with
-      | some (.and n) => n - 1
-      | some _ => 0
-      | none => match P.bodyOf? defn.key with
-        | some b => andsDef P fuel b
-        | none => 0
-    else (defn.body.nodes.toList.map fun nd => nd.members * andsDef P fuel nd.fn).sum
+/-- §9's ANDs by circuits' rule, by a primitive's key: `And<n>` `n - 1`, every other gate and constant bit none; no
+entry for any other primitive. -/
+def gateAndsOf (k : String) : Option ℕ := (gateKind? k).map fun | .and n => n - 1 | _ => 0
 
-/-- **A Definition's ANDs** (`count.py`'s `ands`), at the evaluator's depth. -/
-def bodyAnds (P : Prog) (p : ℕ) : ℕ := andsDef P (2 * P.defs.size + 2) p
+/-- Each primitive's ANDs: a §9 gate's, or a word primitive's Boolean Definition's (`P.bodyOf?`). -/
+def primAnds (P : Prog) (k : String) : Option ℕ :=
+  (gateAndsOf k).orElse fun _ => (P.bodyOf? k).bind fun b => ((Count.boolGates P gateAndsOf)[b]?).join
+
+/-- **A Definition's ANDs** (`count.py`'s `ands`): `Count.boolGates` on `primAnds`; none where it has no count. -/
+def bodyAnds (P : Prog) (p : ℕ) : ℕ := (((Count.boolGates P (primAnds P))[p]?).join).getD 0
 
 /-- Gate `g`'s ANDs: its primitive's, none for an input. -/
 def gateAnds (P : Prog) (g : Fin (ofProgram P).N) : ℕ :=

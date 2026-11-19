@@ -107,14 +107,19 @@ def digest(case: Mapping[str, Any]) -> str:
     return hashlib.sha512(bytes.fromhex(case["commitment"])).hexdigest()
 
 
-def _check(verifier: ModuleType) -> Callable[..., dict[str, Any]]:
-    """The verifier of record (`Scheme.check`) of the scheme declared in ``verifier``'s own protocol package whose
-    protocol is ``verifier``'s ``PROTOCOL``; only that package's declarations are loaded."""
+def _scheme(verifier: ModuleType) -> S.Scheme:
+    """The scheme declared in ``verifier``'s own protocol package whose protocol is ``verifier``'s ``PROTOCOL``; only
+    that package's declarations are loaded."""
     package = verifier.__name__.rsplit(".verifier.", 1)[0] + "."
     for name, module in registry.DECLARATIONS.items():
         if module.startswith(package) and (scheme := registry.get(name)).protocol == verifier.PROTOCOL:
-            return S.declared(scheme, "check")
+            return scheme
     raise Refused(f"no scheme declared in {package[:-1]} has the protocol {verifier.PROTOCOL}")
+
+
+def _check(verifier: ModuleType) -> Callable[..., dict[str, Any]]:
+    """The verifier of record (`Scheme.check`) of ``verifier``'s scheme (`_scheme`)."""
+    return S.declared(_scheme(verifier), "check")
 
 
 def pous_answer(case: Mapping[str, Any], *, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
@@ -314,7 +319,7 @@ def wipe_piece(window: Path, private: Path | None = None, *, schemes: Mapping[st
     served = _json(window / "served.json") if (window / "served.json").is_file() else {}
     if private is None:
         _need(bool(served.get("serve_dir")), f"{window} has no served.json naming the serve dir, so no private directory")
-        private = Path(served["serve_dir"]) / "private" / "wipe"
+        private = Path(served["serve_dir"]) / "private" / _scheme(wipe_period).name
     kept = private / WIPE_CASE if (private / WIPE_CASE).is_file() else window / WIPE_CASE
     case = _json(kept)
     got = wipe_answer(case, schemes=schemes, protocol=public.get("protocol", wipe_period.PROTOCOL))
