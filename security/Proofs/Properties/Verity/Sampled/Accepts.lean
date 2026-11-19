@@ -222,24 +222,6 @@ structure FilesOn (A : Live) (s : Verity.Sent) : Prop where
     (_root_.Core.Blobs.ofArray s.blobs).get p.own.pub "public file" = .ok b → b = A.I.publicFile
   tables : TablesExtend A.I.tables (_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray s.blobs))
 
-/-- **v2 derives no circuit file yet**: `OneStageZk.restrict` refuses after the block's Program
-(`OneCircuit.notDerived`: no encoder writes a lowered Program as a circuit file), so `Own.circuitFile` is never `.ok`. -/
-theorem restrict_ne_ok (C : ByteArray) (partition : Json) (block : ℕ) (b : ByteArray) :
-    _root_.Spot.OneStageZk.restrict C partition block ≠ .ok b := by
-  intro h
-  unfold _root_.Spot.OneStageZk.restrict at h
-  obtain ⟨_, -, h⟩ := ebind_ok h
-  split at h
-  · split at h
-    · obtain ⟨_, -, h⟩ := ebind_ok h
-      obtain ⟨_, -, h⟩ := ebind_ok h
-      cases h
-    · cases h
-  · cases h
-
-theorem circuitFile_ne_ok (p : _root_.Spot.OneStageZk.Own) (b : ByteArray) : p.circuitFile ≠ .ok b :=
-  restrict_ne_ok _ _ _ b
-
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## v2's files are the vocabulary's -/
@@ -426,7 +408,9 @@ theorem filesOn_of {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F B : A
     (hheld : Properties.Spot.HoldsRegisteredTables p₀.own (_root_.Core.Blobs.ofArray s.blobs))
     (ht : TablesSent T s) : FilesOn A s := by
   have hc : ∀ p, ParamsAt s.params p → ∀ b,
-      p.own.circuitFile = .ok b → b = A.I.circuitFile := fun p _ b hg => absurd hg (circuitFile_ne_ok p.own b)
+      p.own.circuitFile = .ok b → b = A.I.circuitFile := fun p hp b hg => by
+    rw [hA.circuit]
+    exact (circuitFileOf_eq (hθ ▸ hp) hg).symm
   refine ⟨hc, fun p hp b hg => ?_, ?_⟩
   · rw [hs] at hg
     rw [hA.publicFile]

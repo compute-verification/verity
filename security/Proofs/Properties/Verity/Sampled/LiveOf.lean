@@ -504,19 +504,19 @@ theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD 
     ∃ p tags0 pubB record proofs n desc, ParamsAt θ p ∧
       Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
       pubB = V.publicFile θ F ∧
-      Accepted (toExec (_root_.Spot.OneStageZk.inputsOf tags0 p.own (V.circuitFile θ F) pubB
+      Accepted (toExec (_root_.Spot.OneStageZk.inputsOf tags0 p.own (circuitFileOf θ) pubB
         (_root_.Core.Blobs.ofArray o.sent.blobs))) { record := record, proofs := proofs } p.base.verifier n ∧
-      _root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray o.sent.blobs) = pinnedTables T (V.circuitFile θ F) ∧
+      _root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray o.sent.blobs) = pinnedTables T (circuitFileOf θ) ∧
       _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program ∧
       samplingDesignAt p.base.verifier n = .ok (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.samplingDesign
         p.base.verifier.workTable n) ∧
       ∃ reg, Flock.ProvedScope.check (Flock.Witness.zkTags (_root_.Spot.OneStageZk.inputsOf tags0 p.own
-          (V.circuitFile θ F) pubB (_root_.Core.Blobs.ofArray o.sent.blobs))) true (V.circuitFile θ F) pubB
+          (circuitFileOf θ) pubB (_root_.Core.Blobs.ofArray o.sent.blobs))) true (circuitFileOf θ) pubB
         (_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray o.sent.blobs)) 1 false reg = .ok () ∧
       ∃ recS units rd x, recordSampled (.subset units.size) n units recS ∧
         units.size = Flock.Bridge.samplingDesignK (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.samplingDesign
           p.base.verifier.workTable n) ∧
-        _root_.Spot.OneStageZk.setupAt (_root_.Spot.OneStageZk.inputsOf tags0 p.own (V.circuitFile θ F) pubB
+        _root_.Spot.OneStageZk.setupAt (_root_.Spot.OneStageZk.inputsOf tags0 p.own (circuitFileOf θ) pubB
           (_root_.Core.Blobs.ofArray o.sent.blobs)) rd (Flock.Witness.recordDraw recS) = .ok x := by
   obtain ⟨hθ, hFo, -⟩ := Binding.play_reaches hreach
   have hreg : V.Registered θ F := by
@@ -540,7 +540,7 @@ theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD 
   have hs : o.sent.blobs = F ++ o.blobs := by
     show o.files ++ o.blobs = _
     rw [hFo]
-  have hcf : circuitB = V.circuitFile θ F := absurd hc (circuitFile_ne_ok p₀.own circuitB)
+  have hcf : circuitB = circuitFileOf θ := (circuitFileOf_eq hp₀ hc).symm
   have hpf : pubB = V.publicFile θ F := by
     rw [hs] at hpb
     exact get_named (hD.publicFile p₀ hp₀) hreg.2 hpb
@@ -596,8 +596,8 @@ theorem session_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD :
     ∃ (p : _root_.Spot.OneStageZk.Params) (n : ℕ) (I : FlockSoundness.Discharge.Exec.Inputs) (D : Flock.Desc)
       (pubO : Flock.Public) (desc : Hash.Msg), ParamsAt θ p ∧
       Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some I.tags ∧ I.count = 1 ∧ I.work = none ∧
-      I.stratified = none ∧ I.closure = none ∧ I.circuitFile = V.circuitFile θ F ∧
-      I.publicFile = V.publicFile θ F ∧ I.tables = pinnedTables T (V.circuitFile θ F) ∧
+      I.stratified = none ∧ I.closure = none ∧ I.circuitFile = circuitFileOf θ ∧
+      I.publicFile = V.publicFile θ F ∧ I.tables = pinnedTables T (circuitFileOf θ) ∧
       I.partition = some p.own.partition ∧ I.program = some p.own.program ∧
       I.tags.typed = false ∧ FlockSoundness.Discharge.ZkHidden.TagsOkZHJ I ∧
       Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D ∧
@@ -628,7 +628,7 @@ theorem session_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD :
   obtain ⟨D, pubO, hDp, hU, hpubO, hcD⟩ := desc_of_ports hAc.flat htyp hAc.ports
   have hports := hAc.ports
   rw [hcD] at hports
-  refine ⟨p, n, toExec (_root_.Spot.OneStageZk.inputsOf tags0 p.own (V.circuitFile θ F) (V.publicFile θ F)
+  refine ⟨p, n, toExec (_root_.Spot.OneStageZk.inputsOf tags0 p.own (circuitFileOf θ) (V.publicFile θ F)
       (_root_.Core.Blobs.ofArray o.sent.blobs)), D, pubO, desc, hp, ht0, rfl, rfl, rfl, rfl, rfl, rfl, htab, rfl, rfl,
     htyp, ⟨hAc.flat.1, hret, hleaf.resolve_right fun h => absurd h.1 (by decide)⟩, hDp, hU, hpubO,
     scopeH_of_form hcD hAc.flat.2 hAc.form, hports, hAc.loads hpubO,
@@ -724,7 +724,7 @@ theorem liveSpec_of_accepted {V : Vocab d α} {T : PinnedTables} {b : SessionBou
       hM := hb.M, ρ := b.ρ, hρ := hb.ρ, hr := fun S R j => hr_planZHJP _ _ hb.kρ S R j, ε := (V.certOf θ).ε,
       v := b.v, w := b.w, h := b.h }
   refine ⟨A, ⟨⟨p, hpa, hpart, hprog, hlaw, hdesc, rfl⟩, rfl, htags, hcount, hwork, hstrat, hclos, rfl, hcirc, hpubf,
-    hread.trans (congrArg Verity.ExecutionPhaseFiles.one (readOf_eq V T hc hp (A := A) htags hcount hcirc hpubf htab)), rfl, rfl,
+    hread.trans (congrArg Verity.ExecutionPhaseFiles.one (readOf_eq V T hp (A := A) htags hcount hcirc hpubf htab)), rfl, rfl,
     rfl, rfl, rfl, rfl, rfl, rfl, hreg, hone⟩⟩
 
 /-- **The session at the files of an accepted play is set up** (`liveSpec_of_accepted`): `liveOf` is not `none`

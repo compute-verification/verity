@@ -471,7 +471,6 @@ theorem registered_of_names (hn : Names A o p bs) {rd : _root_.Spot.OneStageZk.R
       obtain ⟨_, -, hrd⟩ := bind_ok hrd
       obtain ⟨_, -, hrd⟩ := bind_ok hrd
       obtain ⟨_, -, hrd⟩ := bind_ok hrd
-      obtain ⟨_, -, hrd⟩ := bind_ok hrd
       obtain rfl := Except.ok.inj hrd
       rw [Option.mapM_some, hj]
       simp only [bind, Except.bind, hown]

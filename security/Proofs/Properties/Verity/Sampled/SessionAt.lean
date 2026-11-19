@@ -88,16 +88,16 @@ variable (I : Instance d α)
 
 /-- **v2's reading of committed files is their circuit and public files'**: files naming the same circuit and public
 files are read alike (`readOf`, whose tables are the ones the circuit file registers). -/
-theorem read_files {θ : ByteArray} {F F' : Array ByteArray} (hc : I.base.circuitFile θ F = I.base.circuitFile θ F')
+theorem read_files {θ : ByteArray} {F F' : Array ByteArray} (_hc : I.base.circuitFile θ F = I.base.circuitFile θ F')
     (hp : I.base.publicFile θ F = I.base.publicFile θ F') : I.base.read θ F = I.base.read θ F' := by
-  simp only [Vocab.circuitFile, Vocab.publicFile, I.programDigest, I.publicDigest] at hc hp
-  rw [I.read, I.read, readOf, readOf, hc, hp]
+  simp only [Vocab.publicFile, I.publicDigest] at hp
+  rw [I.read, I.read, readOf, readOf, hp]
 
 /-- **A session v2 sets up on some files it sets up on files naming the same circuit and public files, read alike.** -/
 theorem setsUp_files {θ : ByteArray} {F F' : Array ByteArray} {A : Live}
-    (hc : I.base.circuitFile θ F = I.base.circuitFile θ F') (hp : I.base.publicFile θ F = I.base.publicFile θ F')
+    (_hc : I.base.circuitFile θ F = I.base.circuitFile θ F') (hp : I.base.publicFile θ F = I.base.publicFile θ F')
     (hr : I.base.read θ F' = I.base.read θ F) (h : SetsUp I.base θ F A) : SetsUp I.base θ F' A :=
-  { h with circuit := h.circuit.trans hc, publicFile := h.publicFile.trans hp, read := hr.trans h.read }
+  { h with publicFile := h.publicFile.trans hp, read := hr.trans h.read }
 
 /-- **The deployment's session at the parameters `θ`, where it runs one, is one v2 sets up on the registered files**,
 wherever some play's committed files name the registered circuit and public files and its sampled verdict accepts on

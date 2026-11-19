@@ -36,10 +36,9 @@ by name (`tablesMatch_ok`, `statementOf_tables`), so its inputs hold those table
 `checkBlobsAt_members_tables`).
 
 `tablesRegistered_honest` is its honest lemma: where the circuit file derived from C and the partition looks up
-`rcp`, blobs holding `rcp`'s table (`honestBlobs`) pass the refusal; while `restrict` derives no block's circuit
-(`Spot.OneStageZk.restrict`), no verifier's own files meet its hypothesis. `tablesRegistered_nontrivial` is its
-nontrivial lemma: blobs holding `rcp`'s table (`tableBlobs`) don't hold the tables of `witnessOwn`, whose circuit file
-does not derive, so a check that accepts every input, as one without the refusal does there, does not have
+`rcp`, blobs holding `rcp`'s table (`honestBlobs`) pass the refusal. `tablesRegistered_nontrivial` is its
+nontrivial lemma: blobs holding `rcp`'s table (`tableBlobs`) don't hold the tables of `witnessOwn`, whose partition has
+no blocks, so `Spot.OneStageZk.restrictOn` refuses its circuit file by name, and so a check that accepts every input, as one without the refusal does there, does not have
 `TablesRegistered`'s conclusion. The kernel evaluates the lookups on the witnesses' circuit files (`decide +kernel`),
 reading the toolchain's string, byte array and JSON definitions through `import all`, all but `String.trimAsciiEnd`,
 whose recursion is well-founded: `metaOf_of` takes the META line's trim as a hypothesis, unfolded once on each

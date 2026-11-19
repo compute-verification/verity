@@ -681,7 +681,8 @@ reads over the population (`samplingDesignAt`), and the statement's descriptor a
 (`Spot.Program.parse`) and query, so the registration's population is the verifier's, and the sample's bytes
 the coins of the parameters' challenger family, as many as the coin commitment's families give it (`Vocab.families`),
 `COIN_BYTES` bytes each; the statement's tags, one table, no work, stratified or closure input and no recomputation of
-public input words, as `Spot.OneStageZk.inputsOf` hands them; the committed circuit and public files, and the
+public input words, as `Spot.OneStageZk.inputsOf` hands them; the circuit file the door derives from the parameters
+(`circuitFileOf`) and the committed public file, and the
 vocabulary's reading of the files (`Vocab.read`) as the session's, its lookup tables included; and the claim's share,
 the published certificate's. The device's bytes and the bound's parameters are the deployment's session's
 (`Deployed`). -/
@@ -698,7 +699,7 @@ structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Li
   stratified : A.I.stratified = none
   closure : A.I.closure = none
   own : A.own = none
-  circuit : A.I.circuitFile = V.circuitFile θ F
+  circuit : A.I.circuitFile = circuitFileOf θ
   publicFile : A.I.publicFile = V.publicFile θ F
   read : V.read θ F = Verity.ExecutionPhaseFiles.one A.fileRead
   share : (V.certOf θ).ε = A.ε
@@ -766,7 +767,7 @@ structure DigestsAt (V : Vocab d α) (T : PinnedTables) (θ : ByteArray) : Prop 
     V.programDigest θ = some (Verity.sha512 c.data.toList)
   publicFile : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.pub = .ok dg →
     V.publicDigest θ = some fun i => dg.data.getD i.val 0
-  tables : ∀ F, (V.read θ F).first.tables = pinnedTables T (V.circuitFile θ F)
+  tables : ∀ F, (V.read θ F).first.tables = pinnedTables T (circuitFileOf θ)
 
 /-- **v2's parameters in `θ`**, as `ParamsAt` reads them, where they decode (`paramsOf_eq`). -/
 def paramsOf (θ : ByteArray) : Option _root_.Spot.OneStageZk.Params :=
@@ -791,6 +792,16 @@ def digestOf (s : String) : Option Hash.Digest :=
   | .ok dg => some fun i => dg.data.getD i.val 0
   | .error _ => none
 
+/-- **The circuit file at the parameters `θ`, as deployed**: the one the door derives from their C, partition and block
+(`Own.circuitFile`); the empty file where it refuses or `θ` holds no v2 parameters. -/
+def circuitFileOf (θ : ByteArray) : ByteArray :=
+  ((paramsOf θ).bind fun p => p.own.circuitFile.toOption).getD .empty
+
+/-- The circuit file the door derives at v2's parameters in `θ` is `circuitFileOf θ`. -/
+theorem circuitFileOf_eq {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp : ParamsAt θ p) {b : ByteArray}
+    (hb : p.own.circuitFile = .ok b) : circuitFileOf θ = b := by
+  simp only [circuitFileOf, paramsOf_eq hp, Option.bind, hb, Except.toOption, Option.getD_some]
+
 /-- **The circuit file's digest at the parameters `θ`, as deployed**: the SHA-512 of the circuit file the door
 derives from their C, partition and block (`Own.circuitFile`); none where it refuses. -/
 def programDigestOf (θ : ByteArray) : Option Hash.Digest :=
@@ -804,15 +815,13 @@ circuit file `circuitFile`. -/
 def zkTagsOf (tags : Flock.Tags) (circuitFile : ByteArray) : Flock.Tags :=
   Flock.Zk.tags tags (Flock.Zk.maskLogOf circuitFile) 1
 
-/-- **v2's reading of the committed files `F` at the parameters `θ`, as deployed**: the files the digests v2's
-parameters name (`programDigestOf`, `publicDigestOf`), the lookup tables the circuit file registers (`pinnedTables`),
+/-- **v2's reading of the committed files `F` at the parameters `θ`, as deployed**: the circuit file the door derives
+from the parameters (`circuitFileOf`), the public file whose digest v2's parameters name (`publicDigestOf`), the lookup tables the circuit file registers (`pinnedTables`),
 and `verify --zk`'s tags at the statement's tags and the circuit file (`zkTagsOf`). Where the statement has no tags v2
 refuses, and the tags read are a default. -/
 noncomputable def readOf (T : PinnedTables) (θ : ByteArray) (F : Array ByteArray) : Verity.FileRead :=
-  ⟨zkTagsOf ((Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT).getD default)
-      (Verity.namedFile (programDigestOf θ) F),
-    Verity.namedFile (programDigestOf θ) F, pinnedTables T (Verity.namedFile (programDigestOf θ) F),
-    Verity.namedFile (publicDigestOf θ) F⟩
+  ⟨zkTagsOf ((Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT).getD default) (circuitFileOf θ),
+    circuitFileOf θ, pinnedTables T (circuitFileOf θ), Verity.namedFile (publicDigestOf θ) F⟩
 
 /-- **The deployed digests and reading give `DigestsAt`**: at every parameters, a vocabulary whose digests are the
 ones v2's parameters name (`programDigestOf`, `publicDigestOf`) and whose reading of the committed files is v2's
@@ -827,21 +836,20 @@ theorem digestsAt_of (V : Vocab d α) (T : PinnedTables) (hc : ∀ θ, V.program
   publicFile p hθ dg hdg := by
     rw [hp, publicDigestOf, paramsOf_eq hθ]
     simp only [Option.bind, digestOf, hdg]
-  tables F := by rw [hr, Vocab.circuitFile, hc]; rfl
+  tables F := by rw [hr]; rfl
 
 /-- **The deployed reading is the session's** (`SetsUp.read`) at a session whose inputs are the ones v2 hands
-`verity-verify-proof` on `θ` and `F`: the statement's tags, one table, the committed circuit and public files, and the lookup
-tables the circuit file registers. -/
-theorem readOf_eq (V : Vocab d α) (T : PinnedTables) (hc : ∀ θ, V.programDigest θ = programDigestOf θ)
+`verity-verify-proof` on `θ` and `F`: the statement's tags, one table, the circuit file the door derives, the committed
+public file, and the lookup tables the circuit file registers. -/
+theorem readOf_eq (V : Vocab d α) (T : PinnedTables)
     (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ) {θ : ByteArray} {F : Array ByteArray} {A : Live}
     (htags : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags) (hcount : A.I.count = 1)
-    (hcirc : A.I.circuitFile = V.circuitFile θ F) (hpub : A.I.publicFile = V.publicFile θ F)
-    (htab : A.I.tables = pinnedTables T (V.circuitFile θ F)) :
+    (hcirc : A.I.circuitFile = circuitFileOf θ) (hpub : A.I.publicFile = V.publicFile θ F)
+    (htab : A.I.tables = pinnedTables T (circuitFileOf θ)) :
     readOf T θ F = A.fileRead := by
-  have hc' : V.circuitFile θ F = Verity.namedFile (programDigestOf θ) F := by rw [Vocab.circuitFile, hc]
   have hp' : V.publicFile θ F = Verity.namedFile (publicDigestOf θ) F := by rw [Vocab.publicFile, hp]
   simp only [readOf, Live.fileRead, zkTagsOf, FlockSoundness.Discharge.ZkExec.zkTags, htags, Option.getD_some, hcount,
-    hcirc, hpub, htab, hc', hp']
+    hcirc, hpub, htab, hp']
 
 /-- **v2's case in what the prover sent**: v2's parameters in the parameters sent, as `ParamsAt` reads them, and the
 registration and the evidence of the case the composition's evidence names under the sampled component's id, each read
