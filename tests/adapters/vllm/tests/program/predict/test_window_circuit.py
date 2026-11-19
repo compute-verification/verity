@@ -218,6 +218,36 @@ def test_the_slots_entries_are_one_member_a_lane_in_boundary_order():
     assert ends == set(range(0, SLOTS.slots + 1, nb))
 
 
+#: WHOLE's requests with the shorter in lane 0
+LOWER = ([(3, 2, G2), (4, 2, G2)], [[(0, 0, 3), (1, 0, 4)], [(0, 3, 1), (1, 4, 1)]])
+
+
+def _chunks(window) -> list[tuple[int, int, tuple[str, ...]]]:
+    """Each chunk ``c<j>`` of a served window's entries template (`interface.members`, one unit a chunk): j, the lane of
+    the Program whose entry its unit is, and the `ScanSlots_v3` outputs its occupancy reads."""
+    low = _lowered(window)
+    lane = {p.entry_unit[1]: p.lane for p in low.programs}
+    for p in low.programs:
+        tid, u = p.entry_unit
+        assert _source(low.circuit, tid, "occ", u)[2] == f"o{4 * p.lane + 2}"
+    got = [m for m in IF.members(low.circuit, 64) if m.name.startswith(ENTRY.split("{")[0])]
+    assert [(m.name.rsplit("/c", 1)[1], m.n) for m in got] == [(str(j), 1) for j in range(len(low.programs))]
+    return [(j, lane[j], tuple(x.out for x in m.wired if x.port.startswith("occ"))) for j, m in enumerate(got)]
+
+
+@pytest.mark.parametrize("window", [
+    pytest.param(WHOLE, marks=pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
+        "chunk j of the entries template is lane j's entry; a served window makes its entry units shortest Program "
+        "first"))),
+    LOWER, FULL], ids=["shorter-in-the-higher-lane", "shorter-in-the-lower-lane", "full"])
+def test_a_served_windows_entries_chunk_j_is_lane_j_s_entry(window):
+    """`wired` holds the scan's ``prog<j>`` to the audit's ``<entries>/c<j>/o0``, so chunk j's unit must be lane j's
+    Program's entry, its occupancy lane j's `ScanSlots_v3` output, whatever the requests' lengths in the lanes. It cuts
+    each window's members (about half a minute each) because `wired` reads chunks, which a unit's wiring alone doesn't
+    name."""
+    assert _chunks(window) == [(j, j, (f"o{4 * j + 2}",)) for j in range(2)]
+
+
 def test_the_class_of_record_takes_both_windows_to_their_requests(monkeypatch):
     """The class of record (`CLASS_OF_RECORD`: EVERY 16, 4 slots a boundary, 8 a 32-bucket window) is 8 slots of 1,024
     prompt ids and 64 outputs, lane-major: slot 2j + b is boundary b's lane j at bucket 16b. A 3-request and an 8-request
