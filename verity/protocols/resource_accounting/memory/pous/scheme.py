@@ -3,7 +3,7 @@ and ``wipe``.
 
 **PoUS** is decided by `PousCheck.RunProtocol.protocol` (`verifier/check/PousVerifier/RunProtocol.lean`), whose
 `Core.Account` row is memory held in the GPUs' HBM, verified from below. It adds no block to the registered circuit yet:
-its setup unit, `PousP2SetupCheck_v1` (`prover/setup_circuit.py`), is in no window, and what it certifies is a share ρ of
+its setup unit, `PousP2SetupCheck_v2` (`prover/setup_circuit.py`), is in no window, and what it certifies is a share ρ of
 the store `C*`, not a cost per block, so it states what it requires of the proof layer instead (`requires`). Its
 certificate is P2's at the store's block count (`verifier.period.certificate`): up to `2^23` blocks
 `Pous.SecurityProofs.P2SlackFamilyUncond`, in abstract M1 with no named assumption; above, `periodHeldAt`, which takes
@@ -115,7 +115,7 @@ POUS = register(Scheme(
     hooks=("declared", "memory", "blocks"),
     requires={
         "one-labelling": "C*'s own tree over the memory attester's row digests (`VerifierKey.from_row_digests`); "
-                         "`PousP2SetupCheck_v1` is in no window, and setup's tie decodes C* in Python each period",
+                         "`PousP2SetupCheck_v2` is in no window, and setup's tie decodes C* in Python each period",
         "log-order": "its own salt, `setup.sample_salt(source, commitment)` after the commitment to W, and the memory "
                      "attester's coin tree, its session header bound to setup's root",
         "log-times": "the memory attester's own clock: each answer within Δ + RTT of its index, in the rounds it signs",
