@@ -257,7 +257,7 @@ def test_a_windows_close_commits_its_advice_and_compiles_its_circuit_from_it_onc
     the lowering's refusal at TINY, by name. A plan is refused beside an arm, whose tie commits the advice itself."""
     cls = WindowClass(4, 12, 6)
     with Server(tmp_path) as s:
-        s.windows.plan = CP.ClosePlan(tmp_path, REG, cls, compiler=C, flush=s.trace.drain)
+        s.windows.plan = CP.ClosePlan(tmp_path, cls, registered=REG, compiler=C, flush=s.trace.drain)
         for wave in WAVES:
             serve_concurrently(s, wave)
     commits = {w["window"]: w for w in records(tmp_path, "windows.jsonl") if not w.get("empty")}
@@ -270,7 +270,7 @@ def test_a_windows_close_commits_its_advice_and_compiles_its_circuit_from_it_onc
             WC.served_lowering(REG, cls, (d / "private" / "advice.bin").read_bytes(), ADV.bodies(tmp_path, w))
         assert got["refused"] == f"Unexpressible: {e.value}"[:500]
     with pytest.raises(ValueError, match="give one"):
-        sc.CommitWindows(Committer(Runner()), tmp_path, run_id="t", window_steps=4, arm=object(), plan=lambda w: {})
+        sc.CommitWindows(Committer(Runner()), tmp_path, run_id="t", window_steps=4, arm=object(), plan=lambda w, b: {})
 
 
 def test_advice_leaves_a_window_still_open_for_a_later_call(tmp_path):

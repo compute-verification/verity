@@ -67,7 +67,8 @@ from verity_vllm import messages as M
 from verity_vllm.commit.served_record import BlockValues, base_id, served_rows, window_commit
 from verity_vllm.engine.served_seed import SeedCoins, param_of
 from verity_vllm.pipeline.seal_process import SealFailed
-from verity_vllm.pipeline.serve_seal import committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
+from verity_vllm.pipeline.serve_seal import (binding_of, committed_bytes, drop, extras_of, freeze, seal_window, thaw, view_of,
+                                             window_requests)
 from verity_vllm.pipeline.spans import commit_s_of, end_lap, gc_of, phases_of
 
 #: The compile slice built to prove the served windows, `compile_slice_v7.CompileSlice`'s id: CompileSlice_v1's statics,
@@ -196,7 +197,7 @@ class CommitWindows:
                  window_bytes: int | None = None, disk: Any = None,
                  on_floor: Callable[[str], None] | None = None, mirror: Callable[[], None] | None = None,
                  request_cap: int = 0, arm: Any = None, release: Any = None,
-                 coins: SeedCoins | None = None, plan: Callable[[int], dict[str, Any]] | None = None) -> None:
+                 coins: SeedCoins | None = None, plan: Callable[[int, Any], dict[str, Any]] | None = None) -> None:
         if plan is not None and arm is not None:
             raise ValueError("a window's close plan commits its advice, and an arm's tie commits its own: give one")
         self.com, self.out, self.clock, self.wall, self.marks = committer, Path(out), clock, wall, marks
@@ -207,6 +208,7 @@ class CommitWindows:
         self.arm_key = getattr(arm, "outcome_key", "pouw_h1")   # the line's and the summary's key for it
         self.arm_failed: list[int] = []                  # the windows whose arm failed to open or close
         self.plan, self.plans = plan, {}                 # `close_plan.ClosePlan`, and each window's outcome
+        self._bindings: dict[int, Any] = {}              # each sealed window's binding map, until its plan reads it
         self._arm_pending: set[int] = set()              # the windows whose arm is still closing off the loop
         self._arm_held = False                           # the open window's arm waits for its first step's users (`arm.users`)
         self._awaiting: dict[int, dict[str, Any]] = {}   # ... and their lines, held until it ends
@@ -488,16 +490,23 @@ class CommitWindows:
         return self._land(rec, job, here=(c.t_close, c.seal_wait)) if isinstance(job, tuple) else None
 
     def _plan(self, rec: Mapping[str, Any]) -> None:
-        """The window's close plan, once its line names its run root and before its seal: none for a window with no steps or a
-        failed close; a plan that fails is the window's outcome, and serving goes on."""
+        """The window's close plan, once its line names its run root and before its seal, given the binding map its close built
+        (`serve_seal.binding_of`) where it is sealed, its outcome a line of ``plans.jsonl``: none for a window with no steps or
+        a failed close; a plan that fails is the window's outcome, and serving goes on."""
+        with self._lock:
+            binding = self._bindings.pop(int(rec["window"]), None)
         if self.plan is None or not rec.get("steps") or "error" in rec:
             return
         try:
-            got = self.plan(int(rec["window"]))
+            got = self.plan(int(rec["window"]), binding)
         except Exception as e:  # noqa: BLE001  (a window whose plan fails says so; the server goes on)
             got = {"window": rec["window"], "error": f"{type(e).__name__}: {e}"[:500]}
+        finally:
+            if binding is not None:
+                drop(binding.bmap["entries"])
         with self._lock:
             self.plans[int(rec["window"])] = got
+        M.append(self.out / "plans.jsonl", "Run", json.dumps(got).encode())
 
     def _no_release(self, rec: dict[str, Any], com: Any, job: Any) -> None:
         """A window that reaches no seal, so no draw-gated release: `serve_release.Draws.discard`, its device pool pieces freed,
@@ -596,7 +605,15 @@ class CommitWindows:
                 return {"error": why, "disk": short}
             reqs, request_rows = window_requests(served_rows(c.com), name_of, by_name.get)
             tokens = {q["request_id"]: list(by_name[q["request_id"]].streamed) for q in reqs if q["request_id"] in by_name}
-            kw = dict(rec=rec, reqs=reqs, request_rows=request_rows, tokens=tokens, sampling={}, extras=self._extras_of(c.com, rc), **self.seal)
+            view = view_of(c.com)
+            bmap, binding = binding_of(view, rc, self.out / "windows" / f"w{c.window}", request_rows)
+            if self.plan is not None:
+                with self._lock:
+                    self._bindings[c.window] = SimpleNamespace(bmap=bmap, aliases=view.aliases)
+            else:
+                drop(bmap["entries"])
+            kw = dict(rec=rec, reqs=reqs, request_rows=request_rows, tokens=tokens, sampling={}, extras=self._extras_of(c.com, rc),
+                      binding=binding, **self.seal)
             if c.off_loop:
                 if self.sealer.process is None:
                     for metas in c.com._layouts.values():

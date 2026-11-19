@@ -563,41 +563,18 @@ def serve_ingress(requests: list[Mapping[str, Any]]) -> dict[str, dict]:
 
 
 def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target: str | None = None) -> Any:
-    """φ of a served engine as vllm's registered compiler registers it (`predict.phi.served_phi`, the one formula: `advice_compile`
-    compiles the row dir's Builds under it too, so they hold the Programs I2 compiles): the pinned model (``serve.json``'s
-    ``model`` and ``revision``, and the checkpoint's ``config.json``: ``hf_config``, else the pin's config of record, as
-    `advice_compile` reads it (`dense_generic.pinned_hf_config`), else for a model no manifest pins unsloth/Llama-3.2-1B's), the
-    serving device's target profile (``serve.json``'s ``target``, the int8 scope its layers ran included, else the file
-    ``target``), the engine's execution label (``execution``, else ``engine.execution``), and from its engine record
-    (``engine``) its tensor-parallel world and the engine args class G states, ``max_model_len`` among them, which each
-    request Program's length rule reads; no workload. A ``serve.json`` with no engine record states none of those args."""
+    """`predict.phi.phi_of_serve`, the one formula of a served engine's φ, for a model no manifest pins with
+    unsloth/Llama-3.2-1B's config."""
     from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
-    from verity_vllm.program.predict.phi import served_phi
+    from verity_vllm.program.predict.phi import phi_of_serve as of_serve
 
-    prof = json.loads(Path(target).read_text()) if target else serve.get("target")
-    if not isinstance(prof, Mapping):
-        raise ValueError("serve.json records no target profile (the serving device's TargetProfile.to_json()), so φ can't be read: "
-                         "--target F gives it")
-    execution = serve.get("execution") or (serve.get("engine") or {}).get("execution")
-    if not isinstance(execution, str) or not execution:
-        raise ValueError("serve.json records no execution label (execution, engine.execution), so φ can't be read")
-    hf = json.loads(Path(hf_config or pinned_hf_config(serve["model"], serve["revision"]) or LLAMA32_1B_CONFIG).read_text())
-    engine = serve.get("engine")
-    return served_phi({"model": serve["model"], "revision": serve["revision"], "target": prof, "execution": execution,
-                       "engine_record": engine if isinstance(engine, Mapping) else None}, hf)
+    return of_serve(serve, hf_config or pinned_hf_config(serve["model"], serve["revision"]) or str(LLAMA32_1B_CONFIG), target)
 
 
 def registered_seed(serve: Mapping[str, Any]) -> int:
-    """The default seed a served window's docket fixes, `engine.served_seed.DEFAULT_SEED` (as vllm's registered compiler takes
-    it); a ValueError when ``serve.json`` says the server filled in another (or says none), since a request that sent no
-    seed would be compiled under a seed its sample didn't use."""
-    from verity_vllm.engine.served_seed import DEFAULT_SEED
+    from verity_vllm.program.predict.phi import registered_seed as seed
 
-    seed = serve.get("default_seed")
-    if type(seed) is not int or seed != DEFAULT_SEED:
-        raise ValueError(f"serve.json: the run's server filled in default seed {seed!r}, and the registered one is "
-                         f"engine.served_seed.DEFAULT_SEED ({DEFAULT_SEED}): serve it under that rule")
-    return DEFAULT_SEED
+    return seed(serve)
 
 
 def registered_of_serve(serve: Mapping[str, Any], hf_config: str | None, target: str | None, cap_bits: int) -> Any:

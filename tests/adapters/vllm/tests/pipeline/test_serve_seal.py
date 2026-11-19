@@ -66,6 +66,30 @@ def test_a_sealed_rows_sha512_window_opens_as_a_deferred_commits_row_dir(tmp_pat
     assert "committed_not_retained" not in s and "committed_not_retained" not in json.loads(Path(s["bundle"], "MANIFEST.json").read_text())
 
 
+def test_the_seal_reads_the_binding_map_its_windows_close_built(tmp_path, monkeypatch):
+    """The close builds the window's binding map (`binding_of`) and hands the seal its record; the seal builds none of its own, and
+    what it records and leaves beside the bundle is what a seal that builds the map records."""
+    rc, d, s = _sealed(tmp_path)
+    one = (d / "commit" / "binding_map_p0.json").read_text()
+    torch = pytest.importorskip("torch")
+    from tests.check.opened import commit_steps
+
+    com, rc = commit_steps({0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]})
+    com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
+    leds = _ledgers()
+    reqs, rows = ss.window_requests(ROWS, NAMES.get, leds.get)
+    e = tmp_path / "closed" / "w5"
+    bmap, binding = ss.binding_of(ss.view_of(com), rc, e, rows)
+    assert (e / "commit" / "binding_map_p0.json").read_text() == one and len(bmap["entries"]) == binding["entries_n"]
+    monkeypatch.setattr(ss, "binding_of", lambda *a: pytest.fail("the seal built a binding map its close had built"))
+    t = ss.seal_window(com, rc, e, rec={"window": 5, "run_id": "t/w5", "steps": len(rc.steps), "passed": True}, reqs=reqs,
+                       request_rows=rows, tokens={k: v.streamed for k, v in leds.items()}, sampling={}, label="serve-openai:t",
+                       code="c0de", engine_of_record={"vllm": "test"}, binding=binding)
+    assert "error" not in t and (e / "commit" / "binding_map_p0.json").read_text() == one
+    keep = ("binding_map_digest", "binding_map_entries")
+    assert {k: t.get(k) for k in keep} == {k: s.get(k) for k in keep}
+
+
 #: a served step as `--retain-exclude hidden_m1` commits it: an attention interior between two module outputs
 INTERIOR = [("model.layers.0.self_attn.qkv_proj/0", 300), ("fa2.m1/L0/s0/g32x8x1/S", None), ("model.layers.0.self_attn.o_proj/0", 200)]
 

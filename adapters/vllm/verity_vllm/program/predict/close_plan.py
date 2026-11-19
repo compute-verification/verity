@@ -4,8 +4,9 @@ commits it (`advice.write`), the class circuit compiled from that advice and the
 port's source and the served rows each reads where they are committed."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any, Callable
 
 from verity_vllm.pipeline import advice as ADV
 
@@ -15,38 +16,82 @@ from .window_plan import Plan
 
 
 class ClosePlan:
-    """``registered`` (`steps.Registered`) and ``cls`` the window class the circuit is compiled at; ``compiler`` the advice's
-    (`advice.registered_compiler`); ``flush`` drains the advice trace (`StepTrace.drain`) before it is read; ``served(lowered,
-    window)`` gives each slot's `window_rows.Served` (with its ``locate``), and without it the outcome names the circuit's
-    templates and units alone. A window whose advice is pending or refused, or that the class doesn't take, has no circuit and
-    says why."""
+    """The plan of each window a serve under ``out`` closes, at class ``cls`` (None: the serve declared none, and each window
+    says so). φ is ``serve.json``'s (`phi.phi_of_serve`, with ``hf_config`` where no manifest pins the model), read at the first
+    window, else ``registered``; ``compiler`` the advice's (`advice.registered_compiler`'s default); ``flush`` drains the
+    advice trace (`StepTrace.drain`) before it is read. Given the binding map the window's close built (`serve_seal.binding_of`:
+    ``bmap`` and ``aliases``), each slot's `window_rows.Served` locates its request's committed members, from a Build of its
+    Program written beside the window's seal (`naming.write_build`, under `steps.trace_dir`'s name); without it the outcome
+    names the circuit's templates and units alone. A window whose advice is pending or refused, or that the class doesn't take,
+    has no circuit and says why."""
 
-    def __init__(self, out: Path, registered: Any, cls: Any, *, compiler: Any, grain: Any = None,
-                 flush: Callable[[], Any] | None = None,
-                 served: Callable[[Any, int], Sequence[Any]] | None = None,
-                 registered_roots: dict[str, str] | None = None) -> None:
-        self.out, self.registered, self.cls, self.compiler = Path(out), registered, cls, compiler
+    def __init__(self, out: Path, cls: Any, *, registered: Any = None, compiler: Any = None, grain: Any = None,
+                 flush: Callable[[], Any] | None = None, registered_roots: dict[str, str] | None = None,
+                 hf_config: str | None = None) -> None:
+        self.out, self.cls, self.registered, self.compiler = Path(out), cls, registered, compiler
         self.grain = grain if grain is not None else WC._GRAIN
-        self.flush, self.served, self.registered_roots = flush, served, registered_roots
+        self.flush, self.registered_roots, self.hf_config = flush, registered_roots, hf_config
         self.held: dict[int, tuple[Any, Any, Plan | None]] = {}
 
-    def __call__(self, window: int) -> dict[str, Any]:
+    def _registered(self) -> Any:
+        if self.registered is None:
+            from .phi import phi_of_serve, registered_seed
+            from .steps import Registered
+
+            serve = json.loads((self.out / "serve.json").read_text())
+            self.registered = Registered.of(phi_of_serve(serve, self.hf_config), registered_seed(serve), ADV.CAP_BITS)
+        return self.registered
+
+    def __call__(self, window: int, binding: Any = None) -> dict[str, Any]:
         if self.flush is not None:
             self.flush()
+        if self.compiler is None:
+            self.compiler = ADV.registered_compiler()
         rep = ADV.write(self.out, self.out / "advice", window=window, compiler=self.compiler,
                         registered_roots=self.registered_roots)
         for key in ("pending", "refused"):
             if str(window) in rep[key]:
                 return {"window": window, key: rep[key][str(window)]}
         got = {"window": window, "advice": rep["windows"][str(window)]["root"]}
+        if self.cls is None:
+            return {**got, "refused": "the serve declares no window class (--window-class S,P,O), so no circuit is compiled"}
         advice = (self.out / "advice" / f"w{window}" / "private" / "advice.bin").read_bytes()
         try:
-            compiled, low = WC.served_lowering(self.registered, self.cls, advice, ADV.bodies(self.out, window), self.grain)
+            compiled, low = WC.served_lowering(self._registered(), self.cls, advice, ADV.bodies(self.out, window), self.grain,
+                                               named=binding is not None)
         except (Unexpressible, ValueError) as e:
             return {**got, "refused": f"{type(e).__name__}: {e}"[:500]}
-        if self.served is None:
+        if binding is None:
             self.held[window] = (compiled, low, None)
             return {**got, "templates": len(low.circuit.templates), "units": sum(k for _, k in low.circuit.templates)}
-        plan = Plan(low, self.served(low, window))
+        plan = Plan(low, served_slots(low, self.cls, compiled, binding, self.out / "windows" / f"w{window}"))
         self.held[window] = (compiled, low, plan)
         return {**got, **plan.describe()}
+
+
+def served_slots(low: Any, cls: Any, compiled: Any, binding: Any, builds: Path) -> list[Any]:
+    """Each of ``low``'s Programs' `window_rows.Served`, in Program order: the request whose slot its anchor and lane name (slot
+    k the window's k-th request, `window_class.takes`'s placement), read through its Program's index (`ProgramIndex` over the
+    Build written under ``builds``) and the window's binding map, from its first step."""
+    from verity_vllm.check.replay.index import ProgramIndex
+    from verity_vllm.check.replay.opening import CommittedStore
+    from verity_vllm.query.manifest import format as MF
+
+    from .naming import write_build
+    from .steps import trace_dir
+    from .window_rows import Served
+
+    units = [u for u in compiled.requests if u is not None]
+    slot_of = {(cls.anchor(k), cls.lane(k)): k for k in range(cls.slots)}
+    store = CommittedStore.of_record(binding.bmap, lambda *_: None, binding.aliases)
+    dirs: dict[str, str] = {}
+    out = []
+    for P in low.programs:
+        u = units[slot_of[(P.anchor, P.lane)]]
+        if u.digest not in dirs:
+            named = compiled.named[u.digest]
+            dirs[u.digest] = write_build(str(builds / trace_dir({**named.shape, "policy": named.shape["sampling"]})),
+                                         compiled.programs[u.digest], named)
+        pi = ProgramIndex(MF.load_program(dirs[u.digest])["instances"], program_dir=dirs[u.digest])
+        out.append(Served.of_record(pi, store, u.id, u.first_step))
+    return out

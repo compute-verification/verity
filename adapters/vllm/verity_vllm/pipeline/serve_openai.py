@@ -809,7 +809,10 @@ def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[st
     return llm, (SL.warmed(SS.committer(opts, llm), llm, opts) if opts.commit else None)
 
 
-def main(opts: Options) -> int:
+def main(opts: Options, plan_of: Callable[[Path, Any, Callable[[], Any]], Any] | None = None) -> int:
+    """The serve; ``plan_of(out, opts, flush)`` makes the plan each committed window's close compiles (`CommitWindows.plan`),
+    which the command's entry passes (`program.predict.serve`). A committing serve without an H1 arm refuses to run without
+    one."""
     preflight(opts)
     (out := Path(opts.out)).mkdir(parents=True, exist_ok=True)
     day, session = SD.declare(opts, out), SR.session_of(opts, out)
@@ -829,6 +832,9 @@ def main(opts: Options) -> int:
         from verity_vllm.engine.step_trace import scheduler_config
 
         arm = None if listed(opts, out) else SH.arm_of(opts, llm, com, out, flush=trace.drain, day=day)
+        if arm is None and plan_of is None:
+            raise ValueError("a committing serve plans each window at its close: run `verity-vllm serve-openai` "
+                             "(`program.predict.serve.main`), which passes the plan")
         sealer = SP.sealer_of(opts)                      # its process spawned before the pool grows
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
@@ -838,7 +844,8 @@ def main(opts: Options) -> int:
                                 served=served_statics(scheduler_config(trace.sched), served_class(opts)),
                                 no_slice=no_slice(opts), sealer=sealer,
                                 window_bytes=int(opts.window_gb * SS.GB) or None, disk=SG.disk_floor_of(opts), mirror=mirror,
-                                request_cap=opts.window_requests, arm=arm, release=draws)
+                                request_cap=opts.window_requests, arm=arm, release=draws,
+                                plan=None if arm is not None else plan_of(out, opts, trace.drain))
         if arm is not None:
             arm.drawing(draws)
     if draws_dir is not None:

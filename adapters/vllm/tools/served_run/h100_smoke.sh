@@ -176,8 +176,14 @@ K=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" -
   || { say "$said; SMOKE FAILED window: no one sealed window holds the fixed load ($SR/window.err)"; exit 1; }
 # shellcheck disable=SC2086
 (cd adapters/vllm && "$PY" -m verity_vllm.pipeline.cli advice "$D" --window "$K" --cap "$CAP" $CA --weights-of-record "$WREG" \
-  --out "$D/advice/.w$K") > "$SR/advice.log" 2>&1 && mv "$D/advice/.w$K/w$K" "$D/advice/w$K" \
+  --out "$D/advice/.w$K") > "$SR/advice.log" 2>&1 \
   || { say "$said; SMOKE FAILED advice of window $K ($SR/advice.log)"; exit 1; }
+if [ -d "$D/advice/w$K" ]; then  # the serve's close committed it: the advice of record is the one the close compiled
+  cmp -s "$D/advice/.w$K/w$K/private/advice.bin" "$D/advice/w$K/private/advice.bin" \
+    || { say "$said; SMOKE FAILED advice of window $K: not the advice the serve's close committed ($D/advice)"; exit 1; }
+else
+  mv "$D/advice/.w$K/w$K" "$D/advice/w$K"
+fi
 window_commit_of "$K"
 timeout -k 1m "$WC_TIMEOUT" "$PY" "${WC[@]}" > "$SR/window-commit.json" 2> "$SR/window-commit.err" \
   || { say "$said; SMOKE FAILED window-commit of window $K, exit $? ($SR/window-commit.err)"; exit 1; }

@@ -397,12 +397,13 @@ class Scheduled(NamedTuple):
 
 
 def served_lowering(registered: Any, cls: WindowClass, advice: Any, ingress: Any, grain: Grain = _GRAIN,
-                    placed: Sequence[tuple[int, int | None]] | None = None) -> tuple[Any, Lowered]:
+                    placed: Sequence[tuple[int, int | None]] | None = None, named: bool = False) -> tuple[Any, Lowered]:
     """A served window compiled and its circuit lowered, the one call the serve's close and the window commit make: I2's
-    Programs of ``advice`` over the bodies ``ingress`` brought (`steps.compile_steps`), their requests within ``cls``
-    (`takes`), the circuit (`lower`), refused (`Unexpressible`) where Flock's composer wouldn't prove a unit
-    (`check_provable`). -> the compile (its requests' ids and arrivals, which place the slots) and the lowering."""
-    compiled = compile_steps(registered, advice, ingress)
+    Programs of ``advice`` over the bodies ``ingress`` brought (`steps.compile_steps`, with each Program's names under
+    ``named``), their requests within ``cls`` (`takes`), the circuit (`lower`), refused (`Unexpressible`) where Flock's
+    composer wouldn't prove a unit (`check_provable`). -> the compile (its requests' ids and arrivals, which place the
+    slots) and the lowering."""
+    compiled = compile_steps(registered, advice, ingress, named=named)
     low = lower(registered, cls, None, grain, requests=takes(compiled, cls, placed))
     check_provable(low.circuit)
     return compiled, low
