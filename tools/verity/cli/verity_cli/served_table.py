@@ -459,23 +459,6 @@ def _serve(cfg, params, bound, pinned):
             "WINDOW_STEPS": str(w["window-steps"]), "LOAD": w["load"], "V3C_LAW": cfg["service"]["law"]}
 
 
-#: served_verdicts.sh's variable for each optional binding of SPOT's live challenger
-_PP = {"gate": "PP_CHALLENGER", "peer": "PP_PEER", "key": "PP_CHALLENGER_KEY", "gate-key": "PP_GATE_KEY",
-       "main-file": "MAIN_FILE"}
-
-
-def _spot_challenger(cfg, params, bound, pinned):
-    """The window's values committed under hiding leaves and sealed, its registration before the sample, and the sampled
-    proof blocks proved in Flock --zk; the sample on the live challenger when its gate is bound, else on the challenger
-    party's loopback host's coins where ``loopback`` is bound, else on a local development session's, simulated either
-    way, which served_verdicts.sh takes under VERITY_HOLD_PLACEMENT=1 only in a development run."""
-    hooks = {v: f"gate:{bound[k]}" if k == "gate" else bound[k] for k, v in _PP.items() if k in bound}
-    if "gate" in bound:
-        return hooks
-    hooks |= {"PP_CHALLENGER": f"loopback:{bound['loopback']}"} if "loopback" in bound else {}
-    return {**hooks, "DEVELOPMENT": "1"} if machine_settings.hold_placement() else hooks
-
-
 def _pouw(cfg, params, bound, pinned):
     """H1 on the serving engine (--protocols pouw:...), its coins the gate's; served_verdicts.py pouw checks them
     against the gate's session under its key."""
@@ -586,10 +569,6 @@ class Launcher(NamedTuple):
 
     hooks: Hooks
     scripts: tuple[str, ...] = ()
-
-
-def spot_entry(declaration: Any) -> Launcher:
-    return Launcher(_spot_challenger)
 
 
 def pouw_entry(declaration: Any) -> Launcher:

@@ -65,23 +65,12 @@ def test_a_declared_schemes_parameters_are_its_settings_refused_by_name(given: d
     assert (e.value.name, e.value.detail) == (name, detail)
 
 
-#: the declared pieces whose launch declares no entry or no executables yet (`Launch.entry`, `Launch.executables`),
-#: each refused by name when launched, by who owes the declaration; only shrinks
-NO_ENTRY = {("sampled-proofs", T.WORKERS): ("entry", "proofs")}
-
-
-def test_every_declared_piece_names_its_entry_and_executables_and_one_lacking_either_is_refused_by_name() -> None:
+def test_every_declared_piece_names_its_entry_and_executables() -> None:
     said = {(n, p): x for n in T.MANIFESTS for p, x in T.launches(n).items()}
-    lacking = {k: next(f for f in ("entry", "executables") if isinstance(getattr(x, f), T.Lacks))
-               for k, x in said.items() if isinstance(x.entry, T.Lacks) or isinstance(x.executables, T.Lacks)}
-    assert lacking == {k: f for k, (f, _) in NO_ENTRY.items()}, "NO_ENTRY only shrinks: delete what is declared now"
+    lacking = [k for k, x in said.items() if isinstance(x.entry, T.Lacks) or isinstance(x.executables, T.Lacks)]
+    assert not lacking, "each declared piece declares its entry and executables (`Launch.entry`, `Launch.executables`)"
     for (n, p), x in said.items():
         piece = T.PIECES[n][p]
-        if (n, p) in NO_ENTRY:
-            with pytest.raises(Refused) as e:
-                piece.hooks({}, {}, {}, [])
-            assert e.value.name == f"no-{lacking[n, p]}" and e.value.detail.startswith(f"{n} declares a piece for {p} whose")
-            continue
         module, attribute = x.entry.split(":")
         made = getattr(T if module == "served_table" else importlib.import_module(module), attribute)(
             T.UNDECLARED[n][0] if n in T.UNDECLARED else schemes.get(n))

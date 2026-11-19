@@ -295,13 +295,17 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     assert "DEVELOPMENT" not in hooks
 
 
-def test_with_no_gate_bound_spots_coins_are_simulated_and_only_the_placement_hold_makes_the_run_a_development_run(
-        monkeypatch):
-    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
-    assert T._spot_challenger({}, {}, {"peer": "peer-1"}, []) == {"PP_PEER": "peer-1"}
-    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
-    assert T._spot_challenger({}, {}, {"peer": "peer-1"}, []) == {"PP_PEER": "peer-1", "DEVELOPMENT": "1"}
-    assert T._spot_challenger({}, {}, {"gate": "u@g"}, []) == {"PP_CHALLENGER": "gate:u@g"}
+def test_with_no_gate_bound_spots_coins_are_simulated_and_the_hooks_mark_them_for_the_placement_hold(monkeypatch):
+    """Whether the hold makes the run a development run is served_verdicts.sh's (placement.sh's
+    ``development_under_hold``); the hooks are the same held or not."""
+    hooks = T.PIECES["sampled-proofs"][T.WORKERS].hooks
+    for hold in (None, "1"):
+        if hold is None:
+            monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+        else:
+            monkeypatch.setenv("VERITY_HOLD_PLACEMENT", hold)
+        assert hooks({}, {}, {"peer": "peer-1"}, []) == {"PP_PEER": "peer-1", "PP_DEVELOPMENT_UNDER_HOLD": "1"}
+        assert hooks({}, {}, {"gate": "u@g"}, []) == {"PP_CHALLENGER": "gate:u@g"}
 
 
 def test_a_dry_run_prints_each_runtime_party_with_its_protocol_role_machine_clock_and_channels(tmp_path, capsys,
@@ -367,10 +371,11 @@ def test_a_dry_run_on_a_machine_resolves_its_parties(capsys):
 def test_the_runners_variables_and_the_bindings_keys_are_these():
     cfg = R.load(CONFIG, REG)
     deployed = {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": json.dumps(cfg["pin"], sort_keys=True)}
-    assert T.variables(cfg, BINDINGS) == VARIABLES | deployed
+    spot = {"PP_DEVELOPMENT_UNDER_HOLD": "1"}
+    assert T.variables(cfg, BINDINGS) == VARIABLES | deployed | spot
     assert T.unbound(cfg, {}) == KEYS and T.unbound(cfg, BINDINGS) == [] and sorted(set(KEYS) - WRITTEN) == UNBOUND
     unbound = T.variables(cfg, {})
-    assert set(unbound) == set(VARIABLES) - {"WIPE_ADDRESS", "H1_KEY_SHA512"} | set(deployed) | {"DEVELOPMENT"}
+    assert set(unbound) == set(VARIABLES) - {"WIPE_ADDRESS", "H1_KEY_SHA512"} | set(deployed) | {"DEVELOPMENT"} | set(spot)
     assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-attester.network-attester.gate>' "
                                                "--peer '<network-attester.network-attester.peer>' --tokens 2")
     assert unbound["CERTIFIER_CMD"] == VARIABLES["CERTIFIER_CMD"]
