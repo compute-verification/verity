@@ -13,9 +13,7 @@ No engine, no torch: the gates are pure functions of the record."""
 from __future__ import annotations
 
 from verity_vllm.check.c2_rules import _complete_replay_population_gap
-from verity_vllm.pipeline.tp.c2 import TP_FORM_B_SCOPE, c2_and_pin_gates
 from verity_vllm.program.frontend.collective_kinds import cross_rank_families
-from verity_vllm.records import replay_codes as RC
 
 XF8 = cross_rank_families(8)
 #: a DeepSeek-V4-Pro TP8 Commit's rank-0 unreplayable families with no evaluator and no `evaluated_by` (rows over 8 ranks), a selection
@@ -43,12 +41,6 @@ def _sr(unreplayable: dict[str, int], why: str = "no registered evaluator") -> d
             "unreplayable": [{"family": f, "n": n, "why": why, "ranks": list(range(8))} for f, n in unreplayable.items()]}
 
 
-def _gates(sr: dict, xrank=XF8, **cblock) -> tuple[bool | None, str | None, dict]:
-    cb = {"match_oracle": dict(ORACLE)} | cblock
-    f = {"sampled_replay": {"sampled_replay": sr, "boundary_linkage": {"result": True, "linked": 32, "pairs": 32}},
-         "weights_pin": {"result": True, "compared": 2139}}
-    ok, why = c2_and_pin_gates(cb, f, True, None, rank=0, replay_on=True, required=True, bundle="bundle_pair0_rank0", xrank_families=xrank)
-    return ok, why, cb
 
 
 def test_the_dense_verdict_fails_a_no_evaluator_family_without_a_complete_form_b():
@@ -60,52 +52,13 @@ def test_the_dense_verdict_fails_a_no_evaluator_family_without_a_complete_form_b
     assert fail.startswith("C2 of record not established: ") and "MoeRouterSqrtSoftplus_v1" in fail
 
 
-def test_the_tp_verdict_fails_no_evaluator_families_the_oracle_exempts():
-    ok, why, cb = _gates(_sr(NO_EVALUATOR))
-    assert ok is False, why
-    assert why is not None and "MoeRouterSqrtSoftplus_v1" in why
-    assert why.startswith("no-evaluator families (rank 0): C2 of record not established: ") and TP_FORM_B_SCOPE in why
-    assert cb["no_evaluator_gap"]["fail"] and cb["no_evaluator_gap"]["waived_cross_rank"] == []
 
 
-def test_the_cross_rank_collectives_are_waived_while_that_pass_runs_and_only_then():
-    ok, why, cb = _gates(_sr(COLLECTIVES))
-    assert (ok, why) == (True, None) and cb["no_evaluator_gap"]["waived_cross_rank"] == sorted(COLLECTIVES)
-    ok, why, cb = _gates(_sr(COLLECTIVES), xrank=None)
-    assert ok is False and why is not None and all(f in why for f in COLLECTIVES) and cb["no_evaluator_gap"]["cross_rank_pass"] is False
-    ok, why, _ = _gates(_sr(COLLECTIVES | {"MoeRouterHash_v1": 6888}))
-    assert ok is False and why is not None and "MoeRouterHash_v1" in why and "AllReduce_v2" not in why
 
 
-def test_the_rule_reads_the_population_codes_the_replay_stamps():
-    """A rank's own record carries `population.not_evaluable` and its codes: the rule decides from those, as the dense verdict does."""
-    sr = _sr({})
-    reasons = {f"no registered evaluator for {f}": n for f, n in (COLLECTIVES | {"SiluMulClamp_v1": 980392}).items()}
-    sr["population"] |= {"not_evaluable": reasons, "not_evaluable_codes": {k: RC.reason_code("no-evaluator", k.rsplit(" ", 1)[1]) for k in reasons}}
-    ok, why, cb = _gates(sr)
-    assert ok is False and why is not None and "980392 x no registered evaluator for SiluMulClamp_v1" in why and "AllGather_v1" not in why
-    assert cb["no_evaluator_gap"]["waived_cross_rank"] == sorted(COLLECTIVES)
 
 
-def test_a_plane_fed_producer_fails_by_name_and_a_family_without_identity_is_no_gap():
-    plane = {"MoeRouterTopK_v1 (moe_block_stream plane producer: no evaluator)": 512}
-    ok, why, _ = _gates(_sr(plane))
-    assert ok is False and why is not None and "plane-fed VUs" in why and "MoeRouterTopK_v1" in why
-    inert = {"Const32_v1 (structure / interior: no identity)": 9, "Gemm_v1 (interior: composed into its epilogue's VU / a hinted row of the module is its returned tensor)": 4}
-    assert _gates(_sr(inert))[:2] == (True, None)
 
 
-def test_the_replay_versions_stated_domain_is_not_gated():
-    ok, why, _ = _gates(_sr({"AttentionHead_v1": 64}, why=RC.NOT_YET["AttentionHead_v1"]))
-    assert (ok, why) == (True, None)
 
 
-def test_a_selector_passes_only_when_the_match_record_confirms_every_sampled_id():
-    sel = {"GumbelTopPTokenSelect_v1": 32}
-    ok, why, _ = _gates(_sr(sel))
-    assert ok is False and why is not None and "selector output VUs" in why and "request attribution not complete" in why
-    att = {"ok": True, "steps_checked": 32, "rows_checked": 32, "mismatches_n": 0}
-    ok, why, cb = _gates(_sr(sel), attribution=att)
-    assert (ok, why) == (True, None) and "value-checked by form (B)" in cb["no_evaluator_gap"]["note"]
-    ok, why, _ = _gates(_sr(sel), attribution=att | {"ok": False, "mismatches_n": 1})
-    assert ok is False and why is not None and "GumbelTopPTokenSelect_v1" in why

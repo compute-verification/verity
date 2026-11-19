@@ -13,9 +13,9 @@ from pathlib import Path
 import pytest
 
 #: the modules of the processes that sample a replay's population with no export hook, so nothing would take what the driver
-#: kept: the commands that replay a sealed bundle on CPU (`commit-replay`, `tp-commit-replay`), a slim bundle's planner
+#: kept: the commands that replay a sealed bundle on CPU (`commit-replay`), a slim bundle's planner
 #: (`replay-plan`)
-NO_HOOK = ("verity_vllm.pipeline.cpu_replay", "verity_vllm.pipeline.tp.commit_replay", "verity_vllm.pipeline.replay_plan")
+NO_HOOK = ("verity_vllm.pipeline.cpu_replay", "verity_vllm.pipeline.replay_plan")
 
 #: argv[1] is imported; what the process holds then, and again once `c2_replay.vu_export` has made a hook as the Commit makes it
 CHILD = ("import importlib, json, sys\n"

@@ -16,7 +16,6 @@ from verity.circuits.codec import canonical_json
 from verity.circuits.program import RUN, input_id, is_input, is_registered
 
 from tests.program.predict.test_predict import GLM53, TINY, _phi, _row_phi
-from verity_vllm.pipeline import registration_log as RL
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.node import build_node_program
 from verity_vllm.program.predict.phi import Phi
@@ -87,22 +86,6 @@ def test_tp2_node_is_its_ranks_joined_at_their_collectives(wrapper, shape):
     assert sum(n.gates for n in node.node_fn.body.nodes) == sum(n.gates for rp in ranks for n in rp.program.fn.body.nodes)
 
 
-@pytest.mark.parametrize("wrapper,shape", [("step", {"M": 1, "pos0": 8}), ("request", {"LP": 4, "T": 2})])
-def test_the_root_is_the_input_nodes_and_one_call_of_the_body(wrapper, shape):
-    """`InferenceOnlyCheck.Desc` keeps a root node's reads as pieces of gates, so the body is one Definition the root calls once: the root
-    is the parameters' input nodes, in order, then that Call, and the descriptor holds the body's nodes in its callee."""
-    node = build_node_program(_phi(TINY, tp={"world": 2, "rank": 0}), wrapper, **shape)
-    lowered = sum(len(RL.lower(t)) for _, t in node.program.fn.signature()[0])
-    root = node.program.root.body.nodes
-    assert len(root) == lowered + 1 and all(is_input(n.fn) for n in root[:-1])
-    assert root[-1].form == "call" and root[-1].fn is node.node_fn
-    s = node.summary()
-    assert (s["n_root_nodes"], s["body_nodes"], s["node_fn"]) == (lowered + 1, len(node.node_fn.body.nodes), node.node_fn.id)
-    d = node.desc
-    nodes = d["definitions"][d["root"]]["body"]["nodes"]
-    assert len(nodes) == lowered + 1 and nodes[-1]["form"] == "call"
-    callee = d["definitions"][d["callees"][nodes[-1]["fn"]]]
-    assert len(callee["body"]["nodes"]) == len(node.node_fn.body.nodes) == sum(hi - lo for _r, lo, hi in node.spans)
 
 
 @pytest.mark.slow

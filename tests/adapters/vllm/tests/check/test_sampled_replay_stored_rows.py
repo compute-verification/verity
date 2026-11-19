@@ -21,10 +21,8 @@ from tests.check.test_sampled_replay import (  # noqa: F401  -- fixtures
 from verity_vllm.check.replay import driver as SR
 from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import population as POP
-from verity_vllm.pipeline.tp import rank_replay as RR
 from verity_vllm.program.compact import file_items_from_runs
 from verity_vllm.query.manifest import format as RM
-from verity_vllm.query.required import Q_WORD_ID
 
 WORLDS = ("world", "biased_world", "rope_world", "attn_world", "moe_world")
 
@@ -87,39 +85,3 @@ def test_a_stored_moe_program_that_is_not_pair_major_is_named_alike(moe_world):
     assert any("not pair-major" in k for k in pops[0][1])
 
 
-def test_rank_evaluate_on_its_loaded_index_decides_what_the_replays_own_index_decides(tmp_path, monkeypatch, attn_world):
-    w = attn_world
-    d = _write(tmp_path, w.inst)
-    inst = RM.load_program(d, expand=False)["instances"]
-    loaded = {rid: {"instances": inst, "result": {}, "dir": d} for rid in w.prompts}
-    progs = {rid: inst for rid in w.prompts}
-    p = RR.Loaded(0, 1, [{"request_id": rid, "max_tokens": 1 + T.T} for rid in w.prompts], loaded, progs, {rid: "t" * 64 for rid in progs},
-                  {rid: d for rid in progs}, {rid: 0 for rid in progs}, [], IX.ProgramIndex(inst, tp={"rank": 0, "world": 1}, program_dir=d))
-    assert RR.index_memo(p, None) == {("index", id(inst)): p.index}
-    assert RR.index_memo(p, {"query": {"query_id": Q_WORD_ID}}) == {}
-    assert RR.index_memo(p, {"query": {"norm_scales": {}}}) == {}
-    assert RR.index_query(None) == {"query": None, "norm_scales": False}
-    assert RR.index_query({"query": {"query_id": Q_WORD_ID}}) == {"query": Q_WORD_ID, "norm_scales": False}
-    assert RR.index_query({"query": {"norm_scales": {}}}) == {"query": None, "norm_scales": True}
-    bmap, reader = w.bmap_and_reader()
-
-    class Committed:
-        def __call__(self, *a):
-            return reader(*a)
-
-        def record(self):
-            return {}
-
-    def run(**kw):
-        return RR.evaluate(p, {"seed": 5, "per_stratum": 4, "workers": 0}, bmap=bmap, committed=Committed(), weights_of=lambda _prefix: T._weights(w),
-                           weights_check={}, run_root=b"\0" * 32, manifest_doc=None, **kw)
-
-    seeded = run()
-    monkeypatch.setattr(RR, "index_memo", lambda p, man: {})
-    own = run()
-    assert seeded[0]["result"] is True and seeded[0]["sample"]["evaluated"] > 0
-    assert _strip(seeded[0]) == _strip(own[0]) and seeded[1] == own[1]
-    filled = {("index", id(inst)): IX.ProgramIndex(inst, tp={"rank": 0, "world": 1}, program_dir=d, **RR.index_query(None))}
-    monkeypatch.setattr(SR, "ProgramIndex", lambda *a, **k: pytest.fail("an index the memo holds is built again"))
-    shared = run(memo=filled)
-    assert _strip(shared[0]) == _strip(own[0]) and shared[1] == own[1]

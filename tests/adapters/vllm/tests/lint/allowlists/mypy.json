@@ -178,7 +178,6 @@
     {"file": "verity_vllm/pipeline/serving_rows.py", "kind": "var-annotated", "symbol": "read_all", "detail": ""},
     {"file": "verity_vllm/pipeline/serving_templates.py", "kind": "arg-type", "symbol": "coordinate", "detail": ""},
     {"file": "verity_vllm/pipeline/serving_templates.py", "kind": "arg-type", "symbol": "unit_templates", "detail": ""},
-    {"file": "verity_vllm/pipeline/tp/serving_rows.py", "kind": "arg-type", "symbol": "from_bundle", "detail": "", "count": 2},
     {"file": "verity_vllm/pipeline/weight_rows.py", "kind": "var-annotated", "symbol": "by_reference", "detail": ""},
     {"file": "verity_vllm/pipeline/window_advice.py", "kind": "arg-type", "symbol": "_replay", "detail": ""},
     {"file": "verity_vllm/pipeline/window_advice.py", "kind": "type-var", "symbol": "bits_by_window", "detail": ""},

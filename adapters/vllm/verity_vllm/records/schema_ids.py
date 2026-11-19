@@ -141,16 +141,16 @@ RANK_COMMIT_BINDING_SCHEMA = "verity/tp2/commit-binding/v1"
 PROGRAM_COMPARE_SCHEMA = "cb-a/compare/v1"
 
 # --- the sampled replay (`verity_vllm.check.replay`)
-#: the sampled replay's record (`check.replay.driver.SCHEMA`), which `check.replay.driver` writes; `pipeline.c2_replay`,
-#: `pipeline.replay_bundle` and `pipeline.tp.rank_replay` write it for a replay that did not run
+#: the sampled replay's record (`check.replay.driver.SCHEMA`), which `check.replay.driver` writes; `pipeline.c2_replay`
+#: and `pipeline.replay_bundle` write it for a replay that did not run
 SAMPLED_REPLAY_SCHEMA = "verity-sweep/sampled-replay/v1"
 #: the MoE planes' alias check, which `check.replay.population.moe_plane_alias_check` writes
 MOE_PLANE_ALIAS_CHECK_SCHEMA = "verity-sweep/moe-plane-alias-check/v1"
 #: the PoUW circuit's replay, which the deleted ncp-v2 replay (`protocols.pouw.pouw_circuit.replay`) wrote; kept for the
 #: records on disk that carry it
 POUW_CIRCUIT_REPLAY_SCHEMA = "verity-vllm/pouw-ncp-v2-replay/v3"
-#: the boundary linkage's record (`check.replay.linkage.LINKAGE_SCHEMA`); `pipeline.c2_replay`, `pipeline.replay_bundle`
-#: and `pipeline.tp.rank_replay` write it for a linkage that did not run
+#: the boundary linkage's record (`check.replay.linkage.LINKAGE_SCHEMA`); `pipeline.c2_replay` and
+#: `pipeline.replay_bundle` write it for a linkage that did not run
 BOUNDARY_LINKAGE_SCHEMA = "verity-sweep/boundary-linkage/v1"
 #: the stochastic recompute's report, which `check.replay.stoch_recompute.recompute_run` writes
 STOCH_RECOMPUTE_SCHEMA = "verity-r15/stoch-recompute/v2"
@@ -179,46 +179,12 @@ WEIGHTS_OF_RECORD_PRIOR_SCHEMA = "verity/commit/weights-of-record/v1"
 #: the records under `engine/profiles/quarantine/` hold it, and no code of the tree writes one
 QUARANTINE_ADMISSION_SCHEMA = "verity-gen/quarantine/v1"
 
-# --- the TP row (`verity_vllm.pipeline.tp`)
-#: the TP Commit's record of the replays it left for `tp-commit-replay` (`pipeline.tp.c2.SCHEMA`), which `seal` writes
-TP_REPLAY_DEFERRED_SCHEMA = "verity-vllm/tp-replay-deferred/v1"
-#: one rank's replay result (`pipeline.tp.commit_replay.RESULT_SCHEMA`), which `replay_rank` writes
-TP_RANK_REPLAY_SCHEMA = "verity-vllm/tp-rank-replay/v1"
-#: the ranks' fold match (`pipeline.tp.fold_match.SCHEMA`), which its `main` writes
-TP_FOLD_MATCH_SCHEMA = "verity/tp2/fold-match/v1"
-#: the TP Commit's sampled replay (`pipeline.tp.rank_replay.SCHEMA`), which `in_process` and `defer` write, and
-#: `pipeline.tp.commit`'s `main`
-TP_SAMPLED_REPLAY_SCHEMA = "verity-sweep/tp-sampled-replay/v1"
-#: a TP Commit's serving rows, `tp.json` (`pipeline.tp.serving_rows.SCHEMA`), which `gather` writes
-TP_SERVING_ROWS_SCHEMA = "verity-vllm/tp-serving-rows/v1"
-#: the Build's relabel report (`pipeline.tp.emit_ranks.SCHEMA`), which `finish` and `read_report` write
-BUILD_RELABEL_SCHEMA = "verity-vllm/build-relabel/v1"
-#: the relabel's guard record (`pipeline.tp.relabel_build.SCHEMA`), which `derive` writes
-BUILD_RELABEL_GUARD_SCHEMA = "verity-vllm/build-relabel-guard/v1"
-#: a rank's links, which `pipeline.tp.links.write_tp_links` writes
-TP_LINKS_SCHEMA = "cb-a/tp_links/v2"
-#: a rank's cross-rank picks, which `pipeline.tp.xrank_dump.dump` writes
-XRANK_PICKS_SCHEMA = "verity/tp2/xrank-picks/v1"
-#: which `pipeline.tp.import_path.write_import_path_runtime` writes
-IMPORT_PATH_RUNTIME_SCHEMA = "verity/tp2/import-path-runtime/v1"
-#: which `pipeline.tp.rank_worker`'s `tp2_param_hashes` writes
-TP_PARAM_HASHES_SCHEMA = "verity-capture/tp2-param-hashes/v0"
-#: which `pipeline.tp.rank_worker`'s `tp2_profiler_stop` writes
-CENSUS_RANK_SCHEMA = "verity-capture/census-rank/v0"
-#: the late-read check on a fused-MoE block's received output, which `acquire.sources.partial_source.late_read_check`
-#: writes for one rank, and `pipeline.tp.rank_worker` and `pipeline.tp.commit` for the ranks
+# --- the partial source (`verity_vllm.acquire.sources.partial_source`)
+#: the late-read check on a fused-MoE block's received output, which `partial_source.late_read_check` writes for one rank
 LATE_READ_CHECK_SCHEMA = "verity/commit-integ/t6_4-check/v1"
-#: the TP Commit's value check, `value_check.json`, which `pipeline.tp.commit`'s `main` writes
-TP_VALUE_CHECK_SCHEMA = "verity/commit-integ/value-check-tp/v1"
-#: one pair's cross-rank check of the ranks' collectives, `xrank_pair<N>.json`, which `pipeline.tp.commit`'s `main` writes
-XRANK_COLLECTIVES_SCHEMA = "verity/tp2/xrank-collectives/v1"
-#: the pairs' cross-rank checks folded, `xrank_collectives.json`, which `pipeline.tp.commit`'s `main` writes
-XRANK_COLLECTIVES_FOLD_SCHEMA = "verity/tp2/xrank-collectives-fold/v1"
-#: the ranks' weights pins folded, `weights_pin.json`, which `pipeline.tp.commit`'s `main` writes
-TP_WEIGHTS_PIN_SCHEMA = "verity-sweep/tp-weights-pin/v1"
 
 # --- the engine (`verity_vllm.engine`)
-#: the engine's profile manifest, which `engine.engine_profile.build_manifest` writes and `pipeline.tp.rank_worker` reads
+#: the engine's profile manifest, which `engine.engine_profile.build_manifest` writes
 ENGINE_PROFILE_SCHEMA = "verity-vllm/profile/v1"
 #: the manifest `engine.run_facts.profile_manifest` writes in place of the engine's profile when building that one raises
 PROFILE_FALLBACK_SCHEMA = "verity-capture/profile-fallback/v1"

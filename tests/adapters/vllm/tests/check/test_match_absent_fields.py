@@ -19,7 +19,6 @@ from verity_vllm.check.match import program_loaders as PL
 from verity_vllm.check.match import record as REC
 from verity_vllm.check.match import sampler_geometry as SG
 from verity_vllm.check.match import supplied_inputs as SI
-from verity_vllm.check.match import xrank_collectives as XR
 
 # --- the Build's artifact and the declaration ------------------------------------------------------------------------------------
 
@@ -235,25 +234,5 @@ def test_num_sms_is_read_from_the_declarations_components_where_its_geometry_blo
 # --- the cross-rank pass -------------------------------------------------------------------------------------------------------------
 
 
-def test_pairs_that_state_no_families_and_no_coverage_fold_to_none_and_to_not_complete():
-    assert XR.fold_pairs([])["coverage_of_unreplayable"] == {"complete": None, "per_pair": []}
-    pairs = [{"result": True, "picks": 2, "equal": 2, "by_family": {"all_reduce": {"picks": 2, "equal": 2}},
-              "coverage_of_unreplayable": {"complete": True}},
-             {"result": True, "picks": 1, "equal": 1}]
-    out = XR.fold_pairs(pairs)
-    assert out["by_family"] == {"all_reduce": {"picks": 2, "equal": 2, "mismatch": 0, "missing": 0}} and out["picks"] == 3
-    assert out["coverage_of_unreplayable"] == {"complete": False, "per_pair": [{"complete": True}, {}]}
-    assert XR.fold_pairs(pairs[:1])["coverage_of_unreplayable"] == {"complete": True, "per_pair": [{"complete": True}]}
 
 
-def test_a_pass_that_drew_no_stratum_covers_no_site_of_a_family_its_programs_name():
-    dumps = [{"rank": 0, "unreplayable_sites": {"all_reduce": ["model.layers.0.mlp"]}}]
-    out = XR.coverage_of_unreplayable({}, dumps)
-    assert out["complete"] is False and out["strata_sites_n"] == 0
-    assert out["families"] == {"all_reduce": {"sites": 1, "covered": 0, "missing": ["model.layers.0.mlp"], "picks": None, "equal": None}}
-    sampled = {"by_stratum": {"model.layers.0.mlp|0": {"families": ["all_reduce"]}}, "by_family": {"all_reduce": {"picks": 4, "equal": 4}}}
-    out = XR.coverage_of_unreplayable(sampled, dumps)
-    assert out["complete"] is True
-    assert out["families"] == {"all_reduce": {"sites": 1, "covered": 1, "missing": [], "picks": 4, "equal": 4}}
-    out = XR.coverage_of_unreplayable({"by_stratum": sampled["by_stratum"], "by_family": {"all_gather": {"picks": 1}}}, dumps)
-    assert (out["families"]["all_reduce"]["picks"], out["families"]["all_reduce"]["equal"]) == (None, None)

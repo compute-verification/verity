@@ -78,7 +78,7 @@ ARGS = ("program_dir", "programs_root", "program_digest", "required_manifest", "
 
 
 def path(out: str | os.PathLike, pair: int, *, rank: int | None = None) -> Path:
-    """The bundle of instrumented run ``pair``; a TP Commit's has one per rank (`pipeline.tp.commit_replay`)."""
+    """The bundle of instrumented run ``pair``."""
     return Path(out) / (f"replay_bundle_p{pair}" + (f"_rank{rank}" if rank is not None else ""))
 
 

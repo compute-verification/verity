@@ -286,8 +286,6 @@ PUBLIC = {
                                           "(MANIFEST, open_bundle), which benchmarks/one_stage opens",
     "verity_vllm.pipeline.research_outputs": "I1: the names a run's public outputs never hold (PRIVATE), which "
                                              "benchmarks/serve_tax states and refuses a public write by",
-    "verity_vllm.pipeline.tp.rank_replay": "I1: the C2 of record on one rank of a TP Commit, and a rank's manifest (load, "
-                                           "manifest_of_rank), which benchmarks/one_stage reads",
     "verity_vllm.program.model": "I7: what a model configuration is, and the roots that are functions of it (config_of, "
                                  "cos_sin_table, INT8_EXACT_QUANT), which benchmarks/prove_path and benchmarks/inference_only "
                                  "build under",
@@ -397,7 +395,6 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.advice",
     "verity_vllm.pipeline.advice_windows",
     "verity_vllm.pipeline.build_instances",
-    "verity_vllm.pipeline.c2_replay",
     "verity_vllm.pipeline.chunk_rows",
     "verity_vllm.pipeline.cpu_replay",
     "verity_vllm.pipeline.deferred_rows",
@@ -405,8 +402,6 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.serve_protocol",
     "verity_vllm.pipeline.serving_rows",
     "verity_vllm.pipeline.slice_rows",
-    "verity_vllm.pipeline.tp.commit_replay",
-    "verity_vllm.pipeline.tp.serving_rows",
     "verity_vllm.pipeline.window_advice",
     "verity_vllm.program.compact",
     "verity_vllm.program.frontend.derive_examples",
@@ -436,7 +431,6 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.pipeline.serving_rows', '_bind'),
     ('verity_vllm.pipeline.serving_rows', '_operand'),
     ('verity_vllm.pipeline.serving_rows', '_read_s8'),
-    ('verity_vllm.pipeline.tp.commit_replay', '_of_record'),
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
 })
 

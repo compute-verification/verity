@@ -81,10 +81,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "target-family": ("verity_vllm.target_family", "target-family preflight"),
     "timeline": ("verity_vllm.pipeline.timeline", "stage telemetry (report)"),
     "topp-split-probe": ("verity_vllm.pipeline.topp_split_probe", "top-p split fixture"),
-    "tp-commit-replay": ("verity_vllm.pipeline.tp.commit_replay", "a deferred tensor-parallel Commit's C2 replay on CPU, from its ranks' sealed bundles"),
     "tp-register-tables": ("verity_vllm.pipeline.expert_tables", "a TP rank's registration of the per-expert cut's tables, from the checkpoint"),
-    "tp-serving-rows": ("verity_vllm.pipeline.tp.serving_rows", "a deferred tensor-parallel Commit's stand-in windows, from its ranks' sealed bundles"),
-    "advice-windows": ("verity_vllm.pipeline.advice_windows", "a deferred tensor-parallel Commit's stand-in windows over a compiler's Programs for the advice"),
     "verdict": ("verity_vllm.pipeline.verdict_record", "a row's Commit verdict record, rebuilt from its evidence"),
     "weights-of-record": ("verity_vllm.check.weights_of_record", "the weights of record"),
     "weights-tie": ("verity_vllm.program.predict.weights_tie", "the weights registration's checkpoint tie: its window (commit), the verifier's (verify), the pins (pins)"),
@@ -98,7 +95,10 @@ DELETED: dict[str, str] = {
     "commit": "the Commit is deleted; `serve-openai --seal` commits what it serves",
     "manifest": "the row manifest is deleted; the serve commits the window's circuit",
     "neutrality": "the traced Build it compared a predicted one against is deleted",
+    "tp-serving-rows": "the tensor-parallel Commit's stand-in windows are deleted with it; the serve commits the window's circuit",
+    "advice-windows": "the tensor-parallel Commit's advice windows are deleted with it; `advice_windows` commits the advice alone",
 }
+
 
 def usage() -> str:
     w = max(map(len, COMMANDS))

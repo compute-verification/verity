@@ -4,8 +4,7 @@ and its served C2 replay challenge after each run's root of record.
 * **Serving** (the Commit's ``--challenger-gate CMD`` and ``--challenger-peer NAME``; `of_options`): before its engine,
   the Commit reserves a challenge phase on the auditor's challenger gate (`ChallengerGate`: ``reserve --peer NAME --scheme SCHEME --families
   families(runs)``, `verity/protocols/compose/verifier/live_challenger/auditor.py` on the auditor device, under the caller's own gate key). Once its
-  first instrumented run's root of record is fixed (rows-sha512's 64-byte root, `commit.step_rows`; a TP Commit's run
-  root v2, `tp.run_root`), it opens that challenge phase on it (``open --session S --root R``): the gate signs the open entry
+  first instrumented run's root of record is fixed (rows-sha512's 64-byte root, `commit.step_rows`), it opens that challenge phase on it (``open --session S --root R``): the gate signs the open entry
   binding the challenge phase to the root before the challenger serves a coin, and refuses a second challenge phase for the root, ever.
   The Commit then reaches the challenger on its own 127.0.0.1 (this machine's certifier coin link), refuses one whose coin
   commitment isn't the gate's answer before its first coin (`pouw_h1_window.connect`), and for run i opens coin i of

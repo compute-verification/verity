@@ -151,13 +151,6 @@ tests = [
 paths = ["adapters/vllm/verity_vllm/check"]
 
 [[tool.verity.tests.reads]]
-tests = [
-    "check/test_capture_map.py",
-    "pipeline/test_tp_gpu_lease.py",
-]
-paths = ["adapters/vllm/verity_vllm/pipeline/tp"]
-
-[[tool.verity.tests.reads]]
 tests = ["check/test_challenge_seeds.py"]
 paths = ["adapters/vllm/verity_vllm", "verity/circuits"]
 
@@ -232,10 +225,9 @@ paths = ["tools/research/src/research"]
 
 [[tool.verity.tests.reads]]
 tests = [
-    "pipeline/test_tp_run_root.py",
     "pipeline/test_tp_world_n.py",
 ]
-paths = ["adapters/vllm/verity_vllm/acquire", "adapters/vllm/verity_vllm/pipeline/tp"]
+paths = ["adapters/vllm/verity_vllm/acquire"]
 
 [[tool.verity.tests.reads]]
 tests = ["pipeline/test_row.py"]

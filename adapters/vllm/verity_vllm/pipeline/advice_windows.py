@@ -1,8 +1,7 @@
-"""Advice-driven serving-rows windows, for network attestation under arbitrary vLLM usage: a TP rank's window over the Programs a
-registered compiler makes from the advice (everything serving made unpredictable, network-accounting's I1), with the registration
-binding both.
+"""The advice a registered compiler reads (everything serving made unpredictable, network-accounting's I1), committed under
+hiding rows, and the binding a window's registration carries of it.
 
-The binding is two keys of the registration's window provenance (`binding`, `tp.serving_rows.BINDING`), beside the served Programs:
+The binding is two keys of the registration's window provenance (`binding`), beside the served Programs:
 
     compiler   {"name", "digest"}   the registered compiler: model and code fixed before the run
     advice     {"root", "bits"}     the advice it read, private: the root of its hiding commitment, and its length in bits
@@ -13,58 +12,28 @@ is not published: its canonical encoding is committed as hiding rows (`commit_ad
 zero-padded, under `verity.commitments.advice`, hm96-sha512 leaves in one frame-v3-sha512 tree, its domain bound to the
 compiler), and only the root and the length are public.  The rows and their salts are the prover's (`opening`).
 
-* **The prover** commits the window from a rank's sealed bundle over the compiler's Programs for the advice (`commit_window`:
-  `tp.serving_rows.from_bundle` with ``programs`` and ``binding``).  Advice naming a request the Commit didn't serve fails there by
-  name: the committed store holds none of its values.
-* **The verifier** derives its own window from the record, the advice's opening and its own copy of the compiler alone
-  (`of_opening`, `window_of_advice`: `tp.serving_rows.window_of`), holding the root it recomputes from the opening, and
-  `tp.serving_rows.source` holds the registration's window to it, ``compiler`` and ``advice`` among its codes.  It reads no
-  committed value.  The opening shows the verifier the advice: that is the named gap, until the wiring between the compiler's
-  public units is proved in zero knowledge instead.
-
-A compiler is what the window path reads of it: ``name``, ``digest``, ``transfer_gates`` (``()`` if it has none) and
-``load(rank, world, requests)``, the
-rank's `rank_replay.Loaded` for the requests the advice states (`requests_of`), each ``{"request_id", "arrive_step",
-"prompt_len", "max_tokens"}`` with its output length as ``max_tokens``.  `Traced` is today's stand-in: the Build's Programs of
-record, by the manifest's lookup of record.  The ahead-of-time compiler takes its place under its own registered digest.
-
-**Transfer gates**: the units holding transfer gates, the I/O shell's ingress parse and egress render units, are
-proved with selection All, never sampled; every other unit is sampled as before.  The compiler lists them (``transfer_gates``: the
-templates whose units hold them, which its digest covers), and a ``work:K`` window samples by the work table
-`window_sampling_design.work_table_of` derives from that list and the window's own counts: each transfer-gate template works 0 with its
-floor all its units, so its whole stratum is in the sample, beside the rest's strata at the stratified share of K.  Core's work sampling design
-(`draw.work_k`) is the All stratum, with no new verifier form; both sides derive the table, the registration's sampling design is expanded
-under it (R1), and the Stream registers with it.  A partition that leaves a transfer-gate template out, or samples it by another sampling design,
-is refused by name.  Until COMPILER lists the I/O shell's units, the stand-in's list is given (``--transfer-gate``), a template
-Flock proves today: the toy Commit's ``RoPEHead_v1{D=64}`` (its egress render, ``TokenSelect_v1``, has no Flock lowering).
+A compiler is what the binding reads of it: ``name``, ``digest`` and ``transfer_gates`` (``()`` if it has none), the templates
+whose units hold transfer gates (the I/O shell's ingress parse and egress render units), proved with selection All, never sampled,
+which its digest covers.  `Capped` registers one with ℓ, the public cap on the advice's length.
 
 The advice is I1's (``codec``, default `I1`): `of_advice` reads its bytes, which must be its canonical encoding, commits them and
 binds the root and the advice's length, ``total_bits``; `opened` recomputes that binding from an opening without the stand-in's
 requests, for a compiler that compiles the advice itself.  `advice_of_workload` is the stand-in's advice, the prover's, for a
 fixed-length workload; a served run's is ADVICE-SRC's, from the scheduler's step trace.
-
-    verity-vllm advice-windows COMMIT_OUT --advice FILE --opening FILE --partition F --out O --build-root B [--ranks 0,1]
-        [--transfer-gate TEMPLATE ...] [--write-from-workload WORKLOAD [--drop r1 ...]]
 """
 from __future__ import annotations
 
-import dataclasses
 import hashlib
 import importlib
-import json
-import os
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from verity.circuits.codec import canonical_json
 from verity.commitments import advice as AC
 from verity.commitments.periods import interface as IF
-from verity_vllm.config import option, workload_arg
 
-TRACED = "verity-vllm/advice-windows/traced-of-record/v0"
 I1 = "verity_vllm.pipeline.advice_code.format"
 SCHEME = IF.ADVICE_SCHEME
 ROW_BITS = IF.ADVICE_ROW_BITS
@@ -181,7 +150,7 @@ def opening(data: bytes, reg: AC.Committed) -> dict[str, Any]:
 
 def of_opening(compiler: Any, doc: Mapping[str, Any], codec: Any = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """The verifier's side of `opening`: the requests of the advice it opens (`requests_of`) and the binding it recomputes
-    (`opened`), which `tp.serving_rows.source` holds the registration's to.  A malformed opening is a ValueError."""
+    (`opened`), which a window's registration is held to.  A malformed opening is a ValueError."""
     advice, bound = opened(compiler, doc, codec)
     return requests_of(advice), bound
 
@@ -225,40 +194,6 @@ def advice_of_workload(doc: Mapping[str, Any], codec: Any = None, drop: Sequence
                     tuple(s for s, rows in enumerate(steps) for _ in rows))
 
 
-@dataclass(frozen=True)
-class Traced:
-    """The stand-in compiler: each request's Program of record, from ``programs`` (rank -> the rank's Build dir) by the manifest's
-    lookup of record (`rank_replay.load`), refused unless its digest is in ``of_record`` (rank -> digests), and ``transfer_gates``,
-    the templates it lists as holding transfer gates (module docstring).  Its digest names the rule, every rank's Programs of
-    record and that list, so a window over another Build's Programs, or proving other units whole, names another compiler."""
-
-    programs: Mapping[str, str]
-    of_record: Mapping[str, Sequence[str]]
-    name: str = TRACED
-    transfer_gates: tuple[str, ...] = ()
-
-    @classmethod
-    def for_commit(cls, commit_dir: str | os.PathLike, build_root: str | os.PathLike, transfer_gates: Sequence[str] = ()) -> Traced:
-        """The stand-in over a TP Commit's Programs of record (its record's ``of_record``), each rank's under ``build_root/rank<r>``."""
-        from verity_vllm.pipeline.tp import serving_rows as SRT
-
-        rec = SRT.record(commit_dir)
-        return cls({str(r): os.path.join(str(build_root), f"rank{r}") for r in range(int(rec["world"]))}, rec["of_record"],
-                   transfer_gates=tuple(dict.fromkeys(map(str, transfer_gates))))
-
-    @property
-    def digest(self) -> str:
-        return hashlib.sha512(canonical_json({"name": self.name, "of_record": {str(r): sorted(map(str, d)) for r, d in
-                                                                              sorted(self.of_record.items())},
-                                              "transfer_gates": sorted(self.transfer_gates)})).hexdigest()
-
-    def load(self, rank: int, world: int, requests: Sequence[Mapping[str, Any]]) -> Any:
-        from verity_vllm.pipeline.tp import rank_replay as RR
-
-        return RR.load({"programs": {str(rank): self.programs[str(rank)]}, "of_record": {str(k): list(v) for k, v in self.of_record.items()},
-                        "requests": [dict(q) for q in requests]}, int(rank), int(world), definitions=False)
-
-
 CAPPED = "verity/prove-path/capped-compiler/v0"
 #: ℓ when a registration names none, the public cap on the advice's encoding in bits: 1 MiB, far above a session's few hundred
 #: requests (I1 spends tens of bits a row)
@@ -293,7 +228,7 @@ class Capped:
 
 
 def binding(compiler: Any, advice_root: str, advice_bits: int) -> dict[str, Any]:
-    """The window provenance's binding (`tp.serving_rows.BINDING`): the registered compiler's name and digest, and the root of the
+    """The window provenance's binding: the registered compiler's name and digest, and the root of the
     advice's hiding commitment (`commit_advice`) and its length in bits."""
     for what, d in (("compiler's digest", compiler.digest), ("advice's root", advice_root)):
         if not (isinstance(d, str) and _DIGEST.match(d)):
@@ -301,84 +236,3 @@ def binding(compiler: Any, advice_root: str, advice_bits: int) -> dict[str, Any]
     if isinstance(advice_bits, bool) or not isinstance(advice_bits, int) or advice_bits < 0:
         raise ValueError(f"the advice's length is a whole number of bits, not {advice_bits!r}")
     return {"compiler": {"name": str(compiler.name), "digest": compiler.digest}, "advice": {"root": advice_root, "bits": advice_bits}}
-
-
-def _loaded(commit_dir: str | os.PathLike, rank: int, compiler: Any, requests: Sequence[Mapping[str, Any]]) -> tuple[dict[str, Any], Any]:
-    from verity_vllm.pipeline.tp import serving_rows as SRT
-
-    rec, rank = SRT.record(commit_dir), int(rank)
-    if not 0 <= rank < int(rec["world"]):
-        raise ValueError(f"rank {rank} is not a rank of the world of {rec['world']}")
-    return rec, compiler.load(rank, int(rec["world"]), requests)
-
-
-def transfer_gates_of(compiler: Any) -> tuple[str, ...]:
-    """The templates ``compiler`` lists as holding transfer gates, ``()`` for a compiler that lists none."""
-    return tuple(getattr(compiler, "transfer_gates", ()))
-
-
-def window_of_advice(commit_dir: str | os.PathLike, rank: int, partition_file: str | os.PathLike, compiler: Any,
-                     requests: Sequence[Mapping[str, Any]], bound: Mapping[str, Any]) -> tuple[Any, dict[str, Any]]:
-    """The verifier's own window of rank ``rank`` of the TP Commit ``commit_dir``: the population over ``compiler``'s Programs for the
-    advice's ``requests``, and what `tp.serving_rows.source` holds the registration to, ``bound`` (`binding`) among it."""
-    from verity_vllm.pipeline.tp import serving_rows as SRT
-
-    rec, p = _loaded(commit_dir, rank, compiler, requests)
-    return SRT.window_of(rec, rank, partition_file, p, dict(bound), transfer_gates_of(compiler))
-
-
-def commit_window(commit_dir: str | os.PathLike, rank: int, partition_file: str | os.PathLike, out_dir: str | os.PathLike, compiler: Any,
-                  requests: Sequence[Mapping[str, Any]], bound: Mapping[str, Any], **kw: Any) -> dict[str, Any]:
-    """Rank ``rank``'s stand-in window into ``out_dir`` from its sealed bundle (`tp.serving_rows.from_bundle`, ``kw`` its options) over
-    ``compiler``'s Programs for the advice's ``requests``, ``bound`` (`binding`) in its provenance."""
-    from verity_vllm.pipeline.tp import serving_rows as SRT
-
-    _rec, p = _loaded(commit_dir, rank, compiler, requests)
-    return SRT.from_bundle(commit_dir, rank, partition_file, out_dir, programs=p, binding=dict(bound),
-                           transfer_gates=transfer_gates_of(compiler), **kw)
-
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class Options:
-    """verity-vllm advice-windows COMMIT_OUT --advice FILE --opening FILE --partition F --out O: a deferred TP Commit's stand-in
-    windows, ``O/rank<r>/`` each, from its ranks' sealed bundles over the stand-in compiler's Programs (`Traced`, listing the
-    ``--transfer-gate`` templates) for the advice (`commit_window`), their registrations binding the advice's hiding commitment,
-    whose opening goes to ``--opening``."""
-    commit_out: str = option("commit_out", help="the deferred TP Commit's --out (runs.jsonl, versions.json, replay_deferred.json, its bundles)")
-    advice: str = option("--advice", help="the advice: I1's canonical encoding (the prover's, private)")
-    opening: str = option("--opening", help="write the advice's opening here (its encoding and salts, `opening`): the prover's, private")
-    partition: str = option("--partition", help="the verifier's partition file: {templates, law, scope?}")
-    out: str = option("--out", help="the windows' directory: rank<r>/ each")
-    build_root: str = option("--build-root", help="the stand-in compiler's Programs: each rank's Programs of record in rank<r>/")
-    ranks: str | None = option("--ranks", default=None, help="comma-separated ranks (default: every rank of the world)")
-    transfer_gate: list[str] = option("--transfer-gate", action="append", default=[],
-                                      help="a template the stand-in compiler lists as holding transfer gates, every unit of it proved "
-                                           "(repeatable; the partition's sampling design is then work:K)")
-    write_from_workload: str | None = option("--write-from-workload", type=workload_arg, default=None,
-                                             help="first write --advice as the stand-in's advice for this fixed-length workload (`advice_of_workload`)")
-    drop: list[str] = option("--drop", action="append", default=[], help="with --write-from-workload: leave this request out (repeatable)")
-    workers: int | None = option("--workers", type=int, default=None, help="processes hashing the rows (default: min(16, CPUs))")
-
-
-def main(o: Options) -> int:
-    from verity_vllm.pipeline.tp import commit_replay as CR
-    from verity_vllm.pipeline.tp import serving_rows as SRT
-
-    try:
-        c = codec_of()
-        if o.write_from_workload:
-            Path(o.advice).write_bytes(c.encode(advice_of_workload(json.loads(Path(o.write_from_workload).read_text()), c, o.drop)))
-        rec = SRT.record(o.commit_out)
-        compiler = Traced.for_commit(o.commit_out, o.build_root, o.transfer_gate)
-        data = Path(o.advice).read_bytes()
-        reqs, bound, reg = of_advice(compiler, data, c)
-        Path(o.opening).write_text(json.dumps(opening(data, reg)) + "\n")
-        for r in [int(x) for x in o.ranks.split(",")] if o.ranks else range(int(rec["world"])):
-            got = commit_window(o.commit_out, r, o.partition, Path(o.out) / f"rank{r}", compiler, reqs, bound, workers=o.workers)
-            print(f"[advice-windows] rank {r}: stand-in window of {got['population']} units over {len(reqs)} requests, advice root "
-                  f"{bound['advice']['root'][:16]} ({bound['advice']['bits']} bits), compiler {compiler.digest[:16]}, registration "
-                  f"{str(got['registration_digest'])[:16]}", flush=True)
-    except (CR.Refused, LookupError, ValueError, RuntimeError) as e:
-        print(f"[advice-windows] REFUSED: {e}", flush=True)
-        return 2
-    return 0

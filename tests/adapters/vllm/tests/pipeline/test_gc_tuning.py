@@ -153,18 +153,5 @@ def test_tuned_holds_the_thresholds_for_its_block_and_gives_the_callers_back(mon
         gc.set_threshold(*saved)
 
 
-def test_a_ranks_program_load_runs_under_the_tuned_thresholds(monkeypatch):
-    from verity_vllm.pipeline.tp import rank_replay
-    seen: list[tuple[tuple, tuple[int, int, int]]] = []
-
-    def load(*a):
-        seen.append((a, gc.get_threshold()))
-        return "loaded"
-
-    monkeypatch.setattr(rank_replay, "_load", load)
-    monkeypatch.setenv(gc_tuning.ENV, "")
-    saved = gc.get_threshold()
-    assert rank_replay.load({"programs": {}}, 3, 8, definitions=False) == "loaded"
-    assert seen == [(({"programs": {}}, 3, 8, False), gc_tuning.TUNED)] and gc.get_threshold() == saved
 
 
