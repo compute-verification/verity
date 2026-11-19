@@ -97,7 +97,7 @@ class Program:
             params = [bits(t) for _, t in d["params"]]
             ret = bits(d["ret"])
             assert leaves(params[0]) >= leaves(ret), key
-            out[key] = self.composite(f"{key}Bits", Body(self, params), ret, aff("p", 0, 0, leaves(ret)))
+            out[key] = self.composite(f"{key[:-3]}Bits_v1", Body(self, params), ret, aff("p", 0, 0, leaves(ret)))
         return out
 
     def text(self) -> str:
