@@ -16,9 +16,8 @@ module and the Lean equal, entry for entry; refuses a literal of the table in th
 switches to reading it. Flock's statement versions keep their tags in `Flock.Tags`, one structure per version.
 """
 
-# PoUW: the protocol and its identifier
+# PoUW: the protocol and its pass manifest
 POUW_PROTOCOL = "verity/pouw/v1"
-POUW_IDENTIFIER = "verity/pouw/identifier/v1"
 POUW_PASS_MANIFEST = "verity/pouw/pass-manifest/v1"
 
 # PoUW: epochs: coins, salts and the weights they bind
