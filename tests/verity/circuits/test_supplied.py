@@ -137,8 +137,10 @@ def test_the_lean_registry_names_no_function_the_format_lacks():
 #: a function's value at some args, in bits (None: no value there), as the format fixes it (§5.4)
 LENGTHS = [("const.u32/v1", {"value": 7}, 32), ("const.u32/v1", {"value": 1 << 32}, None),
            ("pouw.pearlplus.eb/v1", {"col": 0, "tn": 3}, 768), ("pouw.pearlplus.eb/v1", {"col": 1, "tn": 0}, None),
-           ("pouw.pearlplus.fa/v1", {"k": 2}, 512), ("pouw.pearlplus.fb/v1", {"k": 5}, 1280),
-           ("pouw.pearlplus.gram/v1", {"k": 9, "dev": 3}, 32768), ("pouw.pearlplus.salt/v1", {}, 256),
+           ("pouw.pearlplus.fa/v1", {"k": 64}, 16384), ("pouw.pearlplus.fa/v1", {"k": 2}, None),
+           ("pouw.pearlplus.fb/v1", {"k": 32}, 8192), ("pouw.pearlplus.fb/v1", {"k": 0}, None),
+           ("pouw.pearlplus.gram/v1", {"k": 96, "dev": "a"}, 32768), ("pouw.pearlplus.gram/v1", {"k": 9, "dev": "a"}, None),
+           ("pouw.pearlplus.salt/v1", {}, 256),
            ("registered.root/v1", {"value": "w"}, 512)]
 
 

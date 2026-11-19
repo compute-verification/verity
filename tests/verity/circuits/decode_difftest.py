@@ -65,8 +65,9 @@ def supplied_cases() -> list[tuple[str, str]]:
     edits += [(f"mark: {fn} at {args}", lambda i, fn=fn, args=args: i[1].__setitem__(2, {**mark, "supplied": fn, "args": args}))
               for fn, args in (("const.u32/v1", {"value": 5}), ("const.u32/v1", {"value": 1 << 32}),
                                ("pouw.pearlplus.eb/v1", {"col": 0, "tn": 3}), ("pouw.pearlplus.eb/v1", {"col": 0, "tn": 0}),
-                               ("pouw.pearlplus.fa/v1", {"k": 2}), ("pouw.pearlplus.fb/v1", {"k": 1}),
-                               ("pouw.pearlplus.gram/v1", {"k": 4, "dev": 0}))]
+                               ("pouw.pearlplus.fa/v1", {"k": 64}), ("pouw.pearlplus.fa/v1", {"k": 2}),
+                               ("pouw.pearlplus.fb/v1", {"k": 32}), ("pouw.pearlplus.gram/v1", {"dev": "a", "k": 96}),
+                               ("pouw.pearlplus.gram/v1", {"dev": "a", "k": 9}))]
     out = [("supplied: program", c.decode()), ("supplied: block", block.decode() if isinstance(block, bytes) else block)]
     for label, edit in edits:
         d = json.loads(c)

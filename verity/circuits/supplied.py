@@ -75,6 +75,11 @@ def _bits(f: Callable[[Mapping[str, Any]], int]) -> Callable[[Mapping[str, Any]]
     return nbytes
 
 
+def _k32(f: Callable[[Mapping[str, Any]], int | None]) -> Callable[[Mapping[str, Any]], int | None]:
+    """``f``, where the argument ``k`` is a multiple of 32; no value elsewhere."""
+    return lambda args: f(args) if type(args["k"]) is int and args["k"] % 32 == 0 else None
+
+
 #: every function a supplied input may name, by name, arguments and value length: the same closed list as the Lean
 #: registry's (`Spot/Supplied.lean` of the proofs' verifier), which holds each function's body and so its definition (§5.4). A name is versioned: a
 #: function whose value changes takes a new name. Its arguments are fixed in C, and no length here is one deployment's. A
@@ -113,11 +118,11 @@ FUNCTIONS: dict[str, Function] = {f.name: f for f in (
     Function("const.u32/v1", "supplied", ("constant",), ("value",), lambda a: 4 if a["value"] < 1 << 32 else None),
     # useful work, Pearl+: column `col`'s `tn` lines of 32 E4M3 bytes, 256 bits a line
     Function("pouw.pearlplus.eb/v1", "supplied", ("coin", "commitment"), ("col", "tn"), _bits(lambda a: 256 * a["tn"])),
-    # useful work, Pearl+: `k` lines of 32 bytes each, 256 bits a line
-    Function("pouw.pearlplus.fa/v1", "supplied", ("coin", "commitment"), ("k",), _bits(lambda a: 256 * a["k"])),
-    Function("pouw.pearlplus.fb/v1", "supplied", ("coin", "commitment"), ("k",), _bits(lambda a: 256 * a["k"])),
-    # useful work, Pearl+: a 32 by 32 Gram matrix of FP32 words as u32, 32768 bits whatever `k` and `dev`
-    Function("pouw.pearlplus.gram/v1", "supplied", ("coin", "commitment"), ("k", "dev"), _fixed(4096)),
+    # useful work, Pearl+: `k` lines of 32 E4M3 bytes, 256 bits a line, `k` a multiple of 32
+    Function("pouw.pearlplus.fa/v1", "supplied", ("coin", "commitment"), ("k",), _k32(_bits(lambda a: 256 * a["k"]))),
+    Function("pouw.pearlplus.fb/v1", "supplied", ("coin", "commitment"), ("k",), _k32(_bits(lambda a: 256 * a["k"]))),
+    # useful work, Pearl+: a 32 by 32 Gram matrix of FP32 words as u32, 32768 bits whatever `k` (a multiple of 32) and `dev`
+    Function("pouw.pearlplus.gram/v1", "supplied", ("coin", "commitment"), ("k", "dev"), _k32(_fixed(4096))),
 )}
 
 
