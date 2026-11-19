@@ -504,7 +504,7 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], draw: 
     order, each naming that block (``block``), and None, or None and the refusal (``registered``: `registered` is None
     and the program reads registered values, `reads_registered`; ``undrawn``: the proof is of a block `draw` did not
     sample, or its public file's units are not exactly the drawn block's; ``inputs``: `inputs`, a scheme's reading of
-    the drawn block's public inputs from its committed records (PoUW's `drawn_inputs`), called with the drawn block's
+    the drawn block's public inputs from its committed records, called with the drawn block's
     index, raises a ValueError; ``circuit``: C and the partition give no drawn block or no C_S of it, or Lean's
     lowering of C_S refuses, `one_circuit.lower`;
     ``proof``: a file is missing or the
