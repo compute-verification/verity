@@ -62,11 +62,10 @@ def block(scheme: str, k: int, tm: int, tn: int, n: int, bits: bool = False, res
     phase("restrict")
     params, ret = b.program.fn.signature()
     out["inputs"] = [{"port": p, "rows": ty.n, "width": ty.elem.w,
-                      "binding": R._binding(b.bits, b.inputs[sum(q.n for _, q in params[:i])])}
+                      "binding": R._Gates(b.D).binding(b.inputs[sum(q.n for _, q in params[:i])])}
                      for i, (p, ty) in enumerate(params)]
     out["outputs"] = [{"port": f"o{i}", "rows": ty.n, "width": ty.elem.w} for i, ty in enumerate(ret.fields)]
     out["word_gates"] = sum(hi - lo for lo, hi in b.words)
-    out["bit_gates"] = b.bits.size
     got = CT.count(b.program)
     root = got[descriptor_id(b.program.root)]
     out["gates"], out["ands"] = root.gates, root.ands
