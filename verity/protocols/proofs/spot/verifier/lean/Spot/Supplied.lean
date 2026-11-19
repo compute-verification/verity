@@ -1,5 +1,6 @@
 module
 
+public import Circuits.Program
 public import Flock.ZkServer
 public import Spot.Registered
 
@@ -232,11 +233,9 @@ def root (rec : Json) (log : Array Json) (binding : Option (String × String)) (
 /-! The registry (`verity/circuits/PROTOCOL.md` §5.4): every function a supplied input of C may name, and the bodies the
 verifier evaluates. C names the function in its input's mark, under its digest, so no scheme passes one. -/
 
-/-- Every function a mark may name, the format's closed list (`verity.circuits.supplied.FUNCTIONS` names the same). -/
-def FUNCTIONS : List String :=
-  ["pous.session.round_coin/v1", "pous.session.header/v1", "pous.session.context/v1", "pous.setup.salt/v1",
-   "poub.read.pass_seed/v1", "poub.read.pass_root/v1", "window.salt/v1", "pouw.pearlplus.salt/v1", "registered.root/v1",
-   "record.root/v1", "log.base/v1", "const.u16/v1"]
+/-- Every function a mark may name: the names of the decoder's closed list (`Flock.Program.SUPPLIED_FUNCTIONS`, which
+`verity.circuits.supplied.FUNCTIONS` mirrors), whose bodies are `BODIES`. -/
+def FUNCTIONS : List String := Flock.Program.SUPPLIED_FUNCTIONS.map (·.name)
 def LAYOUTS : List String := ["le", "halves", "digest"]
 /-- A supplied value is short: at most this many bits, whatever the population; what grows with it is computed in C. -/
 def SHORT_BITS : Nat := 65536
@@ -316,37 +315,52 @@ private def coin (coins : Array (String × ByteArray)) (v : String) (m : Mark) :
   let some (_, c) := coins.find? (·.1 == m.fn) | throw s!"supplied input {v}: no statement: the verifier holds no coin for {m.fn}"
   return c
 
-/-- A function's body: its value's sources (`sourceBytes`) and its length in bytes. `const.u16/v1`'s `value` as a u16
-little-endian; `pous.setup.salt/v1` the coin the verifier holds for it, 24 bytes (`coins`: the memory attester's salt,
-drawn after W's commitment); `pouw.pearlplus.salt/v1` the epoch's salt of Pearl+, the coin it holds for it, 32 bytes;
-`window.salt/v1` the window's salt under the coin it holds for it (`runSalt`, 64 bytes);
-`registered.root/v1` the root the record registers for its `value` and `record.root/v1` the root the record names for its
-`port` (64 bytes each); `log.base/v1` the first position after the log's records (8 bytes). "no statement" for any other
-function, whose body isn't written. -/
-def body (coins : Array (String × ByteArray)) (v : String) (m : Mark) : V (Array (String × String) × Nat) := do
-  match m.fn with
-  | "const.u16/v1" =>
-    let x ← argNat v m "value"
-    if x ≥ 2 ^ 16 then throw s!"supplied input {v}: no statement: {x} is no u16"
-    return (#[("bytes", Flock.hexOf ⟨#[(x % 256).toUInt8, (x / 256).toUInt8]⟩)], 2)
-  | "pous.setup.salt/v1" =>
-    let c ← coin coins v m
-    if c.size != 24 then throw s!"supplied input {v}: no statement: {m.fn}'s coin is {c.size} bytes, not 24"
-    return (#[("bytes", Flock.hexOf c)], 24)
-  | "pouw.pearlplus.salt/v1" =>
-    let c ← coin coins v m
-    if c.size != 32 then throw s!"supplied input {v}: no statement: {m.fn}'s coin is {c.size} bytes, not 32"
-    return (#[("bytes", Flock.hexOf c)], 32)
-  | "window.salt/v1" =>
-    let c ← coin coins v m
-    if c.isEmpty then throw s!"supplied input {v}: no statement: {m.fn}'s coin is no bytes"
-    return (#[("window", Flock.hexOf c)], 64)
-  | "registered.root/v1" => return (#[("value", ← argStr v m "value")], 64)
-  | "record.root/v1" => return (#[("port", ← argStr v m "port")], 64)
-  | "log.base/v1" =>
-    if !m.args.isEmpty then throw s!"supplied input {v}: {m.fn} takes no args"
-    return (#[("position", "0")], 8)
-  | f => throw s!"supplied input {v}: no statement: {f}'s body is not the verifier's yet"
+/-- A body: a mark's value's sources (`sourceBytes`) and its length in bytes, from the coins the verifier holds. -/
+abbrev Body := Array (String × ByteArray) → String → Mark → V (Array (String × String) × Nat)
+
+/-- The functions' bodies, by name. `const.u16/v1`'s `value` as a u16 little-endian; `pous.setup.salt/v1` the coin the
+verifier holds for it, 24 bytes (`coins`: the memory attester's salt, drawn after W's commitment);
+`pouw.pearlplus.salt/v1` the epoch's salt of Pearl+, the coin it holds for it, 32 bytes; `window.salt/v1` the window's
+salt under the coin it holds for it (`runSalt`, 64 bytes); `registered.root/v1` the root the record registers for its
+`value` and `record.root/v1` the root the record names for its `port` (64 bytes each); `log.base/v1` the first position
+after the log's records (8 bytes). -/
+def BODIES : List (String × Body) :=
+  [("const.u16/v1", fun _ v m => do
+      let x ← argNat v m "value"
+      if x ≥ 2 ^ 16 then throw s!"supplied input {v}: no statement: {x} is no u16"
+      return (#[("bytes", Flock.hexOf ⟨#[(x % 256).toUInt8, (x / 256).toUInt8]⟩)], 2)),
+   ("pous.setup.salt/v1", fun coins v m => do
+      let c ← coin coins v m
+      if c.size != 24 then throw s!"supplied input {v}: no statement: {m.fn}'s coin is {c.size} bytes, not 24"
+      return (#[("bytes", Flock.hexOf c)], 24)),
+   ("pouw.pearlplus.salt/v1", fun coins v m => do
+      let c ← coin coins v m
+      if c.size != 32 then throw s!"supplied input {v}: no statement: {m.fn}'s coin is {c.size} bytes, not 32"
+      return (#[("bytes", Flock.hexOf c)], 32)),
+   ("window.salt/v1", fun coins v m => do
+      let c ← coin coins v m
+      if c.isEmpty then throw s!"supplied input {v}: no statement: {m.fn}'s coin is no bytes"
+      return (#[("window", Flock.hexOf c)], 64)),
+   ("registered.root/v1", fun _ v m => do return (#[("value", ← argStr v m "value")], 64)),
+   ("record.root/v1", fun _ v m => do return (#[("port", ← argStr v m "port")], 64)),
+   ("log.base/v1", fun _ v m => do
+      if !m.args.isEmpty then throw s!"supplied input {v}: {m.fn} takes no args"
+      return (#[("position", "0")], 8))]
+
+/-- The decoder's functions whose body the verifier doesn't hold yet: a mark of one makes no statement. -/
+def NO_BODY : List String :=
+  ["pous.session.round_coin/v1", "pous.session.header/v1", "pous.session.context/v1", "poub.read.pass_seed/v1",
+   "poub.read.pass_root/v1"]
+
+#guard BODIES.all fun (f, _) => FUNCTIONS.contains f
+#guard FUNCTIONS.all fun f => BODIES.any (·.1 == f) != NO_BODY.contains f
+#guard NO_BODY.all FUNCTIONS.contains
+
+/-- A function's body (`BODIES`); "no statement" for a function whose body isn't written. -/
+def body (coins : Array (String × ByteArray)) (v : String) (m : Mark) : V (Array (String × String) × Nat) :=
+  match BODIES.find? (·.1 == m.fn) with
+  | some (_, b) => b coins v m
+  | none => throw s!"supplied input {v}: no statement: {m.fn}'s body is not the verifier's yet"
 
 /-- A supplied input's one row of sources (`Rows`): its body's, led by `(LE, "")` where its layout is `le`, its value's
 length the mark's bits. -/

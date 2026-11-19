@@ -209,8 +209,12 @@ def test_named_cases(pieces, name, change, want):
         assert pieces.call("supplied_marks", j) == ("output", D.canonical(want))
 
 
-def test_the_registrys_list_is_the_formats():
+def test_the_registrys_list_is_the_decoders():
+    """`Supplied.FUNCTIONS` is the names of the decoder's closed list (`Flock.Program.SUPPLIED_FUNCTIONS`), which the
+    format's `verity.circuits.supplied.FUNCTIONS` names in the same order; its `#guard`s hold `BODIES` to it."""
     text = (PACKAGE / "Spot" / "Supplied.lean").read_text()
-    body = re.search(r"def FUNCTIONS : List String :=\s*\[(.*?)\]", text, re.S)
-    assert body is not None
-    assert re.findall(r'"([^"]+)"', body[1]) == list(SU.FUNCTIONS)
+    assert "def FUNCTIONS : List String := Flock.Program.SUPPLIED_FUNCTIONS.map (·.name)" in text
+    program = (PACKAGE.parents[4] / "circuits" / "lean" / "Circuits" / "Program.lean").read_text()
+    decoder = re.search(r"def SUPPLIED_FUNCTIONS : List SuppliedFn :=(.*?)\n\n", program, re.S)
+    assert decoder is not None
+    assert re.findall(r'⟨"([^"]+)"', decoder[1]) == list(SU.FUNCTIONS)
