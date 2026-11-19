@@ -119,7 +119,8 @@ def test_the_tied_window_runs_with_the_settings_the_tree_writes(tmp_path):
     env, tie = env_of(got), PLACEMENT["run"]["window"]["tie"]["env"]
     design = next(k for k, v in tie.items() if "stratified-rate:" in v)
     assert {k: env[k] for k in tie} == {**tie, design: "stratified-rate:1/2097152"}
-    assert (env["POUW"], env["PEARLPLUS_TIE"], env["V3C_CLASS"], env["PRECISION"]) == ("pearlplus", "1", "4,32,4", "bfloat16")
+    assert (env["POUW"], env["V3C_CLASS"], env["PRECISION"]) == ("pearlplus", "4,32,4", "bfloat16")
+    assert "PEARLPLUS_TIE" not in env, "the application's Pearl+ is untied: the window commit takes no tie"
     assert env["H1_PEER"] == env["PP_PEER"] == "vy-spot-glm53" and "COMPOSITE" not in env
     assert int(env["V3C_AUDIT_MEM_GB"]) > 2015, "the records audit defers off node A, which has 2015 GB"
     piece, lean = 60 * int(env["POUW_TIMEOUT"].removesuffix("m")), int(env["PEARLPLUS_LEAN_TIMEOUT"])

@@ -11,15 +11,14 @@
 #   PEARLC_CHALLENGER_PEER and PEARLC_CHALLENGER_LANE name a live session; after the open, `served_passes.py verify` over
 #   the serve dir's pearl/w0/ with no card visible ($OUT/pearlplus-verify.json); it keeps pearl/w0/ (passes, coins.json,
 #   served.json) and schemes/pearl-plus/ (its report) beside the sealed window. The verify runs once the server has
-#   stopped, --fast --jobs VJOBS (16), and holds the passes to no window record; PEARLPLUS_TIE=1 adds the tie as a second
-#   step after it accepts: `served_passes.py retain --window-record W` (pearl/window-record.json), then `verify --tie W
-#   --class 4,27,2` ($OUT/pearlplus-verify-tie.json).
+#   stopped, --fast --jobs VJOBS (16), and holds the passes to no window record.
 #   VERIFY=0 (default 1) stops once pearl/w0 holds its passes and report, leaving every verify to the launcher.
 set -euo pipefail
+[ -z "${PEARLPLUS_TIE:-}" ] || [ "$PEARLPLUS_TIE" = 0 ] || { echo "h100_smoke.sh: PEARLPLUS_TIE is retired (the window commit takes no tie); unset it" >&2; exit 3; }
 TREE=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd); cd "$TREE"
 ROW=llama32-1b__bf16__h100__tp1__b4__i256__o32__mixed__greedy__bi-eager
 MODEL=unsloth/Llama-3.2-1B REV=9535bd9b1d1dea6acafbdc4813b728796aeb28da
-DRY=${DRY:-0} PY=${PY:-/workspace/venv312/bin/python} SCHEME=${SCHEME:-} PEARLPLUS_TIE=${PEARLPLUS_TIE:-0} VJOBS=${VJOBS:-16} VERIFY=${VERIFY:-1}
+DRY=${DRY:-0} PY=${PY:-/workspace/venv312/bin/python} SCHEME=${SCHEME:-} VJOBS=${VJOBS:-16} VERIFY=${VERIFY:-1}
 case $VERIFY in 0|1) ;; *) echo "SMOKE REFUSED verify: VERIFY is 0 or 1, not $VERIFY"; exit 3 ;; esac
 case $SCHEME in ""|pearl-plus) ;; *) echo "SMOKE REFUSED scheme: SCHEME is empty or pearl-plus, not $SCHEME"; exit 3 ;; esac
 NSO=/workspace/cp/norm_tap/build/verity_norm_tap.so
@@ -187,14 +186,5 @@ EOF
     --out "$OUT/pearlplus-verify.json" > "$SR/pearlplus-verify.log" 2>&1 \
     || { say "SMOKE FAILED pearl-plus verify: served_passes.py verify over pearl/w0 ($SR/pearlplus-verify.log)"; exit 1; }
   said+="; PEARL+ VERIFY: $(tail -1 "$SR/pearlplus-verify.log" | cut -c1-200)"
-  if [ "$PEARLPLUS_TIE" = 1 ]; then
-    W=$D/pearl/window-record.json
-    CUDA_VISIBLE_DEVICES= PYTHONPATH=$SPP "$PY" "$SP" retain --passes "$D/pearl/w0" --window-record "$W" > "$SR/pearlplus-retain.log" 2>&1 \
-      || { say "$said; SMOKE FAILED pearl-plus tie: served_passes.py retain --window-record ($SR/pearlplus-retain.log)"; exit 1; }
-    CUDA_VISIBLE_DEVICES= PYTHONPATH=$SPP "$PY" "$SP" verify --passes "$D/pearl/w0" --tie "$W" --class "$CLASS" --fast --jobs "$VJOBS" \
-      --out "$OUT/pearlplus-verify-tie.json" > "$SR/pearlplus-verify-tie.log" 2>&1 \
-      || { say "$said; SMOKE FAILED pearl-plus tie: verify --tie --class $CLASS ($SR/pearlplus-verify-tie.log)"; exit 1; }
-    said+="; PEARL+ VERIFY TIED ($CLASS): $(tail -1 "$SR/pearlplus-verify-tie.log" | cut -c1-200)"
-  fi
 fi
 say "$said"
