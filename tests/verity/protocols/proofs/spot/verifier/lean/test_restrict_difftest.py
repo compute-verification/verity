@@ -124,3 +124,12 @@ def test_another_blocks_program_differs(pieces):
     assert kind == "output", body
     out = json.loads(body)
     assert out["agree"] is False and out["at"], out
+
+
+@pytest.mark.parametrize("units", [(0, 1), (4, 5), (6,)], ids=lambda us: "units-" + "-".join(map(str, us)))
+def test_the_two_lifts_agree(pieces, units):
+    """`Flock.Lift.lift` of `restrict`'s Program lifts each word composite as `Spot.BlockFront.program` lifts it."""
+    text, _ = chain()
+    mine = json.loads(pieces.call("block_program", {"descriptor": text, "units": list(units)})[1])["lifted"]
+    lifted = json.loads(pieces.call("restrict", {"descriptor": text, "units": list(units), "python": python(units)})[1])["lifted"]
+    assert mine and lifted == mine

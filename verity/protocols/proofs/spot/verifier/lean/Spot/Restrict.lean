@@ -1,6 +1,7 @@
 module
 
 public import Spot.BlockFront
+public import Flock.Lift
 meta import Circuits.Program
 
 /-!
@@ -252,8 +253,9 @@ partial def firstDiff (a b : Json) (at_ : String) : Option String :=
   | _, _ => some at_
 
 /-- The `restrict` piece: `{descriptor, units, python}` (C's text, the block's units, Python's `restrict` bytes as text) to
-`{agree, at, root_nodes, definitions}`: whether Lean's `restrict` equals `Flock.Program.decode` of Python's bytes as
-`dump` shows them, the first path where they differ, and the size of Lean's. -/
+`{agree, at, root_nodes, definitions, digest_bytes, cost, lifted}`: whether Lean's `restrict` equals `Flock.Program.decode` of Python's bytes as
+`dump` shows them, the first path where they differ, the size of Lean's, its digest's bytes, `cost`, and each word
+composite `Flock.Lift.lift` lifts for it, by key (`defJson`). -/
 def piece (j : Json) : Except String Json := do
   let some d := (j.getObjValAs? String "descriptor").toOption | throw "descriptor is not a string"
   let some us := (j.getObjValAs? (Array Nat) "units").toOption | throw "units is not a list of naturals"
@@ -264,9 +266,12 @@ def piece (j : Json) : Except String Json := do
   let b ← dump (← decode py.toUTF8)
   let at_ := firstDiff a b ""
   let nDefs := (keys ((a.getObjVal? "definitions").toOption.getD .null)).size
+  let (L, _) ← Flock.Lift.lift Q Q.root
+  let lifted := L.defs.toList.filter (·.key.endsWith "IR=\"boolean\"}")
   return Json.mkObj [("agree", toJson at_.isNone), ("at", match at_ with | some p => .str p | none => .null),
     ("root_nodes", toJson (((Q.defs[Q.root]?).map (·.body.nodes.size)).getD 0)), ("definitions", toJson nDefs),
-    ("digest_bytes", toJson Q.sha512.size), ("cost", ← cost P us)]
+    ("digest_bytes", toJson Q.sha512.size), ("cost", ← cost P us),
+    ("lifted", Json.mkObj (lifted.map fun x => (x.key, defJson L x)))]
 
 #guard sameInput (inputDefn "run" 16) (inputDefn "run" 16)
 #guard !sameInput (inputDefn "run" 16) { inputDefn "run" 16 with prim := false }
