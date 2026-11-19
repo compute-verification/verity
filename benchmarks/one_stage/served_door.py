@@ -358,26 +358,37 @@ def step(a) -> int:
 
 
 def window(a) -> int:
-    """The adapter's staged window (`test_window_rows._private`: TINY's class, random weights, every node computed)
-    recorded, closed and written as serving writes a window (`Window.supply`, `Rows.record`, `close`, `write` under the
-    docket), for ``records_audit.py audit``."""
+    """The adapter's staged window (`test_window_rows`' TINY class and requests, random weights, every node computed, its
+    scan state the execution phase's own, `window_rows.state_value` under the run root) recorded, closed and written as
+    serving writes a window (`Window.supply`, `Rows.record`, `close`, `write` under the docket), for ``records_audit.py
+    audit``."""
     tree, out = Path(a.tree), Path(a.out)
     sys.path.insert(0, str(tree / "tests/adapters/vllm"))
     from tests.program.predict import test_window_rows as TW
+    from verity.commitments import docket_digest as DD
     from verity.commitments.periods import interface as IF
     from verity.protocols.proofs.spot.prover import docket as DK
+    from verity_vllm.program.predict import inference_blocks as IB
+    from verity_vllm.program.predict import scan_state as SS
     from verity_vllm.program.predict import window_rows as WR
     t = time.perf_counter()
-    low, values, rows = TW._private(a.seed)
+    reg = TW._registered()
+    low = TW.WC.lower(reg, TW.CLASS, None, TW.GRAIN, requests=TW.REQUESTS)
+    fields = TW._weights(low.fn, a.seed)
+    bits = [[w >> k & 1 for w in row for k in range(16)] for row in TW.STATE]
+    values = {**TW.WW.weight_values(reg, fields, None, TW.GRAIN, keep_rows=True),
+              SS.SCAN_STATE: WR.state_value(IB.program_digest(low.circuit), TW.CLASS, bits, window=TW.RUN)}
+    rows = WR.Rows(low, TW.unserved_slots(low, TW.STATE, lambda label, lo, hi: fields[label][lo:hi]), values)
     win = IF.Window(low.circuit, TW.RUN, TW.DESIGN, 64, registered=values, forms=WR.FORMS)
     win.supply()
     rows.record(win)
-    rec = win.write(win.close(), out, {"served_door": "window"}, registrar=DK)
+    win.write(win.close(), out, {"served_door": "window"}, registrar=DK)
     print("STEP " + json.dumps({"step": "window", "wall_s": round(time.perf_counter() - t, 1), "peak_gib": _peak_gib(),
                                 "run": TW.RUN, "units": dict(rows.n),
                                 "circuit_sha512": hashlib.sha512((out / "circuit.json").read_bytes()).hexdigest(),
                                 "registration_sha512": hashlib.sha512((out / "registration.json").read_bytes()).hexdigest(),
-                                "digest": rec.get("digest") if isinstance(rec, dict) else None}, default=str), flush=True)
+                                "docket_digest": DD.digest(json.loads((out / "registration.json").read_text()))},
+                               default=str), flush=True)
     return 0
 
 
