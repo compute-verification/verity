@@ -66,9 +66,13 @@ def keyHex : String := hexOf (Sha512.hash Hm96.Default512.key)
 def bcI : ByteArray := HmRow.zeroRowBc i0
 def bcO : ByteArray := HmRow.zeroRowBc o0
 
-/-- The program: its root a batch of two members of the primitive `T_v1`. -/
-def progJ : Json := Json.mkObj [("annotations", Json.mkObj []), ("callees", ja [js "T_v1"]),
+/-- The program: its root a batch of two members of the primitive `T_v1`, whose Boolean body `StandIn[T]_v1` returns
+16 copies of the constant bit `Const1[0x0]_v1`; the root reads no input node (`inputs` empty). -/
+def progJ : Json := Json.mkObj [("annotations", Json.mkObj []), ("boolean", Json.mkObj [("T_v1", js "StandIn[T]_v1")]),
+  ("callees", ja [js "T_v1", js "Const1[0x0]_v1"]),
   ("definitions", Json.mkObj [
+    ("Const1[0x0]_v1", Json.mkObj [("form", js "primitive"), ("id", js "Const1[0x0]_v1"), ("params", ja []),
+      ("ret", ja [js "Value", jn 1])]),
     ("Root[Two_v1]_v1", Json.mkObj [("bindings", Json.mkObj []),
       ("body", Json.mkObj [
         ("nodes", ja [Json.mkObj [("args", ja []), ("axes", ja []), ("fn", jn 0), ("form", js "batch"), ("n", jn 2),
@@ -76,17 +80,25 @@ def progJ : Json := Json.mkObj [("annotations", Json.mkObj []), ("callees", ja [
         ("params", ja []), ("ret", Json.mkObj [("affine", ja [js "n", jn 0, jn 0, jn 2])]),
         ("ret_type", ja [js "Array", jn 2, ja [js "Value", jn 16]])]),
       ("form", js "composite"), ("id", js "Root[Two_v1]_v1")]),
+    ("StandIn[T]_v1", Json.mkObj [("bindings", Json.mkObj []),
+      ("body", Json.mkObj [
+        ("nodes", ja [Json.mkObj [("args", ja []), ("fn", jn 1), ("form", js "primitive"), ("out", jn 2)]]),
+        ("params", ja []), ("ret", Json.mkObj [("explicit", ja (List.replicate 16 (ja [js "n", jn 0, jn 0])))]),
+        ("ret_type", ja [js "Array", jn 16, ja [js "Value", jn 1]])]),
+      ("form", js "composite"), ("id", js "StandIn[T]_v1")]),
     ("T_v1", Json.mkObj [("form", js "primitive"), ("id", js "T_v1"), ("params", ja []),
       ("ret", ja [js "Value", jn 16])])]),
-  ("program_fn", js "Two_v1"), ("root", js "Root[Two_v1]_v1"), ("schema", js "verity-ir/descriptor/v1"),
-  ("types", ja [ja [js "Value", jn 16], ja [js "Array", jn 2, ja [js "Value", jn 16]]])]
+  ("inputs", ja []), ("program_fn", js "Two_v1"), ("root", js "Root[Two_v1]_v1"),
+  ("schema", js "verity-ir/descriptor/v2"),
+  ("types", ja [ja [js "Value", jn 16], ja [js "Array", jn 2, ja [js "Value", jn 16]], ja [js "Value", jn 1]])]
 def progText : String := printJson progJ
 def progBytes : ByteArray := progText.toUTF8
 
-/-- The program's SHA-512 in hex, as `TemplateQuery.Desc.parse` computes it (`progHex_eq`). A literal: the digest is of
-the program's canonical text, which `canon` writes by well-founded recursion that the kernel does not unfold. -/
+/-- The program digest in hex, as `TemplateQuery.Desc.parse` computes it (`progHex_eq`): `Program.programDigestWith`
+over its Definitions' digests. A literal: each digest is of a canonical text, which `canon` writes by well-founded
+recursion that the kernel does not unfold. -/
 def progHex : String :=
-  "b1b2443c99170e8c52e7011e9041ea4dccc964c5135ccc6be432941d5427066efe02d5810606ecd3ef7a9241c39bc3236b7b077d809a3a42e9bb68aa67fe11c8"
+  "1c128e4ceec6315726473335829aa239bcc707dbd6b4d69b52b1e55e032fbb4220b03970f5efc1d4a7782f03888ac63ccaa223c86a2ad563612d7fec9a467a2b"
 
 /-- The partition: `Q_template_instance` v0 at `T_v1`, over the program. -/
 def partObj : Json := Json.mkObj [("format", js HmRow.PARTITION_V1), ("program", js progHex),
@@ -95,7 +107,7 @@ def partObj : Json := Json.mkObj [("format", js HmRow.PARTITION_V1), ("program",
 
 /-- The partition's digest in hex, as `HmRow.checkPartition` computes it (`partHex_eq`); a literal, as `progHex` is. -/
 def partHex : String :=
-  "1e5de9f6dc7650c0f0a67091651cacf652fa9c56491a4f71852b5f71629454f76412e63e5a988af4233ca983ec2bc0cc14b70f79b42d026b536e29b57badbb85"
+  "13d1d0ab3e2a590f792e457b4c67fe64d12b6ae04cd7a18400e79316bf0bddead0aaa89f29cc1263c47f68960fc983e11f26451b5f5646637dc5fabb27fccfb9"
 
 def rng (net : String) (sl p0 n : Nat) : Json := Json.mkObj [("count", jn n), ("net", js net), ("pos0", jn p0),
   ("slot_log", jn sl), ("type", js "unit")]

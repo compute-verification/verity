@@ -57,14 +57,16 @@ import all Init.WF
 /-! # The statement's program decoded: `Program.decode progBytes`
 
 `decode_prog` walks `Program.decode` on the program's bytes to `progX`: the definitions `T_v1`, a primitive of one
-16-bit output, and the root `Root[Two_v1]_v1`, a batch of two of its members returning both. The decoder's tables are
+16-bit output, the root `Root[Two_v1]_v1`, a batch of two of its members returning both, and `T_v1`'s Boolean body
+`StandIn[T]_v1` over the constant bit `Const1[0x0]_v1`. The decoder's tables are
 `Std.HashMap`s and `Std.HashSet`s keyed by `String.hash`, which the kernel does not evaluate, so each lookup is read off
 the inserts that built its table (`hm_get_insert`, `hs_contains_insert`, `hm_get_foldl`, `hm_contains_foldl`), and its
 state is a `StateT` stepped by its monad's equations (`st_bind` and its siblings). Each well-founded function it calls
 is a fact at the statement's own values (`Ty.ofJson`, `Ty.leaves`, `Ty.beq`, `String.splitOn`, `Widths.bodyBad`) or
-its fuelled twin (`domainError_fuel`, `canon_fuel`). The program's SHA-512 is of `bareText`, its canonical text without
-`annotations`, a literal as `progHex` is (`canon_bare`). `descParse_X` is the template queries' reading of the same
-bytes (`TemplateQuery.Desc.parse`), `descX`, whose digest is `progHex` (`descX_hex`).
+its fuelled twin (`domainError_fuel`, `canon_fuel`). The program digest is composed (`Program.programDigestWith`): each
+Definition's SHA-512 over its canonical entry with its references' digests, memoised in a `Std.HashMap` read off its
+inserts as the tables are, then the SHA-512 of the program's own record. `descParse_X` is the template queries' reading
+of the same bytes (`TemplateQuery.Desc.parse`), `descX`, whose digest is `progHex` (`descX_hex`, `progHex_eq`).
 -/
 
 @[expose] public section
@@ -72,7 +74,7 @@ set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
 open private Flock.Program.DecState.mk Flock.Program.DecState.defs Flock.Program.DecState.index
-  Flock.Program.DecState.busy Flock.Program.DecState.walked from Circuits.Descriptor
+  Flock.Program.DecState.busy Flock.Program.DecState.walked Flock.Program.fnRefs from Circuits.Descriptor
 
 namespace SpotFlock.InstanceStmt.Decode
 
@@ -111,6 +113,11 @@ theorem hm_get_foldl {β : Type} (arr : Array (String × β)) (a : String) :
       (arr.toList.reverse.find? (·.1 == a)).map (·.2) := by
   rw [← Array.foldl_toList, hm_get_foldl_from, Std.HashMap.getElem?_empty, Option.or_none]
 
+theorem hm_get_foldl_n {β : Type} (arr : Array (String × β)) (n : Nat) (a : String) (h : n = arr.size) :
+    (arr.foldl (fun m (k, v) => m.insert k v) ({} : Std.HashMap String β) 0 n)[a]? =
+      (arr.toList.reverse.find? (·.1 == a)).map (·.2) := by
+  subst h; exact hm_get_foldl arr a
+
 theorem hm_contains_foldl_from {β : Type} (l : List (String × β)) (m : Std.HashMap String β) (a : String) :
     (l.foldl (fun m (k, v) => m.insert k v) m).contains a = (l.any (·.1 == a) || m.contains a) := by
   induction l generalizing m with
@@ -139,6 +146,11 @@ theorem st_ite {σ ε α : Type} (c : Prop) [Decidable c] (a b : StateT σ (Exce
 theorem st_dite {σ ε α : Type} (c : Prop) [Decidable c] (a : c → StateT σ (Except ε) α) (b : ¬c → StateT σ (Except ε) α)
     (s : σ) : (dite c a b) s = dite c (fun h => a h s) (fun h => b h s) := by split <;> rfl
 theorem st_run {σ ε α : Type} (x : StateT σ (Except ε) α) (s : σ) : x.run s = x s := rfl
+theorem st_lift {σ ε α : Type} (x : Except ε α) (s : σ) :
+    (monadLift x : StateT σ (Except ε) α) s = (x >>= fun a => .ok (a, s)) := rfl
+theorem st_mapConst {σ ε α β : Type} (b : β) (x : StateT σ (Except ε) α) (s : σ) :
+    (Functor.mapConst b x) s = (x s >>= fun p => .ok (b, p.2)) := rfl
+theorem lift_self {ε α : Type} (x : Except ε α) : (monadLift x : Except ε α) = x := rfl
 theorem st_forIn_empty {σ ε α β : Type} (xs : Array α) (b : β) (f : α → β → StateT σ (Except ε) (ForInStep β)) (s : σ)
     (h : xs.size = 0) : (forIn xs b f) s = .ok (b, s) := by
   rw [Array.eq_empty_of_size_eq_zero h]; rfl
@@ -161,6 +173,230 @@ theorem mapM_one {ε α β : Type} (f : α → Except ε β) (a : α) :
 theorem mapM_pair {ε α β : Type} (f : α → Except ε β) (a b : α) :
     #[a, b].mapM f = (do let x ← f a; let y ← f b; pure #[x, y]) := by
   simp only [Array.mapM_eq_mapM_toList, List.mapM_cons, List.mapM_nil]; cases f a <;> cases f b <;> rfl
+/-- `m`'s result at a loop's last step, `ForInStep`'s value read by a match, as `forIn` returns it. -/
+abbrev stepVal {β : Type} (x : ForInStep β) : β := match x with | .done b => b | .yield b => b
+
+theorem st_forIn_one {σ ε α β : Type} (xs : Array α) (b : β)
+    (f : α → β → StateT σ (Except ε) (ForInStep β)) (s : σ) (h : xs.size = 1) :
+    (forIn xs b f) s = (f (xs[0]'(by omega)) b >>= fun x => pure (stepVal x)) s := by
+  obtain ⟨l⟩ := xs
+  match l, h with
+  | [a], _ =>
+    have e : (forIn #[a] b f : StateT σ (Except ε) β) = (f a b >>= fun x => pure (stepVal x)) := by
+      rw [← Array.forIn_toList]; show forIn [a] b f = _
+      rw [List.forIn_cons]; congr 1; funext x; cases x <;> rfl
+    rw [e]; rfl
+
+theorem st_forIn_two {σ ε α β : Type} (xs : Array α) (b : β)
+    (f : α → β → StateT σ (Except ε) (ForInStep β)) (s : σ) (h : xs.size = 2) :
+    (forIn xs b f) s = (f (xs[0]'(by omega)) b >>= fun x => match x with
+      | .done c => pure c
+      | .yield c => f (xs[1]'(by omega)) c >>= fun y => pure (stepVal y)) s := by
+  obtain ⟨l⟩ := xs
+  match l, h with
+  | [a, a1], _ =>
+    have e : (forIn #[a, a1] b f : StateT σ (Except ε) β) = (f a b >>= fun x => match x with
+        | .done c => pure c
+        | .yield c => f a1 c >>= fun y => pure (stepVal y)) := by
+      rw [← Array.forIn_toList]; show forIn [a, a1] b f = _
+      rw [List.forIn_cons]; congr 1; funext x; cases x with
+      | done c => rfl
+      | yield c =>
+        show forIn [a1] c f = _
+        rw [List.forIn_cons]; congr 1; funext y; cases y <;> rfl
+    rw [e]; rfl
+
+theorem st_forIn_three {σ ε α β : Type} (xs : Array α) (b : β)
+    (f : α → β → StateT σ (Except ε) (ForInStep β)) (s : σ) (h : xs.size = 3) :
+    (forIn xs b f) s = (f (xs[0]'(by omega)) b >>= fun x => match x with
+      | .done c => pure c
+      | .yield c => f (xs[1]'(by omega)) c >>= fun x => match x with
+        | .done c => pure c
+        | .yield c => f (xs[2]'(by omega)) c >>= fun y => pure (stepVal y)) s := by
+  obtain ⟨l⟩ := xs
+  match l, h with
+  | [a, a1, a2], _ =>
+    have e : (forIn #[a, a1, a2] b f : StateT σ (Except ε) β) = (f a b >>= fun x => match x with
+        | .done c => pure c
+        | .yield c => f a1 c >>= fun x => match x with
+          | .done c => pure c
+          | .yield c => f a2 c >>= fun y => pure (stepVal y)) := by
+      rw [← Array.forIn_toList]; show forIn [a, a1, a2] b f = _
+      rw [List.forIn_cons]; congr 1; funext x; cases x with
+      | done c => rfl
+      | yield c =>
+        show forIn [a1, a2] c f = _
+        rw [List.forIn_cons]; congr 1; funext x; cases x with
+        | done c => rfl
+        | yield c =>
+          show forIn [a2] c f = _
+          rw [List.forIn_cons]; congr 1; funext y; cases y <;> rfl
+    rw [e]; rfl
+
+theorem st_forIn_four {σ ε α β : Type} (xs : Array α) (b : β)
+    (f : α → β → StateT σ (Except ε) (ForInStep β)) (s : σ) (h : xs.size = 4) :
+    (forIn xs b f) s = (f (xs[0]'(by omega)) b >>= fun x => match x with
+      | .done c => pure c
+      | .yield c => f (xs[1]'(by omega)) c >>= fun x => match x with
+        | .done c => pure c
+        | .yield c => f (xs[2]'(by omega)) c >>= fun x => match x with
+          | .done c => pure c
+          | .yield c => f (xs[3]'(by omega)) c >>= fun y => pure (stepVal y)) s := by
+  obtain ⟨l⟩ := xs
+  match l, h with
+  | [a, a1, a2, a3], _ =>
+    have e : (forIn #[a, a1, a2, a3] b f : StateT σ (Except ε) β) = (f a b >>= fun x => match x with
+        | .done c => pure c
+        | .yield c => f a1 c >>= fun x => match x with
+          | .done c => pure c
+          | .yield c => f a2 c >>= fun x => match x with
+            | .done c => pure c
+            | .yield c => f a3 c >>= fun y => pure (stepVal y)) := by
+      rw [← Array.forIn_toList]; show forIn [a, a1, a2, a3] b f = _
+      rw [List.forIn_cons]; congr 1; funext x; cases x with
+      | done c => rfl
+      | yield c =>
+        show forIn [a1, a2, a3] c f = _
+        rw [List.forIn_cons]; congr 1; funext x; cases x with
+        | done c => rfl
+        | yield c =>
+          show forIn [a2, a3] c f = _
+          rw [List.forIn_cons]; congr 1; funext x; cases x with
+          | done c => rfl
+          | yield c =>
+            show forIn [a3] c f = _
+            rw [List.forIn_cons]; congr 1; funext y; cases y <;> rfl
+    rw [e]; rfl
+
+theorem stm_forIn_empty {σ ε α β : Type} (xs : Array α) (b : β) (f : α → β → StateT σ (Except ε) (ForInStep β))
+    (h : xs.size = 0) : (forIn xs b f : StateT σ (Except ε) β) = pure b := by
+  rw [Array.eq_empty_of_size_eq_zero h]; rfl
+theorem stm_forIn_one {σ ε α β : Type} (xs : Array α) (b : β)
+    (f : α → β → StateT σ (Except ε) (ForInStep β)) (h : xs.size = 1) :
+    (forIn xs b f : StateT σ (Except ε) β) = (f (xs[0]'(by omega)) b >>= fun x => pure (stepVal x)) :=
+  funext fun s => st_forIn_one xs b f s h
+theorem stm_forIn_two {σ ε α β : Type} (xs : Array α) (b : β)
+    (f : α → β → StateT σ (Except ε) (ForInStep β)) (h : xs.size = 2) :
+    (forIn xs b f : StateT σ (Except ε) β) = (f (xs[0]'(by omega)) b >>= fun x => match x with
+      | .done c => pure c
+      | .yield c => f (xs[1]'(by omega)) c >>= fun y => pure (stepVal y)) :=
+  funext fun s => st_forIn_two xs b f s h
+theorem stm_forIn_three {σ ε α β : Type} (xs : Array α) (b : β)
+    (f : α → β → StateT σ (Except ε) (ForInStep β)) (h : xs.size = 3) :
+    (forIn xs b f : StateT σ (Except ε) β) = (f (xs[0]'(by omega)) b >>= fun x => match x with
+      | .done c => pure c
+      | .yield c => f (xs[1]'(by omega)) c >>= fun x => match x with
+        | .done c => pure c
+        | .yield c => f (xs[2]'(by omega)) c >>= fun y => pure (stepVal y)) :=
+  funext fun s => st_forIn_three xs b f s h
+theorem stm_forIn_four {σ ε α β : Type} (xs : Array α) (b : β)
+    (f : α → β → StateT σ (Except ε) (ForInStep β)) (h : xs.size = 4) :
+    (forIn xs b f : StateT σ (Except ε) β) = (f (xs[0]'(by omega)) b >>= fun x => match x with
+      | .done c => pure c
+      | .yield c => f (xs[1]'(by omega)) c >>= fun x => match x with
+        | .done c => pure c
+        | .yield c => f (xs[2]'(by omega)) c >>= fun x => match x with
+          | .done c => pure c
+          | .yield c => f (xs[3]'(by omega)) c >>= fun y => pure (stepVal y)) :=
+  funext fun s => st_forIn_four xs b f s h
+
+theorem ex_forIn_n1 {ε α β : Type} (xs : Array α) (b : β) (f : α → β → Except ε (ForInStep β)) (h : xs.size = 1) :
+    forIn xs b f = (f (xs[0]'(by omega)) b >>= fun x => pure (stepVal x)) := by
+  obtain ⟨l⟩ := xs
+  match l, h with
+  | [a], _ =>
+    rw [← Array.forIn_toList]; show forIn [a] b f = _
+    rw [List.forIn_cons]; congr 1; funext x; cases x <;> rfl
+theorem ex_forIn_n2 {ε α β : Type} (xs : Array α) (b : β) (f : α → β → Except ε (ForInStep β)) (h : xs.size = 2) :
+    forIn xs b f = (f (xs[0]'(by omega)) b >>= fun x => match x with
+      | .done c => pure c
+      | .yield c => f (xs[1]'(by omega)) c >>= fun y => pure (stepVal y)) := by
+  obtain ⟨l⟩ := xs
+  match l, h with
+  | [a, a1], _ =>
+    rw [← Array.forIn_toList]; show forIn [a, a1] b f = _
+    rw [List.forIn_cons]; congr 1; funext x; cases x with
+    | done c => rfl
+    | yield c =>
+      show forIn [a1] c f = _
+      rw [List.forIn_cons]; congr 1; funext y; cases y <;> rfl
+theorem ex_forIn_n3 {ε α β : Type} (xs : Array α) (b : β) (f : α → β → Except ε (ForInStep β)) (h : xs.size = 3) :
+    forIn xs b f = (f (xs[0]'(by omega)) b >>= fun x => match x with
+      | .done c => pure c
+      | .yield c => f (xs[1]'(by omega)) c >>= fun x => match x with
+        | .done c => pure c
+        | .yield c => f (xs[2]'(by omega)) c >>= fun y => pure (stepVal y)) := by
+  obtain ⟨l⟩ := xs
+  match l, h with
+  | [a, a1, a2], _ =>
+    rw [← Array.forIn_toList]; show forIn [a, a1, a2] b f = _
+    rw [List.forIn_cons]; congr 1; funext x; cases x with
+    | done c => rfl
+    | yield c =>
+      show forIn [a1, a2] c f = _
+      rw [List.forIn_cons]; congr 1; funext x; cases x with
+      | done c => rfl
+      | yield c =>
+        show forIn [a2] c f = _
+        rw [List.forIn_cons]; congr 1; funext y; cases y <;> rfl
+theorem ex_forIn_n4 {ε α β : Type} (xs : Array α) (b : β) (f : α → β → Except ε (ForInStep β)) (h : xs.size = 4) :
+    forIn xs b f = (f (xs[0]'(by omega)) b >>= fun x => match x with
+      | .done c => pure c
+      | .yield c => f (xs[1]'(by omega)) c >>= fun x => match x with
+        | .done c => pure c
+        | .yield c => f (xs[2]'(by omega)) c >>= fun x => match x with
+          | .done c => pure c
+          | .yield c => f (xs[3]'(by omega)) c >>= fun y => pure (stepVal y)) := by
+  obtain ⟨l⟩ := xs
+  match l, h with
+  | [a, a1, a2, a3], _ =>
+    rw [← Array.forIn_toList]; show forIn [a, a1, a2, a3] b f = _
+    rw [List.forIn_cons]; congr 1; funext x; cases x with
+    | done c => rfl
+    | yield c =>
+      show forIn [a1, a2, a3] c f = _
+      rw [List.forIn_cons]; congr 1; funext x; cases x with
+      | done c => rfl
+      | yield c =>
+        show forIn [a2, a3] c f = _
+        rw [List.forIn_cons]; congr 1; funext x; cases x with
+        | done c => rfl
+        | yield c =>
+          show forIn [a3] c f = _
+          rw [List.forIn_cons]; congr 1; funext y; cases y <;> rfl
+
+theorem push1_get0 {α : Type} (a : α) (h : 0 < (#[].push a).size) : (#[].push a)[0]'h = a := rfl
+theorem push2_get0 {α : Type} (a b : α) (h : 0 < ((#[].push a).push b).size) : ((#[].push a).push b)[0]'h = a := rfl
+theorem push2_get1 {α : Type} (a b : α) (h : 1 < ((#[].push a).push b).size) : ((#[].push a).push b)[1]'h = b := rfl
+theorem push3_get0 {α : Type} (a b c : α) (h : 0 < (((#[].push a).push b).push c).size) :
+    (((#[].push a).push b).push c)[0]'h = a := rfl
+theorem push3_get1 {α : Type} (a b c : α) (h : 1 < (((#[].push a).push b).push c).size) :
+    (((#[].push a).push b).push c)[1]'h = b := rfl
+theorem push3_get2 {α : Type} (a b c : α) (h : 2 < (((#[].push a).push b).push c).size) :
+    (((#[].push a).push b).push c)[2]'h = c := rfl
+theorem push4_get0 {α : Type} (a b c d : α) (h : 0 < ((((#[].push a).push b).push c).push d).size) :
+    ((((#[].push a).push b).push c).push d)[0]'h = a := rfl
+theorem push4_get1 {α : Type} (a b c d : α) (h : 1 < ((((#[].push a).push b).push c).push d).size) :
+    ((((#[].push a).push b).push c).push d)[1]'h = b := rfl
+theorem push4_get2 {α : Type} (a b c d : α) (h : 2 < ((((#[].push a).push b).push c).push d).size) :
+    ((((#[].push a).push b).push c).push d)[2]'h = c := rfl
+theorem push4_get3 {α : Type} (a b c d : α) (h : 3 < ((((#[].push a).push b).push c).push d).size) :
+    ((((#[].push a).push b).push c).push d)[3]'h = d := rfl
+
+theorem defn_key (k i p ps r b bd g pl ol) : (Flock.Program.Defn.mk k i p ps r b bd g pl ol).key = k := rfl
+theorem defn_prim (k i p ps r b bd g pl ol) : (Flock.Program.Defn.mk k i p ps r b bd g pl ol).prim = p := rfl
+theorem defn_params (k i p ps r b bd g pl ol) : (Flock.Program.Defn.mk k i p ps r b bd g pl ol).params = ps := rfl
+theorem defn_ret (k i p ps r b bd g pl ol) : (Flock.Program.Defn.mk k i p ps r b bd g pl ol).ret = r := rfl
+
+/-- `fnRefs` on a definition's `bindings`: none (a primitive's entry has no `bindings`) or the empty object. -/
+theorem fnRefs_null (acc : Array String) (j : Json) (h : j = .null) : Flock.Program.fnRefs acc j = acc := by
+  subst h; unfold Flock.Program.fnRefs; rfl
+theorem fnRefs_empty (acc : Array String) (j : Json) (h : j = Json.mkObj []) : Flock.Program.fnRefs acc j = acc := by
+  subst h; unfold Flock.Program.fnRefs; rfl
+
+theorem mapM_triple {ε α β : Type} (f : α → Except ε β) (a b c : α) :
+    #[a, b, c].mapM f = (do let x ← f a; let y ← f b; let z ← f c; pure #[x, y, z]) := by
+  simp only [Array.mapM_eq_mapM_toList, List.mapM_cons, List.mapM_nil]; cases f a <;> cases f b <;> cases f c <;> rfl
 theorem mapM_empty {ε α β : Type} (f : α → Except ε β) (xs : Array α) (h : xs.size = 0) : xs.mapM f = pure #[] := by
   rw [Array.eq_empty_of_size_eq_zero h]; simp only [Array.mapM_eq_mapM_toList, List.mapM_nil]; rfl
 theorem st_mapM_empty {σ ε α β : Type} (f : α → StateT σ (Except ε) β) (xs : Array α) (s : σ) (h : xs.size = 0) :
@@ -200,6 +436,12 @@ theorem ds_walked (d i b w) : Flock.Program.DecState.walked (Flock.Program.DecSt
 
 theorem ofJson_V : Ty.ofJson (ja [js "Value", jn 16]) = .ok (.value 16) := by
   rw [Ty.ofJson.eq_def]; rfl
+theorem ofJson_B : Ty.ofJson (ja [js "Value", jn 1]) = .ok (.value 1) := by
+  rw [Ty.ofJson.eq_def]; rfl
+theorem ofJson_W : Ty.ofJson (ja [js "Array", jn 16, ja [js "Value", jn 1]]) = .ok (.array 16 (.value 1)) := by
+  rw [Ty.ofJson.eq_def]
+  show (do let x ← Ty.ofJson (ja [js "Value", jn 1]); pure (Ty.array 16 x)) = _
+  rw [ofJson_B]; rfl
 theorem ofJson_A : Ty.ofJson (ja [js "Array", jn 2, ja [js "Value", jn 16]]) = .ok (.array 2 (.value 16)) := by
   rw [Ty.ofJson.eq_def]
   show (do let x ← Ty.ofJson (ja [js "Value", jn 16]); pure (Ty.array 2 x)) = _
@@ -326,49 +568,67 @@ theorem domainError_fuel :
 
 /-! ## The program's canonical text and the walk -/
 
-/-- The program without `annotations`, as `Program.decode` writes it before hashing. -/
-def bareJ : Json := match progJ with
-  | .obj top => Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
-  | _ => .null
-
-/-- `bareJ`'s canonical text: a literal, as `progHex` is, so that what reads the program's SHA-512 reads no `canon`. -/
-def bareText : String :=
-  "{\"callees\":[\"T_v1\"],\"definitions\":{\"Root[Two_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[\
-    ],\"axes\":[],\"fn\":0,\"form\":\"batch\",\"n\":2,\"out\":1}],\"params\":[],\"ret\":{\"affine\":[\"n\",0,0,2]}\
-    ,\"ret_type\":[\"Array\",2,[\"Value\",16]]},\"form\":\"composite\",\"id\":\"Root[Two_v1]_v1\"},\"T_v1\":{\"for\
-    m\":\"primitive\",\"id\":\"T_v1\",\"params\":[],\"ret\":[\"Value\",16]}},\"program_fn\":\"Two_v1\",\"root\":\"\
-    Root[Two_v1]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",16],[\"Array\",2,[\"Value\",16]\
-    ]]}"
-
-theorem canon_bareJ : canon bareJ = .ok bareText := by
-  rw [canon_fuel 12]; kernel_rfl'
-theorem canon_bare (j : Json) (h : j = bareJ) : canon j = .ok bareText := by subst h; exact canon_bareJ
-
 /-- `paramsOf`'s duplicate-name check on no parameters finds none: the kernel doesn't reduce a `Std.HashSet`'s size, so
 the walk, whose two definitions have no parameters, takes this step as a rule. -/
 theorem dup_empty {α β : Type} [BEq α] [Hashable α] (f : Std.HashSet α → β → Std.HashSet α) :
     ((Array.foldl f (∅ : Std.HashSet α) (#[] : Array β)).size != (#[] : Array β).size) = false := by
   simp
 
-set_option maxHeartbeats 1600000 in
+set_option maxHeartbeats 8000000 in
 fwd_def progX decode_prog : Program.decode progBytes by [fromUTF8?_toUTF8, parse_prog, domainError_fuel 12,
     hm_get_insert, hm_get_empty, hs_contains_insert, hs_contains_erase, hs_contains_empty, hm_get_foldl,
-    hm_contains_foldl, mapM_nil, mapM_one, mapM_pair, ofJson_V, ofJson_A, beq_of_A, beq_of_V, leaves_of_A,
+    hm_contains_foldl, mapM_nil, mapM_one, mapM_pair, mapM_triple, ofJson_V, ofJson_A, ofJson_B, ofJson_W,
+    beq_of_A, beq_of_V, leaves_of_A,
     leaves_of_V, bodyBad_one, recordFunctionIds_plain, splitOn_of, all_of, toNat_of, st_bind, st_get, st_set,
     st_modify, st_pure, st_throw, st_ite, st_dite, st_forIn_empty, st_forIn_range1, prod_fst, prod_snd, ds_defs,
-    ds_index, ds_busy, ds_walked, mapM_empty, st_mapM_empty, st_run, qsort_fuel, canon_bare, canon_fuel 12,
-    dup_empty]
+    ds_index, ds_busy, ds_walked, mapM_empty, st_mapM_empty, st_run, qsort_fuel, canon_fuel 12,
+    dup_empty, st_lift, st_mapConst, lift_self,
+    st_forIn_one, st_forIn_two, st_forIn_four, st_forIn_three, stm_forIn_three, hm_get_foldl_n,
+    push1_get0, push2_get0, push2_get1, push3_get0, push3_get1, push3_get2, push4_get0, push4_get1, push4_get2,
+    push4_get3, defn_key, defn_prim, defn_params, defn_ret, ex_forIn_n1, ex_forIn_n2, ex_forIn_n3, ex_forIn_n4, stm_forIn_one, stm_forIn_two, stm_forIn_four,
+    fnRefs_null, fnRefs_empty]
   block [Std.HashMap.insert, Std.HashSet.insert, Std.HashSet.erase, Sha512.hash]
   shallow []
 
-fwd_def descX descParse_X : TemplateQuery.Desc.parse progBytes by [fromUTF8?_toUTF8, parse_prog, canon_bare,
-    canon_fuel 12]
-  block [Sha512.hash]
+/-- A fold over an array of one element is one step: the Boolean map's builder over `boolean`'s one entry. -/
+theorem foldl_size1 {α β : Type} (xs : Array α) (b : β) (f : β → α → β) (h : xs.size = 1) :
+    xs.foldl f b = f b (xs[0]'(by omega)) := by
+  obtain ⟨l⟩ := xs
+  match l, h with
+  | [a], _ => rfl
+
+/-- The Boolean map's entry for `a`: `progJ` maps `T_v1` alone, to its body. -/
+theorem bmX_get (a : String) :
+    (match progJ.getObjValD "boolean" with
+      | .obj kvs => kvs.toArray.foldl (fun (m : Std.HashMap String String) (k, v) => match v with
+          | Json.str s => m.insert k s | _ => m)
+          ({} : Std.HashMap String String)
+      | _ => {})[a]? = if "T_v1" == a then some "StandIn[T]_v1" else none := by
+  have e : progJ.getObjValD "boolean" = Json.mkObj [("T_v1", js "StandIn[T]_v1")] := rfl
+  rw [e]
+  show (((∅ : Std.HashMap String String)).insert "T_v1" "StandIn[T]_v1")[a]? = _
+  rw [Std.HashMap.getElem?_insert, Std.HashMap.getElem?_empty]
+
+set_option maxHeartbeats 1600000 in
+fwd_def descX descParse_X : TemplateQuery.Desc.parse progBytes by [fromUTF8?_toUTF8, parse_prog, canon_fuel 12,
+    hm_get_insert, hm_get_empty, hm_get_foldl, hm_contains_foldl, recordFunctionIds_plain, st_bind, st_get, st_set,
+    st_modify, st_pure, st_throw, st_ite, st_dite, st_run, st_lift, st_mapConst, lift_self, prod_fst, prod_snd,
+    qsort_fuel, mapM_nil, mapM_one, mapM_pair, mapM_triple,
+    st_forIn_one, st_forIn_two, st_forIn_four, st_forIn_three, stm_forIn_three, hm_get_foldl_n,
+    push1_get0, push2_get0, push2_get1, push3_get0, push3_get1, push3_get2, push4_get0, push4_get1, push4_get2,
+    push4_get3, defn_key, defn_prim, defn_params, defn_ret, ex_forIn_n1, ex_forIn_n2, ex_forIn_n3, ex_forIn_n4, stm_forIn_one, stm_forIn_two, stm_forIn_four,
+    fnRefs_null, fnRefs_empty, st_forIn_empty, Array.size_push, Array.size_append, Option.toArray_some,
+    Option.toArray_none, List.size_toArray, Array.size_empty, bmX_get, stm_forIn_empty, foldl_size1]
+  block [Sha512.hash, Std.HashMap.insert, Std.HashSet.insert]
   shallow []
 
 theorem descX_hex : hexOf descX.sha512 = progHex := by
-  have h := progHex_eq
-  rw [descParse_X] at h
-  exact Option.some.inj h
+  unfold descX
+  simp only [canon_fuel 12]
+  decide +kernel
+
+/-- **The program's digest is `progHex`.** -/
+theorem progHex_eq : ((fun d => hexOf d.sha512) <$> TemplateQuery.Desc.parse progBytes).toOption = some progHex := by
+  rw [descParse_X]; exact congrArg some descX_hex
 
 end SpotFlock.InstanceStmt.Decode
