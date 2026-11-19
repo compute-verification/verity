@@ -192,6 +192,35 @@ theorem acceptsZKP_congr {I I' : Exec.Inputs} (h : ZkExec.zkInputs I = ZkExec.zk
   unfold AcceptsZKP
   rw [h]
 
+/-- An untyped statement's circuit file that `HmOut.parse` reads is what `HmOut.parseCommit` and `HmRow.parse`
+read. -/
+theorem parse_both {tags : Flock.Tags} {cf : ByteArray} {T : List (String × ByteArray)} {c : Flock.Circuit}
+    (ht : tags.typed = false) (hp : Flock.HmOut.parse tags cf T = .ok c) :
+    Flock.HmOut.parseCommit tags cf T = .ok c ∧ Flock.HmRow.parse tags cf T = .ok c := by
+  have hi := Flock.HmOut.parse_isTmpl hp
+  refine ⟨?_, ?_⟩
+  · rw [Flock.HmOut.parseCommit, ite_eq_right (by simp [hi])]
+    exact hp
+  · unfold Flock.HmOut.parse at hp
+    rw [ite_eq_right (by simp [hi])] at hp
+    dsimp only at hp
+    rw [ite_eq_left (by simp [ht])] at hp
+    obtain ⟨c', hc', hp⟩ := ebind_ok hp
+    obtain ⟨_, -, hp⟩ := ebind_ok hp
+    cases hp
+    exact hc'
+
+/-- **The circuit the checks read is the one the file parses to**: an untyped statement's circuit file that
+`HmOut.parse` reads as `c` with the tables `T` is the circuit `ProvedScope.circuitOf` reads with them. -/
+theorem circuitOf_flat {tags : Flock.Tags} {cf : ByteArray} {T : List (String × ByteArray)} {c : Flock.Circuit}
+    (ht : tags.typed = false) (hp : Flock.HmOut.parse tags cf T = .ok c) :
+    Flock.ProvedScope.circuitOf tags cf T = .ok c := by
+  obtain ⟨hpc, hr⟩ := parse_both ht hp
+  unfold Flock.ProvedScope.circuitOf
+  split
+  · exact hpc
+  · exact hr
+
 /-- **More lookup tables set up `I`'s session** (`Refine.setupTables_back`): where `T'` finds by name whatever `I`'s
 tables find, `I`'s statement is untyped with at most one table and its circuit file parses at `--zk`'s tags, the
 session `Exec.setupOfP` sets up at `--zk`'s inputs with the tables `T'` is the one it sets up with `I`'s. -/
