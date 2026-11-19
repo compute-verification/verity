@@ -1,0 +1,3 @@
+[2026-11-19T23:35Z] 7bff014c58b0
+From the lead, one more item for your branch (own commit): tests/adapters/vllm/tests/program/predict/test_block_counts.py::test_a_primitive_with_no_boolean_body_is_refused_and_a_table_lacking_one_leaves_it_unpriced is red on origin/one-circuit (DID NOT RAISE NoBooleanBody; r20261119-233152-d7ff). Find which change made it stop raising (likely the stand-in Boolean lookup now loaded in the adapter suite's conftest, so the test's primitive HAS a body) and cure the test so it tests the refusal with a primitive that truly has no body under the conftest, or delete it if the refusal is tested elsewhere. Run it, report.
+
