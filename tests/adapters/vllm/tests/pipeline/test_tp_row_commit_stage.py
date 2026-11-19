@@ -218,7 +218,7 @@ def test_a_commit_names_the_taps_it_runs_and_hands_their_sources_to_tp_commit(tm
     c.row.commit()
     cmd = c.ran[0][3]
     assert "taps: norm_tap, vocab_tap (on, and the manifest names their families); guarded max off" in c.said()
-    assert cmd == c.row.commit_cmd(["norm_tap", "vocab_tap"]) and cmd[-3:] == ["--norm-tap-so", str(so), "--vocab-range"]
+    assert cmd == c.row.commit_cmd(["norm_tap", "vocab_tap"]) and cmd[-1:] == ["--vocab-range"]
 
 
 # ---------------------------------------------------------------------------------------------------------------- the verdict

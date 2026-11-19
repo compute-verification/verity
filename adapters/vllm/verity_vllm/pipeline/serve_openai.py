@@ -4,7 +4,7 @@
         [--protocol vllm|plain|ids [--id-payload 503]] [--no-commit] [--window-steps 64] [--no-learn-warmup]
         [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1] [--learn-host-budget-mb 4096]
         [--retain host|device [--retain-device-gb 32] [--release-after spot,pouw_h1 [--draws-dir DIR]]]
-        [--row-build PREDICTED --hidden-so SO --norm-tap-so SO] [--seal]
+        [--row-build PREDICTED --window-class S,P,O --hidden-so SO] [--seal]
         [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb GB (with --seal)]
         [--copy-records-to $OUT] [--switch-interval-ms 0.1] [--async-scheduling]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
@@ -255,7 +255,6 @@ class Options:
     hidden_so: str | None = option("--hidden-so", default=None, help="rows-sha512: the attention hidden tap (as the Commit's --hidden-so)")
     hidden_ns: str | None = option("--hidden-ns", default=None, help="its op namespace (default: the .so's stem)")
     tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="the hidden tap's bounded device buffer, MiB (as the Commit's)")
-    norm_tap_so: str | None = option("--norm-tap-so", default=None, help="rows-sha512: the norm-scale tap (as the Commit's --norm-tap-so)")
     served_rows_class: str | None = option("--served-rows-class", default=None,
                                            help="the compile slice's size class the served rows are committed under, as JSON "
                                                 "{R, W, A, IW, Q, D, P, K} (serve_commit.SERVED_CLASS; default R --max-num-seqs, "
@@ -884,7 +883,7 @@ def main(opts: Options) -> int:
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
               "window_requests": opts.window_requests or None, "protocols": arm.describe() if arm is not None else None,
               "remote_session": session.describe() if session is not None else None, "row_scheduling": row,
-              "committer_options": {k: getattr(opts, k) for k in ("row_build", "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
+              "committer_options": {k: getattr(opts, k) for k in ("row_build", "hidden_so", "hidden_ns", "tap_cap_mb")},
               "compiler": getattr(com, "compiler", None), **RL.retention_record(opts, com),
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},

@@ -110,7 +110,7 @@ def committer_args(opts: Any) -> SimpleNamespace:
 
     return SimpleNamespace(arena_mb=0, profile_hooks=False, pinned_populate_threads=None, commit_scheme=opts.scheme,
                            programs_root=programs_root_of(opts), program_dir=None, out=opts.out,
-                           tap_sources=TapSources(norm_tap_so=opts.norm_tap_so), moe_source="off", required_classes=None)
+                           tap_sources=TapSources(), moe_source="off", required_classes=None)
 
 
 def window_class_of(opts: Any) -> Any:

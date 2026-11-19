@@ -153,6 +153,6 @@ def test_it_commits_under_serve_openais_rows_sha512_committer_and_needs_the_rows
     with pytest.raises(UsageError, match="ninja"):
         CA.preflight(parse("--row-build", str(row)), which=lambda _: None)
     CA.preflight(parse("--row-build", str(row)), which=lambda _: "/v/bin/ninja")
-    opts = CA.committer_opts(parse("--row-build", str(row), "--hidden-so", "h.so", "--norm-tap-so", "n.so"))
+    opts = CA.committer_opts(parse("--row-build", str(row), "--hidden-so", "h.so"))
     assert (opts.scheme, opts.commit, opts.seal) == (SS.ROWS, True, False)
     assert SS.scheme_refusal(opts) is None

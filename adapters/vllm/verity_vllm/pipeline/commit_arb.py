@@ -122,7 +122,6 @@ class Options:
     hidden_so: str | None = option("--hidden-so", default=None, help="the attention hidden tap (as serve-openai's --hidden-so)")
     hidden_ns: str | None = option("--hidden-ns", default=None, help="its op namespace (default: the .so's stem)")
     tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="the hidden tap's bounded device buffer, MiB")
-    norm_tap_so: str | None = option("--norm-tap-so", default=None, help="the norm-scale tap (as serve-openai's --norm-tap-so)")
 
 
 def committer_opts(opts: Options) -> SimpleNamespace:

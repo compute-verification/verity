@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Does: serves ONE window of bf16 Llama 3.2 1B (unsloth at 9535bd9b) on the H100 through serve-openai with its rows-sha512 Commit and seals it, then opens the sealed bundle against its record on the CPU.
 # Does NOT show: a recompute on a processor (the replay is the sealed bundle opened against its record), an audit, or a traced Build on the H100.
-# Needs: PY (default the node's /workspace/venv312/bin/python, both branches), CUDA_HOME (12.9, machine.py's), CARD_SKU (machine.py sku), HF_HOME (/workspace/hf), PYTHONPATH, VERITY_PROTOCOLS_CONFIG (all set here), CUDA_VISIBLE_DEVICES from the lease; the norm tap (no hidden tap: the row's manifest names no hidden class).
+# Needs: PY (default the node's /workspace/venv312/bin/python, both branches), CUDA_HOME (12.9, machine.py's), CARD_SKU (machine.py sku), HF_HOME (/workspace/hf), PYTHONPATH, VERITY_PROTOCOLS_CONFIG (all set here), CUDA_VISIBLE_DEVICES from the lease.
 # Writes: the serve's directory, the private directory (keys, salts) and every log under SR, outside the run's directory; under $OUT only smoke.txt, the last line.
 #   research run --on vy-h100-1 --cwd source -- taskset -c 0-9 bash adapters/vllm/tools/served_run/h100_smoke.sh   (DRY=1: off the card)
 # SCHEME=pearl-plus: the same window served under Pearl+ by its name (serve-openai --protocols pearl-plus), at Pearl+'s tie
@@ -22,7 +22,6 @@ MODEL=unsloth/Llama-3.2-1B REV=9535bd9b1d1dea6acafbdc4813b728796aeb28da
 DRY=${DRY:-0} PY=${PY:-/workspace/venv312/bin/python} SCHEME=${SCHEME:-} PEARLPLUS_TIE=${PEARLPLUS_TIE:-0} VJOBS=${VJOBS:-16} VERIFY=${VERIFY:-1}
 case $VERIFY in 0|1) ;; *) echo "SMOKE REFUSED verify: VERIFY is 0 or 1, not $VERIFY"; exit 3 ;; esac
 case $SCHEME in ""|pearl-plus) ;; *) echo "SMOKE REFUSED scheme: SCHEME is empty or pearl-plus, not $SCHEME"; exit 3 ;; esac
-NSO=/workspace/cp/norm_tap/build/verity_norm_tap.so
 SERVER= SCRATCH=
 stop() {
   if [ -n "$SERVER" ] && kill -0 "$SERVER" 2> /dev/null; then kill -INT "$SERVER"; wait "$SERVER" || true; fi
@@ -43,9 +42,6 @@ else CARD_SKU=$("$PY" benchmarks/kernels/machine.py sku); fi || { echo "SMOKE RE
 export CUDA_HOME CARD_SKU HF_HOME=/workspace/hf HF_HUB_OFFLINE=1
 export PATH=$(dirname "$PY"):$CUDA_HOME/bin:$PATH
 SNAP=$HF_HOME/hub/models--unsloth--Llama-3.2-1B/snapshots/$REV
-if [ "$DRY" = 1 ] && [ ! -s "$NSO" ]; then NSO=$SCRATCH/stand-in-norm-tap.so; echo x > "$NSO"; echo "DRY: no norm tap here, a stand-in path"; fi
-[ -s "$NSO" ] || { echo "SMOKE REFUSED norm tap: no $NSO; build it outside the lease (no card):" \
-  "cd $TREE/adapters/vllm && CUDA_HOME=$CUDA_HOME CARD_SKU=$CARD_SKU bash verity_vllm/ops/pod_norm_tap.sh"; exit 3; }
 { [ -s "$SNAP/config.json" ] && ls "$SNAP"/*.safetensors > /dev/null 2>&1; } || { [ "$DRY" = 1 ] && echo "DRY: $MODEL at $REV is not in $HF_HOME (the dry run loads no model)"; } || {
   echo "SMOKE REFUSED model: $MODEL at $REV is not in $HF_HOME; fetch it outside the lease:" \
     "HF_HOME=$HF_HOME $PY -c \"from huggingface_hub import snapshot_download as s; s('$MODEL', revision='$REV')\""; exit 3; }
@@ -98,7 +94,7 @@ EOF
 fi
 SERVE=(serve-openai --model "$MODEL" --revision "$REV" --out "$D" --port "$PORT" --precision bfloat16
   --run-id "smoke-${RESEARCH_RUN_ID:-local}" --seal --max-num-batched-tokens 512 --window-steps "$STEPS"
-  --row-build "$PRED" --norm-tap-so "$NSO" --window-requests "$REQS" --window-class "$CLASS" --max-num-seqs "$REQS"
+  --row-build "$PRED" --window-requests "$REQS" --window-class "$CLASS" --max-num-seqs "$REQS"
   --max-model-len "$(IFS=, read -r _ p o <<< "$CLASS"; echo $((p + o)))"
   --window-gb 4 --disk-floor-gb 5 --seal-hold-gb 8 "${PP[@]}")
 
