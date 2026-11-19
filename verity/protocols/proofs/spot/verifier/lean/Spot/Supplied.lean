@@ -387,9 +387,9 @@ def order (marked : Array (String × Mark)) (rows : Array (String × Rows)) (coi
     ([] : List String)).mergeSort (· ≤ ·)
   for f in fns do
     if reads.isEmpty then return
-    let some (_, at) := places.find? (·.1 == f)
+    let some (_, coinAt) := places.find? (·.1 == f)
       | throw s!"released: the verifier names no place of {f}'s coin, which a supplied value reads beside commitments"
-    let late := ((reads.filter (·.2 ≥ at)).map (·.1)).toList.mergeSort (· ≤ ·)
+    let late := ((reads.filter (·.2 ≥ coinAt)).map (·.1)).toList.mergeSort (· ≤ ·)
     unless late.isEmpty do
       throw s!"E_SUPPLIED_ORDER: {pyNames late} registered after {f}, which a supplied value reads"
 
