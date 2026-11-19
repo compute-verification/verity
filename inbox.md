@@ -1,0 +1,3 @@
+[2026-11-19T01:39Z] 3a517bf5b85e
+From the circuits lead, one fact for your equality with the Lean restrict (item 2 of the form): its author is changing Spot.BlockFront.front so that out(S) becomes exactly the Core Circuit.exits S, read off the reads descriptions (the Python side: exits from the gates of C that something outside S reads), no longer the units return leaves inside S; it elaborates and is being pushed to origin/cursor/lean-block-circuit-fc8d tonight. So the first of the two differences it named goes away toward the PYTHON side: fetch that branch again before your scratch-merge difference test, and say which head you compared against.
+
