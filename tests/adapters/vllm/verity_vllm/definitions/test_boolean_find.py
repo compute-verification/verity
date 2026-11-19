@@ -58,7 +58,7 @@ def test_an_opt_in_version_is_weighed_only_when_asked_for(fresh):
     newer.opt_in = True
     fresh(_not("BooleanFindTestNot", 2), newer)
     assert descriptor_id(B.boolean_version(WORD)) == "BooleanFindTestNot_v2"
-    with pytest.raises(B.NoBooleanVersion, match="ambiguous: .BooleanFindTestNot_v2., .BooleanFindTestNot_v3."):
+    with pytest.raises(B.NoBooleanVersion, match=r"ambiguous: \['BooleanFindTestNot_v2', 'BooleanFindTestNot_v3'\]"):
         B.boolean_version(WORD, opt_in=True)
     assert descriptor_id(B.boolean_version(WORD, family="BooleanFindTestNot_v3")) == "BooleanFindTestNot_v3"
     assert descriptor_id(B.boolean_version(WORD)) == "BooleanFindTestNot_v2"
