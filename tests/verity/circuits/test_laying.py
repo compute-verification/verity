@@ -103,7 +103,7 @@ def test_packing_closes_a_block_where_the_next_unit_would_not_fit_and_the_object
     assert blocks[0][0] == 0 and blocks[-1][1] == len(m.units) and all(a[1] == b[0] for a, b in zip(blocks, blocks[1:]))
     assert all(fits(*m.block(a, b)) for a, b in blocks)
     assert all(not fits(*m.block(a, b + 1)) for a, b in blocks[:-1])
-    obj = PO.build(P, LY.query(P), blocks)
+    obj = PO.build(P, LY.query(P), [blocks])
     assert PO.validate(obj).ok and PO.verify(obj, P).ok
 
 
@@ -134,3 +134,16 @@ def test_a_body_with_a_scan_is_refused():
     with pytest.raises(LY.Unlaid) as e:
         LY.lay(_program(body, A4), lambda *_a: False)
     assert e.value.code == "lay-scan"
+
+
+def test_laying_keeps_a_supplied_parameter_and_its_mark():
+    mark = {"supplied": "const.uint/v1", "args": {"value": 5, "bits": 8}, "layout": "le", "bits": 8}
+    params = (("x", Array(2, A4)), ("s", Array(8, BL.BIT)))
+
+    def body(B, S, x, s):
+        return B.batch(V, x, array_of([s[i] for i in range(4)]), axes=(0, None))
+    P0 = Program(CompositeDefinition("LayingToySupplied", 1, (), lambda S: (params, Array(2, PAIR)), body, register=False),
+                 supplied={"s": mark})
+    P1 = LY.lay(P0, ands(3))
+    assert P1.bindings == P0.bindings == ("run", "supplied") and P1.supplied == {"s": mark}
+    assert P1.root.inputs == P0.root.inputs
