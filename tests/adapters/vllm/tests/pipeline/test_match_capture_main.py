@@ -29,6 +29,7 @@ import torch
 import verity_vllm.pipeline.match_capture as M1
 from verity_vllm import messages
 from verity_vllm.acquire import install, stage
+from verity_vllm.check import weights_of_record as WR
 from verity_vllm.observe import capture as OC
 from verity_vllm.observe import capture_types
 
@@ -539,7 +540,7 @@ def test_the_rotary_table_s_words_are_written_as_the_engine_holds_them(world: Wo
 def test_a_half_precision_table_is_written_under_its_own_name(world: World, tmp_path: Path) -> None:
     table = torch.arange(6, dtype=torch.float16).reshape(2, 3)
     world.buffers[ROTARY] = table
-    path = M1.dump_cos_sin(world.engine, tmp_path)
+    path = WR.dump_cos_sin(world.engine, tmp_path)
     assert path == tmp_path / "cos_sin_cache.float16.npy" and (np.load(path) == words(table)).all()
     assert json.loads((tmp_path / "cos_sin_cache.json").read_text()) == {
         "dtype": "float16", "shape": [2, 3], "file": "cos_sin_cache.float16.npy", "words": "uint16 (raw IEEE binary16 words)",
@@ -551,7 +552,7 @@ def test_a_half_precision_table_is_written_under_its_own_name(world: World, tmp_
                                      {"model.normalizer": torch.tensor(8.0)}])
 def test_a_table_of_another_type_or_shape_is_not_written(world: World, tmp_path: Path, buffers: dict[str, torch.Tensor]) -> None:
     world.buffers.update(buffers)
-    assert M1.dump_cos_sin(world.engine, tmp_path) is None and M1.dump_normalizer(world.engine, tmp_path) is None
+    assert WR.dump_cos_sin(world.engine, tmp_path) is None and M1.dump_normalizer(world.engine, tmp_path) is None
     assert list(tmp_path.iterdir()) == []
 
 

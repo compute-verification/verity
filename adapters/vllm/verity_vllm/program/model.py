@@ -593,7 +593,7 @@ TRIG_ULPS = 2
 
 def check_cos_sin(C: dict[str, Any], captured: str | Path | np.ndarray, *, max_ulp: int = COS_SIN_MAX_ULP,
                   rows: int = 4096) -> dict[str, Any]:
-    """Gate I9: the captured rotary table (uint16 words [MAX_POS, D], `match_capture.dump_cos_sin`) is the analytic function of
+    """Gate I9: the captured rotary table (uint16 words [MAX_POS, D], `weights_of_record.dump_cos_sin`) is the analytic function of
     `C`.  Two views are reported: the bf16-ulp distance to numpy's fp32 evaluation (`max_ulp`, histogram; informational — at
     large positions and near the zeros of cos/sin the two fp32 libms legitimately land on different bf16 words) and the
     **bound check** that decides `status`: every captured word must round from a value within the error the fp32 pipeline

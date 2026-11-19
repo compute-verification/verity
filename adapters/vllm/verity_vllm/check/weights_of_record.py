@@ -94,8 +94,10 @@ from verity_vllm.records.schema_ids import (
 if TYPE_CHECKING:
     import torch
 
+    from verity_vllm.engine import vllm_adapter as va
+
 __all__ = ["CheckpointIndex", "ENGINE_CONSTANT_RE", "EXPERTS_RE", "FUSED", "Options", "PARAM", "SCHEMA", "build_record",
-           "check", "compose", "derivation_provenance", "live_param_digests", "main", "program_weight_fields",
+           "check", "compose", "derivation_provenance", "dump_cos_sin", "live_param_digests", "main", "program_weight_fields",
            "rank_composer", "record_shard_pin", "served_record", "stamp_of_record_set", "strip_prefix", "weight_param",
            "weights_of_record"]
 
@@ -314,6 +316,52 @@ def _check_analytic(f: dict[str, Any], raw: np.ndarray | None) -> dict[str, Any]
     if r.get("status") != "pass":
         keep["why"] = r.get("reason") or f"{r.get('n_outside_bound')} of {r.get('n_elements')} served words outside the analytic bound (max ulp {r.get('max_ulp')})"
     return rep | keep
+
+
+def dump_cos_sin(engine: va.Engine, out: Path) -> Path | None:
+    """`model.layers.0.self_attn.rotary_emb.cos_sin_cache` (bf16 [MAX_POS, D]) as uint16 words -> DIR/cos_sin_cache.npy.  The
+    table is a derived weight computed on the GPU (vLLM `_compute_cos_sin_cache`, CUDA cosf/sinf); the one-stage audit reads the
+    `cos_sin` field from this file (`benchmarks/one_stage/a11.py`)."""
+    import io
+
+    import numpy as np
+    import torch
+
+    from verity_vllm import messages as M
+    # the one by-name recognition of the two analytic-table buffers
+    from verity_vllm.acquire.plan import analytic_table_of_buffer
+
+    def npy(words: np.ndarray) -> bytes:
+        buf = io.BytesIO()
+        np.save(buf, words)
+        return buf.getvalue()
+
+    buf = None
+    for name, b in engine.model.named_buffers():
+        if analytic_table_of_buffer(name) == "cos_sin":
+            buf = b
+            break
+    if buf is None:
+        return None
+    dtype = str(buf.dtype).removeprefix("torch.")
+    if buf.dtype != torch.bfloat16:
+        # A served-fp16 model's table is float16: observe it (an unobserved table reads as a capture defect) in its own dtype
+        # under a dtype-qualified name -- never as `cos_sin_cache.npy`, whose readers take bf16 words -- and label it; the bf16
+        # path below is unchanged.  There is no fp16 analytic table.
+        if buf.dtype != torch.float16:
+            return None
+        words = buf.detach().contiguous().view(torch.int16).cpu().numpy().view(np.uint16)
+        path = out / f"cos_sin_cache.{dtype}.npy"
+        M.write(path, "RegisteredWeights", npy(words))
+        (out / "cos_sin_cache.json").write_text(json.dumps({"dtype": dtype, "shape": list(buf.shape), "file": path.name,
+                                                             "words": "uint16 (raw IEEE binary16 words)", "buffer": name}, indent=1) + "\n")
+        return path
+    words = buf.detach().contiguous().view(torch.int16).cpu().numpy().view(np.uint16)
+    path = out / "cos_sin_cache.npy"
+    M.write(path, "RegisteredWeights", npy(words))
+    (out / "cos_sin_cache.json").write_text(json.dumps({"dtype": dtype, "shape": list(buf.shape), "file": path.name,
+                                                         "words": "uint16 (raw bfloat16 words)", "buffer": name}, indent=1) + "\n")
+    return path
 
 
 def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_record: set[str] | list[str] | None = None,

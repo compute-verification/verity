@@ -53,55 +53,10 @@ from verity_vllm.engine import static_schedule
 prof.apply_env()
 
 from verity_vllm.engine import vllm_adapter as va  # noqa: E402
+from verity_vllm.check.weights_of_record import dump_cos_sin  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> JSONL, else no-op)
 
-__all__ = ["Options", "dump_cos_sin", "main"]
-
-
-def dump_cos_sin(engine: va.Engine, out: Path) -> Path | None:
-    """`model.layers.0.self_attn.rotary_emb.cos_sin_cache` (bf16 [MAX_POS, D]) as uint16 words -> DIR/cos_sin_cache.npy.  The
-    table is a derived weight computed on the GPU (vLLM `_compute_cos_sin_cache`, CUDA cosf/sinf); the one-stage audit reads the
-    `cos_sin` field from this file (`benchmarks/one_stage/a11.py`)."""
-    import io
-
-    import numpy as np
-    import torch
-
-    from verity_vllm import messages as M
-    # the one by-name recognition of the two analytic-table buffers
-    from verity_vllm.acquire.plan import analytic_table_of_buffer
-
-    def npy(words: np.ndarray) -> bytes:
-        buf = io.BytesIO()
-        np.save(buf, words)
-        return buf.getvalue()
-
-    buf = None
-    for name, b in engine.model.named_buffers():
-        if analytic_table_of_buffer(name) == "cos_sin":
-            buf = b
-            break
-    if buf is None:
-        return None
-    dtype = str(buf.dtype).removeprefix("torch.")
-    if buf.dtype != torch.bfloat16:
-        # A served-fp16 model's table is float16: observe it (an unobserved table reads as a capture defect) in its own dtype
-        # under a dtype-qualified name -- never as `cos_sin_cache.npy`, whose readers take bf16 words -- and label it; the bf16
-        # path below is unchanged.  There is no fp16 analytic table.
-        if buf.dtype != torch.float16:
-            return None
-        words = buf.detach().contiguous().view(torch.int16).cpu().numpy().view(np.uint16)
-        path = out / f"cos_sin_cache.{dtype}.npy"
-        M.write(path, "RegisteredWeights", npy(words))
-        (out / "cos_sin_cache.json").write_text(json.dumps({"dtype": dtype, "shape": list(buf.shape), "file": path.name,
-                                                             "words": "uint16 (raw IEEE binary16 words)", "buffer": name}, indent=1) + "\n")
-        return path
-    words = buf.detach().contiguous().view(torch.int16).cpu().numpy().view(np.uint16)
-    path = out / "cos_sin_cache.npy"
-    M.write(path, "RegisteredWeights", npy(words))
-    (out / "cos_sin_cache.json").write_text(json.dumps({"dtype": dtype, "shape": list(buf.shape), "file": path.name,
-                                                         "words": "uint16 (raw bfloat16 words)", "buffer": name}, indent=1) + "\n")
-    return path
+__all__ = ["Options", "main"]
 
 
 def dump_normalizer(engine: va.Engine, out: Path) -> Path | None:
