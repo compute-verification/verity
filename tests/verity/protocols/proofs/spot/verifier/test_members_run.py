@@ -81,7 +81,7 @@ class Window:
                 self.put(lowered(name))
             except (OC.NotDerived, OC.Refused):
                 pass
-            members[name] = {"public": self.put(public), "registered": None, "block": k, "vus_per_block": 4}
+            members[name] = {"public": self.put(public), "registered": None, "block": k, "vus_per_block": 1}
             if name not in sessions:
                 continue
             tree, line = challenger.sample_tree(SPEC, bytes([k]) * CT.NONCE_BYTES)
