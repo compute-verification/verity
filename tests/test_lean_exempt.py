@@ -16,7 +16,7 @@ SKIP = {".lake", ".git", ".venv", "node_modules", "__pycache__"}
 FIXTURES = ROOT / "tests/tools/verity/lean/fixtures"
 OWED = {"why", "owner", "issue", "due"}
 #: the allowance of the case `PACKAGE:ENTRY` of the test below: a test of the root suite, by its node id
-ALLOWANCE = "suite repository::test_lean_exempt.py::test_an_exempt_file_with_an_owner_is_owed[{case}]"
+ALLOWANCE = "suite repository::tests/test_lean_exempt.py::test_an_exempt_file_with_an_owner_is_owed[{case}]"
 
 
 def owed() -> dict[str, dict]:
