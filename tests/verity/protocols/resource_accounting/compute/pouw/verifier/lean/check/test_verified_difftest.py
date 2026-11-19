@@ -6,7 +6,6 @@ each sampled proof block's outcome or the refusal, string for string, the lanes 
 is of record."""
 from __future__ import annotations
 
-import json
 import random
 import re
 import shutil
@@ -17,6 +16,7 @@ import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
 
+import pouw_credit_cases as C
 import pouw_verified_cases as cases
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
 from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as V
@@ -105,10 +105,11 @@ def test_the_lanes_form_is_refused_by_name_at_both_entries():
             if name == "lanes-evidence":
                 continue
             files = case["files"]
-            ledger = [json.dumps({"kind": "period-open", "body": {"period": "p", Cr.CIRCUIT_FILES: files}})]
+            period = C.period_instance(random.Random(f"lanes-open/{name}/{seed}"), committed_too={Cr.CIRCUIT_FILES: files})
+            got = Cr._lean_committed_files(period["ledger"], period["name"])
+            assert got == Cr.committed_files(period["ledger"], period["name"]), (name, seed)
             if all(x == Cr.LEAF_PROGRAMS or re.fullmatch(r"[0-9a-f]{128}", v) for x, v in files.items()):
-                assert Cr.committed_files(ledger, "p") == (None, want), (name, seed)
-            assert Cr._lean_committed_files(ledger, "p") == Cr.committed_files(ledger, "p"), (name, seed)
+                assert got == (None, want), (name, seed)
 
 
 def test_served_answers():
