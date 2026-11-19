@@ -46,10 +46,19 @@ its body's `params` and `ret_type`. The rest of a descriptor is integers bounded
 and strings of a fixed vocabulary, which the decoder checks (§4.6).
 
 A stored descriptor file need not be canonical (builds write it with spaces). The program digest, `program_digest`, is the hex
-SHA-512 of the canonical bytes of the descriptor without `annotations`: the Build's program digest and the `program` field of
-`verity/partition/v1`. `annotations` never enter it, and no verdict of this format reads them; one, `theta`, means something
-to the port facts (§12). It carries no domain prefix (the
-partition object's digests do).
+SHA-512 of the canonical bytes of
+
+~~~text
+{"schema": <schema>, "program_fn": <program_fn>, "inputs": <inputs>, "root": <the root's digest>,
+ "functions": {<id>: <its digest>, ...}, "boolean": {<word primitive id>: <its body's digest>, ...}}
+~~~
+
+each digest a definition's (§4.8), `functions` holding the functions `program_fn`'s binding record names (§4.1). It is the
+Build's program digest and the `program` field of `verity/partition/v1`. It is composed from the definitions' digests, not
+taken over the descriptor's bytes: the interning tables' order and the aliases a writer chose do not enter it, and a
+definition two Programs share enters each by the same digest. `annotations` never enter it, and no verdict of this format
+reads them; one, `theta`, means something to the port facts (§12). It carries no domain prefix (the partition object's digests
+do).
 
 Vectors: `canonical_json.in_domain` (value, bytes), `canonical_json.outside` (value, Python's bytes, the JCS bytes, the
 refusal), `program_digest`.
@@ -146,6 +155,7 @@ Vectors: `refs` (sequence, references), `take` (type, sequence, axis, member, re
 ~~~text
 {"schema": "verity-ir/descriptor/v2",
  "root": <id>, "program_fn": <id>,
+ "inputs": [[<name>, <node count>], ...],
  "definitions": {<id>: <definition>, ...},
  "boolean": {<word primitive id>: <Boolean Definition id>, ...},
  "callees": [<id>, ...], "types": [<type>, ...],
@@ -155,8 +165,10 @@ Vectors: `refs` (sequence, references), `take` (type, sequence, axis, member, re
 - `root`: the key in `definitions` of the root (§5).
 - `program_fn`: the descriptor id of the program function, which the root inlines. It is part of the identity, and the
   functions its binding record names are definitions too.
+- `inputs`: each parameter of the program function, in parameter order, with how many input nodes it lowers to (§5.1).
 - `definitions`: exactly the definitions reachable from `root` (node callees and the functions binding records name,
-  transitively), from `program_fn`'s record and from the bodies `boolean` names.
+  transitively), from `program_fn`'s record and from the bodies `boolean` names; the decoder refuses any other
+  (`E_UNREACHED`), so the program digest (§1) covers every definition.
 - `boolean`: each word primitive's one Boolean Definition (§4.9).
 - `callees`, `types`: the interning tables. A node's `fn` indexes `callees`; a node's `out` and each argument's `type` index
   `types`.
@@ -265,7 +277,11 @@ have):
 
 - a `schema` other than `verity-ir/descriptor/v2`: a v0 or v1 descriptor, which holds no Boolean bodies, is refused by name
   (`E_SCHEMA`) and never read as v2;
+- a top-level key other than §4.1's and `annotations` (`E_KEYS`): the program digest (§1) covers every other key, so no
+  byte outside it rides along;
 - a `boolean` map that §4.9 refuses (`E_BODY_KEY`, `E_BODY_MISSING`, `E_BODY_NOT_BOOLEAN`);
+- `inputs` that §5.1 refuses (`E_INPUTS`, `E_INPUTS_NAME`, `E_INPUTS_COUNT`, `E_INPUTS_MIXED`), read after the map;
+- a definition reached neither from `root`, from `program_fn`'s record nor from the map's bodies (`E_UNREACHED`), read last;
 - a descriptor outside the canonical JSON domain (§1);
 - a primitive keyed other than by its `id`; a composite whose `id` is not `Name_vN`, or whose key is not its `id` and binding
   record (§4.3);
@@ -316,18 +332,29 @@ written (`encode_specialization` keeps its entries) and never read: `decode_prog
 
 ### 4.8 The definition digest
 
-A definition's digest is the hex SHA-512 of the canonical bytes (§1) of its *canonical entry*, with no domain prefix. A
-primitive's canonical entry is its entry. A composite's is its self-contained entry (§4.7) with every reference sequence of a
-node argument and of `ret` written flat: its parts, each concat spliced in, as `{"concat": [...]}`, or as its only part when it
-has one. From a v1 entry a reader builds the same, with the tables read in place and each `{"alias": [k, a]}` replaced by the
-flat parts of argument a of node k (§4.5). Every other key stays as written.
+A definition's *canonical entry*: a primitive's is its entry. A composite's is its self-contained entry (§4.7) with every
+reference sequence of a node argument and of `ret` written flat: its parts, each concat spliced in, as `{"concat": [...]}`, or
+as its only part when it has one. From a v2 entry a reader builds the same, with the tables read in place and each
+`{"alias": [k, a]}` replaced by the flat parts of argument a of node k (§4.5). Every other key stays as written. Parts compare
+by form and fields, as in §4.5, so two entries that write one reference sequence in different forms differ.
 
-So one definition has one digest in any program, from either schema's bytes, whichever aliases the writer chose and however
-the body nested its concatenations when it was built. Callees enter by descriptor id, so the digest covers the definition's own body, not its
-callees' bodies. Parts compare by form and fields, as in §4.5, so two entries that write one reference sequence in different
-forms have different digests.
+A definition's *digest* is the hex SHA-512 of the canonical bytes (§1) of its canonical entry with every function it
+references replaced by that function's digest: each node's `fn`, and each `{"fn": <id>}` of its binding record, becomes the
+digest, a string (`{"fn": <digest>}` in the record); and a word primitive's (§4.9) gains the key `"boolean"`, its Boolean
+body's digest. No domain prefix. The references form no cycle (a definition never reaches itself, and a Boolean body
+reaches only gates, constant bits and 1-bit inputs), so a writer or reader computes the digests callees first, each once,
+in work proportional to the descriptor.
 
-Reference: `codec.definition_digest(entry, desc)` (`desc` supplies a v1 entry's tables) and `codec.canonical_entry`. Vectors:
+So a definition's digest covers its callees' bodies and, for a word primitive, its Boolean body: a changed body moves the
+digest of every definition that reaches it, and of no other. A definition has one digest in every program that holds it,
+from either schema's bytes, whichever aliases the writer chose and however the body nested its concatenations, and so a
+Program's digest (§1) composes from its definitions'.
+
+The *entry digest*, the hex SHA-512 of the canonical entry itself, names a definition's own body with its callees by id;
+tools that key a definition's own text read it, and the program digest does not.
+
+Reference: `codec.definition_digests(program_or_desc)` (every definition's digest), `codec.definition_digest(entry, desc)`
+(the entry digest; `desc` supplies a v2 entry's tables) and `codec.canonical_entry`. Vectors: `definition_digests` and
 `definition_digest` (descriptor id, digest), one per definition of the descriptor vector.
 
 ### 4.9 The Boolean map
@@ -335,7 +362,8 @@ Reference: `codec.definition_digest(entry, desc)` (`desc` supplies a v1 entry's 
 A *word primitive* is a primitive that is neither a Boolean gate (§9: an `And<n>`, `Xor<n>` or `Not`, a constant bit) nor an
 input (§5.2). C's semantics at the bit level are its Boolean Definitions: `boolean` maps each word primitive among
 `definitions`, by its id, to the id of its one Boolean Definition, which is among `definitions` with everything it calls. An id
-names one body: the map is part of the program digest (§1), and no reader looks a body up anywhere else.
+names one body: a word primitive's digest holds its body's (§4.8), the map is part of the program digest (§1), and no reader
+looks a body up anywhere else.
 
 ~~~text
 "boolean": {"AmpereBF16TcDot16_v2": "AmpereBF16TcDot16_v3", "F2fpBf16_v1": "F2fpBf16_v2", ...}
@@ -385,6 +413,19 @@ input nodes are emitted per parameter, in parameter order, by lowering its type 
 `Array<2, Tuple(Value<16>, Value<32>)>` gives four. The binding times change only the input nodes' callees: the layout, the
 gates and the Calls are those of the same program with every parameter run, and the descriptor, so both digests, bind which
 parameters are registered.
+
+`inputs` names the parameters: `[name, n]` per parameter of the program function, in parameter order, n the input nodes it
+lowers to above (0 for a type without leaves). The parameters' nodes lead the root's body, so parameter i's are the n nodes
+after the first i parameters'. A registered value is named by its parameter: the registered-input nodes of `[name, n]` are
+its value, leaf by leaf in the order above. `inputs` is under the program digest. `decode_program` refuses, in this order:
+
+- `E_INPUTS`: `inputs` is not an array of `[string, natural]` pairs;
+- `E_INPUTS_NAME`: a name is empty, or two parameters share one;
+- `E_INPUTS_COUNT`: the counts do not sum to the input nodes that lead the root's body, or an input node follows a node
+  that is no input node;
+- `E_INPUTS_MIXED`: one parameter's nodes are not all `Input` nodes or all `RegisteredInput` nodes.
+
+Vectors: `inputs` (the descriptor vector's), and `decoder_rejects`' `E_INPUTS*` and `E_UNREACHED` mutations.
 
 ### 5.2 Input nodes are recognized by id
 
@@ -437,9 +478,131 @@ No statement or table claims that a Program's values are always hidden until the
 The format does not refuse a program that holds data: a descriptor's bytes and digests mean what they meant, and programs move
 to registered inputs under new ids.
 
+### 5.4 Supplied inputs and held outputs
+
+A *supplied* input is a parameter of the program function whose value the verifier computes, by a public function C names,
+from public things only: live coins (the proof service's, or a trusted device's signed coin) with their openings against a
+commitment released before them, the sample drawn on live coins, commitments registered before the coin, and the
+registration's constants. The prover supplies none of it. It is the third binding time beside run and registration (§5.1):
+`Program(fn, supplied={name: mark})` names the supplied parameters, and each lowers to `SuppliedInput<w>_v1` nodes as a
+registered one lowers to `RegisteredInput<w>_v1` nodes. A node is a supplied-input node exactly when its callee's id matches
+`^SuppliedInput([1-9][0-9]*)_v1$` (`supplied.SUPPLIED_ID`), under §5.2's rules, and an input node is any of the three. The
+function, its arguments and the input's width are C's, under both digests, so a coin fills the input and never chooses the
+function, the block or which C; a scheme passes no function and no row at run time.
+
+**The mark.** A supplied parameter's `inputs` entry is `[name, n, <mark>]`, every other one `[name, n]`:
+
+~~~text
+<mark> = {"supplied": <function>, "args": {<arg>: <natural or string>, ...}, "layout": "le" | "halves" | "digest", "bits": b}
+~~~
+
+- `supplied` names a function of the registry (`supplied.FUNCTIONS`). A name is versioned (`_vN` of a Definition is
+  `/vN` here): a function whose value changes takes a new name.
+- `args` are exactly the function's static arguments, each a natural or a nonempty string. A slot's index (round j of a
+  session, draw k of a sample) is one, so which slot a block is is fixed at registration and only the slot's value is
+  bound by the coin.
+- `layout` reads the function's value, a byte string, as the parameter's leaves of width w: `le`, the bytes as one
+  little-endian bit string (bit t is bit t mod 8 of byte ⌊t/8⌋) and leaf i its bits `[i·w, (i+1)·w)` least significant
+  first, a row's own order (u16 words as little-endian byte pairs, a byte string's bits in byte order); `halves`, each
+  big-endian 32-bit half's 32/w leaves least significant first; `digest`, each big-endian 64-bit word's 64 bits least
+  significant first, w = 1.
+- `bits` is the value's length in bits at `args`.
+
+**The registry.** The registry is the Lean one (`Spot/Supplied.lean` of the proofs' verifier): a closed list of functions,
+each with its body there, and a function exists when it has one. `supplied.FUNCTIONS` names the same list, with each one's
+reads, the origin its leaves take, its arguments and its value's length at them, which is what the decoder checks a mark
+against; no length is one deployment's figure, so a length a registration fixes is an argument. `test_supplied.py` holds
+the two lists equal, reading the Lean file's string literals of function names, and fails strictly for each function the
+list names whose body is not there yet.
+
+| function | reads | origin | args | bits |
+|---|---|---|---|---|
+| `pous.session.round_coin/v1` (u32be(j) ‖ u64be(i_j)) | coin, commitment | supplied | `round` | 96 |
+| `pous.session.header/v1` (the compact header) | commitment | supplied | `head` (its registered bytes) | 8 (head + head mod 2) |
+| `pous.session.context/v1` | commitment | supplied | | 848 |
+| `pous.setup.salt/v1` | coin | supplied | | 192 |
+| `poub.read.pass_seed/v1` (the named exception to live coins: seeds inside a window) | coin, commitment | supplied | `window`, `pass` | 512 |
+| `poub.read.pass_root/v1` (released before the openings' coin) | commitment | supplied | `window`, `pass` | 512 |
+| `window.salt/v1` | coin | coin | | 512 |
+| `pouw.pearlplus.salt/v1` | coin | coin | | 256 |
+| `registered.root/v1` (the verifier's pin, never a prover's row) | commitment | supplied | `value` | 512 |
+| `record.root/v1` (a port root the record names) | commitment | supplied | `port` | 512 |
+| `log.base/v1` (the first position after the log's records) | commitment | supplied | | 64 |
+| `pouw.pearlplus.eb/v1` (E_B's lines of column tile `col`) | coin, commitment | supplied | `col`, `tn` | 256 tn |
+| `pouw.pearlplus.fa/v1`, `pouw.pearlplus.fb/v1` (F_A's, F_B's lines) | coin, commitment | supplied | `k` (a multiple of 32) | 256 k |
+| `pouw.pearlplus.gram/v1` (32 by 32 FP32 words) | coin, commitment | supplied | `k` (a multiple of 32), `dev` | 32768 |
+| `const.uint/v1` | constant | supplied | `value`, `bits` (a multiple of 8, up to 64; `value` < 2^bits) | `bits` |
+
+**A supplied value is short.** No supplied input is as long as a population: where a unit's row is a function of its index
+and a short value, the verifier supplies the short value and the units compute the row inside. Either each unit reads the
+value and computes its own row, from the value and its index, a constant of the unit in C; or one unit of the block reads
+it, expands it, and its outputs are the rows the block's other units read by wire. So the verifier computes one value per
+input, and the prover pays the expansion in gates. A storage setup unit builds its base `prefix ‖ u64be(s) ‖ u64be(v)`: the
+prefix is the keys' tag, the framed protocol id, the framed prime's id and the framed `pous.setup.salt/v1`, zero-padded to
+128 bytes, the first three registered constants; its block u = 2^16 s + v is constant bits: wiring and constants, no AND;
+its slot u mod n is a constant. A unit's position is `log.base/v1` plus its index, a 64-bit addition. A bandwidth pass's one
+expanding unit reads `poub.read.pass_seed/v1` and computes the sketch's midstate, the receipt tree's domain and the sign
+rows, which the pass's other units read by wire; the rest of a draw's public row is registered constants and the unit's own
+index.
+
+So a storage round's index, its session's header and context, the setup's salt, the bandwidth pass's seed and root, and a
+PoUW block's salt, its log's base and its operands' roots, which its seed Definition hashes inside the block, are one kind
+of input, with no case per scheme.
+
+**What the decoder refuses**, after §5.1's `E_INPUTS*`, in this order (`supplied.check_entry`, `check_held`):
+
+- `E_SUPPLIED_MARK`: an entry's third element is not a mark of exactly these four keys of these forms;
+- `E_INPUTS_MIXED`: a marked parameter's nodes are not all supplied-input nodes, or an unmarked one's include one. So a
+  value the verifier makes is never read as the prover's registration, and no position a registered read opens is ever a
+  supplied value;
+- `E_SUPPLIED_FN`: the function is not in the registry;
+- `E_SUPPLIED_ARGS`: the args are not the function's, or the function has no value at them;
+- `E_SUPPLIED_WIDTH`: the parameter's leaves are not of one width w, `bits` is not the function's length at `args`, or the
+  leaves' `n · w` bits are not `bits` read whole by `layout`;
+- `E_HELD`: a held output (below) names no run of leaves of a supplied input of its width whose length divides the row's.
+
+A supplied leaf's origin (§12) is `coin` when its function's is (the value is the coin itself: `window.salt/v1`), and
+`supplied` otherwise. §12's rules read `coin` as they do for a coin input, so a salt reaches only noise primitives, receipt
+folds and seeds, and a value computed from a coin (a round's index) reaches any port but a coin port. A supplied node's port
+is never `"kind": "static"` or `"kind": "position"`, and it is `"kind": "coin"` exactly when its origin is (`E_PORT_KIND`).
+
+**Held outputs.** A root `ret` port row may carry `"equals": [name, at, n]`: leaf `lo + i` of the row is held to leaf
+`at + (i mod n)` of the supplied input `name`, of the same width. With `const.uint/v1` at 1 (16 bits) and `n` = 1 it holds every
+unit's verdict word to 1, which is what an opening's verdict and a check's `ok` are; a block whose held output differs is
+refused inside the proof, since its row opens no root the verifier holds.
+
+**A block** (`restrict`). A maximal run of in(S) of one width whose gates are supplied-input gates of one parameter of C is
+a parameter of the block bound `supplied`, named `<name>/p<i>`; a run ends where the parameter does or skips a leaf. Its
+entry carries C's mark with `"of": [name, lo, hi]`, the leaves of C's parameter it covers (`0 <= lo < hi`, inside the
+value's bits), and `bits` the part's (`supplied.part`); a block's decoder checks the part as it checks C's mark, with
+`bits` the part's in place of the value's (`E_SUPPLIED_MARK`, `E_SUPPLIED_WIDTH`). The leaves a block's
+held outputs are held to join in(S) as such a part. The listing's binding of such an input bit is `supplied`. A block
+whose one expanding unit reads the input and whose other units read that unit's outputs has the part in in(S) once, and
+the expansion's rows are the block's own gates; a block that holds only readers of the rows reads them as wires. A block that
+reads one leaf of an input reads that leaf alone: the key of an opening reads i_j's low half, leaf 2 of
+`pous.session.round_coin/v1` under `halves`, and no other function gives i_j.
+
+**What the statement carries.** Each supplied part is a value the verifier registers at known content: its rows the part's
+leaves as the units read them, at the positions C gives (`OneCircuit.pos`, as for a registered input), row i salted by the
+public salt `registered_value.supplied_salts(<program digest>, <name>, i)` and committed under the value's registered
+domain. The verifier computes the root from the rows it computed (`Flock.Registered.checkKnown`), and the statement's rows
+open it as any registered read's do; a held output is a registered read of an output row against such a value. The base
+verifier is handed no other kind of public input. A supplied value is public, so each part's tree is listed in what the
+statement reveals (`Flock.Registered.knownList`). A value the verifier cannot compute (a coin's opening fails, a commitment
+it reads is missing) makes no statement, refused in the clear.
+
+**The order rule.** Every commitment a function reads is registered before the coin it reads, and the statement names it;
+the verifier refuses an evaluation that reads one registered after (`E_SUPPLIED_ORDER`, naming the commitment). Values
+that read a supplied value (an opening's row, salt and path, a block's outputs) are committed after its coin, in a window
+whose domain binds that coin, and the block's own check holds them to the commitments registered before it.
+
 ## 6. The canonical layout
 
-Gates are numbered by laying bodies out in node order, recursively.
+Gates are numbered by laying bodies out in node order, recursively. This is C's index at word level: a word primitive is one
+gate, and every given or registered thing (a partition's units, a port, a committed value's position, a registered value's
+gates) is named by it. The bit level, each word primitive's gate replaced by its Boolean body's gates (§4.9), is laid out
+from this index and is read only inside a proof block's statement and for counts; nothing outside a block names a bit
+gate.
 
 - **Gate counts.** A primitive is 1 gate, and a composite's gates are its body's last offset. A node's gates: primitive 1,
   call gates(callee), batch and scan n · gates(callee).
@@ -707,7 +870,8 @@ a word type (or none). The origins are:
 - `gate`, for a computed value;
 - `static`, for the output of a primitive without parameters (a constant);
 - `input` and `registered`, for an input node's leaf by its binding time;
-- `coin`, for an input leaf whose port is `"kind": "coin"`;
+- `coin`, for an input leaf whose port is `"kind": "coin"`, and a supplied leaf whose function's origin is `coin` (§5.4);
+- `supplied`, for any other supplied input node's leaf (§5.4);
 - `theta`, in place of `input` or `registered`, for a leaf of an input node the Program marks as the model's weights.
 - `position`, for an input leaf whose port is `"kind": "position"` (a proof block's position).
 

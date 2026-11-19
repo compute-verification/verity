@@ -24,7 +24,8 @@ def test_a_record_before_the_re_baseline_is_named_by_its_sha512(tmp_path):
 
 def test_a_sha256_digest_alone_falls_back_to_the_descriptor(tmp_path):
     assert M.recorded_program_digest(str(tmp_path), {"program": {"digest": SHA256}}) is None
-    desc: dict[str, Any] = {"schema": SCHEMA, "definitions": [], "root": None}
+    desc: dict[str, Any] = {"schema": SCHEMA, "program_fn": "P_v1", "inputs": [], "root": "P_v1", "boolean": {},
+                            "definitions": {"P_v1": {"form": "primitive", "id": "P_v1"}}}
     with gzip.open(tmp_path / "descriptor.json.gz", "wt") as f:
         json.dump(desc, f)
     assert M.recorded_program_digest(str(tmp_path), {"program": {"digest": SHA256}}) == program_digest(desc)

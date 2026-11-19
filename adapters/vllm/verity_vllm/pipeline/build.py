@@ -494,7 +494,7 @@ def _read_back_flash_attn_version(impls: dict, applied: dict) -> None:
 def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling: dict, launch: dict | None, tp: int, rank: int,
                    model_root: str | None) -> None:
     """A successful derive's files under `out` (descriptor, derive report, instances, tp_links, artifact) and its `res` fields."""
-    from verity.circuits.codec import canonical_json, encode_program
+    from verity.circuits.codec import canonical_json, encode_program, program_digest
     from verity_torch.correspondence.runtime import NAMESPACE as CORR_NS
     from verity_torch.correspondence.runtime import correspondence_digest
 
@@ -504,7 +504,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     program, supplied = rep.program, ({"supplied": s} if (s := rep.provenance.get("supplied")) else {})   # a registered_values derive's
     supplied |= {"ir": ir} if (ir := rep.provenance.get("ir")) else {}   # ir=boolean: the word root and digest the bits were lifted from
     desc = {**rep.descriptor, "annotations": dict(program.annotations)} if rep.descriptor is not None else encode_program(program)  # annotations re-read: the derive adds provenance after its digest
-    digest = hashlib.sha512(canon := canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()  # program_digest's text
+    canon, digest = canonical_json({k: v for k, v in desc.items() if k != "annotations"}), program_digest(desc)
     # runtime correspondence: carried in the descriptor's annotations (excluded from program_digest), digested apart
     corr_digest = correspondence_digest(desc)
     assert corr_digest == rep.correspondence_digest, (corr_digest, rep.correspondence_digest)

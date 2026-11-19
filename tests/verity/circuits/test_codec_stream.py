@@ -8,7 +8,7 @@ descriptor's canonical JSON, `program_digest` and `descriptor_size` must agree b
 from __future__ import annotations
 
 import contextlib
-import hashlib
+import json
 import importlib
 import inspect
 import random
@@ -96,6 +96,7 @@ def old_encode_program(program, schema: str = C.SCHEMA) -> dict:
         "schema": schema,
         "root": descriptor_id(root),
         "program_fn": getattr(program, "program_fn_id", None) or descriptor_id(program.fn),
+        "inputs": [list(x) for x in program.inputs],
         "definitions": defs,
         "boolean": {k: descriptor_id(f) for k, f in bodies.items()},
         "annotations": dict(program.annotations),
@@ -163,7 +164,7 @@ def assert_same(program, batches=(1, 3, C._NODE_BATCH)) -> int:
             try:
                 assert outcome(lambda p, s: b"".join(C.descriptor_chunks(p, s)), program, schema) == want, (schema, batch)
                 if schema == C.SCHEMA and want[0] == "ok":
-                    assert C.program_digest(program) == hashlib.sha512(want[1]).hexdigest()
+                    assert C.program_digest(program) == C.program_digest(json.loads(want[1]))
                     assert C.descriptor_size(program) == len(want[1])
                 elif schema == C.SCHEMA:
                     assert outcome(C.program_digest, program) == want
@@ -271,7 +272,7 @@ def test_random_programs_have_the_old_codecs_bytes():
     for seed in range(RANDOM):
         prog = _Gen(seed).program()
         assert assert_same(prog) == len(SCHEMAS)
-        assert C.program_digest(prog) == hashlib.sha512(old_bytes(prog)).hexdigest()
+        assert C.program_digest(prog) == C.program_digest(json.loads(old_bytes(prog)))
         aliased += b'"alias"' in old_bytes(prog)
     assert aliased > RANDOM // 10
 
@@ -396,9 +397,10 @@ def test_a_domain_error_names_the_old_path():
 
 # -- what the digest holds ----------------------------------------------------------------------------------------------
 
-def test_the_digest_streams_a_batch_of_nodes_at_a_time(monkeypatch):
-    """`program_digest` of a Program, and so a partition object's `program`, builds no descriptor: `encode_program` is never called, and no piece it hashes holds more than
-    one batch of a body's nodes (here 8 of a root's 2000), so what it holds is one definition's head and one batch."""
+def test_the_descriptor_streams_a_batch_of_nodes_at_a_time(monkeypatch):
+    """`descriptor_chunks` builds no descriptor: no piece holds more than one batch of a body's nodes (here 8 of a root's 2000),
+    so what it holds is one definition's head and one batch; and `program_digest` of a Program, and so a partition object's
+    `program`, never calls `encode_program`."""
     n = 2000
 
     def body(B, S, x):
@@ -412,6 +414,6 @@ def test_the_digest_streams_a_batch_of_nodes_at_a_time(monkeypatch):
     monkeypatch.setattr(C, "_NODE_BATCH", 8)
     monkeypatch.setattr(C, "encode_program", lambda *a, **k: pytest.fail("program_digest encoded the whole descriptor"))
     pieces = list(C.descriptor_chunks(prog))
-    assert b"".join(pieces) == want and C.program_digest(prog) == hashlib.sha512(want).hexdigest() == PO.build(prog)["program"]
+    assert b"".join(pieces) == want and C.program_digest(prog) == C.program_digest(json.loads(want)) == PO.build(prog)["program"]
     node = len(want) // n
     assert max(map(len, pieces)) < 16 * node < len(want) // 100

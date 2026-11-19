@@ -71,7 +71,7 @@ def check_format(a, out, bad):
     f = json.loads(Path(a.format).read_text())
     sys.path.insert(0, str(Path(a.format).parent))
     spec = importlib.import_module("test_format_spec")
-    (out / "wide.desc").write_text(f["wide"]["descriptor"])
+    (out / "wide.desc").write_text(spec.wide_descriptor())
     got = lean(a, out / "wide.desc")
     if not got["ok"]:
         bad.append(("wide", got["error"]))

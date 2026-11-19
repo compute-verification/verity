@@ -79,7 +79,7 @@ def test_a_row_two_fill_is_refused():
 
 def test_a_program_with_no_width_changing_wire_keeps_its_digest():
     assert program_digest(wired_population_program([(A, 2), (B, 2)], _record())[0]) == (
-        "576af2e56b9dfe625143d2f38bddf49c1e12b0ed77462fe94cea34322432042f97a527f91f1b21f88fd9f0d6f0faacbfea92b570bab2079dbcd2db7a7a0e7138")
+        "b709555fe028c8260dfeb17e5e02698617886e068d503d9bd44f359331f2cf0ced19cfca4e05fa65b1ca292a9a0461e9cf19d2f91f7a5a981d646b7c613bb23b")
     assert wired_population_program([(A, 2), (B, 2)], _record())[1]["params"]["templates"] == [IA, IB]
 
 

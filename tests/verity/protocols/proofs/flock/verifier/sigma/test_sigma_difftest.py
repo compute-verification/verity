@@ -119,7 +119,7 @@ _NO_ENTRY = PrimitiveDefinition("NoSigmaEntry", 1, (), Value(1), lambda: 0, regi
 
 def reference(case: dict) -> dict:
     wd, bd = case["word"], case["bits"]
-    PW, PB = _decode(wd), _decode(bd)
+    PW, PB = _decode(wd), _decode({k: v for k, v in bd.items() if k != "word"})   # the link is no key of the format (E_KEYS)
     link = bd.get("word")
     if (not isinstance(link, dict) or sorted(link) != ["program_sha512", "sigma"] or link["program_sha512"] != program_digest(wd)
             or not isinstance(link["sigma"], dict)):
