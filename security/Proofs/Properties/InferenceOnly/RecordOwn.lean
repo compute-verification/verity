@@ -13,6 +13,10 @@ argument of a root node that is no input node is a run of leaves of one input no
 those has `dims` on every argument (`batch_dims`), and two such parts at two positions, each of some leaf, are runs
 that share none (`runs_apart`). The test sorts the runs and compares neighbours; sorted, neighbours apart are all
 apart (`apart_of_sorted`), and the order they stood in does not matter (`List.Perm.pairwise_iff`).
+
+`OwnRunsOf` is `ownRows` itself, of a record declaring the root input nodes `D` (`ownRunsOf_iff`): its parts are
+runs where they are no edge and over no declared node (`ownPart_run`), and a batch maps each argument over no
+declared node (`ownBatch_dims`).
 -/
 
 @[expose] public section
@@ -164,6 +168,51 @@ theorem ownRuns_of_edgeFree {P : Prog} {D : List Nat} (h : ownRows P D = true) (
   unfold OwnRuns
   rw [← hp, ← hd]
   exact h
+
+/-- The parts of node `n`'s arguments `ownRows` reads as runs, of a record declaring the root input nodes `D`: every
+one but an edge (`edgeOf`) or a part over a declared node (`Record.overDeclared`). -/
+def ownPartsIn (P : Prog) (D : List Nat) (n : Node) : List Part :=
+  n.args.toList.flatMap fun a => a.seq.parts.toList.filter fun q => !edgeOf P q && !overDeclared D q
+
+/-- **The reading of the root `own-rows` admits, of a record declaring the root input nodes `D`**: `OwnRuns` over
+the parts that are no edge and no part over a declared node, a batch's argument mapped unless a part of it is over
+a declared node. It is `ownRows P D` itself (`ownRunsOf_iff`). -/
+def OwnRunsOf (P : Prog) (D : List Nat) : Prop :=
+    ((unitsOf P).all (fun n => n.form != .batch || n.args.all fun a =>
+        a.dims.isSome || a.seq.parts.any (overDeclared D)) &&
+      (((unitsOf P).flatMap (ownPartsIn P D)).filterMap (runOf P)).length ==
+        ((unitsOf P).flatMap (ownPartsIn P D)).length &&
+      ((((((unitsOf P).flatMap (ownPartsIn P D)).filterMap (runOf P)).filter fun r => r.2.2 > 0).mergeSort runLe).zip
+        (((((unitsOf P).flatMap (ownPartsIn P D)).filterMap (runOf P)).filter fun r => r.2.2 > 0).mergeSort
+          runLe).tail).all
+        fun (a, b) => a.1 != b.1 || a.2.1 + a.2.2 ≤ b.2.1) = true
+
+/-- **`own-rows` is `OwnRunsOf`.** -/
+theorem ownRunsOf_iff {P : Prog} {D : List Nat} : ownRows P D = true ↔ OwnRunsOf P D := Iff.rfl
+
+/-- **A part `own-rows` reads as a run is one**: of a unit, no edge and over no declared node. -/
+theorem ownPart_run {P : Prog} {D : List Nat} (h : OwnRunsOf P D) {n : Node} (hn : n ∈ unitsOf P) {q : Part}
+    (hq : q ∈ partsIn n) (he : edgeOf P q = false) (hd : overDeclared D q = false) : ∃ r, runOf P q = some r := by
+  unfold OwnRunsOf at h
+  rw [Bool.and_eq_true, Bool.and_eq_true] at h
+  refine filterMap_all (runOf P) _ (by simpa using h.1.2) q (List.mem_flatMap.2 ⟨n, hn, ?_⟩)
+  obtain ⟨a, ha, hqa⟩ := List.mem_flatMap.1 hq
+  exact List.mem_flatMap.2 ⟨a, ha, List.mem_filter.2 ⟨hqa, by simp [he, hd]⟩⟩
+
+/-- **A batch that is no input node maps each argument that reads no declared node over its members.** -/
+theorem ownBatch_dims {P : Prog} {D : List Nat} (h : OwnRunsOf P D) {n : Node} (hn : n ∈ unitsOf P)
+    (hb : n.form = .batch) {a : Arg} (ha : a ∈ n.args) (hd : a.seq.parts.any (overDeclared D) = false) :
+    a.dims.isSome = true := by
+  unfold OwnRunsOf at h
+  rw [Bool.and_eq_true, Bool.and_eq_true] at h
+  have h1 := List.all_eq_true.1 h.1.1 n hn
+  rw [hb] at h1
+  rcases Bool.or_eq_true_iff.1 h1 with hc | hc
+  · cases (show false = true from hc)
+  · rcases Bool.or_eq_true_iff.1 (Array.all_eq_true'.1 hc a ha) with hs | hs
+    · exact hs
+    · rw [hd] at hs
+      cases hs
 
 theorem runLe_trans (a b c : Nat × Nat × Nat) (hab : runLe a b = true) (hbc : runLe b c = true) :
     runLe a c = true := by
