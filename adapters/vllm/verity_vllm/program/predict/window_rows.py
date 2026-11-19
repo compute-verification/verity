@@ -675,7 +675,9 @@ class Rows:
     def record(self, win: IF.Window) -> None:
         """Every unit into ``win``, template by template in unit order, in runs of one step, one slot and one form, each
         labelled ``{"step", "slot", "form"}`` (module docstring): each input by reference but an opening's ports, each port
-        in its element width."""
+        in its element width; and the scan's supplied ok, which every bucket's verdict reads."""
+        if self.circuit.registered and SS.OK in self.circuit.registered.supplied:
+            win.give(SS.OK, SS.OK_VALUE)
         for tid, fn in self.fns.items():
             lay, steps, slots, node = self.lays[tid], self.steps(tid), self.slots(tid), self.node[tid]
             cut = (np.diff(steps) != 0) | (np.diff(slots) != 0) | (np.diff(node) != 0)

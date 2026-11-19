@@ -37,6 +37,7 @@ INGRESS, RELEASED = "ingress", "released"
 #: verifier supplies (`verity.circuits.supplied`), so a bucket the scan refuses opens no root
 OK = "scan-ok"
 OK_MARK = {"supplied": "const.u16/v1", "args": {"value": 1}, "layout": "le", "bits": 16}
+OK_VALUE = OK_MARK["args"]["value"].to_bytes(OK_MARK["bits"] // 8, "little")
 if TYPE_CHECKING:
     SCAN_STATE: str
     INGRESS_ROWS: str
@@ -119,4 +120,4 @@ def bridge(scan: Scan, prompt: int) -> Any:
                 LP=at["fields"], MAX=at["max_tokens"], IDS=at["ids"])
 
 
-__all__ = ["INGRESS", "INGRESS_ROWS", "OK", "OK_MARK", "PORT", "RELEASED", "RELEASED_ROWS", "SCAN_STATE", "Scan", "bridge", "scan_class", "words"]
+__all__ = ["INGRESS", "INGRESS_ROWS", "OK", "OK_MARK", "OK_VALUE", "PORT", "RELEASED", "RELEASED_ROWS", "SCAN_STATE", "Scan", "bridge", "scan_class", "words"]

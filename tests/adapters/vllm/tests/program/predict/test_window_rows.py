@@ -811,11 +811,12 @@ def test_the_registered_values_are_each_weights_rows_and_the_scan_state(window):
     (``row-seg``), each committed under salts of its own, 192 a row and no two alike: the table and a weight are core's
     commits of those rows under the weights record's program and those salts, and the entries name nothing but each value's size, domain and hiding
     root. The scan's are no values of the committer's: its start's, a row, and the network attester's ingress rows, a
-    row a bucket of the window, and its released rows, which the window's egress units compute (`released`). Each value
-    is in its reading ports' rows, which a window's commit refuses otherwise. Another parameter is refused."""
+    row a bucket of the window, its released rows, which the window's egress units compute (`released`), and its ok, which
+    the verifier supplies (`scan_state.OK`). Each value is in its reading ports' rows, which a window's commit refuses
+    otherwise. Another parameter is refused."""
     low, fields, got, *_ = window
-    assert set(got) | {SS.RELEASED_ROWS} == set(low.circuit.registered.params)
-    reads = [r for r in low.circuit.registered.reads if r.param != SS.RELEASED_ROWS]
+    assert set(got) | {SS.RELEASED_ROWS, SS.OK} == set(low.circuit.registered.params)
+    reads = [r for r in low.circuit.registered.reads if r.param not in (SS.RELEASED_ROWS, SS.OK)]
     lays = {r.reader: dict(IF.layout(low.circuit.template(r.reader)).schemas) for r in reads}
     assert {(r.param, got[r.param].schema) for r in reads} == {(r.param, lays[r.reader][r.port]) for r in reads}
     t = got[TABLE]
@@ -976,10 +977,15 @@ def test_a_windows_registration_registers_its_scan_state_under_the_domain_the_ve
 
 
 class _Kept:
-    """A window's `record` as `Rows.record` calls it, keeping each call's template, label and element bytes."""
+    """A window's `record` and `give` as `Rows.record` calls them, keeping each call's template, label and element bytes,
+    and each value given."""
 
     def __init__(self) -> None:
         self.calls: list[tuple[str, int, str, list[bytes | None], list[bytes]]] = []
+        self.given: dict[str, bytes] = {}
+
+    def give(self, param, value) -> None:
+        self.given[param] = value
 
     def record(self, fn, ins, outs, label=None) -> None:
         self.calls.append((fn.id, len(outs[0]), json.dumps(label), [None if a is None else a.tobytes() for a in ins],
