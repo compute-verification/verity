@@ -38,6 +38,7 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.proofs.spot.verifier.one_stage import members as M, one_circuit as OC, proofs as PF
+from verity.circuits import partition_object as PO
 from verity.commitments import hm96
 
 from holes import waits_on
@@ -307,7 +308,7 @@ def _verify(fx: Path, session: Path, public: str = "pub-32.bin", own: bool = Tru
 def _block(public: Path, partition: dict) -> int:
     """The partition's block holding the statement's first unit, as its public file names it."""
     u = PF._header(public)["units"]["indices"][0]
-    return next(k for k, (lo, hi) in enumerate(partition.get("blocks", [[0, u + 1]])) if lo <= u < hi)
+    return next(k for k, (lo, hi) in enumerate((PO.levels(partition) or [[(0, u + 1)]])[0]) if lo <= u < hi)
 
 
 @lean
@@ -507,7 +508,7 @@ def _two_templates(*counts: int) -> tuple[bytes, dict, list[str]]:
     ids = [codec.descriptor_id(t) for t, _ in ts]
     program, query = wired_population_program(ts, {"templates": [[tid, m] for tid, (_, m) in zip(ids, ts)]})
     c = b"".join(codec.descriptor_chunks(program))
-    return c, PO.build(json.loads(c), query, [(u, u + 1) for u in range(sum(counts))]), ids
+    return c, PO.build(json.loads(c), query, [[(u, u + 1) for u in range(sum(counts))]]), ids
 
 
 def test_the_doors_lowering_takes_c_s_template_from_its_root_under_a_query_of_many_templates(tmp_path):
@@ -542,7 +543,7 @@ def test_a_drawn_block_of_a_partition_of_many_templates_is_in_range_and_its_bloc
     with pytest.raises(OC.Refused, match="no block 4 among the partition's 4"):
         OC.block(c, part, 4)
     with pytest.raises(OC.Refused, match="end at 3, not at C's population 4"):
-        OC.block(c, {**part, "blocks": [[0, 1], [1, 3]]}, 0)
+        OC.block(c, PO.build(json.loads(c), part["query"], [[(0, 1), (1, 3)]]), 0)
 
 
 @lean
@@ -666,10 +667,11 @@ def test_the_door_under_the_templated_statement_refuses_a_flat_file(tmp_path, mo
 
 def test_a_members_own_units_are_refused_and_its_block_is_the_partitions():
     """A member's units are its block of the partition object's ``blocks`` (`one_circuit.block`): units its parameters
-    hand it are refused, and a partition naming no blocks gives it none."""
-    with pytest.raises(M._Refused, match=M.UNITS_HANDED):
+    hand it are refused, and a partition naming no blocks gives it none, each as Lean's parse refuses the parameters
+    (`Outside`, with its ``params:`` reason)."""
+    with pytest.raises(M.Outside, match=f"^params: proofs: member a/c0: {M.UNITS_HANDED}$"):
         M._block("a/c0", {"block": 0, "units": [[0, 1]]}, b"", {})
-    with pytest.raises(M._Refused, match="partition: E_PARTITION"):
+    with pytest.raises(M.Outside, match="^params: proofs: member a/c0: partition: E_PARTITION"):
         M._block("a/c0", {"block": 0}, b"", {"program": "p"})
 
 

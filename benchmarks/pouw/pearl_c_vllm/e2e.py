@@ -30,10 +30,12 @@ The run:
   ``pearlc-nohash``), hashing and records (``pearlc`` less ``pearlc-nohash``), and everything else.
 - **Gates, in the arm's process, before any timing:** at every distinct linear shape and both m, served y is held to the
   float product x·Wᵀ (relative RMS error under 8%, the scheme's tested bound), with hashing and without.  With hashing, the
-  same call made twice, each from a fresh pass on poisoned outputs, must give the same A root and tile root, and the
-  negative control, the call once more with its tile leaves omitted, must not.
+  same call made twice, each from a fresh pass on poisoned outputs and on a device run of its own (`on_twin`), must give
+  the same tile digests, and the negative control, the call once more with its tile leaves omitted, must not.
 - **The verify passes** (``--retain``): after the timing, the first timed prefill prompt and the decode prompts are replayed
-  in the arm, each a retained pass on poisoned buffers, whose commitment must equal its timed pass's.  Then the negative
+  in the arm, each a retained pass on poisoned buffers, the first pass of a device run of its own, whose commitment must
+  equal the same prompts' generate as the first pass of another (`on_twin`: a call's index is its place, so no pass repeats
+  a timed one's, and a pass verified alone is round 0).  Then the negative
   control: one decode prompt as a retained pass writing none of the commitment (`CONTROL_OMITS`).  The three manifests go to
   `verify.sh` after the execution phase, whose verdict on each is the Lean's: the first two must be replay-verified
   (development shortcut; the protocol's check is a ZK proof, PouwVerifier) and the control rejected (the panel's rule).
@@ -44,8 +46,9 @@ size only, or ``--capture``'s sizes), and each Pearl-C arm's decode forward is c
 (`pouw_pearl_c_whole`): a decode step is one graph replay after one slot upload.  Prefill runs eagerly; a retained decode
 replays its own capture, which also keeps each call's A words and tree.  Its gate (`whole_check`) holds a forward's calls
 replayed whole to the eager calls, and a retained pass replayed whole to an eager one, bit for bit; the decode response
-counts the steps replayed and run eagerly.  vLLM's eager decode isn't its graph's bit for bit, so the verify pass's eager
-check compares Pearl-C's graphed calls with its eager ones both under vLLM's eager decode.  ``--whole-defer`` (with
+counts the steps replayed and run eagerly.  A whole capture is the arm's own run's, so the verify passes, each on a
+device run of its own, decode under vLLM's eager decode, and their eager check compares Pearl-C's graphed calls with its
+eager ones there.  ``--whole-defer`` (with
 ``--whole-step``) captures each call's tile hashing beside the next call (`pouw_pearl_c_graphs`), ``--whole-defer-a``
 (with ``--whole-defer``) each call's A tree beside its own forming and GEMM, ``--whole-tree-sm`` (with
 ``--whole-defer-a``) that GEMM leaving the tree's CTA its SM, and ``--whole-fork-stats`` (with ``--whole-defer``) each
@@ -66,6 +69,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import gc
 import hashlib
 import json
 import multiprocessing as mp
@@ -343,34 +347,64 @@ def call_verdict(commits: list[dict], err: float) -> dict:
             "ok": err < ERR and same and fresh and control}
 
 
-def gate(run, weights: dict, whole: bool = False) -> list[dict]:
-    """Served y against x·Wᵀ, and with hashing the same call's commitment twice and the negative control (`call_verdict`),
-    at every distinct (n, k) and both m; with `whole` (``--whole-step``), `whole_check` too.  The checks that compare passes
-    repeat one pass's call indices (`PearlCDeviceRun.begin`'s ``at``), since the execution phase numbers calls across
-    passes."""
+def on_twin(run, passes):
+    """``passes(twin)`` on a device run of its own over `run`'s install (`PearlCDeviceRun.twin`): the same salt and its
+    rounds from 0, so its k-th pass with calls holds the place every other twin's k-th does, where `run`'s own next pass
+    can't repeat one (`passes.CHOSEN_INDEX`).  The twin is finished and dropped after, so one twin's memory is held at a
+    time."""
+    import torch
+    twin = run.twin()
+    try:
+        return passes(twin)
+    finally:
+        twin.finish()
+        del twin
+        gc.collect()
+        torch.cuda.empty_cache()
+
+
+def call_checks(run, cases: list) -> list[dict]:
+    """The call check (`call_verdict`) of each case (weight id, weight, x): each case's call in a pass of its own on a
+    twin (`on_twin`), the cases in order, then on a second twin, and on a third with the tile leaves omitted, so a case's
+    passes share a place; without hashing one twin, y alone."""
+    commits, errs = [[] for _ in cases], []
+    for omit in ((), (), ("hash_leaf",)) if run.hashing else ((),):
+        def passes(t, omit=omit):
+            for i, (w, W, x) in enumerate(cases):
+                t.begin()
+                t.poison()
+                t.omit = frozenset(omit)
+                y = t.gemm(w, x, W, None)
+                if len(errs) < len(cases):
+                    ref = x.float() @ W.float().T
+                    errs.append(float(((y.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt()))
+                ended = t.end()
+                commits[i].append(under_salt(t, ended) if t.hashing else ended)
+            t.omit = frozenset()
+        on_twin(run, passes)
+    return [call_verdict(c, err) for c, err in zip(commits, errs, strict=True)]
+
+
+def shape_cases(weights: dict, ms: tuple, gen) -> list:
+    """A case (weight id, weight, x) at every distinct (n, k) of `weights` and each m of `ms`, x BF16 rows drawn from the
+    torch generator `gen`."""
     import torch
     out, seen = [], set()
-    gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20260930)
     for w, W in weights.items():
-        if tuple(W.shape) in seen:
-            continue
-        seen.add(tuple(W.shape))
-        for m in (PREFILL, BATCH):
-            x = torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16)
-            commits, served, at = [], None, run.epoch_calls()
-            for omit in ((), (), ("hash_leaf",)) if run.hashing else ((),):
-                run.begin(at=at)
-                run.poison()
-                run.omit = frozenset(omit)
-                y = run.gemm(w, x, W, None)
-                served = y if served is None else served
-                ended = run.end()
-                commits.append(under_salt(run, ended) if run.hashing else ended)
-            run.omit = frozenset()
-            ref = x.float() @ W.float().T
-            err = float(((served.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())
-            out.append({"check": "call", "weight": w, "n": W.shape[0], "k": W.shape[1], "m": m, "hashing": run.hashing,
-                        **call_verdict(commits, err)})
+        if tuple(W.shape) not in seen:
+            seen.add(tuple(W.shape))
+            out += [(w, W, torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16)) for m in ms]
+    return out
+
+
+def gate(run, weights: dict, whole: bool = False) -> list[dict]:
+    """Served y against x·Wᵀ, and with hashing the same call's commitment twice and the negative control (`call_checks`),
+    at every distinct (n, k) and both m; with `whole` (``--whole-step``), `whole_check` too."""
+    import torch
+    cases = shape_cases(weights, (PREFILL, BATCH),
+                        torch.Generator(device=next(iter(weights.values())).device).manual_seed(20260930))
+    out = [{"check": "call", "weight": w, "n": W.shape[0], "k": W.shape[1], "m": x.shape[0], "hashing": run.hashing, **v}
+           for (w, W, x), v in zip(cases, call_checks(run, cases), strict=True)]
     if run.hashing:
         out.append(screen_check(run, weights))
     if run.hashing and run.schedule.side:
@@ -404,11 +438,12 @@ def bf16_race(run) -> bool:
 
 
 def whole_check(run, weights: dict, m: int | None = None) -> dict:
-    """With ``--whole-step``, a forward's calls (every weight once, `m` rows, default `BATCH`, in weight order) made eagerly
-    twice in one pass, then captured whole in one CUDA graph after a warm-up outside it (as vLLM captures a decode forward)
-    and replayed twice in each of two fresh passes on poisoned outputs, between `whole_replay` and `whole_replayed`, as vLLM's
-    decode steps replay it: each pass must give the eager pass's tile digests (`unsalted`: each pass's salts are fresh, so
-    its roots are its own), screen flags and outputs, bit for bit,
+    """With ``--whole-step``, a forward's calls (every weight once, `m` rows, default `BATCH`, in weight order) captured whole
+    in one CUDA graph after a warm-up outside it (as vLLM captures a decode forward) and replayed twice in each of two
+    fresh passes on poisoned outputs, between `whole_replay` and `whole_replayed`, as vLLM's decode steps replay it; and on
+    another twin (`on_twin`) the forward made eagerly twice in a pass, three passes, so the second and third hold the
+    replays' places: each replayed pass must give its place's eager pass's tile digests (`unsalted`: each pass's salts are
+    fresh, so its roots are its own), screen flags and outputs, bit for bit,
     and each pass's second replay must upload the slots the first one staged (with hashing).  A retained capture keeps a
     stage for each weight and m₁₆, so the check runs at any m beside the sizes vLLM's graphs captured.  The arm
     `bf16_race` names fails it before anything is captured, ``refused`` saying why (`BF16_RACE`)."""
@@ -420,83 +455,98 @@ def whole_check(run, weights: dict, m: int | None = None) -> dict:
     gen = torch.Generator(device=dev).manual_seed(20261002)
     xs = {w: torch.randn(m, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
     rows = 2 * m * len(weights) if run.hashing else 0
-    def forward():
-        return [run.gemm(w, xs[w], W, None) for w, W in weights.items()]
-    def ended(ys):
-        return [y.clone() for y in ys], run.flag_buf[:rows].clone(), unsalted(run, run.end())
+    def forward(t):
+        return [t.gemm(w, xs[w], W, None) for w, W in weights.items()]
+    def ended(t, ys):
+        return [y.clone() for y in ys], t.flag_buf[:rows].clone(), unsalted(t, t.end())
 
-    run.graphs = False
-    run.begin()
-    at = run.cur.base
-    run.poison()
-    forward()
-    want = ended(forward())
-    run.graphs = True
-    run.begin()
-    graph, side = torch.cuda.CUDAGraph(), torch.cuda.Stream(device=dev)
-    run.whole_capture_begin()
-    try:
-        forward()
-        side.wait_stream(torch.cuda.current_stream(dev))
-        with torch.cuda.graph(graph, stream=side):
-            outs = forward()
-    finally:
-        calls = run.whole_capture_end()
-    run.end()
-    got, staged = [], []
-    for _ in range(2):
-        run.begin(at=at)
-        run.poison()
+    def eager(t):
+        t.graphs, got = False, []
+        for _ in range(3):
+            t.begin()
+            t.poison()
+            forward(t)
+            got.append(ended(t, forward(t)))
+        return got[1:]
+
+    def replayed(t):
+        t.graphs = True
+        t.begin()
+        graph, side = torch.cuda.CUDAGraph(), torch.cuda.Stream(device=dev)
+        t.whole_capture_begin()
+        try:
+            forward(t)
+            side.wait_stream(torch.cuda.current_stream(dev))
+            with torch.cuda.graph(graph, stream=side):
+                outs = forward(t)
+        finally:
+            calls = t.whole_capture_end()
+        t.end()
+        got, staged = [], []
         for _ in range(2):
-            staged.append(run.whole_replay(calls))
-            graph.replay()
-            run.whole_replayed(calls)
-        got.append(ended(outs))
-    same = all(g[2] == want[2] and torch.equal(g[1], want[1]) and all(torch.equal(a, b) for a, b in zip(g[0], want[0], strict=True))
-               for g in got)
-    kept = whole_retained_check(run, forward, side) if run.hashing else None
-    return {"check": "whole", "hashing": run.hashing, "calls": len(calls), "eager": want[2], "replays": [g[2] for g in got],
+            t.begin()
+            t.poison()
+            for _ in range(2):
+                staged.append(t.whole_replay(calls))
+                graph.replay()
+                t.whole_replayed(calls)
+            got.append(ended(t, outs))
+        return calls, got, staged
+
+    want = on_twin(run, eager)
+    calls, got, staged = on_twin(run, replayed)
+    same = all(g[2] == e[2] and torch.equal(g[1], e[1]) and all(torch.equal(a, b) for a, b in zip(g[0], e[0], strict=True))
+               for g, e in zip(got, want, strict=True))
+    kept = whole_retained_check(run, forward) if run.hashing else None
+    return {"check": "whole", "hashing": run.hashing, "calls": len(calls), "eager": [e[2] for e in want], "replays": [g[2] for g in got],
             "replay_equals_eager": same, "staged": staged, "retained_equals_eager": None if kept is None else kept["ok"],
             "retained": kept,
             "ok": (same and len(calls) == len(weights) and (kept is None or kept["ok"])
                    and staged == ([False, True] * 2 if run.hashing else [False] * 4))}
 
 
-def whole_retained_check(run, forward, side) -> dict:
-    """A retained pass of `forward` made eagerly, and one replayed from a whole capture of a retained pass's kind: the same
-    records, call files (each call's A and y rows, less what its fresh salts make differ: `RETAINED_SALTED`) and tile digests
-    (`unsalted`), byte for byte (`retained_differences`).  Each pass drops its retain directory before it ends, so neither
-    writes the weights' files, which the two would share."""
+def whole_retained_check(run, forward) -> dict:
+    """A retained pass of `forward` (a function of a device run) made eagerly after an eager pass, and on another twin
+    (`on_twin`) one replayed from a whole capture of a retained pass's kind after its capture's pass, so both are at round
+    1: the same records, call files (each call's A and y rows, less what its fresh salts make differ: `RETAINED_SALTED`)
+    and tile digests (`unsalted`), byte for byte (`retained_differences`).  Each pass drops its retain directory before it
+    ends, so neither writes the weights' files, which the two would share."""
     import shutil
     import tempfile
 
     import torch
     dirs = [Path(tempfile.mkdtemp(prefix="whole-kept-")) for _ in "ab"]
 
-    try:
-        run.graphs = False
-        run.begin(retain=str(dirs[0]))
-        at = run.cur.base
-        forward()
-        want = retained_end(run)
-        run.graphs = True
-        run.begin()
-        graph = torch.cuda.CUDAGraph()
-        run.whole_capture_begin(run.whole_key(True))
+    def eager(t):
+        t.graphs = False
+        t.begin()
+        forward(t)
+        t.end()
+        t.begin(retain=str(dirs[0]))
+        forward(t)
+        return retained_end(t)
+
+    def replayed(t):
+        t.graphs = True
+        t.begin()
+        graph, side = torch.cuda.CUDAGraph(), torch.cuda.Stream()
+        t.whole_capture_begin(t.whole_key(True))
         try:
-            forward()
+            forward(t)
             side.wait_stream(torch.cuda.current_stream())
             with torch.cuda.graph(graph, stream=side):
-                forward()
+                forward(t)
         finally:
-            calls = run.whole_capture_end()
-        run.end()
-        run.begin(retain=str(dirs[1]), at=at)
-        run.whole_replay(calls)
+            calls = t.whole_capture_end()
+        t.end()
+        t.begin(retain=str(dirs[1]))
+        t.whole_replay(calls)
         graph.replay()
-        run.whole_replayed(calls)
-        got = retained_end(run)
-        return retained_differences(want, got, dirs)
+        t.whole_replayed(calls)
+        return retained_end(t)
+
+    try:
+        return retained_differences(on_twin(run, eager), on_twin(run, replayed), dirs)
     finally:
         for d in dirs:
             shutil.rmtree(d, ignore_errors=True)
@@ -513,7 +563,7 @@ def retained_end(run, commitment=None) -> tuple:
 
 
 #: a retained call's file entries that differ between two passes of the same calls, each drawing its own salts: A's tree
-#: and salts, and y's root, tree and salts (`grouped_check.SALTED`'s calls)
+#: and salts, and y's root, tree and salts
 RETAINED_SALTED = {"call": ("tree", "salts"), "y": ("root", "tree", "salts")}
 
 
@@ -573,48 +623,53 @@ def _differing(a, b, at: str = "") -> list[str]:
 
 def schedule_check(run, weights: dict) -> dict:
     """The run's schedule on the card: the same calls (m = 32 on the 64 x 64 path, m = 128 on the 128 x 128 one), each
-    from a fresh pass on poisoned outputs, under the serial schedule and under the run's, must give the same
-    tile digests (`unsalted`: each pass's salts are fresh, so its roots are its own).  The run's schedule is its own again
-    after."""
+    from a fresh pass on poisoned outputs on a twin (`on_twin`), under the serial schedule and under the run's, must give the
+    same tile digests (`unsalted`: each pass's salts are fresh, so its roots are its own).  The run's own passes are
+    untouched."""
     import torch
     w, W = next(iter(weights.items()))
     gen = torch.Generator(device=W.device).manual_seed(20260932)
     xs = [torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16) for m in (32, 128, 32)]
-    commits, mine, at = {}, run.schedule.name, run.epoch_calls()
+    commits, mine = {}, run.schedule.name
     for name in ("serial", mine):
-        run.begin(schedule=name, at=at)
-        run.poison()
-        for x in xs:
-            run.gemm(w, x, W, None)
-        commits[name] = unsalted(run, run.end())
-    run.begin(schedule=mine)
+        def passes(t, name=name):
+            t.begin(schedule=name)
+            t.poison()
+            for x in xs:
+                t.gemm(w, x, W, None)
+            commits[name] = unsalted(t, t.end())
+        on_twin(run, passes)
     return {"check": "schedule", "schedule": mine, "priorities": run.details["schedule"], "serial": commits["serial"],
             mine: commits[mine], "ok": commits["serial"] == commits[mine]}
 
 
 def graphs_check(run, weights: dict) -> list[dict]:
-    """With ``--graphs``, at every distinct (n, k): one m = 32 call made eagerly, then twice as a graph replay, each from a
-    fresh pass on poisoned outputs, must give the same tile digests (`unsalted`), screen flags and y, bit for bit.  And the screen
+    """With ``--graphs``, at every distinct (n, k): one m = 32 call twice as a graph replay, each from a fresh pass on
+    poisoned outputs, must give the tile digests (`unsalted`), screen flags and y the call gives made eagerly in the pass at
+    its place on another twin (`on_twin`), bit for bit.  And the screen
     of an m = 8,192 call read from its BF16 x must give the flags it gives from A's FP32 words."""
     import torch
     from verity_torch.pouw.pearl_c import run_device as PPDR
-    out, seen = [], set()
     gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20261001)
-    for w, W in weights.items():
-        if tuple(W.shape) in seen:
-            continue
-        seen.add(tuple(W.shape))
-        x = torch.randn(BATCH, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16)
-        got, at = [], run.epoch_calls()
-        for graphs in (False, True, True):
-            run.graphs = graphs
-            run.begin(at=at)
-            run.poison()
-            y = run.gemm(w, x, W, None).clone()
-            flags = run.flag_buf[:BATCH].clone()
-            got.append((unsalted(run, run.end()), flags, y))
-        run.graphs = True
-        same = all(g[0] == got[0][0] and torch.equal(g[1], got[0][1]) and torch.equal(g[2], got[0][2]) for g in got[1:])
+    cases = shape_cases(weights, (BATCH,), gen)
+
+    def passes(graphs: bool):
+        def on(t):
+            t.graphs, got = graphs, []
+            for w, W, x in cases:
+                for _ in range(2):
+                    t.begin()
+                    t.poison()
+                    y = t.gemm(w, x, W, None).clone()
+                    got.append((unsalted(t, t.end()), t.flag_buf[:BATCH].clone(), y))
+            return got
+        return on
+
+    eager, replayed = on_twin(run, passes(False)), on_twin(run, passes(True))
+    out = []
+    for i, (w, W, _) in enumerate(cases):
+        same = all(g[0] == e[0] and torch.equal(g[1], e[1]) and torch.equal(g[2], e[2])
+                   for g, e in zip(replayed[2 * i:2 * i + 2], eager[2 * i:2 * i + 2], strict=True))
         out.append({"check": "graphs", "weight": w, "n": W.shape[0], "k": W.shape[1], "m": BATCH, "eager_equals_replay": same,
                     "ok": same})
     w, W = next(iter(weights.items()))
@@ -760,34 +815,35 @@ def serve(conn, args, group: str, coins: dict) -> None:
                 out = {}
                 if whole is not None:
                     whole.take()
-                for name, prompts, sp in (("prefill", [cmd["prefill"]], one), ("decode", cmd["decode"], many)):
-                    want = cmd["want"][name]
-                    run.repeat_at = want.get("base")     # the timed pass's call indices, so its commitment can repeat
-                    _, _, got, _ = timed([{"prompt_token_ids": x} for x in prompts], sp, retain=str(Path(args.retain) / name))
-                    same = all(got.get(k) == want.get(k) for k in ("transcript_root", "activation_roots", "units", "tiles"))
-                    out[name] = {"manifest": got.get("manifest"), "commitment": got, "same_commitment_as_timed": same,
-                                 **({"whole_step": whole.take()} if whole is not None else {})}
-                    if run.graphs:
-                        p, ref = [{"prompt_token_ids": x} for x in prompts], want
-                        if whole is not None:    # vLLM's eager decode isn't its graph's: both sides on vLLM's eager path
-                            whole.enabled = False
+                def alone(name, prompts, sp, retain=None, graphs=True, controls=()):
+                    """`name`'s generate, one pass, as the first pass of a twin (`on_twin`) the stack's executor runs
+                    meanwhile: round 0, the place verify.sh verifies a pass alone at."""
+                    def on(t):
+                        t.graphs, stack.executor.run = run.graphs and graphs, t
                         try:
-                            if whole is not None:
-                                run.repeat_at = want.get("base")
-                                _, _, ref, _ = timed(p, sp)
-                            run.graphs = False
-                            run.repeat_at = want.get("base")
-                            _, _, eager, _ = timed(p, sp)
+                            return timed([{"prompt_token_ids": x} for x in prompts], sp,
+                                         retain=retain and str(Path(retain) / name), controls=controls)[2]
                         finally:
-                            run.graphs = True
-                            if whole is not None:
-                                whole.enabled = True
-                        out[name]["same_commitment_eager"] = all(eager.get(k) == ref.get(k) for k in
-                                                                 ("transcript_root", "activation_roots", "units", "tiles"))
-                for label, omits in CONTROLS.items():
-                    _, _, got, _ = timed([{"prompt_token_ids": cmd["decode"][0]}], one, retain=str(Path(args.retain) / label),
-                                         controls=(Control("omit", omits),))
-                    out[label] = {"manifest": got.get("manifest"), "commitment": got, "omitted": sorted(omits)}
+                            stack.executor.run = run
+                    return on_twin(run, on)
+
+                def same(a, b):
+                    return all(a.get(k) == b.get(k) for k in ("transcript_root", "activation_roots", "units", "tiles"))
+                if whole is not None:     # a whole capture is the arm's own run's: the twins decode under vLLM's eager decode
+                    whole.enabled = False
+                try:
+                    for name, prompts, sp in (("prefill", [cmd["prefill"]], one), ("decode", cmd["decode"], many)):
+                        kept, again = alone(name, prompts, sp, args.retain), alone(name, prompts, sp)
+                        out[name] = {"manifest": kept.get("manifest"), "commitment": kept,
+                                     "same_commitment_as_timed": same(kept, again)}
+                        if run.graphs:
+                            out[name]["same_commitment_eager"] = same(alone(name, prompts, sp, graphs=False), again)
+                    for label, omits in CONTROLS.items():
+                        got = alone(label, [cmd["decode"][0]], one, args.retain, controls=(Control("omit", omits),))
+                        out[label] = {"manifest": got.get("manifest"), "commitment": got, "omitted": sorted(omits)}
+                finally:
+                    if whole is not None:
+                        whole.enabled = True
                 conn.send(out)
             elif op == "served":
                 stack.activate(arm_of("pearlc", run, args))
@@ -1268,9 +1324,7 @@ def main() -> None:
             if mode not in tokens:
                 tokens[mode] = arm.ask(op="chat", mode=mode)
         if last and args.retain:
-            want = {ph: next(r["commitment"] for r in records if r["mode"] == "pearlc" and r["phase"] == ph and r["rep"] == 0)
-                    for ph in ("prefill", "decode")}
-            verify.update(arm.ask(op="verify", prefill=p["prefill"][0], decode=p["decode"], want=want))
+            verify.update(arm.ask(op="verify", prefill=p["prefill"][0], decode=p["decode"]))
 
     try:
         run_workers(ctx, args, coins, p, records, out, arm_steps)
@@ -1344,8 +1398,8 @@ def finish(args, out: dict, records: list[dict], ready: dict, tokens: dict, veri
           and all(v["same_commitment_as_timed"] and v.get("same_commitment_eager") is not False
                   for k, v in summary["verify_pass"].items() if not k.startswith("control")))
     ms = [(f"{m}.{k}", v, "s") for m, r in results.items() for k, v in r["timing"].items()]
-    run_result.write(args.out, ok, "pearl-c vLLM e2e: gated, fp8 interleaved with the Pearl-C engine, and each verify pass repeats "
-                     "its timed commitment", json.dumps(summary), ms)
+    run_result.write(args.out, ok, "pearl-c vLLM e2e: gated, fp8 interleaved with the Pearl-C engine, and each verify pass's "
+                     "commitment its prompts' generate's at its place", json.dumps(summary), ms)
 
 
 if __name__ == "__main__":

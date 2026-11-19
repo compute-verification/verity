@@ -62,7 +62,7 @@ def _program(c: bytes):
 def _partition(d: Path, template: str):
     """The served partition with the template's first unit a block of its own, and that block's index."""
     from verity.circuits import partition_object as PO
-    p = d / f"partition-{hashlib.sha256(template.encode()).hexdigest()[:16]}.json"
+    p = d / f"partition-levels-{hashlib.sha256(template.encode()).hexdigest()[:16]}.json"
     if p.exists():
         j = json.loads(p.read_text())
         return j["partition"], j["k"], j["u"], j["population"]
@@ -72,7 +72,7 @@ def _partition(d: Path, template: str):
     tp = PO.TemplatePartition(program, query)
     u = next(a for _k, t, a, n in tp.ranges if t == template and n)
     blocks = [b for b in ((0, u), (u, u + 1), (u + 1, tp.population)) if b[0] < b[1]]
-    part = PO.build(json.loads(c), query, blocks)
+    part = PO.build(json.loads(c), query, [blocks])
     k = blocks.index((u, u + 1))
     p.write_text(json.dumps({"partition": part, "k": k, "u": u, "population": tp.population}))
     return part, k, u, tp.population

@@ -10,7 +10,7 @@
 # tick's corpus is summarized (each summary.json's `serving` has the trace's throughput and latency), and
 # benchmarks/network_e2e/encodings/v1.py charges the traces at T = 6000 with the checkpoint's stop ids into OUT/advice.json
 # and its table into OUT/advice.md, where the tick's timing is 0 bits.
-# The node's setup is the GLM-5.3 TP drivers' (benchmarks/served_commit/tp_decode.sh): CHECKPOINT (default the node's
+# The node's setup: CHECKPOINT (default the node's
 # verified local copy, else /workspace/fs/glm53/REV), the Hub offline, and VENV (default /workspace/cp/venv312), whose vLLM
 # must be d9105ea80, the scheduler the replay models. Under gpu-lease where the node has it: 8 GPUs, at most MAX_MIN minutes.
 set -uo pipefail
