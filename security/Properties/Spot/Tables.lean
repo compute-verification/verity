@@ -16,11 +16,11 @@ each member's statement (`Spot.OneStageZk.Member.statement`) is handed the blobs
 up (`OneStageZk.ownTables`) and refuses where the blobs lack one of them, so a member's inputs hold its own circuit's
 tables and no other, whatever other pinned table the blobs hold.
 
-* `TablesRegistered`: on blobs `tablesHeld` accepts, the registered circuit file is among the blobs and the pinned
-  tables the blobs hold are, by name, the ones it looks up (`HoldsRegisteredTables`); on blobs on which v2's check
+* `TablesRegistered`: on blobs `tablesHeld` accepts, the circuit file derived from C and the partition looks up the pinned
+  tables the blobs hold, by name, and no other (`HoldsRegisteredTables`); on blobs on which v2's check
   at any coins (`checkBlobsAt`) accepts, that holds of the verifier's own files where the parameters name no members,
   and where they name members the blobs hold each table each member's circuit looks up, sampled or not
-  (`AcceptHoldsTables`); and where a member's statement reads, its circuit file is among the blobs and the lookup
+  (`AcceptHoldsTables`); and where a member's statement reads, its circuit file is derived and the lookup
   tables its inputs hold are the blobs' pinned tables among the names it looks up, every one of those names
   (`HandedOwnTables`).
 
@@ -33,19 +33,20 @@ open Spot
 
 namespace Properties.Spot
 
-/-- **The blobs hold the registered circuit's lookup tables and no other pinned table**: the circuit file the verifier's
-own files `p` name is among the blobs, and the pinned MUFU tables the blobs hold (`OneStageZk.tablesOf`) are, in
-`Flock.MUFU_TABLES`' order, the ones it looks up (`OneStageZk.lookupsOf`). -/
+/-- **The blobs hold the registered circuit's lookup tables and no other pinned table**: the statement's circuit file,
+derived from C and the partition the verifier's own files `p` hold (`OneStageZk.Own.circuitFile`), and the pinned MUFU
+tables the blobs hold (`OneStageZk.tablesOf`) are, in `Flock.MUFU_TABLES`' order, the ones it looks up
+(`OneStageZk.lookupsOf`). -/
 def HoldsRegisteredTables (p : OneStageZk.Own) (bs : Core.Blobs) : Prop :=
-  ∃ circuitB, bs.get p.circuit "circuit" = .ok circuitB ∧
+  ∃ circuitB, p.circuitFile = .ok circuitB ∧
     OneStageZk.lookupsOf circuitB = .ok ((OneStageZk.tablesOf bs).map (·.1))
 
 /-- **The tables `tables` are the blobs' pinned tables the circuit of `p` looks up, every one of them**: the circuit
-file the files `p` name is among the blobs, `tables` are the pinned MUFU tables the blobs hold among the names it looks
+file derived from C and the partition `p` holds (`OneStageZk.Own.circuitFile`), `tables` are the pinned MUFU tables the blobs hold among the names it looks
 up (`OneStageZk.tablesAmong`, in `Flock.MUFU_TABLES`' order), and their names are exactly those names: the blobs hold
 each table the circuit looks up, and `tables` hold no table it does not look up, whatever else the blobs hold. -/
 def HandedOwnTables (p : OneStageZk.Own) (bs : Core.Blobs) (tables : List (String × ByteArray)) : Prop :=
-  ∃ circuitB names, bs.get p.circuit "circuit" = .ok circuitB ∧ OneStageZk.lookupsOf circuitB = .ok names ∧
+  ∃ circuitB names, p.circuitFile = .ok circuitB ∧ OneStageZk.lookupsOf circuitB = .ok names ∧
     tables = OneStageZk.tablesAmong names bs ∧ tables.map (·.1) = names
 
 /-- **What an accept holds of the blobs' lookup tables, in the form the parameters `p` name**: where they name no
@@ -75,10 +76,9 @@ def TablesRegistered : Prop :=
 with the digest it is found under. -/
 def circuitDigest : ByteArray := ⟨Array.replicate 64 0x11⟩
 
-/-- The verifier's own files naming the circuit file under `circuitDigest` and no public file. -/
+/-- The verifier's own files with no C, partition or public file. -/
 def witnessOwn : OneStageZk.Own :=
-  { programJ := Lean.Json.null, program := .empty, partition := Lean.Json.null, circuit := String.ofList (List.replicate 128 '1'),
-    pub := "", registered := none }
+  { programJ := Lean.Json.null, program := .empty, partition := Lean.Json.null, pub := "", registered := none }
 
 /-- `rcp`'s pinned SHA-512 (`Flock.MUFU_TABLES`), as bytes. -/
 def rcpDigest : ByteArray :=

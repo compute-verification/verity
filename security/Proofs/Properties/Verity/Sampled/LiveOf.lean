@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Sampled.SessionAt
+public import Proofs.Properties.Verity.Sampled.Accepts
 public import Proofs.Properties.Verity.Sampled.ParamsProgram
 public import Proofs.Flock.Bridge.SampledDesign
 public import Proofs.Flock.Bridge.Refused
@@ -208,7 +209,7 @@ theorem run_scope {p : _root_.Spot.OneStageZk.Own} {s : _root_.Spot.OneStageZk.R
     {pu : Option (Array ℕ)} {bs : _root_.Core.Blobs} {r : _root_.Spot.OneStageZk.Run}
     (h : _root_.Spot.OneStageZk.run p #[s] pu bs = .ok r) :
     ∃ tags0 circuitB pubB rd, Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
-      bs.get p.circuit "circuit" = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
+      p.circuitFile = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
       ∃ ksFiles population programSha want,
         _root_.Spot.OneStageZk.step (_root_.Spot.OneStageZk.inputsOf tags0 p circuitB pubB bs) rd bs
           (scopeOf (_root_.Spot.OneStageZk.inputsOf tags0 p circuitB pubB bs) pubB rd) ksFiles population
@@ -243,7 +244,7 @@ theorem checkBlobsAt_scope {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
     (hm : p.members = none) (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ tags0 circuitB pubB reg, Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
-      bs.get p.own.circuit "circuit" = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
+      p.own.circuitFile = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       Flock.ProvedScope.check
         (Flock.Witness.zkTags (_root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB bs)) true circuitB pubB
         (_root_.Spot.OneStageZk.tablesOf bs) 1 false reg = .ok () := by
@@ -262,7 +263,7 @@ theorem checkBlobsAt_setup {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
     (hm : p.members = none) (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ tags0 circuitB pubB rd record x, Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
-      bs.get p.own.circuit "circuit" = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
+      p.own.circuitFile = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       sessionRecord e bs = some record ∧
       _root_.Spot.OneStageZk.setupAt (_root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB bs) rd
         (Flock.Witness.recordDraw record) = .ok x := by
@@ -539,9 +540,7 @@ theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD 
   have hs : o.sent.blobs = F ++ o.blobs := by
     show o.files ++ o.blobs = _
     rw [hFo]
-  have hcf : circuitB = V.circuitFile θ F := by
-    rw [hs] at hc
-    exact get_named (hD.circuit p₀ hp₀) hreg.1 hc
+  have hcf : circuitB = V.circuitFile θ F := absurd hc (circuitFile_ne_ok p₀.own circuitB)
   have hpf : pubB = V.publicFile θ F := by
     rw [hs] at hpb
     exact get_named (hD.publicFile p₀ hp₀) hreg.2 hpb

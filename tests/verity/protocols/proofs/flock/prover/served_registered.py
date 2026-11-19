@@ -9,8 +9,8 @@ The program (`program`) is `N` RoPE d64 template instances, instance `i` reading
 * the tree, committed as a registered value (`Registered.commit`): each instance's `cs` row of a generated RoPE set at its
   position, the other rows random, so every instance's output is the set's own;
 * `x`, each instance's input row, committed as a registered value too (row i instance i's), and the instances' outputs
-  as the registered value `rope_out` (row i instance i's output), so every port of the circuit is registered
-  (`Flock.Registered.checkComplete`, which `--registered` runs);
+  in the template's output field's tree (`out_value`, row i instance i's output), so every port of the circuit is
+  registered (`Flock.Registered.checkComplete`, which `--registered` runs);
 * the prover's `inst-N.bin` and the verifier's `pub-N.bin`, a shared-row file whose `x` and `cs` table rows and output
   rows carry the registered salts and paths (header `registered`);
 * `served.json` and `served-x.json`, the trees as the service holds them (`ServedTree`: value, root, leaves, words,
@@ -32,6 +32,7 @@ from pathlib import Path
 
 import numpy as np
 
+from verity.circuits import partition_object as PO
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
@@ -46,8 +47,6 @@ ROWS = 40
 #: the row of `cs_table` instance i reads: distinct, since 7 is prime to ROWS
 POS = tuple((7 * i + 3) % ROWS for i in range(N))
 VALUE = "cs_table"
-#: the registered value whose rows are the instances' outputs, row i instance i's
-OUT_VALUE = "rope_out"
 WORDS = 64
 SEED = 20261020
 #: `--schema`'s names for the row formats a served tree may be
@@ -55,7 +54,8 @@ FORMATS = {"v1": RV.SCHEMA, "v2": G.SCHEMA_V2, "seg": G.SCHEMA_SEG}
 
 
 def program() -> tuple[Program, dict]:
-    """The verifier's own program and query."""
+    """The verifier's own program and query: `x` and `cs_table` are registered inputs, the root nodes whose rows the
+    verifier's registered reads derive (`Flock.Registered.regRow`)."""
     from verity_flock import subcircuit_templates as TM
 
     template = TM.rope_head(64).definition()
@@ -68,8 +68,15 @@ def program() -> tuple[Program, dict]:
     def body(B, S, x, cs):
         return coll_concat(sig(S)[1], [B.call(template, x[i], cs[p]) for i, p in enumerate(POS)])
 
-    return (Program(bind(CompositeDefinition("ServedRegisteredRoPE", 0, (), sig, body, register=False))),
+    return (Program(bind(CompositeDefinition("ServedRegisteredRoPE", 0, (), sig, body, register=False)),
+                    registered=("x", VALUE)),
             P.template_instance_query(template))
+
+
+def out_value(query: dict) -> str:
+    """The tree holding the instances' outputs, row i instance i's: the template's one output field, committed once in its
+    tree (`Flock.Registered.fieldTree`)."""
+    return f"{query['params']['template']}/o0"
 
 
 def stage(out: Path, seed: int = SEED, schema: str = RV.SCHEMA) -> dict:
@@ -80,7 +87,7 @@ def stage(out: Path, seed: int = SEED, schema: str = RV.SCHEMA) -> dict:
 
     out.mkdir(parents=True, exist_ok=True)
     prog, query = program()
-    part = P.partition(prog, query)
+    part = PO.build(prog, query, [(0, N)])
     s = InputSet.open(synthetic_set(TM.rope_head(64), N, seed, out / "set")["path"])
     low = FC.lowering_for_set(s)
     x = np.asarray(s.port("x", 0, N), np.uint16).reshape(N, -1)
@@ -107,13 +114,12 @@ def stage(out: Path, seed: int = SEED, schema: str = RV.SCHEMA) -> dict:
     reg_x = RV.Registered.commit(P.program_digest(prog), "x", x.tolist(), schema=bit_rows)
     x_rows, x_salts, x_entry = reg_x.statement(range(N))
     outs = np.asarray(s.port("out", 0, N), np.uint16).reshape(N, -1)
-    reg_out = RV.Registered.commit(P.program_digest(prog), OUT_VALUE, outs.tolist(), schema=bit_rows)
+    reg_out = RV.Registered.commit(P.program_digest(prog), out_value(query), outs.tolist(), schema=bit_rows)
     out_rows, out_salts, out_entry = reg_out.statement(range(N))
     FC.write(text, s, 0, N, out / f"inst-{N}.bin", out / f"pub-{N}.bin", list(range(N)), share_rows=True,
              outs={"out": np.asarray(out_rows, np.uint16)},
              tables={"x": np.asarray(x_rows), "cs": np.asarray(rows)}, refs={"x": list(range(N)), "cs": refs},
-             salts={"x": x_salts, "cs": salts, "out": out_salts},
-             registered={"cs": entry, "x": x_entry, "out": out_entry})
+             salts={"x": x_salts, "cs": salts, "out": out_salts}, registered={"cs": entry, "x": x_entry, "out": out_entry})
     tree, x_tree = ServedTree.of(reg), ServedTree.of(reg_x)
     out_port = {**reg_out.entry(), **RV.width_entry(RV.WORD_BITS), **RV.schema_entry(bit_rows), "reads": list(range(N))}
     (out / "served.json").write_text(json.dumps(dataclasses.asdict(tree), sort_keys=True))
@@ -132,10 +138,12 @@ def load(stage_dir: Path) -> tuple[ServedTree, ServedTree, dict]:
 
 
 def registered_file(prog: Program, query: dict, tree: ServedTree, x_tree: ServedTree, out_port: dict) -> dict:
-    """The verifier's own `--registered` file: `register_served`'s ports for the served trees `cs_table` and `x`, and the
-    output rows' port, so every port of the circuit is registered (`Flock.Registered.checkComplete`)."""
+    """The verifier's own `--registered` file, in Flock's `Registered.FORMAT` (`registered.READS_V2`: C gives every
+    position, so no port states its reads): `register_served`'s ports for the served trees `cs_table` and `x`, and the
+    output port, the template's output field's tree (`out_value`)."""
     sr = register_served(prog, query, [tree, x_tree])
-    return {**sr.file, "ports": {**sr.ports, "out": out_port}}
+    ports = {**sr.ports, "out": out_port}
+    return {"format": G.READS_V2, "ports": {k: {f: v for f, v in e.items() if f != "reads"} for k, e in ports.items()}}
 
 
 def write_registered(doc: dict, path: Path) -> Path:

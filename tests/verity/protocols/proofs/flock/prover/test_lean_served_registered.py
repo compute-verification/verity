@@ -41,7 +41,7 @@ BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 #: partition.json, served.json, registered.json, tables/), session/ (the sampled --zk session's record and proofs), live.json
 #: (the prover's LIVE record)
 FIXTURES = {
-    RV.SCHEMA: "art:54456e32d1e801018ba6c9da92548482a0e9c8c8fd5c2fc956086cb6e3d8bd4b",
+    RV.SCHEMA: "art:49a1a88a003174e302e974951734bafd43abb6b52f64bc8652cb92f3674ff6f0",
     G.SCHEMA_V2: "art:f14126710f23f62410d0387454ab8c69b236f75f5b92df10ddc214ebc45f37e6",
     G.SCHEMA_SEG: "art:ae8f5cf2b166710fd2418eea10dddc217102587c75d00db85abf2474b2d0864c",
 }
@@ -99,7 +99,7 @@ def test_a_session_verified_on_the_file_register_served_wrote_is_accepted_and_a_
     ok = _verify(fx, SR.write_registered(doc, tmp_path / "registered.json"))
     assert (ok["accepted"], ok["why"]) == (True, ""), ok
     assert ok["registered"] == {"cs": {"value": SR.VALUE, "root": tree.root}, "x": {"value": "x", "root": x_tree.root},
-                                "out": {"value": SR.OUT_VALUE, "root": out_port["root"]}}
+                                "out": {"value": out_port["value"], "root": out_port["root"]}}
     assert ok["program_sha512"] == sr.partition["program"]
     moved = SR.registered_file(program, query, dataclasses.replace(tree, root="00" * 64), x_tree, out_port)
     bad = _verify(fx, SR.write_registered(moved, tmp_path / "registered-root.json"))

@@ -192,7 +192,7 @@ public file, a lookup table, a program, a partition object or registered reads a
 the refusal's test kept. -/
 theorem statement_fits {m : Spot.OneStageZk.Member} {slice : Json} {bs : Core.Blobs} {a : Spot.OneStageZk.StepAt}
     {circuitB pubB : ByteArray} {tables : List (String × ByteArray)} (h : m.statement slice bs = .ok a)
-    (hc : bs.get m.own.circuit "circuit" = .ok circuitB) (hp : bs.get m.own.pub "public file" = .ok pubB)
+    (hc : m.own.circuitFile = .ok circuitB) (hp : bs.get m.own.pub "public file" = .ok pubB)
     (ht : Spot.OneStageZk.ownTables m.own bs = .ok tables) :
     Spot.OneStageZk.fitsWhy Spot.OneStageZk.WORD circuitB pubB tables (some m.own.program)
       (some m.own.partition) m.own.registered = none := by
@@ -305,7 +305,7 @@ theorem verified_at {C : CaseOf} {o : Verity.Exchange} (hacc : FormAccepts C o) 
       (tables : List (String × ByteArray)) (record : String)
       (spec : Flock.SessionSpec) (tabs : Array Flock.Setup) (rest : Json × Json) (proofs : Array ByteArray),
       Flock.Tags.circuit.plainLeaves = false ∧ SessionMsgs.memberAt p e t = some m ∧
-        k.blobs.get m.own.circuit "circuit" = .ok circuitB ∧
+        m.own.circuitFile = .ok circuitB ∧
         k.blobs.get m.own.pub "public file" = .ok pubB ∧ Spot.OneStageZk.readsOf m.own.registered = .ok rd ∧
         Spot.OneStageZk.ownTables m.own k.blobs = .ok tables ∧ SessionMsgs.recordAt k.blobs fs = some record ∧
         Spot.OneStageZk.setupAt (Spot.OneStageZk.inputsAt Flock.Tags.circuit m.own circuitB pubB tables) rd
@@ -351,7 +351,7 @@ theorem stmtAtCase_of_member {k : Case} {p : VStar.Recursive.SampledTwo.Params}
     {e : VStar.Recursive.SampledTwo.Evidence} (hf : SessionMsgs.formOf k = some (p, e)) {t : ℕ}
     {m : Spot.OneStageZk.Member} (hm : SessionMsgs.memberAt p e t = some m) {fs : Spot.OneStageZk.RunFiles}
     (hs : SessionMsgs.filesAt e t = some fs) {record : String} (hr : SessionMsgs.recordAt k.blobs fs = some record)
-    {circuitB pubB : ByteArray} (hc : k.blobs.get m.own.circuit "circuit" = .ok circuitB)
+    {circuitB pubB : ByteArray} (hc : m.own.circuitFile = .ok circuitB)
     (hp : k.blobs.get m.own.pub "public file" = .ok pubB) :
     SessionMsgs.stmtAtCase k t =
       some (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf k.blobs) (SessionMsgs.sampleBytes record)

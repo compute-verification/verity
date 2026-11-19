@@ -219,7 +219,8 @@ structure Ins where
   read : Readable.Read
 
 /-- **The verifier's parsers on the statement's bytes**, as `verifyCmd` runs them. -/
-def Raw.ins (w : Raw) : Except String Ins := do
+def Raw.ins (w : Raw) (read : Lean.Json → Flock.V (Array Registered.Port) := Registered.ofJson) :
+    Except String Ins := do
   let some tags := Tags.byName? w.statement | throw "unknown statement"
   if w.zk && tags.plainLeaves then throw s!"verify --zk: refused: {tags.name}, a statement with plain SHA-512 leaves"
   if w.osCoins then throw "verify: --coins os: the verifier reads coins only from a challenger's log (--coins is tree)"
@@ -228,7 +229,7 @@ def Raw.ins (w : Raw) : Except String Ins := do
   let partition ← w.partition.mapM (jsonOf "partition")
   let table ← w.workTable.mapM fun b => do Draw.workTableOfJson (← jsonOf "work table" b)
   let closure ← w.closure.mapM fun b => do Draw.closureMapOfJson (← jsonOf "closure map" b)
-  let registered ← w.registered.mapM fun b => do Registered.ofJson (← jsonOf "registered reads" b)
+  let registered ← w.registered.mapM fun b => do read (← jsonOf "registered reads" b)
   let work := match w.work, table with
     | some k, some t => some (k, t)
     | _, _ => none
@@ -243,7 +244,8 @@ def noIdentifier (st : Stmt) : V Unit :=
   | .error _ => pure ()
   | .ok _ => throw "identifier: the public header names an identifier; pass the verifier's own (--identifier F)"
 
-/-- **`verifyCmd`'s setup** at the statement's sample, with no recursive input and no `--identifier`. -/
+/-- **`verifyCmd`'s setup** at the statement's sample, with no recursive input and no `--identifier`. Each
+statement's registered reads are checked at the reads `Registered.withPositions` derives from C, the verifier's program. -/
 def Ins.setup (s : Ins) : V (SessionSpec × Array Stmt) := do
   let r := s.read
   if !r.tags.hm96Rows then
@@ -251,7 +253,7 @@ def Ins.setup (s : Ins) : V (SessionSpec × Array Stmt) := do
   RecSetup.checkInner none none (pure (none, none))
   let (spec, sts) ← r.setup
   for st in sts do
-    checkRegistered st s.registered
+    checkRegistered st (← Registered.withPositions st.c st.pub r.I.program s.registered)
     noIdentifier st
   Registered.checkFull s.registered r.draw
   RecSetup.checks none none s.stmtTags r.I.tables sts r.I.circuitFile r.I.partition r.I.program s.registered none none
@@ -299,14 +301,14 @@ theorem setupOf_some {zk : Bool} {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {
 /-- What the verifier reads of the statement's bytes (`Readable.Read`). -/
 def readOf (zk : Bool) (x : Hash.Msg) : Option Readable.Read := (insOf zk x).map Ins.read
 
-theorem Raw.ins_zk {w : Raw} {s : Ins} (h : w.ins = .ok s) : s.read.zk = w.zk := by
+theorem Raw.ins_zk {w : Raw} {read : Lean.Json → Flock.V (Array Flock.Registered.Port)} {s : Ins} (h : w.ins read = .ok s) : s.read.zk = w.zk := by
   unfold Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; rfl)
 
 /-- **The statement's sample is rebuilt** (`norm`) from the JSON its bytes parse to. -/
-theorem Raw.ins_sample {w : Raw} {s : Ins} (h : w.ins = .ok s) :
+theorem Raw.ins_sample {w : Raw} {read : Lean.Json → Flock.V (Array Flock.Registered.Port)} {s : Ins} (h : w.ins read = .ok s) :
     ∃ draw, w.draw.mapM (jsonOf "draw") = .ok draw ∧ s.read.draw = draw.map Flock.norm := by
   unfold Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h

@@ -120,7 +120,7 @@ theorem stmtAt_lt {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.S
     {s : Spot.OneStageZk.RunFiles} {record : String} {circuit pub : ByteArray}
     (hm : SessionMsgs.memberAt p e t = some m) (hs : SessionMsgs.filesAt e t = some s)
     (hrec : SessionMsgs.recordAt bs s = some record)
-    (hc : (bs.get m.own.circuit "circuit").toOption = some circuit)
+    (hc : m.own.circuitFile.toOption = some circuit)
     (hpb : (bs.get m.own.pub "public file").toOption = some pub) :
     (SessionMsgs.stmtRaw m circuit pub (Spot.OneStageZk.tablesOf bs) (SessionMsgs.sampleBytes record)
       (m.own.registered.map fun j => (_root_.Flock.RecordText.printT j).toUTF8)).encode.length < 2 ^ 64 := by

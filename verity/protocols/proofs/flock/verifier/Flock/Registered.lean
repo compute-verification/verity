@@ -511,7 +511,8 @@ the field's bits from the field's first in whole words, and that field is commit
 so `reg` must be that tree and each unit reads its own leaf in it by `HmLinks.treeLeaf`, the leaf `treeReads` opens for
 a reader of the field. An output of several fields in fewer rows, a row of another width or offset, a port registered
 as another value and a unit of another template are refused by name. -/
-def outReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (j : Nat) (reg : Port) : V Port := do
+def outReadsAt (c : Circuit) (P : Program.Prog) (indices : Array Nat) (j : Nat) (reg : Port) :
+    V (Array (Option Nat) × Nat) := do
   if isFreshValue reg.value then throw (RESERVED_WHY "output row" reg.name reg.value)
   let some (t, _) := HmRow.queryTemplate c
     | throw s!"registered reads: output row {reg.name}: the circuit names no template of C (META program_digests)"
@@ -538,7 +539,12 @@ def outReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (j : Nat) (r
       | throw s!"registered reads: output row {reg.name}: unit {u} is outside the program's units"
     if tu != t then throw s!"registered reads: output row {reg.name}: unit {u} is an instance of {tu}, not the circuit's template {t}"
     rel := rel.set! (u - first) (some leaf)
-  return { reg with readsRel := rel, readsFrom := first }
+  return (rel, first)
+
+/-- `reg` reading at `outReadsAt`'s positions from its first unit on, every other field its own. -/
+def outReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (j : Nat) (reg : Port) : V Port := do
+  let r ← outReadsAt c P indices j reg
+  return { reg with readsRel := r.1, readsFrom := r.2 }
 
 /-- The verifier's registered reads `own` with every port's reads derived at the statement's circuit `c` and public file
 `pub` from C, the verifier's program `program`: an output row (a port past `HmOut.nIn c`) by `outReads`, a row of in(S)
@@ -565,6 +571,28 @@ where
       let r ← treeReads P indices lo hi reg
       if r.readsRel.isEmpty then OneCircuit.pos P indices reg else pure r
     | none => OneCircuit.pos P indices reg
+
+/-- **The derived port named `nm`**: the verifier's port of that name in `own` with its reads as `withPositions` derives
+them at the statement's circuit `c` and public file `pub` from C, the verifier's `program`, the port the session's
+registered check opens (`checkRegistered`); none where `own` is none or names no such port. A check of a port's reads
+reads this port, never the file's, whose reads a `FORMAT` file never states. -/
+def derivedPort (c : Circuit) (pub : Public) (program : Option ByteArray) (own : Option (Array Port)) (nm : String) :
+    V (Option Port) := do
+  let some own' ← withPositions c pub program own | return none
+  return own'.find? (·.name == nm)
+
+theorem derivedPort_ok {c : Circuit} {pub : Public} {program : Option ByteArray} {own : Option (Array Port)}
+    {nm : String} {p : Port} (h : derivedPort c pub program own nm = .ok (some p)) :
+    ∃ own', withPositions c pub program own = .ok (some own') ∧ own'.find? (·.name == nm) = some p := by
+  unfold derivedPort at h
+  cases hw : withPositions c pub program own with
+  | error e => simp [hw, bind, Except.bind] at h
+  | ok o =>
+    cases o with
+    | none => simp [hw, bind, Except.bind, pure, Except.pure] at h
+    | some own' =>
+      simp only [hw, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
+      exact ⟨own', rfl, h⟩
 
 /-- The statement's registered reads against the verifier's own `own` (`--registered`). The header's `registered` must
 name exactly `own`'s ports, each a port of the circuit and a table of a shared-row file: every table row's `b ‖ c`, as the

@@ -60,7 +60,7 @@ theorem jsonOf_eq : SampledTwoDesc.jsonOf = FlockDeploy.jsonOf := rfl
 /-- **A reference statement the check reads**, field by field. -/
 theorem refOf_ok {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : SampledTwoDesc.Ref}
     (h : SampledTwoDesc.refOf p bs t = .ok R) :
-    ∃ m, memberOf p t = some m ∧ bs.get m.own.circuit "circuit" = .ok R.circuit ∧
+    ∃ m, memberOf p t = some m ∧ m.own.circuitFile = .ok R.circuit ∧
       bs.get m.own.pub "public file" = .ok R.pub ∧
       _root_.Flock.Tags.byName? Spot.OneStageZk.STATEMENT = some R.tags ∧ R.tags.plainLeaves = false ∧
       R.partitionB = (_root_.Flock.RecordText.printT m.own.partition).toUTF8 ∧
@@ -77,7 +77,7 @@ theorem refOf_ok {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : Sample
   rcases hm : memberOf p t with _ | m
   · simp only [hm] at h; cases h
   simp only [hm] at h
-  rcases hc : bs.get m.own.circuit "circuit" with e | circuit
+  rcases hc : m.own.circuitFile with e | circuit
   · simp only [hc, error_bind] at h; cases h
   simp only [hc, ok_bind] at h
   rcases hp : bs.get m.own.pub "public file" with e | pub
