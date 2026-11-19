@@ -991,6 +991,12 @@ RECORDS_KEPT = 3
 LEAN_SLOTS = Path(os.environ.get("LEAN_SLOTS", "/workspace/research/locks/lean-slots"))
 #: `lean_changed.py`'s kept passes under `lean-records/`, not a tree: they have their own cap (`PASSES_KEPT`)
 RECORDS_PASSES = "passes"
+#: `lean_changed.py`'s facts cache under `lean-records/` (`facts_dir`), not a tree: `check.py --facts-from` reads it after
+#: the run that stored it
+RECORDS_FACTS = "facts"
+#: the facts documents `RECORDS_FACTS` keeps, last stored first: a records run stores one per audited package, under a
+#: megabyte gzipped each, so this is some ten runs' worth; one dropped costs that package's audit again
+RECORDS_FACTS_KEPT = 400
 
 
 def build_slots(slots: Path | None = None) -> int:
@@ -1019,7 +1025,7 @@ def prune_records(store: Path, kept: int | None = None, slots: int | None = None
     used = []
     for tree in store.iterdir() if store.is_dir() else ():
         try:
-            if tree.is_dir() and tree.name != RECORDS_PASSES:
+            if tree.is_dir() and tree.name not in (RECORDS_PASSES, RECORDS_FACTS):
                 stamps = [p.stat().st_mtime for p in (tree / ".who", tree / "links.json", tree / ".lock") if p.exists()]
                 used.append((tree.name in own, max(stamps, default=tree.stat().st_mtime), tree))
         except OSError:
@@ -1037,6 +1043,19 @@ def prune_records(store: Path, kept: int | None = None, slots: int | None = None
         except (BlockingIOError, OSError):
             continue
     return n
+
+
+def prune_records_facts(cache: Path, kept: int = RECORDS_FACTS_KEPT) -> int:
+    """Remove all but the ``kept`` facts documents of ``cache`` (`lean-records/facts`) last stored, each by its sidecar
+    `<key>.json` with its `<key>.json.gz` (`check.store_cached_facts`). The number of documents removed."""
+    if not cache.is_dir():
+        return 0
+    sides = sorted(((e.stat().st_mtime, e.name[:-5]) for e in os.scandir(cache) if e.name.endswith(".json")), reverse=True)
+    gone = [k for _, k in sides[kept:]]
+    for k in gone:
+        for p in (cache / f"{k}.json", cache / f"{k}.json.gz"):
+            p.unlink(missing_ok=True)
+    return len(gone)
 
 
 def prune_replays(cache: Path, kept: int | None = None) -> int:
@@ -2205,7 +2224,8 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["--prune"]:
         root = Path(argv[argv.index("--cache") + 1]).parent if "--cache" in argv else COMMON.cache_dir()
         got = {"lean-deps": WarmDeps(root / "lean-deps").evict(), "lean-builds": WarmBuilds(root / "lean-builds").evict(),
-               "lean-replay": prune_replays(root / "lean-replay"), "lean-records": prune_records(root / "lean-records")}
+               "lean-replay": prune_replays(root / "lean-replay"), "lean-records": prune_records(root / "lean-records"),
+               "lean-records/facts": prune_records_facts(root / "lean-records" / RECORDS_FACTS)}
         # a build's `module_keys.stage` reads the index, the records of what `put` couldn't index and the artifacts under
         # this lock, shared, and `put` and `take` prune under it already
         artifacts = LakeArtifacts(root / "lean-artifacts")

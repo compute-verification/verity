@@ -16,7 +16,8 @@ GITDIR] ... -- CMD` builds infra/vcf/payload.sh's payload of GITDIR's HEAD commi
 by `research pods ssh`'s path, and starts the commit's own vcf-job-run.sh there in a session of its own (setsid), so the launch returns once
 Slurm has the job, and the job outlives the launching VM.  On the node the job runs CMD under `research run --local-only --id RUN
 --machine NAME`; vcf-job-run.sh copies its run dir back to `via` and publishes it to the store under RUN, where `research status
-RUN` and `research fetch RUN` find it.  No lease, slot or pool of ours exists there.
+RUN` and `research fetch RUN` find it.  No lease, slot or pool of ours exists there.  A machine the register marks stopped
+(`research pods stopped NAME`) takes no job: the launch is refused before anything is sent.
 """
 from __future__ import annotations
 
@@ -73,6 +74,9 @@ def problem(entry: dict) -> str | None:
 def refusal(ns: argparse.Namespace, harness_opts: list[str], command: list[str], m: dict) -> str | None:
     """Why `research run --on NAME` refuses this run for slurm machine `m`, with what to pass instead, or None."""
     name = ns.on
+    if out := registry.left_out({"stopped_since": m.get("stopped_since")}, 0):
+        return (f"{name} is {out} in the register, so no job is submitted there: `research pods stopped {name} --back` takes "
+                "the mark out once it may run again")
     instead = (
         ("--pool", ns.pool, f"{name} has no pool or slot of ours: drop it; Slurm gives the job the cores, memory and cards that "
                             "--cpus, --mem-gb and --gpus ask"),
