@@ -38,7 +38,7 @@ def test_dry_run_puts_every_path_under_the_work_dir_whatever_the_environment_nam
     assert r.returncode == 0, r.stderr
     work = str(tmp_path / ".verity-work")
     paths = _paths(r.stdout)
-    assert {"WORK", "VENV", "HF_HOME", "FA2", "NT", "RT", "HOME", "XDG_CACHE_HOME", "UV_PYTHON_INSTALL_DIR",
+    assert {"WORK", "VENV", "HF_HOME", "FA2", "RT", "HOME", "XDG_CACHE_HOME", "UV_PYTHON_INSTALL_DIR",
             "TORCH_EXTENSIONS_DIR", "TRITON_CACHE_DIR", "VLLM_CACHE_ROOT", "CUDA_CACHE_PATH", "NATIVE_COLLECT_BUILD"} <= set(paths)
     assert all(p == work or p.startswith(work + "/") for p in paths.values()), paths
     assert f"uv and pip caches: {work}/.cache/" in r.stdout

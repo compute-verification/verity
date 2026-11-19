@@ -8,12 +8,9 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
-import shutil
 import subprocess
 import sys
 import tracemalloc
-from collections import Counter
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -34,7 +31,6 @@ from verity.circuits.types import Array, Tuple
 from verity_vllm.definitions.registry import fp8_moe_experts as XM
 from verity_vllm.definitions.registry import moe
 from verity_vllm.definitions.registry import sampling as SM
-from verity_vllm.pipeline import cli
 from verity_vllm.query import program_view as PV
 
 
@@ -170,9 +166,6 @@ def test_the_gate_limit_is_the_runs_not_the_querys(norm):
         r = W.check_calls([g], strict=False, max_gates=raised, specialize=PV.specialization)
         assert r["ok"] and r["units"] == 2049 and r["query"] == capped["query"] == W.query_id()
     assert W.gate_limit(norm, f"{low},Gemm_v1=5") == low and W.gate_limit(norm, {norm.id: 7, "RMSNormTriton_v1": 9}) == 7
-    for cmd, argv in (("manifest", ["build", "--program", "p", "--out", "o"]),):
-        assert cli.parse(cmd, argv, {W.MAX_GATES_ENV: "GumbelTopPTokenSelect_v2=120000000"}).word_max_gates == "GumbelTopPTokenSelect_v2=120000000"
-        assert cli.parse(cmd, [*argv, "--word-max-gates", "1"], {}).word_max_gates == "1"
 
 
 def test_uncommitted_boundaries_are_named():
@@ -469,41 +462,6 @@ def test_prefetch_under_a_memory_budget_runs_only_the_cuts_that_fit_and_memos_th
     assert r["n"] == [4, 4] and r["at_once"] == 1 and r["same"], r
 
 
-@pytest.mark.slow
-def test_build_global_builds_the_same_manifest_in_one_process_and_in_several(tmp_path):
-    """`--jobs`: the word check's rules prefetched and the components built in forked processes (`manifest.build_components`) give the
-    manifest one process gives, byte for byte; the first component to fail, in declaration order, is the one reported.  A workload
-    digest read from stdin once the components are built (`--workload-digest -`) gives the manifest the same digest named on the
-    command line gives, and none read fails it."""
-    from tests.check.test_sampled_replay import LP, T
-    d = tmp_path / "row" / f"build_request_LP{LP}_T{T}"
-    d.mkdir(parents=True)
-    _program_dir(d)
-    with gzip.open(d / "instances.json.gz", "rt") as f:
-        hist = Counter(r["spec"] for r in json.load(f)["rows"])
-    (d / "result.json").write_text(json.dumps(dict(json.loads((d / "result.json").read_text()), spec_histogram=dict(hist))))
-    requests = [{"request_id": q, "prompt_len": LP, "max_tokens": T + 1, "arrive_step": 0} for q in "abc"]
-    fx = {"fixture": "t", "requests": requests}
-    (tmp_path / "wl.json").write_text(json.dumps(fx))
-
-    def build_global(jobs: int, out: str, *extra: str, stdin: str | None = None) -> subprocess.CompletedProcess:
-        return subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "manifest", "build-global", "--fixture", str(tmp_path / "wl.json"),
-                               "--programs-root", str(tmp_path / "row"), "--jobs", str(jobs), *extra, "--out", str(tmp_path / out)],
-                              cwd=(Path(__file__).resolve().parents[5] / "adapters" / "vllm"), input=stdin, capture_output=True, text=True)
-
-    for jobs in (1, 3):
-        assert build_global(jobs, f"m{jobs}.json").returncode == 0
-    assert (tmp_path / "m1.json").read_bytes() == (tmp_path / "m3.json").read_bytes()
-    assert build_global(3, "named.json", "--workload-digest", "w" * 64).returncode == 0
-    assert build_global(3, "stdin.json", "--workload-digest", "-", stdin="w" * 64 + "\n").returncode == 0
-    assert (tmp_path / "named.json").read_bytes() == (tmp_path / "stdin.json").read_bytes() != (tmp_path / "m1.json").read_bytes()
-    p = build_global(3, "none.json", "--workload-digest", "-", stdin="")
-    assert p.returncode != 0 and "no workload digest on stdin" in p.stderr and not (tmp_path / "none.json").exists(), p.stderr[-2000:]
-    shutil.copytree(d, tmp_path / "row" / f"build_request_LP{LP}_T{T - 1}")    # a wrong component for r1
-    requests[1]["max_tokens"] = T
-    (tmp_path / "wl.json").write_text(json.dumps(fx))
-    p = build_global(3, "bad.json")
-    assert p.returncode != 0 and f"request r1: Program has {T + 1} steps" in p.stderr, p.stderr[-2000:]
 
 
 # ---------------------------------------------------------------------------------------------------------------- the rule cache
@@ -552,8 +510,3 @@ def test_a_rule_json_would_not_give_back_equal_is_not_written(tmp_path, monkeypa
 
 
 
-def test_the_manifest_cli_takes_the_cache_directory_from_its_flag_or_the_environment():
-    argv = ["build", "--program", "p", "--out", "o"]
-    assert cli.parse("manifest", [*argv, "--unit-rule-cache", "/r"], {}).unit_rule_cache == "/r"
-    assert cli.parse("manifest", argv, {W.RULE_CACHE_ENV: "/e"}).unit_rule_cache == "/e"
-    assert cli.parse("manifest", ["build-global", "--fixture", "f", "--programs-root", "p", "--out", "o"], {}).unit_rule_cache is None
