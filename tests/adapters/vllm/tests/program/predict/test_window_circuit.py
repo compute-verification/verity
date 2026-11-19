@@ -169,16 +169,6 @@ def test_a_served_window_is_its_requests_programs_and_no_padded_unit():
     assert IF.input_count(circuit.description(), **held(circuit))["free"] == 0
 
 
-def test_a_served_windows_entries_read_their_lanes_occupancy_of_one_scan_unit():
-    """Whatever the Programs' order (lane 1's request the longer, its Program first), entry j reads lane j's occupancy word
-    (`ScanSlots_v3`'s ``o{4j+2}``) of lane 0's Program's scan unit, so the entries' occupancy is one strided read."""
-    low = WC.lower(S._registered(), CLASS, None, GRAIN, requests=(WC.Request(0, 1, 4, 2), WC.Request(0, 0, 3, 2)))
-    (entry, _), scan = low.programs[0].entry_unit, next(P for P in low.programs if P.lane == 0).scan_unit
-    occ = sorted((w.at, w.writer, w.base, w.out) for w in low.circuit.wires if (w.reader, w.port) == (entry, "occ"))
-    assert [P.lane for P in low.programs] == [1, 0]
-    assert occ == [(j, *scan, f"o{4 * j + 2}") for j in range(CLASS.lanes)]
-
-
 def test_a_served_windows_circuit_is_its_requests_lengths_not_their_arrival_steps():
     """The circuit is public (its size and shape): two windows of the same requests' lengths are one circuit whatever their
     arrival steps (WINDOW's q1 chunked across two steps, WHOLE's prefilled at one), and windows of other lengths

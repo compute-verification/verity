@@ -644,14 +644,12 @@ class _Program:
             self.entry_label = self.b.label
         return ctid, cu
 
-    def place_entry(self, tid: str, u: int, scan: _Program) -> None:
-        """A served Program's entry, unit ``u`` of the window's entries (`io_shell.SlotEntry_v1{NP=1}`), on its lane's
-        occupancy word of ``scan``'s `ScanSlots_v3` unit, the one every entry reads, and its last collector's state."""
-        if self.occ is None or self.collect is None or self.entry_label is None or scan.scan_unit is None:
+    def place_entry(self, tid: str, u: int) -> None:
+        """A served Program's entry, unit ``u`` of the window's entries (`io_shell.SlotEntry_v1{NP=1}`), on its occupancy
+        word and its last collector's state."""
+        if self.occ is None or self.collect is None or self.entry_label is None:
             raise Unexpressible(f"{self.name}: an entry before its last position's select")
-        if scan.anchor != self.anchor:
-            raise Unexpressible(f"{self.name}: its entry at bucket {self.anchor} on {scan.name}'s scan read at {scan.anchor}")
-        self.b.feed(tid, "occ", u, 1, (Row(*scan.scan_unit, f"o{4 * self.lane + 2}", 2),))
+        self.b.feed(tid, "occ", u, 1, (self.occ,))
         self.b.feed(tid, "state", u, 1, (self.collect,))
         self.entry_unit = (tid, u)
 
