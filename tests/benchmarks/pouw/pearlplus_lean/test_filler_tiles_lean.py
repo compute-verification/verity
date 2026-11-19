@@ -113,10 +113,10 @@ def compared(exe: Path, path: Path, records) -> tuple[dict, dict[int, tuple]]:
         tiles[v["tile"]] = (v["ok"], v["reason"], reference(c)[1], c)
     for tid, (ok, why, block, c) in tiles.items():
         rec = records[c.ref.matmul]
-        if set(rec.excluded_a) & set(c.rows[:c.real]):
-            assert (ok, why, block) == (True, None, 0), f"tile {tid}: an excluded row's tile"
-        elif why is not None and "exceeds" in why:
+        if why is not None and "exceeds" in why:
             assert (ok, block) == (True, 0), f"tile {tid}: over its inert-work bound ({why})"
+        elif set(rec.excluded_a) & set(c.rows[:c.real]):
+            assert (ok, why, block) == (True, None, 0), f"tile {tid}: an excluded row's tile"
         else:
             assert ok == bool(block), f"tile {tid} (TR {c.real} of {c.tm}): Lean {ok} {why!r}, the block {block}"
     return got, tiles
@@ -130,8 +130,8 @@ def test_a_filler_tiles_verdict_is_leans(exe, tmp_path):
     assert records[0].real_rows == FILLER_ROW and records[0].excluded_a == (5,)
     got, tiles = compared(exe, path, records)
     assert got["verdict"] == "accept", got["reason"]
-    filler = sorted(t for t, (*_, c) in tiles.items() if c.real < c.tm)
-    assert filler, f"Lean's {DRAWS} draws opened no filler tile: {sorted(tiles)}"
+    filler = sorted(t for t, (_ok, why, _b, c) in tiles.items() if c.real < c.tm and why is None)
+    assert filler, f"Lean's {DRAWS} draws opened no filler tile within its bound: {sorted(tiles)}"
     c = tiles[filler[0]][3]
     assert c.real == 4 and len(c.y) == 4 and not any(w for x in c.a[4:] for w in x)
     assert tiles[filler[0]][:3] == (True, None, 1)
