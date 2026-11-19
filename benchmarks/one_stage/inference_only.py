@@ -410,50 +410,6 @@ def session_instance(fn: Any, m: int, table: Mapping[str, int], c: int, k: int, 
             "table": dict(table), "c": c, "k": k, "n": n}
 
 
-# -- the count over the registered wired C and its registered partition (one-circuit) ----------------------------------
-# The soundness-correct form: the count reads the registered wired C itself (`interface.program_of_record`, the one the
-# served route registers, commits and proves) and the registered partition object, never a Program rebuilt here. θ is the
-# held registered root input nodes of the flat C; a per-slot inference block is whatever the registered partition's blocks
-# say. Until the new Lean count (over the partition's blocks of a flat Program) and the decoder's base-gate bodies land,
-# nothing runs this; it is kept ready beside `count_instance`.
-
-def held_params_of(doc: Mapping[str, Any], pins: Mapping[str, str] | None,
-                   roots: Mapping[str, str] | None) -> tuple[str, ...]:
-    """The registered parameters the verifier's pins and the window's roots hold, by name (`interface.held_params`): the
-    weights pinned before the run, the pinned tables' roots and openings. On the flat C these are registered root input
-    nodes; held, they are θ, so the count does not count them fresh."""
-    from verity.commitments.periods import interface as IF
-
-    reg = IF.declarations(doc)[2]
-    held = IF.held_params(pins, roots)
-    return tuple(p for p in sorted(reg.params if reg is not None else ()) if p in held)
-
-
-def partition_instance(doc: Mapping[str, Any], pins: Mapping[str, str] | None, roots: Mapping[str, str] | None,
-                       c: int, k: int, n: int) -> dict[str, Any]:
-    """The count's instance on one window, read off the registered record: the registered wired C
-    (`interface.program_of_record`, whose wires are its edges), its registered partition as the record's query (which the
-    count applies to C to get its blocks, as the verifier holds its own program), θ the held registered root input nodes
-    (`held_params_of`), and the policy (c, k, n). It rebuilds no Program from the record: C and the query are the served
-    route's own, and `program_of_record` refuses a claimed wire C cannot carry (a wire that doesn't fit its templates, so
-    the registered C lacks it), which is then no edge and its row counts fresh. Refused (`Undecided`) where the record is
-    not one the compiler emits."""
-    from verity.circuits import codec, partition_object as PO
-    from verity.circuits.program import Program
-    from verity.commitments.periods import interface as IF
-    from verity_vllm.program.predict import block_counts as BC
-
-    try:
-        circuit, query = IF.program_of_record(doc, BC.resolve)
-    except (KeyError, TypeError, ValueError) as e:
-        raise Undecided(f"the registered circuit C: {e}") from e
-    held = held_params_of(doc, pins, roots)
-    program = Program(circuit.fn, circuit.annotations, registered=held, theta=held)
-    text = codec.canonical_json(codec.encode_program(program)).decode()
-    return {"program": text, "partition": PO.build(program, query), "theta": sorted(program.annotations.get("theta", [])),
-            "c": c, "k": k, "n": n}
-
-
 def takes_detail(exe: Path, timeout_s: int, behind: Sequence[str] = ()) -> bool:
     """Whether ``exe``'s ``--count`` takes ``--detail``, as the usage it prints given no argument says. One that does
     prints only ``{complies}`` without it; one that doesn't answers ``--detail`` with its usage."""

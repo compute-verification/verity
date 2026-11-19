@@ -358,7 +358,9 @@ def ran_with(challenger: str, key_record: Mapping[str, Any] | None = None) -> st
     (DETAIL)``. The parameters are those of the LMS key the sample's coins are signed under, the one parameter set the run
     hands the verifier (Lean's `verify` takes none of its own): a local challenger's key is at
     `challenger_session.LOCAL_PARAMS`, development; a gate's is its key record's, deployed only at `lms.DEPLOYED`'s W and H.
-    A gate without its key record states none."""
+    A gate without its key record states none. The challenger party's host on this machine (``loopback:HOST:PORT``) is a
+    development session: its parameters read ``development`` whatever its key's W and H, which a key record adds as detail,
+    so no reader of the line takes its coins for a deployed challenger's."""
     from verity.commitments.crypto import lms
     from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
     from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
@@ -368,9 +370,16 @@ def ran_with(challenger: str, key_record: Mapping[str, Any] | None = None) -> st
         at = lms.Params(64, *AC.LOCAL_PARAMS)
         return (f"ran with: coins local challenger; parameters development (the local challenger's LMS key at W={at.W}, "
                 f"H={at.H}, not the deployed W={dep.W}, H={dep.H})")
-    if not challenger.startswith("gate:"):
-        raise ValueError(f"PP_CHALLENGER {challenger!r}: local, or gate:USER@HOST")
-    coins = f"coins the auditor device's challenger ({challenger})"
+    if challenger.startswith("loopback:"):
+        coins = f"coins the challenger party's host on this machine ({challenger}), a development session's, not an auditor's"
+        if key_record is None:
+            return f"ran with: {coins}; parameters development (the party's own LMS key, no key record given)"
+        key = Ch.key_of_record(dict(key_record))
+        return f"ran with: {coins}; parameters development (the party's own LMS key at W={key.W}, H={key.H}, its key record's)"
+    if challenger.startswith("gate:"):
+        coins = f"coins the auditor device's challenger ({challenger})"
+    else:
+        raise ValueError(f"PP_CHALLENGER {challenger!r}: local, loopback:HOST:PORT or gate:USER@HOST")
     if key_record is None:
         return f"ran with: {coins}; parameters not stated (no challenger key record given)"
     key = Ch.key_of_record(dict(key_record))
@@ -2000,7 +2009,7 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
     p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git rev-list "
                    "--first-parent origin/main), which must hold the commit the session's host pins")
     p = sub.add_parser("ran-with", help="the line naming the coins and the parameters a run's sessions are sampled under (`ran_with`)")
-    p.add_argument("--challenger", required=True, help="run.sh's PP_CHALLENGER: local, or gate:USER@HOST")
+    p.add_argument("--challenger", required=True, help="run.sh's PP_CHALLENGER: local, loopback:HOST:PORT or gate:USER@HOST")
     p.add_argument("--challenger-key", help="with gate:USER@HOST: the challenger's key record (challenger-key/v1)")
     p = sub.add_parser("forged-partition", help="the served arm's forged partition, or its refusal (`served_forged_partition`)")
     p.add_argument("--honest", required=True, help="the honest run's partition file")
@@ -2164,8 +2173,8 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
         if not a.challenger:
             ap.error("audit draws on the auditor's challenger's coins, never the verifier's own: give --challenger local "
                      "--main FILE, or --challenger gate:USER@HOST")
-        if a.challenger != "local" and not a.challenger.startswith("gate:"):
-            ap.error(f"--challenger is local or gate:USER@HOST, not {a.challenger!r}")
+        if a.challenger != "local" and not a.challenger.startswith(("gate:", "loopback:")):
+            ap.error(f"--challenger is local, loopback:HOST:PORT or gate:USER@HOST, not {a.challenger!r}")
         if a.challenger.startswith("gate:") and not (a.peer and a.challenger_key):
             ap.error("--challenger gate:USER@HOST needs --peer and --challenger-key")
         if not a.main:

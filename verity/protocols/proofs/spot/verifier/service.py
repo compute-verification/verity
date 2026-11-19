@@ -1976,14 +1976,17 @@ class Stream:
                  counts: Mapping[str, int] | None = None,
                  outputs: Mapping[str, Mapping[str, str]] | None = None,
                  history: Mapping[str, Any] | None = None,
-                 certified: Mapping[str, Mapping[str, Any]] | None = None) -> WindowCommitmentRecord:
+                 certified: Mapping[str, Mapping[str, Any]] | None = None,
+                 partition: Mapping[str, Any] | None = None) -> WindowCommitmentRecord:
         """Receive a docket: the public-items rule (`check_public`), then one-stage's R1-R8 (`registration.check`),
         each by the verifier (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N (a window's: the mixed population of its
         templates, in its order, at `counts`, the challenger's own `{template's descriptor id: instances}` of the window,
         every template's at least one, taking the stream's `values`; or the stream's own `program`, its ranges `counts`),
         the check's query, the selection rule's sampling
-        design, `SCHEME`, the stream's log (the records of it R6 and R7 read, `_earlier`), and the per-registration
+        design, `SCHEME`, the stream's log (the records of it R6 and R7 read, `_earlier`), `partition` (the window's
+        partition object, its proof blocks included, which R2 holds the record's digest to; without it, the blockless
+        default), and the per-registration
         copies given here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, `supplied`, `pinned`,
         `schemas`, `window_root`, `held`, `outputs`, `history` and `certified`, as `registration.check` takes them), which
         the stream's run of record reads again at the outcome. Then the receipt. Under
@@ -2031,7 +2034,7 @@ class Stream:
                     v = r.verdict
             if v.ok:
                 earlier = self._earlier(record, supplied, outputs)
-                v = V.check(record, program, self.query, sampling_design, SCHEME, ports, leaf_layer, anchors, earlier, None,
+                v = V.check(record, program, self.query, sampling_design, SCHEME, ports, leaf_layer, anchors, earlier, partition,
                             table, registered, supplied, pinned, self.binding, schemas, window_root, held,
                             outputs=outputs, seed_salt=seed_salt, tied=self.spec.check.tied or None,
                             history=history, certified=certified)
@@ -2154,7 +2157,8 @@ class Stream:
                            pinned: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
                            window_root: str | None = None, held: Sequence[str] | None = None,
                            outputs: Mapping[str, Mapping[str, str]] | None = None,
-                           history: Mapping[str, Any] | None = None) -> WindowCommitmentRecord:
+                           history: Mapping[str, Any] | None = None,
+                           partition: Mapping[str, Any] | None = None) -> WindowCommitmentRecord:
         """Receive a two-stage design's interior docket, once, after the first stage `draw` and before its second
         stage: the interiors of the replay sample's Q replay blocks, over their Q·n_rho proof blocks, template-major
         (`interior_program`): template t's Q·n_t from off_t = Q·Σ_{t'<t} n_t', replay block `draw.units[i]`'s instances
@@ -2168,7 +2172,8 @@ class Stream:
         (`interior_program`, the check's query, `subset:Q·n_rho`, every one committed, `SCHEME`, the log, whose last
         record is the docket it follows, and the copies given here, as `register` takes them), `population-order`,
         and each history table `history` names being a port of the boundary docket at the root and domain it computed
-        for it (`tables_served`: `interior-table`). Its receipt follows the log as a docket's does, and it is logged; it
+        for it (`tables_served`: `interior-table`). R2 holds the docket's partition digest to `partition`'s, its
+        proof blocks included, over the interior program and the check's query (without it, the blockless default). Its receipt follows the log as a docket's does, and it is logged; it
         reads no clock.
         It names no links, wires or rows, nor what the block returns: the verifier derives them from the replay
         block's Definition (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`,
@@ -2203,7 +2208,7 @@ class Stream:
             if v.ok and program is not None:
                 earlier = self._earlier(record, supplied, outputs)
                 v = V.check(record, program, query, {"law": "subset", "k": m}, SCHEME, ports, leaf_layer, anchors,
-                            earlier, None, None, registered, supplied, pinned, self.binding, schemas, window_root, held,
+                            earlier, partition, None, registered, supplied, pinned, self.binding, schemas, window_root, held,
                             outputs=outputs, seed_salt=seed_salt, history=history)
                 if v.ok and not P.in_order(program, query, m):
                     v = _refuse("population-order", {"population": m}).verdict
