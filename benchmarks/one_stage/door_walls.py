@@ -8,7 +8,8 @@ rows held to the reference evaluator.
     door_walls.py case NAME [--lower EXE]
 
 ``census`` is the door-ready check a lane runs on its own circuit: ``NAME`` a builder (`BUILDERS`: ``one_linear``,
-``chain``, ``test_class``, ``class_of_record``, ``lean_case``, ``lean_case_wide``) or ``DIR`` a directory holding
+``chain``, ``test_class``, ``class_of_record``, ``pearl_plus``, ``pous_setup``, ``network_scan``, ``lean_case``,
+``lean_case_wide``) or ``DIR`` a directory holding
 ``C.json`` (C's descriptor bytes) and ``query.json`` (its template query, ``Q_template_instances`` over every template its
 root calls). Each chosen unit is a proof block of its own in one partition (the gaps between them blocks of their own,
 never put through the steps); a ``LO-HI`` item is the block [LO, HI) as given. ``one-per-template``: each template's
@@ -161,8 +162,40 @@ def lean_case_wide() -> tuple[bytes, dict]:
     return _rooted(_composite("WallsLeanWide", ps, Value(1), lambda B, S, a, b: B.call(BL.NOT, b)), ps, Value(1))
 
 
+def pearl_plus() -> tuple[bytes, dict]:
+    """Pearl+'s credited linear (`credited_in_c.py`'s C at its default size, K,TM,TN,N,M = 256,1,1,1,2, with its
+    reader), laid under the composer's limit as its stage lays it."""
+    import importlib.util
+    from verity.circuits import laying as LY
+    spec = importlib.util.spec_from_file_location("credited_in_c", ROOT / "benchmarks/pouw/credited_in_c.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    program = LY.lay(m.linear(256, 2, 1, (1, 1), True).program, m.fits)
+    return _bytes(program), LY.query(program)
+
+
+def pous_setup() -> tuple[bytes, dict]:
+    """Storage's store blocks: PoUS's setup C at its test's point (`window.Setup(64, 189, 16, 4, 4)`), every unit one
+    `PousP2SetupCheck_v2`."""
+    from verity.protocols.resource_accounting.memory.pous.prover import window as WIN
+    program, query = WIN.Setup(64, 189, 16, 4, 4).circuit().program()
+    return _bytes(program), query
+
+
+def network_scan() -> tuple[bytes, dict]:
+    """The network scan's units: `scan_zk.scan_root` over its own templates (start, ingress, egress) at its test class
+    and T = 4 buckets."""
+    from verity.protocols.resource_accounting.network.prover import scan_zk as sz
+    cls, t = sz.TEST.cls, 4
+    defs = sz._defs(cls)
+    counts = sz.counts_of(sz.members_of(sz.TEMPLATES, t))
+    root = sz.scan_root([(defs[k], counts[k], sz.FIXED[k]) for k in sz.TEMPLATES], t // cls.EVERY, cls.EVERY)
+    return _bytes(root), sz.PA.template_instances_query([defs[k] for k in sz.TEMPLATES])
+
+
 BUILDERS: dict[str, Callable[[], tuple[bytes, dict]]] = {
     "one_linear": one_linear, "chain": chain, "test_class": test_class, "class_of_record": class_of_record,
+    "pearl_plus": pearl_plus, "pous_setup": pous_setup, "network_scan": network_scan,
     "lean_case": lean_case, "lean_case_wide": lean_case_wide}
 
 
@@ -451,9 +484,14 @@ def render(rows: Sequence[dict]) -> str:
 
 # --- the row check ---------------------------------------------------------------------------------------------------
 
+class Unlowered(RuntimeError):
+    """Lean's `Lower.lower` refuses the template: it has no rows to check."""
+
+
 def template_of(c_s: bytes, key: str, n_in: int, n_out: int, exe: Callable[[], Path]) -> tuple[Any, str]:
     """C_S's template ``key`` lowered as the door lowers it (`Lower.lower` at one 16-bit group a port word), written by
-    `flock-lower-check`'s template mode and parsed (`tmpl.parse`); and the tool's output."""
+    `flock-lower-check`'s template mode and parsed (`tmpl.parse`); and the tool's output. Raises `Unlowered` when Lean
+    refuses to lower it."""
     from verity_flock import tmpl as T
     with tempfile.TemporaryDirectory(prefix="door-walls-") as d:
         d = Path(d)
@@ -463,7 +501,7 @@ def template_of(c_s: bytes, key: str, n_in: int, n_out: int, exe: Callable[[], P
                             ",".join([str(WORD)] * n_out), str(d / "in.txt"), str(d / "t.tmpl"), str(d / "out.txt")],
                            capture_output=True, text=True)
         if not (d / "t.tmpl").exists():
-            raise RuntimeError(f"flock-lower-check ({p.returncode}): {(p.stderr or p.stdout)[-1500:]}")
+            raise Unlowered(f"flock-lower-check ({p.returncode}): {(p.stderr or p.stdout)[-1500:]}")
         return T.parse((d / "t.tmpl").read_text()), p.stdout + p.stderr
 
 
@@ -968,6 +1006,13 @@ def check_case(spec: Spec, exe: Callable[[], Path], seed: int) -> list[Finding]:
             t, _log = template_of(r.c_s, key, n_in, n_out, exe)
             xs, ys, vb = honest_rows(c, query, units, fn, cut, trace)
             v = row_check(t, xs, ys, vb, rng)
+        except Unlowered as e:
+            if r.step is None:
+                out.append(Finding(f"rows: the door accepts what Lean's lowering refuses: {normalise(str(e))}", "rows",
+                                   str(e)[:600], spec.doc(), k))
+            else:
+                out.append(Finding(r.klass, r.step, r.text[:600], spec.doc(), k))
+            continue
         except Exception as e:  # noqa: BLE001
             out.append(Finding(f"rows: crashed: {normalise(_err(e))}", "rows", _err(e)[:600], spec.doc(), k))
             continue
@@ -1091,7 +1136,10 @@ def case(name: str, exe: Callable[[], Path]) -> dict:
     out_w = list(ret.leaf_widths())
     n_in = sum(-(-sum(in_w[j] for j in lv) // WORD) for _p, lv in ins_p)
     n_out = sum(-(-sum(out_w[j] for j in lv) // WORD) for _p, lv in outs_p)
-    t, _log = template_of(r.c_s, key, n_in, n_out, exe)
+    try:
+        t, _log = template_of(r.c_s, key, n_in, n_out, exe)
+    except Unlowered as e:
+        return rec | {"template": key, "rows": f"unlowered: {str(e)[:400]}"}
     rng = random.Random(0)
     verdicts = []
     for s in range(4):
