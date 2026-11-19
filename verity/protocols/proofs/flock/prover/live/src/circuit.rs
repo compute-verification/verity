@@ -3071,8 +3071,13 @@ impl StmtCache {
 }
 
 /// The shape of circuit `c`'s statement at `n` instances ([`shape_in_range`] at its dense size and link points).
+/// The statement's block coordinates for `n` units of `g` a VU: `m = k_log + nbl`.
+pub fn nbl(n: usize, g: usize) -> usize {
+    log2ceil(n.div_ceil(g).max(1)).max(3)
+}
+
 fn shape_at(c: &Composite, n: usize) -> Result<(), String> {
-    let nbl = log2ceil(n.div_ceil(c.g).max(1)).max(3);
+    let nbl = nbl(n, c.g);
     shape_in_range(c.k_log + nbl, PT_LOCAL + nbl)
 }
 
