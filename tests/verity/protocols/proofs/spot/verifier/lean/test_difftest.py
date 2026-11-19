@@ -493,7 +493,7 @@ def rule(sampling_design) -> dict:
     elif kind == "rated":
         _exactly(sampling_design, {"law", "rates"}, "the law")
         try:
-            draw.rated_entries(sampling_design)
+            DR.rated_entries(sampling_design)
         except ValueError as e:
             raise D.Reject(str(e)) from None
     else:
@@ -1920,9 +1920,7 @@ BAD_WORK_ENTRY = st.sampled_from([-1, "1", {"work": -1}, {"floor": 0, "work": 1}
 
 @st.composite
 def sampling_designs(draw, n: int):
-    kind = draw(st.sampled_from(["subset", "bernoulli", "stratified", "work", "rated"]))
-    if kind == "rated":
-        return draw(rated_laws())
+    kind = draw(st.sampled_from(["subset", "bernoulli", "stratified", "work"]))
     if kind == "bernoulli":
         den = draw(st.integers(1, 6))
         return {"law": "bernoulli", "p": f"{draw(st.integers(0, den))}/{den}"}
@@ -3431,7 +3429,8 @@ PARTITION = D.Port(PIECES, "partition", partition, st.one_of(
     st.builds(lambda a, q, sampling_design, t, pre: {"params": a["params"] | {
         "query": q, "law": sampling_design, "work_table": t,
         "partition": {"program": PO.program_sha512(a["params"]["program"]), "query": q} if pre else None}},
-        changed_audits(most=0), st.sampled_from(QUERIES), st.one_of(sampling_designs(6), st.just({"k": 1, "law": "stratified"})),
+        changed_audits(most=0), st.sampled_from(QUERIES),
+        st.one_of(sampling_designs(6), st.just({"k": 1, "law": "stratified"}), rated_laws()),
         st.one_of(st.none(), st.dictionaries(st.sampled_from(PROGRAMS_TEMPLATES + ["Other_v1"]), WORK_ENTRY | BAD_WORK_ENTRY,
                                              max_size=3)), st.booleans()),
     st.builds(lambda a, pq, sampling_design, t, pre: {"params": a["params"] | {
