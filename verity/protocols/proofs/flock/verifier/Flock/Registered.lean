@@ -297,10 +297,11 @@ def checkPort (c : Circuit) (pub : Public) (t : Tables) (indices : Array Nat) (r
         throw s!"registered reads: port {reg.name}: unit {u} reads position {positions.getD (ref t np p i) 0}, and the verifier's program reads {want}"
       | _ => throw s!"registered reads: port {reg.name}: the verifier's program reads no row of {reg.value} in unit {u}"
 
-/-- Definition `fn` of `P` is an input bound at registration (`RegisteredInput<w>_v1`). -/
+/-- Definition `fn` of `P` is an input the prover does not choose: bound at registration (`RegisteredInput<w>_v1`) or
+supplied by the verifier (`SuppliedInput<w>_v1`, PROTOCOL.md §5.4), whose port opens a root the verifier computes. -/
 def regDef (P : Program.Prog) (fn : Nat) : Bool :=
   match P.defs[fn]? with
-  | some f => f.prim && f.binding == some Program.REGISTRATION
+  | some f => f.prim && (f.binding == some Program.REGISTRATION || f.binding == some Program.SUPPLIED)
   | none => false
 
 /-- The root's nodes of `P`. -/
@@ -467,7 +468,7 @@ def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bo
 callee in (`TemplateQuery.Desc`, the descriptor as the template queries read it). A node reads a registered input exactly
 when its callee is one of these, wherever it sits. -/
 def programInputs (d : TemplateQuery.Desc) : Array String :=
-  d.callees.filter fun id => (Program.inputId? id).map (·.1) == some Program.REGISTRATION
+  d.callees.filter fun id => (Program.inputId? id).any fun (b, _) => b == Program.REGISTRATION || b == Program.SUPPLIED
 
 /-- **A program that reads a registered value is verified only against registered roots** (`Flock.HmRow`): with the
 verifier's own program (`program`, `--program`), a statement whose program has a `RegisteredInput<w>_v1` callee

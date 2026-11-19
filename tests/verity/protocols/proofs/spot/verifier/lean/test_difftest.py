@@ -554,7 +554,7 @@ def decode_params(j) -> dict:
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
     keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool", "compiler",
-                               "certified", "verdicts", "window_values")
+                               "certified", "verdicts", "window_values", "coins")
                    if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
@@ -615,6 +615,10 @@ def decode_params(j) -> dict:
             G.sources(j["supplied"])
         except ValueError as e:
             raise D.Reject(str(e)) from None
+    try:
+        G.marked_rows(PROGRAMS[sha], j["registered"] or {}, G.sources(j.get("supplied", {})), j.get("coins"))
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
     if "pinned" in j:
         if not isinstance(j["pinned"], dict):
             raise D.Reject("pinned roots are not an object")
@@ -733,7 +737,8 @@ def _docket_verdict(p: dict, rec) -> Verdict:
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
                    p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"),
-                   compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"), verdicts=p.get("verdicts"))
+                   compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"), verdicts=p.get("verdicts"),
+                   coins=p.get("coins"))
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
@@ -746,7 +751,7 @@ def _caller_verdict(p: dict, rec) -> Verdict:
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
                    day=p.get("day"), declarations=p.get("declarations"), seed_salt=p.get("seed_salt"),
                    pool=p.get("pool"), compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"),
-                   verdicts=p.get("verdicts"))
+                   verdicts=p.get("verdicts"), coins=p.get("coins"))
 
 
 def _coins_of(p: dict, c: tuple[dict, bytes], e: dict) -> bytes | None:

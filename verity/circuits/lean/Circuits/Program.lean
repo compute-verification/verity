@@ -551,6 +551,7 @@ def Prog.digest (P : Prog) : Except String String :=
 
 def RUN : String := "run"
 def REGISTRATION : String := "registration"
+def SUPPLIED : String := "supplied"
 
 private def widthAfter? (pre id : String) : Option Nat :=
   if !(id.startsWith pre && id.endsWith "_v1") then none else
@@ -558,11 +559,14 @@ private def widthAfter? (pre id : String) : Option Nat :=
   if w.length > 0 && w.all Char.isDigit && w.front != '0' then w.toNat? else none
 
 /-- `program.input_id`: an input id's binding time and width: `run` for `^Input([1-9][0-9]*)_v1$` (`program.INPUT_ID`),
-`registration` for `^RegisteredInput([1-9][0-9]*)_v1$` (`program.REGISTERED_ID`); none for any other id. -/
+`registration` for `^RegisteredInput([1-9][0-9]*)_v1$` (`program.REGISTERED_ID`), `supplied` for
+`^SuppliedInput([1-9][0-9]*)_v1$` (`program.SUPPLIED_ID`, §5.4); none for any other id. -/
 def inputId? (id : String) : Option (String × Nat) :=
   match widthAfter? "Input" id with
   | some w => some (RUN, w)
-  | none => (widthAfter? "RegisteredInput" id).map (REGISTRATION, ·)
+  | none => match widthAfter? "RegisteredInput" id with
+    | some w => some (REGISTRATION, w)
+    | none => (widthAfter? "SuppliedInput" id).map (SUPPLIED, ·)
 
 def inputWidth? (id : String) : Option Nat := (inputId? id).map (·.2)
 
@@ -592,7 +596,7 @@ def GateKind.signature : GateKind → Array (String × Ty) × Ty
 
 /-- A primitive a Boolean Definition may reach (§9): a gate, a constant bit, or a 1-bit input. -/
 def isBooleanPrim (id : String) : Bool :=
-  (gateKind? id).isSome || id == "Input1_v1" || id == "RegisteredInput1_v1"
+  (gateKind? id).isSome || id == "Input1_v1" || id == "RegisteredInput1_v1" || id == "SuppliedInput1_v1"
 
 /-- §4.9's word primitive: a primitive that is no gate, constant bit or input. -/
 def isWordPrim (prim : Bool) (id : String) : Bool := prim && !isInputId id && !isBooleanPrim id
@@ -1266,10 +1270,10 @@ private def decodeAll (desc : Desc) (fs : Array String) : D Unit := do
   for f in fs do
     if desc.ddefs.contains f then discard (getDef Steps.FUEL desc f)
 
-/-- An id spelt as a member of the input families or the gates' (`Input`, `RegisteredInput`, `And` or `Xor`, then a
+/-- An id spelt as a member of the input families or the gates' (`Input`, `RegisteredInput`, `SuppliedInput`, `And` or `Xor`, then a
 digit) that is no member's id: a family member spelt otherwise than its id (§4.6), which no registry holds. -/
 def misspelt (id : String) : Bool :=
-  ["Input", "RegisteredInput", "And", "Xor"].any (fun pre =>
+  ["Input", "RegisteredInput", "SuppliedInput", "And", "Xor"].any (fun pre =>
       id.startsWith pre && (id.drop pre.length).toString.front.isDigit) &&
     !isInputId id && (gateKind? id).isNone
 
