@@ -175,18 +175,10 @@ TIE_RUN = {"summary.json": {"ok": True, "tie": {"honest": [True]}}, "stager/prog
 TIE_KEPT = ["stager/partition.json", "stager/program.json", "summary.json"]
 
 
-def test_n2_tie_zk_keeps_its_verdicts_and_public_parameters_and_never_its_inputs(tmp_path):
-    """The tie's inputs (each request's place, its prompt length, the cells each window received) and the outcome records
-    naming their digest are what the verifier received, not public: $OUT/n2tie gets the summary and the tie's
-    Program and partition alone."""
-    w, out = tmp_path / "W", tmp_path / "OUT"
-    put(w / "n2tie", TIE_RUN)
-    got = run(block("n2_tie_zk.sh", 'mkdir -p "$OUT/n2tie"', "  [ -f"), W=w, OUT=out)
-    assert got.returncode == 0, got.stderr
-    assert published(out) == [f"n2tie/{f}" for f in TIE_KEPT]
-
-
 def test_the_chains_tie_step_keeps_its_verdicts_and_public_parameters_and_never_its_inputs(tmp_path):
+    """The tie's inputs (each request's place, its prompt length, the cells each window received) and the outcome records
+    naming their digest are what the verifier received, not public: $OUT/tie gets the summary and the tie's
+    Program and partition alone."""
     w, out = tmp_path / "W", tmp_path / "OUT"
     put(w / "tie", TIE_RUN)
     got = run(block("chain_record.sh", "WHOLE=(", "}") + kept('W/tie', "tie"), W=w, OUT=out, Q=tmp_path / "q")

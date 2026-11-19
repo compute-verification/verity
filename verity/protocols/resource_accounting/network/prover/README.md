@@ -23,7 +23,7 @@ statics and tie are vLLM's compiler's (`adapters/vllm/verity_vllm/compiler`).
   - `verity/protocols/compose/verifier/live_challenger`: its tests, `released_keys` and `scan_zk`;
   - `verity/protocols/resource_accounting/network/verifier`: its tests, `egress`, `ingress_scan`, `io_ids`, `lengths_row`,
     `response_tie`, `window_charge` and `workload`. No module of that package imports this one.
-- **Commands**: no console script and no Lean. The drivers `n2_tie_zk`, `network_attester_zk`,
+- **Commands**: no console script and no Lean. The drivers `network_attester_zk`,
   `released_keys`, `scan_period` and `scan_zk` each have a `__main__`, which `benchmarks/network_traces`'s jobs run.
 - **The period check's evidence**: the period check reads each answer as the evidence states it. That each is the
   answer one-stage's verifier gives back is the open premise `Properties.NetworkPeriod.AnswersVerified`.

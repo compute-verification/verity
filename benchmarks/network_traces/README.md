@@ -35,8 +35,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   in the proof system.
 - **Proofs in zero knowledge.** Each driver, in network attestation's `prover/`, proves its
   proof blocks with Flock `prove --zk` behind the Lean ZK server and holds them by the Lean
-  `verity-verify-proof verify --zk`: `n2_tie_zk.py`
-  (the ingress tie), `scan_zk.py` (the step-indexed scan), `scan_period.py` (the
+  `verity-verify-proof verify --zk`: `scan_zk.py` (the step-indexed scan), `scan_period.py` (the
   scan's answers held by `NetworkCheck.Period`). `leak_scan.py`, in
   `prover/` too, is the scan of what the verifier received that every one of them runs.
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with
@@ -334,8 +333,8 @@ attested lines. That check requires the session's attested start, so a gate run 
 start is refused here: such a run is read by the chain of the tree its gate ran. The relay signs no clock attestation,
 so none is read. The endpoint step binds the endpoint's own
 advice to the attested I/O read off the relay's cells (`chain_record.py endpoint`, with `CR_EOS_IDS` the model's EOS
-ids). N2 is the plain proof block on the relay's link, which no driver of the tree proves. The ingress tie (lengths and order, no id) is proved on the relay's
-ingress (`n2_tie_zk.py prove --class warden`, the report's `tie` step), and the scan is `scan_zk.py prove
+ids). N2 is the plain proof block on the relay's link, which no driver of the tree proves. The ingress tie (lengths and order, no id) is the report's `tie` step, which no driver of
+the tree proves, and the scan is `scan_zk.py prove
 --warden-run`'s. Each step is held to the one relay run the attestations step read, and every one is required.
 
 A Commit period that carries a request across its open or close (`verity_vllm.pipeline.window_advice`, schema

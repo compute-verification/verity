@@ -641,37 +641,6 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
   cell, whether it ends the request, the bytes left after it and its prompt fields. The step keeps (left, fields,
   over, padded, ok); the count's carry past 2^32 is kept, so a sum that wraps is refused. Public: the lanes, each
   (q, left, fields, left_out, fields_out). Witness: the row.
-- **The verdict** (`tie_service.IoTieVerdict`) is `IoTieVerdict(link, registrations, inputs, accepted)`: the link,
-  its ingress execution phases' registrations (each one's `registration.digest`, in order), the inputs' digest
-  (`tie_service.digest`) and one bit a registration, set when every bucket row of that execution phase is accepted. The
-  inputs (`tie_service.IngressInputs`) are each input's place in the order and its length, public outputs of the
-  registered compiler's circuit; the tie never reads the advice's bytes. It
-  is built only from IoTieRequest proofs the verifier verified on its own lanes (`lanes` from those lengths and places
-  and the network attester's release) and given only by the verifier's own tie source
-  (`tie_service.Ties`), which gives none on another link or another stream than its own. An accepted verdict on every
-  execution phase says that connection `places[i]` + 1 is an id request of `lengths[i]` prompt ids. The inputs carry no
-  tie, and none the prover states or delivers is taken: the phase-7 attack stated the swapped split, and the phase-10
-  attack delivered a verdict built for the forged inputs' digest, every execution phase accepted.
-- **Through the proof system** (`tie_service.IngressTie`). A registration is one ingress execution phase, the
-  network attester's salted root of its T bucket rows, held to the execution phase's order, and T proof blocks, proof block t bucket
-  row t. The proof block is `NetworkIngressTieBucket`: one gate naming IoTieRequest and its pinned circuit digest
-  (`io_request.circuit-check.json`), its witness row the bucket row itself, read off the network attester's root by
-  the verifier's own registered read (`network_attester_rows.bucket_port`). The statement is a shared-row file every port of
-  which is one of the verifier's registered reads (Flock's `Registered.checkComplete`): `wit` at the network
-  attester's root, and `pub` and `o0` at known content the verifier registers itself (`IngressTie.known`), each
-  proof block's lanes (`io_request.lanes`, from the inputs it holds and the network attester's release, taken in the clear)
-  and the output word 1, under public salts, which hide nothing since both rows are public. The verifier
-  decides each execution phase on the proof alone, each proof block's `pub` row opened to its own lanes, and reports the inputs'
-  digest. `IngressTie.tie` reads the verdict from the stream's outcomes of record
-  alone, on the link and the stream's registrations. Execution phase w is accepted when its outcome is, decided on the proof
-  for the advice's digest. Every one is refused unless the stream registers exactly the advice's execution phases in order,
-  the release is the network attester's schedule for the advice and puts `received`'s request cells in each,
-  and the profile's framing is the network attester's cut (`tie_service.framing`) with no own frame. A connection's
-  lanes chain from (0, 0) into its first bucket to (0, n) out of its `END`'s, so the proof blocks together hold each
-  request's count across the buckets it spans. A size class with no pinned digest has no accepted proof.
-  `tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_tie_service.py` holds the phase-9 attack's carried field count, its forged advice and
-  phase 6's split, refused through the verifier, on stand-in proofs (`tests/verity/protocols/resource_accounting/network/verifier/standin.py`), and
-  `verity/protocols/resource_accounting/network/prover/n2_tie_zk.py` proves them live, its `network_attester` class the network attester path's tie.
 - **The first negative** is the phase-6 attack's split (`test_redteam_phase6_split_is_refused`). At B = 4,096, prompts
   of 400 and 16 tokens take 2 cells and 1, released one a bucket (r = 1). The forged advice swaps them, keeping the
   total; its lanes aren't the release's, and built anyway they are refused by the proof block, which reads 400 fields in

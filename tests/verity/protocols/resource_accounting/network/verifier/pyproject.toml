@@ -9,7 +9,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = [
     "test_network_attester_relay_lean.py",
     "test_network_attester_registered.py",
-    "test_network_attester_tie_service.py",
 ]
 # the served circuits' Definitions (`verity_vllm.definitions`) its tests import, with the package they sit in
 # and the network attester's runs (`relay_runs`), which the relay check's rows audit outcomes are read on
@@ -30,7 +29,6 @@ paths = ["verity/circuits", "verity/circuits/kernels"]
 [[tool.verity.tests.reads]]
 tests = [
     "test_network_attester_lean_difftest.py",
-    "test_network_attester_tie_service.py",
     "test_network_check_lean_difftest.py",
 ]
 paths = ["verity"]

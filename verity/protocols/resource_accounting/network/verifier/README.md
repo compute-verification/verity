@@ -153,8 +153,8 @@ A spec-level reference for network attestation's timing channel:
   network attester's cells (a `PAD` on its ordinal, a `DATA` of exactly B − 9 bytes, its `END`), each request cell a
   cell of CERT-VARLEN's id
   request, with its count of prompt fields carried across buckets from the lane's carry-in to its carry-out, which
-  hold each request's prompt_len to the advice's and which the ingress tie's verdict (`tie_service.IoTieVerdict`) is
-  built from. It has the reference, the lanes the verifier computes from the advice and the network attester's release
+  hold each request's prompt_len to the advice's and which the ingress tie's verdict is
+  to be built from. It has the reference, the lanes the verifier computes from the advice and the network attester's release
   (`lanes`, `Release`), and the proof block's Boolean Definition (`IoTieRequest`: one `IoTieRequestFrame` and
   `IoTieRequestStep` a cell, `IoTieRequestEnd` a lane); the ingress-ids tie (`io_ids`, `IoTieRequestIds`) would add the
   Commit's `c00.input/ids` rows to the same scan and hold every prompt id to them: a reference on a fake upstream
@@ -346,16 +346,7 @@ A spec-level reference for network attestation's timing channel:
   `verity/protocols/resource_accounting/network/prover/scan_zk.py` proves both sides of a group of execution phases in one registration: ingress proof block
   t's state and view outputs are committed as registered reads of the scan's state and view rows t, which ingress proof block
   t + 1 and egress proof block t read, and egress proof block t's row as a registered read of the network attester's egress row t, so the
-  chains are wires through the registered roots;
-- the ingress tie through the proof system (`tie_service`): `IngressTie`, each ingress execution phase's `IoTieRequest`
-  proof blocks, one a bucket row of the network attester's registered ingress cells, proved as
-  `NetworkIngressTieBucket` (one gate
-  naming its pinned circuit digest, `io_request.circuit-check.json`) with the row read off the network attester's root
-  (`network_attester_rows.bucket_port`) and its lanes and output row off values the verifier registers at known content
-  (`IngressTie.known`), decided by the verifier on its own lanes from the advice and the network attester's
-  release, and `IngressTie.tie`, which builds `IoTieVerdict` on the link and the stream's registrations from the
-  stream's outcomes of record alone; `Ties`, the tie, its stream and the release as the verifier's own tie source,
-  which gives the verdict only on its own link. A size class no sidecar pins has no accepted proof.
+  chains are wires through the registered roots.
 
 The attestation's signature scheme is a parameter: the network attester's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
@@ -426,8 +417,6 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
   (`Properties.Certifier.TransferBlocksAcceptMeans`, proved): an accepted execution phase was proved, opened to the
   word 0b11, attested on both ends and synced within Σ_sync (a network attester link's syncs are not asked of), and
   its public outputs are verdict 1 and deadline 1.
-
-`tie_service.IngressTie.verify`, the ingress tie's verifier, is not ported and stays Python.
 
 A proof of the proof block is held to its circuit. Each gate names its Definition's circuit digest
 (`Gate[NetworkHeadCheck_v2{…}@<digest>]_v2`), as `head_check.circuit-check.json` pins it and circuit-check holds the
