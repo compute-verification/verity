@@ -127,7 +127,7 @@ def test_a_wrong_invocation_in_the_alias_table_never_reads_a_neighbours_words():
     rep2 = SR.sampled_replay(_programs(world), bmap2, committed2, _weights(world), per_stratum=8, seed=5, manifest=man2)
     assert rep2["result"] is True and rep2["sample"]["mismatch_n"] == 0, json.dumps(rep2, indent=1, default=str)[:2000]
     # and the store, asked for invocation 0 through a layer-0 path, gets the OTHER words (never layer 1's)
-    st = OP.CommittedStore.of_record(bmap2, committed2, man2)
+    st = OP.CommittedStore.of_record(bmap2, committed2, OP.alias_table(man2))
     w1, _ = st.words("r0", 0, ALIAS, "query", 0, 4)
     w0, _ = st.words("r0", 0, CANON, "query", 0, 4)
     assert w1 is not None and w0 is not None and w1.tolist() != w0.tolist()

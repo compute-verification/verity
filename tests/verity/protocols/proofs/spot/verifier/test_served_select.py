@@ -64,11 +64,12 @@ def _codes(own: SS.Own) -> set[str]:
 
 
 def _held(own: SS.Own, template: SpecializedDefinition) -> list[str]:
-    """The interior record's port that holds each port of ``template``'s session (`second_stage._held_port`), its parameters
-    then its outputs: a wired port's is its writer's output port, any other its own."""
+    """The interior record's port that holds each port of ``template``'s session, its parameters then its outputs: a wired
+    port's is its writer's output port (`second_stage.placings`), any other its own."""
     params, ret = template.signature()
     ports = [name for name, _t in params] + [f"o{j}" for j in range(SS._outputs(ret))]
-    return [SS._held_port(own, True, P.template_id(template), p) for p in ports]
+    t = P.template_id(template)
+    return [next((at for rule, at in SS.placings(own, True, t, p) if rule == SS.WRITER_TREE), f"{t}/{p}") for p in ports]
 
 
 DESIGN = {"second-links", "second-wires", "second-cells"}

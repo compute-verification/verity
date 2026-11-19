@@ -17,8 +17,8 @@ TP stand-in (adapters/vllm's `tests.pipeline.served_tp`, deferred), without prov
   no root, and on nothing else; told it forges a unit, the same record fails.
 * An accepted audit's charge terms: λ_δ, β_δ and their sum, off the audit's profile, and c only where the window's leak count
   is within the charge, so a partial window, whose port from a template it lacks is free, states none (`charge_terms`).
-* A single-GPU run's pieces without its Commit: I2's adapter (its requests, its refusal by name, its Program bodies by digest),
-  the requests' bodies from the record, the stand-in window's link and `source1`'s codes, and the CLI's one committed run.
+* A served window's pieces without its Commit: I2's adapter (its requests, its refusal by name, its Program bodies by digest),
+  the stand-in window's link and `source1`'s codes, and the CLI's one committed run.
 * A served window's pieces on a small synthetic serve-openai run dir (no Commit): its requests' bodies by I1 id, φ of the served
   engine, the registered compiler, the prover committing under the published binding (no re-commit), `serve_check`'s codes
   (a compiler without the cap, a root that isn't rows-sha512, a carried request that doesn't follow from the last window's
@@ -59,7 +59,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as
 from verity.commitments import randomness as RND
 from verity.circuits.codec import canonical_json
 from verity.commitments import salt_file as SF
-from verity.commitments.periods import interface as IF, rows as CS
+from verity.commitments.periods import interface as IF, rows as CS, wiring as WI
 from verity_difftest import settings as opt
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
@@ -223,7 +223,7 @@ def test_a_registration_under_the_compiler_listing_no_transfer_gates_or_one_fewe
         served.mkdir()
         (served / "registration.json").write_text(json.dumps({"window": w}))
         assert PP.source1(w, mine, held)["ok"]
-        got = PP.more_negatives(argparse.Namespace(bundle="b"), 0, 1, compiler, mine, held, served, opening)
+        got = PP.more_negatives(argparse.Namespace(serve_run="RUN"), 0, 1, compiler, mine, held, served, opening)
         assert all(v["refused"] for v in got.values()), got
         keys = ["registration-under-the-compiler-listing-no-transfer-gates (source)"][:len(gates)] + [
             f"registration-under-the-compiler-less-the-gate-{g} (source)" for g in gates]
@@ -255,7 +255,7 @@ def test_a_single_gpu_window_proves_the_templates_its_compiler_lists_whole(monke
 
 
 def test_the_challengers_coins_need_main_and_the_gates_peer_and_key(monkeypatch):
-    run = ["--bundle", "b", "--row-dir", "d", "--workload", "f", "--opening", "o", "--windows", "w", "--partition", "p",
+    run = ["--serve-run", "RUN", "--window", "0", "--row-dir", "d", "--opening", "o", "--windows", "w", "--partition", "p",
            "--template-sets", "s", "--m0-pythonpath", "m", "--bin", "b", "--lean", "l", "--zk-server", "f", "--out", "o"]
     gate = ["--challenger", "gate:research@vy-challenger-1", "--main", "m.txt"]
     for refused in ([], ["--challenger", "local"], gate, [*gate, "--peer", "vy-nebius-2"], ["--challenger", "remote", "--main", "m.txt"]):
@@ -756,7 +756,7 @@ def test_a_partial_windows_charge_states_no_c_its_port_from_a_template_it_lacks_
     import records_audit as RA
 
     writer = CS.Member("W", (("a", 4),), (("o0", 8),), 2)
-    reader = CS.Member("R", (("x", 8), ("y", 2)), (("o0", 2),), 2, base=2, wired=(("x", "o0", (0, 1)),))
+    reader = CS.Member("R", (("x", 8), ("y", 2)), (("o0", 2),), 2, base=2, wired=(WI.Wired("x", "W", "o0", 0, (2,), 0, (1,)),))
     advice = 16 * 2 * (4 + 2)
     whole, partial = (RA.leak_count(w, (), advice) for w in ([writer, reader], [replace(reader, base=0, wired=())]))
     assert (whole["other_inputs"], whole["bound"]) == (advice, "within the charge")
@@ -805,7 +805,7 @@ def test_i2_loads_only_a_single_gpu_session_and_only_programs_a_build_dir_holds(
     i2.units["d1" * 64] = ST.RequestUnit(1, "d1" * 64, 3, 1, {"kind": "greedy"}, None, 0, "r1", stop={"max_tokens": 2})
     with pytest.raises(ValueError, match=r"request r1: no Build dir under .* holds I2's Program d1d1.*\(its trace: "
                                          r"build_request_LP3_T1_greedy_s[0-9a-f]{12}/; the Builds there: build_request_LP5_T2 d0d0.*\)"
-                                         r".*cannot be proved by the single-GPU arm.*length rule.*served arm \(PP_SERVE_RUN"):
+                                         r"\. A served window's row dir holds the Builds of I2's Programs once `advice_compile\.py RUN --window K`"):
         i2.load(0, 1, [{"request_id": "r1", "arrive_step": 0, "digest": "d1" * 64}])
 
 
@@ -953,14 +953,6 @@ def test_a_builds_input_batches_are_its_parameters_as_src_shapes_them():
         [["p", 1, 0, 5], ["p", 0, 5, 6], ["n", 2, 0, 1], ["n", 2, 2, 3]]
 
 
-def test_each_requests_body_is_its_prompt_cap_and_sampling_by_its_i1_id():
-    ctx = {"requests": [{"request_id": "x", "prompt_token_ids": [1, 2], "max_tokens": 3},
-                        {"request_id": "y", "prompt_token_ids": [4], "max_tokens": 2}],
-           "sampling": {"temperature": 0.0, "top_p": 1.0, "logprobs": 5}}
-    assert PP.ingress_of(ctx) == {"r0": {"prompt": [1, 2], "max_tokens": 3, "temperature": 0.0, "top_p": 1.0},
-                                  "r1": {"prompt": [4], "max_tokens": 2, "temperature": 0.0, "top_p": 1.0}}
-
-
 def _single(root: str = "aa" * 64) -> tuple[dict, SimpleNamespace, dict]:
     r = SimpleNamespace(store=SimpleNamespace(commit_scheme=SRT.ROWS_SCHEME), run=SimpleNamespace(run_root=bytes.fromhex(root)),
                         bundle={"manifest_sha256": "bb" * 32})
@@ -989,13 +981,13 @@ def test_a_single_gpu_window_is_a_stand_in_of_the_records_sha512_run_root():
 
 def test_a_run_is_one_committed_run_and_a_single_gpu_runs_one_window_is_rank_0():
     tail = ["--advice", "a.bin", "--opening", "o.json", "--partition", "p.json", "--out", "w"]
-    for run in ([], ["--tp-commit", "c"], ["--bundle", "b", "--row-dir", "d"], ["--bundle", "b", "--workload", "f"],
-                ["--tp-commit", "c", "--build-root", "b", "--bundle", "b", "--row-dir", "d", "--workload", "f"]):
+    for run in ([], ["--tp-commit", "c"], ["--bundle", "b", "--row-dir", "d", "--workload", "f"],
+                ["--tp-commit", "c", "--build-root", "b", "--serve-run", "RUN", "--window", "0", "--row-dir", "d"]):
         with pytest.raises(SystemExit):
             PP.main(["commit", *run, *tail])
-    assert PP.ranks_of(argparse.Namespace(bundle="b", ranks=None)) == (1, [0])
+    assert PP.ranks_of(argparse.Namespace(serve_run="RUN", ranks=None)) == (1, [0])
     with pytest.raises(SystemExit, match=r"ranks \[1\] are not ranks of the world of 1"):
-        PP.ranks_of(argparse.Namespace(bundle="b", ranks="0,1"))
+        PP.ranks_of(argparse.Namespace(serve_run="RUN", ranks="0,1"))
 
 
 def test_per_unit_timing_is_over_the_members_sampled_proof_blocks_not_c_flocks_virtual_units():
@@ -1025,7 +1017,7 @@ def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str =
     """A serve-openai run dir with one closed window (w0, the stand-in workload's two requests by their `user`) and a request of
     another window, its advice committed as `verity-vllm advice` commits it under the served compiler (or, ``uncapped``, under
     the inner compiler alone; ``gates``, under the server's listing those instead of the model's of record), and its row dir's
-    request Programs as vllm's registered compiler writes them (``manifest.json``);
+    request Programs as vllm's registered compiler writes them (``programs.json``, with the window's docket);
     the server's compiler identity, I2's compile and the row dir's record stubbed."""
     from verity_vllm.program.predict import steps as ST
 
@@ -1033,8 +1025,6 @@ def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str =
     run, rows = tmp_path / "serve", tmp_path / "rows"
     (run / "advice" / "w0" / "private").mkdir(parents=True)
     rows.mkdir()
-    (rows / "manifest.json").write_text(json.dumps({"schema": PP.SERVED_PROGRAMS, "window": 0,
-                                                    "requests": {"r0": {"digest": "d0" * 64}, "r1": {"digest": "d1" * 64}}}))
     pub = root if published is None else published
     (run / "serve.json").write_text(json.dumps({"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
                                                 "default_seed": DEFAULT_SEED, "engine": {"execution": "bi-eager", "pin": {"world": 1}},
@@ -1051,10 +1041,12 @@ def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str =
     inner = SimpleNamespace(name=compiler.inner.name, digest=compiler.inner.digest)
     _r, bound, reg = AW.of_advice(inner if uncapped else compiler, data)
     adv = run / "advice" / "w0"
-    (adv / "registration.json").write_text(json.dumps({
-        "schema": "verity-vllm/advice-registration/v1", "scheme": AW.SCHEME, "binding": bound,
-        "compiler": {**bound["compiler"], "cap_bits": PP.CAP_BITS, "inner": {"name": SERVER[0], "digest": SERVER[1]}},
-        "window": 0, "commit": {"run_id": "RUN/w0", "run_root": pub}}))
+    reg_doc = {"schema": "verity-vllm/advice-registration/v1", "scheme": AW.SCHEME, "binding": bound,
+               "compiler": {**bound["compiler"], "cap_bits": PP.CAP_BITS, "inner": {"name": SERVER[0], "digest": SERVER[1]}},
+               "window": 0, "commit": {"run_id": "RUN/w0", "run_root": pub}}
+    (adv / "registration.json").write_text(json.dumps(reg_doc))
+    (rows / "programs.json").write_text(json.dumps({"schema": PP.SERVED_PROGRAMS, "window": 0, "registration": reg_doc,
+                                                    "requests": {"r0": {"digest": "d0" * 64}, "r1": {"digest": "d1" * 64}}}))
     (adv / "private" / "advice.bin").write_bytes(data)
     (adv / "private" / "opening.json").write_text(json.dumps(AW.opening(data, reg)))
 
@@ -1236,22 +1228,6 @@ def test_a_served_pins_phi_reads_its_config_of_record_as_advice_compile_does():
     assert PP.phi_of_serve(bf16).model["hf_config"] == json.loads(PP.LLAMA32_1B_CONFIG.read_text())
 
 
-def test_a_declared_runs_phi_reads_the_config_of_record_of_its_workloads_pin():
-    """A single-GPU Commit's φ (`i2_of_record`) reads the config of record of the pin its workload serves (`workload_hf_config`),
-    as a served pin's does: an int8 row's carries the quantization config its Programs were built under, never the bf16
-    fixture's; a bf16 row's is the fixture's, so that row compiles as before; a model no manifest pins reads the fixture; a doc
-    with no engine.revision, the old flat layout's among them, is refused by name, never read as the fixture's."""
-    int8 = {"model": "verity-int8/Llama-3.2-1B-INT8", "engine": {"revision": "15b0976d400d796ee589e7737d03a919526bf800"}}
-    assert json.loads(PP.workload_hf_config(int8).read_text())["quantization_config"]["quant_method"] == "verity_int8"
-    bf16 = {"model": "unsloth/Llama-3.2-1B", "engine": {"revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da"}}
-    assert json.loads(PP.workload_hf_config(bf16).read_text()) == json.loads(PP.LLAMA32_1B_CONFIG.read_text())
-    assert PP.workload_hf_config({"model": "org/unpinned", "engine": {"revision": "0" * 40}}) == PP.LLAMA32_1B_CONFIG
-    assert PP.workload_hf_config(int8, "given.json") == Path("given.json")
-    for flat in ({"model": "org/unpinned", "engine": {}}, {"model": int8["model"], "revision": int8["engine"]["revision"]}):
-        with pytest.raises(ValueError, match="names no engine.revision"):
-            PP.workload_hf_config(flat)
-
-
 def test_the_ran_with_line_names_the_coins_and_the_parameters_of_their_key(tmp_path, capsys):
     """A local challenger's key is at its development parameters; a gate's is its key record's, deployed only at
     `lms.DEPLOYED`'s, and without the record no word is stated. The challenger party's host on this machine, which
@@ -1402,32 +1378,6 @@ def test_a_served_run_registers_the_public_default_seed_and_one_that_records_ano
         assert PP.main(["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"),
                         "--advice", str(tmp_path / "advice.bin"), "--out", str(tmp_path / "circuit.json")]) == PP.REFUSED
         assert why in capsys.readouterr().err and not (tmp_path / "circuit.json").exists()
-
-
-def test_a_stand_in_records_the_public_default_seed_and_its_seedless_sampled_requests_bring_the_records(tmp_path, monkeypatch):
-    """`serve-standin` lays a declared Commit out as serve-openai does, so its serve.json records the public default seed and
-    passes `registered_seed`; a sampled request of the record that named no seed brings the declared run's default seed, the
-    one its sample used, and a greedy or seeded one brings what the record served it under."""
-    phi = SimpleNamespace(model={"repo": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da"},
-                          execution="bi-eager", target=TARGET)
-    ingress = {"r0": {"prompt": [0, 1, 2, 3, 4], "max_tokens": 3, "temperature": 0.0},
-               "r1": {"prompt": [0, 1, 2], "max_tokens": 2, "temperature": 0.8},
-               "r2": {"prompt": [5], "max_tokens": 2, "temperature": 0.8, "seed": 11}}
-    record = SimpleNamespace(row={"label": "ROW"}, run=SimpleNamespace(run_root=bytes.fromhex("aa" * 64)))
-    monkeypatch.setattr(PP, "record1", lambda bundle, row_dir: record)
-    monkeypatch.setattr(PP, "i2_of_record", lambda *a, **k: SimpleNamespace(
-        registered=SimpleNamespace(phi=phi, default_seed=5), ingress=ingress))
-    monkeypatch.setattr(PP, "served_identity", lambda: SERVER)
-    out = tmp_path / "serve"
-    a = argparse.Namespace(bundle="b", row_dir=str(tmp_path / "rows"), workload=str(_workload(tmp_path)), out=str(out),
-                           hf_config=None, cap_bits=PP.CAP_BITS)
-    assert PP.serve_standin(a)["requests"] == 3
-    serve = json.loads((out / "serve.json").read_text())
-    assert serve["default_seed"] == PP.registered_seed(serve) == DEFAULT_SEED
-    brought = {q["user"]: q["ingress"]["brought"] for q in map(json.loads, (out / "requests.jsonl").read_text().splitlines())}
-    assert brought == {"r0": {"max_tokens": 3, "temperature": 0.0}, "r1": {"max_tokens": 2, "temperature": 0.8, "seed": 5},
-                       "r2": {"max_tokens": 2, "temperature": 0.8, "seed": 11}}
-    assert PP.compiler_doc(str(out), None, None, PP.CAP_BITS)["default_seed"] == DEFAULT_SEED
 
 
 def test_the_served_identity_is_verity_vllm_advices_and_refused_where_the_tree_has_none(monkeypatch):
@@ -1751,11 +1701,25 @@ def test_the_prover_commits_a_served_window_under_the_published_binding(tmp_path
     assert PP.serve_check_of(s.a, bound) == {"ok": True, "codes": [], "detail": {
         "window": 0, "published_root": s.root, "commitment": SRT.ROWS_SCHEME, "compiler": s.bound["compiler"],
         "advice": s.bound["advice"], "run_id": "RUN/w0", "follows": {"last": None, "carried": []}}}
-    by_id = PP.i2_against_record(s.a, requests)
+    by_id = PP.i2_against_record(s.a, requests, bound["compiler"])
     assert by_id["equal"] and by_id["units"]["r1"] == {"i2": "d1" * 64, "of_record": "d1" * 64, "equal": True}
-    (Path(s.a.row_dir) / "manifest.json").unlink()
-    assert PP.i2_against_record(s.a, requests) == {"units": {"r0": {"i2": "d0" * 64}, "r1": {"i2": "d1" * 64}},
-                                                   "of_record": ["d0" * 64, "d1" * 64], "equal": True}
+    assert by_id["compiler"] == {"i2": bound["compiler"], "of_record": bound["compiler"], "equal": True}
+    other = {**bound["compiler"], "digest": "ff" * 64}
+    got = PP.i2_against_record(s.a, requests, other)
+    assert not got["equal"] and got["compiler"]["equal"] is False and all(u["equal"] for u in got["units"].values())
+    programs = Path(s.a.row_dir) / "programs.json"
+    doc = json.loads(programs.read_text())
+    programs.write_text(json.dumps({**doc, "requests": {"r0": doc["requests"]["r0"], "r1": {"digest": "ee" * 64}}}))
+    got = PP.i2_against_record(s.a, requests, bound["compiler"])
+    assert not got["equal"] and got["compiler"]["equal"] and got["units"]["r1"]["equal"] is False
+    programs.write_text(json.dumps({**doc, "schema": "verity-vllm/other/v1"}))
+    with pytest.raises(ValueError, match=r"programs.json is 'verity-vllm/other/v1', not verity-vllm/served-window-programs/v1"):
+        PP.i2_against_record(s.a, requests, bound["compiler"])
+    programs.unlink()
+    with pytest.raises(FileNotFoundError, match="programs.json"):
+        PP.i2_against_record(s.a, requests, bound["compiler"])
+    with pytest.raises(ValueError, match="a single-GPU window is a served one"):
+        PP.i2_against_record(argparse.Namespace(bundle="b", row_dir=s.a.row_dir), requests, bound["compiler"])
 
 
 @pytest.mark.parametrize("kw, codes", [
@@ -1891,7 +1855,7 @@ def test_a_served_run_is_its_window_and_row_dir_with_the_servers_advice_and_open
                   ["--window", "3", "--row-dir", "R", "--advice", "a.bin"], ["--window", "3", "--row-dir", "R", "--tp-commit", "c"]):
         with pytest.raises(SystemExit):
             PP.main(["commit", *base, *extra])
-    assert PP.single(argparse.Namespace(serve_run="RUN")) and PP.ranks_of(argparse.Namespace(serve_run="RUN", ranks=None)) == (1, [0])
+    assert PP.served(argparse.Namespace(serve_run="RUN")) and PP.ranks_of(argparse.Namespace(serve_run="RUN", ranks=None)) == (1, [0])
 
 
 def test_the_verifiers_i2_reads_only_builds_it_wrote_itself_and_the_provers_its_row_dir(tmp_path, monkeypatch):
@@ -2041,11 +2005,116 @@ def test_window_commit_without_the_attesters_reader_or_state_file_is_refused_by_
             PP.window_commit_of_builds(argparse.Namespace(), **given)
 
 
-def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
-    """`h1_tie`: with ``--window-registration`` W, H1's docket of the window, and ``--h1-prover``, window-commit's
-    circuit reads W's tables (`window_class.Tables` of the serve's H1 window Program); none without W. Refused by name
-    without the prover's directory, for a W under another Program, and where H1's rounds aren't the class's outputs. The verifier's
-    window-circuit, which holds no key (not ``key``), reads the same tables."""
+#: adapters/vllm's `tests.program.predict.test_steps.TINY`, as test_class_rows has it
+TINY_CONFIG = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
+               "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256,
+               "rms_norm_eps": 1e-5, "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}
+
+
+@pytest.mark.slow
+def test_window_commit_fills_the_served_circuits_slots_and_rows_from_its_served_requests(tmp_path, monkeypatch):
+    """`window_commit_of_builds` on TINY's served window at class 2,4,2 (r0 at a prompt of 4 keeping 1 output, r1 at 4
+    keeping 2): it lowers the served circuit of the requests it takes, builds one `Slot` per Program from the slot its
+    anchor and lane name, each of its served request's values, registers the weights and the scan state, and fills the
+    circuit's every unit (`Rows`), up to the window it closes. The record, store, checkpoint and scan readers are stood
+    in, and TINY's templates are below what Flock's composer proves; the lowering, the slots, the weights' values and
+    the rows are window-commit's own. Slow (about two minutes) for TINY's rows, which every unit of the circuit fills:
+    what no cheaper test reaches is window-commit's own path from the lowering to the rows, which none runs past a slot."""
+    import numpy as np
+    from verity_vllm.check import oracle_compare as OC
+    from verity_vllm.check import weights_of_record as WOR
+    from verity_vllm.check.replay import index as RI
+    from verity_vllm.check.replay import opening as OP
+    from verity_vllm.pipeline import cpu_replay as CPU
+    from verity_vllm.program.predict import scan_state as SS
+    from verity_vllm.program.predict import steps as ST
+    from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.program.predict import window_rows as WRS
+    from verity_vllm.program.predict import window_weights as WW
+    from verity_vllm.program.predict.phi import Phi
+
+    grain = WC.Grain(gemm_words=1024, rows=256, select=64)
+    phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY_CONFIG},
+              target={"compute_capability": [12, 0], "num_sms": 188})
+    registered, cls = ST.Registered.of(phi, default_seed=7), WC.WindowClass(2, 4, 2)
+    served = {"r0": (4, 1, [1, 4, 17, 3, 250, 9]), "r1": (4, 2, [1, 4, 5, 77, 42, 0])}
+    requests = tuple(WC.Request(cls.anchor(k), cls.lane(k), lp, m) for k, (lp, m, _row) in enumerate(served.values()))
+    lower, weight_values, rows_of = WC.lower, WW.weight_values, WRS.Rows
+    widths, zeros = {8: np.uint8, 16: np.uint16, 32: np.uint32}, {}
+
+    def lowered(r, c, requests=None):
+        low = lower(r, c, None, grain, requests=requests)
+        zeros.update({label: np.zeros(ty.leaves, dtype=widths[next(iter(ty.width_set()))])
+                      for label, ty in dict(low.fn.signature()[0])[WC.WEIGHTS].fields})
+        return low
+
+    monkeypatch.setattr(WC, "lower", lowered)
+    monkeypatch.setattr(WC, "takes", lambda compiled, c: requests)
+    monkeypatch.setattr(WC, "check_provable", lambda circuit: None)
+    monkeypatch.setattr(WW, "weight_values", lambda r, s, _reg, keep_rows=False: weight_values(r, s, None, grain, keep_rows=keep_rows))
+    monkeypatch.setattr(ST, "compile_steps", lambda *a, **k: SimpleNamespace(requests=[SimpleNamespace(id=i) for i in served]))
+    p = SimpleNamespace(progs={i: i for i in served}, dirs={i: str(tmp_path) for i in served}, arrivals={i: 0 for i in served})
+    compiler = SimpleNamespace(inner=SimpleNamespace(registered=registered, ingress={}), load=lambda *a: p)
+    monkeypatch.setattr(PP, "compiler_of_args", lambda a: compiler)
+    monkeypatch.setattr(PP, "compile_advice", lambda c, d: [])
+    monkeypatch.setattr(PP, "kept_scan", lambda *a, **k: None)
+    monkeypatch.setattr(PP, "place_slots", lambda *a: [(i, row, m) for i, (_lp, m, row) in served.items()])
+    (tmp_path / "weights").mkdir()
+    (tmp_path / "weights" / "tree.json").write_text("{}")
+    (tmp_path / "binding_map_p0.json").write_text("{}")
+    monkeypatch.setattr(PP, "record1", lambda *a: SimpleNamespace(
+        run=SimpleNamespace(run_root=bytes(64)), bdir=tmp_path, row={"commit": {}}, out=tmp_path, pair=0, store=None,
+        manifest=None))
+    monkeypatch.setattr(WOR, "CheckpointIndex", lambda *a, **k: None)
+    monkeypatch.setattr(CPU, "OnRead", lambda *a: None)
+    monkeypatch.setattr(CPU, "provider", lambda *a: lambda label, lo, hi: zeros[label][lo:hi])
+    monkeypatch.setattr(RI, "ProgramIndex", lambda *a, **k: SimpleNamespace(prefix=""))
+    monkeypatch.setattr(OC, "OpenedReader", lambda *a: None)
+    monkeypatch.setattr(OP.CommittedStore, "of_record", staticmethod(lambda *a: None))
+    stand_in = {i: (lp, lp + m - 1) for i, (lp, m, _row) in served.items()}
+    class Computed:
+        """A served request whose every node the committer computes."""
+
+        def __init__(self, rid: str) -> None:
+            self.LP, self.positions = stand_in[rid]
+
+        def __call__(self, *_: Any) -> None:
+            return None
+
+    monkeypatch.setattr(WRS.Served, "of_record", classmethod(lambda c, pi, store, rid, arrive: Computed(rid)))
+    monkeypatch.setattr(WW.WeightsRegistration, "of", staticmethod(
+        lambda *a: SimpleNamespace(repo="org/m", revision="r", values={}, unrooted=[])))
+    filled = {}
+
+    class Closed(Exception):
+        pass
+
+    def rows(low, slots, values):
+        filled.update(low=low, slots=slots, values=values, rows=rows_of(low, slots, values))
+        return filled["rows"]
+
+    def window(*a, **k):
+        raise Closed
+
+    monkeypatch.setattr(WRS, "Rows", rows)
+    monkeypatch.setattr(IF, "Window", window)
+    (tmp_path / "advice.bin").write_bytes(b"")
+    a = argparse.Namespace(sampling_design="rate:1/4", advice=str(tmp_path / "advice.bin"), window_class="2,4,2", cap=64, bundle="unread",
+                           row_dir="unread", checkpoint_dir="unread", checkpoints=None, serve_run=str(tmp_path),
+                           registration=str(tmp_path / "registration.json"))
+    (tmp_path / "registration.json").write_text("{}")
+    with pytest.raises(Closed):
+        PP.window_commit_of_builds(a, kept_ingress=lambda serve_dir: None, scan_state_file="unread")
+    low, slots = filled["low"], filled["slots"]
+    assert [P.positions for P in low.programs] == [5, 4] and len(slots) == 2
+    assert [s.fn for s in slots] == [P.fn for P in low.programs]
+    assert SS.SCAN_STATE in filled["values"] and sum(filled["rows"].n.values()) > 0
+
+
+def test_window_circuits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
+    """`h1_tie`: with ``--window-registration`` W, H1's docket of the window, the verifier's window-circuit reads W's
+    tables (`window_class.Tables` of the serve's H1 window Program) with no key; none without W. Refused by name for a W
+    under another Program, and where H1's rounds aren't the class's outputs."""
     from verity_vllm.program.predict.window_circuit import Tables
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
     serve, cls = tmp_path / "serve", SimpleNamespace(outputs=2)
@@ -2055,15 +2124,11 @@ def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
     (tmp_path / "w.json").write_text(json.dumps({"program": "p" * 128, "registered": []}))
 
     def tie(cls=cls, **kw):
-        args = {"serve_run": str(serve), "window_registration": str(tmp_path / "w.json"), "h1_prover": "prover", **kw}
+        args = {"serve_run": str(serve), "window_registration": str(tmp_path / "w.json"), **kw}
         return PP.h1_tie(argparse.Namespace(**args), cls)
     assert PP.h1_tie(argparse.Namespace(window_registration=None), cls) is None
     w, meta, tables = tie()
     assert w["program"] == meta["program_digest"] and tables == Tables(64, 8, 2)
-    with pytest.raises(ValueError, match="give --h1-prover"):
-        tie(h1_prover=None)
-    verifier = argparse.Namespace(serve_run=str(serve), window_registration=str(tmp_path / "w.json"))
-    assert PP.h1_tie(verifier, cls, key=False) == (w, meta, tables)
     (tmp_path / "other.json").write_text(json.dumps({"program": "q" * 128}))
     with pytest.raises(ValueError, match="is no registration under the serve's H1 window Program"):
         tie(window_registration=str(tmp_path / "other.json"))
@@ -2093,59 +2158,6 @@ def test_window_commits_design_is_the_one_its_rate_names_over_the_circuit_and_a_
         with pytest.raises(ValueError, match="a fixed count") as e:
             PP.window_design(fixed, circuit)
         assert repr(fixed) in str(e.value)
-
-
-def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows_retained_steps(tmp_path):
-    """`pearl_tie`: with ``--pearl-passes DIR`` (Pearl+'s ``pearl/w<k>/``) and ``--window-registration`` W, Pearl+'s
-    window record, window-commit's circuit is cut at its linears under W's scheme (`window_class.PearlTables`) and reads
-    the retained passes' manifests at their rounds, each pass's directory its manifest's, which `reuse` reads the kept
-    salts under; `h1_tie` then stands aside. Refused by name without W, beside
-    ``--h1-prover``, for a W whose entry isn't Pearl+'s declared option (H1's, another Pearl-C kernel's, the FP4 kernel's) or
-    whose scheme isn't its entry's, and where the rounds retained aren't the class's outputs."""
-    from verity_vllm.program.predict.window_circuit import PearlTables
-
-    d, cls = tmp_path / "q", SimpleNamespace(outputs=2)
-    d.mkdir()
-    mans = []
-    for i in range(3):
-        (tmp_path / f"pass-{i}").mkdir()
-        (m := tmp_path / f"pass-{i}" / "manifest.json").write_text(json.dumps({"salt": f"s{i}"}))
-        mans.append({"pass": 4 + i, "units": 1, "manifest": str(m)})
-    (d / "served.json").write_text(json.dumps({"passes": [{"pass": 3, "units": 0}, *mans]}))
-    def record(name, entry, scheme):
-        (tmp_path / name).write_text(json.dumps({"window": {"entry": entry, "scheme": scheme}, "registered": []}))
-        return str(tmp_path / name)
-    record("w.json", "pouw:pearl-c-h100-v1-h3", "pearl-c-h100-v1-h3")
-
-    def tie(cls=cls, **kw):
-        args = {"pearl_passes": str(d), "window_registration": str(tmp_path / "w.json"), "h1_prover": None, **kw}
-        return PP.pearl_tie(argparse.Namespace(**args), cls)
-    assert PP.pearl_tie(argparse.Namespace(window_registration="w"), cls) is None
-    assert PP.h1_tie(argparse.Namespace(window_registration="w", pearl_passes=str(d)), cls) is None
-    with pytest.raises(ValueError, match=r"retained rounds \[0, 1, 2\] aren't its class's 2 outputs"):
-        tie()
-    (d / "retention.json").write_text(json.dumps({"rounds": [0, 1]}))
-    w, got, rounds, tables, dirs = tie()
-    assert [m["salt"] for m in got] == ["s0", "s1"] and rounds == [0, 1] and tables == PearlTables("pearl-c-h100-v1-h3")
-    assert dirs == [tmp_path / "pass-0", tmp_path / "pass-1"]
-    with pytest.raises(ValueError, match="give --window-registration W"):
-        tie(window_registration=None)
-    with pytest.raises(ValueError, match="--h1-prover is H1's prover directory"):
-        tie(h1_prover="prover")
-    (tmp_path / "h1.json").write_text(json.dumps({"program": "p" * 128}))
-    with pytest.raises(ValueError, match="is no Pearl\\+ window record"):
-        tie(window_registration=str(tmp_path / "h1.json"))
-    with pytest.raises(ValueError, match="its entry pouw:pearl-c-nvfp4-v0 is not Pearl\\+'s declared option "
-                                         "pouw:pearl-c-h100-v1-h3"):
-        tie(window_registration=record("c4.json", "pouw:pearl-c-nvfp4-v0", "pearl-c-nvfp4-v0"))
-    with pytest.raises(ValueError, match="its entry pouw:pearl-c-sm120-v1-h3 is not Pearl\\+'s declared option "
-                                         "pouw:pearl-c-h100-v1-h3"):
-        tie(window_registration=record("sm120.json", "pouw:pearl-c-sm120-v1-h3", "pearl-c-sm120-v1-h3"))
-    with pytest.raises(ValueError, match="its scheme pearl-c-sm120-v1-h3 is not the one its entry pouw:pearl-c-h100-v1-h3 names"):
-        tie(window_registration=record("other.json", "pouw:pearl-c-h100-v1-h3", "pearl-c-sm120-v1-h3"))
-    (d / "retention.json").write_text(json.dumps({"rounds": [1, 2]}))
-    with pytest.raises(ValueError, match=r"retained rounds \[1, 2\]"):
-        tie()
 
 
 @pytest.fixture(scope="module")

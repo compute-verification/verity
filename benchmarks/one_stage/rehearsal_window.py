@@ -128,9 +128,9 @@ def served_rows(PP: Any, run: Path, data: bytes, cls: Any, tables: Any, builds: 
     i2 = PP.i2_of_serve(str(run), 0, str(builds), None, None, PP.CAP_BITS, own=True)
     requests = PP.compile_advice(PP.Capped(i2, PP.CAP_BITS), data)
     compiled = compile_steps(i2.registered, data, i2.ingress)
-    WC.takes(compiled, cls)
     if tables is not None:
-        tables.held(compiled, cls)
+        raise ValueError("SERVED-ROWS counts a served window's rows, whose circuit reads no tables")
+    WC.lower(i2.registered, cls, requests=WC.takes(compiled, cls))
     p = i2.load(0, 1, requests)
     rows = []
     for u in p.progs:

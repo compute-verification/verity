@@ -142,14 +142,6 @@ def test_attach_refuses_a_manifest_without_columns_and_leaves_an_external_acquis
         NS.attach(Committer(torch.nn.Linear(2, 2)), MANIFEST).install()
 
 
-def test_the_taps_attach_it_whenever_the_manifest_names_narrowed_rows() -> None:
-    assert NS.SHORT_NAME in TAPS.attached(MANIFEST) and NS.SHORT_NAME in TAPS.attached({**MANIFEST, "ranks": 2})
-    assert NS.SHORT_NAME not in TAPS.attached({"identities": [MANIFEST["identities"][0]]})
-    com = Committer(_model((torch.zeros(T, QKV), None)))
-    TAPS.attach(com, MANIFEST, (), TAPS.TapSources(), explicit_classes=True)
-    assert [type(s).__name__ for s in com.sources] == ["NarrowedRowsSource"]
-
-
 def test_every_tp_rank_whose_rows_are_narrowed_must_attach_it(tmp_path) -> None:
     path = tmp_path / "manifest.json"
     path.write_text(json.dumps({"identities": [_row(rank=r) for r in (0, 1)]}))

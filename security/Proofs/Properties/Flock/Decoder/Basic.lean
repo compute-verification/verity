@@ -26,12 +26,12 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Properties.InferenceOnly.Walk
+import Proofs.Properties.Flock.Decoder.Walk
 
 /-!
 # Lemmas for `BodiesOk`: types, loops and streams
 
-What the decoder's spec (`Proofs.Properties.InferenceOnly.BodiesOk.Decode`) reads off `Flock.Program`'s code: type equality from
+What the decoder's spec (`Proofs.Properties.Flock.Decoder.Decode`) reads off `Flock.Program`'s code: type equality from
 `Ty.beq`, the leaves of the types a node computes, the leaves of a batch member mapped over an axis (`axis_spec`), and
 invariants of `for` loops in `Id`, `Except` and the decoder's `StateT` monad, index by index.
 -/

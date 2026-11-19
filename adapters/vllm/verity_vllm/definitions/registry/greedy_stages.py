@@ -37,7 +37,7 @@ Definitions take any such N, and `GreedyChunk_v2` any OFF that is a multiple of 
 
 **Each chunk position is its own Definition.**  OFF is a static, so the K - 1 chunks before the last are K - 1 templates,
 and the combine reads each one's result through one parameter.  In the second stage's interior a wired parameter is held at its
-writer's output port (`second_stage._held_port`), and a session two of whose ports are held at one port is a form Flock's
+writer's output port (`second_stage.placings`), and a session two of whose ports are held at one port is a form Flock's
 verifier refuses (`Flock.PortRoots.dupId`): so no two parameters of a unit read one template's output, and a chunk's result
 is one field, not a field a word.
 

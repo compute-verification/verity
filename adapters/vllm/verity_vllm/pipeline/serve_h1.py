@@ -246,9 +246,9 @@ def refusal(opts: Any) -> str | None:
     if opts.protocols != ENTRY:
         return (f"--protocols {opts.protocols}: serve-openai serves {ENTRY} (PoUW H1, serve_h1) and declared schemes "
                 "by their names only")
-    if not opts.commit or opts.scheme != "rows-sha512" or not opts.required_manifest:
+    if not opts.commit or opts.scheme != "rows-sha512" or not opts.row_build:
         return (f"--protocols {ENTRY} taps the server's rows-sha512 Commit (its int8 source and step-input port): it needs "
-                "--commit, --scheme rows-sha512 and the bench row's --required-manifest")
+                "--commit, --scheme rows-sha512 and the bench row's --row-build")
     if opts.max_num_batched_tokens % 32:
         return f"--protocols {ENTRY}: H1's T, --max-num-batched-tokens {opts.max_num_batched_tokens}, is a multiple of 32"
     config_of(opts.protocols_config)
