@@ -58,10 +58,11 @@ import pytest
 from hypothesis import strategies as st
 
 import settings
+import stand_in
 import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.commitments import docket_digest as DD
-from verity.circuits import population as PN
+from verity.circuits import boolean as BL, population as PN
 from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.verifier import audit as PA
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import tagged
@@ -139,7 +140,8 @@ IDENTITY = bind(CompositeDefinition("CoreSpotIdentity", 0, (), lambda S: ((("x",
                                     lambda B, S, x: x[0], register=False))
 #: The templates a population's members are instances of: `TEMPLATES`, `FORK` and `IDENTITY`.
 MEMBERS = TEMPLATES + [FORK, IDENTITY]
-CONST8 = PrimitiveDefinition("CoreSpotConst8", 1, (), Value(8), lambda: 0x5A, register=False)
+CONST8 = stand_in.exact(PrimitiveDefinition("CoreSpotConst8", 1, (), Value(8), lambda: 0x5A, register=False),
+                         lambda B: [B.call(BL.constant((0x5A >> j) & 1)) for j in range(8)])
 
 
 def _held(B, S, x):
