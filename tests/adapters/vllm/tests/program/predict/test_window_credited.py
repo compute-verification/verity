@@ -26,6 +26,8 @@ from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pea
 
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import CLASS, GRAIN, WINDOW, made_up, wired
+from tests.program.predict.test_window_rows import STATE
+from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_class import Credited, PearlTables
@@ -146,7 +148,8 @@ def _honest(t: Any, unit: int, salt: bytes, root: bytes, a: np.ndarray, b: np.nd
 
 @pytest.mark.slow
 def test_on_honest_values_every_tile_is_ok_writes_the_schemes_y_and_its_readers_take_it_by_wire():
-    """Node by node on the wired Program: weights small BF16 words, every other parameter made up, the public row, the
+    """Node by node on the wired Program: weights and each embedding opening's row small BF16 words, the scan state
+    `test_window_rows.STATE` (so every token is inside the vocabulary), every other parameter made up, the public row, the
     salt and the root as the verifier fills them, each tile's certificates the prover's on the A rows and weight columns it
     is wired and read, the filler row zero. Each tile's ok is 1 and its y the scheme's (`pearl_c_u.y`), each row's split
     hands that row's words on to down_proj's reader; a weight word or a certificate word changed makes the tile's ok 0. Slow (16
@@ -160,11 +163,15 @@ def test_on_honest_values_every_tile_is_ok_writes_the_schemes_y_and_its_readers_
     rng = random.Random(5)
     salt, root = rng.randbytes(32), rng.randbytes(64)
     sig = dict(prog.fn.signature()[0])
+
+    def small(n: int) -> np.ndarray:
+        return np.asarray([int(np.float32(rng.uniform(-0.25, 0.25)).view(np.uint32)) >> 16 for _ in range(n)], dtype=np.uint64)
+
     inputs = made_up(prog)
+    inputs[SS.SCAN_STATE] = np.asarray([w for row in STATE for w in row], dtype=np.uint64)
     for name, t in sig.items():
-        if name.startswith("weights/") and "/table/" not in name and not name.endswith("/root") and t.homogeneous_width() == 16:
-            inputs[name] = np.asarray([int(np.float32(rng.uniform(-0.25, 0.25)).view(np.uint32)) >> 16
-                                       for _ in range(t.leaves)], dtype=np.uint64)
+        if name.startswith("weights/") and not name.endswith("/root") and t.homogeneous_width() == 16:
+            inputs[name] = small(t.leaves)
     port = dict(_units(c, TILE)[0][0].signature()[0])
     for v, mark in c.registered.supplied.items():
         p, raw = ("salt", salt) if mark["supplied"] == "pouw.pearlplus.salt/v1" else ("root", root)
@@ -197,6 +204,11 @@ def test_on_honest_values_every_tile_is_ok_writes_the_schemes_y_and_its_readers_
         assert tid == descriptor_id(node.fn)
         cur[1], cur[2] = lo + node.n, cur[2] - node.n
         j, ports = ids.index(tid), [p for p, _t in node.fn.signature()[0]]
+        if tid.startswith("EmbeddingRead_v2"):
+            row = node.args[ports.index("row")].refs
+            bits = iter((int(w) >> b) & 1 for w in small(row.count // 16) for b in range(16))
+            for _s, i, lo_, hi in runs(row):
+                vals[i][lo_:hi] = [next(bits) for _ in range(hi - lo_)]
         if j in tile_ix:
             args = gather(node)
             certs, want = vals[at[f"{j}.cert"]], []
