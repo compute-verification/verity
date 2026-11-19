@@ -133,7 +133,7 @@ theorem param_wide {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Read
       ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get
         (Resolve.argIdx ((P.defs[P.root]!).body.nodes[k]!) i m t)) :=
     ⟨href0.1, fun h => ⟨Nat.lt_trans (href0.2 h).1 hk, (href0.2 h).2⟩⟩
-  have hret := LeafWidths.resolve_wide P hroot hB hL hD hW P.rootScope hgood _ href g
+  have hret := LeafWidths.resolve_wide P hroot (fun sc h => (hB sc h).toIn) hL hD hW P.rootScope hgood _ href g
     (Resolve.resolve_one hstep) p ops sc' hgate
   -- the leaf the reference names is as wide as the parameter's
   have hwid : Flock.Program.Widths.wAt
@@ -142,10 +142,10 @@ theorem param_wide {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Read
       ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get
         (Resolve.argIdx ((P.defs[P.root]!).body.nodes[k]!) i m t)).j =
       Flock.Program.Widths.wAt ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[i]!).2 t := by
-    have hw := LeafWidths.arg_wide P hroot hB hD hW P.rootScope hgood k hk m hm i hi t ht
+    have hw := LeafWidths.arg_wide P hroot (fun sc h => (hB sc h).toIn) hD hW P.rootScope hgood k hk m hm i hi t ht
     rcases hform with hf | hf
     · rw [Resolve.argIdx_call hf]
-      exact hw.1 hf
+      exact hw.1 (Or.inr hf)
     · rw [Resolve.argIdx_batch hf]
       exact hw.2 hf
   exact ⟨p, ops, sc', hgate, hret.trans (congrArg Ty.value (hwid.trans (LeafWidths.wAt_widths _ _ ht)))⟩
@@ -231,7 +231,8 @@ theorem outLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.Securi
         obtain ⟨p, ops, sc', hgate, -⟩ := param_wide hP hO hrs hu hi' hj hpar
         exact ⟨p, ops, sc', hgate⟩
     obtain ⟨p, ops, sc', hgate⟩ := hgate
-    have hret := LeafWidths.resolve_wide P hroot hB hL hD hW _ hgood _ href g hres p ops sc' hgate
+    have hret := LeafWidths.resolve_wide P hroot (fun sc h => (hB sc h).toIn) hL hD hW _ hgood _ href g hres p ops sc'
+      hgate
     have hsw := hbw.2 _ htc _ (LeafWidths.srcOf_ty (P.defs[(P.child P.rootScope k m).d]!).body
       (P.defs[(P.child P.rootScope k m).d]!).body.nodes.size _ (fun h => (href.1 h).1)
       (fun h => ⟨(href.2 h).1, (href.2 h).1⟩))

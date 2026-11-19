@@ -87,6 +87,25 @@ theorem body_ok (P : Prog) (hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]!
     exact ⟨hp1, fun h => ⟨hord h, (hp2 h).2⟩⟩
   · exact hret t ht
 
+/-- Every Definition of a decoded Program is `BodyIn`: `BodyOk` but for the order, which `decode` doesn't check. -/
+theorem body_in (P : Prog) (hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]!) (d : ℕ) : Resolve.BodyIn P d := by
+  by_cases hd : d < P.defs.size
+  swap
+  · have e : P.defs[d]! = default := getElem!_neg P.defs d hd
+    refine ⟨fun k hk => ?_, fun t ht => ?_⟩
+    · rw [e] at hk; exact absurd hk (Nat.not_lt_zero _)
+    · rw [e] at ht; exact absurd ht (Nat.not_lt_zero _)
+  obtain ⟨-, hnodes, hret, -⟩ := hok d hd
+  refine ⟨fun k hk => ?_, fun t ht => hret t ht⟩
+  obtain ⟨hfn, hnd, hargs⟩ := hnodes k hk
+  have hfs : ((P.defs[d]!).body.nodes[k]!).fn < P.defs.size := by omega
+  have hc : CalleeOk P.defs[((P.defs[d]!).body.nodes[k]!).fn]! := (hok _ hfs).1
+  refine ⟨hfs, fun i t ht => ?_, up_ok _ _ hc hnd, down_ok _ _ hc hnd, fun _ => op_ok _ _ hnd⟩
+  by_cases hi : i < ((P.defs[d]!).body.nodes[k]!).args.size
+  swap
+  · rw [getElem!_neg _ i hi] at ht; exact absurd ht (Nat.not_lt_zero _)
+  exact (hargs i hi).2 t ht
+
 end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
 
 namespace InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
