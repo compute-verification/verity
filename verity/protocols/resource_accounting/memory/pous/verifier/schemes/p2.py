@@ -344,10 +344,16 @@ def segment_seed(salt: bytes, s: int) -> bytes:
     return hashlib.shake_256(SEED_DOMAIN + tag(salt_value(_salt(salt)), s).to_bytes(32, "little")).digest(32)
 
 
+def prefix_head(params: P2Params) -> bytes:
+    """v4: `expand_prefix`'s bytes before the salt: the keys' tag, the framed protocol id, the framed prime's id and the
+    salt's frame header."""
+    return KEYS_TAG + frame(PROTOCOL_ID) + frame(params.prime_id) + frame(bytes(SALT_BITS // 8))[:-(SALT_BITS // 8)]
+
+
 def expand_prefix(params: P2Params, salt: bytes) -> bytes:
     """v4: every chunk's SHA-512 input before its `u64be(segment) ‖ u64be(block) ‖ purpose ‖ u32be(counter)`, zero-padded
     to whole 128-byte blocks so that a chunk is one compression after the prefix's midstate."""
-    prefix = KEYS_TAG + frame(PROTOCOL_ID) + frame(params.prime_id) + frame(_salt(salt))
+    prefix = prefix_head(params) + _salt(salt)
     return prefix + bytes(-len(prefix) % 128)
 
 
@@ -562,5 +568,5 @@ def wide320_certificate(params: P2Params) -> CapacityBound | None:
 __all__ = ["CAPACITY_KEYS", "CERT_BLOCKS", "CERT_FAMILY_BLOCKS", "CERT_K", "CERT_K_WIDE320", "CERT_WIDE_BLOCKS", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
            "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHA512_CTR", "WIDE_CLAIMS", "WIDE320_CLAIMS", "P2", "P2ChaCha", "P2Params",
            "below", "block_keys", "capacities", "chacha_block", "chacha_keys", "decode_segment", "encode_blocks", "encode_segment",
-           "expand_prefix", "family_certificate", "segment_keys", "segment_seed", "sha512_keys", "sha512_keys_indexed", "stream",
+           "expand_prefix", "prefix_head", "family_certificate", "segment_keys", "segment_seed", "sha512_keys", "sha512_keys_indexed", "stream",
            "wide_certificate"]

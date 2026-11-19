@@ -844,7 +844,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/memory/pous/prover/responder.py",
     "verity/protocols/resource_accounting/memory/pous/prover/setup_proof.py",
     "verity/protocols/resource_accounting/memory/pous/prover/weight_store.py",
-    "verity/protocols/resource_accounting/memory/pous/prover/window.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_run.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_store.py",
