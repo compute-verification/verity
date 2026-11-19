@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import bisect
 import heapq
-from typing import Any, Callable, Iterator, Sequence
+from typing import Any, Callable, Iterator
 
 from . import partition_object as PO
 from .count import count
@@ -35,8 +35,6 @@ Fits = Callable[[tuple[int, ...], tuple[int, ...], int], bool]
 
 
 class Unlaid(ValueError):
-    """What `lay` and `pack` refuse, by code: ``lay-primitive`` (a unit that is one primitive and does not fit), ``lay-scan``
-    (a body to lay that holds a scan), ``lay-form`` (a root node to lay that is no call or batch)."""
 
     def __init__(self, code: str, what: str) -> None:
         super().__init__(f"{code}: {what}")
@@ -44,12 +42,10 @@ class Unlaid(ValueError):
 
 
 def query(program: Any) -> dict[str, Any]:
-    """The template query whose units are the root's Calls: each Definition a root node calls, in first-call order."""
     return PO.template_instances_query(list(dict.fromkeys(descriptor_id(fn) for _k, fn in PO.calls(program))))
 
 
 def lay(program: Any, fits: Fits) -> Program:
-    """``program`` with every root unit that does not fit laid at the root, recursively (module docstring)."""
     while True:
         m = Measure(program, query(program))
         over = sorted({m.units[u][0] for u in range(len(m.units)) if not fits(*m.block(u, u + 1))})
@@ -117,8 +113,6 @@ def _body(B, fn, args: list) -> Any:
 
 
 def _subst(refs: Any, look: Callable[[str, int], Any]) -> Any:
-    """``refs`` with each part's (space, index) replaced by the references ``look`` gives it: structurally where that is one
-    node's leaves from a base, leaf by leaf otherwise."""
     out, todo = [], [refs]
     while todo:
         p = todo.pop()
@@ -150,9 +144,6 @@ def _width(fn: PrimitiveDefinition) -> int:
 
 
 class Measure:
-    """A Program's root units under a template query (`PO.TemplatePartition`), each as the gates it reads and the gates it
-    holds that a later unit reads or C returns, by intervals of C's gates read from the descriptor; ``block(a, b)`` is the
-    ``fits`` arguments of units a .. b - 1."""
 
     def __init__(self, program: Any, q: Any) -> None:
         self.program, self.root = program, program.root.body
@@ -249,8 +240,6 @@ class Measure:
                 i += 1
 
     def _ret_runs(self, fn: Any) -> tuple[list, list]:
-        """``fn``'s returned leaves as runs (first leaf, end leaf, first gate relative to fn's first, width), or a leaf it
-        returns of its parameters as (leaf, leaf + 1, ("p", i, l)), with the runs' first leaves."""
         if id(fn) in self._rets:
             return self._rets[id(fn)]
         runs: list = []
@@ -310,7 +299,6 @@ def _member_arg(node: Any, pi: int, leaf: int, m: int) -> tuple[str, int, int]:
 
 
 def _resolve(fn: Any, ref: tuple, rets: Callable[[Any], list]) -> tuple:
-    """Leaf ``ref`` of ``fn``'s body as ("g", gate relative to fn's first, width) or ("p", i, l), its parameter's leaf."""
     body = fn.body
     s, i, l = ref
     while s != "p":
@@ -370,8 +358,6 @@ def _rows(runs: list, key: Callable[[tuple], Any]) -> tuple[int, ...]:
 
 
 def pack(program: Any, fits: Fits, q: Any = None) -> list[tuple[int, int]]:
-    """The root units in order, ``q``'s (default `query`), as the partition object's ``blocks``: a block closed when the
-    next unit would take it past ``fits`` (module docstring). A unit that alone does not fit is refused (`Unlaid`)."""
     m = Measure(program, q or query(program))
     n, out, a = len(m.units), [], 0
     while a < n:
