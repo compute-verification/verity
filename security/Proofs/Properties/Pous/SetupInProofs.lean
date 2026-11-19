@@ -90,7 +90,7 @@ registered `W` except `εreg` (`RegisteredW`), then every audit strategy is acce
 of `C*` fail to decode to their slice of `W` with probability at most `L.miss (⌊B/100⌋ + 1) + εks + εbind + εreg`. -/
 def SetupGives : Prop :=
   ∀ (q : P2.Params) (salt W : ByteArray) (S : SetupC q) (L : Verity.SamplingDesign (Fin q.blocks)) (Reg : Type)
-    (session : Finset (Fin q.blocks) → Reg → Game Bool) (A : Spot.Sampling.ExtractionAnalysis L Reg session)
+    (session : Finset (Fin q.blocks) → Reg → Verity.Game Bool) (A : Spot.Sampling.ExtractionAnalysis L Reg session)
     (tr : A.Tr → S.C.Trace) (εks εbind εreg : ℝ≥0∞),
     A.KnowledgeSound (fun _ _ => εks) → A.BindSound (fun _ _ => εbind) →
     (∀ X, A.incorrect X = S.P.incorrect (tr X)) →
