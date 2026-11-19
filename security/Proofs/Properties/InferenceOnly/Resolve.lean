@@ -608,6 +608,4 @@ theorem operandsEarlier_of (hB : BodiesOk) : Walk.OperandsEarlier := by
     omega
   exact gate_operands_lt P ⟨hr, hrp⟩ (hB bytes P hdec hov hlo hin hwk han) hlay hx a ha
 
-/-- `Desc.walkable` checks `Desc.resolvable`, so a walkable Program's root reads no input node recut. -/
-
 end InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
