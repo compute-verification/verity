@@ -35,17 +35,18 @@ verifier reads coins only from a challenger's log, and uses no randomness of its
 
 An entry is covered by its device's key when it is authenticated by a signature of that device over it, or over a chain
 that holds it. What a verifier checks of a chain shows the cover: each entry holds its sequence number and the chain
-value before it under SHA-512 whole, the closing signature covers the head, the count and the session, and the chain
+value before it, a whole SHA-512 digest; the closing signature covers the head, the count and the session; and the chain
 recomputes from its first entry to the signed head with no gap, no repeat and the signed count. A session with no
-closing signature has no attested entries, and a consumer's check refuses it by name, never with a partial verdict.
-That the device writes an entry into its chain before it releases what the entry is about (a coin) is assumed of the
-device (`trusted-device`), since no signature at a close shows it.
+closing signature has no attested entries, and a consumer's check refuses it by name, never with a partial verdict. That
+the device writes an entry into its chain before it releases what the entry is about (a coin) is assumed of the device
+(`trusted-device`), since no signature at a close shows it.
 
 Order is the model's: an attester's entry is after the entries whose digests it holds, and before the close that covers
-it; an entry that reads another is after it. A reading is taken when its entry is made, not at the close. Time is a protocol on that order, not a part of it: a reading is data on an attester's entry, a statement
-reads only the difference of two readings of one device (`Reading.elapsed`), never a time of day and never two devices'
-readings against each other, and a prover's entry has no time but a bracket (`Between`). How a device's clock runs
-against real time is an assumption about the device, `Assumptions.ClockWithin`.
+it; an entry that reads another is after it. A reading is taken when its entry is made, not at the close. Time is a
+protocol on that order, not a part of it: a reading is data on an attester's entry, a statement reads only the
+difference of two readings of one device (`Reading.elapsed`), never a time of day and never two devices' readings
+against each other, and a prover's entry has no time but a bracket (`Between`). How a device's clock runs against real
+time is an assumption about the device, `Assumptions.ClockWithin`.
 
 A run of a challenger that flips `n` coins, coin `i` of a finite type `C i`, is weighed by its flips
 `ω : (i : Fin n) → C i`, each sequence of flips equally likely (`Game.prCoin`), as `Game.coin` weighs a live coin. Its log
