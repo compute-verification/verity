@@ -331,8 +331,9 @@ def test_nohash_forms_and_multiplies_without_hashing(device_run):
 def test_a_calls_index_is_its_round_and_its_position_and_no_caller_chooses_one(device_run):
     """A call's index is its place (`passes.call_index`): its pass's round among the epoch's passes with calls times
     `ROUND_CALLS`, plus its position in the pass.  Three calls, then two in the next pass, take round 1's positions 0 and 1;
-    a pass without a call takes no round.  A call after an ended pass is refused by name (`NO_OPEN_PASS`) until a `begin`.  A caller's own index is refused by name, at
-    `begin` and at `repeat_at`, and the keys a call uploads carry the derived index."""
+    a pass without a call takes no round.  A call after an ended pass is refused by name (`NO_OPEN_PASS`) until a `begin`.
+    A caller's own index is refused by name, at `begin` and at `repeat_at`, and the keys a call uploads carry the derived
+    index."""
     make, kernel, weights, roots, salt = device_run
     run = make()
     x = torch.randn(16, 1024).to(torch.bfloat16)
