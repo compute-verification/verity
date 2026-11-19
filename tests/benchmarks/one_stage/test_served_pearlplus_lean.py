@@ -62,7 +62,7 @@ def test_the_lean_step_writes_the_real_lean_answer_on_the_served_run_and_the_com
     monkeypatch.setattr(PV, "coins", lambda n: SOURCE[:n])
     for k in ("PEARLC_CHALLENGER_GATE", "PEARLC_CHALLENGER_PEER"):
         monkeypatch.delenv(k, raising=False)
-    warm, a, b = (T.proved_pass(tmp_path / name, H100, ix)[0] for name, ix in (("w", (0, 1)), ("a", (2, 3)), ("b", (4, 5))))
+    warm, a, b = (T.proved_pass(tmp_path / name, H100, s)[0] for name, s in (("w", 0), ("a", 1), ("b", 2)))
     d = T._serve_dir(tmp_path, [warm, a, b])
     served = json.loads((d / "served.json").read_text())
     served["passes"] = [{**served["passes"][0], "timed": False}, *({**p, "timed": True} for p in served["passes"][1:])]
