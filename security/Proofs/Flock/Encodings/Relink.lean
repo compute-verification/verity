@@ -59,6 +59,9 @@ theorem oneStagePa_nonneg (ns : List ℕ) : ∀ (r : OneStage) (B : Finset ℕ),
   | .work K w f, B => by
     simp only [OneStage.Pa]
     exact strataPa_nonneg _ _ _
+  | .counts ks, B => by
+    simp only [OneStage.Pa]
+    exact strataPa_nonneg _ _ _
 
 /-- **`P_a` is antitone** in each one-stage design. -/
 theorem oneStagePa_anti (ns : List ℕ) {B B' : Finset ℕ} (h : B' ⊆ B) : ∀ r : OneStage, r.Pa ns B ≤ r.Pa ns B'
@@ -81,6 +84,9 @@ theorem oneStagePa_anti (ns : List ℕ) {B B' : Finset ℕ} (h : B' ⊆ B) : ∀
     simp only [OneStage.Pa]
     exact strataPa_anti h _ 0
   | .work K w f => by
+    simp only [OneStage.Pa]
+    exact strataPa_anti h _ 0
+  | .counts ks => by
     simp only [OneStage.Pa]
     exact strataPa_anti h _ 0
 

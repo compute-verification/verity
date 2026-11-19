@@ -95,6 +95,7 @@ theorem OneStage.Pa_empty (ns : List ℕ) (st : OneStage) (h : st.WellFormed ns)
     refine strataPa_empty _ 0 fun p hp => ?_
     obtain ⟨q, -, rfl⟩ := List.mem_map.1 hp
     exact min_le_left _ _
+  | counts ks => exact strataPa_empty _ 0 fun p hp => (h.2 p hp).2
 
 theorem classesPa_empty : ∀ (rs : List OneStage) (cs : List (List (List (List ℕ)))) (o : ℕ), rs.length = cs.length →
     (∀ p ∈ rs.zip cs, p.1.WellFormed (strataSizes p.2)) → classesPa rs cs o ∅ = 1
