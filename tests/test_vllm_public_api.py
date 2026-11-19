@@ -314,8 +314,6 @@ PUBLIC = {
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.
 KNOWN = frozenset({
-    "verity_vllm.acquire.sources.attention_source",
-    "verity_vllm.acquire.sources.taps",
     "verity_vllm.check.fold_compare",
     "verity_vllm.check.replay.evaluate",
     "verity_vllm.commit.committer.host_retention",
@@ -390,7 +388,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.replay",
     "verity_vllm.engine.build",
     "verity_vllm.engine.engine_driver",
-    "verity_vllm.engine.engine_profile",
     "verity_vllm.engine.int8_attention",
     "verity_vllm.engine.int8_exact",
     "verity_vllm.engine.int8_fused",
@@ -402,7 +399,6 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.build_instances",
     "verity_vllm.pipeline.c2_replay",
     "verity_vllm.pipeline.chunk_rows",
-    "verity_vllm.pipeline.commit",
     "verity_vllm.pipeline.cpu_replay",
     "verity_vllm.pipeline.deferred_rows",
     "verity_vllm.pipeline.serve_openai",
