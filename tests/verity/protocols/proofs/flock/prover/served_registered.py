@@ -56,7 +56,8 @@ FORMATS = {"v1": RV.SCHEMA, "v2": G.SCHEMA_V2, "seg": G.SCHEMA_SEG}
 
 
 def program() -> tuple[Program, dict]:
-    """The verifier's own program and query."""
+    """The verifier's own program and query: `x` and `cs_table` are registered inputs, the root nodes whose rows the
+    verifier's registered reads derive (`Flock.Registered.regRow`)."""
     from verity_flock import subcircuit_templates as TM
 
     template = TM.rope_head(64).definition()
@@ -69,7 +70,8 @@ def program() -> tuple[Program, dict]:
     def body(B, S, x, cs):
         return coll_concat(sig(S)[1], [B.call(template, x[i], cs[p]) for i, p in enumerate(POS)])
 
-    return (Program(bind(CompositeDefinition("ServedRegisteredRoPE", 0, (), sig, body, register=False))),
+    return (Program(bind(CompositeDefinition("ServedRegisteredRoPE", 0, (), sig, body, register=False)),
+                    registered=("x", VALUE)),
             P.template_instance_query(template))
 
 
