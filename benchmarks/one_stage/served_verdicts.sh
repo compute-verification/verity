@@ -2,16 +2,15 @@
 # One window of Llama-3.2-1B int8 served on an H200 through every subprotocol, each step's own
 # verdict line in $OUT/verdicts.txt, and one record of every verdict. The chain, in order:
 #  0. B: `verity-vllm predict row` writes the H200 int8 row's Build of record (ROW_ID, default ROW's name) from its declared
-#     inputs alone into PRED ($D/predicted), before the lease and on the CPU: its request Programs, GP-01's workload and the
-#     manifest, and beside them a copy of the checkpoint config it was predicted from (checkpoint_config.json, which the
-#     served compare reads). `predict compare ROW --predicted PRED` holds it to the traced Build ROW, the cross-check: PREDICT-COMPARE,
-#     every Program digest and the manifest's digest, Program digest and identities, gates the serve.
+#     inputs alone into PRED ($D/predicted), before the lease and on the CPU: its request Programs, GP-01's workload and
+#     predicted.json (the registered compiler and those Programs' digests), and beside them a copy of the checkpoint config
+#     it was predicted from (checkpoint_config.json, which the served compare reads). `predict compare ROW --predicted PRED`
+#     holds it to the traced Build ROW, the cross-check: PREDICT-COMPARE, every Program digest, gates the serve.
 #  1. serve: `verity-vllm serve-openai` of LLAMA32_1B_INT8 (REPO at REV, --precision PRECISION: verity-int8/Llama-3.2-1B-INT8, verity_int8) on one GPU
 #     under `gpu-lease`, `--scheme rows-sha512 --seal --admit release-order --window-requests SLOTS`, its committer built from
-#     B's manifest (PRED/manifest.json) and taps (HIDDEN_SO, NORM_TAP_SO), T tokens a step (--max-num-batched-tokens; T defaults
-#     to H1_T, else 512, with or without H1); B-OF-RECORD says each sealed sampling block's record names B's manifest, and its
-#     Program digest and manifest digest predict's (a record sealed before the seal recorded the manifest digest: the Program
-#     digest alone). Each closed window is sealed as a
+#     B's Build (--row-build PRED) and taps (HIDDEN_SO, NORM_TAP_SO), T tokens a step (--max-num-batched-tokens; T defaults
+#     to H1_T, else 512, with or without H1); B-OF-RECORD says each sealed sampling block's record binds predict's compiler
+#     (the served compare's BUILD holds PRED to the row's workload digest, C's). Each closed window is sealed as a
 #     rows-sha512 row dir, and the seal opens each one's replay bundle (`deferred_rows.of_record`). Once it listens, before
 #     the first request, the committer registers its weights (`prove_path.py weights-registration`: each weight parameter of
 #     the checkpoint CKPT, REPO's snapshot at REV under HF_HOME, and the rotary table at the words the engine serves,
@@ -401,7 +400,7 @@
 # (`served_compare.py`, within SERVED_COMPARE_TIMEOUT, default 30m): PHI, serve.json's φ is ROW_ID's declared φ at REV
 # (`--revision`, which the manifests must pin of the row's model when it isn't the row's own) and lowers
 # the same window circuit at V3C's class cut at Pearl+'s linears; BUILD, PRED is the row's Build of record BUILD_OF_RECORD
-# (PROGRAM_DIGEST:MANIFEST_DIGEST); CUT, W registers exactly that circuit's Pearl+ values. Its last line, SERVED-COMPARE:
+# (its workload digest); CUT, W registers exactly that circuit's Pearl+ values. Its last line, SERVED-COMPARE:
 # EQUAL or NOT EQUAL, is the one the record names (`record --served-compare`, its served-compare/served_compare.json
 # carried to a follow-on and the compose hand-off), and NOT EQUAL fails the run.
 # A step that can't run says why, and the chain stops there. Flock, Lean's verity-verify-proof and spot-verifier and the
@@ -531,10 +530,10 @@ if [ -n "$PEARLPLUS_TIE" ]; then  # the window served under Pearl+: Llama 3.2 1B
   export PEARLPLUS_TIE PEARLPLUS_CLASS=${V3C_CLASS-4,32,4} PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
   # the BF16 1B's compiler of record lists its RoPE heads as transfer gates, every unit of which step 3 proves (work-rate:NUM/DEN)
   PP_PARTITION=${PP_PARTITION:-benchmarks/prove_path/llama32_1b_tg_l0_step1.json} PP_SETS=${PP_SETS:-rope-head/d64/bf16}
-  # each tied row's Build of record, PROGRAM_DIGEST:MANIFEST_DIGEST, which the served compare holds PRED to (BUILD)
+  # each tied row's Build of record, its workload digest, which the served compare holds PRED to (BUILD)
   case ${ROW_ID:-${ROW##*/}} in
     llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager)
-      BUILD_OF_RECORD=${BUILD_OF_RECORD:-95ba0fab376a62f5421ed21ced4e650afa516531508ecb802d065f44fd4f8ab451ba422c75312d8052b9087ff28826aa43edfc945435528856b97c8952903eb7:65ce5a6ccc1fd943c23a6d78b4eb80936d32c1043306ec3aab640b279eee419ef778205bd83b81721ad2c301114bd0e338e04b95acc959f8ba1188dcfa1ceac3} ;;
+      BUILD_OF_RECORD=${BUILD_OF_RECORD:-f0424fea41946511ce3d4af79b28fd6fd646d0d58455233c44a0fe48a3e3ba55449dc3588bff18037b75e12ddc906918a84c4bc36368a8be8ca361d80c7dd2a6} ;;
     *) BUILD_OF_RECORD=${BUILD_OF_RECORD:-} ;;
   esac
 fi
@@ -1172,7 +1171,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --seal \
     --max-num-batched-tokens "$T" --window-steps "$WINDOW_STEPS" "${h1[@]}" "${day[@]}" \
-    --required-manifest "$PRED/manifest.json" --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 \
+    --row-build "$PRED" --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 \
     --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" \
     --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 ${SERVE_ARGS:-} \
     > "$D/serve.log" 2>&1 &
@@ -1859,11 +1858,11 @@ from pathlib import Path
 from verity_vllm.pipeline import deferred_rows as DR
 d, pred, held = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
 predicted = json.loads((pred / "predicted.json").read_text())
-b_of_record = (str((pred / "manifest.json").resolve()), predicted["program_digest"])
+b_of_record = predicted["compiler"]["digest"]
 serve = json.loads((d / "serve.json").read_text())
 seals = [json.loads(x) for x in (d / "seals.jsonl").read_text().splitlines() if x.strip()] if (d / "seals.jsonl").exists() else []
 sealed_ok = bound_ok = bool(seals)
-lines, why, committers, unbound = [], set(), set(), []
+lines, why, committers = [], set(), set()
 if not seals:
     why.add("no window sealed")
 if serve.get("scheme") != "rows-sha512":
@@ -1885,39 +1884,27 @@ for s in seals:
         opened, store, good = f"REFUSED ({type(e).__name__}: {e})"[:400], None, False
     rr = v.get("run_root") or ""
     good = good and v.get("commit_scheme") == c.get("commit_scheme") == store == "rows-sha512" and len(rr) == 128
-    bound = r.ctx["served_window"].get("required_manifest", {}) if good else {}
-    b = (bound.get("path"), bound.get("program_digest")) == b_of_record
-    # a seal before serve_seal.manifest_refusal recorded the manifest's digest as "digest", always None: its path and
-    # Program digest bind it alone
-    if "manifest_digest" in bound:
-        b &= bound["manifest_digest"] == predicted["manifest_digest"]
-        by = f", manifest digest {str(bound['manifest_digest'])[:16]}…"
-    elif "digest" in bound and bound["digest"] is None:
-        by = " (sealed before the seal recorded the manifest's digest: its path and Program digest bind it)"
-        unbound.append(f"w{k}")
-    else:
-        b, by = False, ", and no manifest digest"
+    bound = (r.ctx["served_window"].get("compiler") or {}) if good else {}
+    b = bound.get("digest") == b_of_record
     sealed_ok &= good
     bound_ok &= b
     committers.add(str(c.get("committer")))
     if not good:
         why.add("a sealed window's bundle didn't open as a rows-sha512 commitment with a 64-byte run root")
     if not b:
-        why.add("a sealed record binds another Build than predict row's")
+        why.add("a sealed record binds another compiler than predict row's")
     lines.append(f"WINDOW w{k}: commit_scheme {v.get('commit_scheme')}, committer {c.get('committer')}, run root {rr[:16]}… "
                  f"({len(rr) // 2} bytes); bundle {opened}: {'PASS' if good else 'FAIL'}")
-    whose = "predict row's Build of record (its predicted.json's)" if b else f"not predict row's {b_of_record[0]}"
-    lines.append(f"B-OF-RECORD w{k}: the sealed record binds {bound.get('path')}, program digest "
-                 f"{str(bound.get('program_digest'))[:16]}…{by}: {whose}: {'PASS' if b else 'FAIL'}")
+    whose = "predict row's" if b else "not predict row's"
+    lines.append(f"B-OF-RECORD w{k}: the sealed record binds compiler {bound.get('name')} {str(bound.get('digest'))[:16]}…: "
+                 f"{whose}: {'PASS' if b else 'FAIL'}")
 ok = sealed_ok and bound_ok and serve.get("scheme") == "rows-sha512"
 os.umask(0o077)
 held.write_text("".join(x + "\n" for x in lines))
 print(f"SEALED: every closed window's row dir committed under rows-sha512 (committer {', '.join(sorted(committers)) or 'none'}) "
       f"and its replay bundle opened: {'PASS' if sealed_ok else 'FAIL'}")
-print(f"B-OF-RECORD: every sealed record binds predict row's Build of record ({b_of_record[0]}, program digest "
-      f"{b_of_record[1][:16]}…, manifest digest {predicted['manifest_digest'][:16]}…"
-      + (f"; {', '.join(unbound)} sealed before the seal recorded the manifest's digest, by path and Program digest alone"
-         if unbound else "") + f"): {'PASS' if bound_ok else 'FAIL'}")
+print(f"B-OF-RECORD: every sealed record binds predict row's compiler ({predicted['compiler']['name']}, "
+      f"{b_of_record[:16]}…): {'PASS' if bound_ok else 'FAIL'}")
 print(f"SERVED-SEAL VERDICT: {'PASS' if ok else 'FAIL'} (scheme {serve.get('scheme')}, precision {serve.get('precision')}"
       + (f"; {'; '.join(sorted(why))}" if why else "") + "; each window's lines in the serve dir's private/seal.txt)")
 sys.exit(0 if ok else 1)
@@ -2081,7 +2068,7 @@ elif [ "${1:-}" = v3c ]; then  # V3c alone on an existing serve dir serves nothi
   [ -e "$PY" ] || { say "PREFLIGHT: no python under VENV (VENV, which a node without vLLM's venv sets to the tree's .venv)"; exit 3; }
 else
   host_set VY_CHALLENGER_1_HOST "$H1_GATE" "${PEARLC_CHALLENGER_GATE:-}" || exit 3
-  for f in ROW/manifest.json ROW/build_summary.json HIDDEN_SO NORM_TAP_SO PY; do
+  for f in ROW/build_summary.json HIDDEN_SO NORM_TAP_SO PY; do
     fp=${f%%/*} && fp=${!fp}${f#"${f%%/*}"} && [ -e "$fp" ] || { say "PREFLIGHT: no $f"; exit 3; }
   done
   command -v gpu-lease >/dev/null || { say "PREFLIGHT: no gpu-lease on this node"; exit 3; }
@@ -2177,7 +2164,7 @@ if [ -n "$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # the window served under
     [[ $ROW_ID == *__bf16__* ]] \
       || { say "PREFLIGHT: PEARLPLUS_TIE serves the BF16 checkpoint, and ROW_ID $ROW_ID is no BF16 row's (its id names __bf16__): set ROW to the BF16 row's dir"; exit 3; }
     [ -n "$BUILD_OF_RECORD" ] \
-      || { say "PREFLIGHT: under PEARLPLUS_TIE the served compare holds the serve to ROW_ID $ROW_ID's Build of record, which this file pins none of: pin its PROGRAM_DIGEST:MANIFEST_DIGEST in the tied block's case, or give BUILD_OF_RECORD"; exit 3; }
+      || { say "PREFLIGHT: under PEARLPLUS_TIE the served compare holds the serve to ROW_ID $ROW_ID's Build of record, which this file pins none of: pin its workload digest in the tied block's case, or give BUILD_OF_RECORD"; exit 3; }
     case " $CLASSES " in *" $V3C "*) ;; *)
       say "PREFLIGHT: PEARLPLUS_TIE commits the window at V3C_CLASS $V3C, whose window circuit CLASSES ($CLASSES) doesn't count: add it"; exit 3 ;; esac
     [[ " ${SERVE_ARGS:-} " != *" --prefix-caching "* ]] \

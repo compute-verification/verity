@@ -63,7 +63,7 @@ LABEL=$ARM; [ "${ASYNC:-0}" = 1 ] && LABEL=$ARM-async
 ROOT=${UTIL_ROOT:-/workspace/research/vllm-util80}
 VENV=${VENV:-/workspace/cp/venv312}; PY=$VENV/bin/python
 REPO=verity-int8/Llama-3.2-1B-INT8 REV=15b0976d400d796ee589e7737d03a919526bf800
-ROW=${ROW:-$(dirname "$(find "$ROOT" -maxdepth 3 -path '*__b4__i256__*' -name manifest.json | sort | tail -1)")} ROW_ID=${ROW_ID:-${ROW##*/}}
+ROW=${ROW:-$(dirname "$(find "$ROOT" -maxdepth 3 -path '*__b4__i256__*' -name build_summary.json | sort | tail -1)")} ROW_ID=${ROW_ID:-${ROW##*/}}
 HIDDEN_SO=${HIDDEN_SO:-$ROOT/fa2/build/fa3_matReqG/verity_fa3_matReqG.so}
 NORM_TAP_SO=${NORM_TAP_SO:-$ROOT/norm_tap/build/verity_norm_tap.so}
 CUDA_HOME=$(python3 "$TREE/benchmarks/kernels/machine.py" toolkit 13.0) || { echo "served-util: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
@@ -78,7 +78,7 @@ if [ "${1:-}" != leased ]; then
   case $ARM:${ASYNC:-0} in *:0|noseal:1|seal:1|h1:1) ;; *) say "ASYNC=1 is for the Commit's arms (noseal, seal, h1): stock's is ARM=async"; exit 2 ;; esac
   { echo "tree $(git -C "$TREE" log -1 --format='%H parents %P' 2>/dev/null)"; for h in ${HEADS:-}; do echo "$h"; done; } > "$OUT/heads.txt"
   [ $(( T % 1024 )) = 0 ] || { say "T $T: not a multiple of 1,024"; exit 2; }
-  [ -f "$ROW/manifest.json" ] || { say "no B4 row Build under $ROOT"; exit 3; }
+  [ -f "$ROW/build_summary.json" ] || { say "no B4 row Build under $ROOT"; exit 3; }
   if [ "$ARM" != stock ] && [ "$ARM" != graphs ] && [ "$ARM" != async ] && { [ ! -f "$HIDDEN_SO" ] || [ ! -f "$NORM_TAP_SO" ]; }; then
     say "no taps: $HIDDEN_SO, $NORM_TAP_SO"; exit 3
   fi
@@ -136,7 +136,7 @@ export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=${VERITY_RETAIN:-host} HIDDEN_GPU_BU
 nvidia-smi --query-gpu=name,uuid,clocks.sm,clocks.max.sm,clocks.applications.graphics,power.limit,memory.used --format=csv > "$SCR/gpu.txt" 2>&1
 args=(--model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --window-requests "$SEQS" --max-num-seqs "$SEQS"
       --max-num-batched-tokens "$T" --max-model-len 1088 --window-steps 1)
-[ "$ARM" = graphs ] || [ "$ARM" = async ] || args+=(--required-manifest "$PRED/manifest.json")
+[ "$ARM" = graphs ] || [ "$ARM" = async ] || args+=(--row-build "$PRED")
 [ -n "${PROTOCOLS_CONFIG:-}" ] && args+=(--protocols-config "$PROTOCOLS_CONFIG")
 [ -n "${RELEASE_AFTER:-}" ] && args+=(--retain device --retain-device-gb "${RETAIN_DEVICE_GB:-32}" --release-after "$RELEASE_AFTER")
 commit=(--hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb "${TAP_CAP_MB:-2048}"
@@ -164,12 +164,12 @@ if [ "${ASYNC:-0}" = 1 ]; then
   args+=(--async-scheduling)
   serve=("$PY" -c 'import json, sys
 from pathlib import Path
-from verity_vllm.pipeline import cli, serve_row as RW, serve_seal as SS
+from verity_vllm.pipeline import cli, serve_row as RW
 checked = RW.of
 def of(opts):
-    if not opts.required_manifest:
+    if not opts.row_build:
         return None
-    path = Path(SS.programs_root_of(opts)) / RW.WORKLOAD_PROGRAM
+    path = Path(RW.programs_root_of(opts)) / RW.WORKLOAD_PROGRAM
     got = json.loads(path.read_text())["applicability"]["engine"]["async_scheduling"]
     if got is True:
         print(f"UTIL the row declares async_scheduling true: serve_row checks it ({path})", flush=True)
