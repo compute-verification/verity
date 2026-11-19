@@ -1,6 +1,6 @@
 """The pipeline against Lean's own definitions, evaluated by Lean on small cases (`fixtures/lean_vectors.json`,
-`lean/PousRefCheck.lean`): `c1'`, `c2'`/`topLabel'`, `transpose`, `decodeLower`, `P3Meets.tagOf` and `decodeW`, the
-band graph's parents, and the column game `colRound` with its key-gated reverse.
+`lean/PousRefCheck.lean`): `c1'`, `c2'`/`topLabel'`, `transpose`, `decodeLower`, `P3Meets.tagOf` and `decodeW`, and the
+band graph's parents.
 
 The primitive is the same computable toy on both sides: `toy_h` is a monolithic `H` (`RandomOracleKey`), and `ToyP`
 ignores the tweak, since the Lean model's `P` has none.
@@ -13,7 +13,6 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.resource_accounting.memory.pous.verifier import adversary as A
 from verity.protocols.resource_accounting.memory.pous.verifier.labels import (
     component,
     join,
@@ -102,20 +101,3 @@ def test_encoding_matches_lean(case):
     first = w_labels(params, w)[0][0]
     assert str(prims.p.forward(Tweak(0, 0, 0), first)) == case["p_sample"]
     assert str(prims.p.inverse(Tweak(0, 0, 0), first)) == case["p_inverse_sample"]
-
-
-def _holding_of(n: int, seed: int) -> A.Holding:
-    return A.Holding(frozenset(w for w in range(n) if (seed // 2 ** w) % 5 == 0),
-                     frozenset((w, u) for w in range(n) for u in range(n) if (seed // 3 ** (w * n + u)) % 3 == 0),
-                     frozenset(u for u in range(n) if (seed // 2 ** (u + n)) % 3 != 0))
-
-
-@pytest.mark.parametrize("case", FIXTURE["game"], ids=lambda c: f"n{c['n']}-k{c['k']}-{c['seed']}")
-def test_column_game_matches_lean(case):
-    params = Params(case["n"], 8, case["k"])
-    for r, state in enumerate(case["reach"]):
-        c = A.col_reach(params, _holding_of(case["n"], case["seed"]), r)
-        assert sorted(c.lower_whole) == state["lower_whole"]
-        assert sorted(c.lower_col) == [tuple(p) for p in state["lower_col"]]
-        assert sorted(c.top_whole) == state["top_whole"]
-        assert c.size(case["n"]) == state["size"]

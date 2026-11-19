@@ -15,7 +15,7 @@ CENSUS_DIR = Path(__file__).resolve().parents[3] / "calibration" / "census"
 CENSUS = {d["id"]: d for d in json.loads((CENSUS_DIR / "hardware.json").read_text())}
 
 
-@pytest.mark.parametrize(("name", "device"), [("h100-hgx", "h100-sxm5-80gb"), ("h200-hgx", "h100-sxm5-80gb")])
+@pytest.mark.parametrize(("name", "device"), [("h100-hgx", "h100-sxm-80gb-tensor"), ("h200-hgx", "h100-sxm-80gb-tensor")])
 def test_a_location_is_its_census_devices_where_the_census_has_them(name, device):
     loc, u = hardware.location(REG, name), hardware.units(REG)
     assert math.isclose(loc.phi, u.gates(loc.devices * CENSUS[f"{device}/e4m3"]["flop_per_second"]))
