@@ -6094,10 +6094,10 @@ def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_n
         "SAMPLED_AUDIT": v3c, "STEPS": "0,3"}
     listed = (dc / "inputs.txt").read_text().splitlines()
     assert listed == [*sorted([
-        "h1/log.jsonl", "h1/w7/record.json", "h1/w7/registration.json", "private/compose/compose.env",
-        "private/compose/inference-only.json", "private/compose/pieces/pouw/answer.json", "private/pouw/period/answer.json",
-        "private/pouw/period/case.json", f"{v3c}/summary.json"]),
-        "private/compose/inputs.sha256"], listed
+        "pearlplus/w7/registration.json", "pearlplus/w7/tie/circuit-record.json", "pearlplus/w7/tie/summary.json",
+        "pearlplus/w7/tie/window/registration.json", "private/compose/compose.env", "private/compose/inference-only.json",
+        "private/compose/pieces/pouw/answer.json", f"{v3c}/summary.json"]),
+        "private/compose/inputs.sha256"]
     assert S.witness(listed) == [] and json.loads((dc / "inference-only.json").read_text()) == verdict
     (tmp_path / "order").unlink()
     rc, lines, order = _compose(tmp_path, HOST="vy-auditor-2", LEAN="accept")
