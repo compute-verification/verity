@@ -194,6 +194,7 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots, why_not_pearl  # noqa: E402, F401
 from verity.commitments import docket_digest as DD
+from verity.commitments import randomness as RND  # noqa: E402
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU  # noqa: E402
 from verity.circuits import partition_query as PQ  # noqa: E402
@@ -1764,7 +1765,8 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     win.supply()
     filled.record(win)
     lap("record")
-    c = win.close(workers=a.workers or min(16, os.cpu_count() or 1))
+    key = RND.derive(os.urandom(64), "verity/window-commit/salts/v1", {"window": run})
+    c = win.close(workers=a.workers or min(16, os.cpu_count() or 1), strings=WRS.leaf_strings(win, key))
     lap("close")
     prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)}}
     win.write(c, a.out, prov, registrar=DK)
