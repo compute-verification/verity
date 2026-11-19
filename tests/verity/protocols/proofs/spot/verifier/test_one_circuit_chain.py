@@ -284,7 +284,7 @@ def stage_lean_door() -> str:
     with tempfile.TemporaryDirectory() as d:
         c, p, out = Path(d, "C.json"), Path(d, "partition.json"), Path(d, "c_s.txt")
         c.write_bytes(r["C"])
-        p.write_text(json.dumps(r["partition"]))
+        p.write_text(json.dumps(r["partition"], sort_keys=True, separators=(",", ":")))
         run = subprocess.run([str(PF.v2_executable()), "restrict", str(c), str(p), str(units[0][0]), str(out)],
                              capture_output=True, text=True)
         assert run.returncode == 0, f"lean door: Lean's restrict refused block {k} ({LEAN_DOOR}): {run.stderr[-600:]}"
