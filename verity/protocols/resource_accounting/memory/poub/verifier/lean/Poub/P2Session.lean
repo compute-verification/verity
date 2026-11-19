@@ -417,6 +417,6 @@ private def summaryOf (ws : Array Session.WindowSummary) : Session.Summary :=
 #guard (messageOf "{\"request\": {\"passes\": 1e2}}\n".toUTF8 "request").isNone
 #guard (messageOf "{\"root\": \"\\ud800\"}\n".toUTF8 "root").isNone
 #guard (messageOf "{\"root\": \"\\ufffd\"}\n".toUTF8 "root").isNone
-#guard (messageOf "{\"root\": \"\\ud83d\\ude00\"}\n".toUTF8 "root") == some (.str "\u{1F600}")
+#guard (messageOf "{\"root\": \"\\ud83d\\ude00\"}\n".toUTF8 "root") == some (.str (String.singleton (Char.ofNat 0x1F600)))
 
 end Poub.P2Session

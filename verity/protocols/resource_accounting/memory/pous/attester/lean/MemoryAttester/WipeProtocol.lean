@@ -290,9 +290,10 @@ def main : List String → IO UInt32 := mainOf ID SCHEMES
 /-- `wipe-protocol-test`'s command line: `mainOf`'s, and the test's form, `serve` and `check` of `testProtocol` held to
 no node, which the difference test samples sessions of any server through; its schemes are the test signers' alone, so
 nothing it accepts is the deployed protocol's. -/
-def testMain : List String → IO UInt32
-  | args@["serve"] | args@["check", _, _, _] => testProtocol.main args
-  | args => mainOf (TEST_PREFIX ++ ID) TEST_SCHEMES args
+def testMain (args : List String) : IO UInt32 :=
+  match args with
+  | ["serve"] | ["check", _, _, _] => testProtocol.main args
+  | _ => mainOf (TEST_PREFIX ++ ID) TEST_SCHEMES args
 
 /-- **What a wipe accounts for** (`Core.Account`): the foreign bits the server may still hold after an accepted wipe
 (`foreign_bits`), free from above, against the memory the wipe declared (`memory_bits`, its capacity), at the error its
