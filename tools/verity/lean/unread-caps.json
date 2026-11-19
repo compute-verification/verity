@@ -13,6 +13,10 @@
    "modules": 21,
    "declarations": 89
   },
+  "Definitions/Spot": {
+   "modules": 3,
+   "declarations": 3
+  },
   "Proofs/Certifier": {
    "modules": 4,
    "declarations": 34
@@ -33,13 +37,17 @@
    "modules": 42,
    "declarations": 370
   },
+  "Proofs/ResourceAccounting": {
+   "modules": 1,
+   "declarations": 4
+  },
   "Proofs/Slowdown": {
    "modules": 1,
    "declarations": 4
   },
   "Proofs/Spot": {
-   "modules": 5,
-   "declarations": 74
+   "modules": 8,
+   "declarations": 81
   }
  }
 }
