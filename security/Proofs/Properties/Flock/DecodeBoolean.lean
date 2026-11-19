@@ -334,40 +334,77 @@ theorem decodeBodies_run (desc : Desc) (rootKey : String) (pairs : Array (String
 def IsWord (defs : Array Defn) (index : Std.HashMap String Nat) (f : String) : Bool :=
   (index[f]?.map fun i => isWordPrim defs[i]!.prim f).getD false
 
-theorem forIn_each {α ε : Type} (Q : α → Prop) {f : α → Unit → Except ε (ForInStep Unit)}
-    (hf : ∀ a r, f a () = .ok r → Q a ∧ r = .yield ()) :
-    ∀ (l : List α) {u : Unit}, forIn l () f = .ok u → ∀ a ∈ l, Q a
-  | [], _, _, a, ha => by cases ha
-  | b :: l, u, h, a, ha => by
+theorem params_beq {a b : Array (String × Ty)} (h : (a == b) = true) : a = b := by
+  obtain ⟨hs, hr⟩ := Array.isEqv_iff_rel.1 h
+  refine Array.ext hs (fun i h1 h2 => ?_)
+  have hi := hr i h1
+  generalize a[i] = p at hi ⊢
+  generalize b[i] = q at hi ⊢
+  obtain ⟨p1, p2⟩ := p
+  obtain ⟨q1, q2⟩ := q
+  change (p1 == q1 && p2 == q2) = true at hi
+  rw [Bool.and_eq_true, beq_iff_eq] at hi
+  rw [hi.1, BodiesOk.ty_beq hi.2]
+
+theorem forIn_ok_all {α ε : Type} {f : α → PUnit → Except ε (ForInStep PUnit)} {Q : α → Prop}
+    (hf : ∀ x r, f x PUnit.unit = .ok r → Q x ∧ r = .yield PUnit.unit) :
+    ∀ (l : List α) {u : PUnit}, forIn l PUnit.unit f = .ok u → ∀ x ∈ l, Q x
+  | [], _, _, x, hx => absurd hx List.not_mem_nil
+  | y :: l, u, h, x, hx => by
     rw [List.forIn_cons] at h
-    obtain ⟨st, hst, h⟩ := Walk.except_bind_ok h
-    obtain ⟨hb, rfl⟩ := hf b st hst
-    cases ha with
-    | head => exact hb
-    | tail _ ha => exact forIn_each Q hf l h a ha
+    cases hy : f y PUnit.unit with
+    | error e => rw [hy] at h; cases h
+    | ok r =>
+      obtain ⟨hq, rfl⟩ := hf y r hy
+      rw [hy] at h
+      rcases List.mem_cons.1 hx with rfl | hx
+      · exact hq
+      · exact forIn_ok_all hf l h x hx
+
+/-- `booleanKeys` accepts only Definitions whose primitives are spelt as their family's ids and whose gates have
+§9's signature. -/
+theorem booleanKeys_sig {defs : Array Defn} {index : Std.HashMap String Nat} {prims : Array String} {bm : Lean.Json}
+    {pairs : Array (String × String)} (h : booleanKeys defs index prims bm = .ok pairs) :
+    ∀ d ∈ defs, d.prim = true → misspelt d.key = false ∧
+      ∀ g, gateKind? d.key = some g → d.params = g.signature.1 ∧ d.ret = g.signature.2 := by
+  unfold booleanKeys at h
+  obtain ⟨u, h1, -⟩ := Walk.except_bind_ok h
+  rw [← Array.forIn_toList] at h1
+  intro d hd
+  refine forIn_ok_all (Q := fun d => d.prim = true → misspelt d.key = false ∧
+      ∀ g, gateKind? d.key = some g → d.params = g.signature.1 ∧ d.ret = g.signature.2) ?_ _ h1 d
+    (Array.mem_toList_iff.2 hd)
+  intro x r hx
+  dsimp only at hx
+  split at hx
+  · cases hx
+  rename_i hms
+  split at hx
+  · rename_i g hg
+    generalize hsig : g.signature = sg at hx
+    obtain ⟨ps, rt⟩ := sg
+    dsimp only at hx
+    split at hx
+    · cases hx
+    rename_i hbeq
+    cases hx
+    refine ⟨fun hp => ⟨by simpa [hp] using hms, fun g' hg' => ?_⟩, rfl⟩
+    simp only [hp, ↓reduceIte, hg'] at hg
+    cases hg
+    simp only [Bool.not_eq_true', Bool.not_eq_false, Bool.and_eq_true] at hbeq
+    rw [hsig]
+    exact ⟨params_beq hbeq.1, BodiesOk.ty_beq hbeq.2⟩
+  · rename_i hg
+    cases hx
+    refine ⟨fun hp => ⟨by simpa [hp] using hms, fun g' hg' => ?_⟩, rfl⟩
+    simp [hp, hg'] at hg
 
 theorem booleanKeys_ok {defs : Array Defn} {index : Std.HashMap String Nat} {prims : Array String} {bm : Lean.Json}
     {pairs : Array (String × String)} (h : booleanKeys defs index prims bm = .ok pairs) :
-    (∀ d ∈ defs, d.prim = true → misspelt d.key = false) ∧
     (∀ f ∈ prims, IsWord defs index f = true → ∃ v, (f, v) ∈ pairs) ∧
       ∀ p ∈ pairs, p.1 ∈ prims ∧ IsWord defs index p.1 = true := by
   unfold booleanKeys at h
-  obtain ⟨u, hfor, h⟩ := Walk.except_bind_ok h
-  have hmis : ∀ d ∈ defs, d.prim = true → misspelt d.key = false := by
-    rw [← Array.forIn_toList] at hfor
-    refine fun d hd => forIn_each (fun d : Defn => d.prim = true → misspelt d.key = false) (fun d r hr => ?_)
-      defs.toList hfor d (Array.mem_def.1 hd)
-    try extract_lets jp at hr
-    split at hr
-    · exact (BodiesOk.ex_throw_bind hr).elim
-    rename_i hm
-    refine ⟨fun hp => by simpa [hp] using hm, ?_⟩
-    try simp (config := { zeta := false }) only [jp] at hr
-    repeat' split at hr
-    all_goals first
-      | exact (BodiesOk.ex_throw_bind hr).elim
-      | (injection hr with hr; exact hr.symm)
-  refine ⟨hmis, ?_⟩
+  obtain ⟨u, -, h⟩ := Walk.except_bind_ok h
   split at h
   rotate_left; · exact absurd h (by intro h; injection h)
   split at h
@@ -431,17 +468,19 @@ theorem mem_primEntries {kv : Array (String × Lean.Json)} {k : String} {d : Lea
     simp [ho]
 
 /-- **What `decode` guarantees of its primitives**: the Boolean map (`Prog.BoolMapOk`), and every primitive keyed by
-its id and no gate family member spelt otherwise (`misspelt`). -/
+its id, no gate family member spelt otherwise (`misspelt`), and each gate of §9's signature. -/
 theorem decode_facts (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
     P.BoolMapOk ∧ ∀ w < P.defs.size, (P.defs[w]!).prim = true →
-      (P.defs[w]!).id = (P.defs[w]!).key ∧ misspelt (P.defs[w]!).key = false := by
+      (P.defs[w]!).id = (P.defs[w]!).key ∧ misspelt (P.defs[w]!).key = false ∧
+        ∀ g, gateKind? (P.defs[w]!).key = some g →
+          (P.defs[w]!).params = g.signature.1 ∧ (P.defs[w]!).ret = g.signature.2 := by
   obtain ⟨kv, desc, rootId, programFn, bm, root, s0, st, st1, st2, pairs, hdd, hgo, hd0, hi0', -, -, -, hall, hbk, hbod,
     hd, hi, -, hbo⟩ := decode_steps bytes P h
   have hk0 := of_triple (go_kept _ _ _) hgo (DecodeKeys.kept_empty desc hd0 hi0')
   obtain ⟨hi0, -⟩ := go_inv _ _ _ _ _ _ hgo
     ⟨fun i hi => absurd hi (by rw [hd0]; exact Nat.not_lt_zero i), fun k v hk => absurd hk (by rw [hi0']; simp)⟩
   obtain ⟨hb1, hp1, hall'⟩ := decodeAll_run desc _ hall ⟨hk0, hi0⟩
-  obtain ⟨hmisp, hmiss, hextra⟩ := booleanKeys_ok hbk
+  obtain ⟨hmiss, hextra⟩ := booleanKeys_ok hbk
   have hw : ∀ p ∈ pairs, ∃ wi, (DecState.index st1)[p.1]? = some wi := fun p hp => by
     have hg := (hextra p hp).2
     unfold IsWord at hg
@@ -534,7 +573,7 @@ theorem decode_facts (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
     obtain ⟨hjlt, -, hid, -⟩ := hearly w hw' hprim
     refine ⟨hid, ?_⟩
     rw [hp2.2 _ hjlt] at hprim ⊢
-    exact hmisp _ (by rw [getElem!_pos (DecState.defs st1) w hjlt]; exact Array.getElem_mem hjlt) hprim
+    exact booleanKeys_sig hbk _ (by rw [getElem!_pos (DecState.defs st1) w hjlt]; exact Array.getElem_mem hjlt) hprim
 
 /-- **`decode` guarantees the Boolean map (`DecodeBoolean`).** -/
 theorem decode_boolean : DecodeBoolean := fun bytes P h => (decode_facts bytes P h).1
@@ -676,7 +715,7 @@ theorem decode_body_agrees : DecodeBodyAgrees := by
     obtain rfl := Option.some.inj hiw
     obtain ⟨b', hb', hbo, hbody⟩ := hmap p hp hword
     obtain rfl : b = b' := (Option.some.inj (hbo.symm.trans hb)).symm
-    obtain ⟨hid, hmis⟩ := hids p hp hprim
+    obtain ⟨hid, hmis, -⟩ := hids p hp hprim
     obtain ⟨hin, hbp⟩ := word_ids hword
     have hg : Flock.Lower.gateOf? (P.defs[p]!).id = none := by
       rw [hid]
