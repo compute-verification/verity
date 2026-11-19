@@ -125,7 +125,7 @@ def test_a_store_keeping_prior_content_past_the_threshold_is_rejected() -> None:
     assert (n - 1) * sw.LABEL_BITS <= threshold < n * sw.LABEL_BITS
     store = WS.StoreProver(params, WS.HostMemory(), clock=Clock(step=7), foreign=n)
     w = wipe_run.run("n0", params, signer=ts.TestSigner(b"store cheat", 2), log=ts.session_log(), schemes=ts.SCHEMES,
-              protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=Clock(step=7), coin_secret=b"coins", egress_mib=0,
+              protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=Clock(step=7), resolution_ns=1, coin_secret=b"coins", egress_mib=0,
               prover=lambda _: store)
     store.close()
     assert w.verdict == "reject" and w.report["ended"] == sw.WRONG and "wrong answers" in w.answer["reason"]
@@ -439,7 +439,7 @@ def test_one_session_over_a_disk_and_host_memory(tmp_path, foreign: int) -> None
     store = WS.StoreProver(params, joint, staging=4 * WS.BLOCK, clock=Clock(step=7), foreign=foreign)
     store.gate()
     w = wipe_run.run("n0", params, signer=ts.TestSigner(b"disk %d" % foreign, 2), log=ts.session_log(), schemes=ts.SCHEMES,
-              protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=Clock(step=7), secret=KEY, session_id=bytes(32),
+              protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=Clock(step=7), resolution_ns=1, secret=KEY, session_id=bytes(32),
               coin_secret=b"coins", egress_mib=0, prover=lambda _: store)
     [fill] = _fills(tmp_path)
     on_disk, key = fill.read_bytes(), sw.wipe_key(KEY, b"n0", bytes(32))

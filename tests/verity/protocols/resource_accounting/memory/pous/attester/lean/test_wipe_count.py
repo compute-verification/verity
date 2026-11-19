@@ -21,6 +21,7 @@ import wipe_cases as WC
 import wipe_protocol_case as C
 from hypothesis import strategies as st
 
+from verity.clock import Reading
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as WP
 
@@ -107,7 +108,8 @@ def test_a_marked_wipe_is_certified_on_its_count_and_nothing_else_is(counted_ser
     assert saturated["verdict"] == "accept" and not saturated["public"]["certified"], saturated
     assert saturated["profile"]["gaps"] == WP.gaps(params, sw.EGRESS_MAX_UNITS) != [], saturated
 
-    tampered = dataclasses.replace(marked.signed, fill_start_ns=marked.signed.fill_start_ns - 1)
+    start = marked.signed.fill_start
+    tampered = dataclasses.replace(marked.signed, fill_start=Reading(start.key, start.ns - 1))
     for name, c, verdict, reason in [
             ("no count", case(marked, None), "reject", WP.NO_COUNT),
             ("no mark", case(unmarked, 2), "reject", WP.NO_MARK),

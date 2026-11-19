@@ -26,7 +26,8 @@ session has five steps:
    it reads its clock for the fill, so no label is streamed before it.  With no source the start mark is empty.
 3. **Fill.** `fill(chunk)` streams `L_0 … L_{N-1}` in order; the challenger reads its clock at the first and last chunk.
    `fill_by(send)` is the same fill streamed by `send`, a streamer on the challenger's own host given `K`.  Its clock
-   is the raw monotonic clock (`raw_clock_ns`), which the header names (`CLOCK`).
+   is its device's (`verity.clock.Device`), the raw monotonic clock (`verity.clock.raw_ns`), which the header names
+   (`CLOCK`); each time it reads is a reading of that device (`verity.clock.Reading`), stamped into the device's log.
 4. **Challenge.** Once the fill is complete the challenger flips its coins, then reveals them a batch at a time
    (`challenge`), reads the receipt time before it hashes anything (`receive`), and checks every 64-byte answer against
    `L_{c_j}`.  The first late or wrong batch ends the session: no batch is retried, and no index is redrawn.
@@ -59,11 +60,11 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from verity.clock import Reading, elapsed
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.scheme import DIGEST_BYTES
@@ -97,11 +98,6 @@ DEPLOYED_LABELS = DEPLOYED_FILL_BYTES // LABEL_BYTES
 DEPLOYED_K = 74_000
 """The challenge count at the reference fill: retained prior content at most about 1.02 GB plus the egress, at
 δ = 2^-40."""
-
-
-def raw_clock_ns() -> int:
-    """A reading of `CLOCK`, the raw monotonic clock, in ns: what a `WipeMemoryAttester` reads unless a clock is injected."""
-    return time.clock_gettime_ns(time.CLOCK_MONOTONIC_RAW)
 
 
 def _sha512(*parts: bytes) -> bytes:
@@ -200,29 +196,29 @@ class WipeCommitment:
 
 @dataclass(frozen=True, slots=True)
 class BatchRecord:
-    """One batch: its number, its first challenge, its size, the send and receipt times, the wrong answers, and the
-    digest of the indices and the answers as received."""
+    """One batch: its number, its first challenge, its size, the challenger device's readings at the send and the
+    receipt, the wrong answers, and the digest of the indices and the answers as received."""
 
     b: int
     first: int
     count: int
-    send_ns: int
-    receipt_ns: int
+    send: Reading
+    receipt: Reading
     wrong: int
     digest: bytes
 
     @property
     def elapsed_ns(self) -> int:
-        return self.receipt_ns - self.send_ns
+        return elapsed(self.send, self.receipt)
 
     def value(self) -> bytes:
         return (self.b.to_bytes(4, "big") + self.first.to_bytes(4, "big") + self.count.to_bytes(4, "big")
-                + self.send_ns.to_bytes(8, "big") + self.receipt_ns.to_bytes(8, "big") + self.wrong.to_bytes(4, "big")
+                + self.send.ns.to_bytes(8, "big") + self.receipt.ns.to_bytes(8, "big") + self.wrong.to_bytes(4, "big")
                 + self.digest)
 
     def to_json(self) -> dict[str, Any]:
-        return {"b": self.b, "first": self.first, "count": self.count, "send_ns": self.send_ns,
-                "receipt_ns": self.receipt_ns, "wrong": self.wrong, "digest": self.digest.hex()}
+        return {"b": self.b, "first": self.first, "count": self.count, "send_ns": self.send.ns,
+                "receipt_ns": self.receipt.ns, "wrong": self.wrong, "digest": self.digest.hex()}
 
 
 def batch_digest(indices: Sequence[int], answers: bytes) -> bytes:
@@ -239,26 +235,31 @@ def records_root(session: bytes, batches: Sequence[BatchRecord]) -> bytes:
 @dataclass(frozen=True, slots=True)
 class SignedWipe:
     """A closed session: its commitment, how it ended, its start mark (the SHA-512 of the start certificate the
-    challenger held before the fill, empty when it had no mark source), the fill's times, the batch records, and the
-    one signature over them.  It holds no egress count."""
+    challenger held before the fill, empty when it had no mark source), its device's readings at the fill's start and
+    end, the batch records, and the one signature over them.  It holds no egress count."""
 
     commitment: WipeCommitment
     ended: str
     start_mark: bytes
-    fill_start_ns: int
-    fill_end_ns: int
+    fill_start: Reading
+    fill_end: Reading
     batches: tuple[BatchRecord, ...]
     scheme: str
     public_key: bytes
     signature: bytes
 
+    @property
+    def fill_ns(self) -> int:
+        """The fill's first label sent to its last, on the challenger's one device."""
+        return elapsed(self.fill_start, self.fill_end)
+
     def message(self) -> bytes:
-        return message(self.commitment, self.ended, self.start_mark, self.fill_start_ns, self.fill_end_ns, self.batches)
+        return message(self.commitment, self.ended, self.start_mark, self.fill_start.ns, self.fill_end.ns, self.batches)
 
     def to_json(self) -> dict[str, Any]:
         """The signed session as the Lean verdict reads it (`MemoryChallenger.StreamedWipe.Signed.ofJson`)."""
         return {"commitment": self.commitment.to_json(), "ended": self.ended, "start_mark": self.start_mark.hex(),
-                "fill_start_ns": self.fill_start_ns, "fill_end_ns": self.fill_end_ns,
+                "fill_start_ns": self.fill_start.ns, "fill_end_ns": self.fill_end.ns,
                 "batches": [r.to_json() for r in self.batches], "scheme": self.scheme,
                 "public_key": self.public_key.hex(), "signature": self.signature.hex()}
 
@@ -355,7 +356,7 @@ def verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozense
             reasons.append(f"batch {b} has {r.wrong} wrong answers")
         if not 0 <= r.elapsed_ns <= p.limit_ns:
             reasons.append(f"batch {b} is past its deadline of {p.limit_ns} ns")
-        if b == 0 and r.send_ns < signed.fill_end_ns:
+        if b == 0 and elapsed(signed.fill_end, r.send) < 0:
             reasons.append("the first batch was sent before the fill completed")
     return Verdict(not reasons, tuple(reasons))
 
@@ -407,4 +408,4 @@ __all__ = ["CLOCK", "COIN_DOMAIN", "COMPLETE", "DEPLOYED_FILL_BYTES", "DEPLOYED_
            "SignedWipe", "Verdict", "WipeCommitment", "WipeParams", "batch_digest",
            "challenges_for", "sample_indices", "egress_units", "end_message", "label", "labels", "log2_error",
            "mark_of",
-           "message", "raw_clock_ns", "records_root", "retained_bits", "start_message", "verdict", "wipe_key"]
+           "message", "records_root", "retained_bits", "start_message", "verdict", "wipe_key"]

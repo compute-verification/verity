@@ -36,11 +36,13 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(ROOT), str(ROOT / "tests/verity/protocols/resource_accounting/memory/pous/verifier")]
 
+from verity.clock import raw_ns, raw_resolution_ns  # noqa: E402
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw  # noqa: E402
 from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WC  # noqa: E402
 
@@ -289,7 +291,7 @@ def _wipe_verdict():
     return mod
 
 
-def session(port: int, verdict: str) -> dict:
+def session(port: int, verdict: str, clock: Callable[[], int] = raw_ns, resolution_ns: int | None = None) -> dict:
     import pous_test_signer as ts
 
     wv = _wipe_verdict()
@@ -299,7 +301,8 @@ def session(port: int, verdict: str) -> dict:
     params = sw.WipeParams(n, k, 1, 50_000_000, (("host-dram", n * sw.LABEL_BYTES),))
     with tempfile.TemporaryDirectory(prefix="streamed-wipe-bench-") as scratch:
         signer = ts.TestSigner(b"streamed-wipe bench", height=2, directory=scratch)
-        c = WC.WipeMemoryAttester(SECRET, SERVER, SESSION, params, signer, log=ts.session_log(scratch))
+        c = WC.WipeMemoryAttester(SECRET, SERVER, SESSION, params, signer, log=ts.session_log(scratch),
+                                  clock=clock, resolution_ns=resolution_ns or raw_resolution_ns())
         prover = _spawn_prover(port, labels=n)
         s = _connect(port)
         try:

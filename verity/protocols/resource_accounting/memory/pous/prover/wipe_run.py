@@ -147,7 +147,7 @@ def timing(signed: sw.SignedWipe | None) -> dict[str, Any] | None:
     each read's round trip, a batch's send to its answer's receipt."""
     if signed is None:
         return None
-    size, ns = signed.commitment.params.labels * sw.LABEL_BYTES, signed.fill_end_ns - signed.fill_start_ns
+    size, ns = signed.commitment.params.labels * sw.LABEL_BYTES, signed.fill_ns
     return {"fill": {"bytes": size, "ns": ns, "GBps": wipe_store.gbps(size, ns)},
             "reads": wipe_store.percentiles([r.elapsed_ns for r in signed.batches])}
 
@@ -155,13 +155,14 @@ def timing(signed: sw.SignedWipe | None) -> dict[str, Any] | None:
 def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | None = None,
         log: mc.SessionLog | None = None, party: Side | None = None,
         prover: Callable[[sw.WipeParams], wipe_store.Prover] = wipe_store.Prover, egress_mib: int | None = None,
-        clock: Callable[[], int] = sw.raw_clock_ns, secret: bytes | None = None, session_id: bytes | None = None,
+        clock: Callable[[], int] | None = None, resolution_ns: int | None = None, secret: bytes | None = None,
+        session_id: bytes | None = None,
         coin_secret: bytes | None = None, stop_after: int | None = None, trusted_sha512: str | None = None,
         schemes: Mapping[str, mc.Verify] = mc.SCHEMES, protocol: str = PROTOCOL,
         chunk: int = wipe_party.CHUNK) -> Wipe:
     """One wipe of `node` (module docstring), the server id its name's UTF-8. In one process the challenger signs under
-    `signer`, claims its session in `log` and reads `clock` (the raw monotonic clock, which the session's header
-    names); `secret`, `session_id` and `coin_secret`
+    `signer`, claims its session in `log` and reads `clock`, ticking every `resolution_ns`, both given (the header
+    names the raw monotonic clock); `secret`, `session_id` and `coin_secret`
     are fresh from the OS unless a test gives them. With `party` its side runs where `party` starts it, with its own
     secret, coins, key, log and clock, and those arguments are unused. `prover` makes the prover's side,
     which with `stop_after` leaves after that many reads. `egress_mib` is the evidence's egress count, which the
@@ -177,10 +178,11 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
     params = params_for() if params is None else params
     server = node.encode()
     if party is None:
-        assert signer is not None and log is not None, "an in-process wipe needs the challenger's signer and log"
+        assert signer is not None and log is not None and clock is not None and resolution_ns is not None, (
+            "an in-process wipe needs the challenger's signer, log, clock and resolution")
         c = WC.WipeMemoryAttester(secrets.token_bytes(32) if secret is None else secret, server,
-                                    secrets.token_bytes(32) if session_id is None else session_id, params, signer,
-                                    log=log, clock=clock, coin_secret=coin_secret)
+                                  secrets.token_bytes(32) if session_id is None else session_id, params, signer,
+                                  log=log, clock=clock, resolution_ns=resolution_ns, coin_secret=coin_secret)
         p = prover(params)
         for first, data in c.fill(chunk):
             p.receive(first, data)

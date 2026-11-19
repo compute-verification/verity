@@ -42,6 +42,7 @@ import verity_difftest as D
 import wipe_cases as WC
 from verity_difftest import protocol as P
 
+from verity.clock import Reading
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_store as WS
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
@@ -146,7 +147,7 @@ def wipe(params: sw.WipeParams, signer: M.AtLeaf, *, prover: Callable[[sw.WipePa
     and with `stop_after` the prover leaves after that many reads, so the session is never signed."""
     clock = M.Clock(start)
     c = WCH.WipeMemoryAttester(WC.SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock,
-                                coin_secret=coins)
+                                 resolution_ns=1, coin_secret=coins)
     p = prover(params)
     for first, data in c.fill(max(1, params.labels // 3)):
         p.receive(first, data)
@@ -213,7 +214,7 @@ def _build(m: str, seed: int) -> dict:
         return wipe_case(commitment, signed, (M.test_signer(M.STRANGER, 1, 0).public_key,), egress_mib=egress)
     if m == "tampered":
         assert signed is not None
-        signed = dataclasses.replace(signed, fill_start_ns=signed.fill_start_ns - 1)
+        signed = dataclasses.replace(signed, fill_start=Reading(signed.fill_start.key, signed.fill_start.ns - 1))
     c = wipe_case(commitment, signed, trusted, egress_mib=egress)
     if m == "params":
         c["params"] = [c["params"] | {"extra": 1}, {k: v for k, v in c["params"].items() if k != "trusted"},

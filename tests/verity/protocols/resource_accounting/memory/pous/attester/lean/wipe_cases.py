@@ -22,6 +22,7 @@ import mc_cases as M
 import verity_difftest as D
 from hypothesis import strategies as st
 
+from verity.clock import Reading
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WC
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_store as WS
@@ -62,9 +63,10 @@ def commitment_of(j: Any) -> sw.WipeCommitment:
     return sw.WipeCommitment(M.hex_(j, "server"), M.hex_(j, "session"), params)
 
 
-def batch_of(j: Any) -> sw.BatchRecord:
-    return sw.BatchRecord(int_(j, "b"), int_(j, "first"), int_(j, "count"), int_(j, "send_ns"), int_(j, "receipt_ns"),
-                          int_(j, "wrong"), M.hex_(j, "digest"))
+def batch_of(j: Any, key: str) -> sw.BatchRecord:
+    """`BatchRecord.ofJson`, its times readings of the device registered under `key`."""
+    return sw.BatchRecord(int_(j, "b"), int_(j, "first"), int_(j, "count"), Reading(key, int_(j, "send_ns")),
+                          Reading(key, int_(j, "receipt_ns")), int_(j, "wrong"), M.hex_(j, "digest"))
 
 
 def mark_of(j: Any) -> bytes:
@@ -76,13 +78,25 @@ def mark_of(j: Any) -> bytes:
 
 
 def signed_of(j: Any) -> sw.SignedWipe:
+    """`Signed.ofJson`, its times readings of the device registered under its public key."""
+    public_key = M.hex_(j, "public_key")
+    key = public_key.hex()
     return sw.SignedWipe(commitment_of(M._get(j, "commitment")), M._str(j, "ended"), mark_of(j),
-                         int_(j, "fill_start_ns"), int_(j, "fill_end_ns"),
-                         tuple(batch_of(r) for r in M.list_(j, "batches")),
-                         M._str(j, "scheme"), M.hex_(j, "public_key"), M.hex_(j, "signature"))
+                         Reading(key, int_(j, "fill_start_ns")), Reading(key, int_(j, "fill_end_ns")),
+                         tuple(batch_of(r, key) for r in M.list_(j, "batches")),
+                         M._str(j, "scheme"), public_key, M.hex_(j, "signature"))
 
 
 # --- sessions ----------------------------------------------------------------------------------------------------------------
+
+TIMES = {"send_ns": "send", "receipt_ns": "receipt", "fill_start_ns": "fill_start", "fill_end_ns": "fill_end"}
+"""A record's times by their JSON names: each a field holding a reading of the session's device."""
+
+
+def readings(key: str, edits: dict[str, Any]) -> dict[str, Any]:
+    """`edits` with each time given in nanoseconds (`TIMES`) as a reading of the device registered under `key`."""
+    return {TIMES.get(k, k): Reading(key, v) if k in TIMES else v for k, v in edits.items()}
+
 
 @dataclass(frozen=True)
 class Session:
@@ -94,7 +108,7 @@ class Session:
     signer: M.AtLeaf
 
     def resign(self, **edits) -> Session:
-        s = dataclasses.replace(self.signed, **edits)
+        s = dataclasses.replace(self.signed, **readings(self.signed.public_key.hex(), edits))
         try:
             sig = self.signer.sign(s.commitment.session, s.message())
         except (ValueError, OverflowError):  # an edit past the record's widths has no message; the old signature stays
@@ -119,7 +133,8 @@ def run(params: sw.WipeParams, signer: M.AtLeaf, *, server: bytes = SERVERS[0], 
     and the session signs its SHA-512 as its start mark; with none the mark is empty."""
     clock = M.Clock(start)
     c = WC.WipeMemoryAttester(SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock,
-                                coin_secret=coins, mark_source=None if certificate is None else lambda m: certificate)
+                              resolution_ns=1, coin_secret=coins,
+                              mark_source=None if certificate is None else lambda m: certificate)
     prover = WS.Prover(params)
     for first, data in c.fill(max(1, params.labels // 3)):
         prover.receive(first, data)
@@ -179,7 +194,8 @@ def _batch(s: Session, x: int, **edits) -> Session:
     """Batch `x mod n`'s fields edited by `edits[field](record)`, re-signed."""
     batches = list(s.signed.batches)
     r = x % len(batches)
-    batches[r] = dataclasses.replace(batches[r], **{k: v(batches[r]) for k, v in edits.items()})
+    key = s.signed.public_key.hex()
+    batches[r] = dataclasses.replace(batches[r], **readings(key, {k: v(batches[r]) for k, v in edits.items()}))
     return s.resign(batches=tuple(batches))
 
 
@@ -215,7 +231,7 @@ def _more_labels(s: Session, x: int) -> sw.WipeCommitment:
 
 
 def _first_before_fill(s: Session, x: int) -> Session:
-    return s.resign(fill_end_ns=s.signed.batches[0].send_ns + 1 + x % 5)
+    return s.resign(fill_end_ns=s.signed.batches[0].send.ns + 1 + x % 5)
 
 
 def _scheme(s: Session, x: int) -> Session:
@@ -254,9 +270,9 @@ MUTATIONS = [
     lambda s, x: _batch(s, x, wrong=lambda r: r.wrong + 1 + x % 2),
     lambda s, x: _batch(s, x, wrong=lambda r: -1),
     lambda s, x: _batch(s, x, digest=lambda r: M._flip(r.digest, x)),
-    lambda s, x: _batch(s, x, receipt_ns=lambda r: r.send_ns + s.commitment.params.limit_ns + 1 + x),
-    lambda s, x: _batch(s, x, receipt_ns=lambda r: r.send_ns - 1 - x % 3),
-    lambda s, x: _batch(s, x, receipt_ns=lambda r: r.send_ns + s.commitment.params.limit_ns),
+    lambda s, x: _batch(s, x, receipt_ns=lambda r: r.send.ns + s.commitment.params.limit_ns + 1 + x),
+    lambda s, x: _batch(s, x, receipt_ns=lambda r: r.send.ns - 1 - x % 3),
+    lambda s, x: _batch(s, x, receipt_ns=lambda r: r.send.ns + s.commitment.params.limit_ns),
     lambda s, x: _batch(s, x, b=lambda r: r.b + 1),
     lambda s, x: _batch(s, x, b=lambda r: 2 ** 32 + r.b),
     lambda s, x: _batch(s, x, first=lambda r: r.first + 1),
@@ -264,9 +280,9 @@ MUTATIONS = [
     lambda s, x: _batch(s, x, count=lambda r: r.count - 1),
     lambda s, x: _batch(s, x, send_ns=lambda r: -1 - x),
     lambda s, x: _batch(s, x, send_ns=lambda r: 2 ** 64 + x),
-    lambda s, x: _unsigned(s, batches=_batch(s, x, receipt_ns=lambda r: r.receipt_ns + 1).signed.batches),
+    lambda s, x: _unsigned(s, batches=_batch(s, x, receipt_ns=lambda r: r.receipt.ns + 1).signed.batches),
     _first_before_fill,
-    lambda s, x: s.resign(fill_start_ns=-1 - x, fill_end_ns=s.signed.fill_end_ns - 2 ** 70),
+    lambda s, x: s.resign(fill_start_ns=-1 - x, fill_end_ns=s.signed.fill_end.ns - 2 ** 70),
     lambda s, x: s.resign(batches=s.signed.batches + s.signed.batches[-1:]),
     lambda s, x: s.resign(batches=s.signed.batches[:-1]),
     lambda s, x: s.resign(batches=()),

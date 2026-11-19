@@ -197,7 +197,7 @@ def _wipe_window(tmp_path: Path, *, protocol: str = WIPE_ID, egress_mib: int | N
     """A served wipe's public directory as `served_wipe.sh` leaves it, and the serve dir its ``served.json`` names."""
     w = wipe_run.run("n0", SMALL_WIPE, signer=ts.TestSigner(b"served case wipe", 2, directory=tmp_path),
               log=ts.session_log(tmp_path), schemes=ts.SCHEMES,
-              protocol=protocol, clock=iter(range(10 ** 9, 10 ** 12)).__next__, coin_secret=b"coins",
+              protocol=protocol, clock=iter(range(10 ** 9, 10 ** 12)).__next__, resolution_ns=1, coin_secret=b"coins",
               egress_mib=egress_mib)
     assert w.verdict == "accept", w.answer
     serve, window = tmp_path / "serve", tmp_path / "pieces" / "wipe"

@@ -70,7 +70,8 @@ def main() -> int:
 
         with conn, conn.makefile("rwb") as f:
             c = WC.serve(f, request, signer=signer, log=mc.SessionLog(device / "sessions"),
-                         clock=itertools.count(10 ** 9, 1_000).__next__, fill=None if streamer is None else native)
+                         clock=itertools.count(10 ** 9, 1_000).__next__, resolution_ns=1,
+                         fill=None if streamer is None else native)
     print(json.dumps(WC.report(c, signer.public_key, WINDOW) | extra, sort_keys=True), flush=True)
     return 0
 

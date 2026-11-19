@@ -1,9 +1,9 @@
 """Every memory attester in this suite runs on an injected clock (AGENTS.md "Tests"). `tests/test_no_wall_clock.py`
-scans for clock reads in test source, and cannot see an `audit.UnsignedRounds` left on its default `time.perf_counter_ns`,
-or a `wipe_challenger.WipeMemoryAttester` left on its default `streamed_wipe.raw_clock_ns`; such a test passes or fails
-with the load on `check`'s slot. Here each one's default clock, whichever it is, is replaced by one that fails the test
-that reads it, every time (`ContinuousMemoryAttester` and `memory_attester.MemoryAttester` have none: each runs on the
-`verity.clock.Device` it is given). The test signer's leaf states and session logs go under the suite's basetemp
+scans for clock reads in test source, and cannot see an `audit.UnsignedRounds` left on its default `time.perf_counter_ns`;
+such a test passes or fails with the load on `check`'s slot. Here its default clock, whichever it is, is replaced by one
+that fails the test that reads it, every time (`ContinuousMemoryAttester`, `memory_attester.MemoryAttester`,
+`wipe_challenger.WipeMemoryAttester` and an in-process `wipe_run.run` have none: each runs on the clock it is given, its
+device's). The test signer's leaf states and session logs go under the suite's basetemp
 (`pous_test_signer.DIR`)."""
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import shutil
 import pous_test_signer
 import pytest
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester, wipe_challenger, wipe_stream
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester, wipe_stream
 from verity.protocols.resource_accounting.memory.pous.verifier import audit
 
 
@@ -24,8 +24,7 @@ def _wall_clock() -> int:
 
 @pytest.fixture(autouse=True)
 def _no_default_clock(monkeypatch):
-    for cls in (audit.UnsignedRounds, wipe_challenger.WipeMemoryAttester):
-        init = cls.__init__
+    for init in (audit.UnsignedRounds.__init__,):
         if inspect.signature(init).parameters["clock"].kind is inspect.Parameter.KEYWORD_ONLY:
             monkeypatch.setattr(init, "__kwdefaults__", {**init.__kwdefaults__, "clock": _wall_clock})
             continue

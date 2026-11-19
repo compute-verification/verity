@@ -371,7 +371,7 @@ WIPE_MESSAGE_KEYS = ("commitment", "ended", "start_mark", "fill_start_ns", "fill
 def wipe_message(v) -> str:
     return sw.message(W.commitment_of(M._get(v, "commitment")), M._str(v, "ended"), M.hex_(v, "start_mark"),
                       W.int_(v, "fill_start_ns"), W.int_(v, "fill_end_ns"),
-                      [W.batch_of(r) for r in M.list_(v, "batches")]).hex()
+                      [W.batch_of(r, "") for r in M.list_(v, "batches")]).hex()
 
 
 def wipe_start_message(v) -> str:

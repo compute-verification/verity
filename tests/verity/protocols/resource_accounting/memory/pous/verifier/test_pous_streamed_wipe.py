@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import io
 import itertools
 import json
 import math
@@ -16,6 +17,7 @@ import pous_test_signer as ts
 import pytest
 from pous_fakes import Clock
 
+from verity.clock import Reading, raw_ns, raw_resolution_ns
 from verity.commitments.randomness import derive
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
@@ -37,8 +39,14 @@ def params(batch: int = 1, limit: int = LIMIT) -> sw.WipeParams:
 def challenger(p: sw.WipeParams | None = None, *, clock=None, signer=None, log=None, mark_source=None,
                server: bytes = SERVER) -> WC.WipeMemoryAttester:
     return WC.WipeMemoryAttester(SECRET, server, SESSION, p or params(),
-                                   signer or ts.TestSigner(b"wipe challenger", height=2), log=log or ts.session_log(),
-                                   clock=clock or Clock(1_000_000), coin_secret=b"coins", mark_source=mark_source)
+                                 signer or ts.TestSigner(b"wipe challenger", height=2), log=log or ts.session_log(),
+                                 clock=clock or Clock(1_000_000), resolution_ns=1, coin_secret=b"coins",
+                                 mark_source=mark_source)
+
+
+def later(t: Reading, ns: int) -> Reading:
+    """Reading `t` moved `ns` later on its device's clock."""
+    return Reading(t.key, t.ns + ns)
 
 
 def run(c: WC.WipeMemoryAttester, respond=None, *, clock: Clock | None = None,
@@ -150,25 +158,76 @@ def test_one_session_an_id():
         challenger(log=log)
 
 
-DEFAULT_CLOCK = WC.WipeMemoryAttester.__init__.__kwdefaults__["clock"]
-"""`WipeMemoryAttester`'s default clock as the module has it: read at import, before `conftest.py` replaces it in each test."""
-
-
-def test_the_default_clock_is_the_raw_one_and_its_resolution_is_checked(monkeypatch):
-    """`raw_clock_ns` reads `CLOCK_MONOTONIC_RAW`, the clock the header names. It is the default of `WipeMemoryAttester`, of the
-    wipe's party and of an in-process wipe, and a challenger on it is refused where that clock ticks too coarsely."""
-    asked = []
-    monkeypatch.setattr(sw.time, "clock_gettime_ns", lambda clk: asked.append(("ns", clk)) or 7)
-    assert sw.raw_clock_ns() == 7 and asked == [("ns", sw.time.CLOCK_MONOTONIC_RAW)]
-    assert DEFAULT_CLOCK is sw.raw_clock_ns
-    assert WC.serve.__kwdefaults__["clock"] is sw.raw_clock_ns and wipe_run.run.__kwdefaults__["clock"] is sw.raw_clock_ns
-    monkeypatch.setattr(sw.time, "clock_getres", lambda clk: asked.append(("res", clk)) or 1e-9)
-    assert challenger(clock=sw.raw_clock_ns).clock is sw.raw_clock_ns
-    monkeypatch.setattr(sw.time, "clock_getres", lambda clk: asked.append(("res", clk)) or 4e-3)
-    with pytest.raises(ValueError, match=f"the clock ticks every .* ns, coarser than {mc.CLOCK_RESOLUTION_NS} ns"):
-        challenger(clock=sw.raw_clock_ns)
-    assert asked[1:] == [("res", sw.time.CLOCK_MONOTONIC_RAW)] * 2
+def test_the_challenger_is_given_its_clock_and_its_resolution_is_checked():
+    """The challenger takes its device's clock and resolution with no default (the side's `main` gives it
+    `verity.clock.raw_ns`, `CLOCK_MONOTONIC_RAW`, the clock the header names), and is refused where its clock ticks too
+    coarsely."""
+    for f in (WC.serve, WC.WipeMemoryAttester.__init__):
+        assert not {"clock", "resolution_ns"} & set(f.__kwdefaults__ or {})
+    assert wipe_run.run.__kwdefaults__["clock"] is None and wipe_run.run.__kwdefaults__["resolution_ns"] is None
+    with pytest.raises(TypeError, match="resolution_ns"):
+        WC.WipeMemoryAttester(SECRET, SERVER, SESSION, params(), ts.TestSigner(b"wipe challenger", height=2),
+                              log=ts.session_log(), clock=Clock(1_000_000))
+    with pytest.raises(ValueError, match=f"the clock ticks every 4000000 ns, coarser than {mc.CLOCK_RESOLUTION_NS} ns"):
+        WC.WipeMemoryAttester(SECRET, SERVER, SESSION, params(), ts.TestSigner(b"wipe challenger", height=2),
+                              log=ts.session_log(), clock=Clock(1_000_000), resolution_ns=4_000_000)
     assert challenger(clock=Clock(1_000_000)).commitment.header()["clock"] == sw.CLOCK == "CLOCK_MONOTONIC_RAW ns"
+
+
+def test_the_side_serves_its_wipe_on_the_raw_clock(tmp_path, monkeypatch) -> None:
+    """`main` serves the wipe on the device's raw monotonic clock at that clock's resolution, the clock its records
+    are readings of."""
+    got: dict = {}
+
+    class Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def setblocking(self, *_):
+            pass
+
+        def setsockopt(self, *_):
+            pass
+
+        def makefile(self, *_):
+            return Conn()
+
+    class Server(Conn):
+        def getsockname(self):
+            return ("127.0.0.1", 1)
+
+        def accept(self):
+            return Conn(), None
+
+    monkeypatch.setattr(WC.onsite, "device_key", lambda *_, **__: ts.TestSigner(b"side", 2))
+    monkeypatch.setattr(WC.socket, "create_server", lambda *_: Server())
+    monkeypatch.setattr(WC, "serve", lambda f, request, **kw: got.update(kw))
+    monkeypatch.setattr(WC, "report", lambda *_: {})
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(WP.request_of("n0", params())) + "\n"))
+    assert WC.main(["--device", str(tmp_path)]) == 0
+    assert got["clock"] is raw_ns and got["resolution_ns"] == raw_resolution_ns()
+
+
+def test_the_challengers_readings_are_its_devices_and_never_run_backwards():
+    """Every time the challenger signs is a reading of its one device, the one registered under its signing key, and
+    stamped into that device's log; a clock that reads earlier than its last reading is refused, never signed."""
+    signer = ts.TestSigner(b"wipe challenger", height=2)
+    clock = Clock(1_000_000)
+    c = challenger(clock=clock, signer=signer)
+    signed = run(c, clock=clock)
+    key = signer.public_key.hex()
+    times = [signed.fill_start, signed.fill_end, *(t for r in signed.batches for t in (r.send, r.receipt))]
+    assert {t.key for t in times} == {key} == {c.clock_log.key}
+    assert [e.reading for e in c.clock_log.entries] == times
+    back = Clock(1_000_000)
+    c = challenger(clock=back, server=b"server-8")
+    list(c.fill(100))
+    back.now -= 1
+    with pytest.raises(ValueError, match="never run backwards"):
+        c.challenge()
 
 
 CERTIFICATE = b"a start certificate, as the network certifier returned it"
@@ -208,7 +267,7 @@ def signed_bytes(s: sw.SignedWipe) -> bytes:
     egress count among them."""
     p = s.commitment.params
     header = {"batch": p.batch, "batches": len(s.batches), "clock": "CLOCK_MONOTONIC_RAW ns",
-              "ended": s.ended, "fill_end_ns": s.fill_end_ns, "fill_start_ns": s.fill_start_ns, "k": p.k,
+              "ended": s.ended, "fill_end_ns": s.fill_end.ns, "fill_start_ns": s.fill_start.ns, "k": p.k,
               "label_bytes": 64, "labels": p.labels, "limit_ns": p.limit_ns, "protocol": "verity-pous/streamed-wipe/v2",
               "records_tree": "verity-pous/streamed-wipe/batch-records/frame-v3-sha512/v1",
               "server": s.commitment.server.hex(), "session": s.commitment.session.hex(),
@@ -246,7 +305,7 @@ def test_a_mark_source_that_raises_streams_no_label(how):
     c = challenger(clock=clock, mark_source=source)
     with pytest.raises(ConnectionError, match="is away"):
         stream(c, how, sent)
-    assert sent == [] and clock.reads == 0 and c.filled == 0 and c.fill_start_ns is None and c.start_mark == b""
+    assert sent == [] and clock.reads == 0 and c.filled == 0 and c.fill_start is None and c.start_mark == b""
     with pytest.raises(RuntimeError, match="once the fill is complete"):
         c.challenge()
 
@@ -258,7 +317,7 @@ def test_a_mark_source_that_returns_no_bytes_raises(how, nothing):
     c = challenger(clock=clock, mark_source=lambda m: nothing)
     with pytest.raises(ValueError, match="returned no start certificate"):
         stream(c, how, sent)
-    assert sent == [] and clock.reads == 0 and c.filled == 0 and c.fill_start_ns is None and c.start_mark == b""
+    assert sent == [] and clock.reads == 0 and c.filled == 0 and c.fill_start is None and c.start_mark == b""
 
 
 def test_the_signed_header_carries_the_certificates_digest():
@@ -336,10 +395,10 @@ def test_the_end_message_is_the_signed_message_and_its_signature():
     others = [dataclasses.replace(signed, signature=bytes([sig[0] ^ 1]) + sig[1:]),
               dataclasses.replace(signed, signature=sig[:-1] + bytes([sig[-1] ^ 0x80])),
               dataclasses.replace(signed, signature=sig[:-1]), dataclasses.replace(signed, signature=b""),
-              dataclasses.replace(signed, fill_end_ns=signed.fill_end_ns + 1),
+              dataclasses.replace(signed, fill_end=later(signed.fill_end, 1)),
               dataclasses.replace(signed, start_mark=b""),
               dataclasses.replace(signed, start_mark=bytes([signed.start_mark[0] ^ 1]) + signed.start_mark[1:]),
-              dataclasses.replace(signed, batches=(dataclasses.replace(r, receipt_ns=r.receipt_ns + 1),
+              dataclasses.replace(signed, batches=(dataclasses.replace(r, receipt=later(r.receipt, 1)),
                                                    *signed.batches[1:]))]
     assert len({end, *(sw.end_message(s) for s in others)}) == 1 + len(others)
 
@@ -401,7 +460,7 @@ def test_verdict_fails_closed():
     other = dataclasses.replace(c.commitment, params=params(limit=LIMIT + 1))
     assert not sw.verdict(signed, other, trusted=trusted, schemes=ts.SCHEMES).accepted
     r = signed.batches[0]
-    forged = dataclasses.replace(signed, batches=(dataclasses.replace(r, receipt_ns=r.receipt_ns + 1), *signed.batches[1:]))
+    forged = dataclasses.replace(signed, batches=(dataclasses.replace(r, receipt=later(r.receipt, 1)), *signed.batches[1:]))
     assert "the signature does not verify" in sw.verdict(forged, c.commitment, trusted=trusted, schemes=ts.SCHEMES).reasons
 
     def raises(*_):
@@ -410,7 +469,7 @@ def test_verdict_fails_closed():
     for verify in (raises, lambda *_: False, lambda *_: None):  # a scheme that raises, refuses or says nothing
         got = sw.verdict(signed, c.commitment, trusted=trusted, schemes={signed.scheme: verify})
         assert not got.accepted and got.reasons == ("the signature does not verify",)
-    more = dataclasses.replace(signed, fill_start_ns=signed.fill_start_ns - 1)
+    more = dataclasses.replace(signed, fill_start=later(signed.fill_start, -1))
     assert not sw.verdict(more, c.commitment, trusted=trusted, schemes=ts.SCHEMES).accepted
 
 

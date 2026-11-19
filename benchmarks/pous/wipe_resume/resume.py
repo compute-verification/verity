@@ -57,6 +57,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(ROOT), str(ROOT / "tests/verity/protocols/resource_accounting/memory/pous/verifier")]
 
 import pous_test_signer as ts  # noqa: E402
+from verity.clock import raw_ns, raw_resolution_ns  # noqa: E402
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw  # noqa: E402
 from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WC  # noqa: E402
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as W  # noqa: E402
@@ -231,7 +232,7 @@ def session(name: str, make: Callable[[int, WC.WipeMemoryAttester], Any], *, n: 
     are the OS's, sampled when the fill completes, unless `coin_secret` fixes them."""
     sid = hashlib.sha512(b"verity-pous/wipe-resume/session\0" + name.encode() + b"\0" + tag).digest()[:32]
     c = WC.WipeMemoryAttester(os.urandom(32), SERVER, sid, params(n, k, limit_ns), signer, log=log, clock=clock,
-                                coin_secret=coin_secret)
+                              resolution_ns=raw_resolution_ns(), coin_secret=coin_secret)
     prover = make(n, c)
     z_before = hashlib.sha512(prover.z).hexdigest()
     for start, data in c.fill(1 << 14):
@@ -296,7 +297,7 @@ def sampling(*, n: int, k: int, at_k: int, sessions: int, signer, log, judge, de
             "expected": sessions * p, "p": p, "z_score": (passed - sessions * p) / sd if sd else None}
 
 
-def run(*, n: int, k: int, limit_ns: int, decide: str, scratch: Path, clock: Callable[[], int] = sw.raw_clock_ns,
+def run(*, n: int, k: int, limit_ns: int, decide: str, scratch: Path, clock: Callable[[], int] = raw_ns,
         untimed_tries: int = UNTIMED_TRIES, sample_n: int = 4096, sample_k: int = 12, sample_sessions: int = 600,
         judge: Callable[..., Any] | None = None, coin_secret: bytes | None = None) -> dict[str, Any]:
     """Every prover's session at `N = n`, `k` reads, then `sample_sessions` of `sampling` (none at 0)."""

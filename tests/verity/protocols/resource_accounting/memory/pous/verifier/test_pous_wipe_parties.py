@@ -72,7 +72,7 @@ def serve(monkeypatch, params: sw.WipeParams, secret: bytes, stop_after: int | N
     def side() -> None:
         with a, a.makefile("rwb") as f:
             got["c"] = WC.serve(f, WP.request_of("n0", params), signer=signer, log=log, reads=params.k,
-                                clock=itertools.count(T0, STEP).__next__)
+                                clock=itertools.count(T0, STEP).__next__, resolution_ns=1)
 
     t = threading.Thread(target=side)
     t.start()
@@ -132,13 +132,13 @@ def test_on_the_runtimes_own_clock_the_challenger_signs_nothing(monkeypatch):
     out = r.outcomes[C]
     assert (out["refused"], out["outcome"]["ended"], out["outcome"]["signed"]) == ("clock", None, None)
     assert f"reads {S.MONOTONIC}" in out["outcome"]["detail"]
-    assert "RealClock(streamed_wipe.raw_clock_ns, streamed_wipe.CLOCK)" in out["outcome"]["detail"]
+    assert "RealClock(verity.clock.raw_ns, streamed_wipe.CLOCK)" in out["outcome"]["detail"]
     assert r.outcomes[P]["refused"] == "closed"
     assert not [e for e in r.transcripts[C] if e.dir == "out" and e.channel in ("coins", P)]
 
 
 def test_on_the_raw_clock_handed_to_it_the_challenger_signs_and_is_accepted():
-    """Given the raw clock by name (`RealClock(raw_clock_ns, CLOCK)`, its read injected), the challenger signs, and the
+    """Given the raw clock by name (`RealClock(raw_ns, CLOCK)`, its read injected), the challenger signs, and the
     header it signs names the clock it read."""
     raw = S.RealClock(itertools.count(T0, STEP).__next__, sw.CLOCK)
     r = wipe(PARAMS, b"raw", sources={C: {"clock": raw, "coins": S.SeededCoins(SEED)}})

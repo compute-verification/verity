@@ -32,6 +32,7 @@ from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from verity.clock import Reading
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
 from . import streamed_wipe as sw
@@ -86,11 +87,12 @@ def signed_of(j: Mapping[str, Any]) -> sw.SignedWipe:
         raise ValueError(f"a signed wipe is {sw.PROTOCOL}, not {j['commitment'].get('protocol')!r}")
     if j["commitment"].get("clock") != sw.CLOCK:
         raise ValueError(f"a signed wipe's times are on {sw.CLOCK}, not {j['commitment'].get('clock')!r}")
-    batches = tuple(sw.BatchRecord(r["b"], r["first"], r["count"], r["send_ns"], r["receipt_ns"], r["wrong"],
-                                   bytes.fromhex(r["digest"])) for r in j["batches"])
-    return sw.SignedWipe(commitment_of(j["commitment"]), j["ended"], sw.mark_of(j["start_mark"]), j["fill_start_ns"],
-                         j["fill_end_ns"], batches, j["scheme"], bytes.fromhex(j["public_key"]),
-                         bytes.fromhex(j["signature"]))
+    key = j["public_key"]
+    batches = tuple(sw.BatchRecord(r["b"], r["first"], r["count"], Reading(key, r["send_ns"]), Reading(key, r["receipt_ns"]),
+                                   r["wrong"], bytes.fromhex(r["digest"])) for r in j["batches"])
+    return sw.SignedWipe(commitment_of(j["commitment"]), j["ended"], sw.mark_of(j["start_mark"]),
+                         Reading(key, j["fill_start_ns"]), Reading(key, j["fill_end_ns"]), batches, j["scheme"],
+                         bytes.fromhex(key), bytes.fromhex(j["signature"]))
 
 
 

@@ -12,12 +12,12 @@ fill (`fill`).
 
 The party drives the same `WipeMemoryAttester` as `serve`, in the same order: the
 labels' secret and the session id from its coins (64 bytes, the secret first), the fill's start and end, each batch's
-send and receipt on its clock, the coin secret sampled when the first batch is revealed, the session signed once it
-ends. It is given no egress count and signs none. On the same coins, clock readings and key it signs the same bytes as
+send and receipt read on its device's clock and stamped into the device's log (`verity.clock.stamp`), the coin secret
+sampled when the first batch is revealed, the session signed once it ends. It is given no egress count and signs none. On the same coins, clock readings and key it signs the same bytes as
 `serve`. Its header names the raw monotonic clock (`streamed_wipe.CLOCK`), so it refuses by name (`clock`), before any
 coin and unsigned, a clock source that reads another real clock (`Identity.clock`): the runtime's own real clock reads
 `CLOCK_MONOTONIC`, which time synchronisation slews, and the run that starts it hands it
-`RealClock(streamed_wipe.raw_clock_ns, streamed_wipe.CLOCK)` instead. Virtual time (a simulated or seeded run) and a
+`RealClock(verity.clock.raw_ns, streamed_wipe.CLOCK)` instead. Virtual time (a simulated or seeded run) and a
 replay name no clock, and it signs their readings under the header's name, as `WipeMemoryAttester` signs
 a clock a test injects. Its machine gives it `signing-key` (`capabilities["signer"]`, a
 `memory_attester.Signer`, with `capabilities["log"]`, its session log) and the reads it times
@@ -46,6 +46,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from verity.clock import Device, Log, Reading, raw_ns, raw_resolution_ns, stamp
 from verity.party import Finish, Identity, Received, LogEntry, Send, Timer
 from verity.protocol import ProtocolDef, Start
 from verity.channel import Message, Phase, Refused
@@ -69,7 +70,6 @@ from verity.protocols.resource_accounting.memory.pous.verifier.streamed_wipe imp
     label,
     labels,
     message,
-    raw_clock_ns,
     start_message,
     wipe_key,
 )
@@ -91,31 +91,32 @@ class WipeMemoryAttester:
     """The memory attester's side of one streamed-label wipe of `server` under `session`, signed by `signer` (module
     docstring).  The session id goes into `log` before anything else.  `coin_secret` is sampled from the OS when the fill
     completes unless a test gives it.  `mark_source` takes the start message and returns the network attester's start certificate for it, as bytes;
-    with none the session's start mark is empty.  `clock` is `raw_clock_ns` unless given.  The header names `CLOCK`
-    whatever `clock` reads, so a `clock` given outside a test reads the raw clock too."""
+    with none the session's start mark is empty.  Its times are readings of one device (`device`): `clock`, ticking
+    every `resolution_ns`, registered under `signer`'s key, each reading stamped into the device's log (`clock_log`).
+    The header names `CLOCK` whatever `clock` reads, so outside a test it is `verity.clock.raw_ns` with
+    `raw_resolution_ns()`."""
 
     def __init__(self, secret: bytes, server: bytes, session: bytes, params: WipeParams, signer: Signer, *,
-                 log: SessionLog, clock: Callable[[], int] = raw_clock_ns, resolution_ns: int | None = None,
-                 coin_secret: bytes | None = None, mark_source: Callable[[bytes], bytes] | None = None) -> None:
-        if resolution_ns is None:
-            resolution_ns = time.clock_getres(time.CLOCK_MONOTONIC_RAW) * 1e9 if clock is raw_clock_ns else 1
-        if resolution_ns > CLOCK_RESOLUTION_NS:
-            raise ValueError(f"the clock ticks every {resolution_ns} ns, coarser than {CLOCK_RESOLUTION_NS} ns")
+                 log: SessionLog, clock: Callable[[], int], resolution_ns: int, coin_secret: bytes | None = None,
+                 mark_source: Callable[[bytes], bytes] | None = None) -> None:
+        device = Device(signer.public_key.hex(), clock, resolution_ns, 0)
+        if device.resolution_ns > CLOCK_RESOLUTION_NS:
+            raise ValueError(f"the clock ticks every {device.resolution_ns} ns, coarser than {CLOCK_RESOLUTION_NS} ns")
         self.key = wipe_key(secret, server, session)
         log.claim(session)
         self.commitment = WipeCommitment(server, session, params)
-        self.signer, self.clock, self._coin_secret = signer, clock, coin_secret
+        self.signer, self.device, self.clock_log, self._coin_secret = signer, device, Log(device.key), coin_secret
         self._mark_source = mark_source
         self.start_certificate = b""
         self.start_mark = b""
         self.filled = 0
-        self.fill_start_ns: int | None = None
-        self.fill_end_ns: int | None = None
+        self.fill_start: Reading | None = None
+        self.fill_end: Reading | None = None
         self.indices: tuple[int, ...] | None = None
         self.batches: list[BatchRecord] = []
         self.ended: str | None = None
         self.signed: SignedWipe | None = None
-        self._open: tuple[int, int, tuple[int, ...], int] | None = None
+        self._open: tuple[int, int, tuple[int, ...], Reading] | None = None
 
     @property
     def params(self) -> WipeParams:
@@ -135,35 +136,35 @@ class WipeMemoryAttester:
     def fill(self, chunk: int) -> Iterator[tuple[int, bytes]]:
         """The labels in order, `chunk` at a time, as `(first index, bytes)`; once only.  The start mark is held
         before the clock is read, so before any label."""
-        if self.fill_start_ns is not None:
+        if self.fill_start is not None:
             raise RuntimeError("the fill streams once")
         if chunk < 1:
             raise ValueError("a chunk holds at least one label")
         self._hold_start_mark()
-        self.fill_start_ns = self.clock()
+        self.fill_start = stamp(self.device, self.clock_log, "fill start")
         n = self.params.labels
         for start in range(0, n, chunk):
             count = min(chunk, n - start)
             yield start, labels(self.key, start, count)
             self.filled = start + count
-        self.fill_end_ns = self.clock()
+        self.fill_end = stamp(self.device, self.clock_log, "fill end")
 
     def fill_by(self, send: Callable[[bytes, int], Any]) -> Any:
         """`fill`'s labels streamed by `send(K, N)`, which returns once it has sent the last; once only. Returns what
         `send` returns. The answers are checked against this module's `label` whatever `send` streamed.  The start mark
         is held before the clock is read, so before `send` is called."""
-        if self.fill_start_ns is not None:
+        if self.fill_start is not None:
             raise RuntimeError("the fill streams once")
         self._hold_start_mark()
-        self.fill_start_ns = self.clock()
+        self.fill_start = stamp(self.device, self.clock_log, "fill start")
         out = send(self.key, self.params.labels)
         self.filled = self.params.labels
-        self.fill_end_ns = self.clock()
+        self.fill_end = stamp(self.device, self.clock_log, "fill end")
         return out
 
     def challenge(self) -> tuple[int, ...]:
         """Reveal the next batch's indices and read its send time; the coins are flipped at the first batch."""
-        if self.fill_end_ns is None:
+        if self.fill_end is None:
             raise RuntimeError("the challenges start once the fill is complete")
         if self.ended is not None:
             raise RuntimeError(f"the session has ended ({self.ended}): no batch is retried and no index redrawn")
@@ -176,12 +177,12 @@ class WipeMemoryAttester:
         b = len(self.batches)
         first = b * self.params.batch
         idx = self.indices[first:first + self.params.batch]
-        self._open = (b, first, idx, self.clock())
+        self._open = (b, first, idx, stamp(self.device, self.clock_log, ("send", b)))
         return idx
 
     def receive(self, answers: bytes) -> BatchRecord:
         """The open batch's answers, `LABEL_BYTES` an index in order: the receipt time first, then the check."""
-        receipt = self.clock()
+        receipt = stamp(self.device, self.clock_log, ("receipt", len(self.batches)))
         if self._open is None:
             raise RuntimeError("no batch is open")
         b, first, idx, send = self._open
@@ -209,10 +210,10 @@ class WipeMemoryAttester:
         if self.ended is None:
             raise RuntimeError("the session has not ended")
         if self.signed is None:
-            assert self.fill_start_ns is not None and self.fill_end_ns is not None
+            assert self.fill_start is not None and self.fill_end is not None
             batches = tuple(self.batches)
-            m = message(self.commitment, self.ended, self.start_mark, self.fill_start_ns, self.fill_end_ns, batches)
-            self.signed = SignedWipe(self.commitment, self.ended, self.start_mark, self.fill_start_ns, self.fill_end_ns,
+            m = message(self.commitment, self.ended, self.start_mark, self.fill_start.ns, self.fill_end.ns, batches)
+            self.signed = SignedWipe(self.commitment, self.ended, self.start_mark, self.fill_start, self.fill_end,
                                      batches, self.signer.scheme, self.signer.public_key,
                                      self.signer.sign(self.commitment.session, m))
         return self.signed
@@ -225,15 +226,16 @@ class WipeMemoryAttester:
 
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog,
-          reads: int = WP.READS, clock: Callable[[], int] = sw.raw_clock_ns, chunk: int = WP.CHUNK,
+          clock: Callable[[], int], resolution_ns: int, reads: int = WP.READS, chunk: int = WP.CHUNK,
           fill: Callable[[bytes, int], Any] | None = None) -> WipeMemoryAttester:
     """The challenger's side of one wipe over the connection `f`: the labels' secret and the session id sampled here, the
     fill streamed (by `fill(K, N)` when given, which writes the frames to `f`'s connection itself: the native streamer,
-    `wipe_stream`), `reads` batches revealed and their answers read on `clock` (the raw monotonic clock,
-    `sw.raw_clock_ns`, which the header names), the session signed by `signer` once it ends. A prover that closes first
-    leaves it unsigned. This side has no mark source, so the session's start mark is empty."""
+    `wipe_stream`), `reads` batches revealed and their answers read on `clock`, ticking every `resolution_ns`
+    (`verity.clock.raw_ns` and `raw_resolution_ns()` on a device, the clock the header names), the session signed by
+    `signer` once it ends. A prover that closes first leaves it unsigned. This side has no mark source, so the
+    session's start mark is empty."""
     c = WipeMemoryAttester(secrets.token_bytes(32), request["node"].encode(), secrets.token_bytes(32),
-                                WP.params_of(request, reads), signer, log=log, clock=clock)
+                           WP.params_of(request, reads), signer, log=log, clock=clock, resolution_ns=resolution_ns)
     try:
         if fill is not None:
             f.flush()
@@ -289,7 +291,7 @@ class MemoryAttesterParty:
         if identity.clock not in (None, sw.CLOCK):
             return [Finish({"ended": None, "signed": None, "detail": (
                 f"the wipe's header names {sw.CLOCK}, and this challenger's clock source reads {identity.clock}: the run "
-                f"that starts it gives it sources={{{CHALLENGER!r}: {{'clock': RealClock(streamed_wipe.raw_clock_ns, "
+                f"that starts it gives it sources={{{CHALLENGER!r}: {{'clock': RealClock(verity.clock.raw_ns, "
                 "streamed_wipe.CLOCK)}}")}, "clock", kind="private")]
         try:
             self.request, self.wp = dict(params), WP.params_of(params, given.get("reads", WP.READS))
@@ -326,7 +328,7 @@ class MemoryAttesterParty:
         if m.type == "Coins" and self.c is None:
             secret, session = m.body[:32], m.body[32:]
             self.c = WipeMemoryAttester(secret, self.request["node"].encode(), session, self.wp, self.signer,
-                                             log=self.log, clock=self._clock)
+                                        log=self.log, clock=self._clock, resolution_ns=1)
             self.phase.expect()
             return [LogEntry({"commitment": self.c.commitment.to_json()}, "structure"),
                     *self._after_reading(self._fill_start)]
@@ -431,7 +433,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 extra["fill"] = streamer.stream(key, n, conn.fileno())
 
             with conn.makefile("rwb") as f:
-                c = serve(f, request, signer=signer, log=mc.SessionLog(device / "sessions"), reads=a.reads,
+                c = serve(f, request, signer=signer, log=mc.SessionLog(device / "sessions"),
+                          clock=raw_ns, resolution_ns=raw_resolution_ns(), reads=a.reads,
                           fill=None if streamer is None else native)
             t1 = time.time_ns()
     print(json.dumps(report(c, signer.public_key, (t0, t1)) | extra, sort_keys=True), flush=True)

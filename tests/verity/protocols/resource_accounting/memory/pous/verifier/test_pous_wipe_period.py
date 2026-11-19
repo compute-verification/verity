@@ -56,7 +56,7 @@ M = W.SEGMENT_LABELS * sw.LABEL_BITS
 
 def _run(params: sw.WipeParams = SMALL, secret: bytes = b"wipe period", **kw) -> wipe_run.Wipe:
     return wipe_run.run("n0", params, signer=ts.TestSigner(secret, 2), log=ts.session_log(), schemes=ts.SCHEMES,
-                 protocol=TEST_ID, clock=kw.pop("clock", Clock(10 ** 9, 1)), coin_secret=b"coins", **kw)
+                 protocol=TEST_ID, clock=kw.pop("clock", Clock(10 ** 9, 1)), resolution_ns=1, coin_secret=b"coins", **kw)
 
 
 SEGMENT_2152 = 11_709_069
@@ -215,7 +215,7 @@ def _split(params: sw.WipeParams, prover: WS.Prover, signer, stop_after: int | N
     def side() -> None:
         with a, a.makefile("rwb") as f:
             got["c"] = WC.serve(f, WP.request_of("n0", params), signer=signer, log=ts.session_log(),
-                                clock=Clock(10 ** 9, 1))
+                                clock=Clock(10 ** 9, 1), resolution_ns=1)
 
     t = threading.Thread(target=side)
     t.start()
