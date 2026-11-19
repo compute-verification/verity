@@ -256,4 +256,4 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Verity.SampledTwo.Reading", "Proofs.Properties.Verity.SampledTwo.SecondRead",
   "Proofs.Properties.Verity.SampledTwo.Steps", "Proofs.Properties.Verity.SampledTwo.Subprotocol",
   "Proofs.Flock.SpotFlock.RunsAs.StampedReads", "Proofs.Core.CanonicalJson",
-  "Proofs.Properties.Challenger.RunCoins"]
+  "Proofs.Properties.Challenger.RunCoins", "Proofs.Properties.Verity.Recursive.Audit"]
