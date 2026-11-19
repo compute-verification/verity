@@ -245,8 +245,8 @@ theorem scope_of_liftLev {L : Compiled Coin A} {x : Msg} (h : L.liftLev.Scope x)
   obtain ⟨s, Pt, Lv, hp, hq, hLv, -⟩ := h
   exact ⟨s, Pt, hp, hq, (liftLev_levels hLv).1⟩
 
-/-- **`L` at one level meets the contract at levels** where it meets `Compiled.Sessions`. -/
 omit [Nonempty Coin] in
+/-- **`L` at one level meets the contract at levels** where it meets `Compiled.Sessions`. -/
 theorem sessions_liftLev (hreal : LevelsRealizeOne) {H : Msg → Msg} {L : Compiled Coin A} (S : L.Sessions H) :
     L.liftLev.Sessions H where
   samples x s Pt Lv hp hq hLv _ := by
@@ -450,8 +450,8 @@ theorem scope_of_liftLev {L : CompiledTwo Coin A} {x : Msg} (h : L.liftLev.Scope
 theorem escCell_empty (k : ℕ) (X : Finset ℕ) : escCell (∅ : Finset ℕ).card k (X ∩ ∅).card = 1 := by
   simp [escCell]
 
-/-- **`L` at two levels meets the contract at levels** where it meets `CompiledTwo.Sessions`. -/
 omit [Nonempty Coin] in
+/-- **`L` at two levels meets the contract at levels** where it meets `CompiledTwo.Sessions`. -/
 theorem sessions_liftLev (hreal : LevelsRealizeTwo) {H : Msg → Msg} {L : CompiledTwo Coin A} (S : L.Sessions H) :
     L.liftLev.Sessions H where
   samples x s Pt Lv hp hq hLv _ := by
