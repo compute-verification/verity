@@ -168,9 +168,9 @@ def test_the_signed_digest_unit_agrees_with_its_reference() -> None:
 
 @pytest.mark.slow
 def test_the_door_takes_the_sessions_units_in_wire_order() -> None:
-    """The session's units as `window.session_units` lays them out (digest, signature, the store's openings, the rounds)
-    make one Program through the door (`wired_population_program`), and the signature ranked before the digest it reads
-    is refused. Building the Program takes about two minutes at toy size; nothing cheaper runs the door's rank and port
+    """The session's units as `window.session_units` lays them out (digest, signature, the store's openings, the rounds),
+    their coins, header and context supplied under their marks, make one Program through the door
+    (`wired_population_program`), and the signature ranked before the digest it reads is refused. Building the Program takes about two minutes at toy size; nothing cheaper runs the door's rank and port
     rules over these units."""
     from verity.commitments.periods.interface import Circuit
     from verity.protocols.resource_accounting.memory.pous.prover import window as W
@@ -182,6 +182,10 @@ def test_the_door_takes_the_sessions_units_in_wire_order() -> None:
     reads = {(r.port, r.param): (r.at, r.base) for r in c.registered.reads}
     assert [reads[("tok", f"{W.ROUND_COIN}/{j}")] for j in range(3)] == [(0, 4), (1, 4), (2, 4)]
     assert [reads[(h, f"{W.ROUND_COIN}/2")] for h in ("j", "ihi", "ilo")] == [(1, 0), (1, 2), (1, 4)]
+    assert c.registered.supplied[f"{W.ROUND_COIN}/2"] == {"supplied": "pous.session.round_coin/v1", "args": {"round": 2},
+                                                           "layout": "halves", "bits": 96}
+    assert sorted(c.registered.supplied) == sorted([W.SESSION_CONTEXT, W.SESSION_HEADER,
+                                                    *(f"{W.ROUND_COIN}/{j}" for j in range(3))])
     c.program()
     (dig, _), (sig, _), *rest = c.templates
     with pytest.raises(ValueError, match="at or after reader"):

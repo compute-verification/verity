@@ -28,6 +28,7 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA
 from . import answer_circuit, decode_circuit, session_circuit, verdict_circuit
 from . import setup_circuit as SC
 from .setup_proof import payload_bytes, place, setup_unit, unit_inputs
+from verity.protocols.resource_accounting.memory.pous.verifier.setup_proof import SALT, SALT_MARK
 
 DEFINITIONS = (decode_circuit, answer_circuit, verdict_circuit, session_circuit)
 #: the store, one registered value, and its table of one block a row; W's rows; the memory attester's public key
@@ -57,14 +58,15 @@ def commit_store(program: str, blocks: Sequence[bytes]) -> RV.Registered:
 class Setup:
     """PoUS's setup as one circuit C: the setup unit (`setup_proof.setup_unit`, ``PousP2SetupCheck_v2``) over every block
     of the store in order, unit u block u, one proof block a store block (`CAP`, `interface.partition_blocks`). Each unit
-    reads its block of the registered ``store`` and the registered row of ``weights`` that holds its payload (`reads`),
-    and takes the setup's salt, its place ``u64be(s) ‖ u64be(v)`` and its slot (`setup_proof.at`, `setup_proof.place`)
-    as C's input nodes; its ok word is C's output. Which blocks are proved is the proof system's sample on its live coins
-    after the store is committed, and which units a block holds the partition's: the setup lists neither.
+    reads its block of the registered ``store``, the registered row of ``weights`` that holds its payload and the
+    supplied salt ``setup/salt`` (`reads`), and takes its place ``u64be(s) ‖ u64be(v)`` and its slot (`setup_proof.at`,
+    `setup_proof.place`) as C's input nodes; its ok word is C's output. Which blocks are proved is the proof layer's
+    draw on its live coins after the store is committed, and which units a block holds the partition's: the setup lists
+    neither.
 
-    The salt is the one value the verifier supplies (`pous.setup.salt/v1`), and each unit's place and slot are constants
-    of the unit in C; nothing in C binds them yet, and its ok word is held to 1 by nothing yet: the verifier refuses
-    there (`setup_proof.bound`) until the supplied input does.
+    The salt is the one value the verifier supplies (`SALT_MARK`, ``pous.setup.salt/v1``), and each unit's place and
+    slot are constants of the unit in C; nothing in C binds those yet, and its ok word is held to 1 by nothing yet: the
+    verifier refuses there (`setup_proof.bound`).
 
     `w`, `c0` are P2's point, `row_bytes` W's rows' bytes N, `rows` how many, `blocks_per_segment` the store's segment
     length; `salt` is the setup's salt and `store` and `weights` the store's blocks and W's rows, which only
@@ -83,18 +85,20 @@ class Setup:
         return self.rows * self.slots
 
     def reads(self) -> tuple[Read, ...]:
-        """Unit u's two registered reads (16-bit leaves): its block of ``store`` at u·W/16, and its row of ``weights`` at
-        ⌊u/n⌋·N/2, n a row's slots."""
+        """Unit u's three registered reads (16-bit leaves): its block of ``store`` at u·W/16, its row of ``weights`` at
+        ⌊u/n⌋·N/2, n a row's slots, and the whole supplied salt."""
         tid = descriptor_id(self.unit)
         return (Read(tid, "block", STORE, 0, (self.blocks,), 0, (self.w // 16,)),
-                Read(tid, "row", WEIGHTS, 0, (self.rows, self.slots), 0, (self.row_bytes // 2, 0)))
+                Read(tid, "row", WEIGHTS, 0, (self.rows, self.slots), 0, (self.row_bytes // 2, 0)),
+                Read(tid, "salt", SALT, 0, (self.blocks,), 0, (0,)))
 
     def circuit(self) -> Circuit:
         tid = descriptor_id(self.unit)
-        params = {STORE: self.blocks * (self.w // 16), WEIGHTS: self.rows * (self.row_bytes // 2)}
-        return Circuit("pous-setup", ((self.unit, self.blocks),), external=(f"{tid}/salt", f"{tid}/at", f"{tid}/slot"),
+        params = {STORE: self.blocks * (self.w // 16), WEIGHTS: self.rows * (self.row_bytes // 2),
+                  SALT: SALT_MARK["bits"] // 16}
+        return Circuit("pous-setup", ((self.unit, self.blocks),), external=(f"{tid}/at", f"{tid}/slot"),
                        registered=Registered(params, tables=(store_table(self.blocks, self.w // 16),),
-                                             reads=self.reads()))
+                                             reads=self.reads(), supplied={SALT: SALT_MARK}))
 
     def registered(self, program: str) -> dict[str, RV.Registered]:
         """The store (`commit_store`) and W's rows, each committed once before the run under C's Program digest
@@ -109,8 +113,8 @@ class Setup:
                                               schema=V2)}
 
     def run(self, window: Window) -> None:
-        """Every unit recorded: its block and row by reference, the salt, its place and its slot as 16-bit words, and its
-        ok word."""
+        """The salt given to the window as the verifier computes it (`Window.give`), and every unit recorded: its block, row
+        and salt by reference, its place and its slot as 16-bit words, and its ok word."""
         if self.salt is None or self.store is None or self.weights is None:
             raise ValueError("Setup.run reads the salt, the store's blocks and W's rows")
         cases = [unit_inputs(self.w, self.salt, self.blocks_per_segment, self.store[u],
@@ -122,7 +126,8 @@ class Setup:
         words = lambda k: np.frombuffer(b"".join(c[k] for c in cases), dtype="<u2").reshape(self.blocks, -1)  # noqa: E731
         slots = np.array([[c[4]] for c in cases], dtype=np.uint16)
         oks = (ok.astype(np.uint16) << np.arange(16, dtype=np.uint16)).sum(axis=1, dtype=np.uint16)[:, None]
-        window.record(self.unit, [None, words(1), words(2), None, slots], [oks])
+        window.give(SALT, self.salt)
+        window.record(self.unit, [None, None, words(2), None, slots], [oks])
 
 
 def _bit_rows(rows: Sequence[bytes]) -> np.ndarray:
@@ -138,11 +143,8 @@ def coin_bound(k: int, head: int, rounds: Sequence[str], opener: str, digest: st
     opening's key is a 32-bit leaf: round j's unit reads them whole as its ``j``, ``ihi`` and ``ilo`` and round j's
     opening reads ``ilo`` (16-bit leaves 4 and 5) as its key; and the signed header (``pous.session.header/v1`` at
     its ``head`` bytes) and context (``pous.session.context/v1``, 848 bits) under ``le``, which the digest's unit reads.
-    ``rounds`` is the round templates' ids by slot.
-
-    STAND-IN until `Registered.supplied` takes marks: `session_units` declares the parameters and reads and holds the
-    marks back, so the values are registered rows the prover fills and the circuit proves nothing about the coins.
-    Passing the marks as ``supplied`` is the switch."""
+    ``rounds`` is the round templates' ids by slot. `session_units` passes the marks as the registration's
+    ``supplied``, so the verifier computes each value and the prover chooses none of it."""
     params = {SESSION_HEADER: session_circuit.head_bytes(head) // 2, SESSION_CONTEXT: session_circuit.CTX_BYTES // 2}
     reads = [Read(digest, "head", SESSION_HEADER, 0, (1,), 0, (0,)), Read(digest, "ctx", SESSION_CONTEXT, 0, (1,), 0, (0,))]
     marks = {SESSION_HEADER: {"supplied": "pous.session.header/v1", "args": {"head": head}, "layout": "le",
@@ -183,11 +185,12 @@ def session_units(k: int, head: int, limit_ns: int, block_bytes: int, blocks: in
         r = descriptor_id(t)
         wires += [Wire(r, "records", d, f"o{2 + u}", u, (1,), 0, (0,)) for u in range(n)]
         wires.append(Wire(r, "row", o, "o0", 0, (n,), s, (2,)))
-    coins, reads, _marks, formats = coin_bound(k, head, [descriptor_id(t) for t, _ in slots], o, d)
+    coins, reads, marks, formats = coin_bound(k, head, [descriptor_id(t) for t, _ in slots], o, d)
     registered = Registered(
         {STORE: blocks * block_bytes // 2, ATTESTER_KEY: (16 + params.N) // 2, **coins},
         tables=(store_table(blocks, block_bytes // 2),),
         reads=(Read(g, "key", ATTESTER_KEY, 0, (1,), 0, (0,)), *reads),
         roots=(TableRead(o, "root", STORE_TABLE, "root", 0, k), TableRead(o, "domain", STORE_TABLE, "domain", 0, k)),
-        openings=(TableOpening(o, STORE_TABLE, "tok", ("row", "salt", "path"), "o1", 0, k, row="o0"),), formats=formats)
+        openings=(TableOpening(o, STORE_TABLE, "tok", ("row", "salt", "path"), "o1", 0, k, row="o0"),), formats=formats,
+        supplied=marks)
     return Circuit("pous-session", ((dig, 1), (sig, 1), (opener, k), *slots), wires=tuple(wires), registered=registered)

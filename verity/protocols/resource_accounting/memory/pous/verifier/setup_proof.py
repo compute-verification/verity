@@ -10,11 +10,13 @@ the partition's, the caller's door), with no sample or design of its own. The cl
 and commitment as today, the store's registered root, the draw's law and SPOT's outcome to the Lean check
 `PousCheck.SetupInProofs.check`.
 
-Two places stop it. The one value the verifier supplies to C is the setup's salt (`pous.setup.salt/v1`, the memory
-attester's coin, drawn after W is committed); each unit builds its base from it and its place inside, its place and slot
-are constants of the unit in C, and its ok word is an output held to 1. No supplied input binds the salt to C yet, nor a
-constant of a unit or a held output (circuits' and proofs' pair), so `bound` refuses (`NotBound`). And the door's
-statement of a block is not derived (`one_circuit.lower`, proofs').
+The one value the verifier supplies to C is the setup's salt (`SALT`, marked `SALT_MARK`: ``pous.setup.salt/v1``, the
+memory attester's coin, drawn after W is committed), which every unit reads and builds its base from with its place
+inside; `check` refuses a registration that does not mark it so (`NotBound`). Two places stop it: each unit's place and
+slot are constants of the unit in C and its ok word an output held to 1, which C's format has no form for yet (circuits'
+and proofs' pair), so `bound` refuses (`NotBound`); and the door's restriction of a block keeps no supplied input's part yet
+(`supplied.part`, circuits'), so it refuses the block's bit reads of the salt (recut-boundary) before its statement,
+which is not derived either (`one_circuit.lower`, proofs').
 """
 from __future__ import annotations
 
@@ -27,24 +29,31 @@ from .schemes.p2 import P2Params
 
 GOAL = "memory-accounting/pous-setup-as-proof"
 
-#: where C's one supplied value waits on the supplied input
-NOT_BOUND = "pous setup: no supplied input yet: "
-SALT_INPUT = ("salt = pous.setup.salt/v1, the memory attester's coin drawn after W is committed, the one value the "
-              "verifier supplies; unit u builds its base expand_prefix(params, salt) || u64be(u / S) || u64be(u mod S) "
-              "inside")
+#: the setup's supplied salt, every unit's, and its mark (PROTOCOL.md §5.4): unit u builds its base
+#: expand_prefix(params, salt) || u64be(u / S) || u64be(u mod S) inside
+SALT = "setup/salt"
+SALT_MARK = {"supplied": "pous.setup.salt/v1", "args": {}, "layout": "le", "bits": 192}
+NOT_BOUND = "pous setup: not bound: "
 CONSTANTS = ("its block's u64be(u / S) || u64be(u mod S) and its slot u mod n constants of the unit in C, and its ok a "
              "public output held to 1")
 
 
 class NotBound(ValueError):
-    """C's salt is bound to nothing, nor its units' constants or its held ok: the supplied input (circuits' and proofs'
-    pair) isn't in C's format yet."""
+    """C's salt is not the supplied ``pous.setup.salt/v1``, or its units' constants and its held ok, which C's format
+    has no form for yet."""
+
+
+def salted(registered: Mapping[str, Any]) -> None:
+    """C's registration marks its salt the supplied ``pous.setup.salt/v1`` (`SALT`, `SALT_MARK`), so the verifier
+    computes it and the prover chooses none of it; else `NotBound`."""
+    if (got := dict(registered.get("supplied") or {}).get(SALT)) != SALT_MARK:
+        raise NotBound(f"{NOT_BOUND}C's {SALT} is marked {got}, not {SALT_MARK}")
 
 
 def bound(params: P2Params, salt: bytes, row_bytes: int) -> None:
-    """C's salt input bound to the verifier's `salt`, each unit's place and slot to its constants and its ok word held
-    to 1 (`SALT_INPUT`, `CONSTANTS`): refused, `NotBound`, until C's format has the supplied input."""
-    raise NotBound(f"{NOT_BOUND}{SALT_INPUT}; {CONSTANTS}")
+    """Each unit's place and slot bound to its constants and its ok word held to 1 (`CONSTANTS`): refused, `NotBound`,
+    until C's format has constants of a unit and held outputs."""
+    raise NotBound(f"{NOT_BOUND}{CONSTANTS}")
 
 
 class Undrawn(ValueError):
@@ -58,7 +67,7 @@ def check(block: Callable[..., Any], verify: Callable[..., tuple[Any, Any]], pro
     """The door's findings on each block `k` of the proof layer's `draw` (`service.Draw`, drawn on its live coins after
     the store is committed: its ``units`` the blocks, its ``draw`` the sample object the door matches a proof to) of the
     registered C `c` and its `partition`: `proofs` exactly one a drawn block, else `Undrawn`; its units the partition's
-    (`block`, SPOT's `one_circuit.block`), C's salt supplied (`bound`), and its proof `proofs[k]` verified against C,
+    (`block`, SPOT's `one_circuit.block`), C's salt supplied (`salted`), its constants and held ok bound (`bound`), and its proof `proofs[k]` verified against C,
     never the prover's circuit file (`verify`, SPOT's `proofs.verify`, `registered` the store's and W's registration),
     each finding naming block k. The door is the caller's, so the verifier loads none of SPOT. A partition or block the
     door refuses raises its refusal, a refusal of its verdict ValueError with its reason, and a session the door rejects
@@ -68,6 +77,7 @@ def check(block: Callable[..., Any], verify: Callable[..., tuple[Any, Any]], pro
         raise Undrawn(f"the proofs are of blocks {sorted(proofs)}, the proof layer drew {sorted(drawn)}")
     for k in drawn:
         block(c, partition, k)
+    salted(registered)
     bound(params, salt, row_bytes)
     out: list[Any] = []
     for k in drawn:
@@ -116,4 +126,5 @@ class Claim:
         return json.dumps(self.to_json(), sort_keys=True, separators=(",", ":")).encode()
 
 
-__all__ = ["CONSTANTS", "Claim", "GOAL", "NOT_BOUND", "NotBound", "SALT_INPUT", "Undrawn", "bound", "check"]
+__all__ = ["CONSTANTS", "Claim", "GOAL", "NOT_BOUND", "NotBound", "SALT", "SALT_MARK", "Undrawn", "bound", "check",
+           "salted"]

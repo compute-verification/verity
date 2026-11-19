@@ -1,7 +1,7 @@
 """PoUS's setup as one circuit (`window.Setup`, `setup_proof` on both sides): the claim and the proof layer's draw, a
-block's place and inputs, the setup's C over every store block through the door, the prover's commitments, the two places the
-verifier stops: C's supplied salt (`setup_proof.bound`) and the door's statement (`one_circuit.lower`), and the order of
-the weights' commitment before the salt, which nothing holds yet."""
+block's place and inputs, the setup's C over every store block through the door, the prover's commitments, the two
+places the verifier stops: the units' constants and held ok (`setup_proof.bound`) and the door's restriction of a block
+that reads the supplied salt, and the order of the weights' commitment before the salt."""
 
 from __future__ import annotations
 
@@ -61,7 +61,8 @@ def test_proofs_of_other_blocks_than_the_draws_are_refused():
     with pytest.raises(V.Undrawn, match=r"^setup block 0: session s0 is of block 11$"):
         with pytest.MonkeyPatch.context() as m:
             m.setattr(V, "bound", lambda *a: None)
-            V.check(lambda *a: None, verify, {0: None, 11: None}, b"", {}, {}, DRAW, params, salt, 16)
+            V.check(lambda *a: None, verify, {0: None, 11: None}, b"", {}, {"supplied": {V.SALT: V.SALT_MARK}}, DRAW,
+                    params, salt, 16)
     assert seen == [DRAW.draw]
 
 
@@ -110,19 +111,21 @@ def registered():
 
 @pytest.mark.slow
 def test_the_setup_is_one_circuit_over_every_store_block():
-    """One template, the setup unit, a unit a store block; each reads its block of the store and its row of W as
-    registered reads, takes the salt, its place and its slot as C's inputs, and is a proof block of its own: no sampled
+    """One template, the setup unit, a unit a store block; each reads its block of the store, its row of W and the
+    supplied salt as registered reads, takes its place and its slot as C's inputs, and is a proof block of its own: no sampled
     list, no row the verifier makes. A setup over another count of blocks or rows than it reads is refused."""
     _, _, setup = setup_case()
     circuit = setup.circuit()
     assert setup.blocks == 12 and circuit.templates == ((setup.unit, 12),)
-    assert circuit.registered.supplied == () and circuit.registered.params == {"store": 48, "weights": 32}
+    assert circuit.registered.supplied == {V.SALT: V.SALT_MARK}
+    assert circuit.registered.params == {"store": 48, "weights": 32, V.SALT: 12}
     assert circuit.registered.tables == (WIN.store_table(12, 4),)
-    (block, row) = circuit.reads
+    (block, row, salt) = circuit.reads
     units = np.arange(12)
     assert block.source(units).tolist() == (4 * units).tolist()
     assert row.source(units).tolist() == (8 * (units // 3)).tolist()
-    assert sorted(p.split("/")[1] for p in circuit.external) == ["at", "salt", "slot"]
+    assert salt.source(units).tolist() == [0] * 12
+    assert sorted(p.split("/")[1] for p in circuit.external) == ["at", "slot"]
     _c, _win, part, _reg = registered()
     assert part["blocks"] == [[u, u + 1] for u in range(12)]
     assert OC.block(_c, part, 5) == [(5, 6)]
@@ -144,48 +147,55 @@ def test_the_setup_and_the_session_read_one_store():
 
 
 def test_the_prover_commits_the_store_then_the_setups_values():
-    """The store and W are committed before the run; `run` records every unit, its block and row by reference, the salt, its
-    place and its slot as words, and its ok word: a 1 for each block, and a 0 where its row of W is not the one the store
-    encodes. The window then closes."""
+    """The store and W are committed before the run; `run` gives the window the salt as the verifier computes it and
+    records every unit, its block, row and salt by reference, its place and its slot as words, and its ok word: a 1 for
+    each block, and a 0 where its row of W is not the one the store encodes. The window then closes."""
     _c, win, _part, _reg = registered()
-    _, _, setup = setup_case()
-    got = []
-    setup.run(type("W", (), {"record": lambda self, *a: got.append(a)})())
+    _, salt, setup = setup_case()
+    got, given = [], []
+    fake = type("W", (), {"record": lambda self, *a: got.append(a), "give": lambda self, *a: given.append(a)})
+    setup.run(fake())
     ((unit, inputs, outputs),) = got
-    assert unit is setup.unit and inputs[0] is None and inputs[3] is None
-    assert inputs[1].shape == (12, 12) and inputs[2].shape == (12, 8)
+    assert given == [(V.SALT, salt)]
+    assert unit is setup.unit and inputs[0] is None and inputs[1] is None and inputs[3] is None
+    assert inputs[2].shape == (12, 8)
     assert inputs[4][:, 0].tolist() == [u % 3 for u in range(12)]
     assert outputs[0][:, 0].tolist() == [1] * 12
     _, _, wrong = setup_case(lambda rows: [rows[0], bytes(16), *rows[2:]])
     got.clear()
-    wrong.run(type("W", (), {"record": lambda self, *a: got.append(a)})())
+    wrong.run(fake())
     assert got[0][2][0][:, 0].tolist() == [1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1]
     fresh = I.Window(win.circuit, RUN, {"law": "all"}, WIN.CAP, registered=win.registered)
     setup.run(fresh)
+    assert fresh.registered[V.SALT].rows == ((*[int.from_bytes(salt[i:i + 2], "little") for i in range(0, 24, 2)],),)
     assert fresh.close().roots
 
 
 @pytest.mark.slow
-def test_the_verifier_refuses_at_cs_supplied_salt():
-    """The verifier reads the partition's blocks for the proof layer's draw, then stops where C's one supplied value, the salt, needs
-    the supplied input, with each unit's place and slot constants of C and its ok held to 1 (circuits' and proofs' pair):
-    `NotBound`, by name. A partition that leaves a block out is refused before, by the door (E_BLOCKS)."""
+def test_the_verifier_refuses_at_the_units_constants():
+    """The verifier reads the partition's blocks for the proof layer's draw and holds C's salt to the supplied
+    ``pous.setup.salt/v1``, then stops where each unit's place and slot are constants of C and its ok held to 1, which
+    C's format has no form for yet: `NotBound`, by name. A registration whose salt is not so marked is refused before,
+    and a partition that leaves a block out before that, by the door (E_BLOCKS)."""
     params, salt, _ = setup_case()
     c, _win, part, reg = registered()
-    with pytest.raises(V.NotBound, match=r"^pous setup: no supplied input yet: salt = pous\.setup\.salt/v1, .* the one "
-                                         r"value the verifier supplies; .*; its block's .* and its slot u mod n constants "
-                                         r"of the unit in C, and its ok a public output held to 1$"):
-        V.check(OC.block, PF.verify, dict.fromkeys(DRAW.units), c, part, reg, DRAW, params, salt, 16)
+    proofs = dict.fromkeys(DRAW.units)
+    with pytest.raises(V.NotBound, match=r"^pous setup: not bound: its block's .* and its slot u mod n constants of the "
+                                         r"unit in C, and its ok a public output held to 1$"):
+        V.check(OC.block, PF.verify, proofs, c, part, reg, DRAW, params, salt, 16)
+    with pytest.raises(V.NotBound, match=r"^pous setup: not bound: C's setup/salt is marked None, not "):
+        V.check(OC.block, PF.verify, proofs, c, part, {**reg, "supplied": {}}, DRAW, params, salt, 16)
     with pytest.raises(OC.Refused, match="E_BLOCKS"):
-        V.check(OC.block, PF.verify, dict.fromkeys(DRAW.units), c, {**part, "blocks": part["blocks"][:-1]}, reg, DRAW,
-                params, salt, 16)
+        V.check(OC.block, PF.verify, proofs, c, {**part, "blocks": part["blocks"][:-1]}, reg, DRAW, params, salt, 16)
 
 
 @pytest.mark.slow
-def test_the_door_stops_at_lower_on_a_setup_block(monkeypatch):
+def test_the_door_stops_at_the_supplied_salt_on_a_setup_block(monkeypatch):
     """Past the binding, the door's verdict on a drawn block: it restricts C to the block itself (C_S, never the
-    prover's circuit file) and stops at its statement, `one_circuit.lower` (proofs'). Slow: restricting the setup's C
-    takes over a minute, and no smaller circuit is the setup's."""
+    prover's circuit file) and stops there, by name, where the block reads the supplied salt bit by bit: restrict keeps a
+    registered input's leaves (`restrict.py`'s ``registered``) and no supplied input's part (`supplied.part`) yet, so
+    the salt's 16-bit leaves read as bits are refused (recut-boundary, circuits'). Slow: restricting the setup's C takes
+    about half a minute, and no smaller circuit is the setup's."""
     params, salt, _ = setup_case()
     c, _win, part, reg = registered()
     monkeypatch.setattr(V, "bound", lambda *a: None)
@@ -195,18 +205,17 @@ def test_the_door_stops_at_lower_on_a_setup_block(monkeypatch):
         pub.write_text('{"units": {"indices": [5]}}\n')
         s.mkdir()
         (s / "session.json").write_text("{}")
-        with pytest.raises(ValueError, match=r"^setup block 5: the door refused \(circuit\): .*" + OC.PREFIX + "lower"):
+        with pytest.raises(ValueError, match=r"^recut-boundary: .* reads an input node of 16-bit leaves in 1-bit leaves "):
             V.check(OC.block, PF.verify, {5: PF.Proof(cf, pub, (s,))}, c, part, reg, draw([5]), params, salt, 16)
 
 
-@pytest.mark.xfail(strict=True, raises=ImportError, reason="nothing holds the order yet: the supplied input's order check "
-                   "(`verity.circuits.supplied.check_order`, E_SUPPLIED_ORDER) is circuits' and proofs' pair")
 def test_a_weights_commitment_registered_after_the_salt_is_refused():
     """The salt (`pous.setup.salt/v1`) is the memory attester's coin, drawn after W's commitment: an evaluation of it
-    whose W was registered after the coin is refused by name (E_SUPPLIED_ORDER, naming the weights). The place that
-    holds the order is the record's: W's registration entry before the coin's `.released` entry (Core's clock), which
-    the supplied input's check reads when the verifier computes the salt."""
+    whose W was registered after the coin is refused by name (E_SUPPLIED_ORDER, naming the weights), and one whose W was
+    registered before passes. The place that holds the order is the record's: W's registration entry before the coin's
+    entry, which the supplied input's check reads when the verifier computes the salt."""
     from verity.circuits import supplied as S
 
-    with pytest.raises(S.SuppliedError, match=r"^E_SUPPLIED_ORDER: .*weights"):
-        S.check_order({WIN.WEIGHTS: 7}, 5, "pous.setup.salt/v1")
+    S.check_order({WIN.WEIGHTS: 4}, 5, V.SALT_MARK["supplied"])
+    with pytest.raises(S.SuppliedError, match=r"^E_SUPPLIED_ORDER: \['weights'\] registered after pous\.setup\.salt/v1"):
+        S.check_order({WIN.WEIGHTS: 7}, 5, V.SALT_MARK["supplied"])
