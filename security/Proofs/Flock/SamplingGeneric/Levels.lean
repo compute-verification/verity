@@ -232,6 +232,7 @@ theorem liftLev_levels_isSome (hreal : LevelsRealizeOne) (L : Compiled Coin A) {
     {Pt : Partition} (hs : InScope Pt s) : ∃ Lv, L.liftLev.levels s Pt = some Lv := by
   refine ⟨_, dif_pos ⟨hs, hreal s Pt hs⟩⟩
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem scope_liftLev (hreal : LevelsRealizeOne) {L : Compiled Coin A} {x : Msg} (h : L.Scope x) :
     L.liftLev.Scope x := by
   obtain ⟨s, Pt, hp, hq, hs⟩ := h
@@ -239,11 +240,13 @@ theorem scope_liftLev (hreal : LevelsRealizeOne) {L : Compiled Coin A} {x : Msg}
   obtain ⟨-, htop, hslots, -⟩ := liftLev_levels hLv
   exact ⟨s, Pt, Lv, hp, hq, hLv, hs.1, hs.2.1, hslots, htop⟩
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem scope_of_liftLev {L : Compiled Coin A} {x : Msg} (h : L.liftLev.Scope x) : L.Scope x := by
   obtain ⟨s, Pt, Lv, hp, hq, hLv, -⟩ := h
   exact ⟨s, Pt, hp, hq, (liftLev_levels hLv).1⟩
 
 /-- **`L` at one level meets the contract at levels** where it meets `Compiled.Sessions`. -/
+omit [Nonempty Coin] in
 theorem sessions_liftLev (hreal : LevelsRealizeOne) {H : Msg → Msg} {L : Compiled Coin A} (S : L.Sessions H) :
     L.liftLev.Sessions H where
   samples x s Pt Lv hp hq hLv _ := by
@@ -269,6 +272,7 @@ theorem sessions_liftLev (hreal : LevelsRealizeOne) {H : Msg → Msg} {L : Compi
     obtain ⟨b, hb, hc⟩ := S.opens x s Pt Ω Pv ω r u xS vS w hp hq (liftLev_levels hLv).1 hacc hu hsess hR
     exact ⟨b, u, b, hb, rfl, hb, hc⟩
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem rlev_liftLev_iff (hreal : LevelsRealizeOne) {H : Msg → Msg} {L : Compiled Coin A} {x : Msg}
     (hx : L.Scope x) (δ : ℝ) (w : Wit) :
     R H L.commit L.parse L.partition δ x w ↔
@@ -447,6 +451,7 @@ theorem escCell_empty (k : ℕ) (X : Finset ℕ) : escCell (∅ : Finset ℕ).ca
   simp [escCell]
 
 /-- **`L` at two levels meets the contract at levels** where it meets `CompiledTwo.Sessions`. -/
+omit [Nonempty Coin] in
 theorem sessions_liftLev (hreal : LevelsRealizeTwo) {H : Msg → Msg} {L : CompiledTwo Coin A} (S : L.Sessions H) :
     L.liftLev.Sessions H where
   samples x s Pt Lv hp hq hLv _ := by
