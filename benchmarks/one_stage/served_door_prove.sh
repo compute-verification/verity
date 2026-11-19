@@ -4,8 +4,8 @@
 # built once per source; the served C built, the template's first unit cut a block of its own and lowered by the door's
 # own steps; `served_door.py step stage` commits it on a STAGED witness (its writers' rows random, not served values);
 # placed, its statement built, proved over a live loopback session and its session verified by Lean (`--registered`,
-# also on a registered file with a wrong output root), then through the door (`served_door.py step verify`). A block
-# whose row reads part of its writer's output (`stage`'s ``partial``) is only put to the registered reads, on an empty session.
+# also on a registered file with a wrong output root), then through the door (`served_door.py step verify`). Each wired
+# row reads one output field of its writer whole, from that field's tree.
 # TEMPLATE: the block's template's descriptor id.
 # research run --on auto --cwd source --mem-gb 96 --cpus 16 --timeout 3h -- bash benchmarks/one_stage/served_door_prove.sh
 set -uxo pipefail
@@ -77,15 +77,6 @@ done
 U0=$(python3 -c 'import json,sys; print(json.loads([l for l in open(sys.argv[1]) if l.startswith("STEP ")][-1][5:])["unit"])' $O/stage.txt)
 D=$S/stage-$U0; cp $D/stage.json $D/registered*.json $D/draw.json $D/partition.json $O/
 du -b $D/inst-1.bin $D/pub-1.bin $D/circuit.txt | tee $O/stage-sizes.txt
-if python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1]))["partial"] else 1)' $D/stage.json; then
-  E=$S/empty-session; mkdir -p $E; echo '{}' > $E/session.json
-  timed lean-partial $LEAN_BIN verify --zk --statement verity/flock-circuit/tmpl --circuit $D/circuit.txt --public $D/pub-1.bin --tables $D/tables \
-    --partition $D/partition.json --program $D/program.json --registered $D/registered.json --session $E > $O/lean-partial.log 2>&1
-  echo "partial lean rc $?"; cat $O/time-lean-partial.txt; grep -h '^VERDICT' $O/lean-partial.log | head -1 | cut -c1-2500; tail -3 $O/lean-partial.log | cut -c1-1500
-  ( unset PYTHONPATH; timed door-partial $SD step verify --dir $S --template "$TEMPLATE" --unit $U0 --lower $LOW_BIN --lean $LEAN_BIN --session $E ) > $O/door-partial.txt 2>&1
-  echo "partial door rc $?"; grep -h '^STEP' $O/door-partial.txt | cut -c1-3000; tail -c 1500 $O/door-partial.txt | grep -v '^STEP'
-  exit 0
-fi
 rm -rf $CHALLENGER_WORK/challenger
 timed tmpl $UNIT_BIN $D/unit.tmpl --layout iv/hybrid/4 --out $D/unit.placed > $O/tmpl.txt 2>&1 || { tail -40 $O/tmpl.txt; cat $O/time-tmpl.txt; exit 6; }
 cat $O/time-tmpl.txt; tail -3 $O/tmpl.txt | cut -c1-600
