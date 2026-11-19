@@ -11,7 +11,7 @@ import verity_vllm.definitions.registry  # noqa: F401  -- registers the lazy fam
 @pytest.mark.parametrize("fid", ["Dsv4Retired_v1", "MhcRetired_v1{HC=4}", "MarlinRetired_v1", "MoeAlignRetired_v1",
                                  "Lifted[Dsv4Retired_v1]_v2"])
 def test_a_retired_definition_id_is_refused_in_one_sentence(fid: str) -> None:
-    with pytest.raises(KeyError, match="DeepSeek-V4 is not served through the one circuit"):
+    with pytest.raises(KeyError, match="is refused: its model is not served through the one circuit"):
         lookup_primitive(REGISTRY, fid)
 
 

@@ -37,7 +37,7 @@ PROTOCOL SUMMARY (Build stage: the registry = the closed vocabulary every Progra
 # resolves as it did in veritor.  The makers import lazily to keep this package import light and cycle-free.
 #: Definition ids of a model that is not served, refused by name when no module registered them.
 RETIRED = r"^(Dsv4|Mhc|Marlin|MoeAlign)\w*_v\d+(\{.*\})?$"
-RETIRED_WHY = "Definition {fid}: DeepSeek-V4 is not served through the one circuit, so its Definitions are refused"
+RETIRED_WHY = "Definition {fid} is refused: its model is not served through the one circuit, and its serving path is deleted"
 
 
 def _register_lazy_families() -> None:
