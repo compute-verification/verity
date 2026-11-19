@@ -328,8 +328,8 @@ def test_one_stage_refusals_come_through_register():
     assert stream.register(_record(), _ports(6)).order == 0
 
 
-def test_a_bernoulli_sampling_design_is_refused_at_register():
-    """A Bernoulli sampling design at any p is outside the sampled audit's soundness statement (at 0 < p < 1 its sampled
+def test_a_bernoulli_sampling_design_is_refused_at_register_by_design():
+    """By design, a Bernoulli sampling design at any p is outside the sampled audit's soundness statement (at 0 < p < 1 its sampled
     count varies; at p = 0 it samples nothing, so a stream would accept having verified nothing): `register` refuses it
     (`bernoulli`, with `BERNOULLI`) after R1-R8, and logs nothing. A rate, a stratified or work rate and All register."""
     for p in ("0/1", "0/4", "1/1", "3/3", "1/2", "2/3", "2/4"):

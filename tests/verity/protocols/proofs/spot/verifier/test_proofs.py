@@ -667,7 +667,7 @@ def test_the_door_under_the_templated_statement_refuses_a_flat_file(tmp_path, mo
 
 def test_a_members_own_units_are_refused_and_its_block_is_the_partitions():
     """A member's units are its block of the partition object's ``blocks`` (`one_circuit.block`): units its parameters
-    hand it are refused, and a partition naming no blocks gives it none, each as Lean's parse refuses the parameters
+    hand it are refused by design, and a partition naming no blocks gives it none, each as Lean's parse refuses the parameters
     (`Outside`, with its ``params:`` reason)."""
     with pytest.raises(M.Outside, match=f"^params: proofs: member a/c0: {M.UNITS_HANDED}$"):
         M._block("a/c0", {"block": 0, "units": [[0, 1]]}, b"", {})
