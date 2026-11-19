@@ -59,6 +59,7 @@ public import Proofs.Flock.SamplingGeneric.TwoOneWaitAvg
 public import Proofs.Flock.SamplingGeneric.PhasesNumbers
 public import Proofs.Flock.SamplingGeneric.PhasesAvg
 public import Proofs.Flock.SamplingGeneric.Levels
+public import Proofs.Flock.SamplingGeneric.LevelsKS
 public import Proofs.Flock.SpotFlock.Cap
 public import Proofs.Flock.SpotFlock.Code
 public import Proofs.Flock.Claims.Sampling.Refused
