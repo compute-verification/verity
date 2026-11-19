@@ -55,15 +55,19 @@ def example(rows: int, k: int) -> tuple[np.ndarray, np.ndarray]:
 
 
 def product(weight: Any = None, x: Any = None, *, k: int = 64, s: int = 1, units: int = 256, block: int = 16,
-            k_log: int = 22, g: int = 2, dot: dict = G.GEMM_HOPPER, registered: bool = True) -> Product:
+            k_log: int | None = None, g: int | None = None, dot: dict = G.GEMM_HOPPER, registered: bool = True) -> Product:
+    if (k_log is None or g is None) and (k, s, dot) != (64, 1, G.GEMM_HOPPER):
+        raise ValueError(f"unit-size: k_log and g default to the K 64, N 1 Hopper unit's: pass the K {k}, N {s} unit's")
+    k_log, g = 22 if k_log is None else k_log, 2 if g is None else g
     if weight is None and x is None:
         weight, x = example(units * s, k)
     w, x = bf16(weight), bf16(x)
-    if w.shape != (units * s, k) or x.shape != (k,):
+    if w.shape != (units * s, k) or x.shape[-1:] != (k,) or x.ndim > 2:
         raise ValueError(f"weight {w.shape}, x {x.shape}: the weight ({units * s}, {k}) bf16 words, units * s rows of k, "
-                         f"and x ({k},)")
-    if block < 1 or units % block:
-        raise ValueError(f"block {block}: a positive divisor of units {units}")
+                         f"and x ({k},) or (tokens, {k})")
+    n = units if x.ndim == 1 else x.shape[0] * units
+    if block < 1 or n % block:
+        raise ValueError(f"block {block}: a positive divisor of units {n}")
     if block < (need := zk_min_units(k_log, g)):
         raise ValueError(f"pack-floor: a block of {block} units at k_log {k_log}, g {g} is under the prover's floor of "
                          f"{need} (m >= {ZK_M_MIN})")
@@ -72,20 +76,21 @@ def product(weight: Any = None, x: Any = None, *, k: int = 64, s: int = 1, units
         raise ValueError(f"a block of {block} units at k_log {k_log}, g {g} is m = {m}, past 2^{M_MAX}: take smaller blocks")
     t = bind(G.Gemm, K=k, N=s, **dot)
     tid = descriptor_id(t)
-    record = {"templates": [[tid, units]],
+    radix, w_step, x_step = ([units], [s * k], [0]) if x.ndim == 1 else ([x.shape[0], units], [0, s * k], [k, 0])
+    record = {"templates": [[tid, n]],
               "registered": {"params": {"w": units * s * k}, "tables": [], "roots": [], "openings": [],
-                             "reads": [{"reader": tid, "port": "w", "param": "w", "at": 0, "radix": [units], "base": 0,
-                                        "step": [s * k]}]},
-              "boundary_reads": [{"reader": tid, "port": "x", "param": "x", "at": 0, "radix": [units], "base": 0,
-                                  "step": [0]}]}
-    wired, query = wired_population_program([(t, units)], record)
+                             "reads": [{"reader": tid, "port": "w", "param": "w", "at": 0, "radix": radix, "base": 0,
+                                        "step": w_step}]},
+              "boundary_reads": [{"reader": tid, "port": "x", "param": "x", "at": 0, "radix": radix, "base": 0,
+                                  "step": x_step}]}
+    wired, query = wired_population_program([(t, n)], record)
     program = Program(wired.fn, annotations=wired.annotations, registered=("w",) if registered else ())
     if [n for n, _ in program.fn.signature()[0]] != ["w", "x"]:
         raise AssertionError(program.fn.signature()[0])
-    outputs = np.array(evaluate(program.fn, [int(v) for v in w.flat], [int(v) for v in x]), np.uint16).reshape(units, s)
-    blocks = [(a, a + block) for a in range(0, units, block)]
+    outputs = np.array(evaluate(program.fn, [int(v) for v in w.flat], [int(v) for v in x.flat]), np.uint16).reshape(n, s)
+    blocks = [(a, a + block) for a in range(0, n, block)]
     return Product(t, record, program, b"".join(descriptor_chunks(program)), program_digest(program), query, blocks,
-                   PO.build(program, query, [blocks]), PO.build(program, query, [[(0, units)], blocks]), w, x, outputs, m)
+                   PO.build(program, query, [blocks]), PO.build(program, query, [[(0, n)], blocks]), w, x, outputs, m)
 
 
 __all__ = ["M_MAX", "Product", "bf16", "example", "product"]
