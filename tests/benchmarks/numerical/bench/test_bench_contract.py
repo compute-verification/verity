@@ -420,7 +420,7 @@ def test_native_reference_is_the_targets_anchor_peak_and_the_bf16_default_is_unc
 def test_fp8_targets_divide_by_their_own_anchor_peak() -> None:
     """FP8 Ada: the RTX 4090's dense FP8 peak *with FP32 accumulate* (330.3 TFLOPS -- Ada halves FP8 under FP32
     accumulate; 660.6 is the FP16-accumulate figure): 9.30 ps per K=1536 VU, so 401 us/VU is 4.31e7x, not the 4.07e7x
-    the BF16 constant would give.  FP8 Hopper: the H100's 1978.9 TFLOPS dense FP8 peak, 1.55 ps per VU."""
+    the BF16 constant would give.  FP8 Hopper: the H100's dense FP8 peak at its sm reading, 2141.06 TFLOPS, 1.43 ps per VU."""
 
     ada = contract.native_reference(FP8_ADA_MMA.name)
     assert ada is contract.native_peak_of(FP8_ADA_MMA) and ada.flop_per_second == 330.3e12 and ada.accumulate == "fp32" and "4090" in ada.device
@@ -429,9 +429,9 @@ def test_fp8_targets_divide_by_their_own_anchor_peak() -> None:
     assert contract.overhead(401e-6, 1536, FP8_ADA_MMA.name) == pytest.approx(4.31e7, rel=1e-2)
     assert contract.overhead(401e-6, 1536, FP8_ADA_MMA.name) != pytest.approx(contract.overhead(401e-6, 1536), rel=1e-2)
     hopper = contract.native_reference(FP8_HOPPER_WGMMA.name)
-    assert hopper is contract.native_peak_of(FP8_HOPPER_WGMMA) and hopper.flop_per_second == 1978.85952e12 and hopper.accumulate == "fp32" and "H100" in hopper.device
-    assert contract.native_seconds_per_vu(1536, FP8_HOPPER_WGMMA.name) == pytest.approx(2 * 1536 / 1978.85952e12)
-    assert contract.native_seconds_per_vu(1536, FP8_HOPPER_WGMMA.name) == pytest.approx(1.552e-12, rel=1e-3)
+    assert hopper is contract.native_peak_of(FP8_HOPPER_WGMMA) and hopper.flop_per_second == 2141.06112e12 and hopper.accumulate == "fp32" and "H100" in hopper.device
+    assert contract.native_seconds_per_vu(1536, FP8_HOPPER_WGMMA.name) == pytest.approx(2 * 1536 / 2141.06112e12)
+    assert contract.native_seconds_per_vu(1536, FP8_HOPPER_WGMMA.name) == pytest.approx(1.4348e-12, rel=1e-3)
     for t in (FIRST, FP8_HOPPER_WGMMA, FP8_ADA_MMA):
         assert census.native_seconds_per_instance(contract.native_peak_of(t), 1536) == contract.native_seconds_per_vu(1536, t.name)
         assert "sparsity" not in contract.native_peak_of(t).rate and "dense" in contract.native_peak_of(t).rate and census.source(contract.native_peak_of(t))

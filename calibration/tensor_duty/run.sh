@@ -6,7 +6,7 @@
 # clock there (nvidia-smi -lgc; `default` resets it, -rgc), warms the card and runs every arm, class, fill, burst and
 # duty. A clock whose lock fails is skipped; the default clock still runs. On exit it resets the clock and puts the
 # power limit back to the board's default. nvidia-smi samples the GPU every SMI_MS ms (200) while the lease is held.
-# Last, summarize.py judges its data sheet's clock.tensor by the points, and the run exits nonzero unless it passes.
+# Last, summarize.py judges its data sheet's tensor ceiling by the points, and the run exits nonzero unless it passes.
 #
 #   research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     -- bash calibration/tensor_duty/run.sh [--arms fp32-beside] [--no-lock]

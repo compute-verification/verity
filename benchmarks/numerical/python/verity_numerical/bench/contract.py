@@ -813,7 +813,8 @@ def _check_rates(fp: Any, measurements: Any) -> list[str]:
     """The rate measurements, when reported, must be what the contract computes from the fingerprint's ``profile`` and
     ``K`` and the result's ``t.total`` and ``vu.count``: ``rate.proved_flop_per_second`` = 2 K vu.count / t.total and
     ``rate.native_peak_flop_per_second`` = :func:`native_reference` (profile), or a named reading of its census line, to :data:`RATE_TOLERANCE`;
-    ``overhead.vs_native_peak`` = their ratio, i.e. :func:`overhead` at the fingerprint's ``K`` **and profile**, to
+    ``overhead.vs_native_peak`` = their ratio, i.e. :func:`overhead` at the fingerprint's ``K`` **and profile**, at the peak
+    the result reports, to
     :data:`TOLERANCE`.  An overhead divided by another target's peak fails here.  A profile that is not a target is
     reported by :func:`validate_fingerprint`; the rates are not checked against it."""
 
@@ -833,7 +834,9 @@ def _check_rates(fp: Any, measurements: Any) -> list[str]:
     native = line.flop_per_second
     quoted = [native, *(r.flop_per_second for r in getattr(line, "readings", ()))]
     got = reported.get(RATE_NATIVE)
-    if got is not None and (not _is_number(got) or not any(abs(got - q) <= RATE_TOLERANCE * q for q in quoted)):
+    held = next((q for q in quoted if _is_number(got) and abs(got - q) <= RATE_TOLERANCE * q), None)
+    at = native if held is None else held
+    if got is not None and held is None:
         p.append(f"{RATE_NATIVE} {got!r} is neither the native peak of profile {profile!r}, {native:.6g} FLOP/s, nor a named reading of it")
     if RATE_PROVED not in reported and OVERHEAD not in reported:
         return p
@@ -846,10 +849,10 @@ def _check_rates(fp: Any, measurements: Any) -> list[str]:
     if got is not None and (not _is_number(got) or abs(got - proved) > RATE_TOLERANCE * proved):
         p.append(f"{RATE_PROVED} {got!r} is not 2 * K * vu.count / t.total = {proved:.6g} FLOP/s")
     got = reported.get(OVERHEAD)
-    want = overhead(total / count, K, profile)
+    want = total / count * at / (2 * K)
     if got is not None and (not _is_number(got) or abs(got - want) > TOLERANCE * want):
         p.append(f"{OVERHEAD} {got!r} is not (t.total / vu.count) / native_seconds_per_vu(K, profile) = {want:.6g} "
-                 f"at the native peak of profile {profile!r} ({native:.6g} FLOP/s)")
+                 f"at the native peak of profile {profile!r} ({at:.6g} FLOP/s)")
     return p
 
 

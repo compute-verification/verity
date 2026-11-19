@@ -163,7 +163,7 @@ WORKLOAD = "benchmarks/spot_figures/cards/workload.glm-5.3.json"
 #: server's line at its last step, at the 128k serving plan's request
 PLANNER, PLAN_CASE = "benchmarks/spot_figures/breakeven", "P5+poolwin600"
 #: the served model, the slowdown calculator's world fleet and the census's GPU peak, the H200's dense FP8 rate
-MODEL, WORLD, PEAK, READING = "GLM-5.3", "world-h200", "h100-sxm-80gb-tensor/e4m3", "datasheet"
+MODEL, WORLD, PEAK, READING = "GLM-5.3", "world-h200", "h100-sxm-80gb-sm/e4m3", "datasheet"
 #: a GB's bits, and FP4's bits a parameter
 GB, FP4 = 8 * 10 ** 9, 4
 
