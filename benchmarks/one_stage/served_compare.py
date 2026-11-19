@@ -21,7 +21,7 @@
   that the circuit never reads: at version 2 the B rows of the weights the cut's calls read (`PEARL_WEIGHTS`), each
   weight's N rows of K words a call's; at version 1 nothing.
 
-The seal's B-OF-RECORD (`served_verdicts.sh`) holds each sealed record to PRED's C and compiler, so this doesn't. A file a
+The seal's B-OF-RECORD (`served_verdicts.sh`) holds each sealed record to PRED's compiler, so this doesn't. A file a
 verdict can't read fails that verdict, naming the file. Each verdict prints a line; the last, ``SERVED-COMPARE: EQUAL``
 or ``NOT EQUAL``, is the line the record names (`served_verdicts.py record --served-compare`), kept with the verdicts in
 DIR/served_compare.json. Exit 0 iff EQUAL.
