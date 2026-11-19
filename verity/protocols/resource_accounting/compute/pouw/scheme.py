@@ -576,7 +576,7 @@ PEARL_PLUS = register(Scheme(
     protocol="verity/pouw/pearl-plus/v1",
     resource="compute",
     blocks=(Block("PearlPlusTileCoreWired_v1", tile_macs),),
-    ports=(Port(TILE_PORT, "output", "PearlPlusTileCoreWords_v3", "y", layout=_tile_layout),),
+    ports=(Port(TILE_PORT, "output", "PearlPlusTileCoreWired_v1", "y", layout=_tile_layout),),
     assumptions=("Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1",),
     log=(Order("weightsRoot", "pouw/salt"), Order("commitment", "pouw/draw")),
     charges=(Charge("inert-work", "rho"), Charge("sample", "epsilon"), Charge("over-bound-tiles", "over_cap_draws"),
