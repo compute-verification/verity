@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Sampled.SessionAt
+public import Proofs.Properties.Verity.Sampled.Accepts
 public import Proofs.Properties.Verity.Sampled.ParamsProgram
 public import Proofs.Flock.Bridge.SampledDesign
 public import Proofs.Flock.Bridge.Refused
@@ -539,9 +540,7 @@ theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD 
   have hs : o.sent.blobs = F ++ o.blobs := by
     show o.files ++ o.blobs = _
     rw [hFo]
-  have hcf : circuitB = V.circuitFile θ F := by
-    rw [hs] at hc
-    exact get_named (hD.circuit p₀ hp₀) hreg.1 hc
+  have hcf : circuitB = V.circuitFile θ F := absurd hc (circuitFile_ne_ok p₀.own circuitB)
   have hpf : pubB = V.publicFile θ F := by
     rw [hs] at hpb
     exact get_named (hD.publicFile p₀ hp₀) hreg.2 hpb
