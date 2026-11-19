@@ -281,6 +281,9 @@ class Replay:
             raise D.Reject(f"append coin {index} was never released")
         return self.live.open(label, index, after)
 
+    def open_many(self, requests: list[tuple[str, int, bytes]]) -> list[coins.LiveOpening]:
+        return [self.open(label, index, after) for label, index, after in requests]
+
 
 def replayed(reg: audit.Registration, k: int, windows: int, committed: list[bytes], appends: list[bytes],
              per_coin: int = 1, *, samples: int) -> coins.SessionCoins:
@@ -802,8 +805,10 @@ class Run:
 
     def case(self) -> dict:
         p = self.params
+        committed, W, m = [c for c, _ in self.coins.challenger._coins[:p.coins]], p.windows, self.coins.m
         return {"append_coins": [c.hex() for c in coins.by_slot(self.coins)],
-                "coins": [c[:coins.COIN_BYTES].hex() for c, _ in self.coins.challenger._coins[:p.coins]],
+                "coins": [c[:coins.COIN_BYTES].hex() for c in committed[:W]]
+                + [b"".join(committed[W + d * m:W + (d + 1) * m]).hex() for d in range(coins.draws(W, p.groups_per_coin))],
                 "events": self.events,
                 "not_before_ns": self.not_before_ns,
                 "params": {"deadline_ns": p.deadline_ns, "deferred": p.deferred, "lifetime": p.lifetime,
