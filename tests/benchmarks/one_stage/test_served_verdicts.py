@@ -220,7 +220,7 @@ def test_a_published_line_names_no_window_and_counts_none_of_a_windows_own(tmp_p
 def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_public_form(tmp_path):
     """`publish`, once the run is done: a file whose path names a window is held whole in the serve dir's private/out, one
     whose text or JSON names or counts a window is held there in full with its public form left in out/, and the rest,
-    the bench Build's requests by name, a window named ``all`` and the gzipped declared Program, stay byte for byte. Then out/
+    the bench Build's requests by name and a window named ``all``, stay byte for byte. Then out/
     names no window and counts none of a window's own, and a second pass holds nothing."""
     out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
     files = {
@@ -230,7 +230,6 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
         "registration.json": json.dumps(REGISTRATION),
         "pieces/certifier/answer.json": json.dumps({"reason": "window 7: the scan's prog", "verdict": "reject"}),
         "pieces/bandwidth/answer.json": json.dumps({"profile": {"windows": 6}, "verdict": "accept"}),
-        "serve/period.json": json.dumps({"close": {"body": {"windows": [{"root": "ab"}]}}, "rows": 512, "steps": 16}),
         "pieces/pouw/check/check.log": "calls /srv/h1/w7/pouw-h1-calls.json\nPOUW {\"window\": 7, \"verdict\": \"accept\"}\n",
         "sampled-proofs/w7/summary.json": json.dumps({"verdict": "accept"}),
         "predicted.json": json.dumps({"requests": {"build_request_LP11_T8": "ab"}, "row": "r"}),
@@ -239,8 +238,6 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
     for rel, body in files.items():
         (out / rel).parent.mkdir(parents=True, exist_ok=True)
         (out / rel).write_text(body)
-    (out / "serve" / "h1").mkdir()
-    (out / "serve" / "h1" / "window-program.json.gz").write_bytes(gzip.compress(json.dumps({"rows": 512}).encode()))
     assert S.main(["publish", str(out), "--private", str(private)]) == 0
     assert not _window_data(out, 7), _window_data(out, 7)
     kept, whole = {"pieces/wipe/served.json"}, {"sampled-proofs/w7/summary.json", "predicted.json", "pieces/pouw/check/check.log"}
@@ -252,33 +249,25 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
             assert (private / rel).read_text() == body, rel
     assert json.loads((out / "record" / "verdicts.json").read_text()) == {
         "node": "n", "composed": {"verdict": "pending", "reason": "window K: no"}}
-    assert json.loads((out / "serve" / "period.json").read_text()) == {"close": {"body": {}}, "rows": 512}
     assert (out / "verdicts.txt").read_text() == ("SERVE stopped (exit 0): window(s) closed, sealed\n"
                                                   "COMPOSITE CASE verity/pous/p2/v4/run accept\n")
-    assert gzip.decompress((out / "serve" / "h1" / "window-program.json.gz").read_bytes()) == b'{"rows": 512}'
     assert S.publish(out, private) == []
 
 
-def test_publish_holds_whole_each_file_that_isnt_text_but_the_declared_program(tmp_path, monkeypatch):
+def test_publish_holds_whole_each_file_that_isnt_text(tmp_path, monkeypatch):
     """`publish` fails closed on a file it can't read as text: bytes that aren't UTF-8, a gzip stream that doesn't
-    decompress, and gzipped JSON, whether or not it names a window, are each held whole in private/out. Only the declared
-    Program (`PUBLIC_FILES`) stays in out/, byte for byte and unread, even past `PUBLISH_MAX`."""
+    decompress, and gzipped JSON, whether or not it names a window, are each held whole in private/out."""
     monkeypatch.setattr(S, "PUBLISH_MAX", 64)
     out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
-    program = gzip.compress(json.dumps({"rows": list(range(256))}).encode())
     public = gzip.compress(json.dumps({"rows": 512}).encode())
-    files = {"serve/h1/window-program.json.gz": program,
-             "blob.bin": b"\xff\x00window 7",
+    files = {"blob.bin": b"\xff\x00window 7",
              "broken.json.gz": public[:-6],
              "public.json.gz": public,
              "named.json.gz": gzip.compress(json.dumps({"window": 7}).encode())}
-    assert len(program) > S.PUBLISH_MAX
     for rel, body in files.items():
         (out / rel).parent.mkdir(parents=True, exist_ok=True)
         (out / rel).write_bytes(body)
     assert S.publish(out, private) == ["blob.bin", "broken.json.gz", "named.json.gz", "public.json.gz"]
-    assert (out / "serve" / "h1" / "window-program.json.gz").read_bytes() == program
-    assert not (private / "serve" / "h1" / "window-program.json.gz").exists()
     for rel in ("blob.bin", "broken.json.gz", "named.json.gz", "public.json.gz"):
         assert not (out / rel).exists() and (private / rel).read_bytes() == files[rel], rel
     assert S.publish(out, private) == []
@@ -1856,17 +1845,6 @@ GATE = "ssh -i KEY -o BatchMode=yes research@gate"
 CHALLENGER_HOST = "192.0.2.21"
 
 
-def _h1_serve_dir(tmp_path: Path, coins_from: str = "challenger", tied: bool = True) -> Path:
-    """A serve dir whose window 1 served H1 (its line's ``pouw_h1`` and its record) on a gate session."""
-    d = tmp_path / "serve"
-    (d / "h1" / "w1").mkdir(parents=True)
-    _write(d, "windows.jsonl", [{"window": 1, "passed": True, "pouw_h1": {
-        "window": 1, "tied": tied, "steps_served": 4, "coin_source": coins_from, "roots1": {"reason": None},
-        "gate": {"gate_passed": {"rows": 80}}, "session": {"session": SID, "end": {"closed": True, "complete": True}}}}])
-    (d / S.H1_CALLS.format(k=1)).write_text(json.dumps({"commitment": {"session": {"session": SID}}}))
-    return d
-
-
 def _gate(calls: list, files: dict[str, str] | None = None):
     """The gate's answers as `served_verdicts._gate_out` gets them: the session's tree for ``fetch`` (its ``out`` holding
     `files` beside the record), the ledger and pins."""
@@ -1885,92 +1863,6 @@ def _gate(calls: list, files: dict[str, str] | None = None):
             return b'{"kind": "reserve", "session": "%s", "body": {"by": "vllm"}}\n' % SID.encode()
         return b'{"commit": "aa", "main": "bb", "pinned_utc": "2026-10-26T21:35:00Z"}\n'
     return out
-
-
-def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing(tmp_path, monkeypatch, capsys):
-    """``pouw``: the window's session fetched from the gate with the ledger and pins, held by the challenger check; it
-    accepts, its row in the record stays missing with its document (it credits nothing), the record composes pending, and
-    the pieces' line says it is a development run's."""
-    calls, seen = [], []
-    monkeypatch.setattr(S, "_gate_out", _gate(calls))
-
-    def check(calls_file, tree, ledger, pins, main, key, out, inputs):
-        assert inputs == {}, "a serve dir with no declared Program or period gives credit nothing more"
-        seen.append((tree, ledger.read_text(), pins.read_text(), main, key))
-        assert (tree / "out" / "record.json").is_file()
-        return {"ok": True, "reason": None, "manifest": None, "rounds": 16,
-                "credit": {"window": ["budget", "the window is in no period"], "manifest": None}}
-
-    d = _h1_serve_dir(tmp_path)
-    doc = S.pouw(d, 1, tmp_path / "pieces" / "pouw", gate=GATE, key="ff" * 64, main=tmp_path / "main.txt", check=check)
-    assert (doc["verdict"], doc["reasons"], doc["credited"]) == ("accept", [], False)
-    assert doc["credit"]["window"] == ["budget", "the window is in no period"] and doc["check"]["rounds"] == 16
-    assert doc["SaltIsLiveCoin"] == {"met": True, "why": S.SALT_MET}
-    assert doc["AcceptedLive"] == {"met": False, "why": "credit refused the window (budget: the window is in no "
-                                                       "period), so it credited no proof"}
-    assert [w for _g, w in calls] == [("fetch", SID), ("ledger",), ("pins",)] and all(g == GATE for g, _w in calls)
-    (tree, ledger, pins, main, key), = seen
-    assert tree == tmp_path / "pieces" / "pouw" / "session" / SID and SID in ledger and '"commit"' in pins
-    assert (main, key) == (tmp_path / "main.txt", "ff" * 64)
-    row = S.piece_row("work", tmp_path / "pieces")
-    why = f"{S.DEV_WHY}; core's credit refuses the window (budget) the window is in no period"
-    assert (row["verdict"], row["why"], row["development"]["verdict"]) == ("missing", why, "accept")
-    report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(0, 4), node="n", run="r")
-    assert line["composed"] == "pending" and "pouw" in line["record_missing"] and line["development"] == {"PoUW": "accept"}
-    assert line["verdicts"]["PoUW"] == S.DEV_VERDICT == "development run, credits nothing" and line["missing"]["PoUW"] == why
-    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
-    assert BR.check(rec) == {} and rec["composed"]["answer"] is None
-    reason = report["composed"]["reason"]
-    assert reason.startswith(f"{SPOT_ACCEPT}; PoUW: {why}; ")
-    for name, cmd in (("the bandwidth audit", "BANDWIDTH"), ("PoUS", "POUS"), ("the network certifier", "CERTIFIER"),
-                      ("the wipe", "WIPE")):
-        assert f"; {name}: missing: {cmd}_CMD unset: " in reason
-    env = {"POUW_CMD": f"cp {tmp_path}/pieces/pouw/development.json \"$3/\""}
-    got = S.pieces(d, 1, tmp_path / "again", env=env)
-    out = capsys.readouterr().out
-    assert "POUW (development run, credits nothing) " in out and got["pouw"]["verdict"] == "accept"
-    assert (got["pouw"]["session"], got["pouw"]["coins"], got["pouw"]["credited"]) == (SID, None, False)
-    assert {p: got["pouw"][p]["met"] for p in S.PREMISES} == {"AcceptedLive": False, "SaltIsLiveCoin": True}
-
-
-@pytest.mark.parametrize("product", ["onsite", "remote"])
-def test_a_premise_in_the_record_names_who_ran_its_check(tmp_path, monkeypatch, product):
-    """Every premise a record's development row states ends its ``why`` with who ran its check on the record's path
-    (`RAN_BY`), and so does each row `RAN_BY` names, at the end of its ``answer_from`` (the ``RECORD`` line's
-    ``answers``): a met premise never reads as an auditor's, and the words follow the table when its runner changes."""
-    assert set(S.RAN_BY) == set(BR.PRODUCTS)
-    doc = {"verdict": "accept", "AcceptedLive": {"met": True, "why": S.LIVE_MET},
-           "SaltIsLiveCoin": {"met": True, "why": S.SALT_MET}}
-    rows = {**_rows(_accepted(), tmp_path), "work": {"verdict": "missing", "why": S.DEV_WHY, "development": doc},
-            "space": {"verdict": "error", "why": "x", "owner": "memory-accounting"},
-            "bandwidth": {"verdict": "error", "why": "x", "owner": "memory-accounting",
-                          "answer": {"profile": {"placement": {"graded_by": "graded by its own piece"}}}},
-            "communication": {"verdict": "error", "why": "x", "owner": "network-accounting"}}
-    io = {"verdict": "accept", "format": "verity/inference-only/v1"}
-
-    def stated() -> tuple[dict, dict]:
-        report, _rec, line = S.record(rows, window=1, steps=(0, 4), node="n", run="r", product=product, inference_only=io)
-        return report["protocols"], line["answers"]
-
-    got, answers = stated()
-    said = S.RAN_BY[product]
-    for p in S.PREMISES:
-        assert got["work"]["development"][p]["met"] and said[p].startswith(S.PIECE)
-        assert got["work"]["development"][p]["why"] == f"{doc[p]['why']}; {said[p]}"
-    assert all((S.ONSITE_UNDECIDED in said[p]) is (product == "onsite") for p in S.PREMISES)
-    for k in ("integrity", S.INFERENCE_ONLY_ROW):
-        assert got[k]["answer_from"].endswith(f"; {said[k]}")
-    if product == "onsite":
-        assert got["space"]["answer_from"].endswith(f"; {S.PIECE}; {S.ONSITE_UNDECIDED}")
-        assert got["bandwidth"]["answer_from"].endswith(f"; graded by its own piece; {S.ONSITE_UNDECIDED}")
-        assert S.PIECE not in got["communication"]["answer_from"]
-    else:
-        assert {got[k]["verdict"] for k in ("space", "bandwidth", "communication")} == {"dropped"}
-    assert answers["sampled proofs"].endswith(f"; {S.BLOCKS_ALONE}; {S.TIED_BY_CONSTRUCTION}")
-    assert answers["the inference-only verifier"].endswith(f"; {S.BLOCKS_ALONE}; {S.TIED_BY_CONSTRUCTION}")
-    monkeypatch.setitem(S.RAN_BY, product, {**said, "SaltIsLiveCoin": "recomputed elsewhere"})
-    assert stated()[0]["work"]["development"]["SaltIsLiveCoin"]["why"] == f"{S.SALT_MET}; recomputed elsewhere"
-    assert doc["SaltIsLiveCoin"]["why"] == S.SALT_MET, "the piece's own document is left as it wrote it"
 
 
 def _pearlplus_run(accepted: bool = True, source: str = S.LIVE_SOURCE) -> tuple[dict, dict]:
@@ -3270,104 +3162,6 @@ def test_the_rule_line_reads_whether_the_sample_was_the_lanes_first_reserve_afte
     assert json.loads((piece / S.PERIOD).read_text())["rule"]["held"] is (case == "held")
     assert S.main(argv[:-2]) == 1
     assert capsys.readouterr().out.startswith("RULE not read: ValueError: pearlplus-period rule needs --lane and --coin")
-
-
-def test_the_pouw_piece_fetches_the_windows_sample_session_and_gives_the_check_its_tree(tmp_path, monkeypatch):
-    """A window whose record names its sample's session (``draw_session``, which the coin check refuses without): the
-    piece fetches it beside the window's session, and the check gets its tree as ``--draw-dir``."""
-    calls, got = [], []
-    monkeypatch.setattr(S, "_gate_out", _gate(calls))
-    d, dsid = _h1_serve_dir(tmp_path), "s20261026T221503Z-cd34"
-    (d / S.H1_CALLS.format(k=1)).write_text(json.dumps({"commitment": {"session": {"session": SID},
-                                                                       "draw_session": {"session": dsid}}}))
-
-    def check(calls_file, tree, ledger, pins, main, key, out, inputs):
-        got.append(inputs)
-        assert (tree / "out" / "record.json").is_file() and (Path(inputs["--draw-dir"]) / "out" / "record.json").is_file()
-        return {"ok": True, "reason": None, "manifest": None, "credit": {}}
-
-    S.pouw(d, 1, tmp_path / "pieces" / "pouw", gate=GATE, key="ff" * 64, main=None, check=check)
-    assert [w for _g, w in calls] == [("fetch", SID), ("fetch", dsid), ("ledger",), ("pins",)]
-    assert got == [{"--draw-dir": str(tmp_path / "pieces" / "pouw" / "session" / dsid)}]
-
-
-def test_the_pouw_piece_gives_credit_the_declared_program_the_period_and_the_proofs_it_has(tmp_path, monkeypatch):
-    """With the serve dir's declared Program (``h1/window-program.json.gz``) and its period (``period.json``), and the
-    sampled statements and live evidence given, the challenger check gets each as its ``--check-challenger`` flag, and the
-    piece's document carries them and credit's calls."""
-    monkeypatch.setattr(S, "_gate_out", _gate([]))
-    d = _h1_serve_dir(tmp_path)
-    (d / "h1" / "window-program.json.gz").write_bytes(b"")
-    (d / S.PERIOD).write_text(json.dumps({"name": "served-r1"}))
-    st, lv = tmp_path / "statements.json", tmp_path / "live.json"
-    got = []
-
-    def check(*a):
-        got.append(a[-1])
-        return {"ok": True, "reason": None, "manifest": None, "credit": {"window": None, "calls": [3], "credit": [3]}}
-
-    doc = S.pouw(d, 1, tmp_path / "pieces" / "pouw", gate=GATE, key="ff" * 64, main=None, check=check, statements=st,
-                 live=lv)
-    want = {"--descriptor": str(d / "h1" / "window-program.json.gz"), "--period": "served-r1", "--statements": str(st),
-            "--live-evidence": str(lv)}
-    assert got == [want] and doc["credit_inputs"] == want
-    assert (doc["credit"]["window"], doc["credit"]["calls"], doc["credit"]["credit"]) == (None, [3], [3])
-    assert (doc["AcceptedLive"], doc["SaltIsLiveCoin"]) == ({"met": True, "why": S.LIVE_MET},
-                                                            {"met": True, "why": S.SALT_MET})
-
-
-def test_the_pouw_piece_hands_the_verifiers_memo_to_the_check_and_records_what_it_took(tmp_path, monkeypatch):
-    """``--lean-answers`` reaches the challenger check as its own flag, never among credit's inputs, and the piece's
-    document carries the check's counts of answers it ran and took by key."""
-    monkeypatch.setattr(S, "_gate_out", _gate([]))
-    d = _h1_serve_dir(tmp_path)
-    memo, got = tmp_path / "verifier" / "answers", []
-    counts = {"ran": 33, "taken": {}, "unkeyed": 0}
-
-    def check(*a):
-        got.append(a[-1])
-        return {"ok": True, "reason": None, "manifest": None, "credit": {"credit": [3]}, "lean_answers": counts}
-
-    doc = S.pouw(d, 1, tmp_path / "pieces" / "pouw", gate=GATE, key="ff" * 64, main=None, check=check,
-                 lean_answers=memo)
-    assert got[0]["--lean-answers"] == str(memo) and "--lean-answers" not in doc["credit_inputs"]
-    assert doc["lean_answers"] == counts
-
-
-def test_a_record_that_isnt_one_manifest_under_its_salt_coin_doesnt_meet_salt_is_live_coin(tmp_path, monkeypatch):
-    """Coins the challenger check accepts with a record that isn't one manifest under them: ``SaltIsLiveCoin`` isn't
-    met, and names the manifest's refusal."""
-    monkeypatch.setattr(S, "_gate_out", _gate([]))
-    got = {"ok": True, "reason": None, "manifest": "round 2's tables are not under the salt", "credit": {}}
-    doc = S.pouw(_h1_serve_dir(tmp_path), 1, tmp_path / "pieces" / "pouw", gate=GATE, key="ff" * 64, main=None,
-                 check=lambda *a: got)
-    assert doc["SaltIsLiveCoin"] == {"met": False, "why": "the window's record isn't one manifest under its salt coin: "
-                                                          "round 2's tables are not under the salt"}
-    assert doc["AcceptedLive"]["met"] is False and doc["verdict"] == "reject"
-
-
-@pytest.mark.parametrize("case", ["coins", "untied", "in-process", "no gate"])
-def test_a_development_pouw_piece_rejects_what_its_checks_refuse(tmp_path, monkeypatch, case):
-    """Coins the challenger check refuses, H1 tables untied to the Commit, coins held in the serving process, or no gate
-    to check the session by: the piece rejects, naming why, and so does the record."""
-    monkeypatch.setattr(S, "_gate_out", _gate([]))
-    d = _h1_serve_dir(tmp_path, "in-process" if case == "in-process" else "challenger", tied=case != "untied")
-    refused = {"ok": False, "reason": "session s1 is not the one the ledger opened", "manifest": None, "credit": {}}
-    ok = {"ok": True, "reason": None, "manifest": None, "credit": {}}
-    doc = S.pouw(d, 1, tmp_path / "pieces" / "pouw", gate=None if case == "no gate" else GATE, key="ff" * 64, main=None,
-                 check=lambda *a: refused if case == "coins" else ok)
-    why = {"coins": "coins: session s1 is not the one the ledger opened", "untied": "ROOTS1:",
-           "in-process": "coins: in-process, not the auditor device's challenger's", "no gate": "coins: ValueError: no gate"}
-    assert doc["verdict"] == "reject" and doc["reasons"][0].startswith(why[case]), doc["reasons"]
-    salt = {"coins": "the challenger check refused the window's coins, its salt among them: session s1",
-            "untied": S.SALT_MET, "in-process": "the challenger check didn't run on the window: coins: in-process",
-            "no gate": "the challenger check didn't run on the window: coins: ValueError: no gate"}
-    assert doc["SaltIsLiveCoin"]["met"] is (case == "untied") and doc["SaltIsLiveCoin"]["why"].startswith(salt[case])
-    assert doc["AcceptedLive"]["met"] is False
-    row = S.piece_row("work", tmp_path / "pieces")
-    assert row["verdict"] == "reject" and row["reason"].startswith(why[case])
-    _report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(0, 4), node="n", run=None)
-    assert rec is None and (line["composed"], line["by"], line["development"]) == ("reject", ["PoUW"], {"PoUW": "reject"})
 
 
 def test_the_gate_is_refused_while_the_lane_has_a_period_open(tmp_path, monkeypatch):
@@ -7754,240 +7548,6 @@ def _auditor():
     module = sys.modules.setdefault(spec.name, importlib.util.module_from_spec(spec))
     spec.loader.exec_module(module)
     return module
-
-
-def _declared(tmp_path: Path, files: dict | None = None, live=(32, 2)) -> tuple[Path, Path, dict]:
-    """A serve dir whose serve-openai declared a window Program of digest `DIGEST` at T 32, S 2 (serve.json and
-    ``h1/window-program.meta.json``, its layout `served.declared_layout`'s over two linears at K 32 and 64), and a
-    circuit-files directory for it whose manifest holds `files` (default the live file and k32's, not k64's)."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
-    d, c = tmp_path / "serve", tmp_path / "circuits"
-    (d / "h1").mkdir(parents=True)
-    c.mkdir()
-    layout = SV.declared_layout([(64, 32), (32, 64)], {0: "up", 1: "down"}, 32, 2)
-    (d / "serve.json").write_text(json.dumps({"protocols": {"program": DIGEST, "rows": 32, "steps": 2,
-                                                            "weights_root": "77" * 64}}))
-    (d / S.H1_META).write_text(json.dumps({"program_digest": DIGEST, "rows": 32, "steps": 2, "layout": layout}))
-    files = {"live": "11" * 64, "k32": "22" * 64} if files is None else files
-    (c / S.CIRCUITS_MANIFEST).write_text(json.dumps({"program": DIGEST, "live_bind": {"T": live[0], "S": live[1]},
-                                                     "files": files}))
-    return d, c, layout
-
-
-def test_the_period_opens_on_the_served_programs_digest_and_files_as_cores_credit_reads_them(tmp_path, monkeypatch):
-    """``period open``, through infra's own gate (`auditor.gate` and `auditor.period`, as lane vllm's key): its open
-    commits the Program digest serve-openai wrote, its T, the sample K, the fixed length and the circuit files, each read
-    back by core's credit as the window's period commits it; a stratum with no ``k<K>`` file yet is named and left out.
-    It names no weights without ``--model`` (the gate refuses a root its registry lacks). ``period close`` closes it."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
-    from verity.commitments.crypto import lms
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
-
-    A = _auditor()
-    (tmp_path / "var" / "sessions").mkdir(parents=True)
-    (tmp_path / "peers").write_text("vy-dc-h200 research@10.0.0.2\n")
-    (tmp_path / "pins.jsonl").write_text(A.pin_line("c" * 40, "d" * 40, "2026-10-27T09:00:00Z") + "\n")
-    host = A.Host(root=tmp_path / "var", peers=tmp_path / "peers", pins=tmp_path / "pins.jsonl")
-    signer = A.key_signer(host, lms.Params(64, 4, 5), workers=1)
-    now = datetime(2026, 10, 27, 19, 0, tzinfo=UTC)
-    hooks = dict(now=now, token="ab12", own=lambda d: None, start=lambda s: None, active=lambda s: False,
-                 secret=bytes(32), ready=lambda s: None,
-                 period=lambda args: A.period(host, args, signer=signer, pinned="c" * 40, now=now, active=lambda s: False))
-    sent = []
-
-    def gate_out(gate: str, *words: str) -> bytes:
-        sent.append(words)
-        rc, out = A.gate(["--ssh", shlex.join(words), "--key", "vllm"], host, **hooks)
-        if rc:
-            raise RuntimeError(f"the gate refused {words[0]} (exit {rc}): {out.decode()}")
-        return out
-
-    monkeypatch.setattr(S, "_gate_out", gate_out)
-    d, c, layout = _declared(tmp_path)
-    doc = S.period_open(d, GATE, "served-r1", c, slots=4, max_tokens=8)
-    assert doc["missing"] == [64] and doc["weights"] == [] and doc["draw_k"] == PHC.draw_k(layout)
-    assert "--weights-root" not in sent[0] and "--model" not in sent[0]
-    ledger = (host.root / "windows.jsonl").read_text().splitlines()
-    assert CR.committed_k(ledger, "served-r1") == (PHC.draw_k(layout), None)
-    assert CR.committed_rows(ledger, "served-r1") == (32, None)
-    assert CR.committed_files(ledger, "served-r1") == ({"live": "11" * 64, "k32": "22" * 64}, None)
-    assert CR.committed_length(ledger, "served-r1") == ([8] * 4, None)
-    assert json.loads(ledger[-1])["body"]["circuit"] == DIGEST
-    assert json.loads((d / S.PERIOD).read_text())["open"]["body"]["period"] == "served-r1"
-    argv, _ = S.period_open_argv(d, "served-r2", c, slots=4, max_tokens=8, draw_k=3, model="LLAMA32_1B_INT8")
-    assert argv[argv.index("--draw-k") + 1] == "3" and argv[argv.index("--model") + 1] == "LLAMA32_1B_INT8"
-    S.period_close(d, GATE)
-    kinds = [json.loads(x)["kind"] for x in (host.root / "windows.jsonl").read_text().splitlines()]
-    assert kinds[-1] == "period-close" and json.loads((d / S.PERIOD).read_text())["close"]["body"]["windows"] == []
-
-
-def test_a_period_opens_before_serving_and_holds_the_served_program_to_it(tmp_path, monkeypatch, capsys):
-    """Before serve-openai starts (no serve.json; its startup reserves window 0's session, which joins only an open
-    period) the open goes out on the offline Program (`program`'s); ``period served`` then holds the Program
-    serve-openai declared to the period's, refusing another, whose windows credit nothing."""
-    d, c, _ = _declared(tmp_path)
-    served = (d / "serve.json").read_text()
-    (d / "serve.json").unlink()
-    monkeypatch.setattr(S, "_gate_out", lambda gate, *words: json.dumps({"body": {"period": words[2]}}).encode())
-    assert S.main(["period", "open", str(d), "--gate", GATE, "--name", "p", "--circuits", str(c), "--slots", "4",
-                   "--max-tokens", "8"]) == 0
-    assert json.loads((d / S.PERIOD).read_text())["circuit"] == DIGEST
-    (d / "serve.json").write_text(served)
-    assert S.main(["period", "served", str(d)]) == 0
-    assert f"PERIOD served p: serve-openai declared its Program {DIGEST[:16]}" in capsys.readouterr().out
-    (d / "serve.json").write_text(json.dumps({"protocols": {"program": "6f" * 64}}))
-    assert S.main(["period", "served", str(d)]) == 1
-    assert "its windows credit nothing" in capsys.readouterr().out
-
-
-@pytest.mark.parametrize("case", ["other program", "other live T,S", "no live", "no meta", "no manifest"])
-def test_a_period_open_is_refused_on_files_that_are_not_the_served_programs(tmp_path, case):
-    """Circuit files of another Program, a live file for another T or S, none for the live template, a serve dir with no
-    declared Program, or no circuit files: refused before anything is sent, naming the build to run."""
-    d, c, _ = _declared(tmp_path, files={"k32": "22" * 64} if case == "no live" else None,
-                        live=(64, 2) if case == "other live T,S" else (32, 2))
-    if case == "other program":
-        m = json.loads((c / S.CIRCUITS_MANIFEST).read_text())
-        (c / S.CIRCUITS_MANIFEST).write_text(json.dumps({**m, "program": "6f" * 64}))
-    if case == "no meta":
-        (d / S.H1_META).unlink()
-    if case == "no manifest":
-        (c / S.CIRCUITS_MANIFEST).unlink()
-    why = {"other program": "not the served", "other live T,S": "not the window's 32, 2", "no live": "not the window's",
-           "no meta": "has no declared window Program", "no manifest": "no circuit files at"}[case]
-    with pytest.raises(ValueError, match=why):
-        S.period_open_argv(d, "p", c, slots=4, max_tokens=8)
-
-
-def test_the_program_is_built_off_the_server_as_serve_openai_declares_and_writes_it(tmp_path, monkeypatch):
-    """``program`` declares the served model's linears (`DECLARED`) in vLLM's order and naming, ``(n, K)`` each, at T and
-    S, and writes them with serve-openai's own `served.write_program`; ``--like`` takes model, T and S from a serve
-    dir and refuses a digest other than the one that run declared. The declaration and its digest are stand-ins here
-    (a real one takes minutes); the node job checks the real one against a recorded run's digest."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
-
-    seen = []
-    monkeypatch.setattr(SV, "declared", lambda shapes, modules, rows, steps, unit=None: ("program", shapes, modules, rows,
-                                                                                           steps))
-    monkeypatch.setattr(SV, "declared_layout", lambda shapes, modules, rows, steps: {"tile": [32, 32]})
-
-    def write(prog, layout, out, *, rows, steps):
-        seen.append((prog, layout, out, rows, steps))
-        out.mkdir(parents=True, exist_ok=True)
-        (out / PH.PROGRAM_META).write_text(json.dumps({"program_digest": DIGEST, "rows": rows, "steps": steps,
-                                                       "bytes": 9, "layout": layout}))
-        return DIGEST
-    monkeypatch.setattr(SV, "write_program", write)
-    meta = S.program(tmp_path / "h1", "verity-int8/Llama-3.2-1B-INT8", 512, 16)
-    (_tag, shapes, modules, rows, steps), _layout, out, *_ = seen[0]
-    assert meta["program_digest"] == DIGEST and out == tmp_path / "h1" and (rows, steps) == (512, 16)
-    assert len(shapes) == 64 and shapes[:4] == [(3072, 2048), (2048, 2048), (16384, 2048), (2048, 8192)]
-    assert modules[0] == "model.layers.0.self_attn.qkv_proj" and modules[63] == "model.layers.15.mlp.down_proj"
-
-    run = tmp_path / "serve"
-    run.mkdir()
-    (run / "serve.json").write_text(json.dumps({"served_model_name": "verity-int8/Llama-3.2-1B-INT8",
-                                                "protocols": {"program": DIGEST, "rows": 32, "steps": 2}}))
-    assert S.main(["program", str(tmp_path / "like"), "--like", str(run)]) == 0 and seen[-1][3:] == (32, 2)
-    (run / "serve.json").write_text(json.dumps({"served_model_name": "verity-int8/Llama-3.2-1B-INT8",
-                                                "protocols": {"program": "6f" * 64, "rows": 32, "steps": 2}}))
-    with pytest.raises(ValueError, match="DECLARED's linears aren't the ones that run served"):
-        S.program(tmp_path / "like", "x", 0, 0, like=run)
-    with pytest.raises(ValueError, match="no declared linears for 'other'"):
-        S.program(tmp_path / "other", "other", 512, 16)
-
-
-def _llama(torch, model: str):
-    """`DECLARED`'s model as serve-openai's H1 arm finds it: its int8 linears on the meta device under vLLM's module names,
-    each on a stand-in of the int8_exact plain arm."""
-    from types import SimpleNamespace
-
-    class Linear(torch.nn.Module):
-        def __init__(self, n, k):
-            super().__init__()
-            self.weight = torch.empty(n, k, dtype=torch.int8, device="meta")
-            self.weight_scale = torch.empty(n, 1, device="meta")
-            self.quant_method = SimpleNamespace(int8_arm="plain", observe=lambda *a: None)
-
-    layers, linears = S.DECLARED[model]
-    root = torch.nn.Module()
-    root.model = torch.nn.Module()
-    root.model.layers = torch.nn.ModuleList()
-    for _ in range(layers):
-        layer = torch.nn.Module()
-        for name, n, k in linears:
-            parent, leaf = name.split(".")
-            if not hasattr(layer, parent):
-                layer.add_module(parent, torch.nn.Module())
-            getattr(layer, parent).add_module(leaf, Linear(n, k))
-        root.model.layers.append(layer)
-    return root, Linear
-
-
-def test_the_offline_program_is_the_one_serve_openai_declares_under_the_same_protocols_config(tmp_path, monkeypatch):
-    """``program --protocols-config C`` declares what serve-openai's H1 arm (`serve_h1.H1Windows`) declares under
-    ``--protocols-config C`` over the served model: under ``{"pouw": {"unit": "j10r", "ks": [2048]}}`` the same linears
-    at K 2,048 alone, named alike, over the same J10-R tile unit (`served.unit_of`), at the same T and S, so ``period
-    served`` finds the Program the period opened on; ``--like`` takes C from the run (serve.json's ``protocols.config``).
-    Unset on both sides it is v1's over every linear, another Program, and ``--like`` refuses a run whose Program is not
-    the one its recorded config declares. The declaration is a stand-in that records what it was given (a real one takes
-    minutes)."""
-    from types import SimpleNamespace
-
-    torch = pytest.importorskip("torch")
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as HT, h1window as HW
-    from verity_vllm.pipeline import serve_h1 as SH
-    from verity_vllm.protocols import pouw
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
-
-    model, j10r = "verity-int8/Llama-3.2-1B-INT8", {"pouw": {"unit": "j10r", "ks": [2048]}}
-    llama, linear = _llama(torch, model)
-    monkeypatch.setattr(pouw, "linear_types", lambda: (linear,))
-    monkeypatch.setattr(SV, "weights_of", lambda layers: None)
-    monkeypatch.setattr(SV, "register_weights", lambda *a, **k: SimpleNamespace(root=lambda: bytes(64)))
-    monkeypatch.setattr(SV, "declared", lambda shapes, modules, rows, steps, unit=None: (
-        [tuple(s) for s in shapes], dict(modules), rows, steps,
-        None if unit is None else (unit.func, unit.args, unit.keywords)))
-    programs = []
-
-    def write(prog, layout, out, *, rows, steps):
-        if (prog, layout) not in programs:
-            programs.append((prog, layout))
-        digest = f"{programs.index((prog, layout)):0128x}"
-        out.mkdir(parents=True, exist_ok=True)
-        (out / PH.PROGRAM_META).write_text(json.dumps({"program_digest": digest, "rows": rows, "steps": steps, "bytes": 0}))
-        return digest
-    monkeypatch.setattr(SV, "write_program", write)
-
-    def served(config):
-        arm = SH.H1Windows(llama, None, 512, 16, engine=object(), out=tmp_path / f"serve{len(programs)}", config=config)
-        run = tmp_path / f"run{len(programs)}"
-        run.mkdir()
-        (run / "serve.json").write_text(json.dumps({"served_model_name": model, "protocols": arm.describe()}))
-        return arm, run
-
-    arm, run = served(j10r)
-    meta = S.program(tmp_path / "offline", model, 512, 16, config=json.dumps(j10r))
-    assert meta["program_digest"] == arm.digest and len(programs) == 1
-    shapes, modules, _r, _s, unit = programs[0][0]
-    assert len(shapes) == 48 and {k for _n, k in shapes} == {2048} and modules[0] == "model.layers.0.self_attn.qkv_proj"
-    assert unit[0] is HW.tile_unit and unit[2]["definition"] is HT.PouwH1Tile5
-    assert S.main(["program", str(tmp_path / "like"), "--like", str(run)]) == 0 and len(programs) == 1
-    assert S.main(["program", str(tmp_path / "flag"), "--rows", "512", "--steps", "16", "--protocols-config",
-                   json.dumps(j10r)]) == 0 and len(programs) == 1
-
-    v1, v1_run = served(None)
-    assert S.program(tmp_path / "v1", model, 512, 16)["program_digest"] == v1.digest != arm.digest
-    assert len(programs[1][0][0]) == 64 and programs[1][0][4] is None
-    (v1_run / "serve.json").write_text(json.dumps({"served_model_name": model,
-                                                   "protocols": {**v1.describe(), "program": arm.digest}}))
-    with pytest.raises(ValueError, match="DECLARED's linears aren't the ones that run served"):
-        S.program(tmp_path / "mixed", model, 0, 0, like=v1_run)
-    with pytest.raises(ValueError, match=r"no linear at K \[4096\]"):
-        S.program(tmp_path / "none", model, 512, 16, config=json.dumps({"pouw": {"ks": [4096]}}))
-
 
 
 def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
