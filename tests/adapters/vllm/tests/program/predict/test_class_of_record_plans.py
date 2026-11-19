@@ -1,6 +1,7 @@
 """A served window at the class of record (the BF16 Llama 3.2 1B row on the H100, four requests of 27 prompt ids and 2
 outputs, all in one window) through the close's one compile (`window_circuit.served_lowering`) and its plan
-(`window_plan.Plan`), on the processor: every refusal the card meets there shows here first."""
+(`window_plan.Plan`), on the processor: every refusal the card meets there shows here first, which no smaller class
+shows, since the small templates and their rows are the class's own."""
 from __future__ import annotations
 
 import pytest
@@ -12,7 +13,7 @@ from verity_vllm.program.predict import window_plan as WP
 from verity_vllm.program.predict.phi import phi_of_serve
 from verity_vllm.program.predict.steps import Registered
 
-pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
+pytestmark = [pytest.mark.slow, pytest.mark.usefixtures("code_versions_stood_in")]
 
 #: the H100 smoke's serve.json, as φ reads it
 SERVE = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "execution": "bi-eager",
