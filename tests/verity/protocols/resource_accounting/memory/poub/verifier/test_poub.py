@@ -113,7 +113,7 @@ def params_of(st: audit_prover.Store, **kw) -> Params:
 
 
 def challenger(store, p: Params, label: bytes = b"coins", session: int = 0) -> coins.SessionCoins:
-    return coins.local(store.registration.digest, session, p.windows, Entropy(label), appends=APPENDS)
+    return coins.local(store.registration.digest, session, p.windows, Entropy(label), samples=p.samples, appends=APPENDS)
 
 
 def honest(prover, t, i, challenges, previous, plan):
@@ -746,8 +746,9 @@ def test_each_pass_is_seeded_by_the_chain_from_its_windows_coin(store) -> None:
         fresh.end(c.commitment, (forged,))
     with pytest.raises(ValueError, match="is not the one opened"):
         fresh.end(c.commitment, (first,))
-    with pytest.raises(ValueError, match="openings coin"):
-        prover.run(c.openings(0, first.after), 0, store.registration.digest)
+    c.sample(0, first.after)
+    with pytest.raises(ValueError, match="not a window's challenge: poub/sample coin 0"):
+        prover.run(c.opened(coins.SAMPLE)[0], 0, store.registration.digest)
     with pytest.raises(ValueError, match="already open"):
         c.challenger.open(coins.CHALLENGE, 0, c.window)
 
@@ -886,7 +887,7 @@ def test_samples_wait_for_the_windows_roots(store) -> None:
 
 def test_a_paced_windows_roots_are_final_at_its_k_th_root(store) -> None:
     """A paced window takes at most k roots, so its k-th makes them final once its boundary has left: it is sampled then,
-    with no wait for the next window's first root or its deadline, and the openings coin's request names that root on
+    with no wait for the next window's first root or its deadline, and the sample's coins' request names that root on
     the challenger's log."""
     clock = Clock()
     p = params(pace=audit.Pace(2))
@@ -902,7 +903,7 @@ def test_a_paced_windows_roots_are_final_at_its_k_th_root(store) -> None:
     clock.now = 1000
     s.boundary()
     assert isinstance(s.close(0), tuple)
-    assert s.coins.afters(coins.OPENINGS) == (last,)
+    assert s.coins.afters(coins.SAMPLE) == (last,) * s.coins.m
     assert s.deadline(0) == 1000 + A
     assert s.receive(0, 2, bytes(64), step=2) == audit.Verdict(0, False, "order")
 
@@ -981,16 +982,33 @@ def test_a_session_that_binds_z_recomputes_each_tile(stores, kind) -> None:
     assert finish(s, prover, passes, clock)[0].failure == "receipt"
 
 
-def test_openings_are_sampled_from_the_windows_live_coin(store) -> None:
+def test_openings_are_sampled_from_the_windows_live_coins(store) -> None:
+    """Window 0's draw is the proof system's draw on its sample's m coins as the challenger released them, raw
+    (`audit.receipt_sample`): the same coins draw the same receipts, other coins others."""
     def sampled(label: bytes):
         s, _, _, clock = drive(store, params(), SCHEDULE, label=label)
         clock.now = s.deadline(2) + 1
         out = s.close(0)
         with pytest.raises(ValueError, match="already open"):
-            s.coins.challenger.open(coins.OPENINGS, 0, s.windows[0].roots[-1])
-        assert s.coins.afters(coins.OPENINGS) == (s.windows[0].roots[-1],)
+            s.coins.challenger.open(coins.SAMPLE, s.coins.m - 1, s.windows[0].roots[-1])
+        assert s.coins.afters(coins.SAMPLE) == (s.windows[0].roots[-1],) * s.coins.m
+        src = b"".join(o.coin for o in s.coins.opened(coins.SAMPLE))
+        assert src == s.coins.sample_bytes(0) and len(src) == coins.RAW_BYTES * s.coins.m
+        assert out == audit.receipt_sample(s.params.samples, src, [p.length for p in s.windows[0].plans])
         return out
     assert sampled(b"coins") == sampled(b"coins") != sampled(b"other coins")
+
+
+def test_a_draw_that_runs_out_of_its_samples_coins_ends_the_session() -> None:
+    """The draw reads the sample's coins raw and in order, `2k · width(U) + 64` bytes first: a source shorter than that
+    is the proof system's `RAN_OUT`, which `close` raises, ending the session, never a redraw."""
+    lengths = [5, 7]
+    need = 2 * 7 * (((12).bit_length() + 64 + 7) // 8) + 64
+    assert len(audit.receipt_sample(7, bytes(range(256)) * 4, lengths)) == 7
+    with pytest.raises(ValueError, match=audit.RAN_OUT):
+        audit.receipt_sample(7, bytes(need - 1), lengths)
+    assert audit.receipt_sample(0, b"", lengths) == ()
+    assert coins.RAW_BYTES * coins.sample_coins(7) >= 2 * 7 * (((2 ** 64 - 1).bit_length() + 71) // 8) + 64
 
 
 def test_a_session_over_the_store_starts_after_the_one_before_it_ends(store) -> None:

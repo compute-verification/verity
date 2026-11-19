@@ -55,6 +55,7 @@ def _rms(B, S, x, w):
 
 DsaRMSNormV2 = flat("DsaRMSNorm", 2, ["N", "EPS"], lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16))), Array(S.N, BF16)),
                     _rms, DN.DsaRMSNorm)
+DsaRMSNormV2.opt_in = True  # type: ignore[attr-defined]  (`DsaRMSNorm_v3` is the word's Boolean version; this one serves a reader that names it)
 
 
 def _sum_sq(B, S, x):

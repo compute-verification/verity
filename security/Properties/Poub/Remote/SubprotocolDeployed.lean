@@ -136,7 +136,7 @@ def QBytesAtSubprotocol : Prop :=
       (Poub.Protocol.DELTA : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (Poub.Protocol.DELTA : ℝ) t)).toReal +
-        (∑ t, F.hide com prf (Poub.Protocol.DELTA : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal
+        (∑ t, F.hide com prf (Poub.Protocol.DELTA : ℝ) t).toReal + (R.binding ((F.play com).opened prf rest)).toReal
 
 /-- **The memory line of record, in bits read, at the bandwidth component.** `LineHeld`'s node, trace, records and
 premises verbatim, one coin for each of the session's samples (`Node.samples`), and the bytes the component is given at
@@ -163,6 +163,6 @@ def LineHeldAtSubprotocol : Prop :=
       δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
-        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
+        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding ((F.play com).opened prf rest)).toReal)
 
 end Properties.Poub.Subprotocol

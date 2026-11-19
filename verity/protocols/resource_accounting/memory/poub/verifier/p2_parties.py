@@ -86,6 +86,7 @@ from typing import Any, BinaryIO
 from verity.channel import Body, Message, Schema
 from verity.party import Finish, Identity, Received, Send, Timer
 from verity.protocol import Channel, Manifest, ProtocolDef, Role, Start, Starter
+from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
@@ -126,9 +127,9 @@ SESSION = {"deadline_ns": 10**9, "passes": 4, "samples": 1024, "window_ns": 20 *
 four passes each, 1,024 openings a window and an allowance of 1 s. At δ = 2^-40 an accepted session's ε is
 δ + 6,144/2^64 (`EPS_TERMS`), about 9.1e-13, which leaves out Σ_t adv_t (SHA-512 stream as PRF: not priced, not
 assumed)."""
-DELTA = 2.0 ** -40
-"""PoUB-P2's δ, its own (`P2Session.DELTA`): each window's profile δ and the pooled bound's.  It is not PoUB's
-`audit.DELTA`, and not at an error of 2^-100."""
+DELTA = float(WINDOW_DELTA)
+"""PoUB-P2's δ, the proof system's per-window δ (`profile.WINDOW_DELTA`, 2^-40; `P2Session.DELTA` in the Lean): each
+window's profile δ and the pooled bound's.  It is not PoUB's `audit.DELTA`, and not at an error of 2^-100."""
 #: The samples a thread of the Lean checks at once (`P2Session.checkOpeningsChunked`).
 CHUNK = 64
 #: what an accepted session's `eps` sums (`core_answer`)
@@ -377,17 +378,20 @@ class _Ended(Exception):
 class Challenger:
     """The session's challenger on the verifier's host (`coins.local`, on coins from `secret`) and the clock's schedule
     it keeps, which decide nothing: each coin is released in order after the last root the Lean took (the
-    registration's window root before any), a window's openings coin after its last root once it holds the auditor's
+    registration's window root before any), a window's sample's coins after its last root once it holds the auditor's
     passes, and a window's boundary is due `window_ns` after its challenge left and its deadline `deadline_ns` after
-    its boundary. `released` is the coin the last step released, None for none."""
+    its boundary. `released` is the challenge the last step released, None for none, and `sample` the coins of the
+    sample the last close released, whole, None for none."""
 
     def __init__(self, registration: p2.Registration, auditor: Mapping[str, int], secret: bytes) -> None:
-        self.coins = C.local(registration.digest, 0, auditor["windows"], P._Stream(secret, registration.node))
+        self.coins = C.local(registration.digest, 0, auditor["windows"], P._Stream(secret, registration.node),
+                             samples=auditor["samples"])
         self.auditor, self.latest = auditor, self.coins.window
         self.roots: list[list[bytes]] = []
         self.released_ns: list[int] = []
         self.boundary_ns: list[int | None] = []
         self.released: C.LiveOpening | None = None
+        self.sample: bytes | None = None
 
     def _challenge(self, t: int, now: int) -> C.LiveOpening:
         self.released = self.coins.challenge(t, self.latest)
@@ -397,6 +401,7 @@ class Challenger:
         return self.released
 
     def start(self, now: int) -> None:
+        self.sample = None
         self._challenge(0, now)
 
     def _unended(self) -> int | None:
@@ -404,7 +409,7 @@ class Challenger:
 
     def boundary(self, now: int) -> None:
         t = self._unended()
-        self.released = None
+        self.released = self.sample = None
         if t is None:
             return
         self.boundary_ns[t] = now
@@ -417,7 +422,8 @@ class Challenger:
 
     def close(self, t: int) -> None:
         rs = self.roots[t] if 0 <= t < len(self.roots) else []
-        self.released = self.coins.openings(t, rs[-1]) if len(rs) >= self.auditor["passes"] else None
+        self.released = None
+        self.sample = self.coins.sample(t, rs[-1]) if len(rs) >= self.auditor["passes"] else None
 
     def next_boundary_ns(self) -> int | None:
         t = self._unended()
@@ -477,10 +483,12 @@ class LeanSession:
             return {"error": str(e)}
 
     def _event(self, event: dict[str, Any]) -> Any:
-        c = self.challenger.released
-        self.log.append({"coin": None if c is None else c.coin.hex(), "event": event, "op": "p2_event"})
+        c, sample = self.challenger.released, self.challenger.sample
+        whole = sample if sample is not None else None if c is None else c.coin
+        coin = sample if sample is not None else None if c is None else C.coin(c)
+        self.log.append({"coin": None if whole is None else whole.hex(), "event": event, "op": "p2_event"})
         return self._ask({"op": "p2_event", "session": self.k, "event": event,
-                          "coin": None if c is None else C.coin(c).hex()})
+                          "coin": None if coin is None else coin.hex()})
 
     def start(self, now: int) -> tuple[Any, C.LiveOpening | None]:
         """The session's first coin at `now`: the result, and the challenge to send."""
