@@ -95,15 +95,19 @@ def drawn(win: Any) -> Any:
 def python_door(member: Any, circuit_file: bytes = b"", public: bytes | None = None,
                 partition: dict | None = None) -> tuple[Any, Any]:
     """The door on a proof of ``member``'s block, under a draw that sampled that block alone; ``public`` defaults to a
-    public file naming the block's first unit."""
+    public file naming exactly the block's units."""
     r = registered()
     with tempfile.TemporaryDirectory() as d:
         cf, pub, s = Path(d, "circuit.txt"), Path(d, "pub.bin"), Path(d, "s0")
         cf.write_bytes(circuit_file)
-        pub.write_bytes(json.dumps({"units": {"indices": [member.base]}}).encode() + b"\n" if public is None else public)
+        k = [m.base for m in r["window"].window.members].index(member.base)
+        try:
+            units = [u for lo, hi in OC.block(r["C"], r["partition"], k) for u in range(lo, hi)]
+        except OC.Refused:
+            units = [member.base]
+        pub.write_bytes(json.dumps({"units": {"indices": units}}).encode() + b"\n" if public is None else public)
         s.mkdir()
         (s / "session.json").write_text("{}")
-        k = [m.base for m in r["window"].window.members].index(member.base)
         return PF.verify(PF.Proof(cf, pub, (s,)), program=r["C"], partition=r["partition"] if partition is None else partition,
                          draw={"units": [k]}, registered=r["theta"])
 
