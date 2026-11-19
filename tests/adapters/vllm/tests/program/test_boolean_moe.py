@@ -35,18 +35,18 @@ from verity_vllm.definitions.registry.prims import F32, I32
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "MoeSumCoordinate_v2{TOPK=8}": (5222, 8395, 764, "afe7da5c3245a9ec9d6631f1b9b6b686f2c83af71edd52fd8e0c35cd2dee4af2702d65488815ed365213797fb33d77e830fe82d929c5ef3417e60cd05fc59a7d"),
-    "MoeSum_v2{TOPK=8,H=8}": (41776, 67160, 6112, "4c068e14ab23ebb919f4090677ab7cd17c3935c82fe382e6f8cd1ad24bff1210ebffabe282250d4adbda4e23521fa6759ef72a6b539bd49bf4967e6e38f4a699"),
+    "MoeSumCoordinate_v2{TOPK=8}": (5222, 8395, 764, "1539da6028381f67e916335e4fd2b5f82a40011b5c52cb7d5edddbbd476f9ad26c08d446c45c6a6fe29aba010f3964d1292501432c9a99333c1be09c7b685bf2"),
+    "MoeSum_v2{TOPK=8,H=8}": (41776, 67160, 6112, "ac2f217015fa473b5dc578a9a3fef84c65585c9587734acd8c8b07d2f281974c5ffecfb772d1cfbc6fece973fcd63d68ce889330c4588277f2cc33b509b6fa29"),
     "MoeSum_v3{TOPK=8,H=136}": (710192, 1141720, 103904,
-                                "9fe815a960c0f771d368fcd1318874b93f7b806cf1bdc9032f228844b429146759c4eeaead54ae6409970969c8067fd63ccfabf0996d5daebc5cf726a1d8ceb3"),
-    "NvExpf_v2": (11372, 21804, 880, "a91ca00bbe5e644fd206e1be3fe064234dc439382fb2201d823f0c8568646e186262ad31cd26a6253072854294694606fa977c8005650aaf938b23a50ebe16f7"),
+                                "e63b4013a9a5a5c828842346e755193ae0b4f566817ea62dc610d56706d998bd6bd40d2c1973839cde54b833bb3c78d40b16395e3de114642b3a103d169c1927"),
+    "NvExpf_v2": (11372, 21804, 880, "3a80f1c8520c0d19a0bcb4230aeaa8441b4b5a2aa6bf60ffa9bdb28ce42a128e2e45c3c97e13ab924e7df80a360660b228fd017d035464206ba3a0e30b96cb2b"),
     "MoeRouterTopKOrdered_v2{E=8,TOPK=2,VPT=4}": (126243, 239434, 10631,
-                                                  "285955047f4821f8c5f751d032ec0bafcb8b1621eaf34a635486e7ac65588ad45d9811acfc985d00bbd5bffcc819e11ac40a0e1ee714c99e41fb5b0d0b9adcc7"),
-    "MoeRouterSigmoidScore_v2": (30839, 58793, 2452, "511c827402ceb909aaf546f15ab00ac31b6712e5955806ead1ce12d1cc1a5d35755bbddd37d95aa01ad8d90ab5b23bf0ed07c3076c7cd92c5c4fad5bd89d7456"),
+                                                  "5985c29e19882d3ad75dc4cb67fbcb273c5cd6c39a45a2a9e97ec7233769dd3562ff2582cbcfc64b0421de57d2aa17bb230a6ea5bf50d3c0a08ace77e8c93a99"),
+    "MoeRouterSigmoidScore_v2": (30839, 58793, 2452, "ac04bddc7211be0ebe42f0826a2419df88b51865f47d651abfae97e0c3a804bb37ddbe25ef92674664c04b7b89846a3543d55e9367e8c879f3fcb68e0a4ba651"),
     "MoeRouterSigmoidBias_v2{E=8,TOPK=2,SCALE=2.5,KERNEL='block'}": (258083, 492361, 20884,
-                                                                     "b96888197c14bc72fe4a4f6c5a19ae0b11b3ed1247024b175b759a35227b8d149665193205f1db6e309033793c20e42d19a24e74ff6629c046a9d86058407024"),
+                                                                     "71b51964c009a69c8b4d4de326b19971132d534808c2d2b739a83ab271eb0ae98991c97ecbce3475667802e8f116daace52eed44616d7eec4a434ede67a53c7f"),
     "MoeRouterSigmoidBias_v2{E=8,TOPK=2,SCALE=2.5,KERNEL='warp'}": (259626, 494985, 21130,
-                                                                    "27ac80523ef558eb7d6bb3d98e86fcdf0345e959eca86586de7a3dc7fd478b57bb9fef175ad1b826c88e125c587efb27e62e3c971cd997b20ba6f9fe8b436750"),
+                                                                    "561ea9ddd2bda8904cf9adcc41268cb715e35a4db5ff118e6c9860895f068206a8a0d8d6769424194a076f9ead2a67122f9f6e4102de84babe6fd51cea273cc5"),
 }
 TARGETS = [bind(BM.MoeSumCoordinate, TOPK=8), bind(BM.MoeSum, TOPK=8, H=8), bind(BM.MoeSumV3, TOPK=8, H=136), bind(BM.NvExpf),
            pytest.param(bind(BM.MoeRouterSigmoidScore), marks=pytest.mark.slow),
