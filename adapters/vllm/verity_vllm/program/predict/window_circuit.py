@@ -342,6 +342,8 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
         gtid, _ = b.allocation(egress, [(0, 0)] * cls.buckets)
         b.feed(gtid, "state", 0, cls.buckets, (Row(itid, 0, "o2", outs["o2"]),), lead=((cls.buckets, 1),))
         b.value(gtid, "o1", 0, SS.RELEASED_ROWS, 0, cls.buckets, cls.buckets)
+        for tid in (itid, gtid):
+            b.read(tid, "o0", 0, (cls.buckets,), 0, (0,), param=SS.OK)
     for r in progs:
         if r.position != r.positions:
             raise Unexpressible(f"{r.name}: {r.position} positions, not its {r.positions}")
@@ -352,7 +354,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
             raise Unexpressible(f"{r.name}: linears cut by position {r.linears}, not the layout's {len(layout.calls)} calls")
     b.settle()
     roots, openings = b.merged()
-    params = {SS.SCAN_STATE: cls.buckets * scan.bindings["NS"], **b.params}
+    params = {SS.SCAN_STATE: cls.buckets * scan.bindings["NS"], **b.params, **({} if order is None else {SS.OK: 1})}
     if isinstance(tables, Tables):
         held = tuple(v for s in range(cls.outputs) for v in (tables.a(s), tables.ids(s)))
     elif isinstance(tables, PearlTables) and layout is not None:
@@ -361,7 +363,8 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
         held = ()
     reg = IF.Registered(dict(sorted(params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
                         tuple(openings), values=(*held, SS.SCAN_STATE, *(() if order is None else (SS.INGRESS_ROWS, SS.RELEASED_ROWS))),
-                        formats={v: ROW_FORMAT for v in held} if layout is not None else {})
+                        formats={v: ROW_FORMAT for v in held} if layout is not None else {},
+                        supplied={} if order is None else {SS.OK: SS.OK_MARK})
     wires = tuple(IF.coalesce(b.wires if order is None else b.allocation_wires()))
     entry_units = {r.entry_unit[0] for r in progs if r.entry_unit is not None}
     if len(entry_units) != 1 or any(r.entry_unit is None for r in progs):

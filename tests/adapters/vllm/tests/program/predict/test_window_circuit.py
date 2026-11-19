@@ -25,6 +25,7 @@ import pytest
 from verity.circuits import boolean as BL
 from verity.circuits import census as CE
 from verity.circuits import count as K
+from verity.circuits import supplied as SU
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.evaluation import evaluate_batch
@@ -287,6 +288,43 @@ def test_a_served_windows_circuit_holds_the_scan_its_entries_wired_into_it():
     assert [_source(c, egress, "state", t) for t in range(16)] == [(bucket, t, "o2") for t in range(16)]
     assert c.external == (f"{start}/sin", f"{bucket}/row", f"{egress}/o1") and c.order is not None
     assert IF.input_count(c.description(), **held(c))["free"] == 0
+
+
+def _ok(value: int, prog: str = "ab" * 64) -> RV.Registered:
+    """A one-row ok value holding ``value`` under the public salt the verifier's supplied ok row is committed with."""
+    schema, bits = IF.value_format(_lowered(WINDOW).circuit.registered, SS.OK)
+    return RV.Registered.commit(prog, SS.OK, [[value]], RV.supplied_salts(prog, SS.OK, 1), bits, schema)
+
+
+def test_every_scan_buckets_verdict_reads_the_one_supplied_ok_and_the_class_circuit_has_none():
+    """Every ingress and egress bucket's verdict ``o0`` is a registered read of position 0 of `scan_state.OK`, one leaf
+    the verifier supplies as 1 from its mark alone (a whole u16 word, its other 15 bits 0); the start has no verdict, and
+    the class circuit, which holds no scan, registers no ok."""
+    c, s = _lowered(WINDOW).circuit, CLASS.scan
+    start, bucket, egress = (IF.descriptor_id(f) for f in (s.start, s.bucket, s.egress))
+    assert c.registered.supplied == {SS.OK: SS.OK_MARK} and c.registered.params[SS.OK] == 1
+    assert {(r.reader, r.port, r.at, r.radix, r.base, r.step) for r in c.registered.reads if r.param == SS.OK} == {
+        (bucket, "o0", 0, (16,), 0, (0,)), (egress, "o0", 0, (16,), 0, (0,))}
+    assert not any(r.reader == start for r in c.registered.reads if r.param == SS.OK)
+    sources, n = G.body({}, SS.OK, SS.OK_MARK)
+    assert (sources, n) == ([("bytes", "0100")], 2)
+    assert SU.leaves("le", bytes.fromhex(sources[0][1]), IF.value_format(c.registered, SS.OK)[1]) == [1]
+    cls = class_circuit(S._registered(), CLASS, None, GRAIN).registered
+    assert SS.OK not in cls.params and not cls.supplied
+
+
+@pytest.mark.parametrize("which,unit,word", [("bucket", 3, 0), ("egress", 5, 0), ("bucket", 0, 0x8001), ("egress", 15, 0x8001)])
+def test_a_bucket_whose_committed_verdict_is_not_1_opens_no_ok_root_at_its_read(which, unit, word):
+    """A bucket's ``o0`` row, committed under the ok value's public salt as the window commits a read output row, opens the
+    verifier's ok root at the read's position only when it is 1: a verdict of 0, or 0x8001 (a high bit set), is refused at
+    the read (Lean `Flock.Registered`: "table row 0 does not open scan-ok's registered root at position 0")."""
+    c, s = _lowered(WINDOW).circuit, CLASS.scan
+    tid = IF.descriptor_id(s.bucket if which == "bucket" else s.egress)
+    (r,) = [r for r in c.registered.reads if (r.reader, r.port, r.param) == (tid, "o0", SS.OK)]
+    assert r.at <= unit < r.at + r.radix[0] and r.step == (0,)
+    position, ok, row = r.base, _ok(1), _ok(word)
+    assert position == 0 and G.verify_read(ok.domain, ok.root, position, ok.bcs[0], ok.path(position), ok.schema)
+    assert not G.verify_read(ok.domain, ok.root, position, row.bcs[0], ok.path(position), ok.schema)
 
 
 def test_the_slots_entries_are_one_member_a_lane_in_boundary_order():

@@ -33,6 +33,10 @@ B, R, C, IDB, WITHIN = 512, 4, 47, 17, 12
 PORT = "scan-state"
 #: the scheme's ports of the network attester's ingress rows and of the rows it released
 INGRESS, RELEASED = "ingress", "released"
+#: the value every ingress and egress bucket's verdict ``o0`` reads at its one leaf: 1 as a whole u16 word, which the
+#: verifier supplies (`verity.circuits.supplied`), so a bucket the scan refuses opens no root
+OK = "scan-ok"
+OK_MARK = {"supplied": "const.u16/v1", "args": {"value": 1}, "layout": "le", "bits": 16}
 if TYPE_CHECKING:
     SCAN_STATE: str
     INGRESS_ROWS: str
@@ -115,4 +119,4 @@ def bridge(scan: Scan, prompt: int) -> Any:
                 LP=at["fields"], MAX=at["max_tokens"], IDS=at["ids"])
 
 
-__all__ = ["INGRESS", "INGRESS_ROWS", "PORT", "RELEASED", "RELEASED_ROWS", "SCAN_STATE", "Scan", "bridge", "scan_class", "words"]
+__all__ = ["INGRESS", "INGRESS_ROWS", "OK", "OK_MARK", "PORT", "RELEASED", "RELEASED_ROWS", "SCAN_STATE", "Scan", "bridge", "scan_class", "words"]
