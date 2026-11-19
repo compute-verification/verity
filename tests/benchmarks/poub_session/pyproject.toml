@@ -4,8 +4,7 @@
 # runs both over a loopback socket with the driver's reference as the prover's backend
 # (`uv run tools/check/suites.py benchmarks/poub_session`). `serve.py` is vLLM serving as the prover, which
 # `tests/test_vllm_serve.py` runs where vLLM, a GPU and the vLLM integration's `StoreBackend` are; `run.sh`'s served
-# lines (SERVE=tiny, SERVE=row) run on a node of stubs, with no GPU, in `tests/test_run_serve.py`. `sampling_inputs.py`
-# reads a run's `verifier.json` for the audit's side of a sampling plan: ε, the line and the serving cost. `auditor_line.py`
+# lines (SERVE=tiny, SERVE=row) run on a node of stubs, with no GPU, in `tests/test_run_serve.py`. `auditor_line.py`
 # reads a gate run's memory line on the auditor's clock, computed by the Lean verifier (its `line` request) and held
 # exactly to `line.py`'s: each group's coin and last root from the challenger's signed
 # release log, read through the auditor's ledger, the verifier's stamps only a cross-check; it credits a session only when
@@ -79,8 +78,7 @@ inputs = ["verity/protocols/resource_accounting/memory/poub/prover/poub_session/
           # test_run_serve.py: a node's machine properties by the harness kit's `MACHINE_PROPERTIES`
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
           "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py", "tools/config/verity_config",
-          # test_sampling_inputs.py: sampling_inputs.py prices an opening with SPOT's one cost fit; and the
-          # ledger and credit checks' Lean verifier, `spot-verifier` (`coins.lean_answer`), with the
+          # the ledger and credit checks' Lean verifier, `spot-verifier` (`coins.lean_answer`), with the
           # interface its package requires
           "verity/protocols/proofs/spot", "verity/protocols/interface",
           # test_challengers.py: challengers.Gate against the auditor device's gate, its sessions served by serve.py
