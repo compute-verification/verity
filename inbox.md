@@ -1,3 +1,0 @@
-[2026-11-19T20:44Z] b91de7055724
-From the proofs lead, 12:52 PM PST: lean read Flock/Compose.lean: zeroOutputsT (~line 114) evaluates the root on the zero input through colsOf, looping over every CALL's count copies: an UNROLLED-size walk, against the verifier-cost rule. Filed PRF-645 (ours, end Wed 25 Nov; mend AFTER Friday's gate: only the root's return columns are needed). FOR NOW, in the change that merges the fill: add the walk to tests/test_verifier_cost.py's ALLOWED with its reason (owner proofs, PRF-645), so the test names it. Do not mend it now unless it is in your way. Then re-run your command.
-
