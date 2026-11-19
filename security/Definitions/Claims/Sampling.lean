@@ -271,8 +271,8 @@ def PrivateCircuit.args (c : SizeClass) (n : PrivateCircuit) : List Bool :=
 
 /-- **A one-stage sampling design** over a population in strata: every member (`all`); a uniform `K`-subset
 (`subset:K`); each member independently at rate `num/den` (`bernoulli:NUM/DEN`); a uniform `k_s`-subset of each
-stratum, independently, at the design's own `ks` (`stratified`, whose rule `stratified:K` gives
-`k_s = max(1, round(K·n_s/N))`), or
+stratum, independently, at the design's own `ks` (`stratified`; its `K` is the rule's parameter and no count, the
+sample holds `Σ k_s` units, and the rule `stratified:K` gives `k_s = max(1, round(K·n_s/N))`), or
 `k_s = min(n_s, max(f_s, ⌈K·w_s·n_s/W⌉))` from each stratum's work `w_s` and floor `f_s`, `W = Σ w_s·n_s` (`work:K`). -/
 inductive OneStage where
   | all

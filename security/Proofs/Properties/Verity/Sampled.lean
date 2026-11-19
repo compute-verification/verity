@@ -665,19 +665,26 @@ theorem ParamsAt.unique {θ : ByteArray} {p p' : _root_.Spot.OneStageZk.Params} 
 def OneStatement (θ : ByteArray) : Prop :=
   ∀ p, ParamsAt θ p → p.members = none
 
-/-- **The Flock sampling design the sample reads over `n` units** under the verifier `v`'s agreed sampling design: the sampling design
-`Spot.Draw.deriveSamplingDesign` derives, or else the expanded rule's (`Spot.Draw.flockSamplingDesign` at
-`Spot.Draw.derive`'s), as `Spot.OneStage.sampledFrom` reads it before `Spot.Draw.sampleUnits`
-samples. -/
-def samplingDesignAt (v : _root_.Spot.Docket.Verifier) (n : ℕ) : Flock.V Flock.Draw.SamplingDesign := do
-  let samplingDesignJ ← _root_.Spot.Draw.derive v.program v.query v.samplingDesign v.workTable
+/-- **The Flock sampling design the sample reads over `n` units under the sampling design object `J`**, as
+`Spot.OneStage.sampledFrom` reads it before `Spot.Draw.sampleUnits` samples: the sampling design
+`Spot.Draw.deriveSamplingDesign` derives where `J` is that one, else the one `Spot.Draw.flockSamplingDesign` parses from `J`. -/
+def designFrom (v : _root_.Spot.Docket.Verifier) (J : Lean.Json) (n : ℕ) : Flock.V Flock.Draw.SamplingDesign := do
   let derived ← _root_.Spot.Draw.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable
-  pure (derived.getD (← _root_.Spot.Draw.flockSamplingDesign samplingDesignJ n))
+  match derived with
+  | some d => if _root_.Spot.Draw.sameSamplingDesign J d.toJson then pure d
+    else _root_.Spot.Draw.flockSamplingDesign J n
+  | none => _root_.Spot.Draw.flockSamplingDesign J n
+
+/-- **The Flock sampling design the sample reads over `n` units** where the record names the law `law`: `designFrom` at the
+sampling design object the verifier `v` agrees to at `law` (`Spot.Draw.agreed`). -/
+def samplingDesignAt (v : _root_.Spot.Docket.Verifier) (law : Lean.Json) (n : ℕ) : Flock.V Flock.Draw.SamplingDesign := do
+  let samplingDesignJ ← _root_.Spot.Draw.agreed v.program v.query v.samplingDesign v.workTable v.rate law
+  designFrom v samplingDesignJ n
 
 /-- **`A` is the session v2 sets up on the parameters `θ` and the committed files `F`**: v2's parameters in the
 composite's (`ParamsAt`), which name no members, so the session is the one statement's (`single`, `OneStatement`; a
 window of members is `Window`'s), with the verifier's partition object and program as verity-verify-proof's inputs, the sampling design the sample
-reads over the population (`samplingDesignAt`), and the statement's descriptor and the registration's query the verifier's program
+reads at a law over the population (`samplingDesignAt`), and the statement's descriptor and the registration's query the verifier's program
 (`Spot.Program.parse`) and query, so the registration's population is the verifier's, and the sample's bytes
 the coins of the parameters' challenger family, as many as the coin commitment's families give it (`Vocab.families`),
 `COIN_BYTES` bytes each; the statement's tags, one table, no work, stratified or closure input and no recomputation of
@@ -687,7 +694,7 @@ the published certificate's. The device's bytes and the bound's parameters are t
 (`Deployed`). -/
 structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Live) : Prop where
   params : ∃ p, ParamsAt θ p ∧ A.I.partition = some p.own.partition ∧ A.I.program = some p.own.program ∧
-    samplingDesignAt p.base.verifier A.n = .ok A.design ∧
+    (∃ law, samplingDesignAt p.base.verifier law A.n = .ok A.design) ∧
     _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok p.base.verifier.program ∧
     A.qr = p.base.verifier.query ∧
     ∃ key label m, p.base.challenger = some (key, label) ∧ (label, m) ∈ V.families θ ∧

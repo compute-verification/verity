@@ -246,53 +246,54 @@ def sampledBlocks (draw : Lean.Json) : Array ℕ :=
   | _ => #[]
 
 /-- **The sampling design and population v2's sample runs under** at the parameters `p` and the commitment `c`
-(`OneStage.sampledFrom`'s): the verifier's sampling design as `Draw.derive` expands it, the record's population `n`, and the sampling design `L`
-the sample reads its bytes under, the derived sampling design where `Draw.deriveSamplingDesign` gives one and else the sampling design's own
-(`Draw.flockSamplingDesign`). -/
+(`OneStage.sampledFrom`'s): the record's population `n`, and the sampling design `L` the sample reads its bytes under at the
+record's law (`samplingDesignAt`). -/
 def SamplingDesignOf (p : _root_.Spot.OneStageZk.Params) (c : _root_.Spot.OneStage.Commitment)
     (L : Flock.Draw.SamplingDesign) (n : ℕ) : Prop :=
-  ∃ samplingDesign derived fl,
-    _root_.Spot.Draw.derive p.base.verifier.program p.base.verifier.query p.base.verifier.samplingDesign
-      p.base.verifier.workTable = .ok samplingDesign ∧
-    _root_.Spot.nat? (_root_.Spot.getD c.record "population") = some n ∧
-    _root_.Spot.Draw.deriveSamplingDesign p.base.verifier.program p.base.verifier.query p.base.verifier.samplingDesign
-      p.base.verifier.workTable = .ok derived ∧
-    _root_.Spot.Draw.flockSamplingDesign samplingDesign n = .ok fl ∧ L = derived.getD fl
+  samplingDesignAt p.base.verifier (_root_.Spot.getD c.record "law") n = .ok L ∧
+    _root_.Spot.nat? (_root_.Spot.getD c.record "population") = some n
 
 /-- The parameters and the commitment fix the sampling design and the population. -/
 theorem samplingDesignOf_unique {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {L L' : Flock.Draw.SamplingDesign} {n n' : ℕ} (h : SamplingDesignOf p c L n) (h' : SamplingDesignOf p c L' n') : L = L' ∧ n = n' := by
-  obtain ⟨samplingDesign, der, fl, h1, h2, h3, h4, rfl⟩ := h
-  obtain ⟨samplingDesign', der', fl', h1', h2', h3', h4', rfl⟩ := h'
-  rw [h1] at h1'; cases h1'
+  obtain ⟨h1, h2⟩ := h
+  obtain ⟨h1', h2'⟩ := h'
   rw [h2] at h2'; cases h2'
-  rw [h3] at h3'; cases h3'
-  rw [h4] at h4'; cases h4'
+  rw [h1] at h1'; cases h1'
   exact ⟨rfl, rfl⟩
+
+/-- `sampledFrom` is `designFrom`'s sampling design, a Bernoulli one refused, then `sampleUnits` under it. -/
+theorem sampledFrom_eq (v : _root_.Spot.Docket.Verifier) (J : Lean.Json) (n : ℕ) (src : ByteArray) :
+    _root_.Spot.OneStage.sampledFrom v J n src = (designFrom v J n >>= fun L =>
+      _root_.Spot.OneStage.coveredDesign L >>= fun l => _root_.Spot.Draw.sampleUnits l n src) := by
+  unfold _root_.Spot.OneStage.sampledFrom designFrom
+  cases _root_.Spot.Draw.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable with
+  | error e => rfl
+  | ok derived =>
+    cases derived with
+    | none => cases _root_.Spot.Draw.flockSamplingDesign J n <;> rfl
+    | some d =>
+      cases _root_.Spot.Draw.sameSamplingDesign J d.toJson
+      · cases _root_.Spot.Draw.flockSamplingDesign J n <;> rfl
+      · rfl
 
 theorem sampledFrom_ok {v : _root_.Spot.Docket.Verifier} {samplingDesign : Lean.Json} {n : ℕ} {src : ByteArray}
     {units : Array ℕ} {read : ℕ} (h : _root_.Spot.OneStage.sampledFrom v samplingDesign n src = .ok (units, read)) :
-    ∃ derived fl, _root_.Spot.Draw.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable = .ok derived ∧
-      _root_.Spot.Draw.flockSamplingDesign samplingDesign n = .ok fl ∧
-      _root_.Spot.Draw.sampleUnits (derived.getD fl) n src = .ok (units, read) := by
-  unfold _root_.Spot.OneStage.sampledFrom at h
-  cases hd : _root_.Spot.Draw.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable with
-  | error e => rw [hd] at h; cases h
-  | ok derived =>
-    cases hf : _root_.Spot.Draw.flockSamplingDesign samplingDesign n with
-    | error e => rw [hd, hf] at h; cases h
-    | ok fl =>
-      rw [hd, hf] at h
-      change (_root_.Spot.OneStage.coveredDesign (derived.getD fl) >>= fun l =>
-        _root_.Spot.Draw.sampleUnits l n src) = _ at h
-      refine ⟨derived, fl, rfl, rfl, ?_⟩
-      revert h
-      cases derived.getD fl
-      case bernoulli a b =>
-        intro h
-        change Except.error _ = _ at h
-        cases h
-      all_goals intro h; exact h
+    ∃ L, designFrom v samplingDesign n = .ok L ∧ _root_.Spot.Draw.sampleUnits L n src = .ok (units, read) := by
+  rw [sampledFrom_eq] at h
+  cases hL : designFrom v samplingDesign n with
+  | error e => rw [hL] at h; cases h
+  | ok L =>
+    rw [hL] at h
+    change (_root_.Spot.OneStage.coveredDesign L >>= fun l => _root_.Spot.Draw.sampleUnits l n src) = _ at h
+    refine ⟨L, rfl, ?_⟩
+    revert h
+    cases L
+    case bernoulli a b =>
+      intro h
+      change Except.error _ = _ at h
+      cases h
+    all_goals intro h; exact h
 
 theorem eq_of_bne_ite {a b : Array ℕ} {s : String} {rest : Option String}
     (h : (if (a != b) = true then some s else rest) = none) : a = b := by
@@ -320,14 +321,14 @@ theorem coinsReason_none {v : _root_.Spot.Docket.Verifier} {samplingDesign rec_ 
         cases j <;> rfl
       rw [hdf, hx]
 
-/-- **v1's check at the coins `ξ` accepts only where `ξ` samples the evidence's units**: under the verifier's sampling design as
-derived and the record's population, `OneStage.sampledFrom` on `ξ` gives them. -/
+/-- **v1's check at the coins `ξ` accepts only where `ξ` samples the evidence's units**: under the sampling design the verifier
+agrees to at the record's law (`Draw.agreed`) and the record's population, `OneStage.sampledFrom` on `ξ` gives them. -/
 theorem checkAt_drew {p : _root_.Spot.OneStage.Params} {c : _root_.Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.Spot.OneStage.Evidence} {pub : _root_.Spot.OneStage.Public}
     {prof : Core.Integrity} (h : _root_.Spot.OneStage.checkAt p c (some ξ) e = .accept pub prof) :
     ∃ samplingDesign n read,
-      _root_.Spot.Draw.derive p.verifier.program p.verifier.query p.verifier.samplingDesign p.verifier.workTable =
-        .ok samplingDesign ∧
+      _root_.Spot.Draw.agreed p.verifier.program p.verifier.query p.verifier.samplingDesign p.verifier.workTable
+        p.verifier.rate (_root_.Spot.getD c.record "law") = .ok samplingDesign ∧
       _root_.Spot.nat? (_root_.Spot.getD c.record "population") = some n ∧
       _root_.Spot.OneStage.sampledFrom p.verifier samplingDesign n ξ = .ok (sampledBlocks e.draw, read) := by
   unfold _root_.Spot.OneStage.checkAt at h
@@ -511,6 +512,18 @@ theorem case_drew {k : Verity.Registration.Composite} {s : Verity.Sent} (hS : Ve
       exact ⟨_, _, _, p₀, c, ev, ξ, dr, hcase, hp, hc, hev, hξ, hdr, pub, prof, hck⟩
   · simp [VStar.Recursive.Sampled.checkBlobs] at hck
 
+/-- `SamplingDesignOf` from v1's check's agreed sampling design (`checkAt_drew`) and `designFrom`'s at it (`sampledFrom_ok`). -/
+theorem samplingDesignOf_of {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment} {J : Lean.Json}
+    {L : Flock.Draw.SamplingDesign} {n : ℕ}
+    (hd : _root_.Spot.Draw.agreed p.base.verifier.program p.base.verifier.query p.base.verifier.samplingDesign
+      p.base.verifier.workTable p.base.verifier.rate (_root_.Spot.getD c.record "law") = .ok J)
+    (hn : _root_.Spot.nat? (_root_.Spot.getD c.record "population") = some n) (hL : designFrom p.base.verifier J n = .ok L) :
+    SamplingDesignOf p c L n := by
+  refine ⟨?_, hn⟩
+  unfold samplingDesignAt
+  rw [hd]
+  exact hL
+
 /-- **v2 drew `units` from the coins `ξ`** in what the prover sent composite `k`: its case there accepts at `ξ`, read
 under the challenger `dr`, and under the sampling design `L` over `n` units its parameters and record name (`SamplingDesignOf`),
 `Draw.sampleUnits` on `ξ` ends with the evidence's units. -/
@@ -526,9 +539,9 @@ theorem drew_of {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : B
   obtain ⟨_, _, _, _, _, pub, prof, hck⟩ := id hacc
   obtain ⟨out, pub', prof', hat⟩ := checkBlobsAt_checkAt hck
   obtain ⟨samplingDesign, n, read, hd, hn, hdf⟩ := checkAt_drew hat
-  obtain ⟨derived, fl, hder, hfl, hdu⟩ := sampledFrom_ok hdf
-  exact ⟨derived.getD fl, n, sampledBlocks ev.base.draw, a, b, e, p, c, ev, hcase, hacc,
-    ⟨samplingDesign, derived, fl, hd, hn, hder, hfl, rfl⟩, rfl, read, hdu⟩
+  obtain ⟨L, hL, hdu⟩ := sampledFrom_ok hdf
+  exact ⟨L, n, sampledBlocks ev.base.draw, a, b, e, p, c, ev, hcase, hacc,
+    samplingDesignOf_of hd hn hL, rfl, read, hdu⟩
 
 /-! ## What the sampled check's read of the device's log shows of its sample -/
 

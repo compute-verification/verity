@@ -143,7 +143,7 @@ theorem MemberOn.fileRead_eq {T : PinnedTables} {F : Array ByteArray} {vm : _roo
 
 /-- **The window `W` is the parameters' members on the registered files, read on the committed files `F`**: v2's
 parameters in `θ` name members, and `W`'s are those, in the order of their first units, each on the registered files
-with its tables at their registered files `T` (`MemberOn`); the sample's sampling design is the verifier's over `W`'s population (`samplingDesignAt`) and its bytes `MAX_COINS` coins of
+with its tables at their registered files `T` (`MemberOn`); the sample's sampling design is the verifier's at a law over `W`'s population (`samplingDesignAt`) and its bytes `MAX_COINS` coins of
 the parameters' challenger family, 64 bytes each; the vocabulary reads `F` as the members' files in that order; and
 the published share is `W`'s and `F`'s units `W`'s population. -/
 structure ExecutionPhaseOn (V : Vocab d α) (T : PinnedTables) (θ : ByteArray) (F : Array ByteArray) (W : ExecutionPhase) : Prop where
@@ -151,7 +151,7 @@ structure ExecutionPhaseOn (V : Vocab d α) (T : PinnedTables) (θ : ByteArray) 
       (vms : List _root_.Spot.OneStageZk.Member),
     ParamsAt θ p ∧ p.members = some ms ∧ vms.Perm ms.toList ∧
       vms.Pairwise (fun a b => a.first < b.first) ∧ List.Forall₂ (MemberOn T (V.registered θ)) vms W.ms ∧
-      samplingDesignAt p.base.verifier W.nJ = .ok W.samplingDesign ∧
+      (∃ law, samplingDesignAt p.base.verifier law W.nJ = .ok W.samplingDesign) ∧
       ∃ key label, p.base.challenger = some (key, label) ∧
         (label, _root_.Spot.Challenger.MAX_COINS) ∈ V.families θ
   lb : W.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64

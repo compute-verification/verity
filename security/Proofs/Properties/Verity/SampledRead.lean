@@ -998,12 +998,12 @@ theorem paramsAt_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a b
     {p' : _root_.Spot.OneStageZk.Params} (h : ParamsAt s.params p') : p' = p :=
   (Sum.inl.inj (params_of_case hS hcase hacc.1 h)).symm
 
-/-- The sampling design `samplingDesignAt` reads at the population `SamplingDesignOf` names is the sampling design `SamplingDesignOf` names. -/
+/-- The sampling design `samplingDesignAt` reads at the record's law and the population `SamplingDesignOf` names is the sampling design
+`SamplingDesignOf` names. -/
 theorem samplingDesignAt_of_samplingDesignOf {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
-    {L : Flock.Draw.SamplingDesign} {n : ℕ} (h : SamplingDesignOf p c L n) : samplingDesignAt p.base.verifier n = .ok L := by
-  obtain ⟨samplingDesign, derived, fl, hd, -, hder, hfl, rfl⟩ := h
-  simp only [samplingDesignAt, hd, hder, hfl, ok_bind]
-  rfl
+    {L : Flock.Draw.SamplingDesign} {n : ℕ} (h : SamplingDesignOf p c L n) :
+    samplingDesignAt p.base.verifier (_root_.Spot.getD c.record "law") n = .ok L :=
+  h.1
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 

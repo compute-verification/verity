@@ -71,7 +71,7 @@ their verifier's program and its query is their verifier's, at the parameters wh
 the population. -/
 theorem regIs_of_setsUp (A : Live) {ι : Type} {dv : ResourceAccounting.Device ι} {α : Type} [Fintype α]
     {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A) :
-    ∃ p, ParamsAt θ p ∧ p.base.verifier.query = A.qr ∧ samplingDesignAt p.base.verifier A.n = .ok A.design ∧
+    ∃ p, ParamsAt θ p ∧ p.base.verifier.query = A.qr ∧ (∃ law, samplingDesignAt p.base.verifier law A.n = .ok A.design) ∧
       _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok p.base.verifier.program := by
   obtain ⟨p, hp, -, -, hl, hd, hq, -⟩ := hsu.params
   exact ⟨p, hp, hq.symm, hl, hd⟩

@@ -108,14 +108,15 @@ theorem nonneg_of_ascending {xs : Array Int} (ha : Ascending xs) (h0 : ∀ (h : 
 
 /-! ## v1 at the coins -/
 
-/-- **v1 at the coins `ξ`, on a sample without a closure.** Where `checkAt` accepts, the verifier's sampling design derives (`samplingDesign`), the
+/-- **v1 at the coins `ξ`, on a sample without a closure.** Where `checkAt` accepts, the verifier agrees to the record's law (`Draw.agreed`, `samplingDesign`), the
 record names a population `n`, the coins sample `units` under `samplingDesign` over `n` (`sampledFrom`), and the evidence's
 `proved_units` are those units, ascending. -/
 theorem provedUnits_of_checkAt {p : OneStage.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStage.Evidence} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : OneStage.checkAt p c (some ξ) e = .accept pub prof) (hcl : field? e.draw "closure" = none) :
     ∃ samplingDesign n units read,
-      Draw.derive p.verifier.program p.verifier.query p.verifier.samplingDesign p.verifier.workTable = .ok samplingDesign ∧
+      Draw.agreed p.verifier.program p.verifier.query p.verifier.samplingDesign p.verifier.workTable p.verifier.rate
+        (getD c.record "law") = .ok samplingDesign ∧
       nat? (getD c.record "population") = some n ∧ OneStage.sampledFrom p.verifier samplingDesign n ξ = .ok (units, read) ∧
       e.provedUnits = units.qsort (· < ·) := by
   cases hw : OneStage.coinsWhy p c e ξ with
@@ -125,8 +126,7 @@ theorem provedUnits_of_checkAt {p : OneStage.Params} {c : OneStage.Commitment} {
   | none =>
     simp only [OneStage.checkAt, Option.bind_some, hw] at h
     obtain ⟨samplingDesign, -, n, hreg, hdrawn, hunits, -, -, hn, -, -⟩ := acceptMeans p c e pub prof h
-    have hder : Draw.derive p.verifier.program p.verifier.query p.verifier.samplingDesign p.verifier.workTable = .ok samplingDesign :=
-      hreg.1.2.2.2.1
+    have hder := registered_samplingDesign hreg
     obtain ⟨-, -, -, -, -, us, xs, hus, hxs, hasc, h0, -⟩ := hdrawn
     simp only [OneStage.coinsWhy, hder] at hw
     unfold OneStage.coinsReason at hw
@@ -205,7 +205,7 @@ theorem provedUnits_sorted {pubB : ByteArray} {record : String} {us : Array Nat}
 
 /-- **v2 credits its one session with the coins' sample.** Where v2 accepts evidence it parsed at the coins `ξ`: the
 evidence names one session `s`, whose record is on the blobs as UTF-8 (`record`), and the parameters' public file is on
-the blobs (`pubB`); the verifier's sampling design derives (`samplingDesign`) and the record names a population `n`; and the units the session
+the blobs (`pubB`); the verifier agrees to the record's law (`Draw.agreed`, `samplingDesign`) and the record names a population `n`; and the units the session
 proves (`provedUnits`) are the units `ξ` samples under `samplingDesign` over `n` (`sampledFrom`), ascending. -/
 theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
@@ -213,8 +213,8 @@ theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : On
     (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ s pubB B record samplingDesign n units read, e.sessions = #[s] ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       bs.get s.record s!"session {s.name}'s record" = .ok B ∧ String.fromUTF8? B = some record ∧
-      Draw.derive p.base.verifier.program p.base.verifier.query p.base.verifier.samplingDesign p.base.verifier.workTable =
-        .ok samplingDesign ∧
+      Draw.agreed p.base.verifier.program p.base.verifier.query p.base.verifier.samplingDesign p.base.verifier.workTable
+        p.base.verifier.rate (getD c.record "law") = .ok samplingDesign ∧
       nat? (getD c.record "population") = some n ∧ OneStage.sampledFrom p.base.verifier samplingDesign n ξ = .ok (units, read) ∧
       OneStageZk.provedUnits pubB record = .ok (units.qsort (· < ·)) := by
   replace h := (OneStageZk.checkBlobsAt_accept_one hm h).1
@@ -311,15 +311,15 @@ theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : On
 
 /-- **v2's credit, as `Units.unitsAt` reads it**: where v2 accepts evidence it parsed at the coins `ξ`, at any load of
 the parameters' public file and the sample the session's record reads (`Flock.Witness.recordDraw`), `unitsAt` is the units
-`ξ` samples under the verifier's sampling design as derived over the registered population, ascending. -/
+`ξ` samples under the sampling design the verifier agrees to at the record's law over the registered population, ascending. -/
 theorem unitsAt_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (he : OneStageZk.evidenceOf b = .ok e) (hm : p.members = none)
     (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ s pubB B record samplingDesign n units read, e.sessions = #[s] ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       bs.get s.record s!"session {s.name}'s record" = .ok B ∧ String.fromUTF8? B = some record ∧
-      Draw.derive p.base.verifier.program p.base.verifier.query p.base.verifier.samplingDesign p.base.verifier.workTable =
-        .ok samplingDesign ∧
+      Draw.agreed p.base.verifier.program p.base.verifier.query p.base.verifier.samplingDesign p.base.verifier.workTable
+        p.base.verifier.rate (getD c.record "law") = .ok samplingDesign ∧
       nat? (getD c.record "population") = some n ∧ OneStage.sampledFrom p.base.verifier samplingDesign n ξ = .ok (units, read) ∧
       ∀ (tags : Flock.Tags) (cc : Flock.Circuit) (pi : Flock.HmIn.Ports) (P : Flock.Public) (D : Json),
         Flock.HmIn.loadPublic tags cc pi pubB = .ok P → Flock.Witness.recordDraw record = some D →

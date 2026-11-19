@@ -157,7 +157,7 @@ but for the coin commitment's families, which `FamiliesPinned` gives at an accep
 (`Vocab.Registered`) and the parameters name no members (`OneStatement`). -/
 structure LiveSpec (V : Vocab d α) (b : SessionBound) (θ : ByteArray) (R : Array ByteArray) (A : Live) : Prop where
   params : ∃ p, ParamsAt θ p ∧ A.I.partition = some p.own.partition ∧ A.I.program = some p.own.program ∧
-    samplingDesignAt p.base.verifier A.n = .ok A.design ∧
+    (∃ law, samplingDesignAt p.base.verifier law A.n = .ok A.design) ∧
     _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok p.base.verifier.program ∧
     A.qr = p.base.verifier.query
   lb : A.Lb 0 = _root_.Spot.Challenger.MAX_COINS * _root_.Spot.Challenger.COIN_BYTES
