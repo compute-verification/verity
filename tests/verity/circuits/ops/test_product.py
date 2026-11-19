@@ -13,13 +13,13 @@ from verity.circuits.ops import product as PR
 
 
 @functools.cache
-def small():
-    return PR.product(k=16, s=2, units=4, block=2)
+def small(registered=True):
+    return PR.product(k=16, s=2, units=4, block=2, registered=registered)
 
 
 @functools.cache
-def cut(lo: int, hi: int):
-    p = small()
+def cut(lo: int, hi: int, registered=True):
+    p = small(registered)
     bits = R.Bits(R.program(p.description))
     return R.restrict(p.description, p.partition, [(lo, hi)], bits), bits
 
@@ -55,25 +55,28 @@ def test_its_outputs_are_each_slice_of_the_product_by_the_template():
     assert np.allclose(as_float(p.outputs.reshape(-1)), ref, rtol=2 ** -7, atol=2 ** -10)
 
 
-def test_the_program_decodes_with_its_weight_registered_and_its_row_a_run_input():
-    p = small()
+@pytest.mark.parametrize("registered", [True, False])
+def test_the_program_decodes_with_its_weight_registered_or_a_run_input_and_its_row_a_run_input(registered):
+    p = small(registered)
     D = R.program(p.description)
     assert D.circuit.size == p.program.circuit.size and len(p.digest) == 128 and p.digest == program_digest(p.program)
-    assert p.program.bindings == ("registration", "run")
+    assert p.program.bindings == ("registration" if registered else "run", "run")
 
 
-def test_its_partition_object_validates_at_one_level_and_at_two():
-    p = small()
+@pytest.mark.parametrize("registered", [True, False])
+def test_its_partition_object_validates_at_one_level_and_at_two(registered):
+    p = small(registered)
     assert PO.validate(p.partition).ok and PO.validate(p.partition_levels).ok
     assert PO.blocks(p.partition) == p.blocks and PO.levels(p.partition_levels) == [[(0, 4)], p.blocks]
     with pytest.raises(ValueError, match="blocks-levels"):
         PO.blocks(p.partition_levels)
 
 
+@pytest.mark.parametrize("registered", [True, False])
 @pytest.mark.parametrize("lo, hi", [(0, 2), (2, 4)])
-def test_a_block_holds_on_the_values_and_not_on_one_output_word_changed(lo, hi):
-    p = small()
-    b, bits = cut(lo, hi)
+def test_a_block_holds_on_the_values_and_not_on_one_output_word_changed(lo, hi, registered):
+    p = small(registered)
+    b, bits = cut(lo, hi, registered)
     text = b.listing()
     t = trace(p)
     assert R.evaluate(text, [bit(t, bits, x) for x in b.input_bits]) == [bit(t, bits, x) for x in b.output_bits]
