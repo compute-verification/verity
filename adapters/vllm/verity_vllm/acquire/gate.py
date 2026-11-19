@@ -64,19 +64,27 @@ def classes_of_identities(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
     return [class_of_identity(r) for r in identity_rows(manifest) if r.get("family") == CB.FAMILY]
 
 
+def claimant(r: Mapping[str, Any]) -> str | None:
+    """The source that claims `call_boundaries` identity ``r``: by the row (a TP rank's sources read its rows) or by its class (the
+    plan's sources read classes)."""
+    return CB.claimed(r) or CB.claimed(class_of_identity(r))
+
+
 def host_plan(manifest: Mapping[str, Any], *roots: str | None) -> Plan | None:
-    """The call-boundary source's host plan over the identities whose class no source claims, or None when there is none."""
-    evaluated = [r for r in identity_rows(manifest) if r.get("family") != CB.FAMILY or CB.claimed(class_of_identity(r)) is None]
+    """The call-boundary source's host plan over the identities no source claims (`claimant`), or None when there is none."""
+    evaluated = [r for r in identity_rows(manifest) if r.get("family") != CB.FAMILY or claimant(r) is None]
     unclaimed = {**manifest, "identities": evaluated}
     return CB.plan_of(unclaimed, *roots) if CB.manifest_sites(unclaimed) else None
 
 
 def call_boundaries_of(manifest: Mapping[str, Any], plan: Plan | None) -> dict[str, Any]:
     """`call_boundaries` of `manifest` with its host plan given (None when it names no identity the call-boundary source evaluates)."""
-    classes = classes_of_identities(manifest)
-    on = [*taps.attached(classes), *([CB.CallBoundarySource.short_name] if plan and plan.covered else [])]
-    ids = len(classes)
-    uncovered, unattached = (plan.uncovered if plan else []), CB.unattached(classes, on)
+    rows = [r for r in identity_rows(manifest) if r.get("family") == CB.FAMILY]
+    on = [*taps.attached([class_of_identity(r) for r in rows]), *([CB.CallBoundarySource.short_name] if plan and plan.covered else [])]
+    ids = len(rows)
+    uncovered = plan.uncovered if plan else []
+    unattached = [f"{r['op_path']}/{r.get('output_member', 'out')}: claimed by {s}, a source the Commit does not attach" for r in rows
+                  if (s := claimant(r)) is not None and s not in on]
     return {"schema": CALL_BOUNDARIES_SCHEMA, "pass": not uncovered and not unattached, "identities": ids,
             "claimed": ids - (plan.identities if plan else 0), "covered": plan.covered if plan else 0, "uncovered": len(uncovered),
             "unattached": len(unattached), "sources": on, "program_dirs": dict(plan.program_dirs) if plan else {},
