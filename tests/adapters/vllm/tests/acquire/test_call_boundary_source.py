@@ -384,6 +384,21 @@ def test_fp8_group_quant_on_edge_words_is_the_ir_and_the_consuming_gemm_replays(
     assert replay(host[f"{op}/0"], host[f"{op}/1"], bad_y)["result"] is False               # a wrong served output: named by the replay
 
 
+def test_identities_another_source_claims_are_left_to_it(dense, monkeypatch):
+    """`CLAIMS`: a source that acquires some call boundaries itself (a tap of a pre-bias GEMM output the runtime holds) claims them; the
+    host plan leaves them out, and a manifest whose every call boundary is claimed leaves it none."""
+    ids = CB.manifest_sites(dense.man)
+    logits = {f"{r['op_path']}/{r['output_member']}" for r in ids if r["op_path"].startswith("logits_processor")}
+    assert logits
+    monkeypatch.setattr(CB, "CLAIMS", [lambda r: "logits-tap" if r["op_path"].startswith("logits_processor") else None])
+    left = CB.manifest_sites(dense.man)
+    assert len(left) == len(ids) - sum(1 for r in ids if r["op_path"].startswith("logits_processor"))
+    assert not {f"{r['op_path']}/{r['output_member']}" for r in left} & logits
+    assert CB.plan_of(dense.man, dense.pdir).identities == len(left)
+    monkeypatch.setattr(CB, "CLAIMS", [lambda r: "everything-tap"])
+    assert CB.manifest_sites(dense.man) == []
+
+
 def test_a_definition_past_the_reference_bound_is_its_row_kernels_alone(dense, monkeypatch):
     """Past `REFERENCE_LEAVES` argument words per instance (lowered here below the logits Gemm's 8 + 128) a Definition is evaluated by its
     row kernel alone, to the reference's words; an instance the kernel declines (this K = 8 Gemm: its k16 chain needs K % 16 == 0) is a
