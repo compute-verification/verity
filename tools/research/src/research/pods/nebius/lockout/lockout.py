@@ -90,16 +90,13 @@ ALLOW = (
          "(fill-timing-*.scope), jobuser.py's stop of a job's unit; vy-sudo: a scope of the caller's processes, or a job's unit"),
     Rule("/usr/local/sbin/vy-sudo", "job-reclaim *", "jobuser.py finish (`sudo -n find RUN_DIR -user USER ... -delete`, `chown -R "
          "--from=USER`): vy-sudo does both, only under a directory of the caller's"),
-    Rule("/usr/local/sbin/vy-sudo", "hf-ns *", "n2_build.sh:143, n2_commit.sh:288 (`sudo -n unshare --mount ...`, which ran bash as root)"),
     Rule("/usr/local/sbin/vy-seal-runs", "delete *", "research.retention gc/rm on a sealed run (this change)"),
     Rule("/usr/local/sbin/vy-seal-runs", "evict *", "research data evict --runs on a sealed run (vy-store-evict-research.service, as research)"),
     Rule("/usr/local/bin/vy-lean-sandbox", "*", "journal n1 5 (`vy-lean-sandbox probe`); lean_sandbox.py:17 is meant for `sudo -n` "
          "and never runs a build as root, research or a privileged group"),
-    Rule("/usr/bin/systemctl", "start vy-steward-watch.service", "journal n1 3 (infra's duty pass; the watch is read-only)"),
     Rule("/usr/bin/true", "", "journal n2 21 + n1 11 `sudo -n true` (infra/cluster/src/cluster/status.py, its bundles read)"),
     Rule("/usr/local/sbin/vy-sudo", "du-bundles", "journal n1 23,140 each `find /workspace/jobs/cov /workspace/jobs/probe-jit -xdev "
-         "-name replay_bundle_p* -prune -print0` and `xargs -0r du -sb` (infra/cluster/src/cluster/status.py, its bundles read, sky/release.py's: a "
-         "root unit after the switch); vy-sudo runs that find with -exec du, since `xargs du` as root takes du's options from stdin"),
+         "-name replay_bundle_p* -prune -print0` and `xargs -0r du -sb` (infra/cluster/src/cluster/status.py, its bundles read); vy-sudo runs that find with -exec du, since `xargs du` as root takes du's options from stdin"),
 )
 #: research -> root on a CPU node: what a run and the store need there, and nothing of the cluster's
 CPU_ALLOW = (
@@ -115,7 +112,7 @@ CPU_ALLOW = (
     Rule("/usr/bin/true", "", "`sudo -n true` (infra/cluster/src/cluster/status.py, its bundles read)"),
 )
 #: who besides root research may run as, for anything: itself (journal n1 1,471 tmux, 512 env), and the job user ubuntu (journal n1
-#: 311 `env HOME=* PYTHONPATH=* ...`, 27 mv: n1_custody.sh:245, n2_build.sh:98,202, n2_commit.sh:50,197,215) once ubuntu has no root
+#: 311 `env HOME=* PYTHONPATH=* ...`, 27 mv) once ubuntu has no root
 RUNAS_ALL = ("ubuntu", "research")
 #: ubuntu -> root: vy-store-evict.service runs `research data evict --runs` on /workspace/jobs/runs as ubuntu
 UBUNTU_ALLOW = (Rule("/usr/local/sbin/vy-seal-runs", "evict *", "vy-store-evict.service (User=ubuntu) on a sealed job run"),
@@ -149,11 +146,10 @@ def profile(node: str) -> Profile:
     raise ValueError(f"{node or 'no node'}: one of {', '.join(SWITCH)} or a CPU node (vy-nebius-cpu-N)")
 
 EXCLUDED = {
-    "k3s kubectl, kubectl": "journal n1 410,831 + 106: the loops (dispatch, n1_lease, pool_n1, gpu_stray, release) become root units; "
-                            "reads go through research's read-only kubeconfig (research-view.yaml); no cluster-admin",
+    "k3s kubectl, kubectl": "journal n1 410,831 + 106: reads go through research's read-only kubeconfig (research-view.yaml); "
+                            "no cluster-admin",
     "find, xargs, du, readlink, grep, ls, cat, awk, stat, head, sha256sum, lsof, fuser": "journal n1 ~35,000: other users' /proc and "
-        "files (gpu_stray's /proc/PID/environ and root, release.py's bundle sizes: root units after the switch); as root, any of "
-        "them reads every secret on the node (`xargs du` too: `du --files0-from=FILE` prints FILE in its errors)",
+        "files; as root, any of them reads every secret on the node (`xargs du` too: `du --files0-from=FILE` prints FILE in its errors)",
     "rm, mv, cp, chown, chmod, install, tee, sed, rsync, tar, mkdir": "writes as root (n1 423 rm, n2 111 rm, 6 install, 7 tee): "
         "vy-admin's; n2_*.sh's `--rsync-path=\"sudo -n rsync\" --chown=1000:1000` becomes `sudo -n -u ubuntu rsync`",
     "python3 -c": "journal n1 48 + n2 22: research deploy's install/record/attic, which write root's files: vy-admin's",
@@ -163,7 +159,6 @@ EXCLUDED = {
         "root by another name (a container, a kernel probe, ptrace, boot config): vy-admin's",
     "env, sh, bash, nohup, nice, timeout, tmux (as root)": "a wrapper runs any command: never allowlisted",
     "kill, pkill": "journal n2 8 + n1 4: a process of the caller's needs no sudo",
-    "unshare": "n2_build.sh:143 and n2_commit.sh:288 move to `vy-sudo hf-ns`",
     "vy-lean-build-setup, vy-device-cores": "setup that creates users or edits boot config: vy-admin's",
     "apt-get": "remote.py's wake-time upgrade of the trust store asks only on a node that still trusts a distrusted root, which a "
                "set-up node never is (vm_setup.sh's 52vy-trust keeps those packages current); any other install is vy-admin's",
@@ -278,34 +273,11 @@ class Loop:
     writes: tuple[str, ...] = ()  # directories it writes in: root's too, or a symlink there redirects a root write anywhere
 
 
-#: Each node's loops in switch order: observers first, then the workers, the GPU leases, and the dispatcher last, which drives
-#: the rest. Stop order for --back is the reverse. Node 1's other tmux sessions (fp-feed, gm-*, kueue-shadow, q30b-backstop) are
+#: Each node's loops in switch order: observers first, then the workers. Stop order for --back is the reverse. Node 1's other tmux sessions (fp-feed, gm-*, kueue-shadow, q30b-backstop) are
 #: lanes' and stay research's; node 2's pouw-infra-* are compute accounting's user units (deploy.toml), not switched here.
 SWITCH = {
     "vy-nebius-1": (
         Loop("vy-write-probe@vy-nebius-1.service", "write-probe"),
-        Loop("vy-gpu-stray.service", "gpu-stray", root=True,
-             code=("/usr/bin/python3", "/workspace/verity-guest/bin"), writes=("/workspace/verity-guest",)),
-        Loop("vy-n1-pool.service", "n1-pool", root=True,
-             code=("/usr/bin/python3", "/workspace/verity-guest/bin", "/workspace/jobs/dispatch/infra/nebius"),
-             writes=("/workspace/verity-guest", "/workspace/usage")),
-        Loop("vy-commit-release.service", "commit-release", root=True,
-             code=("/usr/bin/python3", "/workspace/jobs/dispatch/infra/nebius"),
-             writes=("/workspace/jobs/dispatch", "/home/research/commit-release")),
-        Loop("vy-n2-offload.service", "n2-offload"),
-        Loop("vy-n2-commit-offload.service", "n2-commit-offload"),
-        Loop("vy-n1-lease@circuits.service", "n1-lease-circuits", root=True,
-             code=("/usr/bin/python3", "/workspace/verity-guest/bin", "/workspace/verity-guest/cluster-policy"),
-             writes=("/workspace/verity-guest", "/run/gpu-lease-circuits")),
-        Loop("vy-n1-lease@provers.service", "n1-lease", root=True,
-             code=("/usr/bin/python3", "/workspace/verity-guest/bin", "/workspace/verity-guest/cluster-policy"),
-             writes=("/workspace/verity-guest", "/run/gpu-lease")),
-        Loop("vy-node1-dispatch.service", "node1-dispatch", root=True,
-             code=("/workspace/jobs/venv312", "/workspace/jobs/dispatch/infra/nebius", "/workspace/jobs/dispatch/dispatch.env",
-                   "/workspace/verity-guest/cluster-src", "/workspace/verity-guest/bin"),
-             writes=("/workspace/jobs/dispatch", "/workspace/verity-guest", "/workspace/monitoring/alerts/outbox")),
-        Loop("vy-custody.timer", None, root=True, code=("/usr/local/bin/vy-custody", "/workspace/custody"),
-             writes=("/workspace/research/custody-n1",)),
     ),
     "vy-nebius-2": (
         Loop("vy-write-probe@vy-nebius-2.service", "write-probe"),
@@ -316,7 +288,7 @@ COMMON_CODE = ("/etc/vy/env", K3S_CONFIG)
 
 
 def unit_file(unit: str) -> str:
-    """The unit file a unit loads: a template's for an instance (vy-n1-lease@provers.service -> vy-n1-lease@.service)."""
+    """The unit file a unit loads: a template's for an instance (vy-write-probe@vy-nebius-1.service -> vy-write-probe@.service)."""
     name, _, kind = unit.rpartition(".")
     base, at, _inst = name.partition("@")
     return f"{base}@.{kind}" if at else unit

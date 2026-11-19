@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
-import re
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -262,14 +261,6 @@ def test_a_pools_idle_that_isnt_one_known_number_raises_and_so_does_its_spans(tm
     with pytest.raises(LookupError):
         vc.n1_lease_spans(H0, {str(pool): "circuits"})
     assert vc.n1_lease_spans(H0, {str(tmp_path / "no-log"): "circuits"}) == []
-
-
-def test_the_loop_defaults_are_n1_lease_pys():
-    src = (Path(__file__).parents[3] / "tools" / "research" / "src" / "research" / "pods" / "nebius" / "n1_lease.py").read_text()
-    assert f'IDLE_S = int(os.environ.get("VY_POOL_IDLE_S", "{vc.N1_POOL_IDLE_S}"))' in src
-    assert f'DIR = Path(os.environ.get("GPU_LEASE_DIR", "{vc.N1_POOL_DIR}"))' in src
-    assert 'BRAIN = os.environ.get("VY_LEASE_BRAIN", "")' in src
-    assert set(re.findall(r'os\.environ\.get\("(GPU_LEASE_DIR|VY_POOL_IDLE_S|VY_LEASE_BRAIN)"', src)) == set(vc.N1_LOOP_ENV)
 
 
 def test_record_usage_writes_both_files_once_per_complete_hour(tmp_path):

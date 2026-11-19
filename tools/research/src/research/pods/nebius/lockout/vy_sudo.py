@@ -7,7 +7,6 @@
     sudo -n vy-sudo systemctl stop|kill|freeze|thaw [--signal=SIG] NAME.scope    a scope whose processes are all the caller's
     sudo -n vy-sudo systemctl stop [--no-block] research-job-RUN  a job's unit (`research run --job-user`), which never runs as root
     sudo -n vy-sudo job-reclaim RUN_DIR USER                  what job user USER left in the caller's run dir, back to the caller
-    sudo -n vy-sudo hf-ns [VAR=VAL...] -- SCRIPT ARGS...     SCRIPT as the caller, with /workspace/jobs/hf bound on /workspace/hf
     sudo -n vy-sudo du-bundles                                the bytes of each replay bundle under BUNDLE_ROOTS (`du -sb` lines)
 
 sudoers can't check arguments (a `*` there matches spaces, so `cmd x *` lets through any further options), so the allowlist
@@ -73,10 +72,9 @@ EMPTY_ONLY = frozenset({"CapabilityBoundingSet", "AmbientCapabilities"})
 #: unit; `no`, a `~` list or any other value widens it. jobuser.check_namespaces (NAMESPACES) holds the same set for the launcher's
 #: side; the two agree by test_nebius_lockout, since this file is installed on a node as a lone `python3 -I` script and cannot import it
 NAMESPACES = frozenset({"user", "mnt", "net"})
-HF_BIND = ("/workspace/jobs/hf", "/workspace/hf")
 BUNDLE_ROOTS = ("/workspace/jobs/cov", "/workspace/jobs/probe-jit")
 #: every form, as the usage line lists them; jobuser.py asks for root through this helper once it reads "job-reclaim" here
-FORMS = ("renice", "taskset", "systemd-run", "env", "systemctl", "hf-ns", "du-bundles", "job-reclaim")
+FORMS = ("renice", "taskset", "systemd-run", "env", "systemctl", "du-bundles", "job-reclaim")
 JOB_UNIT = re.compile(r"^research-job-[A-Za-z0-9._-]{1,180}$")      # jobuser.py's unit_name: research-job-RUN
 
 
@@ -337,18 +335,6 @@ def _foreign(proc_pid: Path, uid: int) -> bool:
         return False
 
 
-def hf_ns(args: list[str], uid: int, gid: int) -> list[str]:
-    if "--" not in args:
-        raise Refused("hf-ns [VAR=VAL...] -- SCRIPT ARGS...")
-    i = args.index("--")
-    env, rest = env_vars(args[:i]), args[i + 1:]
-    if not rest:
-        raise Refused("no script")
-    inner = 'mount --bind "$1" "$2" && exec setpriv --reuid="$3" --regid="$4" --init-groups -- bash "${@:5}"'
-    return ["/usr/bin/unshare", "--mount", "--propagation", "private", "/usr/bin/env", "-i", "VY_N2_NS=1",
-            *(f"{k}={v}" for k, v in sorted(env.items())), "/bin/bash", "-c", inner, "hf-ns", *HF_BIND, str(uid), str(gid), *rest]
-
-
 def reclaim(args: list[str], uid: int, gid: int, user=job_user, say=print, warn=None) -> int:
     """job-reclaim RUN_DIR USER, as the docstring has it. 0 once everything of USER's it reached is the caller's or gone, 1
     when something couldn't be read or changed (each named on stderr); Refused before anything changes."""
@@ -426,8 +412,6 @@ def plan(argv: list[str], environ: dict[str, str]) -> tuple[list[str], dict[str,
         return systemd_run(rest, uid, gid), base
     if head == "systemctl":
         return systemctl(rest, uid), base
-    if head == "hf-ns":
-        return hf_ns(rest, uid, gid), base
     if head == "du-bundles":
         if rest:
             raise Refused("du-bundles takes no arguments")

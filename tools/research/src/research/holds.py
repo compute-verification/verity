@@ -5,23 +5,15 @@
     gpus     every live gpu-lease lease whose owner line names the run (`run=`, gpu-lease's RESEARCH_RUN_ID)
     slot     the check slot (slot.py) or Lean slot (lean_slot.py) whose holder names the run
     waits    a live gpu-lease wait file naming the run: its place among the directory's waiters and how many GPUs are
-             unlocked there; on node 1, the lease pool's record and the limit that binds it (`n1_limit`).  A check-line or
-             Lean-line ticket naming the run: its place in line, and the slots it may take (a lane's check never takes an
-             `only=trains` slot) or its pool's N
+             unlocked there.  A check-line or Lean-line ticket naming the run: its place in line, and the slots it may take
+             (a lane's check never takes an `only=trains` slot) or its pool's N
 """
 from __future__ import annotations
 
-import sys
-import tomllib
-from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from . import scopemem
 
-#: the cluster's description beside this package (infra/cluster), for node 1's lease-pool quotas
-DESCRIPTION = Path(__file__).resolve().parents[4] / "infra" / "cluster" / "descriptions" / "nebius.toml"
-NODE1 = "vy-nebius-1"
 DEFAULT_LEASE_DIR = "/run/gpu-lease"
 
 
@@ -57,39 +49,7 @@ def gpus(run_id: str, node: dict[str, Any]) -> list[str]:
     return out
 
 
-def n1_limit(lease_dir: str, n: int, waits: list[dict], limits: str | None, now: datetime, desc: Path = DESCRIPTION) -> str | None:
-    """The limit node 1's lease pool in `lease_dir` holds a request for `n` GPUs to (n1_lease.py): at most its queue's nominal quota,
-    less what the queue's other admitted Workloads reserve, and `borrow` GPUs more only while every waiter is --preemptible
-    and before `borrow-until`, never more than `max`.  The quota is the description's; max, borrow and borrow-until are the
-    pool's `n1-lease.limits` when it writes one (under a policy command), else unknown here.  None without the description."""
-    try:
-        doc = tomllib.loads(desc.read_text())
-        pools = doc["policy"][NODE1]["lease-pool"]
-        name, pool = next((k, p) for k, p in pools.items() if p.get("dir", DEFAULT_LEASE_DIR) == lease_dir)
-        queue = pool.get("queue", name)
-        quota = next(int(w["gpus"]) for w in doc["workstreams"] if w["name"] == queue and w["node"] == NODE1)
-    except (OSError, KeyError, StopIteration, ValueError, tomllib.TOMLDecodeError) as e:
-        print(f"research holds: node 1's GPU limit for {lease_dir} not read from {desc} ({type(e).__name__}: {e})", file=sys.stderr)
-        return None
-    every = bool(waits) and all(w.get("preempt") == "1" for w in waits)
-    lim = dict(tok.split("=", 1) for tok in (limits or "").split() if "=" in tok)
-    try:
-        mx, borrow = int(lim["max"]), int(lim["borrow"])
-    except (KeyError, ValueError):
-        most = None if every else quota
-        why = (f"node 1's {name} pool grants at most the {queue} queue's quota, {quota} GPU(s), less its other Workloads'"
-               + (", and borrows more only while every waiter is --preemptible (its limits are unrecorded: no n1-lease.limits)" if every
-                  else ", while a waiter isn't --preemptible"))
-    else:
-        until = lim.get("borrow-until") or ""
-        lending = every and (not until or now.strftime("%Y-%m-%dT%H:%M:%SZ") < until)
-        most = min(mx, quota + (borrow if lending else 0))
-        why = (f"node 1's {name} pool grants at most {most} GPU(s): the {queue} queue's quota {quota}" + (f" + borrow {borrow}" if lending else "")
-               + f", max {mx}, less its other Workloads' ({limits.strip()})")
-    return why + (f"; this asks for {n}, more than that" if most is not None and n > most else "")
-
-
-def gpu_waits(run_id: str, machine: str | None, node: dict[str, Any], now: datetime) -> list[str]:
+def gpu_waits(run_id: str, node: dict[str, Any]) -> list[str]:
     out = []
     for d, ld in (node.get("leases") or {}).items():
         waits = ld.get("waits") or []
@@ -97,14 +57,8 @@ def gpu_waits(run_id: str, machine: str | None, node: dict[str, Any], now: datet
             if w.get("run") != run_id:
                 continue
             n = int(w["n"]) if str(w.get("n", "")).isdigit() else 1
-            pool = ld.get("pool")
             line = (f"gpu-lease {d}: {n} GPU(s)" + (f" on {w['on']}" if w.get("on") else "") + (" preemptible" if w.get("preempt") == "1" else "")
                     + f" since {_t(w.get('since'))}; {i} waiter(s) ahead, {ld['gpus'] - ld['locked']} of {ld['gpus']} GPUs unlocked")
-            if pool:
-                line += f"; pool {pool.get('pool')} GPU(s), {pool.get('pending_holders')} holder(s) pending" + \
-                        (f", BLOCKED: {pool['blocked']}" if pool.get("blocked") else "")
-            if machine == NODE1 and (limit := n1_limit(d, n, waits, ld.get("limits"), now)):
-                line += f"; {limit}"
             out.append(line)
     return out
 
@@ -145,10 +99,9 @@ def slots(run_id: str, node: dict[str, Any]) -> tuple[list[str], list[str]]:
     return held, waits
 
 
-def lines(run_id: str, machine: str | None, reading: dict[str, Any], now: datetime | None = None) -> list[tuple[str, str]]:
+def lines(run_id: str, reading: dict[str, Any]) -> list[tuple[str, str]]:
     """(label, text) for `research status` and `inspect`: mem, cpus, gpus, slot and waits, from `remote.node_readings`' entry
     (or a local `scopemem.node` reading's)."""
-    now = now or datetime.now(UTC)
     run, node = reading.get("run") or {}, reading.get("node") or {}
     out = [("mem", scopemem.render(m)) for m in run.get("memory") or ()]
     if c := cpus(run):
@@ -156,7 +109,7 @@ def lines(run_id: str, machine: str | None, reading: dict[str, Any], now: dateti
     out += [("gpus", g) for g in gpus(run_id, node)]
     held, waits = slots(run_id, node)
     out += [("slot", h) for h in held]
-    out += [("waits", w) for w in gpu_waits(run_id, machine, node, now) + waits]
+    out += [("waits", w) for w in gpu_waits(run_id, node) + waits]
     for k, doc in (node.get("slots") or {}).items():
         if isinstance(doc, dict) and doc.get("error"):
             out.append(("slots", f"{k} slots unread: {doc['error']}"))

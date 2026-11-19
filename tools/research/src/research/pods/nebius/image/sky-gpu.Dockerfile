@@ -1,4 +1,4 @@
-# The image node 1's Kueue jobs run in (dispatch.py's, n1_lease.py's and n1_custody.sh's IMAGE): SkyPilot's May GPU image with
+# The image node 1's Kueue jobs run in: SkyPilot's May GPU image with
 # its trust store upgraded, since that Ubuntu 22.04 base still trusts the roots that cross-signed the compromised eMudhra
 # intermediates (USN-8944-1; INF-314), and the jobs' Python reads the container's /etc/ssl/certs. The pods set their own user.
 #   IMAGE_NAME=verity-sky-gpu DOCKERFILE=sky-gpu.Dockerfile build.sh

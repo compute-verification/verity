@@ -178,7 +178,7 @@ def idle_from_series(util: dict, fb: dict, n: dict, gib: float, cover: float = 0
 
 
 def pool_flagged(path: Path, now: float, max_age_s: float = 900.0) -> set[int]:
-    """GPUs that pool_n1's fresh `gpu-idle-in-lease` monitor already flags (job norms own those; the steward doesn't re-alert)."""
+    """GPUs that the pool file's fresh `gpu-idle-in-lease` monitor already flags (job norms own those; the steward doesn't re-alert)."""
     if not Path(path).exists():
         return set()
     try:
@@ -187,7 +187,7 @@ def pool_flagged(path: Path, now: float, max_age_s: float = 900.0) -> set[int]:
             return set()
         return {int(m["gpu"]) for n in doc["nodes"].values() for m in n.get("monitors") or [] if m.get("kind") == "gpu-idle-in-lease"}
     except (OSError, ValueError, KeyError, TypeError) as e:
-        print(f"resource_probe: {path} unread, so no GPU counts as flagged by pool_n1 ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
+        print(f"resource_probe: {path} unread, so no GPU counts as flagged by the pool file ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return set()
 
 

@@ -750,7 +750,7 @@ def force_refusal(run_dir: Path, *, runner_gone: bool = False, now: float | None
     """Why `research data custody RUN --publish --force` must not publish the run as its runner last left it, or None. A status
     that isn't terminal is the runner's last word only once the runner is gone. This host can see that of a runner that ran here
     (its pid, its boot); of any other (a Kubernetes pod, another machine) only the run's own host can, and the caller says it did
-    with `runner_gone` (n1_custody.sh: `kubectl get pod` says NotFound; n2_custody.sh: the pid is gone on node 2). Records quiet
+    with `runner_gone` (n2_custody.sh: the pid is gone on node 2). Records quiet
     for STALE_S never are: a pod whose workload prints nothing for a day may still run."""
     d = Path(run_dir)
     status = _read(d / "status.json") or {}

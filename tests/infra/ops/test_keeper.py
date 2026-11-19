@@ -563,18 +563,18 @@ def test_a_targets_env_is_set_inside_the_lease_where_bash_env_cannot_make_it_tim
     env.update(GPU_LEASE_DIR=str(tmp_path / "gl"), GPU_LEASE_COUNT="1", GPU_LEASE_UUID_TABLE="GPU-a0", RESEARCH_RUN_ID="r-x",
                GPU_LEASE_USAGE_LOG=str(tmp_path / "u.jsonl"), GPU_LEASE_UTIL_LOG=str(tmp_path / "util-*.jsonl"),
                GPU_LEASE_ALLOWED_FILE=str(tmp_path / "absent-direct-gpus"), GPU_LEASE_WINDOWS=str(tmp_path / "absent-windows"),
-               **chunk["env"])       # the node's own direct-gpus and windows files would decide the lease (node 1: none)
+               **chunk["env"])       # the node's own direct-gpus and windows files would decide the lease
     r = subprocess.run(chunk["command"], env=env, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     owner = next(x for x in r.stdout.splitlines() if x.startswith("pid="))
     assert f"inside {tmp_path / 'be.sh'}" in r.stdout.splitlines() and "who=keeper:@proofs" in owner and " timed=1" not in owner
 
 
-@pytest.mark.parametrize("unit", ["vy-keeper-n1.service", "vy-keeper-n2.service"])
-def test_the_lease_wrapper_names_its_programs_by_path_and_a_targets_path_cannot_replace_them(node, tmp_path, monkeypatch, unit):
-    """The runner looks its workload's argv[0] up in its own PATH (node 1's wrapper starts with env), as do gpu-lease's shebang
-    and its flock and timeout calls; a target's PATH, set inside the lease, decides none of them."""
+def test_the_lease_wrapper_names_its_programs_by_path_and_a_targets_path_cannot_replace_them(node, tmp_path, monkeypatch):
+    """The runner looks its workload's argv[0] up in its own PATH, as do gpu-lease's shebang and its flock and timeout calls; a
+    target's PATH, set inside the lease, decides none of them."""
     k, sd, now, _ = node
+    unit = "vy-keeper-n2.service"
     line, = [x for x in (KEEPER.parent / unit).read_text().splitlines() if "KEEPER_GPU_LEASE=" in x]
     wrapper = shlex.split(shlex.split(line.removeprefix("Environment="))[0].partition("=")[2])
     progs = [a for a in wrapper if "=" not in a]

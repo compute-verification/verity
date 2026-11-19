@@ -43,12 +43,6 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("DIRECT_CPUS_FILE", str(tmp_path_factory.mktemp("cpus") / "absent-direct-cpus"))     # nor its CPU map
     # ... nor cpu-1's rule that a run comes through a check slot (/etc/vy/runs-via-slot), which refuses the keeper's launch there
     monkeypatch.setenv("RUNS_VIA_SLOT_FILE", str(tmp_path_factory.mktemp("slot-only") / "absent-runs-via-slot"))
-    # ... nor its learned bundle sizes: on vy-nebius-1 the pacer mirrors them to /workspace/jobs/dispatch/bundle-sizes.json
-    monkeypatch.setenv("VY_BUNDLE_SIZES", str(tmp_path_factory.mktemp("bundle-sizes") / "bundle-sizes.json"))
-    # ... nor its dispatcher's settings: importing dispatch.py loads $VY_DISPATCH_ROOT/dispatch.env (default
-    # /workspace/jobs/dispatch, node 1's loop's) into os.environ outside monkeypatch, so every later test in the worker would see
-    # node 1's CPU slices
-    monkeypatch.setenv("VY_DISPATCH_ROOT", str(tmp_path_factory.mktemp("dispatch") / "absent"))
     # ... nor the agent's Cursor identity: without SLACK_BOT_TOKEN, research msg asks this socket for an OIDC token for its broker
     monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(tmp_path_factory.mktemp("cursor") / "absent.sock"))
 
@@ -67,9 +61,9 @@ def _isolated_git(monkeypatch, tmp_path_factory):
 @pytest.fixture
 def reap(tmp_path):
     """However the test ends, SIGTERM the process group of every process whose argv names its tmp_path: the detached processes
-    it starts (n1_lease's fences, a lease loop, a pod guard) lead their own sessions, with their `sleep` children in the group.
+    it starts (a lease loop, a pod guard) lead their own sessions, with their `sleep` children in the group.
     A process that exits meanwhile is skipped (a check runs other suites' processes beside these), and pytest's own group is
-    never signalled. On vy-nebius-1 the old per-lock scan raised on such a race and left fences holding /workspace for hours."""
+    never signalled."""
     yield
     own = os.getpgrp()
     named = re.compile(re.escape(os.fsencode(tmp_path)) + rb"(/|\0|$)")    # not a sibling test's .../test_x10 for .../test_x1

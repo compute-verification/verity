@@ -127,13 +127,13 @@ def test_a_local_run_whose_store_has_no_remote_refuses_before_it_starts(tmp_path
 
 def test_local_only_runs_without_a_remote_and_records_why(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv("RESEARCH_LOCAL_ONLY")
-    assert _local_run(tmp_path, "--local-only", "n2_commit.sh takes it to node 1") == 0
+    assert _local_run(tmp_path, "--local-only", "a custody of its own takes it home") == 0
     run_dir = next((tmp_path / "runs").iterdir())
     assert (run_dir / "ran").exists()
     rec = json.loads((run_dir / "job.json").read_text())["store"]["local_only"]
-    assert rec["reason"] == "n2_commit.sh takes it to node 1" and "absent-store.toml" in rec["no_remote"]
+    assert rec["reason"] == "a custody of its own takes it home" and "absent-store.toml" in rec["no_remote"]
     err = capsys.readouterr().err
-    assert "--local-only: n2_commit.sh takes it to node 1" in err and "local only" in err
+    assert "--local-only: a custody of its own takes it home" in err and "local only" in err
     monkeypatch.setenv("RESEARCH_LOCAL_ONLY", "from the environment")
     assert _local_run(tmp_path) == 0
 
