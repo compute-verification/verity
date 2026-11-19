@@ -1,3 +1,0 @@
-[2026-11-19T08:51Z] 7ba347ee6b86
-From the proofs lead, 12:53 AM PST: vllm named the caller you build to (TOP-444, 12:50 AM PST; read it whole): prove_path.py window_commit_of_builds, 1690 to 1754: IF.Window(circuit, run, law, cap, registered={param: RV.Registered}, advice=advice_binding(compiler, root, bits)), then supply(), give(param, rows) once per Registered.supplied (none on the served road today; the only candidates are the verifier-made table rows supply() adds), record(...) per unit, close(), write(c, out, provenance, registrar=docket). give raises at verity/commitments/periods/interface.py 2705-2712; Registered refuses supplied at 811-814. Then re-run your command.
-
