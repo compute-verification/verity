@@ -25,6 +25,10 @@ tests = ["test_codec_stream.py"]
 paths = ["verity"]
 
 [[tool.verity.tests.reads]]
+tests = ["test_supplied.py"]
+paths = ["verity/protocols/proofs/spot/verifier/lean/Spot/Supplied.lean"]
+
+[[tool.verity.tests.reads]]
 tests = ["test_population_recorded.py"]
 paths = ["verity/errors.py", "verity/circuits", "verity/circuits/ops", "verity/circuits/silicon", "verity/circuits/kernels"]
 
