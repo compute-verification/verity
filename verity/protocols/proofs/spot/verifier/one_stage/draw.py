@@ -53,6 +53,7 @@ k_s. A stratified sample is held to the verifier's sampling design once, for the
 """
 from __future__ import annotations
 
+import re
 from fractions import Fraction
 from typing import Any, Mapping, Sequence
 
@@ -149,6 +150,67 @@ def meets_rate(rates: Sequence[tuple[str, int, int]], strata: Sequence[Mapping[s
     return next((why for s in strata if (why := rate_miss(rates, s)) is not None), None)
 
 
+#: Lean `Spot.Draw.RATED_TABLES`: the amount tables a rated law's entry names
+RATED_TABLES = ("plain", "work")
+_NUM = re.compile(r"[0-9]+")
+
+
+def _rate_entry(e: Any) -> tuple[str, int, int]:
+    """A rated law's entry `{table, rate}` (Lean `Flock.Draw.rateEntryOfJson`)."""
+    bad = "a rated law's entry is exactly {table, rate}, its rate NUM/DEN"
+    if not isinstance(e, Mapping) or not isinstance(e.get("table"), str) or not isinstance(e.get("rate"), str) or len(e) != 2:
+        raise ValueError(bad)
+    parts = e["rate"].split("/")
+    if len(parts) != 2 or not all(_NUM.fullmatch(x) for x in parts):
+        raise ValueError(bad)
+    return e["table"], int(parts[0]), int(parts[1])
+
+
+def _rate_json(e: tuple[str, int, int]) -> dict[str, Any]:
+    return {"rate": f"{e[1]}/{e[2]}", "table": e[0]}
+
+
+def rated_entries(law: Mapping[str, Any]) -> list[tuple[str, int, int]]:
+    """A rated law's entries (Lean `Spot.Draw.ratedEntries`): each `{table, rate}`, its table one of `RATED_TABLES`, no
+    table twice. Raises `ValueError`."""
+    rates = law.get("rates")
+    if not isinstance(rates, list):
+        raise ValueError("a rated law's rates are a list")
+    es = [_rate_entry(e) for e in rates]
+    for i, (table, _, _) in enumerate(es):
+        if table not in RATED_TABLES:
+            raise ValueError(f"a rated law's table is plain or work, not '{table}'")
+        if any(u == table for u, _, _ in es[:i]):
+            raise ValueError(f"a rated law names table '{table}' twice")
+    return es
+
+
+def rated_strata(rates: Sequence[tuple[str, int, int]], works: Mapping[str, tuple[int, int]],
+                 strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> list[dict[str, Any]]:
+    """The rated law's strata at their default k_s (Lean `Flock.Draw.ratedStrata`): each stratum's amount in each entry's
+    table, its template's work for `work` and one a proof block otherwise, and `rate_k`."""
+    out = []
+    for t, rs in strata:
+        amounts = [(works[t][0] if t in works else 0) if table == "work" else 1 for table, _, _ in rates]
+        out.append({"template": t, "units": [list(r) for r in rs], "amounts": amounts, "k": rate_k(rates, amounts, _size(rs))})
+    return out
+
+
+def rated_why(rates: Sequence[tuple[str, int, int]], strata: Sequence[tuple[str, Any]],
+              works: Mapping[str, Any]) -> str | None:
+    """Why the entries have no default over the strata and work table, or None (Lean `Flock.Draw.ratedWhy`)."""
+    if not rates:
+        return "a rated law needs at least one rate"
+    for table, num, den in rates:
+        if den == 0:
+            return f"table '{table}': a rate needs DEN > 0, not {num}/{den}"
+    if any(table == "work" for table, _, _ in rates):
+        missing = [t for t, _ in strata if t not in works]
+        if missing:
+            return f"the work table names no work for template '{missing[0]}'"
+    return None
+
+
 def derive(program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any],
            table: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The verifier's sampling design for its program and query: `stratified` (the rule, or an expanded sampling design, whose strata are ignored)
@@ -157,9 +219,19 @@ def derive(program: Program, query: Mapping[str, Any], sampling_design: Mapping[
     `bernoulli` are unchanged. Raises `partition.QueryRefused` when the query doesn't apply, and `ValueError` when k isn't
     in [1, population], a work sampling design has no table, the table names no work for a template, or the population does none."""
     kind = sampling_design.get("law")
-    if kind not in ("stratified", "work"):
+    if kind not in ("stratified", "work", "rated"):
         return dict(sampling_design)
     strata = P.strata(program, query)
+    if kind == "rated":
+        rates = rated_entries(sampling_design)
+        works: Mapping[str, Any] = {}
+        if any(table == "work" for table, _, _ in rates):
+            if table is None:
+                raise ValueError("a rated law's work rate needs the verifier's work table")
+            works = work_table(table)
+        if (why := rated_why(rates, strata, works)) is not None:
+            raise ValueError(why)
+        return {"law": "rated", "rates": [_rate_json(e) for e in rates], "strata": rated_strata(rates, works, strata)}
     n = sum(hi - lo for _, rs in strata for lo, hi in rs)
     k = sampling_design.get("k")
     if not _int(k) or not 1 <= k <= n:
@@ -183,9 +255,35 @@ def derive(program: Program, query: Mapping[str, Any], sampling_design: Mapping[
     return {"law": "work", "k": k, "strata": out}
 
 
+def agreed(program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any],
+           table: Mapping[str, Any] | None, registered: Any) -> dict[str, Any]:
+    """The sampling design the verifier agrees to for the registered design (Lean `Spot.Draw.agreed`): under a rated law,
+    `registered` when it is `derive`'s rated expansion at its own k_s, byte for byte, and those k_s meet every rate with
+    the floor (`meets_rate`); else `derive`'s expansion, which the caller holds `registered` to. Raises `ValueError`."""
+    if sampling_design.get("law") != "rated":
+        return derive(program, query, sampling_design, table)
+    mine = derive(program, query, sampling_design, table)
+    ss = registered.get("strata") if isinstance(registered, Mapping) else None
+    if not isinstance(ss, list):
+        raise ValueError("a rated design's strata are a list")
+    if len(ss) != len(mine["strata"]):
+        raise ValueError(f"the rated design has {len(ss)} strata, not the population's {len(mine['strata'])}")
+    ks = [s.get("k") if isinstance(s, Mapping) else None for s in ss]
+    if not all(_nat(k) for k in ks):
+        raise ValueError("a rated stratum's k is a natural number")
+    at = [{**m, "k": k} for m, k in zip(mine["strata"], ks)]
+    if not same_design(registered, {"law": "rated", "rates": mine["rates"], "strata": at}):
+        raise ValueError("the rated design is not the population's strata at the verifier's rates and amounts")
+    if (why := meets_rate(rated_entries(sampling_design), at)) is not None:
+        raise ValueError(why)
+    return dict(registered)
+
+
 def sampling_design_of(draw: Mapping[str, Any]) -> dict[str, Any]:
     if draw.get("law") in ("stratified", "work"):
         return {"law": draw["law"], "k": draw.get("k"), "strata": draw.get("strata")}
+    if draw.get("law") == "rated":
+        return {"law": "rated", "rates": draw.get("rates"), "strata": draw.get("strata")}
     return {"law": "subset", "k": draw["k"]} if draw.get("law") == "subset" else {"law": "bernoulli", "p": draw.get("p")}
 
 
@@ -240,6 +338,67 @@ def strata_problem(sampling_design: Mapping[str, Any], population: int) -> str |
     return None if at == population else "the strata don't tile the population"
 
 
+def _rated_stratum(s: Any) -> dict[str, Any]:
+    """A rated stratum `{template, units, amounts, k}` (Lean `Flock.Draw.ratedStratumOfJson`). Raises `ValueError`."""
+    bad = "U2: a rated stratum is exactly {template, units, amounts, k}"
+    if not isinstance(s, Mapping) or not isinstance(s.get("amounts"), list) or len(s) != 4:
+        raise ValueError(bad)
+    if not all(_nat(a) for a in s["amounts"]):
+        raise ValueError("U2: a rated stratum's amount: not a natural number")
+    if not isinstance(s.get("template"), str):
+        raise ValueError("U2: a stratum is exactly {template, units, k}")
+    t = s["template"]
+    if not _nat(s.get("k")):
+        raise ValueError("U2: a stratum's k: not a natural number")
+    rs = s.get("units")
+    if not isinstance(rs, list):
+        raise ValueError(f"U2: stratum '{t}': units are non-empty [lo, hi) ranges")
+    for r in rs:
+        if not isinstance(r, list) or len(r) != 2:
+            raise ValueError(f"U2: stratum '{t}': units are non-empty [lo, hi) ranges")
+        for b in r:
+            if not _nat(b):
+                raise ValueError(f"U2: stratum '{t}': a range bound: not a natural number")
+        if r[0] >= r[1]:
+            raise ValueError(f"U2: stratum '{t}': units are non-empty [lo, hi) ranges")
+    if not rs:
+        raise ValueError(f"U2: stratum '{t}': units are non-empty [lo, hi) ranges")
+    if any(b[0] <= a[1] for a, b in zip(rs, rs[1:])):
+        raise ValueError(f"U2: stratum '{t}': ranges ascending, disjoint and not adjacent")
+    return dict(s)
+
+
+def rated_problem(sampling_design: Mapping[str, Any], population: int) -> str | None:
+    """Why a rated sampling design isn't well formed over `population` proof blocks, or None (Lean `Spot.Draw.ratedMessage`,
+    `Flock.Draw.ratedProblem`): its rates and strata parse, distinct templates tile the population, and every rate is
+    met with the floor (`meets_rate`). The k_s are the registered ones, not a rule's."""
+    rs, ss = sampling_design.get("rates"), sampling_design.get("strata")
+    if not isinstance(rs, list) or not isinstance(ss, list):
+        return "a rated law's rates and strata are lists"
+    try:
+        rates = [_rate_entry(e) for e in rs]
+        strata = [_rated_stratum(s) for s in ss]
+    except ValueError as e:
+        return str(e)
+    if population < 0:
+        return "population"
+    if not strata:
+        return "U2: a rated law's strata"
+    seen: set[str] = set()
+    for s in strata:
+        if s["template"] in seen:
+            return f"U2: template '{s['template']}' twice"
+        seen.add(s["template"])
+    if (why := meets_rate(rates, strata)) is not None:
+        return f"U2: {why}"
+    at = 0
+    for lo, hi in sorted(r for s in strata for r in s["units"]):
+        if lo != at:
+            return "U2: the strata don't tile the population"
+        at = hi
+    return None if at == population else "U2: the strata don't tile the population"
+
+
 def _ranges_ok(rs: Any) -> bool:
     return isinstance(rs, list) and bool(rs) and all(isinstance(r, list) and len(r) == 2 and all(map(_int, r)) and r[0] < r[1]
                                                     for r in rs)
@@ -250,7 +409,7 @@ def fixed_count(sampling_design: Mapping[str, Any]) -> int | None:
     `stratified`; None for `bernoulli` (its count is random) and `work` (its closure varies). Lean `Draw.SamplingDesign.fixedCount`."""
     if sampling_design.get("law") == "subset":
         return sampling_design.get("k")
-    if sampling_design.get("law") == "stratified" and isinstance(sampling_design.get("strata"), list):
+    if sampling_design.get("law") in ("stratified", "rated") and isinstance(sampling_design.get("strata"), list):
         return sum(s.get("k", 0) for s in sampling_design["strata"] if isinstance(s, Mapping))
     return None
 
@@ -284,11 +443,11 @@ def check_draw(draw: Any, docket: Mapping[str, Any], sampling_design: Mapping[st
     """The sample is well formed, over the registered population, under the verifier's sampling design (for `stratified` and `work`,
     the expanded sampling design of `derive`), and a session of `tables` tables can split it (`tables_problem`)."""
     c = _Collect()
-    if not isinstance(draw, Mapping) or draw.get("law") not in ("subset", "bernoulli", "stratified", "work"):
+    if not isinstance(draw, Mapping) or draw.get("law") not in ("subset", "bernoulli", "stratified", "work", "rated"):
         c.fail("not-a-draw", draw)
         return c.verdict()
     keys = {"law", "population", "units", *{"subset": ["k"], "bernoulli": ["p"], "stratified": ["k", "strata"],
-                                            "work": ["k", "strata"]}[draw["law"]]}
+                                            "work": ["k", "strata"], "rated": ["rates", "strata"]}[draw["law"]]}
     if draw["law"] == "work" and "closure" in draw:
         keys.add("closure")
     if set(draw) != keys:
@@ -314,8 +473,8 @@ def check_draw(draw: Any, docket: Mapping[str, Any], sampling_design: Mapping[st
         num, _, den = str(draw["p"]).partition("/")
         if not (digits(num) and digits(den) and 0 < int(den) and Fraction(int(num), int(den)) <= 1):
             c.fail("p", draw["p"])
-    if draw["law"] in ("stratified", "work"):
-        problem = strata_problem(draw, n) if _int(n) else "population"
+    if draw["law"] in ("stratified", "work", "rated"):
+        problem = ((rated_problem if draw["law"] == "rated" else strata_problem)(draw, n) if _int(n) else "population")
         if problem:
             c.fail("strata", problem)
         else:

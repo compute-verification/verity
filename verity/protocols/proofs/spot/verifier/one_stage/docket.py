@@ -346,7 +346,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     if (rec["format"], rec["protocol"]) != (DM.REGISTRATION if v2 else DM.REGISTRATION_V1, DM.ONE_STAGE_PROTOCOL):
         c.fail("R1-protocol", [rec["format"], rec["protocol"]])
     try:
-        mine = D.derive(program, query, sampling_design, work_table)
+        mine = D.agreed(program, query, sampling_design, work_table, rec["law"])
     except (P.QueryRefused, ValueError) as e:
         c.fail("R1-law", {"registered": rec["law"], "verifier": f"{dict(sampling_design)} does not apply: {e}"})
     else:

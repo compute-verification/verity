@@ -209,6 +209,16 @@ def partition (j : Json) : V Json := do
       (Partition.strata v.program v.query)),
     ("law", orNull id (Draw.derive v.program v.query v.samplingDesign v.workTable))]
 
+/-- `{"params", "registered"}` to `{"law", "same"}`, the design `Draw.agreed` agrees to and whether `registered` is it, as
+R1 holds a record to it, or to `{"why"}`, its refusal; refused where the query doesn't apply. -/
+def agreed (j : Json) : V Json := do
+  let v := (← params (getD j "params")).verifier
+  discard <| Partition.strata v.program v.query
+  let registered := getD j "registered"
+  return match Draw.agreed v.program v.query v.samplingDesign v.workTable registered with
+    | .ok d => Json.mkObj [("law", d), ("same", Json.bool (Draw.sameSamplingDesign registered d))]
+    | .error why => Json.mkObj [("why", Json.str why)]
+
 /-- `{"program", "X"}`, a program object and a natural number, to `[[definition, bits, bits by walk], …]`: per distinct
 Definition `Q_call` v1 at X cuts (`Flock.Qcall.evaluate`), its units' committed bits read off its layout
 (`Partition.committedBits`) and by the walk of its own that replaced (`Partition.committedBitsRef`); refused where
@@ -403,6 +413,7 @@ private def designOfSamplingDesign : Flock.Draw.SamplingDesign → Option Core.S
   | .stratified _ strata => some (.stratified (strata.map fun s => { name := s.template, size := s.size, k := s.k }))
   | .work k strata => some (.work k (strata.map fun s =>
       { name := s.template, size := s.size, k := s.k, work := s.work, floor := s.floor }))
+  | .rated _ strata => some (.stratified (strata.map fun s => { name := s.template, size := s.size, k := s.k }))
 
 /-- `select`'s input to `{"design"}`: the sampling design (`designOfSamplingDesign`) of the challenger's sample's sampling design,
 as the profile writes it (`Core.SamplingDesign.toJson`); refused where `select` is. -/
@@ -1126,7 +1137,7 @@ def tablesServed (j : Json) : V Json := do
   return Json.mkObj [("served", Json.bool (Run.tablesServed (getD j "record") tables))]
 
 def table : List (String × (Json → V Json)) :=
-  [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
+  [("decode", decode), ("partition", partition), ("agreed", agreed), ("committed_bits", committedBits), ("unit_gates", unitGates),
    ("fanout", fanout), ("registration", docket),
    ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("ran_out", ranOut),

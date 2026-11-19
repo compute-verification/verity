@@ -490,8 +490,14 @@ def rule(sampling_design) -> dict:
         _exactly(sampling_design, {"k", "law"}, "the law")
         if not _nat(sampling_design["k"]):
             raise D.Reject("the law's k is not a natural number")
+    elif kind == "rated":
+        _exactly(sampling_design, {"law", "rates"}, "the law")
+        try:
+            draw.rated_entries(sampling_design)
+        except ValueError as e:
+            raise D.Reject(str(e)) from None
     else:
-        raise D.Reject("the law is not subset, bernoulli, stratified or work")
+        raise D.Reject("the law is not subset, bernoulli, stratified, work or rated")
     return sampling_design
 
 
@@ -805,7 +811,7 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
         return "reject", "coins"
     if _registration(p, rec):
         return "reject", "registration"
-    mine = DR.derive(p["program"], p["query"], p["law"], p["work_table"])
+    mine = DR.agreed(p["program"], p["query"], p["law"], p["work_table"], rec["law"])
     if not DR.check_draw(e["draw"], rec, mine).ok:
         return "reject", "draw"
     if coins is not None and _coins_problem(rec, mine, e["draw"], coins):
@@ -832,7 +838,8 @@ def _ran_out(p: dict, rec: dict, src: bytes) -> bool:
     if not _nat(rec.get("population")):
         return False
     try:
-        return draw_ran_out(DR.derive(p["program"], p["query"], p["law"], p["work_table"]), rec["population"], src)
+        return draw_ran_out(DR.agreed(p["program"], p["query"], p["law"], p["work_table"], rec.get("law")),
+                            rec["population"], src)
     except (P.QueryRefused, ValueError, TypeError):
         return False
 
@@ -907,6 +914,21 @@ def partition(j):
     except (P.QueryRefused, ValueError):
         out["law"] = None
     return out
+
+
+def agreed(j):
+    j = _json(j)
+    p = _params_of(j)
+    try:
+        P.strata(p["program"], p["query"])
+    except P.QueryRefused as e:
+        raise D.Reject(str(e)) from None
+    registered = j.get("registered") if isinstance(j, dict) else None
+    try:
+        d = DR.agreed(p["program"], p["query"], p["law"], p["work_table"], registered)
+    except ValueError as e:
+        return {"why": str(e)}
+    return {"law": d, "same": DR.same_design(registered, d)}
 
 
 def registration(j):
@@ -1898,11 +1920,55 @@ BAD_WORK_ENTRY = st.sampled_from([-1, "1", {"work": -1}, {"floor": 0, "work": 1}
 
 @st.composite
 def sampling_designs(draw, n: int):
-    kind = draw(st.sampled_from(["subset", "bernoulli", "stratified", "work"]))
+    kind = draw(st.sampled_from(["subset", "bernoulli", "stratified", "work", "rated"]))
+    if kind == "rated":
+        return draw(rated_laws())
     if kind == "bernoulli":
         den = draw(st.integers(1, 6))
         return {"law": "bernoulli", "p": f"{draw(st.integers(0, den))}/{den}"}
     return {"k": draw(st.integers(0 if kind == "subset" else 1, n)), "law": kind}
+
+
+RATE_ENTRY = st.builds(lambda t, num, den: {"rate": f"{num}/{den}", "table": t},
+                       st.sampled_from(["plain", "work", "plain", "work", "other"]), st.integers(0, 6), st.integers(0, 6))
+
+
+@st.composite
+def rated_laws(draw):
+    """A rated law: up to three entries over the plain count, the work table and an unknown table, rates from 0/0 to 6/1."""
+    return {"law": "rated", "rates": draw(st.lists(RATE_ENTRY, max_size=3))}
+
+
+def _registered_from(mine, edit, i: int, json_):
+    """A registered design from the verifier's own expansion `mine`: as it is, one stratum's k moved (up, down, to its
+    size, to zero), a stratum dropped, or any JSON."""
+    if not isinstance(mine, dict) or not isinstance(mine.get("strata"), list) or not mine["strata"] or edit == "json":
+        return json_
+    out = copy.deepcopy(mine)
+    s = out["strata"][i % len(out["strata"])]
+    size = sum(hi - lo for lo, hi in s["units"])
+    if edit == "drop":
+        out["strata"].pop(i % len(out["strata"]))
+    elif edit != "same":
+        s["k"] = {"up": s["k"] + 1, "down": max(0, s["k"] - 1), "cap": size, "zero": 0}[edit]
+    return out
+
+
+@st.composite
+def agreed_inputs(draw):
+    """`agreed`'s inputs: an audit's parameters under a rated law (or its own law) and a work table with zero works,
+    over populations of one to six proof blocks, and a registered design edited from the verifier's own expansion."""
+    a = draw(changed_audits(most=0, setups=SETUPS))
+    law = draw(st.one_of(rated_laws(), rated_laws(), st.just(a["params"]["law"])))
+    t = draw(st.one_of(st.none(), st.fixed_dictionaries({t: WORK_ENTRY for t in WORK_IDS})))
+    params = a["params"] | {"law": law, "work_table": t}
+    try:
+        p = _params_of({"params": params})
+        mine = DR.derive(p["program"], p["query"], p["law"], p["work_table"])
+    except (D.Reject, P.QueryRefused, ValueError, TypeError, KeyError):
+        mine = None
+    edit = draw(st.sampled_from(["same", "same", "up", "down", "cap", "zero", "drop", "json"]))
+    return {"params": params, "registered": _registered_from(mine, edit, draw(st.integers(0, 5)), draw(JSON))}
 
 
 @st.composite
@@ -3374,6 +3440,7 @@ PARTITION = D.Port(PIECES, "partition", partition, st.one_of(
         changed_audits(most=0, setups=SETUPS), partitions(), sampling_designs(24),
         st.one_of(st.none(), st.fixed_dictionaries({t: WORK_ENTRY for t in WORK_IDS})), st.booleans()),
     JSON), package=PACKAGE)
+AGREED = D.Port(PIECES, "agreed", agreed, st.one_of(agreed_inputs(), agreed_inputs(), agreed_inputs(), JSON), package=PACKAGE)
 COMMITTED_BITS = D.Port(PIECES, "committed_bits", committed_bits, st.one_of(
     st.builds(lambda m, x: {"program": json.loads(_calls(tuple(m))), "X": x},
               st.lists(st.sampled_from(range(len(CALLEES))), min_size=1, max_size=5), st.sampled_from([4, 8, 16, 32])),
@@ -6470,7 +6537,7 @@ pieces = D.server_fixture(DECODE)
 callers = D.server_fixture(CALLER)
 
 
-PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300), (FANOUT, 400),
+PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (AGREED, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300), (FANOUT, 400),
               (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_SAMPLE, 500), (DRAW, 500), (RAN_OUT, 300), (SELECT, 600), (DESIGN, 300), (SLOTS, 400),

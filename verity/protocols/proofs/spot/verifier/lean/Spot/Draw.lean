@@ -17,6 +17,20 @@ namespace Spot.Draw
 
 open Lean (Json)
 open Flock (V)
+/-- The amount tables a rated law's entry names: `plain`, one for every proof block, and `work`, the verifier's work table. -/
+def RATED_TABLES : Array String := #["plain", "work"]
+
+/-- `draw.rated_entries`: a rated law's entries, its `rates`, each `{table, rate}` with its table one of `RATED_TABLES`
+and no table twice. -/
+def ratedEntries (law : Json) : V (Array Flock.Draw.RateEntry) := do
+  let .arr rs := getD law "rates" | throw "a rated law's rates are a list"
+  let es ← rs.mapM Flock.Draw.rateEntryOfJson
+  for i in [0:es.size] do
+    let e := es[i]!
+    if !RATED_TABLES.contains e.table then throw s!"a rated law's table is plain or work, not '{e.table}'"
+    if (es.extract 0 i).any (·.table == e.table) then throw s!"a rated law names table '{e.table}' twice"
+  return es
+
 /-- `draw.derive`'s expansion as Flock's sampling design: `stratified` and `work` (the rule, or an expanded sampling design, whose strata are
 ignored) over the strata of the verifier's program and query (`Flock.Draw.derive`, and `Flock.Draw.deriveWork` with its
 work table); `none` for `subset` and `bernoulli`, which `derive` leaves unchanged. An error when the query doesn't apply,
@@ -24,8 +38,15 @@ work table); `none` for `subset` and `bernoulli`, which `derive` leaves unchange
 none. -/
 def deriveSamplingDesign (p : Program) (query samplingDesign : Json) (table : Option Json) : V (Option Flock.Draw.SamplingDesign) := do
   let kind := match getD samplingDesign "law" with | .str s => s | _ => ""
-  if !(kind == "stratified" || kind == "work") then return none
+  if !(kind == "stratified" || kind == "work" || kind == "rated") then return none
   let strata ← Partition.strata p query
+  if kind == "rated" then
+    let rates ← ratedEntries samplingDesign
+    let works ← if rates.any (·.table == "work") then match table with
+        | some t => Flock.Draw.workTableOfJson t
+        | none => throw "a rated law's work rate needs the verifier's work table"
+      else pure #[]
+    return some (← Flock.Draw.deriveRated rates strata works)
   let n := strata.foldl (fun acc (_, rs) => acc + rs.foldl (fun a (lo, hi) => a + (hi - lo)) 0) 0
   let some k := nat? (getD samplingDesign "k") | throw s!"a law needs 1 <= k <= {n}"
   if kind == "stratified" then
@@ -40,11 +61,33 @@ def derive (p : Program) (query samplingDesign : Json) (table : Option Json) : V
 /-- `draw.same_design`: the same canonical bytes. -/
 def sameSamplingDesign (a b : Json) : Bool := jeq a b
 
+/-- Whether `samplingDesign` is a rated law. -/
+def rated (samplingDesign : Json) : Bool := jeq (getD samplingDesign "law") "rated"
+
+/-- `draw.agreed`: the sampling design the verifier agrees to for the registered design `registered`. Under a rated law,
+`registered` itself when it is the verifier's rated expansion (`deriveSamplingDesign`: the population's strata at the
+verifier's rates and amounts) at its own `k_s`, byte for byte, and those `k_s` meet every rate with the floor
+(`Flock.Draw.meetsRate`); else `derive`'s expansion, which the caller holds `registered` to. -/
+def agreed (p : Program) (query samplingDesign : Json) (table : Option Json) (registered : Json) : V Json := do
+  if !rated samplingDesign then return ← derive p query samplingDesign table
+  let some (.rated rates ms) ← deriveSamplingDesign p query samplingDesign table | throw "a rated law's expansion"
+  let .arr ss := getD registered "strata" | throw "a rated design's strata are a list"
+  if ss.size != ms.size then throw s!"the rated design has {ss.size} strata, not the population's {ms.size}"
+  let ks ← ss.mapM fun s => match nat? (getD s "k") with
+    | some k => pure k
+    | none => throw "a rated stratum's k is a natural number"
+  let at_ := (ms.zip ks).map fun (m, k) => { m with k }
+  if !sameSamplingDesign registered (Flock.Draw.SamplingDesign.rated rates at_).toJson then
+    throw "the rated design is not the population's strata at the verifier's rates and amounts"
+  if let .error why := Flock.Draw.meetsRate rates at_ then throw why
+  return registered
+
 /-- `draw.samplingDesign_of`: the sampling design a sample names. -/
 def samplingDesignOf (draw : Json) : Json :=
   let kind := getD draw "law"
   if jeq kind "stratified" || jeq kind "work" then
     Json.mkObj [("law", kind), ("k", getD draw "k"), ("strata", getD draw "strata")]
+  else if jeq kind "rated" then Json.mkObj [("law", kind), ("rates", getD draw "rates"), ("strata", getD draw "strata")]
   else if jeq kind "subset" then Json.mkObj [("law", "subset"), ("k", getD draw "k")]
   else Json.mkObj [("law", "bernoulli"), ("p", getD draw "p")]
 
@@ -93,7 +136,20 @@ def strataProblem (samplingDesign : Json) (population : Int) : Bool := Id.run do
 
 private def samplingDesignKeys (kind : String) : Array String :=
   sortStrings (#["law", "population", "units"] ++
-    if kind == "subset" then #["k"] else if kind == "bernoulli" then #["p"] else #["k", "strata"])
+    if kind == "subset" then #["k"] else if kind == "bernoulli" then #["p"] else if kind == "rated" then #["rates", "strata"]
+    else #["k", "strata"])
+
+/-- `draw.rated_problem`: why a rated sampling design is not well formed over `population` units, else none: its rates
+and strata parse (`Flock.Draw.rateEntryOfJson`, `Flock.Draw.ratedStratumOfJson`) and `Flock.Draw.ratedProblem` finds
+nothing. -/
+def ratedMessage (samplingDesign : Json) (population : Int) : Option String :=
+  match getD samplingDesign "rates", getD samplingDesign "strata" with
+  | .arr rs, .arr ss =>
+    match rs.mapM Flock.Draw.rateEntryOfJson, ss.mapM Flock.Draw.ratedStratumOfJson with
+    | .ok rates, .ok strata =>
+      if population < 0 then some "population" else Flock.Draw.ratedProblem rates strata population.toNat
+    | .error why, _ | _, .error why => some why
+  | _, _ => some "a rated law's rates and strata are lists"
 
 private def ascending (xs : Array Int) : Bool := (List.range (xs.size - 1)).all fun i => xs[i]! < xs[i + 1]!
 
@@ -164,7 +220,7 @@ def strataMessage (samplingDesign : Json) (population : Int) : Option String := 
 `stratified` and `work`, the expanded sampling design of `derive`), each failure with Python's detail. -/
 def checkSampleFull (draw population samplingDesign : Json) : Check := Id.run do
   let kind := match getD draw "law" with | .str s => s | _ => ""
-  if !(draw matches .obj _) || !["subset", "bernoulli", "stratified", "work"].contains kind then
+  if !(draw matches .obj _) || !["subset", "bernoulli", "stratified", "work", "rated"].contains kind then
     return Check.fail {} "not-a-draw" draw
   let closure := kind == "work" && (field? draw "closure").isSome
   let want := if closure then sortStrings ((samplingDesignKeys kind).push "closure") else samplingDesignKeys kind
@@ -192,9 +248,9 @@ def checkSampleFull (draw population samplingDesign : Json) : Check := Id.run do
       | .str p => (probability? p).isSome
       | _ => false
     if !ok then c := c.fail "p" (getD draw "p")
-  if kind == "stratified" || kind == "work" then
+  if kind == "stratified" || kind == "work" || kind == "rated" then
     let problem := match int? n with
-      | some n => strataMessage draw n
+      | some n => if kind == "rated" then ratedMessage draw n else strataMessage draw n
       | none => some "population"
     match problem with
     | some why => c := c.fail "strata" (Json.str why)
@@ -285,7 +341,12 @@ def flockSamplingDesign (samplingDesign : Json) (population : Nat) : Except Stri
       if strataProblem samplingDesign population then throw s!"the {kind} law's strata are not well formed over {population} units"
       let some strata := ss.mapM (stratum? (kind == "work")) | throw s!"the {kind} law's strata"
       pure (if kind == "work" then .work k strata else .stratified k (strata.map (·.toStratum)))
-    | _ => throw "a one-stage law is subset, bernoulli, stratified or work"
+    | "rated" =>
+      if keys? samplingDesign != some (sortStrings #["law", "rates", "strata"]) then throw "a rated law is exactly {law, rates, strata}"
+      if let some why := ratedMessage samplingDesign population then throw why
+      let (.arr rs, .arr ss) := (getD samplingDesign "rates", getD samplingDesign "strata") | throw "a rated law's rates and strata"
+      pure (.rated (← rs.mapM Flock.Draw.rateEntryOfJson) (← ss.mapM Flock.Draw.ratedStratumOfJson))
+    | _ => throw "a one-stage law is subset, bernoulli, stratified, work or rated"
 
 /-- The units `samplingDesign` samples over `[0, population)` as `Flock.Draw.drawWith` samples them from `src` read in order (`take`):
 `subset` and `bernoulli` on one stream, `stratified` and `work` one stream per stratum, each extended and rerun when it

@@ -70,6 +70,7 @@ def ended (samplingDesign : Flock.Draw.SamplingDesign) (population : Nat) (us : 
   | .bernoulli a b => if a == 0 then some (0, 0) else if b == 0 then none else if b ≤ a then some (n, n) else some (0, n)
   | .stratified _ strata => strataEnded strata us
   | .work _ strata => strataEnded (strata.map (·.toStratum)) us
+  | .rated _ strata => strataEnded (strata.map (·.toStratum)) us
 
 /-- Each member's fewest and most sampled proof blocks under `samplingDesign` over `[0, population)` when the sample ends (`ended`): a member
 is its units, `[lo, hi)` ranges, and its circuit's units a proof block. A member with no unit, a range of none, ranges

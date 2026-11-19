@@ -261,6 +261,9 @@ inductive SamplingDesign where
   /-- the work samplingDesign, the stratified samplingDesign's second version: its sampler, each stratum's `k_s` sized by work (`workK`) above
   its floor -/
   | work (k : Nat) (strata : Array WorkStratum)
+  /-- the rated design: the stratified sampler at the registered `k_s`, which meet every entry's rate at the strata's
+  amounts (`meetsRate`); its default `k_s` is `rateK` -/
+  | rated (rates : Array RateEntry) (strata : Array RatedStratum)
   deriving BEq, Inhabited
 
 /-- `stratified:K` expanded over the strata (`draw.derive`): each stratum with `stratumK`, for `1 ≤ K ≤ population`. -/
@@ -283,6 +286,70 @@ def deriveWork (k : Nat) (strata : Array (String × Array (Nat × Nat))) (table 
   let total := totalWork ws
   if total == 0 then throw "a work law needs a population that does some work"
   return .work k (ws.map fun s => { s with k := workK k s.work s.size total s.floor })
+
+/-- The rated law's strata over the population's strata: each stratum's amount in each entry's table (`work`: its
+template's work in `works`; any other table: one a proof block) and its default `k_s`, `rateK`. -/
+def ratedStrata (rates : Array RateEntry) (works : Array (String × Nat × Nat))
+    (strata : Array (String × Array (Nat × Nat))) : Array RatedStratum :=
+  strata.map fun (t, rs) =>
+    let amounts := rates.map fun e => if e.table == "work" then ((works.find? (·.1 == t)).map (·.2.1)).getD 0 else 1
+    let s : Stratum := { template := t, units := rs, k := 0 }
+    { s with k := rateK rates amounts s.size, amounts }
+
+/-- Why the rated law's entries `rates` have no default over the strata and the work table `works`, else none: at least
+one entry, each `DEN` positive, and, under a `work` entry, a work for every template. -/
+def ratedWhy (rates : Array RateEntry) (strata : Array (String × Array (Nat × Nat))) (works : Array (String × Nat × Nat)) :
+    Option String :=
+  if rates.size = 0 then some "a rated law needs at least one rate"
+  else match rates.find? (·.den == 0) with
+  | some e => some s!"table '{e.table}': a rate needs DEN > 0, not {e.num}/{e.den}"
+  | none =>
+    if rates.any (·.table == "work") then
+      (strata.find? fun (t, _) => !works.any (·.1 == t)).map fun (t, _) => s!"the work table names no work for template '{t}'"
+    else none
+
+/-- The prover's default rated design: `ratedStrata` where `ratedWhy` finds nothing. The verifier takes any registered
+design over the same strata and amounts that meets the rates (`meetsRate`), not this one alone. -/
+def deriveRated (rates : Array RateEntry) (strata : Array (String × Array (Nat × Nat))) (works : Array (String × Nat × Nat)) :
+    Except String SamplingDesign :=
+  match ratedWhy rates strata works with
+  | some why => .error why
+  | none => .ok (.rated rates (ratedStrata rates works strata))
+
+theorem meetsRate_ratedStrata {rates : Array RateEntry} {works : Array (String × Nat × Nat)}
+    {strata : Array (String × Array (Nat × Nat))} (hr : 0 < rates.size) (hd : ∀ e ∈ rates.toList, 0 < e.den) :
+    meetsRate rates (ratedStrata rates works strata) = .ok () := by
+  refine meetsRate_of_rateK hr hd fun s hs => ?_
+  simp only [ratedStrata, Array.toList_map, List.mem_map] at hs
+  obtain ⟨⟨t, rs⟩, _, rfl⟩ := hs
+  exact ⟨by simp, rfl⟩
+
+theorem ratedWhy_none {rates : Array RateEntry} {strata : Array (String × Array (Nat × Nat))}
+    {works : Array (String × Nat × Nat)} (h : ratedWhy rates strata works = none) :
+    0 < rates.size ∧ ∀ e ∈ rates.toList, 0 < e.den := by
+  unfold ratedWhy at h
+  by_cases hr : rates.size = 0
+  · simp [hr] at h
+  · cases hf : rates.find? (·.den == 0) with
+    | some e => simp [hr, hf] at h
+    | none =>
+      refine ⟨by omega, fun e he => ?_⟩
+      have := Array.find?_eq_none.1 hf e (Array.mem_def.2 he)
+      simp only [beq_iff_eq] at this
+      omega
+
+/-- **The prover's default meets its rates**: every design `deriveRated` gives is rated at its entries and meets every
+one of them (`meetsRate`). -/
+theorem deriveRated_meetsRate {rates : Array RateEntry} {strata : Array (String × Array (Nat × Nat))}
+    {works : Array (String × Nat × Nat)} {d : SamplingDesign} (h : deriveRated rates strata works = .ok d) :
+    ∃ ss, d = .rated rates ss ∧ meetsRate rates ss = .ok () := by
+  unfold deriveRated at h
+  cases hw : ratedWhy rates strata works with
+  | some why => simp [hw] at h
+  | none =>
+    simp only [hw, Except.ok.injEq] at h
+    obtain ⟨hr, hd⟩ := ratedWhy_none hw
+    exact ⟨_, h.symm, meetsRate_ratedStrata hr hd⟩
 
 /-- A work table: a JSON object from template descriptor id to the PoUW work of one of its units, or to
 `{"work": w, "floor": f}` with its floor `f ≥ 1` (one when the table gives only the work). -/
@@ -363,12 +430,23 @@ def WorkStratum.toJson (s : WorkStratum) : Json :=
     ("units", Json.arr (s.units.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi])),
     ("work", Lean.toJson s.work)]
 
+def RateEntry.toJson (e : RateEntry) : Json :=
+  Json.mkObj [("rate", Json.str s!"{e.num}/{e.den}"), ("table", Json.str e.table)]
+
+/-- A rated stratum's object, its fields in key order (as `WorkStratum.toJson`). -/
+def RatedStratum.toJson (s : RatedStratum) : Json :=
+  Json.mkObj [("amounts", Json.arr (s.amounts.map fun a => Lean.toJson a)), ("k", Lean.toJson s.k),
+    ("template", Json.str s.template),
+    ("units", Json.arr (s.units.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi]))]
+
 /-- The samplingDesign object (the registration's `samplingDesign`): `{samplingDesign, k, strata}` for `stratified` and `work`. -/
 def SamplingDesign.toJson : SamplingDesign → Json
   | .subset k => Json.mkObj [("law", "subset"), ("k", Lean.toJson k)]
   | .bernoulli a b => Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{a}/{b}")]
   | .stratified k strata => Json.mkObj [("law", "stratified"), ("k", Lean.toJson k), ("strata", Json.arr (strata.map (·.toJson)))]
   | .work k strata => Json.mkObj [("law", "work"), ("k", Lean.toJson k), ("strata", Json.arr (strata.map (·.toJson)))]
+  | .rated rates strata => Json.mkObj [("law", "rated"), ("rates", Json.arr (rates.map (·.toJson))),
+      ("strata", Json.arr (strata.map (·.toJson)))]
 
 def UnitSample.toJson (d : UnitSample) : Json :=
   let u := Json.arr (d.units.map fun x => Lean.toJson x)
@@ -381,6 +459,8 @@ def UnitSample.toJson (d : UnitSample) : Json :=
   | .work k strata => Json.mkObj ([("law", Json.str "work"), ("population", Lean.toJson d.population),
       ("k", Lean.toJson k), ("strata", Json.arr (strata.map (·.toJson))), ("units", u)] ++
       if d.closure.isEmpty then [] else [("closure", Json.arr (d.closure.map fun x => Lean.toJson x))])
+  | .rated rates strata => Json.mkObj [("law", "rated"), ("population", Lean.toJson d.population),
+      ("rates", Json.arr (rates.map (·.toJson))), ("strata", Json.arr (strata.map (·.toJson))), ("units", u)]
 
 #guard
   let s : WorkStratum := { template := "A", units := #[(0, 2)], k := 1, work := 3, floor := 1 }
@@ -464,6 +544,44 @@ def workProblem (k : Nat) (strata : Array WorkStratum) (population : Nat) : Opti
     at_ := hi
   return if at_ == population then none else some "U2: the strata don't tile the population"
 
+/-- A rated law's entry object: exactly `{table, rate}`, its rate `NUM/DEN`. -/
+def rateEntryOfJson (j : Json) : V RateEntry := do
+  let bad := "a rated law's entry is exactly {table, rate}, its rate NUM/DEN"
+  let .ok kvs := j.getObj? | throw bad
+  let (.ok table, .ok r) := (j.getObjValAs? String "table", j.getObjValAs? String "rate") | throw bad
+  if kvs.toArray.size != 2 then throw bad
+  match r.splitOn "/" with
+  | [a, b] => match a.toNat?, b.toNat? with
+    | some num, some den => pure { table, num, den }
+    | _, _ => throw bad
+  | _ => throw bad
+
+/-- A rated stratum object: exactly `{template, units, amounts, k}`, its amounts natural numbers and the rest a
+stratum's. -/
+def ratedStratumOfJson (j : Json) : V RatedStratum := do
+  let bad := "U2: a rated stratum is exactly {template, units, amounts, k}"
+  let .ok kvs := j.getObj? | throw bad
+  let .ok (.arr as) := j.getObjVal? "amounts" | throw bad
+  if kvs.toArray.size != 4 then throw bad
+  let amounts ← as.mapM (J.asNat · "U2: a rated stratum's amount")
+  let get := fun (key : String) => (j.getObjVal? key).toOption.getD Json.null
+  let s ← stratumOfJson (Json.mkObj [("template", get "template"), ("units", get "units"), ("k", get "k")])
+  return { s with amounts }
+
+/-- Why rated strata are not well formed over `population` units, else none: distinct templates tiling the population,
+and every entry's rate met with the floor (`meetsRate`). The `k_s` are the registered ones, not a rule's. -/
+def ratedProblem (rates : Array RateEntry) (strata : Array RatedStratum) (population : Nat) : Option String := Id.run do
+  if strata.isEmpty then return some "U2: a rated law's strata"
+  for i in [0:strata.size] do
+    let s := strata[i]!
+    if (strata.extract 0 i).any (·.template == s.template) then return some s!"U2: template '{s.template}' twice"
+  if let .error why := meetsRate rates strata then return some s!"U2: {why}"
+  let mut at_ := 0
+  for (lo, hi) in (strata.foldl (· ++ ·.units) #[]).qsort (fun a b => a.1 < b.1) do
+    if lo != at_ then return some "U2: the strata don't tile the population"
+    at_ := hi
+  return if at_ == population then none else some "U2: the strata don't tile the population"
+
 private def ratio (s : String) : V (Nat × Nat) :=
   match s.splitOn "/" with
   | [a, b] => match a.toNat?, b.toNat? with
@@ -500,7 +618,13 @@ def UnitSample.ofJson (j : Json) : V UnitSample := do
         throw "U2: unit_draw's keys are not law, population, k, strata, units and a closure draw's closure"
       let .ok (.arr ss) := j.getObjVal? "strata" | throw "U2: unit_draw.strata is not a list"
       pure (SamplingDesign.work (← J.nat j "k" ctx) (← ss.mapM workStratumOfJson))
-    | l => throw s!"U2: unit_draw.law {l} is neither subset, bernoulli, stratified nor work"
+    | "rated" =>
+      if kvs.toArray.size != 5 || !(j.getObjVal? "rates").isOk || !(j.getObjVal? "strata").isOk then
+        throw "U2: unit_draw's keys are not law, population, rates, strata, units"
+      let (.ok (.arr rs), .ok (.arr ss)) := (j.getObjVal? "rates", j.getObjVal? "strata")
+        | throw "U2: unit_draw.rates and unit_draw.strata are lists"
+      pure (SamplingDesign.rated (← rs.mapM rateEntryOfJson) (← ss.mapM ratedStratumOfJson))
+    | l => throw s!"U2: unit_draw.law {l} is neither subset, bernoulli, stratified, work nor rated"
   if !(List.range units.size).all (fun i => units[i]! < population && (i == 0 || units[i - 1]! < units[i]!)) then
     throw "U2: the drawn units are not ascending, distinct units of the population"
   let closure ← match j.getObjVal? "closure" with
@@ -520,6 +644,11 @@ def UnitSample.ofJson (j : Json) : V UnitSample := do
       if drawn != s.k then throw s!"U2: stratum '{s.template}' holds {drawn} drawn units, not its k = {s.k}"
   | .work k strata =>
     if let some why := workProblem k strata population then throw why
+    for s in strata do
+      let drawn := units.foldl (fun acc u => if s.units.any (fun (lo, hi) => lo ≤ u && u < hi) then acc + 1 else acc) 0
+      if drawn != s.k then throw s!"U2: stratum '{s.template}' holds {drawn} drawn units, not its k = {s.k}"
+  | .rated rates strata =>
+    if let some why := ratedProblem rates strata population then throw why
     for s in strata do
       let drawn := units.foldl (fun acc u => if s.units.any (fun (lo, hi) => lo ≤ u && u < hi) then acc + 1 else acc) 0
       if drawn != s.k then throw s!"U2: stratum '{s.template}' holds {drawn} drawn units, not its k = {s.k}"
@@ -571,6 +700,7 @@ def drawWith {m : Type → Type} [Monad m] (get : Nat → Nat → m ByteArray) (
     | .bernoulli a b => onWith (get 0) (2 * population * width b + 64) (bernoulli a b population)
     | .stratified _ strata => stratifiedWith get strata
     | .work _ strata => stratifiedWith get (strata.map (·.toStratum))
+    | .rated _ strata => stratifiedWith get (strata.map (·.toStratum))
   return units.map fun units => { samplingDesign, population, units }
 
 /-- The sample from the operating system's randomness: `drawWith` with every stream's bytes from `IO.getRandomBytes`.
@@ -596,6 +726,11 @@ def sampleOn (samplingDesign : SamplingDesign) (population : Nat) (src : ByteArr
       let (segs, _) := strata.foldl (fun (acc : Array ByteArray × Nat) s =>
         (acc.1.push (src.extract acc.2 (acc.2 + s.need)), acc.2 + s.need)) (#[], 0)
       stratified strata segs
+    | .rated _ strata =>
+      let strata := strata.map (·.toStratum)
+      let (segs, _) := strata.foldl (fun (acc : Array ByteArray × Nat) s =>
+        (acc.1.push (src.extract acc.2 (acc.2 + s.need)), acc.2 + s.need)) (#[], 0)
+      stratified strata segs
   return { samplingDesign, population, units }
 
 /-- The units every draw under a samplingDesign has, when that count is fixed: `k` for a subset samplingDesign and `Σ_s k_s` for a stratified
@@ -604,7 +739,12 @@ whose closure varies from draw to draw. -/
 def SamplingDesign.fixedCount : SamplingDesign → Option Nat
   | .subset k => some k
   | .stratified _ strata => some (strata.foldl (fun acc s => acc + s.k) 0)
+  | .rated _ strata => some (strata.foldl (fun acc s => acc + s.k) 0)
   | _ => none
+
+/-- The refusal of a rated draw where the verifier holds no rates of its own to check its design against. -/
+def RATED_UNCHECKED : String :=
+  "U2: a rated draw: this verifier holds no rates of its own to check its design against (SPOT's one-stage verifier does)"
 
 /-- The refusal of a draw that several tables cannot split (`Stmt.setupTables`, `tablesWhy`). -/
 def TABLES_SAMPLING_DESIGN : String :=

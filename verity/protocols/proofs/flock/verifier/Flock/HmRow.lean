@@ -1334,6 +1334,7 @@ proof blocks' indices; the public digest covers that header and the population's
 stay the statement's, with the sampled proof blocks' refs into them. -/
 def drawn (c : Circuit) (pub : Public) (draw : Json) : V Public := do
   let d ← Draw.UnitSample.ofJson draw
+  if let .rated .. := d.samplingDesign then throw Draw.RATED_UNCHECKED
   let proved := d.proved
   if d.population != pub.n || pub.population.isSome then throw "U: the draw's population is not this registered population"
   let np := c.ports.size

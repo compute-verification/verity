@@ -40,11 +40,11 @@ from .challenger import (COIN_BYTES, MAX_COINS, MAX_HELLOS, MAX_LEDGER_LINES, MA
                          WITHHELD, ChallengerKey, CoinError, LiveCommitment, LiveOpening, LiveRecord, Verify, live_reason,
                          record_many, trusted_session_of, withheld_on, Entry, released_after)
 from verity.commitments.randomness import digits
-from verity.protocols.proofs.spot.verifier.one_stage.draw import strata_problem
+from verity.protocols.proofs.spot.verifier.one_stage.draw import rated_problem, strata_problem
 from .remote import MAX_BATCH
 
 _SAMPLING_DESIGN_KEYS = {"subset": {"law", "k"}, "bernoulli": {"law", "p"}, "stratified": {"law", "k", "strata"},
-             "work": {"law", "k", "strata"}}
+             "work": {"law", "k", "strata"}, "rated": {"law", "rates", "strata"}}
 _HEX = re.compile(r"[0-9a-f]+")
 
 
@@ -62,12 +62,14 @@ def _ratio(p: Any) -> tuple[int, int] | None:
 def sampling_design_problem(sampling_design: Mapping[str, Any], population: int) -> str | None:
     """Why `sampling_design` is no one-stage sampling design over `population` proof blocks, or None (Lean `Draw.flockSamplingDesign`): exactly its keys,
     a subset's k a natural number from one to the population, a Bernoulli p NUM/DEN in [0, 1], and an expanded stratified
-    or work design's strata well formed (`strata_problem`)."""
+    or work design's strata well formed (`strata_problem`), and a rated design's (`rated_problem`)."""
     kind = sampling_design.get("law")
     if not isinstance(kind, str) or kind not in _SAMPLING_DESIGN_KEYS:
-        return "a one-stage law is subset, bernoulli, stratified or work"
+        return "a one-stage law is subset, bernoulli, stratified, work or rated"
     if set(sampling_design) != _SAMPLING_DESIGN_KEYS[kind]:
         return f"a {kind} law is exactly {sorted(_SAMPLING_DESIGN_KEYS[kind])}"
+    if kind == "rated":
+        return rated_problem(sampling_design, population)
     if kind == "bernoulli":
         return None if _ratio(sampling_design["p"]) else "a bernoulli law's p is NUM/DEN with 0 <= NUM <= DEN and DEN > 0"
     if not _int(sampling_design["k"]) or sampling_design["k"] < 0:

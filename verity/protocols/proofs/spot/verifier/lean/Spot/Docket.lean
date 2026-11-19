@@ -582,7 +582,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   -- R1
   if !(jeq (get "format") (if v2 then FORMAT_V2 else FORMAT) && jeq (get "protocol") PROTOCOL) then
     c := addCode c "R1-protocol"
-  match Draw.derive v.program v.query v.samplingDesign v.workTable with
+  match Draw.agreed v.program v.query v.samplingDesign v.workTable (get "law") with
   | .error _ => c := addCode c "R1-law"
   | .ok mine => if !Draw.sameSamplingDesign (get "law") mine then c := addCode c "R1-law"
   let w := get "window"
@@ -647,7 +647,7 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   -- R1
   if !(jeq (get "format") (if v2 then FORMAT_V2 else FORMAT) && jeq (get "protocol") PROTOCOL) then
     c := addCode c "R1-protocol"
-  match Draw.derive v.program v.query v.samplingDesign v.workTable with
+  match Draw.agreed v.program v.query v.samplingDesign v.workTable (get "law") with
   | .error _ => c := addCode c "R1-law"
   | .ok mine => if !Draw.sameSamplingDesign (get "law") mine then c := addCode c "R1-law"
   let w := get "window"
