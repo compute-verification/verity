@@ -102,6 +102,6 @@ for v in honest dishonest; do
   done
   cp $D/partition.json $D/unit.tmpl $D/registered*.json $D/draw.json $Ov/; sha512sum $D/circuit.txt $D/unit.tmpl > $Ov/sha512.txt
 done
-( unset PYTHONPATH; timed door $UV run -q python benchmarks/compile_cost/credited_door.py door --lower $LOW_BIN --lean $LEAN_BIN --out $S "${DOOR[@]}" ) > $O/door.txt 2>&1
+( unset PYTHONPATH; timed door $UV run -q python benchmarks/compile_cost/credited_door.py door --size $SIZE --lower $LOW_BIN --lean $LEAN_BIN --out $S "${DOOR[@]}" ) > $O/door.txt 2>&1
 echo "door rc $?"; cat $O/time-door.txt 2>/dev/null; grep -h '^DOOR' $O/door.txt | cut -c1-2500; tail -c 3000 $O/door.txt | grep -v '^DOOR'
 ls -la $S/circuit.txt; [ $(stat -c %s $S/circuit.txt 2>/dev/null || echo 0) -lt 200000000 ] && cp $S/circuit.txt $O/; true

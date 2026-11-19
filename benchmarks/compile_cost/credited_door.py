@@ -164,20 +164,22 @@ def reads(program, partition, bits: dict[str, list[int]], roots: dict[str, str])
                           schemas={p: RV.SCHEMA_HM96_SHA512_ROW_V2 for p in bits})
 
 
-def lean_lower(lower_bin: str, partition) -> "callable":
+def lean_lower(lower_bin: str, partition, fn) -> "callable":
     """`one_circuit.lower` as Lean's `flock-lower-check compose` gives it, for a partition object of one template
-    (`Q_template_instance`): C_S's template instance lowered to the templated block circuit, its input ports the
-    template's parameters as bit rows, its output the template's return bits as one u16 port ``o0``. The function the
-    door's `one_circuit.lower` would need, taking the partition beside C_S."""
+    (`Q_template_instance`) and ``fn``, that template's Definition as the verifier builds it (a decoded one is no
+    `Program`'s root): C_S's template instance lowered to the templated block circuit, its input ports the template's
+    parameters as bit rows, its output the template's return bits as one u16 port ``o0``. The function the door's
+    `one_circuit.lower` would need, taking the partition and the template beside C_S."""
     from verity.circuits import boolean as BL
     from verity.circuits import partition_object as PO
-    from verity.circuits import restrict as R
-    from verity.circuits.codec import definitions, program_digest
+    from verity.circuits.codec import descriptor_id, program_digest
     from verity.circuits.program import Program
 
+    key = partition["query"]["params"]["template"]
+    if descriptor_id(fn) != key:
+        raise ValueError(f"the template {descriptor_id(fn)} is not the partition's {key}")
+
     def lower(c_s: bytes) -> bytes:
-        key = partition["query"]["params"]["template"]
-        fn = definitions(R.program(c_s))[key]
         params, ret = fn.signature()
         ins = ",".join(f"{p}:{sum(BL.elements(t))}" for p, t in params)
         outs = f"o0:{-(-sum(BL.elements(ret)) // 16)}"
@@ -251,7 +253,7 @@ def stage(a) -> int:
 
     a.out.mkdir(parents=True, exist_ok=True)
     t0 = time.perf_counter()
-    text = lean_lower(a.lower, part)(b.descriptor).decode()
+    text = lean_lower(a.lower, part, core)(b.descriptor).decode()
     rec["lower"] = {"by": "lean flock-lower-check compose (lean_lower)", "wall_s": round(time.perf_counter() - t0, 2),
                     "peak_gib_children": _peak_gib(resource.RUSAGE_CHILDREN)}
     meta = FC.meta_of(text)
@@ -328,7 +330,8 @@ def door(a) -> int:
                                    default=str), flush=True)
 
     call("as-is", "honest", "registered.json")
-    OC.lower = lean_lower(a.lower, partition)
+    from verity_vllm.program.predict import window_cut as WK
+    OC.lower = lean_lower(a.lower, partition, WK.credited_product(SCHEME, *map(int, a.size.split(","))))
     call("lean_lower", "honest", "registered.json")
     call("lean_lower", "dishonest", "registered.json")
     call("lean_lower", "honest", "registered-wrong.json")
@@ -343,6 +346,7 @@ def main() -> int:
     st.add_argument("--lower", required=True, help="flock-lower-check, Lean's lowering")
     st.add_argument("--out", type=Path, required=True)
     dr = sub.add_parser("door")
+    dr.add_argument("--size", default="256,1,1,1", help="K,TM,TN,N")
     dr.add_argument("--lower", required=True)
     dr.add_argument("--lean", required=True, help="verity-verify-proof")
     dr.add_argument("--out", type=Path, required=True)
