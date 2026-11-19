@@ -125,9 +125,9 @@ def lowerBlock (CJ : Json) (partition : Json) (S : Flock.Program.Prog) : V ByteA
     if Spot.Edges.isInputNode S k then continue
     let key := ((root.body.nodes[k]?).bind (S.defs[·.fn]?) |>.map (·.key)).getD ""
     if !called.contains key then called := called.push key
-  let called := called.qsort (· < ·)
-  let #[key] := called
-    | throw s!"lower: C_S's root calls {called.toList}, and a block's units are instances of one template"
+  let keys := called.qsort (· < ·)
+  let #[key] := keys
+    | throw s!"lower: C_S's root calls {keys.toList}, and a block's units are instances of one template"
   if !listed.contains key then throw s!"lower: C_S's template {key} is not one the partition's query lists"
   let some d := S.index[key]? | throw s!"lower: C_S's template {key} is no Definition of C_S"
   let some fn := S.defs[d]? | throw s!"lower: C_S's template {key} is no Definition of C_S"
