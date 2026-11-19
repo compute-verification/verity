@@ -7,5 +7,8 @@
   "IngressScanBucket_v4{B=512,r=4,lanes=4,C=47,IDB=17,EVERY=16,WITHIN=12,D=27,KO=4,KI=32}": {
    "sha512": "6704a4a256f1ee330e5c762754fce560eb94c4a945cd4de7c0e2cb1d3a3b20c5ed59e5b3af1be36e6dc3bc919e16a6077d00b2296633a96dbbb0838c3f6ca1a1"
   }
+ },
+ "struct_max_gates": {
+  "IngressScanStart_v3": 300234
  }
 }
