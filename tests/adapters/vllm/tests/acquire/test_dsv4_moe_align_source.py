@@ -10,6 +10,7 @@ manifest by port; an expert_map or a second call in one module accepted; and the
 from __future__ import annotations
 
 import sys
+import types
 
 import numpy as np
 import pytest

@@ -111,9 +111,9 @@ def test_neither_a_program_nor_a_fixture_with_its_programs_directory_is_refused(
 
 
 @pytest.mark.parametrize("argv", [["manifest-verify", "--manifest", "m.json", "--program", "D", "--rank", "1", "--ranks", "2"],
-                                  ["manifest", "build", "--program", "D", "--ranks", "2"],
+                                  ["manifest", "build", "--program", "D", "--ranks", "2", "--out", "o"],
                                   ["manifest", "build-global", "--fixture", "f", "--programs-root", "a", "--programs-root", "b",
-                                   "--rank", "0", "--rank", "1", "--ranks", "2"]])
+                                   "--rank", "0", "--rank", "1", "--ranks", "2", "--out", "o"]])
 def test_a_manifest_of_more_than_one_gpu_is_refused_by_name_before_it_reads_a_file(argv, capsys):
     with pytest.raises(SystemExit):
         cli.main(argv)

@@ -73,7 +73,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "served-pin": ("verity_vllm.acquire.served_artifact", "a served row's pinned compile artifact: seed a fresh Inductor dir with its autotune winners (seed), check a dir's (check)"),
     "serve-openai": ("verity_vllm.pipeline.serve_openai", "an OpenAI-compatible HTTP server on the in-process engine, every step committed"),
     "program-compare": ("verity_vllm.check.match.program_compare", "structural comparison of two Programs"),
-    "program-dag": ("verity_vllm.check.match.program_dag", "a derived Program and a fold: live-cone DAG multisets equal"),
     "records": ("verity_vllm.pipeline.circuit_db",
                 ("the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch, "
                  "switch), and a checkpoint's staging (staged)")),
