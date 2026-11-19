@@ -580,6 +580,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
 
     def _gemm(self, w: int, x: Any, weight: Any, bias: Any) -> Any:
         import torch
+        self.cur.salts.check()
         cur, wt = self.cur, self.weights[w]
         lead, k = x.shape[:-1], x.shape[-1]
         x2 = x.reshape(-1, k)

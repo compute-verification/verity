@@ -69,8 +69,10 @@ def call_index(run: Any, calls: int = 1) -> int:
     takes none) and the position the call's among the pass's calls.  -h3's row seed binds the salt and the index, so a
     place is one seed, and nothing here takes an index from a caller.  The pass's own buffers stay positional
     (``index - run.cur.base``).  ``RuntimeError`` where the epoch has no round left (`EPOCH_ROUNDS`), or ``calls`` more
-    calls would pass the round's `ROUND_CALLS`."""
+    calls would pass the round's `ROUND_CALLS`; `host.SaltsRefused` where the pass's salts are closed, before any round
+    or base is taken, at every hashing."""
     p = run.cur
+    p.salts.check()
     if p.base is None:
         if run._rounds >= EPOCH_ROUNDS:
             raise RuntimeError(f"{run.entry}: the epoch has used its {EPOCH_ROUNDS} rounds, and a call of another would "
