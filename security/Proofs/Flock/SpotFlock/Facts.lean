@@ -183,7 +183,9 @@ theorem partitionsOk_sound {P : Partition} {C : Prog} (hP : partitionsOk P C = t
       exact ⟨w, by simp, of_decide_eq_true this⟩
 
 theorem oneStageOk_sound {ns : List ℕ} {o : OneStage} (h : oneStageOk ns o = true) : o.WellFormed ns := by
-  cases o <;> simp_all [oneStageOk, OneStage.WellFormed]
+  cases o
+  case counts ks => simpa [oneStageOk, OneStage.WellFormed] using h
+  all_goals simp_all [oneStageOk, OneStage.WellFormed]
 
 theorem scopeOk_sound {C : Prog} {Pt : Partition} {d : Design.Two} (hs : scopeOk C Pt d = true) (s : AuditStatement)
     (hC : s.prog = C) : InScopeTwo Pt d s := by
