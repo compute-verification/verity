@@ -186,7 +186,7 @@ theorem sampledDesign_ok {desc : Hash.Msg} {q lj : Lean.Json} {tb : Option Lean.
   refine ⟨p, derived, hp, hd, ?_⟩
   cases derived with
   | none => exact Or.inr ⟨rfl, hpar⟩
-  | some d => exact Or.inl (congrArg some (Except.ok.inj hpar).symm)
+  | some d => exact Or.inl (congrArg some (Except.ok.inj hpar))
 
 /-- **The audit samples under no Bernoulli sampling design**: `sampledDesign` refuses one (`OneStage.coveredDesign`). -/
 theorem notBernoulli_sampledDesign {desc : Hash.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ}
