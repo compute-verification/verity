@@ -11,7 +11,7 @@ public import Definitions.Pouw.PearlC.Deadline
 public import Definitions.Pouw.PearlC.DeviceKernelWref
 public import Definitions.Pouw.PearlC.Tile
 public import Definitions.Pouw.Game.Deadline
-public import Definitions.Assumptions.Clock
+public import Definitions.Assumptions.Pouw
 public import Definitions.Pouw.PearlC.Game
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 

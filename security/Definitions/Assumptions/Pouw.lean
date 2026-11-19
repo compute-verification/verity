@@ -2,6 +2,7 @@ module
 
 public import Definitions.Pouw.Game.Defs
 public import Definitions.Pouw.PearlC.Game
+public import Definitions.Assumptions.Clock
 
 /-!
 # PoUW's hashless cost models, and Pearl-C's gap property with the budget per coin
@@ -14,7 +15,8 @@ conjecture): an adversary is bounded by `T` only on the coins where its cost is 
 property on a machine that stops a run at its budget (`Pouw.PearlC.CostModel.withStop`) is equivalent to it.
 
 Both are named assumptions under `Definitions.Assumptions`, in a module of their own that reads only PoUW's and
-Pearl-C's games, so the public PoUW proofs import it without the rest of the named assumptions.
+Pearl-C's games, so the public PoUW proofs import it without the rest of the named assumptions. It re-exports Core's
+`clock-within-drift` (`Definitions.Assumptions.Clock`), which PoUW's deadline guarantees take.
 -/
 
 @[expose] public section
