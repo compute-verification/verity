@@ -395,7 +395,6 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.advice",
     "verity_vllm.pipeline.advice_windows",
     "verity_vllm.pipeline.build_instances",
-    "verity_vllm.pipeline.c2_replay",
     "verity_vllm.pipeline.chunk_rows",
     "verity_vllm.pipeline.cpu_replay",
     "verity_vllm.pipeline.deferred_rows",
@@ -403,7 +402,6 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.serve_protocol",
     "verity_vllm.pipeline.serving_rows",
     "verity_vllm.pipeline.slice_rows",
-    "verity_vllm.pipeline.tp.commit_replay",
     "verity_vllm.pipeline.tp.serving_rows",
     "verity_vllm.pipeline.window_advice",
     "verity_vllm.program.compact",
@@ -431,7 +429,6 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.pipeline.serving_rows', '_bind'),
     ('verity_vllm.pipeline.serving_rows', '_operand'),
     ('verity_vllm.pipeline.serving_rows', '_read_s8'),
-    ('verity_vllm.pipeline.tp.commit_replay', '_of_record'),
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
 })
 
