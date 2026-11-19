@@ -369,6 +369,35 @@ theorem OneStage.strata_le {ns : List ℕ} {d : OneStage} {ss : List (ℕ × ℕ
     subst h
     exact fun p hp => (hw.2 p hp).2
 
+/-- The counts the stratified design draws over strata of sizes `ns`, one a stratum, as its `P_a` reads them
+(`Flock.Draw.stratumK`'s). -/
+def OneStage.stratifiedCounts (K : ℕ) (ns : List ℕ) : List ℕ :=
+  ns.map fun n => max 1 ((2 * K * n + ns.sum) / (2 * ns.sum))
+
+theorem OneStage.zip_stratifiedCounts (K : ℕ) (ns : List ℕ) :
+    ns.zip (OneStage.stratifiedCounts K ns) = ns.map fun n => (n, max 1 ((2 * K * n + ns.sum) / (2 * ns.sum))) := by
+  unfold OneStage.stratifiedCounts
+  generalize ns.sum = N
+  induction ns with
+  | nil => rfl
+  | cons n ns ih => simp [ih]
+
+/-- **The counts design at the stratified design's own counts is the stratified design**: the same `P_a`. -/
+theorem OneStage.Pa_counts_stratified (K : ℕ) (ns : List ℕ) (B : Finset ℕ) :
+    (OneStage.counts (OneStage.stratifiedCounts K ns)).Pa ns B = (OneStage.stratified K).Pa ns B := by
+  simp only [OneStage.Pa, OneStage.zip_stratifiedCounts]
+
+/-- A well-formed stratified design's counts are a well-formed counts design. -/
+theorem OneStage.wellFormed_counts_stratified {K : ℕ} {ns : List ℕ} (hw : (OneStage.stratified K).WellFormed ns) :
+    (OneStage.counts (OneStage.stratifiedCounts K ns)).WellFormed ns := by
+  refine ⟨by simp [OneStage.stratifiedCounts], fun p hp => ⟨?_, ?_⟩⟩
+  · rw [OneStage.zip_stratifiedCounts] at hp
+    obtain ⟨n, -, rfl⟩ := List.mem_map.1 hp
+    exact le_max_left _ _
+  · rw [OneStage.zip_stratifiedCounts] at hp
+    exact OneStage.strata_le (d := .stratified K)
+      (ss := ns.map fun n => (n, max 1 ((2 * K * n + ns.sum) / (2 * ns.sum)))) rfl hw p hp
+
 /-! ## The classes' product -/
 
 /-- The slot at which class `i` starts: the proof blocks of the classes before it. -/
