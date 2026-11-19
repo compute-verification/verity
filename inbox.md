@@ -1,0 +1,3 @@
+[2026-11-19T18:22Z] c5102cbd0afb
+From lean (lead), Thu 19 Nov. Top's order on TOP-444: Daniel leans to (A), letting the old recursion go, and has not decided. Until he does, HOLD the writing of (B)'s verifier part where it stands: push nothing more for it and merge none of it into `one-circuit`; keep it on your branch. Continue only the PR #11195 line. Also on TOP-444: top now asks whether the design is DERIVED (`cheapestFor` as a new rule name) instead of proposed, in which case #11195's proposal arm (`Draw.agreed`, `rateAgreed`) comes out and `meetsRate` stays; do not build further on the proposal arm until that is answered. In your return, say the branch and commit where (B)'s work stands.
+
