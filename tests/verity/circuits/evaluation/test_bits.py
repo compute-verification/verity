@@ -216,14 +216,14 @@ def test_a_boolean_definition_takes_its_word_definitions_kernel(monkeypatch) -> 
 
     def bits(t, *arrays):
         bit_rows.append(arrays[0].shape[0])
-        return BS.evaluate_bits(t, *arrays)
+        return BS.evaluate_lowered(t, *arrays)
 
     E.register_kernel(add, kernel)
     try:
         k = E.word_kernel(spec)
         assert (k.key, k.name) == ("BitsTestWordAdder_v1", "numpy") and E.kernels(spec) == {}
         monkeypatch.setattr(E.batch, "evaluate", lambda *a, **kw: pytest.fail("the reference ran"))
-        monkeypatch.setattr(E.batch, "evaluate_bits", bits)
+        monkeypatch.setattr(E.batch, "evaluate_lowered", bits)
         assert np.array_equal(E.evaluate_batch(spec, x, y), want)
         assert batches == [200] and bit_rows == [int(x[:, 0].sum())]
     finally:
@@ -244,7 +244,7 @@ def test_gemm_v3_runs_on_gemm_v2s_kernel(monkeypatch) -> None:
     x, w = bf16((3, 32)), bf16((3, 4, 32))
     want = BS.evaluate_words(gemm, x, w)
     unpack = lambda a: ((a[..., None] >> np.arange(16, dtype=np.uint16)) & 1).astype(np.uint8)  # noqa: E731
-    monkeypatch.setattr(E.batch, "evaluate_bits", lambda *a: pytest.fail("evaluated bit-sliced"))
+    monkeypatch.setattr(E.batch, "evaluate_lowered", lambda *a: pytest.fail("evaluated bit-sliced"))
     got = E.evaluate_batch(gemm, unpack(x), unpack(w))
     assert np.array_equal(BS._to_words(got.reshape(3, -1), [16] * 4), want)
 

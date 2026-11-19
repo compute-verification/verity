@@ -175,6 +175,7 @@ class ProgramIndex:
         self._v2: dict[int, list[tuple[str, int, str]]] = {}
         self._v2_ports: dict[int, dict[str, str]] = {}
         self._v2_module: dict[int, str] = {}
+        self._v2_family: dict[int, dict[str, str]] = {}
         self._v2_fault: dict[int, str] = {}
         # a manifest built under the norm-scale policy spells an ATen norm's rsqrt as `<norm module>/norm_scale`, not a Call boundary
         of = NS.population if norm_scales else population
@@ -188,6 +189,7 @@ class ProgramIndex:
                 self._v2[cid] = [(m.member, m.width, m.dtype) for m in mem]
                 self._v2_ports[cid] = dict(reversed([(m.port, m.member) for m in mem]))      # a port's own member, before a partial on it
                 self._v2_module[cid] = pop.program_path(cid)
+                self._v2_family[cid] = {m.member: m.family for m in mem}
         self.correspondence: dict[str, Any] | None = corr.provenance()
         impl = corr.implementation_path
         del P, corr, pop
@@ -315,6 +317,11 @@ class ProgramIndex:
 
     def step_of(self, i: int) -> int:
         return max(0, bisect.bisect_right(self._seg_lo, int(i)) - 1)
+
+    def value_families(self, i: int) -> dict[str, str]:
+        """Row i's committed member -> the query's family of the Value it is (`query.required.CallMember.family`); {} for a row whose
+        outputs are interior."""
+        return dict(self._v2_family.get(int(i), {}))
 
     def member_of_port(self, i: int) -> dict[str, str]:
         """Row i's output port -> the member it is committed as (`CallMember.port`); {} for a row whose outputs are interior."""

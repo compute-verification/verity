@@ -167,7 +167,8 @@ def test_both_registrations_pass_the_verifiers_check_and_the_interior_follows_th
     for rec, c in ((brec, bc), (irec, it.committed)):
         w = c.window
         v = V.check(rec, w.program, w.query, w.law, T.CS.SCHEME, T.CS.expected_ports(w),
-                    leaf_layer=T.CS.leaf_layer(publics(c)), **({"log": [brec]} if rec is irec else {}))
+                    leaf_layer=T.CS.leaf_layer(publics(c)), partition=w.partition,
+                    **({"log": [brec]} if rec is irec else {}))
         assert v.ok, v.codes
     assert irec["previous"] == run["digest"] and irec["window"]["replay_sample"] == list(SAMPLE)
     assert irec["window"]["run"] == T.interior_run(run["digest"], SAMPLE) != brec["window"]["run"]
@@ -215,7 +216,8 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
     and the wires the replay block's Definition makes (`second_stage.replay_wires`: each member's input its writer's
     output, `toy.WRITERS`), while without the params' headers every one fails ``second-header``, without their reads or with
     a link port's read of another boundary port ``second-values``, without the verifier ``second-verified``,
-    without the wires ``second-header`` and ``second-read`` (a wired port is bound and read at its writer's port), with
+    without the wires ``second-header``, ``second-read`` and ``second-place-none`` (a wired port is bound and read at its
+    writer's port, and no rule places it without its wire), with
     none derived ``second-wires``, and against S reversed ``second-interior-order`` fails. Slow (about 15 s): the only
     test that lowers the templates, whose circuit SHA-512s and classes are in both headers."""
     from verity_flock.class_statement import member_stager
@@ -265,7 +267,7 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
     assert check(SAMPLE, refs, ref_reads=())["codes"] == ["second-values"]
     assert check(SAMPLE, refs, ref_reads=((t0, other), *ref_reads[1:]))["codes"] == ["second-values"]
     assert check(SAMPLE, refs, ())["codes"] == ["second-verified"]
-    assert check(SAMPLE, refs, wires=())["codes"] == ["second-header", "second-read"]
+    assert check(SAMPLE, refs, wires=())["codes"] == ["second-header", "second-read", "second-place-none"]
     assert check(SAMPLE, refs, wires=None)["codes"] == ["second-wires"]
     assert check(SAMPLE, refs, rows=())["codes"] == ["second-links", "second-wires"]
     assert "second-interior-order" in check(SAMPLE[::-1], refs)["codes"]

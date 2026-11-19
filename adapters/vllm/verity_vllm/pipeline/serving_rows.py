@@ -134,7 +134,7 @@ from verity.protocols.proofs.spot.verifier import service as SV
 from verity.protocols.proofs.spot.prover import docket as DK
 from verity.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
-from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.check.replay.opening import CommittedStore, alias_table
 from verity_vllm.commit import history_tables as H, index as IX, row_tables as RTB, step_rows
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
@@ -179,7 +179,7 @@ def readers(request: str | None, com: Any, rc: Any, weights: Callable, programs:
         try:
             hs = H.of_request(req.get("committer"), HR.on(json.loads(Path(req["partition"]).read_text())))
             after_commit(req["dir"], partition_file=req["partition"], programs=programs, bmap=bmap, committed=OpenedReader(com, rc),
-                         weights=weights, manifest=manifest if isinstance(manifest, dict) else None, run_root=rc.run_root, run=req.get("run"),
+                         weights=weights, aliases=alias_table(manifest if isinstance(manifest, dict) else None), run_root=rc.run_root, run=req.get("run"),
                          row=row or None, arrivals=arrivals, program_dirs={k: v.get("dir") for k, v in loaded.items()},
                          digests=digests, committer=req.get("committer"), tables=EX.of_request(req.get("tables")), histories=hs)
         except Exception as e:  # noqa: BLE001
@@ -723,7 +723,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
 
 
 def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[str, Any]], bmap: dict[str, Any], committed: Callable,
-                 weights: Callable, manifest: dict[str, Any] | None, run_root: bytes | str, run: str | None = None, row: Any = None,
+                 weights: Callable, aliases: Mapping[str, Sequence[Any]] | None = None, run_root: bytes | str, run: str | None = None, row: Any = None,
                  arrivals: dict[str, int] | None = None, program_dirs: dict[str, str] | None = None,
                  digests: Mapping[str, str] | None = None, committer: dict[str, Any] | None = None,
                  workers: int | None = None, stand_in: Mapping[str, Any] | None = None, tp: Mapping[str, Any] | None = None,
@@ -754,7 +754,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     window, rows = population(programs, pf, run_root if isinstance(run_root, str) else bytes(run_root).hex(), dirs, index, arrivals,
                               rt.get("context", ""), reuse, transfer_gates)
     ms = window.members
-    store = CommittedStore.of_record(bmap, committed, manifest)
+    store = CommittedStore.of_record(bmap, committed, aliases)
     data, entries, roots, salts_of, strings_of, idx, hreg, window = window_values(window, rows, store, weights, arrivals,
                                                                                   weight_values, tables, histories, HR.on(pf))
     t_read = time.perf_counter()

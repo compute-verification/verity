@@ -45,8 +45,8 @@ def test_every_tensor_core_step_has_its_precision():
     assert set(PRECISION) == set(PRODUCTS) and set(PRECISION.values()) == {"bf16", "tf32", "fp8", "fp4", "int8"}
     assert {f: PRECISION[f] for f in PRODUCTS if "E5m2" in f or "Mxf4" in f or "U8S8" in f} == {
         "BlackwellE5m2QmmaDot32_v1": "fp8", "BlackwellE5m2QmmaDot32_v2": "fp8", "BlackwellMxf4OmmaDot64_v1": "fp4",
-        "BlackwellMxf4OmmaDot64_v2": "fp4", "PouwDot16U8S8_v1": "int8", "BlackwellU8S8ImmaDot32_v1": "int8",
-        "BlackwellU8S8ImmaDot32_v2": "int8"}
+        "BlackwellMxf4OmmaDot64_v2": "fp4", "PouwDot16U8S8_v1": "int8", "PouwDot16U8S8_v2": "int8",
+        "BlackwellU8S8ImmaDot32_v1": "int8", "BlackwellU8S8ImmaDot32_v2": "int8"}
 
 
 def test_every_definition_with_a_rule_is_ruled_under_its_module():

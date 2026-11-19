@@ -172,7 +172,7 @@ def test_2_the_reader_returns_layer_ks_own_words_for_every_step_request_layer_me
     bmap = build_map(rec, REQS)
     table = expected_table(N)
     rd = OC.OpenedReader(*rec)
-    st = OP.CommittedStore.of_record(bmap, rd, {"op_path_aliases": table})
+    st = OP.CommittedStore.of_record(bmap, rd, table)
     for s in STEPS:
         for r, rid in enumerate(REQS):
             for k in range(N):

@@ -44,6 +44,7 @@ pytest.importorskip("torch")
 
 import verity_difftest as D  # noqa: E402
 from verity.commitments import docket_digest as DD  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw import scheme as PP  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[4]
 PACKAGE = ROOT / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
@@ -136,6 +137,13 @@ def challenger_sample(entropy: int = 7, after: bytes | None = None):
     return draw
 
 
+def pinned_y(monkeypatch, seed: int = 0) -> None:
+    """`proved_pass` commits each call's y under fresh salts (`served_y.retain_y`), and y's roots are in the run's commitment,
+    which keys the sample: seeded salts (`seeded_salts`) fix the sample, so a case that names a tile its draws reach reaches it
+    on every run."""
+    monkeypatch.setattr(T.SY, "fresh_salts", T.seeded_salts(seed))
+
+
 def edit(path: Path, f) -> None:
     man = json.loads(path.read_text())
     f(man)
@@ -226,9 +234,10 @@ def test_the_forming_term_reads_a_block_every_credited_word_flags_and_not_one_so
     16 credited words flag each block and the rest don't, so no block is inert and its debit is the chain's, 160, over
     its row cap, with or without the term.  On 16 x 1 tiles that column's tile has one credited word, which flags all
     four blocks, so every element of the row is inert and the tile's debit is 672, 160 without the term.  The Lean's
-    verdicts are the Python's on both, under each ``over_cap`` rule."""
+    verdicts are the Python's on both, under each ``over_cap`` rule; y's salts are pinned, so the draws reach that tile."""
     cases = [((16, 16), 16, "A row 11's replayed debit 160 exceeds", "A row 11's replayed debit 160 exceeds"),
              ((16, 1), 64, "the replayed debit 672 exceeds", "the replayed debit 160 exceeds")]
+    pinned_y(monkeypatch)
     paths = []
     for tile, draws, why, _ in cases:
         path = T.proved_pass(tmp_path / f"{tile[0]}x{tile[1]}", H100, key=bytes(32), tile=tile)[0]
@@ -248,7 +257,8 @@ def test_the_forming_term_reads_a_row_some_of_whose_blocks_are_inert(exe, tmp_pa
     of its four atom blocks and not the other three, and no element of the tile is salt-dead.  So 32 of the row's 128
     elements are inert and the tile's debit is 168 (40 for the flagged atom-word, 4 per inert element), 40 without the
     term; reading the three unflagged blocks as the inert ones would make it 424.  The Lean's verdicts are the Python's
-    under each ``over_cap`` rule."""
+    under each ``over_cap`` rule; y's salts are pinned, so the 96 draws reach tile 14."""
+    pinned_y(monkeypatch)
     path = T.proved_pass(tmp_path, H100, key=bytes([4]) * 32, tile=(16, 1))[0]
     for rule in (None, *VR.OVER_INERT_BOUND):
         got = same(exe, [path], 96, over_cap=rule)
@@ -311,6 +321,21 @@ def test_a_served_y_that_is_not_the_unscale_of_its_u(exe, tmp_path):
     assert "the prover's files don't open its y: ValueError: " in same(exe, [path])["reason"]
 
 
+def test_a_credited_call_that_commits_no_y_root(exe, tmp_path):
+    """A call with a credited cell whose manifest names no y is refused at load on both sides, before the coin, since the
+    tile check ties U to y only where y is committed. One with no credited cell (weight 1's excluded row 20 takes all its
+    columns) commits none and is read: its exclusion tile is opened and passes, with no y to hold it to."""
+    path = T.proved_pass(tmp_path / "credited", H100)[0]
+    index = json.loads(path.read_text())["matmuls"][1]["index"]
+    edit(path, lambda m: m["matmuls"][1].pop("y"))
+    got = same(exe, [path])
+    assert got["verdict"] == "reject" and got["source"] is None and got["verdicts"] == []
+    assert got["reason"] == f"ValueError: matmul {index}: a credited call commits no y root"
+    path = T.proved_pass(tmp_path / "uncredited", H100, bad_b=20)[0]
+    edit(path, lambda m: m["matmuls"][1].pop("y"))
+    assert same(exe, [path], 16)["verdict"] == "accept"
+
+
 def test_a_served_y_row_that_ends_before_its_tiles_columns(exe, tmp_path):
     """A prover's own y whose last real row is short (`short_y`: the rows file cut, the tree and root over the row as it
     is, so it opens), on a row whose unscale is +0 at every column (`zero_a`: its A row is zero, so it is excluded and its
@@ -363,6 +388,28 @@ def test_an_epochs_passes(exe, tmp_path):
     c = T.proved_pass(tmp_path / "c", H100, (2, 3))[0]
     got = same(exe, [a, c], 8)
     assert got["verdict"] == "accept" and {v["pass"] for v in got["verdicts"]} == {0, 1} and len(got["verdicts"]) == 10
+
+
+def test_the_tiles_the_lean_draws_are_pearl_plus_credited_blocks_drawn(exe, tmp_path):
+    """Over two passes of one epoch, the tiles the Lean opens for its sample, (pass, tile id) in its order, are the
+    credited blocks `scheme.drawn_blocks` draws on the run's key, each pass's before its exclusion tiles, and each a block
+    of `scheme.credited_blocks` with a ticket."""
+    a, c = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("a", (0, 1)), ("c", (2, 3))))
+    draws = 16
+    got = same(exe, [a, c], draws)
+    passes = [VR.load(x, T.published(x)) for x in (a, c)]
+    records = [p.records for p in passes]
+    key = VR.derive(SOURCE, VR.RUN_DRAW_DOMAIN, {"run": VR.run_commitment(passes)})
+    drawn = PP.drawn_blocks(passes[0].scheme, records, key, draws)
+    opened = [(v["pass"], v["tile"]) for v in got["verdicts"]]
+    for i in (0, 1):
+        mine = [b.id for b in drawn if b.id[0] == i]
+        assert [x for x in opened if x[0] == i][:len(mine)] == mine
+    assert len(opened) == draws + sum(len(p.tile_ids(T.CW.exclusion_tiles(p.scheme, p.records))) for p in passes)
+    blocks = PP.credited_blocks(passes[0].scheme, records)
+    assert all(b in blocks and b.ticket > 0 for b in drawn)
+    assert [(b.id, b.rows, b.cols) for b in blocks] == [((i, r.id), r.tile.rows, r.tile.cols) for i, p in enumerate(passes)
+                                                        for r in p.verifier.refs]
 
 
 def test_a_served_runs_tile_and_salt(exe, tmp_path):

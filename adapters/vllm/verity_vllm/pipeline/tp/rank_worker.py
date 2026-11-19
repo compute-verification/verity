@@ -605,8 +605,8 @@ class TP2CaptureWorkerExtension:
         res: dict[str, Any] = {"rank": rank, "committer": com.name, "post_load_tensors": post_load}
         from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, attention_hidden, make_hidden_source
         man = json.loads(Path(required_manifest).read_text()) if required_manifest else None      # its ROW word 3 / MS class must be the build's
-        if (res.setdefault("attention_hidden", attention_hidden(man, model))["family"] and hidden_so):   # MLA / DSA: no hidden class, no FA2 source
-            com.attach_source(make_hidden_source(com, hidden_so, ns=(hidden_ns or Path(hidden_so).stem), manifest=man,
+        if (res.setdefault("attention_hidden", attention_hidden(model))["family"] and hidden_so):   # MLA / DSA: no hidden class, no FA2 source
+            com.attach_source(make_hidden_source(com, hidden_so, ns=(hidden_ns or Path(hidden_so).stem),
                                                  fa2_cls=getattr(com, "hidden_source_cls", HiddenM1Source), fa3_cls=getattr(com, "hidden_source_cls_fa3", None)))
             res["hidden_source"] = hidden_so
         # the fused-MoE layer source (MOE-03: router_w/ids, up, act, down, sum per MoE layer per step, class

@@ -796,7 +796,7 @@ def UPSTREAM_PLAIN : String :=
   "refused: upstream's plain proof files (--upstream-plain): a form the soundness proof does not cover; verity-verify-proof agree compares the verifier's checks on them with upstream's verdicts"
 
 /-- `verify --statement ID --circuit F --comp F --public F [--coins tree] [--session-tables J] --session DIR...`: `ID`
-names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`), and every session of a legacy
+names the statement's tags (`verity/flock-circuit` by default; `Tags.byName?`), and every session of a legacy
 statement (`ProvedScope.legacyStatements`) is refused before any file is read (`ProvedScope.legacyWhy`), as is every session of a
 wide-leaf statement (`Tags.wideLeaf`) without `--zk` or with a `--rec-…` argument (`ProvedScope.wideLeafWhy`); `--comp` is the row leaf's
 pinned compression circuit; `J` (default 1) is the tables of every session (`Stmt.setupTables`), which split one sample of fixed count, a
@@ -834,13 +834,14 @@ whose circuit links sets up only with the verifier's own program of it, `--rec-i
 as the session's does with `--program`.
 Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The draw-less statement is set up once, and each sampled session at its own
-sample; one verdict line per session, in order, naming with `--program` the verifier's own program's digest: as `program_sha512`
+sample; one verdict line per session, in order, each saying whether it ran `--zk` (`zk`), naming with `--program` the
+verifier's own program's digest: as `program_sha512`
 only when it is META's `program_sha512`, else as `program_handed_sha512` with a `program_note` (`ProvedScope.programFields`),
 the digest of its public file's header (`public_header_sha512`, `publicHeader`), with `--registered F` the digest of that
 file (`registered_sha512`, `sha512Of`), a sampled session's sample (`unit_draw`), the number of tables it set the
 session up as (`session_tables`, `--session-tables J`, else 1),
 with `--rec-part J` its part (`rec_part`), the SHA-512 of every other input V*'s parts share (`rec_shared`,
-`recSharedInput`), whether it ran `--zk` (`zk`) and its session's coin key (`coin_key`), with `--rec-rows F` the
+`recSharedInput`) and its session's coin key (`coin_key`), with `--rec-rows F` the
 SHA-512 of the shared rows file it checked (`rec_rows_sha512`), with `--rec-inner F` the SHA-512 of the inner shape file
 it read (`rec_inner_sha512`), and with `--rec-inner-session DIR` and `--rec-inner-transcript F` the SHA-512 of the inner
 session's record and of the transcript (`rec_inner_session_sha512`, `rec_inner_transcript_sha512`,
@@ -913,11 +914,13 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   -- a session's line: the checks' outcome, then that of the refusals after them. `verify` prints its verdict; `agree`
   -- whether the checks pass exactly when upstream accepted, and never an acceptance
+  let zk := args.contains "--zk"
   let emit : String → Except String (Except String Unit) → List (String × Lean.Json) → IO Bool := fun dir outcome extra => do
     match upstream with
     | none =>
       let (ok, why) := match outcome with | .ok (.ok ()) => (true, "") | .ok (.error e) | .error e => (false, e)
-      let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)] ++ extra)
+      let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why),
+        ("zk", Lean.Json.bool zk)] ++ extra)
       IO.println s!"VERDICT {line.compress}"
       return ok
     | some up =>
@@ -945,7 +948,6 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
   let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
   let dirs := (args.dropWhile (· != "--session")).drop 1
-  let zk := args.contains "--zk"
   let ksForm := args.contains "--ks-form"
   if ksForm && !zk then
     IO.eprintln "verify --ks-form: the sampled audit's knowledge soundness is over --zk sessions, so --ks-form goes with --zk"; return 2
@@ -1180,13 +1182,13 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
       (match identifier with | some (j, _) => [("identifier", j)] | none => []) ++
       -- the verifier's own inner shape's word, never the prover's META
       (match recInner with | some i => [("private_circuit", Lean.Json.bool i.holo)] | none => []) ++
-      -- the part, the shared rows and every other shared input it was checked against, whether it ran --zk, and its
-      -- session's coin key, which `rec-compose` holds every part to (`RecCompose.Accepts`)
+      -- the part, the shared rows and every other shared input it was checked against, and its session's coin key,
+      -- which `rec-compose` holds every part to (`RecCompose.Accepts`)
       (match recPart with | some j => [("rec_part", Lean.toJson j)] | none => []) ++
       (match recRowsSha with | some h => [("rec_rows_sha512", Lean.Json.str h)] | none => []) ++
       (match recInnerSha with | some h => [("rec_inner_sha512", Lean.Json.str h)] | none => []) ++ recSessionShas ++
       (match recShared with
-        | some s => [("rec_shared", s.toJson), ("zk", Lean.Json.bool zk)] ++
+        | some s => [("rec_shared", s.toJson)] ++
           (match coinKey with | some k => [("coin_key", Lean.Json.str k)] | none => [])
         | none => []))
     all := all && ok
@@ -1750,6 +1752,27 @@ def templateQueryCmd (paths : List String) : IO UInt32 := do
     IO.println s!"TEMPLATEQUERY {line.compress}"
   return 0
 
+/-- `partition-object FILE...`: a partition object's form (`HmRow.checkPartitionObject`) for each case `{"object"}`, and
+with `"descriptor"` (the program's bytes as a string) its `blocks` as a reader gets them (`HmRow.blocksOf`), or the
+refusal. One `PARTITIONOBJECT` line per file. -/
+def partitionObjectCmd (paths : List String) : IO UInt32 := do
+  for path in paths do
+    let text ← try IO.FS.readFile path catch _ => pure ""
+    let res : V Lean.Json := do
+      let j ← match Flock.JsonParse.parse text with | .ok j => pure j | .error e => throw s!"not JSON: {e}"
+      let obj := (j.getObjVal? "object").toOption.getD Lean.Json.null
+      discard <| HmRow.checkPartitionObject obj
+      let some d := (j.getObjValAs? String "descriptor").toOption | return Lean.Json.mkObj []
+      let bs ← HmRow.blocksOf obj d.toUTF8
+      return Lean.Json.mkObj [("blocks", match bs with
+        | some ps => Lean.Json.arr (ps.map fun (lo, hi) => Lean.toJson #[lo, hi])
+        | none => Lean.Json.null)]
+    let line := match res with
+      | .ok r => (r.setObjVal! "file" (Lean.Json.str path)).setObjVal! "ok" (Lean.Json.bool true)
+      | .error e => Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
+    IO.println s!"PARTITIONOBJECT {line.compress}"
+  return 0
+
 /-- `cut-check FILE...`: `check_cut` (the invariant on one Call's cut against its graph, and the width rule) on each case, one
 `CUTCHECK` line per file; a case with `"recompute": "report"` (`Q_word` v2's rule) also gives its `recomputed_across` count. -/
 def cutCheckCmd (paths : List String) : IO UInt32 := do
@@ -1969,6 +1992,7 @@ def main (args : List String) : IO UInt32 := do
   | "sigma-check" :: rest => Flock.Sigma.cmd rest
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "template-query" :: paths => templateQueryCmd paths
+  | "partition-object" :: paths => partitionObjectCmd paths
   | "net-check" :: paths => netCheckCmd paths
   | "draw" :: rest => sampleCmd rest
   | "draw-test" :: path :: rest => sampleTest path rest

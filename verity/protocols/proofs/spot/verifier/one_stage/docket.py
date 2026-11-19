@@ -96,11 +96,13 @@
   P's leaf count must be the value's rows (`R7-output` when the log holds no such record or port, or the counts differ).
   Its rows stay under the earlier run's hiding leaves, so nothing about the value is opened, and the reads open against
   that root under that domain (`registered.reads_file`'s `domains`).
-* **Reused values**: an output value may name an earlier record's registered value instead of a port (`{value:
+* **Reused values**: an output value may name the previous record's registered value instead of a port (`{value:
   {"record": D, "value": V}}`): its entry takes the domain and root of V's entry in the `registered` of the log's record
-  with digest D (its last naming V), whose leaves, words and word bits must be the value's own (`R7-output` when the log
-  holds no such record or value, or they differ). Nothing is registered afresh: a record whose entry names another domain
-  or root is `R7-domain` or `R7-held`, as for a port.
+  with digest D (its last naming V), whose leaves, words and word bits must be the value's own (`R7-output` when D is
+  not the log's last record, `last_digest`, which R6 holds `previous` to, when the log holds no such value, or when they
+  differ). D is the previous record's so that the record whose own check held V's domain is the one the verifier's
+  caller ties this record to (Pearl+'s window record W, chained right before it). Nothing is registered afresh: a
+  record whose entry names another domain or root is `R7-domain` or `R7-held`, as for a port.
 * **Window history**: an output value the verifier gives only a port (`{value: {"port": P}}`) is port P of the previous
   record, the log's last, which R6 holds `previous` to (`last_digest`): the verifier names the record itself, so a
   window's history, the earlier windows' outputs it reads, is held to the previous window's root and domain for P, and
@@ -566,8 +568,10 @@ def _output_port(log: Sequence[Mapping[str, Any]], record: str, port: str, key: 
 def _earlier(log: Sequence[Mapping[str, Any]], record: str, kind: str, name: str,
              want: Mapping[str, Any]) -> Mapping[str, Any] | None:
     """An output value's earlier entry: the port `name` of the log's record with digest `record`, with the value's leaf
-    count, or (`kind == "value"`) its registered value `name`, with the value's leaves, words and word bits; each with a
-    string domain and root, else None."""
+    count, or (`kind == "value"`) its registered value `name`, of the log's last record alone (`last_digest`), with the
+    value's leaves, words and word bits; each with a string domain and root, else None."""
+    if kind == "value" and record != last_digest(log):
+        return None
     if kind == "port":
         e = _output_port(log, record, name)
         ok = e is not None and type(e.get("leaves")) is int and e["leaves"] == want["leaves"]
@@ -910,31 +914,54 @@ NOT_ONE_MEMBER = ("public file: the registration's roots are not one member's: t
                   "a registration whose ports are bare, or are all one window member's, <member>/<port>")
 
 
+def name_template(name: str) -> str:
+    """`OneStageZk.NAME_TEMPLATE`."""
+    return (f"roots: the member {name}'s name is another member's template: a root {name}/<field> would read both as the "
+            "member's own port and as the window's tree of the template's field")
+
+
+def own_field(name: str, field: str) -> str:
+    """`OneStageZk.OWN_FIELD`."""
+    return (f"roots: the member {name} holds a root of its own at {field}, a field its template has a window's tree of: a "
+            "member reads its template's field at the window's one tree, which every wire into the field reads")
+
+
 def public_ports(rec: Mapping[str, Any]) -> dict[str, Any]:
     """`OneStageZk.publicPorts`: the record's roots by port as v2's one statement's public file names them (bare): its
-    own where no root's port holds a ``/``; else, where every root's port is ``<member>/<port>`` of one member, whose own
-    port names hold no ``/``, that member's roots with its name and the ``/`` taken off. Raises `ValueError` with v2's
-    refusal where the roots are two members' or more, or bare and a member's (`NOT_ONE_MEMBER`), or one is a row tables'
-    (`ROW_TABLES`) or names no port."""
+    own where no root's port holds a ``/``; else, where every root's port but the window's trees of a template's field
+    (``<template>/<field>``, its template another port's name's template) is ``<member>/<port>`` of one member, whose
+    own port names hold no ``/``, that member's roots with its name and the ``/`` taken off, with its template's fields'
+    trees at its fields. Raises `ValueError` with v2's refusal where the roots are two members' or more, or bare and a
+    member's (`NOT_ONE_MEMBER`), or one is a row tables' (`ROW_TABLES`) or names no port, or the member holds a root of
+    its own at a field its template has a tree of (`own_field`)."""
     roots = rec["roots"]
     ports = [r["port"] for r in roots if isinstance(r.get("port"), str)]
     if all("/" not in p for p in ports):
         return {r["port"]: r for r in roots if isinstance(r.get("port"), str)}
-    names = {p.rsplit("/", 1)[0] if "/" in p else None for p in ports}
+    ts = {n.rsplit("/", 1)[0] for p in ports if "/" in p and "/" in (n := p.rsplit("/", 1)[0])}
+    names = {p.rsplit("/", 1)[0] if "/" in p else None for p in ports if "/" not in p or p.rsplit("/", 1)[0] not in ts}
     if None in names or len(names) != 1:
         raise ValueError(NOT_ONE_MEMBER)
     name, = names
     out: dict[str, Any] = {}
+    fields: dict[str, Any] = {}
     for r in roots:
         port = r.get("port")
         if not isinstance(port, str):
             raise ValueError("roots: a root of the registration names no port")
         if port == TABLE_PORT:
             raise ValueError(ROW_TABLES)
+        if not port.startswith(name + "/") and port != name and "/" in port and port.rsplit("/", 1)[0] in ts:
+            t, f = port.rsplit("/", 1)
+            if name.rsplit("/", 1)[0] == t and f not in fields:
+                fields[f] = {"domain": r.get("domain"), "leaves": r.get("leaves"), "port": f, "root": r.get("root")}
+            continue
         bare = port[len(name) + 1:]
         out.pop(bare, None)
         out[bare] = {"domain": r.get("domain"), "leaves": r.get("leaves"), "port": bare, "root": r.get("root")}
-    return out
+    if (f := next((f for f in fields if f in out), None)) is not None:
+        raise ValueError(own_field(name, f))
+    return {**out, **fields}
 
 
 def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str], domains: Mapping[str, str],
