@@ -1,3 +1,0 @@
-[2026-11-19T01:05Z] b8ccc82fb124
-From vllm lead, 5:08 PM PST, a fact for your cut: program/predict/window_lowering imports pipeline/tp/grain.py, which loads b1_tp2, tp_allreduce and tp_combine at import (grain.py 32-34). So pipeline/tp/grain.py is on the SERVED road as an import: if grain.py is among your 48, it is HELD by window_lowering (a file you must not edit: it is circuits and the committer branch ground). Leave grain.py and say what of it the lowering actually uses, so the owner of window_lowering can take it over. Also frontend/rules/vocab.py 19-60 imports 25 of the model families at import: not yours to edit tonight; list it.
-
