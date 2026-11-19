@@ -578,7 +578,7 @@ CHECKED = {
 #: states (δ ≥ 0) aren't listed
 RESTS_ON: dict[str, dict[str, Any]] = {
     "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted": {
-        "statement": "e7686773821a0c9646d03a906d16c534d2253ed2a566aedf686d01fccf4a1e36",
+        "statement": "1d17938dd5b2e1780a3eece62b070d331e06de6a58283307e81e2bccb4b1af8f",
         "takes": {"Claims.SamplingGeneric.Compiled.KS": "sampled-leg-bridge",
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge",
                   "Verity.Assumptions.TrustedDevice": "Verity.Assumptions.TrustedDevice",
