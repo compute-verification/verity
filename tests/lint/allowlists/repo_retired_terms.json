@@ -2624,7 +2624,7 @@
     {"file": "verity/circuits/boundary.py", "count": 18},
     {"file": "verity/circuits/defs.py", "count": 4},
     {"file": "verity/circuits/evaluate/Evaluate/Words.lean", "count": 2},
-    {"file": "verity/circuits/lean/Circuits/Program.lean", "count": 4},
+    {"file": "verity/circuits/lean/Circuits/Descriptor.lean", "count": 4},
     {"file": "verity/circuits/ops/boolean/int8.py", "count": 2},
     {"file": "verity/circuits/ops/boolean/norm_quant.circuit-check.py", "count": 1},
     {"file": "verity/circuits/partition.py", "count": 2},

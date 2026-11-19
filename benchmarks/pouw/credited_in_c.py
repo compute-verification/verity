@@ -4,9 +4,10 @@ C is one linear y = x · Wᵀ over M rows of K and N columns whose nodes are its
 (`pearl_plus_credited.tiles`), each reading its ports as rows of the values C holds: x's and W's rows (``a``, ``b``), the
 linear's one y (``y``), the prover's certificates (``cert``) and the public row (`pearl_plus_credited.PUBLIC`: ``salt``,
 ``root``, ``unit``, ``rows``, ``col``, ``eb``, ``fa``, ``fb``, ``g``), registered under public salts; and each unit's ``ok``
-registered as 1 the same way. Here the stager computes the public row (`pearl_plus_credited.public`, from its own salt and
-a root of its own, not W's registered root) and writes the verifier's registered file from it: that the verifier computes
-each field itself is `Registered.supplied`'s, not this run's. ``stage``
+registered as 1 the same way. The noise is seeded by the epoch's salt and W's registered root: the stager forms its
+tiles under them, and the verifier's side computes the public row from those two alone (`public_values`, on
+`pearl_plus_credited`'s reference) and its registered roots from that row, which every staged file's roots must equal;
+the door doesn't yet bind the row to the supplied functions (`Registered.supplied`). ``stage``
 evaluates C on an honest linear and on one whose drawn tile is false (``--bad``: its y word's sign flipped, or a
 nonzero word in its filler row), places the units' amounts
 (`resource_accounting.scheme.credited` over C's strata, `PEARL_PLUS.blocks`' cost on the template's statics), draws one
@@ -116,13 +117,25 @@ def linear(k: int, m: int, n: int, tile: tuple[int, int]) -> Linear:
     return Linear(Program(root, registered=[v for v, _ in params]), ts, types, reads)
 
 
-def honest(k: int, m: int, n: int, ln: Linear, unit: int, seed: str) -> dict:
-    """An honest linear: x and W BF16 (widened to FP32), the epoch's salt and the weights' root, each tile's certificates
-    and the served y (`PearlC.checked`'s U unscaled, BF16), and the public row; every value as C holds it, a row a port's
-    read (x and y a row tile's rows, W a column tile's)."""
+def public_values(ln: Linear, k: int, unit: int, salt: bytes, root: bytes) -> dict:
+    """The public row of call ``unit`` as C's values (`pearl_plus_credited.public` of each tile): ``salt``, ``root``,
+    ``unit``, ``fa``, ``fb`` and ``g`` one row each, ``rows`` a row tile's, ``col`` and ``eb`` a column tile's."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
+
+    pub: dict = {"rows": {}, "col": {}, "eb": {}}
+    for t in ln.tiles:
+        p = PC.public(SCHEME, k, t, unit, salt, root)
+        pub["rows"][t.rows[0] // len(t.rows)], pub["col"][t.col], pub["eb"][t.col] = p["rows"], p["col"], p["eb"]
+        shared = {v: p[v] for v in ("salt", "root", "unit", "fa", "fb", "g")}
+    return {**shared, **{v: [pub[v][r] for r in range(len(pub[v]))] for v in ("rows", "col", "eb")}}
+
+
+def honest(k: int, m: int, n: int, ln: Linear, unit: int, seed: str, salt: bytes, root_of) -> dict:
+    """An honest linear: x and W BF16 (widened to FP32), each tile's certificates and the served y (`PearlC.checked`'s U
+    unscaled, BF16) under the epoch's ``salt`` and W's registered root (``root_of`` of W's values), and the public row;
+    every value as C holds it, a row a port's read (x and y a row tile's rows, W a column tile's)."""
     from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import inert_bound
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
     from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
     from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as CU
 
@@ -134,13 +147,13 @@ def honest(k: int, m: int, n: int, ln: Linear, unit: int, seed: str) -> dict:
     tm, tn = len(ln.tiles[0].rows), len(ln.tiles[0].cols)
     x = [bf16_row() if i < m else [0] * k for i in range(-(-m // tm) * tm)]
     w = [bf16_row() for _ in range(n)]
-    salt, root = rng.randbytes(32), rng.randbytes(64)
+    w_values = [[[v >> 16 for v in w[j]] for j in range(c * tn, (c + 1) * tn)] for c in range(n // tn)]
+    root = root_of(w_values)
     s = pouw_schemes.get(SCHEME, k_min=k, tile=(tm, tn))
     dev = s.device.name
     _d, ng = inert_bound._promoted(dev, k)
     y = [[0] * n for _ in range(m)]
     certs = []
-    pub = {"rows": {}, "col": {}, "eb": {}}
     for t in ln.tiles:
         ctx = C.Context(salt, C.Matmul(unit, C.Shape(len(x), k, n), 0), bytes(64), root)
         a, b = [x[i] for i in t.rows], [w[j] for j in t.cols]
@@ -151,15 +164,10 @@ def honest(k: int, m: int, n: int, ln: Linear, unit: int, seed: str) -> dict:
         for i in range(t.real):
             for j, c in enumerate(t.cols):
                 y[t.rows[i]][c] = CU.y(checked.u[i][j], ops.a.alpha[i], ops.b.alpha[j]) << 16
-        p = PC.public(SCHEME, k, t, unit, salt, root)
-        pub["rows"][t.rows[0] // tm], pub["col"][t.col], pub["eb"][t.col] = p["rows"], p["col"], p["eb"]
-        shared = {v: p[v] for v in ("salt", "root", "unit", "fa", "fb", "g")}
     row_tiles = sorted({t.rows: t.real for t in ln.tiles}.items())
-    values = {"x": [[x[i] for i in rs] for rs, _ in row_tiles],
-              "w": [[[v >> 16 for v in w[j]] for j in range(c * tn, (c + 1) * tn)] for c in range(n // tn)],
-              "y": [[y[i] for i in rs[:real]] for rs, real in row_tiles], "cert": certs, **shared,
-              **{v: [pub[v][r] for r in range(len(pub[v]))] for v in ("rows", "col", "eb")}}
-    return values
+    return {"x": [[x[i] for i in rs] for rs, _ in row_tiles], "w": w_values,
+            "y": [[y[i] for i in rs[:real]] for rs, real in row_tiles], "cert": certs,
+            **public_values(ln, k, unit, salt, root)}
 
 
 def reference(ln: Linear, index: int, vals: dict, unit: int) -> list[int]:
@@ -290,12 +298,19 @@ def stage(a) -> int:
     b = R.restrict(c, part, blk)
     phase("restrict", block_units=blk, block_bytes=len(b.descriptor), bit_gates=int(b.bits.size))
 
+    params = [v for v, _ in program.fn.signature()[0]]
     unit = 7
-    good = honest(k, m, n, ln, unit, "credited-in-c")
+    salt = random.Random("credited-in-c/salt").randbytes(32)
+    supplied = tuple(v for v in params if v not in PRIVATE)
+    w_reg: dict = {}
+
+    def root_of(w: list) -> bytes:
+        w_reg.update(register(program, rows_of(ln, {"w": w}), supplied))
+        return w_reg["w"].root
+
+    good = honest(k, m, n, ln, unit, "credited-in-c", salt, root_of)
     drawn = ln.tiles[index]
     bad = tamper(ln, index, good, a.bad)
-
-    params = [v for v, _ in program.fn.signature()[0]]
 
     def run(values: dict) -> list[list[int]]:
         flat = evaluate_batch(program.fn, *(np.asarray([_flat(values[v])], dtype=np.int64) for v in params))
@@ -328,9 +343,10 @@ def stage(a) -> int:
     phase("lower")
 
     widths = dict((q[0], q[1]) for q in meta["ports"])
-    supplied = tuple(v for v in params if v not in PRIVATE)
-    pub_rows = rows_of(ln, good)
-    verifier_roots = {v: r.root.hex() for v, r in register(program, {v: pub_rows[v] for v in supplied}, supplied).items()}
+    verifier_row = public_values(ln, k, unit, salt, w_reg["w"].root)
+    verifier_roots = {v: r.root.hex() for v, r in register(program, rows_of(ln, verifier_row), supplied).items()}
+    rec["public_row"] = {"of": "the verifier's: `public_values` from the salt and W's registered root alone",
+                         "salt": salt.hex(), "w_root": w_reg["w"].root.hex(), "supplied": list(supplied)}
     other = PC.public(SCHEME, k, drawn, unit + 1, good["salt"], good["root"])
     wrong_unit = rows_of(ln, {"unit": other["unit"]})
     rec["registered"] = {}
@@ -339,7 +355,8 @@ def stage(a) -> int:
         (d / "tables").mkdir(parents=True, exist_ok=True)
         (d / "circuit.txt").write_text(text)
         rows = rows_of(ln, vals)
-        regs = register(program, rows, supplied)
+        fresh = register(program, {v: r for v, r in rows.items() if v != "w"}, supplied)
+        regs = {v: w_reg[v] if v == "w" else fresh[v] for v in rows}
         assert all(regs[v].root.hex() == verifier_roots[v] for v in supplied)
         roots = {v: r.root.hex() for v, r in regs.items()}
         fields = {"o0": [g[:512] for g in got["honest"]], "o1": [g[512:] for g in got["honest"]]}
