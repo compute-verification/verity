@@ -242,11 +242,12 @@ def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | Non
 
 def requests_of(advice: Any, cls: WindowClass) -> tuple[Request, ...]:
     """The decoded advice's requests (`steps.advice_of`) in request order (`Request`), each of its prompt and outputs and
-    at its lane of the class's one boundary: the advice carries no admission bucket, so a class of more boundaries is
-    refused, as are requests past ``cls``'s envelope, carried across windows or served from the prefix cache."""
+    at its lane of the class's one boundary: neither C's shape nor the advice holds the bucket a request arrived in, so a
+    class of more boundaries is refused, as are requests past ``cls``'s envelope, carried across windows or served from the
+    prefix cache."""
     if len(cls.boundaries) != 1:
-        raise Unexpressible(f"{cls}: the advice carries no request's admission bucket, so its requests are anchored at a class "
-                            f"of one boundary, not {len(cls.boundaries)}")
+        raise Unexpressible(f"{cls}: a class of {len(cls.boundaries)} boundaries, and a served Program reads boundary 0's scan "
+                            "state row: the advice holds no request's bucket, which no block checks as a committed value yet")
     if advice.carried:
         raise Unexpressible(f"{len(advice.carried)} requests carried into the window, which its lowering doesn't take yet")
     for st in advice.steps:
@@ -270,6 +271,9 @@ def _placed(cls: WindowClass, sizes: Sequence[tuple[int, int, int]],
         if anchor not in cls.boundaries:
             raise Unexpressible(f"request {i}: anchored at bucket {anchor}, none of its class's boundaries "
                                 f"{list(cls.boundaries)}")
+        if anchor != cls.boundaries[0]:
+            raise Unexpressible(f"request {i}: anchored at bucket {anchor}, and a served Program reads boundary 0's scan state "
+                                "row: C's shape holds no request's bucket, which no block checks as a committed value yet")
         if end is not None and end < anchor:
             raise Unexpressible(f"request {i}: its last output at bucket {end}, before its anchor {anchor}")
         out.append(Request(anchor, anchored.get(anchor, 0), prompt, outputs))

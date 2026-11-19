@@ -585,9 +585,10 @@ def test_weights_outside_the_kernels_domain_are_refused_before_any_commitment(mo
 
 def test_its_settings_are_declared_and_checked() -> None:
     assert S.settings(PS.PEARL_PLUS, {}) == PS.SETTINGS
-    assert S.settings(PS.PEARL_PLUS, {"tie-uniform": True})["tie-uniform"] is True
-    with pytest.raises(ValueError, match="tie-uniform is a bool"):
-        S.settings(PS.PEARL_PLUS, {"tie-uniform": "yes"})
+    with pytest.raises(ValueError, match=r"pearl-plus has no setting \['tie-uniform'\]"):
+        S.settings(PS.PEARL_PLUS, {"tie-uniform": True})
+    with pytest.raises(ValueError, match="schedule is a str"):
+        S.settings(PS.PEARL_PLUS, {"schedule": 1})
     for given, refused in (({"schedule": "sideways"}, "schedule is one of serial"),
                            ({"coins": "beacon"}, "coins is 'in-process'"),
                            ({"coins": "in-process", **CTX["settings"]}, "coins and challenger are both set"),
@@ -614,7 +615,7 @@ def test_reports_are_the_runs_commitment_and_details(monkeypatch) -> None:
     assert on.commitment() == {} and on.run is None
     ex.emit(H.StepBegan(0, ("a",), 8))
     assert on.commitment() == {"salt_opening": "o"}
-    assert on.record() == {"entry": PS.OPTION, "schedule": "serial", "tie-uniform": False}
+    assert on.record() == {"entry": PS.OPTION, "schedule": "serial"}
     assert on.summary() == {"max_step_tokens": 64}
     on.release()
     assert run.finished and on.run is None
@@ -702,7 +703,7 @@ def test_the_plugins_report_reads_as_the_served_verdicts_read_served_json(tmp_pa
     session = {"session": "s-1", "seq": 4, "root": "ab" * 64, "commitment": "cd" * 64, "host": "auditor.s-1"}
     w = SV.weights_root({0: bytes([0]) * 64})
     reports = {"configuration": {"scheme": "pearl-plus", "settings": {**PS.SETTINGS, **CTX["settings"]},
-                                 "record": {"entry": PS.OPTION, "schedule": "serial", "tie-uniform": False}},
+                                 "record": {"entry": PS.OPTION, "schedule": "serial"}},
                "summary": {"max_step_tokens": 64, "passes": [{"units": 3, "tiles": 9, "transcript_root": "ef"}],
                            "challenger": {"closed": True}},
                "commitment": {"coin_source": SV.H1_CHALLENGER, "session": session, "pass_index": 2,

@@ -17,8 +17,8 @@ linears it computes, whose calls commit their A rows and y. Its credited product
 call of every pass, in the Lean verifier's tile order (`credited_blocks`), and its sample draws over those blocks
 (`drawn_blocks`), each drawn block's core taking its public inputs from the committed records (`drawn_inputs`, which
 refuses a block the core doesn't cover). Its settings are
-`SETTINGS`; ``tie-uniform`` lets a uniform sampling rate stand under the tie to its tables, with the weaker tie its
-record states.
+`SETTINGS`. A served run launches it untied (`_hooks`): its verdict is its own over its own passes, held to no window
+record, and credits nothing.
 """
 
 from __future__ import annotations
@@ -152,10 +152,10 @@ def drawn_blocks(scheme: Any, passes: Sequence[Sequence[Any]], key: Any, t: int,
 #: process, crediting nothing) or ``challenger`` (the auditor device's, HOST:PORT), whose sessions the launcher's
 #: ``ctx["gate"]``, the gate in its own words, opens: ``session``, a reserve answer the gate already gave, opened by the
 #: first epoch, and ``lane`` and ``peer``, under which each later epoch reserves its own (`Attached.reserve`);
-#: ``users``, a regular expression a phase's inputs' users must all match in full for its epoch to open (unset: every
-#: phase's); and ``tie-uniform``
-SETTINGS: dict[str, Any] = {"tie-uniform": False, "kernel": "", "cubin": "", "schedule": "serial", "transcript_dir": "",
-                            "coins": "", "challenger": "", "session": {}, "lane": "", "peer": "", "users": ""}
+#: and ``users``, a regular expression a phase's inputs' users must all match in full for its epoch to open (unset:
+#: every phase's)
+SETTINGS: dict[str, Any] = {"kernel": "", "cubin": "", "schedule": "serial", "transcript_dir": "", "coins": "",
+                            "challenger": "", "session": {}, "lane": "", "peer": "", "users": ""}
 COINS = ("", "in-process")
 
 
@@ -427,7 +427,7 @@ class Attached:
         return dict(self.life["commitment"]) if self.life else dict(self.run.commits) if self.run is not None else {}
 
     def record(self) -> Mapping[str, Any]:
-        return {"entry": OPTION, "schedule": self.own["schedule"], "tie-uniform": self.own["tie-uniform"]}
+        return {"entry": OPTION, "schedule": self.own["schedule"]}
 
     def summary(self) -> Mapping[str, Any]:
         if self.phased:
@@ -604,14 +604,11 @@ PEARL_PLUS = register(Scheme(
     under="400 × the MACs spent: the prover's cost in the cost model, priced at a credited MAC's honest cost (TT_OUT's T "
           "at g₀ = 1/400)",
     settings=SETTINGS,
-    # the class's slots and outputs are the tied workload's slots and window steps (4, 2): Pearl+'s launcher refuses
-    # any other, so an application on other workload values does not tie
-    tie={"class": "4,27,2", "tie-uniform": True},
     check_settings=check_settings,
     option=OPTION,
     hooks=("blocks", "declared", "memory", "steps"),
     provides=("cut",),
-    requires={"one-labelling": "its own pass manifests, tied to the window record's pearl-a/, pearl-y/ and pearl-b/ values",
+    requires={"one-labelling": "its own pass manifests, held to no window record",
               "log-order": "its own coin sessions: the salt's opened on the weights' root, the sample's on the run's "
                            "commitment",
               "one-design": "its own tile sampling by ticket weight"},
@@ -634,10 +631,10 @@ PEARL_PLUS = register(Scheme(
     unchecked={"coins-signatures-checked-by-the-auditor":
                "coins' signatures checked on the served node only; not checked by the auditor",
                # no record the verifier reads states vLLM's graph mode: `requests`' eager is held on the serving node
-               "cuda-graph-rows-outside-the-tie":
-               "the tie covers a workload served eager (vLLM's graph mode NONE): under a CUDA graph (FULL or PIECEWISE) "
-               "a step's linear runs at the capture size, with rows no request owns, and those rows are outside what "
-               "the tie covers"},
+               "cuda-graph-rows-outside-the-verdict":
+               "Pearl+'s verdict covers a workload served eager (vLLM's graph mode NONE): under a CUDA graph (FULL or "
+               "PIECEWISE) a step's linear runs at the capture size, with rows no request owns, and those rows are "
+               "outside what its verdict covers"},
     record="work",
     symbol="V",
     published=("MACs", Fraction(1)),
@@ -665,13 +662,13 @@ _CHALLENGER = workload.PEARL_CHANNELS[0].sender
 
 
 def _hooks(cfg, params, bound, pinned):
-    """Pearl+ on the workload's engine (POUW=pearlplus, PEARLPLUS_TIE=1): each engine step's passes retained under the
-    gate's salts, Pearl+'s window record tied to the execution phase, then its verdict and the Lean verifier
+    """Pearl+ on the workload's engine (POUW=pearlplus), untied: each engine step's passes retained under the gate's
+    salts, then its verdict over its own passes, held to no window record, and the Lean verifier
     (served_pearlplus.sh). With no gate bound the gate variables are set empty, since unset served_verdicts.sh takes the
     lane's gate: Pearl+'s epoch coins are then an in-process challenger's on the workload's machine, its verdict claims
     none, and the run is a development one."""
     product = "remote" if sorted(cfg["protocols"]) == sorted(COMPOSITES["verity/remote/v1"]) else "onsite"
-    hooks = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": product}
+    hooks = {"POUW": "pearlplus", "PRODUCT": product}
     if given := [k for k in _LIVE if k in bound]:
         if lacking := [k for k in _LIVE if k not in bound]:
             raise LaunchRefused("unbound", f"Pearl+'s live challenger takes {', '.join(_LIVE)} together, and the "
@@ -681,17 +678,8 @@ def _hooks(cfg, params, bound, pinned):
         hooks |= {v: bound[k] for k, v in _LIVE.items()}
     else:
         hooks |= {"PEARLC_CHALLENGER_GATE": "", "PEARLC_CHALLENGER_PEER": "", "DEVELOPMENT": "1"}
-    hooks |= {v: bound[k] for k, v in (("lane", "PEARLC_CHALLENGER_LANE"), ("main-file", "MAIN_FILE")) if k in bound}
-    if "class" in params:
-        w = cfg["workload"]["params"]
-        slots, _, outputs = (int(x) for x in params["class"].split(","))
-        if (slots, outputs) != (w["slots"], w["window-steps"]):
-            raise LaunchRefused("params", f"Pearl+'s class {params['class']} is {slots} requests of {outputs} output "
-                                          f"tokens, and the workload's slots and window-steps are {w['slots']} and "
-                                          f"{w['window-steps']}: state slots = {slots} and window-steps = {outputs}, "
-                                          "or a class that agrees")
-        hooks |= {"V3C_CLASS": params["class"], "CLASSES": params["class"]}
-    return hooks | ({"PEARLPLUS_TIE_UNIFORM": "1"} if params["tie-uniform"] else {})
+    return hooks | {v: bound[k] for k, v in (("lane", "PEARLC_CHALLENGER_LANE"), ("main-file", "MAIN_FILE"))
+                    if k in bound}
 
 
 def launch_pearlplus(declaration: Scheme) -> tuple[Any, tuple[str, ...]]:

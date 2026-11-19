@@ -742,14 +742,11 @@ def test_a_manifest_that_is_not_of_record_says_which_of_its_statements_is_not_th
 
 
 def test_a_tap_build_that_is_not_on_disk_is_named_with_the_script_that_builds_it(tmp_path):
-    """The first applicable tap whose build is absent, the norm tap before the router's; the vocabulary range has no build."""
-    norm, router = tmp_path / "verity_norm_tap.so", tmp_path / "verity_router_tap.so"
-    env = SimpleNamespace(norm_tap_so=str(norm), router_tap_so=str(router))
+    """The router tap's build when it is absent; the norm tap and the vocabulary range have no build."""
+    router = tmp_path / "verity_router_tap.so"
+    env = SimpleNamespace(norm_tap_so="", router_tap_so=str(router))
     said = "{}=1 and the manifest names its family, but the tap .so is missing: {} (ops/{}, run by ops/pod_bootstrap.sh)"
     taps = ["norm_tap", "router_tap", "vocab_tap"]
-    assert R.missing_tap_build(taps, env) == said.format("NORM_TAP", norm, "pod_norm_tap.sh")
-    assert R.missing_tap_build(["router_tap", "vocab_tap"], env) == said.format("ROUTER_TAP", router, "pod_router_tap.sh")
-    norm.write_bytes(b"")
     assert R.missing_tap_build(taps, env) == said.format("ROUTER_TAP", router, "pod_router_tap.sh")
     router.write_bytes(b"")
     assert R.missing_tap_build(taps, env) == "" and R.missing_tap_build(["vocab_tap"], SimpleNamespace(norm_tap_so="", router_tap_so="")) == ""
