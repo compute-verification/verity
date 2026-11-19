@@ -111,12 +111,11 @@ def stage(out: Path, seed: int = SEED, schema: str = RV.SCHEMA) -> dict:
     x_rows, x_salts, x_entry = reg_x.statement(range(N))
     outs = np.asarray(s.port("out", 0, N), np.uint16).reshape(N, -1)
     reg_out = RV.Registered.commit(P.program_digest(prog), OUT_VALUE, outs.tolist(), schema=bit_rows)
-    out_rows, out_salts, out_entry = reg_out.statement(range(N))
+    out_rows, out_salts, _ = reg_out.statement(range(N))
     FC.write(text, s, 0, N, out / f"inst-{N}.bin", out / f"pub-{N}.bin", list(range(N)), share_rows=True,
              outs={"out": np.asarray(out_rows, np.uint16)},
              tables={"x": np.asarray(x_rows), "cs": np.asarray(rows)}, refs={"x": list(range(N)), "cs": refs},
-             salts={"x": x_salts, "cs": salts, "out": out_salts},
-             registered={"cs": entry, "x": x_entry, "out": out_entry})
+             salts={"x": x_salts, "cs": salts, "out": out_salts}, registered={"cs": entry, "x": x_entry})
     tree, x_tree = ServedTree.of(reg), ServedTree.of(reg_x)
     out_port = {**reg_out.entry(), **RV.width_entry(RV.WORD_BITS), **RV.schema_entry(bit_rows), "reads": list(range(N))}
     (out / "served.json").write_text(json.dumps(dataclasses.asdict(tree), sort_keys=True))
