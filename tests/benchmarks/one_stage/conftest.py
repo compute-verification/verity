@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import pytest
 
+collect_ignore = ["interfaces"]  # a suite of its own, which a plain `pytest` here would collect a second time
+
 
 @pytest.fixture(autouse=True)
 def _no_run_result(monkeypatch):
