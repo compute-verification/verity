@@ -48,7 +48,7 @@ theorem decoded_wide (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
   obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P h
   have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   intro d hd hp
-  obtain ⟨hrt, hI, defs', key, w, w', hrun⟩ := decoded_checked bytes P h d hd hp
+  obtain ⟨hrt, hI, defs', key, w, w', hrun⟩ := decoded_checked bytes P h hrc d hd hp
   obtain ⟨hc, hB⟩ := hok d hd
   refine ⟨hrt, bodyBad_sound P.defs defs' d key _ w w' hB hI ?_ hrun⟩
   rw [hrt]
