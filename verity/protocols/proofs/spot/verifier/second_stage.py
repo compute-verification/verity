@@ -603,6 +603,9 @@ def port_binding(rec: Any, port: str, schema: str, run: str) -> str | None:
     return window_binding(program, partition, port, schema, leaves, run).hex()
 
 
+_HEX_DIGITS = frozenset("0123456789abcdef")
+
+
 def registered_binding(held: Held | None, e: Any) -> str | None:
     """`SecondStage.registeredBinding`: the binding the interior registration's entry `e` was committed under, from the
     held registration `held`: `registered_value.domain` over its Program's digest, the value's name, words, leaves and
@@ -610,12 +613,12 @@ def registered_binding(held: Held | None, e: Any) -> str | None:
     entry's ``domain``, or where `held` is None or the entry names no such domain."""
     v, words, leaves, b = _get(e, "value"), _get(e, "words"), _get(e, "leaves"), _get(e, RV.WIDTH_KEY)
     b = RV.WORD_BITS if b is None else b
-    if held is None or not (isinstance(v, str) and _nat(words) and _nat(leaves) and _nat(b)):
+    if held is None or not (isinstance(v, str) and _nat(words) and _nat(leaves) and _nat(b) and b in RV.WIDTHS):
         return None
-    try:
-        d = RV.domain(held.program, v, words, leaves, b, None if v in held.fixed else held.window)
-    except ValueError:
+    window = None if v in held.fixed else held.window
+    if window is not None and not (isinstance(window, str) and len(window) == 128 and set(window) <= _HEX_DIGITS):
         return None
+    d = RV.domain(held.program, v, words, leaves, b, window)
     return d.binding.hex() if _jeq(d.domain_id.hex(), _get(e, "domain")) else None
 
 
