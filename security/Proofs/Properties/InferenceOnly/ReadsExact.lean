@@ -2928,7 +2928,7 @@ theorem den_prim (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (q 
   have hnode : ((c.P.defs[sc.d]!).body.nodes[k]!) = node := by rw [hd]; exact node_get hn
   have hres : ∀ j : Nat, Flock.Program.resolve c.P sc ⟨false, k, j⟩ = .ok (sc.off + c.body.offsets[k]!) := by
     intro j
-    apply resolve_inl
+    apply resolve_inl (hrc := hrc)
     rw [Resolve.rs_prim c.P sc k j (by rw [hnode]; exact hform), hd]
     rfl
   by_cases h0 : q.count = 0
@@ -2982,7 +2982,7 @@ theorem den_batchPrim (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d
   have hnode : ((c.P.defs[c.d]!).body.nodes[k]!) = node := node_get hn
   have hres : ∀ j : Nat, Flock.Program.resolve c.P sc ⟨false, k, j⟩ = .ok (sc.off + c.body.offsets[k]! + j) := by
     intro j
-    apply resolve_inl
+    apply resolve_inl (hrc := hrc)
     rw [Resolve.rs_batch c.P sc k j (by rw [hd, hnode]; exact hform)]
     simp only [hd, hnode, hp, ite_true, hL, Nat.div_one]
     rfl
