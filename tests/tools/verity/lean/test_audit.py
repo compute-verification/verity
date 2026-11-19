@@ -5471,7 +5471,8 @@ def test_a_guarantee_of_what_an_acceptance_means_has_an_honest_and_a_nontrivial_
         "[\"P.sound_honest\"], \"nontrivial\": \"P.sound_nontrivial\"} under `witnesses`: a guarantee carries an honest and "
         "a nontrivial witness. Only if `unwitnessed` listed it and a merge dropped the entry, write the entry back: "
         f"\"P.sound\": \"{f['pins']['P.sound']['type_sha256']}\"; a new guarantee gets its witnesses, not an entry "
-        "(`UNWITNESSED` only shrinks)"]
+        "(`UNWITNESSED` only shrinks). No run writes an entry: an exemption is a ruling, written by hand on soundness's "
+        "word, its reason in `why` where `witnesses` lists the other half"]
     out_of_scope = witnessed(guarantee={"reads": fact()["reads"]})
     assert witness_codes({**out_of_scope[0], "witnesses": {}}, out_of_scope[1]) == []
     assert witness_codes(*out_of_scope) == []
