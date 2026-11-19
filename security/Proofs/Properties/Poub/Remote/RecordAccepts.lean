@@ -14,10 +14,10 @@ import all Init.Data.Range.Basic
 `record_verified`: the Lean verifier accepts a record (`Properties.Poub.Line.Verified`). The node stores one
 registered block under the deployed codec, and runs one window of one pass under one sample, at one window a sample. The
 session starts, receives the pass's root over the whole store, ends the window, samples its one receipt and verifies its
-opening. The sample of one receipt among one is position 0 whatever the coin (`receiptSample_one`). The opening is
+opening. The sample of one receipt among one is position 0 on a sample's coins of 64 zero bytes (`receiptSample_one`). The opening is
 `Schedule`'s zero-block opening at one block: its leaf is the block's receipt alone, and the receipt and payload trees
 each have one leaf, so their roots are the leaves' digests (`zeroRoot`). The session's steps read the roots and coins
-only through their sizes (`run_accepts`, over any registration of one block, any coins and any root of 64 bytes), so no
+only through their sizes (`run_accepts`, over any registration of one block, any first coin and any root of 64 bytes), so no
 SHA-512 is evaluated.
 
 `lineHeld_accepted`: `Properties.Poub.Line.LineHeld`'s premises hold together with an accepted play. The record's
@@ -60,10 +60,6 @@ theorem beNat_lt (b : ByteArray) (off len : ℕ) : Flock.Draw.beNat b off len < 
   have h := beNat_lt_aux b off (List.range len) 0 0 (by decide)
   simpa [Flock.Draw.beNat] using h
 
-theorem stream_size (key : ByteArray) (idx : List FlockSoundness.Randomness.Part) :
-    (FlockSoundness.Randomness.stream key idx 64).size = 64 := by
-  simp [FlockSoundness.Randomness.stream, FlockSoundness.Randomness.block, ByteArray.size_extract, hash_size]
-
 theorem width_one : Flock.Draw.width 1 = 9 := by
   have h : Nat.log2 1 = 0 := (Nat.log2_eq_iff (by decide)).2 ⟨by decide, by decide⟩
   simp [Flock.Draw.width, h]
@@ -81,42 +77,19 @@ theorem uniformOn_one (s : ByteArray) (hs : s.size = 64) : FlockSoundness.Random
   simp only [width_one, hs]
   simp [hx, Nat.mod_one]
 
-theorem qsort_single (a : ℕ) (lt : ℕ → ℕ → Bool) : #[a].qsort lt 0 0 = #[a] := by
-  unfold Array.qsort
-  simp only [List.size_toArray, List.length_singleton, Nat.one_ne_zero, ↓reduceDIte, Nat.sub_self, Nat.min_self,
-    Nat.max_self]
-  rw [Array.qsort.sort]
-  simp
-
-theorem qsort_map_zero (F : ℕ → ℕ) (lt : ℕ → ℕ → Bool) (h : F 0 = 0) : (#[0].map F).qsort lt 0 0 = #[0] := by
-  rw [Array.map_singleton, h, qsort_single]
-
-theorem subsetOn_one (streams : ℕ → ByteArray) (h : FlockSoundness.Randomness.uniformOn 1 (streams 0) = some 0) :
-    FlockSoundness.Randomness.subsetOn 1 1 streams = some #[0] := by
-  unfold FlockSoundness.Randomness.subsetOn
-  simp [Id.run, h, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size]
-  rw [show Array.range 1 = #[0] from rfl, qsort_map_zero]
-  · rfl
-  · simp [Std.HashMap.getD_insert_self]
-
-theorem subsetExact_one (key : ByteArray) (idx : List FlockSoundness.Randomness.Part) :
-    FlockSoundness.Randomness.subsetExact key 1 1 idx = some #[0] := by
-  have h : FlockSoundness.Randomness.subset key 1 1 idx 64 = some #[0] :=
-    subsetOn_one _ (uniformOn_one _ (stream_size _ _))
-  unfold FlockSoundness.Randomness.subsetExact
-  simp [Id.run, h, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, List.range']
-  try rfl
-
 theorem bisectRight_one : bisectRight #[1] 0 = 0 := by
   first
     | rfl
     | decide
     | decide +kernel
 
-/-- A window of one pass of one receipt samples that receipt, whatever the registration and the coin. -/
-theorem receiptSample_one (digest coin : ByteArray) : receiptSample digest 0 coin 1 #[1] = some #[(0, 0)] := by
-  unfold receiptSample
-  simp [subsetExact_one, bisectRight_one]
+/-- A window of one pass of one receipt samples that receipt on a sample's coins of 64 zero bytes: the draw's one word
+of `width 1` bits is below `2^w`, so it is accepted. -/
+theorem receiptSample_one : receiptSample 1 (zeros 64) #[1] = some #[(0, 0)] := by
+  first
+    | rfl
+    | decide
+    | decide +kernel
 
 /-! ## The window: one block, one pass, its opening -/
 
@@ -214,12 +187,12 @@ def events1 (root : ByteArray) (o : Opening) : Array _root_.Poub.Session.Event :
 /-- The session's run accepts, over any registration of one block, any two coins and any root of 64 bytes whose
 window's openings `checkWindow` accepts, and its record has one window, of one pass of one block, which drew one
 receipt. -/
-theorem run_accepts (reg : Registration) (hB : reg.blocks = 1) (c0 c1 root : ByteArray) (hroot : root.size = 64)
+theorem run_accepts (reg : Registration) (hB : reg.blocks = 1) (c0 root : ByteArray) (hroot : root.size = 64)
     (o : Opening) (hcheck : checkWindow reg reg.digest #[] (window1 reg c0 root) #[(0, 0)] #[o] = .accept) :
-    ∃ rs s, _root_.Poub.Session.run (_root_.Poub.Session.State.init params1 reg #[c0, c1] #[] 0)
+    ∃ rs s, _root_.Poub.Session.run (_root_.Poub.Session.State.init params1 reg #[c0, zeros 64] #[] 0)
       (events1 root o) = .ok (rs, s) ∧ s.outcome = some "accepted" ∧
       s.summary.map (fun sm => sm.windows.map fun w => (w.lengths, w.drawn)) = some #[(#[1], 1)] := by
-  have hdraw := receiptSample_one reg.digest c1
+  have hdraw := receiptSample_one
   have hr1 : Array.range 1 = #[0] := rfl
   simp only [window1] at hcheck
   simp [hr1, _root_.Poub.Session.run, events1, _root_.Poub.Session.step, _root_.Poub.Session.start,
@@ -286,7 +259,7 @@ theorem record_run : ∃ rs s, record1.run node1 = .ok (rs, s) ∧ s.outcome = s
     rfl
   have hcheck := checkWindow_one reg1 (zeros 64) rfl rfl hpay
   simp only [Record.run, node1, record1, _root_.Poub.Shared.run_one]
-  exact run_accepts reg1 rfl (zeros 64) (zeros 64) _ hroot _ hcheck
+  exact run_accepts reg1 rfl (zeros 64) _ hroot _ hcheck
 
 theorem record_verified : Verified node1 record1 := by
   obtain ⟨rs, s, hr, ho, -⟩ := record_run
