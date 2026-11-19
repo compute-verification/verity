@@ -5,7 +5,9 @@ registered read of the rank's weights, the prompt's rows a boundary read and, at
 stand in for `served_values`: each unit's rows by the chain's wiring."""
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 from dataclasses import replace
 
 import numpy as np
@@ -14,6 +16,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
+from verity.commitments import salt_file as SF
 from verity.commitments.periods import interface as IF
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     registered_commit,
@@ -32,9 +35,9 @@ WORLD, CAP = 2, 2
 DESIGN = {"law": "stratified", "k": 2}
 TP_ROOT = "ab" * 64
 KEYS = ("run", "population", "partition_digest", "registration_digest", "seconds", "window")
-WIRES = (IF.Wire(GID, "x", GID, "o0", at=LAYER, radix=(STEPS, REQUESTS), base=0, step=(REQUESTS, 1)),
-         IF.Wire(GID, "x", GID, "o0", at=REQUESTS, radix=(STEPS - 1, REQUESTS), base=LAYER, step=(REQUESTS, 1)))
-REGISTERED = IF.Registered({"w": LAYERS * 256}, reads=(IF.Read(GID, "w", "w", 0, (LAYERS, LAYER), 0, (256, 0)),))
+WIRES = (IF.Wire(GID, "x", GID, "o0", at=REQUESTS, radix=(UNITS - REQUESTS,), base=0, step=(1,)),)
+REGISTERED = IF.Registered({"w": LAYERS * 256},
+                           reads=(IF.Read(GID, "w", "w", 0, (STEPS, LAYERS, REQUESTS), 0, (0, 256, 0)),))
 
 
 def _bf16(a: np.ndarray) -> np.ndarray:
@@ -42,8 +45,8 @@ def _bf16(a: np.ndarray) -> np.ndarray:
 
 
 def rank(r: int) -> NJ.Rank:
-    """Rank ``r``'s window: units in (layer, step, request) order, layer 1 reading layer 0's output at its step and
-    request, layer 0 at step s + 1 reading layer 1's at step s, the first step's ``x`` the prompt's (a boundary read)
+    """Rank ``r``'s window: units in (step, layer, request) order, each unit reading the output of the unit ``REQUESTS``
+    before it (layer 1 layer 0's at its step and request, layer 0 at step s + 1 layer 1's at step s), the first step's ``x`` the prompt's (a boundary read)
     and, at rank 0, the last units' outputs the served ids."""
     reads = [IF.Read(GID, "x", "prompt", 0, (REQUESTS,), 0, (16,))]
     if r == 0:
@@ -51,7 +54,7 @@ def rank(r: int) -> NJ.Rank:
     circuit = IF.Circuit(f"toy/rank{r}", ((GEMM, UNITS),), wires=WIRES, registered=REGISTERED,
                          boundary_reads=tuple(reads),
                          order=IF.ordered({GID: UNITS}, WIRES, {GID: range(0, UNITS, REQUESTS)}))
-    spans = {GID: tuple((a, REQUESTS, 0, (a // REQUESTS) % STEPS) for a in range(0, UNITS, REQUESTS))}
+    spans = {GID: tuple((a, REQUESTS, 0, a // LAYER) for a in range(0, UNITS, REQUESTS))}
     return NJ.Rank(r, circuit, (), spans, STEPS, {})
 
 
@@ -71,7 +74,7 @@ class Values:
                         x[layer, s, q] = y[0, s, q] if layer else y[1, s - 1, q]
                     y[layer, s, q] = np.asarray(evaluate_batch(GEMM, x[layer, s, q][None], self.w[layer][None],
                                                                kernel="reference"), dtype=np.uint16).reshape(16)
-        order = [(layer, s, q) for layer in range(LAYERS) for s in range(STEPS) for q in range(REQUESTS)]
+        order = [(layer, s, q) for s in range(STEPS) for layer in range(LAYERS) for q in range(REQUESTS)]
         self.x, self.y = np.stack([x[k] for k in order]), np.stack([y[k] for k in order])
         self.ws = self.w[[k[0] for k in order]]
 
@@ -84,7 +87,9 @@ class Values:
 
 
 def weights(r: int) -> dict:
-    return {"w": registered_commit("test/node-window", "w", Values(r).w, bytes(32), r, keep_rows=True)}
+    w = Values(r).w
+    ys = hashlib.shake_256(f"node-window weights {r}".encode()).digest(len(w) * SF.SALT_BYTES)
+    return {"w": registered_commit("test/node-window", "w", w, ys, keep_rows=True)}
 
 
 def commit(r: int, out, **edit):
@@ -132,8 +137,8 @@ def test_each_rank_commits_the_window_the_join_names(stated, tmp_path):
     ({"cap": 0}, "cap"),
     ({"registered": {}}, "registered"),
     ({"registered": {**weights(1), "v": weights(1)["w"]}}, "registered"),
-    ({"registered": {"w": registered_commit("test/node-window", "w", Values(1).w.reshape(LAYERS * 2, 128), bytes(32), 1,
-                                            keep_rows=True)}}, "registered"),
+    ({"registered": {"w": registered_commit("test/node-window", "w", Values(1).w.reshape(LAYERS * 2, 128),
+                                            os.urandom(LAYERS * 2 * SF.SALT_BYTES), keep_rows=True)}}, "registered"),
 ], ids=["ingress", "no-cap", "cap-0", "registered-missing", "registered-extra", "registered-shape"])
 def test_refused_by_name_before_anything_is_written(edit, name, tmp_path):
     """A rank window that declares an ingress (its prompt is a boundary read), a cap that is not a positive count, and

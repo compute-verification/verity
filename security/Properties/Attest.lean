@@ -208,7 +208,7 @@ structure PeriodRun where
   reads : Array Attest.Read
 
 /-- SHA-512 on the claims' messages. -/
-def sha512 (m : Claims.Msg) : Claims.Msg := (Sha512.hash ⟨m.toArray⟩).data.toList
+def sha512 (m : Hash.Msg) : Hash.Msg := (Sha512.hash ⟨m.toArray⟩).data.toList
 
 /-- **`B'_τ`**: on coins `ω`, the run `τ ω`'s strings with their digests, and the first collision among them; its cost
 is the number of strings. -/

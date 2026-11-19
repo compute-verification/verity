@@ -303,8 +303,8 @@ so do the verdict's last refusals, given:
 * `LiveCoins`: the record's live session is the session's messages and coins (`hlive`). -/
 theorem decide_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartProof} {bs : Core.Blobs}
     (hpart : partVerdict h j p q bs = .ok (.ok ()))
-    {xO : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    {xO : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     (hfind : Flock.Tags.find? STATEMENT = some s.stmtTags)
     (hcirc : bs.get p.circuit s!"part {j}'s circuit" = .ok s.read.I.circuitFile)
     (hpub : bs.get q.pub "a part's public file" = .ok s.read.I.publicFile)
@@ -387,8 +387,8 @@ theorem decide_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartP
 `decide_of_partVerdict` (`RecDeploy.nextO_decide_sha512`). -/
 theorem nextO_acc_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartProof} {bs : Core.Blobs}
     (hpart : partVerdict h j p q bs = .ok (.ok ()))
-    {xO : Claims.Msg} {as' : List Claims.Msg} {cs' : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    {xO : Hash.Msg} {as' : List Hash.Msg} {cs' : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     (ha : actO xO as' cs' = .decide s spec sts link c₁ mids f)
     (hfind : Flock.Tags.find? STATEMENT = some s.stmtTags)
     (hcirc : bs.get p.circuit s!"part {j}'s circuit" = .ok s.read.I.circuitFile)
@@ -421,8 +421,8 @@ theorem nextO_acc_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : Pa
 hypotheses of `decide_of_partVerdict` (`FlockDeploy.decisionAt_eval`, `RecDeploy.verdictWithO_sha512`). -/
 theorem decisionAt_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartProof} {bs : Core.Blobs}
     (hpart : partVerdict h j p q bs = .ok (.ok ()))
-    {xO : Claims.Msg} {as' : List Claims.Msg} {cs' : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    {xO : Hash.Msg} {as' : List Hash.Msg} {cs' : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     (ha : actO xO as' cs' = .decide s spec sts link c₁ mids f)
     (hfind : Flock.Tags.find? STATEMENT = some s.stmtTags)
     (hcirc : bs.get p.circuit s!"part {j}'s circuit" = .ok s.read.I.circuitFile)
@@ -456,11 +456,11 @@ theorem decisionAt_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : P
 /-- **The model verifier's answer at the session's last round** is the compiled part's: `.acc` at the last session,
 `.msg []` before it, where the session is the part's staged one (`ract`), this is its last round, and the hypotheses of
 `decide_of_partVerdict` hold (`RecDeploy.next_decide_sha512`). -/
-theorem next_of_partVerdict {IV : Claims.Verifier Coin} {st : RecDeploy.Stage} {x : Claims.Msg} {as : List Claims.Msg}
+theorem next_of_partVerdict {IV : Claims.Verifier Coin} {st : RecDeploy.Stage} {x : Hash.Msg} {as : List Hash.Msg}
     {cs : List Coin} {i j' : ℕ} {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartProof} {bs : Core.Blobs}
     (hpart : partVerdict h j p q bs = .ok (.ok ()))
-    {xO : Claims.Msg} {as' : List Claims.Msg} {cs' : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    {xO : Hash.Msg} {as' : List Hash.Msg} {cs' : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     (hs : RecDeploy.ract IV st x as cs = .sess i j' xO as' cs') (hlast : j' + 1 = VO.k xO)
     (ha : actO xO as' cs' = .decide s spec sts link c₁ mids f)
     (hfind : Flock.Tags.find? STATEMENT = some s.stmtTags)

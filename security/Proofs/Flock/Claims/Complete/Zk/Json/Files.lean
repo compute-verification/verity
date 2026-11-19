@@ -81,7 +81,7 @@ theorem Ret.run_throw_bind {α β : Type} {P : β × Transcript → Prop} (e : S
   exact Ret.bind (Q := fun _ => False) (Ret.run_throw e t) fun _ h => h.elim
 
 /-- **The inner proof carries its commitment's root.** -/
-theorem innerP_root (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
+theorem innerP_root (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
     (ic : InnerCommit) (finalC : F128) (cons : Array (String × Zk.Lin)) (t : Transcript) :
     Ret ((innerP (asksS resp) (Hashes.ofSha512 h) lay p ic finalC cons).run t) fun pt => pt.1.root = ic.root := by
   unfold innerP
@@ -105,7 +105,7 @@ theorem innerP_root (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (l
   exact Ret.pure rfl
 
 /-- **A masked rep's proof carries the commitment's cap, the table's PCS parameters and its pads' root.** -/
-theorem repPZk_fields (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
+theorem repPZk_fields (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) (tr₀ : Transcript) :
@@ -129,7 +129,7 @@ theorem repPZk_fields (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) 
 /-- A masked proof file of a rep: it encodes, at the rep's shape, a masked proof the rep returned on the table's trace
 `tr`, its packed table, the masked level-0 commitment `cm`, the extra claims `e`, and the tape's pads, committed, at
 some rank check. -/
-def RepFileZk (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (v : Schedule × ℕ) (tr : Trace)
+def RepFileZk (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Setup) (v : Schedule × ℕ) (tr : Trace)
     (cm : Commit) (e : Array Claim) (tape : TapeZk) (b : ByteArray) : Prop :=
   ∃ p rep ic d l t' l' prior ws, innerCommitP (Hashes.ofSha512 h : Hashes V)
       (padsOf tape 0 rep (Zk.PadLayout.new st.m st.kLog v.1.k0)) (tape.innerSalt 0 rep) = .ok ic ∧
@@ -141,11 +141,11 @@ def RepFileZk (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Se
 /-- **The one-table masked session's proof files**: the table's `--zk` schedule, its masked level-0 commitment `cm` and
 its extra claims `e` at the link's points; the first send is the link of `cm`'s cap; one proof file per rep stream,
 each a `RepFileZk`. -/
-theorem sessionPZk_files (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
+theorem sessionPZk_files (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Lean.Json}
     (hown : Flock.JsonParse.parse spec.hello = .ok own) {hz : String} (hc : canon (helloJ own) = .ok hz) (st : Setup)
     (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk) {r : String × Array ByteArray}
-    {bodies : Array Claims.Msg}
+    {bodies : Array Hash.Msg}
     (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec #[st] words trs tape).go #[] =
       (.ok r, bodies)) :
     ∃ v cm e, Zk.schedule st.wideLeaf st.m = .ok v ∧
@@ -187,7 +187,7 @@ theorem sessionPZk_files (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.
   obtain ⟨rfl, rfl⟩ := hL
   have hrs1 := repStreams_one ht
   obtain ⟨⟨ss, ps⟩, l₄, hF, hrun⟩ := go_bind_ok hrun
-  have hinv := forIn_array_inv _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Claims.Msg) =>
+  have hinv := forIn_array_inv _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Hash.Msg) =>
       b.2.size = k ∧ (0 < k → ∃ e, st.extra (ptsOf spec (coinOf (resp 0))) = .ok e) ∧
         (∀ e, st.extra (ptsOf spec (coinOf (resp 0))) = .ok e →
           ∀ q ∈ b.2, RepFileZk resp (Claims.hOf H) st v trs[0]! cm e tape q) ∧
@@ -231,13 +231,13 @@ theorem sessionPZk_files (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.
         by simp, by simpa using e2⟩
 
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The honest masked rep proof fits its shape**: at every good masked case, on its table's trace, the trace's packed
 table committed at the `--zk` schedule's first level under the case's tape (`cm`), the table's extra claims at the
 link's points (`e`), and the tape's pads committed (`ic`), each masked proof a rep returns is `Shaped` at the shape the
 masked verifier decodes it at. -/
-def RepShapedZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def RepShapedZk (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : CaseZk H rel, ∀ st v cm e, c.sts = #[st] → Zk.schedule (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m = .ok v →
     commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle (v.1.levels.getD 0 default) v.2
       (packed (tracesOf c.sts c.w)[0]! (Setup.ofCircuit st).m) (c.ω.extra 0) (c.ω.lanePad 0) (c.ω.salt 0 0 0) =

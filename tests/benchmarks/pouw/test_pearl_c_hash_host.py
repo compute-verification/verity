@@ -2,7 +2,7 @@
 too: test_pearl_c_hash_wide.py): each -h3 hashing kernel,
 launched as pearl_c_sm120/run.py launches it, writes the bytes the verifier's reference computes: the SHA-512 row digests
 (s512_rows, and hash_fast.cuh's segment and fold launches), the seeds and line keys over them at the pinned vectors, the line
-raws, tickets and tile leaves (both ways), and the hm96-sha512 frame-v3-sha512 trees under ChaCha20 salts; then run.py's epoch,
+raws, tickets and tile leaves (both ways), and the hm96-sha512 frame-v3-sha512 trees over the salts they are handed; then run.py's epoch,
 unit, commit and hashing phases end to end with either kernel set."""
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ import numpy as np
 import pytest
 from conftest import load
 
+from verity.commitments import MerkleTree, hm96
 from verity.commitments.merkle import tree_levels
 from verity.protocols.resource_accounting.compute.pouw.verifier import audit
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import ROW_SCHEMA, activation_binding, rows_domain
@@ -55,6 +56,11 @@ class Host:
 
     def sync(self) -> None:
         pass
+
+    def ck(self, name: str, to, data, n: int) -> None:
+        """The one driver call a pipeline makes of this device: a host copy into one of its buffers (`put_salts`)."""
+        assert name == "cuMemcpyHtoD_v2", name
+        ctypes.memmove(to.value, data, n)
 
     def launch(self, name: str, grid, block: int, smem: int = 0, p=(), i=(), stream=None) -> None:
         a = R.Args()
@@ -264,40 +270,140 @@ def s512_levels(host: Host, base: int, count: int, dom: int, small: int = 4) -> 
     host.launch("s512_tree_small", 1, 64, p=(base, dom), i=(width, level))
 
 
-@pytest.mark.parametrize("count,digests,nonce", [(1, False, 0), (5, False, 7), (300, True, 1 << 63), (64, False, (1 << 62) + 3)])
-def test_hm96_trees_are_the_verifiers(host, count, digests, nonce):
-    """hm_leaves then s512_frame_leaves over 64-byte values (row digests, or with ``digests`` tile leaves) under ChaCha20 salts at each tree's nonce
-    (an activation tree's unit index, a weight's 2^62 + w, the transcript's 2^63), then pads, nodes and the small tree: every
-    level is the frame-v3-sha512 tree `audit.commit_rows` builds, its root the `MerkleTree`'s.  300 leaves put ranks past one
-    byte; the nonce is read from the unit block's index at 7 and given as i1, i2 otherwise."""
+def salts_of(label: str, count: int) -> bytes:
+    """`count` leaves' salts for a test, `R.HM_SALT` bytes a leaf in leaf order: any bytes, which the kernels only read."""
+    return hashlib.shake_256(f"pearl-c-test-salts/{label}".encode()).digest(R.HM_SALT * count)
+
+
+def salted(values: list[bytes], salts: bytes) -> list[bytes]:
+    """Each value followed by its salt, as `audit.Hm96Domain.leaf` takes one."""
+    assert len(salts) == R.HM_SALT * len(values)
+    return [v + salts[R.HM_SALT * i:R.HM_SALT * (i + 1)] for i, v in enumerate(values)]
+
+
+def tree_of(dom, values: list[bytes], salts: bytes) -> bytes:
+    """An `audit.HM96` tree's levels as the kernels lay them out, each value under its salt of `salts`."""
+    return b"".join(b"".join(lv) for lv in tree_levels(dom, [dom.leaf(i, i, ROW_SCHEMA, v) for i, v in enumerate(salted(values, salts))]))
+
+
+def test_a_leafs_salt_is_192_bytes_as_hm96s():
+    """The buffer's stride and the kernels' is the commitment's salt size, and the 16-byte loads divide it."""
+    src = (HERE / "hash_h3.cuh").read_text()
+    assert R.HM_SALT == hm96.SHA512.salt_bytes == audit.HM96_SALT == 192 and "constexpr int HM_SALT = 192;" in src
+    assert R.HM_SALT % 16 == 0 and not re.search(r"chacha|salt_key|nonce", src, re.I)
+
+
+@pytest.mark.parametrize("count,digests", [(1, False), (5, False), (300, True), (64, False)])
+def test_hm96_trees_are_the_verifiers(host, count, digests):
+    """hm_leaves over 64-byte values (row digests, or with ``digests`` tile leaves) and the buffer of their salts, 192 bytes a
+    leaf in leaf order: each hl is `verity.commitments.hm96`'s leaf of that value under those salt bytes (byte n of a salt at
+    offset n).  Then s512_frame_leaves, pads, nodes and the small tree: every level is the frame-v3-sha512 tree over the
+    salted values, its root the `MerkleTree`'s.  300 leaves put ranks past one byte.  The kernel reads the salts only."""
     rng = np.random.default_rng(count)
     rows = [rng.integers(0, 256, 128 * (r % 3 + 1), dtype=np.uint8).tobytes() for r in range(count)]
     xs = [r[:64] for r in rows] if digests else [C.row_digest(r) for r in rows]
     values = xs if digests else rows
-    salt_key, binding = bytes(range(64, 96)), hashlib.sha256(b"binding").digest()
+    binding, salts = hashlib.sha256(b"binding").digest(), salts_of(f"tree-{count}", count)
     dom = rows_domain(binding, 3, count, audit.HM96, digests)
     width = R.pow2(count)
     buf, pdom = host.alloc(64 * (2 * width - 1)), host.put(dom.domain_id)
-    const = host.put(audit.hm96_kernel_constants())
-    block = host.put(unit_block(bytes(32), bytes(64), nonce)) if nonce == 7 else 0
-    host.launch("hm_leaves", R.cdiv(count, 64), 64, p=(host.put(b"".join(xs)), buf, host.put(salt_key), const, 0, block + 96 if block else 0),
-                i=(count, 0, 0) if block else (count, nonce & 0xFFFFFFFF, nonce >> 32))
+    const, at = host.put(audit.hm96_kernel_constants()), host.put(salts)
+    host.launch("hm_leaves", R.cdiv(count, 64), 64, p=(host.put(b"".join(xs)), buf, at, const), i=(count,))
+    key = audit.HM96_KEY
+    assert host.read(buf, 64 * count) == b"".join(
+        hm96.SHA512.tree_leaf(key, hm96.SHA512.commit_string(key, x, salts[192 * i:192 * i + 192])) for i, x in enumerate(xs))
+    assert host.read(at, len(salts)) == salts
     host.launch("s512_frame_leaves", R.cdiv(count, 64), 64, p=(buf, pdom), i=(0, count))
     s512_levels(host, buf, count, pdom)
-    salted = [v + audit.hm96_salt(salt_key, nonce, i) for i, v in enumerate(values)]
-    want = b"".join(b"".join(level) for level in tree_levels(dom, [dom.leaf(i, i, ROW_SCHEMA, v) for i, v in enumerate(salted)]))
+    want = tree_of(dom, values, salts)
     assert host.read(buf, 64 * (2 * width - 1)) == want
-    root = audit.commit_rows(binding, 3, values, audit.HM96, salt_key, nonce, digests).commitment.root
-    assert want[-64:] == root
+    assert want[-64:] == MerkleTree(dom, dict(enumerate(salted(values, salts))), lambda _: ROW_SCHEMA).commitment.root
+
+
+def test_a_pipeline_without_a_trees_salts_refuses_it(host):
+    """A tree's hm96 level 0 reads `salts_<tree>`, which its caller fills: a pipeline given none launches nothing and says
+    whose bytes they are."""
+    p = SimpleNamespace(dev=host, keys={"hm": 1, "dom_b": 1}, b={"tree_b": 1})
+    launched, launch = [], host.launch
+    host.launch = lambda *a, **kw: launched.append(a)
+    try:
+        with pytest.raises(NotImplementedError, match="salts_b .192 bytes a leaf.*derive no salt"):
+            R.Pipeline.hm_level0(p, "b", 1, 4, "dom_b")
+    finally:
+        host.launch = launch
+    assert not launched
+
+
+@pytest.mark.parametrize("run", ["pearl_c_sm120/run.py", "pearl_c_sm90/run.py"])
+def test_a_salts_buffer_of_the_wrong_length_or_alignment_is_refused_before_any_launch(host, run):
+    """The leaf kernels read `count` salts of 192 bytes by 16-byte loads from an address, so the launch code refuses, by
+    the buffer's name and before any launch, an address that is not a multiple of 16 (a caller's own ``salts_<tree>`` and
+    one handed to `hm_level0`) and a stated length that is a salt too few, a salt too many or a byte short; the right
+    length at an aligned address launches."""
+    M = load(run)
+    count = 4
+    values, salts = host.put(bytes(64 * count)), host.put(salts_of("aligned", count + 1))
+    p = SimpleNamespace(dev=host, keys={"hm": host.put(audit.hm96_kernel_constants()), "dom_b": host.put(bytes(64))},
+                        b={"tree_b": host.alloc(64 * count), "salts_b": salts + 1}, salt_bytes={"b": M.HM_SALT * count})
+    launched, launch = [], host.launch
+    host.launch = lambda name, *a, **kw: launched.append(name) or launch(name, *a, **kw)
+    try:
+        with pytest.raises(ValueError, match="salts_b at 0x[0-9a-f]+: .*multiple of 16 bytes"):
+            M.Pipeline.hm_level0(p, "b", values, count, "dom_b")
+        with pytest.raises(ValueError, match="tree 'b''s salts at 0x[0-9a-f]+: .*multiple of 16 bytes"):
+            M.Pipeline.hm_level0(p, "b", values, count, "dom_b", salts=salts + 8, salt_bytes=M.HM_SALT * count)
+        for given in (M.HM_SALT * (count - 1), M.HM_SALT * (count + 1), M.HM_SALT * count - 1):
+            with pytest.raises(ValueError, match=f"tree 'b''s salts: {given} bytes for {count} leaves, which take {M.HM_SALT * count}"):
+                M.Pipeline.hm_level0(p, "b", values, count, "dom_b", salts=salts, salt_bytes=given)
+        with pytest.raises(ValueError, match=f"tree 'b''s salts: its owner stated no length, and the launch reads {M.HM_SALT * count}"):
+            M.Pipeline.hm_level0(p, "b", values, count, "dom_b", salts=salts)
+        assert not launched
+        M.Pipeline.hm_level0(p, "b", values, count, "dom_b", salts=salts, salt_bytes=M.HM_SALT * count)
+        assert launched == ["hm_leaves", "s512_frame_leaves"]
+    finally:
+        host.launch = launch
+
+
+@pytest.mark.parametrize("run", ["pearl_c_sm120/run.py", "pearl_c_sm90/run.py"])
+def test_a_callers_salts_buffer_states_its_length_or_is_refused_before_any_launch(host, run):
+    """A caller that owns ``salts_<tree>`` gives it in ``bufs`` as (address, bytes).  `Pipeline.salts` refuses, by the
+    buffer's name and with both byte counts, one given as a bare address (no length is assumed) and one whose stated length
+    is a salt too few, a salt too many or a byte short of what the launch reads; the stated length launches, and travels
+    with the buffers a pipeline lends another (`lent`)."""
+    M = load(run)
+    count = 4
+    need = M.HM_SALT * count
+    values, salts = host.put(bytes(64 * count)), host.put(salts_of("stated", count))
+    keys = {"hm": host.put(audit.hm96_kernel_constants()), "dom_b": host.put(bytes(64))}
+    launched, launch = [], host.launch
+    host.launch = lambda name, *a, **kw: launched.append(name) or launch(name, *a, **kw)
+
+    def pipe(given):
+        b, said = M.stated_salts({"tree_b": host.alloc(64 * count), "salts_b": given})
+        return SimpleNamespace(dev=host, keys=keys, b=b, salt_bytes=said)
+    try:
+        with pytest.raises(ValueError, match=f"salts_b: its owner stated no length, and the launch reads {need} bytes"):
+            M.Pipeline.hm_level0(pipe(salts), "b", values, count, "dom_b")
+        for given in (need - M.HM_SALT, need + M.HM_SALT, need - 1):
+            with pytest.raises(ValueError, match=f"salts_b: {given} bytes for {count} leaves, which take {need}"):
+                M.Pipeline.hm_level0(pipe((salts, given)), "b", values, count, "dom_b")
+        assert not launched
+        p = pipe((salts, need))
+        assert p.b["salts_b"] == salts and M.Pipeline.lent(p)["salts_b"] == (salts, need)
+        assert M.stated_salts(M.Pipeline.lent(p)) == (p.b, p.salt_bytes)
+        M.Pipeline.hm_level0(p, "b", values, count, "dom_b")
+        assert launched == ["hm_leaves", "s512_frame_leaves"]
+    finally:
+        host.launch = launch
 
 
 @pytest.mark.parametrize("sha", ["fast", pytest.param("ref", marks=pytest.mark.slow)])
 def test_sm120_h3_phases_are_the_verifiers(host, monkeypatch, sha):
     """pearl_c_sm120/run.py's `Pipeline` under -h3 at 64 x 128 x 1024 (m_real 48: a partial row block), its epoch, unit, commit
     and hashing phases on the host with either SHA-512 kernel set (``PEARLC_SHA``: hash_fast.cuh's segment and fold launches,
-    or hash_h3.cuh's s512_rows and s512_tile_leaves): B's HM96 tree under weight 3's nonce, A's under the unit index read from
-    the unit block, seed_A over root_A with its line key, each row's seed and line key, the tile leaves over C~ and U and the
-    transcript tree, each equal to the reference's (`audit.commit_rows`, `pearl_c`)."""
+    or hash_h3.cuh's s512_rows and s512_tile_leaves): B's HM96 tree, A's and the tiles', each over the salts its caller put in
+    `salts_<tree>`, seed_A over root_A with its line key, each row's seed and line key, the tile leaves over C~ and U and the
+    transcript tree, each equal to the reference's (`audit.Hm96Domain`'s leaves, `pearl_c`)."""
     S = R
     m, n, k, mr, w, idx = 64, 128, 1024, 48, 3, 5
     rng = np.random.default_rng(12)
@@ -305,19 +411,26 @@ def test_sm120_h3_phases_are_the_verifiers(host, monkeypatch, sha):
     b_rows = [rng.integers(0, 256, 4 * k, dtype=np.uint8).tobytes() for _ in range(n)]
     c = rng.integers(0, 2**32, (m, n), dtype=np.uint64).astype(np.uint32)
     u = rng.integers(0, 2**32, (m, n), dtype=np.uint64).astype(np.uint32)
-    salt, salt_key, tiles = bytes(range(32)), bytes(range(100, 132)), S.cdiv(mr, 64) * (n // 64)
-    b_tree = audit.commit_rows(audit.weight_binding(w), -2, b_rows, audit.HM96, salt_key, audit.HM96_WEIGHTS + w)
-    root_b = b_tree.commitment.root
-    dom_a, dom_b = rows_domain(activation_binding(salt, idx), idx, mr, audit.HM96), b_tree.domain
+    salt, tiles = bytes(range(32)), S.cdiv(mr, 64) * (n // 64)
+    salts = {"a": salts_of("phases-a", mr), "b": salts_of("phases-b", n), "t": salts_of("phases-t", tiles)}
+    dom_a, dom_b = rows_domain(activation_binding(salt, idx), idx, mr, audit.HM96), rows_domain(audit.weight_binding(w), -2, n, audit.HM96)
+    tree_b = tree_of(dom_b, b_rows, salts["b"])
+    root_b = tree_b[-64:]
     epoch = audit.Epoch(audit.Workload((C.Matmul(idx, C.Shape(mr, k, n), w),)), {w: root_b}, salt)
     dom_t = audit.transcript_domain(epoch, tiles, audit.HM96)
-    keys = {"salt_key": salt_key, "hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
+    keys = {"hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
             "dom_a": dom_a.domain_id, "dom_b": dom_b.domain_id, "dom_t": dom_t.domain_id, "line_b": bytes(32)}
     host.sms = 4
     launched, launch = set(), host.launch
     monkeypatch.setattr(host, "launch", lambda name, *a, **kw: launched.add(name) or launch(name, *a, **kw))
     pipe = S.Pipeline(host, m, n, k, "sm120", {name: host.put(v) for name, v in keys.items()}, host.put(b"".join(a_rows)),
-                      host.put(b"".join(b_rows)), m_real=mr, weight=w, sha=sha)
+                      host.put(b"".join(b_rows)), m_real=mr, sha=sha)
+    assert {t: pipe.size[f"salts_{t}"] for t in R.SALTED} == {t: len(x) for t, x in salts.items()}
+    assert pipe.salt_bytes == {t: len(x) for t, x in salts.items()}   # its own buffers' lengths are its own sizes
+    with pytest.raises(NotImplementedError, match="salts_b"):   # its own buffers hold no salts until they are put
+        pipe.salts("b", n)
+    for t, x in salts.items():
+        pipe.put_salts(t, x)
     for name, words in (("c", c), ("u", u)):
         host.bufs[pipe.b[name]][:m * n * 4] = np.frombuffer(words.astype("<u4").tobytes(), np.uint8)
     names = [nm for nm, phase, step in pipe.steps() if phase in ("epoch", "unit", "commit", "hashing") and (step() or True)]
@@ -326,20 +439,15 @@ def test_sm120_h3_phases_are_the_verifiers(host, monkeypatch, sha):
     fast, ref = {"s512_row_segs", "s512_tile_segs", "s512_folds"}, {"s512_rows", "s512_tile_leaves"}
     assert (launched & fast, launched & ref) == ((fast, set()) if sha == "fast" else (set(), ref))
 
-    def levels(dom, values, nonce):
-        salted = [v + audit.hm96_salt(salt_key, nonce, i) for i, v in enumerate(values)]
-        return b"".join(b"".join(lv) for lv in tree_levels(dom, [dom.leaf(i, i, ROW_SCHEMA, v) for i, v in enumerate(salted)]))
-
-    tree_a = levels(dom_a, a_rows[:mr], idx)
+    tree_a = tree_of(dom_a, a_rows[:mr], salts["a"])
     seed_a = C.unit_seed_a(salt, tree_a[-64:], root_b, idx, "h3")
     seeds = [C.row_seed(salt, C.row_digest(r), root_b, idx, i) for i, r in enumerate(a_rows[:mr])]
     cr, ur = c[:mr], u[:mr]
     leaves = [C.leaf(C.Checked(cr[r0:r0 + 64, c0:c0 + 64].tolist(), ur[r0:r0 + 64, c0:c0 + 64].tolist()), "h3")
               for r0 in range(0, mr, 64) for c0 in range(0, n, 64)]
-    want = {"tree_b": levels(dom_b, b_rows, audit.HM96_WEIGHTS + w), "tree_a": tree_a, "seed_a": seed_a,
+    want = {"tree_b": tree_b, "tree_a": tree_a, "seed_a": seed_a,
             "line_a": C._s512_line_key(seed_a), "seeds_a": b"".join(seeds), "lkeys_a": b"".join(C._s512_line_key(x) for x in seeds),
-            "leaves": b"".join(leaves), "tree_t": levels(dom_t, leaves, audit.HM96_TRANSCRIPT)}
-    assert want["tree_b"][-64:] == root_b
+            "leaves": b"".join(leaves), "tree_t": tree_of(dom_t, leaves, salts["t"])}
     assert {name: host.read(pipe.b[name], len(v)) == v for name, v in want.items()} == dict.fromkeys(want, True)
 
 
@@ -366,46 +474,126 @@ def test_a_caller_without_the_scratch_runs_the_reference_kernels(host, monkeypat
 
 
 def y_trees(host, monkeypatch):
-    """served_y's `DeviceTrees` over the host build, for a run of the sm120 variant whose salt and salt key are fixed."""
+    """served_y's `DeviceTrees` over the host build, for a run of the sm120 variant whose salt is fixed."""
     torch = pytest.importorskip("torch")
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
     from verity_torch.pouw.pearl_c import served_y_device as SYD
-    salt_key = bytes(range(100, 132))
-    const = host.put(salt_key.ljust(256, b"\0") + audit.hm96_kernel_constants())
     run = SimpleNamespace(kernel=SimpleNamespace(run=R, dev=host), device=torch.device("cpu"), variant="sm120",
-                          salt=bytes(range(64)), salt_key=salt_key, const_keys={"salt_key": const, "hm": const + 256},
-                          cur=SimpleNamespace(poison=0xA5))
+                          salt=bytes(range(64)), salt_key=bytes(range(100, 132)),
+                          const_keys={"hm": host.put(audit.hm96_kernel_constants())}, cur=SimpleNamespace(poison=0xA5))
     monkeypatch.setattr(host, "stream", None, raising=False)
     return torch, SY, run, SYD.DeviceTrees(run)
 
 
+def y_salt_bytes(torch, label: str, m: int):
+    """`m` rows' test salts as `served_y_device.y_tree` takes them: uint8 on the host, `R.HM_SALT` bytes a row."""
+    return torch.frombuffer(bytearray(salts_of(label, m)), dtype=torch.uint8)
+
+
 @pytest.mark.parametrize("m", [1, 5, 129, 300])
-def test_served_y_device_trees_are_commit_ys(host, monkeypatch, m):
+def test_served_y_device_trees_are_the_trees_over_their_salts(host, monkeypatch, m):
     """served_y's `DeviceTrees` (a retained Pearl+ call's y tree as its device builds it, by run.py's launches) on the host
-    build: over a call's real rows of y, BF16 widened to FP32 7 rows at a time, the tree is `served_y.commit_y`'s bytes,
-    level 0 padded and every level above it, under the call's y domain and hm96 nonce, at 1, 5, 129 and 300 rows."""
+    build, handed the rows' salts: over a call's real rows of y, BF16 widened to FP32 7 rows at a time, the tree is the
+    frame-v3-sha512 tree over y's FP32 rows under those salts, level 0 padded and every level above it, under the call's y
+    domain, at 1, 5, 129 and 300 rows.  It is `commit_y`'s tree under the same salt bytes, which is also what `y_tree`
+    gives where y is on the CPU (the fallback), and other salt bytes give another root."""
     n, index = 1024, 77
     torch, SY, run, trees = y_trees(host, monkeypatch)
+    from verity_torch.pouw.pearl_c import served_y_device as SYD
     monkeypatch.setattr(SY, "Y_CHUNK_BYTES", 7 * 4 * n)
     y = torch.randn(m, n, generator=torch.Generator().manual_seed(m)).to(torch.bfloat16)
-    got = trees(y, index).numpy().tobytes()
-    assert got == SY.commit_y(y.view(torch.uint8).numpy().tobytes(), n, run.salt, index, run.salt_key)[1] and n in trees.pipes
+    raw = salts_of(f"y-{m}", m)
+    salts, y_bytes = y_salt_bytes(torch, f"y-{m}", m), y.view(torch.uint8).numpy().tobytes()
+    got = trees._tree(trees._pipe(n), y, index, salts).numpy().tobytes()
+    root, tree = SY.commit_y(y_bytes, n, run.salt, index, [raw[i:i + R.HM_SALT] for i in range(0, len(raw), R.HM_SALT)])
+    assert got == tree == tree_of(SY.y_domain(run.salt, index, m), SY.f32_rows(y_bytes, n), raw) and got[-64:] == root
+    assert SYD.y_tree(run, y, index, salts).numpy().tobytes() == got
+    other = trees._tree(trees._pipe(n), y, index, y_salt_bytes(torch, f"other-{m}", m)).numpy().tobytes()
+    assert other[-64:] != root
+
+
+def test_served_y_refuses_a_wrong_count_or_size_of_salts(host, monkeypatch):
+    """`commit_y`, and `y_tree`'s fallback through it, take one salt of `R.HM_SALT` bytes a row of y: a salt too few, one
+    too many and a short salt are each refused, naming the count and the size."""
+    n, m, index = 1024, 5, 3
+    torch, SY, run, _ = y_trees(host, monkeypatch)
+    from verity_torch.pouw.pearl_c import served_y_device as SYD
+    y = torch.randn(m, n, generator=torch.Generator().manual_seed(0)).to(torch.bfloat16)
+    raw = salts_of("y-count", m + 1)
+    each = [raw[i:i + R.HM_SALT] for i in range(0, len(raw), R.HM_SALT)]
+    refusal = f"y's {m} rows take {m} salts of {R.HM_SALT} bytes"
+    for salts in (each[:m - 1], each, [*each[:m - 1], each[m - 1][:-1]]):
+        with pytest.raises(ValueError, match=refusal):
+            SY.commit_y(y.view(torch.uint8).numpy().tobytes(), n, run.salt, index, salts)
+    for size in (R.HM_SALT * (m - 1), R.HM_SALT * (m + 1), R.HM_SALT * m - 1):
+        with pytest.raises(ValueError, match=refusal):
+            SYD.y_tree(run, y, index, torch.frombuffer(bytearray(raw[:size]), dtype=torch.uint8))
+
+
+def test_device_trees_refuse_a_wrong_count_or_size_of_salts_before_any_launch(host, monkeypatch):
+    """The device path (`DeviceTrees`, whose kernels read `R.HM_SALT` bytes a leaf from the salts' address with no length)
+    refuses a salt too few, one too many, a short salt, and salts not contiguous uint8 on y's device, each before any
+    launch: its width's pipeline is built first, and every launch after it fails."""
+    n, m, index = 1024, 5, 3
+    torch, _, _, trees = y_trees(host, monkeypatch)
+    y = torch.randn(m, n, generator=torch.Generator().manual_seed(0)).to(torch.bfloat16)
+    raw = salts_of("y-device-count", m + 1)
+    trees.pipe(n, index)
+
+    def launched(*a, **kw):
+        raise AssertionError("a launch")
+    monkeypatch.setattr(host, "launch", launched, raising=False)
+    wrong = [torch.frombuffer(bytearray(raw[:size]), dtype=torch.uint8)
+             for size in (R.HM_SALT * (m - 1), R.HM_SALT * (m + 1), R.HM_SALT * m - 1)]
+    whole = torch.frombuffer(bytearray(raw[:R.HM_SALT * m]), dtype=torch.uint8)
+    wrong += [whole.view(torch.int8), torch.frombuffer(bytearray(raw[:2 * R.HM_SALT * m]), dtype=torch.uint8)[::2]]
+    for salts in wrong:
+        with pytest.raises(ValueError, match=f"y's {m} rows take {m} salts of {R.HM_SALT} bytes, contiguous uint8"):
+            trees(y, index, salts)
+
+
+def test_served_y_tree_launches_state_the_salts_length_to_hm_level0(host, monkeypatch):
+    """`tree_launches` hands `hm_level0` its salts with their length: a buffer a salt short, a salt long or a byte short of
+    `m` rows' is refused by name before the leaf launch, and the right length launches it."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+    m = 4
+    salts = host.put(salts_of("tree-launches", m + 1))
+    p = SimpleNamespace(dev=host, keys={"hm": host.put(audit.hm96_kernel_constants()), "dom_b": host.put(bytes(64))}, b={},
+                        tree_setup=lambda *a: [], row_digests=lambda *a: None, levels=lambda *a: None)
+    launched: list[str] = []
+    launch = host.launch
+    monkeypatch.setattr(host, "launch", lambda name, *a, **kw: launched.append(name) or launch(name, *a, **kw), raising=False)
+
+    def go(given: int) -> None:
+        SY.tree_launches(R, p, host.alloc(64 * m), host.alloc(64 * m), 0, m, m, 0, lambda r, c: 0, salts, given)
+    for given in (R.HM_SALT * (m - 1), R.HM_SALT * (m + 1), R.HM_SALT * m - 1):
+        with pytest.raises(ValueError, match=f"tree 'b''s salts: {given} bytes for {m} leaves, which take {R.HM_SALT * m}"):
+            go(given)
+    assert not launched
+    go(R.HM_SALT * m)
+    assert launched == ["hm_leaves", "s512_frame_leaves"]
 
 
 def test_served_y_device_trees_refuse_a_width_whose_first_tree_isnt_commit_ys(host, monkeypatch):
-    """A width's first device tree is held to `commit_y` over a fixed 129-row y, so a tree with a node off is refused, naming
-    the node, and the width's pipeline isn't kept: the next call checks again."""
+    """A width's first device tree is held to `commit_y` over a fixed 129-row y under the same fresh salts, so a tree with a
+    node off is refused, naming the node, and the width's pipeline isn't kept: the next call checks again.  A tree left as
+    built passes the check, and the call's tree is `commit_y`'s under the salts it was handed."""
     n = 1024
     torch, SY, run, trees = y_trees(host, monkeypatch)
     real = trees._tree
 
-    def off(p, y, index):
-        t = real(p, y, index)
+    def off(p, y, index, salts):
+        t = real(p, y, index, salts)
         t[64 * 3] ^= 1
         return t
 
     trees._tree = off
+    y, salts = torch.zeros(4, n, dtype=torch.bfloat16), y_salt_bytes(torch, "y-check", 4)
     for _ in range(2):
         with pytest.raises(ValueError, match=f"width {n} differs from served_y.commit_y over 129 rows, first at node 3 of 511"):
-            trees(torch.zeros(4, n, dtype=torch.bfloat16), 5)
+            trees(y, 5, salts)
         assert not trees.pipes
+    trees._tree = real
+    raw = salts_of("y-check", 4)
+    want = SY.commit_y(y.view(torch.uint8).numpy().tobytes(), n, run.salt, 5, [raw[i:i + R.HM_SALT] for i in range(0, len(raw), R.HM_SALT)])[1]
+    assert trees(y, 5, salts).numpy().tobytes() == want and list(trees.pipes) == [n]

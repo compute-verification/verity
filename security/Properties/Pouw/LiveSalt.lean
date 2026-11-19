@@ -91,7 +91,7 @@ namespace Properties.Pouw.LiveSalt
 open Lean (Json)
 open PouwVerifier (R at? checkWorkload workloadOf weightsRootAt MANIFEST_SCHEMA)
 open Spot.Challenger (Audited ChallengerKey Families LedgerEntry LiveCommitment LiveOpening Roots ledgerEntry?
-  leafOf liveReason pinnedChallengePhase challengePhaseNamed)
+  leafOf liveReason pinnedChallengePhase challengePhaseNamed byFamily)
 
 /-! ## The layout, the epoch's root and the salt -/
 
@@ -138,7 +138,7 @@ def liveSalt (c : LiveCommitment) (coin w : ByteArray) : Except String ByteArray
 
 /-- When a Pearl-C salt session counts: its commitment is the salt-only layout's, and its log shows the challenger
 received `r`, the epoch's root, alone, as the salt coin's root, each received root followed by its coin's release
-(`releasedRootsOf`). -/
+(`releasedLogOf`). -/
 def Counts (c : LiveCommitment) (received : Roots) (r : ByteArray) : Prop :=
   SaltEpoch c ∧ received = [(PouwWindow.SALT, [r])]
 
@@ -195,12 +195,12 @@ abbrev Check := (key ledger pins main session m : Json) → R ByteArray
 `a`'s commitment `c` and its salt coin `o`, opened after the epoch's root. -/
 def Accepted (key ledger pins main session m : Json) (w : ByteArray) (k : Nat) (a : Audited) (c : LiveCommitment)
     (o : LiveOpening) (salt : ByteArray) : Prop :=
-  ∃ (ck : ChallengerKey) (openSeq : Nat) (received : Roots),
+  ∃ (ck : ChallengerKey) (openSeq : Nat) (log : Spot.Challenger.Log),
     ChallengerKey.ofJson key = .ok ck ∧
     at? m "schema" = .str MANIFEST_SCHEMA ∧ EpochRoot m w k ∧
     pinnedChallengePhase ledger (rootExecutionPhase (epochOpenRoot w k)) ck pins main = .ok a ∧
-    challengePhaseNamed a ck session = .ok (c, received) ∧
-    Counts c received (epochOpenRoot w k) ∧
+    challengePhaseNamed a ck session = .ok (c, log) ∧
+    Counts c (byFamily c log) (epochOpenRoot w k) ∧
     LedgerShows ledger a.session (epochOpenRoot w k) a.recordLeaf openSeq ∧
     ManifestNames m a (epochOpenRoot w k) openSeq ∧
     LiveCommitment.ofJson (at? m "coins") = .ok c ∧

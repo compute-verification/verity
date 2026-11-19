@@ -10,7 +10,8 @@ from __future__ import annotations
 import argparse
 
 from verity_machine_model import lean_headline, lean_headline_dc
-from verity_machine_model.model import DATA
+
+READS_DEVICE = False
 
 
 def add(sub: argparse._SubParsersAction) -> None:
@@ -23,8 +24,8 @@ def add(sub: argparse._SubParsersAction) -> None:
 
 
 def run(args: argparse.Namespace) -> int:
-    if args.data != DATA:
-        raise SystemExit("lean-headline writes every family's instances from this package's own data: no --data, and "
-                         "no --device but sm_120")
+    if args.data is not None:
+        raise SystemExit("lean-headline writes every family's instances from this package's own data: no --data, "
+                         "--device or --card")
     sm120 = 0 if args.numbers else lean_headline.write(args.check)
     return max(sm120, lean_headline_dc.write(args.check, args.numbers, args.json))

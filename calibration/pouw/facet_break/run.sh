@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # One facet_break batch: generate the seeded grid, build and gate it (the gate's refusals are dropped by name and the rest
 # rebuilt in chunks of 64, so one bad sink loses only its chunk), gate again and time on one leased GPU, then load every
-# program on every facet. From a pushed commit, on an RTX PRO 6000 node (MACHINE):
+# program on every facet. The target is the card's (its card record's `arch`, probe.py arch); a card whose target isn't
+# sm_120a is refused before anything is built. From a pushed commit, on an RTX PRO 6000 node (MACHINE):
 #
 #   research run --on MACHINE --project verity --source <tree> --cwd source --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=facet-break -- bash calibration/pouw/facet_break/run.sh [generate.py flags: --seed S --n N ...]
@@ -13,9 +14,12 @@ OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROBE="$HERE/../opcode_probe/probe.py"
 export PYTHONDONTWRITEBYTECODE=1
-NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
-[ -x "$NVCC" ] || NVCC=$(command -v nvcc)
+NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13.0)/bin/nvcc} || { echo "run.sh: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
+[ -x "$NVCC" ] || { echo "run.sh: no nvcc at $NVCC" >&2; exit 2; }
 export NVCC PATH="$(dirname "$NVCC"):$PATH"
+ARCH=$(python3 "$PROBE" arch) || exit 2
+WANT=$(python3 "$PROBE" arch --sku rtx-pro-6000-server) || exit 2
+[ "$ARCH" = "$WANT" ] || { echo "facet_break: the card's target is $ARCH, and its forms are $WANT's only: nothing built" >&2; exit 2; }
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$OUT/sass" "$OUT/chunks"

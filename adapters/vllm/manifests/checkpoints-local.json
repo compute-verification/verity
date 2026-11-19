@@ -1,0 +1,24 @@
+{
+ "appended": [
+  {
+   "at": "2026-11-18T08:30:00Z",
+   "by": "vllm",
+   "note": "new entry only (role LLAMA31_8B_INSTRUCT_LOCAL, the bandwidth specs' node-local Llama 3.1 8B Instruct, bound by its content)",
+   "repos": [
+    "/workspace/pouw/mvp-e2e/models/llama-3.1-8b-instruct"
+   ]
+  }
+ ],
+ "checkpoints": [
+  {
+   "downloaded": true,
+   "gated": false,
+   "local_path": "/workspace/pouw/mvp-e2e/models/llama-3.1-8b-instruct",
+   "repo": "/workspace/pouw/mvp-e2e/models/llama-3.1-8b-instruct",
+   "revision": "sha256:98e25b0ecbb3eff924ea9fad4673feea9ea6457d2f45db5b5b60e88205de1daa",
+   "role": "LLAMA31_8B_INSTRUCT_LOCAL"
+  }
+ ],
+ "hf_home": "/workspace/hf",
+ "schema": "verity-vllm/checkpoints/v1"
+}

@@ -2,7 +2,7 @@
 (4096, 6144) and w2 (6144, 2048)), with decode's and prefill's routed counts (`COUNTS`), under each schedule.
 
   python benchmarks/pouw/pearl_c_sm90/grouped_check.py --out DIR --passes SCRATCH [--cubin C] [--reps 10] [--schedule S ...]
-  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py verify --out SCRATCH/NxK      # on CPUs, after, a shape each
+  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py verify --retain SCRATCH/NxK --out SCRATCH/NxK  # on CPUs, after, a shape each
 
 A shape is one install (`glm53_timing.device_run`) of `EXPERTS` experts, ``pearl-c-h100-v1-h3``.  At each count pattern P,
 retained passes from outputs poisoned 0xA5, in SCRATCH/NxK: ``dense-P``, each unit's rows (`grouped.units`: an expert's rows in
@@ -11,19 +11,21 @@ experts are grouped), then one `pouw_pearl_c_grouped.gemm_grouped` call under ea
 deferred and deferred-a): ``grouped-P`` under serial, ``grouped-S-P`` under S, run eagerly; and with ``--graphs`` (the default)
 each again with the run's graphs, ``grouped[-S]-graph-P``, after `WARM_GRAPHS` calls in a pass of its own, so the retained call
 replays its layout's lane graphs (it must have).  Each grouped pass must agree with the dense one
-byte for byte: y, and the manifests less their run name (the transcript and records roots, every A root, record and file
-digest), with every call's A rows file read and compared.  Then the arms are timed interleaved, rep by rep (the order rotated),
+byte for byte: y, and the manifests less their run name and what fresh salts make differ (`SALTED`: the A, tile and y
+salts, and the trees, roots and leaves over them), so the records root, every record, B's side and every rows file's digest,
+with every call's A and y rows files read and compared.  Then the arms are timed interleaved, rep by rep (the order rotated),
 the pearl arms in fresh unretained passes under their schedule, each sample closed only after the side lanes
 (`glm53_timing.timed`), beside the stock grouped arms that build (`stock_arms`), each checked against x·Wᵀ.  SCRATCH/NxK gets
-``capture.json`` and ``coins.json``, for glm53_passes.py verify; DIR gets ``grouped.json`` and each pass's manifest.  Exits 0
-only when every grouped pass agrees.
+``capture.json`` and ``coins.json``, for glm53_passes.py verify; DIR gets ``grouped.json``, with each pass's public fields
+(`PUBLIC`) and its manifest's sha256, never the manifest, which names the pass's salts and rows.  SCRATCH is private and
+neither is nor shares DIR.  Exits 0 only when every grouped pass agrees.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import shutil
+import hashlib
 import statistics
 import sys
 from collections.abc import Callable, Sequence
@@ -51,14 +53,40 @@ SCHEDULES = ("serial", "deferred", "deferred-a")
 WARM_GRAPHS = 4
 
 
+#: what DIR keeps of a retained pass's manifest: its roots and counts
+PUBLIC = ("scheme", "schedule", "units", "tiles", "transcript_root", "records_root", "activation_roots", "weights_root")
+
+
+def public_of(manifest: Path) -> dict:
+    """`manifest`'s `PUBLIC` fields and its sha256."""
+    raw = manifest.read_bytes()
+    man = json.loads(raw)
+    return {"manifest_sha256": hashlib.sha256(raw).hexdigest(), **{k: man[k] for k in PUBLIC if k in man}}
+
+
+#: what two passes over the same rows hold apart, each drawing its own salts: the pass's, a call's and its y's
+SALTED = {"pass": ("leaves", "tree_t", "salts_t", "commitment"), "call": ("root_a", "salts", "tree"),
+          "y": ("root", "tree", "salts")}
+
+
+def _unsalted(m: dict) -> dict:
+    """Manifest `m` less `SALTED`."""
+    def call(u: dict) -> dict:
+        y = {"y": {k: v for k, v in u["y"].items() if k not in SALTED["y"]}} if "y" in u else {}
+        return {k: v for k, v in u.items() if k not in SALTED["call"]} | y
+    return {k: v for k, v in m.items() if k not in SALTED["pass"]} | {"matmuls": [call(u) for u in m["matmuls"]]}
+
+
 def _same(a: Path, b: Path) -> list[str]:
-    """Where two retained passes differ: their manifests less the run name and the schedule the pass ran under (its lanes,
-    which commit nothing), and every call's A rows file."""
-    ma, mb = (json.loads((p / "manifest.json").read_text()) for p in (a, b))
+    """Where two retained passes differ: their manifests less the run name, the schedule the pass ran under (its lanes,
+    which commit nothing) and `SALTED`, and every call's A and y rows files."""
+    ma, mb = (_unsalted(json.loads((p / "manifest.json").read_text())) for p in (a, b))
     out = [k for k in sorted(set(ma) | set(mb)) if k not in ("run", "schedule") and ma.get(k) != mb.get(k)]
     for x, y in zip(ma["matmuls"], mb["matmuls"]):
-        if (a / x["rows"]["path"]).read_bytes() != (b / y["rows"]["path"]).read_bytes():
-            out.append(f"matmul {x['index']} rows")
+        for name, fx, fy in (("rows", x["rows"], y["rows"]), *((("y rows", x["y"]["rows"], y["y"]["rows"]),)
+                                                                if "y" in x and "y" in y else ())):
+            if (a / fx["path"]).read_bytes() != (b / fy["path"]).read_bytes():
+                out.append(f"matmul {x['index']} {name}")
     return out
 
 
@@ -266,7 +294,8 @@ def check_shape(a: argparse.Namespace, n: int, k: int) -> dict:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--out", required=True)
-    p.add_argument("--passes", required=True, help="where the retained passes go (each about EXPERTS weights' rows)")
+    p.add_argument("--passes", required=True,
+                   help="where the retained passes go (each about EXPERTS weights' rows): private, outside --out")
     p.add_argument("--scheme", default=glm53.SCHEME)
     p.add_argument("--cubin")
     p.add_argument("--reps", type=int, default=10)
@@ -275,14 +304,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--graphs", action=argparse.BooleanOptionalAction, default=True,
                    help="each schedule's grouped arm a second time with the run's graphs (its layout's lane graphs replayed)")
     a = p.parse_args(argv)
-    out = Path(a.out)
+    out, passes = Path(a.out).resolve(), Path(a.passes).resolve()
+    if passes == out or out in passes.parents or passes in out.parents:
+        p.error(f"--passes {a.passes} is --out or shares it: a pass's salts and rows never go under --out")
     out.mkdir(parents=True, exist_ok=True)
     res = {"shapes": [check_shape(a, n, k) for n, k in SHAPES]}
-    for n, k in SHAPES:
-        for m in sorted((Path(a.passes) / f"{n}x{k}").glob("*/manifest.json")):
-            dst = out / f"{n}x{k}" / m.parent.name
-            dst.mkdir(parents=True, exist_ok=True)
-            shutil.copy(m, dst / "manifest.json")
+    res["passes"] = {f"{n}x{k}": {m.parent.name: public_of(m) for m in sorted((passes / f"{n}x{k}").glob("*/manifest.json"))}
+                     for n, k in SHAPES}
     res["ok"] = all(s["ok"] for s in res["shapes"])
     (out / "grouped.json").write_text(json.dumps(res, indent=1) + "\n")
     print(f"grouped check {'PASS' if res['ok'] else 'FAIL'}", flush=True)

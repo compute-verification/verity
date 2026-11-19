@@ -1,4 +1,4 @@
-"""A prototype of `CacheStep_v3`'s reference: vLLM's block pool (the vLLM integration's `advice_code.pool.BlockPool`,
+"""vLLM's block pool (the vLLM integration's `advice_code.pool.BlockPool`,
 which the replay runs) as a machine over word-addressed memories, every read and write of which is one access under
 offline memory checking.
 

@@ -71,7 +71,7 @@ open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.Exec
 
 local notation "𝔽" => FlockLevel3.GF128
 
-theorem tables_head_one {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+theorem tables_head_one {zk : Bool} {x : Hash.Msg} {spec : SessionSpec} {st : Stmt}
     (h : tables zk x = [(spec, st)]) : (tables zk x).head? = some (spec, st) := by
   rw [h]
   rfl
@@ -82,7 +82,7 @@ open Classical in
 of cap `cap₀` bounds the deployed runs accepting on `C` by its acceptance with no opening off `C` unless it
 self-clashes, and the mixture's mean `ε_c⁻` is at most `ε_table` and the term of escapes `e`, `ε_ω` is at most
 `ε_table`, `e`'s term and the deployed runs' probability of accepting with a column off `C`. -/
-theorem plain_le_sessionsEV (Vr : Claims.Verifier Coin) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ)
+theorem plain_le_sessionsEV (Vr : Claims.Verifier Coin) {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m) (ptLocal : ℕ)
@@ -179,7 +179,7 @@ theorem plain_le_sessionsEV (Vr : Claims.Verifier Coin) {x : Claims.Msg} {spec :
 open Classical in
 /-- **The plain bound at one tape and table, from salted sessions after `Commit`, at any escapes**: `plain_le_sessionsEV` at
 `V false`. -/
-theorem plain_le_sessionsE {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ)
+theorem plain_le_sessionsE {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m) (ptLocal : ℕ)
@@ -214,7 +214,7 @@ open Classical in
 `Commit` of cap `cap₀` bounds the deployed runs accepting on `C` by its acceptance with no opening off `C` unless it
 self-clashes, and the events `ev`, `ev₁` bound its `Adv` and self-clash, `ε_ω` is at most `ε_table`, the old escapes'
 term and the deployed runs' probability of accepting with a column off `C`. -/
-theorem plain_le_sessions {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
+theorem plain_le_sessions {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m) (ptLocal : ℕ)
@@ -266,8 +266,8 @@ open Classical in
 mixture `σ` of salted sessions after a `Commit` of cap `cap₀` bounds the deployed runs accepting on `C` by its
 acceptance with no opening off `C` unless it self-clashes, and the escapes' events bound its `Adv` and self-clash; and
 no table `Ok` allows that does not extract is committed to table 0's model statement. -/
-theorem plain_tableBoundθAt_of_sessions (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → List 𝔽 → Prop)
-    {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)]) (L : Layout st)
+theorem plain_tableBoundθAt_of_sessions (rel : Readable.Parsed → Readable.Relation) (Ok : Hash.Msg → List 𝔽 → Prop)
+    {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)]) (L : Layout st)
     (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m) (ptLocal : ℕ)
@@ -329,8 +329,8 @@ the simulated strategies after `Commit` (`simAt`) of live strategies `σL` whose
 `C` `Ok` allows, what is left is that the live verdict `pL` bounds the deployed runs accepting on `C`, that the decoder
 is right for the verdict accepting with no opening off `C` unless it self-clashes, and that the escapes' events bound
 the simulated strategies' `Adv` and self-clash. -/
-theorem plain_tableBoundθAt_of_live (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → List 𝔽 → Prop)
-    {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)]) (L : Layout st)
+theorem plain_tableBoundθAt_of_live (rel : Readable.Parsed → Readable.Relation) (Ok : Hash.Msg → List 𝔽 → Prop)
+    {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)]) (L : Layout st)
     (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m) (ptLocal : ℕ)

@@ -678,8 +678,8 @@ hashes and its custody passes on the round messages `mids`, each message's coin 
 theorem custody_vals_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
     {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} (hc : custody spec lv link c₁ mids = .ok ()) :
-    List.Forall₂ (fun (n : ℕ) (am : Claims.Msg × Coin) =>
+    {mids : List (Hash.Msg × Coin)} (hc : custody spec lv link c₁ mids = .ok ()) :
+    List.Forall₂ (fun (n : ℕ) (am : Hash.Msg × Coin) =>
       ∃ rd : Round, rd.n = n ∧ rd.bytes = some ⟨am.1.toArray⟩ ∧ rd.coins = am.2.vals n) (plainNs spec sts) mids := by
   rw [← rounds_ns_plain hs hv hl, List.forall₂_map_left_iff]
   exact (Claims.Bridge.Custody.custody_ok hc).2.2.2.imp fun rd am h => ⟨rd, rfl, h⟩

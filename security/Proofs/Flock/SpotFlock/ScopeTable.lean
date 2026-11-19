@@ -28,7 +28,7 @@ SPOT's analysis, which imports none of the network attester, can read it. What t
 namespace Verity.SampledTwo
 
 /-- **A statement in Flock's masked scope whose list of table sizes has one entry sets up one table.** -/
-theorem oneTable_of_shape {x : Claims.Msg} (hz : SpotFlock.zkOk x = true) (h1 : (SpotFlock.shapeOf x).length = 1) :
+theorem oneTable_of_shape {x : Hash.Msg} (hz : SpotFlock.zkOk x = true) (h1 : (SpotFlock.shapeOf x).length = 1) :
     ∃ s spec st, FlockDeploy.setupOf true x = some (s, spec, #[st]) := by
   obtain ⟨s, spec, sts, hset, -⟩ := SpotFlock.zkOk_sound hz
   have hsz : sts.size = 1 := by simpa [SpotFlock.shapeOf, hset] using h1
@@ -39,7 +39,7 @@ theorem oneTable_of_shape {x : Claims.Msg} (hz : SpotFlock.zkOk x = true) (h1 : 
 two-stage design evaluates, a statement that passes template `t`'s scope check has the one table size of the
 template's reference statement, and the masked verifier sets a table count above one up as that many tables. -/
 theorem oneTable_of_sessionOk {h : SpotFlock.Held} {s d} (hd : SpotFlock.two h s = some d) {t : ℕ}
-    (ht : t < h.ms.length) {xS : Claims.Msg} (hs : SpotFlock.sessionOk h t xS = true) {ins : FlockDeploy.Ins}
+    (ht : t < h.ms.length) {xS : Hash.Msg} (hs : SpotFlock.sessionOk h t xS = true) {ins : FlockDeploy.Ins}
     {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts)) : sts.size = 1 ∧ ins.read.I.count ≤ 1 := by
   have h1 : (SpotFlock.shapeOf (h.xS₀ t)).length = 1 := (SpotFlock.ref_one_table h hd ht).1

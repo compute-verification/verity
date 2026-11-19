@@ -133,13 +133,13 @@ theorem setupTables_size
 
 end Walk
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The masked scope at a statement in scope that sets up**: one to `Tags.MAX_TABLES` tables, the spec names one per
 statement, and every
 table is of `25 ≤ m ≤ 35` (the `--zk` scope's `mMin`, table 0's bound, and every table at table 0's `m`) and commits
 with `hm96-sha512/v1` (the scope check's leaf scheme). -/
-theorem tables_of_setup {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem tables_of_setup {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hscope : Claims.Flock.Scope (deployZk rel) x) (hsetup : setupOf true x = some (s, spec, sts)) :
     0 < sts.size ∧ sts.size ≤ Tags.MAX_TABLES ∧ spec.tables.size = sts.size ∧
       ∀ j (hj : j < sts.size), 25 ≤ sts[j].m ∧ sts[j].m ≤ 35 ∧ sts[j].merkle = MerkleScheme.hm96Sha512 := by
@@ -207,7 +207,7 @@ theorem Case.tables (c : Case H rel) :
 
 /-- **Every table a masked session sets up has `N = 2^D ≥ 1024` mask words** (`MaskRank.maskWords_ge`): `verify --zk`'s
 setup passes every table's `Zk.shapeOk` (`setup_shapeOk`), which refuses a mask slot of fewer than `576` words. -/
-theorem maskWords_ge_of_setup {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem maskWords_ge_of_setup {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (h : setupOf true x = some (s, spec, sts)) :
     ∀ st ∈ sts, ∃ D, 10 ≤ D ∧ (Composed.maskWordsOf st).length = 2 ^ D := by
   obtain ⟨hi, hs⟩ := setupOf_some h

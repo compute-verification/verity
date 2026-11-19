@@ -241,7 +241,7 @@ from verity.protocols.resource_accounting.network.verifier.certificate import (C
     SignerRefused, StartRefused)
 from verity.protocols.resource_accounting.network.verifier.grid import GridParams, BlockGrid, Status, row_count
 from verity.protocols.resource_accounting.network.verifier.pacer import ClockRefused, raw_clock
-from verity.protocols.resource_accounting.network.verifier.release import WATERMARK_PATH
+from verity.release import WATERMARK_PATH
 from verity.protocols.resource_accounting.network.verifier.network_attester import (EGRESS_FORMS, INTEGER_FIELDS, Shim, NetworkAttester,
     NetworkAttesterParams, cells)
 from verity.protocols.resource_accounting.network.verifier.relay_check import (CELLS_TIMING, CERTIFIED, EGRESS, ENDPOINTS,
@@ -1261,7 +1261,10 @@ def rehearse(args) -> int:
     scratch = Path(tempfile.mkdtemp(prefix="network-certifier-serve-"))
     procs: list[subprocess.Popen] = []
     try:
-        make_key(scratch / "network_certifier", args.height)
+        # the device's check is held to the key it made and the session it drew, never to the run's own record
+        session = secrets.token_hex(32)
+        under = hashlib.sha512(lms.public_key(make_key(scratch / "network_certifier", args.height))).digest(), \
+            bytes.fromhex(session)
         if load:
             try:
                 lr.relay_load(args.load_store, LK.SHAPES[args.load_shape], args.load_sinks, args.load_program, out,
@@ -1287,7 +1290,7 @@ def rehearse(args) -> int:
             serving = subprocess.Popen(me + ["serve", "--upstream", "%s:%d" % upstream, "--listen",
                                              "%s:%d" % args.listen if kept else "127.0.0.1:0",
                                              "--out", str(out), "--key", str(scratch / "network_certifier"), "--session",
-                                             secrets.token_hex(32), "--windows", str(windows), "--start-in",
+                                             session, "--windows", str(windows), "--start-in",
                                              str(args.start_in), "--slack", str(args.slack), "--paced-ms",
                                              str(args.paced_ms), *_flags(args), *rp.flags_of(params),
                                              *(["--watermark"] if args.watermark else []),
@@ -1305,7 +1308,7 @@ def rehearse(args) -> int:
             if proc.poll() is None:
                 proc.terminate()
         shutil.rmtree(scratch)
-    result = check(out) | {"upstream": list(upstream), "model": model, "exit": {"serve": serve_exit,
+    result = check(out, under=under) | {"upstream": list(upstream), "model": model, "exit": {"serve": serve_exit,
                                                                               "client": client_exit}}
     (out / "check.json").write_text(json.dumps(result, indent=1))
     print(table(result), flush=True)

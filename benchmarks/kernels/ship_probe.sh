@@ -7,10 +7,13 @@
 #   - nvcc itself must give two cubins. Were they one, the probe would follow no path and the second comparison would
 #     show nothing;
 #   - ship_nvcc.sh must give one. Were they two, a ship's cubins would follow where their sources sit.
-# Either failing refuses the build, naming which. Needs CUDA (the toolkit) and TMPDIR, as ship_nvcc.sh does.
+# Either failing refuses the build, naming which. Needs CUDA (the toolkit) and TMPDIR, as ship_nvcc.sh does, and the
+# build's target as its argument (ship_cuda passes the build's ARCH), the probe compiled for it.
 set -euo pipefail
 : "${CUDA:?the toolkit, which ship_cuda sets}" "${TMPDIR:?which the frame of ship.sh sets}"
 SHIP_NVCC=$(dirname "${BASH_SOURCE[0]}")/ship_nvcc.sh
+arch=${1:?the target of the build, which ship_cuda passes (its ARCH)}
+gencode=$(python3 "$(dirname "${BASH_SOURCE[0]}")/machine.py" gencode "$arch")
 p=$(mktemp -d "$TMPDIR/ship_probe.XXXXXXXX"); trap 'rm -rf "$p"' EXIT
 places=("$p/as_is" "$p/moved/to_another_depth/under_other_names")
 includes=("probe.cuh" "headers/of_its_own/probe.cuh")
@@ -29,7 +32,7 @@ PROBE
   echo "__device__ inline unsigned mix(unsigned x) { return x * 2654435761u + 1u; }" > "${places[i]}/${includes[i]}"
 done
 # a ship's cubin flags (ship_cubin_flags), less ptxas's report
-flags=(-O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -fmad=false -cubin)
+flags=(-O3 -std=c++17 -gencode "$gencode" -fmad=false -cubin)
 for cc in "$CUDA/bin/nvcc" "$SHIP_NVCC"; do
   for i in 0 1; do
     "$cc" "${flags[@]}" -o "$p/$(basename "$cc").$i.cubin" "${places[i]}/probe.cu" || {

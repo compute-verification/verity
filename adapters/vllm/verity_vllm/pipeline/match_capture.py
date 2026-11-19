@@ -38,7 +38,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from verity_vllm import settings
+from verity_vllm import messages, settings
 from verity_vllm.records.schema_ids import SPEC_TOKENS_SCHEMA
 
 if TYPE_CHECKING:
@@ -313,13 +313,18 @@ def main(args: Options) -> None:
             from verity_vllm.acquire.install import OccurrenceSink, install_from_plan
 
             acq_sink = OccurrenceSink()
-            acq_inst = install_from_plan(plan, eng.model, getattr(eng, "runner", None), sink=acq_sink)
+            acq_inst = install_from_plan(plan, eng.model, getattr(eng, "runner", None))
+            acq_keys = set(acq_inst.keys())
+            acq_unsubscribe = messages.current().subscribe(
+                "acquisition", "values",
+                lambda e: (k := (e.block, e.port, e.slot)) in acq_keys and acq_sink(k, e.value))
             print(f"[m1] acquisition plan hooks installed beside the observer: {len(acq_inst.installed)} sites "
                   f"({len(acq_inst.deferred)} deferred to their sources: taps / registered inputs / prescribed)", flush=True)
         t0 = time.perf_counter()
         tokens, timing = va.run_requests(eng, wl["requests"], wl["sampling"])
         run_s = time.perf_counter() - t0
         if plan is not None:
+            acq_unsubscribe()
             acq_inst.remove()                                  # before cap.close() restores the runner's sample(): the wraps unwind in order
             obs = acq_sink.to_json()
             obs["plan_digest"] = plan.digest

@@ -573,14 +573,14 @@ record and is kept. -/
 theorem executionPhaseAt_raw {inner : Inner} {p : AuditParams} {r : Read} {ledger pins : Json} {bs : Core.Blobs}
     {st st' : Progress} {w : _root_.Spot.MonitoringPeriod.Run} {we : RunEvidence}
     (h : executionPhaseAt inner p r ledger pins bs st w we = .ok st') :
-    ∃ (au : Audited) (opened : Json) (lc : LiveCommitment) (roots : Roots) (d : String) (k : Case) (record : Json)
+    ∃ (au : Audited) (opened : Json) (lc : LiveCommitment) (log : Log) (d : String) (k : Case) (record : Json)
         (o : Core.Outcome OneStage.Public Core.Integrity),
       auditedIn r.wins r.periods (Json.mkObj [("root", Json.str w.root)]) = .ok (au, opened) ∧
       pinsReason au.session opened pins = none ∧
       firstParentReason au.session au.pinned p.main = none ∧
-      challengePhaseNamed au p.ledger.key we.session = .ok (lc, roots) ∧
+      challengePhaseNamed au p.ledger.key we.session = .ok (lc, log) ∧
       withheldOn ledger w.root = true ∧
-      (sampledOn w.root roots).toList = [d] ∧
+      (sampledOn w.root (byFamily lc log)).toList = [d] ∧
       we.audits.toList = [k] ∧
       caseAt inner p ledger pins we.session w d st.before k bs = .ok (record, o) ∧
       ((∃ published profile, o = .accept published profile ∧
@@ -588,14 +588,14 @@ theorem executionPhaseAt_raw {inner : Inner} {p : AuditParams} {r : Read} {ledge
                           passed := st.passed.push
                             { window := w, audits := #[{ registration := d, published, profile }] } }) ∨
         (∃ why, st' = { st with before := st.before.push record, undecided := st.undecided <|> some why })) := by
-  refine of_triple (Q := fun st' => ∃ (au : Audited) (opened : Json) (lc : LiveCommitment) (roots : Roots)
+  refine of_triple (Q := fun st' => ∃ (au : Audited) (opened : Json) (lc : LiveCommitment) (log : Log)
         (d : String) (k : Case) (record : Json) (o : Core.Outcome OneStage.Public Core.Integrity),
       auditedIn r.wins r.periods (Json.mkObj [("root", Json.str w.root)]) = .ok (au, opened) ∧
       pinsReason au.session opened pins = none ∧
       firstParentReason au.session au.pinned p.main = none ∧
-      challengePhaseNamed au p.ledger.key we.session = .ok (lc, roots) ∧
+      challengePhaseNamed au p.ledger.key we.session = .ok (lc, log) ∧
       withheldOn ledger w.root = true ∧
-      (sampledOn w.root roots).toList = [d] ∧
+      (sampledOn w.root (byFamily lc log)).toList = [d] ∧
       we.audits.toList = [k] ∧
       caseAt inner p ledger pins we.session w d st.before k bs = .ok (record, o) ∧
       ((∃ published profile, o = .accept published profile ∧
@@ -626,14 +626,14 @@ def StepOk (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs
 theorem executionPhaseAt_step {inner : Inner} {p : AuditParams} {c : Commitment} {e : Evidence} {bs : Core.Blobs} {r : Read}
     {st st' : Progress} {w : _root_.Spot.MonitoringPeriod.Run} {we : RunEvidence}
     (h : executionPhaseAt inner p r c.ledger e.pins bs st w we = .ok st') : StepOk inner p c e bs r st w we st' := by
-  obtain ⟨au, opened, lc, roots, d, k, record, o, h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := executionPhaseAt_raw h
+  obtain ⟨au, opened, lc, log, d, k, record, o, h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := executionPhaseAt_raw h
   obtain ⟨cm, q, ev, c1, c2, c3, c4, c5, c6⟩ := caseAt_ok h8
   obtain ⟨hrec, ho⟩ := Prod.mk.inj c6
   unfold StepOk
   rcases h9 with ⟨published, profile, hacc, hst⟩ | ⟨why, hst⟩
   · subst hst
     refine Or.inl ⟨{ registration := d, published, profile }, record, rfl, rfl, rfl, ?_⟩
-    exact ⟨au, opened, lc, roots, k, cm, q, ev, h1, h2, h3, h4, h5, Array.ext' h6, Array.ext' h7, c1, c2, hrec, c3,
+    exact ⟨au, opened, lc, log, k, cm, q, ev, h1, h2, h3, h4, h5, Array.ext' h6, Array.ext' h7, c1, c2, hrec, c3,
       c4, c5, ho.symm.trans hacc⟩
   · subst hst
     refine Or.inr ?_

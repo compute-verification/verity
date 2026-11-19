@@ -4,10 +4,10 @@
 
 The kernels hash rows of K 8-bit codes then a 4-byte word, so a table's leaf value is that row followed by its 192-byte salt,
 and its root is `hiding_rows`' when the table's layout says so (`layout`): the domain id is ``audit.rows_domain``'s (the
-host's), the step's nonce is ``bytes(4) || u64le nonce`` and the table starts at the step's row 0 in rank order, so row i's salt
-is ChaCha20 blocks 3i .. 3i + 2 at that nonce, ``hiding_rows``' keystream. An A table is the call's T slots of K s8 codes and
-f32 scale; a z table's leaf is a ``ZY_BYTES`` record, its first ``ZY_BYTES - 4`` bytes as the codes and its last 4 as the word
-(`record_rows`). The step's own root, over its one table, is not read.
+host's) and the table starts at the step's row 0 in rank order, so row i's salt is the given salts' bytes
+[192 i, 192 i + 192): the run's fresh salts at the table's nonce, which ``hiding_rows`` takes too, copied to the device and
+read there as data. An A table is the call's T slots of K s8 codes and f32 scale; a z table's leaf is a ``ZY_BYTES``
+record, its first ``ZY_BYTES - 4`` bytes as the codes and its last 4 as the word (`record_rows`). The step's own root, over its one table, is not read.
 
 `device_hash` launches a call's tables on one of the device's side streams (`STREAMS`, in turn) behind everything the current
 stream has enqueued, nothing waiting on the host, and hands back a `Pending` whose `roots` waits for them: `H1Run` reads a
@@ -56,23 +56,26 @@ MODES = ("auto", "gpu", "host", "python")
 STREAMS = 4
 #: whether a served call's z table is committed with its registered ``zy@<c>`` where both hash on the GPU (`take_z`)
 FUSE = True
-_M32 = 0xFFFFFFFF
 
 
-def layout(domain_id: bytes, key: bytes, nonce: int, n: int, k: int) -> tuple[np.ndarray, RTD.Args]:
-    """The kernels' step of one table of ``n`` rows of ``k`` codes and a 4-byte word under ``domain_id``, salted by ChaCha20
-    under the 32-byte ``key`` at the u64 ``nonce``: its ``Tab`` (14 u64 words, the codes' and words' addresses zero until
-    bound) and its ``Args``."""
-    if n < 1 or k < 2 or k % 2 or 3 * n > 1 << 32 or len(domain_id) != 64 or len(key) != 32 or not 0 <= nonce < 1 << 64:
-        raise ValueError(f"{n} rows of {k} codes under a {len(domain_id)}-byte domain id, a {len(key)}-byte key and nonce "
-                         f"{nonce}: not 1 to 2^32 / 3 rows of an even K >= 2, a 64-byte id, a 32-byte key and a u64 nonce")
+def layout(domain_id: bytes, n: int, k: int) -> tuple[np.ndarray, RTD.Args]:
+    """The kernels' step of one table of ``n`` rows of ``k`` codes and a 4-byte word under ``domain_id``: its ``Tab`` (14
+    u64 words, the codes' and words' addresses zero until bound) and its ``Args``, whose ``salts`` the caller binds to the
+    table's given salts where the kernels run."""
+    if n < 1 or k < 2 or k % 2 or 3 * n > 1 << 32 or len(domain_id) != 64:
+        raise ValueError(f"{n} rows of {k} codes under a {len(domain_id)}-byte domain id: not 1 to 2^32 / 3 rows of an even "
+                         "K >= 2 and a 64-byte id")
     s = -(-(k + 4) // RTD.SEG_BYTES)
     tab = np.concatenate([np.asarray([0, 0, k | n << 32, s << 32, 0, RTD.table_width(n)], np.uint64), RTD.u64_words(domain_id)])
     args = RTD.Args()
-    args.key[:] = np.frombuffer(key, "<u4").tolist()
-    args.nonce[:] = [0, nonce & _M32, nonce >> 32]
     args.T = 1
     return tab, args
+
+
+def _salts(salts: bytes, n: int) -> np.ndarray:
+    if len(salts) != 192 * n:
+        raise ValueError(f"one 192-byte salt per row: {len(salts)} bytes for {n} rows")
+    return np.frombuffer(salts, np.uint8).copy()
 
 
 def _root(words: np.ndarray) -> bytes:
@@ -94,18 +97,19 @@ def _host(x: Any) -> np.ndarray:
     return np.ascontiguousarray(x.detach().cpu().numpy() if hasattr(x, "detach") else np.asarray(x))
 
 
-def host_roots(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes) -> list[bytes]:
-    """Each table's root, ``(domain_id, nonce, codes, words)`` with codes ``(n, K)`` of 8-bit and words ``(n,)`` of 32-bit
-    values, by the kernels' functions on the CPU: the device path's twin."""
+def host_roots(tables: Sequence[tuple[bytes, bytes, Any, Any]]) -> list[bytes]:
+    """Each table's root, ``(domain_id, salts, codes, words)`` with codes ``(n, K)`` of 8-bit and words ``(n,)`` of 32-bit
+    values and n 192-byte salts concatenated, by the kernels' functions on the CPU: the device path's twin."""
     out = []
-    for did, nonce, c, w in tables:
+    for did, salts, c, w in tables:
         codes, words = _host(c), _host(w)
         if codes.ndim != 2 or codes.itemsize != 1 or words.itemsize != 4 or words.shape != (codes.shape[0],):
             raise ValueError(f"codes {codes.shape} of {codes.dtype} and words {words.shape} of {words.dtype} are not (n, K) "
                              "8-bit and (n,) 32-bit")
         n, k = codes.shape
-        tab, args = layout(did, key, nonce, n, k)
-        tab[0], tab[1] = codes.ctypes.data, words.ctypes.data
+        tab, args = layout(did, n, k)
+        ys = _salts(salts, n)
+        tab[0], tab[1], args.salts = codes.ctypes.data, words.ctypes.data, ys.ctypes.data
         roots = np.zeros(16, np.uint64)
         rc = RTD.host_lib().rt_step_host(tab.reshape(1, -1), np.arange(n, dtype=np.uint32), n * (int(tab[3]) >> 32), n,
                                          RTD.hm_tables(), RTD.leaf_prefixes(), ctypes.byref(args), roots)
@@ -188,7 +192,7 @@ class Pending:
         return [_root(host[i, 8:]) for i in range(len(host))]
 
 
-def device_hash(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes, names: tuple[str, ...] = ("a", "z")) -> Pending:
+def device_hash(tables: Sequence[tuple[bytes, bytes, Any, Any]], names: tuple[str, ...] = ("a", "z")) -> Pending:
     """`host_roots` hashed on the next side stream of the tables' device, after everything its current stream has enqueued
     so far, every codes and words a contiguous CUDA tensor there, nothing waiting on the host; ``names`` the call's tables
     they are (`Pending.names`)."""
@@ -197,32 +201,36 @@ def device_hash(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes, names
     dev = tables[0][2].device
     if dev.type != "cuda":
         raise ValueError(f"device_hash hashes CUDA tensors, not tensors on {dev}")
-    for _did, _nonce, c, w in tables:
+    for _did, _salts_, c, w in tables:
         if c.device != dev or w.device != dev or c.dim() != 2 or c.element_size() != 1 or w.element_size() != 4 \
                 or tuple(w.shape) != (c.shape[0],) or not c.is_contiguous() or not w.is_contiguous():
             raise ValueError(f"codes {tuple(c.shape)} and words {tuple(w.shape)} are not contiguous (n, K) 8-bit and (n,) "
                              f"32-bit tensors on {dev}")
     d = _device(torch, dev)
-    laid = [layout(did, key, nonce, int(c.shape[0]), int(c.shape[1])) for did, nonce, c, _w in tables]
+    laid = [layout(did, int(c.shape[0]), int(c.shape[1])) for did, _salts_, c, _w in tables]
     tabs = np.stack([tab for tab, _args in laid])
-    for i, (_did, _nonce, c, w) in enumerate(tables):
+    for i, (_did, _salts_, c, w) in enumerate(tables):
         tabs[i, 0], tabs[i, 1] = c.data_ptr(), w.data_ptr()
+    ys = torch.from_numpy(np.concatenate([_salts(y, int(c.shape[0])) for _did, y, c, _w in tables])).pin_memory()
     # each table's scratch, in 64-byte units: its segment digests, leaves, tree and step tree; then every table's output
     units = [(n * s, n, RTD.table_width(n), 2) for n, s in ((int(t[2]) >> 32, int(t[3]) >> 32) for t, _args in laid)]
     staged = torch.from_numpy(tabs.view(np.int64)).pin_memory()
     meta = staged.to(dev, non_blocking=True)
-    perm = d.ranks(torch, max(int(c.shape[0]) for _did, _nonce, c, _w in tables))
+    salts = ys.to(dev, non_blocking=True)
+    perm = d.ranks(torch, max(int(c.shape[0]) for _did, _salts_, c, _w in tables))
     written = torch.cuda.Event()
     written.record(torch.cuda.current_stream(dev))
     side = d.next_stream()
     side.wait_event(written)
-    inputs = (meta, perm, *(x for _did, _nonce, c, w in tables for x in (c, w)))
+    inputs = (meta, salts, perm, *(x for _did, _salts_, c, w in tables for x in (c, w)))
     for x in inputs:
         x.record_stream(side)
     with torch.cuda.stream(side):
         scratch = torch.empty(8 * (sum(map(sum, units)) + 2 * len(laid)), dtype=torch.int64, device=dev)
         at, outs = scratch.data_ptr(), scratch[-16 * len(laid):].view(len(laid), 16)
+        first = salts.data_ptr()
         for i, ((_tab, args), (segs, n, w, st)) in enumerate(zip(laid, units)):
+            args.salts, first = first, first + 192 * n
             dig, leaves, tree, step = at, at + 64 * segs, at + 64 * (segs + n), at + 64 * (segs + n + w)
             at += 64 * (segs + n + w + st)
             rc = d.lib.rt_step(side.cuda_stream, meta.data_ptr() + 8 * RTD.TAB_WORDS * i, perm.data_ptr(), segs, n,
@@ -234,12 +242,12 @@ def device_hash(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes, names
         host.copy_(outs, non_blocking=True)
         done = torch.cuda.Event()
         done.record(side)
-    return Pending(done, host, (staged, scratch, *inputs), names)
+    return Pending(done, host, (staged, ys, scratch, *inputs), names)
 
 
-def device_roots(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes) -> list[bytes]:
+def device_roots(tables: Sequence[tuple[bytes, bytes, Any, Any]]) -> list[bytes]:
     """`device_hash`'s roots, waited for."""
-    return device_hash(tables, key).roots()
+    return device_hash(tables).roots()
 
 
 def row_words(t: Any, m: int, dtype: str) -> np.ndarray:
@@ -261,19 +269,19 @@ def _fuses(run: Any, records: Any) -> bool:
             and D.zy_available())
 
 
-def take_z(run: Any, call: Any, words: Any) -> tuple[bytes, int] | None:
+def take_z(run: Any, call: Any, words: Any) -> tuple[bytes, bytes] | None:
     """The call's z table for its registered ``zy@<c>`` to commit (`pouw_h1_registered.commit`'s ``also``), when it waits
-    for it and ``words``, the value's rows, are its records' own bytes: its ``(domain id, nonce)``, after which the
+    for it and ``words``, the value's rows, are its records' own bytes: its ``(domain id, salts)``, after which the
     registration puts its root in ``run``'s roots. Else None, and `flush` hashes it."""
     held = getattr(run, "_zy", None)
     if held is None or held[0] != call.index:
         return None
-    _index, records, did, nonce = held
+    _index, records, did, salts = held
     if not (getattr(words, "is_cuda", False) and str(words.dtype) == "torch.uint16" and words.is_contiguous()
             and words.data_ptr() == records.data_ptr() and tuple(words.shape) == (records.shape[0], records.shape[1] // 2)):
         return None
     run._zy = None
-    return did, nonce
+    return did, salts
 
 
 def flush(run: Any) -> None:
@@ -283,8 +291,8 @@ def flush(run: Any) -> None:
     if held is None:
         return
     run._zy = None
-    index, records, did, nonce = held
-    run._hashing.append((index, device_hash([(did, nonce, *record_rows(records))], run._key, ("z",))))
+    index, records, did, salts = held
+    run._hashing.append((index, device_hash([(did, salts, *record_rows(records))], ("z",))))
 
 
 def _kernel_tables(run: Any, call: Any, a: Any, s_a: Any, zy: Any, where: str) -> None:
@@ -306,20 +314,20 @@ def _kernel_tables(run: Any, call: Any, a: Any, s_a: Any, zy: Any, where: str) -
     elif zy is not None:
         records = torch.as_tensor(zy).to(dev)
         if where == "gpu" and _fuses(run, records):
-            binding, nonce = _binding(run, call, "z")
-            run._zy = (call.index, records, rows_domain(binding, call.index, len(records), HM96).domain_id, nonce)
+            binding, salts = _binding(run, call, "z", len(records))
+            run._zy = (call.index, records, rows_domain(binding, call.index, len(records), HM96).domain_id, salts)
         else:
             tables.append(("z", *record_rows(records)))
     laid = []
     for name, c, w in tables:
-        binding, nonce = _binding(run, call, name)
-        laid.append((rows_domain(binding, call.index, len(c), HM96).domain_id, nonce, c, w))
+        binding, salts = _binding(run, call, name, len(c))
+        laid.append((rows_domain(binding, call.index, len(c), HM96).domain_id, salts, c, w))
     run._roots[call.index] = {"a": None, "z": None}
     if where == "gpu":
-        run._hashing.append((call.index, device_hash(laid, run._key, tuple(name for name, _c, _w in tables))))
+        run._hashing.append((call.index, device_hash(laid, tuple(name for name, _c, _w in tables))))
         settle(run, wait=False)
     else:
-        run._roots[call.index].update(zip(("a", "z"), (r.hex() for r in host_roots(laid, run._key))))
+        run._roots[call.index].update(zip(("a", "z"), (r.hex() for r in host_roots(laid))))
 
 
 def commit_tables(run: Any, call: Any, a: Any, s_a: Any, records: np.ndarray | None, zy: Any = None) -> None:

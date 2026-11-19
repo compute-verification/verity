@@ -51,7 +51,6 @@ def main() -> int:
     import a11
     import a11_kinds as K
     from verity.circuits.codec import canonical_json, encode_program
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity_vllm.pipeline import serving_rows as SRW
 
     from verity.circuits.codec import decode_program
@@ -93,7 +92,7 @@ def main() -> int:
     nrows, nouts = a11.unit_rows(new, rows_spec, ins, louts)
     np.savez(out / f"{a.new}.npz", **{f"i.{r}": np.asarray(v, dtype=np.uint16) for r, v in nrows.items()},
              **{f"o.{o}": np.asarray(v, dtype=np.uint16) for o, v in nouts.items()})
-    (out / "units.json").write_bytes(canonical_json(encode_program(P.mixed_population_program([(new, 1)]))))
+    (out / "units.json").write_bytes(canonical_json(encode_program(a11.listed([(new, 1)])[0])))
     kept = [g["instance"] for g in gate if g["new"]]
     staged = {**rec, "unit": new.id, "name": a.new, "n": len(kept), "calls": [rec["calls"][i] for i in kept],
               "event": rec["calls"][kept[0]], "rebound": {"from": a.label, "unit": rec["unit"], "why": a.why, "gate": gate}}

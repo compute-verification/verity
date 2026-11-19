@@ -76,8 +76,8 @@ class Instruction:
     #: The ``trust-dossier/v1`` artifact id (``art:...``) whose computed level this pin cites (``calibration/tc_probe/trust.py``),
     #: from :data:`EVIDENCE_IDS`.
     dossier: str | None = None
-    #: The device trust anchors this instruction on when no Target wraps it and it was measured on a device other than the
-    #: arch's default anchor (``trust.ANCHOR_SKU``); a Target's own ``anchor_device`` takes precedence.
+    #: The device trust anchors this instruction on when no Target wraps it (``calibration/tc_probe/trust.py`` refuses such an
+    #: instruction without one); a Target's own ``anchor_device`` takes precedence.
     anchor_device: str | None = None
 
     def __post_init__(self) -> None:
@@ -278,6 +278,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
             model=ADA_BF16_M16N8K16,
             status="pinned",
+            anchor_device="NVIDIA GeForce RTX 4090",
             evidence=(_ADA_4090, _ADA_RUN, _GOLDEN_BF16, _PIN_BF16),
         ),
         _i(
@@ -305,6 +306,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
             model=HOPPER_BF16_WGMMA_K16,
             status="pinned",  # calibration/tc_probe/trust.py computed PINNED (P1-P5, Ta)
+            anchor_device="NVIDIA H100 SXM5 80GB",
             evidence=(_H100_WGMMA_BF16, _H100_BF16),
         ),
         # --- FP8 Ada mma.sync ----------------------------------------------------------------------------------
@@ -327,6 +329,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="e5m2", b_dtype="e5m2", acc_dtype="f32", scale=None,
             model=ADA_E5M2_M16N8K32,
             status="pinned",
+            anchor_device="NVIDIA GeForce RTX 4090",
             evidence=(_ADA_E5M2_RUN, "model = sm89.mma.m16n8k32.e4m3's pipeline (groups (16,16), width 14, floor -139) with e5m2 products"),
         ),
         # --- FP8 Hopper ----------------------------------------------------------------------------------------
@@ -348,6 +351,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="e5m2", b_dtype="e5m2", acc_dtype="f32", scale=None,
             model=HOPPER_E5M2_K32,
             status="pinned",
+            anchor_device="NVIDIA H100 SXM5 80GB",
             evidence=(_H100_WGMMA_E5M2, "model = sm90.wgmma.m64n8k32.e4m3's pipeline (groups (32,), width 14, floor -139) with e5m2 products"),
         ),
         # --- TF32 Hopper -----------------------------------------------------------------------------------------
@@ -392,6 +396,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
             model=HOPPER_BF16_M16N8K16,
             status="pinned",
+            anchor_device="NVIDIA GeForce RTX 5090",
             evidence=(_RTX5090_BF16, _PIN_BF16),
         ),
         _i(
@@ -446,6 +451,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             model=BLACKWELL_SM120_MXF4,
             # As nvf4: 0 mismatches over the fit sweeps and the fresh-seed sweep (_PIN_FP4); trust computed PINNED.
             status="pinned",
+            anchor_device="NVIDIA GeForce RTX 5090",
             evidence=(_RTX5090_FP4_RE, _PIN_FP4, _PRO6000_MXF4,
                       "the same adder as nvf4 with the UE8M0 scale 2^(code-127) written as mantissa 8 at 2^(code-130) (D18); a "
                       "nonzero sum below the subnormal grid is +0 (D13: BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED refuted); the "
@@ -549,6 +555,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
             model=BLACKWELL_SM100_S8_K32,
             status="pinned",
+            anchor_device="NVIDIA B200",
             evidence=(BLACKWELL_SM100_S8_K32.validated,
                       "SASS UTCIMMA, one per tile kernel; 0 mismatches over 10,334,208 elements: "
                       "run `tc_evidence.run` (tc-evidence `tc_evidence.art`)"),
@@ -561,6 +568,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
             model=BLACKWELL_SM100_S8_K32,
             status="pinned",
+            anchor_device="NVIDIA B200",
             evidence=(BLACKWELL_SM100_S8_K32.validated,
                       "SASS IMMA.16832.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,243,968 elements: "
                       "run `tc_evidence.run` (tc-evidence `tc_evidence.art`)"),
@@ -576,6 +584,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
             model=HOPPER_BF16_M16N8K16,
             status="pinned",
+            anchor_device="NVIDIA B200",
             evidence=(_B200_MMA_BF16,),
         ),
         _i(
@@ -587,6 +596,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue4m3",
             model=BLACKWELL_SM100_NVF4,
             status="pinned",  # calibration/tc_probe/trust.py computed PINNED (P1-P5) from the store
+            anchor_device="NVIDIA B200",
             evidence=(_B200_TCGEN05, _B200_STAGE0,
                       "SASS UTCOMMA.4X, one per tile kernel; 0 mismatches over 16,461,824 elements: the `runs`, in order 303,104; "
                       "6,463,488 + probe3 1,601/1,601; 1,134,592, K=128 chain; "
@@ -603,6 +613,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue8m0",
             model=BLACKWELL_SM100_MXF4,
             status="pinned",  # calibration/tc_probe/trust.py computed PINNED (P1-P5) from the store
+            anchor_device="NVIDIA B200",
             evidence=(_B200_TCGEN05, _B200_STAGE0,
                       "SASS UTCOMMA, one per tile kernel; 0 mismatches over 12,898,304 elements: kind::mxf4 `mxf4` "
                       "(3,956,736 and 3,956,736), kind::mxf4nvf4 2X `mxf4nvf4_2x` (3,956,736 and "
@@ -620,6 +631,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
             model=HOPPER_BF16_WGMMA_K16,
             status="pinned",
+            anchor_device="NVIDIA B200",
             evidence=(_B200_TCGEN05_BF16,),
         ),
         _i(

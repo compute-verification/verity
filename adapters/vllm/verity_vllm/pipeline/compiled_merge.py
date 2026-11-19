@@ -3,7 +3,7 @@
 
 The two arms are separate processes because the treatment's record ops live inside the compiled graphs for the whole process; pairing is
 by run index (control run i <-> treatment run i).  Refuses when the two processes' compilation settings differ (CompilationMode,
-CUDAGraphMode, capture sizes, enforce_eager) or when the generated tokens differ (tokens_digest), so an eager control cannot be paired with
+CUDAGraphMode, capture sizes, enforce_eager) or when the generated tokens differ (their digests in each process's private tokens_digests.jsonl), so an eager control cannot be paired with
 a compiled treatment (and vice versa)."""
 from __future__ import annotations
 
@@ -15,10 +15,16 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import option
+from verity_vllm.pipeline.research_outputs import TOKENS_DIGESTS
 
 
 def _rows(p: Path) -> list[dict]:
     f = p / "runs.jsonl"
+    return [json.loads(line) for line in f.read_text().splitlines() if line.strip()] if f.exists() else []
+
+
+def _digests(p: Path) -> list[dict]:
+    f = p / TOKENS_DIGESTS
     return [json.loads(line) for line in f.read_text().splitlines() if line.strip()] if f.exists() else []
 
 
@@ -127,11 +133,12 @@ def main(a: Options) -> None:
             problems.append("served path: generated kernels not identified in both arms (inductor_kernels.json)")
         elif not kernel_set_equal:
             problems.append(f"served path: the treatment's generated kernel set differs from the control's: {kernel_diff}")
-    tok_c = {r.get("tokens_digest") for r in ctl}
-    tok_t = {r.get("tokens_digest") for r in trt}
-    tokens_equal = bool(tok_c) and tok_c == tok_t and len(tok_c) == 1
+    tok_c = [d["tokens_digest"] for C in Cs for d in _digests(C)]
+    tok_t = [d["tokens_digest"] for T in Ts for d in _digests(T)]
+    tokens_equal = len(tok_c) == len(ctl) > 0 and len(tok_t) == len(trt) > 0 and len(set(tok_c) | set(tok_t)) == 1
     if not tokens_equal:
-        problems.append(f"generated tokens differ across arms/runs: control {sorted(x[:12] for x in tok_c if x)} treatment {sorted(x[:12] for x in tok_t if x)}")
+        problems.append(f"generated tokens differ across arms/runs: {len(set(tok_c) | set(tok_t))} distinct in {TOKENS_DIGESTS} over "
+                        f"{len(tok_c)} control and {len(tok_t)} treatment runs, of {len(ctl)} and {len(trt)} in runs.jsonl")
     n = min(len(ctl), len(trt))
     pairs = []
     for i in range(n):

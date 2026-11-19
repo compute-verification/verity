@@ -73,7 +73,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
 
 from . import segment as SG
 
-#: the scheme's id and the kind `circuit.SCHEMES` records for it (its silicon target)
+#: the scheme's id and the kind its `compile.SCHEMES` registration records (its silicon target)
 SCHEME = "eps1-sm120-h1fx1"
 KIND = "h1fx1"
 #: the seed's domain separator (`seed`); a byte string, as every SHA-512 tag here is

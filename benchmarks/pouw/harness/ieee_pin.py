@@ -5,7 +5,8 @@ GPU, and judges them.
   research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=<you> \
       -- python3 benchmarks/pouw/harness/ieee_pin.py [--toolkit NAME=CUDA_HOME ...]
 
-Toolkits: 12.9.1 from `jobs/toolkit.sh`, 13.0.1 at /usr/local/cuda, unless --toolkit names them; each must be a toolkit of
+Toolkits: 12.9.1 from `jobs/toolkit.sh`, 13.0.1 the run's machine's (`verity_bench.kit.toolkit`),
+unless --toolkit names them; each must be a toolkit of
 `sass_pins.json`, and every one given is judged. A toolkit's target is its name's suffix (13.0.1-sm_90a builds sm_90a and
 runs on an sm_90 card; no suffix, sm_120a), and one run's toolkits share one target, since one leased GPU runs every binary.
 `jobs/pin_target.sh` pins a new one and runs this on it. Per toolkit, on the CPU:
@@ -39,46 +40,66 @@ from pathlib import Path
 #: what `jobs/pin_target.sh` and the tests read
 __all__ = [
     "CASES", "FLOAT", "NORMAL", "PINNED", "PinFailed", "SG", "UNITS_CASES", "arch_of", "build_toolkit", "homes",
-    "judge_run", "nvcc_args",
+    "judge_run", "nvcc_args", "sm_of",
 ]
 
 HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[2]
+# the tree's import roots, as `benchmarks/kernels/machine.py` puts them, for a run under the bare `python3`
+sys.path += [str(p) for p in (ROOT / "benchmarks" / "harness", ROOT / "tools" / "config", ROOT) if str(p) not in sys.path]
+
+from verity.device import load_architecture  # noqa: E402
+from verity_bench import kit  # noqa: E402
 
 
 def _gate():
-    """The SASS gate under the name every file that loads it gives it, so a process holds one: the tree's, or the copy
-    beside this file where the two were copied out of the tree."""
+    """The SASS gate under the name every file that loads it gives it, so a process holds one."""
     name = "pouw_harness_sass_gate"
     if name not in sys.modules:
-        tree = HERE.parent.parent.parent / "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py"
-        spec = importlib.util.spec_from_file_location(name, tree if tree.is_file() else HERE / "sass_gate.py")
+        tree = ROOT / "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py"
+        spec = importlib.util.spec_from_file_location(name, tree)
         sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules[name])
     return sys.modules[name]
 
 
 SG = _gate()
-#: the pinned builds' source: the tree's, beside the pins, or the copy beside this file where the two were copied out
-_TREE_SOURCE = HERE.parent.parent.parent / "verity/protocols/resource_accounting/compute/pouw/prover/ieee_pin.cu"
-SOURCE = _TREE_SOURCE if _TREE_SOURCE.is_file() else HERE / "ieee_pin.cu"
-ARCHS = {"sm_120a": 120, "sm_90a": 90}
+#: the pinned builds' source, beside the pins
+SOURCE = ROOT / "verity/protocols/resource_accounting/compute/pouw/prover/ieee_pin.cu"
+#: the target of a toolkit whose name has no suffix, as sass_pins.json names them
+DEFAULT_TARGET = "sm_120a"
+#: the compute capability (major and minor digits) ieee_pin.cu builds and runs `units_checks` for
+UNITS_SM = 90
+
+
+def architecture(arch: str) -> dict:
+    try:
+        return load_architecture(arch, directory=kit.cards_directory().parent / "architectures")
+    except KeyError as e:
+        raise PinFailed(f"no target {arch}: {e.args[0]}") from None
+
+
+def sm_of(arch: str) -> int:
+    """The compute capability's digits, as a run's device line gives them (``"12.0"`` is 120)."""
+    return int(architecture(arch)["capability"].replace(".", ""))
 
 
 def arch_of(toolkit: str) -> str:
-    arch = toolkit.rsplit("-", 1)[1] if "-sm_" in toolkit else "sm_120a"
-    if arch not in ARCHS:
-        raise PinFailed(f"toolkit {toolkit}: no target {arch} (one of {sorted(ARCHS)})")
+    arch = toolkit.rsplit("-", 1)[1] if "-sm_" in toolkit else DEFAULT_TARGET
+    try:
+        architecture(arch)
+    except PinFailed as e:
+        raise PinFailed(f"toolkit {toolkit}: {e}") from None
     return arch
 
 
 def nvcc_args(arch: str) -> list[str]:
-    return ["-O3", "-std=c++17", "-gencode", f"arch=compute_{arch[3:]},code={arch}", "--no-compress"]
+    return ["-O3", "-std=c++17", "-gencode", kit.arch_gencode(arch), "--no-compress"]
 
 
 PINNED = [[], ["-fmad=false"]]
 CONTROLS = [["--use_fast_math"], ["-ftz=true"], ["-prec-div=false", "-prec-sqrt=false"]]
 SEQUENCES = {"rcp-fast-path", "sqrt-fast-path", "div-fast-path", "int-seed"}
-DEFAULT_HOMES = {"13.0.1": "/usr/local/cuda"}
 LEASE_MINUTES = 30
 _ALL, _HOST = 1 << 32, (1 << 24) - 2 + (1 << 25)
 #: each check ieee_pin.cu prints, and how many inputs it covers (cases plus skipped)
@@ -110,11 +131,19 @@ def toolkit_sh_home() -> str:
     return out.strip()
 
 
+def machine_home(version: str) -> str:
+    """CUDA `version`'s home on the run's machine (`kit.toolkit`): CUDA_HOME, else the one its [properties] list."""
+    try:
+        return kit.toolkit(version)
+    except SystemExit as e:
+        raise PinFailed(str(e)) from None
+
+
 def homes(specs: list[str], pins: dict) -> dict[str, str]:
     if specs:
         out = dict(s.split("=", 1) for s in specs)
     else:
-        out = {"12.9.1": toolkit_sh_home(), **DEFAULT_HOMES}
+        out = {"12.9.1": toolkit_sh_home(), "13.0.1": machine_home("13.0")}
     unknown = sorted(set(out) - set(pins["toolkits"]))
     if unknown:
         raise PinFailed(f"no toolkit {unknown} in sass_pins.json")
@@ -135,13 +164,7 @@ def build_toolkit(tk: str, home: str, work: Path, pins_path: Path, pending: Path
     bin_dir = Path(home) / "bin"
     rec = {"home": home, "nvcc_version": _run([str(bin_dir / "nvcc"), "--version"]).strip(),
            "ptxas_version": _run([str(bin_dir / "ptxas"), "--version"]).strip(), "builds": [], "problems": []}
-    old = os.environ.get("POUW_CUDA_BIN")
-    os.environ["POUW_CUDA_BIN"] = str(bin_dir)
-    try:
-        tools = SG.find_tools()
-    finally:
-        os.environ.pop("POUW_CUDA_BIN") if old is None else os.environ.__setitem__("POUW_CUDA_BIN", old)
-    rec["tools"] = tools
+    tools = rec["tools"] = SG.find_tools(bin_dir)
     for control, flags in [(False, f) for f in PINNED] + [(True, f) for f in CONTROLS]:
         out = work / f"{tk}{''.join(f.replace('=', '_') for f in flags) or '-default'}"
         cmd = [str(bin_dir / "nvcc"), *nvcc_args(arch_of(tk)), *flags, str(SOURCE), "-o", str(out)]
@@ -184,9 +207,10 @@ def run_binaries(work: Path) -> None:
     (work / "runs.json").write_text(json.dumps(runs, indent=1))
 
 
-def judge_run(run: dict, control: bool, sm: int = ARCHS["sm_120a"]) -> list[str]:
-    """What's wrong with one binary's run: [] when a pinned build is exact everywhere on an sm_`sm` card, or a control
-    differs somewhere."""
+def judge_run(run: dict, control: bool, sm: int | None = None) -> list[str]:
+    """What's wrong with one binary's run: [] when a pinned build is exact everywhere on an sm_`sm` card (by default
+    `DEFAULT_TARGET`'s), or a control differs somewhere."""
+    sm = sm_of(DEFAULT_TARGET) if sm is None else sm
     lines = run.get("lines", [])
     dev = next((ln for ln in lines if "device" in ln), None)
     if dev is None:
@@ -203,7 +227,7 @@ def judge_run(run: dict, control: bool, sm: int = ARCHS["sm_120a"]) -> list[str]
         return problems
     if run.get("exit") != 0:
         problems.append(f"exit {run.get('exit')}: {run.get('stderr', '')[-300:]}")
-    cases = {**CASES, **(UNITS_CASES if sm == ARCHS["sm_90a"] else {})}
+    cases = {**CASES, **(UNITS_CASES if sm == UNITS_SM else {})}
     for name, n in cases.items():
         c = checks.get(name)
         if c is None:
@@ -258,7 +282,7 @@ def main(argv: list[str] | None = None) -> int:
         for tk, t in result["toolkits"].items():
             for b in t["builds"]:
                 b["run"] = runs.get(b["binary"], {"exit": None, "lines": []})
-                b["problems"] = judge_run(b["run"], b["control"], ARCHS[arch_of(tk)])
+                b["problems"] = judge_run(b["run"], b["control"], sm_of(arch_of(tk)))
                 b["binary"] = Path(b["binary"]).name
             t["ok"] = not t["problems"] and not any(b["problems"] for b in t["builds"])
     result["ok"] = result["lease_exit"] == 0 and bool(result["toolkits"]) and all(t["ok"] for t in result["toolkits"].values())

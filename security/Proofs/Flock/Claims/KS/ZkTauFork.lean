@@ -165,7 +165,7 @@ open Classical in
 /-- **The simulated fork's alignment at rep `r`'s `τ` at tape `u`**: against the simulated strategy after `Commit`
 at table `j`, the fork at rep `r`'s `τ` node (`advTauSZ`, `zkAdvSim`'s `τ` term) is at most the fork after `t` coins
 of `TauForkEvZ`. -/
-def ZkTauAlignQ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+def ZkTauAlignQ {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -207,7 +207,7 @@ open Classical in
 /-- **The simulated fork's alignment at rep `r`'s `τ` at tape `u`**: against the simulated strategy after `Commit`
 at table `j`, the fork at rep `r`'s `τ` node (`advTauSZ`, `zkAdvSim`'s `τ` term) is at most the fork after `t` coins
 of `TauForkEvZ`. -/
-def ZkTauAlignQ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+def ZkTauAlignQ {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -247,7 +247,7 @@ end Gen
 up at a sample, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s `τ` node
 against the simulated strategy after `Commit` is at most the fork after `zkRd j i` coins of `TauForkEvZ`
 (`ZkTauAlignQ`). -/
-def ZkTauAlign (x : Claims.Msg) : Prop :=
+def ZkTauAlign (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -267,7 +267,7 @@ variable [S : ZkSetup]
 up at a sample, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s `τ` node
 against the simulated strategy after `Commit` is at most the fork after `zkRd j i` coins of `TauForkEvZ`
 (`ZkTauAlignQ`). -/
-def ZkTauAlign (x : Claims.Msg) : Prop :=
+def ZkTauAlign (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -284,7 +284,7 @@ end Gen
 /-- **The live `τ` fork event's collision**: at every masked statement in scope that sets up at a sample, every prover
 and tape, every table `j` and table of full-width columns, two accepting runs of `P` at the masked simulator's coins
 whose decoded live outcomes have `TauForkEvZ` collide among the verifier's calls in the two. -/
-def ZkTauClash (x : Claims.Msg) : Prop :=
+def ZkTauClash (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -317,7 +317,7 @@ variable [S : ZkSetup]
 /-- **The live `τ` fork event's collision**: at every masked statement in scope that sets up at a sample, every prover
 and tape, every table `j` and table of full-width columns, two accepting runs of `P` at the masked simulator's coins
 whose decoded live outcomes have `TauForkEvZ` collide among the verifier's calls in the two. -/
-def ZkTauClash (x : Claims.Msg) : Prop :=
+def ZkTauClash (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -349,7 +349,7 @@ simulated fork at round `t`, where at each tape the fork at the `τ` node is at 
 `TauForkEvZ`: that fork is at most the live fork of the decoded event (`forkC_simAtJZ_le_out`, the dead branches
 opening no `τ`, `not_opensTauZ_nul`), the deployed runs' fork at round `t` (`forkC_liveStratZ`), whose event gives two
 accepting runs (`zkSimAbortAt`) that collide by `ZkTauClash`. -/
-theorem zkAdvTau_le_of {x : Claims.Msg} (hc : ZkTauClash x) {s : Claims.Flock.Stmt}
+theorem zkAdvTau_le_of {x : Hash.Msg} (hc : ZkTauClash x) {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -414,7 +414,7 @@ simulated fork at round `t`, where at each tape the fork at the `τ` node is at 
 `TauForkEvZ`: that fork is at most the live fork of the decoded event (`forkC_simAtJZ_le_out`, the dead branches
 opening no `τ`, `not_opensTauZ_nul`), the deployed runs' fork at round `t` (`forkC_liveStratZ`), whose event gives two
 accepting runs (`zkSimAbortAt`) that collide by `ZkTauClash`. -/
-theorem zkAdvTau_le_of {x : Claims.Msg} (hc : ZkTauClash x) {s : Claims.Flock.Stmt}
+theorem zkAdvTau_le_of {x : Hash.Msg} (hc : ZkTauClash x) {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -438,7 +438,7 @@ variable [S : ZkSetup]
 
 /-- **The fork bound at `τ` from the alignment and the clash**: `ZkSimForkLeOn` at the `τ` events from `ZkTauAlign`
 and `ZkTauClash` (`zkAdvTau_le_of`). -/
-theorem zkSimForkLeTau_of {x : Claims.Msg} (ha : ZkTauAlign x) (hc : ZkTauClash x) :
+theorem zkSimForkLeTau_of {x : Hash.Msg} (ha : ZkTauAlign x) (hc : ZkTauClash x) :
     ZkSimForkLeOn x fun _ i => ∃ r, i = .inl (.inr (.inr r)) := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC i hi
   obtain ⟨r, rfl⟩ := hi
@@ -449,7 +449,7 @@ end Gen
 
 /-- **The fork bound at `τ` from the alignment and the clash**: `ZkSimForkLeOn` at the `τ` events from `ZkTauAlign`
 and `ZkTauClash` (`zkAdvTau_le_of`). -/
-theorem zkSimForkLeTau_of {x : Claims.Msg} (ha : ZkTauAlign x) (hc : ZkTauClash x) :
+theorem zkSimForkLeTau_of {x : Hash.Msg} (ha : ZkTauAlign x) (hc : ZkTauClash x) :
     ZkSimForkLeOn x fun _ i => ∃ r, i = .inl (.inr (.inr r)) :=
   Gen.zkSimForkLeTau_of (S := S₀) (x := x) (ha := ha) (hc := hc)
 

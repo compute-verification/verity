@@ -311,7 +311,8 @@ theorem credited_play {I : ByteArray} {p : Play} (h : p.Honest I) {salt calls se
       (.arr #[.str (Flock.hexOf p.pin)]) (PouwVerifier.get (sampleOf p receipts) "session") (Flock.hexOf root) =
         .ok (p.commitment, [(PouwWindow.DRAW, [root])]) := by
     have hd := Properties.Pouw.Credit.SecurityProofs.drawChallengePhase_honest ht hwo
-    rw [hl, ha, hw] at hd
+    dsimp only at hd
+    rw [Properties.Challenger.Logs.byFamily_oneLog (n := 1) rfl, hl, ha, hw] at hd
     rw [g3]
     exact hd
   have hlive : liveReason p.commitment p.opening p.label 0 p.after = .ok none :=

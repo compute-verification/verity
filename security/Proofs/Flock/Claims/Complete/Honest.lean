@@ -62,8 +62,8 @@ open Flock FlockDeploy
 /-- **The prover's program**: a result, an oracle query, or a send answered by the verifier's reply. -/
 inductive PI (α : Type) where
   | ret : α → PI α
-  | query : Claims.Msg → (Claims.Msg → PI α) → PI α
-  | ask : Claims.Msg → (Claims.Msg → PI α) → PI α
+  | query : Hash.Msg → (Hash.Msg → PI α) → PI α
+  | ask : Hash.Msg → (Hash.Msg → PI α) → PI α
 
 namespace PI
 
@@ -88,7 +88,7 @@ def Hashes.pi : Flock.Hashes PV :=
 
 /-- A coin read back from the verifier's reply: element `i` is the reply's bytes `16i` to `16i + 16`, `le64(lo) ‖ le64(hi)`,
 as `Coin.bytes` writes it. -/
-def coinOf (a : Claims.Msg) : Nat → F128 :=
+def coinOf (a : Hash.Msg) : Nat → F128 :=
   let b := Claims.ofMsg a
   fun i => ⟨u64OfLE b (16 * i), u64OfLE b (16 * i + 8)⟩
 
@@ -99,7 +99,7 @@ def asks : Asks PV where
 
 /-- **The prover's next message**: the program on the replies `bs`: the first send they do not answer, or the program's
 result. Each oracle query is the prover's. -/
-def feed : PI Claims.Msg → List Claims.Msg → Claims.OC Claims.Msg
+def feed : PI Hash.Msg → List Hash.Msg → Claims.OC Hash.Msg
   | .ret a, _ => .ret a
   | .query q k, bs => .query q fun r => feed (k r) bs
   | .ask m _, [] => .ret m
@@ -132,7 +132,7 @@ def tracesOf (sts : Array Flock.Stmt) (w : Claims.Flock.Wit) : Array Trace :=
 /-- **The honest prover's program** on the statement `x`, the witness `w` and the tape `ω`: on the session the
 statement sets up, the honest session, then the last message. A statement that sets up no session, or a session the
 prover cannot run, gets the empty message, which the verifier refuses. -/
-def prog (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : Tape) : PI Claims.Msg :=
+def prog (x : Hash.Msg) (w : Claims.Flock.Wit) (ω : Tape) : PI Hash.Msg :=
   match setupOf false x with
   | none => .ret []
   | some (_, spec, sts) => do

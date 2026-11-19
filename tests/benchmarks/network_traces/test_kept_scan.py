@@ -131,7 +131,7 @@ def _imports() -> tuple:
 
 
 def test_a_windows_slots_are_the_requests_the_scan_starts_there(serve_dir):
-    scan, imports = CLASS.scan, _imports()
+    scan, imports = IS.Class(**CLASS.scan.shape), _imports()
     rows, starts = kept_scan(serve_dir, CLASS, USERS[:3])
     assert starts == [None, "user-0", None, "user-1", None, "user-2", None, None]
     assert len(rows) == CLASS.buckets and rows[0] == IS.encode(scan, IS.empty(scan))
@@ -151,17 +151,19 @@ def test_a_windows_state_rows_are_the_rows_of_the_scans_state_tree(serve_dir):
     scan_zk's `link` builds it), in execution phase 0 and in execution phase 1: what a period's check needs before it can tie
     the two to one root."""
     served, T = _served(), CLASS.buckets
-    states = ST.chain(CLASS.scan, *served.rows(), served.outputs).states[1:]
+    scan = IS.Class(**CLASS.scan.shape)
+    states = ST.chain(scan, *served.rows(), served.outputs).states[1:]
     for w, users in ((0, USERS[:3]), (1, USERS[3:])):
         rows, _ = kept_scan(serve_dir, CLASS, users)
-        assert [list(r) for r in rows] == IS.window_state(CLASS.scan, states, w * T, T)
+        assert [list(r) for r in rows] == IS.window_state(scan, states, w * T, T)
 
 
 def test_the_scan_state_opening_is_the_registered_scan_state_the_scan_holds(serve_dir, tmp_path, monkeypatch):
     """window-commit's `SCAN_STATE` (`window_rows.state_value` of the kept scan's rows, on NumPy, the reference)
     opened whole, prover only (`prove_path.scan_state_opening`), is the tree ``scan_zk.py --v3c`` reads as its state:
-    `scan_zk.v3c_state` finds it at the registered entry's root and domain and holds its rows to the scan's; another
-    execution phase's rows are refused by name."""
+    `scan_zk.v3c_state` finds it at the registered entry's root and domain and holds its rows to the scan's, its salts
+    read from the file alone: a second commit of the same rows, under other fresh salts and another root, is held as
+    well. Another execution phase's rows are refused by name."""
     from verity_vllm.program.predict import window_rows as WRS
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as H1R
 
@@ -169,12 +171,16 @@ def test_the_scan_state_opening_is_the_registered_scan_state_the_scan_holds(serv
     from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
     rows, _ = kept_scan(serve_dir, CLASS, USERS[:3])
     run, program = "ab" * 64, "cd" * 64
-    value = WRS.state_value(program, CLASS, rows, hashlib.sha512(b"committer").digest()[:32], 0, window=run)
-    path = PP.scan_state_opening(value, tmp_path / SZ.SCAN_STATE_FILE)
-    assert path == tmp_path / SZ.SCAN_STATE_FILE and path.stat().st_mode & 0o777 == 0o600
-    rec = {"program": program, "registered": [value.entry()], "window": {"run": run}}
-    held = SZ.v3c_state(tmp_path, rec, [list(r) for r in rows])
-    assert (held.root.hex(), held.domain.domain_id.hex()) == (value.entry()["root"], value.entry()["domain"])
+    roots = []
+    for _ in range(2):
+        value = WRS.state_value(program, CLASS, rows, window=run)
+        path = PP.scan_state_opening(value, tmp_path / SZ.SCAN_STATE_FILE)
+        assert path == tmp_path / SZ.SCAN_STATE_FILE and path.stat().st_mode & 0o777 == 0o600
+        rec = {"program": program, "registered": [value.entry()], "window": {"run": run}}
+        held = SZ.v3c_state(tmp_path, rec, [list(r) for r in rows])
+        assert (held.root.hex(), held.domain.domain_id.hex()) == (value.entry()["root"], value.entry()["domain"])
+        roots.append(held.root.hex())
+    assert roots[0] != roots[1]
     late, _ = kept_scan(serve_dir, CLASS, USERS[3:])
     with pytest.raises(SystemExit, match=r"rows \[.*\] aren't the scan's .* it scanned another network attester run or execution phase"):
         SZ.v3c_state(tmp_path, rec, [list(r) for r in late])

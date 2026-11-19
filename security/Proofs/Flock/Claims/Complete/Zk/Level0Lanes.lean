@@ -62,7 +62,7 @@ variable {α β σ : Type}
 
 /-! ## Runs that only push -/
 
-theorem liftT_ok' {y : TMW PS α} {st st' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg} {a : α}
+theorem liftT_ok' {y : TMW PS α} {st st' : LigState} {t t' : Transcript} {l l' : Array Hash.Msg} {a : α}
     (h : (((liftT y : LP PS α).run st).run t).go l = (.ok ((a, st'), t'), l')) :
     st' = st ∧ (y.run t).go l = (.ok (a, t'), l') := by
   change ((y >>= fun a => Pure.pure (a, st)).run t).go l = _ at h
@@ -106,7 +106,7 @@ theorem grL_modify (g : LigState → LigState) (hg : ∀ s, Grow s (g s)) :
   obtain ⟨-, rfl, -, -⟩ := ok_inj (show (Except.ok (((), g st), t), l) = _ from e)
   exact ⟨hg st, trivial⟩
 
-theorem set_ok {s' st st₁ : LigState} {t t₁ : Transcript} {l l₁ : Array Claims.Msg} {a : PUnit}
+theorem set_ok {s' st st₁ : LigState} {t t₁ : Transcript} {l l₁ : Array Hash.Msg} {a : PUnit}
     (h : (((set s' : LP PS PUnit).run st).run t).go l = (.ok ((a, st₁), t₁), l₁)) : st₁ = s' :=
   (ok_inj (show (Except.ok (((), s'), t), l) = _ from h)).2.1.symm
 
@@ -140,7 +140,7 @@ theorem grL_sendMsg (m : F256 × F256) : grL.T (sendMsg (M := PS) m) fun _ => Tr
     | (with_reducible apply Total.ite)
     | split)
 
-theorem grL_challengeP (resp : ℕ → Claims.Msg) (split : Bool) :
+theorem grL_challengeP (resp : ℕ → Hash.Msg) (split : Bool) :
     grL.T (challengeP (asksS resp) split) fun _ => True := by
   unfold challengeP
   repeat (first
@@ -156,7 +156,7 @@ theorem grL_challengeP (resp : ℕ → Claims.Msg) (split : Bool) :
     | (with_reducible apply Total.ite)
     | split)
 
-theorem grL_oodIntroP (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) (dim : ℕ) :
+theorem grL_oodIntroP (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) (dim : ℕ) :
     grL.T (oodIntroP (asksS resp) nonce g dim) fun _ => True := by
   unfold oodIntroP
   repeat (first
@@ -169,7 +169,7 @@ theorem grL_oodIntroP (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt6
     | (with_reducible apply grL_sendMsg)
     | (with_reducible apply grL_powP))
 
-theorem grL_queryP (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit) :
+theorem grL_queryP (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit) :
     grL.T (queryP (asksS resp) nonce ms lv cm) fun _ => True := by
   unfold queryP
   repeat (first
@@ -192,20 +192,20 @@ theorem Pre.size_le {γ : Type} {A B : Array γ} (h : Pre A B) : A.size ≤ B.si
 /-! ## The lane phase, state by state -/
 
 theorem lmodify_bind {g : LigState → LigState} {f : PUnit → LP PS β} {st : LigState} {t : Transcript}
-    {l l'' : Array Claims.Msg} {r : (β × LigState) × Transcript}
+    {l l'' : Array Hash.Msg} {r : (β × LigState) × Transcript}
     (h : (((modify g >>= f).run st).run t).go l = (.ok r, l'')) : (((f ⟨⟩).run (g st)).run t).go l = (.ok r, l'') := by
   obtain ⟨a, st₁, t₁, l₁, h₁, h₂⟩ := lp_bind_ok h
   obtain ⟨rfl, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), g st), t), l) = _ from h₁)
   exact h₂
 
-theorem lget_bind {f : LigState → LP PS β} {st : LigState} {t : Transcript} {l l'' : Array Claims.Msg}
+theorem lget_bind {f : LigState → LP PS β} {st : LigState} {t : Transcript} {l l'' : Array Hash.Msg}
     {r : (β × LigState) × Transcript} (h : (((MonadState.get >>= f).run st).run t).go l = (.ok r, l'')) :
     (((f st).run st).run t).go l = (.ok r, l'') := by
   obtain ⟨a, st₁, t₁, l₁, h₁, h₂⟩ := lp_bind_ok h
   obtain ⟨rfl, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok ((st, st), t), l) = _ from h₁)
   exact h₂
 
-theorem lliftTM_bind {x : TM α} {f : α → LP PS β} {st : LigState} {t : Transcript} {l l'' : Array Claims.Msg}
+theorem lliftTM_bind {x : TM α} {f : α → LP PS β} {st : LigState} {t : Transcript} {l l'' : Array Hash.Msg}
     {r : (β × LigState) × Transcript} (h : (((liftT (liftTM x) >>= f).run st).run t).go l = (.ok r, l'')) :
     ∃ a t₁, (((f a).run st).run t₁).go l = (.ok r, l'') := by
   obtain ⟨a, st₁, t₁, l₁, h₁, h₂⟩ := lp_bind_ok h
@@ -215,7 +215,7 @@ theorem lliftTM_bind {x : TM α} {f : α → LP PS β} {st : LigState} {t : Tran
   exact ⟨a, t₁, hst ▸ h₂⟩
 
 theorem lsendMsg_bind (m : F256 × F256) {f : Unit → LP PS β} {st : LigState} {t : Transcript}
-    {l l'' : Array Claims.Msg} {r : (β × LigState) × Transcript}
+    {l l'' : Array Hash.Msg} {r : (β × LigState) × Transcript}
     (h : (((sendMsg m >>= f).run st).run t).go l = (.ok r, l'')) :
     ∃ t₁, (((f ()).run { st with msgs := st.msgs.push m }).run t₁).go l = (.ok r, l'') := by
   obtain ⟨a, st₁, t₁, l₁, h₁, h₂⟩ := lp_bind_ok h
@@ -224,7 +224,7 @@ theorem lsendMsg_bind (m : F256 × F256) {f : Unit → LP PS β} {st : LigState}
   exact ⟨_, h₂⟩
 
 theorem lpowB_bind (nonce : ℕ → ℕ → UInt64) {f : Unit → LP PS β} {st : LigState} {t : Transcript}
-    {l l'' : Array Claims.Msg} {r : (β × LigState) × Transcript}
+    {l l'' : Array Hash.Msg} {r : (β × LigState) × Transcript}
     (h : (((powP nonce 2 >>= f).run st).run t).go l = (.ok r, l'')) :
     ∃ t₁, (((f ()).run { st with cbn := st.cbn.push 0 }).run t₁).go l = (.ok r, l'') := by
   obtain ⟨a, st₁, t₁, l₁, h₁, h₂⟩ := lp_bind_ok h
@@ -232,22 +232,22 @@ theorem lpowB_bind (nonce : ℕ → ℕ → UInt64) {f : Unit → LP PS β} {st 
     ap (pN 0) t), l) = _ from h₁)
   exact ⟨_, h₂⟩
 
-theorem lpure_ok {b b' : β} {st st' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg}
+theorem lpure_ok {b b' : β} {st st' : LigState} {t t' : Transcript} {l l' : Array Hash.Msg}
     (h : (((Pure.pure b : LP PS β).run st).run t).go l = (.ok ((b', st'), t'), l')) : b = b' ∧ st = st' ∧ l = l' :=
   have e := ok_inj (show (Except.ok ((b, st), t), l) = _ from h)
   ⟨e.1, e.2.1, e.2.2.2⟩
 
 /-- **A loop over `[0:n]`** whose every step, from a loop state, prover state and bodies with `I j`, yields ones with
 `I (j + 1)`, ends with `I n`. -/
-theorem lforIn_invS (body : ℕ → σ → LP PS (ForInStep σ)) (I : ℕ → σ → LigState → Array Claims.Msg → Prop) (n : ℕ)
+theorem lforIn_invS (body : ℕ → σ → LP PS (ForInStep σ)) (I : ℕ → σ → LigState → Array Hash.Msg → Prop) (n : ℕ)
     (hb : ∀ j < n, ∀ s st t l r st' t' l', I j s st l → (((body j s).run st).run t).go l = (.ok ((r, st'), t'), l') →
       ∃ s', r = .yield s' ∧ I (j + 1) s' st' l')
-    {s : σ} {st : LigState} {t : Transcript} {l : Array Claims.Msg} {s' : σ} {st' : LigState} {t' : Transcript}
-    {l' : Array Claims.Msg} (h₀ : I 0 s st l)
+    {s : σ} {st : LigState} {t : Transcript} {l : Array Hash.Msg} {s' : σ} {st' : LigState} {t' : Transcript}
+    {l' : Array Hash.Msg} (h₀ : I 0 s st l)
     (h : (((forIn [:n] s body).run st).run t).go l = (.ok ((s', st'), t'), l')) : I n s' st' l' := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range'] at h
   simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one] at h
-  suffices key : ∀ k a (s : σ) st t (l : Array Claims.Msg), a + k = n → I a s st l →
+  suffices key : ∀ k a (s : σ) st t (l : Array Hash.Msg), a + k = n → I a s st l →
       (((forIn (List.range' a k) s body).run st).run t).go l = (.ok ((s', st'), t'), l') → I n s' st' l' from
     key n 0 s st t l (by omega) h₀ h
   intro k
@@ -269,10 +269,10 @@ theorem foldKs_take_succ (ch : List F256) {j : ℕ} (hj : j < ch.length) (x : Ar
   rw [List.take_add_one, List.getElem?_eq_getElem hj, Option.toList_some, foldKs, foldKs, List.foldl_append]
   rfl
 
-theorem laneCh_length (resp : ℕ → Claims.Msg) (k0 L : ℕ) : (ZkTables.Level0.laneCh resp k0 L).length = k0 := by
+theorem laneCh_length (resp : ℕ → Hash.Msg) (k0 L : ℕ) : (ZkTables.Level0.laneCh resp k0 L).length = k0 := by
   simp [ZkTables.Level0.laneCh]
 
-theorem laneCh_get (resp : ℕ → Claims.Msg) (k0 L : ℕ) {j : ℕ} (hj : j < (ZkTables.Level0.laneCh resp k0 L).length) :
+theorem laneCh_get (resp : ℕ → Hash.Msg) (k0 L : ℕ) {j : ℕ} (hj : j < (ZkTables.Level0.laneCh resp k0 L).length) :
     (ZkTables.Level0.laneCh resp k0 L)[j] = coinKOf (resp (L + 2 + j)) := by
   simp [ZkTables.Level0.laneCh]
 
@@ -288,9 +288,9 @@ open ZkTables.Level0 in
 since `L` (and the pair's two once `j = k_0`); the out-of-domain value `y`; messages `0` to `j`, the first `k_0` of
 them `roundPoly` of the folds masked; before `k_0` the table and weights folded at the first `j` coins; at `k_0` the
 pair's coins, sums and blinded claim. -/
-def LaneInv (resp : ℕ → Claims.Msg) (sch : Schedule) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128)
+def LaneInv (resp : ℕ → Hash.Msg) (sch : Schedule) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128)
     (rep : ℕ) (extra : ℕ → ℕ → F128) (L : ℕ) (y : F128) (j : ℕ) (s : Array F256 × (F256 × F256) × Zk.Level0Msgs)
-    (st : LigState) (l : Array Claims.Msg) : Prop :=
+    (st : LigState) (l : Array Hash.Msg) : Prop :=
   s.1.size = j ∧ (∀ i < j, s.1[i]! = coinKOf (resp (L + 2 + i))) ∧
   l.size = L + 2 + j + (if j = sch.k0 then 2 else 0) ∧ st.oods = #[y] ∧ st.msgs.size = j + 1 ∧
   (∀ i < j + 1, i < sch.k0 → st.msgs[i]! = maskMsg lay hv i
@@ -314,10 +314,10 @@ open ZkTables.Level0 in
 /-- **The masked Ligerito prover's lane phase in closed form**: a masked Ligerito prover that returns, run in the pure
 session from the bodies `l`, has `LaneForm`'s record, out-of-domain value, lane messages, pair's sums and blinded claim
 at `L = |l|`. -/
-theorem ligeritoPZk_lanes (resp : ℕ → Claims.Msg) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule) (T : F128)
+theorem ligeritoPZk_lanes (resp : ℕ → Hash.Msg) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule) (T : F128)
     (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (hn : sch.n ≠ 0)
-    (hk0 : 1 ≤ sch.k0) {t t' : Transcript} {l l' : Array Claims.Msg} {P : LigeritoProof} {zl : Zk.Level0Msgs}
+    (hk0 : 1 ≤ sch.k0) {t t' : Transcript} {l l' : Array Hash.Msg} {P : LigeritoProof} {zl : Zk.Level0Msgs}
     {rc : Zk.L0Rec}
     (hrun : ((ligeritoPZk (asksS resp) hs ms sch T cm0 tb b lay hv rep tPad extra lanePad salt nonce).run t).go l =
       (.ok ((P, zl, rc), t'), l')) :

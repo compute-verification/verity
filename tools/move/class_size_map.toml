@@ -1,0 +1,25 @@
+# SPOT's class-size projection prices a window class with its Llama-3.2-1B measurements; nothing in `verity/` imports it,
+# and its callers (`window_cost.py`, `prove_path.py class-size`) and its sources (`sources.json`) are in
+# `benchmarks/prove_path/`, where it goes. `tools/move/layout.py --map tools/move/class_size_map.toml` moves and rewrites.
+
+[roots]
+old = { circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", datacenter = "benchmarks/datacenter/datacenter", research = "tools/research/src/research", slowdown = "benchmarks/slowdown/slowdown", verity = "verity", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_machine_model = "calibration/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm" }
+new = { circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", datacenter = "benchmarks/datacenter/datacenter", research = "tools/research/src/research", slowdown = "benchmarks/slowdown/slowdown", verity = "verity", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_machine_model = "calibration/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm" }
+
+[paths]
+"verity/protocols/proofs/spot/prover/audit/class_size.py" = "benchmarks/prove_path/class_size.py"
+
+[modules]
+"verity.protocols.proofs.spot.prover.audit.class_size" = "benchmarks.prove_path.class_size"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was, files whose bytes a digest pins, every Lean input and lock.
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "*.patch",
+           "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "tools/research/src/research/store/moves.json", "**/*.lean",
+           "**/lean-audit.json", "tests/interfaces_ratchet.json"]

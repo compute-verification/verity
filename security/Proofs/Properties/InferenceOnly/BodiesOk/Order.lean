@@ -43,6 +43,7 @@ def partNames : Part → Array (Bool × ℕ)
   | .affine p idx _ c => if c > 0 then #[(p, idx)] else #[]
   | .strided p idx _ _ _ _ c => if c > 0 then #[(p, idx)] else #[]
   | .explicit it => it.map fun r => (r.p, r.i)
+  | .grid _ lanes => lanes.map fun l => (l.p, l.i)
 
 theorem get_mem_names (q : Part) (t : ℕ) (ht : t < q.count) : ((q.get t).p, (q.get t).i) ∈ partNames q := by
   cases q with
@@ -59,6 +60,16 @@ theorem get_mem_names (q : Part) (t : ℕ) (ht : t < q.count) : ((q.get t).p, (q
     show (it[t]!.p, it[t]!.i) ∈ it.map fun r => (r.p, r.i)
     rw [getElem!_pos it t ht]
     exact Array.mem_map.2 ⟨it[t], Array.getElem_mem ht, rfl⟩
+  | grid run lanes =>
+    simp only [Part.count] at ht
+    have hg : 0 < lanes.size * run := Nat.pos_of_ne_zero fun h => by rw [h, Nat.zero_mul] at ht; omega
+    have hrun : 0 < run := Nat.pos_of_ne_zero fun h => by simp [h] at hg
+    have hj : t % (lanes.size * run) / run < lanes.size := by
+      rw [Nat.div_lt_iff_lt_mul hrun]; exact Nat.mod_lt _ hg
+    show ((lanes[t % (lanes.size * run) / run]!).p, (lanes[t % (lanes.size * run) / run]!).i) ∈
+      partNames (.grid run lanes)
+    rw [getElem!_pos lanes (t % (lanes.size * run) / run) hj]
+    exact Array.mem_map.2 ⟨_, Array.getElem_mem hj, rfl⟩
 
 /-- A name node `k` of `body` may read: a parameter, or an earlier node. -/
 def NameOk (body : Body) (k : ℕ) (nm : Bool × ℕ) : Prop :=

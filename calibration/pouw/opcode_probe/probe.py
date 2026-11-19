@@ -16,9 +16,16 @@ The rate is the gate's count: a loop that `expect` says holds N instructions of 
 `iters` times by `warps` warps of each of the blocks (one an SM), over the block's cycles; the median block, then the
 median rep.
 
-  python probe.py build [--out DIR] [--arch SM] [SOURCE...]        # probes/*.cu -> DIR/STEM, SM's SASS only (sm_120a)
+  python probe.py build [--out DIR] [--sku SKU] [SOURCE...]       # probes/*.cu -> DIR/STEM, the card's target's SASS only
+  python probe.py arch [--card NAME | --sku SKU]                   # the card's target (its card record's `arch`)
+  python probe.py gencode [--card NAME | --sku SKU]                # nvcc's -gencode value for it (`kit.card_gencode`)
+
+The card is the run's; on a machine with none, --sku names the card file (calibration/hardware/cards/SKU.toml) to build
+for, and with neither the build is refused.
   python probe.py gate BINARY... [--json OUT]                      # CPU only; exit 8 when a verdict isn't the declared one
   python probe.py run BINARY... --out DIR [--reps N] [--scale X] [--since EPOCH] [--run-id ID]   # one GPU
+
+Both read SASS with the cuobjdump and nvdisasm of --cuda-bin DIR, else those beside `nvcc()`'s.
 """
 from __future__ import annotations
 
@@ -28,7 +35,6 @@ import importlib.util
 import json
 import os
 import re
-import shutil
 import statistics
 import subprocess
 import sys
@@ -37,8 +43,6 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 EXIT_FAIL = 8
 NVCC_FLAGS = ("-std=c++20", "-O3", "-ldl")
-#: the one SASS target a binary carries; the datacenter probes (`../dc/`) build for sm_90a and sm_100a
-ARCHES = ("sm_120a", "sm_90a", "sm_100a")
 
 
 def _load(name: str, path: Path):
@@ -59,19 +63,54 @@ rows = _load("opcode_probe_rows", HERE / "rows.py")
 
 
 def nvcc() -> str:
-    for c in (os.environ.get("NVCC"), os.environ.get("CUDA_HOME") and os.path.join(os.environ["CUDA_HOME"], "bin", "nvcc"),
-              shutil.which("nvcc"), "/usr/local/cuda/bin/nvcc"):
-        if c and os.access(c, os.X_OK):
-            return c
-    raise SystemExit("probe: no nvcc (set NVCC or CUDA_HOME)")
+    """The executable NVCC names, else the nvcc of the machine's toolkit at 13.0 (`kit.toolkit`: CUDA_HOME, else the run's
+    machine's record)."""
+    named = os.environ.get("NVCC")
+    if named and os.access(named, os.X_OK):
+        return named
+    found = os.path.join(_kit().toolkit("13.0"), "bin", "nvcc")
+    if os.access(found, os.X_OK):
+        return found
+    raise SystemExit(f"probe: no nvcc at {found} (set NVCC or CUDA_HOME)")
 
 
-def build(out: Path, sources: list[Path], arch: str = "sm_120a") -> list[Path]:
-    """Each source for `arch`'s SASS. The host side sees the target as PROBE_ARCH (90, 100, 120), so a probe table can
-    declare the counts that target's ptxas lowers to."""
+def _kit():
+    """The harness kit (`verity_bench.kit`), which finds a card and its target from the card files."""
+    root = HERE.parents[2]
+    for path in (root, root / "benchmarks" / "harness", root / "tools" / "config"):
+        if str(path) not in sys.path:
+            sys.path.insert(0, str(path))
+    from verity_bench import kit
+
+    return kit
+
+
+def card() -> str:
+    """The card the run opened: the name nvidia-smi gives its GPUs (the lease's, else the host's; `kit.host_stamp`)."""
+    return _kit().host_stamp()["card"]
+
+
+def target(name: str | None = None, sku: str | None = None) -> dict[str, str]:
+    """What `kit.card_arch` and `kit.card_gencode` take for a build: the card file ``sku``, else the card nvidia-smi names
+    ``name``, else the run's card; refused in one line on a machine with no card and no sku."""
+    if sku:
+        return {"sku": sku}
+    name = name or card()
+    if name == "none":
+        raise SystemExit("probe: this machine has no GPU: pass --sku SKU, the card file (calibration/hardware/cards/"
+                         "SKU.toml) to build for")
+    return {"name": name}
+
+
+def build(out: Path, sources: list[Path], name: str | None = None, *, sku: str | None = None) -> list[Path]:
+    """Each source for the SASS of `target`'s card: the target its card record's `arch` names, with nvcc's `-gencode`
+    from that target's architecture file (`kit.card_gencode`). The host side sees the target as PROBE_ARCH (90, 100,
+    120), so a probe table can declare the counts that target's ptxas lowers to."""
+    kit = _kit()
     out.mkdir(parents=True, exist_ok=True)
-    gencode = f"arch=compute_{arch.removeprefix('sm_')},code={arch}"
-    define = f"-DPROBE_ARCH={arch.removeprefix('sm_').rstrip('a')}"
+    card_ = target(name, sku)
+    gencode = kit.card_gencode(**card_)
+    define = f"-DPROBE_ARCH={kit.card_arch(**card_).removeprefix('sm_').rstrip('af')}"
     built = []
     for src in sources:
         dst = out / src.stem
@@ -211,8 +250,8 @@ def row_line(s: dict) -> str:
 # ---- the command ---------------------------------------------------------------------------------------------------------
 
 
-def gate_all(binaries: list[Path]) -> tuple[dict[Path, list[dict]], list[dict]]:
-    tools = G.H.find_tools()
+def gate_all(binaries: list[Path], cuda_bin: str) -> tuple[dict[Path, list[dict]], list[dict]]:
+    tools = G.H.find_tools(cuda_bin)
     tables = {b: listing(b) for b in binaries}
     verdicts = [v for b in binaries for v in judge(b, tables[b], tools=tools)]
     return tables, verdicts
@@ -223,8 +262,12 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build")
     b.add_argument("--out", type=Path, default=Path("build"))
-    b.add_argument("--arch", choices=ARCHES, default="sm_120a")
+    b.add_argument("--sku", help="on a machine with no card, the card file to build for (calibration/hardware/cards/SKU.toml)")
     b.add_argument("sources", nargs="*", type=Path)
+    for name in ("arch", "gencode"):
+        t = sub.add_parser(name).add_mutually_exclusive_group()
+        t.add_argument("--card", help="the name nvidia-smi gives the card (default: the run's card)")
+        t.add_argument("--sku", help="on a machine with no card, the card file (calibration/hardware/cards/SKU.toml)")
     g = sub.add_parser("gate")
     g.add_argument("binaries", nargs="+", type=Path)
     g.add_argument("--json", type=Path)
@@ -238,14 +281,20 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--only", default="", help="time only the probes whose name matches this regex")
     r.add_argument("--passed-only", action="store_true",
                    help="time the probes that pass even when others are refused (the refusals stay in gate.json)")
+    for s in (g, r):
+        s.add_argument("--cuda-bin", help="the bin directory whose cuobjdump and nvdisasm read the SASS (default: nvcc's)")
     a = p.parse_args(argv)
 
     if a.cmd == "build":
-        for out in build(a.out, a.sources or sorted((HERE / "probes").glob("*.cu")), a.arch):
+        for out in build(a.out, a.sources or sorted((HERE / "probes").glob("*.cu")), sku=a.sku):
             print(out)
         return 0
+    if a.cmd in ("arch", "gencode"):
+        kit = _kit()
+        print((kit.card_arch if a.cmd == "arch" else kit.card_gencode)(**target(a.card, a.sku)))
+        return 0
 
-    tables, verdicts = gate_all(a.binaries)
+    tables, verdicts = gate_all(a.binaries, a.cuda_bin or os.path.dirname(nvcc()))
     for line in verdict_lines(verdicts):
         print(line)
     wrong = [v for v in verdicts if not v["correct"]]

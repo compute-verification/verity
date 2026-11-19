@@ -259,10 +259,8 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
         if not local_only:
             try:
                 completion.pull_labels()
-            except RuntimeError as e:
-                if completion.store.remote is not None:
-                    raise
-                raise RuntimeError(f"{e}; {ON_A_CLONE}") from e
+            except jobs.NoCatalog as e:
+                raise jobs.NoCatalog(f"{e}; {ON_A_CLONE}") from e
         store = completion.store
     scopes, plans, runs, refused = rows_of_record(store, row=row, step=step, variant=variant, record=record)
     labelled = {} if record is not None else verdict_runs(store)

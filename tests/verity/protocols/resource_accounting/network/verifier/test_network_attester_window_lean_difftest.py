@@ -24,8 +24,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.resource_accounting.network.verifier import arith_encode, charge_chain
-from verity.protocols.resource_accounting.network.prover import window_charge as WC
+from verity.protocols.interface.charge import arith_encode, charge_chain
+from verity.protocols.interface.charge import window_charge as WC
 
 LEAN = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "resource_accounting" / "network" / "attester" / "program" / "lean"
 SCRIPT = LEAN / "scripts" / "window_vectors.py"

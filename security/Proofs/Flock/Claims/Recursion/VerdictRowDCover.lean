@@ -99,7 +99,7 @@ def rowDPiecesOf (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ
 
 /-- **The pieces at the inner statement `x`**: those of the statements `setupOf` reads off it, none where it doesn't
 set up. -/
-def rowDPieces (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (x : Claims.Msg) : List OpenPiece :=
+def rowDPieces (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (x : Hash.Msg) : List OpenPiece :=
   match FlockDeploy.setupOf false x with
   | some v => rowDPiecesOf key v.2.2
   | none => []
@@ -180,7 +180,7 @@ theorem levelPass_of_merkleOk {hs : Hashes Flock.V} (hops : plain.opsWith hs = M
 
 namespace DecAt
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128)
 
 /-! ## The cover -/
@@ -208,7 +208,7 @@ theorem rowDPieces_cover (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × �
 every level has at least its `q` positions and its check passes on the rep's decoded proof (`hrun`; at the honest
 run, `levelPass_of_merkleOk`). -/
 theorem hholds_rowDPieces (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
-    (sideAt : Claims.Msg → List Claims.Msg → OpenPiece → OpenSide) (posAt : Claims.Msg → List Coin → OpenPiece → ℕ)
+    (sideAt : Hash.Msg → List Hash.Msg → OpenPiece → OpenSide) (posAt : Hash.Msg → List Coin → OpenPiece → ℕ)
     (hside : ∀ t < D.sts.size, ∀ r : Fin 2, ∀ q ∈ rowDPieces key x, q.table = t → q.rep = r.val →
       sideAt x ms q = D.side cls t r)
     (hpos : ∀ t < D.sts.size, ∀ r : Fin 2, ∀ v info kappa,
@@ -237,7 +237,7 @@ theorem hholds_rowDPieces (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × �
 /-- **Table `i`'s reps run at the decision** (`runs_assembled`) at the pieces `rowDPieces key x`: their cover is
 `rowDPieces_cover`, and they hold by `hholds_rowDPieces` at the layout and coin ties and the verifier rows' passing
 level checks at every table. -/
-theorem runs_open {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
+theorem runs_open {xo : Hash.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size)
     (hframed : ∀ r : Fin 2, FramedAt ((D.files cls i).stream r).rounds 0 (repFrames (D.files cls i).st
@@ -250,7 +250,7 @@ theorem runs_open {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (
       ProofShaped (shapeAt (tabsOf D.sts) (pointsOf D.spec D.d.c₁) (2 * i + r)) (D.d.f.ps[2 * i + r]'(hk r)))
     (hL : ∀ r, D.RowL cls acc i r)
     (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
-    (sideAt : Claims.Msg → List Claims.Msg → OpenPiece → OpenSide) (posAt : Claims.Msg → List Coin → OpenPiece → ℕ)
+    (sideAt : Hash.Msg → List Hash.Msg → OpenPiece → OpenSide) (posAt : Hash.Msg → List Coin → OpenPiece → ℕ)
     (hside : ∀ t < D.sts.size, ∀ r : Fin 2, ∀ q ∈ rowDPieces key x, q.table = t → q.rep = r.val →
       sideAt x ms q = D.side cls t r)
     (hpos : ∀ t < D.sts.size, ∀ r : Fin 2, ∀ v info kappa,
@@ -278,7 +278,7 @@ theorem runs_open {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (
 /-! ## At one table -/
 
 /-- **Table `i`'s pieces** at the inner statement `x`. -/
-def rowDPiecesAt (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (i : ℕ) (x : Claims.Msg) : List OpenPiece :=
+def rowDPiecesAt (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (i : ℕ) (x : Hash.Msg) : List OpenPiece :=
   (rowDPieces key x).filter fun q => q.table == i
 
 theorem mem_rowDPiecesAt {key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ} {i : ℕ} {q : OpenPiece} :
@@ -297,7 +297,7 @@ theorem rowDPiecesAt_cover (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × 
 rep's verifier rows run (`hrun`; `verifierRows_rep`) and, at any run of them, every level has at least its `q`
 positions and its check passes on the rep's decoded proof (`hlev`; at the honest run, `levels_of_merkleOk`). -/
 theorem hholds_rowDPiecesAt (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) {i : ℕ}
-    (sideAt : Claims.Msg → List Claims.Msg → OpenPiece → OpenSide) (posAt : Claims.Msg → List Coin → OpenPiece → ℕ)
+    (sideAt : Hash.Msg → List Hash.Msg → OpenPiece → OpenSide) (posAt : Hash.Msg → List Coin → OpenPiece → ℕ)
     (hside : ∀ r : Fin 2, ∀ q ∈ rowDPiecesAt key i x, q.table = i → q.rep = r.val → sideAt x ms q = D.side cls i r)
     (hpos : ∀ r : Fin 2, ∀ v info kappa,
       verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras (D.rep cls acc i r).comb =
@@ -352,7 +352,7 @@ theorem levels_of_merkleOk {i : ℕ} (r : Fin 2) {hs : Hashes Flock.V}
 `sideAt` and `posAt` with their ties `hside` and `hpos`, hold where the rows run (`hrun`) and every run's level checks
 pass (`hlev`), and cover every query. -/
 theorem rowD_target (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) {i : ℕ} (hi : i < D.sts.size)
-    (sideAt : Claims.Msg → List Claims.Msg → OpenPiece → OpenSide) (posAt : Claims.Msg → List Coin → OpenPiece → ℕ)
+    (sideAt : Hash.Msg → List Hash.Msg → OpenPiece → OpenSide) (posAt : Hash.Msg → List Coin → OpenPiece → ℕ)
     (hside : ∀ r : Fin 2, ∀ q ∈ rowDPiecesAt key i x, q.table = i → q.rep = r.val → sideAt x ms q = D.side cls i r)
     (hpos : ∀ r : Fin 2, ∀ v info kappa,
       verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras (D.rep cls acc i r).comb =
@@ -368,8 +368,8 @@ theorem rowD_target (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × 
       ∀ ℓ < (D.files cls i).sch.levels.size, ((D.files cls i).sch.levels[ℓ]!).q ≤ (info.lg.conss[ℓ]!).pos.size ∧
         levelCheck (D.files cls i).sch ((D.files cls i).proof r).cap ((D.files cls i).proof r).ligerito ℓ
           (info.lg.conss[ℓ]!).pos = .ok ()) :
-    ∃ (pieces : List OpenPiece) (sideAt : Claims.Msg → List Claims.Msg → OpenPiece → OpenSide)
-      (posAt : Claims.Msg → List Coin → OpenPiece → ℕ),
+    ∃ (pieces : List OpenPiece) (sideAt : Hash.Msg → List Hash.Msg → OpenPiece → OpenSide)
+      (posAt : Hash.Msg → List Coin → OpenPiece → ℕ),
       (∀ q ∈ pieces, openHolds sideAt posAt q x ms cs) ∧
       (∀ r : Fin 2, ∀ q ∈ pieces, q.table = i → q.rep = r.val → sideAt x ms q = D.side cls i r) ∧
       (∀ r : Fin 2, ∀ v info kappa,
@@ -393,7 +393,7 @@ theorem rowsRun_of {i : ℕ} (hti : i < D.spec.tables.size) {S : RecAlgebra.GfS}
 /-- **Table `i`'s reps run at the decision** (`runs_assembled`) at table `i`'s pieces, with `runs_assembled`'s own
 `hside` and `hpos`: the cover is `rowDPiecesAt_cover`, and the pieces hold by `hholds_rowDPiecesAt` at the verifier
 rows' run (`verifierRows_rep`) and their passing level checks (`hlev`). -/
-theorem runs_openAt {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
+theorem runs_openAt {xo : Hash.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size)
     (hframed : ∀ r : Fin 2, FramedAt ((D.files cls i).stream r).rounds 0 (repFrames (D.files cls i).st
@@ -406,7 +406,7 @@ theorem runs_openAt {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement}
       ProofShaped (shapeAt (tabsOf D.sts) (pointsOf D.spec D.d.c₁) (2 * i + r)) (D.d.f.ps[2 * i + r]'(hk r)))
     (hL : ∀ r, D.RowL cls acc i r)
     (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
-    (sideAt : Claims.Msg → List Claims.Msg → OpenPiece → OpenSide) (posAt : Claims.Msg → List Coin → OpenPiece → ℕ)
+    (sideAt : Hash.Msg → List Hash.Msg → OpenPiece → OpenSide) (posAt : Hash.Msg → List Coin → OpenPiece → ℕ)
     (hside : ∀ r : Fin 2, ∀ q ∈ rowDPiecesAt key i x, q.table = i → q.rep = r.val → sideAt x ms q = D.side cls i r)
     (hpos : ∀ r : Fin 2, ∀ v info kappa,
       verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras (D.rep cls acc i r).comb =

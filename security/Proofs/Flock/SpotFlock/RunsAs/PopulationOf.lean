@@ -24,7 +24,7 @@ set_option maxHeartbeats 4000000 in
 /-- **A run that does not refuse passed its population check**: `Run.run` either refuses at a step (a `{"step",
 "codes"}` object) or passed `Slots.popOk` at the params' program and query and at the population its boundary record
 states. -/
-theorem run_popOk {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run i form = .ok j) :
+theorem run_popOk {i : Spot.Run.Input} {j : Json} (h : Spot.Run.run i = .ok j) :
     (∃ (step : String) (codes : Array String),
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
     ∃ n, Spot.nat? (Spot.getD i.record "population") = some n ∧

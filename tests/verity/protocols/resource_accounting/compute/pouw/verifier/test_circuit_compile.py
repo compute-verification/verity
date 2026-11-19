@@ -17,6 +17,7 @@ from functools import cache
 
 import pytest
 
+from verity.circuits import population as PN
 from verity.circuits.codec import encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation import evaluate
@@ -240,7 +241,7 @@ def _coord(K):
 @cache
 def _layer(members):
     """One Program per population, built once: `mixed_population_program` makes a new `TemplatePopulations_v1` each call."""
-    return OP.mixed_population_program([(_coord(K), n) for K, n in members])
+    return PN.mixed_population_program([(_coord(K), n) for K, n in members])
 
 
 def _acc(K):

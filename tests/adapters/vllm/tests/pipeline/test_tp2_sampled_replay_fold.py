@@ -110,7 +110,7 @@ def _worker(cfg, bmap, rc=None, model=None):
         _tp2_sampled_replay = W.TP2CaptureWorkerExtension._tp2_sampled_replay
 
     s = Stub()
-    s._tp2_commit = {"rank": 1, "replay": cfg, "bmap": bmap, "com": types.SimpleNamespace(_layouts={}, weights=None, register_weights=lambda: {"root": "x"}),
+    s._tp2_commit = {"rank": 1, "replay": cfg, "bmap": bmap, "com": types.SimpleNamespace(_layouts={}, weights=None, register_weights=lambda replay=False: {"root": "x"}),
                      "eng": types.SimpleNamespace(model=model), "weights": model}
     return s
 

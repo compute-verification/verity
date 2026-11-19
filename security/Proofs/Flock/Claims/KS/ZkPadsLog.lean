@@ -106,7 +106,7 @@ theorem qs_get (a : Array F128) (n k : ℕ) : (a.map fun w => w.lo.toNat % n)[k]
 it read four rounds, and at each query `k` (its position the coin `w` of the fourth round, at `w.lo mod innerN`) the
 path has the tree's depth, the climb from the leaf of `[a, b]` under the query's salt reaches the root, and every
 SHA-512 input of that opening is in `L`. -/
-theorem verifyInner_logs {L : List Claims.Msg} {lay : Zk.PadLayout} {pr : Zk.InnerProof} {finalC : F128}
+theorem verifyInner_logs {L : List Hash.Msg} {lay : Zk.PadLayout} {pr : Zk.InnerProof} {finalC : F128}
     {cons : Array (String × Zk.Lin)} {t t' : Transcript}
     (h : Zk.verifyInnerWith (hashesIn L) lay pr finalC cons t = .ok ((), t')) :
     t'.rounds = t.rounds ∧ t'.k = t.k + 4 ∧ pr.paths.size = Zk.Q ∧
@@ -195,7 +195,7 @@ theorem climbs_binding (ms : MerkleScheme) (hs : ms.Sized) (pos : ℕ) (r1 r2 : 
 /-- **Two climbs from different rows to one top collide in the joined logs**: `tiedColl_of_opens` from the climbs'
 equality alone, along paths of one length of digest-width siblings. -/
 theorem tiedColl_of_climbs {pos : ℕ} {r1 r2 : Array F128} {y1 y2 : ByteArray} {s1 s2 : List ByteArray}
-    {l : List (Claims.Msg × Claims.Msg)} (hw1 : ∀ x ∈ s1, x.size = MerkleScheme.hm96Sha512.digestLen)
+    {l : List (Hash.Msg × Hash.Msg)} (hw1 : ∀ x ∈ s1, x.size = MerkleScheme.hm96Sha512.digestLen)
     (hw2 : ∀ x ∈ s2, x.size = MerkleScheme.hm96Sha512.digestLen) (hlen : s1.length = s2.length)
     (heq : climb MerkleScheme.hm96Sha512 (MerkleScheme.hm96Sha512.leaf r1 y1) pos s1 =
       climb MerkleScheme.hm96Sha512 (MerkleScheme.hm96Sha512.leaf r2 y2) pos s2) (hr : r1 ≠ r2)
@@ -212,7 +212,7 @@ theorem tiedColl_of_climbs {pos : ℕ} {r1 r2 : Array F128} {y1 y2 : ByteArray} 
 
 /-- **Two queries of an accepted inner proof at one position, with different pairs, collide in its log**: both
 openings climb to the inner proof's root along paths of the tree's depth (`verifyInner_logs`). -/
-theorem tiedColl_of_verifyInner {L : List (Claims.Msg × Claims.Msg)} {lay : Zk.PadLayout} {pr : Zk.InnerProof}
+theorem tiedColl_of_verifyInner {L : List (Hash.Msg × Hash.Msg)} {lay : Zk.PadLayout} {pr : Zk.InnerProof}
     {finalC : F128} {cons : Array (String × Zk.Lin)} {t t' : Transcript}
     (h : Zk.verifyInnerWith (hashesIn (L.map Prod.fst)) lay pr finalC cons t = .ok ((), t'))
     (hpaths : ∀ k < pr.paths.size, ∀ b ∈ (pr.paths[k]!).toList, b.size = 64) {k k' : ℕ} (hk : k < Zk.Q)

@@ -17,13 +17,16 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.commitments import advice as ADV
 from verity.commitments.gates.frame_v3 import _part
-from verity.protocols.resource_accounting.network.verifier import head_check as HC
+from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.prover import io_ids as I
 from verity.protocols.resource_accounting.network.verifier import io_request as Q
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
+from verity.circuits.boolean import benes as BN
 from verity.protocols.resource_accounting.network.verifier import network_attester as W
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
+
+import standin
 
 PL = (5, 60, 12, 100, 1)
 B, P = 512, 16
@@ -77,7 +80,7 @@ def _link(sources, ps=None, tokens=None, shape=SHAPE):
     link = Q.serve(PARAMS, reqs, ARRIVALS, RATES, buckets=BUCKETS)
     steps = _steps(sources)
     rows = I.commit_rows(steps, _tokens(ps) if tokens is None else tokens, P)
-    salts, levels, dom = I.commit(rows)
+    salts, levels, dom = standin.fake_commit(rows)
     out = []
     for t, row in enumerate(link.rows):
         lanes_ = Q.lanes(shape.request, PL, link.releases, t)
@@ -153,7 +156,7 @@ def test_the_read_rows_are_the_commits_at_the_maps_steps():
     insts, count = _link(ACROSS), len(_steps(ACROSS))
     seed = hashlib.sha512(b"commit").digest()
     rows = I.commit_rows(_steps(ACROSS), _tokens(_prompts(ACROSS)), P)
-    salts = [IT.fake_salt(b"commit", s) for s in range(count)]
+    salts = [standin.fake_salt(b"commit", s) for s in range(count)]
     root = ADV.commit(rows, 32 * P, seed, salts).root
     assert root == insts[0].port_root
     dom = IT.domain(seed, count)
@@ -173,7 +176,7 @@ def test_the_read_rows_are_the_commits_at_the_maps_steps():
     steps = list(b.map.steps)
     steps[0] = (steps[0] + 1) % count
     for name, bad in {"a row": b._replace(port=(b.port[0], bytes(row), *b.port[2:])),
-                      "a salt": b._replace(port_salts=(IT.fake_salt(b"x", 0), *b.port_salts[1:])),
+                      "a salt": b._replace(port_salts=(standin.fake_salt(b"x", 0), *b.port_salts[1:])),
                       "a step": b._replace(map=b.map._replace(steps=tuple(steps)))}.items():
         assert not I.reads_open(SHAPE, bad) and not I.reference(SHAPE, bad), name
         assert any(refusals([*insts[:u], bad, *insts[u + 1:]])), name
@@ -187,7 +190,7 @@ def test_a_second_tree_of_the_users_ids_is_refused_under_the_commits_registratio
     tokens = _tokens(_prompts(ACROSS))
     tokens[2][5] ^= 1
     rows = I.commit_rows(_steps(ACROSS), tokens, P)
-    salts, levels, dom_id = I.commit(rows)
+    salts, levels, dom_id = standin.fake_commit(rows)
     registered = ADV.commit(rows, 32 * P, hashlib.sha512(b"commit").digest(), salts)
     forged = _link(ACROSS)
     assert registered.root == levels[-1][0] != forged[0].port_root and forged[0].port_domain == dom_id
@@ -276,7 +279,7 @@ def test_the_slots_circuit_is_its_reference():
         slots = [o[32 + I.SLOT * k:32 + I.SLOT * (k + 1)] for k in range(sh.K)]
         got.append((_int(o[:32]), [(int(s[0]), _int(s[1:33]), _int(s[33:]) if s[0] else None) for s in slots]))
     assert sum(f for _, slots in want for f, _, _ in slots) == sum(PL) and got == want
-    assert HC.ands(bind(I.IoTieIdsSlots, B=B)) == 24_670
+    assert GB.ands(bind(I.IoTieIdsSlots, B=B)) == 24_670
 
 
 def test_the_keys_circuit_is_its_reference():
@@ -296,8 +299,8 @@ def test_the_keys_circuit_is_its_reference():
         cases.append((slots, routed))
         ok = all(not f or (routed[s][1] == o and routed[s][0] != 7) for s, (f, o, _) in enumerate(slots))
         want.append((int(ok), [routed[s][0] if f else 7 for s, (f, _, _) in enumerate(slots)]))
-    args = [[[b for f, o, v in sl for b in [f] + HC._int_bits(o, 32) + HC._int_bits(v, 32)] for sl, _ in cases],
-            [[b for k, x in ro for b in HC._int_bits(k, CB) + HC._int_bits(x, D1)] for _, ro in cases]]
+    args = [[[b for f, o, v in sl for b in [f] + GB._int_bits(o, 32) + GB._int_bits(v, 32)] for sl, _ in cases],
+            [[b for k, x in ro for b in GB._int_bits(k, CB) + GB._int_bits(x, D1)] for _, ro in cases]]
     out = np.asarray(evaluate_bits(bind(I.IoTieIdsKeys, NK=NK, CB=CB, D1=D1), *[_bits(a) for a in args]))
     got = [(int(o[0]), [_int(o[1 + CB * s:1 + CB * (s + 1)]) for s in range(NK)]) for o in out.reshape(len(cases), -1)]
     assert got == want and 40 < sum(w[0] for w in want) < 160
@@ -333,7 +336,7 @@ def test_the_chain_circuit_is_its_reference():
             prev = k
         cases.append(ms)
     want = [ref(ms) for ms in cases]
-    args = [[[b for k, kind, v in ms for b in HC._int_bits(k, CB) + [kind] + HC._int_bits(v, 32)] for ms in cases]]
+    args = [[[b for k, kind, v in ms for b in GB._int_bits(k, CB) + [kind] + GB._int_bits(v, 32)] for ms in cases]]
     out = np.asarray(evaluate_bits(bind(I.IoTieIdsChain, CB=CB, D2=D2), *[_bits(a) for a in args]))
     assert [int(b) for b in out.reshape(-1)] == want and 60 < sum(want) < 240
 
@@ -380,7 +383,7 @@ def _chains(rng, CB: int, D2: int, count: int) -> list[list[list[int]]]:
 
 
 def _chain_out(fn, CB: int, chains) -> list[int]:
-    rows = [[b for k, kind, v in ms for b in HC._int_bits(k, CB) + [kind] + HC._int_bits(v, 32)] for ms in chains]
+    rows = [[b for k, kind, v in ms for b in GB._int_bits(k, CB) + [kind] + GB._int_bits(v, 32)] for ms in chains]
     return [int(b) for b in np.asarray(evaluate_bits(fn, _bits(rows))).reshape(-1)]
 
 
@@ -393,7 +396,7 @@ def test_the_batched_chain_is_the_flat_one():
     rng, refused = random.Random(11), 0
     for CB, D2 in ((1, 1), (3, 1), (2, 2), (3, 3), (6, 4), (1, 5), (9, 6), (13, 8)):
         new, flat = bind(I.IoTieIdsChain, CB=CB, D2=D2), bind(FLAT_CHAIN, CB=CB, D2=D2)
-        assert HC.ands(new) == HC.ands(flat) == _chain_ands(CB, D2)
+        assert GB.ands(new) == GB.ands(flat) == _chain_ands(CB, D2)
         chains = _chains(rng, CB, D2, 16)
         want = [_chain_reference(ms, (1 << CB) - 1) for ms in chains]
         assert _chain_out(new, CB, chains) == _chain_out(flat, CB, chains) == want and all(want[0::2])
@@ -401,7 +404,7 @@ def test_the_batched_chain_is_the_flat_one():
     assert refused >= 20
     deep = bind(I.IoTieIdsChain, CB=13, D2=14)
     assert [nd.form for nd in deep.body.nodes] == ["call", "batch", "primitive"]
-    assert HC.ands(deep) == _chain_ands(13, 14) == 1_228_738
+    assert GB.ands(deep) == _chain_ands(13, 14) == 1_228_738
     chains = _chains(rng, 13, 14, 4)
     assert _chain_out(deep, 13, chains) == [_chain_reference(ms, (1 << 13) - 1) for ms in chains]
 
@@ -457,10 +460,10 @@ def test_the_unit_is_its_reference():
     args = [I.arguments(sh, i, r, s) for i, r, s in cases]
     out = evaluate_bits(fn, *[_bits([a[k] for a in args]) for k in range(len(args[0]))])
     assert [int(b) for b in np.asarray(out).reshape(-1)] == want + [0, 0]
-    a = HC.ands
+    a = GB.ands
     rq = sh.request
     parts = (rq.N * (a(bind(Q.IoTieRequestFrame, B=sh.B)) + a(bind(Q.IoTieRequestStep)) + a(bind(I.IoTieIdsSlots, B=B)))
              + rq.L * a(bind(Q.IoTieRequestEnd))
-             + a(bind(IT.IoTieRoute, W=sh.CB + sh.D1, D=sh.D1)) + a(bind(I.IoTieIdsKeys, NK=sh.NK, CB=sh.CB, D1=sh.D1))
-             + a(bind(IT.IoTieRoute, W=sh.CB + 33, D=sh.D2)) + a(bind(I.IoTieIdsChain, CB=sh.CB, D2=sh.D2)) + rq.L + 1)
+             + a(bind(BN.IoTieRoute, W=sh.CB + sh.D1, D=sh.D1)) + a(bind(I.IoTieIdsKeys, NK=sh.NK, CB=sh.CB, D1=sh.D1))
+             + a(bind(BN.IoTieRoute, W=sh.CB + 33, D=sh.D2)) + a(bind(I.IoTieIdsChain, CB=sh.CB, D2=sh.D2)) + rq.L + 1)
     assert a(fn) == parts

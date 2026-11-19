@@ -35,7 +35,8 @@ configs, Definitions) or advice charged at its width. A value the served hardwar
 atomics order, a split choice) is never among them as a free witness: serving makes it canonical so a block computes it,
 or it is advice.
 
-Under a two-stage sampling design the same three roles run `parties.SPOT_TWO_PROTOCOL`. The first stage samples replay blocks.
+At ``levels`` 2, a two-stage sampling design, the same three roles run `parties.SPOT_TWO_PROTOCOL`, which SPOT[Flock]'s
+definition chooses under its own id (`ProtocolDef.chosen`). The first stage samples replay blocks.
 The proof server replays them and sends the verifier their interior docket (`Interior`). Once it is in, the
 verifier samples the second stage on fresh coins (`Second`). The proof server then proves the second stage's proof
 blocks, one session a template, and the verifier audits both stages.
@@ -75,6 +76,28 @@ unfold to them), and `RecordCustodyZKJPLaw` (read as `RecordCustodyZKJ`) in
 In the one-stage form, v2's verdicts are its own run of `verity-verify-proof verify --zk` on the sessions' files, which come
 in as blobs (under "Where things are"), so a composite accepts there only where that run accepts. No Lean statement yet
 carries a composite's acceptance to `SampledKSLiveV3`'s event.
+
+## Levels
+
+SPOT is one protocol with levels (`levels.py`): each level is a partition into blocks with its sampling design. One
+level is the audit over one partition and its sampling design. Two levels sample outer blocks first (the boundary docket, under the
+two-level rule with its grain and count), then inner blocks inside each sampled outer block (the interior). More levels
+are refused by name (`levels-not-built`). `recursive` is not a level: it is how many blocks' proofs are compressed, and
+it stays refused by name.
+
+- **The verdict's count is the auditor's.** It is read off the shape of the case's parameters, fixed before any coin
+  (`levels.of_params`). A case's `levels` (a JSON integer; a string is refused) and its `form` (`one-stage` or `two-stage`, which the Lean
+  dispatcher reads today) must name that shape. A case that names neither reads as one level, and a mismatch is
+  refused with both values named.
+- **The run's record and `SPOT_LEVELS` are the prover's.** They say what was served. A record's `levels` field holds the
+  count. A record without the field is of one level. A record of the
+  boundary commitment's format (`verity-vllm/boundary-rows/v1`) is of two by that format, and one whose `levels` is
+  another count is refused (`levels-format-mismatch`). A record that served another
+  count than the parameters check is refused (`levels-record-mismatch`).
+- **Each level's partition and sampling design** are the integrity profile's `levels`, coarse to fine
+  (`profile.IntegrityProfile.to_json`). Their length is the count.
+- **A command that can't run the count it is given refuses it** (`levels-no-path`) rather than running another:
+  `a5.py` runs one level, `two_stage.py` two.
 
 ## Outline
 
@@ -136,7 +159,7 @@ A bound of S served bits charges a replay block at most F S, F the grain's fan-o
 Definition's return (`second_stage.returned_bits`, Lean `SecondStage.returnedBits`: each returned output field of each
 proof block on 16-bit words of its own) and a two-stage docket carries (`ExecutionPhaseCommitmentRecord.returned`);
 `plancheck.two` refuses a served cap below them.
-Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs. A boundary record may commit a
+Round 2: `second_stage` (Lean `SecondStage`); its `FORM` is on: a two-stage run whose every check passes is accepted, ahead of the form's proof. A boundary record may commit a
 step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of its requests' positions), which round 2
 refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`). What a replay
 block returns is read only at the boundary record's port for it: an interior docket that registers a value of
@@ -161,7 +184,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 
 ## Where things are
 
-- **The Lean.** Today it sits in Flock's soundness package, `security/Proofs/Flock/Soundness/Audit/`,
+- **The Lean.** Today it sits in Flock's soundness package, `security/Proofs/Spot/Sampling/`,
   whose `README.md` lists every theorem; `Audit/Flock*.lean` instantiate them for Flock.
   The two-stage design's certificate is `Claims.SamplingGeneric.compilerKSTwo` (`Claims.SamplingTwo`).
 - **The executable sample** is the Lean verifier's `verity/commitments/lean/Commitments/Draw.lean` (`verity-verify-proof draw`): the
@@ -194,8 +217,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   sample's coins as v1 does (`OneStage.coinsOf`; `oneStageZkReads` in `security/Properties/Challenger.lean`) and holds
   the session's record to the coin trees the signed release log shows the challenger sampled and opened
   (`Spot/ChallengerTrees.lean`, `challenger.sessions_tree_reason`, `order_why`).
-  `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
-  to `verify`'s.
+  `one_stage.proofs.verdicts_v2` runs its verdicts alone, which `tests/test_proofs.py` holds to `verify`'s.
   A window of several members has a per-member form of `proofs` (the parameters' `members`, the evidence's
   `statements`; `one_stage.proofs.members_v2` writes it), which the audit's `check` reads beside the one
   statement's and decides by `checkMembersAt`: it accepts where the form's run returns with every session accepted
@@ -209,9 +231,8 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `proofs.members_parsed`) prints what its parsers read of a case, with no verdict, as its module's docstring says. A
   window's sessions run on its challenger's session, each closed there after its evidence
   (`one_stage.closing`, `challenger.members_tree_reason`). The parameters may name the members' wiring beside them
-  (`proofs.wiring`, SPOT's `Spot.Wires.Wiring`, refused where `Spot.Wires.check` refuses it), and the check then holds
-  every wired row of every proof block of the sample to its writer's output row in the members' public files
-  (`OneStageZk.wiresHeld`, the `members_wires` piece); `one_stage.members` leaves a wiring `Outside`.
+  (`proofs.wiring`, SPOT's `Spot.Wires.Wiring`, refused where `Spot.Wires.check` refuses it), and a wired port then
+  reads its writer's output field's tree by path, one tree each writer template and output field (`OneStageZk.fieldRoots`); `one_stage.members` leaves a wiring `Outside`.
 - **A monitoring period's sessions in the auditor's ledger** (`Spot/MonitoringPeriod.lean`, Lean only; the Python it is held
   to is a reference in `lean/tests/test_period_difftest.py`): from the ledger's signed lines, under the auditor's
   challenger key, every session of a lane that the ledger opens on a root during a monitoring period, whatever its
@@ -283,7 +304,7 @@ Tests: `uv run tools/check/suites.py protocols/spot`.
 
 No function here returns a verdict of its own. Each verdict SPOT acts on is the Lean's: `one_stage.verifier` asks
 `spot-verifier` and computes the Python twin beside it, and a disagreement, or no answer from the Lean, is a
-refusal (`DISAGREE`). A verdict whose Lean no interface here reaches yet raises
+refusal (`DISAGREE`). A verdict whose Lean no interface here reaches yet (a two-stage outcome's completeness) raises
 `NotImplementedError("proofs/spot-two-stage-sound")` (`verifier.not_written`), and its twin answers the difftest only.
 
 | Verdict | Entry | Lean of record | Twin |
@@ -291,7 +312,7 @@ refusal (`DISAGREE`). A verdict whose Lean no interface here reaches yet raises
 | R1-R8 on a docket | `verifier.check` | `registration` (`OneStage`) | `registration.check` |
 | The audit record | `verifier.audit_record` | `Record.record` | `audit.audit_record` |
 | A docket's whole run | `verifier.run` | `Run.run` | the stream's own outcome |
-| A two-stage outcome | `Stream.outcome` (`_audit_two`) | `Run.run`'s symbol; it refuses every two-stage run while `SecondStage.FORM` is off | the two records' join |
+| A two-stage outcome | `Stream.outcome` (`_audit_two`) | `Run.run`'s symbol; it accepts a two-stage run (levels 2) whose every check passes, ahead of its proof | the two records' join |
 | Round 2's statements | `second_stage.check` | `SecondStage.checkAny`, which only `Run.run` reaches | `check_twin` |
 | A two-stage outcome's completeness | `second_stage.complete` | none yet | `complete_twin` |
 
@@ -340,15 +361,15 @@ from verity.protocols.proofs.spot.prover.costfit import fit
 - `registration`: `record` builds a `verity/registration/v1` record (v2 with registered values), `check` holds one to
   the verifier's copies (R1 to R8), `matches_public` to its public file, `receipt` logs it, `digest` names it, and `window_domain` is a
   registered root's commitment domain (`verity.commitments.window`'s, which an integration commits under).
-- `draw`: `parse_design` reads a sampling design's text, `derive` expands a rule over the verifier's program and query (and
+- `draw`: `derive` expands a rule over the verifier's program and query (and
   a work table), `check_draw` holds a sample to the docket and the verifier's sampling design, and `check_proved`
   holds the proved proof blocks to the sample; `stratum_k`, `work_k`, `work_table` and `proved` are the pieces they use.
 - `partition`: `partition`, `digest`, `units` and `strata` over core's `verity/partition/v1` with the template queries,
   and the population programs `population_program` and `mixed_population_program` (`verity.circuits.population`'s,
   which an integration builds its run's program with).
-- `registered`: registered values: `Registered.commit` (the prover's rows, salts and tree), `domain`,
-  `registered_entries` and `reads` (the verifier's leaf counts, domains and read map, from its own program), `reads_file`
-  (the Lean verifier's `--registered`), `verify_read`.
+- `registered`: registered values, over `verity.commitments.registered_value` (`Registered.commit`, the prover's rows,
+  salts and tree, and `domain`): `registered_entries` and `reads` (the verifier's leaf counts, domains and read map,
+  from its own program), `reads_file` (the Lean verifier's `--registered`), `verify_read`.
 - `served`: `register_served`, how a served path registers its `ServedTree`s ("Served trees", below).
 - `audit`: `audit_record`, and the profile in its forms: `profile`, `wrong_units`, `integrity_profile`; `core_law` is a
   sampling design as core's `Stratified`; `session_registered` reads the registered roots off the verdicts of record.
@@ -364,7 +385,7 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   proved), so a protocol reads verdicts from that run, never from a record the prover hands in.
 - `parties`: SPOT[Flock]'s `InferenceServer`, `ProofServer` and `SpotVerifier` (`SPOT_MANIFEST`, `SPOT_PROTOCOL`,
   `spot_params_of`), in two stages with `TwoStageProofServer` and `TwoStageVerifier` (`SPOT_TWO_MANIFEST`,
-  `SPOT_TWO_PROTOCOL`), the core deployment's `ZkServer`, `Workers` and `Verifier` (`MANIFEST`, `PROTOCOL`, `params_of`),
+  `SPOT_TWO_PROTOCOL`, chosen at ``levels`` 2), the core deployment's `ZkServer`, `Workers` and `Verifier` (`MANIFEST`, `PROTOCOL`, `params_of`),
   the `Challenger` both run, `PROTOCOLS` by id, and `IDS`, the configuration's subprotocol names and their protocol ids.
 - `consumers`: `infiltration_bound`, `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `window_place`: `of`, `family` and `run`, the place a docket's window names in its window's session, the
@@ -389,7 +410,7 @@ from verity.protocols.proofs.spot.prover.costfit import fit
 ### The docket
 
 A docket fixes everything a sampled proof block's statement can depend on before the verifier samples. Its record,
-`verity/registration/v1` (`one_stage.docket.record`), names the program, query and partition digests, the
+`verity/registration/v1` (`prover.docket.record`), names the program, query and partition digests, the
 population, the sampling design expanded over the verifier's program and query, the commitment scheme, each port's root
 with its leaf count and domain, the leaf layer, the anchors, the run (`window`: its provenance, `served` or `stand-in`, the
 stream and prover it is bound to, and its seed salt) and `previous`, the digest of this prover's last record. A record
@@ -417,10 +438,10 @@ A program's weights, constants and tables are values: committed once, under hidi
 - **The commitment.** Row r of a registered value is `words` leaves of `word_bits` bits (16 or 32). It is committed as
   the circuit statement commits that port's row, in the port's row format (`hm96-sha512/row/v1`, or the bit rows
   `hm96-sha512/row/v2` and `hm96-sha512/row-seg/v1`), with a salt sampled once. The root is the frame-v3-sha512 root over
-  the rows under the value's registered-value domain (`registered.domain`, on the SHA-512 identity frame of
+  the rows under the value's registered-value domain (`registered_value.domain`, on the SHA-512 identity frame of
   `verity/one-stage/registered-domain/v1`). The prover keeps the rows and salts
-  (`Registered.commit`). The record's `registered` entry is `{"value", "root", "leaves", "words", "domain"}`, with
-  `"word_bits"` when it is not 16 (`Registered.entry`).
+  (`registered_value.Registered.commit`). The record's `registered` entry is `{"value", "root", "leaves", "words", "domain"}`, with
+  `"word_bits"` when it is not 16 (`registered_value.Registered.entry`).
 - **R7** holds the entries to the verifier's own (`registered_entries`, from its own program). It holds each value to a
   root it already has, when it has one: its pinned root (`pinned`: the weights' root recorded before the salt), the root
   an earlier record of the log registered under the same domain (`held_roots`), or, for an output or reused value, the
@@ -487,8 +508,8 @@ core's `tests/verity/circuits/partition_vectors.json` and `template_instance_vec
 ### Sampling designs as text and as registered
 
 - A sampling design's text is `subset:K` or `bernoulli:NUM/DEN` with `NUM ≤ DEN` and `DEN > 0` (`flock-circuit serve
-  --draw`'s syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`draw.parse_design`), each number in ASCII digits
-  (`draw.digits`, as the Lean reads them; a sample's `p` too).
+  --draw`'s syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`randomness.parse_design`), each number in ASCII digits
+  (`randomness.digits`, as the Lean reads them; a sample's `p` too).
 - As objects they are the forms `one_stage.draw`'s docstring gives, the rules expanded by `draw.derive`. The
   docket carries the sampling design expanded.
 - `derive` refuses a `K` outside `[1, N]`, a work sampling design without the verifier's work table, a subcircuit the
@@ -544,13 +565,13 @@ One-stage's answer of an accepted record (`audit.answer`, as Lean's `OneStage.ch
 "complete", "per_template", "proved"}` and the sample's units under the integrity profile's key for them. `complete`
 is the record's own: whether every verdict ran. An accept waits on the verdicts of record and on those that ran, so an
 accept can say `complete` is false, and then a verdict that is not of record did not run. A reader that wants a
-complete audit reads `audit.answer_complete`, never the verdict alone: it is true only of an accept whose `complete`
-is true, so an answer without the field (one written before it, a reject, an undecided) is not complete. A two-stage
+complete audit reads `complete`, never the verdict alone; the stop audit's verdict record (`verdict_record`) words
+an accept whose record is not complete `not complete`. A two-stage
 outcome says it only under `second_stage.complete`, which raises until its Lean is written (`verifier.not_written`,
 goal `proofs/spot-two-stage-sound`); its twin `complete_twin` holds when the two-stage form is allowed, the replay block
 is the registered request Definition, and each audit record accepted and is complete. A two-stage outcome's accept is
-`Run.run`'s symbol alone: round 2's check (`second_stage.check`) raises the same way, and its twin `check_twin` is the
-Python side the run is held to.
+`Run.run`'s symbol alone: round 2's check (`second_stage.check`) is its twin `check_twin` held to the codes the Lean's
+run gave (`DISAGREE` where they differ).
 
 Pinned by `tests/test_one_stage.py` (the profile, audit record, answer and incorrect-block bound tests, under each
 sampling design).

@@ -6,7 +6,7 @@ TMEM stage alone, ε_tensor at L = 32 with the measured points, the fold's issue
     python3 pipe.py agree OUT_A OUT_B               a repeat's rates against the first's, point by point
 
 OUT is pipe.sh's output (rate.jsonl, gate/*/result.json and ref.json, sass/pgemm.sass). --census takes the B200 probe runs
-(run.sh sm100, fetched with `research fetch RUN --all`): their TMEM region and mma.sync points, with the kernel's measured
+(run.sh on a B200, fetched with `research fetch RUN --all`): their TMEM region and mma.sync points, with the kernel's measured
 points added, give ε_tensor at L = 32 by TENSOR's two-stage LP (analyze.tmem_model). Without it the census lines in
 `../../machine_model/data/devices/sm_100/` give ρ_T5, the issue facet and the scalar rates, and ε is not computed.
 
@@ -26,6 +26,9 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import archs  # noqa: E402
+
 CENSUS = Path(__file__).resolve().parents[2] / "machine_model" / "data" / "devices" / "sm_100" / "census.csv"
 ARMS = {0: "pipeline", 1: "TMEM stage", 2: "honest", 3: "MMA self-wait"}
 SLOTS_MMA, LANES, SMSPS = 128 * 256, 32, 4
@@ -189,7 +192,7 @@ def eps_tensor_l32(census_dirs: list[Path], rates: list[dict], rho5: float) -> d
     (the MMA waiting on its own commit, no read) bounds any program's tcgen05 words from above."""
     census = _module("dc_census", HERE / "census.py")
     analyze = census.analyze
-    dev = census.Device("sm100", census_dirs)
+    dev = census.Device(archs.of("sm_100a").family, census_dirs)
     base = dev.model()
     region = list(base["tmem_points"]) + [(r["slots_per_clk"] / rho5, r["committed_words_per_clk"] / rho5)
                                           for r in rates if r["arm"] in (1, 2) and r["L"] == 32]
@@ -204,7 +207,7 @@ def eps_tensor_l32(census_dirs: list[Path], rates: list[dict], rho5: float) -> d
            "T1": 1 - w / rho5}
     rt = max((b for b in (best(rates, 0, 32), best(rates, 3, 32)) if b), key=lambda r: r["slots_per_clk"], default=None)
     out["honest_config"] = {k: honest.get(k) for k in ("nb", "lw", "mi")}
-    bounds = {"bandwidth": h} | ({"round_trip": min(h, rt["slots_per_clk"] / rho5)} if rt else {})
+    bounds = {"load_bandwidth": h} | ({"round_trip": min(h, rt["slots_per_clk"] / rho5)} if rt else {})
     if rt:
         out["round_trip_config"] = {k: rt.get(k) for k in ("nb", "lw", "mi", "arm")}
     for name, t in bounds.items():
@@ -274,7 +277,7 @@ def text(res: dict) -> str:
         lines += ["", (f"eps_tensor at L = 32, honest's measured TMEM stage {e['honest_TMEM_stage']:.2f} words/SM/clk "
                        f"({e['honest_fraction']:.4f} of rho_T5; the probes' LP assumed "
                        f"{e['region_balanced_probes']:.4f} and gave {e['eps_probes_lp']:.4f}): T1 {e['T1']:.4f}")]
-        for name in ("bandwidth", "round_trip"):
+        for name in ("load_bandwidth", "round_trip"):
             c = e.get(name)
             if c:
                 lines.append(f"- adversary capped by {name.replace('_', ' ')}: t {c['t']:.4f}, tcgen05 "

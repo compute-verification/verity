@@ -17,8 +17,11 @@
   `clear_work.RecordedDraw` of round 1, after the commitment's 0.
 - **The prover only opens.** Each opening's value and path come from the pass's files: A's rows and tree levels per call,
   B's rows and tree levels per fixed operand, the tile tree.  Each is checked against the published roots.  Under ``hm96-sha512``
-  (-h3's) a node is 64 bytes and each value is followed by its salt, `audit.hm96_salt` under the manifest's
-  ``hm96_salt_key`` (the prover's, retained for this replay), and the scheme reads the value less its salt.
+  (-h3's) a node is 64 bytes and each value is followed by its salt, the opened leaf's alone: an A row's, a tile's and a
+  y row's from the salts the pass kept beside its rows (a call's ``salts``, the manifest's ``salts_t``, a y's ``salts``),
+  a B row's from the copy the pass kept beside the fixed operand's rows (its ``salts``) of the salts the weights'
+  registration committed them under (`pearl_c.weight_row_salts`), 192 bytes a leaf, and the scheme reads the value less
+  its salt.
 - **The tiles** are `clear_work.audit`'s: its t work-weighted samples (`draw`) and one tile per excluded row
   (`exclusion_tiles`).  Each is held to `Verifier.check_tile` and `check_opened`, as `audit` does, but mapped over J
   processes, since each costs about 11 s of CPU per 1,024 of k (``--fast``: about a tenth of that on `fast_tile`'s batch
@@ -123,15 +126,15 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.commitments import docket_digest as DD
+from verity.commitments import domains as DM
 from verity.commitments import Commitment, Opening, VerificationLimits, verify_opening
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
-    HM96_TRANSCRIPT,
-    HM96_WEIGHTS,
+    HM96_SALT,
     ROW_SCHEMA,
     Epoch,
     activation_binding,
-    hm96_salt,
     opened_value,
     rows_domain,
     weight_binding,
@@ -142,13 +145,16 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.credit import pa
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape, Tile, tagged
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as PCU
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c import K_MIN, TILE
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c import H100, K_MIN, TILE
 from verity.protocols.resource_accounting.compute.pouw.verifier.window import LIVE_SCHEME, pad as grid_pad
+from verity.protocols.compose import schemes
+from verity.protocols.resource_accounting.scheme import declared
 from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveCommitment
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as REG
+from verity.commitments import registered_value as RV
 from verity.errors import ProtocolError
 from verity.commitments.randomness import derive
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PD
+from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 from verity_config.settings import of
@@ -223,12 +229,12 @@ class Opened:
 
     def __init__(self, man: dict, files: Files, refs):
         self.man, self.files, self.refs = man, files, refs
-        hash = PD.scheme_of(man["scheme"]).commitment_hash
-        self.key = bytes.fromhex(man["hm96_salt_key"]) if hash == HM96 else None
-        self.nb = 64 if hash == HM96 else 32
+        self.hm96 = pouw_schemes.get(man["scheme"]).commitment_hash == HM96
+        self.nb = 64 if self.hm96 else 32
 
-    def _salted(self, value: bytes, nonce: int, i: int) -> bytes:
-        return value if self.key is None else value + hm96_salt(self.key, nonce, i)
+    def _salted(self, value: bytes, spec: dict | None, i: int) -> bytes:
+        """``value`` followed by leaf ``i``'s salt from the kept salts at manifest entry ``spec``."""
+        return value + bytes(self.files(spec)[HM96_SALT * i:HM96_SALT * (i + 1)]) if self.hm96 else value
 
     def open(self, epoch: Epoch, tile_id: int) -> TileOpening:
         ref, nb, sv = self.refs[tile_id], self.nb, self._salted
@@ -238,19 +244,21 @@ class Opened:
         b_rows, b_tree = self.files(wt["rows"]), self.files(wt["tree"])
         c = self.man["commitment"]
         leaves = self.files(self.man["leaves"])
-        return TileOpening(ref, tuple(opening(a_tree, u.shape.m, i, sv(f32_row(a_rows, u.shape.k, i), u.index, i), nb)
+        a_salts, b_salts, t_salts = (rec["salts"], wt["salts"], self.man["salts_t"]) if self.hm96 else (None, None, None)
+        return TileOpening(ref, tuple(opening(a_tree, u.shape.m, i, sv(f32_row(a_rows, u.shape.k, i), a_salts, i), nb)
                                       for i in ref.tile.rows),
-                           tuple(opening(b_tree, u.shape.n, j, sv(f32_row(b_rows, u.shape.k, j), HM96_WEIGHTS + u.weight, j), nb)
+                           tuple(opening(b_tree, u.shape.n, j, sv(f32_row(b_rows, u.shape.k, j), b_salts, j), nb)
                                  for j in ref.tile.cols),
                            opening(self.files(self.man["tree_t"]), c["count"], tile_id,
-                                   sv(bytes(leaves[nb * tile_id:nb * tile_id + nb]), HM96_TRANSCRIPT, tile_id), nb))
+                                   sv(bytes(leaves[nb * tile_id:nb * tile_id + nb]), t_salts, tile_id), nb))
 
     def open_y(self, epoch: Epoch, tile_id: int) -> tuple[Opening, ...]:
         """The tile's real rows of its call's committed y (`served_y`; filler rows aren't served)."""
         ref = self.refs[tile_id]
         u, rec = epoch.workload.matmuls[ref.matmul], self.man["matmuls"][ref.matmul]
         rows, tree, real = self.files(rec["y"]["rows"]), self.files(rec["y"]["tree"]), rec["real_rows"]
-        return tuple(opening(tree, real, i, self._salted(f32_row(rows, u.shape.n, i), SY.HM96_Y + u.index, i), self.nb)
+        salts = rec["y"]["salts"] if self.hm96 else None
+        return tuple(opening(tree, real, i, self._salted(f32_row(rows, u.shape.n, i), salts, i), self.nb)
                      for i in ref.tile.rows if i < real)
 
 
@@ -315,7 +323,7 @@ def load(path: Path, coins: CoinCommitment | LiveCommitment | None = None, man: 
     why = passes_distinct([man])
     if why is not None:
         raise Refused(why)
-    scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
+    scheme = pouw_schemes.get(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
     matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
     epoch, salt = PD.manifest_epoch(man, coins)
     records = records_of(man, matmuls)
@@ -502,9 +510,9 @@ def run_commitment(passes: list[Pass]) -> bytes:
                                                          p.epoch.salt, *(bytes.fromhex(r or "") for r in y_roots(p)))))
 
 
-TIE_A, TIE_Y, TIE_B = "pearl-a/{s}/{c}", "pearl-y/{s}/{c}", "pearl-b/{w}"
-#: W's Pearl+ values: a call's (a round's, `TIE_CALLS`) and a fixed operand's
-TIE_PREFIXES = ("pearl-a/", "pearl-y/", "pearl-b/")
+#: W's Pearl+ values: a call's (a round's, `TIE_CALLS`) and a fixed operand's, in the tables Pearl+ declares
+TIE_PREFIXES = tuple(f"{t}/" for t in declared(schemes.get("pearl-plus"), "tables"))
+TIE_A, TIE_Y, TIE_B = TIE_PREFIXES[0] + "{s}/{c}", TIE_PREFIXES[1] + "{s}/{c}", TIE_PREFIXES[2] + "{w}"
 TIE_CALLS = TIE_PREFIXES[:2]
 #: why `tie` refuses a version-2 W that ties the calls alone: it reads as untied fixed operands, never as a tie
 UNTIED_WEIGHTS = "W registers no weight's B rows (no pearl-b/ value: a window record written before W registered them)"
@@ -579,8 +587,8 @@ def tie(w: dict, passes: list[Pass], rounds: list[int] | None = None, dropped: t
     left out of the retention before the coin, which credit nothing). For a W at version 1, which registers no ``pearl-b/``
     value, the tie is of the calls alone, as it was at that version, and the answer names the fixed operands untied:
     ``"weights": WEIGHTS_UNTIED``. ValueError naming the first mismatch otherwise."""
-    if not isinstance(w, dict) or w.get("format") != REG.FORMAT_V2 or not isinstance(w.get("registered"), list):
-        raise ValueError(f"W is no {REG.FORMAT_V2} record with registered values")
+    if not isinstance(w, dict) or w.get("format") != DM.REGISTRATION or not isinstance(w.get("registered"), list):
+        raise ValueError(f"W is no {DM.REGISTRATION} record with registered values")
     tied = PWR.version_of(w) == PWR.VERSION
     got: dict[str, dict] = {}
     for e in w["registered"]:
@@ -600,10 +608,10 @@ def tie(w: dict, passes: list[Pass], rounds: list[int] | None = None, dropped: t
     for v, x in want.items():
         if (e := got.get(v)) is None:
             raise ValueError(f"W registers no {v}")
-        have = {**e, "word_bits": e.get(G.WIDTH_KEY, G.WORD_BITS)}
+        have = {**e, "word_bits": e.get(RV.WIDTH_KEY, RV.WORD_BITS)}
         if bad := [k for k in x if type(have.get(k)) is not type(x[k]) or have[k] != x[k]]:
             raise ValueError(f"W's {v}: its {', '.join(bad)} not the {_owner(v)}'s")
-    return {"record": REG.digest(w), "tables": len(want), **({} if tied else {"weights": WEIGHTS_UNTIED})}
+    return {"record": DD.digest(w), "tables": len(want), **({} if tied else {"weights": WEIGHTS_UNTIED})}
 
 
 def load_class(load: Any) -> tuple[int, int, int]:
@@ -678,7 +686,7 @@ def assumption_of(scheme: Any) -> str:
     """The named assumption a run of `scheme` is credited at (`ASSUMPTION_H100`, else `ASSUMPTION_DEV` at its device
     record, and at its prices where they are another device's)."""
     own = scheme.prices == scheme.device.prices
-    if scheme.device.name == "h100" and own:
+    if scheme.device == H100 and own:
         return ASSUMPTION_H100
     return f"{ASSUMPTION_DEV} at {scheme.device.name}" + ("" if own else f", priced at {scheme.prices.device}")
 

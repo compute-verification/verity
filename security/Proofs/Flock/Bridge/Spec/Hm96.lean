@@ -99,7 +99,7 @@ theorem xorBytes_ofFn (d : Hash.Digest) (m : List UInt8) (hm : m.length = 64) :
       List.getD_eq_getElem _ _ (show i < m.length by omega)]
 
 /-- `Claims.Sampling.sha512Msg` is the bytes of `H`'s digest. -/
-theorem sha512Msg_eq {H : Hash.Msg → Hash.Digest} (hH : HashOf H) (m : Claims.Msg) :
+theorem sha512Msg_eq {H : Hash.Msg → Hash.Digest} (hH : HashOf H) (m : Hash.Msg) :
     Claims.Sampling.sha512Msg m = (H m).bytes := by
   have h := hH (Claims.Sampling.bytes m)
   rw [Claims.Sampling.bs_bytes] at h
@@ -107,7 +107,7 @@ theorem sha512Msg_eq {H : Hash.Msg → Hash.Digest} (hH : HashOf H) (m : Claims.
 
 /-- **The outer message the Bridge's hm96 leaf hashes is `Hash.Hm96`'s**: `leafPrefix ‖ commitString` at the
 executable's key, the row message's digest and the salt. -/
-theorem hm96Outer_eq {H : Hash.Msg → Hash.Digest} (hH : HashOf H) (row salt : Claims.Sampling.Opening Bool → Claims.Msg)
+theorem hm96Outer_eq {H : Hash.Msg → Hash.Digest} (hH : HashOf H) (row salt : Claims.Sampling.Opening Bool → Hash.Msg)
     (o : Claims.Sampling.Opening Bool) :
     Claims.Sampling.hm96Outer Claims.Sampling.sha512Msg row salt o =
       Hash.Hm96.leafPrefix H (bs Flock.Hm96.Default512.key) ++
@@ -123,7 +123,7 @@ theorem hm96Outer_eq {H : Hash.Msg → Hash.Digest} (hH : HashOf H) (row salt : 
 /-- **The Bridge's hm96 leaf is `Hash.Hm96.leaf`**: the bytes SHA-512 gives its outer message are the spec leaf's
 over the row message's digest and the salt, at the executable's key. -/
 theorem sha512Msg_hm96Outer {H : Hash.Msg → Hash.Digest} (hH : HashOf H)
-    (row salt : Claims.Sampling.Opening Bool → Claims.Msg) (o : Claims.Sampling.Opening Bool) :
+    (row salt : Claims.Sampling.Opening Bool → Hash.Msg) (o : Claims.Sampling.Opening Bool) :
     Claims.Sampling.sha512Msg (Claims.Sampling.hm96Outer Claims.Sampling.sha512Msg row salt o) =
       (Hash.Hm96.leaf H (bs Flock.Hm96.Default512.key) (H (row o)) (salt o)).bytes := by
   rw [sha512Msg_eq hH, hm96Outer_eq hH, Hash.Hm96.leaf]

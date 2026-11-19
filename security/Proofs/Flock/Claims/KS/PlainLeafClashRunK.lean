@@ -33,7 +33,7 @@ def plainDecQUK (keep : Bool → Bool) {mPts : ℕ} (Q : Model.OutCL 𝔽 Refine
     Q (a.getD 0 dfltOutL)
 
 /-- `PlainClashQU` at `VK keep`. -/
-def PlainClashQUK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
+def PlainClashQUK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
     (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
     (Q : Model.OutCL 𝔽 Refine.Dig (List UInt8) → Prop) : Prop :=
@@ -44,7 +44,7 @@ def PlainClashQUK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x :
     PlainRawClashLK keep P x ω (plainΦ x spec st (u, r'))
 
 /-- `plainClashQ₀U` at `VK keep`. -/
-theorem plainClashQ₀UK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plainClashQ₀UK (keep : Bool → Bool) {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
     (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
@@ -119,7 +119,7 @@ theorem plainClashQ₀UK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flo
   exact Or.inl ⟨q, a₁, b₁, hcl' ha, hcl' hb, hab⟩
 
 /-- `plainClashQ_orU` at `VK keep`. -/
-theorem plainClashQ_orUK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {spec : SessionSpec} {st : Stmt}
+theorem plainClashQ_orUK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {spec : SessionSpec} {st : Stmt}
     {T : TabSpec spec.mPts} {hw : 2 * spec.mPts ≤ 65536} {I : Exec.Inputs} {d : Json}
     {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8)}
     {Q₁ Q₂ : Model.OutCL 𝔽 Dig (List UInt8) → Prop} (Q : Model.OutCL 𝔽 Dig (List UInt8) → Prop)
@@ -131,7 +131,7 @@ theorem plainClashQ_orUK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover �
   · exact h₂ C u r' ⟨a, ha, hq⟩ hacc
 
 /-- `plainClashQLU` at `VK keep`. -/
-theorem plainClashQLUK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plainClashQLUK (keep : Bool → Bool) {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
     (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
@@ -201,7 +201,7 @@ theorem plainClashQLUK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock
   exact Or.inr (Or.inl (plain_levelClashK keep hacc (hcl' ha) (hcl' hb) hab))
 
 /-- `plainSimClashHU` at `VK keep`. -/
-theorem plainSimClashHUK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plainSimClashHUK (keep : Bool → Bool) {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "flock-leaf/sha512-unsalted")

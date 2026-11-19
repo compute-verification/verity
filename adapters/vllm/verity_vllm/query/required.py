@@ -555,7 +555,7 @@ def _profile(res: Mapping[str, Any], profile: str | None) -> tuple[str, int | No
         from verity_vllm.program.frontend.target_profile import TargetProfile
 
         cc = _declared_target(res).get("compute_capability") or [8, 9]
-        fa3 = TargetProfile(compute_capability=(int(cc[0]), int(cc[1]))).effective_flash_attn_version() == 3
+        fa3 = TargetProfile.default().with_overrides(compute_capability=(int(cc[0]), int(cc[1]))).effective_flash_attn_version() == 3
         profile = "hopper" if (fa == 3 or (fa is None and fa3)) else "ampere"
     return profile, fa
 

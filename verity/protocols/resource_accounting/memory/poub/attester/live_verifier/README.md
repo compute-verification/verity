@@ -30,5 +30,5 @@ peer's `addresses` in `/etc/vy/verifier.json` (`node_of`), whatever the key. A p
 host comes from:
 
 ~~~json
-"peers": {"NODE": {"host_bytes": 1843153879040, "ingress_bytes_per_s": 4.4e9, "addresses": ["ADDRESS"]}}
+"peers": {"NODE": {"figures": "FIGURES.json", "figures_sha512": "HEX", "ingress_bytes_per_s": 4.4e9, "addresses": ["ADDRESS"]}}
 ~~~

@@ -1,4 +1,4 @@
-"""The stacking property (`verity/stacking-property` v1): P(c, R_in, L) on a Program, read with its census (`census`,
+"""The stacking property (`verity/stacking-property` v2): P(c, R_in, L) on a Program, read with its census (`census`,
 verity/census/v1: its steps, its primitives' instances, and each root value's producer, bits and readers).
 
 A carrier is an audited block whose contents were chosen after the seed and hold another block's encoding. Such an encoding
@@ -37,8 +37,10 @@ out-of-range constant, n for the entry at the index's low n bits (8 for `Exp2Lut
 reads counts once per kind, so one routing index read by many gathers counts
 once; a constant index is wiring. A gather whose index and column both depend on a run input pays one ``gathers`` unit more, as
 Lean's `Gates.units` does: it is a V-way select among run-time values, and without that unit a tree of gathers sharing indices
-would compute any function of b index bits for b units. A field extraction (`BitAtx{W}`, `PouwWindowWord_v1`) is a rounding, not a gather: at a
-constant position it still computes. A lift (`Lifted[P]_v1`, `Lifted[P]_v2`, ``P{ORD=k}``) is P's class with a tag test, so a
+would compute any function of b index bits for b units. A field extraction (`BitAtx{W}`, `PouwWindowWord_v1`, a word's bit
+`BitOf{W}x{I}`) is a rounding, not a gather: at a constant position it still computes (bit 1 of a free sum of two bits is
+their AND), and a packing (`WordOf{W}`) is one as Lean's packings are; of registered words, as a weight's unpacking, neither
+is budgeted. A lift (`Lifted[P]_v1`, `Lifted[P]_v2`, ``P{ORD=k}``) is P's class with a tag test, so a
 free P's lift is budgeted (a constant's a select on the enable, the rest roundings). A lifted gather also scans every operand's
 tag (any invalid row gives INV), so it pays one ``compare_select`` unit beside its index bits, and it isn't exempt from B.
 
@@ -104,11 +106,11 @@ from verity.circuits.codec import canonical_json
 from verity.circuits.defs import Body, CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.intervals import norm, ref_intervals
 from verity.circuits.program import RUN, input_id, is_input
-from verity.circuits.refs import Affine, Concat, Explicit, Refs, Strided
+from verity.circuits.refs import Affine, Concat, Explicit, Grid, Refs, Strided
 from verity.circuits.types import Array, Tuple, Type
 
 TAG = "verity/stacking-property"
-VERSION = 1
+VERSION = 2
 SCHEMA = f"{TAG}/v{VERSION}"
 
 BUDGETED = ("roundings", "compare_select", "gathers", "folds")
@@ -139,6 +141,8 @@ _BITS: dict[str, Callable[[int], int]] = {"range": lambda n: n.bit_length(), "lo
 #: the other families built on demand, by id, and their class
 FAMILIES: tuple[tuple[str, str], ...] = (
     (r"^BitAtx[1-9][0-9]*_v1$", "roundings"),  # (word, i): bit i of one runtime word, a field extraction
+    (r"^BitOf[1-9][0-9]*x(?:0|[1-9][0-9]*)_v1$", "roundings"),  # (word): its bit I, a field extraction at a constant position
+    (r"^WordOf[1-9][0-9]*_v1$", "roundings"),  # (bits): the W-bit word of its W bits, a packing
     (r"^(?:And|Xor)(?:[2-9]|[1-9][0-9]+)_v1$", "compare_select"),  # Boolean logic on n bits, as And2_v1 and Xor2_v1
     (r"^TopPMaskWordx[1-9][0-9]*_v1$", "compare_select"),  # the top-p keep mask of V lanes
     (r"^L(?:Select[1-9][0-9]*|FixedSelect[1-9][0-9]*x[1-9][0-9]*|IsActive[1-9][0-9]*|IsEOS[1-9][0-9]*|StepLive[1-9][0-9]*"
@@ -492,6 +496,8 @@ def _colls(refs: Refs, cache: dict | None = None) -> frozenset[tuple[str, int]]:
         out = frozenset().union(*(_colls(p) for p in refs.parts))
     elif isinstance(refs, Explicit):
         out = frozenset((s, i) for s, i, _leaf in refs.items)
+    elif isinstance(refs, Grid):
+        out = frozenset((s, i) for s, i, *_x in refs.lanes)
     else:
         out = frozenset((s, i) for s, i, _leaf in refs)
     if cache is not None:

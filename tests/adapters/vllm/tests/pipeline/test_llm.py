@@ -25,7 +25,9 @@ import pytest
 
 import verity_vllm
 from tests import fake_vllm
-from verity_vllm import config
+from verity import hooks as H
+from verity.protocols.resource_accounting.scheme import Lacks
+from verity_vllm import config, messages
 from verity_vllm import llm as L
 from verity_vllm.config import EnginePin
 from verity_vllm.engine import handle
@@ -102,6 +104,13 @@ def test_a_repo_pinned_under_two_roles_resolves_to_the_downloaded_one(tmp_path):
     assert (pin.case, pin.local_path, pin.world) == ("OLMOE", "/snap", 2)
 
 
+def _answered() -> messages.Exchange:
+    """The exchange `build_engine` answers, as it answers it for an eager engine on one rank."""
+    ex = messages.build()
+    ex.answer(H.Declared("", {"eager": True, "world": 1}))
+    return ex
+
+
 class _FakeVllm:
     llm_engine: SimpleNamespace
 
@@ -110,6 +119,7 @@ class _FakeVllm:
 
     def generate(self, prompts, sampling_params, **kw):
         self.calls.append((prompts, sampling_params, kw))
+        self.in_scope = messages.current()
         return [SimpleNamespace(request_id=str(i), prompt_token_ids=[1, 2],
                                 outputs=[SimpleNamespace(token_ids=[7, 8, 9], finish_reason="length")]) for i, _ in enumerate(prompts)]
 
@@ -125,7 +135,8 @@ def built(monkeypatch):
     def build_engine(checkpoints, **kw):
         seen.update(kw, checkpoints=checkpoints)
         return SimpleNamespace(llm=_FakeVllm(), kwargs={"model": "/snap", "max_num_seqs": kw["max_num_seqs"]}, env_flags={"F": "1"},
-                               execution=kw["execution"], effective={"enforce_eager": True}, build_s=1.5)
+                               execution=kw["execution"], effective={"enforce_eager": True}, build_s=1.5,
+                               exchange=_answered())
 
     monkeypatch.setattr(va, "build_engine", build_engine)
     return seen
@@ -206,13 +217,64 @@ def test_a_refused_set_raises_before_the_engine_is_built(built):
     assert built == {}
 
 
+def test_storage_attaches_by_its_name_though_the_selector_has_no_such_protocol(built, monkeypatch):
+    """``pous`` is no protocol of the selector (`config.PROTOCOLS`) but PoUS's declared scheme's name, which is attached
+    by name: what refuses it here is PoUS's own attach (`served.launcher_refusals`: the in-process LLM hands it no salt
+    source), not the selector.  A name that is neither stays the selector's to refuse, with its message."""
+    attached: list[str] = []
+    attach = messages.Exchange.attach
+    monkeypatch.setattr(messages.Exchange, "attach", lambda ex, s, given, **ctx: (attached.append(s.name), attach(ex, s, given, **ctx))[1])
+    with pytest.raises(ValueError, match="no salt_source"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous")
+    assert attached == ["pous"]
+    with pytest.raises(ValueError, match=r"protocol entry 'zk:v1': unknown protocol 'zk' \(known: pouw, sampled-proofs\)"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous,zk:v1")
+
+
+def test_pearl_plus_attaches_by_its_name_on_the_build_and_close_releases_it(built, monkeypatch):
+    """The kernel is a stand-in: Pearl+ loads it at the first registered weights, which a CPU engine never emits."""
+    llm = L.LLM(LLAMA[0], revision=LLAMA[1], protocols=["pearl-plus"],
+                protocols_config={"pearl-plus": {"device": "cuda", "kernel": "/k.so"}})
+    ex = llm._engine.exchange
+    assert list(ex.attached) == ["pearl-plus"] and llm.protocols is None
+    assert ex.attached["pearl-plus"]["kernel"] == "/k.so" and ex.attached["pearl-plus"]["coins"] == "in-process"
+    assert ("pearl-plus", H.RequireProperty("eager", True, "its kernel at each linear block is not graph-capturable")) in ex.requests
+    released: list[bool] = []
+    monkeypatch.setattr(llm.scheme, "release", lambda: released.append(True))
+    llm.close()
+    llm.close()
+    assert released == [True]
+    with pytest.raises(ValueError, match="pearl-plus runs on cuda"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pearl-plus", protocols_config={"pearl-plus": {"device": "cpu"}})
+
+
+def test_a_declared_schemes_option_is_refused_and_its_name_is_named(built):
+    with pytest.raises(ValueError, match="pouw:pearl-c-h100-v1-h3: names the declared scheme pearl-plus, .*by its name, 'pearl-plus'"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pouw:pearl-c-h100-v1-h3")
+    with pytest.raises(ValueError, match="unknown protocol 'pous'"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous:p2-16448/v4")
+    with pytest.raises(ValueError, match="protocol 'pouw' is enabled twice"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pearl-plus,pouw:eps1-sm120-h1fx1")
+
+
+def test_listed_schemes_attach_by_name_in_their_order(built, monkeypatch):
+    order: list[str] = []
+    stand_ins = {n: SimpleNamespace(name=n, option="", settings={}, depends=(), resource=Lacks("a stand-in"), kernels=Lacks("a stand-in"), check_settings=lambda own: None, requests=lambda ctx: (),
+                                    attach=lambda ex, ctx, n=n: order.append(n)) for n in ("a", "b")}
+    monkeypatch.setattr(messages.declarations, "load", lambda: stand_ins)
+    both = L.LLM(LLAMA[0], revision=LLAMA[1], protocols="a,b")
+    assert order == ["a", "b"] and sorted(both._engine.exchange.attached) == ["a", "b"] and both.protocols is None
+    with pytest.raises(ValueError, match="2 schemes attached by name, not one"):
+        _ = both.scheme
+
+
 @pytest.mark.parametrize("option,value", [
     ("dtype", "float16"),
     ("quantization", "fp8"),
     ("compilation_config", {"mode": 0}),
 ])
 def test_a_build_dependent_option_refuses_kernel_profile_overrides_before_build(built, option, value):
-    with pytest.raises(ValueError, match=rf"sampled-proofs:rows-sha512: engine overrides {option} .* no longer match its Build"):
+    with pytest.raises(ValueError, match=rf"sampled-proofs:rows-sha512: its served computation is the row's Build.* \(kernels \('{option}',\)\)"):
         L.LLM(
             LLAMA[0],
             revision=LLAMA[1],
@@ -235,7 +297,7 @@ def test_protocols_install_on_the_built_model_and_close_uninstalls_them(built, m
 
     fake = SimpleNamespace(NAME="pous", schemes=lambda: ("band-chain/d12/v1",), refusals=lambda scheme, ctx: (), install=install)
     monkeypatch.setitem(sys.modules, "verity_vllm.protocols.fake_pous", fake)
-    monkeypatch.setitem(PO.ADAPTERS, "pous", "fake_pous")
+    monkeypatch.setitem(config.PROTOCOLS, "pous", "fake_pous")
     real = va.build_engine
     monkeypatch.setattr(va, "build_engine", lambda *a, **kw: SimpleNamespace(**vars(real(*a, **kw)), model=model))
     llm = L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous:band-chain/d12/v1", protocols_config={"pous": {"cpu": 3}})
@@ -244,6 +306,30 @@ def test_protocols_install_on_the_built_model_and_close_uninstalls_them(built, m
     assert llm.engine_record["protocols"]["protocols"] == [{"entry": "pous:band-chain/d12/v1", "commitment": {"storage_root": "c"}}]
     llm.close()
     assert not hasattr(model, "decoded")
+
+
+def test_each_llm_files_on_its_own_builds_exchange_and_generates_in_it(built, monkeypatch):
+    """A second LLM in one process, after the first build was answered, files its protocols' requests on its own build's
+    exchange, and each generates with its own in scope."""
+    from verity_vllm import protocols as PO
+    model = SimpleNamespace(name="model")
+    asks = (H.RequireProperty("eager", True, "the decode wrappers are not graph-capturable"),)
+    fake = SimpleNamespace(NAME="pous", schemes=lambda: ("band-chain/d12/v1",), refusals=lambda scheme, ctx: (),
+                           requests=lambda scheme, ctx: asks,
+                           install=lambda scheme, target: PO.Option(name=f"pous:{scheme}", hooks=target.hooks(f"pous:{scheme}")))
+    monkeypatch.setitem(sys.modules, "verity_vllm.protocols.fake_pous", fake)
+    monkeypatch.setitem(config.PROTOCOLS, "pous", "fake_pous")
+    from verity_vllm.engine import vllm_adapter as va
+    stand_in = va.build_engine
+    monkeypatch.setattr(va, "build_engine", lambda *a, **kw: SimpleNamespace(**vars(stand_in(*a, **kw)), model=model))
+    first, second = (L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous:band-chain/d12/v1") for _ in range(2))
+    a, b = first._engine.exchange, second._engine.exchange
+    assert a is not b and a.requests == b.requests == [("pous:band-chain/d12/v1", asks[0])]
+    first.generate(["x"])
+    assert first._engine.llm.in_scope is a and messages.current() is b
+    assert first.reinstall() is not None and messages.current() is b
+    first.close()
+    second.close()
 
 
 def test_an_engine_class_fills_its_settings():
@@ -357,7 +443,7 @@ def built_g(monkeypatch):
             scheduler=_Scheduler(effective["max_model_len"]))))
         return SimpleNamespace(llm=llm, kwargs={"max_num_seqs": kw["max_num_seqs"], **args},
                                env_flags=seen.get("env_flags", dict(kw.get("env") or {})), execution=kw["execution"],
-                               effective=effective, build_s=1.0)
+                               effective=effective, build_s=1.0, exchange=_answered())
 
     monkeypatch.setattr(va, "build_engine", build_engine)
     return seen
@@ -451,6 +537,7 @@ def test_class_g_reaches_vllms_engine_args_and_is_read_back_from_its_scheduler_c
     monkeypatch.setattr(B.served, "apply", lambda execution: {})
     monkeypatch.setattr(sparse_mla, "arm", lambda: None)
     monkeypatch.setattr(topp_pin, "arm", lambda: None)
+    monkeypatch.setattr(B, "hooked", lambda make: (make(), None, lambda: None))
     seen = {}
 
     class _VllmLLM:

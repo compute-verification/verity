@@ -36,10 +36,3 @@ def supports(subcircuit, scheme):
 
 def relation(subcircuit, scheme):
     return "irf:token-select-combine"
-
-
-def stage(input_set, lo, hi, out_dir):
-    """The frame-v3 instance file for ids [lo, hi) (``verity_flock.ir_frame.stage``): each pod stages its own."""
-    from verity_flock import ir_frame
-
-    return ir_frame.stage(frame_lowering(input_set.subcircuit), input_set, lo, hi, out_dir)

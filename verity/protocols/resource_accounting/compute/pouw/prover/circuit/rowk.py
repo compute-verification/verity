@@ -55,7 +55,7 @@ from . import anchors as A
 from . import leaves as L
 from . import pc8
 from . import tile_units as U
-from . import words as W
+from verity.circuits.ops import words as W
 
 #: the deployed segment length: a multiple of every device's window, of 32 and of Pearl-C4's 64-position atom
 ROW_K = 2048

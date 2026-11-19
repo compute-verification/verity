@@ -131,7 +131,7 @@ def test_the_bindings_read_the_padded_launch_under_a_breakable_target(declared):
     VB.observe_launch_context(TG.parse_launch_context({"batch": [[[1, 3], [2, 0]]]}))
     node, sampled = _node({"launch_step": 0, "launch_rows": "tokens"}), _node({"launch_step": 0, "launch_rows": "sampled"})
     assert OB.launch_tokens_of(node, 2) == 3
-    VB.observe_target_profile(TargetProfile(batch_invariant=False, compilation="breakable"))
+    VB.observe_target_profile(TargetProfile.default().with_overrides(batch_invariant=False, compilation="breakable"))
     assert OB.launch_tokens_of(node, 2) == 4 and OB.launch_tokens_of(sampled, 1) == 2
     with OB.launch_region(0, "tokens"):
         assert OB.traced_launch_tokens(2) == 4

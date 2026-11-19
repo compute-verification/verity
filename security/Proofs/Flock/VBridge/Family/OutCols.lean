@@ -41,7 +41,7 @@ namespace FlockVBridge.OfVStar
 
 open Flock.HmNets hiding and
 open Flock FlockSoundness.Discharge.Hm
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge
 
 /-- **The verifier's `rec-residuals` unit returns its outputs from `partBase`**: its output group's first column, of
 `RES_OUT_WORDS` ports, past the inputs, its bits within the computed columns. -/
@@ -71,7 +71,7 @@ end FlockVBridge.OfVStar
 namespace FlockVBridge.Family
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Exec
-open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockSoundness.Model FlockSoundness.Audit
+open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockSoundness.Model Spot.Sampling
 open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBridge.Stages
 open FlockVBridge.OfVStar (partBase)
 

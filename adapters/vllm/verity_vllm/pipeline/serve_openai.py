@@ -5,11 +5,10 @@
         [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1] [--learn-host-budget-mb 4096]
         [--retain host|device [--retain-device-gb 32] [--release-after spot,pouw_h1 [--draws-dir DIR]]]
         [--required-manifest PREDICTED/manifest.json --hidden-so SO --norm-tap-so SO] [--seal]
-        [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300]
-        [--copy-records-to $OUT] [--admit arrival|release-order|tick [--admit-hold-ms 5000]] [--switch-interval-ms 0.1] [--async-scheduling]
-        [--tick-bucket-ms 100 --tick-sat-ms MS --tick-free-ms MS]
+        [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb GB (with --seal)]
+        [--copy-records-to $OUT] [--switch-interval-ms 0.1] [--async-scheduling]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
-        [--protocols pouw:pearl-c-h100-v1-h3 --precision bfloat16 --protocols-config JSON
+        [--protocols pearl-plus --precision bfloat16 --protocols-config JSON
          [--challenger-gate CMD --challenger-peer NAME --challenger-lane LANE]]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO] [--remote-filler-gib 0]]
         [--day N --day-log LOG --day-program HEX [--day-blocks KEYS] [--day-params FILE]]
@@ -21,7 +20,7 @@ is the reference: under ``--protocol vllm`` (the default) a request is parsed by
 validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamResponse``, serialized the way its
 ``completion_stream_generator`` does; ``max_tokens`` is bounded by its ``get_max_tokens`` rule. `serve_protocol.PlainProtocol`
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
-each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) answers a network
+each other and the server records the result at start. ``--protocol ids`` (the network attester's declared framing, `serve_protocol.framings`) answers a network
 attester's id request (exactly ``id_form.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
 scan's id form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``; a stream the
 engine fails stops after its ids so far and the connection closes, with no ``[DONE]`` and no text (its reason only in
@@ -47,12 +46,14 @@ thread (`serve_loop.EngineLoop`): each HTTP request is admitted with ``add_reque
 request's connection as it comes. The HTTP side is an asyncio server on its own thread, one request per connection. It
 takes a request's first line only as the network attester does (`serve_head.request_line`), and answers 400 to any other:
 those are the bytes the network attester passes on without its release.
-Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the network
-attester's release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the network attester sends), where each step's
-rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`; ``serve.json``'s
-``step_rows``). ``--admit tick`` (`serve_admit.TickGate`) also adds each at the step the certified tick says, from the release
-buckets the network attester's watermark gives (its ``POST /verity/watermark``, which the server reads as it streams) and the
-engine class's registered step times (``--tick-sat-ms``, ``--tick-free-ms``), the rows kept as under ``release-order``.
+The admission's settings are ``--protocols-config``'s entry under the name of the scheme that provides admission
+(`admission_settings`), and their ``order`` (`admission_order`) decides it: requests reach the engine in the order the
+frontend parsed them (``arrival``, the default), or in the network attester's release order (``release-order``: the attester's
+frontend, `network_admission`), where each step's rows also keep the scheduler's order, so a step's new rows are in
+admission order (`serve_admit.keep_scheduler_rows`; ``serve.json``'s ``step_rows``). ``tick`` (the attester's gate) also
+adds each at the step the certified tick says, from the release buckets the network attester's watermark gives (its
+``POST /verity/watermark``, which the server reads as it streams) and the engine class's registered step times, the rows
+kept as under ``release-order``.
 No compile slice replays that admission, so its windows' served rows name none (`no_slice`, `serve_commit.NO_TICK_SLICE`).
 The engine schedules synchronously unless ``--async-scheduling``, which the row's Build of record must declare
 (`serve_row`).
@@ -66,16 +67,14 @@ window back from the committed bytes into the served record (`commit.served_reco
 committed input ids (the step-input port's ``step.input/ids``, `served_record.IDS_NAMES`), sampled ids and
 seeds, by position. Once a request has finished, `BlockValues.check` holds them to what was served: its prompt ids and
 streamed ids, the seed it carried, and where its finish says the stream ends. ``--prefix-caching``: vLLM's prefix cache
-(off otherwise); a hit's check names the requests that committed its prefix (`RequestRecord.prefix_cover`). With it,
-``VERITY_POOL_ROW`` (the carried pool's token width CTW) keys the cache's blocks by BlockKey_v1 and exports the pool's row at
-each close (`engine.pool_row`, `CommitWindows._pool_row`): ``pool_rows/w<k>.json`` and the window line's ``pool_row``. Before it listens, under bounded staging, the committer learns its declared static
+(off otherwise); a hit's check names the requests that committed its prefix (`RequestRecord.prefix_cover`). Before it listens, under bounded staging, the committer learns its declared static
 shape's plans in a learn-only pass (`serve_learn`).
 
 Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in use, the address), ``windows.jsonl`` (one
 line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds, and the public
 record of the step rows it ran, committed at its close under its run root for the compile slice, `serve_commit.commit_served`,
 whose rows and salts go to ``served_rows/w<k>.json``; the record's ``slice`` names that slice, `serve_commit.SERVED_SLICE`, and
-under ``--admit tick`` is null, with why in its ``no_slice`` and once in ``serve.json``'s ``served_rows_no_slice``),
+under order ``tick`` is null, with why in its ``no_slice`` and once in ``serve.json``'s ``served_rows_no_slice``),
 ``requests.jsonl`` (one line a request: the HTTP id, the engine id, the
 body's ``user``, its release and its place among the engine's adds, the runner's ids, the prompt ids, the streamed ids, its
 ingress, its finish, its committed rows and seeds, and its check), ``request_users.jsonl`` (`serve_commit.REQUEST_USERS`) and
@@ -97,21 +96,21 @@ committer (`NativeHostCommitter.detach`), and it waits only while the windows aw
 has ``--disk-floor-gb`` free beyond one such window, and once a window's seal would take it under that floor, the window is
 not sealed and the server stops: it refuses new requests, finishes those in flight, and exits. ``--copy-records-to`` (the
 run's ``$OUT``) gets the fields `serve_mirror.PUBLIC` names of the records it lists, each with its public kind, after each close
-and each seal, and at the stop before the seals still pending; every other field and file stays in ``--out``.
-SIGTERM or SIGINT stops it: the open window is closed and its requests checked, the pending seals
-finish, and ``summary.json`` counts the requests and checks, the seals, and the admissions' order (`ReleaseOrder.summary`);
+and each seal, and at the stop before the seals still pending; every other field and file stays in ``--out``. SIGTERM or SIGINT stops it: the open window is closed and its requests checked, the pending seals
+finish, and ``summary.json`` counts the requests and checks, the seals, and the admissions' order (the attester's frontend's ``summary``);
 it is written before the pending seals too, and its ``final`` is true only once every window's records are written.
 
 ``--protocols pouw:eps1-sm120-h1fx1`` serves PoUW H1 on this server's own Commit, one H1 window a Commit window
 (`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
 ``--challenger-peer`` each window's coins come from a session of its own on the auditor device's challenger, reserved
 through the challenger's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
-``--protocols pouw:pearl-c-h100-v1-h3`` (``--precision bfloat16``) serves every linear but the LM head as Pearl+'s FP8
-product under this server's Commit, one Pearl+ epoch a Commit window, the window's circuit cut at those linears
-(`serve_pearl`): each window's passes, one an engine step, its ``coins.json`` and ``served.json`` go to ``pearl/w<k>/``, and
-its outcome is its ``windows.jsonl`` line's ``pouw_pearl``. With ``--challenger-gate``, ``--challenger-peer`` and
-``--challenger-lane`` each window's salt coin comes from a salt-only session of its own on the auditor device's challenger,
-reserved under the lane when the window opens (`serve_pearl.live`); without them it is in-process and credits nothing.
+``--protocols`` listing declared schemes, each by its name (``pearl-plus``, ``--precision bfloat16``; its option
+``pouw:pearl-c-h100-v1-h3`` is refused, naming it), attaches each by name on the engine's build in the list's order, the earlier outer
+(`listed`, `messages.attach_listed`), and releases each at shutdown before its report (`write_reports`): Pearl+ one epoch a Commit window,
+its passes, ``coins.json`` and ``served.json`` under ``pearl/w<k>/``, its report under ``schemes/pearl-plus/``. With
+``--challenger-gate``, ``--challenger-peer`` and ``--challenger-lane`` each epoch's salt comes from a session of its own
+reserved under the lane, its epoch number kept in ``VERITY_PROTOCOLS_CONFIG``'s ``private``; without them it is in-process
+and credits nothing.
 ``--day N`` declares day N's one circuit in ``--day-log`` before the model loads, and each window's registration names it (`serve_day`).
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to
 PoUB's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_poub`): its
@@ -126,30 +125,51 @@ from __future__ import annotations
 
 import asyncio
 import json
+import queue
 import shutil
 import signal
 import sys
 import threading
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm import messages as M, settings
+from verity import hooks as H
+from verity_vllm import messages as M
+from verity_vllm import settings
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
-from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_head as HD, serve_learn as SL,
-                                   serve_pearl as SPL, serve_release as RL, serve_day as SD, serve_poub as SR, serve_row as RW,
-                                   serve_seal as SS)
-from verity_vllm.pipeline.serve_admit import (ADMIT, WATERMARK_PATH, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
-                                              engine_id_of, keep_scheduler_rows, new_http_id)
-from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, param_of,
-                                               served_statics, user_of)
+from verity_vllm.llm import option_settings
+from verity_vllm.pipeline import (commit_coins as CC, seal_process as SP, serve_guard as SG, serve_h1 as SH,
+                                   serve_learn as SL, serve_release as RL, serve_day as SD, serve_poub as SR,
+                                   serve_row as RW, serve_seal as SS)
+from verity_vllm.pipeline.scheme_plugin import write_reports
+from verity_vllm.pipeline.serve_admit import (Admission, Delta, admission_order, admission_settings, engine_id_of, keep_scheduler_rows,
+                                              new_http_id, protocols_doc)
+from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, param_of, served_statics,
+                                               user_of)
 from verity_vllm.pipeline.serve_loop import EngineLoop, advice_trace
 from verity_vllm.pipeline.serve_mirror import records_mirror
-from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
-                                                 VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
+from verity_vllm.pipeline.serve_protocol import (PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
+                                                 VllmProtocol, error_body, framing_agrees, framings, http_chunk, sse,
+                                                 usage_of)
+
+NO_REQUEST_LINE = ("the request's first line isn't `METHOD target HTTP/1.0` or `HTTP/1.1`, one space between and nothing "
+                   "after")
+_TOKEN = frozenset("!#$%&'*+-.^_`|~0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+
+def request_line(line: str) -> tuple[str, str] | None:
+    """(method, target) of an HTTP/1.x request's first line: a token, a target of printable non-space characters, and
+    ``HTTP/1.0`` or ``HTTP/1.1``, one space between and nothing after; None for any other line."""
+    parts = line.split(" ")
+    if not (len(parts) == 3 and parts[2] in ("HTTP/1.0", "HTTP/1.1") and parts[0] and set(parts[0]) <= _TOKEN
+            and parts[1] and all(c.isprintable() and not c.isspace() for c in parts[1])):
+        return None
+    return parts[0], parts[1]
+
 
 PRECISIONS = ("verity_int8", "int8_exact", "pin", "bfloat16")
 #: precision -> (the int8 parts it registers, the int8 scope its layers must then run; None: not checked). Every precision
@@ -163,7 +183,7 @@ TOP_P_REFUSAL = ("serve-openai refuses top_p={top_p} < 1: vLLM's top-p sampler r
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    out: str = option("--out", env="RESEARCH_RUN_DIR", default=".", help="the records' directory (default $RESEARCH_RUN_DIR, else .)")
+    out: str | None = option("--out", default=None, help="the records' directory, outside the run's directory (refused inside it)")
     host: str = option("--host", default="127.0.0.1")
     port: int = option("--port", type=int, default=18082)
     model: str = option("--model", help="the pinned model (the int8 pin: manifests/checkpoints-int8.json)")
@@ -171,18 +191,18 @@ class Options:
     served_model_name: str | None = option("--served-model-name", default=None, help="the name /v1/models lists (default --model)")
     hf_home: str | None = option("--hf-home", env="HF_HOME", default=None, help="the checkpoint store (default $HF_HOME)")
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="local", help="the Commit's run id (default $RESEARCH_RUN_ID)")
-    protocol: str = option("--protocol", choices=tuple(PROTOCOLS), default="vllm",
+    protocol: str = option("--protocol", choices=tuple(framings()), default="vllm",
                            help="vllm: vLLM's own request and response classes; plain: the same framing without them; ids: a "
                                 "network attester's id requests streamed in the scan's id form, raw, and every other request as vllm "
-                                "(serve_protocol.IdsProtocol)")
-    id_payload: int = option("--id-payload", type=int, default=ID_PAYLOAD,
+                                "(the network attester's declared framing, Scheme.framings)")
+    id_payload: int | None = option("--id-payload", type=int, default=None,
                              help="--protocol ids: each id event's bytes, the network attester's cell payload B − 9 (default 503: the scan's "
                                   "B = 512)")
     precision: str = option("--precision", choices=PRECISIONS, default="verity_int8",
                             help="verity_int8 (default): int8 linears only, as vLLM's own server serves the int8 pin, the one that fits "
                                  "network attestation's plan; int8_exact: int8 linears and attention (quantization verity_int8, attention "
                                  "CUSTOM); pin: the pin's engine profile; bfloat16: the pin's profile at dtype bfloat16, "
-                                 "unquantized (Pearl+'s arm, serve_pearl)")
+                                 "unquantized (Pearl+'s)")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     max_model_len: int = option("--max-model-len", type=int, default=512)
     max_num_batched_tokens: int = option("--max-num-batched-tokens", type=int, default=2048, help="tokens a step schedules")
@@ -214,10 +234,10 @@ class Options:
     window_gb: float = option("--window-gb", type=float, default=32.0,
                               help="close a Commit window once its steps have committed this many GB, which bounds its sealed "
                                    "bundle (0: no bound)")
-    disk_floor_gb: float = option("--disk-floor-gb", type=float, default=300.0,
-                                  help="--seal: refuse to start unless OUT's filesystem has this many GB free beyond one window "
-                                       "(--window-gb), and stop cleanly (no new requests) rather than seal a window that would "
-                                       "leave less (0: no floor)")
+    disk_floor_gb: float | None = option("--disk-floor-gb", type=float, default=None,
+                                         help="--seal (required with it: a fact of the machine's disk): refuse to start unless "
+                                              "OUT's filesystem has this many GB free beyond one window (--window-gb), and stop "
+                                              "cleanly (no new requests) rather than seal a window that would leave less (0: no floor)")
     copy_records_to: str | None = option("--copy-records-to", default=None,
                                          help="copy the records' public fields (serve_mirror.PUBLIC, field by field; nothing it doesn't "
                                               "name) into this directory (the run's $OUT) after each block closes and at the stop")
@@ -240,34 +260,15 @@ class Options:
     force_include_usage: bool = option("--force-include-usage", action="boolean_optional", default=True,
                                        help="vLLM's --enable-force-include-usage: the usage chunk on every stream, and usage on each "
                                             "chunk (default on)")
-    admit: str = option("--admit", choices=ADMIT, default="arrival",
-                        help="arrival (default): each request to the engine once parsed; release-order: in the network attester's release "
-                             "order (x-verity-release), each once every earlier-released one is in; tick: in release order, each at "
-                             "the step whose logical time its release bucket has closed by (serve_admit.TickGate), its windows' "
-                             "served rows naming no compile slice (serve_commit.NO_TICK_SLICE)")
-    admit_hold_ms: int = option("--admit-hold-ms", type=int, default=5000,
-                                help="release-order, tick: skip a missing earlier release once a later request has waited this long; "
-                                     "tick: open the gate once the watermark has stalled this long")
-    tick_bucket_ms: float = option("--tick-bucket-ms", type=float, default=100.0,
-                                   help="tick: the network attester's bucket (its deployment's bucket_ms)")
-    tick_sat_ms: float = option("--tick-sat-ms", type=float, default=0.0,
-                                help="tick: the engine class's step time while vLLM's waiting queue is nonempty (registered with "
-                                     "the class)")
-    tick_free_ms: float = option("--tick-free-ms", type=float, default=0.0,
-                                 help="tick: the engine class's step time while the waiting queue is empty (registered with the class)")
     protocols: str | None = option("--protocols", default=None,
                                    help=f"{SH.ENTRY}: PoUW H1 on this server's Commit, one H1 window a Commit window (serve_h1); "
-                                        f"{SPL.ENTRY}: every linear but the LM head Pearl+'s FP8 product under it, one Pearl+ "
-                                        "epoch a Commit window, the window's circuit cut at those linears (serve_pearl)")
+                                        "else a configuration's declared schemes in its order, each its name or its option, "
+                                        "attached by name, the earlier outer (messages.attach_listed)")
     protocols_config: str | None = option("--protocols-config", default=None,
                                           help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file "
-                                               "(serve_h1.config_of, serve_pearl.config_of)")
-    pearl_users: str | None = option("--pearl-users", default=None, metavar="REGEX",
-                                     help=f"with --protocols {SPL.ENTRY}: the arm opens on a window only at its first step "
-                                          "whose requests' users all match REGEX, the tied workload's; any other window "
-                                          "(the network attester's front's) serves no Pearl+ epoch and reserves no salt "
-                                          "session (serve_pearl)")
-    gate: SH.GateOptions = group(SH.GateOptions)
+                                               "(serve_h1.config_of, listed)")
+    gate: CC.GateOptions = group(CC.GateOptions)
+    h1: SH.H1Options = group(SH.H1Options)
     remote: SR.RemoteOptions = group(SR.RemoteOptions)
     retention: RL.RetentionOptions = group(RL.RetentionOptions)
     learning: SL.LearnOptions = group(SL.LearnOptions)
@@ -282,8 +283,13 @@ class Server:
 
     def __init__(self, *, proto: PlainProtocol, served_name: str, max_model_len: int, tokenizer: Any, defaults: Mapping[str, Any],
                  submit: Callable[[Admission], None], abort: Callable[[str], None], model_root: str = "",
-                 clock: Callable[[], float] = time.time, order: ReleaseOrder | TickAdmit | None = None) -> None:
+                 clock: Callable[[], float] = time.time, order: H.Front | None = None,
+                 exchange: M.Exchange | None = None,
+                 arrive: Callable[[str, str, Mapping[str, str], str | None], None] | None = None) -> None:
         self.proto, self.served_name, self.max_model_len = proto, served_name, int(max_model_len)
+        self.ex, self.arrive = exchange or M.current(), arrive
+        self.ex.refuse = self.refuse
+        self.live: dict[str, Admission] = {}                   # engine id -> its admission, while its answer goes on
         self.tokenizer, self.defaults, self.order = tokenizer, dict(defaults), order
         self.submit, self.abort = (submit, abort) if order is None else (order.submit, order.abort)
         self.model_root, self.clock = model_root or served_name, clock
@@ -296,16 +302,19 @@ class Server:
             head = await reader.readuntil(b"\r\n\r\n")
             t_head = self.clock()
             line, *fields = head[:-4].split(b"\r\n")
-            first = HD.request_line(line)
+            first_line = line.decode("latin-1")
+            first = request_line(first_line)
             if first is None:
-                return await self._json(writer, 400, error_body(HD.NO_REQUEST_LINE, 400, "BadRequestError"))
+                return await self._json(writer, 400, error_body(NO_REQUEST_LINE, 400, "BadRequestError"))
             method, path = first
-            headers = HD.header_fields(fields)
-            if method == "POST" and path.split("?", 1)[0] == WATERMARK_PATH and isinstance(self.order, TickAdmit):
-                return await self.watermark(reader, writer, headers)
+            headers = {k.strip().lower().decode("latin-1"): v.strip().decode("latin-1")
+                       for k, _, v in (f.partition(b":") for f in fields if f)}
+            served = self.ex.route(path.split("?", 1)[0])
+            if served is not None:
+                return await self.serve_route(served[1], first_line, headers, reader, writer)
             body = await reader.readexactly(int(headers.get("content-length") or 0))
             await self.route(method, path.split("?", 1)[0], body, writer, headers, head + body,
-                             {"head": t_head, "received": self.clock()})
+                             {"head": t_head, "received": self.clock()}, first_line)
         except (asyncio.IncompleteReadError, ConnectionError, ValueError):
             pass
         finally:
@@ -315,28 +324,29 @@ class Server:
             except (ConnectionError, OSError):
                 pass
 
-    async def watermark(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, headers: Mapping[str, str]) -> None:
-        """The network attester's watermark (``--admit tick``): its chunked body's lines go to the gate as they come, and
-        its end is answered 200 (400 for a malformed stream). A POST that isn't a run's one stream (a client's, a run's
-        second: `TickAdmit.watermark`) is answered 400 with its body unread."""
+    async def serve_route(self, serve: H.Route, first_line: str, headers: Mapping[str, str], reader: asyncio.StreamReader,
+                          writer: asyncio.StreamWriter) -> None:
+        """A request on a route a scheme serves (`hooks.ServeRoute`): its body, chunked or of its stated length, streams to
+        ``serve`` on a thread of its own, the event loop waiting while it takes each piece, so nothing ``serve`` calls
+        overlaps the server's own work; its status and text are the answer. A body that breaks off reaches ``serve`` as
+        `hooks.Broken`."""
+        route = _Route(serve, first_line, headers)
         try:
-            w = self.order.watermark(headers)
-        except ValueError as e:
-            return await self._json(writer, 400, error_body(str(e), 400, "BadRequestError"))
-        try:
-            if "chunked" not in headers.get("transfer-encoding", "").lower():
-                w.close("the watermark's body is chunked")
-            while not w.closed:
-                size = int((await reader.readuntil(b"\r\n")).split(b";", 1)[0], 16)
-                if size == 0:
-                    await reader.readuntil(b"\r\n")
-                    w.close()
-                    break
-                w.feed((await reader.readexactly(size + 2))[:-2])
+            if "chunked" in headers.get("transfer-encoding", "").lower():
+                while True:
+                    size = int((await reader.readuntil(b"\r\n")).split(b";", 1)[0], 16)
+                    if size == 0:
+                        await reader.readuntil(b"\r\n")
+                        break
+                    if not route.feed((await reader.readexactly(size + 2))[:-2]):
+                        break
+            elif int(headers.get("content-length") or 0):
+                route.feed(await reader.readexactly(int(headers["content-length"])))
         except (asyncio.IncompleteReadError, ConnectionError, ValueError) as e:
-            w.close(f"the watermark broke off: {type(e).__name__}")
-        await self._json(writer, 200 if w.error is None else 400,
-                         b"" if w.error is None else error_body(w.error, 400, "BadRequestError"))
+            route.feed(H.Broken(type(e).__name__))
+        status, text = route.end()
+        kind = {400: "BadRequestError", 404: "NotFoundError", 405: "MethodNotAllowed"}.get(status, "InternalServerError")
+        await self._json(writer, status, text.encode() if status < 400 else error_body(text, status, kind))
 
     @staticmethod
     def _head(status: int, ctype: str, length: int | None) -> bytes:
@@ -349,7 +359,8 @@ class Server:
         await writer.drain()
 
     async def route(self, method: str, path: str, body: bytes, writer: asyncio.StreamWriter,
-                    headers: Mapping[str, str] | None = None, request: bytes = b"", times: Mapping[str, float] | None = None) -> None:
+                    headers: Mapping[str, str] | None = None, request: bytes = b"", times: Mapping[str, float] | None = None,
+                    first_line: str = "") -> None:
         release = None
         try:
             if path == "/health":
@@ -362,7 +373,8 @@ class Server:
                 return await self._json(writer, 200, json.dumps(self.tokenize(self._body(body))).encode())
             if path == "/v1/completions":
                 release = self._release(headers)
-                return await self.completions(self._body(body), writer, release, self.proto.of(request), times)
+                return await self.completions(self._body(body), writer, release, self.proto.of(request), times,
+                                              first_line, headers or {})
             raise RequestError(f"no route {method} {path}", 404, "NotFoundError")
         except RequestError as e:
             await self._json(writer, e.status, error_body(str(e), e.status, e.kind, e.param))
@@ -443,12 +455,16 @@ class Server:
         print(f"SERVE-OPENAI stream error ({proto.name}) {adm.http_id}: {error}", file=sys.stderr, flush=True)
 
     async def completions(self, b: Any, writer: asyncio.StreamWriter, release: tuple[str, int] | None = None,
-                          proto: Any = None, times: Mapping[str, float] | None = None) -> None:
+                          proto: Any = None, times: Mapping[str, float] | None = None, first_line: str = "",
+                          headers: Mapping[str, str] | None = None) -> None:
         proto = proto or self.proto
         loop = asyncio.get_running_loop()
         deltas: asyncio.Queue = asyncio.Queue()
         req, adm = self.admit(b, lambda d: loop.call_soon_threadsafe(deltas.put_nowait, d), release, proto, times)
         created, model = int(self.clock()), self.served_name
+        if self.arrive is not None:
+            self.arrive(adm.engine_id, first_line, dict(headers or {}), adm.user)
+        self.live[adm.engine_id] = adm
         self.submit(adm)
         self.served += 1
         n_prompt, n_out, finished = len(adm.prompt_ids), 0, False
@@ -499,8 +515,138 @@ class Server:
             writer.write(frame(SSE_DONE) + (b"0\r\n\r\n" if http else b""))
             await writer.drain()
         finally:
+            self.live.pop(adm.engine_id, None)
             if not finished:
                 self.abort(adm.engine_id)
+
+    def refuse(self, input: str, why: str) -> None:
+        """A scheme refused input ``input`` (`hooks.RefuseInput`): its answer, if it is still going on, ends with ``why``
+        and the engine aborts it."""
+        adm = self.live.get(input)
+        if adm is not None:
+            adm.deliver(Delta([], "", error=why))
+            self.abort(input)
+
+
+class _Route:
+    """One request's body handed to a route's ``serve`` on its own thread, a piece at a time (`Server.serve_route`)."""
+
+    END = object()
+
+    def __init__(self, serve: H.Route, first_line: str, headers: Mapping[str, str]) -> None:
+        self.inbox: queue.SimpleQueue = queue.SimpleQueue()
+        self.outbox: queue.SimpleQueue = queue.SimpleQueue()
+        self.answer: tuple[int, str] | None = None
+        threading.Thread(target=self._run, args=(serve, first_line, headers), name="route", daemon=True).start()
+
+    def _body(self) -> Iterator[bytes]:
+        while (item := self.inbox.get()) is not self.END:
+            if isinstance(item, BaseException):
+                raise item
+            yield item
+            self.outbox.put(None)
+
+    def _run(self, serve: H.Route, first_line: str, headers: Mapping[str, str]) -> None:
+        try:
+            answer = serve(first_line, headers, self._body())
+        except Exception as e:  # noqa: BLE001  (a route's fault answers 500)
+            answer = (500, f"{type(e).__name__}: {e}")
+        self.outbox.put(answer)
+
+    def _wait(self) -> bool:
+        if self.answer is None:
+            got = self.outbox.get()
+            if got is None:
+                return True
+            self.answer = got
+        return False
+
+    def feed(self, item: bytes | BaseException) -> bool:
+        """Hand ``serve`` the body's next piece (or why it broke off) and wait while it takes it; False once it has
+        answered."""
+        if self.answer is not None:
+            return False
+        self.inbox.put(item)
+        return self._wait()
+
+    def end(self) -> tuple[int, str]:
+        if self.answer is None:
+            self.inbox.put(self.END)
+            while self._wait():
+                pass
+        assert self.answer is not None
+        return self.answer
+
+
+def listed(opts: Any, out: Path) -> list[tuple[Any, dict[str, Any]]]:
+    """``--protocols``' entries in their order, each the declared scheme it names (`messages.named`) with its settings:
+    ``--protocols-config``'s entry under its name (`option_settings`), with what the serve holds of the keys the scheme declares: its passes under
+    ``out/pearl``, its salt a session an epoch reserved under ``--challenger-lane`` as ``--challenger-peer`` (the
+    challenger at this node's 127.0.0.1, at the port the gate's open answers), else in-process.  Empty when no entry
+    names a declared scheme (H1's, `serve_h1`); `UsageError` when only some do, or one is a declared scheme's option
+    (`messages.option`), naming the scheme's name."""
+    entries = [e for e in (x.strip() for x in (opts.protocols or "").split(",")) if e]
+    if spelled := [f"{e} is {s.name}'s option: list it as --protocols {s.name}" for e in entries if (s := M.option(e))]:
+        raise UsageError(f"--protocols {opts.protocols}: {'; '.join(spelled)}, its settings under {s.name!r}")
+    found = [(e, M.named(e)) for e in entries]
+    if all(s is None for _, s in found):
+        return []
+    if bad := [e for e, s in found if s is None]:
+        raise UsageError(f"--protocols {opts.protocols}: {', '.join(bad)} names no declared scheme, and a list of several "
+                         "attaches declared schemes only")
+    g = opts.gate
+    held = {"challenger": "127.0.0.1:0" if g.challenger_gate else "", "coins": "" if g.challenger_gate else "in-process",
+            "lane": g.challenger_lane or "", "peer": g.challenger_peer or "", "transcript_dir": str(out / "pearl")}
+    try:
+        return [(s, {**option_settings(e, protocols_doc(opts)), **{k: v for k, v in held.items() if k in s.settings}})
+                for e, s in found]
+    except ValueError as e:
+        raise UsageError(f"--protocols-config: {e}") from None
+
+
+def private() -> str | None:
+    """The directory outside the run output each scheme keeps its own under: ``VERITY_PROTOCOLS_CONFIG``'s ``private``,
+    as `scheme_plugin` hands it."""
+    return settings.get("VERITY_PROTOCOLS_CONFIG").get("private")
+
+
+def scheme_refusal(opts: Any, found: list[tuple[Any, dict[str, Any]]]) -> str | None:
+    """Why ``opts`` can't serve the schemes `listed` ``found``, None when they can: each one's settings as it checks them,
+    and a scheme with an option (Pearl+'s) reads the BF16 checkpoint's linears unquantized, under the server's
+    rows-sha512 Commit, and puts no draw into ``--release-after pouw``."""
+    from verity.protocols.resource_accounting.scheme import settings as checked
+
+    g, after = opts.gate, getattr(getattr(opts, "retention", None), "release_after", "") or ""
+    if h1 := [f"--{k.replace('_', '-')}" for k, v in vars(opts.h1).items() if v]:
+        return f"{', '.join(h1)}: PoUW H1's, not {opts.protocols}'s"
+    if g.challenger_gate and not private():
+        return (f"--challenger-gate under {opts.protocols}: VERITY_PROTOCOLS_CONFIG's private, the directory outside the run "
+                "output where each scheme keeps its salt epoch's number, as scheme_plugin's")
+    if (pearl := any(s.option for s, _ in found)) and opts.precision != "bfloat16":
+        return f"--protocols {opts.protocols} reads the BF16 checkpoint's linears: it needs --precision bfloat16"
+    if pearl and (not opts.commit or opts.scheme != "rows-sha512" or not opts.required_manifest):
+        return f"--protocols {opts.protocols} runs under --commit, --scheme rows-sha512 and the row's --required-manifest"
+    if "pouw" in (p.strip() for p in after.split(",")):
+        return f"--release-after pouw waits for PoUW H1's draw of each window, and {opts.protocols} puts none"
+    try:
+        for scheme, given in found:
+            checked(scheme, given)
+    except ValueError as e:
+        return f"--protocols-config, --challenger-gate, --challenger-lane, --challenger-peer: {e}"
+    return None
+
+
+def network_admission(loop: EngineLoop, sched: Any, opts: Any) -> tuple[Any, H.Front]:
+    """Order ``release-order`` or ``tick``: the network attester's admission, attached to this process's exchange by
+    the scheme that provides admission (`messages.providing`). Returns the admission hook (under ``tick``, the one the build put on ``sched``
+    where it did, after the attester's gate, `loop.gate`; else None) and the attester's frontend."""
+    from verity_vllm.engine import admission
+    got = M.current().attach(M.providing("admission"), admission_settings(opts), source="--protocols-config", submit=loop.submit,
+                             abort=loop.abort, take=loop.tick)
+    loop.gate = got.gate
+    if loop.gate is not None:
+        loop.hook = admission.install(sched)
+    return loop.hook, got.front
 
 
 class HttpThread(threading.Thread):
@@ -573,9 +719,9 @@ def served_class(opts: Options) -> dict[str, int]:
 
 
 def no_slice(opts: Options) -> str | None:
-    """Why the windows' served rows name no compile slice: under ``--admit tick``, `serve_commit.NO_TICK_SLICE`. None
+    """Why the windows' served rows name no compile slice: under order ``tick``, `serve_commit.NO_TICK_SLICE`. None
     under any other admission, whose windows name `serve_commit.SERVED_SLICE`."""
-    return NO_TICK_SLICE if opts.admit == "tick" else None
+    return NO_TICK_SLICE if admission_order(opts) == "tick" else None
 
 
 def no_slice_record(windows: CommitWindows | None) -> dict[str, str]:
@@ -586,40 +732,45 @@ def no_slice_record(windows: CommitWindows | None) -> dict[str, str]:
 
 
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
-              usage: Callable[[Any], Any] = shutil.disk_usage) -> None:
+              usage: Callable[[Any], Any] = shutil.disk_usage, environ: Mapping[str, str] | None = None) -> None:
     """What would fail after the model has loaded, refused before it."""
-    if opts.window_steps < 1 or opts.admit_hold_ms < 1:
-        raise UsageError("--window-steps and --admit-hold-ms are at least 1")
+    if opts.window_steps < 1:
+        raise UsageError("--window-steps is at least 1")
     if opts.window_requests < 0:
         raise UsageError("--window-requests is at least 0 (0: no bound)")
-    if opts.admit == "tick":
-        if min(opts.tick_bucket_ms, opts.tick_sat_ms, opts.tick_free_ms) * 1000 < 1:
-            raise UsageError("--admit tick: --tick-bucket-ms, --tick-sat-ms and --tick-free-ms are at least 0.001 (the engine "
-                             "class's registered step times)")
-        if opts.window_requests:
-            raise UsageError("--admit tick adds each request at its step; --window-requests would hold it past that")
+    from verity.protocols.resource_accounting.scheme import settings as checked
+    try:
+        if (admit := admission_order(opts)) != "arrival":
+            checked(M.providing("admission"), admission_settings(opts))
+    except (OSError, ValueError) as e:
+        raise UsageError(f"--protocols-config {(opts.protocols_config or '')[:80]}: {e}") from None
+    if admit == "tick" and opts.window_requests:
+        raise UsageError("order tick adds each request at its step; --window-requests would hold it past that")
     if (c := served_class(opts))["R"] < opts.max_num_seqs:
         raise UsageError(f"--served-rows-class R {c['R']} is under --max-num-seqs {opts.max_num_seqs}: a full step's rows wouldn't fit")
-    if min(opts.window_gb, opts.seal_hold_gb, opts.seal_warm_gb, opts.disk_floor_gb, opts.switch_interval_ms) < 0:
+    if opts.seal and opts.disk_floor_gb is None:
+        raise UsageError("--seal needs --disk-floor-gb: the GB --out's filesystem keeps free beyond one window, which only the "
+                         "machine's disk can say (0: no floor)")
+    if min(opts.window_gb, opts.seal_hold_gb, opts.seal_warm_gb, opts.disk_floor_gb or 0, opts.switch_interval_ms) < 0:
         raise UsageError("--window-gb, --seal-hold-gb, --seal-warm-gb, --disk-floor-gb and --switch-interval-ms are at least 0")
     if opts.seal and not opts.commit:
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
-    if settings.VERITY_POOL_ROW < 0:
-        raise UsageError(f"VERITY_POOL_ROW {settings.VERITY_POOL_ROW}: a token width is at least 1 (0 is off)")
-    if settings.VERITY_POOL_ROW and not (opts.prefix_caching and opts.commit):
-        raise UsageError("VERITY_POOL_ROW exports the prefix cache's pool at each Commit window's close: it needs "
-                         "--prefix-caching and the Commit")
-    if (floor := SG.disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
-        raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
-    if opts.pearl_users is not None and opts.protocols != SPL.ENTRY:
-        raise UsageError(f"--pearl-users is {SPL.ENTRY}'s, and --protocols is {opts.protocols}")
-    if why := (SPL.refusal if opts.protocols == SPL.ENTRY else SH.refusal)(opts) or SR.refusal(opts) or SL.refusal(opts) or SD.refusal(opts):
+    found = listed(opts, Path(opts.out or "."))
+    if why := (scheme_refusal(opts, found) if found else SH.refusal(opts)) or SR.refusal(opts) or SL.refusal(opts) or SD.refusal(opts):
         raise UsageError(why)
     if opts.commit and which("ninja") is None:
         raise UsageError("the Commit JIT-builds its kernels with ninja, which is not on PATH: put the environment's bin (where its "
                          "ninja is) on PATH, or pass --no-commit")
+    if why := SG.out_refusal(opts.out, environ):
+        raise UsageError(why)
+    from verity_vllm.pipeline.replay_bundle import private_refusal
+
+    if opts.seal and (why := private_refusal(environ)):
+        raise UsageError(f"--seal: {why}")
+    if (floor := SG.disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
+        raise UsageError(f"--seal: {why}")
 
 
 def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[str, Any] | None = None) -> tuple[Any, Any]:
@@ -631,6 +782,11 @@ def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[st
     if opts.commit:
         engine_env.apply_target({"VERITY_RETAIN": "host", **SL.settings_of(opts)})
     scope = register_int8(opts.precision)
+    if found := listed(opts, Path(opts.out)):
+        from verity_vllm.pipeline.commit_coins import ChallengerGate
+        gate = ChallengerGate(opts.gate.challenger_gate) if opts.gate.challenger_gate else None
+        M.attach_listed(M.build(), found, gate=gate and gate.call, ledger=gate and gate.ledger, private=private(),
+                        process=H.ENGINE)
     from verity_vllm.llm import LLM
 
     llm = RW.checked(opts, row, LLM(opts.model, revision=opts.revision, **(dict if session is None else session.engine_args)(engine_options(opts))))
@@ -649,7 +805,8 @@ def main(opts: Options) -> int:
     day, session = SD.declare(opts, out), SR.session_of(opts, out)
     llm, com = build(opts, session, row := RW.of(opts))
     engine = llm.vllm.llm_engine
-    proto = PROTOCOLS[opts.protocol](opts.force_include_usage, **({"payload": opts.id_payload} if opts.protocol == "ids" else {}))
+    given = {} if opts.protocol in PROTOCOLS or opts.id_payload is None else {"payload": opts.id_payload}
+    proto = framings()[opts.protocol](opts.force_include_usage, **given)
     reference = getattr(proto, "base", proto)
     framing = framing_agrees(reference) if isinstance(reference, VllmProtocol) else None
     defaults: dict[str, Any] = {}                            # vLLM's neutral defaults: the request brings its sampling
@@ -661,23 +818,9 @@ def main(opts: Options) -> int:
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
 
-        arm = SPL.arm_of(opts, llm, com, out) or SH.arm_of(opts, llm, com, out, flush=trace.drain, day=day)
+        arm = None if listed(opts, out) else SH.arm_of(opts, llm, com, out, flush=trace.drain, day=day)
         sealer = SP.sealer_of(opts)                      # its process spawned before the pool grows
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
-        pool = pool_block = None
-        if ctw := settings.VERITY_POOL_ROW:
-            from verity_vllm.engine import pool_row as PR
-
-            if (len(tok) - 1) >> ctw:
-                raise UsageError(f"VERITY_POOL_ROW {ctw}: the tokenizer's {len(tok)} tokens need "
-                                 f"{(len(tok) - 1).bit_length()} bits")
-            pool_block = trace.sched.block_size
-            PR.install_keys(ctw, pool_block)
-
-            def live_pool() -> Any:
-                return trace.sched.kv_cache_manager.block_pool
-            pool = live_pool
-            PR.genesis_reset(pool())                         # the learn pass cached its blocks under vLLM's own keys
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
                                 eos_ids=[int(tok.eos_token_id)] if tok.eos_token_id is not None else [],
                                 decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window,
@@ -685,7 +828,7 @@ def main(opts: Options) -> int:
                                 served=served_statics(scheduler_config(trace.sched), served_class(opts)),
                                 no_slice=no_slice(opts), sealer=sealer,
                                 window_bytes=int(opts.window_gb * SS.GB) or None, disk=SG.disk_floor_of(opts), mirror=mirror,
-                                request_cap=opts.window_requests, arm=arm, release=draws, pool=pool, pool_block=pool_block)
+                                request_cap=opts.window_requests, arm=arm, release=draws)
         if arm is not None:
             arm.drawing(draws)
     if draws_dir is not None:
@@ -697,20 +840,13 @@ def main(opts: Options) -> int:
         windows.on_floor = loop.drain
     served = opts.served_model_name or opts.model
     order = rows = ticked = None
-    if opts.admit in ("release-order", "tick"):
+    if admission_order(opts) in ("release-order", "tick"):
         from verity_vllm.engine.handle import model_runner, scheduler
         rows = keep_scheduler_rows(model_runner(llm.vllm), scheduler(engine))
-    if opts.admit == "release-order":
-        order = ReleaseOrder(loop.submit, loop.abort, hold_s=opts.admit_hold_ms / 1000)
-    elif opts.admit == "tick":
-        from verity_vllm.engine.engine_driver import external_id
-        from verity_vllm.pipeline.serve_admit import install
-        loop.sched = scheduler(engine)
-        loop.gate = TickGate(Tick.of_ms(opts.tick_bucket_ms, opts.tick_sat_ms, opts.tick_free_ms), hold_s=opts.admit_hold_ms / 1000)
-        ticked = install(loop.sched, loop.gate, key=external_id)      # over the advice trace's wrappers, which see admissions
-        order = TickAdmit(loop.submit, loop.abort, loop.tick)
+        ticked, order = network_admission(loop, scheduler(engine), opts)
     server = Server(proto=proto, served_name=served, max_model_len=opts.max_model_len, tokenizer=tok,
-                    defaults=defaults, submit=loop.submit, abort=loop.abort, model_root=opts.model, order=order)
+                    defaults=defaults, submit=loop.submit, abort=loop.abort, model_root=opts.model, order=order,
+                    arrive=ticked.arrive if ticked is not None else None)
     http = HttpThread(server, opts.host, opts.port)
     http.start()
     http.ready.wait()
@@ -729,8 +865,9 @@ def main(opts: Options) -> int:
               "framing": framing, "defaults": dict(defaults),
               "generation_config_not_applied": engine.vllm_config.model_config.get_diff_sampling_param(),
               "default_seed": DEFAULT_SEED, "top_p": "refused below 1", "committer": getattr(com, "name", None),
-              "admit": opts.admit, "admit_hold_ms": opts.admit_hold_ms if order is not None else None,
-              "tick": loop.gate.tick.record() if loop.gate is not None else None,
+              "weight_copy_allowed": [n.record() for n in M.current().allowed],
+              "admit": admission_order(opts), "admission": M.current().attached.get(M.providing("admission").name) if order is not None else None,
+              "tick": loop.gate.record() if loop.gate is not None else None,
               "step_rows": "scheduler" if rows is not None else "runner",
               "commit": opts.commit, "scheme": com.commit_scheme if com is not None else None,
               "learn_warmup": getattr(com, "learn_warmup", None),
@@ -784,6 +921,7 @@ def main(opts: Options) -> int:
         watchdog.stop()
         summary = stopped(True)
         print(f"SERVE-OPENAI stopped: {json.dumps(summary)}", flush=True)
+        write_reports(M.current(), out)
         if ticked is not None:
             ticked.uninstall()
         trace.uninstall()

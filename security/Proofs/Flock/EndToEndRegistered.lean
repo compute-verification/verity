@@ -7,7 +7,7 @@ public import Proofs.Flock.EndToEndRegistered.Statement
 
 `Flock.SecurityProofs.EndToEndRegistered : Flock.Guarantees.EndToEndRegistered` is `zk_session_soundHJR_custody_regSt`
 with its first conjunct's first and last terms in closed form, as `EndToEnd` is `zk_session_soundJ_custody_reg`'s
-(`Audit.SamplingDesign.subset_miss`, and `linkBoundZC` at A2); its second conjunct is unchanged.
+(`Spot.Sampling.SamplingDesign.subset_miss`, and `linkBoundZC` at A2); its second conjunct is unchanged.
 `Flock.SecurityProofs.EndToEndRegisteredSampled : Flock.Guarantees.EndToEndRegisteredSampled` is
 `zk_session_soundHJR_custody_sampled_regSt` with its first conjunct's last term in closed form. Both read the circuit the
 descriptor unrolls to, a flat file's or a templated statement's (`Flock.Desc.parseStmt_stmt`), and each flat form is
@@ -19,7 +19,7 @@ descriptor unrolls to, a flat file's or a templated statement's (`Flock.Desc.par
 
 namespace Flock.SecurityProofs
 
-open FlockSoundness FlockSoundness.Audit
+open FlockSoundness Spot.Sampling
 
 /-- **Flock's one-stage audit, end to end, with registered reads.** -/
 theorem EndToEndRegistered : Flock.Guarantees.EndToEndRegistered := by

@@ -192,7 +192,7 @@ abbrev totL : Total (LP PS) := totT.st LigState
 
 /-! ## The transcript's and Ligerito's steps return -/
 
-theorem squeezeP_tot (resp : ℕ → Claims.Msg) (kind : UInt8) (n : ℕ) :
+theorem squeezeP_tot (resp : ℕ → Hash.Msg) (kind : UInt8) (n : ℕ) :
     totT.T (squeezeP (asksS resp) kind n) fun _ => True := by
   intro t
   unfold squeezeP
@@ -200,13 +200,13 @@ theorem squeezeP_tot (resp : ℕ → Claims.Msg) (kind : UInt8) (n : ℕ) :
   · exact totS.pure' _
   · exact totS.bind' (fun l => ⟨_, _, rfl, trivial⟩) fun _ => totS.pure' _
 
-theorem sampleP_tot (resp : ℕ → Claims.Msg) : totT.T (sampleP (asksS resp)) fun _ => True :=
+theorem sampleP_tot (resp : ℕ → Hash.Msg) : totT.T (sampleP (asksS resp)) fun _ => True :=
   totT.bind' (squeezeP_tot resp 1 1) fun _ => totT.pure' _
 
-theorem sampleVecP_tot (resp : ℕ → Claims.Msg) (n : ℕ) : totT.T (sampleVecP (asksS resp) n) fun _ => True :=
+theorem sampleVecP_tot (resp : ℕ → Hash.Msg) (n : ℕ) : totT.T (sampleVecP (asksS resp) n) fun _ => True :=
   squeezeP_tot resp 2 n
 
-theorem sampleKP_tot (resp : ℕ → Claims.Msg) : totT.T (sampleKP (asksS resp)) fun _ => True :=
+theorem sampleKP_tot (resp : ℕ → Hash.Msg) : totT.T (sampleKP (asksS resp)) fun _ => True :=
   totT.bind' (squeezeP_tot resp 2 2) fun _ => totT.pure' _
 
 theorem liftT_tot {α : Type} {x : TMW PS α} (h : totT.T x fun _ => True) : totL.T (liftT x) fun _ => True :=
@@ -233,7 +233,7 @@ theorem powP_tot (nonce : ℕ → ℕ → UInt64) (kind : ℕ) : totL.T (powP (M
     | (with_reducible apply liftT_tot)
     | (with_reducible apply Total.liftTM; intro _; exact ⟨_, rfl⟩))
 
-theorem challengeP_tot (resp : ℕ → Claims.Msg) (split : Bool) :
+theorem challengeP_tot (resp : ℕ → Hash.Msg) (split : Bool) :
     totL.T (challengeP (asksS resp) split) fun _ => True := by
   unfold challengeP
   repeat (first
@@ -249,7 +249,7 @@ theorem challengeP_tot (resp : ℕ → Claims.Msg) (split : Bool) :
     | (with_reducible apply Total.ite)
     | split)
 
-theorem oodIntroP_tot (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) (dim : ℕ) :
+theorem oodIntroP_tot (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) (dim : ℕ) :
     totL.T (oodIntroP (asksS resp) nonce g dim) fun _ => True := by
   unfold oodIntroP
   repeat (first
@@ -264,7 +264,7 @@ theorem oodIntroP_tot (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt6
     | (with_reducible apply sampleVecP_tot)
     | (with_reducible apply Total.liftTM; intro _; exact ⟨_, rfl⟩))
 
-theorem queryP_tot (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit) :
+theorem queryP_tot (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit) :
     totL.T (queryP (asksS resp) nonce ms lv cm) fun _ => True := by
   unfold queryP
   repeat (first
@@ -283,7 +283,7 @@ theorem commitP_tot (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Leve
   ⟨cm, l, by rw [commitP_pureS h ms lv g salt l, hcm], trivial⟩
 
 /-- **Ligerito returns** where each level's commitment does. -/
-theorem ligeritoP_tot (resp : ℕ → Claims.Msg) (hs : Hashes PS)
+theorem ligeritoP_tot (resp : ℕ → Hash.Msg) (hs : Hashes PS)
     (hc : ∀ ms lv g salt, totS.T (commitP hs ms lv g salt) fun _ => True) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (t b : Array F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) :
     totT.T (ligeritoP (asksS resp) hs ms sch T cm0 t b salt nonce) fun _ => True := by
@@ -316,7 +316,7 @@ theorem ligeritoP_tot (resp : ℕ → Claims.Msg) (hs : Hashes PS)
 /-! ## The PIOP's provers return -/
 
 /-- **The zerocheck returns**, its `ρ` one coin per residual round. -/
-theorem zerocheckP_tot (resp : ℕ → Claims.Msg) (m : ℕ) (digest cap : ByteArray) (tr : Trace) :
+theorem zerocheckP_tot (resp : ℕ → Hash.Msg) (m : ℕ) (digest cap : ByteArray) (tr : Trace) :
     totT.T (zerocheckP (asksS resp) m digest cap tr) fun p => p.2.rho.size = m - 6 := by
   unfold zerocheckP
   dsimp only
@@ -340,7 +340,7 @@ theorem fold_ne_error {c : CircuitFold} {lw ρ : Array F128} (hfold : ∀ α, �
   cases h
 
 /-- **The lincheck returns** where the statement's fold returns at the zerocheck's point. -/
-theorem lincheckP_tot (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut)
+theorem lincheckP_tot (resp : ℕ → Hash.Msg) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut)
     (hfold : ∀ α, ∃ v, c.fold α (skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) = .ok v) :
     totT.T (lincheckP (asksS resp) c m tr zc) fun _ => True := by
   unfold lincheckP
@@ -356,7 +356,7 @@ theorem lincheckP_tot (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) (t
     | split)
 
 /-- **The ring switch returns.** -/
-theorem ringSwitchP_tot (resp : ℕ → Claims.Msg) (tr : Trace) (claims : Array Claim) :
+theorem ringSwitchP_tot (resp : ℕ → Hash.Msg) (tr : Trace) (claims : Array Claim) :
     totT.T (ringSwitchP (asksS resp) tr claims) fun _ => True := by
   unfold ringSwitchP
   repeat (first
@@ -445,7 +445,7 @@ theorem fold_ok (st : Stmt) (hk : 6 ≤ st.c.kLog) (hs : ∀ r ∈ st.c.ranges.t
 
 /-- **A rep returns** on a statement whose fold returns at the zerocheck's point, on any level-0 commitment, extra
 claims, salts and nonces. -/
-theorem repP_tot (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Stmt) (hk : 6 ≤ st.c.kLog)
+theorem repP_tot (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Stmt) (hk : 6 ≤ st.c.kLog)
     (hkm : st.c.kLog ≤ st.m) (hs : ∀ r ∈ st.c.ranges.toList, SlotOk st.c r) (sch : Schedule) (tr : Trace)
     (t : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) :
     totT.T (repP (asksS resp) (Hashes.ofSha512 h) (Setup.ofCircuit st) sch tr t cm0 extras salt nonce)
@@ -468,7 +468,7 @@ theorem repP_tot (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st :
   exact totT.bind' (ligeritoP_tot resp _ (commitP_tot h) _ _ _ _ _ _ _ _) fun _ => totT.pure' _
 
 /-- **The prover's reps return**: the hypothesis `ProverRuns`. -/
-theorem proverRuns (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : ProverRuns H rel := by
+theorem proverRuns (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : ProverRuns H rel := by
   intro c st sch hst _ _ cm e _ _ salt nonce d l
   obtain ⟨st', hst', -, -, -, ⟨tags, file, tables, hty, hcirc⟩, hm, hk⟩ := c.table
   rw [hst] at hst'
@@ -479,7 +479,7 @@ theorem proverRuns (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Re
   exact ⟨pt, l', e'⟩
 
 /-- **The session runs**: the goal `SessionRuns`. -/
-theorem sessionRuns_goal {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} :
+theorem sessionRuns_goal {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} :
     SessionRuns H rel :=
   sessionRuns_of (proverRuns H rel)
 

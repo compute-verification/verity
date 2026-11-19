@@ -265,7 +265,7 @@ answers the SHA-512 of the session's evidence `w`, and no opening of that tree f
 theorem SessionRead.of_dropped {Lc L₂ : List Release} {x : Release} {i s n : ℕ} (hx : x.frame = .opening i s n)
     {u : ℕ} (hu : (openedTrees Lc)[u]? = some i)
     (hs : ((helloSpecs Lc)[i]?.bind fun sp => sp.streams[s]?) = some TREE_SESSION) (hk : openedOf Lc i s = 1)
-    {w : Claims.Msg} (hw : sha512Msg w = x.answers.data.toList)
+    {w : Hash.Msg} (hw : sha512Msg w = x.answers.data.toList)
     (hlast : ∀ y ∈ L₂, ∀ s' n', y.frame ≠ .opening i s' n')
     {tables : Array String} {text : String} {J : Json} {sess : Flock.RunRecord}
     (h : SessionOpens (Lc ++ L₂) tables u text J sess) : SessionRead (Lc ++ x :: L₂) tables u text J sess w := by

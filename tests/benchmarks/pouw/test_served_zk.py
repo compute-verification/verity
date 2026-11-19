@@ -21,6 +21,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from verity.circuits import population as PN
+from verity.commitments import docket_digest as DD
 from verity.commitments.crypto import lms
 from verity.commitments.merkle import tree_levels
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L
@@ -375,7 +377,7 @@ def test_the_challenger_holds_every_item_to_its_own(served):
     assert refused(legacy) == {"window-form"}
     assert "x" not in ch.regs
     reg = _held(ch, "honest", rec)
-    assert reg.receipt["registration"] == R.digest(rec) == reg.digest and reg.order == 0
+    assert reg.receipt["registration"] == DD.digest(rec) == reg.digest and reg.order == 0
     assert refused(rec) == {"open"}
 
 
@@ -496,6 +498,7 @@ def test_a_window_without_a_registration_deadline_is_refused(served, tmp_path):
     assert json.loads((tmp_path / "q.json").read_text())["registration_deadline"] == 60.0
 
 
+@LEAN
 def test_a_pass_registered_again_on_another_stream_is_refused(served):
     """Execution phases credited together hold each call index of their salt once (`credit.passes_distinct`): the same pass
     registered again on another stream would credit every call twice under the same seeds and tickets, so it is refused
@@ -873,7 +876,7 @@ def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_re
     assert "no salt coin" in refused({k: v for k, v in man.items() if k not in ("coins", "salt_opening")})
     assert "names no pass" in refused(None)
     assert "not the one the window's parameters name" in refused({**man, "note": "another pass"}, code="manifest")
-    assert _held(_challenger(params), "honest", rec).digest == R.digest(rec)
+    assert _held(_challenger(params), "honest", rec).digest == DD.digest(rec)
 
     bparams, bpublic, _, _ = _window(words, run="r-beacon", recorded=True)
     brec, braw = _register(bparams, bpublic), PASSES[bparams["context"]][1]
@@ -1042,7 +1045,7 @@ def test_r1_r6_of_a_window_are_leans(served):
     params, public, _, _ = _window(words)
     rec = _register(params, public)
     ell, n = SC.level_of(rec), rec["population"]
-    prog, q = SC.PT.population_program(SC.template(K), n), SC.PT.template_instance_query(SC.template(K))
+    prog, q = PN.population_program(SC.template(K), n), SC.PT.template_instance_query(SC.template(K))
     sampling_design, ports = SC.sampling_design_of(params, ell), SC.ports(params, ell)
     p = OR.registration_params(prog, q, sampling_design, S.SCHEME, ports, [], params["delta"])
     record = ORL.Record()
@@ -1102,7 +1105,7 @@ def _stub_calls():
     st = object.__new__(ST.Statement)
     record = OR.Record(lean=False)
     torch = "benchmarks/pouw/served_zk/statement_torch.py"
-    calls = [("Stager.stage", lambda: STG.Stager().stage(*[None] * 9), "benchmarks/pouw/hidden_zk/served_stage.py"),
+    calls = [("Stager.stage", lambda: STG.Stager().stage(*[None] * 8), "benchmarks/pouw/hidden_zk/served_stage.py"),
              ("Statement.zeros", lambda: st.zeros(1), torch), ("Statement.empty", lambda: st.empty(1, 1), torch),
              ("Statement.fill_stages", lambda: st.fill_stages(0), torch), ("Statement.check", lambda: st.check({}), torch),
              ("Record.canonical", lambda: record.canonical({}), "benchmarks/pouw/served_zk/of_record_lean.py"),
@@ -1345,9 +1348,9 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
     assert json.loads((log / "coins.json").read_text()) == coins.commitment.to_json()
     assert json.loads((tmp_path / "salt.json").read_text()) == man["salt_opening"]
     salt, sampling = (json.loads(x) for x in (log / "openings.jsonl").read_text().splitlines())
-    assert salt == man["salt_opening"] and sampling["label"] == "draw" and sampling["after"] == R.digest(rec)
+    assert salt == man["salt_opening"] and sampling["label"] == "draw" and sampling["after"] == DD.digest(rec)
     d = json.loads((tmp_path / "draw.json").read_text())
-    assert d["units"] == sampled and json.loads((tmp_path / "receipt.json").read_text())["registration"] == R.digest(rec)
+    assert d["units"] == sampled and json.loads((tmp_path / "receipt.json").read_text())["registration"] == DD.digest(rec)
     assert not (tmp_path / "draw2.json").exists() and not (tmp_path / "outcome2").exists()
     o = json.loads((tmp_path / "outcome" / "outcome.json").read_text())
     assert o["accepted"] and set(o["public"]) == {x[0] for x in Wd.PUBLIC} and o["public"]["drawn"] == sampled
@@ -1432,54 +1435,3 @@ def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
         assert SC.check(params, rec, sample, t, (out / "pub.bin").read_bytes(), op, record=ORL.Record()) is None, t
     assert json.loads((tmp_path / "u25" / "stage.json").read_text())["kind"] == "filler"
 
-
-def _recorded(words, root: Path, units=(1, 13)) -> Path:
-    """A committed execution phase laid out as a served_zk run records it (`job.sh`): the request's advice, params and
-    registration, the sample, and each sampled proof block's and the filler unit's opening."""
-    params, public, advice, priv = _window(words)
-    rec = _register(params, public)
-    out = root / "r-window" / "out"
-    (out / "request").mkdir(parents=True)
-    for name, x in (("advice", advice), ("params", params), ("registration", rec)):
-        (out / "request" / f"{name}.json").write_text(json.dumps(x))
-    filler = next(e.lo for e in SC.entries_of(advice) if e.kind == "filler")
-    (out / "draw.json").write_text(json.dumps({"units": list(units)}))
-    (out / "summary.json").write_text(json.dumps({"units": list(units), "filler_unit": filler}))
-    for t, d in [*((t, f"u{t}") for t in units), (filler, "filler")]:
-        (out / d).mkdir()
-        (out / d / "opening.json").write_text(json.dumps(SC.opening(advice, priv, params, t)))
-    return root / "r-window"
-
-
-def test_replay_window_holds_a_recorded_window_and_refuses_its_breaks(served, tmp_path):
-    """`replay_window` on a recorded execution phase of entry rows: its statement, rows, records, root, samples and registered items
-    are the recorded values and every negative control is refused; a tampered salt fails the execution phase's root."""
-    import replay_window as RW
-    *_, words = served
-    run = _recorded(words, tmp_path)
-    rep = RW.replay(RW.Sides(lean=False), [run])
-    t = rep["totals"]
-    assert RW.passed(rep) and (t["entry_rows"], t["draws"]) == (1, 3), t
-    w = rep["runs"]["r-window"]["request"]
-    assert {c["control"] for c in w["controls"]} >= {f"window-{k}" for k in RW.REASONS} | {"root-salt", "tile-at-past"}
-    adv = run / "out" / "request" / "advice.json"
-    a = json.loads(adv.read_text())
-    a["entry_salts"][1] = "00" * (len(a["entry_salts"][1]) // 2)
-    adv.write_text(json.dumps(a))
-    bad = RW.replay(RW.Sides(lean=False), [run])
-    assert not RW.passed(bad) and [c["check"] for c in bad["runs"]["r-window"]["request"]["checks"] if not c["ok"]] == ["root-1"]
-
-
-@LEAN
-def test_replay_window_lean_is_the_python(served, tmp_path):
-    """Every input `replay_window` makes of a recorded execution phase, the controls' included, gives Lean's
-    `pouw-window-difftest` the outcome Python gives."""
-    import replay_window as RW
-    *_, words = served
-    sides = RW.Sides()
-    try:
-        rep = RW.replay(sides, [_recorded(words, tmp_path)])
-    finally:
-        sides.close()
-    t = rep["totals"]
-    assert RW.passed(rep) and t["compared"] >= 40 and t["lean_same"] == t["compared"], rep["apart"][:3]

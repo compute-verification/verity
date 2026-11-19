@@ -1,4 +1,4 @@
-"""The difftest of advice v1's in-circuit encoder (`verity.protocols.resource_accounting.network.verifier.arith_encode`) against the advice
+"""The difftest of advice v1's in-circuit encoder (`verity.protocols.interface.charge.arith_encode`) against the advice
 code's coders (`code.py`, `code_v1`), over what v1 actually codes.
 
 Every stream is `code_v1`'s: a list of windows, each one `code.py` `ArithEncoder` segment with the symbols it took,
@@ -80,13 +80,13 @@ FIXTURE = HERE.parents[2] / "tests" / "verity" / "protocols" / "resource_account
 
 def _ae() -> Any:
     """`arith_encode`, for the checks only: the streams are code.py's and v1's alone."""
-    from verity.protocols.resource_accounting.network.verifier import arith_encode as AE
+    from verity.protocols.interface.charge import arith_encode as AE
     assert AE.K_MAX == K
     return AE
 
 
 def _wc() -> Any:
-    from verity.protocols.resource_accounting.network.prover import window_charge as WC
+    from verity.protocols.interface.charge import window_charge as WC
     return WC
 
 

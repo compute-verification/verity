@@ -47,7 +47,7 @@ The assumptions are `flock_headline_exec`'s: A3 (`hA3`), `cr/sha-512` for the kn
 
 namespace FlockSoundness.Discharge.PlainHJ
 
-open Game Model Accounting Refine Audit Audit.Partition Flock
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition Flock
 open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.Tables
 open FlockSoundness.Discharge.HiddenExec FlockSoundness.Discharge.Inst
 open FlockSoundness.Discharge.DecodeZL
@@ -101,7 +101,7 @@ theorem plain_session_soundHJ
               ((rsPHJ dj x₀ ht hc hpub hU hscope).binding (rsPHJ_computes dj x₀ ht hc hpub hU hscope))
               (reg σ) (cont σ) k Rw))).card)
         (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfJ dg (planPHJ dj x₀) N wr)) τ ≤
-      (SamplingDesign.subset n kd hkd).miss K +
+      (Verity.SamplingDesign.subset n kd hkd).miss K +
         StrictCR.ksAvgStrict (planPHJ dj x₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).linkBoundE
           (L := SamplingDesign.execOS (n := n) src (.subset kd) n) (planPHJ (Reg := Reg) dj x₀) (tabPHJ (Reg := Reg) dj x₀)
@@ -160,7 +160,7 @@ theorem plain_session_soundHJI
               ((rsPHJI dj x₀ ht hc hrf hpub hU hpr hw).binding (rsPHJI_computes dj x₀ ht hc hrf hpub hU hpr hw))
               (reg σ) (cont σ) k Rw))).card)
         (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfJ dg (planPHJ dj x₀) N wr)) τ ≤
-      (SamplingDesign.subset n kd hkd).miss K +
+      (Verity.SamplingDesign.subset n kd hkd).miss K +
         StrictCR.ksAvgStrict (planPHJ dj x₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         ((instProg c n).partition (outsOfI c n)).linkBoundE
           (L := SamplingDesign.execOS (n := n) src (.subset kd) n) (planPHJ (Reg := Reg) dj x₀) (tabPHJ (Reg := Reg) dj x₀)

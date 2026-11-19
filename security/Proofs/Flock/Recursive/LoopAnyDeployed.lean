@@ -38,10 +38,10 @@ def RecursiveZKLoopAnySumDeployed : Prop :=
     [Fintype Ωk] [Nonempty Ωk]
     (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-    (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
+    (src : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
     (s : Flock.ZkServer.Schedule) (w : Ωa → Ωp → ZkServerAdaptive.Worker) (N r : ℕ)
-    (m : ℕ) (stmt : ℕ → Ωa × (Fin (fwHoles s) → ByteArray) → Claims.Msg)
+    (m : ℕ) (stmt : ℕ → Ωa × (Fin (fwHoles s) → ByteArray) → Hash.Msg)
     (wit : ℕ → OuterZK.WCtx Ωa Ωp (fwHoles s) → Claims.Flock.Wit) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
     [∀ j, Nonempty (CB j)]
     (Vs : Claims.VStar Θ) (θ : Ωa → (Fin (fwHoles s) → ByteArray) → Θ),
@@ -53,7 +53,7 @@ def RecursiveZKLoopAnySumDeployed : Prop :=
           ZkServerAdaptive.adaptFinished s (w u.1.1 u.1.2) N (saltsOf u.2) = true} =>
         anyCtx s w N r u.1.1.1 u.1.1.2 u.1.2) →
     (OuterZK.LoopSessions.atWorker m stmt wit).Sized (OuterZK.loopSim L₀ src t) CB →
-    ∀ (cut : St → Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) → W) (s₀ : St),
+    ∀ (cut : St → Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Hash.Msg × Claims.Out) → W) (s₀ : St),
       ReleaseReadsNoStop cut s₀ →
     ∀ (stop : (((Ωa × Ωp) × (Fin (fwHoles s + r) → Fin 192 → Fin 256)) × Claims.Sampling.unitTape.at 0
         ((OuterZK.loopRef L₀ src).swP vs).Nonce ((OuterZK.loopRef L₀ src).swP vs).Rand m) × Ωk → St)

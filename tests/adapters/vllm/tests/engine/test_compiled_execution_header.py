@@ -48,7 +48,7 @@ def test_compilation_facts_are_read_back_in_the_declared_form():
     e = A.compilation_facts(_llm(True, _CG.NONE))
     assert e["enforce_eager"] is True and e["mode"] == "NONE"
     # the declared facts of the `piecewise` profile are a subset of the read-back (what the global match's G1 compares key by key)
-    decl = TargetProfile(compilation="piecewise").modelled_engine()["compilation"]
+    decl = TargetProfile.default().with_overrides(compilation="piecewise").modelled_engine()["compilation"]
     assert all(f[k] == decl[k] for k in ("mode", "cudagraph_mode", "use_inductor_graph_partition", "emulate_precision_casts"))
 
 

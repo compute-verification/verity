@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import re
 import subprocess
@@ -20,6 +21,7 @@ from verity_bench.vllm import presets
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.arms import (
     build_bound,
+    protocols_config,
     resolve_arms,
 )
 from verity_bench.vllm.engine import (
@@ -37,7 +39,6 @@ from verity_bench.vllm.presets import (
     expand_sweep,
     load_spec,
     load_sweep,
-    local_checkpoint,
     resolve_spec,
 )
 from verity_bench.vllm.runner import (
@@ -62,7 +63,7 @@ def test_cli_and_presets_use_the_benchmark_package_and_stable_gpu_ids(tmp_path):
         "vllm", "--preset", "llama31-8b-fp8-1gpu", "--arms", "stock,stock-fp8", "--out", str(tmp_path),
     ])
     assert args.command == "vllm"
-    preset = load_spec(args.preset).preset
+    preset = resolve_spec(args.preset).preset
     assert preset.gpu_id == "rtx-pro-6000"
     assert preset.engine_settings["resident_gpu_memory_utilization"] == 0.40
     assert preset.engine_settings["block_gpu_memory_utilization"] == 0.80
@@ -97,181 +98,128 @@ def test_plan_identity_binds_resolved_spec_commit_lock_pin_and_point_but_not_adm
     assert identity != jobs.point_identity(spec.config_sha256, pins, expand_sweep("quick")[1])
 
 
-def test_plan_marks_passing_points_and_dispatches_one_recorded_run_for_each_missing_point():
-    root = Path(__file__).resolve().parents[3]
-    seen = []
-
-    def lookup(identity, commit):
-        seen.append((identity, commit))
-        return "r-passed" if len(seen) == 1 else None
-
-    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lookup)
-    assert [point.passing_run for point in plan.points] == ["r-passed", None]
-    commands = []
-    assert jobs.dispatch(plan, "llama31-8b-fp8-1gpu", root=root,
-                         execute=lambda command, cwd: commands.append((list(command), cwd)) or 0) == 0
-    [(command, cwd)] = commands
-    assert cwd == root
-    assert command[:3] == ["research", "run", "--queue"]
-    assert command[command.index("--kind") + 1] == "vllm-bench-1gpu"
-    assert "--preemptible" in command[:command.index("--")]
-    assert command[command.index("--gpus") + 1] == "1"
-    assert command[command.index("--gpu-model") + 1] == "rtx-pro-6000"
-    assert command[command.index("--disk-gb") + 1] == str(jobs.POINT_DISK_GB)
-    assert command[command.index("--") + 1:][:2] == ["bash", "benchmarks/harness/run_point.sh"]
-    assert (root / "benchmarks/harness/run_point.sh").is_file()
-    assert command[command.index("--point") + 1] == "b32-p512-mixed"
+def _lease_host(monkeypatch, held: bool) -> None:
+    monkeypatch.setattr(jobs, "lease_host", lambda: held)
+    for name in ("GPU_LEASE_UUID", "GPU_LEASE_ON", "GPU_LEASE_CORES"):
+        monkeypatch.delenv(name, raising=False)
 
 
-def test_direct_dispatch_runs_each_missing_point_on_the_nodes_gpu_slots_as_the_queued_point(monkeypatch):
-    """`run --direct NODE`: `research run --on NODE` through one of the node's GPU slots and its gpu-lease, the slot-only
-    launcher's form, with the queued point's tool, point command, identity and environment, so plan and check find it."""
-
-    from research.pods.nebius.slot_only import through_slot
+def test_run_runs_the_named_point_here_and_a_passed_one_only_again(monkeypatch, capsys):
+    """`run SPEC --point P` is the point's own command in this process's run, and no launch of another run: a point a
+    passing run stands for runs only when --again names it."""
 
     root = Path(__file__).resolve().parents[3]
-    monkeypatch.setenv("VERITY_BENCH_VENV", "/workspace/jobs/venv312")
+    _lease_host(monkeypatch, False)
     seen = []
     plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40,
                           lookup=lambda identity, commit: seen.append(identity) or ("r-passed" if len(seen) == 1 else None))
     assert [point.passing_run for point in plan.points] == ["r-passed", None]
     commands = []
-    assert jobs.dispatch(plan, "llama31-8b-fp8-1gpu", root=root, direct="vy-nebius-3",
-                         execute=lambda command, cwd: commands.append((list(command), cwd)) or 0) == 0
-    [(command, cwd)] = commands
-    item = plan.points[1]
-    assert command == [
-        "research", "run", "--on", "vy-nebius-3", "--project", "verity", "--campaign", "vllm-bench", "--source", str(root),
-        "--cwd", "source", "--timeout", "21600", "--require-result", "--tool", "verity_bench.tool:VLLM_BENCH_POINT",
-        "--env", "VERITY_BENCH_VENV=/workspace/jobs/venv312", "--",
-        "env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/check/slot.py", "--by", "benchmarks",
-        "--wait-max", "14400", "--run-max", "7200", "--",
-        "gpu-lease", "1", "--wait", "--max-min", "120", "--preemptible", "--",
-        "bash", "benchmarks/harness/run_point.sh", "--spec", "benchmarks/harness/specs/llama31-8b-fp8-1gpu.toml",
-        "--point", "b32-p512-mixed", "--identity", item.identity,
-    ], "the whole launch: a changed token anywhere in it is a changed launch"
-    queued = jobs.research_command(plan, "llama31-8b-fp8-1gpu", item, root)
-    flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
-    assert cwd == root and flags[:4] == ["research", "run", "--on", "vy-nebius-3"]
-    assert "--queue" not in flags and "--gpus" not in flags
-    assert flags[flags.index("--source") + 1] == str(root) and flags[flags.index("--cwd") + 1] == "source"
-    assert flags[flags.index("--timeout") + 1] == f"{jobs.DIRECT_WAIT_S + 7200}" and "--require-result" in flags
-    assert flags[flags.index("--tool") + 1] == queued[queued.index("--tool") + 1]
-    queued_flags = queued[:queued.index("--")]
-    assert [flags[i + 1] for i, t in enumerate(flags) if t == "--env"] == [
-        queued_flags[i + 1] for i, t in enumerate(queued_flags) if t == "--env"] == ["VERITY_BENCH_VENV=/workspace/jobs/venv312"]
-    assert through_slot(workload)
-    assert workload[:4] == ["env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/check/slot.py"]
-    assert workload[workload.index("--run-max") + 1] == "7200"
-    lease = workload[workload.index("--", 4) + 1:]
-    assert lease[:3] == ["gpu-lease", "1", "--wait"] and lease[lease.index("--max-min") + 1] == "120"
-    assert lease[lease.index("--") + 1:] == queued[queued.index("--") + 1:]
-    assert VLLM_BENCH_POINT.parse(command)["identity"] == VLLM_BENCH_POINT.parse(queued)["identity"] == item.identity
+
+    def execute(command, cwd):
+        commands.append((list(command), cwd))
+        return 0
+
+    assert jobs.dispatch(plan, "llama31-8b-fp8-1gpu", point="b32-p512-mixed", root=root, execute=execute) == 0
+    assert commands == [(["env", "bash", "benchmarks/harness/run_point.sh", "--spec",
+                          "benchmarks/harness/specs/llama31-8b-fp8-1gpu.toml", "--point", "b32-p512-mixed",
+                          "--identity", plan.points[1].identity], root)], "the whole command: a changed token is a changed run"
+    assert jobs.dispatch(plan, "llama31-8b-fp8-1gpu", point="b8-p512-mixed", root=root, execute=execute) == 0
+    assert len(commands) == 1 and "has its passing run r-passed, so nothing runs" in capsys.readouterr().err
+    again = jobs.again(plan, ["b8-p512-mixed"])
+    assert jobs.dispatch(again, "llama31-8b-fp8-1gpu", root=root, execute=execute) == 0
+    assert commands[-1][0][commands[-1][0].index("--point") + 1] == "b8-p512-mixed"
+    for name in ("b8-p512-mixed", "b32-p512-mixed"):
+        assert jobs.to_run(plan, name).point.id == name
+    with pytest.raises(ValueError, match="has 2 points .* and a run runs one: name it with --point"):
+        jobs.dispatch(plan, "llama31-8b-fp8-1gpu", root=root, execute=execute)
+    with pytest.raises(ValueError, match="--point b9: not a point of spec"):
+        jobs.dispatch(plan, "llama31-8b-fp8-1gpu", point="b9", root=root, execute=execute)
+    assert len(commands) == 2
 
 
-def test_direct_dispatch_refuses_a_cpu_only_node_and_a_spec_without_max_minutes():
+def test_on_a_lease_host_a_point_waits_for_its_cards_in_its_own_lease_and_in_a_leased_job_takes_none(monkeypatch):
+    """Where gpu-lease hands out every GPU a run sees none until it takes a lease: the point takes one of the spec's
+    GPUs for its max_minutes, preemptible, of GPU_LEASE_ON's cards on GPU_LEASE_CORES' CPUs; a job holding its lease
+    (GPU_LEASE_UUID) takes no second one, and a spec with no max_minutes is refused before anything runs."""
+
     root = Path(__file__).resolve().parents[3]
-    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: "r-passed")
-    launched = []
-    for node in ("vy-nebius-cpu-1", "vy-nebius-cpu-4"):
-        with pytest.raises(ValueError, match=f"--direct {node}: not a GPU node with gpu slots"):
-            jobs.dispatch(plan, "llama31-8b-fp8-1gpu", root=root, direct=node, execute=lambda c, cwd: launched.append(c) or 0)
+    _lease_host(monkeypatch, True)
+    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
+    item = plan.points[1]
+    point = ["bash", "benchmarks/harness/run_point.sh", "--spec", "benchmarks/harness/specs/llama31-8b-fp8-1gpu.toml",
+             "--point", item.point.id, "--identity", item.identity]
+    assert jobs.point_command(plan, "llama31-8b-fp8-1gpu", item, root) == [
+        "gpu-lease", "1", "--wait", "--max-min", "120", "--preemptible", "--", "env", *point]
+    monkeypatch.setenv("GPU_LEASE_ON", "4")
+    monkeypatch.setenv("GPU_LEASE_CORES", "48-59")
+    assert jobs.point_command(plan, "llama31-8b-fp8-1gpu", item, root) == [
+        "gpu-lease", "1", "--wait", "--on", "4", "--cores", "48-59", "--max-min", "120", "--preemptible", "--", "env",
+        *point]
+    monkeypatch.setenv("GPU_LEASE_UUID", "GPU-1")
+    assert jobs.point_command(plan, "llama31-8b-fp8-1gpu", item, root) == ["env", *point]
+    monkeypatch.delenv("GPU_LEASE_UUID")
     unbounded = replace(plan, spec=replace(plan.spec, admission=Admission(None, None, None)))
+    launched = []
     with pytest.raises(ValueError, match="admission max_minutes"):
-        jobs.dispatch(unbounded, "llama31-8b-fp8-1gpu", root=root, direct="vy-nebius-2",
+        jobs.dispatch(unbounded, "llama31-8b-fp8-1gpu", point=item.point.id, root=root,
                       execute=lambda c, cwd: launched.append(c) or 0)
     assert launched == []
-    assert _parser().parse_args(["run", "x", "--direct", "vy-nebius-3"]).direct == "vy-nebius-3"
-    assert _parser().parse_args(["run", "x"]).direct is None
 
 
-def test_the_served_commits_width_sweep_runs_direct_on_a_dc_vms_one_gpu_as_on_the_rtx():
+def test_run_has_one_launch_and_no_flag_of_the_launches_it_replaced():
+    """The one launch is `research run ... -- verity-bench run SPEC`: no flag of a node, a slot, a booked card, cores or
+    end, and no queue of the harness's own; a booked period's are `research run`'s (`jobs.booked`)."""
+
+    for flag in ("--direct", "--here", "--card", "--cores", "--end"):
+        with pytest.raises(SystemExit):
+            _parser().parse_args(["run", "x", flag, "1"])
+    assert _parser().parse_args(["run", "x", "--point", "b8"]).point == "b8"
+    for gone in ("DIRECT_NODES", "GPU_SLOTS", "DIRECT_WAIT_S", "SLOT_GRACE_S", "slot_run", "direct_command",
+                 "direct_minutes", "research_command", "QUEUE_KINDS", "queue_kind", "here_command"):
+        assert not hasattr(jobs, gone), gone
+
+
+def test_the_served_commits_width_sweep_on_a_dc_vms_one_gpu_is_the_rtxs():
     """The Commit's width spec on an H200 is the RTX PRO 6000's spec (arms, sweep, reps, model, engine settings) on
-    another GPU, and `--direct` takes the DC VM's one GPU through its slot and gpu-lease, the wait for other leases on the
-    node inside the spec's max_minutes."""
-
-    from research.pods.nebius.slot_only import through_slot
+    another GPU, and a run of it runs the point it names."""
 
     root = Path(__file__).resolve().parents[3]
-    node, name = "vy-spot-glm53", "llama31-8b-fp8-1gpu-commit-served-width-h200"
-    spec, rtx = resolve_spec(name), resolve_spec("llama31-8b-fp8-1gpu-commit-served-width")
+    name = "llama31-8b-fp8-1gpu-commit-served-width@h200"
+    spec, rtx = resolve_spec(name), resolve_spec("llama31-8b-fp8-1gpu-commit-served-width@rtx-pro-6000")
     assert (spec.arms, spec.arm_modules, spec.arm_settings, spec.sweep, spec.reps, spec.eager) == (
         rtx.arms, rtx.arm_modules, rtx.arm_settings, rtx.sweep, rtx.reps, rtx.eager)
     assert (spec.preset.gpu_id, spec.preset.model, spec.preset.revision, spec.preset.precision) == (
         "h200", rtx.preset.model, rtx.preset.revision, rtx.preset.precision)
     assert dict(spec.preset.engine_settings) == dict(rtx.preset.engine_settings)
+    assert (rtx.admission.max_minutes, spec.admission.max_minutes) == (40, 120)
     assert [point.id for point in expand_sweep(spec.sweep.id)] == ["b1-p512-mixed", "b8-p512-mixed", "b32-p512-mixed"]
-
-    assert node in jobs.DIRECT_NODES
     plan = jobs.make_plan(name, root=root, commit="a" * 40, lookup=lambda identity, commit: None)
-    commands = []
-    assert jobs.dispatch(plan, name, root=root, direct=node,
-                         execute=lambda command, cwd: commands.append(list(command)) or 0) == 0
-    assert len(commands) == 3
-    for command in commands:
-        flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
-        assert flags[:4] == ["research", "run", "--on", node] and flags[flags.index("--timeout") + 1] == f"{jobs.DIRECT_WAIT_S + 7200}"
-        assert through_slot(workload)
-        lease = workload[workload.index("--", 4) + 1:]
-        assert lease[:3] == ["gpu-lease", "1", "--wait"] and "--preemptible" in lease[:lease.index("--")]
+    assert [jobs.to_run(plan, point.id).point.id for point in expand_sweep(spec.sweep.id)] == [
+        "b1-p512-mixed", "b8-p512-mixed", "b32-p512-mixed"]
 
 
-def test_the_launcher_finds_a_dc_vms_environment_after_the_others(tmp_path):
-    """The DC VMs' pinned-vLLM Python is $WORK/cp/venv312: the launcher takes it when none before it exists."""
+def test_the_launcher_runs_the_point_in_the_venv_the_launch_gives_and_refuses_without_one(tmp_path):
+    """The point's Python is VERITY_BENCH_VENV, which the launch gives: no node's directory stands in for it."""
 
     root = Path(__file__).resolve().parents[3]
     launcher = root / "benchmarks/harness/run_point.sh"
-    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path)}
-    python = tmp_path / "cp" / "venv312" / "bin" / "python"
-    python.parent.mkdir(parents=True)
-    python.write_text('#!/bin/sh\necho "$0"\n')
-    python.chmod(0o755)
-    ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
-    assert ran.returncode == 0, ran.stderr
-    assert ran.stdout.strip() == str(python)
-
-
-def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(tmp_path, monkeypatch):
-    root = Path(__file__).resolve().parents[3]
-    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
-    monkeypatch.setenv("VERITY_BENCH_VENV", str(tmp_path / "venv"))
-    command = jobs.research_command(plan, "llama31-8b-fp8-1gpu", plan.points[0], root)
-    assert f"VERITY_BENCH_VENV={tmp_path / 'venv'}" == command[command.index("--env") + 1]
-
-    launcher = root / "benchmarks/harness/run_point.sh"
-    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path)}
-    missing = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
-    assert missing.returncode == 2 and "pod_bootstrap.sh" in missing.stderr
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "CUDA_HOME": str(tmp_path)}
     python = tmp_path / "venv312" / "bin" / "python"
     python.parent.mkdir(parents=True)
-    python.write_text('#!/bin/sh\necho "$PYTHONPATH"\necho "$@"\n')
+    python.write_text(f'#!/bin/sh\n[ "$1" = -c ] && exec {sys.executable} "$@"\necho "$PYTHONPATH"\necho "$@"\n')
     python.chmod(0o755)
-    ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
+    missing = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
+    assert missing.returncode == 2 and "else the path recorded in" in missing.stderr and "(none of them set)" in missing.stderr
+    nope = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root,
+                          env={**env, "VERITY_BENCH_VENV": str(tmp_path / "nope")}, capture_output=True, text=True)
+    assert nope.returncode == 2 and f"{tmp_path}/nope" in nope.stderr
+    ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root,
+                         env={**env, "VERITY_BENCH_VENV": str(tmp_path / "venv312")}, capture_output=True, text=True)
     assert ran.returncode == 0, ran.stderr
     pythonpath, argv = ran.stdout.splitlines()
     assert {f"{root}/benchmarks/harness", f"{root}/adapters/vllm"} <= set(pythonpath.split(":"))
     assert argv == "-m verity_bench _vllm-point --point p"
-
-
-def test_the_launcher_finds_a_nodes_jobs_environment_without_verity_bench_venv(tmp_path):
-    """A jobs node's pinned-vLLM Python is $WORK/jobs/venv312, not pod_bootstrap.sh's $WORK/venv312: with no
-    VERITY_BENCH_VENV the launcher takes the first that exists, and refuses naming every path it tried."""
-
-    root = Path(__file__).resolve().parents[3]
-    launcher = root / "benchmarks/harness/run_point.sh"
-    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path)}
-    missing = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
-    assert missing.returncode == 2 and f"{tmp_path}/jobs/venv312" in missing.stderr
-    python = tmp_path / "jobs" / "venv312" / "bin" / "python"
-    python.parent.mkdir(parents=True)
-    python.write_text('#!/bin/sh\necho "$0"\n')
-    python.chmod(0o755)
-    ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
-    assert ran.returncode == 0, ran.stderr
-    assert ran.stdout.strip() == str(python)
-    unset = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root,
-                           env={**env, "VERITY_BENCH_VENV": str(tmp_path / "nope")}, capture_output=True, text=True)
-    assert unset.returncode == 2 and f"{tmp_path}/nope" in unset.stderr
 
 
 def _spec_with(tmp_path, extra: str) -> Path:
@@ -325,10 +273,10 @@ def test_dispatch_forwards_the_spec_env_and_setup_and_the_point_refuses_any_othe
     monkeypatch.delenv("VERITY_BENCH_VENV", raising=False)
     plan = jobs.Plan(spec, spec.config_sha256, jobs.toolchain(root, spec, commit="a" * 40),
                      tuple(jobs.PlannedPoint(p, "f" * 64, None) for p in expand_sweep(spec.sweep.id)))
-    command = jobs.research_command(plan, "llama31-8b-fp8-1gpu", plan.points[0], root)
-    flags = command[:command.index("--")]
-    forwarded = [flags[i + 1] for i, token in enumerate(flags) if token == "--env"]
-    assert forwarded == ["ARM_KNOB=on", "VERITY_BENCH_SETUP=benchmarks/harness/setup/vllm_encoded.sh"]
+    monkeypatch.setattr(jobs, "lease_host", lambda: False)
+    command = jobs.point_command(plan, "llama31-8b-fp8-1gpu", plan.points[0], root)
+    forwarded = command[1:command.index("bash")]
+    assert command[0] == "env" and forwarded == ["ARM_KNOB=on", "VERITY_BENCH_SETUP=benchmarks/harness/setup/vllm_encoded.sh"]
 
     environ = dict(item.split("=", 1) for item in forwarded)
     jobs.check_point_environment(spec, environ)
@@ -341,26 +289,10 @@ def test_dispatch_forwards_the_spec_env_and_setup_and_the_point_refuses_any_othe
         jobs.check_point_environment(stock, {"VERITY_BENCH_SETUP": "benchmarks/harness/setup/vllm_encoded.sh"})
 
 
-def test_a_point_refuses_a_local_checkpoint_whose_files_differ_from_the_spec_digest(tmp_path, monkeypatch, capsys):
-    checkpoint = tmp_path / "model"
-    checkpoint.mkdir()
-    (checkpoint / "config.json").write_text("{}")
-    digest = local_checkpoint(load_spec("llama31-8b-fp8-1gpu").preset, checkpoint).model_digest
-    path = _spec_with(tmp_path, "")
-    text = path.read_text().replace('model = "unsloth/Llama-3.1-8B"', f'model = "{checkpoint}"\nmodel_digest = "{digest}"')
-    path.write_text(re.sub(r'(?m)^(revision|case) = .*\n', "", text))
-    monkeypatch.setenv("RESEARCH_SOURCE_SHA", "a" * 40)
-    item = jobs.make_plan(path, lookup=lambda identity, commit: None).points[0]
-    (checkpoint / "config.json").write_text('{"changed": true}')
-    with pytest.raises(SystemExit):
-        main(["_vllm-point", "--spec", str(path), "--point", item.point.id, "--identity", item.identity])
-    assert f"not the spec's model_digest {digest}" in capsys.readouterr().err
-
-
 @pytest.mark.parametrize("card", ["NVIDIA H100 80GB HBM3", "NVIDIA H200"])
 def test_a_point_refuses_a_card_that_is_not_its_specs_before_anything_is_timed(tmp_path, monkeypatch, capsys, card):
     path = _spec_with(tmp_path, "")
-    path.write_text(path.read_text().replace('gpu_id = "rtx-pro-6000"', 'gpu_id = "h200"'))
+    path.write_text(path.read_text().replace('cards = ["rtx-pro-6000"]', 'cards = ["h200"]'))
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", "a" * 40)
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
     item = jobs.make_plan(path, lookup=lambda identity, commit: None).points[0]
@@ -368,25 +300,12 @@ def test_a_point_refuses_a_card_that_is_not_its_specs_before_anything_is_timed(t
     monkeypatch.setattr("verity_bench.cli.run_benchmark", lambda *args, **kwargs: sys.exit("timed"))
     with pytest.raises(SystemExit) as stop:
         main(["_vllm-point", "--spec", str(path), "--point", item.point.id, "--identity", item.identity])
-    if card == GPUS["h200"].nvidia_smi_name:
+    if card == "NVIDIA H200":
         assert stop.value.code == "timed"
     else:
         assert stop.value.code == 2 and (
             f"the card is a {card}, not the h200 of spec 'llama31-8b-fp8-1gpu' (NVIDIA H200): run it on a node whose "
-            "card is a NVIDIA H200, or use the spec for this card") in capsys.readouterr().err
-
-
-def test_a_local_checkpoint_is_bound_by_the_files_a_loader_reads_not_the_hub_snapshots_metadata(tmp_path):
-    preset = load_spec("llama31-8b-fp8-1gpu").preset
-    checkpoint = tmp_path / "model"
-    checkpoint.mkdir()
-    (checkpoint / "config.json").write_text("{}")
-    digest = local_checkpoint(preset, checkpoint).model_digest
-    (checkpoint / ".gitattributes").write_text("*.safetensors filter=lfs\n")
-    (checkpoint / "README.md").write_text("# a model card\n")
-    assert local_checkpoint(preset, checkpoint).model_digest == digest
-    (checkpoint / "generation_config.json").write_text("{}")
-    assert local_checkpoint(preset, checkpoint).model_digest != digest
+            "card is a NVIDIA H200, or name this card where the spec lists it (`SPEC@CARD`)") in capsys.readouterr().err
 
 
 def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
@@ -396,7 +315,7 @@ def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
     python.parent.mkdir(parents=True)
     python.write_text('#!/bin/sh\necho "$FROM_SETUP $SETUP_SAW_PYTHONPATH"\n')
     python.chmod(0o755)
-    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path),
+    env = {"PATH": "/usr/bin:/bin", "VERITY_BENCH_VENV": str(tmp_path / "venv312"), "CUDA_HOME": str(tmp_path),
            "VERITY_BENCH_SETUP": os.path.relpath(setup, root)}
     setup.write_text('export FROM_SETUP="built in $PWD" SETUP_SAW_PYTHONPATH=${PYTHONPATH##*:}\n')
     ran = subprocess.run(["bash", "benchmarks/harness/run_point.sh"], cwd=root, env=env, capture_output=True, text=True)
@@ -409,14 +328,14 @@ def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
 
 
 def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_their_libraries_built():
-    spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-r6")
+    spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000")
     assert spec.arms == ("stock-fp8", "bandwidth-plain", "bandwidth-audit", "stock-fp8@compiled")
     assert spec.arm_modules == ("benchmarks.vllm_encoded.bench_arm:PLAIN", "benchmarks.vllm_encoded.bench_arm:AUDIT")
     assert spec.env["VERITY_VLLM_BENCH_KV_RECEIPTS"] == "on"
     stock = resolve_spec("llama31-8b-fp8-1gpu")
     bound = dict(id=stock.preset.id, model=stock.preset.model, revision=stock.preset.revision, case=stock.preset.case,
-                 model_digest=None)
-    assert spec.preset.model_digest and replace(spec.preset, **bound) == stock.preset
+                 engine_settings={k: v for k, v in spec.preset.engine_settings.items() if k != "batch_invariant"})
+    assert spec.preset.revision.startswith("sha256:") and replace(spec.preset, **bound) == stock.preset
     root = Path(__file__).resolve().parents[3]
     setup = (root / spec.setup).read_text()
     bench_arm = (root / "benchmarks/vllm_encoded/bench_arm.py").read_text()
@@ -427,7 +346,7 @@ def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_th
 
 
 def test_the_served_bandwidth_spec_times_compiled_stock_uncontrolled_beside_its_graph_path_at_six_reps():
-    served_spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-r6")
+    served_spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000")
     assert served_spec.reps == 6 and served_spec.arm_settings["stock-fp8@compiled"].control == "none"
 
     stock, compiled = resolve_arms("stock-fp8,stock-fp8@compiled", (), served_spec.arm_settings)
@@ -443,17 +362,23 @@ def test_the_served_bandwidth_spec_times_compiled_stock_uncontrolled_beside_its_
     assert {b["kv_cache_memory_bytes"] for b in built} == {60129542144}
 
 
-def test_a_queued_point_records_its_identity_as_the_key_param_resume_matches():
+def test_a_points_run_records_its_identity_as_the_key_param_resume_matches(monkeypatch):
+    """The launch `research run ... -- uv run verity-bench run SPEC --point P` records the identity of the point the run
+    runs, planned in the launching checkout as the run plans it; so does the point's own command, leased or not."""
+
     root = Path(__file__).resolve().parents[3]
-    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
-    item = plan.points[0]
-    workload = jobs.research_command(plan, "llama31-8b-fp8-1gpu", item, root)
-    workload = workload[workload.index("--") + 1:]
+    monkeypatch.setattr(jobs, "lease_host", lambda: False)
+    monkeypatch.delenv("RESEARCH_SOURCE_SHA", raising=False)
+    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, lookup=lambda identity, commit: None)
+    item = plan.points[1]
+    workload = jobs.point_command(plan, "llama31-8b-fp8-1gpu", item, root)
     wrapped = ["/workspace/pouw/infra/bin/gpu-lease", "1", "--wait", "--max-min", "120", "--mem-gb", "64", "--", *workload]
-    for argv in (workload, wrapped):
+    launch = ["uv", "run", "verity-bench", "run", "llama31-8b-fp8-1gpu", "--point", item.point.id]
+    for argv in (workload, wrapped, launch):
         params, key = VLLM_BENCH_POINT.resolve_params(argv, root)
-        assert key == {"identity": item.identity}
-        assert params["point"] == item.point.id and params["spec"] == "benchmarks/harness/specs/llama31-8b-fp8-1gpu.toml"
+        assert key == {"identity": item.identity}, argv
+        assert params["point"] == item.point.id
+    assert VLLM_BENCH_POINT.resolve_params(["uv", "run", "verity-bench", "run", "llama31-8b-fp8-1gpu"], root)[1] == {}
 
 
 def test_a_spec_named_by_a_path_under_the_specs_former_directory_is_the_spec_of_that_name_here(tmp_path):
@@ -473,21 +398,17 @@ def test_a_spec_named_by_a_path_under_the_specs_former_directory_is_the_spec_of_
         load_spec(SOURCE_ROOT / FORMER_SPECS / "no-such-spec.toml")
 
 
-def test_every_spec_dispatches_as_a_registered_queue_kind_that_fits_it():
-    """The queue refuses an unregistered kind's job without --mem-gb, so each spec's points need a kind whose shape has
-    the spec's GPUs and whose wall time covers its admission."""
+def test_every_spec_fits_the_queued_points_kind():
+    """A point run through the queue is a job of the kind the README names, `vllm-bench-1gpu`: each spec's GPUs are its
+    shape's, and its wall time covers the spec's admission."""
 
     kinds_toml = Path(__file__).resolve().parents[3] / "infra" / "cluster" / "kinds" / "benchmarks.toml"
-    kinds = tomllib.loads(kinds_toml.read_text())["kinds"]
-    phase_gpus = {"gpu1": 1}
+    kind = tomllib.loads(kinds_toml.read_text())["kinds"]["vllm-bench-1gpu"]
     specs = [load_spec(p) for p in sorted(SPEC_ROOT.glob("*.toml")) if "vllm-spec/v0" in p.read_text().splitlines()[0]]
-    assert specs
+    assert specs and kind["phase"] == "gpu1"
     for spec in specs:
-        kind = kinds[jobs.queue_kind(spec.preset.gpu_count)]
-        assert phase_gpus[kind["phase"]] == spec.preset.gpu_count, spec.id
+        assert spec.preset.gpu_count == 1, spec.id
         assert spec.admission.max_minutes is None or spec.admission.max_minutes <= kind["max_wall_min"], spec.id
-    with pytest.raises(ValueError, match="register one in infra/cluster/kinds/benchmarks.toml"):
-        jobs.queue_kind(8)
 
 
 def test_plan_run_check_and_compare_are_top_level_commands(tmp_path):
@@ -503,7 +424,7 @@ def test_graphs_are_refused_for_arms_bound_to_the_build():
     assert build_bound(bound_arm) == ("sampled-proofs:hm96",)
     assert build_bound(resolve_arms("stock")[0]) == ()
     with pytest.raises(ValueError, match="Build"):
-        ProcessEngineFactory(eager=False).create(bound_arm, load_spec("llama31-8b-fp8-1gpu").preset, resident=True)
+        ProcessEngineFactory(eager=False).create(bound_arm, resolve_spec("llama31-8b-fp8-1gpu").preset, resident=True)
 
 
 def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(monkeypatch):
@@ -517,10 +438,15 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
 
     class Run:
+        """A pass's tile digest is written into `leaves` by its call (not with ``hash_leaf`` omitted) over the poison, and
+        each end draws fresh salts, so its roots are its own (`fresh`, `writes`: a run that breaks either)."""
+        fresh, writes = True, True
+
         def __init__(self, y, **commits):
             self.y, self.omit, self.details = y, frozenset(), {"passes": [{}]}
-            self.scheme, self.schedule = SimpleNamespace(name="pearl-c-sm120-v1-h3"), SimpleNamespace(name="deferred")
+            self.scheme, self.schedule = SimpleNamespace(name="pearl-c-h100-v1-h3"), SimpleNamespace(name="deferred")
             self.commits = {"weights_root": "ab" * 64, **commits}
+            self.nb, self.leaves, self.ended = 64, torch.zeros(64, dtype=torch.uint8), 0
             g = torch.Generator().manual_seed(0)
             self.weights = {w: SimpleNamespace(tensor=torch.randn(n, 32, generator=g).to(torch.bfloat16))
                             for w, n in ((0, 64), (1, 64), (2, 128))}
@@ -532,30 +458,116 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
             return 7
 
         def poison(self):
-            pass
+            self.leaves.fill_(0xA5)
 
         def gemm(self, w, x, W, bias):
-            return self.y(x, W)
+            y = self.y(x, W)
+            if self.writes and "hash_leaf" not in self.omit:
+                digest = hashlib.sha512(y.contiguous().view(torch.uint8).numpy().tobytes()).digest()
+                self.leaves.copy_(torch.frombuffer(bytearray(digest), dtype=torch.uint8))
+            return y
 
         def end(self):
-            return {"transcript_root": "omitted" if self.omit else "root", "activation_roots": "a", "units": 1}
+            self.ended += self.fresh
+            return {"transcript_root": f"root-{self.ended}", "activation_roots": f"a-{self.ended}", "units": 1, "tiles": 1}
 
     def exact_y(x, W):
         return (x.float() @ W.float().T).to(torch.bfloat16)
 
     run = Run(exact_y)
-    exact = _pearl_c_gate(run)
+    exact = _pearl_c_gate(run, "pearl-plus")
     assert exact["passed"] and exact["provided"] and exact["schedule"] == "deferred"
     assert exact["coins"] == {"source": "in-process"}
     assert run.stepped and set(run.ats[:-1]) == {7} and run.ats[-1] is None    # the compared passes share one index
     assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
-    wrong = _pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)))
+    wrong = _pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)), "pearl-plus")
     assert not wrong["passed"] and wrong["provided"]
+    for broken in ("fresh", "writes"):          # roots that repeat (salts not fresh), leaves the call never writes
+        run = Run(exact_y)
+        setattr(run, broken, False)
+        assert not _pearl_c_gate(run, "pearl-plus")["passed"]
     session = {"session": "s1", "root": "ab" * 64, "commitment": "cd" * 64}
-    live = _pearl_c_gate(Run(exact_y, coin_source="challenger", session=session, pass_index=0))
+    live = _pearl_c_gate(Run(exact_y, coin_source="challenger", session=session, pass_index=0), "pearl-plus")
     after = epoch_open_root(bytes.fromhex("ab" * 64), 0).hex()
     assert live["passed"] and live["coins"] == {"source": "challenger", "session": session, "pass_index": 0,
                                                 "salt_after": after}
+
+
+def test_the_config_a_declared_schemes_arm_hands_passes_that_schemes_own_settings_check():
+    """A protocol arm whose entry is a declared scheme's name hands it settings it takes, read as
+    `verity_vllm.LLM` reads them (`option_settings`) and checked by the scheme's own `settings`: its in-process coins
+    the string its settings say, ``coins = "in-process"``, or, where the spec gives one, its challenger's address alone."""
+    from verity.protocols.compose import schemes
+    from verity.protocols.resource_accounting.scheme import settings
+    from verity_vllm.llm import option_settings
+
+    spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
+    arm = next(a for a in resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings) if a.protocols)
+    entry, = arm.protocols
+    scheme = schemes.get(entry)
+    assert entry == scheme.name == "pearl-plus"
+    environ = {"PEARLC_KERNEL": "/tree/kernels/pearl_c_sm90", "PEARLC_CUBIN": "/run/out/setup/pearl_c_sm90.cubin"}
+    config = protocols_config(arm, environ)
+    own = option_settings(entry, config)
+    assert own == {"kernel": environ["PEARLC_KERNEL"], "cubin": environ["PEARLC_CUBIN"], "coins": "in-process"}
+    assert settings(scheme, own)["coins"] == "in-process"
+    live = replace(arm, protocols_config={"pearl-plus": {**arm.protocols_config["pearl-plus"], "challenger": "10.0.0.7:7000",
+                                                         "lane": "benchmarks", "peer": "node-1"}})
+    own = option_settings(entry, protocols_config(live, environ))
+    assert "coins" not in own and settings(scheme, own)["challenger"] == "10.0.0.7:7000"
+
+
+def test_a_served_schemes_gate_refuses_by_name_where_its_device_run_is_not_found(monkeypatch):
+    """A guard never fails open: an arm serving a declared useful-work scheme whose engine exposes no device run is
+    refused, naming the scheme, and not passed as ``provided`` False; the run Pearl+'s attach holds (``llm.scheme.run``)
+    is the one gated; an arm that serves no declared scheme keeps its unprovided gate."""
+    from verity_torch.pouw.pearl_c.run_device import PearlCDeviceRun
+
+    from verity_bench.vllm import engine as E
+
+    spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
+    arm = next(a for a in resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings) if a.protocols)
+
+    def engine(arm, scheme):
+        got = object.__new__(E._VllmEngine)
+        got.arm, got.obj, got.served = arm, None, E._served_scheme(arm)
+        got.llm = SimpleNamespace(protocols=None, scheme=scheme)
+        return got
+
+    for attached in (None, SimpleNamespace(run=None)):
+        gate = engine(arm, attached).custom_gate()
+        assert gate["passed"] is False and gate["provided"] is True and gate["scheme"] == "pearl-plus"
+        assert "could not find the served scheme pearl-plus's device run" in gate["refused"]
+    run = object.__new__(PearlCDeviceRun)
+    run.retain_dir = None
+    monkeypatch.setattr(E, "_pearl_c_gate", lambda r, s: {"passed": r is run and s == "pearl-plus", "provided": True})
+    assert engine(arm, SimpleNamespace(run=run)).custom_gate() == {"passed": True, "provided": True}
+    h1 = replace(arm, protocols=("pouw:eps1-sm120-h1fx1",))
+    assert engine(h1, None).custom_gate() == {"passed": True, "provided": False}
+
+
+def test_the_harness_gate_is_refused_on_a_run_that_retains_its_passes(monkeypatch, tmp_path):
+    """The gate's call check begins and ends passes of its own, each retained (`passes.pass_dir`) on a run that retains:
+    on a retained Pearl+ run, three steps with the gate after the first left 15 pass directories against 2 passes listed.
+    So the harness refuses the gate by name on a run with a retain directory, and no pass directory is added."""
+    from verity_torch.pouw.pearl_c.passes import pass_dir
+    from verity_torch.pouw.pearl_c.run_device import PearlCDeviceRun
+
+    from verity_bench.vllm import engine as E
+
+    spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
+    arm = next(a for a in resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings) if a.protocols)
+    run = object.__new__(PearlCDeviceRun)
+    run.retain_dir, run.retained = tmp_path / "passes", 1
+    (run.retain_dir / "pass-00000").mkdir(parents=True)
+    monkeypatch.setattr(E, "_pearl_c_gate", lambda r, s: (Path(pass_dir(r)).mkdir(), {"passed": True, "provided": True})[1])
+    got = object.__new__(E._VllmEngine)
+    got.arm, got.obj, got.served = arm, None, E._served_scheme(arm)
+    got.llm = SimpleNamespace(protocols=None, scheme=SimpleNamespace(run=run))
+    with pytest.raises(SystemExit, match="the harness gate begins and ends passes of its own; it can't run on a run that "
+                                         "retains its passes"):
+        got.custom_gate()
+    assert sorted(p.name for p in run.retain_dir.iterdir()) == ["pass-00000"]
 
 
 def test_the_readme_states_the_contract_the_code_keeps():
@@ -572,8 +584,7 @@ def test_the_readme_states_the_contract_the_code_keeps():
     for mode in ("resident", "blocks"):
         assert f"`{mode}`" in readme and f'"{mode}"' in runner_source
     assert f"`{result_format.SCHEMA}`" in readme
-    for kind in jobs.QUEUE_KINDS.values():
-        assert f"`{kind}`" in readme, kind
+    assert "`vllm-bench-1gpu`" in readme
     [subparsers] = [a for a in _parser()._actions if isinstance(a, argparse._SubParsersAction)]
     public = {name for name in subparsers.choices if not name.startswith("_")}
     assert public == set(re.findall(r"^verity-bench ([a-z-]+) ", readme, re.M))

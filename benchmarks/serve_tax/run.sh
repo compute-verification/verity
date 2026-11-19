@@ -2,7 +2,7 @@
 # The serve tax on one node (README.md), from the shipped tree's root under `research run`, the C4 shard sent with
 # --send (or C4=PATH) unless a ready plan is:
 #   ARMS="compiled eager ..." RATES=light=R,medium=R,saturated=R [MODEL_ID=moonlight] [REPS=3] [SPAN_S=60]
-#     [REQUESTS=N] [DRAIN_S=600] [WINDOW_S=600] [KV_WINDOW_S=WINDOW_S] [TICK_MS=SAT,FREE | TICK_FROM=RECORD_ARM_DIR] [TICK_RULE=JSON]
+#     [REQUESTS=N] [DRAIN_S=600] [WINDOW_S=600] [TICK_MS=SAT,FREE | TICK_FROM=RECORD_ARM_DIR] [TICK_RULE=JSON]
 #     [REPLAY=LOAD [REPLAY_FROM=RECORD_ARM_DIR] [REPLAY_MODES="compiled eager"] [REPLAY_LOGPROBS=1]] [MAX_MIN=240]
 #     bash benchmarks/serve_tax/run.sh
 #   CAPACITY=1 [REQUESTS=800] bash benchmarks/serve_tax/run.sh   # stock compiled under one burst: its capacity
@@ -10,7 +10,7 @@
 #     # only replay an earlier window, at the model's GPUs as tensor-parallel width, taking REPLAY_CAPTURE's requests'
 #     # logits rows and ids at the sampler into OUT/replay-<mode>/capture (replay.py --capture)
 #   ARMS="restore-base restore-pause restore" RATES=medium=R REPS=1 SPAN_S=720 EDGES_S=180,360,540 [SAVE_KV=1]
-#     [RESTORE=1:2 [RESTORE_ARM="restore ..."] [RESTORE_WARM=N]] [NUM_GPU_BLOCKS=N] [KV_DIR=DIR]
+#     [RESTORE=1:2 [RESTORE_ARM="restore ..."] [RESTORE_WARM=N]] [NUM_GPU_BLOCKS=N] [KV_DIR=DIR] [SCHEME_SETTINGS=JSON]
 #     bash benchmarks/serve_tax/run.sh   # boundary states at the edges, one restored
 #   ARMS="compiled record tokens-only boundary" RATES=... EDGES_EVERY_S=30 [KV_COPY=all|first|none] [PLAN_FILE=PLAN.jsonl]
 #     [MAX_MODEL_LEN=N] [FLASHINFER=1] [LDCONFIG=1] [BUDGET_MIN=M] bash benchmarks/serve_tax/run.sh   # the served configuration's tax
@@ -19,6 +19,9 @@
 #                                        # committed under PRIVATE/two-stage/boundary
 #   bash benchmarks/serve_tax/run.sh --model glm53 [--arms "ARM ..."|all] [--loads NAME[=RUNG+RUNG...],...]
 #     [--dataset NAME=FILE] [--reps 6] [--target PERCENT] [--json]   # the serving cost, by vLLM's own client
+#   bash benchmarks/serve_tax/run.sh --model llama32-1b --profile coding-agent|chat|fixed-size
+#     --find-load|--feature NAME [KEY=VALUE ...]
+#     # a serving profile of benchmarks/production.toml: where stock saturates, or one arm of ours beside stock
 # The last form is the serving cost (README.md): each flag sets the variable of its name (MODEL_ID, ARMS, LOADS, DATASETS,
 # REPS, TARGET, JSON) and any of them makes vLLM's own client the default (CLIENT=vllm-bench: `vllm bench serve`, no C4
 # shard and no plan). Its arms are by default stock, stock again and two-stage, with --arms all one arm for each change
@@ -27,6 +30,25 @@
 # --dataset chat=FILE names another copy of it, and no run sends or keeps the file. --dataset prefix=FILE serves a table
 # of planned requests (arrival times and lengths; prefix_plan.jsonl is the full-size one) in place of load prefix's
 # four, each sent as it arrives: the row then says whether stock kept up, and which of its figures is the cost.
+# --profile NAME serves as benchmarks/production.toml's profile does (serve_tax.profile_run): the file's stock launch
+# (prod for glm53, stock vLLM at vLLM's own limits for the others), the profile's load at the model's context, no
+# sampling flag (the model's generation_config) and each request to its recorded length (fixed-size's 1,024 tokens).
+# It fixes ARMS, LOADS, REPS, LIFETIMES, SAMPLED, MAX_MODEL_LEN, PASS_PROMPTS, the published arm's flags, TARGET and
+# WITH, and refuses each one given, naming it. --profile, --feature and --find-load are flags alone: PROFILE, FEATURE
+# and FIND_LOAD in the environment are refused. --find-load serves stock alone over the profile's ladder (its users
+# or requests in flight, benchmarks/production.toml) and prints where its output
+# tokens a second stop rising: the file's line, the version to raise and the pin test's digest
+# (OUT/find_load.json); it edits no file. --feature NAME [KEY=VALUE ...] names an application's component and its
+# settings as its [params] lines state them (--feature sampled-proofs levels=2; serve_tax.feature), refused by name
+# where verity config check's components have no such name or setting; the arm ARM that serves it is served with stock in turn at the profile's one load, two lifetimes of three reps each, and writes
+# the run's result through the kit's report: its three lines, the first our extra card time a token under the model's
+# metric id. Where ARM
+# refuses what the profile has on, the result is `cannot run` in the refusal's words and the job exits 1, as for an
+# arm whose run refuses it; where a change on our side alone lets the same prompts through, ARM is served with it
+# (OURS, its label in the result) as the second line, stock unchanged. The passes are planned within the model's
+# cap_minutes (BUDGET_MIN and STOP_AT, the earlier of the given and the cap). An arm that turns a scheme on inside
+# vLLM's server (pearl-plus) takes SCHEME_SETTINGS, serve_tax.py run's --scheme-settings, a list of one object a server
+# lifetime under a profile (each lifetime opens its own reserved session); the plan checks it before any GPU is held.
 # PASS_PROMPTS=NAME=N,... makes a pass of load NAME send N prompts at every rung in place of the load's own, and
 # NAME=Kx K prompts for each request its rung holds in flight (serve_tax.parse_pass_prompts): for a ladder past the
 # rungs the load's own prompts can hold, and the same for every arm of a cost. SAMPLED=1 has every request sampled at
@@ -60,20 +82,25 @@
 # starts the arm's engine and the id front before it on loopback port FRONT and holds them until the network attester's run
 # has ended or STOP_AT (serve_tax.certified_server); OUT/tick-certifier/server.json is its record, and it has no table
 # and no cost here. The other command runs where the network attester does, a host that reaches FRONT and is never this node:
-# serve_tax.py run --arm tick-certifier --side client, with the same LOADS and CELLS. Its directory is the arm's, and
+# serve_tax.py run --arm tick-certifier --side client --private DIR, with the same LOADS and CELLS (DIR, outside every
+# run's, keeps the network attester's run and the shim's records). Its directory is the arm's, and
 # `serve_tax.py cost` over it and this job's compiled gives its cost. SIDE is its arms' alone: stock named before it
 # is served whole, under the same lease.
 # PRIVATE is where the arms keep what never leaves the node, each in PRIVATE/<arm>: a boundary commitment's classes, whose
 # files hold the requests' tokens and the salts (OUT keeps each class's public commit.json, a line of
-# <arm>/server/boundary.PID.jsonl), the history tables and the top-k's counters. It is a directory outside every run's.
-# A serve's later stages read it, so without it such an arm is refused; in the serving cost's form alone, where nothing
-# reads it afterwards, each such arm gets a fresh one, removed when it stops. BOUNDARY_ROWS replaces the object of an
+# <arm>/server/boundary.PID.jsonl), the history tables, the top-k's counters, and an arm's step traces, served ids and
+# edges' outputs and dumps (PRIVATE/<arm>/server/, each gzipped at the job's end), the corpus client's whole records
+# (PRIVATE/<arm>/client/; OUT keeps each less its served ids), the plan (PRIVATE/plan.jsonl), and each replay's tokens,
+# step records and capture (PRIVATE/replay-<mode>, a restore's in PRIVATE/<arm>-replay).
+# It is a directory outside every run's. A serve's later stages read it, so without it an arm that records, a replay,
+# or any arm under the corpus client is refused; in the serving cost's form alone, where nothing reads it
+# afterwards, an arm that records nothing gets a fresh one, removed when it stops. BOUNDARY_ROWS replaces the object of an
 # arm's boundary commitment (a model with no check template of its own needs it).
 # EDGES_EVERY_S puts the boundary arm's edge each that many seconds of a load (its replay blocks' length); at TP > 1 each
 # rank keeps its KV copy and rows in host memory, and KV_COPY=first copies rank 0's pool alone (for ranks that hold the
 # same KV bytes, as GLM-5.3's replicated MLA cache does). PLAN_FILE (else a sent inputs/plan.jsonl) is a ready plan, served
 # as it is (the replay ladder's serving plan: each request's own sampling, stopping at its end of text), copied to
-# OUT/plan.jsonl; MAX_MODEL_LEN the engines' context limit, a number of tokens or auto (vLLM's word for the longest the
+# PRIVATE/plan.jsonl; MAX_MODEL_LEN the engines' context limit, a number of tokens or auto (vLLM's word for the longest the
 # cards' KV cache holds); PUBLISHED_FRONTEND=rust starts the published arm behind vLLM's Rust front end, on a build
 # that has it (python, the default, is the front end of every other arm), and PUBLISHED_ARGS=--FLAG=VALUE,... adds flags
 # of vLLM's own to that arm's line alone. FLASHINFER=1 puts CUDA_HOME's bin first on PATH (CUDA_HOME, where unset torch's own toolkit, else
@@ -93,7 +120,7 @@
 # DRAIN_S is how long the trace corpus's client waits, after a load's last arrival, for the answers still out (600 s):
 # a request unanswered by then is cut and counted unserved, so a load whose last request is very long (a prompt at
 # the model's context limit) names more. It is that client's alone: a pass of vLLM's own client reads none.
-# One plan (OUT/plan.jsonl, from the shard's first DOCS documents) is made before the GPUs are held; then each arm is a
+# One plan (PRIVATE/plan.jsonl, from the shard's first DOCS documents) is made before the GPUs are held; then each arm is a
 # server lifetime of its own (serve_tax.py run) into OUT/<arm>, in ARMS's order, all under one gpu-lease; the tick arms
 # take τ from TICK_MS, else from TICK_FROM, else from this job's own record arm, calibrated on its saturated load.
 # REPLAY then replays LOAD's first rep of the record arm (by default this job's) in each of REPLAY_MODES (replay.py)
@@ -106,25 +133,60 @@
 # its stand-in on one, a directory under /tmp of the cut config and that checkpoint's tokenizer; llama8b,
 # qwen3-30b and llama32-1b their pinned snapshots under HF_HOME on one. GPU_LEASE_ON and GPU_LEASE_CORES are the
 # lease's --on and --cores. VENV's vLLM must be SERVE_VLLM: d9105ea80, the integration's
-# pin, unless set.
+# pin, unless set. On a machine that is not ours (a Slurm node, under research run --local-only) there is no gpu-lease:
+# the job waits for its own cards (CUDA_VISIBLE_DEVICES, as Slurm sets it) to be free; VENV must be given; HF_HOME is
+# the hub's own place under XDG_CACHE_HOME unless given; and a profile's job names its commit from research run's
+# --tree-sha (RESEARCH_SOURCE_SHA) or RESEARCH_SOURCE_COMMIT, with no .git, and its card from nvidia-smi's name
+# through the card files, never from the machine's name.
 set -uo pipefail
+[ -z "${PROFILE:-}${FEATURE:-}${FIND_LOAD:-}" ] || {
+  echo "serve-tax: PROFILE, FEATURE and FIND_LOAD are not read from the environment: --profile NAME with --feature NAME" \
+    "[KEY=VALUE ...] or --find-load"; exit 2; }
 while [ $# -gt 0 ] && [ "$1" != leased ]; do
   flag=$1; shift
   case $flag in
     --json) JSON=1 ;;
-    --model|--arms|--loads|--dataset|--reps|--target)
+    --find-load) FIND_LOAD=1 ;;
+    --feature)
+      [ $# -gt 0 ] || { echo "serve-tax: $flag takes a value"; exit 2; }
+      FEATURE=("$1"); shift
+      while [ $# -gt 0 ] && [[ $1 == *=* && $1 != -* ]]; do FEATURE+=("$1"); shift; done ;;
+    --model|--arms|--loads|--dataset|--reps|--target|--profile)
       [ $# -gt 0 ] || { echo "serve-tax: $flag takes a value"; exit 2; }
       case $flag in
         --model) MODEL_ID=$1 ;; --arms) ARMS=$1 ;; --loads) LOADS=$1 ;; --reps) REPS=$1 ;; --target) TARGET=$1 ;;
-        --dataset) DATASETS="${DATASETS:+$DATASETS }$1" ;;
+        --dataset) DATASETS="${DATASETS:+$DATASETS }$1" ;; --profile) PROFILE=$1 ;;
       esac
       shift ;;
-    *) echo "serve-tax: unknown flag $flag (--model, --arms, --loads, --dataset NAME=FILE, --reps, --target, --json)"; exit 2 ;;
+    *) echo "serve-tax: unknown flag $flag (--model, --arms, --loads, --dataset NAME=FILE, --reps, --target, --json," \
+         "--profile NAME, --feature NAME [KEY=VALUE ...], --find-load)"; exit 2 ;;
   esac
   CLIENT=${CLIENT:-vllm-bench}
 done
 CLIENT=${CLIENT:-corpus}
-if [ "$CLIENT" = vllm-bench ]; then
+# the second entry, under the lease, takes the profile as the first did: as a flag (leased --profile NAME)
+if [ "${1:-}" = leased ] && [ $# -gt 1 ]; then
+  { [ $# = 3 ] && [ "$2" = --profile ]; } || { echo "serve-tax: leased takes --profile NAME alone"; exit 2; }
+  PROFILE=$3; set -- leased
+fi
+if [ "${1:-}" != leased ] && [ -n "${PROFILE:-}${FEATURE:-}${FIND_LOAD:-}" ]; then
+  [ -n "${PROFILE:-}" ] || { echo "serve-tax: --feature and --find-load are a profile's: --profile NAME"; exit 2; }
+  case "${FEATURE:+f}${FIND_LOAD:+l}" in
+    f|l) ;;
+    *) echo "serve-tax: --profile $PROFILE takes --feature NAME [KEY=VALUE ...] or --find-load, one of them"; exit 2 ;;
+  esac
+  fixes() { echo "serve-tax: --profile $PROFILE fixes $2 (benchmarks/production.toml): drop $1"; exit 2; }
+  [ -z "${ARMS:-}" ] || fixes "--arms/ARMS" "the arms: its stock and --feature's arm, or stock alone for --find-load"
+  [ -z "${LOADS:-}" ] || fixes "--loads/LOADS" "the load: its dataset, cut and turns at its one load, or --find-load's ladder"
+  [ -z "${REPS:-}${LIFETIMES:-}" ] || fixes "--reps/REPS and LIFETIMES" \
+    "the passes: two lifetimes of three reps each, six paired, or one of three for --find-load"
+  [ "${SAMPLED:-0}" = 0 ] || fixes SAMPLED "the sampling: no flag, so the model's generation_config applies"
+  [ -z "${MAX_MODEL_LEN:-}" ] || fixes MAX_MODEL_LEN "the context limit: the model's in the file"
+  [ -z "${PASS_PROMPTS:-}" ] || fixes PASS_PROMPTS "the prompts a pass sends"
+  [ -z "${PUBLISHED_ARGS:-}${PUBLISHED_FRONTEND:-}" ] || fixes "PUBLISHED_ARGS and PUBLISHED_FRONTEND" "the stock launch"
+  [ -z "${TARGET:-}${WITH:-}" ] || fixes "--target/TARGET and WITH" "the result: its three lines, and no cost against a target"
+  WINDOW_S=${WINDOW_S:-30}
+elif [ "$CLIENT" = vllm-bench ] && [ -z "${PROFILE:-}" ]; then
   ARMS=${ARMS:-compiled compiled-again two-stage}; LOADS=${LOADS:-chat,long}
   [ "$ARMS" = all ] && ARMS="compiled compiled-again record no-prefix-cache boundary-rows canonical-topk two-stage"
   # six reps: the fewest whose ratios bound their median at 95% (the cost's interval). A Commit period shorter than a
@@ -157,8 +219,10 @@ else
     TRITON_CACHE_DIR=$venv/cache/triton
 fi
 VENV=${VENV:-$venv}; PY=$VENV/bin/python
+[ -x "$PY" ] || { echo "serve-tax: no environment at VENV=$VENV: on a machine that is not ours (no /workspace/venv312), set VENV to one holding vLLM $SERVE_VLLM"; exit 2; }
 export PATH="$VENV/bin:$PATH"   # the venv's ninja, which FlashInfer's JIT (vLLM's default sampler) runs
 [ -d /workspace/cp/hf ] && hf=/workspace/cp/hf || hf=/workspace/hf
+[ -d "$hf" ] || hf=${XDG_CACHE_HOME:-$HOME/.cache}/huggingface   # a machine that is not ours: the hub's own place, the job's
 export HF_HOME=${HF_HOME:-$hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
 MODEL_ID=${MODEL_ID:-moonlight}
 case $MODEL_ID in
@@ -178,27 +242,21 @@ case $MODEL_ID in
   llama8b|qwen3-30b|llama32-1b) CK=${CHECKPOINT:-$("$PY" "$here/serve_tax.py" checkpoint --model-id "$MODEL_ID")}; GPUS=1 ;;
   *) echo "serve-tax: MODEL_ID is moonlight, glm53, glm53-standin, llama8b, qwen3-30b or llama32-1b, not $MODEL_ID"; exit 2 ;;
 esac
-# CUDA_HOME, where unset: the toolkit of torch's own CUDA under /usr/local, which FlashInfer's JIT (vLLM's default
-# sampler) builds with; a newer toolkit can lack its headers (cuRAND)
-if [ -z "${CUDA_HOME:-}" ]; then
-  v=$("$PY" -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)
-  [ -n "$v" ] && [ -d "/usr/local/cuda-$v" ] && export CUDA_HOME=/usr/local/cuda-$v
-fi
-# nvcc, which the kv and boundary arms build the row-table kernels with: CUDA_HOME's, else the newest toolkit under
-# /usr/local; with FLASHINFER=1 first on PATH, for FlashInfer's JIT too, which finds CUDA_HOME's headers and libraries
-# itself (an inherited CPATH or LIBRARY_PATH could mix toolkits)
+# CUDA_HOME: the toolkit of torch's own CUDA, which FlashInfer's JIT (vLLM's default sampler) builds with (a newer
+# toolkit can lack its headers, cuRAND), and whose nvcc the kv and boundary arms build the row-table kernels with; with
+# FLASHINFER=1 first on PATH, for FlashInfer's JIT too, which finds CUDA_HOME's headers and libraries itself (an inherited
+# CPATH or LIBRARY_PATH could mix toolkits)
+[ -n "${CUDA_HOME:-}" ] || { echo "serve-tax: CUDA_HOME is not set: set it to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)"; exit 2; }
+export CUDA_HOME
 if [ "${FLASHINFER:-0}" = 1 ]; then
-  CUDA_HOME=${CUDA_HOME:-$(ls -d /usr/local/cuda-[0-9]*.[0-9]* 2>/dev/null | sort -V | tail -1)}
-  export CUDA_HOME PATH="$CUDA_HOME/bin:$PATH"
+  export PATH="$CUDA_HOME/bin:$PATH"
   unset CPATH LIBRARY_PATH
 else
-  command -v nvcc >/dev/null || for d in ${CUDA_HOME:+"$CUDA_HOME/bin"} $(ls -d /usr/local/cuda*/bin 2>/dev/null | sort -rV); do
-    [ -x "$d/nvcc" ] && { export PATH="$PATH:$d"; break; }
-  done
+  command -v nvcc >/dev/null || export PATH="$PATH:$CUDA_HOME/bin"
 fi
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 REPS=${REPS:-3}; SPAN_S=${SPAN_S:-60}; MAX_MIN=${MAX_MIN:-240}; DOCS=${DOCS:-45000}
-WINDOW_S=${WINDOW_S:-600}; KV_WINDOW_S=${KV_WINDOW_S:-$WINDOW_S}; PLAN=${PLAN:-$OUT/plan.jsonl}
+WINDOW_S=${WINDOW_S:-600}; PLAN=${PLAN:-${PRIVATE:+$PRIVATE/plan.jsonl}}
 PLAN_FILE=${PLAN_FILE:-$(ls "$D"/inputs/plan.jsonl 2>/dev/null)}
 [ -z "$PLAN_FILE" ] || [ -f "$PLAN_FILE" ] || { echo "serve-tax: no plan at PLAN_FILE=$PLAN_FILE"; exit 2; }
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
@@ -210,6 +268,20 @@ replay_only=0; [ -z "${ARMS:-}" ] && [ "${CAPACITY:-0}" != 1 ] && [ -n "${REPLAY
 v=$("$PY" -c 'from vllm._version import __commit_id__ as c; print(c.removeprefix("g"))') || exit 2
 [ "$v" = "$SERVE_VLLM" ] || { echo "serve-tax: $VENV holds vLLM $v, not SERVE_VLLM=$SERVE_VLLM"; exit 2; }
 mkdir -p "$OUT"
+if [ -n "${PROFILE:-}" ] && [ "${1:-}" != leased ]; then
+  # what the profile serves (serve_tax.profile_plan): ARMS, LOADS, REPS, LIFETIMES, the changes on our side (OURS), the
+  # stock arm and the model's minutes (CAP_MIN), within which the arms' passes are planned. No arm where the feature
+  # cannot run and no change on our side lets the profile through: its result is written now, and no GPU is held
+  plan=$("$PY" "$here/serve_tax.py" profile plan --profile "$PROFILE" --model-id "$MODEL_ID" ${FEATURE:+--feature "${FEATURE[@]}"} \
+    ${FIND_LOAD:+--find-load} ${SCHEME_SETTINGS:+--scheme-settings "$SCHEME_SETTINGS"}) || exit 2
+  eval "$plan"
+  { [ -n "${BUDGET_MIN:-}" ] && [ "$BUDGET_MIN" -le "$CAP_MIN" ]; } || BUDGET_MIN=$CAP_MIN
+  export ARMS LOADS REPS LIFETIMES OURS STOCK CAP_MIN BUDGET_MIN
+  if [ -z "$ARMS" ]; then
+    "$PY" "$here/serve_tax.py" profile result --profile "$PROFILE" --model-id "$MODEL_ID" --feature "${FEATURE[@]}" --out "$OUT"
+    exit $?
+  fi
+fi
 [ ! -f "$VENV/freeze.txt" ] || cp "$VENV/freeze.txt" "$OUT/vllm_env.freeze.txt"   # ops/vllm_env.sh's: what it installed
 
 # FlashInfer's caches every engine reads, by their files' digests: its JIT GEMMs (TRTLLM_DG_CACHE_DIR, else
@@ -254,13 +326,14 @@ if [ "${1:-}" = leased ]; then
   fi
   if [ "${CAPACITY:-0}" = 1 ]; then
     "$PY" "$here/serve_tax.py" run --arm compiled "${common[@]}" --rates burst=1000 --requests "${REQUESTS:-800}" --reps 1 \
-      --warm-s 10 --out "$OUT/capacity"
+      --warm-s 10 --private "$PRIVATE/capacity" --out "$OUT/capacity"
     exit $?
   fi
   rc=0
   if [ -n "${TICK_MS:-}" ]; then tick=(--tick-ms "$TICK_MS"); else tick=(--tick-from "${TICK_FROM:-$OUT/record}"); fi
   [ -n "${TICK_RULE:-}" ] && tick+=(--tick-rule "$TICK_RULE")
   count=(); [ -n "${REQUESTS:-}" ] && count=(--requests "$REQUESTS")
+  [ -n "${SCHEME_SETTINGS:-}" ] && count+=(--scheme-settings "$SCHEME_SETTINGS")
   [ -n "${NUM_GPU_BLOCKS:-}" ] && count+=(--num-gpu-blocks "$NUM_GPU_BLOCKS")
   [ -n "${EDGES_S:-}" ] && count+=(--edges-s "$EDGES_S" --save-kv "${SAVE_KV:-1}" --kv-dir "$KV_DIR")
   [ -n "${EDGES_EVERY_S:-}" ] && count+=(--edges-every-s "$EDGES_EVERY_S" ${SAVE_KV:+--save-kv "$SAVE_KV"} --kv-copy "${KV_COPY:-all}")
@@ -275,6 +348,13 @@ if [ "${1:-}" = leased ]; then
     for arm in "${names[@]}"; do order+=("$arm:$k"); done
   done
   last=; to_serve=${#order[@]}
+  if [ -n "${PROFILE:-}" ]; then
+    # a profile's job stops by its model's minutes: an arm starts no pass it can't finish by then, and the result says
+    # cannot tell where a side's passes were cut
+    cap_at=$((t_leased + CAP_MIN * 60))
+    { [ -n "${STOP_AT:-}" ] && [ "$(date -d "$STOP_AT" +%s)" -le "$cap_at" ]; } 2>/dev/null \
+      || STOP_AT=$(date -u -d "@$cap_at" +%FT%TZ)
+  fi
   [ -z "${STOP_AT:-}" ] || stop_at=$(date -d "$STOP_AT" +%s) || { echo "serve-tax: STOP_AT=$STOP_AT is not a time"; exit 2; }
   for item in "${order[@]}"; do
     arm=${item%%:*}; dir=$arm; life=()
@@ -293,8 +373,10 @@ if [ "${1:-}" = leased ]; then
       break
     fi
     echo "== $dir $(date -u +%FT%TZ)"
-    "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" "${load[@]}" --reps "$reps" ${STOP_AT:+--stop-at "$STOP_AT"} \
-      --window-s "$WINDOW_S" --kv-window-s "$KV_WINDOW_S" "${tick[@]}" "${count[@]}" "${life[@]}" \
+    profile=(); [ -n "${PROFILE:-}" ] && profile=(--profile "$PROFILE")
+    [ -n "${PROFILE:-}" ] && [ "$arm" != "$STOCK" ] && [ -n "${OURS:-}" ] && profile+=(--ours "$OURS")
+    "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" "${load[@]}" "${profile[@]}" --reps "$reps" ${STOP_AT:+--stop-at "$STOP_AT"} \
+      --window-s "$WINDOW_S" "${tick[@]}" "${count[@]}" "${life[@]}" \
       ${LEAVE_OUT:+--leave-out "$LEAVE_OUT"} ${SIDE:+--side "$SIDE"} ${FRONT:+--front "$FRONT"} ${CELLS:+--cells "$CELLS"} \
       ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE/$dir"} --out "$OUT/$dir" || rc=1
     echo "after $dir: $(fi_cache)" >> "$OUT/engine_env.txt"
@@ -305,6 +387,7 @@ if [ "${1:-}" = leased ]; then
     echo "== restore $ra ${RESTORE} $(date -u +%FT%TZ)"
     "$PY" "$here/restore.py" --arm-dir "${RESTORE_FROM:-$OUT}/$ra" --from-edge "${RESTORE%%:*}" --to-edge "${RESTORE##*:}" \
       --kv-dir "$KV_DIR/$ra" --checkpoint "$CK" --warm "${RESTORE_WARM:-0}" --out "$OUT/$ra-replay" \
+      --private "$PRIVATE/$ra-replay" \
       > "$OUT/$ra-replay.log" 2>&1 || { tail -n 60 "$OUT/$ra-replay.log"; rc=1; }
     tail -n 1 "$OUT/$ra-replay.log"
   done
@@ -326,6 +409,13 @@ if [ "${1:-}" = leased ]; then
   exit $rc
 fi
 
+if [ -z "${PRIVATE:-}" ]; then
+  recording=$("$PY" -c 'import sys; sys.path.insert(0, sys.argv[1]); import serve_tax as S
+print(" ".join(a for a in sys.argv[2:] if S.records(S.ARMS[a])))' "$here" ${ARMS:-}) || exit 2
+  [ -z "$recording" ] || { echo "serve-tax: arms $recording record their step traces, served ids or edges' outputs, which hold request values: PRIVATE, a directory outside every run's"; exit 2; }
+  [ -z "${REPLAY:-}" ] || { echo "serve-tax: REPLAY keeps each replay's tokens on the node: PRIVATE, a directory outside every run's"; exit 2; }
+  [ "$CLIENT" = vllm-bench ] || { echo "serve-tax: the corpus client keeps each request's served ids, and the plan its prompts, on the node: PRIVATE, a directory outside every run's (or CLIENT=vllm-bench)"; exit 2; }
+fi
 if [ "${CAPACITY:-0}" != 1 ] && [ -z "${ARMS:-}" ]; then
   [ $replay_only = 1 ] || { echo "serve-tax: ARMS: the arms to serve, in order (or only REPLAY with REPLAY_FROM, or RESTORE with RESTORE_FROM)"; exit 2; }
   [ -z "${RESTORE_FROM:-}" ] || [ -n "${KV_DIR:-}" ] || { echo "serve-tax: RESTORE_FROM reads the edges' KV bytes in KV_DIR/<arm>: set KV_DIR"; exit 2; }
@@ -345,7 +435,7 @@ fresh_kv=0
 if [ -n "${EDGES_S:-}" ] && [ -z "${KV_DIR:-}" ]; then
   KV_DIR=$(mktemp -d "${SCRATCH:-/workspace/research/scratch}/serve-tax-kv.XXXXXX") || exit 2; fresh_kv=1
 fi
-export PLAN DOCS WINDOW_S KV_WINDOW_S KV_DIR
+export PLAN DOCS WINDOW_S KV_DIR
 # LDCONFIG=1: the linker cache refreshed first, so libnvrtc and the rest resolve to the toolkit the node's dev packages
 # were installed for, the same for every engine of the job
 [ "${LDCONFIG:-0}" = 1 ] && ldconfig
@@ -357,7 +447,7 @@ for k in SERVE_VLLM VLLM_CACHE_ROOT FLASHINFER VLLM_USE_FLASHINFER_SAMPLER CUDA_
   [ -f "$PLAN" ] && echo "plan_sha256=$(sha256sum "$PLAN" | cut -c1-64)"; } >> "$OUT/engine_env.txt" 2>&1
 if command -v gpu-lease > /dev/null; then
   GPU_LEASE_WHO=${GPU_LEASE_WHO:-serve-tax} gpu-lease "$GPUS" --wait --max-min "$MAX_MIN" ${GPU_LEASE_ON:+--on "$GPU_LEASE_ON"} \
-    ${GPU_LEASE_CORES:+--cores "$GPU_LEASE_CORES"} -- bash "$here/run.sh" leased
+    ${GPU_LEASE_CORES:+--cores "$GPU_LEASE_CORES"} -- bash "$here/run.sh" leased ${PROFILE:+--profile "$PROFILE"}
   rc=$?
 else
   # a node without gpu-lease queues its jobs by other means: refuse to start on GPUs another job still holds, of those
@@ -370,11 +460,13 @@ else
   if [ "${used:-0}" -ge "${FREE_MIB:-2048}" ]; then
     echo "serve-tax: a GPU still holds $used MiB after 10 min; not starting"; rc=75
   else
-    bash "$here/run.sh" leased; rc=$?
+    bash "$here/run.sh" leased ${PROFILE:+--profile "$PROFILE"}; rc=$?
   fi
 fi
 [ $fresh_kv = 1 ] && rm -rf "$KV_DIR"
-gzip -f "$OUT"/*/server/step_trace.*.jsonl "$OUT"/*/server/ids.*.jsonl "$OUT"/*/server/edges/outputs.*.jsonl "$OUT"/*-replay/*.jsonl 2>/dev/null
+[ -z "${PRIVATE:-}" ] || gzip -f "$PRIVATE"/*-replay/*.jsonl "$PRIVATE"/replay-*/replay_steps.jsonl \
+  "$PRIVATE"/*/server/step_trace.*.jsonl "$PRIVATE"/*/server/ids.*.jsonl \
+  "$PRIVATE"/*/server/edges/outputs.*.jsonl 2>/dev/null
 dirs=()
 for d in "$OUT"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done
 [ ${#dirs[@]} -gt 0 ] && "$PY" "$here/serve_tax.py" table "${dirs[@]}" --out "$OUT"
@@ -383,7 +475,12 @@ for d in "$OUT"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done
 # no arm of ours; nor has the node's side of an arm behind the network attester, whose passes are in the other
 # side's directory. WITH: the out/ directories of earlier jobs on this node whose arms served another load, which
 # joins the number
-if [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ] && [ "${ARMS##* }" != published ] \
+if [ -n "${PROFILE:-}" ]; then
+  # a profile's result in place of a cost (serve_tax.profile_result): exit 1 where the feature cannot run, as for an arm
+  # whose run refuses it
+  "$PY" "$here/serve_tax.py" profile result "${dirs[@]}" --profile "$PROFILE" --model-id "$MODEL_ID" \
+    ${FEATURE:+--feature "${FEATURE[@]}"} ${FIND_LOAD:+--find-load} --out "$OUT" || rc=1
+elif [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ] && [ "${ARMS##* }" != published ] \
     && [ "${ARMS##* }" != prod ] && [ "${SIDE:-}" != server ]; then
   for o in ${WITH:-}; do for d in "$o"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done; done
   cost=("$PY" "$here/serve_tax.py" cost "${dirs[@]}" --arm "${ARMS##* }" ${TARGET:+--target "$TARGET"})

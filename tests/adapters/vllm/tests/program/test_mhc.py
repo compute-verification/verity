@@ -11,6 +11,7 @@ The capture (`tests/properties/dsv4_mhc_capture_gpu.py`) checks the twin against
 from __future__ import annotations
 
 import itertools
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -19,12 +20,15 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
+from verity.device import load_card, number
 
 from verity_vllm.definitions.numerics import mhc_twin as W
 from verity_vllm.definitions.registry import boolean_mhc as BM
 from verity_vllm.definitions.registry import mhc as M
 
 EPS = 1e-6
+#: the H200's SMs, the served split counts' device
+SMS = int(number(load_card("h200-sxm-141gb", directory=Path(__file__).resolve().parents[5] / "calibration/hardware/cards")["sm"]["count"]))
 F32_SPECIALS = np.array([0, 0x80000000, 1, 0x80000001, 0x00800000, 0x3F800000, 0xBF800000, 0x3F800001, 0x7F7FFFFF, 0xFF7FFFFF,
                          0x7F800000, 0xFF800000, 0x7FC00000, 0x7F800001, 0xFFC00001, 0x00001FFF, 0x3F801FFF, 0x5F000000,
                          0x1F000000], np.uint32)
@@ -381,13 +385,13 @@ def test_statics_refused(definition, statics) -> None:
 
 def test_served_splits() -> None:
     K = 4 * 7168
-    assert [W.tf32_num_split(T, K) for T in (17, 64, 65, 128, 129, 1024)] == [112, 112, 66, 66, 44, 8]
-    assert [W.tf32_num_split(T, 7168) for T in (1, 64, 320, 1024)] == [28, 28, 26, 8]
-    assert W.tf32_split_schedule(K) == [(1, 112), (65, 66), (129, 44), (193, 33), (257, 26), (321, 22), (385, 18), (449, 16),
+    assert [W.tf32_num_split(T, K, SMS) for T in (17, 64, 65, 128, 129, 1024)] == [112, 112, 66, 66, 44, 8]
+    assert [W.tf32_num_split(T, 7168, SMS) for T in (1, 64, 320, 1024)] == [28, 28, 26, 8]
+    assert W.tf32_split_schedule(K, SMS) == [(1, 112), (65, 66), (129, 44), (193, 33), (257, 26), (321, 22), (385, 18), (449, 16),
                                         (513, 14), (577, 13), (641, 12), (705, 11), (769, 10), (833, 9), (897, 8)]
-    assert W.tf32_split_schedule(7168) == [(1, 28)] + W.tf32_split_schedule(K)[4:]
+    assert W.tf32_split_schedule(7168, SMS) == [(1, 28)] + W.tf32_split_schedule(K, SMS)[4:]
     for K_ in (K, 7168):
-        for _, NS in W.tf32_split_schedule(K_):
+        for _, NS in W.tf32_split_schedule(K_, SMS):
             ranges = M.tf32_ranges(K_, NS)
             assert sum(n for _, n in ranges) == K_ and ranges[0][0] == 0
             assert all(o + n == o2 for (o, n), (o2, _) in zip(ranges, ranges[1:]))
@@ -400,7 +404,7 @@ def test_the_schedule_covers_every_decode_batch() -> None:
     """`tf32_split_schedule` is exhaustive to the 1024-token envelope: the split count at every T is its regime's, so the
     capture's one case per regime covers every decode batch."""
     for K_ in (4 * 7168, 7168):
-        sched = W.tf32_split_schedule(K_)
+        sched = W.tf32_split_schedule(K_, SMS)
         for T in range(1, 1025):
             want = [ns for t0, ns in sched if t0 <= T][-1]
-            assert W.tf32_num_split(T, K_) == want, (K_, T)
+            assert W.tf32_num_split(T, K_, SMS) == want, (K_, T)

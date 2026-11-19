@@ -75,7 +75,7 @@ open Flock FlockComplete Rows
 /-- **The honest prover's messages at its own files**: each table's level-0 cap (`fileCaps`), each rep's rows of the
 proof its file decodes to (`filePs`) at its batched value `Ts k`, then the last message. -/
 def honestFileMsgs (spec : SessionSpec) (sts : Array _root_.Flock.Stmt) (c₁ : Coin) (pfs : Array ByteArray)
-    (cs : List Coin) (Ts : ℕ → F128) (last : Claims.Msg) : List Claims.Msg :=
+    (cs : List Coin) (Ts : ℕ → F128) (last : Hash.Msg) : List Hash.Msg :=
   honestMsgs (fileCaps spec sts c₁ pfs) ((List.range (filePs spec sts c₁ pfs).size).map fun k =>
     repRows (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast k) (filePs spec sts c₁ pfs)[k]!
       (Ts k)) last
@@ -85,14 +85,14 @@ replies are the coins' bytes, for coins that number at least the reps' rounds an
 most 2,048 extra claims at the first coin's link points, where the last message reads as `filePs`' openings
 (`opensOf`, what `rdR` returns) at the statement, `decR` decides at the statement's spec, tables and first coin, with
 the proofs `filePs` (`readsBack`, through `decR_opensOf`). -/
-theorem honest_decR_files {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {rd : Claims.Msg → Option FinalP}
-    {x last : Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} {c₁ : Coin}
-    {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit} {ω : Tape} {fl : FinalP} (Ts : ℕ → F128)
+theorem honest_decR_files {H : Hash.Msg → Hash.Msg} (h64 : Claims.Out64 H) {rd : Hash.Msg → Option FinalP}
+    {x last : Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} {c₁ : Coin}
+    {resp : ℕ → Hash.Msg} {w : Claims.Flock.Wit} {ω : Tape} {fl : FinalP} (Ts : ℕ → F128)
     (hx : setupOf false x = some (s, spec, sts)) (hcs : cs.head? = some c₁)
     (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes) (hlen : (repLens spec sts).sum + 2 ≤ cs.length)
     (htab : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
       ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048)
-    {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
+    {rec : String} {pfs : Array ByteArray} {bs : Array Hash.Msg}
     (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs)) (hrd : rd last = some fl)
     (hps : fl.ps = (filePs spec sts c₁ pfs).map RecDeploy.DeployedR.opensOf) (hst : fl.stmt = x) :
     ∃ d, decR rd x (honestFileMsgs spec sts c₁ pfs cs Ts last) cs = some d ∧ d.spec = spec ∧ d.sts = sts ∧
@@ -177,7 +177,7 @@ open FlockComplete (repP asksS commitP Commit Trace)
 
 namespace DecAt
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128)
 
 /-- **Row D's `hlev` at a decision whose proofs are the honest session's files'**: where the decision's spec, tables
@@ -186,13 +186,13 @@ the coins' bytes, for coins that number at least the reps' rounds and two, at `T
 claims at the first coin's link points. `hlev_of_repP`'s `hrun` and `h0` are the run's rep `2 i + r`
 (`sessionP_repRuns`), its `hcoin` the replies' coins at the rounds the verifier rows query (`rows_sz`,
 `rounds_canon`), and its widths the table's registered scheme's (`opsWith_sizes`). -/
-theorem hlev_honest_of {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {s : FlockDeploy.Ins} {spec : SessionSpec}
-    {sts : Array _root_.Flock.Stmt} {c₁ : Coin} {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit} {ω : FlockComplete.Tape}
+theorem hlev_honest_of {H : Hash.Msg → Hash.Msg} (h64 : Claims.Out64 H) {s : FlockDeploy.Ins} {spec : SessionSpec}
+    {sts : Array _root_.Flock.Stmt} {c₁ : Coin} {resp : ℕ → Hash.Msg} {w : Claims.Flock.Wit} {ω : FlockComplete.Tape}
     (hx : FlockDeploy.setupOf false x = some (s, spec, sts)) (hcs : cs.head? = some c₁)
     (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes) (hlen : (repLens spec sts).sum + 2 ≤ cs.length)
     (htab : ∀ (i : ℕ) (hi : i < sts.size), FlockComplete.JsonRT.TableOk sts[i] ∧
       ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048)
-    {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
+    {rec : String} {pfs : Array ByteArray} {bs : Array Hash.Msg}
     (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs))
     (hdsp : D.d.spec = spec) (hdsts : D.d.sts = sts) (hdc : D.d.c₁ = c₁) (hdps : D.d.f.ps = filePs spec sts c₁ pfs)
     {i : ℕ} (hG : D.RowG cls acc i) (hti : i < D.spec.tables.size) (r : Fin 2)
@@ -355,14 +355,14 @@ theorem hlev_honest_of {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {s
 statement that sets up, at a `sessionS` run whose replies are the coins' bytes, for coins that number at least the
 reps' rounds and two, at `TableOk` tables with at most 2,048 extra claims at the first coin's link points, where the
 last message reads as `filePs`' openings at the statement (`honest_decR_files`, `hlev_honest_of`). -/
-theorem hlev_honest {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {last : Claims.Msg} {s : FlockDeploy.Ins}
-    {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} {c₁ : Coin} {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit}
+theorem hlev_honest {H : Hash.Msg → Hash.Msg} (h64 : Claims.Out64 H) {last : Hash.Msg} {s : FlockDeploy.Ins}
+    {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} {c₁ : Coin} {resp : ℕ → Hash.Msg} {w : Claims.Flock.Wit}
     {ω : FlockComplete.Tape} {Ts : ℕ → F128} {fl : FinalP}
     (hx : FlockDeploy.setupOf false x = some (s, spec, sts)) (hcs : cs.head? = some c₁)
     (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes) (hlen : (repLens spec sts).sum + 2 ≤ cs.length)
     (htab : ∀ (i : ℕ) (hi : i < sts.size), FlockComplete.JsonRT.TableOk sts[i] ∧
       ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048)
-    {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
+    {rec : String} {pfs : Array ByteArray} {bs : Array Hash.Msg}
     (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs)) (hrd : rd last = some fl)
     (hps : fl.ps = (filePs spec sts c₁ pfs).map RecDeploy.DeployedR.opensOf) (hst : fl.stmt = x)
     (D : DecAt rd x (honestFileMsgs spec sts c₁ pfs cs Ts last) cs) {i : ℕ} (hG : D.RowG cls acc i)
@@ -391,14 +391,14 @@ theorem sha512_ops : plain.opsWith (Hashes.ofSha512 (Claims.hOf FlockDeploy.sha5
 
 /-- **Row D's `hlev` at the honest recursive prover's messages, at the deployed hashes**: `hlev_honest` at
 `FlockDeploy.sha512`, with no `hops`. -/
-theorem hlev_honest_deployed {last : Claims.Msg} {s : FlockDeploy.Ins}
-    {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} {c₁ : Coin} {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit}
+theorem hlev_honest_deployed {last : Hash.Msg} {s : FlockDeploy.Ins}
+    {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} {c₁ : Coin} {resp : ℕ → Hash.Msg} {w : Claims.Flock.Wit}
     {ω : FlockComplete.Tape} {Ts : ℕ → F128} {fl : FinalP}
     (hx : FlockDeploy.setupOf false x = some (s, spec, sts)) (hcs : cs.head? = some c₁)
     (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes) (hlen : (repLens spec sts).sum + 2 ≤ cs.length)
     (htab : ∀ (i : ℕ) (hi : i < sts.size), FlockComplete.JsonRT.TableOk sts[i] ∧
       ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048)
-    {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
+    {rec : String} {pfs : Array ByteArray} {bs : Array Hash.Msg}
     (hS : FlockComplete.sessionS FlockDeploy.sha512 resp spec sts w ω = (.ok (rec, pfs), bs))
     (hrd : rd last = some fl) (hps : fl.ps = (filePs spec sts c₁ pfs).map RecDeploy.DeployedR.opensOf)
     (hst : fl.stmt = x) (D : DecAt rd x (honestFileMsgs spec sts c₁ pfs cs Ts last) cs) {i : ℕ}

@@ -77,26 +77,26 @@ proof the loop's finish computes for the rep stream the history locates (`fin`, 
 them). -/
 structure LoopModel (W Rr : Type) where
   L : LeanRelease W Rr
-  nN : Claims.Msg → Nat
+  nN : Hash.Msg → Nat
   wk : L.toSrv.Worker
-  x : Claims.Msg
+  x : Hash.Msg
   w : W
   ρ : Rr
   κ : L.toSrv.Chk
-  τ : List (Claims.Msg × Claims.Out)
+  τ : List (Hash.Msg × Claims.Out)
   src : Nat → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)
-  fin : List (Claims.Msg × Claims.Msg) → Array ByteArray
+  fin : List (Hash.Msg × Hash.Msg) → Array ByteArray
 
 namespace LoopModel
 
 variable {W Rr : Type} (M : LoopModel W Rr)
 
 /-- The run's messages. -/
-def msgs : List Claims.Msg := M.τ.map (·.1)
+def msgs : List Hash.Msg := M.τ.map (·.1)
 
 open Claims.ZKMal in
 /-- The run's history before its `j`-th message. -/
-def hist (j : Nat) : List (Claims.Msg × Claims.Msg) := histOf (M.τ.take j)
+def hist (j : Nat) : List (Hash.Msg × Hash.Msg) := histOf (M.τ.take j)
 
 /-- **Each of the run's messages is the deferred release's** at the history before it. -/
 def Own : Prop :=
@@ -263,7 +263,7 @@ def LoopRead {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec)
             (((st.answer .commit a).2.size - 5) / 16))) ∧
       Between sid σ.R σ'.R ∧ σ'.c = σ.c + 1
   | .round stream n, st, pl, e, σ, σ' =>
-    M.Ans σ.c e ∧ (∃ i r dom, ∃ v : Claims.Msg, M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) ∧
+    M.Ans σ.c e ∧ (∃ i r dom, ∃ v : Hash.Msg, M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) ∧
       RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R ∧
       (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) ∧ InnerSrc M sid i r σ ∧
       StartOk sts sid i r σ) ∧
@@ -324,14 +324,14 @@ messages to come are those past the `σ.c` the session's slots took, `LoopFacts`
 requests to come are read as the loop answers them, and each reads the session's setup. -/
 def LoopP {W Rr : Type} (M : LoopModel W Rr) (J : List String → State → LoopAt → Prop) (sid : Nat)
     (spec : SessionSpec) (sts : Array Stmt) (nonce : ByteArray) (seen : List String) (st : State) (pl : Placed)
-    (es : List Env) (ms : List Claims.Msg) : Prop :=
+    (es : List Env) (ms : List Hash.Msg) : Prop :=
   ∃ σ : LoopAt, ms = M.msgs.drop σ.c ∧ LoopFacts sid spec seen st pl σ ∧ J seen st σ ∧
     LoopReads M sid spec sts nonce σ st pl es ∧ ∀ e ∈ es, e.setup = .ok (spec, sts)
 
 /-- **`envPre_inv`'s step at the slots of kind `k`**, at the invariant `P`: at each request at such a slot where `P`
 holds, what the relay read is the model's next message if the slot reads one, and `P` holds at the next request where
 the session goes on. -/
-def SlotCase (spec : SessionSpec) (P : List String → State → Placed → List Env → List Claims.Msg → Prop)
+def SlotCase (spec : SessionSpec) (P : List String → State → Placed → List Env → List Hash.Msg → Prop)
     (k : Session.Kind) : Prop :=
   ∀ seen st pl e rest ms, slot st pl = some k → P seen st pl (e :: rest) ms →
     (isModel k = true → EnvOk spec seen k e (ms.headD [])) ∧
@@ -661,7 +661,7 @@ theorem envPre_loop {W Rr : Type} {M : LoopModel W Rr} {J : List String → Stat
     (hCommit : SlotCase spec (LoopP M J sid spec sts nonce) .commit)
     (hRound : ∀ stream n, SlotCase spec (LoopP M J sid spec sts nonce) (.round stream n))
     (hFinish : SlotCase spec (LoopP M J sid spec sts nonce) .finish) :
-    ∀ (es : List Env) (seen : List String) (st : State) (pl : Placed) (ms : List Claims.Msg),
+    ∀ (es : List Env) (seen : List String) (st : State) (pl : Placed) (ms : List Hash.Msg),
       LoopP M J sid spec sts nonce seen st pl es ms → EnvPre spec seen (schedSteps true st pl es) ms :=
   envPre_inv (LoopP M J sid spec sts nonce) fun seen st pl e rest ms k => by
     have hc : ∀ k : Session.Kind, isModel k = false → (∀ seen, seenAfter seen k = seen) →

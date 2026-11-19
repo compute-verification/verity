@@ -35,6 +35,7 @@
 # SMALL_ARGS="--inline --units 1 --logits --serve NONCE" with a nonce no run has used: the gate opens a run's root once,
 # ever.
 set -euo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 REPO=$(git rev-parse --show-toplevel); cd "$REPO"
 O=${OUT:?research run sets OUT}; mkdir -p "$O"
 W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
@@ -59,12 +60,11 @@ mkdir -p "$O/m0-build"
 FW=${SMALL_FLOCK_WORK:-$W}
 GPU=0; ON_CARDS=()
 if [ -n "${SMALL_GPU:-}" ]; then
-  # the unpacking runs in a subshell, under its own shell options; sourced again, the script only names the toolkit it
-  # finds. With the toolkit named, the build installs nothing on the node, and the prover finds its runtime beside it
-  ( set +euo pipefail; FLOCK_WORK=$FW . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh ) > "$O/cuda.log" 2>&1 \
+  # with the toolkit named, the build installs nothing on the node, and the prover finds its runtime beside it
+  . benchmarks/one_stage/toolkit.sh
+  FLOCK_WORK=$FW cuda_13_3 "$O/cuda.log" \
     || { tail -20 "$O/cuda.log"; echo "SMALL_GPU=1: the node has no CUDA 13.3 toolkit and none could be unpacked" >&2; exit 8; }
-  set +euo pipefail; FLOCK_WORK=$FW . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh >> "$O/cuda.log" 2>&1; set -euo pipefail
-  TK=${CUDA_TK:-/usr/local/cuda-13.3}
+  TK=$CUDA_TK
   [ -x "$TK/bin/nvcc" ] || { echo "SMALL_GPU=1: no nvcc under $TK" >&2; exit 8; }
   export CUDA_TK=$TK LD_LIBRARY_PATH=$TK/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
   # `second` is told its cards as whoever holds them names them: this run's, else a lease's taken for it alone
@@ -116,11 +116,11 @@ rc=0
   --out "$W/second" "${UNLINKED[@]}" "${STOP[@]}" "${KEPT[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
 grep '^TWO ' "$O/second.log" || tail -30 "$O/second.log"
 echo "second rc=$rc" | tee -a "$O/machine.txt"
-RECORDS=(-type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -name index.json
-         ! -name index-salt.bin ! -name salts.bin ! -path './*/archive/*' ! -path '*-work/*' ! -path './challenger-host/*')
+RECORDS=(-type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name index.json
+         ! -path './*/archive/*' ! -path '*-work/*' ! -path './challenger-host/*')
 for d in first second; do
   mkdir -p "$O/$d"
-  (cd "$W/$d" && find . "${RECORDS[@]}" -size -64M -print0 | xargs -0 -r -I{} cp --parents {} "$O/$d/")
+  (cd "$W/$d" && find . "${RECORDS[@]}" -size -64M -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$O/$d/")
   (cd "$W/$d" && find . "${RECORDS[@]}" -size +63M -print0 | sort -z \
      | xargs -0 -r -I{} sh -c 'printf "%s  %s  %s\n" "$(sha512sum < "$1" | cut -d" " -f1)" "$(stat -c %s "$1")" "$1"' _ {}) > "$O/$d/large.txt"
 done

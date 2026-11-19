@@ -927,9 +927,11 @@ open Flock.Program (Ref Part Seq)
 /-- A reference as a position: its collection's leaf. -/
 def refPos (r : Ref) : Tgt × Int := (.ref r.p r.i, (r.j : Int))
 
-/-- A part's references never step below leaf 0: a strided part's pattern (`parsePartsIn` checks its corners). -/
+/-- A part's references never step below leaf 0: a strided part's pattern (`parsePartsIn` checks its corners), and a
+grid's lanes at every period and offset in a run (`parsePartsIn` checks each lane's least leaf). -/
 def PartNonneg : Part → Prop
   | .strided _ _ b inner os is c => ∀ k < c, 0 ≤ b + ((k / inner : Nat) : Int) * os + ((k % inner : Nat) : Int) * is
+  | .grid run lanes => ∀ l ∈ lanes, ∀ t < (lanes[0]?.map Flock.Program.Lane.periods).getD 0, ∀ o < run, 0 ≤ l.leafAt t o
   | _ => True
 
 theorem pos_one (t : Tgt) (base stride : Int) (len : Nat) (rs : Int) :
@@ -1329,6 +1331,66 @@ theorem ofPart_explicit (it : Array Ref) :
     simp [Flock.Program.Part.get, getElem!_pos it k hk]
   · rw [List.getElem?_eq_none (by simp; omega), List.getElem?_eq_none (by simp; omega)]; rfl
 
+private theorem range_mul_map {α : Type} (f : Nat → α) (m : Nat) : ∀ n,
+    (List.range (n * m)).map f = (List.range n).flatMap fun i => (List.range m).map fun j => f (i * m + j)
+  | 0 => by simp
+  | n + 1 => by
+    rw [Nat.succ_mul, List.range_add, List.map_append, range_mul_map f m n, List.range_succ, List.flatMap_append,
+      List.flatMap_singleton, List.map_map]
+    rfl
+
+private theorem flatMap_congr_mem {α β : Type} {f g : α → List β} : ∀ {l : List α}, (∀ x ∈ l, f x = g x) →
+    l.flatMap f = l.flatMap g
+  | [], _ => rfl
+  | a :: l, h => by
+    rw [List.flatMap_cons, List.flatMap_cons, h a (by simp), flatMap_congr_mem (fun x hx => h x (by simp [hx]))]
+
+/-- Reference `t·(g·run) + m·run + o` of a grid of `g` lanes: lane `m`, period `t`, offset `o` in its run. -/
+theorem grid_index (g run t m o : Nat) (hm : m < g) (ho : o < run) :
+    (t * (g * run) + (m * run + o)) % (g * run) / run = m ∧ (t * (g * run) + (m * run + o)) / (g * run) = t ∧
+      (t * (g * run) + (m * run + o)) % run = o := by
+  have hr : 0 < run := by omega
+  have hlt : m * run + o < g * run := by
+    have := Nat.mul_le_mul_right run (show m + 1 ≤ g by omega)
+    rw [Nat.succ_mul] at this; omega
+  have hgr : 0 < g * run := by omega
+  have e : t * (g * run) + (m * run + o) = (o + m * run) + t * (g * run) := by omega
+  rw [e, Nat.add_mul_mod_self_right, Nat.add_mul_div_right _ _ hgr, show o + m * run = m * run + o by omega,
+    Nat.mod_eq_of_lt hlt, Nat.div_eq_of_lt hlt, show m * run + o = o + m * run by omega, Nat.add_mul_div_right _ _ hr,
+    Nat.div_eq_of_lt ho, show t * (g * run) = (t * g) * run by rw [Nat.mul_assoc], Nat.add_mul_mod_self_right,
+    Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt ho]
+  omega
+
+theorem leafAt_shift (l : Flock.Program.Lane) (t o : Nat) : l.leafAt t o = l.leafAt t 0 + (o : Int) * l.e := by
+  simp only [Flock.Program.Lane.leafAt, Int.natCast_zero, Int.zero_mul, Int.add_zero]
+  omega
+
+/-- A grid part as pieces, one a lane a period, names its references in order. -/
+theorem ofPart_grid (run : Nat) (lanes : Array Flock.Program.Lane) (hq : PartNonneg (.grid run lanes)) :
+    posAll (Desc.ofPart (.grid run lanes)) = (List.range (Part.grid run lanes).count).map fun k =>
+      refPos ((Part.grid run lanes).get k) := by
+  have hL : lanes.toList = (List.range lanes.size).map fun m => lanes[m]! := by
+    apply List.ext_getElem (by simp)
+    intro i h1 h2
+    simp [getElem!_pos lanes i (by simpa using h1)]
+  change ∀ l ∈ lanes, ∀ t < (lanes[0]?.map Flock.Program.Lane.periods).getD 0, ∀ o < run, 0 ≤ l.leafAt t o at hq
+  simp only [Desc.ofPart, Flock.Program.Part.count]
+  generalize (lanes[0]?.map Flock.Program.Lane.periods).getD 0 = P at hq ⊢
+  rw [Nat.mul_comm (lanes.size * run) P, range_mul_map]
+  unfold posAll
+  rw [Array.toList_flatMap, List.flatMap_assoc, Array.toList_range]
+  refine flatMap_congr_mem fun t ht => ?_
+  rw [range_mul_map, Array.toList_map, List.flatMap_map, hL, List.flatMap_map]
+  refine flatMap_congr_mem fun m hm => ?_
+  rw [List.mem_range] at ht hm
+  rw [pos_one]
+  refine List.map_congr_left fun o ho => ?_
+  rw [List.mem_range] at ho
+  obtain ⟨h1, h2, h3⟩ := grid_index lanes.size run t m o hm ho
+  have hmem : lanes[m]! ∈ lanes := by rw [getElem!_pos lanes m hm]; exact Array.getElem_mem hm
+  simp only [Flock.Program.Part.get, refPos, h1, h2, h3]
+  rw [Int.toNat_of_nonneg (hq _ hmem t ht o ho), leafAt_shift _ t o]
+
 /-- **A part as pieces** names its references, in order. -/
 theorem ofPart_pos (q : Part) (hq : PartNonneg q) :
     posAll (Desc.ofPart q) = (List.range q.count).map fun k => refPos (q.get k) := by
@@ -1336,6 +1398,7 @@ theorem ofPart_pos (q : Part) (hq : PartNonneg q) :
   | affine p i b c => exact ofPart_affine p i b c
   | strided p i b inner os is c => exact ofPart_strided p i b inner os is c hq
   | explicit it => exact ofPart_explicit it
+  | grid run lanes => exact ofPart_grid run lanes hq
 
 /-- A sequence's references as positions, part by part. -/
 def partsPos (ps : Array Part) : List (Tgt × Int) :=
@@ -1753,7 +1816,27 @@ theorem parsePartsIn_nonneg_step (leaves : Bool → Nat → Option Nat) (args : 
               simp only [Array.mem_singleton] at hq
               subst hq
               trivial
-            · exact absurd h (by intro h; injection h)
+            · split at h
+              · obtain ⟨run, lanes, rfl, hp, hf⟩ := Walk.parseGrid_ok h
+                intro q hq
+                simp only [Array.mem_singleton] at hq
+                subst hq
+                intro l hl t ht o ho
+                obtain ⟨i0, hi0, -⟩ := Array.mem_iff_getElem.1 hl
+                have h0 : 0 < lanes.size := by omega
+                have hper : t < l.periods := by
+                  rw [hp l hl, getElem!_pos lanes 0 h0]
+                  rw [Array.getElem?_eq_getElem h0] at ht
+                  simp only [Option.map_some, Option.getD_some] at ht
+                  exact ht
+                have hb := (Walk.leafAt_mem l ho hper).1
+                have hfl := hf l hl
+                unfold Flock.Program.Lane.fits at hfl
+                split at hfl
+                · simp only [Bool.and_eq_true, decide_eq_true_eq] at hfl
+                  omega
+                · cases hfl
+              · exact absurd h (by intro h; injection h)
 
 /-- **No position of a parsed strided part is negative**, given none of an argument an alias may name is: its corners'
 least is within its collection (`parsePartsIn`'s `within`), so `Desc.ofPart`'s piece names its references

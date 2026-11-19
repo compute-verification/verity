@@ -50,31 +50,5 @@
    "stderr": "90ab2ab5d68f2457a158d5b6170eeb71789cf78f26a018c1d3c1b2000d4a06ce",
    "stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   }
- },
- "s8_linear": {
-  "fast_math": {
-   "out_json": "d47f193106f80013b47f41d71f8607f2c42905d097205c8e0688e723ce771f0a",
-   "rc": 1,
-   "stderr": "2ef2a0c26b3dbb0ade48c82331fc7b24d790e3e9fe075a4862bb99e25a70fe76",
-   "stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  },
-  "pass": {
-   "out_json": "275bdb733f30f56348ee44705e6299afa3c9dbc18554a2a9b30f1158d88e9f42",
-   "rc": 0,
-   "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-   "stdout": "35f73e1d659788e70a1e660c64c28779ba1ac6de0e74414dbf80caa7302b7cb3"
-  },
-  "plain": {
-   "out_json": "ebcc9474a3eb8fcd836d7fb54fa509b77e209211aca0574cb236ded3ac7a9ce5",
-   "rc": 1,
-   "stderr": "1d4f8657692d5fe4acc6d3c63b48acba472b249ffe773c94e110cfae232b697a",
-   "stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  },
-  "refused": {
-   "out_json": "fe2dcd75ae4e77cba60bea32555400a8595ae540ff06ac7a97963d01af71abc1",
-   "rc": 1,
-   "stderr": "f50c14e83d2c14aa9acf110206b8040f4b72f7cda27bafd185dcb617797fbb8f",
-   "stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  }
  }
 }

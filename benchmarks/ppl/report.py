@@ -177,7 +177,6 @@ def baseline_check(lk: dict, results: list[dict]) -> tuple[str, bool]:
 
 def metrics(r: dict, repo: str, revision: str) -> tuple[str, dict, list[dict]]:
     from verity_bench import kit
-    from verity_bench.overhead import CARD_FILES
 
     if not r.get("passed"):
         raise ValueError(f"{r.get('model')} {r.get('set')}/{r.get('ctx')}: its gates failed, so it has no perplexity")
@@ -190,7 +189,7 @@ def metrics(r: dict, repo: str, revision: str) -> tuple[str, dict, list[dict]]:
     cost = 100 * (arm["ppl"] / base["ppl"] - 1)
     env = r["env"]
     fields = {"model": repo, "revision": revision, "hardware": env["device"], "set": r["set"], "ctx": r["ctx"]}
-    member = f"{r['model']}-{kit.card_short(env['device'], directory=CARD_FILES)}"
+    member = f"{r['model']}-{kit.card_short(env['device'])}"
     run = env.get("run") or None
     inputs = [run] if run else []
     kw = {"inputs": inputs, "member": member}

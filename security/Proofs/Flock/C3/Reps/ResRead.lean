@@ -208,7 +208,7 @@ end Builder
 
 section Net
 
-open FlockSoundness FlockSoundness.Audit
+open FlockSoundness Spot.Sampling
 open FlockVBridge.OfVStar (ReadCol partRep partRun rowCol vBase innerIn)
 
 /-- **The `rec-residuals` unit reads every input column its builder reads**: under any name, a row of the part's

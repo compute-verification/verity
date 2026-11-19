@@ -323,10 +323,10 @@ fit's `T'`): the verdict accepts the rep at the shipped oracle and the table's n
 retained its chunks (`rep_rounds`), and custody makes the stream's rounds the decision's round messages
 (`custody_ok`), which are the fitted proofs' framed bytes, rep by rep (`decR_some`, `readRep_fits`). The fit's context
 is the decoding's. -/
-theorem plainR_capChunk {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plainR_capChunk {rd : Hash.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {c : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω c).out = .acc) {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {e : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP} {st : Stmt} {sch : Flock.Schedule} {p : Proof} {r : ℕ}
+    {mids : List (Hash.Msg × Coin)} {f : FinalP} {st : Stmt} {sch : Flock.Schedule} {p : Proof} {r : ℕ}
     (hact : actR rd x ((Claims.run sha512 P (VR rd) x ω c).msgs.map Prod.fst)
         ((List.range ((Claims.run sha512 P (VR rd) x ω c).msgs.map Prod.fst).length).map (Claims.coinSeq c)) =
       .decide s spec sts link e mids f)
@@ -493,7 +493,7 @@ theorem plainR_capChunk {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Cla
 /-! ## Two accepted runs' caps -/
 
 /-- **An accepted run's messages are `P`'s along its coins** (`run_depK`'s proof, at `VR rd`). -/
-theorem run_depR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
+theorem run_depR (rd : Hash.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω)
     (c : Fin ((VR rd).k x) → Coin) :
     (Claims.run sha512 P (VR rd) x ω c).msgs.map Prod.fst =
       (List.range (Claims.run sha512 P (VR rd) x ω c).msgs.length).map (depMsg sha512 P x ω (Claims.coinSeq c)) :=
@@ -584,7 +584,7 @@ they open agree up to the cap's round (`depMsg_congr`), so the proofs `readRep` 
 (`FitsRep.tops`, `flatMap_zip_congr`) and absorb one message there (`FitsRep.elems`, `RowsAt.vals_eq`), and their
 chunks there are one (`repFrames_capChunk`). The decoded proofs' chunks there have those bytes (`plainR_capChunk`), so
 they absorb one cap (`capFr_eq_of_chunk`). -/
-theorem capPrefixR (rd : Claims.Msg → Option FinalP) : CapPrefixR rd := by
+theorem capPrefixR (rd : Hash.Msg → Option FinalP) : CapPrefixR rd := by
   intro Ω P x ω c₁ c₂ h₁ h₂ s spec sts st sch r ℓ _ hst hsch hr hℓ hc link₁ link₂ e₁ e₂ mids₁ mids₂ f₁ f₂ p₁ p₂
     hact₁ hact₂ hp₁ hp₂
   obtain ⟨rss₁, cx₁, q₁, T₁, T₁', hrss₁, hst₁, hsch₁, hdom₁, hn₁, hsched₁, hfit₁, hT₁⟩ :=
@@ -710,7 +710,7 @@ theorem capPrefixR (rd : Claims.Msg → Option FinalP) : CapPrefixR rd := by
 
 /-- **The table bound at the deployed reader's plain record, from `PlainRdInR` alone**
 (`plainR_tableBoundAbortLin_of_capPrefix` at `capPrefixR`). -/
-theorem plainR_tableBoundAbortLin_R (rd : Claims.Msg → Option FinalP)
+theorem plainR_tableBoundAbortLin_R (rd : Hash.Msg → Option FinalP)
     (hIn : ∀ x, ¬ Claims.Flock.NoAcc sha512 (VR rd) x → PlainRdInR rd x) :
     Claims.Recursion.TableBoundAbortLin sha512 (deployPlainR Readable.relation rd) (wordLen false) (wide false)
       CpDep :=
@@ -718,7 +718,7 @@ theorem plainR_tableBoundAbortLin_R (rd : Claims.Msg → Option FinalP)
 
 /-- **`KSFlockLin` at the deployed reader's trimmed plain record, from `PlainRdInR` alone**
 (`plainR_KSFlockLin_of_capPrefix` at `capPrefixR`). -/
-theorem plainR_KSFlockLin_R (rd : Claims.Msg → Option FinalP)
+theorem plainR_KSFlockLin_R (rd : Hash.Msg → Option FinalP)
     (hIn : ∀ x, ¬ Claims.Flock.NoAcc sha512 (VR rd) x → PlainRdInR rd x) :
     Claims.Recursion.KSFlockLin sha512 (deployPlainTrimR Readable.relation rd) CpDep :=
   plainR_KSFlockLin_of_capPrefix rd hIn (capPrefixR rd)

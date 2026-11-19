@@ -49,21 +49,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import torch
+from verity_bench.overhead import SHAPES
 from verity_vllm.engine import int8_fused as X
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from types import ModuleType
 
-MODELS = {
-    "llama-3.1-8b": {"layers": 32, "linears": {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096),
-                                              "down": (4096, 14336)}},
-    "qwen3-8b": {"layers": 36, "linears": {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (24576, 4096),
-                                          "down": (4096, 12288)}},
-    "llama-3.2-1b": {"layers": 16, "linears": {"qkv": (3072, 2048), "o": (2048, 2048), "gate_up": (16384, 2048),
-                                              "down": (2048, 8192)}},
-}
-LAYERS = MODELS["llama-3.1-8b"]["linears"]
+MODELS = {m: SHAPES[m] for m in ("llama-3.1-8b", "qwen3-8b", "llama-3.2-1b")}
 MS = (1, 32, 256, 2048, 8192)
 DECODE_MS = (1, 32, 256)
 # the gate's Ms: every int8_fused.CONFIGS row (m_max 1, 16, 32, 64, 256) and an M inside two of them, masked tiles
@@ -75,7 +68,7 @@ def shapes_of(models: tuple[str, ...], ms: tuple[int, ...]) -> list[tuple[int, i
     """Each distinct (n, k, m) of the models' linears once, with the model:layer names it serves."""
     out: dict[tuple[int, int], list[str]] = {}
     for model in models:
-        for name, nk in MODELS[model]["linears"].items():
+        for name, nk in MODELS[model].linears.items():
             out.setdefault(nk, []).append(f"{model}:{name}")
     return [(n, k, m, names) for (n, k), names in out.items() for m in ms]
 POISON = 0xA5

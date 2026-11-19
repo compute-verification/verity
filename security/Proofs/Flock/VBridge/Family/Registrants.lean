@@ -44,19 +44,19 @@ a SHA-512 collision, in a pair fixed by the two records rather than by a run:
 
 namespace FlockVBridge.Family
 
-open FlockSoundness FlockSoundness.Refine FlockSoundness.Binding FlockSoundness.Registered Audit
+open FlockSoundness FlockSoundness.Refine FlockSoundness.Binding FlockSoundness.Registered Spot.Sampling
 
 section Two
 
-variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
-  {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
+  {decode : Spot.Sampling.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
   {lay : Layout P plan tab decode} {rs : HmRowsX lay}
-  {C' : Verity.Boolean.Circuit} {n' : ℕ} {P' : Audit.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
+  {C' : Verity.Boolean.Circuit} {n' : ℕ} {P' : Spot.Sampling.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
   {plan' : Finset (Fin n') → Reg₁ → List (TabSpec mPts')}
   {tab' : (S : Finset (Fin n')) → (R : Reg₁) → Fin n' → Fin (plan' S R).length}
-  {decode' : Audit.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
+  {decode' : Spot.Sampling.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
   {lay' : Layout P' plan' tab' decode'} {rs' : HmRowsX lay'}
 
 /-- **Two registrants' rows at one registered root and position are one row's bytes, or SHA-512 collides**: where two

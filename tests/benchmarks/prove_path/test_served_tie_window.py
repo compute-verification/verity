@@ -16,7 +16,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "prove_path"))
 import served_tie_window as STW  # noqa: E402
 
-FIXTURE = HERE.parents[2] / "tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_smallkv.json"
+FIXTURE = HERE.parents[2] / "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_smallkv.json"
 WINDOW = [((0, 1, 0, 0, 5), (1, 2, 0, 0, 3)), ((0, 1, 1, 5, 1), (1, 2, 1, 3, 1)), ((0, 1, 1, 6, 1), (1, 2, 1, 4, 1))]
 SEQS = {1: list(range(101, 111)), 2: list(range(201, 211))}
 
@@ -42,6 +42,24 @@ def test_real_window_cases_on_a_small_window():
     assert run.passed and all(c["circuit_matches"] for c in run.cases.values())
     assert run.cases["id"]["circuit"] == ST.ACCEPT
     assert run.edits == {"prefill": [0, 0, [0, 1, 0, 0, 5]], "decode": [1, 0, [0, 1, 1, 5, 1]], "other_row": [1, 2, 1, 4, 1]}
+
+
+def test_the_result_and_its_line_say_the_developers_piece_checked_it(monkeypatch, tmp_path, capsys):
+    """`main`'s ``result.json`` and printed line carry ``checked_by`` `kit_report.PIECE`: the run's opened bindings are
+    stood in for, the cases run on the small window."""
+    fx = json.loads(FIXTURE.read_text())
+    S = CS.statics(fx["R"], fx["W"], fx["A"], fx["engine"], fx["IW"], Q=fx["Q"], D=fx["D"], P=fx["P"], K=fx["K"],
+                   CN=fx["CN"], CTW=fx["CTW"], CU=fx["CU"])
+    St = SimpleNamespace(**ST.statics(SimpleNamespace(**S)))
+    x = SimpleNamespace(ctx={"served_window": {"step_input_port": {"IB": St.IB, "PB": St.PB}}},
+                        rec={"served_rows": {"root": "00"}}, run=SimpleNamespace(run_root=bytes(64)),
+                        priv={"statics": S, "session": [[list(map(list, s)) for s in WINDOW]]},
+                        reqs=[{"arrival": r, "prompt_ids": ids[:5], "streamed_ids": ids[5:]} for r, ids in SEQS.items()])
+    monkeypatch.setattr(STW, "load", lambda _dir, _w: x)
+    monkeypatch.setattr(STW, "bindings", lambda _x, _S, _St: ({"run_root": True}, _steps(St, WINDOW, SEQS), {}))
+    assert STW.main(["--serve-run", str(tmp_path), "--window", "0", "--out", str(tmp_path / "out")]) == 0
+    assert json.loads((tmp_path / "out/result.json").read_text())["checked_by"] == STW.K.PIECE == "piece"
+    assert json.loads(capsys.readouterr().out)["checked_by"] == "piece"
 
 
 def test_a_run_sealed_before_the_async_and_cache_statics_reads_them_as_0():

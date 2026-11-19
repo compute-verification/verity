@@ -63,7 +63,7 @@ def ownOfAt (h : Held) (st : Roots) (rec draw : Json) (s₀ : ByteArray) : Spot.
     rows := h.rows, refs := refsOf h, refReads := refRegisteredOf h }
 
 /-- `SpotFlock.readsOk` at the stages' bytes. -/
-def readsOkAt (h : Held) (t : ℕ) (x m₁ xS : Claims.Msg) (s₀ s₁ : ByteArray) : Bool :=
+def readsOkAt (h : Held) (t : ℕ) (x m₁ xS : Hash.Msg) (s₀ s₁ : ByteArray) : Bool :=
   match decode x, jsonMsg m₁, secondSampleAt h s₀ s₁, FlockDeploy.decode xS with
   | some st, some rec, some draw, some w =>
     let own := ownOfAt h st rec draw s₀
@@ -73,13 +73,13 @@ def readsOkAt (h : Held) (t : ℕ) (x m₁ xS : Claims.Msg) (s₀ s₁ : ByteArr
       ((stmtJsonOf h t w).map (codesOk h own t)).getD false && pinOk h t w
   | _, _, _, _ => false
 
-theorem readsOk_eq (h : Held) (t : ℕ) (x m₁ xS : Claims.Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) :
+theorem readsOk_eq (h : Held) (t : ℕ) (x m₁ xS : Hash.Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) :
     readsOk h t x m₁ xS c₀ c₁ = readsOkAt h t x m₁ xS (src c₀) (stageSrc c₁) := rfl
 
 /-- **`stmtOk`'s conjuncts on the run**, at the stages' bytes: the run's statement decodes, `m₂` states one session
 statement per template, the run's records name their registrations' names (`recordsOk`), and template `t`'s statement
 has `k₀ t` rounds, is in scope (`sessionOk`) and reads the run's (`readsOk`). -/
-def runOkAt (h : Held) (x m₁ m₂ : Claims.Msg) (s₀ s₁ : ByteArray) : Bool :=
+def runOkAt (h : Held) (x m₁ m₂ : Hash.Msg) (s₀ s₁ : ByteArray) : Bool :=
   match decode x, stmtsOf m₂ with
   | some _, some xs =>
     xs.length == h.ms.length && recordsOk h x m₁ &&
@@ -93,7 +93,7 @@ reading the statement `s`. -/
 def regOk (h : Held) (s : Claims.Sampling.AuditStatement) : Bool := (partition h s).isSome && (two h s).isSome
 
 /-- **`stmtOk` is its registration's conjuncts and its run's**, the run's read through the coins' bytes. -/
-theorem stmtOk_split (h : Held) (x m₁ m₂ : Claims.Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) :
+theorem stmtOk_split (h : Held) (x m₁ m₂ : Hash.Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) :
     stmtOk h x m₁ m₂ c₀ c₁ = ((parse h x).any (regOk h) && runOkAt h x m₁ m₂ (src c₀) (stageSrc c₁)) := by
   unfold stmtOk runOkAt parse
   cases decode x <;> cases stmtsOf m₂ <;> simp [regOk, readsOk_eq, Bool.and_assoc]
@@ -335,9 +335,9 @@ def unmovedAt (h : Held) (n : ℕ) (c : ℕ → _root_.Flock.Circuit) : List (St
 /-! ## The auditor's copies -/
 
 /-- Template `t`'s reference statement among `refs`, the last template's past them. -/
-def refAt (refs : Array Claims.Msg) (t : ℕ) : Claims.Msg := refs.getD (min t (refs.size - 1)) []
+def refAt (refs : Array Hash.Msg) (t : ℕ) : Hash.Msg := refs.getD (min t (refs.size - 1)) []
 
-theorem refAt_ok (refs : Array Claims.Msg)
+theorem refAt_ok (refs : Array Hash.Msg)
     (hz : 0 < refs.size ∧ (List.range refs.size).all (fun t => zkOk (refs.getD t [])) = true) :
     ∀ t, zkOk (refAt refs t) = true := fun t =>
   List.all_eq_true.mp hz.2 (min t (refs.size - 1)) (List.mem_range.mpr (by have := hz.1; omega))
@@ -351,7 +351,7 @@ def field (j : Json) (k : String) : Json := (j.getObjVal? k).toOption.getD .null
 def natsOf (what : String) (j : Json) : IO (List ℕ) := do
   (← ok what j.getArr?).toList.mapM fun n => ok what n.getNat?
 
-def hexOf (what : String) (j : Json) : IO Claims.Msg := do
+def hexOf (what : String) (j : Json) : IO Hash.Msg := do
   return (← ok what (_root_.Flock.unhex (← ok what j.getStr?))).data.toList
 
 def strsOf (what : String) (j : Json) : IO (List String) := do
@@ -377,7 +377,7 @@ is the boundary registration's program, query and work table with the stream's r
 the `select` piece takes it), the fields of `Docket.Verifier` the model doesn't read empty; `blockOf` is
 `filesBlockOf` at the members (`Held.ms`), and no proof block is checked whatever the stages sample (`always`): every
 slot of the toy's boundary layout is a request's. -/
-def heldOf (held : Json) (refs : Array Claims.Msg) (reads : Array Json) : IO (Option Held) := do
+def heldOf (held : Json) (refs : Array Hash.Msg) (reads : Array Json) : IO (Option Held) := do
   let first := field held "first"
   let queryJ := field first "query"
   let P ← ok "program" do Spot.Program.parse (← _root_.Flock.canon (field first "program")).toUTF8
@@ -434,11 +434,11 @@ def timed {α : Type} (label : String) (f : Unit → α) (fmt : α → String) :
 
 def b (x : Bool) : String := toString x
 
-def readMsg (p : System.FilePath) : IO Claims.Msg := return (← IO.FS.readBinFile p).data.toList
+def readMsg (p : System.FilePath) : IO Hash.Msg := return (← IO.FS.readBinFile p).data.toList
 
 /-- **Why a reference statement is out of Flock's masked scope**: the first of `zkOk`'s steps it fails (`setupOf`:
 decode, the verifier's parsers `Raw.ins`, `Ins.setup`; then `zkOk`'s bounds), with its error; none where `zkOk` holds. -/
-def refWhy (xS : Claims.Msg) : Option String :=
+def refWhy (xS : Hash.Msg) : Option String :=
   match FlockDeploy.decode xS with
   | none => some "decode: the bytes don't decode as a statement"
   | some w =>
@@ -519,7 +519,7 @@ def filesResult (h : Held) (c : ℕ → _root_.Flock.Circuit) (ms : Spot.Bits.Me
     ("unmoved", Json.arr (unmoved.map fun e => Json.arr #[Json.str e.1, Json.str e.2.1, Json.str e.2.2]).toArray)])
 
 /-- Each conjunct of `runOkAt` on its own, in their order. -/
-def diag (h : Held) (ms : Spot.Bits.Members) (x m₁ m₂ : Claims.Msg) (s₀ s₁ : ByteArray) : IO Unit := do
+def diag (h : Held) (ms : Spot.Bits.Members) (x m₁ m₂ : Hash.Msg) (s₀ s₁ : ByteArray) : IO Unit := do
   let (st?, _) ← timed "decode x" (fun _ => decode x) (fun s => b s.isSome)
   let (xs?, _) ← timed "stmtsOf" (fun _ => stmtsOf m₂) fun xs => toString (xs.map (·.map List.length))
   let xs := xs?.getD []
@@ -575,7 +575,7 @@ def main (args : List String) : IO UInt32 := do
   let s₀ ← if ran then coinBytes (dir / "c0.bin") else pure ByteArray.empty
   let s₁ ← if ran then coinBytes (dir / "c1.bin") else pure ByteArray.empty
   let held ← ok "held.json" (Json.parse (← IO.FS.readFile (dir / "held.json")))
-  let mut refs : Array Claims.Msg := #[]
+  let mut refs : Array Hash.Msg := #[]
   let mut reads : Array Json := #[]
   for t in [0:(← ok "names" (field held "names").getArr?).size] do
     refs := refs.push (← readMsg (dir / s!"ref-{t}.bin"))

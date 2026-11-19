@@ -14,13 +14,13 @@ invariance), and each arm is gated token for token against `stock` before anythi
 On one RTX PRO 6000, with `VERITY_BENCH_VENV` naming the node's pinned-vLLM environment:
 
 ~~~sh
-SPEC=qwen3-8b-bf16-rtx-served-arm verity bench served_commit --sweep quick --reps 1
+SPEC=qwen3-8b-bf16-served-arm verity bench served_commit --sweep quick --reps 1
 ~~~
 
 This runs one served spec's sweep in one process, its arms interleaved, and writes the result and the run's log to
 `$OUT` (else `$RESEARCH_RUN_DIR/out`). `SPEC` is any of the served arm's specs,
 `benchmarks/harness/specs/*-served-arm*.toml`, each for one RTX PRO 6000 or one H200
-(`llama32-1b-bf16-h200-served-arm`); arguments override the spec's arms, sweep and reps.
+(`llama32-1b-bf16-served-arm@h200`); arguments override the spec's arms, sweep and reps.
 
 ## Profiling
 

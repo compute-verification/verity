@@ -18,7 +18,7 @@ what that record shows, for every input: the coins the challenger device drew, o
   own ledger opens withheld on the window (`OpensOn`), or the fixed finder outputs a break from the run (`Break`).
   `sampledByDevice_nontrivial` (security_proofs) shows it false for a reader that accepts every record.
 * `FamilyOneCommitment`: that run's own log shows every coin of the family released after `after`, so the coins read
-  are every coin the family released, from its first, and no other root stands in the family.
+  are every coin the family released, and no other root stands in the family.
   `FamilyOneCommitmentRead` is the same of the bytes `Challenger.coinsReason` passes, the reader of a stream's run,
   under the key and the copy of main's first-parent history its caller hands it.
   Their nontrivial lemmas (security_proofs) are stated at the device that ran nothing (`idle`) and a key with no
@@ -100,17 +100,16 @@ def Run.commitment (s : Run) : Option LiveCommitment :=
   | .ok dom => some ⟨s.scheme, s.epoch, s.families, Flock.FV3.root dom (s.leaves dom) Flock.Sha512.hash⟩
   | .error _ => none
 
-/-- The coins of family `label` the run released after it received `after`, concatenated in order: coin `i` of the
-family for each `i` whose root its log shows received is `after`. -/
+/-- The coins of family `label` the run released after it received `after`, concatenated in its log's order: coin `i`
+of the family for each release of coin `i` its log shows after `after` (`releasedAfter`). -/
 def Run.released (s : Run) (label : String) (after : ByteArray) : ByteArray :=
   match s.commitment with
   | none => .empty
   | some c =>
-    match releasedRootsOf c s.log with
+    match releasedLogOf c s.log with
     | .error _ => .empty
-    | .ok roots =>
-      let rs := ((roots.find? (·.1 == label)).map (·.2)).getD []
-      (rs.zipIdx.filter (·.1 == after)).foldl (fun acc x => match c.position label x.2 with
+    | .ok log =>
+      (releasedAfter log label after).foldl (fun acc (i : Nat) => match c.position label i with
         | some p => acc ++ s.coins p
         | none => acc) .empty
 
@@ -388,14 +387,14 @@ def SampledByDevice : Prop := SampledByDeviceAt sampleCoins
 
 /-! ## A family's coins follow one commitment -/
 
-/-- The roots the run's own log shows family `label`'s coins released after, in order: root `i` is the 64 bytes the run
-received before it released the family's coin `i` (`releasedRootsOf` over the whole of its log); none when its log
+/-- The roots the run's own log shows family `label`'s coins released after, in its order: each the 64 bytes the run
+received before it released the coin its root names (`releasedLogOf` over the whole of its log); none when its log
 doesn't read as its commitment's. -/
 def Run.roots (s : Run) (label : String) : List ByteArray :=
   match s.commitment with
   | none => []
   | some c =>
-    match releasedRootsOf c s.log with
+    match byFamily c <$> releasedLogOf c s.log with
     | .error _ => []
     | .ok roots => ((roots.find? (·.1 == label)).map (·.2)).getD []
 
@@ -406,8 +405,8 @@ def Run.roots (s : Run) (label : String) : List ByteArray :=
 `after` (`Run.roots`); or the fixed finder outputs a break from the run (`Break`). So, with `label` and `after` the
 verifier's (its parameters' family and the registration's digest):
 
-* the coins the sample reads are coins of that family, and every coin it released, from its first: nothing the
-  evidence carries chooses where they start (`Run.released` keeps coin `i` where root `i` is `after`, which is each);
+* the coins the sample reads are coins of that family, every coin it released after `after`: nothing the evidence
+  carries chooses which (`Run.released` keeps each coin its log shows released after `after`, which is each);
 * every root in the family, up to the last coin read and past it, is the registration's digest: a prover that reads a
   sample's coins and registers again has no coin of the family for the second registration;
 * the family's first line carries the digest, and the log read is the device's own, whole from its head to its close,

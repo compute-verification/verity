@@ -477,7 +477,7 @@ theorem decodeWith_points (hs : Hashes Flock.V) {spec : SessionSpec} {text : Str
     cases h
     exact (check_pts (by assumption)).2
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 theorem _root_.FlockComplete.Run.sess_points (o : Run H rel) {st : Stmt} (hspec : o.spec = st.spec) :
     ∀ p ∈ o.sess.points.toList, p.size = st.mPts := by
@@ -500,7 +500,7 @@ theorem switch_all {claims : Array Claim} {tr : Trace} (h : ∀ c ∈ claims, do
   exact h _ (Array.getElem_mem hk)
 
 /-- **The ring switch's algebra at the deployed relation**, from `RelS` alone. -/
-theorem rsAlgebra (H : Claims.Msg → Claims.Msg) : RsAlgebra H Readable.relation := by
+theorem rsAlgebra (H : Hash.Msg → Hash.Msg) : RsAlgebra H Readable.relation := by
   intro o i hi r _ k hk
   obtain ⟨st, hsts, hwf, hrw, -, hsat⟩ := o.model
   obtain ⟨st', hsts', hspec, h22, -⟩ := o.table
@@ -528,7 +528,7 @@ theorem rsAlgebra (H : Claims.Msg → Claims.Msg) : RsAlgebra H Readable.relatio
     (o.sess_points hspec)) k hk
 
 /-- **The ring-switch goal at the deployed relation**, at every rep the session walk aligns. -/
-theorem ringSwitch_relation (H : Claims.Msg → Claims.Msg)
+theorem ringSwitch_relation (H : Hash.Msg → Hash.Msg)
     (hzc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r)
     (hlc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, LcAt o i r)
     (hrs : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, RsAt o i r) :

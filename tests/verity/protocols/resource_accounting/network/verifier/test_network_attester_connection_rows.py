@@ -21,6 +21,7 @@ from tests.verity.protocols.resource_accounting.network.verifier.test_network_at
 from tests.verity.protocols.resource_accounting.network.verifier.test_network_attester import records, run
 from verity.protocols.resource_accounting.network.verifier.network_attester import Released
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 T, K = LEN.window // LEN.every, LEN.stride_releases
 LINK = "responses"
@@ -38,7 +39,7 @@ def handed():
 def _attest(tmp_path, strides, window=0, session=signers.SESSION, seed=b"certifier"):
     tmp_path.mkdir(parents=True, exist_ok=True)
     issuer = Issuer(signers.signer(tmp_path, seed), session)
-    rows, cert = C.attest(issuer, LINK, window, strides, LEN, None)
+    rows, cert = signers.attest_connection_rows(issuer, LINK, window, strides, LEN, None)
     return issuer, rows, cert
 
 
@@ -122,7 +123,7 @@ def test_every_row_opens_its_tables_signed_root_at_its_position_and_nowhere_else
         for k, row in enumerate(table.rows):
             bc = W.bc(row, table.salts[k])
             assert bc == hm96.SHA512.commit_string(
-                hm96.SHA512.default_key, G.row_digest(W.words(row), 16, G.SCHEMA_V2), table.salts[k])
+                hm96.SHA512.default_key, RV.row_digest(W.words(row), 16, G.SCHEMA_V2), table.salts[k])
             assert W.opens(dom, entry.root, k, bc, table.path(k))
         row, salt, path = table.rows[1], table.salts[1], table.path(1)
         flipped = bytes([row[0] ^ 1]) + row[1:]
@@ -220,7 +221,7 @@ def test_the_registration_reads_back_and_refuses_anything_but_its_own(handed, tm
             C.check_registration(changed, key, signers.SESSION, *args)
 
     for k, v in [("format", "x"), ("link", "requests"), ("window", 0), ("parameters", PLAIN.digest.hex()),
-                 ("word_bits", 32), ("row_schema", G.SCHEMA), ("tables", [lengths]), ("tables", [fails, lengths]),
+                 ("word_bits", 32), ("row_schema", RV.SCHEMA), ("tables", [lengths]), ("tables", [fails, lengths]),
                  ("tables", [lengths, fails, fails]), ("tables", {"lengths": lengths, "fails": fails}),
                  ("tables", [lengths, "fails"])]:
         refused({**doc, k: v})
@@ -260,6 +261,6 @@ def test_a_refused_signer_gives_no_attestation(handed, tmp_path):
     _, _, by_window = handed
     issuer = Issuer(signers.signer(tmp_path), signers.SESSION)
     issuer.signer.start(signers.OTHER_SESSION)
-    rows, cert = C.attest(issuer, LINK, 0, by_window[0], LEN)
+    rows, cert = signers.attest_connection_rows(issuer, LINK, 0, by_window[0], LEN)
     assert cert is None and issuer.refused == [(LINK, Direction.EGRESS, 0)]
     assert [len(t.rows) for t in rows.tables] == [T, T]

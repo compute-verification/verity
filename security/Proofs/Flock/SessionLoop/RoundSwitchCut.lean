@@ -31,7 +31,7 @@ open _root_.Flock
 the first (the lincheck ends on its squeeze). -/
 theorem piopCut_rs_bodies {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} (hm : 14 ≤ st.m) {lay : Zk.PadLayout}
     {src : RepSrc} {cap root : ByteArray} {extras : Array Claim} {prior : Array (List F128)} {words : List ℕ}
-    {t₀ : Transcript} {l : Array Claims.Msg} {res t₃ l₃}
+    {t₀ : Transcript} {l : Array Hash.Msg} {res t₃ l₃}
     (hN : l.size + 3 + (st.m - 6) + (3 + (st.fold.kLog - 6)) + (2 + extras.size) + 1 ≤ n)
     (h : ((piopCut (asksCut coin n) st lay src cap root extras prior words).run t₀).go l = (.ok (res, t₃), l₃))
     {k : ℕ} (hk : k ≤ extras.size + 2) :

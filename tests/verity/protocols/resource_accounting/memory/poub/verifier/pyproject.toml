@@ -8,7 +8,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = ["test_poub_coins.py"]
 # What the tests import of `verity`: the audit's codec, receipts and record, on the commitments, the randomness and the
 # profile; its coins on the one challenger, local and as a service.
-inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
+inputs = ["tests/verity/protocols/resource_accounting/memory/poub/figures.json",
+          "verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
           # `coins.trusted`'s Lean verifier (`coins.lean_answer`): one_stage's `lean`, and what `lake build
           # spot-verifier` reads, its package and its path requires
           "verity/protocols/proofs/spot/verifier/one_stage", "verity/protocols/proofs/spot/verifier/lean",
@@ -17,6 +18,9 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           "verity/protocols/proofs/flock/verifier/lake-manifest.json", "verity/protocols/proofs/flock/verifier/lean-toolchain",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean", "verity/commitments/lms/lean",
           "verity/circuits/difftest",
+          # PoUB's declaration, which the prover's side reads (`period_prover`), and the interface it is declared in
+          "verity/protocols/resource_accounting/memory/poub/scheme.py", "verity/protocols/resource_accounting/scheme.py",
+          "verity/hooks.py",
           "verity/__init__.py", "verity/errors.py",
           "verity/protocols/proofs/spot/verifier/profile.py",
           "verity/protocols/proofs/spot/verifier/__init__.py",
@@ -38,6 +42,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           "verity/protocols/resource_accounting/memory/poub/prover/__init__.py", "verity/protocols/resource_accounting/memory/poub/prover/session_prover.py",
           # the honest provers and the period's prover side, which the tests run against the verifier's
           "verity/protocols/resource_accounting/memory/poub/prover/audit_prover.py", "verity/protocols/resource_accounting/memory/poub/prover/p2_prover.py",
+          "verity/protocols/resource_accounting/memory/poub/verifier/rota.py",
           "verity/protocols/resource_accounting/memory/poub/prover/period_prover.py",
           "verity/protocols/resource_accounting/memory/poub/prover/opening_prover.py",
           "verity/protocols/resource_accounting/memory/poub/prover/p2_party_prover.py",

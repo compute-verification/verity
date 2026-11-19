@@ -298,7 +298,7 @@ end msgs
 
 section family
 
-open FlockSoundness.Game FlockSoundness.Discharge.Exec FlockSoundness.Audit FlockVBridge.InnerAccepts
+open FlockSoundness.Game FlockSoundness.Discharge.Exec Spot.Sampling FlockVBridge.InnerAccepts
 open FlockVBridge.Stages
 
 variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]

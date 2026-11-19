@@ -536,19 +536,19 @@ open Flock
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **The word's length**: table 0's level-0 codeword length `2^d`; `0` where the statement does not set up. -/
-def wordLen (zk : Bool) (x : Claims.Msg) : ℕ :=
+def wordLen (zk : Bool) (x : Hash.Msg) : ℕ :=
   match (tables zk x).head? with
   | some (_, st) => 2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).d
   | none => 0
 
 /-- **The zero column**: table 0's level-0 witness lanes, each `0`. -/
-noncomputable def zeroCol (zk : Bool) (x : Claims.Msg) : List 𝔽 :=
+noncomputable def zeroCol (zk : Bool) (x : Hash.Msg) : List 𝔽 :=
   match (tables zk x).head? with
   | some (_, st) =>
     List.replicate (2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).lanes) 0
   | none => []
 
-theorem wordLen_le_N₀ (zk : Bool) (x : Claims.Msg) : (wordLen zk x : ℝ) ≤ N₀ zk x := by
+theorem wordLen_le_N₀ (zk : Bool) (x : Hash.Msg) : (wordLen zk x : ℝ) ≤ N₀ zk x := by
   unfold wordLen N₀
   cases h : tables zk x with
   | nil => simp
@@ -566,16 +566,16 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-theorem V_k_pos (zk : Bool) (x : Claims.Msg) : 0 < (V zk).k x := by
+theorem V_k_pos (zk : Bool) (x : Hash.Msg) : 0 < (V zk).k x := by
   simp only [V]
   split <;> omega
 
 end Gen
 
-theorem V_k_pos (zk : Bool) (x : Claims.Msg) : 0 < (V zk).k x :=
+theorem V_k_pos (zk : Bool) (x : Hash.Msg) : 0 < (V zk).k x :=
   Gen.V_k_pos (S := S₀) (zk := zk) (x := x)
 
-theorem k_one_plain (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
+theorem k_one_plain (rel : Readable.Parsed → Readable.Relation) (x : Hash.Msg) :
     1 ≤ (deployPlain rel).k x ∨ Claims.Flock.NoAcc sha512 (deployPlain rel).V x :=
   (k_range_plain rel x).imp_left fun h => by omega
 
@@ -583,21 +583,21 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-theorem k_one_zk (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
+theorem k_one_zk (rel : Readable.Parsed → Readable.Relation) (x : Hash.Msg) :
     1 ≤ (deployZk rel).k x ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x :=
   (k_range_zk rel x).imp_left fun h => by omega
 
 end Gen
 
-theorem k_one_zk (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
+theorem k_one_zk (rel : Readable.Parsed → Readable.Relation) (x : Hash.Msg) :
     1 ≤ (deployZk rel).k x ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x :=
   Gen.k_one_zk (S := S₀) (rel := rel) (x := x)
 
 /-- **A column of the code's width**: as long as the zero column, table 0's level-0 lanes (under `--zk` with the extra
 lanes). -/
-def wide (zk : Bool) (x : Claims.Msg) (u : List 𝔽) : Prop := u.length = (zeroCol zk x).length
+def wide (zk : Bool) (x : Hash.Msg) (u : List 𝔽) : Prop := u.length = (zeroCol zk x).length
 
-theorem wide_ne_zero (zk : Bool) (x : Claims.Msg) (u : List 𝔽) (hN : 0 < wordLen zk x) (h : wide zk x u) :
+theorem wide_ne_zero (zk : Bool) (x : Hash.Msg) (u : List 𝔽) (hN : 0 < wordLen zk x) (h : wide zk x u) :
     u ≠ 0 := by
   unfold wordLen at hN
   unfold wide zeroCol at h

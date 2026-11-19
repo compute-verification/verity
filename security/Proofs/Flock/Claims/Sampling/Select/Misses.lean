@@ -56,7 +56,7 @@ open Spot
 
 namespace Properties.Spot.SecurityProofs
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset Claims.Sampling
+open FlockSoundness FlockSoundness.Game Spot.Sampling Finset Claims.Sampling
 
 /-- The population's proof blocks, slot by slot. -/
 def popBlocks (pop : Array (Array Slots.ProofBlock)) : List Slots.ProofBlock := pop.toList.flatMap (·.toList)

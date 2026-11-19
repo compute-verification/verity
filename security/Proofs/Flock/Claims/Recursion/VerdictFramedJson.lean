@@ -68,7 +68,7 @@ open Claims.Bridge.Custody (RoundFields)
 /-- **Each rep's block of the round messages `readPs` reads is its proof's framed bytes**, at a `T` the proof fits its
 opened rounds at. -/
 theorem readPs_framesR {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray}
-    {rss : List (List ByteArray)} {cs : List Coin} {fl : FinalP} {pf : Array Flock.Proof × List Claims.Msg}
+    {rss : List (List ByteArray)} {cs : List Coin} {fl : FinalP} {pf : Array Flock.Proof × List Hash.Msg}
     (h : readPs spec sts c₁ r₀ rss cs fl = some pf) :
     ∀ k < 2 * sts.size, ∃ T, FitsRep (repCtx spec sts c₁ r₀ cs k) ((cutLens (repLens spec sts) rss).getD k [])
       pf.1[k]! T ∧ (cutLens (repLens spec sts) pf.2).getD k [] = framesOf (repCtx spec sts c₁ r₀ cs k) pf.1[k]! T := by
@@ -112,9 +112,9 @@ theorem readPs_framesR {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r�
 
 /-- **At a decision, the record's round messages are the reps' frames**: the reader's record is `recJ` at round
 messages `ms` whose `k`-th block is rep `k`'s proof's framed bytes, at a `T` the proof fits its opened rounds at. -/
-theorem decR_framesR {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem decR_framesR {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) :
-    ∃ (r₀ : List ByteArray) (rss : List (List ByteArray)) (ms : List Claims.Msg),
+    ∃ (r₀ : List ByteArray) (rss : List (List ByteArray)) (ms : List Hash.Msg),
       (rowsOf (as.headD [])).map (List.map nodeOf) = some r₀ ∧ as.tail.dropLast.mapM rowsOf = some rss ∧
       d.f.j = recJ d.spec d.sts d.link d.c₁ ms cs.tail.dropLast d.f.ps ∧
       ∀ k < 2 * d.sts.size, ∃ T, FitsRep (repCtx d.spec d.sts d.c₁ r₀ cs.tail.dropLast k)
@@ -173,8 +173,8 @@ theorem arr_eraseCoins (j : Json) :
 
 /-- **The verdict's record keeps the reader's streams**: each rep stream of `jAt` reads as the reader's record's, at
 its name and at its rounds' counts and messages. -/
-theorem arr_streams_jAt {H : Claims.Msg → Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP} {recs : Array Json}
+theorem arr_streams_jAt {H : Hash.Msg → Hash.Msg} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
+    {mids : List (Hash.Msg × Coin)} {f : FinalP} {recs : Array Json}
     (h : Record.arr (jAt H spec sts c₁ mids f) "streams" = .ok recs) :
     ∃ recs₀, Record.arr f.j "streams" = .ok recs₀ ∧ List.Forall₂ KeptS recs₀.toList recs.toList := by
   unfold jAt coinSubJ fillCoins at h

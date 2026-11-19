@@ -1,12 +1,11 @@
 // The kernels' host twin (rows.cu's extern "C" calls, one loop a kernel, on host memory), built by engine.host_lib with the
 // system C++ compiler: what the CPU tests hold to the reference. The stream and variant arguments are ignored. It counts what
-// it hashes (sxr_counts): compressions, those of them over a constant schedule (C::kw), and ChaCha20 chunks.
+// it hashes (sxr_counts): compressions, and those of them over a constant schedule (C::kw).
 #include <cstdint>
 
 namespace {
-uint64_t counts[3];
+uint64_t counts[2];
 }  // namespace
-#define SXR_COUNT_CHACHA() (++counts[2])
 
 #include "rows.cuh"
 
@@ -33,7 +32,7 @@ const char* sxr_variant_name(int i) { return i == 0 ? "host" : nullptr; }
 const char* sxr_default() { return "host"; }
 
 void sxr_counts(uint64_t* out, int reset) {
-  for (int i = 0; i < 3; ++i) {
+  for (int i = 0; i < 2; ++i) {
     out[i] = counts[i];
     if (reset) counts[i] = 0;
   }

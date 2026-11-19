@@ -3,8 +3,9 @@
 # Each rep is one `verity-vllm serve-openai --no-commit` lifetime of served_verdicts.sh's model (REPO at REV, --precision PRECISION),
 # the bench row's check (--required-manifest PRED/manifest.json, which here only refuses a row declaring async scheduling;
 # PRED is the row's Build of record, which `verity-vllm predict row` writes for ROW's name before the lease, as served_verdicts.sh's),
-# --max-model-len MAX_MODEL_LEN, --max-num-batched-tokens MNBT (default 512, served_verdicts.sh's T), --admit release-order and --window-requests
-# SLOTS, and --window-steps WINDOW_STEPS when it is set (unset: not passed), under served_verdicts.sh's engine environment
+# --max-model-len MAX_MODEL_LEN, --max-num-batched-tokens MNBT (default 512, served_verdicts.sh's T), the network attester
+# scheme's order release-order (--protocols-config under its name) and --window-requests SLOTS, and --window-steps
+# WINDOW_STEPS when it is set (unset: not passed), under served_verdicts.sh's engine environment
 # (VLLM_BATCH_INVARIANT=1, eager), then LOADS loads of `adapters/vllm/tools/served_run/serve_load.py --varied` with served_verdicts.sh's
 # REQUESTS, RATE, PROMPTS, MAX_TOKENS and SEED, each under a release run of its own. With FIXED (unset: the varied load) each
 # load is served_verdicts.sh's LOAD=fixed instead, `serve_load.py --fixed FIXED --prompt-range PROMPTS --window-steps
@@ -35,7 +36,8 @@ REPO=${REPO:-verity-int8/Llama-3.2-1B-INT8} REV=${REV:-15b0976d400d796ee589e7737
 PORT=${PORT:-18191} SLOTS=${SLOTS:-4} PROMPTS=${PROMPTS:-16:24} MAX_TOKENS=${MAX_TOKENS:-4} RATE=${RATE:-1000} SEED=${SEED:-1}
 REQUESTS=${REQUESTS:-$SLOTS} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} MNBT=${MNBT:-512} REPS=${REPS:-5} LOADS=${LOADS:-3} WARM=${WARM:-1}
 FIXED=${FIXED:-} WINDOW_STEPS=${WINDOW_STEPS:-}
-export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
+export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1
+export CUDA_HOME=${CUDA_HOME:-$(python3 "$TREE/benchmarks/kernels/machine.py" toolkit 13.0)}
 export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src
 ROOT=${SERVE_ROOT:-${TMPDIR:-/tmp}/served-stock}
 export PRED=${PRED:-$ROOT/predicted/${RESEARCH_RUN_ID:-local}}
@@ -52,10 +54,11 @@ serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its 
     echo "$1: not started, past NOT_AFTER $NOT_AFTER" | tee -a "$OUT/stock.txt"; return 11
   fi
   mkdir -p "$D"
+  local na=network-attester; "$PY" -m verity.protocols.compose.schemes "$na" settings > /dev/null || return 9
   cd "$TREE/adapters/vllm" || return 9
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}-$1" --no-commit --required-manifest "$PRED/manifest.json" \
-    --admit release-order --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" --max-num-batched-tokens "$MNBT" "${ws[@]}" \
+    --protocols-config "{\"$na\": {\"order\": \"release-order\"}}" --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" --max-num-batched-tokens "$MNBT" "${ws[@]}" \
     > "$D/serve.log" 2>&1 &
   srv=$!
   trap 'kill -TERM "$srv" 2>/dev/null; wait "$srv"; exit 143' TERM INT
@@ -65,9 +68,9 @@ serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its 
     sleep 2
   done
   if [ "$up" != 1 ]; then
-    tail -40 "$D/serve.log"
-    echo "$1: not listening: $(grep -m1 -E 'UsageError|Error|refus' "$D/serve.log" | cut -c1-400)" | tee -a "$OUT/stock.txt"
-    kill -TERM "$srv" 2>/dev/null; wait "$srv"; return 10
+    kill -TERM "$srv" 2>/dev/null; wait "$srv"; rc=$?
+    echo "$1: $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" not-listening "$D/serve.log" "$rc")" | tee -a "$OUT/stock.txt"
+    return 10
   fi
   for j in $(seq 1 "$LOADS"); do
     release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
@@ -94,21 +97,21 @@ reps() {
 }
 
 if [ "${1:-}" = reps ]; then reps; exit $?; fi
-echo "$PRIV" > "$OUT/private.txt"
 for v in FIXED WINDOW_STEPS; do
   [[ -z ${!v} || ${!v} =~ ^[1-9][0-9]*$ ]] || { echo "PREFLIGHT: $v is a positive integer or unset" | tee -a "$OUT/stock.txt"; exit 3; }
 done
 [ -z "$FIXED" ] || [ -n "$WINDOW_STEPS" ] \
   || { echo "PREFLIGHT: FIXED needs WINDOW_STEPS, each request's max_tokens" | tee -a "$OUT/stock.txt"; exit 3; }
-{ id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; nproc; nvidia-smi -L; echo "row $ROW"; } | tee "$OUT/machine.txt"
+{ id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; nproc; nvidia-smi -L; echo "row $ROW"; } > "$PRIV/machine.txt" 2>&1
+git -C "$TREE" rev-parse HEAD 2>/dev/null | tee "$OUT/machine.txt"
 for f in "$ROW/manifest.json" "$PY"; do [ -e "$f" ] || { echo "PREFLIGHT: no $f" | tee -a "$OUT/stock.txt"; exit 3; }; done
 command -v gpu-lease >/dev/null || { echo "PREFLIGHT: no gpu-lease on this node" | tee -a "$OUT/stock.txt"; exit 3; }
 mkdir -p "$ROOT/cache"
 (cd "$TREE/adapters/vllm" && "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW_ID" --out "$PRED") \
-  > "$OUT/predict_row.json" 2> "$OUT/predict_row.err"
+  > "$PRIV/predict_row.json" 2> "$PRIV/predict_row.err"
 rc=$?
 [ "$rc" = 0 ] && [ -f "$PRED/predicted.json" ] || {
-  echo "PREDICT-ROW $ROW_ID refused (exit $rc): $(grep -v '^\[predict\]' "$OUT/predict_row.err" | tail -2 | cut -c1-600)" \
+  echo "PREDICT-ROW $ROW_ID refused $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" failed "$rc" "$PRIV/predict_row.err")" \
     | tee -a "$OUT/stock.txt"; exit 3; }
 export OUT
 GPU_LEASE_WHO=${GPU_LEASE_WHO:-bench-31-stock} gpu-lease 1 --wait --max-min "${LEASE_MIN:-60}" --mem-gb "${LEASE_MEM_GB:-64}" \

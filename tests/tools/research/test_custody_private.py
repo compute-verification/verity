@@ -221,12 +221,12 @@ def test_a_runs_statement_refuses_its_names_and_its_private_directories(tmp_path
     d = _fixture_run(tmp_path / "root" / "runs")
     priv = tmp_path / "private"
     secret = _write(priv, "secret.bin", b"s")
-    _write(d, "out/plan.jsonl", b"p")
+    _write(d, "out/schedule.jsonl", b"p")
     _write(d, "out/capture/a.bin", b"c")
     _write(d, "out/draws.3.jsonl.gz", b"i")
     _write(d, "out/note/capture", b"a file, not a directory")
     (d / "out" / "held").symlink_to(secret)
-    _stated(d, [str(priv)], ["plan.jsonl", "capture/", "draws.*.jsonl*"])
+    _stated(d, [str(priv)], ["schedule.jsonl", "capture/", "draws.*.jsonl*"])
     rep = CU.runner_publish(d, _custody_dir(tmp_path, FIXTURE_RID, vault), sleep=lambda s: None, tries=1)
     assert rep["preserved"], rep.get("error")
     err = capsys.readouterr().err
@@ -237,7 +237,7 @@ def test_a_runs_statement_refuses_its_names_and_its_private_directories(tmp_path
     assert {r["path"]: r["rule"] for r in marker} == {"out/capture/a.bin": "private-paths.json: name capture/",
                                                       "out/held": f"private-paths.json: inside {priv}",
                                                       "out/draws.3.jsonl.gz": "private-paths.json: name draws.*.jsonl*",
-                                                      "out/plan.jsonl": "private-paths.json: name plan.jsonl"}
+                                                      "out/schedule.jsonl": "private-paths.json: name schedule.jsonl"}
     assert all("owner" not in r for r in marker), "a statement's rule has no lane owner"
     kept, _, _ = CU.choose(d)
     assert P.PATHS_FILE in kept and "out/note/capture" in kept, "a trailing / names a directory only"
@@ -259,10 +259,10 @@ def test_an_unreadable_statement_stores_nothing_of_the_run(tmp_path, capsys, doc
 
 def test_a_put_under_a_run_dir_obeys_its_statement(tmp_path, capsys):
     d = _fixture_run(tmp_path / "runs")
-    _write(d, "out/model/plan.jsonl", b"p")
-    _stated(d, [], ["plan.jsonl"])
+    _write(d, "out/model/schedule.jsonl", b"p")
+    _stated(d, [], ["schedule.jsonl"])
     assert data_main(["put", "--store", str(tmp_path / "s"), "--kind", "x/v1", "--tree", str(d / "out" / "model")]) == 1
-    assert "plan.jsonl: private (private-paths.json: name plan.jsonl)" in capsys.readouterr().err
+    assert "schedule.jsonl: private (private-paths.json: name schedule.jsonl)" in capsys.readouterr().err
 
 
 def _ship(d: Path, src: Path) -> None:
@@ -347,14 +347,14 @@ def test_fetch_all_copies_no_private_file_and_preserves_the_rest(tmp_path, monke
     from research import remote
 
     d = _private_run(tmp_path / "machine" / "runs")
-    _stated(d, [], ["plan.jsonl"])
-    _write(d, "out/model/plan.jsonl", b"p")
+    _stated(d, [], ["schedule.jsonl"])
+    _write(d, "out/model/schedule.jsonl", b"p")
     here = tmp_path / "here" / FIXTURE_RID
     here.mkdir(parents=True)
     (here / "remote.json").write_text(json.dumps({"remote_run_dir": str(d), "host": "h", "port": 22, "run_id": FIXTURE_RID}))
     monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **kw: ["sh", "-c"])
     rec = remote.fetch(here, everything=True)
-    refused = sorted([*(r for r, _ in PRIVATE), "out/b/salts_t", "out/model/plan.jsonl"])
+    refused = sorted([*(r for r, _ in PRIVATE), "out/b/salts_t", "out/model/schedule.jsonl"])
     assert [r["path"] for r in rec["refused"]] == refused and rec["preserved"], rec.get("preserve_error")
     assert not any((here / r).exists() for r in refused), "no private file reached the launcher"
     assert (here / "out/proof.bin").exists() and (here / P.PATHS_FILE).exists() and (here / UNDECIDED[0]).exists()

@@ -80,7 +80,7 @@ open Lean (Json JsonNumber)
 /-- **What the masked record needs of the statement**, at every good masked case: a non-empty `Σ`, a printable sample
 that decodes to the statement's instances, the statement's sample the one it was set up at, and the verifier's `Hello` a
 JSON object whose `coins` is an object, printable with the prover's nonce put in. -/
-def StmtOkZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def StmtOkZk (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : CaseZk H rel, 0 < c.spec.sigma.size ∧ SampleOk c.spec ∧ c.spec.unitSample = c.s.read.draw ∧
     ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse c.spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
       m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m))
@@ -88,7 +88,7 @@ def StmtOkZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable
 /-- **What the masked record needs of the prover's pieces**, at every good masked case's table: the masked
 commitment's cap, at the `--zk` schedule's first level, is non-empty and under `2^64` bytes, and each masked rep, on the
 table's extra claims at the link's points, records a round, each of at most `65536` coins. -/
-def ProverOkZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def ProverOkZk (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : CaseZk H rel, ∀ st ∈ c.sts,
     (∀ v, Zk.schedule (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m = .ok v → ∀ g extra lanePad salt cm,
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle (v.1.levels.getD 0 default)
@@ -99,7 +99,7 @@ def ProverOkZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readab
       Ret ((repPZk (asksS c.resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit st) v.1 v.2 rep dom tr tb cm₀
         extras pads ic extra lanePad salt nonce prior ws).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The honest masked run's record**, at one table: it is the printed honest masked record, `Record.decodeWith`
 reads it as `sessOf` and `liveOf` as its live session, its points the first coin's, the link is its `root_B` and no
@@ -162,7 +162,7 @@ theorem RunZk.json (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
   rfl
 
 /-- **The round messages and their coins**: the sends after the first, the `j`th with coin `1 + j`. -/
-theorem RunZk.mids_eq (o : RunZk H rel) {b : Claims.Msg} {bs : List Claims.Msg} (hbs : o.bodies.toList = b :: bs) :
+theorem RunZk.mids_eq (o : RunZk H rel) {b : Hash.Msg} {bs : List Hash.Msg} (hbs : o.bodies.toList = b :: bs) :
     o.mids = bs.zip ((List.range bs.length).map fun j => Claims.coinSeq o.r (1 + j)) := by
   have hn : o.bodies.size = bs.length + 1 := by
     rw [← Array.length_toList, hbs, List.length_cons]

@@ -182,7 +182,7 @@ theorem freshAt_cur {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sessi
 /-- **A round of the model's next round's stream keeps `SeenAt` one round on**: where that stream is table `i`'s rep
 `r`'s, `s`, the rep streams' names are distinct, and the history `h'` is one message past `h`, past the `Commit`, the
 streams seen and `s` are those with a round before the model's next at `h'`. -/
-theorem seenAt_round {spec : SessionSpec} {sts : Array Stmt} {h h' : List (Claims.Msg × Claims.Msg)}
+theorem seenAt_round {spec : SessionSpec} {sts : Array Stmt} {h h' : List (Hash.Msg × Hash.Msg)}
     {seen : List String} {i r : Nat} {s : String} (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup)
     (hmem : (i, r, s) ∈ spec.repStreams.toList) (hk : 2 * i + r = (nextAt spec sts h).1) (hl : 2 ≤ h.length)
     (hl' : h'.length = h.length + 1) (hS : SeenAt spec sts h seen) : SeenAt spec sts h' (s :: seen) := by
@@ -221,7 +221,7 @@ theorem seenAt_round {spec : SessionSpec} {sts : Array Stmt} {h h' : List (Claim
 /-- **A rep stream before the next round's has `StreamAt` vacuously one round on**: past the `Commit`, at the history
 `h'` one message past `h`, the next round is neither the stream's nor the next stream's first. -/
 theorem streamAt_old {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {sts : Array Stmt} {k : Nat}
-    {h h' : List (Claims.Msg × Claims.Msg)} {rel : _root_.Flock.ZkServer.Frames.Release} {name : String}
+    {h h' : List (Hash.Msg × Hash.Msg)} {rel : _root_.Flock.ZkServer.Frames.Release} {name : String}
     {l0 : _root_.Flock.ZkServer.Level0.Level0} {p : Rep} {R : _root_.Flock.ZkServer.Frames.Sessions}
     (hk : k < (nextAt spec sts h).1) (hl : 2 ≤ h.length) (hl' : h'.length = h.length + 1) :
     StreamAt M spec sts k h' rel name l0 p R := by
@@ -481,13 +481,13 @@ theorem sameInv_snd {T : ZKMal.CoinLayer.TableData}
 auditor answered and the session and the rep's frame took, the loop's frames at the session's next request have
 stopped the session exactly where a round up to this one failed. -/
 theorem stopped_roundRun {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {seen : List String}
-    {stream : String} {n i r : Nat} {dom : ByteArray} {v : Claims.Msg} {σ : LoopAt} {st : State} {pl : Placed}
+    {stream : String} {n i r : Nat} {dom : ByteArray} {v : Hash.Msg} {σ : LoopAt} {st : State} {pl : Placed}
     {e : Env} {R₃ : Sessions} (hA : RoundFacts M sid spec seen stream n i r dom v σ)
     (hv : M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false))
     (hr : RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 R₃)
     (hreq : st.request pl (.round stream n) = none) {o a : ByteArray} (ho : e.round = .ok o)
     (ha : e.ans = some a) (hb : byte? a 0 = some 2) (hs : (st.answer (.round stream n) a).1.stop = none)
-    (hc : e.coins = .ok ()) (e' : Claims.Msg × Claims.Msg) :
+    (hc : e.coins = .ok ()) (e' : Hash.Msg × Hash.Msg) :
     R₃.stopped sid = !M.L.toSrv.liveBefore M.wk M.x M.w M.ρ M.κ (M.hist σ.c ++ [e']) := by
   obtain ⟨m, q, f, nd, hm, hrp, hnd, hcfg, hu, -⟩ := hA.place
   have hcn := hA.coins
@@ -514,14 +514,14 @@ theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
     {s0 : FlockDeploy.Ins} (hx : FlockDeploy.setupOf true M.x = some (s0, spec, sts))
     (hrq : ∀ j, M.L.req M.x j = Loop.reqOf M.x j)
     (hA : ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat) (dom : ByteArray)
-      (v : Claims.Msg), slot st pl = some (.round stream n) → LoopFacts sid spec seen st pl σ →
+      (v : Hash.Msg), slot st pl = some (.round stream n) → LoopFacts sid spec seen st pl σ →
       LoopJ M sid spec sts seen st σ → σ.c < M.τ.length → M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
       RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
       (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → SaltsSrc M sid σ →
       InnerSrc M sid i r σ → StartOk sts sid i r σ → (∃ o, e.round = .ok o) →
       RoundFacts M sid spec seen stream n i r dom v σ)
     (hcur : ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat)
-      (dom : ByteArray) (v : Claims.Msg), slot st pl = some (.round stream n) → e.setup = .ok (spec, sts) →
+      (dom : ByteArray) (v : Hash.Msg), slot st pl = some (.round stream n) → e.setup = .ok (spec, sts) →
       LoopFacts sid spec seen st pl σ → LoopJ M sid spec sts seen st σ → M.Ans σ.c e →
       M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
       RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →

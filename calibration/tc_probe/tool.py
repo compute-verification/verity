@@ -24,6 +24,7 @@ def parse(argv: list[str]) -> dict:
     idx = next((i for i, t in enumerate(argv) if Path(t).name == SCRIPT), 0)
     ap = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     ap.add_argument("--arch", default=None)
+    ap.add_argument("--card", default=None)
     ap.add_argument("--out", default=None)
     ap.add_argument("--pipeline", default="ampere_bf16_m16n8k16")
     ap.add_argument("--instruction", default=None)

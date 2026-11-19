@@ -42,7 +42,7 @@ groups, on where the outputs are returned, or on shared-row tables:
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Flock FlockLevel3 Game Model Accounting Refine Audit ZkSession ZkLink ZkExec ZkBind HiddenExec Placed Composed
+open Flock FlockLevel3 Game Model Accounting Refine Spot.Sampling ZkSession ZkLink ZkExec ZkBind HiddenExec Placed Composed
 open FlockSoundness.Discharge.Exec (Inputs)
 open FlockSoundness.Discharge.Inst
 open FlockSoundness.Discharge.Layout (portRowW)

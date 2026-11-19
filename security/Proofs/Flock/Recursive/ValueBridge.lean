@@ -42,7 +42,7 @@ no budget).
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Audit StrictCR
+open Game Spot.Sampling StrictCR
 open scoped ENNReal
 
 section Chain

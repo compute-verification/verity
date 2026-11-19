@@ -73,7 +73,6 @@ def test_a_tp_commit_writes_each_phase_around_its_gpu_steps_and_ends_the_one_a_f
     for the test: another test in the same worker may have imported it before the engine's pin, which
     `engine.env.require_inductor` refuses."""
     pytest.importorskip("torch")
-    from verity_vllm import protocols as PO
     from verity_vllm.engine import engine_profile as prof
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline import commit as PC
@@ -96,7 +95,7 @@ def test_a_tp_commit_writes_each_phase_around_its_gpu_steps_and_ends_the_one_a_f
     for owner, name, value in [(prof, "apply_env", lambda: {}), (prof, "checkpoint_for", lambda case, path: {"repo": "org/model"}),
                                (prof, "engine_kwargs", lambda cp, **kw: dict(kw)), (va, "load_workload", lambda path, max_tokens: WORKLOAD),
                                (va, "target_of_workload", lambda wl, *a: None), (va, "case_of", lambda wl, case: case),
-                               (va, "throwaway_requests", lambda eng, reqs, seed=0: reqs), (PO, "commit_guard", lambda *a, **k: None),
+                               (va, "throwaway_requests", lambda eng, reqs, seed=0: reqs),
                                (PC, "git_head", lambda: None), (PC, "run_workload", run), (TPCM, "tree_of_record", lambda: {}),
                                (GL, "_ENVIRON", []), (GL, "_HELD", [])]:
         monkeypatch.setattr(owner, name, value)

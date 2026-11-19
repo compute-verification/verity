@@ -14,9 +14,9 @@ from verity.circuits.defs import REGISTRY
 
 from ..schemes.ncp import assemble, checked_route_u
 from . import ncp2
-from . import words as W
+from verity.circuits.ops import words as W
 from .ncp2 import D, Shape
-from .words import M32, i32_to_f32_rn
+from verity.circuits.ops.words import M32, i32_to_f32_rn
 
 M64 = (1 << 64) - 1
 

@@ -34,7 +34,7 @@ import a5  # noqa: E402
 from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC  # noqa: E402
 from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
 from tests.pipeline import test_row_tables as TR  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
 from verity_vllm.commit import index as IX, row_tables as RTB  # noqa: E402
 from verity.commitments.periods import rows as CS  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
@@ -53,10 +53,11 @@ def commit(out: Path) -> tuple[CS.Binding, dict[int, bytes]]:
     w = a5.rated(replace(w, run=f"{ROOT}/rank0"), RULE)
     SRW._operand = s.operand  # the fixture's served operands, as `test_row_tables.committed` reads them
     got = SRW._read_s8(ms, s.rows, s, None, TR.ARRIVALS)
-    live = {step: RTB.step_roots(TR.CTX, step, s.outputs(step), TR.ROW_KEY).root for step, _ in w.segments}
-    c = CS.commit(w, [g[0] for g in got], row_salt_key=TR.ROW_KEY, segment_roots=live)
+    served = {step: RTB.step_roots(TR.CTX, step, s.outputs(step)) for step, _ in w.segments}
+    live = {step: sr.root for step, sr in served.items()}
+    c = CS.commit(w, [g[0] for g in got], table_salts={step: sr.salts for step, sr in served.items()}, segment_roots=live)
     prov = {"of": {**OF, "step_roots": {str(k): v.hex() for k, v in live.items()}}, "committer": {"module": "a5_row_tables.py"}}
-    CS.write(c, out, prov, IX.index_doc(w.members, [g[1] for g in got], w.run), kind="stand-in", registrar=R)
+    CS.write(c, out, prov, IX.index_doc(w.members, [g[1] for g in got], w.run), kind="stand-in", registrar=DK)
     return w, live
 
 

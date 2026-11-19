@@ -27,23 +27,20 @@ under a key the run pinned itself is a rehearsal; neither has a bound. It names 
 custody, an uncounted egress, the node's memory outside the declared tiers (`undeclared`), what the prover's store
 leaves out (`wipe_period.store_gaps`) and each link leaving the node that no network attester counts
 (`wipe_party.link`).
-`main` runs the subprotocol on this node and prints its `summary` (`benchmarks/pous/streamed_wipe/demo.sh` runs it on one GPU,
-through `wipe_on_node.py`, which hands it the runtime's `Side.of`). Run as a module, with no side to hand it, this file
-exits 1 naming `wipe_on_node.py`.
+The wipe scheme's attach (`wipe_served.attach`) runs the subprotocol on this node, with the side its launcher hands it
+(`benchmarks/pous/streamed_wipe/served_wipe.sh` on one GPU, through `verity_vllm.messages.Exchange.attach`).
 """
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import os
 import re
 import secrets
 import socket
-import sys
 import time
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO, Protocol, TypeVar
@@ -63,6 +60,12 @@ from . import wipe_store
 
 
 T = TypeVar("T")
+#: what carries the challenger's link in a placement: the connection's addresses stay in the private record
+CHALLENGER_LINK = "the prover's connection to the memory attester's machine (its addresses in the private record)"
+#: who graded the wipe's answer, its placement's ``graded_by``
+GRADED_BY = ("graded by the developer's piece (verity/protocols/resource_accounting/memory/pous/prover/wipe_run.py: "
+             "wipe_period.answer and wipe-protocol, verity/wipe/v0 uncounted) on the served node; no auditor-side entry "
+             "runs it; not certified: survivors bounded by nothing")
 
 
 class Side(Protocol):
@@ -168,7 +171,7 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
     `node` with none pinned is refused (ValueError) before its session.
     `schemes` are the signature schemes it accepts and `protocol` the id it answers under."""
     if party is not None and party.host != node and trusted_sha512 is None:
-        raise ValueError(f"no key is pinned (trusted_sha512) with the memory attester on {party.host}: the verifier "
+        raise ValueError(f"no key is pinned (trusted_sha512) with the memory attester on {mc.ATTESTER_MACHINE}: the verifier "
                          "trusts a challenger on its own host only under its pinned key (the SHA-512 of its public "
                          "key, as its host gives it)")
     params = params_for() if params is None else params
@@ -219,13 +222,13 @@ programs. A challenger on its own host streams as its
 `challenger.wipe.command` says. `foreign_bytes` makes the prover the cheat that keeps that much prior content in place
 of the fill's first labels (`foreign_labels`; `"fM"`, one label past the bound at the expected reads), and `placement`
 `"simulated"` names a challenger on this node the stand-in for one on its own host (`wipe_party.placement`).
-`egress_bits` is the network certifier's count over the session, in bits, which the verifier's check is given as
+`egress_bits` is the network attester's count over the session, in bits, which the verifier's check is given as
 evidence in whole MiB (`streamed_wipe.egress_units`), wherever the challenger runs; `None` gives none, and the check
 takes `EGRESS_MAX_UNITS`, which bounds nothing. `reads` is the session's timed reads: a challenger on this node is started
 with it (`wipe_party --reads`); one on its own host chooses its own (its `challenger.wipe.command`), and the subprotocol refuses
 a session at another count. `None`: whatever the challenger chooses (`READS` here). `links` are the links leaving the
 node besides the one to a challenger on its own host, which the subprotocol adds from the connection it made: each `{"name",
-"to", "via"}`, with `mbps` and `counted_by` (the network certifier that counts it) when known (`wipe_party.link`).
+"to", "via"}`, with `mbps` and `counted_by` (the network attester that counts it) when known (`wipe_party.link`).
 `trusted_sha512` is the verifier's pin, the SHA-512 of the memory attester's public key in 128 lowercase hex digits:
 the only key a session is accepted under. A challenger on its own host needs it; `None` trusts the key a challenger on
 this node made for the run."""
@@ -416,8 +419,8 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     `period.json`'s `deployment`, `period.deployment`), what the prover's store leaves out (`wipe_period.store_gaps`),
     the links leaving the node (`wipe.links`, and the challenger's on its own host as the prover connected to it) and
     the node's memory outside the declared tier (`undeclared`) go in `wipe.json` and in an accepted answer's profile
-    (`placement`, `wipe_party.placement`), which names no device; `wipe.json` adds the prover's own record (`prover`:
-    its store as it measured it, the device's name and ids among them, its gate, fill and device read latency),
+    (`placement`, `wipe_party.placement` with who graded it, `GRADED_BY`), which names no device; `wipe.json` adds
+    the prover's own record (`prover`: its store as it measured it, the device's name and ids among them, its gate, fill and device read latency),
     the signed session's on the challenger's clock (`session`: the fill's GB/s, each read's
     round trip), the streamer's (`report.fill`), the session's window on each side's real-time clock (`window`) and
     what the bound doesn't cover (`uncertified`)."""
@@ -429,7 +432,7 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
                     "the wipe")
     egress = None if c["egress_bits"] is None else sw.egress_units(c["egress_bits"])
     if party.host != node and c["trusted_sha512"] is None:
-        raise ValueError(f"period.json's wipe.trusted_sha512 is unset with the memory attester on {party.host}: the "
+        raise ValueError(f"period.json's wipe.trusted_sha512 is unset with the memory attester on {mc.ATTESTER_MACHINE}: the "
                          "verifier trusts a challenger on its own host only under its pinned key (the SHA-512 of its "
                          "public key, as its host gives it)")
     memory, store = store_of(c), None
@@ -460,20 +463,21 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
             memory.close()
     k = json.loads(bytes.fromhex(wipe.case["commitment"]))["k"]
     if c["reads"] is not None and k != c["reads"]:
-        raise RuntimeError(f"the memory attester on {party.host} ran {k} reads, not period.json's wipe.reads "
+        raise RuntimeError(f"the memory attester on {mc.ATTESTER_MACHINE} ran {k} reads, not period.json's wipe.reads "
                            f"{c['reads']}: its command chooses them (wipe_party --reads)")
-    links = [wipe_party.link(e["name"], node, e["to"], e["via"], mbps=e.get("mbps"), counted_by=e.get("counted_by"))
+    prover_machine, attester_machine = mc.machines(node, party.host)
+    links = [wipe_party.link(e["name"], prover_machine, e["to"], e["via"], mbps=e.get("mbps"), counted_by=e.get("counted_by"))
              for e in c["links"]]
     if party.host != node and not any(e["to"] == party.host for e in c["links"]):
-        conn = wipe.report["connection"]
-        links.append(wipe_party.link("challenger", node, party.host, f"{conn['local']} to {conn['peer']}"))
+        links.append(wipe_party.link("challenger", prover_machine, attester_machine, CHALLENGER_LINK))
     where = wipe_party.placement(node, party.host, wipe.report["key_sha512"], **deployment(doc),
                                  store_gaps=W.store_gaps(kept),
                                  simulated=c["placement"] == "simulated", links=links,
                                  undeclared=undeclared(tier, memory_bits(params) // 8, kept))
+    where = where | {"graded_by": GRADED_BY}
     window = {"challenger": wipe.report.get("window"),
               "prover": {"t0": wipe_party.utc(p0), "t1": wipe_party.utc(p1),
-                         "clock": f"{socket.gethostname()}'s real-time clock, around the whole session (the "
+                         "clock": f"{mc.PROVER_MACHINE}'s real-time clock, around the whole session (the "
                                   "challenger's start included)"}}
     answer, lean = wipe.answer, None
     if "wipe-protocol" in tools:
@@ -523,27 +527,7 @@ def summary(record: Mapping[str, Any]) -> dict[str, Any]:
                        "sync_ns": (prover.get("fill") or {}).get("sync_ns"), "gate": prover.get("gate")}}
 
 
-def main(argv: Sequence[str] | None = None, *, side_of: Callable[..., Side],
-         ready: Callable[[str], None] = lambda exe: None) -> int:
-    """`--period DIR --out DIR [--node NAME] [--expect VERDICT]`: the wipe on this node, its challenger's side where
-    `side_of` puts it (the runtime's `Side.of`, handed in by the program that starts the run), its summary printed; exit
-    0 when the verdict is the expected one (`accept` by default), 1 otherwise."""
-    ap = argparse.ArgumentParser(description=main.__doc__)
-    ap.add_argument("--period", type=Path, required=True, help="the period's directory, holding period.json")
-    ap.add_argument("--out", type=Path, required=True, help="where wipe.json and wipe.case.json go")
-    ap.add_argument("--node", default=socket.gethostname(), help="the developer's node: the wiped server's id")
-    ap.add_argument("--expect", choices=("accept", "reject"), default="accept",
-                    help="the verdict that exits 0 (reject: a cheat's run)")
-    a = ap.parse_args(argv)
-    answer = subprotocol(a.period, a.node, a.out, side_of=side_of, ready=ready)
-    print(json.dumps(summary(json.loads((a.out / "wipe.json").read_text())), indent=1, sort_keys=True), flush=True)
-    return 0 if answer["verdict"] == a.expect else 1
-
-
 __all__ = ["CONFIG", "DISK", "DRAM", "LINK_KEYS", "NOT_DISKS", "Side", "Wipe", "answer", "config", "disks",
-           "dram_available", "subprotocol", "main", "run", "segments_of", "session", "store_of", "summary", "timing",
+           "dram_available", "subprotocol", "run", "segments_of", "session", "store_of", "summary", "timing",
            "undeclared"]
 
-if __name__ == "__main__":
-    sys.exit(f"python -m {__spec__.name} runs no wipe, since it has no challenger's side to hand `main`: run "
-             "benchmarks/pous/streamed_wipe/wipe_on_node.py, which hands it the runtime's Side.of")

@@ -35,7 +35,7 @@ open Properties.Certifier.Bytes (bs)
 (`Flock.Bridge.Spec.domainOf`), the executable's hm96 key and its registered schema's format
 (`Flock.Bridge.Spec.formatOf`); the port's root; the row's leaf; and the bit's place in its row. -/
 noncomputable def placeFrom (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option Flock.Bridge.RowAt)
-    (c : Flock.Circuit) (L : Flock.Bridge.LeafMap) (roots : List Claims.Msg) (i : ℕ) : Option Place :=
+    (c : Flock.Circuit) (L : Flock.Bridge.LeafMap) (roots : List Hash.Msg) (i : ℕ) : Option Place :=
   (Flock.Bridge.atOf C rows roots i).bind fun ri =>
     ((Flock.Bridge.portsOfL c L roots).find? fun p => decide (bs p.root = ri.1)).map fun reg =>
       { verifier := { domain := Flock.Bridge.Spec.domainOf reg, key := bs Flock.Hm96.Default512.key,

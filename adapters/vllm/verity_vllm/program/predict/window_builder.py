@@ -36,8 +36,8 @@ def table_param(label: str, words: int) -> str:
 @dataclass(frozen=True)
 class Grain:
     """The units' size (Llama-3.2-1B's by default): a GEMM slice reads ``gemm_words`` weight words (N = gemm_words
-    // K output columns: `Gemm_v2{2048, 16}`, `Gemm_v2{8192, 4}`; an s8 one twice the columns: `ScaledMmS8_v1{2048, 32}`,
-    `ScaledMmS8_v1{8192, 8}`), no unit holds more than ``rows`` rows in and out (Flock's
+    // K output columns: `Gemm_v2{2048, 16}`, `Gemm_v2{8192, 4}`; an s8 one twice the columns: `ScaledMmS8_v3{2048, 32}`,
+    `ScaledMmS8_v3{8192, 8}`), no unit holds more than ``rows`` rows in and out (Flock's
     composer gives each row a unit reads or writes an hm96 slot, so a unit fits its 2^27-bit block with at most 256), a
     token select is units of ``select`` logits (2,672: 48 units at V = 128,256, each 167 groups of 16), and a fused norm
     cut at its residual add is parts of ``norm`` elements (256: 8 parts at N = 2,048, each x 64 rows of a `Gemm_v2{8192, 4}`)."""
@@ -133,9 +133,6 @@ def _step(rowss: Sequence[Sequence[Row]]) -> int | None:
 class _Builder:
     grain: Grain
     programs: int = 1
-    #: refuse at `settle` every unit Flock's composer wouldn't prove (`interface.check_proof_block`); off only for a
-    #: probe's census and for tests of the lowering at a class too small to prove
-    provable: bool = True
     fns: dict[str, Any] = field(default_factory=dict)
     units: dict[str, int] = field(default_factory=dict)
     local: dict[tuple[int, str], int] = field(default_factory=dict)
@@ -248,9 +245,7 @@ class _Builder:
         """Each port read as m writer rows cut m ways (`interface.Layout.cut`: row j its outer elements
         [j·n/m, (j+1)·n/m), each writer row one of them), and every feed wired. Refused at once, naming each
         (`Unexpressible`): a port read at two row counts (a port is cut one way), rows that aren't its outer elements cut
-        that many ways, a unit of more than ``grain.rows`` rows in and out, and, unless not ``provable``, a unit Flock's
-        composer wouldn't prove (`interface.check_proof_block`: past 256 rows, no row past 111 bytes, or rows past its
-        block)."""
+        that many ways and a unit of more than ``grain.rows`` rows in and out."""
         counts: dict[tuple[str, str], set[int]] = {}
         widths: dict[tuple[str, str], set[int]] = {}
         for f in self.feeds:
@@ -272,13 +267,6 @@ class _Builder:
                 if (k := _rows(fn, self.cuts.get(tid))) > self.grain.rows]
         if why:
             raise Unexpressible(f"{len(why)} templates the window can't hold, each port cut once a writer row: " + "; ".join(why))
-        for tid, fn in self.fns.items() if self.provable else ():
-            try:
-                IF.check_proof_block(fn, self.cuts.get(tid))
-            except ValueError as e:
-                why.append(str(e))
-        if why:
-            raise Unexpressible(f"{len(why)} templates Flock's composer wouldn't prove: " + "; ".join(why))
         for f in self.feeds:
             self._wire(f.tid, f.port, f.at, f.count, f.rows, f.lead)
 
@@ -288,6 +276,19 @@ class _Builder:
                        lambda x, n: IF.TableRead(x.reader, x.port, x.table, x.of, x.at, n)),
                 _merge(self.openings, lambda x: (x.reader, x.table, x.key, x.ports, x.verdict, x.row),
                        lambda x, n: IF.TableOpening(x.reader, x.table, x.key, x.ports, x.verdict, x.at, n, x.row)))
+
+
+def check_provable(circuit: IF.Circuit) -> None:
+    """Refuse (`Unexpressible`), naming each, every template of ``circuit`` whose unit Flock's composer wouldn't prove
+    (`interface.check_proof_block`: past 256 rows, no row past 111 bytes, or rows past its block)."""
+    why = []
+    for fn, _ in circuit.templates:
+        try:
+            IF.check_proof_block(fn, circuit.cuts.get(descriptor_id(fn)))
+        except ValueError as e:
+            why.append(str(e))
+    if why:
+        raise Unexpressible(f"{len(why)} templates Flock's composer wouldn't prove: " + "; ".join(why))
 
 
 def _rows(fn: Any, cuts: dict[str, int] | None) -> int:
@@ -335,3 +336,10 @@ def inference(spans: dict[str, list[tuple[int, int, int, int]]], slots: int) -> 
             groups = _follow(groups, axis, delta)
         out += [IF.InferenceEntry(tid, at, tuple(r for r, _ in d), tuple(a for _, a in d), step) for at, d, step in groups]
     return out
+
+
+def weight_run(name: str, segs: Sequence[tuple[Any, ...]], words: int) -> int:
+    """The first word of ``segs`` where they are one run of the weights record, ``words`` long."""
+    if len(segs) != 1 or segs[0][:2] != ("p", WEIGHTS) or segs[0][3] - segs[0][2] != words:
+        raise Unexpressible(f"{name}: a weight read of {segs}, not one run of {words} weight words")
+    return segs[0][2]

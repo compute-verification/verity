@@ -15,18 +15,18 @@ import json
 
 import pytest
 
+from verity.commitments import docket_digest as DD
 from verity.protocol import place, site_of
 from verity.runtime.runner import run
 from verity.protocols.proofs.spot.verifier import parties as P
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.channel import Refused
 
 SP, WORK = P.SUBPROTOCOLS["verity/remote/v1"]["sampled-proofs"], P.SUBPROTOCOLS["verity/remote/v1"]["pearl-plus"]
-CERT = P.IDS["certifier"]
+CERT = P.IDS["network-attester"]
 POLICY = P.IDS["inference-only"]
 REMOTE = ("sampled-proofs", "pearl-plus", "inference-only")
 REMOTE_V0 = ("sampled-proofs", "pouw", "inference-only")
-ONSITE = ("sampled-proofs", "certifier", "pearl-plus", "pous", "bandwidth", "inference-only", "wipe")
+ONSITE = ("sampled-proofs", "network-attester", "pearl-plus", "pous", "bandwidth", "inference-only", "wipe")
 ROLES = [P.CHALLENGER, P.ZK_SERVER, P.VERIFIER, P.WORKERS]
 SHA = "5a" * 64
 CASE = {"commitment": "01", "evidence": "02", "params": {"k": 8}}
@@ -73,7 +73,7 @@ class Machine:
         self.calls.append(("audit", i, raw, challenger["address"], zk_server["sha512"]))
         if self.audit_raises:
             raise self.audit_raises
-        digest = self.commitment or R.digest(json.loads(raw))
+        digest = self.commitment or DD.digest(json.loads(raw))
         return {"verdict": "accept" if self.accept else "reject", "commitment": digest}, CASE
 
     def component(self, i, name):
@@ -109,7 +109,7 @@ def test_an_honest_run_audits_each_block_in_order_and_accepts():
     assert [x["block"] for x in lines] == [0, 1]
     assert lines[0] == {"block": 0, "coins": "simulated", "components": dict.fromkeys(REMOTE, "accept"),
                         "product": "verity/remote/v1", "reason": None,
-                        "registration": R.digest(json.loads(docket(0))), "verdict": "accept"}
+                        "registration": DD.digest(json.loads(docket(0))), "verdict": "accept"}
     audits = [c for c in m.calls if c[0] == "audit"]
     assert audits == [("audit", i, docket(i), "127.0.0.1:4242", SHA) for i in (0, 1)]
     assert [c for c in m.calls if c[0] == "product"][0][1:] == (
@@ -187,9 +187,9 @@ def test_workers_that_cant_serve_leave_the_verifier_refused_closed_with_nothing_
 
 
 @pytest.mark.parametrize("bad", [{"blocks": 0, "components": list(REMOTE), "coins": "simulated"},
-                                 {"blocks": 1, "components": ["certifier"], "coins": "simulated"},
+                                 {"blocks": 1, "components": ["network-attester"], "coins": "simulated"},
                                  {"blocks": 1, "components": ["sampled-proofs"], "coins": "simulated"},
-                                 {"blocks": 1, "components": ["sampled-proofs", "certifier"], "coins": "simulated"},
+                                 {"blocks": 1, "components": ["sampled-proofs", "network-attester"], "coins": "simulated"},
                                  {"blocks": 1, "components": ["sampled-proofs", "pouw", "pouw"], "coins": "simulated"},
                                  {"blocks": 1, "components": list(REMOTE), "coins": "gate"},
                                  {"blocks": 1, "components": list(REMOTE), "coins": "simulated", "law": "x"}])

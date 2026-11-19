@@ -39,6 +39,7 @@ public import Definitions.Certifier.Cells
 public import Definitions.Certifier.ResponseCap
 public import Definitions.Certifier.Marks
 public import Definitions.Certifier.Tap
+public import Definitions.ResourceAccounting.Network.AttesterScheme
 public import Definitions.Certifier.RecordRows
 public import Definitions.Certifier.MonitoringPeriod
 public import Definitions.Certifier.Witness
@@ -51,6 +52,7 @@ public import Definitions.ResourceAccounting
 public import Definitions.Spot
 public import Definitions.Claims
 public import Definitions.Claims.Encodings
+public import Definitions.Claims.LevelsProofBlocks
 public import Definitions.Claims.Recursion
 public import Definitions.Claims.RecursionGeneric
 public import Definitions.Claims.RecursionLin

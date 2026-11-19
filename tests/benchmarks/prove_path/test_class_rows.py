@@ -30,7 +30,7 @@ GRAIN = Grain(gemm_words=1024, rows=256, select=64)
 
 def _circuit():
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, target={"compute_capability": [12, 0], "num_sms": 188})
-    return class_circuit(Registered.of(phi, default_seed=7), WindowClass(2, 4, 2), None, GRAIN, provable=False)
+    return class_circuit(Registered.of(phi, default_seed=7), WindowClass(2, 4, 2), None, GRAIN)
 
 
 def test_every_input_row_of_tinys_class_circuit_is_filled_and_a_gemm_slice_is_wired_registered_and_one_row_out():
@@ -44,7 +44,7 @@ def test_every_input_row_of_tinys_class_circuit_is_filled_and_a_gemm_slice_is_wi
     assert gemms.pop("Gemm_v2{K=64,N=8}") == {"out": 1, "registered": 1, "wired": 4}
     assert gemms and all(rows == {"out": 1, "registered": 1, "wired": 1} for rows in gemms.values())
     assert {"rows.value", "rows.opening", "rows.table_root"} <= set(total)
-    assert [t["rows"] for lab, t in templates.items() if lab.startswith("ScanSlots_v2")] == [{"out": 8, "value": 1}]
+    assert [t["rows"] for lab, t in templates.items() if lab.startswith("ScanSlots_v3")] == [{"out": 8, "value": 1}]
     assert not [lab for lab in templates if lab.startswith(("ScanSlots_v1", "SlotRow", "AllGather"))]
 
 

@@ -32,8 +32,8 @@ theorem foldl_fail_ne : ∀ (l : List (String × Json)) (c : Spot.Check), (c.cod
 
 /-- **Round 2's check with no code had statements**: without them it fails at the cells, the statements or the
 design. -/
-theorem statements_some {b : Bool} {own : Spot.SecondStage.Own} {stmts : Option (Array Json)}
-    (h : (Spot.SecondStage.check b own stmts).codes = #[]) : ∃ ss, stmts = some ss := by
+theorem statements_some {own : Spot.SecondStage.Own} {stmts : Option (Array Json)}
+    (h : (Spot.SecondStage.check own stmts).codes = #[]) : ∃ ss, stmts = some ss := by
   cases stmts with
   | some ss => exact ⟨ss, rfl⟩
   | none =>
@@ -112,7 +112,7 @@ theorem stmtOk_of_accepted {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Js
   have hown : OwnAgrees h (runOwn i it ((Spot.Draw.proved draw).map Int.toNat) strata draw₂)
       ⟨i.record, portRoots i.record⟩ it.record draw₂ c₀ := by
     unfold Round2.OwnAgrees Round2.core runOwn ownOf
-    rw [hsample, ← hproved, hpa, hm.links, hm.wires, hm.rows, hm.refs, hm.refReads]
+    rw [hsample, ← hproved, hpa, hm.links, hm.wires, hm.rows, hm.refs, hm.refReads, hm.held]
     all_goals rfl
   obtain ⟨ss, hst⟩ := statements_some hcodes
   rw [hst] at hcodes

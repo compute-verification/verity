@@ -43,6 +43,7 @@ import settings
 pytest.importorskip("torch")
 
 import verity_difftest as D  # noqa: E402
+from verity.commitments import docket_digest as DD  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[4]
 PACKAGE = ROOT / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
@@ -135,6 +136,13 @@ def challenger_sample(entropy: int = 7, after: bytes | None = None):
     return draw
 
 
+def pinned_y(monkeypatch, seed: int = 0) -> None:
+    """`proved_pass` commits each call's y under fresh salts (`served_y.retain_y`), and y's roots are in the run's commitment,
+    which keys the sample: seeded salts (`seeded_salts`) fix the sample, so a case that names a tile its draws reach reaches it
+    on every run."""
+    monkeypatch.setattr(T.SY, "fresh_salts", T.seeded_salts(seed))
+
+
 def edit(path: Path, f) -> None:
     man = json.loads(path.read_text())
     f(man)
@@ -225,9 +233,10 @@ def test_the_forming_term_reads_a_block_every_credited_word_flags_and_not_one_so
     16 credited words flag each block and the rest don't, so no block is inert and its debit is the chain's, 160, over
     its row cap, with or without the term.  On 16 x 1 tiles that column's tile has one credited word, which flags all
     four blocks, so every element of the row is inert and the tile's debit is 672, 160 without the term.  The Lean's
-    verdicts are the Python's on both, under each ``over_cap`` rule."""
+    verdicts are the Python's on both, under each ``over_cap`` rule; y's salts are pinned, so the draws reach that tile."""
     cases = [((16, 16), 16, "A row 11's replayed debit 160 exceeds", "A row 11's replayed debit 160 exceeds"),
              ((16, 1), 64, "the replayed debit 672 exceeds", "the replayed debit 160 exceeds")]
+    pinned_y(monkeypatch)
     paths = []
     for tile, draws, why, _ in cases:
         path = T.proved_pass(tmp_path / f"{tile[0]}x{tile[1]}", H100, key=bytes(32), tile=tile)[0]
@@ -247,7 +256,8 @@ def test_the_forming_term_reads_a_row_some_of_whose_blocks_are_inert(exe, tmp_pa
     of its four atom blocks and not the other three, and no element of the tile is salt-dead.  So 32 of the row's 128
     elements are inert and the tile's debit is 168 (40 for the flagged atom-word, 4 per inert element), 40 without the
     term; reading the three unflagged blocks as the inert ones would make it 424.  The Lean's verdicts are the Python's
-    under each ``over_cap`` rule."""
+    under each ``over_cap`` rule; y's salts are pinned, so the 96 draws reach tile 14."""
+    pinned_y(monkeypatch)
     path = T.proved_pass(tmp_path, H100, key=bytes([4]) * 32, tile=(16, 1))[0]
     for rule in (None, *VR.OVER_INERT_BOUND):
         got = same(exe, [path], 96, over_cap=rule)
@@ -297,8 +307,7 @@ def test_a_served_y_that_is_not_the_unscale_of_its_u(exe, tmp_path):
     for u in man["matmuls"]:
         y = bytearray((path.parent / u["y"]["rows"]["path"]).read_bytes())
         y[0::2] = bytes(b ^ 0x01 for b in y[0::2])
-        u["y"] = T.SY.retain_y(path.parent, u["index"], bytes(y), u["n"], bytes.fromhex(man["salt"]),
-                               bytes.fromhex(man["hm96_salt_key"]))
+        u["y"] = T.SY.retain_y(path.parent, u["index"], bytes(y), u["n"], bytes.fromhex(man["salt"]))
     path.write_text(json.dumps(man))
     assert "is not the unscale of the tile's U" in same(exe, [path])["reason"]
     for u, root in zip(man["matmuls"], old):
@@ -478,7 +487,7 @@ def test_a_run_tied_to_its_window_record(exe, tmp_path):
     warm, a, b = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("w", (0, 1)), ("a", (2, 3)), ("b", (4, 5))))
     (w := tmp_path / "w.json").write_text(json.dumps(T.window_record(a, b)))
     got = same(exe, [a, b], 8, tie=w, record=tmp_path / "coin.json")
-    assert got["verdict"] == "accept" and got["tie"] == {"record": T.REG.digest(json.loads(w.read_text())), "tables": 10}
+    assert got["verdict"] == "accept" and got["tie"] == {"record": DD.digest(json.loads(w.read_text())), "tables": 10}
     (w3 := tmp_path / "w3.json").write_text(json.dumps(T.window_record(warm, a, b)))
     got = same(exe, [a, b], 8, tie=w3, rounds=[1, 2], dropped=(0,), record=tmp_path / "coin3.json")
     assert got["verdict"] == "accept" and got["tie"]["tables"] == 10
@@ -486,7 +495,7 @@ def test_a_run_tied_to_its_window_record(exe, tmp_path):
     assert (rec["rounds"], rec["dropped"]) == ([1, 2], [0])
     (w1 := tmp_path / "w1.json").write_text(json.dumps(T.window_record(a, b, version=1)))
     got = same(exe, [a, b], 8, tie=w1, record=tmp_path / "coin1.json")
-    assert got["verdict"] == "accept" and got["tie"] == {"record": T.REG.digest(json.loads(w1.read_text())), "tables": 8,
+    assert got["verdict"] == "accept" and got["tie"] == {"record": DD.digest(json.loads(w1.read_text())), "tables": 8,
                                                          "weights": VR.WEIGHTS_UNTIED}
 
 
@@ -510,7 +519,7 @@ def test_a_tied_run_held_to_its_classs_fixed_load(exe, tmp_path):
         return f
     wab = w(a, b)
     got = same(exe, [a, b], 8, tie=wab, load=cls, record=tmp_path / "coin.json")
-    assert got["verdict"] == "accept" and got["tie"] == {"record": T.REG.digest(json.loads(wab.read_text())), "tables": 10,
+    assert got["verdict"] == "accept" and got["tie"] == {"record": DD.digest(json.loads(wab.read_text())), "tables": 10,
                                                          "load": [2, 8, 2]}
     passes = [VR.load(x, VR.epoch_coins(x.parent / "coins.json")) for x in (a, b)]
     work, kept = got["work"], got["exact_work"]
@@ -603,7 +612,7 @@ def test_the_version_2_tie_at_the_run_of_records_size(exe, tmp_path, capsys):
     want = answer(VR.verify_passes(paths, 0, 1, "test", VR.epoch_coins(paths[0].parent / "coins.json"), SOURCE, window=good))
     got, seconds = T.timed(lambda: lean(exe, paths, 0, tie=w))
     assert got == want
-    assert got["verdict"] == "accept" and got["tie"] == {"record": T.REG.digest(good), "tables": 576} and not got["verdicts"]
+    assert got["verdict"] == "accept" and got["tie"] == {"record": DD.digest(good), "tables": 576} and not got["verdicts"]
     other = next(e["root"] for e in reg if e["value"] == "pearl-b/38")
     cases = [({**good, "registered": [{**e, "root": other} if e["value"] == "pearl-b/37" else e for e in reg]},
               "ValueError: W's pearl-b/37: its root not the weight's"),

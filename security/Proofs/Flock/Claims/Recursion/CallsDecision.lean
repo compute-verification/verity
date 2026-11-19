@@ -51,7 +51,7 @@ namespace FlockDeploy.KS
 open Flock FlockSoundness.Refine
 
 /-- **The files' digests over `OC` call at most once a file.** -/
-theorem filesDg_calls_le (H : Claims.Msg → Claims.Msg) (spec : SessionSpec) (xs : Array ByteArray) :
+theorem filesDg_calls_le (H : Hash.Msg → Hash.Msg) (spec : SessionSpec) (xs : Array ByteArray) :
     ((xs.mapM (spec.dgWith Claims.Hashes.oc)).run.eval H).2.length ≤ xs.size := by
   have hs := ((Claims.ocLog H).mapM_array xs
     fun b => With.dgWith_sim (Claims.ocLog H) (Claims.ocLog_hashes H) spec b) #[]
@@ -63,8 +63,8 @@ theorem filesDg_calls_le (H : Claims.Msg → Claims.Msg) (spec : SessionSpec) (x
 
 /-- **A decision's SHA-512 calls on every run**: one per proof file, then the verdict's at the reader's record, whose
 streams are `sj`, each of at most `R` rounds. -/
-theorem decisionAtS_calls_le (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
-    (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin))
+theorem decisionAtS_calls_le (H : Hash.Msg → Hash.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
+    (x : Hash.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin))
     (f : FinalP) (sj : Array Lean.Json) (R : ℕ) (hsj : Record.arr (jAt H spec sts c₁ mids f) "streams" = .ok sj)
     (hR : ∀ s ∈ sj, ∀ rj, Record.arr s "rounds" = .ok rj → rj.size ≤ R) :
     ((decisionAtS s spec sts x link c₁ mids f).run.eval H).2.length ≤

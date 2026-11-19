@@ -637,7 +637,7 @@ theorem commitment_of {q l : Nat} {s t : String} (h : (q == l && s == t) = true)
 -- `mvcgen` splits `challengePhaseNamed` into one goal per check it makes of the session's record
 set_option maxHeartbeats 1000000 in
 /-- `challengePhaseNamed` returns the commitment whose root's hex the ledger's `end` recorded. -/
-theorem challengePhaseNamed_root {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Roots}
+theorem challengePhaseNamed_root {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Log}
     (h : challengePhaseNamed a key session = .ok r) : Flock.hexOf r.1.root = a.commitment := by
   refine of_triple (Q := fun r => Flock.hexOf r.1.root = a.commitment) ?_ h
   clear h

@@ -180,13 +180,13 @@ theorem beta_ne {k : ℕ} {r : Fin k → Coin} {a : ℕ} (hlt : a < k) (h : a < 
   | true => exact absurd (isZero_eq hz) (h hlt)
 
 /-- A lift of a verdict that returned. -/
-theorem liftV_go {α : Type} {v : V α} {a : α} (hv : v = .ok a) (t : Transcript) (l : Array Claims.Msg) :
+theorem liftV_go {α : Type} {v : V α} {a : α} (hv : v = .ok a) (t : Transcript) (l : Array Hash.Msg) :
     ((StateT.lift (monadLift v : PS α) : TMW PS α).run t).go l = (.ok (a, t), l) := by
   subst hv
   rfl
 
 /-- A step that returns, then a continuation that returns. -/
-theorem go_bind_ex {α β : Type} {x : TMW PS α} {f : α → TMW PS β} {t t' : Transcript} {l l' : Array Claims.Msg}
+theorem go_bind_ex {α β : Type} {x : TMW PS α} {f : α → TMW PS β} {t t' : Transcript} {l l' : Array Hash.Msg}
     {a : α} (hx : (x.run t).go l = (.ok (a, t'), l')) (h : ∃ pt l'', ((f a).run t').go l' = (.ok pt, l'')) :
     ∃ pt l'', ((x >>= f).run t).go l = (.ok pt, l'') := by
   rw [bind_go hx]
@@ -273,7 +273,7 @@ theorem replay_ok {st : Flock.Stmt} {tr : Trace} (hT : TableT st tr) (lay : Zk.P
 
 /-- **The rank check returns where it passes**, keeping the transcript and the sends. -/
 theorem rankCheckP_ok {m kLog : ℕ} {prior : Array (List F128)} {words : List ℕ} (t : Transcript)
-    (l : Array Claims.Msg) (h : MaskRank.maskRankOk (prior ++ MaskRank.roundPoints m kLog t.rounds) words = true) :
+    (l : Array Hash.Msg) (h : MaskRank.maskRankOk (prior ++ MaskRank.roundPoints m kLog t.rounds) words = true) :
     ((rankCheckP m kLog prior words : TMW PS Unit).run t).go l = (.ok ((), t), l) := by
   unfold rankCheckP
   simp only [StateT.run_bind, StateT.run_get, pure_bind, h, ↓reduceIte]
@@ -298,7 +298,7 @@ run from the empty transcript and `l` sends, are those sends' (`zerocheckPZk_rec
 holding the zerocheck's `m − 13` outer coins, so the points read off them are the rep's from coin `|l|`. -/
 theorem lcRounds_points {k : ℕ} (r : Fin k → Coin) (st : Flock.Stmt) (hm : 14 ≤ st.m) (lay : Zk.PadLayout)
     (hp : Array F128) (digest cap root : ByteArray) (tr : Trace) (full : Array F128) (d : ByteArray)
-    (l : Array Claims.Msg)
+    (l : Array Hash.Msg)
     (hfold : st.circuitFold.fold (coinOf ((Claims.coinSeq r (l.size + 3 + (st.m - 6))).bytes) 0)
       (skipWeights (zcR (fun j => (Claims.coinSeq r j).bytes) (Setup.ofCircuit st) tr l.size).z)
       ((zcR (fun j => (Claims.coinSeq r j).bytes) (Setup.ofCircuit st) tr l.size).rho.extract 0
@@ -308,7 +308,7 @@ theorem lcRounds_points {k : ℕ} (r : Fin k → Coin) (st : Flock.Stmt) (hm : 1
       (lcCoinsR (fun j => (Claims.coinSeq r j).bytes) (Setup.ofCircuit st) l.size)
       (ZcZ.tEnd lay hp st.m digest cap root (Zc.coinsAt (fun j => (Claims.coinSeq r j).bytes) l.size) tr
         (Transcript.init #[] d))).rounds = MaskRank.claimsAt st r l.size := by
-  set resp : ℕ → Claims.Msg := fun j => (Claims.coinSeq r j).bytes with hresp
+  set resp : ℕ → Hash.Msg := fun j => (Claims.coinSeq r j).bytes with hresp
   obtain ⟨l₁, hl₁, hz⟩ := zerocheckPZk_go resp hm digest cap root lay hp tr (Transcript.init #[] d) l
   obtain ⟨l₂, -, hl⟩ := lincheckPZk_go resp st.circuitFold st.m lay hp tr (Zc.out st.m (Zc.coinsAt resp l.size) tr)
     full (ZcZ.tEnd lay hp st.m digest cap root (Zc.coinsAt resp l.size) tr (Transcript.init #[] d)) l₁
@@ -365,19 +365,19 @@ theorem lcRounds_points {k : ℕ} (r : Fin k → Coin) (st : Flock.Stmt) (hm : 1
 the zerocheck's point, its rank check passes on the rounds so far, and from any `|l| + piopSends` bodies at `tPiop`
 its masked Ligerito, the prover's own replay of its rounds, level 0's lane constraints and its inner proof on every
 constraint return. -/
-theorem repPZk_of (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
+theorem repPZk_of (resp : ℕ → Hash.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) (t : Transcript)
-    (l : Array Claims.Msg) (full : Array F128)
+    (l : Array Hash.Msg) (full : Array F128)
     (hfold : st.fold.fold (coinOf (resp (l.size + 3 + (st.m - 6))) 0) (skipWeights (zcR resp st tr l.size).z)
       ((zcR resp st tr l.size).rho.extract 0 (st.fold.kLog - 6)) = .ok full)
     (hrank : MaskRank.maskRankOk (prior ++ MaskRank.roundPoints st.m st.kLog
       (LcZ.tEnd (Zk.PadLayout.new st.m st.kLog sch.k0) pads.h st.fold st.m tr (zcR resp st tr l.size) full
         (lcCoinsR resp st l.size) (ZcZ.tEnd (Zk.PadLayout.new st.m st.kLog sch.k0) pads.h st.m st.digest (flat cm0.cap)
           ic.root (Zc.coinsAt resp l.size) tr t)).rounds) words = true)
-    (h : ∀ lL : Array Claims.Msg, lL.size = l.size + piopSends st extras →
-      ∃ (lg : LigeritoProof) (zl : Zk.Level0Msgs) (rec : Zk.L0Rec) (tI : Transcript) (lI : Array Claims.Msg)
+    (h : ∀ lL : Array Hash.Msg, lL.size = l.size + piopSends st extras →
+      ∃ (lg : LigeritoProof) (zl : Zk.Level0Msgs) (rec : Zk.L0Rec) (tI : Transcript) (lI : Array Hash.Msg)
         (rp : Zk.Replayed) (x : Transcript) (lgc : Array (String × Zk.Lin)),
         ((ligeritoPZk (asksS resp) (Hashes.ofSha512 hsh) st.merkle sch
           (Rs.T tr (claimsR resp st tr l.size extras) (rsCoinsR resp st l.size extras)) cm0 tb
@@ -389,7 +389,7 @@ theorem repPZk_of (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (s
           (proofR resp st tr l.size sch (Zk.PadLayout.new st.m st.kLog sch.k0) pads.h cm0 full extras lg) ic.root).run
             (Transcript.init tI.rounds dom) = .ok (rp, x) ∧
         Zk.ligeritoConstraints (Zk.PadLayout.new st.m st.kLog sch.k0) rec lg zl = .ok lgc ∧
-        ∃ (inner : Zk.InnerProof) (tE : Transcript) (lE : Array Claims.Msg),
+        ∃ (inner : Zk.InnerProof) (tE : Transcript) (lE : Array Hash.Msg),
           ((innerP (asksS resp) (Hashes.ofSha512 hsh) (Zk.PadLayout.new st.m st.kLog sch.k0) pads ic
             (ZcZ.proof (Zk.PadLayout.new st.m st.kLog sch.k0) pads.h st.m (Zc.coinsAt resp l.size) tr).finalC
             (rp.cons ++ #[("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]!
@@ -430,7 +430,7 @@ theorem repPZk_of (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (s
   refine go_bind_ex hinn ?_
   exact ⟨_, _, pure_go _ _ _⟩
 
-variable {H : Claims.Msg → Claims.Msg}
+variable {H : Hash.Msg → Hash.Msg}
 
 /-- **A masked rep returns at good coins**, given level 0's premises: the zerocheck, lincheck and ring switch run in
 closed form (`repPZk_of`), the lincheck's fold returns (`JsonRT.fold_ok`), the masked Ligerito returns at the
@@ -442,7 +442,7 @@ rounds it reads giving the rep's claim points at the coins (`lcRounds_points`). 
 theorem repT_go (h0 : Level0.ProverRuns) (h2 : Level0.Lanes) (h3 : Level0.Verifier) (h64 : Claims.Out64 H)
     (st : Flock.Stmt) (tr : Trace) (hT : TableT st tr) (ω : TapeZk) (i : ℕ) (d : ByteArray) {k : ℕ}
     (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit) (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ)
-    (ic : InnerCommit) (hin : RepIn H st tr ω i v cm pts e rep ic) (hrep : rep < 2) (l : Array Claims.Msg)
+    (ic : InnerCommit) (hin : RepIn H st tr ω i v cm pts e rep ic) (hrep : rep < 2) (l : Array Hash.Msg)
     (prior : Array (List F128)) (hco : CoinsT st v e r l.size) (hmr : MaskRankT st r l.size prior) :
     ∃ pt l', (repT H r st tr ω i d v cm e rep ic prior (FlockSoundness.Discharge.Composed.maskWordsOf st)).go l =
       (.ok pt, l') := by
@@ -461,7 +461,7 @@ theorem repT_go (h0 : Level0.ProverRuns) (h2 : Level0.Lanes) (h3 : Level0.Verifi
     unfold repRoundsT at hfit
     unfold piopT
     omega
-  set resp : ℕ → Claims.Msg := fun j => (Claims.coinSeq r j).bytes with hresp
+  set resp : ℕ → Hash.Msg := fun j => (Claims.coinSeq r j).bytes with hresp
   set lay := Zk.PadLayout.new (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog v.1.k0 with hlay
   set pads := padsOf ω i rep lay with hpads
   obtain ⟨full, hfold⟩ := JsonRT.fold_ok st hk6 hslot (coinOf (resp (l.size + 3 + (st.m - 6))) 0)
@@ -563,7 +563,7 @@ theorem repT_go (h0 : Level0.ProverRuns) (h2 : Level0.Lanes) (h3 : Level0.Verifi
 
 /-- **`ProverRunsT` beyond level 0 holds**: a rep returns at good coins (`repT_go`) and records `repRoundsT` rounds
 (`rep_rounds`). -/
-theorem runsRest (H : Claims.Msg → Claims.Msg) : RunsRest H := by
+theorem runsRest (H : Hash.Msg → Hash.Msg) : RunsRest H := by
   intro h0 h2 h3 h64 st tr hT ω i d k r v cm pts e rep ic hin hrep
   exact ⟨fun l prior _ hco hmr => repT_go h0 h2 h3 h64 st tr hT ω i d r v cm pts e rep ic hin hrep l prior hco hmr,
     fun prior ws l a l' hgo => rep_rounds h3 h64 st tr hT ω i d r v cm pts e rep ic hin hrep prior ws l a.1 a.2 l'

@@ -10,6 +10,9 @@ of the reader indices between two (`Wire.writerAt_mem_box`). -/
 
 namespace Spot.Wires
 
+open Circuits
+open Spot.Wires
+
 /-- One digit's term lies between `min 0 (s (r − 1))` and `max 0 (s (r − 1))`. -/
 theorem digit_bounds (d r : Nat) (s : Int) (hd : d < r) :
     min 0 (s * ((r : Int) - 1)) ≤ (d : Int) * s ∧ (d : Int) * s ≤ max 0 (s * ((r : Int) - 1)) := by
@@ -43,7 +46,7 @@ theorem accum_bounds : ∀ (ps : List (Nat × Int)) (i : Nat), i < prodR ps →
 
 /-- **Every writer a wire reads lies in its span**: `check`'s bounds in closed form bound the writer of every reader row
 the wire covers. -/
-theorem Wire.writerAt_mem_span (w : Wire) (i : Nat) (hi : i < w.units) :
+theorem _root_.Circuits.Wire.writerAt_mem_span (w : Wire) (i : Nat) (hi : i < w.units) :
     w.span.1 ≤ w.writerAt i ∧ w.writerAt i ≤ w.span.2 := by
   have := accum_bounds w.pairs i hi
   simp only [Wire.span, Wire.writerAt]
@@ -86,7 +89,7 @@ theorem accum_box : ∀ (ps : List (Nat × Int)) {lo hi i : Nat}, lo ≤ i → i
       omega
 
 /-- **The writers of reader indices `lo … hi` lie in the wire's box there.** -/
-theorem Wire.writerAt_mem_box (w : Wire) {lo hi i : Nat} (h1 : lo ≤ i) (h2 : i ≤ hi) :
+theorem _root_.Circuits.Wire.writerAt_mem_box (w : Wire) {lo hi i : Nat} (h1 : lo ≤ i) (h2 : i ≤ hi) :
     (w.box lo hi).1 ≤ w.writerAt i ∧ w.writerAt i ≤ (w.box lo hi).2 := by
   have := accum_box w.pairs h1 h2
   simp only [Wire.box, Wire.writerAt]

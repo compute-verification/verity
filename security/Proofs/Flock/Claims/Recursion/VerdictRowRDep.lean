@@ -114,7 +114,7 @@ def resVAt (spec : SessionSpec) (sts : Array Stmt) (cs : List Coin) (r p k : ℕ
 
 /-- **The verifier values a `rec-residuals` piece reads off the statement and the coins**: at key `(jj, o, g, u)`,
 group `jj`'s values at rep `o + g` (`resVAt`), `0` at a statement that doesn't set up. -/
-def resVRead (x : Claims.Msg) (cs : List Coin) (key : ℕ × ℕ × ℕ × ℕ) (k : ℕ) : F128 :=
+def resVRead (x : Hash.Msg) (cs : List Coin) (key : ℕ × ℕ × ℕ × ℕ) (k : ℕ) : F128 :=
   match setupOf false x with
   | some v => resVAt v.2.1 v.2.2 cs (key.2.1 + key.2.2.1) key.1 k
   | none => 0
@@ -129,13 +129,13 @@ theorem resVOf_eq {sh : Shape} {rounds : Array (Array F128)} {extras : Array Cla
 
 namespace DecAt
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128)
 
 /-- **A piece reads the decision's verifier values**: at a decision of an inner statement read at the dense form, a
 piece keyed by group `p` at a copy `(o, g)` with `o + g = r` reads, through `resVRead`, group `p`'s `V` elements of
 the `v` the verifier rows give at rep `r`'s values. -/
-theorem resVRead_eq {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
+theorem resVRead_eq {xo : Hash.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size) (r : Fin 2)
     {S : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hS : structureOf (D.sh cls i) = .ok S)
     (hg : groups S (portSizes (D.sh cls i)) = .ok gs) {p : ℕ} (hp : p < gs.size) {o g u : ℕ} (hog : o + g = r.val)

@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import numpy as np
 import pytest
@@ -31,7 +32,7 @@ from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity.commitments import randomness as RND
 
 from verity_vllm.commit import history_tables as H
 from verity_vllm.definitions.registry import boolean_dsa_norm as BDN
@@ -128,8 +129,8 @@ def cut(rows, histories=True, caps=CAPS):
 
 def binding(ms) -> CS.Binding:
     n = {t: sum(m.n for m in ms if m.template == t) for t in TMPLS}
-    return CS.Binding(*CS.population_program([(SRW.template(t).fn, n[t]) for t in TMPLS], several=True),
-                      D.parse_design("stratified:2"), RUN, tuple(ms), (), "", None)
+    return CS.Binding(*IF.listed_program([(SRW.template(t).fn, n[t]) for t in TMPLS], ()),
+                      RND.parse_design("stratified:2"), RUN, tuple(ms), (), "", None)
 
 
 def opens(t: HT.HistoryTable, g, i):
@@ -173,10 +174,17 @@ def test_a_request_served_cached_prompt_rows_appends_its_own_rows_and_its_reads_
     assert plan.keys() == [("r0", 3), ("r0", 5)] and [len(us) for us in plan.written.values()] == [5, 5]
 
 
-def light(ms) -> SimpleNamespace:
-    """A window of members ``ms`` as `serving_rows.window_values` reads it, with no population program to build (a real
-    `rows.Binding` lowers the Boolean latent row and the V = 2^17 read, minutes on a CPU)."""
-    return SimpleNamespace(members=tuple(ms), row_tables=(), partition_digest="ef" * 64)
+@dataclass(frozen=True)
+class Light:
+    """A window as `serving_rows.window_values` reads it, with no population program to build (a real `rows.Binding`
+    lowers the Boolean latent row and the V = 2^17 read, minutes on a CPU)."""
+    members: tuple[Any, ...]
+    row_tables: tuple[Any, ...] = ()
+    partition_digest: str = "ef" * 64
+
+
+def light(ms) -> Light:
+    return Light(tuple(ms))
 
 
 def recomputed(h: IF.History, ms, strings_of, held) -> list[bytes]:
@@ -199,7 +207,7 @@ def windows(served, commit=None):
         tables = plan.keys()
         edges = {key: hs.edge(*key) for key in tables}
         got = SRW.window_values((commit or {}).get("window", light)(ms), rows, served.store, None, histories=hs, on=True)
-        data, entries, roots, salts_of, strings_of, _idx, hreg = got
+        data, entries, roots, salts_of, strings_of, _idx, hreg, _w = got
         assert {key: hs.edge(*key) for key in tables} == {key: edges[key] + WINDOWS[k]["tokens"] for key in edges}
         for key, t in hs.tables.items():
             assert all(np.array_equal(t.rows[p], served.latent[(key[1], p)]) for p in range(len(t.rows)))
@@ -249,8 +257,8 @@ def test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verif
     def check(rows, ms, data, roots, salts_of, strings_of, hreg):
         nonlocal held
         w = binding(ms)
-        c = CS.commit(w, data, salt_key=bytes(32), salts_of=salts_of, strings_of=strings_of)
-        full = CS.commit(w, data, salt_key=bytes(32), salts_of=salts_of)
+        c = CS.commit(w, data, salts_of=salts_of, strings_of=strings_of)
+        full = CS.commit(w, data, salts_of=salts_of)
         assert full.roots == c.roots and full.bc == c.bc
         publics = {m.key: c.public_body(i) for i, m in enumerate(ms)}
         doc = json.loads(IF.circuit_bytes(SRW.circuit_record(w, rows, None, hreg)))

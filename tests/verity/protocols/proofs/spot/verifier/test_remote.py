@@ -194,12 +194,14 @@ class Host:
 
     def trusted(self, window: dict = WINDOW, key: C.ChallengerKey | None = None, ledger=None):
         """`remote.trusted_session` over this host's directory and the ledger's file (or `ledger`), its one head."""
-        return R.trusted_session(self.directory, [ledger or self.ledger.path], window, key or pinned_key(), lms_verify)
+        c, log = R.trusted_session(self.directory, [ledger or self.ledger.path], window, key or pinned_key(), lms_verify)
+        return c, C.by_family(c, log)
 
     def trusted_of(self, window: dict = WINDOW):
         """`challenger.trusted_session_of` over this host's files as they are, past `remote`'s check of the sealed bytes."""
-        return C.trusted_session_of(R.ledger_lines(self.ledger.path), window, pinned_key(), HOST_PINS, MAIN,
-                                    R.session_files(self.directory), lms_verify)
+        c, log = C.trusted_session_of(R.ledger_lines(self.ledger.path), window, pinned_key(), HOST_PINS, MAIN,
+                                      R.session_files(self.directory), lms_verify)
+        return c, C.by_family(c, log)
 
 
 def honest(host: Host) -> dict[str, C.LiveRecord]:
@@ -272,7 +274,6 @@ REFUSED = {
     "an unknown type": [frame({"type": "hello"}), frame({"type": "draw"})],
     "an extra key": [frame({"type": "hello"}), frame({**OPEN, "retry": True})],
     "a repeated key": [frame({"type": "hello"}), R.HEADER.pack(len(REPEATED), 0) + REPEATED],
-    "a coin ahead of its family's next": [frame({"type": "hello"}), frame({**OPEN, "index": 1})],
     "a coin opened twice": [frame({"type": "hello"}), frame(OPEN), frame(OPEN)],
     "an unknown family": [frame({"type": "hello"}), frame({**OPEN, "label": "other"})],
     "a family past its last coin": [frame({"type": "hello"})] + [frame({**OPEN, "label": "replay", "index": i})
@@ -950,13 +951,13 @@ def test_a_batch_the_challenger_refuses_midway_raises_and_releases_only_the_coin
 
     def ask(client):
         held.append(client)
-        with pytest.raises(C.CoinError, match="refused: the next positions coin is 1, not 5"):
+        with pytest.raises(C.CoinError, match="refused: the epoch's positions family has no coin 5"):
             client.open_many(batch)
         with pytest.raises(C.CoinError, match="session ended"):
             client.open(*BATCH[2])
 
     log, _, why = _served(tmp_path / "s", signer, ask)
-    assert why == "the next positions coin is 1, not 5"
+    assert why == "the epoch's positions family has no coin 5"
     assert [json.loads(line).get("label") for line in log.decode().splitlines()] == [None, "positions", "positions"]
     close = json.loads((tmp_path / "s" / R.CLOSE).read_text())
     assert (close["ended"], close["lines"]) == (why, 3)
@@ -1151,7 +1152,7 @@ def test_the_verifier_refuses_an_unsigned_log_or_a_close_the_challenger_did_not_
 
 STRUCTURE = {
     "another commitment's": (_set(0, "root", "00" * 64), "not coin commitment"),
-    "a root without its release": (lambda lines: lines[:-1], "without its release"),
+    "a root without its release": (lambda lines: lines[:-1], "a root its coin's release does not follow"),
     "a rewritten root": (_set(1, "root", root(7).hex()), "malformed"),
     "a skipped index": (_set(1, "index", 1), "malformed"),
     "a torn line": (lambda lines: lines[:-1] + [lines[-1][:9]], "malformed"),

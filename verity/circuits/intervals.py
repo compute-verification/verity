@@ -9,7 +9,7 @@ from __future__ import annotations
 import bisect
 from typing import Callable, Iterable, Iterator
 
-from .refs import Affine, Concat, Explicit, Refs, Strided
+from .refs import Affine, Concat, Explicit, Grid, Refs, Strided
 
 Intervals = tuple[tuple[int, int], ...]  # sorted, disjoint, non-empty half-open [lo, hi)
 
@@ -132,6 +132,9 @@ def ref_intervals(r: Refs, out: dict[tuple[str, int], list], seen: set | None = 
             out.setdefault((r.space, r.idx), []).append((r.base, r.base + r.count))
     elif isinstance(r, Concat):
         for p in r.parts:
+            ref_intervals(p, out, seen)
+    elif isinstance(r, Grid):
+        for p in r.lane_parts():
             ref_intervals(p, out, seen)
     elif isinstance(r, Explicit):
         for s, i, leaf in r.items:

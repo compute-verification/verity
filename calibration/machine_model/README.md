@@ -10,10 +10,10 @@ ACCEL model (`GLOSSARY.md`).
 
 ## Try it
 
-Re-solve the current price vector and check it:
+Re-solve a device's current price vector and check it (a command that reads one device's model is given it):
 
 ~~~sh
-uv run machine-model solve
+uv run machine-model --card rtx-pro-6000-server solve
 ~~~
 
 It prints the vector's τ, U/F_low and margin beside the numbers it was published with, the cheapest attacks, the check

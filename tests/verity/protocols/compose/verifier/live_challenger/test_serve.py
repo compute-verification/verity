@@ -110,7 +110,8 @@ def trusted(out: Path, auditor: Auditor, session: str = "s-out", closed: bool = 
     key = C.ChallengerKey.from_json(json.loads((out / R.KEY).read_text()))
     assert key.public == auditor.public
     auditor.end(session, out, closed)
-    return R.trusted_session(out, [auditor.path], auditor.windows[session], key, lms_verify)
+    c, log = R.trusted_session(out, [auditor.path], auditor.windows[session], key, lms_verify)
+    return c, C.by_family(c, log)
 
 
 def close(out: Path) -> dict:

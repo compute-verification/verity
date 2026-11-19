@@ -13,7 +13,7 @@ Neither bundle carries a registered weight: a window made from one composes the 
     python -m tests.pipeline.served_experts OUT        (from adapters/vllm)
 
 writes both with ``OUT/row`` (the Program of record), ``OUT/ckpt`` and ``OUT/checkpoints.json`` (the checkpoint and its shard's
-pin), ``OUT/tables-rank0.json`` and ``OUT/tables.key`` (the per-expert tables' registration and the committer's key),
+pin), ``OUT/tables-rank0.json`` and ``OUT/tables-rank0.salts`` (the per-expert tables' registration and its salts),
 ``OUT/partition.json`` (each projection's scale-row reads and fused blocks) and ``OUT/hook``, and prints their paths as one
 JSON line.  No Build made the Program: its digest is the SHA-512 of its parameters and rows as written here.
 
@@ -35,6 +35,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
+from verity.commitments import salt_file as SF
 from verity.commitments.periods import rows as CS
 
 from verity_vllm.commit import step_rows
@@ -56,7 +57,6 @@ UNITS = {"w13": (NV * 2 * I // G, NV * 2 * I // BLOCKS["w13"]), "w2": (NV * H //
 #: the units one flock-circuit statement holds (`serving_rows.chunk_caps`, which stages the template with the verifier's tools)
 CAP = 48
 REPO, REV = "test/fp8-moe-served", "abc"
-KEY = bytes(range(32))
 REQUEST = "r0"
 DESIGN = "stratified:1"
 LABEL = "fp8-moe-cpu"
@@ -230,15 +230,16 @@ def served_weights(ck: Any) -> dict[str, np.ndarray]:
     return out
 
 
-def weights_tree(served: dict[str, np.ndarray]) -> dict[str, Any]:
-    """The weights registration's tree over the served tensors, as a committer registers them under rows-sha512."""
-    geo, wk = bytes(range(64)), bytes(range(64))
-    names, roots = [], []
+def weights_tree(served: dict[str, np.ndarray]) -> tuple[dict[str, Any], dict[str, bytes]]:
+    """The weights registration's tree over the served tensors, as a committer registers them under rows-sha512, and its salts."""
+    geo = bytes(range(64))
+    names, roots, salts = [], [], {}
     for i, (_key, (name, shape, bits)) in enumerate(fields()):
         raw: np.ndarray = served[name.removeprefix(WRAP)].view(np.uint8)
         names.append([name.removeprefix(WRAP), DTYPES[bits], list(shape), int(raw.size)])
-        roots.append(step_rows.tensor_root(geo, i, names[-1], raw, wk))
-    return step_rows.weights_tree(geo, names, roots, wk)
+        salts[names[-1][0]] = step_rows.fresh_tensor_salts(int(raw.size))
+        roots.append(step_rows.tensor_root(geo, i, names[-1], raw, salts[names[-1][0]]))
+    return step_rows.weights_tree(geo, names, roots), salts
 
 
 def partition() -> dict[str, Any]:
@@ -263,7 +264,7 @@ def partition() -> dict[str, Any]:
 
 
 def commit(root: Path, *, seed: int = 23) -> dict[str, Any]:
-    """Under ``root``: the checkpoint and its pins, the Program's row dir, the tables' registration and key, the partition file
+    """Under ``root``: the checkpoint and its pins, the Program's row dir, the tables' registration and its salts, the partition file
     and the deferred Commit's output dir over the layer's committed step; and the committer, its run commitment and the served
     weights, for `hook` and `serve`.  ``seed`` samples the checkpoint, the logits and the input."""
     import torch
@@ -281,9 +282,9 @@ def commit(root: Path, *, seed: int = 23) -> dict[str, Any]:
     logits = (rng.standard_normal((M, E)) * 2).astype(np.float32).view(np.uint32)
     values = execute(inst, logits, _bf16(rng, M, H), {WRAP + name: a for name, a in served.items()})
     com, rc = commit_steps({0: planes(inst, values)}, run_id="served-experts")
-    tree = weights_tree(served)
+    tree, wsalts = weights_tree(served)
     rc.weight_registration = {"root": tree["root"]}
-    com.weights_tree, com.model = tree, torch.nn.Module()
+    com.weights_tree, com.weights_salts, com.model = tree, wsalts, torch.nn.Module()
 
     row_dir = root / "row"
     (row_dir / "build_request").mkdir(parents=True)
@@ -291,9 +292,9 @@ def commit(root: Path, *, seed: int = 23) -> dict[str, Any]:
         json.dump(inst, f)
     (row_dir / "build_request" / "result.json").write_text(json.dumps({"program_digest": inst["digest"]}))
     (root / "tables-rank0.json").write_text(json.dumps(
-        ET.register(str(row_dir / "build_request"), str(ckpt), KEY, BLOCKS, checkpoints_manifest=str(man)), indent=1) + "\n")
-    (root / "tables.key").write_bytes(KEY)
-    tables = {"key": str(root / "tables.key"), "registration": str(root / "tables-rank{rank}.json")}
+        ET.register(str(row_dir / "build_request"), str(ckpt), BLOCKS, salts_to=root / "tables-rank0.salts",
+                    checkpoints_manifest=str(man)), indent=1) + "\n")
+    tables = {"registration": str(root / "tables-rank{rank}.json")}
     pf = root / "partition.json"
     pf.write_text(json.dumps(partition()) + "\n")
 
@@ -302,6 +303,7 @@ def commit(root: Path, *, seed: int = 23) -> dict[str, Any]:
     SD.dump(com, rc, p / "store")
     (p / "weights" / "extra").mkdir(parents=True)
     (p / "weights" / "tree.json").write_text(json.dumps(tree | {"extra": {}}))
+    SF.write(SF.beside(p / "weights" / "tree.json"), wsalts)
     bmap = B.build_binding_map(com._layouts, rc.steps, rc.run_root, inst["digest"], request_id=REQUEST, rank=0, chunk=com.chunk,
                                weight_registration=rc.weight_registration, request_rows={0: [(REQUEST, 0, M)]})
     (out / "binding_map_p1.json").write_text(json.dumps(bmap, default=str))

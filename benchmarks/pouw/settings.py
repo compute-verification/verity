@@ -11,9 +11,9 @@ first `of` of a process.  It declares the ``POUW_`` variables these directories 
 distribution's other directories read too.
 
 The Pearl-C runners and the SASS gate (`STANDALONE`) run outside the tree with stdlib alone: a runner beside its cubin on the
-card, or loaded by path from a kernel directory (the vLLM integration's ``pearl_c``), the gate and ieee_pin.py copied beside a
-build.  So they read the environment themselves; each name they read is declared here, and ``tests/test_settings.py`` holds
-their reads to these declarations.
+card, or loaded by path from a kernel directory (the vLLM integration's ``pearl_c``), the gate copied beside a build.  So
+they read the environment themselves; each name they read is declared here, and ``tests/test_settings.py`` holds their
+reads to these declarations.
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, 
 STANDALONE = ("../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py",
               "../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py",
               "../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/grouped.py", "../../verity/protocols/experimental/pearl_c4/prover/kernels/dev.py",
-              "../../verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py", "harness/ieee_pin.py")
+              "../../verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py")
 
 
 def places(raw: str) -> frozenset[str]:
@@ -83,15 +83,19 @@ REGISTRY = Registry(
                                        "(real.py --f1 sets it for the processes it starts)"),
     S("VERITY_COMMIT", str, None, WHERE, "the commit a Pearl-C4 replay names for its provenance; unset, unknown"),
     # ---------------------------------------------------------------- the vLLM arm (pearl_c_vllm)
-    S("PEARLC_KERNEL", str, None, VALUE, "the kernel directory the arm serves with; unset, the tree's pearl_c_sm120"),
+    S("PEARLC_KERNEL", str, None, VALUE, "the kernel directory the arm serves with; unset, the tree's of its kernel scheme on "
+                                         "the card (bench_arm.kernel_directory)"),
     S("PEARLC_CUBIN", str, None, VALUE, "the cubin the arm loads; unset, the kernel directory's build.sh cubin"),
-    S("PEARLC_SCHEME", str, None, VALUE, "the arm's scheme record; unset, the kernel directory's (bench_arm.KERNEL_SCHEMES)"),
+    S("PEARLC_SCHEME", str, None, VALUE, "the kernel scheme served_pearlplus.sh's Pearl-C period names; unset, "
+                                         "the one Pearl+ declares (compose.schemes pearl-plus option)"),
     S("PEARLC_SCHEDULE", str, "deferred", VALUE, "when the arm's hashes run: deferred (the served schedule) or serial"),
     S("PEARLC_BENCH_EPOCH", int, 20261014, VALUE, "the arm's PoUW epoch"),
     S("PEARLC_CHALLENGER_GATE", str, None, WHERE, "infra's gate as an ssh command: with PEARLC_CHALLENGER_PEER, the salt coin "
                                                   "is a live session's on the auditor device"),
     S("PEARLC_CHALLENGER_PEER", str, None, WHERE, "this node's name in the challenger host's peers"),
     S("PEARLC_CHALLENGER_LANE", str, "vllm", WHERE, "the lane the gate key is registered for"),
+    S("PEARLC_PRIVATE", str, None, WHERE, "the directory outside every run output where served_passes.py serve's Pearl+ "
+                                          "keeps its salt epoch's number (pouw.scheme.spend_epoch); a live session needs it"),
     S("PEARLC_GPU_UTIL", float, 0.55, VALUE, "vLLM's gpu_memory_utilization under the arm"),
     S("PEARLC_STEP_TOKENS", int, 4096, VALUE, "vLLM's max_num_batched_tokens under the arm"),
     S("PEARLC_WHOLE_DEFER_A", not_zero, True, VALUE, "the whole-step arm's whole_defer_a option; 0 leaves it out"),
@@ -117,7 +121,6 @@ REGISTRY = Registry(
     S("PANEL_BY", str, "bc-dd22acf8", WHERE, "who panel_rows.py labels its rows by"),
     S("SERVED_TREE", str, None, WHERE, "the source tree served_profile.py profiles; unset, the working directory"),
     # ---------------------------------------------------------------- the harness
-    S("POUW_CUDA_BIN", str, None, WHERE, "the CUDA toolkit's bin directory the SASS gate takes cuobjdump and nvdisasm from"),
     S("VERITY_POUW_NVCC", str, None, WHERE, "a CUDA >= 12.8 toolkit's root (its bin/ holds nvcc and cuobjdump), with which "
                                             "test_pearl_c_sm120.py's and test_pearl_c_sm90.py's build tests compile the "
                                             "kernels and hold them to the SASS gate"),
@@ -132,6 +135,8 @@ REGISTRY = Registry(
                                               "overhead_node sets it), which pearl_c_sm90's overhead arm loads; unset, the "
                                               "arm builds one, for development only"),
     S("HZ_STAGE", str, "fast", WHERE, "how a hiding tile is staged: fast (fast_stage's patches) or library, the same bytes"),
+    S("HZ_SALTS", str, None, WHERE, "a file of the hiding tile's rows' salts: read when it exists, else written with the "
+                                    "fresh ones; unset, fresh salts kept nowhere"),
     # ---------------------------------------------------------------- which of the served path's tests run (tests/)
     # ---------------------------------------------------------------- H1's harness (h1_prove/h1form.py)
     S("H1_TILE", str, "v1", WHERE, "the H1 tile under the unit, v1 or v3 (h1unit.tile)"),

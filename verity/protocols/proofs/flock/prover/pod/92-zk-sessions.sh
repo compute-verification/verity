@@ -31,9 +31,10 @@ cp "$W/stage/circuit.txt" "$W/stage/pub-16.bin" "$W/stage/pub-32.bin" "$FIX/stag
 log "staged: circuit_sha512 $(sha512sum "$W/stage/circuit.txt" | cut -c1-16)"
 ST=(--circuit "$W/stage/circuit.txt" --tables "$W/stage/tables")
 
-"$SBIN" selftest --zk --instances "$W/stage/inst-16.bin" "${ST[@]}" --forged "$W/stage/circuit-forged.txt" \
-  --record-dir "$W/rec" > "$OUT/selftest.out" 2> "$OUT/selftest.err"
-log "selftest exit $?: $(grep SELFTEST "$OUT/selftest.out" | cut -c1-300)"
+. "$SRC/verity/protocols/proofs/flock/prover/pod/selftest.sh"
+selftest_run selftest "$OUT/selftest.out" "$OUT/selftest.err" \
+  "$SBIN" selftest --zk --instances "$W/stage/inst-16.bin" "${ST[@]}" --forged "$W/stage/circuit-forged.txt" --record-dir "$W/rec"
+log "selftest: $(grep SELFTEST "$OUT/selftest.out" | cut -c1-300)${SELFTEST_FAILED:+ FAILED:$SELFTEST_FAILED}"
 "$PY" "$SRC/verity/protocols/proofs/flock/prover/agreement/selftest_records.py" "$W/rec" "$FIX/sessions/selftest" > "$OUT/selftest_records.log" 2>&1 \
   || { log "selftest_records FAILED: $(tail -2 "$OUT/selftest_records.log")"; exit 1; }
 log "selftest cases: $(ls "$FIX/sessions/selftest" | wc -l)"
@@ -70,3 +71,4 @@ one() { ls -d "$FIX/sessions/$1"/*/ | head -1; }
   for s in m26 j2 drawn; do echo "$s index: $(cat "$FIX/sessions/$s/index.jsonl")"; done
 } | tee "$OUT/lean.log" | tee -a "$OUT/job.log"
 log "zk-sessions: done"
+selftest_end

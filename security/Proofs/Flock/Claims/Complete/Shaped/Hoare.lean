@@ -204,7 +204,7 @@ theorem splitK_size (f : Array F256) : (splitK f).size = 2 * f.size := by
   | nil => simp
   | cons a l ih => intro acc; rw [List.foldl_cons, ih]; simp; omega
 
-theorem challengeP_H (resp : ℕ → Claims.Msg) (split : Bool) (v : Ms) :
+theorem challengeP_H (resp : ℕ → Hash.Msg) (split : Bool) (v : Ms) :
     totT.H (challengeP (asksS resp) split) (fun s => meas s = v) fun _ s =>
       meas s = { v with msgs := v.msgs + 1, tab := if split then 2 * (v.tab / 2) else v.tab / 2 } := by
   unfold challengeP
@@ -222,7 +222,7 @@ theorem challengeP_H (resp : ℕ → Claims.Msg) (split : Bool) (v : Ms) :
       simp [meas, embedF_size, splitK_size]) _) fun _ => ?_
     exact hk _
 
-theorem oodIntroP_H (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) (dim : ℕ) (v : Ms) :
+theorem oodIntroP_H (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) (dim : ℕ) (v : Ms) :
     totT.H (oodIntroP (asksS resp) nonce g dim) (fun s => meas s = v) fun _ s =>
       meas s = { v with msgs := v.msgs + 1, cbn := v.cbn + 1, oods := v.oods + 1 } := by
   unfold oodIntroP
@@ -234,7 +234,7 @@ theorem oodIntroP_H (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64)
   refine Total.H.bind (H_liftT (sampleP_tot resp)) fun b => ?_
   exact H_modify _ id (by intro s; rfl) _
 
-theorem queryP_H (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level)
+theorem queryP_H (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level)
     (cm : Commit) (v : Ms) :
     totT.H (queryP (asksS resp) nonce ms lv cm) (fun s => meas s = v) fun a s =>
       meas s = { v with qn := v.qn + 1, cn := v.cn + 1 } ∧ ∃ coins, a.1 = openP ms cm lv (positions lv coins) := by

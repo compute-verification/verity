@@ -17,7 +17,6 @@ the all-reduce into the RMSNorm after it (`fused_allreduce_rms_norm`) adds one s
 """
 from __future__ import annotations
 
-import hashlib
 import importlib
 import json
 import re
@@ -718,8 +717,7 @@ def late_read_check(com: Any, rc: Any, rank: int) -> dict[str, Any]:
             eq = a == b
             equal += int(eq)
             if eq or step < 2 or len(pairs) < 96:
-                pairs.append({"step": step, "layer": layer, "out": n, "next_norm": nxt, "out_sha": hashlib.sha256(a).hexdigest()[:16],
-                              "next_norm_sha": hashlib.sha256(b).hexdigest()[:16], "nbytes": len(a), "equal": eq})
+                pairs.append({"step": step, "layer": layer, "out": n, "next_norm": nxt, "nbytes": len(a), "equal": eq})
     # a dense TP workload (Llama: no fused-MoE `/out` member in any step) has nothing for this detector to compare -- record NOT
     # APPLICABLE (result None, applicable False) rather than a False that reads as a detected late read; on a MoE workload the rule is
     # the MoE one: True only with > 0 pairs compared, 0 equal, 0 missing

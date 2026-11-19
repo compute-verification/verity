@@ -3,33 +3,43 @@
 # gate and bench. From a pushed commit, on a 1x H200 or 1x B200 node:
 #
 #   research run --on <node> --project verity --campaign pouw --source <tree> --cwd source --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=dc -- bash calibration/pouw/dc/run.sh sm90|sm90jb|sm100
+#     --env GPU_LEASE_WHO=dc -- bash calibration/pouw/dc/run.sh
 #
+# The card is the one the run opened: its card record's `arch` picks the family, sources and gates from archs.py's table
+# (an architecture it lacks is refused before anything is built) and its architecture file gives nvcc's -gencode
+# (probe.py arch, gencode).
 # Outside the lease: build every binary and SASS-gate it (gate-build.txt; a refusal stops the run). Under one lease:
 # dgemm gate on three small shapes, each dump rechecked by dgemm_ref.py (dgemm/gate-<shape>/result.json, ref.json); dgemm
-# bench only if every gate is exact (dgemm/bench.jsonl); on sm100, fp8acc gate (fp8acc/: is kind::f8f6f4 exact in emu8's
+# bench only if every gate is exact (dgemm/bench.jsonl); where the table says fp8acc (sm_100a), fp8acc gate (fp8acc/: is kind::f8f6f4 exact in emu8's
 # binades, the B300 question; its CPU selftest runs at build); probe.py run on the family's probes and scalar.cu
 # (probes/, scalar/: rows.jsonl, gate.json, times.jsonl) with nvidia-smi sampled every 200 ms (env/smi.csv); then
 # analyze.py (analysis.json, verdict.json).
 # Exit: 0 all done, 1 build or gate refused, 4 a dgemm gate not exact (probes still ran), 2 wrong device or no nvcc.
-# DC_BUILD_ONLY=1 stops after the build and SASS gate and needs no GPU (any machine with CUDA 13.0).
-# sm90jb is the stress of the H200 rows (probes/sm90_jbreak.cu): probes only, no dgemm. DC_ONLY=REGEX times only
+# DC_BUILD_ONLY=1 stops after the build and SASS gate and leases no GPU; on a node with none, DC_SKU names the card file
+# to build for (calibration/hardware/cards/SKU.toml). DC_JBREAK=1 (sm90jb) is the stress of the H200 rows (probes/sm90_jbreak.cu):
+# probes only, no dgemm. DC_ONLY=REGEX times only
 # the probes it matches and skips dgemm and fp8acc; DC_PASSED_ONLY=1 times what passes when some probes are refused.
 set -uo pipefail
-FAM=${1:?usage: run.sh sm90|sm90jb|sm100}
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROBE="$HERE/../opcode_probe/probe.py"
 export PYTHONDONTWRITEBYTECODE=1
-NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
-[ -x "$NVCC" ] || NVCC=$(command -v nvcc) || { echo "run.sh: no nvcc (CUDA 13.0 has sm_90a and sm_100a)" >&2; exit 2; }
+NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13.0)/bin/nvcc} || { echo "run.sh: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
+[ -x "$NVCC" ] || { echo "run.sh: no nvcc at $NVCC" >&2; exit 2; }
 export NVCC PATH="$(dirname "$NVCC"):$PATH"
-case "$FAM" in
-  sm90) ARCH=sm_90a; CC=9; SRC=sm90_wgmma; GATES=("128 256 256 7" "256 512 1024 11" "192 384 2048 13") ;;
-  sm100) ARCH=sm_100a; CC=10; SRC=sm100_tcgen05; GATES=("128 256 256 7" "256 512 1024 11" "384 768 2048 13") ;;
-  sm90jb) ARCH=sm_90a; CC=9; SRC=sm90_jbreak; GATES=(); DC_ONLY=${DC_ONLY:-^jb} ;;
-  *) echo "run.sh: family sm90, sm90jb or sm100, not $FAM" >&2; exit 2 ;;
-esac
+CARD=(${DC_SKU:+--sku "$DC_SKU"})
+ARCH=$(python3 "$PROBE" arch "${CARD[@]}") || exit 2
+FAM=$(python3 "$HERE/archs.py" "$ARCH" family) || exit 2
+SRC=$(python3 "$HERE/archs.py" "$ARCH" source)
+mapfile -t GATES < <(python3 "$HERE/archs.py" "$ARCH" gates)
+FP8ACC=$(python3 "$HERE/archs.py" "$ARCH" fp8acc)
+if [ "${DC_JBREAK:-}" = 1 ]; then
+  JB=$(python3 "$HERE/archs.py" "$ARCH" jbreak)
+  [ -n "$JB" ] || { echo "run.sh: DC_JBREAK has no stress rows for $ARCH, the card's target (archs.py's jbreak)" >&2; exit 2; }
+  FAM=${FAM}jb; SRC=$JB; GATES=(); DC_ONLY=${DC_ONLY:-^jb}
+  FP8ACC=
+fi
+GENCODE=$(python3 "$PROBE" gencode "${CARD[@]}") || exit 2
 BENCH=("4096 4096 4096" "8192 8192 8192" "512 8192 8192")
 
 if [ "${DC_LEASED:-}" != 1 ]; then
@@ -37,22 +47,18 @@ if [ "${DC_LEASED:-}" != 1 ]; then
   trap 'rm -rf "$WORK"' EXIT
   mkdir -p "$OUT/sass" "$OUT/env" "$OUT/dgemm" "$OUT/probes" "$OUT/scalar"
   "$NVCC" --version >"$OUT/env/nvcc.txt" 2>&1
-  if [ "${DC_BUILD_ONLY:-}" != 1 ]; then
-    nvidia-smi -q >"$OUT/env/nvidia-smi.txt" 2>&1
-    have=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1)
-    [ "${have%%.*}" = "$CC" ] || { echo "run.sh: $FAM needs compute capability $CC.x, the device reports '$have'" >&2; exit 2; }
-  fi
+  [ "${DC_BUILD_ONLY:-}" = 1 ] || nvidia-smi -q >"$OUT/env/nvidia-smi.txt" 2>&1
 
-  python3 "$PROBE" build --arch "$ARCH" --out "$WORK" "$HERE/probes/$SRC.cu" "$HERE/probes/scalar.cu" \
+  python3 "$PROBE" build "${CARD[@]}" --out "$WORK" "$HERE/probes/$SRC.cu" "$HERE/probes/scalar.cu" \
     >"$WORK/built" 2>"$OUT/build.log" || { cat "$OUT/build.log" >&2; exit 1; }
   lt=(-DDG_CUBLASLT -lcublasLt -Xlinker "-rpath=$(cd "$(dirname "$NVCC")/../lib64" && pwd -P)")
-  "$NVCC" -O3 -std=c++17 -gencode "arch=compute_${ARCH#sm_},code=$ARCH" "${lt[@]}" "$HERE/dgemm.cu" -o "$WORK/dgemm" \
+  "$NVCC" -O3 -std=c++17 -gencode "$GENCODE" "${lt[@]}" "$HERE/dgemm.cu" -o "$WORK/dgemm" \
     >>"$OUT/build.log" 2>&1 \
-    || "$NVCC" -O3 -std=c++17 -gencode "arch=compute_${ARCH#sm_},code=$ARCH" "$HERE/dgemm.cu" -o "$WORK/dgemm" \
+    || "$NVCC" -O3 -std=c++17 -gencode "$GENCODE" "$HERE/dgemm.cu" -o "$WORK/dgemm" \
     >>"$OUT/build.log" 2>&1 || { cat "$OUT/build.log" >&2; exit 1; }
   extra=("$WORK/dgemm")
-  if [ "$FAM" = sm100 ]; then
-    "$NVCC" -O3 -std=c++17 -gencode arch=compute_100a,code=sm_100a "$HERE/fp8acc.cu" -o "$WORK/fp8acc" \
+  if [ -n "$FP8ACC" ]; then
+    "$NVCC" -O3 -std=c++17 -gencode "$GENCODE" "$HERE/fp8acc.cu" -o "$WORK/fp8acc" \
       >>"$OUT/build.log" 2>&1 || { cat "$OUT/build.log" >&2; exit 1; }
     mkdir -p "$OUT/fp8acc-selftest"
     "$WORK/fp8acc" selftest "$OUT/fp8acc-selftest" | tail -1 || { echo "run.sh: fp8acc selftest failed" >&2; exit 1; }
@@ -73,7 +79,7 @@ if [ "${DC_LEASED:-}" != 1 ]; then
   lease=()
   [ -z "${GPU_LEASE_UUID:-}" ] && command -v gpu-lease >/dev/null && lease=(gpu-lease 1 --wait --max-min 40 --)
   [ ${#lease[@]} -eq 0 ] && [ -z "${GPU_LEASE_UUID:-}" ] && echo "run.sh: no gpu-lease on this node; running on its one GPU directly" >&2
-  "${lease[@]}" env DC_LEASED=1 WORK="$WORK" bash "${BASH_SOURCE[0]}" "$FAM"
+  "${lease[@]}" env DC_LEASED=1 WORK="$WORK" bash "${BASH_SOURCE[0]}"
   exit $?
 fi
 
@@ -102,7 +108,7 @@ else
   echo "run.sh: a dgemm gate is not exact; no bench (result.json's lbo_sbo_swapped says whether the descriptor fields are)" >&2
 fi
 
-if [ "$FAM" = sm100 ] && [ -z "${DC_ONLY:-}" ]; then
+if [ -n "$FP8ACC" ] && [ -z "${DC_ONLY:-}" ]; then
   mkdir -p "$OUT/fp8acc"
   "$WORK/fp8acc" gate "$OUT/fp8acc" | tee "$OUT/fp8acc/result.jsonl"
   frc=${PIPESTATUS[0]}
@@ -127,7 +133,7 @@ record=(--record "$OUT")
 [ $prc = 0 ] || record+=(--failed "probe.py run refused or failed a binary")
 [ $exact = 1 ] || record=(--record "$OUT" --failed "a dgemm gate is not exact")
 ROOT=$HERE/../../..
-[ "$FAM" = sm90jb ] || PYTHONPATH="$ROOT/benchmarks/harness:$ROOT/tools/config${PYTHONPATH:+:$PYTHONPATH}" \
+[ "${DC_JBREAK:-}" = 1 ] || PYTHONPATH="$ROOT/benchmarks/harness:$ROOT/tools/config${PYTHONPATH:+:$PYTHONPATH}" \
   python3 "$HERE/analyze.py" "$FAM" "$OUT" --json "$OUT/analysis.json" "${record[@]}" | tee "$OUT/verdict.json"
 [ $exact = 1 ] || exit 4
 [ $prc = 0 ] || exit 1

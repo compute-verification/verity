@@ -38,7 +38,7 @@ from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
 PACKAGE = Path(verity_vllm.__file__).parent
-DEFAULT = TargetProfile().numerics_profile
+DEFAULT = TargetProfile.default().numerics_profile
 CURRENT = sorted(n for n, v in PROFILES.items() if n and v.kinds == PROFILES[DEFAULT].kinds)
 
 #: a representative value of every static a vocabulary role takes; an optional static is also tried at its default

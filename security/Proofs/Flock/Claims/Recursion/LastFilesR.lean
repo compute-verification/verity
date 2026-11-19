@@ -60,8 +60,8 @@ open Flock FlockSoundness.Refine FlockSoundness.Discharge.Exec
 open Lean (Json)
 
 /-- **An accepting step of `nextR` decides.** -/
-theorem actR_of_acc {H : Claims.Msg → Claims.Msg} {rd : Claims.Msg → Option FinalP} {x : Claims.Msg}
-    {as : List Claims.Msg} {cs : List Coin} (h : ((nextR rd x as cs).eval H).1 = .acc) :
+theorem actR_of_acc {H : Hash.Msg → Hash.Msg} {rd : Hash.Msg → Option FinalP} {x : Hash.Msg}
+    {as : List Hash.Msg} {cs : List Coin} (h : ((nextR rd x as cs).eval H).1 = .acc) :
     ∃ s spec sts link c₁ mids f, actR rd x as cs = .decide s spec sts link c₁ mids f := by
   cases ha : actR rd x as cs with
   | rej => exact absurd h (by simp [nextR, ha, Claims.OC.eval])
@@ -74,9 +74,9 @@ theorem actR_of_acc {H : Claims.Msg → Claims.Msg} {rd : Claims.Msg → Option 
 calls**: each verdict accepts with SHA-512 answered only within its own log, and at a position where the files differ
 both pass one rep on one session, where one decoded proof is one file (`decodeProof_read`), so two openings collide
 (`plainE_calls_tied`'s second half, at a parsed value). -/
-theorem filesJ_tied {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
-    {fj fj' : FinalJ} {j j' : Json} {F F' : Array ByteArray} {L₁ L₂ : List (Claims.Msg × Claims.Msg)}
+theorem filesJ_tied {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Hash.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)}
+    {fj fj' : FinalJ} {j j' : Json} {F F' : Array ByteArray} {L₁ L₂ : List (Hash.Msg × Hash.Msg)}
     (hV : verifyJWithMK id (hashesIn (L₁.map Prod.fst)) spec (tabsOf sts) j F = .ok ())
     (hV' : verifyJWithMK id (hashesIn (L₂.map Prod.fst)) spec (tabsOf sts) j' F' = .ok ())
     (hck : checksAtJ s spec x link c₁ mids fj j = .ok ()) (hck' : checksAtJ s spec x link c₁ mids fj' j' = .ok ())
@@ -125,7 +125,7 @@ theorem filesJ_tied {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claim
   have hr₂s : verifyRepWith (hashesIn (L₂.map Prod.fst)) spec st sch sess (k / 2) (k % 2) F'[k]! = .ok c' := by
     rw [With.verifyRepWith_erase With.Sim.liftMap_V _ spec st sch _ hy hy' hyy hP (by rw [hB])]
     exact hr₂
-  have hpure : ∀ {L : List Claims.Msg} {sess₀ : RunRecord} {bs c₀ : ByteArray},
+  have hpure : ∀ {L : List Hash.Msg} {sess₀ : RunRecord} {bs c₀ : ByteArray},
       verifyRepWith (hashesIn L) spec st sch sess₀ (k / 2) (k % 2) bs = .ok c₀ →
         verifyRep spec st sch sess₀ (k / 2) (k % 2) bs = .ok c₀ := by
     intro L sess₀ bs c₀ h
@@ -165,9 +165,9 @@ theorem filesJ_tied {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claim
 
 /-- **Two accepted decisions of `nextR` at one setup, first coin and round messages, on different proof files, collide
 among their calls**, at SHA-512. -/
-theorem filesR_tied {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as as' : List Claims.Msg}
+theorem filesR_tied {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as as' : List Hash.Msg}
     {cs cs' : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f f' : FinalP}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f f' : FinalP}
     (ha : actR rd x as cs = .decide s spec sts link c₁ mids f)
     (ha' : actR rd x as' cs' = .decide s spec sts link c₁ mids f')
     (hacc : ((nextR rd x as cs).eval sha512).1 = .acc) (hacc' : ((nextR rd x as' cs').eval sha512).1 = .acc)
@@ -202,9 +202,9 @@ theorem streams_getD_coins {A B : Array (Array Flock.Round)}
     simp only [hk, hk', ↓reduceDIte]
 
 /-- `nextR`'s run of table `j` where the step decides, the table is set up and its extra claims read. -/
-theorem runOfR_decide {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem runOfR_decide {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP} {lv : Live} {j : ℕ} {st : Stmt} {extras : Array Flock.Claim}
+    {mids : List (Hash.Msg × Coin)} {f : FinalP} {lv : Live} {j : ℕ} {st : Stmt} {extras : Array Flock.Claim}
     (ha : actR rd x as cs = .decide s spec sts link c₁ mids f)
     (hlv : FlockDeploy.liveOfJ spec (jAt sha512 spec sts c₁ mids f) = .ok lv) (hst : sts[j]? = some st)
     (hx : (Setup.ofCircuit st).extra lv.points = .ok extras) :
@@ -218,17 +218,17 @@ theorem runOfR_decide {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as :
   unfold runOfR
   simp [ha, hst, hlv, hx, Except.toOption]
 
-theorem runOfR_none_st {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem runOfR_none_st {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP} {j : ℕ}
+    {mids : List (Hash.Msg × Coin)} {f : FinalP} {j : ℕ}
     (ha : actR rd x as cs = .decide s spec sts link c₁ mids f) (hst : sts[j]? = none) :
     runOfR rd x as cs j = none := by
   unfold runOfR
   simp [ha, hst]
 
-theorem runOfR_none_x {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem runOfR_none_x {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP} {lv : Live} {j : ℕ} {st : Stmt} {e : String}
+    {mids : List (Hash.Msg × Coin)} {f : FinalP} {lv : Live} {j : ℕ} {st : Stmt} {e : String}
     (ha : actR rd x as cs = .decide s spec sts link c₁ mids f)
     (hlv : FlockDeploy.liveOfJ spec (jAt sha512 spec sts c₁ mids f) = .ok lv) (hst : sts[j]? = some st)
     (hx : (Setup.ofCircuit st).extra lv.points = .error e) :
@@ -238,9 +238,9 @@ theorem runOfR_none_x {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as :
 
 /-- **Two accepted decisions of `nextR` at one setup, first coin and round messages, on the same proof files, open the
 same columns**: `colsR` reads the live value through its link points and its rounds' coins only, which custody pins. -/
-theorem colsR_of_files {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as as' : List Claims.Msg}
+theorem colsR_of_files {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as as' : List Hash.Msg}
     {cs cs' : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {link link' : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f f' : FinalP}
+    {link link' : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f f' : FinalP}
     (ha : actR rd x as cs = .decide s spec sts link c₁ mids f)
     (ha' : actR rd x as' cs' = .decide s spec sts link' c₁ mids f')
     (hacc : ((nextR rd x as cs).eval sha512).1 = .acc) (hacc' : ((nextR rd x as' cs').eval sha512).1 = .acc)
@@ -280,7 +280,7 @@ open FlockDeploy (Coin FinalP nextR actR)
 /-- **The deployed reader binds its last message's columns, at SHA-512**: two accepted last steps on the same rounds
 and coins share the setup, the first coin and the round messages (`nextR_shared`); on the same proof files they open
 the same columns (`colsR_of_files`), and on different ones two openings collide among their calls (`filesR_tied`). -/
-theorem rColsBind_sha512 (rd : Claims.Msg → Option FinalP) : RColsBind FlockDeploy.sha512 rd := by
+theorem rColsBind_sha512 (rd : Hash.Msg → Option FinalP) : RColsBind FlockDeploy.sha512 rd := by
   intro x ms l l' cs hk _ hacc hacc' hne
   obtain ⟨s, spec, sts, link, c₁, mids, f, ha⟩ := FlockDeploy.KS.actR_of_acc hacc
   obtain ⟨s', spec', sts', link', c₁', mids', f', ha'⟩ := FlockDeploy.KS.actR_of_acc hacc'

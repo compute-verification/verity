@@ -48,11 +48,11 @@ from typing import NamedTuple, Sequence
 from verity.circuits.boolean.forms import ONE, OR, ZERO, add, maj, or_reduce
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates.frame_v3 import _part
-from verity.protocols.resource_accounting.network.verifier import head_check as HC
+from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.verifier.io_tie import (CELL_USED, EMPTY, END_ENTRY, HEADER, ID_AT, ID_DIGITS, _eq, _lt,
                                                     data_cell, end_cell, pad_cell)
 
-BIT, BYTE = HC.BIT, HC.BYTE
+BIT, BYTE = GB.BIT, GB.BYTE
 U16 = Array(16, BIT)
 #: o0 of a bucket whose state renders a row
 ACCEPT = 1
@@ -241,15 +241,15 @@ def outputs(sh: Shape, state: State) -> tuple[int, bytes]:
 def output_bits(sh: Shape, state: State) -> list[int]:
     """`EgressBucket`'s outputs as its leaves' bits: o0's 16, then the row's, bit 8k + i bit i of byte k."""
     word, row = outputs(sh, state)
-    return HC._int_bits(word, 16) + [x >> i & 1 for x in row for i in range(8)]
+    return GB._int_bits(word, 16) + [x >> i & 1 for x in row for i in range(8)]
 
 
 def state_bits(sh: Shape, state: State) -> list[int]:
     """The state's egress view as its row's bits (the module docstring's layout)."""
-    bits = HC._int_bits(_u32("b", state.b), 32)
+    bits = GB._int_bits(_u32("b", state.b), 32)
     for s in _slots(sh, state):
-        slot = (HC._int_bits(s.live, 16) + HC._int_bits(s.q, 32) + HC._int_bits(s.admitted, 32) + HC._int_bits(s.n, 32)
-                + [x for v in s.ids for x in HC._int_bits(v, sh.IB)])
+        slot = (GB._int_bits(s.live, 16) + GB._int_bits(s.q, 32) + GB._int_bits(s.admitted, 32) + GB._int_bits(s.n, 32)
+                + [x for v in s.ids for x in GB._int_bits(v, sh.IB)])
         bits += slot + [0] * (sh.slot_bits - len(slot))
     return bits
 

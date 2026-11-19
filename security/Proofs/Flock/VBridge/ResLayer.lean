@@ -51,7 +51,7 @@ open Flock.RecResiduals (portSizes groups partS)
 open Flock.RecAlgebra (structureOf verifierRows el)
 open FlockVBridge.PartS (wIdx)
 open FlockVBridge.Compiled (RepData AlgebraHolds)
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 
 /-! ## The columns the rows read -/
 

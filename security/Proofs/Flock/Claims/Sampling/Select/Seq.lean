@@ -27,7 +27,7 @@ uniform and unread, so the strata's samples are independent.
 
 namespace Properties.Spot.SecurityProofs
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Audit.SampleExec Finset
+open FlockSoundness FlockSoundness.Game Spot.Sampling Spot.Sampling.SampleExec Finset
 open scoped ENNReal
 
 /-- A sampler sampling `D` at its `j`-th read of `N` bytes of `src` from `p`, its first sample: it samples nothing on the reads

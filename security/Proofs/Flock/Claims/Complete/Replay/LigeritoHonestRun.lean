@@ -362,14 +362,14 @@ end Lg
 
 /-- **Ligerito's final identity at the deployed relation** (`LgFinal`) at every rep the session walk runs on its packed
 table (`RepWalkP`). -/
-theorem lgFinal_walkP (H : Claims.Msg → Claims.Msg)
+theorem lgFinal_walkP (H : Hash.Msg → Hash.Msg)
     (hw : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, RepWalkP o i r) : LgFinal H Readable.relation :=
   lgFinal_relation H hw Lg.honest
 
 /-- **The Ligerito goal at the deployed relation from the session walk**: the walk's facts at every rep (`ZcAt`,
 `LcAt`, `RsAt`, `RepWalk`, `RepWalkP`), the reps' proofs decoding (`RepDecodes`) and the schemes' widths
 (`SchemeWidths`). -/
-theorem ligerito_walkP (H : Claims.Msg → Claims.Msg)
+theorem ligerito_walkP (H : Hash.Msg → Hash.Msg)
     (hzc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r)
     (hlc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, LcAt o i r)
     (hrs : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, RsAt o i r) (hD : RepDecodes H Readable.relation)
@@ -380,7 +380,7 @@ theorem ligerito_walkP (H : Claims.Msg → Claims.Msg)
 
 /-- **The consumption goal at the deployed relation from the session walk** (S15): every recorded round is consumed,
 from the same walk facts and the schemes' widths. -/
-theorem consumed_walkP (H : Claims.Msg → Claims.Msg)
+theorem consumed_walkP (H : Hash.Msg → Hash.Msg)
     (hzc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r)
     (hlc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, LcAt o i r)
     (hrs : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, RsAt o i r) (hD : RepDecodes H Readable.relation)

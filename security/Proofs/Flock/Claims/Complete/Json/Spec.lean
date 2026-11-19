@@ -142,6 +142,6 @@ The masked completeness proofs (`Zk/`, `ZkTables/`) name the oracle's 64-byte ou
 reads `Claims.Out64`. -/
 
 /-- `Claims.Out64`: the oracle's outputs are 64 bytes. -/
-abbrev Out64 (H : Claims.Msg → Claims.Msg) : Prop := Claims.Out64 H
+abbrev Out64 (H : Hash.Msg → Hash.Msg) : Prop := Claims.Out64 H
 
 end FlockComplete.JsonRT

@@ -80,7 +80,8 @@ def _served(entry: str):
 
 
 def test_the_fused_statics_are_every_served_launch() -> None:
-    served = {(TA.mnnvl_shot(M, GLM53_N, 8), TA.mnnvl_grid(M, GLM53_N)[1]) for M in range(1, TA.fused_max_tokens(GLM53_N, 8) + 1)}
+    sms = TA.UNSTATED_NODE[0][1]
+    served = {(TA.mnnvl_shot(M, GLM53_N, 8), TA.mnnvl_grid(M, GLM53_N, sms)[1]) for M in range(1, TA.fused_max_tokens(GLM53_N, 8) + 1)}
     assert served == set(GLM53_FUSED)
 
 

@@ -221,8 +221,8 @@ theorem claims_xsize' (st : Stmt) (hk : st.c.kLog ≤ st.m) (hm : 13 ≤ st.m) (
 
 /-! ## The verifier's replay is the prover's -/
 
-theorem recs_bytes {resp : ℕ → Claims.Msg} :
-    ∀ {i : ℕ} {rs : List Round} {bs : List Claims.Msg}, JsonRT.Recs resp i rs bs → ∀ r ∈ rs, r.bytes.isSome
+theorem recs_bytes {resp : ℕ → Hash.Msg} :
+    ∀ {i : ℕ} {rs : List Round} {bs : List Hash.Msg}, JsonRT.Recs resp i rs bs → ∀ r ∈ rs, r.bytes.isSome
   | _, [], [], _, _, hr => by simp at hr
   | _, _ :: _, _ :: _, h, r, hr => by
     rcases List.mem_cons.1 hr with rfl | hr
@@ -250,9 +250,9 @@ theorem replay_bridge (hs : Hashes V) (st : Setup) (lay : Zk.PadLayout) (prf : P
 
 /-- **A masked inner proof that returned** passed its two refusals at the replies' coins, and is `InZ.proof` with
 transcript `InZ.tEnd` (`innerP_go`'s converse). -/
-theorem innerP_ret (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
-    (ic : InnerCommit) (finalC : F128) (cons : Array (String × Zk.Lin)) (t : Transcript) (l : Array Claims.Msg)
-    {a : Zk.InnerProof} {t' : Transcript} {l' : Array Claims.Msg}
+theorem innerP_ret (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
+    (ic : InnerCommit) (finalC : F128) (cons : Array (String × Zk.Lin)) (t : Transcript) (l : Array Hash.Msg)
+    {a : Zk.InnerProof} {t' : Transcript} {l' : Array Hash.Msg}
     (e : ((innerP (asksS resp) (Hashes.ofSha512 h) lay p ic finalC cons).run t).go l = (.ok (a, t'), l')) :
     ((InZ.lin lay p cons (InZ.coinsAt resp l.size)).c +
       dot (InZ.lin lay p cons (InZ.coinsAt resp l.size)).a p.h).isZero = true ∧
@@ -423,7 +423,7 @@ namespace FlockComplete.ZkTables
 
 open Flock Transcript FlockComplete FlockDeploy FlockComplete.Replay
 
-variable {H : Claims.Msg → Claims.Msg}
+variable {H : Hash.Msg → Hash.Msg}
 
 /-- **The verifier's view of a returning rep**, given level 0's verifier premise: on a table and its rep's inputs,
 where the rep returned from `l` sends and the verifier's rounds carry its rounds, the verifier's replay `q` and ring
@@ -434,8 +434,8 @@ theorem view (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr
     (ω : TapeZk) (i : ℕ) (d : ByteArray) {k : ℕ} (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit)
     (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ) (ic : InnerCommit)
     (hin : RepIn H st tr ω i v cm pts e rep ic)
-    (hrep : rep < 2) (prior : Array (List F128)) (ws : List ℕ) (l : Array Claims.Msg) (p : Zk.ZkProof)
-    (t' : Transcript) (l' : Array Claims.Msg)
+    (hrep : rep < 2) (prior : Array (List F128)) (ws : List ℕ) (l : Array Hash.Msg) (p : Zk.ZkProof)
+    (t' : Transcript) (l' : Array Hash.Msg)
     (hgo : (repT H r st tr ω i d v cm e rep ic prior ws).go l = (.ok (p, t'), l')) (R : Array Round)
     (hAg : Agrees R t'.rounds 0) (q : Zk.Replayed × Transcript)
     (hq : (Zk.replayWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st)
@@ -444,7 +444,7 @@ theorem view (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr
     (sw : (F128 × Array Switched) × Transcript)
     (hsw : (ringSwitchWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).m
         (ringClaimsZk q.1 p.proof ++ e) p.proof.ringSwitches).run q.2 = .ok sw) :
-    ∃ (rec : Zk.L0Rec) (tI : Transcript) (lI : Array Claims.Msg) (rp : Zk.Replayed)
+    ∃ (rec : Zk.L0Rec) (tI : Transcript) (lI : Array Hash.Msg) (rp : Zk.Replayed)
       (lgc : Array (String × Zk.Lin)),
       (Zk.ligeritoWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle v.1 sw.1.1
         p.proof.cap p.proof.ligerito (basis sw.1.2) ⟨v.2, rep, p.level0⟩).run sw.2 = .ok (rec, ⟨R, tI.k, tI.pending⟩) ∧
@@ -461,7 +461,7 @@ theorem view (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr
   have hkm : st.c.kLog ≤ st.m := hf.2.2.2.1.trans_eq hf.1
   have hm14 : 14 ≤ (Setup.ofCircuit st).m := by show 14 ≤ st.m; omega
   have hmerk : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 := hms
-  set resp : ℕ → Claims.Msg := fun j => (Claims.coinSeq r j).bytes with hresp
+  set resp : ℕ → Hash.Msg := fun j => (Claims.coinSeq r j).bytes with hresp
   set lay := Zk.PadLayout.new (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog v.1.k0 with hlay
   set pads := padsOf ω i rep lay with hpads
   unfold repT at hgo

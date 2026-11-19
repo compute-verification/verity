@@ -32,7 +32,7 @@ open Spot
 namespace Properties.Spot.SecurityProofs
 
 open Lean (Json)
-open FlockSoundness FlockSoundness.Audit
+open FlockSoundness Spot.Sampling
 
 /-- A stratum's unit weighs at most the largest weight on its units. -/
 theorem le_sup_unit (W : ℕ → ℕ) (s : Flock.Draw.Stratum) {j : ℕ} (hj : j < s.size) :

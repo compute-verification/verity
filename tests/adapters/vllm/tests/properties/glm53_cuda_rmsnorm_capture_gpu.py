@@ -37,7 +37,7 @@ from verity_vllm.definitions.numerics import derived_rows as D
 from verity_vllm.definitions.registry import cuda_rmsnorm as M
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.engine.env import served_defaults
-from verity_vllm.pipeline.cli import MACHINE
+from verity_vllm import settings
 from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-cuda-rmsnorm-capture/v2"
@@ -123,7 +123,7 @@ def _profiler_launch(trace: Path, needle: str) -> dict[str, Any]:
 
 def sass(out: Path) -> dict[str, Any]:
     """Compile the pinned width-8 arithmetic for sm_90 and retain its SASS and operation census."""
-    nvcc = shutil.which("nvcc") or "/usr/local/cuda/bin/nvcc"
+    nvcc = shutil.which("nvcc") or os.path.join(settings.cuda_home(), "bin", "nvcc")
     cuobjdump = shutil.which("cuobjdump") or str(Path(nvcc).with_name("cuobjdump"))
     cubin, text = out / "cuda_rmsnorm_sm90.cubin", out / "cuda_rmsnorm_sm90.sass"
     flags = ["-O3", "-DNDEBUG", "-std=c++17", "-lineinfo", "--expt-relaxed-constexpr", "--expt-extended-lambda",
@@ -245,10 +245,10 @@ def one_case(work: Path, kind: str, m: int, n: int) -> dict[str, Any]:
 
 
 def toolchain() -> dict[str, str]:
-    """A served engine's toolchain, which `sass` compiles with: `CUDA_HOME` (an exported one winning) and `RunEnv.cuda_bin` on
+    """A served engine's toolchain, which `sass` compiles with: `CUDA_HOME` and its `bin` on
     `PATH` after the interpreter's directory, as `pipeline.row_driver` sets them."""
-    env = {"CUDA_HOME": os.environ.get("CUDA_HOME") or MACHINE["RunEnv.cuda_home"],
-           "PATH": f"{os.path.dirname(sys.executable)}:{MACHINE['RunEnv.cuda_bin']}:{os.environ.get('PATH', '')}"}
+    env = {"CUDA_HOME": settings.cuda_home(),
+           "PATH": f"{os.path.dirname(sys.executable)}:{os.path.join(settings.cuda_home(), 'bin')}:{os.environ.get('PATH', '')}"}
     os.environ.update(env)
     return env
 

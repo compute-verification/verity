@@ -786,7 +786,7 @@ def _sparse_twin(model: _SparseAttn, xs: list[np.ndarray], launch: dict | None =
                 idx = words([0] * swa + [-1] * (NW - swa) + [0] * nc + [-1] * (N - NW - nc))
                 lens, req = (launch or {}).get(p, ([(swa, nc)], 0))
                 metas, ns = FT.sched_meta([w for w, _ in lens], [c for _, c in lens] if ratio > 1 else None, topk=window,
-                                          extra_topk=int(ratio > 1), parts=FT.num_sm_parts(model.NHP), block_size_n=BN)
+                                          extra_topk=int(ratio > 1), parts=FT.num_sm_parts(model.NHP, 1, H200.num_sms), block_size_n=BN)
                 outs.append(FT.decode(qp[i, :2], *stack(rows), idx, [swa] + ([nc] if N > NW else []), sink,
                                       SPLITS=FT.request_splits(metas, ns, req, N // BN), NW=NW, QT=QB, BN=BN, SCALE=SPARSE_SCALE))
             else:
@@ -850,7 +850,7 @@ def test_a_sparse_attention_beyond_the_definitions_refuses_by_name(over, refusal
 
 
 def _decode_splits(lens: list[tuple[int, int]], req: int, window: int) -> tuple[int, ...]:
-    metas, ns = FT.sched_meta([w for w, _ in lens], [c for _, c in lens], topk=window, extra_topk=1, parts=FT.num_sm_parts(64),
+    metas, ns = FT.sched_meta([w for w, _ in lens], [c for _, c in lens], topk=window, extra_topk=1, parts=FT.num_sm_parts(64, 1, H200.num_sms),
                               block_size_n=SPARSE_BN)
     return FT.request_splits(metas, ns, req, sum(-(-n // SPARSE_BN) for n in lens[req]))
 

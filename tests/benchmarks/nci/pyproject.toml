@@ -17,10 +17,15 @@ inputs = [
   "security/Definitions/Slowdown/Assumptions/Layered.lean",
   "security/Definitions/Slowdown/Guarantees/Layered.lean",
   "verity/circuits/ops/boolean/gemm.py",
-  # tiers.CARD pins the RTX PRO 6000 Server Edition's card file, and CREDITED_CLOCK_HZ the card file's clock.sm, read
-  # through verity.device (test_tiers.py)
+  # tiers.CARD and CREDITED_CLOCK_HZ read the RTX PRO 6000 Server Edition's card file through verity.device, in the
+  # kit's cards directory
   "verity/device.py",
   "calibration/hardware/cards/rtx-pro-6000-server.toml",
+  "benchmarks/harness/verity_bench/__init__.py",
+  "benchmarks/harness/verity_bench/kit.py",
+  "benchmarks/harness/verity_bench/kit_report.py",
+  "benchmarks/harness/verity_bench/settings.py",
+  "tools/config/verity_config",
   # the slowdown D is the slowdown calculator's (statement.py, fit.py, imported by path)
   "benchmarks/slowdown/slowdown/__init__.py",
   "benchmarks/slowdown/slowdown/theorem.py",

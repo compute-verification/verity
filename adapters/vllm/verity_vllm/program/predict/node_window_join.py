@@ -173,7 +173,7 @@ def join(ranks: Sequence[Rank], name: str = f"{NAME}/ranks") -> Joined:
     cut to them (`_within`). Where they don't cover the rows, the input stays free, listed in ``unwired``. The wires are
     each rank's own in rank order, then the join's, coalesced a reader rank at a time and in rank order, so a join wire's
     reader units are one rank's (`interface.check_ranks`). The circuit's order is made anew over every rank's runs
-    (`interface.ordered`), its blocks from every rank's spans."""
+    (`interface.ordered`, a template's ranges rising inside each rank), its blocks from every rank's spans."""
     W = len(ranks)
     if [x.rank for x in ranks] != list(range(W)) or len({x.steps for x in ranks}) != 1:
         raise Unexpressible(f"{name}: ranks {[x.rank for x in ranks]} at steps {sorted({x.steps for x in ranks})}; the "
@@ -255,7 +255,8 @@ def join(ranks: Sequence[Rank], name: str = f"{NAME}/ranks") -> Joined:
     circuit = IF.Circuit(name, tuple((fns[tid], total[tid]) for tid in fns), wires=tuple(wires), cuts=cuts,
                          registered=registered, boundary_reads=boundary,
                          external=tuple(dict.fromkeys(e for x in ranks for e in x.circuit.external)), blocks=IF.Blocks(1, ranks[0].steps, tuple(inference(spans, 1))),
-                         order=IF.ordered(dict(total), wires, starts))
+                         order=IF.ordered(dict(total), wires, starts,
+                                          {tid: [first[x.rank][tid] for x in ranks] for tid in total}))
     return Joined(circuit, first, tuple(free), tuple(wired), tuple(unwired))
 
 

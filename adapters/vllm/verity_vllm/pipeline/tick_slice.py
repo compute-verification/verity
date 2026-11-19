@@ -52,12 +52,14 @@ def step_statics(S) -> SimpleNamespace:
 
 
 def rule(S) -> TS.Rule:
-    return TS.Rule(S.TAU, S.CSAT, S.CFREE, S.C1, quiet=not S.TCU)
+    return TS.Rule(S.TAU, S.CSAT, S.CFREE, S.C1)
 
 
 def _sig(S):
     if S.PC:
         raise ValueError("the tick's slice has no prefix cache: PC = 0")
+    if S.TCU:
+        raise ValueError("the tick's slice has no catch-up while requests run: TCU = 0")
     TK.widths(step_statics(S))
     return CS._sig(S, CODE)
 
@@ -107,11 +109,11 @@ TickSlice = _part(
 
 
 def statics(R: int, W: int, A: int, engine: dict, IW: int, Q: int, D: int, P: int, K: int, *, tau: int, sat: int,
-            free: int, token: int = 0, quiet: bool = True, carry: int = 1) -> dict:
-    """`compile_slice_v7.statics` with the tick's amounts (`compiler.tick_step.statics`' ``tau``, ``sat``, ``free``, ``token``,
-    ``quiet`` and ``carry``), refused as TickStep_v1 refuses them and where the engine caches prefixes."""
+            free: int, token: int = 0, carry: int = 1) -> dict:
+    """`compile_slice_v7.statics` with the tick's amounts (`compiler.tick_step.statics`' ``tau``, ``sat``, ``free``, ``token``
+    and ``carry``), refused as TickStep_v1 refuses them and where the engine caches prefixes."""
     st = {**V7.statics(R, W, A, engine, IW, Q, D, P, K), "TAU": tau, "CSAT": sat, "CFREE": free, "C1": token,
-          "TCU": int(not quiet), "CARRY": carry}
+          "TCU": 0, "CARRY": carry}
     _sig(SimpleNamespace(**st))
     return st
 

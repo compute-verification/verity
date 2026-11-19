@@ -36,20 +36,22 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.commitments import domains as DM
 from verity.commitments import CommitmentDomain
 from verity.commitments.merkle import tree_levels
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
+    HM96_SALT,
     activation_binding,
-    hm96_salt,
     rows_domain,
     weight_binding,
 )
+from verity.protocols.resource_accounting.scheme import declared
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+from verity.commitments import registered_value as RV
 
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.manifest import session_head
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.served_record import SCHEMA as SERVED_SCHEMA
@@ -97,23 +99,29 @@ def coins_of(option: Any, reserved: Any = None) -> dict[str, Any]:
             "closed": option.info().get("challenger"), "manifest_head": session_head(c)}
 
 
+def tables() -> tuple[str, ...]:
+    """W's tables, of A rows, y and B rows: Pearl+'s (`Scheme.tables`)."""
+    from verity.protocols.resource_accounting.compute.pouw.scheme import PEARL_PLUS
+    return declared(PEARL_PLUS, "tables")
+
+
 def a_value(s: int, c: int) -> str:
     """Round ``s``'s call ``c``'s A rows."""
-    return f"pearl-a/{s}/{c}"
+    return f"{tables()[0]}/{s}/{c}"
 
 
 def y_value(s: int, c: int) -> str:
     """Round ``s``'s call ``c``'s y."""
-    return f"pearl-y/{s}/{c}"
+    return f"{tables()[1]}/{s}/{c}"
 
 
 def b_value(w: int) -> str:
     """Weight ``w``'s B rows."""
-    return f"pearl-b/{w}"
+    return f"{tables()[2]}/{w}"
 
 
 def _hm96(man: Mapping[str, Any], s: int) -> None:
-    hashing = PPD.scheme_of(man["scheme"]).commitment_hash
+    hashing = pouw_schemes.get(man["scheme"]).commitment_hash
     if hashing != HM96:
         raise ValueError(f"round {s}'s pass commits {hashing} rows, and W registers {HM96} rows")
 
@@ -129,9 +137,9 @@ def entries(man: Mapping[str, Any], s: int) -> list[dict[str, Any]]:
         a = rows_domain(activation_binding(salt, u["index"]), u["index"], u["m"], HM96)
         y = SY.y_domain(salt, u["index"], u["real_rows"])
         out += [{"value": a_value(s, c), "root": u["root_a"], "leaves": u["m"], "words": u["k"],
-                 "domain": a.domain_id.hex(), G.WIDTH_KEY: WORD_BITS},
+                 "domain": a.domain_id.hex(), RV.WIDTH_KEY: WORD_BITS},
                 {"value": y_value(s, c), "root": u["y"]["root"], "leaves": u["real_rows"], "words": u["n"],
-                 "domain": y.domain_id.hex(), G.WIDTH_KEY: WORD_BITS}]
+                 "domain": y.domain_id.hex(), RV.WIDTH_KEY: WORD_BITS}]
     return out
 
 
@@ -152,7 +160,7 @@ def b_entries(man: Mapping[str, Any], s: int) -> list[dict[str, Any]]:
         if "root" not in man.get("weights", {}).get(str(w), {}):
             raise ValueError(f"round {s}'s pass commits no root of weight {w}, whose B rows W registers")
         out.append({"value": b_value(w), "root": bytes.fromhex(man["weights"][str(w)]["root"]).hex(), "leaves": n,
-                    "words": k, "domain": rows_domain(weight_binding(w), -2, n, HM96).domain_id.hex(), G.WIDTH_KEY: WORD_BITS})
+                    "words": k, "domain": rows_domain(weight_binding(w), -2, n, HM96).domain_id.hex(), RV.WIDTH_KEY: WORD_BITS})
     return out
 
 
@@ -229,7 +237,7 @@ def record(manifests: Sequence[Mapping[str, Any]], previous: str | None = None,
         raise ValueError(f"W is one epoch's: its passes are under salts {head['salt'][:16]}… and {other[:16]}…")
     at = _rounds(manifests, rounds)
     tied = version == VERSION
-    return {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL,
+    return {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL,
             "window": {"kind": "served", "entry": head["entry"], "scheme": head["scheme"], "salt": head["salt"],
                        **({"version": VERSION} if tied else {}), **named},
             "registered": [*(e for s, m in zip(at, manifests) for e in entries(m, s)),
@@ -263,7 +271,7 @@ def write(path: str | Path, passes: Sequence[Mapping[str, Any]], rounds: Sequenc
 
 
 @dataclass(frozen=True)
-class Committed(G.Registered):
+class Committed(RV.Registered):
     """A call's A rows or y as a registered value of the audited circuit (`reuse`): its FP32 words in ``row-seg/v1`` rows,
     salted as Pearl+ salts them, in a tree under ``call_domain``, the ``frame-v3-sha512`` domain of the call's binding,
     index and rows (W's entry's domain id), so its entry is W's."""
@@ -275,40 +283,54 @@ class Committed(G.Registered):
         return self.call_domain
 
 
+def kept_salts(base: Path, spec: Mapping[str, Any], n: int) -> list[bytes]:
+    """The ``n`` salts a pass kept in the file at manifest entry ``spec`` under the pass's directory ``base``
+    (`HM96_SALT` bytes a leaf, leaf order). ValueError for a file of another size."""
+    data = (Path(base) / spec["path"]).read_bytes()
+    if len(data) != spec["bytes"] or len(data) != n * HM96_SALT:
+        raise ValueError(f"{spec['path']}: {len(data)} bytes, and {n} salts are {n * HM96_SALT}")
+    return [data[HM96_SALT * j:HM96_SALT * (j + 1)] for j in range(n)]
+
+
 def reuse(w: Mapping[str, Any], manifests: Sequence[Mapping[str, Any]],
-          rows_of: Callable[[str, int, np.ndarray], np.ndarray], rounds: Sequence[int] | None = None) -> dict[str, Committed]:
+          rows_of: Callable[[str, int, np.ndarray], np.ndarray], rounds: Sequence[int] | None = None,
+          dirs: Sequence[str | Path] | None = None) -> dict[str, Committed]:
     """The calls' values W registers (``w``, the window record of ``manifests`` at ``rounds``, at the version it states
     and naming the day it names: `record`, `version_of`, `naming_of`; its B rows are no value of the audited circuit), each
     as the audited circuit's registered
     value: the rows ``rows_of(name, rows,
     empty)`` gives (`window_rows.Rows.value`: u16 words, an FP32 word's two low first, every row no proof block makes
-    ``empty``, zero), each salted with `audit.hm96_salt` under its pass's ``hm96_salt_key`` at the call's index for A and
-    `served_y.HM96_Y` past it for y. ValueError unless ``w`` is the record of ``manifests`` and each value's entry is W's:
-    the proof blocks don't make the rows Pearl+ committed, or the key is another."""
+    ``empty``, zero), each under the salt its pass kept for it (`kept_salts`: a call's ``salts`` for A, its y's
+    ``salts`` for y), read from the pass's directory, ``dirs[i]`` for ``manifests[i]``. ValueError unless ``w`` is the
+    record of ``manifests`` and each value's entry is W's: the proof blocks don't make the rows Pearl+ committed, or the
+    salts are another pass's."""
     if dict(w) != record(manifests, w.get("previous"), rounds, version_of(w), naming_of(w)):
         raise ValueError("W is not the window record of these passes (`record`), whose calls' values the audited window reads")
+    if dirs is None:
+        raise NotImplementedError("the passes' directories, where each kept its salts, handed to `reuse` by its caller "
+                                  "(prove_path's window commit)")
     out: dict[str, Committed] = {}
-    for s, man in zip(_rounds(manifests, rounds), manifests):
-        salt, key, want = bytes.fromhex(man["salt"]), bytes.fromhex(man["hm96_salt_key"]), iter(entries(man, s))
+    for s, man, base in zip(_rounds(manifests, rounds), manifests, dirs, strict=True):
+        salt, want = bytes.fromhex(man["salt"]), iter(entries(man, s))
         for u in man["matmuls"]:
             i = u["index"]
-            for binding, nonce in ((activation_binding(salt, i), i), (SY.y_binding(salt, i), SY.HM96_Y + i)):
+            for binding, spec in ((activation_binding(salt, i), u["salts"]), (SY.y_binding(salt, i), u["y"]["salts"])):
                 e = next(want)
                 n, k = e["leaves"], e["words"]
                 words = np.ascontiguousarray(rows_of(e["value"], n, np.zeros(2 * k, np.uint16)), "<u2").view("<u4")
-                base = G.Registered.commit(man["scheme"], e["value"], words.tolist(), [hm96_salt(key, nonce, j) for j in range(n)],
-                                           word_bits=WORD_BITS, schema=G.SCHEMA_SEG)
+                base_value = RV.Registered.commit(man["scheme"], e["value"], words.tolist(), kept_salts(base, spec, n),
+                                                 word_bits=WORD_BITS, schema=G.SCHEMA_SEG)
                 dom = rows_domain(binding, i, n, "sha512")
-                levels = tree_levels(dom, [G.leaf(dom, j, bc, G.SCHEMA_SEG) for j, bc in enumerate(base.bcs)])
-                got = out[e["value"]] = Committed(**{**{f.name: getattr(base, f.name) for f in fields(base)}, "levels": levels},
-                                                  call_domain=dom)
+                levels = tree_levels(dom, [RV.leaf(dom, j, bc, G.SCHEMA_SEG) for j, bc in enumerate(base_value.bcs)])
+                got = out[e["value"]] = Committed(**{**{f.name: getattr(base_value, f.name) for f in fields(base_value)},
+                                                     "levels": levels}, call_domain=dom)
                 if got.entry() != e:
                     raise ValueError(f"{e['value']}: the rows the audited circuit's proof blocks make of it are not the rows "
                                      f"Pearl+ committed (root {got.root.hex()[:16]}… for W's {e['root'][:16]}…): the model "
-                                     "didn't make them, or the salt key is another")
+                                     "didn't make them, or the salts are another pass's")
     return out
 
 
 __all__ = ["KEEP", "NAMING", "SERVED_SCHEMA", "UNKNOWN_VERSION", "VERSION", "VERSIONS", "WORD_BITS", "Committed", "a_value",
-           "b_entries", "b_value", "coins_of", "entries", "macs", "naming_of", "record", "reuse", "served_passes", "version_of",
+           "b_entries", "b_value", "coins_of", "entries", "kept_salts", "macs", "naming_of", "record", "reuse", "served_passes", "version_of",
            "write", "y_value"]

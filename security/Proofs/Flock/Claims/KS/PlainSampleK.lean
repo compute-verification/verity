@@ -176,7 +176,7 @@ theorem forall₂_map_congr {α β γ : Type} {R : α → β → Prop} {f : α �
 (`viewOf`) at the setup at `d` through every `keep`: the decoder's rounds are `liveOf`'s in coin count, coins and bytes
 (`decodeWithK_live`), and custody retains every live round's bytes, so they agree after `Round.erase`. -/
 theorem recordsLiveAtDK_of_checks (keep : Bool → Bool) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {x : Claims.Msg} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
+    {x : Hash.Msg} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)}
     {f : Final} {J mPts : ℕ} {d : Json} (hs : s.setup = .ok (spec, sts)) (hzk : s.read.zk = false)
     (hpi : s.read.publicInputs = none) (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size)
     (hc : checks false s spec x link c₁ mids f = .ok ()) :
@@ -213,9 +213,9 @@ theorem recordsLiveAtDK_of_checks (keep : Bool → Bool) {s : Ins} {spec : Sessi
 /-- **An accepting decision of `VK keep` at SHA-512**: the statement sets up at `(spec, sts)`, plain and without
 `--public-inputs`, `verifyWithMK keep` at SHA-512 accepts the record and proof files there, and the custody checks
 pass (`nextK_decide` at the setup `act` read). -/
-theorem decideK_sha512 (keep : Bool → Bool) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+theorem decideK_sha512 (keep : Bool → Bool) {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (ha : act false x as cs = .decide s spec sts link c₁ mids f)
+    {mids : List (Hash.Msg × Coin)} {f : Final} (ha : act false x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((nextK keep x as cs).eval sha512).1 = .acc) :
     verifyWithMK keep With.std spec (tabsOf sts) f.record f.proofs = .ok () ∧
       checks false s spec x link c₁ mids f = .ok () ∧ s.setup = .ok (spec, sts) ∧ s.read.zk = false ∧
@@ -229,9 +229,9 @@ theorem decideK_sha512 (keep : Bool → Bool) {x : Claims.Msg} {as : List Claims
 /-- **An accepting decision of `VK keep` at SHA-512 is accepted through `keep` at the setup at its statement's sample**,
 on a record of its live outcome there up to the rounds' digests, whatever sample the record carries
 (`acceptsAtD_of_decide` at every `keep`). -/
-theorem acceptsAtDK_of_decide (keep : Bool → Bool) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+theorem acceptsAtDK_of_decide (keep : Bool → Bool) {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} {J mPts : ℕ} {d : Json}
+    {mids : List (Hash.Msg × Coin)} {f : Final} {J mPts : ℕ} {d : Json}
     (ha : act false x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((nextK keep x as cs).eval sha512).1 = .acc) (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size) :
     AcceptsAtDK keep s.read.I (some d) ⟨f.record, f.proofs⟩ ∧
@@ -298,7 +298,7 @@ table 0, `plainVerdictAtK keep` holds at the run's live outcome (`viewOf`, at an
 sample its record carries (`plainVerdictAt_of_run` at `nextK keep`): `verifyWithMK keep` accepts the last message at the
 setup at `d` (`acceptsAtDK_of_decide`), so it accepts what `wrPDK` writes, whose rep streams' coins are the run's
 (`coins_getElem?_of_erase`), and those are the reader's columns (`cols_plainK`). -/
-theorem plainVerdictAtK_of_run (keep : Bool → Bool) (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
+theorem plainVerdictAtK_of_run (keep : Bool → Bool) (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg}
     {ω : Ω} {r : Fin ((VK keep).k x) → Coin} {N : ℕ} (C : Fin N → List 𝔽)
     (h : (Claims.run sha512 P (VK keep) x ω r).out = .acc) :
     ∃ s spec sts link c₁ mids f,

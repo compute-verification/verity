@@ -405,6 +405,12 @@ def partRuns (S : Side) (word : Bool) : Part → List Run
         let l := ((Part.strided p i b inner os is c).get t).j
         ⟨S.srcOf p i, S.bit word p i l, S.bit word p i (l + 1)⟩
   | .explicit items => items.toList.map fun r => ⟨S.srcOf r.p r.i, S.bit word r.p r.i r.j, S.bit word r.p r.i (r.j + 1)⟩
+  | .grid run lanes =>
+    (List.range ((lanes[0]?.map Lane.periods).getD 0)).flatMap fun t => lanes.toList.flatMap fun l =>
+      if l.e = 1 ∨ run = 1 then
+        [⟨S.srcOf l.p l.i, S.bit word l.p l.i (l.leafAt t 0).toNat, S.bit word l.p l.i ((l.leafAt t 0).toNat + run)⟩]
+      else (List.range run).map fun o =>
+        ⟨S.srcOf l.p l.i, S.bit word l.p l.i (l.leafAt t o).toNat, S.bit word l.p l.i ((l.leafAt t o).toNat + 1)⟩
 
 /-- A part's runs are as it reads: none when it is empty, else at least one and none empty. -/
 def partGood (q : Part) (rs : List Run) : Bool :=
@@ -682,6 +688,36 @@ theorem part_srcs (S : Side) (word : Bool) (q : Part) (h : partGood q (partRuns 
       obtain ⟨t, ht, rfl⟩ := List.getElem_of_mem hx
       refine ⟨t, by simpa [Part.count] using ht, ?_⟩
       simp [Part.get, getElem!_pos items t (by simpa using ht)]
+    | grid run lanes =>
+      have hlt := hall _ hr
+      simp only [partRuns, List.mem_flatMap, List.mem_range] at hr
+      obtain ⟨t, htP, l, hl, hr⟩ := hr
+      obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem hl
+      have hj' : j < lanes.size := by simpa using hj
+      have hrun : 0 < run := by
+        split at hr
+        · rw [List.mem_singleton] at hr
+          subst hr
+          rcases Nat.eq_zero_or_pos run with h0 | h0
+          · subst h0; simp at hlt
+          · exact h0
+        · rw [List.mem_map] at hr
+          obtain ⟨o, ho, -⟩ := hr
+          rw [List.mem_range] at ho
+          omega
+      have hsrc : r.src = S.srcOf (lanes[j]'hj').p (lanes[j]'hj').i := by
+        split at hr
+        · rw [List.mem_singleton] at hr; subst hr; simp
+        · rw [List.mem_map] at hr; obtain ⟨o, -, rfl⟩ := hr; simp
+      have hjr : j * run < lanes.size * run := Nat.mul_lt_mul_of_pos_right hj' hrun
+      refine ⟨j * run + lanes.size * run * t, ?_, ?_⟩
+      · have h1 := Nat.mul_le_mul_left (lanes.size * run) htP
+        rw [Nat.mul_succ] at h1
+        show j * run + lanes.size * run * t < lanes.size * run * ((lanes[0]?.map Lane.periods).getD 0)
+        omega
+      · have hk : (j * run + lanes.size * run * t) % (lanes.size * run) / run = j := by
+          rw [Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hjr, Nat.mul_div_cancel j hrun]
+        simp only [Part.get, hk, getElem!_pos lanes j hj', hsrc]
   · rintro ⟨t, ht, rfl⟩
     have hc : q.count ≠ 0 := by omega
     cases q with
@@ -705,6 +741,30 @@ theorem part_srcs (S : Side) (word : Bool) (q : Part) (h : partGood q (partRuns 
         simp only [partRuns, List.mem_map]
         exact ⟨x, Array.getElem_mem_toList ht', rfl⟩
       · simp [x, Part.get, getElem!_pos items t ht']
+    | grid run lanes =>
+      simp only [Part.count] at ht hc
+      generalize hP : (lanes[0]?.map Lane.periods).getD 0 = P at ht hc
+      have hg : 0 < lanes.size * run := Nat.pos_of_ne_zero fun h => hc (by rw [h, Nat.zero_mul])
+      have hrun : 0 < run := Nat.pos_of_ne_zero fun h => by simp [h] at hg
+      have hj : t % (lanes.size * run) / run < lanes.size := by
+        rw [Nat.div_lt_iff_lt_mul hrun]; exact Nat.mod_lt _ hg
+      have htt : t / (lanes.size * run) < P := by
+        rw [Nat.div_lt_iff_lt_mul hg, Nat.mul_comm]; exact ht
+      obtain ⟨l, hl⟩ : ∃ l, lanes[t % (lanes.size * run) / run]'hj = l := ⟨_, rfl⟩
+      have hlm : l ∈ lanes.toList := by rw [← hl]; exact Array.getElem_mem_toList hj
+      have hmem : ∃ r ∈ partRuns S word (.grid run lanes), r.src = S.srcOf l.p l.i := by
+        by_cases hb : l.e = 1 ∨ run = 1
+        · refine ⟨⟨S.srcOf l.p l.i, S.bit word l.p l.i (l.leafAt (t / (lanes.size * run)) 0).toNat,
+            S.bit word l.p l.i ((l.leafAt (t / (lanes.size * run)) 0).toNat + run)⟩, ?_, rfl⟩
+          simp only [partRuns, List.mem_flatMap, List.mem_range]
+          exact ⟨_, by rw [hP]; exact htt, l, hlm, by simp [hb]⟩
+        · refine ⟨⟨S.srcOf l.p l.i, S.bit word l.p l.i (l.leafAt (t / (lanes.size * run)) 0).toNat,
+            S.bit word l.p l.i ((l.leafAt (t / (lanes.size * run)) 0).toNat + 1)⟩, ?_, rfl⟩
+          simp only [partRuns, List.mem_flatMap, List.mem_range]
+          exact ⟨_, by rw [hP]; exact htt, l, hlm, by simp only [hb, ite_false, List.mem_map, List.mem_range]; exact ⟨0, hrun, rfl⟩⟩
+      obtain ⟨r, hr, hs⟩ := hmem
+      refine ⟨r, hr, hall r hr, ?_⟩
+      simp only [Part.get, getElem!_pos lanes (t % (lanes.size * run) / run) hj, hl, hs]
 
 /-- A sequence whose parts' runs are as they read: the sources of its merged runs are the sources of its references. -/
 theorem seq_srcs (S : Side) (word : Bool) (sq : Seq) (h : (seqRuns S word sq).all (fun (q, rs) => partGood q rs) = true)

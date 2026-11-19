@@ -1361,7 +1361,7 @@ private def statedSample (size : Nat) (d : Core.SamplingDesign) : Json :=
 -- registration's sample and the bound are read
 #guard
   let facts := fun (size : Nat) (d : Core.SamplingDesign) =>
-    match (factsOf "x" (statedSample size d) ⟨#[], #[], false, #[], #[⟨"unit", none, size, some d⟩], ⟨1, 100⟩, #[]⟩
+    match (factsOf "x" (statedSample size d) ⟨#[], #[], false, #[], #[⟨"unit", none, size, some d⟩], ⟨1, 100⟩, #[], #[]⟩
       (Json.mkObj [("bound", toJson (1 : Nat))])).toOption with
     | some ⟨units, k, _, b, _⟩ => some (units, k, b)
     | none => none
@@ -1372,7 +1372,7 @@ private def statedSample (size : Nat) (d : Core.SamplingDesign) : Json :=
     facts 2 (.stratified #[⟨"a", 2, 1⟩, ⟨"b", 2, 1⟩]) == none && facts 2 (.stratified #[⟨"a", 1, 1⟩]) == none
 #guard
   let reason := fun (d : Core.SamplingDesign) =>
-    match factsOf "x" (statedSample 2 d) ⟨#[], #[], false, #[], #[⟨"unit", none, 2, some d⟩], ⟨1, 100⟩, #[]⟩
+    match factsOf "x" (statedSample 2 d) ⟨#[], #[], false, #[], #[⟨"unit", none, 2, some d⟩], ⟨1, 100⟩, #[], #[]⟩
       (Json.mkObj []) with
     | .error (_, r) => r
     | .ok _ => ""
@@ -1388,7 +1388,7 @@ private def statedSample (size : Nat) (d : Core.SamplingDesign) : Json :=
 #guard
   let reg := statedSample
   let reason := fun (r : Json) (size : Nat) (d : Core.SamplingDesign) =>
-    match factsOf "x" r ⟨#[], #[], false, #[], #[⟨"unit", none, size, some d⟩], ⟨1, 100⟩, #[]⟩
+    match factsOf "x" r ⟨#[], #[], false, #[], #[⟨"unit", none, size, some d⟩], ⟨1, 100⟩, #[], #[]⟩
       (Json.mkObj [("bound", toJson size)]) with
     | .error (_, e) => e
     | .ok _ => ""
@@ -1415,7 +1415,7 @@ private def statedSample (size : Nat) (d : Core.SamplingDesign) : Json :=
 -- rule over all 16 is 3; a level sampled whole leaves none, and its `bound` is read as it is
 #guard
   let count := fun (size : Nat) (d : Core.SamplingDesign) (δ : Core.Ratio) (b : Nat) =>
-    (factsOf "x" (statedSample size d) ⟨#[], #[], false, #[], #[⟨"unit", none, size, some d⟩], δ, #[]⟩
+    (factsOf "x" (statedSample size d) ⟨#[], #[], false, #[], #[⟨"unit", none, size, some d⟩], δ, #[], #[]⟩
       (Json.mkObj [("bound", toJson b)])).toOption.map (·.wrong)
   let strata : Core.SamplingDesign := .stratified #[⟨"a", 10, 9⟩, ⟨"b", 10, 1⟩]
   let halves : Core.SamplingDesign := .stratified #[⟨"a", 8, 4⟩, ⟨"b", 8, 4⟩]

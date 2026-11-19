@@ -57,7 +57,7 @@ from verity.circuits.silicon.instructions import INSTRUCTIONS, Instruction
 from verity.circuits.silicon.models import Model
 
 __all__ = [
-    "ANCHOR_SKU", "CANONICAL_FAMILIES", "Criterion", "DOSSIER_KIND", "EvidenceRef", "HONEST_MIN", "INDEPENDENT_REFERENCES",
+    "CANONICAL_FAMILIES", "Criterion", "DOSSIER_KIND", "EvidenceRef", "HONEST_MIN", "INDEPENDENT_REFERENCES",
     "INVALIDATION_TRIGGERS", "Level", "N_MIN", "NEGATIVES_MIN", "REGRESSION_TILES", "RELATION_LABELS", "RELITIGATION_PROCEDURE",
     "TrustReport", "assess", "d_class", "main", "publish", "registry_level", "render_markdown", "sku_family", "subjects",
 ]
@@ -99,19 +99,6 @@ STABLE_MIN_ELEMENTS = 1_000
 
 DOSSIER_KIND = "trust-dossier/v1"
 DOSSIER_SCHEMA = "verity/trust-dossier/v1"
-
-#: SKU string -> family (the same table as ``research.env.SKU_FAMILY``; the anchor is a *family*: any A100 is the A100 anchor).
-SKU_FAMILY: tuple[tuple[str, str], ...] = (
-    (r"\bH200\b", "h200"), (r"\bH100\b", "h100"), (r"\bB200\b", "b200"), (r"\bA100\b", "a100"), (r"\bL40S\b", "l40s"), (r"\bL40\b", "l40"),
-    (r"\bRTX\s*4090\b", "rtx4090"), (r"\bRTX\s*5090\b", "rtx5090"), (r"\bRTX\s*PRO\s*6000\b", "rtxpro6000"),
-)
-
-#: The anchor SKU of an architecture when neither a Target nor the instruction names one (a Target's anchor is its
-#: ``anchor_device``, then the registry instruction's ``anchor_device``).
-ANCHOR_SKU: dict[str, str] = {
-    "sm_80": "NVIDIA A100 SXM4 80GB", "sm_89": "NVIDIA GeForce RTX 4090", "sm_90": "NVIDIA H100 SXM5 80GB",
-    "sm_100": "NVIDIA B200", "sm_120": "NVIDIA GeForce RTX 5090",
-}
 
 #: The canonical family set for PINNED: role -> tc_probe family names that cover it (``replay:<fragment>`` = a replay file).
 #: Every role must be covered on the anchor with 0 mismatches for the subject's model (specials are recorded, not asserted:
@@ -271,13 +258,11 @@ RELITIGATION_PROCEDURE: tuple[str, ...] = (
 
 
 def sku_family(sku: str | None) -> str | None:
-    """SKU string -> family name (``NVIDIA A100 80GB PCIe`` -> ``a100``); None when no row matches."""
-    if not sku:
-        return None
-    for pat, fam in SKU_FAMILY:
-        if re.search(pat, sku):
-            return fam
-    return None
+    """SKU string -> family name (``NVIDIA A100 80GB PCIe`` -> ``a100``) by ``research.env``'s one table, the one ``hw.family``
+    is written by (the anchor is a *family*: any A100 is the A100 anchor); None when no row matches."""
+    from research.env import sku_family as family
+
+    return None if (found := family(sku, None)) == "unknown" else found
 
 
 def _sm(arch: str | None) -> str | None:
@@ -396,8 +381,9 @@ def subjects(name: str) -> Subject:
         wrapped = [t for t in TARGETS.values() if t.instruction == name]
         if wrapped:
             return subjects(wrapped[0].name)
-        return Subject(name=ins.id, instruction=ins.id, model=ins.model, anchor_sku=ins.anchor_device or ANCHOR_SKU.get(ins.sm, ins.sm),
-                       target=None)
+        if ins.anchor_device is None:
+            raise KeyError(f"instruction {name!r}: no target wraps it and its registry entry names no anchor_device")
+        return Subject(name=ins.id, instruction=ins.id, model=ins.model, anchor_sku=ins.anchor_device, target=None)
     raise KeyError(f"unknown target or instruction {name!r}; targets: {sorted(TARGETS)}; instructions: {sorted(INSTRUCTIONS)}")
 
 

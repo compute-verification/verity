@@ -50,11 +50,12 @@
 # whose A5 line is the audit's verdict, whose REGISTERED line the window's kind, commitment and run root length, and whose
 # COINS line (also summary.json's ``coins``) the coins, the card and which check accepted. No other file of the row is
 # published (with A5_KEEP=1 they stay on the machine): match/spec.json holds the prompts, commit/ the token record, the bundle and
-# the slim keep (the committed store with its salts, the weights key, the opened weights, the requests and served tokens),
+# the slim keep (the committed store with its salts, the opened weights and their salts, the requests and served tokens),
 # and stages.txt, row.log and the stages' logs can quote a served token on a FAIL. Under KEPT, beside the row dir: each
 # stage's output, the row dir's sizes and what `row run` writes for a research run (result.json, its evidence/ copies of
 # the row's records and the Commit's window, which the stages get KEPT for, never the published run dir).
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 ROW=${ROW:-llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager}
 ROLE=LLAMA32_1B_INT8 REPO=verity-int8/Llama-3.2-1B-INT8 REV=15b0976d400d796ee589e7737d03a919526bf800
@@ -68,6 +69,7 @@ PART=${A5_PARTITION:-$TREE/benchmarks/one_stage/llama32_1b_rope_d64_l0.json}
 ROOT=${A5_ROOT:-$WORK/a5-llama1b}
 BASE=$ROOT/${RESEARCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}
 D=$BASE/$ROW WD=$BASE/serving-rows FW=${A5_FLOCK_WORK:-$ROOT/flock-work} KEPT=$BASE/unpublished
+export VERITY_PROTOCOLS_CONFIG=${VERITY_PROTOCOLS_CONFIG:-"{\"private\": \"$ROOT/private\"}"}  # where a replay bundle's keys and salts go
 VENV=${VENV:-$WORK/venv312} HF_HOME=${HF_HOME:-$WORK/hf} A5_COINS=${A5_COINS:-dev} A5_PLAIN=${A5_PLAIN:-}
 CLEAN_PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 BOOT="(cd adapters/vllm && WORK=$WORK bash verity_vllm/ops/pod_bootstrap.sh --cases $ROLE)"
@@ -87,7 +89,11 @@ print(checkpoint_dir(*sys.argv[1:]) or "")' "$REPO" "$REV" "$HF_HOME" 2>/dev/nul
 if [ -n "${GPU_LEASE-}" ] || command -v gpu-lease >/dev/null; then
   [[ ${A5_CORES:-} =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]] || refuse "A5_CORES=${A5_CORES:-}: every gpu-lease names its CPUs (--cores), and a lease without them holds every other lane out: A5_CORES=CPUS, the cores this machine's map gives you (e.g. 40-59)"
 fi
-command -v nvidia-smi >/dev/null || refuse "no nvidia-smi: the workload serves on one H200 (sm_90), which this machine doesn't show"
+command -v nvidia-smi >/dev/null || refuse "no nvidia-smi: $ROW serves on a GPU, which this machine doesn't show"
+if [ -z "${A5_CARD:-}" ] && { [ -n "${GPU_LEASE-}" ] || command -v gpu-lease >/dev/null; }; then on=(); else on=(-i "${A5_CARD:-0}"); fi
+mapfile -t cards < <(nvidia-smi --query-gpu=name --format=csv,noheader "${on[@]}" 2>/dev/null)
+PYTHONPATH=$TREE python3 "$TREE/benchmarks/one_stage/row_card.py" "$ROW" "${cards[@]}" \
+  || refuse "card ${A5_CARD:-any} is not one $ROW serves on: set A5_CARD to such a card's index"
 UNGUARDED=(); [ ! -e "$FA3" ] || UNGUARDED=(--hidden-so-fa3 "$FA3")
 mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW" "$KEPT"
 finish() {  # at exit, success or failure: BASE (the row dir, the window, the audit's private files) removed, or with A5_KEEP=1 kept
@@ -126,7 +132,7 @@ PB=$!
 
 export PY=$VENV/bin/python PY312=$VENV/bin/python HF_HOME HF_HUB_OFFLINE=1
 if [ -z "${CUDA_HOME:-}" ]; then
-  for c in /usr/local/cuda-12.9 /usr/local/cuda-12 /usr/local/cuda-13.0 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA_HOME=$c; break; }; done
+  for v in 12.9 13.0 ""; do CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit ${v:+"$v"} 2> /dev/null) && break; done
 fi
 if [ ! -f "$CUDA_HOME/include/cusparse.h" ]; then  # a toolkit without the math libraries' headers: the venv's wheels hold them
   for lib in cusparse cusolver cufft curand; do
@@ -219,9 +225,9 @@ challenger_audit() {  # A5_COINS=challenger: records_audit.py audit of WD on one
     --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/verity-verify-proof" \
     --zk-server "$leanb/flock-zk-server" --out "$A" > "$OUT/a5/a5.log" 2> "$OUT/a5/audit.err"
   rc=$?
-  (cd "$A" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*private*' ! -path './*/archive/*' \
+  (cd "$A" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -path './*/archive/*' \
      ! -path '*/challenger-work/*' \( ! -path './challenger/*' -o -name windows.jsonl -o -name pins.jsonl \) -print0 \
-    | xargs -0 -r -I{} cp --parents {} "$OUT/a5/")
+    | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$OUT/a5/")
   [ -z "$A5_PLAIN" ] || return $rc
   # the case the audit wrote (a5.write_case: it names the challenger, its window root and coins), as SPOT's check reads it;
   # v2_case.py's rebuild from the kept files carries no coins, which v2 refuses (NO_CHALLENGER)

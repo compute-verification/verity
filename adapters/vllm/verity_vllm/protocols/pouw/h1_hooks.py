@@ -13,7 +13,7 @@ from typing import Any
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     H1_SCHEME,
     H1_TILE,
-    H1_WEIGHT_KEY,
+    H1_WEIGHT_SALTS,
     CreditTrace,
     H1Run,
     h1_weight_root,
@@ -63,18 +63,18 @@ def layers(model: Any, types: tuple[type, ...], ks: tuple[int, ...] | None = Non
     return out
 
 
-#: the roots `weight_roots` computed, by salt key and global index: the weight (a weak reference), its `_tensor_key` and
-#: its root
-_ROOTS: dict[tuple[bytes, int], tuple[Any, tuple, bytes]] = {}
+#: the roots `weight_roots` computed, by the salts they are under and global index: the weight (a weak reference), its
+#: `_tensor_key` and its root
+_ROOTS: dict[tuple[Any, int], tuple[Any, tuple, bytes]] = {}
 
 
 def weight_roots(layers: list[Any], lo: int = 0) -> dict[int, bytes]:
     """`pouw_h1.weight_root` of each layer's int8 weight as it is served, by global index from ``lo``, under this process's
-    salt key (`pouw_h1.WEIGHT_KEY`), once a process: the weights are fixed after install, so each window's install reuses a
-    root while the key is the one it was computed under and the layer's weight the tensor it was computed from, with the
-    same storage, shape, dtype and version. Anything else (another key, a weight replaced or written in place, or an array
-    that isn't a tensor) is computed again."""
-    out, salt = {}, H1_WEIGHT_KEY
+    weight salts (`pouw_h1.WEIGHT_SALTS`), once a process: the weights are fixed after install, so each window's install
+    reuses a root while the salts are the ones it was computed under and the layer's weight the tensor it was computed
+    from, with the same storage, shape, dtype and version. Anything else (other salts, a weight replaced or written in
+    place, or an array that isn't a tensor) is computed again."""
+    out, salt = {}, H1_WEIGHT_SALTS
     for i, m in enumerate(layers):
         w, weight = lo + i, m.weight
         key, hit = _tensor_key(weight), _ROOTS.get((salt, w))

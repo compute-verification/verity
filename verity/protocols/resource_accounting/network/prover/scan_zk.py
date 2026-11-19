@@ -209,7 +209,6 @@ import hashlib
 import importlib.util
 import json
 import os
-import socket
 import sys
 import time
 from contextlib import contextmanager
@@ -219,8 +218,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Mapping, NamedTuple, Sequence
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.network.prover import leak_scan as LS, proof_drivers, network_attester_zk as WZ
-from verity.circuits import boolean as BL
+from verity.circuits import boolean as BL, partition_query as PQ, population as PN
 from verity.circuits.boolean import trace as TR
 from verity.circuits.codec import canonical_json
 from verity.circuits.defs import CompositeDefinition, bind
@@ -232,6 +232,7 @@ from verity.commitments.frame_v3 import BitRowLeaf, FrameV3, Port
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
+from verity.ports import free_port
 from verity.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_leaf,
                                            sha512_row_seg_digest)
 from verity.commitments.crypto import lms
@@ -245,10 +246,12 @@ from verity.protocols.resource_accounting.network.verifier.certificate import Di
 from verity.protocols.proofs.spot.verifier.challenger import coins as CC
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
-from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, partition as PA, produced
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as RG
+from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, partition as PA
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
 from verity.protocols.resource_accounting.network.verifier.scan_answer import _found, window_answer
+from verity.commitments import randomness as RND
 
 _TRAFFIC = Path(__file__).resolve().parents[5] / "tests" / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "scan_traffic.py"
 _spec = importlib.util.spec_from_file_location("scan_traffic", _TRAFFIC)
@@ -602,8 +605,8 @@ def tree_port(kind: str, reg: ADV.Committed, reads: list[int], reads_from: int) 
     """The verifier's own ``--registered`` port of `kind`'s registration: unit ``reads_from + i`` reads leaf reads[i]."""
     n = len(reg.rows)
     e = {"leaves": n, "words": reg.n_bits // 16, "word_bits": 16, "domain": tree_domain(reg).domain_id.hex()}
-    port = produced.port(value(kind), e, reg.root.hex(), reads, _schema(reg))
-    return port | ({REG.READS_FROM: int(reads_from)} if reads_from else {})
+    port = RV.port(value(kind), e, reg.root.hex(), reads, _schema(reg))
+    return port | ({RV.READS_FROM: int(reads_from)} if reads_from else {})
 
 
 def tree_entry(kind: str, reg: ADV.Committed, positions) -> dict:
@@ -620,7 +623,7 @@ def state_reads(ports: Sequence[Mapping[str, dict]]) -> dict:
     for ps in ports:
         for p in ("o0", "sin", "o1"):
             if p in ps and ps[p]["value"] == value("state"):
-                at.setdefault(p, {}).update({ps[p].get(REG.READS_FROM, 0) + i: r for i, r in enumerate(ps[p]["reads"])})
+                at.setdefault(p, {}).update({ps[p].get(RV.READS_FROM, 0) + i: r for i, r in enumerate(ps[p]["reads"])})
     runs = {}
     for p, got in sorted(at.items()):
         lo, hi = min(got), max(got) + 1
@@ -650,7 +653,7 @@ def tree_refusal(port: dict, reg: ADV.Committed, entry: dict, bcs: list[bytes | 
         if bc is None or not scheme.verify_path(ADV.PORT, root, n, p, row_leaf(
                 d, p, ADV.INST.tree_leaf(reg.key, bc), _schema(reg)), nodes):
             return f"registered reads: table row {r} does not open the registered root at position {p}"
-    base = int(port.get(REG.READS_FROM, 0))
+    base = int(port.get(RV.READS_FROM, 0))
     for i, (r, want) in enumerate(zip(refs, port["reads"], strict=True)):
         if entry["positions"][r] != want:
             return (f"registered reads: unit {base + i} reads position {entry['positions'][r]}, and the verifier's "
@@ -828,16 +831,16 @@ def _v3c_refused(window: Path, why: str) -> SystemExit:
 def v3c_state(window: Path, rec: dict, states: list[list[int]]) -> Held:
     """V3c's `SCAN_STATE` (network attestation's `blocks.SCAN_STATE`): its registration's one ``registered`` entry of
     it, its rows and salts the prover's `SCAN_STATE_FILE`, under the domain one-stage's R7 holds a value of the execution
-    phase to (`registered.domain` of the registration's ``program``, the entry's words and leaves, and the open root its
+    phase to (`registered_value.domain` of the registration's ``program``, the entry's words and leaves, and the open root its
     ``window`` names as ``run``), held to the entry's root and domain and to the scan's ``states``."""
     named = [e for e in rec.get("registered") or () if e.get("value") == SCAN_STATE]
     if len(named) != 1:
         raise _v3c_refused(window, f"its registration's registered values name {SCAN_STATE} {len(named)} times, not "
                                    "once: register the scan's state as a value of the audit's Program")
     (e,) = named
-    if int(e.get(REG.WIDTH_KEY, REG.WORD_BITS)) != REG.WORD_BITS:
-        raise _v3c_refused(window, f"its {SCAN_STATE}'s words are {e[REG.WIDTH_KEY]} bits, not the scan's "
-                                   f"{REG.WORD_BITS}")
+    if int(e.get(RV.WIDTH_KEY, RV.WORD_BITS)) != RV.WORD_BITS:
+        raise _v3c_refused(window, f"its {SCAN_STATE}'s words are {e[RV.WIDTH_KEY]} bits, not the scan's "
+                                   f"{RV.WORD_BITS}")
     n, W = int(e["leaves"]), int(e["words"])
     if n != len(states) or 16 * W != len(states[0]):
         raise _v3c_refused(window, f"its {SCAN_STATE} is {n} rows of {16 * W} bits, not the scan's {len(states)} "
@@ -847,7 +850,7 @@ def v3c_state(window: Path, rec: dict, states: list[list[int]]) -> Held:
         raise _v3c_refused(window, f"its registration's window names no open root (``run``), which its {SCAN_STATE}'s "
                                    "domain binds")
     try:
-        dom = REG.domain(rec.get("program", ""), SCAN_STATE, W, n, window=run)
+        dom = RV.domain(rec.get("program", ""), SCAN_STATE, W, n, window=run)
     except ValueError as x:
         raise _v3c_refused(window, f"its registration's window's open root: {x}") from None
     data = (window / SCAN_STATE_FILE).read_bytes()
@@ -982,6 +985,13 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
 def _bits(reg: ADV.Committed, i: int) -> list[int]:
     row = reg.rows[i]
     return [row[k // 8] >> k % 8 & 1 for k in range(reg.n_bits)]
+
+
+def _refusal(e: Exception) -> dict:
+    """What a refused, pending or failed stream call says of itself, as a record's `refused` field."""
+    if isinstance(e, S.Refused):
+        return e.verdict.to_json()
+    return {"pending": e.args[0] if e.args else None} if isinstance(e, S.Pending) else {"stream": str(e)}
 
 
 def header_refusal(ports: dict, entries: dict) -> str | None:
@@ -1170,12 +1180,12 @@ def wired(members) -> list[str]:
         [f"view {b}" for b in sorted(state) if o2 and o2.get(b) != state[b]]
 
 
-def empty_start(program: str, cls: IS.Class) -> REG.Registered:
+def empty_start(program: str, cls: IS.Class) -> RV.Registered:
     """The start of a run's first execution phase, as the verifier computes it: the empty state's row as one-stage's
     registered value `CARRY` of the Program with digest ``program``, a row/v2 row under the public salt of a value the
-    verifier fills (`registered.supplied_salts`). Nothing of it is the prover's, so the verifier pins its root."""
-    return REG.Registered.commit(program, CARRY, [_words(IS.encode(cls, IS.empty(cls)))],
-                                 REG.supplied_salts(program, CARRY, 1), schema=BitRowLeaf.hiding_schema)
+    verifier fills (`registered_value.supplied_salts`). Nothing of it is the prover's, so the verifier pins its root."""
+    return RV.Registered.commit(program, CARRY, [_words(IS.encode(cls, IS.empty(cls)))],
+                                 RV.supplied_salts(program, CARRY, 1), schema=BitRowLeaf.hiding_schema)
 
 
 def window_of(whole: SimpleNamespace, w: int, start, claimed: list[int] | None = None) -> SimpleNamespace:
@@ -1328,10 +1338,10 @@ def carry_of(pg: SimpleNamespace, cls: IS.Class, log: list[dict], port: dict) ->
         if old is not None:
             out["explicit-older"] = (
                 {**rec, "registered": [{**entry, "root": old["root"], "domain": old["domain"]}]},
-                {**check, "outputs": {CARRY: {"record": RG.digest(log[-2]), "port": CARRY_PORT}}}, None)
+                {**check, "outputs": {CARRY: {"record": DD.digest(log[-2]), "port": CARRY_PORT}}}, None)
         return out
 
-    return SimpleNamespace(check=check, record={"previous": RG.digest(log[-1]) if log else None, "registered": [entry]},
+    return SimpleNamespace(check=check, record={"previous": DD.digest(log[-1]) if log else None, "registered": [entry]},
                            root=root, domain=dom, empty=empty, negatives=negatives)
 
 
@@ -1434,7 +1444,7 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], T: int, out: Path) -> 
     counts = counts_of(members)
     nb, scan = T // cls.EVERY, templates == TEMPLATES
     prog = scan_program(cls, templates, T) if scan else \
-        M.P.mixed_population_program([(defs[tp], counts[tp]) for tp in templates])
+        PN.mixed_population_program([(defs[tp], counts[tp]) for tp in templates])
     query = M.P.template_instances_query([defs[tp] for tp in templates])
     part = M.P.partition(prog, query)
     if scan:
@@ -1489,7 +1499,7 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
     refs = {r: mr.refs.get(r, list(range(n))) for r in words}
     tables = {r: x[[refs[r].index(i) for i in range(max(refs[r]) + 1)]] for r, x in words.items()}
     set_name, salts = mr.set_name, mr.salts
-    got = st.stage(words, out, os.urandom(32), salts=salts, indices=range(mr.base, mr.base + n), set_name=set_name,
+    got = st.stage(words, out, salts=salts, indices=range(mr.base, mr.base + n), set_name=set_name,
                    tables=tables, refs=refs, registered=mr.entries)
     o0 = None if mr.outputs is None else [int(x[0]) for x in M.np.asarray(got["outs"]["o0"])]
     if o0 != mr.outputs:
@@ -1669,7 +1679,7 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
         o, result = outcome(stream, sample, ev)
         told = {"stream": stream.digest, "record": o.record, "accepted": o.accepted, "codes": list(o.verdict.codes)}
     except (S.Refused, S.Pending) as e:
-        result, told = None, {"stream": stream.digest, "accepted": False, "refused": AC._refusal(e)}
+        result, told = None, {"stream": stream.digest, "accepted": False, "refused": _refusal(e)}
     if result is not None and why is not None:
         result = {**result, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,
                   "checks": {**result["checks"], "coins": {"ok": False, "codes": ["coins"], "detail": {"coins": why}}}}
@@ -1686,7 +1696,7 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
             got, audit = outcome(s, d, evidence)
             accepted, side = got.accepted, AC.lean_side(audit)
         except (S.Refused, S.Pending, ValueError, AC.Ch.CoinError) as e:
-            accepted, side = None, {"refused": AC._refusal(e)}
+            accepted, side = None, {"refused": _refusal(e)}
         py = reason(evidence, window, held)
         step = ((side or {}).get("step"), (side or {}).get("codes"))
         neg[name] = {"refused": py is not None and accepted is False and step == AC.SELECT_COINS, "accepted": accepted,
@@ -1718,14 +1728,6 @@ def network_attester_roots(members) -> list[dict]:
     return [out[p] for p in sorted(out)]
 
 
-def _free_port() -> int:
-    """A loopback port the OS has free now. A pool's slots share a machine, and the nodes' 7811-7899 are the challenger
-    gate's tunnels, so a fixed port collides across runs."""
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: list[dict], trees: dict, out: Path,
           port: int, k: int | None = None, coins: SimpleNamespace | None = None,
           carry: SimpleNamespace | None = None) -> dict:
@@ -1747,7 +1749,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     opens a start that is the empty state's (``empty``); its outcome carries the record's changed forms' codes
     (``registration_negatives``) and the root the verdicts of record opened the start unit's ``sin`` against
     (``carried_start``, `audit.session_registered`)."""
-    a0, a7, P, R, V, frame_ports = M.a0, M.a7, M.P, M.R, M.V, M.prove_subprotocol.frame_ports
+    a0, a7, P, DK, R, V, frame_ports = M.a0, M.a7, M.P, M.DK, M.R, M.V, M.prove_subprotocol.frame_ports
     out.mkdir(parents=True, exist_ok=True)
     want, roots, publics, schemas = {}, [], {}, {}
     for m in members:
@@ -1770,7 +1772,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     n = sum(m["n"] for m in members)
     k = n if k is None else k
     rule = f"stratified:{k}" if coins is None else rule_of(k, n)
-    law, table = (M.D.parse_design(rule), None) if coins is None else S.params_sampling_design(rule, pg.program, pg.query, None)
+    law, table = (RND.parse_design(rule), None) if coins is None else S.params_sampling_design(rule, pg.program, pg.query, None)
     win = {"kind": "stand-in", "of": f"round {name}: execution phase {at.number} of {at.source}, its ingress and egress "
                                      f"at {at.setup.name}'s class (scan_zk.py)",
            "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]}
@@ -1781,7 +1783,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     reads = state_reads([json.loads(Path(m["registered_file"]).read_text())["ports"] for m in members])
     win |= ({"reads": {"scan/state": reads}} if reads else {}) | (
         {"empty": {CARRY: carry.empty}} if carry and carry.empty else {})
-    rec = R.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer, work_table=table,
+    rec = DK.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer, work_table=table,
                    **(carry.record if carry else {}))
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
 
@@ -1806,7 +1808,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     stream = None
     if coins is None:
         p = a0.challenger_sample(a.lean, ["--program", str(pg.program_file), "--partition", str(pg.partition_file),
-                                        "--stratified", str(k)], rec["law"], rec["population"], R.digest(rec),
+                                        "--stratified", str(k)], rec["law"], rec["population"], DD.digest(rec),
                                out / "draw.log")
         line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
         if line is None:
@@ -1850,7 +1852,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
             log(f"{name}/{m['name']}: no unit sampled, no session")
             continue
         sdir = out / f"session-{m['name']}"
-        record, live, proc = M.a8.session(a, m, sdir, local, port + j if port else _free_port(), env=WZ.zk_server(M, m))
+        record, live, proc = M.a8.session(a, m, sdir, local, port + j if port else free_port(), env=WZ.zk_server(M, m))
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": len(local)})
         verdicts[f"m0-verifier/{m['name']}"] = {
@@ -1933,12 +1935,12 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
 def charge_terms(M, result: dict, members: list[dict], delta: float) -> dict | None:
     """An accepted audit's terms (prove_path's `charge_terms`): ε, at most ``wrong_units.bound`` of its ``of`` proof
     blocks wrong except with probability δ; λ_δ (``location_bits``), β_δ (``harm_bound``: each template's proof blocks
-    weighing the bits one of its proof blocks commits, `partition._template_bits`) and ``exfiltration_bound`` = β_δ +
+    weighing the bits one of its proof blocks commits, `partition_query._template_bits`) and ``exfiltration_bound`` = β_δ +
     λ_δ. None where the audit isn't accepted, which bounds nothing."""
     if not result.get("accepted"):
         return None
     p = AU.profile(result["registration"], result["draw"], delta)
-    bits = {M.P.template_id(m["defn"]): float(M.P._template_bits(m["defn"])) for m in members}
+    bits = {M.P.template_id(m["defn"]): float(PQ._template_bits(m["defn"])) for m in members}
     wu = result.get("wrong_units") or {}
     return {"delta": delta, "wrong_units": wu, "epsilon": wu["bound"] / wu["of"] if wu.get("of") else None,
             "template_bits": bits, "location_bits": location_bits(p), "harm_bound": p.harm_bound(bits),
@@ -2098,10 +2100,10 @@ def frame_leaf(earlier: dict, start: dict) -> dict:
     """A start's leaf on the staged files of two execution phases' honest rounds: ``earlier``, the one before's staged
     ``last`` member, whose statement commits its o1 as a frame port of one leaf, so that port's root is that leaf as
     Flock's statement frames it; ``start``, this one's staged start member, whose ``sin`` row's b‖c one-stage's
-    registered read frames at leaf 0 of that port's domain (`registered.leaf`, the leaf Lean's registered reads
+    registered read frames at leaf 0 of that port's domain (`registered_value.leaf`, the leaf Lean's registered reads
     open). The two leaves, and whether they and the two rows' b‖c are the same bytes."""
     fv, dom = earlier["header"]["frame_v3"], ADV.domain(frame_binding(earlier["set"], 1, "o1"), 1)
-    read = REG.leaf(dom, 0, start["bcs"][0]["sin"], BitRowLeaf.hiding_schema).hex()
+    read = RV.leaf(dom, 0, start["bcs"][0]["sin"], BitRowLeaf.hiding_schema).hex()
     return {"statement": fv["roots"]["o1"], "registered_read": read,
             "same": (read == fv["roots"]["o1"] and dom.domain_id.hex() == fv["domain_ids"]["o1"]
                      and start["bcs"][0]["sin"] == earlier["bcs"][0]["o1"])}

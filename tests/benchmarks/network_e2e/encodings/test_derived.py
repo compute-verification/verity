@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.resource_accounting.network.verifier import advice as I1
+from verity_vllm.pipeline.advice_code import format as I1
 
 HERE = Path(__file__).parent
 

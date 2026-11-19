@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import shutil
 from pathlib import Path
 
 import priced as Q
@@ -43,8 +44,9 @@ def lifetime(out: Path, name: str, seconds: float, *, mode: str | None, decode: 
         p.mkdir(parents=True)
         (p / "meta.json").write_text(json.dumps({"load": "agentic@4", "rep": rep, "t0_unix": t0, "wall_s": 10.0}))
         (p / "result.json").write_text(json.dumps({"duration": seconds}))
+    private = out.parent / "private" / name
     (d / "meta.json").write_text(json.dumps({"left_out": 1, "env": {"VERITY_DSA_TOPK": mode} if mode else {},
-                                             "server_argv": ["--tensor-parallel-size", "8"]}))
+                                             "server_argv": ["--tensor-parallel-size", "8"], "private": str(private)}))
     recs = [{"kind": "header", "config": {"speculative": {"num_speculative_tokens": 5}}}]
     if lead:
         recs.append({"kind": "step", "step": 98, "T": 1, "rows": [["s", 10, 1]], "t": 100.5})
@@ -53,8 +55,10 @@ def lifetime(out: Path, name: str, seconds: float, *, mode: str | None, decode: 
               "t": 102.0 + i} for i, (n, start) in enumerate(decode)]
     recs.append({"kind": "step", "step": 99, "T": 6, "rows": [["r0", 5000, 6]], "t": 5.0})
     (d / "server").mkdir()
-    with gzip.open(d / "server" / "step_trace.1.jsonl.gz", "wt") as f:
+    (private / "server").mkdir(parents=True)
+    with gzip.open(private / "server" / "step_trace.1.jsonl.gz", "wt") as f:
         f.write("".join(json.dumps(r) + "\n" for r in recs))
+    Q.S.public_steps(d)
 
 
 def job(tmp: Path, counters: dict | None, layers: list[dict] | None = None) -> Path:
@@ -104,15 +108,62 @@ def test_at_is_linear_between_shapes_holds_rows_and_extends_keys(tmp_path):
 
 
 def test_steps_count_decode_rows_past_k_and_their_longest(tmp_path):
-    out = job(tmp_path, None)
-    s, n = Q.steps(out / "prod-record.1" / "server" / "step_trace.1.jsonl.gz")
+    job(tmp_path, None)
+    s, n = Q.steps(tmp_path / "out" / "prod-record.1" / "server" / "steps.1.jsonl.gz")
     assert n == 6
     assert [(x["rows"], x["keys"]) for x in s] == [(0, 0), (24, 131072), (6, 20000), (6, 5006)]
 
 
+def trace_steps(trace: Path) -> tuple[list[dict], int]:
+    """`priced.steps` as it read a step trace before the public steps: the reference a converted run is held to."""
+    out, n = [], None
+    with gzip.open(trace, "rt") as f:
+        for r in map(json.loads, f):
+            if r["kind"] == "header":
+                n = 1 + r["config"]["speculative"]["num_speculative_tokens"]
+            if r["kind"] != "step":
+                continue
+            rows = keys = pre = pre_keys = 0
+            for _, start, m in r["rows"]:
+                long_ = max(0, start + m - max(start, Q.K))
+                if m <= n:
+                    rows, keys = rows + long_, max(keys, start + m)
+                elif long_:
+                    pre, pre_keys = pre + long_, max(pre_keys, start + m)
+            out.append({"step": r["step"], "T": r["T"], "t": r["t"], "rows": rows, "keys": keys if rows else 0,
+                        "prefill_rows": pre, "prefill_keys": pre_keys})
+    return out, n
+
+
+def test_a_stored_runs_traces_converted_price_as_the_old_reader_read_them(tmp_path, capsys):
+    """A run stored before the public steps holds its step traces in its output; `steps-of-trace` writes their public
+    steps, which priced reads to the old reader's steps, kinds and price."""
+    counters = {"rows_long": 1, "rows_tied": 0, "rows_bisected": 80, "rows_refined": 1600, "rows_at": 1, "calls": 1}
+    out = job(tmp_path, counters)
+    args = [str(out), "--card", "h200", "--units", str(units_file(tmp_path)), "--ours", "prod-record"]
+    assert Q.main(args) == 0
+    was = json.loads((out / "priced.json").read_text())
+    for d in sorted(out.glob("prod-*")):
+        (d / "server" / "steps.1.jsonl.gz").unlink()
+        (tmp_path / "private" / d.name / "server" / "step_trace.1.jsonl.gz").rename(d / "server" / "step_trace.1.jsonl.gz")
+    with pytest.raises(SystemExit, match="no public steps"):
+        Q.main(args)
+    to = tmp_path / "derived"
+    assert Q.S.main(["steps-of-trace", str(out), "--to", str(to)]) == 0
+    assert sorted(str(p.relative_to(to)) for p in to.rglob("*") if p.is_file()) == [
+        f"prod-{a}.{k}/server/steps.1.jsonl.gz" for a in ("record", "trace") for k in (1, 2)]
+    for d in sorted(out.glob("prod-*")):
+        trace, steps = d / "server" / "step_trace.1.jsonl.gz", to / d.name / "server" / "steps.1.jsonl.gz"
+        assert Q.steps(steps) == trace_steps(trace)
+        assert all(len(row) == 2 for r in map(json.loads, gzip.open(steps, "rt")) for row in r.get("rows", ()))
+        shutil.copy(steps, d / "server")
+    assert Q.main(args) == 0
+    assert json.loads((out / "priced.json").read_text()) == was
+
+
 def test_without_failed_rows_only_the_base_is_priced_and_no_point_stands(tmp_path, capsys):
     out = job(tmp_path, {"rows_long": 1, "rows_tied": 0, "rows_at": 1, "calls": 1})
-    assert Q.main([str(out), "--units", str(units_file(tmp_path)), "--ours", "prod-record"]) == 0
+    assert Q.main([str(out), "--card", "h200", "--units", str(units_file(tmp_path)), "--ours", "prod-record"]) == 0
     r = json.loads((out / "priced.json").read_text())
     ly = r["layers"][0]
     assert not ly["failed_priced"] and r["point"] is None and "no failed rows" in r["no_point"]
@@ -141,7 +192,7 @@ def test_the_point_is_the_priced_layer_and_the_measured_one_below_marked_modeled
     mine = {"arm": "prod-record", "over": "prod-trace", "value": 0.02, "ci95": [0.01, 0.03], "pairs": 2}
     out = job(tmp_path, {"rows_long": 1, "rows_tied": 0, "rows_bisected": 80, "rows_refined": 1600, "rows_at": 1,
                          "calls": 1}, [below, mine])
-    assert Q.main([str(out), "--units", str(units_file(tmp_path)), "--ours", "prod-record"]) == 0
+    assert Q.main([str(out), "--card", "h200", "--units", str(units_file(tmp_path)), "--ours", "prod-record"]) == 0
     r = json.loads((out / "priced.json").read_text())
     ly, p = r["layers"][0], r["point"]
     assert ly["failed_priced"] and ly["each"][0]["pass"] == "cut"
@@ -157,21 +208,21 @@ def test_the_point_is_the_priced_layer_and_the_measured_one_below_marked_modeled
     assert p["ci95"] == pytest.approx([100 * (c["lo"] - 0.01), 100 * (c["hi"] + 0.02)])
     assert p["inputs"][0].startswith("modeled: ")
     # the door's call: the same layers and point, its runs in the point's inputs, under the id it gives
-    d = Q.price(out, Q.units(units_file(tmp_path)), tested_by="r-capture", units_from="r-minify", ours=["prod-record"],
+    d = Q.price(out, Q.units(units_file(tmp_path)), tested_by="r-capture", units_from="r-minify", ours=["prod-record"], card="h200",
                 name="x/priced")
     assert d["layers"][0]["cost"] == c and d["member"] == p["member"] and "no_point" not in d
     assert d["point"]["name"] == "x/priced" and d["point"]["tested_by"] == "r-capture"
     assert "at r-minify's device times a call" in d["point"]["inputs"][0]
     with pytest.raises(SystemExit, match="none of prod-record-bisect was served"):
-        Q.price(out, Q.units(units_file(tmp_path)), tested_by="r", units_from="u", ours=["prod-record-bisect"])
+        Q.price(out, Q.units(units_file(tmp_path)), tested_by="r", units_from="u", ours=["prod-record-bisect"], card="h200")
     with pytest.raises(SystemExit):
-        Q.main([str(out), "--units", str(units_file(tmp_path)), "--result"])
+        Q.main([str(out), "--card", "h200", "--units", str(units_file(tmp_path)), "--result"])
 
 
 def test_a_lifetime_whose_server_ran_no_canonical_top_k_is_refused(tmp_path):
     out = job(tmp_path, None)
     with pytest.raises(SystemExit, match="no canonical top-k"):
-        Q.main([str(out), "--units", str(units_file(tmp_path)), "--ours", "prod-trace"])
+        Q.main([str(out), "--card", "h200", "--units", str(units_file(tmp_path)), "--ours", "prod-trace"])
 
 
 def steps_file(d: Path, lines: list[dict], stats=("rows_long", "rows_tied", "rows_bisected")) -> None:
@@ -208,7 +259,7 @@ def test_counts_by_step_price_each_steps_own_failed_rows_on_its_slowest_card(tmp
             {"step": 1, "tokens": 24, "device": "cuda:1", "rows_long": 9, "rows_tied": 0, "rows_bisected": 12},
             # the second's tokens are not the trace's: it joins nothing
             {"step": 2, "tokens": 7, "device": "cuda:0", "rows_long": 9, "rows_tied": 0, "rows_bisected": 5}])
-    assert Q.main([str(out), "--units", str(units_file(tmp_path)), "--ours", "prod-record"]) == 0
+    assert Q.main([str(out), "--card", "h200", "--units", str(units_file(tmp_path)), "--ours", "prod-record"]) == 0
     x = json.loads((out / "priced.json").read_text())["layers"][0]["each"][0]
     assert x["counts_by_step"] and x["rows_at"] is None and x["unjoined_steps"] == 1
     assert x["rows_failed_a_card"] == {"rows_bisected": 12} and x["prefill_rows_failed_a_card"] == {"rows_bisected": 30}
@@ -229,7 +280,7 @@ def test_prefill_steps_are_priced_only_at_prefill_unit_times_and_else_given_meas
                                                                   for k in (1, 2)}}))
     (out / "prod_repro.json").write_text(json.dumps({"run": "r-ab", "layers": {"each": [below]}}))
     units = str(units_file(tmp_path))
-    assert Q.main([str(out), "--units", units, "--ours", "prod-record"]) == 0
+    assert Q.main([str(out), "--card", "h200", "--units", units, "--ours", "prod-record"]) == 0
     r = json.loads((out / "priced.json").read_text())
     ly = r["layers"][0]
     assert not ly["prefill_priced"] and "--prefill-units" in ly["prefill_refused"]
@@ -241,7 +292,7 @@ def test_prefill_steps_are_priced_only_at_prefill_unit_times_and_else_given_meas
     assert any(i.startswith("measured, not priced: prod-record's prefill steps") for i in p["inputs"])
     assert "prefill steps not priced: no prefill unit time" in capsys.readouterr().out
     # with prefill unit times, the prefill step is priced at them and is no measured term of the point
-    assert Q.main([str(out), "--units", units, "--prefill-units", units, "--ours", "prod-record"]) == 0
+    assert Q.main([str(out), "--card", "h200", "--units", units, "--prefill-units", units, "--ours", "prod-record"]) == 0
     r = json.loads((out / "priced.json").read_text())
     x = r["layers"][0]["each"][0]
     pb = Q.units(units_file(tmp_path))["present"]["base"]
@@ -269,3 +320,14 @@ def test_the_measured_cost_adjusted_for_steps_is_paired_by_pass_and_marked_model
     assert a["ci95"][0] < a["value"] < a["ci95"][1]
     assert 0.015 < a["value"] < 0.025
     assert Q.adjusted(out, "prod-record", "prod") is None
+
+
+@pytest.mark.parametrize("card", [None, "h20"])
+def test_a_card_no_gpu_card_file_names_is_refused(tmp_path, card):
+    """The card is a member's name part: given, and a GPU card file's `short`, else refused by name."""
+    out = tmp_path / "out"
+    out.mkdir()
+    with pytest.raises(SystemExit) as e:
+        Q.main([str(out), *(["--card", card] if card else []), "--units", str(units_file(tmp_path)), "--ours", "prod-record"])
+    assert card is None or "--card 'h20': 0 GPU card files under" in str(e.value.code)
+

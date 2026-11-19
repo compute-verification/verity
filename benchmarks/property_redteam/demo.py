@@ -30,7 +30,7 @@ import sys
 from verity_vllm.definitions.registry import catalog
 from verity_vllm.definitions.registry.ref_prims import gather_f32
 
-import verity.protocols.resource_accounting.compute.pouw.prover.circuit.words  # noqa: F401  (PoUW word primitives register on import)
+import verity.circuits.ops.words  # noqa: F401  (PoUW word primitives register on import)
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.circuits.evaluation.reference import ScalarReference, evaluate
 from verity.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32 as IMMA_SAT

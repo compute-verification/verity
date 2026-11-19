@@ -413,7 +413,7 @@ theorem inWords_laid {U : VStar.UnitC} {l : Laid} (hl : U.laid = .ok l) {name : 
 
 section Unit
 
-open FlockSoundness FlockSoundness.Audit
+open FlockSoundness Spot.Sampling
 
 /-- **A copy of V*'s laid-out `RecOpen` unit, in a unit of any partition, computes the climb and the consistency term**
 (`unit_recOpen`). Let the verifier build `net` from the layout of `VStar.recOpenUnit LANES H` (`netOf`), and let unit `u`

@@ -35,5 +35,6 @@ gk::Dump("out").digests("leaves", leaves, count, s);  // SHA-512 bytes, whatever
 Run `sass_gate.py` on the binary in the same job, before the timed run. Write the twin's output with `dump.write` under
 the same names and compare with `python compare.py DEVICE_DIR TWIN_DIR` (exit 9 on a difference).
 
-`python sass_gate.py BINARY --kernels K... --expect OP=N[,OP=N...]... [--smem FILE] [--numeric]` exits 0 when every
-kernel passes and 8 when one is refused, naming the kernel, the check and the fix.
+`python sass_gate.py BINARY --cuda-bin DIR --kernels K... --expect OP=N[,OP=N...]... [--smem FILE] [--numeric]` exits 0
+when every kernel passes and 8 when one is refused, naming the kernel, the check and the fix. DIR is the bin directory of
+the toolkit that built the binary.

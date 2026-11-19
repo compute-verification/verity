@@ -18,7 +18,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk 
 
 
 class Stager(stage_tile.Stager):
-    def stage(self, d: Any, name: str, in_rows: list, out_rows: list, rows: dict, out: Path, seed: bytes, salts: dict,
+    def stage(self, d: Any, name: str, in_rows: list, out_rows: list, rows: dict, out: Path, salts: dict,
               staging: str) -> dict:
         if staging == "fast":
             import fast_stage
@@ -26,7 +26,7 @@ class Stager(stage_tile.Stager):
         bad = H.check()
         assert not any(bad.values()), f"hash_scratch's pieces disagree with their primitives: {bad}"
         IL.PIECES.update(H.PIECES)
-        got = CS.stage_unit(d, name, in_rows, out_rows, rows, out, seed, salts=salts)
+        got = CS.stage_unit(d, name, in_rows, out_rows, rows, out, salts=salts)
         text = fast_stage.composed() if staging == "fast" else (out / "circuit.txt").read_text()
         got = {**got, "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text),
                "circuit_bytes": fast_stage.size(text) if staging == "fast" else len(text)}

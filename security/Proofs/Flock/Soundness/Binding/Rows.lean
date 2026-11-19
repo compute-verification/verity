@@ -27,12 +27,12 @@ string of its row and salt, and its leaf is the registered one. So the value bin
 
 namespace FlockSoundness.Binding
 
-open Game Model Accounting Refine Audit
+open Game Model Accounting Refine Spot.Sampling
 
-variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
-  {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
+  {decode : Spot.Sampling.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
 
 /-- **A layout's `hm96-sha512/row/v1` or `/row/v2` rows**: which commit strings are rows (`isRow`), the bytes the row
 digest hashes for a row (`enc`, injective: `sha512/row/v1`'s row prefix then its words, or `sha512/row/v2`'s `P(ℓ)` then
@@ -50,7 +50,7 @@ structure HmRows (lay : Layout P plan tab decode) where
   enc_inj : Function.Injective enc
   other : lay.Pos → ExplicitLeaf lay.Val
   bcAt : (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) → lay.Pos → Fin 128 → Fin 8 →
-    Fin (2 ^ (Audit.Partition.tabOf plan tab S R u).S.m)
+    Fin (2 ^ (Spot.Sampling.Partition.tabOf plan tab S R u).S.m)
   bc_registered : ∀ S R u, u ∈ S → ∀ M, Sat plan tab S R u M → ∀ g ∈ P.io u, isRow (lay.pos g) →
     H512 (K512.leafPrefix ++ bytesAt (wit plan tab S R u M) (bcAt S R u (lay.pos g))) = lay.regLeaf R (lay.pos g)
   other_registered : ∀ S R u, u ∈ S → ∀ M, Sat plan tab S R u M → ∀ g ∈ P.io u, ¬ isRow (lay.pos g) →
@@ -65,7 +65,7 @@ def HmRows.v2 {lay : Layout P plan tab decode} (isRow : lay.Pos → Prop) [Decid
     (bits : lay.Val → {bs : List Bool // bs.length < 2 ^ 64}) (hbits : Function.Injective bits)
     (other : lay.Pos → ExplicitLeaf lay.Val)
     (bcAt : (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) → lay.Pos → Fin 128 → Fin 8 →
-      Fin (2 ^ (Audit.Partition.tabOf plan tab S R u).S.m))
+      Fin (2 ^ (Spot.Sampling.Partition.tabOf plan tab S R u).S.m))
     (bc_registered : ∀ S R u, u ∈ S → ∀ M, Sat plan tab S R u M → ∀ g ∈ P.io u, isRow (lay.pos g) →
       H512 (K512.leafPrefix ++ bytesAt (wit plan tab S R u M) (bcAt S R u (lay.pos g))) = lay.regLeaf R (lay.pos g))
     (other_registered : ∀ S R u, u ∈ S → ∀ M, Sat plan tab S R u M → ∀ g ∈ P.io u, ¬ isRow (lay.pos g) →

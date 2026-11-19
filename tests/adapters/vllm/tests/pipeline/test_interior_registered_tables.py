@@ -23,6 +23,7 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
+from verity.circuits import population as PN
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import ONE
@@ -30,6 +31,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.population import BitsWord, WordBits
 from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
@@ -37,9 +39,11 @@ from verity.commitments.gates import embedding as EMB
 from verity.commitments.periods import rows as CS
 from verity.commitments.periods.interface import digest_words
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+from verity.commitments import registered_value as RV
+from verity.commitments import randomness as RND
 
 from verity_vllm.definitions.numerics.fp8_moe_rows import moe_expert_fp8_block_row
 from verity_vllm.definitions.registry import boolean_fp8_moe as BM
@@ -48,10 +52,11 @@ from verity_vllm.pipeline import interior_links as IL
 from verity_vllm.pipeline import interior_rows as IR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
+from tests.fixed_salts import fixed
 
 #: experts a table, a block's K e4m3 bytes (one row a block), and a table row's u16 words
 E, K, H = 4, 32, 16
-SPANS, Q, SALT, ROW, DELTA = 3, 2, bytes(range(32)), "interior-registered-tables-test", 2.0 ** -40
+SPANS, Q, ROW, DELTA = 3, 2, "interior-registered-tables-test", 2.0 ** -40
 #: a boundary registration's digest and its replay sample, for an interior no stream registers
 BOUNDARY, SAMPLE = "b1" * 64, (0, 2)
 #: the registered tables a span reads, the blocks that each open one, and a span's units
@@ -62,15 +67,26 @@ REGISTRATION = "5e" * 64
 PARAMS = tuple(f"weights/model.layers.0.mlp.experts.{p}@{H}/b0/table" for p in ("gate_up_proj", "down_proj"))
 
 
-def _read_signature(S_):
-    return EMB.read(S_.V, S_.H).signature()[0], Tuple(Array(S_.H, EMB.BF16), BL.BIT)
+def _bits_signature(S_):
+    params = EMB.read(S_.V, S_.H).signature()[0]
+    return (("tok", EMB.TOKEN), *params[1:]), Tuple(Array(S_.H, EMB.BF16), BL.BIT)
 
 
 #: a read's ports and (h, ok) without its hashes: h the row (a read's elements are its key, eight words each of its root
 #: and domain id, then the row's H), ok 1
-READ = TR.part("InteriorRegisteredTablesTestRead", ("V", "H"), _read_signature,
-               lambda C, S_, *e: [*e[17:17 + S_.H], [ONE]], "h = row, ok = 1: a read's ports with none of its hashes",
-               version=0, register=False)
+_READ_BITS = TR.part("InteriorRegisteredTablesTestReadBits", ("V", "H"), _bits_signature,
+                     lambda C, S_, *e: [*e[17:17 + S_.H], [ONE]], "h = row, ok = 1: a read's bits with none of its hashes",
+                     version=0, register=False)
+
+
+def _read_body(B_, S_, tok, *rest):
+    h, ok = B_.call(bind(_READ_BITS, V=S_.V, H=S_.H), B_.call(bind(WordBits, W=32), tok), *rest)
+    return coll_concat(EMB.read(S_.V, S_.H).signature()[1], [B_.batch(bind(BitsWord, W=16), h, axes=(0,)), ok])
+
+
+#: the read's ports and words around `_READ_BITS`, as `EmbeddingRead_v2` wires its own
+READ = CompositeDefinition("InteriorRegisteredTablesTestRead", 0, ("V", "H"), lambda S_: EMB.read(S_.V, S_.H).signature(),
+                           _read_body, doc="h = row, ok = 1: a read's ports with none of its hashes", register=False)
 FUSED = bind(BM.MoeExpertFp8ReadGemmV1, READ=bind(READ, V=E, H=H), K=K, N=1, G=K, KB=K, SWAP=False,
              DOT=BG.HopperE4m3MmaV2Dot32)
 TID = descriptor_id(FUSED)
@@ -128,11 +144,11 @@ def _links() -> tuple[IR.Link, ...]:
 
 
 @functools.cache
-def _tables(seed: int = 0) -> dict[str, RG.Registered]:
+def _tables(seed: int = 0) -> dict[str, RV.Registered]:
     """The registered tables, by parameter: `E` rows of `K` e4m3 bytes each, committed in the reads' row format under
     salts of their own. ``seed``: 0 the registration the verifier pinned, any other a registration of other weights."""
     rng = np.random.default_rng(seed)
-    return {p: RG.Registered.commit(REGISTRATION, p, rng.integers(0, 0x70, (E, K), dtype=np.uint8).view("<u2").tolist(),
+    return {p: RV.Registered.commit(REGISTRATION, p, rng.integers(0, 0x70, (E, K), dtype=np.uint8).view("<u2").tolist(),
                                     [rng.bytes(192) for _ in range(E)], schema=RG.SCHEMA_SEG) for p in PARAMS}
 
 
@@ -148,6 +164,10 @@ def _words(b: bytes) -> list[int]:
 
 def _bits(words) -> list[int]:
     return [(int(w) >> b) & 1 for w in words for b in range(16)]
+
+
+def _tok(words) -> int:
+    return int(words[0]) | int(words[1]) << 16
 
 
 @functools.cache
@@ -175,7 +195,7 @@ def _span(seed: int, registration: int = 0) -> IR.Span:
 
 
 def _boundary_window() -> CS.Binding:
-    return CS.Binding(P.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), S.D.parse_design(f"subset:{Q}"),
+    return CS.Binding(PN.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), RND.parse_design(f"subset:{Q}"),
                       "b0" * 64, (CS.Member(P.template_id(BLOCK), (("ingress", 64),), (("egress", 64),), SPANS),))
 
 
@@ -184,8 +204,8 @@ def _boundary() -> tuple[dict, dict, str]:
     """Round 1's stand-in boundary: its record, the challenger's ports and its leaf layer."""
     window = _boundary_window()
     c = CS.commit(window, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
-                            "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}], salt_key=SALT)
-    return (CS.registration(c, {"stand_in": "boundary"}, None, registrar=R), CS.expected_ports(window),
+                            "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}], salts_of=fixed(window))
+    return (CS.registration(c, {"stand_in": "boundary"}, None, registrar=DK), CS.expected_ports(window),
             CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)}))
 
 
@@ -194,9 +214,8 @@ def _first():
     stand-in boundary registered and its first stage sampled (spans 0 and 2)."""
     links = _links()
     names: dict[str, tuple[str, str]] = {}
-    values = IR.link_values(links, Q)
-    for phase, w in (("serve", _boundary_window()), ("interior", IR.interior_window(_member(), CELLS, "00", [0], values=values))):
-        names |= {m.port(p): (m.schema(p), phase) for m in w.members for p in CS.port_leaves(m)}
+    for phase, w in (("serve", _boundary_window()), ("interior", IR.interior_window(_member(), CELLS, "00", [0], links=links))):
+        names |= {t: (schema, phase) for t, (schema, _n) in w.trees.items()}
     supplied = tuple(v for v, _per, _leaf in IR.span_values(links))
     public = (S.Public("population", "structure", "N, the sample's range"),
               S.Public("window", "structure", "provenance: served, on test values"),
@@ -221,7 +240,7 @@ def _interior(registration: int = 0, boundary: str = BOUNDARY, **kw) -> IR.Inter
     """The interior of `SAMPLE`'s spans on the tables of ``registration``, under this module's links and those
     tables' entries as the pins, unless ``kw`` gives others."""
     tables = _tables(registration)
-    kw = {"salt_key": SALT, "links": _links(), "registered": tables, "pins": _pins(tables),
+    kw = {"links": _links(), "registered": tables, "pins": _pins(tables),
           "spans": [_span(s, registration) for s in SAMPLE], **kw}
     return IR.interior(kw.pop("spans"), CELLS, boundary, list(SAMPLE), row=ROW, **kw)
 
@@ -236,7 +255,7 @@ def _copies(pins) -> dict:
 def test_a_spans_unit_is_the_fused_blocks_own_function():
     """This module's spans are the block's: a unit's y and ok are the fused block's reference on its rows."""
     data = _span(SAMPLE[0]).data
-    out = evaluate(FUSED, *(_bits(data["rows"][p][0]) for p in PORTS))
+    out = evaluate(FUSED, *(_tok(data["rows"][p][0]) if p == "tok" else _bits(data["rows"][p][0]) for p in PORTS))
     assert list(out) == [*_bits(data["outs"]["o0"][0]), int(data["outs"]["o1"][0][0])]
 
 
@@ -261,8 +280,8 @@ def test_the_stream_registers_an_interior_of_fused_blocks_under_the_tables_the_v
     for x in SUPPLIES:
         assert c.given[m.port(x.port)].positions == tuple(s * T + a for s in range(Q) for a in AT)
         mine = RG.supplied_rows(stream.interior_program(Q), x.value, RG.sources(srcs)[x.value], it.record)
-        v = RG.Registered.commit(prog, x.value, [RG.bit_words(r, 1, 16) for r in mine],
-                                 RG.supplied_salts(prog, x.value, len(mine)), schema=m.schema(x.port))
+        v = RV.Registered.commit(prog, x.value, [RG.bit_words(r, 1, 16) for r in mine],
+                                 RV.supplied_salts(prog, x.value, len(mine)), schema=m.schema(x.port))
         assert [list(r) for r in v.rows] == [digest_words(bytes.fromhex(pins[n][x.port])) for _ in range(Q) for n in PARAMS]
         assert v.entry() == {k: got[x.value][k] for k in v.entry()} and got[x.value]["leaves"] == Q * T
     assert IR.span_values(SUPPLIES) == tuple((x.value, T, IR.DIGEST) for x in SUPPLIES)
@@ -360,7 +379,7 @@ def test_a_registered_table_without_a_pin_is_refused():
             fill(SUPPLIES, Q)
     with pytest.raises(ValueError, match=f"registered table {PARAMS[1]} is not held"):
         _interior(registered={PARAMS[0]: tables[PARAMS[0]]})
-    wide = RG.Registered.commit(REGISTRATION, PARAMS[0], np.zeros((2 * E, H), np.uint16).tolist(), schema=RG.SCHEMA_SEG)
+    wide = RV.Registered.commit(REGISTRATION, PARAMS[0], np.zeros((2 * E, H), np.uint16).tolist(), schema=RG.SCHEMA_SEG)
     with pytest.raises(ValueError, match=f"reads a table of {E} rows of {H} words, not registered table {PARAMS[0]}'s {2 * E}"):
         _interior(registered={**tables, PARAMS[0]: wide}, pins={**pins, PARAMS[0]: wide.entry()})
 
@@ -370,11 +389,11 @@ def test_the_links_are_the_ones_round_2_derives_from_the_replay_block():
     ``domain`` the verifier's with the registered tables a row (``tables``): a row a table, unit j reading row
     j // `W`. They are this module's by hand."""
     record = _boundary()[0]
-    got = IR.links(P.population_program(BLOCK, SPANS), KEY, record, _member(), CELLS, dict.fromkeys(IR.TABLE),
+    got = IR.links(PN.population_program(BLOCK, SPANS), KEY, record, _member(), CELLS, dict.fromkeys(IR.TABLE),
                    dict.fromkeys(IR.TABLE, PARAMS))
     assert len(got) == len(_links()) and set(got) == set(_links())
     with pytest.raises(ValueError, match="1 registered tables for its 2 rows a sampled span"):
-        IR.links(P.population_program(BLOCK, SPANS), KEY, record, _member(), CELLS, dict.fromkeys(IR.TABLE),
+        IR.links(PN.population_program(BLOCK, SPANS), KEY, record, _member(), CELLS, dict.fromkeys(IR.TABLE),
                  dict.fromkeys(IR.TABLE, PARAMS[:1]))
     with pytest.raises(ValueError, match="read it as two values"):
         IL.values((SUPPLIES[0], replace(SUPPLIES[0], tables=PARAMS[::-1])))
@@ -399,10 +418,10 @@ def test_a_table_read_of_a_registered_table_is_tied_as_a_fused_block_is():
             spans.append(IR.Span(f"s{s}", m, {"rows": rows, "outs": {"o0": rows["row"].copy(),
                                                                       "o1": np.ones((CELLS, 1), np.uint16)}},
                                  [[0, m.n]], "p" * 64))
-        it = IR.interior(spans, CELLS, BOUNDARY, list(SAMPLE), row=ROW, salt_key=SALT, links=(*ties, *ops),
+        it = IR.interior(spans, CELLS, BOUNDARY, list(SAMPLE), row=ROW, links=(*ties, *ops),
                          registered=tables, pins=_pins(tables))
         assert it.tables == () and [e["value"] for e in it.record["registered"]][:2] == ["read/root", "read/domain"]
         spans[0].data["outs"]["o0"][0, 0] ^= 1
         with pytest.raises(ValueError, match="its h and ok are not the read's"):
-            IR.interior(spans, CELLS, BOUNDARY, list(SAMPLE), row=ROW, salt_key=SALT, links=(*ties, *ops),
+            IR.interior(spans, CELLS, BOUNDARY, list(SAMPLE), row=ROW, links=(*ties, *ops),
                         registered=tables, pins=_pins(tables))

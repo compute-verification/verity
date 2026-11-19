@@ -5,7 +5,7 @@
 `ReplayStep_v1` (`replay_step`) takes each admitting row's prefix-cache hit as witness that it only bounds, so a hit
 the cache didn't give would be a channel nobody charges. The derived encoding's rules
 (`verity_vllm.pipeline.advice_code.derived`, `Prefixes`) fix the hit while the cumulative pool bound rules out
-eviction, and fix the canonical sources always. Past the bound the hit is the block pool's, which `CacheStep_v3`
+eviction, and fix the canonical sources always. Past the bound the hit is the block pool's, which no circuit
 derives, and advice v1 sends none. This Definition is those rules over a committed cache state, with
 `reference` as their specification in Python. The encodings' `test_cache_step.py` difftests both against `Prefixes`
 on the fixture traces.
@@ -82,11 +82,7 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates.frame_v3 import _refs
-from verity.protocols.resource_accounting.network.verifier.head_check import (
-    _coll,
-    _Consts,
-    ands,
-)
+from verity.commitments.gates.bits import _coll, _Consts, ands
 
 STATICS = ("N", "U", "TW", "RW", "L")
 

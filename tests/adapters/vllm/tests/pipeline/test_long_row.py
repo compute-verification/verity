@@ -26,9 +26,10 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
+from verity.circuits import population as PN
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import Builder, CompositeDefinition, bind
-from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.batch import evaluate_batch
 from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.types import Array, Tuple
 from verity.commitments import history as HT
@@ -39,6 +40,7 @@ from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, int
 from verity_vllm.pipeline import long_row as LR
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.circuits import replay_links as RL
 
 RUN = "0" * 128
 
@@ -81,7 +83,7 @@ def test_the_served_row_is_4213_units_of_56_templates() -> None:
     us = LR.units(t)
     by = Counter(d.base_id for _, d in us)
     assert by == {"DsaTopKDigitCount_v1": 32, "DsaTopKDigitPick_v2": 4, "DsaTopKMaskBlock_v2": 8, "DsaMaskPositions_v2": 8,
-                  "DsaPositionsMerge_v2": 1, "DsaPositionsChunk_v1": 64, "DsaPositionsSlot_v1": 2048, "EmbeddingRead_v1": 2048}
+                  "DsaPositionsMerge_v2": 1, "DsaPositionsChunk_v1": 64, "DsaPositionsSlot_v2": 2048, "EmbeddingRead_v2": 2048}
     ids = Counter(descriptor_id(d) for _, d in us)
     assert (len(us), len(ids)) == (4213, 56)
     assert sorted(ids.values()) == [1] * 53 + [64, 2048, 2048]
@@ -122,13 +124,13 @@ def test_the_layout_takes_it_inline_and_round_two_links_and_wires_each_units_ope
     fn = defs[descriptor_id(L.replay)]
     cs = SS._callers_of(defs, fn)
     assert None not in cs.template
-    assert all(SS._node_links(cs, fn, k, node) is not None for k, node in enumerate(fn.body.nodes))
-    assert all(SS._node_wires(cs, fn, k, node) is not None for k, node in enumerate(fn.body.nodes))
+    assert all(RL._node_links(cs, fn, k, node) is not None for k, node in enumerate(fn.body.nodes))
+    assert all(RL._node_wires(cs, fn, k, node) is not None for k, node in enumerate(fn.body.nodes))
     wires = {(x.template.partition("{")[0], x.port, x.writer.partition("{")[0], x.wport)
              for x, _per, _runs in SS.wire_runs(defs, descriptor_id(L.replay))}
     assert {("DsaPositionsChunk_v1", "slots", "DsaPositionsMerge_v2", "o0"),
-            ("DsaPositionsSlot_v1", "slots", "DsaPositionsChunk_v1", "o0"),
-            ("EmbeddingRead_v1", "tok", "DsaPositionsSlot_v1", "o0")} <= wires
+            ("DsaPositionsSlot_v2", "slots", "DsaPositionsChunk_v1", "o0"),
+            ("EmbeddingRead_v2", "tok", "DsaPositionsSlot_v2", "o0")} <= wires
     returns = [(x.template, x.port, per) for x, per, _ in SS.link_runs(defs, descriptor_id(L.replay)) if x.value == BR.RETURN]
     assert returns == [(descriptor_id(t.bindings["READ"]), "o1", L.verdict_rows[0])]
 
@@ -174,10 +176,10 @@ def test_its_ok_and_its_reads_rows_are_the_long_rows_function() -> None:
     whole = bind(R.DsaTopKReadRows, **{k: t.bindings[k] for k in ("N", "TOPK", "BLOCK", "READ")})
     kv, ok = whole.signature()[1].fields
     assert t.signature()[1] == ok
-    want = np.asarray(BS.evaluate_bits(whole, *args[:-2])).reshape(6, -1)
+    want = np.asarray(evaluate_batch(whole, *args[:-2])).reshape(6, -1)
     assert want.shape[1] == kv.leaves + ok.leaves
-    assert np.array_equal(np.asarray(BS.evaluate_bits(t, *args)).reshape(6, -1), want[:, kv.leaves:])
-    assert np.array_equal(np.asarray(BS.evaluate_bits(_read_rows(t), *args)).reshape(6, -1), want[:, :kv.leaves])
+    assert np.array_equal(np.asarray(evaluate_batch(t, *args)).reshape(6, -1), want[:, kv.leaves:])
+    assert np.array_equal(np.asarray(evaluate_batch(_read_rows(t), *args)).reshape(6, -1), want[:, :kv.leaves])
 
 
 PARAMS = ("scores", "n", "c", "i", "root", "domain", "row", "salt", "path")
@@ -230,9 +232,9 @@ def test_its_links_are_the_ones_round_two_derives_and_its_window_takes_them() ->
         IR.interior_window(ms, cells, "00", [0], wires)
     for q in (1, 2):
         values = IL.link_values(links, q)
-        w = IR.interior_window(ms, cells, "00", list(range(q)), wires, values, rows)
+        w = IR.interior_window(ms, cells, "00", list(range(q)), wires, links, rows)
         assert [m.n for m in w.members] == [q * n for n in cells]
-        want = P.mixed_population_program([(x, q * n) for x, n in zip(L.templates, cells, strict=True)], values=values)
+        want = PN.mixed_population_program([(x, q * n) for x, n in zip(L.templates, cells, strict=True)], values=values)
         digests.append(P.program_digest(w.program))
         assert digests[-1] == P.program_digest(want)
     assert digests[0] != digests[1]
@@ -241,6 +243,11 @@ def test_its_links_are_the_ones_round_two_derives_and_its_window_takes_them() ->
 def _bits(a: np.ndarray) -> np.ndarray:
     """Rows of u16 words as rows of bits, each word's low bit first."""
     return np.unpackbits(np.ascontiguousarray(a, dtype="<u2").view(np.uint8).reshape(len(a), -1), axis=1, bitorder="little")
+
+
+def _leaf_bits(values: np.ndarray, widths: list[int]) -> np.ndarray:
+    return np.asarray([[(int(v) >> b) & 1 for v, w in zip(row, widths, strict=True) for b in range(w)] for row in values],
+                      dtype=np.uint8)
 
 
 def _table(length: int, seed: int, name: str = "long-row-test", fill: tuple[int, int] | None = None) -> HT.HistoryTable:
@@ -280,9 +287,11 @@ def test_a_spans_units_are_each_its_definitions_value() -> None:
         fields = ret.fields if isinstance(ret, Tuple) else (ret,)
         args = [_bits(s.data["rows"][p])[:, :ty.leaves] for (p, _w), (_n, ty) in zip(s.member.rows, params, strict=True)]
         outs = [_bits(s.data["outs"][p]) for p, _w in s.member.outs]
-        want = np.asarray(BS.evaluate_bits(defs[s.member.template], *args)).reshape(s.n, -1)
-        assert np.array_equal(np.concatenate([o[:, :f.leaves] for o, f in zip(outs, fields, strict=True)], axis=1), want)
-        assert not any(o[:, f.leaves:].any() for o, f in zip(outs, fields, strict=True))
+        bits = [sum(f.leaf_widths()) for f in fields]
+        values = np.asarray(evaluate_batch(defs[s.member.template], *args)).reshape(s.n, -1)
+        want = _leaf_bits(values, [w for f in fields for w in f.leaf_widths()])
+        assert np.array_equal(np.concatenate([o[:, :b] for o, b in zip(outs, bits, strict=True)], axis=1), want)
+        assert not any(o[:, b:].any() for o, b in zip(outs, bits, strict=True))
     slot, reads = got[-2], got[-1]
     assert reads.member.template == descriptor_id(t.bindings["READ"])
     assert np.array_equal(reads.data["rows"]["tok"], slot.data["outs"]["o0"])
@@ -323,27 +332,27 @@ def test_a_sampled_spans_units_commit_as_its_interior() -> None:
     operands = [np.asarray(args[p], dtype=np.uint8) for p, _ty in t.signature()[0]]
     whole = bind(R.DsaTopKReadRows, **{k: t.bindings[k] for k in ("N", "TOPK", "BLOCK", "READ")})
     kv = whole.signature()[1].fields[0]
-    assert np.array_equal(np.asarray(BS.evaluate_bits(t, *operands)).reshape(len(rows), -1),
+    assert np.array_equal(np.asarray(evaluate_batch(t, *operands)).reshape(len(rows), -1),
                           _bits(read.data["outs"]["o1"])[:, 0].reshape(len(rows), -1))
-    assert np.array_equal(np.asarray(BS.evaluate_bits(whole, *operands[:-2])).reshape(len(rows), -1)[:, :kv.leaves],
-                          _bits(read.data["outs"]["o0"]).reshape(len(rows), -1))
+    assert np.array_equal(np.asarray(evaluate_batch(whole, *operands[:-2])).reshape(len(rows), -1)[:, :kv.leaves],
+                          read.data["outs"]["o0"].reshape(len(rows), -1))
 
     served = {"roots": [{"port": x.value, "root": x.root.hex(), "leaves": x.leaves, "domain": x.domain.domain_id.hex()}
                         for x in tables]}
-    kw = {"row": "long-row-test", "salt_key": bytes(range(32)), "wires": wires, "rows": block, "tables": tables,
+    kw = {"row": "long-row-test", "wires": wires, "rows": block, "tables": tables,
           "served": served, "positions": BT.class_rows(L.prompt, L.outputs, 16), "links": links}
     it = IR.interior(sampled, cells, "00" * 64, [0, 2], **kw)
     w = it.committed.window
     assert [(m.template, m.n) for m in w.members] == [(m.template, 2 * n) for m, n in zip(ms, cells, strict=True)]
-    want = P.mixed_population_program([(x, 2 * n) for x, n in zip(L.templates, cells, strict=True)],
+    want = PN.mixed_population_program([(x, 2 * n) for x, n in zip(L.templates, cells, strict=True)],
                                       values=IL.link_values(links, 2))
     assert P.program_digest(w.program) == P.program_digest(want)
     assert [e["value"] for e in it.record["registered"]] == [f"{key}/{p}" for p in PARAMS]
     assert it.published == {x.value: [bc.hex() for bc in x.bcs] for x in tables}
     reads = next(m for m in w.members if m.template == descriptor_id(t.bindings["READ"]))
-    assert w.held_leaves(reads, "tok") == tuple(range(reads.n))
+    assert w.leaves(reads, "tok").tolist() == list(range(reads.n))
     pick = next(m for m in w.members if m.template.startswith("DsaTopKDigitPick"))
-    assert w.held_leaves(pick, pick.rows[0][0]) == (0, 1, 2, 3)
+    assert w.leaves(pick, pick.rows[0][0]).tolist() == [0, 1, 2, 3]
 
     ids = [s.member.template for s in sampled[0]]
 

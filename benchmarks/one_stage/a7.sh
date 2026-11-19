@@ -17,6 +17,7 @@
 # δ the sample's. Checks 1-3 and 5 on each sampled receipt are proved, not opened, in a second statement, by the opening
 # unit (`verity.protocols.resource_accounting.memory.poub.verifier.commitments.gates.block_check`).
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 export HZ_CONFIGS=a7 HZ_MEM_GB=${A7_MEM_GB:?}
 [ -n "${A7_CACHE:-}" ] && export HZ_CACHE=$A7_CACHE
 source benchmarks/pouw/hidden_zk/job.sh
@@ -30,6 +31,6 @@ log "a7: k ${A7_K:-default}, steps ${A7_STEPS:-default}, samples ${A7_SAMPLES:-d
   ${A7_SAMPLES:+--samples "$A7_SAMPLES"} 2>&1 | tee -a "$OUT/a7.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/a7"
-(cd "$W/a7" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -I{} cp --parents {} "$OUT/a7/")
+(cd "$W/a7" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | python3 "$PUBF" filter | xargs -0 -I{} cp --parents {} "$OUT/a7/")
 log "a7: done, rc $rc"
 exit "$rc"

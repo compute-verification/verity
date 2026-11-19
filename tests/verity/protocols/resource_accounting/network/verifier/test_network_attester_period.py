@@ -12,6 +12,7 @@ from dataclasses import replace
 
 import pytest
 
+from verity.protocols.resource_accounting.network.prover import n2_zk as N2
 from verity.protocols.resource_accounting.network.verifier import service as SVC
 from verity.protocols.resource_accounting.network.verifier.certificate import CertifiedRecord
 from verity.protocols.resource_accounting.network.verifier.service import PERIOD_DRAW, PERIOD_DRAWN
@@ -69,7 +70,7 @@ def prove(run: Run, drawn: dict, openings: dict, windows=None) -> list[S.Outcome
     """The sampled windows (or `windows`) registered under the period sample, in order, and each decided on a proof."""
     out = []
     for w in drawn["units"] if windows is None else windows:
-        reg = run.lw.register(run.stream, run.lw.registration(openings[w], run.previous), drawn)
+        reg = run.lw.register(run.stream, N2.registration(run.lw, openings[w], run.previous), drawn)
         run.previous = reg.digest
         out.append(run.decide(run.stream.select(reg), openings[w]))
     return out
@@ -215,15 +216,15 @@ def test_registration_follows_the_sample_and_the_committed_roots(tmp_path):
     (w,) = drawn["units"]
     other = min({0, 1, 2} - {w})
     with pytest.raises(S.Refused, match="window"):
-        run.lw.register(run.stream, run.lw.registration(openings[other]), drawn)
+        run.lw.register(run.stream, N2.registration(run.lw, openings[other]), drawn)
     eg, ig = openings[w].records
     resalted = run.lw.commit(w, eg, ig, SALTS[other])
     with pytest.raises(S.Refused, match="period"):
-        run.lw.register(run.stream, run.lw.registration(resalted), drawn)
+        run.lw.register(run.stream, N2.registration(run.lw, resalted), drawn)
     assert not run.stream.log
     prove(run, drawn, openings)
     with pytest.raises(S.Refused, match="period"):
-        run.lw.register(run.stream, run.lw.registration(openings[other], run.previous), drawn)
+        run.lw.register(run.stream, N2.registration(run.lw, openings[other], run.previous), drawn)
 
 
 def test_a_rejected_sampled_window_rejects_the_link(tmp_path):
@@ -268,6 +269,6 @@ def test_a_sampled_window_missing_or_past_the_sample_refuses_a_sampled_link(tmp_
     prove(run, drawn, openings, [last])
     assert run.lw.network_verdict(run.stream, drawn=drawn)["accepted"]
     (unsampled,) = {0, 1, 2} - set(drawn["units"])
-    reg = run.stream.register(run.lw.registration(openings[unsampled], run.previous), run.lw.ports(unsampled))
+    reg = run.stream.register(N2.registration(run.lw, openings[unsampled], run.previous), run.lw.ports(unsampled))
     assert reg.order == 2
     assert run.lw.network_verdict(run.stream, drawn=drawn)["refused"] == [3]

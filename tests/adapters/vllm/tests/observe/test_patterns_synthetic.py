@@ -724,7 +724,7 @@ def test_an_fa3_call_is_held_to_the_arguments_the_registered_chain_models(extra,
             events[i] = dataclasses.replace(e, op="_vllm_fa3_C.fwd.default", schema=schema, args=args)
     se = step_events(events)
     ctx = context(start, se.sample)
-    doc = {**ctx.header.profile, "target": TargetProfile(flash_attn_version=3).to_json()}
+    doc = {**ctx.header.profile, "target": TargetProfile.default().with_overrides(flash_attn_version=3).to_json()}
     res = resolve_step(se, dataclasses.replace(ctx, header=dataclasses.replace(ctx.header, profile=doc)))
     u = next(r for root, r in zip(se.roots, res) if root.op == "vllm.unified_attention_with_output.default")
     assert isinstance(u, Unsupported) and u.reason.startswith(reason), u
@@ -761,7 +761,7 @@ def test_silu_is_the_builders_silu_mul_kind_under_the_record_targets_numerics_pr
     events, start = decode_step()
     se = step_events(events)
     ctx = context(start, se.sample)
-    doc = {**ctx.header.profile, "target": TargetProfile(numerics_profile=numerics).to_json()}
+    doc = {**ctx.header.profile, "target": TargetProfile.default().with_overrides(numerics_profile=numerics).to_json()}
     ctx = dataclasses.replace(ctx, header=dataclasses.replace(ctx.header, profile=doc))
     (s,) = [c for k, v in by_spec(resolve_step(se, ctx)).items() if k.startswith("SiluMul") for c in v]
     assert s.spec is vocabulary_for("profile", numerics).kind("silu_mul", I=INTER)

@@ -39,7 +39,7 @@ unset CARGO_TARGET_DIR
 . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh
 { nvidia-smi --query-gpu=index,name,driver_version,memory.total --format=csv; nproc; echo "cuda_visible=${CUDA_VISIBLE_DEVICES:-}"; } | tee $R/out/host.txt
 # cores busy outside this attempt every 30 s (Builds overlapping it: ov.noisy)
-python3 verity/protocols/proofs/flock/prover/pod/gemm_slowdown.py sample --pgid $(ps -o pgid= $$ | tr -d ' ') --out $R/out/others_cores.txt &
+python3 benchmarks/proof_throughput/gemm_slowdown.py sample --pgid $(ps -o pgid= $$ | tr -d ' ') --out $R/out/others_cores.txt &
 SAMPLER=$!
 trap 'kill $SAMPLER 2>/dev/null' EXIT
 PREFLIGHT=${PREFLIGHT:-${GATE:-1}}
@@ -70,7 +70,7 @@ fi
 W=${FLOCK_WORK:-/workspace}/flock-circuit; UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $W/torch/bin/python ] || { $UV venv -q --python 3.12 $W/torch && $UV pip install -q --python $W/torch/bin/python 'torch>=2.7' \
   --index-url https://download.pytorch.org/whl/cu128; } || exit 1
-$W/torch/bin/python verity/protocols/proofs/flock/prover/pod/gemm_slowdown.py native --out $R/out/native.json --iters ${ITERS:-100} || exit 1
+$W/torch/bin/python benchmarks/proof_throughput/gemm_slowdown.py native --out $R/out/native.json --iters ${ITERS:-100} || exit 1
 G=; [ "$PREFLIGHT" = 1 ] && G="--preflight $R/out/preflight/classes/results.jsonl"
-$W/py/bin/python3 verity/protocols/proofs/flock/prover/pod/gemm_slowdown.py compute --sweep $R/out/m34/classes/results.jsonl $G --native $R/out/native.json \
+$W/py/bin/python3 benchmarks/proof_throughput/gemm_slowdown.py compute --sweep $R/out/m34/classes/results.jsonl $G --native $R/out/native.json \
   --result $R/result.json

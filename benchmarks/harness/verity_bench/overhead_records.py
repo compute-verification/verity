@@ -12,7 +12,8 @@ clean tree, wrote an `overhead.json` of `RUN_SCHEMA` the
 node side found nothing against, was timed at the points of an art of record that nothing supersedes, ran its arm's cubin
 from the `art:` it was sent (`run --cubin ART`; the art's bytes a binary the run's SASS gate passed, `cubin_why`; a cubin
 built in the run is development only), and its own point passed the door's rules (`overhead.point_whys`: every linear timed, at least 20 paired reps, an
-interval within ±5%, the cross-check, the arm's reference verifier accepting every row). `table` refuses every other
+interval within ±5%, the cross-check, the arm's reference verifier accepting every row: run by the node job on its own
+transcript, so the developer's side's word, its `checked_by` `piece`, `not recorded` for a run that predates the field). `table` refuses every other
 figure and says why; a reader of γ outside this package (the protocol table, the one-pager, a goal) takes it from
 `verity bench overhead table --json`, whose rows carry `of_record` and `why`.
 
@@ -34,14 +35,13 @@ from pathlib import Path
 from typing import Any
 
 from verity_bench import jobs, kit, settings
+from verity_bench.kit_report import NOT_RECORDED, PIECE
 from verity_bench import overhead as O
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, records
 
 POINTS_RECORD, RUN_RECORD = "overhead-points", "overhead"
 POINTS_KIND = "verity-bench-overhead-points/v1"
 BY = "benchmarks"
-#: each card's GPU node, where `--on` names none
-NODES = {"h200": "vy-spot-glm53", "h100": "vy-h100-1"}
 NODE_JOB = "benchmarks/harness/overhead_node.sh"
 #: the options the door gives each node job (`launch_points`, `launch_run`); the node job sets the rest itself
 DOOR_OPTIONS = {"points": {"--card", "--model", "--precision"},
@@ -50,8 +50,6 @@ DOOR_OPTIONS = {"points": {"--card", "--model", "--precision"},
 #: the variables a run of the door sets with `--env` (`launch_argv`): its interpreter, and whether it is a trial; any other
 #: could change what the node job runs
 DOOR_ENV = frozenset({"VERITY_BENCH_VENV", kit.TRIAL})
-#: what `research run` records in every job's `params.env` (`research.result.ONEDNN_ISA`), admitted at that value alone
-RUN_DEFAULT_ENV = {"ONEDNN_MAX_CPU_ISA": "AVX512_CORE_BF16"}
 #: the run's bound, which its GPU lease enforces too: the sweep's and a timed run's
 MINUTES = {"points": 150, "run": 60}
 CENSUS = Path("calibration/census")
@@ -60,6 +58,11 @@ DATACENTER, WORLD = "dc-12500-machines-600s", "world-inference-2027"
 GATES = Path("benchmarks/slowdown/data/hardware.toml")
 #: the table a research run of `table` keeps beside its result, relative to the run's directory (`record`)
 TABLE = "out/overhead-table.json"
+#: the line under each γ table: who ran the check a γ of record needs, and under what coins
+REFERENCE_VERIFIER = (f"A γ of record needs its arm's reference verifier to accept every row; `checked by` `{PIECE}`: the "
+                      "node job runs it (`verify.py --every-row`) on the node's own transcript, a replay that recomputes "
+                      "the scheme in the clear, so its accept is the developer's side's word, not an audit. `overhead.json` "
+                      "records no coins of it: the arm's verifier writes what it drew under the run's `verdicts/`.")
 #: the unit of every γ `record` writes
 GAMMA_UNIT = "busy SM-seconds over stock's, less one: a fraction, not a percent"
 #: each model as the words that open its member, `MODEL-CARD` (`measurements`)
@@ -112,8 +115,8 @@ def launch_run(store: Any, root: Path, node: str, card: str, scheme: str, point:
         O.scheme(scheme)
     art = points or current_points(store, card, model)
     if art is None:
-        raise ValueError(f"no points of record for the {card} and {model}: run `verity bench overhead points --card {card} "
-                         f"--model {model} --on NODE`, then `verity bench overhead points --store RUN`")
+        raise ValueError(f"no points of record for the {card} and {model}: run `verity bench overhead points --model {model} "
+                         f"--on NODE` on a node with the {card}, then `verity bench overhead points --store RUN`")
     held = {k: store.get_manifest(art).meta.get(k) for k in ("card", "model")}
     if held != {"card": card, "model": model}:
         raise ValueError(f"{art} holds the points of the {held['card']} and {held['model']}, not the {card} and {model}")
@@ -137,7 +140,9 @@ def launch_run(store: Any, root: Path, node: str, card: str, scheme: str, point:
 def door_why(attempt: Mapping, run: str, sub: str) -> str | None:
     """Why `run` isn't a run of the door's `sub`: its command isn't the node job `bash NODE_JOB sub` with the door's options
     (`DOOR_OPTIONS`), under the gpu-lease that holds its GPU (the door's own, or `research run --gpus`'s) or alone, or it set
-    a variable with `--env` the door doesn't (`DOOR_ENV`)."""
+    a variable with `--env` the door doesn't (`DOOR_ENV`); what `research run` records in every job's `params.env`
+    (`research.result.env_defaults`) is admitted at its default alone."""
+    from research.result import env_defaults
 
     argv = [str(x) for x in attempt.get("argv") or []]
     cmd = argv[argv.index("--") + 1:] if argv[:1] == ["gpu-lease"] and "--" in argv else argv
@@ -145,8 +150,8 @@ def door_why(attempt: Mapping, run: str, sub: str) -> str | None:
     if cmd[:3] != ["bash", NODE_JOB, sub] or options - DOOR_OPTIONS[sub]:
         return (f"{run} isn't a run of the door: it ran `{shlex.join(argv)[:300]}`, not `bash {NODE_JOB} {sub}` with the "
                 f"door's options (launch it with `verity bench overhead {sub}`)")
-    env = (attempt.get("params") or {}).get("env") or {}
-    if extra := sorted(k for k, v in env.items() if k not in DOOR_ENV and RUN_DEFAULT_ENV.get(k) != v):
+    env, defaults = (attempt.get("params") or {}).get("env") or {}, env_defaults({})
+    if extra := sorted(k for k, v in env.items() if k not in DOOR_ENV and defaults.get(k) != v):
         return f"{run} set {', '.join(extra)} with --env, which a run of the door doesn't: it sets only {', '.join(sorted(DOOR_ENV))}"
     return None
 
@@ -189,16 +194,12 @@ def trial_why(store: Any, attempt: Mapping, run: str) -> str | None:
     return kit.trial_why(run, attempt, result)
 
 
-def _superseded(store: Any, target: str) -> list[str]:
-    return [str(lab.value) for lab in store.labels(target, key=SUPERSEDED_BY)]
-
-
 def current_points(store: Any, card: str, model: str = O.KERNEL_MODEL, precision: str = "fp8") -> str | None:
     """The points art of record of a card, model and precision: the newest such art labelled, and not superseded."""
 
     found = [art for art in records(store).get(POINTS_RECORD, []) if art.startswith("art:")
              and {k: store.get_manifest(art).meta.get(k) for k in ("card", "model", "precision")}
-             == {"card": card, "model": model, "precision": precision} and not _superseded(store, art)]
+             == {"card": card, "model": model, "precision": precision} and not kit.superseded(store, art)]
     return max(found, key=lambda art: store.get_manifest(art).meta.get("version", 0), default=None)
 
 
@@ -225,7 +226,7 @@ def of_record(store: Any, run: str) -> tuple[dict | None, list[str]]:
         m = store.get_manifest(art)
         if POINTS_RECORD not in [lab.value for lab in store.labels(art, key=RUN_OF_RECORD)]:
             whys.append(f"its points {art} aren't of record")
-        if later := _superseded(store, art):
+        if later := kit.superseded(store, art):
             whys.append(f"its points {art} are superseded by {', '.join(later)}: time it at the current points")
         if m.payload is None or m.payload.sha256 != doc.get("points_sha256"):
             whys.append(f"the points it was timed at aren't {art}'s")
@@ -268,7 +269,8 @@ def gamma_rows(store: Any) -> list[dict]:
                    "gamma_weight_side_bound": p.get("gamma_weight_side_bound"), "aa": p.get("aa"),
                    "epsilon": p.get("epsilon"), "perplexity": p.get("perplexity"), "gate": p.get("gate"),
                    "linears": p.get("linears"), "commits_y": None if arm is None else bool(arm.get("commits_y")),
-                   "note": O.row_note(arm, doc.get("card"))}
+                   "note": O.row_note(arm, doc.get("card")),
+                   "checked_by": "—" if arm is None else p.get("checked_by") or NOT_RECORDED}
             why = whys + list(p.get("whys") or [])
             row |= {"of_record": not why, "why": "; ".join(why) or None}
             best[(row["scheme"], row["card"], row["model"], name)] = row
@@ -335,7 +337,7 @@ def census(root: Path) -> dict:
     gates = tomllib.loads((root / GATES).read_text())["units"]
     return {"datacenter": DATACENTER, "gpus": dc["machines"] * dc["gpus_per_machine"], "window_s": dc["window_s"],
             "world": WORLD, "world_flop_per_year": world[WORLD]["total_flop"],
-            "flop_per_s": {c.gpu: hardware[c.datasheet]["flop_per_second"] for c in O.CARDS.values()},
+            "flop_per_s": {c.gpu: hardware[c.datasheet]["flop_per_second"] for c in O.DOOR},
             "gates_per_flop": gates["gates_per_flop"]["value"],
             "gates_basis": f"{GATES} units.gates_per_flop ({gates['gates_per_flop']['status']}, {gates['basis']})"}
 
@@ -356,19 +358,35 @@ def build(store: Any = None, *, root: Path | None = None, local_only: bool = Fal
     return {"schema": "verity-bench/overhead-table/v1", "census": c, "covers": O.covers(), "rows": rows}
 
 
+#: what a metric's row says of its readings: ``own``, the kernel model's on the row's card is the metric's own reading;
+#: ``members``, every reading is a member
+READINGS = ("own", "members")
+
+
+def metric_row(row: str) -> tuple[str, str, str, bool]:
+    """A metric's row, ``scheme/card/point own`` or ``scheme/card/point members``: its scheme, card and point, and whether
+    it has an own reading; ValueError otherwise."""
+    where, _, readings = row.partition(" ")
+    parts = where.split("/")
+    if len(parts) != 3 or readings not in READINGS:
+        raise ValueError(f"metric row {row!r} is not 'scheme/card/point {' or '.join(READINGS)}'")
+    return parts[0], parts[1], parts[2], readings == "own"
+
+
 def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
-    """The measurements `record` writes: for each of `metrics`, an id for the γ of a row named ``scheme/card/point``, and
-    for each model that row's γ of record with its interval (the kernel model's on the kernel card as the metric's own
-    reading, every other as its `member`, `MEMBER_MODEL`'s words and the card), measured, held to the scheme gate (`overhead.GAMMA_MAX`)
-    as its target, from its run and its points' art, with its note, whether its run timed y's commitment (`commits_y`,
-    where the row says) and what the γ is over; where the table has no γ of record there, no value and why."""
+    """The measurements `record` writes: for each of `metrics`, an id for the γ of a row (`metric_row`), and for each
+    model that row's γ of record with its interval (the kernel model's on the row's card as the metric's own reading
+    where the row says ``own``, every other as its `member`, `MEMBER_MODEL`'s words and the card), measured, held to the
+    scheme gate (`overhead.GAMMA_MAX`) as its target, from its run and its points' art, with its note, whether its run
+    timed y's commitment (`commits_y`, where the row says) and what the γ is over; where the table has no γ of record
+    there, no value and why."""
 
     rows = {(r["scheme"], r["card"], r["model"], r["point"]): r for r in table["rows"]}
     out = []
     for name, row in metrics.items():
-        scheme, card, point = row.split("/")
+        scheme, card, point, has_own = metric_row(row)
         for model in O.MODELS:
-            own = model == O.KERNEL_MODEL and card == O.KERNEL_CARD
+            own = has_own and model == O.KERNEL_MODEL
             r = rows.get((scheme, card, model, point))
             g = (r or {}).get("gamma") or {}
             m: dict[str, Any] = {"name": name, "unit": GAMMA_UNIT, "mark": "measured", "target": O.GAMMA_MAX,
@@ -438,8 +456,8 @@ def render(table: Mapping) -> str:
 
 
 def _section(c: Mapping, rows: list[dict], covers: str) -> str:
-    lines = ["| Scheme | Card | Point | m | γ, × stock − 1 [95% CI] | over least-SM stock | weight side bound | A/A | ε | γ ≤ 10 | Run | Note |",
-             "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+    lines = ["| Scheme | Card | Point | m | γ, × stock − 1 [95% CI] | over least-SM stock | weight side bound | A/A | ε | γ ≤ 10 | Reference verifier checked by | Run | Note |",
+             "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     refused = []
     for r in rows:
         if not r["of_record"]:
@@ -448,8 +466,9 @@ def _section(c: Mapping, rows: list[dict], covers: str) -> str:
         gate = r.get("gate") or {}
         lines.append(f"| {r['scheme']} | {r['card']} | {r['point']} | {r['m']} | {_g(r['gamma'])} | {_g(r['gamma_least_sm'])} "
                      f"| {_g(r['gamma_weight_side_bound'])} | {_g(r['aa'])} | {_eps(r['epsilon'])} | "
-                     f"{'yes' if gate.get('passes') else 'no'} | {r['run']} | {r.get('note') or ''} |")
+                     f"{'yes' if gate.get('passes') else 'no'} | {r.get('checked_by') or NOT_RECORDED} | {r['run']} | {r.get('note') or ''} |")
     lines += ["", covers,
+              "", REFERENCE_VERIFIER,
               "", (f"Per monitoring period, over all compute: the {c['datacenter']} datacenter's {c['gpus']:,} GPUs in "
                    f"{c['window_s']} s windows, spending the share γ/(1+γ) of its compute on proving, and the world's "
                    f"{c['world_flop_per_year']:.3g} FLOP a year of useful work ({c['world']}), to which proving adds γ times it. "

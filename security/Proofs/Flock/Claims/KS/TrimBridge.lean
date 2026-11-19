@@ -80,16 +80,16 @@ theorem firstWait_map {R W Op : Type} (k : ℕ) (opens : Claims.Seen → List Op
     rw [← List.map_flatMap, ih]
 
 theorem ERep_map {Coin W Op : Type} [Fintype Coin] [Nonempty Coin] (V : Claims.Verifier Coin)
-    (m k K : Claims.Msg → ℕ) (opens : Claims.Seen → List Op) (g : Op → Op) (A : Claims.Msg → List Op → Option W)
-    (check : Claims.Msg → W → Bool) :
+    (m k K : Hash.Msg → ℕ) (opens : Claims.Seen → List Op) (g : Op → Op) (A : Hash.Msg → List Op → Option W)
+    (check : Hash.Msg → W → Bool) :
     Claims.ERep V m k K (fun v => (opens v).map g) A check =
       Claims.ERep V m k K opens (fun x os => A x (os.map g)) check := by
   unfold Claims.ERep
   simp only [firstWait_map]
 
-theorem assemble_map {Col T : Type} (parse : Claims.Msg → Option Claims.Flock.Stmt)
-    (table : Claims.Msg → ℕ → Option Claims.Flock.Stmt) (decode : List (ℕ × Col) → List T)
-    (read : List T → Claims.Flock.Wit) (f : Col → Col) (x : Claims.Msg) (ops : List (ℕ → List (ℕ × Col))) :
+theorem assemble_map {Col T : Type} (parse : Hash.Msg → Option Claims.Flock.Stmt)
+    (table : Hash.Msg → ℕ → Option Claims.Flock.Stmt) (decode : List (ℕ × Col) → List T)
+    (read : List T → Claims.Flock.Wit) (f : Col → Col) (x : Hash.Msg) (ops : List (ℕ → List (ℕ × Col))) :
     Claims.Flock.assemble parse table decode read x (ops.map fun o j => (o j).map fun p => (p.1, f p.2)) =
       Claims.Flock.assemble parse table (fun os => decode (os.map fun p => (p.1, f p.2))) read x ops := by
   have e : ∀ j, ((ops.map fun o j => (o j).map fun p => (p.1, f p.2)).flatMap fun o => o j) =
@@ -134,7 +134,7 @@ theorem listWithin_comp {Col T : Type} [DecidableEq Col] [Zero Col] (len : T →
 /-- **KS at a record gives KS at the record with its columns and code through `f`**, at the same `κ` and `γ`, when
 `f` keeps `0`. -/
 theorem KS_mapCols_of_KS {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
-    [Zero Col] (H : Claims.Msg → Claims.Msg) (D : Claims.Flock.Deploy Coin Col T) (f : Col → Col) (hf : f 0 = 0)
+    [Zero Col] (H : Hash.Msg → Hash.Msg) (D : Claims.Flock.Deploy Coin Col T) (f : Col → Col) (hf : f 0 = 0)
     (h : Claims.Flock.KS H D) : Claims.Flock.KS H (D.mapCols f) := by
   intro decode hlw
   rw [E_mapCols]
@@ -166,8 +166,8 @@ theorem hole_agree {F : Type} [Zero F] [DecidableEq F] (n : ℕ) (i : Fin n) (u 
 /-- **KS at both records from the one bound at tables of `Ok` columns**: at `D.mapCols f` directly, `0` being `f` of an
 `Ok` column on a nonempty word, and at `D` with `ExtendJ`, both at the same `κ` and `γ`. -/
 theorem KS_both_of_tableBoundJR {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-    [DecidableEq Col] [Zero Col] (H : Claims.Msg → Claims.Msg) (D : Claims.Flock.Deploy Coin Col T)
-    (N : Claims.Msg → ℕ → ℕ) (f : Col → Col) (hf : f 0 = 0) (Ok : Claims.Msg → ℕ → Col → Prop)
+    [DecidableEq Col] [Zero Col] (H : Hash.Msg → Hash.Msg) (D : Claims.Flock.Deploy Coin Col T)
+    (N : Hash.Msg → ℕ → ℕ) (f : Col → Col) (hf : f 0 = 0) (Ok : Hash.Msg → ℕ → Col → Prop)
     (hN : ∀ x, ((∑ j : Fin (Claims.Flock.nTab D x), N x j : ℕ) : ℝ) ≤ D.N₀ x) (hεt : ∀ x, 0 ≤ D.εtable x)
     (hVk : ∀ x, 0 < D.V.k x) (hK : ∀ x, 0 < D.cap x)
     (hk : ∀ x, (8 ≤ D.k x ∧ Claims.Flock.Splits D x) ∨ Claims.Flock.NoAcc H D.V x)
@@ -205,12 +205,12 @@ namespace FlockDeploy.KS.TrimBridge
 open Flock
 
 /-- **KS at the untrimmed masked instance gives it at the masked record the claims read.** -/
-theorem zk_KS_trim_of_KS (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem zk_KS_trim_of_KS (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (h : Claims.Flock.KS H (deployZk rel)) : Claims.Flock.KS H (deployZkTrim rel) :=
   Claims.Flock.TrimBridge.KS_mapCols_of_KS H (deployZk rel) trimCol rfl h
 
 /-- **KS at the untrimmed plain instance gives it at the plain record the claims read.** -/
-theorem plain_KS_trim_of_KS (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem plain_KS_trim_of_KS (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (h : Claims.Flock.KS H (deployPlain rel)) : Claims.Flock.KS H (deployPlainTrim rel) :=
   Claims.Flock.TrimBridge.KS_mapCols_of_KS H (deployPlain rel) trimCol rfl h
 

@@ -113,7 +113,7 @@ def ScanScopeAcc : Prop :=
   ∀ (j : Lean.Json) (program : String) (s : Schedule) (sc : Scan) (c : String),
     scanOf j program s = .ok sc → Flock.canon j = .ok c →
     ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Claims.SamplingGeneric.Arg Coin}
-      (D : Claims.SamplingGeneric.Compiled Coin A) (x : Claims.Msg),
+      (D : Claims.SamplingGeneric.Compiled Coin A) (x : Hash.Msg),
       StmtFlattens D → D.Scope x →
       (∀ st, D.parse x = some st → (⟨st.desc.toArray⟩ : ByteArray) = c.toUTF8) →
       NetTiming.ScopeAcc D (layOf s) (fun _ => s.window) x

@@ -32,7 +32,8 @@ ZERO_ROW = 128_100
 #: the column tiles the sample is fixed to: the first, one in the middle and the last
 DRAWN = (0, 1_002, 2_003)
 EXCLUSION = ZERO_ROW // 64
-KEY = bytes([1]) * 32
+#: the seed of the prover's salts (`test_pearl_c_vllm.seeded_salts`), 192 bytes a leaf, kept in the pass's salts files
+SALTS = 1
 DRAWS = 3
 SOURCE = b"verifier" * 4
 CHUNK = 8_192
@@ -64,7 +65,7 @@ def _prove(ts: list[int]) -> list[tuple[int, bytes, np.ndarray]]:
 def head_pass(d: Path, prove: tuple[int, ...] | None = (*DRAWN, EXCLUSION), jobs: int = 1) -> Path:
     """The head's pass in the device run's layout under `d`, its manifest's path. Tiles `prove` are proved (every tile
     with None), in `jobs` forked processes, the rest of the transcript and of y left +0."""
-    s = T.PPD.scheme_of(SCHEME)
+    s = T.pouw_schemes.get(SCHEME)
     rng = np.random.default_rng(64)
     h = s.commitment_hash
     (d / "calls").mkdir(parents=True)
@@ -72,7 +73,8 @@ def head_pass(d: Path, prove: tuple[int, ...] | None = (*DRAWN, EXCLUSION), jobs
     dom_b = T.rows_domain(T.weight_binding(WEIGHT), -2, N, h)
     tiles = s.tiles(T.Shape(M16, K, N))
     keep = {j for t in (range(len(tiles)) if prove is None else prove) for j in tiles[t].cols}
-    b_rows, b_leaves = {}, []
+    salted = T.seeded_salts(SALTS)
+    b_rows, b_leaves, b_salts = {}, [], []
     with open(d / "weights" / f"{WEIGHT}.rows.bf16", "wb") as f:
         for j0 in range(0, N, CHUNK):
             w = T.bf16_words(rng, min(CHUNK, N - j0), K)
@@ -81,14 +83,16 @@ def head_pass(d: Path, prove: tuple[int, ...] | None = (*DRAWN, EXCLUSION), jobs
             f.write((w >> 16).astype("<u2").tobytes())
             for r, row in enumerate(w):
                 j, v = j0 + r, row.tobytes()
-                b_leaves.append(dom_b.leaf(j, j, T.ROW_SCHEMA, v + T.hm96_salt(KEY, T.HM96_WEIGHTS + WEIGHT, j)))
+                b_salts += salted(1)
+                b_leaves.append(dom_b.leaf(j, j, T.ROW_SCHEMA, v + b_salts[-1]))
                 if j in keep:
                     b_rows[j] = v
     tree_b = T.laid_out(dom_b, b_leaves)
     root_b = tree_b[-64:]
     weights = {str(WEIGHT): {"n": N, "k": K, "root": root_b.hex(), "excluded_b": [ZERO_ROW],
                              "rows": T.PH._entry(d / "weights" / f"{WEIGHT}.rows.bf16", N * K * 2),
-                             "tree": T.PH._write(d / "weights" / f"{WEIGHT}.tree", tree_b)}}
+                             "tree": T.PH._write(d / "weights" / f"{WEIGHT}.tree", tree_b),
+                             "salts": T.PH._write(d / "weights" / f"{WEIGHT}.salts", b"".join(b_salts))}}
     roots = {WEIGHT: root_b}
     coins = T.salt_coin(roots)
     mm = T.Matmul(INDEX, T.Shape(M16, K, N), WEIGHT)
@@ -97,7 +101,8 @@ def head_pass(d: Path, prove: tuple[int, ...] | None = (*DRAWN, EXCLUSION), jobs
     a[REAL:] = 0
     a_rows = [r.tobytes() for r in a]
     dom_a = T.rows_domain(T.activation_binding(epoch.salt, INDEX), INDEX, M16, h)
-    tree_a = T.laid_out(dom_a, [dom_a.leaf(i, i, T.ROW_SCHEMA, r + T.hm96_salt(KEY, INDEX, i)) for i, r in enumerate(a_rows)])
+    a_salts = salted(M16)
+    tree_a = T.laid_out(dom_a, [dom_a.leaf(i, i, T.ROW_SCHEMA, r + a_salts[i]) for i, r in enumerate(a_rows)])
     root_a = tree_a[-64:]
     ctx = T.Context(epoch.salt, mm, root_a, root_b)
     noise = s.noise(ctx)
@@ -127,15 +132,17 @@ def head_pass(d: Path, prove: tuple[int, ...] | None = (*DRAWN, EXCLUSION), jobs
                 "root_a": root_a.hex(),
                 "rows": T.PH._write(d / "calls" / f"{INDEX}.rows.bf16", T.bf16_file(a_rows), digest=False),
                 "tree": T.PH._write(d / "calls" / f"{INDEX}.tree", tree_a),
-                "y": T.SY.retain_y(d, INDEX, y.tobytes(), N, epoch.salt, KEY)}]
+                "salts": T.PH._write(d / "calls" / f"{INDEX}.salts", b"".join(a_salts)),
+                "y": T.SY.retain_y(d, INDEX, y.tobytes(), N, epoch.salt)}]
     dt = T.transcript_domain(epoch, len(leaves), h)
-    tree_t = T.laid_out(dt, [dt.leaf(i, i, T.TILE_SCHEMA, v + T.hm96_salt(KEY, T.HM96_TRANSCRIPT, i)) for i, v in enumerate(leaves)])
+    t_salts = salted(len(leaves))
+    tree_t = T.laid_out(dt, [dt.leaf(i, i, T.TILE_SCHEMA, v + y) for i, (v, y) in enumerate(zip(leaves, t_salts))])
     head = {"schema": T.CC.MANIFEST_SCHEMA, "run": T.RUN, "entry": f"pouw:{SCHEME}", "scheme": SCHEME,
             "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(), "salt": epoch.salt.hex(),
             "records_root": T.PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
             "commitment": {"root": tree_t[-64:].hex(), "count": len(leaves)},
             "leaves": T.PH._write(d / "leaves", b"".join(leaves)),
-            "tree_t": T.PH._write(d / "tree_t", tree_t), "hm96_salt_key": KEY.hex()}
+            "tree_t": T.PH._write(d / "tree_t", tree_t), "salts_t": T.PH._write(d / "salts_t", b"".join(t_salts))}
     path = T.PH.write_manifest(d, head, weights, matmuls)
     (d / "coins.json").write_text(json.dumps(coins[0].to_json()))
     return path
@@ -148,7 +155,7 @@ def head(tmp_path_factory):
 
 @pytest.fixture
 def fixed_draw(monkeypatch):
-    tiles = T.PPD.scheme_of(SCHEME).tiles(T.Shape(M16, K, N))
+    tiles = T.pouw_schemes.get(SCHEME).tiles(T.Shape(M16, K, N))
     monkeypatch.setattr(T.VR.CW, "draw", lambda scheme, records, key, draws: [(0, tiles[t]) for t in DRAWN][:draws])
 
 
@@ -171,7 +178,7 @@ def test_the_verifier_accepts_the_heads_call_opens_its_last_column_tile_and_cred
     assert "y committed and checked on 1 of 1 calls" in got["line"] and "on its 3 tables" in got["line"], got["line"]
     assert public["tie"]["tables"] == 3 and "weights" not in public["tie"]
     work = public["work"]
-    eps, rho = Fraction(work["epsilon"]), T.PPD.scheme_of(SCHEME).cap
+    eps, rho = Fraction(work["epsilon"]), T.pouw_schemes.get(SCHEME).cap
     assert work["macs"] == REAL * (N - 64) * K and work["credited_tiles"] == 2_003
     assert work["credited"] == int((1 - rho) * (1 - eps) * work["macs"]) and eps == T.VR.epsilon(DRAWS, T.VR.DELTA)
     entry = next(e for e in T.window_record(head)["registered"] if e["value"] == f"pearl-b/{WEIGHT}")
@@ -188,12 +195,12 @@ def test_a_wrong_y_word_in_the_heads_last_column_tile_rejects_the_run(head, fixe
     y = np.frombuffer((head.parent / good["rows"]["path"]).read_bytes(), "<u2").reshape(REAL, N).copy()
     y[3, N - 1] ^= 1
     try:
-        u["y"] = T.SY.retain_y(head.parent, INDEX, y.tobytes(), N, bytes.fromhex(man["salt"]), KEY)
+        u["y"] = T.SY.retain_y(head.parent, INDEX, y.tobytes(), N, bytes.fromhex(man["salt"]))
         head.write_text(json.dumps(man))
         got = verdict(head)
         assert got["answer"]["verdict"] == "reject", got["line"]
         assert f"pass 0 tile 2003: y[3, {N - 1}] is not the unscale of the tile's U" in got["answer"]["reason"], got["line"]
     finally:
         y[3, N - 1] ^= 1
-        u["y"] = T.SY.retain_y(head.parent, INDEX, y.tobytes(), N, bytes.fromhex(man["salt"]), KEY)
+        u["y"] = T.SY.retain_y(head.parent, INDEX, y.tobytes(), N, bytes.fromhex(man["salt"]))
         head.write_text(json.dumps(man))

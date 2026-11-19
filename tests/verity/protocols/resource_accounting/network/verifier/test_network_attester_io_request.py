@@ -12,7 +12,7 @@ import pytest
 from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
-from verity.protocols.resource_accounting.network.verifier import head_check as HC
+from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.verifier import io_request as Q
 from verity.protocols.resource_accounting.network.verifier import network_attester as W
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
@@ -373,7 +373,7 @@ def test_the_frame_circuit_is_its_reference():
     want = [_frame_reference(B, *c) for c in cases]
     assert sum(w[1] for w in want) >= 26 and sum(w[0] for w in want) == 3 and len(cases) >= 280
     assert _frames(B, cases) == want
-    assert HC.ands(bind(Q.IoTieRequestFrame, B=B)) == 20_876
+    assert GB.ands(bind(Q.IoTieRequestFrame, B=B)) == 20_876
 
 
 @pytest.mark.slow
@@ -389,7 +389,7 @@ def test_redteam_phase6_cells_read_their_prompt_lengths():
     cases = [(long_[:4096], 0, 1), (long_[4096:], Q.carries(400, 4096)[1][0], 1), (short, 0, 2)]
     assert [g[1:] for g in _frames(4096, cases)] == [(1, 1, 0, cases[1][1], 338), (1, 0, 1, 0, 62),
                                                      (1, 1, 1, 0, 16)]
-    assert HC.ands(bind(Q.IoTieRequestFrame, B=4096)) == FRAME_4096
+    assert GB.ands(bind(Q.IoTieRequestFrame, B=4096)) == FRAME_4096
 
 
 #: `IoTieRequestFrame{B = 4096}`'s ANDs, the served cell's
@@ -397,11 +397,11 @@ FRAME_4096 = 166_615
 
 
 def _state(left, fields, over, padded, ok):
-    return HC._int_bits(left, 32) + HC._int_bits(fields, 32) + [over, padded, ok]
+    return GB._int_bits(left, 32) + GB._int_bits(fields, 32) + [over, padded, ok]
 
 
 def _frame_out(pad, req, start, ended, left, fields):
-    return [pad, req, start, ended] + HC._int_bits(left, 32) + HC._int_bits(fields, 32)
+    return [pad, req, start, ended] + GB._int_bits(left, 32) + GB._int_bits(fields, 32)
 
 
 def test_the_step_keeps_the_lanes_scan():
@@ -434,7 +434,7 @@ def test_the_end_holds_the_carry_out():
             pub = [310, 12]
             pub[k] ^= 1 << b
             cases.append((honest, tuple(pub), 0))
-    args = [[_state(*s) for s, _, _ in cases]] + [[HC._int_bits(p[k], 32) for _, p, _ in cases] for k in range(2)]
+    args = [[_state(*s) for s, _, _ in cases]] + [[GB._int_bits(p[k], 32) for _, p, _ in cases] for k in range(2)]
     out = evaluate_bits(bind(Q.IoTieRequestEnd), *[_bits(a) for a in args])
     assert [int(b) for b in np.asarray(out).reshape(-1)] == [w for _, _, w in cases]
 
@@ -461,7 +461,7 @@ def test_the_unit_is_its_reference(link):
     args = [Q.arguments(SHAPE, i) for i in insts]
     out = evaluate_bits(fn, *[_bits([a[k] for a in args]) for k in range(2)])
     assert [int(b) for b in np.asarray(out).reshape(-1)] == want
-    a = HC.ands
+    a = GB.ands
     parts = SHAPE.N * (a(bind(Q.IoTieRequestFrame, B=B)) + a(bind(Q.IoTieRequestStep))) + \
         SHAPE.L * a(bind(Q.IoTieRequestEnd)) + a(BL.and_gate(SHAPE.L))
     assert a(fn) == parts == 84_175

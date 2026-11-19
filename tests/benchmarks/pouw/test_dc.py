@@ -19,7 +19,7 @@ import numpy as np
 import pipe
 import pytest
 import uniform as un
-from conftest import load
+from conftest import H100, H200, UNKNOWN, load
 
 DC = Path(__file__).resolve().parents[3] / "calibration" / "pouw" / "dc"
 MODEL_DATA = Path(__file__).resolve().parents[3] / "calibration" / "machine_model" / "data"
@@ -313,16 +313,30 @@ def test_analyze_sm90_pass_line(tmp_path):
     assert not an.analyze("sm90", tmp_path / "b")["M3"]["pass"]
 
 
-def test_record_writes_the_fastest_form_over_honest_and_a_failed_gate_writes_none(tmp_path, no_gpu):
+def test_record_writes_the_fastest_form_over_honest_and_a_failed_gate_writes_none(tmp_path, stamp_card):
+    """Each card's point names its card (the H200's member is ``h200``, the H100's ``h100``), and a card no card record
+    holds writes no value."""
     wg = {"0:IGMMA.64x256x32.S8.S8*": 128 / 4096}
     _rows(tmp_path / "rows", {"wg_s8_n256_a1": wg, "imma_s8_k16": {"0:IMMA.16816.S8.S8": 1.1},
                               "wgz_s8_n256_a1": {"0:IGMMA.64x256x32.S8.S8*": 2 * 128 / 4096}})
-    assert an.main(["sm90", str(tmp_path / "rows"), "--record", str(tmp_path / "ok")]) == 0
-    doc = json.loads((tmp_path / "ok" / "result.json").read_text())
-    [m] = doc["measurements"]
-    assert doc["validation"]["status"] == "passed" and m["value"] == pytest.approx(1.1)
-    assert (m["name"], m["unit"], m["mark"], m["family"], m["form"], m["honest_form"], m["host"]["card"]) == (
-        an.METRIC, "times honest", "measured", "sm90", "mma.sync s8_k16", "wgmma s8 m64n256k32", "none")
+    ms = {}
+    for name in (H200, H100):
+        stamp_card(name)
+        assert an.main(["sm90", str(tmp_path / "rows"), "--record", str(tmp_path / name)]) == 0
+        doc = json.loads((tmp_path / name / "result.json").read_text())
+        [ms[name]] = doc["measurements"]
+        assert doc["validation"]["status"] == "passed" and ms[name]["value"] == pytest.approx(1.1)
+    m = ms[H200]
+    assert m["member"] == "h200" and m["host"]["card"] == H200
+    assert (m["name"], m["unit"], m["mark"], m["family"], m["form"], m["honest_form"]) == (
+        an.METRIC, "times honest", "measured", "sm90", "mma.sync s8_k16", "wgmma s8 m64n256k32")
+    assert ms[H100]["member"] == "h100" and {k: v for k, v in ms[H100].items() if k not in ("member", "host")} == {
+        k: v for k, v in m.items() if k not in ("member", "host")}
+    stamp_card(UNKNOWN)
+    assert an.main(["sm90", str(tmp_path / "rows"), "--record", str(tmp_path / "unknown")]) == 0
+    [m] = json.loads((tmp_path / "unknown" / "result.json").read_text())["measurements"]
+    assert m["value"] is None and "member" not in m
+    assert m["why"].startswith("0 GPU card files under ") and repr(UNKNOWN) in m["why"]
     assert an.main(["sm90", str(tmp_path / "rows"), "--record", str(tmp_path / "bad"),
                     "--failed", "a dgemm gate is not exact"]) == 1
     doc = json.loads((tmp_path / "bad" / "result.json").read_text())
@@ -627,8 +641,9 @@ def test_a2u_issue_bound_and_uniform_price(tmp_path):
     assert edge["a2u_holds"] and 1 < edge["max_issue_low"] < 1 + a2.TOL
 
 
-def _h32_run(out: Path, s8_rate: float = 1 / 32, drop: str = "") -> Path:
-    """emp.sh time's output for h32.py: each class's least form at a known rate, and the forms beside it."""
+def _h32_run(out: Path, s8_rate: float = 1 / 32, drop: str = "", card: str | None = H200) -> Path:
+    """emp.sh time's output for h32.py: each class's least form at a known rate, and the forms beside it, on ``card``
+    (nvidia-smi's name in env/device.csv; none written for None)."""
     acc = {"s8": ("IGMMA.64x256x32.S8.S8*", 128), "e4m3": ("QGMMA.64x256x32.F32.E4M3.E4M3*", 128),
            "e5m2": ("QGMMA.64x256x32.F32.E5M2.E5M2*", 128), "e4m3f16": ("QGMMA.64x256x32.F16.E4M3.E4M3*", 64),
            "e5m2f16": ("QGMMA.64x256x32.F16.E5M2.E5M2*", 64), "f16": ("HGMMA.64x256x16.F32*", 128),
@@ -654,6 +669,9 @@ def _h32_run(out: Path, s8_rate: float = 1 / 32, drop: str = "") -> Path:
     for b in ("sm90_h32", "sm90_h32_tc"):
         (out / b).mkdir(parents=True, exist_ok=True)
         (out / b / "rows.jsonl").write_text("".join(json.dumps(ln) + "\n" for ln in lines if ln["binary"] == b))
+    if card is not None:
+        (out / "env").mkdir(exist_ok=True)
+        (out / "env" / "device.csv").write_text(f"name, uuid, compute_cap\n{card}, GPU-0, 9.0\n")
     return out
 
 
@@ -677,11 +695,11 @@ def test_h32_prices_each_class_and_writes_the_lean_table(tmp_path):
     assert t["fields"]["int32"]["probe"] == "x_iadd_r" and t["fields"]["tc"]["probe"] == "wa_b1_n256"
     assert t["co_issue"]["probe"] == "wu_dadd" and abs(t["co_issue"]["price"] - 16) < 1e-9
     assert t["h32"] and t["floor_tc"] == {"a": 32, "c": 32} and not t["missing"]
-    assert h.lean(t) == ("def h200Measured : Prices100 where\n  mac := nominalMac\n  tc := 32\n  ffma := 32\n"
+    assert h.lean(t, "h200") == ("def h200Measured : Prices100 where\n  mac := nominalMac\n  tc := 32\n  ffma := 32\n"
                          "  int32 := 32\n  fp64 := 32\n  other := 36\n")
     fast = h.table(h.read(_h32_run(tmp_path / "fast", s8_rate=1 / 31)))
     assert fast["mac"]["s8"]["mac"] == 0 and not fast["h32"] and fast["floor_tc"]["a"] == 0
-    assert "    | .s8 => 0\n    | .f16F32 => 2\n" in h.lean(fast)
+    assert "    | .s8 => 0\n    | .f16F32 => 2\n" in h.lean(fast, "h200")
     run = _h32_run(tmp_path / "partial", drop="x_dadd")
     part = h.table(h.read(run))
     assert part["missing"] == ["fp64"] and "h32" not in part
@@ -689,3 +707,30 @@ def test_h32_prices_each_class_and_writes_the_lean_table(tmp_path):
     bad = {"binary": "b", "probe": "p", "note": "c=ffma w=FMUL:1", "rates": {"0:FADD": 4.0}, "run": "r1", "tags": []}
     with pytest.raises(ValueError, match="FMUL"):
         h.price(bad)
+
+
+@pytest.mark.parametrize("card, short", [(H100, "h100"), (H200, "h200")])
+def test_h32_names_the_lean_table_for_the_card_the_run_opened(tmp_path, card, short):
+    """h32.py: the Lean table is named the run's card file's `short` and `Measured`, its card the one env/device.csv
+    names; the rest of what it writes is the same on either card."""
+    run = _h32_run(tmp_path / "run", card=card)
+    assert h.main([str(run), "--json", str(tmp_path / "t.json"), "--lean", str(tmp_path / "t.lean")]) == 0
+    assert (tmp_path / "t.lean").read_text().split("\n", 1)[0] == f"def {short}Measured : Prices100 where"
+    other = _h32_run(tmp_path / "other", card=H200 if card == H100 else H100)
+    assert h.main([str(other), "--json", str(tmp_path / "o.json"), "--lean", str(tmp_path / "o.lean")]) == 0
+    assert (tmp_path / "t.json").read_text() == (tmp_path / "o.json").read_text()
+    assert (tmp_path / "t.lean").read_text().split("\n", 1)[1] == (tmp_path / "o.lean").read_text().split("\n", 1)[1]
+
+
+def test_h32_refuses_a_run_naming_no_card_or_two_cards_together(tmp_path):
+    """h32.py refuses, writing nothing, a run whose output names no card, and runs of two cards handed together."""
+    lean = tmp_path / "t.lean"
+    bare = _h32_run(tmp_path / "bare", card=None)
+    with pytest.raises(SystemExit, match="names no one card"):
+        h.main([str(bare), "--lean", str(lean)])
+    a, b = _h32_run(tmp_path / "a", card=H100), _h32_run(tmp_path / "b", card=H200)
+    with pytest.raises(SystemExit, match="2 cards"):
+        h.main([str(a), str(b), "--lean", str(lean)])
+    assert not lean.exists()
+    with pytest.raises(SystemExit, match=re.escape(UNKNOWN)):
+        h.main([str(_h32_run(tmp_path / "unknown", card=UNKNOWN)), "--lean", str(lean)])

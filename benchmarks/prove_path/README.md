@@ -1,15 +1,19 @@
 # prove_path
 
 The prove path (`prove_path.py`, `run.sh`), an execution phase's audit from its records alone (`records_audit.py`) and the cost
-model's class-of-record execution phase (`window_cost.py`, `class_rows.py`), and what they read from the measurements and the
-served-rows tie's runs on a sealed served execution phase:
+model's class-of-record execution phase (`window_cost.py`, `class_rows.py`, and `class_size.py`, the class circuit's padded size), what they read from the measurements, and the
+served rows' two ties:
 
 - `sources.json` and the checkpoint manifests it names: the served models' sources, which `prove_path.py` reads.
 - The class probes (`llama32_1b_*.json`, `glm53_silu_mul_v2_*.json`), each a Program lowered at a small class, which
   `window_cost.py` projects.
-- `served_tie_window.py`: the served rows' tie (`served_tie.ServedRowsTie_v2`) on a sealed served execution phase's real rows.
-- `served_tie_zk.py`, `served_statics_zk.py`, `served_tie_zk.sh`: the routed served-rows tie, and the served rows held to
-  their Programs' statics, proved in zero knowledge on a sealed served execution phase, on a CPU machine.
+- `served_tie_window.py`: the routed tie (`served_tie.ServedRowsTie_v2`) checked natively, in plain, on a sealed served
+  execution phase's real rows.
+- `served_statics_zk.py cost`: the statics tie's (`served_statics.ServedStaticsTie_v1`) proof block ANDs and Flock block
+  at each class, the table of the network verifier's `protocol/served-statics.md`.
+
+Both ties are Definitions with pinned costs. No zero-knowledge proof of either runs, and nothing the verifier accepts
+rests on one.
 - `e2e_chains/`: the status of every protocol's end-to-end chain behind the prove path's "What an accepted audit means".
 
 ## The shell entry points
@@ -20,17 +24,6 @@ served-rows tie's runs on a sealed served execution phase:
   (with `WINDOW=served`, the in-Commit hook's), and the circuit prover and Lean built from the run's tree. With `A5_ROW_DIR` it takes a
   single-GPU deferred Commit's row dir and sealed bundle in place of the fixture, and with `WINDOW=served` the execution phase its C2
   site committed (`A5_WINDOW`).
-- `../one_stage/prove_bundle.sh`: a sampled-proof-block replay bundle (`benchmarks/one_stage/interfaces`, `verity/drawn-unit-bundle/v2`) proved by
-  `../one_stage/prove_bundle.py`: `PB_BUNDLE` of the execution phase `PB_WINDOW`, else `BUNDLE_WINDOW`, the registered fixture `bundle-window` (a W8A8 MLP's execution phase under a
-  test key, its tampered twin and the interfaces' bundle of four sampled proof blocks under its registered `subset:4`).
-  `../../tests/benchmarks/one_stage/test_prove_bundle.py` holds that bundle to the execution phase's public part (`../../tests/benchmarks/one_stage/fixtures/bundle-window-public`). `PB_LIVE=1` requires the bundle's sample to be live. The bundle is held to the prover's execution phase: its own check (the sample's
-  sampling design the registered one among it), its run, docket and partition, each sampled member's public body and a live
-  sample's receipt and record. Each sampled member is one `prove --zk` session (behind the Lean ZK server with `ZK_SERVER=1`), one at a time, served the bundle's
-  sample, with Lean `verify --zk` as the verdict, overlapping the next session. The negatives are `verity/protocols/proofs/flock/prover/agreement/zk_mutants.py`'s one-bit
-  proof edits (`PB_FLIPS=N`: the first N), refused by Lean, and a tampered execution phase's member, refused by Lean (and with
-  `ZK_SERVER=1` stopped by the ZK server as well). `PB_BUILD_ONLY=1` only builds the prover, Lean verifier and ZK server into its `out/bin`, stamped
-  with the trees they come from. A later run with `PB_BINARIES=` that directory uses them while the stamp matches its own
-  source, so M3's reserved time isn't spent on the build.
 
 ## The prove path
 
@@ -84,7 +77,7 @@ what the served arm derives when `PP_FORGED_PARTITION` is unset (`prove_path.py 
 
 A declared run's audit (`../one_stage/a5.py --tp-commit`) derives each rank's Programs from the workload the record served. Under arbitrary
 usage no workload is declared: serving decides the batches, arrivals and lengths, and the advice (I1,
-`verity.protocols.resource_accounting.network.verifier.advice`) records those decisions. The advice is private: it is committed under hiding
+`verity_vllm.pipeline.advice_code.format`) records those decisions. The advice is private: it is committed under hiding
 commitments and never published.
 
 1. **Docket binds the compiler and the advice's hiding root, not a workload.** The rank's `window` provenance (core's
@@ -106,8 +99,8 @@ commitments and never published.
 4. **The advice is fixed before the coins, and the verifier checks it** (`advice_before_draw`), as `pouw.credit.draw_root`
    checks that the credit bits came before the sampling coin. The digest of the docket the verifier opens the advice under
    covers its `compiler` and `advice` root. That digest must be the one the sample's receipt names: the stream writes the receipt
-   when it receives the docket, and its `select` reads the verifier's coins only after that (a5's
-   `verifier-coins-before-the-registration`). A docket whose advice root postdates the sample is refused
+   when it receives the docket, and its `select` reads the challenger's coins only after that: a select on a docket the
+   stream never received is refused (`unknown`, `service.Stream`). A docket whose advice root postdates the sample is refused
    (`advice-root-after-the-draw`): the same advice re-committed after the coins, under fresh salts and so a fresh root, passes
    every check before the sample with its new opening, and `advice_before_draw` refuses it with `after-the-draw`.
 5. **The compiler is total.** `compile_advice` takes any input and returns either the requests or a `ValueError` naming why.

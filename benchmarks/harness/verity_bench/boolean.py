@@ -13,7 +13,7 @@ def boolean_version(block: str, definition: str) -> bool:
 
     from verity.circuits.defs import CompositeDefinition, bind
 
-    # registers `EmbeddingRead_v1`, a `READ` static's Definition, which `boolean.load` doesn't
+    # registers `EmbeddingRead_v2`, a `READ` static's Definition, which `boolean.load` doesn't
     from verity.commitments.gates import embedding  # noqa: F401
     from verity.circuits.ops.boolean import versions as boolean
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)

@@ -37,7 +37,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.SamplingBoundary
-import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Spot.Sampling.Circuit
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
@@ -74,7 +74,7 @@ alone (`ref_blockOf`), and it is correct exactly when the unit's gates are and e
 
 namespace Flock.Bridge
 
-open FlockSoundness.Audit Claims.Sampling
+open Spot.Sampling Claims.Sampling
 
 /-! ## Indexing a `flatMap` -/
 

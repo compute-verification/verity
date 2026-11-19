@@ -10,15 +10,14 @@
 # `verity-vllm router-tap-build` into $RT/build, the path config.RunEnv.router_tap_so names, rebuilding only when the inputs changed (their
 # sha256 beside the .so, source_set.sha256); (3) `verity-vllm router-tap-build --check`.  Exactness is a separate step:
 # tests/properties/router_tap_exactness_gpu.py (needs the GPU).
-# Env: VENV (default /workspace/venv312), CUDA_HOME (default: first of /usr/local/cuda-12.9, /usr/local/cuda), RT (default
-# /workspace/cp/router_tap), REPO (default: this tree), ROUTER_TAP_FORCE=1 (rebuild regardless).
+# Env: VENV (default /workspace/venv312), CUDA_HOME (required), CARD_SKU (required: the card file the tap compiles for), RT (default
+# <build root>/router_tap: VERITY_BUILD_ROOT, else cli.MACHINE's), REPO (default: this tree), ROUTER_TAP_FORCE=1 (rebuild regardless).
 set -uo pipefail
 REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"
 VENV=${VENV:-/workspace/venv312}
-if [ -z "${CUDA_HOME:-}" ]; then for c in /usr/local/cuda-12.9 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA_HOME=$c; break; }; done; fi
-export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
+export CUDA_HOME=${CUDA_HOME:?set CUDA_HOME to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
 . "$REPO/verity_vllm/ops/cuda_headers.sh" && cuda_headers "$VENV/bin/python"
-RT=${RT:-/workspace/cp/router_tap}
+[ -n "${RT:-}" ] || RT=${VERITY_BUILD_ROOT:-$("$VENV/bin/python" -c "from verity_vllm.pipeline.cli import MACHINE; print(MACHINE[\"RunEnv.build_root\"])")}/router_tap || { echo "ROUTER-TAP-FAIL no build root (VERITY_BUILD_ROOT)"; exit 1; }
 PIN=d9105ea8001e0a6d77a96327d17515bb5791fb36
 SRC=$REPO/verity_vllm/acquire/router_tap_src
 FILES="csrc/libtorch_stable/moe/topk_softmax_kernels.cu csrc/cuda_compat.h csrc/libtorch_stable/cub_helpers.h"
@@ -42,7 +41,7 @@ SET_SHA=$( (cd "$SRC" && find . -type f ! -name '*.pyc' ! -path '*/__pycache__/*
             cd "$RT/vllm" && sha256sum $FILES; nvcc --version | tail -1) | sha256sum | cut -c1-64)
 if [ "${ROUTER_TAP_FORCE:-0}" = "1" ] || [ ! -f "$OUT/verity_router_tap.so" ] || [ "$(cat "$OUT/source_set.sha256" 2>/dev/null)" != "$SET_SHA" ]; then
   log "BUILD $OUT (source set ${SET_SHA:0:16})"
-  PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}" verity-vllm router-tap-build --vllm-src "$RT/vllm" --build-dir "$OUT" > "$RT/logs/build.log" 2>&1 \
+  PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}" verity-vllm router-tap-build --card "${CARD_SKU:?set CARD_SKU to the SKU of the card file the tap compiles for (calibration/hardware/cards)}" --vllm-src "$RT/vllm" --build-dir "$OUT" > "$RT/logs/build.log" 2>&1 \
     || fail "build (see $RT/logs/build.log: $(grep -a -m1 -i 'error' "$RT/logs/build.log" | cut -c1-200))"
   echo "$SET_SHA" > "$OUT/source_set.sha256"
   log "$(tail -1 "$RT/logs/build.log")"

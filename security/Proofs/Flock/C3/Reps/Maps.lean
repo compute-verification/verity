@@ -40,7 +40,7 @@ namespace FlockC3.Reps
 
 noncomputable section
 
-open Flock FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open Flock FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Flock.RecResiduals (portSizes groups)
 open Flock.RecAlgebra (structureOf verifierRows el)
 open FlockVBridge.Compiled (RepData Accepted layers AlgebraDecodes AccChains)

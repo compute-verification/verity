@@ -57,7 +57,7 @@ open FlockSoundness FlockSoundness.Refine
 
 /-- **In scope, at one table, the session's sample is the statement's.** -/
 theorem unitSample_one {rel : Readable.Parsed → Readable.Relation}
-    {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+    {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hsc : Claims.Flock.Scope (deployPlain rel) x) (hset : setupOf false x = some (s, spec, sts))
     (h1 : sts.size = 1) (hd : s.read.draw.isSome = true) :
     ∃ d, spec.unitSample = some d ∧ s.read.draw = some d ∧ d ≠ Json.null := by

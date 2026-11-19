@@ -5,7 +5,7 @@ public import Proofs.Properties.InferenceOnly.RecordGrid
 public import Proofs.Properties.InferenceOnly.RecordInputs
 public import Proofs.Properties.InferenceOnly.RecordSameSlot
 public import Proofs.Properties.InferenceOnly.RecordWire
-public import Proofs.Properties.InferenceOnly.RecordWireRead
+public import Proofs.Properties.InferenceOnly.RecordEdgesOf
 
 /-!
 # What a row's kind says of the row
@@ -20,7 +20,8 @@ Both read what fills the row off the declarations. No two declarations fill one 
 fills a row is the fill of any declaration that covers it (`fill_of_cover`, by `cover_apart`: two disjoint wires do
 not both cover a row). A row of kind `inside` is filled by a wire's declaration whose wire the check found to stay
 inside a slot (`Record.sameSlot`); the row's writer is that wire's, at the row's index, and the test is sound there
-(`sameSlot_sound`) for a wire with a step for each digit and no digit of radix zero (`text_digits`).
+(`sameSlot_sound`) for a wire with a step for each digit and no digit of radix zero, as every wire of the record's
+wiring is (`edgeDigits`).
 -/
 
 @[expose] public section
@@ -29,7 +30,7 @@ namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open InferenceOnlyVerifier.Record (Case Front read finish sameSlot openingHeld Kind kindOf)
 open InferenceOnlyVerifier.Record.SecurityProofs (read_front finish_text slotOf OneGrid slotIn_eq gridsOf_lookup sameSlot_sound
-  text_digits)
+  edgeDigits)
 open Spot.RecordText (Row Decl Fill Inputs fillAt)
 open Lean (Json)
 
@@ -224,7 +225,7 @@ theorem inside_writer {j tr : Json} {c : Case} (h : read j tr = .ok c) (r : Row)
           subst hie
           obtain ⟨rt, wtm, hsh, -⟩ := wire_shape hchk w' hw'm
           obtain ⟨-, -, p, ow, -, -, hc1, -, hlast, hmod, -⟩ := shape_spec hsh
-          obtain ⟨hlen, hrad⟩ := text_digits htext w' (by rw [← hwires]; exact hw'm)
+          obtain ⟨hlen, hrad⟩ := edgeDigits _ _ _ htext w' (by rw [← hwires]; exact hw'm)
           obtain ⟨hrd, hpt, hu1, hu2, hr1, hr2, hie⟩ := indexOf_some hidx'
           have hlt := Spot.Wires.indexOf_lt hmod hidx'
           have hgr : ∀ tid, OneGrid (c.gridsAt tid) := fun tid =>

@@ -13,7 +13,8 @@ from types import SimpleNamespace as NS
 import pytest
 import release_front as RF
 import serve_tax as S
-from verity_vllm.pipeline.serve_admit import BUCKET_HEADER, RELEASE_HEADER, RUN_HEADER, WATERMARK_PATH
+from verity import ports
+from verity.protocols.resource_accounting.network.prover.admission import BUCKET_HEADER, RELEASE_HEADER, RUN_HEADER, WATERMARK_PATH
 
 
 class Upstream:
@@ -172,11 +173,14 @@ def test_prod_all_on_is_sent_through_its_release_front_and_records_what_a_price_
     monkeypatch.setattr(S.subprocess, "Popen", popen)
     monkeypatch.setattr(S, "drive_bench", drive)
     with upstream() as (port, up):
-        monkeypatch.setattr(S, "corpus", lambda: NS(TICK_BUCKET_MS=100, free_port=lambda: port))
+        monkeypatch.setattr(S, "corpus", lambda: NS(TICK_BUCKET_MS=100))
+        monkeypatch.setattr(ports, "free_port", lambda: port)
         assert S.main(["run", "--arm", "prod-all-on", "--model-id", "glm53", "--checkpoint", str(tmp_path / "ck"),
                        "--client", "vllm-bench", "--loads", "long=1", "--reps", "2", "--warm-s", "0", "--tick-ms",
-                       "34.7,42.4", "--edges-every-s", "60", "--out", str(out)]) == 0
-    tick, cfg = json.loads(envs[0]["VERITY_TICK"]), json.loads(envs[0][S.PLUGIN_ENV])
+                       "34.7,42.4", "--edges-every-s", "60", "--private", str(tmp_path / "private"), "--out",
+                       str(out)]) == 0
+    tick = json.loads(envs[0]["VERITY_PROTOCOLS_CONFIG"])[envs[0]["VERITY_PROTOCOLS"]]
+    cfg = json.loads(envs[0][S.PLUGIN_ENV])
     assert (tick["bucket_us"], tick["sat_us"], tick["free_us"]) == (100000, 34700, 42400)
     assert (cfg["record"], cfg["ids"], cfg["idle_reset"], cfg["every_s"], cfg["kv_copy"]) == (True, True, True, 60.0, "all")
     mark, *heads = up.heads

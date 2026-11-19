@@ -1,7 +1,7 @@
 """Class-fixed regions: two private circuits of one class, `UniversalUnit_v1{G, N_IN, N_OUT}`, staged as the universal unit is
 staged (a one-Call Program partitioned by `Q_template_instance`,
 `class_statement.stage` packed, each description source one row every instance opens, x one row per instance) on the same x
-under one staging salt key, give one statement but for its regions' bytes. One description is a random circuit
+under the same salts (the second staging given the first's as data), give one statement but for its regions' bytes. One description is a random circuit
 description padded to the class, the other a uniformly random bit string of the class (any index, reads past the wires included);
 each staging builds its own Program, units and partition.
 
@@ -88,7 +88,7 @@ def _lanes(units, cl, net: U.PrivateCircuit, xs: list[list[int]]):
     return ins, want, rows
 
 
-def _stage(cls: tuple[int, int, int], xs: list[list[int]], net: U.PrivateCircuit, d: Path, key: bytes) -> dict:
+def _stage(cls: tuple[int, int, int], xs: list[list[int]], net: U.PrivateCircuit, d: Path, salts: dict | None = None) -> dict:
     """One staging from scratch: the Program, its units and partition, the lanes and `class_statement.stage`."""
     fn = bind(U.UniversalUnit, G=cls[0], N_IN=cls[1], N_OUT=cls[2])
     program = PU.one_call(fn)
@@ -96,7 +96,7 @@ def _stage(cls: tuple[int, int, int], xs: list[list[int]], net: U.PrivateCircuit
     units = PU.PartitionUnits(program, query=query)
     [(shape, cl)] = units.classes().items()
     lanes = _lanes(units, cl, net, xs)
-    st = CS.stage(units, SPEC, shape, cl, lanes, d, key, packed=True)
+    st = CS.stage(units, SPEC, shape, cl, lanes, d, packed=True, salts=salts)
     (d / "partition.json").write_text(json.dumps(PO.build(program, query), sort_keys=True))
     (d / "program.desc").write_bytes(canonical_json(encode_program(program)))
     return {"stage": st, "x_ports": {f"p{i}" for i, ids in enumerate(lanes[2]) if ids[0][0] == "x"},
@@ -112,9 +112,9 @@ def staged(request, tmp_path_factory):
     rng = random.Random(f"test-universal-same-shape/{cls}")
     xs = [[rng.randrange(2) for _ in range(cls[1])] for _ in range(N)]
     nets = [_description(rng, *cls, any_index=False), _description(rng, *cls, any_index=True)]
-    key = hashlib.sha256(b"test-universal-same-shape").digest()
     d = tmp_path_factory.mktemp("same-shape")
-    return {k: {**_stage(cls, xs, net, d / k, key), "dir": d / k, "net": net} for k, net in zip("ab", nets)}
+    a = {**_stage(cls, xs, nets[0], d / "a"), "dir": d / "a", "net": nets[0]}
+    return {"a": a, "b": {**_stage(cls, xs, nets[1], d / "b", _files(d / "a")["salts"]), "dir": d / "b", "net": nets[1]}}
 
 
 def _files(d: Path) -> dict:

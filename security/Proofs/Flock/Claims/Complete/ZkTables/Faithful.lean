@@ -81,13 +81,13 @@ def maskW (sts : Array Flock.Stmt) (w : Claims.Flock.Wit) (μ : ℕ → ℕ → 
   ⟨(List.range (max w.hid.length (sts.size * (sts.toList.map fun st => 2 ^ st.m).sum))).map (maskBit sts w μ)⟩
 
 /-- **The witness with the mask slots set to `μ`** at `x`'s session, and `w` where `x` does not set up. -/
-def maskWOf (x : Claims.Msg) (w : Claims.Flock.Wit) (μ : ℕ → ℕ → F128) : Claims.Flock.Wit :=
+def maskWOf (x : Hash.Msg) (w : Claims.Flock.Wit) (μ : ℕ → ℕ → F128) : Claims.Flock.Wit :=
   match setupOf true x with
   | some (_, _, sts) => maskW sts w μ
   | none => w
 
 /-- **Some zerocheck outer coin among the replies `bs` is `1`** (`refuse_outer`'s test). -/
-def outerHit (x : Claims.Msg) (bs : List Claims.Msg) : Bool :=
+def outerHit (x : Hash.Msg) (bs : List Hash.Msg) : Bool :=
   (outerSlotsZk x).any fun p => decide (p.1 < bs.length) && decide (coinOf (bs.getD p.1 []) p.2 = 1)
 
 /-- **Flock's masked prover as `flock-circuit --zk` runs it**: `honestP` with the tape's mask words in every table's
@@ -95,12 +95,12 @@ mask slot (`maskWOf`), stopped (`[]`) once an outer coin is `1` (`outerHit`). -/
 def honestPR (w : Claims.Flock.Wit) : Claims.Prover TapeZk :=
   ⟨fun x hist ω => if outerHit x (hist.map Prod.snd) then .ret [] else (honestP (maskWOf x w ω.mask)).next x hist ω⟩
 
-theorem honestPR_next {w : Claims.Flock.Wit} {x : Claims.Msg} {hist : List (Claims.Msg × Claims.Msg)} {ω : TapeZk}
+theorem honestPR_next {w : Claims.Flock.Wit} {x : Hash.Msg} {hist : List (Hash.Msg × Hash.Msg)} {ω : TapeZk}
     (h : outerHit x (hist.map Prod.snd) = false) :
     (honestPR w).next x hist ω = (honestP (maskWOf x w ω.mask)).next x hist ω := by
   simp only [honestPR, h, Bool.false_eq_true, ↓reduceIte]
 
-theorem honestPR_stop {w : Claims.Flock.Wit} {x : Claims.Msg} {hist : List (Claims.Msg × Claims.Msg)} {ω : TapeZk}
+theorem honestPR_stop {w : Claims.Flock.Wit} {x : Hash.Msg} {hist : List (Hash.Msg × Hash.Msg)} {ω : TapeZk}
     (h : outerHit x (hist.map Prod.snd) = true) : (honestPR w).next x hist ω = .ret [] := by
   simp only [honestPR, h, ↓reduceIte]
 

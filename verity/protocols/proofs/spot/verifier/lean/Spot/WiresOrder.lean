@@ -11,6 +11,8 @@ of a template tile its units, so each of its units lies in a range (`ranksIn_ne_
 
 namespace Spot.Wires
 
+open Circuits
+
 theorem readerUnit_lt {w : Wire} (hc : 1 ≤ w.cuts) (hd : w.units % w.cuts = 0) {i : Nat} (hi : i < w.units) :
     i / w.cuts < w.readerUnits := by
   unfold Wire.readerUnits

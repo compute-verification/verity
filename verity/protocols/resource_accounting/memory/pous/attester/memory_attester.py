@@ -83,7 +83,7 @@ import os
 import re
 import time
 import tomllib
-from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -388,6 +388,23 @@ REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
 UNCOMMITTED = "rehearsal, no bound: the configuration is not a committed one"
 MATCHED = ("rehearsal, no bound: the key matched the pins this machine was handed, which no record vouches for until the "
            "auditor's compose gate gives its signal")
+#: the machines a placement or a premise names, by the party on each and never by a name the machine gives itself
+PROVER_MACHINE, ATTESTER_MACHINE = "the prover's machine", "the memory attester's machine"
+UNNAMED = "a machine the piece does not name"
+#: a placement's key for `UNCHECKED`, which storage's, the wipe's and the bandwidth audit's placements carry
+UNCHECKED_KEY = "unchecked"
+ATTENDED = "attester-attended-each-block"
+KEY_PINNED = "attester-key-pinned-outside-the-case"
+#: what no auditor-side entry checks of the memory attester, by name, each with why; `holds` never reads it
+UNCHECKED = MappingProxyType({
+    ATTENDED: ("not checked by any auditor-side entry: the grader verifies one signature of the memory attester per "
+               "session (storage: the session's id, coin root, parameters and round times; the wipe: its header, fill "
+               "times and batch records; the bandwidth audit: one closing signature over its log), which names no "
+               "period or block; no served path writes a liveness record, and verify_liveness has no caller"),
+    KEY_PINNED: ("not checked by any auditor-side entry: the grader takes the attester's key from the trusted list the "
+                 "case itself carries, which the developer's node fills, and the pins are compared on the served node: "
+                 "the developer's check, built and not yet in force as the auditor's"),
+})
 COMMITTED = Path(__file__).resolve().parents[6] / "tools" / "verity" / "cli" / "verity_cli" / "configurations.toml"
 """The committed configurations' hashes, each application's configuration by its path: the only configurations under which
 `trusted_device` says `PREMISE` holds."""
@@ -425,8 +442,32 @@ def premise(where: Mapping[str, Any]) -> str:
     return where[PREMISE] if PREMISE in where else where[PREMISE_BEFORE]
 
 
+def machines(node: str, host: str) -> tuple[str, str]:
+    """The prover's and the memory attester's machines as a placement names them (`PROVER_MACHINE`, and
+    `ATTESTER_MACHINE` unless `host` is `node`): the two names given are compared, and neither is written."""
+    return PROVER_MACHINE, PROVER_MACHINE if host == node else ATTESTER_MACHINE
+
+
+def unnamed(text: str, prover: Iterable[str | None] = (), attester: Iterable[str | None] = ()) -> str:
+    """``text`` with every name the prover's machine (``prover``) or the memory attester's (``attester``) goes by put
+    as its party's machine (`PROVER_MACHINE`, `ATTESTER_MACHINE`; the prover's where one name is both, as `machines`),
+    longest first, in one pass and only where it stands as a name of its own, not inside a longer word: a refusal's
+    words, which a side, a socket or the system wrote, as a placement names the machines."""
+    label = {n: ATTESTER_MACHINE for n in attester if n} | {n: PROVER_MACHINE for n in prover if n}
+    if not label:
+        return text
+    names = "|".join(re.escape(n) for n in sorted(label, key=len, reverse=True))
+    return re.sub(rf"(?<![\w.-])(?:{names})(?![\w-])", lambda m: label[m[0]], text)
+
+
+def unchecked() -> dict[str, dict[str, str]]:
+    """A placement's `UNCHECKED_KEY` entry: `UNCHECKED`, as the record writes it."""
+    return {UNCHECKED_KEY: dict(UNCHECKED)}
+
+
 def holds(where: Mapping[str, Any]) -> bool:
-    """Whether a placement's `PREMISE` holds (`trusted_device`)."""
+    """Whether a placement's `PREMISE` holds (`trusted_device`), which nothing else of the placement, `UNCHECKED`
+    among it, can make hold."""
     return premise(where).startswith("holds: ")
 
 

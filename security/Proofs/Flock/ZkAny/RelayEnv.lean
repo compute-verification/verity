@@ -44,7 +44,7 @@ open _root_.Flock.ZkServer.Level0 (Level0 Slot Slots commit ofSession)
 
 /-- **At the model's `Hello`, `EnvOk` where the relay's nonce is the tape's**: where `x` sets up the session on `spec`
 and the nonce the relay drew from the operating system is the tape's `ν`, the `Hello` it frames is the model's. -/
-theorem envOk_hello_tape {x : Claims.Msg} {ν : Claims.ZKMal.CoinLayer.Nonce} {spec : SessionSpec} {sts : Array Stmt}
+theorem envOk_hello_tape {x : Hash.Msg} {ν : Claims.ZKMal.CoinLayer.Nonce} {spec : SessionSpec} {sts : Array Stmt}
     {seen : List String} {ins : _} {e : Env} (hs : FlockDeploy.setupOf true x = some (ins, spec, sts))
     (hn : e.nonce = ⟨(Claims.ZKMal.CoinLayer.nb ν).toArray⟩) :
     EnvOk spec seen .hello e (Claims.ZKMal.CoinLayer.helloMsg x ν) := by

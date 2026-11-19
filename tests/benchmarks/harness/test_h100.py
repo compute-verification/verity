@@ -1,56 +1,76 @@
 from __future__ import annotations
 
+import dataclasses
 import tomllib
 from pathlib import Path
 
 import pytest
 
-from verity_bench import jobs
-from verity_bench.vllm.presets import GPUS, SPEC_ROOT, resolve_spec
+from verity_bench import jobs, kit
+from verity_bench.vllm.presets import SPEC_ROOT, resolve_spec
 
-COPIES = {"llama32-1b-1gpu-pouw-protocol-served-h100": "llama32-1b-1gpu-pouw-protocol-served-h200",
-          "llama32-1b-bf16-h100-served-arm": "llama32-1b-bf16-h200-served-arm"}
-WHOLE = "llama32-1b-1gpu-pearl-c-whole-served-h100"
-#: nvidia-smi's names for the H100s and the H200, and the card each is, by the node side's test that a card's
-#: `nvidia_smi_name` is part of the leased card's name
+POUW = "llama32-1b-1gpu-pouw-protocol-served"
+#: the specs that were an H200 file and an H100 file differing in their card alone
+ON_BOTH = (POUW, "llama32-1b-bf16-served-arm")
+#: nvidia-smi's names for the H100s and the H200, and the card each is, by the node side's test (`kit.is_card`)
 NAMES = {"NVIDIA H100 80GB HBM3": "h100", "NVIDIA H200": "h200", "NVIDIA H100 NVL": None, "NVIDIA H100 PCIe": None}
 
 
-@pytest.mark.parametrize("h100, h200", COPIES.items())
-def test_each_h100_spec_is_its_h200_spec_with_only_the_card_changed(h100, h200):
-    copy, original = (tomllib.loads((SPEC_ROOT / f"{name}.toml").read_text()) for name in (h100, h200))
-    assert resolve_spec(h100).preset.gpu_id == "h100"
-    copy["id"] = h200
-    copy["preset"] |= {"id": h200, "gpu_id": "h200"}
-    assert copy == original
+@pytest.mark.parametrize("spec", ON_BOTH)
+def test_a_spec_runs_on_the_h200_and_the_h100_with_only_the_card_differing(spec):
+    assert not tomllib.loads((SPEC_ROOT / f"{spec}.toml").read_text()).get("card_settings")
+    on = {card: resolve_spec(f"{spec}@{card}") for card in ("h200", "h100")}
+    assert {card: spec.preset.gpu_id for card, spec in on.items()} == {"h200": "h200", "h100": "h100"}
+    assert dataclasses.replace(on["h100"].preset, gpu_id="h200") == on["h200"].preset
+    assert dataclasses.replace(on["h100"], preset=on["h200"].preset) == on["h200"]
+    assert on["h200"].config_sha256 != on["h100"].config_sha256
 
 
 @pytest.mark.parametrize("name, card", NAMES.items())
 def test_an_h100_spec_takes_the_h100_sxm_card_alone_and_an_h200_spec_no_h100(name, card):
-    assert [gpu for gpu in ("h100", "h200") if GPUS[gpu].nvidia_smi_name in name] == ([card] if card else [])
+    assert [gpu for gpu in ("h100", "h200") if kit.is_card(name, gpu)] == ([card] if card else [])
 
 
-def test_the_h100_whole_step_spec_is_the_h100_pouw_spec_with_the_whole_step_arm_beside():
-    whole, protocol = (tomllib.loads((SPEC_ROOT / f"{name}.toml").read_text())
-                       for name in (WHOLE, "llama32-1b-1gpu-pouw-protocol-served-h100"))
-    assert whole.pop("arms") == [*protocol.pop("arms"), "pouw-pearl-c-whole"]
-    assert whole.pop("arm_modules") == ["benchmarks.pouw.pearl_c_vllm.bench_arm:PEARL_C_WHOLE"]
-    whole["id"] = whole["preset"]["id"] = protocol["id"]
-    assert whole == protocol
-
-
-@pytest.mark.parametrize("name", ["llama32-1b-1gpu-pouw-protocol-served-h100", WHOLE])
-def test_the_h100_pouw_spec_runs_direct_on_the_h100_vm_through_its_slot_and_one_card_lease(name):
-    from research.pods.nebius.slot_only import through_slot
-
-    root, node = Path(__file__).resolve().parents[3], "vy-h100-1"
-    assert node in jobs.DIRECT_NODES
+def test_the_h100_pouw_spec_runs_its_one_point_in_a_one_card_lease(monkeypatch):
+    root, name = Path(__file__).resolve().parents[3], f"{POUW}@h100"
+    monkeypatch.setattr(jobs, "lease_host", lambda: True)
+    for variable in ("GPU_LEASE_UUID", "GPU_LEASE_ON", "GPU_LEASE_CORES"):
+        monkeypatch.delenv(variable, raising=False)
     plan = jobs.make_plan(name, root=root, commit="a" * 40, lookup=lambda identity, commit: None)
     commands: list[list[str]] = []
-    assert jobs.dispatch(plan, name, root=root, direct=node,
+    assert jobs.dispatch(plan, name, root=root, execute=lambda command, cwd: commands.append(list(command)) or 0) == 0
+    assert len(commands) == len(plan.points) == 1
+    assert commands[0][:3] == ["gpu-lease", "1", "--wait"]
+
+
+def test_the_whole_step_spec_on_the_h100_is_the_pouw_point_there_with_one_arm_beside_in_a_one_card_lease(monkeypatch):
+    """`llama32-1b-1gpu-pearl-c-whole-served@h100`, which was the file `...-whole-served-h100`: the H100 is its one card,
+    its settings there are the PoUW spec's on the H100 with one arm and that arm's module beside, a stored run under
+    the former id reads as it, and its one point waits for one card in a lease of its own."""
+
+    from verity_config import ConfigError
+
+    from verity_bench import served_table
+    from verity_bench.vllm import presets
+
+    root, whole, former = Path(__file__).resolve().parents[3], "llama32-1b-1gpu-pearl-c-whole-served", \
+        "llama32-1b-1gpu-pearl-c-whole-served-h100"
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "none"})
+    on, pouw = resolve_spec(f"{whole}@h100"), resolve_spec(f"{POUW}@h100")
+    assert on == resolve_spec(whole) and on.preset.gpu_id == "h100"
+    with pytest.raises(ConfigError, match=rf"spec '{whole}' runs on h100, not the h200"):
+        resolve_spec(f"{whole}@h200")
+    assert on.arms[:-1] == pouw.arms and len(on.arm_modules) == 1 and not pouw.arm_modules
+    assert dataclasses.replace(on, id=pouw.id, arms=pouw.arms, arm_modules=pouw.arm_modules,
+                               preset=dataclasses.replace(on.preset, id=pouw.preset.id)) == pouw
+    assert presets.former_specs()[former] == (whole, "h100") and presets.current_spec(former) == whole
+    assert served_table.spec_path(former) in served_table.spec_paths(f"{whole}@h100")
+    monkeypatch.setattr(jobs, "lease_host", lambda: True)
+    for variable in ("GPU_LEASE_UUID", "GPU_LEASE_ON", "GPU_LEASE_CORES"):
+        monkeypatch.delenv(variable, raising=False)
+    plan = jobs.make_plan(f"{whole}@h100", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
+    commands: list[list[str]] = []
+    assert jobs.dispatch(plan, f"{whole}@h100", root=root,
                          execute=lambda command, cwd: commands.append(list(command)) or 0) == 0
     assert len(commands) == len(plan.points) == 1
-    flags, workload = commands[0][:commands[0].index("--")], commands[0][commands[0].index("--") + 1:]
-    assert flags[:4] == ["research", "run", "--on", node] and through_slot(workload)
-    lease = workload[workload.index("--", 4) + 1:]
-    assert lease[:3] == ["gpu-lease", "1", "--wait"]
+    assert commands[0][:3] == ["gpu-lease", "1", "--wait"]

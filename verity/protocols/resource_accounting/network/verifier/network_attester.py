@@ -268,7 +268,7 @@ from verity.protocols.resource_accounting.network.verifier.id_form import ID_DIG
 from verity.protocols.resource_accounting.network.verifier.io_tie import parse_cell
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD, decode_frame, encode_frame
 from verity.protocols.resource_accounting.network.verifier.pacer import CLOCKS, Pacer, Report, raw_clock
-from verity.protocols.resource_accounting.network.verifier.release import RUN_ID_BYTES, WATERMARK_END, watermark_chunk, watermark_head, with_release
+from verity.release import RUN_ID_BYTES, WATERMARK_END, watermark_chunk, watermark_head, with_release
 from verity.protocols.resource_accounting.network.verifier.release import one_request, to_watermark
 
 PARAMETERS_TAG = "verity-network-warden/parameters/v3"

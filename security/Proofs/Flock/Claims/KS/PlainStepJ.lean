@@ -128,8 +128,8 @@ theorem schedOf_repCtx_of_verify (keep : Bool → Bool) (hs : Hashes Flock.V) {s
 /-- `schedOf_repCtx_of_verify` at a decision's checks: `checksAtJ` reads the value's live session, whose link points
 are the first coin's (`checksAtJ_ok`, `custody_ok`). -/
 theorem schedOf_repCtx_of_checksAtJ (keep : Bool → Bool) (hs : Hashes Flock.V) {s : Ins} {spec : SessionSpec}
-    {sts : Array Stmt} {x : Claims.Msg} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalJ} {v : Json} {proofs : Array ByteArray}
+    {sts : Array Stmt} {x : Hash.Msg} {link : List ByteArray × List ByteArray} {c₁ : Coin}
+    {mids : List (Hash.Msg × Coin)} {f : FinalJ} {v : Json} {proofs : Array ByteArray}
     (hv : verifyJWithMK keep hs spec (tabsOf sts) v proofs = .ok ())
     (hc : checksAtJ s spec x link c₁ mids f v = .ok ()) (r₀ : List ByteArray) (cs : List Coin) {k : ℕ}
     (hk : k < 2 * sts.size) : SchedOf (repCtx spec sts c₁ r₀ cs k) := by

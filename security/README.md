@@ -71,7 +71,7 @@ incorrect set of the trace the extractor recovers.
      read in the error.
    - Open: the targets (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
      `NetworkAttesterSound`, `WipeSound`), each open until proved (PoUW's:
-     `verity/protocols/resource_accounting/compute/pouw/verifier/`). Remote: the first two, `WiresSound`, `GateARow`.
+     `verity/protocols/resource_accounting/compute/pouw/verifier/`). Remote: the first two.
 
 **The real assumptions.** Items 1 to 3 rest on three: `Claims.ExpectedCR` (SHA-512 collision resistance, which the
 other SHA-512 shapes fold into) and `Claims.Hm96Hiding` (hm96 leaves hide at the pinned key), each under the lock's
@@ -541,8 +541,8 @@ Onsite (`Core.Onsite.protocol`, `verity/onsite/v1`) composes Pearl+'s run verdic
   (`Verity.Sampled.checkBlobs_event`), which has a coupling.
 - **The inference-only policy at remote** (`Properties.Remote.SecurityProofs.acceptInferenceOnly`, proved): remote's
   accept gives `InferenceOnlyHeld`, whose SPOT case is `StageHeld`, the one-stage form's. It has no clause for the
-  two-stage form, which the verifier refuses while `SecondStage.FORM` is false; switching it on needs the two-stage
-  clause first.
+  two-stage form (levels 2), which the verifier accepts ahead of its proof; the two-stage case
+  needs its own clause and its open premises.
 - **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `SHA512CRStrict`,
   `SHA512CRExpected`, `TileServiceSound`, `TileSampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and
   `SharedNoiseLucks`. The challenger and the verifier both run on auditor devices. The challenger, which

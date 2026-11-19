@@ -16,6 +16,8 @@ import pytest
 from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire.inductor_templates import Unmodelled
+from verity.errors import InvalidArtifact
+from verity_vllm.config import CARD_FILES
 from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.pipeline import served_match
 
@@ -98,10 +100,10 @@ def test_a_device_that_is_not_its_card_is_refused_naming_each_field(cc: tuple[in
 
 
 def test_a_card_whose_arch_names_no_compute_capability_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(SD, "load_card", lambda sku, directory: {"arch": "hopper", "sm": {"count": {"value": 132}}})
-    with pytest.raises(Unmodelled) as e:
+    monkeypatch.setattr(SD, "load_card", lambda sku, directory: {"kind": "gpu", "sku": sku, "arch": "hopper", "sm": {"count": {"value": 132}}})
+    with pytest.raises(InvalidArtifact) as e:
         SD.check_card((9, 0), 132, "a-card")
-    assert str(e.value) == "calibration/hardware/cards/a-card.toml: arch 'hopper' names no compute capability"
+    assert str(e.value) == "card 'a-card': arch = 'hopper'; a GPU card states sm_<major><minor>[a|f]"
 
 
 def test_fa3_splitting_a_prefill_chunk_is_refused() -> None:
@@ -132,8 +134,7 @@ def test_a_device_registered_on_no_card_and_not_excepted_is_refused(name: str) -
     facts = {"device": name, "cc": [9, 0], "sms": 132, "attention": [{"backend": "FLASH_ATTN", "fa_version": 3}], "max_model_len": 4096}
     with pytest.raises(Unmodelled) as e:
         served_match.device_of(facts)
-    assert str(e.value) == (f"device {name!r} is in the `driver` of no card record under calibration/hardware/cards/: add "
-                            f"{{ value = {json.dumps(name)}, source = ... }} to its card's `driver`, adding its <sku>.toml if it has none")
+    assert f"0 GPU card files under {CARD_FILES} have {name!r}, the name the device reports, in `driver`: add " in str(e.value)
 
 
 def full_decode(device: SD.DeviceBindings) -> tuple[list[int], list[list[dict[str, Any]]], dict[str, Any]]:

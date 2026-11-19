@@ -1009,10 +1009,6 @@
    "digest": "0427726221d37e3328795346f90b9cc0ab7f3b25ccc9555d7c40fda34d73ac9008447ea096f2dfc45c0c19bd160043a163f0d81b6da2ad7eb699c5ae53cffef3",
    "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
   },
-  "TemplatePopulations_v0|1,2|ScaledMmS8_v1{K=64,N=3,DOT={\"fn\":\"BlackwellS8ImmaDot32_v1\"}}|KvCacheAppendE4m3_v1": {
-   "digest": "3043534ecf7d1ba950feea290ab3422a52264758d4cc4ec7dc3ad8633d7b397dba159747737e820932b81547fad4f3f7e14ee86d6d76fe37e17b71003a69b879",
-   "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
-  },
   "TemplatePopulations_v0|1,2|ScaledMmS8_v2{K=64,N=3,DOT={\"fn\":\"BlackwellS8ImmaDot32_v2\"}}|GfScale_v1{L=2}": {
    "digest": "451fb2737169b6ab8dc5c472283957972955cf37ffe3c52d5a267fa55a878535196d38cc3fb6fffc55f1f0ee59b5ad63b27a66d68f7a73c37e25878a68e8701c",
    "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
@@ -1244,10 +1240,6 @@
   "TemplatePopulations_v1|1,2|S8Matmul_v2{N=3,K=64,L=64,T0=\"zero\",C=null,DOT={\"fn\":\"BlackwellS8ImmaDot32_v2\"},A=[-127,127],B=[-127,127],TAIL=[],TDOT=null,NOISE=\"none\",LIMBS=\"none\",COMMIT=\"final\"}|LimbSplit_v2{FORM=\"bytes\",N=3,Y=[-8355711,8355711]}": {
    "digest": "528faa2e101cd672a78f0396af464b450694ea219461796e9c310ddc4650f9cc1e6c27573f829d19bdb02bba941ed6c33e82f81722c8faff46ced40f348cbbc4",
    "id_sha512": "234a695512c98f1a2980ebb472093138fc149fea9503fecf889e6f85736d0d88dd5780c317ff56462729badf26cf42000751dd2f833ebc2f89445a2fb903f83a"
-  },
-  "TemplatePopulations_v1|1,2|ScaledMmS8_v1{K=64,N=3,DOT={\"fn\":\"BlackwellS8ImmaDot32_v1\"}}|KvCacheAppendE4m3_v1": {
-   "digest": "113b39c5532b3562bedccafbab7d1db439fe3b6b69f475892e98edcda9cc5033ead0f3a43e3587c5931dadb056308b7b76169764374d43653f16e9a345270f60",
-   "id_sha512": "7bfe166b32f4609be217238afcc612b13dfa115b2cf5529ee103dfb531f98082cfcf45a768e641f391ba2882cf874262d180257b59635f873fe27a2a434dd3a4"
   },
   "TemplatePopulations_v1|1,2|ScaledMmS8_v2{K=64,N=3,DOT={\"fn\":\"BlackwellS8ImmaDot32_v2\"}}|GfScale_v1{L=2}": {
    "digest": "ab8c475b63611c1eca377fad9e37ea17d7e2aba6ce4fafedab94db870abde1fec322cd33c89f706feda6b3f65d58f33c0b6e024815f9986264b61c07937154c0",

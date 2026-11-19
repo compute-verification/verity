@@ -1,0 +1,30 @@
+# The sampling layer's rename: Flock's audit namespace becomes SPOT's sampling layer, `Spot.Sampling`, and
+# Flock's eight instance modules move to SpotFlock. Run after the preparation commit that spells every
+# relative `Audit` in full. The files that already spell `Spot.Sampling` are left as they are.
+
+[words]
+"Proofs.Flock.Soundness.Audit.Flock" = "Proofs.Flock.SpotFlock.Sampling.Flock"
+"Proofs.Flock.Soundness.Audit.FlockBatched" = "Proofs.Flock.SpotFlock.Sampling.FlockBatched"
+"Proofs.Flock.Soundness.Audit.FlockBatchedAcc" = "Proofs.Flock.SpotFlock.Sampling.FlockBatchedAcc"
+"Proofs.Flock.Soundness.Audit.FlockCompiled" = "Proofs.Flock.SpotFlock.Sampling.FlockCompiled"
+"Proofs.Flock.Soundness.Audit.FlockLink" = "Proofs.Flock.SpotFlock.Sampling.FlockLink"
+"Proofs.Flock.Soundness.Audit.FlockLinked" = "Proofs.Flock.SpotFlock.Sampling.FlockLinked"
+"Proofs.Flock.Soundness.Audit.FlockPublic" = "Proofs.Flock.SpotFlock.Sampling.FlockPublic"
+"Proofs.Flock.Soundness.Audit.FlockWork" = "Proofs.Flock.SpotFlock.Sampling.FlockWork"
+"Proofs.Flock.Soundness.Audit" = "Proofs.Spot.Sampling"
+"Definitions.Flock.Audit" = "Definitions.Spot.Sampling"
+"Proofs/Flock/Soundness/Audit/Flock" = "Proofs/Flock/SpotFlock/Sampling/Flock"
+"Proofs/Flock/Soundness/Audit/FlockBatched" = "Proofs/Flock/SpotFlock/Sampling/FlockBatched"
+"Proofs/Flock/Soundness/Audit/FlockBatchedAcc" = "Proofs/Flock/SpotFlock/Sampling/FlockBatchedAcc"
+"Proofs/Flock/Soundness/Audit/FlockCompiled" = "Proofs/Flock/SpotFlock/Sampling/FlockCompiled"
+"Proofs/Flock/Soundness/Audit/FlockLink" = "Proofs/Flock/SpotFlock/Sampling/FlockLink"
+"Proofs/Flock/Soundness/Audit/FlockLinked" = "Proofs/Flock/SpotFlock/Sampling/FlockLinked"
+"Proofs/Flock/Soundness/Audit/FlockPublic" = "Proofs/Flock/SpotFlock/Sampling/FlockPublic"
+"Proofs/Flock/Soundness/Audit/FlockWork" = "Proofs/Flock/SpotFlock/Sampling/FlockWork"
+"Proofs/Flock/Soundness/Audit" = "Proofs/Spot/Sampling"
+"Definitions/Flock/Audit" = "Definitions/Spot/Sampling"
+"FlockSoundness.Audit" = "Spot.Sampling"
+
+[rewrite]
+exclude = ["tests/**/fixtures/**", "tools/move/spot_sampling_map.toml", "tools/move/spot_sampling_moves.json", "security/Definitions/Spot.lean", "security/Definitions/Spot/Limits.lean", "security/Definitions/Spot/Sampling/Layer.lean"]
+

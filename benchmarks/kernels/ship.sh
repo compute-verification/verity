@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# The ship preamble the builds here source (s8_linear's and p2_stage's build.sh): the
+# The ship preamble the builds here source (p2_stage's build.sh): the
 # toolkit, the cubin flags and the ship's layout. Sourced first, under `set -euo pipefail`; sets ROOT, the source tree's
 # root, and each function below reads or sets CUDA, OUT and FLAGS.
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
@@ -31,30 +31,29 @@ fi
 # exports
 SHIP_NVCC=$ROOT/benchmarks/kernels/ship_nvcc.sh
 
-# whether the toolkit $1 has nvcc 12.8 or later
-ship_nvcc_ok() { [ -x "$1/bin/nvcc" ] && "$1/bin/nvcc" --version | grep -Eq "release 12\.(8|9)|release 1[3-9]\."; }
-
-# CUDA, else the first of the toolkits named whose nvcc is 12.8 or later; empty when there is none
+# CUDA: as the build gives it, else the machine's toolkit at version $1 (machine.py toolkit: CUDA_HOME, else the run's
+# machine's record), refused by name where there is none
 ship_find_cuda() {
-  if [ -z "${CUDA:-}" ]; then
-    for c in "$@"; do ship_nvcc_ok "$c" && { CUDA=$c; break; }; done
-  fi
-  CUDA=${CUDA:-}
+  [ -n "${CUDA:-}" ] || CUDA=$(python3 "$ROOT/benchmarks/kernels/machine.py" toolkit "${1:?the toolkit version, or CUDA}") \
+    || exit 1
 }
 
-# ship_find_cuda, refusing unless it finds one, and unless SHIP_NVCC with that toolkit still gives one cubin for a source
-# at two places (ship_probe.sh, once a build: a toolkit or a wrapper that no longer does builds no ship)
+# ship_find_cuda, refusing unless SHIP_NVCC with that toolkit still gives one cubin for a source at two places, compiled
+# for the build's target ARCH, which the build sets first (ship_probe.sh, once a build: a toolkit or a wrapper that no
+# longer does builds no ship)
 ship_cuda() {
   ship_find_cuda "$@"
-  ship_nvcc_ok "$CUDA" || { echo "no nvcc >= 12.8 at ${CUDA:-any of $*}: set CUDA" >&2; exit 1; }
   export CUDA
-  "$ROOT/benchmarks/kernels/ship_probe.sh" || exit 1
+  "$ROOT/benchmarks/kernels/ship_probe.sh" "${ARCH:?set ARCH, the target of the build, before ship_cuda}" || exit 1
 }
 
-# FLAGS: SHIP_NVCC's command line for a cubin of the arch $1 (sm_90a, sm_120a): no FTZ, fast-math, FMA contraction or
-# approximate division or square root, and no line info, so a cubin's bytes don't depend on the directory it's built in
+# FLAGS: SHIP_NVCC's command line for a cubin of the arch $1 (sm_90a, sm_120a), its -gencode from $1's architecture file
+# (machine.py gencode): no FTZ, fast-math, FMA contraction or approximate division or square root, and no line info, so
+# a cubin's bytes don't depend on the directory it's built in
 ship_cubin_flags() {
-  FLAGS=(-O3 -std=c++17 -gencode "arch=compute_${1#sm_},code=$1" -fmad=false -Xptxas -v -cubin)
+  local gencode
+  gencode=$(python3 "$ROOT/benchmarks/kernels/machine.py" gencode "$1") || exit 1
+  FLAGS=(-O3 -std=c++17 -gencode "$gencode" -fmad=false -Xptxas -v -cubin)
   case " ${FLAGS[*]} " in
     *ftz*|*fast-math*|*fast_math*|*prec-div*|*prec-sqrt*|*lineinfo*) echo "a refused flag: ${FLAGS[*]}" >&2; exit 1;;
   esac

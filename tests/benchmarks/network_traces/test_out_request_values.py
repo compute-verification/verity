@@ -282,7 +282,7 @@ def test_the_records_endpoint_step_keeps_its_verdict_and_counts_of_windows_alone
         assert step["verdict"] == "refused" and "needle" not in json.dumps(step) and '"requests"' not in json.dumps(step)
         assert step["advice"] == {"bound": False, "rebuilt": False}
         assert step["io"] == {"accepted": io["accepted"], "violations": len(io.get("violations") or [])}
-        e2e = cr.endpoint_step({"chain": {"bits": bits, "tie": {}}})
+        e2e = cr.endpoint_step({"chain": {"bits": bits}})
         assert "needle" not in json.dumps(e2e) and e2e["advice"] == step["advice"]
 
 

@@ -64,13 +64,13 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The fork bound at the caps and `τ`, with no hypothesis.** -/
-theorem zkSimForkLeCapTau (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsCapTauZ i :=
+theorem zkSimForkLeCapTau (x : Hash.Msg) : ZkSimForkLeOn x fun _ i => IsCapTauZ i :=
   zkSimForkLeOn_capTau (zkSimForkLeCap_of (zkForkAlign_of_slot (zkSlotAlign x)) (zkForkClash x)) (zkSimForkLeTau x)
 
 end Gen
 
 /-- **The fork bound at the caps and `τ`, with no hypothesis.** -/
-theorem zkSimForkLeCapTau (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsCapTauZ i :=
+theorem zkSimForkLeCapTau (x : Hash.Msg) : ZkSimForkLeOn x fun _ i => IsCapTauZ i :=
   Gen.zkSimForkLeCapTau (S := S₀) (x := x)
 
 namespace Gen

@@ -24,8 +24,6 @@ RECEIPT = hashlib.sha512(b"operand-root receipt").digest()
 SEEDS = D.seeds(COIN, RECEIPT, 0)
 #: K = 160 at L = 64 (t = 2): three segments, the last of 32; 1 KiB rows
 SH = D.Shape(128, 128, 160, lp=32, L=64, row=1024)
-KS = hashlib.sha512(b"prover's salt key").digest()
-OFF = 1 << 33
 
 
 def _operands(sh: D.Shape, seed: int = 7) -> tuple[list[list[int]], list[list[int]]]:
@@ -37,7 +35,7 @@ def _operands(sh: D.Shape, seed: int = 7) -> tuple[list[list[int]], list[list[in
 def _call(sh: D.Shape = SH):
     A, B = _operands(sh)
     T, O = D.values(sh, SEEDS, A, B)
-    return A, B, T, O, D.commit(sh, D.values_buffer(sh, T, O), D.salts(KS, OFF))
+    return A, B, T, O, D.commit(sh, D.values_buffer(sh, T, O), D.salts(sh.leaves))
 
 
 def _np(sh: D.Shape, A, B):
@@ -149,20 +147,19 @@ def test_leaves_from_sampled_cells_and_openings():
         i, j, s = rng.randrange(SH.m), rng.randrange(SH.n), rng.randrange(1, SH.W + 1)
         for pos, off, width, want in ((*SH.word_leaf(i, j, s), 2, T[s - 1][i][j]), (*SH.o_leaf(i, j), 4, O[i][j])):
             row, salt, path = cm.open(pos)
-            assert salt == D.prf_salt(KS, OFF + pos)
+            assert salt == cm.salts[pos] and len(salt) == 192
             assert D.leaf_row(SH, SEEDS, A, B, pos) == row
             assert int.from_bytes(row[off:off + width], "little") == want
             assert D.opens(cm.dom, cm.root, SH.leaves, pos, row, salt, path)
             assert not D.opens(cm.dom, cm.root, SH.leaves, pos, bytes([row[0] ^ 1]) + row[1:], salt, path)
-            assert not D.opens(cm.dom, cm.root, SH.leaves, pos, row, D.prf_salt(KS, pos), path)
+            assert not D.opens(cm.dom, cm.root, SH.leaves, pos, row, cm.salts[pos - 1 if pos else 1], path)
 
 
 def test_operand_roots_and_the_checkpoint_pin():
     """A opens from the call's operand root and B from the weight root; registration's pin is B's checkpoint digest, which
     any one changed code moves."""
     A, B, *_ = _call()
-    salt = lambda p: D.prf_salt(KS, 1 << 40 | p)  # noqa: E731
-    ta, tb = D.operand_tree("A", A, salt), D.operand_tree("B", B, salt)
+    ta, tb = D.operand_tree("A", A, D.salts(len(A))), D.operand_tree("B", B, D.salts(len(B)))
     assert ta.root != tb.root and ta.dom != tb.dom
     for t, M, r in ((ta, A, 77), (tb, B, 3)):
         row, s, path = t.open(r)

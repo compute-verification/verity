@@ -105,6 +105,23 @@ def no_gpu(monkeypatch):
     monkeypatch.setattr(kit.shutil, "which", lambda name: None)
 
 
+#: the names nvidia-smi gives the cards of three data sheets, and one no data sheet holds
+H100, H200, RTX, UNKNOWN = ("NVIDIA H100 80GB HBM3", "NVIDIA H200", "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+                            "NVIDIA A100-SXM4-40GB")
+
+
+@pytest.fixture
+def stamp_card(no_gpu, monkeypatch):
+    """``stamp_card(name)``: the harness-kit stamp names ``name`` as its card, as nvidia-smi would."""
+    from verity_bench import kit
+
+    stamp = kit.host_stamp
+
+    def named(name: str) -> None:
+        monkeypatch.setattr(kit, "host_stamp", lambda: {**stamp(), "card": name})
+    return named
+
+
 def load(file: str) -> ModuleType:
     """``benchmarks/pouw/FILE`` as a module named `load_name` of it, run once however many tests ask. For a module whose
     name another directory holds and `AHEAD` gives to that one, and for one its own directory's scripts load from its

@@ -65,11 +65,11 @@ with no pending bytes and sends the inner proof's first body there, at the sourc
 theorem repCut_inner_of_ret (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (sch : Flock.Schedule) (rep : ℕ)
     (dom : ByteArray) (cm0 : FlockComplete.Commit) (extras : Array Claim) (ic : FlockComplete.InnerCommit)
     (src : FlockComplete.RepSrc) (prior : Array (List F128)) (words : List ℕ) (t₀ : Transcript)
-    (l : Array Claims.Msg) (hs : FlockComplete.CutEq.SchOk st sch)
-    {p : Zk.ZkProof} {t : Transcript} {l' : Array Claims.Msg}
+    (l : Array Hash.Msg) (hs : FlockComplete.CutEq.SchOk st sch)
+    {p : Zk.ZkProof} {t : Transcript} {l' : Array Hash.Msg}
     (h : ((FlockComplete.repCut (FlockComplete.asksCut coin n) (Hashes.ofSha512 Sha512.hash) st sch rep dom cm0 extras
       ic src prior words).run t₀).go l = (.ok (p, t), l')) :
-    ∃ (t₄ : Transcript) (L : Array Claims.Msg), t₄.pending = ByteArray.empty ∧
+    ∃ (t₄ : Transcript) (L : Array Hash.Msg), t₄.pending = ByteArray.empty ∧
       L.size = FlockComplete.CutEq.innerAt l.size st sch extras ∧
       ((FlockComplete.repCut (FlockComplete.asksCut coin L.size) (Hashes.ofSha512 Sha512.hash) st sch rep dom cm0 extras
           ic src prior words).run t₀).go l =
@@ -158,7 +158,7 @@ theorem repCut_inner_of_ret (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup)
 theorem piopCut_of_repCut (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (sch : Flock.Schedule) (rep : ℕ)
     (dom : ByteArray) (cm0 : FlockComplete.Commit) (extras : Array Claim) (ic : FlockComplete.InnerCommit)
     (src : FlockComplete.RepSrc) (prior : Array (List F128)) (words : List ℕ) (t₀ : Transcript)
-    (l : Array Claims.Msg) {p : Zk.ZkProof} {t : Transcript} {l' : Array Claims.Msg}
+    (l : Array Hash.Msg) {p : Zk.ZkProof} {t : Transcript} {l' : Array Hash.Msg}
     (h : ((FlockComplete.repCut (FlockComplete.asksCut coin n) (Hashes.ofSha512 Sha512.hash) st sch rep dom cm0 extras
       ic src prior words).run t₀).go l = (.ok (p, t), l')) :
     ∃ res t₃ l₃, ((FlockComplete.piopCut (FlockComplete.asksCut coin n) st (Zk.PadLayout.new st.m st.kLog sch.k0) src

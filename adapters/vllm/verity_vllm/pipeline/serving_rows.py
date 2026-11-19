@@ -21,8 +21,8 @@ The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "l
 (`service.params_sampling_design`).  A ``work`` window samples by the work table `work_table_of` derives from the registered compiler's
 transfer-gate templates (`pipeline.advice_windows`): every unit of those is proved (an All stratum), the rest sampled as the
 stratified sampling design samples it.  The members are its templates in order, each instance count read off the Build's Programs;
-the population program over them (``ml.windows.population.population_program``: ``TemplatePopulations`` for several
-templates, or for one when the file names ``Q_template_instances``) is the one the verifier builds from the same Programs, and a
+the wired Program of a record that lists its members over them (`interface.listed_program`, ``Q_template_instances``) is the
+one the verifier builds from the same Programs, and a
 ``partition_digest`` in the file that is not that program's partition is refused, as is any other query (a word partition,
 ``Q_word``, never: with the stratified sampling design it is refused by name, its strata being templates).  ``partition.json`` beside the window
 is the derived file, digest and members included.  ``scope.op_path_prefix`` restricts the population to one module
@@ -102,7 +102,7 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    whole along the others (a GEMM coordinate: ``x`` whole, ``w[n]``) -> ``out.<member>``, the
                                    row's output element; packed ports, one index entry per row; chunked (``chunk_cap``), v2
                                    bit rows (`chunk_rows.unit_rows`) -> ``o0``
-  ``EmbeddingRead_v1{V=2^17,H=..}``  every history read of a ``DsaHistoryReads_v1`` row where the partition file says
+  ``EmbeddingRead_v2{V=2^17,H=..}``  every history read of a ``DsaHistoryReads_v1`` row where the partition file says
                                    ``"histories": true`` (`history_rows`: its ports, and its writer's row-seg ``o0``); always
                                    chunked, v2 bit rows
   any row's own Definition         every row of it, the row itself: ``in<g>`` per argument group -> ``out.<member>`` per
@@ -131,7 +131,7 @@ from typing import Any
 import numpy as np
 
 from verity.protocols.proofs.spot.verifier import service as SV
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
@@ -403,8 +403,8 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     tmpls, sampling_design = list(partition["templates"]), sampling_design_of(partition["law"])
     q = partition.get("query")
     if q is not None and q not in TEMPLATE_QUERIES:
-        if q == P.Q_WORD[0] and sampling_design.get("law") == "stratified":
-            raise ValueError(f"a word partition ({P.Q_WORD[0]}) with the stratified sampling design: its strata are templates, which a word "
+        if q == PO.Q_WORD[0] and sampling_design.get("law") == "stratified":
+            raise ValueError(f"a word partition ({PO.Q_WORD[0]}) with the stratified sampling design: its strata are templates, which a word "
                              f"partition does not have; the serving rows' partition is {' / '.join(TEMPLATE_QUERIES)}")
         raise ValueError(f"partition query {q!r}: the serving rows' window is the template instances' partition "
                          f"({' / '.join(TEMPLATE_QUERIES)}), never a word partition")
@@ -422,10 +422,11 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     if partition.get("row_tables"):
         ms, tables = with_row_tables(ms, tmpls, rows, arrivals)
     n_of = {t: sum(m.n for m in ms if m.template == t) for t in tmpls}
-    program, query = CS.population_program([(fn, n_of[t]) for fn, t in zip(defs, tmpls, strict=True)], several=q == TEMPLATE_QUERIES[1])
+    ms = CH.shared_tables(ms)
+    program, query = IF.listed_program([(fn, n_of[t]) for fn, t in zip(defs, tmpls, strict=True)], ())
     table = work_table_of(sampling_design, n_of, transfer_gates)
     if table is not None:
-        table = {P.template_id(fn): table[t] for fn, t in zip(defs, tmpls, strict=True)}
+        table = {PO.template_id(fn): table[t] for fn, t in zip(defs, tmpls, strict=True)}
     sampling_design, table = SV.params_sampling_design(sampling_design["rate"], program, query, table) if "rate" in sampling_design else (sampling_design, table)
     window = CS.Binding(program, query, sampling_design, run_root, tuple(ms), tables, context, table)
     want = partition.get("partition_digest")
@@ -674,7 +675,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
                   arrivals: dict[str, int] | None = None, weight_values: Mapping[str, Any] | None = None,
                   tables: Mapping[str, Any] | None = None, histories: Any = None, on: bool = False) -> tuple[
                       list[dict[str, Any]], dict[str, Any], dict[str, str], dict[str, bytes], dict[str, bytes], list[list[list[Any]]],
-                      IF.Registered | None]:
+                      IF.Registered | None, CS.Binding]:
     """What `after_commit` commits of ``window``'s members (``rows`` its templates', `population`'s): their words (`read_all`)
     with each registered read given by reference (`weight_rows.by_reference`) to ``weight_values``, each port a chain unit
     holds in its writer's tree given as its writer's (`chain_rows.held_rows`), the per-expert cut's
@@ -682,8 +683,8 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
     ``"histories": true``), the committer's ``histories`` (`commit.history_tables.Histories`), which it appends the
     window's latent rows to, each table from its edge, before it reads the history reads against them. -> (the data, the
     header entries, the registered roots, ``salts_of`` and ``strings_of`` (`rows.commit`'s: a history writer's rows its
-    table's), each member's index entries and the history tables' declarations (`history_rows.declarations`))."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+    table's), each member's index entries, the history tables' declarations (`history_rows.declarations`) and ``window``
+    with each port given by reference named in its member's ``values``)."""
 
     if on != (histories is not None):
         raise ValueError("a window commits history tables exactly when its partition file says \"histories\": true, into the "
@@ -698,27 +699,27 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
     reg = registered(ms, rows, hreg) if weight_values else merged(EX.declarations(plan), hreg)
     if tables is not None:
         made = EX.commit_tables(plan, store, weights, arrivals, _slices, tables)
-        values |= made | IF.supplied(reg, {p: v.entry() for p, v in made.items()}, window.partition_digest, module=G)
+        values |= made | IF.supplied(reg, {p: v.entry() for p, v in made.items()}, window.partition_digest)
     by_t, at = dict(zip(tmpls, rows, strict=True)), {}
     first, apart = ([m for m in ms if (template(m.template).layout == "history") == a] for a in (False, True))
     got = read_all(first, [by_t[t] for t in dict.fromkeys(m.template for m in first)], store, weights, arrivals, values)
     if histories is not None:
         at = HR.append(hp, first, got, histories)
-        values |= IF.supplied(hreg, {H.name(*k): histories.tables[k].entry() for k in hp}, window.partition_digest,
-                              module=G)
+        values |= IF.supplied(hreg, {H.name(*k): histories.tables[k].entry() for k in hp}, window.partition_digest)
     if apart:
         read = dict(zip([m.key for m in first], got, strict=True))
         read |= zip([m.key for m in apart], read_all(apart, [by_t[t] for t in dict.fromkeys(m.template for m in apart)], store,
                                                       weights, arrivals, values, histories))
         got = [read[m.key] for m in ms]
-    data, entries, roots, salts_of = WT.by_reference(window, reg, [g[0] for g in got], values)
+    data, entries, roots, salts_of = WT.by_reference(window, reg, [g[0] for g in got], values, IF.member_ranges(window.members))
+    window = WT.valued(window, data)
     data = CH.held_rows(window, data)
     strings_of: dict[str, bytes] = {}
     if histories is not None:
         hs, strings_of = HR.strings_of(hp, ms, histories, at)
         salts_of = {**salts_of, **hs}
         roots = {**roots, **{H.name(*k): histories.tables[k].root.hex() for k in hp}}
-    return data, entries, roots, salts_of, strings_of, [g[1] for g in got], hreg
+    return data, entries, roots, salts_of, strings_of, [g[1] for g in got], hreg, window
 
 
 def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[str, Any]], bmap: dict[str, Any], committed: Callable,
@@ -743,7 +744,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     domain ids they read by reference (`interface.supplied`), their roots its ``registered_roots`` too.  A window of history
     tables (``"histories": true``) takes the committer's ``histories`` (`commit.history_tables.Histories`, kept across the
     run's windows), its tables' roots among its ``registered_roots`` (`window_values`).  A row-table layout takes the serving
-    loop's ``row_tables``: ``{"context": <hex>, "key": <the run's row key>, "step_roots": {engine step: root}}``
+    loop's ``row_tables``: ``{"context": <hex>, "step_roots": {engine step: root}, "salts": {engine step: its rows' salts}}``
     (`commit.row_tables.step_roots`), which the window's step roots must be.  It reads the committed values and writes only ``out_dir``, ``circuit.json`` among its files: the window's circuit record (`circuit_record`), whose SHA-512
     the provenance carries as ``circuit``.  For Programs a registered compiler made from advice, the provenance also carries ``binding``: the
     compiler's digest and the advice's hiding root (`pipeline.advice_windows.binding`)."""
@@ -754,10 +755,10 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
                               rt.get("context", ""), reuse, transfer_gates)
     ms = window.members
     store = CommittedStore.of_record(bmap, committed, manifest)
-    data, entries, roots, salts_of, strings_of, idx, hreg = window_values(window, rows, store, weights, arrivals, weight_values,
-                                                                          tables, histories, HR.on(pf))
+    data, entries, roots, salts_of, strings_of, idx, hreg, window = window_values(window, rows, store, weights, arrivals,
+                                                                                  weight_values, tables, histories, HR.on(pf))
     t_read = time.perf_counter()
-    c = CS.commit(window, data, row_salt_key=rt.get("key"), segment_roots=rt.get("step_roots"),
+    c = CS.commit(window, data, table_salts=rt.get("salts"), segment_roots=rt.get("step_roots"),
                   workers=workers or min(16, os.cpu_count() or 1), salts_of=salts_of, strings_of=strings_of)
     prov = {"commitment": step_rows.NAME, "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
             "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope"),
@@ -769,7 +770,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     (Path(out_dir) / "circuit.json").write_bytes(body)
     prov["circuit"] = hashlib.sha512(body).hexdigest()
     res = CS.write(c, out_dir, prov, IX.index_doc(ms, idx, window.run), kind="stand-in" if stand_in else "served",
-                   registered=entries, registrar=R)
+                   registered=entries, registrar=DK)
     res["seconds"]["hook_s"] = round(time.perf_counter() - t0, 3)
     (Path(out_dir) / "window.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
     print(f"[serving-rows] {window.population} units in {len(ms)} members committed ({CS.SCHEME}): "

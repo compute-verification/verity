@@ -152,7 +152,7 @@ def sentQ {α : Type} (t : Step α × List (ByteArray × Nat) × List (Array F12
 logged its rounds; where the cut falls within its rounds, the run stops past the openings having logged the rounds up
 to the cut's. -/
 def FeedOk {α : Type} (n : Nat) (coins : Got) (t : Step (α × Got) × List (ByteArray × Nat) × List (Array F128))
-    (out : Except String α × Array Claims.Msg) (l : Array Claims.Msg) : Prop :=
+    (out : Except String α × Array Hash.Msg) (l : Array Hash.Msg) : Prop :=
   (∀ a got', t.1 = .done (a, got') → l.size + (sentQ t).length ≤ n →
     out = (.ok a, l ++ ((sentQ t).map Claims.toMsg).toArray) ∧ coins.size ≤ got'.size) ∧
   (l.size ≤ n → n < l.size + (sentQ t).length →
@@ -170,7 +170,7 @@ theorem coinAt_drop {coin : Nat → Nat → F128} {p : Nat} {cs : List (Array F1
 /-- **The feeding relation**: from every state past the given coins and every log, fed the coins from the log's
 round on. -/
 def FR (coin : Nat → Nat → F128) (n : Nat) (coins : Got) {α : Type} (x : OpenM α) (y : PS α) : Prop :=
-  ∀ (got : Got) (l : Array Claims.Msg) (cs : List (Array F128)), coins.size ≤ got.size → CoinAt coin l.size cs →
+  ∀ (got : Got) (l : Array Hash.Msg) (cs : List (Array F128)), coins.size ≤ got.size → CoinAt coin l.size cs →
     FeedOk n coins (feedR (x.run got) cs) (y.go l) l
 
 theorem fr_bind {coin : Nat → Nat → F128} {n : Nat} {coins : Got} {α β : Type} {x : OpenM α} {y : PS α}
@@ -373,9 +373,9 @@ theorem repOpening_cutL0 (coin : Nat → Nat → F128) (st : _root_.Flock.Setup)
     (lay : _root_.Flock.Zk.PadLayout)
     (tPad rep : Nat) (g : Array F128) (cm0 : _root_.Flock.ZkServer.Finish.Commit) (claims : Array _root_.Flock.Claim)
     (h : Array F128) (extra lanePad : Nat → Nat → F128) (salt : Nat → Nat → ByteArray) (tr : _root_.Flock.Transcript)
-    (l : Array Claims.Msg) {j : Nat} (hj : j < sch.k0 + 4) (hk : 1 ≤ sch.k0) (hn : sch.n ≠ 0)
+    (l : Array Hash.Msg) {j : Nat} (hj : j < sch.k0 + 4) (hk : 1 ≤ sch.k0) (hn : sch.n ≠ 0)
     {ss : Array (Array F128)} {T : F128} {sws : Array _root_.Flock.Switched} {tr₂ : _root_.Flock.Transcript}
-    {l₂ : Array Claims.Msg}
+    {l₂ : Array Hash.Msg}
     (hrs : ((ringSwitchCut (asksCut coin (l₂.size + j))
       (fun k => _root_.Flock.ZkServer.Finish.switchVec g claims[k]!) claims).run tr).go l =
       (.ok ((ss, T, sws), tr₂), l₂)) :
@@ -533,13 +533,13 @@ theorem openStep_l0 (t : _root_.Flock.ZkServer.Finish.Tab) (rep : Nat) (dom : By
     (hi : Array ByteArray) (coins : Got) (hdom : dom.size < 2 ^ 64) (hdg : t.st.digest.size < 2 ^ 64)
     (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64) (hm : t.st.m < 2 ^ 64)
     (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (cs : List (Array F128))
-    (coin : Nat → Nat → F128) (l : Array Claims.Msg) (hc : CoinAt coin l.size cs)
+    (coin : Nat → Nat → F128) (l : Array Hash.Msg) (hc : CoinAt coin l.size cs)
     (h0 : sentQ (feedR (openStep t rep dom xs hi coins) cs) ≠ []) :
     ∃ r, ((repPiop (stepAsks coins false) t.st (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
           (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) ByteArray.empty (claimsOf xs) fun _ => 0).run
           (_root_.Flock.Transcript.init #[] dom)).run #[] = .done r ∧ r.2.size = coins.size ∧
       ∀ {j : Nat} {ss : Array (Array F128)} {T : F128} {sws : Array _root_.Flock.Switched}
-        {tr₂ : _root_.Flock.Transcript} {l₂ : Array Claims.Msg}, j < t.sch.k0 + 4 → 1 ≤ t.sch.k0 → t.sch.n ≠ 0 →
+        {tr₂ : _root_.Flock.Transcript} {l₂ : Array Hash.Msg}, j < t.sch.k0 + 4 → 1 ≤ t.sch.k0 → t.sch.n ≠ 0 →
         l.size ≤ l₂.size →
         ((ringSwitchCut (asksCut coin (l₂.size + j))
           (fun k => _root_.Flock.ZkServer.Finish.switchVec t.g r.1.1.2.2[k]!) r.1.1.2.2).run

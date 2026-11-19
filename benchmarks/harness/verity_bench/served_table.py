@@ -27,8 +27,10 @@ from pathlib import Path
 from typing import Any
 
 from verity_bench import jobs, kit
+from verity_bench.kit_report import checked_by_of
 from verity_bench.vllm import result as result_format
-from verity_bench.vllm.presets import FORMER_SPEC, FORMER_SPECS, SOURCE_ROOT, SPEC_ROOT, expand_sweep, resolve_spec
+from verity_bench.vllm.presets import (FORMER_SPEC, FORMER_SPECS, SOURCE_ROOT, SPEC_ROOT, current_spec, expand_sweep,
+                                       former_arm, former_specs, load_spec, resolve_spec, spec_file, split_card)
 from verity_bench.vllm.runner import summarize
 
 SCHEMA = "verity-bench/served-table/v1"
@@ -42,16 +44,41 @@ POINT_TOOL = "vllm_bench_point"
 
 # Validation comes from result.json alone; rc 0 rules out a run killed after writing it, and a dirty tree ran code its
 # commit doesn't name (jobs.StoreCompletion's rule, keyed here by spec and point rather than by one commit's identity).
-# The spec is named by either of its recorded paths (`spec_paths`).
+# The spec is named by any of its recorded paths (`spec_paths`), one placeholder each: `passing`.
 PASSING = """
 SELECT a.id, o.artifact, a.source_commit
 FROM attempts a
-JOIN attempt_params s ON s.attempt = a.id AND s.key = 'spec' AND s.value IN (?, ?)
+JOIN attempt_params s ON s.attempt = a.id AND s.key = 'spec' AND s.value IN ({paths})
 JOIN attempt_params p ON p.attempt = a.id AND p.key = 'point' AND p.value = ?
 JOIN attempt_outputs o ON o.attempt = a.id AND o.name = 'result'
 WHERE a.tool = 'vllm_bench_point' AND a.validation = 'passed' AND a.rc = 0 AND a.source_dirty IS NOT 1
 ORDER BY a.start_utc DESC, a.id DESC
 """.strip()
+
+
+@dataclass(frozen=True)
+class Member:
+    """A protocol's member: ``model``'s runs of ``spec`` on the card whose file is ``card`` (its ``sku``, under
+    `kit.cards_directory`), whose record gives its ``short``: the member's name (`name`, ``MODEL-SHORT``) and its rows'
+    spec (`key`, the spec as a run on that card names it, `_on_card`)."""
+
+    model: str
+    spec: str
+    card: str
+
+    @property
+    def short(self) -> str:
+        from verity.device import load_card
+
+        return load_card(self.card, directory=kit.cards_directory())["short"]
+
+    @property
+    def name(self) -> str:
+        return f"{self.model}-{self.short}"
+
+    @property
+    def key(self) -> str:
+        return _on_card(self.spec, self.short)
 
 
 @dataclass(frozen=True)
@@ -66,7 +93,7 @@ class Protocol:
     eager_stock: str | None
     own_arm: str | None = None
     record: str = ""
-    members: tuple[tuple[str, str], ...] = ()
+    members: tuple[Member, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -83,17 +110,13 @@ class Live:
 
 
 PROTOCOLS = (
-    Protocol("Pearl-C served (cross-check)",
-             ("llama31-8b-1gpu-pouw-protocol-served", "llama31-8b-1gpu-pouw-protocol-served-b32"),
-             "pouw:pearl-c-sm120-v1-h3", "stock-fp8", record="pearl-c-served"),
-    Protocol("Pearl-C whole-step (cross-check)", (), "pouw-pearl-c-whole", "stock-fp8", record="pearl-c-whole-step"),
     # The bandwidth specs run every arm but the compiled one on decode-only CUDA graphs: no eager stock.
     Protocol("PoUS bandwidth audit", (), "bandwidth-audit", None, record="pous-bandwidth-audit",
-             members=(("llama-3.1-8b-h200", "llama31-8b-fp8-1gpu-bandwidth-served-h200"),
-                      ("llama-3.2-1b-h200", "llama32-1b-fp8-1gpu-bandwidth-served-h200"))),
+             members=(Member("llama-3.1-8b", "llama31-8b-fp8-1gpu-bandwidth-served-reps6", "h200-sxm-141gb"),
+                      Member("llama-3.2-1b", "llama32-1b-fp8-1gpu-bandwidth-served", "h200-sxm-141gb"))),
     Protocol("Commit", (), "commit@compiled", None, record="commit"),
-    Protocol("PoUW served on sm_90a", (), "pouw:pearl-c-h100-v1-h3", "stock-fp8", record="pouw-served-sm90",
-             members=(("llama-3.2-1b-h100", "llama32-1b-1gpu-pouw-protocol-served-h100"),)),
+    Protocol("Pearl+ served", (), "pearl-plus", "stock-fp8", record="pouw-served-sm90",
+             members=(Member("llama-3.2-1b", "llama32-1b-1gpu-pouw-protocol-served", "h100-sxm-80gb"),)),
     Protocol("H1 served, GPU commit path (cost only, in-process coins)", (), "pouw:eps1-sm120-h1fx1", "stock-int8",
              record="h1-served"),
 )
@@ -124,31 +147,57 @@ def spec_path(spec: str) -> str:
     return f"{SPECS}/{spec}.toml"
 
 
-def spec_paths(spec: str) -> tuple[str, str]:
-    """The two paths a run of `spec` may have recorded: where the spec is, and where it was while the specs had a
-    directory of their own (`presets.FORMER_SPEC`). A run of record keeps the path it ran under, so both are read."""
+def spec_paths(spec: str) -> tuple[str, ...]:
+    """The paths a run of `spec` may have recorded: where the spec is, and where it was while the specs had a directory
+    of their own (`presets.FORMER_SPEC`), each as it was named (``SPEC@CARD`` too, `presets.split_card`), and the same
+    of each former id it is now (`presets.FORMER_IDS`), on its card when `spec` names one. A run of record keeps the
+    path it ran under, so all are read; a path that doesn't name the card (``SPEC``) is read, and its run's card judged
+    (`_judge`)."""
 
-    return spec_path(spec), FORMER_SPEC.format(name=spec)
+    name, card = split_card(spec)
+    names = [name, *([spec] if card else []),
+             *(old for old, now in former_specs().items() if now[0] == name and card in (None, now[1]))]
+    return tuple(path for each in dict.fromkeys(names) for path in (spec_path(each), FORMER_SPEC.format(name=each)))
+
+
+def passing(paths: Sequence[str]) -> str:
+    """`PASSING` for a spec recorded under any of `paths`."""
+
+    return PASSING.format(paths=", ".join("?" * len(paths)))
 
 
 def spec_name(path: str) -> str:
-    """The spec a recorded path names, under either of its directories (`spec_paths`); any other path stays a path."""
+    """The spec a recorded path names, under either of its directories (`spec_paths`), by its name now
+    (`presets.current_spec`); any other path stays a path."""
 
     for under in (SPECS, FORMER_SPECS):
         if path.startswith(f"{under}/"):
-            return path.removeprefix(f"{under}/").removesuffix(".toml")
+            return current_spec(path.removeprefix(f"{under}/").removesuffix(".toml"))
     return path.removesuffix(".toml")
 
 
-def spec_added(root: Path, spec: str) -> int:
-    """When the commit that added the spec was committed, under the earlier of its paths: none of its runs can start
-    before."""
+def _on_card(spec: str, card: str | None) -> str:
+    """`spec` as the card its run was on names it (``SPEC@CARD``), unless that card is its spec's one card now: a run on a
+    card the spec no longer lists keeps its card's name."""
 
-    process = subprocess.run(["git", "log", "--diff-filter=A", "--format=%ct", "--", *dict.fromkeys(spec_paths(spec))],
-                             cwd=root, capture_output=True, text=True)
+    if card is None or split_card(spec)[1] is not None or spec_file(spec) is None:
+        return spec
+    return spec if load_spec(spec).cards == (card,) else f"{spec}@{card}"
+
+
+def spec_added(root: Path, spec: str) -> int:
+    """When the commit that added the spec was committed, under the earliest of its paths and its former ids' (`spec_paths`,
+    the card it names set aside): none of its runs can start before."""
+
+    paths = [path.replace(f"@{card}.toml", ".toml") if (card := split_card(spec)[1]) else path for path in spec_paths(spec)]
+    try:
+        process = subprocess.run(["git", "log", "--diff-filter=A", "--format=%ct", "--", *dict.fromkeys(paths)],
+                                 cwd=root, capture_output=True, text=True)
+    except FileNotFoundError:
+        raise jobs.NoCatalog(f"no git here, so {spec_path(spec)}'s runs can't be looked up on the store's remote") from None
     times = [int(line) for line in process.stdout.split()]
     if process.returncode != 0 or not times:
-        raise ValueError(f"git has no commit adding {spec_path(spec)} here, so its runs can't be looked up on the store's "
+        raise jobs.NoCatalog(f"git has no commit adding {spec_path(spec)} here, so its runs can't be looked up on the store's "
                          "remote: fetch the history (unshallow), or pass --local-only to read this machine's catalog alone")
     return min(times)
 
@@ -162,6 +211,9 @@ class Found:
     point: Mapping[str, Any]
     caveats: list[dict[str, Any]]
     device: str | None = None
+    card: str | None = None
+    #: who ran the result's gates (`kit_report.checked_by_of`), None for a result that predates the field
+    checked_by: str | None = None
 
 
 def _labels(store: Any, targets: Sequence[str]) -> list[dict[str, Any]]:
@@ -176,10 +228,11 @@ def _benchmark(store: Any, art: str) -> dict[str, Any]:
 
 
 def _judge(store: Any, run: str, art: str, commit: str, arms: Sequence[str], points: Sequence[str] | None,
-           record: str | None = None) -> tuple[list[Found], str | None]:
+           record: str | None = None, card: str | None = None) -> tuple[list[Found], str | None]:
     """The result's points (those of `points`, else all) as rows, or why the result can't stand: a `superseded_by`
-    label, an invalid result, or a point without every one of `arms` timed. The caveats are the result's, its run's and
-    the `record` art's that named the run."""
+    label, an invalid result, a run on another card than `card` (where one is asked), or a point without every one of
+    `arms` timed, each under its id now (`former_arm`). The caveats are the result's, its run's and the `record` art's
+    that named the run."""
 
     labels = _labels(store, [art, run, *([record] if record else [])])
     if superseded := [label["value"] for label in labels if label["key"] == SUPERSEDED_BY]:
@@ -189,7 +242,11 @@ def _judge(store: Any, run: str, art: str, commit: str, arms: Sequence[str], poi
         result_format.validate(doc)
     except ValueError as error:
         return [], f"invalid result: {error}"
-    rows = [row for row in doc["points"] if points is None or row["point"]["id"] in points]
+    ran_on = (doc["identity"].get("preset") or {}).get("gpu_id")
+    if card is not None and ran_on != card:
+        return [], f"ran on the {ran_on}, not the {card}"
+    rows = [{**row, "arms": {former_arm(arm) or arm: v for arm, v in row["arms"].items()}}
+            for row in doc["points"] if points is None or row["point"]["id"] in points]
     if not rows:
         return [], f"no timed point {', '.join(points or ())}"
     for row in rows:
@@ -197,7 +254,8 @@ def _judge(store: Any, run: str, art: str, commit: str, arms: Sequence[str], poi
             return [], f"no timed {', '.join(absent)} at {row['point']['id']}"
     caveats = [label for label in labels if label["key"] in CAVEAT_KEYS]
     device = doc["identity"].get("gpu")
-    return [Found(run, art, commit, int(doc["execution"]["reps"]), row, caveats, device) for row in rows], None
+    return [Found(run, art, commit, int(doc["execution"]["reps"]), row, caveats, device, ran_on, checked_by_of(doc["gates"]))
+            for row in rows], None
 
 
 def newest_passing(store: Any, spec: str, point: str, arms: Sequence[str],
@@ -205,12 +263,13 @@ def newest_passing(store: Any, spec: str, point: str, arms: Sequence[str],
     """The newest passing run of `spec` at `point` that isn't a trial (`kit.trial_attempt`), whose result isn't
     superseded and holds `arms`; each newer run passed over goes into `skipped` with why."""
 
-    for run, art, commit in store.index.sql(PASSING, (*spec_paths(spec), point)):
+    paths = spec_paths(spec)
+    for run, art, commit in store.index.sql(passing(paths), (*paths, point)):
         if kit.trial_attempt(store.get_attempt(run) or {}):
             skipped.append({"spec": spec, "point": point, "run": run, "art": art,
                             "why": f"a trial run ({kit.TRIAL}): its measurements are its own, never a row"})
             continue
-        found, why = _judge(store, run, art, commit, arms, [point])
+        found, why = _judge(store, run, art, commit, arms, [point], card=split_card(spec)[1])
         if why is None:
             return found[0]
         skipped.append({"spec": spec, "point": point, "run": run, "art": art, "why": why})
@@ -271,7 +330,7 @@ def _recorded(store: Any, run: str, arms: Sequence[str], record: str | None) -> 
     if not art:
         return spec, [], "no result output"
     found, why = _judge(store, run, art, str(source.get("commit") or ""), arms, None, record)
-    return spec, found, why
+    return _on_card(spec, found[0].card if found else None), found, why
 
 
 def _arms(protocol: Protocol) -> list[str]:
@@ -302,9 +361,10 @@ def _points(protocol: Protocol, record: Sequence[str], store: Any,
 def _source(spec: str, point: str, found: Found | None, record: str | None) -> dict[str, Any]:
     if found is None:
         return {"spec": spec, "point": point, "device": None, "run": None, "art": None, "commit": None, "reps": None,
-                "caveats": [], "record": record}
+                "caveats": [], "record": record, "checked_by": None}
     return {"spec": spec, "point": point, "device": found.device, "run": found.run, "art": found.art,
-            "commit": found.commit, "reps": found.reps, "caveats": found.caveats, "record": record}
+            "commit": found.commit, "reps": found.reps, "caveats": found.caveats, "record": record,
+            "checked_by": found.checked_by}
 
 
 def _over(point: Mapping[str, Any], arm: str, over: str | None, metric: str) -> dict[str, Any] | None:
@@ -358,7 +418,7 @@ def live_row(store: Any, live: Live) -> tuple[dict[str, Any], str | None]:
     row: dict[str, Any] = {"device": live.device, "run": live.run, "arm": live.arm, "control": live.control,
                            "machine": None, "record": None, "commit": None, "batch": None, "t": None, "reps": None,
                            "step_ms": None, "control_ms": None, "ratio": None, "form": None, "coins": None,
-                           "caveats": []}
+                           "checked_by": None, "caveats": []}
     attempt = store.get_attempt(live.run)
     if attempt is None:
         return row, "not in the store or on its remote"
@@ -383,7 +443,8 @@ def live_row(store: Any, live: Live) -> tuple[dict[str, Any], str | None]:
     coins = stop[live.arm]["end"]["live"]["coins"]
     row.update(batch=summary["b"], t=check.get("t"), reps=min(len(steps), len(controls)),
                step_ms=statistics.median(steps), control_ms=statistics.median(controls),
-               form=check.get("form_basis") or check.get("form"), coins=coins["source"])
+               form=check.get("form_basis") or check.get("form"), coins=coins["source"],
+               checked_by=summary.get("checked_by"))
     row["ratio"] = row["step_ms"] / row["control_ms"]
     return row, None
 
@@ -441,7 +502,7 @@ def collect(store: Any, *, protocols: Sequence[Protocol] | None = None, factors:
     rows = []
     for protocol in protocols:
         own = protocol.own_arm or protocol.arm
-        members = {spec: member for member, spec in protocol.members}
+        members = {m.key: m.name for m in protocol.members}
         head = {"protocol": protocol.name, "arm": protocol.arm, "served_stock": SERVED,
                 "own_arm": own if protocol.eager_stock else None, "eager_stock": protocol.eager_stock}
         seen = set()

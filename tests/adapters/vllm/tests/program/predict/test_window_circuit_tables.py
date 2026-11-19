@@ -14,6 +14,7 @@ import pytest
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.periods import interface as IF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
+from verity.commitments import registered_value as RV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
     served as SV,
 )
@@ -30,7 +31,7 @@ from tests.program.predict.test_window_circuit import (
     state_row,
 )
 from tests.program.predict.test_window_circuit_int8 import GRAIN, _registered
-from tests.program.predict.test_window_rows import KEY, PROGRAM, _weights
+from tests.program.predict.test_window_rows import PROGRAM, _weights
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_rows as WR
@@ -46,7 +47,7 @@ FIXED = ([(4, 2, G2), (4, 2, G2)], [[(0, 0, 4), (1, 0, 4)], [(0, 4, 1), (1, 4, 1
 
 
 def _lowered(tables: Tables | None = TABLES, cls: WindowClass = CLASS):
-    return WC.lower(_registered(), cls, None, GRAIN, wired=False, tables=tables)
+    return WC.lower(_registered(), cls, None, GRAIN, tables=tables)
 
 
 def _held_rows(circuit) -> dict[tuple[str, str, int], tuple[str, int]]:
@@ -105,13 +106,13 @@ def test_the_class_circuit_holds_each_quantizers_leaf_and_each_token_to_its_row_
     assert got == want and len(set(got.values())) == len(got) == 2 * 5 * 7
     doc = json.loads(json.dumps(c.description()))
     assert IF.input_count(doc, **held(c)) == {
-        "units": 1568, "inputs": 10547104, "wired": 0, "registered": 9161856, "ingress": 0, "free": 1385248}
+        "units": 1568, "inputs": 10547104, "wired": 1385248, "registered": 9161856, "ingress": 0, "free": 0}
 
 
 def test_each_tables_readers_are_templates_of_their_own():
     """A sample stratified by template samples a unit from every template, so each table has a sampled reader when its readers
     are templates of their own: each template that holds a table row holds one on each of its units, all of one table, and
-    every table has one. Round s's quantizers bind ROUND = s; round 0's token rows are its `ScanSlots_v2` and `TokenFeed_v1`
+    every table has one. Round s's quantizers bind ROUND = s; round 0's token rows are its `ScanSlots_v3` and `TokenFeed_v1`
     units' and round 1's its selects', `SelectCollect_v2{..., ROUND=1}`. Without the tables no template binds a round."""
     c = _lowered().circuit
     tables: dict[str, set[str]]
@@ -123,7 +124,7 @@ def test_each_tables_readers_are_templates_of_their_own():
     assert all(len(ts) == 1 and held_units[t] == set(range(units[t])) for t, ts in tables.items())
     readers = sorted((t.split("{")[0], *ts, "ROUND=1" in t) for t, ts in tables.items())
     assert readers == [("Int8RowQuant_v5", "row-table/0/k64", False)] * 2 + [("Int8RowQuant_v5", "row-table/1/k64", True)] * 2 + [
-        ("ScanSlots_v2", "input-ids/0", False), ("SelectCollect_v2", "input-ids/1", True), ("TokenFeed_v1", "input-ids/0", False)]
+        ("ScanSlots_v3", "input-ids/0", False), ("SelectCollect_v2", "input-ids/1", True), ("TokenFeed_v1", "input-ids/0", False)]
     assert {s for t, ts in tables.items() for s in ts} == {p for p in c.registered.params
                                                             if p.startswith(("row-table/", "input-ids/"))}
     assert not any("ROUND=" in IF.descriptor_id(fn) for fn, _ in _lowered(None).circuit.templates)
@@ -134,13 +135,13 @@ def test_a_fixed_load_window_is_the_class_circuit_with_the_tables_and_any_other_
     with H1's tables, wired; `test_window_circuit`'s WINDOW (a prompt of 3 chunked across two steps) is refused by name,
     since its rows aren't the public rows the tables are read at."""
     reg = _registered()
-    fixed = WC.window_circuit(reg, S.compile_steps(reg, *S._session(*FIXED)), CLASS, GRAIN, provable=False, tables=TABLES)
+    fixed = WC.window_circuit(reg, S.compile_steps(reg, *S._session(*FIXED)), CLASS, GRAIN, tables=TABLES)
     assert IF.circuit_bytes(fixed.description()) == IF.circuit_bytes(
-        WC.class_circuit(reg, CLASS, None, GRAIN, provable=False, tables=TABLES).description())
+        WC.class_circuit(reg, CLASS, None, GRAIN, tables=TABLES).description())
     assert fixed.wires and {r.param for r in fixed.registered.reads} >= {"row-table/1/k64", "input-ids/1"}
     with pytest.raises(Unexpressible, match=r"not its class's fixed load \[\[\(0, 0, 4\), \(1, 0, 4\)\], \[\(0, 4, 1\), "
                                             r"\(1, 4, 1\)\]\], the rows H1's tables are read at"):
-        WC.window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN, provable=False, tables=TABLES)
+        WC.window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN, tables=TABLES)
 
 
 @pytest.fixture(scope="module")
@@ -148,13 +149,13 @@ def filled():
     """The class circuit with H1's tables filled from a window's values (`window_rows.Rows`: `test_window_rows`' random
     weights, a scan state whose row at bucket 0 carries two prompts of 4): its lowering, its slots and its rows."""
     reg = _registered()
-    low = WC.lower(reg, CLASS, None, GRAIN, provable=False, tables=TABLES)
+    low = WC.lower(reg, CLASS, None, GRAIN, tables=TABLES)
     fields = _weights(low.fn)
     lanes = [(1, 4, 2, [17, 3, 250, 9]), (1, 4, 2, [5, 77, 42, 8])]
     rows_ = [state_row(CLASS.scan, lanes)] + [state_row(CLASS.scan, [(1, 1, 1, [99, 0, 0, 0])] * 2)] * (CLASS.buckets - 1)
-    state = CR.Registered.commit(PROGRAM, SS.SCAN_STATE, rows_, [hm96_salt(bytes(32), 0, j) for j in range(len(rows_))],
+    state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, rows_, [hm96_salt(bytes(32), 0, j) for j in range(len(rows_))],
                                  schema=CR.SCHEMA_V2)
-    values = {**WW.weight_values(reg, fields, KEY, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
+    values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
     slots = [WR.Slot(low.fn, CLASS, row, lambda label, lo, hi: fields[label][lo:hi]) for row, _ in WR.scan_slots(low, rows_)]
     return low, slots, WR.Rows(low, slots, values)
 

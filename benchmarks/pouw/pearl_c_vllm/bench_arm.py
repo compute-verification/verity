@@ -1,6 +1,7 @@
-"""Pearl-C (``pearl-c-sm120-v1-h3``) as a `verity-bench` experimental arm (``--arm-module pearl_c_vllm.bench_arm:PEARL_C``
-with ``benchmarks/pouw`` on ``PYTHONPATH``), on one RTX PRO 6000; with ``PEARLC_KERNEL`` the tree's
-``verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90``, ``pearl-c-h100-v1-h3`` on one H100 or H200.
+"""A useful-work scheme's kernels as a `verity-bench` experimental arm (``--arm-module pearl_c_vllm.bench_arm:PEARL_C``
+with ``benchmarks/pouw`` on ``PYTHONPATH``) on one card: the arm takes the scheme's registered name (``PearlCArm(NAME)``;
+`PEARL_C` is ``pearl-plus``'s) and serves the PoUW kernel scheme that scheme runs on the leased card
+(`PearlCArm.kernel`: ``pearl-c-sm120-v1-h3`` on an RTX PRO 6000, ``pearl-c-h100-v1-h3`` on an H100 or H200).
 
 The arm serves the preset's model in BF16 with every linear computed and committed by `pouw_pearl_c_device.PearlCDeviceRun`,
 installed as `e2e.install` does (sites by type, the kernel directory's cubin, the fixed operands' roots, the epoch from a
@@ -8,16 +9,18 @@ challenger's salt coin) but attached through the harness's ``target.hooks``, so 
 One pass per engine step: ``llm_engine.step`` is wrapped to open `Stack.pass_` around each forward, which bounds a pass's
 tiles by the step's scheduled tokens, so the full sweep's long prefills fit the pass buffers that one generate's pass
 would overflow.
+It holds the device run directly, not Pearl+ attached by name, because it times and replays device internals no served
+setting exposes.
 
 Its tokens are Pearl-C's own y (Pearl's FP8 quantization), so no stock arm is a bit-exact control (``control=None``), and
 each call's noise is seeded by its index across the epoch, so no two of the engine's passes need agree either (the gate's
 `runner.PER_PASS_TOKENS`); the arm's gate is Pearl-C's own, `e2e.gate`'s call check: at every distinct (n, k), served y
-against x·Wᵀ within `ERR` rel RMS, the same call's commitment twice bit for bit, and the ``hash_leaf``-omitted negative
-control changing the transcript root.
+against x·Wᵀ within `ERR` rel RMS, the same call twice with equal tile digests under different roots (its salts are
+fresh), and the ``hash_leaf``-omitted negative control changing the tile digests (`e2e.call_verdict`).
 
-Env: ``PEARLC_KERNEL`` (default the tree's ``verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120``), ``PEARLC_CUBIN`` (default the directory's
-build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``deferred``, the served schedule),
-``PEARLC_SCHEME`` (default the kernel directory's record, `KERNEL_SCHEMES`), ``PEARLC_BENCH_EPOCH``. The salt coin
+Env: ``PEARLC_KERNEL`` (default the tree's directory of the kernel scheme on the card, `kernel_directory`), ``PEARLC_CUBIN``
+(default the directory's build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``deferred``, the
+served schedule), ``PEARLC_BENCH_EPOCH``. The salt coin
 is a challenger's held in this process (``in-process``, a cost measurement) unless ``PEARLC_CHALLENGER_GATE`` (infra's gate
 as an ssh command under the lane's gate key) and ``PEARLC_CHALLENGER_PEER`` (this node's name in the challenger host's
 peers) are set: then it is a live session's on the auditor device, reserved at install with its salt coin alone
@@ -36,13 +39,30 @@ from typing import Any
 from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
-#: the sm_120 kernel's directory, the default kernel
-SM120 = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
+#: the tree's kernel directories, one per kernel scheme family and build target (`kernel_directory`)
+KERNELS = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels"
 settings = of(__file__)
 #: `e2e.gate`'s bound on served y against x·Wᵀ (rel RMS), Pearl's FP8 quantization noise
 ERR = 0.08
-#: the scheme each of the tree's kernel directories runs (`pouw_pearl_c_device.SCHEMES`' device records)
-KERNEL_SCHEMES = {"pearl_c_sm120": "pearl-c-sm120-v1-h3", "pearl_c_sm90": "pearl-c-h100-v1-h3"}
+
+
+def _e2e() -> Any:
+    """`e2e.py`, loaded from its file: the call check's verdict (`call_verdict`, `under_salt`) and `whole_check`."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("pearl_c_e2e", HERE / "e2e.py")
+    e2e = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(e2e)
+    return e2e
+
+
+def kernel_directory(scheme: str, card: str) -> Path:
+    """The tree's kernel directory of the PoUW kernel scheme ``scheme`` on the card ``card`` (its short name): its
+    family's, built for the card's target (``pearl_c_sm90`` for ``pearl-c-h100-v1-h3`` on an H200)."""
+    from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import named
+    from verity_bench.schemes import arch
+
+    return KERNELS / f"{named(scheme).family.replace('-', '_')}_{arch(card).removesuffix('a').replace('_', '')}"
 
 
 class _Coins:
@@ -82,7 +102,7 @@ class _LiveSession:
 
     def __init__(self, gate: str, peer: str, epoch: int, lane: str, run: Any = None) -> None:
         from verity_vllm.pipeline.commit_coins import ChallengerGate
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
         self.gate = ChallengerGate(gate, run)
         self.reserved, self.period = PHW.reserve_salt(self.gate.call, self.gate.ledger, lane, peer, epoch)
@@ -90,7 +110,7 @@ class _LiveSession:
         self.carried: dict[str, Any] = {}
 
     def open(self, entry: str, root: bytes) -> Any:
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
         self.client, self.commitment, opening, _, self.carried = PHW.open_session(
             entry, self.gate.call, self.reserved["session"], root, self.k)
@@ -100,28 +120,6 @@ class _LiveSession:
         if self.client is not None:
             client, self.client = self.client, None
             client.close()
-
-
-def live_coins(pouw: dict[str, Any], gate: str | None, peer: str | None, epoch: int, lane: str,
-               run: Any = None) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """A protocols config's PoUW settings `pouw` with the salt coin a live session's on the auditor device when `gate` (infra's
-    gate as an ssh command) and `peer` (this node in the challenger host's peers) are given: a salt-only session reserved
-    now under lane `lane` (`_LiveSession`, `run` its gate's subprocess in tests), which the install opens on its salt
-    epoch's root (`salt.epoch_open_root` of the fixed operands' root and the epoch's number) and flips its salt coin from
-    (`pouw_h1_window.salt_session`), through the settings ``challenger`` (this node's 127.0.0.1, at the port the gate's open
-    answers), ``session`` (the reserve answer), ``gate`` and ``period`` (the lane's open period the reserve joined), its
-    in-process ``coins`` dropped. Returns the settings and the reserve answer: `pouw` itself and None when neither is
-    given, the coins then in-process. ValueError when one is given without the other, or the reserve is refused."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
-
-    if (gate, peer) == (None, None):
-        return pouw, None
-    if gate is None or peer is None:
-        raise ValueError("live coins take PEARLC_CHALLENGER_GATE (the gate's ssh command) and PEARLC_CHALLENGER_PEER (this "
-                         "node's name in the challenger host's peers) together")
-    session = _LiveSession(gate, peer, epoch, lane, run)
-    return ({**{k: v for k, v in pouw.items() if k != "coins"}, "challenger": "127.0.0.1:0", "session": session.reserved,
-             "gate": PHW.gate_of(session.gate.call), "period": session.period}, session.reserved)
 
 
 class LiveDraw:
@@ -147,7 +145,7 @@ class LiveDraw:
     def __call__(self, root: bytes, asking: Any) -> tuple[bytes, dict[str, Any]]:
         from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
         from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
         lines = self.gate.ledger()
         period = PHW.open_period(lines, self.lane)
@@ -202,10 +200,11 @@ class PearlCArm:
     #: `PearlCDeviceRun`'s options beside the install's
     run_options: dict[str, Any] = {}
 
-    def __init__(self) -> None:
-        self.kernel_dir = Path(settings.PEARLC_KERNEL or SM120)
+    def __init__(self, protocol: str | None = None) -> None:
+        """``protocol`` is the useful-work scheme's registered name; an arm built only for its gate (`gate`) names none."""
+        self.protocol = protocol
+        self._kernel: tuple[str, Path] | None = None
         self.cubin = settings.PEARLC_CUBIN
-        self.scheme = settings.PEARLC_SCHEME or KERNEL_SCHEMES.get(self.kernel_dir.name, "pearl-c-sm120-v1-h3")
         self.schedule = settings.PEARLC_SCHEDULE
         self.epoch = settings.PEARLC_BENCH_EPOCH
         self.gate_command = settings.PEARLC_CHALLENGER_GATE
@@ -213,6 +212,32 @@ class PearlCArm:
         self.lane = settings.PEARLC_CHALLENGER_LANE
         self.run = self.stack = self.weights = self.session = None
         self.coins: dict[str, Any] = {"source": "in-process"}
+
+    def kernel(self, card: str | None = None) -> tuple[str, Path]:
+        """The kernel scheme and kernel directory the arm serves with, fixed at the first call: the scheme the arm's
+        served useful-work scheme's declaration runs (its ``kernels``, `scheme.declared`; `verity_bench.schemes.served`) on the card ``card`` (its short name;
+        where None, the leased card's, `kit.card_short` of the run's stamp), for the served model's weights, which
+        registration pins, and its directory ``PEARLC_KERNEL`` or the tree's (`kernel_directory`)."""
+        if self._kernel is None:
+            from verity.protocols.resource_accounting.scheme import declared
+            from verity_bench import kit
+            from verity_bench.schemes import arch, served, useful_work
+
+            if self.protocol is None:
+                raise ValueError(f"{self.id} names no useful-work scheme: build it as {type(self).__name__}(NAME), NAME "
+                                 "a registered compute scheme's name")
+            card = card or kit.card_short(kit.host_stamp()["card"])
+            scheme = declared(served(useful_work(self.protocol)), "kernels")(card, pinned=True, arch=arch(card))
+            self._kernel = scheme, Path(settings.PEARLC_KERNEL or kernel_directory(scheme, card))
+        return self._kernel
+
+    @property
+    def scheme(self) -> str:
+        return self.kernel()[0]
+
+    @property
+    def kernel_dir(self) -> Path:
+        return self.kernel()[1]
 
     def install(self, target: Any) -> "PearlCArm":
         return self
@@ -244,10 +269,14 @@ class PearlCArm:
 
     def ready(self, target: Any) -> None:
         from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
-        from verity.protocols.resource_accounting.compute.pouw.verifier.salt import epoch_open_root
+        from verity.protocols.compose import schemes
+        from verity.protocols.resource_accounting.scheme import declared
+        from verity.hooks import ComputeBlockWith
+        from verity_vllm import messages
         from verity_vllm.protocols.linear import vllm_site
         from verity_vllm.protocols.linear.api import Arm as StackArm
         from verity_vllm.protocols.linear.api import PassSpec, Stack
+        from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
         from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
         from verity_torch.pouw.pearl_c import run_device as PPDR
 
@@ -263,22 +292,23 @@ class PearlCArm:
         kernel = PPD.Kernel.load(str(self.kernel_dir), self.cubin)
         if self.gate_command is not None:
             self.session = _LiveSession(self.gate_command, self.peer, self.epoch, self.lane)
-        salt_key = PPD.new_salt_key(scheme)
-        roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=salt_key)
+        weight_salts = PPDR.fresh_weight_salts(weights)
+        roots = PPDR.weight_roots(kernel, weights, scheme, weight_salts=weight_salts)
         if self.session is not None:
             opening = self.session.open(f"pouw:{scheme}", weights_root(roots))
             commitment = self.session.commitment
             self.coins = {"source": "challenger", "session": self.session.carried, "pass_index": self.session.k,
-                          "salt_after": epoch_open_root(weights_root(roots), self.session.k).hex()}
+                          "salt_after": declared(schemes.get("pearl-plus"), "salt_open_root")(weights_root(roots),
+                                                                                             self.session.k).hex()}
         else:
             coins = _Coins(self.epoch)
             opening, commitment = coins.open("salt", weights_root(roots)), coins.commitment
         tiles, rows = self._capacity(target, kernel.run.TILE, PPD.ROW_ALIGN,
                                      [t.shape[0] for t in weights.values()], PPD.LEAF_CAPACITY, PPD.FLAG_ROWS)
         try:
-            run = PPDR.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots,
+            run = PPDR.PearlCDeviceRun(pouw_schemes.get(scheme), f"pouw:{scheme}", kernel, weights, roots,
                                       commitment, opening, schedule=self.schedule,
-                                      capacity=tiles, flag_rows=rows, salt_key=salt_key,
+                                      capacity=tiles, flag_rows=rows, weight_salts=weight_salts,
                                       pass_index=None if self.session is None else self.session.k, **self.run_options)
         except BaseException:
             if self.session is not None:
@@ -291,7 +321,8 @@ class PearlCArm:
         bad = stack.refusals()
         if bad:
             raise RuntimeError(f"{scheme} refuses the model: " + "; ".join(bad))
-        vllm_site.attach(stack, sites, target.hooks)
+        messages.current().request(run.entry, ComputeBlockWith(stack))
+        vllm_site.attach(sites, target.hooks)
         spec = PassSpec(hashing=True, schedule=self.schedule, run_id=settings.RESEARCH_RUN_ID)
         stack.activate(StackArm("pearlc", "bf16", run.entry, spec=spec))
 
@@ -310,10 +341,11 @@ class PearlCArm:
         self.run, self.stack, self.weights = run, stack, weights
 
     def gate(self, target: Any) -> dict[str, Any]:
-        """`e2e.gate`'s call check, between passes: y against x·Wᵀ, the commitment twice, and the negative control."""
+        """`e2e.gate`'s call check, between passes: y against x·Wᵀ, the call twice under the salt, and the negative control
+        (`e2e.call_verdict`)."""
         import torch
 
-        run, weights = self.run, self.weights
+        run, weights, e2e = self.run, self.weights, _e2e()
         checks, seen = [], set()
         gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20260930)
         for w, W in weights.items():
@@ -329,14 +361,11 @@ class PearlCArm:
                     run.omit = frozenset(omit)
                     y = run.gemm(w, x, W, None)
                     served = y if served is None else served
-                    commits.append({k: v for k, v in run.end().items() if k in ("transcript_root", "activation_roots")})
+                    commits.append(e2e.under_salt(run, run.end()))
                 run.omit = frozenset()
                 ref = x.float() @ W.float().T
                 err = float(((served.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())
-                same = commits[0] == commits[1]
-                control = commits[2]["transcript_root"] != commits[0]["transcript_root"]
-                checks.append({"n": W.shape[0], "k": W.shape[1], "m": m, "rel_rms": err, "commitment_repeats": same,
-                               "omitted_leaves_rejected": control, "ok": err < ERR and same and control})
+                checks.append({"n": W.shape[0], "k": W.shape[1], "m": m, **e2e.call_verdict(commits, err)})
         from verity_bench.vllm.runner import PER_PASS_TOKENS
 
         run.details["passes"].clear()
@@ -392,10 +421,8 @@ class PearlCWholeArm(PearlCArm):
     #: the options measured on pearl_c_sm120 alone (B̃'s prefetch is its pipeline's), which another kernel's arm leaves out
     RTX_ONLY = ("whole_prefetch_b", "whole_eager")
 
-    def __init__(self) -> None:
-        super().__init__()
-        if self.kernel_dir.name != "pearl_c_sm120":
-            self.run_options = {k: v for k, v in self.run_options.items() if k not in self.RTX_ONLY}
+    def __init__(self, protocol: str | None = None) -> None:
+        super().__init__(protocol)
         for option, env in (("whole_defer_a", "PEARLC_WHOLE_DEFER_A"), ("whole_fork_stats", "PEARLC_WHOLE_FORK_STATS"),
                             ("lag_ends", "PEARLC_LAG_ENDS"), ("whole_tree_sm", "PEARLC_WHOLE_TREE_SM"),
                             ("aside_ends", "PEARLC_ASIDE_ENDS"), ("whole_prefetch_b", "PEARLC_WHOLE_PREFETCH_B")):
@@ -419,6 +446,13 @@ class PearlCWholeArm(PearlCArm):
         self.engine_label = "graphs-mode0" + ("" if self.vllm_execution == "compiled" else f"-{self.vllm_execution}")
         self.whole, self.totals, self.capture = None, {}, [1, 8, 32, 128]
 
+    def kernel(self, card: str | None = None) -> tuple[str, Path]:
+        """`PearlCArm.kernel`, the `RTX_ONLY` options dropped from `run_options` where its directory is another kernel's."""
+        got = super().kernel(card)
+        if got[1].name != "pearl_c_sm120":
+            self.run_options = {k: v for k, v in self.run_options.items() if k not in self.RTX_ONLY}
+        return got
+
     def engine_overrides(self, target: Any) -> dict[str, Any]:
         self.capture = list(settings.PEARLC_CAPTURE_SIZES or (1, 8, 32, 128))
         return {**super().engine_overrides(target), "enforce_eager": False, "execution": self.vllm_execution,
@@ -435,13 +469,8 @@ class PearlCWholeArm(PearlCArm):
         self.totals = dict(self.whole.take())
 
     def gate(self, target: Any) -> dict[str, Any]:
-        import importlib.util
-
         got = super().gate(target)
-        spec = importlib.util.spec_from_file_location("pearl_c_e2e", HERE / "e2e.py")
-        e2e = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(e2e)
-        whole = e2e.whole_check(self.run, self.weights, m=max(self.capture))
+        whole = _e2e().whole_check(self.run, self.weights, m=max(self.capture))
         self.run.details["passes"].clear()
         return {**got, "passed": bool(got["passed"] and whole.get("ok")), "whole": whole}
 
@@ -455,5 +484,5 @@ class PearlCWholeArm(PearlCArm):
         return out
 
 
-PEARL_C = PearlCArm()
-PEARL_C_WHOLE = PearlCWholeArm()
+PEARL_C = PearlCArm("pearl-plus")
+PEARL_C_WHOLE = PearlCWholeArm("pearl-plus")

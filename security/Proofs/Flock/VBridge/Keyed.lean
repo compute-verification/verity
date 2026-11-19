@@ -18,7 +18,7 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Spot.Sampling.Circuit
 import VCVio.Prelude.Core
 
 /-!
@@ -38,7 +38,7 @@ gate (`unit_recOpen`).
 
 namespace FlockVBridge
 
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Hm
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Hm
 
 variable {c : Flock.Circuit} (hU : Built c.unit) (n : ℕ)
 

@@ -26,7 +26,7 @@ import pytest
 from verity.circuits.codec import canonical_json
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
-from verity.commitments.periods import flock_inputs as FI, links as LK, rows as CS
+from verity.commitments.periods import flock_inputs as FI, links as LK, rows as CS, wiring as WI
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 from verity_vllm.pipeline import boundary_rows as BR, interior_rows as IR, serving_rows as SRW
@@ -116,7 +116,7 @@ def test_a_class_whose_block_makes_no_wires_has_no_second_stage_and_one_of_insta
     assert bare.returns == (replace(d.returns[0], held=False),) and bare.links == d.links
     rule = TS.rule_of(_layout(), f"rate:{Q}/{N}", K)
     assert rule.span_values == (("logits", O, (V, 16)),)
-    assert [n for n, _s in rule.interior] == [f"{TID}/logits", f"{TID}/o0"]
+    assert [n for n, _s in rule.interior] == [f"{TID}/o0"]
 
 
 def _words(bits: np.ndarray) -> np.ndarray:
@@ -171,7 +171,7 @@ def test_a_class_wired_to_a_writer_of_two_units_a_block_is_committed_by_its_repl
     assert CS.expected_ports(r.design.window(again.docket.digest, sample)) == r.interior.ports
     w = r.interior.committed.window
     assert [(m.template, m.n) for m in w.members] == [(t, Q * o) for t in ids]
-    assert w.held_leaves(w.members[1], "mask") == tuple(range(Q * o))
+    assert w.tree(w.members[1], "mask") == WI.tree(ids[0], "o0") and w.reads(w.members[1], "mask").tolist() == list(range(Q * o))
     assert [e["value"] for e in r.record["registered"]] == ["scores", "n", "key", "r"]
     assert sorted(u // o for u in r.draw.units) == list(range(2 * Q))
     with pytest.raises(ValueError, match="reads a writer of 2 units a block.*give the replay block's rows"):
@@ -258,6 +258,25 @@ def test_a_serve_under_another_nonce_commits_under_another_run(tmp_path, served)
     assert pub["run"] == BR.run_root("another", 0) != served["pub"]["run"] == BR.run_root(SM.SERVE, 0)
 
 
+class LinkedHeaderRefused(Exception):
+    """Round 2 refused with exactly the codes expected and `HEADER_REFUSED` beside them."""
+
+
+#: round 2's refusal of a linked registered value's port, which the circuit prover's header binds at another binding
+HEADER_REFUSED = "second-header"
+LINKED_HEADER = pytest.mark.xfail(
+    strict=True, raises=LinkedHeaderRefused,
+    reason="the circuit prover's header binds a linked registered value's port at the port's own window binding (`rows.frame_entry`, since 0d3041a95f2) where round 2 places it at its registration's "
+    "(`SecondStage.lean` 978); round 2 refuses, so it fails closed; cured by the frame entry binding a linked registered "
+    "value at its registration; any other failure, or the refusal gone, fails this test")
+
+
+def _linked_header(got: dict, codes: list[str]) -> None:
+    if got.get("ok") is False and sorted(got.get("codes") or []) == sorted([*codes, HEADER_REFUSED]):
+        raise LinkedHeaderRefused(got)
+
+
+@LINKED_HEADER
 def test_round_2_takes_the_hand_over_with_the_return_read_at_round_1s_rows_but_for_the_logits_the_prover_registers(run):
     """What `two_stage.prove` hands over, held to round 2 (`two_stage.round_two`, the form allowed): the verifier's
     window (`Design.window`, public items alone) is the one the interior was committed under; the verifier's reads
@@ -309,6 +328,7 @@ def test_round_2_takes_the_hand_over_with_the_return_read_at_round_1s_rows_but_f
     assert r.tie.get("supplied") is None and "pinned" not in r.tie and "outputs" not in r.tie
     got = TS.round_two_twin(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs,
                        r.tie)
+    _linked_header(got, [TS.INPUTS_REFUSED])
     inputs = {"value": "logits", "why": SS.INPUTS_WHY}
     assert got == {"ok": False, "codes": [TS.INPUTS_REFUSED], "detail": {TS.INPUTS_REFUSED: inputs}}
     assert [(x.port, x.value) for x in SS.replay_links(layout.program, d.key, brec)] == [("logits", "logits"), ("o0", "o0")]
@@ -316,6 +336,7 @@ def test_round_2_takes_the_hand_over_with_the_return_read_at_round_1s_rows_but_f
     filled = {**r.tie, "supplied": {"logits": [[{"bytes": "00000000"}]]}}
     got = TS.round_two_twin(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs,
                        filled)
+    _linked_header(got, [])
     assert got == {"ok": True, "codes": [], "detail": {}}
 
     own = TS.verifier_reads(replace(d, returns=()), mine, r.record, brec, sample)
@@ -328,14 +349,15 @@ def test_round_2_takes_the_hand_over_with_the_return_read_at_round_1s_rows_but_f
 
 
 def test_a_second_stage_whose_interior_gives_a_replay_block_an_input_never_held():
-    """`two_stage.held` on a run's summary: a second stage whose every check passed and whose outcome round 2 refuses
-    by its form alone held; the same run with ``second-inputs`` among round 2's codes, or among the outcome's, did
-    not, whatever else it reports."""
+    """`two_stage.held` on a run's summary: a second stage whose every check passed and whose outcome is accepted held,
+    and one whose outcome round 2 refuses, by the deleted two-stage form's code too, did not; the same run with
+    ``second-inputs`` among round 2's codes, or among the outcome's, did not, whatever else it reports."""
     s = {"checks_before_draw": {"registered": True}, "negatives": {"wrong-root": True},
          "audit": {"complete": True, "registered_reads": True, "verdicts": {"m0": True}}}
     files, r2 = {TID: True}, {"ok": True, "codes": []}
-    o = {"accepted": False, "interior": ["statements"], "statements": [TS.FORM_REFUSED], "replay_sample": []}
+    o = {"accepted": True, "interior": [], "statements": [], "replay_sample": []}
     assert TS.held(s, r2, o, files)
+    assert not TS.held(s, r2, {**o, "accepted": False, "interior": ["statements"], "statements": [SM.FORM]}, files)
     assert not TS.held(s, {"ok": False, "codes": [TS.INPUTS_REFUSED]}, o, files)
     assert not TS.held(s, r2, {**o, "statements": [TS.INPUTS_REFUSED]}, files)
     assert not TS.held(s, {"ok": True, "codes": [TS.INPUTS_REFUSED]}, {**o, "accepted": True, "statements": []}, files)
@@ -365,7 +387,7 @@ def test_the_small_rehearsal_expects_the_inputs_code_of_a_linked_run_and_not_of_
     untimed = summary([SM.INPUTS])
     del untimed["audit"]["timing"]
     assert SM.expect(untimed, SM.INPUTS) == {**passed, "round_two": True, "outcome": True, "cost": False}
-    for codes in ([], ["second-read"], [SM.INPUTS, "second-read"], [TS.FORM_REFUSED]):
+    for codes in ([], ["second-read"], [SM.INPUTS, "second-read"], [SM.FORM]):
         assert SM.expect(summary(codes), SM.INPUTS) == {**passed, "round_two": False, "outcome": False}
     assert all(SM.expect(summary([], [SM.FORM])).values())
     assert SM.expect(summary([SM.INPUTS])) == {**passed, "round_two": False, "outcome": False}
@@ -411,6 +433,7 @@ def test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses
 
 
 @pytest.mark.slow
+@LINKED_HEADER
 @pytest.mark.parametrize("tables", [False, True], ids=["alone", "beside-tables"])
 def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_takes_its_hand_over(tmp_path, tables):
     """A class as a served vocabulary's is with the greedy select in units, its replay block
@@ -464,6 +487,7 @@ def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_ta
     assert len(stmts) == k and all(TS.pins(proofs, stmts).values())
     args = (c.layout.program, d.key, sample, mine, r.record, brec, drawn)
     got = TS.round_two_twin(*args, stmts, {"verdicts": verdicts}, proofs, r.tie)
+    _linked_header(got, [TS.INPUTS_REFUSED])
     assert got == {"ok": False, "codes": [TS.INPUTS_REFUSED],
                    "detail": {TS.INPUTS_REFUSED: {"value": f"{block}logits", "why": SS.INPUTS_WHY}}}
 
@@ -724,3 +748,12 @@ def test_under_a_stop_rule_the_serves_hook_gives_a_stop_class_of_the_greedy_sele
                       FC.Challenger("stop", label=TS.family_of(L, blocks=True)), got.record)
     assert s["record"]["previous"] == got.docket.digest and s["record"]["population"] == spans
     assert [r["port"] for r in s["record"]["roots"]] == [BR.STOP] and len(s["units"]) == Q
+
+
+def test_round_two_of_record_holds_the_twin_to_the_leans_codes():
+    """`two_stage.round_two`: the Python twin's codes and the Lean run's, the same list, are the verdict; any other pair,
+    or either missing, is `disagree` alone."""
+    assert TS.round_two({"codes": []}, []) == {"ok": True, "codes": []}
+    assert TS.round_two({"codes": ["second-read"]}, ["second-read"]) == {"ok": False, "codes": ["second-read"]}
+    for python, lean in (({"codes": []}, ["second-read"]), ({"codes": ["second-read"]}, []), (None, []), ({"codes": []}, None)):
+        assert TS.round_two(python, lean) == {"ok": False, "codes": ["disagree"]}

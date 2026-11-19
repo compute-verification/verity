@@ -41,6 +41,7 @@ from pathlib import Path
 import pytest
 
 import verity_difftest as D
+from verity.circuits import population as PN
 from verity.commitments import coin_tree as CT
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import (
@@ -51,6 +52,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     proofs as PF,
     docket as R,
 )
+from verity.protocols.proofs.spot.prover import docket as DK
 
 from test_challenger_difftest import Ledger, TreeSession, _pinned, lms_verify
 from test_difftest import (LEAF, PAIR, RECEIVED, SCHEME, STAND_IN_CIRCUIT, TRIPLE, V2_TABLES, WINDOW, Setup,
@@ -93,10 +95,10 @@ class Audit:
     def __init__(self, seed: str, ports: tuple[str, str] = (f"{A}/out", f"{B}/out"), opened: tuple[str, str] = (A, B),
                  closed: tuple[str, ...] = (A, B), together: bool = False, sampled: tuple[str, ...] = (A, B)):
         rng = random.Random(seed)
-        s = self.s = Setup(P.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]),
+        s = self.s = Setup(PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]),
                            P.template_instances_query([PAIR.id, TRIPLE.id]), names=ports)
         roots = [{"port": p, "root": rng.randbytes(64).hex(), **s.ports[p]} for p in s.ports]
-        self.rec = R.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF)
+        self.rec = DK.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF)
         held = None
         while held != set(sampled):
             ch, sample, _ = _challenger_sample(rng, s, DESIGN, self.rec, trees=0)
@@ -228,8 +230,8 @@ def test_the_twin_answers_leans_reason_on_each_refusal_of_the_per_member_run(tmp
 def test_the_members_wiring_is_a_parameter_its_check_refuses_and_is_read_after_the_members_files(tmp_path):
     """Parameters naming the members' wiring: one SPOT's check refuses is refused with the parameters (a wire of no
     template), and one it passes (`TRIPLE`'s rows of ``x``, cut one a word, each `PAIR`'s unit 1's ``o0``) leaves Lean's
-    reason the audit's without it, the first member's circuit, since the wires of the sample's units are read after every
-    member's files (`OneStageZk.wiresHeld`). The twin leaves a wiring `Outside`."""
+    reason the audit's without it, the first member's circuit, since a wired port's tree is read after every member's
+    files (`OneStageZk.fieldRoots`). The twin leaves a wiring `Outside`."""
     a = Audit("members-twin-wiring")
     wire = {"reader": TRIPLE.id, "port": "x", "writer": PAIR.id, "out": "o0", "at": 0, "radix": [3, 3], "base": 1,
             "step": [0, 0], "cut": [0, 3]}
@@ -345,7 +347,7 @@ def test_the_twin_answers_leans_reason_on_the_logs_order_and_the_registrations_r
     why, (run, refused) = other.ask(tmp_path / "roots")
     assert run is None and why == M.run_reason(run, refused), (why, refused)
     assert why == ("proofs: roots: the registration's root zzz/out is no member's: a member's roots are named "
-                   "<member>/<port>")
+                   "<member>/<port>, and a window's tree of a template's field <template>/<field>")
 
 
 def test_the_twin_answers_leans_reason_on_each_refusal_of_the_sessions_trees(tmp_path):

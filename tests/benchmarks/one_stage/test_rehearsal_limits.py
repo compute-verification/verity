@@ -26,3 +26,23 @@ def test_the_held_pair_is_a_block_a_slot_and_refused_where_the_slots_do_not_divi
     assert RL.held(4, 6, 100, Refused) == {"alpha": [6, 25], "gamma": 25}
     with pytest.raises(Refused, match="the class's 3 slots don't divide the profile's gamma 100"):
         RL.held(3, 6, 100, Refused)
+
+
+def test_a_class_whose_units_no_proof_block_takes_is_refused_by_the_templates_name(monkeypatch):
+    """The rehearsal's circuit is the proving path's: a class whose unit Flock's composer wouldn't prove (a coordinate
+    of K = 64, no row past 111 bytes) is refused naming the template, and a class it would prove is taken."""
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.defs import bind
+    from verity.circuits.ops import gemm as G
+    from verity.commitments.periods import interface as IF
+    from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.program.predict.build import Unexpressible
+
+    small, wide = (bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8) for k in (64, 128))
+    for fn in (small, wide):
+        monkeypatch.setattr(WC, "class_circuit", lambda registered, cls, tables=None, fn=fn: IF.Circuit("t", ((fn, 2),)))
+        if fn is small:
+            with pytest.raises(Unexpressible, match=f"1 templates Flock's composer wouldn't prove: .*{descriptor_id(small)}"):
+                RL.class_circuit_of(None, None)
+        else:
+            assert RL.class_circuit_of(None, None).templates[0][0] is wide

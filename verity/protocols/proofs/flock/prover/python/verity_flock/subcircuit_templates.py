@@ -1160,50 +1160,50 @@ def _fp8_block_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
 TEMPLATES: dict[str, Template] = {}
 
 
-def _add(t: Template) -> None:
+def register(t: Template) -> None:
     TEMPLATES[t.id] = t
 
 
-_add(Template("gemm-coordinate", "GemmCoordinate<K>",
+register(Template("gemm-coordinate", "GemmCoordinate<K>",
               "one output word of x @ W^T: K multiply-accumulates on one tensor-core instruction's exact semantics (FP32 accumulation), "
               "then the bf16 epilogue", {"K": "int, a multiple of 16", "semantics": "the tensor-core instruction (GEMM_SEMANTICS)",
                                          "datatype": "operand datatype (bf16)"},
               gemm_coordinate, _gemm_identify, {"K": 2048, "semantics": "sm80.mma.m16n8k16.bf16"}))
-_add(Template("attention-head", "AttentionHead<T,D>",
+register(Template("attention-head", "AttentionHead<T,D>",
               "FlashAttention forward, one query head at position T-1 over its KV head: FA2 (AttentionHead_v3) or FA3 on the H100 "
               "(AttentionHead_v2); T varies per instance",
               {"D": "int, head dim", "BN": "int, the kernel's kBlockN", "T": "synthetic key-count range lo:hi (per draw)",
                "semantics": "sm80.fa2.bf16 or sm90.fa3.bf16"}, attention_head, _attn_identify, {"D": 64, "BN": 128, "T": "1:512"}))
-_add(Template("attention-head-v18", "AttentionHead_v18<T,D>",
+register(Template("attention-head-v18", "AttentionHead_v18<T,D>",
               "the registered compiler's FA2 head (dead_free.AttentionHead_v18) on sm120's steps, one query head of a decode-only launch "
               "(MASKED_FROM = ceil(T/BN) - 1); T varies per instance",
               {"D": "int, head dim", "BN": "int, the kernel's kBlockN", "T": "synthetic key-count range lo:hi (per draw)",
                "semantics": ATTN_V18_SEMANTICS}, attention_head_v18, _attn_v18_identify, {"D": 64, "BN": 128, "T": "1:512"}))
-_add(Template("rope-head", "RoPEHead<D>", "NeoX rotary embedding of one head with its bf16 cos/sin row (RoPEHead_v1)", {"D": "int, even"},
+register(Template("rope-head", "RoPEHead<D>", "NeoX rotary embedding of one head with its bf16 cos/sin row (RoPEHead_v1)", {"D": "int, even"},
               rope_head, _rope_identify, {"D": 64}))
 for _r in ROWS.values():
-    _add(Template(_r.template, _r.family, f"{_r.family} (verity_vllm.definitions.registry), one row", {k: "static" for k in _r.statics},
+    register(Template(_r.template, _r.family, f"{_r.family} (verity_vllm.definitions.registry), one row", {k: "static" for k in _r.statics},
                   (lambda r: lambda **p: _row_subcircuit(r, **p))(_r), _row_identify(_r), dict(_r.example)))
-_add(Template("embedding-row", "Embedding_v1", "one row of the token embedding table, gathered by token id (Embedding_v1): an input "
+register(Template("embedding-row", "Embedding_v1", "one row of the token embedding table, gathered by token id (Embedding_v1): an input "
               "stores the id and the row it opens", {"V": "int, vocabulary", "H": "int, hidden size"}, embedding_row, _embedding_identify,
               {"V": 32768, "H": 4096}))
-_add(Template("ingress-prompt", "IngressPrompt_v1", "the I/O shell's ingress parse unit (io_shell.IngressPrompt_v1): the attested request "
+register(Template("ingress-prompt", "IngressPrompt_v1", "the I/O shell's ingress parse unit (io_shell.IngressPrompt_v1): the attested request "
               "body of ingress v0 to its ok bit, the prompt's token ids and max_tokens", {"MODEL": "str, the served model's name",
               "LP": "int, prompt tokens", "V": "int, vocabulary"}, ingress_prompt, _ingress_identify,
               {"MODEL": "served-model", "LP": 16, "V": 128256}))
-_add(Template("token-select-chunk", "TokenSelectChunk_v2", "a V-chunk of the registered compiler's greedy select "
+register(Template("token-select-chunk", "TokenSelectChunk_v2", "a V-chunk of the registered compiler's greedy select "
               "(dead_free.TokenSelectChunk_v2): C logits to their first maximum above -inf and its index", {"C": "int, logits per chunk"},
               token_select_chunk, _chunk_identify, {"C": 64}))
-_add(Template("token-select-combine", "TokenSelectCombine_v2", "the registered compiler's greedy token from logits[0] and the row's "
+register(Template("token-select-combine", "TokenSelectCombine_v2", "the registered compiler's greedy token from logits[0] and the row's "
               "V-chunk partials (dead_free.TokenSelectCombine_v2): the egress id", {"V": "int, vocabulary", "C": "int, logits per chunk"},
               token_select_combine, _combine_identify, {"V": 128256, "C": 64}))
-_add(Template("moe-expert-coordinate", "MoeExpertCoordinate<K>", "one output word of the routed expert's GEMM (MoeExpertCoordinate_v1): "
+register(Template("moe-expert-coordinate", "MoeExpertCoordinate<K>", "one output word of the routed expert's GEMM (MoeExpertCoordinate_v1): "
               "GemmCoordinate_v1 on expert e's row", {"E": "int, experts", "K": "int, a multiple of 16"},
               lambda **p: moe_expert_coordinate(**p), _expert_identify(False), {"E": 64, "K": 2048}))
-_add(Template("moe-expert-coordinate-weighted", "MoeExpertCoordinateW<K>", "the routed expert's GEMM coordinate scaled by its routing "
+register(Template("moe-expert-coordinate-weighted", "MoeExpertCoordinateW<K>", "the routed expert's GEMM coordinate scaled by its routing "
               "weight (MoeExpertCoordinateW_v1)", {"E": "int, experts", "K": "int, a multiple of 16"},
               lambda **p: moe_expert_coordinate(**p, weighted=True), _expert_identify(True), {"E": 64, "K": 1024}))
-_add(Template("scaled-mm-fp8-block-coordinate", "ScaledMmFp8BlockCoordinate<K,G>", "one bf16 output word of the block-scaled FP8 GEMM "
+register(Template("scaled-mm-fp8-block-coordinate", "ScaledMmFp8BlockCoordinate<K,G>", "one bf16 output word of the block-scaled FP8 GEMM "
               "(ScaledMmFp8BlockCoordinate_v1): E4M3 wgmma per G-wide block, fp32 block scales", {"K": "int", "G": "int, the block (128)",
               "semantics": "sm90.wgmma.m64n8k32.e4m3"}, scaled_mm_fp8_block_coordinate, _fp8_block_identify, {"K": 2560, "G": 128}))
 

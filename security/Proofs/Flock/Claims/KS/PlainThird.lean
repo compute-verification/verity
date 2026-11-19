@@ -55,8 +55,8 @@ open Classical in
 /-- **A deployed event bounds a mixture of live strategies at `plainCoins`**: where the live event `pL` at the live
 outcome of `P'` at the tape `(ω, u)` and the live coins `r'` gives `E` at `plainCoins (u, r')`, the average over the
 deployed coins `u` of the live session's probability of `pL` against `P'`'s strategies is at most `Pr[E]`. -/
-theorem plainMix_le_of_run {Ω : Type} (x : Claims.Msg) (ω : Ω) (mPts : ℕ) (N : Claims.Msg → ℕ)
-    (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire 65536 1 mPts)
+theorem plainMix_le_of_run {Ω : Type} (x : Hash.Msg) (ω : Ω) (mPts : ℕ) (N : Hash.Msg → ℕ)
+    (dg : ByteArray → ByteArray) (w : Hash.Msg → Wire 65536 1 mPts)
     (P' : Claims.Prover (Ω × (Fin ((V false).k x) → Coin))) (hk : N x + 2 = (V false).k x)
     (n : Fin ((V false).k x) → ℕ) (pL : LiveOutJ 1 mPts → Prop) (E : (Fin ((V false).k x) → Coin) → Prop)
     (h : ∀ u r', pL (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r') →

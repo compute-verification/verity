@@ -2,7 +2,7 @@
 stage, the interior docket over the replay sample's proof blocks, the second stage on its own coins, one outcome
 binding both dockets and both samples, each step by both verifiers; replay blocks of one template and of two,
 whose interior is template-major and whose second stage samples each cell; round 2's statement check of the
-second-stage sessions (`second_stage`), which refuses the two-stage form while `second_stage.FORM` is off; its
+second-stage sessions (`second_stage`); its
 refusals; its profile at the footprint; and its replay grain's fan-out."""
 
 from __future__ import annotations
@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 from verity.circuits import codec, partition_object as PO
 from verity.circuits.cut import member_refs
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -29,6 +31,7 @@ from verity.protocols.proofs.spot.verifier.profile import Bernoulli, Subset
 from verity.protocols.proofs.spot.prover import optimize as O, plancheck as PC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments.window import window_binding
 
 import fake_challenger as FC
@@ -68,7 +71,7 @@ def _values(boundary: tuple[str, ...]) -> tuple[S.Value, ...]:
 
 PUBLIC, VALUES = _public(BOUNDARY), _values(BOUNDARY)
 RULE = S.TwoStage(GRAIN, "rate:1/2", K)
-TEMPLATE, = (t for t, _ in P.strata(P.population_program(PAIR, Q * N_RHO), QUERY))
+TEMPLATE, = (t for t, _ in P.strata(PN.population_program(PAIR, Q * N_RHO), QUERY))
 #: The reference header of an honest statement in these streams, fixed before the run: PAIR's part's, its ports' schemas
 #: and the set it was staged in, none of the run's fields (`fake_challenger.reference_header`).
 REFERENCE = FC.reference_header(TEMPLATE, 0, Q * N_RHO, dict.fromkeys(INTERIOR, SCHEMA))
@@ -108,13 +111,13 @@ def _ports(program: Program, query, names, n: int | Mapping[str, int]) -> dict:
 def _record(program: Program, query, names, n: int | Mapping[str, int], sampling_design, window, previous) -> dict:
     ports = _ports(program, query, names, n)
     roots = [{"port": v, "root": f"{i + 1:02x}" * 64, **ports[v]} for i, v in enumerate(names)]
-    return R.record(program, query, sampling_design, S.SCHEME, roots, window, previous=previous)
+    return DK.record(program, query, sampling_design, S.SCHEME, roots, window, previous=previous)
 
 
 def _boundary(n=N, row=0, previous=None, q=Q, **window) -> tuple[dict, dict]:
     """The boundary docket over `n` replay blocks: BLOCK's `x` and output, each of N_RHO rows a block, one for
     each of its PAIR instances' `x` and `o0` (`second_stage.replay_rows`); its window names `window`'s items too."""
-    program, leaves = P.population_program(BLOCK, n), dict.fromkeys(BOUNDARY, n * N_RHO)
+    program, leaves = PN.population_program(BLOCK, n), dict.fromkeys(BOUNDARY, n * N_RHO)
     return (_record(program, GRAIN, BOUNDARY, leaves, {"law": "subset", "k": q},
                     {"kind": "served", "run": RUN, "row": row, **window}, previous),
             _ports(program, GRAIN, BOUNDARY, leaves))
@@ -123,7 +126,7 @@ def _boundary(n=N, row=0, previous=None, q=Q, **window) -> tuple[dict, dict]:
 def _interior(m: int, previous: str, sample, row=0, **change) -> tuple[dict, dict]:
     """The interior docket's record over `m` proof blocks, its window naming the replay sample `sample` it lays out
     (`window.replay_sample`, the first stage's proved blocks in order where honest), and its ports."""
-    program = P.population_program(PAIR, m)
+    program = PN.population_program(PAIR, m)
     rec = _record(program, QUERY, INTERIOR, m, {"law": "subset", "k": m},
                   {"kind": "served", "run": RUN, "row": row, "interior": True, "replay_sample": sample}, previous)
     return {**rec, **change}, _ports(program, QUERY, INTERIOR, m)
@@ -157,7 +160,7 @@ def _refused(f) -> tuple[str, ...]:
 def _stages(stream: S.Stream, row=0, sample=list) -> tuple[S.Draw, S.Draw]:
     """Both stages on `stream`, the interior record naming as its replay sample `sample` of the first stage's proved
     blocks (they themselves, in order, where honest)."""
-    previous = R.digest(stream._log[-1]) if stream._log else None
+    previous = DD.digest(stream._log[-1]) if stream._log else None
     reg = stream.register(*_boundary(row=row, previous=previous))
     first = stream.select(reg)
     stream.register_interiors(first, *_interior(Q * N_RHO, reg.digest, sample(D.proved(first.draw)), row))
@@ -200,9 +203,7 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
     each sampled replay block on the coins after the interior docket; and one outcome holds both audit records, each
     by both verifiers and the whole run by the Lean's. Round 2 holds the session's statement to the interior docket
     and the second stage's cells, its ports the replay block's Definition links (PAIR's `x` and `o0`) read at the
-    boundary, each unit at its own row of its replay block's N_RHO, and passes it; while the two-stage form is refused
-    (`second_stage.FORM`) that refusal is the outcome's one failure, a reject. The profile an accepted one carries is at
-    the footprint."""
+    boundary, each unit at its own row of its replay block's N_RHO, and passes it; the outcome is an accept, and its profile is at the footprint."""
     stream = _stream()
     assert stream.n_rho == N_RHO and stream._params["two_stage"] is True
     assert stream.cells == (N_RHO,) and stream.counts == (K,)
@@ -217,7 +218,7 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
     assert [u // N_RHO for u in second.units] == list(range(Q))
     assert stream.deliver(second, [SESSION]) is None
     statements = stream.statements(second)
-    (template, _), = P.strata(P.population_program(PAIR, Q * N_RHO), QUERY)
+    (template, _), = P.strata(PN.population_program(PAIR, Q * N_RHO), QUERY)
     assert [(s["template"], s["draw"]["units"], s["header"]["units"]["indices"]) for s in statements] == \
         [(template, D.proved(second.draw), list(range(Q * N_RHO)))]
     reads = statements[0]["registered"]["ports"]
@@ -226,14 +227,12 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
         for p, v in (("x", BX), ("o0", BOUT))}
     out = stream.outcome(second, _lean(reads=_reads_of(statements), checked=statements[0]), {"statement": "stub"},
                          session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=statements)
-    assert not SS.FORM and not out.accepted and out.profile is None and stream.symbols == ("reject",)
-    assert out.verdict.detail["reject"] == {"checks": ["statements"], "verdicts": {"lean": True}, "replay_sample": []}
+    assert out.accepted and out.profile is not None and stream.symbols == ("accept",)
 
     body = stream.records[0]
     assert S._sha512(body) == out.record and body["registration"] == reg.digest
     assert body["draw"] == S._sha512(second.draw) and "run" not in body["audit"]["checks"]
-    assert body["audit"]["checks"]["statements"] == {"ok": False, "codes": ["two-stage-form"],
-                                                     "detail": {"two-stage-form": SS.FORM_WHY}}
+    assert body["audit"]["checks"]["statements"] == {"ok": True, "codes": [], "detail": {}}
     assert body["replay_sample"]["draw"] == S._sha512(first.draw) and body["replay_sample"]["audit"]["accepted"]
     assert body["interior"] == {"registration": ireg.digest, "receipt": S._sha512(ireg.receipt)}
 
@@ -289,41 +288,41 @@ def test_a_replay_block_is_held_to_the_boundary_values_committed_while_serving(p
     assert stream.records[0]["replay_sample"]["audit"]["checks"]["roots"]["detail"]["ports"] == [port]
 
 
-def test_the_run_of_record_holds_the_form_switch(monkeypatch):
-    """`second_stage.FORM` is the Lean's `SecondStage.FORM`, which the run of record reads: flipped in the Python alone,
-    round 2's check passes and the Python would accept, and the run of record, still refusing the form, disagrees."""
-    monkeypatch.setattr(SS, "FORM", True)
-    stream = _stream()
-    out = _two_stage_outcome(stream, lambda s, second: [s])
-    checks = stream.records[0]["audit"]["checks"]
-    assert not out.accepted and checks["statements"]["ok"] and checks["run"]["codes"] == [V.DISAGREE]
-    assert {"interior", "symbol"} <= set(checks["run"]["detail"][V.DISAGREE]["fields"])
-
-
-def test_a_two_stage_outcome_is_complete_only_on_the_form_the_request_definition_and_its_records():
-    """`second_stage.complete_twin`: true only when the two-stage form is allowed, the replay block is the registered request
-    Definition and each audit record accepted and is itself complete. One of the three missing, it is false: the form
-    off, as `FORM` is; a stand-in replay block; a record that is missing, did not accept, is not complete or does not
-    say; no record at all. An argument that is not the boolean true counts as missing."""
+def test_a_two_stage_outcome_is_complete_only_on_the_request_definition_and_its_records():
+    """`second_stage.complete_twin`: true only when the replay block is the registered request Definition and each
+    audit record accepted and is itself complete. One missing, it is false: a stand-in replay block; a record that is
+    missing, did not accept, is not complete or does not say; no record at all. An argument that is not the boolean
+    true counts as missing."""
     whole = {"accepted": True, "complete": True}
-    assert SS.FORM is False
-    assert SS.complete_twin(True, True, [whole, whole]) is True and SS.complete_twin(True, True, [whole]) is True
-    assert not SS.complete_twin(SS.FORM, True, [whole, whole])
-    assert not SS.complete_twin(True, False, [whole, whole])
+    assert SS.complete_twin(True, [whole, whole]) is True and SS.complete_twin(True, [whole]) is True
+    assert not SS.complete_twin(False, [whole, whole])
     for record in (None, {"accepted": True, "complete": False}, {"accepted": False, "complete": True},
                    {"accepted": True}, {"complete": True}, {"accepted": 1, "complete": True}):
-        assert not SS.complete_twin(True, True, [whole, record])
-    assert not SS.complete_twin(True, True, [])
-    assert not SS.complete_twin(1, True, [whole]) and not SS.complete_twin(True, "yes", [whole])
+        assert not SS.complete_twin(True, [whole, record])
+    assert not SS.complete_twin(True, [])
+    assert not SS.complete_twin("yes", [whole])
 
 
-def test_no_python_decides_a_two_stage_outcome():
-    """Round 2's check and a two-stage outcome's completeness of record are the Lean's, which no interface here reaches:
-    each raises naming the goal (`verifier.not_written`), and their Python twins answer only beside it."""
-    whole = {"accepted": True, "complete": True}
-    for call in (lambda: SS.check(True, None, None), lambda: SS.complete(True, True, [whole])):
-        with pytest.raises(NotImplementedError, match=V.GOAL):
-            call()
+def test_round_two_is_the_twin_held_to_the_lean_and_completeness_is_the_leans(monkeypatch):
+    """`second_stage.check`: the Python twin's verdict held to the codes the Lean's run gave. The same codes pass, those
+    of a tampered input (no statements) too; the Lean's codes differing from the twin's, or the Lean giving none, fail
+    with `DISAGREE` alone. Completeness of record is the Lean's, which no interface here reaches: `complete` raises
+    naming the goal (`verifier.not_written`)."""
+    seen = []
+    check = SS.check_twin
+    monkeypatch.setattr(SS, "check_twin", lambda own, ss: seen.append((own, ss)) or check(own, ss))
+    _two_stage_outcome(_stream(), lambda s, second: [s])
+    (own, (s,)), = seen
+    assert SS.check(own, [s], []).ok
+    for lean in (["second-read"], None):
+        v = SS.check(own, [s], lean)
+        assert not v.ok and v.codes == (V.DISAGREE,) and v.detail[V.DISAGREE] == {"lean": lean, "python": []}
+    refused = check(own, None).codes
+    assert refused and SS.check(own, None, list(refused)).codes == refused
+    assert SS.check(own, None, []).codes == (V.DISAGREE,)
+    assert SS.held_to_lean(None, []) == SS.held_to_lean([], None) == [V.DISAGREE]
+    with pytest.raises(NotImplementedError, match=V.GOAL):
+        SS.complete(True, [{"accepted": True, "complete": True}])
     assert V.GOAL == "proofs/spot-two-stage-sound"
 
 
@@ -364,7 +363,7 @@ def _frame(key: str, f):
 
 
 @pytest.mark.parametrize("statements, codes", [
-    (lambda s, second: [s], ["two-stage-form"]),
+    (lambda s, second: [s], []),
     (lambda s, second: [{**s, "registered": _linked(s, out=_own(second))}], ["second-values"]),
     (None, ["second-statements"]),
     ([], ["second-cover"]),
@@ -381,8 +380,8 @@ def _frame(key: str, f):
     (_frame("bindings", lambda b: {**b, "out": b["x"]}), ["second-header"]),
     (_frame("bindings", lambda b: {"x": b["x"]}), ["second-header"]),
     (_frame("schemas", lambda s: {**s, "out": "hm96-sha512/row/v1"}), ["second-header"]),
-    (_header(registered={"x": {"value": BX, "positions": [0], "paths": [[0]]}}), ["two-stage-form"]),
-    (_restated(header=lambda h: {**h, "units": {**h["units"], "blocks": [0]}}), ["two-stage-form"]),
+    (_header(registered={"x": {"value": BX, "positions": [0], "paths": [[0]]}}), []),
+    (_restated(header=lambda h: {**h, "units": {**h["units"], "blocks": [0]}}), []),
     (_restated(header=lambda h: {**h, "units": {**h["units"], "units_per_vu": 2}}), ["second-header"]),
     (_restated(header=lambda h: {**h, "frame_v3": {**h["frame_v3"], "owner": "other"}}), ["second-header"]),
     (_frame("roots", lambda r: {**r, "out": "00" * 64}), ["second-roots"]),
@@ -404,7 +403,7 @@ def _frame(key: str, f):
 ])
 def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     """Round 2, by both verifiers, passes the run's own statements, its linked ports reading the boundary at each slot's
-    unit's row of its cell's replay block (the form's refusal their one failure), under the auditor's params whose
+    unit's row of its cell's replay block (the outcome an accept), under the auditor's params whose
     reference statement reads those ports (`fake_challenger.Stream.proofs`), so one reading its own `out` too is
     refused (`second-values`),
     and refuses, each statement's session checked as it states by the verifier: none (`second-statements`), none
@@ -424,7 +423,7 @@ def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     stream = _stream()
     out = _two_stage_outcome(stream, statements)
     checks = stream.records[0]["audit"]["checks"]
-    assert not out.accepted and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
+    assert out.accepted == (codes == []) and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
     assert "registered" not in checks and stream.records[0]["replay_sample"]["audit"]["accepted"]
 
 
@@ -489,16 +488,16 @@ FV = REFERENCE["frame_v3"]
 
 
 @pytest.mark.parametrize("header, codes", [
-    (REFERENCE, ["two-stage-form"]),
+    (REFERENCE, []),
     ({**REFERENCE, "instances": 7, "units": {**REFERENCE["units"], "indices": [9]},
       "frame_v3": {**FV, "roots": {"x": "00" * 64}, "domain_ids": {}}, "registered": {"x": {"value": "w"}}},
-     ["two-stage-form"]),
-    (FC.reference_header(TEMPLATE, 9, 9 + Q * N_RHO, dict.fromkeys(INTERIOR, SCHEMA)), ["two-stage-form"]),
-    ({**REFERENCE, "set": "served/other/m0", "frame_v3": {**FV, "bindings": {"x": "11" * 64}}}, ["two-stage-form"]),
+     []),
+    (FC.reference_header(TEMPLATE, 9, 9 + Q * N_RHO, dict.fromkeys(INTERIOR, SCHEMA)), []),
+    ({**REFERENCE, "set": "served/other/m0", "frame_v3": {**FV, "bindings": {"x": "11" * 64}}}, []),
     ({**REFERENCE, "scheme": "frame-v3-sha512/other"}, ["second-header"]),
     ({**REFERENCE, "units": {**REFERENCE["units"], "units_per_vu": 2}}, ["second-header"]),
     ({**REFERENCE, "frame_v3": {**FV, "schemas": {**FV["schemas"], "out": "hm96-sha512/row/v1"}}}, ["second-header"]),
-    ({**REFERENCE, "frame_v3": {**FV, "schemas": {**FV["schemas"], "y": SCHEMA}}}, ["second-header"]),
+    ({**REFERENCE, "frame_v3": {**FV, "schemas": {**FV["schemas"], "y": SCHEMA}}}, ["second-header", "second-place-none"]),
     ({**REFERENCE, "frame_v3": {k: v for k, v in FV.items() if k != "schemas"}}, ["second-header"]),
     ({"scheme": S.SCHEME}, ["second-header"]),
     (None, ["second-header", "second-values"]),
@@ -508,16 +507,16 @@ def test_round_two_holds_each_header_to_its_templates_reference(header, codes):
     template (`template_circuits`) placed in the run (`second_stage.at_run`: its `set` the run's `served/<run>/m<k>`,
     its `frame_v3.bindings` each `frame_v3.schemas` port's binding in the run, both the verifier's), the two the same
     with the run's fields blanked (`second_stage.RUN_FIELDS`: `instances`, `units.indices`, `units.blocks`,
-    `frame_v3.roots`, `frame_v3.domain_ids` and `registered`). The honest run passes unchanged, refused only on the form,
+    `frame_v3.roots`, `frame_v3.domain_ids` and `registered`). The honest run passes unchanged,
     under a reference fixed before the run that names none of the run's fields or names them otherwise, or was staged at
     other slots, or names another set and bindings, which the verifier replaces; a reference with another scheme, another
-    `units.units_per_vu`, another schema, a port the interior record lacks or none of the ports, or a key the header
-    lacks, is refused by name, and so is the statement when the params give no reference (and no reference reads,
-    `second-values`)."""
+    `units.units_per_vu`, another schema, a port the interior record lacks (which no rule places either,
+    `second-place-none`) or none of the ports, or a key the header lacks, is refused by name, and so is the statement
+    when the params give no reference (and no reference reads, `second-values`)."""
     stream = _stream()
     out = _two_stage_outcome(stream, lambda s, second: [s], proofs=None if header is None else _circuits((PAIR,), header=header))
     checks = stream.records[0]["audit"]["checks"]
-    assert not out.accepted and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
+    assert out.accepted == (codes == []) and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
 
 
 #: The interior's ports as a session's header shares them (``shared_rows``), a table of one row a slot each.
@@ -532,7 +531,7 @@ def _sharing(registered=None):
 
 
 @pytest.mark.parametrize("statements, codes", [
-    (_sharing(lambda s, second: _linked(s, out=_own(second))), ["two-stage-form"]),
+    (_sharing(lambda s, second: _linked(s, out=_own(second))), []),
     (_sharing(), ["second-refs", "second-values"]),
     (_sharing(lambda s, second: None), ["second-read", "second-refs", "second-values"]),
     (_sharing(lambda s, second: _linked(s, out=_own(second, shift=1))), ["second-read"]),
@@ -542,7 +541,7 @@ def test_round_two_holds_each_port_a_header_shares_rows_at_to_a_registered_read(
     """`second-refs`, by both verifiers, under a reference whose sessions share rows at the interior's ports
     (``shared_rows``: tables whose rows an instance reads by the refs in its public file's body) and read the
     interior's own `out` (`READS_OUT`). The run's statement reading its linked `x` at the boundary and its own `out` at
-    each slot's own rows passes, refused only on the form. One leaving the shared `out` unread is refused: the session's
+    each slot's own rows passes. One leaving the shared `out` unread is refused: the session's
     verifier would only bound its refs by their table, so one could point a sampled proof block at another unit's rows; its
     reads are then not its reference's either (`second-values`). So is one reading nothing registered. A shared port
     read at another slot's rows, where the verifier would hold the ref, is `second-read`'s, and a header sharing no rows
@@ -551,7 +550,7 @@ def test_round_two_holds_each_port_a_header_shares_rows_at_to_a_registered_read(
     out = _two_stage_outcome(stream, statements, proofs=_circuits((PAIR,), header={**REFERENCE, "shared_rows": SHARED},
                                                                   reads=(READS_OUT,)))
     checks = stream.records[0]["audit"]["checks"]
-    assert not out.accepted and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
+    assert out.accepted == (codes == []) and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
 
 
 def test_round_two_places_the_reference_in_the_run_as_the_served_path_names_it():
@@ -560,7 +559,7 @@ def test_round_two_places_the_reference_in_the_run_as_the_served_path_names_it()
     binding the window-domain rule's over the interior record's program, partition and that port's leaves
     (`rows.Binding.binding`, whose domain is the one the record registers for the port). The verifier recomputes both
     from the interior record alone (`second_stage.at_run`), so the header is the reference so placed but for the run's
-    fields, and passes, refused only on the form."""
+    fields, and passes."""
     stream = _stream()
     _, second = _stages(stream)
     rec, (s,) = second.docket.record, stream.statements(second)
@@ -580,11 +579,11 @@ def test_round_two_places_the_reference_in_the_run_as_the_served_path_names_it()
     out = stream.outcome(second, _lean(reads=_reads_of([s]), checked=s), {"statement": "stub"},
                          session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=[s])
     checks = stream.records[0]["audit"]["checks"]
-    assert not out.accepted and checks["statements"]["codes"] == ["two-stage-form"] and "run" not in checks
+    assert out.accepted and checks["statements"]["codes"] == [] and "run" not in checks
 
 
 @pytest.mark.parametrize("sample, statements, codes", [
-    (list, lambda s, second: [s], ["two-stage-form"]),
+    (list, lambda s, second: [s], []),
     (lambda u: u[::-1], lambda s, second: [s], ["second-interior-order"]),
     (lambda u: u[:-1], lambda s, second: [s], ["second-interior-order"]),
     (lambda u: [*u, u[0]], lambda s, second: [s], ["second-interior-order"]),
@@ -603,7 +602,7 @@ def test_round_two_holds_the_interior_record_to_the_replay_sample_in_order(sampl
     stream = _stream()
     out = _two_stage_outcome(stream, statements, sample=sample)
     checks = stream.records[0]["audit"]["checks"]
-    assert not out.accepted and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
+    assert out.accepted == (codes == []) and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
     if "second-interior-order" in codes:
         assert checks["statements"]["detail"]["second-interior-order"] == SS.INTERIOR_ORDER_WHY
 
@@ -615,7 +614,7 @@ def test_round_two_derives_the_links_from_the_replay_block(monkeypatch):
     (`second-links`); the run of record, deriving its own, then disagrees."""
     stream = _stream()
     first, _ = _stages(stream)
-    assert SS.replay_links(P.population_program(BLOCK, N), codec.descriptor_id(BLOCK), first.docket.record) == \
+    assert SS.replay_links(PN.population_program(BLOCK, N), codec.descriptor_id(BLOCK), first.docket.record) == \
         (SS.Link(TEMPLATE, "x", BX), SS.Link(TEMPLATE, "o0", BOUT))
     with pytest.raises(TypeError):
         stream.register_interiors(first, *_interior(Q * N_RHO, first.docket.digest, D.proved(first.draw)), links=[])
@@ -645,7 +644,7 @@ BARE = bind(CompositeDefinition("TwoStageTestBare", 0, (), lambda S_: ((("x", Ar
 
 
 def _returned(block) -> int | None:
-    return SS.replay_returned(P.population_program(block, N), codec.descriptor_id(block))
+    return SS.replay_returned(PN.population_program(block, N), codec.descriptor_id(block))
 
 
 def test_a_two_stage_registration_publishes_the_bits_a_replay_block_returns():
@@ -659,8 +658,8 @@ def test_a_two_stage_registration_publishes_the_bits_a_replay_block_returns():
     assert _returned(BLOCK) == 3 * 16 and _returned(MIXED) == 3 * 16
     assert _returned(WIDES) == 4 * 32 and _returned(PACKS) == 2 * 9 * 16 == 2 * 8 * 18
     assert _returned(BARE) is None
-    assert SS.replay_returned(P.population_program(BLOCK, N), codec.descriptor_id(MIXED)) is None
-    assert SS.replay_returned(P.population_program(BLOCK, 1), codec.descriptor_id(BLOCK)) == 3 * 16
+    assert SS.replay_returned(PN.population_program(BLOCK, N), codec.descriptor_id(MIXED)) is None
+    assert SS.replay_returned(PN.population_program(BLOCK, 1), codec.descriptor_id(BLOCK)) == 3 * 16
     stream = _stream()
     reg = stream.register(*_boundary())
     first = stream.select(reg)
@@ -711,7 +710,7 @@ def _registered_codes(monkeypatch):
     values itself (``filled``) or the prover registers them."""
     seen = []
     check = SS.check_twin
-    monkeypatch.setattr(SS, "check_twin", lambda allow, own, ss: seen.append((own, ss)) or check(allow, own, ss))
+    monkeypatch.setattr(SS, "check_twin", lambda own, ss: seen.append((own, ss)) or check(own, ss))
     _two_stage_outcome(_stream(), lambda s, second: [s])
     (own, (s,)), = seen
     entries = {v: {"value": v, "root": f"{i:02x}" * 64, "domain": f"{i + 1:02x}" * 64, "leaves": 8}
@@ -726,7 +725,7 @@ def _registered_codes(monkeypatch):
                                 reported=SS.statement_reads([stmt]), verified=SS.verified_of(_lean(checked=stmt)),
                                 ref_reads=((TEMPLATE, ref),),
                                 supplied=SS.supplied_of({v: [[{"bytes": "00000000"}]] for v in entries} if filled else None))
-        return list(check(True, o, [stmt]).codes)
+        return list(check(o, [stmt]).codes)
     return codes
 
 
@@ -766,7 +765,7 @@ def test_round_two_refuses_a_value_the_prover_registers_after_the_first_stages_s
 
 #: A read's template, which the auditor's params record as a read of 8 rows (`READ_SIZES`), and its ports' links,
 #: each at a value of its own name.
-READ_T = "EmbeddingRead_v1{V=8,H=2}"
+READ_T = "EmbeddingRead_v2{V=8,H=2}"
 READ_SIZES = ((READ_T, 8),)
 READ_LINKS = tuple(SS.Link(READ_T, p, p) for p in ("tok", "root", "domain", "row", "salt", "path"))
 #: The roots and domain ids of tables ``t`` and ``u``, and round 1's record registering both.
@@ -1022,8 +1021,8 @@ def test_a_read_whose_key_is_wired_lists_no_table_rows():
         assert SS.table_rows_why(own, READ_T, "row", {"value": "row"}) is None
         assert SS.table_rows_why(own, READ_T, "row", {"value": "row", "table_rows": None}) is None
         assert ("second-table-rows", {"statement": 0, "template": READ_T, "port": "row", "why": SS.KEY_ROWS_WHY}) in \
-            SS._failures(True, own, own.parts, [stmt("row", listed)])
-        assert not any(c == "second-table-rows" for c, _ in SS._failures(True, own, own.parts, [stmt("row", {})]))
+            SS._failures(own, own.parts, [stmt("row", listed)])
+        assert not any(c == "second-table-rows" for c, _ in SS._failures(own, own.parts, [stmt("row", {})]))
     unwired = dataclasses.replace(_keyed(), wires=())
     assert SS.table_rows_why(unwired, READ_T, "row", listed) == SS.TABLE_ROWS_WHY
     assert SS.KEYED_PORTS == ("tok", "row", "salt", "path", "o1")
@@ -1108,7 +1107,7 @@ def test_the_interior_registration_is_in_the_boundary_registrations_window_or_th
     (`second_stage.interior_root`), so the second stage's session is the one on that root. Any other is refused
     (`interior-window`): a root of the prover's choosing, none where the boundary docket has one, and the root
     of another sample or another docket. On the computed root, the second stage's session opened for it, the run
-    of record agrees through both stages, and the outcome's one failure is the form's (`second_stage.FORM`)."""
+    of record agrees through both stages, and the outcome is an accept."""
     stream = _stream()
     reg = stream.register(*_boundary())
     first = stream.select(reg)
@@ -1126,8 +1125,7 @@ def test_the_interior_registration_is_in_the_boundary_registrations_window_or_th
     out = stream.outcome(second, _lean(reads=_reads_of(statements), checked=statements[0]), {"statement": "stub"},
                          session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=statements)
     checks = stream.records[0]["audit"]["checks"]
-    assert not out.accepted and "run" not in checks and checks["statements"]["codes"] == ["two-stage-form"]
-    assert out.verdict.detail["reject"] == {"checks": ["statements"], "verdicts": {"lean": True}, "replay_sample": []}
+    assert out.accepted and "run" not in checks and checks["statements"]["codes"] == []
 
 
 def test_a_one_stage_stream_has_no_interior_registration():
@@ -1190,7 +1188,7 @@ def test_the_verifier_samples_both_stages():
     of the `N` replay blocks, and its second, `k` of each sampled replay block's proof blocks, as the service does."""
     assert V.EXE == "spot-verifier" and _spec().selection == RULE
     source = random.Random(1).randbytes(4096)
-    first = {"rule": RULE.to_json(), "program": codec.encode_program(P.population_program(BLOCK, N)), "query": GRAIN,
+    first = {"rule": RULE.to_json(), "program": codec.encode_program(PN.population_program(BLOCK, N)), "query": GRAIN,
              "work_table": None, "closure": None, "source": source.hex()}
     assert len(V.lean("select", first)["draw"]["units"]) == Q
     for ns, ks, cell in (((N_RHO,), (K,), lambda u: u // N_RHO), ((2, 1), (1, 1), lambda u: (u // 2, 0) if u < 4 else
@@ -1294,7 +1292,7 @@ def test_a_replay_block_reading_anothers_values_joins_its_group():
     summary counts the whole batch: here the second reads the first's result and the fourth, a batch member, the
     second's, while the last reads the batch's other member, groups {0, 1, 3}, {2} and {4, 5} walked a member at a
     time (F = 3), and the summary's joined nodes hold 5.  F is a template query's."""
-    assert P.fanout(P.population_program(BLOCK, 4), GRAIN) == _fanout_walk(P.population_program(BLOCK, 4), GRAIN) == 1
+    assert P.fanout(PN.population_program(BLOCK, 4), GRAIN) == _fanout_walk(PN.population_program(BLOCK, 4), GRAIN) == 1
     o = Array(3, Bits(8))
     calls = Program(bind(CompositeDefinition("TwoStageTestChain", 0, (),
                                              lambda S_: ((("x", Array(4, Array(3, Array(2, Bits(8))))),),
@@ -1341,7 +1339,7 @@ def _window_stream(spec=None, window=WINDOW, replay=MIXED) -> S.Stream:
 def _window_boundary(stream: S.Stream) -> S.WindowCommitmentRecord:
     """MIXED's boundary docket over N replay blocks: its `x` and its first output two rows a block, one for each
     of its PAIR instances' `x` and `o0`, and its `y` and second output one, TRIPLE's (`second_stage.replay_rows`)."""
-    boundary, leaves = P.population_program(MIXED, N), dict(zip(MIXED_BOUNDARY, (2 * N, N, 2 * N, N)))
+    boundary, leaves = PN.population_program(MIXED, N), dict(zip(MIXED_BOUNDARY, (2 * N, N, 2 * N, N)))
     return stream.register(_record(boundary, MIXED_GRAIN, MIXED_BOUNDARY, leaves, {"law": "subset", "k": Q},
                                    {"kind": "served", "run": RUN, "row": 0}, None),
                            _ports(boundary, MIXED_GRAIN, MIXED_BOUNDARY, leaves))
@@ -1378,7 +1376,7 @@ def test_a_replay_block_of_two_templates_runs_with_a_template_major_interior():
     assert stream.cells == (2, 1) and stream.counts == (1, 1) and stream.n_rho == 3
     reg = _window_boundary(stream)
     first = stream.select(reg)
-    interior = P.mixed_population_program([(PAIR, 2 * Q), (TRIPLE, Q)])
+    interior = PN.mixed_population_program([(PAIR, 2 * Q), (TRIPLE, Q)])
     assert stream.interior_program(Q).root.id == interior.root.id
     ireg = stream.register_interiors(first, *_window_interior(interior, reg.digest, first))
     second = stream.select(ireg)
@@ -1387,7 +1385,7 @@ def test_a_replay_block_of_two_templates_runs_with_a_template_major_interior():
     assert sorted(u // 2 for u in second.units if u < 4) == [0, 1] and {4, 5} <= set(second.units)
     assert stream.deliver(second, [SESSION]) is None
     (pair, triple), (x, y, o0, o1) = (codec.descriptor_id(t) for t in WINDOW), MIXED_BOUNDARY
-    assert SS.replay_links(P.population_program(MIXED, N), codec.descriptor_id(MIXED), reg.record) == (
+    assert SS.replay_links(PN.population_program(MIXED, N), codec.descriptor_id(MIXED), reg.record) == (
         SS.Link(pair, "x", x), SS.Link(triple, "x", y), SS.Link(pair, "o0", o0), SS.Link(triple, "o0", o1))
     statements = stream.statements(second)
     assert [(s["template"], {p: e["value"] for p, e in s["registered"]["ports"].items()}) for s in statements] == [
@@ -1395,7 +1393,7 @@ def test_a_replay_block_of_two_templates_runs_with_a_template_major_interior():
     out = stream.outcome(second, _lean(reads=_reads_of(statements), checked=statements), {"statement": "stub"},
                          session_roots={**_roots(MIXED_BOUNDARY), **_roots(INTERIOR)}, statements=statements)
     checks = stream.records[0]["audit"]["checks"]
-    assert not out.accepted and checks["statements"]["codes"] == ["two-stage-form"] and "run" not in checks, checks
+    assert out.accepted and checks["statements"]["codes"] == [] and "run" not in checks, checks
     p = stream._footprint(stream._entries[reg.order])
     assert p.sizes == (N, 4) and p.draws["unit"] == Subset(1) and dict(p.drawn) == {S.REPLAY: Q, "unit": Q * 2}
     for w in ((0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)):
@@ -1424,14 +1422,14 @@ def test_round_two_names_what_a_replay_block_returns_and_refuses_an_interior_val
     that registers a value of one is refused by name (`second-return`, `returns_ok`), with the interior record's
     order; one that registers any other name, or a run whose return has no such name, is not."""
     for block, fields in ((BLOCK, 1), (MIXED, 2)):
-        program, key = P.population_program(block, N), codec.descriptor_id(block)
+        program, key = PN.population_program(block, N), codec.descriptor_id(block)
         assert SS.replay_returns(program, key, None) == tuple(f"o{j}" for j in range(fields))
         named = SS.replay_returns(program, key, {"roots": [{"port": f"{key}/x"}]})
         assert named == tuple(f"{key}/o{j}" for j in range(fields))
         assert {x.value for x in SS.replay_links(program, key, None) if x.port.startswith("o")} == {
             f"o{j}" for j in range(fields)}
         assert SS.replay_returns(program, "Other_v0", None) == ()
-    assert SS.replay_returns(P.population_program(MIXED, N), codec.descriptor_id(MIXED),
+    assert SS.replay_returns(PN.population_program(MIXED, N), codec.descriptor_id(MIXED),
                              {"roots": [{"port": p} for p in MIXED_BOUNDARY]}) == MIXED_BOUNDARY[2:]
 
     def own(registered, returns=(BOUT,)) -> SS.Own:
@@ -1439,12 +1437,11 @@ def test_round_two_names_what_a_replay_block_returns_and_refuses_an_interior_val
     for registered, returns in (([{"value": "w"}, {"value": 5}, {}], (BOUT,)), (5, (BOUT,)), ([{"value": BOUT}], ()),
                                 ([{"value": BX}], (BOUT,))):
         assert SS.returns_ok(own(registered, returns))
-        assert "second-return" not in SS.check_twin(True, own(registered, returns), None).codes
+        assert "second-return" not in SS.check_twin(own(registered, returns), None).codes
     refused = own([{"value": "w"}, {"value": BOUT}])
-    v = SS.check_twin(True, refused, None)
+    v = SS.check_twin(refused, None)
     assert not SS.returns_ok(refused) and "second-return" in v.codes and not v.ok, v
     assert v.to_json()["detail"]["second-return"] == SS.RETURN_WHY
-    assert SS.check_twin(False, refused, None).codes == v.codes
 
 
 def test_a_replay_block_of_two_templates_takes_a_count_per_template():
@@ -1471,7 +1468,7 @@ def test_a_replay_block_of_two_templates_fits_the_check_in_order():
     stream = _window_stream()
     reg = _window_boundary(stream)
     first = stream.select(reg)
-    blocks = P.mixed_population_program([(PAIR, 2), (TRIPLE, 1)] * Q)
+    blocks = PN.mixed_population_program([(PAIR, 2), (TRIPLE, 1)] * Q)
     assert "R2-program" in _refused(lambda: stream.register_interiors(first, *_window_interior(blocks, reg.digest, first)))
     assert not P.in_order(blocks, WINDOW_QUERY, 3 * Q)
 

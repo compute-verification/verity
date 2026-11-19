@@ -1,18 +1,18 @@
 """The vocabulary shard's embedding (`EmbeddingShard_v1{VS, H, START}`) lowered into the node window (`node_window`) as reads
-of padded tables: per column block b of `WIDTH` words, one `EmbeddingRead_v1{V, H=WIDTH}` unit a member, keyed by the token as
+of padded tables: per column block b of `WIDTH` words, one `EmbeddingRead_v2{V, H=WIDTH}` unit a member, keyed by the token as
 it is, over block b's table, a registered parameter of its own of V rows of `WIDTH` words, the shard's rows at its START and
 zero rows elsewhere (`shard_param`). A token the shard owns reads its row; any other token below V reads the zero row, as the
-shard gives zeros (`EmbeddingRead_v1` gives 0x7FFF only for a token past its table, which is why the table is padded to the
+shard gives zeros (`EmbeddingRead_v2` gives 0x7FFF only for a token past its table, which is why the table is padded to the
 whole vocabulary). The all-reduce reads block b's ``o0`` by wire as its column block b of the embedding's partial.
 
-The width is one, fixed at registration: a table's salts are its field's place and its block (`expert_tables.nonces`), so two
-widths of one field would take the same salts, and `shard_param` and the lowering refuse any width but `WIDTH`. The window
+The width is one, fixed at registration: the tables' registration holds a table's salts at that width alone, and `shard_param`
+and the lowering refuse any width but `WIDTH`. The window
 declares the tables as parameters of the rank's registration and commits nothing: the prover commits them once a process.
 
-The tables are not weights: `window_weights.weight_nonces` numbers every name it is handed, so a table among them moves the
-plain weights' nonces and their roots stop being the registration's. `split` keeps the window's tables
+The tables are not weights: the weights' registration holds no salt of theirs, so a table handed to `window_weights` is
+refused. `split` keeps the window's tables
 (``/b<b>/vocab``, ``/b<b>/table``) and the absorption weights' entry (``/bnk``) apart from its plain weights; they go to
-the tables' registration (`expert_tables`, its nonces from `expert_tables.TABLES_NONCE`), the rest to `window_weights`.
+the tables' registration (`expert_tables`, its own salt file), the rest to `window_weights`.
 A batched GEMM's ``w`` reads its ``/bnk`` entry by a registered read (`node_window_sparse.entry`), so none of its rows is free.
 
 `SHARD_VOCAB`, `shard_vocab`, `shard_param` and `unit_templates` belong in `serving_templates` and live here until it holds
@@ -68,7 +68,7 @@ def shard_param(label: str, words: int, block: int) -> str:
 
 def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     """`serving_templates.unit_templates` of ``spec``, and for an ``EmbeddingShard_v1`` row the read of a block of its padded
-    tables, ``EmbeddingRead_v1{V, H=WIDTH}``, H / `WIDTH` of them."""
+    tables, ``EmbeddingRead_v2{V, H=WIDTH}``, H / `WIDTH` of them."""
     hit = ST.unit_templates(spec)
     if spec_base(spec) == SHARD:
         H = int(spec_statics(spec)["H"])
@@ -98,7 +98,7 @@ def split(params: Iterable[str]) -> tuple[list[str], list[str]]:
 
 def tables_of(params: Iterable[str]) -> dict[str, list[tuple[int, str, str, int]]]:
     """The shards' padded tables among ``params``, by weight, each ``(block, param, "vocab", 0)``: the form the tables'
-    registration numbers them in (`expert_tables.nonces`). Only the ``/vocab`` tables: not the expert blocks' or a ``/bnk``
+    registration lists them in (`expert_tables.tables_of`). Only the ``/vocab`` tables: not the expert blocks' or a ``/bnk``
     entry, which `split` gives beside them."""
     out: dict[str, list[tuple[int, str, str, int]]] = {}
     for p in split(params)[1]:
@@ -127,7 +127,7 @@ def _reads(w: NodeWindow, tid: str, at: int, units: int, lo: int, label: str, V:
 
 
 def embedding_shard(w: NodeWindow, j: int, node: Any) -> None:
-    """`EmbeddingShard_v1{VS, H, START}` as H / `WIDTH` column blocks of `EmbeddingRead_v1{V, WIDTH}` (module docstring), block
+    """`EmbeddingShard_v1{VS, H, START}` as H / `WIDTH` column blocks of `EmbeddingRead_v2{V, WIDTH}` (module docstring), block
     b of member t at unit ``a + b M + t``, each keyed by member t's token over block b's padded table; the node's output is
     block b's ``o0`` at its columns."""
     spec, fam, M = descriptor_id(node.fn), _family(node), w.members(node)

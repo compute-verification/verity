@@ -34,7 +34,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import IO, Any
 
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import CommitRecord, commit_registration
 from verity_vllm import messages as M
 
@@ -125,7 +125,7 @@ class WindowTie:
         d.mkdir(parents=True, exist_ok=True)
         w, wf, rf = commit_registration(run, self.last, self.day and self.day.naming()), d / W_FILE, d / R_FILE
         M.write(wf, "H1Registration", (json.dumps(w, indent=1) + "\n").encode())
-        self.last = self._logged(window, "registration", wf, REG.digest(w))
+        self.last = self._logged(window, "registration", wf, DD.digest(w))
         rf.unlink(missing_ok=True)
         argv = ["bash", "-c", self.command, "_", str(self.out), str(window), str(wf), str(rf), str(prover or "")]
         with open(d / COMMAND_LOG, "w") as log:
@@ -139,7 +139,7 @@ class WindowTie:
         if self.day is not None and (why := self.day.refusal(r)):
             raise ValueError(f"R in h1/w{window}/{R_FILE}: {why}")
         with self._cv:
-            self._named[window] = (rf, REG.digest(r) if isinstance(r, Mapping) else "")
+            self._named[window] = (rf, DD.digest(r) if isinstance(r, Mapping) else "")
         return w, r
 
     def bound(self, window: int, run: Any) -> None:

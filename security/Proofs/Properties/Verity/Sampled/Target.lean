@@ -22,7 +22,7 @@ What the proof reads that is proved: Flock's knowledge soundness of the live ses
 session's sample (`Live.v5_at`, along `Live.L_eq`), A3 and `live-verifier` at the deployed device (`Live.deployed`,
 `Live.hCust`), the sampling design's miss (`Flock.Bridge.pa_partOf`, `Flock.Bridge.nsOf_sum`), the bridge from the
 committed files' unbound units to the session's incorrect proof blocks (`Live.unbound_subset_faulty_part`), and, at
-parameters that don't name the one-stage form, that SPOT accepts nothing (`recursiveForm_refused`).
+parameters that don't name the one-stage form, the open premise `TwoStageBound` (`recursiveForm_bound`).
 
 * `Live.ks`: at a session, a strategy of the live audit whose extracted transcript fails the claim at the session's share
   is accepted with probability at most the session's error (`Live.sessionDelta`). V5 at `B` the extracted witness's
@@ -40,7 +40,7 @@ parameters that don't name the one-stage form, that SPOT accepts nothing (`recur
 
 namespace Verity.Sampled
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
 open scoped ENNReal
@@ -86,7 +86,7 @@ charged `t + w` per run and the tables' finders at `2t + 2v` and `t + v`, at a s
 at the session's bytes and sampling design; at `L = A.L` (`Live.L_eq`) its simulator and extractor are the session's
 (`Live.sim`, `Live.Xr`). The session's `--zk` tags are in `TagsOkZHJ` (`Live.hTags`), so V5's bound is the one it states
 there, and `live-verifier` at the registration's sampling design is the sample file's (`Live.hsub`, `Live.hCust`). -/
-theorem v5_at (L : FlockSoundness.Audit.SamplingDesign A.n) (hL : Flock.Bridge.execSel (n := A.n) A.src A.design A.n = L) (t : ℕ)
+theorem v5_at (L : Spot.Sampling.SamplingDesign A.n) (hL : Flock.Bridge.execSel (n := A.n) A.src A.design A.n = L) (t : ℕ)
     (B : Finset ℕ) (τ : FlockSoundness.Game.Strategy (auditLive L A.Reg (liveOfZJ A.dg (planZHJP A.dj A.y₀) A.N A.wr))) :
     let σ := simZJA execArith hs512 (planZHJP A.dj A.y₀) (AcceptsZKP A.I A.own) A.wr
       (opnAtZHJP (planZHJP A.dj A.y₀) A.I A.own A.dj) A.dg (decAtZJ (planZHJP A.dj A.y₀)) (fun _ _ _ _ => true)
@@ -187,15 +187,16 @@ theorem sqrt_le_twoRun {f : Claims.Finder} (hf : Claims.StrictBirthday Verity.sh
 
 /-- **SPOT's target at the deployed device**: soundness's vocabulary at `.sampled` reading the constructions `K`
 at the deployment's sessions `S` (`Deployed`), which cover the one-stage form (`Covers`), meets SPOT's target
-at composite `k`, from the coupling at each session (`CouplingTarget`). Off the one-stage form SPOT accepts nothing
-(`recursiveForm_refused`). -/
+at composite `k`, from the coupling at each session (`CouplingTarget`). Off the one-stage form it takes the open premise
+`TwoStageBound` (`recursiveForm_bound`). -/
 theorem spotSound_of_targets {K : Constructions V} {S : ByteArray → Array ByteArray → Option Live}
-    (hD : Deployed V K S) (hCov : Covers V k S) (hC : ∀ θ F A, S θ F = some A → CouplingTarget V k K A θ F) :
+    (hD : Deployed V K S) (hCov : Covers V k S) (hTwo : TwoStageBound V k)
+    (hC : ∀ θ F A, S θ F = some A → CouplingTarget V k K A θ F) :
     V.SpotSound k := by
   intro θ F c σ
   by_cases hP : ∃ p, ParamsAt θ p
   swap
-  · exact recursiveForm_refused V k θ hP F c σ
+  · exact recursiveForm_bound V k hTwo θ hP F c σ
   unfold Vocab.error ResourceAccounting.condError
   beta_reduce
   split_ifs with hE

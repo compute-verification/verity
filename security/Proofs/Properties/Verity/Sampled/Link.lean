@@ -68,7 +68,7 @@ theorem get?_mem {kvs : Std.TreeMap.Raw String Json} {k : String} {v : Json} (h 
 theorem keys?_single {kvs : Std.TreeMap.Raw String Json} {x : String}
     (h : Spot.keys? (.obj kvs) = some #[x]) : ∃ w, kvs.toArray = #[(x, w)] := by
   simp only [Spot.keys?, Option.some.injEq] at h
-  have hp := FlockSoundness.Audit.StrataExec.qsort_perm (· < ·) (kvs.toArray.map (·.1))
+  have hp := Spot.Sampling.StrataExec.qsort_perm (· < ·) (kvs.toArray.map (·.1))
   rw [show (kvs.toArray.map (·.1)).qsort (· < ·) = Spot.sortStrings (kvs.toArray.map (·.1)) from rfl, h]
     at hp
   have hl : (kvs.toArray.map (·.1)).toList = [x] := List.perm_singleton.1 hp.symm

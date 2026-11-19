@@ -14,7 +14,9 @@
 # runs no arms.
 set -uo pipefail
 export O=${OUT:?}
-export PATH=/usr/local/cuda-13.0/bin:$PATH
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 4  # the machine's toolkit at 13.0
+GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks/kernels/machine.py arch)") || exit 4
+export PATH=$CUDA_HOME/bin:$PATH
 D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/dfill.XXXXXX); trap 'rm -rf "$B"' EXIT
 export DF_ALONE=${DF_ALONE:-"4:1 4:2 4:4 8:1 8:2 8:4"}
@@ -26,7 +28,7 @@ git rev-parse HEAD > "$O/commit.txt" 2>&1
 export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 echo "$DFILL_COINS" > "$O/coins.txt"
 nvcc --version | tail -2 > "$O/nvcc.txt"
-nvcc -O3 -std=c++17 $DF_NVCC -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $K/dcap.cu -lcublasLt -lnvidia-ml -ldl \
+nvcc -O3 -std=c++17 $DF_NVCC -gencode "$GENCODE" -Xptxas -v -o "$B/dcap" $K/dcap.cu -lcublasLt -lnvidia-ml -ldl \
   > "$O/build.log" 2>&1 || { grep -E "error" "$O/build.log" | head -40; tail -20 "$O/build.log"; exit 4; }
 grep -B1 -E "spill" "$O/build.log" | grep -A1 dfill | head -12
 cuobjdump -sass "$B/dcap" | awk '/Function : /{p = /dfill_k/} p' > "$O/sass-dfill.txt" 2>&1

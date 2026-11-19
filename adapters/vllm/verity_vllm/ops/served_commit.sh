@@ -28,7 +28,7 @@ set -uo pipefail
 CASE=$1; WL=$(realpath "$2"); BUILD=$(realpath "$3"); PDIG=$4; CKPT=$5; D=$(realpath -m "$6")
 PY=${PY:-/workspace/venv-cu129/bin/python}
 export HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 TOKENIZERS_PARALLELISM=false
-export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda} PATH=$(dirname "$PY"):/usr/local/cuda/bin:$PATH
+export CUDA_HOME="${CUDA_HOME:?CUDA_HOME is not set: set it to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)}"; export PATH=$(dirname "$PY"):$CUDA_HOME/bin:$PATH
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1               # the integration's root: the commit's manifests/ defaults
 mkdir -p "$D"
 PAIRS=${PAIRS:-2}; TO=${COMMIT_TIMEOUT:-2400}

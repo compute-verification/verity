@@ -28,7 +28,7 @@ open FlockComplete.Replay (afterSq bind_go liftTM_ok)
 
 /-- **A loop whose first step throws**, then a continuation, throws with the first step's log. -/
 theorem forIn_first_err {σ β : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) {n : ℕ} (hn : n ≠ 0) (s₀ : σ)
-    (f : σ → TMW PS β) {t : Flock.Transcript} {l l' : Array Claims.Msg} {e : String}
+    (f : σ → TMW PS β) {t : Flock.Transcript} {l l' : Array Hash.Msg} {e : String}
     (h : ((body 0 s₀).run t).go l = (.error e, l')) :
     ((forIn [:n] s₀ body >>= f).run t).go l = (.error e, l') := by
   refine FlockComplete.bind_go_err ?_
@@ -98,7 +98,7 @@ theorem openStep_first (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom :
     simpa only [claimsOf, Array.size_map] using h'
   have hpe : r.1.2.pending = ByteArray.empty := Switch.endE_repPiop _ _ _ _ _ _ _ _ _ _ hp
   refine ⟨fun k => switchVec t.g r.1.1.2.2[k]!, fun k => by simp [switchVec], ?_⟩
-  have hc : CoinAt (fun j i => (cs.getD j #[])[i]!) (#[] : Array Claims.Msg).size cs := by
+  have hc : CoinAt (fun j i => (cs.getD j #[])[i]!) (#[] : Array Hash.Msg).size cs := by
     intro j hj
     funext i
     simp [List.getD_eq_getElem?_getD, hj]

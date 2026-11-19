@@ -59,11 +59,11 @@ attribute [local irreducible] Sha512.hash Sha256.hash Blake3.hash Blake3.keyedHa
 
 /-- **SHA-512 within `L`**: the deployed SHA-512 on inputs whose message is in `L`, a refusal on every other; the other
 hashes the deployed ones. -/
-def hashesIn (L : List Claims.Msg) : Hashes Flock.V :=
+def hashesIn (L : List Hash.Msg) : Hashes Flock.V :=
   { Hashes.ofSha512 Sha512.hash with
     sha512 := fun b => if Claims.toMsg b ∈ L then pure (Sha512.hash b) else throw "SHA-512: an input outside the log" }
 
-theorem hashesIn_sha512 {L : List Claims.Msg} {b y : ByteArray} (h : (hashesIn L).sha512 b = .ok y) :
+theorem hashesIn_sha512 {L : List Hash.Msg} {b y : ByteArray} (h : (hashesIn L).sha512 b = .ok y) :
     y = Sha512.hash b ∧ Claims.toMsg b ∈ L := by
   by_cases hb : Claims.toMsg b ∈ L
   · have e : (hashesIn L).sha512 b = pure (Sha512.hash b) := by simp only [hashesIn, hb, ↓reduceIte]
@@ -74,13 +74,13 @@ theorem hashesIn_sha512 {L : List Claims.Msg} {b y : ByteArray} (h : (hashesIn L
     rw [e] at h
     cases h
 
-theorem Runs.ret {H : Claims.Msg → Claims.Msg} {α : Type} (a : α) (L : List Claims.Msg) :
+theorem Runs.ret {H : Hash.Msg → Hash.Msg} {α : Type} (a : α) (L : List Hash.Msg) :
     Runs H (Pure.pure a : OCV α) a L :=
   ⟨rfl, fun _ hp => by simp [Claims.OC.eval] at hp⟩
 
 /-- **Runs of the two parts are a run of the bind.** -/
-theorem Runs.bind_intro {H : Claims.Msg → Claims.Msg} {α β : Type} {x : OCV α} {f : α → OCV β} {a : α} {b : β}
-    {L : List Claims.Msg} (hx : Runs H x a L) (hf : Runs H (f a) b L) : Runs H (x >>= f) b L := by
+theorem Runs.bind_intro {H : Hash.Msg → Hash.Msg} {α β : Type} {x : OCV α} {f : α → OCV β} {a : α} {b : β}
+    {L : List Hash.Msg} (hx : Runs H x a L) (hf : Runs H (f a) b L) : Runs H (x >>= f) b L := by
   obtain ⟨hx1, hx2⟩ := hx
   obtain ⟨hf1, hf2⟩ := hf
   simp only [Runs, ExceptT.run_bind, Claims.OC.bind_eq, Claims.OC.eval_bind]
@@ -91,7 +91,7 @@ theorem Runs.bind_intro {H : Claims.Msg → Claims.Msg} {α β : Type} {x : OCV 
   · exact hf2 p hp
 
 /-- **A run within `L` is accepted with `hashesIn L`.** -/
-def within (L : List Claims.Msg) : With.Sim OCV Flock.V where
+def within (L : List Hash.Msg) : With.Sim OCV Flock.V where
   R x y := ∀ a, Runs sha512 x a L → y = .ok a
   pure a a' h := by rw [Runs.pure h]; rfl
   bind {α β x y f g} hxy hfg b h := by
@@ -101,7 +101,7 @@ def within (L : List Claims.Msg) : With.Sim OCV Flock.V where
   throw _ _ h := (Runs.throw h).elim
   lift _ _ h := Runs.lift h
 
-theorem within_hashes (L : List Claims.Msg) : (within L).Hashes Claims.Hashes.oc (hashesIn L) where
+theorem within_hashes (L : List Hash.Msg) : (within L).Hashes Claims.Hashes.oc (hashesIn L) where
   sha512 b a h := by
     obtain ⟨rfl, hm⟩ := Runs.hash h
     simp only [hashesIn, hm, ↓reduceIte]
@@ -111,7 +111,7 @@ theorem within_hashes (L : List Claims.Msg) : (within L).Hashes Claims.Hashes.oc
   blake3Keyed k b a h := by rw [Runs.pure h]; rfl
 
 /-- **What `hashesIn L` accepts runs within `L`.** -/
-def back (L : List Claims.Msg) : With.Sim OCV Flock.V where
+def back (L : List Hash.Msg) : With.Sim OCV Flock.V where
   R x y := ∀ a, y = .ok a → Runs sha512 x a L
   pure a a' h := by cases h; exact Runs.ret a L
   bind {α β x y f g} hxy hfg b h := by
@@ -122,7 +122,7 @@ def back (L : List Claims.Msg) : With.Sim OCV Flock.V where
     change p ∈ (Claims.OC.eval sha512 (Claims.OC.ret v)).2 at hp
     simp [Claims.OC.eval] at hp⟩
 
-theorem back_hashes (L : List Claims.Msg) : (back L).Hashes Claims.Hashes.oc (hashesIn L) where
+theorem back_hashes (L : List Hash.Msg) : (back L).Hashes Claims.Hashes.oc (hashesIn L) where
   sha512 b a h := by
     obtain ⟨rfl, hm⟩ := hashesIn_sha512 h
     refine ⟨?_, fun p hp => ?_⟩
@@ -148,7 +148,7 @@ def sub : With.Sim Flock.V Flock.V where
   throw _ _ h := h
   lift _ _ h := h
 
-theorem sub_hashes (L : List Claims.Msg) : sub.Hashes (hashesIn L) With.std where
+theorem sub_hashes (L : List Hash.Msg) : sub.Hashes (hashesIn L) With.std where
   sha512 b a h := by
     obtain ⟨rfl, -⟩ := hashesIn_sha512 h
     rfl

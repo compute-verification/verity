@@ -20,7 +20,7 @@ literals that name an integration module (`importlib.import_module("verity_vllm.
 prefixes (`f"verity_vllm.definitions.registry.{m}"` + every short literal of the same file that completes to a module), path literals
 (`verity_vllm/acquire/fa2_tap_src/build_ext.py`) and unique `<name>.py` literals joined at runtime.  Anything reachable from a
 root is LIVE.  `verity_vllm/observe/fold/profiles/**` is resolved by name at runtime: the whole package is reachable when any consumer is.
-`registry.catalog.load()` imports every module of `verity_vllm.definitions.registry` but `quarantine` (`pkgutil`): they are reachable from it.
+`registry.catalog.load()` imports every module of `verity_vllm.definitions.registry` (`pkgutil`): they are reachable from it.
 
 CLASSES (per module of the census packages):
     LIVE       static_reachable or dynamically_imported
@@ -230,9 +230,9 @@ class Graph:
                     if m.startswith(pkg + "."):
                         self.add(src_mod, m)
                 continue
-            if pkg == "verity_vllm.definitions.registry":                    # registry.catalog.load(): every module of it but quarantine
+            if pkg == "verity_vllm.definitions.registry":                    # registry.catalog.load(): every module of it
                 for m in self.file_of:
-                    if m.rsplit(".", 1)[0] == pkg and m != pkg + ".quarantine":
+                    if m.rsplit(".", 1)[0] == pkg:
                         self.add(src_mod, m)
                 continue
             for s in strings:

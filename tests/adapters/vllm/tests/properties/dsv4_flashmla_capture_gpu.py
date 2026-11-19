@@ -98,8 +98,12 @@ from verity_vllm.definitions.numerics import flashmla_twin as T
 from verity_vllm.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
 from verity_vllm.definitions.registry import flashmla as F
 from verity_vllm.definitions.registry import flashmla_prefill as P
+from verity_vllm.program.frontend.target_profile import card_facts
 from verity_vllm.records.property_record import seal as seal_record
 
+#: the card the capture gates on, and its SMs, which its planner cuts over
+CARD = "h200-sxm-141gb"
+SMS = card_facts(CARD)[1]
 SCHEMA = "verity-vllm/dsv4-flashmla-capture/v1"
 RECORD = "dsv4_flashmla_capture.json"
 #: DeepSeek-V4-Pro (config.json at b5968e91) at TP8: 128 / 8 = 16 local heads padded to h_q = 64 (flashmla.py:78-85), head_dim
@@ -456,7 +460,7 @@ def twin_sched(o: dict[str, Any]) -> tuple[np.ndarray, np.ndarray]:
     """The port's planner output for a case: (parts, 7) metadata words and num_splits (b + 1,)."""
     w = extra_width(o)
     metas, ns = T.sched_meta(o["swa_lens"].tolist(), o["extra_lens"].tolist() if w else None, topk=WINDOW, extra_topk=w,
-                             parts=T.num_sm_parts(H_Q))
+                             parts=T.num_sm_parts(H_Q, 1, SMS))
     return np.array([m.words() for m in metas], dtype=np.int32), np.array(ns, dtype=np.int32)
 
 
@@ -738,7 +742,7 @@ def launch_case(work: Path, case: str, quick: bool) -> tuple[dict[str, Any], lis
     torch.cuda.synchronize()
     tsm, ns = meta.tile_scheduler_metadata.cpu().numpy(), meta.num_splits.cpu().numpy()
     want_m, want_ns = twin_sched(o)
-    parts = T.num_sm_parts(H_Q)
+    parts = T.num_sm_parts(H_Q, 1, SMS)
     rec = {"phase": "decode", "case": case, "layer": o["layer"], "b": b, "extra_width": w, "num_splits": ns.tolist(),
            "lse_shape": list(lse.shape),
            "checks": {"shape": list(out1.shape) == [b, H_Q, D] and tuple(tsm.shape) == (parts, 8) and tuple(ns.shape) == (b + 1,),
@@ -1072,7 +1076,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--scratch", default=None, help="parent of the scratch directory (the cases' operands and outputs)")
     ap.add_argument("--min-driver", type=int, default=575)
     ap.add_argument("--want-cc", default="9.0")
-    ap.add_argument("--want-sms", type=int, default=132)
+    ap.add_argument("--want-sms", type=int, default=SMS)
     ap.add_argument("--workers", type=int, default=C.cpu_workers())
     ap.add_argument("--quick", action="store_true",
                     help=f"a decode batch of {QUICK_BATCH}, the batch cases at `QUICK_BATCHES` and the reference on one token per "

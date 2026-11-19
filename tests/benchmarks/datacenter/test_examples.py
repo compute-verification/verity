@@ -1,18 +1,22 @@
 """The declaration library: the measured node, a BlueField-3 behind its NIC, the leaf-spine generator and the demo's rack."""
 from __future__ import annotations
 
+from pathlib import Path
 from collections import Counter
 
+import json
 import pytest
 from verity.protocols.resource_accounting.memory.poub.verifier import ledger, timing
 
 from datacenter import Cadence, Port, route
 from datacenter.examples import GB, leaf_spine, rack, rtx_node, two_sites, with_dpu
 
+FIGURES = timing.Figures.of_json(json.loads((Path(__file__).resolve().parents[3] / "tests/verity/protocols/resource_accounting/memory/poub/figures.json").read_text()))
+
 
 def test_a_node_is_one_block_of_eight_gpus_on_two_sockets_with_the_measured_pcie_tree():
     """Its devices add up to PoUB's node, `ledger.Node`: `ResourceAccounting.Device`'s one Python mirror."""
-    dc, node = rtx_node("n"), ledger.Node.stated(timing.RTX_PRO_6000_NODE)
+    dc, node = rtx_node("n"), ledger.Node.stated(FIGURES)
     ds = dc.devices.values()
     assert sum(float(d.on_chip) for d in ds if d.on_chip) == node.chip_bytes * 8
     assert sum(float(d.bandwidth) for d in ds if d.bandwidth) == pytest.approx(node.read_bytes_per_s * 8)

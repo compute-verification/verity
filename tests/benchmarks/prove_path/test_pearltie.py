@@ -9,7 +9,7 @@ gate/up and down), and its 895 units of 58 templates are proof blocks Flock's co
 
 * **Pearl+'s passes**, a pass a round: each call's A rows (its x widened to FP32, then zero rows up to m₁₆) and y (its value
   widened) as the circuit's proof blocks make them (`window_rows.Rows.value`), committed as Pearl+'s reference commits them
-  (`audit.commit_rows`, `served_y.commit_y`) under the prover's salt key, and each layer weight's B rows (a call's
+  (`audit.commit_rows`, `served_y.commit_y`) under fresh salts each pass keeps in its directory, and each layer weight's B rows (a call's
   weight, random BF16 rows of n x K: no proof block reads B) as PoUW's weights tree commits them, in manifests of the
   fields W and the verdict's W check read.
 * **W**, Pearl+'s window record over them (`pearl_c.window.record`), which Pearl+'s verdict holds to the roots its passes
@@ -39,7 +39,7 @@ a5's v1 case of R with the tie's params accepts R on [W], refuses its docket on 
 case's verdict of record is an accepting stand-in reporting R's values' roots as their readers opened them; the proofs of
 a sample of R's proof blocks, through both one-stage verifiers, are `records_audit.py audit --tie W`'s.
 
-Pearl+'s verdict is the prover's development verifier: it reads the prover's salt key and opens sampled rows in the clear,
+Pearl+'s verdict is the prover's development verifier: it reads the salts the prover kept and opens sampled rows in the clear,
 values the one-stage proof hides once tied.
 """
 from __future__ import annotations
@@ -47,6 +47,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -61,13 +62,18 @@ from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 from verity_vllm.program.predict.window_class import PearlTables, WindowClass
+from verity.commitments import docket_digest as DD
+from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96, HM96_WEIGHTS, Workload, activation_binding, commit_rows, weight_binding
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96, Workload, activation_binding, commit_rows, fresh_salts, weight_binding
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
-from verity.circuits.codec import canonical_json
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as REG
+from verity.protocols.proofs.spot.prover import docket as DK
+from verity.commitments import randomness as RND
+from verity.protocols.resource_accounting.network.prover import scan_state_rows as SR
+from verity.circuits.codec import canonical_json, program_digest
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.periods import interface as IF, rows as CS
 
@@ -83,13 +89,11 @@ SCHEME = "pearl-c-h100-v1-h3"
 CLASS, GRAIN, PEARL = WindowClass(1, 27, 2), WC.Grain(gemm_words=8192, rows=256, select=512), PearlTables(SCHEME, words=64)
 #: a round's calls: the layer's q/k/v, o, gate/up and down
 CALLS = 4
-#: the committers' secret keys: the audited window's, and Pearl+'s salt key, which the prover's manifests retain
-KEY, SALT_KEY = bytes(range(32)), bytes(range(64, 96))
 #: the window's epoch salt, Pearl+'s salt coin's
 SALT = bytes(range(100, 164))
 #: the audited window's run root
 RUN = "ab" * 64
-SAMPLING_DESIGN = D.parse_design("stratified:1")
+SAMPLING_DESIGN = RND.parse_design("stratified:1")
 PROMPT = [(7 * i + 3) % 500 for i in range(CLASS.prompt)]
 #: the flipped bit: round 1's o-projection's (call 1) A row 0, its first word's high half (the BF16 of x's first element)
 FLIP = (PEARL.a(1, 1), 0, 1)
@@ -126,48 +130,61 @@ def _shape(c, s: int, call: int) -> tuple[int, int]:
 
 def _b_roots(c) -> dict[int, str]:
     """Each call's weight's B root (weight id the call's place in its round), as PoUW's weights tree commits its n rows of
-    K FP32 words (`audit.commit_rows` under `weight_binding`, salted at ``HM96_WEIGHTS + w``) under the prover's salt key."""
+    K FP32 words (`audit.commit_rows` under `weight_binding`) under fresh salts."""
     rng, out = np.random.default_rng(5), {}
     for w in range(CALLS):
         k, n = _shape(c, 0, w)
         rows = (rng.standard_normal((n, k)).astype(np.float32).view(np.uint32) & 0xFFFF0000).astype("<u4")
-        out[w] = commit_rows(weight_binding(w), -2, [r.tobytes() for r in rows], HM96, SALT_KEY,
-                             HM96_WEIGHTS + w).commitment.root.hex()
+        out[w] = commit_rows(weight_binding(w), -2, [r.tobytes() for r in rows], HM96, fresh_salts(n)).commitment.root.hex()
     return out
 
 
-def _manifests(c, pearl: dict[str, np.ndarray]) -> list[dict]:
-    """Pearl+'s passes' manifests, a pass a round, of the fields W and the verdict's W check read: each call's A rows
-    ``pearl[pearl-a/<s>/<c>]`` committed as `audit.commit_rows` commits them (salted at the call's index) and its y
+def _salts(d: Path, name: str, salts: list[bytes]) -> dict:
+    """``salts`` kept in the pass's directory ``d`` at ``name``, as the device run keeps them: its manifest entry."""
+    (d / name).parent.mkdir(mode=0o700, exist_ok=True)
+    return SY._write(d / name, b"".join(salts))
+
+
+def _manifests(c, pearl: dict[str, np.ndarray], like: SimpleNamespace | None = None) -> tuple[list[dict], list[Path], dict]:
+    """Pearl+'s passes' manifests, a pass a round, of the fields W and the verdict's W check read, and the passes'
+    directories: each call's A rows ``pearl[pearl-a/<s>/<c>]`` committed as `audit.commit_rows` commits them and its y
     ``pearl[pearl-y/<s>/<c>]`` as `served_y.commit_y` does (its BF16 words, each committed row's high halves), under the
-    epoch's salt and the prover's salt key, the call's index ``s · CALLS + c``; and each weight's B root (`_b_roots`)."""
-    out, roots = [], _b_roots(c)
+    epoch's salt and fresh salts the pass keeps in its directory (``calls/<i>.salts``, ``y/<i>.salts``), the call's index
+    ``s · CALLS + c``; and each weight's B root (`_b_roots`).  Passes ``like`` another window's commit under its salts and
+    B roots, so the two differ only where their values do.  The salts drawn, by call index and side, are the third."""
+    out, dirs = [], []
+    roots = _b_roots(c) if like is None else {int(w): x["root"] for w, x in like.manifests[0]["weights"].items()}
+    drawn = {} if like is None else like.salts
     for s in range(CLASS.outputs):
+        d = Path(tempfile.mkdtemp(prefix=f"pearltie-pass{s}-"))
         mm = []
         for call in range(CALLS):
             i, (k, n) = s * CALLS + call, _shape(c, s, call)
             a, y = pearl[PEARL.a(s, call)], pearl[PEARL.y(s, call)]
-            root_a = commit_rows(activation_binding(SALT, i), i, [r.tobytes() for r in a], HM96, SALT_KEY, i).commitment.root
-            root_y = SY.commit_y(np.ascontiguousarray(y[:, 1::2]).tobytes(), n, SALT, i, SALT_KEY)[0]
+            sa = drawn.setdefault((i, "a"), fresh_salts(len(a)))
+            sy = drawn.setdefault((i, "y"), fresh_salts(len(y)))
+            root_a = commit_rows(activation_binding(SALT, i), i, [r.tobytes() for r in a], HM96, sa).commitment.root
+            root_y = SY.commit_y(np.ascontiguousarray(y[:, 1::2]).tobytes(), n, SALT, i, sy)[0]
             mm.append({"index": i, "m": len(a), "k": k, "n": n, "weight": call, "real_rows": len(y), "root_a": root_a.hex(),
-                       "y": {"root": root_y.hex()}})
-        out.append({"entry": f"pouw:{SCHEME}", "scheme": SCHEME, "salt": SALT.hex(), "hm96_salt_key": SALT_KEY.hex(),
+                       "salts": _salts(d, f"calls/{i}.salts", sa), "y": {"root": root_y.hex(), "salts": _salts(d, f"y/{i}.salts", sy)}})
+        out.append({"entry": f"pouw:{SCHEME}", "scheme": SCHEME, "salt": SALT.hex(),
                     "matmuls": mm, "weights": {str(u["weight"]): {"n": u["n"], "k": u["k"], "root": roots[u["weight"]]}
                                                for u in mm}})
-    return out
+        dirs.append(d)
+    return out, dirs, drawn
 
 
-def _window(c, pearl: dict[str, np.ndarray]) -> SimpleNamespace:
-    """Pearl+'s passes committing ``pearl`` and its window record W over them."""
-    manifests = _manifests(c, pearl)
-    return SimpleNamespace(pearl=pearl, manifests=manifests, W=PWR.record(manifests))
+def _window(c, pearl: dict[str, np.ndarray], like: SimpleNamespace | None = None) -> SimpleNamespace:
+    """Pearl+'s passes committing ``pearl`` (under ``like``'s salts and B roots, if given) and its window record W."""
+    manifests, dirs, salts = _manifests(c, pearl, like)
+    return SimpleNamespace(pearl=pearl, manifests=manifests, dirs=dirs, salts=salts, W=PWR.record(manifests))
 
 
 def _flipped(toy) -> SimpleNamespace:
     """``toy``'s passes with bit `FLIP` of their A rows flipped, committed alike, and their W'."""
     pearl = {v: r.copy() for v, r in toy.pearl.items()}
     pearl[FLIP[0]][FLIP[1], FLIP[2]] ^= 1
-    return _window(toy.low.circuit, pearl)
+    return _window(toy.low.circuit, pearl, toy)
 
 
 def _passes(manifests: list[dict]) -> list[SimpleNamespace]:
@@ -205,8 +222,9 @@ def make_toy() -> SimpleNamespace:
     reg = Registered.of(Phi(model={"repo": "org/toy", "revision": "r", "hf_config": CONFIG}, target=H200), default_seed=7)
     low = WC.lower(reg, CLASS, None, GRAIN, tables=PEARL)
     fields = _weights(low.fn)
-    state = WRS.standin_state(WC.population_digest(low.circuit), CLASS, [([1, CLASS.prompt, *PROMPT], CLASS.outputs)], KEY, 0, window=RUN)
-    values = {**WW.weight_values(reg, fields, KEY, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
+    state = WRS.state_value(program_digest(low.circuit.program()[0]), CLASS,
+                            SR.standin_rows(CLASS, [([1, CLASS.prompt, *PROMPT], CLASS.outputs)]), window=RUN)
+    values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
     slots = [WRS.Slot(low.fn, CLASS, row, lambda label, lo, hi: fields[label][lo:hi], cut=low.cut)
              for row, _ in WRS.scan_slots(low, state.rows)]
     rows, c = WRS.Rows(low, slots, values), low.circuit
@@ -224,8 +242,10 @@ def toy() -> SimpleNamespace:
     return make_toy()
 
 
-def _reuse(toy, W: dict, manifests: list[dict] | None = None) -> dict:
-    return PWR.reuse(W, toy.manifests if manifests is None else manifests, toy.rows.value)
+def _reuse(toy, W: dict, window: SimpleNamespace | None = None) -> dict:
+    """`reuse` of W on ``window``'s passes (``toy``'s by default), each read from its directory."""
+    window = toy if window is None else window
+    return PWR.reuse(W, window.manifests, toy.rows.value, dirs=window.dirs)
 
 
 def _reads(circuit) -> dict[tuple[str, str, int], tuple[str, int]]:
@@ -256,7 +276,7 @@ def test_the_circuit_reads_each_calls_committed_rows_and_the_verdict_and_reuse_t
     real = {(v, i) for v in pearl for i in range(PEARL.rows(CLASS, int(v.split("/")[1])))}
     assert sorted(reads.values()) == sorted(real)
     VR = _verify_run()
-    assert VR.tie(toy.W, _passes(toy.manifests)) == {"record": REG.digest(toy.W), "tables": (2 * CLASS.outputs + 1) * CALLS}
+    assert VR.tie(toy.W, _passes(toy.manifests)) == {"record": DD.digest(toy.W), "tables": (2 * CLASS.outputs + 1) * CALLS}
     assert [e["value"] for e in toy.W["registered"]][-CALLS:] == [PEARL.b(w) for w in range(CALLS)]
     assert {v: x.entry() for v, x in _reuse(toy, toy.W).items()} == {e["value"]: e for e in _calls(toy.W)}
 
@@ -272,11 +292,11 @@ def test_a_w_whose_root_isnt_the_credited_one_is_refused_and_its_row_is_off_its_
     assert [x["value"] for x, y in zip(toy.W["registered"], flipped.W["registered"], strict=True) if x != y] == [FLIP[0]]
     with pytest.raises(ValueError, match=f"W's {FLIP[0]}: its root not the call's"):
         VR.tie(flipped.W, _passes(toy.manifests))
-    assert VR.tie(flipped.W, _passes(flipped.manifests))["record"] == REG.digest(flipped.W)
+    assert VR.tie(flipped.W, _passes(flipped.manifests))["record"] == DD.digest(flipped.W)
     with pytest.raises(ValueError, match="W is not the window record of these passes"):
         _reuse(toy, flipped.W)
     with pytest.raises(ValueError, match=f"^{FLIP[0]}: the rows the audited circuit's proof blocks make of it are not"):
-        _reuse(toy, flipped.W, flipped.manifests)
+        _reuse(toy, flipped.W, flipped)
     (tid, port, u), = [k for k, v in _reads(c).items() if v == FLIP[:2]]
     assert c.units[tid] == PEARL.rows(CLASS, 0) + PEARL.rows(CLASS, 1) and port == "o0" and u == PEARL.rows(CLASS, 0)
     assert D.stratum_k(SAMPLING_DESIGN["k"], c.units[tid], sum(c.units.values())) == 1
@@ -292,11 +312,11 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
     ``registration.json``), and the verifier's own window and circuit record from its records."""
     c, out = toy.low.circuit, tmp_path_factory.mktemp("window")
     win = IF.Window(c, RUN, SAMPLING_DESIGN, 64, registered={**toy.values, **_reuse(toy, toy.W)}, forms=WRS.FORMS)
-    win.supply(G)
+    win.supply()
     toy.rows.record(win)
     committed = win.close()
     prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0}}
-    win.write(committed, out, prov, registrar=REG, index_salt=WRS.index_salt(KEY, 0), previous=REG.digest(toy.W))
+    win.write(committed, out, prov, registrar=DK, previous=DD.digest(toy.W))
     mine, doc = IF.of_records(out, SAMPLING_DESIGN, WT.catalog_resolve)
     publics = {m.key: (out / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
     return SimpleNamespace(dir=out, R=json.loads((out / "registration.json").read_text()), mine=mine, doc=doc,
@@ -306,7 +326,7 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
 def _by_hand(written, W: dict) -> dict:
     """The window's record R chained after ``W`` instead and registering ``W``'s entries, written by hand."""
     theirs = {e["value"]: e for e in W["registered"]}
-    return {**written.R, "previous": REG.digest(W), "registered": [theirs.get(e["value"], e) for e in written.R["registered"]]}
+    return {**written.R, "previous": DD.digest(W), "registered": [theirs.get(e["value"], e) for e in written.R["registered"]]}
 
 
 def _check(written, W: dict, R: dict):
@@ -326,7 +346,7 @@ def test_r_registers_ws_values_and_r1_r7_accept_it_on_w_and_refuse_it_on_a_w_of_
     it, and tied to W' refuse it: it is chained after W (``R6-previous``), and of its values only the flipped one's root is
     not the one W' registers (``R7-held``)."""
     R, W = written.R, toy.W
-    assert R["format"] == REG.FORMAT_V2 and R["previous"] == REG.digest(W)
+    assert R["format"] == DM.REGISTRATION and R["previous"] == DD.digest(W)
     assert sorted(R["registered"], key=lambda e: e["value"]) == sorted([*_calls(W), *written.own.values()],
                                                                        key=lambda e: e["value"])
     strata, readers = {s["template"]: s for s in R["law"]["strata"]}, {}
@@ -348,7 +368,7 @@ def test_the_records_accept_a_flipped_row_on_its_own_w_so_only_its_readers_proof
     flipped = _flipped(toy)
     R2 = _by_hand(written, flipped.W)
     assert canonical_json(R2) != canonical_json(written.R)
-    assert _verify_run().tie(flipped.W, _passes(flipped.manifests))["record"] == REG.digest(flipped.W)
+    assert _verify_run().tie(flipped.W, _passes(flipped.manifests))["record"] == DD.digest(flipped.W)
     assert list(_check(written, flipped.W, R2).codes) == []
     assert list(_check(written, toy.W, R2).codes) != []
 
@@ -414,9 +434,9 @@ def test_one_stage_s_lean_accepts_r_on_w_and_refuses_it_on_a_w_of_another_root(t
     tied to W', as R1-R7 do."""
     SC, flipped = lean.one.SC, _flipped(toy)
     got, _ = SC.lean_answer(lean.v1, _v1_case(lean.one, written, toy.W, written.R), tmp_path)
-    assert (got["verdict"], got["commitment"]) == ("accept", REG.digest(written.R)), got
+    assert (got["verdict"], got["commitment"]) == ("accept", DD.digest(written.R)), got
     got, _ = SC.lean_answer(lean.v1, _v1_case(lean.one, written, flipped.W, written.R), tmp_path)
     assert got["verdict"] == "reject" and got["reason"].startswith("registration: "), got
     R2 = _by_hand(written, flipped.W)
     got, _ = SC.lean_answer(lean.v1, _v1_case(lean.one, written, flipped.W, R2), tmp_path)
-    assert (got["verdict"], got["commitment"]) == ("accept", REG.digest(R2)), got
+    assert (got["verdict"], got["commitment"]) == ("accept", DD.digest(R2)), got

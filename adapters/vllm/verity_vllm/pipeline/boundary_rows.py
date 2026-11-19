@@ -100,8 +100,10 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.proofs.spot.verifier import second_stage as SS
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
+from verity.circuits import population as PN
+from verity.circuits import replay_links as RL
+from verity.protocols.proofs.spot.prover import docket as DK
+from verity.circuits import partition_object as PO
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.population import population
@@ -303,7 +305,7 @@ class Layout:
             forms = {n.form for n in self.check.body.nodes} if composite else {"primitive"}
             if not forms <= {"call", "batch"}:
                 raise ValueError(f"an inlined check template's body is calls of templates, each a proof block, not "
-                                 f"{P.template_id(self.check)}'s {sorted(forms - {'call', 'batch'})}")
+                                 f"{PO.template_id(self.check)}'s {sorted(forms - {'call', 'batch'})}")
 
     @property
     def n_rho(self) -> int:
@@ -320,13 +322,13 @@ class Layout:
         of its first call."""
         if not self.inline:
             return (self.check,)
-        return tuple({P.template_id(n.fn): n.fn for n in self.check.body.nodes}.values())
+        return tuple({PO.template_id(n.fn): n.fn for n in self.check.body.nodes}.values())
 
     @property
     def query(self) -> dict[str, Any]:
         """The check's proof blocks in a replay block (`service.Check.query`): one template's instances, or each one's."""
         ts = self.templates
-        return P.template_instance_query(ts[0]) if len(ts) == 1 else P.template_instances_query(ts)
+        return PO.template_instance_query(ts[0]) if len(ts) == 1 else PO.template_instances_query(ts)
 
     @cached_property
     def replay(self) -> SpecializedDefinition:
@@ -334,15 +336,15 @@ class Layout:
 
     @cached_property
     def program(self) -> Program:
-        return P.population_program(self.replay, self.spans)
+        return PN.population_program(self.replay, self.spans)
 
     @cached_property
     def grain(self) -> dict[str, Any]:
-        return P.template_instance_query(self.replay)
+        return PO.template_instance_query(self.replay)
 
     @cached_property
     def partition(self) -> dict[str, Any]:
-        return P.partition(self.program, self.grain)
+        return PO.build(self.program, self.grain)
 
     @cached_property
     def stop_program(self) -> Program:
@@ -350,16 +352,16 @@ class Layout:
         if not self.stopped:
             raise ValueError("only a stop class has stop blocks: a class under a stop rule, whose spans the rule ends as "
                              "they were served")
-        return P.population_program(self.stop.template, self.spans)
+        return PN.population_program(self.stop.template, self.spans)
 
     @cached_property
     def stop_query(self) -> dict[str, Any]:
         """The stop population's proof blocks: the stop block's instances, one a span."""
-        return P.template_instance_query(self.stop.template)
+        return PO.template_instance_query(self.stop.template)
 
     @cached_property
     def stop_partition(self) -> dict[str, Any]:
-        return P.partition(self.stop_program, self.stop_query)
+        return PO.build(self.stop_program, self.stop_query)
 
     @cached_property
     def verdict_rows(self) -> tuple[int, int] | None:
@@ -378,7 +380,7 @@ class Layout:
         w = widths.pop() if len(widths) == 1 else 0
         if ret.width_set() != {1} or not w or ret.leaves % w:
             raise ValueError(f"a class commits its replay block's return as verdicts where it is bits, in rows of one width "
-                             f"its body's nodes return, not {P.template_id(self.check)}'s {ret!r}")
+                             f"its body's nodes return, not {PO.template_id(self.check)}'s {ret!r}")
         return ret.leaves // w, w
 
     @cached_property
@@ -390,17 +392,17 @@ class Layout:
         32-bit output, one an output of the class, in output order. None for a class that commits no return."""
         if not self.ids:
             return self.verdict_rows
-        params = {P.template_id(t): {name for name, _ty in t.signature()[0]} for t in self.templates}
-        runs = SS.link_runs(definitions(self.program), descriptor_id(self.replay)) or ()
+        params = {PO.template_id(t): {name for name, _ty in t.signature()[0]} for t in self.templates}
+        runs = RL.link_runs(definitions(self.program), descriptor_id(self.replay)) or ()
         got = [(x, per, rs) for x, per, rs in runs if x.port not in params.get(x.template, ())]
-        by = {P.template_id(t): t for t in self.templates}
+        by = {PO.template_id(t): t for t in self.templates}
         ok = (len(got) == 1 and got[0][0].value == RETURN and got[0][0].template in by
               and sum(by[got[0][0].template].signature()[1].leaf_widths()) == 32 and got[0][1] == self.outputs == self.n_rho
-              and [SS.row_at(got[0][2], j) for j in range(self.outputs)] == list(range(self.outputs)))
+              and [RL.row_at(got[0][2], j) for j in range(self.outputs)] == list(range(self.outputs)))
         if not ok:
             raise ValueError(f"a class commits its replay block's return as ids where the block returns one 32-bit id an "
                              f"output, in output order, by one return link round 2 derives: not "
-                             f"{P.template_id(self.replay)}'s, of {self.n_rho} instances at {self.outputs} outputs with "
+                             f"{PO.template_id(self.replay)}'s, of {self.n_rho} instances at {self.outputs} outputs with "
                              f"return links {[(x.template, x.value, per) for x, per, _rs in got]}")
         return self.outputs, 32
 
@@ -415,21 +417,21 @@ class Layout:
             return None
         from verity_vllm.definitions.registry import greedy_stages as GS
 
-        fn, t = self.check, P.template_id(self.check)
+        fn, t = self.check, PO.template_id(self.check)
         V, N = (int(fn.bindings[k]) for k in ("V", "N")) if getattr(fn, "defn", None) is GS.GreedySelect else (0, 0)
         if not (self.inline and V and self.per_prompt == 0 and self.per_output == 1):
             raise ValueError(f"a class commits the logits its ids were selected from where its check is GreedySelect_v1 "
                              f"inlined, one instance an output: not {t}{'' if self.inline else ' as instances'} at "
                              f"{self.per_prompt} a prompt id and {self.per_output} an output")
-        units, params = GS.plan(V, V // N), {P.template_id(x): dict(x.signature()[0]) for x in self.templates}
-        runs = SS.link_runs(definitions(self.program), descriptor_id(self.replay)) or ()
+        units, params = GS.plan(V, V // N), {PO.template_id(x): dict(x.signature()[0]) for x in self.templates}
+        runs = RL.link_runs(definitions(self.program), descriptor_id(self.replay)) or ()
         read = [(x, per, rs) for x, per, rs in runs if x.port in params.get(x.template, {})]
         got = {x.template: (per, rs) for x, per, rs in read}
         K, n_out = len(units), self.outputs
-        want = [P.template_id(u.defn) for u in units]
+        want = [PO.template_id(u.defn) for u in units]
         ok = (len(got) == len(read) and sorted(got) == sorted(want) and {x.value for x, _p, _r in read} == {LOGITS}
               and all(u.lanes == (k * N, (k + 1) * N) and got[w][0] == K * n_out
-                      and [SS.row_at(got[w][1], j) for j in range(n_out)] == [j * K + k for j in range(n_out)]
+                      and [RL.row_at(got[w][1], j) for j in range(n_out)] == [j * K + k for j in range(n_out)]
                       for k, (u, w) in enumerate(zip(units, want, strict=True))))
         if not ok:
             raise ValueError(f"{t}: round 2's links at its units' parameters are not each unit k's {LOGITS} at row j·{K} + k "
@@ -493,7 +495,7 @@ class Layout:
         if port not in ROWS and port not in (self.returned, self.logits_port):
             return HT.domain(self.partition["program"], port, self.row_words, self.capacity)
         part = self.stop_partition if port == STOP else self.partition
-        return window_domain(part["program"], P.digest(part), port, self.leaves(port), self.run)
+        return window_domain(part["program"], PO.digest(part), port, self.leaves(port), self.run)
 
     def _ports(self, names: Sequence[str]) -> dict[str, dict[str, Any]]:
         return {p: {"leaves": self.leaves(p), "domain": self.domain(p).domain_id.hex()} for p in names}
@@ -521,7 +523,7 @@ class Layout:
     def provenance(self) -> dict[str, Any]:
         wide = {} if self.row_words == BT.WORDS else {"words": self.row_words}
         tables = {"tables": {"layers": list(self.layers), "capacity": self.capacity, **wide}} if self.layers else {}
-        return {"prompt": self.prompt, "outputs": self.outputs, "check": P.template_id(self.check),
+        return {"prompt": self.prompt, "outputs": self.outputs, "check": PO.template_id(self.check),
                 "per_prompt": self.per_prompt, "per_output": self.per_output, "inline": self.inline, **tables,
                 **({} if self.stop is None else {"stop": self.stop.to_json(), "stopped": self.held}),
                 **({"verdicts": True} if self.verdicts else {}), **({"ids": True} if self.ids else {}),
@@ -586,8 +588,8 @@ class Committed:
     def public(self) -> dict[str, Any]:
         L, ports = self.layout, {**self.layout.ports(), **self.layout.stop_ports()}
         return BoundaryCommit(
-            window=self.window, run=L.run, **L.provenance(), spans=L.spans, replay=P.template_id(L.replay),
-            program=L.partition["program"], partition=P.digest(L.partition), schema=SCHEMA,
+            window=self.window, run=L.run, **L.provenance(), spans=L.spans, replay=PO.template_id(L.replay),
+            program=L.partition["program"], partition=PO.digest(L.partition), schema=SCHEMA,
             values={p: {"root": self.roots[p].hex(), "words": L.words(p), **ports[p]} for p in ports},
             index=self.index_leaf, index_rule=CS.INDEX_RULE, seconds=round(self.seconds, 3)).dump()
 
@@ -616,8 +618,8 @@ def layout_of(pub: Mapping[str, Any], check: SpecializedDefinition, stop: Any = 
     ``stop``, it says whether it is a stop class without a rule or doesn't under one, or its values aren't its
     layout's."""
     c = BoundaryCommit.of(pub, COMMIT)
-    if c.check != P.template_id(check):
-        raise ValueError(f"a {FORMAT} commitment of check {c.check}, not {P.template_id(check)}")
+    if c.check != PO.template_id(check):
+        raise ValueError(f"a {FORMAT} commitment of check {c.check}, not {PO.template_id(check)}")
     mine = None if stop is None else stop.to_json()
     if json.dumps(c.stop and dict(c.stop), sort_keys=True) != json.dumps(mine, sort_keys=True):
         raise ValueError(f"a {FORMAT} commitment under the stop rule {c.stop!r}, not the verifier's own, {mine!r}: a class "
@@ -648,7 +650,7 @@ def record(pub: Mapping[str, Any], check: SpecializedDefinition, design: Mapping
     roots = [{"port": p, "root": c.values[p]["root"], **e} for p, e in L.ports().items()]
     w = {"kind": "served", "run": L.run, "row": c.window, **L.provenance(), "index": c.index, "boundary": FORMAT,
          **(window or {})}
-    return R.record(L.program, L.grain, design, CS.SCHEME, roots, w, previous=previous)
+    return DK.record(L.program, L.grain, design, CS.SCHEME, roots, w, previous=previous)
 
 
 def commit(spans: Sequence[Span], layout: Layout, window: int, *, salts: Mapping[str, bytes] | None = None,

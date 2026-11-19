@@ -322,31 +322,31 @@ theorem closeMessage_ok_spec (I : ByteArray) (host : String) (c : LiveCommitment
 theorem mapM_ok_spec {α β : Type} (f : α → Flock.V β) (l : List α) :
     ⦃⌜True⌝⦄ l.mapM f ⦃⇓? a => ⌜l.mapM f = .ok a⌝⦄ := ok_spec _
 
-theorem releasedRootsOf_ok_spec (c : LiveCommitment) (log : List String) :
-    ⦃⌜True⌝⦄ releasedRootsOf c log ⦃⇓? a => ⌜releasedRootsOf c log = .ok a⌝⦄ := ok_spec _
+theorem releasedLogOf_ok_spec (c : LiveCommitment) (log : List String) :
+    ⦃⌜True⌝⦄ releasedLogOf c log ⦃⇓? a => ⌜releasedLogOf c log = .ok a⌝⦄ := ok_spec _
 
 -- `mvcgen` splits `challengePhaseOf` into one goal per check it makes of the record, the close and the log
 set_option maxHeartbeats 4000000 in
 /-- What `challengePhaseOf` read when it accepts: its record, its close and the close's message, whose signature verifies under
 the key, its log's lines, which chain to the close's chain, a session its client closed, and the roots its log shows. -/
-theorem challengePhaseOf_read {key : ChallengerKey} {record log close : Json} {res : LiveCommitment × Roots × String}
+theorem challengePhaseOf_read {key : ChallengerKey} {record log close : Json} {res : LiveCommitment × Log × String}
     (h : challengePhaseOf key record log close = .ok res) :
     ∃ (r : ChallengerRecord) (c : ChallengerClose) (m : ByteArray) (ls : Array Json) (lines : List String),
       ChallengerRecord.ofJson record = .ok r ∧ ChallengerClose.ofJson close = .ok c ∧
       closeMessage (key.pub.extract 0 16) r.host r.commitment c.session c.lines c.chain c.ended = .ok m ∧
       LmsVerifies key m c.signature ∧ log = .arr ls ∧ ls.toList = lines.map Json.str ∧
-      logChain lines = c.chain ∧ c.ended = none ∧ releasedRootsOf r.commitment lines = .ok res.2.1 ∧
+      logChain lines = c.chain ∧ c.ended = none ∧ releasedLogOf r.commitment lines = .ok res.2.1 ∧
       res = (r.commitment, res.2.1, c.session) := by
   refine of_triple (Q := fun res => ∃ (r : ChallengerRecord) (c : ChallengerClose) (m : ByteArray) (ls : Array Json)
       (lines : List String),
       ChallengerRecord.ofJson record = .ok r ∧ ChallengerClose.ofJson close = .ok c ∧
       closeMessage (key.pub.extract 0 16) r.host r.commitment c.session c.lines c.chain c.ended = .ok m ∧
       LmsVerifies key m c.signature ∧ log = .arr ls ∧ ls.toList = lines.map Json.str ∧
-      logChain lines = c.chain ∧ c.ended = none ∧ releasedRootsOf r.commitment lines = .ok res.2.1 ∧
+      logChain lines = c.chain ∧ c.ended = none ∧ releasedLogOf r.commitment lines = .ok res.2.1 ∧
       res = (r.commitment, res.2.1, c.session)) ?_ h
   clear h
   mvcgen [challengePhaseOf, -Spec.throw_Except, throw_spec, recordReason_spec, recordOfJson_ok_spec, closeMessage_ok_spec,
-    mapM_ok_spec, releasedRootsOf_ok_spec]
+    mapM_ok_spec, releasedLogOf_ok_spec]
   all_goals
     refine ⟨_, _, _, _, _, by assumption, by assumption, by assumption, lms_of_check (by assumption),
       by first | rfl | assumption, mapM_str_of (by assumption) (fun j s hj => by cases j <;> cases hj <;> rfl),
@@ -360,7 +360,7 @@ theorem challengePhaseOf_ok_spec (key : ChallengerKey) (record log close : Json)
 -- `mvcgen` splits `challengePhaseNamed` into one goal per check it makes of the session's record and files
 set_option maxHeartbeats 1000000 in
 /-- `challengePhaseNamed` returns what `challengePhaseOf` returns of the session's files. -/
-theorem challengePhaseNamed_ok {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Roots}
+theorem challengePhaseNamed_ok {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Log}
     (h : challengePhaseNamed a key session = .ok r) :
     ∃ sid, challengePhaseOf key (getD session "record") (getD session "log") (getD session "close") = .ok (r.1, r.2, sid) := by
   refine of_triple (Q := fun r => ∃ sid,
@@ -371,7 +371,7 @@ theorem challengePhaseNamed_ok {a : Audited} {key : ChallengerKey} {session : Js
 
 /-- `trustedChallengePhaseOf` returns what `challengePhaseNamed` returns of the session the ledger pins. -/
 theorem trustedChallengePhaseOf_ok {ledger window : Json} {key : ChallengerKey} {pins main session : Json}
-    {r : LiveCommitment × Roots} (h : trustedChallengePhaseOf ledger window key pins main session = .ok r) :
+    {r : LiveCommitment × Log} (h : trustedChallengePhaseOf ledger window key pins main session = .ok r) :
     ∃ a, pinnedChallengePhase ledger window key pins main = .ok a ∧ challengePhaseNamed a key session = .ok r := by
   unfold trustedChallengePhaseOf at h
   exact bind_ok.1 h
@@ -381,9 +381,9 @@ theorem trustedChallengePhaseOf_ok_spec (ledger window : Json) (key : Challenger
       ⦃⇓? a => ⌜trustedChallengePhaseOf ledger window key pins main session = .ok a⌝⦄ := ok_spec _
 
 theorem challengerStream_ok_spec (c : LiveCommitment) (segment : Json) (after : ByteArray)
-    (roots : Option (List ByteArray)) :
-    ⦃⌜True⌝⦄ challengerStream c segment after roots
-      ⦃⇓? a => ⌜challengerStream c segment after roots = .ok a⌝⦄ := ok_spec _
+    (log : Option Log) :
+    ⦃⌜True⌝⦄ challengerStream c segment after log
+      ⦃⇓? a => ⌜challengerStream c segment after log = .ok a⌝⦄ := ok_spec _
 
 -- `mvcgen` splits `sampleCoins` into one goal per check it makes of the record's form, the window and the family
 set_option maxHeartbeats 1000000 in
@@ -394,11 +394,11 @@ theorem drawCoins_ok {key : ChallengerKey} {w label : String} {after : ByteArray
     ∃ c roots, trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key (getD coins "pins")
         (getD coins "main") (getD coins "session") = .ok (c, roots) ∧
       challengerStream c (getD coins "segment") after
-        (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ := by
+        (some roots) = .ok ξ := by
   refine of_triple (Q := fun ξ => ∃ c roots, trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)])
       key (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, roots) ∧
       challengerStream c (getD coins "segment") after
-        (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ) ?_ h
+        (some roots) = .ok ξ) ?_ h
   clear h
   mvcgen [sampleCoins, -Spec.throw_Except, throw_spec, trustedChallengePhaseOf_ok_spec, challengerStream_ok_spec]
   all_goals first
@@ -680,11 +680,11 @@ theorem closeOfJson_ok {j : Json} {c : ChallengerClose} (h : ChallengerClose.ofJ
 finder outputs a break: the commitment, the roots and the session id `challengePhaseOf` returns from the record's session
 files are a run's of the device under the key, a run its client closed, the roots the ones that run's own release log
 shows, and the session's log is that run's lines. -/
-theorem challengePhaseOf_run {c : LiveCommitment} {roots : Roots} {sid : String}
+theorem challengePhaseOf_run {c : LiveCommitment} {roots : Log} {sid : String}
     (h : challengePhaseOf key (getD (getD coins "session") "record") (getD (getD coins "session") "log")
       (getD (getD coins "session") "close") = .ok (c, roots, sid)) :
     (∃ s ∈ dev.runs key.pub, s.commitment = some c ∧ s.id = sid ∧ s.ended = none ∧
-      releasedRootsOf c s.log = .ok roots ∧
+      releasedLogOf c s.log = .ok roots ∧
         ∃ ls : Array Json, getD (getD coins "session") "log" = .arr ls ∧ ls.toList = s.log.map Json.str) ∨
       Break dev key label coins := by
   obtain ⟨r, cl, m, ls, lines, hr, hcl, hm, hv, hlog, hls, hch, hend, hroots, hres⟩ := challengePhaseOf_read h
@@ -745,11 +745,11 @@ theorem challengePhaseOf_run {c : LiveCommitment} {roots : Roots} {sid : String}
 
 /-- **A session `challengePhaseOf` accepts from a sample's record is a run the device closed**, or the finder outputs a break:
 `challengePhaseOf_run` without the log. -/
-theorem challengePhaseOf_bound {c : LiveCommitment} {roots : Roots} {sid : String}
+theorem challengePhaseOf_bound {c : LiveCommitment} {roots : Log} {sid : String}
     (h : challengePhaseOf key (getD (getD coins "session") "record") (getD (getD coins "session") "log")
       (getD (getD coins "session") "close") = .ok (c, roots, sid)) :
     (∃ s ∈ dev.runs key.pub, s.commitment = some c ∧ s.id = sid ∧ s.ended = none ∧
-      releasedRootsOf c s.log = .ok roots) ∨ Break dev key label coins := by
+      releasedLogOf c s.log = .ok roots) ∨ Break dev key label coins := by
   rcases challengePhaseOf_run (dev := dev) (label := label) h with ⟨s, hs, hc, hid, he, hr, -⟩ | b
   · exact .inl ⟨s, hs, hc, hid, he, hr⟩
   · exact .inr b
@@ -759,8 +759,8 @@ commitment and the roots its segment's coins are read against are a run's of the
 closed, the roots the ones that run's own release log shows. -/
 theorem sampleCoins_challengePhase {w : String} {after ξ : ByteArray} (h : sampleCoins key w label after coins = .ok ξ) :
     ∃ c roots, challengerStream c (getD coins "segment") after
-        (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ ∧
-      ((∃ s ∈ dev.runs key.pub, s.commitment = some c ∧ s.ended = none ∧ releasedRootsOf c s.log = .ok roots) ∨
+        (some roots) = .ok ξ ∧
+      ((∃ s ∈ dev.runs key.pub, s.commitment = some c ∧ s.ended = none ∧ releasedLogOf c s.log = .ok roots) ∨
         Break dev key label coins) := by
   obtain ⟨c, roots, ht, hs⟩ := drawCoins_ok h
   obtain ⟨a, -, hn⟩ := trustedChallengePhaseOf_ok ht

@@ -8,8 +8,8 @@ stream's event, ``result()`` is the `row_tables.StepRoots` the CPU path gives.  
 a queue to the loop's recorder (``LiveRecord.record``), in step order.  The step's root is what the challenger's coin for that
 step waits on; the next step's compute does not wait on it.
 
-The kernels compute each row's ``sha512/row-seg/v1`` digest, its salt from the step's ChaCha20 stream (`serving_rows.segment_salts`),
-its ``hm96-sha512`` string and tree leaf and its ``frame-v3-sha512`` leaf, then each table's tree and the step's tree over their
+The kernels compute each row's ``sha512/row-seg/v1`` digest, its salt from the step's fresh OS salts the host copies over
+with the layout, its ``hm96-sha512`` string and tree leaf and its ``frame-v3-sha512`` leaf, then each table's tree and the step's tree over their
 roots (`row_table.step_tree`): the row's digests with the GPU's one SHA-512 (`verity.commitments.cuda.SHA512`, through `ncp2.cuh`),
 the hm96 leaf and the frame's leaf, pad and node with the GPU's one row commitment (`verity.commitments.cuda.ROW_COMMIT`).  The host
 computes the domain ids, the rows' rank order and the tables' layout (`plan`).  `host_step` runs the same functions on the CPU
@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
+import os
 from collections import deque
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -33,6 +34,7 @@ from verity.commitments import row_table as RT
 from verity.commitments.identity import tagged_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import domain_message
+from verity.commitments.periods.rows import SALT_BYTES
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     ROW_TABLE_SEG_BYTES as SEG_BYTES,
 )
@@ -84,7 +86,8 @@ def table_domain_id(context: bytes, step: int, index: int, leaves: int) -> bytes
 class Plan:
     """A step's tables as the kernels take them: ``order`` (`row_tables.table_key`), ``tabs`` (T, 14) u64 (`row_table.cuh`'s
     ``Tab``, the codes and scales addresses zero until bound), ``perm`` each rank's batch row (tables in order), ``S`` segments,
-    ``N`` rows, ``tree`` the tables' padded widths summed, and ``args``."""
+    ``N`` rows, ``tree`` the tables' padded widths summed, ``salts`` the step's (192 bytes a row, `row_tables.StepRoots.salts`)
+    and ``args`` (its ``salts`` address set where the kernels run)."""
     engine_step: int
     order: tuple[str, ...]
     tabs: np.ndarray
@@ -92,6 +95,7 @@ class Plan:
     S: int
     N: int
     tree: int
+    salts: bytes
     args: Args
 
     @property
@@ -100,11 +104,12 @@ class Plan:
         return len(self.order) + table_width(len(self.order))
 
 
-def plan(context: bytes, engine_step: int, shapes: Mapping[str, tuple[Sequence[tuple[str, int]], int, int]], key: bytes) -> Plan:
+def plan(context: bytes, engine_step: int, shapes: Mapping[str, tuple[Sequence[tuple[str, int]], int, int]], *,
+         salts: bytes | None = None) -> Plan:
     """The layout of a step whose tables are ``shapes[op_path] = (rows, B, K)`` (``rows[b]`` batch row ``b``'s (request, token
-    row)), under ``context`` and the row key ``key``, as `row_tables.step_roots` orders, ranks, salts and domains them."""
-    if len(context) != 64 or len(key) != 32 or not shapes:
-        raise ValueError("a 64-byte context, a 32-byte row key and at least one table")
+    row)), under ``context``, as `row_tables.step_roots` orders, ranks, salts and domains them: fresh OS salts, or ``salts``."""
+    if len(context) != 64 or not shapes:
+        raise ValueError("a 64-byte context and at least one table")
     order = tuple(sorted(shapes, key=RTB.table_key))
     layout: list[tuple[int, int, int, int, int, int]] = []
     dids: list[bytes] = []
@@ -126,30 +131,34 @@ def plan(context: bytes, engine_step: int, shapes: Mapping[str, tuple[Sequence[t
         dids.append(table_domain_id(context, engine_step, i, b))
         row0, seg0, tree0 = row0 + b, seg0 + b * s, tree0 + w
     tabs = np.concatenate([np.asarray(layout, dtype=np.uint64), u64_words(b"".join(dids)).reshape(-1, 8)], axis=1)
+    ys = os.urandom(row0 * SALT_BYTES) if salts is None else bytes(salts)
+    if len(ys) != row0 * SALT_BYTES:
+        raise ValueError(f"step {engine_step}: {len(ys)} bytes of salts for its {row0} table rows, not {SALT_BYTES} a row")
     args = Args()
-    args.key[:] = np.frombuffer(key, dtype="<u4").tolist()
-    args.nonce[:] = np.frombuffer(engine_step.to_bytes(12, "little"), dtype="<u4").tolist()
     args.T = len(order)
     args.did[:] = u64_words(RT.step_domain(context, engine_step, len(order)).domain_id).tolist()
-    return Plan(engine_step, order, tabs, np.asarray([p for q in perms for p in q], dtype=np.uint32), seg0, row0, tree0, args)
+    return Plan(engine_step, order, tabs, np.asarray([p for q in perms for p in q], dtype=np.uint32), seg0, row0, tree0, ys, args)
 
 
 def _roots(p: Plan, out: np.ndarray) -> RTB.StepRoots:
     raw = np.asarray(out).view(np.uint64).astype(">u8").tobytes()
-    return RTB.StepRoots(p.engine_step, raw[:64], tuple((op, raw[64 * (i + 1):64 * (i + 2)]) for i, op in enumerate(p.order)))
+    return RTB.StepRoots(p.engine_step, raw[:64], tuple((op, raw[64 * (i + 1):64 * (i + 2)]) for i, op in enumerate(p.order)),
+                         p.salts)
 
 
-def host_step(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Sequence[tuple[str, int]], Any, Any]],
-              key: bytes) -> RTB.StepRoots:
+def host_step(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Sequence[tuple[str, int]], Any, Any]], *,
+              salts: bytes | None = None) -> RTB.StepRoots:
     """`row_tables.step_roots` by the kernels' functions on the CPU (`row_table_host.cpp`): the device path's twin."""
     held = {op: (np.ascontiguousarray(np.asarray(c, dtype=np.int8)), np.ascontiguousarray(np.asarray(s, dtype="<f4").reshape(-1)))
             for op, (_ids, c, s) in outputs.items()}
     for op, (c, s) in held.items():
         if c.ndim != 2 or s.shape != (c.shape[0],):
             raise ValueError(f"{op}: codes {c.shape} and scales {s.shape} are not (B, K) and (B,)")
-    p = plan(context, engine_step, {op: (outputs[op][0], *held[op][0].shape) for op in outputs}, key)
+    p = plan(context, engine_step, {op: (outputs[op][0], *held[op][0].shape) for op in outputs}, salts=salts)
     for i, op in enumerate(p.order):
         p.tabs[i, 0], p.tabs[i, 1] = held[op][0].ctypes.data, held[op][1].ctypes.data
+    ys = np.frombuffer(p.salts, dtype=np.uint32)
+    p.args.salts = ys.ctypes.data
     out = np.zeros(8 * (len(p.order) + 1), dtype=np.uint64)
     rc = host_lib().rt_step_host(p.tabs, p.perm, p.S, p.N, hm_tables(), leaf_prefixes(), ctypes.byref(p.args), out)
     if rc:
@@ -188,8 +197,8 @@ class Pending:
         return float(self.marks[0].elapsed_time(self.marks[1]))
 
 
-def step_roots(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Sequence[tuple[str, int]], Any, Any]], key: bytes, *,
-           stream: Any = None, timing: bool = False) -> Pending:
+def step_roots(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Sequence[tuple[str, int]], Any, Any]], *,
+               salts: bytes | None = None, stream: Any = None, timing: bool = False) -> Pending:
     """`row_tables.step_roots` of engine step ``engine_step``, hashed on ``stream`` (default: the device's side stream) after
     everything the current stream has enqueued so far, nothing waiting on the host: ``outputs[op_path] = (rows, codes, scales)``
     with ``codes`` (B, K) int8 and ``scales`` (B,) float32 CUDA tensors on one device."""
@@ -201,18 +210,21 @@ def step_roots(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Seq
         if c.device != dev or s.device != dev or c.dtype != torch.int8 or s.dtype != torch.float32 or c.dim() != 2 \
                 or s.shape != (c.shape[0],) or not c.is_contiguous() or not s.is_contiguous():
             raise ValueError(f"{op}: codes and scales are contiguous (B, K) int8 and (B,) float32 tensors on {dev}")
-    p = plan(context, engine_step, {op: (ids, int(c.shape[0]), int(c.shape[1])) for op, (ids, c, _s) in outputs.items()}, key)
+    p = plan(context, engine_step, {op: (ids, int(c.shape[0]), int(c.shape[1])) for op, (ids, c, _s) in outputs.items()},
+             salts=salts)
     d = DeviceLibrary.of(torch, dev.index)
     side = stream or d.stream
     for i, op in enumerate(p.order):
         p.tabs[i, 0], p.tabs[i, 1] = outputs[op][1].data_ptr(), outputs[op][2].data_ptr()
-    staged = torch.from_numpy(np.concatenate([p.tabs.reshape(-1).view(np.uint8), p.perm.view(np.uint8)])).pin_memory()
+    staged = torch.from_numpy(np.concatenate([p.tabs.reshape(-1).view(np.uint8), p.perm.view(np.uint8),
+                                              np.frombuffer(p.salts, dtype=np.uint8)])).pin_memory()
     written = torch.cuda.Event()
     written.record(torch.cuda.current_stream(dev))
     side.wait_event(written)
     t = len(p.order)
     with torch.cuda.stream(side):
         meta = staged.to(dev, non_blocking=True)
+        p.args.salts = meta.data_ptr() + 8 * TAB_WORDS * t + 4 * len(p.perm)
         dig, leaves, tree, step, out = (torch.empty(8 * n, dtype=torch.int64, device=dev)
                                         for n in (p.S, p.N, p.tree, p.step_scratch, t + 1))
         marks = (torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)) if timing else None

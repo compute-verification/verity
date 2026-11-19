@@ -174,7 +174,7 @@ def test_a_block_of_three_vus_is_refused(store, tmp_path):
     assert meta["vus_per_block"] == 3 and meta["out_net"] != "unit" and low.units.cut
     (tmp_path / "circuit.txt").write_text(text)
     IL.write_tables(tmp_path / "tables")
-    FC.write(text, s, 0, 3, tmp_path / "inst-3.bin", tmp_path / "pub-3.bin", salt_key=b"fail-closed/vus-per-block-3")
+    FC.write(text, s, 0, 3, tmp_path / "inst-3.bin", tmp_path / "pub-3.bin")
     p = subprocess.run([str(BIN), "statement", "--statement", SETS["flat", "gemm-coordinate"], "--circuit",
                         str(tmp_path / "circuit.txt"), "--public", str(tmp_path / "pub-3.bin"), "--tables",
                         str(tmp_path / "tables")], capture_output=True, text=True)

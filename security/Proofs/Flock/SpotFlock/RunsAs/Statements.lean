@@ -110,27 +110,27 @@ def PinHeld (h : Held) (m₂ : Msg) : Prop :=
 /-- **A passing round 2 holds the interior record to the replay sample as the model does** (`interiorOrderOk`). -/
 def InteriorOrderOfCheck : Prop :=
   ∀ (h : Held) (own : Spot.SecondStage.Own) (ss : Array Json) (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin),
-    OwnAgrees h own st rec draw c₀ → (Spot.SecondStage.check true own (some ss)).codes = #[] →
+    OwnAgrees h own st rec draw c₀ → (Spot.SecondStage.check own (some ss)).codes = #[] →
       Spot.SecondStage.interiorOrderOk (ownOf h st rec draw c₀) = true
 
 /-- **A passing round 2 holds the interior registration's names to the boundary record's as the model does**
 (`namesOk`, the model's once its `readsOk` reads it). -/
 def NamesOkOfCheck : Prop :=
   ∀ (h : Held) (own : Spot.SecondStage.Own) (ss : Array Json) (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin),
-    OwnAgrees h own st rec draw c₀ → (Spot.SecondStage.check true own (some ss)).codes = #[] →
+    OwnAgrees h own st rec draw c₀ → (Spot.SecondStage.check own (some ss)).codes = #[] →
       Spot.SecondStage.namesOk (ownOf h st rec draw c₀) = true
 
 /-- **A passing round 2 passes the model's code check of each statement** (`codesOk`) at its position. -/
 def CodesOkOfCheck : Prop :=
   ∀ (h : Held) (own : Spot.SecondStage.Own) (ss : Array Json) (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin),
-    OwnAgrees h own st rec draw c₀ → (Spot.SecondStage.check true own (some ss)).codes = #[] →
+    OwnAgrees h own st rec draw c₀ → (Spot.SecondStage.check own (some ss)).codes = #[] →
       ∀ t < ss.size, ∀ S, Spot.SecondStage.Stmt.ofJson? (ss.toList.getD t .null) = some S →
         codesOk h (ownOf h st rec draw c₀) t S = true
 
 /-- **A passing round 2 reads one statement a template**, where the templates' names are distinct. -/
 def CountOfCheck : Prop :=
   ∀ (h : Held) (own : Spot.SecondStage.Own) (ss : Array Json) (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin),
-    OwnAgrees h own st rec draw c₀ → NamesDistinct h → (Spot.SecondStage.check true own (some ss)).codes = #[] →
+    OwnAgrees h own st rec draw c₀ → NamesDistinct h → (Spot.SecondStage.check own (some ss)).codes = #[] →
       ss.size = h.ms.length
 
 /-- **A passing round 2 gives the model's `readsOk` at each template**, where the session statements are their
@@ -140,7 +140,7 @@ def ReadsOkOfCheck : Prop :=
     (st : Roots) (rec draw : Json),
     decode x = some st → jsonMsg m₁ = some rec → secondDraw h c₀ c₁ = some draw → OwnAgrees h own st rec draw c₀ →
       StmtsAre h m₂ ss → InputsNone own → PinHeld h m₂ →
-        (Spot.SecondStage.check true own (some ss)).codes = #[] →
+        (Spot.SecondStage.check own (some ss)).codes = #[] →
         ∀ t < ss.size, readsOk h t x m₁ (stmtAt h m₂ t) c₀ c₁ = true
 
 /-- **A passing round 2 gives the model's `stmtOkAt` at each template**, with the premises round 2 does not check. -/
@@ -149,7 +149,7 @@ def StmtOkAtOfCheck : Prop :=
     (st : Roots) (rec draw : Json),
     decode x = some st → jsonMsg m₁ = some rec → secondDraw h c₀ c₁ = some draw → OwnAgrees h own st rec draw c₀ →
       StmtsAre h m₂ ss → InputsNone own → TwoHolds h → RoundsHeld h m₂ → ScopeHeld h m₂ → PinHeld h m₂ →
-        (Spot.SecondStage.check true own (some ss)).codes = #[] →
+        (Spot.SecondStage.check own (some ss)).codes = #[] →
           ∀ t < ss.size, stmtOkAt h x m₁ (stmtAt h m₂ t) c₀ c₁ t = true
 
 /-- **A passing round 2 gives the model's statement check** (`stmtOk`), with the premises round 2 does not check. -/
@@ -158,7 +158,7 @@ def StmtOkOfCheck : Prop :=
     (st : Roots) (rec draw : Json),
     decode x = some st → jsonMsg m₁ = some rec → secondDraw h c₀ c₁ = some draw → OwnAgrees h own st rec draw c₀ →
       StmtsAre h m₂ ss → InputsNone own → TwoHolds h → NamesDistinct h → RecordsHeld h x m₁ →
-        RoundsHeld h m₂ → ScopeHeld h m₂ → PinHeld h m₂ → (Spot.SecondStage.check true own (some ss)).codes = #[] →
+        RoundsHeld h m₂ → ScopeHeld h m₂ → PinHeld h m₂ → (Spot.SecondStage.check own (some ss)).codes = #[] →
           stmtOk h x m₁ m₂ c₀ c₁ = true
 
 end SpotFlock.RunsAs.Round2

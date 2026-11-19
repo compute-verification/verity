@@ -2,7 +2,7 @@
 // FFMA2 and FMUL2 (fma.rn.f32x2, mul.rn.f32x2: two FP32 results a lane, which loads.class_of folds into FFMA) beside
 // FFMA and FMUL, and DMMA (mma.sync m8n8k4 f64, which no DS_tensor row lists) beside IMMA (mma.sync m16n8k32 s8) and
 // beside a saturated tcgen05.mma kind::i8 (dmmaU_tc, tcU_dmma).
-// Built and gated by ../opcode_probe/probe.py build --arch sm_100a (f32x2 is sm_100+); rates.sh is the job.
+// Built and gated by ../opcode_probe/probe.py build on a B200 (f32x2 is sm_100+); rates.sh is the job.
 //   s_<op>     1024 threads (8 warps a SMSP), 8 independent chains a thread; lane ops 64 an iteration, MMAs 8
 //   p_<x>_<y>  the same with x and y alternating (32 each): FFMA2's issue slots beside LOP3 and IMAD
 // A rate is warp instructions a SM a clock (probe.py); FP32 results a SM-clock are 32 x it (FFMA, FMUL) or 64 x it

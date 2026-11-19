@@ -46,13 +46,13 @@ import ctypes
 
 import numpy as np
 
+from verity_vllm.definitions.numerics import _jit
 from verity_vllm.definitions.numerics import fa2_model as _fa2
 from verity_vllm.definitions.numerics.fa2_model import (  # noqa: F401  (the shared pieces: tables, scale, build)
     HEAD_DIM,
     M_LOG2E,
     MufuTables,
     RowsResult,
-    _nudge,
     build,
     mufu_ex2,
     mufu_rcp,
@@ -127,8 +127,7 @@ def lib() -> ctypes.CDLL:
     global _lib
     if _lib is None:
         L = _fa2.lib()
-        L.fa3_rows.restype = None
-        L.fa3_rows.argtypes = L.fa2_rows.argtypes
+        _jit.declare(L, "fa3_rows", _fa2.ROWS_ARGTYPES)
         _lib = L
     return _lib
 
@@ -235,8 +234,7 @@ def split_plan(seqlens: list[int] | np.ndarray, H: int, KVH: int, D: int, *, num
 
 def attention_rows(
     q: np.ndarray, k: np.ndarray, v: np.ndarray, kvh: np.ndarray, col_limit: np.ndarray, n_block_max: np.ndarray,
-    softmax_scale: float, tables: MufuTables, *, debug: bool = False, variant: int = 0, scale_log2_nudge: int = 0,
-    kblock_n: int = KBLOCK_N,
+    softmax_scale: float, tables: MufuTables, *, kblock_n: int = KBLOCK_N,
 ) -> RowsResult:
     """``q`` (n, D) u16 words (one head's query per row); ``k``/``v`` (Lk, KVH, D) u16 canonical KV rows;
     ``kvh`` (n,) KV head per row; ``col_limit``/``n_block_max`` from :func:`kernel_geometry` (same ``kblock_n``)."""
@@ -259,47 +257,33 @@ def attention_rows(
     out = np.zeros((n, D), np.uint16)
     out_f32 = np.zeros((n, D), np.uint32)
     flags = np.zeros(n, np.uint8)
-    max_blocks = int(n_block_max.max(initial=1))
-    dbg = None
-    ptrs = [None] * 5
-    if debug:
-        dbg = {
-            "s": np.zeros((n, max_blocks * BN), np.uint32),
-            "p": np.zeros((n, max_blocks * BN), np.uint32),
-            "m": np.zeros((n, max_blocks), np.uint32),
-            "l": np.zeros((n, 4), np.uint32),
-            "o_pre": np.zeros((n, D), np.uint32),
-        }
-        ptrs = [dbg[x].ctypes.data for x in ("s", "p", "m", "l", "o_pre")]
     lib().fa3_rows(
         q.ctypes.data, k.ctypes.data, v.ctypes.data, KVH, D, kvh.ctypes.data, col_limit.ctypes.data,
-        n_block_max.ctypes.data, n, BN, ctypes.c_float(float(_nudge(scale_log2(softmax_scale), scale_log2_nudge))),
-        tables.ex2.ctypes.data, tables.rcp.ctypes.data, out.ctypes.data, out_f32.ctypes.data, *ptrs, max_blocks, int(variant),
-        flags.ctypes.data,
+        n_block_max.ctypes.data, n, BN, ctypes.c_float(float(scale_log2(softmax_scale))),
+        tables.ex2.ctypes.data, tables.rcp.ctypes.data, out.ctypes.data, out_f32.ctypes.data, flags.ctypes.data,
     )
     if (flags & 2).any():
         raise RuntimeError("fa3_rows refused the block size")
-    return RowsResult(out, out_f32, dbg, (flags & 1).astype(bool))
+    return RowsResult(out, out_f32, (flags & 1).astype(bool))
 
 
 def attention_call(
     q: np.ndarray, k: np.ndarray, v: np.ndarray, rows: np.ndarray, seqlen_q: int, seqlen_k: int, softmax_scale: float,
-    tables: MufuTables, *, debug: bool = False, variant: int = 0, scale_log2_nudge: int = 0, kblock_n: int | None = None,
-    launch_max_seqlen_q: int | None = None,
+    tables: MufuTables, *, kblock_n: int | None = None,
 ) -> RowsResult:
     """One kernel call for one sequence: ``q`` (len(rows), H, D) words for the query rows ``rows`` (0-based in the
     sequence), ``k``/``v`` (>= seqlen_k, KVH, D).  Returns (len(rows), H, D) words.  ``kblock_n`` defaults to the tile rule
-    :func:`kblock_n_for` on the LAUNCH's max_seqlen_q (``launch_max_seqlen_q``, default ``seqlen_q``: one sequence per launch)."""
+    :func:`kblock_n_for` on the LAUNCH's max_seqlen_q (one sequence per launch: ``seqlen_q``)."""
     nrow, H, D = q.shape
     KVH = k.shape[1]
     ngroups = H // KVH
-    BN = int(kblock_n) if kblock_n is not None else kblock_n_for(D, launch_max_seqlen_q if launch_max_seqlen_q is not None else seqlen_q, ngroups)
+    BN = int(kblock_n) if kblock_n is not None else kblock_n_for(D, seqlen_q, ngroups)
     rows = np.asarray(rows, dtype=np.int64)
     col_limit, nb = kernel_geometry(seqlen_q, seqlen_k, rows, BN)
     qf = q.reshape(nrow * H, D)
     kvh = (np.arange(H, dtype=np.int32) // ngroups)[None, :].repeat(nrow, 0).reshape(-1)
     res = attention_rows(qf, k[:seqlen_k], v[:seqlen_k], kvh, np.repeat(col_limit, H), np.repeat(nb, H), softmax_scale, tables,
-                         debug=debug, variant=variant, scale_log2_nudge=scale_log2_nudge, kblock_n=BN)
+                         kblock_n=BN)
     res.out = res.out.reshape(nrow, H, D)
     res.out_f32 = res.out_f32.reshape(nrow, H, D)
     res.nonfinite = res.nonfinite.reshape(nrow, H)
@@ -323,12 +307,9 @@ MEASURED = {
 def coverage(seqlen_q: int, seqlen_k: int, H: int, KVH: int, D: int, consts: dict, *, arch: str | None = None) -> str | None:
     """None when the call is inside the measured family, else the reason it is ``unresolved`` (the gate is what was
     measured, as in :func:`fa2_model.coverage`)."""
-    a = arch or consts.get("arch")
+    a = _fa2.arch_of(consts, arch)
     if a is None:
-        name = str(consts.get("gpu") or consts.get("gpu_name") or "")
-        a = "sm_90" if ("H100" in name or "H200" in name or "H800" in name) else None
-    if a is None:
-        return "arch not declared (consts.arch / consts.gpu); measured only on sm_90"
+        return "arch not declared (consts.arch); measured only on sm_90"
     if a not in MEASURED["arch"]:
         return f"arch {a} not measured (measured: {MEASURED['arch']})"
     if D not in SUPPORTED_HEAD_DIMS:

@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Core.Boolean
+public import Definitions.Core.Partition
 public import Mathlib.Data.Fintype.Card
 
 /-!
@@ -16,7 +17,7 @@ A transcript assigns a bit to every gate; only its committed entries are ever re
 inputs (`Partition.Correct`): evaluate `u`'s gates in order, reading every other gate from `X`
 (`Partition.localEval`), and compare with `X` on `u`'s committed gates.
 
-The lemmas about them (composition, congruence, refinement) are in `Proofs.Flock.Soundness.Audit.Circuit`.
+The lemmas about them (composition, congruence, refinement) are in `Proofs.Spot.Sampling.Circuit`.
 -/
 
 @[expose] public section
@@ -36,17 +37,17 @@ inductive Feeds : Fin C.N → Fin C.N → Prop
 
 end Verity.Boolean.Circuit
 
-namespace FlockSoundness.Audit
+namespace Spot.Sampling
 
 /-- A partition of a circuit's computed gates into `n` units; the input gates are the input unit
 (`none`). -/
-structure Partition (C : Verity.Boolean.Circuit) (n : ℕ) where
-  unit : Fin C.N → Option (Fin n)
-  input_iff : ∀ g, unit g = none ↔ (C.op g).isInput = true
+abbrev Partition (C : Verity.Boolean.Circuit) (n : ℕ) : Type := Verity.Partition C.toCircuit n
 
 namespace Partition
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
+
+def unit : Fin C.N → Option (Fin n) := Verity.Partition.unit P
 
 open Classical in
 /-- The committed wires: inputs, outputs, and every gate that a gate of another unit reads. -/
@@ -80,10 +81,13 @@ noncomputable def io (u : Fin n) : Finset (Fin C.N) :=
 /-! ## Refinement -/
 
 /-- `Pf` refines `Pc`: every fine unit lies inside one coarse unit, its `parent`. -/
-structure Refines {nf nc : ℕ} (Pf : Partition C nf) (Pc : Partition C nc) where
-  parent : Fin nf → Fin nc
-  sub : ∀ g, Pc.unit g = (Pf.unit g).map parent
+abbrev Refines {nf nc : ℕ} (Pf : Partition C nf) (Pc : Partition C nc) : Type :=
+  Verity.Partition.Refines Pf Pc
+
+def Refines.parent {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc} (R : Refines Pf Pc) :
+    Fin nf → Fin nc :=
+  Verity.Partition.Refines.parent R
 
 end Partition
 
-end FlockSoundness.Audit
+end Spot.Sampling

@@ -64,7 +64,7 @@ open Flock
 
 /-- A record's table check doesn't read its verifier. -/
 theorem goodTable_withV {Col T : Type} [DecidableEq Col] [Zero Col] (D : Claims.Flock.Deploy Coin Col T)
-    (W : Claims.Verifier Coin) (N : Claims.Msg → ℕ) (x : Claims.Msg) (C : Fin (N x) → Col) :
+    (W : Claims.Verifier Coin) (N : Hash.Msg → ℕ) (x : Hash.Msg) (C : Fin (N x) → Col) :
     Claims.Flock.GoodTable ({ D with V := W } : Claims.Flock.Deploy Coin Col T) N x C ↔
       Claims.Flock.GoodTable D N x C :=
   Iff.rfl
@@ -85,17 +85,17 @@ theorem deployPlainK_weight (keep : Bool → Bool) (rel : Readable.Parsed → Re
     (deployPlainK keep rel).weight = (deployPlain rel).weight :=
   deploy_withV_weight (deployPlain rel) (VK keep)
 
-theorem goodTable_plainK (keep : Bool → Bool) (rel : Readable.Parsed → Readable.Relation) (N : Claims.Msg → ℕ)
-    (x : Claims.Msg) (C : Fin (N x) → List 𝔽) :
+theorem goodTable_plainK (keep : Bool → Bool) (rel : Readable.Parsed → Readable.Relation) (N : Hash.Msg → ℕ)
+    (x : Hash.Msg) (C : Fin (N x) → List 𝔽) :
     Claims.Flock.GoodTable (deployPlainK keep rel) N x C ↔ Claims.Flock.GoodTable (deployPlain rel) N x C :=
   goodTable_withV (deployPlain rel) (VK keep) N x C
 
-theorem VK_k_pos (keep : Bool → Bool) (x : Claims.Msg) : 0 < (VK keep).k x := by
+theorem VK_k_pos (keep : Bool → Bool) (x : Hash.Msg) : 0 < (VK keep).k x := by
   rw [VK_k]
   exact V_k_pos false x
 
 /-- `plain_k_le` at `deployPlainK keep`. -/
-theorem plain_k_leK (keep : Bool → Bool) (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
+theorem plain_k_leK (keep : Bool → Bool) (rel : Readable.Parsed → Readable.Relation) (x : Hash.Msg) :
     ((deployPlainK keep rel).k x : ℝ) ≤ 2 * (deployPlainK keep rel).weight x := by
   rw [deployPlainK_k, deployPlainK_weight]
   exact plain_k_le rel x
@@ -103,7 +103,7 @@ theorem plain_k_leK (keep : Bool → Bool) (rel : Readable.Parsed → Readable.R
 /-- `slackEsc_fitsFork_plain` at `VK keep`. -/
 theorem slackEsc_fitsFork_plainK (keep : Bool → Bool) (rel : Readable.Parsed → Readable.Relation) {Ω : Type}
     (P : Claims.Prover Ω)
-    (x : Claims.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables false x).head? = some (spec, st))
+    (x : Hash.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables false x).head? = some (spec, st))
     {sch : FlockSoundness.Accounting.Schedule} (hsch : FlockSoundness.Accounting.fast100 st.m = some sch)
     (ev : Fin 2 → Fin sch.levels.length → Ω → (Fin ((VK keep).k x) → Coin) →
       (Fin ((VK keep).k x) → Coin) → Prop)
@@ -175,7 +175,7 @@ open Lean (Json)
 
 open Classical in
 /-- `PlainSimWrPAtDU` at `VK keep`. -/
-def PlainSimWrPAtDUK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
+def PlainSimWrPAtDUK (keep : Bool → Bool) {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -196,7 +196,7 @@ def PlainSimWrPAtDUK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec
           (fun r ℓ (i : Fin ((V false).k x)) =>
             Claims.Flock.slackW ((V false).k x) δ (plainJ (x := x) (tables_head_one h) hsch r ℓ).val i.val) i ≤
         2 * ((2 : ℝ) ^ l₀.logLen * l₀.queries)),
-    ∀ ω : Ω, ∃ (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire 65536 1 spec.mPts) (τ : Type)
+    ∀ ω : Ω, ∃ (N : Hash.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Hash.Msg → Wire 65536 1 spec.mPts) (τ : Type)
       (_ : Fintype τ) (_ : Nonempty τ) (P' : Claims.Prover (Ω × τ))
       (Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin)
       (_ : ∀ E : (Fin ((V false).k x) → Coin) → Prop, Claims.Pr (fun p => E (Φ p)) = Claims.Pr E)
@@ -224,7 +224,7 @@ def PlainSimWrPAtDUK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec
 
 open Classical in
 /-- `plainSimWrPAtD_of_partsU` at `VK keep`. -/
-theorem plainSimWrPAtD_of_partsUK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem plainSimWrPAtD_of_partsUK (keep : Bool → Bool) {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt}
     (h : tables false x = [(spec, st)]) {d : Json} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
@@ -268,7 +268,7 @@ theorem plainSimWrPAtD_of_partsUK (keep : Bool → Bool) {x : Claims.Msg} {s : C
       ((hf Ω P ω C hC r ℓ).trans_eq (by rw [plainΦ_eq hL]; rfl))
 
 /-- `plainSimWrPAtDU_at` at `VK keep`. -/
-theorem plainSimWrPAtDU_atK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plainSimWrPAtDU_atK (keep : Bool → Bool) {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "flock-leaf/sha512-unsalted")
@@ -284,7 +284,7 @@ theorem plainSimWrPAtDU_atK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.
     (fun _ _ _ P ω C _ r ℓ => plainAdv_leUK keep hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay P ω C r ℓ)
 
 /-- `plainSimWD_all` at `VK keep`. -/
-theorem plainSimWD_allK (keep : Bool → Bool) (x : Claims.Msg) : PlainSimWDK keep x :=
+theorem plainSimWD_allK (keep : Bool → Bool) (x : Hash.Msg) : PlainSimWDK keep x :=
   plainSimWD_of_partsK keep (plainSimClashAt_of_laterK keep (plainSimLaterClashAtK keep x))
     (plainSimForkLe_ofK keep (plainForkAlign_of_slotK keep (plainSlotAlign_of_schedK keep (plainSchedAlignK keep x))) (plainForkClashK keep x))
 

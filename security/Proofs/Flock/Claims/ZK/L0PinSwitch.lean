@@ -65,15 +65,15 @@ open FlockComplete.Replay (afterSq bind_go liftTM_ok)
 
 /-! ## A loop whose steps' states are left open -/
 
-theorem forIn_go_ex {σ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (T : ℕ → Flock.Transcript) (B : ℕ → Claims.Msg)
+theorem forIn_go_ex {σ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (T : ℕ → Flock.Transcript) (B : ℕ → Hash.Msg)
     (L n : ℕ)
-    (hbody : ∀ i < n, ∀ (s : σ) (l : Array Claims.Msg), l.size = L + i →
+    (hbody : ∀ i < n, ∀ (s : σ) (l : Array Hash.Msg), l.size = L + i →
       ∃ s', ((body i s).run (T i)).go l = (.ok (.yield s', T (i + 1)), l.push (B i)))
-    (s₀ : σ) (l : Array Claims.Msg) (hl : l.size = L) :
+    (s₀ : σ) (l : Array Hash.Msg) (hl : l.size = L) :
     ∃ s, ((forIn [:n] s₀ body).run (T 0)).go l = (.ok (s, T n), l ++ ((List.range n).map B).toArray) := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range']
   simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
-  suffices h : ∀ k a (s : σ) (l : Array Claims.Msg), a + k ≤ n → l.size = L + a →
+  suffices h : ∀ k a (s : σ) (l : Array Hash.Msg), a + k ≤ n → l.size = L + a →
       ∃ s', ((forIn (List.range' a k) s body).run (T a)).go l =
         (.ok (s', T (a + k)), l ++ ((List.range' a k).map B).toArray) by
     simpa [List.range_eq_range'] using h n 0 s₀ l (by omega) (by simpa using hl)
@@ -94,11 +94,11 @@ theorem forIn_go_ex {σ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (T
 /-- **A loop, then a continuation**: what holds of the continuation's run from every state the loop may end in holds
 of the whole. -/
 theorem forIn_bind_go {σ β : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (T : ℕ → Flock.Transcript)
-    (B : ℕ → Claims.Msg) (L n : ℕ) {t₀ : Flock.Transcript} (hT : T 0 = t₀)
-    (hbody : ∀ i < n, ∀ (s : σ) (l : Array Claims.Msg), l.size = L + i →
+    (B : ℕ → Hash.Msg) (L n : ℕ) {t₀ : Flock.Transcript} (hT : T 0 = t₀)
+    (hbody : ∀ i < n, ∀ (s : σ) (l : Array Hash.Msg), l.size = L + i →
       ∃ s', ((body i s).run (T i)).go l = (.ok (.yield s', T (i + 1)), l.push (B i)))
-    (s₀ : σ) (f : σ → TMW PS β) (l : Array Claims.Msg) (hl : l.size = L)
-    (P : Except String (β × Flock.Transcript) × Array Claims.Msg → Prop)
+    (s₀ : σ) (f : σ → TMW PS β) (l : Array Hash.Msg) (hl : l.size = L)
+    (P : Except String (β × Flock.Transcript) × Array Hash.Msg → Prop)
     (hf : ∀ s, P (((f s).run (T n)).go (l ++ ((List.range n).map B).toArray))) :
     P (((forIn [:n] s₀ body >>= f).run t₀).go l) := by
   obtain ⟨s, hs⟩ := forIn_go_ex body T B L n hbody s₀ l hl
@@ -124,12 +124,12 @@ def rsLoopT (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t
   | i + 1 => afterSq (rsPre sv i (rsLoopT sv coin L t₀ i)) 2 7 (coin (L + i))
 
 /-- The body the switch's round `i` sends. -/
-def rsLoopB (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Flock.Transcript) (i : ℕ) : Claims.Msg :=
+def rsLoopB (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Flock.Transcript) (i : ℕ) : Hash.Msg :=
   Claims.toMsg (framed (rsPre sv i (rsLoopT sv coin L t₀ i)) 2 7)
 
 /-- **The switch's bodies** after the pending bytes `P`, of `N` claims: round `i < N` the ring switch's label, the
 claim's switched vector and a squeeze of `7`, the first after `P` and the opening's label; round `N` `γ`'s squeeze. -/
-def rsBody (sv : ℕ → Array F128) (N : ℕ) (P : List UInt8) (i : ℕ) : Claims.Msg :=
+def rsBody (sv : ℕ → Array F128) (N : ℕ) (P : List UInt8) (i : ℕ) : Hash.Msg :=
   if i < N then
     (if i = 0 then P ++ (Frame.label "flock-pcs-open-batch-v0".toUTF8).enc else []) ++
       encs [.label "flock-ring-switch-v0".toUTF8, .vec (sv i).toList] ++ (Frame.sq 2 7).enc
@@ -163,7 +163,7 @@ theorem rsLast (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ)
 /-- **The cut ring switch, answered by `asksCut` with room for its asks**: from `l`, with `claims.size + 1` asks before
 round `n`, it returns, having sent `rsBody` after `t`'s pending bytes, and leaves nothing pending. -/
 theorem ringSwitchCut_bodies (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → Array F128)
-    (claims : Array _root_.Flock.Claim) (hN : claims.size ≠ 0) (t : Flock.Transcript) (l : Array Claims.Msg)
+    (claims : Array _root_.Flock.Claim) (hN : claims.size ≠ 0) (t : Flock.Transcript) (l : Array Hash.Msg)
     (hl : l.size + claims.size + 1 ≤ n) :
     ∃ res t' L', ((ringSwitchCut (asksCut coin n) sv claims).run t).go l = (.ok (res, t'), L') ∧
       L'.toList = l.toList ++ (List.range (claims.size + 1)).map (rsBody sv claims.size t.pending.data.toList) ∧

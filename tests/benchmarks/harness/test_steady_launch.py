@@ -6,9 +6,7 @@ import json
 
 import pytest
 from steady_standins import (
-    ART,
     FULL,
-    IN_ART,
     OWN,
     PIN,
     QUARTER,
@@ -26,7 +24,7 @@ from test_steady import DROP, made
 from verity_bench import jobs, served_table
 from verity_bench import steady_plan as P
 from verity_bench import steady_spec as SP
-from verity_bench.cli import _parser, main
+from verity_bench.cli import main
 from verity_bench.tool import STEADY_POINT
 
 
@@ -45,8 +43,9 @@ def test_a_spec_names_a_type_at_its_full_statement_and_a_quarter_side_by_side_an
     plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None))
     assert len({item.identity for item in plan.points}) == 4, "the statement's units are in a point's identity"
     commands = []
-    assert P.dispatch(plan, root / path, root=root, direct="vy-spot-glm53",
-                      execute=lambda command, cwd: commands.append(command) or 0) == 0
+    for item in plan.points:
+        assert jobs.dispatch(plan, root / path, point=item.point.id, root=root,
+                             execute=lambda command, cwd: commands.append(command) or 0) == 0
     assert [STEADY_POINT.parse(command) for command in commands] == [
         {"spec": path, "point": item.point.id, "identity": item.identity} for item in plan.points]
     assert [SP.point(spec, STEADY_POINT.parse(command)["point"]).row.n for command in commands] == [8, 8, 2, 4]
@@ -166,150 +165,69 @@ def test_a_spec_outside_the_specs_directory_or_without_history_is_looked_up_on_t
     assert [point.passing_run for point in P.make_plan(elsewhere, root=root, local_only=True).points] == [None] * 3
 
 
-def test_run_launches_each_point_without_a_passing_run_through_a_gpu_slot_of_the_node(tmp_path):
-    """The command is the slot-only launcher's form; the node side takes the card itself, so no lease wraps it."""
+def _ran(plan, path, root, **named) -> list[list[str]]:
+    commands: list[list[str]] = []
+    assert jobs.dispatch(plan, path, root=root, execute=lambda command, cwd: commands.append(list(command)) or 0,
+                         **named) == 0
+    return commands
 
-    from research.pods.nebius.slot_only import through_slot
 
+def test_run_runs_a_point_without_a_passing_run_here_and_no_lease_wraps_it(tmp_path, monkeypatch):
+    """The point's launcher in this process's run, with the spec's env and setup: the node side takes the card itself,
+    so no lease wraps it, and a point a passing run stands for doesn't run."""
+
+    monkeypatch.delenv("GPU_LEASE_ON", raising=False)
     root, path = tree(tmp_path)
     plan = P.make_plan(root / path, root=root,
                        lookup=lambda spec, item, identity: ("r-passed", None) if item.id == "gemm64-k1" else (None, "why"))
     assert [point.passing_run for point in plan.points] == ["r-passed", None, None]
-    commands = []
-    assert P.dispatch(plan, root / path, root=root, direct="vy-spot-glm53",
-                      execute=lambda command, cwd: commands.append((list(command), cwd)) or 0) == 0
-    assert [cwd for _, cwd in commands] == [root, root]
-    for (command, _), item in zip(commands, plan.points[1:], strict=True):
-        flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
-        assert flags[:4] == ["research", "run", "--on", "vy-spot-glm53"] and "--queue" not in flags and "--gpus" not in flags
-        assert flags[flags.index("--source") + 1] == str(root) and flags[flags.index("--cwd") + 1] == "source"
-        assert flags[flags.index("--timeout") + 1] == f"{jobs.DIRECT_WAIT_S + 5400}" and "--require-result" in flags
-        assert flags[flags.index("--tool") + 1] == "verity_bench.tool:STEADY_POINT"
-        assert [flags[i + 1] for i, token in enumerate(flags) if token == "--env"] == [
-            "RUST_MIN_STACK=1073741824", f"VERITY_BENCH_SETUP={SETUP}"]
-        assert through_slot(workload) and "gpu-lease" not in command
-        assert workload[:4] == ["env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/check/slot.py"]
-        assert workload[workload.index("--wait-max") + 1] == f"{jobs.DIRECT_WAIT_S}"
-        assert workload[workload.index("--run-max") + 1] == "5400"
-        assert workload[workload.index("--", 4) + 1:] == [
-            "bash", "benchmarks/harness/steady_point.sh", "--spec", path, "--point", item.point.id,
-            "--identity", item.identity]
+    assert _ran(plan, root / path, root, point="gemm64-k1") == []
+    for item in plan.points[1:]:
+        [command] = _ran(plan, root / path, root, point=item.point.id)
+        assert command == ["env", "RUST_MIN_STACK=1073741824", f"VERITY_BENCH_SETUP={SETUP}", "bash",
+                           "benchmarks/harness/steady_point.sh", "--spec", path, "--point", item.point.id,
+                           "--identity", item.identity]
         assert STEADY_POINT.parse(command) == {"spec": path, "point": item.point.id, "identity": item.identity}
-
-
-def test_a_run_given_the_booked_periods_end_never_ends_after_it_and_one_that_could_not_finish_is_not_launched(tmp_path):
-    """`run --end`: slot.py waits only as long as the spec's max_minutes and slot.py's last try (`SLOT_GRACE_S`) still
-    fit before the end, the run's timeout is that wait and max_minutes, and a point whose max_minutes don't fit at its
-    launch is refused, saying so."""
-
-    root, path = tree(tmp_path)
-    plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, "why"))
-    commands = []
-    assert P.dispatch(plan, root / path, root=root, direct="vy-spot-glm53", end=1_007_200, now=lambda: 1_000_000.4,
-                      execute=lambda command, cwd: commands.append(list(command)) or 0) == 0
-    assert len(commands) == 3
-    for command in commands:
-        flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
-        assert flags[flags.index("--timeout") + 1] == "7139"
-        assert workload[workload.index("--wait-max") + 1] == "1739"
-        assert workload[workload.index("--run-max") + 1] == "5400"
-    launched = []
-    with pytest.raises(ValueError, match=r"up to 90 min .* don't fit before its end, 1970-01-12T15:16:40Z: it would "
-                                         r"not finish, so it isn't launched"):
-        P.dispatch(plan, root / path, root=root, direct="vy-spot-glm53", end=1_005_400, now=lambda: 1_000_000.0,
-                   execute=lambda command, cwd: launched.append(command) or 0)
-    assert launched == []
-    assert _parser().parse_args(["run", "x", "--direct", "n", "--end", "1970-01-12T15:46Z"]).end == 1_007_160
-    with pytest.raises(SystemExit):
-        _parser().parse_args(["run", "x", "--end", "15:46"])
+    launch = ["uv", "run", "verity-bench", "run", str(root / path), "--point", "gemm64-k2"]
+    monkeypatch.chdir(root)
+    assert STEADY_POINT.parse(launch)["identity"] == plan.points[1].identity
 
 
 def test_a_point_named_again_is_launched_though_a_passing_run_stands_for_it_and_plan_says_so(tmp_path):
     """A labelled row stands for a point by its pin, provers and cores, so without `--again` a first run of the harness
-    at a point the record already has is never launched."""
+    at a point the record already has never runs."""
 
     root, path = tree(tmp_path)
     plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: ("r-passed", None))
-    ran = []
-    assert P.dispatch(plan, root / path, root=root, direct="vy-spot-glm53", execute=lambda c, cwd: ran.append(c) or 0) == 0
-    assert ran == [], "every point passed: nothing is launched"
+    assert [_ran(plan, root / path, root, point=item.point.id) for item in plan.points] == [[]] * 3
     again = jobs.again(plan, ["gemm64-k2"])
     assert [item.again for item in again.points] == [False, True, False]
     assert [point.get("again") for point in jobs.plan_json(again)["points"]] == [None, "passed by r-passed", None]
     assert [point["passing_run"] for point in jobs.plan_json(again)["points"]] == ["r-passed"] * 3, "nothing superseded"
-    assert P.dispatch(again, root / path, root=root, direct="vy-spot-glm53", execute=lambda c, cwd: ran.append(c) or 0) == 0
-    assert [STEADY_POINT.parse(command)["point"] for command in ran] == ["gemm64-k2"]
+    assert [STEADY_POINT.parse(command)["point"] for command in _ran(again, root / path, root)] == ["gemm64-k2"]
     with pytest.raises(ValueError, match=r"--again gemm64-k3: not a point of spec 'steady', whose points are gemm64-k1, "):
         jobs.again(plan, ["gemm64-k3"])
     with pytest.raises(SystemExit):
-        main(["run", path, "--direct", "vy-spot-glm53", "--again"])
+        main(["run", path, "--again"])
 
 
-def test_a_point_on_a_booked_card_is_launched_through_the_booked_slot_and_names_the_card(tmp_path):
-    """The calendar books a card and its slot's cores; the first free slot, and either card of its NUMA node, may be
-    another lane's booking."""
+def test_a_point_on_a_booked_card_names_the_card_to_its_node_side(tmp_path, monkeypatch):
+    """The calendar books a card: GPU_LEASE_ON, one index, which the node side's lease asks for alone; the first free
+    card of the slot's NUMA node may be another lane's booking."""
 
+    monkeypatch.setenv("GPU_LEASE_ON", "3")
     root, path = tree(tmp_path)
     plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None))
-    ran = []
-    assert P.dispatch(plan, root / path, root=root, direct="vy-spot-glm53", card=3, cores="34-43",
-                      execute=lambda c, cwd: ran.append(c) or 0) == 0
-    for command, item in zip(ran, plan.points, strict=True):
-        workload = command[command.index("--") + 1:]
-        assert workload[:7] == ["taskset", "-c", "34-43", "env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3",
-                                "tools/check/slot.py"]
-        assert workload[workload.index("--", 7) + 1:] == [
+    for item in plan.points:
+        [command] = _ran(plan, root / path, root, point=item.point.id)
+        assert command[command.index("bash"):] == [
             "bash", "benchmarks/harness/steady_point.sh", "--spec", path, "--point", item.point.id,
             "--identity", item.identity, "--card", "3"]
         assert STEADY_POINT.parse(command) == {"spec": path, "point": item.point.id, "identity": item.identity}
-    with pytest.raises(ValueError, match=r"--card 3 needs --cores, the booked slot's cores"):
-        P.dispatch(plan, root / path, root=root, direct="vy-spot-glm53", card=3, execute=lambda c, cwd: 0)
 
 
-def test_a_point_whose_statement_is_in_the_store_is_launched_with_a_read_only_key_to_it(tmp_path):
-    """Only that point's run reads the store: a row staged in the run, or from a directory on the node, gets no key."""
-
-    root, path = tree(tmp_path)
-    spec = root / path
-    spec.write_text(spec.read_text().replace('staged = "/dev/shm/head"', f'staged = "{ART}/{IN_ART}"'))
-    plan = P.make_plan(spec, root=root, lookup=lambda spec, item, identity: (None, None))
-    assert [point.point.row.stored for point in plan.points] == [None, None, (ART, IN_ART)]
-    commands = []
-    assert P.dispatch(plan, spec, root=root, direct="vy-spot-glm53",
-                      execute=lambda command, cwd: commands.append(command) or 0) == 0
-    flags = [command[:command.index("--")] for command in commands]
-    assert ["--store-read" in f for f in flags] == [False, False, True]
-    assert STEADY_POINT.parse(commands[2])["point"] == plan.points[2].point.id
-
-
-def test_a_launch_that_fails_stops_the_launches_after_it(tmp_path):
+def test_run_refuses_a_steady_spec_of_several_points_unless_one_is_named(tmp_path):
     root, path = tree(tmp_path)
     plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None))
-    ran = []
-
-    def execute(command, cwd):
-        ran.append(command[command.index("--point") + 1])
-        return 0 if len(ran) < 2 else 75
-
-    assert P.dispatch(plan, root / path, root=root, direct="vy-spot-glm53", execute=execute) == 75
-    assert ran == ["gemm64-k1", "gemm64-k2"]
-
-
-def test_run_refuses_a_steady_spec_without_a_node_a_node_without_slots_and_a_spec_without_a_bound(tmp_path):
-    root, path = tree(tmp_path)
-    plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None))
-    launched = []
-
-    def execute(command, cwd):
-        launched.append(command)
-        return 0
-
-    with pytest.raises(ValueError, match="is a steady-state spec.*`verity-bench run SPEC --direct NODE`"):
-        P.dispatch(plan, root / path, root=root, execute=execute)
-    with pytest.raises(ValueError, match="--direct vy-nebius-cpu-1: not a GPU node with gpu slots"):
-        P.dispatch(plan, root / path, root=root, direct="vy-nebius-cpu-1", execute=execute)
-    unbounded, path = tree(tmp_path, spec={"admission": None}, name="unbounded")
-    plan = P.make_plan(unbounded / path, root=unbounded, lookup=lambda spec, item, identity: (None, None))
-    with pytest.raises(ValueError, match="admission max_minutes"):
-        P.dispatch(plan, unbounded / path, root=unbounded, direct="vy-spot-glm53", execute=execute)
-    assert launched == []
+    with pytest.raises(ValueError, match=r"has 3 points \(gemm64-k1, gemm64-k2, head_block-k2\) and a run runs one"):
+        _ran(plan, root / path, root)

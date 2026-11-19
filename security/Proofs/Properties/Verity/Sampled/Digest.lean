@@ -158,7 +158,7 @@ theorem bind_hash_eq {k : Verity.Registration.Composite} {s s' : Verity.Sent} (h
 /-! ## The commitment's cut -/
 
 /-- **The message `bind` hashes over the digests `ds`**, as a message a cut reveals. -/
-def bindMsg (k : Verity.Registration.Composite) (ds : List (String × ByteArray)) : Claims.Msg :=
+def bindMsg (k : Verity.Registration.Composite) (ds : List (String × ByteArray)) : Hash.Msg :=
   (Properties.Composition.bindMessage (Verity.verifier k).id ds).data.toList
 
 /-- Two lists bound into one commitment with one message are one. -/
@@ -224,7 +224,7 @@ theorem bindsOf_eq {k : Verity.Registration.Composite} {s : Verity.Sent} {ds : L
 
 /-- **What a play reveals for the commitment `c`**: where what the prover sent has the commitment `c` and binds a list
 of digests (`bindsOf`), the message `bind` hashed over it (`bindMsg`); else none. -/
-noncomputable def bindReveal (k : Verity.Registration.Composite) (c : ByteArray) (o : Exchange) : Option Claims.Msg :=
+noncomputable def bindReveal (k : Verity.Registration.Composite) (c : ByteArray) (o : Exchange) : Option Hash.Msg :=
   if o.sent.commitment = c then (bindsOf k o.sent).map (bindMsg k) else none
 
 theorem bindReveal_of {k : Verity.Registration.Composite} {c : ByteArray} {o : Exchange}
@@ -232,7 +232,7 @@ theorem bindReveal_of {k : Verity.Registration.Composite} {c : ByteArray} {o : E
     bindReveal k c o = some (bindMsg k ds) := by
   rw [bindReveal, if_pos hc, bindsOf_eq.mpr hB, Option.map_some]
 
-theorem bindReveal_some {k : Verity.Registration.Composite} {c : ByteArray} {o : Exchange} {w : Claims.Msg}
+theorem bindReveal_some {k : Verity.Registration.Composite} {c : ByteArray} {o : Exchange} {w : Hash.Msg}
     (h : bindReveal k c o = some w) :
     o.sent.commitment = c ∧ ∃ ds, BindsAt k o.sent ds ∧ w = bindMsg k ds := by
   rw [bindReveal] at h
@@ -246,7 +246,7 @@ variable (V : Vocab d α) (k : Verity.Registration.Composite) (θ : ByteArray) (
 
 /-- **The commitment's cut**: at the play's start, where the commitment `c` is fixed, the message `bind` hashed over
 the digests each play binds into it (`bindReveal`). -/
-noncomputable def bindCut : DigestCut Claims.Msg (V.game θ F c) := .here (bindReveal k c)
+noncomputable def bindCut : DigestCut Hash.Msg (V.game θ F c) := .here (bindReveal k c)
 
 /-- **The commitment's cut agrees under SHA-512**: each play binds its digests into the one commitment
 (`bind_hash_eq`). -/
@@ -256,7 +256,7 @@ theorem bindCut_agrees : (bindCut V k θ F c).Agrees sha512Msg := fun _ _ _ _ h 
   rw [bindMsg, bindMsg, sha512Msg_bytes, sha512Msg_bytes, bind_hash_eq (hc.trans hc'.symm) hB hB']
 
 /-- **The message `σ`'s plays most likely reveal at the commitment's cut** (`revealMode`). -/
-noncomputable def bindMode (σ : Strategy (V.game θ F c)) : Claims.Msg :=
+noncomputable def bindMode (σ : Strategy (V.game θ F c)) : Hash.Msg :=
   revealMode (bindReveal k c) (V.game θ F c) σ
 
 /-! ## The clause -/

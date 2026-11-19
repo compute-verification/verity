@@ -55,7 +55,7 @@ open RecDeploy (RecIns insO setupO readOfO fullSampleO actO nextO VO runOfO cols
   deployZkRec)
 
 /-- **The outer verifier's refusal after the checks**: the verdict's last refusals (`fullSampleO`). -/
-def wrapO (x : Claims.Msg) (f : Final) (v : Flock.V Unit) : Flock.V Unit :=
+def wrapO (x : Hash.Msg) (f : Final) (v : Flock.V Unit) : Flock.V Unit :=
   if fullSampleO x f then v else .error "rec: refused by the verdict's last refusals (fullSample, innerSampled, denseOnly)"
 
 /-- Under `--zk` the recursive setup passes every table's `Zk.shapeOk`. -/
@@ -116,14 +116,14 @@ recursive setup succeeds, and the verdict's last refusals after the checks (`wra
     · obtain ⟨r, rfl, hr⟩ := h
       exact recIns_shapeOk hr hz
 
-theorem setupOf_SO (x : Claims.Msg) : @Gen.setupOf SO true x = (setupO x).map fun p => (p.1.base, p.2) := rfl
+theorem setupOf_SO (x : Hash.Msg) : @Gen.setupOf SO true x = (setupO x).map fun p => (p.1.base, p.2) := rfl
 
-theorem checks_SO (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) (f : Final) :
+theorem checks_SO (s : Ins) (spec : SessionSpec) (x : Hash.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
+    (mids : List (Hash.Msg × Coin)) (f : Final) :
     @Gen.checks SO true s spec x link c₁ mids f = wrapO x f (checks true s spec x link c₁ mids f) := rfl
 
 /-- **The step at `SO` is the outer verifier's** (`actO`). -/
-theorem act_SO (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : @Gen.act SO true x as cs = actO x as cs := by
+theorem act_SO (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin) : @Gen.act SO true x as cs = actO x as cs := by
   unfold Gen.act actO
   rw [setupOf_SO]
   rcases setupO x with _ | ⟨i, spec, sts⟩ <;> rfl
@@ -141,8 +141,8 @@ theorem outOf_bind {β : Type} (m : Claims.OCV β) (G : β → Claims.OCV Unit) 
 
 /-- **The decision at `SO`** is the decision, refused where the verdict's last refusals fail (`nextO`'s decide
 step). -/
-theorem outOf_decision_SO (s : Ins) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) (f : Final) :
+theorem outOf_decision_SO (s : Ins) (x : Hash.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
+    (mids : List (Hash.Msg × Coin)) (f : Final) :
     outOf (@Gen.decision SO true s x link c₁ mids f) =
       (outOf (decision true s x link c₁ mids f)).bind fun o => .ret (if fullSampleO x f then o else .rej) := by
   unfold Gen.decision decision
@@ -166,7 +166,7 @@ theorem outOf_decision_SO (s : Ins) (x : Claims.Msg) (link : List ByteArray × L
       cases fullSampleO x f <;> rfl
 
 /-- **The verifier's next message at `SO` is the outer verifier's** (`nextO`). -/
-theorem next_SO (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) :
+theorem next_SO (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin) :
     @Gen.next SO true x as cs = nextO x as cs := by
   unfold Gen.next nextO
   rw [act_SO]
@@ -206,7 +206,7 @@ theorem cols_SO : @Gen.cols SO true = colsO := by
   rw [runOf_SO]
   cases runOfO s j <;> rfl
 
-theorem tables_SO (x : Claims.Msg) : @Gen.tables SO true x = tablesO x := by
+theorem tables_SO (x : Hash.Msg) : @Gen.tables SO true x = tablesO x := by
   unfold Gen.tables tablesO
   rw [setupOf_SO]
   rcases setupO x with _ | ⟨i, spec, sts⟩ <;> rfl

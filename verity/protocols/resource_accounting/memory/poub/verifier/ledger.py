@@ -69,6 +69,10 @@ def _rate(x: object, what: str) -> float:
 
 
 TIER_KEYS = ("devices", "spec_bytes_per_s", "read_bytes_per_s", "chip_bytes")
+NODE_KEYS = ("chip_bytes", "disk_burst_bytes", "disk_bytes_per_s", "gpu_write_bytes_per_s", "host_write_bytes_per_s",
+             "link_burst_bytes", "link_bytes_per_s", "read_bytes_per_s", "rebuild_burst_bytes", "spec_bytes_per_s",
+             "squarings_per_s", "tiers")
+"""`Node.to_json`'s keys."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,7 +107,7 @@ class Node:
     maximal rebuild batch, one maximal disk read and one link burst.  A burst of 0 states the rate down to one
     nanosecond, which no device with a nonzero rate meets.  Beside the read ceilings are the write ceilings, one GPU's
     and the host DRAM's (bytes a second), how fast a fill can write labels into each tier, which a wipe's timing reads;
-    the node states no DPU's (`timing.HOST_WRITE_BYTES_PER_S`).  `stated` takes them from the node's `timing.Figures`,
+    the node states no DPU's.  `stated` takes them from the node's `timing.Figures`,
     whose read rate a reported one can only raise.  `tiers` are the memory tiers R and S_chip are summed over (`Tier`),
     for what states the node or splits its R by tier; the ledger's terms read the sums."""
 
@@ -181,7 +185,7 @@ class Node:
     def of_json(cls, j: object) -> Node:
         """The node's capacities handed in as a parameter, in `to_json`'s form, which the ledger publishes them in:
         exactly its keys, and each tier's, each value as `__post_init__` holds it."""
-        keys = sorted(cls.stated(timing.RTX_PRO_6000_NODE).to_json())
+        keys = sorted(NODE_KEYS)
         if type(j) is not dict or sorted(j) != keys:
             raise ValueError(f"a node's capacities are an object of exactly {', '.join(keys)}")
         if type(j["squarings_per_s"]) is not dict:
@@ -362,6 +366,7 @@ class Gamma:
                 "error": {"draw": self.draw.to_json(), "horizon": self.error_horizon, "sketch": self.sketch,
                           "windows": self.error},
                 "gamma": self.gamma, "gamma_horizon": self.gamma_horizon,
+                **({} if self.ledger.probation is None else {"probation": self.ledger.probation}),
                 "windows": [{"gamma": w.gamma, "gamma_horizon": w.gamma_horizon, "span_ns": w.span_ns,
                              "window": w.window} for w in self.windows]}
 
@@ -394,7 +399,7 @@ def _fixed(record: audit.Record, lg: audit.GammaTerms, chip_bytes: int,
             raise ValueError(f"fixed window {m} certifies {reads} bytes read, more than the capacity allows in its "
                              "span: the capacity is understated")
         parts = [(lg.windows[t], sum(record.windows[t].lengths[i] for i in js)) for t, js in passes.items()]
-        credited = sum(w.credited(False)[i] for w, i in ps) * b
+        credited = sum(w.credited(lg.steering is not None)[i] for w, i in ps) * b
         named = sum(audit.named_bits(w.lengths[i]) + audit.SLACK_LOG2 for w, i in ps)
         out.append(audit.WindowLedger(
             m, v - u, timing=1 - credited / whole, sample=charged(parts, "sample") / whole,
@@ -405,12 +410,17 @@ def _fixed(record: audit.Record, lg: audit.GammaTerms, chip_bytes: int,
 
 
 def gamma(record: audit.Record, node: Node, capacity_bytes_per_s: float, *,
-          wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound) -> Gamma:
+          wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound,
+          schedule: audit.Scheduled | None = None) -> Gamma:
     """γ against `capacity_bytes_per_s`, over the registered store only (nothing appended after the codec seed is
     credited), with the node's S_chip and squaring ceiling (`audit.ledger`), and per window as declared (`windows`):
-    a paced record's needs each root's arrival, in order."""
+    a paced record's needs each root's arrival, in order.  A refresh record (`audit.Record.refresh`) with its
+    session's schedule check (`schedule`) also credits its appended blocks, with no carrier, and reports its
+    probation share beside γ (`audit.GammaTerms.probation`)."""
+    if schedule is not None and not record.refresh:
+        raise ValueError("only a refresh record credits appended blocks on its schedule check alone")
     lg = audit.ledger(record, capacity_bytes_per_s=capacity_bytes_per_s, chip_bytes=node.chip_bytes,
-                      rebuild=node.rebuild(record.codec), wrong=wrong)
+                      rebuild=node.rebuild(record.codec), wrong=wrong, schedule=schedule)
     ws = lg.windows if record.pace is None else _fixed(record, lg, node.chip_bytes, capacity_bytes_per_s)
     return Gamma(capacity_bytes_per_s, lg, ws, float(sketch(record)), draw(record))
 
@@ -527,13 +537,15 @@ class Declared:
 
 
 def declared(record: audit.Record, node: Node, *,
-             wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound) -> Declared:
+             wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound,
+             schedule: audit.Scheduled | None = None) -> Declared:
     """`record`'s declared outputs on `node`.  `wrong` is each window's bound on its wrong receipts
-    (`IntegrityProfile.bound`, computed once a window for both readings)."""
+    (`IntegrityProfile.bound`, computed once a window for both readings); `schedule`, a refresh record's schedule
+    check, which credits its appended blocks (`gamma`)."""
     bounds = {id(w.profile): wrong(w.profile) for w in record.windows}
     once = lambda p: bounds[id(p)]  # noqa: E731
-    return Declared(len(record.windows), gamma(record, node, node.spec_bytes_per_s, wrong=once),
-                    gamma(record, node, node.read_bytes_per_s, wrong=once), memory(record, node))
+    return Declared(len(record.windows), gamma(record, node, node.spec_bytes_per_s, wrong=once, schedule=schedule),
+                    gamma(record, node, node.read_bytes_per_s, wrong=once, schedule=schedule), memory(record, node))
 
 
 __all__ = ["BINDING_ROOT_BITS", "DELTA_FORM", "DELTA_PARTS", "FORMS", "NAMED_TERMS", "Node", "PRF_CLAIM",

@@ -8,7 +8,7 @@ Its sampled sessions are SPOT[Flock]'s on its own, in its three roles: serving c
 each sampled session's prover runs `flock-circuit prove --zk` itself (the proof server: `a0.DIRECT`, `zk_cost.py`'s `dev` arm, which
 Figure 1 prices); and the challenger's live coins, its signed log and the Lean verifier decide (the verifier). There is no ZK
 server and no recursion on that path. The core protocols' path, every prover behind the Lean ZK server's send check, is
-`--zk-server` on SPOT's window audit (`a5.py`), its variants here and `prove_bundle.py`, and `ZK_SERVER=1` on their shell entry points. The network
+`--zk-server` on SPOT's window audit (`a5.py`), its variants here, and `ZK_SERVER=1` on their shell entry points. The network
 attester, where a run has one (`a5_network_attester.py`), is a layer of its own, whose signed stamp SPOT[Flock] reads as a certified
 input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/README.md`.
 
@@ -109,7 +109,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
 - `served_verdicts.sh` (with `served_verdicts.py`): one served window through every subprotocol, in one job on an H200 node
   from a clone of the tree (`bash benchmarks/one_stage/served_verdicts.sh`). It serves
-  Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal --admit release-order`), sends a
+  Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal`, the network attester scheme's order `release-order`), sends a
   few greedy requests from the network attester's traffic generator, and seals each window. Before the first request, the committer
   registers its weights under its own key (`prove_path.py weights-registration`). Without a docket, `NO WEIGHTS
   REGISTRATION` is printed and every weight read counts free. On the window holding the most requests, none carried, it runs
@@ -122,7 +122,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   names the command it lacks and its owner, and it gets no verdict. The script sets each owner's command by default where
   the tree has its piece and the node holds what the piece reads (its auditor key, the bandwidth audit's registered store).
   The bandwidth audit's session runs inside PoUS's piece, over the store that piece holds
-  (`benchmarks/pous/served_piece.py`), and `BANDWIDTH_CMD` collects its answer (`served_bandwidth.py collect`).
+  (`benchmarks/pous/served_piece.py`), and `BANDWIDTH_CMD` collects its answer (`served_piece.py collect-bandwidth`).
   Finally the all-protocols window report and the block record, which accepts only when every subprotocol accepted on this
   node and names each one missing, rejecting or about another server, with its reason (PoUW's development piece: development
   run, credits nothing). `PRODUCT=remote` composes SPOT and PoUW alone: the onsite pieces are dropped, not run
@@ -256,13 +256,19 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   static pair form (`boolean_fp8_moe`): `a9.py` holds one coordinate of each launch's first routed pair to the capture in
   its word and Boolean forms, cuts an up/gate coordinate whose rows overflow the circuit prover's block into its gather and
   block-coordinate proof blocks, and saves the proof blocks for `a11.py --load-values`, whose audit proves them. `A9_SAVED` audits a
-  saved directory without the values stage.
+  saved directory (an input tar made outside any run's output) without the values stage. The saved units' values are witness: a9.sh
+  keeps them in the job's scratch directory only.
 - `a10.sh`: run A10's entry point, on the same builds. A10 is A11's kinds and A9's launches on rank 0's committed values
   in place of the capture's: `a10.py values` opens rank 0's replay bundle from the Commit (`--replay-deferred`,
   `retain=host`) against its run root of record, reads each Call's operands and returns through its Program row as the
   deferred replay does, and runs `a11.py`'s and `a9.py`'s staging on them, writing every word where the committed value
   and the capture's differ to `compare.json`; `a10.py audit` is `a11.py --load-values` on a saved directory, with the
-  docket window naming the committed values.
+  docket window naming the committed values. a10.sh keeps the two saved directories (witness) under
+  `$A10_SAVED_ROOT/<run id>/` on the values node, mode 0700, never under the run's output; its audit mode reads
+  `A10_VALUES` as that run id on the same machine and refuses by name where the directory is absent.
+- `public_files.py`: the one rule for what a launcher copies under its run's output (`filter`): a served run's witness
+  (`served_verdicts.witness`) and private, salt, key and saved-value names are never copied; every copy loop of
+  `benchmarks/one_stage` and `benchmarks/prove_path` pipes its `find` through it (`tests/benchmarks/one_stage/test_public_files.py`).
 - `m1_families.py` and `m1_unit.py`: M1's full-step coverage. `m1_families.py` reads a rank's Programs of record from a
   deferred TP Commit's Build and lists the proof-block families of the given steps: each Definition the serving rows' partition
   samples from, its rows, op paths, ports and whether `serving_rows.template` takes it; `--estimate` adds each family's
@@ -283,7 +289,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   and size class, estimated ANDs, served MACs and opened row bytes, the Definition on bits its proof is (`proved_as`, and
   `bounded_by` its kind's largest block in the census where that bounds it), with the totals per token and per request, the gaps
   and the rows that are no proof block (`census.json`, `table.md`), and the planner's card (`card.json`,
-  `verity/protocols/proofs/spot/prover/cost/glm53.py`). `block_recut.sh ART` makes a stored census again from its families (its
+  `calibration/sampling_plan/glm53.py`). `block_recut.sh ART` makes a stored census again from its families (its
   `census-rank<r>.json`) with this tree's proof-block templates, sizing and `block_census.py`, for a change to the cut or to a
   family's proof blocks that needs no Commit Build, and writes `compare.json` against the planner's card.
   `m1_unit.py` builds one family's proof block through Flock's circuit prover's `UnitStager`, flat or `--structural`, and with `--bin`
@@ -428,8 +434,8 @@ cp -r $WORK/out-flock $WORK/out-zk $WORK/out-sampling . && rm -rf "$WORK"
 `gpu-lease 1 --wait --on $A5_CARD --cores $A5_CORES --` in place of `taskset -c $A5_CORES`. The script leases `A5_CARD`
 for its Match capture and its Commit, and every lease it takes names `A5_CORES`, without which it refuses before any
 build; with no `gpu-lease` it takes that card directly. `gpu-lease status` shows each lease under `GPU_LEASE_WHO`;
-unset, the script records its leases as `vllm-sha512`. Unless `CUDA_HOME` is set, the script takes the first of
-`/usr/local/cuda-12.9`, `/usr/local/cuda-12`, `/usr/local/cuda-13.0` and `/usr/local/cuda` that has `nvcc`. Where that
+unset, the script records its leases as `vllm-sha512`. Unless `CUDA_HOME` is set, the script takes the machine's toolkit
+at 12.9, else at 13.0, else its default (`benchmarks/kernels/machine.py toolkit`). Where that
 toolkit lacks the CUDA math libraries' headers, it takes them from the venv's NVIDIA wheels, as the bootstrap's norm and
 router tap builds do. Each run's record is its `OUT`, which the printer reads as a directory, as it reads a
 `research run`'s id. The three `OUT` directories are inside `WORK`, so the last line copies them to the current

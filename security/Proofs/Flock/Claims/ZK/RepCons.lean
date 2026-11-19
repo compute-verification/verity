@@ -220,7 +220,7 @@ open Flock Transcript Replay
 variable {wideLeaf : Bool}
 
 /-- Coins as the bytes a reply carries them in: each element's `le64(lo) ‖ le64(hi)`. -/
-def encC (cs : Array F128) : Claims.Msg := cs.toList.flatMap fun a => a.toBytes.data.toList
+def encC (cs : Array F128) : Hash.Msg := cs.toList.flatMap fun a => a.toBytes.data.toList
 
 theorem encL_length : ∀ xs : List F128, (xs.flatMap fun a => a.toBytes.data.toList).length = 16 * xs.length
   | [] => by simp
@@ -267,7 +267,7 @@ theorem coinOf_encC (cs : Array F128) : coinOf (encC cs) = fun i => cs[i]! := by
     first | rfl | decide
 
 theorem ok_name {α β : Type} {x : TMW PS (α × β)} {t : Transcript} {a : α} {b : β} {t' : Transcript}
-    {l l' : Array Claims.Msg} (h : (x.run t).go l = (.ok ((a, b), t'), l')) :
+    {l l' : Array Hash.Msg} (h : (x.run t).go l = (.ok ((a, b), t'), l')) :
     ∃ a', (x.run t).go l = (.ok ((a', b), t'), l') ∧ a' = a :=
   ⟨a, h, rfl⟩
 
@@ -275,11 +275,11 @@ theorem ok_name {α β : Type} {x : TMW PS (α × β)} {t : Transcript} {a : α}
 with room for its `k₀ + 7 + 11R` sends at a `--zk` schedule of `m ∈ [25, 35]`, at any table, basis, pads, extra lanes
 and salts, with a record of the layout's shape. `ligeritoPZk` returns at the replies (`ligeritoPZk_ret`), so at the cut's
 coins, where the coupling (`ligeritoPZk_agree`) throws only at send `n + 1`, past its send count. -/
-theorem ligeritoPZk_cut_ret (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claims.Msg}
+theorem ligeritoPZk_cut_ret (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Hash.Msg}
     (hr : ∀ k, coinOf (resp k) = coin k) {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35) {sch : Schedule} {tp : ℕ}
     (hz : Zk.schedule wideLeaf m = .ok (sch, tp)) (ms : MerkleScheme) (T : F128) (cm0 : Commit) (tb b : Array F128)
     (lay : Zk.PadLayout) (hv : Array F128) (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
-    (t : Transcript) (l : Array Claims.Msg) (hN : l.size + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) ≤ n)
+    (t : Transcript) (l : Array Hash.Msg) (hN : l.size + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) ≤ n)
     (hρ : Zk.rhoIndependent ((⟨coin (l.size + 2 + sch.k0) 0, coin (l.size + 2 + sch.k0) 1⟩ : F256),
       (⟨coin (l.size + 3 + sch.k0) 0, coin (l.size + 3 + sch.k0) 1⟩ : F256)) = true) :
     ∃ lg zl rec t' l', ((ligeritoPZk (asksCut coin n) (Hashes.ofSha512 Sha512.hash) ms sch T cm0 tb b lay hv rep tPad
@@ -319,7 +319,7 @@ proof, at a `--zk` schedule of `m ∈ [25, 35]` and a fold defined at every poin
 pads, table, level-0 commitment and extra claims, `Finish.repCons` returns wherever its pair's coins are independent. Its
 `final_c` is the masked value at `fc`, the verifier's replay of its proof returns, and its constraints are the replay's,
 the ring switch's and the lane phase's. -/
-theorem repCons_cut (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claims.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
+theorem repCons_cut (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Hash.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
     {st : Setup} (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hkm : st.fold.kLog ≤ st.m) (hkk : st.kLog = st.fold.kLog)
     (hmk : st.merkle = MerkleScheme.hm96Sha512)
     (hfold : ∀ (a b : F128) (lw ρ ts : Array F128), lw.size = 64 → ρ.size = st.fold.kLog - 6 →
@@ -329,7 +329,7 @@ theorem repCons_cut (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Clai
     {sch : Schedule} {tp : ℕ} (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) (tPad rep : ℕ) (dom : ByteArray)
     (g : Array F128) (cm0 : _root_.Flock.ZkServer.Finish.Commit) (extras : Array Claim)
     (pads : _root_.Flock.ZkServer.Finish.PadsZk) (ic : _root_.Flock.ZkServer.Finish.InnerCommit) (vals : Array F128)
-    (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (l : Array Claims.Msg)
+    (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (l : Array Hash.Msg)
     (hN : CutEq.innerAt l.size st sch extras ≤ n)
     (hρ : Zk.rhoIndependent
       ((⟨coin (CutEq.ligAt l.size st extras + 2 + sch.k0) 0, coin (CutEq.ligAt l.size st extras + 2 + sch.k0) 1⟩ :
@@ -463,7 +463,7 @@ theorem getBang_of_some {C : Array (Array F128)} {k : ℕ} {cs : Array F128} (h 
   rw [getElem!_pos C k hk, e]
 
 /-- A sent round's coin count, from its framed header. -/
-def roundHdr (b : Claims.Msg) : ℕ := (u64OfLE (Claims.ofMsg b) ((Claims.ofMsg b).size - 8)).toNat
+def roundHdr (b : Hash.Msg) : ℕ := (u64OfLE (Claims.ofMsg b) ((Claims.ofMsg b).size - 8)).toNat
 
 theorem roundHdr_toMsg (c : ByteArray) : roundHdr (Claims.toMsg c) = (u64OfLE c (c.size - 8)).toNat := by
   simp only [roundHdr, Claims.ofMsg_toMsg]
@@ -472,7 +472,7 @@ theorem roundHdr_toMsg (c : ByteArray) : roundHdr (Claims.toMsg c) = (u64OfLE c 
 def SizedAt (C : Array (Array F128)) (base : ℕ) (ns : List ℕ) : Prop :=
   ∀ j < ns.length, ∃ cs, C[base + j]? = some cs ∧ ns[j]? = some cs.size
 
-theorem sizedAt_shift {C : Array (Array F128)} {base : ℕ} {sfx : Array Claims.Msg} {ns : List ℕ}
+theorem sizedAt_shift {C : Array (Array F128)} {base : ℕ} {sfx : Array Hash.Msg} {ns : List ℕ}
     (h : SizedAt C base (sfx.toList.map roundHdr ++ ns)) : SizedAt C (base + sfx.size) ns := by
   intro j hj
   have e : (sfx.toList.map roundHdr).length = sfx.size := by rw [List.length_map, Array.length_toList]
@@ -503,10 +503,10 @@ theorem sizedAt_all (C : Array (Array F128)) : SizedAt C 0 (C.toList.map Array.s
 log's have the sizes `ns`, a run of `x` from the log that returns sent rounds whose headers are a prefix of `ns`, and `y`
 ends with the same value in `Q` at the counts after them. -/
 def CountR (C : Array (Array F128)) {α : Type} (x : FlockComplete.PS α) (y : OpenM α) : Prop :=
-  ∀ (l : Array Claims.Msg) (got : Array (Array F128)) (ns : List ℕ) (Q : α × Array (Array F128) → List ℕ → Prop)
-    (a : α) (l' : Array Claims.Msg),
+  ∀ (l : Array Hash.Msg) (got : Array (Array F128)) (ns : List ℕ) (Q : α × Array (Array F128) → List ℕ → Prop)
+    (a : α) (l' : Array Hash.Msg),
     SP Q (y.run got) ns → SizedAt C l.size ns → x.go l = (.ok a, l') →
-      ∃ sfx : Array Claims.Msg, l' = l ++ sfx ∧ ∃ ns₂, ns = sfx.toList.map roundHdr ++ ns₂ ∧
+      ∃ sfx : Array Hash.Msg, l' = l ++ sfx ∧ ∃ ns₂, ns = sfx.toList.map roundHdr ++ ns₂ ∧
         ∃ got' : Array (Array F128), Q (a, got') ns₂
 
 def countS (C : Array (Array F128)) : Sim FlockComplete.PS OpenM where
@@ -583,8 +583,8 @@ theorem countRel (C : Array (Array F128)) (N : ℕ) :
 /-- **A cut run as the port's**: a run of `x` from the log `l` that returns sent rounds, and where `C`'s rounds from
 `l`'s have their headers' sizes, `z` from round `l.size` returns the same at the log's size. -/
 def PortR (C : Array (Array F128)) {α : Type} (x : FlockComplete.PS α) (z : StateT ℕ V α) : Prop :=
-  ∀ (l : Array Claims.Msg) (a : α) (l' : Array Claims.Msg), x.go l = (.ok a, l') →
-    ∃ sfx : Array Claims.Msg, l' = l ++ sfx ∧
+  ∀ (l : Array Hash.Msg) (a : α) (l' : Array Hash.Msg), x.go l = (.ok a, l') →
+    ∃ sfx : Array Hash.Msg, l' = l ++ sfx ∧
       (SizedAt C l.size (sfx.toList.map roundHdr) → z.run l.size = .ok (a, l'.size))
 
 def portS (C : Array (Array F128)) : Sim FlockComplete.PS (StateT ℕ V) where
@@ -725,10 +725,10 @@ theorem repCons_asksOf (C : Array (Array F128)) {st : Setup} (h25 : 25 ≤ st.m)
     tPad rep dom g cm0 extras pads ic vals extra lanePad salt (Transcript.init #[] dom) #[] (r, tr) _ hcut
   simp only [Array.empty_append] at e'
   subst e'
-  have hs : SizedAt C (#[] : Array Claims.Msg).size (sfx.toList.map roundHdr) := by
+  have hs : SizedAt C (#[] : Array Hash.Msg).size (sfx.toList.map roundHdr) := by
     rw [hpre]
     exact sizedAt_left hall
-  have hlen : (#[] ++ sfx : Array Claims.Msg).size = (Claims.ZKServer.Count.consCounts st sch extras.size).length := by
+  have hlen : (#[] ++ sfx : Array Hash.Msg).size = (Claims.ZKServer.Count.consCounts st sch extras.size).length := by
     rw [← hpre, List.length_map, Array.length_toList, Array.empty_append]
   refine ⟨r, tr, ?_, hout⟩
   rw [← hlen]

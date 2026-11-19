@@ -28,10 +28,13 @@ from types import SimpleNamespace
 
 import pytest
 
+from verity.commitments import docket_digest as DD
+from verity.commitments import domains as DM
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 
 
 
@@ -39,6 +42,8 @@ from verity.protocols.resource_accounting.network.prover import scan_zk as sz
 from verity.protocols.resource_accounting.network.attester import network_attester_serve as WS
 from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC
 from verity.protocols.resource_accounting.network.verifier import scan_answer as SA
+from verity.commitments import randomness as RND
+from verity.commitments import registered_value as RV
 
 ROOT = Path(__file__).resolve().parents[6]
 PERIOD_CASE = ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "network" / "period_case.py"
@@ -97,7 +102,7 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
         assert blk.ports["o0"]["root"] == tr.root.hex() == ing.ports[f"prog{j}"]["root"] == last.ports[
             f"prog{j}"]["root"]
         assert blk.ports["o0"]["reads"] == list(range(nb)) and sorted(blk.ports) == sorted(blk.framed) == ["o0", "x"]
-        assert blk.ports["x"]["value"] == sz.value("frame") and blk.ports["x"][sz.REG.SCHEMA_KEY] == sz.REG.SCHEMA_SEG
+        assert blk.ports["x"]["value"] == sz.value("frame") and blk.ports["x"][sz.RV.SCHEMA_KEY] == sz.REG.SCHEMA_SEG
         assert blk.made["o0"] == [sz._bits(tr, b) for b in range(nb)] == [u[0] for u in blk.units]
         assert blk.set_name == at.block_sets[j] and tr.binding == sz.block_binding(at.block_sets[j], nb)
     assert len(set(at.block_sets)) == len({tr.root for tr in trs}) == cls.NR
@@ -110,10 +115,10 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
     assert start.bcs["o0"] + ing.bcs["o1"] == ing.bcs["sin"] + last.bcs["sin"]
     assert ing.bcs["o2"] + last.bcs["o2"] == eg.bcs["state"]
     assert ing.ports["o1"]["root"] == ing.ports["sin"]["root"] and ing.ports["o2"]["root"] == eg.ports["state"]["root"]
-    assert ing.ports["row"]["reads"] == list(range(T - 1)) and ing.ports["row"][sz.REG.READS_FROM] == 1
-    assert last.ports["row"]["reads"] == [T - 1] and last.ports["row"][sz.REG.READS_FROM] == T
+    assert ing.ports["row"]["reads"] == list(range(T - 1)) and ing.ports["row"][RV.READS_FROM] == 1
+    assert last.ports["row"]["reads"] == [T - 1] and last.ports["row"][RV.READS_FROM] == T
     side = at.sides["egress"]
-    assert eg.ports["o1"]["reads"] == list(range(T)) and eg.ports["o1"][sz.REG.READS_FROM] == T + 1
+    assert eg.ports["o1"]["reads"] == list(range(T)) and eg.ports["o1"][RV.READS_FROM] == T + 1
     assert eg.ports["o1"]["root"] == side.head.root.hex() and eg.bcs["o1"] == list(side.cells.bcs)
     c = chain["ingress-0"]
     assert sz.targets(at, "chain-0") == ["ingress-0"]
@@ -223,7 +228,7 @@ def test_each_execution_phase_is_a_registration_its_start_the_record_befores_las
     unit's o0, which is state leaf 0, and its members reading its own rows. The first's start is the empty state's row
     at the root the verifier computes (`empty_start`). The second's start reads the first's ``last/o1``: the port of
     the first's record at its root and domain, one leaf, its b‖c the first statement's own row's under the same salt;
-    and the leaf a registered read frames from that b‖c at position 0 of the frame port's domain (`registered.leaf`,
+    and the leaf a registered read frames from that b‖c at position 0 of the frame port's domain (`registered_value.leaf`,
     the mirror of the Lean verifier's read) is, byte for byte, the leaf the first statement's frame commits (`Frame`,
     `rowleaf.row_leaf`), which a one-leaf port's root is. The stale round's start, given the state the last execution
     phase started from, opens no leaf of the last record's port."""
@@ -259,19 +264,19 @@ def test_each_execution_phase_is_a_registration_its_start_the_record_befores_las
     first = sz.empty_start(digest, cls)
     assert rounds[0]["start"].ports["sin"] == {
         "value": sz.CARRY, "root": first.root.hex(), "leaves": 1, "words": words, "word_bits": 16,
-        "domain": first.domain.domain_id.hex(), sz.REG.SCHEMA_KEY: v2, "reads": [0]}
+        "domain": first.domain.domain_id.hex(), sz.RV.SCHEMA_KEY: v2, "reads": [0]}
     assert first.rows == (tuple(sz._words(sz.IS.encode(cls, sz.IS.empty(cls)))),)
-    assert first.salts == tuple(sz.REG.supplied_salts(digest, sz.CARRY, 1))
+    assert first.salts == tuple(RV.supplied_salts(digest, sz.CARRY, 1))
     last, start = rounds[0]["last"], rounds[1]["start"]
     frame = last.frames["o1"]
     dom = sz.ADV.domain(sz.frame_binding(last.set_name, 1, "o1"), 1)
     assert start.ports["sin"] == {
         "value": sz.CARRY, "root": last.ports["o1"]["root"], "leaves": 1, "words": words, "word_bits": 16,
-        "domain": last.ports["o1"]["domain"], sz.REG.SCHEMA_KEY: v2, "reads": [0]}
+        "domain": last.ports["o1"]["domain"], sz.RV.SCHEMA_KEY: v2, "reads": [0]}
     assert (last.ports["o1"]["root"], last.ports["o1"]["domain"]) == (frame.root.hex(), dom.domain_id.hex())
     assert start.bcs["sin"] == last.bcs["o1"] and start.salts["sin"] == last.salts["o1"]
     assert start.entries["sin"] == {"value": sz.CARRY, "positions": [0], "paths": [""]}
-    read = sz.REG.leaf(dom, 0, start.bcs["sin"][0], v2)
+    read = RV.leaf(dom, 0, start.bcs["sin"][0], v2)
     assert read == frame.leaves[0] == frame.root
     assert read == sz.row_leaf(dom, 0, sz.ADV.INST.tree_leaf(sz.ADV.INST.default_key, last.bcs["o1"][0]), v2)
     assert sz.REG.verify_read(dom, frame.root, 0, start.bcs["sin"][0], b"", v2)
@@ -302,9 +307,9 @@ def test_a_starts_record_is_held_to_the_log_s_last_record_and_refused_at_another
     T, v2 = s.params.window, sz.BitRowLeaf.hiding_schema
     root, query, defs = _scan_program(cls, T)
     h = sz.host(tmp_path, setup=s, group=2, program=sz.PA.program_digest(root))
-    alone = sz.PA.mixed_population_program([(defs["start"], 1)])
-    programs = {sz.TEMPLATES: (root, query, sz.DR.parse_design(f"stratified:{2 * T + 1}"), sz.lane_kinds(cls)),
-                sz.STALE: (alone, sz.PA.template_instances_query([defs["start"]]), sz.DR.parse_design("stratified:1"),
+    alone = sz.PN.mixed_population_program([(defs["start"], 1)])
+    programs = {sz.TEMPLATES: (root, query, RND.parse_design(f"stratified:{2 * T + 1}"), sz.lane_kinds(cls)),
+                sz.STALE: (alone, sz.PA.template_instances_query([defs["start"]]), RND.parse_design("stratified:1"),
                            None)}
     assert [n for n, _t in alone.fn.signature()[0]] == [sz.CARRY]
     by: dict[int, list] = {}
@@ -324,7 +329,7 @@ def test_a_starts_record_is_held_to_the_log_s_last_record_and_refused_at_another
             if r.kind != "stale":
                 ports[sz.CARRY_PORT] = {x: ms["last"].ports["o1"][x] for x in ("root", "leaves", "domain")}
             want = {p: {"leaves": e["leaves"], "domain": e["domain"]} for p, e in ports.items()}
-            rec = R.record(program, q, law, sz.S.SCHEME, [{"port": p, **e} for p, e in sorted(ports.items())],
+            rec = DK.record(program, q, law, sz.S.SCHEME, [{"port": p, **e} for p, e in sorted(ports.items())],
                            {"kind": "stand-in", "of": r.name}, leaf_layer="ee" * 64, **carry.record)
 
             def check(record, given, program=program, q=q, law=law, want=want, tied=tied):
@@ -333,7 +338,7 @@ def test_a_starts_record_is_held_to_the_log_s_last_record_and_refused_at_another
             verdict = check(rec, carry.check)
             assert verdict.ok, (r.name, verdict.codes, verdict.detail)
             seen[r.name] = {k: (check(x, given).codes, code) for k, (x, given, code) in carry.negatives(rec).items()}
-            assert rec["previous"] == (R.digest(found[-1]) if found else None)
+            assert rec["previous"] == (DD.digest(found[-1]) if found else None)
             assert rec["registered"] == [{"value": sz.CARRY, "root": ms["start"].ports["sin"]["root"], "leaves": 1,
                                           "words": sz.IS.state_bits(cls) // 16,
                                           "domain": ms["start"].ports["sin"]["domain"]}]
@@ -342,7 +347,7 @@ def test_a_starts_record_is_held_to_the_log_s_last_record_and_refused_at_another
                 assert (carry.root, carry.domain) == (before["root"], before["domain"])
                 assert carry.check["outputs"] == {sz.CARRY: {"port": sz.CARRY_PORT}} and "pinned" not in carry.check
                 assert carry.check["log"] == found and carry.empty is None
-                explicit = {**carry.check, "outputs": {sz.CARRY: {"record": R.digest(found[-1]), "port": sz.CARRY_PORT}}}
+                explicit = {**carry.check, "outputs": {sz.CARRY: {"record": DD.digest(found[-1]), "port": sz.CARRY_PORT}}}
                 assert check(rec, explicit).ok
                 with pytest.raises(SystemExit, match="isn't the verifier's own"):
                     sz.carry_of(SimpleNamespace(program=program, query=q), cls, found,
@@ -394,14 +399,14 @@ def test_every_port_of_every_member_is_registered_a_ports_own_rows_at_its_frame_
             own[name, m.name] = [p for p in m.framed if m.ports[p]["value"] == sz.value("frame")]
             for p in own[name, m.name]:
                 port = m.ports[p]
-                schema = port.get(sz.REG.SCHEMA_KEY, sz.REG.SCHEMA)
+                schema = port.get(sz.RV.SCHEMA_KEY, sz.RV.SCHEMA)
                 dom = sz.ADV.domain(sz.frame_binding(m.set_name, m.n, p, schema), m.n)
-                assert (port["domain"], port["leaves"], port["reads"], port.get(sz.REG.READS_FROM, 0)) == (
+                assert (port["domain"], port["leaves"], port["reads"], port.get(RV.READS_FROM, 0)) == (
                     dom.domain_id.hex(), m.n, list(range(m.n)), m.base)
                 assert m.entries[p]["positions"] == list(range(m.n))
                 for k in range(m.n):
                     bits = [m.outputs[k]] if p == "o0" else m.units[k][0] if p == "x" else m.made[p][k]
-                    bc = sz.ADV.INST.commit_string(key, sz.REG.row_digest(sz._words(bits), 16, schema), m.salts[p][k])
+                    bc = sz.ADV.INST.commit_string(key, RV.row_digest(sz._words(bits), 16, schema), m.salts[p][k])
                     assert m.bcs[p][k] == bc and sz.REG.verify_read(
                         dom, bytes.fromhex(port["root"]), k, bc, bytes.fromhex(m.entries[p]["paths"][k]), schema)
     assert own == {**{(r, "start"): [] for r in ("honest-0", "chain-0", "stale-1")},
@@ -526,7 +531,7 @@ def test_the_members_are_the_programs_ranges():
     for templates in {t for t, _o in sz.ROUNDS.values()}:
         members = sz.members_of(templates, T, entries=E, lanes=L)
         counts = sz.counts_of(members)
-        program = sz.PA.mixed_population_program([(defs[t], counts[t]) for t in templates])
+        program = sz.PN.mixed_population_program([(defs[t], counts[t]) for t in templates])
         ranges = sz.PA.ranges(program, sz.PA.template_instances_query([defs[t] for t in templates]))
         assert [(lo, n) for _t, lo, n in ranges] == [
             (next(m.base for m in members if m.template == t), counts[t]) for t in templates]
@@ -603,12 +608,12 @@ def test_the_scans_answer_names_its_lanes_tied_or_nothing_and_the_period_check_h
     counts = sz.counts_of(sz.members_of(sz.TEMPLATES, T))
     root = sz.scan_root([(defs[t], counts[t], sz.FIXED[t]) for t in sz.TEMPLATES], nb, every)
     query = sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES])
-    N, design = sum(counts.values()), sz.DR.parse_design(f"stratified:{2 * G * T}")
+    N, design = sum(counts.values()), RND.parse_design(f"stratified:{2 * G * T}")
     lanes, sched = sz.lane_kinds(cls), SimpleNamespace(lanes=cls.NR)
     assert lanes == PC.prog_params(cls.NR)
     roots = [{"port": PC.prog_name(j), "root": "aa" * 64, "leaves": nb, "domain": f"b{j}" * 64} for j in range(cls.NR)]
     want = {r["port"]: {"leaves": r["leaves"], "domain": r["domain"]} for r in roots}
-    reg = R.record(root, query, design, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64)
+    reg = DK.record(root, query, design, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64)
     shared = every > 1
     v = R.check(reg, root, query, design, sz.S.SCHEME, want, leaf_layer="ee" * 64, tied=lanes)
     assert v.ok and v.rests_on_period_check == (lanes if shared else ()), v
@@ -655,10 +660,10 @@ def test_a_scan_registered_with_a_second_tied_input_is_refused_by_the_period_che
         lambda B, S_, s, *entries: B.batch(
             unit, s, *(sz.array_of([e[m // cls.EVERY] for m in range(N)]) for e in entries), axes=(None, 0, 0)),
         register=False)))
-    query, design = sz.PA.template_instances_query([unit]), sz.DR.parse_design(f"stratified:{N}")
+    query, design = sz.PA.template_instances_query([unit]), RND.parse_design(f"stratified:{N}")
     roots = [{"port": PC.prog_name(j), "root": "aa" * 64, "leaves": nb, "domain": f"b{j}" * 64} for j in range(cls.NR)]
     want = {r["port"]: {"leaves": r["leaves"], "domain": r["domain"]} for r in roots}
-    reg = R.record(root, query, design, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64)
+    reg = DK.record(root, query, design, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64)
     for some in ((), lanes, ("state",), (lanes[0], "state")):
         v = R.check(reg, root, query, design, sz.S.SCHEME, want, leaf_layer="ee" * 64, tied=some)
         assert v.codes == ("R8-shared-input",) and v.rests_on_period_check == some, (some, v)
@@ -810,8 +815,8 @@ def _program(T: int) -> tuple:
     buckets, with stand-in templates."""
     counts = sz.counts_of(sz.members_of(sz.TEMPLATES, T))
     defs = {"start": START, "ingress": ING, "egress": EG}
-    return (sz.PA.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES]),
-            sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES]), sz.DR.parse_design(f"stratified:{2 * T + 1}"))
+    return (sz.PN.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES]),
+            sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES]), RND.parse_design(f"stratified:{2 * T + 1}"))
 
 
 def test_an_execution_phases_answer_is_one_stages_on_its_registration():
@@ -826,18 +831,17 @@ def test_an_execution_phases_answer_is_one_stages_on_its_registration():
     T = 4
     program, query, law = _program(T)
     N = 2 * T + 1
-    reg = R.record(program, query, law, sz.S.SCHEME,
+    reg = DK.record(program, query, law, sz.S.SCHEME,
                    [{"port": "rows/egress/1", "root": "aa" * 64, "leaves": T, "domain": "bb" * 64}],
                    {"kind": "stand-in"}, leaf_layer="ee" * 64)
     sample = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
     record = {"accepted": True, "registration": reg, "draw": sample, "proved_units": list(range(N))}
     a = SA.window_answer(reg, record, sz.Fraction(1, 100), "unused")
-    assert CC.answer_of(a)["verdict"] == "accept" and a["commitment"] == R.digest(reg) and a["protocol"] == R.PROTOCOL
+    assert CC.answer_of(a)["verdict"] == "accept" and a["commitment"] == DD.digest(reg) and a["protocol"] == DM.ONE_STAGE_PROTOCOL
     assert a["public"]["bound"] == 0 and a["public"]["drawn"] == a["public"]["proved"] == list(range(N))
     assert "rests_on_period_check" not in a["public"]
     whole = SA.window_answer(reg, {**record, "complete": True}, sz.Fraction(1, 100), "unused")
     assert whole["public"] == {**a["public"], "complete": True} and a["public"]["complete"] is False
-    assert sz.AU.answer_complete(whole) and not sz.AU.answer_complete(a)
     tied = SA.window_answer(reg, record, sz.Fraction(1, 100), "unused", ["prog0", "prog1"])
     assert CC.answer_of(tied)["verdict"] == "accept"
     assert tied["public"] == {**a["public"], "rests_on_period_check": ["prog0", "prog1"]}
@@ -860,7 +864,7 @@ def test_an_audit_refused_with_every_member_held_answers_its_execution_phase_nam
     regs, results = {}, {}
     for w in range(G):
         (d := out / f"honest-{w}").mkdir(parents=True)
-        regs[w] = R.record(*_program(h.T), sz.S.SCHEME, [], {"kind": "stand-in", "of": w}, leaf_layer="ee" * 64)
+        regs[w] = DK.record(*_program(h.T), sz.S.SCHEME, [], {"kind": "stand-in", "of": w}, leaf_layer="ee" * 64)
         (d / "registration.json").write_text(json.dumps(regs[w]))
         results[f"honest-{w}"] = {"window_accepted": False, "why": {"lean-verify/egress-0": None},
                                   "failed": {"registered": ["registered"]}}
@@ -868,7 +872,7 @@ def test_an_audit_refused_with_every_member_held_answers_its_execution_phase_nam
     got = sz.answers(ats, out, results, sz.Fraction(1, 100))
     why = "the scan's audit of execution phase {} refused: check registered: registered"
     doc = json.loads((out / "answers.json").read_text())
-    assert got == {w: {"verdict": "reject", "bound": None, "reason": why.format(w), "commitment": R.digest(regs[w]),
+    assert got == {w: {"verdict": "reject", "bound": None, "reason": why.format(w), "commitment": DD.digest(regs[w]),
                        "public": doc["windows"][w]["answer"]["public"]} for w in range(G)}
     assert (doc["format"], doc["audits"]) == (sz.ANSWERS, []) and "registration" not in doc
     assert [(x["window"], x["registration"], x["answer"]["reason"]) for x in doc["windows"]] == [
@@ -969,7 +973,7 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
     assert PC.scan_ok.held(PC.scan_ok.constants(T), {"roots": oks})
     roots = sz.network_attester_roots([{"network_certifier": m.network_attester} for m in honest]) + [
         *({"port": PC.prog_name(j), **o} for j, o in enumerate(progs)), {"port": "scan/state", **state}, *oks]
-    law = sz.DR.parse_design(f"stratified:{N}")
+    law = RND.parse_design(f"stratified:{N}")
 
     reads = sz.state_reads([m.ports for m in honest])
     assert reads == {"o0": {"leaf": 0, "units": [0, 1]}, "o1": {"leaf": 1, "units": [1, T]},
@@ -978,7 +982,7 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
     win = {"kind": "stand-in", "reads": {"scan/state": reads}, "empty": {sz.CARRY: carry.empty}}
 
     def registration(named: list[dict], layer: str = "ee", window: dict = win) -> dict:
-        return R.record(program, query, law, sz.S.SCHEME, named, window, leaf_layer=layer * 64, **carry.record)
+        return DK.record(program, query, law, sz.S.SCHEME, named, window, leaf_layer=layer * 64, **carry.record)
 
     reg, chain = (registration(roots, x) for x in ("ee", "ff"))
     other = {**reg, "program": "ab" * 64}
@@ -988,8 +992,8 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
     sample = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
     record = {"accepted": True, "registration": reg, "draw": sample, "proved_units": list(range(N))}
     answer = SA.window_answer(reg, record, sz.Fraction(1, 100), "unused")
-    block = sz.PA.mixed_population_program([(defs["block"], E)])
-    bquery, blaw = sz.PA.template_instances_query([defs["block"]]), sz.DR.parse_design(f"stratified:{E}")
+    block = sz.PN.mixed_population_program([(defs["block"], E)])
+    bquery, blaw = sz.PA.template_instances_query([defs["block"]]), RND.parse_design(f"stratified:{E}")
     entries = [PC.entries_port(sz.PA.template_id(defs["block"]), j) for j in range(cls.NR)]
     assert entries == [f"{sz.port_prefix(defs['block'], SimpleNamespace(template='block', lane=j))}/o0"
                        for j in range(cls.NR)]
@@ -997,10 +1001,10 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
     def block_audit(o0: list[dict], ports: list[str] = entries, scan_state: dict | None = state,
                     sampled: int | None = None, served: bool = False, registered: bool = False) -> dict:
         stated = [{"port": "scan/state", **scan_state}] if scan_state and not (served or registered) else []
-        law = sz.DR.parse_design(f"subset:{sampled}") if sampled else blaw
+        law = RND.parse_design(f"subset:{sampled}") if sampled else blaw
         held = {"value": sz.SCAN_STATE, "words": st.n_bits // 16, **(scan_state or {})}
         window = {"kind": "served", "activations": {"program": "c3" * 64, "values": {sz.SCAN_STATE: held}}}
-        breg = R.record(block, bquery, law, sz.S.SCHEME,
+        breg = DK.record(block, bquery, law, sz.S.SCHEME,
                         [*({"port": q, **o} for q, o in zip(ports, o0, strict=True)), *stated],
                         window if served else {"kind": "stand-in"}, leaf_layer="cc" * 64,
                         registered=[held] if registered else ())
@@ -1218,7 +1222,7 @@ def test_the_scan_leaves_out_an_empty_starts_public_salt_and_scans_a_carried_sta
     a8 = SimpleNamespace(PIECE=16, needles=lambda ps: {nd: k for k, x in ps.items() for nd in (x, x.hex().encode())},
                          find=lambda data, table: {k: 1 for nd, k in table.items() if nd in data})
     at = SimpleNamespace(setup=sz.TEST, ordinals=[1])
-    salt = sz.REG.supplied_salts("ab" * 64, sz.CARRY, 1)[0]
+    salt = RV.supplied_salts("ab" * 64, sz.CARRY, 1)[0]
     salts = {"start salt sin 0": salt}
     for carry, out in ((SimpleNamespace(empty={"salt": salt.hex()}), True), (SimpleNamespace(empty=None), False),
                        (None, False)):
@@ -1435,7 +1439,7 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     T, k, root = 32, 16, "dd" * 64
     defs = {"ingress": ING, "egress": EG}
     templates = ("ingress", "egress")
-    program = sz.PA.mixed_population_program([(defs[s], 2 * T) for s in templates])
+    program = sz.PN.mixed_population_program([(defs[s], 2 * T) for s in templates])
     query = sz.PA.template_instances_query([defs[s] for s in templates])
     pg = SimpleNamespace(program=program, query=query, templates=templates,
                          stagers={s: SimpleNamespace(defn=defs[s]) for s in templates}, tied=())
@@ -1453,7 +1457,7 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     def record(ports: dict) -> dict:
         roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **w} for i, (p, w) in enumerate(ports.items())]
         law, table = sz.S.params_sampling_design(rule, program, query, None)
-        return R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64, work_table=table)
+        return DK.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64, work_table=table)
 
     assert sz.S.check_public(spec, record(want)).ok
     v = sz.S.check_public(spec, record({**want, "scan/other": {"leaves": 1, "domain": "ff" * 64}}))

@@ -40,21 +40,20 @@ if [ -n "${TOOLKIT:-}" ]; then
   # shellcheck disable=SC1091
   . benchmarks/pouw/harness/jobs/toolkit.sh || { say "PREFLIGHT: the toolkit did not assemble"; exit 3; }
 fi
-NVCC=$(first "${CUDA_HOME:-/nonexistent}/bin/nvcc" /usr/local/cuda-12.9/bin/nvcc /usr/local/cuda-13.0/bin/nvcc \
-  /usr/local/cuda/bin/nvcc)
-[ -n "$NVCC" ] || { say "PREFLIGHT: no nvcc (CUDA_HOME, /usr/local/cuda-12.9, -13.0)"; exit 3; }
+[ -n "${CUDA_HOME:-}" ] || for v in 12.9 13.0; do CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit "$v" 2> /dev/null) && break; done
+NVCC=$(first "${CUDA_HOME:-/nonexistent}/bin/nvcc")
+[ -n "$NVCC" ] || { say "PREFLIGHT: no nvcc (CUDA_HOME, else the machine's toolkit at 12.9 or 13.0)"; exit 3; }
 export CUDA_HOME=${NVCC%/bin/nvcc} PATH=${NVCC%/nvcc}:$PATH
 # `cuobjdump -sass` runs nvdisasm. Where NVCC's toolkit has none, another toolkit's goes last on the PATH: same_sass.py
 # compares two listings the same nvdisasm made, each instruction with its encoding.
-command -v nvdisasm > /dev/null || for d in /usr/local/cuda*/bin; do
-  [ -x "$d/nvdisasm" ] && { PATH=$PATH:$d; break; }
+command -v nvdisasm > /dev/null || for v in 12.9 13.0; do
+  d=$(python3 benchmarks/kernels/machine.py toolkit "$v" 2> /dev/null)/bin && [ -x "$d/nvdisasm" ] && { PATH=$PATH:$d; break; }
 done
 if [ -z "${ARCH:-}" ]; then
-  case $(nvidia-smi --query-gpu=name --format=csv,noheader -i "${CARDS%%,*}" 2> /dev/null) in
-    *H200* | *H100*) ARCH=90a ;;
-    *"RTX PRO 6000"*) ARCH=120a ;;
-    *) say "PREFLIGHT: ARCH (90a, 120a) is not given and the card's name does not tell it"; exit 3 ;;
-  esac
+  ARCH=$(python3 "$TREE/benchmarks/kernels/machine.py" arch \
+    "$(nvidia-smi --query-gpu=name --format=csv,noheader -i "${CARDS%%,*}" 2> /dev/null)" 2>&1) \
+    || { say "PREFLIGHT: ARCH is not given and the card's record doesn't give it: $ARCH"; exit 3; }
+  ARCH=${ARCH#sm_}
 fi
 B=${BUILD_DIR:-}
 [ -n "$B" ] || { B=$(mktemp -d /tmp/host-read.XXXXXX); trap 'rm -rf "$B"' EXIT; }
@@ -62,7 +61,9 @@ B=${BUILD_DIR:-}
   "$NVCC" --version | tail -n 2; cat /sys/fs/cgroup/cpu.max; nvidia-smi -L; command -v cuobjdump nvdisasm
 } > "$O/machine.txt" 2>&1
 
-FLAGS=(-O3 -gencode "arch=compute_$ARCH,code=sm_$ARCH" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
+GENCODE=$(python3 "$TREE/benchmarks/kernels/machine.py" gencode "sm_$ARCH" 2>&1) ||
+  { say "PREFLIGHT: no build target for ARCH=$ARCH: $GENCODE"; exit 3; }
+FLAGS=(-O3 -gencode "$GENCODE" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
 BASE_REV=${BASE_REV:-$(git -C "$TREE" merge-base HEAD origin/main 2> /dev/null)}
 # The base's session.cu sits where BASE_REV has it, the prover's directory or (before the provers' move) $RS, and its
 # includes resolve to this tree's codec_tensor, circuits and commitments from either place.

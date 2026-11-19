@@ -301,7 +301,7 @@ theorem laid_innerUnit {S : VStar.RepS} {name : String} {U : VStar.UnitC} (hU : 
 
 section Unit
 
-open FlockSoundness FlockSoundness.Audit
+open FlockSoundness Spot.Sampling
 
 /-- **A copy of V*'s laid-out `InnerRepCheck` unit, in a unit of any partition, computes its residuals**
 (`laid_innerUnit`). Let the verifier build `net` from the layout of `VStar.innerUnit S name` (`netOf`), and let unit `u`

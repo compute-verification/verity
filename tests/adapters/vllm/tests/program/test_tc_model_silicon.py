@@ -11,7 +11,7 @@ from verity.circuits.defs import bind
 from verity.circuits.silicon.errors import InvalidArtifact
 from verity.circuits.silicon import models as S
 from verity.circuits.silicon import total as ST
-from verity_vllm.definitions.numerics import cpu_model, derived_rows, fa3_model, prims_twins
+from verity_vllm.definitions.numerics import cpu_model, derived_rows, prims_twins
 from verity_vllm.definitions.numerics import kernel_registry as KR
 from verity_vllm.definitions.numerics import twins as TW
 from verity_vllm.definitions.registry import prims as P
@@ -188,24 +188,23 @@ def _chain_total(m: S.GroupSum, q: np.ndarray, k: np.ndarray) -> int:
 @pytest.mark.parametrize("arch", PIPELINES)
 def test_attention_models_compiled_params_are_group_sums(arch):
     """`fa2_rows` (the attention twin's, `Params AMPERE_BF16`) and `fa3_rows` (`Params HOPPER_BF16_WGMMA`) compute each S word as a
-    D/16-step chain from +0 with their compiled parameters: equal to `silicon/total` under that architecture's `GroupSum`, overflow
-    rows included, and unequal under the other's on some keys, so a swapped or edited constant fails."""
-    fa2, tables = prims_twins.fa2_twin()
+    D/16-step chain from +0 with their compiled parameters (read through `fa2_model.s_words`): equal to `silicon/total` under that
+    architecture's `GroupSum`, overflow rows included, and unequal under the other's on some keys, so a swapped or edited constant
+    fails."""
+    fa2, _ = prims_twins.fa2_twin()
     rng = np.random.default_rng(7)
     rows, D = 8, 128
-    model, BN = (fa2, fa2.KBLOCK_N) if arch == "ampere" else (fa3_model, 128)
+    BN = fa2.KBLOCK_N if arch == "ampere" else 128
     q = _bf16(rng.standard_normal((rows, D)) * (2.0 ** rng.integers(-20, 20, (rows, 1))))
     q[0] = _bf16(rng.standard_normal(D) * 1e30)
     k = _bf16(rng.standard_normal((BN, 1, D)) * 1e9 ** (np.arange(BN) % 2)[:, None, None])
-    kw = {} if arch == "ampere" else {"kblock_n": BN}
-    res = model.attention_rows(q, k, k, np.zeros(rows, dtype=np.int32), np.full(rows, BN, dtype=np.int32),
-                               np.ones(rows, dtype=np.int32), D ** -0.5, tables, debug=True, **kw)
+    s = fa2.s_words(q, k[:, 0], hopper=arch == "hopper")
     other = PIPELINES["hopper" if arch == "ampere" else "ampere"]
     differs = sticky = 0
     for r in range(rows):
         for c in range(BN):
             want = _chain_total(PIPELINES[arch], q[r], k[c, 0])
-            assert int(res.dbg["s"][r, c]) == want, (arch, r, c, hex(int(res.dbg["s"][r, c])), hex(want))
+            assert int(s[r, c]) == want, (arch, r, c, hex(int(s[r, c])), hex(want))
             differs += _chain_total(other, q[r], k[c, 0]) != want
             sticky += (want & 0x7FFFFFFF) == 0x7F800000
     assert differs > 0 and sticky > 0, (differs, sticky)

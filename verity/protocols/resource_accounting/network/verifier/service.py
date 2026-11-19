@@ -102,9 +102,8 @@ service, in the clear. That is a provisional exception to the four public kinds,
 default, which adds its accept bit and decides nothing) and the tests' reference: the opening reproduces the registered
 root, each end's head check accepts (`head_check.reference`), the opening's attestations hold (`certified`) and both
 heads met their deadline. The records' cells are the scan's (`network_attester.audit`
-reads them in the clear), and the attester's host audit doesn't read them. `TransferBlocks.unproved_outcome` decides a
-run that proves nothing (a rehearsal, the simulator) on it, so its verdict says ``"decided_by": "clear"`` and is never
-zero-knowledge.
+reads them in the clear), and the attester's host audit doesn't read them. A run that proves nothing has no outcome of
+record, so `network_verdict` rejects its link, every window it didn't prove refused.
 
 **The link** (`TransferBlocks(network_attester=NetworkAttesterProfile(…))`) is the network attester's (`network_attester.NetworkAttester`) own two records of
 each execution phase: its responses on egress and its requests on ingress, on its one grid, attested under its
@@ -158,6 +157,8 @@ from functools import cached_property, lru_cache
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 from verity.circuits import boolean as BL
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -170,6 +171,7 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
 from verity.protocols.resource_accounting.network.verifier import head_check as HC, lean_audit as LA
+from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.verifier.certificate import Certificate, CertifiedRecord, Direction, LmsKey, PublicKey
 from verity.protocols.resource_accounting.network.verifier.grid import GridParams
 from verity.protocols.resource_accounting.network.verifier.schedule import ClockSync, SyncSet
@@ -184,7 +186,6 @@ from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 OF_RECORD = "lean"
 
 SPEC = "verity-network-certifier/service-spec/v0"
-SESSION = "verity-network-certifier/session/v0"
 STATEMENT = "verity-network-certifier/statement/v0"
 VERDICT = "verity-network-certifier/verdict/v0"
 NETWORK_VERDICT = "verity-network-certifier/network-verdict/v0"
@@ -198,7 +199,7 @@ VERIFIER = "network-audit"
 _INST = hm96.SHA512
 
 
-_SIGNED = (("egress", HC.DIGEST), ("ingress", HC.DIGEST))
+_SIGNED = (("egress", GB.DIGEST), ("ingress", GB.DIGEST))
 LEAVES = 4
 #: the leaf of the head of the record at leaf i (0 egress, 1 ingress) is HEADS + i
 HEADS = HC.HEADS
@@ -236,18 +237,18 @@ def _checks(B, S_, args, check=HC.gate) -> tuple[list[Coll], list[Coll], list[An
     """Each end's head check (`check`'s for its size class) over its end's signed digest (the proof block's `egress` or
     `ingress`) and its own direction, a constant; each end's head counts and its deadline byte's low bit, as the head
     check reads the head."""
-    K = HC._Consts(B)
+    K = GB._Consts(B)
     oks, counts, deadline, rest = [], [], [], list(args[2:])
     for d, key in enumerate((S_.EGRESS, S_.INGRESS)):
         g = check(*key)
         names = [name for name, _ in g.signature()[0]]
         ends, rest = rest[:len(names) - len(_FIXED)], rest[len(names) - len(_FIXED):]
-        ends.insert(names.index("direction"), HC._coll(Array(1, BL.BIT), K.bits(d, 1)))
+        ends.insert(names.index("direction"), GB._coll(Array(1, BL.BIT), K.bits(d, 1)))
         ends.insert(names.index("signed"), args[d])
         oks.append(B.call(g, *ends))
         sh = HC.Shape(*key[:2])
-        head = HC._refs(ends[names.index("head")])
-        counts.append(HC._coll(Array(sh.T, Array(4, HC.BYTE)), head[8 * sh.CNT:8 * sh.ROOT]))
+        head = GB._refs(ends[names.index("head")])
+        counts.append(GB._coll(Array(sh.T, Array(4, GB.BYTE)), head[8 * sh.CNT:8 * sh.ROOT]))
         deadline.append(head[8 * sh.DL])
     return oks, counts, deadline
 
@@ -259,7 +260,7 @@ def _all(B, oks: list[Coll]) -> Coll:
 
 def _outputs(B, oks: list[Coll], deadline: list[Any]) -> Coll:
     """The proof block's two output bits: the AND of its checks, then the AND of both heads' deadline bits."""
-    settled = B.call(BL.and_gate(2), HC._coll(Array(2, BL.BIT), deadline))
+    settled = B.call(BL.and_gate(2), GB._coll(Array(2, BL.BIT), deadline))
     return Coll(_OUT, concat([_all(B, oks).refs, settled.refs]))
 
 
@@ -528,7 +529,7 @@ class TransferBlocks:
 
     @cached_property
     def _program(self) -> Program:
-        return P.population_program(self.unit, 1)
+        return PN.population_program(self.unit, 1)
 
     @cached_property
     def _partition(self) -> dict[str, Any]:
@@ -594,19 +595,6 @@ class TransferBlocks:
 
     def root(self, opening: Hidden) -> str:
         return tree_levels(self.domain(opening.window), self.leaves(opening))[-1][0].hex()
-
-    def registration(self, opening: Hidden, previous: str | None = None) -> dict[str, Any]:
-        """One-stage's record of the execution phase: its salted root and nothing of the attestations. `previous`: the
-        digest of the stream's previous registration."""
-        w = opening.window
-        roots = [{"port": VALUE, "root": self.root(opening), **self.ports(w)[VALUE]}]
-        return R.record(self._program, self.query, {"law": "subset", "k": 1}, S.SCHEME, roots, self.provenance(w),
-                        previous=previous)
-
-    def session(self, opening: Hidden, sample: S.Draw) -> str:
-        """The delivered session's SHA-512: the registration, the sample and the salted leaves the opening reproduces."""
-        return _sha512({"format": SESSION, "registration": sample.docket.digest, "draw": _sha512(dict(sample.draw)),
-                        "leaves": [x.hex() for x in self.leaves(opening)]})
 
     # the challenger
 
@@ -677,7 +665,7 @@ class TransferBlocks:
         return sum(t.leaves for n, t in params if n in self.layout[row])
 
     def _arguments(self, insts: Sequence[HC.Instance]) -> dict[str, list[int]]:
-        out = {end: HC._digest_bits(inst.signed) for end, inst in zip(_ENDS, insts)}
+        out = {end: GB._digest_bits(inst.signed) for end, inst in zip(_ENDS, insts)}
         for end, inst in zip(_ENDS, insts):
             for (name, _), bits in zip(inst.unit.signature()[0], HC.arguments(inst)):
                 if name not in _FIXED:
@@ -913,20 +901,6 @@ class TransferBlocks:
         return stream.outcome(sample, {VERIFIER: verdict}, self.statement(sample),
                               session_roots={VALUE: sample.docket.record["roots"][0]["root"]})
 
-    def unproved_outcome(self, stream: S.Stream, sample: S.Draw, opening: Hidden,
-                         syncs: Sequence[ClockSync]) -> S.Outcome:
-        """`stream.outcome` for a run that proves nothing (a rehearsal, the simulator): on the in-the-clear check
-        (`clear`), which reads the opening, so it is never zero-knowledge, and its
-        verdict says ``"decided_by": "clear"``. The delivered session is the opening's (`session`), and its root the
-        one the opening reproduces, which one-stage's audit holds to the registered root."""
-        v = self.clear(opening, sample, syncs)
-        sessions = [self.session(opening, sample)]
-        digest = _sha512({"format": VERDICT, "registration": sample.docket.digest, "sessions": sessions,
-                          "accepted": v["accepted"], "public": v["public"], "decided_by": "clear"})
-        verdict = {**v, "of_record": True, "decided_by": "clear", "digest": digest, "sessions": sessions}
-        return stream.outcome(sample, {VERIFIER: verdict}, self.statement(sample),
-                              session_roots={VALUE: self.root(opening)})
-
     def _period(self, stream: S.Stream, windows: int | None) -> int:
         default = self.windows
         if stream.spec.digest() != self.spec.digest():
@@ -1052,7 +1026,7 @@ class TransferBlocks:
             reg = stream.log[i] if i < len(stream.log) else None
             w = expected[i] if i < len(expected) else n + i - len(expected)
             in_order = reg is not None and reg.get("window") == self.provenance(w)
-            body = outcomes.get(R.digest(reg)) if in_order else None
+            body = outcomes.get(DD.digest(reg)) if in_order else None
             record = None if body is None else _sha512(body)
             if w < n:
                 records[w] = record

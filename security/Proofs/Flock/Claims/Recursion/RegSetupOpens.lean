@@ -37,7 +37,7 @@ theorem portOpenings_opens {st : _root_.Flock.Stmt} {own : Array _root_.Flock.Re
   exact (hall i hi).2.2
 
 /-- **Every opening the recursive setup lists opens.** -/
-theorem regOpenings_opens {xO : Claims.Msg} {reg : _root_.Flock.Registered.Port} {bc path : ByteArray} {pos : ℕ}
+theorem regOpenings_opens {xO : Hash.Msg} {reg : _root_.Flock.Registered.Port} {bc path : ByteArray} {pos : ℕ}
     (ho : (reg, bc, pos, path) ∈ regOpenings xO) : _root_.Flock.Registered.opens reg bc pos path = true := by
   cases hS : setupO xO with
   | none => simp [regOpenings, hS] at ho
@@ -57,9 +57,9 @@ theorem regOpenings_opens {xO : Claims.Msg} {reg : _root_.Flock.Registered.Port}
 one position under one tree, have one commit string wherever the true calls `l` and the setup's evaluations at `xs`
 have no collision. -/
 theorem bc_eq_of_setup {Coin : Type} {D : Claims.Recursion.Deploy Coin} (hD : RegListed D)
-    {l : List (Claims.Msg × Claims.Msg)} (hl : ∀ e ∈ l, FlockDeploy.sha512 e.1 = e.2) {xs : List Claims.Msg}
+    {l : List (Hash.Msg × Hash.Msg)} (hl : ∀ e ∈ l, FlockDeploy.sha512 e.1 = e.2) {xs : List Hash.Msg}
     (hc : (Claims.findColl (l ++ Claims.Recursion.setupCalls FlockDeploy.sha512 D xs)).isSome = false)
-    {xO xO' : Claims.Msg} (hx : xO ∈ xs) (hx' : xO' ∈ xs) {reg reg' : _root_.Flock.Registered.Port}
+    {xO xO' : Hash.Msg} (hx : xO ∈ xs) (hx' : xO' ∈ xs) {reg reg' : _root_.Flock.Registered.Port}
     {bc bc' path path' : ByteArray} {pos : ℕ} (ho : (reg, bc, pos, path) ∈ regOpenings xO)
     (ho' : (reg', bc', pos, path') ∈ regOpenings xO') (hR : _root_.Flock.Registered.SameRoot reg reg') : bc = bc' :=
   bc_eq_of_regOpenings hD hl hc hx hx' ho ho' hR (regOpenings_opens ho) (regOpenings_opens ho')

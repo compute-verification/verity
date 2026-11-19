@@ -80,12 +80,16 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.prover import opening_prover  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import schedule as SC  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.receipts import Plan  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 from verity.circuits import requirement as RQ, requirement_units as RU  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
@@ -554,9 +558,7 @@ def stage(defn, S, rows, args: list[dict], name: str, out: Path, base: int, boun
     words = [RU.row_words(S, rows, a) for a in args]
     data = {r: np.asarray([w[r] for w in words], dtype=np.uint16) for r, _b, _ps in rows}
     set_name = f"{st.iset.name}-c0"
-    iset = SimpleNamespace(**{**vars(st.iset), "name": set_name})
-    salt_key = hashlib.sha256(f"verity/one-stage/a7/salts\0{name}".encode()).digest()
-    salts = FC.stage_salts(iset, 0, n, st.ports, salt_key)
+    salts = FC.stage_salts(0, n, st.ports)
     for i, a in enumerate(args):
         for r, b, ps in rows:
             if salt_of is not None:
@@ -567,7 +569,7 @@ def stage(defn, S, rows, args: list[dict], name: str, out: Path, base: int, boun
             if c is not None:
                 kind, idx = c
                 salts[r][i] = canons[kind]["salts"][idx]
-    got = st.stage(data, out / "c0", salt_key, salts=salts, indices=range(base, base + n), set_name=set_name)
+    got = st.stage(data, out / "c0", salts=salts, indices=range(base, base + n), set_name=set_name)
     d = out / "c0"
     (d / "inst.bin").rename(d / f"inst-{n}.bin")
     (d / "pub.bin").rename(d / f"pub-{n}.bin")
@@ -674,13 +676,13 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
         S = Ss[at[0]]
         specs.append({"template": f"opening{leaf}", "defn": bind(BC.BlockOpeningCheck, **vars(S)), "S": S,
                       "rows": BC.opening_rows(S), "args": [wits[u] for u in at], "draw": at})
-    program = P.mixed_population_program([(s["defn"], len(s["args"])) for s in specs])
+    program = PN.mixed_population_program([(s["defn"], len(s["args"])) for s in specs])
     query = P.template_instances_query([s["defn"] for s in specs])
     part = P.partition(program, query)
     n_all, ranges = P.units(program, query), P.ranges(program, query)
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
-    sampling_design = D.parse_design(f"stratified:{n_all}")
+    sampling_design = RND.parse_design(f"stratified:{n_all}")
     bound = {"partition": P.digest(part), "program": part["program"]}
     members = []
     for s, (tid, base, cnt) in zip(specs, ranges, strict=True):
@@ -709,7 +711,7 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
     window = {"kind": "stand-in", "of": "check 3 of the remote session's drawn receipts (a7.py, check3_audit), on the stand-in's store",
               "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]} for m in members},
               "link": "opening.plan_link: the plan row by its b || c; every other witness row inside the unit"}
-    rec = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    rec = DK.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for m in members:
@@ -923,7 +925,7 @@ def main() -> int:
     salts = {j: canons["payload"]["salts"][u] for u, j in enumerate(written)}
 
     # the program, its partition and the sampling design
-    program = P.mixed_population_program([(plan_def, a.steps), (map_def, a.steps)])
+    program = PN.mixed_population_program([(plan_def, a.steps), (map_def, a.steps)])
     query = P.template_instances_query([plan_def, map_def])
     part = P.partition(program, query)
     pd = P.digest(part)
@@ -933,7 +935,7 @@ def main() -> int:
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
     a.k = n_all if a.k is None else a.k
     summary["k"] = a.k
-    sampling_design = D.parse_design(f"stratified:{a.k}")
+    sampling_design = RND.parse_design(f"stratified:{a.k}")
     bound = {"partition": pd, "program": part["program"]}
 
     # serving commits: each template's one member, bound to the partition
@@ -967,7 +969,7 @@ def main() -> int:
     window = {"kind": "stand-in", "of": WINDOW_OF,
               "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]} for m in members},
               "link": "none: no served run; vllm's Store backend and its served values replace these"}
-    rec = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    rec = DK.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for c in canons.values():
@@ -979,7 +981,7 @@ def main() -> int:
         checks[f"bindings/{m['name']}"] = bindings(m, canons, pub_args, m["S"])
     receipt = R.receipt(rec, "one-stage-e2e verifier (a7.py)")
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
-    summary.update(population=n_all, partition=pd, registration=R.digest(rec), law=rec["law"],
+    summary.update(population=n_all, partition=pd, registration=DD.digest(rec), law=rec["law"],
                    checks_before_draw={c: v["ok"] for c, v in checks.items()})
     if not all(v["ok"] for v in checks.values()):
         summary["checks"] = checks
@@ -990,7 +992,7 @@ def main() -> int:
     # the verifier's stratified sample, by its own Lean on a development challenger's coins; each member serves its
     # stratum, --zk
     p = a0.challenger_sample(a.lean, ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
-                                    "--stratified", str(a.k)], rec["law"], n_all, R.digest(rec), out / "draw.log")
+                                    "--stratified", str(a.k)], rec["law"], n_all, DD.digest(rec), out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
     served, proved, n_inst, verdicts, statement, sessions, counts, session_roots, opened = [], [], 0, {}, {}, [], {}, {}, {}
@@ -1487,7 +1489,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     fewer = R2.program([(plan_m["defn"], plan_m["n"]), (map_m["defn"], map_m["n"])], mixed=True)
     v = V.check(rec, fewer, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, program, query, D.parse_design(f"stratified:{a.k // 2 if a.k > 1 else a.k + 1}"), a0.SCHEME, want,
+    v = V.check(rec, program, query, RND.parse_design(f"stratified:{a.k // 2 if a.k > 1 else a.k + 1}"), a0.SCHEME, want,
                 leaf_layer=leaf_layer)
     neg["registration-law-another-k (R1)"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(rec, program, query, sampling_design, a0.SCHEME, {k_: w for k_, w in want.items() if not k_.startswith("canon/")}, leaf_layer=leaf_layer)

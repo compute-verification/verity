@@ -82,7 +82,7 @@ theorem sum3_range {L : ℕ} (lg : ℕ → ℕ) (f : ℕ → ℕ → ℕ → ℝ
         _ = _ := Finset.sum_congr rfl fun ℓ _ => Fin.sum_univ_eq_sum_range (f r ℓ) _
 
 /-- A sum over `CpDep`'s positions of `x`, as one over reps, slots and level positions. -/
-theorem sum_depIdx (x : Claims.Msg) (f : ℕ → ℕ → ℕ → ℝ) :
+theorem sum_depIdx (x : Hash.Msg) (f : ℕ → ℕ → ℕ → ℝ) :
     (∑ j : DepIdx x, f j.1.val j.2.1.val j.2.2.val) =
       ∑ r ∈ Finset.range 2, ∑ ℓ ∈ Finset.range (depL x), ∑ q ∈ Finset.range (2 ^ depLogLen x (ℓ + 1)), f r ℓ q := by
   rw [Fintype.sum_sigma]

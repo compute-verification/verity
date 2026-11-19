@@ -109,6 +109,8 @@ from verity.circuits.defs import bind, composite
 from verity.circuits.ops.prims import ZERO32, const
 from verity.circuits.refs import array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
+from verity.device import compute_capability, load_card, number
+
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.prims import BF16
@@ -117,9 +119,9 @@ from verity_vllm.definitions.registry.tp_allreduce_nodes import (NODE_FILE, NODE
 
 __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "AllReduceMnnvlCoordinate", "AllReduceMultimem",
            "AllReduceMultimemCoordinate", "AllReduceMultimemVector", "AllReduceNcclTree", "AllReduceNcclTreeCoordinate",
-           "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "BATCH_INVARIANT", "CAPTURED", "CAPTURE_RUNS", "CUSTOM_MAX_BYTES",
+           "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "BATCH_INVARIANT", "CAPTURED", "CAPTURE_RUNS", "CUSTOM_MAX_BYTES",  # noqa: F822  (CAPTURED: the module's __getattr__, first read)
            "CUSTOM_SYMM_MAX_BYTES", "Captured", "FI_MAX_BYTES", "MNNVL_ONE_SHOT_BYTES", "MULTIMEM_REPLAY_RUN", "MULTIMEM_VECTOR",
-           "NCCL_TREE_RUNS", "RTX_PRO_6000", "RmsNormMnnvl", "SETTINGS", "SYMM_MEM_MAX_BYTES", "TREE_UNRECORDED", "TREE_UNSTATED",
+           "NCCL_TREE_CARD", "NCCL_TREE_RUNS", "RTX_PRO_6000", "RmsNormMnnvl", "SETTINGS", "SYMM_MEM_MAX_BYTES", "TREE_UNRECORDED", "TREE_UNSTATED",  # noqa: F822  (RTX_PRO_6000: the module's __getattr__, first read)
            "UNSTATED_NODE", "WARP", "chain", "covered", "custom_order", "custom_owners", "custom_stage", "device_of", "eps_bits",
            "fused_max_tokens", "mnnvl_grid", "mnnvl_shot", "multimem_owners", "multimem_runs", "nccl_chain", "node_refusal",
            "offset_free", "ranks", "route_binding", "served_route", "settings_of", "strategy", "tree_clusters", "tree_from_clusters"]
@@ -142,7 +144,6 @@ MULTIMEM_VECTOR = MULTIMEM_ALIGN_BYTES // 2
 #: the record of the run that replayed `CAPTURE_RUNS`' kept multimem words on `AllReduceMultimemVector_v1`'s batch
 #: (tests/properties/glm53_multimem_replay.py)
 MULTIMEM_REPLAY_RUN = EVIDENCE["glm53_multimem_replay"]["run_record"]
-H200_SMS = 132
 _NEG_ZERO32 = const(32, 0x80000000)
 
 #: vLLM's all-reduce settings: name -> (custom all-reduce on, torch symmetric memory on), FlashInfer's all-reduce on in each.
@@ -159,8 +160,17 @@ _DEFAULT_RUNS = CAPTURE_RUNS[2:]
 GLM53_H200_TREE = ((((((0, (1, 2)), 3), 5), 6), 4), 7)
 #: vLLM's batch-invariant mode (``VLLM_BATCH_INVARIANT=1``), the setting under which every TP all-reduce is pynccl's
 BATCH_INVARIANT = "batch-invariant"
-#: (compute capability, SMs) of the RTX PRO 6000 Blackwell Server Edition
-RTX_PRO_6000 = ("12.0", 188)
+#: the card `NCCL_TREE_RUNS` ran on, the TP4 capture's own target: its node's card
+#: (calibration/hardware/nodes/rtx-pro-6000-server-x8.toml's device.sku).  `RTX_PRO_6000`, its (compute capability, SMs), and
+#: `CAPTURED`, which keys a route on it, are read from its card file when first used, so importing this module opens no hardware file
+NCCL_TREE_CARD = "rtx-pro-6000-server"
+
+
+def _rtx_pro_6000() -> tuple[str, int]:
+    from verity_torch.pouw.row_table_device import CARD_FILES
+
+    card = load_card(NCCL_TREE_CARD, directory=CARD_FILES)
+    return "%d.%d" % compute_capability(card), int(number(card["sm"]["count"]))
 #: the records of three runs on an RTX PRO 6000 node: Llama-3.1-70B int8's TP4 capture (GPUs 2, 3, 6, 7, NCCL 2.29.7), the replay
 #: of its every all-reduce through `AllReduceNcclTree_v1` (`tests/properties/tp4_nccl_tree_replay.py replay`: 5152 calls,
 #: 1,514,110,976 rank words, GO) and NCCL's tree probed on GPUs 0, 1, 2, 5 (``probe``: the same chain, NaNs 0x7FFF)
@@ -191,16 +201,17 @@ class Captured(NamedTuple):
 #: The covered routes no node's tree keys, lo and hi the fewest and most tokens the capture launched on it (its `FUSED_M`, `AR_M`,
 #: `DSV4_AR_M` and `SWITCH_M`, with counts between; the TP4 capture launched 256 and 1, and NCCL's tree reads no size).
 #: `CAPTURED` adds each node record's routes.
-_BASE_CAPTURED = (
-    Captured("custom-off", 6144, "fused", 1, 42, "AllReduceRmsNormMnnvl_v1", {"FMA": True}, _CUSTOM_OFF_RUNS),
-    Captured("custom-off", 6144, "fi_ar_comm", 1, 42, "AllReduceMnnvl_v1", {}, _CUSTOM_OFF_RUNS),
-    Captured("defaults", 6144, "fused", 1, 42, "AllReduceRmsNormMnnvl_v1", {"FMA": True}, _DEFAULT_RUNS),
-    Captured("defaults", 6144, "fi_ar_comm", 1, 42, "AllReduceMnnvl_v1", {}, _DEFAULT_RUNS),
-    Captured("defaults", 7168, "fi_ar_comm", 1, 36, "AllReduceMnnvl_v1", {}, _DEFAULT_RUNS),
-    Captured("switch", 6144, "ca_comm", 43, 682, "AllReduceCustom_v1", {"STAGE": 2}, CAPTURE_RUNS),
-    Captured(BATCH_INVARIANT, 8192, "pynccl_comm", 1, 256, "AllReduceNcclTree_v1", {"CHAIN": (0, 1, 2, 3)}, NCCL_TREE_RUNS,
-             world=4, device=RTX_PRO_6000, transport="shm"),
-)
+def _base_captured() -> tuple[Captured, ...]:
+    return (
+        Captured("custom-off", 6144, "fused", 1, 42, "AllReduceRmsNormMnnvl_v1", {"FMA": True}, _CUSTOM_OFF_RUNS),
+        Captured("custom-off", 6144, "fi_ar_comm", 1, 42, "AllReduceMnnvl_v1", {}, _CUSTOM_OFF_RUNS),
+        Captured("defaults", 6144, "fused", 1, 42, "AllReduceRmsNormMnnvl_v1", {"FMA": True}, _DEFAULT_RUNS),
+        Captured("defaults", 6144, "fi_ar_comm", 1, 42, "AllReduceMnnvl_v1", {}, _DEFAULT_RUNS),
+        Captured("defaults", 7168, "fi_ar_comm", 1, 36, "AllReduceMnnvl_v1", {}, _DEFAULT_RUNS),
+        Captured("switch", 6144, "ca_comm", 43, 682, "AllReduceCustom_v1", {"STAGE": 2}, CAPTURE_RUNS),
+        Captured(BATCH_INVARIANT, 8192, "pynccl_comm", 1, 256, "AllReduceNcclTree_v1", {"CHAIN": (0, 1, 2, 3)}, NCCL_TREE_RUNS,
+                 world=4, device=_lazy("RTX_PRO_6000"), transport="shm"),
+    )
 
 
 def device_of(compute_capability, sms) -> tuple[str, int]:
@@ -222,7 +233,7 @@ def covered(setting: str, N: int, route: str, M: int, *, world: int = 8, device=
     node, node_dev = stated_node(trees, ftz, int(world)), dev
     if trees is None and ftz is None and UNSTATED_NODE is not None:
         node, node_dev = UNSTATED_NODE[1:], dev or UNSTATED_NODE[0]
-    return next((c for c in CAPTURED if (c.setting, c.N, c.route, c.world) == (setting, N, route, int(world)) and c.lo <= M <= c.hi
+    return next((c for c in _lazy("CAPTURED") if (c.setting, c.N, c.route, c.world) == (setting, N, route, int(world)) and c.lo <= M <= c.hi
                  and c.transport in (None, transport)
                  and (c.device in (None, dev) if c.node is None else (c.device, c.node) == (node_dev, node))), None)
 
@@ -263,9 +274,11 @@ def fused_max_tokens(N: int, tp: int) -> int:
     return FI_MAX_BYTES // (N * 2)
 
 
-def mnnvl_grid(M: int, N: int, sm_count: int = H200_SMS) -> tuple[int, int]:
+def mnnvl_grid(M: int, N: int, sm_count: int | None = None) -> tuple[int, int]:
     """(BLOCK, CLUSTER) of FlashInfer's `adjustGridConfig(M, N, 8, useCluster=true)` with one load per thread, the geometry of
-    both fused kernels; at N = 6144 on an H200: M <= 16 (96, 8), 17..33 (192, 4), 34..66 (384, 2), past it (768, 1)."""
+    both fused kernels, on `sm_count` SMs (None: `UNSTATED_NODE`'s device's); at N = 6144 on 132: M <= 16 (96, 8), 17..33
+    (192, 4), 34..66 (384, 2), past it (768, 1)."""
+    sm_count = UNSTATED_NODE[0][1] if sm_count is None else sm_count
     ceil = lambda a, b: -(-a // b)  # noqa: E731
     threads = ceil(N, 8)
     cluster = 8
@@ -300,12 +313,11 @@ def _fused_geometry(N: int, cluster: int) -> tuple[int, int]:
     return block, block // WARP
 
 
-def custom_stage(world: int, nbytes: int, fully_connected: bool = True) -> int:
-    """vLLM's custom all-reduce kernel for `nbytes` over `world` ranks (``VLLM_CUSTOM_ALLREDUCE_ALGO`` unset): 1 or 2."""
+def custom_stage(world: int, nbytes: int) -> int:
+    """vLLM's custom all-reduce kernel for `nbytes` over `world` ranks of a fully connected topology
+    (``VLLM_CUSTOM_ALLREDUCE_ALGO`` unset): 1 or 2."""
     if world == 2:
         return 1
-    if not fully_connected:
-        raise ValueError("custom all-reduce past two ranks needs a fully connected topology")
     return 1 if (world <= 4 and nbytes < 512 * 1024) or (world <= 8 and nbytes < 256 * 1024) else 2
 
 
@@ -427,11 +439,30 @@ def _node_entries(rec: dict) -> list[Captured]:
     return out
 
 
-#: Every covered route: `_BASE_CAPTURED`'s, and each node record's keyed on its node tree (`_node_entries`)
-CAPTURED = (*_BASE_CAPTURED, *(e for rec in NODE_RECORDS for e in _node_entries(rec)))
+def _captured() -> tuple[Captured, ...]:
+    """Every covered route (`CAPTURED`): `_base_captured`'s, and each node record's keyed on its node tree (`_node_entries`)."""
+    return (*_base_captured(), *(e for rec in NODE_RECORDS for e in _node_entries(rec)))
+
+
+_LAZY = {"RTX_PRO_6000": _rtx_pro_6000, "CAPTURED": _captured}
+
+
+def _lazy(name: str):
+    """``name``'s value, computed once and kept as the module's attribute (so a test may set it)."""
+    if name not in globals():
+        globals()[name] = _LAZY[name]()
+    return globals()[name]
+
+
+def __getattr__(name: str):
+    if name in _LAZY:
+        return _lazy(name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 #: the node (device, TREES, FTZ) `covered` takes for a registration that states no TREES and FTZ, on a device the caller names
-#: or this one: `CAPTURE_RUNS`' node, `GLM53_H200_TREE` on every owner, FTZ off; None refuses it (`node_refusal`'s `TREE_UNSTATED`)
-UNSTATED_NODE = (("9.0", H200_SMS), multimem_trees((GLM53_H200_TREE,) * 8, 8), False)
+#: or this one: `CAPTURE_RUNS`' node, `GLM53_H200_TREE` on every owner, FTZ off, at the device its record holds; None refuses it
+#: (`node_refusal`'s `TREE_UNSTATED`)
+_UNSTATED = (multimem_trees((GLM53_H200_TREE,) * 8, 8), False)
+UNSTATED_NODE = (next(node_key(r)[0] for r in NODE_RECORDS if node_key(r)[1:] == (8, *_UNSTATED)), *_UNSTATED)
 
 
 def node_refusal(trees, ftz, *, device, world: int = 8) -> str | None:

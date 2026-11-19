@@ -17,6 +17,29 @@ from verity_bench import overhead_node
 from verity_bench import overhead_records as R
 from verity_bench.cli import main
 
+#: a launch's GPU node, which the door takes as given and never defaults; its card is its record's
+NODE = "gpu-node-1"
+ON = ["--on", NODE]
+#: a register entry made up for the tests (`fixtures/machines`), every property read
+ONE_CARD = Path(__file__).parent / "fixtures" / "machines" / "one-card.toml"
+
+
+def _machine(directory: Path, name: str, kind: str, card: str) -> None:
+    text = ONE_CARD.read_text().replace('"h100-sxm-80gb-x1"', f'"{kind}"').replace('"h100-sxm-80gb"', f'"{card}"')
+    (directory / f"{name}.toml").write_text(text.replace("research run --on one-card", f"research run --on {name}"))
+
+
+@pytest.fixture(autouse=True)
+def machines(tmp_path, monkeypatch):
+    """The machine register `--on` is read from: NODE an H200 node, and a node with a card the door doesn't measure on."""
+
+    directory = tmp_path / "machines.d"
+    directory.mkdir()
+    _machine(directory, NODE, "h200-sxm-141gb-x1", "h200-sxm-141gb")
+    _machine(directory, "l40s-node", "l40s-x1", "l40s")
+    monkeypatch.setenv("RESEARCH_MACHINES_D", str(directory))
+    return directory
+
 SMALL, MEMBER = "llama3.2-1b", "llama-3.2-1b-h200"
 
 # ---- the command ------------------------------------------------------------------------------------------------------------------
@@ -48,38 +71,45 @@ def test_the_command_launches_each_step_as_a_research_run_on_one_gpu_and_ships_t
         return 0
 
     monkeypatch.setattr(R, "_execute", execute)
-    assert main(["overhead", "points", "--card", "h200"]) == 0
-    assert main(["overhead", "run", "--scheme", "stock", "--point", "L", "--local-only"]) == 0
-    assert main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", s.cubin, "--local-only"]) == 0
+    assert main(["overhead", "points", *ON]) == 0
+    assert main(["overhead", "run", "--scheme", "stock", "--point", "L", "--local-only", *ON]) == 0
+    assert main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", s.cubin, "--local-only", *ON]) == 0
     (points, _), (run, sent), (armed, armed_sent) = launched
     assert job(armed, "60") == ["run", "--card", "h200", "--scheme", "pearl-plus", "--points", "points.json",
                                              "--points-art", art, "--point", "all", "--cubin", "arm.cubin",
                                              "--cubin-art", s.cubin]
     assert armed_sent == [Path(s.store.fetch(art)).read_bytes(), CUBIN]
     with pytest.raises(SystemExit):
-        main(["overhead", "run", "--scheme", "stock", "--cubin", s.cubin, "--local-only"])
+        main(["overhead", "run", "--scheme", "stock", "--cubin", s.cubin, "--local-only", *ON])
     assert "stock has no arm to load it" in capsys.readouterr().err
     with pytest.raises(SystemExit):
-        main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", "art:" + "f" * 64, "--local-only"])
+        main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", "art:" + "f" * 64, "--local-only", *ON])
     assert "isn't in the store" in capsys.readouterr().err
     (tmp_path / "cubins").mkdir()
     (tmp_path / "cubins" / "a.cubin").write_bytes(CUBIN)
     tree = s.store.put_artifact("cubin/v1", {}, tree=tmp_path / "cubins")
     with pytest.raises(SystemExit):
-        main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", tree, "--local-only"])
+        main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", tree, "--local-only", *ON])
     assert "isn't one file" in capsys.readouterr().err
     for argv in (points, run):
-        assert argv[:4] == ["research", "run", "--on", "vy-spot-glm53"] and "--require-result" in argv
+        assert argv[:4] == ["research", "run", "--on", NODE] and "--require-result" in argv
         assert argv[argv.index("--cwd") + 1] == "source" and "--gpus" not in argv
     assert job(points, "150") == ["points", "--card", "h200", "--model", O.KERNEL_MODEL, "--precision", "fp8"]
     assert job(run, "60") == ["run", "--card", "h200", "--scheme", "stock", "--points", "points.json",
                               "--points-art", art, "--point", "L"]
     assert sent == [Path(s.store.fetch(art)).read_bytes()] and run[run.index("--timeout") + 1] == "60m"
     with pytest.raises(SystemExit):
-        main(["overhead", "points", "--card", "rtx-pro-6000"])
-    assert "has no default node" in capsys.readouterr().err
+        main(["overhead", "points"])
+    assert "--on NODE: a launch names the GPU node it runs on" in capsys.readouterr().err
     with pytest.raises(SystemExit):
-        main(["overhead", "run", "--card", "h200", "--local-only"])
+        main(["overhead", "points", "--on", "l40s-node"])
+    assert "give card 'l40s'" in capsys.readouterr().err
+    with pytest.raises(SystemExit, match="machine 'gone': .*gone.toml is unreadable"):
+        main(["overhead", "points", "--on", "gone"])
+    with pytest.raises(SystemExit):
+        main(["overhead", "points", *ON, "--card", "h200"])
+    with pytest.raises(SystemExit):
+        main(["overhead", "run", "--local-only"])
     assert "--scheme S, or --record RUN" in capsys.readouterr().err
 
 
@@ -112,10 +142,10 @@ def test_under_a_research_run_the_table_records_its_metrics_and_prints_the_same(
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20261114-000000-0000")
     runner = REPO / "benchmarks" / "overhead" / "run.py"
     metrics = runpy.run_path(str(runner))["METRICS"]
-    assert metrics == {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C",
-                       "benchmarks/pearl-plus-gamma-l-h200": "pearl-plus/h200/L",
-                       "benchmarks/pearl-plus-gamma-c-h100": "pearl-plus/h100/C",
-                       "benchmarks/pearl-plus-gamma-l-h100": "pearl-plus/h100/L"}
+    assert metrics == {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C own",
+                       "benchmarks/pearl-plus-gamma-l-h200": "pearl-plus/h200/L own",
+                       "benchmarks/pearl-plus-gamma-c-h100": "pearl-plus/h100/C members",
+                       "benchmarks/pearl-plus-gamma-l-h100": "pearl-plus/h100/L members"}
     h200 = {n: metrics[n] for n in metrics if n.endswith("-h200")}
     words = {w: model for model, w in R.MEMBER_MODEL.items()}
 
@@ -142,7 +172,7 @@ def test_under_a_research_run_the_table_records_its_metrics_and_prints_the_same(
         *((n, w) for n in h200 for w in (None, MEMBER)),
         *((n, w) for n in metrics if n not in h200 for w in ("llama-3.1-70b-h100", "llama-3.2-1b-h100"))]
     for m in got["measurements"]:
-        _, card, point = metrics[m["name"]].split("/")
+        _, card, point, _ = R.metric_row(metrics[m["name"]])
         assert m["value"] is None and m["mark"] == "measured" and m["target"] == O.GAMMA_MAX and m["verdict"] is None
         on = f" on {words[m['member'].rsplit('-', 1)[0]]}" if m.get("member") else ""
         assert m["why"] == (f"no γ of record: no labelled run times pearl-plus at {card}'s {point}{on} "
@@ -193,7 +223,7 @@ def test_the_1b_points_launch_on_one_named_gpu_and_cpus_and_their_gamma_is_each_
     monkeypatch.delenv("VERITY_BENCH_VENV", raising=False)
     launched = []
     monkeypatch.setattr(R, "_execute", lambda argv, root: launched.append(list(argv)) or 0)
-    on = ["--on", "vy-spot-glm53", "--gpu", "6", "--cores", "72-95", "--model", SMALL, "--local-only"]
+    on = [*ON, "--gpu", "6", "--cores", "72-95", "--model", SMALL, "--local-only"]
     assert main(["overhead", "points", *on]) == 0
     assert main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", s.cubin, *on]) == 0
     with pytest.raises(SystemExit):
@@ -215,7 +245,7 @@ def test_the_1b_points_launch_on_one_named_gpu_and_cpus_and_their_gamma_is_each_
     head, _, tail = printed.partition(f"\n## {SMALL}\n\n")
     assert f"| {seventy} |" in head and one not in head and f"| {one} |" in tail and O.covers(SMALL) in tail
     rows = {(r["model"], r["point"]): r for r in table["rows"]}
-    written = R.measurements(table, {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C"})
+    written = R.measurements(table, {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C own"})
     assert [(m.get("member"), m["value"], m["inputs"]) for m in written] == [
         (None, rows["llama3.1-70b", "C"]["gamma"]["gamma"], [seventy, big]),
         (MEMBER, rows[SMALL, "C"]["gamma"]["gamma"], [one, small])]
@@ -230,7 +260,7 @@ def test_a_run_that_keeps_its_reports_goes_through_the_door_and_is_never_of_reco
     monkeypatch.delenv("VERITY_BENCH_VENV", raising=False)
     launched = []
     monkeypatch.setattr(R, "_execute", lambda argv, root: launched.append(list(argv)) or 0)
-    assert main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", s.cubin, "--keep-reports", "--local-only"]) == 0
+    assert main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", s.cubin, "--keep-reports", "--local-only", *ON]) == 0
     (run,) = launched
     assert job(run, "60")[-1] == "--keep-reports"
     assert R.door_why({"argv": run[run.index("--") + 1:]}, "r", "run") is None
@@ -238,50 +268,3 @@ def test_a_run_that_keeps_its_reports_goes_through_the_door_and_is_never_of_reco
     assert overhead_node.KEEP_REPORTS_WHY in R.of_record(s.store, kept)[1]
     with pytest.raises(ValueError, match="a profiling pass is never of record"):
         R.record_run(s.store, kept)
-
-
-def test_the_h100_s_door_sweeps_times_and_records_on_its_own_node_with_the_h200_node_s_host_weight(tmp_path, monkeypatch,
-                                                                                                    scheme):
-    """The H100 is a card of its own records (its SMs, L2 and datasheet rate), its host CPU weighed at its Xeon Platinum
-    8468's 0.48, which every point it times says; its sweep and timed run launch on its node and pass the door, and its
-    run of record is a row of its own beside the H200's, whose note is unchanged."""
-
-    h100, h200 = O.CARDS["h100"], O.CARDS["h200"]
-    assert (h100.sms, h100.l2_bytes, h100.arch, h100.datasheet) == (132, 50 << 20, "sm_90a", h200.datasheet)
-    assert h100.cpu_sm_s_per_core_s == h200.cpu_sm_s_per_core_s and h200.note is None
-    assert O.row_note({"commits_y": True}, "h100") == h100.note
-    assert O.row_note({"commits_y": False}, "h100") == f"{O.WITHOUT_Y}; {h100.note}"
-    assert all(O.row_note(arm, "h200") == O.y_note(arm) for arm in (None, {}, {"commits_y": True}, {"commits_y": False}))
-
-    s = Store(tmp_path)
-    old = stored_points(tmp_path, s, "r20261104-020000-0001")
-    art = stored_points(tmp_path, s, "r20261104-020000-0003", card="h100")
-    assert R.current_points(s.store, "h100") == art and R.current_points(s.store, "h200") == old
-    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "producer"))
-    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(s.config))
-    monkeypatch.delenv("VERITY_BENCH_VENV", raising=False)
-    launched = []
-    monkeypatch.setattr(R, "_execute", lambda argv, root: launched.append(list(argv)) or 0)
-    assert main(["overhead", "points", "--card", "h100"]) == 0
-    assert main(["overhead", "run", "--card", "h100", "--scheme", "pearl-plus", "--cubin", s.cubin, "--local-only"]) == 0
-    for argv in launched:
-        assert argv[argv.index("--on") + 1] == "vy-h100-1"
-        assert R.door_why({"argv": argv[argv.index("--") + 1:]}, "r", argv[argv.index("bash") + 2]) is None
-    assert job(launched[1], "60")[:9] == ["run", "--card", "h100", "--scheme", "pearl-plus", "--points", "points.json",
-                                          "--points-art", art]
-
-    seventy = timed(tmp_path, s, old, "pearl-plus", "r20261104-030000-0002")
-    run = timed(tmp_path, s, art, "pearl-plus", "r20261104-030000-0004", card="h100")
-    assert R.record_run(s.store, seventy) == [] and R.record_run(s.store, run) == []
-    table = R.build(s.store, local_only=True)
-    rows = {(r["card"], r["point"]): r for r in table["rows"]}
-    for point in O.POINTS:
-        assert rows["h100", point]["of_record"] and rows["h100", point]["run"] == run
-        assert rows["h100", point]["note"] == f"{O.WITHOUT_Y}; {h100.note}"
-        assert rows["h200", point]["note"] == O.WITHOUT_Y
-    seven, small = R.measurements(table, {"benchmarks/pearl-plus-gamma-c": "pearl-plus/h100/C"})
-    assert (seven["member"], seven["value"]) == ("llama-3.1-70b-h100", rows["h100", "C"]["gamma"]["gamma"])
-    assert seven["extra"]["note"] == rows["h100", "C"]["note"]
-    assert (small["member"], small["value"]) == ("llama-3.2-1b-h100", None)
-    own, member = R.measurements(table, {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C"})
-    assert "member" not in own and own["value"] == rows["h200", "C"]["gamma"]["gamma"] and member["value"] is None

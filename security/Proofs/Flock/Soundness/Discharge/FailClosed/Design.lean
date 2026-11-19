@@ -35,7 +35,7 @@ sampling design's samples, `TableCRL`, `LinkCRL`.
 
 namespace FlockSoundness.Discharge
 
-open Game Model Accounting Refine Audit
+open Game Model Accounting Refine Spot.Sampling
 
 /-- **A sample design**: the sampling design verity-verify-proof's live sample of a one-table session without `--zk` is by. The stratified sample
 at executable strata `St`, stratum `s` sampling `(St s).k` of its units, over `pop` units; or the subset sample of `kd` of
@@ -70,7 +70,7 @@ noncomputable def idealMiss : SampleDesign n → ℕ → ENNReal
   | @stratified _ m St _ _, K =>
     ⨅ σs : Fin n → Fin m, ⨅ _ : SamplingDesign.ExecStrata σs (fun s => (St s).k) St,
     ⨅ hks : ∀ s, (St s).k ≤ (SamplingDesign.stratum σs s).card, (SamplingDesign.stratified σs (fun s => (St s).k) hks).miss K
-  | subset kd hkd, K => (SamplingDesign.subset n kd hkd).miss K
+  | subset kd hkd, K => (Verity.SamplingDesign.subset n kd hkd).miss K
 
 /-- **Under A3 the live sample misses no more than the ideal miss**: `SamplingDesign.execOS_miss_le` at every assignment the strata
 describe, at the stratified sample, and `Tables.execOS_subset_miss_le` at the subset sample. -/
@@ -92,7 +92,7 @@ end FlockSoundness.Discharge
 
 namespace FlockSoundness.Discharge.Exec
 
-open Game Model Accounting Refine Audit Audit.Partition
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
@@ -156,7 +156,7 @@ end FlockSoundness.Discharge.Exec
 
 namespace FlockSoundness.Discharge.HiddenExec
 
-open Game Model Accounting Refine Audit Audit.Partition Flock
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition Flock
 open FlockSoundness.Discharge.Exec
 open scoped ENNReal
 
@@ -218,7 +218,7 @@ end FlockSoundness.Discharge.HiddenExec
 
 namespace FlockSoundness.Discharge.FailClosed
 
-open Game Model Accounting Refine Audit Audit.Partition Flock
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition Flock
 open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Inst
 open FlockSoundness.Discharge.HiddenExec FlockSoundness.Discharge.HiddenDec FlockSoundness.Discharge.DecodeZL
 open FlockSoundness.Discharge.General (rsAtG rsAtG_computes)

@@ -27,12 +27,12 @@ later replay of the same picks reads, so the bundle can go and the Commit can st
 serving again (the sample is seeded from the run root, so it makes the same picks).  Not under other Definition bodies: the replay is
 refused unless the Definitions its tree evaluates the picks by are the ones the Build of record bound (`check.replay.definitions`).
 The keep stays on the node: it holds clear values (the opened committed values with their salts, the requests and served tokens, the
-opened tensors' salt keys and bundle bytes), so no stage publishes it (`research_outputs`).
+opened tensors' salts and bundle bytes), so no stage publishes it (`research_outputs`).
 
     store/            the bundle's store, slim (`commit.store_dump`, `touched=`): only the byte ranges and Merkle nodes the replay and the
                       linkage opened, folding to the run root
-    weights/          the bundle's weights tree and the tensors it carries, slim (`slim_tree`): under rows-sha512 the salt keys and
-                      bundle bytes of the tensors the replay consumed alone, never the registration's key;
+    weights/          the bundle's weights tree and the tensors it carries, slim (`slim_tree`): under rows-sha512 the salts (its salt
+                      file, `tree.salts/`) and bundle bytes of the tensors the replay consumed alone;
     binding_map.json, context.json  the bundle's
     slim.json         {schema, pair, run_root, program_digest, programs, binding_map_sha256, bundle_manifest_sha256, commit_pass, picked,
                        picks_key, picks, touched_bytes, files: {path: {sha256, bytes}}, bytes, dump_sha256}, written last
@@ -62,6 +62,8 @@ from typing import Any, Protocol
 
 import numpy as np
 
+from verity.commitments import salt_file as SF
+
 from verity_vllm.commit import step_rows
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.config import option
@@ -89,7 +91,9 @@ __all__ = [
     "provider",
     "registered_roles",
     "replay_args",
+    "salts_path",
     "tensor_root_of",
+    "tensor_salts_of",
     "tree_refusal",
     "weights_attest",
     "worker_peak",
@@ -209,40 +213,36 @@ def root_scheme(root_of_record: str | None) -> str | None:
     return step_rows.NAME if len(root_of_record or "") // 2 == step_rows.ROOT_BYTES else None
 
 
-def tensor_key_of(tree: dict[str, Any], i: int) -> bytes | None:
-    """A rows-sha512 tree's salt key of tensor ``i``: derived from the registration's ``Kw`` (a bundle's tree), else the slim keep's own
-    key for it (`slim_tree`); None when the keep carries none."""
-    if "key" in tree:
-        return step_rows.tensor_key(bytes.fromhex(tree["key"]), i)
-    ks = tree["tensor_keys"].get(str(i))
-    return bytes.fromhex(ks) if ks else None
+def salts_path(bundle: Path) -> Path:
+    """The salt file of a bundle's weights registration, in its private part (`replay_bundle.private_file`), or of a slim keep's:
+    ``weights/tree.salts`` beside ``weights/tree.json``."""
+    return RB.private_file(bundle, RB.PRIVATE[1]) or SF.beside(Path(bundle) / "weights" / "tree.json")
 
 
-def held_tensor_key(tree: dict[str, Any], i: int) -> bytes:
-    """`tensor_key_of` tensor ``i``; KeyError where the slim keep carries none."""
-    ks = tensor_key_of(tree, i)
-    if ks is None:
-        raise KeyError(f"registered tensor {i} ({tree['names'][i][0]}): the slim keep carries no salt key for it")
-    return ks
+def tensor_salts_of(bundle: Path, tree: dict[str, Any], i: int) -> bytes | None:
+    """Tensor ``i``'s row salts from the registration's salt file (`salts_path`); None when it holds none for the tensor (a slim keep
+    holds those of the tensors its replay opened alone)."""
+    p, name = salts_path(bundle), tree["names"][i][0]
+    if not int(tree["names"][i][3]):
+        return b""
+    if not (p / SF.INDEX).is_file() or name not in SF.params(p):
+        return None
+    return SF.read(p, name)
 
 
-def tensor_root_of(tree: dict[str, Any], i: int, raw: np.ndarray) -> bytes:
-    """Tensor ``i``'s root (`step_rows.keyed_tensor_root` under `held_tensor_key`)."""
-    return step_rows.keyed_tensor_root(bytes.fromhex(tree["geo_digest"]), i, tree["names"][i], memoryview(raw).cast("B"),
-                                       held_tensor_key(tree, i))
+def tensor_root_of(bundle: Path, tree: dict[str, Any], i: int, raw: np.ndarray) -> bytes:
+    """Tensor ``i``'s root under its salts (`tensor_salts_of`); KeyError where the salt file holds none for it."""
+    ys = tensor_salts_of(bundle, tree, i)
+    if ys is None:
+        raise KeyError(f"registered tensor {i} ({tree['names'][i][0]}): the salt file holds no salts for it")
+    return step_rows.tensor_root(bytes.fromhex(tree["geo_digest"]), i, tree["names"][i], memoryview(raw).cast("B"), ys)
 
 
 def slim_tree(tree: dict[str, Any], opened: Iterable[str]) -> dict[str, Any]:
-    """The weights tree a slim keep carries: never the registration's ``Kw`` (every weights leaf's salt derives
-    from it), only ``step_rows.tensor_key(Kw, t)`` of each tensor ``opened`` names (those the replay consumed and opened), and the
-    bundle's bytes of those alone."""
-    at, keep_ = {e[0]: i for i, e in enumerate(tree["names"])}, set(opened)
-    keys: dict[str, str] = {}
-    for n in sorted(keep_ & at.keys(), key=at.__getitem__):
-        ks: Any = tensor_key_of(tree, at[n])  # typed Any: a tree that carries no key for the tensor raises AttributeError here
-        keys[str(at[n])] = ks.hex()
-    return {k: v for k, v in tree.items() if k not in ("key", "tensor_keys", "extra")} | {
-        "tensor_keys": keys, "extra": {n: i for n, i in tree["extra"].items() if str(i) in keys}}
+    """The weights tree a slim keep carries: the bundle's, with the bytes of the tensors ``opened`` names (those the replay consumed
+    and opened) alone; `keep` writes those tensors' salts alone into its salt file."""
+    keep_ = set(opened)
+    return {k: v for k, v in tree.items() if k != "extra"} | {"extra": {n: i for n, i in tree["extra"].items() if n in keep_}}
 
 
 def folded_root(tree: dict[str, Any]) -> str:
@@ -263,8 +263,8 @@ def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, tp: dict[str,
 
     name, dt, shape, nb = tree["names"][i]
     src = "bundle" if name in bundle_tensors(tree) else "checkpoint"
-    if tensor_key_of(tree, i) is None:
-        return src, None, "the slim keep carries no salt key for it", False
+    if tensor_salts_of(bundle, tree, i) is None:
+        return src, None, "the salt file holds no salts for it", False
     if src == "bundle":
         raw = np.fromfile(bundle / "weights" / "extra" / f"{i}.bin", dtype=np.uint8)
     else:
@@ -282,7 +282,7 @@ def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, tp: dict[str,
         raw = np.ascontiguousarray(words).reshape(-1).view(np.uint8)
     if raw.size != int(nb):
         return src, None, f"{raw.size} B, registered {nb} B", True
-    if tensor_root_of(tree, i, raw) != bytes.fromhex(tree["tensor_roots"][i]):
+    if tensor_root_of(bundle, tree, i, raw) != bytes.fromhex(tree["tensor_roots"][i]):
         return src, None, "tensor root != the committed tensor root", True
     return src, raw, None, True
 
@@ -328,6 +328,8 @@ def tree_refusal(tree: dict[str, Any], root_of_record: str | None) -> tuple[str,
     rows-sha512 tree under a rows-sha512 root of record (`root_scheme`) is read: a tree of another scheme, or one recorded before trees
     named theirs, is refused by name before anything opens, and so is a root of record of another size."""
     have, want = tree_scheme(tree), root_scheme(root_of_record)
+    if "key" in tree or "tensor_keys" in tree:
+        return "", "the bundle's weights tree was registered under a weights key: only a registration with a salt file is read"
     if have != step_rows.NAME:
         named = "names no scheme" if have is None else f"is {have}'s"
         return "", f"the bundle's weights tree {named}: only a {step_rows.NAME} tree is read"
@@ -455,7 +457,7 @@ def of_record(b: dict[str, Any], out: Path, *, awaiting: bool = True) -> tuple[l
         undecided(row["commit"], done["bundle"])
     if row is None or (awaiting and not RB.awaits_replay(RB.commit_of(row))):
         raise Refused(f"pair {pair}: no instrumented run awaiting its deferred replay in {out / 'runs.jsonl'}")
-    store, run = SD.load(bdir / "store")
+    store, run = RB.load_store(bdir)
     c = row["commit"]
     folded = store._run_root(run)
     for what, got in (("the bundle's run root", ctx["run_root"]), ("the store's run root", run.run_root.hex()),
@@ -579,8 +581,8 @@ def keep(out: Path, b: dict[str, Any], store: Any, run: Any, touched: SD.Touched
          opened: Iterable[str]) -> dict[str, Any] | None:
     """Writes the decided replay's slim keep (module docstring) and returns its `slim.json`; None, with nothing written, when the sample's
     reads were not all made in this process (`plan` is not a plan of as many picks as the replay picked).  ``opened``: the registered
-    tensors the replay consumed and opened, the only ones whose salt keys and bundle bytes the keep's weights tree carries (`slim_tree`)."""
-    ctx, bdir, pair = b["context"], Path(b["path"]), int(b["context"]["pair"])
+    tensors the replay consumed and opened, the only ones whose salts and bundle bytes the keep carries (`slim_tree`)."""
+    ctx, bdir, pair, opened = b["context"], Path(b["path"]), int(b["context"]["pair"]), set(opened)
     replay, commit_args = c.get("sampled_replay"), ctx.get("args")
     sr: dict[str, Any] = replay if replay else {}
     sample = sr.get("sample")
@@ -600,6 +602,8 @@ def keep(out: Path, b: dict[str, Any], store: Any, run: Any, touched: SD.Touched
         shutil.copyfile(bdir / rel, p / rel)
     (p / "weights").mkdir(exist_ok=True)
     (p / "weights" / "tree.json").write_text(json.dumps(tree, separators=(",", ":")) + "\n")
+    held = SF.params(salts_path(bdir)) if (salts_path(bdir) / SF.INDEX).is_file() else {}
+    SF.write(salts_path(p), {n: SF.read(salts_path(bdir), n) for n in sorted(opened & held.keys())})
     names = sorted(x.relative_to(p).as_posix() for x in p.rglob("*") if x.is_file())
     with ThreadPoolExecutor(8) as pool:
         sums = pool.map(lambda r: hashed.get(r.removeprefix("store/")) or RB._sha256(p / r), names)

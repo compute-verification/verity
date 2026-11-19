@@ -48,6 +48,7 @@ from typing import Mapping, Sequence
 import numpy as np
 
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from . import circuit as FC
 
@@ -142,10 +143,11 @@ def registration_record(program, partition: Mapping, entries: Sequence[Mapping])
     """The circuit registration over ``program`` (a core ``Program``) and its ``verity/partition/v1`` object ``partition``,
     registering ``entries`` (`Registered.entry`): one-stage ``registration.record`` with the sampling design ``stratified`` over the
     population, the statement's scheme, no served roots and the `WINDOW` (the module docstring)."""
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+    from verity.protocols.proofs.spot.prover import docket as DK
 
     query = partition["query"]
-    return R.record(program, query, {"law": "stratified", "k": P.units(program, query)}, FC.SCHEME, [], WINDOW,
+    return DK.record(program, query, {"law": "stratified", "k": P.units(program, query)}, FC.SCHEME, [], WINDOW,
                     partition=partition, registered=list(entries))
 
 
@@ -169,7 +171,8 @@ def bind(stage: Path, program, partition: Mapping, entries: Sequence[Mapping], p
     every value an earlier `bind` registered; a value is registered once) written to `REGISTRATION`, its digest bound into
     META (`REGISTRATION_KEY`), and ``private`` (``{value: {"nodes", "salts"}}``, the prover's openings) added to `PRIVATE`.
     Refused unless META names ``partition`` and its program. Returns the record."""
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
+    from verity.commitments import docket_digest as DD
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
     stage = Path(stage)
     m = meta(stage)
@@ -182,7 +185,7 @@ def bind(stage: Path, program, partition: Mapping, entries: Sequence[Mapping], p
         raise ValueError(f"a value is registered once, and the registration would name {sorted(names)}")
     rec = registration_record(program, partition, [*old, *entries])
     (stage / REGISTRATION).write_text(json.dumps(rec, indent=1))
-    bind_meta(stage, REGISTRATION_KEY, R.digest(rec))
+    bind_meta(stage, REGISTRATION_KEY, DD.digest(rec))
     if private:
         own = json.loads((stage / PRIVATE).read_text())["values"] if (stage / PRIVATE).exists() else {}
         own.update({v: {"nodes": list(o["nodes"]), "salts": list(o["salts"])} for v, o in private.items()})
@@ -192,7 +195,7 @@ def bind(stage: Path, program, partition: Mapping, entries: Sequence[Mapping], p
 
 def bound(stage: Path) -> dict:
     """The staged statement's circuit registration, refused unless its digest is the one META carries."""
-    from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+    from verity.commitments import docket_digest as DD
 
     stage = Path(stage)
     want = meta(stage).get(REGISTRATION_KEY)
@@ -201,8 +204,8 @@ def bound(stage: Path) -> dict:
     if not (stage / REGISTRATION).exists():
         raise ValueError(f"{stage}: no {REGISTRATION}, the circuit registration META binds")
     rec = json.loads((stage / REGISTRATION).read_text())
-    if R.digest(rec) != want:
-        raise ValueError(f"{stage}: {REGISTRATION}'s digest {R.digest(rec)} is not the registration META binds ({want})")
+    if DD.digest(rec) != want:
+        raise ValueError(f"{stage}: {REGISTRATION}'s digest {DD.digest(rec)} is not the registration META binds ({want})")
     return rec
 
 
@@ -243,7 +246,7 @@ def register(stage: Path, ports: Mapping[str, str] | None = None, extra: int = 0
         if extra and name in ports:
             rows += [(0,) * len(rows[0])] * extra
             salts += [os.urandom(FC.SALT_BYTES) for _ in range(extra)]
-        reg = G.Registered.commit(program_sha512, value, rows, salts)
+        reg = RV.Registered.commit(program_sha512, value, rows, salts)
         if list(reg.bcs[:len(t["bcs"])]) != t["bcs"]:
             raise AssertionError(f"port {name}: the registration's b || c are not the statement's")
         positions = list(range(len(t["bcs"])))
@@ -251,7 +254,7 @@ def register(stage: Path, ports: Mapping[str, str] | None = None, extra: int = 0
         reads = [None] * population
         for i, u in enumerate(head["units"]["indices"]):
             reads[u] = t["refs"][i]
-        own[name] = {**reg.entry(), "word_bits": G.WORD_BITS, "reads": reads}
+        own[name] = {**reg.entry(), "word_bits": RV.WORD_BITS, "reads": reads}
         out[name] = {"entry": entries[name], "root": reg.root.hex(), "leaves": reg.leaves, "positions": positions}
         if name in ports:
             records.append(reg.entry())

@@ -18,6 +18,7 @@ from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 import pytest
 
@@ -82,92 +83,6 @@ def test_gamma_is_the_lean_twins():
     assert h.name == G.SCHEME and h.prices.fadd == 32 and G.scheme(Fraction(1979, 67)).prices.fadd == Fraction(1979, 67)
 
 
-def test_the_profile_gives_each_launch_to_the_step_that_launched_it():
-    """glm53_profile's report: a GPU activity is the innermost step's around its launch (the API call's thread and time, not
-    when it ran), one launched outside every call is dropped, the GPU span is the calls' first start to their last end over
-    the calls, the solo call's is its own, and a reference SHA-512 launch is named as a fallback."""
-    spec = importlib.util.spec_from_file_location("pearl_c_sm90_glm53_profile", HERE / "glm53_profile.py")
-    P = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(P)
-    t, label = 7, "6144:2048 m16 hash"
-    ranges = [(t, 0, 100, f"call {label} #0"), (t, 10, 30, "step commit_a"), (t, 40, 60, "step gemm_pearlc"),
-              (t, 70, 90, "host after"), (t, 75, 85, "host screen"),
-              (t, 100, 200, f"call {label} #1"), (t, 110, 130, "step commit_a"), (t, 140, 160, "step hash_leaf"),
-              (t, 300, 400, f"solo {label}"), (t, 310, 320, "step commit_a"), (t, 500, 900, f"pass_end {label}")]
-    acts = [(t, 15, 1000, 3000, "kernel", "pd_commit_851"), (t, 45, 3000, 5000, "kernel", "gemm_pearlc_d"),
-            (t, 80, 5000, 5500, "kernel", "screen"), (t, 72, 5500, 5600, "memcpy", "memcpy"),
-            (t, 105, 6000, 6100, "memcpy", "memcpy"), (t, 115, 7000, 9000, "kernel", "pd_commit_851"),
-            (t, 145, 9000, 10000, "kernel", "s512_tile_leaves"), (t, 250, 20000, 21000, "kernel", "stray"),
-            (t + 1, 15, 21000, 22000, "kernel", "other thread"), (t, 315, 30000, 32000, "kernel", "pd_commit_851")]
-    out = P.report(sorted(ranges), [(*a, 7) for a in acts])
-    assert set(out) == {label}
-    r, steps = out[label], out[label]["steps"]
-    assert r["calls"] == 2 and r["host_wall_us"] == 0.1 and r["pass_end_host_us"] == 0.4
-    assert {s: round(v["gpu_us"], 9) for s, v in steps.items()} == {
-        "step commit_a": 2.0, "step gemm_pearlc": 2.0, "host screen": 0.5, "host after": 0.1, "host other": 0.05, "step hash_leaf": 1.0}
-    assert steps["step commit_a"]["host_us"] == 0.02 and steps["step commit_a"]["kernels"]["pd_commit_851"]["count"] == 1
-    assert round(steps["host other"]["host_us"], 9) == 0.05 and steps["host screen"]["host_us"] == 0.01
-    assert r["gpu_busy_us"] == 3.85 and r["gpu_span_us_per_call"] == 4.5 and r["solo_gpu_span_us"] == 2.0
-    assert (r["hash_decode"], r["hash_fast"], r["fallbacks"]) == (["pd_commit_851"], [], ["s512_tile_leaves"])
-
-
-def test_the_lanes_report_gives_each_graph_node_to_its_launchs_call_and_each_stream_its_lane():
-    """glm53_profile's lanes: a graph's nodes go to the call whose range their launch is in, the stream that runs pd_commit
-    is the main lane and those that run pd_tiles the side lanes, numbered in their order; the period is a call's first
-    start to the next's, and each lane's start, span, busy and idle times are over the steady calls (all but the first and
-    the last), its idle time since the call before's last activity on the same lane."""
-    spec = importlib.util.spec_from_file_location("pearl_c_sm90_glm53_profile", HERE / "glm53_profile.py")
-    P = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(P)
-    t, label = 7, "4096:6144 m64 hash"
-    ranges = [(t, 100 * c, 100 * c + 50, f"call {label} #{c}") for c in range(4)]
-    acts = []
-    for c in range(4):                      # main on stream 5; side lanes 9 then 11; 10 µs a call apart
-        at, side = 10_000 * c, (9, 11)[c % 2]
-        acts += [(t, 100 * c + 1, at, at + 4000, "kernel", "pd_commit_979", 5),
-                 (t, 100 * c + 1, at + 4000, at + 9000, "kernel", "gemm_pearlc_d", 5),
-                 (t, 100 * c + 1, at + 4500, at + 6000, "kernel", "pd_tree_979", side),
-                 (t, 100 * c + 1, at + 9000, at + 15000, "kernel", "pd_tiles_979", side)]
-    acts.append((t, 450, 0, 1, "kernel", "stray", 5))
-    r = P.lanes(sorted(ranges), acts)[label]
-    assert r["calls"] == 4 and r["period_us"] == 10.0 and r["periods_us"] == [10.0] * 3
-    assert r["lanes"]["main"] == {"start_us": 0.0, "span_us": 9.0, "busy_us": 9.0, "idle_before_us": 1.0}
-    assert r["lanes"]["side0"] == {"start_us": 4.5, "span_us": 10.5, "busy_us": 7.5}
-    assert r["lanes"]["side1"] == {"start_us": 4.5, "span_us": 10.5, "busy_us": 7.5}
-    assert r["kernels"]["side0 pd_tree_979"] == {"count": 0.5, "mean_us": 1.5}
-    assert [(a["lane"], a["name"]) for a in r["timeline"]] == [
-        ("main", "pd_commit_979"), ("main", "gemm_pearlc_d"), ("side0", "pd_tree_979"), ("side0", "pd_tiles_979")]
-
-
-def test_the_stamps_give_each_phase_since_its_ctas_start_and_the_tail_since_the_first_start():
-    """glm53_profile's stamps: a pd_commit CTA's phases by its own SM's clock (at the clock's rate over its span on the timer),
-    the CTAs' starts and ends and the tail's slots on the global timer since the first CTA's start, the tail CTA when
-    pd_commit's last CTA ran it, and an unwritten slot left out."""
-    import struct
-    spec = importlib.util.spec_from_file_location("pearl_c_sm90_glm53_profile", HERE / "glm53_profile.py")
-    P = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(P)
-    slots, count = 16, 2
-    words = [0] * (2 * slots * (count + 1))
-
-    def put(row, slot, ns, clock):
-        words[2 * (slots * row + slot):2 * (slots * row + slot) + 2] = [ns, clock]
-    for r, (t0, c0) in enumerate(((1_000_000, 50_000), (1_004_000, 90_000))):   # CTA 1 starts 4 µs later, on another SM
-        for slot, us in ((0, 0), (1, 10), (4, 11), (5, 20), (6, 21), (7, 30), (8, 33)):
-            put(r, slot, t0 + 1000 * us, c0 + 2000 * us)                         # a 2 GHz clock
-    put(count, 0, 1_037_000, 0)
-    put(count, 1, 1_040_000, 0)
-    put(count, 9, 1_050_000, 0)
-    put(count, 15, 1, 7)
-    rows, tail = P.stamp_rows(struct.pack(f"<{len(words)}Q", *words), count, slots)
-    s = P.stamp_summary(rows, tail)
-    assert s["rows"] == 2 and s["clock_ghz"] == 2.0 and "salt" not in s["since_cta_start_us"]
-    assert s["since_cta_start_us"]["segs"] == {"median_us": 10.0, "max_us": 10.0}
-    assert s["since_cta_start_us"]["seed"] == {"median_us": 33.0, "max_us": 33.0}
-    assert s["cta_start_us"] == {"median": 2.0, "max": 4.0} and s["cta_end_us"] == {"median": 35.0, "max": 37.0}
-    assert s["tail_us"] == {"start": 37.0, "level1": 40.0, "seed_a": 50.0} and s["tail_cta"] == [1, 7]
-
-
 def _llama():
     """llama32_1b.py, which imports glm53 by its own name from its directory."""
     if str(HERE) not in sys.path:
@@ -212,13 +127,14 @@ def test_h200_session_runs_the_tables_shapes():
         assert {tuple(map(int, x.split("x"))) for x in listed[model][0].split()} == set(mod.in_domain()), model
     assert listed["llama32_1b"][1] == llama.CONFIG["L"] and listed["glm53"][1] == 1
     assert 'for nk in $NKS; do\n  SHAPES="$SHAPES 64x$nk 8192x$nk"' in sh
-    assert '"$D/glm53_passes.py" capture --model "$MODEL" --out "$O/passes"' in sh
+    assert '"$D/glm53_passes.py" capture --model "$MODEL" --retain "$KEPT" --out "$O/passes"' in sh
+    assert "KEPT=$(mktemp -d /tmp/pearlplus-glm53.XXXXXX)" in sh and """trap 'rm -rf "$S" "$KEPT"' EXIT""" in sh
     assert '"$D/glm53_timing.py" --model "$MODEL" --out "$O" --graphs --schedule serial deferred-a >' in sh
     assert '"$D/glm53_timing.py" --model "$MODEL" --whole --layers "$LAYERS" --out "$O/whole"' in sh
     assert 'PEARLC_CHAIN=h3 "$PY" "$D/glm53_timing.py" --model "$MODEL" --out "$O/timing-h3" --m 2048 8192' in sh
-    assert sh.index('"$D/glm53_passes.py" full --out "$O/passes" --jobs "$(nproc)"') > sh.index('echo "lease rc $?"')
-    lease, volunteer = sh.index('echo "lease rc $?"'), sh.index('"$D/glm53_passes.py" volunteer --out "$O/passes" --jobs "$(nproc)"')
-    verify = sh.index('"$D/glm53_passes.py" verify --out "$O/passes" --fast --draws "${DRAWS:-459}"')
+    assert sh.index('"$D/glm53_passes.py" full --retain "$KEPT" --out "$O/passes" --jobs "$(nproc)"') > sh.index('echo "lease rc $?"')
+    lease, volunteer = sh.index('echo "lease rc $?"'), sh.index('"$D/glm53_passes.py" volunteer --retain "$KEPT" --out "$O/passes" --jobs "$(nproc)"')
+    verify = sh.index('"$D/glm53_passes.py" verify --retain "$KEPT" --out "$O/passes" --fast --draws "${DRAWS:-459}"')
     assert lease < volunteer < verify and _served_passes().DRAWS == 459
     assert sh.index('"$D/glm53_passes.py" capture') < sh.index('[ "$TIMING" = 1 ] || exit 0') < sh.index('"$D/glm53_timing.py"')
     lock, trap = sh.index('sudo -n nvidia-smi -i "$U" -lgc "$LOCK_MHZ,$LOCK_MHZ"'), sh.index('trap "sudo -n nvidia-smi -i $U -rgc')
@@ -555,6 +471,15 @@ def _passes_module():
     return sys.modules[spec.name]
 
 
+def test_the_passes_directory_is_refused_when_it_is_holds_or_sits_inside_a_runs_directory(tmp_path):
+    why = _passes_module().retain_why
+    run, out = tmp_path / "run", tmp_path / "run" / "out"
+    for retain in (out, out / "kept", run, tmp_path):
+        assert "never go under a run's directory" in why(retain, out, str(run)), retain
+    assert why(out / "kept", out, None) is not None
+    assert why(tmp_path / "scratch", out, str(run)) is None
+
+
 @pytest.fixture(scope="module")
 def retained(tmp_path_factory):
     """A retained pass in glm53_passes' layout, as `prefill` and as `decode` (the same pass): two calls of a test instance of
@@ -570,11 +495,12 @@ def retained(tmp_path_factory):
     sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/compute/pouw/prover/clear"))
     import clear_work as CW
     from clear_audit import Prover
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
     from verity_torch.pouw.pearl_c import run_device as PPDR
 
     from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
     from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
+        HM96_SALT,
         HM96_TRANSCRIPT,
         HM96_WEIGHTS,
         ROW_SCHEMA,
@@ -594,7 +520,7 @@ def retained(tmp_path_factory):
     from verity.commitments.merkle import tree_levels
 
     scheme = "pearl-c-h100-v1-h3"
-    s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
+    s = pouw_schemes.get(scheme, k_min=32, tile=(16, 16))
     rng, k = np.random.default_rng(11), 128
 
     def words(r):
@@ -615,15 +541,26 @@ def retained(tmp_path_factory):
     wrows, acts = {0: words(16), 1: words(32)}, {0: words(32), 1: words(16)}
     acts[0][20:] = 0
     work = Workload((Matmul(0, Shape(32, k, 16), 0), Matmul(1, Shape(16, k, 32), 1)))
-    prover = Prover(s, {w: rows(x) for w, x in wrows.items()}, salt_key=bytes([1]) * 32)
+    nonces, key = iter([HM96_WEIGHTS + w for w in wrows] + [u.index for u in work.matmuls] + [HM96_TRANSCRIPT]), bytes([1]) * 32
 
-    def salted(v, nonce, i):
-        return v + hm96_salt(prover.salt_key, nonce, i)
+    def pinned(n):
+        nonce = next(nonces)
+        return [hm96_salt(key, nonce, i) for i in range(n)]
+
+    def kept(tree):
+        return [tree.open(i).value for i in range(tree.domain.count)]
+
+    def salts(tree):
+        return b"".join(v[-HM96_SALT:] for v in kept(tree))
+
+    with mock.patch.object(sys.modules[Prover.__module__], "fresh_salts", pinned):
+        prover = Prover(s, {w: rows(x) for w, x in wrows.items()})
 
     ch = Challenger(0, random.Random(7).randbytes)
     coins = ch.commitment, ch.open("salt", weights_root(prover.weight_roots))
     epoch = Epoch.start(work, prover.weight_roots, *coins)
-    tr = prover.prove(epoch, {i: rows(x) for i, x in acts.items()})
+    with mock.patch.object(sys.modules[Prover.__module__], "fresh_salts", pinned):
+        tr = prover.prove(epoch, {i: rows(x) for i, x in acts.items()})
     splits = {w: PW.Split(k) for w in wrows}
     records = CW.declare(s, epoch, {i: rows(x) for i, x in acts.items()}, {w: rows(x) for w, x in wrows.items()}, splits,
                          real_rows={0: 20})
@@ -637,17 +574,18 @@ def retained(tmp_path_factory):
         weights[str(w)] = {"n": len(x), "k": k, "root": prover.weight_roots[w].hex(), "excluded_b": list(records[w].excluded_b),
                            "rows": PPDR._write(d / "weights" / f"{w}.rows.bf16", bf16(x), digest=False),
                            "tree": PPDR._write(d / "weights" / f"{w}.tree",
-                                              laid(dom, [dom.leaf(j, j, ROW_SCHEMA, salted(r, HM96_WEIGHTS + w, j))
-                                                         for j, r in enumerate(rows(x))]))}
+                                              laid(dom, [dom.leaf(j, j, ROW_SCHEMA, v) for j, v in enumerate(kept(prover.weight_trees[w]))])),
+                           "salts": PPDR._write(d / "weights" / f"{w}.salts", salts(prover.weight_trees[w]))}
     matmuls, y_words = [], 0
-    for u, rec, root in zip(work.matmuls, records, tr.activation_roots):
+    for u, rec, root, at in zip(work.matmuls, records, tr.activation_roots, prover._act_trees):
         x, m, n = rows(acts[u.index]), u.shape.m, u.shape.n
         dom = rows_domain(activation_binding(epoch.salt, u.index), u.index, m, s.commitment_hash)
         matmuls.append({"index": u.index, "m": m, "k": k, "n": n, "weight": u.weight, "real_rows": rec.real_rows,
                         "k_kept": rec.k_kept, "excluded_a": list(rec.excluded_a), "root_a": root.hex(),
                         "rows": PPDR._write(d / "calls" / f"{u.index}.rows.bf16", bf16(acts[u.index]), digest=False),
                         "tree": PPDR._write(d / "calls" / f"{u.index}.tree",
-                                           laid(dom, [dom.leaf(i, i, ROW_SCHEMA, salted(r, u.index, i)) for i, r in enumerate(x)]))})
+                                           laid(dom, [dom.leaf(i, i, ROW_SCHEMA, v) for i, v in enumerate(kept(at))])),
+                        "salts": PPDR._write(d / "calls" / f"{u.index}.salts", salts(at))})
         ctx = Context(epoch.salt, u, root, epoch.weight_roots[u.weight])
         noise = s.noise(ctx)
         ops = s.encode(ctx, noise, x, rows(wrows[u.weight]), Tile(tuple(range(m)), tuple(range(n))))
@@ -662,9 +600,8 @@ def retained(tmp_path_factory):
             "instance": {"k_min": 32, "tile": [16, 16]}, "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(),
             "salt": epoch.salt.hex(), "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
             "commitment": {"root": tr.commitment.root.hex(), "count": count}, "leaves": PPDR._write(d / "leaves", b"".join(leaves)),
-            "tree_t": PPDR._write(d / "tree_t", laid(dt, [dt.leaf(i, i, TILE_SCHEMA, salted(v, HM96_TRANSCRIPT, i))
-                                                       for i, v in enumerate(leaves)])),
-            "hm96_salt_key": prover.salt_key.hex()}
+            "tree_t": PPDR._write(d / "tree_t", laid(dt, [dt.leaf(i, i, TILE_SCHEMA, v) for i, v in enumerate(kept(prover._tree))])),
+            "salts_t": PPDR._write(d / "salts_t", salts(prover._tree))}
     PPDR.write_manifest(d, head, weights, matmuls)
     (base / "coins.json").write_text(json.dumps(coins[0].to_json()) + "\n")
     for name in GP.FULL:
@@ -673,19 +610,22 @@ def retained(tmp_path_factory):
     return SimpleNamespace(base=base, count=count, y_words=y_words, GP=GP)
 
 
-def _copy(retained, tmp_path) -> Path:
+def _copy(retained, tmp_path) -> tuple[Path, Path]:
+    """A copy of the retained passes, and a public directory apart from it holding their coins.json."""
     import shutil
 
     shutil.copytree(retained.base, tmp_path / "passes")
-    return tmp_path / "passes"
+    (tmp_path / "public").mkdir()
+    shutil.copy(retained.base / "coins.json", tmp_path / "public" / "coins.json")
+    return tmp_path / "passes", tmp_path / "public"
 
 
 def test_full_checks_every_tile_and_every_served_y_word(retained, tmp_path):
     """`full` takes every tile of prefill and decode through the verifier's check_tile (openings, then C~ and U against the
     leaf) and every real row's served y against y_unit, on the batch forms with the scalar reference on every 2nd tile too."""
-    out = _copy(retained, tmp_path)
-    assert retained.GP.main(["full", "--out", str(out), "--jobs", "2", "--cross-check", "2"]) == 0
-    res = json.loads((out / "full.json").read_text())
+    out, pub = _copy(retained, tmp_path)
+    assert retained.GP.main(["full", "--retain", str(out), "--out", str(pub), "--jobs", "2", "--cross-check", "2"]) == 0
+    res = json.loads((pub / "full.json").read_text())
     for name in retained.GP.FULL:
         r = res[name]
         assert r["ok"] and r["tiles"] == retained.count and r["failed"] == 0, r["line"]
@@ -699,7 +639,7 @@ def test_full_fails_on_one_served_y_word_or_one_activation_row_and_names_it(reta
     """One served y word off (decode's call 1, row 3, column 17) fails that tile alone, naming the word; one byte of an
     activation row off (prefill's call 0, row 4) fails that row's tiles at their openings."""
     np = pytest.importorskip("numpy")
-    out = _copy(retained, tmp_path)
+    out, pub = _copy(retained, tmp_path)
     y = out / "decode" / "y" / "1.bf16"
     words = np.fromfile(y, "<u2").reshape(16, 32)
     words[3, 17] ^= 1
@@ -708,8 +648,8 @@ def test_full_fails_on_one_served_y_word_or_one_activation_row_and_names_it(reta
     raw = bytearray(a.read_bytes())
     raw[2 * 128 * 4] ^= 0x40
     a.write_bytes(bytes(raw))
-    assert retained.GP.main(["full", "--out", str(out), "--jobs", "1", "--cross-check", "0"]) == 1
-    res = json.loads((out / "full.json").read_text())
+    assert retained.GP.main(["full", "--retain", str(out), "--out", str(pub), "--jobs", "1", "--cross-check", "0"]) == 1
+    res = json.loads((pub / "full.json").read_text())
     dec, pre = res["decode"], res["prefill"]
     assert dec["failed"] == 1 and "served y differs at 1 of 256 words, first row 3 column 17" in dec["failures"][0]["reason"]
     assert pre["failed"] == 1 and pre["failures"] == [{"tile": 0, "reason": "activation opening"}]
@@ -723,12 +663,12 @@ def test_volunteer_leaves_each_pass_no_tile_over_an_inert_bound_and_its_transcri
     verifier's check under it."""
     from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment
 
-    out = _copy(retained, tmp_path)
+    out, pub = _copy(retained, tmp_path)
     before = {n: json.loads((out / n / "manifest.json").read_text()) for n in retained.GP.FULL}
-    assert retained.GP.main(["volunteer", "--out", str(out), "--jobs", "1"]) == 0
+    assert retained.GP.main(["volunteer", "--retain", str(out), "--out", str(pub), "--jobs", "1"]) == 0
     import verify_run as VR
 
-    res, coins = json.loads((out / "volunteer.json").read_text()), CoinCommitment.from_json(json.loads((out / "coins.json").read_text()))
+    res, coins = json.loads((pub / "volunteer.json").read_text()), CoinCommitment.from_json(json.loads((pub / "coins.json").read_text()))
     for name in retained.GP.FULL:
         r, man = res[name], json.loads((out / name / "manifest.json").read_text())
         assert r["ok"] and r["left"] == [] and r["tiles"] == retained.count, r["line"]
@@ -743,12 +683,12 @@ def test_full_requires_the_served_y_unless_told_the_pass_has_none(retained, tmp_
     """A pass without its served y fails `full`, which checks C~ and U alone only under --without-y."""
     import shutil
 
-    out = _copy(retained, tmp_path)
+    out, pub = _copy(retained, tmp_path)
     for name in retained.GP.FULL:
         shutil.rmtree(out / name / "y")
-    assert retained.GP.main(["full", "--out", str(out), "--jobs", "1"]) == 1
-    res = json.loads((out / "full.json").read_text())
+    assert retained.GP.main(["full", "--retain", str(out), "--out", str(pub), "--jobs", "1"]) == 1
+    res = json.loads((pub / "full.json").read_text())
     assert all("call 0: no served y of 20 x 16 BF16 words" in res[x]["error"] for x in retained.GP.FULL) and not res["ok"]
-    assert retained.GP.main(["full", "--out", str(out), "--jobs", "1", "--without-y"]) == 0
-    res = json.loads((out / "full.json").read_text())
+    assert retained.GP.main(["full", "--retain", str(out), "--out", str(pub), "--jobs", "1", "--without-y"]) == 0
+    res = json.loads((pub / "full.json").read_text())
     assert all(res[x]["y_words"] == 0 and "served y not retained" in res[x]["line"] for x in retained.GP.FULL)

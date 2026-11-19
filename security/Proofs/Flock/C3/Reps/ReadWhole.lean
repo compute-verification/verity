@@ -335,7 +335,7 @@ theorem part_ok {sh : Shape} {p : ℕ} {x : RecOpen.GfS × List ℕ × ℕ} (h :
 
 section Net
 
-open FlockSoundness FlockSoundness.Audit
+open FlockSoundness Spot.Sampling
 open FlockVBridge.OfVStar (ReadCol rowCol partRep)
 
 /-- **A net row from the inputs' end to the constant is a computed row** of the audit's rows, reading its columns. -/

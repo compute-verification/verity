@@ -90,18 +90,17 @@ DEV void pl_node(const uint64_t* tm, int i, bool wide, const uint64_t* l, const 
 }
 
 // pl_leaves_V: A's level 0, PL_ROWS rows a CTA of 128 threads (8 PD_PAIR_WORDS bytes of dynamic shared memory: pair 0).  p0
-// the row digests (64 B a row), p1 A's tree (level 0 out, 64 B a node), p2 the prover's salt key, p3 the hm96 constants, p4
-// the unit block (its u64 LE index at byte 96 the salt's nonce), p5 dom_a; i0 rows (at most PL_MAX_ROWS)
+// the row digests (64 B a row), p1 A's tree (level 0 out, 64 B a node), p2 the rows' hm96 salts (192 B a row, row r's at
+// p2 + 192 r: the caller's bytes), p3 the hm96 constants, p5 dom_a; i0 rows (at most PL_MAX_ROWS)
 template <int V> DEV void pl_leaves_t(const Args a) {
   static_assert((V & PD_PAIR) != 0, "pl_leaves' leaf chain is paired");
   __shared__ uint32_t ys[PL_ROWS][48];
   __shared__ uint64_t mk[PL_ROWS][8], ftw[PL_ROWS * PL_FTW], ftm[PL_ROWS][8];
   const int count = a.i[0], tid = threadIdx.x, warp = tid / 32, lane = tid % 32, r0 = PL_ROWS * blockIdx.x;
   if (count > PL_MAX_ROWS || blockDim.x != 128 || pd_dyn_bytes() < 8u * PD_PAIR_WORDS) __trap();
-  const uint32_t* unit = reinterpret_cast<const uint32_t*>(a.p[4]);
-  const uint64_t nonce = (uint64_t)unit[24] | (uint64_t)unit[25] << 32, hm = a.p[3];
+  const uint64_t hm = a.p[3];
   for (int j = warp; j < PL_ROWS; j += 4)
-    if (r0 + j < count) pd_hm_mask(a.p[2], nonce, (uint64_t)(r0 + j), hm, ys[j], lane, mk[j]);
+    if (r0 + j < count) pd_hm_mask(a.p[2], (uint64_t)(r0 + j), hm, ys[j], lane, mk[j]);
   __syncthreads();
   const int j = lane, r = r0 + j;
   const bool on = j < PL_ROWS && r < count, wide = r0 >= 256;

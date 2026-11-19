@@ -23,7 +23,7 @@ without replacement inside each, independently.
   own expansion, and the sample carries the sampling design's keys plus `population` and `units`.
 
 **The work sampling design** (the Lean verifier's `Flock.Draw.SamplingDesign.work`, its bound
-`FlockSoundness.Audit.Work.work_escape_le`): the stratified sampling design's strata and sampler, with each stratum's sample sized by the
+`Spot.Sampling.Work.work_escape_le`): the stratified sampling design's strata and sampler, with each stratum's sample sized by the
 PoUW work its proof blocks do. The verifier's work table gives each template's work per proof block, a natural number in any fixed unit,
 and its floor f_s >= 1 (`work_table`). With W = sum_s w_s n_s >= 1, stratum s samples
 k_s = min(n_s, max(f_s, ceil(K w_s n_s / W))) (`work_k`), and a work stratum is `{"template", "units", "work", "floor",
@@ -36,13 +36,13 @@ k_s = min(n_s, max(f_s, ceil(K w_s n_s / W))) (`work_k`), and a work stratum is 
   the sampling design is derived, or credited 0. The acceptance-probability bound needs each proof block's inclusion probability to be at least K w_u / W
   over the credited W, which a per-template work that over-credits any unit breaks.
 
-**The rate sampling designs** (`parse_rate` and `parse_strata_rate`, the Lean's `Select.parseRate` and `Select.parseStrataRate`): a
+**The rate sampling designs** (`randomness.parse_rate` and `randomness.parse_strata_rate`, the Lean's `Select.parseRate` and `Select.parseStrataRate`): a
 selection rule states its sampling design as a rate q = NUM/DEN, which has no sampling design object of its own. Over a docket's
 N proof blocks `rate:NUM/DEN` or `rate:NUM/DEN:T` is `subset:K` at K = `rate_count`, ceil(q N) rounded up to a multiple of the T
 tables. `stratified-rate:NUM/DEN` is the stratified sampling design at the K its strata need (`strat_k`: the most any stratum of
 n_s proof blocks needs for `stratum_k` to reach ceil(q n_s), at most N), so every stratum samples at least q of its proof blocks
 however many the prover registers in it or elsewhere (Lean `Rate.stratK_ge`). `work-rate:NUM/DEN` is the work sampling design at K =
-ceil(q N) over a table the verifier derives (`rate_table`), the verifier's work table's work with each stratum's floor raised to
+ceil(q N) over a table the verifier derives (`verity.commitments.rate`'s `rate_table`), the verifier's work table's work with each stratum's floor raised to
 ceil(q n_s) (`rate_floor`), and since k_s >= its floor, every stratum samples at least q of its proof blocks too (Lean
 `Rate.workK_ge`). A fixed count, `subset:K`, `stratified:K` or `work:K`, is refused as a rule: a proof block's inclusion K/N falls
 as the prover pads the N it registers.
@@ -58,82 +58,14 @@ from typing import Any, Mapping, Sequence
 
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
+from verity.commitments.randomness import digits
+from verity.commitments.rate import _int, _nat, _size, rate_count, work_table
 
 from . import partition as P
 from .verdict import Verdict, _Collect
 
 _STRATUM_KEYS = {"template", "units", "k"}
 _WORK_STRATUM_KEYS = {"template", "units", "work", "floor", "k"}
-
-
-def digits(s: str) -> bool:
-    """One or more ASCII digits, as the Lean verifier reads a number (`str.isdigit` alone admits other scripts' digits)."""
-    return s.isascii() and s.isdigit()
-
-
-def parse_design(text: str) -> dict[str, Any]:
-    """`subset:K` or `bernoulli:NUM/DEN` (`flock-circuit serve --draw`'s syntax), or `stratified:K` or `work:K` (rules, which `derive`
-    expands over a program and query, and for `work` a work table), as a sampling design object; numbers in ASCII digits, `K >= 1`.
-    A design outside the sampling claims' scope (`Claims.Sampling.OneStage.WellFormed`) is refused: `subset:0` samples
-    nothing, so its `P_a` is no acceptance probability."""
-    kind, _, arg = text.partition(":")
-    if kind == "subset" and digits(arg) and int(arg) >= 1:
-        return {"law": "subset", "k": int(arg)}
-    if kind in ("stratified", "work") and digits(arg) and int(arg) >= 1:
-        return {"law": kind, "k": int(arg)}
-    if kind == "bernoulli":
-        num, _, den = arg.partition("/")
-        if digits(num) and digits(den) and 0 < int(den) and int(num) <= int(den):
-            return {"law": "bernoulli", "p": f"{int(num)}/{int(den)}"}
-    raise ValueError(f"a law is subset:K, stratified:K, work:K or bernoulli:NUM/DEN, not {text!r}")
-
-
-def parse_rate(text: Any) -> tuple[int, int, int] | None:
-    """The rate sampling design `rate:NUM/DEN` or `rate:NUM/DEN:T` as `(NUM, DEN, T)`: a public rate NUM/DEN with 0 < NUM <= DEN over
-    T >= 1 tables (one when it names none), numbers in ASCII digits; None for any other text. A selection rule states it
-    (`service.SamplingDesign`), and over a docket's N proof blocks it is `subset:K` at K = `rate_count` (`service.selection_sampling_design`)."""
-    if not isinstance(text, str):
-        return None
-    kind, _, arg = text.partition(":")
-    q, sep, t = arg.partition(":")
-    num, _, den = q.partition("/")
-    if not sep:
-        tables = 1
-    elif digits(t):
-        tables = int(t)
-    else:
-        return None
-    if kind == "rate" and digits(num) and digits(den) and 0 < int(num) <= int(den) and tables >= 1:
-        return int(num), int(den), tables
-    return None
-
-
-def rate_count(num: int, den: int, tables: int, n: int) -> int:
-    """The rate sampling design's sample over n proof blocks: ceil(NUM n / DEN) rounded up to a multiple of `tables`, so each of the session's
-    tables proves the same count and every proof block is sampled with probability K/n >= NUM/DEN, whatever n the prover registers.
-    The Lean's `Spot.Rate.count` is this."""
-    return tables * -(-(num * n) // (den * tables))
-
-
-def parse_strata_rate(text: Any) -> tuple[bool, int, int] | None:
-    """The stratified rate sampling design `stratified-rate:NUM/DEN` or the work rate sampling design `work-rate:NUM/DEN` as
-    `(work, NUM, DEN)`, `work` True for the work rate: a public rate NUM/DEN with 0 < NUM <= DEN, numbers in ASCII digits; None
-    for any other text. The Lean's `Select.parseStrataRate` is this."""
-    if not isinstance(text, str):
-        return None
-    kind, _, arg = text.partition(":")
-    num, _, den = arg.partition("/")
-    if kind in ("stratified-rate", "work-rate") and digits(num) and digits(den) and 0 < int(num) <= int(den):
-        return kind == "work-rate", int(num), int(den)
-    return None
-
-
-def rate_floor(num: int, den: int, n: int, floor: int) -> int:
-    """A stratum's floor under the work rate NUM/DEN: ceil(NUM n / DEN), raised to the verifier's `floor`, at most the stratum's n proof
-    blocks. A work sampling design samples each stratum at its floor or more (`work_k`), so every proof block of a stratum whose
-    floor this is is sampled with probability at least NUM/DEN, whatever strata the prover registers. The Lean's
-    `Spot.Rate.floor` is this, and `Rate.workK_ge` the bound."""
-    return min(n, max(floor, rate_count(num, den, 1, n)))
 
 
 def rate_need(num: int, den: int, size: int, n: int) -> int:
@@ -157,57 +89,9 @@ def strata_sizes(program: Program, query: Mapping[str, Any]) -> list[int]:
     return [_size(rs) for _, rs in P.strata(program, query)]
 
 
-def rate_table(program: Program, query: Mapping[str, Any], num: int, den: int,
-               table: Mapping[str, Any] | None) -> dict[str, dict[str, int]]:
-    """The work table the work rate sampling design `work-rate:NUM/DEN` is expanded over: each stratum of the program under the
-    query (`partition.strata`) with the verifier's `table`'s work and its floor at the rate (`rate_floor`). Raises
-    `partition.QueryRefused` when the query doesn't apply, and `ValueError` when there is no table or the table names no work
-    for a stratum's template. The Lean's `Select.Rule.tableOver` is this."""
-    if table is None:
-        raise ValueError("a work rate law needs the verifier's work table")
-    works = work_table(table)
-    out: dict[str, dict[str, int]] = {}
-    for t, rs in P.strata(program, query):
-        if t not in works:
-            raise ValueError(f"the work table names no work for template {t!r}")
-        w, f = works[t]
-        out[t] = {"work": w, "floor": rate_floor(num, den, _size(rs), f)}
-    return out
-
-
 def stratum_k(k: int, size: int, population: int) -> int:
     """A stratum's sample under the stratified rule: max(1, round(k * size / population)), rounding half up."""
     return max(1, (2 * k * size + population) // (2 * population))
-
-
-def work_table(table: Mapping[str, Any]) -> dict[str, tuple[int, int]]:
-    """The verifier's work table (Lean `workTableOfJson`): template descriptor id -> the credited work of one of its proof blocks
-    (a natural number, floor one) or `{"work": w, "floor": f}` with f >= 1; as `{template: (work, floor)}`. Raises
-    `ValueError` naming the first bad entry. See the module docstring for what a proof block's work may count."""
-    if not isinstance(table, Mapping):
-        raise ValueError("a work table is an object from template id to work per unit")
-    out: dict[str, tuple[int, int]] = {}
-    for t, v in table.items():
-        if not isinstance(t, str):
-            raise ValueError("a work table is an object from template id to work per unit")
-        if _nat(v):
-            out[t] = (v, 1)
-        elif isinstance(v, Mapping):
-            if set(v) - {"work", "floor"} or not _nat(v.get("work")):
-                raise ValueError(f"work table: template {t!r}: neither a work nor an object of work and floor")
-            f = v.get("floor", 1)
-            if not _nat(f):
-                raise ValueError(f"work table: template {t!r}: neither a work nor an object of work and floor")
-            if f < 1:
-                raise ValueError(f"work table: template {t!r}: a floor is at least one")
-            out[t] = (v["work"], f)
-        else:
-            raise ValueError(f"work table: template {t!r}: the work is not a natural number")
-    return out
-
-
-def _size(ranges: Sequence[Sequence[int]]) -> int:
-    return sum(hi - lo for lo, hi in ranges)
 
 
 def total_work(strata: Sequence[Mapping[str, Any]]) -> int:
@@ -259,14 +143,6 @@ def sampling_design_of(draw: Mapping[str, Any]) -> dict[str, Any]:
     if draw.get("law") in ("stratified", "work"):
         return {"law": draw["law"], "k": draw.get("k"), "strata": draw.get("strata")}
     return {"law": "subset", "k": draw["k"]} if draw.get("law") == "subset" else {"law": "bernoulli", "p": draw.get("p")}
-
-
-def _int(x: Any) -> bool:
-    return isinstance(x, int) and not isinstance(x, bool)
-
-
-def _nat(x: Any) -> bool:
-    return _int(x) and x >= 0
 
 
 def same_design(a: Any, b: Any) -> bool:
@@ -426,6 +302,6 @@ def check_proved(draw: Mapping[str, Any], proved_units: Sequence[int], instances
     return c.verdict()
 
 
-__all__ = ["TABLES_SAMPLING_DESIGN", "check_draw", "check_proved", "derive", "digits", "fixed_count", "sampling_design_of", "parse_design", "parse_rate",
+__all__ = ["TABLES_SAMPLING_DESIGN", "check_draw", "check_proved", "derive", "fixed_count", "sampling_design_of",
            "proved", "rate_count", "same_design", "strata_problem", "stratum_k", "tables_problem", "total_work", "work_k",
            "work_table"]

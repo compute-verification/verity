@@ -4,7 +4,7 @@
 #
 #   POUS_CMD='bash benchmarks/pous/served_piece.sh "$@"'
 #
-# Before the card: libp2v1.so built for it (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh at ARCH, default sm_90a) into a
+# Before the card: libp2v1.so built for it (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh at ARCH, default the `arch` of this node's card record) into a
 # scratch directory removed on exit, unless P2_LIB names one, as a node that refuses `setarch -R` needs, since the build
 # doesn't run there; the library loaded once by the sessions' Python, with no card to see; and the two Lean verifiers
 # that decide, pous-run-protocol (PoUS's case) and poub-p2-protocol (PoUB-P2's), started building in a scratch copy of
@@ -29,7 +29,7 @@
 # answered: PoUS's case is held by the Python and written as its
 # line, four times C*, to the Lean, which works in a few times that line), all three at once: PoUB-P2's case
 # answered by poub-p2-protocol, its answer to DIR's sibling bandwidth, which BANDWIDTH_CMD collects
-# (served_bandwidth.py collect), and its case to SERVE_DIR/private/bandwidth; and PoUS's case answered by the Python
+# (served_piece.py collect-bandwidth), and its case to SERVE_DIR/private/bandwidth; and PoUS's case answered by the Python
 # and by pous-run-protocol, which must agree with it. This part starts only when the sessions' part exits 0 and
 # those two programs are built. A run that ended in it, or whose Lean
 # didn't answer or agree (the window is then undecided), keeps what the sessions left and can be answered again by
@@ -72,7 +72,7 @@ if [ -n "$RUN_KEYS" ]; then
     esac
   done
 fi
-export PYTHONPATH=$ROOT:$ROOT/adapters/vllm:$ROOT/tools/config:$ROOT/tools/research/src PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH=$ROOT:$ROOT/adapters/vllm:$ROOT/tools/config:$ROOT/tools/research/src:$ROOT/benchmarks/harness PYTHONDONTWRITEBYTECODE=1
 K=
 S=$(mktemp -d); trap 'rm -rf "$S" ${K:+"$K"}' EXIT
 LIB=${P2_LIB:-}
@@ -80,7 +80,14 @@ if [ -z "$LIB" ]; then
   setarch "$(uname -m)" -R true 2> /dev/null \
     || { echo "POUS: no answer: setarch -R is refused on this node, so libp2v1.so doesn't build here: build it where" \
            "it is allowed (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh) and name its directory in P2_LIB"; exit 3; }
-  ARCH=${ARCH:-sm_90a} bash "$ROOT/verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh" "$S/p2" > "$DIR/build.log" 2>&1 \
+  if [ -z "${ARCH:-}" ]; then
+    ARCH=$(python3 "$ROOT/benchmarks/kernels/machine.py" arch \
+      "$(nvidia-smi -i "${GPU_LEASE_UUID:-0}" --query-gpu=name --format=csv,noheader 2> /dev/null | head -1)" 2>&1) \
+      || { echo "POUS: no answer: ARCH is not given and the card's record doesn't give it: $ARCH"; exit 3; }
+  fi
+  TOOLKIT=$(python3 "$ROOT/benchmarks/kernels/machine.py" toolkit 13.0) \
+    || { echo "POUS: no answer: no CUDA 13.0 toolkit to build libp2v1.so with (machine.py, above)"; exit 3; }
+  ARCH=$ARCH CUDA_HOME=$TOOLKIT bash "$ROOT/verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh" "$S/p2" > "$DIR/build.log" 2>&1 \
     || { tail -20 "$DIR/build.log"; echo "POUS: no answer: libp2v1.so doesn't build (build.log)"; exit 3; }
   LIB=$S/p2/lib
   stamp "built libp2v1.so"
@@ -120,7 +127,10 @@ builds() {  # each of BUILDS in order, its lock released as it ends: B/EXE.ok, o
   done
 }
 if [ ${#BUILDS[@]} -gt 0 ]; then
-  tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ verity | tar -C "$S" -x
+  # tar's exit 1 is only a file that changed as it read it: a process importing the tree's Python writes beside it
+  # meanwhile, as a check's other suites do; 2 or more is a copy that failed
+  { tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ --warning=no-file-changed verity || [ $? = 1 ]; } \
+    | tar -C "$S" -x || { echo "POUS: no answer: verity/ doesn't copy for the Lean builds"; exit 7; }
   export PATH="$HOME/.elan/bin:$PATH"
   : > "$DIR/lake-build.log"
   mkdir -p "$B"

@@ -445,7 +445,7 @@ theorem verdict_calls_sub {spec : SessionSpec} {tabs : Array Setup} {record reco
 /-! ## The decision's calls -/
 
 /-- Every entry of an oracle program's log is a query with `H`'s answer. -/
-theorem eval_log_ans (H : Claims.Msg → Claims.Msg) {α : Type} (x : Claims.OC α) :
+theorem eval_log_ans (H : Hash.Msg → Hash.Msg) {α : Type} (x : Claims.OC α) :
     ∀ p ∈ (x.eval H).2, p.2 = H p.1 := by
   induction x with
   | ret a => simp [Claims.OC.eval]
@@ -456,15 +456,15 @@ theorem eval_log_ans (H : Claims.Msg → Claims.Msg) {α : Type} (x : Claims.OC 
     · rfl
     · exact ih _ p hp
 
-theorem ofMsg_inj {a b : Claims.Msg} (h : Claims.ofMsg a = Claims.ofMsg b) : a = b := by
+theorem ofMsg_inj {a b : Hash.Msg} (h : Claims.ofMsg a = Claims.ofMsg b) : a = b := by
   have := congrArg Claims.toMsg h
   simpa [Claims.toMsg, Claims.ofMsg] using this
 
 /-- Two logs of `H`'s answers with the same queries are one set. -/
-theorem toFinset_eq_of_queries {H : Claims.Msg → Claims.Msg} {L L' : List (Claims.Msg × Claims.Msg)}
+theorem toFinset_eq_of_queries {H : Hash.Msg → Hash.Msg} {L L' : List (Hash.Msg × Hash.Msg)}
     (hL : ∀ p ∈ L, p.2 = H p.1) (hL' : ∀ p ∈ L', p.2 = H p.1) (h : ∀ p ∈ L, ∃ p' ∈ L', p'.1 = p.1)
     (h' : ∀ p ∈ L', ∃ p' ∈ L, p'.1 = p.1) : L.toFinset = L'.toFinset := by
-  have key : ∀ {A B : List (Claims.Msg × Claims.Msg)}, (∀ p ∈ A, p.2 = H p.1) → (∀ p ∈ B, p.2 = H p.1) →
+  have key : ∀ {A B : List (Hash.Msg × Hash.Msg)}, (∀ p ∈ A, p.2 = H p.1) → (∀ p ∈ B, p.2 = H p.1) →
       (∀ p ∈ A, ∃ p' ∈ B, p'.1 = p.1) → ∀ p ∈ A, p ∈ B := by
     intro A B hA hB hAB p hp
     obtain ⟨p', hp', e⟩ := hAB p hp
@@ -475,8 +475,8 @@ theorem toFinset_eq_of_queries {H : Claims.Msg → Claims.Msg} {L L' : List (Cla
   exact ⟨key hL hL' h p, key hL' hL h' p⟩
 
 /-- The decision at a session logs its verdict's calls: the checks call nothing. -/
-theorem decisionAt_log (H : Claims.Msg → Claims.Msg) (zk : Bool) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
-    (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin))
+theorem decisionAt_log (H : Hash.Msg → Hash.Msg) (zk : Bool) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
+    (x : Hash.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin))
     (f : Final) :
     ((decisionAt zk s spec sts x link c₁ mids f).run.eval H).2 =
       ((verdictM zk Claims.Hashes.oc spec (tabsOf sts) f.record f.proofs).run.eval H).2 := by
@@ -485,9 +485,9 @@ theorem decisionAt_log (H : Claims.Msg → Claims.Msg) (zk : Bool) (s : Ins) (sp
   cases r <;> exact List.append_nil l
 
 /-- **A step that decides logs the setup's calls, then the verdict's**, where the setup is `.ok`. -/
-theorem next_decide_calls (H : Claims.Msg → Claims.Msg) {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg}
+theorem next_decide_calls (H : Hash.Msg → Hash.Msg) {zk : Bool} {x : Hash.Msg} {as : List Hash.Msg}
     {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
-    {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     (h : act zk x as cs = .decide s spec sts link c₁ mids f)
     (hs : ((setupM Claims.Hashes.oc s.read).run.eval H).1 = .ok (spec, sts)) :
     ((next zk x as cs).eval H).2 = ((setupM Claims.Hashes.oc s.read).run.eval H).2 ++
@@ -501,8 +501,8 @@ theorem next_decide_calls (H : Claims.Msg → Claims.Msg) {zk : Bool} {x : Claim
   rw [decisionAt_log]
 
 /-- **An accepting plain step at SHA-512** has a logged verdict that accepts, and its checks pass. -/
-theorem acc_verifyLogged {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
-    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
+theorem acc_verifyLogged {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)}
     {f : Final} (h : act false x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((next false x as cs).eval sha512).1 = .acc) :
     verifyLogged Sha512.hash spec (tabsOf sts) f.record f.proofs =
@@ -516,9 +516,9 @@ theorem acc_verifyLogged {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin
 
 /-- **Two plain steps that decide on one setup call SHA-512 on one set**, where each verdict's calls are among the
 other's: the decision's calls are the setup's, then the verdict's. -/
-theorem next_calls_toFinset {x : Claims.Msg} {as as' : List Claims.Msg} {cs cs' : List Coin} {s : Ins}
+theorem next_calls_toFinset {x : Hash.Msg} {as as' : List Hash.Msg} {cs cs' : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin}
-    {mids mids' : List (Claims.Msg × Coin)} {f f' : Final}
+    {mids mids' : List (Hash.Msg × Coin)} {f f' : Final}
     (h : act false x as cs = .decide s spec sts link c₁ mids f)
     (h' : act false x as' cs' = .decide s spec sts link' c₁' mids' f')
     (hsub : ∀ b ∈ (verifyLogged Sha512.hash spec (tabsOf sts) f.record f.proofs).2.toList,
@@ -532,7 +532,7 @@ theorem next_calls_toFinset {x : Claims.Msg} {as as' : List Claims.Msg} {cs cs' 
   have hl := Claims.verifyOC_log sha512 spec (tabsOf sts) f.record f.proofs
   have hl' := Claims.verifyOC_log sha512 spec (tabsOf sts) f'.record f'.proofs
   rw [hOf_sha512] at hl hl'
-  have hq : ∀ {A B : List (Claims.Msg × Claims.Msg)} {LA LB : Array ByteArray},
+  have hq : ∀ {A B : List (Hash.Msg × Hash.Msg)} {LA LB : Array ByteArray},
       A.map (fun p => Claims.ofMsg p.1) = LA.toList → B.map (fun p => Claims.ofMsg p.1) = LB.toList →
       (∀ b ∈ LA.toList, b ∈ LB.toList) → ∀ p ∈ A, ∃ p' ∈ B, p'.1 = p.1 := by
     intro A B LA LB hA hB hAB p hp
@@ -547,7 +547,7 @@ theorem next_calls_toFinset {x : Claims.Msg} {as as' : List Claims.Msg} {cs cs' 
 
 /-- **Two accepted plain last messages after the same rounds and coins decide on one setup, link, coin and round
 messages.** -/
-theorem plain_decide_shared {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims.Msg} {cs : List Coin}
+theorem plain_decide_shared {x : Hash.Msg} {ms : List Hash.Msg} {l l' : Hash.Msg} {cs : List Coin}
     {f f' : Final} (hc : cs.length = ms.length + 1)
     (hacc : ((next false x (ms ++ [l]) cs).eval sha512).1 = .acc)
     (hacc' : ((next false x (ms ++ [l']) cs).eval sha512).1 = .acc)
@@ -596,9 +596,9 @@ theorem plain_decide_shared {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Clai
 SHA-512 on one set**, where the sessions their records decode have the same rounds at each rep stream. Custody pins
 both records' `root_B`, points and public words to the link and the first coin; S10 pins `y`; the statement's tables
 are named apart (`tables_nodup`), so S11 leaves no stream but the rep streams (`verdict_calls_sub`). -/
-theorem plain_calls_agree {x : Claims.Msg} {as as' : List Claims.Msg} {cs cs' : List Coin} {s : Ins}
+theorem plain_calls_agree {x : Hash.Msg} {as as' : List Hash.Msg} {cs cs' : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f f' : Final}
+    {mids : List (Hash.Msg × Coin)} {f f' : Final}
     (h : act false x as cs = .decide s spec sts link c₁ mids f)
     (h' : act false x as' cs' = .decide s spec sts link c₁ mids f')
     (hacc : ((next false x as cs).eval sha512).1 = .acc) (hacc' : ((next false x as' cs').eval sha512).1 = .acc)

@@ -2,25 +2,17 @@ Part of network attestation's [PROTOCOL.md](../PROTOCOL.md).
 
 ## The compile slice's charge, and a served execution phase at its engine's class
 
+This file describes a Definition and its design: no session of the compile slice runs, and no auditor and no driver
+runs any check of it; its checks run only in its tests. In its place, `records_audit.py audit` opens the advice in the
+clear and recompiles it (`records_audit.compile_check`), which reads no served rows. Running the slice would not close the
+gap: the design holds the served rows to nothing the server ran, so even a proof of the slice would accept a prover that
+registers its own rows, the phase-10 passes' among them.
+
 `CompileSlice_v1` (`verity_vllm.compiler.compile_slice`) is one execution phase of the compile slice's proof block in one Boolean
 Definition. Its circuit, rows, verdict flags, reference and stand-ins are `verity_vllm.compiler.compile_slice`'s
 docstring. This file covers how the slice charges an execution phase, what binds the charge's inputs, and a served execution phase
-at its engine's class. `CompileSlice_v4` (`verity_vllm.compiler.compile_slice_v4`) is the slice computing its schedule rather
-than checking it, with vLLM's block pool in place of the evictable and returned counts' stand-in, its pool calls
-answered by `CacheStep_v3`'s memory-checked stream. It has no ChargeLink: the served rows and last rows are registered
-reads it holds to the computed ones, and its advice input is exactly ℓ_w gates wide. Until a Lean lemma shows its
-checked witness unique, that witness counts as free input at its width, so its charge is ℓ_w plus the witness's width
-(`free_width`). `CompileSlice_v5` (`verity_vllm.compiler.compile_slice_v5`) is v4 at its execution phase's activity: the keys are
-one a block the execution phase keys, from a ragged token row registered with each slot's keyed block count, RB's touched list
-is the addresses the stream touches, and each running slot's request number is carried in the slot row ``cout``
-registers. Its charge is v4's, at its own checked witness's width. `CompileSlice_v6` and `PoolWindow_v1`
-(`verity_vllm.compiler.compile_slice_v6`) are v5 cut in two proof blocks with the block pool carried between execution phases: `PoolWindow_v1`
-opens the pool row under the previous execution phase's output root, registered before its coins, and commits the
-row its stream leaves as the next. Both are proved every execution phase, and a chain restarts from the empty pool's root after a
-failed one. A request open at the execution phase's edge is cut, having emitted its ``a_O``, and continues in the next one
-as an ordinary arrival; each keyed block's page is copied into the execution phase's carried port from its source, its
-write or the previous carried port (`PageCopy_v1`). The charge is ℓ_w plus `PoolWindow_v1`'s checked rows (the left row,
-the blocks' sources and the stream's witness) at their widths.
+at its engine's class. A session past the pool bound is outside the slice's class and refused
+([charge-chain.md](charge-chain.md), "The slice").
 
 **The charge** is `charge_chain.ChargeLink_v1{D}` (`build_link`; [charge-chain.md](charge-chain.md)):
 - Its inputs:
@@ -58,30 +50,34 @@ and its carry are witness until the slice binds them):
   - by ``load`` when the execution-phase row keeps the decision;
   - by ``steps`` (and ``rows``) when the execution-phase row drops it too, since the scan's ask then reads past the count.
   On w212 both cases charge less than the honest 27 bits (24).
-- *`bit` is the committed decisions:* ``adv``'s row, which the verifier holds to the advice registration's leaf.
-- *The carry is the session's:* ``cout`` must be the charge's carry' from ``cin`` (``code``). The verifier holds ``cin``
-  and ``cout`` by their b‖c to the session's carry chain (`charge_chain.check_chain`), beside the advice, served-row and
-  attested-record bindings. The proof block accepts a restarted carry-in (the priors, or counts fitted to the execution phase),
-  and the chain refuses it: ``CH-first`` on a session's first execution phase, ``CH-carry`` after it.
+- *`bit` is the committed decisions:* ``adv``'s row, which a verifier of the slice's proof would hold to the advice
+  registration's leaf; none runs.
+- *The carry is the honest prover's:* ``cout`` must be the charge's carry' from ``cin`` (``code``), and the proof block
+  accepts any carry-in, a restarted one (the priors, or counts fitted to the execution phase) included. `charge_check`'s
+  `check_chain` would refuse it (``CH-first`` on a session's first execution phase, ``CH-carry`` after it), and no
+  verifier calls it, so no verifier holds ``cin`` and ``cout`` to the session's carry chain.
 - The slice-level cases are `tests/adapters/vllm/tests/compiler/test_network_attester_compile_slice_phase14.py`.
 
-**Every advised execution phase is proved, never sampled.** The chain binds only proved proof blocks: an unproved one's
-carry-out is whatever the prover likes. And `en` is pinned only by the slice's own scan. So the compile slice (the load
-proof block, where the replay is split into proof blocks) is sampled `All`, as N2's proof blocks are (PROTOCOL.md, A3).
+**In the design every advised execution phase is proved, never sampled.** The chain binds only proved proof blocks: an
+unproved one's carry-out is whatever the prover likes. And `en` is pinned only by the slice's own scan. So the compile
+slice (the load proof block, where the replay is split into proof blocks) would be sampled `All`, as N2's proof blocks
+are (PROTOCOL.md, A3).
 
 **A served execution phase at its engine's class: w212.** An execution phase's request and step counts are private, and the
-class is protocol structure. So a session proves every execution phase at its engine's class: (R, W, A) = (8, 1, 9), Q 4,
-D 32, P 54, K 4, no prefix caching, and 8eb1's AsyncScheduler (AS = 1). The scheduler is engine configuration, so it
-is the class's and never an execution phase's: an AS chosen per execution phase would show whether its schedule matched sync
-order. w212 (requests 308–310, 21 proof blocks, 14 decisions) is padded into it
-(`tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w212_class_async.json`: an empty arrival slot, 18
-decisions past the count with en 0, and 33 idle steps). The seal's rows are in ``srv``
-(`verity_vllm.compiler.served_rows.step_rows`), each held to its request's slot through ``map``.
-- It proves w212's charge of its decisions. Its order's charge is the I/O tie's, outside this proof (What a proof of
-  the slice covers, above).
-- `compile_slice_zk` refuses a w212 fixture whose engine isn't the trace header's. `replay_vectors --slice` replays an
+class is protocol structure. So a session of the slice would prove every execution phase at its engine's class: (R, W, A) =
+(8, 1, 9), Q 4, D 32, P 54, K 4, no prefix caching, and 8eb1's AsyncScheduler (AS = 1); no session of the slice runs. The
+scheduler is engine configuration, so it is the class's and never an execution phase's: an AS chosen per execution phase
+would show whether its schedule matched sync order. w212 (requests 308–310, 21 proof blocks, 14 decisions) is padded into it
+(`tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w212_class_async.json`: an empty arrival slot, 18
+decisions past the count with en 0, and 33 idle steps). The fixture's ``srv`` holds the seal's rows
+(`verity_vllm.compiler.served_rows.step_rows`), and the Definition states that each is its request's slot's through
+``map``.
+- A proof of the slice at this class would prove w212's charge of its decisions. None runs: the tests evaluate the
+  circuit and its reference on the fixture (`test_network_attester_compile_slice_w212.py`). Its order's charge is the
+  I/O tie's, outside this proof (What a proof of the slice covers, above).
+- `replay_vectors --slice` replays an
   execution phase at the trace's own scheduler unless asked for the sync class (`--AS 0`).
-- The proof block is 1,021,302 ANDs, 123,120 of them the map's ([served-shape.md](served-shape.md)). Of them,
+- The proof block is 1,021,302 ANDs, 123,120 of them the map's ([served-shape.md](../../../../../../adapters/vllm/verity_vllm/compiler/served-shape.md)). Of them,
   ChargeLink_v1{32} is 97,159, and 5,509 are its copies of the words it carries from decision to decision
   ([charge-chain.md](charge-chain.md)).
 - Without prefix caching the slice makes no CacheStep_v1 call and ``cache`` is 1. So a made-up cache table can't be
@@ -103,33 +99,7 @@ decisions past the count with en 0, and 33 idle steps). The seal's rows are in `
 - The phase-10 attack's passes (a pass at every ask, where the served execution phase admitted requests 309 and 310 at the seventh
   and fourteenth: twenty-one at the class, at the asks of its 21 proof blocks, and twenty at the sync class) charge 23
   bits.
-  - With the served rows in ``srv``, they are refused by ``rows``.
-  - With their own rows there, the proof block accepts them, and the native ``srv`` b‖c check refuses them.
-
-**In zero knowledge** (`benchmarks/network_traces/compile_slice_zk.py prove --slice w212 --out DIR --bin FLOCK --lean
-VERIFY`, and `--slice demo`; `compile_slice_zk.sh` builds Flock's `flock-circuit` and the Lean `verity-verify-proof` and
-runs it as a job of 16 CPUs and 64 GB), each proof
-block, a `CompileSlice_v7`, is proved by Flock `prove --zk` behind the Lean ZK server and held by Lean
-`verify --zk`. The verifier opens only ``pub`` and the verdict, and runs the bindings, the carry chain's among them, on
-the proof blocks' b‖c. What the verifier received holds no witness piece: the ``wit`` and ``srv`` rows, every row's
-salt, and the ``cin`` and ``cout`` rows whole. With ``--plain`` the same statement is proved on Flock's plain path
-(``FC_COINS=tree``, Lean `verify --coins tree`), whose guarantee is soundness alone.
-- The scan's rule is the lane's one, field-aligned (`leak_scan.scan`, `verity/protocols/resource_accounting/network/prover/leak_scan.py`). It
-  replaces the phase-18 attack's rule.
-  - A find of a witness piece or carry row counts only if it lies inside one field: one read Flock's proof format
-    makes of a repetition's stream (`circuit.rep*.bin`, `redigest.layout`), or one record of a round message
-    (`rounds[*].msg`, as `transcript_check.T` frames them). A match across two fields doesn't count, and neither does
-    hex a nibble off.
-  - A counted find is excused only if its bytes are in what the statement fixes: ``pub``'s rows (`pub-*.bin`), the
-    statement or the circuit's definition, the streams' integer fields (lengths and parameters, not nonces), and the
-    round messages' headers, domain and labels.
-  - No piece is excused for its byte count or its witness class. A differential against a proof of a different witness
-    is evidence for a manual analysis only.
-  - The rule misses a leak written at a byte shift across fields.
-- The driver scans for every piece but those the staged circuit holds, and for each carry row whole.
-  `compile_slice_zk.py rescan` takes a finished run's scan again under the rule, its pieces recomputed; a salt the run
-  sampled isn't, so a salt it found reads leaked.
-  - Each witness row is cut whole (`leak_scan.public_pieces`). A row shorter than the 16-byte piece is found whole, as
-    the carry rows are: at G < P, the ``srv`` rows of a few steps (10 bytes at the demo's G = 2).
-  - Earlier runs cut with `n2_zk.public_pieces`, which skipped a row's bytes past its last 16-byte boundary and every
-    row shorter than 16 bytes.
+  - With the served rows in ``srv``, the Definition's ``rows`` refuses them in a proof of the slice, of which none runs.
+  - With their own rows there, the proof block accepts them, and nothing that runs refuses them: the native ``srv`` b‖c
+    check (`verity_vllm.compiler.served_rows.leaf_ok`) is called only by its tests, and a prover that registers those
+    rows passes it too.

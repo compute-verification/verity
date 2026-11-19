@@ -13,6 +13,7 @@ from types import SimpleNamespace as NS
 import pytest
 import serve_tax as S
 import servetax_plugin as P
+from verity import ports
 
 ARM = "tick-certifier"
 
@@ -35,11 +36,15 @@ def test_the_arm_is_the_tick_arm_with_the_attester_in_front(tmp_path: Path, monk
     tau = S.tick_args(None, "220,230", bucket_ms=cells["bucket_ms"])
     assert tau == {"bucket_us": 250000, "sat_us": 220000, "free_us": 230000, "calibrated_from": None}
     assert S.tick_args(None, "220,230")["bucket_us"] == 100000
-    env = S.server_env(arm, tmp_path, tmp_path / "site", tau, 600.0, 600.0)
+    with pytest.raises(SystemExit, match="keeps files on the node"):
+        S.server_env(arm, tmp_path, tmp_path / "site", tau, 600.0)
+    env = S.server_env(arm, tmp_path, tmp_path / "site", tau, 600.0, private=tmp_path / "private")
     plugin = json.loads(env[S.PLUGIN_ENV])
-    assert {k: plugin.get(k) for k in ("record", "to_length", "idle_reset", "release_order")} == {
-        "record": True, "to_length": True, "idle_reset": True, "release_order": None}
-    assert {k: json.loads(env["VERITY_TICK"])[k] for k in ("bucket_us", "sat_us", "free_us")} == {
+    assert plugin["private"] == str(tmp_path / "private")
+    assert {k: plugin.get(k) for k in ("record", "to_length", "idle_reset")} == {
+        "record": True, "to_length": True, "idle_reset": True}
+    tick = json.loads(env["VERITY_PROTOCOLS_CONFIG"])[env["VERITY_PROTOCOLS"]]
+    assert {k: tick[k] for k in ("bucket_us", "sat_us", "free_us")} == {
         "bucket_us": 250000, "sat_us": 220000, "free_us": 230000}
     assert S.changes_of(ARM) == [*S.changes_of("tick"), "the network certifier in front"]
     assert S.not_in_target(glm, ARM) == ["the network certifier in front"]
@@ -85,15 +90,15 @@ def test_each_sides_commands_are_the_fronts_the_attesters_and_the_shims(tmp_path
 
 
 def test_the_servers_side_holds_its_engine_until_the_attesters_run_ends_or_its_stop_time(tmp_path: Path):
-    feed = tmp_path / "tick-feed.jsonl"
-    assert S.runs_ended(feed) == 0
+    feed = tmp_path / "tick.7.jsonl"
+    assert S.runs_ended(tmp_path) == 0
     lines = [{"key": "chat@96-r1-0", "run": "aa", "n": 0, "bucket": 21}, {"run": "aa", "t": 21, "n": 1},
              {"run": "aa", "n": 0, "passed": True}, {"run": "aa", "error": "the connection closed before the watermark's end"}]
     feed.write_text("".join(json.dumps(x, separators=(",", ":")) + "\n" for x in lines))
-    assert S.runs_ended(feed) == 0                      # a watermark that broke is no run's end: the side holds on
+    assert S.runs_ended(tmp_path) == 0                  # a watermark that broke is no run's end: the side holds on
     with feed.open("a") as f:
         f.write('{"run":"bb","t":0,"n":0}\n{"run":"bb","end":true}\n')
-    assert S.runs_ended(feed) == 1
+    assert S.runs_ended(tmp_path) == 1
     assert S.hold_ends(None, None, 0, None) is None and S.hold_ends(None, None, 0, S.STOP_S + 1) is None
     assert S.hold_ends(None, None, 1, 3600.0) == ("the network certifier's run ended", True)
     assert S.hold_ends(None, None, 0, S.STOP_S) == ("--stop-at", True)
@@ -189,7 +194,8 @@ def test_the_servers_side_starts_the_engine_then_the_id_front_and_holds_them(
     --stop-at, the engine's counters read first. An id front that ends first fails the side."""
     (tmp_path / "tick_plugin.py").touch()
     monkeypatch.setattr(S, "TICK_PLUGIN", tmp_path / "tick_plugin.py")
-    monkeypatch.setattr(S, "corpus", lambda: NS(TICK_BUCKET_MS=100, free_port=lambda: 8100))
+    monkeypatch.setattr(S, "corpus", lambda: NS(TICK_BUCKET_MS=100))
+    monkeypatch.setattr(ports, "free_port", lambda: 8100)
     monkeypatch.setattr(S, "signal", NS(signal=lambda *a: None, SIGTERM=15))
     monkeypatch.setattr(S, "open_files", lambda: 4096)
     monkeypatch.setattr(S, "source_commit", lambda: "c0ffee")
@@ -198,14 +204,15 @@ def test_the_servers_side_starts_the_engine_then_the_id_front_and_holds_them(
     monkeypatch.setattr(S, "scrape", lambda port: events.append(("scrape", port)) or COUNTERS)
     monkeypatch.setattr(S, "stop", lambda server, grace_s: events.append(("stop", server.name, grace_s)) or "exited")
     out, t, events, procs = tmp_path / "out", [5000.0], [], {}
-    feed = out / "server" / "tick-feed.jsonl"
+    feed = out / "server" / "tick.9.jsonl"
 
     def popen(argv, stdout, stderr, env, **how):
         name = "front" if "ids-front" in argv else "server"
         if name == "server":
             assert how == {"start_new_session": True} and json.loads(env[S.PLUGIN_ENV])["idle_reset"] is True
-            assert json.loads(env["VERITY_TICK"]) | {"bucket_us": 250000, "sat_us": 220000, "feed": str(feed)} == \
-                json.loads(env["VERITY_TICK"])
+            cfg = json.loads(env["VERITY_PROTOCOLS_CONFIG"])
+            assert cfg["feed"] == str(feed.parent) and cfg[env["VERITY_PROTOCOLS"]] | {"bucket_us": 250000, "sat_us": 220000} == \
+                cfg[env["VERITY_PROTOCOLS"]]
             assert argv[argv.index("--port") + 1] == "8100"
         else:
             assert how == {"text": True} and str(S.ROOT / "adapters/vllm") in env["PYTHONPATH"].split(":")
@@ -230,8 +237,11 @@ def test_the_servers_side_starts_the_engine_then_the_id_front_and_holds_them(
     a = argparse.Namespace(
         arm=ARM, model_id="glm53", checkpoint="/ck", client="vllm-bench", side="server", loads="chat=96", cells=None,
         front=18750, tick_from=None, tick_ms="220,220", stop_at="1970-01-01T01:25:00Z" if ends == "stop-at" else None,
-        num_gpu_blocks=None, max_model_len=None, window_s=30.0, kv_window_s=30.0, startup_s=1800.0, lifetime=None,
-        out=str(out))
+        num_gpu_blocks=None, max_model_len=None, window_s=30.0, startup_s=1800.0, lifetime=None,
+        out=str(out), private=None)
+    with pytest.raises(SystemExit, match="records its step trace"):
+        S.certified_server(a, popen=popen, sleep=sleep, now=lambda: t[0], clock=lambda: t[0])
+    a.private = str(tmp_path / "private")
     rc = S.certified_server(a, popen=popen, sleep=sleep, now=lambda: t[0], clock=lambda: t[0])
     said = capsys.readouterr().out
     # --stop-at is 100 s off, and the side stops `STOP_S` before it
@@ -243,6 +253,7 @@ def test_the_servers_side_starts_the_engine_then_the_id_front_and_holds_them(
                       ("stop", "server", 120.0)]
     rec = json.loads((out / S.SERVER_RECORD).read_text())
     assert (rec["arm"], rec["side"], rec["cells"]["lanes"], rec["tick"]["bucket_us"]) == (ARM, "server", 96, 250000)
+    assert S.private_of(out) == (tmp_path / "private").resolve()
     assert rec["stopped"] == {"certifier": "the network certifier's run ended", "stop-at": "--stop-at",
                               "front": "the id front exited with 1 (server/front.log)"}[ends]
     assert rec["prefix_resets"] == [{"t": 5001.0, "idle_s": None, "reset": True}] and rec["server_stop"] == "exited"
@@ -280,7 +291,7 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
     monkeypatch.setattr(S.tempfile, "tempdir", str(tmp_path / "tmp"))
     monkeypatch.setattr(S, "source_commit", lambda: "c0ffee")
     monkeypatch.setattr(S, "served_models", lambda front: ["glm-5.3"])
-    out, t, events, scraped = tmp_path / "out", [1000.0], [], [0]
+    out, private, t, events, scraped = tmp_path / "out", tmp_path / "private", [1000.0], [], [0]
 
     def scrape(port: int) -> dict:
         scraped[0] += 1
@@ -292,10 +303,10 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
     def popen(argv, stdout, stderr, env, text):
         assert str(S.ROOT) in env["PYTHONPATH"].split(":") and text
         if argv[1] == str(S.ATTESTER):
-            (out / "certifier" / "deployment.json").write_text(json.dumps({"origin_unix": 1005.0}))
+            (private / "certifier" / "deployment.json").write_text(json.dumps({"origin_unix": 1005.0}))
             events.append(("certifier", int(argv[argv.index("--windows") + 1]), Path(argv[argv.index("--key") + 1])))
             return Proc({"listening": ["127.0.0.1", 4000]}, events, "certifier")
-        assert argv[1] == str(S.SHIM) and argv[argv.index("--deployment") + 1] == str(out / "certifier" / "deployment.json")
+        assert argv[1] == str(S.SHIM) and argv[argv.index("--deployment") + 1] == str(private / "certifier" / "deployment.json")
         events.append(("shim", argv[argv.index("--log") + 1]))
         return Proc({"listening": ["127.0.0.1", 5000]}, events, "shim")
 
@@ -303,16 +314,16 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
         if argv[1] == str(S.ATTESTER):
             events.append((argv[2],))
             if argv[2] == "check":
-                assert argv[3:] == ["--run", str(out / "certifier")]
-                sent = json.loads((out / "certifier" / "client.json").read_text())["connections"]
-                (out / "certifier" / "check.json").write_text(json.dumps(
+                assert argv[3:] == ["--run", str(private / "certifier")]
+                sent = json.loads((private / "certifier" / "client.json").read_text())["connections"]
+                (private / "certifier" / "check.json").write_text(json.dumps(
                     {"accepted": True, "problems": [], "summary": {"certified_windows": 9, "requests": len(sent)}}))
             return NS(returncode=0)
         sends = int(argv[argv.index("--num-prompts") + 1])
         events.append(("pass", argv[argv.index("--base-url") + 1], argv[argv.index("--max-concurrency") + 1], sends, t[0]))
         d = Path(argv[argv.index("--result-dir") + 1])
         (d / argv[argv.index("--result-filename") + 1]).write_text(json.dumps(result(sends, 6.0)))
-        with (out / "shim.jsonl").open("a") as f:
+        with (private / "shim.jsonl").open("a") as f:
             for k in range(sends):
                 f.write(json.dumps(line(k, "end", 8 - (short and k == 1))) + "\n")
         t[0] += 300.0
@@ -325,14 +336,14 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
     a = argparse.Namespace(
         arm=ARM, model_id="glm53", checkpoint=str(tmp_path / "ck"), client=S.BENCH, loads="chat=2", dataset=None,
         pass_prompts="chat=3", reps=3, seed=0, warm_s=20.0, front=18746, cells="window=40", attester_windows=windows,
-        lifetime=None, leave_out=0, out=str(out), side=S.CLIENT)
+        lifetime=None, leave_out=0, out=str(out), private=str(private), side=S.CLIENT)
     rc = S.certified_client(a, run=run, popen=popen, sleep=sleep, now=lambda: t[0], clock=lambda: t[0])
     said = capsys.readouterr().out
     # the network attester runs windows of 10 s from its origin, and a pass takes 300 s: of 130 windows the warm-up and two
     # reps fit and the third is not sent, of 200 all three are
     reps, end = (2, 2305.0) if windows == 130 else (3, 3005.0)
     key = events[1][2]
-    assert events[:4] == [("keys",), ("certifier", windows, key), ("shim", str(out / "shim.jsonl")), ("waited", 5.0)]
+    assert events[:4] == [("keys",), ("certifier", windows, key), ("shim", str(private / "shim.jsonl")), ("waited", 5.0)]
     assert not key.exists() and not key.is_relative_to(out)
     sent = [x for k in range(reps + 1) for x in (
         ("waited", S.IDLE_S), ("scrape", 18746), ("pass", "http://127.0.0.1:5000", "2", 3, 1011.0 + 306.0 * k),
@@ -357,7 +368,9 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
     assert (k["accepted"], k["connections"], k["ended"], k["refused"], k["failed"]) == (True, n, n, 0, 0)
     assert k["short"] == (reps + 1) * short
     assert f"{n} of {n} connections ended, 0 refused, 0 failed, {k['short']} answers short of their length" in said
-    assert len(json.loads((out / "certifier" / "client.json").read_text())["connections"]) == n
+    assert len(json.loads((private / "certifier" / "client.json").read_text())["connections"]) == n
+    assert sorted(x.name for x in out.iterdir() if x.is_file()) == ["attester.log", "check.log", "meta.json", "shim.log"]
+    assert not (out / "certifier").exists()
     rep = json.loads((out / "chat@2" / "rep-2" / "meta.json").read_text())
     assert (rep["load"], rep["rep"], rep["concurrency"], rep["requests"], rep["unfinished"]) == ("chat@2", 2, 2, 3, 0)
     assert rep["schedule"]["prompt_tokens"] == 100.0 and rep["schedule"]["prompt_tokens_cached"] == 1.0

@@ -15,6 +15,7 @@ import generate as gen
 import loads
 import probe
 import pytest
+from conftest import H100, RTX, UNKNOWN
 
 EPOCH = "VF3n-16"
 
@@ -198,17 +199,26 @@ def test_no_timed_program_beats_no_facet_and_fails(tmp_path, capsys):
         assert "no facet beaten" not in out and "no program was timed" in err
 
 
-def test_record_writes_the_largest_load_and_a_failed_gate_or_no_program_writes_none(tmp_path, census, no_gpu):
+def test_record_writes_the_largest_load_and_a_failed_gate_or_no_program_writes_none(tmp_path, census, stamp_card):
+    """The census's card's point names its card; another card, priced on a census not its own, and a card no data sheet
+    holds write no value."""
     path = _records(tmp_path, MIXU_R32, ALONE, FFMA)
+    stamp_card(RTX)
     for name, args, rc in (("ok", [], 1), ("gate", ["--failed", "a chunk's gate exited 1"], 1)):
         out = tmp_path / name
         assert loads.main(["summary", str(path), "--epoch", EPOCH, "--json", "--record", str(out), *args]) == rc
         doc = json.loads((out / "result.json").read_text())
         assert doc["validation"]["status"] == ("passed" if name == "ok" else "failed")
     [m] = json.loads((tmp_path / "ok" / "result.json").read_text())["measurements"]
-    assert (m["name"], m["unit"], m["mark"], m["row"], m["programs"], m["host"]["card"]) == (
-        loads.METRIC, "load", "measured", "KFFMA0", 3, "none")
+    assert (m["name"], m["unit"], m["mark"], m["row"], m["programs"], m["member"], m["host"]["card"]) == (
+        loads.METRIC, "load", "measured", "KFFMA0", 3, "rtx-pro-6000", RTX)
     assert m["value"] == pytest.approx(1.0296, abs=1e-4)
+    for name, why in ((H100, "the loads are priced on sm_120's census, of the rtx-pro-6000, and the run's card is the "
+                       "h100"), (UNKNOWN, repr(UNKNOWN))):
+        stamp_card(name)
+        assert loads.main(["summary", str(path), "--epoch", EPOCH, "--record", str(tmp_path / name)]) == 1
+        [m] = json.loads((tmp_path / name / "result.json").read_text())["measurements"]
+        assert m["value"] is None and why in m["why"]
     assert json.loads((tmp_path / "gate" / "result.json").read_text())["measurements"] == []
     empty, out = _records(tmp_path / "empty"), tmp_path / "none"
     assert loads.main(["summary", str(empty), "--epoch", EPOCH, "--record", str(out)]) == 2
@@ -322,8 +332,7 @@ def test_targets_sit_at_the_section_vertices():
 
 def _cuda_tools() -> bool:
     try:
-        probe.nvcc()
-        probe.G.H.find_tools()
+        probe.G.H.find_tools(Path(probe.nvcc()).parent)
     except (SystemExit, probe.G.H.SassGateFailed, OSError):
         return False
     return True
@@ -344,5 +353,5 @@ def test_grid_slice_builds_and_gates(tmp_path):
     assert {g["name"] for g in gs} == picks | mem | l2
     src = tmp_path / "slice.cu"
     src.write_text(gen.emit_cu(gs))
-    _, verdicts = probe.gate_all(probe.build(tmp_path / "b", [src]))
+    _, verdicts = probe.gate_all(probe.build(tmp_path / "b", [src], "NVIDIA RTX PRO 6000 Blackwell Server Edition"))
     assert [v["probe"] for v in verdicts if not v["passed"]] == []

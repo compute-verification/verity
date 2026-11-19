@@ -18,6 +18,8 @@ The converse, that `check` accepts whatever `checkRef` accepts, is `check_comple
 
 namespace Spot.Wires
 
+open Circuits
+
 theorem firstWire_eq_none {c : Wiring} {f : Wire → Option Code} :
     firstWire c f = none ↔ ∀ w ∈ c.wires, f w = none := by
   unfold firstWire

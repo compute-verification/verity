@@ -9,8 +9,9 @@
 #      ZK_UNITS="fp8-coord:K=6144 router-row" (served types instead of A6's coordinates, zk_cost.py's --units: ZK_SIZES then
 #      defaults to half,full, ZK_SAMPLES to c:dev+nofw,8:dev+nofw+fw,64:dev+nofw+fw, ZK_ARMS to dev,nofw,fw; overhead instead of fit)
 #      ZK_STAGE_ONLY=1 (with ZK_UNITS: stage on this node's CPUs, keep the records, no CUDA, build or GPU)
-#      ZK_SM (the prover's target, from nvidia-smi unless given)  ZK_CARD=rtx-pro-6000-server (the card whose datasheet
-#      peak divides; the overhead step refuses one whose arch isn't the run's GPU's; an H200: ZK_CARD=h200-sxm-141gb)
+#      ZK_SM (the prover's target, from nvidia-smi unless given)  ZK_CARD, with ZK_UNITS and no default (the card file
+#      whose datasheet peak divides: rtx-pro-6000-server, or h200-sxm-141gb on an H200; the overhead step refuses one whose
+#      arch isn't the run's GPU's)
 #      LEASE_MAX_MIN=30 (one GPU lease a point)
 #      ZK_VERIFY=0 (no Lean verify: the sessions' prices alone, each accepted by its ZK server)
 #      FLOCK_WORK=/workspace/jobs/proof-throughput (the CUDA prover's build and venv, as proof_throughput's job.sh keeps them)
@@ -19,8 +20,11 @@
 # never a circuit, a prover's file or a proof.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 for o in ZK_DRAWS:ZK_SAMPLES; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
   || { echo "zk-cost: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
+[ -z "${ZK_UNITS:-}" ] || [ -n "${ZK_CARD:-}" ] \
+  || { echo "zk-cost: ZK_UNITS needs ZK_CARD, the run's GPU's card file (rtx-pro-6000-server, h200-sxm-141gb)" >&2; exit 2; }
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:?}/out}; mkdir -p "$O"
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
 PT_WORK=${PT_WORK:-/workspace/cache/proof-throughput}
@@ -41,7 +45,7 @@ Z=$S/zk
 ZK() { "$PY" benchmarks/one_stage/zk_cost.py "$@" --out "$Z"; }
 keep() {
   (cd "$Z" && find . -type f -size -8M ! -name circuit.txt ! -name 'inst*.bin' ! -name 'pub*.bin' ! -path '*/archive/*' \
-    \( ! -path '*/sessions/*/*' -o -name session.json \) -print0 | xargs -0 -r -I{} cp --parents {} "$O/")
+    \( ! -path '*/sessions/*/*' -o -name session.json \) -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$O/")
 }
 # a served type stages on CPUs alone (stage.py, no Lean), before the builds
 if [ -n "${ZK_UNITS:-}" ]; then
@@ -51,28 +55,9 @@ if [ -n "${ZK_UNITS:-}" ]; then
   rc=${PIPESTATUS[0]}
   if [ "${ZK_STAGE_ONLY:-0}" = 1 ] || [ "$rc" != 0 ]; then keep; log "zk-cost: staged only, rc $rc"; exit "$rc"; fi
 fi
-for c in "$FLOCK_WORK/cuda-root" /workspace/cache/flock/cuda-root; do
-  [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x "$c/usr/local/cuda-13.3/bin/nvcc" ] && export CUDA_TK=$c/usr/local/cuda-13.3
-done
-# else its packages unpacked under FLOCK_WORK without root, as 71-gemm-slowdown.sh does (an R580 driver runs 13.3)
-if [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ]; then
-  CR=$FLOCK_WORK/cuda-root
-  todo="cuda-nvcc-13-3 cuda-cudart-dev-13-3"; seen=
-  while [ -n "$todo" ]; do
-    set -- $todo; q=$1; shift; todo="$*"
-    case " $seen " in *" $q "*) continue ;; esac
-    seen="$seen $q"
-    todo="$todo $(apt-cache show "$q" 2>/dev/null | awk '/^Depends:/ {sub(/^Depends: /, ""); print; exit}' | tr ',' '\n' \
-      | sed 's/(.*//; s/|.*//; s/ //g' | grep -E -- '-13-3$' | tr '\n' ' ')"
-  done
-  (exec 8>"$FLOCK_WORK/cuda-root.lock"; flock 8; [ -x "$CR/usr/local/cuda-13.3/bin/nvcc" ] || {
-    mkdir -p "$CR/debs" && (cd "$CR/debs" && apt-get download $(for q in $seen; do
-      echo "$q=$(apt-cache show "$q" | awk '/^Version:/ {print $2; exit}')"; done)) \
-      && for d in "$CR"/debs/*.deb; do dpkg-deb -x "$d" "$CR"; done; }) > "$O/cuda-unpack.log" 2>&1
-  [ -x "$CR/usr/local/cuda-13.3/bin/nvcc" ] && export CUDA_TK=$CR/usr/local/cuda-13.3
-fi
-[ -x /usr/local/cuda-13.3/bin/nvcc ] || [ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 on this node"; tail -5 "$O/cuda-unpack.log"; exit 1; }
-C13=${CUDA_TK:-/usr/local/cuda-13.3}; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
+. benchmarks/one_stage/toolkit.sh
+cuda_13_3 "$O/cuda-unpack.log" "$FLOCK_WORK/cuda-root.lock" || { log "no CUDA 13.3 on this node"; tail -5 "$O/cuda-unpack.log"; exit 1; }
+C13=$CUDA_TK; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 
 log "zk-cost: source ${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)}, builds under $FLOCK_WORK and $PT_WORK"
 OUT=$O/build bash verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM="${ZK_SM:-}" > "$O/build.txt" 2>&1 &
@@ -120,7 +105,7 @@ if [ "$rc" = 0 ]; then
     ZK verify --lean "$LEAN" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
     [ "${PIPESTATUS[0]}" = 0 ] || rc=1
   fi
-  if [ -n "${ZK_UNITS:-}" ]; then ZK overhead --card "${ZK_CARD:-rtx-pro-6000-server}" 2>&1 | tee -a "$O/zk.log"
+  if [ -n "${ZK_UNITS:-}" ]; then ZK overhead --card "$ZK_CARD" 2>&1 | tee -a "$O/zk.log"
   else ZK fit 2>&1 | tee -a "$O/zk.log"; fi
 fi
 keep

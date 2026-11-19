@@ -48,7 +48,7 @@ bash benchmarks/pous/pod.sh IMPL=band-gpu BAND_D=6                              
 ~~~
 
 `pod.sh` installs nothing on the system, so it runs as-is on a shared node. It builds with the toolkit already installed
-(`CUDA_HOME`, `/usr/local/cuda`, or `/usr/local/cuda-13.0`, `-12.9` or `-12.8`). With CUDA 13 it uses torch 2.14.0 cu130 wheels,
+(`CUDA_HOME`, else the machine's toolkit: its default, or at 13.0, 12.9 or 12.8). With CUDA 13 it uses torch 2.14.0 cu130 wheels,
 and with CUDA 12.8+ it uses 2.7.1 cu128. It builds `pous_native` for the device's capability (`native.arch_list`) and `libp2v1.so`
 for `ARCH=sm_120` on an RTX PRO 6000. Without a system `gmp.h`, CGBN's host pass takes gmpy2's wheel's from the venv.
 `WORK`, `VCPU`, `RCPU` and `WORKERS` place it on a shared node's directories and cores. Every `nvidia-smi` query names the run's

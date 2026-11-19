@@ -162,7 +162,7 @@ def shared (want : Array (String × Array (Nat × String))) (verdicts : Array (S
         if !ok then return #["P-shared"]
   return #[]
 
-/-- A row's `sha512/row/v2` digest (`registered.row_digest` at `SCHEMA_V2`): SHA-512 of `P(16 · words)` and its u16 words,
+/-- A row's `sha512/row/v2` digest (`registered_value.row_digest` at `SCHEMA_V2`): SHA-512 of `P(16 · words)` and its u16 words,
 each little-endian. -/
 def v2Digest (u16s : Array Nat) : ByteArray :=
   let bytes := u16s.foldl (fun b w => (b.push (w % 256).toUInt8).push (w / 256 % 256).toUInt8) ByteArray.empty

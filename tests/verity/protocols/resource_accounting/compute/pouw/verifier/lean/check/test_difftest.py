@@ -504,7 +504,7 @@ def test_credit(pass_server):
 
 
 def test_honest_j10r_windows_are_credited(pass_server):
-    """The compiled `Credit.window` credits honest J10-R windows (`window_instance`'s ``j10r``: J10-R units, two row tiles
+    """The compiled `Credit.executionPhase` credits honest J10-R windows (`window_instance`'s ``j10r``: J10-R units, two row tiles
     a call), as the Python verifier does: the code fact `Proofs.Pouw.MonitoringPeriodJ10R.Honest`'s `j10r_meets` takes as `hacc`.
     `test_credit` replays these cases but holds only the two sides to each other. A window whose calls all carry credit
     bit false is credited with nothing, so the test asks only that some of them credit a call."""
@@ -734,7 +734,7 @@ def test_rounds(pass_server):
     print(f"pouw-verifier-difftest rounds: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(ROUNDED.items()))}")
     assert "accept" in ROUNDED
-    for part in ("is opened twice", "was opened before its root was recorded", "was never opened", ": coin is epoch #",
+    for part in ("is opened twice", "was opened with no root recorded before it", "has no coin opened after it", ": coin is epoch #",
                  ": coin does not open", ": coin was not opened after", "the verifier's challenger key is malformed",
                  "the round roots are not", "the round coins are not a list", ": a live coin opening is",
                  "the coin commitment's ", "not trusted: no challenger close record",

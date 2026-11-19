@@ -9,8 +9,8 @@ agree.  run.py compares the device's buffers with these bytes before it times an
 
   uv run python benchmarks/pouw/pearl_c_sm90/fixture.py OUT_DIR [m n k]     (default 256 384 1024; m, n multiples of 128)
 
-The instance is a one-unit epoch as `verity.protocols.resource_accounting.compute.pouw.verifier.audit` starts it: B's `audit.HM96` row tree under a
-fixed prover salt key (`SALT_KEY`), the salt from the salt coin of the gate's test challenger (`test_challenger`,
+The instance is a one-unit epoch as `verity.protocols.resource_accounting.compute.pouw.verifier.audit` starts it: B's `audit.HM96` row tree, each
+leaf under its salt in the fixture's fixed salts (`salts_of`; check.json's `salts` names each tree's file), the salt from the salt coin of the gate's test challenger (`test_challenger`,
 `Epoch.start`) opened after B's root, A's HM96 row tree, seed_A from A's committed root (so E_A's padding line key is an
 output the device derives, `line_a`) and each row's seed and line key from its SHA-512 row digest.  Writes
 OUT_DIR/check.json (the shape, keys, seeds, the coin commitment and the salt coin's opening, and per buffer its file, dtype
@@ -23,164 +23,63 @@ leaves and the tile tree.
 from __future__ import annotations
 
 import hashlib
-import itertools
+import importlib.util
 import json
 import multiprocessing
 import sys
 from dataclasses import replace
-from multiprocessing.pool import Pool
 from pathlib import Path
 
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-sys.path.insert(0, str(ROOT.parent / "tests" / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier"))
+sys.path.insert(0, str(ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier"))
 
 
+def _sm120_fixture():
+    """pearl_c_sm120/fixture.py, whose formation, chains, peel and tile leaves this fixture shares, under one module
+    name, so the fork pool's workers find the functions it maps."""
+    name = "pearl_c_sm120_fixture"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, HERE.parent / "pearl_c_sm120" / "fixture.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+F120 = _sm120_fixture()
+from pearl_c_sm120_fixture import (Out, adopted, bf16_bytes, crosscheck, epoch_of, form, glue_y,  # noqa: E402
+                                   padded, pa_rows, pb_rows, peel_np, plain, product, recip, tile_leaves, tree_bytes)
 import pearl_c_vectors as CV  # noqa: E402
-from verity.commitments.merkle import tree_levels  # noqa: E402
-from verity.circuits.silicon import fp32  # noqa: E402
-from verity.circuits.kernels.tc import group_sum_total_batch  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (HM96, HM96_TRANSCRIPT, HM96_WEIGHTS, ROW_SCHEMA, TILE_SCHEMA,  # noqa: E402
-                                                         Epoch, Workload, activation_binding, commit_rows, hm96_kernel_constants,
-                                                         hm96_salt, rows_domain, transcript_domain, weight_binding, weights_root)
-from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger, CoinOpening  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape, Tile  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (HM96_SALT, ROW_SCHEMA, TILE_SCHEMA,  # noqa: E402
+                                                         activation_binding, hm96_kernel_constants,
+                                                         rows_domain, transcript_domain)
+from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c import keys_of, unit_block  # noqa: E402, F401 - the scheme's unit keys, re-exported
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import (  # noqa: E402
-    DEVICES,
-    H100,
-    Device,
-)
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import H100  # noqa: E402
 
 VARIANTS = (H100,)
 #: the plain baseline unpromoted (gemm_fast): one accumulator over all of k on the H100's atom
 H100_UNPROMOTED = replace(H100, name="h100-unpromoted", g=None)
 CASE, INDEX, WEIGHT = "gpu-check", 5, 1
 COINS = b"verity-pouw/pearl-c-sm90-gpu-check/coins"
-#: the check's prover hm96 salt key (a served run samples its own)
-SALT_KEY = hashlib.sha256(b"verity-pouw/pearl-c-sm90-gpu-check/salt-key").digest()
 
 
 def test_challenger() -> Challenger:
-    """The gate's test challenger: epoch 0's coins flipped from SHA-512 in counter mode over `COINS`, the same at every build,
-    so a replay starts the fixture's epoch again from B's root."""
-    blocks, buf = (hashlib.sha512(COINS + i.to_bytes(8, "little")).digest() for i in itertools.count()), bytearray()
-
-    def entropy(n: int) -> bytes:
-        while len(buf) < n:
-            buf.extend(next(blocks))
-        out = bytes(buf[:n])
-        del buf[:n]
-        return out
-
-    return Challenger(0, entropy)
+    return F120.test_challenger(COINS)
 
 
-def tree_bytes(domain, values: list[bytes], schema: str, salt_key: bytes, nonce: int) -> bytes:
-    """An `audit.HM96` tree's levels as the kernels lay them out: level 0 (each value under its salt, then pads), then each
-    level above."""
-    leaves = [domain.leaf(i, i, schema, v + hm96_salt(salt_key, nonce, i)) for i, v in enumerate(values)]
-    return b"".join(b"".join(level) for level in tree_levels(domain, leaves))
-
-
-def epoch_of(matmul: Matmul, b_rows: list[bytes], coins: Challenger, salt_key: bytes
-             ) -> tuple[Epoch, CoinOpening, bytes, bytes]:
-    """A one-unit epoch on B's rows as `verity.protocols.resource_accounting.compute.pouw.verifier.audit` starts it, from `coins`' salt coin
-    opened after B's root: (epoch, the salt coin's opening, B's tree bytes, its root)."""
-    dom_b = rows_domain(weight_binding(matmul.weight), -2, len(b_rows), HM96)
-    tree_b = tree_bytes(dom_b, b_rows, ROW_SCHEMA, salt_key, HM96_WEIGHTS + matmul.weight)
-    roots = {matmul.weight: tree_b[-64:]}
-    opening = coins.open("salt", weights_root(roots))
-    return Epoch.start(Workload((matmul,)), roots, coins.commitment, opening), opening, tree_b, tree_b[-64:]
+def salts_of(tree: str, count: int) -> bytes:
+    """The fixture's hm96 salts of tree `tree` ("a": A's rows, "b": B's rows, "t": the tiles), `HM96_SALT` bytes a leaf in
+    leaf order, as the kernels read them from ``salts_<tree>``: fixed bytes, so the fixture is.  A serving caller's are
+    fresh bytes from the operating system."""
+    return hashlib.shake_256(f"verity-pouw/pearl-c-sm90-gpu-check/salts_{tree}".encode()).digest(HM96_SALT * count)
 
 
 # ---- layouts and batched pieces -------------------------------------------------------------------------------------
-
-def padded(x: np.ndarray, rows: int) -> np.ndarray:
-    out = np.zeros((rows, x.shape[1]), np.uint8)
-    out[:x.shape[0]] = x
-    return out
-
-
-def bf16_bytes(words: np.ndarray) -> np.ndarray:
-    """(rows, e) BF16 words as the (rows, 2e) byte matrix of their little-endian halves."""
-    return np.ascontiguousarray(words, "<u2").view(np.uint8).reshape(words.shape[0], -1)
-
-
-def rne_bf16(w: np.ndarray) -> np.ndarray:
-    w = w.astype(np.uint64)
-    return ((w + 0x7FFF + ((w >> 16) & 1)) >> 16).astype(np.uint16)
-
-
-def fmul(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    return (a.view(np.float32) * b.view(np.float32)).view(np.uint32)
-
-
-def grid(rows: int, cols: int) -> tuple[np.ndarray, np.ndarray]:
-    ii, jj = np.meshgrid(np.arange(rows), np.arange(cols), indexing="ij")
-    return ii.ravel(), jj.ravel()
-
-
-def pa_rows(be: np.ndarray, af: np.ndarray) -> np.ndarray:
-    """C.peel_factors_a from the batched A′·F_B words: [be ‖ RNE_bf16(AF)]."""
-    return np.concatenate([be, rne_bf16(af)], axis=1)
-
-
-def pb_rows(be: np.ndarray, bf: np.ndarray, g: np.ndarray) -> np.ndarray:
-    """C.peel_factors_b from the batched B̃·F_A and G words, the FMA chain in the scalar reference's order."""
-    mid = np.zeros(bf.shape, np.uint16)
-    for j in range(be.shape[0]):
-        for q in range(C.R):
-            acc = 0
-            for p in range(C.R):
-                acc = fp32.fma(int(be[j, p]) << 16, int(g[p, q]), acc)
-            mid[j, q] = P.f32_to_bf16(P.f32_of_bits(fp32.add(acc, fp32.neg(int(bf[j, q])))))
-    return np.concatenate([mid, be ^ 0x8000], axis=1)
-
-
-def plain(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """The baseline's quantize (plainq): s = 448/amax, codes = fp8(x·s), glue amax/448, per row of FP32 values."""
-    codes, glue = np.zeros(x.shape, np.uint8), np.zeros(x.shape[0], np.uint32)
-    for i, row in enumerate(x):
-        amax = P.f32_bits(float(np.abs(row).max()))
-        s = fp32.div(P.f32_bits(448.0), amax) if amax else P.f32_bits(1.0)
-        glue[i] = fp32.div(amax, P.f32_bits(448.0)) if amax else P.f32_bits(1.0)
-        codes[i] = [P.f32_to_fp8(P.f32_of_bits(fp32.mul(P.f32_bits(float(v)), s))) for v in row]
-    return codes, glue
-
-
-def adopted(x: np.ndarray, alpha: list[int]) -> np.ndarray:
-    """The adopted quantizer (quant_s5): e4m3(α·x) per element, α from v1's statistics."""
-    return np.array([[P.f32_to_fp8(P.f32_of_bits(fp32.mul(a, P.f32_bits(float(v))))) for v in row] for row, a in zip(x, alpha)], np.uint8)
-
-
-def glue_y(words: np.ndarray, rs: np.ndarray, cs: np.ndarray) -> np.ndarray:
-    return rne_bf16(fmul(fmul(words, np.broadcast_to(rs[:, None], words.shape).copy()), np.broadcast_to(cs[None, :], words.shape).copy()))
-
-
-def recip(alpha: np.ndarray) -> np.ndarray:
-    return (np.float32(1.0) / alpha.view(np.float32)).view(np.uint32)
-
-
-def tile_leaves(c: np.ndarray, u: np.ndarray, m: int, n: int) -> list[bytes]:
-    """The tile leaves, row-major (`pearl_c.leaf` under -h3 over each tile's C~ and U); the last row tile is partial when
-    64 ∤ m."""
-    return [C.leaf(C.Checked(c[r:r + 64, q:q + 64].tolist(), u[r:r + 64, q:q + 64].tolist()), "h3")
-            for r in range(0, m, 64) for q in range(0, n, 64)]
-
-
-class Out:
-    def __init__(self, path: Path):
-        self.path, self.files = path, {}
-
-    def put(self, name: str, data, dtype: str) -> None:
-        raw = data if isinstance(data, bytes) else b"".join(data) if isinstance(data, list) else np.ascontiguousarray(data).tobytes()
-        (self.path / f"{name}.bin").write_bytes(raw)
-        self.files[name] = {"file": f"{name}.bin", "dtype": dtype, "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
 
 
 def rowmajor(x: np.ndarray) -> bytes:
@@ -219,59 +118,6 @@ def widen_case(out: Out, rows: int, k: int) -> dict:
     return {"shape": [rows, k], "files": {key: out.files[name] for key, name in names.items()}}
 
 
-def chain(a: np.ndarray, b: np.ndarray, ii: np.ndarray, jj: np.ndarray, device: Device, block: int = 1 << 16) -> np.ndarray:
-    """`pearl_c.chain` on `device` for the cells (ii, jj) of code matrices a and b: +0 per window of G atoms, one FP32 add
-    per window; unpromoted, one accumulator over all of k."""
-    out = np.empty(len(ii), np.uint32)
-    k = a.shape[1]
-    window = device.window if device.g else k
-    for lo in range(0, len(ii), block):
-        ci, cj = ii[lo:lo + block], jj[lo:lo + block]
-        total = np.zeros(len(ci), np.uint32)
-        for ws in range(0, k, window):
-            local = np.zeros(len(ci), np.uint32)
-            for s in range(ws, min(ws + window, k), C.SLICE):
-                local = group_sum_total_batch(device.atom, local, a[ci, s:s + C.SLICE], b[cj, s:s + C.SLICE])[0]
-            total = (total.view(np.float32) + local.view(np.float32)).view(np.uint32) if device.g else local
-        if device.g:
-            total[total == 0x80000000] = 0
-        out[lo:lo + block] = total
-    return out
-
-
-def product(device: Device, a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """C.chain on `device` for every cell of codes a (rows x k) and b, batched."""
-    ii, jj = grid(a.shape[0], b.shape[0])
-    return chain(a, b, ii, jj, device).reshape(a.shape[0], b.shape[0])
-
-
-def peel_np(device: Device, c: np.ndarray, pa: np.ndarray, pb: np.ndarray) -> np.ndarray:
-    ii, jj = grid(*c.shape)
-    acc = c.ravel().copy()
-    for s in range(0, C.PEEL_K, 16):
-        acc = group_sum_total_batch(device.peel, acc, pa[ii, s:s + 16], pb[jj, s:s + 16])[0]
-    return acc.reshape(c.shape)
-
-
-def _side(job):
-    device, rows, idx, side, seed_e, seed_b, k, e = job
-    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=DEVICES[device], hashing="h0")
-    return s._side(rows, idx, side, seed_e, seed_b, k, e)
-
-
-def form(pool: Pool, device: Device, rows: list[bytes], side: int, seed_e: bytes, seed_b: bytes, k: int,
-         e: list[list[int]] | None = None, chunk: int = 16):
-    """One side's forming in chunks of rows; `e` gives each row's E line (A's, each from its own seed), else seed_e's."""
-    jobs = [(device.name, rows[i:i + chunk], list(range(i, min(i + chunk, len(rows)))), side, seed_e, seed_b, k,
-             None if e is None else e[i:i + chunk]) for i in range(0, len(rows), chunk)]
-    parts = pool.map(_side, jobs)
-    built = parts[0][0]
-    for p, _ in parts[1:]:
-        for field in built.__slots__:
-            getattr(built, field).extend(getattr(p, field))
-    return built, [x for _, ep in parts for x in ep]
-
-
 def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     assert m % 128 == 0 and n % 128 == 0 and k % 1024 == 0, (m, n, k)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -280,19 +126,18 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     h = scheme.commitment_hash
     mm = Matmul(INDEX, Shape(m, k, n), WEIGHT)
     coins = test_challenger()
-    epoch, salt_opening, tree_b, root_b = epoch_of(mm, rb, coins, SALT_KEY)
-    assert root_b == commit_rows(weight_binding(WEIGHT), -2, rb, h, SALT_KEY, HM96_WEIGHTS + WEIGHT).commitment.root
+    tiles = len(scheme.tiles(mm.shape))
+    salts = {"a": salts_of("a", m), "b": salts_of("b", n), "t": salts_of("t", tiles)}
+    epoch, salt_opening, tree_b, root_b = epoch_of(mm, rb, coins, salts["b"])
     dom_a = rows_domain(activation_binding(epoch.salt, INDEX), INDEX, m, h)
-    tree_a = tree_bytes(dom_a, ra, ROW_SCHEMA, SALT_KEY, INDEX)
+    tree_a = tree_bytes(dom_a, ra, ROW_SCHEMA, salts["a"])
     root_a = tree_a[-64:]
-    assert root_a == commit_rows(activation_binding(epoch.salt, INDEX), INDEX, ra, h, SALT_KEY, INDEX).commitment.root
     ctx = Context(epoch.salt, mm, root_a, root_b)
     noise = scheme.noise(ctx)
     seeds = scheme.row_seeds(ctx, ra, range(m))
     keys = keys_of(scheme, epoch, mm, noise.seed_b)
-    keys["salt_key"] = SALT_KEY
-    dom_t = transcript_domain(epoch, len(scheme.tiles(mm.shape)), h)
-    manifest = {"schema": "verity-pouw/pearl-c-sm90-gpu-check/v1", "shape": [m, n, k], "case": CASE, "layout": "rowmajor",
+    dom_t = transcript_domain(epoch, tiles, h)
+    manifest = {"schema": "verity-pouw/pearl-c-sm90-gpu-check/v2", "shape": [m, n, k], "case": CASE, "layout": "rowmajor",
                 "hashing": scheme.hashing, "weight": WEIGHT, "coins": coins.commitment.to_json(), "salt_opening": salt_opening.to_json(),
                 "keys": {name: x.hex() for name, x in keys.items()},
                 "seeds": {"seed_a": noise.seed_a.hex(), "seed_b": noise.seed_b.hex(), "salt": epoch.salt.hex(),
@@ -300,6 +145,10 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     kf = Out(out_dir)
     kf.put("hm", hm96_kernel_constants(), "u8")
     manifest["key_files"] = kf.files
+    sf = Out(out_dir)
+    for tree, x in salts.items():
+        sf.put(f"salts_{tree}", x, "u8")
+    manifest["salts"] = {name.removeprefix("salts_"): f for name, f in sf.files.items()}
     o = Out(out_dir)
     o.put("tree_a", tree_a, "u8")
     o.put("tree_b", tree_b, "u8")
@@ -376,29 +225,12 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
         v.put("y", glue_y(u, inv["a"], inv["b"]), "u16")
         lv = tile_leaves(c, u, m, n)
         v.put("leaves", lv, "u8")
-        v.put("tree_t", tree_bytes(dom_t, lv, TILE_SCHEMA, SALT_KEY, HM96_TRANSCRIPT), "u8")
+        v.put("tree_t", tree_bytes(dom_t, lv, TILE_SCHEMA, salts["t"]), "u8")
         agree = crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, lv, n)
         manifest["variants"][device.name] = {"scheme": C.PearlC(forming="v1", device=device, hashing="h3").name, "g": device.g,
                                              "files": v.files, "crosscheck": agree}
     (out_dir / "check.json").write_text(json.dumps(manifest, indent=1) + "\n")
     return manifest
-
-
-def crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, lv, n) -> dict:
-    """One 64 x 64 tile (rows 64-127, the last 64 columns) through the scheme on `device` at -h3: encode, checked, digest."""
-    s = C.PearlC(forming="v1", device=device, hashing="h3")
-    rows, cols = range(64, 128), range(n - 64, n)
-    noise = s.noise(ctx)
-    ops = s.encode(ctx, noise, [ra[i] for i in rows], [rb[j] for j in cols], Tile(tuple(rows), tuple(cols)))
-    assert ops is not None
-    checked = s.checked(ctx, ops)
-    sub = lambda x: [[int(w) for w in row] for row in x[64:128, n - 64:n]]  # noqa: E731
-    assert [list(r) for r in ops.a.codes] == at[64:128].tolist() and [list(r) for r in ops.b.codes] == bt[n - 64:].tolist()
-    assert ops.pa == pa[64:128].tolist() and ops.pb == pb[n - 64:].tolist()
-    assert checked.c == sub(c) and checked.u == sub(u)
-    assert s.admissible(ctx, ops)
-    assert s.digest(ctx, noise, checked) == lv[(n // 64) + n // 64 - 1]
-    return {"tile": [64, n - 64], "cells": 64 * 64, "agree": True}
 
 
 if __name__ == "__main__":

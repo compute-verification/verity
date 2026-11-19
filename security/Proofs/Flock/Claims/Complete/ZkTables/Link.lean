@@ -57,9 +57,9 @@ open With
 
 /-- **The first masked send is the link message**: a pure masked session that returns ran its schedules and level-0
 commitments (their verdict-monad runs return), then sent the link message of the caps, with no public words, first. -/
-theorem sessionS_link {H : Claims.Msg → Claims.Msg} {resp : ℕ → Claims.Msg} {spec : SessionSpec}
+theorem sessionS_link {H : Hash.Msg → Hash.Msg} {resp : ℕ → Hash.Msg} {spec : SessionSpec}
     {sts : Array Flock.Stmt} {w : Claims.Flock.Wit} {ω : TapeZk} {rec : String} {pfs : Array ByteArray}
-    {bodies : Array Claims.Msg} (h : sessionS H resp spec sts w ω = (.ok (rec, pfs), bodies)) :
+    {bodies : Array Hash.Msg} (h : sessionS H resp spec sts w ω = (.ok (rec, pfs), bodies)) :
     ∃ schs cms, (schedsPZk (tabsOf sts) : V _) = .ok schs ∧
       (commitsPZk (Hashes.ofSha512 (Claims.hOf H)) (tabsOf sts) schs (tablesP (tabsOf sts) (traces sts w)) ω :
         V _) = .ok cms ∧
@@ -94,7 +94,7 @@ theorem sessionS_link {H : Claims.Msg → Claims.Msg} {resp : ℕ → Claims.Msg
 
 /-- **The first masked send is the link message**, each length in its word: the goal `LinkFirstZk`, for a SHA-512 of
 64-byte outputs. -/
-theorem linkFirst_goal (H : Claims.Msg → Claims.Msg) (hH : ∀ m, (H m).length = 64)
+theorem linkFirst_goal (H : Hash.Msg → Hash.Msg) (hH : ∀ m, (H m).length = 64)
     (rel : Readable.Parsed → Readable.Relation) : LinkFirstZk H rel := by
   intro o
   have h64 : ∀ b, (Claims.hOf H b).size = 64 := fun b => by

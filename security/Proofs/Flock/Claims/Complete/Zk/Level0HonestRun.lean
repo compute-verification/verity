@@ -107,8 +107,8 @@ abbrev ZOut := Array (Array ByteArray) × Array LevelProof × FinalProof × Leve
 
 /-- A run of a step on the model's: where it ends, and its table and weight. -/
 theorem HRuns.ends {p : LigeritoProof} {L : ℕ} {β : Type} {y : LP PS β} {c c' : Cur} {tm tm' : Transcript}
-    {Q Xb : β → Prop} {J : TW → Prop} {J' : β → TW → Prop} {st : LigState} {t : Transcript} {l : Array Claims.Msg}
-    {b : β} {st' : LigState} {t' : Transcript} {l' : Array Claims.Msg} (hl : l.size = L + t.k)
+    {Q Xb : β → Prop} {J : TW → Prop} {J' : β → TW → Prop} {st : LigState} {t : Transcript} {l : Array Hash.Msg}
+    {b : β} {st' : LigState} {t' : Transcript} {l' : Array Hash.Msg} (hl : l.size = L + t.k)
     (e : ((y.run st).run t).go l = (.ok ((b, st'), t'), l')) (h : HRuns p L y c tm c' tm' Q Xb J J') :
     (Ext p st' → Xb b → pcur st = c → t = tm → pcur st' = c' ∧ t' = tm') ∧
       (Ext p st' → Xb b → pcur st = c → t = tm → J (tw st) → J' b (tw st')) :=
@@ -124,11 +124,11 @@ a table `tb` and weights `b` of `2^n` entries whose level-0 commitment has `tb`'
 basis whose value at every original point `q ‖ bits(y)` is the multilinear extension of `b` there, the masked prover's
 Ligerito, run from a transcript at which `L + k` bodies have been sent (`k` its position), ends at the masked model's
 transcript, and the masked model's final identity holds on the proof it returns. -/
-theorem honestZ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) {m : ℕ} {sch : Schedule}
+theorem honestZ (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) {m : ℕ} {sch : Schedule}
     {tPad : ℕ} (T : F128) (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
-    (basisAt : Array F256 → ℕ → Array F256) (L : ℕ) (t : Transcript) (l : Array Claims.Msg) {P : LigeritoProof}
-    {zl : Zk.Level0Msgs} {rc : Zk.L0Rec} {t' : Transcript} {l' : Array Claims.Msg}
+    (basisAt : Array F256 → ℕ → Array F256) (L : ℕ) (t : Transcript) (l : Array Hash.Msg) {P : LigeritoProof}
+    {zl : Zk.Level0Msgs} {rc : Zk.L0Rec} {t' : Transcript} {l' : Array Hash.Msg}
     (h1 : 25 ≤ m) (h2 : m ≤ 35) (hsch : Zk.schedule wideLeaf m = .ok (sch, tPad)) (hrep : rep < 2)
     (htb : tb.size = 2 ^ sch.n) (hb : b.size = 2 ^ sch.n)
     (hcm0 : cm0.rows = encodeRowsZk (sch.levels.getD 0 default) tPad tb extra lanePad)

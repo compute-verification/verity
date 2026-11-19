@@ -28,12 +28,13 @@ from verity_config.settings import VALUE, WHERE, Registry, Setting
 S = Setting
 REGISTRY = Registry(__file__, ("VERITY_BENCH_",),
     # ---- the dispatcher and a point's job (jobs.py, run_point.sh, env.sh, setup/)
-    S("VERITY_BENCH_VENV", str, None, WHERE, "the node's pinned-vLLM Python a point runs under (env.sh), which the dispatcher "
-      "forwards when set: an interpreter, whose vLLM and torch versions the result's identity records"),
+    S("VERITY_BENCH_VENV", str, None, WHERE, "the node's pinned-vLLM Python a point runs under (env.sh), which "
+      "the launch gives, else the environment the launch runs in ($VIRTUAL_ENV), else the one pod_bootstrap.sh recorded "
+      "(${XDG_STATE_HOME:-$HOME/.local/state}/verity-bench/venv; a point refuses with none): an interpreter, whose vLLM and torch versions the result's identity records"),
     S("VERITY_BENCH_SETUP", str, None, VALUE, "the spec's setup script, which run_point.sh sources before the point's Python "
       "(the dispatcher sets it from the spec; a point refuses any other)"),
     S("VERITY_BENCH_LIB_CACHE", str, None, WHERE, "the node's cache of the libraries setup/vllm_encoded.sh builds, each under its "
-      "recipe's and sources' digest; unset, /workspace/research/cache/verity-bench-libs"),
+      "recipe's and sources' digest; unset, verity-bench-libs under $XDG_CACHE_HOME (~/.cache)"),
     # ---- a steady-state point's node side (steady_point.sh, steady_node.py)
     S("VERITY_BENCH_STEADY_PY", str, None, WHERE, "the Python (3.12 with numpy and blake3) the spec's setup made on the "
       "node, which runs a steady-state point's node side, the stager and the script that times the provers"),
@@ -57,6 +58,10 @@ REGISTRY = Registry(__file__, ("VERITY_BENCH_",),
     # ---- gpu-lease's (the kit's host stamp)
     S("GPU_LEASE_UUID", str, None, WHERE, "the UUIDs of the GPUs gpu-lease leased the job (it sets them), which the host stamp "
       "reads the clocks of; unset, every GPU of the host"),
+    S("GPU_LEASE_ON", str, None, WHERE, "the cards a point's lease is asked of (gpu-lease's --on: a vLLM point's, a list; a "
+      "steady-state point's, one index); unset, any card"),
+    S("GPU_LEASE_CORES", str, None, WHERE, "the CPUs a vLLM point's lease pins it to (gpu-lease's --cores, 34-43); unset, "
+      "none"),
     elsewhere=(
         "VERITY_BENCH_FULL",       # tests/benchmarks/numerical/bench/test_instances.py's opt-in
         "VERITY_BENCH_CUBIN",      # `verity bench overhead run --cubin`'s file, which overhead_node sets and a scheme's arm loads

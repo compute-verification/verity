@@ -27,11 +27,12 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
   instances of template `t`), from given bytes of the challenger's coins, with the number of bytes it read
   (`Select.selectSecond`);
 * `second_statements`: round 2's statement check of second-stage sessions' statements against the interior
-  registration and the second stage's cells, the two-stage form allowed or not (`SecondStage.checkAny`);
+  registration and the second stage's cells (`SecondStage.checkAny`);
 * `second_interior_reads`: of that check's input, the statements' reads that rest on the interior's own values
   (`SecondStage.interiorReads`);
 * `replay_links`: the design's links, from the replay block's Definition in a program (`SecondStage.replayLinks`);
 * `replay_wires`: the design's wires, from the replay block's Definition in a program (`SecondStage.replayWires`);
+* `edges`: the wires a Program's root states, read off its nodes (`Edges.edgesOf`);
 * `replay_rows`: the rows the design's links' and wires' units read, from the replay block's Definition in a program
   (`SecondStage.replayRows`);
 * `replay_returns`: the names the replay block's return has in the boundary registration's record, from its
@@ -60,6 +61,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
   offsets and total, the honest prover's witnesses, and the witness for a named call;
 * `verdict`: the verdicts' share of the outcome once the record's checks hold;
 * `matches_public`: the verifier's own public file against the record (`Record.matchesPublic`);
+* `session_setup`: the sampled proofs' own set-up of one statement and its refusal (`OneStageZk.sessionAt`);
 * `public_ports`: the record's roots by port as v2's one statement's public file names them (`OneStageZk.publicPorts`);
 * `session_registered`: the registered roots the verifiers report (`Record.sessionRegistered`), and with a
   registration only its own values' (`Record.ownRegistered`);
@@ -87,8 +89,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
   verifier's key and a record as `from_json` reads them, with `record_message`, and `trusted_reason`.
 * `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_day`, `challenger_head`,
   `challenger_session`, `challenger_credited`, `challenger_pinned`: the challenger's session (`ChallengerSession`): its
-  close as `from_json` reads it, with `close_message`; `log_chain` and `released_roots_of`; `audited_session`, the
-  auditor's ledger; `declared_day`, a window's day and its lane's declarations before it; `ledger_head`, the ledger's
+  close as `from_json` reads it, with `close_message`; `log_chain`, `released_log_of` and `by_family`; `audited_session`,
+  the auditor's ledger; `declared_day`, a window's day and its lane's declarations before it; `ledger_head`, the ledger's
   published heads; `trusted_session_of` and `credited_session`, a window counted toward its
   period's circuit, each over `pinned_session`: a session from a commit the host's pins log records and the auditor's
   first-parent list of main holds.
@@ -116,8 +118,6 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
   (`MonitoringPeriod.checkWith`, `MonitoringPeriod.stubInner`).
 * `wires`, `wires_unrolled`: a window circuit's wires checked at the size of their description (`Wires.check`) and by
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and sampled rows' writers.
-* `wires_drawn`, `wires_drawn_unrolled`: the wire check on the sampled proof blocks alone (`Wires.Summary.drawnOk`, each sampled
-  wired row's public string its writer's) and on the reference's entries whose unit is sampled.
 * `public_units`: whether a public file's `units.indices` are exactly given units, ascending (`PublicUnits.exactly`),
   which the per-member form holds each statement's file to.
 * `link_points`: each member's fewest and most sampled proof blocks under a sampling design over the samples that end, and the members whose
@@ -159,11 +159,11 @@ public import Spot.Produced
 public import Spot.HiddenSample
 public import Spot.PartitionRef
 public import Spot.Returned
-public import Spot.WiresSampled
 public import Spot.OneStageZk
 public import Spot.HistoryTable
 public import Spot.PublicUnits
 public import Spot.LinkPoints
+public import Spot.Edges
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -282,7 +282,7 @@ def registered (j : Json) : V Json := do
   return orNull (fun es => Json.mkObj (es.toList.map fun e => (e.value, e.toJson))) (Docket.ownEntries v)
 
 /-- `{"program", "value", "words", "leaves", "word_bits"}`, two strings and three natural numbers, and an optional
-`"window"`, to `registered.domain(...).domain_id` in hex; refused where it raises (a width but 16 or 32, a window that is
+`"window"`, to `registered_value.domain(...).domain_id` in hex; refused where it raises (a width but 16 or 32, a window that is
 not lowercase hex of 64 bytes). -/
 def domain (j : Json) : V Json := do
   let (.str program, .str value) := (getD j "program", getD j "value") | throw "program or value is not a string"
@@ -853,7 +853,7 @@ def run (j : Json) : V Json := do
             key, main := getD j "main",
             interior := interior.map fun it => { it with family := interiorFamily } }
 
-/-- `second_stage.check`'s input, read: the two-stage form allowed or not (`allow`), the first stage's replay sample,
+/-- `second_stage.check`'s input, read: the first stage's replay sample,
 the interior program and query, whose strata make the parts, the interior and boundary registrations' records, the
 second stage's units (`drawn`), the design's links (`replayLinks`') and wires (`replayWires`'), each null for none, the
 rows their units read (`replayRows`'), null for none, the names of what the replay block returns (`returns`,
@@ -865,10 +865,10 @@ template's), the verifier's own copies of the interior registration's values it 
 (`supplied`, `SecondStage.suppliedOf?`), and the names of those it pinned or holds to an earlier record (`fixed`), each
 null for none, the templates the auditor's params record as table reads with their tables' rows (`reads`, `{template:
 V}`, null for none), the registered tables they pin (`tables`, `{parameter: entry}`, `Run.pinnedTables`, null for
-none), the words of the rows each wire joins (`widths`, `replayWidths`', null for none), and the statements, null for
-none. The wired key's switch is `SecondStage.WIRED_KEY`'s: no input sets it. -/
-def secondOwn (j : Json) : V (Bool × SecondStage.Own × Option (Array Json)) := do
-  let .bool allow := getD j "allow" | throw "allow is not a boolean"
+none), the words of the rows each wire joins (`widths`, `replayWidths`', null for none), the terms the interior
+registration's own entries were held to (`held`, `{program, window, fixed}`, `SecondStage.Held`, null for none), and the
+statements, null for none. The wired key's switch is `SecondStage.WIRED_KEY`'s: no input sets it. -/
+def secondOwn (j : Json) : V (SecondStage.Own × Option (Array Json)) := do
   let .arr ss := getD j "sample" | throw "sample is not a list"
   let some sample := ss.mapM nat? | throw "sample is not a list of replay blocks"
   let .arr ds := getD j "drawn" | throw "drawn is not a list"
@@ -941,22 +941,31 @@ def secondOwn (j : Json) : V (Bool × SecondStage.Own × Option (Array Json)) :=
     | ws => match SecondStage.widthsOf? ws with
       | some ws => pure ws
       | none => throw "widths is null or a list of {template, port, reads, writes}, two strings and two naturals"
+  let held ← match getD j "held" with
+    | .null => pure none
+    | h => match getD h "program", getD h "window", getD h "fixed" with
+      | .str p, w, .arr fs =>
+        match (match w with | .null => some none | .str r => some (some r) | _ => none),
+            fs.mapM (fun v => match v with | .str x => some x | _ => none) with
+        | some w, some fs => pure (some ({ program := p, window := w, fixed := fs } : SecondStage.Held))
+        | _, _ => throw "held is null or {program, window, fixed}: a string, a string or null, a list of strings"
+      | _, _, _ => throw "held is null or {program, window, fixed}: a string, a string or null, a list of strings"
   let own : SecondStage.Own :=
     { sample, parts := SecondStage.parts sample.size strata, interior := getD j "interior",
       boundary := getD j "boundary", drawn, links, reported := Record.sessionRegistered verdicts,
       verified := SecondStage.verifiedOf verdicts, refs, refReads, wires, rows, returns, supplied, fixed, reads,
-      tables, widths }
-  return (allow, own, stmts)
+      tables, widths, held }
+  return (own, stmts)
 
 /-- `second_stage.check`'s input (`secondOwn`) to its verdict (`SecondStage.checkAny`). -/
 def secondStatements (j : Json) : V Json := do
-  let (allow, own, stmts) ← secondOwn j
-  return (SecondStage.checkAny allow own stmts).toJson
+  let (own, stmts) ← secondOwn j
+  return (SecondStage.checkAny own stmts).toJson
 
 /-- `second_stage.check`'s input (`secondOwn`) to the reads that rest on the interior's own values
 (`SecondStage.interiorReads`), each `{"template", "port", "value"}`. -/
 def secondInteriorReads (j : Json) : V Json := do
-  let (_, own, stmts) ← secondOwn j
+  let (own, stmts) ← secondOwn j
   return .arr (SecondStage.interiorReads own ((stmts.getD #[]).toList))
 
 /-- `second_stage.replay_links`' input to the design's links (`SecondStage.replayLinks`): a program object, the replay
@@ -978,6 +987,26 @@ def replayWires (j : Json) : V Json := do
   return match SecondStage.replayWires p.prog key with
     | some ws => Json.arr (ws.map SecondStage.Wire.toJson)
     | none => .null
+
+/-- `periods.edges`' input to the wires a Program's root states (`Edges.edgesOf`): a program object, its ranges
+(`[node, template, first, count]` each) and a wiring (`Wires.Wiring.ofJson`'s); `{"wires": [...]}` or
+`{"refusal": code}`. -/
+def edges (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  let .arr rj := getD j "ranges" | throw "ranges is not a list"
+  let rs ← rj.mapM fun r => match r with
+    | .arr #[k, .str t, f, c] => match k.getNat?, f.getNat?, c.getNat? with
+      | .ok k, .ok f, .ok c => pure ({ node := k, template := t, first := f, count := c } : Flock.TemplateQuery.TRange)
+      | _, _, _ => throw "a range is [node, template, first, count]"
+    | _ => throw "a range is [node, template, first, count]"
+  let w ← Wires.Wiring.ofJson (getD j "wiring")
+  return match Edges.edgesOf p.prog rs w with
+    | .error e => Json.mkObj [("refusal", Json.str e)]
+    | .ok ws => Json.mkObj [("wires", Json.arr (ws.toArray.map fun e => Json.mkObj [("reader", Json.str e.reader),
+        ("port", Json.str e.port), ("writer", Json.str e.writer), ("out", Json.str e.out), ("at", Lean.toJson e.start),
+        ("radix", Lean.toJson e.radix), ("base", Lean.toJson e.base), ("step", Lean.toJson e.step),
+        ("cut", Json.arr #[Lean.toJson e.cut0, Lean.toJson e.cuts])]))]
 
 /-- `second_stage.replay_rows`' input to the rows the design's links' and wires' units read
 (`SecondStage.replayRows`): a program object and the replay block's descriptor id in it (`replay`). -/
@@ -1053,6 +1082,27 @@ def fits (j : Json) : V Json := do
     ("inputs", why (OneStageZk.fitsWhy limit circuit pub tables program (given "partition") (given "registered"))),
     ("draw", why (OneStageZk.sampleFitsWhy limit (given "draw")))]
 
+/-- `{"circuit", "public", "tables", "program", "partition", "registered", "draw"}` to `{"refused"}`: the sampled proofs'
+own set-up of one statement (`OneStageZk.sessionAt` under the statement `OneStageZk.STATEMENT`, as `rootBTablesAt`
+reads the verifier's files), null when it sets the session up, else its refusal. The files are hex, the tables
+`[name, hex]` pairs, the program hex, and the registered reads and the sample null for none. -/
+def sessionSetup (j : Json) : V Json := do
+  let some tags := Flock.Tags.find? OneStageZk.STATEMENT | throw s!"the statement {OneStageZk.STATEMENT} is not known"
+  let circuitFile ← Flock.unhex (← Flock.J.str j "circuit" "the session's setup")
+  let publicFile ← Flock.unhex (← Flock.J.str j "public" "the session's setup")
+  let .arr ts := getD j "tables" | throw "tables is not a list"
+  let tables ← ts.toList.mapM fun
+    | .arr #[.str n, .str b] => do pure (n, ← Flock.unhex b)
+    | _ => throw "a table is not its name and its hex"
+  let program ← Flock.unhex (← Flock.J.str j "program" "the session's setup")
+  let given (k : String) : Option Json := match getD j k with
+    | .null => none
+    | x => some x
+  let I : Flock.Witness.Inputs :=
+    { tags, circuitFile, publicFile, count := 1, tables, partition := given "partition", program := some program }
+  let r := do OneStageZk.sessionAt I (← OneStageZk.readsOf (given "registered")) (given "draw")
+  return Json.mkObj [("refused", match r with | .ok _ => Json.null | .error e => Json.str e)]
+
 /-- `{"proofs", "query"}` to `{"circuits": [[template, circuit, header, registered], ...], "reads": [[template, V],
 ...], "tables": [[parameter, entry], ...]}`: a two-stage run's params naming each template's circuit file and its
 statements' reference header and registered reads, in the order the check's template query names the templates
@@ -1082,11 +1132,11 @@ def table : List (String × (Json → V Json)) :=
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("ran_out", ranOut),
    ("select", select), ("design", design), ("slots", slots),
    ("file_population", FilePart.piece), ("tables_held", OneStageZk.tablesPiece),
-   ("own_tables", OneStageZk.ownTablesPiece),
+   ("own_tables", OneStageZk.ownTablesPiece), ("session_setup", sessionSetup),
    ("check_proved", checkProved),
    ("select_second", selectSecond), ("second_statements", secondStatements),
    ("second_interior_reads", secondInteriorReads), ("replay_links", replayLinks),
-   ("replay_wires", replayWires), ("replay_rows", replayRows), ("replay_widths", replayWidths),
+   ("replay_wires", replayWires), ("edges", edges), ("replay_rows", replayRows), ("replay_widths", replayWidths),
    ("replay_returns", replayReturns),
    ("replay_returned", replayReturned), ("second_schedule", secondSchedule),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
@@ -1118,8 +1168,6 @@ def table : List (String × (Json → V Json)) :=
    ("period_asked", MonitoringPeriod.askedPiece), ("period_check", MonitoringPeriod.checkPiece),
    ("period_check_stub", MonitoringPeriod.checkStubPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
-   ("wires_drawn", Wires.pieceSampled), ("wires_drawn_unrolled", Wires.pieceSampledRef),
-   ("members_wires", OneStageZk.membersWiresPiece),
    ("public_units", PublicUnits.piece),
    ("link_points", LinkPoints.piece),
    ("history_root", HistoryTable.rootPiece), ("history_check", HistoryTable.checkPiece),

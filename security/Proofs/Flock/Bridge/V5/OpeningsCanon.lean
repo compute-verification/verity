@@ -24,7 +24,7 @@ proof block's public gates:
 
 namespace FlockSoundness.Discharge.HiddenExec
 
-open Flock FlockLevel3 Model Audit Binding Placed
+open Flock FlockLevel3 Model Spot.Sampling Binding Placed
 open FlockSoundness.Discharge.Layout (keyN portRowW OutColAt outDecode OutsOutP KeysRowP keyRowOfP keyPubOf)
 
 variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {pi : HmIn.Ports} {Reg : Type} {mPts : ℕ}
@@ -72,7 +72,7 @@ end FlockSoundness.Discharge.HiddenExec
 
 namespace Flock.Guarantees
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
     FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.ZkSession
 open FlockSoundness.Discharge.Tables (LiveOutJ)
@@ -155,7 +155,7 @@ theorem _root_.Flock.Bridge.openingsCanonV5_const
     obtain ⟨⟨u', q, t⟩, hpq, rfl⟩ := Option.map_eq_some_iff.1 hb
     subst hx
     unfold UnitPlace.decode
-    rw [FlockSoundness.Audit.Partition.IsRowsUnit.decode_wire _ (UnitPlace.agree _ hz),
+    rw [Spot.Sampling.Partition.IsRowsUnit.decode_wire _ (UnitPlace.agree _ hz),
       Discharge.Layout.block_gateAt
         (Discharge.HiddenExec.keyPlaceHP (sitesShHJP_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope)
           hpi (Discharge.Layout.outsOfP D.unroll hU n pi)) hu hz x]
@@ -199,7 +199,7 @@ theorem _root_.Flock.Bridge.openingsCanonV5_const
         (Discharge.Layout.outsOfP D.unroll hU n pi) S R u hu x (by rw [hx, h2]; exact Finset.mem_singleton_self _) _ hz
       rw [← hx]
       unfold UnitPlace.decode
-      rw [FlockSoundness.Audit.Partition.IsRowsUnit.decode_wire _ (UnitPlace.agree _ hz), hzero]
+      rw [Spot.Sampling.Partition.IsRowsUnit.decode_wire _ (UnitPlace.agree _ hz), hzero]
       rfl
 
 /-- **`OpeningsCanonTargetV5` holds**: at a constant wire by `openingsCanonV5_const`; at any other committed wire the

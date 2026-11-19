@@ -20,14 +20,14 @@ coins the device opened, so they are the device's or bytes of one SHA-512 with t
   texts (`Canon`), with the fields v2 reads: a family's coin as a root's line (`RootValue`) and its release's line
   (`PlainValue`), a tree's hello as its key, nonce, root and spec (`HelloValue`, `SpecValue`), and a round opened as its
   tree's root, stream, round, count, the bytes it answers and its coins' SHA-512 (`OpenValue`); and, where the run's
-  release log reads as its coin commitment's (`releasedRootsOf`), the coins it released of a family after a root,
+  release log reads as its coin commitment's (`releasedLogOf`), the coins it released of a family after a root,
   `COIN_BYTES` bytes each in order, the family's coins in its log (`Holds`, `freshOf`). These are the properties the
   device's history at a play is to have.
 * **A line reads back** (`CanonLine.event_getD`): where v2's line reader (`Spot.Challenger.event`) accepts a
   line that is a sorted value's `canon` text, it reads the value's fields (`str_of`, `nat_of`, `spec_of`). The reader's
   parse can't be seen into, so that it accepts a printed line is what `readTail`'s success shows: a line it refuses is
   no tree's (`treeLine_error`), and a root's line it refuses is pending with no root (`rootOf_error`), which no read
-  survives (`pending_none`). The head is the commitment's value's text (`head_canon`), so where `releasedRootsOf`
+  survives (`pending_none`). The head is the commitment's value's text (`head_canon`), so where `releasedLogOf`
   accepts a log, `readLog` reads it as `readTail` reads the lines after its head (`readLog_head`).
 * **The trees v2 accepts** (`TreesOf`, `trees_log`): `coinTreesOf`'s acceptance gives each tree a root no other tree
   has, a spec of distinct streams, and each round opened once, so where a session's record passes `sessionTreeReason`,
@@ -128,11 +128,11 @@ inductive Holds : ByteArray → List (List Bool) → Prop
 
 /-- **The device printed its log `log`**, the properties the device's history at a play is to have: each run of the
 device its ledger opens withheld on a window prints `log` after its release log's head (`Prints`), and, where its
-release log reads as its coin commitment's (`releasedRootsOf`), released of each family after each root the coins
+release log reads as its coin commitment's (`releasedLogOf`), released of each family after each root the coins
 `log` shows released so (`Holds`). -/
 def PrintsLog (dev : History) (log : List Release) : Prop :=
   ∀ pk w r, r ∈ dev.runs pk → OpensOn dev pk w r.id →
-    Prints [] r.log.tail log ∧ ((∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) →
+    Prints [] r.log.tail log ∧ ((∃ c entries, r.commitment = some c ∧ releasedLogOf c r.log = .ok entries) →
       ∀ label after, Holds (r.released label after) (freshOf label after log))
 
 /-! ## A release as v2 reads it -/
@@ -409,7 +409,7 @@ theorem canon_str (s : String) : Flock.canon (.str s) = pure (Flock.canonStr s) 
   simp only [Flock.canon]
 
 /-- **The release log's head is the coin commitment's value's text**: `{"event":"commitment","root":…}` with its
-root's hex, as the challenger writes it and `releasedRootsOf` reads it. -/
+root's hex, as the challenger writes it and `releasedLogOf` reads it. -/
 theorem head_canon (b : ByteArray) :
     Canon (Json.mkObj [("event", .str "commitment"), ("root", .str (Flock.hexOf b))])
       ("{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf b ++ "\"}") := by
@@ -444,13 +444,13 @@ theorem treeLine_head (b : ByteArray) :
     treeLine ("{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf b ++ "\"}") = false :=
   treeLine_plain (head_canon b) (head_plain b)
 
-/-- **A log `releasedRootsOf` accepts at the coin commitment `c` opens with `c`'s line.** -/
-theorem head_of_roots {c : LiveCommitment} {log : List String} {roots : Roots} (h : releasedRootsOf c log = .ok roots) :
+/-- **A log `releasedLogOf` accepts at the coin commitment `c` opens with `c`'s line.** -/
+theorem head_of_log {c : LiveCommitment} {log : List String} {entries : Spot.Challenger.Log} (h : releasedLogOf c log = .ok entries) :
     log.head? = some ("{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf c.root ++ "\"}") := by
   by_cases hc : (log.head? == some ("{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf c.root ++ "\"}")) = true
   · exact beq_iff_eq.1 hc
   · rw [Bool.not_eq_true] at hc
-    unfold releasedRootsOf at h
+    unfold releasedLogOf at h
     simp only [hc, Bool.false_eq_true, ↓reduceIte] at h
     cases h
 
@@ -511,11 +511,11 @@ theorem pending_none {a : String} (ha : Verity.Sampled.rootOf a = none) {ls : Li
     · rw [Verity.Sampled.readTail, ite_eq_right ht]
       simp only [ha, Option.bind_eq_bind, Option.bind_none]
 
-/-- **v2's read of a log `releasedRootsOf` accepts is `readTail`'s of the lines after its head**: the head is the coin
-commitment's line (`head_of_roots`), no coin tree's (`treeLine_head`). -/
-theorem readLog_head {c : LiveCommitment} {log : List String} {roots : Roots} (h : releasedRootsOf c log = .ok roots)
+/-- **v2's read of a log `releasedLogOf` accepts is `readTail`'s of the lines after its head**: the head is the coin
+commitment's line (`head_of_log`), no coin tree's (`treeLine_head`). -/
+theorem readLog_head {c : LiveCommitment} {log : List String} {entries : Spot.Challenger.Log} (h : releasedLogOf c log = .ok entries)
     {ξ : ByteArray} : readLog label after recs ξ log = readTail label after recs log.tail [] none ξ := by
-  have hh := head_of_roots h
+  have hh := head_of_log h
   cases log with
   | nil => cases hh
   | cons l ls =>
@@ -1039,19 +1039,19 @@ theorem read_prints : ∀ {ts : List (ByteArray × Flock.CoinTree.Spec)} {lines 
             · exact hash_of_hex hC
 
 /-- **A run the device printed reads as its log** (`ReadOf`): where the device printed its log `log` (`PrintsLog`), on
-a run its ledger opens withheld on a window, whose release log reads as its coin commitment's (`releasedRootsOf`) and
+a run its ledger opens withheld on a window, whose release log reads as its coin commitment's (`releasedLogOf`) and
 whose log `coinTreesOf` reads trees from and gives each round opened the records' coins (`TreeLines`), `readLog`
 reads the run's log, at the run's released coins, as `log`: its head is the commitment's line (`readLog_head`), and
 the lines after it are what the device printed. -/
 theorem read_run {dev : History} {log : List Release} (hP : PrintsLog dev log) {pk : ByteArray} {w : String}
     {r : Properties.Challenger.Run} (hr : r ∈ dev.runs pk) (ho : OpensOn dev pk w r.id)
-    (hcr : ∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) {ts : Array LoggedTree}
+    (hcr : ∃ c entries, r.commitment = some c ∧ releasedLogOf c r.log = .ok entries) {ts : Array LoggedTree}
     (hts : coinTreesOf r.log = .ok ts) (hrecs : TreeLines recs r.log)
     {out : List Release} (h : readLog label after recs (r.released label after) r.log = some out) :
     List.Forall₂ ReadOf out log := by
   obtain ⟨hp, hξ⟩ := hP pk w r hr ho
-  obtain ⟨c, roots, -, hroots⟩ := id hcr
-  rw [readLog_head hroots] at h
+  obtain ⟨c, entries, -, hentries⟩ := id hcr
+  rw [readLog_head hentries] at h
   have hT := trees_log hts
   have hn : (r.log.filterMap helloRoot).Nodup := hT.roots ▸ hT.nodup
   refine read_prints hp .nil (hrecs.sub fun _ hl => List.mem_of_mem_tail hl) ?_

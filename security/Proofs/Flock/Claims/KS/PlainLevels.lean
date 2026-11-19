@@ -412,7 +412,7 @@ table 0's rep `k` is an `Opening` of its position against the flattened `ℓ −
 that log (`acc_within`), so level `ℓ`'s Merkle check passed on the rep's rows at those positions
 (`plainLevels_verifyWithM`), and the check at the table's scheme, carried back to `OC`, logged them
 (`merkleCheck_logsOf`). -/
-theorem plain_levelOpeningK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plain_levelOpeningK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {k ℓ q : ℕ} {a : List FlockLevel3.GF128}
     (h : (Claims.run sha512 P (VK keep) x ω r).out = .acc)
     (ha : (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (VK keep) x ω r).seen k ℓ) :
@@ -530,7 +530,7 @@ theorem plain_levelOpeningK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prove
     hjq ▸ hop j hj⟩
 
 /-- `plain_levelOpeningK` at the deployed plain verifier (`keep := id`). -/
-theorem plain_levelOpening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plain_levelOpening {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {k ℓ q : ℕ} {a : List FlockLevel3.GF128}
     (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
     (ha : (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω r).seen k ℓ) :
@@ -550,7 +550,7 @@ theorem plain_levelOpening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {
 /-- **Two rows one rep of an accepted plain run opens at one later-level position clash in its log**: two of table 0's
 rep `k`'s level-`ℓ` rows at one position that differ are two `Opening`s of that position against one root, the
 flattened `ℓ − 1`-th recursive cap of the rep's proof (`plain_levelOpening`). -/
-theorem plain_levelClashK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plain_levelClashK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {k ℓ q : ℕ} {a b : List FlockLevel3.GF128}
     (h : (Claims.run sha512 P (VK keep) x ω r).out = .acc)
     (ha : (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (VK keep) x ω r).seen k ℓ)
@@ -568,7 +568,7 @@ theorem plain_levelClashK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover 
   exact ⟨_, _, _, _, q, row, row', fun he => hab (by rw [hra, hrb, he]), hop, hop'⟩
 
 /-- `plain_levelClashK` at the deployed plain verifier (`keep := id`). -/
-theorem plain_levelClash {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plain_levelClash {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {k ℓ q : ℕ} {a b : List FlockLevel3.GF128}
     (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
     (ha : (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω r).seen k ℓ)

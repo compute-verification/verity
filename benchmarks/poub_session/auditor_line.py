@@ -56,7 +56,7 @@ ledger's windows and periods (`periods_answer`, past `verify_ledger` and `verify
 (`credit`), and its store's binding isn't refused, and gives any other session zero credit with the reasons:
 
 - *credited*: its window reads through `challenger.credited_session` (its pin first, as *pinned* reads it) with the
-  descriptor of the verifier that ran it, `verity/remote-bandwidth/v0 verifier tree <tree>`, `<tree>` being
+  descriptor of the verifier that ran it, `<audit.PROTOCOL_ID> verifier tree <tree>`, `<tree>` being
   `git rev-parse COMMIT:verity/protocols/resource_accounting/memory/poub/verifier` of the run's recorded commit (`--commit`), so it counts
   only toward a period that committed that verifier; and that commit is on the auditor's first-parent list
   of main (`--main`), as the challenger host's pin must be, so the verdict is that of a tree main's check ran on. A host
@@ -158,6 +158,7 @@ from verity.protocols.resource_accounting.memory.poub.verifier.session import ve
 from verity.protocols.resource_accounting.memory.poub.verifier.poub_session import verifier_process as VP  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger, line, pooled, timing  # noqa: E402
+from verity.device import load_node, number  # noqa: E402
 from verity.protocol import no_bound  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore  # noqa: E402
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch  # noqa: E402
@@ -165,10 +166,11 @@ from verity.protocols.proofs.spot.verifier.challenger import remote  # noqa: E40
 
 import sheets  # noqa: E402
 
-FIGURES = sheets.figures()
-"""The node's figures, from its data sheets (`sheets.figures`)."""
+FIGURES = sheets.figures("rtx-pro-6000-server-x8")
+"""The figures of the node the gate's sessions ran on, from its data sheets (`sheets.figures`)."""
 
-RATES = {"disk_bytes_per_s": FIGURES.disk_bytes_per_s, "link_bytes_per_s": 5e10}
+RATES = {"disk_bytes_per_s": FIGURES.disk_bytes_per_s, "link_bytes_per_s": float(number(load_node(
+    "rtx-pro-6000-server-x8", directory=sheets.NODE_FILES, cards_directory=sheets.CARD_FILES)["interface"]["eth0"]["rate"]) / 8)}
 """The node's rates a gate run's line is read at, bytes a second (`line.Rates`): its disks' measured read
 (the host card's `disk.read`, `Disks`' β), which Identity leaves in, charged in both forms, and its boundary links beyond
 them, link-charged (54.311e9 in all)."""
@@ -282,11 +284,12 @@ def peer_of(out: Path, v: dict) -> str:
 
 def release_log(lines: list[str]) -> dict[str, dict[str, list]]:
     """A release log's lines after its head, by family: each coin's root (`after`), its request's receipt and the
-    coin's release, on the challenger's clock, in index order (`challenger.released_roots_of` checks the form)."""
+    coin's release, on the challenger's clock, in index order (`challenger.released_log_of` checks the form).  A label's
+    former name (`coins.FORMER`) is read as that label."""
     fam: dict[str, dict[str, list]] = {}
     for i in range(1, len(lines) - 1, 2):
         root, release = json.loads(lines[i]), json.loads(lines[i + 1])
-        f = fam.setdefault(root["label"], {"after": [], "received": [], "released": []})
+        f = fam.setdefault(coins.FORMER.get(root["label"], root["label"]), {"after": [], "received": [], "released": []})
         f["after"].append(root["root"])
         f["received"].append(root["received_at"])
         f["released"].append(release["released_at"])
@@ -306,7 +309,7 @@ def auditor_seen(lines: list[str], seen: list[dict], per_coin: int = 1) -> tuple
     chal_(g+2)'s, which at k = 1 names window g's root and above it a root of window g + 1, whose roots come after g's.
     That time is at or after A_g, so L_g is at least window g's own and the line credits no more."""
     fam = release_log(lines)
-    ch, op = fam.get("challenge"), fam.get("openings")
+    ch, op = fam.get(coins.CHALLENGE), fam.get(coins.OPENINGS)
     n = len(seen)
     draws = -(-n // per_coin)
     if ch is None or op is None or len(ch["released"]) < n or len(op["after"]) < draws:
@@ -317,13 +320,13 @@ def auditor_seen(lines: list[str], seen: list[dict], per_coin: int = 1) -> tuple
     out, by = [], {}
     for g, w in enumerate(seen):
         if per_coin == 1:
-            t, label = op["received"][g], "openings"
+            t, label = op["received"][g], coins.OPENINGS
             if g + 2 < len(ch["after"]) and ch["after"][g + 2] == op["after"][g] and ch["received"][g + 2] < t:
-                t, label = ch["received"][g + 2], "challenge"
+                t, label = ch["received"][g + 2], coins.CHALLENGE
         else:
-            t, label = op["received"][g // per_coin], "openings"
+            t, label = op["received"][g // per_coin], coins.OPENINGS
             if g + 2 < n and ch["received"][g + 2] < t:
-                t, label = ch["received"][g + 2], "challenge"
+                t, label = ch["received"][g + 2], coins.CHALLENGE
         by[label] = by.get(label, 0) + 1
         out.append({**w, "released_ns": ch["released"][g], "arrivals_ns": [t] if w["arrivals_ns"] else []})
     return out, {"last_root_first_named_by": by}
@@ -735,8 +738,8 @@ def log_checks(lines: list[str], window_root: str) -> dict:
             "coin_before_its_root": [(label, i) for label, f in fam.items()
                                      for i, (r, s) in enumerate(zip(f["received"], f["released"])) if s < r],
             "clock_monotone": all(a <= b for a, b in zip(times, times[1:])),
-            "sigma0_after_window_root": bool(fam.get("challenge", {}).get("after"))
-            and fam["challenge"]["after"][0] == window_root}
+            "sigma0_after_window_root": bool(fam.get(coins.CHALLENGE, {}).get("after"))
+            and fam[coins.CHALLENGE]["after"][0] == window_root}
 
 
 def ledger_check(heads: list[Path], key: Ch.ChallengerKey, period: str, lane: str
@@ -932,7 +935,8 @@ def signed_lines(d: Path, kind: str, R: str, heads: list[Path], key: Ch.Challeng
         trust = {"read": "trusted_session", "period": got["period"], "cap": got["cap"], "circuit": got["circuit"]}
     else:
         key = Ch.ChallengerKey.from_json(json.loads((d / remote.KEY).read_text()))
-        commitment, roots, sid = Ch.session_of(key, files["record"], files["log"], files["close"], VP.lms_verify)
+        commitment, log, sid = Ch.session_of(key, files["record"], files["log"], files["close"], VP.lms_verify)
+        roots = Ch.by_family(commitment, log)
         try:
             served_session_answer(key, files, {"commitment": commitment.to_json(), "session": sid,
                                                "roots": {k: [r.hex() for r in rs] for k, rs in roots.items()}})

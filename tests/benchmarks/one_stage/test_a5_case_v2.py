@@ -204,16 +204,16 @@ def test_a_tied_case_names_its_values_parameters_and_row_formats_as_the_lean_rea
 
 
 def test_spot_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, stub_case):
-    """SPOT refuses one-stage v1's case, so its case is v2's with the form, never v1's."""
+    """SPOT refuses one-stage v1's case, so its case is v2's at one level, never v1's."""
     zk = {"blobs": ["b"], "commitment": "ab", "evidence": stub_case.DT.canonical({"proofs": {}}).encode().hex(),
           "params": {"proofs": {"circuit": "cc" * 64, "registered": None}}}
     monkeypatch.setattr(a5, "case_v2", lambda case, sessions, **k: zk)
     write(tmp_path, {})
     assert json.loads((tmp_path / "case-v2.json").read_text()) == zk
     got = json.loads((tmp_path / "case-sampled.json").read_text())
-    assert got == a5.case_with_form(zk)
-    assert got["params"]["form"] == "one-stage" and got["params"]["proofs"] == zk["params"]["proofs"]
-    assert json.loads(bytes.fromhex(got["evidence"])) == {"form": "one-stage", "proofs": {}}
+    assert got == a5.case_with_levels(zk)
+    assert got["params"]["levels"] == 1 and got["params"]["proofs"] == zk["params"]["proofs"]
+    assert json.loads(bytes.fromhex(got["evidence"])) == {"levels": 1, "proofs": {}}
     assert not (tmp_path / "case-v2-error.txt").exists()
 
 
@@ -248,7 +248,7 @@ def test_a_case_sampled_on_the_challengers_coins_names_the_challenger_and_carrie
     assert got["evidence"] == stub_case.DT.canonical(evidence).encode().hex()
     assert (got["blobs"], got["commitment"]) == (zk["blobs"], zk["commitment"])
     sampled = json.loads((tmp_path / "case-sampled.json").read_text())
-    assert sampled == a5.case_with_form(got) and sampled["params"]["challenger"] == got["params"]["challenger"]
+    assert sampled == a5.case_with_levels(got) and sampled["params"]["challenger"] == got["params"]["challenger"]
     assert not (tmp_path / "case-v2-error.txt").exists()
 
 
@@ -336,6 +336,7 @@ def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     assert LP.refused({"k": 20, "law": "subset"}, 40, a5.link_members(ms)) == [0]
     assert [a5.per_member(ms[:n], zk) for n in (1, 2, 3) for zk in (True, False)] == [False, False, True, False, True, False]
     assert a5.members_proof(ms[:1], [], True) is None and isinstance(a5.members_proof(ms, [], False), str)
+    assert a5.per_member(ms[:1], True, one=True) and not a5.per_member(ms[:1], False, one=True)
 
 
 def test_a5_records_a_sampling_design_none_of_whose_samples_ends(monkeypatch):
@@ -492,7 +493,7 @@ def test_the_per_member_case_is_the_v2_case_and_its_one_stage_form(tmp_path, mon
     a5.write_case(tmp_path, None, {}, {}, {}, None, 0.01, None, {"format": "f"}, {}, instances=0, sessions=[],
                   session_roots={}, served=[], v2="not read", per_member={"members": {}, "tables": []})
     assert json.loads((tmp_path / "case-v2.json").read_text()) == pm
-    assert json.loads((tmp_path / "case-sampled.json").read_text()) == a5.case_with_form(pm)
+    assert json.loads((tmp_path / "case-sampled.json").read_text()) == a5.case_with_levels(pm)
     assert not (tmp_path / "case-v2-error.txt").exists()
     other = tmp_path / "plain"
     other.mkdir()

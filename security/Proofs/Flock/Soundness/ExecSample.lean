@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.SamplingDesign
+public import Proofs.Spot.Sampling.SamplingDesign
 public import Flock.Draw
 import all Init.Data.Array.QSort.Basic
 
@@ -9,8 +9,8 @@ import all Init.Data.Array.QSort.Basic
 
 `Flock.Draw.subset k n src` is the verifier's executable sampler (`verity/commitments/lean/Commitments/Draw.lean`): a
 partial Fisher–Yates over a `Std.HashMap` of swaps, each index sampled by `Flock.Draw.uniform`, an exact rejection sampler
-on big-endian words, and the `k` values sorted by `Array.qsort`. `SamplingDesign.subset_exec_escape_le`: over a uniform stream of
-bytes, it returns a sample that misses `B` with probability at most `(SamplingDesign.subset n k hk).missProb B`, the model's uniform
+on big-endian words, and the `k` values sorted by `Array.qsort`. `SamplingDesign.subset_exec_missProb_le`: over a uniform stream of
+bytes, it returns a sample that misses `B` with probability at most `(Verity.SamplingDesign.subset n k hk).missProb B`, the model's uniform
 `k`-subset. A stream that runs out gives `none`, which only lowers the executable's missProb.
 
 * `mem_qsort`: `Array.qsort` keeps its elements, through core's private `qsort.sort` and `qpartition.loop`.
@@ -25,15 +25,19 @@ bytes, it returns a sample that misses `B` with probability at most `(SamplingDe
 
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
 
-namespace FlockSoundness.Audit.SamplingDesign
+namespace Spot.Sampling.SamplingDesign
+
+open FlockSoundness
 
 /-- The byte stream of `L` bytes `f`, as `Flock.Draw` reads it. -/
 def streamOf {L : ℕ} (f : Fin L → Fin 256) : ByteArray := ⟨Array.ofFn fun i => UInt8.ofFin (f i)⟩
 
-end FlockSoundness.Audit.SamplingDesign
+end Spot.Sampling.SamplingDesign
 
 
-namespace FlockSoundness.Audit.SampleExec
+namespace Spot.Sampling.SampleExec
+
+open FlockSoundness
 
 private theorem loop_perm {α : Type} {n : ℕ} (lt : α → α → Bool) (lo hi : ℕ) (hhi : hi < n) (pivot : α) :
     ∀ (d : ℕ) (as : Vector α n) (i k : ℕ) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
@@ -686,20 +690,22 @@ theorem loopL_le (n k F : ℕ) (B : Finset ℕ) (hB : ∀ u ∈ B, u < n) : ∀ 
       _ = ((n - i - B.card).choose (c + 1) : ℝ≥0∞) / ((n - i).choose (c + 1) : ℝ≥0∞) :=
           choose_step_ratio (n - i) B.card c (by omega)
 
-end FlockSoundness.Audit.SampleExec
+end Spot.Sampling.SampleExec
 
-namespace FlockSoundness.Audit.SamplingDesign
+namespace Spot.Sampling.SamplingDesign
+
+open FlockSoundness
 
 open Game Finset
 open scoped ENNReal
 
 /-- **The executable sample escapes no more often than the model's.** Its probability space is a uniform stream: that
 the challenger's coins are uniform is A3 (`Assumptions.UniformRandomBytes`, `uniform/io-getrandombytes`), which
-`sampleOS_subset_escape_le` (`ExecSampleOS.lean`) takes for the live sample, reruns included. -/
-theorem subset_exec_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) :
+`sampleOS_subset_missProb_le` (`ExecSampleOS.lean`) takes for the live sample, reruns included. -/
+theorem subset_exec_missProb_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) :
     prCoin (fun f : Fin L → Fin 256 =>
         ∃ D, Flock.Draw.subset k n (SamplingDesign.streamOf f) = some D ∧ ∀ u ∈ B, u.val ∉ D) ≤
-      (subset n k hk).missProb B := by
+      (Verity.SamplingDesign.subset n k hk).missProb B := by
   classical
   set B' : Finset ℕ := B.image Fin.val with hB'
   have hB'n : ∀ u ∈ B', u < n := fun u hu => by obtain ⟨v, _, rfl⟩ := mem_image.1 hu; exact v.isLt
@@ -717,7 +723,7 @@ theorem subset_exec_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) 
     _ ≤ ((n - 0 - B'.card).choose k : ℝ≥0∞) / ((n - 0).choose k : ℝ≥0∞) :=
         SampleExec.loopL_le n k (L + 1) B' hB'n k 0 (Equiv.refl ℕ) (by omega) hk (fun t ht => ht)
           (fun t ht => absurd ht (Nat.not_lt_zero t)) L
-    _ = (subset n k hk).missProb B := by rw [subset_escape, hcard, Nat.sub_zero]
+    _ = (Verity.SamplingDesign.subset n k hk).missProb B := by rw [Verity.SamplingDesign.subset_missProb, hcard, Nat.sub_zero]
 
-end FlockSoundness.Audit.SamplingDesign
+end Spot.Sampling.SamplingDesign
 

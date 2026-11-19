@@ -32,7 +32,7 @@ ROOT=$PWD
 I="$RESEARCH_RUN_DIR/inputs"; O="$RESEARCH_RUN_DIR/out"; mkdir -p "$O" "$S/bin"
 export HF_HOME=${HF_HOME:-/workspace/hf}
 export PYTHONPATH=$ROOT/adapters/vllm:$ROOT/tools/config:$ROOT/tools/research/src:$ROOT HF_HUB_OFFLINE=1 TOKENIZERS_PARALLELISM=false
-export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda} TMPDIR=$S OMP_NUM_THREADS=${OMP_NUM_THREADS:-8}
+export CUDA_HOME="${CUDA_HOME:?CUDA_HOME is not set: set it to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)}" TMPDIR=$S OMP_NUM_THREADS=${OMP_NUM_THREADS:-8}
 export VERITY_RETAIN=host VERITY_WINDOW_MB=256 VERITY_WINDOW_SLOTS=8
 VENV=${VERITY_BENCH_VENV:?}
 printf '#!/bin/sh\nexec %s/bin/python "$@"\n' "$VENV" > "$S/bin/python"; chmod +x "$S/bin/python"

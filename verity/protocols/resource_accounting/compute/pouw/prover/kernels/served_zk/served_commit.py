@@ -122,6 +122,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 from verity.commitments.identity import identity_digest_sha512, tagged_sha512
@@ -131,6 +133,7 @@ from verity.commitments.randomness import Key, derive
 from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pc8
+from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
@@ -147,6 +150,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import partition as PT
 from verity.protocols.proofs.spot.verifier.one_stage import caller as CA
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict, _Collect
 
 from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk import of_record as OR
@@ -211,7 +215,7 @@ def tile_work(params: dict) -> int:
 def population(k: int, n: int):
     """The execution phase's tiles as one-stage's population: (program, query, partition object)."""
     d = template(k)
-    prog = PT.population_program(d, n)
+    prog = PN.population_program(d, n)
     q = PT.template_instance_query(PT.template_id(d))
     return prog, q, PT.partition(prog, q)
 
@@ -763,7 +767,7 @@ def register(params: dict, commitment: dict, extra: Mapping[str, Any] = {}) -> d
     except ValueError as e:
         raise _refused("level", str(e)) from None
     window = {"kind": "served", "context": params["context"], "public": {**commitment["items"], **extra}}
-    rec = R.record(prog, q, sampling_design_of(params, ell), S.SCHEME, commitment["roots"], window)
+    rec = DK.record(prog, q, sampling_design_of(params, ell), S.SCHEME, commitment["roots"], window)
     for v in (S.check_public(spec_of(params, ell), rec), public_problem(params, rec)):
         if not v.ok:
             raise S.Refused(v)
@@ -1035,7 +1039,7 @@ class Challenger:
         runs them, each of record.  Raises `Refused`."""
         n = rec["population"]
         sampling_design = S.selection_sampling_design(st.spec.selection, n)
-        prog = PT.population_program(st.unit, n)
+        prog = PN.population_program(st.unit, n)
         q = st.spec.check.query
         params = OR.registration_params(prog, q, sampling_design, S.SCHEME, ports_, list(st.log), self.params["delta"])
         args = (rec, prog, q, sampling_design, S.SCHEME, ports_, None, (), list(st.log), None, None, None)
@@ -1357,9 +1361,9 @@ def cmd_params(a) -> int:
 
 def cmd_commit(a) -> int:
     pass_dir = Path(a.pass_dir)
-    PD, man, sha, calls = _pass(pass_dir)
+    _, man, sha, calls = _pass(pass_dir)
     params = _json(a.params)
-    scheme = PD.scheme_of(man["scheme"])
+    scheme = pouw_schemes.get(man["scheme"])
     if tuple(scheme.tile) != (Wd.TILE, Wd.TILE):
         raise SystemExit(f"{man['scheme']}: its tiles are {scheme.tile}, not the window's 64 x 64 pass tiles")
     source = os.urandom(32)
@@ -1434,7 +1438,7 @@ def cmd_register(a) -> int:
         print(f"REFUSED {json.dumps(e.verdict.to_json(), default=str)}", flush=True)
         return 0 if a.expect_refused else 1
     Path(a.out).write_text(json.dumps(rec, sort_keys=True))
-    print(f"REGISTERED {json.dumps({'registration': R.digest(rec)[:32], 'population': rec['population'], 'law': rec['law'], 'public': sorted(rec['window']['public'])})}",
+    print(f"REGISTERED {json.dumps({'registration': DD.digest(rec)[:32], 'population': rec['population'], 'law': rec['law'], 'public': sorted(rec['window']['public'])})}",
           flush=True)
     return 1 if a.expect_refused else 0
 
@@ -1714,10 +1718,10 @@ def main(argv=None, *, record: Callable[..., OR.Record] = lean_record,
                                   "challenger's (default: its Python twin, stream_subset)")
     p.add_argument("--epoch", type=int, default=0, help="the epoch whose coins the challenger holds (default 0)")
     p.add_argument("--state", help="the file holding the challenger's entropy, the one the serving controller's challenges "
-                                   "came from (serve.sh's $WORK/coin-state/<run id>, written from the Lean verifier's "
-                                   "challenges before serving); default: fresh from the Lean verifier when this "
-                                   "process starts (pouw.verifier.coins, IO.getRandomBytes), before it publishes "
-                                   "LOG/coins.json")
+                                   "came from (benchmarks/pouw/served_zk/serve.sh's $WORK/coin-state/<run id>, written "
+                                   "from the Lean verifier's challenges before serving); default: fresh from the Lean "
+                                   "verifier when this process starts (pouw.verifier.coins, IO.getRandomBytes), before "
+                                   "it publishes LOG/coins.json")
     p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("replay")
     for x in ("params", "log", "out"):

@@ -112,12 +112,12 @@ from typing import Any, Callable, Iterable, Iterator
 from verity.circuits import boolean as BL
 from verity.circuits import ports
 from verity.circuits.codec import MAX_SAFE_INT, _static_json, canonical_json, descriptor_id, jcs_domain_error
-from verity.circuits.defs import CompositeDefinition, BodyNode, PrimitiveDefinition, bind
+from verity.circuits.defs import CompositeDefinition, BodyNode, PrimitiveDefinition, bind, recut_unread
 from verity.circuits.intervals import Intervals, contains, full, norm, ref_intervals, total
 from verity.circuits.layout import resolve
 from verity.circuits.liveness import _MEMBER_LIMIT
 from verity.circuits.program import input_id, is_input
-from verity.circuits.refs import Affine, Concat, Explicit, Refs, Strided, concat
+from verity.circuits.refs import Affine, Concat, Explicit, Grid, Refs, Strided, concat
 from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
 
 SCHEMA = "verity/census/v1"
@@ -340,8 +340,8 @@ class _Marks:
         self.approximate = False
 
     def walk(self, refs: Refs, into: dict) -> None:
-        if isinstance(refs, Concat):
-            for p in refs.parts:
+        if isinstance(refs, (Concat, Grid)):
+            for p in refs.parts if isinstance(refs, Concat) else refs.lane_parts():
                 self.walk(p, into)
         elif isinstance(refs, Explicit):
             for s, i, leaf in refs.items:
@@ -400,7 +400,7 @@ class _Marks:
 
 
 def _flat(r: Refs) -> list[Refs]:
-    return [q for p in r.parts for q in _flat(p)] if isinstance(r, Concat) else [r]
+    return [q for p in r.parts for q in _flat(p)] if isinstance(r, Concat) else r.pieces() if isinstance(r, Grid) else [r]
 
 
 def _through(r: Refs, args) -> Refs:
@@ -1019,6 +1019,7 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
     root Call's own gates, a resolver (`verity.circuits.ops.boolean.versions.boolean_version`) each root Call that is not Boolean through
     the Boolean Definition it returns; either refuses (`NoBooleanWork`) every root Call it cannot count, by name."""
     root = program.root
+    recut_unread(root, "census.census")
     nodes = root.body.nodes
     I = sum(1 for nd in nodes if is_input(nd.fn))
     if any(not is_input(nd.fn) for nd in nodes[:I]):

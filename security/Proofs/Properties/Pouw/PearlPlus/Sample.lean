@@ -264,17 +264,17 @@ theorem drawIsOnItsStreams : DrawIsOnItsStreams := by
 
 /-! ## The coin bytes -/
 
-open FlockSoundness.Audit.SampleExec (bsOf uniformL)
+open Spot.Sampling.SampleExec (bsOf uniformL)
 
 /-- `uniformOn` of a stream's bytes is the rejection sampler on them. -/
 theorem uniformOn_bytesOf {L : ℕ} (s : Fin L → Fin 256) (n : ℕ) :
     FlockSoundness.Randomness.uniformOn n (Properties.Spot.bytesOf s) =
       (uniformL n (L + 1) (bsOf s)).map Prod.fst := by
-  have h := FlockSoundness.Audit.SampleExec.uniform_streamOf s n (L + 1) 0 (Nat.zero_le _)
+  have h := Spot.Sampling.SampleExec.uniform_streamOf s n (L + 1) 0 (Nat.zero_le _)
   rw [List.drop_zero] at h
-  have hb : Properties.Spot.bytesOf s = FlockSoundness.Audit.SamplingDesign.streamOf s := rfl
+  have hb : Properties.Spot.bytesOf s = Spot.Sampling.SamplingDesign.streamOf s := rfl
   unfold FlockSoundness.Randomness.uniformOn
-  rw [hb, FlockSoundness.Audit.SampleExec.size_streamOf]
+  rw [hb, Spot.Sampling.SampleExec.size_streamOf]
   revert h
   cases uniformL n (L + 1) (bsOf s) with
   | none => intro h; rw [h]; rfl
@@ -293,9 +293,9 @@ theorem card_uniformOn_le {L n v : ℕ} (hv : v < n) :
   have hQ : ∀ r < n, ∀ ℓ, Verity.Game.prCoin (fun _ : Fin ℓ → Fin 256 => r = v) ≤ if r = v then 1 else 0 := by
     intro r _ ℓ
     by_cases hr : r = v
-    · rw [ite_eq_left hr]; exact FlockSoundness.Audit.SampleExec.prCoin_le_one _
+    · rw [ite_eq_left hr]; exact Spot.Sampling.SampleExec.prCoin_le_one _
     · simp only [hr, ite_false]; exact (Verity.Game.prCoin_false).le
-  have hle := FlockSoundness.Audit.SampleExec.uniformL_le n hn (fun r _ => r = v) _ hQ (L + 1) L
+  have hle := Spot.Sampling.SampleExec.uniformL_le n hn (fun r _ => r = v) _ hQ (L + 1) L
   rw [Finset.sum_ite_eq' (range n) v (fun _ => (1 : ℝ≥0∞)), ite_eq_left (Finset.mem_range.2 hv)] at hle
   have hev : (fun g : Fin L → Fin 256 => ∃ r rest, uniformL n (L + 1) (bsOf g) = some (r, rest) ∧ r = v) =
       fun s => FlockSoundness.Randomness.uniformOn n (Properties.Spot.bytesOf s) = some v := by

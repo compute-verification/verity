@@ -57,7 +57,7 @@ open Flock Transcript FlockComplete FlockComplete.Replay
 
 section Defs
 
-variable (resp : ℕ → Claims.Msg) (st : Setup) (tr : Trace) (L : ℕ)
+variable (resp : ℕ → Hash.Msg) (st : Setup) (tr : Trace) (L : ℕ)
 
 /-- The masked rep's zerocheck output from `L` bodies (the plain prover's). -/
 def zcR : ZcOut := Zc.out st.m (Zc.coinsAt resp L) tr
@@ -95,10 +95,10 @@ def proofR (sch : Schedule) (lay : Zk.PadLayout) (hp : Array F128) (cm0 : Commit
 
 end Defs
 
-theorem get_go (t : Transcript) (l : Array Claims.Msg) :
+theorem get_go (t : Transcript) (l : Array Hash.Msg) :
     ((get : TMW PS Transcript).run t).go l = (.ok (t, t), l) := rfl
 
-theorem liftV_bind_ok {α β : Type} {v : V α} {f : α → TMW PS β} {t : Transcript} {l l' : Array Claims.Msg}
+theorem liftV_bind_ok {α β : Type} {v : V α} {f : α → TMW PS β} {t : Transcript} {l l' : Array Hash.Msg}
     {b : β} {t' : Transcript}
     (h : ((StateT.lift (monadLift v : PS α) >>= f).run t).go l = (.ok (b, t'), l')) :
     ∃ a, v = .ok a ∧ ((f a).run t).go l = (.ok (b, t'), l') := by
@@ -114,15 +114,15 @@ theorem liftV_bind_ok {α β : Type} {v : V α} {f : α → TMW PS β} {t : Tran
   exact ⟨c, hv, e2⟩
 
 /-- **A returning masked rep, stage by stage.** -/
-theorem repPZk_split (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
+theorem repPZk_split (resp : ℕ → Hash.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) (t : Transcript)
-    (l : Array Claims.Msg) {P : Zk.ZkProof} {t' : Transcript} {l' : Array Claims.Msg}
+    (l : Array Hash.Msg) {P : Zk.ZkProof} {t' : Transcript} {l' : Array Hash.Msg}
     (h : ((repPZk (asksS resp) (Hashes.ofSha512 hsh) st sch tPad rep dom tr tb cm0 extras pads ic extra lanePad salt
       nonce prior words).run t).go l = (.ok (P, t'), l')) :
-    ∃ (full : Array F128) (lL : Array Claims.Msg) (lg : LigeritoProof) (zl : Zk.Level0Msgs) (rec : Zk.L0Rec)
-      (tI : Transcript) (lI : Array Claims.Msg) (rp : Zk.Replayed) (x : Transcript) (lgc : Array (String × Zk.Lin)),
+    ∃ (full : Array F128) (lL : Array Hash.Msg) (lg : LigeritoProof) (zl : Zk.Level0Msgs) (rec : Zk.L0Rec)
+      (tI : Transcript) (lI : Array Hash.Msg) (rp : Zk.Replayed) (x : Transcript) (lgc : Array (String × Zk.Lin)),
       st.fold.fold (coinOf (resp (l.size + 3 + (st.m - 6))) 0) (skipWeights (zcR resp st tr l.size).z)
         ((zcR resp st tr l.size).rho.extract 0 (st.fold.kLog - 6)) = .ok full ∧
       lL.size = l.size + piopSends st extras ∧

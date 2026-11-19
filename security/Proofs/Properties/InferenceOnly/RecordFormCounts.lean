@@ -28,11 +28,13 @@ open InferenceOnlyVerifier.Record.SecurityProofs (form FreshRows fresh_rows)
 
 /-- **The summary counts every block**, where the fresh rows of a slot are within the summary's fresh: a block reads
 at most the summary's fresh bits (`block_fresh`), and has the summary's gates or none (`block_gates`). -/
-theorem counts_of_fresh (hFR : FreshRows) : Counts form := fun _ _ _ h _ hd u =>
-  ⟨block_fresh hFR h hd u, block_gates h hd u⟩
+theorem counts_of_fresh (hFR : FreshRows) (hNE : InferenceOnlyVerifier.Record.SecurityProofs.EdgeFreeReads) :
+    Counts form :=
+  fun j tr c h _ hd u => ⟨block_fresh hFR h (hNE j tr c h) hd u, block_gates h (hNE j tr c h) hd u⟩
 
 /-- **The summary counts every block**: in every circuit a record the check reads lays out, each block reads at
 most the summary's fresh bits, and has the summary's gates or none. -/
-theorem form_counts : Counts form := counts_of_fresh fresh_rows
+theorem form_counts (hNE : InferenceOnlyVerifier.Record.SecurityProofs.EdgeFreeReads) : Counts form :=
+  counts_of_fresh fresh_rows hNE
 
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs

@@ -17,8 +17,8 @@
 #      proofs.py's VERIFIER_ENV)
 set -uo pipefail
 SPECS=$(cat <<'EOF'
-expert-gemm-small	MoeExpertFp8ReadGemm_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=384}"},K=768,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v2"}}
-expert-gemm	MoeExpertFp8ReadGemm_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=3072}"},K=6144,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v2"}}
+expert-gemm-small	MoeExpertFp8ReadGemm_v1{READ={"fn":"EmbeddingRead_v2{V=256,H=384}"},K=768,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v2"}}
+expert-gemm	MoeExpertFp8ReadGemm_v1{READ={"fn":"EmbeddingRead_v2{V=256,H=3072}"},K=6144,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v2"}}
 EOF
 )
 [ -n "${FM_SPECS:-}" ] && SPECS=$(cat "$FM_SPECS")

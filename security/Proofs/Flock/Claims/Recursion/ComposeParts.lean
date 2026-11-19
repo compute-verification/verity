@@ -98,14 +98,14 @@ theorem RecRaw.ofShared_shared {w : RecRaw} {s : ℕ} (h : w.recPart = some s) :
   rfl
 
 /-- **What the compiled verifier's parts share** at the rounds `ms` before the sessions (`partRaw`). -/
-def stagedShared (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) : RecShared :=
+def stagedShared (r : XR) (st : Stage) (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out)) : RecShared :=
   ⟨some r.w.recInner, some (st.rows x ms), some r.innerRaw.circuit, some r.innerRaw.publicFile, r.innerRaw.partition,
     none, some (st.record x ms), some (st.transcript x ms), r.w.registration, some r.innerRaw.statement,
     some r.innerRaw.tables, r.innerRaw.draw, r.w.links, r.innerRaw.program⟩
 
 /-- **Part `s` of the compiled verifier is `RecRaw.ofShared`** at what every part shares, its staged Flock statement
 and its bindings. -/
-theorem partRaw_ofShared (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (s : ℕ)
+theorem partRaw_ofShared (r : XR) (st : Stage) (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out)) (s : ℕ)
     (p : PartX) :
     partRaw r st x ms s p =
       RecRaw.ofShared (stagedShared r st x ms) { p.base with publicFile := st.pub x ms s } s (some p.bindings) :=

@@ -2,15 +2,15 @@
 # The two-stage form's accept test's honest play: two_stage_small.sh's run on one challenger whose key is at the
 # deployed LMS parameters (--deployed-key), its second stage's sessions' coin trees on the stage's own session under
 # the second stage's family (--interior-trees, FLOCK_CHALLENGER=1), and the form's case of the run (--form-case,
-# sampled_two_case.py), then the form's check on it: `sampled-two-on check` (the switch on) must accept, and
-# `sampled-two check` (the shipped switch) must refuse by the switch alone. The case's parameters, commitment and
+# sampled_two_case.py), then SPOT's check on it (`vstar-recursive sampled check`, `VStar.Recursive.Sampled` at two
+# levels) must accept. The case's parameters, commitment and
 # evidence are kept under $OUT/form with its blobs (blobs/, their SHA-512 and sizes in blobs.txt): a case as the
 # form's accept test reads one, its kept case such a run's and VERITY_SAMPLED_TWO_CASE naming another in its place.
 # Then a negative play: the same first stage with a coin tree sampled on
-# its session (first --first-tree) and its own second stage, whose case `sampled-two-on check` must refuse by the
+# its session (first --first-tree) and its own second stage, whose case the check must refuse by the
 # first session's coin tree's line (kept under $OUT/form-tree). Before either, each kept play's case KEPT_CASES names
-# (directories like $OUT/form, space separated) is checked again: accepted with the switch on, refused by the shipped
-# switch. Exit 0 when all hold; 1 when the honest play's verdicts do not, 8 when a kept play's do not, 9 when the
+# (directories like $OUT/form, space separated) is checked again: accepted. Exit 0 when all hold; 1 when the honest play's verdicts do not, 8 when a kept
+# play's do not, 9 when the
 # negative play is not refused by that line.
 #   research run --on auto --cwd clone --cpus 16 --mem-gb 64 --max-min 120 -- bash benchmarks/one_stage/sampled_two_small.sh
 #   With no SMALL_ARGS the serve is the play the form accepts: the class inlined as the greedy select in one unit, its
@@ -19,7 +19,7 @@
 #   registers no value of the prover's. SMALL_ARGS, where given, is the serve's arguments instead; SMALL_FIRST and
 #   SMALL_SECOND pass `first` and `second` more. A serve without --logits leaves the select's inputs a value the
 #   prover registers after the first stage's sample, which the second stage refuses (second-inputs): that play's case
-#   is not one the form accepts. ROUND_TWO prints the second stage's statement check as the run's summary has it.
+#   is not one the form accepts. ROUND_TWO prints the second stage's statement check as the run's summary has it (the Python twin's codes held to the Lean run's: ROUND_TWO_PYTHON beside it), ROUND_TWO_NEGATIVES the tampered statements round two refuses (one dropped, none), NEGATIVES the audit's tampered inputs refused.
 set -euo pipefail
 REPO=$(git rev-parse --show-toplevel); cd "$REPO"
 O=${OUT:?research run sets OUT}; mkdir -p "$O"
@@ -30,7 +30,7 @@ uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/
 
 { (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server) \
     && (cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier spot-difftest) \
-    && (cd verity/protocols/proofs/spot_flock/verifier/lean && lake build sampled-two sampled-two-on); } > "$O/build-lean.log" 2>&1 &
+    && (cd verity/protocols/proofs/spot_flock_recursion/verifier/lean && lake build vstar-recursive); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
 RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
@@ -38,19 +38,17 @@ RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/protocol
 BIN=$W/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
 LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof
-FORM_BIN=$REPO/verity/protocols/proofs/spot_flock/verifier/lean/.lake/build/bin
-sha256sum "$BIN" "$LEAN" "$FORM_BIN/sampled-two" "$FORM_BIN/sampled-two-on" | tee "$O/binaries.sha256"
+SPOT=$REPO/verity/protocols/proofs/spot_flock_recursion/verifier/lean/.lake/build/bin/vstar-recursive
+sha256sum "$BIN" "$LEAN" "$SPOT" | tee "$O/binaries.sha256"
 
 kept=0; n=0
 for d in ${KEPT_CASES:-}; do
   mapfile -t KB < <(find "$d/blobs" -maxdepth 1 -type f | sort)
   KF=("$d/params.json" "$d/commitment.json" "$d/evidence.json" "${KB[@]}")
   mkdir -p "$O/kept/$n"
-  on=0; "$FORM_BIN/sampled-two-on" check "${KF[@]}" > "$O/kept/$n/on.json" || on=$?
-  off=0; "$FORM_BIN/sampled-two" check "${KF[@]}" > "$O/kept/$n/off.json" || off=$?
-  echo "KEPT_ON rc=$on $d $(head -c 600 "$O/kept/$n/on.json")"
-  echo "KEPT_OFF rc=$off $d $(head -c 600 "$O/kept/$n/off.json")"
-  { [ "$on" -eq 0 ] && [ "$off" -eq 1 ]; } || kept=1
+  rc=0; "$SPOT" sampled check "${KF[@]}" > "$O/kept/$n/check.json" || rc=$?
+  echo "KEPT rc=$rc $d $(head -c 600 "$O/kept/$n/check.json")"
+  [ "$rc" -eq 0 ] || kept=1
   n=$((n + 1))
 done
 
@@ -85,6 +83,8 @@ echo "second rc=$rc" | tee -a "$O/machine.txt"
   "$W/second/summary.json" || true
 "${PY[@]}" -c 'import json,sys; s=json.load(open(sys.argv[1])); print("ROUND_TWO " + json.dumps(s.get("round_two"), sort_keys=True))' \
   "$W/second/summary.json" || true
+"${PY[@]}" -c 'import json,sys; s=json.load(open(sys.argv[1])); print("ROUND_TWO_PYTHON " + json.dumps((s.get("round_two_python") or {}).get("codes"))); print("ROUND_TWO_NEGATIVES " + json.dumps(s.get("round_two_negatives"), sort_keys=True)); print("NEGATIVES " + json.dumps({k: (v if isinstance(v, bool) else bool(v.get("refused"))) for k, v in ((s.get("audit") or {}).get("negatives") or {}).items()}, sort_keys=True))' \
+  "$W/second/summary.json" || true
 for f in summary.json run-input.json coins.json statements.json audit/summary.json audit/case-v2.json \
          audit/case-v2-error.txt; do
   [ -f "$W/second/$f" ] && { mkdir -p "$O/second/$(dirname "$f")"; cp "$W/second/$f" "$O/second/$f"; }
@@ -99,11 +99,9 @@ for b in "${BLOBS[@]}"; do
   cp "$b" "$O/form/blobs/$(printf %03d $i)-$(basename "$b")"; i=$((i + 1))
 done > "$O/form/blobs.txt"
 FILES=("$W/second/form/params.json" "$W/second/form/commitment.json" "$W/second/form/evidence.json" "${BLOBS[@]}")
-on=0; "$FORM_BIN/sampled-two-on" check "${FILES[@]}" > "$O/form/on.json" || on=$?
-off=0; "$FORM_BIN/sampled-two" check "${FILES[@]}" > "$O/form/off.json" || off=$?
-echo "FORM_ON rc=$on $(head -c 2000 "$O/form/on.json")"
-echo "FORM_OFF rc=$off $(head -c 2000 "$O/form/off.json")"
-{ [ "$on" -eq 0 ] && [ "$off" -eq 1 ]; } || exit 1
+rc=0; "$SPOT" sampled check "${FILES[@]}" > "$O/form/check.json" || rc=$?
+echo "FORM rc=$rc $(head -c 2000 "$O/form/check.json")"
+[ "$rc" -eq 0 ] || exit 1
 [ "$kept" -eq 0 ] || exit 8
 
 # shellcheck disable=SC2086
@@ -122,6 +120,6 @@ mkdir -p "$O/form-tree"
 cp "$W/second-tree/form/params.json" "$W/second-tree/form/commitment.json" "$W/second-tree/form/evidence.json" "$O/form-tree/"
 mapfile -t TBLOBS < "$W/second-tree/form/blobs.txt"
 TFILES=("$W/second-tree/form/params.json" "$W/second-tree/form/commitment.json" "$W/second-tree/form/evidence.json" "${TBLOBS[@]}")
-tree=0; "$FORM_BIN/sampled-two-on" check "${TFILES[@]}" > "$O/form-tree/on.json" || tree=$?
-echo "FORM_TREE rc=$tree $(head -c 2000 "$O/form-tree/on.json")"
-[ "$tree" -eq 1 ] && grep -q "coin tree's line" "$O/form-tree/on.json" || exit 9
+tree=0; "$SPOT" sampled check "${TFILES[@]}" > "$O/form-tree/check.json" || tree=$?
+echo "FORM_TREE rc=$tree $(head -c 2000 "$O/form-tree/check.json")"
+[ "$tree" -eq 1 ] && grep -q "coin tree's line" "$O/form-tree/check.json" || exit 9

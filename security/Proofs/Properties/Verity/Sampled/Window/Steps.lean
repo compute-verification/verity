@@ -159,14 +159,14 @@ theorem forall₂_right_mem {γ : Type _} {δ : Type _} {Rl : γ → δ → Prop
 /-- **The readings of a window's sessions**, each of one table `tb` and 1026 rounds: round `j` is of session
 `j / 1026`, at the slot at place `j % 1026` (`executionPhaseReadingAt`), and the play reveals for it the session's record's
 message at that slot, or at the closing round's the session's evidence `ev` (`sessionReveal`). -/
-abbrev sessionReading (R : ℕ) (tb : String) (ev : ℕ → Exchange → Option Claims.Msg)
-    (record₀ : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) : Reading R :=
+abbrev sessionReading (R : ℕ) (tb : String) (ev : ℕ → Exchange → Option Hash.Msg)
+    (record₀ : Exchange → Option Hash.Msg) (recordDigest : Hash.Msg) : Reading R :=
   executionPhaseReadingAt #[tb] 1026 (sessionReveal #[tb] ev) record₀ recordDigest
 
 /-- **The proof files a session's decoders read at the position its trace ends at**: the files `filesDec` decodes
 from the most likely message of a closing round the next stop fixes, the session's evidence. -/
 noncomputable def closeFiles {g : Game Exchange} {σ : Strategy g} {R : ℕ}
-    (filesDec : Claims.Msg → Array ByteArray) (q : Pos g σ Claims.Msg (Fin R)) : Array ByteArray :=
+    (filesDec : Hash.Msg → Array ByteArray) (q : Pos g σ Hash.Msg (Fin R)) : Array ByteArray :=
   (((List.finRange R).findSome? fun j => if j.val % 1026 + 1 = 1026 then q.toStop.modes j else none).map
     filesDec).getD #[]
 
@@ -174,7 +174,7 @@ noncomputable def closeFiles {g : Game Exchange} {σ : Strategy g} {R : ℕ}
 `Commit`'s roots and a round's submission as one session's at the session's slots (`decodersAt`), and the proof files
 decoded from the evidence its closing round reveals (`closeFiles`). -/
 noncomputable def sessionDecoders {g : Game Exchange} {σ : Strategy g} {R : ℕ} {Reg : Type}
-    (reg : Option Claims.Msg → Reg) (tb : String) (filesDec : Claims.Msg → Array ByteArray) :
+    (reg : Option Hash.Msg → Reg) (tb : String) (filesDec : Hash.Msg → Array ByteArray) :
     PosDecoders g σ R Reg where
   reg := reg
   root := (decodersAt reg fun j : Fin R => slotOf (#[tb] : Array String).size 1026 (j.val % 1026)).root
@@ -183,8 +183,8 @@ noncomputable def sessionDecoders {g : Game Exchange} {σ : Strategy g} {R : ℕ
 
 /-- **The proof files at a stop that fixes one closing round**: where the stop after `q` fixes round `jc`, a closing
 round, with the most likely message `w`, and no other round, the proof files are those `filesDec` decodes from `w`. -/
-theorem closeFiles_eq {g : Game Exchange} {σ : Strategy g} {R : ℕ} (filesDec : Claims.Msg → Array ByteArray)
-    {q : Pos g σ Claims.Msg (Fin R)} {jc : Fin R} {w : Claims.Msg} (hjc : jc.val % 1026 + 1 = 1026)
+theorem closeFiles_eq {g : Game Exchange} {σ : Strategy g} {R : ℕ} (filesDec : Hash.Msg → Array ByteArray)
+    {q : Pos g σ Hash.Msg (Fin R)} {jc : Fin R} {w : Hash.Msg} (hjc : jc.val % 1026 + 1 = 1026)
     (hw : q.toStop.modes jc = some w) (hs : ∀ j, j ≠ jc → q.toStop.modes j = none) :
     closeFiles filesDec q = filesDec w := by
   have hf : ∀ j : Fin R, j ≠ jc → (if j.val % 1026 + 1 = 1026 then q.toStop.modes j else none) = none :=
@@ -211,7 +211,7 @@ record sent for the session is `text`, the verifier's read holds the log to it a
 it decodes at `spec` to `sess`, verity-verify-proof `--zk` accepts it with the proof files `proofs`, and `spec` is a
 session of the one table `tb`, `Σ` a SHA-512 digest, rounds retained, two link points and SHA-512 round digests. -/
 structure SessionSpecAt (x : Exchange) (tb : String) (v : ℕ) (text : String) (spec : Flock.SessionSpec)
-    (tabs : Array Flock.Setup) (proofs : Array ByteArray) (sess : Flock.RunRecord) (J : Json) (w₀ : Claims.Msg) :
+    (tabs : Array Flock.Setup) (proofs : Array ByteArray) (sess : Flock.RunRecord) (J : Json) (w₀ : Hash.Msg) :
     Prop where
   sent : sentRecordAt v x.sent = some text
   read : SessionRead x.log #[tb] v text J sess w₀
@@ -231,15 +231,15 @@ place `i`, has a session's verdict (`SessionVerdict`) at a statement that is `m`
 `S` as its sample, is the record sent for the session after as many sessions as sampled members come before `m`,
 decodes to what the verifier's read holds the log to at that session, a tree the log opens, and whose proof files
 `filesDec` decodes from the evidence `ev` the session's closing round reveals (`session`). -/
-structure ExecutionPhaseSessions (W : ExecutionPhase) (tb : String) (ev : ℕ → Exchange → Option Claims.Msg)
-    (filesDec : Claims.Msg → Array ByteArray) (S : Finset (Fin W.nJ)) (x : Exchange) : Prop where
+structure ExecutionPhaseSessions (W : ExecutionPhase) (tb : String) (ev : ℕ → Exchange → Option Hash.Msg)
+    (filesDec : Hash.Msg → Array ByteArray) (S : Finset (Fin W.nJ)) (x : Exchange) : Prop where
   specs : ∀ sp ∈ helloSpecs x.log, sp.streams.toList.Nodup
   order : OpensLast x.log
   trees : (openedTrees x.log).length ≤ sampledBefore W.ms S W.ms.length
   session : ∀ (i : ℕ) (m : Member W.nJ), W.ms[i]? = some m → (m.part S).Nonempty →
     ∃ (a : StepAt) (bs : _root_.Core.Blobs) (keys : Array String) (s : _root_.Spot.OneStageZk.RunFiles)
       (record : String) (spec : Flock.SessionSpec) (tabs : Array Flock.Setup) (rest : Json × Json)
-      (proofs : Array ByteArray) (units : Array ℕ) (J : Json) (sess : Flock.RunRecord) (w : Claims.Msg) (τ : ℕ),
+      (proofs : Array ByteArray) (units : Array ℕ) (J : Json) (sess : Flock.RunRecord) (w : Hash.Msg) (τ : ℕ),
       StatesMember a m ∧ SessionVerdict a bs keys s record spec tabs rest proofs units ∧
       Exec.recordDraw record = some (printedPart (m.part S)) ∧
       sentRecordAt (sampledBefore W.ms S i) x.sent = some record ∧
@@ -250,13 +250,13 @@ structure ExecutionPhaseSessions (W : ExecutionPhase) (tb : String) (ev : ℕ �
 
 /-- **A sampled member's session, with the session `--zk` sets up at the member**: `ExecutionPhaseSessions.session` with the
 session's shape at a member of one table (`Member.spec_at`). -/
-theorem ExecutionPhaseSessions.specAt {W : ExecutionPhase} {tb : String} {ev : ℕ → Exchange → Option Claims.Msg}
-    {filesDec : Claims.Msg → Array ByteArray} {S : Finset (Fin W.nJ)} {x : Exchange}
+theorem ExecutionPhaseSessions.specAt {W : ExecutionPhase} {tb : String} {ev : ℕ → Exchange → Option Hash.Msg}
+    {filesDec : Hash.Msg → Array ByteArray} {S : Finset (Fin W.nJ)} {x : Exchange}
     (h : ExecutionPhaseSessions W tb ev filesDec S x) (hMA : MembersAt W tb) {i : ℕ} {m : Member W.nJ}
     (hm : W.ms[i]? = some m) (hd : (m.part S).Nonempty) :
     ∃ (a : StepAt) (bs : _root_.Core.Blobs) (keys : Array String) (s : _root_.Spot.OneStageZk.RunFiles)
       (record : String) (spec : Flock.SessionSpec) (tabs : Array Flock.Setup) (rest : Json × Json)
-      (proofs : Array ByteArray) (units : Array ℕ) (J : Json) (sess : Flock.RunRecord) (w : Claims.Msg) (τ : ℕ)
+      (proofs : Array ByteArray) (units : Array ℕ) (J : Json) (sess : Flock.RunRecord) (w : Hash.Msg) (τ : ℕ)
       (sts : Array Flock.Stmt),
       StatesMember a m ∧ SessionVerdict a bs keys s record spec tabs rest proofs units ∧
       Exec.recordDraw record = some (printedPart (m.part S)) ∧
@@ -275,11 +275,11 @@ theorem ExecutionPhaseSessions.specAt {W : ExecutionPhase} {tb : String} {ev : �
 
 /-- **Every tree the log opens is a sampled member's session's**, with its verdict's read: the log opens at most as
 many trees as the sample samples members, and each count below that is the sessions before a sampled member. -/
-theorem ExecutionPhaseSessions.all {W : ExecutionPhase} {tb : String} {ev : ℕ → Exchange → Option Claims.Msg}
-    {filesDec : Claims.Msg → Array ByteArray} {S : Finset (Fin W.nJ)} {x : Exchange}
+theorem ExecutionPhaseSessions.all {W : ExecutionPhase} {tb : String} {ev : ℕ → Exchange → Option Hash.Msg}
+    {filesDec : Hash.Msg → Array ByteArray} {S : Finset (Fin W.nJ)} {x : Exchange}
     (h : ExecutionPhaseSessions W tb ev filesDec S x) (hMA : MembersAt W tb) :
     ∀ v τ, (openedTrees x.log)[v]? = some τ → ∃ (text : String) (spec : Flock.SessionSpec)
-      (tabs : Array Flock.Setup) (proofs : Array ByteArray) (sess : Flock.RunRecord) (J : Json) (w₀ : Claims.Msg),
+      (tabs : Array Flock.Setup) (proofs : Array ByteArray) (sess : Flock.RunRecord) (J : Json) (w₀ : Hash.Msg),
       SessionSpecAt x tb v text spec tabs proofs sess J w₀ := by
   intro v τ hτ
   have hv : v < sampledBefore W.ms S W.ms.length := lt_of_lt_of_le (List.getElem?_eq_some_iff.1 hτ).1 h.trees
@@ -300,17 +300,17 @@ stop's release is the first pick not answered, so the link's of session `u` (`Se
 tree not opened before after `u` trees (`SessionPicks.link`), which asks for the link points' coordinates
 (`SessionRead.link_n`). -/
 theorem link_stop {g : Game Exchange} {σ : Strategy g} {R : ℕ} {P : Fin R → List Release → Frame → Prop}
-    {rv : Fin R → Exchange → Option Claims.Msg} {sg : Signer} {θ : ByteArray} {F : Array ByteArray}
+    {rv : Fin R → Exchange → Option Hash.Msg} {sg : Signer} {θ : ByteArray} {F : Array ByteArray}
     {c rq : ByteArray} (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n)
-    (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n) {Ks₀ : Fin R → DigestCut Claims.Msg g}
-    {q : Pos g σ Claims.Msg (Fin R)} (hi : q.Inv Ks₀) {pre : List Release} {f : List Release → Game Exchange}
+    (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n) {Ks₀ : Fin R → DigestCut Hash.Msg g}
+    {q : Pos g σ Hash.Msg (Fin R)} (hi : q.Inv Ks₀) {pre : List Release} {f : List Release → Game Exchange}
     {a : Fin R → Prop} {done : List (List Release)} (hf : ∀ log, f log = finish sg θ F c rq (pre ++ log))
     (hSO : StopOf P rv pre f a q) {z : CoinTape g σ} (hz : ∃ w, z = q.back w)
     (hW : Walked P (CoinTape.run g σ z).log pre a done) {su : Fin R → ℕ} {lk : Fin R → Prop}
     (hSP : SessionPicks P su lk (CoinTape.run g σ z).log) {u : ℕ}
     (hDn : SessDone P su (CoinTape.run g σ z).log done u)
     (hul : u < (openedTrees (CoinTape.run g σ z).log).length) {tables : Array String} {text : String} {J : Json}
-    {spec : Flock.SessionSpec} {sess : Flock.RunRecord} {w₀ : Claims.Msg}
+    {spec : Flock.SessionSpec} {sess : Flock.RunRecord} {w₀ : Hash.Msg}
     (hR : SessionRead (CoinTape.run g σ z).log tables u text J sess w₀)
     (hd : Flock.Record.decode spec text = .ok sess) (hp2 : spec.points = 2) :
     (¬ ∀ j, q.Ks j = .skip) ∧ ∀ o' : OpeningAt (finish sg θ F c rq) q.g', o'.n = spec.mPts + spec.mPts := by
@@ -348,10 +348,10 @@ is a session's with its verdict's read (`SessionSpecAt`), every description of t
 coins. The stop's release is a rep round's of a session (`LoggedAfter.session_slot`), which asks for its message's
 count (`session_stop_count`). -/
 theorem answered_count {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {R J : ℕ}
-    {Reg : Type} (reg : Option Claims.Msg → Reg) (hJ : J ≤ 1) {tb : String}
-    (ev : ℕ → Exchange → Option Claims.Msg) (record₀ : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg)
+    {Reg : Type} (reg : Option Hash.Msg → Reg) (hJ : J ≤ 1) {tb : String}
+    (ev : ℕ → Exchange → Option Hash.Msg) (record₀ : Exchange → Option Hash.Msg) (recordDigest : Hash.Msg)
     {rd : Reading R} (hrd : rd = sessionReading R tb ev record₀ recordDigest) {σ : Strategy (V.game θ F c)}
-    {q : Pos (V.game θ F c) σ Claims.Msg (Fin R)} (hi : q.Inv (roundCuts V θ F c rd)) {pre : List Release}
+    {q : Pos (V.game θ F c) σ Hash.Msg (Fin R)} (hi : q.Inv (roundCuts V θ F c rd)) {pre : List Release}
     {f : List Release → Game Exchange} {a : Fin R → Prop}
     (hf : ∀ log, f log = finish (V.signer θ) θ F c σ.1 (pre ++ log)) (hSO : StopOf rd.round rd.reveal pre f a q)
     {z : CoinTape (V.game θ F c) σ} (hz : ∃ y, z = q.back y) (hn : NoMiss V θ F c rd σ z) {s : SubmitJ J}
@@ -359,7 +359,7 @@ theorem answered_count {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {
       some s)
     (hall : ∀ v τ, (openedTrees (CoinTape.run (V.game θ F c) σ z).log)[v]? = some τ →
       ∃ (text : String) (spec : Flock.SessionSpec) (tabs : Array Flock.Setup) (proofs : Array ByteArray)
-        (sess : Flock.RunRecord) (J' : Json) (w₀ : Claims.Msg),
+        (sess : Flock.RunRecord) (J' : Json) (w₀ : Hash.Msg),
         SessionSpecAt (CoinTape.run (V.game θ F c) σ z) tb v text spec tabs proofs sess J' w₀) :
     ∀ o' : OpeningAt (finish (V.signer θ) θ F c σ.1) q.g', o'.n = s.n := by
   subst hrd
@@ -409,16 +409,16 @@ round's isn't. So the session's picks are all answered past it (`SessDone.closed
 message is the session's evidence (`stop_modes_tape`), and the roots, link points and rep rounds are the record's
 (`session_rootB`, `session_pts`, `session_reps`). -/
 theorem session_step {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {R nJ : ℕ} {Ω : Type}
-    (reg : Option Claims.Msg → ByteArray) {tb : String} (ev : ℕ → Exchange → Option Claims.Msg)
-    (filesDec : Claims.Msg → Array ByteArray) (record₀ : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg)
+    (reg : Option Hash.Msg → ByteArray) {tb : String} (ev : ℕ → Exchange → Option Hash.Msg)
+    (filesDec : Hash.Msg → Array ByteArray) (record₀ : Exchange → Option Hash.Msg) (recordDigest : Hash.Msg)
     {rd : Reading R} (hrd : rd = sessionReading R tb ev record₀ recordDigest) {σ : Strategy (V.game θ F c)}
     {M : ExecutionPhaseCoinMap (V.game θ F c) σ Ω R}
-    (hML : ∀ i (p : Pos (V.game θ F c) σ Claims.Msg (Fin R)) mPts (pts : Fin 2 → Fin mPts → 𝔽),
+    (hML : ∀ i (p : Pos (V.game θ F c) σ Hash.Msg (Fin R)) mPts (pts : Fin 2 → Fin mPts → 𝔽),
       M.link i p mPts pts = writeOpening (finish (V.signer θ) θ F c σ.1) p.s' (linkBits fieldEnc pts))
-    (hMR : ∀ i (p : Pos (V.game θ F c) σ Claims.Msg (Fin R)) J (s : SubmitJ J) (cs : Fin s.n → 𝔽),
+    (hMR : ∀ i (p : Pos (V.game θ F c) σ Hash.Msg (Fin R)) J (s : SubmitJ J) (cs : Fin s.n → 𝔽),
       M.round i p J s cs = writeOpening (finish (V.signer θ) θ F c σ.1) p.s' (roundBits fieldEnc cs))
     {S : Finset (Fin nJ)} {Rg : ByteArray} {i : ℕ} {m : Member nJ} (t : ℕ)
-    {p q r : Pos (V.game θ F c) σ Claims.Msg (Fin R)}
+    {p q r : Pos (V.game θ F c) σ Hash.Msg (Fin R)}
     {out : LiveOutJ (memberTabs S Rg (m.toV5 t)) (memberPts (m.toV5 t))}
     (hmr : MemberReach (fun _ => sessionDecoders reg tb filesDec) M
       (fun _ _ => linkEmptyAt fieldEnc (finish (V.signer θ) θ F c σ.1))
@@ -434,10 +434,10 @@ theorem session_step {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
     (hTr : (openedTrees (CoinTape.run (V.game θ F c) σ r.tape).log).length * 1026 ≤ R)
     (hall : ∀ v τ, (openedTrees (CoinTape.run (V.game θ F c) σ r.tape).log)[v]? = some τ →
       ∃ (text : String) (spec : Flock.SessionSpec) (tabs : Array Flock.Setup) (proofs : Array ByteArray)
-        (sess : Flock.RunRecord) (J' : Json) (w₀ : Claims.Msg),
+        (sess : Flock.RunRecord) (J' : Json) (w₀ : Hash.Msg),
         SessionSpecAt (CoinTape.run (V.game θ F c) σ r.tape) tb v text spec tabs proofs sess J' w₀)
     {record : String} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {proofs : Array ByteArray}
-    {sess : Flock.RunRecord} {J : Json} {w : Claims.Msg} {τ : ℕ}
+    {sess : Flock.RunRecord} {J : Json} {w : Hash.Msg} {τ : ℕ}
     (hA : SessionSpecAt (CoinTape.run (V.game θ F c) σ r.tape) tb u record spec tabs proofs sess J w)
     (hτ : (openedTrees (CoinTape.run (V.game θ F c) σ r.tape).log)[u]? = some τ)
     (hev : ev u (CoinTape.run (V.game θ F c) σ r.tape) = some w) (hfd : filesDec w = proofs)
@@ -711,8 +711,8 @@ of the sessions before the one after as many as members before `i` have a proof 
 `sampledBefore`), and `p` is past the play's start on the coin map's tape. -/
 def StepInv (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (W : ExecutionPhase)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds)
-    (ω : (W.extend M.widening).L.Ω) (r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)) (i : ℕ)
-    (p : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)) : Prop :=
+    (ω : (W.extend M.widening).L.Ω) (r : Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds)) (i : ℕ)
+    (p : Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds)) : Prop :=
   ∃ (pre : List Release) (f : List Release → Game Exchange) (a : Fin W.rounds → Prop)
     (done : List (List Release)), (∀ log, f log = finish (V.signer θ) θ F c σ.1 (pre ++ log)) ∧
     StopOf rd.round rd.reveal pre f a p.toStop ∧
@@ -731,12 +731,12 @@ sessions before the next place are the same; and a sampled member's step is `ses
 after `sampledBefore` others, with the moves its record decodes to (`MemberMovesOf`). -/
 theorem memberSteps_of_sessions (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
-    (reg : Option Claims.Msg → ByteArray) (tb : String) (ev : ℕ → Exchange → Option Claims.Msg)
-    (filesDec : Claims.Msg → Array ByteArray) (record₀ : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg)
+    (reg : Option Hash.Msg → ByteArray) (tb : String) (ev : ℕ → Exchange → Option Hash.Msg)
+    (filesDec : Hash.Msg → Array ByteArray) (record₀ : Exchange → Option Hash.Msg) (recordDigest : Hash.Msg)
     (σ : Strategy (V.game θ F c)) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds)
-    (hML : ∀ i (p : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)) mPts (pts : Fin 2 → Fin mPts → 𝔽),
+    (hML : ∀ i (p : Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds)) mPts (pts : Fin 2 → Fin mPts → 𝔽),
       M.link i p mPts pts = writeOpening (finish (V.signer θ) θ F c σ.1) p.s' (linkBits fieldEnc pts))
-    (hMR : ∀ i (p : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)) J (s : SubmitJ J) (cs : Fin s.n → 𝔽),
+    (hMR : ∀ i (p : Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds)) J (s : SubmitJ J) (cs : Fin s.n → 𝔽),
       M.round i p J s cs = writeOpening (finish (V.signer θ) θ F c σ.1) p.s' (roundBits fieldEnc cs))
     (hMA : MembersAt W tb)
     (hses : ∀ (ω : (W.extend M.widening).L.Ω) (z : CoinTape (V.game θ F c) σ),

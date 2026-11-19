@@ -119,7 +119,7 @@ difftest only.
 | --- | --- | --- | --- |
 | An execution phase | `core_check.case`, `answer` | `pouw-check serve` | `case_twin`, `answer_twin`, `check_twin` |
 | A credit period | `period_check.case`, `answer` | `pouw-period serve` | `case_twin`, `answer_twin`, `check_twin` |
-| A served execution phase's credit | `credit.window` | `Credit.window` (`window`) | `credit._window` |
+| A served execution phase's credit | `credit.window` | `Credit.executionPhase` (`window`) | `credit._window` |
 | A credit period's credit | `credit.period_credit` | `Credit.periodCredit` (`period`) | `credit._period_of` |
 | The salt | `core_check.salt_of_record` | `saltCheck` (`salt`) | `salt_twin` |
 | A live pass's salt | `core_check.live_salt` | `liveSaltCheck` (`live-salt`) | `live_salt_twin` |
@@ -132,4 +132,6 @@ difftest only.
 Several functions are twins only, because the Lean decides their verdict inside a whole case's (`registered_twin`,
 `opening_twin`, `pass_epoch_twin`, `draw_twin`). Others are guards a device runs before a coin opens: `window`'s
 `*_epoch_reason` and `rounds_reason`, `coins.coin_reason`, `salt.unit_reason` and `core_check.recorded_reason`. They
-only refuse to go on, never credit, and the verdict of record checks the same rules again in Lean.
+only refuse to go on, never credit. The verdict of record checks the same rules again in Lean, except `salt.unit_reason`
+and `core_check.recorded_reason`: they guard a certified execution phase, which only the prover's `served_commit.Challenger`
+class runs, and no command runs one, so no verdict of record rechecks them yet.

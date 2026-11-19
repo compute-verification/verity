@@ -34,9 +34,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+from verity.commitments.domains import FLOCK_IR_BLOCK, FLOCK_IR_TMPL
 
-FORMAT = "flock-ir-tmpl/v2"
-FLAT = "flock-ir-unit/v2"
+FORMAT = FLOCK_IR_TMPL
+FLAT = FLOCK_IR_BLOCK
 _CHUNK = 1 << 20
 
 

@@ -8,12 +8,13 @@
 #      from this tree, with the SASS gates build.sh enforces; the cubin line also names the harness's .FTZ and FP32 MUFU
 #      gate's verdict (harness_gate.json), which build.sh records and doesn't enforce, its pins being sm_120a's;
 #   2. under `gpu-lease 1` (PEARLPLUS_LEASE_MIN, default 30), `served_passes.py serve` serves PEARLPLUS_SPEC's Pearl-C arm
-#      (default benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml: pouw:pearl-c-h100-v1-h3 over Llama 3.2 1B's
+#      (default benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served.toml: pouw:pearl-c-h100-v1-h3 over Llama 3.2 1B's
 #      BF16 checkpoint) a warm-up, then PEARLPLUS_REQUESTS requests (default 32) of PEARLPLUS_PROMPT_TOKENS seeded random
 #      tokens (default 1,024) and PEARLPLUS_OUTPUT_TOKENS outputs (default 1) at PEARLPLUS_T tokens a step (default 8,192:
 #      a prefill-heavy load, 8 prompts a step), each engine step one pass retained in passes/, its epoch's salt coin a
 #      live session's on vy-challenger-1 where PEARLC_CHALLENGER_GATE and PEARLC_CHALLENGER_PEER are set (served_verdicts.sh
-#      sets them under POUW=pearlplus; `served_passes.py serve`'s, `bench_arm.live_coins`), else an in-process
+#      sets them under POUW=pearlplus; `served_passes.py serve`'s `scheme_settings`, its epoch numbers spent under
+#      PEARLC_PRIVATE, SERVE_DIR/private unless set), else an in-process
 #      challenger's; with the gate, the lane's Pearl-C period PEARLPLUS_PERIOD (default pearlplus-RUN_ID) is opened right
 #      before that serve (`served_verdicts.py pearlplus-period`: cap 1, its circuit PIECE_DIR/pearlplus-descriptor.json's
 #      SHA-512, its answers in PIECE_DIR/period.json), so the serve's salt session joins it and fills its cap, and the gate
@@ -78,8 +79,8 @@
 #      `served_verdicts.py publish` holds on the node, with its counts in this log's lines), Pearl+'s verdict's credit,
 #      its shares (with the unretained serve's beside them) and why it credits nothing (served_verdicts.pearlplus_why: its
 #      passes are not the window SPOT audited, so WINDOW names nothing here).
-# With PEARLPLUS_TIE set (served_verdicts.sh's PEARLPLUS_TIE: the window itself served under serve-openai's Pearl+ arm,
-# `serve_pearl`, one Pearl+ epoch a Commit window in SERVE_DIR/pearl/w<k>/), the piece serves nothing of its own: step 1
+# With PEARLPLUS_TIE set (served_verdicts.sh's PEARLPLUS_TIE: the window itself served under serve-openai's Pearl+,
+# attached by name (`serve_openai.scheme_settings`), one Pearl+ epoch a Commit window in SERVE_DIR/pearl/w<k>/), the piece serves nothing of its own: step 1
 # takes the window serve's cubin (PEARLC_CUBIN) where it is set; step 2 takes window WINDOW's own epoch, passes/ a
 # symlink to SERVE_DIR/pearl/wWINDOW (its served.json, coins.json and owner-only pass-NNNNN/, round s the window's step
 # s), and goes no further unless that served.json says ok; steps 3 and 4 read and write there, `retain` writing Pearl+'s
@@ -97,7 +98,7 @@
 # the give-up padded up to H1's window grid; the exact credit is the profile's exact_work, which `publish` holds on the
 # node), and under the gate it samples only after the window serve's Pearl-C period (SERVE_DIR/pearlplus/period.json,
 # the one its RULE line reads) closed with the lane's reserves since its open the window's salt sessions alone. Its salt coin is the
-# arm's: a live salt-only session of the window's own under the gate (`serve_pearl.live`), which step 5 holds each pass
+# scheme's: a salt session of the window's own under the gate (`serve_openai.scheme_settings`), which step 5 holds each pass
 # to as above, else in-process, and the piece then claims no verdict. Step 5 gets W (`--tie W`): the piece is then the
 # window's own epoch, and why it credits nothing by itself names the Pearl-C period its salt session joined
 # (served_verdicts.pearlplus_why_tied).
@@ -112,7 +113,9 @@ mkdir -p "${3:?PIECE_DIR}" && SD=$(cd "${1:?SERVE_DIR}" && pwd) && P=$(cd "$3" &
 cd "$(dirname "$0")/../.." || exit 1
 TREE=$PWD TPY=$PWD/.venv/bin/python
 [ -x "$TPY" ] || TPY=${PY:-python3}
-Q=$SD/private/pearlplus SPEC=${PEARLPLUS_SPEC:-benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml}
+Q=$SD/private/pearlplus SPEC=${PEARLPLUS_SPEC:-benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served.toml}
+# a live session's salt epoch numbers, spent across the serve dir's pieces (served_passes.py serve's PEARLC_PRIVATE)
+export PEARLC_PRIVATE=${PEARLC_PRIVATE:-$SD/private}
 FAST=${PEARLPLUS_FAST-1}
 # every file the piece writes is its owner's alone, the passes' files a step rewrites too: a manifest holds the salt key
 umask 077
@@ -225,7 +228,7 @@ period() {  # open|close: the lane's Pearl-C period from the retained serve to t
   if [ "$1" = open ]; then
     "$TPY" benchmarks/one_stage/served_verdicts.py pearlplus-period open "$P" --gate "$PEARLC_CHALLENGER_GATE" \
       --name "${PEARLPLUS_PERIOD:-pearlplus-${RESEARCH_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}}" \
-      --scheme "${PEARLC_SCHEME:-pearl-c-h100-v1-h3}" ${PEARLC_CUBIN:+--cubin "$PEARLC_CUBIN"} > "$Q/period.log" 2>&1 \
+      ${PEARLC_SCHEME:+--scheme "$PEARLC_SCHEME"} ${PEARLC_CUBIN:+--cubin "$PEARLC_CUBIN"} > "$Q/period.log" 2>&1 \
       && PERIOD_OPEN=1
   else
     [ -n "$PERIOD_OPEN" ] || return 0
@@ -247,10 +250,10 @@ print(d.get("passes_with_calls"), "passes with calls of its Commit window'\''s",
       (d.get("coins") or {}).get("source"), "->", "OK" if d.get("ok") else "FAIL, " + str(d.get("error"))[:300])
 sys.exit(0 if d.get("ok") else 1)' "$E/served.json" 2>&1)
     rc=$?
-    say "window: the window's own Pearl+ epoch $E (serve_pearl), $BF16: $(tail -1 <<< "$line" | cut -c1-400)"
+    say "window: the window's own Pearl+ epoch $E (pearl-plus), $BF16: $(tail -1 <<< "$line" | cut -c1-400)"
     [ "$rc" = 0 ] || GO=
   else
-    say "window: the window serve wrote no Pearl+ epoch $E/served.json (serve_pearl), so there are no passes to tie"
+    say "window: the window serve wrote no Pearl+ epoch $E/served.json (pearl-plus), so there are no passes to tie"
     GO=
   fi
 elif [ -n "${PEARLC_CUBIN:-}" ]; then

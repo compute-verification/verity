@@ -2,8 +2,9 @@
 # exactlin's gate, then its kernel-level timing (kbench.py), on one leased GPU for at most KBENCH_MAX_MIN (30)
 # minutes; KSCRIPT=kgate.py runs the gate alone, KSCRIPT=ksweep.py the GEMM config sweep.  Extra arguments go to the
 # script (e.g. --reps 15 --shapes decode).  Under `research run --gpus 1` (GPU_LEASE_UUID set) the run already holds its
-# GPU, and the script runs on it without a second lease; with no `gpu-lease` on PATH it runs on the visible card.
-#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/kernels/exactlin/kbench.sh
+# GPU, and the script runs on it without a second lease; with no `gpu-lease` on PATH it runs on the visible card.  CUDA 13.0
+# is CUDA_HOME where given, else the run's machine's [properties]' (benchmarks/kernels/machine.py); refused before any lease.
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO CUDA_HOME=DIR bash benchmarks/kernels/exactlin/kbench.sh
 # Runs on an RTX PRO 6000, an H200 or a B200, in benchmarks/harness/env.sh's Python and PYTHONPATH.
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"
@@ -11,10 +12,12 @@ TMP=/workspace/pouw; mkdir -p "$TMP" 2>/dev/null && [ -w "$TMP" ] || TMP=${TMPDI
 S=$(mktemp -d "$TMP/tmp-exactlin.XXXXXX"); trap 'rm -rf "$S"' EXIT
 ROOT=$PWD
 git rev-parse HEAD > "$OUT/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}" > "$OUT/commit.txt"
+TOOLKIT=13.0   # the CUDA the pinned-vLLM environment runs with
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit "$TOOLKIT") || exit 2
+export CUDA_HOME
 . benchmarks/harness/env.sh || exit 2
 PY=$VENV/bin/python3
-CUDA=${CUDA:-/usr/local/cuda-13.0}
-export PATH=$CUDA/bin:$PATH
+export PATH=$CUDA_HOME/bin:$PATH
 export TRITON_CACHE_DIR=$S/triton
 nvidia-smi --query-gpu=index,uuid,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu --format=csv -l 1 > "$OUT/smi.csv" 2>/dev/null &
 SMI=$!

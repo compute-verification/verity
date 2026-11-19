@@ -31,8 +31,12 @@ import io
 import json
 import math
 import re
+import sys
 import tomllib
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import archs  # the one table of what dc times on each architecture
 
 HERE = Path(__file__).resolve().parent
 MARGIN = 0.02
@@ -355,7 +359,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("cmd", choices=["analyze", "census", "tables"])
     ap.add_argument("out", type=Path, nargs="+")
-    ap.add_argument("--family", choices=["sm90", "sm100"])
+    ap.add_argument("--family", choices=archs.FAMILIES)
     ap.add_argument("--device", type=Path)
     ap.add_argument("--json", type=Path)
     ap.add_argument("--write", action="store_true")
@@ -364,7 +368,11 @@ def main(argv: list[str] | None = None) -> int:
         for g in a.out:
             print("\n".join(map(str, write_table(g))))
         return 0
-    fam = a.family or ("sm100" if any(any((o / "sass").glob("sm100_*.sass")) for o in a.out) else "sm90")
+    found = [f for f in archs.FAMILIES if any(any((o / "sass").glob(f"{f}_*.sass")) for o in a.out)]
+    if not a.family and len(found) != 1:
+        raise SystemExit(f"uniform.py: the runs hold SASS of {found or 'no family'}; pass --family, one of "
+                         f"{', '.join(archs.FAMILIES)}")
+    fam = a.family or found[0]
     dev = a.device or Path(__file__).resolve().parents[2] / "machine_model" / "data" / "devices" / f"sm_{fam[2:]}"
     res = analyze(a.out, fam, dev / "census.csv", dev / "rows.csv")
     if a.json:

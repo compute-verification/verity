@@ -1,9 +1,9 @@
 module
 
 public import Properties.Spot.PlanCheck
-import Proofs.Flock.Soundness.Audit.SamplingDesign
-import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Bernoulli
-import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.SamplingDesigns
+import Proofs.Spot.Sampling.SamplingDesign
+import Proofs.Spot.Sampling.Partitioning.SecurityProofs.Exfil.Bernoulli
+import Proofs.Spot.Sampling.Partitioning.SecurityProofs.Unequal.SamplingDesigns
 import Mathlib.Analysis.Complex.ExponentialBounds
 
 /-!
@@ -28,7 +28,7 @@ everything would pass (`_nontrivial`).
 
 namespace Properties.Spot.SecurityProofs
 
-open Finset FlockSoundness.Audit FlockSoundness.Audit.Partitioning
+open Finset Spot.Sampling Spot.Sampling.Partitioning
 open _root_.Spot.PlanCheck
 
 /-! ## The exponential series -/
@@ -218,14 +218,14 @@ theorem leakCheckSound : LeakCheckSound := by
   have hesc := rateCovers_sound hden hnum hrate
   obtain ⟨k, hk⟩ : ∃ k, d.den = k + 1 := ⟨d.den - 1, by omega⟩
   rw [hk] at hnum hesc
-  refine ⟨k, hk, FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil.bern_certifies hnum hesc ?_⟩
+  refine ⟨k, hk, Spot.Sampling.Partitioning.SecurityProofs.Exfil.bern_certifies hnum hesc ?_⟩
   have := locBits_le_upper d.units d.count
   push_cast
   linarith
 
 /-- Independent samples at `num / N` let more than `K` units missProb with at most `(1 − num/N)^(K + 1)`. -/
 theorem bern_miss_lt {n num N K : ℕ} [NeZero N] (h : num ≤ N) {δ : ℝ}
-    (hesc : (1 - (num : ℝ) / N) ^ (K + 1) < δ) : (SamplingDesign.bernoulli n num N).miss (K + 1) < ENNReal.ofReal δ := by
+    (hesc : (1 - (num : ℝ) / N) ^ (K + 1) < δ) : (Verity.SamplingDesign.bernoulli n num N).miss (K + 1) < ENNReal.ofReal δ := by
   have hN : (0 : ℝ) < N := by exact_mod_cast Nat.pos_of_ne_zero (NeZero.ne N)
   have ht0 : 0 ≤ 1 - (num : ℝ) / N := by
     rw [sub_nonneg, div_le_one hN]
@@ -235,12 +235,12 @@ theorem bern_miss_lt {n num N K : ℕ} [NeZero N] (h : num ≤ N) {δ : ℝ}
     linarith
   have hδ : 0 < δ := lt_of_le_of_lt (pow_nonneg ht0 _) hesc
   have hbig : ∀ B : Finset (Fin n), K + 1 ≤ B.card →
-      (SamplingDesign.bernoulli n num N).missProb B ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) := by
+      (Verity.SamplingDesign.bernoulli n num N).missProb B ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) := by
     intro B hB
-    rw [ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (SamplingDesign.escape_le_one _ B))
-      (pow_nonneg ht0 _), FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil.bern_escape_toReal h]
+    rw [ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (Verity.SamplingDesign.missProb_le_one _ B))
+      (pow_nonneg ht0 _), Spot.Sampling.Partitioning.SecurityProofs.Exfil.bern_missProb_toReal h]
     exact pow_le_pow_of_le_one ht0 ht1 hB
-  have hmiss_le : (SamplingDesign.bernoulli n num N).miss (K + 1) ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) :=
+  have hmiss_le : (Verity.SamplingDesign.bernoulli n num N).miss (K + 1) ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) :=
     iSup₂_le fun B hB => hbig B hB
   exact lt_of_le_of_lt hmiss_le ((ENNReal.ofReal_lt_ofReal_iff hδ).2 hesc)
 
@@ -311,7 +311,7 @@ theorem workCheckSound : WorkCheckSound := by
   have hst : ∀ u, (σ u).num ≤ d.den ∧ 0 ≤ (σ u).work := fun u => by simpa using hall _ (hσ u)
   have hD : (0 : ℝ) < d.den := by exact_mod_cast Nat.pos_of_ne_zero hden
   have hCR : (0 : ℝ) < d.target := by exact_mod_cast hC
-  rw [FlockSoundness.Audit.Partitioning.SecurityProofs.Unequal.bern_escape_toReal (num := fun u => (σ u).num)
+  rw [Spot.Sampling.Partitioning.SecurityProofs.Unequal.bern_missProb_toReal (num := fun u => (σ u).num)
     (den := k + 1) (fun u => by rw [← hk]; exact (hst u).1), ← hk]
   have hfac0 : ∀ u, 0 ≤ 1 - ((σ u).num : ℝ) / d.den := fun u => by
     rw [sub_nonneg, div_le_one hD]; exact_mod_cast (hst u).1
@@ -372,7 +372,7 @@ theorem leakCheckSound_honest :
 
 /-- No design certifies `−1` bits: the conclusion fails where a check accepting everything would return `−1`. -/
 theorem leakCheckSound_nontrivial :
-    ∀ k : ℕ, ¬ CertifiesLeak (SamplingDesign.bernoulli 1 0 (k + 1)) (fun _ => 0) ((1 / 2 : ℚ) : ℝ) ((-1 : ℚ) : ℝ) := by
+    ∀ k : ℕ, ¬ CertifiesLeak (Verity.SamplingDesign.bernoulli 1 0 (k + 1)) (fun _ => 0) ((1 / 2 : ℚ) : ℝ) ((-1 : ℚ) : ℝ) := by
   intro _ ⟨H, K, _, _, hℓ⟩
   have h0 : 0 ≤ locBits 1 K := by
     unfold locBits
@@ -388,11 +388,11 @@ theorem leakCountSound_honest :
 
 /-- A unit never sampled always escapes: the count's conclusion fails where a check accepting everything would pass. -/
 theorem leakCountSound_nontrivial :
-    ∀ k : ℕ, ¬ (SamplingDesign.bernoulli 1 0 (k + 1)).miss (0 + 1) < ENNReal.ofReal ((1 / 2 : ℚ) : ℝ) := by
+    ∀ k : ℕ, ¬ (Verity.SamplingDesign.bernoulli 1 0 (k + 1)).miss (0 + 1) < ENNReal.ofReal ((1 / 2 : ℚ) : ℝ) := by
   intro k h
-  have he := SamplingDesign.escape_le_miss (SamplingDesign.bernoulli 1 0 (k + 1)) (K := 0 + 1) (B := {0}) (by simp)
-  have h1 : ((SamplingDesign.bernoulli 1 0 (k + 1)).missProb {0}).toReal = 1 := by
-    rw [FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil.bern_escape_toReal (Nat.zero_le _)]
+  have he := Verity.SamplingDesign.missProb_le_miss (Verity.SamplingDesign.bernoulli 1 0 (k + 1)) (K := 0 + 1) (T := {0}) (by simp)
+  have h1 : ((Verity.SamplingDesign.bernoulli 1 0 (k + 1)).missProb {0}).toReal = 1 := by
+    rw [Spot.Sampling.Partitioning.SecurityProofs.Exfil.bern_missProb_toReal (Nat.zero_le _)]
     simp
   have hlt := lt_of_le_of_lt he h
   have := (ENNReal.toReal_lt_toReal (ne_top_of_lt hlt) ENNReal.ofReal_ne_top).2 hlt
@@ -410,7 +410,7 @@ theorem workCheckSound_nontrivial :
       ((1 : ℚ) : ℝ) ((1 / 2 : ℚ) : ℝ) := by
   intro _ h
   have := h {0} (by simp)
-  rw [FlockSoundness.Audit.Partitioning.SecurityProofs.Unequal.bern_escape_toReal (fun _ => Nat.zero_le _)] at this
+  rw [Spot.Sampling.Partitioning.SecurityProofs.Unequal.bern_missProb_toReal (fun _ => Nat.zero_le _)] at this
   norm_num at this
 
 end Properties.Spot.SecurityProofs

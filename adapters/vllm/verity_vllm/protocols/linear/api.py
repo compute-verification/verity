@@ -6,9 +6,11 @@ stand-ins (`tests/protocols/linear`), and only the module that finds the sites i
   ``apply`` does.  It declares what it can't compose with (``keeps_weight_state``), which weight formats it reads, which
   controls and schedules it implements, and runs one pass at a time (`ExecutorPass`), fixed by its `PassSpec`.
 * A `WeightSource` supplies each use's weight (POUS: decoded from its store) and is told when each forward ends.
-* A `Stack` joins them on one rank.  Its `refusals` read the declared attributes, so a composition that can't hold is
-  refused before any patch; `activate` switches arms only between passes; `apply` computes inside a pass, and an active
-  executor outside one fails closed; `forward` always ends the forward at the source, even when the forward raises.
+* A `Stack` joins them on one rank: it is the kernel (`verity.hooks.Kernel`) a scheme files with
+  `verity.hooks.ComputeBlockWith`, and `vllm_site.attach` hands it every linear's `BlockDue` through the exchange.  Its
+  `refusals` read the declared attributes, so a composition that can't hold is refused before any patch; `activate`
+  switches arms only between passes; a call computes inside a pass, and an active executor outside one fails closed;
+  `forward` always ends the forward at the source, even when the forward raises.
 
 The design, and the migration of today's executors onto it: research store ``docs/pouw/vllm-integration-api.md``.
 """
@@ -19,6 +21,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from verity import hooks as H
 from verity_vllm.errors import Refused
 
 Tensor = Any
@@ -124,7 +127,7 @@ class Arm:
     spec: PassSpec = field(default_factory=PassSpec)
 
 
-class _WithWeight:
+class WithWeight:
     """The layer vLLM's own ``apply`` sees under a source: the source's weight, and every other attribute the layer's."""
 
     def __init__(self, layer: Any, weight: Tensor) -> None:
@@ -141,6 +144,7 @@ class Stack:
     def __init__(self, sites: Sequence[LinearSite], executor: LinearExecutor | None = None,
                  source: WeightSource | None = None) -> None:
         self.sites, self.executor, self.source = tuple(sites), executor, source
+        self._by_key = {s.weight_id: s for s in self.sites}
         self.active: Arm | None = None
         self.passes: list[Any] = []
         self._pass: ExecutorPass | None = None
@@ -227,18 +231,23 @@ class Stack:
             if self.source is not None:
                 self.source.forward_end(fwd)
 
-    def apply(self, site: LinearSite, layer: Any, x: Tensor, bias: Tensor | None, original: Callable[..., Tensor]) -> Tensor:
-        """What a patched ``quant_method.apply`` calls: the executor's pass when an arm executes, else vLLM's `original`,
-        either one with the source's weight when there is a source."""
+    def __call__(self, due: H.BlockDue, original: Callable[[Mapping[str, Tensor] | None], Tensor]) -> Tensor:
+        """A due linear's y (``due.key`` its site's weight id; inputs ``x``, ``weight``, ``bias``): the executor's pass when
+        an arm executes, else the workload's `original`, either one with the source's weight when there is a source.  A
+        block that is none of this stack's sites is the workload's."""
+        site = self._by_key.get(due.key)
+        if site is None:
+            return original(None)
         weight = self.source.weight(site, self._forward) if self.source is not None else None
         arm = self.active
         if arm is None or arm.executor is None:
-            return original(layer if weight is None else _WithWeight(layer, weight), x, bias)
+            return original(None if weight is None else {"weight": weight})
         if self._pass is None:
             name = arm.executor if self.executor is None else self.executor.name
             raise RuntimeError(f"{name} is active outside a pass: open one (Stack.pass_) before the forward")
-        return self._pass.call(site, x, layer.weight if weight is None else weight, bias)
+        inputs = due.inputs
+        return self._pass.call(site, inputs["x"], inputs["weight"] if weight is None else weight, inputs.get("bias"))
 
 
 __all__ = ["Arm", "Control", "ExecutorPass", "Forward", "LinearExecutor", "LinearSite", "PassSpec", "Shard", "Stack",
-           "Tensor", "WeightReader", "WeightSource"]
+           "Tensor", "WeightReader", "WeightSource", "WithWeight"]

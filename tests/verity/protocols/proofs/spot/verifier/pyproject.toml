@@ -22,12 +22,12 @@ untraced = [
 # (verity.circuits.kernels) lazily. test_proofs.py fetches its fixture through Flock's `verifier/ci.py`, whose child
 # `python -m research data fetch` imports the research files listed last.
 # the served circuits' Definitions (`verity_vllm.definitions`) its tests import, with the package they sit in
-inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions", "security/Proofs/Flock/Soundness/Audit/Influence.lean",
+inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions", "security/Proofs/Spot/Sampling/Influence.lean",
           # `verity_difftest`, through which the verifiers these tests run speak to their Lean executables
           "tools/difftest/python/verity_difftest",
-          "security/Proofs/Flock/Soundness/Audit/SamplingDesign.lean",
-          "security/Proofs/Flock/Soundness/Audit/Stratified.lean",
-          "security/Proofs/Flock/Soundness/Audit/StratifiedMiss.lean",
+          "security/Proofs/Spot/Sampling/SamplingDesign.lean",
+          "security/Proofs/Spot/Sampling/Stratified.lean",
+          "security/Proofs/Spot/Sampling/StratifiedMiss.lean",
           "security/Proofs/Flock/SamplingGeneric/TwoCount.lean",
           "security/Proofs/Flock/SamplingGeneric/TwoTable.lean",
           "security/Definitions/Claims/SamplingTwo.lean",
@@ -56,6 +56,8 @@ inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/veri
           "benchmarks/one_stage", "benchmarks/prove_path", "benchmarks/network_traces",
           # the vLLM adapter, which test_pearltie and test_remotetie load, and the PyTorch adapter it loads
           "adapters/vllm/verity_vllm", "adapters/torch/verity_torch",
+          # the RTX PRO 6000's card, which the vLLM adapter's definitions registry reads in test_proofs
+          "calibration/hardware/cards/rtx-pro-6000-server.toml",
           "verity/protocols/proofs/flock/prover/agreement/zk_mutants.py",
           # test_pearltie holds the window's tie to Pearl+'s verdict, `verify_run.tie`, which has no home outside
           # `benchmarks/` yet (a verifier's suite reading `benchmarks/`, to be cut): the script, its sibling `fast_tile`,

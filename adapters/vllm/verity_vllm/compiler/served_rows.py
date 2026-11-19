@@ -2,7 +2,8 @@
 slice's ``rows`` bit holds the replay to through its ``srv`` row. Were that row the prover's own word, a prover who served
 user-1's admission at the sixth ask could put six passes there, and the slice accepts it at 0x3F with a 5-bit code against
 the honest 8. With the row registered here in ``srv``, ``rows`` refuses it; with any other
-row, the verifier's b‖c check does.
+row, the b‖c check against its registered leaf (`leaf_ok`) would, and that check exists in our compiler and only its
+tests call it.
 
 **The rows.** The server keeps each step's rows as the model runner laid them out (`verity_vllm.commit.served_record`'s
 `SamplerInputsSource.rows`: the runner's request id, its token rows [lo, hi) of the step's flattened batch, its first
@@ -22,12 +23,12 @@ block's bits as u16 words, as a proof commits a row, under `binding` of the run 
 one row, the slice's ``srv``; at G < P block j is the slice's ``srv{j}`` (`compile_slice.srv_rows`). `Served.record` is
 the public part: the root, the count, the row width and G. The rows and their salts stay the prover's.
 
-**The verifier's side.** `leaf_ok` holds a proof block's row by its b‖c to its registered leaf (`leaf`: window w's block
-j), as the advice's ``adv`` row is held; `reads_port` is the same registration as the Lean verifier's registered reads
-take it (`verity-verify-proof verify --registered`), each proof block's leaf its own.
+**The check.** `leaf_ok` holds a proof block's row by its b‖c to its registered leaf (`leaf`: window w's block
+j), as the advice's ``adv`` row is held. It exists in our compiler and only its tests call it.
 
-That the served rows are the rows the served compute ran is the tie's to bind (`served_tie`: each row's valid, start and
-n against its step's Program, and the ids IoTieRequest's); nothing here checks it.
+The tie states that the served rows are the rows the served compute ran (`served_tie` and `served_statics`: each row's
+valid, start and n against its step's Program, and the ids IoTieRequest's); no proof of it runs, so today the rows
+registered at serve time are the prover's word, and nothing here checks it.
 """
 from __future__ import annotations
 
@@ -39,8 +40,6 @@ from verity.commitments import advice as ADV
 from verity.commitments import domains
 from verity.commitments.frame_v3 import BitRowLeaf
 from verity.commitments.rowleaf import bit_row, row_leaf
-from verity.protocols.proofs.spot.verifier.one_stage import produced
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 
 from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import replay_step as RS
@@ -150,15 +149,3 @@ def leaf_ok(record: Mapping, run_root: bytes, i: int, bc: bytes, path: Sequence[
         return False
     lf = row_leaf(ADV.domain(b, n), i, ADV.INST.tree_leaf(ADV.INST.default_key, bytes(bc)), BitRowLeaf(n_bits).hiding_schema)
     return ADV._scheme(b, n, n_bits).verify_path(ADV.PORT, bytes.fromhex(record["root"]), n, i, lf, tuple(path))
-
-
-def reads_port(record: Mapping, run_root: bytes, reads: Sequence[int | None], reads_from: int = 0) -> dict:
-    """The Lean verifier's own ``--registered`` port (`verity/registered-reads/v1`) over the registration `record`
-    publishes under the run root: proof block ``reads_from + i`` reads leaf ``reads[i]`` (None: none)."""
-    b, n, n_bits = binding(run_root), record["count"], record["n_bits"]
-    if record["binding"] != b.hex() or n_bits % CS.WORD:
-        raise ValueError("a registration under another run root, or rows of part words")
-    e = {"leaves": n, "words": n_bits // CS.WORD, "word_bits": CS.WORD, "domain": ADV.domain(b, n).domain_id.hex()}
-    port = produced.port(SCHEMA, e, record["root"], [None if r is None else int(r) for r in reads],
-                         BitRowLeaf(n_bits).hiding_schema)
-    return port | ({REG.READS_FROM: int(reads_from)} if reads_from else {})

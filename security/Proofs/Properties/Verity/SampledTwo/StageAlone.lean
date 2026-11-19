@@ -138,20 +138,37 @@ theorem none_readLog (label : String) (after : ByteArray) (records : List Json) 
     · rw [ite_eq_right ht] at h
       exact none_readTail label after records label' after' ls [] none ξ h (by simpa using hz)
 
-/-- **Roots that don't show a coin count none**: where a session's released roots show no coin of `label` after
-`after` (`interiorShown`), no root line of its log after the head names that family and digest. -/
-theorem countFresh_zero {c : LiveCommitment} {log : List String} {roots : Roots} {label : String}
-    {after : ByteArray} (hr : releasedRootsOf c log = .ok roots)
-    (h : VStar.Recursive.SampledTwo.interiorShown roots label after = false) :
+theorem interiorShown_look {c : LiveCommitment} {log : Log} {label : String} (after : ByteArray)
+    (hf : c.family label ≠ none) :
+    VStar.Recursive.SampledTwo.interiorShown (byFamily c log) label after =
+      (Verity.Sampled.look log label).contains after := by
+  unfold VStar.Recursive.SampledTwo.interiorShown byFamily
+  unfold LiveCommitment.family at hf
+  generalize c.families = fs at hf ⊢
+  induction fs with
+  | nil => simp at hf
+  | cons p fs ih =>
+    by_cases hl : p.1 = label
+    · simp [hl, Verity.Sampled.look]
+    · have hb : (p.1 == label) = false := by simpa using hl
+      simp only [List.map_cons, List.find?_cons, hb] at hf ⊢
+      exact ih hf
+
+/-- **Roots that don't show a coin count none**: where a session's log, which commits no root, shows no coin of
+`label` after `after` (`interiorShown`), no root line of its log after the head names that family and digest. -/
+theorem countFresh_zero {c : LiveCommitment} {log : List String} {out : Log} {label : String}
+    {after : ByteArray} (hr : releasedLogOf c log = .ok out) (hc : out.any (·.kind == .committed) = false)
+    (h : VStar.Recursive.SampledTwo.interiorShown (byFamily c out) label after = false) :
     Verity.Sampled.countFresh label after (log.tail.filter fun l => !treeLine l) = 0 := by
-  rw [Verity.Sampled.countFresh_eq, ← Verity.Sampled.releasedRootsOf_ok hr label, List.length_eq_zero_iff,
-    List.filter_eq_nil_iff]
+  obtain ⟨-, hL, -, hF, -⟩ := Verity.Sampled.releasedLogOf_ok hr hc
+  rw [Verity.Sampled.countFresh_eq, ← hL label, List.length_eq_zero_iff, List.filter_eq_nil_iff]
   intro x hx hxa
   rw [beq_iff_eq] at hxa
   rw [hxa] at hx
-  have hm : (Verity.Sampled.look roots label).contains after = true := List.contains_iff_mem.2 hx
-  have h' : (Verity.Sampled.look roots label).contains after = false := h
-  rw [h'] at hm
+  have hf : c.family label ≠ none := fun hn => by simp [hF label hn] at hx
+  rw [interiorShown_look after hf] at h
+  have hm : (Verity.Sampled.look out label).contains after = true := List.contains_iff_mem.2 hx
+  rw [h] at hm
   cases hm
 
 /-! ## The premise and the statement -/
@@ -160,19 +177,19 @@ theorem countFresh_zero {c : LiveCommitment} {log : List String} {roots : Roots}
 sessions are on two windows, the roots of the first session `sampleCoins` reads (from `firstCoins`, under the
 parameters' key, on the boundary's window) show no coin of the second stage's family after the interior's digest. -/
 def FirstUnshown (C : CaseOf) : Prop :=
-  ∀ o, FormAccepts C o → ∀ p c e key d₁ d₂ cm roots, caseOf o.sent = .ok (p, c, e) → keyOf o.sent.params = some key →
+  ∀ o, FormAccepts C o → ∀ p c e key d₁ d₂ cm log, caseOf o.sent = .ok (p, c, e) → keyOf o.sent.params = some key →
     firstSamples key p c e = some d₁ → secondSamples p e = some d₂ → d₁.window ≠ d₂.window →
     trustedChallengePhaseOf (Spot.getD (firstCoins e) "ledger") (Json.mkObj [("root", Json.str d₁.window)]) d₁.key
       (Spot.getD (firstCoins e) "pins") (Spot.getD (firstCoins e) "main") (Spot.getD (firstCoins e) "session") =
-        .ok (cm, roots) →
-    VStar.Recursive.SampledTwo.interiorShown roots d₂.label d₂.after = false
+        .ok (cm, log) →
+    VStar.Recursive.SampledTwo.interiorShown (Spot.Challenger.byFamily cm log) d₂.label d₂.after = false
 
 /-- **`SecondAlone` from the first session's roots.** -/
 theorem secondAlone_of (C : CaseOf) (hU : FirstUnshown C) : SecondAlone C := by
   intro o ha p c e key d₁ ξ r₁ d₂ hcase hkey hd₁ hξ hr₁ hd₂ hw
   obtain ⟨lines, hlines, hrl⟩ := firstRead_some hd₁ hr₁
   obtain ⟨ls, hls, hlsl⟩ := firstLines_arr hlines
-  obtain ⟨cm, roots, hts, -⟩ := Verity.Sampled.drawCoins_ok hξ
+  obtain ⟨cm, roots, hts, hcm, -⟩ := Verity.Sampled.drawCoins_ok hξ
   have hsh := hU o ha p c e key d₁ d₂ cm roots hcase hkey hd₁ hd₂ hw hts
   obtain ⟨_, hsn⟩ := Verity.Sampled.trustedChallengePhaseOf_ok hts
   obtain ⟨_, hso⟩ := Verity.Sampled.challengePhaseNamed_ok hsn
@@ -182,7 +199,7 @@ theorem secondAlone_of (C : CaseOf) (hU : FirstUnshown C) : SecondAlone C := by
   rw [hlsl] at hls'
   have hl : lines' = lines := ((List.map_injective_iff.2 fun _ _ h => Json.str.inj h) hls').symm
   subst hl
-  exact none_readLog _ _ _ _ _ _ hrl (countFresh_zero hrr hsh)
+  exact none_readLog _ _ _ _ _ _ hrl (countFresh_zero hrr hcm hsh)
 
 /-! ## From the form's check -/
 
@@ -191,7 +208,7 @@ theorem unshown_of_accepts {C : CaseOf} (hC : CaseIsSent C) {o : Verity.Exchange
     {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment} {e : VStar.Recursive.SampledTwo.Evidence}
     (hcase : caseOf o.sent = .ok (p, c, e)) : VStar.Recursive.SampledTwo.interiorUnshown p e = .ok () := by
   obtain ⟨k, hk, p', c', e', _, _, hd, hc⟩ := ha
-  obtain ⟨_, _, _, _, _, _, _, _, _, hu, _, _⟩ := VStar.Recursive.SampledTwo.accepted_steps hc
+  obtain ⟨_, _, _, _, _, _, _, _, hu, _, _⟩ := VStar.Recursive.SampledTwo.accepted_steps hc
   obtain ⟨hcase', -⟩ := hC o k p' c' e' hk hd
   have hpce := Except.ok.inj (hcase.symm.trans hcase')
   simp only [Prod.mk.injEq] at hpce
@@ -247,7 +264,7 @@ def SessionMatches (C : CaseOf) : Prop :=
 
 /-- **`FirstUnshown` from the form's check**, where it reads the cut's session (`SessionMatches`). -/
 theorem firstUnshown_of (C : CaseOf) (hC : CaseIsSent C) (hM : SessionMatches C) : FirstUnshown C := by
-  intro o ha p c e key d₁ d₂ cm roots hcase hkey hd₁ hd₂ hw hts
+  intro o ha p c e key d₁ d₂ cm log hcase hkey hd₁ hd₂ hw hts
   obtain ⟨c₂, hi₂, hch₂, hwin₂, hafter⟩ := secondSamples_parts hd₂
   obtain ⟨hdig, hf⟩ := hM o ha p c e c₂ hcase hi₂
   obtain ⟨bp, hb, hbw, hkey₁⟩ := firstSamples_executionPhase hd₁
@@ -279,7 +296,7 @@ session is the evidence's `coins` (`firstCoins`). -/
 theorem sessionMatches_of (C : CaseOf) (hC : CaseIsSent C) : SessionMatches C := by
   intro o ha p c e c₂ hcase hi₂
   obtain ⟨k, hk, p', c', e', _, _, hd, hc⟩ := ha
-  obtain ⟨-, c₂', _, _, _, _, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hc
+  obtain ⟨c₂', _, _, _, _, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hc
   obtain ⟨hcase', -⟩ := hC o k p' c' e' hk hd
   have hpce := Except.ok.inj (hcase'.symm.trans hcase)
   simp only [Prod.mk.injEq] at hpce

@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.Tables.Session
 public import Proofs.Flock.Soundness.Binding.RowsX
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Audit.SamplingDesign
+import Proofs.Spot.Sampling.SamplingDesign
 import Proofs.Flock.Soundness.Discharge.Exec.BindingE2EL
 import Proofs.Flock.Soundness.Discharge.Exec.Headline
 import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
@@ -32,7 +32,7 @@ reads the plan only through the positions the sample reads and `ρ`, a bound on 
 
 namespace FlockSoundness.Discharge.Tables
 
-open Game Model Accounting Refine Audit Audit.Partition Exec
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition Exec
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
@@ -101,8 +101,8 @@ theorem _root_.FlockSoundness.Prog.flock_headline_live_tables
 /-- The live subset sample's count curve is at most the uniform `kd`-subset's, under A3. -/
 theorem execOS_subset_miss_le (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src) (c : ℕ) :
-    (SamplingDesign.execOS (n := n) src (.subset kd) n).miss c ≤ (SamplingDesign.subset n kd hkd).miss c :=
-  iSup₂_mono fun B _ => SamplingDesign.execOS_subset_escape_le n kd hkd Lb src hA3 B
+    (SamplingDesign.execOS (n := n) src (.subset kd) n).miss c ≤ (Verity.SamplingDesign.subset n kd hkd).miss c :=
+  iSup₂_mono fun B _ => SamplingDesign.execOS_subset_missProb_le n kd hkd Lb src hA3 B
 
 /-- **The headline at the executable, for sessions of `J` tables of the challenger, at the live subset sample**,
 the sample verity-verify-proof takes at more than one table. As `Prog.flock_headline_live_tables`, with the verifier's sample the
@@ -167,7 +167,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_live_tables_subset
   exact execOS_subset_miss_le kd hkd Lb src hA3 K
 
 /-- **`Prog.flock_headline_live_tables_subset` at every `K`**, its count curve the uniform `kd`-subset sampling design's
-(`SamplingDesign.subset n kd hkd`), which is `C(n − K, kd) / C(n, kd)` at `K ≤ n` (`SamplingDesign.subset_miss`). -/
+(`Verity.SamplingDesign.subset n kd hkd`), which is `C(n − K, kd) / C(n, kd)` at `K ≤ n` (`SamplingDesign.subset_miss`). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_live_tables_subset_miss
     (kd : ℕ) (hkd : kd ≤ n)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
@@ -206,7 +206,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_live_tables_subset_miss
               (reg (simAuditJ H512 enc512 leaf512 plan I wr opn dg dec one fin capOf N hdec τ))
               (cont (simAuditJ H512 enc512 leaf512 plan I wr opn dg dec one fin capOf N hdec τ)) k Rw))).card)
         (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfJ dg plan N wr)) τ ≤
-      (SamplingDesign.subset n kd hkd).miss K +
+      (Verity.SamplingDesign.subset n kd hkd).miss K +
         StrictCR.ksAvgStrict plan (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS
           (reg (simAuditJ H512 enc512 leaf512 plan I wr opn dg dec one fin capOf N hdec τ)) +
         (p.partition outs).linkBoundE (L := SamplingDesign.execOS (n := n) src (.subset kd) n)
@@ -264,7 +264,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_live_tables_subset_missX
               (reg (simAuditJ H512 enc512 leaf512 plan I wr opn dg dec one fin capOf N hdec τ))
               (cont (simAuditJ H512 enc512 leaf512 plan I wr opn dg dec one fin capOf N hdec τ)) k Rw))).card)
         (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfJ dg plan N wr)) τ ≤
-      (SamplingDesign.subset n kd hkd).miss K +
+      (Verity.SamplingDesign.subset n kd hkd).miss K +
         StrictCR.ksAvgStrict plan (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS
           (reg (simAuditJ H512 enc512 leaf512 plan I wr opn dg dec one fin capOf N hdec τ)) +
         (p.partition outs).linkBoundE (L := SamplingDesign.execOS (n := n) src (.subset kd) n)

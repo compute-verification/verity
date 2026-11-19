@@ -87,13 +87,13 @@ namespace FlockComplete.Run
 
 open Flock FlockDeploy
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The deployed verifier's coins at the run**: the run's coins `r`, in order. -/
 def recCoins (o : Run H rel) : List Coin := List.ofFn o.r
 
 /-- **The honest last message**: tag `1`, the statement, then each file's proof's openings (`encLast`). -/
-def recLast (o : Run H rel) : Claims.Msg := RecDeploy.DeployedR.encLast o.x o.recPs.toList
+def recLast (o : Run H rel) : Hash.Msg := RecDeploy.DeployedR.encLast o.x o.recPs.toList
 
 theorem recCoins_length (o : Run H rel) : o.recCoins.length = (V false).k o.x := List.length_ofFn
 
@@ -105,7 +105,7 @@ theorem coinsAt_recCoins (o : Run H rel) : o.CoinsAt o.recCoins := by
 
 /-- **What the honest prover sends `IVStar` at `DeployedR.bdR`**: its committed rounds under the salts `ys`, then its
 last message to V\* (`lastOR`), at the run's coins. -/
-noncomputable def recAsR (o : Run sha512 Readable.relation) (ys : ℕ → ℕ → RecDeploy.Salt) : List Claims.Msg :=
+noncomputable def recAsR (o : Run sha512 Readable.relation) (ys : ℕ → ℕ → RecDeploy.Salt) : List Hash.Msg :=
   KS.honestAsR Readable.relation RecDeploy.DeployedR.rdR
     (deployPlainTrimR Readable.relation RecDeploy.DeployedR.rdR).cols RecDeploy.DeployedR.wER RecDeploy.rowInDeployed
     RecDeploy.DeployedR.finalR RecDeploy.DeployedR.wR o.recCaps
@@ -254,7 +254,7 @@ theorem honest_rdR (o : Run sha512 Readable.relation) :
 open Rows in
 /-- **The honest messages number the deployed verifier's coins**: round 0, the reps' rounds and the last message. -/
 theorem honest_len (o : Run sha512 Readable.relation) {cs : List Coin} (hcs : o.CoinsAt cs)
-    (hk : cs.length = (V false).k o.x) (last : Claims.Msg) : (o.recMsgs cs last).length = cs.length := by
+    (hk : cs.length = (V false).k o.x) (last : Hash.Msg) : (o.recMsgs cs last).length = cs.length := by
   have h64 := out64_sha512
   have hx := o.setup
   have htab := o.recTabsOk

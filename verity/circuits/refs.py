@@ -13,6 +13,7 @@ weight arrays O(1) in the descriptor.
 from __future__ import annotations
 
 import bisect
+import math
 from itertools import chain, islice
 from typing import Iterator
 
@@ -132,6 +133,175 @@ class Strided(Refs):
         return f"Strided({self.space},{self.idx},{self.base},inner={self.inner},{self.outer_stride}/{self.inner_stride},{self.count})"
 
 
+Lane = tuple[str, int, int, int, tuple[tuple[int, int], ...]]
+
+
+def grid_ref(run: int, lanes: tuple[Lane, ...], k: int) -> tuple[int, Ref]:
+    """`(j, reference k)` of the grid `(run, lanes)`: lane j, period t's digits in the lane's levels (innermost first, the
+    last unbounded), offset o in the run (PROTOCOL.md §3)."""
+    t, r = divmod(k, len(lanes) * run)
+    j, o = divmod(r, run)
+    s, i, b, e, levels = lanes[j]
+    leaf = b + o * e
+    for n, (rad, d) in enumerate(levels):
+        if n == len(levels) - 1:
+            leaf += t * d
+        else:
+            t, digit = divmod(t, rad)
+            leaf += digit * d
+    return j, (s, i, leaf)
+
+
+def lane_bounds(run: int, lane: Lane) -> tuple[int, int]:
+    """The least and greatest leaf a lane of a whole grid reaches."""
+    _s, _i, b, e, levels = lane
+    lo = hi = b
+    for rad, d in ((run, e), *levels):
+        lo, hi = lo + (rad - 1) * min(d, 0), hi + (rad - 1) * max(d, 0)
+    return lo, hi
+
+
+def _merged_levels(levels) -> tuple[tuple[int, int], ...]:
+    out: list[tuple[int, int]] = []
+    for r, d in levels:
+        if out and d == out[-1][0] * out[-1][1]:
+            out[-1] = (out[-1][0] * r, out[-1][1])
+        else:
+            out.append((r, d))
+    return tuple(out)
+
+
+def spell(run: int, lanes) -> "Refs":
+    """The grid `(run, lanes)` in the first form that spells it: `Strided` (`Affine`) for one lane and at most one level,
+    `Explicit` for one reference a lane, `Grid` otherwise (PROTOCOL.md §3, merges first)."""
+    lanes = [(s, i, b, e, _merged_levels(lv)) for s, i, b, e, lv in lanes]
+    g = len(lanes)
+    if g >= 2 and len({(s, i, e, lv) for s, i, _b, e, lv in lanes}) == 1:
+        s, i, b0, e, lv = lanes[0]
+        c = lanes[1][2] - b0
+        if all(lanes[j][2] == b0 + j * c for j in range(g)) and (run == 1 or c == run * e):
+            run, lanes = run * g, [(s, i, b0, c if run == 1 else e, lv)]
+    if len(lanes) == 1:
+        s, i, b, e, lv = lanes[0]
+        while lv and (run == 1 or lv[0][1] == run * e):
+            e = lv[0][1] if run == 1 else e
+            run, lv = run * lv[0][0], _merged_levels(lv[1:])
+        if run == 1:
+            e = 1
+        if not lv:
+            return Affine(s, i, b, run) if e == 1 else Strided(s, i, b, run, 0, e, run)
+        if len(lv) == 1:
+            return Strided(s, i, b, run, lv[0][1], e, run * lv[0][0])
+        lanes = [(s, i, b, e, lv)]
+    if run == 1 and all(not lv for *_x, lv in lanes):
+        return Explicit(tuple((s, i, b) for s, i, b, _e, _lv in lanes))
+    return Grid(run, tuple(lanes))
+
+
+def as_grid(p: "Refs") -> tuple[int, tuple[Lane, ...]]:
+    """`(run, lanes)` of an affine, strided, explicit or grid part: the grid its spelling stands for (PROTOCOL.md §3)."""
+    if isinstance(p, Grid):
+        return p.run, p.lanes
+    if isinstance(p, Affine):
+        return p.count, ((p.space, p.idx, p.base, 1, ()),)
+    if isinstance(p, Strided):
+        T = max(1, -(-p.count // p.inner))
+        return p.inner, ((p.space, p.idx, p.base, p.inner_stride, ((T, p.outer_stride),) if T > 1 else ()),)
+    if isinstance(p, Explicit):
+        return 1, tuple((s, i, j, 0, ()) for s, i, j in p.items)
+    raise TypeError(f"{p!r} is not a part")
+
+
+def recut(registered_bits: int, reader_bits: int, part: "Refs | None" = None, leaves: int | None = None) -> int:
+    """q, the reader leaves one leaf of an input node of width ``registered_bits`` is read as at width ``reader_bits``:
+    reader leaf j is bits [(j mod q) * reader_bits, (j mod q + 1) * reader_bits) of registered leaf j div q, the low part
+    first (PROTOCOL.md §3). Given the ``part`` that reads it and the node's ``leaves``, its lanes are checked to read whole
+    registered leaves inside the node. Refused (ValueError) by name: recut-width, recut-boundary, recut-overrun."""
+    if not (reader_bits > 0 and registered_bits > 0 and registered_bits % reader_bits == 0):
+        raise ValueError(f"recut-width: an input node of {registered_bits}-bit leaves read in {reader_bits}-bit leaves: the "
+                         "reader's width divides the registered width")
+    q = registered_bits // reader_bits
+    if part is None or not part.count:
+        return q
+    run, lanes = as_grid(part)
+    for ln in lanes:
+        _s, _i, b, e, lv = ln
+        if q > 1 and not (e == 1 and b % q == 0 and run % q == 0 and part.count % q == 0 and all(d % q == 0 for _r, d in lv)):
+            raise ValueError(f"recut-boundary: {part.to_json()} reads an input node of {registered_bits}-bit leaves in "
+                             f"{reader_bits}-bit leaves other than whole registered leaves")
+        if isinstance(part, Strided):
+            k, last = divmod(part.count - 1, part.inner)
+            at = [b + x * part.outer_stride + y * e for x, y in
+                  [(0, 0), (0, min(part.inner, part.count) - 1), (k, 0), (k, last)] + ([(k - 1, part.inner - 1)] if k else [])]
+            lo, hi = min(at), max(at)
+        else:
+            lo, hi = lane_bounds(run, ln)
+        if leaves is not None and not (0 <= lo and hi < leaves * q):
+            raise ValueError(f"recut-overrun: {part.to_json()} reads past the {leaves} {registered_bits}-bit leaves of its "
+                             "input node")
+    return q
+
+
+class Grid(Refs):
+    """`len(lanes)` lanes of `run` references a period, interleaved, over `periods` periods (PROTOCOL.md §3). A lane is
+    `(space, idx, base, inner_stride, ((radix, step), ...))`, innermost level first; every lane's radices multiply to
+    `periods`."""
+
+    __slots__ = ("run", "lanes", "periods", "count")
+
+    def __init__(self, run: int, lanes: tuple[Lane, ...]) -> None:
+        self.run, self.lanes = run, tuple((s, i, b, e, tuple(map(tuple, lv))) for s, i, b, e, lv in lanes)
+        self.periods = math.prod(r for r, _d in self.lanes[0][4]) if self.lanes else 0
+        self.count = len(self.lanes) * run * self.periods
+
+    def __getitem__(self, k: int) -> Ref:
+        if k < 0:
+            k += self.count
+        if not (0 <= k < self.count):
+            raise IndexError(k)
+        return grid_ref(self.run, self.lanes, k)[1]
+
+    def pieces(self, t0: int = 0, t1: int | None = None) -> list[Refs]:
+        """Periods `[t0, t1)` as one run a lane a period, in order."""
+        run, g = self.run, len(self.lanes)
+        out: list[Refs] = []
+        for t in range(t0, self.periods if t1 is None else t1):
+            for j, (s, i, _b, e, _lv) in enumerate(self.lanes):
+                leaf = grid_ref(run, self.lanes, (t * g + j) * run)[1][2]
+                out.append(Affine(s, i, leaf, run) if e == 1 or run == 1 else Strided(s, i, leaf, run, 0, e, run))
+        return out
+
+    def lane_parts(self) -> list[Refs]:
+        """Each lane's references as one-level runs, in no order: the grid's leaves as a set, repeats aside."""
+        out: list[Refs] = []
+        for s, i, b, e, lv in self.lanes:
+            if not lv:
+                out.append(Strided(s, i, b, self.run, 0, e, self.run))
+                continue
+            (r1, d1), rest = lv[0], lv[1:]
+            for q in range(math.prod(r for r, _d in rest)):
+                off = 0
+                for n, (r, d) in enumerate(rest):
+                    q, digit = (0, q) if n == len(rest) - 1 else divmod(q, r)
+                    off += digit * d
+                out.append(Strided(s, i, b + off, self.run, d1, e, self.run * r1))
+        return out
+
+    def slice(self, lo: int, hi: int) -> Refs:
+        lo, hi = max(lo, 0), min(hi, self.count)
+        if hi <= lo:
+            return Explicit(())
+        p = len(self.lanes) * self.run
+        t0, t1 = lo // p, -(-hi // p)
+        return concat(self.pieces(t0, t1)).slice(lo - t0 * p, hi - t0 * p)
+
+    def to_json(self):
+        return {"grid": [self.run, [[s, i, b, e, [list(x) for x in lv]] for s, i, b, e, lv in self.lanes]]}
+
+    def __repr__(self) -> str:
+        return f"Grid({self.run}x{len(self.lanes)}x{self.periods})"
+
+
 class Concat(Refs):
     """Concatenation of reference sequences (binary search on `[j]`); descriptor size = number of parts.
 
@@ -184,7 +354,27 @@ def refs_from_json(j) -> Refs:
         return Strided(*j["strided"])
     if "concat" in j:
         return Concat([refs_from_json(x) for x in j["concat"]])
+    if "grid" in j:
+        return _grid_from_json(j["grid"])
     return Explicit(tuple((r[0], r[1], r[2]) for r in j["explicit"]))
+
+
+def _grid_from_json(a) -> Grid:
+    def nat(x, lo=0):
+        return isinstance(x, int) and not isinstance(x, bool) and x >= lo
+
+    def lane(x):
+        return (isinstance(x, list) and len(x) == 5 and x[0] in ("p", "n") and nat(x[1]) and nat(x[2], -(1 << 62))
+                and nat(x[3], -(1 << 62)) and isinstance(x[4], list)
+                and all(isinstance(v, list) and len(v) == 2 and nat(v[0], 2) and nat(v[1], -(1 << 62)) for v in x[4]))
+    if not (isinstance(a, list) and len(a) == 2 and nat(a[0], 1) and isinstance(a[1], list) and a[1] and all(map(lane, a[1]))):
+        raise ValueError(f"grid-shape: grid {a!r} is not [run, [[space, index, base, inner_stride, [[radix, step], ...]], ...]]")
+    if len({math.prod(r for r, _d in x[4]) for x in a[1]}) != 1:
+        raise ValueError(f"grid-shape: grid {a!r}: its lanes' radices multiply to different period counts")
+    g = Grid(a[0], tuple((s, i, b, e, tuple((r, d) for r, d in lv)) for s, i, b, e, lv in a[1]))
+    if not isinstance(spell(g.run, g.lanes), Grid):
+        raise ValueError(f"grid-spelled: grid {a!r}: an affine, strided or explicit part spells it")
+    return g
 
 
 def is_broadcast(p: Refs) -> bool:
@@ -427,6 +617,9 @@ def _walk_runs(out, r):
                 _push_run(out, space, idx, leaf, leaf + 1)
     elif isinstance(r, Concat):
         for p in r.parts:
+            _walk_runs(out, p)
+    elif isinstance(r, Grid):
+        for p in r.pieces():
             _walk_runs(out, p)
     else:
         for space, idx, leaf in r:

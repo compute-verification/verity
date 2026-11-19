@@ -153,7 +153,7 @@ theorem stmtOk_of_secondStage (h : Held) (own : Spot.SecondStage.Own) (ss : Arra
     (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (st : Roots) (rec draw : Json) (hx : decode x = some st)
     (hm₁ : jsonMsg m₁ = some rec) (hd : secondDraw h c₀ c₁ = some draw) (hA : OwnAgrees h own st rec draw c₀)
     (hS : StmtsAre h m₂ ss) (hT : TwoHolds h) (hRec : RecordsHeld h x m₁) (hR : RoundsHeld h m₂)
-    (hSc : ScopeHeld h m₂) (hP : PinHeld h m₂) (hc : (Spot.SecondStage.check true own (some ss)).codes = #[]) :
+    (hSc : ScopeHeld h m₂) (hP : PinHeld h m₂) (hc : (Spot.SecondStage.check own (some ss)).codes = #[]) :
     stmtOk h x m₁ m₂ c₀ c₁ = true :=
   stmtOk_of_check h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS (inputsNone_of_two hT hm₁ hA hRec) hT
     (namesDistinct_of_two hT) hRec hR hSc hP hc

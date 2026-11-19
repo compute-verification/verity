@@ -85,7 +85,7 @@ The logical layer:
   and a claim of every credited tile at its stage, whatever the past: what `OperandHMu` and `ReceiptLuckAt` and
   `Assumptions.Compose.GuessLuckAt` are taken of.
 * `jointGame`, `serviceGame`, `drawOf`: the window as one round on coins `A × (Equiv.Perm (Fin N) × Ξ)`: the rounds'
-  coins, then the service's one uniform `K`-subset (`Pouw.Window.subsetDraw`, its `Equiv.Perm`) and the proofs' coins
+  coins, then the service's one uniform `K`-subset (`Verity.SamplingDesign.permPrefix N K`, a uniform `Equiv.Perm`'s `K`-prefix) and the proofs' coins
   `Ξ`. Its share is `a·(folded weight) + b·(whole weight)` at the weights it is given, and it passes when every sampled
   tile's checked value is honest; `serviceGame` is it at a split-stage window's joint run.
 * `Declared.slots`, `ProofRun`, `Declared.layer`: the window's proofs as an `ResourceAccounting.TS.SampledLayer` over the IR's
@@ -665,19 +665,19 @@ noncomputable def stageShare {V : Type} [Fintype V] (stg : V → ℕ) (w : V →
   ∑ v, if stg v = j then w v else 0
 
 /-- **The window as one round of the service**: on the rounds' coins `A`, the permutation whose first `K` images are the
-sampled tiles (`Pouw.Window.subsetDraw`) and the proofs' coins `Ξ`, its share is `a` per unit of folded work and `b` per
+sampled tiles (`Verity.SamplingDesign.permPrefix N K`) and the proofs' coins `Ξ`, its share is `a` per unit of folded work and `b` per
 unit of whole work of the joint run `R`, and it passes when every sampled tile's checked values are honest. -/
 noncomputable def jointGame {A Ξ : Type} {N : ℕ} (R : JointRun A (Fin N)) (w : Fin N → ℝ) (a b : ℝ) (K : ℕ) :
     RoundGame (A × (Equiv.Perm (Fin N) × Ξ)) 1 :=
   .round (fun ω => a * R.share w ω.1 .folded + b * R.share w ω.1 .whole)
-    (fun ω => ∀ v ∈ Pouw.Window.subsetDraw K ω.2.1, R.same ω.1 v) fun _ => .done
+    (fun ω => ∀ v ∈ (Verity.SamplingDesign.permPrefix N K).draw ω.2.1, R.same ω.1 v) fun _ => .done
 
 /-- **The window as one round of the service**, for a split-stage window: `jointGame` at its joint run. -/
 noncomputable def serviceGame {C Ξ : Type} {N M : ℕ} (stg : Fin N → ℕ) (W : SplitStages C (Fin N) M)
     (w : Fin N → ℝ) (a b : ℝ) (K : ℕ) : RoundGame (Paths C M × (Equiv.Perm (Fin N) × Ξ)) 1 :=
   jointGame (W.joint stg) w a b K
 
-/-- **The service's samples**: sample `i` is the permutation's image of `i`, so the `K` samples are `subsetDraw K`. -/
+/-- **The service's samples**: sample `i` is the permutation's image of `i`, so the `K` samples are `Verity.SamplingDesign.permPrefix N K`'s draw. -/
 def drawOf {N K : ℕ} {Ξ : Type} (hK : K ≤ N) (β : Equiv.Perm (Fin N) × Ξ) (i : Fin K) : Fin N :=
   β.1 (Fin.castLE hK i)
 

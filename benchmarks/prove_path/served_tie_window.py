@@ -1,6 +1,10 @@
-"""The served rows' tie (`served_tie.ServedRowsTie_v2`) on a sealed served window's real rows.
+"""The routed tie (`served_tie.ServedRowsTie_v2`) checked natively, in plain, on a sealed served window's real rows.
 
     python benchmarks/prove_path/served_tie_window.py --serve-run DIR --window K --out DIR
+
+It is the developer's own check of its own run, on values in the clear (the serve's run directory, the prover's served
+rows with their salts, the requests), and it establishes nothing for the auditor: its result's ``checked_by`` is
+`kit_report.PIECE`.
 
 * **The window** is serve-openai's sealed window K of the run DIR: its dumped store
   (``windows/wK/commit/replay_bundle_p0/store``), its served-rows record (``windows.jsonl``), the prover's served rows and
@@ -23,8 +27,10 @@
     a decode row's request id changed to another arrival's;
   - one with a row of another request in place of one.
 
-  ``ids`` is IoTieRequest's statement in integers: each token's committed input id is its request's prompt-and-output id
-  at its position, read through `served_tie.ids`. The tie binds start and n, so the id is ``ids``' to refuse.
+  ``ids`` is a check in integers, in the clear, against the serve's own log: each token's committed input id, read
+  through `served_tie.ids`, is its request's prompt-and-output id at its position in ``requests.jsonl``. The ingress
+  tie (IoTieRequest) holds prompt lengths and arrival order, not the ids' values, and no proof of ``ids`` runs. The
+  tie binds start and n, so the id is ``ids``' to refuse.
 
 The port is a stream tensor of its own. The embedding reads ``model.embed_tokens/in``, a second copy, until vllm aliases the
 port's ranges as the embedding's and the rotary's inputs. So the tie binds the rows to the stream's port chunks, not yet
@@ -39,6 +45,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+from verity_bench import kit_report as K
 from verity_vllm.compiler import served_rows as SR
 from verity_vllm.compiler import served_statics as SS, served_tie as ST
 
@@ -47,11 +54,11 @@ RECORD_KEYS = ("schema", "binding", "root", "count", "n_bits")
 
 
 def load(run_dir: Path, w: int) -> SimpleNamespace:
-    from verity_vllm.commit import store_dump
+    from verity_vllm.pipeline import replay_bundle
 
     bundle = run_dir / "windows" / f"w{w}" / "commit" / "replay_bundle_p0"
     rec = next(r for r in map(json.loads, (run_dir / "windows.jsonl").read_text().splitlines()) if r["window"] == w)
-    store, run = store_dump.load(bundle / "store")
+    store, run = replay_bundle.load_store(bundle)
     return SimpleNamespace(ctx=json.loads((bundle / "context.json").read_text()), rec=rec, store=store, run=run,
                            priv=json.loads((run_dir / "served_rows" / f"w{w}.json").read_text()),
                            reqs=[json.loads(l) for l in (run_dir / "requests.jsonl").read_text().splitlines() if l.strip()])
@@ -73,7 +80,8 @@ def _ints(chunks: list[bytes], read, St) -> list[int]:
 
 
 def bindings(x: SimpleNamespace, S, St) -> tuple[dict, list[SimpleNamespace], dict]:
-    """The verifier's native checks, and each executed step's N, port chunks and embedding input."""
+    """The native checks the design gives the verifier, run here by the developer on values in the clear, and each
+    executed step's N, port chunks and embedding input."""
     import numpy as np
 
     C, G = ST.CHUNK, ST.geometry(St)
@@ -120,7 +128,7 @@ def statics_held(window: list, steps: list[SimpleNamespace]) -> bool:
 
 
 def ids_ok(St, window: list, steps: list[SimpleNamespace], seqs: dict[int, list[int]]) -> bool:
-    """IoTieRequest's statement in integers: slot k's tokens [lo, lo + n) carry its request's ids at [start, start + n)."""
+    """Slot k's tokens [lo, lo + n) carry its request's ids at [start, start + n) of ``seqs``, the serve's own log."""
     for u, rows in enumerate(window):
         lo = 0
         for _slot, req, _kind, start, n in rows or ():
@@ -203,14 +211,15 @@ def main(argv: list[str] | None = None) -> int:
     run = run_cases(S, st, window, steps, seqs)
     t2 = time.monotonic()
     passed = all(ok.values()) and run.passed
-    result = {"window": a.window, "run_root": x.run.run_root.hex(), "served_rows_root": x.rec["served_rows"]["root"],
+    result = {"checked_by": K.PIECE, "window": a.window, "run_root": x.run.run_root.hex(), "served_rows_root": x.rec["served_rows"]["root"],
               "statics": st, "steps": len(steps), "N": [s.N for s in steps], "bindings": ok, "native": native,
               "edits": run.edits, "cases": run.cases, "verdicts": run.verdicts, "expected": run.expected, "passed": passed,
               "ands": {"step": ST.step_size(**st)["ands"], "window": ST.size(**st)["ands"]},
               "seconds": {"open": round(t1 - t0, 1), "cases": round(t2 - t1, 1)}}
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "result.json").write_text(json.dumps(result, indent=1))
-    print(json.dumps({k: result[k] for k in ("bindings", "native", "verdicts", "ands", "seconds", "passed")}, indent=1))
+    print(json.dumps({k: result[k] for k in ("checked_by", "bindings", "native", "verdicts", "ands", "seconds", "passed")},
+                     indent=1))
     return 0 if passed else 1
 
 

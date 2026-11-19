@@ -15,6 +15,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from verity.circuits.codec import canonical_json
 from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
 from verity_flock import zk_server_transcript as FT
 from verity_flock import rec_live as RL
@@ -74,7 +75,7 @@ def test_the_transcript_is_the_schedule_in_its_order():
         assert fixed(FA.run_case(o, FA.requests(order=o), RL.Proxy, None).transcript()) == fixed(t)
     assert list(t["items"][-1]) == ["finish"]
     hello = next(i["fixed"] for i in t["items"] if "fixed" in i and i["fixed"]["what"] == "hello")
-    assert bytes.fromhex(hello["sent"]) == FT.canon(FA.SCHEDULE["hello"])
+    assert bytes.fromhex(hello["sent"]) == canonical_json(FA.SCHEDULE["hello"])
 
 
 def test_the_contract_and_the_zk_server_agree_on_every_case(lean, tmp_path):

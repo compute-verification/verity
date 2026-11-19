@@ -10,11 +10,11 @@ side's (`egress`): no request, response or value one host sends another has a he
 attester's own salts. The value is `rows` rows of `words` leaves of `word_bits` bits (16, or 32: the reading
 parameter's width, `registered.width`), row r its leaves in the order the proof blocks read them, each row the bit row a
 proof block's port carries in its `schema` (`SCHEMAS`: ``hm96-sha512/row/v2``, or ``hm96-sha512/row-seg/v1`` for a row a
-port reads in segments, as `EmbeddingRead_v1` reads a token's embedding):
+port reads in segments, as `EmbeddingRead_v2` reads a token's embedding):
 
-    b‖c_r  = hm96.SHA512.commit_string(default_key, registered.row_digest(row r, word_bits, schema), salt_r)
+    b‖c_r  = hm96.SHA512.commit_string(default_key, registered_value.row_digest(row r, word_bits, schema), salt_r)
     leaf_r = row_leaf(D, r, hm96.SHA512.tree_leaf(default_key, b‖c_r), schema)
-    root   = the frame-v3-sha512 root of the rows' leaves under D = registered.domain(program, value, words, rows, word_bits)
+    root   = the frame-v3-sha512 root of the rows' leaves under D = registered_value.domain(program, value, words, rows, word_bits)
 
 D leaves the window out, as a value the verifier holds across windows does, so the root is the one `registration.check`
 holds a pinned value's entry to (`pinned`) and the one the verifier's `--registered` port opens; the head and its
@@ -61,16 +61,16 @@ from typing import Any
 from verity.commitments import hm96
 from verity.commitments.identity import tagged_sha512
 from verity.commitments.merkle import CommitmentDomain
-from verity.protocols.resource_accounting.network.verifier.certificate import DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey, _text, _u
-from verity.protocols.proofs.spot.verifier.one_stage import produced
+from verity.protocols.resource_accounting.network.verifier.certificate import DIGEST_BYTES, Certificate, Direction, PublicKey, _text, _u
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 TRANSFER_TAG = "verity-network-certifier/transfer/v1"
 REGISTRATION = "verity-network-certifier/transfer-registration/v1"
 #: each kind's directions
 KINDS = {"load": (Direction.INGRESS,)}
 WORD_BITS = 16
-WIDTHS = G.WIDTHS
+WIDTHS = RV.WIDTHS
 SCHEMA = G.SCHEMA_V2
 #: the bit-row formats a proof block's port carries
 SCHEMAS = (G.SCHEMA_V2, G.SCHEMA_SEG)
@@ -100,15 +100,15 @@ def _format(word_bits: int, schema: str) -> None:
 
 def domain(program: str, value: str, words: int, rows: int, word_bits: int = WORD_BITS) -> CommitmentDomain:
     """The frame-v3-sha512 domain of a transfer value's rows: a registered value's held across windows
-    (`registered.domain` with no window), the one a pinned value's entry is under."""
+    (`registered_value.domain` with no window), the one a pinned value's entry is under."""
     _format(word_bits, SCHEMA)
-    return G.domain(_program(program), value, words, rows, word_bits)
+    return RV.domain(_program(program), value, words, rows, word_bits)
 
 
 def bc(words: Sequence[int], salt: bytes, word_bits: int = WORD_BITS, schema: str = SCHEMA) -> bytes:
     """A row's hm96 commitment string `b ‖ c` under its salt: what a statement's table row of it is."""
     _format(word_bits, schema)
-    return _INST.commit_string(_INST.default_key, G.row_digest(words, word_bits, schema), salt)
+    return _INST.commit_string(_INST.default_key, RV.row_digest(words, word_bits, schema), salt)
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,7 +153,7 @@ class Transfer:
     direction: Direction
     window: int
     kind: str
-    committed: G.Registered
+    committed: RV.Registered
 
     @classmethod
     def commit(cls, link: str, direction: Direction, window: int, kind: str, program: str, value: str,
@@ -163,7 +163,7 @@ class Transfer:
         fresh from the operating system) and never for another row."""
         _kind(kind, direction)
         _format(word_bits, schema)
-        return cls(link, direction, window, kind, G.Registered.commit(_program(program), value, rows, salts, word_bits,
+        return cls(link, direction, window, kind, RV.Registered.commit(_program(program), value, rows, salts, word_bits,
                                                                       schema))
 
     @property
@@ -200,15 +200,6 @@ def read_witness(blob: bytes) -> list[bytes]:
     if not blob or len(blob) % SALT_BYTES:
         raise ValueError(f"a transfer's witness is {SALT_BYTES} bytes a row")
     return [blob[i:i + SALT_BYTES] for i in range(0, len(blob), SALT_BYTES)]
-
-
-def attest(issuer: Issuer, link: str, direction: Direction, window: int, kind: str, program: str, value: str,
-           rows: Sequence[Sequence[int]], salts: Sequence[bytes] | None = None, word_bits: int = WORD_BITS,
-           schema: str = SCHEMA) -> tuple[Transfer, Certificate | None]:
-    """The value's rows committed and their head signed by `issuer` for the link and execution phase (None when its
-    signer refuses)."""
-    t = Transfer.commit(link, direction, window, kind, program, value, rows, salts, word_bits, schema)
-    return t, issuer.sign(link, direction, window, t.head.digest())
 
 
 def registration(head: TransferHead, certificate: Certificate) -> dict[str, Any]:
@@ -268,5 +259,5 @@ def port(head: TransferHead, reads: Sequence[int | None], reads_from: int = 0) -
     if any(r is not None and not (type(r) is int and 0 <= r < head.rows) for r in reads):
         raise ValueError(f"a read is a row of the value's {head.rows}, or None")
     e = {"leaves": head.rows, "words": head.words, "word_bits": head.word_bits, "domain": head.domain.hex()}
-    return produced.port(head.value, e, head.root.hex(), list(reads), head.schema) | \
-        ({G.READS_FROM: int(reads_from)} if reads_from else {})
+    return RV.port(head.value, e, head.root.hex(), list(reads), head.schema) | \
+        ({RV.READS_FROM: int(reads_from)} if reads_from else {})

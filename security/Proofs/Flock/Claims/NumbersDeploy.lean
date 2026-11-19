@@ -195,18 +195,18 @@ theorem tableErr_nonneg (zk : Bool) (spec : SessionSpec) (st : Stmt) : 0 ≤ tab
 
 /-! ## The session's numbers -/
 
-theorem tables_eq {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem tables_eq {zk : Bool} {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupOf zk x = some (s, spec, sts)) : tables zk x = sts.toList.map fun st => (spec, st) := by
   simp only [tables, hs]
 
-theorem εtable_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ εtable zk x := by
+theorem εtable_nonneg (zk : Bool) (x : Hash.Msg) : 0 ≤ εtable zk x := by
   unfold εtable
   exact List.sum_nonneg fun a ha => by
     obtain ⟨p, -, rfl⟩ := List.mem_map.1 ha
     exact tableErr_nonneg zk p.1 p.2
 
 /-- **`ε_table ≤ n·2^{−205}`**: the session's `n` tables' errors, summed, each at most `2^{−205}`. -/
-theorem εtable_le {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem εtable_le {zk : Bool} {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupOf zk x = some (s, spec, sts)) (h : ∀ st ∈ sts.toList, tableErr zk spec st ≤ 2 ^ (-(205 : ℝ))) :
     εtable zk x ≤ sts.size * 2 ^ (-(205 : ℝ)) := by
   unfold εtable
@@ -215,10 +215,10 @@ theorem εtable_le {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {
   obtain ⟨st, hst, rfl⟩ := List.mem_map.1 ha
   exact h st hst
 
-theorem waits_deploy (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
+theorem waits_deploy (rel : Readable.Parsed → Readable.Relation) (x : Hash.Msg) :
     (deployPlain rel).waits x = 210 ∧ (deployZk rel).waits x = 210 := ⟨rfl, rfl⟩
 
-theorem cap_deploy (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
+theorem cap_deploy (rel : Readable.Parsed → Readable.Relation) (x : Hash.Msg) :
     (deployPlain rel).cap x = Claims.Flock.Numbers.cap ∧ (deployZk rel).cap x = Claims.Flock.Numbers.cap := ⟨rfl, rfl⟩
 
 /-- The plain level 0 at each `m` served: `fast100`'s schedule has at most `6` lanes (log) and `7` levels (`7` at
@@ -264,7 +264,7 @@ theorem tableLen_zk_bounds (st : Stmt) (h1 : 25 ≤ st.m) (h2 : st.m ≤ 35) :
   exact ⟨pow_le_pow_right₀ (by norm_num) hlo, pow_le_pow_right₀ (by norm_num) hhi⟩
 
 /-- **`2^10 ≤ N₀ ≤ n·2^23`**: `N₀` sums the session's `n ≥ 1` tables' level-0 lengths, each `2^10` to `2^23`. -/
-theorem N₀_le {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem N₀_le {zk : Bool} {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupOf zk x = some (s, spec, sts)) (h0 : 0 < sts.size)
     (h : ∀ st ∈ sts.toList, 2 ^ 10 ≤ tableLen zk st ∧ tableLen zk st ≤ 2 ^ 23) :
     2 ^ 10 ≤ N₀ zk x ∧ N₀ zk x ≤ sts.size * 2 ^ 23 := by
@@ -281,7 +281,7 @@ theorem N₀_le {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts
     exact (h st hst).2
 
 /-- **`N₀` at one table** is that table's level-0 length, `2^{d₀}`. -/
-theorem N₀_one {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem N₀_one {zk : Bool} {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupOf zk x = some (s, spec, sts)) (h1 : sts.size = 1) :
     N₀ zk x = (2 : ℝ) ^ (if zk then zkLevel0 (sts[0]'(by omega)).wideLeaf (sts[0]'(by omega)).m else plainLevel0 (sts[0]'(by omega)).m).d := by
   have hl : sts.toList = [sts[0]'(by omega)] := by
@@ -294,7 +294,7 @@ theorem N₀_one {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {st
 
 /-- **`N₀` and `k` without `--zk`, at one table**: `N₀ = 2^{d₀}`, the table's plain level-0 length,
 `2^10 ≤ N₀ ≤ 2^23`, and `k = ⌈4N₀/e⌉ = kVal d₀`. -/
-theorem k_plain (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem k_plain (rel : Readable.Parsed → Readable.Relation) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (hs : setupOf false x = some (s, spec, sts)) (h0 : sts.size = 1)
     (h1 : 22 ≤ (sts[0]'(by omega)).m) (h2 : (sts[0]'(by omega)).m ≤ 35) :
     (deployPlain rel).N₀ x = 2 ^ (plainLevel0 (sts[0]'(by omega)).m).d ∧ 2 ^ 10 ≤ (deployPlain rel).N₀ x ∧
@@ -314,7 +314,7 @@ theorem k_plain (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {
 
 /-- **`N₀` and `k` with `--zk`, at one table**: `N₀ = 2^{d₀}`, the table's masked level-0 length,
 `2^10 ≤ N₀ ≤ 2^23`, and `k = ⌈4N₀/e⌉ = kVal d₀`. -/
-theorem k_zk (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem k_zk (rel : Readable.Parsed → Readable.Relation) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (hs : setupOf true x = some (s, spec, sts)) (h0 : sts.size = 1)
     (h1 : 25 ≤ (sts[0]'(by omega)).m) (h2 : (sts[0]'(by omega)).m ≤ 35) :
     (deployZk rel).N₀ x = 2 ^ (zkLevel0 (sts[0]'(by omega)).wideLeaf (sts[0]'(by omega)).m).d ∧ 2 ^ 10 ≤ (deployZk rel).N₀ x ∧
@@ -387,7 +387,7 @@ theorem rounds_le {zk : Bool} {spec : SessionSpec} {sts : Array Stmt} {b : ℕ}
   exact Nat.mul_le_mul_left 2 (h st hst)
 
 /-- **The verifier's rounds**: at most `2 + 4400·n` at `n` tables of at most `2200` rounds per rep. -/
-theorem Vk_le {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem Vk_le {zk : Bool} {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupOf zk x = some (s, spec, sts)) (h : ∀ st ∈ sts.toList, repRounds zk spec st ≤ 2200) :
     (V zk).k x ≤ 2 + 4400 * sts.size := by
   have := rounds_le h
@@ -410,7 +410,7 @@ theorem tableWeight_zk_le (st : Stmt) (h1 : 25 ≤ st.m) (h2 : st.m ≤ 35) (hk 
   simp only [tableWeight, ite_true]
   exact Claims.Flock.Numbers.weightOf_le_m1_pads h1 h2 hk hf.1
 
-theorem weight_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ weight zk x := by
+theorem weight_nonneg (zk : Bool) (x : Hash.Msg) : 0 ≤ weight zk x := by
   unfold weight
   exact List.sum_nonneg fun a ha => by
     obtain ⟨p, -, rfl⟩ := List.mem_map.1 ha
@@ -418,7 +418,7 @@ theorem weight_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ weight zk x := by
     split <;> exact Claims.Flock.Numbers.weightOf_nonneg _ _
 
 /-- **The weight `C`**: at most `n·2^33` at `n` tables of weight at most `2^33`. -/
-theorem weight_le {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem weight_le {zk : Bool} {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupOf zk x = some (s, spec, sts)) (h : ∀ st ∈ sts.toList, tableWeight zk st ≤ 2 ^ 33) :
     weight zk x ≤ sts.size * 2 ^ 33 := by
   unfold weight
@@ -431,7 +431,7 @@ theorem weight_le {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {s
 
 /-- **A plain session in scope**: it sets up with `1 ≤ n ≤ 200` tables at two link points, each at an `m` the plain
 verifier serves and of a planned table's shape. -/
-structure PlainIn (x : Claims.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt) : Prop where
+structure PlainIn (x : Hash.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt) : Prop where
   setup : setupOf false x = some (s, spec, sts)
   size_pos : 0 < sts.size
   size_le : sts.size ≤ 200
@@ -439,7 +439,7 @@ structure PlainIn (x : Claims.Msg) (s : Ins) (spec : SessionSpec) (sts : Array S
   tab : ∀ st ∈ sts.toList, 22 ≤ st.m ∧ st.m ≤ 35 ∧ (acct spec st).InRangeWide
 
 /-- **A masked session in scope**: likewise, at an `m` the masked verifier serves and a shape in `InRange`. -/
-structure ZkIn (x : Claims.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt) : Prop where
+structure ZkIn (x : Hash.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt) : Prop where
   setup : setupOf true x = some (s, spec, sts)
   size_pos : 0 < sts.size
   size_le : sts.size ≤ 200
@@ -450,7 +450,7 @@ theorem size_one_le {sts : Array Stmt} (h : 0 < sts.size) : (1 : ℝ) ≤ sts.si
   exact_mod_cast h
 
 /-- **`κ ≤ n·2^{−202.98}`** at the deployed plain verifier, `n` its tables. -/
-theorem κ_plain_le (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem κ_plain_le (rel : Readable.Parsed → Readable.Relation) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (h : PlainIn x s spec sts) :
     Claims.Flock.κ (deployPlain rel) x ≤ sts.size * 2 ^ (-(202.98 : ℝ)) := by
   obtain ⟨hlo, hhi⟩ := N₀_le h.setup h.size_pos fun st hst =>
@@ -462,7 +462,7 @@ theorem κ_plain_le (rel : Readable.Parsed → Readable.Relation) {x : Claims.Ms
     tableErr_plain_le spec st this.1 this.2.1 this.2.2
 
 /-- **`κ ≤ n·2^{−202.98}`** at the deployed masked verifier, `n` its tables. -/
-theorem κ_zk_le (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem κ_zk_le (rel : Readable.Parsed → Readable.Relation) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (h : ZkIn x s spec sts) :
     Claims.Flock.κ (deployZk rel) x ≤ sts.size * 2 ^ (-(202.98 : ℝ)) := by
   obtain ⟨hlo, hhi⟩ := N₀_le h.setup h.size_pos fun st hst =>
@@ -473,32 +473,32 @@ theorem κ_zk_le (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} 
     have := h.tab st hst
     tableErr_zk_le spec st this.1 this.2.1 this.2.2
 
-theorem Vk_plain_le (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem Vk_plain_le (rel : Readable.Parsed → Readable.Relation) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (h : PlainIn x s spec sts) : (deployPlain rel).V.k x ≤ 2 + 4400 * sts.size :=
   Vk_le h.setup fun st hst =>
     have := h.tab st hst
     repRounds_plain_le spec st this.1 this.2.1 this.2.2.1 this.2.2.2.1 h.points
 
-theorem Vk_zk_le (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem Vk_zk_le (rel : Readable.Parsed → Readable.Relation) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (h : ZkIn x s spec sts) : (deployZk rel).V.k x ≤ 2 + 4400 * sts.size :=
   Vk_le h.setup fun st hst =>
     have := h.tab st hst
     repRounds_zk_le spec st this.1 this.2.1 this.2.2.1 (this.2.2.2.1.trans (by norm_num)) h.points
 
-theorem weight_plain_le (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem weight_plain_le (rel : Readable.Parsed → Readable.Relation) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (h : PlainIn x s spec sts) : (deployPlain rel).weight x ≤ sts.size * 2 ^ 33 :=
   weight_le h.setup fun st hst =>
     have := h.tab st hst
     tableWeight_plain_le st this.1 this.2.1
 
-theorem weight_zk_le (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem weight_zk_le (rel : Readable.Parsed → Readable.Relation) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (h : ZkIn x s spec sts) : (deployZk rel).weight x ≤ sts.size * 2 ^ 33 :=
   weight_le h.setup fun st hst =>
     have := h.tab st hst
     tableWeight_zk_le st this.1 this.2.1 this.2.2.1
 
 /-- `γ ≤ 2^105` at up to `200` tables: at most `2 + 4400·200` rounds and a weight at most `200·2^33`. -/
-theorem γ_le_105_of {C Col T : Type} (D : Claims.Flock.Deploy C Col T) (x : Claims.Msg) {n : ℕ} (hn : n ≤ 200)
+theorem γ_le_105_of {C Col T : Type} (D : Claims.Flock.Deploy C Col T) (x : Hash.Msg) {n : ℕ} (hn : n ≤ 200)
     (hr : D.V.k x ≤ 2 + 4400 * n) (hC0 : 0 ≤ D.weight x) (hC : D.weight x ≤ n * 2 ^ 33) :
     Claims.Flock.γ D x ≤ 2 ^ (105 : ℝ) := by
   refine Claims.Flock.Numbers.γ_le_105 D x (by omega) hC0 (hC.trans ?_)
@@ -506,7 +506,7 @@ theorem γ_le_105_of {C Col T : Type} (D : Claims.Flock.Deploy C Col T) (x : Cla
   nlinarith
 
 /-- **`λ ≥ 201.98 − log₂ n`** at the deployed plain verifier, `n ≤ 200` its tables. -/
-theorem lam_plain_ge (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem lam_plain_ge (rel : Readable.Parsed → Readable.Relation) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (h : PlainIn x s spec sts) :
     201.98 - Real.logb 2 sts.size ≤ Claims.lamOf (Claims.Flock.κ (deployPlain rel) x) (Claims.Flock.γ (deployPlain rel) x) :=
   Claims.Flock.Numbers.lam_ge_mul (size_one_le h.size_pos) (Claims.Flock.κ_pos _ x (εtable_nonneg false x))
@@ -514,7 +514,7 @@ theorem lam_plain_ge (rel : Readable.Parsed → Readable.Relation) {x : Claims.M
     (γ_le_105_of _ x h.size_le (Vk_plain_le rel h) (weight_nonneg false x) (weight_plain_le rel h))
 
 /-- **`λ ≥ 201.98 − log₂ n`** at the deployed masked verifier, `n ≤ 200` its tables. -/
-theorem lam_zk_ge (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem lam_zk_ge (rel : Readable.Parsed → Readable.Relation) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (h : ZkIn x s spec sts) :
     201.98 - Real.logb 2 sts.size ≤ Claims.lamOf (Claims.Flock.κ (deployZk rel) x) (Claims.Flock.γ (deployZk rel) x) :=
   Claims.Flock.Numbers.lam_ge_mul (size_one_le h.size_pos) (Claims.Flock.κ_pos _ x (εtable_nonneg true x))
@@ -529,7 +529,7 @@ theorem logb_size_le_6 {sts : Array Stmt} (h0 : 0 < sts.size) (h64 : sts.size �
     _ = 6 := by rw [Real.logb_pow, Real.logb_self_eq_one (by norm_num)]; norm_num
 
 /-- **`λ ≥ 195.98`** at the deployed plain verifier at up to `64` tables, the verifier's cap (`Tags.MAX_TABLES`). -/
-theorem lam_plain_ge_64 (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem lam_plain_ge_64 (rel : Readable.Parsed → Readable.Relation) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (h : PlainIn x s spec sts) (h64 : sts.size ≤ 64) :
     195.98 ≤ Claims.lamOf (Claims.Flock.κ (deployPlain rel) x) (Claims.Flock.γ (deployPlain rel) x) := by
   have := lam_plain_ge rel h
@@ -537,7 +537,7 @@ theorem lam_plain_ge_64 (rel : Readable.Parsed → Readable.Relation) {x : Claim
   linarith
 
 /-- **`λ ≥ 195.98`** at the deployed masked verifier at up to `64` tables, the verifier's cap (`Tags.MAX_TABLES`). -/
-theorem lam_zk_ge_64 (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem lam_zk_ge_64 (rel : Readable.Parsed → Readable.Relation) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (h : ZkIn x s spec sts) (h64 : sts.size ≤ 64) :
     195.98 ≤ Claims.lamOf (Claims.Flock.κ (deployZk rel) x) (Claims.Flock.γ (deployZk rel) x) := by
   have := lam_zk_ge rel h
@@ -545,7 +545,7 @@ theorem lam_zk_ge_64 (rel : Readable.Parsed → Readable.Relation) {x : Claims.M
   linarith
 
 /-- **One plain table**: `ε_table ≤ 2^{−205}`, `κ ≤ 2^{−202.98}`, `γ ≤ 2^51` and `λ ≥ 201.98`. -/
-theorem plain_one (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem plain_one (rel : Readable.Parsed → Readable.Relation) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (h : PlainIn x s spec sts) (h1 : sts.size = 1) :
     (deployPlain rel).εtable x ≤ 2 ^ (-(205 : ℝ)) ∧ Claims.Flock.κ (deployPlain rel) x ≤ 2 ^ (-(202.98 : ℝ)) ∧
       Claims.Flock.γ (deployPlain rel) x ≤ 2 ^ (51 : ℝ) ∧
@@ -562,7 +562,7 @@ theorem plain_one (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg}
   exact ⟨hε, hκ, Claims.Flock.Numbers.γ_le_51 _ x (by omega) (weight_nonneg false x) hC, hl⟩
 
 /-- **One masked table**: `ε_table ≤ 2^{−205}`, `κ ≤ 2^{−202.98}`, `γ ≤ 2^51` and `λ ≥ 201.98`. -/
-theorem zk_one (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem zk_one (rel : Readable.Parsed → Readable.Relation) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (h : ZkIn x s spec sts) (h1 : sts.size = 1) :
     (deployZk rel).εtable x ≤ 2 ^ (-(205 : ℝ)) ∧ Claims.Flock.κ (deployZk rel) x ≤ 2 ^ (-(202.98 : ℝ)) ∧
       Claims.Flock.γ (deployZk rel) x ≤ 2 ^ (51 : ℝ) ∧

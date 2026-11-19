@@ -21,11 +21,11 @@ import json
 
 import pytest
 
+from verity.commitments import docket_digest as DD
 from verity.protocol import place, site_of
 from verity.party import Identity, Received
 from verity.runtime.runner import run
 from verity.protocols.proofs.spot.verifier import parties as P
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.channel import Message, Refused
 
 ROLES = [P.CHALLENGER, P.INFERENCE_SERVER, P.PROOF_SERVER, P.VERIFIER]
@@ -49,7 +49,7 @@ def proof(i: int) -> bytes:
 
 
 def interior(i: int) -> bytes:
-    return json.dumps({"block": i, "previous": R.digest(json.loads(docket(i))), "root": "cd" * 64},
+    return json.dumps({"block": i, "previous": DD.digest(json.loads(docket(i))), "root": "cd" * 64},
                       sort_keys=True).encode()
 
 
@@ -58,7 +58,7 @@ def second(i: int) -> bytes:
 
 
 def digest(raw: bytes) -> str:
-    return R.digest(json.loads(raw))
+    return DD.digest(json.loads(raw))
 
 
 class Host:
@@ -128,9 +128,9 @@ class Machine:
                 P.VERIFIER: {"draw": self.draw, "second": self.second, "audit": self.audit}}
 
 
-def go(m: Machine, *, blocks: int = 1, coins: str = "simulated", params=None, state=None, protocol: str = P.SPOT_ID):
-    params = params if params is not None else P.spot_params_of(blocks, coins)
-    return run({"protocol": protocol, "params": params}, ROLES, "simulated", state, protocols=P.PROTOCOLS,
+def go(m: Machine, *, blocks: int = 1, coins: str = "simulated", params=None, state=None, levels: int = 1):
+    params = params if params is not None else P.spot_params_of(blocks, coins, levels)
+    return run({"protocol": P.SPOT_ID, "params": params}, ROLES, "simulated", state, protocols=P.PROTOCOLS,
                capabilities=m.caps(), seed=b"SPOT[Flock]'s parties", authenticate=False)
 
 
@@ -144,7 +144,7 @@ def test_an_honest_run_samples_proves_and_audits_each_block_in_order_and_accepts
     assert r.status == "completed", r.outcomes
     lines = lines_of(r)
     assert lines == [{"block": i, "coins": "simulated", "reason": None,
-                      "registration": R.digest(json.loads(docket(i))), "verdict": "accept"} for i in (0, 1)]
+                      "registration": DD.digest(json.loads(docket(i))), "verdict": "accept"} for i in (0, 1)]
     assert [c for c in m.calls if c[0] == "draw"] == [("draw", i, docket(i), ADDRESS) for i in (0, 1)]
     assert [c for c in m.calls if c[0] == "prove"] == [("prove", i, replay(i), sample(i), ADDRESS) for i in (0, 1)]
     assert [c for c in m.calls if c[0] == "audit"] == [("audit", i, docket(i), ADDRESS, sample(i), proof(i))
@@ -203,13 +203,12 @@ def test_an_unavailable_sample_ends_the_verifier_refused_sample_with_nothing_pro
     assert not [c for c in m.calls if c[0] in ("prove", "audit")] and m.host.events == ["start", "stop"]
 
 
-@pytest.mark.parametrize("step, party, protocol", [
-    ("serve", P.INFERENCE_SERVER, P.SPOT_ID), ("replay", P.INFERENCE_SERVER, P.SPOT_ID), ("prove", P.PROOF_SERVER, P.SPOT_ID),
-    ("replay", P.INFERENCE_SERVER, P.SPOT_TWO_ID), ("interior", P.PROOF_SERVER, P.SPOT_TWO_ID),
-    ("prove", P.PROOF_SERVER, P.SPOT_TWO_ID)])
-def test_a_server_that_cant_do_its_step_leaves_the_verifier_refused_closed(step, party, protocol):
+@pytest.mark.parametrize("step, party, levels", [
+    ("serve", P.INFERENCE_SERVER, 1), ("replay", P.INFERENCE_SERVER, 1), ("prove", P.PROOF_SERVER, 1),
+    ("replay", P.INFERENCE_SERVER, 2), ("interior", P.PROOF_SERVER, 2), ("prove", P.PROOF_SERVER, 2)])
+def test_a_server_that_cant_do_its_step_leaves_the_verifier_refused_closed(step, party, levels):
     m = Machine(fails=step)
-    r = go(m, protocol=protocol)
+    r = go(m, levels=levels)
     assert r.outcomes[party]["refused"] == step
     assert r.outcomes[P.VERIFIER] == {"outcome": {"verdicts": []}, "refused": "closed"}
     assert not [c for c in m.calls if c[0] == "audit"] and m.host.events == ["start", "stop"]
@@ -260,7 +259,7 @@ def test_the_placement_holds_each_party_to_its_principals_machine_and_the_sample
 
 def test_two_stages_sample_each_blocks_second_stage_only_once_its_interior_is_in_and_audit_both():
     m = Machine()
-    r = go(m, blocks=2, protocol=P.SPOT_TWO_ID)
+    r = go(m, blocks=2, levels=2)
     assert r.status == "completed", r.outcomes
     lines = lines_of(r)
     assert lines == [{"block": i, "coins": "simulated", "interior": digest(interior(i)), "reason": None,
@@ -292,20 +291,23 @@ def test_two_stages_add_the_interior_and_the_second_sample_to_spots_channels():
     assert P.SPOT_TWO_MANIFEST.channel(P.VERIFIER, P.PROOF_SERVER).carries_coins
     assert {s.type: s.kind for s in P.SPOT_TWO_MANIFEST.messages if s.type in ("Interior", "Second")} == {
         "Interior": "commitment", "Second": "coins"}
-    assert P.SPOT_TWO_ID not in {i for subs in P.SUBPROTOCOLS.values() for i in subs.values()}
+    assert P.SPOT_TWO_MANIFEST.protocol == P.SPOT_ID and set(P.PROTOCOLS) == {P.ID, P.SPOT_ID}
+    assert P.SPOT_PROTOCOL.chosen(P.spot_params_of(1, "simulated", 2)) is P.SPOT_TWO_PROTOCOL
+    assert P.SPOT_PROTOCOL.chosen(P.spot_params_of(1, "simulated")) is P.SPOT_PROTOCOL
+    assert P.PROTOCOL.chosen({"levels": 2}) is P.PROTOCOL
 
 
 @pytest.mark.parametrize("machine, reason", [
     (Machine(audited_interior="00" * 64), "the audit's interior is not the interior registration the proof server sent"),
     (Machine(commitment="00" * 64), "the audit's commitment is not the registration the inference server sent")])
 def test_in_two_stages_an_accepting_audit_of_another_record_rejects(machine, reason):
-    (line,) = lines_of(go(machine, protocol=P.SPOT_TWO_ID))
+    (line,) = lines_of(go(machine, levels=2))
     assert (line["verdict"], line["reason"]) == ("reject", reason)
 
 
 def test_in_two_stages_an_unavailable_second_sample_ends_the_verifier_refused_second_with_nothing_proved():
     m = Machine(fails="second")
-    r = go(m, protocol=P.SPOT_TWO_ID)
+    r = go(m, levels=2)
     assert r.outcomes[P.VERIFIER] == {"outcome": {"verdicts": []}, "refused": "second"}
     assert r.outcomes[P.PROOF_SERVER]["refused"] == "closed"
     (why,) = [json.loads(e.data) for e in r.transcripts[P.VERIFIER] if e.dir == "record" and e.kind == "private"]
@@ -360,9 +362,9 @@ def test_in_two_stages_the_proof_server_refuses_a_second_sample_before_its_inter
 
 
 def test_two_stages_replay_from_the_verifiers_own_transcript_and_place_as_spot_does(tmp_path):
-    r = go(Machine(), state=tmp_path, protocol=P.SPOT_TWO_ID)
+    r = go(Machine(), state=tmp_path, levels=2)
     assert r.status == "completed"
-    again = run({"protocol": P.SPOT_TWO_ID, "params": P.spot_params_of(1, "simulated")}, [P.VERIFIER], "replay", None,
+    again = run({"protocol": P.SPOT_ID, "params": P.spot_params_of(1, "simulated", 2)}, [P.VERIFIER], "replay", None,
                 protocols=P.PROTOCOLS, capabilities={P.VERIFIER: Machine().caps()[P.VERIFIER]},
                 replay_dir=tmp_path / "runs" / "1")
     assert (again.status, again.divergence) == ("completed", None)

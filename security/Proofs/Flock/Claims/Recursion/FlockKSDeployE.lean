@@ -74,17 +74,17 @@ open Claims.Recursion
 
 local notation "𝔽" => FlockLevel3.GF128
 
-theorem nextE_rej (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem nextE_rej (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     (h : act false x as cs = .rej) : (nextE x as cs).eval H = (.rej, []) := by
   simp only [nextE, h, Claims.OC.eval]
 
-theorem nextE_coin (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem nextE_coin (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {c : Coin} (h : act false x as cs = .coin c) : (nextE x as cs).eval H = (.msg c.bytes, []) := by
   simp only [nextE, h, Claims.OC.eval]
 
 /-- **Where the element-level verifier answers, the deployed plain one answers alike.** -/
-theorem next_msg_of_nextE (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
-    {m : Claims.Msg} (h : ((nextE x as cs).eval H).1 = .msg m) : ((next false x as cs).eval H).1 = .msg m := by
+theorem next_msg_of_nextE (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
+    {m : Hash.Msg} (h : ((nextE x as cs).eval H).1 = .msg m) : ((next false x as cs).eval H).1 = .msg m := by
   cases ha : act false x as cs with
   | rej => rw [nextE_rej H ha] at h; cases h
   | coin c => rw [nextE_coin H ha] at h; rw [next_coin H ha]; exact h
@@ -92,16 +92,16 @@ theorem next_msg_of_nextE (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as :
     simp only [nextE, ha, outOf, Claims.OC.eval_bind, Claims.OC.eval] at h
     split at h <;> simp at h
 
-theorem refusable_VE (H : Claims.Msg → Claims.Msg) : Refusable H VE := fun x =>
+theorem refusable_VE (H : Hash.Msg → Hash.Msg) : Refusable H VE := fun x =>
   ⟨[], fun as cs => by
     show ((nextE x (as ++ [[]]) cs).eval H).1 ≠ .acc
     rw [nextE_rej H (act_snoc_nil false x as cs)]
     exact fun h => Claims.Out.noConfusion h⟩
 
-theorem coinsShown_VE (H : Claims.Msg → Claims.Msg) : CoinsShown H VE decCoin :=
+theorem coinsShown_VE (H : Hash.Msg → Hash.Msg) : CoinsShown H VE decCoin :=
   fun x as cs c m hl h => coinsShown_V H false x as cs c m hl (next_msg_of_nextE (cs := cs ++ [c]) H h)
 
-theorem decideFree_VE (H : Claims.Msg → Claims.Msg) : DecideFree H VE := by
+theorem decideFree_VE (H : Hash.Msg → Hash.Msg) : DecideFree H VE := by
   intro x as cs c c' hl hacc
   show (nextE x as (cs ++ [c'])).eval H = (nextE x as (cs ++ [c])).eval H
   change ((nextE x as (cs ++ [c])).eval H).1 = .acc at hacc
@@ -127,7 +127,7 @@ theorem decideFree_VE (H : Claims.Msg → Claims.Msg) : DecideFree H VE := by
 
 /-- **Wherever `VE` accepts, the prover sent the rounds of the session the statement sets up against `H`**: the
 element-level verdict's rep streams have their tables' rounds (`streams_size_plainK`), as the shipped verdict's do. -/
-theorem nextE_acc_length_setup (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg}
+theorem nextE_acc_length_setup (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {as : List Hash.Msg}
     {cs : List Coin} (hcs : cs.length = as.length) (h : ((nextE x as cs).eval H).1 = .acc) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Flock.Stmt) (spec' : SessionSpec) (sts' : Array Flock.Stmt),
       setupOf false x = some (s, spec, sts) ∧ setupWith (Claims.hOf H) s.read = .ok (spec', sts') ∧
@@ -199,7 +199,7 @@ theorem servedE {h : ByteArray → ByteArray} {spec : SessionSpec} {sts : Array 
 
 /-- **An accepting step of `VE` at SHA-512** is an accepting element-level verdict at the statement's setup, after
 which the scope check passed. -/
-theorem nextE_acc_check {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem nextE_acc_check {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     (h : ((nextE x as cs).eval sha512).1 = .acc) :
     ∃ ins spec sts record proofs, setupOf false x = some (ins, spec, sts) ∧
       verifyWithE (Claims.hOf sha512) spec (tabsOf sts) record proofs = .ok () ∧ ins.read.check = .ok () := by
@@ -213,7 +213,7 @@ theorem nextE_acc_check {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     cases hsu
     exact ⟨s, spec, sts, f.record, f.proofs, hso, hv, checks_scope hc⟩
 
-theorem accE_check {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 VE x) :
+theorem accE_check {x : Hash.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 VE x) :
     ∃ ins spec sts record proofs, setupOf false x = some (ins, spec, sts) ∧
       verifyWithE (Claims.hOf sha512) spec (tabsOf sts) record proofs = .ok () ∧ ins.read.check = .ok () := by
   unfold Claims.Flock.NoAcc at hacc
@@ -224,7 +224,7 @@ theorem accE_check {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 VE x) :
 
 /-- **`VE` accepts only in scope**, at SHA-512: a statement some run accepts parses, in scope (`acc_inScope`'s
 proof, at the element-level verdict, `servedE`). -/
-theorem accE_inScope (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg}
+theorem accE_inScope (rel : Readable.Parsed → Readable.Relation) {x : Hash.Msg}
     (hacc : ¬ Claims.Flock.NoAcc sha512 VE x) : ∃ s, parse false rel x = some s ∧ Claims.Flock.InScope false s := by
   obtain ⟨ins, spec, sts, record, proofs, hset, hv, hc⟩ := accE_check hacc
   obtain ⟨hi, hs⟩ := setupOf_some hset
@@ -242,7 +242,7 @@ theorem accE_inScope (rel : Readable.Parsed → Readable.Relation) {x : Claims.M
       (hm 0 h0).1
 
 /-- **`VE` accepts only at one table**, at SHA-512: the plain scope admits one (`accE_inScope`). -/
-theorem plainE_hone (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
+theorem plainE_hone (rel : Readable.Parsed → Readable.Relation) (x : Hash.Msg) :
     (∃ s, (deployPlainE rel).parse x = some s ∧ s.tables = 1) ∨
       Claims.Flock.NoAcc sha512 (deployPlainE rel).V x := by
   by_cases hno : Claims.Flock.NoAcc sha512 VE x
@@ -252,7 +252,7 @@ theorem plainE_hone (rel : Readable.Parsed → Readable.Relation) (x : Claims.Ms
     exact .inl ⟨s, hs, (Claims.Flock.Stmt.tables_eq_one_iff s).2 (by simpa using ht)⟩
 
 /-- **`VE`'s `k` range**: at every statement, `k ≥ 8` or `VE` accepts no run at SHA-512 (`k_range_plain`'s proof). -/
-theorem kE_range (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
+theorem kE_range (rel : Readable.Parsed → Readable.Relation) (x : Hash.Msg) :
     8 ≤ (deployPlainE rel).k x ∨ Claims.Flock.NoAcc sha512 (deployPlainE rel).V x := by
   by_cases hacc : Claims.Flock.NoAcc sha512 VE x
   · exact .inr hacc
@@ -272,7 +272,7 @@ theorem kE_range (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) 
   exact le_trans (two_pow_le hlen) (N₀_ge_of_setup hs h0)
 
 /-- **An accepted run of `VE` ends on a final message on the statement**, at a statement that sets up. -/
-theorem accE_last {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem accE_last {H : Hash.Msg → Hash.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin (VE.k x) → Coin} (h : (Claims.run H P VE x ω r).out = .acc) :
     ∃ s spec sts f, setupOf false x = some (s, spec, sts) ∧ lastFinal (Claims.run H P VE x ω r).seen = some f ∧
       f.stmt = x := by
@@ -291,7 +291,7 @@ theorem accE_last {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover
 
 /-- **An accepted run of `VE` opens columns of the reader's table 0**: each has the statement's table 0's level-0
 width (`acc_cols`'s proof). -/
-theorem accE_cols {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem accE_cols {H : Hash.Msg → Hash.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin (VE.k x) → Coin} (h : (Claims.run H P VE x ω r).out = .acc) {q : ℕ} {u : List 𝔽}
     (hu : Claims.Flock.lookCol (cols false (Claims.run H P VE x ω r).seen 0) q = some u) :
     ∃ spec st, (tables false x).head? = some (spec, st) ∧
@@ -312,7 +312,7 @@ theorem accE_cols {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover
   · simp [Claims.Flock.lookCol] at hu
 
 /-- **`ColsOk` at the plain record at `VE`**: an accepted run opens only columns of the zero column's width. -/
-theorem plainE_colsOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
+theorem plainE_colsOk (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.ColsOk H (deployPlainE rel) (wordLen false) (wide false) := by
   intro x Ω P ω r q u hacc _ hu
   obtain ⟨spec, st, hh, hl⟩ := accE_cols hacc hu
@@ -321,7 +321,7 @@ theorem plainE_colsOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed →
 
 /-- **The trimmed record at `VE`'s `k` range, with the relation split**, where the statement has one table wherever
 `VE` accepts some run (`plainE_hone`). -/
-theorem plainE_kSplits (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
+theorem plainE_kSplits (rel : Readable.Parsed → Readable.Relation) (x : Hash.Msg) :
     (8 ≤ ((deployPlainE rel).mapCols trimCol).k x ∧ Claims.Flock.Splits ((deployPlainE rel).mapCols trimCol) x) ∨
       Claims.Flock.NoAcc sha512 ((deployPlainE rel).mapCols trimCol).V x :=
   (kE_range rel x).elim

@@ -1,4 +1,4 @@
-"""prove_time.sh on a templated statement (`flock-circuit/tmpl`, a census read such as `EmbeddingRead_v1`), on its own
+"""prove_time.sh on a templated statement (`flock-circuit/tmpl`, a census read such as `EmbeddingRead_v2`), on its own
 functions lifted out of the script and run against stubs of stage.py, flock-tmpl-unit and flock-circuit. Its stage step
 places the unit stage.py writes (unit.tmpl at unit.layout's mode) as unit.placed, also for a statement staged before this
 step placed units, and leaves no unit.placed when flock-tmpl-unit fails. Its prove step passes unit.placed as --tmpl-unit to

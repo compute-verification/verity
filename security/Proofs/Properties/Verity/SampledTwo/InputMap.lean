@@ -96,11 +96,11 @@ record `run` of the input `i` names `accept`; `i` holds an interior `it` on the 
 two-stage rule; and the sampling design the last step holds the interior audit's sample to is `Select.secondSamplingDesign` of the proved
 units of `run`'s `draw`, over the cells of `it`'s replay block under `it`'s query, at the rule's counts over them:
 the cells and counts the run's own second stage samples over. -/
-theorem accepted_samplingDesign_run {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+theorem accepted_samplingDesign_run {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
-    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
+    (h : checkBlobsAtInner p c ξ e bs = .accept pub prof) :
     ∃ c₂ ξ₂ r i run samplingDesign it grain replay k ns ids ks,
-      inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ Spot.Run.run i true = .ok run ∧
+      inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ Spot.Run.run i = .ok run ∧
       Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true ∧
       secondCheck p.audit.base.verifier p.audit.base.delta c₂ samplingDesign ξ₂ { e.interior.base with verdicts := r.out } =
         .accept pub prof ∧
@@ -109,7 +109,7 @@ theorem accepted_samplingDesign_run {form : Bool} {p : Params} {c : OneStage.Com
       Select.replayCells it.replay it.params.verifier.query = .ok ns ∧
       Select.templateIds it.params.verifier.query = .ok ids ∧ k.over ids ns = .ok ks ∧
       samplingDesign = Select.secondSamplingDesign ((Draw.proved (Spot.getD run "draw")).map Int.toNat) ns ks := by
-  obtain ⟨-, c₂, ξ₂, r, i, run, hi, hr, -, -, hj, samplingDesign, hl, htwo⟩ := accepted_steps h
+  obtain ⟨c₂, ξ₂, r, i, run, hi, hr, -, -, hj, samplingDesign, hl, htwo⟩ := accepted_steps h
   obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, hio, -, -⟩ := inputAt_ok hi
   obtain ⟨grain, replay, k, ns, ids, ks, hk, hns, hids, hks, hlaw⟩ := secondSamplingDesignOf_ok hl
   obtain ⟨it, hit, hp, hrep, hsrc⟩ :=

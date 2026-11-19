@@ -84,7 +84,7 @@ a token, so `Proofs/ResourceAccounting.lean` imports it.
 
 namespace Flock.SoundAtBridge.RowsSession
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.ZkReg
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 

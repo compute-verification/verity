@@ -65,7 +65,7 @@ def JointPeriodLive : Prop :=
 claim fails is at most `∑_a (δ_a(s) + loss_a(q_a(s) / 2^256))`. -/
 def JointPeriodLiveECR : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (C : Verity.Circuit) (O : Type) (G : Verity.Game O)
-    (r : PeriodLive d α C G) (H : Claims.Msg → Claims.Msg) (c : Certificates)
+    (r : PeriodLive d α C G) (H : Hash.Msg → Hash.Msg) (c : Certificates)
     (δ : Audit → Verity.Game.Strategy G → ℝ≥0∞) (loss : Audit → ℝ≥0∞ → ℝ≥0∞)
     (q : Audit → Verity.Game.Strategy G → ℝ),
     (∀ a, r.Sound c a (fun s => r.error H a (δ a s) (loss a) s)) →

@@ -2,7 +2,8 @@
 v0.4): an accepted row carries the verifier's commit, its accept line verbatim and the transcript as `<run>:<path>
 sha256:<hex>`, in the form `panel.py append` takes; a rejected, missing or stale transcript, a per-shape command that fails,
 an arm without a verifier, and a run without a run id or commit are not accepted; the same per-run command runs once; a bad
-declaration is refused before timing. The verifiers are small scripts shaped like GPU 1's `verify.py` (one run, one line per
+declaration is refused before timing. The transcripts are read from the run's passes directory, outside the run's, which a
+result must name and which can't share the run's directory; what the commands decide goes to the run's ``verdicts/``. The verifiers are small scripts shaped like GPU 1's `verify.py` (one run, one line per
 transcript) and GPU 5's replay (prove, then verify, per shape)."""
 
 from __future__ import annotations
@@ -49,7 +50,7 @@ else:
 
 def per_run(script: Path) -> dict:
     return {"per": "run", "transcript": "transcripts/{arm}/{shape}/manifest.json",
-            "commands": [["{python}", str(script), "{run_dir}", "{commit}"]]}
+            "commands": [["{python}", str(script), "{passes}", "{commit}"]]}
 
 
 def per_shape(script: Path) -> dict:
@@ -73,8 +74,12 @@ def result(run_dir: Path, verifiers: dict, clocks: bool = True) -> Path:
             for n, v in verifiers.items()}
     run_dir.mkdir(parents=True, exist_ok=True)
     path = run_dir / "bench.json"
-    path.write_text(json.dumps({"shapes": shapes, "arms": arms}))
+    path.write_text(json.dumps({"shapes": shapes, "arms": arms, "args": {"passes": str(passes_of(run_dir))}}))
     return path
+
+
+def passes_of(run_dir: Path) -> Path:
+    return run_dir.parent / "passes"
 
 
 def script(tmp_path: Path, name: str, text: str) -> Path:
@@ -84,7 +89,7 @@ def script(tmp_path: Path, name: str, text: str) -> Path:
 
 
 def manifest(run_dir: Path, arm: str, shape: str, text: str = "{}") -> str:
-    p = run_dir / "transcripts" / arm / shape / "manifest.json"
+    p = passes_of(run_dir) / "transcripts" / arm / shape / "manifest.json"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(text)
     return hashlib.sha256(text.encode()).hexdigest()
@@ -127,7 +132,7 @@ def test_an_accepted_row_carries_what_panel_py_needs_and_one_run_command_runs_on
 def test_a_rejected_missing_or_unnamed_transcript_is_not_accepted_and_the_step_fails(tmp_path):
     run_dir = tmp_path / "run"
     v = script(tmp_path, "v.py", RUN_VERIFIER)
-    named = run_dir / "transcripts" / "st" / PREFILL / "manifest.json"
+    named = passes_of(run_dir) / "transcripts" / "st" / PREFILL / "manifest.json"
     stale = script(tmp_path, "stale.py", "import hashlib\n"
                                          f"print('ACCEPT another transcript sha256:{'0' * 64}')\n"
                                          f"sha = hashlib.sha256(open({str(named)!r}, 'rb').read()).hexdigest()\n"
@@ -156,15 +161,15 @@ def test_per_shape_commands_run_for_each_shape_and_a_failing_one_rejects_only_it
     v = script(tmp_path, "r.py", SHAPE_VERIFIER)
     path = result(run_dir, {"c4": per_shape(v)})
     for s, text in ((PREFILL, "good dump"), (DECODE, "bad dump")):
-        (run_dir / "transcripts" / f"c4-{s}").mkdir(parents=True)
-        (run_dir / "transcripts" / f"c4-{s}" / "dump").write_text(text)
+        (passes_of(run_dir) / "transcripts" / f"c4-{s}").mkdir(parents=True)
+        (passes_of(run_dir) / "transcripts" / f"c4-{s}" / "dump").write_text(text)
     code, res = run(path)
     assert code == V.EXIT_REJECTED
     cmds = res["verification"]["commands"]
     assert len(cmds) == 4 and [c["exit"] for c in cmds] == [0, 0, 0, 1]
     assert cmds[1]["argv"][-2:] == [f"{RUN}:{PREFILL}", COMMIT]
     p = panel(res, "c4", PREFILL)
-    t = run_dir / "transcripts" / f"c4-{PREFILL}" / "transcript.json"
+    t = passes_of(run_dir) / "transcripts" / f"c4-{PREFILL}" / "transcript.json"
     sha = hashlib.sha256(t.read_bytes()).hexdigest()
     assert json.loads(t.read_text()) == {"dump": "good dump", "run": RUN}
     assert p["transcript"] == f"{RUN}:transcripts/c4-{PREFILL}/transcript.json sha256:{sha}"
@@ -253,8 +258,8 @@ GOOD = {"transcript": "transcripts/{arm}/{shape}/t.json", "commands": [["{python
 
 @pytest.mark.parametrize("bad, why", [
     ({"per": "tile"}, "per 'tile'"),
-    ({"transcript": "/abs/{arm}/{shape}"}, "inside the run's directory"),
-    ({"transcript": "../x/{arm}/{shape}"}, "inside the run's directory"),
+    ({"transcript": "/abs/{arm}/{shape}"}, "inside the passes directory"),
+    ({"transcript": "../x/{arm}/{shape}"}, "inside the passes directory"),
     ({"transcript": "t/{arm}.json"}, "must name {arm} and {shape}"),
     ({"transcript": "t/{arm}/{shape}/{run_id}"}, "must name {arm} and {shape}"),
     ({"commands": []}, "non-empty list"),
@@ -277,3 +282,35 @@ def test_check_verifier_normalizes_a_good_one_and_allows_none():
     assert v == {"per": "shape", "transcript": GOOD["transcript"], "commands": GOOD["commands"], "commit": None,
                  "name": "the audit", "control": None}
     assert A.check_verifier("x", {"verifier": v}) == v
+
+
+def test_the_passes_stay_outside_the_run_and_only_the_verdicts_enter_it(tmp_path):
+    """A per-shape verifier reads its transcript in the passes directory and writes its verdict to ``{verdicts}``, under the
+    run's ``verdicts/``; nothing of the pass is written under the run's directory."""
+    run_dir = tmp_path / "run"
+    v = script(tmp_path, "w.py", "import pathlib, sys\npathlib.Path(sys.argv[1], 'verdict.json').write_text('{}')\n"
+                                 "print('ACCEPT sha256:' + __import__('hashlib').sha256(pathlib.Path(sys.argv[2]).read_bytes())"
+                                 ".hexdigest())\n")
+    decl = {"transcript": "transcripts/{arm}/{shape}/manifest.json",
+            "commands": [["{python}", str(v), "{verdicts}", "{transcript}"]]}
+    path = result(run_dir, {"pc": decl})
+    for s in SHAPES:
+        manifest(run_dir, "pc", s)
+    code, res = run(path)
+    assert code == V.EXIT_OK, res["verification"]
+    for s in SHAPES:
+        assert (run_dir / "verdicts" / "transcripts" / "pc" / s / "verdict.json").is_file()
+        assert not (passes_of(run_dir) / "transcripts" / "pc" / s / "verdict.json").exists()
+    assert not (run_dir / "transcripts").exists()
+
+
+@pytest.mark.parametrize("where", [None, "run", "inside"])
+def test_a_result_naming_no_passes_or_the_run_s_own_directory_is_a_usage_error(tmp_path, where):
+    run_dir = tmp_path / "run"
+    v = script(tmp_path, "v.py", RUN_VERIFIER)
+    path = result(run_dir, {"pc": per_run(v)})
+    res = json.loads(path.read_text())
+    res["args"] = {} if where is None else {"passes": str(run_dir if where == "run" else run_dir / "passes")}
+    path.write_text(json.dumps(res))
+    assert V.main([str(path), "--run-id", RUN, "--commit", COMMIT]) == V.EXIT_USAGE
+    assert "verification" not in json.loads(path.read_text())

@@ -18,7 +18,7 @@ to 100 less the mean.
 
 Tensor Active counts cycles at the clock the card ran (the GPC Clock Frequency metric, sampled with it). ``sm_clock_mhz`` is
 that clock's mean over the window, and ``tensor_active_pct_at_ref`` the tensor-busy cycles over the cycles the window would
-hold at ``--ref-mhz`` (1,830): the mean over samples of Tensor Active times the sample's clock over the reference.
+hold at the card's ``clock.tensor`` (``--card``): the mean over samples of Tensor Active times the sample's clock over the reference.
 
 ``served_stack`` is false for the arms that override serve-openai's engine options and drop the bench row (NOT_SERVED),
 and for a Commit arm served async (``<arm>-async``) unless its bench row declares async scheduling (``serve.json``'s
@@ -228,8 +228,9 @@ def steady_cut(ts: list[int], tv: list[float], clock: tuple[list[int], list[floa
     return got
 
 
-def analyse(sqlite: Path, trace: Path, T: int, sent_s: float | None = None, ref_mhz: float = 1830.0) -> dict[str, Any]:
-    """``sent_s``: when the load's last request was sent (`last_send`), from which the ``queued`` window starts."""
+def analyse(sqlite: Path, trace: Path, T: int, ref_mhz: float, sent_s: float | None = None) -> dict[str, Any]:
+    """``sent_s``: when the load's last request was sent (`last_send`), from which the ``queued`` window starts; ``ref_mhz``:
+    the card's ``clock.tensor``."""
     db = sqlite3.connect(sqlite)
     z = utc0_ns(db)
     names, series = metrics(db)
@@ -346,18 +347,20 @@ def row_declares_async(serve_dir: Path | None) -> bool:
     return (doc.get("row_scheduling") or {}).get("async_scheduling") is True
 
 
+#: H1's release counts util.txt says
+H1_COUNTS = ("windows", "tied", "untied", "failed", "gate_passed_rows")
+
+
 def windows(serve_dir: Path) -> dict[str, Any]:
-    """windows.jsonl's sizes and timings (no roots, requests or rows), and summary.json's counts."""
+    """windows.jsonl's and summary.json's aggregates: the windows closed and passed, their committed size and seconds
+    (mean, max), the engine's steps and whether it failed, and H1's release counts. No window's own row, error text,
+    pause or request."""
     got: dict[str, Any] = {}
     p = serve_dir / "windows.jsonl"
     if p.exists():
-        recs = [json.loads(x) for x in p.read_text().splitlines() if x.strip()]
-        keep = ("window", "steps", "committed_bytes", "passed", "seconds", "close_phases_s", "on_loop_phases_s", "error")
-        rows = [{k: r[k] for k in keep if k in r} | ({"pouw_h1_seconds": r["pouw_h1"].get("seconds"), "pouw_h1_tied": r["pouw_h1"].get("tied"),
-                                                      "pouw_h1_error": (r["pouw_h1"].get("error") or None) and str(r["pouw_h1"]["error"])[:300]}
-                                                     if isinstance(r.get("pouw_h1"), dict) else {})
-                for r in recs]
-        got["windows"] = rows
+        rows = [json.loads(x) for x in p.read_text().splitlines() if x.strip()]
+        got["windows"] = {"closed": len(rows), "passed": sum(1 for r in rows if r.get("passed")),
+                          "h1_failed": sum(1 for r in rows if isinstance(r.get("pouw_h1"), dict) and r["pouw_h1"].get("error"))}
         sizes = [r["committed_bytes"] for r in rows if r.get("committed_bytes")]
         if sizes:
             got["committed_GB_per_window"] = {"mean": round(statistics.fmean(sizes) / 1e9, 3), "max": round(max(sizes) / 1e9, 3)}
@@ -368,9 +371,10 @@ def windows(serve_dir: Path) -> dict[str, Any]:
     s = serve_dir / "summary.json"
     if s.exists():
         doc = json.loads(s.read_text())
-        got["summary"] = {k: doc.get(k) for k in ("served", "engine_steps", "engine_error", "stopped_by", "pauses", "sealer", "release")}
-        if isinstance(doc.get("commit"), dict):
-            got["summary"]["commit"] = {k: v for k, v in doc["commit"].items() if not isinstance(v, (list, dict)) or k in ("seals", "pouw_h1")}
+        got["summary"] = {"engine_steps": doc.get("engine_steps"), "engine_failed": doc.get("engine_error") is not None}
+        h1 = (doc.get("commit") or {}).get("pouw_h1") if isinstance(doc.get("commit"), dict) else None
+        if isinstance(h1, dict):
+            got["summary"]["pouw_h1"] = {k: h1.get(k) for k in H1_COUNTS}
     return got
 
 
@@ -383,12 +387,15 @@ def main() -> int:
     ap.add_argument("--arm", default=None)
     ap.add_argument("--serve-dir", type=Path, default=None)
     ap.add_argument("--timings", type=Path, default=None)
-    ap.add_argument("--ref-mhz", type=float, default=1830.0)
+    ap.add_argument("--card", required=True, help="the card's sku: its clock.tensor is the reference clock")
     ap.add_argument("--out", required=True, type=Path)
     a = ap.parse_args()
+    from verity.device import load_card, number
+    from verity_bench import kit
+    ref_mhz = float(number(load_card(a.card, directory=kit.cards_directory())["clock"]["tensor"]))
     served = a.arm not in NOT_SERVED and (not str(a.arm).endswith("-async") or row_declares_async(a.serve_dir))
     doc: dict[str, Any] = {"arm": a.arm, "served_stack": served, "T": a.T, "N": a.N,
-                           **analyse(a.sqlite, a.trace, a.T, last_send(a.timings), a.ref_mhz)}
+                           **analyse(a.sqlite, a.trace, a.T, ref_mhz, last_send(a.timings))}
     if a.serve_dir is not None:
         doc["serve"] = windows(a.serve_dir)
     if a.timings is not None and a.timings.exists():
@@ -398,13 +405,12 @@ def main() -> int:
         doc["load"] = {"requests": len(reqs), "ok": sum(1 for r in reqs if r.get("ok")), "span_s": round(max(done), 3) if done else None,
                        "last_send_s": round(max(sent), 3) if sent else None}
     a.out.write_text(json.dumps(doc, indent=1))
-    if rows := doc.get("serve", {}).get("windows"):
-        print(f"WINDOWS {len(rows)} closed, {sum(1 for r in rows if r.get('passed'))} passed, committed GB a window "
+    if w := doc.get("serve", {}).get("windows"):
+        print(f"WINDOWS {w['closed']} closed, {w['passed']} passed, committed GB a window "
               f"{doc['serve'].get('committed_GB_per_window')}, seconds {doc['serve'].get('window_seconds')}")
-    if h1 := (doc.get("serve", {}).get("summary", {}).get("commit") or {}).get("pouw_h1"):
-        why = next((r["pouw_h1_error"] for r in doc["serve"].get("windows", []) if r.get("pouw_h1_error")), None)
+    if h1 := doc.get("serve", {}).get("summary", {}).get("pouw_h1"):
         print(f"H1 {h1.get('windows')} windows released, {h1.get('tied')} tied, untied {h1.get('untied')}, failed {h1.get('failed')}, "
-              f"gate-passed rows {h1.get('gate_passed_rows')}" + (f"; first failure: {why}" if why else ""))
+              f"gate-passed rows {h1.get('gate_passed_rows')}, {(w or {}).get('h1_failed', 0)} windows with an H1 error (the serve dir's windows.jsonl)")
     for key in ("queued", "queued_body", "all", "all_body"):
         w = doc.get(key)
         if not isinstance(w, dict) or "tensor_active_pct" not in w:

@@ -89,33 +89,33 @@ open Flock
 open FlockDeploy (Coin)
 open scoped NNReal
 
-variable {N Ω : Claims.Msg → Type} [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)] [∀ x, Fintype (Ω x)]
+variable {N Ω : Hash.Msg → Type} [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)] [∀ x, Fintype (Ω x)]
   [∀ x, Nonempty (Ω x)]
 
 /-- **An inner zerocheck outer coin is `1`** in the transcript `ms`: at some outer coin slot of the inner statement
 (`FlockComplete.outerSlots`), the verifier's answer is a coin's bytes whose element there is `1` (`FlockComplete.Bad`
 on the answers). -/
-def badAt (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) : Prop :=
+def badAt (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out)) : Prop :=
   ∃ p ∈ FlockComplete.outerSlots (xIOf x), ∃ c : Coin,
     (ms[p.1]?).map Prod.snd = some (Claims.Out.msg c.bytes) ∧ c.at p.2 = 1
 
 /-- The rounds whose starts the stop is read at, and the one after: the inner rounds of `IV` and the staging round. -/
-def stopRounds (IV : Claims.Verifier Coin) (x : Claims.Msg) : ℕ := IV.k (xIOf x) + kS x
+def stopRounds (IV : Claims.Verifier Coin) (x : Hash.Msg) : ℕ := IV.k (xIOf x) + kS x
 
 /-- **An answer before the sessions is not a coin's bytes**: among the inner and staging rounds of `ms`, the verifier
 answered one with something other than `.msg c.bytes`. -/
-def uncoinedAt (IV : Claims.Verifier Coin) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) : Prop :=
+def uncoinedAt (IV : Claims.Verifier Coin) (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out)) : Prop :=
   ∃ p ∈ ms.take (stopRounds IV x), ∀ c : Coin, p.2 ≠ Claims.Out.msg c.bytes
 
 /-- **Some part's staged numbers are not `nums`'** once `ms` has passed the inner and staging rounds: the compiled
 verifier refuses that part's session (`ract`). -/
-def mismatchAt (IV : Claims.Verifier Coin) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) :
+def mismatchAt (IV : Claims.Verifier Coin) (st : Stage) (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out)) :
     Prop :=
   stopRounds IV x ≤ ms.length ∧ ∃ s < nS x, numsOf (staged st x (ms.take (stopRounds IV x)) s) ≠ nums st x s
 
 /-- **Some part's staged V\* statement is one the masked verifier can't accept** at SHA-512 once `ms` has passed the
 inner and staging rounds: `readyO` at the run's own staged statement, not `pick`'s. -/
-def unreadyAt (IV : Claims.Verifier Coin) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) :
+def unreadyAt (IV : Claims.Verifier Coin) (st : Stage) (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out)) :
     Prop :=
   stopRounds IV x ≤ ms.length ∧
     ∃ s < nS x, readyO FlockDeploy.sha512 (staged st x (ms.take (stopRounds IV x)) s) = false
@@ -125,14 +125,14 @@ open Classical in
 verifier can't accept at SHA-512 (read off the statement), an answer before the sessions that is not a coin's bytes,
 an inner zerocheck outer coin at `1`, or a part's staged V\* statement the masked verifier can't accept or whose
 numbers are not the statement's. -/
-noncomputable def stopsRec (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (st : Stage) (x : Claims.Msg)
-    (ms : List (Claims.Msg × Claims.Out)) : Bool :=
+noncomputable def stopsRec (IV : Claims.Verifier Coin) (ivScope : Hash.Msg → Bool) (st : Stage) (x : Hash.Msg)
+    (ms : List (Hash.Msg × Claims.Out)) : Bool :=
   !scopeCheck ivScope x || !FlockComplete.ready FlockDeploy.sha512 (xIOf x) || decide (uncoinedAt IV x ms) ||
     decide (badAt x ms) || decide (unreadyAt IV st x ms) || decide (mismatchAt IV st x ms)
 
 /-- **The reference prover with the deployed stop**: `refP`, except that once `stopsRec` has held at the start of a
 round up to `stopRounds` it sends the empty message. -/
-noncomputable def refPStop (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
+noncomputable def refPStop (IV : Claims.Verifier Coin) (ivScope : Hash.Msg → Bool) (b : Brings)
     (w : Claims.Flock.Wit) : Claims.Prover (Tape b) :=
   ⟨fun x hist ω =>
     if (List.range (min hist.length (stopRounds IV x) + 1)).any
@@ -143,10 +143,10 @@ noncomputable def refPStop (IV : Claims.Verifier Coin) (ivScope : Claims.Msg →
 stop `stopsRec`, which reads no oracle; the reference prover's tape at each statement `x` sampled from the finite nonce
 and rest `N x × Ω x` by `tapeOf x`, the outer simulators `SO`, and the inner rounds' commit strings `nAt` in the
 layout `innerMsg`. -/
-noncomputable def deployRecStop (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
-    (tapeOf : (x : Claims.Msg) → N x × Ω x → Tape b) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim)
-    (nAt : Claims.Msg → ℕ → ℕ)
-    (innerMsg : Claims.Msg → List (Claims.Msg × Claims.Out) → List Claims.Msg → Claims.OC Claims.Msg) :
+noncomputable def deployRecStop (IV : Claims.Verifier Coin) (ivScope : Hash.Msg → Bool) (b : Brings)
+    (tapeOf : (x : Hash.Msg) → N x × Ω x → Tape b) (SO : ℕ → Hash.Msg → ℕ → Claims.Recursion.OSim)
+    (nAt : Hash.Msg → ℕ → ℕ)
+    (innerMsg : Hash.Msg → List (Hash.Msg × Claims.Out) → List Hash.Msg → Claims.OC Hash.Msg) :
     Claims.Recursion.StopDeploy Coin :=
   { deployRec IV ivScope b with
     Tape := Tape b
@@ -161,21 +161,21 @@ noncomputable def deployRecStop (IV : Claims.Verifier Coin) (ivScope : Claims.Ms
 
 /-- **`ZKStop` reads the record's own reference prover**: at each statement `x`, `refPStop` on the tape `tapeOf x`
 samples. -/
-theorem prover_deployRecStop (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
-    (tapeOf : (x : Claims.Msg) → N x × Ω x → Tape b) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim)
-    (nAt : Claims.Msg → ℕ → ℕ)
-    (innerMsg : Claims.Msg → List (Claims.Msg × Claims.Out) → List Claims.Msg → Claims.OC Claims.Msg)
-    (w : Claims.Flock.Wit) (x : Claims.Msg) :
+theorem prover_deployRecStop (IV : Claims.Verifier Coin) (ivScope : Hash.Msg → Bool) (b : Brings)
+    (tapeOf : (x : Hash.Msg) → N x × Ω x → Tape b) (SO : ℕ → Hash.Msg → ℕ → Claims.Recursion.OSim)
+    (nAt : Hash.Msg → ℕ → ℕ)
+    (innerMsg : Hash.Msg → List (Hash.Msg × Claims.Out) → List Hash.Msg → Claims.OC Hash.Msg)
+    (w : Claims.Flock.Wit) (x : Hash.Msg) :
     (deployRecStop IV ivScope b tapeOf SO nAt innerMsg).prover w x =
       ⟨fun x' hist ω => (refPStop IV ivScope b w).next x' hist (tapeOf x ω)⟩ :=
   rfl
 
 /-- **Where the stop has fired, the reference prover sends the empty message**, `SimStop`'s message there. -/
-theorem refPStop_halted (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
-    (tapeOf : (x : Claims.Msg) → N x × Ω x → Tape b) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim)
-    (nAt : Claims.Msg → ℕ → ℕ)
-    (innerMsg : Claims.Msg → List (Claims.Msg × Claims.Out) → List Claims.Msg → Claims.OC Claims.Msg)
-    (H : Claims.Msg → Claims.Msg) (w : Claims.Flock.Wit) (x : Claims.Msg) (hist : List (Claims.Msg × Claims.Msg))
+theorem refPStop_halted (IV : Claims.Verifier Coin) (ivScope : Hash.Msg → Bool) (b : Brings)
+    (tapeOf : (x : Hash.Msg) → N x × Ω x → Tape b) (SO : ℕ → Hash.Msg → ℕ → Claims.Recursion.OSim)
+    (nAt : Hash.Msg → ℕ → ℕ)
+    (innerMsg : Hash.Msg → List (Hash.Msg × Claims.Out) → List Hash.Msg → Claims.OC Hash.Msg)
+    (H : Hash.Msg → Hash.Msg) (w : Claims.Flock.Wit) (x : Hash.Msg) (hist : List (Hash.Msg × Hash.Msg))
     (ω : Tape b)
     (h : (deployRecStop IV ivScope b tapeOf SO nAt innerMsg).halted H (stopRounds IV x) x (asRounds hist) = true) :
     (refPStop IV ivScope b w).next x hist ω = .ret [] := by
@@ -186,11 +186,11 @@ theorem refPStop_halted (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bo
   simp only [refPStop, h', ↓reduceIte]
 
 /-- **Where it hasn't, the reference prover is `refP`.** -/
-theorem refPStop_live (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
-    (tapeOf : (x : Claims.Msg) → N x × Ω x → Tape b) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim)
-    (nAt : Claims.Msg → ℕ → ℕ)
-    (innerMsg : Claims.Msg → List (Claims.Msg × Claims.Out) → List Claims.Msg → Claims.OC Claims.Msg)
-    (H : Claims.Msg → Claims.Msg) (w : Claims.Flock.Wit) (x : Claims.Msg) (hist : List (Claims.Msg × Claims.Msg))
+theorem refPStop_live (IV : Claims.Verifier Coin) (ivScope : Hash.Msg → Bool) (b : Brings)
+    (tapeOf : (x : Hash.Msg) → N x × Ω x → Tape b) (SO : ℕ → Hash.Msg → ℕ → Claims.Recursion.OSim)
+    (nAt : Hash.Msg → ℕ → ℕ)
+    (innerMsg : Hash.Msg → List (Hash.Msg × Claims.Out) → List Hash.Msg → Claims.OC Hash.Msg)
+    (H : Hash.Msg → Hash.Msg) (w : Claims.Flock.Wit) (x : Hash.Msg) (hist : List (Hash.Msg × Hash.Msg))
     (ω : Tape b)
     (h : (deployRecStop IV ivScope b tapeOf SO nAt innerMsg).halted H (stopRounds IV x) x (asRounds hist) = false) :
     (refPStop IV ivScope b w).next x hist ω = (refP IV b w).next x hist ω := by
@@ -202,11 +202,11 @@ theorem refPStop_live (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool
 
 /-- **The stop fires at the first round on a statement out of scope, or whose inner statement the inner verifier
 can't accept**: it reads the statement alone. -/
-theorem halted_of_statement (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
-    (tapeOf : (x : Claims.Msg) → N x × Ω x → Tape b) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim)
-    (nAt : Claims.Msg → ℕ → ℕ)
-    (innerMsg : Claims.Msg → List (Claims.Msg × Claims.Out) → List Claims.Msg → Claims.OC Claims.Msg)
-    (H : Claims.Msg → Claims.Msg) (n : ℕ) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out))
+theorem halted_of_statement (IV : Claims.Verifier Coin) (ivScope : Hash.Msg → Bool) (b : Brings)
+    (tapeOf : (x : Hash.Msg) → N x × Ω x → Tape b) (SO : ℕ → Hash.Msg → ℕ → Claims.Recursion.OSim)
+    (nAt : Hash.Msg → ℕ → ℕ)
+    (innerMsg : Hash.Msg → List (Hash.Msg × Claims.Out) → List Hash.Msg → Claims.OC Hash.Msg)
+    (H : Hash.Msg → Hash.Msg) (n : ℕ) (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out))
     (h : scopeCheck ivScope x = false ∨ FlockComplete.ready FlockDeploy.sha512 (xIOf x) = false) :
     (deployRecStop IV ivScope b tapeOf SO nAt innerMsg).halted H n x ms = true := by
   unfold Claims.Recursion.StopDeploy.halted
@@ -217,21 +217,21 @@ theorem halted_of_statement (IV : Claims.Verifier Coin) (ivScope : Claims.Msg �
 /-! ## The stop doesn't fire everywhere in scope -/
 
 /-- **Every answer of `ms` is a coin's bytes**, as the compiled verifier sends them. -/
-def Coined (ms : List (Claims.Msg × Claims.Out)) : Prop := ∀ p ∈ ms, ∃ c : Coin, p.2 = Claims.Out.msg c.bytes
+def Coined (ms : List (Hash.Msg × Claims.Out)) : Prop := ∀ p ∈ ms, ∃ c : Coin, p.2 = Claims.Out.msg c.bytes
 
-theorem not_uncoinedAt (IV : Claims.Verifier Coin) (x : Claims.Msg) {ms : List (Claims.Msg × Claims.Out)}
+theorem not_uncoinedAt (IV : Claims.Verifier Coin) (x : Hash.Msg) {ms : List (Hash.Msg × Claims.Out)}
     (hc : Coined ms) : ¬ uncoinedAt IV x ms := fun ⟨p, hp, hn⟩ =>
   let ⟨c, hpc⟩ := hc p (List.mem_of_mem_take hp)
   hn c hpc
 
-theorem Coined.take {ms : List (Claims.Msg × Claims.Out)} (hc : Coined ms) (i : ℕ) : Coined (ms.take i) :=
+theorem Coined.take {ms : List (Hash.Msg × Claims.Out)} (hc : Coined ms) (i : ℕ) : Coined (ms.take i) :=
   fun p hp => hc p (List.mem_of_mem_take hp)
 
 /-- **Before the staging round the stop fires only at an answer that is not a coin's bytes or a bad inner coin**, at a
 statement in scope whose inner statement the inner verifier can accept at SHA-512: the readiness and the numbers of
 the staged statements are read only past the staging round. -/
-theorem stopsRec_live (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (st : Stage) (x : Claims.Msg)
-    (ms : List (Claims.Msg × Claims.Out)) (hs : scopeCheck ivScope x = true)
+theorem stopsRec_live (IV : Claims.Verifier Coin) (ivScope : Hash.Msg → Bool) (st : Stage) (x : Hash.Msg)
+    (ms : List (Hash.Msg × Claims.Out)) (hs : scopeCheck ivScope x = true)
     (hr : FlockComplete.ready FlockDeploy.sha512 (xIOf x) = true) (hl : ms.length < stopRounds IV x)
     (hc : Coined ms) (hb : ¬ badAt x ms) : stopsRec IV ivScope st x ms = false := by
   have hu : ¬ unreadyAt IV st x ms := fun h => absurd h.1 (by omega)
@@ -241,11 +241,11 @@ theorem stopsRec_live (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool
 /-- **The prover with the stop runs the inner rounds**: at a statement in scope whose inner statement the inner
 verifier can accept at SHA-512, before the staging round, where every answer is a coin's bytes and no prefix of the
 transcript holds a bad inner coin, the reference prover hasn't stopped. -/
-theorem halted_live (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
-    (tapeOf : (x : Claims.Msg) → N x × Ω x → Tape b) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim)
-    (nAt : Claims.Msg → ℕ → ℕ)
-    (innerMsg : Claims.Msg → List (Claims.Msg × Claims.Out) → List Claims.Msg → Claims.OC Claims.Msg)
-    (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out))
+theorem halted_live (IV : Claims.Verifier Coin) (ivScope : Hash.Msg → Bool) (b : Brings)
+    (tapeOf : (x : Hash.Msg) → N x × Ω x → Tape b) (SO : ℕ → Hash.Msg → ℕ → Claims.Recursion.OSim)
+    (nAt : Hash.Msg → ℕ → ℕ)
+    (innerMsg : Hash.Msg → List (Hash.Msg × Claims.Out) → List Hash.Msg → Claims.OC Hash.Msg)
+    (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out))
     (hs : scopeCheck ivScope x = true) (hr : FlockComplete.ready FlockDeploy.sha512 (xIOf x) = true)
     (hl : ms.length < stopRounds IV x) (hc : Coined ms) (hb : ∀ i ≤ ms.length, ¬ badAt x (ms.take i)) :
     (deployRecStop IV ivScope b tapeOf SO nAt innerMsg).halted H (stopRounds IV x) x ms = false := by
@@ -260,11 +260,11 @@ theorem halted_live (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) 
 
 /-- **The recursion's `ZKStop` at `deployRecStop` is its bound**: the outer record is the masked one, and the rest is
 `ZKmalRx` of the record's own reference prover at `SimStop` within `εzkStop + γzk · Pr[Fork]`. -/
-theorem zkStop_deployRecStop_iff (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin)
-    (ivScope : Claims.Msg → Bool) (b : Brings) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
-    (relO : Readable.Parsed → Readable.Relation) (tapeOf : (x : Claims.Msg) → N x × Ω x → Tape b)
-    (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim) (nAt : Claims.Msg → ℕ → ℕ)
-    (innerMsg : Claims.Msg → List (Claims.Msg × Claims.Out) → List Claims.Msg → Claims.OC Claims.Msg) :
+theorem zkStop_deployRecStop_iff (H : Hash.Msg → Hash.Msg) (IV : Claims.Verifier Coin)
+    (ivScope : Hash.Msg → Bool) (b : Brings) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
+    (relO : Readable.Parsed → Readable.Relation) (tapeOf : (x : Hash.Msg) → N x × Ω x → Tape b)
+    (SO : ℕ → Hash.Msg → ℕ → Claims.Recursion.OSim) (nAt : Hash.Msg → ℕ → ℕ)
+    (innerMsg : Hash.Msg → List (Hash.Msg × Claims.Out) → List Hash.Msg → Claims.OC Hash.Msg) :
     Claims.Recursion.ZKStop H (deployRecStop IV ivScope b tapeOf SO nAt innerMsg) I (deployZkRec relO) ↔
       ∀ t, 0 < t → ∀ δ₁ : ℝ≥0,
         Claims.Hm96Hiding (deployRecStop IV ivScope b tapeOf SO nAt innerMsg).mask

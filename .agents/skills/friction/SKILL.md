@@ -38,11 +38,10 @@ Most friction is. Fix it at the source, in the PR you're working on or a small o
 - a bug in a shared tool that stops it doing what its own docs or help say;
 - a wrong or missing command, flag or gotcha in a skill or a `kb/` doc;
 - a failure message that didn't say how to fix the failure;
-- a flaky test: delete it; a needlessly slow one: shrink it or delete it;
-- a loop of yours that keeps you waiting, a build, run or check you repeat that takes more than about 10 minutes: make it
-  incremental, warm or cached.
+- a flaky test: delete it; a needlessly slow one: shrink or delete it;
+- a build, run or check you repeat that takes over about 10 minutes: make it incremental, warm or cached.
 
-Say what you fixed in the PR description. It needs no note.
+Say what you fixed in the PR; no note needed.
 
 ## 2. Ask, when you can't tell
 
@@ -200,11 +199,13 @@ Protocols and claims:
 - A guarantee's checked family may fold in a check the compiled verifier already runs, or a new fail-closed
   refusal modelled the same way. A free parameter whose adversarial values break a proof is closed by a side condition
   decidable at any literal instantiation, discharged by computation at use, never a listed assumption.
+- The Lean verifier accepts a two-stage run ahead of its proof; the accept's record says what is not covered.
 - Harm is read at a replay block's footprint (GLOSSARY.md, "Two-stage design"), and compute credit charges it whole.
 - The end goal is SPOT through recursion with hidden unit circuits and a hidden partition; the auditor
   checks only padded counts. One key per protecting party, sampled once at setup from the OS before anything else, public
   and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts
-  are sampled from the OS, not expanded by a PRG, but the lead keys its instances under one window key (`Hash.Keyed`).
+  are OS bytes or, on a GPU, the listed keyed stream under a fresh key a unit (`KeyedUniform`); a lead keys its instances
+  under one window key (`Hash.Keyed`).
 - A circuit restatement of a verifier (VBridge's V\*) is proved in one direction, that the circuit accepting
   implies the verifier accepts; completeness stays a test.
 - `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption, and nobody works on proving the

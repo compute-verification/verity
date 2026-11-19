@@ -205,8 +205,9 @@ def test_a_session_serves_from_the_pinned_tree_and_its_end_entry_seals_its_out(h
     assert A.verify_ledger(A.read_ledger(host.ledger), I, verify)["cd" * 64]["end"] == end
     key = C.ChallengerKey.from_json(json.loads((out / R.KEY).read_text()))
     assert key.public == (host.key / "public").read_bytes()
-    commitment, roots = R.trusted_session(out, [host.ledger], {"root": "cd" * 64}, key,
-                                          lambda k, m, s: lms.verify(P, k.public, m, lms.Signature.decode(P, s)))
+    commitment, log = R.trusted_session(out, [host.ledger], {"root": "cd" * 64}, key,
+                                        lambda k, m, s: lms.verify(P, k.public, m, lms.Signature.decode(P, s)))
+    roots = C.by_family(commitment, log)
     assert roots == {"positions": (bytes(64),), "replay": ()} and commitment.root.hex() == end["body"]["commitment"]
     assert json.loads((out / R.RECORD).read_text())["host"] == body["host"] == f"vy-challenger-1.{session}"
 

@@ -191,7 +191,6 @@ abbrev REMOTE_SESSION_PAYLOAD_SALTS : String := "verity/remote-session/payload-s
 abbrev STORE_SALT : String := "verity/store/salt/v1"
 
 -- Not yet read from here: the network attester and network accounting
-abbrev CERTIFIER_ADVISED_ADVICE : String := "verity-network-certifier/advised-advice/v2"
 abbrev CERTIFIER_CERTIFICATES : String := "verity-network-certifier/certificates/v3"
 abbrev CERTIFIER_CLOCK : String := "verity-network-certifier/clock/v1"
 abbrev CERTIFIER_EMPTY : String := "verity-network-certifier/empty/v2"
@@ -214,7 +213,6 @@ abbrev CERTIFIER_RECORDS : String := "verity-network-certifier/records/v2"
 abbrev CERTIFIER_ROW_SHA512 : String := "verity-network-certifier/row-sha512/v1"
 abbrev CERTIFIER_SCAN_OK_ROW_SALT : String := "verity-network-certifier/scan-ok-row-salt/v1"
 abbrev CERTIFIER_SERVICE_SPEC : String := "verity-network-certifier/service-spec/v0"
-abbrev CERTIFIER_SESSION : String := "verity-network-certifier/session/v0"
 abbrev CERTIFIER_START : String := "verity-network-certifier/start/v2"
 abbrev CERTIFIER_STATEMENT : String := "verity-network-certifier/statement/v0"
 abbrev CERTIFIER_TRANSFER_REGISTRATION : String := "verity-network-certifier/transfer-registration/v1"
@@ -229,7 +227,6 @@ abbrev CERTIFIER_BLOCKS : String := "verity-network-warden/units/v1"
 abbrev CERTIFIER_WIRING : String := "verity-network-warden/wiring/v1"
 abbrev ADVICE : String := "verity/advice/v0"
 abbrev BLOCKS : String := "verity/blocks/v1"
-abbrev BOUNDARY : String := "verity/boundary/v3"
 abbrev CERTIFIER_SCAN_STATE : String := "verity/certifier/scan-state/v1"
 abbrev CERTIFIER_SERVED_ROWS : String := "verity/certifier/served-rows/v1"
 abbrev CERTIFIER_PROTOCOL : String := "verity/certifier/v0"
@@ -243,6 +240,7 @@ abbrev PERIOD_CIRCUIT : String := "verity/window-circuit/v1"
 -- Not yet read from here: composition (onsite, remote)
 abbrev ONSITE_PROTOCOL : String := "verity/onsite/v1"
 abbrev REMOTE_PROTOCOL : String := "verity/remote/v0"
+abbrev REMOTE_V1_PROTOCOL : String := "verity/remote/v1"
 
 -- Not yet read from here: served periods (`verity.commitments.periods`, the bytes say window)
 abbrev VLLM_ADVICE_WINDOWS_ADVICE : String := "verity-vllm/advice-windows/advice/v1"

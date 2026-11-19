@@ -20,6 +20,8 @@ import sys
 from pathlib import Path
 
 import pytest
+from verity.ports import free_port
+from verity_bench.kit import MACHINE_PROPERTIES
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -119,6 +121,14 @@ else:
                              "RuntimeError: the run ended after 32 steps, before the session's last pass"}
     red = 12
     os.makedirs(os.path.dirname(record), exist_ok=True)
+    commit = os.path.dirname(record)
+    os.makedirs(f"{commit}/windows/w0", exist_ok=True)
+    for name, body in (("verdict.json", "{}"), ("steps.jsonl", "{}"), ("runs.jsonl", '{"tokens_digest": "00"}'),
+                       ("summary.json", "{}"), ("summary.md", "ok"), ("commit.log", "ok"), ("versions.json", "{}"),
+                       ("windows/w0/rows.salts", "s"), ("dump_step0_pair0_x.bin", "v"), ("sampled_replay_p0.json", "{}"),
+                       ("binding_map_p0.json", "{}"), ("memory_map.jsonl", "{}")):
+        with open(f"{commit}/{name}", "w") as f:
+            f.write(body)
 if mode in ("crash", "commitfail"):
     print("Traceback: the engine could not be built")
     sys.exit(1 if kind == "tiny" else red)
@@ -182,28 +192,40 @@ def row_file(path: Path, steps: int | None = 32, target: dict | None = None) -> 
     return path
 
 
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 def gone(pid: int) -> bool:
     """Whether no process ``pid`` is left: `run.sh` waits for the verifier it started, or stopped, before it ends."""
     return not Path(f"/proc/{pid}").exists()
 
 
-class Node:
-    """A node of stubs under ``tmp``: its workspace (``ws``, the vLLM venv at ``venv``), its CUDA toolkits (``cuda``),
-    its programs (``bin``, on the PATH) and what the stubs wrote (``stub``); `run` runs `run.sh` on it."""
+def machine_record(path: Path, toolkits: list[dict[str, str]]) -> None:
+    """The run's copy of a machine record whose `[properties]` list `toolkits` (``{ directory, version }``, the first
+    the default) and leave every other property unread."""
+    def kit(t: dict[str, str], more: str = "") -> str:
+        return f'{{ directory = "{t["directory"]}", version = "{t["version"]}"{more} }}'
 
-    def __init__(self, tmp: Path, venv: str = "venv312", toolkits: tuple[str, ...] = ("cuda-12.9", "cuda-13.0", "cuda")):
+    others = ", ".join(map(kit, toolkits[1:]))
+    first = kit(toolkits[0], f', loader = "lib64", others = [{others}]') if toolkits else '"none"'
+    values = {k: '"unread"' for k in MACHINE_PROPERTIES} | {"toolkit": first}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("[properties]\n" + "".join(f'{k} = {{ value = {v}, read = "stub" }}\n' for k, v in values.items()))
+
+
+class Node:
+    """A node of stubs under ``tmp``: its workspace (``ws``, the vLLM venv at ``venv``), its CUDA toolkits (``cuda``,
+    each at the version its machine record lists it), its programs (``bin``, on the PATH) and what the stubs wrote
+    (``stub``); `run` runs `run.sh` on it."""
+
+    def __init__(self, tmp: Path, venv: str = "venv312",
+                 toolkits: dict[str, str] | None = None):
         self.tmp, self.ws, self.stub, self.bin = tmp, tmp / "ws", tmp / "stub", tmp / "bin"
         self.out = tmp / "run" / "out"
-        for d in (self.stub, tmp / "scratch", tmp / "home", *(tmp / "cuda" / t for t in toolkits)):
+        toolkits = {"12.9": "cuda-12.9", "13.0": "cuda-13.0"} if toolkits is None else toolkits
+        for d in (self.stub, tmp / "scratch", tmp / "home", *(tmp / "cuda" / t for t in toolkits.values())):
             d.mkdir(parents=True)
-        for t in toolkits:
+        for t in toolkits.values():
             program(tmp / "cuda" / t / "bin" / "nvcc", NVCC)
+        machine_record(tmp / "run" / "inputs" / "node.toml",
+                       [{"directory": str(tmp / "cuda" / t), "version": v} for v, t in toolkits.items()])
         (self.stub / "verifier.py").write_text(VERIFIER)
         (self.stub / "prover.py").write_text(PROVER)
         self.venv(venv)
@@ -221,9 +243,10 @@ class Node:
 
     def run(self, **env: str | None) -> subprocess.CompletedProcess:
         base = {"PATH": f"{self.bin}:{MACHINE_PATH}", "HOME": str(self.tmp / "home"), "TMPDIR": str(self.tmp / "scratch"),
-                "RESEARCH_RUN_DIR": str(self.tmp / "run"), "NODE_WORKSPACE": str(self.ws), "CUDA_ROOT": str(self.tmp / "cuda"),
+                "RESEARCH_RUN_DIR": str(self.tmp / "run"), "NODE_WORKSPACE": str(self.ws), "RESEARCH_MACHINE": "node",
                 "STUB_DIR": str(self.stub), "REAL_PY": sys.executable, "STUB_TORCH_CUDA": "12.9",
-                "GPU_LEASE": str(self.lease), "LEAN_EXE": str(self.lean), "TUNNEL_WAIT_S": "0"}
+                "GPU_LEASE": str(self.lease), "LEAN_EXE": str(self.lean), "TUNNEL_WAIT_S": "0",
+                "NODE_KIND": "rtx-pro-6000-server-x8"}
         env = {k: v for k, v in (base | env).items() if v is not None}
         return subprocess.run([BASH, str(RUN)], cwd=ROOT, env=env, capture_output=True, text=True)
 
@@ -407,6 +430,17 @@ def test_a_paced_line_hands_the_verifier_its_pace_in_place_of_the_windows_and_on
             "refused: PACED=1:1000:2773:7 1:1000:2773:7 paces 2 session(s), and PLAN=serve has 1")
 
 
+def test_refresh_reaches_the_verifier_as_the_line_states_it_and_not_at_all_when_unset(node, tmp_path):
+    p = node.both("tiny")
+    assert p.returncode == 0, said(p)
+    assert "--refresh" not in node.verifier()["argv"]
+    other = Node(tmp_path / "other")
+    p = other.both("tiny", REFRESH="0,1")
+    assert p.returncode == 0, said(p)
+    argv = other.verifier()["argv"]
+    assert argv[argv.index("--refresh") + 1] == "0,1"
+
+
 def test_one_line_of_a_row_builds_before_the_lease_and_commits_under_it(node):
     port = str(free_port())
     p = node.both("row", PORT=port, ROW_ARGS="--norm-tap-so /taps/norm.so")
@@ -418,6 +452,9 @@ def test_one_line_of_a_row_builds_before_the_lease_and_commits_under_it(node):
     nvcc, = [c for c in calls if c.startswith("nvcc")]
     # kv.cu's build, the Build with no GPU visible and the verifier all before the lease; the Commit alone under it
     assert calls == [nvcc, "row build", "verifier", lease, "row commit"]
+    kept = sorted(str(f.relative_to(node.out / "row")) for f in (node.out / "row").rglob("*") if f.is_file())
+    assert kept == [f"commit/{n}" for n in ("remote_session.json", "verdict.json")], kept
+    assert not (node.out / "row" / "commit" / "runs.jsonl").exists()
     assert build["env"]["CUDA_VISIBLE_DEVICES"] == "" and commit["env"]["CUDA_VISIBLE_DEVICES"] is None
     sweep = build["argv"][build["argv"].index("--sweep-dir") + 1]
     assert sweep.startswith(str(node.tmp / "scratch")) and node.scratch() == []      # scratch, gone with the run
@@ -620,7 +657,9 @@ def test_kv_cu_is_built_for_the_card_the_rows_target_declares_or_the_one_stated(
     ("p512/k2", "-DKV_FIELD=512"),
 ])
 def test_a_cards_session_builds_kv_cu_and_registers_at_codec(node, codec, defines):
-    program(node.bin / "nvidia-smi", '#!/bin/bash\ncase " $* " in *compute_cap*) echo 9.0 ;; esac\nexit 0\n')
+    # the leased card as nvidia-smi names it: its card file gives the session's node and the build's target
+    program(node.bin / "nvidia-smi", '#!/bin/bash\ncase " $* " in *query-gpu=name*) echo "NVIDIA H200" ;; '
+                                     '*query-gpu=index*) echo 0 ;; esac\nexit 0\n')
     port = str(free_port())
     (node.stub / "busy").write_text(f"{port}\n")
     # a card's line takes CUDA_HOME, else /usr/local/cuda-13.0, whose real nvcc a node with that toolkit would run
@@ -630,6 +669,7 @@ def test_a_cards_session_builds_kv_cu_and_registers_at_codec(node, codec, define
     assert p.returncode == 0, said(p)
     kv = "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu"
     (nvcc,) = [c for c in node.calls() if c.startswith("nvcc ") and c.endswith(kv)]
+    assert nvcc.startswith("nvcc -O3 -gencode arch=compute_90a,code=sm_90a ")
     assert nvcc.split(" -o ")[0].endswith(f"-Xptxas -v {defines}")
     (prover,) = [c for c in node.calls() if c.startswith("card prover ")]
     from verity.protocols.resource_accounting.memory.poub.verifier import codec as deployed
@@ -677,18 +717,16 @@ def test_the_vllm_venv_is_the_first_there(tmp_path):
 
 
 @pytest.mark.parametrize("toolkits, torch, home", [
-    (("cuda-12.9", "cuda-13.0", "cuda"), "12.9", "cuda-12.9"),     # the toolkit of the CUDA the prover's torch is built for
-    (("cuda-12", "cuda-13.0", "cuda"), "12.9", "cuda-12"),         # else one of its major version
-    (("cuda-12.9", "cuda"), None, "cuda"),                         # a venv with no torch to ask
-    (("cuda-12.9",), "13.0", None),
-    (("cuda-13.0", "cuda-13"), "12.9", 13),                        # only another major version's: torch's JIT won't see
+    ({"12.9": "cuda-12.9", "13.0": "cuda-13.0"}, "12.9", "cuda-12.9"),  # the machine's toolkit at the CUDA torch is built for
+    ({"12.9": "cuda-12.9", "13.0": "cuda-13.0"}, None, "cuda-13.0"),    # a venv with no torch to ask: 13.0
+    ({"12.9": "cuda-12.9"}, "13.0", None),                              # the machine lists none at that version
+    ({"12.9": "cuda-13.0"}, "12.9", 13),         # a record whose 12.9 is another major version's: torch's JIT won't see
 ])
-def test_cuda_home_is_a_toolkit_the_node_has(tmp_path, toolkits, torch, home):
+def test_cuda_home_is_the_machines_toolkit_at_torchs_version(tmp_path, toolkits, torch, home):
     node = Node(tmp_path, toolkits=toolkits)
     p = node.both("row", STUB_TORCH_CUDA=torch)
     if home is None:
-        return refused(node, p, f"refused: no CUDA toolkit: CUDA_HOME is not set, and none of {tmp_path}/cuda/cuda-13 "
-                                f"{tmp_path}/cuda/cuda-13.0 {tmp_path}/cuda/cuda is a directory")
+        return refused(node, p, "refused: no CUDA toolkit 13.0: CUDA_HOME is not set, and the machine's record lists none")
     if home == 13:
         return refused(node, p, f"refused: the vLLM venv's torch is built for CUDA 12, and {tmp_path}/cuda/cuda-13.0's "
                                 "nvcc is CUDA 13: install a CUDA 12 toolkit and state CUDA_HOME")
@@ -758,7 +796,8 @@ def test_a_red_prover_under_role_prover_ends_the_verifier_itself(node, tmp_path)
     line = [sys.executable, str(ROOT / "verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py"),
             "--host", "127.0.0.1", "--port", port, "--out", str(tmp_path / "verifier"), "--windows", "3",
             "--window-ms", "2000", "--samples", "2773", "--jitter-ms", "5000", "--sessions", "1", "--check-workers", "1",
-            "--lean-exe", str(lv.build())]
+            "--lean-exe", str(lv.build()),
+            "--figures", str(ROOT / "tests/verity/protocols/resource_accounting/memory/poub/figures.json")]
     verifier = subprocess.Popen(line, cwd=ROOT, env=os.environ | {"HOME": str(tmp_path / "home")},
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     try:

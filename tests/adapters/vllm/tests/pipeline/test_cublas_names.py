@@ -80,9 +80,10 @@ def test_every_stage_on_one_venv_gets_the_same_environment(tmp_path):
 
 
 def test_a_venv_without_a_cublas_wheel_leaves_the_environment(tmp_path):
-    env = {"LD_LIBRARY_PATH": "/usr/local/cuda/lib64"}
+    given = str(tmp_path / "toolkit/lib64")
+    env = {"LD_LIBRARY_PATH": given}
     assert cublas_names(env, str(tmp_path / "venv/bin/python"), str(tmp_path)) is None
-    assert env == {"LD_LIBRARY_PATH": "/usr/local/cuda/lib64"}
+    assert env == {"LD_LIBRARY_PATH": given}
 
 
 def test_two_libraries_of_one_name_or_a_foreign_directory_are_refused(tmp_path):

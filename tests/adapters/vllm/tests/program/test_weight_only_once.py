@@ -130,11 +130,11 @@ def test_cross_call_finds_the_repeated_adds_only_per_forward():
 
 
 def test_the_knob_is_a_declared_static_that_keeps_undeclared_digests():
-    e = TargetProfile()
+    e = TargetProfile.default()
     assert "weight_only_calls" not in e.to_json() and e.effective_weight_only_calls() == "once"
     o = e.with_overrides(weight_only_calls="per-forward")
     assert o.to_json()["weight_only_calls"] == "per-forward" and o.digest() != e.digest() and TargetProfile.from_json(o.to_json()) == o
     assert o.execution_label == e.execution_label and o.engine_args() == e.engine_args()          # not another execution
     for bad in ("twice", "ONCE", True, 1):
         with pytest.raises(ValueError, match="weight_only_calls"):
-            TargetProfile(weight_only_calls=bad)
+            TargetProfile.default().with_overrides(weight_only_calls=bad)

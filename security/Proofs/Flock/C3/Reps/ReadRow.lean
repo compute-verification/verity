@@ -438,7 +438,7 @@ end Builder
 
 section Net
 
-open FlockSoundness FlockSoundness.Audit
+open FlockSoundness Spot.Sampling
 
 /-- **A laid-out row below the constant is a computed row of the net**, reading the same columns: the net is
 `Net.ofRows`' (`netOf`) of the layout's rows, its computed rows `Rows.ofNet`'s from its input rows' end, at

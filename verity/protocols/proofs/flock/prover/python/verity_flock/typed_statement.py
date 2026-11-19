@@ -405,7 +405,7 @@ def _compose_flat(low: IL.Lowering, sub, **kw) -> Typed:
     return Typed(head + body, rows, types, layouts, {"unit": rows}, {}, dv)
 
 
-def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: bool = False, salt_key: bytes | None = None,
+def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: bool = False, salts: dict | None = None,
           indices: list | None = None, partition: str | None = None, program: str | None = None, share_rows: bool = False):
     """:func:`circuit.stage` for the typed statement. ``<out_dir>/circuit.txt`` is the statement. ``rows/`` is the prover's
     copy of the rows the verifier derives: ``unit.txt`` for a flat class; for a template with a tail, ``root.txt``,
@@ -414,8 +414,8 @@ def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: b
     :func:`circuit.write`'s, naming the typed statement."""
     from pathlib import Path
 
-    if public_only and salt_key is None:
-        raise ValueError("a verifier stages its own public file only from the prover's staging salt key (salts are otherwise fresh)")
+    if public_only and salts is None:
+        raise ValueError("a verifier stages its own public file only from the prover's salts (salts are otherwise fresh)")
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     statics = C.set_statics(input_set)
@@ -431,7 +431,7 @@ def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: b
             forged = compose(low, input_set.subcircuit, forged=True, partition=partition, program=program, statics=statics)
             (out / "circuit-forged.txt").write_text(forged.text)
     inst, pub = out / f"inst-{hi - lo}.bin", out / f"pub-{hi - lo}.bin"
-    C.write(typed.text, input_set, lo, hi, None if public_only else inst, pub, salt_key, indices, share_rows=share_rows)
+    C.write(typed.text, input_set, lo, hi, None if public_only else inst, pub, indices, share_rows=share_rows, salts=salts)
     return pub if public_only else inst
 
 

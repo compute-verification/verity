@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import random
 import re
 import shutil
 import subprocess
@@ -45,13 +46,14 @@ MORE = "unknown"
 #: the two refusals the reference states as the Lean's rule and then expands leaf by leaf, unless form-only
 EXPANDED = ("own-rows", "leaf-widths")
 #: the shaped cases the compiled command is run on beside the script's: a refusal of each expanded rule, with its message
-REFUSED = ("a leaf that reads sixteen gates through one row", "2x3 one input run handed to two rows")
+REFUSED = ("an edge from an output of two widths into a row of the same two widths",
+           "2x3 one input run handed to two rows")
 LINE = re.compile(r"\[\d+ s\] (check|count): (.*)")
 
 
 @pytest.fixture(scope="module")
 def shaped() -> dict[str, dict]:
-    return {m["shape"]: m for m in vectors.shaped()}
+    return {m["shape"]: m for m in vectors.shaped() + vectors.edged()}
 
 
 def _files(case: dict, where: Path) -> list[str]:
@@ -96,6 +98,31 @@ def _written(args: list[str], out: Path, name: str, *more: str) -> tuple[dict, d
     assert script.main([*args, "--out", str(out), "--name", name, *more]) == 0
     return (json.loads((out / f"{name}.case.json").read_text()),
             json.loads((out / f"{name}.reference.json").read_text()))
+
+
+def _recut(nodes: list, desc: dict) -> None:
+    """The root's input node, a batch of 32 `Input16_v1`, as 16 of `Input32_v1`, its reader's references unchanged:
+    each 16-bit leaf it reads is half of a 32-bit gate (`refs.recut`)."""
+    desc["callees"].append("Input32_v1")
+    desc["definitions"]["Input32_v1"] = {"form": "primitive", "id": "Input32_v1", "params": [], "ret": ["Value", 32]}
+    desc["types"] += [t for t in (["Value", 32], ["Array", 16, ["Value", 32]]) if t not in desc["types"]]
+    nodes[0].update(fn=len(desc["callees"]) - 1, n=16, out=desc["types"].index(["Array", 16, ["Value", 32]]))
+
+
+def test_a_read_at_another_width_is_refused_recut_unread():
+    """`read_in_leaves`, taken as built; with its input node read at another width it is refused `recut-unread`,
+    expanded and form-only, where the whole-leaf reading would resolve each 16-bit leaf to a whole gate."""
+    rng = random.Random(1)
+    c = vectors.read_in_leaves()
+    roots = {p: vectors._hex(rng) for p in c.params}
+    made = vectors.finish(rng, c, {p: vectors._registered(roots[p], c.params[p], 16) for p in c.params}, roots, [],
+                          policy={})
+    inst, tr = made["case"]["instance"], made["case"]["trusted"]
+    assert ref.check_detail(inst, tr)["complies"]
+    vectors._reroot(made, _recut)
+    assert ref.reference.desc_program(inst["program"]).root.body.recut == {0: 2}
+    for form_only in (False, True):
+        assert ref.check_detail(inst, tr, form_only) == {"error": "recut-unread", "message": ref.RECUT_UNREAD}
 
 
 def test_the_script_reads_a_runs_files_as_the_case_they_make(shaped, tmp_path):
@@ -186,7 +213,7 @@ def test_form_only_is_the_whole_references_verdict_and_walks_no_leaf(shaped, mon
     ways = {s: vectors.WAYS[k % len(vectors.WAYS)] for s, k in turns.items()}
     seeds = [s for s, (stage, _) in ways.items() if stage in EXPANDED] + [s for s in range(40) if s not in turns]
     made = {**shaped, **{f"random {s}": vectors.case(s) for s in seeds}}
-    assert {ways[s] for s in seeds if s in ways} == {(stage, how) for stage in EXPANDED for how in vectors.BROKEN[stage]}
+    assert {ways[s] for s in seeds if s in ways} == {(stage, how) for stage in EXPANDED for how in vectors.BROKEN.get(stage, ())}
     whole = {what: (ref.check_detail(m["case"]["instance"], m["case"]["trusted"]),
                     ref.count(m["case"]["instance"], m["case"]["trusted"], m["case"]["count"]))
              for what, m in made.items()}

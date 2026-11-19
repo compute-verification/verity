@@ -1,5 +1,5 @@
 """A two-stage interior whose replay block reads history tables (`interior_rows`, ``tables``): each span two
-`EmbeddingRead_v1{V=8,H=2}` reads of the table round 1 served for it, over a replay sample of two of three spans. Round 1
+`EmbeddingRead_v2{V=8,H=2}` reads of the table round 1 served for it, over a replay sample of two of three spans. Round 1
 (a stand-in boundary) registers each span's table as a port of its record, of its class's C strings (P=4, O=2: 6 of 8
 leaves, `boundary_tables.class_rows`), its rows past its length L zero rows (`boundary_tables.fill`). The interior commits no
 table: each read's ``root`` and ``domain`` rows are rows of two supplied values, named as round 2 names the replay
@@ -26,6 +26,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from verity.circuits import population as PN
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
@@ -35,8 +36,10 @@ from verity.commitments.gates import embedding as E
 from verity.commitments.periods import rows as CS
 from verity.commitments.periods.interface import digest_words
 from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.circuits import replay_links as RL
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 
@@ -45,9 +48,10 @@ from verity_vllm.pipeline import boundary_tables as BT
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import interior_rows as IR
 from verity_vllm.pipeline import serving_rows as SRW
+from tests.fixed_salts import fixed
 
 RD = E.read(8, 2)
-SPANS, Q, CELLS, SALT, ROW, DELTA = 3, 2, 2, bytes(range(32)), "interior-table-test", 2.0 ** -40
+SPANS, Q, CELLS, ROW, DELTA = 3, 2, 2, "interior-table-test", 2.0 ** -40
 RUN, PROMPT, OUTPUTS, LAYER, CAP = "b0" * 64, 4, 2, 0, 8
 C = BT.class_rows(PROMPT, OUTPUTS, CAP)
 #: each span's length L: spans 0 and 2 are sampled
@@ -96,7 +100,7 @@ SHARED = _opt_in("VERITY_VLLM_INTERIOR_TABLE", "about 5 minutes on a CPU to buil
 def _boundary() -> CS.Binding:
     """Round 1's stand-in boundary, one member of the replay block's `SPANS` units. Built on first use, never at
     import: every test worker imports the module to collect it, and the boundary's program holds every span's reads."""
-    return CS.Binding(P.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), {"law": "subset", "k": Q},
+    return CS.Binding(PN.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), {"law": "subset", "k": Q},
                       RUN, (CS.Member(P.template_id(BLOCK), (("ingress", 64),), (("egress", 64),), SPANS),))
 
 
@@ -126,7 +130,7 @@ def _spec() -> S.Spec:
     parameters, registered: the reads' two supplied values and the four the replay gives."""
     names = {m.port(p): (m.schema(p), "serve") for m in _boundary().members for p in CS.port_leaves(m)}
     names |= {n: (HT.SCHEMA, "serve") for n in NAMES}
-    w = IR.interior_window(MEMBER, CELLS, "00", [0], values=IR.link_values(LINKS, Q))
+    w = IR.interior_window(MEMBER, CELLS, "00", [0], links=LINKS)
     names |= {m.port(p): (m.schema(p), "interior") for m in w.members for p in CS.port_leaves(m)}
     supplied = tuple(x.value for x in LINKS)
     public = (S.Public("population", "structure", "N, the sample's range"),
@@ -150,8 +154,8 @@ def _first(tables):
                       challenger="challenger-test", clock=lambda: 0.0,
                       sampler=lambda sampling_design, n: next(draws) if sampling_design["law"] == "subset" else [0] * len(sampling_design["strata"]))
     c = CS.commit(boundary, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
-                              "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}], salt_key=SALT)
-    rec = CS.registration(c, {"stand_in": "boundary"}, None, registrar=R)
+                              "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}], salts_of=fixed(boundary))
+    rec = CS.registration(c, {"stand_in": "boundary"}, None, registrar=DK)
     rec["roots"] += [{"port": t.value, "root": t.root.hex(), "leaves": t.leaves, "domain": t.domain.domain_id.hex()}
                      for t in tables]
     ports = CS.expected_ports(boundary) | {t.value: {"leaves": t.leaves, "domain": t.domain.domain_id.hex()} for t in tables}
@@ -184,7 +188,7 @@ def _spans(tables) -> list[IR.Span]:
 
 def _interior(reg, first, rec, drawn, spans=None, **kw) -> IR.Interior:
     return IR.interior(_spans(drawn) if spans is None else spans, CELLS, reg.digest, first.units, row=ROW,
-                       **{"salt_key": SALT, "tables": drawn, "served": rec, "positions": C, "links": LINKS, **kw})
+                       **{"tables": drawn, "served": rec, "positions": C, "links": LINKS, **kw})
 
 
 def _with(span: IR.Span, kind: str, port: str, unit: int, value) -> IR.Span:
@@ -262,8 +266,8 @@ def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves
     data = [{"rows": {p: np.concatenate([s.data["rows"][p] for s in spans]) for p, _ in m.rows},
              "outs": {p: np.concatenate([s.data["outs"][p] for s in spans]) for p, _ in m.outs},
              "refs": np.repeat(np.arange(m.n)[:, None], len(m.rows), axis=1)}]
-    full = CS.commit(w, data, salt_key=SALT, salts_of={m.port(p): CS.value_salts(v.value, v.positions)
-                                                       for p, v in by_ref.items()})
+    full = CS.commit(w, data, salts_of={**fixed(w), **{m.port(p): CS.value_salts(v.value, v.positions)
+                                                       for p, v in by_ref.items()}})
     assert full.roots == c.roots
     with pytest.raises(S.Refused) as refused:
         IR.register(stream, first, it, history=hist, registered=IR.link_words(LINKS),
@@ -312,8 +316,8 @@ def test_round_2_reads_root_and_domain_at_the_name_the_served_records_ports_give
     assert {r["port"] for r in served["roots"]} == {*BR.PORTS, *NAMES}
     defs = definitions(_boundary().program)
     cs = SS._callers_of(defs, defs[key])
-    shares = [x for k, node in enumerate(defs[key].body.nodes) for x in SS._node_links(cs, defs[key], k, node)]
-    runs = SS._gather(lambda x: (x.template, x.port), lambda a, b: a.value == b.value, cs.units, shares)
+    shares = [x for k, node in enumerate(defs[key].body.nodes) for x in RL._node_links(cs, defs[key], k, node)]
+    runs = RL._gather(lambda x: (x.template, x.port), lambda a, b: a.value == b.value, cs.units, shares)
     assert SS.replay_links(_boundary().program, key, served) is None
     assert {(x.template, x.port, f"{key}/{x.value}", per, tuple(SS.row_at(rs, j) for j in range(CELLS)))
             for x, per, rs in runs} == {(x.template, x.port, x.value, x.per, x.at) for x in LINKS}
@@ -396,15 +400,14 @@ def test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length(stag
 
 @SHARED
 @pytest.mark.slow
-def test_a_table_reads_interior_without_a_test_key_registers_the_same_root_and_domain(staged, honest):
-    """Serving gives no test key: the reads' interior commits with every salt fresh from the OS but its linked ports',
-    whose rows keep their value's. Its ``root`` and ``domain`` register the entries the keyed interior's do (a supplied
-    value's salts are public), and each value the replay gives the same rows, words and domain under a new root. Slow: it
-    commits the reads' interior as serving does, the one path every other test's key replaces."""
+def test_a_table_reads_interior_registers_the_same_root_and_domain_each_commit(staged, honest):
+    """The reads' interior commits with every salt fresh from the OS but its linked ports', whose rows keep their value's.
+    A second commit's ``root`` and ``domain`` register the entries the first's do (a supplied value's salts are public),
+    and each value the replay gives the same rows, words and domain under a new root. Slow: it commits the reads'
+    interior a second time."""
     _stream, reg, first, rec, tables = staged
     drawn = [tables[u] for u in first.units]
-    keyed, served = honest, _interior(reg, first, rec, drawn, salt_key=None)
-    a, b = ({e["value"]: e for e in it.record["registered"]} for it in (keyed, served))
+    a, b = ({e["value"]: e for e in it.record["registered"]} for it in (honest, _interior(reg, first, rec, drawn)))
     assert list(b) == [x.value for x in LINKS]
     for x in SUPPLIES:
         assert a[x.value] == b[x.value]

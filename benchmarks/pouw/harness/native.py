@@ -439,7 +439,7 @@ def versions(dev: Device) -> dict:
         if build is not None and Path(t["path"]).parent == lib.parent and (lt2 or {}).get("lib_sha256") != t["sha256"]:
             raise RuntimeError(f"{build_json} describes another libpouw_lt2.so ({(lt2 or {}).get('lib_sha256')}, loaded "
                                f"{t['sha256']})")
-    nvcc = shutil.which("nvcc") or ((settings.CUDA_HOME or "/usr/local/cuda") + "/bin/nvcc")
+    nvcc = shutil.which("nvcc") or (f"{settings.CUDA_HOME}/bin/nvcc" if settings.CUDA_HOME else "")
     maps = Path("/proc/self/maps")
     loaded = sorted({line.split()[-1] for line in maps.read_text().splitlines() if "libcublasLt" in line}) \
         if maps.exists() else None

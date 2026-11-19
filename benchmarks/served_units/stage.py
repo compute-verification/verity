@@ -24,7 +24,7 @@ with hidden outputs, bound to the Program of its N instances and that Program's 
                            (`steady_node.py`) and `verifier_cost/flock_sessions.py`.
 
 A statement is bound (`UnitStager`'s ``bind``) to the population Program of the type's Definition at its N instances
-(`population.mixed_population_program`, as a served window registers its population) and that Program's
+(`population.wired_population_program`, as a served window registers its population) and that Program's
 ``verity/partition/v1`` object under `Q_template_instances` v0, whose proof blocks 0 .. N are the statement's. Beside the
 statement it writes the verifier's own copies, partition.json and program.json (the Lean verifier's ``--partition`` and
 ``--program``), from which the verifier derives the statement's proof blocks rather than taking them as stated. The circuit is
@@ -50,10 +50,10 @@ AND limits, which keep it within the GPU prover's slot types, a form ``verify --
 its unit name, so the statement is the served one but for its binding: its ``class_sha512`` is the served composer's. The
 circuit is streamed to circuit.txt once, every input's outputs checked against the Program's reference (``twin`` null).
 ``census:NAME`` stages any other block type of the serving rows the same way, its values seeded by the same rule and its
-seeds keyed by the name. One whose statement is templated (a table read's, ``census:EmbeddingRead_v1{V,H}``) writes its
+seeds keyed by the name. One whose statement is templated (a table read's, ``census:EmbeddingRead_v2{V,H}``) writes its
 template and layout mode beside the circuit as a READS type does, and stage.json's ``statement.id`` names it.
 
-A type of `READS` is a table read, ``EmbeddingRead_v1{V, H}`` on its served rows (`interface.unit_rows`), staged as serving
+A type of `READS` is a table read, ``EmbeddingRead_v2{V, H}`` on its served rows (`interface.unit_rows`), staged as serving
 stages a read (`chunk_rows.statement`): the templated statement at the read layout on the verifier's own read template
 (``structural``, `verity_flock.read_tmpl`, so ``flock-read-tmpl`` is built first). Its inputs are honest reads of one table of
 V ranks whose first L hold filled rows and every later one the zero row under the zero salt, as a history table pads to its
@@ -89,11 +89,11 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
     dsa-q-row   `CENSUS`: DsaIndexerQ_v2{H=32,D=128,ROPE=64}, DSA's indexer query row as served, its EX2 reads in gates.
     mla-split-part  `CENSUS`: SparseMlaSplitPart_v1 at T = 64, one query's sparse MLA over one split's 64 keys (FA3's).
     rmsnorm-v8  `CENSUS`: RMSNormFusedCudaVector8_v1{N=6144,BLOCK=256}, the fused residual add and RMSNorm of one token row.
-    table-read  `READS`: EmbeddingRead_v1{V,H}, one read of a request's history table for sparse MLA: V = 131072 ranks (the
+    table-read  `READS`: EmbeddingRead_v2{V,H}, one read of a request's history table for sparse MLA: V = 131072 ranks (the
                 table's capacity), H = 576 words (a kv row's 512 latent and 64 rope bf16 words), L = 8192 rows filled.
     dsa-chunk   DsaPositionsChunk_v1{K,W}: chunk c of the long row's index, the merge's K = 2048 slots in chunks of W = 32,
                 each port its own row; its slots below N = 131072 (the longest row's class) but a tenth of any u32.
-    dsa-slot    DsaPositionsSlot_v1{K,N}: slot j of a chunk (K = 32), held below N = 131072 whatever its inputs."""
+    dsa-slot    DsaPositionsSlot_v2{K,N}: slot j of a chunk (K = 32), held below N = 131072 whatever its inputs."""
 from __future__ import annotations
 
 import hashlib
@@ -109,8 +109,8 @@ from typing import Callable
 import numpy as np
 
 from verity.circuits import partition_object as PO
-from verity.circuits.codec import canonical_json, encode_program
-from verity.circuits.population import mixed_population_program
+from verity.circuits.codec import canonical_json, descriptor_id, encode_program
+from verity.circuits.population import wired_population_program
 from verity.circuits.types import Array
 from verity.circuits.defs import bind
 from verity.circuits.ops.boolean import gemm as BG
@@ -275,7 +275,7 @@ CENSUS: dict[str, Census] = {
 
 @dataclass(frozen=True)
 class Read:
-    """A table read type: ``EmbeddingRead_v1{V, H}`` at statics ``V``, ``H`` and ``L``, the rows its table holds."""
+    """A table read type: ``EmbeddingRead_v2{V, H}`` at statics ``V``, ``H`` and ``L``, the rows its table holds."""
 
     defaults: dict
 
@@ -345,13 +345,13 @@ UNBOUND = {k: hashlib.sha512(f"verity/served-units/unbound\0{k}".encode()).hexdi
 
 def binding(d, n: int, out: Path) -> tuple[dict, dict]:
     """``n`` proof blocks of Definition ``d`` as a Program of their own and its partition: the population Program of ``n``
-    instances of ``d`` (`population.mixed_population_program`, a served window's Program, here of one template) under
-    `Q_template_instances` v0 listing ``d``, whose proof blocks ``0 .. n`` are the instances in order. Writes the verifier's
+    instances of ``d`` (`population.wired_population_program`, a served window's Program, here of one template and no wire)
+    under `Q_template_instances` v0 listing ``d``, whose proof blocks ``0 .. n`` are the instances in order. Writes the verifier's
     copies under ``out``: partition.json (the ``verity/partition/v1`` object, the Lean verifier's ``--partition``) and
     program.json (the Program's descriptor, its ``--program``). -> `UnitStager`'s ``bind``, the two digests the statement
     binds, and stage.json's record of them."""
-    program = mixed_population_program([(d, n)])
-    part = PO.build(program, PO.template_instances_query([d]))
+    program, query = wired_population_program([(d, n)], {"templates": [[descriptor_id(d), n]]})
+    part = PO.build(program, query)
     desc = canonical_json(encode_program(program))
     out.mkdir(parents=True, exist_ok=True)
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
@@ -451,8 +451,7 @@ def stage_census(name: str, cen: Census, S: dict, tag: str, n: int | str, out: P
     if any(rows[r].shape != (n, b // 16) for r, _s, b, _ps in in_rows):
         raise SystemExit(f"stage.py: {tp.id}'s generated rows {[rows[r].shape for r, *_x in in_rows]} are not its rows' words")
     t_values = time.time() - t0 - t_built
-    salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
-    got = st.stage(rows, out, salt_key, **({"indices": range(n)} if bind else {}))
+    got = st.stage(rows, out, **({"indices": range(n)} if bind else {}))
     if bind:
         bound_files(out, st.pin, n)
     if stmt.get("reads") == "slots":
@@ -509,8 +508,7 @@ def stage_read(name: str, S: dict, tag: str, n: int, out: Path, t0: float, bind:
     st = CS.UnitStager(fn, "unit/table-read", in_rows, out_rows, circuit=out / "circuit.txt", layout=READ_LAYOUT,
                        structural=True, **({"bind": digests} if bind else {}))
     t_built = time.time() - t0
-    salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
-    got = st.stage(rows, out, salt_key, **({"indices": range(n)} if bind else {}))
+    got = st.stage(rows, out, **({"indices": range(n)} if bind else {}))
     if bind:
         bound_files(out, st.pin, n)
     (out / "unit.tmpl").write_text(FC.template_of(st.text))
@@ -599,9 +597,8 @@ def main() -> None:
                      "derivation": "served-units/public-weights"} for p in w[2]}
         tag += "-packed-weights" if packed else "-public-weights"
     in_rows = [(r, schema, 16 * rows[r].shape[1], list(ps)) for r, schema, ps in unit_rows]
-    salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
     digests, bind_rec = binding(d, n, out) if bound else (None, None)
-    got = CS.stage_unit(d, f"unit/served-{tag}", in_rows, [(V2, (0,))], rows, out, salt_key, public_inputs=ports, packed=packed,
+    got = CS.stage_unit(d, f"unit/served-{tag}", in_rows, [(V2, (0,))], rows, out, public_inputs=ports, packed=packed,
                         **({"bind": digests, "indices": range(n)} if bound else {}))
     if bound:
         bound_files(out, got["circuit_sha512"], n)

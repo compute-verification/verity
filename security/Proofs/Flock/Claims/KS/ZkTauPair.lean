@@ -85,7 +85,7 @@ def tauIns (tau : F128) (salt : ByteArray) : List ByteArray :=
 
 /-- **The inner proof's `τ` commitment, logged**: when `Zk.verifyInnerWith` accepts with SHA-512 answered only within
 `L`, `τ` opens the inner proof's `τ` commitment under its salt, and every SHA-512 input of that commitment is in `L`. -/
-theorem verifyInner_tau {L : List Claims.Msg} {lay : Zk.PadLayout} {pr : Zk.InnerProof} {finalC : F128}
+theorem verifyInner_tau {L : List Hash.Msg} {lay : Zk.PadLayout} {pr : Zk.InnerProof} {finalC : F128}
     {cons : Array (String × Zk.Lin)} {t t' : Transcript}
     (h : Zk.verifyInnerWith (hashesIn L) lay pr finalC cons t = .ok ((), t')) :
     Zk.tauCommitment pr.tau pr.tauSalt = pr.tauCommit ∧ ∀ b ∈ tauIns pr.tau pr.tauSalt, Claims.toMsg b ∈ L := by
@@ -127,7 +127,7 @@ theorem leafPair_tauIns (τ₁ τ₂ : F128) (s₁ s₂ : ByteArray) :
   split_ifs <;> simp [tauIns]
 
 /-- Two different inputs with one SHA-512 digest, each in its own log, collide in the joined logs. -/
-theorem tiedColl_of_hash {L₁ L₂ : List (Claims.Msg × Claims.Msg)} {u v : ByteArray} (hne : u ≠ v)
+theorem tiedColl_of_hash {L₁ L₂ : List (Hash.Msg × Hash.Msg)} {u v : ByteArray} (hne : u ≠ v)
     (h : Sha512.hash u = Sha512.hash v) (hu : Claims.toMsg u ∈ L₁.map Prod.fst)
     (hv : Claims.toMsg v ∈ L₂.map Prod.fst) : Claims.TiedColl sha512 (L₁ ++ L₂) := by
   refine ⟨Claims.toMsg u, Claims.toMsg v, ⟨fun e => hne (toMsg_injective e), ?_⟩, ?_, ?_⟩
@@ -148,7 +148,7 @@ open FlockSoundness.Discharge.ZkExec (innerN layZ shapeZK shapeZKn innerOpensOf 
 open Claims.Bridge.Custody
 
 /-- **A rep's `τ` opening, logged**: `τ` and its salt, every SHA-512 input of whose commitment is in `L`. -/
-def TauLogged (L : List (Claims.Msg × Claims.Msg)) (io : ZkLink.InnerOpens 𝔽 Dig (List UInt8)) : Prop :=
+def TauLogged (L : List (Hash.Msg × Hash.Msg)) (io : ZkLink.InnerOpens 𝔽 Dig (List UInt8)) : Prop :=
   ∃ (tau : F128) (salt : ByteArray), io.tau = (fOf tau, salt.data.toList) ∧
     ∀ b ∈ tauIns tau salt, Claims.toMsg b ∈ L.map Prod.fst
 
@@ -156,7 +156,7 @@ def TauLogged (L : List (Claims.Msg × Claims.Msg)) (io : ZkLink.InnerOpens 𝔽
 are the executable's `τ` commitments (`leaf_tau`), so either `τ`'s tagged digests agree, a collision of the tagged
 bytes, or the `hm96-sha512/v1` leaves of different digests agree (`Hm96.leafPair_collides`); every input of each is in
 its own log. -/
-theorem tiedColl_of_tauLogged {L₁ L₂ : List (Claims.Msg × Claims.Msg)}
+theorem tiedColl_of_tauLogged {L₁ L₂ : List (Hash.Msg × Hash.Msg)}
     {io₁ io₂ : ZkLink.InnerOpens 𝔽 Dig (List UInt8)} (h₁ : TauLogged L₁ io₁) (h₂ : TauLogged L₂ io₂)
     (hv : hs512.Lτ.leaf io₁.tau.1 io₁.tau.2 = hs512.Lτ.leaf io₂.tau.1 io₂.tau.2) (hne : io₁.tau.1 ≠ io₂.tau.1) :
     Claims.TiedColl sha512 (L₁ ++ L₂) := by
@@ -180,7 +180,7 @@ theorem tiedColl_of_tauLogged {L₁ L₂ : List (Claims.Msg × Claims.Msg)}
 /-- **An accepted masked rep logs its `τ` opening**: where rep `r`'s proof file decodes to the openings `io`
 (`PadsRep`), the run's verifier ran that proof's inner proof (`zkVerifyRepWith_inner`), which checked its `τ`
 commitment and hashed every input of it (`verifyInner_tau`). -/
-theorem zk_tauLogged {L : List (Claims.Msg × Claims.Msg)} {spec : SessionSpec} {sts : Array Stmt}
+theorem zk_tauLogged {L : List (Hash.Msg × Hash.Msg)} {spec : SessionSpec} {sts : Array Stmt}
     {record : String} {proofs : Array ByteArray} {lv : Live} {j rr : ℕ} {sch : Schedule} {tPad : ℕ}
     (hv : Zk.verifyWithM (hashesIn (L.map Prod.fst)) spec (tabsOf sts) record proofs = .ok ())
     (hlv : liveOf spec record = .ok lv) (hj : j < sts.size) (hsch : Zk.schedule sts[j].wideLeaf sts[j].m = .ok (sch, tPad))
@@ -228,7 +228,7 @@ variable [S : ZkSetup]
 /-- **An accepting run's view logs its reps' `τ` openings**: at the view the deployed decoders are right at
 `OpensRows` (`decodesTableR_deploy`), so each rep's openings are its proof file's inner-proof openings (`PadsRep`), and
 the proof file is the run's, so the run's log holds their `τ` commitments' inputs (`zk_tauLogged`). -/
-theorem zkViewTauLogged {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+theorem zkViewTauLogged {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -297,7 +297,7 @@ end Gen
 /-- **An accepting run's view logs its reps' `τ` openings**: at the view the deployed decoders are right at
 `OpensRows` (`decodesTableR_deploy`), so each rep's openings are its proof file's inner-proof openings (`PadsRep`), and
 the proof file is the run's, so the run's log holds their `τ` commitments' inputs (`zk_tauLogged`). -/
-theorem zkViewTauLogged {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+theorem zkViewTauLogged {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -358,7 +358,7 @@ variable [S : ZkSetup]
 /-- **A decoded live outcome of the masked simulator logs an accepting run's `τ` openings**: where the live verdict
 holds, `P`'s run at `zkΦ`'s coins accepts (`zkSimAbortAt`), the outcome is the view of the record it decides
 (`zkSimRunAt`), and table `j`'s decoded output's `τ` openings are logged in the run (`zkViewTauLogged`). -/
-theorem zkAccTau {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+theorem zkAccTau {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -391,7 +391,7 @@ end Gen
 /-- **A decoded live outcome of the masked simulator logs an accepting run's `τ` openings**: where the live verdict
 holds, `P`'s run at `zkΦ`'s coins accepts (`zkSimAbortAt`), the outcome is the view of the record it decides
 (`zkSimRunAt`), and table `j`'s decoded output's `τ` openings are logged in the run (`zkViewTauLogged`). -/
-theorem zkAccTau {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+theorem zkAccTau {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -423,7 +423,7 @@ variable [S : ZkSetup]
 tape whose table `j` outputs are accepted and open one cap's `τ` commitment at rep `r` to different values are two
 accepting runs of `P` at `zkΦ`'s coins (`zkAccTau`) whose openings there have one leaf, the cap's root
 (`opTauZ_some`), so they collide in the two runs' logs (`tiedColl_of_tauLogged`). -/
-theorem zkTauClash (x : Claims.Msg) : ZkTauClash x := by
+theorem zkTauClash (x : Hash.Msg) : ZkTauClash x := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC u r₁ r₂ r h _ _
   obtain ⟨a, a', ha, ha', dc, hs₁, hs₂, hne⟩ := h
   dsimp only at hs₁ hs₂ hne
@@ -440,7 +440,7 @@ end Gen
 tape whose table `j` outputs are accepted and open one cap's `τ` commitment at rep `r` to different values are two
 accepting runs of `P` at `zkΦ`'s coins (`zkAccTau`) whose openings there have one leaf, the cap's root
 (`opTauZ_some`), so they collide in the two runs' logs (`tiedColl_of_tauLogged`). -/
-theorem zkTauClash (x : Claims.Msg) : ZkTauClash x :=
+theorem zkTauClash (x : Hash.Msg) : ZkTauClash x :=
   Gen.zkTauClash (S := S₀) (x := x)
 
 namespace Gen
@@ -449,7 +449,7 @@ variable [S : ZkSetup]
 
 /-- **The fork bound at `τ` from the alignment**: `ZkSimForkLeOn` at the `τ` events from `ZkTauAlign`, the clash
 holding outright (`zkTauClash`). -/
-theorem zkSimForkLeTau_of_align {x : Claims.Msg} (ha : ZkTauAlign x) :
+theorem zkSimForkLeTau_of_align {x : Hash.Msg} (ha : ZkTauAlign x) :
     ZkSimForkLeOn x fun _ i => ∃ r, i = .inl (.inr (.inr r)) :=
   zkSimForkLeTau_of ha (zkTauClash x)
 
@@ -457,7 +457,7 @@ end Gen
 
 /-- **The fork bound at `τ` from the alignment**: `ZkSimForkLeOn` at the `τ` events from `ZkTauAlign`, the clash
 holding outright (`zkTauClash`). -/
-theorem zkSimForkLeTau_of_align {x : Claims.Msg} (ha : ZkTauAlign x) :
+theorem zkSimForkLeTau_of_align {x : Hash.Msg} (ha : ZkTauAlign x) :
     ZkSimForkLeOn x fun _ i => ∃ r, i = .inl (.inr (.inr r)) :=
   Gen.zkSimForkLeTau_of_align (S := S₀) (x := x) (ha := ha)
 

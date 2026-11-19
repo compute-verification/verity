@@ -12,7 +12,7 @@ def test_an_output_wider_than_64_bits_is_compared_limb_by_limb(monkeypatch):
     is compared with the reference on every limb, and one that differs only in its top bit is caught."""
     import verity.protocols.resource_accounting.compute.pouw.prover.circuit.boolean  # noqa: F401  (registers the Boolean version that Flock lowers it through)
     from verity_flock import ir_lower as IL
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import words as W
+    from verity.circuits.ops import words as W
 
     opts, pins = CK.Options(), CK.load_pins()
     e = CK.check_definition(W.PouwHopperE4m3Window, opts, pins=pins, as_call=False)

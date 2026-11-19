@@ -586,7 +586,7 @@ theorem some_beq_some {α : Type} [BEq α] [LawfulBEq α] {a b : α} : ((some a 
 (`tt`, its JSON `tr`) and the inner session's record (`record`), and `Record.decode` decodes that record, each round
 `m` of the record's stream `name` has the coins of a round of the record `checkReads` reads in its own format
 (`readFull`): of that stream, at round `sp m`, where `sp` is the identity or skips the one split round of a holo
-session's z_partial. `hq` is `qsort`'s membership (`FlockSoundness.Audit.SampleExec.mem_qsort`). -/
+session's z_partial. `hq` is `qsort`'s membership (`Spot.Sampling.SampleExec.mem_qsort`). -/
 theorem coinTie_core (hq : ∀ (a : Array Json) (lt : Json → Json → Bool) x, x ∈ a.qsort lt → x ∈ a)
     {tr : Json} {record : String} {reg : Option Json} {bound : Option String}
     {shape : Option RecVStar.StackedShape} {cs : RecVStar.InnerCommits} {ish : RecVStar.Inner} {tt : String}
@@ -754,7 +754,7 @@ theorem staged_coinTie {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s
     exact Option.some.inj hsrc
   rw [hrec] at hdec
   obtain ⟨R', hRead', sp, hsp, hall⟩ := coinTie_core
-    (fun a lt x hx => (FlockSoundness.Audit.SampleExec.mem_qsort a lt x).1 hx) hic hR hdec hfind
+    (fun a lt x hx => (Spot.Sampling.SampleExec.mem_qsort a lt x).1 hx) hic hR hdec hfind
   rw [hRead] at hRead'
   cases hRead'
   refine ⟨spec'.tables[0]!, sp, hsp, fun m hm => ?_⟩

@@ -48,8 +48,8 @@ not whole words has bits past its writer's and lays out no circuit.
 **The record's text.** A record lays out a circuit only where the check reads it as its text states it (`Served`),
 by the readers a check of a circuit record is built on (`Spot.RecordText`), so that the check and these
 statements read one definition. The text parses, and the wiring's cuts and wires are its wiring's
-(`Spot.RecordText.wiring`, what `Spot.Wires.Wiring.ofJson` reads of its cuts and wires). The text states no
-template's rows or outputs, which are the Program's (`Templates`), and the wiring's order is left free: under any
+(`Spot.RecordText.wiring`: the text's cuts and the wires `Spot.Edges.edgesOf` reads off the Program's root). The text
+states no template's rows or outputs, which are the Program's (`Templates`), and the wiring's order is left free: under any
 order `Spot.Wires.check` accepts only wires without a cycle (`Spot.Wires.check_acyclic`). The slots are the ones the
 text's inference blocks give each unit (`Spot.RecordText.slot`), and every row the check holds is one the text
 declares, for the reason it declares: a registered read, a table read or an opening
@@ -225,6 +225,16 @@ def WriterLeaf (P : Prog) (rs : Array TRange) (S : Spot.Wires.Summary) (r : Row)
   ∃ wt wu out sc', S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out) ∧ 0 ≤ wu ∧
     UnitAt P rs wt wu.toNat sc' ∧ OutLeaf P sc' out l' g' lo' hi'
 
+/-- **Every unit's rows are its own input gates or its writers' outputs**: a leaf of a reader row is an input gate or
+the gate of a leaf of the output row it is wired to (an edge of the Program's root, `Spot.Edges.edgesOf`), and no gate
+is a leaf of two rows that have no writer, or two leaves of one. `OwnRows` is it on a wiring with no wire. -/
+def OwnOrEdgeRows (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) : Prop :=
+  (∀ r l g lo hi, RowLeaf P rs W r l g lo hi →
+      (∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧ Flock.Program.isInputId (P.defs[p]!).key = true) ∨
+        ∃ l' lo' hi', WriterLeaf P rs S r l' g lo' hi') ∧
+    ∀ r l lo hi r' l' lo' hi' g, RowLeaf P rs W r l g lo hi → RowLeaf P rs W r' l' g lo' hi' →
+      S.writerOf r.tid r.unit r.port r.row = none → S.writerOf r'.tid r'.unit r'.port r'.row = none → r = r' ∧ l = l'
+
 /-- The unit of the reader row `r` passes Program gate `g` on: `g` is a leaf of one of that unit's output rows. -/
 def PassedOn (P : Prog) (rs : Array TRange) (r : Row) (g : ℕ) : Prop :=
   ∃ sc out l lo hi, UnitAt P rs r.tid r.unit sc ∧ OutLeaf P sc out l g lo hi
@@ -275,12 +285,12 @@ def Divides (P : Prog) (rs : Array TRange) (slot : String → ℕ → Option ℕ
     at_ x < sc.off + (P.defs[sc.d]!).gates ∧ slot tid u = some s ∧ (U.unit x).map Fin.val = some s
 
 /-- **`d` is the circuit the record `c` lays out.** The instance's Program decodes and the record's text parses. The
-check reads the record as the text states it: the wiring's cuts and wires are its wiring's
-(`Spot.RecordText.wiring`); the slots are the ones its inference blocks give each unit
+check reads the record as the text states it: the wiring's cuts and wires are the record's wiring's, the text's cuts
+and the edges of the Program's root (`Spot.RecordText.wiring`); the slots are the ones its inference blocks give each unit
 (`Spot.RecordText.slot`); and every row the check holds is one the text declares, for the reason it declares
 (`Spot.RecordText.declared`). The wiring passes `Spot.Wires.check`, and its templates are the Program's: the
 root's nodes (`Flock.TemplateQuery.evaluate`), with their units, rows and outputs (`Templates`); every unit's rows
-are its own input gates, every wire lands whole, and every bit of a wired row is its writer's; no row the check
+are its own input gates or its writers' outputs (`OwnOrEdgeRows`), every wire lands whole, and every bit of a wired row is its writer's; no row the check
 holds has a writer; and `d` is the wired circuit, θ the rows the check holds and `𝓘` the slots.
 
 No clause asks that the text names its Program: where a gate is computed or a row is held it does, since the gate's
@@ -291,20 +301,20 @@ Not tied to the text: that the check holds every row the text declares (one that
 fresh); an opening's pin and its reader's roles, which are the check's (`Good`); which leaves of its parameter a
 declared read takes; and that the rows and outputs of the templates the two readers lay the units out by
 (`Spot.RecordText.templatesOf`) are this wiring's (`Templates`), two definitions held to one Program with no
-lemma between them. The two number a template's units alike: where the text's reader gives its templates, a template
-has one root node, its units are that node's, and its unit `u` is the node's member `u` (`unitAt_iff`,
+lemma between them. The two number a template's units alike: where the text's reader gives its templates, a
+template's units are the members of its root nodes, in the nodes' order, as many as the text gives it (`unitAt_iff`,
 `Proofs.Properties.InferenceOnly.Record`). SPOT's audit reads neither reader. -/
 def Served (F : Form) (c : F.Case) (d : Verity.RegisteredCircuit) : Prop :=
   ∃ (P : Prog) (doc : Json) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (rs : Array TRange)
       (at_ : Fin d.D.N → ℕ),
     Flock.Program.decode (F.inst c).program.toUTF8 = .ok P ∧
-    Flock.JsonParse.parse (F.inst c).record = .ok doc ∧ Spot.RecordText.wiring doc = .ok W ∧
+    Flock.JsonParse.parse (F.inst c).record = .ok doc ∧ Spot.RecordText.wiring P doc = .ok W ∧
     (F.wiring c).cuts = W.cuts ∧ (F.wiring c).wires = W.wires ∧ F.slot c = Spot.RecordText.slot P doc ∧
     (∀ r h, F.held c r = some h → Spot.RecordText.declared P doc r = some h.declared) ∧
     Spot.Wires.check (F.wiring c) = .ok S ∧
     Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P)
       ((F.wiring c).templates.map (·.1)).toArray = .ok rs ∧
-    Templates P rs (F.wiring c) ∧ OwnRows P rs (F.wiring c) ∧ Aligned P rs (F.wiring c) S ∧
+    Templates P rs (F.wiring c) ∧ OwnOrEdgeRows P rs (F.wiring c) S ∧ Aligned P rs (F.wiring c) S ∧
     Filled P rs (F.wiring c) S ∧ (∀ r, (F.held c r).isSome → S.writerOf r.tid r.unit r.port r.row = none) ∧
     LaysOut P rs (F.wiring c) S d.D at_ ∧
     Names P rs (F.wiring c) (fun r => (F.held c r).isSome) at_ d.θ ∧ Divides P rs (F.slot c) at_ d.𝓘

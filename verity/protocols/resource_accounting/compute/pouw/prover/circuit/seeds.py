@@ -55,7 +55,7 @@ from verity.commitments.gates.sha512 import IV, compress_gadget, pad_tail, words
 from verity.commitments.scheme import DIGEST_BYTES
 
 from . import hashes as H
-from . import words as W
+from verity.circuits.ops import words as W
 
 SEED_TAG = domains.POUW_SEED.encode().ljust(24, b"\0")
 RECEIPT_TAG = domains.POUW_RECEIPT.encode().ljust(24, b"\0")

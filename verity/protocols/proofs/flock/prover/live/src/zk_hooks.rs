@@ -17,7 +17,8 @@
 //! build can only sample from the OS: no fixed or test seed is reachable in a proving build.
 //!
 //! The Merkle leaf salts of `hm96-sha512/v1` are [`LeafSalts`]'s: the OS's bytes too, read tree by tree (decision 4(a)). With an
-//! injected seed they are a ChaCha20 expansion of that seed instead, so a test proof is reproducible. The hm96 key is not prover
+//! injected seed they are an expansion of that seed instead (`seed_injection`, a module a proving build doesn't have), so a test
+//! proof is reproducible. The hm96 key is not prover
 //! randomness at all: it is the statement's constant (`circuit::leaf_scheme`).
 //!
 //! [`Hooks`] is where M1's masking goes: a sumcheck round hook (`+ρ·g`), the Reed–Solomon padding `t_pad` of each Ligerito
@@ -79,10 +80,9 @@ impl ProverSeed {
 /// sees one set: level 0's are kept for the proof ([`LeafSalts::level0`]: the session's `Commit`, both reps and the ZK server's
 /// recheck all commit that tree), and a tree whose salts the ZK server's Lean finish drew ([`LeafSalts::preset`]) is kept
 /// until the device's tree takes them (zeroed if dropped first). Salts are never written to a record. An
-/// injected seed (a test harness only) expands them with ChaCha20 instead, leaf `i` of tree `id` being blocks
-/// `3i, 3i + 1, 3i + 2` under its `STREAM_SALT` key with nonce `id` ([`chacha20_block`]), so a test proof repeats.
+/// injected seed (a test harness only) expands them instead (`seed_injection`), so a test proof repeats.
 pub struct LeafSalts {
-    /// an injected seed's salt key (on the heap, so moving a `LeafSalts` copies no key byte); `None` in every proving build
+    /// an injected seed's key (`seed_injection::key`); `None` in every proving build, which has no `seed_injection`
     key: Option<Box<[u8; 32]>>,
     /// the trees kept
     kept: std::sync::Arc<std::sync::Mutex<Kept>>,
@@ -138,13 +138,13 @@ pub fn coin_nonce(seed: &ProverSeed) -> [u8; 32] {
 
 impl LeafSalts {
     pub fn for_seed(seed: &ProverSeed) -> Self {
-        let key = seed.injected.then(|| {
-            let mut key = Box::new([0u8; 32]);
-            let mut r = ChaCha20Rng::from_seed(seed.seed);
-            r.set_stream(STREAM_SALT);
-            r.fill_bytes(&mut key[..]);
-            key
-        });
+        #[cfg(any(test, feature = "seed-injection"))]
+        let key = seed.injected.then(|| crate::seed_injection::key(&seed.seed));
+        #[cfg(not(any(test, feature = "seed-injection")))]
+        let key = {
+            let _ = seed;
+            None
+        };
         LeafSalts { key, kept: Default::default(), ahead: Default::default(), next: 1, level0: 0 }
     }
 
@@ -250,16 +250,14 @@ fn sample_salts(key: Option<&[u8; 32]>, id: u64, leaves: usize) -> Vec<u8> {
 
 /// Writes every byte of `b`, whole leaves: tree `id`'s salts, on the current rayon pool.
 fn fill_salts(key: Option<&[u8; 32]>, id: u64, b: &mut [u8]) {
-    use rayon::prelude::{IndexedParallelIterator, ParallelIterator, ParallelSliceMut};
     assert_eq!(b.len() % SALT_BYTES, 0, "a tree's salts are whole {SALT_BYTES}-byte leaves");
-    match key {
-        Some(key) => b.par_chunks_mut(SALT_BYTES).enumerate().for_each(|(i, s)| {
-            for j in 0..3 {
-                s[64 * j..64 * j + 64].copy_from_slice(&chacha20_block(key, 3 * i as u64 + j as u64, id));
-            }
-        }),
-        None => os_fill(b),
+    #[cfg(any(test, feature = "seed-injection"))]
+    if let Some(key) = key {
+        return crate::seed_injection::fill_salts(key, id, b);
     }
+    #[cfg(not(any(test, feature = "seed-injection")))]
+    let _ = (key, id);
+    os_fill(b)
 }
 
 /// Reads a table's trees before the prover samples them ([`LeafSalts::ahead`]), so the device's tree callbacks find their salts
@@ -361,46 +359,6 @@ impl Drop for ZeroOnDrop {
     fn drop(&mut self) {
         zero(&mut self.0);
     }
-}
-
-/// One ChaCha20 block (20 rounds): state = "expand 32-byte k", the key, a 64-bit block counter (words 12-13) and a 64-bit
-/// nonce (words 14-15), output little-endian.
-pub fn chacha20_block(key: &[u8; 32], counter: u64, nonce: u64) -> [u8; 64] {
-    let mut s = [0u32; 16];
-    s[..4].copy_from_slice(&[0x6170_7865, 0x3320_646e, 0x7962_2d32, 0x6b20_6574]);
-    for i in 0..8 {
-        s[4 + i] = u32::from_le_bytes(key[4 * i..4 * i + 4].try_into().unwrap());
-    }
-    s[12] = counter as u32;
-    s[13] = (counter >> 32) as u32;
-    s[14] = nonce as u32;
-    s[15] = (nonce >> 32) as u32;
-    let mut x = s;
-    let qr = |x: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize| {
-        x[a] = x[a].wrapping_add(x[b]);
-        x[d] = (x[d] ^ x[a]).rotate_left(16);
-        x[c] = x[c].wrapping_add(x[d]);
-        x[b] = (x[b] ^ x[c]).rotate_left(12);
-        x[a] = x[a].wrapping_add(x[b]);
-        x[d] = (x[d] ^ x[a]).rotate_left(8);
-        x[c] = x[c].wrapping_add(x[d]);
-        x[b] = (x[b] ^ x[c]).rotate_left(7);
-    };
-    for _ in 0..10 {
-        qr(&mut x, 0, 4, 8, 12);
-        qr(&mut x, 1, 5, 9, 13);
-        qr(&mut x, 2, 6, 10, 14);
-        qr(&mut x, 3, 7, 11, 15);
-        qr(&mut x, 0, 5, 10, 15);
-        qr(&mut x, 1, 6, 11, 12);
-        qr(&mut x, 2, 7, 8, 13);
-        qr(&mut x, 3, 4, 9, 14);
-    }
-    let mut out = [0u8; 64];
-    for i in 0..16 {
-        out[4 * i..4 * i + 4].copy_from_slice(&x[i].wrapping_add(s[i]).to_le_bytes());
-    }
-    out
 }
 
 /// The prover's random words: in a proving build the OS's, read afresh by every sample (two samples at one address get different
@@ -549,15 +507,6 @@ mod tests {
         assert!(ProverRng::from_seed(seed).f128s_lanes(7, 0, 8).is_empty());
     }
 
-    /// RFC 7539 section 2.3.2: key 00..1f, block counter 1, nonce 000000090000004a00000000 (words 13-15).
-    #[test]
-    fn chacha20_block_matches_rfc7539() {
-        let key: [u8; 32] = std::array::from_fn(|i| i as u8);
-        let b = chacha20_block(&key, 1 | (0x0900_0000u64 << 32), 0x4a00_0000);
-        assert_eq!(crate::hex(&b), concat!("10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4e",
-                                           "d2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e"));
-    }
-
     /// A proving build's salts are the OS's: no two trees, proofs or leaves share a salt, a tree's sample spans several
     /// `getrandom` pieces, and level 0's are read once.
     #[test]
@@ -655,25 +604,6 @@ mod tests {
         let mut old = std::sync::Arc::new(vec![0xa5u8; leaves * SALT_BYTES]);
         os.ahead().draw(&[(os.level0_id(), leaves)], &mut reused(&mut old));
         assert!(os.level0(leaves).chunks(SALT_BYTES).all(|l| l.iter().any(|&x| x != 0xa5)), "every leaf read from the OS");
-    }
-
-    /// An injected seed's salts are its ChaCha20 tape: leaf `i` of tree `id` is blocks `3i..3i+2` under the `STREAM_SALT` key with
-    /// nonce `id`, so a test proof repeats.
-    #[test]
-    fn an_injected_seed_expands_its_salts() {
-        let seed = ProverSeed::injected([5; 32]);
-        let mut key = [0u8; 32];
-        let mut r = ChaCha20Rng::from_seed([5; 32]);
-        r.set_stream(STREAM_SALT);
-        r.fill_bytes(&mut key);
-        let s = LeafSalts::for_seed(&seed);
-        let all = s.expand(7, 5);
-        for i in 0..5 {
-            let want: Vec<u8> = (0..3).flat_map(|j| chacha20_block(&key, 3 * i as u64 + j, 7)).collect();
-            assert_eq!(all[SALT_BYTES * i..SALT_BYTES * (i + 1)], want);
-        }
-        assert_eq!(LeafSalts::for_seed(&seed).expand(7, 5), all);
-        assert_eq!(*s.level0(3), LeafSalts::for_seed(&seed).expand(0, 3));
     }
 
     /// Table 0 of a session of several tables reads a one-table session's words and salts; every other table reads none of

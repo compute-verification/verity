@@ -1,5 +1,5 @@
 """vLLM serving under PoUB: an in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``)
-with `verity_vllm.protocols.poub.binder.Binder` on it registers its weights and KV pool in a `NodeMemory`, and
+with `verity.protocols.resource_accounting.memory.poub.prover.binder.Binder` on it registers its weights and KV pool in a `NodeMemory`, and
 PoUB's prover's `serving.StoreBackend` (`verity.protocols.resource_accounting.memory.poub.prover.node_store.serving`) proves that store to a
 verifier while the engine serves a trace of requests:
 before each pass the engine runs its next step (its allocs, appends and frees, one memory-map/v1 line), and the pass
@@ -117,7 +117,7 @@ def fit(steps: int | None, pass_ms: int, windows: int | None = None, window_ms: 
 def row_steps(path: Path) -> int:
     """The engine steps of the row file ``path``'s run, its ``expected_engine_steps``; `Refused` for a file that
     states none, or whose target does not declare synchronous scheduling, which a Commit's session refuses once its
-    engine is about to be built (`verity_vllm.protocols.poub.remote.CommitSession.target`)."""
+    engine is about to be built (`verity.protocols.resource_accounting.memory.poub.prover.commit_session.CommitSession.target`)."""
     try:
         row = json.loads(Path(path).read_text())
     except (OSError, ValueError) as e:
@@ -261,11 +261,10 @@ def engine(work: Path):
 
 
 def provers():
-    """PoUB's prover's serving loop and its store, which serving proves by; none of it the adapter's, vLLM's or a
-    GPU's (the adapter's `Binder` is imported where the engine is built)."""
+    """PoUB's prover's serving loop, which proves by the store PoUB's attach makes (the binder's ``store``); none of it
+    the adapter's, vLLM's or a GPU's."""
     from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
-    from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import NodeMemory
-    return serving, NodeMemory
+    return serving
 
 
 def backend_class(serving):
@@ -299,7 +298,7 @@ def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) ->
     lsock.close()
     v = None
     try:
-        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), figures=sheets.figures(),
+        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), figures=sheets.figures(a.figures_node),
                               source=os.urandom(32), windows=a.windows,
                               window_ns=a.window_ns, samples=a.samples, delta=2.0 ** -40, jitter_ns=10 ** 9,
                               clock=clock, log=lambda m: None, lifetime=a.lifetime)
@@ -371,6 +370,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--plan", default="serve", help="serve, or servedrop:K")
     ap.add_argument("--codec", default="p512/k2", help="the registration's codec (`wire.codec_named`)")
     ap.add_argument("--node", default="verity-vllm/serve-tiny", help="the node's name in the hello")
+    ap.add_argument("--figures-node", metavar="KIND",
+                    help="with --local: the node file whose figures the verifier reads (`sheets.figures`)")
     ap.add_argument("--windows", type=int, help="with --local (default 3); with --fit: the session's windows")
     ap.add_argument("--window-ns", type=int, default=6, help="with --local: passes a window, a tick each")
     ap.add_argument("--samples", type=int, default=4096, help="with --local")
@@ -397,21 +398,25 @@ def main(argv: list[str] | None = None) -> int:
         if a.prover_rc is None:
             ap.error("--verdict takes --prover-rc")
         return verdict_main(a)
+    if a.local and a.figures_node is None:
+        ap.error("--local takes --figures-node KIND, the node file whose figures its verifier reads")
     if a.windows is None:
         a.windows = 3
     if "," in a.plan:
         ap.error("one session a process: a NodeMemory serves one session")
     a.out.mkdir(parents=True, exist_ok=True)
 
-    from verity_vllm.protocols.poub.binder import Binder
+    from verity_vllm import messages
+    from verity_vllm.engine.build import hooked
+    from verity.protocols.compose import schemes
 
-    serving, NodeMemory = provers()
-    store = NodeMemory()
-    binder = Binder(store, passes=False).install()
+    serving = provers()
+    binder = messages.current().attach(schemes.get("poub"), {"passes": False})
     with tempfile.TemporaryDirectory() as work:
-        trace = Trace(engine(Path(work)))
+        built, _, detach = hooked(lambda: engine(Path(work)))
+        trace = Trace(built)
         clock = PassClock() if a.local else None
-        backend = backend_class(serving)(store, trace, clock=clock)
+        backend = backend_class(serving)(binder.store, trace, clock=clock)
         result, th = {}, None
         if a.local:
             lsock = wire.listen("127.0.0.1", 0)
@@ -427,6 +432,7 @@ def main(argv: list[str] | None = None) -> int:
             if "error" in result:
                 raise result["error"]
     binder.uninstall()
+    detach()
     out = {"schema": "verity/remote-session/serve/v0", "plan": a.plan, "model": TINY, "pages": PAGES,
            "slots": SLOTS, "budget": BUDGET, "store": binder.stats(), "layout": backend.layout(),
            "trace": {"steps": trace.steps, "requests": trace.requests}, "prover": prover_result,

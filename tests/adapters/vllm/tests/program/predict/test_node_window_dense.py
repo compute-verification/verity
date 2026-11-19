@@ -171,14 +171,12 @@ def test_free_rows_unwired(window):
 
 
 def test_left_free(program):
-    """The token select and the stop check stay unlowered: the select's one unit (`TokenSelect_v4` is no ``STAGES`` row)
-    reads 309,760 bytes of logits, past a proof block, and the stop check's ports are 32-bit ids and no serving template's
-    u16 words."""
+    """The token select stays unlowered: its one unit (`TokenSelect_v4` is no ``STAGES`` row) reads 309,760 bytes of logits,
+    past a proof block. The stop check's ports are 32-bit ids, so its serving template is laid out as its bits."""
     specs = {getattr(n.fn, "name", ""): descriptor_id(n.fn) for n in program.body.nodes}
     with pytest.raises(ValueError, match="past 2\\^27"):
         IF.check_proof_block(ST.template(specs["TokenSelect"]).fn)
-    with pytest.raises(ValueError, match="commit u16 words"):
-        ST.template(specs["StopCheck"])
+    assert ST.template(specs["StopCheck"]).layout == "bits"
 
 
 def _after(family: str, lower, prefix: str, extra):
@@ -211,15 +209,6 @@ def test_row_fed_refusals(program, which, extra, match):
     port row-fed at two cuts, and a row of a unit fed twice: free twice, or wired and free."""
     with pytest.raises(NW.Unexpressible, match=match):
         NW.node_window(program, families=_after(*which, extra))
-
-
-def test_row_fed_cut_kept(program):
-    """After `_Builder.settle`, a row-fed port's cut is still the one `feed_rows` gave it, else the window is refused."""
-    w = NW.NodeWindow(program, FAMILIES).lower()
-    (tid,) = [t for t in w.b.fns if t.startswith("AllReduceResidualMnnvl_v1") and "SHOT=2" in t]
-    w.b.cuts[tid]["parts"] = 4
-    with pytest.raises(NW.Unexpressible, match=r"cuts changed after `feed_rows`: .*parts 8"):
-        w.circuit()
 
 
 def _rewired(circuit: IF.Circuit, make) -> IF.Circuit:

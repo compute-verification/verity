@@ -122,7 +122,7 @@ CASE_DIGESTS = "case-digests.txt"
 REQUEST_KEYS = ("deadline_ns", "node", "passes", "samples", "window_ns", "windows")
 SESSION = {"deadline_ns": 10**9, "passes": 4, "samples": 1024, "window_ns": 20 * 10**9, "windows": 6}
 """The auditor's session parameters, which a request must carry as they are (`params_of`): the served bandwidth piece's
-(`benchmarks/pous/held_bandwidth.py`'s defaults, over the store the PoUS piece holds), six windows of at least 20 s,
+(`p2_stage/bandwidth.py`'s defaults, over the store the PoUS piece holds), six windows of at least 20 s,
 four passes each, 1,024 openings a window and an allowance of 1 s. At δ = 2^-40 an accepted session's ε is
 δ + 6,144/2^64 (`EPS_TERMS`), about 9.1e-13, which leaves out Σ_t adv_t (SHA-512 stream as PRF: not priced, not
 assumed)."""
@@ -360,7 +360,7 @@ def core_answer(a: Mapping[str, Any], r_bytes_per_s: int | None = None) -> dict[
         public: dict[str, Any] = {"eps": str(delta + Fraction(sum(a["draws"]), 2**64)), "q_bytes": q, "span_ns": span}
         profile: dict[str, Any] = {
             "delta": str(delta), "draws": a["draws"], "eps_terms": EPS_TERMS, "plan_units": a.get("plan_units", a["units"]),
-            "receipts": a["receipts"], "unit_bytes": a["unit_bytes"], "units": a["units"], "verifier_host": a.get("host"),
+            "receipts": a["receipts"], "unit_bytes": a["unit_bytes"], "units": a["units"], "verifier_host": None if a.get("host") is None else mc.UNNAMED,
             "windows": len(a["windows"]), "wrong": a["wrong_at_most"]}
         if r_bytes_per_s is not None:
             public |= {"gamma": str(1 - Fraction(q * 10**9, r_bytes_per_s * span)), "r_bytes_per_s": r_bytes_per_s}

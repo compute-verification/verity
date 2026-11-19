@@ -38,7 +38,7 @@ def _isolated(case):
         assert r.returncode == 0, f"{case.__name__} in a fresh interpreter:\n{r.stdout}{r.stderr}"
     return test
 
-VERSIONS = {"torch_version": "2.8.0", "cuda_version": "12.9"}
+VERSIONS = {"arch": "9.0a", "torch_version": "2.8.0", "cuda_version": "12.9"}
 
 
 def _sources(tmp_path, body: bytes = b"__global__ void k(){}") -> list[str]:
@@ -149,7 +149,7 @@ def test_local_headers_are_staged_beside_the_sources_and_key_the_digest(tmp_path
     assert nj.local_headers(paths) == [("sub/a.h", str(src / "sub" / "a.h")), ("sub/b.h", str(src / "sub" / "b.h"))]
     seen = {}
     _, bd, digest = nj.jit_load("ext", paths, parent=str(tmp_path / "jit"), loader=lambda **kw: seen.update(kw), **VERSIONS)
-    assert seen["sources"] == [os.path.join(bd, "src", "ext.cu")]
+    assert seen["sources"] == [os.path.join(bd, "src", "ext.cu")] and os.environ["TORCH_CUDA_ARCH_LIST"] == "9.0a"
     assert Path(bd, "src", "sub", "b.h").read_bytes() == b"#define B 1\n"
     (src / "sub" / "b.h").write_bytes(b"#define B 2\n")
     assert nj.source_set_digest(paths, cflags=(), cuda_cflags=(), **VERSIONS) != digest, "a header byte moves the digest"
@@ -159,7 +159,7 @@ def test_a_header_free_source_set_keeps_its_digest(tmp_path):
     import hashlib
 
     paths = _sources(tmp_path)
-    h = hashlib.sha256(b"ext.cu\0__global__ void k(){}\0cflags=|cuda_cflags=|torch=2.8.0|cuda=12.9")
+    h = hashlib.sha256(b"ext.cu\0__global__ void k(){}\0cflags=|cuda_cflags=|torch=2.8.0|cuda=12.9|arch=9.0a")
     assert nj.source_set_digest(paths, cflags=(), cuda_cflags=(), **VERSIONS) == h.hexdigest()
 
 

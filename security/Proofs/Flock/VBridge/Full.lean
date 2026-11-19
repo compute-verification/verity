@@ -38,7 +38,7 @@ in full; under a stratified sample that is the stratum holding it.
 
 namespace FlockVBridge.Full
 
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 
 /-- `Stratum.unit` over its ranges as a list. -/
 def unitL : List (ℕ × ℕ) → ℕ → ℕ

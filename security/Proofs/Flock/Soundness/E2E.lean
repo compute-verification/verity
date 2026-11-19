@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.FlockPublic
+public import Proofs.Flock.SpotFlock.Sampling.FlockPublic
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
@@ -48,7 +48,9 @@ The headline, gives each one's kind):
 
 @[expose] public section
 
-namespace FlockSoundness.Audit
+namespace Spot.Sampling
+
+open FlockSoundness
 
 open Game Model Accounting Extract LinkFinder
 open scoped ENNReal
@@ -204,4 +206,4 @@ theorem _root_.FlockSoundness.Prog.flock_e2e_sampled
       ksAvgBE H E plan k (reg σ) (cont σ) + (p.partition outs).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   (p.partition outs).flock_e2e_sampled H E plan tab hExec pp.derived ones hConst zeros hZero vb hk hRw hM hρ hr ht σ hCR
 
-end FlockSoundness.Audit
+end Spot.Sampling

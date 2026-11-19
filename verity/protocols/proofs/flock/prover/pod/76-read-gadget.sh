@@ -39,9 +39,9 @@ L=$FW/cache/pc-read-gadget; mkdir -p $L || exit 1
 unset CARGO_TARGET_DIR
 { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "pinned=$RG_PINNED rayon=$RAYON_NUM_THREADS slices=${SLICES:-} slice_wait_s=${SLICE_WAIT_S:-}"
   free -g | head -2; cat /proc/loadavg; } > $O/host.txt 2>&1
-python3 verity/protocols/proofs/flock/prover/pod/gemm_slowdown.py sample --pgid $(ps -o pgid= $$ | tr -d ' ') --out $O/others_cores.txt --every 10 &
+python3 benchmarks/proof_throughput/gemm_slowdown.py sample --pgid $(ps -o pgid= $$ | tr -d ' ') --out $O/others_cores.txt --every 10 &
 SAMPLER=$!
-python3 verity/protocols/proofs/flock/prover/pod/gemm_hill.py cores --cpus $RG_PINNED --out $O/slice_cores.tsv --every 10 &
+python3 benchmarks/proof_throughput/gemm_hill.py cores --cpus $RG_PINNED --out $O/slice_cores.tsv --every 10 &
 CORES=$!
 trap 'kill $SAMPLER $CORES 2>/dev/null; rm -rf $S' EXIT
 [ -x /usr/bin/time ] || { apt-get install -y -qq time >/dev/null 2>&1 || { apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq time >/dev/null 2>&1; }; }
@@ -68,16 +68,15 @@ CHALLENGER_REPO=$REPO CHALLENGER_WORK=$S/challengers
 challenger_build
 
 # the CPU prover, cached per pod under its sources' key like 70-class-sweep.sh's binaries (one build at a time per FLOCK_WORK)
-SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-89}
 KEY=$(cat verity/protocols/proofs/flock/prover/pod/20-gpu-link.sh verity/protocols/proofs/flock/prover/pod/60-circuit.sh verity/protocols/proofs/flock/prover/*.patch verity/protocols/proofs/flock/prover/cuda_*_patch.py \
   $(find verity/protocols/proofs/flock/prover/cuda verity/protocols/proofs/flock/prover/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
-BIN=$W/bin-$KEY-g0-sm$SM; F=$FW/flock-gpu-link/flock
+BIN=$W/bin-$KEY-g0; F=$FW/flock-gpu-link/flock
 exec 8>$W/build.lock; flock 8
 if [ -x $BIN/flock-circuit ] && [[ $(ldd $BIN/flock-circuit 2>&1) == *"not found"* ]]; then
   rm -rf $BIN || { echo "$BIN: built against another glibc, and this job can't remove it" >&2; exit 1; }
 fi
 if [ ! -x $BIN/flock-circuit ]; then
-  RESEARCH_RUN_DIR=$O/build FLOCK_WORK=$FW MODE=build GPU=0 SM=$SM bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
+  RESEARCH_RUN_DIR=$O/build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
   mkdir -p $BIN && cp $F/target/release/flock-circuit $BIN/flock-circuit
 fi
 exec 8>&-

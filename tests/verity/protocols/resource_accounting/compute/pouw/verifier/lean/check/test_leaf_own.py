@@ -23,6 +23,7 @@ import verity_difftest as D
 
 from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -61,7 +62,7 @@ def _entry(rng: random.Random, value: str) -> dict:
 
 def _known(rng: random.Random, name: str) -> dict:
     return {"value": name, "root": rng.randbytes(64).hex(), "leaves": 1, "words": 1, "word_bits": 16,
-            "domain": rng.randbytes(64).hex(), G.SCHEMA_KEY: G.SCHEMA_V2, "reads": [0]}
+            "domain": rng.randbytes(64).hex(), RV.SCHEMA_KEY: G.SCHEMA_V2, "reads": [0]}
 
 
 def _window(rng: random.Random) -> tuple[dict, dict]:

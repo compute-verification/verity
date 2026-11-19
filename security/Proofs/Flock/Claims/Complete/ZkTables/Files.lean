@@ -74,7 +74,7 @@ open Lean (Json JsonNumber)
 `b` encodes, at the rep's shape, a masked proof the rep returned on the table's trace, its packed table, its masked
 level-0 commitment, and the tape's pads, committed, from `n` sends, ending at the rounds `rs`, its rank check over
 the table's `words` at some earlier claim points. -/
-def RepFileJ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup)
+def RepFileJ (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup)
     (words : Array (List ℕ)) (schs : Array (Schedule × ℕ)) (cms : Array Commit) (trs : Array Trace) (tape : TapeZk)
     (pts : Array (Array F128)) (n i rep : ℕ) (rs : Array Round) (b : ByteArray) : Prop :=
   ∃ e p ic l t' l' prior, tabs[i]!.extra pts = .ok e ∧
@@ -91,7 +91,7 @@ def RepFileJ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : S
 level-0 commitment; the record is the honest masked record of the commitments' caps and one well-formed stream per rep
 stream; the sends are the link of the caps, then the streams' rounds in order; and the `j`th proof file and stream are
 table `j / 2`'s rep `j % 2`'s (`RepFileJ`). -/
-theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec}
+theorem sessionPZk_filesJ (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg) {spec : SessionSpec}
     {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json} (hown : Flock.JsonParse.parse spec.hello = .ok own)
     {hz : String} (hc : canon (helloJ own) = .ok hz) (tabs : Array Setup) (words : Array (List ℕ))
     (trs : Array Trace) (tape : TapeZk)
@@ -100,7 +100,7 @@ theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
       st.extra (ptsOf spec (coinOf (resp 0))) = .ok extras →
       Ret ((repPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) st v.1 v.2 rep dom tr tb cm₀ extras pads ic extra
         lanePad salt nonce prior ws).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds)
-    (hst : ∀ a ∈ spec.repStreams, a.1 < tabs.size) {r : String × Array ByteArray} {bodies : Array Claims.Msg}
+    (hst : ∀ a ∈ spec.repStreams, a.1 < tabs.size) {r : String × Array ByteArray} {bodies : Array Hash.Msg}
     (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec tabs words trs tape).go #[] =
       (.ok r, bodies)) :
     ∃ schs cms streams, (∀ i < tabs.size, Zk.schedule tabs[i]!.wideLeaf tabs[i]!.m = .ok schs[i]! ∧
@@ -153,7 +153,7 @@ theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
   simp only [Prod.mk.injEq, Except.ok.injEq, Array.size_empty] at hL
   obtain ⟨rfl, rfl⟩ := hL
   obtain ⟨⟨ss, ps⟩, l₄, hF, hrun⟩ := go_bind_ok hrun
-  have hinv := forIn_array_idx _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Claims.Msg) =>
+  have hinv := forIn_array_idx _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Hash.Msg) =>
       b.1.size = k ∧ b.2.size = k ∧ (∀ rs ∈ b.1, RoundsOk rs) ∧
         (∀ j (hj : j < b.2.size), RepFileJ resp (Claims.hOf H) spec tabs words schs cms trs tape
           (ptsOf spec (coinOf (resp 0))) (1 + ((b.1.toList.take j).flatMap Array.toList).length) (j / 2) (j % 2)
@@ -221,7 +221,7 @@ theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
       simp only [Array.toList_push, List.flatMap_append, List.flatMap_cons, List.flatMap_nil, List.append_nil, hrs]
       exact Recs.append hrec (by rw [← hsz]; exact hrec')
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The honest masked rep proof fits its shape** (`RepShapedZk`), at each table of a good case: on table `i`'s
 `--zk` schedule `v`, its masked level-0 commitment `cm` of its share's packed table, its extra claims `e` at the link's
@@ -388,7 +388,7 @@ theorem filesJ (h64 : Out64 H) (hS : StmtOkJ H rel) (hR : RepShapedJ H rel) : Fi
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
 any number of tables: `completeJ` with what the record's checks ask of the proof files from `RepShapedJ` (`filesJ`). -/
-theorem completeJR (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem completeJR (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel) (hPRJ : ProverRunsJ H rel) (hRJ : RepShapedJ H rel)

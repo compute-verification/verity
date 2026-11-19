@@ -65,7 +65,6 @@ def driver(tmp_path, monkeypatch) -> tuple[_LLM, Path]:
     """`tp-commit`'s engine and what it reads around it, stood in -> (the stand-in LLM, the Commit's out dir).  Inductor's config is
     unloaded for the test: another test in the same worker may have imported it before the engine's pin, which
     `engine.env.require_inductor` refuses."""
-    from verity_vllm import protocols as PO
     from verity_vllm.engine import engine_profile as prof
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline import commit as PC
@@ -81,7 +80,7 @@ def driver(tmp_path, monkeypatch) -> tuple[_LLM, Path]:
                                (prof, "engine_kwargs", lambda cp, **kw: dict(kw)), (va, "load_workload", lambda path, max_tokens: WORKLOAD),
                                (va, "target_of_workload", lambda wl, *a: None), (va, "case_of", lambda wl, case: case),
                                (va, "throwaway_requests", lambda eng, reqs, seed=0: reqs),
-                               (PO, "commit_guard", lambda *a, **k: None), (PC, "git_head", lambda: None),
+                               (PC, "git_head", lambda: None),
                                (PC, "run_workload", lambda eng, requests, sampling: dict(RUN)), (TPCM, "tree_of_record", lambda: {}),
                                (GL, "_ENVIRON", []), (GL, "_HELD", [])]:
         monkeypatch.setattr(owner, name, value)

@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 
 `ResourceAccounting.Compose.Declared` gives each gate its proof block (`Declared.unit`), each value its commit coin
 (`Declared.commitRound`) and each round the values its seed names (`Declared.seedNames`), and the composed credit
-(`Definitions.Compose.Guarantees.Compose`) samples, proves and charges tiles by them, its sample `Pouw.Window.subsetDraw`
+(`Definitions.Compose.Guarantees.Compose`) samples, proves and charges tiles by them, its sample `Verity.SamplingDesign.permPrefix`
 (`ResourceAccounting.Compose.drawOf`). `UnitsOfLayout` is the statement that the registered circuit is the service's on a
 program `p` and query:
 * **units**: the service samples and proves the units of the verifier's own partition of its program
@@ -64,7 +64,7 @@ program `p` and query:
   credit nothing on today's code either;
 * **the sample**: the code's sample under the `subset:K_d` sampling design, from `L` uniform bytes (`Select.select`, its sampled proof blocks
   then its closure, `Properties.Spot.bytesOf`), is accepted and samples no unit of a set `U` no more often than
-  `subsetDraw K_d` of a uniform permutation of the population's `N_p` tiles misses `U`.
+  `Verity.SamplingDesign.permPrefix N_p K_d`, a uniform permutation's `K_d`-prefix of the population's `N_p` tiles, misses `U`.
 
 It is stated, not proved: nothing builds a `Declared` from a compiled Program yet, which is the composed statement's
 open faithfulness gap. The extractor that builds one, with this property proved of it, closes it; tying each value to
@@ -86,7 +86,7 @@ population unit is one of `Cd`'s `units`; each value `Cd` writes is committed be
 input and before the sample (`Cd.rounds`) otherwise, PoUW's salt-and-draw schedule; each round's seed names a value
 `Cd` writes exactly when it is a registered input (through the salt, which names the weights' root); and where the
 population is `N_p` units, the code's `subset:K_d` sample from `L` uniform bytes is accepted and misses a set `U` of
-units with probability at most the model's sample's (`Pouw.Window.subsetDraw K_d` of a uniform permutation of
+units with probability at most the model's sample's (`Verity.SamplingDesign.permPrefix N_p K_d`, a uniform permutation's `K_d`-prefix of
 `Fin N_p`). -/
 def UnitsOfLayout {ι : Type} (Cd : ResourceAccounting.Compose.Declared ι) (Np Kd : ℕ) (p : Spot.Program)
     (query : Json) : Prop :=
@@ -104,6 +104,6 @@ def UnitsOfLayout {ι : Type} (Cd : ResourceAccounting.Compose.Declared ι) (Np 
         prob (fun src : Fin L → Fin 256 => ∃ r,
             Spot.Select.select (.samplingDesign ("subset:" ++ toString Kd)) p query none cm
               (Properties.Spot.bytesOf src) = .ok r ∧ ∀ u ∈ U, u ∉ r.2.1) ≤
-          prob (fun β : Equiv.Perm (Fin Np) => ∀ t ∈ Pouw.Window.subsetDraw Kd β, t.val ∉ U))
+          prob (fun β : Equiv.Perm (Fin Np) => ∀ t ∈ (Verity.SamplingDesign.permPrefix Np Kd).draw β, t.val ∉ U))
 
 end Properties.Compose

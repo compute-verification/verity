@@ -1,6 +1,5 @@
 """The TABLES sweep for ``flock-circuit`` (``verity/flock-circuit``, or with ``--typed`` the typed statement
-``verity/flock-circuit/types``): one ``result.json`` per point, as ``verity_flock.ir_bench``
-does for ``flock-ir-frame`` (whose guard, probes and helpers, from ``verity_flock.bench``, this reuses).
+``verity/flock-circuit/types``): one ``result.json`` per point.
 
     python -m verity_flock.circuit_bench --template rope-head --input-set DIR --bin target/release/flock-circuit --out-dir D \\
         --points "256 1024" [--per-proof N] [--runs 5] [--verifier HOST:PORT] [--rtt-target HOST:PORT] [--loopback] [--typed]
@@ -30,23 +29,150 @@ from pathlib import Path
 from . import challengers as CH
 from . import circuit as FC
 from . import typed_statement as TS
-from .bench import PER_PROOF_LOG2, PROFILES, _OURS, _guard, _lines, _probe, _quota, _sampler, _wait_serving, subbatches, tcp_rtt
 
 RULE = "the planned points (instances of the input set, sequential sub-batches of --per-proof); plateau = the point with the highest median throughput"
+
+PROFILES = {"bf16-hopper": "bf16-hopper-mma-draft/2026-09-22", "fp8-ada": "fp8-ada-mma-draft/2026-09-22",
+            "fp8-hopper": "fp8-hopper-wgmma-draft/2026-09-22", "bf16-ampere": "first-campaign-target/2026-09-21",
+            "bf16-hopper-wgmma": "bf16-hopper-mma-draft/2026-09-22", "fp4-nvf4": "nvfp4-sm120-mma-draft/2026-09-22"}
+
+
+def _guard():
+    from . import timing_guard
+    return timing_guard
+
+
+_OURS: set[int] = set()
+#: when our prover subprocesses exited (monotonic): NVML can list an exited context for a while, under a pid we can't match
+_EXITED: list[float] = []
+EXIT_GRACE_S = 10.0
+
+
+def _sampler():
+    """The timing guard's sample with our own prover subprocess taken out: it holds the GPU context, not this process, and
+    NVML may list it under another pid namespace, so one listed process per running prover of ours is ours."""
+    s = _guard().sample()
+    if s.get("pids") is not None:
+        mine = [p for p in s["pids"] if int(p) in _OURS] if s["pids"] else []
+        rest = [p for p in s["pids"] if p not in mine]
+        now = time.monotonic()
+        lingering = sum(1 for t in _EXITED if now - t < EXIT_GRACE_S)
+        drop = max(0, len(_OURS) + lingering - len(mine))
+        s["pids"] = rest[drop:]
+        s["n_other"] = len(s["pids"])
+    return s
+
+
+def _quota() -> int:
+    """The cgroup's CPU quota in whole cores (v2 ``cpu.max``, else v1 ``cpu.cfs_quota_us`` / ``cpu.cfs_period_us``), else the
+    host's CPU count."""
+    cg = Path("/sys/fs/cgroup")
+    try:
+        q, p = (cg / "cpu.max").read_text().split()
+    except (OSError, ValueError):
+        try:
+            q, p = ((cg / "cpu" / f).read_text().strip() for f in ("cpu.cfs_quota_us", "cpu.cfs_period_us"))
+        except OSError:
+            q = p = "max"
+    try:
+        if q not in ("max", "-1"):
+            return max(1, int(int(q) / int(p)))
+    except ValueError:
+        pass
+    return os.cpu_count() or 1
+
+
+def _lines(path: Path, tag: str) -> list[dict]:
+    """The tagged JSON lines. A LIVE record's ``wait_s`` is the transport's wait read after ``Finish``, so it includes the
+    verifier's end-of-session replay (``verdict.verify_s``), which ``e2e_s`` does not: that is taken out here (the raw figure
+    stays as ``wait_s_raw``)."""
+    out = []
+    for line in path.read_text().splitlines():
+        if line.startswith(tag + "\t"):
+            r = json.loads(line.split("\t", 1)[1], strict=False)
+            if tag == "LIVE" and "wait_s" in r and isinstance(r.get("verdict"), dict) and r["verdict"].get("verify_s") is not None:
+                r["wait_s_raw"] = r["wait_s"]
+                r["wait_s"] = max(0.0, r["wait_s"] - r["verdict"]["verify_s"])
+            out.append(r)
+    return out
+
+
+def _wait_serving(log: Path, proc: subprocess.Popen, timeout: float = 600) -> None:
+    t = time.time()
+    while time.time() - t < timeout:
+        if log.exists() and "SERVING" in log.read_text():
+            return
+        if proc.poll() is not None:
+            raise RuntimeError(f"verifier exited: {log.read_text()[-500:]}")
+        time.sleep(0.5)
+    raise RuntimeError("verifier did not start")
+
+
+def subbatches(total: int, per: int) -> list[tuple[int, int]]:
+    return [(lo, min(total, lo + per)) for lo in range(0, total, per)]
+
+
+def _probe(addr: str, timeout: float = 1800) -> None:
+    """Wait until the verifier for the next statement listens, then use up the one connection its `--sessions` count
+    reserves for this probe (the previous server may still hold the port for a moment after its last session)."""
+    import socket
+    time.sleep(3)
+    host, port = addr.rsplit(":", 1)
+    t = time.time()
+    while time.time() - t < timeout:
+        try:
+            socket.create_connection((host, int(port)), timeout=5).close()
+            return
+        except OSError:
+            time.sleep(0.5)
+    raise RuntimeError(f"no verifier at {addr}")
+
+
+PER_PROOF_LOG2 = -195.44   # flock-128-r2 whole-proof bound per proof (flock-pure-block/v2's)
+
+
+def tcp_rtt(target: str, n: int = 30) -> dict | None:
+    """TCP connect time to ``target`` (the verifier pod's sshd, not its session port: a connect there would use up a
+    session): median and min over ``n`` connects, in ms."""
+    import socket
+    if not target:
+        return None
+    host, port = target.rsplit(":", 1)
+    ts = []
+    for _ in range(n):
+        t = time.perf_counter()
+        try:
+            socket.create_connection((host, int(port)), timeout=5).close()
+        except OSError:
+            continue
+        ts.append((time.perf_counter() - t) * 1e3)
+        time.sleep(0.02)
+    return {"median_ms": statistics.median(ts), "min_ms": min(ts), "n": len(ts), "target": target} if ts else None
 
 
 def relation(template: str) -> str:
     return f"circuit:{template}"
 
 
-#: Both pods stage from one salt key, derived from the set's content digest, so the verifier pod stages its own public files: the
-#: salts are public in a benchmark, which measures proving, not the serving side's hiding (the checking process never reads a
-#: salt: its file has none).
-STAGE_SALTS = "public benchmark key: sha256('verity/flock-circuit/bench-stage-salts' || content_digest)"
+#: Both pods stage from the same public salts, derived from the set's content digest, so the verifier pod stages its own
+#: public files: the salts are public in a benchmark, which measures proving, not the serving side's hiding (the checking
+#: process never reads a salt: its file has none).
+STAGE_SALTS = "public benchmark salts: SHA-512('verity/flock-circuit/bench-public-salts' || content_digest || port || row || j), j < 3"
 
 
-def salt_key(input_set) -> bytes:
-    return hashlib.sha256(b"verity/flock-circuit/bench-stage-salts\0" + bytes.fromhex(input_set.content_digest)).digest()
+class PublicSalts(dict):
+    """Every row's public salt in instances [lo, hi) (`STAGE_SALTS`), made on first read of a port."""
+
+    def __init__(self, input_set, lo: int, hi: int):
+        super().__init__()
+        self.tag = b"verity/flock-circuit/bench-public-salts\0" + bytes.fromhex(input_set.content_digest)
+        self.rows = range(lo, hi)
+
+    def __missing__(self, port: str) -> list[bytes]:
+        pre = self.tag + port.encode() + b"\0"
+        self[port] = [b"".join(hashlib.sha512(pre + i.to_bytes(8, "big") + bytes([j])).digest() for j in range(3))
+                      for i in self.rows]
+        return self[port]
 
 
 def stage_point(a, low, input_set, total: int, d: Path, public: bool) -> tuple[list[tuple[int, int]], float]:
@@ -55,7 +181,7 @@ def stage_point(a, low, input_set, total: int, d: Path, public: bool) -> tuple[l
     t0 = time.time()
     stage = TS.stage if a.typed else FC.stage
     for i, (lo, hi) in enumerate(subs):
-        p = stage(low, input_set, lo, hi, d / f"stage-s{i}", public_only=public, salt_key=salt_key(input_set))
+        p = stage(low, input_set, lo, hi, d / f"stage-s{i}", public_only=public, salts=PublicSalts(input_set, lo, hi))
         os.replace(p, d / f"instances-s{i}.bin")
     return subs, time.time() - t0
 
@@ -217,7 +343,7 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
     first = timed[0]
     sub = input_set.subcircuit
     and_count = ands(first) * n
-    # a GEMM coordinate's result names its campaign target and K, as flock-pure's cells do (bench.PROFILES)
+    # a GEMM coordinate's result names its campaign target and K, as flock-pure's cells did (PROFILES)
     gemm = sub.template.id == "gemm-coordinate"
     fp = contract.fingerprint(
         profile=PROFILES["bf16-ampere"] if gemm else None, domain=low.domain, K=int(sub.params["K"]) if gemm else None, B=n, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode="none",

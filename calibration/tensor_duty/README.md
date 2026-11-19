@@ -1,17 +1,17 @@
-# tensor_duty: the H200's tensor MAC rate by duty cycle
+# tensor_duty: an sm_90a GPU's tensor MAC rate by duty cycle
 
-Can an H200 move more tensor MACs a second than its card says it can? The H200's card
-(`calibration/hardware/cards/h200-sxm-141gb.toml`) gives its tensor rate at `clock.tensor`, and this benchmark is the falsification
-test of that clock: a run above the card's rate refutes the card.
+Can an sm_90a GPU move more tensor MACs a second than its card says it can? Its card, the data sheet under
+`calibration/hardware/cards/` whose `driver` holds the name nvidia-smi gives the GPU, gives its tensor rate at
+`clock.tensor`, and this benchmark is the falsification test of that clock: a run above the card's rate refutes the card.
 
 A full tensor pipe is not the only case: a pipe busy part of the time, with the rest idle or non-tensor work, could run
 its tensor phases at a higher clock. So each point holds the dense tensor MMA at a duty cycle from 50% to 100%, for an
-operand class, a fill and a burst, with the SM clock locked to 1980 MHz and again at the driver's default, and the power
+operand class, a fill and a burst, with the SM clock locked to the GPU's highest and again at the driver's default, and the power
 limit at the board's maximum. Throughput rests on the host's wall clock alone.
 
 ## Run it
 
-It needs one H200, under `research run`:
+It needs one sm_90a GPU (an H200 or an H100), under `research run`:
 
 ~~~text
 research run --on NODE --project verity --source . --cwd source --mem-gb 1 --env GPU_LEASE_WHO=LANE \

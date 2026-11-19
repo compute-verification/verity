@@ -61,6 +61,9 @@
 # codec kv.cu is built for (KV_DEFS); SERVE=row's Commit registers the deployed codec only.
 # LIFETIME (windows) sets the verifier's cap L on an appended block, after which the prover re-keys it (default: the
 # windows of WINDOW_MS in 30 s, or a paced session's groups, `audit.lifetime_windows`).
+# REFRESH sets refresh for the sessions (the verifier's --refresh, `audit.Params.refresh`): unset, off, and nothing
+# differs; 1, every session; one word a session, as 0,1 with PLAN=P,P, the same plan twice on one registration, first
+# under today's rule and then under refresh, which refresh_result.py writes side by side as one result.
 #
 # SERVE makes the prover vLLM serving under the audit, on one leased GPU in vLLM's venv (VLLM_PY, default the first
 # there of NODE_WORKSPACE/jobs/venv312/bin/python and NODE_WORKSPACE/venv312/bin/python, NODE_WORKSPACE default
@@ -75,7 +78,7 @@
 # (the default) or servedrop:K. SERVE=row runs row ROW's Commit under the audit, `verity-vllm row run ROW CHECKPOINT
 # REPO REV` with the checkpoint `verity-vllm epoch resolve ROW` names and REMOTE_VERIFIER at the verifier: its Commit
 # puts the store binder on its engine and proves the store in lockstep with its first instrumented run, a pass an
-# engine step (`verity_vllm.protocols.poub.remote.CommitSession`: one GPU, synchronous scheduling declared
+# engine step (`verity.protocols.resource_accounting.memory.poub.prover.commit_session.CommitSession`: one GPU, synchronous scheduling declared
 # in the row's target, its store the weights and --remote-filler-gib of filler, the KV pool outside it). ROW is a row
 # id whose file `verity_vllm.config.row_file` finds (ROW_FILE: that file instead): a stored row whose target declares
 # the synchronous scheduling a session needs, such as
@@ -132,9 +135,9 @@
 # work while its lease is held to a lease program whose text names --cores: PROVER_CPUS and, under ROLE=both,
 # VERIFIER_CPUS, which the lease counts with every other lease's against the node's CPU quota (75 where they pass
 # it under NOWAIT=1); to a program that names none it declares none, and says so. A served line's CUDA_HOME defaults
-# to CUDA_ROOT/cuda-V (CUDA_ROOT default /usr/local) for the CUDA version V the prover's torch is built for, else
-# cuda-MAJOR, else cuda-13.0, else cuda, and is refused (exit 3) where its nvcc is not V's major version; any other
-# line's to /usr/local/cuda-13.0. ROLE=prover takes PORT; ROLE=both and
+# to the machine's toolkit at the CUDA version V the prover's torch is built for (13.0 where it has no torch), and is
+# refused (exit 3) where the machine lists none at V or its nvcc is not V's major version; any other line's to the
+# machine's toolkit at 13.0. ROLE=prover takes PORT; ROLE=both and
 # ROLE=verifier pick one nothing listens on when it is not stated. Scratch is under TMPDIR (default /tmp), removed
 # at exit.
 #
@@ -155,18 +158,19 @@
 #
 # SERVE=node serves the whole node: a vLLM engine a leased GPU (`engine.py`), and the prover (`node.py`) registers
 # their weights arenas as the store, where they are served, the engines decoding each weight as they use it
-# (`node.sh` starts them; MODEL, ENGINE_ARGS, ENGINE_CPUS, NODE_ARGS). VERIFIER_ARGS=--host-bytes N puts the serving
-# node's host DRAM (its MemTotal) in the memory line. Its cores default to this process's: the first quarter the
+# (`node.sh` starts them; MODEL, ENGINE_ARGS, ENGINE_CPUS, NODE_ARGS). Its cores default to this process's: the first quarter the
 # engines' (ENGINE_CPUS), under ROLE=both the last quarter the verifier's, the rest the prover's, all declared to a lease
 # program that takes --cores. PACED (K:T_MS:DRAWS:WINDOWS a session of PLAN, `verifier.py --paced`) and PACE_PASS_MS
 # make the sessions paced; ROLE=both SERVE=node, the node's session on this machine with its verifier and a local
 # challenger beside it, defaults them to 1:1000:2773:7 (seven stretches of a second, a live coin a pass) and 0 (the
 # pass its calibration measured), builds the Lean verifier before the lease, as a served line does, and ends by the
-# verdict line. VERIFIER_ARGS='--node FILE --hbm-bytes N' states the node the share is of (default: timing's eight-card
-# RTX PRO 6000 node). The north-star run, the verifier on a second node's CPUs:
+# verdict line. The verifier reads the audited node's figures, its HBM and host DRAM among them, from FIGURES, by default out/figures.json, which `sheets.py NODE_KIND`
+# writes, NODE_KIND a node file's name (ROLE=both on a GPU: the node file of this machine's card). The north-star run,
+# the verifier on a second node's CPUs:
 #
 #   ROLE=verifier PEER=PROVER_NODE PORT=7799 SESSIONS=2 WINDOWS=7 WINDOW_MS=60000 SAMPLES=33273 QUANTILE=max \
-#     JITTER_MS=50 VERIFIER_ARGS='--host-bytes 1843153879040' bash benchmarks/poub_session/run.sh   # 16 CPUs
+#     JITTER_MS=50 NODE_KIND=rtx-pro-6000-server-x8 \
+#     bash benchmarks/poub_session/run.sh                         # 16 CPUs
 #   ROLE=prover PORT=7799 SERVE=node PLAN=honest,skip:0.0625 ENGINE_CPUS=0-23 PROVER_CPUS=24-47 \
 #     ENGINE_ARGS='--step-hz 2 --align-steps' NODE_ARGS='--decode-s 60 --warm-openings 33273' \
 #     bash benchmarks/poub_session/run.sh                         # the whole 8-GPU node, 200 GB of host memory
@@ -208,20 +212,17 @@ PY=${PY:-$(first_of -x "$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python" ${VPY:+"$V
 [ -x "$PY" ] || refuse "PY=$PY is not an executable"
 export PY PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 if [ -z "${CUDA_HOME:-}" ] && [ -n "$SERVED" ]; then
-  # the toolkit of the CUDA version the prover's torch is built for, where the node has it
-  CUDA_ROOT=${CUDA_ROOT:-/usr/local}
+  # the machine's toolkit at the CUDA version the prover's torch is built for (13.0 where it has no torch to ask)
   TV=$("$VPY" -c 'import torch; print(torch.version.cuda or "")' 2> /dev/null)
   TM=${TV%%.*}
-  [ "$TV" = 13.0 ] && TV=
-  TOOLKITS=(${TV:+"$CUDA_ROOT/cuda-$TV"} ${TM:+"$CUDA_ROOT/cuda-$TM"} "$CUDA_ROOT/cuda-13.0" "$CUDA_ROOT/cuda")
-  CUDA_HOME=$(first_of -d "${TOOLKITS[@]}") ||
-    refuse "no CUDA toolkit: CUDA_HOME is not set, and none of ${TOOLKITS[*]} is a directory"
+  CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit "${TV:-13.0}") ||
+    refuse "no CUDA toolkit ${TV:-13.0}: CUDA_HOME is not set, and the machine's record lists none (machine.py, above)"
   # the Commit's collector is built by torch's JIT, which checks no nvcc against the CUDA torch is built for
   NV=$("$CUDA_HOME/bin/nvcc" --version 2> /dev/null | sed -n 's/.*release \([0-9]*\)\..*/\1/p')
   [ -z "$TM" ] || [ "$NV" = "$TM" ] || refuse "the vLLM venv's torch is built for CUDA $TM, and $CUDA_HOME's nvcc is" \
     "CUDA ${NV:-unknown}: install a CUDA $TM toolkit and state CUDA_HOME"
 fi
-export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
+export CUDA_HOME=${CUDA_HOME:-$(python3 benchmarks/kernels/machine.py toolkit 13.0)}
 export PATH=$CUDA_HOME/bin:$(dirname "$PY"):$PATH
 [ -n "$SERVED" ] && . adapters/vllm/verity_vllm/ops/cuda_headers.sh && cuda_headers "$VPY"
 [ -x "$HOME/.elan/bin/lake" ] && export PATH="$HOME/.elan/bin:$PATH"
@@ -334,10 +335,24 @@ if [ -n "${PACED:-}" ]; then
   FORM=(--paced "${PACE[@]}" ${PACE_PASS_MS:+--pace-pass-ms "$PACE_PASS_MS"} --jitter-ms "$JITTER_MS")
 fi
 VERIFY=(--port "$PORT" --out "$O" "${FORM[@]}" ${QUANTILE:+--quantile "$QUANTILE"}
-  ${CHECK_WORKERS:+--check-workers "$CHECK_WORKERS"} ${LIFETIME:+--lifetime "$LIFETIME"})
+  ${CHECK_WORKERS:+--check-workers "$CHECK_WORKERS"} ${LIFETIME:+--lifetime "$LIFETIME"} ${REFRESH:+--refresh "$REFRESH"})
 if [ "${SERVE:-}" = node ] && [ "$ROLE" = both ]; then
   lean_exe
   VERIFY+=(--lean-exe "$LEAN_EXE")
+fi
+if [ "$ROLE" != prover ] && [ -z "${CLOSE:-}" ]; then
+  if [ -z "${FIGURES:-}" ]; then
+    if [ -z "${NODE_KIND:-}" ] && [ "$ROLE" = both ] && [ -z "${CPU:-}" ]; then
+      NODE_KIND=$(python3 benchmarks/kernels/machine.py session-node "$(nvidia-smi --query-gpu=name --format=csv,noheader \
+        | head -1)" 0) || refuse "no node file for this machine's card: $NODE_KIND"
+      NODE_KIND=${NODE_KIND#local/} NODE_KIND=${NODE_KIND%/*}
+    fi
+    [ -n "${NODE_KIND:-}" ] || refuse "the verifier reads the audited node's figures: set NODE_KIND (a node file under" \
+      "calibration/hardware/nodes) or FIGURES (their JSON, benchmarks/poub_session/sheets.py NODE)"
+    FIGURES=$O/figures.json
+    "$PY" benchmarks/poub_session/sheets.py "$NODE_KIND" > "$FIGURES" || refuse "no figures for NODE_KIND=$NODE_KIND"
+  fi
+  VERIFY+=(--figures "$FIGURES")
 fi
 eval "KEYARGS=(${VERIFIER_ARGS:-})"
 for ((k = 0; k < ${#KEYARGS[@]}; k++)); do
@@ -566,14 +581,17 @@ fi
 "${LEASE[@]}" bash -c '
   if [ -n "$CPU" ]; then
     DEV=(--cpu "$CPU" --codec "$CODEC")
+    SNODE=$(python3 benchmarks/kernels/machine.py session-node cpu 0)
   else
+    SNODE=$(python3 benchmarks/kernels/machine.py session-node "$(nvidia-smi --query-gpu=name --format=csv,noheader \
+      -i "${GPU_LEASE_UUID%%,*}" | head -1)" "$(nvidia-smi --query-gpu=index --format=csv,noheader -i "${GPU_LEASE_UUID%%,*}" \
+      | head -1)" 2>&1) || { echo "run.sh: no node for the session to register: $SNODE"; exit 3; }
     nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
       --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
-    CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader -i "${GPU_LEASE_UUID%%,*}" | head -1)
-    SM=${CC/./}
-    [[ $SM =~ ^[0-9]+$ ]] || { echo "run.sh: the leased card names no compute capability ($CC)"; exit 4; }
-    [ "${CC%%.*}" -ge 9 ] && SM+=a
-    FLAGS=(-O3 -gencode "arch=compute_$SM,code=sm_$SM" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
+    ARCH=$(python3 benchmarks/kernels/machine.py arch "$(nvidia-smi --query-gpu=name --format=csv,noheader \
+      -i "${GPU_LEASE_UUID%%,*}" | head -1)" 2>&1) && GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$ARCH" 2>&1) ||
+      { echo "run.sh: no build target for the leased card: ${GENCODE:-$ARCH}"; exit 4; }
+    FLAGS=(-O3 -gencode "$GENCODE" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
     nvcc "${FLAGS[@]}" -o "$B/session.so" verity/protocols/resource_accounting/memory/poub/prover/poub_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
     nvcc "${FLAGS[@]}" $KV_DEFS -o "$B/kv.so" verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
     wait $S || { tail -40 "$O/session.ptxas"; exit 4; }
@@ -596,7 +614,7 @@ fi
       setpriv --reuid="$(id -u)" --regid="$(id -g)" --init-groups -- "${PIN[@]}")
   fi
   "${PIN[@]}" "$PY" verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \
-    "${DEV[@]}" ${PROVER_ARGS:-} > "$O/prover.log" 2>&1
+    "${DEV[@]}" --node "${SESSION_NODE:-$SNODE}" ${PROVER_ARGS:-} > "$O/prover.log" 2>&1
   P=$?
   W=0
   if [ -n "$V" ]; then

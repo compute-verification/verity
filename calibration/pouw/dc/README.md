@@ -17,17 +17,21 @@ It needs no GPU; `--device sm_90` gives the H200's.
 
 ## Run it
 
-Each job is the command of a `research run` from a pushed commit, on a node with the card, CUDA 13.0
-(`/usr/local/cuda-13.0`) and driver ≥ 580. `run.sh` is the job for one family:
+Each job is the command of a `research run` from a pushed commit, on a node with the card, the machine's
+toolkit at 13.0 and driver ≥ 580. `run.sh` is the job for one family:
 
 ~~~text
 research run --on H200 --project verity --source /workspace --cwd source --custody-ttl 12h \
-  --timeout 60m --env GPU_LEASE_WHO=dc -- bash calibration/pouw/dc/run.sh sm90
-research run --on B200 ... -- bash calibration/pouw/dc/run.sh sm100
-research run --on H200 ... -- bash calibration/pouw/dc/run.sh sm90jb   # the stress of the H200's rows: probes only
+  --timeout 60m --env GPU_LEASE_WHO=dc -- bash calibration/pouw/dc/run.sh
+research run --on B200 ... -- bash calibration/pouw/dc/run.sh
+research run --on H200 ... --env DC_JBREAK=1 -- bash calibration/pouw/dc/run.sh   # the stress of the H200's rows: probes only
 ~~~
 
-A run builds and SASS-gates everything before it touches the GPU, and `DC_BUILD_ONLY=1` builds and gates without one.
+A run builds and SASS-gates everything before it touches the GPU, and `DC_BUILD_ONLY=1` builds and gates without one (on a node
+with no GPU, `DC_SKU` names the card file to build for, `calibration/hardware/cards/SKU.toml`; with neither, the build is
+refused). `uni.sh`, `pipe.sh`, `ffill.sh`, `s8_mma.sh` and `emp.sh run h32|emp` (the H32 probes, `h32.py`'s input, and
+`sm90_emp.cu`, `emp.py`'s) take their target from the card the same way, and `emp.sh build SKU` and `s8_mma.sh build
+SKU` build on a CPU node for the card file `SKU`.
 Its results are not kept here: the analyses print them from a run's `out/`.
 
 ## What is not covered

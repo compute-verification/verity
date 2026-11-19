@@ -44,9 +44,11 @@ open InferenceOnlyVerifier.Record.SecurityProofs (form front_text tmplOf_spec ra
 Program the record check reads; and its Definition is one of the Program's. -/
 theorem tmpl_index {P : Prog} {doc : Json} {ts : List Tmpl} (hP : ReadProg P) (hts : templatesOf P doc = .ok ts)
     {t : Tmpl} (ht : t ∈ ts) : P.index[t.tid]? = some t.defn ∧ t.defn < P.defs.size := by
-  obtain ⟨tids, rs, hev, -, hmapM⟩ := templatesOf_spec hts
-  obtain ⟨r, hr, htm⟩ := (InferenceOnlyVerifier.Record.SecurityProofs.Json.mapM_ok _ _ _ hmapM t).1 ht
-  obtain ⟨hnode, htpl, -⟩ := (ranges_spec (read_bodies hP).1 hP.2.2.2.2.2.2 (readProg_inputs hP) hev).2 r hr
+  obtain ⟨tids, rs, hev, -, -, hmapM⟩ := templatesOf_spec hts
+  obtain ⟨x, -, hx⟩ := (InferenceOnlyVerifier.Record.SecurityProofs.Json.mapM_ok _ _ _ hmapM t).1 ht
+  obtain ⟨-, -, r, hr, -, htm⟩ := tmplAt_ok hx
+  obtain ⟨hnode, htpl, -⟩ :=
+    (ranges_spec (read_bodies hP).1 hP.2.2.2.2.2.2 (readProg_inputs hP) hev).2 r (Array.mem_toList_iff.2 hr)
   obtain ⟨hdefn, htid, -⟩ := tmplOf_spec htm
   obtain ⟨⟨bytes, hdec⟩, -⟩ := hP
   obtain ⟨hroot, -⟩ := SecurityProofs.BodiesOk.decode_root bytes P hdec

@@ -38,7 +38,7 @@ committed net's `unit_computes`). No verifier path reads this file.
 
 @[expose] public section
 
-open Flock Flock.Tmpl FlockSoundness.Audit
+open Flock Flock.Tmpl Spot.Sampling
 
 namespace FlockSoundness.TmplValue
 

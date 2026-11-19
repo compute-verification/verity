@@ -80,7 +80,7 @@ theorem sendsC_forIn_array {α β : Type} (xs : Array α) (b : β) {f : α → �
 
 /-- **The masked session after the link sends at most its reps' rounds**, at tables of `14 ≤ m`, one spec table per
 statement and each table's `--zk` schedule. -/
-theorem afterLinkPZk_sendsLe (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
+theorem afterLinkPZk_sendsLe (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Stmt) (words : Array (List ℕ)) (schs : Array (Schedule × ℕ)) (trs : Array Trace) (tape : TapeZk)
     (tbls : Array (Array F128)) (cms : Array Commit) (c1 : ℕ → F128) (hspec : spec.tables.size = sts.size)
     (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m)
@@ -131,7 +131,7 @@ theorem afterLinkPZk_sendsLe (resp : ℕ → Claims.Msg) (h : ByteArray → Byte
 
 /-- **Every run of the masked session sends at most `repStartZk` of its last rep**, whether it returns or stops, at
 tables of `14 ≤ m` and one spec table per statement. -/
-theorem sessionPZk_sendsLe (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
+theorem sessionPZk_sendsLe (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Stmt) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hspec : spec.tables.size = sts.size) (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m) :
     sendsC.P (sessionPZk (asksS resp) (Hashes.ofSha512 h) spec (tabsOf sts) words trs tape)

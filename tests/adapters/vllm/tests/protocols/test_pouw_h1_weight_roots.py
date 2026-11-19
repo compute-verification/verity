@@ -1,6 +1,6 @@
 """`pouw_h1_hooks.weight_roots`: each window's install reuses a linear's root while its weight is the tensor the root was
-computed from and the process's salt key the one it was computed under, and computes it again when the weight was replaced
-or written; and `pouw_h1.weight_root` hides the rows under that key."""
+computed from and the process's weight salts the ones it was computed under, and computes it again when the weight was
+replaced or written; and `pouw_h1.weight_root` hides the rows under those salts."""
 from __future__ import annotations
 
 import types
@@ -17,6 +17,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
 torch = pytest.importorskip("torch")
 PH = pytest.importorskip("verity.protocols.resource_accounting.compute.pouw.prover.serving.h1")
 PHK = pytest.importorskip("verity_vllm.protocols.pouw.h1_hooks")
+PV = pytest.importorskip("verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.prover")
 
 FRESH = PH.weight_root
 
@@ -37,36 +38,41 @@ def computed(monkeypatch: pytest.MonkeyPatch) -> list[int]:
     monkeypatch.setattr(PHK, "_ROOTS", {})
     seen: list[int] = []
 
-    def computing(w: int, rows: np.ndarray, key: bytes | None = None) -> bytes:
+    def computing(w: int, rows: np.ndarray, salts=None) -> bytes:
         seen.append(w)
-        return FRESH(w, rows, key)
+        return FRESH(w, rows, salts)
 
     monkeypatch.setattr(PH, "weight_root", computing)
     monkeypatch.setattr(PHK, "h1_weight_root", computing)
     return seen
 
 
-def test_another_key_computes_every_root_again(computed, monkeypatch):
+def test_other_salts_compute_every_root_again(computed, monkeypatch):
     layers = _layers(6, n=2)
     before = PHK.weight_roots(layers)
-    monkeypatch.setattr(PH, "WEIGHT_KEY", bytes(range(32)))
-    monkeypatch.setattr(PHK, "H1_WEIGHT_KEY", bytes(range(32)))
+    other = PV.RunSalts()
+    monkeypatch.setattr(PH, "WEIGHT_SALTS", other)
+    monkeypatch.setattr(PHK, "H1_WEIGHT_SALTS", other)
     after = PHK.weight_roots(layers)
     assert computed == [0, 1, 0, 1] and after == _fresh(layers) and all(after[w] != before[w] for w in after)
 
 
-def test_two_weight_sets_roots_differ_and_none_is_recomputed_without_the_key():
-    """A root is core's hiding tree over the rows (``audit.commit_rows(weight_binding(w), -2, rows, HM96, key,
-    HM96_WEIGHTS + w)``) under this process's 32-byte key: another weight set's root differs, and the same rows under any
-    other key, or in the unsalted tree, give another root."""
+def test_two_weight_sets_roots_differ_and_none_is_recomputed_without_the_salts(monkeypatch):
+    """A root is core's hiding tree over the rows (``audit.commit_rows(weight_binding(w), -2, rows, HM96, salts)``) under
+    this process's fresh weight salts at ``HM96_WEIGHTS + w``: another weight set's root differs, and the same rows under
+    any other salts, or in the unsalted tree, give another root. The process's salts are this test's own: another test
+    that drew more rows at the same nonce would leave them held there."""
     first, second = (m.weight.detach().numpy() for m in _layers(7, n=2, shape=(16, 32)))
-    key = PH.WEIGHT_KEY
+    salts = PV.RunSalts()
+    monkeypatch.setattr(PH, "WEIGHT_SALTS", salts)
     root = PH.weight_root(3, first)
-    assert len(key) == 32 and root == PH.weight_root(3, first, key) == commit_rows(
-        weight_binding(3), -2, [r.tobytes() for r in first], HM96, key, HM96_WEIGHTS + 3).commitment.root
+    ys = salts.held(HM96_WEIGHTS + 3)
+    assert len(ys) == 192 * len(first) and root == PH.weight_root(3, first, salts) == commit_rows(
+        weight_binding(3), -2, [r.tobytes() for r in first], hash=HM96,
+        salts=[ys[192 * j:192 * (j + 1)] for j in range(len(first))]).commitment.root
     assert PH.weight_root(3, second) != root
-    for other in (bytes(32), b"\xff" * 32, key[:-1] + bytes([key[-1] ^ 1]), bytes(range(32))):
-        assert PH.weight_root(3, first, other) != root
+    for _ in range(3):
+        assert PH.weight_root(3, first, PV.RunSalts()) != root
     assert commit_rows(weight_binding(3), -2, [r.tobytes() for r in first], hash="sha512",
                        public=True).commitment.root != root
 

@@ -7,13 +7,10 @@ import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 
 /-!
-# What SPOT's reader reads back of the wiring the record check writes
+# What SPOT's reader reads of a JSON wiring
 
-The record check hands SPOT's reader (`Spot.Wires.Wiring.ofJson`) a JSON object of its own making (`Record.piece`):
-the text's cuts and wires, with the templates it read off the Program, each with its units, its rows and its outputs.
-This module shows the reader reads back what was written: `piece_templates`, each template of the wiring is one of the
-check's templates, with its units, its rows by name with their words and outer lengths, and its outputs by name with
-their words, and every template of the check is one of the wiring's.
+`template_ofJson` and `wiring_templates`: SPOT's reader (`Spot.Wires.Wiring.ofJson`) reads a template object back
+with its units, its rows by name with their words and outer lengths, and its outputs by name with their words.
 
 The steps are about JSON objects (`Json`, below): a field of an object built from a list with distinct keys is the
 list's pair (`getObjVal?_mkObj`), its fields are the list's pairs (`mem_fields_mkObj`), and a field of two objects
@@ -376,7 +373,7 @@ namespace InferenceOnlyVerifier.Record.SecurityProofs
 open Lean (Json toJson)
 open Flock.Program (Prog fieldsOf)
 open Flock.Sigma (bits)
-open Spot.RecordText (Tmpl tmplOf wiresOf outerOf)
+open Spot.RecordText (Tmpl tmplOf outerOf)
 
 /-- `eraseDups` keeps a list's length only where the list has no duplicates. -/
 theorem nodup_of_eraseDups : ∀ (n : Nat) (l : List String), l.length ≤ n →
@@ -460,45 +457,5 @@ theorem tmplOf_spec {P : Prog} {r : Flock.TemplateQuery.TRange} {t : Tmpl} (h : 
     have := ho2 (ty, j) (List.mem_zipIdx_iff_getElem?.2 hj)
     simp at this
     exact this
-
-/-- **SPOT's reader reads back the templates the record check writes.** Where no two of the check's templates have
-one id and no two ports of one have one name, each template of the wiring read from `piece` is one of the check's:
-it has its units, its rows by name, each with its words and its outer length, and its outputs by name, each with its
-words. And each of the check's templates is one of the wiring's. -/
-theorem piece_templates {f : Front} (hd : (f.ts.map (·.tid)).Nodup)
-    (hn : ∀ t ∈ f.ts, (t.rows.map (·.1) ++ t.outs.map (·.1)).Nodup) {W : Spot.Wires.Wiring}
-    (h : Spot.Wires.Wiring.ofJson (piece f) = .ok W) :
-    (∀ tid t', (tid, t') ∈ W.templates → ∃ t ∈ f.ts, t.tid = tid ∧ t'.units = t.units ∧
-        (∀ p q, (p, q) ∈ t'.rows ↔
-          ∃ words outer, (p, words, outer) ∈ t.rows ∧ q.words = words ∧ q.outer = outer) ∧
-        ∀ o n, (o, n) ∈ t'.outs ↔ (o, n) ∈ t.outs) ∧
-      ∀ t ∈ f.ts, ∃ t', (t.tid, t') ∈ W.templates := by
-  have hts : (f.ts.map fun t => (t.tid, Json.tmplJson t.units t.rows t.outs)).Pairwise (fun a b => a.1 ≠ b.1) :=
-    List.pairwise_map.2 (List.pairwise_map.1 hd)
-  have key : ∃ rest : List (String × Lean.Json),
-      (("templates", Lean.Json.mkObj (f.ts.map fun t => (t.tid, Json.tmplJson t.units t.rows t.outs))) :: rest).Pairwise
-        (fun a b => a.1 ≠ b.1) ∧
-      piece f = (Lean.Json.obj (Std.TreeMap.Raw.ofList [("templates", Lean.Json.mkObj []),
-          ("cuts", (f.doc.getObjVal? "cuts").toOption.getD (Lean.Json.mkObj [])),
-          ("wires", Spot.RecordText.valueAt f.doc "wires")] compare)).mergeObj
-        (Lean.Json.mkObj (("templates",
-          Lean.Json.mkObj (f.ts.map fun t => (t.tid, Json.tmplJson t.units t.rows t.outs))) :: rest)) := by
-    refine ⟨match (f.doc.getObjVal? "order").toOption, f.i.order with
-      | some o, _ => [("order", o)]
-      | none, some o => [("order", o)]
-      | none, none => [], ?_, rfl⟩
-    split <;> simp
-  obtain ⟨rest, hrest, hp⟩ := key
-  rw [hp] at h
-  obtain ⟨h1, h2⟩ := Json.wiring_templates Std.TreeMap.Raw.WF.ofList hts hrest h
-  refine ⟨fun tid t' hm => ?_, fun t ht => ?_⟩
-  · obtain ⟨v, hv, ht'⟩ := (h1 tid t').1 hm
-    obtain ⟨t, ht, he⟩ := List.mem_map.1 hv
-    cases he
-    have hnt := List.nodup_append.1 (hn t ht)
-    obtain ⟨hu, hr, ho⟩ := Json.template_ofJson (List.pairwise_map.1 hnt.1) (List.pairwise_map.1 hnt.2.1) ht'
-    exact ⟨t, ht, rfl, hu, hr, ho⟩
-  · obtain ⟨t', ht'⟩ := h2 t.tid _ (List.mem_map.2 ⟨t, ht, rfl⟩)
-    exact ⟨t', (h1 _ _).2 ⟨_, List.mem_map.2 ⟨t, ht, rfl⟩, ht'⟩⟩
 
 end InferenceOnlyVerifier.Record.SecurityProofs

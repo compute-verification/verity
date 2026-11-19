@@ -18,7 +18,7 @@
 * `salt_dead(alpha, x, beta)`: P3's salt-dead predicate (`SaltDead.saltDead`) on each element of a formed A row: its
   A′ code has one value at every noise pair of the support, which by `saltDeadP_iff_ends` is the support's two ends
   agreeing, E′ the row's flat code c_β = e4m3(f32(β·44)) at all 32 positions and F e4m3(±11/4) at all 32, from the
-  forming's accumulator f32(α·x) (`circuit.words.ends_agree`, the hidden inert-work bound's bit).
+  forming's accumulator f32(α·x) (`ops.words.ends_agree`, the hidden inert-work bound's bit).
 * `inert_elements(flags, dead)`: P3's per-tile rule (`tileInertWorkDev`'s `elems`): the A′ elements (i, l), l < k, of the
   tile's rows that are salt-dead or whose atom block l/32 every word of the row over the tile's columns flags.  Each
   counts fs·|cols|/n of inert work, the tile's share of an element its row band shares (`clear_work.tile_inert_bound`).

@@ -169,7 +169,8 @@ def kinds(a: argparse.Namespace) -> int:
 
     d = Path(a.model_dir)
     w = L.R.window(d / "record", L.LOAD, 1)
-    plan = {r["i"]: r for r in map(json.loads, (d / "plan.jsonl").read_text().splitlines())}
+    named = Path(json.loads((d / "record" / "meta.json").read_text())["plan"])
+    plan = {r["i"]: r for r in map(json.loads, named.read_text().splitlines())}
     client = {}
     for line in (d / "record" / L.LOAD / "rep-1" / "client.jsonl").read_text().splitlines():
         c = json.loads(line)

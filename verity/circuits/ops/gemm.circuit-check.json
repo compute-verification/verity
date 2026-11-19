@@ -1,0 +1,5 @@
+{
+  "struct_max_gates": {
+    "ScaledMmS8_v3": 2048
+  }
+}

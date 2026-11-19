@@ -28,6 +28,7 @@ and its served C2 replay challenge after each run's root of record.
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 import re
 import secrets
@@ -37,6 +38,8 @@ from collections.abc import Callable, Mapping, Sequence
 from types import SimpleNamespace
 from typing import Any
 
+from verity.commitments.live_coin import CoinError, LiveOpening
+from verity.commitments.scheme import DIGEST_BYTES
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     REPLY_FIELDS,
     SESSION_FIELDS,
@@ -48,17 +51,14 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
 )
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.challenger import remote
-from verity.protocols.proofs.spot.verifier.challenger.challenger import (
-    CoinError,
-    LiveOpening,
-    live_reason,
-)
+from verity.protocols.proofs.spot.verifier.challenger.challenger import live_reason
+from verity_vllm.config import option
 
 SCHEME_TAG = "verity/vllm/commit-coins/v1"
 POSITIONS, IDENTITIES, REPLAY = "opening-positions", "opening-identities", "replay"
 FAMILIES = (POSITIONS, IDENTITIES, REPLAY)
 CHALLENGER, IN_PROCESS = "challenger", "in-process"
-ROOT_BYTES = remote.ROOT_BYTES
+ROOT_BYTES = DIGEST_BYTES["sha512"]
 
 
 def families(runs: int) -> list[list[Any]]:
@@ -72,6 +72,25 @@ Run = Callable[[list[str]], "tuple[int, str]"]
 
 #: what a refusal shows of a gate answer it can't read: no run of hex digits long enough to be a session's secret or a root
 _HEX, HEX_WITHHELD = re.compile(r"[0-9a-fA-F]{32,}"), "(hex withheld)"
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class GateOptions:
+    """serve-openai's ``--challenger-gate``, ``--challenger-peer`` and ``--challenger-lane`` (its ``gate`` group,
+    `serve_h1.sessions_of`, `serve_openai.scheme_settings`)."""
+    challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD",
+                                         help="with --protocols: the auditor device's challenger gate, its command as one string "
+                                              "(e.g. 'ssh -i KEY -o BatchMode=yes research@HOST'); each H1 window reserves a "
+                                              "session of its own there and draws its coins from it (serve_h1.GateSessions), "
+                                              "each Pearl+ epoch a salt session (serve_openai.scheme_settings); "
+                                              "without it they are in-process and credit nothing")
+    challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME",
+                                         help="with --challenger-gate: this machine's name in the auditor device's peers, where its "
+                                              "challenger reaches the server (ssh -R)")
+    challenger_lane: str | None = option("--challenger-lane", default=None, metavar="LANE",
+                                         help="with --challenger-gate under Pearl+: the lane whose gate key the gate's "
+                                              "command holds, whose open period in the auditor's ledger each epoch's "
+                                              "salt session joins (serving.reserve_salt); PoUW H1's take none")
 
 
 class ChallengerGate:
@@ -265,7 +284,8 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
         lines = Ch.ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
         audited = Ch.pinned_session(lines, window, key, pins_head(pins), None if main is None else list(main),
                                     verify)
-        trusted, received = remote.trusted_session(directory, heads, window, key, verify)
+        trusted, log = remote.trusted_session(directory, heads, window, key, verify)
+        received = Ch.by_family(trusted, log)
     except CoinError as e:
         return f"the Commit's challenger session is not trusted: {e}"
     for i, run in enumerate(runs):
@@ -297,6 +317,6 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
     return None
 
 
-__all__ = ["CHALLENGER", "ChallengePhase", "ChallengerGate", "FAMILIES", "IDENTITIES", "IN_PROCESS", "POSITIONS", "REPLAY",
+__all__ = ["CHALLENGER", "ChallengePhase", "ChallengerGate", "FAMILIES", "GateOptions", "IDENTITIES", "IN_PROCESS", "POSITIONS", "REPLAY",
            "ROOT_BYTES", "SCHEME_TAG", "draw", "families", "identities", "of_options", "positions", "reason", "replay_challenge", "tp_draw",
            "tp_keys"]

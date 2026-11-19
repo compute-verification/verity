@@ -53,6 +53,8 @@ sys.path.insert(0, str(HERE.parent / "served_units"))
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
 import stage as SU  # noqa: E402
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.ops import gemm as OG  # noqa: E402
@@ -62,6 +64,8 @@ from verity.commitments.merkle import CommitmentDomain  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 
 #: one Llama-3.2-1B decoder layer's W8A8 coordinates for one token, by K
 LLAMA_3_2_1B_LAYER = "2048:21504,8192:2048"
@@ -104,7 +108,7 @@ def chunk_cap(meta: dict) -> int:
 def window(K: int, c: int) -> tuple:
     """Template K's population of c units as a window of its own: its program, query and partition."""
     d = template(K)
-    program = P.mixed_population_program([(d, c)])
+    program = PN.mixed_population_program([(d, c)])
     query = P.template_instances_query([d])
     return program, query, P.partition(program, query)
 
@@ -141,14 +145,13 @@ def stage_template(K: int, n: int, base: int, bound: dict | None, out: Path, chu
     st, _ = stager(n)
     t_build = time.time() - t0
     cap = min(chunk_cap(st.meta), chunk or n)
-    salt_key = hashlib.sha256(f"verity/one-stage/a6/salts\0{tag}".encode()).digest()
     members = []
     for j, lo in enumerate(range(0, n, cap)):
         t1, c, d = time.time(), min(cap, n - lo), out / f"c{j}"
         st, wd = stager(c)
         set_name = f"{st.iset.name}-c{j}"
         first = base + lo if bound is not None else 0
-        got = st.stage({r: v[lo:lo + c] for r, v in rows.items()}, d, salt_key, indices=range(first, first + c),
+        got = st.stage({r: v[lo:lo + c] for r, v in rows.items()}, d, indices=range(first, first + c),
                        set_name=set_name)
         (d / "inst.bin").rename(d / f"inst-{c}.bin")
         (d / "pub.bin").rename(d / f"pub-{c}.bin")
@@ -186,7 +189,7 @@ def plain(a: argparse.Namespace, spec: list[tuple[int, int]], out: Path) -> int:
             sdir.mkdir(parents=True, exist_ok=True)
             after = hashlib.sha512(canonical_json({"partition": P.digest(part), "pin": st["pin"]})).hexdigest()
             p = a0.challenger_sample(a.lean, ["--program", str(st["program_file"]), "--partition", str(st["partition_file"]),
-                                            "--stratified", str(c)], D.derive(program, query, D.parse_design(f"stratified:{c}")),
+                                            "--stratified", str(c)], D.derive(program, query, RND.parse_design(f"stratified:{c}")),
                                      c, after, sdir / "draw.log")
             line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
             if line is None:
@@ -259,7 +262,7 @@ def main() -> int:
 
     # the verifier's program and partition
     defs = [template(K) for K, _ in spec]
-    program = P.mixed_population_program([(d, n) for d, (_K, n) in zip(defs, spec)])
+    program = PN.mixed_population_program([(d, n) for d, (_K, n) in zip(defs, spec)])
     query = P.template_instances_query(defs)
     part = P.partition(program, query)
     pd = P.digest(part)
@@ -267,7 +270,7 @@ def main() -> int:
     ranges = P.ranges(program, query)
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
-    sampling_design = D.parse_design(f"stratified:{a.k}")
+    sampling_design = RND.parse_design(f"stratified:{a.k}")
     strata = P.strata(program, query)
     assert [t for t, _ in strata] == [P.template_id(d) for d in defs] and all(len(rs) == 1 for _, rs in strata)
 
@@ -298,7 +301,7 @@ def main() -> int:
     window = {"kind": "stand-in", "of": WINDOW_OF,
               "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]} for m in members},
               "link": "none: no served run; vllm's int8 Program and its served rows replace these values"}
-    rec = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    rec = DK.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for m in members:
@@ -306,7 +309,7 @@ def main() -> int:
         checks[f"twin/{m['name']}"] = {"ok": m["st"]["twin"]["agrees"], "codes": [] if m["st"]["twin"]["agrees"] else ["twin"], "detail": {}}
     receipt = R.receipt(rec, "one-stage-e2e verifier (a6.py)")
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
-    summary.update(population=n_all, partition=pd, registration=R.digest(rec), law=rec["law"],
+    summary.update(population=n_all, partition=pd, registration=DD.digest(rec), law=rec["law"],
                    checks_before_draw={c: v["ok"] for c, v in checks.items()})
     if not all(v["ok"] for v in checks.values()):
         summary["checks"] = checks
@@ -317,7 +320,7 @@ def main() -> int:
     # the verifier's stratified sample, by its own Lean over its own program and partition object on a development
     # challenger's coins; each member serves its stratum
     p = a0.challenger_sample(a.lean, ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
-                                    "--stratified", str(a.k)], rec["law"], n_all, R.digest(rec), out / "draw.log")
+                                    "--stratified", str(a.k)], rec["law"], n_all, DD.digest(rec), out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
     served, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
@@ -369,8 +372,8 @@ def main() -> int:
     if len(defs) > 1:
         v = V.check(rec, program, P.template_instances_query(defs[:-1]), sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg["registration-query-drops-a-template (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    for name, other in (("registration-law-another-k (R1)", D.parse_design(f"stratified:{a.k + 1}")),
-                        ("registration-law-subset-not-stratified (R1)", D.parse_design(f"subset:{a.k}"))):
+    for name, other in (("registration-law-another-k (R1)", RND.parse_design(f"stratified:{a.k + 1}")),
+                        ("registration-law-subset-not-stratified (R1)", RND.parse_design(f"subset:{a.k}"))):
         v = V.check(rec, program, query, other, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg[name] = {"refused": not v.ok, "codes": list(v.codes)}
     first = members[0]["name"]

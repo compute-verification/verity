@@ -41,7 +41,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Sampling.Draws
-import Proofs.Flock.Soundness.Audit.SamplingDesign
+import Proofs.Spot.Sampling.SamplingDesign
 import Proofs.Flock.Soundness.Game
 import Std.Tactic.BVDecide.Normalize.Prop
 
@@ -49,7 +49,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # The sample `sampleUnits` makes misses a set of units no more often than its sampling design's `P_a`
 
 `sampleUnits` runs its sampling design's stages on the coins in order (`sampleUnits_seq`), and each stage is bounded by its sampler's
-missProb on a stream of any length (`SamplingDesign.subset_exec_escape_le`, `SamplingDesign.bernoulli_exec_escape_le`), so the stopping-time
+missProb on a stream of any length (`SamplingDesign.subset_exec_missProb_le`, `SamplingDesign.bernoulli_exec_missProb_le`), so the stopping-time
 bound (`seqMiss_le`) multiplies them.
 
 * `subset_none_of_lt`: `subset k n` samples nothing when `k > n`, so such a stratum's stage misses with probability `0`.
@@ -65,7 +65,7 @@ open Spot
 
 namespace Properties.Spot.SecurityProofs
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset Claims.Sampling
+open FlockSoundness FlockSoundness.Game Spot.Sampling Finset Claims.Sampling
 open scoped ENNReal
 
 theorem uniform_zero (src : ByteArray) : ∀ fuel pos, Flock.Draw.uniform 0 src fuel pos = none
@@ -106,19 +106,19 @@ theorem seqMiss_imp : ∀ (l l' : List Stage),
 
 /-- A subset stage missing `U`, bounded by `subset`'s missProb. -/
 theorem subset_stage_bounded (n k : ℕ) (hk : k ≤ n) (N : ℕ) (hN : 0 < N) (U : Finset ℕ) :
-    Stage.Bounded ⟨N, Flock.Draw.subset k n, fun D => ∀ u ∈ U, u ∉ D⟩ ((SamplingDesign.subset n k hk).missProb (finOf n U)) := by
+    Stage.Bounded ⟨N, Flock.Draw.subset k n, fun D => ∀ u ∈ U, u ∉ D⟩ ((Verity.SamplingDesign.subset n k hk).missProb (finOf n U)) := by
   refine ⟨hN, fun a b D h => SamplingDesign.subset_append k n a b D h, fun L => ?_⟩
   refine le_trans (prCoin_mono fun f ⟨D, hD, hm⟩ => ⟨D, hD, fun u hu => hm u.val ?_⟩)
-    (SamplingDesign.subset_exec_escape_le n k L hk (finOf n U))
+    (SamplingDesign.subset_exec_missProb_le n k L hk (finOf n U))
   simpa [finOf] using hu
 
 /-- A Bernoulli stage missing `U`, bounded by `bernoulli`'s missProb. -/
 theorem bernoulli_stage_bounded (n num den : ℕ) [NeZero den] (h : num ≤ den) (N : ℕ) (hN : 0 < N) (U : Finset ℕ) :
     Stage.Bounded ⟨N, Flock.Draw.bernoulli num den n, fun D => ∀ u ∈ U, u ∉ D⟩
-      ((SamplingDesign.bernoulli n num den).missProb (finOf n U)) := by
+      ((Verity.SamplingDesign.bernoulli n num den).missProb (finOf n U)) := by
   refine ⟨hN, fun a b D h => SamplingDesign.bernoulli_append num den n a b D h, fun L => ?_⟩
   refine le_trans (prCoin_mono fun f ⟨D, hD, hm⟩ => ⟨D, hD, fun u hu => hm u.val ?_⟩)
-    (SamplingDesign.bernoulli_exec_escape_le n num den L h (finOf n U))
+    (SamplingDesign.bernoulli_exec_missProb_le n num den L h (finOf n U))
   simpa [finOf] using hu
 
 theorem escape_ne_top {n : ℕ} (L : SamplingDesign n) (B : Finset (Fin n)) : L.missProb B ≠ ⊤ :=
@@ -141,7 +141,7 @@ theorem one_bound (n : ℕ) (U : Finset ℕ) (hU : U ⊆ range n) (L : ℕ) :
       (((den - num : ℕ) : ℝ) / den) ^ U.card) := by
   refine ⟨fun k hk => ?_, fun num den hden h => ?_⟩
   · have hle := seqMiss_le [(⟨2 * k * Flock.Draw.width n + 64, Flock.Draw.subset k n, fun D => ∀ u ∈ U, u ∉ D⟩,
-      (SamplingDesign.subset n k hk).missProb (finOf n U))] (fun p hp => by
+      (Verity.SamplingDesign.subset n k hk).missProb (finOf n U))] (fun p hp => by
         rw [List.mem_singleton.1 hp]; exact subset_stage_bounded n k hk _ (by omega) U) L
     rw [List.map_singleton, List.map_singleton, List.prod_singleton] at hle
     dsimp only at hle
@@ -149,10 +149,10 @@ theorem one_bound (n : ℕ) (U : Finset ℕ) (hU : U ⊆ range n) (L : ℕ) :
     · obtain ⟨units, read, hd, hm⟩ := hf
       refine seqMiss_imp _ _ ?_ _ _ (sampleUnits_seq _ n _ units read hd)
       exact .cons ⟨rfl, rfl, fun D hD u hu huD => hm u hu (hD u huD)⟩ .nil
-    · rw [SamplingDesign.subset_escape, card_finOf hU, ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
+    · rw [Verity.SamplingDesign.subset_missProb, card_finOf hU, ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
   · have : NeZero den := ⟨by omega⟩
     have hle := seqMiss_le [(⟨2 * n * Flock.Draw.width den + 64, Flock.Draw.bernoulli num den n,
-      fun D => ∀ u ∈ U, u ∉ D⟩, (SamplingDesign.bernoulli n num den).missProb (finOf n U))] (fun p hp => by
+      fun D => ∀ u ∈ U, u ∉ D⟩, (Verity.SamplingDesign.bernoulli n num den).missProb (finOf n U))] (fun p hp => by
         rw [List.mem_singleton.1 hp]; exact bernoulli_stage_bounded n num den h _ (by omega) U) L
     rw [List.map_singleton, List.map_singleton, List.prod_singleton] at hle
     dsimp only at hle
@@ -160,7 +160,7 @@ theorem one_bound (n : ℕ) (U : Finset ℕ) (hU : U ⊆ range n) (L : ℕ) :
     · obtain ⟨units, read, hd, hm⟩ := hf
       refine seqMiss_imp _ _ ?_ _ _ (sampleUnits_seq _ n _ units read hd)
       exact .cons ⟨rfl, rfl, fun D hD u hu huD => hm u hu (hD u huD)⟩ .nil
-    · rw [SamplingDesign.bernoulli_escape h, card_finOf hU, ENNReal.toReal_pow, bernFactor_zero num den]
+    · rw [SamplingDesign.bernoulli_missProb h, card_finOf hU, ENNReal.toReal_pow, bernFactor_zero num den]
 
 /-- A stratum's units, in order: `Stratum.unit` over its ranges. -/
 theorem stratum_unit (s : Flock.Draw.Stratum) (j : ℕ) : s.unit j = (expand s.units.toList).getD j 0 := by
@@ -188,7 +188,7 @@ theorem stratum_size' (s : Flock.Draw.Stratum) : s.size = (expand s.units.toList
 /-- The stage of stratum `s` at slot `o`, missing the slots of `W`, and its bound: `subset`'s missProb, `0` when the stratum
 samples more units than it has. -/
 noncomputable def stratumQ (W : Finset ℕ) (s : Flock.Draw.Stratum) (o : ℕ) : ℝ≥0∞ :=
-  if h : s.k ≤ s.size then (SamplingDesign.subset s.size s.k h).missProb (finOf s.size (window o s.size W)) else 0
+  if h : s.k ≤ s.size then (Verity.SamplingDesign.subset s.size s.k h).missProb (finOf s.size (window o s.size W)) else 0
 
 /-- The strata's stages from slot `o`, each missing its window of `W`, with their bounds. -/
 noncomputable def strataStages (W : Finset ℕ) : List Flock.Draw.Stratum → ℕ → List (Stage × ℝ≥0∞)
@@ -214,7 +214,7 @@ theorem stratumQ_toReal (W : Finset ℕ) (s : Flock.Draw.Stratum) (o : ℕ) :
     (stratumQ W s o).toReal = ((s.size - (window o s.size W).card).choose s.k : ℝ) / (s.size.choose s.k : ℝ) := by
   unfold stratumQ
   split
-  · rw [SamplingDesign.subset_escape, card_finOf (window_subset _ _ _), ENNReal.toReal_div, ENNReal.toReal_natCast,
+  · rw [Verity.SamplingDesign.subset_missProb, card_finOf (window_subset _ _ _), ENNReal.toReal_div, ENNReal.toReal_natCast,
       ENNReal.toReal_natCast]
   · rw [Nat.choose_eq_zero_of_lt (n := s.size) (k := s.k) (by omega), Nat.cast_zero, div_zero, ENNReal.toReal_zero]
 

@@ -56,7 +56,9 @@ a token, so `Proofs/ResourceAccounting.lean` imports it.
 
 @[expose] public section
 
-namespace FlockSoundness.Audit.SamplingDesign
+namespace Spot.Sampling.SamplingDesign
+
+open FlockSoundness
 
 /-- **A `subset` live sample that runs is `Flock.Draw.subset` on its stream.** -/
 theorem runOS_subset {L : Fin 1 → ℕ} {f : (i : Fin 1) → Fin (L i) → Fin 256} {k n : ℕ} {d : Flock.Draw.UnitSample}
@@ -79,7 +81,7 @@ theorem runOS_subset {L : Fin 1 → ℕ} {f : (i : Fin 1) → Fin (L i) → Fin 
       rw [h2] at h1
       rw [← hD]; exact h1
 
-end FlockSoundness.Audit.SamplingDesign
+end Spot.Sampling.SamplingDesign
 
 namespace ResourceAccounting.TS.Checked
 
@@ -101,7 +103,7 @@ end ResourceAccounting.TS.Checked
 
 namespace Flock.SoundAtBridge
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.ZkReg
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open ResourceAccounting.TS.Checked

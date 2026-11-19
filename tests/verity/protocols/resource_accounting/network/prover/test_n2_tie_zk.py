@@ -91,12 +91,12 @@ def test_a_network_attester_runs_release_is_its_cells_and_its_forged_row_is_the_
     assert releases == list(link.releases) and lens == tz.SPAN
     real = SimpleNamespace(cells=cells, records=link.records, releases=releases)
     f = tz.forge(real)
-    rd = tz.phases(tie, real, tz.advice(lens, tz.received(real)), f)
+    rd = tz.phases(tie, real, tz.inputs(lens, tz.received(real)), f)
     assert f.window == 0 and rd.windows[0].rows[f.bucket] != cells[0].rows[f.bucket]
     assert [x.words for x in rd.windows] == [[1] * tz.T] * 2 and all(all(x.opens) for x in rd.windows)
     assert "does not open" in rd.windows[0].held and rd.windows[1].held is None
     assert [x.expect for x in rd.windows] == [0, 1]
-    honest = tz.phases(tie, real, tz.advice(lens, tz.received(real)))
+    honest = tz.phases(tie, real, tz.inputs(lens, tz.received(real)))
     assert [x.expect for x in honest.windows] == [1, 1] and all(x.held is None for x in honest.windows)
 
 
@@ -157,7 +157,7 @@ def test_a_member_fails_on_what_the_scan_reads_as_leaked_not_on_a_find_across_th
     key = next(k for k in sorted(held_pieces) if len(set(pieces[k])) > 2)
     piece = pieces[key]
     res = {"windows": [{"as_expected": True}] * len(rd.windows),
-           "tie": {"accepted": list(tz.EXPECT["honest"]), "advice": tz.TS.digest(rd.advice), "link": tz.LINK,
+           "tie": {"accepted": list(tz.EXPECT["honest"]), "inputs": tz.TS.digest(rd.inputs), "link": tz.LINK,
                    "registrations": [{}] * len(rd.windows)}}
 
     def member(body: bytes, out):
@@ -176,15 +176,24 @@ def test_a_member_fails_on_what_the_scan_reads_as_leaked_not_on_a_find_across_th
     assert rec["verifier_found"] == rec["leaked"] == [key] and not rec["structured"] and not ok
 
 
-def test_a_dry_prove_s_summary_holds_no_digest_of_the_inputs_nor_their_lengths_or_releases(tmp_path):
+def test_a_dry_prove_reads_every_member_at_its_verdicts_on_the_pinned_link_and_stages_nothing(tmp_path):
+    """``prove --dry`` on the built-in members: each member's references give its `EXPECT` verdicts, every member names
+    what it changed, and the link is the tie's pinned unit with every port's width; it stops before staging."""
     out = tmp_path / "out"
     assert tz.main(["prove", "--dry", "--out", str(out)]) == 0
+    assert [p.name for p in out.iterdir()] == ["summary.json"]
     s = json.loads((out / "summary.json").read_text())
+    tie = _tie()
     assert set(s["members"]) == set(s["changed"]) == set(tz.EXPECT)
-    assert not {"advice", "inputs", "prompt_lens", "releases"} & set(s), \
-        "the inputs' digest, lengths and releases are witness"
+    assert not {"inputs", "prompt_lens", "releases"} & set(s), "the inputs' digest, lengths and releases are witness"
+    for name, m in s["members"].items():
+        assert tuple(bool(x["expect"]) for x in m["reference"]) == tz.EXPECT[name], name
+        assert [x["window"] for x in m["reference"]] == list(range(len(tz.EXPECT[name]))), name
     assert s["changed"]["honest"] == [] and all(s["changed"][n] for n in tz.EXPECT if n != "honest")
     assert all(isinstance(k, str) for v in s["changed"].values() for k in v), "a member names what it changed, no value"
+    link = s["link"]
+    assert link["pinned"] and link["T"] == tz.T and link["unit"] == tie.unit.id and link["name"] == tz.LINK
+    assert link["bits"] == {p: tie.bits(p) for p in tz.TS.PORTS} and set(link["bits"]) == {"wit", "pub", "o0"}
 
 
 def test_a_members_summary_holds_its_verdicts_and_counts_and_no_digest_or_piece_of_its_inputs():

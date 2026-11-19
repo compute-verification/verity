@@ -211,4 +211,4 @@ def test_the_program_digest_is_the_program_sha512_registrations_were_made_with()
     for key, want in PROGRAM_SHA512.items():
         prog = Program(globals()[key]) if isinstance(key, str) else _vector_descriptor(*key)
         assert codec.program_digest(prog) == PO.program_sha512(prog) == want, key
-    assert PO.program_sha512(Program(Max3)) == PO.build(Program(Max3))["program"]
+    assert codec.program_digest(Program(Max3)) == PO.build(Program(Max3))["program"]

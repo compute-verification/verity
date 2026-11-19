@@ -141,6 +141,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_ARENA_WAIT_S", float, 600.0, WHERE, "seconds the serving thread waits for a free host-arena block before failing"),
     S("VERITY_COLLECT_DEAD_GRACE_S", float, 120.0, WHERE, "seconds a dead collector waits for progress before its watchdog exits"),
     S("VERITY_COLLECT_WATCHDOG_MARKER", str, "", WHERE, "the file the collector's watchdog writes when it exits (the Commit sets it)"),
+    S("VERITY_CONFIGURATION", str, None, VALUE, "the committed configuration's hash the launcher was given (`verity run`'s "
+      "runner sets it), which `messages.Exchange.attach` hands each scheme as ctx['configuration']; unset, none was given"),
     S("VERITY_CONSUMER_DELAY_MS", float, 0.0, DEBUG, "milliseconds the collector's consumer sleeps per step (a stall injected for tests)"),
     S("VERITY_CUT", json.loads, None, VALUE, "the carried pool's cut at each window edge under vLLM's engine core "
       "(`pipeline.cut_plugin`), a JSON object: every_s or every_steps, hold_s, the log directory and the sent feed (`cut_plugin.SentFeed`); unset, none"),
@@ -163,6 +165,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_PIN", one, False, VALUE, "1: the host committer's worker pins its CPU affinity"),
     S("VERITY_PINNED_EXACT", flag, True, VALUE, "the pinned pool allocates exactly what is asked, not rounded up"),
     S("VERITY_PINNED_POPULATE_THREADS", int, None, VALUE, "helper threads that fault a fresh pinned pool in (`commit --pinned-populate-threads`)"),
+    S("VERITY_PINS", json.loads, None, VALUE, "the application's [[pin]] entries as JSON (`verity run`'s runner sets it), "
+      "which `messages.Exchange.attach` hands each scheme, read-only, as ctx['pins']; unset, none were given"),
     S("VERITY_RETAIN", lowered, None, VALUE, "where raw copies are retained: host, device, gpu, none or sample; unset, the committer's; "
       "empty is refused", empty=True),
     S("VERITY_RETAIN_EXCLUDE", str, "", VALUE, "families whose raw copies aren't retained (`native_collect.retain_exclude_families`)"),
@@ -195,8 +199,6 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_INT8_FUSED_PRODUCERS", flag, True, VALUE, "the int8 linears' norms and silu-and-mul quantize their outputs in the "
       "same launch (`engine.int8_producers`)"),
     S("VERITY_INT8_PARTS", csv, (), VALUE, "the int8 parts a rank registers when it starts (`engine.int8_ranks`)"),
-    S("VERITY_POOL_ROW", int_or_zero, 0, VALUE, "the carried pool's token width CTW: the engine keys its blocks by BlockKey_v1 "
-      "for tokens of CTW bits and each window's close exports its pool row (`engine.pool_row`); 0, off"),
     S("VERITY_ROPE_CACHE_FUSED", flag, True, VALUE, "the rope and the KV-cache write run as one launch a layer "
       "(`engine.rope_cache`)"),
     S("VERITY_SPARSE_MLA_NUM_SPLITS", stripped, "0", VALUE, "FA3's sparse MLA splits: 1 pins one split, 0 leaves vLLM's heuristic; "
@@ -209,6 +211,12 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_LEASE_MAX_MIN", int, None, WHERE, "minutes a leased Commit holds its GPUs (the row sets it)"),
     S("VERITY_LEASE_STARTED", str, None, WHERE, "the lease marker a leased Commit takes its GPUs by (the row sets it)"),
     S("VERITY_MANIFEST_JOBS", int, None, VALUE, "concurrent component builds of the required-value manifest"),
+    S("VERITY_PROTOCOLS", csv, (), VALUE, "the schemes attached by name inside vLLM's own server (`pipeline.scheme_plugin`), "
+      "comma-separated, an application's protocols line; unset, none"),
+    S("VERITY_PROTOCOLS_CONFIG", json.loads, {}, VALUE, "VERITY_PROTOCOLS's JSON object: feed, the directory the server's "
+      "front and its engine share (required with a scheme); the engine's out, the run output its schemes' reports go "
+      "under, and private, the directory each scheme's own goes under (serve-openai's too); gate, infra's challenger gate command; and each "
+      "scheme's settings under its name"),
     S("VERITY_QUERY_ID", str, None, VALUE, "the verification query id a row runs"),
     S("VERITY_QWORD_MAX_GATES", str, None, VALUE, "the strict word check's gate bound for the row"),
     S("VERITY_QWORD_MAX_GATES_ALLOWED", str, None, VALUE, "the one raised VERITY_QWORD_MAX_GATES a GO allows"),
@@ -217,9 +225,6 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_REPLAY_DUMP_MAX", int, 1024, DEBUG, "the most values the replay dumps"),
     S("VERITY_REPLAY_FORK_GC_FREEZE", not_off, True, VALUE, "the replay freezes the GC before it forks its workers"),
     S("VERITY_RESEARCH", str, None, WHERE, "the research tree a row's stages import (the row sets it)"),
-    S("VERITY_TICK", json.loads, None, VALUE, "the certified tick under vLLM's own OpenAI server (`pipeline.tick_plugin`), a JSON "
-      "object: the registered bucket_us, sat_us and free_us, hold_ms, the feed file, the gate's log directory and a rule measured "
-      "against the registered one (token_ns, catch_up, and the arm measuring it where catch_up is open); unset, none"),
     S("VERITY_TIMELINE", str, None, WHERE, "the stage telemetry file"),
     S("VERITY_TREE", str, None, WHERE, "the source tree that runs (the mixed-tree refusal)"),
     S("VERITY_UNIT_RULE_CACHE", str, None, WHERE, "the host's unit-rule cache directory (`sweep --unit-rule-cache`)"),
@@ -237,6 +242,7 @@ SETTINGS: dict[str, Setting] = _declare(
       "its fields to the record (diagnostic only, never on a workload of record)"),
     # ---- the native builds
     S("NATIVE_COLLECT_BUILD", str, None, WHERE, "the parent directory of the native collector's builds"),
+    S("VERITY_BUILD_ROOT", str, None, WHERE, "the pod's build root: the collector's and the taps' builds are under it (config.BUILT)"),
     # ---- the program (program/)
     S("VERITY_DENSE_THREADS", str, None, VALUE, "the dense chain's thread cap, read at import; not a positive integer, no cap"),
     S("VERITY_NUMERICS_BUILD_DIR", str, None, WHERE, "where the numerics' JIT-built libraries live"),
@@ -244,10 +250,12 @@ SETTINGS: dict[str, Setting] = _declare(
     # ---- operations (ops/*.sh)
     S("VERITY_RELEASE_TAG", str, None, WHERE, "the release a compiled Commit logs"),
     S("VERITY_TREE_COMMIT", str, None, WHERE, "the commit of VERITY_TREE a compiled Commit logs"),
+    S("CARD_SKU", str, None, WHERE, "the SKU of the card file (calibration/hardware/cards) of this host's GPUs, whose arch a CUDA "
+      "extension built here compiles to"),
     # ---- other programs' variables the library reads
     S("CUBLASLT_WORKSPACE_SIZE", str, None, VALUE, "cuBLASLt's workspace in KiB; the replay's dependencies record it"),
     S("CUBLAS_WORKSPACE_CONFIG", str, None, VALUE, "cuBLAS's workspace configuration, :SIZE:COUNT; the replay's dependencies record it"),
-    S("CUDA_HOME", str, None, WHERE, "the CUDA toolkit torch's extension builds use; a tap build sets its own default"),
+    S("CUDA_HOME", str, None, WHERE, "the CUDA toolkit torch's extension builds use; a tap build refuses without it"),
     S("CUDA_VISIBLE_DEVICES", str, None, WHERE, "the devices this process may use; empty, none", empty=True),
     S("HF_HOME", str, None, WHERE, "Hugging Face's cache root; unset, ~/.cache/huggingface"),
     S("HF_HUB_OFFLINE", str, None, WHERE, "1: Hugging Face reads only its cache (`engine.env.EXPORT` and an engine's pins set it); a "
@@ -261,8 +269,10 @@ SETTINGS: dict[str, Setting] = _declare(
     S("NCCL_MIN_NCHANNELS", str, None, VALUE, "the fewest channels NCCL uses"),
     S("NCCL_NTHREADS", str, None, VALUE, "NCCL's CUDA threads per block, one block a channel"),
     S("NCCL_PROTO", str, None, VALUE, "the protocols NCCL may use"),
+    S("OUT", str, None, WHERE, "the research run's output directory, which custody uploads whole (`serve_guard.inside_run`)"),
     S("PYTHONPATH", str, None, WHERE, "the interpreter's module search path, which the source identity records as the environment "
       "holds it"),
+    S("RESEARCH_RUN_DIR", str, None, WHERE, "the research run's directory, which custody uploads (`serve_guard.inside_run`)"),
     S("RESEARCH_RUN_ID", str, None, WHERE, "the research run this process is part of"),
     S("RESEARCH_SOURCE_SHA", str, None, WHERE, "the commit of the tree the research runner shipped, which the source identity takes "
       "where `--sha` names none and a row's records carry"),
@@ -273,7 +283,7 @@ SETTINGS: dict[str, Setting] = _declare(
     S("TORCHINDUCTOR_CACHE_DIR", str, None, WHERE, "Inductor's output-code cache; unset, torch's default"),
     S("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK", str, None, VALUE, "1, torch's default: Inductor picks a reduction kernel's tiling per "
       "process at its first launch; an engine pins 0 (`engine.env.ENGINE`) and refuses another"),
-    S("TORCH_CUDA_ARCH_LIST", str, None, VALUE, "the architectures torch's extension builds compile for (a tap build sets it)"),
+    S("TORCH_CUDA_ARCH_LIST", str, None, VALUE, "the architectures torch's extension builds compile for (a tap build sets it from its card file)"),
     S("TRITON_CACHE_DIR", str, None, WHERE, "Triton's compiled-kernel cache; unset, ~/.triton/cache"),
     S("VLLM_API_KEY", str, None, VALUE, "the key vLLM's OpenAI-compatible server asks of its clients (its family's role): a "
       "credential, which a record names and never holds", secret=True),
@@ -300,14 +310,14 @@ FAMILIES: dict[str, str] = {"VLLM_": VALUE, "NCCL_": VALUE, "CUBLAS": VALUE}
 ELSEWHERE = frozenset((
     "VERITY_BENCH_", "VERITY_GRADER_", "VERITY_SUITE_", "VERITY_VLLM_BENCH_",
     "VERITY_ADV_CACHE", "VERITY_ADV_SEED", "VERITY_AMBIENT", "VERITY_AMBIENT_TEST", "VERITY_CAPTURED_101_GUMBEL", "VERITY_CENSUS",
-    "VERITY_CHECKER_VARIANT", "VERITY_CIRCUIT_CHECK_SLOW", "VERITY_COMMIT", "VERITY_CONFIGURATION", "VERITY_DENSE_PROGRAM_DIRS", "VERITY_E2E_B",
+    "VERITY_CHECKER_VARIANT", "VERITY_CIRCUIT_CHECK_SLOW", "VERITY_COMMIT", "VERITY_DENSE_PROGRAM_DIRS", "VERITY_E2E_B",
     "VERITY_E2E_BOUNDED", "VERITY_E2E_CASE", "VERITY_E2E_EXCLUDE", "VERITY_E2E_GPU_UTIL", "VERITY_E2E_HIDDEN_SO", "VERITY_E2E_LEARN_MB",
     "VERITY_E2E_UTIL", "VERITY_E2E_WINDOW_MB", "VERITY_E2E_WORKLOAD", "VERITY_ENCODINGS_ADVICE_V0", "VERITY_EVALUATE_FULL_LOGF",
     "VERITY_EXHAUSTIVE", "VERITY_FA2_CSRC", "VERITY_FLOCK_CACHE", "VERITY_FLOCK_INNER_FOLD", "VERITY_FLOCK_SAME_SHAPE_FULL",
     "VERITY_GIT_GUARD", "VERITY_GPU_TORCH_ONLY", "VERITY_H1_REGISTER", "VERITY_HOLD_PLACEMENT", "VERITY_HP_ARCHIVE", "VERITY_KV_SO",
     "VERITY_LEAF_LAYOUT",
     "VERITY_LEAN_MEM_FLOOR_GIB", "VERITY_ML_BOOLEAN_EXHAUSTIVE", "VERITY_ML_DEFINITIONS_SLOW", "VERITY_MOE_PROGRAM_DIRS",
-    "VERITY_MUFU_TABLES", "VERITY_MUFU_TANH_TABLES", "VERITY_NETWORK_RECORDS_EXE", "VERITY_NUMERICAL_STORE", "VERITY_PAGED_SO", "VERITY_PINS",
+    "VERITY_MUFU_TABLES", "VERITY_MUFU_TANH_TABLES", "VERITY_NETWORK_RECORDS_EXE", "VERITY_NUMERICAL_STORE", "VERITY_PAGED_SO",
     "VERITY_POUS_SLOW", "VERITY_POUW_CUDA_ARCH", "VERITY_POUW_CUDA_BUILD", "VERITY_POUW_H1_PIN", "VERITY_POUW_H1U_SO",
     "VERITY_POUW_NOISE_CUBIN", "VERITY_POUW_NVCC", "VERITY_POUW_WINDOW_LOWERED_LANES", "VERITY_REAL_GIT", "VERITY_REGRESSION",
     "VERITY_REGRESSION_CANDIDATE", "VERITY_REGRESSION_CANDIDATE_CACHE", "VERITY_REGRESSION_ORACLE", "VERITY_REGRESSION_REBUILD",
@@ -354,6 +364,23 @@ def get(name: str, environ: Mapping[str, str] | None = None) -> Any:
         return s.type(v)
     except ValueError as e:
         raise ValueError(f"{name}={v!r}: {e}") from None
+
+
+def cuda_home() -> str:
+    """The CUDA toolkit an extension build compiles with (`CUDA_HOME`), refused by name when unset."""
+    home = get("CUDA_HOME")
+    if not home:
+        raise ValueError("CUDA_HOME is not set: set it to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)")
+    return home
+
+
+def card_sku() -> str:
+    """The card file this host's GPUs are (`CARD_SKU`), refused by name when unset."""
+    sku = get("CARD_SKU")
+    if not sku:
+        raise ValueError("CARD_SKU is not set: set it to the SKU of the card file of this host's GPUs (calibration/hardware/cards; "
+                         "a node's placement entry names it)")
+    return sku
 
 
 def put(name: str, value: str) -> None:

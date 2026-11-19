@@ -54,7 +54,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **`ZkSimForkLeOn` at the caps and `τ` from each.** -/
-theorem zkSimForkLeOn_capTau {x : Claims.Msg} (hc : ZkSimForkLeOn x fun _ i => IsCapZ i)
+theorem zkSimForkLeOn_capTau {x : Hash.Msg} (hc : ZkSimForkLeOn x fun _ i => IsCapZ i)
     (ht : ZkSimForkLeOn x fun _ i => IsTauZ i) : ZkSimForkLeOn x fun _ i => IsCapTauZ i := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC i hi
   rcases i with ((_ | (_ | _)) | ⟨⟩)
@@ -66,7 +66,7 @@ theorem zkSimForkLeOn_capTau {x : Claims.Msg} (hc : ZkSimForkLeOn x fun _ i => I
 end Gen
 
 /-- **`ZkSimForkLeOn` at the caps and `τ` from each.** -/
-theorem zkSimForkLeOn_capTau {x : Claims.Msg} (hc : ZkSimForkLeOn x fun _ i => IsCapZ i)
+theorem zkSimForkLeOn_capTau {x : Hash.Msg} (hc : ZkSimForkLeOn x fun _ i => IsCapZ i)
     (ht : ZkSimForkLeOn x fun _ i => IsTauZ i) : ZkSimForkLeOn x fun _ i => IsCapTauZ i :=
   Gen.zkSimForkLeOn_capTau (S := S₀) (x := x) (hc := hc) (ht := ht)
 
@@ -120,7 +120,7 @@ end Event
 
 /-- **The simulated strategy after `Commit` at table `j` at the masked simulator's tape `u`**: `simAtJZ` at
 `zkSim P`'s live strategy and its roots (`zkSim_root`), as `zkAdvSim` reads it. -/
-noncomputable def zkSimAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+noncomputable def zkSimAt {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -146,7 +146,7 @@ variable [S : ZkSetup]
 
 /-- **The simulated strategy after `Commit` at table `j` at the masked simulator's tape `u`**: `simAtJZ` at
 `zkSim P`'s live strategy and its roots (`zkSim_root`), as `zkAdvSim` reads it. -/
-noncomputable def zkSimAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+noncomputable def zkSimAt {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -170,7 +170,7 @@ end Gen
 
 /-- **The strategies' fork advantage at a cap at tape `u`**: `zkAdvSim`'s term at rep `r`'s level `ℓ + 1`, `advRSZ`
 against `zkSimAt`. -/
-noncomputable def zkAdvCapAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+noncomputable def zkAdvCapAt {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -189,7 +189,7 @@ variable [S : ZkSetup]
 
 /-- **The strategies' fork advantage at a cap at tape `u`**: `zkAdvSim`'s term at rep `r`'s level `ℓ + 1`, `advRSZ`
 against `zkSimAt`. -/
-noncomputable def zkAdvCapAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+noncomputable def zkAdvCapAt {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -202,7 +202,7 @@ noncomputable def zkAdvCapAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : pars
   advRSZ execArith ZkExec.hs512 (zkTabs h0 L hz hk hlay j) _ _ (Exec.capOfRoot (zkRoot P x ω)[j]!) r.val (ℓ + 1)
     (zkSimAt hs hin hset h0 L hz hk hlay hd P ω j hj C u)
 
-theorem zkAdvSim_cap {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+theorem zkAdvSim_cap {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -218,7 +218,7 @@ theorem zkAdvSim_cap {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true R
 
 end Gen
 
-theorem zkAdvSim_cap {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+theorem zkAdvSim_cap {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -237,7 +237,7 @@ theorem zkAdvSim_cap {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true R
 open Classical in
 /-- **The simulated fork's alignment at a cap at tape `u`**: against `zkSimAt`, the fork at rep `r`'s level-`ℓ + 1`
 table node is at most the fork after `t` coins of `ForkEvZ`. -/
-def ZkAlignQ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+def ZkAlignQ {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -260,7 +260,7 @@ variable [S : ZkSetup]
 open Classical in
 /-- **The simulated fork's alignment at a cap at tape `u`**: against `zkSimAt`, the fork at rep `r`'s level-`ℓ + 1`
 table node is at most the fork after `t` coins of `ForkEvZ`. -/
-def ZkAlignQ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+def ZkAlignQ {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -280,7 +280,7 @@ end Gen
 
 /-- **The live fork event at the masked simulator**: the live outcomes at live coins `r₁` and `r₂` decode, at table
 `j`'s verdict, to outputs with `ForkEvZ` at rep `r`'s level `ℓ + 1`. -/
-def ZkLiveFork {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+def ZkLiveFork {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -307,7 +307,7 @@ variable [S : ZkSetup]
 
 /-- **The live fork event at the masked simulator**: the live outcomes at live coins `r₁` and `r₂` decode, at table
 `j`'s verdict, to outputs with `ForkEvZ` at rep `r`'s level `ℓ + 1`. -/
-def ZkLiveFork {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+def ZkLiveFork {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -334,7 +334,7 @@ end Gen
 sets up at a sample, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s
 level-`ℓ + 1` table node against the simulated strategy after `Commit` is at most the fork after `zkRd j i` coins of
 `ForkEvZ` (`ZkAlignQ`). -/
-def ZkForkAlign (x : Claims.Msg) : Prop :=
+def ZkForkAlign (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -354,7 +354,7 @@ variable [S : ZkSetup]
 sets up at a sample, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s
 level-`ℓ + 1` table node against the simulated strategy after `Commit` is at most the fork after `zkRd j i` coins of
 `ForkEvZ` (`ZkAlignQ`). -/
-def ZkForkAlign (x : Claims.Msg) : Prop :=
+def ZkForkAlign (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -371,7 +371,7 @@ end Gen
 /-- **The live fork event's collision at the caps**: at every masked statement in scope that sets up at a sample, every
 prover and tape, every table `j` and table of full-width columns, two accepting runs of `P` at the masked simulator's
 coins whose decoded live outcomes have `ForkEvZ` collide among the verifier's calls in the two. -/
-def ZkForkClash (x : Claims.Msg) : Prop :=
+def ZkForkClash (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -395,7 +395,7 @@ variable [S : ZkSetup]
 /-- **The live fork event's collision at the caps**: at every masked statement in scope that sets up at a sample, every
 prover and tape, every table `j` and table of full-width columns, two accepting runs of `P` at the masked simulator's
 coins whose decoded live outcomes have `ForkEvZ` collide among the verifier's calls in the two. -/
-def ZkForkClash (x : Claims.Msg) : Prop :=
+def ZkForkClash (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -416,7 +416,7 @@ open Classical in
 /-- **The fork advantage at a cap from the alignment and the live fork's pair**: `zkAdvSim` at rep `r`'s level
 `ℓ + 1` is at most the simulated fork at round `t`, where at each tape the fork at the slot's node is at most the fork
 after `t` coins of `ForkEvZ` and the live fork event gives the deployed runs' pair event. -/
-theorem zkAdvCap_le_of {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+theorem zkAdvCap_le_of {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -456,7 +456,7 @@ open Classical in
 /-- **The fork advantage at a cap from the alignment and the live fork's pair**: `zkAdvSim` at rep `r`'s level
 `ℓ + 1` is at most the simulated fork at round `t`, where at each tape the fork at the slot's node is at most the fork
 after `t` coins of `ForkEvZ` and the live fork event gives the deployed runs' pair event. -/
-theorem zkAdvCap_le_of {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+theorem zkAdvCap_le_of {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -481,7 +481,7 @@ variable [S : ZkSetup]
 
 /-- **A live fork event's pair**: where `P'` aborts on rejected runs (`zkSimAbortAt`), the live fork event gives two
 accepting runs, which collide by `ZkForkClash`. -/
-theorem pairEvZ_of_forkClash {x : Claims.Msg} (hc : ZkForkClash x) {s : Claims.Flock.Stmt}
+theorem pairEvZ_of_forkClash {x : Hash.Msg} (hc : ZkForkClash x) {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -513,7 +513,7 @@ end Gen
 
 /-- **A live fork event's pair**: where `P'` aborts on rejected runs (`zkSimAbortAt`), the live fork event gives two
 accepting runs, which collide by `ZkForkClash`. -/
-theorem pairEvZ_of_forkClash {x : Claims.Msg} (hc : ZkForkClash x) {s : Claims.Flock.Stmt}
+theorem pairEvZ_of_forkClash {x : Hash.Msg} (hc : ZkForkClash x) {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -536,7 +536,7 @@ variable [S : ZkSetup]
 
 /-- **The fork bound at the caps from the alignment and the clash**: `ZkSimForkLeOn` at `IsCapZ` from `ZkForkAlign` and
 `ZkForkClash`, by `zkAdvCap_le_of` at the abort (`zkSimAbortAt`). -/
-theorem zkSimForkLeCap_of {x : Claims.Msg} (ha : ZkForkAlign x) (hc : ZkForkClash x) :
+theorem zkSimForkLeCap_of {x : Hash.Msg} (ha : ZkForkAlign x) (hc : ZkForkClash x) :
     ZkSimForkLeOn x fun _ i => IsCapZ i := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC i hi
   rcases i with ((⟨r, ℓ⟩ | _ | _) | ⟨⟩)
@@ -549,7 +549,7 @@ end Gen
 
 /-- **The fork bound at the caps from the alignment and the clash**: `ZkSimForkLeOn` at `IsCapZ` from `ZkForkAlign` and
 `ZkForkClash`, by `zkAdvCap_le_of` at the abort (`zkSimAbortAt`). -/
-theorem zkSimForkLeCap_of {x : Claims.Msg} (ha : ZkForkAlign x) (hc : ZkForkClash x) :
+theorem zkSimForkLeCap_of {x : Hash.Msg} (ha : ZkForkAlign x) (hc : ZkForkClash x) :
     ZkSimForkLeOn x fun _ i => IsCapZ i :=
   Gen.zkSimForkLeCap_of (S := S₀) (x := x) (ha := ha) (hc := hc)
 

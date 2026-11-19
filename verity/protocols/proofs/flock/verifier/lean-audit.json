@@ -56,6 +56,7 @@
   "Flock.Test.PlainLeaves",
   "Flock.Test.PlainShared",
   "Flock.Test.Wires",
+  "Flock.Test.WiredPorts",
   "Flock.Test.TableCap",
   "Flock.Test.ProgramHeld",
   "Flock.Test.ProofCanon",

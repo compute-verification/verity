@@ -41,7 +41,7 @@ not parse, so the climb here is `decode_recOpen`'s, at the copy's own row and si
 namespace FlockC3.RegLevels
 
 open Flock
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open FlockVBridge FlockVBridge.AccChain
 open FlockSoundness.Discharge.Hm (bitL)
 open FlockVBridge.Decode (RegBit)

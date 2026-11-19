@@ -24,7 +24,7 @@ session's (`sitesAtHP_parse`). So `ppHP`, `hConstHP` and `hZeroHP` are `ProgPlac
 
 namespace FlockSoundness.Discharge.HiddenExec
 
-open Flock FlockLevel3 Model Refine Audit
+open Flock FlockLevel3 Model Refine Spot.Sampling
 open FlockSoundness.Discharge.Exec (Inputs)
 
 variable {n : ℕ} {I : Inputs} {own : Option ByteArray} {mPts : ℕ}

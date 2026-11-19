@@ -72,13 +72,13 @@ open Claims.Bridge.Live
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **The roots of `P`'s first message**, as `zk_first_of_sim` reads them. -/
-def zkRoot {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) : Array ByteArray :=
+def zkRoot {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) : Array ByteArray :=
   ((linkOf ((P.next x [] ω).eval sha512).1).getD default).1.toArray
 
 /-- **A live prover whose first message is `P`'s sends `P`'s roots**, where the wire reads roots as the deployed link
 does (`liveStrat_fst`): the strategies' roots `ZkSimWJ` asks for. -/
-theorem zkRoot_of_first {Ω τ : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {J : Claims.Msg → ℕ} {mPts : ℕ}
-    (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) {w : (x : Claims.Msg) → Wire 65536 (J x) mPts}
+theorem zkRoot_of_first {Ω τ : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {J : Hash.Msg → ℕ} {mPts : ℕ}
+    (N : Hash.Msg → ℕ) (dg : ByteArray → ByteArray) {w : (x : Hash.Msg) → Wire 65536 (J x) mPts}
     {P' : Claims.Prover (Ω × τ)} (hw : ∀ a, (w x).root a = ((linkOf a).getD default).1.toArray)
     (h1 : ∀ u, ((P'.next x [] (ω, u)).eval sha512).1 = ((P.next x [] ω).eval sha512).1) (u : τ) :
     (liveStrat J (fun _ => mPts) N dg w sha512 P' x (ω, u)).1 = zkRoot P x ω := by
@@ -87,7 +87,7 @@ theorem zkRoot_of_first {Ω τ : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {
 
 /-- **An accepting masked run with a collision among the verifier's calls**: the one-run event the self-clash bound
 reads. -/
-def zkEv₁ {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (s : Fin ((V true).k x) → Coin) : Prop :=
+def zkEv₁ {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) (s : Fin ((V true).k x) → Coin) : Prop :=
   (Claims.run sha512 P (V true) x ω s).out = .acc ∧ Claims.TiedColl sha512 (Claims.run sha512 P (V true) x ω s).vLog
 
 namespace Gen
@@ -96,14 +96,14 @@ variable [S : ZkSetup]
 
 /-- **An accepting masked run with a collision among the verifier's calls**: the one-run event the self-clash bound
 reads. -/
-def zkEv₁ {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (s : Fin ((V true).k x) → Coin) : Prop :=
+def zkEv₁ {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) (s : Fin ((V true).k x) → Coin) : Prop :=
   (Claims.run sha512 P (V true) x ω s).out = .acc ∧ Claims.TiedColl sha512 (Claims.run sha512 P (V true) x ω s).vLog
 
 end Gen
 
 /-- **An accepting masked fork at the coin `j₀` with a collision among the verifier's calls in its two runs**: the
 event the fork bounds read. -/
-def zkForkEv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (j₀ : Fin ((V true).k x)) (ω : Ω)
+def zkForkEv {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (j₀ : Fin ((V true).k x)) (ω : Ω)
     (s s' : Fin ((V true).k x) → Coin) : Prop :=
   (Claims.run sha512 P (V true) x ω s).out = .acc ∧
     (Claims.run sha512 P (V true) x ω (Claims.forkCoins j₀ s s')).out = .acc ∧
@@ -116,7 +116,7 @@ variable [S : ZkSetup]
 
 /-- **An accepting masked fork at the coin `j₀` with a collision among the verifier's calls in its two runs**: the
 event the fork bounds read. -/
-def zkForkEv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (j₀ : Fin ((V true).k x)) (ω : Ω)
+def zkForkEv {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (j₀ : Fin ((V true).k x)) (ω : Ω)
     (s s' : Fin ((V true).k x) → Coin) : Prop :=
   (Claims.run sha512 P (V true) x ω s).out = .acc ∧
     (Claims.run sha512 P (V true) x ω (Claims.forkCoins j₀ s s')).out = .acc ∧
@@ -128,8 +128,8 @@ end Gen
 /-- **A live event at `P'`'s outcome gives an accepting masked run of `P` with a collision**: wherever `pL` holds at
 the live outcome of `P'` at the tape `(ω, u)` and the live coins `r'`, `V true` accepts `P` at `Φ (u, r')` with a
 collision among its calls (`zkEv₁`). -/
-def ZkClashRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) (J N : Claims.Msg → ℕ)
-    (dg : ByteArray → ByteArray) (w : (x : Claims.Msg) → Wire 65536 (J x) mPts) {τ : Type}
+def ZkClashRun {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) (mPts : ℕ) (J N : Hash.Msg → ℕ)
+    (dg : ByteArray → ByteArray) (w : (x : Hash.Msg) → Wire 65536 (J x) mPts) {τ : Type}
     (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V true).k x) → Coin)
     (pL : LiveOutJ (J x) mPts → Prop) : Prop :=
   ∀ u r', pL (liveOut J (fun _ => mPts) N dg w sha512 P' x (ω, u) r') → zkEv₁ P x ω (Φ (u, r'))
@@ -141,8 +141,8 @@ variable [S : ZkSetup]
 /-- **A live event at `P'`'s outcome gives an accepting masked run of `P` with a collision**: wherever `pL` holds at
 the live outcome of `P'` at the tape `(ω, u)` and the live coins `r'`, `V true` accepts `P` at `Φ (u, r')` with a
 collision among its calls (`zkEv₁`). -/
-def ZkClashRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) (J N : Claims.Msg → ℕ)
-    (dg : ByteArray → ByteArray) (w : (x : Claims.Msg) → Wire 65536 (J x) mPts) {τ : Type}
+def ZkClashRun {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) (mPts : ℕ) (J N : Hash.Msg → ℕ)
+    (dg : ByteArray → ByteArray) (w : (x : Hash.Msg) → Wire 65536 (J x) mPts) {τ : Type}
     (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V true).k x) → Coin)
     (pL : LiveOutJ (J x) mPts → Prop) : Prop :=
   ∀ u r', pL (liveOut J (fun _ => mPts) N dg w sha512 P' x (ω, u) r') → zkEv₁ P x ω (Φ (u, r'))
@@ -159,7 +159,7 @@ with a collision there (`ZkClashRun`) and whose strategies' fork bounds after `C
 at `OkOffWJ` are no more than an accepting fork's with a collision (`zkForkEv`) and the slack of the fork at its round
 (`Claims.Flock.forkSlack` at `δ ≥ 0`), where only level 0's event of a table is at round `0` and the slack fits the
 masked weight's room (`Claims.Flock.SlackFitW`). -/
-def ZkSimWJ (x : Claims.Msg) : Prop :=
+def ZkSimWJ (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -172,8 +172,8 @@ def ZkSimWJ (x : Claims.Msg) : Prop :=
       (_ : ∀ t, 0 ≤ δ t)
       (_ : Claims.Flock.SlackFitW (tables true x).length (fun j => (zkTabs h0 L hz hk hlay j).sch)
         (fun j => (zkTabs h0 L hz hk hlay j).N) rd δ),
-      ∀ ω, ∃ (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray)
-        (w : Claims.Msg → Wire 65536 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec.mPts)
+      ∀ ω, ∃ (N : Hash.Msg → ℕ) (dg : ByteArray → ByteArray)
+        (w : Hash.Msg → Wire 65536 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec.mPts)
         (τ : Type) (_ : Fintype τ) (_ : Nonempty τ) (P' : Claims.Prover (Ω × τ))
         (Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V true).k x) → Coin)
         (_ : ∀ E : (Fin ((V true).k x) → Coin) → Prop, Claims.Pr (fun p => E (Φ p)) = Claims.Pr E)
@@ -253,7 +253,7 @@ with a collision there (`ZkClashRun`) and whose strategies' fork bounds after `C
 at `OkOffWJ` are no more than an accepting fork's with a collision (`zkForkEv`) and the slack of the fork at its round
 (`Claims.Flock.forkSlack` at `δ ≥ 0`), where only level 0's event of a table is at round `0` and the slack fits the
 masked weight's room (`Claims.Flock.SlackFitW`). -/
-def ZkSimWJ (x : Claims.Msg) : Prop :=
+def ZkSimWJ (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -266,8 +266,8 @@ def ZkSimWJ (x : Claims.Msg) : Prop :=
       (_ : ∀ t, 0 ≤ δ t)
       (_ : Claims.Flock.SlackFitW (tables true x).length (fun j => (zkTabs h0 L hz hk hlay j).sch)
         (fun j => (zkTabs h0 L hz hk hlay j).N) rd δ),
-      ∀ ω, ∃ (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray)
-        (w : Claims.Msg → Wire 65536 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec.mPts)
+      ∀ ω, ∃ (N : Hash.Msg → ℕ) (dg : ByteArray → ByteArray)
+        (w : Hash.Msg → Wire 65536 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec.mPts)
         (τ : Type) (_ : Fintype τ) (_ : Nonempty τ) (P' : Claims.Prover (Ω × τ))
         (Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V true).k x) → Coin)
         (_ : ∀ E : (Fin ((V true).k x) → Coin) → Prop, Claims.Pr (fun p => E (Φ p)) = Claims.Pr E)
@@ -336,7 +336,7 @@ def ZkSimWJ (x : Claims.Msg) : Prop :=
 /-- **A simulator gives the masked live sessions' bound at the deployed decoders off the table on a witness lane**:
 the events an accepting fork or run with its collision, the first bound by `zk_first_of_sim`, the self-clash bound by
 `liveMix_le_Pr`, the fork bounds as `ZkSimWJ` gives them. -/
-theorem zkXferWJ_of_simWJ {x : Claims.Msg} (hx : ZkSimWJ x) : ZkXferWJ x := by
+theorem zkXferWJ_of_simWJ {x : Hash.Msg} (hx : ZkSimWJ x) : ZkXferWJ x := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω _ _ P
   obtain ⟨rd, hrd, hr0, δ, hδ, hfit, hω⟩ := hx s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P
   refine ⟨rd, hrd, hr0, δ, hδ, hfit, fun j i => zkForkEv P x (rd j i), fun _ => zkEv₁ P x, fun _ _ _ _ _ he => he.2.2,
@@ -366,7 +366,7 @@ end Gen
 /-- **A simulator gives the masked live sessions' bound at the deployed decoders off the table on a witness lane**:
 the events an accepting fork or run with its collision, the first bound by `zk_first_of_sim`, the self-clash bound by
 `liveMix_le_Pr`, the fork bounds as `ZkSimWJ` gives them. -/
-theorem zkXferWJ_of_simWJ {x : Claims.Msg} (hx : ZkSimWJ x) : ZkXferWJ x :=
+theorem zkXferWJ_of_simWJ {x : Hash.Msg} (hx : ZkSimWJ x) : ZkXferWJ x :=
   Gen.zkXferWJ_of_simWJ (S := S₀) (x := x) (hx := hx)
 
 namespace Gen
@@ -390,7 +390,7 @@ theorem zk_KS_trim_of_simWJ (hs : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x
 /-- **Table 0's masked bound at every statement, off the table on a witness lane, with escapes on accepted runs
 counted per round**, at full-width columns, from a simulator of each prover at the statements some run accepts. -/
 theorem zk_tableBoundθAccAtR_of_simWJ (hs : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimWJ x)
-    (x : Claims.Msg) :
+    (x : Hash.Msg) :
     Claims.Flock.TableBoundθAccAtR sha512 (deployZk Readable.relation) (wordLen true) (wide true) x :=
   zk_tableBoundθAccAtR_of_xferWJ (fun x hno => zkXferWJ_of_simWJ (hs x hno)) x
 

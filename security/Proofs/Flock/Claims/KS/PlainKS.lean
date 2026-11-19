@@ -70,7 +70,7 @@ tables of `Ok` columns. Every prover has escapes at the plain fork rounds such t
 strategies `σL` whose roots agree bound the deployed runs accepting on `C` by their verdict `pL`, the decoder is right
 for `pL` accepting with no opening off `C` unless it self-clashes, and the escapes' events bound the simulated
 strategies' `Adv` and self-clash. -/
-def PlainLiveAt (Ok : Claims.Msg → List 𝔽 → Prop) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+def PlainLiveAt (Ok : Hash.Msg → List 𝔽 → Prop) {x : Hash.Msg} {spec : SessionSpec} {st : Stmt}
     (h : tables false x = [(spec, st)]) (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m) (ptLocal : ℕ)
@@ -131,7 +131,7 @@ def PlainLiveAt (Ok : Claims.Msg → List 𝔽 → Prop) {x : Claims.Msg} {spec 
 
 /-- **The live sessions' bound at a plain statement**: `PlainLiveAt` at tables of full-width columns, at link layout
 `PT_LOCAL`, wherever the setup has the one table `st`, at its every `fast100` schedule of two levels or more. -/
-def PlainLive (x : Claims.Msg) : Prop :=
+def PlainLive (x : Hash.Msg) : Prop :=
   ∀ (spec : SessionSpec) (st : Stmt) (h : tables false x = [(spec, st)]) (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -140,7 +140,7 @@ def PlainLive (x : Claims.Msg) : Prop :=
     PlainLiveAt (wide false) h L m k0 l₀ l₁ rest ext hsch hk0 hm PT_LOCAL hlay
 
 /-- The tables of a setup with one statement. -/
-theorem tables_of_one {zk : Bool} {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem tables_of_one {zk : Bool} {x : Hash.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf zk x = some (ins, spec, sts)) (h1 : sts.size = 1) :
     tables zk x = [(spec, sts[0]'(by omega))] := by
   unfold tables
@@ -151,7 +151,7 @@ theorem tables_of_one {zk : Bool} {x : Claims.Msg} {ins : Ins} {spec : SessionSp
   · simp at h1
 
 /-- **Table 0 of a plain statement in scope**: its layout, its link layout at `PT_LOCAL` and its link points. -/
-theorem plain_table0 {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plain_table0 {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) (h0 : 0 < sts.size) :
     ∃ L : Layout (sts[0]'h0), (L.model (Refine.regionsOf (sts[0]'h0))).LinkLayout PT_LOCAL spec.mPts := by
@@ -193,7 +193,7 @@ theorem plain_sched {m : ℕ} (h22 : 22 ≤ m) (h35 : m ≤ 35) :
 
 /-- **The plain table bound at a statement in scope, from the live sessions' bound**: at tables of full-width
 columns, where the statement parses in scope and sets up. -/
-theorem plain_tableBoundθAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem plain_tableBoundθAt_live {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) (hl : PlainLive x) :
     Claims.Flock.TableBoundθAt sha512 (deployPlain Readable.relation) (wordLen false) (wide false) x := by

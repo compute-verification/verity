@@ -7,7 +7,8 @@
              "advice_trace.jsonl", "load*.jsonl", "topology.json", "timeline.jsonl", "timeline_report.json",
              "runs.jsonl", "memory_map.jsonl",
              "keys.bin", "weights.key", "salts", "salts_t", "*.salts", "state.pkl", "*.state.pkl", "fp.npy", "*.fp.npy", "*.kv",
-             "step_trace*.jsonl*", "certified.jsonl", "*-private.bin"],
+             "step_trace*.jsonl*", "certified.jsonl", "*-private.bin",
+             "plan.jsonl", "plan.base.jsonl", "replay_steps.jsonl*"],
  "why": {
   "replay_bundle_p": ["@vllm", "a replay bundle: committed values with their salts, the requests and served tokens, and opened weights"],
   "replay_slim_p": ["@vllm", "a replay's slim keep, which holds clear values"],
@@ -45,6 +46,9 @@
   "*.kv": ["@vllm", "KV cache contents"],
   "step_trace*.jsonl*": ["@vllm", "a serving trace of each step's requests and tokens"],
   "certified.jsonl": ["@network-accounting", "the network attester's certified record of every byte, which is witness"],
-  "*-private.bin": ["@vllm", "a window's rows and salts that a tile's proof takes privately"]
+  "*-private.bin": ["@vllm", "a window's rows and salts that a tile's proof takes privately"],
+  "plan.jsonl": ["@vllm", "a load's request plan: each request's prompt token ids"],
+  "plan.base.jsonl": ["@vllm", "a load's request plan before its prefixes are cut: each request's prompt token ids"],
+  "replay_steps.jsonl*": ["@vllm", "a replay's record of each step: its requests and served tokens"]
  }
 }

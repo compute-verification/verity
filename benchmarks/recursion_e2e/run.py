@@ -41,7 +41,6 @@ HERE = Path(__file__).resolve().parent
 JOB = ("bash", "benchmarks/recursion_e2e/job.sh")
 #: the job over a served window (--window): stage.sh stages it into FLOCK_WORK/data/TAG on the run's machine, then runs job.sh
 STAGE = ("bash", "benchmarks/recursion_e2e/stage.sh")
-NODE = "vy-nebius-1"
 STEPS = RP.ORDER
 E2E = (*RP.E2E_STEPS, "negative")
 KIND = "bench/recursion-e2e/v1"
@@ -68,17 +67,12 @@ FORGE_AFTER = ("coef", "dirs", "message")
 FORGED = {"message": "alg", "sum": "L0,L3,alg", "comb": "alg", "top": "L3", "top-salt": "L0", "coef": "L0", "dirs": "L0",
           "filler": "alg"}
 
-# Where a run goes. 85's CPU prover needs no GPU, so a run behind the ZK server (and --cpu) goes straight to a CPU node that takes
-# plain runs, pinned to CORES; the SLOT_ONLY nodes take runs only through slots.
-# `--on auto` (AUTO) is research run's queue itself, which places the run on a node of its choosing: it takes the queue's
-# options but no --queue, and a CPU run there may land on a CPU node.
+# Where a run goes: `--on auto` (AUTO, the default) is research run's queue itself, which places the run on a node of its
+# choosing: it takes the queue's options but no --queue, and a CPU run there may land on a CPU node. `--on MACHINE` queues it
+# on that machine; with `--direct`, a CPU run (85's CPU prover needs no GPU) is a plain run there, pinned to CORES, which
+# research run's launcher refuses on a machine that takes runs only through its slots.
 AUTO = "auto"
-CPU_NODE, PLAIN_CPU_NODES = "vy-nebius-cpu-2", ("vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5")
-SLOT_ONLY = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-nebius-cpu-1")
 CPU_WORK = "/workspace/cache/rec-bench"
-# A GPU node that keeps served windows takes a --window run as a plain run on the cores of its calendar row (--cores, no
-# default there), reading the window in place, so no private file of it travels to another machine or into a record.
-WINDOW_NODES = ("vy-spot-glm53",)
 
 STAGES = {
     "build": "the CUDA prover (60-circuit.sh), the Lean verifier (lake build), the inner statement staged with plain and hm96 leaves",
@@ -155,20 +149,20 @@ def cpu_run(a) -> bool:
 
 
 def on(a) -> str:
-    """The machine: --on (AUTO: research run's queue places it), else a plain CPU node for a CPU run and the GPU node's
-    queue for a GPU one."""
+    """The machine: --on, else AUTO (research run's queue places it); a --direct run names its machine and is a CPU run, and
+    a --window run names the machine that keeps the window (a --direct one, its calendar row's --cores too)."""
     if a.window:
-        if not a.on:
+        if not a.on or a.on == AUTO:
             raise SystemExit("--window: say the machine that keeps it (--on); the window is read there, never copied")
         if not cpu_run(a):
             raise SystemExit("--window: a run on the CPU prover (behind the ZK server, or --cpu); a window node's cards aren't leased")
-        if a.on in WINDOW_NODES and not a.cores:
-            raise SystemExit(f"--window on {a.on}: --cores, the cores of its calendar row")
-    m = a.on or (CPU_NODE if cpu_run(a) else NODE)
-    if m in PLAIN_CPU_NODES and not cpu_run(a):
-        raise SystemExit(f"--on {m}: a CPU node has no GPU; --oprove-gpu 1 and GPU modes need a GPU node")
-    if m in SLOT_ONLY and cpu_run(a):
-        raise SystemExit(f"--on {m}: takes runs only through its slots; a CPU run goes to one of {', '.join(PLAIN_CPU_NODES)}")
+        if a.direct and not a.cores:
+            raise SystemExit(f"--window --direct --on {a.on}: --cores, the cores of its calendar row")
+    m = a.on or AUTO
+    if a.direct and m == AUTO:
+        raise SystemExit("--direct: a plain run names its machine, --on MACHINE (one that takes plain runs)")
+    if a.direct and not cpu_run(a):
+        raise SystemExit(f"--direct --on {m}: a plain run has no GPU host; --oprove-gpu 1 and GPU modes are queued runs")
     return m
 
 
@@ -214,9 +208,9 @@ def forge_after(a) -> list[str]:
 
 
 def direct(a) -> bool:
-    """A plain run on a CPU node, or a --window run on a window node (``research run --on``, pinned to --cores), not a
-    queued job."""
-    return on(a) in PLAIN_CPU_NODES or bool(a.window) and on(a) in WINDOW_NODES
+    """A plain run on --on's machine (``research run --on``, pinned to --cores), not a queued job."""
+    on(a)
+    return a.direct
 
 
 def job_env(a: argparse.Namespace) -> list[str]:
@@ -225,7 +219,7 @@ def job_env(a: argparse.Namespace) -> list[str]:
         raise SystemExit(f"--env: {', '.join(bad)} is not KEY=VALUE")
     lease = a.lease_min or lease_min(a.oprove_warm + a.oprove_runs, zk_server(a), levels(a))
     # a CPU node has no GPU, and /workspace/jobs isn't the research user's there; a CPU run books no GPU anywhere
-    cpu_node = on(a) in PLAIN_CPU_NODES or (on(a) == AUTO and cpu_run(a))
+    cpu_node = (direct(a) and not a.window) or (on(a) == AUTO and cpu_run(a))
     node = ["GPU=0", f"FLOCK_WORK={CPU_WORK}"] if cpu_node else ["GPU=0"] if cpu_run(a) else []
     env = [f"K={a.K}", f"N={a.N}", f"STEPS={','.join(steps(a.steps))}", f"REPEAT={a.repeat}", f"MODES={a.modes}",
            f"OPROVE_WARM={a.oprove_warm}", f"OPROVE_RUNS={a.oprove_runs}", f"GPU_MAX_MIN={lease}", f"NEG={','.join(a.neg.split())}",
@@ -397,10 +391,12 @@ def main(argv: list[str] | None = None, job: tuple[str, ...] = JOB) -> int:
                        help="V*'s prover: 0 the CPU prover (auto under the ZK server: node 1's lease pool stops a lease whose "
                             "GPU idles about 10 min, as it does during a release through the ZK server), 1 the GPU one under a lease")
         p.add_argument("--on", "--node", dest="on", default="", metavar="MACHINE",
-                       help=f"default {CPU_NODE} for a CPU run (behind the ZK server on the CPU prover, or --cpu), a plain run there; "
-                            f"else {NODE}'s queue; {AUTO}: research run's queue places it")
-        p.add_argument("--cores", default="", help="a plain run's cores on its CPU node (taskset -c; default 0-31; on a "
-                       "window node, its calendar row's, no default)")
+                       help=f"the machine's queue (default {AUTO}: research run's queue places it); with --direct, a plain run there")
+        p.add_argument("--direct", action="store_true",
+                       help="a CPU run (behind the ZK server on the CPU prover, or --cpu) as a plain run on --on MACHINE, "
+                            "pinned to --cores, not a queued job")
+        p.add_argument("--cores", default="", help="a --direct run's cores on its machine (taskset -c; default 0-31; with "
+                       "--window, its calendar row's, no default)")
         p.add_argument("--window", default="", metavar="DIR", help="a served window's serving-rows on --on's machine: "
                        "stage.sh stages its member there (FLOCK_WORK, removed at the end) and nothing of it is sent")
         p.add_argument("--member", type=int, default=0, help="the window's member (--window)")

@@ -13,6 +13,7 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
+from verity.circuits import population as PN
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
@@ -22,7 +23,7 @@ from verity.circuits.types import Array, Tuple
 from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier import second_stage as SS
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 from verity_vllm.definitions.registry import dead_free as DF
@@ -50,7 +51,7 @@ def _block():
 
 
 BLOCK = _block()
-WIRES = SS.replay_wires(P.population_program(BLOCK, SPANS), descriptor_id(BLOCK))
+WIRES = SS.replay_wires(PN.population_program(BLOCK, SPANS), descriptor_id(BLOCK))
 
 
 def _u32(xs) -> np.ndarray:
@@ -77,7 +78,7 @@ def _spans(seed: int) -> tuple[IR.Span, ...]:
 
 
 def _boundary_window() -> CS.Binding:
-    return CS.Binding(P.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), {"law": "subset", "k": Q},
+    return CS.Binding(PN.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), {"law": "subset", "k": Q},
                       "b0" * 64, (CS.Member(P.template_id(BLOCK), (("ingress", 64),), (("egress", 64),), SPANS),))
 
 
@@ -85,7 +86,7 @@ def _first(members):
     """A two-stage stream over `W` and `T`, a stand-in boundary registered and its first stage sampled (spans 0 and 2)."""
     names: dict[str, tuple] = {}
     for phase, w in (("serve", _boundary_window()), ("interior", IR.interior_window(members, CELLS, "00", [0], WIRES))):
-        names |= {m.port(p): (m.schema(p), phase) for m in w.members for p in CS.port_leaves(m)}
+        names |= {t: (schema, phase) for t, (schema, _n) in w.trees.items()}
     public = (S.Public("population", "structure", "N, the sample's range"),
               S.Public("window", "structure", "provenance: served, on test values"),
               S.Public("leaf_layer", "structure", "the members' public bodies' digest"),
@@ -99,8 +100,8 @@ def _first(members):
                       sampler=lambda sampling_design, n: next(draws) if sampling_design["law"] == "subset" else [0] * len(sampling_design["strata"]))
     window = _boundary_window()
     c = CS.commit(window, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
-                            "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}], salt_key=SALT)
-    reg = stream.register(CS.registration(c, {"stand_in": "boundary"}, None, registrar=R), CS.expected_ports(window),
+                            "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}])
+    reg = stream.register(CS.registration(c, {"stand_in": "boundary"}, None, registrar=DK), CS.expected_ports(window),
                           leaf_layer=CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)}))
     return stream, reg, stream.select(reg)
 
@@ -124,8 +125,9 @@ def test_a_wired_port_is_its_writers_output_rows_and_registers_on_the_challenger
     it = IR.interior(per, CELLS, reg.digest, first.units, row=ROW, wires=WIRES)
     w = it.committed.window
     mw, mt, _mx = w.members
-    assert (mt.wired, mt.wired_trees, dict(mt.tables)["idx"]) == ((("idx", "o0", (0, 1)),), False, Q)
-    assert w.held(mt, "idx") == mw.port("o0") and mt.port("idx") not in it.ports and mw.port("o0") in it.ports
+    assert ({(x.port, x.writer, x.out) for x in mt.wired}, w.reads(mt, "idx").tolist(), dict(mt.tables)["idx"]) == (
+        {("idx", mw.template, "o0")}, [0, 1], Q)
+    assert w.tree(mt, "idx") == w.tree(mw, "o0") in it.ports and mt.port("idx") not in it.ports
     assert it.committed.refs[1][:, 2].tolist() == [0, 1]
     assert it.ports == IR.interior_ports(members, CELLS, reg.digest, first.units, WIRES)
     assert _refused(lambda: IR.register(stream, first, it, ports=IR.interior_ports(members, CELLS, reg.digest,

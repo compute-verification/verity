@@ -76,7 +76,7 @@ sample, `SampleSetupZHJ.table`), so every table is a table the session sets up (
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec Composed
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec Composed
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
@@ -280,7 +280,7 @@ theorem oneTableLowers : OneTableLowers := by
 witness in its relation, whose setup has the tables `sts`, the verifier's parse is masked, untyped, without public input
 ports, has the tables `sts`, the witness is in its readable relation, and the circuit's output is its unit's where its
 outputs are not hidden. -/
-theorem parsed_zk {rel : Parsed → Relation} {x : Claims.Msg} {w : Claims.Flock.Wit} {s : FlockDeploy.Ins}
+theorem parsed_zk {rel : Parsed → Relation} {x : Hash.Msg} {w : Claims.Flock.Wit} {s : FlockDeploy.Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hsc : Claims.Flock.Scope (FlockDeploy.deployZk rel) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk rel).parse x w)
     (hset : FlockDeploy.setupOf true x = some (s, spec, sts)) :

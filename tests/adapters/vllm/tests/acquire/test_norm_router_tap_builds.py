@@ -28,7 +28,8 @@ from verity_vllm.config import UsageError
 NVCC = "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) NVIDIA\nCuda compilation tools, release 0.0\nBuild a.b\n"
 VLLM = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
 FLAGS = ["-O3", "-DNDEBUG", "-std=c++17", "--expt-relaxed-constexpr", "--expt-extended-lambda"]
-USAGE = r"give --vllm-src and --build-dir \(build\) or --check SO"
+USAGE = r"give --vllm-src, --build-dir and --card \(build\) or --check SO"
+CARD = "h100-sxm-80gb"
 
 
 @dataclass(frozen=True)
@@ -112,7 +113,7 @@ def toolkit(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Toolkit:
     cpp_extension = pytest.importorskip("torch.utils.cpp_extension")
     made = Toolkit(tmp_path / "cuda")
     monkeypatch.setattr(cpp_extension, "load", made.load)
-    monkeypatch.setattr(cpp_extension, "CUDA_HOME", str(made.home))
+    monkeypatch.setenv("CUDA_HOME", str(made.home))
     monkeypatch.setattr(torch.cuda, "get_device_capability", made.capability)
     monkeypatch.setattr(torch.cuda, "get_device_name", made.device_name)
     monkeypatch.setattr(torch.ops, "load_library", made.libraries.append)
@@ -149,7 +150,7 @@ def test_a_build_writes_the_tapped_header_compiles_its_launcher_alone_and_record
     launcher = Path(tap.module.__file__).resolve().parent / tap.launcher
     flags, so = [*FLAGS, tap.version_flag], str(build / (tap.name + ".so"))
 
-    assert tap.module.main(tap.module.Options(vllm_src=str(tree), build_dir=str(build))) == 0
+    assert tap.module.main(tap.module.Options(vllm_src=str(tree), build_dir=str(build), card=CARD)) == 0
 
     assert toolkit.loads == [{
         "name": tap.name, "sources": [str(launcher)], "extra_cuda_cflags": flags, "extra_cflags": ["-O3", "-DNDEBUG"],
@@ -158,7 +159,7 @@ def test_a_build_writes_the_tapped_header_compiles_its_launcher_alone_and_record
     }]
     captured = {"capture_output": True, "text": True}
     assert toolkit.programs == [([str(toolkit.home / "bin" / "nvcc"), "--version"], captured)]
-    assert toolkit.devices == [("capability", 0), ("name", 0)] and toolkit.libraries == []
+    assert toolkit.devices == [] and toolkit.libraries == []
     header = (build / tap.header).read_text()
     assert header == tap.module.tapped_kernel(tap.text()) and "after_the_block" not in header
     info = json.loads((build / "build_info.json").read_text())
@@ -166,12 +167,12 @@ def test_a_build_writes_the_tapped_header_compiles_its_launcher_alone_and_record
         "name": tap.name, "tap_version": 1, "vllm": VLLM,
         "sources": {rel: _sha256(data) for rel, data in files.items()},
         "launcher": {"file": str(launcher), "sha256": _sha256(launcher.read_bytes())},
-        "kernel_header_sha256": _sha256(header.encode()), "nvcc_flags": flags, "arch": "12.3", "device": "a device",
+        "kernel_header_sha256": _sha256(header.encode()), "nvcc_flags": flags, "arch": "9.0a", "card": CARD,
         "torch": torch.__version__, "torch_cuda": torch.version.cuda, "cuda_home": str(toolkit.home),
         "nvcc_version": ["Build a.b"], "compile_seconds": 2.5, "so": so, "so_sha256": _sha256(b"an extension"),
     }
     assert list(info["sources"]) == [tap.kernel_file, *tap.others]
-    assert capsys.readouterr().out == f"BUILD-OK {so} {_sha256(b'an extension')} arch=12.3 (2.5 s)\n"
+    assert capsys.readouterr().out == f"BUILD-OK {so} {_sha256(b'an extension')} arch=9.0a (2.5 s)\n"
 
 
 def test_the_router_header_is_the_renamed_namespace_under_its_own_includes_and_the_files_two_macros(
@@ -201,16 +202,27 @@ def test_the_router_edits_refuse_lines_that_do_not_open_and_close_the_namespace(
 
 
 @TAPS
-def test_a_build_without_a_toolkit_home_starts_nvcc_by_its_relative_path_and_records_no_home(
+def test_a_build_without_a_toolkit_home_is_refused_by_name_after_the_tree_and_before_any_program(
         tap: Tap, toolkit: Toolkit, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    cpp_extension = pytest.importorskip("torch.utils.cpp_extension")
-    monkeypatch.setattr(cpp_extension, "CUDA_HOME", None)
+    monkeypatch.delenv("CUDA_HOME")
     _pinned_tree(tap, tmp_path / "vllm", monkeypatch)
 
-    tap.module.main(tap.module.Options(vllm_src=str(tmp_path / "vllm"), build_dir=str(tmp_path / "build")))
+    with pytest.raises(ValueError, match="CUDA_HOME is not set"):
+        tap.module.main(tap.module.Options(vllm_src=str(tmp_path / "vllm"), build_dir=str(tmp_path / "build"), card=CARD))
 
-    assert [argv for argv, _ in toolkit.programs] == [["bin/nvcc", "--version"]]
-    assert json.loads((tmp_path / "build" / "build_info.json").read_text())["cuda_home"] is None
+    assert toolkit.loads == [] and toolkit.programs == [] and toolkit.devices == []
+
+
+@TAPS
+def test_a_build_for_a_card_with_no_card_file_is_refused_by_name_before_any_program(
+        tap: Tap, toolkit: Toolkit, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _pinned_tree(tap, tmp_path / "vllm", monkeypatch)
+
+    with pytest.raises(KeyError, match="no card .no-such-card."):
+        tap.module.main(tap.module.Options(vllm_src=str(tmp_path / "vllm"), build_dir=str(tmp_path / "build"),
+                                           card="no-such-card"))
+
+    assert toolkit.loads == [] and toolkit.programs == [] and toolkit.devices == []
 
 
 @pytest.mark.parametrize("fault", ["another-kernel-file", "another-last-file", "another-block", "an-edits-line-twice"])
@@ -240,7 +252,7 @@ def test_a_build_refuses_a_tree_that_is_not_the_pinned_one_before_it_asks_torch_
         refusal = re.escape(f"{tree}/{changed}: sha256 ") + "[0-9a-f]{64}, not the pinned [0-9a-f]{64}"
 
     with pytest.raises(ValueError, match=refusal):
-        tap.module.main(tap.module.Options(vllm_src=str(tree), build_dir=str(build)))
+        tap.module.main(tap.module.Options(vllm_src=str(tree), build_dir=str(build), card=CARD))
 
     assert build.exists() == (fault in ("another-block", "an-edits-line-twice"))
     assert not (build / tap.header).exists() and not (build / "build_info.json").exists()
@@ -271,8 +283,9 @@ def test_a_check_loads_the_extension_and_passes_only_on_its_three_ops_at_its_tap
     assert toolkit.libraries == [str(so)] and toolkit.loads == [] and toolkit.programs == []
 
 
-@pytest.mark.parametrize("given", [{}, {"vllm_src": "a tree"}, {"build_dir": "a directory"}],
-                         ids=["neither", "no-build-dir", "no-vllm-src"])
+@pytest.mark.parametrize("given", [{}, {"vllm_src": "a tree", "card": CARD}, {"build_dir": "a directory", "card": CARD},
+                                   {"vllm_src": "a tree", "build_dir": "a directory"}],
+                         ids=["none", "no-build-dir", "no-vllm-src", "no-card"])
 @TAPS
 def test_a_build_without_both_of_its_directories_is_a_usage_error(
         tap: Tap, given: dict[str, str], toolkit: Toolkit) -> None:

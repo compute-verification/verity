@@ -136,6 +136,7 @@ impl Rules {
 
     /// hm96's `M(K)·y`: bit `i` is `⊕_j K_{i+j} y_j` (`i < 512`, `j < 1536`), bit `t` of a byte string being bit `t % 8` of
     /// byte `t / 8`. Each set bit of `y` adds the key's 512-bit window at it.
+    /// Not upstream's `flock_merkle::hm96::mask`, which takes only the pinned key; v2's key is the session's.
     fn mask(&self, y: &[u8]) -> [u8; 64] {
         let mut acc = [0u64; 8];
         for j in (0..8 * SALT_BYTES).filter(|&j| (y[j >> 3] >> (j & 7)) & 1 == 1) {

@@ -1,5 +1,5 @@
 // The tensor measurement M3 on Hopper (sm_90a, H100/H200) as opcode probes.
-// Build with ../opcode_probe/probe.py build --arch sm_90a; every probe passes the SASS gate, the poisoned sink and its
+// Build with ../opcode_probe/probe.py build on an sm_90a card; every probe passes the SASS gate, the poisoned sink and its
 // no-write control before it is timed (probe.cuh). Accumulators stay in registers; A and B come from one shared-memory
 // tile through no-swizzle K-major descriptors (dc.cuh). Each iteration's first wgmma overwrites D (scale-d 0), so FP
 // accumulators stay finite on random operands.

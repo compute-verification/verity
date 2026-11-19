@@ -13,6 +13,7 @@ passes, a tick each (`PassClock`).  The loop itself is tested here; the adapter'
 lockstep with the Commit's run, and imports this file's helpers to do it."""
 from __future__ import annotations
 
+import json
 import contextlib
 import os
 import queue
@@ -22,6 +23,7 @@ import socket
 import sys
 import threading
 import traceback
+from pathlib import Path
 from collections.abc import Callable, Iterator
 from typing import Any
 
@@ -48,6 +50,8 @@ from verity.protocols.resource_accounting.memory.poub.verifier.session import ve
 
 from .test_memory_map import BLOCK, PAGES, SLOT_BYTES, SLOTS, kv_payload
 from .test_registry import CODEC, RECEIPT
+
+FIGURES = timing.Figures.of_json(json.loads((Path(__file__).resolve().parents[6] / "tests/verity/protocols/resource_accounting/memory/poub/figures.json").read_text()))
 
 P512 = rcodec.Codec(rcodec.P512, 2, False)
 
@@ -102,7 +106,7 @@ def verifying(sock: socket.socket, clock: PassClock, **kw) -> Iterator[verifier.
     on its stdin."""
     v = None
     try:
-        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), figures=timing.RTX_PRO_6000_NODE, source=os.urandom(32),
+        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), figures=FIGURES, source=os.urandom(32),
                               delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None, **kw)
         yield v
     finally:

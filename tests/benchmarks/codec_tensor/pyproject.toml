@@ -31,4 +31,6 @@ inputs = ["verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/
           # test_run writes run.py's result through the harness's kit
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
           "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
+          # bench.py's MODELS, which run.py's --model takes: the harness's Llama-3.1 shapes (overhead.SHAPES)
+          "benchmarks/harness/verity_bench/overhead.py",
           "tools/config/verity_config"]

@@ -60,7 +60,7 @@ namespace RecDeploy
 
 /-- **The compiled verifier's own SHA-512 evaluations at the V\* statement `xO`**: check 5's (`ResLower.resSetup`),
 then the registered reads' leaves and climbs (`regIns`). -/
-def deployedSetup (xO : Claims.Msg) : List Claims.Msg := ResLower.resSetup xO ++ regIns xO
+def deployedSetup (xO : Hash.Msg) : List Hash.Msg := ResLower.resSetup xO ++ regIns xO
 
 /-- **The deployed brings** at `b`: `b` with the verifier's own evaluations as its setup. -/
 def deployedB (b : Brings) : Brings := { b with setup := deployedSetup }
@@ -81,7 +81,7 @@ theorem regListed_deployedB (rel : _root_.Flock.Readable.Parsed → _root_.Flock
   regListed_recBound rel (regSetup_deployedB b) L IV
 
 /-- The challenger's live-coin part's record keeps the deployed setup: `deployedB` commutes with replacing `tr`. -/
-theorem deployedB_tr (b : Brings) (t : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArray) :
+theorem deployedB_tr (b : Brings) (t : Hash.Msg → List (Hash.Msg × Claims.Out) → ByteArray) :
     { deployedB b with tr := t } = deployedB { b with tr := t } := rfl
 
 end RecDeploy

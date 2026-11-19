@@ -37,7 +37,7 @@ open Finset
 checks commitment `c`, seed `σ` and answer `a`, in order: the leaves and nodes of every opening it checks against a
 committed root, and the hashes inside every proof it verifies. A collision finder reads a run's collisions off them. -/
 structure HashedService extends Service where
-  hashes : Com → Seed → Ans → List Claims.Msg
+  hashes : Com → Seed → Ans → List Hash.Msg
 
 instance HashedService.instNonemptySeed (S : HashedService) : Nonempty S.Seed :=
   Fintype.card_pos_iff.mp (by rw [S.card_seed]; positivity)
@@ -57,7 +57,7 @@ def forkSeeds (S : HashedService) {Ω : Type} {R : ℕ} (e : S.Seed ≃ Paths Ω
 /-- The verifier's SHA-512 inputs along the fork's runs of `M` at its coins `r`, run after run. -/
 def forkLog {Mc : Machine} (S : HashedService) {Ω : Type} {R : ℕ} (e : S.Seed ≃ Paths Ω R) {Ω' : Type}
     (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)) (r : Ω') (w : Fin R) {k : ℕ} (σ : S.Seed)
-    (σ' : Fin k → S.Seed) : List Claims.Msg :=
+    (σ' : Fin k → S.Seed) : List Hash.Msg :=
   (forkSeeds S e w σ σ').flatMap fun s => S.hashes (Mc.eval M (s, r)).1 s (Mc.eval M (s, r)).2
 
 /-- **The fork finder `B^M`** at the adversary's coins `r` and round `w`, with `k` continuations. Its coins are a
@@ -66,7 +66,7 @@ seed and `k` more; it runs `M` at `r` on the seed and on each continuation forke
 (`Claims.findColl`). Its cost is those inputs' count plus `k + 1` runs of `M` at `M`'s worst-case time, which counts
 `M`'s own SHA-512 calls wherever a call costs at least a unit of the machine's time. -/
 noncomputable def forkFinder {Mc : Machine} (S : HashedService) {Ω : Type} {R : ℕ} (e : S.Seed ≃ Paths Ω R)
-    (sha : Claims.Msg → Claims.Msg) (k : ℕ) {Ω' : Type} (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)) (r : Ω')
+    (sha : Hash.Msg → Hash.Msg) (k : ℕ) {Ω' : Type} (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)) (r : Ω')
     (w : Fin R) : Claims.Finder where
   S := S.Seed × (Fin k → S.Seed)
   out s := Claims.findColl ((forkLog S e M r w s.1 s.2).map fun u => (u, sha u))
@@ -75,7 +75,7 @@ noncomputable def forkFinder {Mc : Machine} (S : HashedService) {Ω : Type} {R :
 /-- **The fork finders of every adversary**, as `Finders`: `forkFinder` at each adversary, value of its coins and
 round. -/
 noncomputable def forkFinders {Mc : Machine} (S : HashedService) {Ω : Type} {R : ℕ} (e : S.Seed ≃ Paths Ω R)
-    (sha : Claims.Msg → Claims.Msg) (k : ℕ) : Finders Mc S.toService R :=
+    (sha : Hash.Msg → Hash.Msg) (k : ℕ) : Finders Mc S.toService R :=
   fun _ _ M r w => forkFinder S e sha k M r w
 
 /-- **An adversary's error at its finders' collision probabilities**: at each value `r` of its coins, the luck term
@@ -83,7 +83,7 @@ noncomputable def forkFinders {Mc : Machine} (S : HashedService) {Ω : Type} {R 
 zero-knowledge finders' collision probabilities summed over the rounds at the weights `βb` and `βz`, capped at 1;
 then averaged over `r`. It assumes nothing of SHA-512: `ecr/sha-512` at the finders turns each probability into a
 number outside the floors, and `breakBound` is that reading (`breakPr ≤ breakBound` at every budget). -/
-noncomputable def breakPr {Mc : Machine} {S : Service} {R : ℕ} (sha : Claims.Msg → Claims.Msg)
+noncomputable def breakPr {Mc : Machine} {S : Service} {R : ℕ} (sha : Hash.Msg → Hash.Msg)
     (fb fz : Finders Mc S R) (ε δb βb δz βz : ℝ) (Ω : Type) [Fintype Ω]
     (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)) : ENNReal :=
   ∑ r : Ω, (Fintype.card Ω : ENNReal)⁻¹ *

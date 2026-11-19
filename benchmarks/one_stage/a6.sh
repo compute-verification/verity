@@ -10,6 +10,7 @@
 # Kept in $OUT/a6: a6's records and logs, the public files and the sessions (their proofs and records); never a prover's file
 # (inst-*) nor a circuit (its pin is kept), nor a session's archive (copies of the circuit and public file).
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 export HZ_CONFIGS=a6 HZ_MEM_GB=${A6_MEM_GB:?}
 [ -n "${A6_CACHE:-}" ] && export HZ_CACHE=$A6_CACHE
 source benchmarks/pouw/hidden_zk/job.sh
@@ -23,6 +24,6 @@ log "a6: members ${A6_MEMBERS:-default}, k ${A6_K:-default}"
   ${A6_K:+--k "$A6_K"} ${A6_CHUNK:+--chunk "$A6_CHUNK"} ${A6_ARGS:-} 2>&1 | tee -a "$OUT/a6.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/a6"
-(cd "$W/a6" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -I{} cp --parents {} "$OUT/a6/")
+(cd "$W/a6" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | python3 "$PUBF" filter | xargs -0 -I{} cp --parents {} "$OUT/a6/")
 log "a6: done, rc $rc"
 exit "$rc"

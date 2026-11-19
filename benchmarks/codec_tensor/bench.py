@@ -26,6 +26,7 @@ import sketch_receipt as SR  # noqa: E402
 import sketching as SKT  # noqa: E402
 import wide as W  # noqa: E402
 from verity.device import load_card  # noqa: E402
+from verity_bench.overhead import SHAPES  # noqa: E402
 
 SEED = hashlib.sha256(b"verity/codec-tensor/bench/seed").digest()
 TAG_SEED = hashlib.sha256(b"verity/codec-tensor/bench/tag-seed").digest()   # the window's sigma
@@ -35,10 +36,7 @@ COMMIT_GATE_BLOCKS = 4096      # sketch-sha512's commit gate: the driver's tree 
 READER = None                  # a WT_RECEIPT build's commit: reader.Reader (reader.cu), set by --reader-lib
 SMS = load_card("rtx-pro-6000-server", directory=CARD_FILES)["sm"]["count"]["value"]   # the card's `sm.count`: one CTA an SM
 PIPE_OPS = ("imad_wide", "imad", "iadd", "mac")   # wt_chain 5's ops
-MODELS = {   # Llama-3.1's layers (for the tree's share of a step) and linears (N, K)
-    "8b": (32, {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}),
-    "70b": (80, {"qkv": (10240, 8192), "o": (8192, 8192), "gate_up": (57344, 8192), "down": (8192, 28672)}),
-}
+MODELS = {"8b": SHAPES["llama-3.1-8b"], "70b": SHAPES["llama-3.1-70b"]}   # Llama-3.1's layers and linears (N, K)
 BATCHES = (1, 2, 4, 8, 16, 32)
 L2_DEFEAT_BYTES = 1 << 30
 SPIN_CYCLES = 20_000_000

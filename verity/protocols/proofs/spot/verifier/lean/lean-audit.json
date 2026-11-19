@@ -12,14 +12,14 @@
  },
  "layers": {
   "Spot": {
-   "imports": ["Lean", "Std.Data.HashMap", "Flock", "CoreProtocol", "Lms", "Spot"],
+   "imports": ["Lean", "Std.Data.HashMap", "Flock", "CoreProtocol", "Lms", "Spot", "Circuits.Wire"],
    "except": [],
-   "why": "the port is code: Lean core, C-Flock's verifier library, the core protocol interface, the LMS verifier (the challenger's signed record) and Lean's hash map (R3's port index, `Registration.portIndex`), no Mathlib and nothing of Security (the layout rule: Lean code never requires Security)"
+   "why": "the port is code: Lean core, C-Flock's verifier library, the core protocol interface, the LMS verifier (the challenger's signed record) and Lean's hash map (R3's port index, `Registration.portIndex`), no Mathlib and nothing of Security (the layout rule: Lean code never requires Security); Circuits.Wire: the verifier's wire check reads the circuits' one definition of a wire and holds none of its own; Circuits.Wire imports only Lean's own JSON"
   },
   "Spot.RecordText": {
-   "imports": ["Flock.Sigma", "Flock.TemplateQuery", "Spot.Wires"],
+   "imports": ["Flock.Sigma", "Flock.TemplateQuery", "Spot.Wires", "Spot.Edges"],
    "except": [],
-   "why": "what an execution phase's circuit record's text declares is code, read from the decoded Program and the parsed text alone: Flock's program decoder and template queries, a type's bits read from its structure (Flock.Sigma, which imports the decoder alone) and SPOT's reader of the record's wires; nothing else of SPOT, no Mathlib and nothing of Security"
+   "why": "what an execution phase's circuit record's text declares is code, read from the decoded Program and the parsed text alone: Flock's program decoder and template queries, a type's bits read from its structure (Flock.Sigma, which imports the decoder alone) and SPOT's reader of the record's wires, and Spot.Edges: the reader's wiring is the Program's edges; code reading the code beneath it; nothing else of SPOT, no Mathlib and nothing of Security"
   }
  },
  "guarantees": {},

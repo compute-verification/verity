@@ -1441,3 +1441,43 @@ def test_no_key_holds_the_variables_that_say_where_records_are_or_how_a_suite_ru
     monkeypatch.setenv("VERITY_REGRESSION", "1")
     monkeypatch.setenv("CIRCUIT_CHECK_OTHER", "1")
     assert UN.key(("_x_roots",), 0)["environment"] == {"CIRCUIT_CHECK_OTHER": "1", "VERITY_REGRESSION": "1"}
+
+
+def _json_values(rng, depth: int = 0):
+    """JSON values of every kind a slice holds (ids, paths, digests, counts, effects), as `json.loads` gives them."""
+    leaves = [None, True, False, 0, -1, 2 ** 63 + 5, -0.0, 1.5, 1e-7, 1e21, 0.1 + 0.2, "", "é", "\u2028", "\U0001f600",
+              "\x00\x1f\x7f", '"\\/', 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}', "sha512:" + "ab" * 64,
+              "verity_vllm/definitions/registry/b1.py"]
+    k = rng.randrange(8 if depth < 3 else 6)
+    if k < 6:
+        return rng.choice(leaves)
+    n = rng.randrange(4)
+    if k == 6:
+        return [_json_values(rng, depth + 1) for _ in range(n)]
+    return {rng.choice(["id", "node", "reads", "é", "\U0001f600", "a b", ""]) + str(i): _json_values(rng, depth + 1)
+            for i in range(n)}
+
+
+def test_every_slice_file_is_its_document_as_compact_sorted_ascii_json(tmp_path):
+    import random
+
+    from circuit_check import units as UN
+
+    rng = random.Random(0)
+
+    def old(doc):
+        return json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()
+
+    for t in range(40):
+        shared = {f"s{i}": _json_values(rng) for i in range(rng.randrange(8))}
+        per = {f"binding-{t}-{i}-\u00e9": {f"p{j}": _json_values(rng) for j in range(rng.randrange(6))}
+               for i in range(rng.randrange(1, 5))}
+        to = tmp_path / str(t)
+        UN.write_slices(to, shared, per)
+        body = (to / "shared.json").read_bytes()
+        assert body == old(json.loads(json.dumps(shared)))
+        digest = "sha512:" + hashlib.sha512(body).hexdigest()
+        index = json.loads((to / "index.json").read_bytes())
+        assert (to / "index.json").read_bytes() == old(index)
+        for b, f in index["bindings"].items():
+            assert (to / f).read_bytes() == old(json.loads(json.dumps({**per[b], "shared": digest})))

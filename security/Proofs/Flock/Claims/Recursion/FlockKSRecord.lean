@@ -100,11 +100,11 @@ namespace FlockDeploy
 open Claims.Recursion
 
 /-- **The coin a message shows**: the coin whose bytes it is. -/
-noncomputable def decCoin (_ : Claims.Msg) : Claims.Msg → Coin := Function.invFun Coin.bytes
+noncomputable def decCoin (_ : Hash.Msg) : Hash.Msg → Coin := Function.invFun Coin.bytes
 
 /-- **The deployed verifier shows each round's coin**: it answers with the coin's bytes (`answersCoin_deploy`), which
 determine the coin (`coin_bytes_injective`). -/
-theorem coinsShown_V (H : Claims.Msg → Claims.Msg) (zk : Bool) : CoinsShown H (V zk) decCoin :=
+theorem coinsShown_V (H : Hash.Msg → Hash.Msg) (zk : Bool) : CoinsShown H (V zk) decCoin :=
   fun x as cs c m _ h => by
     rw [Claims.Bridge.answersCoin_deploy zk H x as cs c m h]
     exact Function.leftInverse_invFun Claims.Bridge.coin_bytes_injective c
@@ -120,7 +120,7 @@ open Claims.Recursion
 verifier accepts some run. -/
 theorem plain_kSplits (rel : Readable.Parsed → Readable.Relation)
     (hone : ∀ x, (∃ s, (deployPlain rel).parse x = some s ∧ s.tables = 1) ∨
-      Claims.Flock.NoAcc sha512 (deployPlain rel).V x) (x : Claims.Msg) :
+      Claims.Flock.NoAcc sha512 (deployPlain rel).V x) (x : Hash.Msg) :
     (8 ≤ (deployPlainTrim rel).k x ∧ Claims.Flock.Splits (deployPlainTrim rel) x) ∨
       Claims.Flock.NoAcc sha512 (deployPlainTrim rel).V x :=
   (k_range_plain rel x).elim
@@ -131,7 +131,7 @@ theorem plain_kSplits (rel : Readable.Parsed → Readable.Relation)
 verifier accepts some run. -/
 theorem zk_kSplits (rel : Readable.Parsed → Readable.Relation)
     (hone : ∀ x, (∃ s, (deployZk rel).parse x = some s ∧ s.tables = 1) ∨
-      Claims.Flock.NoAcc sha512 (deployZk rel).V x) (x : Claims.Msg) :
+      Claims.Flock.NoAcc sha512 (deployZk rel).V x) (x : Hash.Msg) :
     (8 ≤ (deployZkTrim rel).k x ∧ Claims.Flock.Splits (deployZkTrim rel) x) ∨
       Claims.Flock.NoAcc sha512 (deployZkTrim rel).V x :=
   (k_range_zk rel x).elim

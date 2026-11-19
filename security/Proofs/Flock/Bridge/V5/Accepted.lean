@@ -277,7 +277,7 @@ theorem idsSized_of_checksStmt {tags : Tags} {cf pf : ByteArray} {tables : List 
   rw [he, hu]
   exact hcs'
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
 open FlockSoundness.Discharge.Tables (LiveOutJ)
@@ -306,7 +306,7 @@ def SampledKSLiveV5Accepted : Prop :=
     -- the game's units are the public file's population
     (_hn : pub.n = n)
     -- the statement's descriptor, and the registration's query
-    (desc : Claims.Msg) (qr : Lean.Json)
+    (desc : Hash.Msg) (qr : Lean.Json)
     -- the registration's sampling design object and work table, the sampling design the verifier samples under from them, sampling kd proof
     -- blocks, and that it is no Bernoulli sampling design
     (lj : Lean.Json) (tb : Option Lean.Json) (samplingDesign : Flock.Draw.SamplingDesign) (kd : ℕ)

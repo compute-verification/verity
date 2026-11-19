@@ -52,10 +52,14 @@ from typing import Any
 
 import pytest
 
+from verity.commitments import docket_digest as DD
+from verity.commitments import domains as DM
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, docket as R
+from verity.commitments import randomness as RND
 from verity.circuits.codec import canonical_json
-from verity.commitments.periods import interface as IF, rows as CS
+from verity.commitments import salt_file as SF
+from verity.commitments.periods import interface as IF, rows as CS, wiring as WI
 from verity_difftest import settings as opt
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
@@ -172,7 +176,7 @@ def test_the_advice_must_be_in_the_registration_the_challengers_stream_drew_afte
     rec = _rec("11" * 64)
     drawn = R.receipt(rec, A5.CHALLENGER, received="0")
     assert PP.advice_before_draw(drawn, rec, _bound(rec)) == {"ok": True, "codes": [], "detail": {
-        "drawn_after": R.digest(rec), "registration": R.digest(rec), "received": "0"}}
+        "drawn_after": DD.digest(rec), "registration": DD.digest(rec), "received": "0"}}
     late = _rec("22" * 64)
     assert PP.advice_before_draw(drawn, late, _bound(late))["codes"] == ["after-the-draw"]
     assert PP.advice_before_draw(R.receipt(rec, "one-stage-e2e verifier (a5.py)"), rec, _bound(rec))["codes"] == ["after-the-draw"]
@@ -752,7 +756,7 @@ def test_a_partial_windows_charge_states_no_c_its_port_from_a_template_it_lacks_
     import records_audit as RA
 
     writer = CS.Member("W", (("a", 4),), (("o0", 8),), 2)
-    reader = CS.Member("R", (("x", 8), ("y", 2)), (("o0", 2),), 2, base=2, wired=(("x", "o0", (0, 1)),))
+    reader = CS.Member("R", (("x", 8), ("y", 2)), (("o0", 2),), 2, base=2, wired=(WI.Wired("x", "W", "o0", 0, (2,), 0, (1,)),))
     advice = 16 * 2 * (4 + 2)
     whole, partial = (RA.leak_count(w, (), advice) for w in ([writer, reader], [replace(reader, base=0, wired=())]))
     assert (whole["other_inputs"], whole["bound"]) == (advice, "within the charge")
@@ -1492,18 +1496,17 @@ def _tiny_checkpoint(d: Path, model: str, revision: str, int8: bool = False) -> 
     return man
 
 
-def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(tmp_path, capsys, monkeypatch):
+def test_a_served_runs_weights_registration_is_the_committers_under_fresh_salts(tmp_path, capsys, monkeypatch):
     """``weights-registration``, the committer's: the served run's weights (`window_weights.weights_registration` under the
-    φ its window circuit lowers under, here at a grain TINY lowers at) committed under salts sampled from ``--key``, a 32-byte
-    file sampled there (0600) the first time and read thereafter, once the committer has checked the checkpoint's shards
+    φ its window circuit lowers under, here at a grain TINY lowers at) committed under fresh OS salts kept in the salt file
+    beside ``--out`` (0700, no salt in the registration), once the committer has checked the checkpoint's shards
     against its manifest. Written to ``--out``: a root for each weight parameter but the rotary table's, what `verity-vllm
     advice --weights-of-record` records and ``window-circuit --pins`` takes (the embedding's table its own, its ``row-seg``
     rows), and what the verifier holds to its own weights
     record's shapes (`registration_pins`) without computing a root. With the engine's served rotary table in the run's
-    ``private/cos_sin_cache.npy`` (serve-openai's) it roots that too, the other roots unchanged, and refuses by name a
-    table outside the analytic table's bound. Another key gives other roots for every weight; a key
-    file of another length, a checkpoint the manifest pins as another model than the run served, or a shard other than the
-    one the manifest pins, is refused by name, nothing registered."""
+    ``private/cos_sin_cache.npy`` (serve-openai's) it roots that too, and refuses by name a table outside the analytic
+    table's bound. Registering again gives other roots for every weight; a checkpoint the manifest pins as another model
+    than the run served, or a shard other than the one the manifest pins, is refused by name, nothing registered."""
     import functools
 
     import numpy as np
@@ -1513,7 +1516,7 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.window_weights import Grain
 
-    grain = Grain(gemm_words=512, rows=9, select=64)
+    grain = Grain(gemm_words=512, rows=18, select=64)
     monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
     run, hf, ck = tmp_path / "serve", tmp_path / "tiny.json", tmp_path / "ck" / "snap"
     run.mkdir()
@@ -1522,17 +1525,18 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     (run / "serve.json").write_text(json.dumps(serve))
     hf.write_text(json.dumps(TINY))
     man = _tiny_checkpoint(ck, serve["model"], serve["revision"])
-    out, key = tmp_path / "weights_registration.json", tmp_path / "private" / "weights.key"
+    out = tmp_path / "weights_registration.json"
+    salts = SF.beside(out)
 
-    def register(key_file: Path) -> int:
+    def register() -> int:
         return PP.main(["weights-registration", "--serve-run", str(run), "--checkpoint-dir", str(ck), "--checkpoints",
-                        str(man), "--hf-config", str(hf), "--key", str(key_file), "--out", str(out)])
+                        str(man), "--hf-config", str(hf), "--out", str(out)])
 
     capsys.readouterr()
-    assert register(key) == 0
+    assert register() == 0
     reg, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
-    assert len(key.read_bytes()) == 32 and key.stat().st_mode & 0o777 == 0o600
-    assert key.read_bytes().hex() not in out.read_text()
+    assert salts.stat().st_mode & 0o777 == 0o700 and set(SF.params(salts)) == set(reg["values"])
+    assert all(SF.read(salts, q, [0]).hex() not in out.read_text() for q in reg["values"])
     pins = ADV.registered_weights(reg, serve)
     assert said["roots"] == len(pins) == 16 and PP.pins_of((), [str(out)]) == pins
     assert [p for p in pins if p.endswith("/table")] == ["weights/model.embed_tokens.weight@64/table"]
@@ -1540,31 +1544,27 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     registered = PP.registered_of_serve(serve, str(hf), None, PP.CAP_BITS)
     record = WW.weights_record(registered, str(ck), str(man), grain=grain)
     assert WW.registration_pins(reg, record) == pins
-    assert register(key) == 0 and json.loads(out.read_text()) == reg
+    assert register() == 0
+    again = ADV.registered_weights(json.loads(out.read_text()), serve)
+    assert sorted(again) == sorted(pins) and all(again[q] != pins[q] for q in pins)
+    reg = json.loads(out.read_text())
     C = next(f for f in record["fields"] if f.get("pinned") == "analytic")["analytic"]["C"]
     table = run / "private" / "cos_sin_cache.npy"
     table.parent.mkdir()
     np.save(table, M.cos_sin_table(C))
     capsys.readouterr()
-    assert register(key) == 0
+    assert register() == 0
     rooted, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
     assert said["roots"] == 17 and said["unrooted"] == [] == list(rooted["unrooted"])
-    assert {p: e for p, e in rooted["values"].items() if p not in reg["unrooted"]} == reg["values"]
+    assert set(rooted["values"]) == set(reg["values"]) | set(reg["unrooted"])
     assert WW.registration_pins(rooted, record) == ADV.registered_weights(rooted, serve)
     np.save(table, M.cos_sin_table({**C, "ROPE_THETA": 2 * C["ROPE_THETA"]}))
-    assert register(key) == PP.REFUSED
+    assert register() == PP.REFUSED
     assert "served words outside the analytic table's bound" in capsys.readouterr().err
     table.unlink()
-    assert register(tmp_path / "other.key") == 0
-    other = ADV.registered_weights(json.loads(out.read_text()), serve)
-    assert sorted(other) == sorted(pins) and all(other[p] != pins[p] for p in pins)
-    (tmp_path / "short.key").write_bytes(bytes(16))
-    capsys.readouterr()
-    assert register(tmp_path / "short.key") == PP.REFUSED
-    assert "a committer's salt key is 32 bytes, not 16" in capsys.readouterr().err
     out.unlink()
     (run / "serve.json").write_text(json.dumps({**serve, "model": "org/other"}))
-    assert register(key) == PP.REFUSED
+    assert register() == PP.REFUSED
     assert f"manifest entry is {serve['model']}@{serve['revision']}, not the registered model org/other@" in capsys.readouterr().err
     assert not out.exists()
     (run / "serve.json").write_text(json.dumps(serve))
@@ -1572,7 +1572,7 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     body = bytearray(shard.read_bytes())
     body[-1] ^= 1
     shard.write_bytes(bytes(body))
-    assert register(key) == PP.REFUSED
+    assert register() == PP.REFUSED
     assert "the checkpoint is not of record" in capsys.readouterr().err and not out.exists()
 
 
@@ -1580,7 +1580,7 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
     """``weights-registration --deployment-record FILE`` writes the committer's registration also as the first record of the
     serve's registration log (`window_weights.deployment_record`): a `verity/registration/v2` record chained after nothing
     that registers each rooted weight parameter's entry as the docket states it, by name, and names the unrooted
-    ones in its header, with nothing of the key; the command says its digest (`registration.digest`), which Pearl+'s W
+    ones in its header, with none of its salts; the command says its digest (`registration.digest`), which Pearl+'s W
     names as its ``previous`` on a serve tied to it. So each weight's root is in the log's first record under its value's
     name, where the inference-only policy's check looks a registered parameter up, by name and root, in the log it is
     given (its Lean's `isTheta`). Without the flag no such record is
@@ -1592,7 +1592,7 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.window_weights import Grain
 
-    grain = Grain(gemm_words=512, rows=9, select=64)
+    grain = Grain(gemm_words=512, rows=18, select=64)
     monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
     run, hf, ck = tmp_path / "serve", tmp_path / "tiny.json", tmp_path / "ck" / "snap"
     run.mkdir()
@@ -1601,15 +1601,15 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
     (run / "serve.json").write_text(json.dumps(serve))
     hf.write_text(json.dumps(TINY))
     man = _tiny_checkpoint(ck, serve["model"], serve["revision"])
-    out, key, first = tmp_path / "weights_registration.json", tmp_path / "private" / "weights.key", tmp_path / "first.json"
+    out, first = tmp_path / "weights_registration.json", tmp_path / "first.json"
     argv = ["weights-registration", "--serve-run", str(run), "--checkpoint-dir", str(ck), "--checkpoints", str(man),
-            "--hf-config", str(hf), "--key", str(key), "--out", str(out)]
+            "--hf-config", str(hf), "--out", str(out)]
     capsys.readouterr()
     assert PP.main(argv) == 0 and "deployment" not in json.loads(capsys.readouterr().out) and not first.exists()
     assert PP.main([*argv, "--deployment-record", str(first)]) == 0
     reg, rec, said = json.loads(out.read_text()), json.loads(first.read_text()), json.loads(capsys.readouterr().out)
-    assert rec == WW.deployment_record(reg) and said["deployment"] == R.digest(rec) and said["roots"] == 16
-    assert (rec["format"], rec["protocol"], rec["previous"]) == (R.FORMAT_V2, R.PROTOCOL, None)
+    assert rec == WW.deployment_record(reg) and said["deployment"] == DD.digest(rec) and said["roots"] == 16
+    assert (rec["format"], rec["protocol"], rec["previous"]) == (DM.REGISTRATION, DM.ONE_STAGE_PROTOCOL, None)
     assert [e["value"] for e in rec["registered"]] == sorted(reg["values"])
     assert {e["value"]: e for e in rec["registered"]} == reg["values"]
     assert all(set(e) == {"value", "root", "leaves", "words", "domain"} for e in rec["registered"])
@@ -1617,7 +1617,7 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
                                  "model": {"repo": serve["model"], "revision": serve["revision"]},
                                  "unrooted": sorted(reg["unrooted"])}
     assert rec["deployment"]["unrooted"] and not {e["value"] for e in rec["registered"]} & set(reg["unrooted"])
-    assert key.read_bytes().hex() not in first.read_text()
+    assert all(SF.read(SF.beside(out), q, [0]).hex() not in first.read_text() for q in reg["values"])
     stem = next(iter(reg["values"])).rpartition("@")[0]
     for name in ("x", f"{stem}@192/bnk", f"{stem}@3072/b0/table", f"{stem}@192/b0/vocab"):
         odd = {**reg, "values": {**reg["values"], name: {**next(iter(reg["values"].values())), "value": name}}}
@@ -1640,7 +1640,7 @@ def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.window_weights import Grain
 
-    grain = Grain(gemm_words=512, rows=9, select=64)
+    grain = Grain(gemm_words=512, rows=18, select=64)
     monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
     run, hf, ck = tmp_path / "serve", tmp_path / "tiny-int8.json", tmp_path / "ck" / "snap"
     run.mkdir()
@@ -1652,7 +1652,7 @@ def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears
     out = tmp_path / "weights_registration.json"
     capsys.readouterr()
     assert PP.main(["weights-registration", "--serve-run", str(run), "--checkpoint-dir", str(ck), "--checkpoints", str(man),
-                    "--hf-config", str(hf), "--key", str(tmp_path / "private" / "weights.key"), "--out", str(out)]) == 0
+                    "--hf-config", str(hf), "--out", str(out)]) == 0
     reg, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
     pins = ADV.registered_weights(reg, serve)
     assert said["roots"] == len(pins) == 24 and said["unrooted"] == ["weights/model.layers.0.self_attn.rotary_emb.cos_sin_cache@16"]
@@ -1968,11 +1968,12 @@ def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_hol
 
     monkeypatch.setattr(PP.I2Compiler, "load", loaded)
     monkeypatch.setattr(WC, "takes", lambda *a, **k: None)
-    monkeypatch.setattr(WC, "lower", lambda *a, **k: None)
+    monkeypatch.setattr(WC, "lower", lambda *a, **k: SimpleNamespace(circuit=None))
+    monkeypatch.setattr(WC, "check_provable", lambda *a, **k: None)
     (tmp_path / "advice.bin").write_bytes(s.data)
     with pytest.raises(Loaded):
         PP.main(["window-commit", "--serve-run", s.a.serve_run, "--window", "0", "--row-dir", s.a.row_dir, "--advice",
-                 str(tmp_path / "advice.bin"), "--key", str(tmp_path / "private" / "key"), "--registration", "unread",
+                 str(tmp_path / "advice.bin"), "--registration", "unread",
                  "--checkpoint-dir", "unread", "--sampling-design", "rate:1/4", "--out", str(out)],
                 kept_ingress=lambda serve_dir: None, scan_state_file="unread")
     assert seen["root"].parent == out.parent and seen["held"] == {seen["root"]} and not seen["root"].exists()
@@ -2003,7 +2004,7 @@ def test_a_served_windows_record_states_its_window_ingress_and_its_window_figure
     assert [(g["port"], g["at"], g["units"], g["step"]) for g in doc[IF.WINDOW_INGRESS]] == [
         ("in0", 0, 4, 0), ("in0", 4, 1, 1), ("in0", 5, 4, 2), ("in0", 9, 1, 3), ("in0", 10, 1, 4)]
     assert "ingress" not in doc
-    mine = IF.window_of_record(doc, DR.parse_design(LAYER0["law"]), IF.resolve)
+    mine = IF.window_of_record(doc, RND.parse_design(LAYER0["law"]), IF.resolve)
     inputs = 11 * 16 * 2 * 128
     assert doc["templates"] == [["SiluMul_v2{I=128}", 11]] and bits > 0
     assert RA.leak_count(mine.members, (), bits) == {"inputs": inputs, "wired": 0, "ingress": 0, "registered": 0, "external": 0,
@@ -2022,17 +2023,6 @@ def test_a_served_windows_record_states_its_window_ingress_and_its_window_figure
     assert IF.circuit_of(record) == IF.circuit_of(doc)
 
 
-def test_the_committers_key_is_made_once_private_and_read_back(tmp_path):
-    """`committer_key`: 32 bytes made mode 0600 where the file doesn't exist, the same bytes read back every window after;
-    a file of another size is refused."""
-    p = tmp_path / "private" / "committer.key"
-    k = PP.committer_key(p)
-    assert len(k) == 32 and (p.stat().st_mode & 0o777) == 0o600 and PP.committer_key(p) == k
-    p.write_bytes(bytes(31))
-    with pytest.raises(ValueError, match="32 bytes, not 31"):
-        PP.committer_key(p)
-
-
 def test_window_commit_without_the_attesters_reader_or_state_file_is_refused_by_name():
     """SPOT imports neither the attester nor a benchmark, so window-commit takes the reader of the run a serve kept and
     the name the attester's scan reads the opened scan state under from its caller, and refuses by name without them."""
@@ -2042,9 +2032,9 @@ def test_window_commit_without_the_attesters_reader_or_state_file_is_refused_by_
 
 
 def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
-    """`h1_tie`: with ``--window-registration`` W, H1's docket of the window, and ``--h1-key``, window-commit's
+    """`h1_tie`: with ``--window-registration`` W, H1's docket of the window, and ``--h1-prover``, window-commit's
     circuit reads W's tables (`window_class.Tables` of the serve's H1 window Program); none without W. Refused by name
-    without the key, for a W under another Program, and where H1's rounds aren't the class's outputs. The verifier's
+    without the prover's directory, for a W under another Program, and where H1's rounds aren't the class's outputs. The verifier's
     window-circuit, which holds no key (not ``key``), reads the same tables."""
     from verity_vllm.program.predict.window_circuit import Tables
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
@@ -2055,13 +2045,13 @@ def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
     (tmp_path / "w.json").write_text(json.dumps({"program": "p" * 128, "registered": []}))
 
     def tie(cls=cls, **kw):
-        args = {"serve_run": str(serve), "window_registration": str(tmp_path / "w.json"), "h1_key": "key", **kw}
+        args = {"serve_run": str(serve), "window_registration": str(tmp_path / "w.json"), "h1_prover": "prover", **kw}
         return PP.h1_tie(argparse.Namespace(**args), cls)
     assert PP.h1_tie(argparse.Namespace(window_registration=None), cls) is None
     w, meta, tables = tie()
     assert w["program"] == meta["program_digest"] and tables == Tables(64, 8, 2)
-    with pytest.raises(ValueError, match="give --h1-key"):
-        tie(h1_key=None)
+    with pytest.raises(ValueError, match="give --h1-prover"):
+        tie(h1_prover=None)
     verifier = argparse.Namespace(serve_run=str(serve), window_registration=str(tmp_path / "w.json"))
     assert PP.h1_tie(verifier, cls, key=False) == (w, meta, tables)
     (tmp_path / "other.json").write_text(json.dumps({"program": "q" * 128}))
@@ -2096,38 +2086,53 @@ def test_window_commits_design_is_the_one_its_rate_names_over_the_circuit_and_a_
 
 
 def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows_retained_steps(tmp_path):
-    """`pearl_tie`: with ``--pearl-passes DIR`` (serve_pearl's ``pearl/w<k>/``) and ``--window-registration`` W, Pearl+'s
+    """`pearl_tie`: with ``--pearl-passes DIR`` (Pearl+'s ``pearl/w<k>/``) and ``--window-registration`` W, Pearl+'s
     window record, window-commit's circuit is cut at its linears under W's scheme (`window_class.PearlTables`) and reads
-    the retained passes' manifests at their rounds; `h1_tie` then stands aside. Refused by name without W, beside
-    ``--h1-key``, for a W of no Pearl-C scheme, and where the rounds retained aren't the class's outputs."""
+    the retained passes' manifests at their rounds, each pass's directory its manifest's, which `reuse` reads the kept
+    salts under; `h1_tie` then stands aside. Refused by name without W, beside
+    ``--h1-prover``, for a W whose entry isn't Pearl+'s declared option (H1's, another Pearl-C kernel's, the FP4 kernel's) or
+    whose scheme isn't its entry's, and where the rounds retained aren't the class's outputs."""
     from verity_vllm.program.predict.window_circuit import PearlTables
 
     d, cls = tmp_path / "q", SimpleNamespace(outputs=2)
     d.mkdir()
     mans = []
     for i in range(3):
-        (m := tmp_path / f"m{i}.json").write_text(json.dumps({"salt": f"s{i}"}))
+        (tmp_path / f"pass-{i}").mkdir()
+        (m := tmp_path / f"pass-{i}" / "manifest.json").write_text(json.dumps({"salt": f"s{i}"}))
         mans.append({"pass": 4 + i, "units": 1, "manifest": str(m)})
     (d / "served.json").write_text(json.dumps({"passes": [{"pass": 3, "units": 0}, *mans]}))
-    (tmp_path / "w.json").write_text(json.dumps({"window": {"scheme": "pearl-c-h100-v1-h3"}, "registered": []}))
+    def record(name, entry, scheme):
+        (tmp_path / name).write_text(json.dumps({"window": {"entry": entry, "scheme": scheme}, "registered": []}))
+        return str(tmp_path / name)
+    record("w.json", "pouw:pearl-c-h100-v1-h3", "pearl-c-h100-v1-h3")
 
     def tie(cls=cls, **kw):
-        args = {"pearl_passes": str(d), "window_registration": str(tmp_path / "w.json"), "h1_key": None, **kw}
+        args = {"pearl_passes": str(d), "window_registration": str(tmp_path / "w.json"), "h1_prover": None, **kw}
         return PP.pearl_tie(argparse.Namespace(**args), cls)
     assert PP.pearl_tie(argparse.Namespace(window_registration="w"), cls) is None
     assert PP.h1_tie(argparse.Namespace(window_registration="w", pearl_passes=str(d)), cls) is None
     with pytest.raises(ValueError, match=r"retained rounds \[0, 1, 2\] aren't its class's 2 outputs"):
         tie()
     (d / "retention.json").write_text(json.dumps({"rounds": [0, 1]}))
-    w, got, rounds, tables = tie()
+    w, got, rounds, tables, dirs = tie()
     assert [m["salt"] for m in got] == ["s0", "s1"] and rounds == [0, 1] and tables == PearlTables("pearl-c-h100-v1-h3")
+    assert dirs == [tmp_path / "pass-0", tmp_path / "pass-1"]
     with pytest.raises(ValueError, match="give --window-registration W"):
         tie(window_registration=None)
-    with pytest.raises(ValueError, match="--h1-key is H1's prover key"):
-        tie(h1_key="key")
+    with pytest.raises(ValueError, match="--h1-prover is H1's prover directory"):
+        tie(h1_prover="prover")
     (tmp_path / "h1.json").write_text(json.dumps({"program": "p" * 128}))
     with pytest.raises(ValueError, match="is no Pearl\\+ window record"):
         tie(window_registration=str(tmp_path / "h1.json"))
+    with pytest.raises(ValueError, match="its entry pouw:pearl-c-nvfp4-v0 is not Pearl\\+'s declared option "
+                                         "pouw:pearl-c-h100-v1-h3"):
+        tie(window_registration=record("c4.json", "pouw:pearl-c-nvfp4-v0", "pearl-c-nvfp4-v0"))
+    with pytest.raises(ValueError, match="its entry pouw:pearl-c-sm120-v1-h3 is not Pearl\\+'s declared option "
+                                         "pouw:pearl-c-h100-v1-h3"):
+        tie(window_registration=record("sm120.json", "pouw:pearl-c-sm120-v1-h3", "pearl-c-sm120-v1-h3"))
+    with pytest.raises(ValueError, match="its scheme pearl-c-sm120-v1-h3 is not the one its entry pouw:pearl-c-h100-v1-h3 names"):
+        tie(window_registration=record("other.json", "pouw:pearl-c-h100-v1-h3", "pearl-c-sm120-v1-h3"))
     (d / "retention.json").write_text(json.dumps({"rounds": [1, 2]}))
     with pytest.raises(ValueError, match=r"retained rounds \[1, 2\]"):
         tie()
@@ -2161,7 +2166,7 @@ class OfRecord(Listing):
 def _fused_args(c: dict, **over) -> argparse.Namespace:
     return argparse.Namespace(**{"bundle": c["served"]["bundle"], "row_dir": c["served"]["row_dir"], "partition": c["partition"],
                                  "workers": 1, "serving_rows_tables": c["tables"]["registration"],
-                                 "serving_rows_tables_key": c["tables"]["key"], "checkpoint_dir": c["checkpoint"], **over})
+                                 "checkpoint_dir": c["checkpoint"], **over})
 
 
 def _same_commitment(a: Path, b: Path) -> None:
@@ -2219,16 +2224,14 @@ def test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpo
     compiler = PP.Capped(OfRecord(program_dir=fused["program_dir"]))
     with pytest.raises(ValueError, match=r"is not among the committer's tables \(commit_tables\)"):
         PP.commit1(_fused_args(fused, serving_rows_tables=None), compiler, [], {}, tmp_path / "w1")
-    with pytest.raises(ValueError, match=r"read under its committer's key file \(--tables-key\)"):
-        PP.commit1(_fused_args(fused, serving_rows_tables_key=None, bundle="no-bundle"), compiler, [], {}, tmp_path / "w2")
     with pytest.raises(LookupError, match=r"registered tensor \S+\.experts\.w\S+ \(checkpoint\) does not open against the committed "
                                           r"weights root: no checkpoint given"):
         PP.commit1(_fused_args(fused, checkpoint_dir=None), compiler, [], {}, tmp_path / "w3")
-    assert not any((tmp_path / d / "registration.json").exists() for d in ("w1", "w2", "w3"))
+    assert not any((tmp_path / d / "registration.json").exists() for d in ("w1", "w3"))
 
 
 def test_a_tp_ranks_window_is_handed_the_tables_and_the_checkpoint(monkeypatch, tmp_path):
-    assert PP.tables_of(argparse.Namespace(serving_rows_tables=None, serving_rows_tables_key="k")) is None
+    assert PP.tables_of(argparse.Namespace(serving_rows_tables=None)) is None
     assert PP.checkpoint_of(argparse.Namespace(checkpoint_dir=None)) is None
     got = {}
     monkeypatch.setattr(PP, "compiler_of_args", lambda a: "compiler")
@@ -2236,7 +2239,7 @@ def test_a_tp_ranks_window_is_handed_the_tables_and_the_checkpoint(monkeypatch, 
     monkeypatch.setattr(AW, "commit_window", lambda commit, r, partition, out, compiler, requests, bound, **kw:
                         got.update(kw, at=(commit, r, partition, str(out), compiler)) or {"run": "x"})
     a = argparse.Namespace(tp_commit="c", partition="p", out=str(tmp_path), workers=1, forge=None, checkpoint_dir="ck",
-                           serving_rows_tables="t-rank{rank}.json", serving_rows_tables_key="k")
+                           serving_rows_tables="t-rank{rank}.json")
     assert PP.commit_rank((a, 3, [], {})) == {"run": "x", "forged": None}
     assert got == {"at": ("c", 3, "p", str(tmp_path / "rank3"), "compiler"), "workers": 1,
-                   "tables": {"key": "k", "registration": "t-rank{rank}.json"}, "checkpoint": ("checkpoint", "ck")}
+                   "tables": {"registration": "t-rank{rank}.json"}, "checkpoint": ("checkpoint", "ck")}

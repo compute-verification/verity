@@ -45,7 +45,7 @@ hypotheses hold at `Idle.unbounded` (`soundness_at_of_targets_honest`, `soundnes
 everything (`soundness_at_of_targets_nontrivial`, `soundness_of_subprotocols_nontrivial`,
 `plain_soundness_of_subprotocols_nontrivial`): there every error is `0` and PoUW's claim fails on every play after the
 empty commitment, at files that pass the commit phase's check. Remote's witnesses read the same two deployments
-(`Idle.target_unbounded`, `Idle.wiresSound_unbounded`, `Idle.nontrivial_at`).
+(`Idle.target_unbounded`, `Idle.nontrivial_at`).
 -/
 
 @[expose] public section
@@ -449,14 +449,8 @@ theorem target_unbounded (k : Verity.Registration.Composite) (a : Subprotocol) :
   rw [error_unbounded]
   exact le_top
 
-/-- At `unbounded`, the wires' target holds at every composite: twice SPOT's error is `⊤`. -/
-theorem wiresSound_unbounded (k : Verity.Registration.Composite) : unbounded.WiresSound k := by
-  intro θ F c σ
-  rw [error_unbounded, ENNReal.mul_top (by norm_num)]
-  exact le_top
-
 /-- The idle finder outputs no collision. -/
-theorem finder_pr (H : Claims.Msg → Claims.Msg) : finder.Pr H = 0 := by
+theorem finder_pr (H : Hash.Msg → Hash.Msg) : finder.Pr H = 0 := by
   unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
   simp [finder]
   exact Or.inl rfl

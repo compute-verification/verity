@@ -77,16 +77,16 @@ source, layout, cap, root and transcript returns from a log of `l`'s size at ext
 its rank check passes, with a log of the ring switch's size. -/
 theorem piopCut_of_phases {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} (hm : 14 ≤ st.m) {lay : Zk.PadLayout}
     {mk : ℕ → F128} {cap root : ByteArray} {sv : ℕ → Array F128} {extras : Array Claim} {t₀ : Transcript}
-    {l : Array Claims.Msg} {zp : ZerocheckProof} {zc : ZcOut} {t₁ : Transcript} {l₁ : Array Claims.Msg}
-    {lp : LincheckProof} {lc : LcOut} {t₂ : Transcript} {l₂ : Array Claims.Msg}
-    {r : Array (Array F128) × F128 × Array Switched} {t₃ : Transcript} {l₃ : Array Claims.Msg}
+    {l : Array Hash.Msg} {zp : ZerocheckProof} {zc : ZcOut} {t₁ : Transcript} {l₁ : Array Hash.Msg}
+    {lp : LincheckProof} {lc : LcOut} {t₂ : Transcript} {l₂ : Array Hash.Msg}
+    {r : Array (Array F128) × F128 × Array Switched} {t₃ : Transcript} {l₃ : Array Hash.Msg}
     (h₁ : ((zerocheckCut (asksCut coin n) st.m st.digest cap root lay mk).run t₀).go l = (.ok ((zp, zc), t₁), l₁))
     (h₂ : ((lincheckCut (asksCut coin n) st.fold st.m lay mk zc).run t₁).go l₁ = (.ok ((lp, lc), t₂), l₂))
     (h₃ : ((ringSwitchCut (asksCut coin n) sv (abcClaims st.m st.kLog zc lc ++ extras)).run t₂).go l₂ =
       (.ok (r, t₃), l₃))
     (lay' : Zk.PadLayout) (src : RepSrc) (cap' root' : ByteArray) {extras' : Array Claim}
     (hes : extras'.size = extras.size) (prior : Array (List F128)) (words : List ℕ) (t₀' : Transcript)
-    {l' : Array Claims.Msg} (hl : l'.size = l.size)
+    {l' : Array Hash.Msg} (hl : l'.size = l.size)
     (hrk : ∀ zp zc t₁ l₁ lp lc t₂ l₂,
       ((zerocheckCut (asksCut coin n) st.m st.digest cap' root' lay' src.masked).run t₀').go l' =
           (.ok ((zp, zc), t₁), l₁) →
@@ -132,7 +132,7 @@ theorem piopCut_of_phases {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} (
 /-- **A returned cut PIOP ran its four phases and passed its rank check** at the lincheck's rounds. -/
 theorem piopCut_split_rank {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {lay : Zk.PadLayout} {src : RepSrc}
     {cap root : ByteArray} {extras : Array Claim} {prior : Array (List F128)} {words : List ℕ} {t₀ : Transcript}
-    {l : Array Claims.Msg} {zp lp ss T sws t₃ l₃}
+    {l : Array Hash.Msg} {zp lp ss T sws t₃ l₃}
     (h : ((piopCut (asksCut coin n) st lay src cap root extras prior words).run t₀).go l =
       (.ok ((zp, lp, ss, T, sws), t₃), l₃)) :
     ∃ zc t₁ l₁ lc t₂ l₂,
@@ -163,12 +163,12 @@ one size, where the cut PIOP from `src` returned, so does the one from any `src'
 the same count, at the same earlier points and words, with a log of the same size. -/
 theorem piopCut_src_free {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} (hm : 14 ≤ st.m) (hk : 6 ≤ st.kLog)
     (hfk : st.fold.kLog = st.kLog) {lay : Zk.PadLayout} {src : RepSrc} {cap root : ByteArray} {extras : Array Claim}
-    {prior : Array (List F128)} {words : List ℕ} {t₀ : Transcript} (ht₀ : t₀.rounds = #[]) {l : Array Claims.Msg}
+    {prior : Array (List F128)} {words : List ℕ} {t₀ : Transcript} (ht₀ : t₀.rounds = #[]) {l : Array Hash.Msg}
     {zp lp ss T sws t₃ l₃}
     (h : ((piopCut (asksCut coin n) st lay src cap root extras prior words).run t₀).go l =
       (.ok ((zp, lp, ss, T, sws), t₃), l₃))
     (lay' : Zk.PadLayout) (src' : RepSrc) (cap' root' : ByteArray) {extras' : Array Claim}
-    (hes : extras'.size = extras.size) {t₀' : Transcript} (ht₀' : t₀'.rounds = #[]) {l' : Array Claims.Msg}
+    (hes : extras'.size = extras.size) {t₀' : Transcript} (ht₀' : t₀'.rounds = #[]) {l' : Array Hash.Msg}
     (hl : l'.size = l.size) :
     ∃ res t₃' l₃', ((piopCut (asksCut coin n) st lay' src' cap' root' extras' prior words).run t₀').go l' =
       (.ok (res, t₃'), l₃') ∧ l₃'.size = l₃.size := by
@@ -183,7 +183,7 @@ theorem piopCut_src_free {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} (h
 /-- **Two returned cut PIOPs from logs of one size have the same switched claims** at the same extra claims. -/
 theorem piopCut_sws_eq {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} (hm : 14 ≤ st.m) {lay lay' : Zk.PadLayout}
     {src src' : RepSrc} {cap root cap' root' : ByteArray} {extras : Array Claim} {prior prior' : Array (List F128)}
-    {words words' : List ℕ} {t₀ t₀' : Transcript} {l l' : Array Claims.Msg} {zp lp ss T sws t₃ l₃}
+    {words words' : List ℕ} {t₀ t₀' : Transcript} {l l' : Array Hash.Msg} {zp lp ss T sws t₃ l₃}
     {zp' lp' ss' T' sws' t₃' l₃'}
     (h : ((piopCut (asksCut coin n) st lay src cap root extras prior words).run t₀).go l =
       (.ok ((zp, lp, ss, T, sws), t₃), l₃))

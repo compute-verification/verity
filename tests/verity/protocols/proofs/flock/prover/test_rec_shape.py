@@ -6,7 +6,6 @@ Gemm_v2 class, in both layouts (tiles and one coordinate an instance), a stateme
 one filler's output row alone."""
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 
@@ -104,20 +103,20 @@ def staged(tmp_path_factory):
     units = PU.partition_units(program, "q-word")
     ((s, cl),) = units.classes().items()
     key = PU.derive(PU.SOURCE, PU.DOMAIN, {"program": "test", "seed": 0})
-    salt, shared = hashlib.sha256(b"test").digest(), CS.broadcast_params(units)
+    shared = CS.broadcast_params(units)
     out = {}
     for name, lanes_n, n, real in (("plain", 8, 8, None), ("five", 5, 5, None), ("padded", 5, 8, 5)):
         d = tmp_path_factory.mktemp(f"tile-{name}")
         lanes = CS.class_lanes(units, cl, key, lanes_n * 8, shared)
-        out["tile", name] = (d, n, CS.stage_tiled(units, "q-word", s, cl, lanes, d, salt, 4, 4, n, real))
+        out["tile", name] = (d, n, CS.stage_tiled(units, "q-word", s, cl, lanes, d, 4, 4, n, real))
         d = tmp_path_factory.mktemp(f"unit-{name}")
         lanes = CS.class_lanes(units, cl, key, lanes_n, shared)
-        out["unit", name] = (d, n, CS.stage(units, "q-word", s, cl, lanes, d, salt, pad=8 if real else None))
+        out["unit", name] = (d, n, CS.stage(units, "q-word", s, cl, lanes, d, pad=8 if real else None))
     with pytest.raises(ValueError, match="--real 9"):
         CS.stage_tiled(units, "q-word", s, cl, CS.class_lanes(units, cl, key, 72, shared), tmp_path_factory.mktemp("bad"),
-                       salt, 4, 4, 8, 9)
+                       4, 4, 8, 9)
     with pytest.raises(ValueError, match="padded to 4"):
-        CS.stage(units, "q-word", s, cl, CS.class_lanes(units, cl, key, 5, shared), tmp_path_factory.mktemp("bad"), salt, pad=4)
+        CS.stage(units, "q-word", s, cl, CS.class_lanes(units, cl, key, 5, shared), tmp_path_factory.mktemp("bad"), pad=4)
     return out
 
 

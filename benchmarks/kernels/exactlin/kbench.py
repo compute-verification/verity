@@ -214,7 +214,6 @@ def shape_row(n: int, k: int, m: int, reps: int, clock: Callable[[], int | None]
 
 def record(out: Path, gate: dict, step: dict, model: str) -> None:
     from verity_bench import kit
-    from verity_bench.overhead import CARD_FILES
     w = kit.writer(out)
     w.validation("passed" if gate["ok"] else "failed", "kgate.gate",
                  f"{gate['shapes']} shapes of {', '.join(gate['models'])}, ok={gate['ok']}",
@@ -222,7 +221,7 @@ def record(out: Path, gate: dict, step: dict, model: str) -> None:
     arms = step.get(model, {})
     if gate["ok"] and {"fused", "stock"} <= arms.keys():
         fused, stock = arms["fused"]["ms_per_step_m32"], arms["stock"]["ms_per_step_m32"]
-        card = kit.card_short(w.stamp["card"], directory=CARD_FILES)
+        card = kit.card_short(w.stamp["card"])
         m = w.measurement(METRIC, fused / stock, "times stock", mark="measured", member=f"{model}-{card}",
                           extra={"fused_ms_per_step": fused, "stock_ms_per_step": stock})
         print(json.dumps({k: m[k] for k in ("name", "value", "unit", "member", "fused_ms_per_step", "stock_ms_per_step")}),
@@ -268,8 +267,8 @@ def main() -> int:
         at32 = {(r["n"], r["k"]): r for r in rows if r["m"] == 32}
         step[model] = {}
         for arm in arms:
-            per_layer = sum(at32[nk]["us_per_call"][arm] for nk in spec["linears"].values())
-            step[model][arm] = {"us_per_layer_m32": per_layer, "ms_per_step_m32": spec["layers"] * per_layer / 1e3}
+            per_layer = sum(at32[nk]["us_per_call"][arm] for nk in spec.linears.values())
+            step[model][arm] = {"us_per_layer_m32": per_layer, "ms_per_step_m32": spec.layers * per_layer / 1e3}
     from vllm.triton_utils import use_tensor_descriptor
     summary = {"device": torch.cuda.get_device_name(), "reps": a.reps, "arms": arms, "models": models,
                "special_rows": a.special_rows, "arch": X.arch(),

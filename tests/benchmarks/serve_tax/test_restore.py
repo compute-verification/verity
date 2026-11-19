@@ -27,13 +27,14 @@ def rid(tag: str, i: int) -> str:
 def arm(tmp_path: Path, gz: bool = False) -> tuple[Path, Path]:
     """A restore arm whose edge 0 holds ``a`` and ``b`` at step 2 and whose edge 1 holds ``c`` and ``d`` at step 4; ``b``
     arrived before step 1, ``c`` before step 3, and ``d`` and ``e`` before step 4, ``d`` while edge 1 drained."""
-    d, kv = tmp_path / "restore", tmp_path / "kv"
-    (d / "server" / "edges").mkdir(parents=True)
+    d, kv, private = tmp_path / "restore", tmp_path / "kv", tmp_path / "private"
+    (d / "server").mkdir(parents=True)
+    (private / "server" / "edges").mkdir(parents=True)
     (d / "medium" / "rep-1").mkdir(parents=True)
     kv.mkdir()
     plan = tmp_path / "plan.jsonl"
     plan.write_text("".join(json.dumps({"i": i, "prompt_ids": [i, i + 1]}) + "\n" for i in range(5)))
-    (d / "meta.json").write_text(json.dumps({"plan": str(plan)}))
+    (d / "meta.json").write_text(json.dumps({"plan": str(plan), "private": str(private)}))
     (d / "medium" / "rep-1" / "client.jsonl").write_text("".join(
         json.dumps({"id": f"medium1-{i:05d}", "i": i}) + "\n" for i in range(5)))
     a, b, c, e4, e5 = (rid("medium1", i) for i in range(5))
@@ -49,15 +50,15 @@ def arm(tmp_path: Path, gz: bool = False) -> tuple[Path, Path]:
             {"kind": "arrive", "request": e4, "before_step": 4, "sampling": s},
             {"kind": "arrive", "request": e5, "before_step": 4, "sampling": s},
             {"kind": "step", "step": 4, "rows": [[c, 2, 1]]}]
-    trace = d / "server" / "step_trace.9.jsonl"
+    trace = private / "server" / "step_trace.9.jsonl"
     trace.write_text("".join(json.dumps(r) + "\n" for r in recs))
     edges = [{"edge": 0, "next_step": 2}, {"edge": 0, "state_write_s": 0.1}, {"edge": 1, "next_step": 4}]
     (d / "server" / "edges.9.jsonl").write_text("".join(json.dumps(r) + "\n" for r in edges))
     for k, held in ((0, [a, b]), (1, [c, e4])):
         st = {"requests": B.pickle_requests([Request(x) for x in held], {"block_hasher": None}), "next_step": 2 + 2 * k}
         (kv / f"edge-{k}.state.pkl").write_bytes(pickle.dumps(st))
-        (d / "server" / "edges" / f"edge-{k}.dump.json").write_text(json.dumps({"sched.x": k}))
-    outs = d / "server" / "edges" / "outputs.9.jsonl"
+        (private / "server" / "edges" / f"edge-{k}.dump.json").write_text(json.dumps({"sched.x": k}))
+    outs = private / "server" / "edges" / "outputs.9.jsonl"
     outs.write_text("".join(json.dumps({"step": t, "out": {a: [[t], None]}}) + "\n" for t in range(1, 5)))
     if gz:
         for f in (trace, outs):
@@ -81,7 +82,7 @@ def test_served_refuses_an_edge_not_taken_and_a_missing_plan(tmp_path: Path):
     d, kv = arm(tmp_path)
     with pytest.raises(SystemExit, match="not 0 and 2"):
         R.served(d, kv, 0, 2)
-    (d / "meta.json").write_text(json.dumps({"plan": str(tmp_path / "elsewhere.jsonl")}))
+    (d / "meta.json").write_text(json.dumps({"plan": str(tmp_path / "elsewhere.jsonl"), "private": str(tmp_path / "private")}))
     with pytest.raises(SystemExit, match="no plan at"):
         R.served(d, kv, 0, 1)
 

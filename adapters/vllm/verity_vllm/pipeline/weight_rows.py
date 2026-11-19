@@ -93,23 +93,34 @@ def reads(members: Sequence[CS.Member], rows: Sequence[list[Row]],
     return IF.Registered({p: params[p] for p in sorted({x.param for x in got})}, reads=tuple(got)) if got else None
 
 
+def valued(window: CS.Binding, data: Sequence[dict[str, Any]]) -> CS.Binding:
+    """``window`` with each member's ports that ``data`` (`by_reference`'s) gives as `rows.ValueRows` named in its
+    ``values``."""
+    vs = [tuple(p for p, _w in m.rows if isinstance(d["rows"].get(p), CS.ValueRows))
+          for m, d in zip(window.members, data, strict=True)]
+    if not any(vs):
+        return window
+    return replace(window, members=tuple(replace(m, values=v) for m, v in zip(window.members, vs, strict=True)))
+
+
 def by_reference(window: CS.Binding, registered: IF.Registered | None, data: Sequence[dict[str, Any]],
-                 values: Mapping[str, Any] | None) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, str],
+                 values: Mapping[str, Any] | None, ranges: Sequence[tuple[str, int, int]]) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, str],
                                                             dict[str, bytes]]:
     """``data`` (`serving_rows.read_all`'s, one a member) with each input port a committed read of ``registered`` fills
     (`interface.committed_reads`: a weight's read, a table's root or domain id) given by reference (`rows.ValueRows`) as the rows
-    its units read of the parameter's committed value in ``values`` (``{param: core's registered.Registered}``: the committer's
+    its units read of the parameter's committed value in ``values`` (``{param: core's registered_value.Registered}``: the committer's
     weights and tables under its key at their nonces, rows held, `window_weights.weight_value`, `expert_rows.commit_tables`; a
     table's supplied values, `interface.supplied`), and each output port one fills (an opening's verdict) committed under the
     value's salts (``salts_of``, `rows.commit`), so each unit's row is the value's row the Lean verifier opens against the
     pinned root (`interface.registered_reads`); with each such member's header entries (`rows.write`'s ``registered``), each
     weight's and table's root (``registered_roots``) and the salts.  Refused (ValueError) where a read's value is missing or
     isn't the words its units read.  ``data`` as given with no ``values``, or in a window with row tables (whose rows
-    `rows.commit` takes in full): its reads stay free."""
+    `rows.commit` takes in full): its reads stay free. ``ranges``: the window's ranges of units in its Program's
+    root order (`interface.ranges_of`)."""
     if not values or registered is None or window.row_tables:
         return list(data), {}, {}, {}
     out, entries, salts_of = [], {}, {}
-    for m, d, reads in zip(window.members, data, IF.member_reads(window.members, registered), strict=True):
+    for m, d, reads in zip(window.members, data, IF.member_reads(window.members, registered, ranges), strict=True):
         d, outs = {**d, "rows": dict(d["rows"])}, dict(m.outs)
         for p, (param, positions, refs) in reads.items():
             v, part = values.get(param), "outs" if p in outs else "rows"

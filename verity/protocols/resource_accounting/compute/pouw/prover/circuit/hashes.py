@@ -22,7 +22,7 @@ from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array
 from verity.circuits.ops.prims import const
 
-from . import words as W
+from verity.circuits.ops import words as W
 
 Half = Coll | int
 Pair = tuple[Half, Half]

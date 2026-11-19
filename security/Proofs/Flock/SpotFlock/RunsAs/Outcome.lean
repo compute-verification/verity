@@ -11,8 +11,6 @@ import Std.Data.TreeMap.Raw.WF
 `Run.run`'s interior audit record is the audit record (`Record.record`, an object built by `Json.mkObj`) with round 2's
 check attached (`SecondStage.attach`), and it accepts only where that record's `accepted` reads `true`. Here:
 
-* `failures_allow`, `check_true_of_codes`: round 2's check at the form's switch `b` reports no code only where the
-  check with the form allowed reports none, the switch adding the one refusal `two-stage-form`;
 * `codes_of_attach`: a well-formed object with a check attached reads accepted only where the check reports no code.
 -/
 
@@ -21,46 +19,6 @@ check attached (`SecondStage.attach`), and it accepts only where that record's `
 namespace SpotFlock.RunsAs
 
 open Lean (Json)
-
-/-- **The form's switch adds one refusal**: round 2's failures at the switch `b` are the failures with the form
-allowed, or the form's refusal alone. -/
-theorem failures_allow (b : Bool) (own : Spot.SecondStage.Own) (ps : Array Spot.SecondStage.Part) (ss : List Json) :
-    Spot.SecondStage.failures b own ps ss = Spot.SecondStage.failures true own ps ss ∨
-      Spot.SecondStage.failures b own ps ss = [("two-stage-form", Json.str Spot.SecondStage.FORM_WHY)] := by
-  cases b
-  · unfold Spot.SecondStage.failures
-    simp only [Bool.not_false, Bool.and_true, Bool.not_true, Bool.and_false, Bool.false_eq_true, if_false]
-    split
-    · exact Or.inr rfl
-    · exact Or.inl rfl
-  · exact Or.inl rfl
-
-/-- The form's refusal alone is a code. -/
-theorem codes_form :
-    ([("two-stage-form", Json.str Spot.SecondStage.FORM_WHY)].foldl (fun c x => c.fail x.1 x.2)
-      ({} : Spot.Check)).codes ≠ #[] := by
-  simp [Spot.Check.fail]
-
-/-- **Round 2's check passes with the form allowed where it passes at any switch**: its failures at the switch `b`
-are those with the form allowed, or the form's refusal, which is a code. -/
-theorem check_true_of_codes {b : Bool} {own : Spot.SecondStage.Own} {stmts : Option (Array Json)}
-    (h : (Spot.SecondStage.check b own stmts).codes = #[]) :
-    (Spot.SecondStage.check true own stmts).codes = #[] := by
-  unfold Spot.SecondStage.check at h ⊢
-  cases hp : own.parts with
-  | none => simpa only [hp] using h
-  | some ps =>
-    cases stmts with
-    | none => simpa only [hp] using h
-    | some ss =>
-      simp only [hp] at h ⊢
-      cases hd : Spot.SecondStage.designOk ps own
-      · simpa only [hd, Bool.false_eq_true, if_false] using h
-      · simp only [hd, if_true] at h ⊢
-        rcases failures_allow b own ps ss.toList with e | e
-        · rwa [e] at h
-        · rw [e] at h
-          exact absurd h codes_form
 
 /-- `getD` of an object at `k` is its map's entry at `k`, `null` where it has none. -/
 theorem getD_obj (m : Std.TreeMap.Raw String Json compare) (k : String) :

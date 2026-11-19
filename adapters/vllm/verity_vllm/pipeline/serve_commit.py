@@ -37,13 +37,14 @@ yet absorbed); a request may still span windows. ``disk`` (`serve_guard.DiskFloo
 filesystem under its floor, and ``on_floor`` then hears why (the server stops). ``mirror`` (`serve_mirror.Mirror`) copies into the
 run's ``$OUT``, after each close and each seal, the fields `serve_mirror.PUBLIC` names of the records it lists, and nothing else.
 
-With ``served`` (the statics of the compile slice the windows are proved by, `SERVED_SLICE`; `served_statics`) each close
-also commits the step rows the window ran
+With ``served`` (the statics of the compile slice built to prove the windows, `SERVED_SLICE`; `served_statics`; no
+session of the compile slice runs and no proof of it runs, so today the rows registered at serve time are the prover's
+word) each close also commits the step rows the window ran
 (`verity_vllm.compiler.served_rows.register`, under the window's run root): each request named by its arrival
 id, its index in the order the engine admitted the run's requests. The record's public part (the registration's
 binding, root, count and row width, with the statics and the slice) goes into the window's ``windows.jsonl`` line, beside
 its run root, written at the close and so before sampling over it; the rows and their salts go to ``served_rows/w<k>.json``, the prover's.
-With ``no_slice`` (`NO_TICK_SLICE`, under ``--admit tick``) the record names no slice: its ``slice`` is null and its
+With ``no_slice`` (`NO_TICK_SLICE`, under order ``tick``) the record names no slice: its ``slice`` is null and its
 ``no_slice`` says why. The rows are committed all the same, under the same statics.
 """
 from __future__ import annotations
@@ -58,22 +59,23 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity.protocols.resource_accounting.network.verifier import charge_chain as CC
+from verity import hooks as H
+from verity.protocols.interface.charge import charge_chain as CC
 from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import served_rows as SRW
 from verity_vllm import messages as M
 from verity_vllm.commit.served_record import BlockValues, base_id, served_rows, window_commit
 from verity_vllm.engine.served_seed import SeedCoins, param_of
-from verity_vllm.errors import Refused
 from verity_vllm.pipeline.seal_process import SealFailed
 from verity_vllm.pipeline.serve_seal import committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
 from verity_vllm.pipeline.spans import commit_s_of, end_lap, gc_of, phases_of
 
-#: The compile slice the served windows are proved by, `compile_slice_v7.CompileSlice`'s id: CompileSlice_v1's statics,
-#: rows and schedule, charging the window's decisions and each certified arrival's output length. The serve path commits
+#: The compile slice built to prove the served windows, `compile_slice_v7.CompileSlice`'s id: CompileSlice_v1's statics,
+#: rows and schedule, which state the charge of the window's decisions and each certified arrival's output length; no
+#: session of it runs and no proof of it runs. The serve path commits
 #: only the rows v1 and v7 share, ``srv`` (the served rows); the rest of v7's are the prover's.
 SERVED_SLICE = "CompileSlice_v7"
-#: Why a window the certified tick admitted (``--admit tick``) names no slice: its served rows record's ``no_slice``, and
+#: Why a window the certified tick admitted (order ``tick``) names no slice: its served rows record's ``no_slice``, and
 #: ``serve.json``'s ``served_rows_no_slice``.
 NO_TICK_SLICE = (f"no compile slice replays the certified tick's admission: {SERVED_SLICE} replays vLLM's own admission "
                  "from the decisions the advice sends, and under the tick the advice sends none")
@@ -94,6 +96,7 @@ def user_of(body: Any) -> str | None:
 #: requests.jsonl's engine id to ``user`` map alone, a line each as requests.jsonl's: ``{"engine_id", "user"}``.  ``user`` is
 #: the body's as the client sent it, a request value, so the file is private and stays in the serve dir with requests.jsonl.
 REQUEST_USERS = "request_users.jsonl"
+
 
 def ingress_of(brought: Mapping[str, Any], params: Any, rule: str) -> dict[str, Any]:
     """A request's ingress record: the sampling fields it sent, the engine's parameters they make (``params``, seeded),
@@ -133,7 +136,7 @@ class LiveRequest:
     prompt_ids: list[int]
     ingress: dict[str, Any] = field(default_factory=dict)
     user: str | None = None                      # the body's `user`, the id the advice names the request by
-    release: Any = None                          # (the network attester's run, its place in the release order), under --admit release-order
+    release: Any = None                          # (the network attester's run, its place in the release order), under order release-order
     admitted: int = -1                           # its place in the order requests were added to the engine
     streamed: list[int] = field(default_factory=list)
     finish: dict[str, Any] | None = None
@@ -160,6 +163,13 @@ class _Closed:
     seed_coin: dict[str, Any] | None = None                    # the seed coin it opened under (`SeedCoins.record`)
 
 
+def committed(window: int, rc: Any) -> None:
+    """Closed window ``window``'s root on the exchange (`hooks.PhaseCommitted`): its finalize's run root, empty where it
+    committed no step."""
+    if (ex := M.current()).wants("steps"):
+        ex.emit(H.PhaseCommitted(window, bytes(getattr(rc, "run_root", b"") or b"") if rc is not None else b""))
+
+
 class CommitWindows:
     """The committer's windows over a serving engine, and every request's `LiveRequest`. ``committer`` is a
     `NativeHostCommitter` with a `served_record.SamplerInputsSource` attached (or its offline stand-in in the tests:
@@ -169,12 +179,11 @@ class CommitWindows:
     the committer off the engine and the next one installs it again; one closed off the loop leaves it installed, its view
     detached, for the next window, which opens before the next engine step (`before_step`), so every step the hooks see is
     in an open window and an off-loop window costs no install (`serve_openai.main` closes the committer at the end). ``arm``
-    (`serve_h1.H1Windows`, `serve_pearl.PearlWindows`) opens on each window once its committer is installed and closes first
+    (`serve_h1.H1Windows`) opens on each window once its committer is installed and closes first
     at its close, before the committer comes off or its window is detached, its hooks being on top of the committer's; what
     its ``close`` returns is the window line's ``pouw_h1`` (the arm's ``outcome_key`` where it has one), and when that is a
     `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on. An arm with
-    ``sealed`` hears each window's seal line, or why it has none. With ``pool`` (a call for the engine's live ``BlockPool``)
-    and its blocks' size ``pool_block``, each close exports the pool's row on the loop (`_pool_row`). ``coins``
+    ``sealed`` hears each window's seal line, or why it has none. ``coins``
     (`engine.served_seed.SeedCoins`, which the engine loop reads as it admits) names the seed coin each window opens
     under in its line (``seed_coin``)."""
 
@@ -185,13 +194,9 @@ class CommitWindows:
                  served: Mapping[str, int] | None = None, no_slice: str | None = None, sealer: Any = None,
                  window_bytes: int | None = None, disk: Any = None,
                  on_floor: Callable[[str], None] | None = None, mirror: Callable[[], None] | None = None,
-                 request_cap: int = 0, arm: Any = None, release: Any = None, pool: Callable[[], Any] | None = None,
-                 pool_block: int | None = None, coins: SeedCoins | None = None) -> None:
+                 request_cap: int = 0, arm: Any = None, release: Any = None,
+                 coins: SeedCoins | None = None) -> None:
         self.com, self.out, self.clock, self.wall, self.marks = committer, Path(out), clock, wall, marks
-        if (pool is None) != (pool_block is None):
-            raise ValueError("a pool row needs both the live pool and its blocks' size")
-        self.pool, self.pool_block = pool, pool_block
-        self._pool_out: dict[int, dict[str, Any]] = {}   # each window's pool row record (`_pool_row`), until its line
         self.coins = coins if coins is not None else SeedCoins()
         self.seed_coin: dict[str, Any] | None = None      # the open window's seed coin (`SeedCoins.record`)
         self.release = release                           # `serve_release.Draws`: each window's draw-gated release, before its seal
@@ -297,6 +302,8 @@ class CommitWindows:
         if not self.installed:
             self.com.install()
             self.installed = True
+        if (ex := M.current()).wants("steps"):
+            ex.emit(H.PhaseOpened(self.window, ex.next_step))
         if self.arm is not None:
             self._arm_held = getattr(self.arm, "users", None) is not None
             if not self._arm_held:
@@ -375,16 +382,16 @@ class CommitWindows:
         t0 = self.clock()
         laps = [("", t0)]
         lap = functools.partial(end_lap, laps, self.clock)
+        if (ex := M.current()).wants("steps"):
+            ex.emit(H.PhaseClosed(self.window, ex.step, bytes(getattr(self.com, "program_digest", b"") or b"")))
         if self.arm is not None:
             self._close_arm()
             lap("arm")
-        if self.pool is not None:
-            self._pool_row()
-            lap("pool_row")
         if self.off_loop:
             return self._close_off_loop(laps, lap)
         rc = self.com.finalize() if int(self.com._step_index) else None    # a window whose one step() only drained outputs
         lap("finalize")
+        committed(self.window, rc)
         readback = self.record.absorb(self.com, self.window) if rc is not None else None
         lap("readback")
         self.com.uninstall()
@@ -407,20 +414,6 @@ class CommitWindows:
         if isinstance(job, tuple):
             self._land(rec, job)
         return rec
-
-    def _pool_row(self) -> None:
-        """The prefix cache's pool at the close as its row (`engine.pool_row.export`), the row and its root to
-        ``pool_rows/w<k>.json``: the window line's ``pool_row`` is the row's NB and root, or why the row can't hold
-        the pool (a block a running request holds). No coin or verdict reads it yet, so it doesn't fail the window."""
-        from verity_vllm.engine import pool_row as PR
-
-        assert self.pool is not None and self.pool_block is not None
-        try:
-            got = PR.export(self.pool(), self.pool_block, self.out / "pool_rows" / f"w{self.window}.json")
-        except Refused as e:
-            got = {"refused": str(e)[:500]}
-        with self._lock:
-            self._pool_out[self.window] = got
 
     def _close_off_loop(self, laps: list[tuple[str, float]], lap: Callable[[str], None]) -> None:
         view = self.com.detach() if int(self.com._step_index) else None
@@ -457,6 +450,7 @@ class CommitWindows:
             lap("finalize_wait")
             rc = c.com.finalize() if c.com is not None else None
             lap("finalize")
+            committed(c.window, rc)
             readback = self.record.absorb(c.com, c.window) if rc is not None else None
             lap("readback")
             rec, job = self._record(c, rc, readback, lap)
@@ -539,8 +533,6 @@ class CommitWindows:
                 return
             if self.arm is not None:
                 rec[self.arm_key] = self._arm_out.pop(rec["window"], None)
-            if self.pool is not None:
-                rec["pool_row"] = self._pool_out.pop(rec["window"], None)
             self.records.append(rec)
             M.append(self.out / "windows.jsonl", "Run", json.dumps(rec).encode())
 

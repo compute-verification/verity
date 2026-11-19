@@ -42,7 +42,7 @@ From them, `Refine.verifyRep_of_checks` makes both reps' checks accept with the 
 namespace FlockVBridge.Stages
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Exec
-open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockSoundness.Model FlockSoundness.Audit
+open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockSoundness.Model Spot.Sampling
 open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts
 
 local notation "𝔽" => FlockLevel3.GF128

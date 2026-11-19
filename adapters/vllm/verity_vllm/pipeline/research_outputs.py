@@ -34,13 +34,14 @@ No entry holds a private file (`private`), wherever it sits, and these stay on t
   served tokens, and opened weights;
 - the requests' prompt and served token ids: the Match's token records (`tokens.json`), the Commit's token record
   (`tokens_p<pair>.json`), the sampler value check's rows (`match_stoch.json`) and the C2 replay's executed-prefix facts
-  (`sampled_replay*.json`);
+  (`sampled_replay*.json`), the diagnostic digests of a Commit's retained tensors (`tensor_digests_pair*.json`) and the TP
+  Match's recorder files' digests (`recorder_sha256.json`);
 - a served run's requests (`requests.jsonl`), its step traces (`step_trace.*`, `advice_trace.jsonl`: each request's prompt
   length, sampling parameters, rows a step and emitted ids), its served ids (`ids.*jsonl*`), its step outputs
   (`outputs.*jsonl*`: sampled ids and logprob bits), a replay's tokens and logprobs (`replay_tokens.jsonl*`,
   `replay_logprobs.jsonl*`, `alone_tokens.jsonl*`) and the load's client records (`load*.jsonl`);
-- the Commit's run table (`runs.jsonl`: an unsalted digest of each run's served tokens, `tokens_digest`) and a session's
-  memory map (`memory_map.jsonl`: its lines' digests of KV block payloads);
+- a Commit's served tokens' unsalted digests (`tokens_digests.jsonl`), its run table (`runs.jsonl`, which carried them before) and
+  a session's memory map (`memory_map.jsonl`: its lines' digests of KV block payloads);
 - where each rank ran, its process and device (`topology.json`), and when each process ran (`timeline.jsonl`,
   `timeline_report.json`).
 A check that reads them runs where they are: the regression harness takes such a candidate as row dirs, not as Attempts.
@@ -68,12 +69,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.check.match.rank_match import RECORDER_DIGESTS
 from verity_vllm.config import option, row_batch
 from verity_vllm.pipeline import private_names
 from verity_vllm.pipeline.cli import write
 from verity_vllm.query.manifest.format import tp_ranks_fold_digest
 
-__all__ = ["COMMANDS", "main"]
+__all__ = ["COMMANDS", "PRIVATE", "main"]
 
 SCHEMA = "research/outputs/v0.1"
 MAX_FILE = 512 << 20                      # per file; the required-value manifest of a long row is ~100+ MB
@@ -86,6 +88,14 @@ PRIVATE_NAMES = private_names.LIST
 #: never in a stage's outputs (`private`): the replay bundles and the slim keeps, which hold clear values; nor the files
 #: PRIVATE names, wherever they sit: request values, where each rank ran and when each process ran
 KEPT_APART, PRIVATE = private_names.load()
+#: a Commit's served tokens' digests, a line of each run's (`pipeline.commit`), compared across processes on the node
+#: (`pipeline.compiled_merge`): unsalted, so kept apart from `runs.jsonl`
+TOKENS_DIGESTS = "tokens_digests.jsonl"
+#: `pipeline.commit --tensor-digests`' unsalted digest of every retained tensor a step, compared across pairs on the node
+TENSOR_DIGESTS = "tensor_digests_pair*.json"
+if not {TOKENS_DIGESTS, TENSOR_DIGESTS, RECORDER_DIGESTS} <= set(PRIVATE):
+    raise RuntimeError(f"{PRIVATE_NAMES} lists {sorted({TOKENS_DIGESTS, TENSOR_DIGESTS, RECORDER_DIGESTS} - set(PRIVATE))} as "
+                       "private: add them to its `private`")
 
 BUILD_FILES = ["build_summary.json", "build_workload/workload_program.json", "build_workload/descriptor.json.gz", "manifest.json",
                "target_family.build.json", "target_family.json",

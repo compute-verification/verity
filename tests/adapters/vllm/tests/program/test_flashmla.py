@@ -188,7 +188,7 @@ def test_a_token_with_no_valid_row_writes_zeros():
 
 def test_a_lone_request_is_one_split_per_block():
     """b = 1 over the window and 512 compressed rows (10 blocks, 15 units of work over 132 parts): each part takes one block."""
-    metas, ns = T.sched_meta([128], [512], topk=128, extra_topk=512)
+    metas, ns = T.sched_meta([128], [512], topk=128, extra_topk=512, parts=132)
     assert ns == [0, 10] and len(metas) == 132
     assert T.request_splits(metas, ns, 0, 10) == tuple(range(11))
     assert metas[0].words() == (0, 0, 0, 1, 0, 1, 1) and metas[9].words() == (0, 0, 9, 10, 9, 1, 1)
@@ -202,7 +202,7 @@ def test_the_scheduler_tiles_every_request():
         extra_topk = int(rng.choice([0, 512, 2048]))
         swa = rng.integers(0, 129, b)
         extra = rng.integers(0, extra_topk + 1, b) if extra_topk else None
-        metas, ns = T.sched_meta(swa, extra, topk=128, extra_topk=extra_topk, parts=T.num_sm_parts(64))
+        metas, ns = T.sched_meta(swa, extra, topk=128, extra_topk=extra_topk, parts=T.num_sm_parts(64, 1, 132))
         assert ns[0] == 0 and all(x < y for x, y in zip(ns, ns[1:]))
         for r in range(b):
             nb = T.request_blocks(int(swa[r]), None if extra is None else int(extra[r]))[1] // T.BLOCK
@@ -211,7 +211,7 @@ def test_the_scheduler_tiles_every_request():
 
 
 def test_the_scheduler_constants():
-    assert (T.num_sm_parts(64), T.num_sm_parts(128), T.num_sm_parts(64, s_q=2)) == (132, 66, 66)
+    assert (T.num_sm_parts(64, 1, 132), T.num_sm_parts(128, 1, 132), T.num_sm_parts(64, 2, 132)) == (132, 66, 66)
     assert [T.request_blocks(*a) for a in ((128, None), (0, None), (128, 512), (1, 1), (65, 0))] == \
         [(128, 128), (64, 64), (128, 640), (64, 128), (128, 128)]
 

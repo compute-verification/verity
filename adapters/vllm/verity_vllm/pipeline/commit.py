@@ -43,6 +43,7 @@ PROTOCOL SUMMARY (Commit phase entry: the instrumented runs + the fail-closed X-
 
 from __future__ import annotations
 
+import itertools
 import time
 
 from verity_vllm.records.commit_run import SCHEMA
@@ -82,6 +83,7 @@ from verity_vllm.pipeline import boundary_plan as BP, c2_replay as C2, commit_pl
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 from verity_vllm.pipeline.compiled_merge import _bootstrap_ci  # noqa: E402
 from verity_vllm.pipeline import commit_coins as CC, poub_session as RS  # noqa: E402
+from verity_vllm.pipeline.research_outputs import TOKENS_DIGESTS  # noqa: E402
 
 if TYPE_CHECKING:
     from verity_vllm.acquire.sources import call_boundary_plan as CBP
@@ -89,6 +91,35 @@ if TYPE_CHECKING:
 
 # automatic stage telemetry of THIS process: the engine's build, warm-up, arms, validation
 TL = Timeline.from_env("commit_delta", hot=False)
+
+
+def phase_opened(phase: int) -> None:
+    """Execution phase ``phase`` opens on the exchange (`hooks.PhaseOpened`), at the step it begins at: an instrumented
+    run is one phase, its committer installed and nothing of it committed yet."""
+    from verity import hooks as H
+    from verity_vllm import messages
+    ex = messages.current()
+    if ex.wants("steps"):
+        ex.emit(H.PhaseOpened(phase, ex.next_step))
+
+
+def phase_closed(phase: int, program: bytes) -> None:
+    """Execution phase ``phase`` closes after its last step (`hooks.PhaseClosed`), under the Program ``program`` (empty
+    where its committer names none)."""
+    from verity import hooks as H
+    from verity_vllm import messages
+    ex = messages.current()
+    if ex.wants("steps"):
+        ex.emit(H.PhaseClosed(phase, ex.step, bytes(program)))
+
+
+def phase_committed(phase: int, root: bytes) -> None:
+    """Closed execution phase ``phase``'s root (`hooks.PhaseCommitted`), once its committer finalized it."""
+    from verity import hooks as H
+    from verity_vllm import messages
+    ex = messages.current()
+    if ex.wants("steps"):
+        ex.emit(H.PhaseCommitted(phase, bytes(root)))
 
 
 def _rid_of(order: dict, rid) -> str:
@@ -946,11 +977,11 @@ class Options:
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
     vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark input sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
     serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: after pair 0's roots are final and before its seed, commit every unit of the verifier's partition in M0's serving row format (verity_vllm.pipeline.serving_rows; the row stage writes the request: dir, partition, run, committer); with --replay-deferred (not slim) at the C2 site, before the bundle is sealed (c2_replay.serving_rows)")
-    remote_verifier: str | None = option("--remote-verifier", default=None, metavar="HOST:PORT", help="the PoUB session's verifier: the store binder goes on the engine at its build, and the Commit proves its store to it in lockstep with its first instrumented run, a pass an engine step of that run (verity_vllm.protocols.poub.remote.CommitSession); a rejected session fails the Commit")
+    remote_verifier: str | None = option("--remote-verifier", default=None, metavar="HOST:PORT", help="the PoUB session's verifier: the store binder goes on the engine at its build, and the Commit proves its store to it in lockstep with its first instrumented run, a pass an engine step of that run (verity.protocols.resource_accounting.memory.poub.prover.commit_session.CommitSession); a rejected session fails the Commit")
     remote_plan: str = option("--remote-plan", default="serve", help="the session's mode: serve, or servedrop:K (negative: the first K blocks appended withheld)")
     remote_node: str | None = option("--remote-node", default=None, metavar="HOST", help="the session's node, the id the verifier registers the store under (against a verifier holding a Site, this machine's host id there); default verity-vllm/<hostname>")
     remote_kv_pages: int = option("--remote-kv-pages", type=int, default=32, help="the KV pool's pages under the session (num_gpu_blocks_override; outside the registered store); 0: the engine's own pool, at the row's gpu_memory_utilization")
-    remote_filler_gib: float = option("--remote-filler-gib", type=float, default=0.0, help="GiB of zeros on the engine's GPU registered after the build as the session's filler, beside the weights (the KV pool is never registered: verity_vllm.protocols.poub.binder.Binder.register_filler)")
+    remote_filler_gib: float = option("--remote-filler-gib", type=float, default=0.0, help="GiB of zeros on the engine's GPU registered after the build as the session's filler, beside the weights (the KV pool is never registered: verity.protocols.resource_accounting.memory.poub.prover.binder.Binder.register_filler)")
     remote_weight_blocks: int | None = option("--remote-weight-blocks", type=int, default=None, help="register weight tensors in order up to this many 4 KiB blocks (default: all)")
     remote_kv_lib: str | None = option("--remote-kv-lib", default=None, help="kv.cu built at the codec's field and mask: the store's encode on the GPU (default: the CPU reference)")
     remote_step_ms: float = option("--remote-step-ms", type=float, default=0.0, help="the engine step a paced session's pass waits on, in ms: added to the calibration's pass times so the verifier's allowance covers it (a verifier at --paced 1:T_MS:DRAWS:WINDOWS runs each pass's step inside its coin's window); 0 for a session in stated windows")
@@ -1146,8 +1177,14 @@ def main(args: Options) -> None:
     moe_attached = False
     coms: dict[str, Any] = {}
     GL.acquire(TL)            # a leased Commit's GPU from here to its last run's GL.release (pipeline.gpu_lease); the target below reads the device
-    _settings = PO.own_auditor(args.protocols_config or wl.get("protocols_config"), va.target_of_workload(wl, args.target))   # PoUW's coins: this process's challenger (the Commit is its run's own auditor)
-    _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args, target=PO.commit_guard(va.target_of_workload(wl, args.target), settings=_settings, commit_scheme=args.commit_scheme), execution=va.execution_of_workload(wl))
+    _target = va.target_of_workload(wl, args.target)
+    _settings = PO.own_auditor(args.protocols_config or wl.get("protocols_config"), _target)   # PoUW's coins: this process's challenger (the Commit is its run's own auditor)
+    try:
+        PO.commit_context(_target, settings=_settings, commit_scheme=args.commit_scheme)
+    except PO.Refused as e:
+        print(f"[delta] REFUSE (fail-closed): {e}", flush=True)
+        raise SystemExit(3) from None
+    _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args, target=_target, execution=va.execution_of_workload(wl))
     _rs is not None and _rs.before_build(_ekw)
     TL.start("engine.build", case=_ekw["case"], max_num_seqs=args.max_num_seqs, execution=_ekw["execution"])
     eng = va.build_engine(_ekw["checkpoints"], max_num_seqs=_ekw["max_num_seqs"], case=_ekw["case"], engine_args=_ekw["engine_args"],
@@ -1254,6 +1291,7 @@ def main(args: Options) -> None:
 
     rows: list[dict] = []
     step_rows: list[dict] = []
+    digests: list[dict] = []
     tokens_ref: dict | None = None
     decl = None
     decls: dict[str, dict] = {}
@@ -1268,6 +1306,7 @@ def main(args: Options) -> None:
     arms_all = ["control"] + (kinds if multi else ["instrumented"])
     # the measured runs start here; verdict.host_peak.printed_before_run = admission_monotonic_s < this (timestamps, not a literal)
     _RUN0 = {"utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "monotonic_s": round(time.monotonic(), 3)}
+    phases = itertools.count()
     for pair in range(args.pairs):
         if multi:
             shift = pair % len(arms_all)
@@ -1292,11 +1331,15 @@ def main(args: Options) -> None:
                 if served is not None:
                     served.src.begin_run()
                 com.install()
+            phase = None if arm == "control" else next(phases)
+            phase is not None and phase_opened(phase)
             r = run_workload(eng, reqs, sampling, step=None if _lock is None else _lock.step)
+            phase is not None and phase_closed(phase, getattr(com, "program_digest", b"") or b"")
             if _lock is not None:
                 r["remote_session"] = RS.end_run(_rs, pair, arm)
             if arm != "control":
                 rc = com.finalize()
+                phase_committed(phase, rc.run_root)
                 t_ready = time.perf_counter()
                 com.uninstall()
                 assert_pristine(eng, base)
@@ -1317,7 +1360,6 @@ def main(args: Options) -> None:
                 "step_wall_s": r["step_wall_s"], "step_wall_prefill_s": r["step_wall_s"][0],
                 "step_wall_decode_mean_s": statistics.fmean(r["step_wall_s"][1:]) if len(r["step_wall_s"]) > 1 else None,
                 "tokens_equal_ref": r["tokens"] == tokens_ref,
-                "tokens_digest": hashlib.sha256(json.dumps(r["tokens"], default=str, separators=(",", ":")).encode()).hexdigest(),   # cross-process pairing (compiled rows)
                 "gpu_mem": {"torch_max_allocated_gb": torch.cuda.max_memory_allocated() / 2**30, "torch_reserved_gb": torch.cuda.memory_reserved() / 2**30, "nvidia_smi_used_mib": nvidia_smi_used_mib()},
                 "host_mem_kb": {"rss_before": rss0, "rss_after": rss1, "hwm": hwm},
                 "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -1353,8 +1395,8 @@ def main(args: Options) -> None:
                 if getattr(args, "match_dir", None):
                     oracle_producers = match_record_compare(row, com, rc, components, oracle_producers, args=args, reqs=reqs, sampling=sampling,
                                                             required_manifest=required_manifest, vc_result=vc_result, pair=pair)
-                _c2 = C2.ReplaySources(args=args, out=Path(args.out), pair=pair, com=com, rc=rc, row=row, reqs=reqs, sampling=sampling, tokens=r["tokens"], manifest=required_manifest, stop_of_record=stop_of_record, ids_full=_ids_full, versions=versions, components=components, vc_result=vc_result, tl=TL, protocols=protocols, weights_of=lambda p: C2.live_weights(PO.weights_view(protocols, eng.model), p), weights_check=lambda: C2.live_weights_check(lambda: PO.register_weights(protocols, com), com, rc), after_replay=C2.vu_export(args, pair, rc, required_manifest, versions, eng))
-                _c2_deferred = bool(args.replay_deferred and not C2.live_only(_c2) and RB.defer(out, pair, com, rc, args, tl=TL, arm=arm, versions=versions, reqs=reqs, sampling=sampling, tokens=r["tokens"], stop_of_record=stop_of_record, ids_full=_ids_full, declaration=d, required_classes=required_classes, vc_result=vc_result, plan=(lambda: C2.plan(_c2, _planner)) if args.replay_deferred == "slim" else None, row=row, deferred=deferred, started=_rb_started))
+                _c2 = C2.ReplaySources(args=args, out=Path(args.out), pair=pair, com=com, rc=rc, row=row, reqs=reqs, sampling=sampling, tokens=r["tokens"], manifest=required_manifest, stop_of_record=stop_of_record, ids_full=_ids_full, versions=versions, components=components, vc_result=vc_result, tl=TL, protocols=protocols, weights_of=lambda p: C2.live_weights(PO.weights_view(protocols, eng.model), p), weights_check=lambda: C2.live_weights_check(lambda: PO.register_weights(protocols, com, replay=True), com, rc), after_replay=C2.vu_export(args, pair, rc, required_manifest, versions, eng))
+                _c2_deferred = bool(args.replay_deferred and RB.defer(out, pair, com, rc, args, tl=TL, arm=arm, versions=versions, reqs=reqs, sampling=sampling, tokens=r["tokens"], stop_of_record=stop_of_record, ids_full=_ids_full, declaration=d, required_classes=required_classes, vc_result=vc_result, plan=(lambda: C2.plan(_c2, _planner)) if args.replay_deferred == "slim" else None, row=row, deferred=deferred, started=_rb_started))
                 if _c2_deferred and args.serving_rows:
                     C2.serving_rows(_c2)
                 elif not _c2_deferred and (getattr(args, "program_dir", None) or getattr(args, "programs_root", None)):
@@ -1394,6 +1436,8 @@ def main(args: Options) -> None:
                 for i, wsec in enumerate(r["step_wall_s"]):
                     step_rows.append({"pair": pair, "arm": arm, "step": i, "wall_s": wsec})
             rows.append(row)
+            digests.append({"pair": pair, "arm": arm, "tokens_digest": hashlib.sha256(
+                json.dumps(r["tokens"], default=str, separators=(",", ":")).encode()).hexdigest()})
             extra = ""
             if rc is not None:
                 sp = rc.spans["total_s"]
@@ -1410,6 +1454,7 @@ def main(args: Options) -> None:
         with (out / "steps.jsonl").open("w") as f:
             for rw in step_rows:
                 f.write(json.dumps(rw, default=str) + "\n")
+        (out / TOKENS_DIGESTS).write_text("".join(json.dumps(d) + "\n" for d in digests))
 
     # repeated graph replay must be covered, not only compilation/warm-up: re-read the code
     # objects LOADED in this process after the LAST measured run and compare with the build-time snapshot (compile + autotune + capture):

@@ -38,11 +38,11 @@ incorrect proof blocks contain `zk_session_soundJ_custody`'s (`incorrect_subset_
 
 namespace FlockSoundness.Discharge.Layout
 
-open Flock FlockLevel3 Audit Placed
+open Flock FlockLevel3 Spot.Sampling Placed
 
 /-- **A unit cut out as a rows unit reads only its own gates and input gates**, when every column of it that is no
 computed column is on an input gate. -/
-theorem readsOwn_of_rows {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {R : Fin n → Rows}
+theorem readsOwn_of_rows {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n} {R : Fin n → Rows}
     (I : ∀ u, P.IsRowsUnit u (R u))
     (hread : ∀ u (y : Fin (R u).w), (∀ i, y ≠ (R u).comp i) → P.unit ((I u).wire y) = none) (u : Fin n) :
     P.ReadsOwn u := by
@@ -67,7 +67,7 @@ end FlockSoundness.Discharge.Layout
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
@@ -125,7 +125,7 @@ theorem zk_session_soundJ_custody_reg
             ((rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope))
             (reg σ) (cont σ) k Rw)).card)
         (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)) τ ≤
-      (SamplingDesign.subset n kd hkd).miss K₀ +
+      (Verity.SamplingDesign.subset n kd hkd).miss K₀ +
         ksAvgStrictZ (planZJ dj y₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
           ((rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope))

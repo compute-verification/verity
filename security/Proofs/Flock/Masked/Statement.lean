@@ -107,7 +107,7 @@ with `n_L(x)` the deployed plan's leaf count at `x` (`nL PE x`) and `δ₁` the 
 key (`FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash`); outside scope `ε_zk` is `1`. The fork term's factor
 is `γ = 4·t·3^t`. It takes no other hypothesis. -/
 def MaskedZK : Prop :=
-  ∀ (nr : Claims.Msg → ℕ → ℕ) (t : ℕ), 0 < t →
+  ∀ (nr : Hash.Msg → ℕ → ℕ) (t : ℕ), 0 < t →
     Claims.Flock.ZK FlockDeploy.sha512 (Claims.ZKMal.zkDeployed _root_.Flock.Readable.relation nr
         (tableData PE (RoundPlan.stop (czExe PE) (encStop (encExe PE)) (finExe PE)) UE) t)
       (fun x => if Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x then

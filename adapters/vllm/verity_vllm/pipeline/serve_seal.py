@@ -8,7 +8,8 @@ hidden tap (``--hidden-so``), the norm-scale tap (``--norm-tap-so``) and the hoo
 the acquisition plan, so its name is the Commit's (``...+hidden_m1+norm_scale+plan``) and a part the manifest names that did not
 attach is refused (`parts_missing`). Then `served_record.StepInputPort` (each step's
 stream starts with its input ids, then its positions, each padded to ``--max-num-batched-tokens``: the port network attestation's
-served-rows tie reads) and `served_record.SamplerInputsSource` are attached and the arena sized; under ``--seal`` it registers
+served-rows tie's Definition reads; no proof of it runs, so today the rows registered at serve time are the
+prover's word) and `served_record.SamplerInputsSource` are attached and the arena sized; under ``--seal`` it registers
 the weights. The port is the step's one copy of its ids (`single_ids`): the embedding's own input isn't committed beside it.
 It writes the engine's rotary table to ``OUT/private/cos_sin_cache.npy`` (`match_capture.dump_cos_sin`), which no record copies:
 the words the committer's weights registration roots it at (``prove_path.py weights-registration``) before the first request.
@@ -65,6 +66,7 @@ from verity_vllm.commit import step_rows
 from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import serve_release as SL
+from verity_vllm.pipeline.serve_guard import GB
 from verity_vllm.pipeline.serve_row import programs_root_of, row_refusal
 
 ROWS = step_rows.NAME
@@ -290,9 +292,10 @@ def port_identities(manifest: Mapping[str, Any]) -> dict[str, tuple[str, str]]:
     """The identities the row's Programs read that the step-input port's tensors bind as, (op_path, member) by port name: its
     ids the manifest's one input-ids identity (``c00.input/ids`` on the compiled path, the embedding's ``<module>/in`` on the
     eager one), its positions ``c00.input/positions`` where the manifest has it. An eager row's Programs read no committed
-    positions: RoPE's are static structure of the Program (`rules.profile.RotaryEmbeddingRule` refuses a computed one), compiled
-    from the advice's rows, and the served-rows tie holds the port's positions to the window's served rows. A manifest naming
-    two ids identities is refused."""
+    positions: RoPE's are static structure of the Program (`rules.profile.RotaryEmbeddingRule` refuses a computed one),
+    compiled from the advice's rows, and the served-rows tie states that the port's positions are the window's served
+    rows; no proof of it runs, so today the rows registered at serve time are the prover's word. A manifest naming two
+    ids identities is refused."""
     from verity_vllm.query.manifest.format import SERVED_IDS, SERVED_POSITIONS
 
     fam: dict[tuple[str, str], str] = {}
@@ -493,7 +496,7 @@ def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]]
     (out / "runs.jsonl").write_text(json.dumps(row, default=str) + "\n")
     (out / "verdict.json").write_text(json.dumps(verdict, indent=1, default=str) + "\n")
     b = (verdict.get("replay_deferred") or {}).get("bundles") or [{}]
-    return {"row_dir": str(d), "bundle": b[0].get("path"), "manifest_sha256": b[0].get("manifest_sha256"), "bytes": b[0].get("bytes"),
+    return {"row_dir": str(d), "bundle": b[0].get("path"), "bytes": b[0].get("bytes"),
             "commit_scheme": scheme, "binding_map_digest": bmap["digest"], "binding_map_entries": bmap["entries_n"],
             "requests": [q["request_id"] for q in reqs], "port_layout": layout, "seal_s": round(time.perf_counter() - t0, 3),
             "phases_s": {"binding_map": round(t_map - t0, 3), "store": round(t_store - t_map, 3),
@@ -561,7 +564,6 @@ class _Null:
 
 #: what a committer's `reset` rebinds for its next window: the closed window's per-step state, as its seal reads it
 WINDOW_STATE = ("_layouts", "_gpu_blocks", "_gpu_levels", "_done", "row_keys")
-GB = 10 ** 9
 
 
 def freeze(com: Any) -> Any:

@@ -37,6 +37,10 @@ import argparse, hashlib, json, os, shutil, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+#: `verity.commitments.domains.FLOCK_NETLIST`, as bytes: the agreement scripts import the standard library alone
+#: (`test_domains.STDLIB_COPIES` holds the two equal)
+FLOCK_NETLIST = "verity/flock-netlist/v1"
+
 
 def reads(a, s):
     """The verifier's own registered reads for session `s`: its directory's `registered.json` when it has one (null: none),
@@ -148,7 +152,7 @@ def modes(a):
 
 
 def upstream_cmd(a, public, extra=()):
-    flag = "--netlist" if a.statement == "verity/flock-netlist/v1" else "--circuit"
+    flag = "--netlist" if a.statement == FLOCK_NETLIST else "--circuit"
     tables = ["--tables", a.tables] if a.tables else []
     return [a.upstream, "replay", *extra, *modes(a), "--instances", public, flag, a.circuit, *tables, "--sessions"]
 

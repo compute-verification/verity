@@ -233,12 +233,12 @@ theorem extras_size {s : Stmt} {pts : Array (Array F128)} {e : Array Claim} (h :
 
 namespace DecAt
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass)
 
 /-- **Table `i`'s decode shape is V\*'s inner shape** in every field V\*'s algebra reads, at a decision of an inner
 statement the reader reads at the dense form, where the session's points are the link's. -/
-theorem sh_alg {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
+theorem sh_alg {xo : Hash.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hpts : D.sess.points = pointsOf D.spec D.d.c₁) :
     ∃ (inn : RecVStar.Inner) (ss : Array VStar.Stmt) (sh0 : Shape), RecVStar.statements inn = .ok ss ∧
@@ -303,7 +303,7 @@ theorem sh_alg {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst
 
 /-- **S and its groups at table `i`** (row R's `hS` and `hg`): V\*'s list, which the reader's scope check builds,
 computes them at the inner shape, which is table `i`'s decode shape in the fields they read. -/
-theorem structure_ok {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
+theorem structure_ok {xo : Hash.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hpts : D.sess.points = pointsOf D.spec D.d.c₁) :
     ∃ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
@@ -368,8 +368,8 @@ group `p` of S has a piece at the copy `keyAt p` whose group is the verifier's p
 elements are `w` at the group's row ports (`hE`) and its verifier values `verifierRows`' `v` at the group's `V` (`hvv`),
 every part's residuals vanish at rep `r`'s values. -/
 theorem partsZero_of_pieces {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (rpieces : List ResPiece)
-    (elemAt : Claims.Msg → List Claims.Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
-    (vvAt : Claims.Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
+    (elemAt : Hash.Msg → List Hash.Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
+    (vvAt : Hash.Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
     (hres : ∀ q ∈ rpieces, resHolds elemAt vvAt q x ms cs) (keyAt : ℕ → ℕ × ℕ × ℕ × ℕ)
     (hcover : ∀ p (_hp : p < gs.size), ∃ q ∈ rpieces, q.key = keyAt p ∧
       ∃ ns nv, RecResiduals.part (D.sh cls i) p = .ok (q.S, ns, nv))
@@ -391,7 +391,7 @@ theorem partsZero_of_pieces {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (
 /-- **Table `i`'s reps run at the decision**, as `runs_assembled`, with row R's S, groups and `w`'s size discharged,
 its parts' residuals given by the `rec-residuals` pieces and their two ties (the layout's `hE`, check 5's `hvv`), and
 its coin rounds' sizes (`hsz`) and the accumulators' number (`hacc`) as hypotheses. -/
-theorem runs_assembled_R {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
+theorem runs_assembled_R {xo : Hash.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size)
     (hframed : ∀ r : Fin 2, FramedAt ((D.files cls i).stream r).rounds 0 (repFrames (D.files cls i).st
@@ -404,8 +404,8 @@ theorem runs_assembled_R {xo : Claims.Msg} {sto : Claims.Recursion.CompiledState
       ProofShaped (FlockDeploy.shapeAt (tabsOf D.sts) (pointsOf D.spec D.d.c₁) (2 * i + r))
         (D.d.f.ps[2 * i + r]'(hk r)))
     (hL : ∀ r, D.RowL cls acc i r)
-    (pieces : List OpenPiece) (sideAt : Claims.Msg → List Claims.Msg → OpenPiece → OpenSide)
-    (posAt : Claims.Msg → List Coin → OpenPiece → ℕ)
+    (pieces : List OpenPiece) (sideAt : Hash.Msg → List Hash.Msg → OpenPiece → OpenSide)
+    (posAt : Hash.Msg → List Coin → OpenPiece → ℕ)
     (hholds : ∀ q ∈ pieces, openHolds sideAt posAt q x ms cs)
     (hside : ∀ r : Fin 2, ∀ q ∈ pieces, q.table = i → q.rep = r.val → sideAt x ms q = D.side cls i r)
     (hpos : ∀ r : Fin 2, ∀ v info kappa,
@@ -416,8 +416,8 @@ theorem runs_assembled_R {xo : Claims.Msg} {sto : Claims.Recursion.CompiledState
       ∃ q ∈ pieces, q.table = i ∧ q.rep = r.val ∧ q.level = ℓ ∧ q.query = j)
     (hsz : ∀ r : Fin 2, (D.rep cls acc i r).rounds.toList.map Array.size = roundSizes (D.sh cls i))
     (hacc : ∀ r : Fin 2, (acc (2 * i + r)).size = 4)
-    (rpieces : List ResPiece) (elemAt : Claims.Msg → List Claims.Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
-    (vvAt : Claims.Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
+    (rpieces : List ResPiece) (elemAt : Hash.Msg → List Hash.Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
+    (vvAt : Hash.Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
     (hres : ∀ q ∈ rpieces, resHolds elemAt vvAt q x ms cs) (keyAt : Fin 2 → ℕ → ℕ × ℕ × ℕ × ℕ)
     (hcoverR : ∀ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
       structureOf (D.sh cls i) = .ok S → groups S (portSizes (D.sh cls i)) = .ok gs →

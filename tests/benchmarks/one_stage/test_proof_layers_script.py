@@ -71,7 +71,7 @@ def test_it_reads_only_the_settings_it_names():
     assigned = set(re.findall(r"(?:^|[\s;(])(?:local )?([A-Za-z_]\w*)=", TEXT)) | {"s", "t", "n", "f", "o", "k"}
     read = set(re.findall(r"\$\{?!?([A-Za-z_]\w*)", TEXT)) - (assigned - set(SETTINGS))
     # HOME and PATH are the shell's; RESEARCH_RUN_DIR is a research run's own directory, the results' default
-    assert read - {"HOME", "PATH", "RESEARCH_RUN_DIR", "SECONDS", "PIPESTATUS", "BASH_REMATCH"} == set(SETTINGS)
+    assert read - {"HOME", "PATH", "RESEARCH_RUN_DIR", "SECONDS", "PIPESTATUS", "BASH_REMATCH", "BASH_SOURCE"} == set(SETTINGS)
     header = TEXT.split("set -uo pipefail", 1)[0]
     assert all(f"#   {s} " in header for s in SETTINGS)
 
@@ -129,6 +129,19 @@ def test_a5_keep_that_is_not_a_new_directory_outside_work_is_refused(keep, tmp_p
     run = subprocess.run(["bash", str(SCRIPT), "--dry-run"], cwd=ROOT, env=env, capture_output=True, text=True)
     assert run.returncode == 2 and run.stderr.startswith(f"proof_layers.sh: A5_KEEP={keep}: an absolute path")
     assert 'cp -a "${w[0]}" "$A5_KEEP"' in TEXT and TEXT.index('cp -a "${w[0]}"') < TEXT.index('rm -rf "$WORK"')
+
+
+@pytest.mark.parametrize("keep, refused", [("{out}/kept", True), ("{out}", True), ("{tmp}/kept", False)])
+def test_a5_keep_under_out_is_refused(keep, refused, tmp_path):
+    """The kept window holds private files, and only the public-files filter puts a file under --out."""
+    lines = [x for x in TEXT.splitlines() if x.startswith(('RESULTS=$(realpath', '[ -z "$A5_KEEP" ] || case'))]
+    assert len(lines) == 2
+    keep = keep.format(out=tmp_path / "out", tmp=tmp_path)
+    script = ('refuse() { echo "proof_layers.sh: $1" >&2; exit 2; }\n'
+              f"RESULTS={tmp_path / 'out'}; A5_KEEP={keep}\n" + "\n".join(lines))
+    run = subprocess.run(["bash", "-c", script], cwd=ROOT, capture_output=True, text=True)
+    assert run.returncode == (2 if refused else 0)
+    assert run.stderr.startswith(f"proof_layers.sh: A5_KEEP={keep} is under --out") == refused
 
 
 @pytest.mark.parametrize("windows", [0, 1, 2])

@@ -10,7 +10,7 @@ from typing import Any, cast
 
 from verity_torch.pouw.pearl_c.ends import _RunState
 from verity_torch.pouw.pearl_c.graphs import SLOT_BYTES
-from verity_torch.pouw.pearl_c.host import _Driver, _event, _Lane, _stream
+from verity_torch.pouw.pearl_c.host import _Driver, _event, _Lane, _stream, fresh_into
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.lanes import (
     STEP_GROUPS,
     TREE_APART_ROWS,
@@ -133,7 +133,8 @@ class LaneCalls(_RunState):
         after the main lane's per-row keying (the pipeline's ``lane_cuts``) and copies A's root to the pass, below
         `TREE_APART_ROWS` on the call's side lane, before the rest, and from it on the side lane after the call's, while the
         call's runs the rest behind the main lane's end, then waits for the tree.  The keys go to the set's own when the
-        ring rotates them, once the side steps of the set's last call are done.  With `graph` (the call's m and tiles;
+        ring rotates them, once the side steps of the set's last call are done; with hashing, the set's A salts fresh
+        (`host.fresh_into`) on the main lane once it may write them.  With `graph` (the call's m and tiles;
         `_lane_graphed`), each lane replays its steps as graphs of the set's (`_lane_graph`: made, run eagerly here and
         captured at their first call, replayed by the driver after, `_replay_lanes`), whose slot takes the keys and the
         call's offsets in one copy, once the side steps of the set's last call are done; returns the graphs and whether
@@ -176,6 +177,8 @@ class LaneCalls(_RunState):
             lane.wait_event(main.event)
         if cuda and side and sh.done[j] is not None and not waited:  # and rewrites set j only once its side steps are done
             lane.wait_event(sh.done[j])
+        if self.hashing:
+            fresh_into(self.salts_a(sh, pipe), sh.m16, lane_raw if cuda else None)
         cut, side_cut = (g.cut, g.side_cut) if g is not None else pipe.lane_cuts if aside else (None, 0)
         self._launching = lane
         self.kernel.dev.stream = lane_raw
@@ -229,17 +232,18 @@ class LaneCalls(_RunState):
 
     def _replay_lanes(self, g: Any, sh: Any, j: int, to: Any, tl: Any, raw: int, main: Any, data: bytes) -> None:
         """A call's lane graphs replayed by the driver (`_Driver`, on the streams' and events' handles), with `_lanes`'s
-        events: the main lane waits for the side steps of set j's last call and uploads the slot, which only the graphs
-        read, so the upload is off the chain from the caller's stream, then waits for the caller and replays its graph;
-        where A's tree is aside, side lane `tl` (`to`, or from `TREE_APART_ROWS` the one after it) replays the tree graph
-        after the main graph's own event past the per-row keying; side lane `to` replays the side graph after the main
-        graph, then waits for the tree where `tl` is another; the caller waits for the main lane."""
+        events: the main lane waits for the side steps of set j's last call, uploads the slot and writes the set's A salts
+        fresh, which only the graphs read, so neither is on the chain from the caller's stream, then waits for the caller
+        and replays its graph; where A's tree is aside, side lane `tl` (`to`, or from `TREE_APART_ROWS` the one after it)
+        replays the tree graph after the main graph's own event past the per-row keying; side lane `to` replays the side
+        graph after the main graph, then waits for the tree where `tl` is another; the caller waits for the main lane."""
         D = cast("_Driver", self.driver)    # no driver is unchecked: its first call fails
         lane = main.raw if main is not None else raw
         done = sh.done[j]
         if done is not None:
             D.wait(lane, done)
         self.uploads.put_raw(g.slot_ptr, data, lane, D)
+        fresh_into(self.salts_a(sh, None), sh.m16, lane)
         if main is not None:
             D.record(main.event, raw)
             D.wait(lane, main.event)

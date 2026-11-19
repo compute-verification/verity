@@ -237,6 +237,30 @@ def test_bootstrap_removes_only_the_caches_it_made_under_work(tmp_path: Path) ->
     assert not c["work_uv"].exists() and not c["work_pip"].exists()
 
 
+def test_bootstrap_records_its_environment_for_launches_that_name_none(tmp_path: Path) -> None:
+    """Once vLLM is installed, the environment's path is this user's record (benchmarks/harness/env.sh reads it)."""
+    _through_step2(tmp_path)
+    record = tmp_path / "home" / ".local" / "state" / "verity-bench" / "venv"
+    assert record.read_text() == f"{(tmp_path / 'work' / 'venv312').resolve()}\n"
+
+
+def test_record_venv_records_an_environment_and_touches_nothing_else(tmp_path: Path) -> None:
+    """`--record-venv PATH` records an environment a machine bootstrapped before the record already has, and builds
+    nothing; one that holds no Python is refused by name and recorded nowhere."""
+    venv, home, work = tmp_path / "old" / "venv312", tmp_path / "home", tmp_path / "work"
+    (venv / "bin").mkdir(parents=True)
+    (venv / "bin" / "python").write_text(FAKE_PY)
+    (venv / "bin" / "python").chmod(0o755)
+    env = {"PATH": f"{_bin(tmp_path, nvidia_smi=False)}{os.pathsep}/usr/bin{os.pathsep}/bin", "HOME": str(home), "WORK": str(work)}
+    r = subprocess.run([BASH, str(SCRIPT), "--record-venv", str(venv)], capture_output=True, text=True, env=env)
+    assert r.returncode == 0, r.stderr
+    assert (home / ".local/state/verity-bench/venv").read_text() == f"{venv.resolve()}\n"
+    assert not work.exists(), "--record-venv built something"
+    r = subprocess.run([BASH, str(SCRIPT), "--record-venv", str(tmp_path / "none")], capture_output=True, text=True,
+                       env={**env, "XDG_STATE_HOME": str(tmp_path / "state")})
+    assert r.returncode == 3 and "BOOTSTRAP_FAIL_VENV_RECORD" in r.stderr and not (tmp_path / "state").exists()
+
+
 def test_bootstrap_leaves_a_cache_the_caller_named(tmp_path: Path) -> None:
     """A UV_CACHE_DIR the caller set is the caller's: step 2 leaves it, and removes only the pip cache it made under $WORK."""
     c = _through_step2(tmp_path, UV_CACHE_DIR=str(tmp_path / "callers-uv"))

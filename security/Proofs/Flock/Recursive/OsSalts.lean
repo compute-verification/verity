@@ -45,7 +45,7 @@ section ZK
 /-- **The ZK server's commitment at the OS's bytes**: the executable's leaf of `SHA-512(msg)` at the 192 bytes `b` the
 operating system gives is `zkServerLeaf msg (saltOfBytes b)`. -/
 theorem zkServerLeaf_os (msg : ByteArray) (b : Fin 192 → Fin 256) :
-    Hm96.Default512.leaf (Sha512.hash msg) (FlockSoundness.Audit.SamplingDesign.streamOf b) =
+    Hm96.Default512.leaf (Sha512.hash msg) (Spot.Sampling.SamplingDesign.streamOf b) =
       Flock.Guarantees.zkServerLeaf msg (ZkView.saltOfBytes b) :=
   ZkView.leaf_os _ b (Sha512.hash_size _)
 

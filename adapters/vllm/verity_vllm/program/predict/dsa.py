@@ -134,7 +134,8 @@ class Net:
             C, _ = derive_config(hf, repo=phi.model.get("repo"), revision=phi.model.get("revision"), world=self.world)
         except (KeyError, ValueError) as e:
             raise Unexpressible(f"config.json: {e}") from None
-        self.C, self.tp, self.device = C, phi.target_profile(), phi.target.get("device_name")
+        self.C, self.tp = C, phi.target_profile()
+        self.device = self.tp.device_name
         self.indexers = frozenset(C.get("INDEXER_LAYERS") or ())
         facts = []
         if phi.execution == "compiled" and self.tp.compilation != "breakable":

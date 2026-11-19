@@ -45,8 +45,8 @@ open Flock Transcript
 theorem repFwC_piopFw {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {sch : Flock.Schedule} {tPad rep : ℕ}
     {dom : ByteArray} {g : Array F128} {cm0 : FlockComplete.Commit} {extras : Array Claim}
     {pads : FlockComplete.PadsZk} {ic : FlockComplete.InnerCommit} {vals : Array F128} {extra lanePad : ℕ → ℕ → F128}
-    {salt : ℕ → ℕ → ByteArray} {t₀ : Transcript} {l : Array Claims.Msg} {p : Zk.ZkProof} {t : Transcript}
-    {l' : Array Claims.Msg}
+    {salt : ℕ → ℕ → ByteArray} {t₀ : Transcript} {l : Array Hash.Msg} {p : Zk.ZkProof} {t : Transcript}
+    {l' : Array Hash.Msg}
     (h : ((repFwC (FlockComplete.asksCut coin n) (Hashes.ofSha512 Sha512.hash) st sch tPad rep dom g cm0 extras pads ic
       vals extra lanePad salt).run t₀).go l = (.ok (p, t), l')) :
     ∃ zp lp ss T sws t₃ l₃, ((piopFw (FlockComplete.asksCut coin n) st (Zk.PadLayout.new st.m st.kLog sch.k0) g

@@ -22,7 +22,7 @@ from verity_bench.vllm.presets import SPEC_ROOT
 
 ROOT = Path(__file__).resolve().parents[3]
 STEADY = sorted(path.stem for path in SPEC_ROOT.glob("*.toml") if SP.is_steady(path))
-HEAD = "glm53-flock-steady-head-block-h200"
+HEAD = "glm53-flock-steady-head-block"
 SETUP = "benchmarks/harness/setup/flock_prover.sh"
 LAUNCHER = "benchmarks/harness/steady_point.sh"
 
@@ -35,7 +35,7 @@ def test_the_specs_directory_holds_steady_state_specs():
 def test_a_steady_spec_names_a_workload_with_a_record_and_a_setup_that_names_the_prover_and_its_python(name):
     spec = SP.load_spec(name)
     assert spec.id == name and spec.workload in R.WORKLOADS
-    assert spec.admission.max_minutes is not None, "`run --direct` refuses a spec without a bound"
+    assert spec.admission.max_minutes is not None, "the node side's lease refuses a spec without a bound"
     setup = (ROOT / spec.setup).read_text()
     assert spec.setup.startswith("benchmarks/harness/setup/")
     assert all(f"{exported}=" in setup for exported in ("VERITY_BENCH_STEADY_BIN", "VERITY_BENCH_STEADY_PY"))
@@ -82,52 +82,31 @@ def real(tmp_path: Path, **changes: str) -> tuple[Path, str]:
     return root, path
 
 
-def launches(root: Path, path: str, node: str = "vy-spot-glm53") -> tuple[list, list[list[str]]]:
+def launches(root: Path, path: str) -> tuple[list, list[list[str]]]:
     plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None))
     commands: list[list[str]] = []
-    assert P.dispatch(plan, root / path, root=root, direct=node,
-                      execute=lambda command, cwd: commands.append(list(command)) or 0) == 0
+    for item in plan.points:
+        assert jobs.dispatch(plan, root / path, point=item.point.id, root=root,
+                             execute=lambda command, cwd: commands.append(list(command)) or 0) == 0
     return list(plan.points), commands
 
 
-def test_each_point_of_the_head_blocks_spec_is_launched_with_the_stores_key_within_the_specs_bound(tmp_path):
+def test_each_point_of_the_head_blocks_spec_runs_in_its_specs_environment_and_takes_its_card_itself(tmp_path, monkeypatch):
+    """A steady-state point runs its launcher here with the spec's env and setup and no lease: the node side takes the
+    card, on the NUMA node of the slot's cores, or the booked one GPU_LEASE_ON names (`steady_node --card`)."""
+
+    monkeypatch.delenv("GPU_LEASE_ON", raising=False)
     root, path = real(tmp_path)
     points, commands = launches(root, path)
     assert len(commands) == len(points) == 6
     for item, command in zip(points, commands, strict=True):
-        flags, job = command[:command.index("--")], command[command.index("--") + 1:]
-        assert "--store-read" in flags and flags[flags.index("--timeout") + 1] == f"{jobs.DIRECT_WAIT_S + 5400}"
-        assert [flags[i + 1] for i, token in enumerate(flags) if token == "--env"] == [
-            "RUST_MIN_STACK=67108864", f"VERITY_BENCH_SETUP={SETUP}"]
-        assert job[-8:] == ["bash", LAUNCHER, "--spec", path, "--point", item.point.id, "--identity", item.identity]
-
-
-@pytest.mark.parametrize("node", ["vy-spot-glm53", "vy-h200x8-1", "vy-dc-h200-3"])
-def test_the_head_blocks_spec_runs_direct_on_the_h200_nodes_whose_slots_give_ten_cores_of_one_numa_node(tmp_path, node):
-    from research.pods.nebius.slot_only import through_slot
-
-    assert node in jobs.DIRECT_NODES
-    points, commands = launches(*real(tmp_path), node=node)
-    assert len(commands) == len(points) == 6
-    for command in commands:
-        flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
-        assert flags[:4] == ["research", "run", "--on", node] and "--queue" not in flags and "--gpus" not in flags
-        assert through_slot(workload) and workload[:2] == ["env", f"CHECK_SLOTS={jobs.GPU_SLOTS}"]
-        assert "gpu-lease" not in command, "the node side takes the card, on the NUMA node of the slot's cores"
-
-
-def test_a_node_outside_the_direct_nodes_is_refused_at_dispatch_and_no_point_starts_there(tmp_path):
-    """A node outside `jobs.DIRECT_NODES` is refused here, where the tuple and the slots file it joins with are named,
-    before any run starts there."""
-
-    root, path = real(tmp_path)
-    plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None))
-    launched: list = []
-    for node in ("vy-dc-h200-without-slots", "vy-nebius-cpu-1"):
-        assert node not in jobs.DIRECT_NODES
-        with pytest.raises(ValueError, match=f"--direct {node}: not a GPU node with gpu slots.*{jobs.GPU_SLOTS} joins"):
-            P.dispatch(plan, root / path, root=root, direct=node, execute=lambda command, cwd: launched.append(command) or 0)
-    assert launched == []
+        assert command == ["env", "RUST_MIN_STACK=67108864", f"VERITY_BENCH_SETUP={SETUP}", "bash", LAUNCHER, "--spec",
+                           path, "--point", item.point.id, "--identity", item.identity]
+    monkeypatch.setenv("GPU_LEASE_ON", "3")
+    assert all(command[-2:] == ["--card", "3"] for command in launches(root, path)[1])
+    monkeypatch.setenv("GPU_LEASE_ON", "3,4")
+    with pytest.raises(ValueError, match="a steady-state point's lease is of one card"):
+        launches(root, path)
 
 
 def test_another_pin_and_another_stored_statement_are_a_change_to_the_spec_alone(tmp_path):
@@ -170,7 +149,8 @@ def test_the_setup_is_part_of_every_points_identity(tmp_path):
 
 #: a stand-in for verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh, in its shape: it names a toolkit it finds, else unpacks one,
 #: which resets the sourcing shell's arguments, and exits where it can't
-TOOLKIT = """for c in "$FLOCK_WORK/cuda-root"; do
+TOOLKIT = """[ -e "$FLOCK_WORK/own-toolkit" ] && return 0
+for c in "$FLOCK_WORK/cuda-root"; do
   [ -z "${CUDA_TK:-}" ] && [ -x "$c/bin/nvcc" ] && export CUDA_TK=$c
 done
 if [ -z "${CUDA_TK:-}" ]; then
@@ -262,10 +242,19 @@ def test_the_setup_builds_the_prover_and_leaves_the_environment_a_point_runs_in(
     assert len((work / "uv-ran.txt").read_text().splitlines()) == 2, "a later point finds the Python the first made"
 
 
-def test_the_setups_default_work_directory_is_the_harnesss_own_under_the_nodes_jobs():
+def test_the_setups_default_work_directory_is_the_harnesss_own_under_the_users_cache_and_names_no_nodes():
     setup = (ROOT / SETUP).read_text()
-    assert "export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/verity-bench-steady}\n" in setup
+    assert "export FLOCK_WORK=${FLOCK_WORK:-${XDG_CACHE_HOME:-$HOME/.cache}/verity-bench-steady}\n" in setup
     assert "VERITY_BENCH_STEADY_SCRATCH=$FLOCK_WORK/scratch" in setup and "/dev/shm" not in setup
+    assert "/workspace" not in setup and "/usr/local" not in setup
+
+
+def test_a_nodes_own_toolkit_its_record_does_not_list_is_refused_naming_the_record(tmp_path):
+    launcher = Launcher(tmp_path)
+    launcher.work.mkdir()
+    (launcher.work / "own-toolkit").touch()
+    ran = launcher()
+    assert ran.returncode == 4 and "its own CUDA 13.3, which the run's machine's [properties] don't list" in ran.stderr
 
 
 def test_the_setup_removes_only_the_scratch_a_killed_point_left_long_ago(tmp_path):

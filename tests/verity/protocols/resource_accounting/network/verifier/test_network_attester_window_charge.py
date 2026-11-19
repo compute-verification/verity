@@ -11,11 +11,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.protocols.resource_accounting.network.verifier import arith_encode as AE
-from verity.protocols.resource_accounting.network.prover import window_charge as WC
-from verity.protocols.resource_accounting.network.verifier.head_check import ands
-from verity.protocols.proofs.spot.verifier.one_stage import produced
-from verity.commitments import hm96
+from verity.protocols.interface.charge import arith_encode as AE
+from verity.protocols.interface.charge import window_charge as WC
+from verity.commitments.gates.bits import ands
 
 FIXTURE = Path(__file__).parent / "fixtures" / "arith_encode_vectors.json"
 PROGRAM, REGISTRATION = "window-charge-test", "ab" * 64
@@ -217,30 +215,6 @@ def _random_link(rng, N, H, O, L):
 
 
 @pytest.mark.slow
-def test_the_chain_on_the_cut_is_code_v1s():
-    """Each fixture stream's cut windows chained under hiding commitments: the verifier's check passes, and
-    `ChargeLink_v2{4, 2, 2, 2}` on each window's committed rows is ok at `code_v1`'s charge. A carry-in other than the last
-    carry-out is refused by the chain (CH-carry), and the session must start at the book's first carry (CH-first)."""
-    for s in _streams():
-        N, H, O, L, book, slots, lens = _cut(s)
-        ses = WC.session(N, H, O, L, book, slots)
-        values = []
-        for _length, _c_in, c_out in ses:
-            values.append(WC.commit_window(PROGRAM, book, WC.carry_of(c_out), REGISTRATION,
-                                           values[-1] if values else None))
-        ops = [list(v.bcs) for v in values]
-        assert WC.check_chain(ops, PROGRAM, book) is None
-        assert WC.check_chain(ops, "another-program", book).startswith("CH-first")
-        if len(ops) > 2:
-            assert WC.check_chain([ops[0], ops[2]], PROGRAM, book).startswith("CH-carry")
-        wb = WC.window_book(book, N, H, O)[0]
-        cases = [(wb, WC.CC.unrow(v.rows[0]), WC.CC.unrow(v.rows[1]), *sl) for v, sl in zip(values, slots)]
-        assert WC.evaluate_links(N, H, O, L, cases) == [(1, length) for length in lens], s["source"]
-    v = values[0]
-    assert v.salts[0] == WC.CC.start_salt(PROGRAM, WC.VALUE) and v.bcs[0] == WC.start_opening(PROGRAM, book)
-
-
-@pytest.mark.slow
 def test_the_circuits_are_the_reference():
     """`ChargeLink_v2{4, 2, 2, 2}` against `reference_link` on random cases (books with skewed bins and now and then a
     bin the coder refuses, carries at their edges, values at and past their caps, carry-outs one bit off), and
@@ -307,29 +281,6 @@ def test_build_link_inline_and_the_bound():
             assert (g[0] == 0) if w[0] == 0 else g == w, (cs, g, w)
             if w[0]:
                 assert res[1] == int(not drop or w[1] == 0)
-
-
-def test_rows():
-    """The 160-bit row: `ChargeCount_v1`'s 92 bits, then pos and rank, then zeros; its commitment under this module's
-    own value, the session's first row the book's first carry under the value's public salt."""
-    carry = WC.WindowCarry(((1, (1 << 15) - 1), (7, 0), (0, 3)), 2, (1 << 32) - 1, (1 << 24) + 1)
-    bits = WC.encode(carry)
-    assert len(bits) == WC.ROW_BITS == 160 and not any(bits[149:]) and WC.carry_of(bits) == carry
-    assert bits[92:124] == (1,) * 32 and bits[124:149] == tuple(((1 << 24) + 1 >> j) & 1 for j in range(25))
-    assert WC.carry_of(bits[:149] + (1,) * 11) == carry
-    for bad in (WC.WindowCarry(pos=1 << 32), WC.WindowCarry(rank=1 << 25), WC.WindowCarry(((0, 0),) * 2)):
-        with pytest.raises(ValueError):
-            WC.encode(bad)
-    book = _streams()[0]["decisions"]["book"]
-    v0 = WC.commit_window(PROGRAM, book, carry, REGISTRATION)
-    v1 = WC.commit_window(PROGRAM, book, carry, REGISTRATION, v0)
-    assert v0.rows[0] == WC.CC.row(WC.encode(WC.first_carry(book))) and v0.bcs[0] == WC.start_opening(PROGRAM, book)
-    assert v0.salts[0] != WC.CC.start_salt(PROGRAM) and v0.bcs[0] != WC.CC.start_opening(PROGRAM, book)
-    assert (v1.rows[0], v1.salts[0], v1.bcs[0]) == (v0.rows[1], v0.salts[1], v0.bcs[1])
-    assert WC.reads() == {WC.VALUE: {"carry_in": 0, "carry_out": 1}}
-    forged = produced.commit(PROGRAM, WC.VALUE, [WC.CC.row(WC.encode(WC.WindowCarry())), v0.rows[1]], REGISTRATION,
-                             [hm96.SHA512.fresh_salt(), hm96.SHA512.fresh_salt()], WC.CC.WORD_BITS, WC.CC.SCHEMA)
-    assert WC.check_chain([list(forged.bcs)], PROGRAM, book).startswith("CH-first")
 
 
 @pytest.mark.slow

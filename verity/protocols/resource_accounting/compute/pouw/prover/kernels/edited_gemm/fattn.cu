@@ -32,7 +32,6 @@
 //   fattn bench REPS S H REP      hot items interleaved across FA_ARMS, one JSON line
 //   fattn one ARM S H REP         three warm-up calls, then one between cudaProfilerStart and Stop (for ncu)
 // Build: nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a fattn.cu -lcuda -lcublasLt -lnvidia-ml
-// Run: fattnrun.sh
 #define APV_LIB
 #include "apv.cu"
 #include <climits>

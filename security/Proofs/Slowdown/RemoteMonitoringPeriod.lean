@@ -3,7 +3,7 @@ module
 public import Definitions.Slowdown.Guarantees.RemoteMonitoringPeriod
 public import Proofs.Slowdown.Remote
 public import Proofs.Slowdown.CutWitness
-public import Proofs.Flock.Soundness.Audit.Periods
+public import Proofs.Spot.Sampling.Periods
 
 /-!
 # Proof of the remote overhead bound over a monitoring period
@@ -19,7 +19,7 @@ windows of window `t`'s own). Three events carry the failure:
   `J (1 − q)^(K+1)`. Up to its first detection an identity's windows each miss all their faulty blocks, so the escaped
   blocks are the faulty blocks of windows that missed them; counted at a weight fixed before each window's coins, that
   of its faulty blocks while the identity is undetected and has at most `K` so far (`truncated_sum_ge`), the tail is
-  `FlockSoundness.Audit.Periods.prCoin_forall_sum_le_pow`.
+  `Spot.Sampling.Periods.prCoin_forall_sum_le_pow`.
 
 Outside them, `VerdictLag` and the escape share bound the faulty blocks' skipped work, and `remote_core` sums the
 sources.
@@ -36,7 +36,7 @@ open Verity.Game renaming prPMFReal → prob
 
 namespace Slowdown.SecurityProofs
 
-open Verity Slowdown.Slowdown FlockSoundness.Audit.Periods
+open Verity Slowdown.Slowdown Spot.Sampling.Periods
 open FlockSoundness.Game (avg prCoin avg_mono avg_const prCoin_mono)
 open scoped ENNReal
 

@@ -146,7 +146,7 @@ variable [S : ZkSetup]
 /-- **A later-level clash among a run's own rows is a collision in its log**: openings whose `(position, row)` pairs are
 the level-`ℓ` rows table `j`'s rep `k` opens in an accepting masked run, two of which verify at one position with
 different rows (`ClashL`), give two of those rows at one position that differ (`zk_levelClash_tiedJ`). -/
-theorem zk_laterClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem zk_laterClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {j k ℓ : ℕ} {cap : Model.Cap Refine.Dig} {lanes depth : ℕ}
     {xs : List (ℕ × List 𝔽 × List UInt8 × List Refine.Dig)} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (hxs : xs.map (fun x => (x.1, x.2.1)) = zkRawLevelRowsJ (Claims.run sha512 P (V true) x ω r).seen j k ℓ)
@@ -166,7 +166,7 @@ end Gen
 /-- **A later-level clash among a run's own rows is a collision in its log**: openings whose `(position, row)` pairs are
 the level-`ℓ` rows table `j`'s rep `k` opens in an accepting masked run, two of which verify at one position with
 different rows (`ClashL`), give two of those rows at one position that differ (`zk_levelClash_tiedJ`). -/
-theorem zk_laterClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem zk_laterClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {j k ℓ : ℕ} {cap : Model.Cap Refine.Dig} {lanes depth : ℕ}
     {xs : List (ℕ × List 𝔽 × List UInt8 × List Refine.Dig)} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (hxs : xs.map (fun x => (x.1, x.2.1)) = zkRawLevelRowsJ (Claims.run sha512 P (V true) x ω r).seen j k ℓ)
@@ -184,7 +184,7 @@ play the deployed decoders' tapes, so table `j`'s output there is right at `Open
 rep `k`'s openings at a level `ℓ ≥ 1` are the rep's `zkLevelRowsOf` rows at `wrS`'s transcript, which records the run's
 rep streams and proof files (`recordsLiveAtS_wrS`), so they are the run's level-`ℓ` rows (`rawLevelRows_zk`), and two
 of them at one position that differ collide in the run's log (`zk_laterClash_tiedJ`). -/
-theorem zkViewClashQL (x : Claims.Msg) : ZkViewClashQ x LaterClashZ := by
+theorem zkViewClashQL (x : Hash.Msg) : ZkViewClashQ x LaterClashZ := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C _ r hacc s' spec' sts' link c₁ mids f hact hret
   obtain ⟨a, ⟨hV, pend, hpl, ha⟩, hcl⟩ := hret
   subst a
@@ -260,7 +260,7 @@ play the deployed decoders' tapes, so table `j`'s output there is right at `Open
 rep `k`'s openings at a level `ℓ ≥ 1` are the rep's `zkLevelRowsOf` rows at `wrS`'s transcript, which records the run's
 rep streams and proof files (`recordsLiveAtS_wrS`), so they are the run's level-`ℓ` rows (`rawLevelRows_zk`), and two
 of them at one position that differ collide in the run's log (`zk_laterClash_tiedJ`). -/
-theorem zkViewClashQL (x : Claims.Msg) : ZkViewClashQ x LaterClashZ :=
+theorem zkViewClashQL (x : Hash.Msg) : ZkViewClashQ x LaterClashZ :=
   Gen.zkViewClashQL (S := S₀) (x := x)
 
 end Clash

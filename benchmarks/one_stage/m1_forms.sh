@@ -18,6 +18,7 @@
 # (accepted, or its refusal).  Records: $OUT/<tag>/m1.log.
 # env: MF_CASES  MF_MEM_GB=128 (the job's --mem-gb)  MF_CACHE
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 FIRST='AttnBlockFirst_v%d{D=64,NVIS=%d,BN=192,DOT={"fn":"HopperBF16WgmmaDot16_v%d"}}'
 END='AttnHeadEnd_v%d{D=64,INV={"fn":"Fa3InvSum_v%d"}}'
 TMPL='--structural iv/hybrid/4 --tmpl-unit-bin {TU}'
@@ -56,7 +57,7 @@ for form in "${FORMS[@]}"; do
     "$PY" benchmarks/one_stage/m1_unit.py --out "$W/$tag" --bin "$BIN" --lean "$W/lean-timed" --n 1 "${args[@]:1}" ) > "$OUT/$tag/m1.log" 2>&1
   r=$?
   [ $r = 0 ] || { log "m1 $tag: rc $r"; tail -30 "$OUT/$tag/m1.log" | cut -c1-2000 | tee -a "$OUT/job.log"; rc=1; }
-  (cd "$W/$tag" && find . -type f \( -name '*.json' -o -name '*.log' \) -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/$tag/")
+  (cd "$W/$tag" && find . -type f \( -name '*.json' -o -name '*.log' \) -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$OUT/$tag/")
   line=$("$PY" - "$tag" "$OUT/$tag" "$W/$tag.lean.json" <<'PYEOF'
 import json, os, sys
 tag, out, timed = sys.argv[1:]

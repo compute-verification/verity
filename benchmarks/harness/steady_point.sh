@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # `bash benchmarks/harness/steady_point.sh --spec SPEC --point POINT --identity IDENTITY`: one steady-state point
-# (`python -m verity_bench.steady_node ARGS...`) as the research run `verity-bench run SPEC --direct NODE` launches, from
-# the source tree (--cwd source), inside a GPU slot of the node, which gives it its cores.
-# The dispatcher forwards the spec's env and its setup script as VERITY_BENCH_SETUP, which is sourced here, cwd the source
+# (`python -m verity_bench.steady_node ARGS...`) as `verity-bench run SPEC` runs it in its research run, from the source
+# tree (--cwd source), in a GPU slot of the node (`research run --pool gpu`), which gives it its cores.
+# `run` passes the spec's env and its setup script as VERITY_BENCH_SETUP, which is sourced here, cwd the source
 # tree. The setup builds the prover and makes the Python the point runs under, and exports both
 # (VERITY_BENCH_STEADY_BIN, VERITY_BENCH_STEADY_PY), with whatever the prover, the stager and
 # benchmarks/one_stage/server_rate.py need to run (the CUDA toolkit first on PATH, their PYTHONPATH and libraries).
 set -euo pipefail
 ROOT=$PWD
 if [ -z "${VERITY_BENCH_SETUP:-}" ]; then
-  echo "steady_point.sh: no VERITY_BENCH_SETUP: a steady-state point runs in the environment the setup of its spec leaves; launch it with verity-bench run SPEC --direct NODE" >&2
+  echo "steady_point.sh: no VERITY_BENCH_SETUP: a steady-state point runs in the environment the setup of its spec leaves; run it with verity-bench run SPEC" >&2
   exit 2
 fi
 # shellcheck source=/dev/null

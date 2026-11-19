@@ -1,7 +1,7 @@
 /-
 `Registered.checkKnownAll` on a `--registered` file: a port named at known content (`known`: each row's u16 words and
 its salt) passes only when its root is the frame-v3-sha512 root of those rows' `hm96-sha512/row/v2` leaves, as
-`registered.Registered.commit` roots them; ports without `known` are untouched. And the tree a statement publishes
+`registered_value.Registered.commit` roots them; ports without `known` are untouched. And the tree a statement publishes
 for such a port (`Registered.publishedRoot`, `Registered.knownTrees`): the value's own tree where the statement's
 table is the value's rows at the value's domain, another root at another domain or layout, and an entry of the
 verifier's list for each port at known content that the statement publishes a tree for. The list the verifier writes
@@ -17,7 +17,7 @@ meta import Flock.ZkServer.Salts
 /-!
 `Registered.checkKnownAll` on a `--registered` file: a port named at known content (`known`: each row's u16 words and
 its salt) passes only when its root is the frame-v3-sha512 root of those rows' `hm96-sha512/row/v2` leaves, as
-`registered.Registered.commit` roots them; ports without `known` are untouched.
+`registered_value.Registered.commit` roots them; ports without `known` are untouched.
 -/
 
 @[expose] public section

@@ -68,7 +68,7 @@ def recCoin (coins : Got) (k i : ℕ) : F128 := (coins.toList.getD k #[])[i]!
 /-- **The recorded relation**: where the program over `OpenM` returns from the record `got`, the run over `PS` from any
 log of `got`'s length returns the same, at a log of the new record's length. -/
 def RecR {α : Type} (x : OpenM α) (y : PS α) : Prop :=
-  ∀ (got : Got) a got', x.run got = .done (a, got') → ∀ l : Array Claims.Msg, l.size = got.size →
+  ∀ (got : Got) a got', x.run got = .done (a, got') → ∀ l : Array Hash.Msg, l.size = got.size →
     ∃ l', y.go l = (.ok a, l') ∧ l'.size = got'.size
 
 theorem recR_bind {α β : Type} {x : OpenM α} {y : PS α} {f : α → OpenM β} {g : α → PS β} (hxy : RecR x y)

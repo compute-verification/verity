@@ -1,6 +1,6 @@
-"""run.sh's summary: the gates, each shape's hot items with each arm's ratio to plain cuBLASLt, the ratio table (each
-GEMM kernel against plain and each edited call, editedf:K, against plainq, hot and interleaved), the parts at o_proj and
-ncu's counters. python3 summary.py OUT_DIR"""
+"""benchmarks/pouw/edited_gemm/run.sh's summary: the gates, each shape's hot items with each arm's ratio to plain
+cuBLASLt, the ratio table (each GEMM kernel against plain and each edited call, editedf:K, against plainq, hot and
+interleaved), the parts at o_proj and ncu's counters. python3 summary.py OUT_DIR"""
 from __future__ import annotations
 
 import csv

@@ -30,14 +30,15 @@ from typing import Any
 
 from verity_vllm.config import (
     ROOT,
-    TARGETS,
     CommitConfig,
     MatchConfig,
     RowConfig,
     RunEnv,
+    UsageError,
     row_execution,
     row_path,
     row_target,
+    target_cc,
 )
 from verity_vllm.engine import served
 from verity_vllm.pipeline import gpu_lease as GL
@@ -89,8 +90,11 @@ def jit_key(py: str, cuda_home: str, row: str, tree: str) -> str | None:
                 return None
             parts.append([name, hashlib.sha256(Path(rec[0]).read_bytes()).hexdigest()])
         ver = re.search(rb"^#define CUDA_VERSION (\d+)", Path(cuda_home, "include", "cuda.h").read_bytes(), re.M)
-        cc = TARGETS.get(row_target(row) or "")
-        if not ver or not cc:
+        try:
+            cc = target_cc(row_target(row) or "")
+        except UsageError:
+            return None
+        if not ver:
             return None
         parts += [["cuda", ver.group(1).decode()], ["cc", f"{cc[0]}.{cc[1]}"]]
         for p in sorted(Path(tree, "verity_vllm").rglob("*.py")):
@@ -221,7 +225,7 @@ class Row:
         if not os.access(self.py, os.X_OK):
             print(f"no python at {self.py} (run verity_vllm/ops/pod_bootstrap.sh first)", file=sys.stderr)
             raise Stop(3)
-        env["PATH"] = f"{os.path.dirname(self.py)}:{self.env.cuda_bin}:{self.env.environ.get('PATH', '')}"
+        env["PATH"] = f"{os.path.dirname(self.py)}:{self.env.cuda_bin or os.path.join(self.env.cuda_home, 'bin')}:{self.env.environ.get('PATH', '')}"
         env["VERITY_TIMELINE"] = self.timeline
 
     def path(self, rel: str) -> str:
@@ -264,12 +268,8 @@ class Row:
         """The Commit's serving-rows request (`pipeline.serving_rows`, `pipeline.tp.serving_rows`): its directory inside the research
         run dir when there is one, so the run's custody preserves it, the verifier's partition file, the run id and source the
         registration names (its domains bind the run root), and the per-expert cut's ``tables`` (`expert_rows.of_request`) when
-        ``SERVING_ROWS_TABLES`` names their registration, refused here without its key rather than after serving."""
-        tables = None
-        if ck.serving_rows_tables:
-            if not ck.serving_rows_tables_key:
-                raise SystemExit("SERVING_ROWS_TABLES: a tables registration is read under its committer's key file (SERVING_ROWS_TABLES_KEY)")
-            tables = {"key": ck.serving_rows_tables_key, "registration": ck.serving_rows_tables}
+        ``SERVING_ROWS_TABLES`` names their registration."""
+        tables = {"registration": ck.serving_rows_tables} if ck.serving_rows_tables else None
         rd = self.env.research_run_dir
         d = os.path.join(rd, "serving-rows", self.row) if rd else f"{self.d}/serving-rows"
         os.makedirs(d, exist_ok=True)

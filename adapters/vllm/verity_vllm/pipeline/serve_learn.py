@@ -12,7 +12,8 @@ requests (at most ``--window-requests``) that share ``--max-num-batched-tokens``
 execution block's first step and run through its last (``--window-steps``), greedy, with ``ignore_eos``. They are throwaway
 requests of random ids, parsed by the server's own protocol, and the committer runs learn-only around them
 (`acquire.sources.taps.warmup`): a step over the budget records its plan and commits a placeholder. The pass is never a record:
-it opens no execution block, no step trace sees it, and the committer is reset after it. A plan stays learned while each
+it opens no execution block, no step trace sees it, no scheme hears it (`messages.Exchange.unheard`), and the committer is reset
+after it. A plan stays learned while each
 execution block uses it (``native_plans.h``: a reset drops the plans the run before it didn't use), so at a static shape no
 served step learns. ``serve.json``'s ``learn_warmup`` records the pass (the committer's ``learn_warmup``).
 """
@@ -68,6 +69,7 @@ def warm_up(engine: Any, com: Any, opts: Any, proto: Any, defaults: Mapping[str,
     ``learn_warmup``. None, running nothing, without bounded staging or under ``--no-learn-warmup``."""
     if com is None or not getattr(com, "bounded", False) or not opts.learning.learn_warmup:
         return None
+    from verity_vllm import messages
     from verity_vllm.acquire.sources import taps as TAPS
     from verity_vllm.commit import challenge
     from verity_vllm.engine.served_seed import served
@@ -78,14 +80,15 @@ def warm_up(engine: Any, com: Any, opts: Any, proto: Any, defaults: Mapping[str,
     TAPS.warmup(com, True)
     com.install()
     try:
-        for i in range(shape["requests"]):
-            req = proto.parse({**body, "prompt": rng.integers(FIRST_ID, top, size=shape["prompt_ids"]).tolist()})
-            engine.add_request(request_id=f"learn-warmup-{i}", prompt={"prompt_token_ids": list(req.prompt)},
-                               params=served(proto.sampling_params(req, shape["steps"], dict(defaults or {})), None, None)[0])
-        steps = 0
-        while engine.has_unfinished_requests():
-            engine.step()
-            steps += 1
+        with messages.current().unheard():
+            for i in range(shape["requests"]):
+                req = proto.parse({**body, "prompt": rng.integers(FIRST_ID, top, size=shape["prompt_ids"]).tolist()})
+                engine.add_request(request_id=f"learn-warmup-{i}", prompt={"prompt_token_ids": list(req.prompt)},
+                                   params=served(proto.sampling_params(req, shape["steps"], dict(defaults or {})), None, None)[0])
+            steps = 0
+            while engine.has_unfinished_requests():
+                engine.step()
+                steps += 1
         rc = com.finalize()
     finally:
         com.uninstall()
@@ -108,8 +111,8 @@ def warmed(com: Any, llm: Any, opts: Any) -> Any:
     """The server's committer ``com`` over ``llm`` (a `verity_vllm.LLM`) once its plans are learned (`warm_up`, its requests
     parsed as ``--protocol`` parses a completion), what the pass learned in its ``learn_warmup``."""
     from verity_vllm.engine.handle import engine_of
-    from verity_vllm.pipeline.serve_protocol import PROTOCOLS
+    from verity_vllm.pipeline.serve_protocol import framings
 
-    proto = PROTOCOLS[opts.protocol](opts.force_include_usage)
+    proto = framings()[opts.protocol](opts.force_include_usage)
     com.learn_warmup = warm_up(engine_of(llm), com, opts, getattr(proto, "base", proto))
     return com

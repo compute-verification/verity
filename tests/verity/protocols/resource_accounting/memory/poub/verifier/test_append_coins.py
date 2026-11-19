@@ -97,7 +97,7 @@ def test_a_session_that_reserves_no_append_coins_has_no_append_family_and_refuse
     assert r.s.commitment.families == ((coins.CHALLENGE, 2), (coins.OPENINGS, 2))
     assert r.s.append(hashlib.sha512(b"page").digest(), 1) == audit.Verdict(0, False, "coin")
     assert r.s.coins.appends == 0 and r.s.coins.opened(coins.APPEND) == () and r.s.extent == N
-    with pytest.raises(CoinError, match="no append family"):
+    with pytest.raises(CoinError, match="no poub/append family"):
         r.s.coins.append(bytes(64))
 
 

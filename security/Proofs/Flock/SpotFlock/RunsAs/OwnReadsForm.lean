@@ -50,12 +50,12 @@ check held**, at the last step's own reading: of the reads the sessions' own ver
 commitment `c₂`'s own values, each one `Record.lessOwnReads` takes out names one of `c₂.record`'s ports at that port's
 root and is `HeldRead` at the run of record's input, unless that port's root prints as null. From `leftOut_of_check`
 by the two premises. -/
-theorem accepted_ownReads_form (hrec : RecordReadSame) (hver : VerdictsReadSame) {form : Bool}
+theorem accepted_ownReads_form (hrec : RecordReadSame) (hver : VerdictsReadSame)
     {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment} {ξ : ByteArray}
     {e : VStar.Recursive.SampledTwo.Evidence} {bs pub prof}
     (hp : ∃ grain replay k, p.rule = .twoStage grain replay k)
     (hsn : SampledNoneOf p c ξ e bs)
-    (h : VStar.Recursive.SampledTwo.checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
+    (h : VStar.Recursive.SampledTwo.checkBlobsAtInner p c ξ e bs = .accept pub prof) :
     ∃ c₂ ξ₂ r i it, VStar.Recursive.SampledTwo.inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ i.interior = some it ∧
       ∀ opened v root,
         Spot.Record.ownRegistered c₂.record (Spot.Record.sessionRegistered r.out) = some opened →

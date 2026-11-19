@@ -386,8 +386,8 @@ theorem slotOf_inj {T per i i' : ℕ} (hT : 0 < T) (hi : i < per) (hi' : i' < pe
 /-- **The readings of a window, a session at a time**, at `per` rounds a session: round `j` is the slot
 `slotOf (j % per)` of session `j / per` (`sessionRound`), what the play reveals for it is `reveal` at that session
 and slot, with the record the play's output reveals (`record`) and the record's digest (`recordDigest`). -/
-def executionPhaseReadingAt {R : ℕ} (tables : Array String) (per : ℕ) (reveal : ℕ → Slot → Exchange → Option Claims.Msg)
-    (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) : Reading R where
+def executionPhaseReadingAt {R : ℕ} (tables : Array String) (per : ℕ) (reveal : ℕ → Slot → Exchange → Option Hash.Msg)
+    (record : Exchange → Option Hash.Msg) (recordDigest : Hash.Msg) : Reading R where
   round j := sessionRound tables (j.val / per) (slotOf tables.size per (j.val % per))
   reveal j := reveal (j.val / per) (slotOf tables.size per (j.val % per))
   record := record
@@ -395,16 +395,16 @@ def executionPhaseReadingAt {R : ℕ} (tables : Array String) (per : ℕ) (revea
 
 /-- **Each round of a window's readings picks only openings.** -/
 theorem executionPhaseReadingAt_picks {R : ℕ} (tables : Array String) (per : ℕ)
-    (reveal : ℕ → Slot → Exchange → Option Claims.Msg) (record : Exchange → Option Claims.Msg)
-    (recordDigest : Claims.Msg) :
+    (reveal : ℕ → Slot → Exchange → Option Hash.Msg) (record : Exchange → Option Hash.Msg)
+    (recordDigest : Hash.Msg) :
     ∀ (j : Fin R) pre fr, (executionPhaseReadingAt tables per reveal record recordDigest).round j pre fr →
       ∃ i s n, fr = .opening i s n :=
   fun _ _ _ h => sessionRound_opening h
 
 /-- **Each round of a window's readings picks only openings the device serves.** -/
 theorem executionPhaseReadingAt_served {R : ℕ} (tables : Array String) (per : ℕ)
-    (reveal : ℕ → Slot → Exchange → Option Claims.Msg) (record : Exchange → Option Claims.Msg)
-    (recordDigest : Claims.Msg) :
+    (reveal : ℕ → Slot → Exchange → Option Hash.Msg) (record : Exchange → Option Hash.Msg)
+    (recordDigest : Hash.Msg) :
     ∀ (j : Fin R) pre i s n, (executionPhaseReadingAt tables per reveal record recordDigest).round j pre (.opening i s n) →
       Served pre i s n :=
   fun _ _ _ _ _ h => sessionRound_served h
@@ -412,8 +412,8 @@ theorem executionPhaseReadingAt_served {R : ℕ} (tables : Array String) (per : 
 /-- **No two rounds of a window's readings pick one frame** after one log, where the tables are distinct and there
 is one (`sessionRound_unique`, `slotOf_inj`). -/
 theorem executionPhaseReadingAt_unique {R : ℕ} {tables : Array String} (ht : tables.toList.Nodup) (hT : 0 < tables.size)
-    {per : ℕ} (hper : 0 < per) (reveal : ℕ → Slot → Exchange → Option Claims.Msg)
-    (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {j j' : Fin R} {pre : List Release}
+    {per : ℕ} (hper : 0 < per) (reveal : ℕ → Slot → Exchange → Option Hash.Msg)
+    (record : Exchange → Option Hash.Msg) (recordDigest : Hash.Msg) {j j' : Fin R} {pre : List Release}
     {fr : Frame} (h : (executionPhaseReadingAt tables per reveal record recordDigest).round j pre fr)
     (h' : (executionPhaseReadingAt tables per reveal record recordDigest).round j' pre fr) : j = j' := by
   obtain ⟨hu, hs⟩ := sessionRound_unique ht h h'
@@ -423,8 +423,8 @@ theorem executionPhaseReadingAt_unique {R : ℕ} {tables : Array String} (ht : t
 /-- **Each round of a window's readings picks at most one release of a log** whose trees each name their streams
 distinctly (`sessionRound_once`). -/
 theorem picksOnce_executionPhaseReadingAt {R : ℕ} (tables : Array String) (per : ℕ)
-    (reveal : ℕ → Slot → Exchange → Option Claims.Msg) (record : Exchange → Option Claims.Msg)
-    (recordDigest : Claims.Msg) {Lg : List Release} (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup) :
+    (reveal : ℕ → Slot → Exchange → Option Hash.Msg) (record : Exchange → Option Hash.Msg)
+    (recordDigest : Hash.Msg) {Lg : List Release} (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup) :
     PicksOnce (executionPhaseReadingAt (R := R) tables per reveal record recordDigest).round Lg :=
   picksOnce_of_once fun _ _ _ _ _ _ he hp hp' => sessionRound_once hn he hp hp'
 

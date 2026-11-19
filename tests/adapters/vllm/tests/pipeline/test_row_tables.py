@@ -20,20 +20,24 @@ from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
 from verity.circuits.ops import gemm as OG
 from verity.commitments import row_table as RT
+from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.commitments.periods import tables as TB
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity.protocols.proofs.spot.prover import docket as DK
+from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.commitments import registered_value as RV
 
 from verity_vllm.commit import index as IX
 from verity_vllm.commit import row_tables as RTB
+from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import serving_rows as SRW
 
 DOT = '{"fn":"BlackwellS8ImmaDot32_v1"}'
 K, CAP, RUN = 64, 7, "ab" * 32
 #: the serve-time context (the live coin commitment's root) and the run's row key
-CTX, ROW_KEY = bytes(range(64)), bytes(range(32, 64))
+CTX = bytes(range(64))
 COORD = f"ScaledMmS8Coordinate_v1{{K={K},DOT={DOT}}}"
 DEFN = bind(OG.ScaledMmS8Coordinate, K=K, **OG.GEMM_SM120_S8)
 QKV, UP = "model.layers.0.self_attn.qkv_proj", "model.layers.0.mlp.gate_up_proj"
@@ -107,7 +111,9 @@ def window(row_tables: bool = True, sampling_design=None, work_table=None) -> tu
     tables: tuple = ()
     if row_tables:
         ms, tables = SRW.with_row_tables(ms, [COORD], [s.rows], ARRIVALS)
-    w = CS.Binding(*CS.population_program([(DEFN, UNITS)], several=True), sampling_design or D.parse_design("stratified:2"), RUN, tuple(ms),
+    else:
+        ms = CH.shared_tables(ms)
+    w = CS.Binding(*IF.listed_program([(DEFN, UNITS)], ()), sampling_design or RND.parse_design("stratified:2"), RUN, tuple(ms),
                    tables, CTX.hex() if row_tables else "", work_table)
     return w, s, ms
 
@@ -116,7 +122,7 @@ def committed(monkeypatch, row_tables: bool = True, sampling_design=None, work_t
     w, s, ms = window(row_tables, sampling_design, work_table)
     monkeypatch.setattr(SRW, "_operand", s.operand)
     got = SRW._read_s8(ms, s.rows, s, None, ARRIVALS)
-    return CS.commit(w, [g[0] for g in got], salt_key=bytes(32), row_salt_key=ROW_KEY, **kw), s, got
+    return CS.commit(w, CH.held_rows(w, [g[0] for g in got]), **kw), s, got
 
 
 def test_one_table_per_engine_step_and_linear_in_the_canonical_order_and_each_chunk_links_the_token_rows_it_reads():
@@ -156,9 +162,8 @@ def test_the_tables_do_not_depend_on_the_programs_row_order():
 def test_each_tables_root_is_the_cpu_references_under_its_serve_time_domain_and_its_chunks_carry_its_strings(monkeypatch):
     c, s, got = committed(monkeypatch)
     w = c.window
-    for step, ks in w.segments:
-        tabs = [w.row_tables[k] for k in ks]
-        assert b"".join(c.salts[t.port] for t in tabs) == CS.segment_salts(ROW_KEY, step, sum(t.n for t in tabs))
+    again = committed(monkeypatch)[0]
+    assert all(c.salts[t.port] != again.salts[t.port] for t in w.row_tables)
     for t, tab in enumerate(w.row_tables):
         units = [row_of(rid, tab.segment, tab.name, tok) for rid, tok, _i in tab.keys]
         salts = c.salts[tab.port]
@@ -175,9 +180,11 @@ def test_each_tables_root_is_the_cpu_references_under_its_serve_time_domain_and_
 
 
 def test_the_step_roots_serving_computes_at_its_step_boundary_are_the_windows_and_the_windows_table_is_the_tree_over_them(monkeypatch):
-    c, s, _got = committed(monkeypatch)
+    w, s, _ = window()
+    served = {step: RTB.step_roots(CTX, step, s.outputs(step)) for step, _ in w.segments}
+    ys = {step: sr.salts for step, sr in served.items()}
+    c, s, _got = committed(monkeypatch, table_salts=ys)
     w = c.window
-    served = {step: RTB.step_roots(CTX, step, s.outputs(step), ROW_KEY) for step, _ in w.segments}
     for step, ks in w.segments:
         tabs = [w.row_tables[k] for k in ks]
         assert served[step].tables == tuple((t.name, c.table_roots[t.port]) for t in tabs)
@@ -185,9 +192,9 @@ def test_the_step_roots_serving_computes_at_its_step_boundary_are_the_windows_an
         ref = RT.commit_step(CTX, step, [([RT.s8_row(*s.x_of(row_of(rid, step, t.name, tok))) for rid, tok, _i in t.keys],
                                           [c.salts[t.port][i * 192:(i + 1) * 192] for i in range(t.n)]) for t in tabs])
         assert ref.root == served[step].root and len(served[step].root) == 64
-    assert RTB.step_roots(CTX, 1, s.outputs(1), ROW_KEY, workers=2) == served[1]
-    assert RTB.step_roots(bytes(64), 1, s.outputs(1), ROW_KEY).root != served[1].root
-    assert RTB.step_roots(CTX, 1, s.outputs(1), bytes(32)).root != served[1].root
+    assert RTB.step_roots(CTX, 1, s.outputs(1), salts=ys[1], workers=2) == served[1]
+    assert RTB.step_roots(bytes(64), 1, s.outputs(1), salts=ys[1]).root != served[1].root
+    assert RTB.step_roots(CTX, 1, s.outputs(1)).root != served[1].root
     # the window's table: the tree over the step roots, each the step's subtree, nothing committed again
     win = RT.RootTree(w.tables_domain, [served[st].root for st, _ in w.segments])
     assert c.roots[CS.TABLE_PORT] == win.root and c.domains[CS.TABLE_PORT] == w.tables_domain
@@ -196,16 +203,20 @@ def test_the_step_roots_serving_computes_at_its_step_boundary_are_the_windows_an
         assert o.roots == (served[step].root,) and RT.verify_roots(c.roots[CS.TABLE_PORT], w.tables_domain.domain_id, len(w.segments), o)
     # the window's commit holds its steps to the roots serving recorded before their coins
     recorded = {step: sr.root for step, sr in served.items()}
-    assert committed(monkeypatch, segment_roots=recorded)[0].roots == c.roots
+    assert committed(monkeypatch, table_salts=ys, segment_roots=recorded)[0].roots[CS.TABLE_PORT] == c.roots[CS.TABLE_PORT]
     with pytest.raises(ValueError, match=r"segments \[1\]: the period's segment roots are not the ones recorded"):
-        committed(monkeypatch, segment_roots={**recorded, 1: bytes(64)})
+        committed(monkeypatch, table_salts=ys, segment_roots={**recorded, 1: bytes(64)})
+    with pytest.raises(ValueError, match=r"segments \[0, 1\]: the period's segment roots are not the ones recorded"):
+        committed(monkeypatch, table_salts={st: bytes(len(y)) for st, y in ys.items()}, segment_roots=recorded)
     w2, _, _ = window()
-    with pytest.raises(ValueError, match="give row_salt_key"):
-        CS.commit(w2, [g[0] for g in _got], salt_key=bytes(32), segment_roots=recorded)
+    with pytest.raises(ValueError, match="give table_salts"):
+        CS.commit(w2, [g[0] for g in _got], segment_roots=recorded)
+    with pytest.raises(ValueError, match="bytes of salts"):
+        RTB.step_roots(CTX, 1, s.outputs(1), salts=ys[1][:-1])
     with pytest.raises(ValueError, match="twice in one step"):
-        RTB.step_roots(CTX, 1, {QKV: ([("r0", 0), ("r0", 0)], np.zeros((2, K), np.int8), np.zeros(2, np.float32))}, ROW_KEY)
+        RTB.step_roots(CTX, 1, {QKV: ([("r0", 0), ("r0", 0)], np.zeros((2, K), np.int8), np.zeros(2, np.float32))})
     with pytest.raises(ValueError, match="even K"):
-        RTB.step_roots(CTX, 1, {QKV: ([("r0", 0)], np.zeros((1, K + 1), np.int8), np.zeros(1, np.float32))}, ROW_KEY)
+        RTB.step_roots(CTX, 1, {QKV: ([("r0", 0)], np.zeros((1, K + 1), np.int8), np.zeros(1, np.float32))})
 
 
 def test_the_s8_coordinate_replay_reads_each_units_x_row_from_the_table(monkeypatch):
@@ -225,7 +236,7 @@ def test_the_s8_coordinate_replay_reads_each_units_x_row_from_the_table(monkeypa
 
 def test_the_registration_holds_the_tree_over_the_step_roots_and_the_verifier_ties_it_to_the_chunks(monkeypatch, tmp_path):
     c, s, got = committed(monkeypatch)
-    win = CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=R)
+    win = CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=DK)
     rec = json.loads((tmp_path / "registration.json").read_text())
     mine, _, _ = window()
     ports = CS.expected_ports(mine)
@@ -263,7 +274,7 @@ def test_the_registration_holds_the_tree_over_the_step_roots_and_the_verifier_ti
             assert REG.verify_read(dom, root, pos, bc, path, REG.SCHEMA_SEG)
             assert not REG.verify_read(dom, bytes(64), pos, bc, path, REG.SCHEMA_SEG)
             assert not REG.verify_read(dom, root, pos ^ 1, bc, path, REG.SCHEMA_SEG)
-            assert not REG.verify_read(dom, root, pos, bc, path, REG.SCHEMA)
+            assert not REG.verify_read(dom, root, pos, bc, path, RV.SCHEMA)
     with pytest.raises(ValueError, match="do not hold"):
         TB.registered_reads(mine, {k: v for k, v in publics.items() if k != mine.members[0].key}, registered=REG)
     # a chunk whose x string is the only copy of a table row and is not that row: step 0's root, against the recorded one
@@ -290,7 +301,7 @@ def test_the_audit_record_carries_each_sampled_chunks_reads_beside_the_roots_lea
     """`reported_reads`: each sampled chunk's table and root from the verifier's own reads file beside Lean's `registered`
     finding, held only when every verdict accepted and reports exactly its file's port, value and root."""
     c, _s, got = committed(monkeypatch)
-    CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=R)
+    CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=DK)
     mine, _, _ = window()
     reads = TB.registered_reads(mine, {m.key: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)},
                                  registered=REG)
@@ -319,7 +330,7 @@ def test_a_chunk_spanning_two_row_tables_is_refused_on_the_verifier_side(monkeyp
     runs the executable verifier on such a table). `registered_reads` writes no file for a member linking two tables, whatever
     built it."""
     c, _s, got = committed(monkeypatch)
-    CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=R)
+    CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=DK)
     w = c.window
     bc = lambda t, r: c.bc[w.row_tables[t].port][r * CS.BC_BYTES:(r + 1) * CS.BC_BYTES]  # noqa: E731
     trees = {t: RT.RowTable(w.table_domain(t), [bc(t, r) for r in range(w.row_tables[t].n)]) for t in range(len(w.row_tables))}
@@ -342,7 +353,7 @@ def test_a_chunk_spanning_two_row_tables_is_refused_on_the_verifier_side(monkeyp
 
 def test_pouws_interface_finds_a_table_and_its_step_openings_verify_and_tampered_rows_fail(monkeypatch, tmp_path):
     c, s, got = committed(monkeypatch)
-    CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=R)
+    CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=DK)
     rec = json.loads((tmp_path / "registration.json").read_text())
     mine, _, _ = window()
     live = dict(c.segment_roots)
@@ -418,13 +429,13 @@ def test_a_window_or_commit_whose_links_do_not_hold_is_refused(monkeypatch):
     data[1]["rows"]["x"] = data[1]["rows"]["x"].copy()
     data[1]["rows"]["x"][0, 0] ^= 1                                  # chunk 1 reads table 1's row 1 otherwise than chunk 0
     with pytest.raises(ValueError, match="as another member reads it"):
-        CS.commit(w, data, salt_key=bytes(32))
+        CS.commit(w, data)
 
 
 @pytest.mark.parametrize("row_tables", [False, True])
 def test_window_bytes_are_the_bytes_the_window_writes(monkeypatch, tmp_path, row_tables):
     c, _s, got = committed(monkeypatch, row_tables)
-    CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=R)
+    CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=DK)
     size = lambda pat: sum(p.stat().st_size for p in Path(tmp_path).glob(pat))  # noqa: E731
     b = CS.window_bytes(c.window.members, c.window.row_tables)
     assert (b["public"], b["private"]) == (size("[mt]*-public.bin"), size("[mt]*-private.bin"))

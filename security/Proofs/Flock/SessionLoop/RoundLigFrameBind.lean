@@ -145,7 +145,7 @@ theorem feed_sized {α : Type} : ∀ (s : Step α) (cs : List (Array F128)), Siz
 
 /-- A step that logs nothing after `x` leaves `x`'s log. -/
 theorem log_bind_silent {α β : Type} {x : _root_.Flock.TMW PS α} {f : α → _root_.Flock.TMW PS β}
-    (hf : ∀ a t l, (((f a).run t).go l).2 = l) (t : _root_.Flock.Transcript) (l : Array Claims.Msg) :
+    (hf : ∀ a t l, (((f a).run t).go l).2 = l) (t : _root_.Flock.Transcript) (l : Array Hash.Msg) :
     (((x >>= f).run t).go l).2 = ((x.run t).go l).2 := by
   rw [StateT.run_bind, FlockComplete.go_bind]
   generalize (x.run t).go l = y
@@ -162,13 +162,13 @@ theorem openStep_lig (t : _root_.Flock.ZkServer.Finish.Tab) (rep : Nat) (dom : B
     (hi : Array ByteArray) (coins : Got) (hdom : dom.size < 2 ^ 64) (hdg : t.st.digest.size < 2 ^ 64)
     (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64) (hm : t.st.m < 2 ^ 64)
     (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (cs : List (Array F128))
-    (coin : Nat → Nat → F128) (l : Array Claims.Msg) (hc : CoinAt coin l.size cs)
+    (coin : Nat → Nat → F128) (l : Array Hash.Msg) (hc : CoinAt coin l.size cs)
     (h0 : sentQ (feedR (openStep t rep dom xs hi coins) cs) ≠ []) :
     ∃ r, ((repPiop (stepAsks coins false) t.st (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
           (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) ByteArray.empty (claimsOf xs) fun _ => 0).run
           (_root_.Flock.Transcript.init #[] dom)).run #[] = .done r ∧ r.2.size = coins.size ∧
       ∀ {n : Nat} {ss : Array (Array F128)} {T : F128} {sws : Array _root_.Flock.Switched}
-        {tr₂ : _root_.Flock.Transcript} {l₂ : Array Claims.Msg}, l.size ≤ n →
+        {tr₂ : _root_.Flock.Transcript} {l₂ : Array Hash.Msg}, l.size ≤ n →
         n < l.size + (sentQ (feedR (openStep t rep dom xs hi coins) cs)).length →
         ((ringSwitchCut (asksCut coin n)
           (fun k => _root_.Flock.ZkServer.Finish.switchVec t.g r.1.1.2.2[k]!) r.1.1.2.2).run
@@ -205,7 +205,7 @@ theorem openStep_lig (t : _root_.Flock.ZkServer.Finish.Tab) (rep : Nat) (dom : B
 theorem msg_inj {a b : ByteArray} (h : Claims.toMsg a = Claims.toMsg b) : a = b := by
   simpa only [Claims.ofMsg_toMsg] using congrArg Claims.ofMsg h
 
-theorem log_at {l : Array Claims.Msg} {Q : List ByteArray} {p : Nat} (hp : l.size ≤ p) :
+theorem log_at {l : Array Hash.Msg} {Q : List ByteArray} {p : Nat} (hp : l.size ≤ p) :
     (l ++ (Q.map Claims.toMsg).toArray)[p]? = (Q[p - l.size]?).map Claims.toMsg := by
   rw [Array.getElem?_append_right hp]
   simp only [List.getElem?_toArray, List.getElem?_map]
@@ -237,10 +237,10 @@ theorem sched_lig {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : Byte
     (hk : 1 ≤ t.sch.k0) (hn : t.sch.n < 2 ^ 62) (hq : ∀ i, (t.sch.levels.getD i default).q < 2 ^ 63)
     (hm14 : 14 ≤ t.st.m) (hc1 : alg.size + (xs.size + 2) + 1 ≤ cr.size)
     (hc2 : cr.size < alg.size + (Count.openList (xs.size + 2) t.sch).length)
-    (coin : ℕ → ℕ → F128) (l : Array Claims.Msg) (hc : CoinAt coin l.size (cr.extract alg.size cr.size).toList)
+    (coin : ℕ → ℕ → F128) (l : Array Hash.Msg) (hc : CoinAt coin l.size (cr.extract alg.size cr.size).toList)
     {n : ℕ} (hnl : l.size + (cr.size - alg.size) = n) :
     cr.size < sched.size ∧
-      ∃ (T : F128) (sws : Array _root_.Flock.Switched) (tr₂ : Flock.Transcript) (l₂ L : Array Claims.Msg),
+      ∃ (T : F128) (sws : Array _root_.Flock.Switched) (tr₂ : Flock.Transcript) (l₂ L : Array Hash.Msg),
         l₂.size = l.size + (xs.size + 2) + 1 ∧
         (∃ zc lc, FlockComplete.LigLock.Fed.PtsAt t.st.m t.st.fold.kLog
             (FlockComplete.LigLock.Fed.recCoin (cr.extract 0 alg.size)) 0 zc lc ∧

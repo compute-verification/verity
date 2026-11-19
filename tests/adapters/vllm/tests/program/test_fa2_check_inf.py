@@ -119,10 +119,10 @@ def test_the_target_binds_attention_v5_on_blackwell_consumer_fa2_only():
     assert spec.id == bind(F2.AttentionV5, T=287, NH=32, KVH=8, D=128, BN=64, MASKED_FROM=4, **FA2).id
     with pytest.raises(TG.UnregisteredTarget, match="row's index"):
         TG.attention_spec(PRO6000, 287, 32, 8, 128, 1, row=0)
-    for tp in (TargetProfile(), TargetProfile(compute_capability=(8, 0), num_sms=108),
+    for tp in (TargetProfile.default(), TargetProfile(compute_capability=(8, 0), num_sms=108),
                TargetProfile(compute_capability=(9, 0), num_sms=132, flash_attn_version=2)):
         assert not TG.fa2_check_inf(tp)
-    assert TG.attention_spec(TargetProfile(), 287, 32, 8, 128, 1, row=0, own_rows=1).id.startswith("Attention_v3{")
+    assert TG.attention_spec(TargetProfile.default(), 287, 32, 8, 128, 1, row=0, own_rows=1).id.startswith("Attention_v3{")
     h100_fa2 = TargetProfile(compute_capability=(9, 0), num_sms=132, flash_attn_version=2)
     assert TG.attention_spec(h100_fa2, 287, 32, 8, 64, 1, row=0, own_rows=1).id.startswith("Attention_v2{")
     h100 = TargetProfile(compute_capability=(9, 0), num_sms=132)

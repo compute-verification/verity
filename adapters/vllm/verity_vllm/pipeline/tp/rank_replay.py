@@ -336,7 +336,7 @@ def in_process(st: dict[str, Any], rc: Any) -> dict[str, Any]:
         try:
             w_saved = getattr(com, "weights", None)
             with hooks.patched(com, "model", st["weights"]):
-                w_now = com.register_weights()
+                w_now = com.register_weights(replay=True)
             if w_saved is not None:
                 com.weights = w_saved
             w_ref = (rc.weight_registration or {}).get("root") if isinstance(rc.weight_registration, dict) else (w_saved or {}).get("root")

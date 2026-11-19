@@ -23,7 +23,7 @@ def SessionInScope (spec : Flock.SessionSpec) (sts : Array Flock.Stmt) : Prop :=
     (∀ st ∈ sts.toList, st.c.kLog ≤ 27 ∧ st.regions.size ≤ 1024 ∧ spec.mPts ≤ 64) ∧ spec.points ≤ 2
 
 /-- **In scope with its setup is `ZkIn`**: one table is between `1` and `200`, and the range is `acct`'s `InRange`. -/
-theorem zkIn_of_inScope {x : Claims.Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
+theorem zkIn_of_inScope {x : Hash.Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     (hs : FlockDeploy.setupOf true x = some (s, spec, sts)) (h : SessionInScope spec sts) :
     FlockDeploy.ZkIn x s spec sts :=
   ⟨hs, by have := h.1; omega, by have := h.1; omega, h.2.2.2,

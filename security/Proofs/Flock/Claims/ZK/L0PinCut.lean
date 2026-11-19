@@ -108,7 +108,7 @@ transcript and a log `l`, its rounds' claim points are `claimPoints` at the coin
 lincheck's (`roundPoints_cut`'s), which every later round only extends. -/
 theorem repCut_roundPoints (st : Setup) (hm : 14 ≤ st.m) (hk : 6 ≤ st.kLog) (hfk : st.fold.kLog = st.kLog)
     (sch : Schedule) (rep : ℕ) (dom : ByteArray) (cm0 : Commit) (extras : Array Claim) (ic : InnerCommit)
-    (src : RepSrc) (prior : Array (List F128)) (words : List ℕ) {l l' : Array Claims.Msg} {p : Zk.ZkProof}
+    (src : RepSrc) (prior : Array (List F128)) (words : List ℕ) {l l' : Array Hash.Msg} {p : Zk.ZkProof}
     {tr : Transcript}
     (h : ((repCut (asksCut coin n) (Hashes.ofSha512 Sha512.hash) st sch rep dom cm0 extras ic src prior words).run
       (Transcript.init #[] dom)).go l = (.ok (p, tr), l')) :

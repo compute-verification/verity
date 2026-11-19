@@ -74,7 +74,7 @@ open FlockDeploy (setupOf sampleEq)
 open private setupOne_stmt unitSample_of from Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 
 /-- **At a statement that carries a sample, the session's sample is it**, not `null`, at any number of tables. -/
-theorem unitSample_of_setup {x : Claims.Msg} {s : FlockDeploy.Ins}
+theorem unitSample_of_setup {x : Hash.Msg} {s : FlockDeploy.Ins}
     {spec : SessionSpec} {sts : Array Flock.Stmt} (hx : setupOf false x = some (s, spec, sts))
     (hq : s.read.check = .ok ()) {d : Json} (hdr : s.read.draw = some d) :
     spec.unitSample = some d ∧ d ≠ Json.null := by

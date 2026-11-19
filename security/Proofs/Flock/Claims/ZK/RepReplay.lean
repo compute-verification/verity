@@ -175,9 +175,9 @@ theorem lay_lt_len (lay : Zk.PadLayout) :
 
 /-- **The cut's zerocheck is the masked prover's at the pads `mk` and the empty trace**: answered by `asksCut` at
 replies with its coins, where it returns from `l`, its proof and transcript are `ZcZ`'s at the coins from `l.size`. -/
-theorem zerocheckCut_closed (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claims.Msg}
+theorem zerocheckCut_closed (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Hash.Msg}
     (hr : ∀ k, coinOf (resp k) = coin k) {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray) {lay : Zk.PadLayout}
-    (hn : m - 6 ≤ lay.nMlv) (mk : ℕ → F128) {t t₁ : Transcript} {l l₁ : Array Claims.Msg} {zp : ZerocheckProof}
+    (hn : m - 6 ≤ lay.nMlv) (mk : ℕ → F128) {t t₁ : Transcript} {l l₁ : Array Hash.Msg} {zp : ZerocheckProof}
     {zc : ZcOut}
     (h : ((zerocheckCut (asksCut coin n) m digest cap root lay mk).run t).go l = (.ok ((zp, zc), t₁), l₁)) :
     zp = ZcZ.proof lay (padsOf lay mk) m (zcCoins coin l.size) tr0 ∧
@@ -209,10 +209,10 @@ theorem zerocheckCut_closed (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ 
 /-- **The cut's lincheck is the masked prover's at the pads `mk` and the empty trace**: answered by `asksCut` at replies
 with its coins, from a zerocheck output with the `z` and `ρ` of `zcs`, where it returns from `l`, its fold at `α`
 returned some `full`, and its proof and transcript are `LcZ`'s at the coins from `l.size`. -/
-theorem lincheckCut_closed (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claims.Msg}
+theorem lincheckCut_closed (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Hash.Msg}
     (hr : ∀ k, coinOf (resp k) = coin k) (c : CircuitFold) (m : ℕ) {lay : Zk.PadLayout} (hn' : c.kLog - 6 ≤ lay.nLc)
     (mk : ℕ → F128) (zcs : Zc.Challenges) {zc : ZcOut} (hz : zc.z = (Zc.out m zcs tr0).z)
-    (hρ : zc.rho = (Zc.out m zcs tr0).rho) {t t₂ : Transcript} {l l₂ : Array Claims.Msg} {lp : LincheckProof}
+    (hρ : zc.rho = (Zc.out m zcs tr0).rho) {t t₂ : Transcript} {l l₂ : Array Hash.Msg} {lp : LincheckProof}
     {lc : LcOut} (h : ((lincheckCut (asksCut coin n) c m lay mk zc).run t).go l = (.ok ((lp, lc), t₂), l₂)) :
     ∃ full, c.fold (coin l.size 0) (skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) = .ok full ∧
       lp = LcZ.proof lay (padsOf lay mk) c m tr0 (Zc.out m zcs tr0) full (lcCoins coin l.size (c.kLog - 6)) ∧
@@ -250,10 +250,10 @@ theorem lincheckCut_closed (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ �
 lincheck at any masked values `mk` returned from the empty transcript of domain `d` and the log `l`, the replay of a
 proof whose zerocheck and lincheck they returned, on rounds that begin with the lincheck's, returns, wherever the
 circuit fold at the coins from `l.size` returns a vector of width `64`. -/
-theorem replay_cut_ok (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claims.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
+theorem replay_cut_ok (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Hash.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
     {st : Setup} (hm : 14 ≤ st.m) (hkk : st.kLog = st.fold.kLog) {lay : Zk.PadLayout} (hn : st.m - 6 ≤ lay.nMlv)
     (hn' : st.fold.kLog - 6 ≤ lay.nLc) (mk : ℕ → F128) (p : Proof) (root d : ByteArray)
-    {l l₁ l₂ : Array Claims.Msg} {zc : ZcOut} {t₁ t₂ : Transcript} {lc : LcOut}
+    {l l₁ l₂ : Array Hash.Msg} {zc : ZcOut} {t₁ t₂ : Transcript} {lc : LcOut}
     (h₁ : ((zerocheckCut (asksCut coin n) st.m st.digest (flat p.cap) root lay mk).run (Transcript.init #[] d)).go l =
       (.ok ((p.zerocheck, zc), t₁), l₁))
     (h₂ : ((lincheckCut (asksCut coin n) st.fold st.m lay mk zc).run t₁).go l₁ = (.ok ((p.lincheck, lc), t₂), l₂))

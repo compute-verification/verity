@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pytest
 
+from verity.circuits import population as PN
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import array_of, coll_concat
@@ -48,10 +49,10 @@ def _design(check: SpecializedDefinition, tokens: int, q: int) -> tuple[list[Spe
     and rows it derives from the block."""
     replay = _inlined(check, tokens)
     key = codec.descriptor_id(replay)
-    program = P.population_program(replay, 8)
+    program = PN.population_program(replay, 8)
     templates = list({P.template_id(n.fn): n.fn for n in check.body.nodes}.values())
     cells = [tokens * sum(1 for n in check.body.nodes if n.fn is t) for t in templates]
-    interior = P.mixed_population_program([(t, q * n) for t, n in zip(templates, cells, strict=True)])
+    interior = PN.mixed_population_program([(t, q * n) for t, n in zip(templates, cells, strict=True)])
     parts = SS.parts(q, P.strata(interior, P.template_instances_query(templates)))
     return templates, parts, SS.Own(
         tuple(range(q)), parts, {}, {}, (), links=SS.replay_links(program, key, None),
@@ -59,15 +60,16 @@ def _design(check: SpecializedDefinition, tokens: int, q: int) -> tuple[list[Spe
 
 
 def _codes(own: SS.Own) -> set[str]:
-    return set(SS.check_twin(True, own, None).codes)
+    return set(SS.check_twin(own, None).codes)
 
 
 def _held(own: SS.Own, template: SpecializedDefinition) -> list[str]:
-    """The interior record's port that holds each port of ``template``'s session (`second_stage._held_port`), its parameters
-    then its outputs: a wired port's is its writer's output port, any other its own."""
+    """The interior record's port that holds each port of ``template``'s session, its parameters then its outputs: a wired
+    port's is its writer's output port (`second_stage.placings`), any other its own."""
     params, ret = template.signature()
     ports = [name for name, _t in params] + [f"o{j}" for j in range(SS._outputs(ret))]
-    return [SS._held_port(own, True, P.template_id(template), p) for p in ports]
+    t = P.template_id(template)
+    return [next((at for rule, at in SS.placings(own, True, t, p) if rule == SS.WRITER_TREE), f"{t}/{p}") for p in ports]
 
 
 DESIGN = {"second-links", "second-wires", "second-cells"}

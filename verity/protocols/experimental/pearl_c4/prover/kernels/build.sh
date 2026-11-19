@@ -8,10 +8,13 @@
 #   check/, check2/  fixture.py's buffers for NVFP4 and MXFP4 at 128x128x1024 and 256x384x2048 (needs verity and numpy)
 #   dev.py, run.sh, toolchain.txt (nvcc's version and every flag, none of them FTZ or fast-math), source.txt (the verity
 #                    commit and the header's), MANIFEST.sha256
-# Usage: bash verity/protocols/experimental/pearl_c4/prover/kernels/build.sh [OUT]   (default /tmp/pearl-c4-ship; C9 names CUDA 12.9, default /usr/local/cuda-12.9)
+# Usage: bash verity/protocols/experimental/pearl_c4/prover/kernels/build.sh [OUT]   (default /tmp/pearl-c4-ship; CUDA_HOME names CUDA 12.9, GENCODE the target)
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../../../../.." && pwd)
-C9=${C9:-/usr/local/cuda-12.9}; OUT=${1:-/tmp/pearl-c4-ship}
+C9=${CUDA_HOME:?set CUDA_HOME to a CUDA 12.9 toolkit}; OUT=${1:-/tmp/pearl-c4-ship}
+ARCH=sm_120a   # pearl_c4.cu's kernels are this target's alone (sass.py holds its MMA forms)
+GENCODE=${GENCODE:?set GENCODE to the -gencode value of the target (benchmarks/kernels/machine.py gencode ARCH)}
+case $GENCODE in *,code=$ARCH) ;; *) echo "pearl_c4 is $ARCH's: GENCODE=$GENCODE is another card's target" >&2; exit 2 ;; esac
 HASH_BRANCH=cursor/pouw-hash-sm120-9569
 HASH_COMMIT=71086532
 HASH_SHA256=9e861db9227b2267256cf642cbce06dfe807ddfa8b94db42f6dbb199ef1a63cc
@@ -21,7 +24,7 @@ git -C "$ROOT" cat-file -e "$HASH_COMMIT^{commit}" 2> /dev/null || git -C "$ROOT
 rm -rf "$OUT"; mkdir -p "$OUT/inc"
 git -C "$ROOT" show "$HASH_COMMIT:benchmarks/pouw/pouw_hash/pouw_hash.cuh" > "$OUT/inc/pouw_hash.cuh"
 echo "$HASH_SHA256  $OUT/inc/pouw_hash.cuh" | sha256sum -c --quiet
-FLAGS="-O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -fmad=false -Xptxas -v -cubin"
+FLAGS="-O3 -std=c++17 -gencode $GENCODE -fmad=false -Xptxas -v -cubin"
 "$C9/bin/nvcc" $FLAGS -I "$OUT/inc" -o "$OUT/pearl_c4.cubin" "$HERE/pearl_c4.cu" 2> "$OUT/ptxas.txt"
 "$C9/bin/cuobjdump" -sass "$OUT/pearl_c4.cubin" > "$OUT/pearl_c4.sass"
 python3 "$HERE/sass.py" "$OUT/ptxas.txt" "$OUT/pearl_c4.sass" "$OUT/sass.json"

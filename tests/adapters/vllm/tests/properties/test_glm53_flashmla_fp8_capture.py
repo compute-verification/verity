@@ -19,7 +19,7 @@ FLIP = (1, 3, 100)
 
 
 def _planner(t: int, topk: int):
-    metas, ns = T.sched_meta([topk], topk=topk, parts=T.num_sm_parts(X.H_Q, s_q=t))
+    metas, ns = T.sched_meta([topk], topk=topk, parts=T.num_sm_parts(X.H_Q, s_q=t, num_sms=X.D.SMS))
     return metas, ns, T.request_splits(metas, ns, 0, topk // X.BN)
 
 
@@ -206,6 +206,7 @@ def test_the_listing_is_made_image_by_image(tmp_path, monkeypatch) -> None:
             return subprocess.CompletedProcess(cmd, int(name in failing), listings[name], "")
         return subprocess.CompletedProcess(cmd, 0, "demangled\n", "")
 
+    monkeypatch.setenv("CUDA_HOME", "/a/toolkit")
     monkeypatch.setattr(X, "flashmla_library", lambda: "lib.so")
     monkeypatch.setattr(X.C, "_archs", lambda so: {"so": so, "sha256": "0" * 64, "sass_archs": ["100", "90a"]})
     monkeypatch.setattr(X.C, "_run", run)
@@ -247,7 +248,7 @@ def test_the_tokens_held_to_the_definition_are_spread_over_a_case() -> None:
 
     S = R.FLASHMLA_GLM53
     assert (S["NH"], S["DN"], S["DR"], S["QT"], S["BN"], S["SCALE"]) == (X.NH, X.DN, X.DR, X.QT, X.BN, X.SCALE)
-    assert R.GLM53_TOPK == 2048 and V.step_splits(14, topk=2048) == _planner(14, 2048)[2]
+    assert R.GLM53_TOPK == 2048 and V.step_splits(14, topk=2048, num_sms=132) == _planner(14, 2048)[2]
     assert X.definition_tokens(24, 2, False) == [0, 23] and X.definition_tokens(24, 3, False) == [0, 12, 23]
     assert X.definition_tokens(16, 1, True) == list(range(16)) and X.definition_tokens(16, 0, True) == []
     assert X.definition_tokens(1, 2, False) == [0] and X.definition_tokens(5, 1, False) == [0]

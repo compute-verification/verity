@@ -6,7 +6,6 @@ import argparse
 import json
 import sys
 from collections.abc import Mapping, Sequence
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +29,7 @@ from verity_bench.vllm import cli as vllm_cli
 from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
 from verity_bench.vllm.engine import ProcessEngineFactory
-from verity_bench.vllm.presets import SweepPoint, local_checkpoint, served, wrong_card
+from verity_bench.vllm.presets import SweepPoint, served
 from verity_bench.vllm.result import write
 from verity_bench.vllm.runner import run_benchmark
 from verity_bench.vllm.table import render
@@ -53,14 +52,37 @@ def _again_argument(parser: argparse.ArgumentParser) -> None:
 
 def _make_plan(args: Any) -> jobs.Plan:
     """The spec's plan, by its schema: a steady-state spec's points (`steady_plan`), or a vLLM spec's, with the points
-    `--again` names launched again."""
+    `--again` names launched again. `run`'s reads the catalog where one is reachable (`_where_reachable`)."""
 
     root = jobs.repository_root()
-    if steady_spec.is_steady(args.spec):
-        plan = steady_plan.make_plan(args.spec, root=root, local_only=args.local_only)
-    else:
-        plan = jobs.make_plan(args.spec, root=root, lookup=jobs.StoreCompletion(root=root, local_only=args.local_only))
+    steady = steady_spec.is_steady(args.spec)
+    lookup = (steady_plan.SteadyCompletion(root=root, local_only=args.local_only,
+                                           since=lambda: steady_plan._added(root, args.spec)) if steady
+              else jobs.StoreCompletion(root=root, local_only=args.local_only))
+    if args.run is _run:
+        lookup = _where_reachable(lookup, (None, None) if steady else None)
+    plan = (steady_plan.make_plan(args.spec, root=root, lookup=lookup) if steady
+            else jobs.make_plan(args.spec, root=root, lookup=lookup))
     return jobs.again(plan, args.again) if getattr(args, "again", None) else plan
+
+
+def _where_reachable(lookup: Any, missing: Any) -> Any:
+    """`lookup`, until it finds no catalog here (`jobs.NoCatalog`: a tree with no git that knows its commit, a store with
+    no remote): then no point's passing run is looked up, which it says once, and the point runs. Any other error of the
+    lookup fails the launch."""
+
+    skipped: list[str] = []
+
+    def found(*key: Any) -> Any:
+        if not skipped:
+            try:
+                return lookup(*key)
+            except jobs.NoCatalog as error:
+                skipped.append(str(error))
+                print(f"verity-bench: no catalog lookup here, so no passing run is reused: {error}", file=sys.stderr)
+        return missing
+
+    return found
 
 
 def _plan(args: Any) -> int:
@@ -77,29 +99,8 @@ def _check(args: Any) -> int:
     return 0 if done == len(plan.points) else 1
 
 
-def _end(text: str) -> float:
-    """`--end`'s instant, a UTC time as `2026-11-15T03:30Z`, in seconds since the epoch."""
-
-    try:
-        return datetime.strptime(text, "%Y-%m-%dT%H:%MZ").replace(tzinfo=UTC).timestamp()
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"{text!r} is not a UTC time as 2026-11-15T03:30Z") from None
-
-
 def _run(args: Any) -> int:
-    plan = _make_plan(args)
-    if args.end is not None and args.direct is None:
-        raise ValueError("--end bounds a direct point's wait for its GPU slot: it needs --direct NODE")
-    if isinstance(plan.spec, steady_spec.SteadySpec):
-        return steady_plan.dispatch(plan, args.spec, direct=args.direct, card=args.card, cores=args.cores, end=args.end)
-    if (args.card is not None or args.cores is not None) and args.direct is None:
-        raise ValueError("--card and --cores are a booked card's and its slot's on a GPU node: they need --direct NODE")
-    if args.card is not None and args.cores is None:
-        raise ValueError(f"--card {args.card} needs --cores, the booked slot's cores: the first free slot may be on "
-                         "another NUMA node than the card")
-    return jobs.dispatch(plan, args.spec, direct=args.direct,
-                         command=lambda *point: jobs.direct_command(*point, card=args.card, cores=args.cores,
-                                                                    end=args.end))
+    return jobs.dispatch(_make_plan(args), args.spec, point=args.point)
 
 
 def _point(args: Any) -> int:
@@ -117,12 +118,7 @@ def _point(args: Any) -> int:
     if not isinstance(point, SweepPoint):
         raise TypeError(f"{point.id} is a steady-state point: steady_plan runs it")
     jobs.check_point_environment(spec, settings.environ())
-    if spec.preset.model_digest is not None:
-        found = local_checkpoint(spec.preset, spec.preset.model).model_digest
-        if found != spec.preset.model_digest:
-            raise ValueError(f"checkpoint {spec.preset.model} hashes to {found}, not the spec's model_digest "
-                             f"{spec.preset.model_digest}")
-    if why := wrong_card(spec.id, spec.preset.gpu_id, kit.host_stamp()["card"]):
+    if why := kit.wrong_card(spec.id, spec.preset.gpu_id, kit.host_stamp()["card"]):
         raise ValueError(why)
     preset, eager = served(spec.preset, spec.eager)
     arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
@@ -196,18 +192,23 @@ def _overhead_store(args: Any) -> Any:
     return completion.store
 
 
-def _overhead_node(args: Any) -> str:
-    node = args.on or overhead_records.NODES.get(args.card)
-    if node is None:
-        raise ValueError(f"--on NODE: the {args.card} has no default node")
-    return node
+def _overhead_node(args: Any) -> tuple[str, str]:
+    """The machine a launch runs on (`research run --on`) and the card it measures, its record's (`overhead.machine_card`)."""
+    from research.pods.registry import registry_dir
+    from research.remote import machines_path
+
+    if args.on is None:
+        raise ValueError("--on NODE: a launch names the GPU node it runs on, whose record's [properties] give its card")
+    if (machines := registry_dir(machines_path())) is None:
+        raise ValueError("the machine register is off (RESEARCH_MACHINES_D), so no record gives --on's card")
+    return args.on, overhead.machine_card(args.on, machines).gpu
 
 
 def _overhead_points(args: Any) -> int:
     if args.store:
         print(overhead_records.store_points(_overhead_store(args), args.store, by=args.by))
         return 0
-    return overhead_records.launch_points(jobs.repository_root(), _overhead_node(args), args.card, args.model,
+    return overhead_records.launch_points(jobs.repository_root(), *_overhead_node(args), args.model,
                                           args.precision, args.minutes, gpu=args.gpu, cores=args.cores)
 
 
@@ -219,7 +220,7 @@ def _overhead_run(args: Any) -> int:
         return 0
     if args.scheme is None:
         raise ValueError("--scheme S, or --record RUN")
-    return overhead_records.launch_run(_overhead_store(args), jobs.repository_root(), _overhead_node(args), args.card,
+    return overhead_records.launch_run(_overhead_store(args), jobs.repository_root(), *_overhead_node(args),
                                        args.scheme, args.point, args.points, args.minutes, cubin=args.cubin,
                                        model=args.model, gpu=args.gpu, cores=args.cores, keep_reports=args.keep_reports)
 
@@ -240,8 +241,8 @@ def _overhead_parser(commands: Any) -> None:
     sub = door.add_subparsers(dest="overhead_command", required=True, metavar="STEP")
 
     def common(p: argparse.ArgumentParser) -> None:
-        p.add_argument("--card", default="h200", choices=list(overhead.CARDS))
-        p.add_argument("--on", metavar="NODE", help="the GPU node (default: the card's, overhead_records.NODES)")
+        p.add_argument("--on", metavar="NODE", help="the GPU node the launch runs on (research run --on), whose record's "
+                                                    "[properties] give the card it measures; a launch needs it")
         p.add_argument("--gpu", metavar="INDEX", help="lease this GPU of the node alone (gpu-lease --on)")
         p.add_argument("--cores", metavar="CPUS", help="pin the run to these CPUs of the node (gpu-lease --cores)")
         p.add_argument("--model", default=overhead.KERNEL_MODEL, choices=list(overhead.MODELS))
@@ -365,20 +366,11 @@ def _parser() -> argparse.ArgumentParser:
     _again_argument(plan)
     plan.set_defaults(run=_plan, command_parser=plan)
 
-    run = commands.add_parser("run", help="launch one recorded research run per incomplete point")
+    run = commands.add_parser("run", help="run one point without a passing run in this process's research run")
     _spec_argument(run)
     _again_argument(run)
-    run.add_argument("--direct", metavar="NODE", default=None,
-                     help="launch each point with `research run --on NODE` through a GPU slot of that node, not the queue")
-    run.add_argument("--card", type=int, default=None, metavar="INDEX",
-                     help="a booked card, which a direct point's lease is asked of alone (needs --cores)")
-    run.add_argument("--cores", default=None, metavar="CPUS",
-                     help="a booked slot, by its cores (34-43): the slot taker runs under `taskset -c CPUS`, and a vLLM "
-                          "point's lease declares them")
-    run.add_argument("--end", type=_end, default=None, metavar="UTC",
-                     help="the booked period's end (2026-11-15T03:30Z), which a direct point's run never passes: it "
-                          "waits for its slot until its max_minutes before it, and one that could not finish by then "
-                          "is not started; default: it waits up to jobs.DIRECT_WAIT_S")
+    run.add_argument("--point", default=None, metavar="POINT",
+                     help="the spec's point this run runs (default: its only point, or the one --again names)")
     run.set_defaults(run=_run, command_parser=run)
 
     check = commands.add_parser("check", help="report whether every point has a passing result")

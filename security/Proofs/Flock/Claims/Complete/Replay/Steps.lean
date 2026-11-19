@@ -100,18 +100,18 @@ theorem pushes_eq_map {α : Type} (f : ℕ → α) (n : ℕ) : pushes f n = ((Li
 
 /-! ## The prover's steps in the pure session -/
 
-theorem liftTM_go {α : Type} (x : TM α) (t : Transcript) (l : Array Claims.Msg) :
+theorem liftTM_go {α : Type} (x : TM α) (t : Transcript) (l : Array Hash.Msg) :
     ((liftTM x : TMW PS α).run t).go l = (x t, l) := rfl
 
-theorem liftTM_ok {α : Type} {x : TM α} {t t' : Transcript} {a : α} (h : x t = .ok (a, t')) (l : Array Claims.Msg) :
+theorem liftTM_ok {α : Type} {x : TM α} {t t' : Transcript} {a : α} (h : x t = .ok (a, t')) (l : Array Hash.Msg) :
     ((liftTM x : TMW PS α).run t).go l = (.ok (a, t'), l) := by
   rw [liftTM_go, h]
 
-theorem bind_go {α β : Type} {x : TMW PS α} {f : α → TMW PS β} {t t' : Transcript} {l l' : Array Claims.Msg} {a : α}
+theorem bind_go {α β : Type} {x : TMW PS α} {f : α → TMW PS β} {t t' : Transcript} {l l' : Array Hash.Msg} {a : α}
     (h : (x.run t).go l = (.ok (a, t'), l')) : ((x >>= f).run t).go l = ((f a).run t').go l' := by
   rw [StateT.run_bind, go_bind, h]
 
-theorem pure_go {α : Type} (a : α) (t : Transcript) (l : Array Claims.Msg) :
+theorem pure_go {α : Type} (a : α) (t : Transcript) (l : Array Hash.Msg) :
     ((pure a : TMW PS α).run t).go l = (.ok (a, t), l) := rfl
 
 /-- The round a prover's squeeze of `n` coins of `kind` records from `t`, its coins `coin`'s first `n`. -/
@@ -122,15 +122,15 @@ def sent (t : Transcript) (kind : UInt8) (n : ℕ) (coin : ℕ → F128) : Round
 def afterSq (t : Transcript) (kind : UInt8) (n : ℕ) (coin : ℕ → F128) : Transcript :=
   ⟨t.rounds.push (sent t kind n coin), t.k + 1, ByteArray.empty⟩
 
-theorem squeezeP_go (resp : ℕ → Claims.Msg) (kind : UInt8) {n : ℕ} (hn : n ≠ 0) (t : Transcript)
-    (l : Array Claims.Msg) :
+theorem squeezeP_go (resp : ℕ → Hash.Msg) (kind : UInt8) {n : ℕ} (hn : n ≠ 0) (t : Transcript)
+    (l : Array Hash.Msg) :
     ((squeezeP (asksS resp) kind n).run t).go l =
       (.ok ((Array.range n).map (coinOf (resp l.size)), afterSq t kind n (coinOf (resp l.size))),
         l.push (Claims.toMsg (framed t kind n))) := by
   simp only [squeezeP, StateT.run, hn, ite_false]
   rfl
 
-theorem sampleP_go (resp : ℕ → Claims.Msg) (t : Transcript) (l : Array Claims.Msg) :
+theorem sampleP_go (resp : ℕ → Hash.Msg) (t : Transcript) (l : Array Hash.Msg) :
     ((sampleP (asksS resp)).run t).go l =
       (.ok (coinOf (resp l.size) 0, afterSq t 1 1 (coinOf (resp l.size))), l.push (Claims.toMsg (framed t 1 1))) := by
   unfold sampleP
@@ -138,13 +138,13 @@ theorem sampleP_go (resp : ℕ → Claims.Msg) (t : Transcript) (l : Array Claim
   show (Except.ok (_, _), _) = _
   simp
 
-theorem sampleVecP_go (resp : ℕ → Claims.Msg) {n : ℕ} (hn : n ≠ 0) (t : Transcript) (l : Array Claims.Msg) :
+theorem sampleVecP_go (resp : ℕ → Hash.Msg) {n : ℕ} (hn : n ≠ 0) (t : Transcript) (l : Array Hash.Msg) :
     ((sampleVecP (asksS resp) n).run t).go l =
       (.ok ((Array.range n).map (coinOf (resp l.size)), afterSq t 2 n (coinOf (resp l.size))),
         l.push (Claims.toMsg (framed t 2 n))) :=
   squeezeP_go resp 2 hn t l
 
-theorem sampleKP_go (resp : ℕ → Claims.Msg) (t : Transcript) (l : Array Claims.Msg) :
+theorem sampleKP_go (resp : ℕ → Hash.Msg) (t : Transcript) (l : Array Hash.Msg) :
     ((sampleKP (asksS resp)).run t).go l =
       (.ok (⟨coinOf (resp l.size) 0, coinOf (resp l.size) 1⟩, afterSq t 2 2 (coinOf (resp l.size))),
         l.push (Claims.toMsg (framed t 2 2))) := by
@@ -157,14 +157,14 @@ theorem sampleKP_go (resp : ℕ → Claims.Msg) (t : Transcript) (l : Array Clai
 `T i` with `L + i` bodies sent, yields `S (i + 1)` and `T (i + 1)` and sends `B i`, the loop over `[0:n]` from `S 0`
 returns `S n` and `T n` and sends `B 0, …, B (n − 1)`. -/
 theorem forIn_go {σ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (S : ℕ → σ) (T : ℕ → Transcript)
-    (B : ℕ → Claims.Msg) (L : ℕ)
-    (hbody : ∀ i (l : Array Claims.Msg), l.size = L + i →
+    (B : ℕ → Hash.Msg) (L : ℕ)
+    (hbody : ∀ i (l : Array Hash.Msg), l.size = L + i →
       ((body i (S i)).run (T i)).go l = (.ok (.yield (S (i + 1)), T (i + 1)), l.push (B i)))
-    (n : ℕ) (l : Array Claims.Msg) (hl : l.size = L) :
+    (n : ℕ) (l : Array Hash.Msg) (hl : l.size = L) :
     ((forIn [:n] (S 0) body).run (T 0)).go l = (.ok (S n, T n), l ++ ((List.range n).map B).toArray) := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range']
   simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
-  suffices h : ∀ k a (l : Array Claims.Msg), l.size = L + a →
+  suffices h : ∀ k a (l : Array Hash.Msg), l.size = L + a →
       ((forIn (List.range' a k) (S a) body).run (T a)).go l =
         (.ok (S (a + k), T (a + k)), l ++ ((List.range' a k).map B).toArray) by
     simpa [List.range_eq_range'] using h n 0 l (by simpa using hl)

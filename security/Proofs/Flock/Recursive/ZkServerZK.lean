@@ -153,7 +153,7 @@ def encAt {D : Type} (H : ZkView.Bits × ByteArray → D) {n : ℕ} (m : (i : Fi
 salt, they are `commitBytes` of the commitments' halves at the salts `saltOfBytes (b i)`. -/
 theorem zkServerStrings_os {nh : ℕ} (m : (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
     (b : Fin nh → Fin 192 → Fin 256) :
-    Flock.Guarantees.zkServerStrings m (fun i => FlockSoundness.Audit.SamplingDesign.streamOf (b i)) =
+    Flock.Guarantees.zkServerStrings m (fun i => Spot.Sampling.SamplingDesign.streamOf (b i)) =
       encAt Flock.Guarantees.commitBytes m fun i => ZkView.saltOfBytes (b i) :=
   (congrArg (Flock.Guarantees.zkServerStrings m) (funext fun i => (ZkView.saltBytes_saltOfBytes (b i)).symm)).trans
     (zkServerStrings_salts m fun i => ZkView.saltOfBytes (b i))
@@ -328,11 +328,11 @@ theorem fwRealPr_eq {Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Fintype Ωp]
   refine congrArg prCoin (funext fun z => ?_)
   have hrun : Flock.ZkServer.run s (reqs P w r z.1.1.1 z.1.1.2
         (Flock.Guarantees.zkServerStrings (msgs P w r z.1.1.1 z.1.1.2)
-          fun i => FlockSoundness.Audit.SamplingDesign.streamOf (z.1.2 i)))
-      (List.ofFn fun i => FlockSoundness.Audit.SamplingDesign.streamOf (z.1.2 i)) =
+          fun i => Spot.Sampling.SamplingDesign.streamOf (z.1.2 i)))
+      (List.ofFn fun i => Spot.Sampling.SamplingDesign.streamOf (z.1.2 i)) =
         (T (encAt Flock.Guarantees.commitBytes (msgs P w r z.1.1.1 z.1.1.2) fun i => ZkView.saltOfBytes (z.1.2 i)),
           true) :=
-    (hF P w r z.1.1.1 z.1.1.2 fun i => FlockSoundness.Audit.SamplingDesign.streamOf (z.1.2 i)).trans
+    (hF P w r z.1.1.1 z.1.1.2 fun i => Spot.Sampling.SamplingDesign.streamOf (z.1.2 i)).trans
       (congrArg (fun f => (T f, true)) (zkServerStrings_os (msgs P w r z.1.1.1 z.1.1.2) z.1.2))
   exact congrArg (fun u => E (Flock.Guarantees.regLeaves rows pub P r, z.1.1.1, u,
     V.view prover (OuterZK.hctxAt msgs P w r z.1.1.1 z.1.1.2 fun i => ZkView.saltOfBytes (z.1.2 i)) z.2)) hrun

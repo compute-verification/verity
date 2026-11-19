@@ -35,7 +35,7 @@ from verity_vllm.pipeline import commit_plan as CP
 # inside the functions that read them, as `vu_store` is: the driver's import puts the catalog's Definitions into the Definition
 # table, and a process that only imports this module (the Commit before its replay, a deferred Commit) is to hold none of them.
 
-__all__ = ["ProgramSources", "ReplaySources", "arrivals", "cached_prefixes", "linkage_facts", "live_only", "live_only_entry",
+__all__ = ["ProgramSources", "ReplaySources", "arrivals", "cached_prefixes", "linkage_facts",
            "live_weights", "live_weights_check", "no_weights", "plan", "programs_of_record", "request_labels", "retention_of",
            "rss_kb", "run", "sampling_design_of", "seed_of", "serving_rows", "vu_export"]
 
@@ -113,7 +113,8 @@ def vu_export(args: Any, pair: int, rc: Any, manifest: Any, versions: dict[str, 
 
 def live_weights_check(register: Callable[[], dict[str, Any]], com: Any, rc: Any) -> dict[str, Any]:
     """[O5] the weight slices the relations consume must be the COMMITTED weights: re-register the live parameters now (`register`) and
-    compare the root with the run's weights root (registered before the workload; a param swap after it is a named FAIL)."""
+    compare the root with the run's weights root (registered before the workload; a param swap after it is a named FAIL).  `register`
+    re-registers under the run's recorded salts (`register_weights(replay=True)`)."""
     try:
         _w_saved = getattr(com, "weights", None)
         _w_now = register()     # through what a protocol option released
@@ -392,25 +393,6 @@ def executed_prefix_kw(s: ReplaySources, _epr_r: dict, lk: dict, _arr: dict, _rl
     return _sr_kw, _ep_facts
 
 
-def live_only(s: ReplaySources) -> str | None:
-    """`live_only_entry` of the run's protocols."""
-    return live_only_entry(s.protocols)
-
-
-def live_only_entry(protocols: Any) -> str | None:
-    """The protocol entry whose replay reads the live run (`pouw_circuit.around`): such a run's C2 cannot be deferred to a bundle."""
-    entries = getattr(protocols, "entries", None) or ()
-    if not entries:
-        return None
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
-        NCP_CIRCUIT_SCHEMES as SCHEMES,
-    )
-
-    from verity_vllm.protocols import pouw
-
-    return next((e for e in entries if e.split(":", 1)[0] == pouw.NAME and e.split(":", 1)[1] in SCHEMES), None)
-
-
 def plan(s: ReplaySources, planner: Any = None) -> dict[str, Any]:
     """The replay's and the linkage's committed reads made against `s.com` without evaluating anything (what a slim replay bundle must
     hold, `commit.store_dump.touched`): the same Programs, readers and sample as `run`.  With a ``planner`` (`replay_plan.Planner`) the
@@ -504,7 +486,7 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
         SD.touch(s.com, got["reads"])
         return got["plan"] | {"prepare_s": facts.get("prepare_s"), "reads": len(got["reads"]), "draw_s": round(t1 - t0, 3),
                               "reads_s": round(time.perf_counter() - t1, 3)}, lk
-    sr = (lambda f: f() if plan or s.protocols is None else replayed(s.protocols, f))(lambda: SR.sampled_replay(_progs, _bm, _rd, _wp, plan=plan, **_kw))
+    sr = SR.sampled_replay(_progs, _bm, _rd, _wp, plan=plan, **_kw)
     if plan:
         return sr, lk
     if s.reads is not None:
@@ -528,12 +510,6 @@ def no_weights(*a: Any, **kw: Any) -> Any:
     """The weights provider of a plan (the planner's own sample, and the Commit's over a planner's Programs, where none is loaded): a
     plan evaluates no row, so no weight is read."""
     raise RuntimeError("no weights provider: the Programs are a planner's, whose plan evaluates no row")
-
-
-def replayed(protocols: Any, run: Callable[[], dict[str, Any]]) -> dict[str, Any]:
-    from verity_vllm.check.replay import pouw_circuit as PWC
-
-    return PWC.replayed(protocols, run)
 
 
 def retention_of(com: Any, args: Any) -> str | None:

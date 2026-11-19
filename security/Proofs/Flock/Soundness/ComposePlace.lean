@@ -33,7 +33,7 @@ open Flock FlockLevel3
 
 namespace FlockSoundness
 
-open Audit
+open Spot.Sampling
 
 namespace Compose
 

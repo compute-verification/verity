@@ -14,7 +14,8 @@ from egress_traffic import IB, busy, rows, serve, shape, states
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.protocols.resource_accounting.network.prover import egress as EG
-from verity.protocols.resource_accounting.network.verifier import head_check as HC, io_tie as IT, network_attester as W, network_attester_rows as WR
+from verity.protocols.resource_accounting.network.verifier import io_tie as IT, network_attester as W, network_attester_rows as WR
+from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, PAD
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
 
@@ -258,8 +259,8 @@ def test_a_request_not_yet_in_the_state_computes_another_row():
 def test_the_units_ands():
     """The proof block's ANDs at the ZK driver's shape and at the scan note's class (16 cells of 256 bytes in 4 lanes, 4
     request slots of 64 outputs, 17-bit ids, D = 22): what circuit-check pins and the status extrapolates."""
-    assert HC.ands(_fn(shape(PARAMS, NR, K))) == ANDS_ZK
-    assert HC.ands(_fn(EG.Shape(256, 16, 4, 4, 64, 17, 22))) == ANDS_CLASS
+    assert GB.ands(_fn(shape(PARAMS, NR, K))) == ANDS_ZK
+    assert GB.ands(_fn(EG.Shape(256, 16, 4, 4, 64, 17, 22))) == ANDS_CLASS
 
 
 #: `EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}`'s, egress_zk.py's proof block

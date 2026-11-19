@@ -225,7 +225,7 @@ def test_a_stand_in_reads_the_ranks_programs_under_the_build_root_when_one_is_na
         "partition_file": str(tmp_path / "p.json"), "programs": p.progs, "bmap": {"m": 1}, "committed": ("opened", made.store, made.run),
         "weights": weights, "manifest": None, "run_root": f"{ROOT.hex()}/rank1", "row": "the row", "arrivals": p.arrivals, "program_dirs": p.dirs,
         "digests": p.digs, "committer": {"from": "replay bundle", "pair": 0, "source": "c0de"}, "workers": 3, "tp": tp,
-        "index": {"attention_paths": p.attn_paths, "tp": p.tp}, "reuse": (p.index,), "stand_in": SRT.stand_in(tp, "5a" * 32),
+        "index": {"attention_paths": p.attn_paths, "tp": p.tp}, "reuse": (p.index,), "stand_in": SRT.stand_in(tp),
         "binding": {"compiler": "c"}, "transfer_gates": ("g",), "tables": None})
 
 
@@ -255,10 +255,9 @@ CHECKPOINT = ["--checkpoint-dir", "ck", "--checkpoints-manifest", "pins.json", "
     ([], [0, 1, 2], None, None),
     (["--ranks", "2,0", *CHECKPOINT], [2, 0],
      {"checkpoints_manifest": "pins.json", "model": "org/model", "revision": "r1", "verify_shards": True}, None),
-    (["--checkpoint-dir", "ck", "--no-verify-shards", "--tables", "t{rank}.json", "--tables-key", "key"], [0, 1, 2],
-     {"checkpoints_manifest": None, "model": None, "revision": None, "verify_shards": False}, {"key": "key", "registration": "t{rank}.json"}),
-    (["--tables-key", "key"], [0, 1, 2], None, None),
-], ids=["every rank, no checkpoint", "two ranks in the order asked, a pinned checkpoint", "shards not hashed, tables", "a tables key and no tables"])
+    (["--checkpoint-dir", "ck", "--no-verify-shards", "--tables", "t{rank}.json"], [0, 1, 2],
+     {"checkpoints_manifest": None, "model": None, "revision": None, "verify_shards": False}, {"registration": "t{rank}.json"}),
+], ids=["every rank, no checkpoint", "two ranks in the order asked, a pinned checkpoint", "shards not hashed, tables"])
 def test_the_command_opens_the_checkpoint_once_and_hands_it_to_each_rank_it_was_asked_for(tmp_path, monkeypatch, capsys, more, ranks, index, tables):
     asked: list[tuple] = []
     made: list[tuple[str, dict[str, Any]]] = []

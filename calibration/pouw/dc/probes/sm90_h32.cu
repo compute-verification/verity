@@ -1,5 +1,5 @@
 // H32 on the H200 (sm_90a), the scalar register writers: every form of MH100's ffma, int32, fp64 and other classes
-// alone, and the co-issued mixes across pipes. Build with ../opcode_probe/probe.py build --arch sm_90a; every probe
+// alone, and the co-issued mixes across pipes. Build with ../opcode_probe/probe.py build on an sm_90a card; every probe
 // passes the SASS gate, the poisoned sink and its no-write control before it is timed (probe.cuh). ../h32.py turns
 // rows.jsonl into MH100's unit, 4,096 over the registers a SM writes a clock.
 //   x_<form>        1024 threads (8 warps a SMSP), 512 of the form an iteration: the loop's own 3 instructions are 0.6%

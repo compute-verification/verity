@@ -170,8 +170,8 @@ theorem prob_le_noMiss_add_missP [Nonempty V] {ι : Type} [Fintype ι] (E : α �
 /-- **An event, off the misses of a family of cuts whose messages agree**: at most as likely as the event on the tapes
 that miss at none of the cuts, plus the square root of each cut's two-continuation finder's success (`finder`, at any
 budget). -/
-theorem prob_le_noMiss_add_sqrt (H : Claims.Msg → Claims.Msg) {ι : Type} [Fintype ι] (E : α → Prop) (g : Game α)
-    (s : Strategy g) (Ks : ι → DigestCut Claims.Msg g) (hK : ∀ i, (Ks i).Agrees H) (q : ι → ℕ) :
+theorem prob_le_noMiss_add_sqrt (H : Hash.Msg → Hash.Msg) {ι : Type} [Fintype ι] (E : α → Prop) (g : Game α)
+    (s : Strategy g) (Ks : ι → DigestCut Hash.Msg g) (hK : ∀ i, (Ks i).Agrees H) (q : ι → ℕ) :
     prob E g s ≤
       ENNReal.ofReal (Claims.Pr fun x : CoinTape g s => E (CoinTape.run g s x) ∧ ∀ i, ¬ (Ks i).missOn s x) +
         ∑ i, ENNReal.ofReal (Real.sqrt (((Ks i).finder s (q i)).Pr H)) :=
@@ -304,10 +304,10 @@ theorem play_eq (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : A
 /-! ## The cuts at the frames the prover sends -/
 
 /-- **The messages `rv` reveals that open the digest `dg`**: those whose SHA-512 is `dg`. -/
-def digestReveal {β : Type} (rv : β → Option Claims.Msg) (dg : Claims.Msg) (o : β) : Option Claims.Msg :=
+def digestReveal {β : Type} (rv : β → Option Hash.Msg) (dg : Hash.Msg) (o : β) : Option Hash.Msg :=
   (rv o).filter fun w => decide (sha512Msg w = dg)
 
-theorem digestReveal_sha512 {β : Type} (rv : β → Option Claims.Msg) (dg : Claims.Msg) (o : β) (w : Claims.Msg)
+theorem digestReveal_sha512 {β : Type} (rv : β → Option Hash.Msg) (dg : Hash.Msg) (o : β) (w : Hash.Msg)
     (h : digestReveal rv dg o = some w) : sha512Msg w = dg := by
   unfold digestReveal at h
   rcases hr : rv o with _ | u
@@ -319,7 +319,7 @@ theorem digestReveal_sha512 {β : Type} (rv : β → Option Claims.Msg) (dg : Cl
     · simp [Option.filter, hu] at h
 
 /-- **The cut here, at the digest `dg`**: the messages `rv` reveals that open `dg`. -/
-def cutAt {β : Type} {g : Game β} (rv : β → Option Claims.Msg) (dg : Claims.Msg) :
+def cutAt {β : Type} {g : Game β} (rv : β → Option Hash.Msg) (dg : Hash.Msg) :
     DigestCut.AgreeCut sha512Msg g :=
   .here (digestReveal rv dg) dg (digestReveal_sha512 rv dg)
 
@@ -334,7 +334,7 @@ open Classical in
 /-- **The cut at the first frame the prover sends that `P` picks**, `P` reading the device's log `pre` before it and the
 frame, and its digest the bytes the frame answers: there the play reveals the messages `rv` reads that open the
 digest. A play with no such frame has no cut. -/
-noncomputable def frameCut {β : Type} (P : List Release → Frame → Prop) (rv : β → Option Claims.Msg) :
+noncomputable def frameCut {β : Type} (P : List Release → Frame → Prop) (rv : β → Option Hash.Msg) :
     (k : ℕ) → (fs : List (String × ℕ)) → (ts : List OpenTree) → (f : List Release → Game β) →
       (pre : List Release) → DigestCut.AgreeCut sha512Msg (relK k fs ts f)
   | 0, _, _, _, _ => .skip
@@ -375,11 +375,11 @@ structure Reading (R : ℕ) where
   /-- whether a frame, after the device's log before it, is round `j`'s -/
   round : Fin R → List Release → Frame → Prop
   /-- the message the play's output reveals for round `j` -/
-  reveal : Fin R → Exchange → Option Claims.Msg
+  reveal : Fin R → Exchange → Option Hash.Msg
   /-- the record the play's output reveals -/
-  record : Exchange → Option Claims.Msg
+  record : Exchange → Option Hash.Msg
   /-- the digest of the record the commitment fixes -/
-  recordDigest : Claims.Msg
+  recordDigest : Hash.Msg
 
 /-- **The readings at each session and each parameters, committed files and commitment.** -/
 abbrev Readings := (A : Live) → ByteArray → Array ByteArray → ByteArray → Reading A.rounds
@@ -410,7 +410,7 @@ theorem prob_le_noMiss_add (rd : Reading R) (σ : Game.Strategy (V.game θ F c))
           E (CoinTape.run (V.game θ F c) σ x) ∧ NoMiss V θ F c rd σ x) +
         (∑ j, ENNReal.ofReal (Real.sqrt (((roundCut V θ F c rd j).cut.finder σ q).Pr sha512Msg)) +
           ENNReal.ofReal (Real.sqrt (((recordCut V θ F c rd).cut.finder σ q).Pr sha512Msg))) := by
-  let Ks : Option (Fin R) → DigestCut Claims.Msg (V.game θ F c) := fun
+  let Ks : Option (Fin R) → DigestCut Hash.Msg (V.game θ F c) := fun
     | none => (recordCut V θ F c rd).cut
     | some j => (roundCut V θ F c rd j).cut
   have hK : ∀ i, (Ks i).Agrees sha512Msg := fun

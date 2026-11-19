@@ -72,14 +72,18 @@ import a0  # noqa: E402
 import a6  # noqa: E402
 import a11_kinds as K  # noqa: E402
 import r2_population as R2  # noqa: E402
-from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.commitments import docket_digest as DD
+from verity.circuits.codec import canonical_json, descriptor_id, encode_program  # noqa: E402
 from verity.circuits.defs import PrimitiveDefinition  # noqa: E402
 from verity.circuits.evaluation.reference import evaluate_region  # noqa: E402
+from verity.circuits.population import wired_population_program  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
 from verity.circuits.refs import runs  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 
 ROW = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 WINDOW_OF = ("GLM-5.3 TP8 B1 rank 0's step values: the Match capture's activation snapshots of row " + ROW
@@ -198,9 +202,8 @@ def fold_values(vdir: Path, profile_name: str, roles: Path | None, last_step: in
     the whole log's first steps)."""
     from verity_vllm.check import fold_compare
     from verity_vllm.check.fold_compare import SnapshotStore, Values, _attach_specs, load_profile
-    from verity_vllm.observe.events import RunHeader, StepStart
+    from verity_vllm.observe.events import StepStart
     from verity_vllm.observe.fold.fold import fold
-    from verity_vllm.observe.fold.patterns.pouw import with_protocols
     from verity_vllm.observe.log import read_log
     t0 = time.time()
     for dt in ("float8_e4m3fn", "float8_e5m2", "float8_e8m0fnu"):
@@ -211,8 +214,7 @@ def fold_values(vdir: Path, profile_name: str, roles: Path | None, last_step: in
         if last_step is not None and isinstance(e, StepStart) and e.step > last_step:
             break
         events.append(e)
-    header = next((e for e in events if isinstance(e, RunHeader)), None)
-    res = fold(events, with_protocols(profile, header), strict=None, with_program=False)
+    res = fold(events, profile, strict=None, with_program=False)
     _attach_specs(res)
     store = SnapshotStore(vdir / "rank0")
     weights = (weights_cls or Weights)(res.params[-1][1], profile, vdir / "ckpt", roles, vdir / "rank0" / "cos_sin_cache.npy")
@@ -635,7 +637,7 @@ def kind_values(res, store, vals, rec: dict, a) -> dict:
             "eval": acc["evals"][0], "skipped_calls": why[-3:], **({"boolean": rec["boolean"]} if boolean else {})}
 
 
-def stage_tampered(st, rows: dict, out_dir: Path, salt_key: bytes, indices, set_name: str) -> dict:
+def stage_tampered(st, rows: dict, out_dir: Path, indices, set_name: str) -> dict:
     """`UnitStager.stage` with bit 0 of every instance's first output word flipped before the set is committed."""
     from types import SimpleNamespace
     iset = SimpleNamespace(**{**vars(st.iset), "name": set_name})
@@ -649,9 +651,9 @@ def stage_tampered(st, rows: dict, out_dir: Path, salt_key: bytes, indices, set_
     outs = {f"o{j}": got[:, at[j]:at[j + 1]].copy() for j in range(len(st.out_words))}
     st.reference_check(rows, outs)
     outs["o0"][:, 0] ^= 1
-    salts = FC.stage_salts(iset, 0, n, st.ports, salt_key)
+    salts = FC.stage_salts(0, n, st.ports)
     out_dir.mkdir(parents=True, exist_ok=True)
-    FC.write(st.text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
+    FC.write(st.text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin",
              rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in st.in_rows}, outs=outs, salts=salts, public_words={},
              digests=(st.pin, st.class_sha512), indices=[int(u) for u in indices])
     return {"meta": st.meta, "tampered": "o0", "word": 0, "bit": 0}
@@ -700,11 +702,16 @@ def session_port(base: int, j: int) -> int:
         return s.getsockname()[1]
 
 
+def listed(templates: list) -> tuple:
+    """The wired population Program of ``(Definition, units)`` in order, with no wire, and its template query."""
+    return wired_population_program(templates, {"templates": [[descriptor_id(t), n] for t, n in templates]})
+
+
 def save_values(d: Path, staged: dict, rows_of_kind: dict, weights_notes, a) -> None:
     """Each staged kind's rows and outputs (``<kind>.npz``), its unit Definitions as one encoded Program, and the staging notes."""
     d.mkdir(parents=True, exist_ok=True)
     units = {kv["unit"].id: kv["unit"] for kv in rows_of_kind.values()}
-    (d / "units.json").write_bytes(canonical_json(encode_program(P.mixed_population_program([(u, 1) for u in units.values()]))))
+    (d / "units.json").write_bytes(canonical_json(encode_program(listed([(u, 1) for u in units.values()])[0])))
     for f, kv in rows_of_kind.items():
         np.savez(d / f"{f}.npz", **{f"i.{r}": np.asarray(v, dtype=np.uint16) for r, v in kv["rows"].items()},
                  **{f"o.{o}": np.asarray(v, dtype=np.uint16) for o, v in kv["outs"].items()})
@@ -752,7 +759,7 @@ def load_values(d: Path, lowers: list[str], per_kind: int | None = None) -> tupl
     registry = load_registry()[0]
     doc = json.loads((d / "values.json").read_text())
     defs = {x.id: x for x in decode_program(json.loads((d / "units.json").read_text()), registry).defs.values()}
-    enc = lambda u: canonical_json(encode_program(P.mixed_population_program([(u, 1)])))  # noqa: E731
+    enc = lambda u: canonical_json(encode_program(listed([(u, 1)])[0]))  # noqa: E731
     staged = {f: s for f, s in doc["staged"].items() if f in lowers}
     rows_of_kind = {}
     for f, s in staged.items():
@@ -858,8 +865,7 @@ def main() -> int:
         templates.setdefault(kv["unit"].id, {"defn": kv["unit"], "kinds": []})["kinds"].append(f)
     defs = [t["defn"] for t in templates.values()]
     ns = [sum(rows_of_kind[f]["n"] for f in t["kinds"]) for t in templates.values()]
-    program = P.mixed_population_program(list(zip(defs, ns)))
-    query = P.template_instances_query(defs)
+    program, query = listed(list(zip(defs, ns)))
     part = P.partition(program, query)
     pd = P.digest(part)
     n_all = P.units(program, query)
@@ -867,7 +873,7 @@ def main() -> int:
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
     k = a.k or len(defs)
-    sampling_design = D.parse_design(f"stratified:{k}")
+    sampling_design = RND.parse_design(f"stratified:{k}")
     bound = {"partition": pd, "program": part["program"]}
 
     members, tags = [], {}
@@ -887,7 +893,6 @@ def main() -> int:
         t_build = round(time.time() - t0, 1)
         cap = a6.chunk_cap(st.meta)
         form = a0.templated(st, sdir, a.tmpl_unit_bin)
-        salt_key = hashlib.sha256(f"verity/one-stage/a11/salts\0{uid}".encode()).digest()
         lo = 0
         for f in tpl["kinds"]:
             kv, t1 = rows_of_kind[f], time.time()
@@ -895,7 +900,7 @@ def main() -> int:
             if n > cap:
                 raise SystemExit(f"{f}: {n} units over the statement cap {cap}; lower --per-kind")
             d, set_name = sdir / f, f"{st.iset.name}-{f}"
-            got = st.stage(kv["rows"], d, salt_key, indices=range(base + lo, base + lo + n), set_name=set_name)
+            got = st.stage(kv["rows"], d, indices=range(base + lo, base + lo + n), set_name=set_name)
             (d / "inst.bin").rename(d / f"inst-{n}.bin")
             (d / "pub.bin").rename(d / f"pub-{n}.bin")
             (d / "tables").mkdir(exist_ok=True)
@@ -908,7 +913,7 @@ def main() -> int:
                   "unit_nnz": got["unit_nnz"], "seconds": {"build": t_build if lo == 0 else 0.0, "stage": round(time.time() - t1, 1)},
                   "partition_file": out / "partition.json", "program_file": out / "program.json", **form}
             members.append({"name": f, "kind": f, "n": n, "base": base + lo, "defn": tpl["defn"], "st": ms,
-                            "header": a0.public_header(d, n), "salt_key": salt_key, "rows": kv["rows"]})
+                            "header": a0.public_header(d, n), "rows": kv["rows"]})
             print(f"A11 staged {f}: {n} units of {uid} from {base + lo} (cap {cap}), {got['ands']} ANDs, k_log {st.meta.get('k_log')}, "
                   f"unit twin {agree}, Call twin {kv['twin']}, {ms['seconds']}", flush=True)
             lo += n
@@ -932,7 +937,7 @@ def main() -> int:
     window = {"kind": "stand-in", "of": WINDOW_OF, "link": LINK,
               "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]],
                                       "call": staged[m["kind"]]["name"], "step": staged[m["kind"]]["step"]} for m in members}}
-    rec = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    rec = DK.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for m in members:
@@ -941,7 +946,7 @@ def main() -> int:
         checks[f"twin/{m['name']}"] = {"ok": ok, "codes": [] if ok else ["twin"], "detail": m["st"]["twin"]}
     receipt = R.receipt(rec, "one-stage-e2e verifier (a11.py)")
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
-    summary.update(population=n_all, partition=pd, registration=R.digest(rec), law=rec["law"],
+    summary.update(population=n_all, partition=pd, registration=DD.digest(rec), law=rec["law"],
                    checks_before_draw={c: v["ok"] for c, v in checks.items()})
     if not all(v["ok"] for v in checks.values()):
         summary["checks"] = checks
@@ -952,7 +957,7 @@ def main() -> int:
     # the verifier's stratified sample, by its own Lean over its own program and partition object on a development
     # challenger's coins; each member serves its share
     p = a0.challenger_sample(a.lean, ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
-                                    "--stratified", str(k)], rec["law"], n_all, R.digest(rec), out / "draw.log")
+                                    "--stratified", str(k)], rec["law"], n_all, DD.digest(rec), out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
     served, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
@@ -1007,8 +1012,8 @@ def main() -> int:
     if len(defs) > 1:
         v = V.check(rec, program, P.template_instances_query(defs[:-1]), sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg["registration-query-drops-a-template (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    for name, other in (("registration-law-another-k (R1)", D.parse_design(f"stratified:{k + 1}")),
-                        ("registration-law-subset-not-stratified (R1)", D.parse_design(f"subset:{k}"))):
+    for name, other in (("registration-law-another-k (R1)", RND.parse_design(f"stratified:{k + 1}")),
+                        ("registration-law-subset-not-stratified (R1)", RND.parse_design(f"subset:{k}"))):
         v = V.check(rec, program, query, other, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg[name] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(rec, program, query, sampling_design, a0.SCHEME, want,
@@ -1036,8 +1041,7 @@ def main() -> int:
     if tm is not None:
         tn = min(tm["n"], 4)
         tdef = tm["defn"]
-        tprog = P.mixed_population_program([(tdef, tn)])
-        tq = P.template_instances_query([tdef])
+        tprog, tq = listed([(tdef, tn)])
         tpart = P.partition(tprog, tq)
         tdir = out / "tampered"
         tdir.mkdir(exist_ok=True)
@@ -1049,7 +1053,7 @@ def main() -> int:
                                 bind={"partition": P.digest(tpart), "program": tpart["program"]}, layout=a.layout,
                                 structural=a.structural)
         d, set_name = tdir / "set", f"{tst.iset.name}-tampered"
-        stage_tampered(tst, {r: v[:tn] for r, v in tm["rows"].items()}, d, tm["salt_key"], range(tn), set_name)
+        stage_tampered(tst, {r: v[:tn] for r, v in tm["rows"].items()}, d, range(tn), set_name)
         (d / "inst.bin").rename(d / f"inst-{tn}.bin")
         (d / "pub.bin").rename(d / f"pub-{tn}.bin")
         (d / "tables").mkdir(exist_ok=True)
@@ -1057,9 +1061,9 @@ def main() -> int:
         tst_d = {"dir": d, "meta": tst.meta, "pin": tst.pin, "partition_file": tdir / "partition.json", "program_file": tdir / "program.json",
                  **a0.templated(tst, tdir, a.tmpl_unit_bin)}
         theader = a0.public_header(d, tn)
-        tlaw = D.parse_design("subset:2")
+        tlaw = RND.parse_design("subset:2")
         twant = a6.frame_ports(set_name, tst.meta, tn)
-        trec = R.record(tprog, tq, tlaw, a0.SCHEME, a0.registered_roots(theader, twant),
+        trec = DK.record(tprog, tq, tlaw, a0.SCHEME, a0.registered_roots(theader, twant),
                         {"kind": "stand-in", "of": f"tampered copy of {tm['kind']}'s first {tn} units: bit 0 of every instance's "
                                                    "first output word flipped before commitment"},
                         leaf_layer=a0.sha512_file(d / f"pub-{tn}.bin"))

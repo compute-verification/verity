@@ -129,7 +129,7 @@ def Embeds (L : Layout) : Prop :=
     FlockDeploy.parse true _root_.Flock.Readable.relation (unitStmt h m₂ u) = some S →
     Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
     ∃ (C' : Verity.Boolean.Circuit) (κ : Fin C'.N → Option Bool) (n : ℕ)
-      (P : FlockSoundness.Audit.Partition C' n) (v : Fin n) (o : ℕ),
+      (P : Spot.Sampling.Partition C' n) (v : Fin n) (o : ℕ),
       _root_.Flock.Bridge.Members.SitsAt s.prog o (_root_.Flock.Bridge.progOf C' κ) ∧
       b = (_root_.Flock.Bridge.blockOf P κ v).map (o + ·) ∧
       ∃ β, L.blockOf x m₁ (unitStmt h m₂ u) u = some β ∧ ∀ w : Claims.Flock.Wit, Claims.Flock.RelS S w →

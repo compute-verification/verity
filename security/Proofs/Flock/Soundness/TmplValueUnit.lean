@@ -39,7 +39,7 @@ spec (`Tmpl.DefComputes`) carries that spec of the local evaluation at its bound
 
 namespace FlockSoundness.TmplValue
 
-open Flock Flock.Tmpl FlockSoundness.Audit
+open Flock Flock.Tmpl Spot.Sampling
 
 variable {C : Verity.Boolean.Circuit} {m : ℕ} {P : Partition C m} {u : Fin m} {t : Tmpl} {net : Net} {k : ℕ}
 

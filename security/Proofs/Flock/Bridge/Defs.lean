@@ -63,7 +63,7 @@ The Flock session's units, read as the sampling claims' statement, partition, co
 
 namespace Flock.Bridge
 
-open FlockSoundness.Audit
+open Spot.Sampling
 
 /-- The Boolean-profile gates one Flock gate lowers to: three for a row, one for any other. -/
 def gateSize {N : ℕ} : Verity.Boolean.Op N → ℕ
@@ -124,7 +124,7 @@ def designOf (r : Claims.Sampling.OneStage) : Claims.Sampling.Design := ⟨[r]�
 /-- **The statement**: `progOf`'s program at constants `κ` under the query `q` and the descriptor bytes `desc`, the
 design `designOf r`, and the roots. -/
 def stmtOf {C : Verity.Boolean.Circuit} {n : ℕ} (_P : Partition C n) (κ : Fin C.N → Option Bool) (r : Claims.Sampling.OneStage)
-    (desc : Claims.Msg) (q : Claims.Sampling.Query) (roots : List Claims.Msg) : Claims.Sampling.AuditStatement :=
+    (desc : Hash.Msg) (q : Claims.Sampling.Query) (roots : List Hash.Msg) : Claims.Sampling.AuditStatement :=
   ⟨desc, progOf C κ, q, designOf r, roots⟩
 
 open Classical in

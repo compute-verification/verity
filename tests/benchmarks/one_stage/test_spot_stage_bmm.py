@@ -64,7 +64,7 @@ def _cap(stage):
 
 def _profile():
     from verity_vllm import TargetProfile
-    return TargetProfile(compute_capability=(9, 0), batch_invariant=False)
+    return TargetProfile.default().with_overrides(compute_capability=(9, 0), batch_invariant=False)
 
 
 def test_mlas_absorbs_are_gated_per_token_row_and_the_decode_padded_layout_leaves_its_padding_out(monkeypatch) -> None:

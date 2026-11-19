@@ -88,7 +88,10 @@ def test_kinds_counts_contexts_past_the_top_k_and_where_each_difference_starts(t
     plan = [{"i": 0, "kind": "sharegpt", "prompt_len": 100, "seeded": False},
             {"i": 1, "kind": "multiturn", "prompt_len": PP.TOPK - 8, "seeded": True},
             {"i": 2, "kind": "long", "prompt_len": 3 * PP.TOPK, "seeded": False}]
-    (d / "plan.jsonl").write_text("".join(json.dumps(r) + "\n" for r in plan))
+    kept = tmp_path / "private" / "plan.jsonl"
+    kept.parent.mkdir()
+    kept.write_text("".join(json.dumps(r) + "\n" for r in plan))
+    (d / "record" / "meta.json").write_text(json.dumps({"plan": str(kept), "private": str(kept.parent)}))
     (d / "record" / L.LOAD / "rep-1" / "client.jsonl").write_text(
         "".join(json.dumps({"id": f"h{r['i']}", "i": r["i"]}) + "\n" for r in plan))
     served = {0: 50, 1: 20, 2: 10}
