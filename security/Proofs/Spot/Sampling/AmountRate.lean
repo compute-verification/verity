@@ -42,11 +42,13 @@ theorem stratified_design_rate (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : 
       rw [stratified_missProb]
       refine Finset.prod_eq_zero (mem_univ (σ u)) ?_
       have hpos : 0 < (B.filter (σ · = σ u)).card := Finset.card_pos.2 ⟨u, Finset.mem_filter.2 ⟨hu, rfl⟩⟩
+      have hm : (B.filter (σ · = σ u)).card ≤ (stratum σ (σ u)).card :=
+        card_le_card (filter_subset_filter _ (subset_univ B))
       rw [Nat.choose_eq_zero_of_lt (by omega)]
       simp
     rw [hzero]
     exact zero_le
-  · push_neg at hfull
+  · simp only [not_exists, not_and] at hfull
     refine (stratified_design σ k hk B).trans (ENNReal.ofReal_le_ofReal (Real.exp_le_exp.2 (neg_le_neg ?_)))
     refine Finset.sum_le_sum fun u hu => ?_
     have hr : (stratum σ (σ u)).card * c (σ u) * num ≤ k (σ u) * den :=
@@ -89,16 +91,16 @@ theorem missable_le_rate (S : Scheme) (L : SamplingDesign S.Block) (num den : �
   have hlog : Real.log δ.toReal < -∑ b ∈ T, (S.cost b : ℝ) * num / den := by
     rwa [Real.log_lt_iff_lt_exp hδr]
   have hsum : ∑ b ∈ T, (S.cost b : ℝ) * num / den = (∑ b ∈ T, (S.cost b : ℝ)) * num / den := by
-    rw [Finset.sum_div, Finset.sum_mul]
-  rw [hsum, Real.log_inv] at *
+    rw [← Finset.sum_div, ← Finset.sum_mul]
+  rw [hsum] at hlog
   have hnum' : (0 : ℝ) < num := by exact_mod_cast hnum
   have hden' : (0 : ℝ) < den := by exact_mod_cast hden
   refine Nat.le_floor ?_
   push_cast
-  rw [le_div_iff₀ hnum']
+  rw [Real.log_inv, le_div_iff₀ hnum']
   have h1 : (∑ b ∈ T, (S.cost b : ℝ)) * num / den < -Real.log δ.toReal := by linarith
   rw [div_lt_iff₀ hden'] at h1
-  nlinarith [h1]
+  linarith
 
 /-- **S2, what a scheme gets back at a rate.** Where `S` gets back at cutoff `δ > 0` under designs that each meet the
 rate, it gets back with the missable cost read as `⌊ln(1/δ) · DEN/NUM⌋`, for a monotone probability. -/
