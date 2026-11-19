@@ -70,8 +70,8 @@ readers' `ReadersTrue`, and `recRead` reading the challenger's live-coin part's 
 namespace FlockDeploy
 
 /-- The setup's parsers do not read the public file: a raw statement parses wherever it does with another. -/
-theorem ins_publicFile {w : Raw} {read : Lean.Json → Flock.V (Array Flock.Registered.Port)} {pf : ByteArray} {i' : Ins}
-    (h : ({ w with publicFile := pf } : Raw).ins read = .ok i') : ∃ i, w.ins read = .ok i := by
+theorem ins_publicFile {w : Raw} {pf : ByteArray} {i' : Ins} (h : ({ w with publicFile := pf } : Raw).ins = .ok i') :
+    ∃ i, w.ins = .ok i := by
   unfold Raw.ins at h ⊢
   simp only [bind, Except.bind, pure, Except.pure] at h ⊢
   repeat' split at h

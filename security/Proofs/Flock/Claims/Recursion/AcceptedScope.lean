@@ -73,7 +73,7 @@ set_option Elab.async false
 
 namespace FlockDeploy
 
-theorem Raw.ins_publicInputs {w : Raw} {read : Lean.Json → Flock.V (Array Flock.Registered.Port)} {s : Ins} (h : w.ins read = .ok s) : s.read.publicInputs = w.publicInputs := by
+theorem Raw.ins_publicInputs {w : Raw} {s : Ins} (h : w.ins = .ok s) : s.read.publicInputs = w.publicInputs := by
   unfold Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h

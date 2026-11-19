@@ -86,7 +86,7 @@ open private stratumOfJson from Commitments.Draw
 /-! ## The statement's inputs -/
 
 /-- What `Raw.ins` reads: the masked verifier or not, the plain verifier's coins (a seed's), and the sample. -/
-theorem Raw.ins_read {w : Raw} {read : Lean.Json → Flock.V (Array Flock.Registered.Port)} {s : Ins} (h : w.ins read = .ok s) :
+theorem Raw.ins_read {w : Raw} {s : Ins} (h : w.ins = .ok s) :
     s.read.zk = w.zk ∧ (w.zk = false → s.read.I.coins = .seed) ∧
       ∃ draw, w.draw.mapM (jsonOf "draw") = .ok draw ∧ s.read.draw = draw.map Flock.norm := by
   refine ⟨Raw.ins_zk h, ?_, Raw.ins_sample h⟩
