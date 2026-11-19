@@ -12,7 +12,10 @@ a = ap.parse_args()
 OUT = Path(a.out)
 OUT.mkdir(parents=True, exist_ok=True)
 import faulthandler
-faulthandler.dump_traceback_later(300, repeat=True, file=open(OUT / f"stacks-{a.mode}.txt", "w"))
+_st = open(OUT / f"stacks-{a.mode}.txt", "w")
+faulthandler.enable(file=_st, all_threads=True)
+faulthandler.dump_traceback_later(300, repeat=True, file=_st)
+sys.setrecursionlimit(100000)
 
 from verity.circuits import laying as LY
 from verity.circuits import partition_object as PO
