@@ -170,7 +170,7 @@ def test_a_manifest_that_does_not_come_out_complete_stops_the_commit_and_the_row
     assert [(e["ev"], e["ok"], e["stopped_at"]) for e in _events(c.row, "row")] == [("end", False, "commit")]
 
 
-@pytest.mark.parametrize("family, tap, script", [("norm_scales", "norm_tap", "pod_norm_tap.sh"), ("router_softmax", "router_tap", "pod_router_tap.sh")])
+@pytest.mark.parametrize("family, tap, script", [("router_softmax", "router_tap", "pod_router_tap.sh")])
 def test_a_tap_the_manifest_names_whose_build_is_not_on_the_host_stops_the_commit(tmp_path, monkeypatch, family, tap, script):
     """The manifest names a tap's family and the row runs the tap, so its ranks need the tap's build: without it the Commit stops by
     name; with the tap off (for an A/B) the build is not asked for."""

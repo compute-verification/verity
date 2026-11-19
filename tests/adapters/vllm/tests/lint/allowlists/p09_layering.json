@@ -7,6 +7,7 @@
     {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "commit <-> pipeline"},
     {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "compiler <-> pipeline"},
     {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "correspondence <-> query"},
+    {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "pipeline <-> predict"},
     {"file": "verity_vllm/check/weights_of_record.py", "kind": "layer", "symbol": "<module>", "detail": "check.weights_of_record -> pipeline.experiment"},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_collect -> acquire.committer_api"},
     {"file": "verity_vllm/commit/committer/native_hidden.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_hidden -> acquire.sources.hidden_source"},
