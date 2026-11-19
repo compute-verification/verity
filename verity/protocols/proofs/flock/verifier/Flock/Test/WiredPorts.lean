@@ -76,22 +76,52 @@ def x : Registered.Port := match ofJson (fileJ [("x", portJ (fieldTree (wkey 19)
 #guard ((withPositions default default none none).toOption.map (·.isNone)) == some true
 
 -- unit 19 reads leaf 0 of its writer's tree, derived from C
-#guard ((treeReads prog #[19] 0 x).toOption.map fun r => (r.readsRel, r.readsFrom)) == some (#[some 0], 19)
+#guard ((treeReads prog #[19] 0 1 x).toOption.map fun r => (r.readsRel, r.readsFrom)) == some (#[some 0], 19)
 -- the crossing cheat: the reader's `x` committed under a root of its own is refused by name
-#guard match treeReads prog #[19] 0 { x with value := "r/x" } with
+#guard match treeReads prog #[19] 0 1 { x with value := "r/x" } with
   | .error e => e.startsWith s!"registered reads: row x of in(S) is committed as r/x, and C wires it from {fieldTree (wkey 19) 0}"
   | .ok _ => false
 -- a run input node's tree's name is the node's alone: a row of in(S) under it is refused by that name
-#guard match treeReads prog #[19] 0 { x with value := freshValue 3 } with
+#guard match treeReads prog #[19] 0 1 { x with value := freshValue 3 } with
   | .error e => e == RESERVED_WHY "row of in(S)" "x" "input/n3"
   | .ok _ => false
 -- a row whose units read no writer is an ordinary input row, returned unread; one some of whose units do is refused
-#guard (treeReads prog #[0] 0 x).toOption.map (·.readsRel.isEmpty) == some true
-#guard (treeReads prog #[0, 19] 0 x).toOption.isNone
--- unit 13 reads a `TPair`, of two output fields: a row reads its writer's whole output, one field's tree
-#guard match treeReads prog #[13] 0 x with
+#guard (treeReads prog #[0] 0 1 x).toOption.map (·.readsRel.isEmpty) == some true
+#guard (treeReads prog #[0, 19] 0 1 x).toOption.isNone
+-- the whole-output form beside it refuses unit 13's read of a `TPair`, of two output fields
+#guard match treeReadsWhole prog #[13] 0 { x with value := fieldTree (wkey 13) 0 } with
   | .error e => (e.splitOn "of 2 output fields").length == 2
   | .ok _ => false
+-- unit 13 (the scan's first step) reads at leaf 0 unit 0's `TPair` field 0 whole: its row opens `TPair_v1/o0`, at unit
+-- 0's leaf, the tree C gives
+def y : Registered.Port := { x with name := "y", value := fieldTree (wkey 13) 0 }
+#guard wkey 13 == "TPair_v1"
+#guard ((treeReads prog #[13] 0 1 y).toOption.map fun r => (r.readsRel, r.readsFrom)) == some (#[some 0], 13)
+-- a reader naming another tree: the writer's other field's, a field past its two, or another template's
+#guard match treeReads prog #[13] 0 1 { y with value := fieldTree (wkey 13) 1 } with
+  | .error e => e.startsWith "registered reads: row y of in(S) is committed as TPair_v1/o1, and C wires it from TPair_v1/o0"
+  | .ok _ => false
+#guard match treeReads prog #[13] 0 1 { y with value := fieldTree (wkey 13) 2 } with
+  | .error e => e.startsWith "registered reads: row y of in(S) is committed as TPair_v1/o2, and C wires it from TPair_v1/o0"
+  | .ok _ => false
+#guard match treeReads prog #[13] 0 1 x with
+  | .error e => e.startsWith s!"registered reads: row x of in(S) is committed as {fieldTree (wkey 19) 0}, and C wires it from TPair_v1/o0"
+  | .ok _ => false
+-- a row past the writer's field: unit 13's leaves [0, 2) are TPair's field 0 and a circuit input
+#guard match treeReads prog #[13] 0 2 y with
+  | .error e => e == FIELD_WHY "y" 13 0 "TPair_v1" 2
+  | .ok _ => false
+-- `fieldRead` on TPair's outputs: each field whole, at C's positions; both fields, or a reorder, are no one field
+def og0 : Array Nat := (HmLinks.outGates prog 3 0).toOption.getD #[]
+#guard og0.size == 2
+#guard HmLinks.fieldRead prog og0 (og0.extract 0 1) 3 == some 0
+#guard HmLinks.fieldRead prog og0 (og0.extract 1 2) 3 == some 1
+#guard HmLinks.fieldRead prog og0 og0 3 == none
+#guard HmLinks.fieldRead prog og0 og0.reverse 3 == none
+#guard HmLinks.fieldRead prog og0 #[] 3 == none
+-- two readers of one field's leaves under two roots: one value, one commitment
+#guard splitValue? [y, { y with name := "z", root := ByteArray.mk #[1] }] == some (fieldTree (wkey 13) 0)
+#guard splitValue? [y, { y with name := "z" }] == none
 
 def resolved : Registered.Port := { x with readsRel := (Array.range 8).map fun i => some (7 - i), readsFrom := 8 }
 def tabs : Tables := { counts := #[8, 8], starts := #[0, 8], refs := (Array.range 8).flatMap fun i => #[i, i] }
@@ -192,6 +222,19 @@ def fresh : Registered.Port := { theta with value := freshValue 0 }
 #guard splitValue? [theta, { theta with name := "w1", root := ByteArray.mk #[1] }] == some "theta"
 #guard splitValue? [fresh, theta, { fresh with name := "w1", leaves := 8 }] == some (freshValue 0)
 #guard splitValue? [theta, { fresh with root := ByteArray.mk #[1] }] == none
+
+-- a writer of fields of 2 and 1 leaves: a row is one field whole; a stretch inside a field, or across two, is none
+#guard Program.fieldSpan (.tuple #[.array 2 r16, r16]) 0 == some (0, 2)
+#guard Program.fieldSpan (.tuple #[.array 2 r16, r16]) 2 == some (1, 1)
+#guard Program.fieldSpan (.tuple #[.array 2 r16, r16]) 1 == none
+#guard Program.fieldSpan r16 0 == some (0, 1)
+def wideP : Program.Prog := { regP with defs := regP.defs.set! 1 { regP.defs[1]! with ret := .tuple #[.array 2 r16, r16] } }
+#guard HmLinks.fieldRead wideP #[10, 11, 12] #[10, 11] 1 == some 0
+#guard HmLinks.fieldRead wideP #[10, 11, 12] #[12] 1 == some 1
+#guard HmLinks.fieldRead wideP #[10, 11, 12] #[10] 1 == none
+#guard HmLinks.fieldRead wideP #[10, 11, 12] #[11] 1 == none
+#guard HmLinks.fieldRead wideP #[10, 11, 12] #[11, 12] 1 == none
+#guard HmLinks.fieldRead wideP #[10, 11, 12] #[11, 10] 1 == none
 
 -- output rows: a block circuit of `regP`'s template T, whose one output field (16 bits) is its one output row `o0`
 def oMeta (t : String) : Json := Json.mkObj [("program_digests", Json.mkObj [(t, Json.str "d")])]

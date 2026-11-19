@@ -429,14 +429,14 @@ open Lean (Json)
 /-- The name of the one tree holding template `t`'s output field `j`, in every root, domain and file. -/
 def fieldTree (t : String) (j : Nat) : String := s!"{t}/o{j}"
 
-/-- Row `reg` of in(S)'s layout (`OneCircuit.io`, its first parameter leaf `lo`) at the statement's units `indices`,
+/-- The whole-output form `treeReads` extends to output fields, kept beside it: row `reg` of in(S)'s layout (`OneCircuit.io`, its first parameter leaf `lo`) at the statement's units `indices`,
 from the verifier's program `P`: each unit reads the leaf of its writer (`HmLinks.writerOf`) in the writer
 template's output tree (`HmLinks.treeLeaf`), and `reg` must be that tree (`fieldTree`), one for every unit: a row of
 in(S) with a root of its own, or of another tree, is refused by name. A writer of more than one output field is
 refused: the row reads its writer's whole output (`HmLinks.checkUnit`). Where no unit of `indices` has a writer, the
 row is an ordinary input row and `reg` is returned unread. Its work is the statement's units, each found from the
 root body's nodes. -/
-def treeReads (P : Program.Prog) (indices : Array Nat) (lo : Nat) (reg : Port) : V Port := do
+def treeReadsWhole (P : Program.Prog) (indices : Array Nat) (lo : Nat) (reg : Port) : V Port := do
   let ns := HmLinks.nodes P
   let body := (P.defs[P.root]!).body
   let first := indices.foldl min (indices.getD 0 0)
@@ -453,6 +453,50 @@ def treeReads (P : Program.Prog) (indices : Array Nat) (lo : Nat) (reg : Port) :
     if isFreshValue reg.value then throw (RESERVED_WHY "row of in(S)" reg.name reg.value)
     if reg.value != fieldTree t 0 then
       throw s!"registered reads: row {reg.name} of in(S) is committed as {reg.value}, and C wires it from {fieldTree t 0}: a crossing wire is committed once, in its writer's output field's tree, and the reader's row opens that tree by path"
+    rel := rel.set! (u - first) (some leaf)
+    wired := wired + 1
+  if wired == 0 then return reg
+  if wired != indices.size then
+    throw s!"registered reads: row {reg.name} of in(S): {wired} of the statement's {indices.size} units read it from a writer, and a row is one tree's"
+  return { reg with readsRel := rel, readsFrom := first }
+
+/-- The refusal of row `name` of in(S) whose unit `u` reads leaves of unit `v` (of template `t`, `n` output fields) that
+are no one output field of it, whole and in order. -/
+def FIELD_WHY (name : String) (u v : Nat) (t : String) (n : Nat) : String :=
+  s!"registered reads: row {name} of in(S): unit {u} reads leaves of unit {v} of {t} that are no one of its {n} output fields, whole and in order: a row reads one output field's tree, at the positions C gives"
+
+/-- Row `reg` of in(S)'s layout (`OneCircuit.io`, its parameter leaves `[lo, hi)`) at the statement's units `indices`,
+from the verifier's program `P`: each unit's leaves are one output field `j` of its writer (`HmLinks.writerOf`,
+`HmLinks.fieldRead`, from C's edges and the writer template's return type), read at the writer's leaf
+(`HmLinks.treeLeaf`) of that field's tree, and `reg` must be that tree (`fieldTree t j`), the same field for every unit:
+a row that is no one field whole (`FIELD_WHY`), of two fields across the units, with a root of its own, or of another
+tree, is refused by name. A single-field writer's whole output is its field 0. Where no unit of `indices` has a writer,
+the row is an ordinary input row and `reg` is returned unread. Its work is the statement's units, each found from the
+root body's nodes. -/
+def treeReads (P : Program.Prog) (indices : Array Nat) (lo hi : Nat) (reg : Port) : V Port := do
+  let ns := HmLinks.nodes P
+  let body := (P.defs[P.root]!).body
+  let first := indices.foldl min (indices.getD 0 0)
+  let mut rel : Array (Option Nat) := Array.replicate (indices.foldl max 0 + 1 - first) none
+  let mut wired := 0
+  let mut field : Option Nat := none
+  for u in indices do
+    let some v ← HmLinks.writerOf P ns u lo | continue
+    let some (t, leaf) := HmLinks.treeLeaf P ns v
+      | throw s!"registered reads: row {reg.name} of in(S): unit {u}'s writer {v} is outside the program's units"
+    let some (k, m) := HmLinks.unitAt ns v | throw s!"registered reads: row {reg.name} of in(S): unit {v} is no unit"
+    let some (ku, mu) := HmLinks.unitAt ns u | throw s!"registered reads: row {reg.name} of in(S): unit {u} is no unit"
+    let ops ← Program.operands P P.rootScope (body.nodes[ku]!) mu
+    let og ← HmLinks.outGates P k m
+    let some j := HmLinks.fieldRead P og (ops.extract lo hi) k
+      | throw (FIELD_WHY reg.name u v t (Program.fieldsOf (P.defs[body.nodes[k]!.fn]!).ret).length)
+    if let some j' := field then
+      if j' != j then
+        throw s!"registered reads: row {reg.name} of in(S): the statement's units read fields {j'} and {j} of their writers, and a row is one tree's"
+    field := some j
+    if isFreshValue reg.value then throw (RESERVED_WHY "row of in(S)" reg.name reg.value)
+    if reg.value != fieldTree t j then
+      throw s!"registered reads: row {reg.name} of in(S) is committed as {reg.value}, and C wires it from {fieldTree t j}: a crossing wire is committed once, in its writer's output field's tree, and the reader's row opens that tree by path"
     rel := rel.set! (u - first) (some leaf)
     wired := wired + 1
   if wired == 0 then return reg
@@ -516,8 +560,8 @@ def withPositions (c : Circuit) (pub : Public) (program : Option ByteArray) (own
 where
   ins (c : Circuit) (P : Program.Prog) (indices : Array Nat) (rows : Array (Nat × Nat × Nat)) (reg : Port) : V Port :=
     match rows.find? fun (p, _, _) => (c.ports.getD p default).name == reg.name with
-    | some (_, lo, _) => do
-      let r ← treeReads P indices lo reg
+    | some (_, lo, hi) => do
+      let r ← treeReads P indices lo hi reg
       if r.readsRel.isEmpty then OneCircuit.pos P indices reg else pure r
     | none => OneCircuit.pos P indices reg
 
