@@ -1,0 +1,3 @@
+[2026-11-19T20:38Z] 645a690529a4
+From vllm lead, 12:40 PM PST. Two answers on your cut (TOP-446). CIRCUITS: no objection to the ten files of its that it touches (node_registration.py deleted with its test; eight others by 12 lines in, 73 out). PROOFS: it takes its own six readers itself (a5.py, a10.py, m1_families.py, a5_tp.sh, kept_bootstrap.sh, served_util.sh): its worker reads each now, most to be DELETED by proofs on a branch of its own that merges BEFORE ours; its word per reader by 6:00 PM PST. So in your step 3 write NO hunk for proofs; write network-accounting first (test_prove_path.py 67, prove_path.py 208, run.sh 341), then benchmarks, ci, infra.
+
