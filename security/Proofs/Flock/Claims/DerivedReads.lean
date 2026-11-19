@@ -52,7 +52,11 @@ private theorem map_some_ok {ε α : Type} {x : Except ε α} {y : α} (h : (som
 
 private theorem map_some_some {ε α : Type} {x : Except ε α} {o : Option α} (h : (some <$> x) = .ok o) :
     ∃ y, o = some y := by
-  cases x <;> simp_all [Functor.map, Except.map]
+  cases x with
+  | error e => simp [Functor.map, Except.map] at h
+  | ok a =>
+    simp only [Functor.map, Except.map, Except.ok.injEq] at h
+    exact ⟨a, h.symm⟩
 
 theorem pos_reads {P : _root_.Flock.Program.Prog} {indices : Array Nat} {reg r : Port}
     (h : _root_.Flock.OneCircuit.pos P indices reg = .ok r) :
@@ -74,9 +78,12 @@ theorem outReads_reads {c : _root_.Flock.Circuit} {P : _root_.Flock.Program.Prog
     {reg r : Port} (h : outReads c P indices j reg = .ok r) :
     r = { reg with readsRel := r.readsRel, readsFrom := r.readsFrom } := by
   unfold outReads at h
-  simp only [bind, Except.bind, pure, Except.pure] at h
-  repeat' split at h
-  all_goals first | (cases h; done) | (cases h; rfl)
+  cases ho : outReadsAt c P indices j reg with
+  | error e => simp [ho, bind, Except.bind] at h
+  | ok x =>
+    simp only [ho, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    rfl
 
 theorem ins_reads {c : _root_.Flock.Circuit} {P : _root_.Flock.Program.Prog} {indices : Array Nat}
     {rows : Array (Nat × Nat × Nat)} {reg r : Port}
@@ -104,7 +111,6 @@ theorem withPositions_reads {c : _root_.Flock.Circuit} {pub : _root_.Flock.Publi
     intro reg hreg
     obtain ⟨reg', hreg', hf⟩ := array_mapM_ok_mem (map_some_ok h) reg hreg
     refine ⟨reg', hreg', ?_⟩
-    dsimp only at hf
     split at hf
     · split at hf
       · exact outReads_reads hf

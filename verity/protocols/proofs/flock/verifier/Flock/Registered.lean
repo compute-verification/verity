@@ -430,7 +430,8 @@ the field's bits from the field's first in whole words, and that field is commit
 so `reg` must be that tree and each unit reads its own leaf in it by `HmLinks.treeLeaf`, the leaf `treeReads` opens for
 a reader of the field. An output of several fields in fewer rows, a row of another width or offset, a port registered
 as another value and a unit of another template are refused by name. -/
-def outReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (j : Nat) (reg : Port) : V Port := do
+def outReadsAt (c : Circuit) (P : Program.Prog) (indices : Array Nat) (j : Nat) (reg : Port) :
+    V (Array (Option Nat) × Nat) := do
   let some (t, _) := HmRow.queryTemplate c
     | throw s!"registered reads: output row {reg.name}: the circuit names no template of C (META program_digests)"
   let some f := (rootNodes P).findSome? fun x => (P.defs[x.fn]?).filter (·.key == t)
@@ -456,7 +457,12 @@ def outReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (j : Nat) (r
       | throw s!"registered reads: output row {reg.name}: unit {u} is outside the program's units"
     if tu != t then throw s!"registered reads: output row {reg.name}: unit {u} is an instance of {tu}, not the circuit's template {t}"
     rel := rel.set! (u - first) (some leaf)
-  return { reg with readsRel := rel, readsFrom := first }
+  return (rel, first)
+
+/-- `reg` reading at `outReadsAt`'s positions from its first unit on, every other field its own. -/
+def outReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (j : Nat) (reg : Port) : V Port := do
+  let r ← outReadsAt c P indices j reg
+  return { reg with readsRel := r.1, readsFrom := r.2 }
 
 /-- The verifier's registered reads `own` with every port's reads derived at the statement's circuit `c` and public file
 `pub` from C, the verifier's program `program`: an output row (a port past `HmOut.nIn c`) by `outReads`, a row of in(S)
