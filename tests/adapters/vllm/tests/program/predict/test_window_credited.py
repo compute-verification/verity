@@ -36,7 +36,7 @@ SCHEME = "pearl-c-h100-v1-h3"
 CFG = {**S.TINY, "intermediate_size": 256, "num_hidden_layers": 1}
 #: down_proj, a position's fourth `Gemm_v2`
 DOWN = 3
-CREDITED = Credited(SCHEME, frozenset({(3, DOWN), (4, DOWN)}), tile=(2, 8))
+CREDITED = Credited(frozenset({(3, DOWN), (4, DOWN)}), tile=(2, 8))
 TILE = "PearlPlusTileCoreWords_v2"
 K, N, DIGEST = 256, 64, 512
 
@@ -62,7 +62,7 @@ def _units(c: IF.Circuit, family: str) -> list[tuple[Any, int]]:
 
 def test_with_no_credited_linear_the_circuit_is_todays():
     reg, comp = _window("tiny")
-    none = Credited(SCHEME)
+    none = Credited()
     assert _bytes(WC.window_circuit(reg, comp, CLASS, GRAIN, credited=none)) == _bytes(WC.window_circuit(reg, comp, CLASS, GRAIN))
     assert _bytes(WC.class_circuit(reg, CLASS, None, GRAIN, credited=none)) == _bytes(WC.class_circuit(reg, CLASS, None, GRAIN))
 
@@ -91,9 +91,9 @@ def test_a_credited_linear_is_refused_beside_tables_and_where_its_tile_cant_be()
     with pytest.raises(Unexpressible, match="reading no tables"):
         WC.class_circuit(reg, CLASS, None, GRAIN, tables=PearlTables(SCHEME, words=16), credited=CREDITED)
     with pytest.raises(Unexpressible, match="promotion windows"):
-        _lower(Credited(SCHEME, frozenset({(0, 0)}), tile=(2, 8)))
+        _lower(Credited(frozenset({(0, 0)}), tile=(2, 8)))
     with pytest.raises(Unexpressible, match="don't divide"):
-        _lower(Credited(SCHEME, frozenset({(3, DOWN)}), tile=(2, 2)))
+        _lower(Credited(frozenset({(3, DOWN)}), tile=(2, 2)))
 
 
 def _flat(x: Any) -> list[int]:

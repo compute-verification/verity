@@ -11,13 +11,14 @@ from itertools import accumulate
 from typing import Any
 
 from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import bind
+from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.refs import Refs, runs
 from verity.circuits.types import Tuple
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
+from verity.protocols.resource_accounting import scheme as schemes
 
+from verity_vllm import messages
 from verity_vllm.definitions.registry import int8_exact as IX
 from verity_vllm.definitions.registry import linear_cut as LC
 from verity_vllm.definitions.registry import io_shell as IO
@@ -30,7 +31,7 @@ from verity_vllm.definitions.registry.dead_free import (
 
 from .build import Unexpressible
 from .window_builder import WEIGHTS, Row, _Builder, _spans, _step, _word, weight_run
-from .window_class import Credited, FixedLoad, PearlTables, Request, Tables, WindowClass
+from .window_class import TILE_PORT, Credited, FixedLoad, PearlTables, Request, Tables, WindowClass
 from .window_cut import Linears, cut_linear
 
 PROMPT = "prompt"
@@ -719,10 +720,24 @@ def _digits(pairs: Sequence[tuple[int, int]]) -> tuple[tuple[int, ...], tuple[in
     return tuple(r for r, _ in kept), tuple(s for _, s in kept)
 
 
+def _row_tiles(credited: Credited, k: int, m: int, n: int) -> tuple[int, int, list[Any]]:
+    """(TM, TN, each row tile's tile Definition) of a credited linear of ``m`` rows, depth ``k`` and ``n`` columns, as the
+    declared scheme with `TILE_PORT` lays its tile out (`Credited.tile` in its tile's place)."""
+    scheme = messages.declaring(TILE_PORT)
+    (port,) = [p for p in scheme.ports if p.name == TILE_PORT]
+    shape = {"K": k, "N": n, **({} if credited.tile is None else dict(zip(("TM", "TN"), credited.tile)))}
+    tm, tn = (schemes.layout(scheme, TILE_PORT, {key: v for key, v in shape.items() if key in ("TM", "TN")}).counts[c]
+              for c in ("TM", "TN"))
+    if n % tn:
+        raise ValueError(f"a credited linear is whole column tiles: TN = {tn}, N = {n}")
+    lays = [schemes.layout(scheme, TILE_PORT, {**shape, "M": min(tm, m - i)}) for i in range(0, m, tm)]
+    return tm, tn, [bind(REGISTRY[port.definition], **lay.statics) for lay in lays]
+
+
 def credit(b: _Builder, progs: Sequence[_Program], j: int, node: Any, credited: Credited) -> None:
     """Credited linear ``j`` (`Credited`) once every Program has lowered it: its M rows, each Program's A row in Program order
-    (`LinearARow_v3`), as Pearl+'s grid of units (`pearl_plus_credited.tiles`), row tile by row tile, each a column tile a
-    unit labelled with its first row's slot. A unit reads its real rows' A rows by wire (filler rows free, which the core
+    (`LinearARow_v3`), as the grid of units of the declared scheme's tile (`_row_tiles`), row tile by row tile, each a column
+    tile a unit labelled with its first row's slot. A unit reads its real rows' A rows by wire (filler rows free, which the core
     holds to zero), its weight columns by registered read, the epoch's salt and that read's registered root supplied, its
     place and noise as registered values (`pearlplus/<port>@<words>`) and its certificates free; each of its rows of y is
     handed on by a `LinearYRow_v1` unit of that row's slot, in rows of the words the uncredited slices write, which that
@@ -733,12 +748,11 @@ def credit(b: _Builder, progs: Sequence[_Program], j: int, node: Any, credited: 
     K, N = node.fn.bindings["K"], node.fn.bindings["N"]
     _a, lo, n = rows[0][1]
     try:
-        tiles = PC.tiles(credited.scheme, K, len(rows), N, credited.tile)
-        words, types = dict(IF.layout(tiles[0].core).rows), dict(tiles[0].core.signature()[0])
+        TM, TN, cores = _row_tiles(credited, K, len(rows), N)
+        words, types = dict(IF.layout(cores[0]).rows), dict(cores[0].signature()[0])
     except ValueError as e:
-        raise Unexpressible(f"{node.fn.id}: credited at {len(rows)} rows under {credited.scheme}: {e}") from None
-    TM, TN, step = len(tiles[0].rows), len(tiles[0].cols), rows[0][0].position - 1
-    ct = N // TN
+        raise Unexpressible(f"{node.fn.id}: credited at {len(rows)} rows: {e}") from None
+    step, ct = rows[0][0].position - 1, N // TN
     if TN % n:
         raise Unexpressible(f"{node.fn.id}: its readers read rows of {n} words, which don't divide a tile's {TN} columns")
     name, off = b.weight(lo, lo + N * K, TN * K)
@@ -757,9 +771,8 @@ def credit(b: _Builder, progs: Sequence[_Program], j: int, node: Any, credited: 
         first[port] = b.params[v] // words[port]
         b.params[v] += count * words[port]
     groups: list[tuple[Any, list[int]]] = []
-    for r in range(len(tiles) // ct):
-        core = tiles[r * ct].core
-        if groups and groups[-1][0] is core:
+    for r, core in enumerate(cores):
+        if groups and groups[-1][0].id == core.id:
             groups[-1][1].append(r)
         else:
             groups.append((core, [r]))

@@ -36,17 +36,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
-    NCP_SCHEMES as SCHEMES,
-)
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
-    PEARL_C_ROW_ALIGN as ROW_ALIGN,
-)
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
-    a_value,
-    b_value,
-    y_value,
-)
+from verity.protocols.resource_accounting import scheme as schemes
+
+from verity_vllm import messages
 
 from . import scan_state as SS
 from .build import Unexpressible
@@ -181,23 +173,23 @@ class PearlTables(FixedLoad):
     def __post_init__(self) -> None:
         if type(self.words) is not int or self.words < 1:
             raise ValueError(f"a cut linear hands its y on in rows of a positive number of words, not {self.words!r}")
-        if self.scheme not in SCHEMES:
-            raise ValueError(f"{self.scheme!r} is no PoUW scheme ({', '.join(SCHEMES)})")
+        if messages.option(f"pouw:{self.scheme}") is None:
+            raise ValueError(f"{self.scheme!r} is no PoUW scheme a declared scheme runs (pouw:{self.scheme} is no option)")
 
     @staticmethod
     def a(s: int, c: int) -> str:
         """Round ``s``'s call ``c``'s A rows, by the name Pearl+'s window record registers them under."""
-        return a_value(s, c)
+        return f"{_tables()[0]}/{s}/{c}"
 
     @staticmethod
     def y(s: int, c: int) -> str:
         """Round ``s``'s call ``c``'s y, by the name Pearl+'s window record registers it under."""
-        return y_value(s, c)
+        return f"{_tables()[1]}/{s}/{c}"
 
     @staticmethod
     def b(w: int) -> str:
         """Weight ``w``'s B rows, by the name Pearl+'s window record registers them under."""
-        return b_value(w)
+        return f"{_tables()[2]}/{w}"
 
     @staticmethod
     def rows(cls: WindowClass, s: int) -> int:
@@ -206,24 +198,31 @@ class PearlTables(FixedLoad):
 
     @staticmethod
     def a_rows(cls: WindowClass, s: int) -> int:
-        """A round-``s`` call's A rows: its `rows` and then zero rows up to a multiple of Pearl+'s `ROW_ALIGN`, as the device
-        stages and commits a call's A (its m₁₆)."""
-        return -(-PearlTables.rows(cls, s) // ROW_ALIGN) * ROW_ALIGN
+        """A round-``s`` call's A rows: its `rows` and then zero rows up to a multiple of the declared tile's ``ROW_ALIGN``
+        (`TILE_PORT`), as the device stages and commits a call's A (its m₁₆)."""
+        align = schemes.layout(messages.declaring(TILE_PORT), TILE_PORT, {}).counts["ROW_ALIGN"]
+        return -(-PearlTables.rows(cls, s) // align) * align
+
+
+def _tables() -> tuple[str, ...]:
+    return tuple(messages.declaring(TILE_PORT).tables)
+
+
+#: the port a credited linear's tile writes its y on, looked up on the declared scheme that has it (`messages.declaring`):
+#: its Definition, the tile's statics at a shape and its counts (`TM`, `TN`, `ROW_ALIGN`) are that scheme's
+TILE_PORT = "pearlplus-y"
 
 
 @dataclass(frozen=True)
 class Credited:
-    """The linears whose products PoUW credits under Pearl+'s ``scheme``: each ``(position, call)`` of ``linears``, call c
-    the c-th `Gemm_v2` of the position's forward in node order, is its grid's units at ``tile`` (TM × TN, the scheme's when
-    None), which write its y (`window_lowering.credit`). None credited, the circuit is the uncredited one."""
-    scheme: str
+    """The linears whose products PoUW credits: each ``(position, call)`` of ``linears``, call c the c-th `Gemm_v2` of the
+    position's forward in node order, is the grid of units of the declared scheme's tile (`TILE_PORT`) at ``tile`` (TM × TN,
+    the scheme's when None), which write its y (`window_lowering.credit`). None credited, the circuit is the uncredited one."""
     linears: frozenset[tuple[int, int]] = frozenset()
     tile: tuple[int, int] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "linears", frozenset(tuple(x) for x in self.linears))
-        if self.scheme not in SCHEMES:
-            raise ValueError(f"{self.scheme!r} is no PoUW scheme ({', '.join(SCHEMES)})")
         if not all(len(x) == 2 and all(type(v) is int and v >= 0 for v in x) for x in self.linears):
             raise ValueError(f"credited linears {sorted(self.linears)}: each (position, call), naturals")
         if self.tile is not None and not (len(self.tile) == 2 and all(type(v) is int and v >= 1 for v in self.tile)):
@@ -307,5 +306,5 @@ def _placed(cls: WindowClass, sizes: Sequence[tuple[int, int, int]],
     return tuple(out)
 
 
-__all__ = ["CLASS_OF_RECORD", "Credited", "FixedLoad", "GREEDY", "PearlTables", "Request", "Tables", "WindowClass", "requests_of",
-           "takes"]
+__all__ = ["CLASS_OF_RECORD", "Credited", "FixedLoad", "GREEDY", "PearlTables", "Request", "TILE_PORT", "Tables", "WindowClass",
+           "requests_of", "takes"]
