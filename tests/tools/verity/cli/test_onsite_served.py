@@ -1251,7 +1251,7 @@ def test_the_onsite_line_names_the_machine_each_attesters_and_pearl_pluss_coins_
 
 #: nvidia-smi's stand-in: an idle card
 IDLE = """#!/usr/bin/env bash
-case "$*" in *memory.used*) echo 0 ;; esac
+case "$*" in *memory.used*) echo 0 ;; *name*) echo "NVIDIA H200" ;; esac
 """
 #: ip's stand-in: the default route's NIC
 IP = "#!/bin/sh\necho '1.1.1.1 via 10.0.0.1 dev eth9 src 10.0.0.2 uid 0'\n"
@@ -1298,7 +1298,7 @@ def served_wipe(tmp: Path, bindings_: dict, **env: str) -> tuple[subprocess.Comp
     python = executable(tmp, "python", PYTHON.format(python=sys.executable, log=str(log)))
     run = {"PATH": os.pathsep.join([str(tmp), str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp),
            "VERITY_PINS": json.dumps(cfg["pin"]), "GPU_LEASE_UUID": "card-0",
-           "WIPE_CARD": "any", "PY": str(python), **{k: v for k, v in hooks.items() if k != "WIPE_CMD"}, **env}
+           "PY": str(python), **{k: v for k, v in hooks.items() if k != "WIPE_CMD"}, **env}
     p = subprocess.run(["bash", "-c", hooks["WIPE_CMD"], "_", str(tmp / "serve"), "all", str(tmp / "wipe")], cwd=ROOT,
                        env=run, capture_output=True, text=True, check=False)
     return p, log
@@ -1315,7 +1315,7 @@ def test_the_wipes_key_is_the_pin_when_bound_and_the_runs_otherwise(tmp_path, bo
     assert p.returncode == 3 and "the stand-in attach" in (tmp_path / "wipe" / "refused.txt").read_text(), p.stdout + p.stderr
     handed = json.loads(log.read_text())
     if bound:
-        assert handed["trusted"] == WIPE_PIN and handed["settings"] == {"reads": 5500} and handed["facts"] == {
+        assert handed["trusted"] == WIPE_PIN and handed["settings"] == {} and handed["facts"] == {
             "host": "auditor-1", "address": "192.0.2.1:7001", "command": ["ssh", "auditor-1"], "run_keys": False,
             "links": handed["facts"]["links"]}
         assert handed["wipe_stream"] is None

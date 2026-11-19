@@ -3,7 +3,7 @@ sampled inputs that include what both sides must refuse: a registration's digest
 `codec.P2Codec`'s refusals), a unit's sketch from its blocks' partials (`p2.Sketcher`: π a block, σ their sum, and y
 from σ against y of the unit's bytes) and an opening's check (`p2.check`) on stores of sampled blocks under PoUS's leaf
 and vk tree, honest or with one field changed; a whole session of record (`Poub.P2Session`, which `p2_parties.py`
-runs) against `p2_parties.Books` on the bytes the verifier reads, the registration file, the request and each root and
+runs) against `p2_books.Books` on the bytes the verifier reads, the registration file, the request and each root and
 openings line, under the auditor's session parameters, recorded from a prover over a sampled store, honest or with one
 deviation; and the committed C* (`tests/fixtures/p2-c-star.bin`, PoUS's setup's prover bytes): its registration's
 digest, an honest opening of each of its units, an honest session over it, one of `SESSION`'s (the Lean's pinned
@@ -17,6 +17,7 @@ import json
 import shutil
 from pathlib import Path
 
+import p2_books as B
 import pytest
 import ra_cases as M
 import verity_difftest as D
@@ -327,7 +328,7 @@ def p2_event_of(v) -> tuple:
     raise D.Reject(f"no P2 event kind {kind}")
 
 
-def p2_apply(b: p2_parties.Books, e: tuple) -> dict:
+def p2_apply(b: B.Books, e: tuple) -> dict:
     kind, *a = e
     return {"start": b.start, "boundary": b.boundary, "close": b.close, "root": b.root, "openings": b.openings,
             "fail": b.fail}[kind](*a)
@@ -337,7 +338,7 @@ def p2_session(v) -> dict:
     """`p2SessionFn`: the registration file's bytes and the prover's request line read as `p2_parties` reads them
     (`registration_of`, `plan_of`, `message`, `params_of`) under the auditor's session parameters (`auditor_of`), a
     request out of form refused as such and one off the auditor's with `params_of`'s reason, and the events through
-    `p2_parties.Books` on a challenger replaying the case's 2W coins: the held store, every event's result and the
+    `B.Books` on a challenger replaying the case's 2W coins: the held store, every event's result and the
     answer, less its reason."""
     with M.decoding():
         data = M.hex_(v, "registration")
@@ -365,11 +366,11 @@ def p2_session(v) -> dict:
         M.nat(v, "chunk")
         not_before = M.nat(v, "not_before_ns")
         events = [p2_event_of(e) for e in M._list(v, "events")]
-    b = p2_parties.Books(params, reg, M.replayed(reg, 0, params.windows, committed, []), plan, not_before)
+    b = B.Books(params, reg, M.replayed(reg, 0, params.windows, committed, []), plan, not_before)
     results = [p2_apply(b, e) for e in events]
-    answer = json.loads(json.dumps(p2_parties.answer(b.s, plan=plan)))
+    answer = json.loads(json.dumps(B.answer(b.s, plan=plan)))
     del answer["reason"]
-    return {"held": p2_parties.held_json(reg, plan), "results": results, "answer": answer}
+    return {"held": B.held_json(reg, plan), "results": results, "answer": answer}
 
 
 P2_STEP_NS = 400
@@ -432,7 +433,7 @@ def p2_events(store: p2_prover.Store, plan: Plan, params, committed: list[bytes]
     3 a unit's reads skipped (its receipt from zeros), 4 window t's openings line near its form (`p2_bad_openings`), 5
     window t's last pass missing, 6 the pass's root line near its form (`p2_bad_root`) and 7 the pass's root after
     window t's deadline. The events end once the session has its outcome."""
-    b = p2_parties.Books(params, store.registration, M.replayed(store.registration, 0, params.windows, committed, []),
+    b = B.Books(params, store.registration, M.replayed(store.registration, 0, params.windows, committed, []),
                        plan, not_before)
     prover = p2_prover.Prover(store, entropy=Entropy(b"p2 session"))
     events: list[dict] = []
@@ -697,3 +698,87 @@ def test_a_request_off_the_auditors_session_is_refused_in_lean_by_name(server, c
     assert json.loads(out) == {"refused": "request", "reason": why}
     toy = p2_parties.SESSION | off
     assert "answer" in json.loads(committed_session(server, committed, toy, toy)[1])
+
+
+WS = st.text(" \t\n\r", max_size=2)
+
+
+def spelled(c: str, take) -> str:
+    """`c` as a JSON string writes it: raw where it may be, a short escape, or `\\uXXXX` (two of them past U+FFFF)."""
+    short = {'"': '\\"', "\\": "\\\\", "/": "\\/", "\b": "\\b", "\f": "\\f", "\n": "\\n", "\r": "\\r", "\t": "\\t"}
+    v = ord(c)
+    units = [v] if v < 0x10000 else [0xD800 + ((v - 0x10000) >> 10), 0xDC00 + ((v - 0x10000) & 0x3FF)]
+    escaped = "".join(f"\\u{x:04X}" if take(st.booleans()) else f"\\u{x:04x}" for x in units)
+    forms = [escaped] + ([short[c]] if c in short else []) + ([c] if c not in '"\\' and v >= 0x20 else [])
+    return forms[take(st.integers(0, len(forms) - 1))]
+
+
+@st.composite
+def json_string(draw) -> str:
+    """A JSON string's text: sampled characters spelled every way, now and then a lone surrogate escape, a raw control
+    character, an unknown escape or no closing quote."""
+    chars = draw(st.text(st.one_of(st.characters(blacklist_categories=("Cs",)), st.sampled_from('a"\\/\b\n\t\x7f\ufffd')),
+                         max_size=6))
+    body = "".join(spelled(c, draw) for c in chars)
+    odd = draw(st.integers(0, 12))
+    if odd == 1:
+        body += draw(st.sampled_from(["\\ud800", "\\udc00", "\\udbff\\u0041", "\\ud83d"]))
+    elif odd == 2:
+        body += draw(st.sampled_from(["\x00", "\x1f", "\\x41", "\\", "\\u12"]))
+    return '"' + body + ('"' if odd != 3 else "")
+
+
+NUMBERS = st.one_of(st.integers(-2**80, 2**80).map(str), st.just("-0"),
+                    st.sampled_from(["1.0", "1e2", "1E+2", "-0.5e-3", "0e0", "01", "1.", "-", "+1", ".5", "NaN",
+                                     "Infinity", "-Infinity", "0x10"]))
+ATOMS = st.one_of(NUMBERS, json_string(), st.sampled_from(["true", "false", "null", "True", "nul"]))
+
+
+@st.composite
+def json_text(draw, depth: int = 3) -> str:
+    """A JSON value's text with whitespace anywhere JSON allows it, before a colon among them; objects whose keys may
+    repeat, spelled the same or escaped otherwise; and now and then a trailing comma or a missing one."""
+    kind = draw(st.integers(0, 2)) if depth else 0
+    if kind == 0:
+        return draw(ATOMS)
+    w = lambda: draw(WS)
+    if kind == 1:
+        items = [draw(json_text(depth - 1)) for _ in range(draw(st.integers(0, 3)))]
+        sep = "," if draw(st.integers(0, 15)) else ""
+        tail = "," if items and not draw(st.integers(0, 15)) else ""
+        return "[" + w() + (w() + sep + w()).join(items) + tail + w() + "]"
+    names: list[str] = []
+    for _ in range(draw(st.integers(0, 3))):
+        again = names and draw(st.integers(0, 3)) == 0
+        names.append(draw(st.sampled_from(names)) if again else
+                     draw(st.text(st.sampled_from("ab\"\\é\U0001F600"), min_size=1, max_size=3)))
+    keys = ['"' + "".join(spelled(c, draw) for c in k) + '"' for k in names]
+    members = [k + w() + ":" + w() + draw(json_text(depth - 1)) for k in keys]
+    return "{" + w() + ("," + w()).join(members) + w() + "}"
+
+
+@st.composite
+def lines(draw) -> dict:
+    """A line's bytes without its newline: `json_text`'s, encoded, now and then with a byte not UTF-8 in it or a second
+    value after it."""
+    b = (draw(WS) + draw(json_text()) + draw(WS)).encode()
+    odd = draw(st.integers(0, 20))
+    if odd == 1:
+        at = draw(st.integers(0, len(b)))
+        b = b[:at] + draw(st.sampled_from([b"\xff", b"\xc3", b"\xed\xa0\x80", b"\xef\xbb\xbf"])) + b[at:]
+    elif odd == 2:
+        b += b" 1"
+    return {"line": b.hex()}
+
+
+def line_json(v: dict):
+    return p2_parties.line_json(bytes.fromhex(v["line"]))
+
+
+def test_p2_line_json(server) -> None:
+    """`P2Session.lineJsonOf`, the reading of every line of a P2 session (`scan` and Lean's reader), against Python's
+    strict reader (`p2_parties.line_json`: `json.loads` refusing a key named twice, a float, `NaN` and `Infinity`, and a
+    surrogate or U+FFFD) on 3,000 seeded lines: escapes of every spelling, nested objects and arrays, whitespace before
+    the colon, a key repeated under another spelling, exponents and fractions, constants, and what JSON refuses."""
+    stats = D.run(port("p2_line_json", line_json, lines()), examples=3000, server=server)
+    assert stats.outputs >= 300 and stats.rejects >= 300, stats.counts

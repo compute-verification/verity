@@ -873,7 +873,7 @@ def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict
     if verdict not in LEAN_VERDICTS:
         reason = f"its verdict is {verdict}'s, not the Lean's"
     elif s.get("disagreement") is not None:
-        reason = "the two verifiers disagreed"
+        reason = "undecided: the driver's books left the Lean's session"
     elif (s.get("failure") or {}).get("failure") == "undecided":
         reason = s["failure"].get("reason") or "undecided"
     elif s.get("accepted") is not True:
