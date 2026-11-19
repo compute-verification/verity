@@ -79,7 +79,7 @@ def test_every_declared_piece_names_its_entry_and_executables() -> None:
 
 @pytest.mark.parametrize("lacking", ["entry", "executables"])
 def test_a_piece_lacking_its_entry_or_executables_is_refused_by_name_when_launched(lacking: str) -> None:
-    said = Launch(entry="verity_cli.served_table:pouw_entry", executables=(), **{lacking: T.Lacks()})
+    said = Launch(**{"entry": "verity_cli.served_table:pouw_entry", "executables": (), lacking: T.Lacks()})
     with pytest.raises(Refused) as e:
         T._launcher("c", "p", said, None).hooks({}, {}, {}, {})
     assert e.value.name == f"no-{lacking}"
