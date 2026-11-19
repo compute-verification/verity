@@ -76,6 +76,22 @@ window_commit_of() {  # WC: window $1's commit as its class circuit's units, ser
     --sampling-design "$LAW" --out "$VW")
 }
 
+if [ "$DRY" != 1 ] && [ -d "${RESEARCH_RUN_DIR:-}" ]; then  # SR holds the keys and salts: custody's statement names it private
+  "$PY" - "$RESEARCH_RUN_DIR/private-paths.json" "$SR" <<'EOF'
+import json, os, pathlib, sys
+f, sr = pathlib.Path(sys.argv[1]), os.path.realpath(sys.argv[2])
+doc = json.loads(f.read_text()) if f.is_file() else {}
+f.write_text(json.dumps({"schema": "private-paths/v1", "private": sorted({*doc.get("private", []), sr}),
+                         "names": list(doc.get("names", []))}, indent=1) + "\n")
+EOF
+fi
+if [ "${1:-}" != card ]; then  # the row's Build of record, which the serve binds, before the lease
+  "$PY" -m research data fetch-fixtures --repo "$TREE" --json "$TREE/$WL" > /dev/null
+  want=$(awk -v n="$ROW.json" '$2==n{print $1}' adapters/vllm/workloads/SHA256SUMS)
+  [ "$(sha256sum < "$WL" | cut -c1-64)" = "$want" ] || { say "SMOKE FAILED workload: $WL is not SHA256SUMS's"; exit 1; }
+  (cd adapters/vllm && "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW" --out "$PRED") > "$SR/predict.log" 2>&1 \
+    || { say "SMOKE FAILED predict ($SR/predict.log)"; exit 1; }
+fi
 if [ "$DRY" = 1 ]; then
   "$PY" - "${SERVE[@]}" <<'EOF'
 import os, sys
@@ -138,20 +154,6 @@ if [ "${1:-}" = card ]; then  # under the lease: the serve, the load and the ser
   exit 0
 fi
 
-if [ -d "${RESEARCH_RUN_DIR:-}" ]; then  # SR holds the keys and salts: custody's statement names it private
-  "$PY" - "$RESEARCH_RUN_DIR/private-paths.json" "$SR" <<'EOF'
-import json, os, pathlib, sys
-f, sr = pathlib.Path(sys.argv[1]), os.path.realpath(sys.argv[2])
-doc = json.loads(f.read_text()) if f.is_file() else {}
-f.write_text(json.dumps({"schema": "private-paths/v1", "private": sorted({*doc.get("private", []), sr}),
-                         "names": list(doc.get("names", []))}, indent=1) + "\n")
-EOF
-fi
-"$PY" -m research data fetch-fixtures --repo "$TREE" --json "$TREE/$WL" > /dev/null
-want=$(awk -v n="$ROW.json" '$2==n{print $1}' adapters/vllm/workloads/SHA256SUMS)
-[ "$(sha256sum < "$WL" | cut -c1-64)" = "$want" ] || { say "SMOKE FAILED workload: $WL is not SHA256SUMS's"; exit 1; }
-(cd adapters/vllm && "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW" --out "$PRED") > "$SR/predict.log" 2>&1 \
-  || { say "SMOKE FAILED predict ($SR/predict.log)"; exit 1; }
 "${LEASE[@]}" || { [ -s "$OUT/smoke.txt" ] || say "SMOKE FAILED lease: the card phase under gpu-lease failed ($SR/serve.log)"; exit 1; }
 export CUDA_VISIBLE_DEVICES=
 said=$("$PY" - "$D/windows" <<'EOF'
