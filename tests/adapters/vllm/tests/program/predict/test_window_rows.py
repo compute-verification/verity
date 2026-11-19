@@ -9,6 +9,7 @@ TINY's slots and the class of record's.
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -80,10 +81,10 @@ def _bf16(x) -> np.ndarray:
     return (np.asarray(x, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
 
 
-def _weights(fn) -> dict[str, np.ndarray]:
+def _weights(fn, seed: int = 3) -> dict[str, np.ndarray]:
     """Finite random weights, each field's elements in their unsigned width: s8 codes, small positive f32 scales (an
     attention's scales 1), norms near 1, the rotary cache in [-1, 1]."""
-    rng, out = np.random.default_rng(3), {}
+    rng, out = np.random.default_rng(seed), {}
     for label, ty in dict(fn.signature()[0])[WC.WEIGHTS].fields:
         (bits,), n = ty.width_set(), ty.leaves
         if bits == 8:
@@ -904,3 +905,100 @@ def test_a_window_of_fewer_requests_than_slots_commits(tmp_path):
     win.write(win.close(), tmp_path, {}, registrar=DK)
     rec = json.loads((tmp_path / "registration.json").read_text())
     assert [e["value"] for e in rec["registered"]] == [SS.SCAN_STATE]
+
+
+def _private(seed: int):
+    """The window of `REQUESTS` (one advice) under weights drawn at ``seed``: its registered values and its `Rows`, every
+    node computed. Two seeds give one circuit and two sets of private values."""
+    reg = _registered()
+    low = WC.lower(reg, CLASS, None, GRAIN, requests=REQUESTS)
+    fields = _weights(low.fn, seed)
+    state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
+                                 schema=CR.SCHEMA_V2)
+    values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
+    return low, values, WR.Rows(low, unserved_slots(low, STATE, lambda label, lo, hi: fields[label][lo:hi]), values)
+
+
+def test_a_windows_labels_are_its_step_slot_and_form_alone():
+    """One advice under two sets of private values (`_private`): its rows differ, and `Rows.record` hands the window the
+    same runs under byte-identical labels, each only its step, slot and form. Every unit is in one run, and both forms
+    and both slots are there."""
+    (_la, _va, a), (_lb, _vb, b) = _private(3), _private(4)
+    assert any(not np.array_equal(x, y) for t in a.outs for x, y in zip(a.outs[t], b.outs[t]))
+    ka, kb = _Kept(), _Kept()
+    a.record(ka)
+    b.record(kb)
+    runs = [(fid, n, lab) for fid, n, lab, *_ in ka.calls]
+    assert runs == [(fid, n, lab) for fid, n, lab, *_ in kb.calls]
+    labels = [json.loads(lab) for *_, lab in runs]
+    assert all(set(lab) == {"step", "slot", "form"} for lab in labels)
+    assert {lab["form"] for lab in labels} == set(WR.FORMS) and {lab["slot"] for lab in labels} == {0, 1}
+    counts: dict[str, int] = {}
+    for fid, n, _ in runs:
+        counts[fid] = counts.get(fid, 0) + n
+    want: dict[str, int] = {}
+    for t, n in a.n.items():
+        want[a.fns[t].id] = want.get(a.fns[t].id, 0) + n
+    assert counts == want
+
+
+#: the keys of `Window.write`'s public JSON whose values are hiding commitments or digests over them, and the commit's seconds
+HIDING = {"root", "roots", "registered_roots", "paths", "registered_paths", "public_sha512", "leaf_layer",
+          "registration_digest", "seconds"}
+PRIVATE = re.compile(r"[mtv]\d+-private\.bin|index\.json|index-salt\.bin")
+
+
+def _hide(x: Any, role: str) -> Any:
+    if isinstance(x, dict):
+        return {k: _hide(v, role) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_mask(v) if isinstance(v, dict) else _hide(v, role) for v in x]
+    return f"<{role}>"
+
+
+def _mask(x: Any) -> Any:
+    if isinstance(x, dict):
+        return {k: _hide(v, k) if k in HIDING else _mask(v) for k, v in x.items()}
+    return [_mask(v) for v in x] if isinstance(x, list) else x
+
+
+def _public(c, d) -> dict[str, Any]:
+    """Window dir ``d``'s public files, each hiding commitment and digest over one replaced by its role (`HIDING`; a public
+    body's ``b || c`` strings by their length), each prover-only file by its name once it is its owner's alone."""
+    out: dict[str, Any] = {}
+    for f in sorted(d.iterdir()):
+        if PRIVATE.fullmatch(f.name):
+            assert f.stat().st_mode & 0o077 == 0, f"{f.name} is readable by others"
+            out[f.name] = "private"
+        elif f.name in ("registration.json", "window.json"):
+            out[f.name] = _mask(json.loads(f.read_text()))
+        elif f.suffix == ".bin":
+            k = int(f.name[1:].split("-")[0])
+            ports = ([c.window.row_tables[k].port] if f.name[0] == "t"
+                     else [c.window.members[k].port(p) for p, _ in c.window.members[k].all_rows])
+            body, bc = f.read_bytes(), sum(len(c.bc[p]) for p in ports)
+            out[f.name] = (len(body), body[bc:])
+        else:
+            out[f.name] = f.read_bytes()
+    return out
+
+
+@pytest.mark.slow
+def test_one_advice_under_two_sets_of_private_values_has_one_public_record(tmp_path):
+    """One advice under two sets of private values (`_private`), each closed and written by `Window.write` as
+    `prove_path`'s window commit writes it, under one index salt: every public file is byte for byte the other's once each
+    hiding commitment (a root, a row's ``b || c``, a registered read's path) and each digest over one is replaced by its
+    role, and the index and its salt are prover only. What the labels test can't reach: everything else `Window.write`
+    makes public. Slow (minutes) for the two windows' closes."""
+    pub, salt = {}, os.urandom(CS.SALT_BYTES)
+    for seed in (3, 4):
+        low, values, rows = _private(seed)
+        win = IF.Window(low.circuit, RUN, DESIGN, 64, registered=values, forms=WR.FORMS)
+        win.supply()
+        rows.record(win)
+        c = win.close()
+        prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0}}
+        win.write(c, tmp_path / str(seed), prov, registrar=DK, index_salt=salt)
+        pub[seed] = _public(c, tmp_path / str(seed))
+    assert pub[3] == pub[4]
+    assert {"index.json", "index-salt.bin", "circuit.json", "registration.json"} <= set(pub[3])
