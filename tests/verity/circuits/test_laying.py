@@ -103,6 +103,42 @@ def test_laying_keeps_every_gate_in_place_and_every_unit_fits(limit):
     assert [v0[g] for g in C0.root_outputs()] == [v1[g] for g in C1.root_outputs()]
 
 
+def _values(P):
+    C = P.circuit
+    rng = random.Random(C.size)
+    t = {g.index: rng.getrandbits(1) for g in C.gates() if input_id(g.prim.id)}
+    v = evaluate_region(C, C[0:C.size], t)
+    return sorted(t), [v[g] for g in C.root_outputs()]
+
+
+@functools.cache
+def tiles(n: int) -> Program:
+    params = (("x", Array(n, A4)), ("k", A4))
+    fn = CompositeDefinition(f"LayingToyTiles{n}", 1, (), lambda S: (params, Array(n, PAIR)),
+                             lambda B, S, x, k: B.batch(V, x, k, axes=(0, None)), register=False)
+    return Program(fn, registered=["k"])
+
+
+@pytest.mark.parametrize("limit", [3, 8, 20])
+@pytest.mark.parametrize("program", [toy, lambda: tiles(5)])
+def test_laying_batchwise_gives_the_same_values_and_every_unit_fits(program, limit):
+    P0 = program()
+    P1 = LY.lay(P0, ands(limit), batchwise=True)
+    assert P1.circuit.size == P0.circuit.size and _values(P1) == _values(P0)
+    m = LY.Measure(P1, LY.query(P1))
+    assert all(ands(limit)(*m.block(u, u + 1)) for u in range(len(m.units)))
+
+
+@pytest.mark.parametrize("limit", [3, 8])
+def test_a_batch_of_tiles_laid_batchwise_has_one_tiles_root_nodes(limit):
+    laid_ = {n: LY.lay(tiles(n), ands(limit), batchwise=True) for n in (1, 2, 5, 48)}
+    assert len({len(P.root.body.nodes) for P in laid_.values()}) == 1
+    units = {n: len(LY.Measure(P, LY.query(P)).units) for n, P in laid_.items()}
+    assert units == {n: n * units[1] for n in laid_}
+    sizes = [len(b"".join(descriptor_chunks(P))) for P in laid_.values()]
+    assert max(sizes) - min(sizes) < 512
+
+
 def test_a_unit_that_fits_is_left_as_it_is():
     assert LY.lay(toy(), ands(10**6)) is toy()
 

@@ -12,6 +12,12 @@ order, each reading the same gates (PROTOCOL.md §6 lays a call node out as its 
 a batch of one primitive as its one gate): only the root's nodes, and so the units, change. A root unit that is one
 primitive and does not fit, or a body that holds a scan, is refused (`Unlaid`).
 
+**Batchwise** (`lay(..., batchwise=True)`). A batch of n members past the limit is opened node by node instead: each body
+node, in body order, becomes one root batch over the n members (a body batch of n' members one batch of n·n', member m's
+n' members together), its mapped arguments member-major along axis 0, and a body node whose every argument is the same
+for every member is emitted once. The laid root then has one tile's nodes whatever n is, and its gates are C's gates
+reordered node by node: the outputs are the same, the gate order and so the units' gate ranges are not C's.
+
 **Packing** (`pack`). The root units in order, a block closed when the next unit would take it past ``fits``: the block's
 ports are its in(S) and out(S), so a wire between two of its units is no port of it. A block closes at each of ``ends``
 (a coarser level's ends, which the blocks then refine). With a floor ``enough(ins, outs, ands, units)``, a block under it
@@ -30,9 +36,9 @@ from .count import count
 from .codec import descriptor_id
 from .defs import CompositeDefinition, PrimitiveDefinition, bind
 from .program import REGISTRATION, RUN, SUPPLIED, Program, input_id, is_input
-from .refs import Affine, Coll, Concat, Explicit, Grid, Strided, concat
+from .refs import Affine, Coll, Concat, Explicit, Grid, Strided, as_grid, concat, spell
 from .restrict import _spell
-from .types import Value, axis_runs
+from .types import Array, Value, axis_runs, remove_axis
 
 Fits = Callable[[tuple[int, ...], tuple[int, ...], int], bool]
 Enough = Callable[[tuple[int, ...], tuple[int, ...], int, int], bool]
@@ -49,7 +55,7 @@ def query(program: Any) -> dict[str, Any]:
     return PO.template_instances_query(list(dict.fromkeys(descriptor_id(fn) for _k, fn in PO.calls(program))))
 
 
-def lay(program: Any, fits: Fits) -> Program:
+def lay(program: Any, fits: Fits, batchwise: bool = False) -> Program:
     while True:
         m = Measure(program, query(program))
         over = sorted({m.units[u][0] for u in range(len(m.units)) if not fits(*m.block(u, u + 1))})
@@ -62,13 +68,14 @@ def lay(program: Any, fits: Fits) -> Program:
                 raise Unlaid("lay-primitive", f"root node {k}, {descriptor_id(fn)}: one primitive a unit, past the limit")
             if any(nd.form == "scan" for nd in fn.body.nodes):
                 raise Unlaid("lay-scan", f"root node {k}, {descriptor_id(fn)}: its body holds a scan, which no root unit is")
-        program = _laid(program, set(over))
+        program = _laid(program, set(over), batchwise)
 
 
-def _laid(program: Any, over: set[int]) -> Program:
+def _laid(program: Any, over: set[int], batchwise: bool = False) -> Program:
     fn0, root = program.fn, program.root.body
     params, ret = fn0.signature()
     inputs = next((k for k, nd in enumerate(root.nodes) if not is_input(nd.fn)), len(root.nodes))
+    sp = _periodic if batchwise else _spell
 
     def body(B, S, *_colls):
         new: dict[int, Any] = {k: Affine("n", k, 0, root.nodes[k].out.leaves) for k in range(inputs)}
@@ -76,9 +83,14 @@ def _laid(program: Any, over: set[int]) -> Program:
             return new[i]
         for k in range(inputs, len(root.nodes)):
             node = root.nodes[k]
-            args = [Coll(x.type, _subst(x.refs, look)) for x in node.args]
-            new[k] = _open(B, node, args) if k in over else _emit(B, node, args)
-        return Coll(ret, _subst(root.ret, look))
+            args = [Coll(x.type, _subst(x.refs, look, sp)) for x in node.args]
+            if k not in over:
+                new[k] = _emit(B, node, args)
+            elif batchwise and node.form == "batch":
+                new[k] = _open_batchwise(B, node, args)
+            else:
+                new[k] = _open(B, node, args)
+        return Coll(ret, _subst(root.ret, look, sp))
 
     fn = bind(CompositeDefinition(f"{fn0.name}Laid", fn0.version, (), lambda S: (params, ret), body, register=False))
     names = [n for n, _t in params]
@@ -119,7 +131,197 @@ def _body(B, fn, args: list) -> Any:
     return _subst(body.ret, look)
 
 
-def _subst(refs: Any, look: Callable[[str, int], Any]) -> Any:
+def _open_batchwise(B, node, args: list) -> Any:
+    n, body = node.n, node.fn.body
+    mapped = [ax is not None for ax in node.axes]
+    params = [[a if ax is None else _member(a, ax, m) for a, ax in zip(args, node.axes)] for m in range(n)]
+    local: dict[int, tuple] = {}
+
+    def looks(m):
+        def look(s, i):
+            if s == "p":
+                return params[m][i].refs
+            kind, refs, L = local[i]
+            return refs if kind == "s" else refs.slice(m * L, (m + 1) * L)
+        return look
+
+    def shared(refs) -> bool:
+        return all(not mapped[i] if s == "p" else local[i][0] == "s" for s, i in _sources(refs))
+
+    for j, nd in enumerate(body.nodes):
+        if all(shared(x.refs) for x in nd.args):
+            a = [Coll(x.type, _subst(x.refs, looks(0), _periodic)) for x in nd.args]
+            out = B.batch(nd.fn, *a, axes=(None,) * len(a), n=1, name=nd.name).refs if nd.form == "primitive" \
+                else _emit(B, nd, a)
+            local[j] = ("s", out, 0)
+            continue
+        if nd.form == "scan":
+            raise Unlaid("lay-scan", f"{descriptor_id(nd.fn)}: a scan in a body opened batchwise")
+        inner = nd.n if nd.form == "batch" else 1
+        axes2 = nd.axes if nd.form == "batch" else (None,) * len(nd.args)
+        cols, axes = [], []
+        for x, ax2 in zip(nd.args, axes2):
+            whole = [Coll(x.type, _subst(x.refs, looks(m), _periodic)) for m in range(n)]
+            if ax2 is None and shared(x.refs):
+                cols.append(whole[0])
+                axes.append(None)
+                continue
+            mt = x.type if ax2 is None else remove_axis(x.type, ax2)[1]
+            members = [w.refs if ax2 is None else _member(w, ax2, m2).refs for w in whole for m2 in range(inner)]
+            cols.append(Coll(Array(n * inner, mt), _stack(members, (inner, n))))
+            axes.append(0)
+        out = B.batch(nd.fn, *cols, axes=axes, n=n * inner, name=nd.name)
+        local[j] = ("b", out.refs, inner * out.type.elem.leaves)
+    return _stack([_subst(body.ret, looks(m), _periodic) for m in range(n)])
+
+
+def _member(c: Coll, axis: int, m: int) -> Coll:
+    if axis:
+        return c.take(axis, m)
+    L = c.type.elem.leaves
+    return Coll(c.type.elem, _slice(c.refs, m * L, (m + 1) * L))
+
+
+def _slice(r: Any, lo: int, hi: int) -> Any:
+    """``r.slice(lo, hi)``, a grid cut at whole periods of its levels kept one grid."""
+    if not isinstance(r, Grid) or (lo, hi) == (0, r.count):
+        return r if (lo, hi) == (0, r.count) else r.slice(lo, hi)
+    per, lv = len(r.lanes) * r.run, r.lanes[0][4]
+    if lo % per or hi % per or hi <= lo:
+        return r.slice(lo, hi)
+    t0, t1, i = lo // per, hi // per, 0
+    while i < len(lv) and t0 % (_prod(lv[:i + 1])) == 0 and t1 % (_prod(lv[:i + 1])) == 0 and \
+            (t1 - t0) % _prod(lv[:i + 1]) == 0 and _prod(lv[:i + 1]) <= t1 - t0:
+        i += 1
+    P = _prod(lv[:i])
+    q0, cnt = t0 // P, (t1 - t0) // P
+    if i < len(lv) and i < len(lv) - 1 and q0 % lv[i][0] + cnt > lv[i][0]:
+        return r.slice(lo, hi)
+    lanes = []
+    for s, x, b, e, levels in r.lanes:
+        q, off = q0, 0
+        for k, (rad, d) in enumerate(levels[i:]):
+            q, digit = (0, q) if k == len(levels) - i - 1 else divmod(q, rad)
+            off += digit * d
+        top = ((cnt, levels[i][1]),) if cnt > 1 else ()
+        lanes.append((s, x, b + off, e, (*levels[:i], *top)))
+    return spell(r.run, lanes)
+
+
+def _prod(levels) -> int:
+    out = 1
+    for rad, _d in levels:
+        out *= rad
+    return out
+
+
+def _sources(refs: Any) -> Iterator[tuple[str, int]]:
+    todo = [refs]
+    while todo:
+        p = todo.pop()
+        if isinstance(p, Concat):
+            todo.extend(p.parts)
+        elif isinstance(p, (Affine, Strided)):
+            yield p.space, p.idx
+        elif isinstance(p, Grid):
+            yield from ((s, i) for s, i, *_x in p.lanes)
+        else:
+            yield from ((s, i) for s, i, _j in p)
+
+
+def _atoms(refs: Any, out: list) -> list:
+    if isinstance(refs, Concat):
+        for p in refs.parts:
+            _atoms(p, out)
+    elif isinstance(refs, Strided) and refs.count % refs.inner:
+        s, i, b, inner, o, e, c = (refs.space, refs.idx, refs.base, refs.inner, refs.outer_stride, refs.inner_stride,
+                                   refs.count)
+        if c > inner:
+            _atoms(Strided(s, i, b, inner, o, e, c - c % inner), out)
+        out.append((c % inner, ((s, i, b + (c // inner) * o, e, ()),)))
+    elif refs.count:
+        out.append(as_grid(refs))
+    return out
+
+
+def _stack(rs: list, radices: tuple[int, ...] | None = None) -> Any:
+    """The references of members ``rs`` in member order, member μ's digits in ``radices`` (innermost first; one digit
+    by default): one grid level a digit where each member's references are the first member's moved by a fixed step a
+    lane and digit, else their concatenation."""
+    if len(rs) == 1:
+        return rs[0]
+    atoms = [_atoms(r, []) for r in rs]
+    for rad in dict.fromkeys(x for x in ((radices or (len(rs),)), (len(rs),)) if x):
+        if (out := _grid(atoms, tuple(r for r in rad if r > 1))) is not None:
+            return out
+    N = len(rs)
+    for g in range(2, N // 2 + 1):
+        if N % g == 0 and (out := _grid([sum(atoms[i:i + g], []) for i in range(0, N, g)], (N // g,))) is not None:
+            return out
+    if rs[0].count <= N * len(atoms[0]) and (out := _grid([[(1, ((s, i, j, 1, ()),)) for s, i, j in r] for r in rs],
+                                                          (N,))) is not None:
+        return out
+    return concat(rs)
+
+
+def _grid(atoms: list, radices: tuple[int, ...]) -> Any:
+    if len(atoms) == 1 or not atoms[0]:
+        return None
+
+    def sig(a):
+        return [(run, tuple((s, i, e, lv) for s, i, _b, e, lv in lanes)) for run, lanes in a]
+
+    def bases(a):
+        return [b for _r, lanes in a for _s, _i, b, _e, _lv in lanes]
+
+    s0, b0 = sig(atoms[0]), bases(atoms[0])
+    flat = [ln for _r, lanes in atoms[0] for ln in lanes]
+    if all(sig(a) == s0 for a in atoms[1:]) and (len(atoms[0]) == 1 or
+                                                  all(run == atoms[0][0][0] and not lanes[0][4] for run, lanes in atoms[0])):
+        units, d = 1, []
+        for r in radices:
+            d.append([y - x for x, y in zip(b0, bases(atoms[units]))])
+            units *= r
+        ok = True
+        for mu in range(1, len(atoms)):
+            q, want = mu, list(b0)
+            for r, dk in zip(radices, d):
+                q, digit = divmod(q, r)
+                want = [w + digit * y for w, y in zip(want, dk)]
+            if bases(atoms[mu]) != want:
+                ok = False
+                break
+        if ok:
+            return spell(atoms[0][0][0], [(s, i, b, e, (*lv, *((r, dk[j]) for r, dk in zip(radices, d))))
+                                          for j, (s, i, b, e, lv) in enumerate(flat)])
+    return None
+
+
+def _periodic(items: list) -> Any:
+    """`_spell`'s references, as one grid where they repeat with a period whose every position moves by a fixed step."""
+    r = _spell(items)
+    if not isinstance(r, Concat):
+        return r
+    for seq, run in ((r.parts, None), (items, 1)):
+        N = len(seq)
+        for P in range(1, N // 2 + 1):
+            if N % P:
+                continue
+            k = N // P
+            if run is None:
+                if len({a.count for a in seq[:P]}) != 1:
+                    continue
+                at = [(a.space, a.idx, a.base, a.count) for a in seq]
+            else:
+                at = [(s, i, j, 1) for s, i, j in seq]
+            d = [at[P + j][2] - at[j][2] for j in range(P)]
+            if all(at[q * P + j][:2] == at[j][:2] and at[q * P + j][3] == at[j][3] and
+                   at[q * P + j][2] == at[j][2] + q * d[j] for q in range(1, k) for j in range(P)):
+                return spell(at[0][3], [(at[j][0], at[j][1], at[j][2], 1, ((k, d[j]),)) for j in range(P)])
+    return r
+
+
+def _subst(refs: Any, look: Callable[[str, int], Any], spell_: Callable[[list], Any] = _spell) -> Any:
     out, todo = [], [refs]
     while todo:
         p = todo.pop()
@@ -129,7 +331,7 @@ def _subst(refs: Any, look: Callable[[str, int], Any]) -> Any:
         if isinstance(p, Affine):
             t = look(p.space, p.idx)
             out.append(p if isinstance(t, Affine) and (t.space, t.idx, t.base) == (p.space, p.idx, 0)
-                       else t.slice(p.base, p.base + p.count))
+                       else _slice(t, p.base, p.base + p.count))
             continue
         if isinstance(p, Strided) and isinstance(t := look(p.space, p.idx), Affine):
             out.append(Strided(t.space, t.idx, t.base + p.base, p.inner, p.outer_stride, p.inner_stride, p.count))
@@ -141,7 +343,7 @@ def _subst(refs: Any, look: Callable[[str, int], Any]) -> Any:
                 lanes.append((t.space, t.idx, t.base + b, e, lv))
             out.append(Grid(p.run, tuple(lanes)))
             continue
-        out.append(_spell([look(s, i)[j] for s, i, j in p]))
+        out.append(spell_([look(s, i)[j] for s, i, j in p]))
     return concat(out)
 
 
