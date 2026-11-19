@@ -11,7 +11,7 @@
 On a served run setup is checked by the developer, not the auditor (`challenger_session.SETUP`): the developer's tie on
 the prover's case (`period.tie`, and `PousCheck.RunProtocol.tie` with `SetupProtocol.check`, in the prover's piece on the
 developer's node) decodes the case's `C*` and holds `vk.root` to the root the run published, and no auditor-side entry
-compares that root with anything.  The signed run takes setup's acceptance as the open premise `period.SETUP_ACCEPTED`.
+compares that root with anything.  The signed run takes setup's acceptance as the open premise `PousVerifier.SignedRun.SETUP_ACCEPTED`.
 
 The encoder is deterministic and public given `W`, the salt and the primitives, so the server running it changes nothing
 in the timed game; a server-chosen or predictable salt would break the model's "`W` before coins" order.  Everything

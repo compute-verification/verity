@@ -15,10 +15,9 @@ import pytest
 from bench_standins import on_stand_in_machine
 from verity_config import Admission
 
-from verity_bench import jobs, served_table, steady_spec
+from verity_bench import jobs, steady_spec
 from verity_bench.cli import _parser, main
 from verity_bench.tool import VLLM_BENCH_POINT
-from verity_bench.vllm import presets
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.arms import (
     build_bound,
@@ -32,9 +31,7 @@ from verity_bench.vllm.engine import (
 )
 from verity_bench.vllm.presets import (
     ENGINE_SETTINGS,
-    FORMER_SPECS,
     GPUS,
-    SOURCE_ROOT,
     SPEC_ROOT,
     Sweep,
     expand_sweep,
@@ -398,23 +395,6 @@ def test_a_points_run_records_its_identity_as_the_key_param_resume_matches(monke
     assert VLLM_BENCH_POINT.resolve_params(["uv", "run", "verity-bench", "run", "llama31-8b-fp8-1gpu"], root)[1] == {}
 
 
-def test_a_spec_named_by_a_path_under_the_specs_former_directory_is_the_spec_of_that_name_here(tmp_path):
-    """A command written while the specs had a directory of their own names a file there. It loads as the spec of that
-    name, a steady-state spec's path resolves the same way, and its points record the path the spec has now."""
-
-    name = "llama31-8b-fp8-1gpu"
-    former = SOURCE_ROOT / FORMER_SPECS / f"{name}.toml"
-    assert presets.former_name(former) == presets.former_name(f"{FORMER_SPECS}/{name}.toml") == name
-    assert presets.former_name(name) is None and presets.former_name(tmp_path / f"{name}.toml") is None
-    assert presets.former_name(f"not-{FORMER_SPECS}/{name}.toml") is None
-    assert load_spec(former) == load_spec(name) and resolve_spec(former) == resolve_spec(name)
-    assert steady_spec.spec_path(former).samefile(SPEC_ROOT / f"{name}.toml")
-    assert jobs._relative_spec(former, SOURCE_ROOT) == served_table.spec_path(name)
-    assert (SOURCE_ROOT / served_table.spec_path(name)).samefile(SPEC_ROOT / f"{name}.toml")
-    with pytest.raises(Exception, match="no benchmark spec"):
-        load_spec(SOURCE_ROOT / FORMER_SPECS / "no-such-spec.toml")
-
-
 def test_every_spec_fits_the_queued_points_kind():
     """A point run through the queue is a job of the kind the README names, `vllm-bench-1gpu`: each spec's GPUs are its
     shape's, and its wall time covers the spec's admission."""
@@ -428,12 +408,11 @@ def test_every_spec_fits_the_queued_points_kind():
         assert spec.admission.max_minutes is None or spec.admission.max_minutes <= kind["max_wall_min"], spec.id
 
 
-def test_plan_run_check_and_compare_are_top_level_commands(tmp_path):
+def test_plan_run_and_check_are_top_level_commands():
     parser = _parser()
     assert parser.parse_args(["plan", "llama31-8b-fp8-1gpu"]).command == "plan"
     assert parser.parse_args(["run", "llama31-8b-fp8-1gpu"]).command == "run"
     assert parser.parse_args(["check", "llama31-8b-fp8-1gpu"]).command == "check"
-    assert parser.parse_args(["compare", str(tmp_path / "a"), str(tmp_path / "b")]).command == "compare"
 
 
 def test_graphs_are_refused_for_arms_bound_to_the_build():

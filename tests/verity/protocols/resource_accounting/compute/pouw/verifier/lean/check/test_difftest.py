@@ -335,7 +335,7 @@ def registered_file(case: dict) -> dict:
                 CREDITED["registered-file accept j10r chunked"] += 1
     _counted(refused, "registered-file")
     return {"refused": list(refused)} if refused is not None else {"file": got,
-                                                                   "partition": Cr.partition_of(program, shape)}
+                                                                   "partition": Cr.partition_of(program, shape, lay)}
 
 
 def _port(name: str, fn, instance, names: list[str]) -> D.Port:

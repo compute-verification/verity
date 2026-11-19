@@ -45,7 +45,7 @@ parts are read only after `argPartsOk` has bounded them by the root's nodes.
 
 namespace Spot.Edges
 
-open Flock.Program (Prog Node Arg Part Ty Defn Lane fieldsOf isInputId partLanes partLeafAt laneWire fieldIx)
+open Flock.Program (Prog Node Arg Part Ty Defn Lane fieldsOf isInputId partLanes partLeafAt laneWire fieldIx fieldSpan)
 open Flock.TemplateQuery (TRange)
 open Spot.Bits (bitsOf)
 
@@ -81,10 +81,10 @@ def partsOk (P : Prog) : Bool :=
   (List.range b.nodes.size).all fun k => (b.nodes[k]!).args.all fun a => argPartsOk k b.params.size a.seq
 
 /-- The return field of `t` that starts at leaf `o`: its index, leaves and bits. -/
-def fieldAt (t : Ty) (o : Nat) : Option (Nat × Nat × Nat) :=
-  ((fieldsOf t).foldl (fun (acc : Option (Nat × Nat × Nat) × Nat × Nat) ty =>
-    (if acc.2.1 == o && acc.1.isNone then some (acc.2.2, ty.leaves, bitsOf ty) else acc.1,
-      acc.2.1 + ty.leaves, acc.2.2 + 1)) (none, 0, 0)).1
+def fieldAt (t : Ty) (o : Nat) : Option (Nat × Nat × Nat) := do
+  let (j, l) ← fieldSpan t o
+  let ty ← (fieldsOf t)[j]?
+  pure (j, l, bitsOf ty)
 
 /-- The members `[lo, lo + n)` of `M` whose row, at argument index `x0 + m·L` and `len` long, lies in the part at
 `[s0, s0 + c)`; `edge-rows` where some member's row meets the part without lying in it. -/

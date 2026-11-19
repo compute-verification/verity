@@ -23,8 +23,9 @@ PoUB-P2's session (`P2Session`, as the verifier's process decides it live, `p2_p
 (`Core.Protocol`), so that onsite can take it as its bandwidth component: its registered store is PoUS's `C*`, so the
 store it audits is the one PoUS's setup published. Its bytes are canonical JSON (`p2_case.py` writes them):
 
-* params `{"not_before_ns": n, "request": R, "session": hex, "trusted": [hex, …]}`: the verifier's clock floor, the
-  prover's request R, the session id the auditor designated for the memory challenger that ran the party, and the
+* params `{"not_before_ns": n, "request": R, "session": hex, "store_root": hex, "trusted": [hex, …]}`: the verifier's
+  clock floor, the prover's request R, the session id the auditor designated for the memory challenger that ran the
+  party, the root of `C*` PoUS's setup published (`NOT_POUS_STORE` refuses a registration of another root), and the
   memory challengers' keys the check trusts, which never come from the evidence. R is refused unless it is for the
   registration's node and restates the auditor's session, `P2Session.SESSION`, as it is (`P2Session.requestOf`),
   naming each value that isn't: no digest binds R, so the session's parameters are that constant's, never R's, and a
@@ -35,19 +36,23 @@ store it audits is the one PoUS's setup published. Its bytes are canonical JSON 
   verifier's process answered of the session after it opened, in the order it answered them, as `Verifier.handle`
   takes its `p2_*` ops, each line's bytes as the prover sent them, hex: `{"op": "p2_event", "event", "coin"}` (a
   start, a boundary or a close with the coin the challenger released for it, `Verifier.eventOn 2 1`, whole: its
-  `COIN_BYTES`, of which the process read the first `Codec.COIN_BYTES`), `{"op": "p2_root", "t", "i", "now", "line"}`
+  `COIN_BYTES`, of which the process read the first `Codec.COIN_BYTES`; a close's its sample's coins, whole, which the
+  process read whole), `{"op": "p2_root", "t", "i", "now", "line"}`
   (`P2Session.receive`), `{"op": "p2_openings", "t", "line"}` (`P2Session.verify`) and `{"op": "p2_fail"}`
   (`P2Session.fail`). The close is the memory challenger's signature over the whole case (`P2Close`): its key, the
   log's length, the case's chain (`P2Close.chainOf` over the case's head `headOf`, the commitment's digest and the
   params' clock floor, then each entry's canonical JSON) and its LMS signature on `P2Close.closeMessage`, the memory
   challenger role's message of the params' session and P2's raw record. The log is the verifier's own: its clock's
   readings and its coins never come from the prover;
-* the check, in order: the close (`closeRefusal`) is under a trusted key, counts the log's lines, holds the case's
+* the check, in order: the registration's root is the params' `store_root`; the close (`closeRefusal`) is under a
+  trusted key, counts the log's lines, holds the case's
   chain and verifies under S1's LMS at its deployed parameters (`Lms.deployed`, `MemoryChallenger.LMS`) on the params'
-  session; every coin is the challenger's `COIN_BYTES` (`coinRefusal`); then the log replayed from the session's first
-  state (`P2Session.init`), each coin read at its first `Codec.COIN_BYTES`. Each refusal is named. The replay rejects
+  session; every coin is the challenger's `COIN_BYTES`, a close's a whole number of them (`coinRefusal`); then the log
+  replayed from the session's first state (`P2Session.init`), each coin read at its first `Codec.COIN_BYTES`, a close's
+  whole. Each refusal is named. The replay rejects
   when an entry is a request the process would have answered with an error, and with the failure that rejected the
-  session; it is undecided while a window is unverified; it accepts once every window is.
+  session; it is undecided while a window is unverified; it accepts once every window is and each drew exactly
+  `min(s, U_t)` of its receipts (`P2Session.drawsRefusal`).
 
 On acceptance it publishes `{"eps", "q_bytes", "span_ns"}`: the credited reads (`P2Session.credit`, the answer's),
 their span, and the error they hold at, ε = δ + S/2^64 for S the samples, `Poub.Protocol.certify`'s terms (not
@@ -93,13 +98,15 @@ structure Params where
   notBeforeNs : Nat
   request : Json
   session : ByteArray
+  storeRoot : ByteArray
   trusted : Array ByteArray
 
 def decodeParams (j : Json) : V Params := do
-  keys j ["not_before_ns", "request", "session", "trusted"] "params"
+  keys j ["not_before_ns", "request", "session", "store_root", "trusted"] "params"
   pure { notBeforeNs := ← J.nat j "not_before_ns" "params"
          request := ← J.get j "request" "params"
          session := ← hexAt j "session" "params"
+         storeRoot := ← hexAt j "store_root" "params"
          trusted := ← (← J.arr j "trusted" "params").mapM (hexOf? · "params.trusted") }
 
 structure Commitment where
@@ -175,6 +182,10 @@ def decodeEvidence (b : ByteArray) : V Evidence := do
   keys j ["close", "log"] "evidence"
   pure ⟨← (← J.arr j "log" "evidence").mapM lineOf, ← closeOf (← J.get j "close" "evidence")⟩
 
+/-- The refusal of a session over another store than the params' `store_root`, the root of `C*` PoUS's setup published,
+which the auditor's collector puts there from PoUS's case: so a session judged on its own is of PoUS's store. -/
+def NOT_POUS_STORE : String := "the bandwidth session's store is not PoUS's: its registration's root is not the params' store_root"
+
 def UNTRUSTED : String := "the close is signed by a key that is not a trusted memory challenger's"
 def UNCHAINED : String := "the close's chain is not the case's"
 def UNSIGNED : String := "the close's signature does not verify on the params' session"
@@ -202,21 +213,31 @@ def closeRefusal (lp : Lms.Params) (p : Params) (head : ByteArray) (e : Evidence
 def signedOk (lp : Lms.Params) (p : Params) (head : ByteArray) (e : Evidence) : Bool :=
   (closeRefusal lp p head e).isNone
 
-/-- Why a coin of the log isn't the challenger's whole coin, none when every coin is. -/
+/-- Why a coin of the log isn't the challenger's whole coin, none when every coin is: a close's is its sample's coins,
+whole, a positive number of them (their number is `Verifier.withCoin`'s to check). -/
 def coinRefusal (e : Evidence) : Option String := Id.run do
   for h : k in [0:e.log.size] do
-    if let .event _ (some c) := e.log[k].op then
-      if c.size ≠ COIN_BYTES then
-        return some s!"log entry {k}: a coin is the challenger's {COIN_BYTES} bytes, not {c.size}"
+    if let .event ev (some c) := e.log[k].op then
+      match ev with
+      | .close .. =>
+        if c.size = 0 || c.size % COIN_BYTES ≠ 0 then
+          return some s!"log entry {k}: a sample's coins are the challenger's whole {COIN_BYTES}-byte coins, not {c.size} bytes"
+      | _ =>
+        if c.size ≠ COIN_BYTES then
+          return some s!"log entry {k}: a coin is the challenger's {COIN_BYTES} bytes, not {c.size}"
   return none
 
 /-- One entry of the log through session `s`, as the verifier's process answers it (`Verifier.handle`'s `p2_*` ops),
-its coin read at its first `Codec.COIN_BYTES`: the session after it, or the error the process would have answered. -/
+its coin read at its first `Codec.COIN_BYTES`, a close's sample's coins whole: the session after it, or the error the
+process would have answered. -/
 def step (held : P2Session.Held) (s : Session.State) : Op → V Session.State
   | .event e coin =>
     match e with
     | .start _ | .boundary _ | .close .. => do
-      let (_, s) ← Verifier.eventOn 2 1 s e (coin.map (·.extract 0 Codec.COIN_BYTES))
+      let read := match e with
+        | .close .. => id
+        | _ => (·.extract 0 Codec.COIN_BYTES)
+      let (_, s) ← Verifier.eventOn 2 1 s e (coin.map read)
       pure s
     | _ => throw "a P2 session's events are a start, a boundary or a close: a root or openings is a line"
   | .root t i now line => pure (P2Session.receive held s t i line now).2
@@ -257,7 +278,8 @@ def certify (held : P2Session.Held) (sm : Session.Summary) : Public × Json :=
 
 /-- The check under the LMS parameters `lp` (module docstring); `check` is it under S1's. -/
 def checkAt (lp : Lms.Params) (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Json :=
-  match closeRefusal lp p (headOf p c) e <|> coinRefusal e with
+  if c.held.reg.root != p.storeRoot then .reject NOT_POUS_STORE
+  else match closeRefusal lp p (headOf p c) e <|> coinRefusal e with
   | some why => .reject why
   | none =>
     match replay p c e with
@@ -270,7 +292,10 @@ def checkAt (lp : Lms.Params) (p : Params) (c : Commitment) (e : Evidence) : Cor
           | none => ""
         .reject s!"the session was rejected: {f.failure.name} at window {f.window}{sample}"
       | none, none => .undecided "the session has a window not yet verified"
-      | none, some sm => let (pub, prof) := certify c.held sm; .accept pub prof
+      | none, some sm =>
+        match P2Session.drawsRefusal sm s.params.samples with
+        | some why => .reject why
+        | none => let (pub, prof) := certify c.held sm; .accept pub prof
 
 def check : Params → Commitment → Evidence → Core.Outcome Public Json := checkAt Lms.deployed
 
@@ -303,7 +328,7 @@ def account : Core.Account :=
                   error := .published "eps", uncertified := .safe }] }
 
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason ==
-  some "params: params: the keys must be [not_before_ns, request, session, trusted], not []"
+  some "params: params: the keys must be [not_before_ns, request, session, store_root, trusted], not []"
 
 /-! The close's refusals on a one-line log, signed at a toy LMS key (N = 8, height 1), so the guards sign quickly; the
 check runs at `Lms.deployed`. -/
@@ -326,7 +351,7 @@ private def refusal (signedOn : ByteArray) (trust : Bool) (edit : SignedClose �
     (record.getD (P2Close.closeRecord toyLog.size chain))).toOption
   let s ← (Lms.signAt k 0 m).toOption
   let close := edit ⟨k.publicKey, toyLog.size, chain, s.encode⟩
-  pure (closeRefusal toy ⟨0, .null, toyRecord, if trust then #[close.publicKey] else #[]⟩ head ⟨log, close⟩)
+  pure (closeRefusal toy ⟨0, .null, toyRecord, ByteArray.empty, if trust then #[close.publicKey] else #[]⟩ head ⟨log, close⟩)
 
 /-- A PoUS session record and a wipe record of the toy session, each a digest. -/
 private def pousRecord : Option ByteArray :=

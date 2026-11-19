@@ -27,8 +27,7 @@ byte is read from HBM twice.
 **The session.** `session` starts the verifier with `--verifier CMD` (the ssh command that runs `p2_parties --stdio` on
 the auditor's device; on one host, the module itself, which certifies nothing), reaches `p2_parties --listen` at
 `--connect HOST:PORT`, or starts it as a party of the auditor's gate (`--party CMD`, the ssh command to the gate's verb,
-whose stdout says the port, reached at `--party-host`, and then the verifier's own record of the answer, which must be
-the one the session ended with), sends the request and answers each pass,
+whose stdout says the port, reached at `--party-host`; the verifier keeps no record of its answer), sends the request and answers each pass,
 each window's openings (each unit's four blocks from the segment files with their PoUS vk paths, `VkPaths`, from the
 store's row digests) and returns the verifier's answer, written to `OUT/session.json` with each step's timings, and
 the line `BW VERDICT ...`. `--skip-layer L` is a cheat: it neither reads nor decodes layer L's tensors, and the
@@ -38,8 +37,8 @@ cache under the pass's seed, so a sample of a later pass is rejected (`receipt`)
 
 **The case.** The verifier sends the session's core case before its answer (`p2_parties`'s `{"case": ...}`, `p2_case`):
 `--case-dir DIR` writes it with its answer, `case.json` and `answer.json`, into DIR (0700, each file 0600), the
-answer `Poub.P2Protocol`'s with `--case-exe` (`poub-p2-protocol`); without it the Python only refuses,
-so an accepted session's case is undecided (`p2_case.unjudged`). The case
+answer `Poub.P2Protocol`'s with `--case-exe` (`poub-p2-protocol`); without it the case is undecided, whatever the
+session said (`p2_case.unjudged`). The case
 holds the store's opened blocks and the verifier's coins, so DIR is private and never under OUT: `session.json` says
 only where it went, its commitment's digest, its store and its verdict. A session the verifier refused, or one that
 ended in the prover's error, writes none.
@@ -76,7 +75,7 @@ sys.path.insert(0, str(STAGE))
 
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
-from verity.commitments.merkle import merkle_depth
+from verity.commitments.merkle import levels, merkle_depth
 from verity.protocols.resource_accounting.memory.poub.prover import p2_party_prover
 from verity.protocols.resource_accounting.memory.poub.verifier import coins, ledger, p2, p2_case, p2_parties, receipts
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
@@ -296,34 +295,14 @@ class RefDecode:
 
 # --- the receipt tree and PoUS's vk paths, in worker processes ---------------------------------------------------------
 
-def _domain(seed: bytes, runs: tuple, blocks: int) -> tuple[Any, int]:
-    """The receipt tree's domain under the plan `runs` of a store of `blocks` units, and the plan's positions: a
-    worker's task carries the plan's runs, as a `Plan` doesn't pickle."""
-    plan = receipts.Plan(runs, blocks)
-    return receipts.domain(seed, plan), plan.length
-
-
-def _leaves(args: tuple) -> bytes:
-    seed, runs, blocks, lo, hi, ys, salts = args
-    d, n = _domain(seed, runs, blocks)
-    out = bytearray()
-    for c in range(lo, hi):
-        a, b = (PER_LEAF * c - PER_LEAF * lo) * DIGEST, (min(PER_LEAF * (c + 1), n) - PER_LEAF * lo) * DIGEST
-        out += d.leaf(c, c, receipts.SCHEMA, receipts.hidden(ys[a:b], salts[SALT * (c - lo):SALT * (c - lo + 1)]))
-    return bytes(out)
-
-
-def _pads(args: tuple) -> bytes:
-    seed, runs, blocks, lo, hi = args
-    d, _ = _domain(seed, runs, blocks)
-    return b"".join(d.pad(r) for r in range(lo, hi))
-
-
-def _nodes(args: tuple) -> bytes:
-    seed, runs, blocks, level, lo, below = args
-    d, _ = _domain(seed, runs, blocks)
-    return b"".join(d.node(level, lo + k, below[2 * DIGEST * k:2 * DIGEST * k + DIGEST],
-                           below[2 * DIGEST * k + DIGEST:2 * DIGEST * (k + 1)]) for k in range(len(below) // (2 * DIGEST)))
+def _chunk(args: tuple) -> list[bytes]:
+    d, n, lo, hi, leaves, ys, salts = args
+    nodes = [d.leaf(c, c, receipts.SCHEMA, receipts.hidden(ys[(PER_LEAF * c - PER_LEAF * lo) * DIGEST:
+                                                              (min(PER_LEAF * (c + 1), n) - PER_LEAF * lo) * DIGEST],
+                                                           salts[SALT * (c - lo):SALT * (c - lo + 1)]))
+             for c in range(lo, min(hi, leaves))]
+    nodes += [d.pad(r) for r in range(max(lo, leaves), hi)]
+    return [b"".join(level) for level in levels(d.domain_id, nodes, lo, 0, d.hash)]
 
 
 def _run(pool: ProcessPoolExecutor | None, fn, tasks: list[tuple]) -> list[bytes]:
@@ -331,8 +310,9 @@ def _run(pool: ProcessPoolExecutor | None, fn, tasks: list[tuple]) -> list[bytes
 
 
 class ReceiptTree:
-    """`receipts.tree(seed, plan, ys, salts)` built level by level in `pool`'s processes: its `root`, and `path(c)`,
-    leaf c's siblings from the leaf up, as `MerkleTree.open(c).path`."""
+    """`receipts.tree(seed, plan, ys, salts)` built in `pool`'s processes: `merkle.levels` over each aligned chunk of
+    `CHUNK` leaves and pads (`CHUNK` a power of two) and over the chunks' roots; its `root`, and `path(c)`, leaf c's
+    siblings from the leaf up, as `MerkleTree.open(c).path`."""
 
     CHUNK = 1 << 14
 
@@ -341,22 +321,17 @@ class ReceiptTree:
         L, n = plan.length, receipts.leaves(plan.length)
         if ys.shape != (L, DIGEST) or len(salts) != SALT * n:
             raise ValueError(f"{L} receipts in {n} leaves")
-        raw, C, p = ys.tobytes(), self.CHUNK, (seed, plan.runs, plan.blocks)
-        tasks = [(*p, lo, min(n, lo + C), raw[PER_LEAF * DIGEST * lo:PER_LEAF * DIGEST * min(n, lo + C)],
-                  salts[SALT * lo:SALT * min(n, lo + C)]) for lo in range(0, n, C)]
-        width = 1 << merkle_depth(n)
-        level = b"".join(_run(pool, _leaves, tasks))
-        level += b"".join(_run(pool, _pads, [(*p, lo, min(width, lo + C)) for lo in range(n, width, C)]))
-        self.levels = [level]
-        depth = 0
-        while len(level) > DIGEST:
-            pairs = len(level) // (2 * DIGEST)
-            tasks = [(*p, depth, lo, level[2 * DIGEST * lo:2 * DIGEST * min(pairs, lo + C)])
-                     for lo in range(0, pairs, C)]
-            level = b"".join(_run(pool, _nodes, tasks))
-            self.levels.append(level)
-            depth += 1
-        self.root = level[:DIGEST]
+        if self.CHUNK < 1 or self.CHUNK & (self.CHUNK - 1):
+            raise ValueError(f"CHUNK {self.CHUNK} is not a power of two")
+        raw, width = ys.tobytes(), 1 << merkle_depth(n)
+        C, d = min(self.CHUNK, width), receipts.domain(seed, plan)
+        chunks = _run(pool, _chunk, [(d, L, lo, lo + C, n, raw[PER_LEAF * DIGEST * lo:PER_LEAF * DIGEST * min(n, lo + C)],
+                                      salts[SALT * lo:SALT * min(n, lo + C)]) for lo in range(0, width, C)])
+        self.levels = [b"".join(c[k] for c in chunks) for k in range(len(chunks[0]))]
+        if len(chunks) > 1:
+            self.levels += [b"".join(lv) for lv in levels(d.domain_id, [c[-1] for c in chunks], 0, C.bit_length() - 1,
+                                                           d.hash)[1:]]
+        self.root = self.levels[-1][:DIGEST]
 
     def path(self, c: int) -> tuple[bytes, ...]:
         return tuple(lv[DIGEST * ((c >> k) ^ 1):DIGEST * ((c >> k) ^ 1) + DIGEST]
@@ -738,51 +713,51 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
            deployment: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The answer to the session `held` left in `private`, with no store and no card: the case and its answer to
     `private` (`p2_case.write`), the public answer and a summary to `public` (``answer.json``, ``bandwidth.json``); the
-    public answer, also returned. With `pous_case` (PoUS's run case), a case whose store isn't PoUS's
-    (`p2_case.same_store`) is refused. With `case_exe` (``poub-p2-protocol``) the Lean answers the case and
+    public answer, also returned. With `pous_case` (PoUS's run case), the case is held to PoUS's store
+    (`p2_case.storing`), which the Lean refuses a session over another store by. With `case_exe` (``poub-p2-protocol``) the Lean answers the case and
     its answer is the one written, in ``lean_s`` seconds; a Lean that doesn't answer leaves the session undecided and no
-    case written; without it the session's reject or undecided stands and its accept is undecided
-    (`p2_case.unjudged`). With no key `key_of` gives, the session is undecided (`NO_KEY`). The summary names the program whose verdict the answer is and the machine it ran on, the
-    prover's (``decided_by``, `period.decided_by`): the Lean where it answered the case, else this Python. `HELD` stays, so the
-    same session can be answered again; the caller removes it once it needs no other answer."""
+    case written; without it, a session that made no case and a close that doesn't decode are undecided, never a verdict
+    of this Python's (`p2_case.unjudged`). With no key `key_of` gives, the session is undecided (`NO_KEY`). Under a key
+    the configuration doesn't pin (``--run-keys``' or one given by hand), the public answer is ``development.json``
+    and no ``answer.json`` (`period.publish`). The summary names the program whose verdict the answer is, its digest
+    and the machine it ran on, the prover's (``decided_by``, `period.decided_by`): the Lean where it answered the case,
+    else this Python, with ``case_exe``'s SHA-512 (``executables``) and the card the session was against (``card``):
+    the node writes both about itself, and they are held only where an auditor-side composer compares them. `HELD` stays, so the same session can be answered again; the caller removes it once it needs no
+    other answer."""
     public.mkdir(parents=True, exist_ok=True)
     scope = SCOPE.format(k=window)
     deployed = period.deployment({}) if deployment is None else deployment
     trusted_sha512 = key_of(deployed, trusted_sha512)
     doc = json.loads((private / SESSION).read_text())
-    answer, record, steps = doc["answer"], doc["verifier_record"], doc["steps"] or []
+    answer, steps = doc["answer"], doc["steps"] or []
     r_bytes_per_s = doc["r_bytes_per_s"]
     kept = json.loads((private / HELD).read_text()) if (private / HELD).is_file() else None
     request = {k: v for k, v in doc["request"].items() if k != "node"}   # the node's name: in the private record only
     summary: dict[str, Any] = {"window": window, "request": request,
                                "pous_session": "the PoUS session the PoUS piece ran (its id private)",
                                "private": str(private), "decided_by": period.decided_by(None),
+                               "executables": period.executables(case_exe), "card": doc.get("card"),
                                "setup_s": doc["setup_s"], "session_wall_s": doc["session_wall_s"],
                                "verifier_rc": doc["verifier_rc"], "passes": len(steps),
                                "pass_s": [s["pass_s"] for s in steps]}
-    if record is not None and record != answer:
-        out = _no("reject", f"the verifier's own record of its answer ({record.get('verdict')}) is not the session's "
-                            f"({answer.get('verdict')}); {scope}")
-    elif trusted_sha512 is None:
+    if trusted_sha512 is None:
         out = _no("undecided", f"{NO_KEY}; {scope}")
     elif kept is None:
-        verdict = "undecided" if answer.get("verdict") in ("prover-error", "refused", None) else "reject"
-        out = _no(verdict, f"the session made no case: {answer.get('verdict')}: {answer.get('reason')}"[:1000]
+        out = _no("undecided", f"the session made no case: {answer.get('verdict')}: {answer.get('reason')}"[:1000]
                   + f"; {scope}")
-    elif pous_case is not None and (why := p2_case.same_store(kept, pous_case)) is not None:
-        out = _no("reject", f"the bandwidth session's store is not PoUS's: {why}; {scope}")
     else:
         summary["same_store"] = pous_case is not None
         try:
             kept = p2_case.trusting(kept, trusted_sha512)
+            kept = kept if pous_case is None else p2_case.storing(kept, pous_case)
         except (AttributeError, KeyError, TypeError, ValueError) as e:
-            out = _no("reject", f"the session's close doesn't decode: {type(e).__name__}: {e}"[:1000] + f"; {scope}")
+            out = _no("undecided", f"the session's close doesn't decode: {type(e).__name__}: {e}"[:1000] + f"; {scope}")
         else:
             summary |= key_record(kept, trusted_sha512, deployed)
             t = time.perf_counter()
             try:
                 judged = (p2_case.judged(kept, answer, case_exe) if case_exe is not None
-                          else p2_case.unjudged(kept, answer))
+                          else p2_case.unjudged(kept))
             except (OSError, IndexError, ValueError, subprocess.CalledProcessError) as e:
                 out = _no("undecided",
                           f"{case_exe} doesn't answer the case: {type(e).__name__}: {e}"[:1000] + f"; {scope}")
@@ -794,8 +769,11 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
     if out.get("reason"):
         out = out | {"reason": mc.unnamed(out["reason"], (doc["request"].get("node"), socket.gethostname()),
                                           (doc.get("party_host"),))}
-    _write(public / "answer.json", out)
-    _write(public / "bandwidth.json", summary | {"verdict": out["verdict"], "reason": out["reason"]})
+    pinned = mc.pinned(deployed["pins"], p2_parties.CLOSER_PARTY, p2_parties.COMPONENT)
+    development = period.development_of(trusted_sha512, pinned)
+    period.publish(public, out, development)
+    _write(public / "bandwidth.json", summary | {"development": development, "verdict": out["verdict"],
+                                                 "reason": out["reason"]})
     return out
 
 
@@ -803,7 +781,7 @@ def missing(public: Path, window: int, reason: str) -> dict[str, Any]:
     """No session ran: the public answer undecided, saying why, by this Python (``decided_by``)."""
     public.mkdir(parents=True, exist_ok=True)
     out = _no("undecided", f"{reason}; {SCOPE.format(k=window)}")
-    _write(public / "answer.json", out)
+    period.publish(public, out, None)
     _write(public / "bandwidth.json", {"window": window, "verdict": out["verdict"], "reason": out["reason"],
                                        "decided_by": period.decided_by(None)})
     return out
@@ -954,8 +932,7 @@ class Attached:
         """One PoUB-P2 session over the store PoUS holds with the bandwidth party `party` (a shell command, to which
         ``--pous-session`` and PoUS's session id `sid` are added, and ``--session`` and a fresh id for this session,
         under which the memory attester signs the case's close; without `trusted_sha512`, no session has a case; its
-        port reached at `party_host`), under `request_`: the session's record (`SESSION`: the party's answer and its
-        own record of it, the registration, each pass and opening, the seconds) and, where the session made one, its
+        port reached at `party_host`), under `request_`: the session's record (`SESSION`: the answer the party sent, the registration, each pass and opening, the seconds) and, where the session made one, its
         case not yet answered (`HELD`), with the logs, to `private` (0700, files 0600), for `decide`. γ is against
         `r_bytes_per_s`, the data sheet's stated memory bandwidth of `card`, which the launcher reads."""
         private.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -971,12 +948,12 @@ class Attached:
                 print(m, file=log_f, flush=True)
 
             t0 = time.perf_counter()
-            record = rc = None
+            rc = None
             prover = None
             try:
                 prover = self.peer(node.encode(), log=log)
                 setup_s = time.perf_counter() - t0
-                answer, record, rc = _party(SimpleNamespace(party=command, party_host=party_host), private, prover,
+                answer, rc = _party(SimpleNamespace(party=command, party_host=party_host), private, prover,
                                               request_)
             except Exception as e:  # noqa: BLE001 - the prover's own failure, its answer, never the verifier's
                 log(json.dumps({"prover_error": f"{type(e).__name__}: {e}"}))
@@ -987,7 +964,7 @@ class Attached:
             with os.fdopen(fd, "wb") as f:
                 f.write(canonical_json_bytes(dict(prover.kept)) + b"\n")
         _write(private / SESSION, {
-            "answer": answer, "verifier_record": record, "verifier_rc": rc, "request": dict(request_),
+            "answer": answer, "verifier_rc": rc, "request": dict(request_),
             "registration": None if prover is None else p2_parties.registration_json(prover.registration, prover.plan),
             "steps": None if prover is None else prover.steps, "opened": None if prover is None else prover.opened,
             "pous_session": sid.hex(), "session": None if p2_session is None else p2_session.hex(), "party": command,
@@ -1002,11 +979,10 @@ def registration_file(reg: p2.Registration, path: Path, plan: receipts.Plan | No
 
 # --- the session -------------------------------------------------------------------------------------------------------
 
-def verdict_line(answer: dict, expect: str | None, record: dict | None = None) -> str:
-    """The session's verdict line; with the verifier's own `record` of its answer (a party's stdout), whether the two
-    agree, and the session passes only if they do."""
+def verdict_line(answer: dict, expect: str | None) -> str:
+    """The session's verdict line, as the prover received the answer: a measurement's, which no verdict reads."""
     v = answer.get("verdict")
-    ok = (expect is None or {"accept": "accept", "reject": "reject"}[expect] == v) and record in (None, answer)
+    ok = expect is None or {"accept": "accept", "reject": "reject"}[expect] == v
     parts = [f"BW VERDICT {v}"]
     if v == "accept":
         rate = answer.get("credited_bytes_per_s")
@@ -1017,27 +993,22 @@ def verdict_line(answer: dict, expect: str | None, record: dict | None = None) -
         parts += [f"failure={answer.get('failure')}", f"window={answer.get('window')}", f"at={answer.get('at')}",
                   f"reason={answer.get('reason')!r}"]
     parts += [f"verifier_host={answer.get('host')}", f"expect={expect}"]
-    if record is not None:
-        parts.append(f"verifier_record_agrees={record == answer}")
     return " ".join([*parts, "PASS" if ok else "FAIL"])
 
 
-def _party(a: argparse.Namespace, out: Path, prover: Prover, request: dict) -> tuple[dict, dict | None, int]:
+def _party(a: argparse.Namespace, out: Path, prover: Prover, request: dict) -> tuple[dict, int]:
     """A session with a party the auditor's gate starts (`--party CMD`, `p2_parties --listen` on the gate's host): its
-    `{"listening": port}` read from CMD's stdout, the session over TCP to `--party-host` at that port, and then its own
-    record of the answer from the rest of CMD's stdout. The gate kills a party once its session's minutes run out
+    `{"listening": port}` read from CMD's stdout, then the session over TCP to `--party-host` at that port. The gate kills a party once its session's minutes run out
     (`bw_party --minutes M`) and says so on that stdout, `{"killed": why}`: a session cut off so fails naming it."""
     with open(out / "verifier.err", "ab") as err:
         proc = subprocess.Popen(a.party, shell=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=err)
-        record = killed = None
+        killed = None
 
         def rest() -> None:
-            nonlocal record, killed
+            nonlocal killed
             for line in proc.stdout:
                 doc = json.loads(line)
-                if isinstance(doc, dict) and "answer" in doc:
-                    record = doc["answer"]
-                elif isinstance(doc, dict) and "killed" in doc:
+                if isinstance(doc, dict) and "killed" in doc:
                     killed = doc["killed"]
 
         try:
@@ -1061,7 +1032,7 @@ def _party(a: argparse.Namespace, out: Path, prover: Prover, request: dict) -> t
             rest()
         finally:
             rc = proc.wait()
-    return answer, record, rc
+    return answer, rc
 
 
 def session(a: argparse.Namespace) -> int:
@@ -1091,11 +1062,11 @@ def session(a: argparse.Namespace) -> int:
         log(json.dumps({"start": {"node": a.node, "units": reg.blocks, "registration": reg.digest.hex(),
                                   "request": request, "setup_s": round(setup_s, 3), "host": socket.gethostname(),
                                   "skip_layer": a.skip_layer, "cache": a.cache}}))
-        rc = record = None
+        rc = None
         t1 = time.perf_counter()
         try:
             if a.party is not None:
-                answer, record, rc = _party(a, out, prover, request)
+                answer, rc = _party(a, out, prover, request)
             elif a.connect is not None:
                 host, _, port = a.connect.rpartition(":")
                 with (socket.create_connection((host, int(port))) as conn, conn.makefile("rb") as r,
@@ -1118,21 +1089,19 @@ def session(a: argparse.Namespace) -> int:
         if a.case_dir is not None and prover.kept is not None and answer.get("verdict") in ("accept", "reject",
                                                                                            "undecided"):
             judged = (p2_case.judged(prover.kept, answer, a.case_exe) if a.case_exe
-                      else p2_case.unjudged(prover.kept, answer))
+                      else p2_case.unjudged(prover.kept))
             p2_case.write(a.case_dir, prover.kept, judged)
-            case = {"dir": str(a.case_dir), "commitment": judged["commitment"], "store_root": prover.kept["store_root"],
-                    "verdict": judged["verdict"], "judge": "lean" if a.case_exe else "none"}
+            case = {"dir": str(a.case_dir), "commitment": judged["commitment"],
+                    "store_root": prover.kept["params"]["store_root"], "verdict": judged["verdict"], "judge": "lean" if a.case_exe else "none"}
             log(json.dumps({"case": case}))
     if pool is not None:
         pool.shutdown()
-    if a.party is not None and record is None and answer.get("verdict") != "prover-error":
-        record = {"verdict": "missing", "reason": "the party's stdout held no answer"}
-    line = verdict_line(answer, a.expect, record)
+    line = verdict_line(answer, a.expect)
     verifier = (f"party {a.party} at {a.party_host}" if a.party else a.verifier or f"tcp {a.connect}")
     doc = {"answer": answer, "request": request, "registration": p2_parties.registration_json(reg, engine.plan),
            "steps": prover.steps,
            "opened": prover.opened, "setup_s": round(setup_s, 3), "session_wall_s": round(wall, 3),
-           "verifier_rc": rc, "verifier": verifier, "verifier_record": record, "prover_host": socket.gethostname(),
+           "verifier_rc": rc, "verifier": verifier, "prover_host": socket.gethostname(),
            "skip_layer": a.skip_layer, "cache": a.cache, "store": str(a.store), "device": a.device, "verdict_line": line,
            "case": case}
     (out / "session.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
@@ -1175,7 +1144,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     s.add_argument("--readers", type=int, default=6)
     s.add_argument("--workers", type=int, default=max(1, min(12, (os.cpu_count() or 2) - 2)))
     s.add_argument("--case-dir", type=Path, help="the private directory the session's core case and its answer go to")
-    s.add_argument("--case-exe", help="poub-p2-protocol, which answers the case (else an accept is "
+    s.add_argument("--case-exe", help="poub-p2-protocol, which answers the case (else it is "
                    "undecided: p2_case.unjudged)")
     a = ap.parse_args(argv)
     if a.command == "session" and a.case_dir is not None and a.case_dir.resolve().is_relative_to(a.out.resolve()):

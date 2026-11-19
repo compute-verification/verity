@@ -178,8 +178,8 @@ def test_statics_are_checked(bad):
 
 
 #: the served word Programs (256 experts, 8 slots, x2.5), by launch: `codec.program_digest` of each standalone Program
-SERVED = {"block": "a51907a4af4c68792a7049acede040b6738cbe2ababb88676d55e6509248f5082c02f48cf5db747e1528265ac5c3c04bd799069b7fa32e2265a5baada1677ef0",
-          "warp": "d14a959cc427da1117cad8fc19558c8c6b011879e820313a6538a8004e59960a55e51d2c9ea16ef95bedefffbb9bd13e539199462a6eee6d37bdf8940c79c67f"}
+SERVED = {"block": "8a6d418a8a8d29d479461ffe171524388b9434b2f12fee678a60e2c6dd961479d97256112f75e71259d5e4fa748f55a1368a99bfdc7237358336851a005738e3",
+          "warp": "402034da1d2ea09489dd4e6c57fadd79e30715e4c1edbfa1c8addcb8aa861369d7dda3d0f2d4c952a74e210441c068c33ccb95569fcabc66805eba3a4f862eb3"}
 
 
 @pytest.mark.parametrize("launch", sorted(SERVED))

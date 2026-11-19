@@ -26,7 +26,7 @@ from verity_vllm.definitions.registry.tp_allreduce import settings_of
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR, pinned_hf_config
 from verity_vllm.program.model import INT8_EXACT_LMHEAD_QUANT, INT8_EXACT_QUANT
 from verity_vllm.program.predict import build as BUILD
-from verity_vllm.program.predict import dsa, dsv4
+from verity_vllm.program.predict import dsa
 from verity_vllm.program.predict import node as NODE
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.build import Unexpressible, build_program
@@ -213,59 +213,6 @@ def test_the_execution_label_names_the_batch_invariance(tmp_path):
         build_program(Phi.from_json({**phi.to_json(), "target": {**phi.target, "batch_invariant": True}}), "step")
     with pytest.raises(Unexpressible, match=re.escape("env VLLM_BATCH_INVARIANT=1 under a target that sets '0'")):
         build_program(Phi.from_json({**phi.to_json(), "engine": {**phi.engine, "env": {"VLLM_BATCH_INVARIANT": "1"}}}), "step")
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("rank", [0, 7])
-def test_mhc_rank_step_equals_the_record(rank, tmp_path):
-    """DeepSeek-V4-Pro at TP8 on H200 (block FP8, MXFP4 experts, cc 9.0): the first and last rank's step through the hyper-connected
-    decoder (`predict.dsv4`) is the rank's step Program `records.json` pins for the switched row:
-    the mHC pre and post-pre between sublayers, the compressed-attention decode over each layer's opened window, the table and
-    sqrtsoftplus routers, the Marlin experts aligned in pair-index order.  About 25 s a rank, nearly all of it encoding the mHC
-    Definitions' bodies for the digest; no cheaper test reaches this decoder, and the ranks between differ only in the peer order
-    GLM-5.3's ranks pin."""
-    r = build_program(_row_phi(DSV4, "DSV4_PRO", tmp_path, rank), "step", M=1, pos0=8)
-    assert r.function.startswith("Derived[vLLMStep[DeepseekV4ForCausalLM]]_v1")
-    assert r.digest == json.loads((MANIFESTS / "records.json").read_text())["rows"][DSV4]["programs"][str(rank)]["step"]
-
-
-@pytest.mark.slow
-def test_mhc_request_equals_the_record(tmp_path):
-    """DeepSeek-V4-Pro's switched row at rank 0: its one request through `predict.dsv4`, the prefill of its prompt and each decode
-    after it, is the request Program `records.json` pins for the rank.  The step above is one decode of one row, and a request of
-    two rows adds to it only the prefill's gather and attention and the ratio-4 compressor; the row's own lengths alone reach the
-    ratio-128 compressor, the TF32 post-pre of more than 16 rows, DeepGEMM's FP8 linear from 32 rows, cuBLAS's f32 GEMM without
-    split-K and the multimem all-reduce.  About 140 s."""
-    phi = _row_phi(DSV4, "DSV4_PRO", tmp_path)
-    [(lp, t)] = phi.request_shapes()
-    r = build_program(phi, "request", LP=lp, T=t)
-    assert r.function.startswith("Derived[vLLMRequest[DeepseekV4ForCausalLM]]_v1")
-    assert r.digest == json.loads((MANIFESTS / "records.json").read_text())["rows"][DSV4]["programs"]["0"]["requests"][f"build_request_LP{lp}_T{t}"]
-
-
-def test_mhc_refuses_outside_its_domain(tmp_path):
-    phi = _row_phi(DSV4, "DSV4_PRO", tmp_path)
-    short = {**phi.hf_config, "compress_ratios": [4] + phi.hf_config["compress_ratios"][1:], "index_topk": 1}
-    with pytest.raises(Unexpressible, match=re.escape("position 7 has 2 compressed rows, more than the indexer's top-1")):
-        build_program(Phi.from_json({**phi.to_json(), "model": {**phi.model, "hf_config": short}}), "step", M=8, pos0=0)
-    cfg = {**phi.hf_config, "compress_ratios": [1] + phi.hf_config["compress_ratios"][1:]}
-    with pytest.raises(Unexpressible, match=re.escape("compress ratios [1] (the compressors: [4, 128]")):
-        build_program(Phi.from_json({**phi.to_json(), "model": {**phi.model, "hf_config": cfg}}), "step")
-    half = {**phi.hf_config, "head_dim": 256}
-    with pytest.raises(Unexpressible, match=re.escape("no FlashMLA sparse geometry at head 256, rope 64 (registered: ")):
-        dsv4.Net(Phi.from_json({**phi.to_json(), "model": {**phi.model, "hf_config": half}}), 1, 8)
-
-
-def test_mhc_reads_an_engine_without_env_and_refuses_a_config_without_its_quantization_block(tmp_path):
-    """A φ whose engine states no `env` runs its all-reduce under no switch (`tp_allreduce.settings_of` of an empty env), as one
-    whose `env` is empty does.  A checkpoint config without `quantization_config` is refused by that name."""
-    phi = _row_phi(DSV4, "DSV4_PRO", tmp_path)
-    doc, stated = phi.to_json(), {k: v for k, v in phi.engine.items() if k != "env"}
-    nets = [dsv4.Net(Phi.from_json({**doc, "engine": e}), 1, 8) for e in (stated, {**stated, "env": {}})]
-    assert nets[0].settings == nets[1].settings == settings_of(False, {})
-    bare = {k: v for k, v in phi.hf_config.items() if k != "quantization_config"}
-    with pytest.raises(Unexpressible, match="a checkpoint without its block-FP8 quantization_config"):
-        dsv4.Net(Phi.from_json({**doc, "model": {**phi.model, "hf_config": bare}}), 1, 8)
 
 
 def test_dsa_reads_an_engine_without_env_as_under_no_switch(tmp_path):

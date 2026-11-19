@@ -39,6 +39,21 @@ RANGES = {
     ),
 }
 
+#: the slot, the long row's check and the thresholds on bits, made on demand as their word primitives are, with the pick, the
+#: order's equality and the count's bound each makes inside one
+BODY_FAMILIES = (r"DsaTopKSlot\d+x\d+_v2", r"DsaTopKLongRowCheck\d+x\d+_v2", r"DsaTopK(Counted)?Threshold(Key|Index)\d+x\d+_v2",
+                 r"DsaTopKSlotPick\d+_v1", r"DsaTopKOrderIs\d+_v1", r"DsaTopKBelow\d+_v1")
+
+
+def _on_demand_roots() -> list[Any]:
+    """The families made on demand at N 9, TOPK 8, reaching `DsaTopKTaken_v1`, `DsaTopKLast_v1`, `DsaTopKKeyIf_v1` and
+    `DsaTopKAt_v1`."""
+    from verity.circuits.defs import bind
+
+    from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
+
+    return [bind(d) for d in (BM.slot(9, 8), BM.long_row_check(9, 8), *BM.threshold(9, 8), *BM.threshold(9, 8, counted=True))]
+
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """The mask over 20 keys selecting 16 (reaching `DsaTopKKey_v2`, `DsaRadixPass_v1` and `DsaRadixTies_v1`), the counted mask

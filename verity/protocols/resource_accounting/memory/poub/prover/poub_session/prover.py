@@ -785,7 +785,7 @@ class ProverSide:
     def session(self, head: dict, mode: str, fraction: float) -> dict:
         k, W, cap = head["k"], head["windows"], head.get("pace") or math.inf
         one = head.get("in_flight") == 1
-        groups_per_coin = head.get("groups_per_coin", 1)
+        groups_per_coin, samples = head.get("groups_per_coin", 1), head["samples"]
         N = self.backend.blocks
         getattr(self.backend, "begin_session", lambda: None)()
         trace = serving = None
@@ -1062,7 +1062,7 @@ class ProverSide:
         with self.lock:
             self.kept.clear()
         self.conn.send({"type": "ended", "k": k})
-        self._coins(k, W, groups_per_coin, received)
+        self._coins(k, W, groups_per_coin, samples, received)
         per_window = defaultdict(int)
         for tt, *_ in passes:
             per_window[tt] += 1
@@ -1094,7 +1094,7 @@ class ProverSide:
                                      if at else None)
         return out
 
-    def _coins(self, k: int, windows: int, groups_per_coin: int, received: dict) -> None:
+    def _coins(self, k: int, windows: int, groups_per_coin: int, samples: int, received: dict) -> None:
         """Session k's coin commitment and every coin it released, opened, which the verifier sends once the prover has
         `ended` and no root of the session can follow: each challenge the prover was sent (`received`, by window) is
         to be its opening's, under a commitment of session k's layout (`coins.received_reason`)."""
@@ -1107,7 +1107,7 @@ class ProverSide:
             if head["type"] == "coins" and head["k"] == k:
                 break
         commitment = wire.commitment_of(head["commitment"])
-        why = coins.layout_reason(commitment, k, windows, groups_per_coin) or coins.received_reason(
+        why = coins.layout_reason(commitment, k, windows, groups_per_coin, samples=samples) or coins.received_reason(
             commitment, [received[t] for t in sorted(received)], wire.openings_of(body))
         if why is not None:
             raise ValueError(f"session {k}'s coins are not the ones it was sent: {why}")

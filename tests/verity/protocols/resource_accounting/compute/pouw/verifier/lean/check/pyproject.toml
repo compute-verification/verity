@@ -38,6 +38,8 @@ inputs = ["verity/protocols/proofs/spot/verifier/one_stage/link_points.py", "ver
           "verity/protocols/proofs/spot/verifier/one_stage/registered.py",
           "verity/protocols/proofs/spot/verifier/one_stage/partition.py",
           "verity/protocols/proofs/spot/verifier/one_stage/proofs.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/one_circuit.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/certified_rows.py",
           "verity/protocols/proofs/spot/verifier/one_stage/verifier.py",
           "verity/protocols/proofs/spot/verifier/one_stage/caller.py",
           "verity/protocols/proofs/spot/verifier/one_stage/audit.py",

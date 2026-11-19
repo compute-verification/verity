@@ -16,13 +16,13 @@ from verity.protocols.resource_accounting.compute.pouw.prover import serving as 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import tensors as T
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as Wn
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PSALT
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_plus_credited import PearlPlusTileCoreWords
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_plus_credited import PearlPlusTileCoreWired
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c import PearlC
 
 
 def test_found_by_name() -> None:
     assert S.SCHEMES["pearl-plus"] is PS.PEARL_PLUS
-    assert [b.definition for b in PS.PEARL_PLUS.blocks] == [PearlPlusTileCoreWords.id]
+    assert [b.definition for b in PS.PEARL_PLUS.blocks] == [PearlPlusTileCoreWired.id]
     assert PS.PEARL_PLUS.option == f"pouw:{PearlC().name}"
 
 
