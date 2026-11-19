@@ -27,7 +27,9 @@ a proof block of their own, so none is a unit of its own. The state rows and the
 A slot's Program
 hands all its outputs to the scan at its anchor, which carries them across windows (`SC_GROUP`), so no Program runs into the
 next window. `window_circuit(registered, compiled, cls, grain, placed=...)` refuses a window past the class's envelope and
-emits its circuit.
+emits its circuit. Neither C's shape nor the advice holds the bucket a request arrived in, so a served Program reads boundary
+0's state row, and a served window with a request at another boundary, or compiled from the advice at a class of more than
+one, is refused by name until a block checks the bucket as a committed value.
 
 `lower` walks the longest Program's nodes in order and lowers each to units at ``grain``, once a slot that has it (the
 Programs longest first, each a prefix of the longest): node j's units of slot 0, then of slot 1 and so on, each
@@ -112,8 +114,8 @@ digit, then the run), and like entries that follow on merge, at one step and the
 (`window_builder.inference`).
 
 Refused by name (`Unexpressible`): a window past its class's slots (more requests than slots, more anchored at a boundary than
-its lanes, an anchor that is no boundary, a prompt past the limit, more outputs than the limit), with H1's tables a window that
-isn't the fixed load, a class of more than one boundary or whose round 0 passes a table's rows a call, and a position whose
+its lanes, an anchor that is no boundary or past boundary 0, a prompt past the limit, more outputs than the limit), with H1's
+tables a window that isn't the fixed load, a class of more than one boundary or whose round 0 passes a table's rows a call, and a position whose
 int8 linears of the tables' K aren't their calls a round, with Pearl+'s what `window_cut` refuses, a request whose Program
 would read more than its prompt and the weights (a stochastic request's seed, a prefix-cache hit's prefix, a TP rank's
 peers), a request a Commit window carries in or out, byte ingress, a family this lowering doesn't know, a weight whose
@@ -349,9 +351,10 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     """``compiled``'s window (`steps.Compiled`, of ``registered``) as its circuit, refused where it is past ``cls``'s envelope
     (`takes`): a Program a request, each of the request's own positions (`lower`). ``placed`` is each request's anchor bucket
     and the bucket of its last output, in its request order, as the network attester's scan placed it (the end None:
-    unchecked); by default every request is at the window's first boundary, its end unchecked. A last output past the
-    window's end is the scan's to carry (module docstring). With ``tables``, H1's tables read (`Tables`) or the circuit cut
-    at its linears (`PearlTables`), ``cls``'s class circuit, refused unless the window is the fixed load."""
+    unchecked), each anchor boundary 0 (`window_class._placed`); by default every request is there, its end unchecked. A
+    last output past the window's end is the scan's to carry (module docstring). With ``tables``, H1's tables read
+    (`Tables`) or the circuit cut at its linears (`PearlTables`), ``cls``'s class circuit, refused unless the window is the
+    fixed load."""
     if tables is None:
         return class_circuit(registered, cls, None, grain, requests=takes(compiled, cls, placed))
     takes(compiled, cls, placed)

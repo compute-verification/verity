@@ -45,7 +45,6 @@ from tests.program.predict import test_steps as S
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.pipeline import advice as ADV
-from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program import model as M
 from verity_vllm.program.predict import block_counts as BC
 from verity_vllm.program.predict import scan_state as SS
@@ -188,22 +187,26 @@ def test_the_fixed_load_is_the_class_circuit_byte_for_byte():
         assert _blocks(c) == _blocks(cls) and (c.ids, c.external) == (cls.ids, cls.external) and c.blocks.uniform
 
 
-def test_a_3_request_and_an_8_request_window_at_the_class_of_records_slots_are_their_requests():
+def test_a_served_window_at_the_class_of_records_slots_reads_boundary_0_and_a_request_at_16_is_refused_by_name():
     """At the class of record's slots, 4 a boundary at buckets 0 and 16 (at TINY's bounds of 4 prompt ids and 2 outputs), a
-    window of eight requests is 8 Programs and one of three 3, each reading its lane of the scan's state row before its
-    anchor (a boundary's requests its lanes in request order) and its last position making its entry; their embeddings
-    are their positions (28 and 11), and the scan state they read is the class's 32 rows."""
-    eight = _lowered(EIGHT, SLOTS, [(0, 1)] * 4 + [(16, 17)] * 4)
-    three = _lowered(THREE, SLOTS, [(0, 1), (16, 18), (16, 31)])
-    assert [(p.anchor, p.lane, p.positions) for p in three.programs] == [(0, 0, 5), (16, 0, 3), (16, 1, 3)]
+    window of three requests at boundary 0 is 3 Programs, each reading its lane of the scan's state row before bucket 0 (the
+    requests its lanes in request order) and its last position making its entry; their embeddings are their 11 positions,
+    and the scan state they read is the class's 32 rows. C's shape holds no request's bucket, so a request at bucket 16 is
+    refused by name, and eight requests at boundary 0 pass its 4 lanes."""
+    three = _lowered(THREE, SLOTS, [(0, 1), (0, 2), (0, 31)])
+    assert [(p.anchor, p.lane, p.positions) for p in three.programs] == [(0, 0, 5), (0, 1, 3), (0, 2, 3)]
     assert three.requests == (0, 1, 2)
-    assert sorted((p.anchor, p.lane) for p in eight.programs) == [(16 * b, j) for b in (0, 1) for j in range(4)]
-    scan = SCAN.replace("NS=4548", "NS=9090")
-    for low, slots, positions in ((eight, 8, 28), (three, 3, 11)):
-        n = _counts(low.circuit)
-        assert (n[scan], n[EMB], low.circuit.blocks.slots, low.circuit.blocks.steps) == (slots, positions, slots, 5)
-        assert low.circuit.registered.params[SS.SCAN_STATE] == 32 * 9090 and not low.circuit.ingress
-        assert IF.input_count(low.circuit.description(), **held(low.circuit))["free"] == 0
+    n = _counts(three.circuit)
+    assert (n[SCAN.replace("NS=4548", "NS=9090")], n[EMB], three.circuit.blocks.slots, three.circuit.blocks.steps) == (3, 11, 3, 5)
+    assert three.circuit.registered.params[SS.SCAN_STATE] == 32 * 9090 and not three.circuit.ingress
+    assert IF.input_count(three.circuit.description(), **held(three.circuit))["free"] == 0
+    with pytest.raises(Unexpressible, match="request 1: anchored at bucket 16, and a served Program reads boundary 0's scan "
+                                            "state row: C's shape holds no request's bucket"):
+        _lowered(THREE, SLOTS, [(0, 1), (16, 18), (16, 31)])
+    with pytest.raises(Unexpressible, match="request 4: anchored at bucket 16, and a served Program reads boundary 0's"):
+        _lowered(EIGHT, SLOTS, [(0, 1)] * 4 + [(16, 17)] * 4)
+    with pytest.raises(Unexpressible, match="8 requests anchored at bucket 0, past the 4 slots a boundary has"):
+        _lowered(EIGHT, SLOTS)
 
 
 def test_the_slots_entries_are_one_member_a_lane_in_boundary_order():
@@ -221,10 +224,10 @@ def test_the_slots_entries_are_one_member_a_lane_in_boundary_order():
 
 def test_the_class_of_record_takes_both_windows_to_their_requests(monkeypatch):
     """The class of record (`CLASS_OF_RECORD`: EVERY 16, 4 slots a boundary, 8 a 32-bucket window) is 8 slots of 1,024
-    prompt ids and 64 outputs, lane-major: slot 2j + b is boundary b's lane j at bucket 16b. A 3-request and an 8-request
-    window are each taken (`takes`) to their requests at their anchors and lanes, and lowered with the same arguments (at
-    the class's heads of up to 1,087 keys the class circuit is refused past a key block's 126:
-    `test_past_126_keys_a_key_block_is_refused_by_name`)."""
+    prompt ids and 64 outputs, lane-major: slot 2j + b is boundary b's lane j at bucket 16b. A 3-request window at boundary
+    0 is taken (`takes`) to its requests at their lanes and lowered with the same arguments (at the class's heads of up to
+    1,087 keys the class circuit is refused past a key block's 126: `test_past_126_keys_a_key_block_is_refused_by_name`);
+    an 8-request window is refused, at bucket 16 by its bucket and at bucket 0 past the boundary's lanes."""
     assert (CLASS_OF_RECORD.slots, CLASS_OF_RECORD.lanes, CLASS_OF_RECORD.every, CLASS_OF_RECORD.positions) == (8, 4, 16, 1087)
     assert (CLASS_OF_RECORD.boundaries, CLASS_OF_RECORD.buckets) == ((0, 16), 32)
     assert [(CLASS_OF_RECORD.anchor(k), CLASS_OF_RECORD.lane(k)) for k in range(8)] == [(16 * (k % 2), k // 2) for k in range(8)]
@@ -236,21 +239,23 @@ def test_the_class_of_record_takes_both_windows_to_their_requests(monkeypatch):
 
     monkeypatch.setattr(WC, "class_circuit", class_circuit)
     reg = S._registered()
-    windows = ((THREE, [(0, 1), (0, 2), (16, 31)]), (EIGHT, [(0, 1)] * 4 + [(16, 17)] * 4))
-    taken = []
-    for window, placed in windows:
-        compiled = S.compile_steps(reg, *S._session(*window))
-        assert window_circuit(reg, compiled, CLASS_OF_RECORD, placed=placed) == "the circuit"
-        taken.append(WC.takes(compiled, CLASS_OF_RECORD, placed))
-        assert [(r.anchor, r.lane) for r in taken[-1]] == [
-            (a, sum(1 for b, _ in placed[:i] if b == a)) for i, (a, _) in enumerate(placed)]
-    assert calls == [((CLASS_OF_RECORD, None, WC._GRAIN), t) for t in taken]
+    compiled = S.compile_steps(reg, *S._session(*THREE))
+    placed = [(0, 1), (0, 2), (0, 31)]
+    assert window_circuit(reg, compiled, CLASS_OF_RECORD, placed=placed) == "the circuit"
+    taken = WC.takes(compiled, CLASS_OF_RECORD, placed)
+    assert [(r.anchor, r.lane) for r in taken] == [(0, 0), (0, 1), (0, 2)]
+    assert calls == [((CLASS_OF_RECORD, None, WC._GRAIN), taken)]
+    eight = S.compile_steps(reg, *S._session(*EIGHT))
+    for placed, match in (([(0, 1)] * 4 + [(16, 17)] * 4, "request 4: anchored at bucket 16, and a served Program reads"),
+                          (None, "8 requests anchored at bucket 0, past the 4 slots a boundary has")):
+        with pytest.raises(Unexpressible, match=match):
+            window_circuit(reg, eight, CLASS_OF_RECORD, placed=placed)
 
 
-def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
+def test_a_request_keeping_64_outputs_past_the_windows_end_is_expressible(monkeypatch):
     """A slot's Program hands all its outputs to the scan at its anchor bucket and the scan carries them across
-    windows (`SC_GROUP`), so a request at the class of record's second boundary (bucket 16) keeping all 64 outputs, its last
-    at bucket 16 + D + 64 / r = 59 past the 32-bucket window's end, is taken, a Program of its 64 positions."""
+    windows (`SC_GROUP`), so a request at the class of record's boundary 0 keeping all 64 outputs, its last at bucket
+    D + 64 / r = 43 past the 32-bucket window's end, is taken, a Program of its 64 positions."""
     calls: list[tuple] = []
 
     def class_circuit(*a, **k):
@@ -262,9 +267,9 @@ def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
     window = ([(1, 64, {**S.GREEDY, "max_tokens": 64})], [[(0, 0, 1)]] + [[(0, p, 1)] for p in range(1, 64)])
     compiled = S.compile_steps(reg, *S._session(*window))
     assert [(u.LP, u.T + 1) for u in compiled.requests if u is not None] == [(1, 64)]
-    assert window_circuit(reg, compiled, CLASS_OF_RECORD, placed=[(16, 59)]) == "the circuit"
-    assert calls == [((CLASS_OF_RECORD, None, WC._GRAIN), (WC.Request(16, 0, 1, 64),))]
-    assert WC.Request(16, 0, 1, 64).positions == 64
+    assert window_circuit(reg, compiled, CLASS_OF_RECORD, placed=[(0, 43)]) == "the circuit"
+    assert calls == [((CLASS_OF_RECORD, None, WC._GRAIN), (WC.Request(0, 0, 1, 64),))]
+    assert WC.Request(0, 0, 1, 64).positions == 64
 
 
 def test_a_window_of_no_request_or_a_served_window_with_tables_or_a_program_count_is_refused():
@@ -290,7 +295,8 @@ def test_the_registered_compiler_takes_the_advice_alone_to_the_served_circuit():
 
 def test_the_registered_compiler_refuses_advice_past_its_cap_and_anything_but_a_bit_string():
     """The compiler enforces ℓ, the registered cap on the advice's bits, refusing past it by name; it takes nothing but the
-    bit string."""
+    bit string, and at a class of two boundaries, since neither C's shape nor the advice holds a request's bucket, it refuses
+    by name."""
     reg = S._registered()
     advice = S._session(*WINDOW)[0]
     data = S.I1.encode(advice)
@@ -300,25 +306,9 @@ def test_the_registered_compiler_refuses_advice_past_its_cap_and_anything_but_a_
     assert _bytes(WC.WindowCompiler(replace(reg, cap_bits=bits), CLASS, GRAIN)(data)) == _bytes(_circuit(WINDOW))
     with pytest.raises(Unexpressible, match="the advice is a bit string, bytes, not a Advice"):
         WC.WindowCompiler(reg, CLASS, GRAIN)(advice)
-
-
-def _anchored(window, anchors) -> bytes:
-    advice = S._session(*window)[0]
-    return WA.encode(WA.Advice(tuple(WA.RequestAdvice(q.id, q.prompt_len, q.output_len, q.finish, a)
-                                     for q, a in zip(advice.requests, anchors)), advice.steps, advice.release))
-
-
-def test_the_registered_compiler_places_each_request_at_the_anchor_its_advice_carries():
-    """At a class of two boundaries the compiler reads each request's admission bucket from the advice (version 3,
-    `window_advice.RequestAdvice.anchor`): THREE's circuit at the class of record's slots, its second and third requests
-    at bucket 16, is `window_circuit`'s at those anchors; an anchor no boundary of the class is refused by name."""
-    reg = S._registered()
-    data = _anchored(THREE, (0, 16, 16))
-    assert data[0] == WA.ANCHORS
-    placed = [(0, None), (16, None), (16, None)]
-    assert _bytes(WC.WindowCompiler(reg, SLOTS, GRAIN)(data)) == _bytes(_circuit(THREE, cls=SLOTS, placed=placed))
-    with pytest.raises(Unexpressible, match=r"request 1: anchored at bucket 8, none of its class's boundaries \[0, 16\]"):
-        WC.WindowCompiler(reg, SLOTS, GRAIN)(_anchored(THREE, (0, 8, 16)))
+    with pytest.raises(Unexpressible, match="a class of 2 boundaries, and a served Program reads boundary 0's scan state row: "
+                                            "the advice holds no request's bucket"):
+        WC.WindowCompiler(reg, SLOTS, GRAIN)(data)
 
 
 def _rows_by_step(compiler, window) -> tuple[dict, list[list[tuple[int, int, int]]]]:
@@ -1044,21 +1034,19 @@ def test_what_the_class_doesnt_take_is_refused_by_name():
 
 def test_a_window_its_slots_dont_place_is_refused_by_name():
     """At a class of one slot at each of buckets 0 and 16 (a 32-bucket window), a window placed as the network attester's
-    scan placed it is its requests' Programs at their anchors, a last output past the window's end included (the scan
-    carries it across windows); refused by name are two requests at one boundary, an anchor that is no boundary and a last output before its
-    anchor. A placement that isn't one a request is a caller's error."""
+    scan placed it, at boundary 0, is its request's Program there, a last output past the window's end included (the scan
+    carries it across windows); refused by name are two requests at one boundary, a request at bucket 16 (C's shape holds
+    no request's bucket) and an anchor that is no boundary. A placement that isn't one a request is a caller's error."""
     cls = WindowClass(2, 4, 2, lanes=1, every=16)
     assert (cls.boundaries, cls.buckets, cls.anchor(0), cls.anchor(1)) == ((0, 16), 32, 0, 16)
-    ok = _circuit(WINDOW, cls=cls, placed=[(0, 15), (16, 31)])
-    assert [(p.anchor, p.lane) for p in _lowered(WINDOW, cls, [(0, 15), (16, 31)]).programs] == [(0, 0), (16, 0)]
-    assert _bytes(_circuit(WINDOW, cls=cls, placed=[(0, 15), (16, 47)])) == _bytes(ok)
-    assert [(r.at, r.radix, r.base, r.step) for r in ok.registered.reads if r.param == SS.SCAN_STATE] == [
-        (0, (2,), 0, (16 * 2277,))]
+    ok = _circuit(ONE, cls=cls, placed=[(0, 15)])
+    assert [(p.anchor, p.lane) for p in _lowered(ONE, cls, [(0, 15)]).programs] == [(0, 0)]
+    assert _bytes(_circuit(ONE, cls=cls, placed=[(0, 47)])) == _bytes(ok)
+    assert [(r.at, r.radix, r.base) for r in ok.registered.reads if r.param == SS.SCAN_STATE] == [(0, (1,), 0)]
     for placed, match in (
             (None, "2 requests anchored at bucket 0, past the 1 slots a boundary has"),
-            ([(16, None), (16, None)], "2 requests anchored at bucket 16, past the 1 slots"),
-            ([(0, None), (8, None)], r"request 1: anchored at bucket 8, none of its class's boundaries \[0, 16\]"),
-            ([(16, 3), (0, None)], "request 0: its last output at bucket 3, before its anchor 16")):
+            ([(0, None), (16, None)], "request 1: anchored at bucket 16, and a served Program reads boundary 0's scan state"),
+            ([(0, None), (8, None)], r"request 1: anchored at bucket 8, none of its class's boundaries \[0, 16\]")):
         with pytest.raises(Unexpressible, match=match):
             _circuit(WINDOW, cls=cls, placed=placed)
     with pytest.raises(ValueError, match="1 placements for the window's 2 requests"):

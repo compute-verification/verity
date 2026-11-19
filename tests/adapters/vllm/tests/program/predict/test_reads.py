@@ -44,7 +44,6 @@ from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program.predict import reads as R
 from verity_vllm.program.predict.common import Unexpressible
 from verity_vllm.program.predict.phi import Phi
-from verity_vllm.program.predict.window_class import WindowClass, requests_of
 from verity_vllm.program.predict.steps import (
     Registered,
     RequestUnit,
@@ -161,8 +160,7 @@ def test_the_table_is_the_compilers_read_path(monkeypatch):
 
 def test_the_compiler_reads_every_field_the_gate_passes(monkeypatch, tmp_path):
     """No stale declaration: over sessions with a cache hit, a preemption-free resume of a carried request and chunked
-    prefills, planned on a batch-invariant target and in class G and compiled, and a window placed at its requests' anchors
-    (`window_class.requests_of`), the compiler reads each declared advice field."""
+    prefills, planned on a batch-invariant target and in class G and compiled, the compiler reads each declared advice field."""
     seen: set[tuple[str, str]] = set()
     get = R._View.__getattr__
 
@@ -178,11 +176,6 @@ def test_the_compiler_reads_every_field_the_gate_passes(monkeypatch, tmp_path):
     g = _class_g(tmp_path, engine=CACHE_ON)
     for session in ((A_MID_IN, A_BODY), _hit_chunked()):
         plan_steps(g, *session)
-    late = WA.Advice((WA.RequestAdvice("a", 3, 2, "eos"), WA.RequestAdvice("b", 3, 2, "eos", 16)),
-                     (WA.StepAdvice((WA.Row(0, "prefill", 0, 3, 0, False, ()), WA.Row(1, "prefill", 0, 3, 0, False, ()))),
-                      WA.StepAdvice((WA.Row(0, "decode", 3, 1, 0, False, ()), WA.Row(1, "decode", 3, 1, 0, False, ())))),
-                     (0, 1, 2, 3))
-    assert [r.anchor for r in requests_of(R.gate(late), WindowClass(8, 4, 2, lanes=4, every=16))] == [0, 16]
     assert seen == GATED
 
 

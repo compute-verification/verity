@@ -32,15 +32,8 @@ after a stop. Where it's freed and what it frees are those rows', so the record 
     request, step, release, padding   as I1 v0's, w_len the least width holding the carried values too
 
 and one that aborts a request is version 2, version 1's layout with each request's finish a u2 (eos 0, length 1, abort 2), one
-advice bit more a request. One that admits a request after the window's first bucket is version 3, version 2's layout with
-the anchors' width after the header's and each request's anchor after its finish:
-
-    header   version 2's | w_anc u6
-    request  version 2's | anchor u(w_anc)
-
-a request's anchor the bucket, from the window's first, of the scan state row its Program reads (`RequestAdvice.anchor`).
-So every window has one encoding, and `decode` refuses any other string: a version 1 one that version 0 can say, a version 2
-one that aborts nothing, a version 3 one that anchors every request at bucket 0, a finish of 3.
+advice bit more a request. So every window has one encoding, and `decode` refuses any other string: a version 1 one that
+version 0 can say, a version 2 one that aborts nothing, a finish of 3.
 """
 from __future__ import annotations
 
@@ -62,7 +55,6 @@ from verity_vllm.pipeline.advice_code.format import (  # the advice's parts, as 
 SCHEMA = "verity-vllm/window-advice/v1"
 VERSION = 1
 ABORTS = 2  # the version of a window that aborts a request
-ANCHORS = 3  # the version of a window that admits a request after its first bucket
 FINISHES = (*I1.FINISHES, "abort")
 
 
@@ -86,26 +78,21 @@ def _seq(name: str, value: Any, kind: type | tuple[type, ...]) -> tuple:
 @dataclass(frozen=True, slots=True)
 class RequestAdvice:
     """One request, as I1's (`advice.RequestAdvice`: its id, prompt and output lengths), whose `finish` is `eos`, `length` or
-    `abort` (its client aborted it after its `output_len` outputs, freed at the step of its last row), and whose ``anchor`` is
-    the bucket it was admitted at, from the first of the window that admits it: the scan state row its Program reads."""
+    `abort` (its client aborted it after its `output_len` outputs, freed at the step of its last row)."""
 
     id: str
     prompt_len: int
     output_len: int
     finish: str
-    anchor: int = 0
 
     def __post_init__(self) -> None:
         if type(self.finish) is not str or self.finish not in FINISHES:
             raise MalformedAdvice(f"finish must be one of {FINISHES}, not {self.finish!r}")
-        _int("a request's anchor", self.anchor)
         I1.RequestAdvice(self.id, self.prompt_len, self.output_len, I1.FINISHES[0] if self.finish == "abort" else self.finish)
 
     def i1(self) -> I1.RequestAdvice:
         if self.finish not in I1.FINISHES:
             raise MalformedAdvice(f"request {self.id!r} is aborted, which I1 v0 can't say (its finishes are {I1.FINISHES})")
-        if self.anchor:
-            raise MalformedAdvice(f"request {self.id!r} is anchored at bucket {self.anchor}, which I1 v0 can't say")
         return I1.RequestAdvice(self.id, self.prompt_len, self.output_len, self.finish)
 
 
@@ -276,10 +263,7 @@ class Advice:
 
     @property
     def version(self) -> int:
-        """3 when the window anchors a request after its first bucket, else 2 when it aborts one, else 0 when it is I1 v0's
-        (nothing carried in, nothing left to carry), else 1."""
-        if any(q.anchor for q in self.requests):
-            return ANCHORS
+        """2 when the window aborts a request, else 0 when it is I1 v0's (nothing carried in, nothing left to carry), else 1."""
         if any(q.finish == "abort" for q in self.requests):
             return ABORTS
         return 0 if not self.carried and not any(c.must for c in close(self)) else VERSION
@@ -287,8 +271,7 @@ class Advice:
     def i1(self) -> I1.Advice:
         """The window as I1 v0's `Advice`; only a version 0 window is one."""
         if self.version:
-            raise MalformedAdvice("a window that carries a request in or out, aborts one, or anchors one past bucket 0, isn't I1 "
-                              "v0 advice")
+            raise MalformedAdvice("a window that carries a request in or out, or aborts one, isn't I1 v0 advice")
         return I1.Advice(tuple(q.i1() for q in self.requests), self.steps, self.release)
 
 
@@ -361,10 +344,6 @@ def _widths(advice: Advice) -> _Widths:
                    max(advice.release, default=0).bit_length(), src.bit_length())
 
 
-def _anchor_width(advice: Advice) -> int:
-    return max((q.anchor for q in advice.requests), default=0).bit_length()
-
-
 class _Layout(NamedTuple):
     data: bytes
     header: int
@@ -374,8 +353,8 @@ class _Layout(NamedTuple):
 
 
 def _layout(advice: Advice) -> _Layout:
-    """A version 1, 2 or 3 window's bit string and each part's length in bits."""
-    w, w_anc = _widths(advice), _anchor_width(advice)
+    """A version 1 or 2 window's bit string and each part's length in bits."""
+    w = _widths(advice)
     version = advice.version
     out = I1._Writer()
     out.put(version, 8)
@@ -385,8 +364,6 @@ def _layout(advice: Advice) -> _Layout:
     out.put(w.len, WIDTH_BITS)
     out.put(w.rel, WIDTH_BITS)
     out.put(w.src, WIDTH_BITS)
-    if version == ANCHORS:
-        out.put(w_anc, WIDTH_BITS)
     for c in advice.carried:
         for x in (c.C, c.computed, c.kept):
             out.put(x, w.len)
@@ -404,9 +381,7 @@ def _layout(advice: Advice) -> _Layout:
             out.put(byte, 8)
         out.put(q.prompt_len, w.len)
         out.put(q.output_len, w.len)
-        out.put(FINISHES.index(q.finish), 1 if version == VERSION else 2)
-        if version == ANCHORS:
-            out.put(q.anchor, w_anc)
+        out.put(FINISHES.index(q.finish), 2 if version == ABORTS else 1)
         requests.append(out.bits - mark)
     steps = []
     for st in advice.steps:
@@ -447,12 +422,11 @@ def decode(data: bytes) -> Advice:
     if version == I1.VERSION:
         a = I1.decode(data)
         return Advice(a.requests, a.steps, a.release)
-    if version not in (VERSION, ABORTS, ANCHORS):
-        raise MalformedAdvice(f"window advice version {version}, not {I1.VERSION}, {VERSION}, {ABORTS} or {ANCHORS}")
-    w_finish = 1 if version == VERSION else 2
+    if version not in (VERSION, ABORTS):
+        raise MalformedAdvice(f"window advice version {version}, not {I1.VERSION}, {VERSION} or {ABORTS}")
+    w_finish = 2 if version == ABORTS else 1
     n_carried, n_requests, n_steps = rd.uvar(), rd.uvar(), rd.uvar()
     w_len, w_rel, w_src = rd.get(WIDTH_BITS), rd.get(WIDTH_BITS), rd.get(WIDTH_BITS)
-    w_anc = rd.get(WIDTH_BITS) if version == ANCHORS else 0
     w_req = max(n_requests - 1, 0).bit_length()
     if 3 * w_len * n_carried + 15 * n_requests + 2 * n_steps > rd.left():
         raise MalformedAdvice(f"truncated: {n_carried} carried, {n_requests} requests and {n_steps} steps in {rd.left()} bits")
@@ -472,10 +446,10 @@ def decode(data: bytes) -> Advice:
             rid = bytes(rd.get(8) for _ in range(size)).decode("utf-8")
         except UnicodeDecodeError as e:
             raise MalformedAdvice(f"a request's id isn't UTF-8: {e}") from None
-        prompt_len, output_len, finish, anchor = rd.get(w_len), rd.get(w_len), rd.get(w_finish), rd.get(w_anc)
+        prompt_len, output_len, finish = rd.get(w_len), rd.get(w_len), rd.get(w_finish)
         if finish >= len(FINISHES):
             raise MalformedAdvice(f"request {len(requests)}'s finish {finish} names none of {FINISHES}")
-        requests.append(RequestAdvice(rid, prompt_len, output_len, FINISHES[finish], anchor))
+        requests.append(RequestAdvice(rid, prompt_len, output_len, FINISHES[finish]))
     steps = []
     for _ in range(n_steps):
         rows = []
@@ -494,10 +468,10 @@ def decode(data: bytes) -> Advice:
     if not advice.version:
         raise MalformedAdvice("a window that carries nothing in or out and aborts nothing is I1 v0's, version 0")
     if advice.version != version:
-        raise MalformedAdvice(f"a window of these requests is version {advice.version}, not {version}")
-    if _widths(advice) != (w_req, w_len, w_rel, w_src) or _anchor_width(advice) != w_anc:
-        raise MalformedAdvice(f"widths (len {w_len}, release {w_rel}, sources {w_src}, anchors {w_anc}) aren't the least that "
-                              f"hold the window's values, {(*_widths(advice)[1:], _anchor_width(advice))}")
+        raise MalformedAdvice(f"a window that aborts no request is version {advice.version}, not {version}")
+    if _widths(advice) != (w_req, w_len, w_rel, w_src):
+        raise MalformedAdvice(f"widths (len {w_len}, release {w_rel}, sources {w_src}) aren't the least that hold the window's "
+                              f"values, {_widths(advice)[1:]}")
     return advice
 
 
@@ -547,13 +521,12 @@ def bits_by_window(advice: Advice, T: int) -> dict[int, int]:
 
 def to_json(advice: Advice) -> dict:
     """The window as JSON, for debugging: I1's `to_json` for a version 0 window, with ``carried`` and this schema otherwise (an
-    aborted request's finish ``abort``, an anchored one's ``anchor``); `from_json` reads either back."""
+    aborted request's finish ``abort``); `from_json` reads either back."""
     if not advice.version:
         return I1.to_json(advice.i1())
     return {"schema": SCHEMA,
             "carried": [{"C": c.C, "computed": c.computed, "kept": c.kept, "made": [list(x) for x in c.made]} for c in advice.carried],
-            "requests": [{"id": q.id, "prompt_len": q.prompt_len, "output_len": q.output_len, "finish": q.finish,
-                          **({"anchor": q.anchor} if q.anchor else {})} for q in advice.requests],
+            "requests": [{"id": q.id, "prompt_len": q.prompt_len, "output_len": q.output_len, "finish": q.finish} for q in advice.requests],
             "steps": [{"rows": [{"request": r.request, "kind": r.kind, "start": r.start, "n": r.n, "cache_hit": r.cache_hit,
                                  "preempted": r.preempted, "sources": [{"request": s.request, "n": s.n} for s in r.sources]}
                                 for r in st.rows]} for st in advice.steps],
@@ -582,9 +555,8 @@ def from_json(doc: Any) -> Advice:
         raise MalformedAdvice(f"schema {d['schema']!r}, not {SCHEMA!r} or {I1.SCHEMA!r}")
     carried = tuple(Carried(**{**_keys(c, ("C", "computed", "kept", "made"), "a carried request"),
                                "made": tuple(tuple(x) for x in _list(c["made"], "made"))}) for c in _list(d["carried"], "carried"))
-    requests = tuple(RequestAdvice(**_keys(q, ("id", "prompt_len", "output_len", "finish", *(("anchor",) if isinstance(q, dict)
-                                                                                         and "anchor" in q else ())),
-                                         "a request")) for q in _list(d["requests"], "requests"))
+    requests = tuple(RequestAdvice(**_keys(q, ("id", "prompt_len", "output_len", "finish"), "a request"))
+                     for q in _list(d["requests"], "requests"))
     steps = []
     for st in _list(d["steps"], "steps"):
         rows = []

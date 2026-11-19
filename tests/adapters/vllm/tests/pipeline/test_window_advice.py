@@ -1,7 +1,6 @@
 """`window_advice`: a Commit window that carries nothing is I1 v0's, byte for byte; one that carries a request across its open or
 close is version 1, round-trips, and opens only where the last window closed; one that aborts a request is version 2, charged a
-bit a request more; one that admits a request after its first bucket is version 3, charged its anchors; and every window has the
-one encoding."""
+bit a request more, and every window has the one encoding."""
 from __future__ import annotations
 
 import pytest
@@ -118,7 +117,7 @@ def test_an_aborted_request_is_version_2_round_trips_and_is_charged_its_finish_b
     # version 1's header (n_carried, a 6-bit width and no bits) and one finish bit more a request than I1 v0's
     assert WA.total_bits(ABORTED) == WA.total_bits(STOPPED) + 6 + 1
     assert sum(WA.bits_by_window(ABORTED, 1).values()) == WA.total_bits(ABORTED)
-    with pytest.raises(WA.MalformedAdvice, match="aborts one, or anchors one past bucket 0, isn't I1 v0 advice"):
+    with pytest.raises(WA.MalformedAdvice, match="aborts one, isn't I1 v0 advice"):
         ABORTED.i1()
     with pytest.raises(WA.MalformedAdvice, match="finish must be one of"):
         I1.RequestAdvice("a", 3, 2, "abort")
@@ -153,45 +152,10 @@ def test_decode_refuses_a_version_2_string_that_aborts_nothing_and_a_finish_of_3
     assert alone[0] == carried[0] == WA.ABORTS
     with pytest.raises(WA.MalformedAdvice, match="aborts nothing is I1 v0's"):
         WA.decode(alone)
-    with pytest.raises(WA.MalformedAdvice, match="these requests is version 1, not 2"):
+    with pytest.raises(WA.MalformedAdvice, match="aborts no request is version 1, not 2"):
         WA.decode(carried)
     monkeypatch.setattr(WA, "FINISHES", ("eos", "length", "", "abort"))
     three = WA.encode(ABORTED)
     monkeypatch.undo()
     with pytest.raises(WA.MalformedAdvice, match="request 0's finish 3 names none of"):
         WA.decode(three)
-
-
-# b admitted at bucket 16 of the window, after a at its first
-LATE = WA.Advice((WA.RequestAdvice("a", 3, 2, "eos"), WA.RequestAdvice("b", 3, 2, "eos", 16)),
-                 tuple(WA.StepAdvice(rows) for rows in ((_row(0, 0, 3),), (_row(0, 3, 1), _row(1, 0, 3)), (_row(1, 3, 1),))),
-                 (0, 1, 2, 3))
-
-
-def test_a_request_admitted_after_the_first_bucket_is_version_3_and_charged_its_anchors():
-    flat = WA.Advice(tuple(WA.RequestAdvice(q.id, q.prompt_len, q.output_len, q.finish) for q in LATE.requests), LATE.steps,
-                     LATE.release)
-    assert flat.version == 0 and LATE.version == WA.ANCHORS and [q.anchor for q in LATE.requests] == [0, 16]
-    data = WA.encode(LATE)
-    assert data[0] == WA.ANCHORS and WA.decode(data) == LATE and WA.encode(WA.decode(data)) == data
-    assert WA.from_json(WA.to_json(LATE)) == LATE and WA.to_json(LATE)["requests"][1]["anchor"] == 16
-    # version 1's header (n_carried, a 6-bit width and no bits), the anchors' 6-bit width, and a request each a 2-bit finish
-    # (one bit more than I1 v0's) and a 5-bit anchor, 16's width
-    assert WA.total_bits(LATE) == WA.total_bits(flat) + 6 + 6 + 2 * (1 + 5)
-    assert sum(WA.bits_by_window(LATE, 2).values()) == WA.total_bits(LATE)
-    with pytest.raises(WA.MalformedAdvice, match="anchored at bucket 16, which I1 v0 can't say"):
-        LATE.requests[1].i1()
-
-
-def test_decode_refuses_a_version_3_string_that_anchors_every_request_at_bucket_0_and_an_anchor_wider_than_its_least(
-        monkeypatch):
-    monkeypatch.setattr(WA.Advice, "version", property(lambda self: WA.ANCHORS))
-    flat = WA.encode(STOPPED)
-    monkeypatch.undo()
-    with pytest.raises(WA.MalformedAdvice, match="aborts nothing is I1 v0's"):
-        WA.decode(flat)
-    monkeypatch.setattr(WA, "_anchor_width", lambda advice: 6)
-    wide = WA.encode(LATE)
-    monkeypatch.undo()
-    with pytest.raises(WA.MalformedAdvice, match="anchors 6\\) aren't the least"):
-        WA.decode(wide)

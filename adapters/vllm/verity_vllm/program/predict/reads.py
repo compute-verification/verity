@@ -112,7 +112,6 @@ READS: tuple[Field, ...] = (
     Field("request", "prompt_len", "certified"),
     Field("request", "output_len", "advice", y="a response's length", ahead=("T", "edge", "stop")),
     Field("request", "finish", "advice", y="a response's finish reason", ahead=("stop",)),
-    Field("request", "anchor", "advice"),
     Field("step", "rows", "advice"),
     *(Field("row", n, "advice", switch=PREFIX_CACHE if n in ("cache_hit", "sources") else "")
       for n in ("request", "kind", "start", "n", "cache_hit", "preempted", "sources")),
