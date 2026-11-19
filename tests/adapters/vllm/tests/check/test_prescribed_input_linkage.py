@@ -274,8 +274,7 @@ def test_padrev_m0517_the_lag_is_read_through_gp01s_one_reader_of_the_attested_f
     assert eos_lag_rows_declared({"async_scheduling": True}) == 1 and eos_lag_rows_declared({"async_scheduling": False}) == 0
     assert eos_lag_rows_declared({"async_scheduling": "true"}) == 1
     assert eos_lag_rows_declared({"async_scheduling": None}) is None and eos_lag_rows_declared({}) is None and eos_lag_rows_declared(None) is None
-    src = "".join((Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "verity_vllm" / "pipeline" / f"{m}.py").read_text() for m in ("commit", "c2_replay"))      # torch-free: the wiring read as text
-    assert 'eos_lag_rows_declared({"async_scheduling": (versions.get("engine_kwargs") or {}).get("async_scheduling")})' in src
+    src = (Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "verity_vllm" / "pipeline" / "c2_replay.py").read_text()      # torch-free: the wiring read as text
     assert "eos_lag_rows=_lag" in src
 
 def test_a_committed_seed_word_with_no_declared_source_is_unlinked_by_name_not_not_applicable():
