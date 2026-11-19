@@ -1035,6 +1035,49 @@ def _decode_boolean(desc: dict, get: Callable[[str], Any]) -> dict[str, Function
     return out
 
 
+_GATE_ID = re.compile(r"^((And|Xor)([2-9]|[1-9][0-9]+)|Not|Const1\[0x[01]\])_v1$")
+
+
+def lift_shape(desc: dict, start: str) -> tuple[list[str], list[str]]:
+    """Lean's lift to bits (`Flock.Lift.closure`) from Definition ``start`` of descriptor ``desc``, by ids alone: (the
+    composites it lifts, those reaching a word primitive; the composites it leaves as they are though a parameter or the
+    return is wider than one bit). ValueError where a reached word primitive has no Boolean Definition."""
+    defs, callees, boolean = desc["definitions"], desc["callees"], desc.get("boolean", {})
+
+    def prim(f: str) -> bool:
+        return defs[f]["form"] == "primitive"
+
+    def calls(f: str) -> list[str]:
+        return [callees[n["fn"]] for n in defs[f]["body"]["nodes"]]
+
+    def on_bits(t: Any) -> bool:
+        return type_from_json(t).width_set() <= {1}
+
+    seen: dict[str, None] = {}
+    todo = [start]
+    while todo:
+        f = todo.pop()
+        if f in seen:
+            continue
+        seen[f] = None
+        if prim(f) and input_id(f) is None and not _GATE_ID.fullmatch(f):
+            if f not in boolean:
+                raise ValueError(f"the lift to bits: word primitive '{f}' has no Boolean Definition")
+            todo.append(boolean[f])
+        elif not prim(f):
+            todo += calls(f)
+    wordy = {f: input_id(f) is None and not _GATE_ID.fullmatch(f) for f in seen if prim(f)}
+    while len(wordy) < len(seen):
+        ready = [f for f in seen if f not in wordy and all(c in wordy for c in calls(f))]
+        if not ready:
+            raise ValueError("the lift to bits: a cycle of calls")
+        wordy.update((f, any(wordy[c] for c in calls(f))) for f in ready)
+    composites = [f for f in seen if not prim(f)]
+    return (sorted(f for f in composites if wordy[f]),
+            sorted(f for f in composites if not wordy[f] and not (all(on_bits(t) for _, t in defs[f]["body"]["params"])
+                                                                   and on_bits(defs[f]["body"]["ret_type"]))))
+
+
 def encode_specialization(fn) -> tuple[str, dict[str, dict[str, Any]]]:
     """(the specialization's id, every definition it uses in the codec's v0 form): `encode_program` of a one-node
     Program that calls it, keeping the definitions reachable from it (not the wrapper, its lowered root or their Input gates)."""
