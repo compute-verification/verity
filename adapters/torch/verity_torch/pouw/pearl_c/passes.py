@@ -59,7 +59,8 @@ EPOCH_ROUNDS = CALL_RANGE // ROUND_CALLS
 CHOSEN_INDEX = ("a call's index is its place, its round in the epoch and its position in the round "
                 "(round * ROUND_CALLS + position), which the device derives and no caller chooses: -h3's row seed reads "
                 "the index, so a chosen one chooses the row's noise.  A check that runs a pass twice runs each under a "
-                "device run of its own (the same coins give the same salt, and each numbers its rounds from 0)")
+                "device run of its own (`PearlCDeviceRun.twin`: the same coins give the same salt, and each numbers its "
+                "rounds from 0)")
 
 
 def call_index(run: Any, calls: int = 1) -> int:

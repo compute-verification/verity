@@ -289,6 +289,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         with ``step``) leaves its commitment's readback in flight (`end` with ``lag``, `LaneCalls.settle`); with `aside_ends`
         too, its tile tree runs on a stream of its own over a copy of the leaves (`LaneCalls._end_aside`).  `whole_eager`
         is the schedule a forward a whole-step arm runs eagerly takes (`eager_forward`)."""
+        self._made = {k: v for k, v in locals().items() if k != "self"}
         whole_options(entry, kernel, whole_defer, whole_defer_a, whole_fork_stats, whole_tree_sm, lag_ends, aside_ends,
                       whole_prefetch_b, whole_shape_joins, whole_pd_shared)
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
@@ -370,6 +371,12 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound"}
         self.cur = _Pass(None)              # no pass yet
         self.begin()
+
+    def twin(self) -> PearlCDeviceRun:
+        """A device run of its own over this one's install as it was built (its weights, roots, coins and salt opening, so
+        its salt, and its options), at this one's hashing: its rounds from 0, so its k-th pass with calls holds the place
+        every twin's k-th does.  A check that compares passes runs each on a twin (`passes.CHOSEN_INDEX`)."""
+        return type(self)(**{**self._made, "hashing": self.hashing})
 
     # ---- the schedule -----------------------------------------------------------------------------------------------
 

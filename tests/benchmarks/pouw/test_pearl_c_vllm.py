@@ -364,19 +364,24 @@ def test_a_calls_index_is_its_round_and_its_position_and_no_caller_chooses_one(d
     assert run.cur.base == 3 * PP.ROUND_CALLS and [u.index for u in run.cur.matmuls] == [3 * PP.ROUND_CALLS]
 
 
-def test_two_runs_under_the_same_coins_give_a_pass_the_same_indices(device_run):
-    """What a check that runs a pass twice does in place of a chosen index: a device run of its own for each, whose rounds
-    both number from 0, so the two passes' calls have the same places."""
+def test_twins_give_a_pass_the_same_indices_salt_and_keys(device_run):
+    """What a check that runs a pass twice does in place of a chosen index: each on a twin of the run
+    (`PearlCDeviceRun.twin`), a device run of its own over the same install at the run's hashing, whose rounds number from
+    0 whatever the run's have reached, so the two passes' calls have the same places, salt and keys."""
     make, _, weights, *_ = device_run
     x = torch.randn(16, 1024).to(torch.bfloat16)
+    run = make(hashing=False)
+    for w in (0, 1):
+        run.gemm(w, x, weights[w], None)
+    run.end_pass()
     got = []
     for _ in range(2):
-        run = make()
-        for w in (0, 1):
-            run.gemm(w, x, weights[w], None)
-        got.append([u.index for u in run.cur.matmuls])
-        run.finish()
-    assert got[0] == got[1] == [0, 1]
+        twin = run.twin()
+        for w in (1, 0):
+            twin.gemm(w, x, weights[w], None)
+        got.append(([u.index for u in twin.cur.matmuls], twin.salt, twin.hashing, PPDR._bytes(twin._shape(16, 256, 1024).keys[:168])))
+        twin.finish()
+    assert got[0] == got[1] and got[0][:3] == ([0, 1], run.salt, False) and run.rounds() == 1
 
 
 def test_the_epochs_last_round_is_its_last_and_a_rounds_calls_stay_inside_it(device_run):
