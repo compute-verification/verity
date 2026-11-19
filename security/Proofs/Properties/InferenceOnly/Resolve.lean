@@ -144,6 +144,10 @@ def Good (P : Prog) : Scope → Prop
       m < ((P.defs[parent.d]!).body.nodes[k]!).members ∧
       off = parent.off + (P.defs[parent.d]!).body.offsets[k]! + m * (P.defs[d]!).gates
 
+theorem good_base (P : Prog) : ∀ {U : Scope}, Good P U → U.base = P.root
+  | .top _ _ _, h => h.1
+  | .child _ _ _ _ _, h => good_base P h.1
+
 /-- Reference `r` of body `d` names a parameter's leaf or a leaf of a node before `k`. -/
 def RefOk (P : Prog) (d k : ℕ) (r : Ref) : Prop :=
   (r.p = true → r.i < (P.defs[d]!).body.params.size ∧ r.j < ((P.defs[d]!).body.params[r.i]!).2.leaves) ∧

@@ -326,7 +326,7 @@ theorem unit_leaf_inj {k k' : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     {g : ℕ} (h : resolve P (.child P.rootScope d off k m) ⟨true, i, t⟩ = .ok g)
     (h' : resolve P (.child P.rootScope d' off' k' m') ⟨true, i', t'⟩ = .ok g) :
     k = k' ∧ m = m' ∧ i = i' ∧ t = t' := by
-  have hrc := Flock.Program.resolve_recut h
+  have hrc := Flock.Program.resolve_recut rfl h
   obtain ⟨hroot, -, hL, -, -, -⟩ := decoded_walk bytes P hdec hov hlay
   obtain ⟨n, j, hleaf, hn, hj, ho, hg⟩ := unit_leaf bytes P hdec hov hlay hown hk hu hf hm hi ht d off
   obtain ⟨n', j', hleaf', hn', hj', ho', hg'⟩ := unit_leaf bytes P hdec hov hlay hown hk' hu' hf' hm' hi' ht' d' off'

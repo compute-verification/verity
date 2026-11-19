@@ -2854,17 +2854,17 @@ theorem run_inr {α β : Type} {what : String} {step : α → Flock.V (β ⊕ α
 /-- Resolution ending at a step's gate. -/
 theorem resolve_inl (P : Prog) (sc : Flock.Program.Scope) (r : Ref) (g : Nat)
     (h : Flock.Program.resolveStep P (sc, r) = .ok (.inl g))
-    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) : Flock.Program.resolve P sc r = .ok g := by
+    (hrc : sc.base ≠ P.root ∨ (P.defs[P.root]!).body.recut = #[] := by assumption) : Flock.Program.resolve P sc r = .ok g := by
   obtain ⟨n, hn⟩ := fuel_succ
-  rw [Flock.Program.resolve_eq hrc, hn, Flock.Steps.run.eq_2, h]
+  rw [Flock.Program.resolve_of hrc, hn, Flock.Steps.run.eq_2, h]
   rfl
 
 /-- Resolution going on from a step's state, to the same gate. -/
 theorem resolve_inr (P : Prog) (sc : Flock.Program.Scope) (r : Ref) (s : Flock.Program.Scope × Ref)
-    (h : Flock.Program.resolveStep P (sc, r) = .ok (.inr s)) {g : Nat} (hr : Flock.Program.resolve P sc r = .ok g) :
-    Flock.Program.resolve P s.1 s.2 = .ok g := by
+    (h : Flock.Program.resolveStep P (sc, r) = .ok (.inr s)) {g : Nat} (hr : Flock.Program.resolve P sc r = .ok g)
+    (hb : s.1.base = sc.base := by rfl) : Flock.Program.resolve P s.1 s.2 = .ok g := by
   obtain ⟨n, hn⟩ := fuel_succ
-  rw [Flock.Program.resolve_eq (Flock.Program.resolve_recut hr)]
+  rw [Flock.Program.resolve_of (by rw [hb]; exact Flock.Program.resolve_cond hr)]
   replace hr := Flock.Program.resolve_run hr
   rw [hn] at hr ⊢
   exact Flock.Steps.run_mono (Nat.le_succ n) (run_inr h hr)
@@ -2921,7 +2921,7 @@ theorem down_prim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt 
 theorem den_prim (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (q : Piece) {k : Nat}
     (ht : q.tgt = .ref false k) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .prim)
     (hq : ∀ x ∈ pos q, 0 ≤ x.2) (w : Nat)
-    (hrc : (c.P.defs[c.P.root]!).body.recut = #[] := by assumption) :
+    (hrc : sc.base ≠ c.P.root ∨ (c.P.defs[c.P.root]!).body.recut = #[] := by assumption) :
     (segsPos (if q.count = 0 then #[] else
       #[Seg.one { tgt := .gate w, base := (c.body.offsets[k]! : Int), stride := 0, len := q.count }])).map
         (den c.P sc) = (pos q).map (den c.P sc) := by
@@ -2975,7 +2975,7 @@ theorem den_batchPrim (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d
     (ht : q.tgt = .ref false k) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
     (hp : (c.P.defs[node.fn]!).prim = true) (hL : (c.P.defs[node.fn]!).outLeaves = 1)
     (hq : ∀ x ∈ pos q, 0 ≤ x.2) (w : Nat)
-    (hrc : (c.P.defs[c.P.root]!).body.recut = #[] := by assumption) :
+    (hrc : sc.base ≠ c.P.root ∨ (c.P.defs[c.P.root]!).body.recut = #[] := by assumption) :
     (segsPos (if q.count = 0 then #[] else
       #[Seg.one { q with tgt := .gate w, base := (c.body.offsets[k]! : Int) + q.base }])).map (den c.P sc) =
       (pos q).map (den c.P sc) := by
@@ -3867,7 +3867,7 @@ def CalleeSpec (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop :=
 
 /-- Where the root reads an input node recut, no reference resolves, so a list of references agrees with any list of
 its length. -/
-theorem agree_recut {P : Prog} {sc : Flock.Program.Scope} (hrc : ¬ (P.defs[P.root]!).body.recut = #[]) :
+theorem agree_recut {P : Prog} {sc : Flock.Program.Scope} (hrc : ¬ (sc.base ≠ P.root ∨ (P.defs[P.root]!).body.recut = #[])) :
     ∀ {xs ys : List (Tgt × Int)}, xs.length = ys.length → (∀ y ∈ ys, ∃ b i, y.1 = .ref b i) →
       Agree P sc xs (ys.map (den P sc))
   | [], [], _, _ => List.Forall₂.nil
@@ -3883,7 +3883,7 @@ theorem agree_recut {P : Prog} {sc : Flock.Program.Scope} (hrc : ¬ (P.defs[P.ro
     simp only [den] at ha
     split at ha
     · cases ha
-    · exact absurd (Flock.Program.resolve_recut ha) hrc
+    · exact absurd (Flock.Program.resolve_cond ha) hrc
 
 /-- The positions of a piece of a node's outputs are references. -/
 theorem pos_ref {q : Piece} {k : Nat} (ht : q.tgt = .ref false k) : ∀ y ∈ pos q, ∃ b i, y.1 = .ref b i := by
@@ -3940,7 +3940,7 @@ theorem downSpec_prim (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d
     rw [down_prim c fuel q ht hff hn hform hr] at h
     injection h with h
     subst h
-    by_cases hrc : (c.P.defs[c.P.root]!).body.recut = #[]
+    by_cases hrc : sc.base ≠ c.P.root ∨ (c.P.defs[c.P.root]!).body.recut = #[]
     · exact agree_of_map (den_prim c sc hd q ht hn hform hq w)
     · rw [if_neg h0, segsPos_single]
       exact agree_recut hrc (by rw [pos_length, pos_length]; simp [Desc.Piece.count]) (pos_ref ht)
@@ -3958,7 +3958,7 @@ theorem downSpec_batchPrim (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d 
     rw [down_batchPrim c fuel q ht hff hn hform hp hr] at h
     injection h with h
     subst h
-    by_cases hrc : (c.P.defs[c.P.root]!).body.recut = #[]
+    by_cases hrc : sc.base ≠ c.P.root ∨ (c.P.defs[c.P.root]!).body.recut = #[]
     · exact agree_of_map (den_batchPrim c sc hd q ht hn hform hp hL hq w)
     · rw [if_neg h0, segsPos_single]
       exact agree_recut hrc (by rw [pos_length, pos_length]; simp [Desc.Piece.count]) (pos_ref ht)
