@@ -86,7 +86,7 @@ open ResourceAccounting.Remote.Held _root_.Poub.Line
 structure Node where
   /-- the session's parameters: its windows, one group each, and the receipts each sample samples -/
   params : Poub.Session.Params
-  /-- the windows a sample, `groups_per_coin`: windows `c·g … (c + 1)·g − 1` are sampled from one openings coin; at most 1,
+  /-- the windows a sample, `groups_per_coin`: windows `c·g … (c + 1)·g − 1` are sampled from one sample's coins; at most 1,
   one a window -/
   groupsPerCoin : ℕ
   /-- the registration the session runs on, its registered blocks among it -/
