@@ -618,7 +618,6 @@ hand = [
     "benchmarks/one_stage/pouw_piece.py",
     "benchmarks/one_stage/served_cases.py",
     "benchmarks/one_stage/served_pearlplus.sh",
-    "benchmarks/one_stage/served_util.sh",
     "benchmarks/one_stage/served_verdicts.py",
     "benchmarks/pouw/h1_lanes/j10r.py",
     "benchmarks/pouw/h1_lanes/leaf.py",

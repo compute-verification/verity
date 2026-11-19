@@ -25,7 +25,6 @@
     {"file": "benchmarks/one_stage/inference_only.py", "count": 1, "lane": "proofs"},
     {"file": "benchmarks/one_stage/prove_subprotocol.py", "count": 1, "lane": "proofs"},
     {"file": "benchmarks/one_stage/rehearsal.sh", "count": 1, "lane": "proofs"},
-    {"file": "benchmarks/one_stage/served_util.py", "count": 2, "lane": "proofs"},
     {"file": "benchmarks/pouw/filler/arms.py", "count": 1, "lane": "compute-accounting"},
     {"file": "benchmarks/pouw/filler/share.py", "count": 1, "lane": "compute-accounting"},
     {"file": "benchmarks/poub_session/auditor_line.py", "count": 1, "lane": "memory-accounting"},

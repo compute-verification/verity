@@ -11,6 +11,8 @@ public import Spot.Wires
 public import Spot.Edges
 public import Spot.RecordText
 public import Spot.Restrict
+public import Spot.Partition
+public import Circuits.DefinitionDigest
 public import Flock
 public import Flock.JsonParse
 public import Std.Data.HashMap
@@ -43,8 +45,11 @@ open Lean (Json)
 open Flock (V)
 
 def PROTOCOL : String := "verity/sampled-proofs/one-stage/v2"
-/-- The statement every sampled proof block's session proves (`one_stage.proofs.STATEMENT`). -/
-def STATEMENT : String := "verity/flock-circuit"
+/-- The statement every sampled proof block's session proves: the templated one (`Flock.Tags.tmplName`,
+`one_stage.proofs.TMPL_STATEMENT`), the form `restrict`'s block circuit is written in. -/
+def STATEMENT : String := "verity/flock-circuit/tmpl"
+
+example : STATEMENT = Flock.Tags.tmplName := rfl
 /-- The refusal of parameters naming no challenger: the sample's coins are never the prover's to choose. -/
 def NO_CHALLENGER : String :=
   "the parameters name no challenger: the draw's coins are the auditor's challenger's signed release (challenger, " ++
@@ -80,6 +85,68 @@ def templateOk (c : Flock.Circuit) : V Unit := do
   if c.upv = 0 then throw NO_ROW_WHY
   if returnedBits c > SIZE_CLASS_MAX then throw WIDE_WHY
 
+/-- **in(S)'s row cuts**: `ioCuts : C -> Partition -> {template: {port: rows}}`, the rows each port of a block's
+circuit is cut into, from C and the partition (the ranges `rs`), in O(C's description). A port a part of a root node's argument reads from a non-input root node is cut into its leaves over the leaves of the
+writer's output field at the part's first reference (`Flock.Program.partLeafAt`, `fieldIx`); an uncut port is left out.
+`edgesOf` holds every row so cut to one whole writer field, so a cut here only decides which rows it checks. Its work
+is the root's nodes, arguments and parts. A scan at the root is refused by name (no closed form yet, `edgesOf`'s
+`edge-form`), and so is a port of one template read in rows of two lengths. -/
+def ioCuts (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) :
+    V (List (String × List (String × Nat))) := do
+  let fu := Spot.Edges.firstUnits rs
+  let nodes := ((P.defs[P.root]?).map (·.body.nodes)).getD #[]
+  let mut cs : List (String × List (String × Nat)) := []
+  for k in [0:nodes.size] do
+    if Spot.Edges.isInputNode P k then continue
+    let node := nodes[k]!
+    if node.form == .scan then
+      throw (Flock.OneCircuit.notDerived "ioCuts : a scan node of C's root (edge-form: no closed form yet)")
+    let some (rt, _) := fu[k]? | throw "edge-template"
+    let defn := P.defs[node.fn]!
+    for i in [0:node.args.size] do
+      let (port, ty) := defn.params[i]!
+      for q in node.args[i]!.seq.parts do
+        let (run, lanes) := Flock.Program.partLanes q
+        let some (false, w, l) := Flock.Program.partLeafAt run lanes 0 | continue
+        if l < 0 || w ≥ nodes.size || Spot.Edges.isInputNode P w then continue
+        let wd := P.defs[nodes[w]!.fn]!
+        if wd.outLeaves == 0 then continue
+        let some f := Flock.Program.fieldIx wd.ret (l.toNat % wd.outLeaves) | continue
+        let fl := ((Flock.Program.fieldsOf wd.ret)[f]?.map (·.leaves)).getD 0
+        if fl == 0 || ty.leaves % fl != 0 then throw "edge-rows"
+        let kc := ty.leaves / fl
+        let ports := (cs.lookup rt).getD []
+        match ports.lookup port with
+        | some k' =>
+          if k' != kc then
+            throw s!"ioCuts: template {rt}'s port {port} is read in rows of {ty.leaves / k'} and of {fl} leaves"
+        | none => cs := (rt, ports ++ [(port, kc)]) :: cs.filter (·.1 != rt)
+  return (cs.reverse.map fun (t, ps) => (t, ps.filter (·.2 > 1))).filter (!·.2.isEmpty)
+
+/-- Whether C's root has an edge: an argument part of a root node that reads a root node that is no input. Its work is
+the root's nodes, arguments and parts. -/
+def hasEdge (P : Flock.Program.Prog) : Bool :=
+  ((P.defs[P.root]?).map (·.body.nodes)).getD #[] |>.any fun n => n.args.any fun a =>
+    a.seq.parts.any fun q => (Flock.Registered.partNodes q).any fun k => !Spot.Edges.isInputNode P k
+
+/-- in(S)'s row cuts (`ioCuts`) on C decoded, `prog`, at the partition's ranges (`Partition.evaluate`); none where C's
+root has no edge (`hasEdge`). -/
+def cutsOf (prog : V Flock.Program.Prog) (partition : Json) : V (List (String × List (String × Nat))) := do
+  let P ← prog
+  if !hasEdge P then return []
+  ioCuts P (← Partition.evaluate { desc := .ofProg P, prog := P } (getD partition "query"))
+
+/-- A block circuit's input rows: each parameter `(name, bits)` a row of its own, or, cut `k` ways (`cuts`, `ioCuts`'
+for its template), `k` rows `name#j` of `bits / k` each, in order (`interface.RowLayout.cut`, `row_name`). -/
+def cutRows (cuts : List (String × Nat)) (ins : Array (String × Nat)) : Array (String × Nat) :=
+  ins.flatMap fun (n, b) => match cuts.lookup n with
+    | some k => if k ≤ 1 then #[(n, b)] else (Array.range k).map fun j => (s!"{n}#{j}", b / k)
+    | none => #[(n, b)]
+
+#guard cutRows [("x", 4)] #[("x", 1024), ("w", 256)] ==
+  #[("x#0", 256), ("x#1", 256), ("x#2", 256), ("x#3", 256), ("w", 256)]
+#guard cutRows [] #[("x", 1024)] == #[("x", 1024)]
+
 /-- The verifier's own inputs to `verity-verify-proof verify --zk`: C, the registered Program with its wires (as JSON and
 as the bytes `--program` reads), the partition object, the public file's committed SHA-512 (the commitment) and theta's
 registration (the registered file, which states no position), and the first unit of the statement's block. -/
@@ -90,22 +157,85 @@ structure Own where
   pub : String
   registered : Option Json
   first : Nat := 0
+  /-- C decoded and the partition's blocks, once a session: every member's `Own` is `{ shared with … }`, which keeps
+  these, so no `Own` is updated at `program` or `partition`. -/
+  prog : Thunk (V Flock.Program.Prog) := Thunk.mk fun _ => Flock.Program.decode program
+  blocks : Thunk (V (Option (Array (Nat × Nat)))) := Thunk.mk fun _ => Flock.HmRow.blocksOf partition program
+  cuts : Thunk (V (List (String × List (String × Nat)))) := Thunk.mk fun _ => cutsOf prog.get partition
+
+/-- The layout C_S's template is lowered at (`one_circuit.LAYOUT`). -/
+def LAYOUT : String := "iv/hybrid/4"
+
+/-- The templates a template query lists (`one_circuit._listed`); none for another query. -/
+def listedOf (partition : Json) : Option (Array String) :=
+  let q := partition.getObjValD "query"
+  let ps := q.getObjValD "params"
+  match q.getObjValAs? String "name" with
+  | .ok "Q_template_instance" => some #[(ps.getObjValAs? String "template").toOption.getD ""]
+  | .ok "Q_template_instances" => match ps.getObjValD "templates" with
+    | .arr ts => some (ts.map fun t => (t.getStr?).toOption.getD "")
+    | _ => none
+  | _ => none
+
+/-- **C_S's block circuit** (`one_circuit.lower`): `S`, the block's Program, lowered at its one template (the Definition
+its root's non-input nodes call, which the query lists) by `Flock.Lower.lower` and written by `Flock.Compose.compose`:
+input rows the template's parameters as bit rows, each cut as in(S)'s cuts `cuts` give for the template (`ioCuts`,
+`cutRows`), output ports its return fields `o{j}` in whole u16 words, META's `program_digests` the template's
+`definitionDigest` read off `CJ`, C's descriptor. Refuses a block over several templates by name. -/
+def lowerBlock (CJ : Json) (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog) :
+    V ByteArray := do
+  let some listed := listedOf partition
+    | throw (Flock.OneCircuit.notDerived
+        "lower : C_S of a partition that is no template query (Q_template_instance, Q_template_instances) -> its Boolean block circuit")
+  let some root := S.defs[S.root]? | throw "lower: C_S's root is not one of its Definitions"
+  let mut called : Array String := #[]
+  for k in [0:root.body.nodes.size] do
+    if Spot.Edges.isInputNode S k then continue
+    let key := ((root.body.nodes[k]?).bind (S.defs[·.fn]?) |>.map (·.key)).getD ""
+    if !called.contains key then called := called.push key
+  let keys := called.qsort (· < ·)
+  let #[key] := keys
+    | throw s!"lower: C_S's root calls {keys.toList}, and a block's units are instances of one template"
+  if !listed.contains key then throw s!"lower: C_S's template {key} is not one the partition's query lists"
+  let some d := S.index[key]? | throw s!"lower: C_S's template {key} is no Definition of C_S"
+  let some fn := S.defs[d]? | throw s!"lower: C_S's template {key} is no Definition of C_S"
+  let bits := fun (t : Flock.Program.Ty) => t.widths.foldl (· + ·) 0
+  let ins := cutRows ((cuts.lookup key).getD []) (fn.params.map fun (n, t) => (n, bits t))
+  let outs := (Flock.Program.fieldsOf fn.ret).toArray.mapIdx fun j f => (s!"o{j}", (bits f + 15) / 16)
+  let tab := fun (k : String) => match CJ.getObjValD k with | .arr xs => xs | _ => #[]
+  let digest ← Flock.DefinitionDigest.definitionDigest (tab "callees") (tab "types")
+    ((CJ.getObjValD "definitions").getObjValD key)
+  let nIn := ins.foldl (fun a p => a + (p.2 + 15) / 16) 0
+  let nOut := outs.foldl (· + ·.2) 0
+  let t ← Flock.Lower.lower S d (Array.replicate nIn 16) (Array.replicate nOut 16)
+  Flock.Compose.compose { name := s!"unit/{key}", body := .tmpl t LAYOUT, ins, outs, programDigests := [(key, digest)] }
+    ((partition.getObjValAs? String "program").toOption.getD "") (Flock.hexOf (← Flock.HmRow.partitionDigest partition))
 
 /-- **C_S**: `restrict : C -> Partition -> Block -> Circuit`, the circuit file of the proof block whose first unit
 is `block`: the Boolean lowering of its Definition in C, its ports in(S) and out(S), from C and the partition. The code's
-Core `Circuit.restrict`. The block is the partition's (`HmRow.blocksOf`) and its Program `Spot.Restrict.restrict`'s;
-no encoder writes a lowered Program as a circuit file, so it refuses after the Program. -/
-def restrict (C : ByteArray) (partition : Json) (block : Nat) : V ByteArray := do
-  let some bs ← Flock.HmRow.blocksOf partition C
-    | throw "restrict: the partition object has no blocks"
+Core `Circuit.restrict`. The block is the partition's (`blocks`, `HmRow.blocksOf`), its Program `Spot.Restrict.restrict`'s
+on `prog`, C decoded, and its file `lowerBlock`'s on `CJ`, C's descriptor, at in(S)'s cuts `cuts` (`cutsOf`). -/
+def restrictOn (CJ : V Json) (prog : V Flock.Program.Prog) (blocks : V (Option (Array (Nat × Nat))))
+    (cuts : V (List (String × List (String × Nat)))) (partition : Json) (block : Nat) : V ByteArray := do
+  let some bs ← blocks | throw "restrict: the partition object has no blocks"
   let some (lo, hi) := bs.find? (·.1 == block)
     | throw s!"restrict: no block of the partition starts at unit {block}"
-  discard <| Spot.Restrict.restrict (← Flock.Program.decode C) ((List.range' lo (hi - lo)).toArray)
-  throw (Flock.OneCircuit.notDerived
-    "restrict : C -> Partition -> Block -> Circuit (C_S: the block's Program lowered and written as a circuit file)")
+  let S ← Spot.Restrict.restrict (← prog) ((List.range' lo (hi - lo)).toArray)
+  lowerBlock (← CJ) partition (← cuts) S
 
-/-- The statement's circuit file, derived from C and the partition (`restrict`). -/
-def Own.circuitFile (p : Own) : V ByteArray := restrict p.program p.partition p.first
+/-- `restrictOn` on C's bytes. -/
+def restrict (C : ByteArray) (partition : Json) (block : Nat) : V ByteArray :=
+  let CJ : V Json := match Flock.Program.readJson C with
+    | some (.ok j) => pure j
+    | some (.error e) => throw s!"restrict: C is not JSON: {e}"
+    | none => throw "restrict: C is not UTF-8"
+  let prog := Flock.Program.decode C
+  restrictOn CJ prog (Flock.HmRow.blocksOf partition C) (cutsOf prog partition) partition block
+
+/-- The statement's circuit file, derived from C and the partition (`restrictOn`), on C decoded, its blocks and in(S)'s
+cuts, each once a session. -/
+def Own.circuitFile (p : Own) : V ByteArray :=
+  restrictOn (pure p.programJ) p.prog.get p.blocks.get p.cuts.get p.partition p.first
 
 /-- A member of the per-member form: its name, its units as `[lo, hi)` ranges, ascending, its circuit's units a proof
 block (META `vus_per_block`) and its statement's own inputs. -/
@@ -863,7 +993,7 @@ the evidence's (`provedHeld`); and for a length a session's statement can't hold
 `WORD`). -/
 def run (p : Own) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) : V Run := do
   tablesHeld p bs
-  let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
+  let some tags0 := Flock.Tags.byName? STATEMENT | throw s!"the statement {STATEMENT} is not known"
   (if tags0.plainLeaves then throw s!"{tags0.name}: a statement with plain SHA-512 leaves: --zk's hiding needs hm96 leaves"
     else pure () : V Unit)
   (if p.registered.isNone && readsRegistered p.programJ then
@@ -913,7 +1043,7 @@ def treesOf (p : OneStage.Params) (e : OneStage.Evidence) : V (Array Challenger.
 
 /-- The tables of the session `run` sets up: the statement's tags' at `inputsOf`'s count, one table. None when the
 statement is unknown, which `run` refuses. -/
-def sessionTables : Array String := ((Flock.Tags.find? STATEMENT).map (·.tableNames 1)).getD #[]
+def sessionTables : Array String := ((Flock.Tags.byName? STATEMENT).map (·.tableNames 1)).getD #[]
 
 /-- The parameter naming how many tables one session sets up: the audit at `J` tables in one session, as
 `verity-verify-proof --session-tables J` and `SampledKSLiveV5` take them. Read nowhere yet: `inputsOf` and `inputsAt`
@@ -935,7 +1065,7 @@ def tablesOfJson (j : Json) : V Nat :=
 
 /-- The tables a session of `J` tables sets up: the statement's tags' at `J` (`Flock.Tags.tableNames`), the names its
 link's `root_b` would hold. At `J = 1` it is `sessionTables`. -/
-def sessionTablesAt (J : Nat) : Array String := ((Flock.Tags.find? STATEMENT).map (·.tableNames J)).getD #[]
+def sessionTablesAt (J : Nat) : Array String := ((Flock.Tags.byName? STATEMENT).map (·.tableNames J)).getD #[]
 
 /-- The byte length of table `st`'s `root_B`: the level-0 cap a `--zk` proof's reader reads (`Flock.ZkProof.reader`),
 `2^cap₀` digests of the table's Merkle scheme, `cap₀` the first stratum of `Flock.Zk.schedule` at the table's `m`.
@@ -950,7 +1080,7 @@ files of the verifier's own files `p`. None where it sets up no table. -/
 def rootBTablesAt (inputs : Flock.Tags → ByteArray → ByteArray → V Flock.Witness.Inputs) (p : Own) (bs : Core.Blobs)
     (record : String) : Array (String × Option Nat) :=
   let tabs : Option (Array Flock.Setup) := (do
-    let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
+    let some tags0 := Flock.Tags.byName? STATEMENT | throw s!"the statement {STATEMENT} is not known"
     let I ← inputs tags0 (← p.circuitFile) (← bs.get p.pub "public file")
     let (_, tabs, _) ← setupAt I (← readsOf p.registered) (Flock.Witness.recordDraw record)
     pure tabs : V (Array Flock.Setup)).toOption
@@ -1389,7 +1519,7 @@ where `run` refuses on blobs whose pinned tables are `tables`. -/
 def statementOf (p : Own) (population : ByteArray → V Unit) (tables : List (String × ByteArray)) (bs : Core.Blobs) :
     V StepAt :=
   (p.circuitFile >>= fun circuitB => lookupsOf circuitB >>= tablesMatch tables) >>= fun _ =>
-  match Flock.Tags.find? STATEMENT with
+  match Flock.Tags.byName? STATEMENT with
   | none => throw s!"the statement {STATEMENT} is not known"
   | some tags0 =>
     match tags0.plainLeaves with
@@ -1715,7 +1845,7 @@ def statementOn (tags0 : Flock.Tags) (fk : FileKept) (sha : Option String) (p : 
 
 /-- **`statementOf` at the inputs' own lookup tables (`ownTables`) is `statementOn` at what `fileOf` keeps of its
 circuit file, read at the blobs' lookup tables, and its program's digest**, where the statement's tags are known. -/
-theorem statementOf_on {tags0 : Flock.Tags} (ht : Flock.Tags.find? STATEMENT = some tags0) (p : Own)
+theorem statementOf_on {tags0 : Flock.Tags} (ht : Flock.Tags.byName? STATEMENT = some tags0) (p : Own)
     (population : ByteArray → V Unit) (bs : Core.Blobs) :
     (ownTables p bs >>= fun tables => statementOf p population tables bs) =
       statementOn tags0 (fileOf tags0 (tablesOf bs) p.circuitFile) (programDigest p.program) p population bs := by
@@ -1745,7 +1875,7 @@ def Member.filesOn (m : Member) (tags0 : Flock.Tags) (fk : FileKept) (pk : Progr
 
 /-- `Member.files` is `Member.filesOn` at what `fileOf` keeps of its circuit file, read at the blobs' lookup tables,
 and what `programOf` keeps of its program under its partition. -/
-theorem Member.files_on {tags0 : Flock.Tags} (ht : Flock.Tags.find? STATEMENT = some tags0) (m : Member)
+theorem Member.files_on {tags0 : Flock.Tags} (ht : Flock.Tags.byName? STATEMENT = some tags0) (m : Member)
     (slice : Json) (bs : Core.Blobs) :
     m.files slice bs =
       m.filesOn tags0 (fileOf tags0 (tablesOf bs) m.own.circuitFile) (programOf m.own.program m.own.partition)
@@ -1766,7 +1896,7 @@ def keptFiles (slice : Member → Json) (bs : Core.Blobs) (tags0 : Flock.Tags) (
       keptFiles slice bs tags0 tables (some pk) ms >>= fun as => pure ((m.name, a) :: as)
 
 /-- `keptFiles` on a program that is what `programOf` reads of its bytes under its partition is `membersFiles`. -/
-theorem keptFiles_eq {tags0 : Flock.Tags} (ht : Flock.Tags.find? STATEMENT = some tags0) (slice : Member → Json)
+theorem keptFiles_eq {tags0 : Flock.Tags} (ht : Flock.Tags.byName? STATEMENT = some tags0) (slice : Member → Json)
     (bs : Core.Blobs) : ∀ (ms : List Member) (prog : Option ProgramKept),
       (∀ pk, prog = some pk → pk = programOf pk.bytes pk.partition) →
       keptFiles slice bs tags0 (tablesOf bs) prog ms = membersFiles slice bs ms
@@ -1785,7 +1915,7 @@ strata evaluated once for the members that read it: `keptFiles` from no file and
 tags and the blobs' lookup tables, each read once. It returns what `membersFiles` returns, a refusal included
 (`membersFiles_eq_kept`), and is compiled in its place. -/
 def membersFilesKept (slice : Member → Json) (bs : Core.Blobs) (ms : List Member) : V (List (String × StepAt)) :=
-  match Flock.Tags.find? STATEMENT with
+  match Flock.Tags.byName? STATEMENT with
   | some tags0 => keptFiles slice bs tags0 (tablesOf bs) none ms
   | none => membersFiles slice bs ms
 
@@ -1795,7 +1925,7 @@ exactly what `membersFiles` returns, a statement for each member or the first re
 @[csimp] theorem membersFiles_eq_kept : @membersFiles = @membersFilesKept := by
   funext slice bs ms
   unfold membersFilesKept
-  cases ht : Flock.Tags.find? STATEMENT with
+  cases ht : Flock.Tags.byName? STATEMENT with
   | none => rfl
   | some tags0 => exact (keptFiles_eq ht slice bs ms none (fun _ h => nomatch h)).symm
 

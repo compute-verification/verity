@@ -1082,3 +1082,39 @@ def test_one_advice_under_two_sets_of_private_values_has_one_public_record(tmp_p
         pub[seed] = _public(c, tmp_path / str(seed))
     assert pub[3] == pub[4]
     assert {"index.json", "index-salt.bin", "circuit.json", "registration.json"} <= set(pub[3])
+
+
+def test_a_windows_leaf_salts_are_each_one_position_of_its_key_and_its_strings_the_ones_close_makes():
+    """`leaf_strings`: row r of port q of template t takes the key's stream at index (t, q), leaf r (blocks 3r .. 3r + 2,
+    as `salt_stream.engine.fill` writes them), so no position of the stream serves two rows of a window, no index's head
+    passes the engine's ``HEAD_MAX``, and `close` handed them makes the roots it makes from the same salts."""
+    from verity.circuits.ops import gemm as G
+    from verity.commitments import randomness as RND
+    from verity.commitments.cuda.salt_stream.engine import HEAD_MAX
+
+    from verity_vllm.program.predict.window_rows import leaf_strings
+
+    coord, acc = bind(G.ScaledMmS8Coordinate, K=64, **G.GEMM_SM120_S8), bind(G.GemmAccumulatorS8, K=64, **G.GEMM_SM120_S8)
+    rng = np.random.default_rng(0)
+    win = IF.Window(IF.Circuit("test", ((coord, 10), (acc, 3))), "ab" * 64, {"law": "stratified", "k": 2}, 4)
+    for fn, n in ((coord, 10), (acc, 3)):
+        lay = IF.layout(fn)
+        ins = [rng.integers(0, 1 << 16, (n, w), dtype=np.uint16).view(f"<u{lay.widths[g] // 8}")
+               for g, (_p, w) in enumerate(lay.rows)]
+        outs = evaluate_batch(fn, *ins, kernel="reference")
+        outs = outs if isinstance(outs, (list, tuple)) else [outs]
+        win.record(fn, ins, [np.asarray(o).astype(f"<u{w // 8}") for o, w in zip(outs, lay.widths[len(lay.rows):])])
+    key = RND.derive(bytes(64), "verity/window-commit/salts/v1", {"window": "ab" * 64})
+    got, rows = leaf_strings(win, key), win.leaf_rows()
+    assert set(got) == set(rows) and {lr.template for lr in rows.values()} == {0, 1}
+    heads = {k: key.head((lr.template, lr.port)) for k, lr in rows.items()}
+    positions = [(heads[k], 3 * u + j) for k, lr in rows.items() for u in lr.units for j in range(3)]
+    assert len(set(positions)) == len(positions) == 3 * sum(len(lr.rows) for lr in rows.values())
+    assert max(len(h) for h in heads.values()) <= HEAD_MAX
+    salts = [ys[i:i + CS.SALT_BYTES] for ys, _ in got.values() for i in range(0, len(ys), CS.SALT_BYTES)]
+    assert len(set(salts)) == len(salts)
+    k, lr = next(iter(rows.items()))
+    assert got[k][0][CS.SALT_BYTES:2 * CS.SALT_BYTES] == key.block((lr.template, lr.port), 3) + key.block(
+        (lr.template, lr.port), 4) + key.block((lr.template, lr.port), 5)
+    by_member = {p: s for k, lr in rows.items() for p, s in lr.split(got[k][0], CS.SALT_BYTES).items()}
+    assert win.close(strings=got).roots == win.close(salts_of=by_member).roots

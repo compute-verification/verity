@@ -35,17 +35,10 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   audit run on the cores the job is given (`nproc`). With no `gpu-lease` it takes card `A5_CARD` (default 0) directly. The row dir,
   the window and the audit's private files are under `WORK/a5-llama1b/RUN` (`A5_ROOT`). They are removed at exit, success or
   failure, unless `A5_KEEP=1`. M0's Flock build (`A5_FLOCK_WORK`, default `WORK/a5-llama1b/flock-work`) is kept for the next run.
-- `a5_tp.sh`: A5 over a TP Commit's windows, one `served` window per rank (`a5.py --tp-commit`), taken as served only under a
-  SHA-512 TP run root (`tp.run_root`'s v2, over the ranks' rows-sha512 roots; an old record's SHA-256 v1 root is refused before
-  the sample): GLM-5.3's TP8 Commit with
-  `SERVING_ROWS=benchmarks/one_stage/glm53_silu_mul_v2_tp8.json` (its SiluMul_v2 partition: every proof block of `SiluMul_v2{I=1536}`,
-  the dense layers' 861 per rank, by `rate:512/861`), or by default the CPU TP stand-in
-  (`tests/adapters/vllm/tests/pipeline/served_tp.py`). A member's whole population is one `verity/flock-circuit` statement, whose shape takes at most
-  `2^(35 - k_log)` instances: 2,048 at I=1536 (`k_log` 24) and 8,192 at I=256 (`k_log` 22), so a rank's `SiluMul_v2{I=256}`
-  (172,200 routed-expert and 21,525 shared-expert proof blocks) is not a member. Each session's `circuit.txt` files and lookup tables
-  go to the store by SHA-512 (`sha512/<hex>`, the Lean verifier's `--archive` layout) through
-  `adapters/vllm/verity_vllm/ops/store_trees.sh`, epoch_store.sh's put, and the run is labelled `circuits` with each tree's
-  art id, so the run can be verified again from the store.
+- `a5_tp.sh` (`STANDIN=ENTRY ...`, required): A5 over the stand-in windows below, one entry a stand-in script, on a CPU machine.
+  Each session's `circuit.txt` files and lookup tables go to the store by SHA-512 (`sha512/<hex>`, the Lean verifier's `--archive`
+  layout) through `adapters/vllm/verity_vllm/ops/store_trees.sh`, epoch_store.sh's put, and the run is labelled `circuits` with each
+  tree's art id, so the run can be verified again from the store.
 - `expert_tables_tp.sh`: the committer's per-expert tables registration of a TP model, one file a rank (`verity-vllm
   tp-register-tables --served`): each rank's expert stacks composed from the checkpoint of record, held to a capture's served
   SHA-512s and committed under the committer's key, which never leaves the node. A window's per-expert table reads count
@@ -94,10 +87,6 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   members in turn (`a0.VerifyMembers`), and a member's seconds there are from its line to its answer. Among the readers
   run alone is `verify` on each member's session, a process of its own: it must print the audit's verdict line for that
   member, byte for byte, or the measurement fails, and its seconds are beside the audit's in one record.
-- `a5_glm53_commit.sh`, `a5_glm53_cpu.sh`: A5 on GLM-5.3 in its two halves. The first is the GPU job, from the source tree
-  (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
-  private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
-  machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
 - `served_verdicts.sh` (with `served_verdicts.py`): one served window through every subprotocol, in one job on an H200 node
   from a clone of the tree (`bash benchmarks/one_stage/served_verdicts.sh`). It serves
   Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal`, the network attester scheme's order `release-order`), sends a
@@ -249,29 +238,16 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   block-coordinate proof blocks, and saves the proof blocks for `a11.py --load-values`, whose audit proves them. `A9_SAVED` audits a
   saved directory (an input tar made outside any run's output) without the values stage. The saved units' values are witness: a9.sh
   keeps them in the job's scratch directory only.
-- `a10.sh`: run A10's entry point, on the same builds. A10 is A11's kinds and A9's launches on rank 0's committed values
-  in place of the capture's: `a10.py values` opens rank 0's replay bundle from the Commit (`--replay-deferred`,
-  `retain=host`) against its run root of record, reads each Call's operands and returns through its Program row as the
-  deferred replay does, and runs `a11.py`'s and `a9.py`'s staging on them, writing every word where the committed value
-  and the capture's differ to `compare.json`; `a10.py audit` is `a11.py --load-values` on a saved directory, with the
-  docket window naming the committed values. a10.sh keeps the two saved directories (witness) under
-  `$A10_SAVED_ROOT/<run id>/` on the values node, mode 0700, never under the run's output; its audit mode reads
-  `A10_VALUES` as that run id on the same machine and refuses by name where the directory is absent.
 - `public_files.py`: the one rule for what a launcher copies under its run's output (`filter`): a served run's witness
   (`served_verdicts.witness`) and private, salt, key and saved-value names are never copied; every copy loop of
   `benchmarks/one_stage` and `benchmarks/prove_path` pipes its `find` through it (`tests/benchmarks/one_stage/test_public_files.py`).
-- `m1_families.py` and `m1_unit.py`: M1's full-step coverage. `m1_families.py` reads a rank's Programs of record from a
-  deferred TP Commit's Build and lists the proof-block families of the given steps: each Definition the serving rows' partition
-  samples from, its rows, op paths, ports and whether `serving_rows.template` takes it; `--estimate` adds each family's
+- `m1_families.py` and `m1_unit.py`: M1's full-step coverage. `m1_families.py --estimate CENSUS` adds each proof-block family's
   ANDs, table reads and assertions from its leaves lowered once (table reads counted apart, so not comparable with a
   statement's `ands` with its reads inline: `m1_families.py`'s docstring), against 2^26, and
   the log2 of Flock's circuit prover's block for its proof block against `K_MAX` (the hashing of its rows alone bounds that block from below), the
-  same for each of its split proof blocks, and with `--also`/`--also-file` for Definitions a split main lacks would use, with
-  each proof block's served MACs and the bits of each of its ports; `--steps all` takes every request step.
-- `block_census.py` (run by `block_census.sh ROW_DIR` on the machine holding the row's Build): the proof-block census of
-  a Commit's Build: a TP row's ranks (`build/rank<r>/`), or a single-card row as rank 0 of a world of 1 (its
-  `build_request*/` at the top level, its Programs of record its Commit's `--program-digest` and `--required-manifest`),
-  one census a request, under `<request>/`, when the row's requests are of several shapes (`--request`). Every rank's `m1_families.py --steps all --estimate`, each Program row cut into proof blocks (the
+  same for each of its split proof blocks, and with `--also`/`--also-file` for Definitions a split main lacks would use,
+  each proof block's served MACs and the bits of each of its ports.
+- `block_census.py`: the proof-block census of a stored census's sized families (`block_recut.sh`'s), one census a request, under `<request>/`, when the requests are of several shapes (`--request`). Each rank's `m1_families.py --estimate`, each Program row cut into proof blocks (the
   row itself when it fits Flock's block and a size class and is no longer than its family's `WHOLE_UP_TO`, else each slot
   of its split at its coarsest fitting proof block, else
   a gap with the reason; a `COLS` row or slot, and the block-scaled FP8 GEMM's coordinates (`WIDE_COORDS`), at its fitting
@@ -312,12 +288,6 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   K/m proved past one phase, a node cell proved over a period the run doesn't cover, a datacenter or world cell proved,
   a proved statement outside the lock, a rule without its sources. The tight K is shown conditional on what is open.
   Its test reads stand-ins cut from the writer's own record (`tests/benchmarks/one_stage/fixtures/onsite_periods/make.py`).
-- `served_util.sh` (with `served_util.py`): the whole-step tensor utilization of serve-openai on the int8 Llama-3.2-1B
-  prefill mix (prompts of 1,024 ids, `max_tokens` 1, all queued at once, T tokens a step), one arm a run (stock, the
-  Commit unsealed or sealed, the Commit with PoUW H1 on in-process coins), under Nsight Systems' GPU metrics.
-  `served_util.py` takes Tensor Active's mean over the longest run of full steps, each step from the previous step's end
-  to its own on the step trace's clock, and splits the rest into losses by what the GPU was running at each sample.
-  With `PYSPY=1`, `pyspy_steps.py` splits the same steps' host time by Python function and thread, from py-spy's trace.
 - `served_shares.py SERVE_DIR [--credit ANSWER.json]`: a served run's utilization (the work its step trace's
   steps declare, the linears at θ and attention and the LM head at θ/2, over the loads' busy wall), term by term, and its
   credited share (the MACs Pearl+'s verdict, `served_passes.py verify`'s answer, credited at θ, over the same wall), at

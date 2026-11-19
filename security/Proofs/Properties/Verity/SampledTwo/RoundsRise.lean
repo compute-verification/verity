@@ -777,7 +777,7 @@ theorem accepted_spec {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {l
   obtain ⟨coinKeys, b, text, hg, hu, hv⟩ := hacc
   obtain ⟨proofs, spec, tabs, rest, -, hst, hzk⟩ := Verity.Sampled.verdictOf_ok hv
   obtain ⟨sess, hd⟩ := Verity.Sampled.zkVerify_decode hzk
-  have htag : Flock.Tags.find? Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
+  have htag : Flock.Tags.byName? Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
   have hh : (Flock.Witness.zkTags
       (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB lt rd pop).I).hiddenOutputs = true :=
     (Verity.Sampled.statement_zkTags htag _ _).1

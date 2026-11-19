@@ -43,7 +43,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from verity.circuits.codec import register_lazy_family
 from verity.circuits.defs import bind, composite
 from verity.circuits.ops.prims import const
 from verity.circuits.ops.scalar import BIT, BitOr, I32Add, I32Le, SelectI32
@@ -53,6 +52,7 @@ from verity.circuits.types import Array, Tuple, Value
 from verity_vllm.definitions.numerics import dsv4_decode_indices_twin
 from verity_vllm.definitions.registry import fp8_moe_experts as FX
 from verity_vllm.definitions.registry import marlin_moe as MM
+from verity_vllm.definitions.registry.fp8_moe_experts import gather_i32
 from verity_vllm.definitions.registry.prims import I32
 from verity_vllm.definitions.registry.sampling import bit_at
 
@@ -61,7 +61,7 @@ _CONF = ("model-untested: read from the Triton kernel and Triton 3.7.1's PTX at 
 
 M32 = 0xFFFFFFFF
 #: the block number a lookup past the row selects (`GatherI32x{NB}_v1`)
-FILL = M32
+FILL = FX.I32_FILL
 U8 = Value(8)
 
 #: the served statics: the indexer's top-k of 1024, 64 compressed rows per block, the block table's row at max_model_len 1,048,576
@@ -70,14 +70,6 @@ DSV4_DECODE_INDICES = {"c4": {"TOPK": 1024, "BS": 64, "NB": 4096}, "c4-4096": {"
 
 #: the element types of a signature: these words, and their bits in `boolean_dsv4_decode_indices`
 WORDS = SimpleNamespace(I32=I32, U8=U8, BIT=BIT, LIVE=BIT)
-
-
-def gather_i32(nb: int):
-    """`GatherI32x{NB}_v1`: blocks[b] of NB i32 words for 0 <= b < NB, else -1."""
-    return FX._gather("GatherI32", nb, I32, FILL)
-
-
-register_lazy_family(r"^GatherI32x(\d+)_v1$", lambda m: gather_i32(int(m[1])))   # decodable where the program was not built
 
 
 def check_slot_statics(BS: int, NB: int) -> int:

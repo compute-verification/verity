@@ -92,6 +92,18 @@ def test_lean_restrict_is_pythons_on_the_toys(pieces, name, i, ranges):
     assert out["agree"] is True and out["at"] is None, out
 
 
+@pytest.mark.parametrize("at", [0, 1])
+def test_lean_restrict_is_pythons_on_the_products_blocks(pieces, at):
+    from verity.circuits.ops import product as PR
+    p = PR.product(k=16, s=2, units=4, block=2)
+    lo, hi = p.blocks[at]
+    py = R.restrict(p.description, p.partition, [(lo, hi)]).descriptor.decode()
+    kind, body = pieces.call("restrict", {"descriptor": p.description.decode(), "units": list(range(lo, hi)), "python": py})
+    assert kind == "output", body
+    out = json.loads(body)
+    assert out["agree"] is True and out["at"] is None, out
+
+
 def test_a_repeated_unit_is_refused(pieces):
     text, _ = chain()
     kind, body = pieces.call("restrict", {"descriptor": text, "units": [6, 6], "python": python((6,))})
