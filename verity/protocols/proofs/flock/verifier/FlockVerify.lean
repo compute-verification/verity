@@ -835,13 +835,14 @@ whose circuit links sets up only with the verifier's own program of it, `--rec-i
 as the session's does with `--program`.
 Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The draw-less statement is set up once, and each sampled session at its own
-sample; one verdict line per session, in order, naming with `--program` the verifier's own program's digest: as `program_sha512`
+sample; one verdict line per session, in order, each saying whether it ran `--zk` (`zk`), naming with `--program` the
+verifier's own program's digest: as `program_sha512`
 only when it is META's `program_sha512`, else as `program_handed_sha512` with a `program_note` (`ProvedScope.programFields`),
 the digest of its public file's header (`public_header_sha512`, `publicHeader`), with `--registered F` the digest of that
 file (`registered_sha512`, `sha512Of`), a sampled session's sample (`unit_draw`), the number of tables it set the
 session up as (`session_tables`, `--session-tables J`, else 1),
 with `--rec-part J` its part (`rec_part`), the SHA-512 of every other input V*'s parts share (`rec_shared`,
-`recSharedInput`), whether it ran `--zk` (`zk`) and its session's coin key (`coin_key`), with `--rec-rows F` the
+`recSharedInput`) and its session's coin key (`coin_key`), with `--rec-rows F` the
 SHA-512 of the shared rows file it checked (`rec_rows_sha512`), with `--rec-inner F` the SHA-512 of the inner shape file
 it read (`rec_inner_sha512`), and with `--rec-inner-session DIR` and `--rec-inner-transcript F` the SHA-512 of the inner
 session's record and of the transcript (`rec_inner_session_sha512`, `rec_inner_transcript_sha512`,
@@ -914,11 +915,13 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   -- a session's line: the checks' outcome, then that of the refusals after them. `verify` prints its verdict; `agree`
   -- whether the checks pass exactly when upstream accepted, and never an acceptance
+  let zk := args.contains "--zk"
   let emit : String → Except String (Except String Unit) → List (String × Lean.Json) → IO Bool := fun dir outcome extra => do
     match upstream with
     | none =>
       let (ok, why) := match outcome with | .ok (.ok ()) => (true, "") | .ok (.error e) | .error e => (false, e)
-      let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)] ++ extra)
+      let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why),
+        ("zk", Lean.Json.bool zk)] ++ extra)
       IO.println s!"VERDICT {line.compress}"
       return ok
     | some up =>
@@ -946,7 +949,6 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
   let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
   let dirs := (args.dropWhile (· != "--session")).drop 1
-  let zk := args.contains "--zk"
   let ksForm := args.contains "--ks-form"
   if ksForm && !zk then
     IO.eprintln "verify --ks-form: the sampled audit's knowledge soundness is over --zk sessions, so --ks-form goes with --zk"; return 2
@@ -1181,13 +1183,13 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
       (match identifier with | some (j, _) => [("identifier", j)] | none => []) ++
       -- the verifier's own inner shape's word, never the prover's META
       (match recInner with | some i => [("private_circuit", Lean.Json.bool i.holo)] | none => []) ++
-      -- the part, the shared rows and every other shared input it was checked against, whether it ran --zk, and its
-      -- session's coin key, which `rec-compose` holds every part to (`RecCompose.Accepts`)
+      -- the part, the shared rows and every other shared input it was checked against, and its session's coin key,
+      -- which `rec-compose` holds every part to (`RecCompose.Accepts`)
       (match recPart with | some j => [("rec_part", Lean.toJson j)] | none => []) ++
       (match recRowsSha with | some h => [("rec_rows_sha512", Lean.Json.str h)] | none => []) ++
       (match recInnerSha with | some h => [("rec_inner_sha512", Lean.Json.str h)] | none => []) ++ recSessionShas ++
       (match recShared with
-        | some s => [("rec_shared", s.toJson), ("zk", Lean.Json.bool zk)] ++
+        | some s => [("rec_shared", s.toJson)] ++
           (match coinKey with | some k => [("coin_key", Lean.Json.str k)] | none => [])
         | none => []))
     all := all && ok

@@ -96,11 +96,13 @@
   P's leaf count must be the value's rows (`R7-output` when the log holds no such record or port, or the counts differ).
   Its rows stay under the earlier run's hiding leaves, so nothing about the value is opened, and the reads open against
   that root under that domain (`registered.reads_file`'s `domains`).
-* **Reused values**: an output value may name an earlier record's registered value instead of a port (`{value:
+* **Reused values**: an output value may name the previous record's registered value instead of a port (`{value:
   {"record": D, "value": V}}`): its entry takes the domain and root of V's entry in the `registered` of the log's record
-  with digest D (its last naming V), whose leaves, words and word bits must be the value's own (`R7-output` when the log
-  holds no such record or value, or they differ). Nothing is registered afresh: a record whose entry names another domain
-  or root is `R7-domain` or `R7-held`, as for a port.
+  with digest D (its last naming V), whose leaves, words and word bits must be the value's own (`R7-output` when D is
+  not the log's last record, `last_digest`, which R6 holds `previous` to, when the log holds no such value, or when they
+  differ). D is the previous record's so that the record whose own check held V's domain is the one the verifier's
+  caller ties this record to (Pearl+'s window record W, chained right before it). Nothing is registered afresh: a
+  record whose entry names another domain or root is `R7-domain` or `R7-held`, as for a port.
 * **Window history**: an output value the verifier gives only a port (`{value: {"port": P}}`) is port P of the previous
   record, the log's last, which R6 holds `previous` to (`last_digest`): the verifier names the record itself, so a
   window's history, the earlier windows' outputs it reads, is held to the previous window's root and domain for P, and
@@ -563,8 +565,10 @@ def _output_port(log: Sequence[Mapping[str, Any]], record: str, port: str, key: 
 def _earlier(log: Sequence[Mapping[str, Any]], record: str, kind: str, name: str,
              want: Mapping[str, Any]) -> Mapping[str, Any] | None:
     """An output value's earlier entry: the port `name` of the log's record with digest `record`, with the value's leaf
-    count, or (`kind == "value"`) its registered value `name`, with the value's leaves, words and word bits; each with a
-    string domain and root, else None."""
+    count, or (`kind == "value"`) its registered value `name`, of the log's last record alone (`last_digest`), with the
+    value's leaves, words and word bits; each with a string domain and root, else None."""
+    if kind == "value" and record != last_digest(log):
+        return None
     if kind == "port":
         e = _output_port(log, record, name)
         ok = e is not None and type(e.get("leaves")) is int and e["leaves"] == want["leaves"]

@@ -58,12 +58,6 @@ def BooleanAgrees (P : Prog) (boolean : Std.HashMap String String) : Prop :=
   ∀ p q, (P.defs[p]!).prim = true → boolean[(P.defs[p]!).key]? = some (P.defs[q]!).key →
     Prog.evalBool P p = Prog.evalBool P q
 
-/-- **`BodyAgrees`**: each primitive of `P` with a Boolean Definition in `P`'s own map (`Prog.bodyOf?`) evaluates as
-that Definition. -/
-def BodyAgrees (P : Prog) : Prop :=
-  ∀ p < P.defs.size, ∀ b, (P.defs[p]!).prim = true → P.bodyOf? (P.defs[p]!).key = some b →
-    Prog.evalBool P p = Prog.evalBool P b
-
 /-- **`V5Rows`, the adapter to the sampled proof's guarantee.** A unit `u` correct in the key circuit of the templated
 statement `c` carrying the template `tu.t`: the statement's unit is the net `tu.t` unrolls to, and at every copy `u'` the
 unit's local evaluation, read at copy `u'`'s columns wired as the key program wires the unit (`rowsWireC`, cast along

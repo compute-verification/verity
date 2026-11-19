@@ -10,6 +10,7 @@ public import Spot.CircuitKept
 public import Spot.Wires
 public import Spot.Edges
 public import Spot.RecordText
+public import Spot.Restrict
 public import Flock
 public import Flock.JsonParse
 public import Std.Data.HashMap
@@ -92,10 +93,16 @@ structure Own where
 
 /-- **C_S**: `restrict : C -> Partition -> Block -> Circuit`, the circuit file of the proof block whose first unit
 is `block`: the Boolean lowering of its Definition in C, its ports in(S) and out(S), from C and the partition. The code's
-Core `Circuit.restrict`. -/
-def restrict (_C : ByteArray) (_partition : Json) (_block : Nat) : V ByteArray :=
+Core `Circuit.restrict`. The block is the partition's (`HmRow.blocksOf`) and its Program `Spot.Restrict.restrict`'s;
+no encoder writes a lowered Program as a circuit file, so it refuses after the Program. -/
+def restrict (C : ByteArray) (partition : Json) (block : Nat) : V ByteArray := do
+  let some bs ← Flock.HmRow.blocksOf partition C
+    | throw "restrict: the partition object has no blocks"
+  let some (lo, hi) := bs.find? (·.1 == block)
+    | throw s!"restrict: no block of the partition starts at unit {block}"
+  discard <| Spot.Restrict.restrict (← Flock.Program.decode C) ((List.range' lo (hi - lo)).toArray)
   throw (Flock.OneCircuit.notDerived
-    "restrict : C -> Partition -> Block -> Circuit (C_S, the lowering of the block's Definition in C)")
+    "restrict : C -> Partition -> Block -> Circuit (C_S: the block's Program lowered and written as a circuit file)")
 
 /-- The statement's circuit file, derived from C and the partition (`restrict`). -/
 def Own.circuitFile (p : Own) : V ByteArray := restrict p.program p.partition p.first
