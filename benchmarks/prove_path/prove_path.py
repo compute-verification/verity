@@ -63,8 +63,7 @@ Two kinds of committed run:
         [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--probe SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
     prove_path.py window-commit --serve-run DIR --window K --row-dir DIR --advice FILE --registration FILE \\
         --checkpoint-dir DIR --out DIR --sampling-design RATE [--checkpoints F] [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--cap N] \\
-        [--workers N] [--window-registration W (--h1-prover DIR | --pearl-passes DIR)] [--hf-config F] [--target F] \\
-        [--cap-bits L]
+        [--workers N] [--hf-config F] [--target F] [--cap-bits L]
 
 * **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
   A served run's comes from its step trace instead (ADVICE-SRC); `compile_advice` reads either.
@@ -123,7 +122,7 @@ Two kinds of committed run:
   docket, `verity-vllm advice`'s, records the pinned root for its parameter, and any other is free), which
   ``records_audit.py count`` recounts from the record alone. A5 audits it once the committer writes each
   unit's rows as the record's members. With ``--window-registration W`` (H1's docket of the window), the class's
-  circuit reads H1's tables (`window_class.Tables` of W's Program, no key), the circuit an H1-tied window-commit commits.
+  circuit reads H1's tables (`window_class.Tables` of W's Program, no key).
 * **class-circuit**: that Circuit from φ alone (`class_circuit_of_serve`), no advice, row dir or window: ``window-circuit``'s
   record of any window of the class served under ``--serve``'s φ (a run's ``serve.json``, or **serve-phi**'s statement
   of what it will record, read on the serving device before the run serves), since the circuit is the class's whatever the
@@ -151,16 +150,8 @@ Two kinds of committed run:
   its stream's rule, and the window is committed under the sampling design that rate names over the circuit's proof
   blocks (`window_design`), the design the stream holds its docket to. Each Program's Build is its own, from its
   compile (`own_builds`, beside ``--out``, as ``circuit``'s), so it commits a window at its close, before the row dir holds
-  any (``advice_compile.py`` writes those once the serve is done). With ``--window-registration W`` (H1's
-  docket of the window) and ``--h1-prover``, the circuit reads H1's tables where the model makes them (its rounds
-  H1's steps, the class's outputs), and the window's docket ``--out``/registration.json is chained right after W
-  and registers them as W's tables (`pouw_h1_commit.reuse`), refused unless the model made each as H1 committed it.
-  With ``--window-registration W`` (Pearl+'s window record, ``served_passes.py retain --window-record W``) and
-  ``--pearl-passes DIR`` (the window's passes, Pearl+'s ``pearl/w<k>/`` under serve-openai's ``--out``), the circuit is cut at its linears
-  (`window_class.PearlTables` under W's scheme; its rounds the window's steps, the class's outputs), each cut linear's y
-  taken as served, and the docket is chained right after W and registers W's values (`pearl_c.window.reuse`),
-  refused unless its proof blocks make each row as Pearl+ committed it. ``window-circuit --pearl-tables SCHEME`` is the
-  verifier's own record of that cut circuit.
+  any (``advice_compile.py`` writes those once the serve is done). Its circuit is the served window's, of the
+  requests the advice serves, and reads no H1 or Pearl+ tables.
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
 every byte string: the requests, or a `ValueError` naming why, the same one on every run.
@@ -1451,7 +1442,7 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     compiler, data, pins = compiler_of_args(a), Path(a.advice).read_bytes(), pins_of(a.pin, a.pins)
     compile_advice(compiler, data)
     registered, cls = compiler.inner.registered, window_class_of(a.window_class)
-    tie = h1_tie(a, cls, key=False)
+    tie = h1_tie(a, cls)
     if tie is not None and a.pearl_tables:
         raise ValueError("--pearl-tables or --window-registration: the circuit reads Pearl+'s tables or H1's, not both")
     tables = PearlTables(a.pearl_tables) if a.pearl_tables else None if tie is None else tie[2]
@@ -1657,19 +1648,16 @@ def place_slots(cls: Any, served: Sequence[str], ingress: Mapping[str, Mapping[s
     return out
 
 
-def h1_tie(a: argparse.Namespace, cls: Any, key: bool = True) -> tuple[dict[str, Any], dict[str, Any], Any] | None:
+def h1_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], dict[str, Any], Any] | None:
     """With ``--window-registration``: H1's docket W of the window, its window Program's meta (the serve dir's
     ``h1/`` `pouw_h1.PROGRAM_META`) and the circuit's tables of it (`window_class.Tables`, `pouw_h1_commit.shape`); None
-    without. The tables are W's Program's alone, so the verifier's ``window-circuit`` reads them with no key (not
-    ``key``). ValueError where there's no ``--h1-prover`` (``key``: window-commit's, whose docket reuses W's salts), W
-    is under another Program, or H1's rounds aren't the class's outputs, a table a round the circuit reads."""
-    if not a.window_registration or getattr(a, "pearl_passes", None):
+    without. The tables are W's Program's alone, so the verifier's ``window-circuit`` reads them with no key. ValueError
+    where W is under another Program, or H1's rounds aren't the class's outputs, a table a round the circuit reads."""
+    if not a.window_registration:
         return None
     from verity_vllm.program.predict import window_circuit as WC
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
-    if key and not a.h1_prover:
-        raise ValueError("--window-registration: give --h1-prover, H1's prover directory, whose kept salts W's tables take")
     w = json.loads(Path(a.window_registration).read_text())
     meta = json.loads((Path(a.serve_run) / "h1" / PH.PROGRAM_META).read_text())
     if not isinstance(w, dict) or w.get("program") != meta.get("program_digest"):
@@ -1693,42 +1681,11 @@ def window_design(rule: str, circuit: IF.Circuit) -> dict[str, Any]:
     return dict(S.params_sampling_design(rule, program, query, None)[0])
 
 
-def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dict[str, Any]], list[int], Any, list[Path]] | None:
-    """With ``--pearl-passes DIR`` (Pearl+'s ``pearl/w<k>/``: the window's passes, ``served.json`` and its retention):
-    Pearl+'s window record W of them (``--window-registration``, ``retain --window-record W``'s), the retained passes'
-    manifests, their rounds, the circuit's tables of them (`window_class.PearlTables` under W's scheme) and each pass's
-    directory, its manifest's, where it kept its salts (`pearl_c.window.reuse`'s ``dirs``); None without.
-    ValueError without ``--window-registration``, beside ``--h1-prover``, for a W that is no Pearl+ window record
-    (`records_audit.why_not_pearl`), or where the rounds retained aren't the class's outputs, round s the window's s-th
-    step, whose calls the circuit cut at its linears reads."""
-    if not getattr(a, "pearl_passes", None):
-        return None
-    from verity_vllm.program.predict import window_circuit as WC
-    if not a.window_registration:
-        raise ValueError("--pearl-passes: give --window-registration W, Pearl+'s window record of the passes "
-                         "(served_passes.py retain --window-record W)")
-    if getattr(a, "h1_prover", None):
-        raise ValueError("--h1-prover is H1's prover directory: a window tied to Pearl+'s W takes its salts from the passes' "
-                         "manifests")
-    w, d = json.loads(Path(a.window_registration).read_text()), Path(a.pearl_passes)
-    scheme = str(((w if isinstance(w, dict) else {}).get("window") or {}).get("scheme"))
-    if why := why_not_pearl(w):
-        raise ValueError(f"{a.window_registration} is no Pearl+ window record: {why}")
-    held = [p for p in json.loads((d / "served.json").read_text())["passes"] if p.get("units")]
-    rounds = (json.loads((d / "retention.json").read_text())["rounds"] if (d / "retention.json").exists()
-              else list(range(len(held))))
-    if rounds != list(range(cls.outputs)):
-        raise ValueError(f"the window's retained rounds {rounds} aren't its class's {cls.outputs} outputs, round s its s-th "
-                         "step, whose calls the circuit cut at its linears reads")
-    manifests = [Path(held[s]["manifest"]) for s in rounds]
-    return w, [json.loads(m.read_text()) for m in manifests], rounds, WC.PearlTables(scheme), [m.parent for m in manifests]
-
-
 def window_commit_of_advice(a: argparse.Namespace, kept_ingress: KeptIngress | None = None,
                             scan_state_file: str | None = None) -> dict[str, Any]:
-    """A served window committed as its window class's one Circuit (module docstring): the class lowered
-    (`window_circuit.lower`, refused where the class's slots don't take the window), each slot's values (`window_rows.Slot`,
-    its request's served values its sealed record's), the circuit's output rows (`window_rows.Rows`) recorded into a `Window`
+    """A served window committed as its circuit (module docstring): its requests lowered (`window_circuit.lower`,
+    refused where the class's envelope doesn't take them), each Program's values (`window_rows.Slot`, its request's
+    served values its sealed record's), the circuit's output rows (`window_rows.Rows`) recorded into a `Window`
     under the record's run root, the weights it serves committed under the salt file beside ``--registration`` as the docket
     ``--registration`` (`weights-registration`, before the first window's coins) committed them, and the scan state the
     window's own value. Where the attester front kept the network attester's run under the serve dir, the scan state is
@@ -1736,12 +1693,9 @@ def window_commit_of_advice(a: argparse.Namespace, kept_ingress: KeptIngress | N
     Program the scan starts there, its row the scan's (`place_slots`, refused where the scan starts a request in two
     slots, a served request in none or one that wasn't served, or the scan's prompt or ``max_tokens`` isn't the served
     one); else slot k holds the advice's k-th request and the scan state is a stand-in, the rows its slots' rows and
-    ``max_tokens`` give (`scan_state_rows.standin_rows`). Refused for a docket of another model. With
-    ``--window-registration`` (`h1_tie`), the circuit reads H1's tables and the docket reuses W's (``tie``: the
-    digest of W it is chained after, and the tables); with ``--pearl-passes`` too (`pearl_tie`), the circuit is cut at its
-    linears and the docket reuses Pearl+'s W's values (`pearl_c.window.reuse`). -> the window's run root, its circuit record's SHA-512, its
+    ``max_tokens`` give (`scan_state_rows.standin_rows`). Refused for a docket of another model. -> the window's run root, its circuit record's SHA-512, its
     population and members, the scan state's kind (``scanned`` or ``stand-in``), the registered weights whose root the
-    window's is (``held``) and those it isn't, whose reads are free (``free``), ``tie``, and the seconds each part took.
+    window's is (``held``) and those it isn't, whose reads are free (``free``), and the seconds each part took.
     The window's sampling design is the one its rule ``--sampling-design``, a rate, names over the class circuit (`window_design`); a
     rule that is no rate is refused before the class is lowered."""
     import tempfile
@@ -1789,9 +1743,6 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     compiler, data = compiler_of_args(a), Path(a.advice).read_bytes()
     requests = compile_advice(compiler, data)
     registered, cls = compiler.inner.registered, window_class_of(a.window_class)
-    if h1_tie(a, cls) is not None or pearl_tie(a, cls) is not None:
-        raise ValueError("a window tied to H1's or Pearl+'s W reads its class circuit's table rows, which the committer "
-                         "doesn't fill: it fills a served window's circuit alone")
     try:
         compiled = compile_steps(registered, data, compiler.inner.ingress)
         low = WC.lower(registered, cls, requests=WC.takes(compiled, cls))
@@ -1866,7 +1817,6 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
             "population": sum(filled.n.values()), "members": len(win.window.members), "sources": sources,
             "scan_state": "stand-in" if state is None else "scanned",
             "registration": {"held": len(held), "free": sorted(set(reg.values) - set(held)), "unrooted": sorted(reg.unrooted)},
-            "tie": None,
             "seconds": seconds}
 
 
@@ -2074,17 +2024,6 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
                    "circuit's proof blocks (`window_design`)")
     p.add_argument("--cap", type=int, default=64, help="units a member (a statement)")
     p.add_argument("--workers", type=int, default=None, help="commit workers (default min(16, CPUs))")
-    p.add_argument("--window-registration", help="H1's registration W of the window (`pouw_h1_commit.registration`): the "
-                   "circuit reads H1's tables where the model makes them (`window_class.Tables`, from the serve dir's "
-                   "h1/window-program.meta.json), and the window's registration registers them as W's tables, chained right "
-                   "after W (`pouw_h1_commit.reuse`); with --pearl-passes, Pearl+'s window record W of the window's passes")
-    p.add_argument("--h1-prover", metavar="DIR", help="with --window-registration: H1's prover directory, whose kept salts "
-                   "(pouw_h1_prover.SALTS) W's tables take")
-    p.add_argument("--pearl-passes", metavar="DIR", help="with --window-registration W: the window's Pearl+ passes "
-                   "(serve-openai's Pearl+ epoch pearl/w<k>/, retained by retain --window-record W): the circuit is cut "
-                   "at its linears (`window_class.PearlTables` under W's scheme), each cut linear's y taken as served, and "
-                   "the window's "
-                   "registration registers W's values, chained right after W (`pearl_c.window.reuse`)")
     sub.choices["window-circuit"].add_argument("--pearl-tables", metavar="SCHEME", help="the circuit cut at its linears, "
                                                "as a window tied to Pearl+'s W under PoUW scheme SCHEME commits it "
                                                "(`window_class.PearlTables`)")
