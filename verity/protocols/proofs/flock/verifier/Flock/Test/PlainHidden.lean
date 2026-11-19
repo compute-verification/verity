@@ -14,6 +14,9 @@ plain session at hidden outputs is still refused at two tables, the form just pa
 
 namespace Flock.Test.PlainHidden
 
+/-- The served statement with public outputs, the form only a superseded version has. -/
+def publicOutputs : Tags := { Tags.circuit with hiddenOutputs := false }
+
 def subsetDraw : Draw.UnitSample := { samplingDesign := .subset 2, population := 8, units := #[1, 6] }
 
 def samplingDesignWhy (zk : Bool) (tags : Tags) : String :=
@@ -26,11 +29,11 @@ def tablesWhy (count : Nat) : String :=
   | .error e => e
   | .ok () => ""
 
-#guard Tags.circuit.hiddenOutputs && !Tags.circuit967b8d06.hiddenOutputs
+#guard Tags.circuit.hiddenOutputs && !publicOutputs.hiddenOutputs
 #guard samplingDesignWhy false Tags.circuit == ""
 #guard samplingDesignWhy true Tags.circuit == ""
-#guard samplingDesignWhy true Tags.circuit967b8d06 == ""
-#guard samplingDesignWhy false Tags.circuit967b8d06 == "refused: a subset draw without --zk: no soundness claim draws by this law"
+#guard samplingDesignWhy true publicOutputs == ""
+#guard samplingDesignWhy false publicOutputs == "refused: a subset draw without --zk: no soundness claim draws by this law"
 #guard ProvedScope.firstFailure (ProvedScope.statementRules Tags.circuit false 1 false) == none
 #guard tablesWhy 2 ==
   "refused: 2 tables in a session without --zk: a statement form the soundness proof does not cover"
