@@ -9330,7 +9330,7 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
     that its refusals of parameters naming none (`NO_CHALLENGER`) or another key (`KEY_PARAMS`) aren't what refuse them;
     the same work audit without the closure is accepted by v1. v1 accepts an honest audit under a `subset`, `stratified`
     or `work` sampling design; v2, whose one statement's soundness statement covers a subset sampling design alone,
-    refuses the parameters of the `stratified` and the `work` one by their kind (`subset_only`), and the `subset` ones'
+    refuses the parameters of the `stratified`, the `work` and a `rated` one by their kind (`subset_only`), and the `subset` ones'
     it doesn't. So v2 refuses the
     work audit that carries the closure at its parameters, and a subset audit whose sample carries one at its evidence."""
     for kind, stage in (("bernoulli", "params: "), ("closure", "evidence: ")):
@@ -9377,6 +9377,12 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
             assert (out["verdict"], out["reason"]) == ("reject", f"params: {subset_only(kind)}"), (kind, out)
         else:
             assert not (out["reason"] or "").startswith("params: "), (kind, out)
+    rated = {**v2["params"], "law": {"law": "rated", "rates": [{"rate": "1/2", "table": "plain"}]}, "work_table": None}
+    with pytest.raises(D.Reject) as refused:
+        decode_params_v2(rated)
+    out = server_v2.exchange(_json({**v2, "params": rated}))
+    assert (str(refused.value), out["verdict"], out["reason"]) == (
+        subset_only("rated"), "reject", f"params: {subset_only('rated')}"), out
 
 
 def test_the_run_refuses_a_population_out_of_order(pieces):
