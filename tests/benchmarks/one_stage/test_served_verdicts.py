@@ -5130,7 +5130,8 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert argv[:-8] == [
         "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / f"v3c-w7-{VTAG}" / "audit"),
         "--pieces", str(d / "private" / "deferred" / "pieces"), "--out", str(out / "record"), "--product", "remote",
-        "--node", "vy-dc-h200"]
+        "--node", "vy-dc-h200", "--window-tie", str(d / "pearlplus" / "w7" / "tie"),
+        "--served-compare", str(d / "served-compare" / "served_compare.json")]
     assert (argv[-8], len(argv[-7]), argv[-6:-2]) == ("--key-sha512", 128, ["--lane", "vllm", "--composite",
                                                                              str(out / "composite")])
     assert argv[-2] == "--deploy-manifest" and argv[-1].endswith("/tools/research/src/research/pods/nebius/deploy.toml")
