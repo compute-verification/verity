@@ -27,13 +27,13 @@ import all Init.Data.String.Basic
 
 /-! # The two-instance reference statement's JSON, read back
 
-Round 2 reads a session statement as JSON (`SpotFlock`'s `stmtJsonOf`): its public file's first line (`headerOf`), its
-sample and its registered reads (`FlockDeploy.jsonOf`). For a run `r` whose strings are plain JSON strings
+Round 2 reads a session statement as JSON (`SpotFlock`'s `stmtJsonOf`): its public file's first line (`headerOf`) and its
+sample (`FlockDeploy.jsonOf`); the statement reads no registered value. For a run `r` whose strings are plain JSON strings
 (`Run.Plain`), at any circuit and class digests `circ`, `cls` that are:
 
 * `headerLine`: the public file's first line is the header's text (`findByte_pub`), which parses back to
   `hdrJ r circ cls` (`parse_hdr`);
-* `jsonOf_sample`, `jsonOf_reg`: the sample and the registered reads parse back to `sampleJ` and `regJ`.
+* `jsonOf_sample`: the sample parses back to `sampleJ`.
 
 `InstanceStmt.Round2` makes round 2's statement of them. Each object's members are its list in key order (`*_model`,
 by `kernel_rfl`, the run's strings left as variables), so `plain` reads it member by member (`Concrete.plain_obj_of`).
@@ -61,7 +61,7 @@ structure Run.Plain (r : Run) : Prop where
 /-- A literal leaf, or a literal key, is plain. -/
 macro "plain_lit" : tactic =>
   `(tactic| simp [plain, plainList, plainStr, String.all_bool_eq, jn, js, ja, v2, NAME, HmRow.SCHEME,
-    HmRow.ROW_SCHEMA_V2, valueI, valueO])
+    HmRow.ROW_SCHEMA_V2])
 
 /-! ## Objects of two ports -/
 
@@ -102,36 +102,6 @@ theorem fv3_plain {r : Run} (hr : r.Plain) : plain (fv3J r) = true := by
     ⟨by plain_lit, io_str_plain (plainStr_hexOf _) (plainStr_hexOf _)⟩, ⟨by plain_lit, plainStr_hexOf _⟩,
     ⟨by plain_lit, io_str_plain (by plain_lit) (by plain_lit)⟩⟩
 
-theorem regHdr_obj : regHdrJ = .obj ⟨⟨objT regHdrJ⟩⟩ := by kernel_rfl
-theorem regHdr_model : (objT regHdrJ).toListModel =
-    [⟨"i0", Json.mkObj [("paths", .arr #[.str ""]), ("positions", .arr #[jn 0]), ("value", .str "i0")]⟩,
-     ⟨"o0", Json.mkObj [("paths", .arr #[.str "", .str ""]), ("positions", .arr #[jn 0, jn 0]),
-       ("value", .str "o0")]⟩] := by kernel_rfl
-theorem regHdr_asc : ascending (objT regHdrJ) = true := by kernel_rfl
-
-theorem pv_obj (p q : Json) (v : String) :
-    Json.mkObj [("paths", p), ("positions", q), ("value", .str v)] =
-      .obj ⟨⟨objT (Json.mkObj [("paths", p), ("positions", q), ("value", .str v)])⟩⟩ := by kernel_rfl
-theorem pv_model (p q : Json) (v : String) :
-    (objT (Json.mkObj [("paths", p), ("positions", q), ("value", .str v)])).toListModel =
-      [⟨"paths", p⟩, ⟨"positions", q⟩, ⟨"value", .str v⟩] := by kernel_rfl
-theorem pv_asc (p q : Json) (v : String) :
-    ascending (objT (Json.mkObj [("paths", p), ("positions", q), ("value", .str v)])) = true := by kernel_rfl
-
-theorem pv_plain {p q : Json} {v : String} (hp : plain p = true) (hq : plain q = true) (hv : plainStr v = true) :
-    plain (Json.mkObj [("paths", p), ("positions", q), ("value", .str v)]) = true := by
-  rw [pv_obj]
-  refine plain_obj_of (pv_model p q v) (pv_asc p q v) ?_
-  simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
-  exact ⟨⟨by plain_lit, hp⟩, ⟨by plain_lit, hq⟩, ⟨by plain_lit, hv⟩⟩
-
-theorem regHdr_plain : plain regHdrJ = true := by
-  rw [regHdr_obj]
-  refine plain_obj_of regHdr_model regHdr_asc ?_
-  simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
-  exact ⟨⟨by plain_lit, pv_plain (by plain_lit) (by plain_lit) (by plain_lit)⟩,
-    ⟨by plain_lit, pv_plain (by plain_lit) (by plain_lit) (by plain_lit)⟩⟩
-
 theorem units_obj (cls : String) : unitsJ cls = .obj ⟨⟨objT (unitsJ cls)⟩⟩ := by kernel_rfl
 theorem units_model (cls : String) : (objT (unitsJ cls)).toListModel =
     [⟨"blocks", .arr #[.arr #[jn 0], .arr #[jn 1]]⟩, ⟨"classes", .arr #[.str cls, .str cls]⟩,
@@ -149,7 +119,7 @@ theorem units_plain {cls : String} (hk : plainStr cls = true) : plain (unitsJ cl
 theorem hdr_obj (r : Run) (circ cls : String) : hdrJ r circ cls = .obj ⟨⟨objT (hdrJ r circ cls)⟩⟩ := by kernel_rfl
 theorem hdr_model (r : Run) (circ cls : String) : (objT (hdrJ r circ cls)).toListModel =
     [⟨"circuit_sha512", .str circ⟩, ⟨"format", .str "flock-circuit-inputs"⟩, ⟨"frame_v3", fv3J r⟩,
-     ⟨"instances", jn 2⟩, ⟨"registered", regHdrJ⟩, ⟨"rows", .bool false⟩, ⟨"scheme", .str HmRow.SCHEME⟩,
+     ⟨"instances", jn 2⟩, ⟨"rows", .bool false⟩, ⟨"scheme", .str HmRow.SCHEME⟩,
      ⟨"set", .str r.set⟩, ⟨"shared_rows", Json.mkObj [("i0", jn 1), ("o0", jn 2)]⟩, ⟨"statement", .str NAME⟩,
      ⟨"units", unitsJ cls⟩] := by kernel_rfl
 theorem hdr_asc (r : Run) (circ cls : String) : ascending (objT (hdrJ r circ cls)) = true := by kernel_rfl
@@ -161,7 +131,7 @@ theorem hdr_plain {r : Run} (hr : r.Plain) {circ cls : String} (hc : plainStr ci
   refine plain_obj_of (hdr_model r circ cls) (hdr_asc r circ cls) ?_
   simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
   exact ⟨⟨by plain_lit, hc⟩, ⟨by plain_lit, by plain_lit⟩, ⟨by plain_lit, fv3_plain hr⟩,
-    ⟨by plain_lit, by plain_lit⟩, ⟨by plain_lit, regHdr_plain⟩, ⟨by plain_lit, by plain_lit⟩,
+    ⟨by plain_lit, by plain_lit⟩, ⟨by plain_lit, by plain_lit⟩,
     ⟨by plain_lit, by plain_lit⟩, ⟨by plain_lit, hr.set⟩, ⟨by plain_lit, io_plain (by plain_lit) (by plain_lit)⟩,
     ⟨by plain_lit, by plain_lit⟩, ⟨by plain_lit, units_plain hk⟩⟩
 
@@ -227,7 +197,7 @@ theorem headerLine {r : Run} (hr : r.Plain) {circ cls : String} (hc : plainStr c
   rw [pubOf, tailB]
   exact headerOf_nl _ _ _ (hdr_noTen hr hc hk) (parse_hdr hr hc hk)
 
-/-! ## The sample and the registered reads -/
+/-! ## The sample -/
 
 theorem sample_obj : sampleJ = .obj ⟨⟨objT sampleJ⟩⟩ := by kernel_rfl
 theorem sample_model : (objT sampleJ).toListModel =
@@ -244,40 +214,6 @@ theorem sample_plain : plain sampleJ = true := by
 theorem fjnorm_sample : FlockSoundness.Discharge.Recursion.ZkServerJson.norm sampleJ = sampleJ := by kernel_rfl
 theorem norm_sample : Flock.norm sampleJ = sampleJ := by kernel_rfl
 
-theorem port_obj (value : String) (dom bc : ByteArray) (words : Nat) :
-    regPortJ value dom bc words = .obj ⟨⟨objT (regPortJ value dom bc words)⟩⟩ := by kernel_rfl
-theorem port_model (value : String) (dom bc : ByteArray) (words : Nat) :
-    (objT (regPortJ value dom bc words)).toListModel =
-      [⟨"domain", .str (hexOf dom)⟩, ⟨"leaves", jn 1⟩, ⟨"reads", .arr #[jn 0, jn 0]⟩,
-       ⟨"root", .str (hexOf (regRoot dom bc))⟩, ⟨"row_schema", .str v2⟩, ⟨"value", .str value⟩,
-       ⟨"words", jn words⟩] := by kernel_rfl
-theorem port_asc (value : String) (dom bc : ByteArray) (words : Nat) :
-    ascending (objT (regPortJ value dom bc words)) = true := by kernel_rfl
-
-theorem port_plain {value : String} (hv : plainStr value = true) (dom bc : ByteArray) (words : Nat) :
-    plain (regPortJ value dom bc words) = true := by
-  rw [port_obj]
-  refine plain_obj_of (port_model value dom bc words) (port_asc value dom bc words) ?_
-  simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
-  exact ⟨⟨by plain_lit, plainStr_hexOf _⟩, ⟨by plain_lit, by plain_lit⟩, ⟨by plain_lit, by plain_lit⟩,
-    ⟨by plain_lit, plainStr_hexOf _⟩, ⟨by plain_lit, by plain_lit⟩, ⟨by plain_lit, hv⟩, ⟨by plain_lit, by plain_lit⟩⟩
-
-theorem reg_obj : regJ = .obj ⟨⟨objT regJ⟩⟩ := by kernel_rfl
-theorem reg_model : (objT regJ).toListModel =
-    [⟨"format", .str "verity/registered-reads/v1"⟩,
-     ⟨"ports", Json.mkObj [("i0", regPortJ valueI domI bcI 64), ("o0", regPortJ valueO domO bcO 1)]⟩] := by kernel_rfl
-theorem reg_asc : ascending (objT regJ) = true := by kernel_rfl
-
-theorem reg_plain : plain regJ = true := by
-  rw [reg_obj]
-  refine plain_obj_of reg_model reg_asc ?_
-  simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
-  exact ⟨⟨by plain_lit, by plain_lit⟩,
-    ⟨by plain_lit, io_plain (port_plain (by plain_lit) _ _ _) (port_plain (by plain_lit) _ _ _)⟩⟩
-
-theorem fjnorm_reg : FlockSoundness.Discharge.Recursion.ZkServerJson.norm regJ = regJ := by kernel_rfl
-theorem norm_reg : Flock.norm regJ = regJ := by kernel_rfl
-
 theorem jsonOf_print {j : Json} (h : plain j = true) (hn : FlockSoundness.Discharge.Recursion.ZkServerJson.norm j = j)
     (what : String) : FlockDeploy.jsonOf what (printJson j).toUTF8 = .ok j := by
   unfold FlockDeploy.jsonOf
@@ -289,9 +225,5 @@ theorem jsonOf_print {j : Json} (h : plain j = true) (hn : FlockSoundness.Discha
 /-- **The sample file reads back** to `sampleJ`. -/
 theorem jsonOf_sample (what : String) : FlockDeploy.jsonOf what (printJson sampleJ).toUTF8 = .ok sampleJ :=
   jsonOf_print sample_plain fjnorm_sample what
-
-/-- **The registered-reads file reads back** to `regJ`. -/
-theorem jsonOf_reg (what : String) : FlockDeploy.jsonOf what (printJson regJ).toUTF8 = .ok regJ :=
-  jsonOf_print reg_plain fjnorm_reg what
 
 end SpotFlock.InstanceStmt
