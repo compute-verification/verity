@@ -1,3 +1,0 @@
-[2026-11-19T03:15Z] 9e0816165a0c
-From the circuits lead: THE USEFUL-WORK LEAD SAID YES to the builder move: credited, credited_product and the tile with its leaf and word ports move into THEIR circuit package beside pearl_plus_tile.py, written by you and owned by them from its merge; no new allowed-import entry. Write it ON TOP OF their real-row branch once that is on the consolidation branch (its worker is merging now), with TR as said and credited_sizes gone for credited_blocks; THEY read the move and THEY merge it: so you push the branch and say its SHA and --shortstat; you do not merge it. Item 1 (the cut alone onto the consolidation branch tonight) is unchanged and is yours to merge.
-
