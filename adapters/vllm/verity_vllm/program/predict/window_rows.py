@@ -488,6 +488,8 @@ class Rows:
                        for t, lay in self.lays.items()}
         for P, S in zip(lowered.programs, slots):
             self._slot(P, S)
+        for s, k, c, e in lowered.empty:
+            self._empty(lowered.programs[k], lowered.programs[k].cls.lane(s), c, e)
         if bad := {t: int((~h).any(axis=1).sum()) for t, h in self.held.items() if not h.all()}:
             raise ValueError(f"units with rows no node or Definition fills, by template: {bad}")
 
@@ -568,6 +570,16 @@ class Rows:
         entry = IO.entry_reference(S.row[0], a, KO, e["IDB"], e["NP"], e["STOP"])
         et, eu = P.entry_unit
         self._put(et, eu, "o0", np.array([entry], dtype=np.uint16), EVALUATED)
+
+    def _empty(self, P: Any, lane: int, collect: tuple[str, int], entry: tuple[str, int]) -> None:
+        """An empty lane's collector and entry (`_Program.place_empty`), on lane ``lane`` of the scan state row ``P``'s
+        `ScanSlots_v3` reads."""
+        (row, head), tok = _lanes(P, self.state)[lane], _lanes(P, self.state, IO.scan_reference)[lane][0]
+        KO, e = P.cls.outputs, P.entry.bindings
+        a = IO.collect_reference(head, tok, KO, True)
+        self._put(*collect, "o0", _i32(a), EVALUATED)
+        self._put(*entry, "o0", np.array([IO.entry_reference(row[0], a, KO, e["IDB"], e["NP"], e["STOP"])], dtype=np.uint16),
+                  EVALUATED)
 
     def _heads(self, node: Any, plan: Any, calls: Sequence[tuple[str, int]], S: Slot) -> None:
         """An attention cut by key block: every Call but its last (whose output is the node's) its Definition on the node's

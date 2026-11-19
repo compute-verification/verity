@@ -194,12 +194,14 @@ class Lowered:
     """A window's circuit with what its lowering knows (`window_rows` fills its units from it): the longest Program's
     function, each slot's lowered Program (node j's output as the rows that hold it, ``outs[j]``), each template's runs of
     units by their (slot, step), ``(at, count, slot, step)``, and in a served window's, each slot's request's index among
-    the window's requests (`window_class.takes`), none in a class circuit's."""
+    the window's requests (`window_class.takes`), none in a class circuit's; and each empty slot of a served window,
+    ``(slot, the Program whose slot holds its units, its collector unit, its entry unit)`` (`_Program.place_empty`)."""
     circuit: IF.Circuit
     fn: Any
     programs: tuple[_Program, ...]
     spans: dict[str, list[tuple[int, int, int, int]]]
     requests: tuple[int, ...] | None = None
+    empty: tuple[tuple[int, int, tuple[str, int], tuple[str, int]], ...] = ()
 
     @property
     def cut(self) -> frozenset[int]:
@@ -225,8 +227,9 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     a call and every position has ``tables.calls`` int8 linears of K = ``tables.k``; with Pearl+'s, unless every position's
     linears are the first's (`window_cut.linears`). With ``requests`` (`window_class.takes`, `window_class.requests_of`),
     the served window's circuit: a Program a request of the request's own positions, longest first, reading its lane at
-    its anchor, so it holds exactly the requests' positions; refused with ``tables`` or ``programs``, or for a window of
-    no request."""
+    its anchor, so it holds exactly the requests' positions, and one entry a slot of the class in slot order, an empty
+    slot's in the slot of a Program at its boundary (`_Program.place_empty`); refused with ``tables`` or ``programs``, for
+    a window of no request, or for an empty slot at a boundary no request is anchored at."""
     if requests is not None and (tables is not None or programs is not None):
         raise Unexpressible("a served window's circuit is every request's Program, reading no tables")
     if requests is not None and not requests:
@@ -276,11 +279,25 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
             b.among = (lo, hi)
             r.lower(j, f.body.nodes[j])
     b.among = None
+    empty: list[tuple[int, int, tuple[str, int], tuple[str, int]]] = []
     if order is not None:
-        slots = sorted(progs, key=lambda r: r.lane)
-        etid, eu = b.allocation(entry, [r.entry_label for r in slots])
-        for i, r in enumerate(slots):
-            r.place_entry(etid, eu + i)
+        by = {(r.anchor, r.lane): k for k, r in enumerate(progs)}
+        filled = [by.get((cls.anchor(s), cls.lane(s))) for s in range(cls.slots)]
+        hosts = {s: next((k for t, k in enumerate(filled) if k is not None and cls.anchor(t) == cls.anchor(s)), None)
+                 for s, k in enumerate(filled) if k is None}
+        if (s := next((s for s, k in hosts.items() if k is None), None)) is not None:
+            raise Unexpressible(f"slot {s} is empty and no request is anchored at its boundary, bucket {cls.anchor(s)}, "
+                                "whose scan unit holds its lane")
+        if hosts:
+            ctid, cu = b.allocation(bind(IO.OutCollect, KO=cls.outputs, FIRST=True),
+                                    [progs[k].entry_label for k in hosts.values()])
+        etid, eu = b.allocation(entry, [progs[k if k is not None else hosts[s]].entry_label for s, k in enumerate(filled)])
+        for s, k in enumerate(filled):
+            if k is not None:
+                progs[k].place_entry(etid, eu + s)
+        for i, (s, k) in enumerate(hosts.items()):
+            progs[k].place_empty(cls.lane(s), (ctid, cu + i), (etid, eu + s))
+            empty.append((s, k, (ctid, cu + i), (etid, eu + s)))
     for r in progs:
         if r.position != r.positions:
             raise Unexpressible(f"{r.name}: {r.position} positions, not its {r.positions}")
@@ -309,7 +326,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
                          external=(f"{descriptor_id(scan)}/state", f"{entry_units.pop()}/o0"),
                          wires=wires, cuts=b.cuts, registered=reg, order=IF.ordered(b.units, wires, b.starts) if wires else None,
                          blocks=IF.Blocks(programs, max(r.positions for r in progs), tuple(inference(b.spans, programs))))
-    return Lowered(circuit, fn, tuple(progs), b.spans, None if order is None else tuple(order))
+    return Lowered(circuit, fn, tuple(progs), b.spans, None if order is None else tuple(order), tuple(empty))
 
 
 @dataclass(frozen=True)
