@@ -2000,13 +2000,30 @@ def members_reached(members: Mapping[str, Any], answer: Mapping[str, Any]) -> di
             "bounds": BR.member_bounds(by_member, delta), "by_member": by_member}
 
 
+def sampled_exe(exe: str | os.PathLike | None) -> Path:
+    """This tree's own SPOT Lean (`served_cases.SAMPLED_LEAN`'s build path): built here if ``exe`` is None, and ``exe``
+    only if it resolves to that path; any other is refused (`SAMPLED_EXE_REFUSED`), so `LEAN_HERE` names this tree's."""
+    import served_cases as SC
+
+    if exe is None:
+        return SC.build(*SC.SAMPLED_LEAN)
+    built = SC.SAMPLED_LEAN[0] / ".lake" / "build" / "bin" / SC.SAMPLED_LEAN[1]
+    if Path(exe).resolve() != built.resolve():
+        raise SC.Refused(f"--sampled-exe {exe} {SAMPLED_EXE_REFUSED} ({built})")
+    return built
+
+
+#: why `sampled_exe` refuses an executable
+SAMPLED_EXE_REFUSED = "isn't this tree's own SPOT Lean build path"
+
+
 def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | None = None,
                      run: str | None = None) -> dict[str, Any]:
     """SPOT's row from this host's own run of remote's SPOT Lean (`served_cases.sampled_case`: the
-    records audit's v2 case, its blobs the proofs and public files, in the form ``one-stage``; ``exe`` default built here)
+    records audit's v2 case, its blobs the proofs and public files, in the form ``one-stage``; ``exe`` `sampled_exe`'s)
     on files in a 0700 directory under ``scratch``, its answer tied to the window's docket (`LEAN_HERE`),
-    whatever the audit's summary and record say. An audit that wrote no v2 case (a plain run's, or one a5 refused) leaves
-    no proofs to recompute from: its row is `spot_row`'s, its ``answer_from`` saying so. So does a case whose check
+    whatever the audit's summary and record say; ``executable`` names the file run and its SHA-512. An audit that wrote
+    no v2 case (a plain run's, or one a5 refused) leaves no proofs to recompute from: its row is `spot_row`'s, its ``answer_from`` saying so. So does a case whose check
     was not started (`served_cases.NotStarted`: its blob files sum past the limit, or the host makes no memory scope):
     the row is `spot_row`'s, ``answer_from`` and ``not_started`` naming why, the sum and the limit. A case the Lean
     doesn't make or answer, or an answer about another record, is the row's error. An accept of a case in the
@@ -2020,9 +2037,11 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
                                "(window/case-v2.json), so there are no proofs to recompute it from"}
     try:
         case = SC.sampled_case(audit_dir)
-        answer, _line = SC.lean_answer(exe or SC.build(*SC.SAMPLED_LEAN), case, scratch, SC.SAMPLED_CMD)
+        built = sampled_exe(exe)
+        ran = {"executable": {"name": built.name, "sha512": hashlib.sha512(built.read_bytes()).hexdigest()}}
+        answer, _line = SC.lean_answer(built, case, scratch, SC.SAMPLED_CMD)
         SC.tie(answer, SC.SAMPLED, SC.record_of(case)[1])
-        row = {**row_of(INTEGRITY_OWNER, answer, audit_dir, run), "answer_from": LEAN_HERE}
+        row = {**row_of(INTEGRITY_OWNER, answer, audit_dir, run), "answer_from": LEAN_HERE, **ran}
         proofs = case["params"].get("proofs")
         if isinstance(proofs, dict) and "members" in proofs and row["verdict"] == "accept":
             return {**row, "covers": MEMBERS_COVER, "epsilon": None, **members_reached(proofs["members"], answer)}
@@ -2911,7 +2930,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--off-node", action="store_true", help="composed from the served node's compose hand-off, off it")
     r.add_argument("--sampled-lean", action="store_true",
                    help="sampled proofs' row from this host's run of its Lean on the case's proofs (lean_sampled_row)")
-    r.add_argument("--sampled-exe", help="vstar-recursive, with --sampled-lean (default: built here)")
+    r.add_argument("--sampled-exe", help="this tree's own vstar-recursive build path, with --sampled-lean, any other "
+                                         "refused (default: built here)")
     r.add_argument("--composite", type=Path, help="the composites' public output (served_composite.sh's $OUT/composite): "
                                                   "the product's compiled Lean check's answer there is the record's verdict")
     r.add_argument("--tree", help="the commit of the tree composing the record, which composed_on names")
