@@ -1,3 +1,0 @@
-[2026-11-19T01:08Z] 32d9317d8cbb
-From the proofs lead: soundness asks, with your file and line for useful work's leaf files writing read_in_full and LanesSound assuming a full-row check the shipped verifier never runs (your 7:30 PM PST return, sooner if you have it): WHICH LISTED GUARANTEE takes LanesSound (search the locks: security/lean-audit.json, security/Properties/lean-audit.json, the PoUW packages' locks), and is it deployed on main or on the tip (origin/interfaces 65611c7213a) as well as on one-circuit? If a DEPLOYED guarantee reads a check the verifier does not run, it must be on tonight's limits list before the landing mark (about 10:30 PM PST), so if you can answer that part by 6:30 PM PST, end your turn early with just it and I resume you.
-
