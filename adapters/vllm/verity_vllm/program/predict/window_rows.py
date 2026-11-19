@@ -644,10 +644,11 @@ class Rows:
 
 def leaf_strings(win: IF.Window, key: RND.Key) -> dict[tuple[str, str], tuple[bytes, bytes]]:
     """Each of ``win``'s `leaf_rows` ports, its rows' salts and ``b || c`` (`rows.row_strings`), the strings `Window.close`
-    takes: row r of port q of template t (`interface.LeafRows`) is salted with ``key``'s stream at index (t, q), leaf r."""
+    takes: unit u's row of port q of template t (`interface.LeafRows`) is salted with ``key``'s stream at index (t, q), leaf u."""
     return {k: (ys, CS.row_strings(lr.rows, ys, lr.schema))
             for k, lr in win.leaf_rows().items()
-            for ys in [key.stream((lr.template, lr.port), CS.SALT_BYTES * len(lr.rows))]}
+            for s in [key.stream((lr.template, lr.port), CS.SALT_BYTES * (lr.units[-1] + 1))]
+            for ys in [b"".join(s[u * CS.SALT_BYTES:(u + 1) * CS.SALT_BYTES] for u in lr.units)]}
 
 
 def _elements(words: np.ndarray, width: int) -> np.ndarray:

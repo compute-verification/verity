@@ -2645,7 +2645,8 @@ class _Recorded:
 class LeafRows:
     """A port `Window.close` commits in full and leafs from its own salts (`Window.leaf_rows`): ``template`` its template's
     ordinal among the circuit's, ``port`` its ordinal among a member's ports (its rows, then its outputs), its row
-    ``schema``, and for each member ``(member port, first unit, units)`` beside its rows (``parts``)."""
+    ``schema``, and for each member holding it in full ``(member port, first unit, units)`` beside its rows (``parts``):
+    a template's members that wire the port hold none of its rows."""
     template: int
     port: int
     schema: str
@@ -2654,8 +2655,20 @@ class LeafRows:
 
     @property
     def rows(self) -> np.ndarray:
-        """Its rows over its template's units in order, as `rows.commit` leafs them (an output row at its padded width)."""
+        """Its rows in unit order, as `rows.commit` leafs them (an output row at its padded width)."""
         return np.concatenate([x for _, x in sorted(zip((at for _, at, _ in self.members), self.parts), key=lambda t: t[0])])
+
+    @property
+    def units(self) -> list[int]:
+        """Each of `rows`' unit index within its template."""
+        return [u for _, at, n in sorted(self.members, key=lambda m: m[1]) for u in range(at, at + n)]
+
+    def split(self, b: bytes, size: int) -> dict[str, bytes]:
+        """``b``, ``size`` bytes a row of `rows`, by member port."""
+        out, i = {}, 0
+        for port, _, n in sorted(self.members, key=lambda m: m[1]):
+            out[port], i = bytes(b[i * size:(i + n) * size]), i + n
+        return out
 
 
 @dataclass
@@ -2816,8 +2829,11 @@ class Window:
         unit order, which the period leafs as given and never re-hashes from the rows: a string that isn't its row's is a
         leaf no opening of the row matches. Refused by name for a port missing or not `leaf_rows`', a length that isn't
         whole salts and strings, or a count that isn't the port's rows."""
-        data, salts_of_, strings_of, need = self._plan()
+        data, salts_of_, strings_of, need, unplaced = self._plan()
         if strings is not None:
+            if unplaced:
+                raise ValueError(f"strings: {unplaced[:4]} read through a table of other than one row a unit: a port "
+                                 "`leaf_rows` can't place")
             if lacking := sorted(set(need) - set(strings)):
                 raise ValueError(f"strings: no strings for {lacking[:4]}: every port the period commits in full takes its "
                                  "rows' strings (`leaf_rows`)")
@@ -2832,21 +2848,21 @@ class Window:
                 if len(ys) // CS.SALT_BYTES != n or len(bc) // CS.BC_BYTES != n:
                     raise ValueError(f"strings: {k}: {len(ys) // CS.SALT_BYTES} salts and {len(bc) // CS.BC_BYTES} strings, "
                                      f"not the port's {n} rows")
-            for (tid, p), lr in need.items():
-                ys, bc = strings[(tid, p)]
-                for port, at, n in lr.members:
-                    salts_of_[port] = bytes(ys[at * CS.SALT_BYTES:(at + n) * CS.SALT_BYTES])
-                    strings_of[port] = bytes(bc[at * CS.BC_BYTES:(at + n) * CS.BC_BYTES])
+            for k, lr in need.items():
+                salts_of_ |= lr.split(strings[k][0], CS.SALT_BYTES)
+                strings_of |= lr.split(strings[k][1], CS.BC_BYTES)
         return CS.commit(self.window, data, workers=workers, salts_of={**(salts_of or {}), **salts_of_},
                          strings_of=strings_of)
 
     def leaf_rows(self) -> dict[tuple[str, str], LeafRows]:
         """The ports `close` commits in full and leafs from its own salts, by (template, port): each one's rows as they are
-        leafed, over its template's units in order (`LeafRows`), whose strings `close`'s ``strings`` may hand in."""
+        leafed, in unit order (`LeafRows`), whose strings `close`'s ``strings`` may hand in."""
         return self._plan()[3]
 
-    def _plan(self) -> tuple[list[dict[str, Any]], dict[str, bytes], dict[str, bytes], dict[tuple[str, str], LeafRows]]:
-        """`close`'s members' data for `rows.commit`, the salts and strings the period fixes by member port, and `leaf_rows`."""
+    def _plan(self) -> tuple[list[dict[str, Any]], dict[str, bytes], dict[str, bytes], dict[tuple[str, str], LeafRows],
+                             list[str]]:
+        """`close`'s members' data for `rows.commit`, the salts and strings the period fixes by member port, `leaf_rows`,
+        and the member ports in full that it can't place (read through a table of other than one row a unit)."""
         missing = {tid: (self.count(tid), n) for tid, (_, n) in zip(self.circuit.ids, self.circuit.templates)
                    if self.count(tid) != n}
         if missing:
@@ -2914,6 +2930,7 @@ class Window:
                     d["rows"][r] = CS.WIRED
             data.append(d)
         need: dict[tuple[str, str], LeafRows] = {}
+        unplaced: list[str] = []
         tids = {t: i for i, t in enumerate(self.circuit.ids)}
         for m, d, lo in zip(self.window.members, data, own, strict=True):
             names, padded, tables = [p for p, _ in m.rows + m.outs], dict(m.out_rows), dict(m.tables)
@@ -2921,8 +2938,8 @@ class Window:
             full += [(o, x) for o, x in d["outs"].items() if m.port(o) not in salts_of]
             for p, x in full:
                 if p in tables and tables[p] != m.n:
-                    raise ValueError(f"{m.key} {p}: rows read through a table of {tables[p]}, not one a unit: no port "
-                                     "of `leaf_rows`")
+                    unplaced.append(m.port(p))
+                    continue
                 if p in padded:
                     row = np.zeros((m.n, padded[p]), dtype=np.uint16)
                     row[:, :x.shape[1]] = x
@@ -2930,10 +2947,7 @@ class Window:
                 lr = need.setdefault((m.template, p), LeafRows(tids[m.template], names.index(p), m.schema(p), [], []))
                 lr.members.append((m.port(p), lo, m.n))
                 lr.parts.append(np.asarray(x, dtype=np.uint16))
-        for (tid, p), lr in need.items():
-            if sum(n for _, _, n in lr.members) != self.circuit._by_id[tid][2]:
-                raise ValueError(f"{tid} {p}: committed in full for some of its units and not others: no port of `leaf_rows`")
-        return data, salts_of, strings_of, need
+        return data, salts_of, strings_of, need, unplaced
 
     def _output(self, w: WI.Wired, cat: dict[str, Any]) -> np.ndarray:
         """Writer template ``w.writer``'s recorded ``w.out`` rows, its units in root order: the leaves of its tree."""

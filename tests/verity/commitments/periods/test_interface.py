@@ -224,7 +224,7 @@ def _leaf_strings(win: I.Window, seed: int = 0) -> tuple[dict, dict[str, bytes]]
     for k, lr in win.leaf_rows().items():
         ys = hashlib.shake_256(f"{seed} {k}".encode()).digest(CS.SALT_BYTES * len(lr.rows))
         handed[k] = (ys, CS.row_strings(lr.rows, ys, lr.schema))
-        by_member |= {p: ys[at * CS.SALT_BYTES:(at + n) * CS.SALT_BYTES] for p, at, n in lr.members}
+        by_member |= lr.split(ys, CS.SALT_BYTES)
     return handed, by_member
 
 
@@ -236,6 +236,18 @@ def test_close_leafs_the_strings_it_is_handed_as_it_leafs_the_rows_it_hashes():
     assert set(by_member) == set(CS.full_ports(win.window))
     got, made = win.close(strings=handed), win.close(salts_of=by_member)
     assert got.roots == made.roots and all(got.bc[p] == made.bc[p] for p in by_member)
+
+
+def test_a_port_its_later_units_read_by_wire_takes_strings_for_its_external_units_alone():
+    """`chain`: ``x`` is held in full only by the units reading the embedding, so its `leaf_rows` port is theirs, at
+    their unit indices, and `close` handed its strings makes the roots it makes from the same salts."""
+    win = I.Window(chain(), RUN, SAMPLING_DESIGN, 2)
+    win.record(GEMM, *chain_values(), {"chain": 0})
+    lr = win.leaf_rows()[(GID, "x")]
+    assert lr.units == list(range(REQUESTS)) and [p for p, _, _ in lr.members] == [win.window.members[0].port("x")]
+    handed, by_member = _leaf_strings(win)
+    assert set(by_member) == set(CS.full_ports(win.window))
+    assert win.close(strings=handed).roots == win.close(salts_of=by_member).roots
 
 
 def test_close_refuses_strings_it_cannot_place():

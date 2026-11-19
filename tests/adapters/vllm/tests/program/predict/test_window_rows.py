@@ -1089,7 +1089,7 @@ def test_a_windows_leaf_salts_are_each_one_position_of_its_key_and_its_strings_t
     got, rows = leaf_strings(win, key), win.leaf_rows()
     assert set(got) == set(rows) and {lr.template for lr in rows.values()} == {0, 1}
     heads = {k: key.head((lr.template, lr.port)) for k, lr in rows.items()}
-    positions = [(heads[k], 3 * r + j) for k, lr in rows.items() for r in range(len(lr.rows)) for j in range(3)]
+    positions = [(heads[k], 3 * u + j) for k, lr in rows.items() for u in lr.units for j in range(3)]
     assert len(set(positions)) == len(positions) == 3 * sum(len(lr.rows) for lr in rows.values())
     assert max(len(h) for h in heads.values()) <= HEAD_MAX
     salts = [ys[i:i + CS.SALT_BYTES] for ys, _ in got.values() for i in range(0, len(ys), CS.SALT_BYTES)]
@@ -1097,5 +1097,5 @@ def test_a_windows_leaf_salts_are_each_one_position_of_its_key_and_its_strings_t
     k, lr = next(iter(rows.items()))
     assert got[k][0][CS.SALT_BYTES:2 * CS.SALT_BYTES] == key.block((lr.template, lr.port), 3) + key.block(
         (lr.template, lr.port), 4) + key.block((lr.template, lr.port), 5)
-    by_member = {p: got[k][0][at * CS.SALT_BYTES:(at + n) * CS.SALT_BYTES] for k, lr in rows.items() for p, at, n in lr.members}
+    by_member = {p: s for k, lr in rows.items() for p, s in lr.split(got[k][0], CS.SALT_BYTES).items()}
     assert win.close(strings=got).roots == win.close(salts_of=by_member).roots
