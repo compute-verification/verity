@@ -31,6 +31,7 @@ import numpy as np
 from verity_vllm.acquire.sources import call_boundary_plan as CP
 from verity_vllm.acquire.sources import int8_source
 from verity_vllm.acquire.sources.call_boundary_plan import (
+    CALL_BOUNDARY,
     FAMILY,
     WORD_DTYPES,
     Body,
@@ -44,26 +45,33 @@ logger = init_logger(__name__)
 _SIGNED = {1: "uint8", 2: "int16", 4: "int32", 8: "int64"}
 WARMUP_ID = re.compile(r"warmup-(\d+)(?:-[0-9a-f]{8})?")
 
-#: other sources' claims on `call_boundaries` identities (identity -> the claiming source's `short_name`, or None): a claimed identity is
-#: that source's to acquire (a tap of a Value the runtime already holds, like the int8 quantizer's results) and is never evaluated here
+#: other sources' claims on the capture plan's `call_boundary` classes (plan class -> the claiming source's `short_name`, or None): a
+#: claimed class is that source's to acquire (a tap of a Value the runtime already holds, like the int8 quantizer's results) and is
+#: never evaluated here
 CLAIMS: list[Callable[[Mapping[str, Any]], str | None]] = [int8_source.claim]
 
 
-def claimed(r: Mapping[str, Any]) -> str | None:
-    """The source that claims identity `r` (`CLAIMS`), or None: this source evaluates it."""
-    return next((c for f in CLAIMS if (c := f(r))), None)
+def claimed(c: Mapping[str, Any]) -> str | None:
+    """The source that claims plan class `c` (`CLAIMS`), or None: this source evaluates it."""
+    return next((s for f in CLAIMS if (s := f(c))), None)
 
 
-def unattached(manifest: Mapping[str, Any] | None, attached: Collection[str]) -> list[str]:
-    """The `call_boundaries` identities of `manifest` whose claimant is not among `attached` (the sources the Commit attaches), each named
-    with it: no source acquires them."""
-    return [f"{CP._label(r)}: claimed by {s}, a source the Commit does not attach" for r in identity_rows(manifest)
-            if r.get("family") == FAMILY and (s := claimed(r)) is not None and s not in attached]
+def unattached(plan: Sequence[Mapping[str, Any]], attached: Collection[str]) -> list[str]:
+    """The `call_boundary` classes of the capture plan (`capture_plan.of_build`) whose claimant is not among `attached` (the sources
+    the Commit attaches), each named with it: no source acquires them."""
+    return [f"{c['op_path']}/{c['member']}: claimed by {s}, a source the Commit does not attach" for c in plan
+            if c["capture"] == CALL_BOUNDARY and (s := claimed(c)) is not None and s not in attached]
+
+
+def sites(plan: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """The `call_boundary` classes of the capture plan this source evaluates: every one no other source claims."""
+    return [c for c in plan if c["capture"] == CALL_BOUNDARY and claimed(c) is None]
 
 
 def manifest_sites(manifest: Mapping[str, Any] | None) -> list[Mapping[str, Any]]:
-    """The `call_boundaries` identities of a manifest this source evaluates: every one no other source claims."""
-    return [r for r in identity_rows(manifest) if r.get("family") == FAMILY and claimed(r) is None]
+    """The `call_boundaries` identities of a row manifest, for the host plan (`plan_of`, `call_boundary_plan.plan`), which still reads
+    identities; the served road attaches by `sites` of the capture plan."""
+    return [r for r in identity_rows(manifest) if r.get("family") == FAMILY]
 
 
 def plan_of(manifest: Mapping[str, Any], *roots: str | None) -> Plan:
@@ -351,5 +359,5 @@ def attach(com: Any, enabled: bool, manifest: Mapping[str, Any] | None, required
     return required_classes, src
 
 
-__all__ = ["FAMILY", "WORD_DTYPES", "CLAIMS", "CallBoundarySource", "claimed", "unattached", "manifest_sites", "plan_of", "words",
+__all__ = ["FAMILY", "WORD_DTYPES", "CLAIMS", "CallBoundarySource", "claimed", "unattached", "sites", "manifest_sites", "plan_of", "words",
            "operand_words", "zeros", "attach"]
