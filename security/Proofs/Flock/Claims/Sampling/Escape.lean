@@ -41,6 +41,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Soundness.Game
+import Proofs.Spot.Sampling.SamplingDesign
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
@@ -465,6 +466,80 @@ theorem OneStage.Pa_stratified_stratum {K : ℕ} {ns : List ℕ} (hw : (OneStage
   rw [← OneStage.Pa_counts_stratified, OneStage.Pa_counts_stratum (OneStage.wellFormed_counts_stratified hw) hs
     (by simpa [OneStage.stratifiedCounts] using hs) hB]
   simp [OneStage.stratifiedCounts]
+
+/-! ## The strata's miss against a rate -/
+
+theorem strataPa_nonneg : ∀ (ss : List (ℕ × ℕ)) (o : ℕ) (B : Finset ℕ), 0 ≤ strataPa ss o B
+  | [], _, _ => zero_le_one
+  | (n, k) :: ss, o, B => by
+    rw [strataPa]
+    exact mul_nonneg (by positivity) (strataPa_nonneg ss (o + n) B)
+
+/-- One stratum's miss against a rate `r ≤ k/n`: `C(n − b, k)/C(n, k) ≤ (1 − r)^b`. -/
+theorem choose_div_le_pow_of_rate {n k b : ℕ} {r : ℝ} (hb : b ≤ n) (hk : k ≤ n) (hr : r * n ≤ k) :
+    ((n - b).choose k : ℝ) / (n.choose k : ℝ) ≤ (1 - r) ^ b := by
+  rcases Nat.eq_zero_or_pos n with rfl | hn
+  · obtain rfl : b = 0 := by omega
+    obtain rfl : k = 0 := by omega
+    simp
+  have hn' : (0 : ℝ) < n := by exact_mod_cast hn
+  have hc : (0 : ℝ) < n.choose k := by exact_mod_cast Nat.choose_pos hk
+  have h1 : ((n - b).choose k : ℝ) * (n : ℝ) ^ b ≤ (n.choose k : ℝ) * ((n - k : ℕ) : ℝ) ^ b := by
+    exact_mod_cast Spot.Sampling.SamplingDesign.choose_sub_mul_pow_le n k b hb
+  have h2 : ((n - k : ℕ) : ℝ) ≤ (1 - r) * n := by
+    rw [Nat.cast_sub hk]
+    nlinarith
+  have h4 : ((n - k : ℕ) : ℝ) ^ b ≤ ((1 - r) * n) ^ b := pow_le_pow_left₀ (Nat.cast_nonneg _) h2 b
+  rw [div_le_iff₀ hc]
+  refine le_of_mul_le_mul_right ?_ (pow_pos hn' b)
+  calc ((n - b).choose k : ℝ) * (n : ℝ) ^ b ≤ (n.choose k : ℝ) * ((n - k : ℕ) : ℝ) ^ b := h1
+    _ ≤ (n.choose k : ℝ) * ((1 - r) * n) ^ b := mul_le_mul_of_nonneg_left h4 hc.le
+    _ = (1 - r) ^ b * (n.choose k : ℝ) * (n : ℝ) ^ b := by rw [mul_pow]; ring
+
+/-- **Strata miss a `B` with `t` members on them at most as `(1 − r)^t`**, at a rate `r ≤ k_s/n_s` in every stratum,
+however `B` is split over the strata. -/
+theorem strataPa_le_pow : ∀ (ss : List (ℕ × ℕ)) (o : ℕ) (B : Finset ℕ) {r : ℝ}, r ≤ 1 →
+    (∀ p ∈ ss, p.2 ≤ p.1 ∧ r * p.1 ≤ p.2) →
+    strataPa ss o B ≤ (1 - r) ^ (B.filter fun v => o ≤ v ∧ v < o + (ss.map Prod.fst).sum).card
+  | [], o, B, r, _, _ => by
+    rw [strataPa, Finset.filter_false_of_mem fun v _ h => by
+      simp only [List.map_nil, List.sum_nil, add_zero] at h
+      omega]
+    simp
+  | (n, k) :: ss, o, B, r, hr1, hk => by
+    have hk0 := hk (n, k) (by simp)
+    have hsplit : (B.filter fun v => o ≤ v ∧ v < o + (((n, k) :: ss).map Prod.fst).sum).card =
+        (window o n B).card + (B.filter fun v => o + n ≤ v ∧ v < o + n + (ss.map Prod.fst).sum).card := by
+      rw [window, Finset.card_image_of_injOn fun a ha b hb hab => by
+          have := (Finset.mem_filter.1 (Finset.mem_coe.1 ha)).2
+          have := (Finset.mem_filter.1 (Finset.mem_coe.1 hb)).2
+          have h' : a - o = b - o := hab
+          omega,
+        ← Finset.card_union_of_disjoint (Finset.disjoint_filter.2 fun v _ h1 h2 => by omega)]
+      congr 1
+      ext v
+      simp only [Finset.mem_filter, Finset.mem_union, List.map_cons, List.sum_cons]
+      by_cases hv : v ∈ B
+      · simp only [hv, true_and]
+        omega
+      · simp only [hv, false_and, or_self]
+    have hw : (window o n B).card ≤ n := by
+      simpa using Finset.card_le_card (window_subset o n B)
+    rw [hsplit, pow_add, strataPa]
+    exact mul_le_mul (choose_div_le_pow_of_rate hw hk0.1 hk0.2)
+      (strataPa_le_pow ss (o + n) B hr1 fun p hp => hk p (by simp [hp])) (strataPa_nonneg ss (o + n) B)
+      (pow_nonneg (by linarith) _)
+
+/-- **A counts design misses `B` at most as `(1 − r)^t`**, `t` the members of `B` in the population, at a rate
+`r ≤ k_s/n_s` in every stratum. -/
+theorem OneStage.Pa_counts_le_pow {ns ks : List ℕ} (hw : (OneStage.counts ks).WellFormed ns) {r : ℝ} (hr1 : r ≤ 1)
+    (hr : ∀ p ∈ ns.zip ks, r * p.1 ≤ p.2) (B : Finset ℕ) :
+    (OneStage.counts ks).Pa ns B ≤ (1 - r) ^ (B.filter (· < ns.sum)).card := by
+  obtain ⟨hlen, hk⟩ := hw
+  have h := strataPa_le_pow (ns.zip ks) 0 B hr1 fun p hp => ⟨(hk p hp).2, hr p hp⟩
+  have hsum : ((ns.zip ks).map Prod.fst).sum = ns.sum := by rw [List.map_fst_zip (by simp [hlen])]
+  rw [OneStage.Pa]
+  simpa [hsum] using h
 
 /-! ## The classes' product -/
 
