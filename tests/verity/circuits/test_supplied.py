@@ -31,7 +31,7 @@ SERVED = [
     (_entry("root_b", "registered.root/v1", {"value": "weights/b"}, "digest", 512), [(S.SUPPLIED, 1, 512)]),
     (_entry("root_a", "record.root/v1", {"port": "a/0@1"}, "halves", 512), [(S.SUPPLIED, 32, 16)]),
     (_entry("log_base", "log.base/v1", {}, "halves", 64), [(S.SUPPLIED, 16, 4)]),
-    (_entry("one", "const.u16/v1", {"value": 1}, "le", 16), [(S.SUPPLIED, 16, 1)]),
+    (_entry("one", "const.uint/v1", {"value": 1, "bits": 16}, "le", 16), [(S.SUPPLIED, 16, 1)]),
 ]
 
 
@@ -55,7 +55,7 @@ def test_unmarked_entries_are_unchanged():
     (["k", 1], [(S.SUPPLIED, 32, 3)], "E_INPUTS_MIXED"),
     (_entry("k", "pous.session.round_key/v1", {"round": 3}, "halves", 64), [(S.SUPPLIED, 32, 2)], "E_SUPPLIED_FN"),
     (_entry("k", "pous.session.round_coin/v1", {}, "halves", 96), [(S.SUPPLIED, 32, 3)], "E_SUPPLIED_ARGS"),
-    (_entry("k", "const.u16/v1", {"value": 1 << 16}, "le", 16), [(S.SUPPLIED, 16, 1)], "E_SUPPLIED_ARGS"),
+    (_entry("k", "const.uint/v1", {"value": 1 << 16, "bits": 16}, "le", 16), [(S.SUPPLIED, 16, 1)], "E_SUPPLIED_ARGS"),
     (_entry("k", "pous.session.header/v1", {"head": "x"}, "le", 6048), [(S.SUPPLIED, 1, 6048)], "E_SUPPLIED_ARGS"),
     (_entry("k", "pous.session.header/v1", {}, "le", 6048), [(S.SUPPLIED, 1, 6048)], "E_SUPPLIED_ARGS"),
     (_entry("k", "pous.session.round_coin/v1", {"round": 3}, "halves", 64), [(S.SUPPLIED, 32, 2)], "E_SUPPLIED_WIDTH"),
@@ -71,7 +71,7 @@ def test_refusals(entry, nodes, code):
 
 
 def test_an_output_held_to_a_supplied_constant():
-    """Every unit's ok word (a 16-bit output leaf each, 4 units) held to the one leaf of `const.u16/v1` at 1, as an
+    """Every unit's ok word (a 16-bit output leaf each, 4 units) held to the one leaf of `const.uint/v1` at 1 (16 bits), as an
     opening's verdict and the storage setup's ok are."""
     one = S.check_entry(*SERVED[-1])
     inputs = {"one": (one, 16, 1), "setup_salt": (SERVED[3][0][2], 16, 12)}
@@ -135,7 +135,10 @@ def test_the_lean_registry_names_no_function_the_format_lacks():
 
 
 #: a function's value at some args, in bits (None: no value there), as the format fixes it (§5.4)
-LENGTHS = [("const.u32/v1", {"value": 7}, 32), ("const.u32/v1", {"value": 1 << 32}, None),
+LENGTHS = [("const.uint/v1", {"value": 7, "bits": 32}, 32), ("const.uint/v1", {"value": 1 << 32, "bits": 32}, None),
+           ("const.uint/v1", {"value": 1, "bits": 8}, 8), ("const.uint/v1", {"value": 3, "bits": 64}, 64),
+           ("const.uint/v1", {"value": 5, "bits": 12}, None), ("const.uint/v1", {"value": 0, "bits": 72}, None),
+           ("const.uint/v1", {"value": 0, "bits": 0}, None),
            ("pouw.pearlplus.eb/v1", {"col": 0, "tn": 3}, 768), ("pouw.pearlplus.eb/v1", {"col": 1, "tn": 0}, None),
            ("pouw.pearlplus.fa/v1", {"k": 64}, 16384), ("pouw.pearlplus.fa/v1", {"k": 2}, None),
            ("pouw.pearlplus.fb/v1", {"k": 32}, 8192), ("pouw.pearlplus.fb/v1", {"k": 0}, None),

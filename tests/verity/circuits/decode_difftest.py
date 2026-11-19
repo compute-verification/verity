@@ -45,7 +45,7 @@ def chain() -> str:
 
 
 def supplied_cases() -> list[tuple[str, str]]:
-    """`test_supplied_block`'s program (`k` supplied, `const.u16/v1`), the block reading part of `k` (a mark with `of`), and
+    """`test_supplied_block`'s program (`k` supplied, `const.uint/v1`), the block reading part of `k` (a mark with `of`), and
     the program with its mark edited to each refusal, in `check_entry`'s order."""
     c = b"".join(codec.descriptor_chunks(SB.program()))
     block = R.restrict(c, SB.PARTITION, [(1, 2)], R.Bits(R.program(c))).descriptor
@@ -56,14 +56,15 @@ def supplied_cases() -> list[tuple[str, str]]:
              ("mark: of with lo = hi", lambda i: i[1].__setitem__(2, {**mark, "of": ["k", 1, 1]})),
              ("supplied nodes, no mark", lambda i: i[1].pop()),
              ("a mark on run nodes", lambda i: i[0].append(mark)),
-             ("mark: no such function", lambda i: i[1].__setitem__(2, {**mark, "supplied": "const.u16/v2"})),
+             ("mark: no such function", lambda i: i[1].__setitem__(2, {**mark, "supplied": "const.uint/v2"})),
              ("mark: the wrong args", lambda i: i[1].__setitem__(2, {**mark, "args": {"round": 5}})),
-             ("mark: no value at its args", lambda i: i[1].__setitem__(2, {**mark, "args": {"value": 70000}})),
+             ("mark: no value at its args", lambda i: i[1].__setitem__(2, {**mark, "args": {"bits": 16, "value": 70000}})),
              ("mark: bits not its nodes'", lambda i: i[1].__setitem__(2, {**mark, "bits": 8})),
              ("mark: a function of another length", lambda i: i[1].__setitem__(2, {**mark, "supplied": "log.base/v1", "args": {}})),
              ("mark: digest of a 2-byte value", lambda i: i[1].__setitem__(2, {**mark, "layout": "digest"}))]
     edits += [(f"mark: {fn} at {args}", lambda i, fn=fn, args=args: i[1].__setitem__(2, {**mark, "supplied": fn, "args": args}))
-              for fn, args in (("const.u32/v1", {"value": 5}), ("const.u32/v1", {"value": 1 << 32}),
+              for fn, args in (("const.uint/v1", {"bits": 32, "value": 5}), ("const.uint/v1", {"bits": 32, "value": 1 << 32}),
+                               ("const.uint/v1", {"bits": 12, "value": 5}),
                                ("pouw.pearlplus.eb/v1", {"col": 0, "tn": 3}), ("pouw.pearlplus.eb/v1", {"col": 0, "tn": 0}),
                                ("pouw.pearlplus.fa/v1", {"k": 64}), ("pouw.pearlplus.fa/v1", {"k": 2}),
                                ("pouw.pearlplus.fb/v1", {"k": 32}), ("pouw.pearlplus.gram/v1", {"dev": "a", "k": 96}),

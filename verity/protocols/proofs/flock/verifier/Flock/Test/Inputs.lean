@@ -84,8 +84,8 @@ private def refusal (s : String) : String := match decode s.toUTF8 with
   "E_SUPPLIED_FN: input 'base': 'log.base/v2' is no supplied function"
 #guard refusal (suppliedDesc (logMark (LOG_MARK.replace r#""args":{}"# r#""args":{"round":3}"#))) ==
   "E_SUPPLIED_ARGS: input 'base': log.base/v1 takes the args [], not ['round']"
-#guard refusal (suppliedDesc (logMark r#"{"args":{"value":70000},"bits":16,"layout":"le","supplied":"const.u16/v1"}"#)) ==
-  "E_SUPPLIED_ARGS: input 'base': const.u16/v1 has no value at {'value': 70000}"
+#guard refusal (suppliedDesc (logMark r#"{"args":{"bits":16,"value":70000},"bits":16,"layout":"le","supplied":"const.uint/v1"}"#)) ==
+  "E_SUPPLIED_ARGS: input 'base': const.uint/v1 has no value at {'bits': 16, 'value': 70000}"
 #guard refusal (suppliedDesc (logMark (LOG_MARK.replace r#""bits":64"# r#""bits":32"#))) ==
   "E_SUPPLIED_WIDTH: input 'base': log.base/v1's value is 64 bits, read by le as whole leaves of one width; the mark says " ++
   "32 and its nodes hold 64 leaves of widths [1]"

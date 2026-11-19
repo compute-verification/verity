@@ -1403,12 +1403,12 @@ def SUPPLIED_FUNCTIONS : List SuppliedFn :=
    ⟨"registered.root/v1", ["value"], fixed 64⟩,
    ⟨"record.root/v1", ["port"], fixed 64⟩,
    ⟨"log.base/v1", [], fixed 8⟩,
-   ⟨"const.u16/v1", ["value"], fun a => (nat a "value").bind fun v => if v < 2 ^ 16 then some 2 else none⟩,
-   ⟨"const.u32/v1", ["value"], fun a => (nat a "value").bind fun v => if v < 2 ^ 32 then bits 32 else none⟩,
    ⟨"pouw.pearlplus.eb/v1", ["col", "tn"], per "tn" 256⟩,
    ⟨"pouw.pearlplus.fa/v1", ["k"], k32 fun k => bits (256 * k)⟩,
    ⟨"pouw.pearlplus.fb/v1", ["k"], k32 fun k => bits (256 * k)⟩,
-   ⟨"pouw.pearlplus.gram/v1", ["k", "dev"], k32 fun _ => bits 32768⟩]
+   ⟨"pouw.pearlplus.gram/v1", ["k", "dev"], k32 fun _ => bits 32768⟩,
+   ⟨"const.uint/v1", ["value", "bits"], fun a => (nat a "bits").bind fun b => (nat a "value").bind fun v =>
+      if b ≤ 64 ∧ v < 2 ^ b then bits b else none⟩]
 
 def SUPPLIED_LAYOUTS : List String := ["le", "halves", "digest"]
 

@@ -112,10 +112,6 @@ FUNCTIONS: dict[str, Function] = {f.name: f for f in (
     Function("record.root/v1", "supplied", ("commitment",), ("port",), _fixed(64)),
     # the first position after every unit of the log's records, a u64 big-endian: a unit's position adds its index
     Function("log.base/v1", "supplied", ("commitment",), (), _fixed(8)),
-    # a constant u16 word, what a held output is held to (an opening's verdict, a check's ok)
-    Function("const.u16/v1", "supplied", ("constant",), ("value",), lambda a: 2 if a["value"] < 1 << 16 else None),
-    # a constant u32 word, 32 bits
-    Function("const.u32/v1", "supplied", ("constant",), ("value",), lambda a: 4 if a["value"] < 1 << 32 else None),
     # useful work, Pearl+: column `col`'s `tn` lines of 32 E4M3 bytes, 256 bits a line
     Function("pouw.pearlplus.eb/v1", "supplied", ("coin", "commitment"), ("col", "tn"), _bits(lambda a: 256 * a["tn"])),
     # useful work, Pearl+: `k` lines of 32 E4M3 bytes, 256 bits a line, `k` a multiple of 32
@@ -123,6 +119,10 @@ FUNCTIONS: dict[str, Function] = {f.name: f for f in (
     Function("pouw.pearlplus.fb/v1", "supplied", ("coin", "commitment"), ("k",), _k32(_bits(lambda a: 256 * a["k"]))),
     # useful work, Pearl+: a 32 by 32 Gram matrix of FP32 words as u32, 32768 bits whatever `k` (a multiple of 32) and `dev`
     Function("pouw.pearlplus.gram/v1", "supplied", ("coin", "commitment"), ("k", "dev"), _k32(_fixed(4096))),
+    # a constant word of `bits` bits (a multiple of 8, up to 64) holding `value`: what a held output is held to (an
+    # opening's verdict, a check's ok)
+    Function("const.uint/v1", "supplied", ("constant",), ("value", "bits"),
+             _bits(lambda a: a["bits"] if a["bits"] <= 64 and a["value"] < 1 << a["bits"] else 0)),
 )}
 
 
