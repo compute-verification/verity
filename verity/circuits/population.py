@@ -171,7 +171,8 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
     circuit record ``record`` as one Program over ``templates``, each ``(template, units)`` as the record names them. Each
     range of the record's order (each template one range where it states none) is a batch; each argument's runs of equal
     rows at one stride are one strided part, and the result is `mixed_population_program`'s. An input row is its wire's writer's output
-    row; a registered or boundary read's, the root parameter named for the value it reads; a table read's,
+    row; a registered or boundary read's, the root parameter named for the value it reads, a supplied input (with its
+    mark) where the record's ``registered["supplied"]`` names it; a table read's,
     ``<param>/<root or domain>``; an opening's port, ``<table>/<port>`` over the units of that table's openings in the
     record's order, each opening's after the one before; any other row, the
     population's own ``<j>.<port>``. The registered values are the first parameters, in order, the rest sorted by name. A
@@ -349,7 +350,8 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
                                doc="wired units of " + ", ".join(f"{n} x {t.id}" for t, n in templates), register=False)
     free_rows = [{"reader": t, "port": p, "at": at, "units": n, **({} if rows == (0, cut(index[t], p)) else {"cut": list(rows)})}
                  for t, p, at, n, rows in free]
-    return (Program(bind(defn, **named), annotations={"free": free_rows}),
+    supplied = {v: m for v, m in (reg.get("supplied") or {}).items() if v in dict(params)}
+    return (Program(bind(defn, **named), annotations={"free": free_rows}, supplied=supplied),
             template_instances_query([t for t, _ in templates]))
 
 
