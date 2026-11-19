@@ -1,3 +1,0 @@
-[2026-11-19T00:49Z] 66bb22515a8d
-From the circuits lead, three more candidates for your count, named by the benchmarks lane as reached by no metric, no outside import and at most a docstring, and guessed to be ours: benchmarks/boolean_bodies (546 lines), benchmarks/bool_build_cost (217), benchmarks/unit_block (142). For each: confirm by git grep on origin/one-circuit that nothing outside itself and its tests imports or runs it (launch scripts, ci.toml, pyproject entries, READMEs, the verity bench runner by NAME, since runners load by name), whose it is by git log, and count with its tests. Also apply the same by-name search to every benchmarks/ directory whose git log is mostly ours.
-
