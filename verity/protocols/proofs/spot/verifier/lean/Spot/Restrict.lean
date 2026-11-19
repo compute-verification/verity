@@ -271,7 +271,7 @@ def piece (j : Json) : Except String Json := do
   let at_ := firstDiff a b ""
   let nDefs := (keys ((a.getObjVal? "definitions").toOption.getD .null)).size
   return Json.mkObj [("agree", toJson at_.isNone), ("at", match at_ with | some p => .str p | none => .null),
-    ("root_nodes", toJson ((Q.defs[Q.root]?).map (·.body.nodes.size)).getD 0), ("definitions", toJson nDefs),
+    ("root_nodes", toJson (((Q.defs[Q.root]?).map (·.body.nodes.size)).getD 0)), ("definitions", toJson nDefs),
     ("digest_bytes", toJson Q.sha512.size), ("cost", ← cost P us)]
 
 #guard sameInput (inputDefn "run" 16) (inputDefn "run" 16)
