@@ -1,6 +1,3 @@
-"""`window_cut.credited`: one credited tile, the σ core, as a Program whose one block `restrict` gives with its bit ports,
-evaluated on bits against the σ's word view and the scheme, and counted as the sum of its gates; `credited_sizes` of the
-cut class's calls."""
 from __future__ import annotations
 
 import functools
@@ -20,21 +17,19 @@ from verity.circuits.ops.boolean.versions import block_circuit, boolean_table
 from verity.circuits.types import Array, Value
 from verity.commitments import registered_value as RV
 from verity.commitments.merkle import tree_levels
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
-    HM96, Hm96Domain, activation_binding, commit_rows, fresh_salts, rows_domain, weight_binding)
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import inert_bound, pc8
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as WK
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as T
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as CU
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
+    HM96, Hm96Domain, activation_binding, commit_rows, fresh_salts, rows_domain, weight_binding)
 
-from tests.program.predict.test_window_circuit import CLASS, GRAIN
-from tests.program.predict.test_window_circuit_pearl import PEARL, SCHEME
-from tests.program.predict.test_window_rows import _registered
-from verity_vllm.program.predict import window_circuit as WC
-from verity_vllm.program.predict import window_cut as WK
+SCHEME = "pearl-c-h100-v1-h3"
 
 K, TM, TN, N = 256, 1, 1, 1
 D = 3
@@ -42,7 +37,7 @@ D = 3
 
 @functools.cache
 def credited(depth: int | None = None):
-    program, part = WK.credited(SCHEME, K, TM, TN, N, depth)
+    program, part = WK.credited(SCHEME, K, TM, TN, N, None, depth)
     c = b"".join(descriptor_chunks(program))
     return program, part, c, R.restrict(c, part, [(0, 1)])
 
@@ -126,7 +121,7 @@ def test_the_credited_block_with_its_leaf_is_the_tile_unit_on_word_ports():
     width (FP32 and u32 words, bytes, tpos's bits), all registered, and ok its one output; its count is the tile's, the
     `WordBits` wiring counting nothing. Slow: as above."""
     _program, part, _c, b = credited(D)
-    words = WK.credited_product(SCHEME, K, TM, TN, N, D)
+    words = WK.credited_product(SCHEME, K, TM, TN, N, None, D)
     tile = bind(T.PearlPlusTile, **words.bindings)
     assert part["query"]["params"]["template"] == descriptor_id(words)
     params, ret = b.program.fn.signature()
@@ -140,8 +135,8 @@ def test_the_credited_block_with_its_leaf_is_the_tile_unit_on_word_ports():
 
 
 def test_the_word_ports_registered_rows_are_the_devices_leaves_under_the_port_id_and_its_root_under_pouws():
-    sig = dict(WK.credited_product(SCHEME, K, TM, TN, N, D).signature()[0])
-    w = WK.ROW_FORMAT["word_bits"]
+    sig = dict(WK.credited_product(SCHEME, K, TM, TN, N, None, D).signature()[0])
+    w = sig["a"].leaf_widths()[0]
     assert sig["a"] == Array(TM, Array(K, Value(w))) and sig["b"] == Array(TN, Array(K, Value(w)))
     assert sig["y"] == Array(TM, Array(N, Value(w)))
     rng, salt, i, m16, wid = np.random.default_rng(5), bytes(range(64)), 3, 16, 0
@@ -150,7 +145,7 @@ def test_the_word_ports_registered_rows_are_the_devices_leaves_under_the_port_id
     b = rng.integers(0, 1 << 16, (TN, K), dtype=np.uint16).astype("<u4") << 16
     a_salts, y_salts, b_salts = fresh_salts(m16), fresh_salts(m16), fresh_salts(TN)
 
-    fmt, program, window = WK.ROW_FORMAT, "ab" * 64, "cd" * 64
+    fmt, program, window = {"row_schema": SEG, "word_bits": w}, "ab" * 64, "cd" * 64
     y = y16.astype("<u4") << 16
     values = [(PWR.a_value(0, 0), a, a_salts, activation_binding(salt, i), i, window),
               (PWR.y_value(0, 0), y, y_salts, SY.y_binding(salt, i), i, window),
@@ -205,8 +200,10 @@ def test_the_block_on_bits_is_its_word_view_and_the_scheme():
     assert [[sum(g[8 * i + j] << j for j in range(8)) for i in range(64)] + [g[512]] for g in got] == want
 
 
-def test_the_credited_sizes_are_the_cut_calls_tiles():
-    """Each cut call's A rows in tiles of Pearl+'s 64 rows, here one short tile of 16 a round, and its columns in tiles of
-    64: one size a call shape."""
-    low = WC.lower(_registered(), CLASS, None, GRAIN, tables=PEARL)
-    assert WK.credited_sizes(low) == [(64, 16, 64, 64), (64, 16, 64, 128), (64, 16, 64, 256), (128, 16, 64, 64)]
+def test_the_sixth_argument_is_the_tiles_real_rows():
+    full, part = (WK.credited_product(SCHEME, K, 16, 1, 1, r) for r in (None, 5))
+    assert full.bindings["TR"] == 16 and part.bindings["TR"] == 5
+    assert dict(part.signature()[0])["y"].n == 5
+    assert WK.credited_product(SCHEME, K, 16, 1, 1, 5, D).bindings["TR"] == 5
+    with pytest.raises(Exception):
+        WK.credited_product(SCHEME, K, 16, 1, 1, 17)

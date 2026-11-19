@@ -10,36 +10,19 @@ from pathlib import Path
 
 SCHEME = "pearl-c-h100-v1-h3"
 LAYOUT_MAX = 10**9
-LLAMA32_1B = {"repo": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da"}
 
 
 def _peak_gib() -> float:
     return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 3)
 
 
-def sizes_of_class(cls: str, scheme: str) -> list:
-    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
-    from verity_vllm.engine.served_seed import DEFAULT_SEED
-    from verity_vllm.program.predict import window_circuit, window_cut
-    from verity_vllm.program.predict.phi import Phi
-    from verity_vllm.program.predict.steps import Registered
-    from verity_vllm.program.predict.window_class import PearlTables, WindowClass
-    hf = json.loads(pinned_hf_config(LLAMA32_1B["repo"], LLAMA32_1B["revision"]).read_text())
-    reg = Registered.of(Phi(model={**LLAMA32_1B, "hf_config": hf, "dtype": "bfloat16"}, target={"card": "h200-sxm-141gb"}),
-                        default_seed=DEFAULT_SEED)
-    low = window_circuit.lower(reg, WindowClass(*map(int, cls.split(","))), tables=PearlTables(scheme))
-    return {"census": [{k: r[k] for k in ("round", "call", "k", "n", "rows")} | {"a_rows": r["a"]["rows"]}
-                       for r in window_cut.census(low)],
-            "sizes": window_cut.credited_sizes(low), "templates": len(low.circuit.templates)}
-
-
-def block(scheme: str, k: int, tm: int, tn: int, n: int, bits: bool = False, restrict: bool = True,
-          depth: int | None = None) -> dict:
+def block(scheme: str, k: int, tm: int, tn: int, n: int, real: int | None = None, bits: bool = False,
+          restrict: bool = True, depth: int | None = None) -> dict:
     from verity.circuits import count as CT
     from verity.circuits import restrict as R
     from verity.circuits.codec import descriptor_chunks, descriptor_id
-    from verity_vllm.program.predict import window_cut
-    out, t = {"scheme": scheme, "k": k, "tm": tm, "tn": tn, "n": n, "depth": depth, "phases": {}}, time.perf_counter()
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
+    out, t = {"scheme": scheme, "k": k, "tm": tm, "tn": tn, "n": n, "real": real, "depth": depth, "phases": {}}, time.perf_counter()
 
     def phase(name: str) -> None:
         nonlocal t
@@ -48,7 +31,7 @@ def block(scheme: str, k: int, tm: int, tn: int, n: int, bits: bool = False, res
         print(f"{name}: {out['phases'][name]}", flush=True)
         t = now
 
-    program, part = window_cut.credited(scheme, k, tm, tn, n, depth)
+    program, part = PC.credited(scheme, k, tm, tn, n, real, depth)
     phase("program")
     c = b"".join(descriptor_chunks(program))
     out["descriptor_bytes"] = len(c)
@@ -102,8 +85,7 @@ def block(scheme: str, k: int, tm: int, tn: int, n: int, bits: bool = False, res
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--scheme", default=SCHEME)
-    ap.add_argument("--size", help="K,TM,TN,N")
-    ap.add_argument("--cls", help="a window class, e.g. 4,27,2: its cut calls' credited sizes on Llama 3.2 1B")
+    ap.add_argument("--size", help="K,TM,TN,N or K,TM,TN,N,TR")
     ap.add_argument("--bits", action="store_true", help="also evaluate the block on bits once, on random inputs")
     ap.add_argument("--depth", type=int, help="the tile with its leaf opening in a transcript tree of this depth")
     ap.add_argument("--no-restrict", action="store_true",
@@ -111,14 +93,9 @@ def main() -> int:
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
-    if a.cls:
-        got = sizes_of_class(a.cls, a.scheme)
-        got["peak_gib"] = _peak_gib()
-        (a.out / f"sizes-{a.cls.replace(',', '-')}.json").write_text(json.dumps(got, indent=1))
-        print("CREDITED-SIZES", a.cls, got["sizes"], "templates", got["templates"], flush=True)
     if a.size:
-        k, tm, tn, n = map(int, a.size.split(","))
-        got = block(a.scheme, k, tm, tn, n, a.bits, not a.no_restrict, a.depth)
+        k, tm, tn, n, *real = map(int, a.size.split(","))
+        got = block(a.scheme, k, tm, tn, n, real[0] if real else None, a.bits, not a.no_restrict, a.depth)
         (a.out / f"block-{k}-{tm}-{tn}-{n}.json").write_text(json.dumps(got, indent=1))
         if "sum_of_bodies" not in got:
             return 0

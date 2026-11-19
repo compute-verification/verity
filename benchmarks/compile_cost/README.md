@@ -23,7 +23,7 @@ digest is the pinned one.
 
 ## One credited tile
 
-`credited.py --size K,TM,TN,N --out DIR` builds one credited tile (`window_cut.credited`), restricts its one block and
-counts it, writing `DIR/block-K-TM-TN-N.json`: its ports, gates and ANDs, each word primitive's share, and each phase's
-wall seconds and peak memory. `--cls 4,27,2` writes the class's cut calls and their credited sizes on Llama 3.2 1B
-(`window_cut.credited_sizes`). A served size takes about 15 GiB and minutes, so it runs on a node.
+`credited.py --size K,TM,TN,N[,TR] --out DIR` builds one credited tile (`pearl_plus_credited.credited`, TR its real rows,
+every row when left out), restricts its one block and counts it, writing `DIR/block-K-TM-TN-N.json`: its ports, gates and
+ANDs, each word primitive's share, and each phase's wall seconds and peak memory. `--depth D` builds the tile with its leaf
+opening on word ports. A served size takes about 15 GiB and minutes, so it runs on a node.
