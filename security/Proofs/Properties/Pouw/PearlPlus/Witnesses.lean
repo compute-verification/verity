@@ -777,11 +777,11 @@ theorem test_inert_bound : Rule.inertBoundCheck testPass.scheme testPass.records
 
 theorem test_y : testPass.yRoots[0]! = some testRootY := rfl
 
-theorem test_opensY : ([⟨0, testRowY ++ zeroSalt, []⟩] : List LeafOpening).map (·.position) !=
+theorem test_opensY : (([⟨0, testRowY ++ zeroSalt, []⟩] : List LeafOpening).map (·.position) !=
     [0].filter (· < testPass.records[0]!.realRows) ||
     !([⟨0, testRowY ++ zeroSalt, []⟩] : List LeafOpening).all (opens (rowsDomain (yBinding testPass.salt
       testPass.records[0]!.matmul.index) testPass.records[0]!.matmul.index testPass.records[0]!.realRows HM96 false)
-      testRootY ROW_SCHEMA) = false := by
+      testRootY ROW_SCHEMA)) = false := by
   simp +unfoldPartialApp only [opens, RowsDomain.verify, RowsDomain.leaf, Flock.Hm96.Default512.leaf,
     Flock.Hm96.Default512.treeLeaf, Flock.Hm96.Default512.commitString, mask_eq_maskOr, leafPrefix_eq]
   decide +kernel
@@ -802,8 +802,9 @@ noise `wn`: the deployed check's is `fixedNoise` of the pass's salt and B's root
 check is its own kernel computation (`Witness.checkTile_eq_outcome`), the formed words and the checked words given as the
 Python computes them (`Witness.testOps`, `Witness.testChecked`). -/
 theorem tileAcceptMeans_honest : checkTile testPass (.ok testNoise) 0 testOpening = .pass :=
-  checkTile_eq_outcome (bound := none) test_tile test_domain test_covers test_opensA test_opensB test_opensLeaf rfl
-    test_encode test_checked test_leaf test_rows test_inert_bound test_y rfl test_opensY test_yReason
+  checkTile_eq_outcome (bound := none) (ys := [⟨0, testRowY ++ zeroSalt, []⟩]) test_tile test_domain test_covers
+    test_opensA test_opensB test_opensLeaf rfl test_encode test_checked test_leaf test_rows test_inert_bound test_y rfl
+    test_opensY test_yReason
 
 /-- A tile check that accepts every tile passes tile 0 of a pass with no calls, which is no tile of the verifier's own. -/
 theorem tileAcceptMeans_nontrivial :
