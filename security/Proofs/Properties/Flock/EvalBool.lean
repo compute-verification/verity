@@ -82,15 +82,15 @@ def wordAndBody (P : Program.Prog) (w : String) (x : List Bool) : Option (Nat ×
   | .error _ => false
 
 /-- `BlockEval`'s two sides for the block of `units` of `P`, its only block, on the trace `X g = g · 2654435761 + 40503`:
-the block's Program on the input ports' bits, and the block's local evaluation of C at the output ports; with the ports'
-widths. -/
+the block's Program (`Spot.Restrict.portedOf`) lifted to bits (`Flock.Lift.lift`) on the input ports' bits, and the
+block's local evaluation of C at the output ports; with the ports' widths. -/
 def blockSides (P : Program.Prog) (units : Array Nat) :
     Option (List Nat × List Nat × List Bool × List Bool) :=
-  match Spot.BlockFront.front P units, Spot.BlockFront.program P units with
-  | .ok fr, .ok Q =>
+  match Spot.BlockFront.front P units, Spot.Restrict.portedOf P units >>= fun Q => Flock.Lift.lift Q Q.root with
+  | .ok fr, .ok (L, e) =>
     let X : (OfProgram.ofProgram P).Trace := fun g => BitVec.ofNat _ (g.val * 2654435761 + 40503)
     let u : Fin (#[fr.ranges].size + 1) := ⟨0, Nat.succ_pos _⟩
-    some (fr.ins.toList.map (·.width), fr.outs.toList.map (·.width), Q.evalBool Q.root (Chain.portBits X fr.ins),
+    some (fr.ins.toList.map (·.width), fr.outs.toList.map (·.width), L.evalBool e (Chain.portBits X fr.ins),
       Chain.portBits ((OfProgram.partOf P #[fr.ranges]).localEval X u) fr.outs)
   | _, _ => none
 
@@ -105,5 +105,8 @@ def blockAgrees (units : Array Nat) (ins outs : List Nat) : Bool :=
 
 -- a word primitive of a 16-bit parameter (`TWiden16_v1`, unit 3): its 16-bit input port and its 32-bit output port
 #guard blockAgrees #[3] [16] [32]
+-- a word composite whose word primitive's Boolean body is decoded after it (`TCol_v1` calling `TAdd32_v1`, unit 5): the
+-- lift appends its callees first, so the composite's callee is before it
+#guard blockAgrees #[5] [32, 32] [32]
 
 end FlockSoundness.EvalBool

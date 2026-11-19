@@ -5,7 +5,7 @@ public import Properties.Flock.Circuit.CircuitOf
 public import Properties.Flock.Circuit.UnitInst
 public import Properties.InferenceOnly
 public import InferenceOnlyVerifier.Desc
-public import Spot.BlockFront
+public import Spot.Restrict
 public import Properties.Flock.EvalBool
 public import Properties.Flock.DecodeBoolean
 public import Definitions.Core.Rblk
@@ -23,9 +23,10 @@ tree):
 * `LowerEval`: rows of the net the template `Flock.Lower.lower` writes unrolls to, satisfied with the constant 1, hold at
   each output port bit the value `Prog.evalBool` gives the Definition's lift to bits (`Flock.Lift.lift`) on the input port
   bits, an evaluation of exactly the output's width.
-* `BlockEval`: the block's Program (`Spot.BlockFront.program`) evaluates, on C's values at its input ports, to block `u`'s
-  local evaluation (`Partition.localEval`) at its output ports, where each word primitive evaluates as its Boolean
-  Definition in `P`'s own map (`BodyAgrees`).
+* `BlockEval`: the block's Program (`Spot.Restrict.portedOf`, `restrict` with its input nodes as parameters), lifted to
+  bits as the lowering lifts it (`Flock.Lift.lift`), evaluates, on C's values at its input ports, to block `u`'s local
+  evaluation (`Partition.localEval`) at its output ports, where each word primitive evaluates as its Boolean Definition
+  in `P`'s own map (`BodyAgrees`).
 * `BlockCorrect`: those rows, agreeing with a trace of C at the ports, make block `u` correct.
 * `PortsBind`: the trace a proof block's openings show (`Partition.Rblk`) and the statement's own openings at the same
   positions (`PortsOpenAt`) agree at the ports, so the rows agree with C's committed values there, or SHA-512 collides.
@@ -97,15 +98,15 @@ def LowerEval : Prop :=
     v.length = (Q.defs.getD e default).outLeaves ∧
       ∀ k < (Q.defs.getD e default).outLeaves, z (Flock.Lower.outBit t k) = v.getD k false
 
-/-- **`BlockEval`, MERGE's (C).** The block's Program evaluates, on C's values at its input ports, to block `u`'s local
-evaluation at its output ports, bit for bit. -/
+/-- **`BlockEval`, (C).** The block's Program, lifted to bits as the lowering lifts it, evaluates, on C's values at its
+input ports, to block `u`'s local evaluation at its output ports, bit for bit. -/
 def BlockEval : Prop :=
-  ∀ (P : Prog) (units : Array ℕ) (fr : Spot.BlockFront.Front) (Q : Prog),
-    Spot.BlockFront.front P units = .ok fr → Spot.BlockFront.program P units = .ok Q →
-    BodyAgrees P →
+  ∀ (P : Prog) (units : Array ℕ) (fr : Spot.BlockFront.Front) (Q L : Prog) (e : ℕ),
+    Spot.BlockFront.front P units = .ok fr → Spot.Restrict.portedOf P units = .ok Q →
+    Flock.Lift.lift Q Q.root = .ok (L, e) → BodyAgrees P →
     ∀ (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size), BlockIs P blocks u fr →
     ∀ X : (ofProgram P).Trace,
-      Prog.evalBool Q Q.root (portBits X fr.ins) = portBits ((partOf P blocks).localEval X u.castSucc) fr.outs
+      Prog.evalBool L e (portBits X fr.ins) = portBits ((partOf P blocks).localEval X u.castSucc) fr.outs
 
 /-- **`BlockCorrect`, (J): the block is correct.** Rows of the net `lower`'s template of the block's Program unrolls to,
 satisfied by `z` with the constant 1 (`LowerEval`'s form) and agreeing with a trace `X` of C at
@@ -113,7 +114,7 @@ the input and output port bits, make block `u` correct in C. -/
 def BlockCorrect : Prop :=
   ∀ (P : Prog) (units : Array ℕ) (fr : Spot.BlockFront.Front) (Q : Prog)
     (t : Tmpl.Tmpl) (nt : Net),
-    Spot.BlockFront.front P units = .ok fr → Spot.BlockFront.program P units = .ok Q →
+    Spot.BlockFront.front P units = .ok fr → Spot.Restrict.portedOf P units = .ok Q →
     Flock.Lower.lower Q Q.root (fr.ins.map (·.width)) (fr.outs.map (·.width)) = .ok t → Tmpl.unroll t = .ok nt →
     nt.unitLog ≤ 32 → ∀ (hb : Built nt) (z : ℕ → Bool), (Rows.ofNet hb).Sat (fun c => z c.val) → z t.constPos = true →
     BodyAgrees P →
