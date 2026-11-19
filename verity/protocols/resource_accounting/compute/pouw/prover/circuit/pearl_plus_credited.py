@@ -173,7 +173,7 @@ PearlPlusTileCoreWords = CompositeDefinition(
     "PearlPlusTileCoreWords", 4, _STATICS, lambda S: (_node_params(S), _word_ret(S)),
     _on_words, refuse=PT.PearlPlusTileCoreV3.refuse, conformance=PT.PearlPlusTileCoreV3.conformance,
     doc="A -h3 tile on C's words, its noise derived inside as maps (`pearl_plus_tile.noise`): `PearlPlusTileSeed_v2`(salt, "
-        "root, col), `PearlPlusTileLine_v3` over eb's TN and F's K indices, `PearlPlusGramRow_v4` for each of F_B's 32 columns, and "
+        "root, col), `PearlPlusTileLine_v3` over eb's TN indices one a unit and F's K eight units of K/8, `PearlPlusGramRow_v4` for each of F_B's 32 columns, and "
         "`PearlPlusTileCoreWired_v2` on the tile's words and that noise by wire; the salt and the root in 16-bit words, two "
         "bytes a word, low byte first")
 
@@ -183,7 +183,9 @@ def cut(t: SpecializedDefinition) -> list[tuple[SpecializedDefinition, int]]:
     binding fits whole (its noise alone is about 370k · K ANDs), each Definition bound with how many of it: its body's
     Calls and each map's members."""
     s = t.bindings
-    return [(PT.seed(s["K"], s["TN"]), 1), (PT.line("eb"), s["TN"]), (PT.line("fa"), s["K"]), (PT.line("fb"), s["K"]),
+    g = s["K"] // PT.F_ROWS
+    return [(PT.seed(s["K"], s["TN"]), 1), (PT.line("eb", 1), s["TN"]), (PT.line("fa", g), PT.F_ROWS),
+            (PT.line("fb", g), PT.F_ROWS),
             *((PT.gram_row(s["K"], s["DEV"], p), 1) for p in range(PT.R)), (bind(PearlPlusTileCoreWired, **s), 1)]
 
 

@@ -44,9 +44,10 @@ def test_each_unit_is_the_schemes_block_whose_amount_is_its_credited_macs() -> N
 
 
 def test_the_nodes_top_level_is_maps_over_its_noise_and_one_wired_core_and_its_cut_is_them() -> None:
-    """The node's body is one seed, a map of the line over eb's TN indices and over F's K for fa and fb, a Call of the
-    Gram row for each of F_B's 32 columns, and the wired core, its noise crossing as values; `cut` is those Definitions
-    with their counts, and their ANDs add up to the node's: nothing of the node is outside its units."""
+    """The node's body is one seed, a map of the line over eb's TN indices one a unit and over F's eight groups of K/8
+    for fa and fb, a Call of the Gram row for each of F_B's 32 columns, and the wired core, its noise crossing as values;
+    `cut` is those Definitions with their counts, and their ANDs add up to the node's: nothing of the node is outside its
+    units."""
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_call import ands
     node = PC.credited_product(SCHEME, K, 1, 1, 2)
     top = [(n.fn, n.n if n.form == "batch" else 1) for n in node.body.nodes]
@@ -55,7 +56,8 @@ def test_the_nodes_top_level_is_maps_over_its_noise_and_one_wired_core_and_its_c
     assert [u.defn.id for u, _n in top] == ["PearlPlusTileSeed_v2", *["PearlPlusTileLine_v3"] * 3,
                                              *["PearlPlusGramRow_v4"] * 32, "PearlPlusTileCoreWired_v2"]
     assert [u.bindings["P"] for u, _n in top[4:36]] == list(range(32))
-    assert [n for _u, n in top] == [1, 1, K, K, *[1] * 32, 1]
+    assert [n for _u, n in top] == [1, 1, PT.F_ROWS, PT.F_ROWS, *[1] * 32, 1]
+    assert [u.bindings["G"] for u, _n in top[1:4]] == [1, K // PT.F_ROWS, K // PT.F_ROWS]
     assert sum(n * ands(u) for u, n in top) == ands(node)
 
 

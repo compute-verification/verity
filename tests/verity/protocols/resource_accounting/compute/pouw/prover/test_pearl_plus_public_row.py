@@ -17,7 +17,7 @@ import pytest
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.circuits.evaluation.bits import evaluate_words
+from verity.circuits.evaluation.bits import evaluate_lowered
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
@@ -83,13 +83,14 @@ def test_the_vectors_cover_two_devices_two_columns_and_full_bytes():
 
 def noise_units(c: dict, *, bits: bool) -> dict[str, bytes]:
     """The case's noise as the node's units derive it, wired as the node wires them: the seed (key and line indices),
-    one line per index, one Gram row per F_B column; on their word bodies, or on 16-bit words (the seed's, each line's
-    and each row's, lowered, by word view).  eb's, fa's and fb's codes, then g's FP32 words little-endian, as the
-    reference's bytes: on 16-bit words, each word's two bytes little-endian."""
+    one line per index, one Gram row per F_B column; on their word bodies, or on 16-bit words (the seed's, each line
+    unit's (eb's one line, F's K/8) and each row's, bit-sliced through their gates).  eb's, fa's and fb's codes, then g's FP32
+    words little-endian, as the reference's bytes: on 16-bit words, each word's two bytes little-endian."""
     k, tn, dev = c["k"], c["tn"], c["dev"]
     salt, root = bytes.fromhex(c["salt"]), bytes.fromhex(c["root_b"])
     if not bits:
-        seed, line = bind(PT._SEED, K=k, TN=tn), lambda kind: bind(PT._LINE, **dict(zip(("SIDE", "FACTOR"), PT.LINES[kind])))
+        seed, per = bind(PT._SEED, K=k, TN=tn), 1
+        line = lambda kind, _g: bind(PT._LINE, **dict(zip(("SIDE", "FACTOR"), PT.LINES[kind])))  # noqa: E731
         row = lambda p: bind(PT._GRAM_ROW, K=k, DEV=dev, P=p)  # noqa: E731
 
         def go(fn, *xs):
@@ -99,17 +100,18 @@ def noise_units(c: dict, *, bits: bool) -> dict[str, bytes]:
         s = s.reshape(-1).tolist()
         key, ebi, fi = s[:32], [[i] for i in s[32:32 + tn]], [[i] for i in s[32 + tn:]]
     else:
-        seed, line, row = PT.seed(k, tn), PT.line, lambda p: PT.gram_row(k, dev, p)
+        seed, line, row, per = PT.seed(k, tn), PT.line, lambda p: PT.gram_row(k, dev, p), k // PT.F_ROWS
 
         def go(fn, *xs):
-            return evaluate_words(fn, *(np.asarray(x, dtype=np.uint64) for x in xs)).reshape(len(xs[0]), -1)
+            return evaluate_lowered(fn, *(np.asarray(x, dtype=np.uint64) for x in xs)).reshape(len(xs[0]), -1)
 
-        s = evaluate_batch(seed, *(np.asarray(x, dtype=np.int64) for x in ([PC.le16(salt)], [PC.le16(root)], [[c["col"]]])))
+        s = go(seed, [PC.le16(salt)], [PC.le16(root)], [[c["col"]]])
         s = s.reshape(-1).tolist()
         key, ebi, fi = s[:16], [s[16 + 2 * j:18 + 2 * j] for j in range(tn)], [s[16 + 2 * (tn + t):18 + 2 * (tn + t)]
                                                                              for t in range(k)]
-    eb = go(line("eb"), [key] * tn, ebi)
-    fa, fb = (go(line(kind), [key] * k, fi) for kind in ("fa", "fb"))
+    eb = go(line("eb", 1), [key] * tn, ebi)
+    fg = [sum(fi[t:t + per], []) for t in range(0, k, per)]
+    fa, fb = (go(line(kind, per), [key] * len(fg), fg) for kind in ("fa", "fb"))
     g = np.concatenate([go(row(p), [fb.reshape(-1)], [fa.reshape(-1)]) for p in range(32)])
     if bits:
         return {n: b"".join(int(w).to_bytes(2, "little") for w in x.reshape(-1))
@@ -130,8 +132,8 @@ def test_the_units_noise_on_words_is_the_vectors():
 
 @pytest.mark.slow
 def test_the_units_noise_on_bits_is_the_vectors():
-    """Slow: the noise units on 16-bit words (the seed, 2K + TN lines and 32 Gram rows, lowered) at every case, by their
-    word view: the only check that the units the node Calls and maps derive the vectors' bytes bit for bit."""
+    """Slow: the noise units on 16-bit words (the seed, TN + 16 line units and 32 Gram rows) at every case, bit-sliced
+    through their gates (`evaluate_lowered`): the only check that the units the node Calls and maps derive the vectors' bytes bit for bit."""
     for c in json.loads(PATH.read_text())["cases"]:
         assert _agrees(c, noise_units(c, bits=True)), c
 
