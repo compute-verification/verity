@@ -43,7 +43,7 @@ EVALUATORS = {
     "Dsv4MlaCompressC128_v1": "verity_vllm.definitions.numerics.dsv4_compressor_twin.compress_c128 (Dsv4MlaCompressC128_v1{W,R,D,QB,EPS}: "
                               "Dsv4MlaC128Column_v1 per column, Dsv4MlaNormRopeQuant_v1{128,D,QB,EPS}) -> NoPE e4m3 bytes, RoPE bf16, e8m0 scales",
     **{f"GatherI32x{v}_v1": f"column[token] of the {v} committed i32 words, 0xFFFFFFFF for a token outside [0, {v}) "
-                            f"(GatherI32x{v}_v1, registry.dsv4_decode_indices.gather_i32: a lookup, no arithmetic)" for v in GATHER_VOCABS},
+                            f"(GatherI32x{v}_v1, registry.fp8_moe_experts.gather_i32: a lookup, no arithmetic)" for v in GATHER_VOCABS},
     "FlashMlaDecode_v1": "verity_vllm.definitions.numerics.flashmla_twin.decode (FlashMlaDecode_v1{NH,SPLITS,NW,DN,DR,QT,BN,DOT,SCALE}: "
                          "each row's FlashMlaRowValid_v1 and FlashMlaKvRow_v1, then per head FlashMlaSplit_v1 over each split's 64-row "
                          "blocks and FlashMlaCombine_v1 with the sink; DOT the Hopper k16 step) -> NH x (DN + DR) bf16",
@@ -606,10 +606,10 @@ def check_targets(family: str) -> list:
 
     from verity_vllm.definitions.registry import dsa_norm as DN
     from verity_vllm.definitions.registry import dsv4_compressor as C
-    from verity_vllm.definitions.registry import dsv4_decode_indices as DI
     from verity_vllm.definitions.registry import dsv4_indexer as IX
     from verity_vllm.definitions.registry import dsv4_moe as MO
     from verity_vllm.definitions.registry import dsv4_qnorm_insert as QI
+    from verity_vllm.definitions.registry import fp8_moe_experts as FX
     from verity_vllm.definitions.registry import flashmla as FM
     from verity_vllm.definitions.registry import flashmla_prefill as FP
     from verity_vllm.definitions.registry import mhc as M
@@ -617,7 +617,7 @@ def check_targets(family: str) -> list:
     eps = 1e-6
     fuse = dict(REPEAT=2, EPS=eps, HC_EPS=eps)
     if family.startswith("GatherI32x"):
-        return [DI.gather_i32(int(family[len("GatherI32x"):-len("_v1")]))]
+        return [FX.gather_i32(int(family[len("GatherI32x"):-len("_v1")]))]
     attn = dict(DOT=HopperBF16WgmmaDot16, SCALE=32 ** -0.5)
     decode = dict(NH=2, DN=16, DR=16, QT=16, BN=16, **attn)
     return {

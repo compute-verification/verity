@@ -1,4 +1,4 @@
-"""A partial tile on C's words: `PearlPlusTileCoreWords_v2` over a linear of one row at TM = 2, so its one unit has one
+"""A partial tile on C's words: `PearlPlusTileCoreWords_v3` over a linear of one row at TM = 2, so its one unit has one
 real row (TR = 1) and one filler row. Honest, its ``ok`` is 1, its digest `pearl_plus_tile.reference`'s and its y the real
 row's served y, and it is credited its real rows; a nonzero word in the filler row makes ``ok`` 0. The core's own filler rule (on its word body and
 its σ) is the verifier suite's `test_circuit_pearl_plus_tile`; this is the same rule through the word ports C reads."""

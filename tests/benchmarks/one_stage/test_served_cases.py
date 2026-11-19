@@ -286,8 +286,8 @@ def h1_log(h1: Path, records: list[tuple[int, str, dict]]) -> None:
 
 def tied_serve(root: Path, commits: list | None = None) -> tuple[Path, dict, dict]:
     """A serve dir under H1's tie (`served_verdicts.sh`'s H1_TIE) at its one audited window: V3c's audit of the window's
-    record R (``v3c-w0-…/audit``), H1's log of W then R (``h1/``), and PoUW's period case as `served_pouw.sh` has
-    `pouw_piece.py period` write it (``private/pouw/period``), its windows' ``commit`` each of ``commits`` (default: one
+    record R (``v3c-w0-…/audit``), H1's log of W then R (``h1/``), and PoUW's period case as `pouw_piece.py period` writes
+    it (``private/pouw/period``), its windows' ``commit`` each of ``commits`` (default: one
     window naming R, its canonical JSON in hex as credit reads it). The dir, v1's case and W."""
     w = h1_docket()
     v1 = tied_v1_case(w)

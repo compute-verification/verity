@@ -29,7 +29,7 @@ namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 open Lean (Json)
 open Flock.Program (Prog Scope)
 open Flock.TemplateQuery (TRange)
-open InferenceOnlyVerifier.DefinitionDigest (closureDigest)
+open Flock.DefinitionDigest (closureDigest)
 open Spot.RecordText (Row Tmpl tmplOf templatesOf)
 
 theorem complies_of {F : Form} (hown : Owns F) (hlaid : LaidOut F) (hcount : Counts F) (hrate : Rates F) :
