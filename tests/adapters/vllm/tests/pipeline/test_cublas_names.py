@@ -1,5 +1,5 @@
 """`row_driver.cublas_names`: a row's stages load cuBLAS by its unversioned name (flashinfer's autotune) from the venv's wheel, so a
-stage on a node with a system CUDA maps one cuBLAS, the one the route pin (`driver.cublas_versions`) reads.
+stage on a node with a system CUDA maps one cuBLAS, the one the route pin (`facts_of_record.cublas_versions`) reads.
 
 Two copies of the C library's zlib stand in for the venv's ``libcublas.so.12`` and a system CUDA's ``libcublas.so``: the loader only
 needs an ELF to map, and ``/proc/self/maps`` names each copy by its path. A row's setup giving its stages the names is
@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.check.replay.driver import _mapped_library
+from verity_vllm.engine.facts_of_record import _mapped_library
 from verity_vllm.pipeline.row_driver import cublas_names
 
 # a stage process: torch maps the venv's versioned cuBLAS by its path, then flashinfer's autotune loads the unversioned names

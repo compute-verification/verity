@@ -166,7 +166,7 @@ def target_of(model: Any = None, async_scheduling: bool = False) -> dict[str, An
 
 def seal_of(opts: Any) -> dict[str, Any]:
     """`seal_window`'s fixed arguments: the run's label, the tree's code identity and the engine's facts of record."""
-    from verity_vllm.check.replay.driver import engine_facts_of_record
+    from verity_vllm.engine.facts_of_record import engine_facts_of_record
     from verity_vllm.pipeline import source_identity as SI
 
     return {"label": f"serve-openai:{opts.run_id}", "code": SI.code_identity_of("the seal", SI.TREE)["sha256"],

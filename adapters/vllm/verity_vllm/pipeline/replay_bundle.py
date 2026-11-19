@@ -171,7 +171,7 @@ def start(out: Path, pair: int, com: Any, rc: Any, args: Any, protocols: Any) ->
             or C2.retention_of(com, args) != "host"
             or SD.nbytes(com) > float(getattr(args, "replay_bundle_cap_gb", 300)) * 1e9):
         return None
-    from verity_vllm.check.replay.driver import engine_facts_of_record
+    from verity_vllm.engine.facts_of_record import engine_facts_of_record
 
     hashed: dict[str, str] = {}
     try:
@@ -212,7 +212,7 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
     final, after the weights pin and the openings).  ``plan`` makes the replay's committed reads (`c2_replay.plan`); with it the store is
     SLIM: only the ranges and tree nodes they opened.  False, with nothing written, when the store would exceed
     `args.replay_bundle_cap_gb`: the replay then runs in process."""
-    from verity_vllm.check.replay.driver import engine_facts_of_record
+    from verity_vllm.engine.facts_of_record import engine_facts_of_record
 
     tl.start("validate.replay_bundle", pair=pair)
     slim, t = None, None

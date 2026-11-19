@@ -119,11 +119,10 @@ def engine():
     importlib.import_module("torch._inductor.config")
     from verity_vllm.acquire.sources import compiled_source
     from verity_vllm.check import fold_compare
-    from verity_vllm.check.replay import driver
-    from verity_vllm.engine import build, code_identity, engine_profile, kernel_identity
+    from verity_vllm.engine import build, code_identity, engine_profile, facts_of_record, kernel_identity
     from verity_vllm.engine.profiles import dense_generic
 
-    return types.SimpleNamespace(compiled_source=compiled_source, fold_compare=fold_compare, kernel_identity=kernel_identity, driver=driver,
+    return types.SimpleNamespace(compiled_source=compiled_source, fold_compare=fold_compare, kernel_identity=kernel_identity, facts_of_record=facts_of_record,
                                  build=build, code_identity=code_identity, engine_profile=engine_profile, dense_generic=dense_generic)
 
 
@@ -162,7 +161,7 @@ def test_an_engine_record_takes_the_environment_as_before(engine, env: pytest.Mo
     cc = ns(mode=3, cudagraph_mode=None, cudagraph_capture_sizes=[1], max_cudagraph_capture_size=1, use_inductor_graph_partition=False,
             backend="inductor", inductor_compile_config={})
     llm = ns(llm_engine=ns(vllm_config=ns(compilation_config=cc, model_config=ns(enforce_eager=False))))
-    facts = engine.driver.engine_facts_of_record()
+    facts = engine.facts_of_record.engine_facts_of_record()
     gk = engine.code_identity.generated_kernels_of_this_process()
     pod = engine.engine_profile.gpu_info()["pod"]
     doc = {"facts": [facts[k] for k in ("VLLM_BATCH_INVARIANT", "CUBLAS_WORKSPACE_CONFIG", "CUBLASLT_WORKSPACE_SIZE")] + [facts["cublas"]["env"]],

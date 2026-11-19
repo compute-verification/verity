@@ -16,7 +16,7 @@ from tests.check.test_commit_verdict_hopper_no_evaluator_gap import (
     _bnd,
 )
 from verity_vllm.check.commit_pass import commit_verdict
-from verity_vllm.check.replay import driver
+from verity_vllm.engine import facts_of_record as FR
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline.timeline import Timeline
@@ -147,7 +147,7 @@ def test_the_bundle_reads_the_models_tensors_and_the_engines_facts_before_start_
     deferred: dict[int, Any] = {}
     started = RB.start(tmp_path, 1, com, rc, args, None)
     com.model = None
-    monkeypatch.setattr(driver, "engine_facts_of_record", lambda: pytest.fail("the engine's facts were read after start"))
+    monkeypatch.setattr(FR, "engine_facts_of_record", lambda: pytest.fail("the engine's facts were read after start"))
     assert RB.defer(tmp_path, 1, com, rc, args, tl=Timeline(None), arm="instrumented", versions={}, reqs=[], sampling={}, tokens={},
                     stop_of_record=None, ids_full=None, declaration=None, required_classes=[], row=row, deferred=deferred, started=started)
     w = RB.partial(tmp_path, 1) / "weights"

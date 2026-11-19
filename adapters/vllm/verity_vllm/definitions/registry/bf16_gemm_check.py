@@ -69,7 +69,7 @@ _ROUTES = {(p, int(k), int(n)): runs for (p, k, n), runs in ((key.split(), v) fo
 #: what the scan's process ran on and under, as `glm53_bf16_gemm_capture_gpu.switch` read it (its device beside): the device, torch,
 #: the cuBLAS it mapped, its reduced-precision flags, preferred backend and workspace variables.  cuBLAS picks a route from these
 #: and the launch's shape, so the routes are a serving process's own only when its facts of record (`cublas` in
-#: `check.replay.driver.engine_facts_of_record`) are these
+#: `engine.facts_of_record.engine_facts_of_record`) are these
 ROUTE_CONDITIONS: dict[str, Any] = CUBLAS_ROUTES["conditions"]
 #: the Definitions a Program binds only at a route of the pin (the vocabulary's `cublas_*` roles, which `vllm_bindings.bf16_gemm`, the
 #: fold and the predictor bind at `default_cublas_route`); `Gemm_v2` is bound at the pin's non-split linear routes too, but also by

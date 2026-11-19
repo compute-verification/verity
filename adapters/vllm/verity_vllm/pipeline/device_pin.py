@@ -28,7 +28,7 @@ def probe(like: str, evidence: str) -> dict[str, Any]:
     """This device's pin at `like`'s probed shapes: its routes (`served.probe_routes`) and the route conditions it ran under;
     refused when a condition could not be read."""
     from verity_vllm.acquire.served import probe_routes
-    from verity_vllm.check.replay.driver import engine_facts_of_record
+    from verity_vllm.engine.facts_of_record import engine_facts_of_record
     from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
     shapes = [[int(v) for v in k.split(",")] for k in BC.device_pin(like)["cublas"]]

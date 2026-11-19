@@ -142,7 +142,7 @@ def cublas_names(env: dict[str, str], py: str, root: str | None = None) -> str |
     ``py``'s venv (``site-packages/nvidia/*/lib/<name>.so.N``, the library torch loads), and return it.  vLLM's flashinfer autotune
     (its cache's metadata, `flashinfer.autotuner._get_cublas_version`) loads cuBLAS by the unversioned name, which a wheel doesn't
     ship, so without it ld.so.cache gives a node's system CUDA's and the stage maps two cuBLAS: the route pin
-    (`check.replay.driver.cublas_versions`) reads exactly one.  The loader reads ``LD_LIBRARY_PATH`` once, when a process starts, so
+    (`engine.facts_of_record.cublas_versions`) reads exactly one.  The loader reads ``LD_LIBRARY_PATH`` once, when a process starts, so
     this is the stages' environment, which every rank worker vLLM spawns inherits.  The directory is ``root`` (default: the temp dir)
     named for the links' targets, so every stage on one venv has the same environment.  None, and ``env`` as it was, when the venv
     has no cuBLAS wheel; ValueError when it has more than one library of a name."""

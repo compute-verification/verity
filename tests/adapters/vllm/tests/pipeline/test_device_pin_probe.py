@@ -8,9 +8,9 @@ import pytest
 
 from verity_vllm.pipeline import device_pin as DP
 from verity_vllm.acquire import served as SV
-from verity_vllm.check.replay import driver
 from verity_vllm.config import UsageError
 from verity_vllm.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.engine import facts_of_record as FR
 
 H100 = "NVIDIA H100 80GB HBM3"
 H100_FACTS = {**{k: v for k, v in BC.ROUTE_CONDITIONS.items() if k != "env"}, "device": H100, "cublas_version": 120900,
@@ -28,7 +28,7 @@ def on_h100(monkeypatch):
 
     facts = {"cublas": dict(H100_FACTS)}
     monkeypatch.setattr(SV, "probe_routes", probe_routes)
-    monkeypatch.setattr(driver, "engine_facts_of_record", lambda: facts)
+    monkeypatch.setattr(FR, "engine_facts_of_record", lambda: facts)
     return probed, facts
 
 
