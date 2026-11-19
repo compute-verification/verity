@@ -12,7 +12,7 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
   - `templates/`: one lowering per subcircuit template; `ir_sampling.py`: the sampling template's lane unit and the
     native cut words of `verity/flock-ir-sampling/v1`.
   - `partition_units.py`: every size class of an arbitrary partition (`verity.circuits.units`) lowered and checked against the
-    reference evaluator; `boolean_export.py`: a served workload's leaf templates, or one census subcircuit (`subcircuit`, the catalog's blob), as Boolean
+    reference evaluator; `boolean_export.py`: a leaf template, or one census subcircuit (`subcircuit`, the catalog's blob), as Boolean
     circuits (a derived format, not a statement); `circuit_types.py` (`verity/circuit-type/v1`): each distinct sub-circuit once, the object the Boolean
     export, the docs site and the prover's layouts share.
   - the circuit prover: `circuit.py` (`verity/flock-circuit`), a lowered template proved with its serving rows committed in the circuit,

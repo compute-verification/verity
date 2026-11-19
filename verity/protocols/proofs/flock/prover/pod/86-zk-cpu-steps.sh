@@ -241,7 +241,7 @@ from verity.circuits import partition_object as PO
 from verity.circuits.codec import canonical_json, encode_program
 from verity_flock import class_statement as CS, partition_units as PU
 defs = {'Gemm_v2{K=%s,N=4096,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}' % sys.argv[1]: 1151}
-program, _calls, _prov = CS.distinct_calls(None, None, defs, None, definition=PU.resolver(sys.argv[5], "RESOLVER"))
+program, _calls, _prov = CS.distinct_calls(defs, definition=PU.resolver(sys.argv[5], "RESOLVER"))
 units = PU.partition_units(program, "q-word")
 obj = PO.build(units.program, units.query)
 with open(sys.argv[3]) as f:

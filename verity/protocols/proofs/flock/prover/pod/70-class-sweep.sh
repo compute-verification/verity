@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # flock class sweep: unit shapes of a served row's Q_word partition, each a verity/flock-circuit statement, proved on this pod
 # (verity_flock.class_statement). Builds flock-circuit like 60-circuit.sh (GPU=1: the CUDA circuit prover), then stages and proves
-# the shapes of the row's program graph (GRAPH) or of a list of Call Definitions (DEFS, JSON {descriptor id: Call count}): those in
+# the shapes of a list of Call Definitions (DEFS, JSON {descriptor id: Call count}) or of a Program's Calls (PROGRAM): those in
 # SHAPES (a file of shape digests), or with SELECT (table-free | reads | units) every shape whose unit reads no pinned table, reads
 # one, or either, outside the token-select Calls.
 # env: BINARY= PYBIN= (skip the build and the venv: a local dry run)
-#      GRAPH=path/to/<row>.program.json | DEFS=path/to/defs.json | PROGRAM=path/to/module.py:FUNC (a Program's Calls)  SHAPES=path/to/shapes.txt
-#      RESOLVER=path/to/module.py:FUNC (GRAPH and DEFS name Definitions by id: FUNC(id) is the registered Definition an id names,
+#      DEFS=path/to/defs.json | PROGRAM=path/to/module.py:FUNC (a Program's Calls)  SHAPES=path/to/shapes.txt
+#      RESOLVER=path/to/module.py:FUNC (DEFS names Definitions by id: FUNC(id) is the registered Definition an id names,
 #      class_statement --resolver; refused without one)
 #      PARTITION=q-word (partition_units' spec; q-template-instance: a population program's instances, each one unit)
 #      FLOCK_SAMPLE_DESIGN=path/to/law.json (each session proves the units the verifier samples by this sampling design at Register: serve --sample-design)
-#      SELECT=table-free  MODULES= (a module-path prefix)
+#      SELECT=table-free
 #      BATCH=auto  WARM=1  RUNS=3  SELFTEST=25  JOBS=1 (shapes staged in parallel)  GPU=1  SM (from nvidia-smi)  PORT=7710
 #      SELFTEST_GPU=1 (the selftests on the GPU, its paths against each other and the CPU's included)  SELFTEST_CASES=a,b (only these)
 #      SELFTEST_JOBS=1 (case processes run at once, each its own process; each parses the circuit, so memory grows with it)
@@ -43,7 +43,7 @@ export FC_COINS=${FC_COINS:-tree}
 if [ "$FC_COINS" = tree ] || [ "${FLOCK_ZK:-0}" = 1 ]; then export FLOCK_CHALLENGER=${FLOCK_CHALLENGER:-1}; else export FLOCK_CHALLENGER=0; fi
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/fcs}/out}; W=${FLOCK_WORK:-/workspace}/flock-circuit; mkdir -p $O $W
 [ "${BUILD_ONLY:-0}" = 1 ] || [ -n "${PROGRAM:-}" ] || [ -n "${RESOLVER:-}" ] \
-  || { echo "REFUSED: GRAPH and DEFS name Definitions by id: RESOLVER=MODULE:FUNC binds them (FUNC(id), the registered Definition)"; exit 2; }
+  || { echo "REFUSED: DEFS names Definitions by id: RESOLVER=MODULE:FUNC binds them (FUNC(id), the registered Definition)"; exit 2; }
 G=${GPU:-1}
 SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}
 [ "$G" = 0 ] || [ -n "$SM" ] || [ -n "${BINARY:-}" ] || { echo "REFUSED: a GPU build needs SM, the compute capability of the target (90 for sm_90), and nvidia-smi read none here"; exit 2; }
@@ -99,16 +99,17 @@ nvidia-smi -L 2>/dev/null | tee $O/host.txt; lscpu | grep -E 'Model name|^CPU\(s
 G_=; [ $G = 1 ] && G_=--gpu
 # a path named at launch that isn't here is the file research run --send shipped to the run dir's inputs/
 inp() { local p=$1; if [ -n "$p" ] && [ ! -e "$p" ] && [ -e "${RESEARCH_RUN_DIR:-/nonexistent}/inputs/$(basename "$p")" ]; then p=$RESEARCH_RUN_DIR/inputs/$(basename "$p"); fi; echo "$p"; }
-GRAPH=$(inp "${GRAPH:-}"); DEFS=$(inp "${DEFS:-}"); SHAPES=$(inp "${SHAPES:-}"); RESUME=$(inp "${RESUME:-}")
+DEFS=$(inp "${DEFS:-}"); SHAPES=$(inp "${SHAPES:-}"); RESUME=$(inp "${RESUME:-}")
 [ -n "$RESUME" ] && { mkdir -p $O/classes; grep '^{' "$RESUME" > $O/classes/results.jsonl; }
-SRC=(--program-graph "$GRAPH"); [ -n "$DEFS" ] && SRC=(--definitions "$DEFS"); [ -n "${PROGRAM:-}" ] && SRC=(--program-module "$PROGRAM")
+SRC=(); [ -n "$DEFS" ] && SRC=(--definitions "$DEFS"); [ -n "${PROGRAM:-}" ] && SRC=(--program-module "$PROGRAM")
+[ ${#SRC[@]} -gt 0 ] || { echo "REFUSED: name the shapes to sweep, DEFS=path/to/defs.json or PROGRAM=path/to/module.py:FUNC"; exit 2; }
 SEL=(); [ -n "${SHAPES:-}" ] && SEL+=(--shapes "$SHAPES"); [ "${SELFTEST_LARGEST:-1}" = 0 ] && SEL+=(--no-selftest-largest)
 [ -n "${BATCH_ANDS:-}" ] && SEL+=(--batch-ands "$BATCH_ANDS"); [ -n "${MAX_STATEMENT_BITS:-}" ] && SEL+=(--max-statement-bits "$MAX_STATEMENT_BITS"); [ -n "${SELECT:-}" ] && SEL+=(--select "$SELECT")
 [ -n "${MAX_ANDS:-}" ] && SEL+=(--max-ands "$MAX_ANDS")
 [ "${STAGE_ONLY:-0}" = 1 ] && SEL+=(--stage-only)
 [ "${STAGE_ONLY:-0}" = 1 ] && [ "${STATEMENT_DIGEST:-0}" = 1 ] && SEL+=(--statement-digest)
 [ -n "${SERVE_ONLY:-}" ] && SEL+=(--serve-only "$SERVE_ONLY" --serve-points "${SERVE_POINTS:-1}")
-$PYBIN -m verity_flock.class_statement "${SRC[@]}" ${MODULES:+--modules "$MODULES"} ${RESOLVER:+--resolver "$RESOLVER"} --partition "${PARTITION:-q-word}" --out $O/classes \
+$PYBIN -m verity_flock.class_statement "${SRC[@]}" ${RESOLVER:+--resolver "$RESOLVER"} --partition "${PARTITION:-q-word}" --out $O/classes \
   --binary $B --selftest-binary $SB "${SEL[@]}" --batch ${BATCH:-auto} ${N:+--n $N} --jobs ${JOBS:-1} --warm ${WARM:-1} --runs ${RUNS:-3} --selftest ${SELFTEST:-25} \
   --port ${PORT:-7710} --protocol ${PROTOCOL:-sweep-v0} ${SELFTEST_GPU:+--selftest-gpu} ${SELFTEST_CASES:+--selftest-cases "$SELFTEST_CASES"} \
   ${SELFTEST_JOBS:+--selftest-jobs $SELFTEST_JOBS} ${SELFTEST_CASE_MIB:+--selftest-case-mib $SELFTEST_CASE_MIB} $G_

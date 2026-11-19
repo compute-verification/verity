@@ -99,7 +99,7 @@ def staged(tmp_path_factory):
 
     CS.cache_slot_circuits()
     gemm = bind(G.Gemm, K=64, N=4096, **G.GEMM_HOPPER)
-    program, _calls, _prov = CS.distinct_calls(None, None, {descriptor_id(gemm): 1}, None, definition={descriptor_id(gemm): gemm}.get)
+    program, _calls, _prov = CS.distinct_calls({descriptor_id(gemm): 1}, definition={descriptor_id(gemm): gemm}.get)
     units = PU.partition_units(program, "q-word")
     ((s, cl),) = units.classes().items()
     key = PU.derive(PU.SOURCE, PU.DOMAIN, {"program": "test", "seed": 0})

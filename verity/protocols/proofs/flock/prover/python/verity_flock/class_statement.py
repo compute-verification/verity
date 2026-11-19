@@ -27,7 +27,7 @@ are committed values whose row a reading unit can open.  Every class is one plai
 Boolean circuit, with no slot type other than M0's row slots: a unit's pinned-table reads (MUFU) are laid out inline as ordinary
 rows by `ir_lower.layout` (the one-hot construction; 154-309 M matrix entries per read, about 20 B of prover memory each), and each
 record carries the class's table reads and its unit's matrix entries. `UnitStager`'s ``reads="slots"`` instead puts a unit's
-MUFU reads in Flock's lookup slots (`read_slots`), whose tables count once per statement.  `distinct_calls` builds a served row's workload from its program graph:
+MUFU reads in Flock's lookup slots (`read_slots`), whose tables count once per statement.  `distinct_calls` builds a workload from its Call counts:
 a Program with one Call of each distinct Call Definition, whose per-Call partitions have exactly the row's classes.
 """
 from __future__ import annotations
@@ -457,27 +457,18 @@ def cache_slot_circuits() -> None:
 SAMPLER = class_sweep.SAMPLER
 
 
-def distinct_calls(graph_path: str | None, modules: str | None = None, definitions: dict[str, int] | None = None,
-                   exclude: re.Pattern | None = None, *, definition: Callable[[str], Any]) -> tuple[Any, dict[str, int], list[dict]]:
-    """A served row's distinct Call Definitions, from its program graph (``vllm-program-graph/v1``): (a Program with one Call of
-    each, the row's Call count of each by descriptor id, a provenance row per Definition). ``modules``: a module-path prefix
-    (``model.model.layers.0.``) to keep. Each Definition is bound by ``definition`` (its id to the registered Definition,
-    `partition_units.resolver`) and its definition digest
-    (`codec.definition_digest`) is checked against the graph's ``definitions_index`` where the graph has it (every group's
-    spec; attention's smallest and largest T).
+def distinct_calls(definitions: dict[str, int], exclude: re.Pattern | None = None, *,
+                   definition: Callable[[str], Any]) -> tuple[Any, dict[str, int], list[dict]]:
+    """The distinct Call Definitions ``definitions`` ({descriptor id: Call count}) names: (a Program with one Call of each,
+    the Call count of each by descriptor id, a provenance row per Definition). Each Definition is bound by ``definition``
+    (its id to the registered Definition, `partition_units.resolver`).
     A per-Call partition (``Q_word``, an owner function) cuts this Program's Calls exactly as the row's, so its classes are the
-    row's and the row's unit counts are the per-Call counts times the Call counts. ``definitions`` ({descriptor id: Call count})
-    adds Definitions without a graph (bound the same way, no digest to check); ``exclude`` drops the ids it matches."""
-    from verity.circuits.codec import definition_digest, descriptor_id
+    row's and the row's unit counts are the per-Call counts times the Call counts. ``exclude`` drops the ids it matches."""
+    from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import CompositeDefinition
     from verity.circuits.program import Program
-    from verity.circuits.codec import encode_specialization
 
-    g = json.loads(open(graph_path).read()) if graph_path else {"groups": []}
-    index = g.get("definitions_index") or {}
-    calls: dict[str, int] = dict(definitions or {})
-    for fid, n in class_sweep.graph_calls(g, modules).items():
-        calls[fid] = calls.get(fid, 0) + n
+    calls: dict[str, int] = dict(definitions)
     if exclude is not None:
         calls = {fid: n for fid, n in calls.items() if not exclude.match(fid)}
     fns, prov = [], []
@@ -486,12 +477,8 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
         fn = definition(readable)
         if descriptor_id(fn) != fid:
             raise ValueError(f"{fid}: the resolver binds {descriptor_id(fn)}")
-        want = index.get(fid)
-        got = definition_digest(encode_specialization(fn)[1][fid]) if want else None
-        if want and got != want:
-            raise ValueError(f"{fid}: definition digest {got} is not the row's {want}")
         fns.append(fn)
-        prov.append({"definition": fid, "calls": calls[fid], "digest_checked": bool(want)})
+        prov.append({"definition": fid, "calls": calls[fid]})
     params = [(f"c{i}_{n}", t) for i, fn in enumerate(fns) for n, t in fn.signature()[0]]
     arity = [len(fn.signature()[0]) for fn in fns]
 
@@ -1835,10 +1822,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--definition")
     src.add_argument("--program-module", help="MODULE:FUNC (FUNC() returns a Program); MODULE may be a .py path")
-    src.add_argument("--program-graph", help="a served row's program graph: its distinct Call Definitions (distinct_calls)")
     src.add_argument("--definitions", help="a JSON file {descriptor id: Call count}: those Call Definitions, one Call of each (distinct_calls)")
-    ap.add_argument("--modules", default=None, help="with --program-graph: keep groups whose module path starts with this")
-    ap.add_argument("--resolver", default=None, help="with --program-graph, --definitions or --definition, which name Definitions "
+    ap.add_argument("--resolver", default=None, help="with --definitions or --definition, which name Definitions "
                     "by id: MODULE:FUNC (MODULE may be a .py path), FUNC(id) the registered Definition an id names")
     ap.add_argument("--partition", default="q-word")
     ap.add_argument("--out", required=True)
@@ -1896,10 +1881,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.real is not None and (a.batch not in (None, "fixed") or not 1 <= a.real <= a.n):
         ap.error(f"--real {a.real}: with --batch fixed, between 1 and --n {a.n}")
     calls: dict[str, int] | None = None
-    if a.program_graph or a.definitions:
-        defs = json.loads(Path(a.definitions).read_text()) if a.definitions else None
-        program, calls, prov = distinct_calls(a.program_graph, a.modules, defs, SAMPLER if a.select else None,
-                                              definition=PU.resolver(a.resolver, "--program-graph or --definitions"))
+    if a.definitions:
+        program, calls, prov = distinct_calls(json.loads(Path(a.definitions).read_text()), SAMPLER if a.select else None,
+                                              definition=PU.resolver(a.resolver, "--definitions"))
         Path(a.out).mkdir(parents=True, exist_ok=True)
         (Path(a.out) / "calls.json").write_text(json.dumps({"calls": calls, "provenance": prov}, indent=1))
     elif a.program_module:
