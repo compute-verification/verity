@@ -556,6 +556,29 @@ def test_leans_lowering_takes_a_block_of_a_partition_of_many_templates():
         assert PO.digest(part) in meta and tid in meta, meta[:400]
 
 
+@lean
+@pytest.mark.slow
+def test_the_doors_lowering_refuses_a_template_whose_word_parameter_reaches_no_word_primitive():
+    """A template of a word parameter ``w`` (``Value 8``) that no gate reads beside two bits it XORs: the lift lifts only
+    a Definition reaching a word primitive, so Lean's lowering, the door's executable, refuses it by name
+    (`Flock.Lower.WIDE`) rather than lowering ``w`` as one wire."""
+    from verity.circuits import codec
+    from verity.circuits import partition_object as PO
+    from verity.circuits.boolean import BIT, xor_gate
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.population import wired_population_program
+    from verity.circuits.types import Array, Value
+    t = bind(CompositeDefinition("DoorLowerWordUnread", 0, (),
+                                 lambda S: ((("x", Array(2, BIT)), ("w", Value(8)), ("pad", Array(1024, BIT))), BIT),
+                                 lambda B, S, x, w, pad: B.call(xor_gate(2), x), register=False))
+    tid = codec.descriptor_id(t)
+    program, query = wired_population_program([(t, 2)], {"templates": [[tid, 2]]})
+    c = b"".join(codec.descriptor_chunks(program))
+    part = PO.build(json.loads(c), query, [[(0, 1), (1, 2)]])
+    with pytest.raises(OC.Refused, match="a parameter or return leaf wider than one bit, not lifted to bits"):
+        OC.lower(OC.restrict(c, part, [(0, 1)]), part, PF.lower_executable)
+
+
 @pytest.mark.parametrize("indices, blocks, want", [
     ([3, 5], lambda k: [(k, k + 1)], ("undrawn", "names units [3, 5], not exactly drawn block 3's [[3, 4]]")),
     ([3], lambda k: [(k, k + 2)], ("undrawn", "names units [3], not exactly drawn block 3's [[3, 5]]")),
