@@ -43,7 +43,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from typing import Any
 
 import numpy as np
 from verity.commitments import docket_digest as DD
@@ -377,7 +377,6 @@ class Reused(RV.Registered):
     W's entry names its domain by id alone (round 0's input ids bind the window's session, which W doesn't hold), so it
     has no `domain` to recompute."""
 
-    BINDABLE: ClassVar[bool] = False
     domain_id: bytes = b""
 
     @property

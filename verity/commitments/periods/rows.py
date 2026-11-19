@@ -587,7 +587,7 @@ class Committed:
 
     def _value_domain(self, m: Member, p: str, rows: int) -> CommitmentDomain:
         v = self.given[m.port(p)].value
-        if not v.BINDABLE:
+        if hasattr(v, "domain_id"):
             return self.window.domain(m.port(p), m.schema(p), rows)
         return CommitmentDomain(v.domain.binding, OWNER, RangeIndexedDomain(0, rows), hash="sha512")
 
@@ -598,8 +598,8 @@ class Committed:
         makes again from the public body, which the record never names, under the binding of the tree holding the port
         (`Binding.tree`: a wired port's writer's, where the verifier places it). A registered value's port is under its
         registration's binding (`registered_value.domain`), where round 2 places it (`second_stage.registered_binding`),
-        and under its own port's (`Binding.domain`) only for a value with none to recompute (`Registered.BINDABLE`: a
-        table reused from an earlier registration, `h1.commit.Reused`, names its registration's domain by id alone)."""
+        and under its own port's (`Binding.domain`) only for a value that names its registration's domain by id alone
+        (``domain_id``: a table reused from an earlier registration, `h1.commit.Reused`, has no binding to recompute)."""
         m, w = self.window.members[k], self.window
         names = [p for p, _ in m.all_rows]
         rows = {p: dict(m.tables).get(p, m.n) if p not in dict(m.outs) else m.n for p in names}
