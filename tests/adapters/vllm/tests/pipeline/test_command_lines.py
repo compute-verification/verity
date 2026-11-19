@@ -5,6 +5,7 @@ what it holds without the flag (`NEEDED`: the line is refused without it)."""
 from __future__ import annotations
 
 import dataclasses
+import importlib
 from typing import Any
 
 import pytest
@@ -55,7 +56,7 @@ LINES: dict[tuple[str, ...], list[tuple[str, list[str], Any, Any]]] = {
         ("sampling_seed", ["--sampling-seed", "5"], 5, 20260917),
         ("dry_run", ["--dry-run"], True, False),
     ],
-    ("global-program",): [
+    ("verity_vllm.pipeline.global_program",): [
         ("workload", ["--workload", "w.json"], "w.json", NEEDED),
         ("derived", ["--derived", "d0", "--derived", "d1"], ["d0", "d1"], []),
         ("out", ["--out", "o"], "o", NEEDED),
@@ -179,7 +180,8 @@ def _in_a_directory_that_stores_no_workload(tmp_path, monkeypatch):
 
 
 def _read(command: tuple[str, ...], argv: list[str]) -> dict[str, Any]:
-    options = cli.parse(command[0], [*command[1:], *argv], {})
+    target = importlib.import_module(command[0]) if "." in command[0] else command[0]        # a module no command runs
+    options = cli.parse(target, [*command[1:], *argv], {})
     assert getattr(options, "cmd", command[-1]) == command[-1]                 # a command's part says which it is, to its `main`
     return {f.name: getattr(options, f.name) for f in dataclasses.fields(options) if f.init}
 
