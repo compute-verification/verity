@@ -11,31 +11,14 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from verity.circuits import boolean as BL
-from verity.circuits.boolean.forms import NOT, mux
 from verity.circuits.defs import bind
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.types import Array
 
-from verity_vllm.definitions.registry import boolean_dsv4_indexer as BI
+from verity_vllm.definitions.registry.boolean_gate_ops import SelectGateOps as GateOps
 from verity_vllm.definitions.registry import dsv4_indices as X
 
 BITS = SimpleNamespace(I32=Array(32, BL.BIT))
-
-
-class GateOps(BI.GateOps):
-    """`boolean_dsv4_indexer.GateOps` with `dsv4_indices.WORD`'s ``isel``, ``band`` and ``bnot``, and ``bit(x, i)``."""
-
-    def isel(self, c, a, b):
-        return mux(self.C, c, a, b)
-
-    def band(self, a, b):
-        return self.C.AND(a, b)
-
-    def bnot(self, a):
-        return NOT(a)
-
-    def bit(self, x, i: int):
-        return x[i]
 
 
 def _combine(S):

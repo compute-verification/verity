@@ -2,7 +2,7 @@
 line over gates (the bodies are `stop_rule.stop` and `stop_rule.stop16`, written once over their steps), so each one's word
 view is its `_v1` at the same statics.
 
-A step is `boolean_dsv4_indices.GateOps`' gates for the word primitive `stop_rule.WORD` names (`forms`' add, subtract and
+A step is `boolean_gate_ops.SelectGateOps`' gates for the word primitive `stop_rule.WORD` names (`forms`' add, subtract and
 signed compare, a select as `forms.mux`, an AND and a NOT of bits), an equality as `I32Eq_v2`'s (31 ANDs over the XNORs), an
 OR as `forms.OR` and a word's high half as its 16 high wires.  A constant word is constant bits, so the first-stop chain's
 selects of the constants i + 1 are ANDs only on the low bits that T + 1 needs, and fold above them.  A word added to itself
@@ -25,14 +25,14 @@ from verity.circuits.defs import bind
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.types import Array
 
-from verity_vllm.definitions.registry import boolean_dsv4_indices as BI
+from verity_vllm.definitions.registry import boolean_gate_ops as BG
 from verity_vllm.definitions.registry import stop_rule as X
 
 BITS = SimpleNamespace(I32=Array(32, BL.BIT), U16=Array(16, BL.BIT))
 
 
-class GateOps(BI.GateOps):
-    """`boolean_dsv4_indices.GateOps` with `stop_rule.WORD`'s ``ieq``, ``bor`` and ``hi16``."""
+class GateOps(BG.SelectGateOps):
+    """`boolean_gate_ops.SelectGateOps` with `stop_rule.WORD`'s ``ieq``, ``bor`` and ``hi16``."""
 
     def ieq(self, a, b):
         return and_reduce(self.C, [NOT(x ^ y) for x, y in zip(a, b)])
