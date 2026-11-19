@@ -78,6 +78,8 @@ structure Audit where
   entries : Array (String × Nat × String)
   /-- `entries[i]`'s `slotRead` at a schedule's lanes, `T / every` and `every`. -/
   slots : Array (Nat → Nat → Nat → Option Nat)
+  /-- Its root's `ScanSlots_v3` templates, each with its closure digest. -/
+  scans : Array (String × String)
 
 /-- The network attester's schedule when it functions as an active network attester (`network_certifier.NetworkAttesterParams`). -/
 structure Schedule where
@@ -563,48 +565,62 @@ it returns four fields a lane, lane `j`'s `4j, …, 4j + 3`: its first position'
 occupancy word and its head. -/
 def scanSlotsId : String := "ScanSlots_v3"
 
+/-- The scan slots' Definitions the check takes, by closure digest (`closureDigest`): `boolean_io_shell.ScanSlots_v3`
+at its circuit-check rows, `ScanSlots_v3{NS=4548,NP=4,IDB=17,K0=12,K=45,OCC=[376,36709],…}` (two lanes) and
+`ScanSlots_v3{NS=9353,NP=1024,IDB=17,K0=12,K=45,OCC=[376,37763,75150,112537],…}` (four lanes), in that order. A
+template under `ScanSlots_v3`'s name with another body is refused (`slotted`). A new body or binding is pinned here. -/
+def scanSlotsPins : List String :=
+  ["a865c977e5e97ac27001eba5f3d474dade6e50be475f87f642ba9f3c9b7ddeb5\
+    b26eb2fc5e08578884f2d0711300aed3792d8a77d8aa1db0efb7c02251168eeb",
+   "dcf9fe2e052627beb2a2ebb922fada043a89f0440ce9e93f39070fdabd6331e1\
+    7705975507513da2012bcd97dd2bbcfa755855f8b14925bb9e30c89b43924c40"]
+
+#guard scanSlotsPins.all (·.length == 128)
+
 /-- Part `q`'s references `k < n` as `base + i · di + b · db` at `k = i · nb + b` (`b < nb`), where its form gives that
-exactly, `(space, collection, base, di, db)`: an affine part (`di = nb`, `db = 1`), or a strided part of non-negative
-base and strides whose inner run is `nb` (`di = os`, `db = is`), one (`k · os`) or at least `n` (`k · is`); none for
-another form or count. -/
-def gridOf (q : Flock.Program.Part) (n nb : Nat) : Option (Bool × Nat × Nat × Nat × Nat) := match q with
+exactly, `(space, collection, base, di, db)`, signed: an affine part (`di = nb`, `db = 1`), or a strided part whose
+inner run is `nb` (`di = os`, `db = is`), one (`k · os`) or at least `n` (`k · is`); none for another form or count. -/
+def gridOf (q : Flock.Program.Part) (n nb : Nat) : Option (Bool × Nat × Int × Int × Int) := match q with
   | .affine p i b c => if c == n then some (p, i, b, nb, 1) else none
   | .strided p i b inner os is c =>
-    if c != n || b < 0 || os < 0 || is < 0 then none
-    else if inner == nb then some (p, i, b.toNat, os.toNat, is.toNat)
-    else if inner == 1 then some (p, i, b.toNat, nb * os.toNat, os.toNat)
-    else if inner ≥ n then some (p, i, b.toNat, nb * is.toNat, is.toNat)
+    if c != n then none
+    else if inner == nb then some (p, i, b, os, is)
+    else if inner == 1 then some (p, i, b, nb * os, os)
+    else if inner ≥ n then some (p, i, b, nb * is, is)
     else none
   | _ => none
 
 /-- Argument `a` of a node of `n` members as one part's `gridOf`, `L` leaves a member: none unless its references are
 one part and a member's are its own (`n = 1`, or the argument mapped over its first axis, `(n, L)`). -/
-def argGrid (a : Flock.Program.Arg) (n L nb : Nat) : Option (Bool × Nat × Nat × Nat × Nat) :=
+def argGrid (a : Flock.Program.Arg) (n L nb : Nat) : Option (Bool × Nat × Int × Int × Int) :=
   if a.seq.parts.size == 1 && (n == 1 || a.dims == some (n, L)) then gridOf a.seq.parts[0]! (n * L) nb else none
 
 /-- Whether entries node `x`, units `U, …, U + n − 1` of its template, reads each unit's occupancy where its slot's is,
-at `lanes` lanes, `nb = T / every` slots a lane and `every`, and the input node its scan slots read, if so. One-stage cuts
-the template into chunks of consecutive units in root order, chunk `j` lane `j`'s slots (`wired`), so unit
-`u = j · nb + b` is lane `j`'s slot at boundary `b`, whose request the scan holds in its state row `b · every`. So its
-`occ` (a parameter of one leaf, at its index in the pinned Definition's signature) is leaf `4j + 2` of member `M` of a
-`ScanSlots_v3` node (`scanSlotsId`): lane `j`'s occupancy word, at `M · Ls + j · W + o2`, where `Ls` is the node's
-leaves a member, `W` a lane's four fields' and `o2` the first two fields' (read off its return's type, whose lanes'
-fields are lane 0's); and that member's `state` (its `NS` leaves) is row `b · every` of one input node, leaves
-`b · every · NS, …`. Read whole, one part an argument (`argGrid`): a node of `n > 1` members holds whole chunks
-(`nb ∣ U`, `nb ∣ n`), its `occ` stepping `W` a lane and `dM · Ls` a boundary, its scan slots' `state` reading rows
-`every` apart at members `dM` apart, at the cost of the node and its scan slots' node, not of their members. -/
-def slotRead (prog : Flock.Program.Prog) (x : Flock.Program.Node) (U lanes nb every : Nat) : Option Nat := do
+at `lanes` lanes, `nb = T / every` slots a lane and `every`, with its scan slots' Definition one `scanOk` takes, and the
+input node their state reads, if so. One-stage cuts the template into chunks of consecutive units in root order, chunk
+`j` lane `j`'s slots (`wired`), so unit `u = j · nb + b` is lane `j`'s slot at boundary `b`, whose request the scan
+holds in its state row `b · every`. So its `occ` (a parameter of one leaf, at its index in the pinned Definition's
+signature) is leaf `4j + 2` of some member `M` of a `ScanSlots_v3` node (`scanSlotsId`): lane `j`'s occupancy word, at
+`M · Ls + j · W + o2`, where `Ls` is the node's leaves a member, `W` a lane's four fields' and `o2` the first two
+fields' (read off its return's type, whose lanes' fields are lane 0's); and that member's `state` (its `NS` leaves) is
+row `b · every` of one input node of `T · NS` leaves, leaves `b · every · NS, …`. Read whole, one part an argument
+(`argGrid`): a node of `n > 1` members holds whole chunks (`nb ∣ U`, `nb ∣ n`), its `occ` at member
+`M0 + j · dj + b · db` for whole steps `dj` and `db` of any sign, every corner a member, its scan slots' `state` reading
+one row at members `dj` apart and rows `every` apart at members `db` apart, at the cost of the node and its scan slots'
+node, not of their members. -/
+def slotRead (prog : Flock.Program.Prog) (scanOk : String → Bool) (x : Flock.Program.Node) (U lanes nb every : Nat) :
+    Option Nat := do
   let root ← prog.defs[prog.root]?
   let d ← prog.defs[x.fn]?
   let io ← d.params.findIdx? (·.1 == "occ")
   let ot := d.params[io]!.2
   let n := x.members
-  guard (ot.leaves == 1 && nb ≥ 1 && n ≥ 1)
+  guard (ot.leaves == 1 && nb ≥ 1 && n ≥ 1 && (n == 1 || (U % nb == 0 && n % nb == 0)))
   let (p, i, base, di, db) ← argGrid (← x.args[io]?) n 1 (if n == 1 then 1 else nb)
   guard !p
   let sx ← root.body.nodes[i]?
   let sd ← prog.defs[sx.fn]?
-  guard (sd.id == scanSlotsId)
+  guard (sd.id == scanSlotsId && scanOk sd.key)
   let .tuple fs := sd.ret | none
   guard (fs.size ≥ 4 * lanes && (List.range lanes).all fun j => (List.range 4).all fun f => fs[4 * j + f]! == fs[f]!)
   guard (lanes == 0 || fs[2]! == ot)
@@ -618,26 +634,27 @@ def slotRead (prog : Flock.Program.Prog) (x : Flock.Program.Node) (U lanes nb ev
   guard (!sp && sdb == 1 && NS ≥ 1 && Ls ≥ 1)
   let xn ← root.body.nodes[X]?
   let xd ← prog.defs[xn.fn]?
-  guard (xd.prim && xd.binding.isSome)
-  let member := fun (j : Nat) (leaf : Nat) => if leaf ≥ j * W + o2 && (leaf - j * W - o2) % Ls == 0 then
-    some ((leaf - j * W - o2) / Ls) else none
-  if n == 1 then
-    let j := U / nb
-    guard (j < lanes)
-    let M ← member j base
-    guard (M < nS && sb + M * so == U % nb * every * NS)
-  else
-    guard (U % nb == 0 && n % nb == 0 && U / nb + n / nb ≤ lanes && (n == nb || di == W) && (nb == 1 || db % Ls == 0))
-    let M0 ← member (U / nb) base
-    let dM := db / Ls
-    guard (M0 + (nb - 1) * dM < nS && sb + M0 * so == 0 && (nb == 1 || dM * so == every * NS))
+  guard (xd.prim && xd.binding.isSome && xn.members * xd.ret.leaves == nb * every * NS)
+  let (j0, b0) := (U / nb, U % nb)
+  let (nl, nbb) := if n == 1 then (1, 1) else (n / nb, nb)
+  guard (j0 + nl ≤ lanes)
+  let L : Int := Ls
+  let r0 : Int := base - (j0 * W + o2 : Nat)
+  let rj : Int := di - (W : Nat)
+  guard (r0 % L == 0 && (nl == 1 || rj % L == 0) && (nbb == 1 || db % L == 0))
+  let (M0, dj, dB) := (r0 / L, if nl == 1 then 0 else rj / L, if nbb == 1 then 0 else db / L)
+  let inS := fun (M : Int) => 0 ≤ M && M < nS
+  let (lj, lb) : Int × Int := ((nl - 1 : Nat), (nbb - 1 : Nat))
+  guard (inS M0 && inS (M0 + lj * dj) && inS (M0 + lb * dB) && inS (M0 + lj * dj + lb * dB))
+  guard (sb + M0 * so == (b0 * every * NS : Nat) && dj * so == 0 && dB * so == (if nbb == 1 then 0 else every * NS : Nat))
   pure X
 
 /-- A compute audit's layout terms and its Program, from the Program's descriptor (`Flock.Program.decode` of its
 canonical bytes): its units are its root's template instances, each committing its template's return; a root with no
 template is refused. Its slot entries' templates are its root's template nodes whose Definition is `SlotEntry_v1` or
 `SelectEntry_v1` (`entryIds`), each with its closure digest (`closureDigest`) and its slot read (`slotRead`, its units
-counted from its template's units on the root's earlier nodes). -/
+counted from its template's units on the root's earlier nodes, its scan slots' template one of `scans` that
+`scanSlotsPins` pins); its scan slots' are its root's `ScanSlots_v3` templates, each with its closure digest. -/
 def auditOf (a : Json) (ctx : String) : V Audit := do
   exactly a ["free", "program", "steps"] ctx
   let pj ← Flock.J.get a "program" ctx
@@ -654,11 +671,16 @@ def auditOf (a : Json) (ctx : String) : V Audit := do
     | none => none
   let entries ← slots.mapM fun (k, x) => do
     pure (k, x.members, ← (closureDigest pj k).mapError (s!"{ctx}: " ++ ·))
+  let scanKeys := (root.body.nodes.filterMap fun x => match prog.defs[x.fn]? with
+    | some d => if !d.prim && d.id == scanSlotsId then some d.key else none
+    | none => none).toList.eraseDups.toArray
+  let scans ← scanKeys.mapM fun k => do pure (k, ← (closureDigest pj k).mapError (s!"{ctx}: " ++ ·))
+  let scanOk := fun k => scans.any fun (k', h) => k' == k && scanSlotsPins.contains h
   let reads := (slots.foldl (fun (acc : Array (Nat → Nat → Nat → Option Nat) × List (String × Nat)) (k, x) =>
     let U := ((acc.2.find? (·.1 == k)).map (·.2)).getD 0
-    (acc.1.push (slotRead prog x U), (k, U + x.members) :: acc.2.filter (·.1 != k))) (#[], [])).1
+    (acc.1.push (slotRead prog scanOk x U), (k, U + x.members) :: acc.2.filter (·.1 != k))) (#[], [])).1
   pure { free := ← Flock.J.nat a "free" ctx, steps := ← Flock.J.nat a "steps" ctx, program := Flock.hexOf prog.sha512,
-         units := templates.foldl (· + ·) 0, entries, slots := reads }
+         units := templates.foldl (· + ·) 0, entries, slots := reads, scans }
 
 /-- Whether a batch node of ingress buckets `t0, t0 + 1, …` reads the slot entries at their slots: for each lane `j`
 and member `m` (bucket `t0 + m`), its argument `o + j` (`prog<j>`) is row `⌊(t0 + m) / every⌋` of input node `ks[j]`,

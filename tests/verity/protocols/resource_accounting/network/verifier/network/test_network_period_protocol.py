@@ -985,24 +985,34 @@ def test_a_scan_whose_prog_is_no_slot_entries_is_refused(server, monkeypatch):
 UNSLOTTED_SEEDS = (1, 3)
 
 
-def test_an_entry_read_from_another_lanes_occupancy_is_refused(server, monkeypatch):
-    """A wired entries template of a full window of two lanes whose chunk j reads lane 1 - j's `occ` (the order a
-    lowering gives that numbers its entries shortest first, the shorter in the higher lane) is refused, in Lean and in
-    the mirror, by name (`PC.UNSLOTTED`, `slotted`); and a mirror that skips the slot check accepts it."""
-    for n in UNSLOTTED_SEEDS:
-        case = build("rows-prog-unslotted", n, small=True)
-        assert case["params"]["schedule"]["lanes"] == 2
-        assert PC.UNSLOTTED in reference(case)["reason"], (n, reference(case))
-        verdict, out = D.replay(PORT, case, server)
-        assert verdict == REJECT and PC.UNSLOTTED in json.loads(out)["reason"], (n, out)
-    monkeypatch.setattr(PC, "_slotted", PC._wired)
-    refused_by_lean_alone(build("rows-prog-unslotted", 1, small=True), server, PC.UNSLOTTED)
+@pytest.mark.parametrize("how", PC.UNSLOTS)
+def test_an_entry_not_its_slots_is_refused(how, server, monkeypatch):
+    """A wired entries template of a full window of two lanes whose slot read breaks (`PC.UNSLOTS`) is refused, in Lean
+    and in the mirror, by name (`PC.UNSLOTTED`, `slotted`; `PC.UNPINNED_SCAN` for a scan slots' body no pin holds):
+    chunk j reading lane 1 - j's `occ` word, a `ScanSlots_v3` template with another body under its pinned id, or a
+    second entries template beside the wired one, which `slotted` would otherwise not read; and a mirror that skips
+    the slot check accepts it."""
+    monkeypatch.setattr(PC, "UNSLOTS", (how,))
+    PC.audit_descriptor.cache_clear()
+    why = PC.UNPINNED_SCAN if how == "body" else PC.UNSLOTTED
+    try:
+        for n in UNSLOTTED_SEEDS:
+            case = build("rows-prog-unslotted", n, small=True)
+            assert case["params"]["schedule"]["lanes"] == 2
+            assert why in reference(case)["reason"], (n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and why in json.loads(out)["reason"], (n, out)
+        monkeypatch.setattr(PC, "_slotted", PC._wired)
+        refused_by_lean_alone(build("rows-prog-unslotted", 1, small=True), server, why)
+    finally:
+        PC.audit_descriptor.cache_clear()
 
 
 def test_an_entry_read_from_its_own_lanes_occupancy_is_slotted(server, monkeypatch):
-    """`test_an_entry_read_from_another_lanes_occupancy_is_refused`'s twin: its cases with chunk j reading lane j's
-    `occ`, all else theirs, are accepted in Lean and in the mirror."""
+    """`test_an_entry_not_its_slots_is_refused`'s twin at `lane`: its cases with chunk j reading lane j's `occ`, all
+    else theirs, are accepted in Lean and in the mirror."""
     real = PC._slotted_layout
+    monkeypatch.setattr(PC, "UNSLOTS", ("lane",))
     monkeypatch.setattr(PC, "_slotted_layout", lambda j, lanes, nb, every, swapped: real(j, lanes, nb, every, False))
     PC.audit_descriptor.cache_clear()
     try:

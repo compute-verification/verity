@@ -212,11 +212,12 @@ schedule it runs under, and the certificate the key signed for both once, before
   `j · T / every + b`'s entry, the row the scan's lane `j` reads at boundary `b` (`scanOf`), and each due, occupied
   slot's entry, read bit included, is the one its Program computed, not the prover's word, which with read 1 and no
   outputs would pass for a request no Program reads (`Properties.NetworkPeriod.RowsProgWired`);
-* and each entry is its slot's (`slotted`, refused by its own name where `wired` holds): at every node of that
-  template, unit `j · T / every + b`'s `occ` is leaf `4j + 2`, lane `j`'s occupancy word, of a `ScanSlots_v3` member
-  whose `state` is row `b · every` of one input node, read off one part an argument and the scan slots' return type
-  (`slotRead`), so chunk `j`'s leaf `b` is the entry of a Program that read lane `j`'s slot of the state at boundary
-  `b`'s anchor, whatever order the Programs end in;
+* and each entry is its slot's (`slotted`, refused by its own name where `wired` holds): the audit's every entries
+  node is that template's, and at each, unit `j · T / every + b`'s `occ` is leaf `4j + 2`, lane `j`'s occupancy word,
+  of a member of a `ScanSlots_v3` template whose body the check pins by closure digest (`scanSlotsPins`; another body
+  is refused by name), that member's `state` row `b · every` of one input node of `T · NS` leaves, read off one part
+  an argument and the scan slots' return type (`slotRead`), so chunk `j`'s leaf `b` is the entry of a Program that read
+  lane `j`'s slot of the state at boundary `b`'s anchor, whatever order the Programs end in;
 * execution phase `w`'s scan's state is the `SCAN_STATE` of an audit its `prog` is wired to
   (`stateTied`): the scan's registration has an entry of its `roots` whose port is `scan/state` or of its `registered`
   whose value is `verity/certifier/scan-state/v1`, every such entry at one root and domain, and so has a `wired`
@@ -351,9 +352,10 @@ entries' input node the value it registers as `scan/prog<j>`, and a member's pub
 root, which `okChecks` holds to the constant), which one-stage's verifier checks inside the
 answer, each connection's cap against its lane (the parameters' `cells`; the network attester holds a lane to
 `egress_cells`), and that the scan's answer carries every Input its registration check let through (`tiedInputWired`
-reads the names the answer's public outputs hold, and takes one with no `rests_on_period_check` to name none); that a
-tied audit's `ScanSlots_v3` units compute the occupancy (its id is read, not its body) and that the input node their
-state reads is its `SCAN_STATE` (`slotRead` reads only the entries' `occ` and the scan slots' `state` arguments);
+reads the names the answer's public outputs hold, and takes one with no `rests_on_period_check` to name none); that the
+input node a tied audit's scan slots' state reads is the Program parameter its registration binds `SCAN_STATE` to
+(`slotRead` holds its leaves to `T · NS`; the descriptor's root names no parameter, and the names one-stage binds by
+are its `program_fn` record's, which the check doesn't read);
 and that the audits' answers are the SPOT component's own,
 which the composition's theorem is to bind. Of a session's signed start: where the session before it stopped, which
 no start says (a session that ends early still moves its key's life on by its whole span, so the numbers up to the
@@ -602,12 +604,16 @@ occupancy word of the state row at boundary `b`'s anchor, the slot the scan's la
 Programs end in. -/
 def slotted (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : Json) : Bool :=
   (audits.zip regs).any fun (a, r) => a.entries.any fun e =>
-    wired.wiredTo s reg r e &&
-      let xs := (a.entries.zip a.slots).filterMap fun ((k, _, _), f) =>
-        if k == e.1 then some (f s.programSlots (s.window / s.every) s.every) else none
+    wired.wiredTo s reg r e && a.entries.all (·.1 == e.1) && a.entries.size == a.slots.size &&
+      let xs := a.slots.map fun f => f s.programSlots (s.window / s.every) s.every
       match xs[0]? with
       | some (some x) => xs.all (· == some x)
       | _ => false
+
+/-- An audit `wired` might hold the scan's `prog` to has a `ScanSlots_v3` template whose body `scanSlotsPins` doesn't
+pin. -/
+def scanUnpinned (audits : Array Audit) : Bool :=
+  audits.any fun a => a.scans.any fun (_, h) => !scanSlotsPins.contains h
 
 /-- The scan's state in a registration: the entry of its `roots` whose port is `scan/state`. -/
 def stateName : String := "scan/state"
@@ -800,10 +806,14 @@ def auditChecks (p : Params) (c : Commitment) (e : Evidence) : Array (Found Fact
 /-- Execution phase `w`'s slot finding, where `wired` holds: a refusal unless each entry is its slot's (`slotted`). -/
 def slotCheck (p : Params) (s : Schedule) (audits : Array Json) (w : Nat) (reg : Json) :
     Option (Core.Verdict × String) :=
-  if slotted p.audits s audits reg then none else
+  if slotted p.audits s audits reg then none
+  else if scanUnpinned p.audits then
+    some (.reject, s!"window {w}: an entry is not its slot's: a {scanSlotsId} template's body is no pinned one \
+      (scanSlotsPins)")
+  else
     some (.reject, s!"window {w}: an entry is not its slot's: unit j · {s.window / s.every} + b of the wired entries \
       template does not read its occ from leaf 4j + 2 of a {scanSlotsId} member whose state is row b · {s.every} of \
-      one input node (slotRead)")
+      one input node of T · NS leaves, or another entries template beside it (slotRead)")
 
 /-- Execution phase `w`'s wiring finding in the rows form: a refusal unless its scan's Programs' row is a compute
 audit's slot entries (`wired`), then `slotCheck`'s. -/
