@@ -378,7 +378,6 @@ def nodesOf (doc : Json) : Except String (List NodeDecl) := do
       | some t, some "domain" => pure { node, fill := .table t false }
       | _, _ => throw "nodes"
     else throw "nodes"
-  if (ds.map (·.node)).eraseDups.length != ds.length then throw "nodes"
   return ds
 
 /-- The record's declarations of what fills its units' rows, each refused (`inputs`) unless it is well formed for

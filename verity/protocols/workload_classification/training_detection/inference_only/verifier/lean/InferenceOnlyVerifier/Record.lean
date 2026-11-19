@@ -664,7 +664,7 @@ def withStarts (rs : Array Flock.TemplateQuery.TRange) : List (Flock.TemplateQue
 
 /-- **Each root input node the record declares is declared once, and every row that reads it has that declaration,
 at its position** (the module docstring's `nodes`), of the Program `P`, its templates `ts`, the wiring's cuts `W`,
-the declarations `x` and the record's root input nodes `ns`. Of each declared node: it is an input node, a primitive
+the declarations `x` and the record's root input nodes `ns`. No node is declared twice. Of each declared node: it is an input node, a primitive
 or a batch of one, of leaves of one width `w`; declared as registered parameter `p` from 16-bit leaf `o`, it lies
 within `p`, and `p` is θ (`isTheta`); declared as a table's root or domain id, it is 512 bits and the table's
 parameter is θ. Of each argument of a root node that reads a declared node (`overDeclared`): it is one stretch a
@@ -718,7 +718,7 @@ def nodesHeld (T : Theta.Trusted) (P : Prog) (doc : Json) (ts : List Tmpl) (W : 
             | .table name' root' => name' == name && root' == root
             | _ => false
         | _, _ => false
-  ns.all nodeOk &&
+  (ns.map (·.node)).eraseDups.length == ns.length && ns.all nodeOk &&
   match Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (ts.map (·.tid)).toArray with
   | .ok rs => (withStarts rs).all fun (r, u0) => match ts.find? (·.tid == r.template) with
     | some t => (nodes[r.node]!).args.toList.zip (P.defs[t.defn]!).params.toList |>.all fun (a, (port, pty)) =>

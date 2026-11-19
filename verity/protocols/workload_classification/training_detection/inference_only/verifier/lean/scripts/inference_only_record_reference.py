@@ -685,17 +685,17 @@ def formats_held(T: dict, rec: dict, params: dict) -> bool:
     return True
 
 
-def nodes_of(rec: dict) -> dict[int, tuple]:
-    """`RecordText.nodesOf`: the record's root input nodes (`registered.nodes`), by node, each `("param", p, offset)`
-    or `("table", name, root)`; none where it states none. `nodes` unless each is `{node, param, offset}` or
-    `{node, table, of}`, `of` `root` or `domain`, and no node is declared twice."""
+def nodes_of(rec: dict) -> list[tuple[int, tuple]]:
+    """`RecordText.nodesOf`: the record's root input nodes (`registered.nodes`), in order, each `(node, what)`, `what`
+    `("param", p, offset)` or `("table", name, root)`; none where it states none. `nodes` unless each is
+    `{node, param, offset}` or `{node, table, of}`, `of` `root` or `domain`; a node declared twice is `nodes_held`'s."""
     reg = rec.get("registered")
     ns = reg.get("nodes") if isinstance(reg, dict) else None
     if ns is None:
         return {}
     if not isinstance(ns, list):
         raise Malformed("nodes")
-    out: dict[int, tuple] = {}
+    out: list[tuple[int, tuple]] = []
     for n in ns:
         if not (isinstance(n, dict) and _nat(n.get("node"))):
             raise Malformed("nodes")
@@ -705,9 +705,7 @@ def nodes_of(rec: dict) -> dict[int, tuple]:
             what = ("table", n["table"], n["of"] == "root")
         else:
             raise Malformed("nodes")
-        if n["node"] in out:
-            raise Malformed("nodes")
-        out[n["node"]] = what
+        out.append((n["node"], what))
     return out
 
 
@@ -789,8 +787,8 @@ def declarations(x: Inputs, wires: list[dict], cuts: dict, rec: dict) -> list[tu
 
 
 def nodes_held(T: dict, program, rec: dict, templates: list[Template], cuts: dict, x: Inputs, decls: list[tuple],
-               nodes: dict[int, tuple], form_only: bool = False) -> bool:
-    """`Record.nodesHeld`, restated: each declared node an input node of one width, within its θ parameter or 512 bits
+               declared: list[tuple[int, tuple]], form_only: bool = False) -> bool:
+    """`Record.nodesHeld`, restated: no node declared twice; each declared node an input node of one width, within its θ parameter or 512 bits
     of a θ table; each argument that reads one a single stretch (`stretch_of`) within it, its rows filled, every one,
     by registered reads of the parameter whose slopes and corner are the node's (`slopes_of`), or by that table's
     reads, by a unit reading the whole node in one row. Then, unless `form_only`, what it stands for, row by row:
@@ -801,6 +799,9 @@ def nodes_held(T: dict, program, rec: dict, templates: list[Template], cuts: dic
 
     def theta_of(p: str) -> bool:
         return p in x.params and theta(T, x.params, p, width_of(rec, p))
+    nodes = dict(declared)
+    if len(nodes) != len(declared):
+        return False
     for k, what in nodes.items():
         if not 0 <= k < len(body):
             return False
@@ -945,7 +946,7 @@ def front(inst, tr, form_only: bool = False) -> tuple:
     if not (isinstance(window, dict) and window.get("circuit") == hashlib.sha512(i["record"].encode()).hexdigest()):
         raise Malformed("run-circuit")
     templates = templates_of(program, rec, digest)
-    own_rows(program, nodes_of(rec), form_only)
+    own_rows(program, {n for n, _ in nodes_of(rec)}, form_only)
     return i, program, desc, rec, T, templates
 
 
