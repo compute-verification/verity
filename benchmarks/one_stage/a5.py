@@ -391,7 +391,7 @@ def coins_sample(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Binding, 
         if hold:
             a.coins.hold(rank)
         reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table,
-                              **registering(a, history))
+                              partition=mine.partition, **registering(a, history))
         coins.commit(bytes.fromhex(reg.digest))
         draw = stream.select(reg)
     except S.Refused as e:
@@ -458,7 +458,7 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
         s, _ = stream_of(a, mine, members, want, leaf_layer, AC.Replay(read, family), held)
         try:
             d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts, work_table=mine.work_table,
-                                    **registering(a, history)))
+                                    partition=mine.partition, **registering(a, history)))
             if d.draw != draw.draw:
                 raise ValueError(f"the replayed sample {d.units} is not the honest sample {draw.units}")
             got, audit = outcome(s, d, coins)
