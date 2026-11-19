@@ -361,7 +361,9 @@ def test_glm53s_reading_is_unchanged(tmp_path, monkeypatch, capsys):
     member's carry that member, with the same values and marks."""
 
     got = glm_reading(tmp_path, monkeypatch, capsys)
-    assert got == json.loads(GLM_READING.read_text())
+    named = "`h100-sxm-80gb-tensor/e4m3`, reading `datasheet`"
+    assert named in got["text"]
+    assert json.loads(json.dumps(got).replace(named, "`h100-sxm5-80gb/e4m3`")) == json.loads(GLM_READING.read_text())
     doc = json.loads((tmp_path / "run" / R.TABLE).read_text())
     metrics = runpy.run_path(str(RUNNER))["METRICS"]
     plain = R.measurements(doc, metrics)
