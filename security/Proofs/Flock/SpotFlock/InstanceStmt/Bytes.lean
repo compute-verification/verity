@@ -14,13 +14,11 @@ table, of
   output row `o0` of 16, each VU's two hm96 slots and one `sha512x3` slot, bound to the program and partition below;
 * the public file (`pubOf`): two instances reading `i0`'s one shared row, each its own `o0` row, every value and salt
   zero, with the run's input set and its ports' bindings to the run;
-* the program (`progText`): its root a batch of two members of the primitive `T_v1`, partitioned by
-  `Q_template_instance` v0 at `T_v1` (`partObj`);
-* the sample (`sampleJ`): unit 0 of the two, and the header the verifier writes for the sampled statement (`hdrD`);
-* the registered reads (`regJ`): `i0` and `o0` at one leaf each, which both units read.
+* the program (`progText`): its root a batch of two members of the primitive `T_v1`, with `T_v1`'s Boolean Definition,
+  partitioned by `Q_template_instance` v0 at `T_v1` (`partObj`);
+* the sample (`sampleJ`): unit 0 of the two, and the header the verifier writes for the sampled statement (`hdrD`).
 
-Every registered root is its one leaf: the zero row's `b ‖ c` under its value's domain (`regRoot`). The circuit file's
-SHA-512 (`circuitHash`) and its class (`classHash`, the file with META's bindings removed, as `HmRow.classOf` hashes it)
+The statement reads no registered value. The circuit file's SHA-512 (`circuitHash`) and its class (`classHash`, the file with META's bindings removed, as `HmRow.classOf` hashes it)
 are the only hashes of the file; nothing here asks the kernel to build the fixed nets.
 -/
 
@@ -66,9 +64,13 @@ def keyHex : String := hexOf (Sha512.hash Hm96.Default512.key)
 def bcI : ByteArray := HmRow.zeroRowBc i0
 def bcO : ByteArray := HmRow.zeroRowBc o0
 
-/-- The program: its root a batch of two members of the primitive `T_v1`. -/
-def progJ : Json := Json.mkObj [("annotations", Json.mkObj []), ("callees", ja [js "T_v1"]),
+/-- The program: its root a batch of two members of the primitive `T_v1`, whose Boolean Definition is `StandIn[T]_v1`,
+sixteen constant bits. -/
+def progJ : Json := Json.mkObj [("annotations", Json.mkObj []), ("boolean", Json.mkObj [("T_v1", js "StandIn[T]_v1")]),
+  ("callees", ja [js "T_v1", js "Const1[0x0]_v1"]),
   ("definitions", Json.mkObj [
+    ("Const1[0x0]_v1", Json.mkObj [("form", js "primitive"), ("id", js "Const1[0x0]_v1"), ("params", ja []),
+      ("ret", ja [js "Value", jn 1])]),
     ("Root[Two_v1]_v1", Json.mkObj [("bindings", Json.mkObj []),
       ("body", Json.mkObj [
         ("nodes", ja [Json.mkObj [("args", ja []), ("axes", ja []), ("fn", jn 0), ("form", js "batch"), ("n", jn 2),
@@ -76,17 +78,25 @@ def progJ : Json := Json.mkObj [("annotations", Json.mkObj []), ("callees", ja [
         ("params", ja []), ("ret", Json.mkObj [("affine", ja [js "n", jn 0, jn 0, jn 2])]),
         ("ret_type", ja [js "Array", jn 2, ja [js "Value", jn 16]])]),
       ("form", js "composite"), ("id", js "Root[Two_v1]_v1")]),
+    ("StandIn[T]_v1", Json.mkObj [("bindings", Json.mkObj []),
+      ("body", Json.mkObj [
+        ("nodes", ja [Json.mkObj [("args", ja []), ("axes", ja []), ("fn", jn 1), ("form", js "batch"), ("n", jn 16),
+          ("out", jn 2)]]),
+        ("params", ja []), ("ret", Json.mkObj [("affine", ja [js "n", jn 0, jn 0, jn 16])]),
+        ("ret_type", ja [js "Array", jn 16, ja [js "Value", jn 1]])]),
+      ("form", js "composite"), ("id", js "StandIn[T]_v1")]),
     ("T_v1", Json.mkObj [("form", js "primitive"), ("id", js "T_v1"), ("params", ja []),
       ("ret", ja [js "Value", jn 16])])]),
-  ("program_fn", js "Two_v1"), ("root", js "Root[Two_v1]_v1"), ("schema", js "verity-ir/descriptor/v1"),
-  ("types", ja [ja [js "Value", jn 16], ja [js "Array", jn 2, ja [js "Value", jn 16]]])]
+  ("program_fn", js "Two_v1"), ("root", js "Root[Two_v1]_v1"), ("schema", js "verity-ir/descriptor/v2"),
+  ("types", ja [ja [js "Value", jn 16], ja [js "Array", jn 2, ja [js "Value", jn 16]],
+    ja [js "Array", jn 16, ja [js "Value", jn 1]]])]
 def progText : String := printJson progJ
 def progBytes : ByteArray := progText.toUTF8
 
 /-- The program's SHA-512 in hex, as `TemplateQuery.Desc.parse` computes it (`progHex_eq`). A literal: the digest is of
 the program's canonical text, which `canon` writes by well-founded recursion that the kernel does not unfold. -/
 def progHex : String :=
-  "b1b2443c99170e8c52e7011e9041ea4dccc964c5135ccc6be432941d5427066efe02d5810606ecd3ef7a9241c39bc3236b7b077d809a3a42e9bb68aa67fe11c8"
+  "2cc6b665ee6d848f77f66d8572ffc7907377f2d6085e4e019d605a0a913eab90d1347b9bdc575ae280590f46c68c28d8e0d32cd28febbb6c40c7827a1faca1c8"
 
 /-- The partition: `Q_template_instance` v0 at `T_v1`, over the program. -/
 def partObj : Json := Json.mkObj [("format", js HmRow.PARTITION_V1), ("program", js progHex),
@@ -95,7 +105,7 @@ def partObj : Json := Json.mkObj [("format", js HmRow.PARTITION_V1), ("program",
 
 /-- The partition's digest in hex, as `HmRow.checkPartition` computes it (`partHex_eq`); a literal, as `progHex` is. -/
 def partHex : String :=
-  "1e5de9f6dc7650c0f0a67091651cacf652fa9c56491a4f71852b5f71629454f76412e63e5a988af4233ca983ec2bc0cc14b70f79b42d026b536e29b57badbb85"
+  "431509a8a173e2c98eb5a8fc938365ccc826af926f325c686614fe5e2cdee3367fdcf633706d0a1a4891ab054b129d7aa1d9dadfe6b0af825a30ed4e48b2e410"
 
 def rng (net : String) (sl p0 n : Nat) : Json := Json.mkObj [("count", jn n), ("net", js net), ("pos0", jn p0),
   ("slot_log", jn sl), ("type", js "unit")]
@@ -156,24 +166,12 @@ def fv3J (r : Run) : Json := Json.mkObj [("bindings", Json.mkObj [("i0", js r.bi
   ("roots", Json.mkObj [("i0", js (hexOf rootI)), ("o0", js (hexOf rootO))]), ("row_key_sha512", js keyHex),
   ("schemas", Json.mkObj [("i0", js v2), ("o0", js v2)])]
 
-/-- The registered values both ports read, each named after the boundary record's port it is (`Link.value`). -/
-def valueI : String := "i0"
-def valueO : String := "o0"
-
-/-- The registered values' frame-v3-sha512 domains, 64 bytes each, which the boundary record names with their roots. -/
-def domI : ByteArray := ⟨Array.replicate 64 2⟩
-def domO : ByteArray := ⟨Array.replicate 64 3⟩
-
-def regHdrJ : Json := Json.mkObj [
-  ("i0", Json.mkObj [("paths", ja [js ""]), ("positions", ja [jn 0]), ("value", js valueI)]),
-  ("o0", Json.mkObj [("paths", ja [js "", js ""]), ("positions", ja [jn 0, jn 0]), ("value", js valueO)])]
-
 /-- The header's `units` (`HmRow.unitsEntry` at instances `0` and `1`), each instance of class `cls`. -/
 def unitsJ (cls : String) : Json := Json.mkObj [("blocks", ja [ja [jn 0], ja [jn 1]]), ("classes", ja [js cls, js cls]),
   ("indices", ja [jn 0, jn 1]), ("units_per_vu", jn 1), ("vus_per_block", jn 1)]
 
 def hdrJ (r : Run) (circ cls : String) : Json := Json.mkObj [("circuit_sha512", js circ),
-  ("format", js "flock-circuit-inputs"), ("frame_v3", fv3J r), ("instances", jn 2), ("registered", regHdrJ),
+  ("format", js "flock-circuit-inputs"), ("frame_v3", fv3J r), ("instances", jn 2),
   ("rows", .bool false), ("scheme", js HmRow.SCHEME), ("set", js r.set),
   ("shared_rows", Json.mkObj [("i0", jn 1), ("o0", jn 2)]), ("statement", js NAME), ("units", unitsJ cls)]
 
@@ -185,7 +183,7 @@ def bodyB : ByteArray := bcI ++ bcO ++ bcO ++ u32 0 ++ u32 0 ++ u32 0 ++ u32 1
 def tailB : ByteArray := "\n".toUTF8 ++ bodyB
 def pubOf (r : Run) (circ cls : String) : ByteArray := (printJson (hdrJ r circ cls)).toUTF8 ++ tailB
 
-/-! ## The sample and the registered reads -/
+/-! ## The sample -/
 
 def sampleJ : Json := Json.mkObj [("k", jn 1), ("law", js "subset"), ("population", jn 2), ("units", ja [jn 0])]
 
@@ -195,16 +193,6 @@ def hdrD (r : Run) (c : Circuit) (circ cls : String) : Json :=
   ((((hdrJ r circ cls).setObjVal! "unit_draw" sampleJ).setObjVal! "instances" (Lean.toJson (1 : Nat))).setObjVal!
     "population" (Lean.toJson (2 : Nat))).setObjVal! "units" (HmRow.unitsEntry { c with outPorts := #[] } #[0])
 
-/-- A registered value's one-leaf root: its leaf, the zero row's under its domain. -/
-def regRoot (dom bc : ByteArray) : ByteArray := fLeaf dom 0 bc
-
-def regPortJ (value : String) (dom bc : ByteArray) (words : Nat) : Json := Json.mkObj [("domain", js (hexOf dom)),
-  ("leaves", jn 1), ("reads", ja [jn 0, jn 0]), ("root", js (hexOf (regRoot dom bc))), ("row_schema", js v2),
-  ("value", js value), ("words", jn words)]
-
-def regJ : Json := Json.mkObj [("format", js "verity/registered-reads/v1"), ("ports", Json.mkObj [
-  ("i0", regPortJ valueI domI bcI 64), ("o0", regPortJ valueO domO bcO 1)])]
-
 /-! ## The statement -/
 
 /-- The statement at the fixed nets' layouts `ls`, `lh`, the circuit file's SHA-512 `H` and its class `C`. -/
@@ -212,7 +200,7 @@ def rawOf (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) : FlockDeploy.Raw :=
   { statement := NAME, circuit := bytesOf ls lh, publicFile := pubOf r (hexOf H) (hexOf C), tables := [], zk := true,
     osCoins := false, count := 1, draw := some (printJson sampleJ).toUTF8, partition := some (printJson partObj).toUTF8,
     program := some progBytes, work := none, workTable := none, stratified := none, closure := none,
-    registered := some (printJson regJ).toUTF8, publicInputs := none }
+    registered := none, publicInputs := none }
 
 def raw (r : Run) : FlockDeploy.Raw := rawOf r (HmNets.shaLaid ()) (HmNets.hmLaid ()) circuitHash classHash
 
