@@ -139,8 +139,34 @@ def test_challenges_follow_the_whole_fill_once():
     c.challenge()
     with pytest.raises(RuntimeError, match="unanswered"):
         c.challenge()
-    with pytest.raises(ValueError, match="answered with"):
-        c.receive(bytes(63))
+    assert c.receive(bytes(63)) is None and (c.ended, c.batches) == (sw.MALFORMED, [])
+    signed = c.close()
+    assert sw.verdict(signed, c.commitment, trusted={signed.public_key}, schemes=ts.SCHEMES).reasons == (
+        f"the session ended malformed after 0 of {K} batches",)
+
+
+def test_a_prover_that_leaves_ends_the_session_abandoned_and_signed():
+    """`abandon` ends the session where it stopped, the open batch unrecorded; a fill cut short ends at a reading taken
+    then. The signature covers the end and the batch count, and the verdict rejects it by name."""
+    clock = Clock(1_000_000)
+    c = challenger(clock=clock)
+    prover = WS.Prover(c.params)
+    for start, data in c.fill(100):
+        prover.receive(start, data)
+    for _ in range(3):
+        c.receive(prover.answer(c.challenge()))
+    c.challenge()
+    c.abandon()
+    c.abandon(sw.MALFORMED)
+    signed = c.close()
+    assert (signed.ended, len(signed.batches)) == (sw.ABANDONED, 3)
+    assert sw.verdict(signed, c.commitment, trusted={signed.public_key}, schemes=ts.SCHEMES).reasons == (
+        f"the session ended abandoned after 3 of {K} batches",)
+    cut = challenger(clock=clock, log=ts.session_log())
+    next(cut.fill(100))
+    clock.now += 5
+    cut.abandon()
+    assert (cut.close().ended, cut.fill_end_ns - cut.fill_start_ns) == (sw.ABANDONED, 5)
 
 
 def test_one_session_an_id():

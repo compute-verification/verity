@@ -23,9 +23,9 @@ a clock a test injects. Its machine gives it `signing-key` (`capabilities["signe
 `memory_attester.Signer`, with `capabilities["log"]`, its session log) and the reads it times
 (`capabilities["reads"]`, `wipe_party.READS` when none, as `wipe_party`'s `--reads`). The run's parameters are
 `wipe_party.request_of`'s request, which names no reads: the challenger chooses them, never the prover. The challenger
-finishes with `report` (private: what it signs is witness), refused by name, and unsigned, when the prover
-leaves (`closed`), sends a frame the wire refuses, or answers a batch with another count of labels (`schema`);
-parameters that name the reads are refused `schema` before any fill. It streams the fill `WINDOW` frames at a time,
+finishes with `report` (private: what it signs is witness), refused by name when the prover leaves (`closed`),
+sends a frame the wire refuses, or answers a batch with another count of labels (`schema`), the session then signed
+as it stopped (`ABANDONED`, `MALFORMED`); parameters that name the reads are refused `schema` before any fill, unsigned. It streams the fill `WINDOW` frames at a time,
 letting the prover take each window before the next, so neither side holds more of it than that. `PROTOCOL` declares
 its one role, and `start` how a deployment starts it on the auditor's device: first, in its state directory, its key,
 refused unless the configuration pins it for the wipe (`onsite.signer`), then its session log and the wipe's request
@@ -55,9 +55,11 @@ from verity.protocols.resource_accounting.memory.pous.attester import wipe_strea
 from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import CLOCK_RESOLUTION_NS, SessionLog, Signer
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 from verity.protocols.resource_accounting.memory.pous.verifier.streamed_wipe import (
+    ABANDONED,
     COMPLETE,
     LABEL_BYTES,
     LATE,
+    MALFORMED,
     WRONG,
     BatchRecord,
     SignedWipe,
@@ -179,14 +181,16 @@ class WipeMemoryAttester:
         self._open = (b, first, idx, self.clock())
         return idx
 
-    def receive(self, answers: bytes) -> BatchRecord:
-        """The open batch's answers, `LABEL_BYTES` an index in order: the receipt time first, then the check."""
+    def receive(self, answers: bytes) -> BatchRecord | None:
+        """The open batch's answers, `LABEL_BYTES` an index in order: the receipt time first, then the check; another
+        count of bytes ends the session `MALFORMED`, the batch unrecorded."""
         receipt = self.clock()
         if self._open is None:
             raise RuntimeError("no batch is open")
         b, first, idx, send = self._open
         if len(answers) != LABEL_BYTES * len(idx):
-            raise ValueError(f"a batch of {len(idx)} is answered with {LABEL_BYTES * len(idx)} bytes, not {len(answers)}")
+            self._open, self.ended = None, MALFORMED
+            return None
         self._open = None
         wrong = sum(answers[LABEL_BYTES * t:LABEL_BYTES * (t + 1)] != label(self.key, i) for t, i in enumerate(idx))
         r = BatchRecord(b, first, len(idx), send, receipt, wrong, batch_digest(idx, answers))
@@ -198,6 +202,17 @@ class WipeMemoryAttester:
         elif first + len(idx) == self.params.k:
             self.ended = COMPLETE
         return r
+
+    def abandon(self, end: str = ABANDONED) -> None:
+        """End the session `end` where it stopped, an open batch unrecorded, so that `close` signs it; a fill cut short
+        ends at a reading taken here. A session that has ended keeps its end."""
+        if self.ended is not None:
+            return
+        if self.fill_end_ns is None:
+            self.fill_end_ns = self.clock()
+            if self.fill_start_ns is None:
+                self.fill_start_ns = self.fill_end_ns
+        self._open, self.ended = None, end
 
     def run(self, respond: Callable[[tuple[int, ...]], bytes]) -> None:
         """Drive the challenges against `respond(indices)` until the session ends."""
@@ -231,7 +246,7 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
     fill streamed (by `fill(K, N)` when given, which writes the frames to `f`'s connection itself: the native streamer,
     `wipe_stream`), `reads` batches revealed and their answers read on `clock` (the raw monotonic clock,
     `sw.raw_clock_ns`, which the header names), the session signed by `signer` once it ends. A prover that closes first
-    leaves it unsigned. This side has no mark source, so the session's start mark is empty."""
+    ends it `ABANDONED`, signed. This side has no mark source, so the session's start mark is empty."""
     c = WipeMemoryAttester(secrets.token_bytes(32), request["node"].encode(), secrets.token_bytes(32),
                                 WP.params_of(request, reads), signer, log=log, clock=clock)
     try:
@@ -253,8 +268,8 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
         f.write(WP.END)
         f.flush()
     except (ConnectionError, BrokenPipeError) as e:
-        logger.warning("the prover left before the wipe ended, so its session stays unsigned: %s", e)
-        return c
+        logger.warning("the prover left before the wipe ended, which ends it abandoned: %s", e)
+        c.abandon()
     c.close()
     return c
 
@@ -318,11 +333,11 @@ class MemoryAttesterParty:
         if m.type == "ClockTimer":
             return self._stream()
         if m.type in ("Refused", "Closed"):
-            return self._finish(m.fields["name"] if m.type == "Refused" else "closed")
+            return self._stop(m.fields["name"] if m.type == "Refused" else "closed")
         try:
             self.phase.check(m)
         except Refused as e:
-            return self._finish(e.name)
+            return self._stop(e.name)
         if m.type == "Coins" and self.c is None:
             secret, session = m.body[:32], m.body[32:]
             self.c = WipeMemoryAttester(secret, self.request["node"].encode(), session, self.wp, self.signer,
@@ -338,8 +353,6 @@ class MemoryAttesterParty:
             self.c._coin_secret = m.body
             self.phase.expect()
             return self._after_reading(self._challenge)
-        if len(m.body) != sw.LABEL_BYTES * len(self._open):
-            return self._finish("schema")
         self._answers = m.body
         self.phase.expect()
         return self._after_reading(self._receive)
@@ -376,8 +389,24 @@ class MemoryAttesterParty:
         self.c.receive(self._answers)
         if self.c.ended is None:
             return self._after_reading(self._challenge)
+        if self.c.ended == MALFORMED:
+            return self._signed("schema")
+        return [Send(PROVER, Message("End")), *self._signed(None)]
+
+    def _stop(self, refused: str) -> list[Any]:
+        """The prover left (`closed`) or sent what the wire refuses: unsigned before the session claims its id, else the
+        session ends there, signed, a fill cut short ending at a fresh reading."""
+        if self.c is None or self.c.ended is not None:
+            return self._finish(refused)
+        end = ABANDONED if refused == "closed" else MALFORMED
+        if self.c.fill_end_ns is None:
+            return self._after_reading(lambda: (self.c.abandon(end), self._signed(refused))[1])
+        self.c.abandon(end)
+        return self._signed(refused)
+
+    def _signed(self, refused: str | None) -> list[Any]:
         self.c.close()
-        return [Send(PROVER, Message("End")), *self._finish(None)]
+        return self._finish(refused)
 
     def _finish(self, refused: str | None) -> list[Any]:
         if self.c is None:

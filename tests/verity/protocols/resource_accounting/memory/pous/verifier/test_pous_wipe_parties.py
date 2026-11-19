@@ -179,22 +179,24 @@ class Leaving(WR.Prover):
         return super().on(r)
 
 
-def test_a_prover_that_leaves_leaves_the_session_unsigned():
+def test_a_prover_that_leaves_has_the_session_signed_abandoned():
+    """The challenger signs the session where the prover left it, and its check rejects it for that end by name."""
     r = wipe(PARAMS, b"left", prover=Leaving)
     assert r.outcomes[C]["refused"] == "closed"
     out = r.outcomes[C]["outcome"]
-    assert (out["reads"], out["signed"]) == (3, None)
-    assert verdict(out, b"left")["verdict"] == "undecided"
+    assert (out["reads"], out["ended"], out["signed"]["ended"]) == (3, sw.ABANDONED, sw.ABANDONED)
+    v = verdict(out, b"left")
+    assert v["verdict"] == "reject" and f"the session ended abandoned after 3 of {PARAMS.batches} batches" in v["reason"]
 
 
 def test_serve_says_that_the_prover_left(monkeypatch, caplog):
-    """`wipe_challenger.serve`, whose `log` is its session log, leaves the session unsigned and says so on the module's
-    logger."""
+    """`wipe_challenger.serve`, whose `log` is its session log, signs the session the prover left `ABANDONED` and says
+    so on the module's logger."""
     with caplog.at_level(logging.WARNING, logger=WC.__name__):
         c = serve(monkeypatch, PARAMS, b"left", stop_after=3)
-    assert c.ended is None and c.signed is None
+    assert c.ended == sw.ABANDONED and c.signed is not None and len(c.signed.batches) == 3
     said = [r.getMessage() for r in caplog.records if r.name == WC.__name__]
-    assert len(said) == 1 and said[0].startswith("the prover left before the wipe ended, so its session stays unsigned: ")
+    assert len(said) == 1 and said[0].startswith("the prover left before the wipe ended, which ends it abandoned: ")
 
 
 def test_large_fill_frames_are_kept_as_digests_and_the_challenger_replays(tmp_path):

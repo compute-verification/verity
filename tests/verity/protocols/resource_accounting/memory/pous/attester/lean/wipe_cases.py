@@ -113,10 +113,11 @@ def tiers_of(labels: int, cuts: list[int], names: list[str], outside: int = 0) -
 
 def run(params: sw.WipeParams, signer: M.AtLeaf, *, server: bytes = SERVERS[0], session_id: bytes = bytes(32),
         start: int = 1_000, fill_ns: int = 7, spends=lambda b: 1, tampered=frozenset(),
-        coins: bytes = b"coins", certificate: bytes | None = None) -> Session:
+        coins: bytes = b"coins", certificate: bytes | None = None, stop: tuple[int, str] | None = None) -> Session:
     """One session of `WipeMemoryAttester` against the honest `Prover`: batch `b`'s answer takes `spends(b)` ns, and
     the batches in `tampered` have their first answer's last bit flipped. With `certificate`, the challenger's mark source returns it,
-    and the session signs its SHA-512 as its start mark; with none the mark is empty."""
+    and the session signs its SHA-512 as its start mark; with none the mark is empty. With `stop = (j, end)` the session
+    ends `end` after `j` batches: a short answer to batch `j` (`MALFORMED`), else `abandon` with batch `j` open."""
     clock = M.Clock(start)
     c = WC.WipeMemoryAttester(SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock,
                                 coin_secret=coins, mark_source=None if certificate is None else lambda m: certificate)
@@ -135,7 +136,13 @@ def run(params: sw.WipeParams, signer: M.AtLeaf, *, server: bytes = SERVERS[0], 
         b += 1
         return out
 
-    c.run(answer)
+    if stop is None:
+        c.run(answer)
+    else:
+        for _ in range(stop[0]):
+            c.receive(answer(c.challenge()))
+        c.challenge()
+        c.receive(b"") if stop[1] == sw.MALFORMED else c.abandon(stop[1])
     return Session(c.close(), c.commitment, (signer.public_key,), signer)
 
 

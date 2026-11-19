@@ -161,9 +161,10 @@ counted_test_answer = counted_reference(COUNTED_TEST_ID, M.ts.SCHEMES)
 def wipe(params: sw.WipeParams, signer: M.AtLeaf, *, prover: Callable[[sw.WipeParams], WS.Prover] = WS.Prover,
          spends: Callable[[int], int] = lambda b: 1, stop_after: int | None = None,
          coins: bytes = b"coins", session_id: bytes = bytes(32), server: bytes = SERVER,
-         start: int = 1_000) -> tuple[sw.WipeCommitment, sw.SignedWipe | None]:
+         start: int = 1_000, end: str | None = None) -> tuple[sw.WipeCommitment, sw.SignedWipe | None]:
     """One wipe of `WipeMemoryAttester` against `prover(params)` on an injected clock: read `b` takes `spends(b)` ns,
-    and with `stop_after` the prover leaves after that many reads, so the session is never signed."""
+    and with `stop_after` the prover leaves after that many reads, so the session is never signed, unless `end` ends it
+    there, signed: `MALFORMED` by a short answer to the next read, else by `abandon`."""
     clock = M.Clock(start)
     c = WCH.WipeMemoryAttester(WC.SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock,
                                 coin_secret=coins)
@@ -175,6 +176,8 @@ def wipe(params: sw.WipeParams, signer: M.AtLeaf, *, prover: Callable[[sw.WipePa
         idx = c.challenge()
         clock.now += spends(len(c.batches))
         c.receive(p.answer(idx))
+    if end is not None and c.ended is None:
+        c.receive(b"") if end == sw.MALFORMED and c.challenge() else c.abandon(end)
     return c.commitment, None if c.ended is None else c.close()
 
 
@@ -189,7 +192,7 @@ def wipe_case(commitment: sw.WipeCommitment, signed: sw.SignedWipe | None, trust
 EXPECT = {
     "honest": ACCEPT, "segment": ACCEPT, "reads": ACCEPT, "zero-egress": ACCEPT, "uncounted": ACCEPT,
     "foreign": REJECT, "late": REJECT, "other-server": REJECT, "other-session": REJECT, "untrusted": REJECT,
-    "tampered": REJECT, "egress-range": REJECT,
+    "tampered": REJECT, "egress-range": REJECT, "abandoned": REJECT, "malformed": REJECT,
     "unsigned": UNDECIDED,
     "params": REJECT, "commitment": REJECT, "evidence": REJECT,
 }
@@ -221,8 +224,9 @@ def _build(m: str, seed: int) -> dict:
     elif m == "late":
         at = r.randrange(params.k)
         kw["spends"] = lambda b: params.limit_ns + 1 if b == at else 1
-    elif m == "unsigned":
+    elif m in ("unsigned", "abandoned", "malformed"):
         kw["stop_after"] = r.randrange(params.k)
+        kw["end"] = {"unsigned": None, "abandoned": sw.ABANDONED, "malformed": sw.MALFORMED}[m]
     commitment, signed = wipe(params, signer, **kw)
     if m == "other-server":
         return wipe_case(commitment, signed, trusted, server=b"another node", egress_mib=egress)

@@ -232,7 +232,7 @@ def test_the_split_wipe(how: str) -> None:
     c, answered = _split(SMALL, prover, signer, stop_after=3 if how == "left" else None)
     a = W.answer(b"n0", c.commitment.session, (signer.public_key,), c.commitment, c.signed, ts.SCHEMES, TEST_ID,
                  egress_mib=0)
-    want = {"honest": "accept", "foreign": "reject", "left": "undecided"}[how]
+    want = {"honest": "accept", "foreign": "reject", "left": "reject"}[how]
     assert a["verdict"] == want, a
     if how == "honest":
         assert c.ended == sw.COMPLETE and answered == W.READS and a["public"] == W.uncounted(SMALL)
@@ -240,7 +240,8 @@ def test_the_split_wipe(how: str) -> None:
     elif how == "foreign":
         assert c.ended == sw.WRONG and answered == len(c.batches)
     else:
-        assert answered == 3 and c.ended is None and c.signed is None
+        assert answered == 3 and c.ended == sw.ABANDONED and len(c.signed.batches) == 3
+        assert a["reason"].endswith(f"the session ended abandoned after 3 of {SMALL.batches} batches"), a
 
 
 def test_the_party_follows_period_json(tmp_path) -> None:

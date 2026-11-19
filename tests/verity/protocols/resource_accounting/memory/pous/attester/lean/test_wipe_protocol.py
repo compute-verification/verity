@@ -144,6 +144,9 @@ def test_the_named_wipes(deployed_server):
     assert seen["unsigned"]["reason"] == WP.UNSIGNED and seen["other-server"]["reason"] == C.OTHER_SERVER.format(C.SERVER.decode())
     assert seen["untrusted"]["reason"] == "the session is signed by a key that is not a trusted memory challenger's"
     assert seen["tampered"]["reason"] == "the signature does not verify"
+    for end in ("abandoned", "malformed"):
+        signed = json.loads(bytes.fromhex(C.build(end)["evidence"]))["signed"]
+        assert seen[end]["reason"] == f"the session ended {end} after {len(signed['batches'])} of {WP.READS} batches", seen[end]
     assert seen["commitment"]["commitment"] is None and seen["evidence"]["commitment"] is not None
 
 

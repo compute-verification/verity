@@ -100,11 +100,11 @@ CERTIFICATE = b"a start certificate, as the network certifier returned it"
 
 
 def _honest(batch: int = 1, spends=(1, 1, 1), tampered=frozenset(),
-            certificate: bytes | None = None) -> W.Session:
+            certificate: bytes | None = None, stop: tuple[int, str] | None = None) -> W.Session:
     """A three-challenge session over 8 labels in two tiers, its deadline 1000 ns, signed at leaf 1 of a height-1 key;
     with `certificate`, its start mark is that certificate's SHA-512."""
     return W.run(_params(batch), M.test_signer(M.SECRETS[0], 1, 1), spends=lambda b: spends[b], tampered=tampered,
-                 certificate=certificate)
+                 certificate=certificate, stop=stop)
 
 
 def _uncovered(batch: int) -> str:
@@ -139,6 +139,8 @@ def controls() -> dict[str, tuple[W.Session, tuple[str, ...]]]:
                          ("the signed header is not the session's commitment",)),
         "wrong label": (_honest(tampered={1}), ("the session ended wrong after 2 of 3 batches",
                                                 "batch 1 has 1 wrong answers")),
+        "abandoned": (_honest(stop=(2, sw.ABANDONED)), ("the session ended abandoned after 2 of 3 batches",)),
+        "malformed": (_honest(stop=(0, sw.MALFORMED)), ("the session ended malformed after 0 of 3 batches",)),
         "late answer": (_honest(spends=(1, LIMIT + 1, 1)), ("the session ended late after 2 of 3 batches",
                                                             f"batch 1 is past its deadline of {LIMIT} ns")),
         "answer before its challenge": (W._batch(s, 2, receipt_ns=lambda r: r.send_ns - 1),

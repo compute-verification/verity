@@ -29,7 +29,8 @@ session has five steps:
    is the raw monotonic clock (`raw_clock_ns`), which the header names (`CLOCK`).
 4. **Challenge.** Once the fill is complete the challenger flips its coins, then reveals them a batch at a time
    (`challenge`), reads the receipt time before it hashes anything (`receive`), and checks every 64-byte answer against
-   `L_{c_j}`.  The first late or wrong batch ends the session: no batch is retried, and no index is redrawn.
+   `L_{c_j}`.  The first late or wrong batch ends the session, and so does a prover that leaves (`ABANDONED`) or
+   answers a batch with another count of labels (`MALFORMED`): no batch is retried, and no index is redrawn.
 5. **Sign.** One signature over `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`, where the header is the
    commitment, how the session ended, the start mark and the fill's times (`close`), and the records root is the
    frame-v3-sha512 root of the batch records.  `end_message(signed)` is the end message, what the challenger hands the
@@ -88,7 +89,10 @@ LABEL_BYTES = DIGEST_BYTES["sha512"]
 LABEL_BITS = 8 * LABEL_BYTES
 MARK_BYTES = DIGEST_BYTES["sha512"]
 """A start mark: the SHA-512 of the start certificate."""
-COMPLETE, LATE, WRONG = "complete", "late", "wrong"
+COMPLETE, LATE, WRONG, ABANDONED, MALFORMED = "complete", "late", "wrong", "abandoned", "malformed"
+"""How a session ends, signed in its header: every batch on time and right, a late batch, a wrong answer, the prover
+gone (`abandon`), or a batch answered with another count of labels than its indices (`receive`). The header's batch
+count is the batch it stopped at; every end but `COMPLETE` is rejected by name."""
 
 DEPLOYED_FILL_BYTES = 2_600_000_000_000
 """The reference fill: 2.6 TB, every tier of one server, the size `StreamedWipeMeets2600GB` is stated at.  A run's fill
@@ -401,8 +405,8 @@ def challenges_for(n: int, slack_labels: int, log2_delta: float) -> int:
     return math.ceil(log2_delta / math.log2(1 - slack_labels / n))
 
 
-__all__ = ["CLOCK", "COIN_DOMAIN", "COMPLETE", "DEPLOYED_FILL_BYTES", "DEPLOYED_K", "DEPLOYED_LABELS", "EGRESS_MAX_UNITS",
-           "EGRESS_UNIT_BITS", "END_TAG", "KEY_DOMAIN", "LABEL_BITS", "LABEL_BYTES", "LABEL_TAG", "LATE", "MARK_BYTES",
+__all__ = ["ABANDONED", "CLOCK", "COIN_DOMAIN", "COMPLETE", "DEPLOYED_FILL_BYTES", "DEPLOYED_K", "DEPLOYED_LABELS", "EGRESS_MAX_UNITS",
+           "EGRESS_UNIT_BITS", "END_TAG", "KEY_DOMAIN", "LABEL_BITS", "LABEL_BYTES", "LABEL_TAG", "LATE", "MALFORMED", "MARK_BYTES",
            "PROTOCOL", "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "START_TAG", "WRONG", "BatchRecord",
            "SignedWipe", "Verdict", "WipeCommitment", "WipeParams", "batch_digest",
            "challenges_for", "sample_indices", "egress_units", "end_message", "label", "labels", "log2_error",
