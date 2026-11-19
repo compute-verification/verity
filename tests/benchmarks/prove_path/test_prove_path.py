@@ -2064,7 +2064,7 @@ def test_window_commit_fills_the_served_circuits_slots_and_rows_from_its_served_
     (tmp_path / "binding_map_p0.json").write_text("{}")
     monkeypatch.setattr(PP, "record1", lambda *a: SimpleNamespace(
         run=SimpleNamespace(run_root=bytes(64)), bdir=tmp_path, row={"commit": {}}, out=tmp_path, pair=0, store=None,
-        manifest=None))
+        manifest=None, aliases=None))
     monkeypatch.setattr(WOR, "CheckpointIndex", lambda *a, **k: None)
     monkeypatch.setattr(CPU, "OnRead", lambda *a: None)
     monkeypatch.setattr(CPU, "provider", lambda *a: lambda label, lo, hi: zeros[label][lo:hi])
