@@ -541,6 +541,7 @@ theorem fits_egress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P
     (hF : Flattens P C) :
     ∀ t < s.window, ∀ ℓ σ, ∀ g ∈ NetTiming.slotGates ((scanLayout P s).egress t ℓ σ),
       g ∈ C.outs ∧ C.gates[g]? ≠ some .input := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hA.laid.2.2
   obtain ⟨hok, hroot, hL, hc⟩ := facts hd hA
   obtain ⟨hke, hkc⟩ := templateNodes_mem P hA.egress_mem
   have hmono := Resolve.offsets_mono P P.root (hL _ hroot.1) hroot.2
@@ -606,6 +607,7 @@ bucket's `row` parameter, which resolves up through the bucket's template node t
 leaves, and down to that input node's gates. -/
 theorem fits_ingress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA : Accepted P s)
     (hF : Flattens P C) : ∀ t < s.window, ∀ g ∈ (scanLayout P s).ingress t, C.gates[g]? = some .input := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hA.laid.2.2
   obtain ⟨hok, hroot, hL, hc⟩ := facts hd hA
   have hmono := Resolve.offsets_mono P P.root (hL _ hroot.1) hroot.2
   have hend := ((hL _ hroot.1) hroot.2).2.1
