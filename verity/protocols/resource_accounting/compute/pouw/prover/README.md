@@ -34,7 +34,6 @@ builder.
 | `schemes/` | The kernel schemes' builders: NCP, Pearl's FP8 scheme and Pearl-C, each a `PoUWScheme`, and Pearl-C's device record. |
 | `circuit/` | Each scheme's Definitions, an execution phase's Program and sampling design, and what a call's rows are committed under. |
 | `serving/` | What runs beside a served model, one directory a scheme. An adapter reaches it only through the names `serving` exports. |
-| `lowering/` | H1's lowering: the statements Flock proves for a sampled H1 tile, and the commitments they are opened against. |
 | `kernels/` | The device code, one directory each, each with its README. |
 | `sass_gate.py` | The SASS gate: no shipped kernel computes a value the verifier's scalar model can't replay. |
 

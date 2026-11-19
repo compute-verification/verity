@@ -2,23 +2,21 @@
 
 This package is what runs beside a served model so that [PoUW](../../verifier/README.md) can later credit its matrix
 multiplies. A workload's adapter calls it once for each matrix multiply, and it commits what the scheme will need. It
-holds no device code and loads no tensor library: the workload hands in its tensors, its int8 arm and H1's device, and
-until it does the host paths run.
+holds no device code and loads no tensor library: the workload hands in its tensors and its device halves, and until it
+does the host paths run.
 
-A workload reaches it only through the names the package exports. There are two calls:
-
-- `run_matmul(run, site, x, weight, bias=None)` runs a matrix multiply under PoUW, served and committed by `run`.
-- `observe_matmul(run, site, x, weight, y, ...)` records one the workload served itself, and computes nothing.
+A workload reaches it only through the names the package exports. There is one call:
+`run_matmul(run, site, x, weight, bias=None)` runs a matrix multiply under PoUW, served and committed by `run`.
 
 `site` is the linear's ordinal in the forward pass. The package's docstring says which run each scheme takes, and each
 module's docstring says what it holds.
 
 | Scheme | Where |
 | --- | --- |
-| H1 | [`h1/`](h1/README.md) |
 | Pearl-C | `pearl_c/` |
 
-The live coins every scheme's window draws (its challenger, sample session, request rows and salt names) are in
+H1 is deleted: `h1/` holds only `registered.py`, the registered-table commit the vLLM adapter's expert and window tables
+use until it moves to `verity.commitments`. The live coins a window draws (its challenger and sample session) are in
 `coins/`.
 
 There is nothing here to run on its own: the vLLM adapter drives it while serving.
