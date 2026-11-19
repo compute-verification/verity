@@ -765,7 +765,7 @@ def p2OpeningFn (j : Json) : V Json := do
 /-- A P2 session of record (`P2Session`) on the bytes the verifier reads: `{"registration", "request", "session",
 "not_before_ns", "coins", "chunk", "events"}`, the registration file's bytes and the prover's request line (lowercase
 hex), the auditor's session parameters (`P2Session.Auditor.ofJson`, or `P2Session.SESSION` for null), the session's
-2W coins, the samples a thread checks, and its events: `start` and `boundary` `{"now"}`, `close` `{"t", "now"}`, `root`
+W challenges of 32 bytes and W samples' coins, each whole (`sampleBytes`), the samples a thread checks, and its events: `start` and `boundary` `{"now"}`, `close` `{"t", "now"}`, `root`
 `{"t", "i", "now", "line"}` and `openings` `{"t", "line"}` (each line lowercase hex, as the prover sent it), and `fail`.
 The held store (`Held.json`), every event's result (`resultJ`) and the answer (`P2Session.answer`); a registration
 or a request refused is `{"refused": "registration"}` or `{"refused": "request"}`, and a request off the auditor's
@@ -780,7 +780,10 @@ def p2SessionFn (j : Json) : V Json := do
     | .ok p => pure p
     | .error why => return Json.mkObj [("refused", .str "request"), ("reason", .str why)]
   let coins ← hexes j "coins"
-  if coins.size ≠ 2 * params.windows || coins.any (·.size ≠ Codec.COIN_BYTES) then throw "2W coins of 32 bytes"
+  let W := params.windows
+  if coins.size ≠ 2 * W || (coins.extract 0 W).any (·.size ≠ Codec.COIN_BYTES)
+      || (coins.extract W coins.size).any (·.size ≠ sampleBytes params.samples 1) then
+    throw "W challenges of 32 bytes, then W samples' coins, each whole"
   let chunk ← nat j "chunk"
   let mut s := P2Session.init held params coins (← nat j "not_before_ns")
   let mut results : Array Json := #[]
