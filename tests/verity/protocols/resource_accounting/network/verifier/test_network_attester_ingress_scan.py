@@ -41,6 +41,7 @@ import scan_traffic as ST
 from test_network_attester import EOF, Server, drive
 
 from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.protocols.resource_accounting.network.prover import egress as EG
 from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
@@ -453,16 +454,18 @@ def test_two_continuation_cells_of_a_request_swapped_are_refused():
 
 
 def test_the_carried_start_s_unit_outputs_its_state_row_bit_for_bit(run):
-    """`IngressScanStart`, the unit of a scan's carried start: one input, ``sin``, and one output, each a state row of
-    the class, and the output is ``sin`` on the empty state's row, every state of the run and random rows, so the row
-    it commits is the state it was given and no other."""
+    """`IngressScanStart`, the unit of a scan's carried start: one input, ``sin``, and two outputs, each a state row of
+    the class, o0 as bits and o1 as u16 words, and each output is ``sin`` on the empty state's row, every state of the
+    run and random rows, so the rows it commits are the state it was given and no other."""
     NS = IS.state_bits(CLS)
     (name, ty), ret = START.signature()[0][0], START.signature()[1]
-    assert (name, 16 * ty.n) == ("sin", NS) and [16 * t.n for t in ret.fields] == [NS]
+    assert (name, 16 * ty.n) == ("sin", NS) and [16 * t.n for t in ret.fields] == [NS, NS]
     rng = random.Random(11)
     rows = [IS.encode(CLS, IS.empty(CLS)), *run.chain.states, *([rng.randrange(2) for _ in range(NS)] for _ in range(8))]
     assert len({tuple(r) for r in rows}) > len(run.chain.states) // 2
-    assert _circuit(START, [rows]) == [list(r) for r in rows]
+    out = np.asarray(evaluate_batch(START, np.asarray(rows, dtype=np.uint8).reshape(len(rows), -1, 16)))
+    assert out[:, :NS].tolist() == [list(r) for r in rows]
+    assert out[:, NS:].tolist() == [[sum(b << i for i, b in enumerate(r[w:w + 16])) for w in range(0, NS, 16)] for r in rows]
 
 
 @pytest.mark.slow

@@ -146,9 +146,10 @@ from typing import Sequence
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
-from verity.circuits.defs import CompositeDefinition
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.population import BitsWord
 from verity.circuits.refs import Coll, tuple_of
-from verity.circuits.types import Array, Tuple
+from verity.circuits.types import Array, Tuple, Value
 from verity.commitments.gates.frame_v3 import _part
 from verity.protocols.resource_accounting.network.prover import egress as EG
 from verity.commitments.gates import bits as GB
@@ -666,13 +667,14 @@ def _sig(S):
 
 def _sig_start(S):
     state = _words(state_bits(_cls(S)))
-    return (("sin", state),), Tuple(state)
+    return (("sin", state),), Tuple(state, Array(state.n, Value(16)))
 
 
 def _body_start(B, S, sin):
     bits = Coll(Array(sin.refs.count, BIT), sin.refs)
     # gates, never a pass-through: an output that is an input wire commits nothing the statement computes
-    return tuple_of(Coll(_sig_start(S)[1].fields[0], B.batch(BL.NOT, B.batch(BL.NOT, bits, axes=(0,)), axes=(0,)).refs))
+    state = Coll(_sig_start(S)[1].fields[0], B.batch(BL.NOT, B.batch(BL.NOT, bits, axes=(0,)), axes=(0,)).refs)
+    return tuple_of(state, B.batch(bind(BitsWord, W=16), state, axes=(0,)))
 
 
 def _eq(C, x: Sequence, y: Sequence):
@@ -913,9 +915,10 @@ IngressScanBucket = _part(
     "the first output iff every check of the step holds: " + _STEP, version=4)
 IngressScanBucket.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins
 IngressScanStart = CompositeDefinition(
-    "IngressScanStart", 2, STATICS, _sig_start, _body_start, conformance="exact-model-tested",
-    doc="the scan's start: sin, the state an execution phase's scan starts from (`state_bits` bits, the class's "
-        "state row), each bit through two NOTs, so the row its output commits is sin")
+    "IngressScanStart", 3, STATICS, _sig_start, _body_start, conformance="exact-model-tested",
+    doc="the scan's state at a boundary: sin, the state there (`state_bits` bits, the class's state row; at the first, "
+        "the state an execution phase's scan starts from), each bit through two NOTs, so the rows its outputs commit "
+        "are sin, o0 as bits and o1 as the u16 words `ScanSlots_v3` reads")
 
 
 def arguments(cls: Class, cases: Sequence[tuple[bytes, Sequence[int], Sequence[int]]]) -> list[list]:
