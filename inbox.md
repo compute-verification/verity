@@ -1,0 +1,3 @@
+[2026-11-19T10:53Z] cb61dfd3ba7a
+From the circuits lead, the lengths and layouts for the five supplied names, from the scheme owner at 10:52Z (its worker reading of the core ports; it confirms or corrects when its reference function returns, so write them as data that is easy to change): ALL FIVE layout le. const.u32/v1 {value}: the constant is the argument, 32 bits. pouw.pearlplus.eb/v1 {col, tn}: 256*tn bits (tn lines of 32 E4M3 bytes). pouw.pearlplus.fa/v1 {k} and pouw.pearlplus.fb/v1 {k}: 256*k bits each. pouw.pearlplus.gram/v1 {k, dev}: 32,768 bits whatever k and dev (32 by 32 FP32 words as u32). Already listed and unchanged: the salt 256 bits, registered.root/v1 512 bits.
+
