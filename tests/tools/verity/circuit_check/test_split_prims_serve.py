@@ -31,8 +31,8 @@ DEFINITION_MODULES = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", 
 
 
 def _digest(fn) -> str | None:
-    """The descriptor digest of a circuit-check target: a specialization's Program digest, None when it reaches a primitive
-    with no Boolean body (it is in no Program); a primitive's entry digest, read from its entry alone."""
+    """The descriptor digest of a circuit-check target: a specialization's Program digest, `E_NO_BODY` when it reaches a
+    primitive with no Boolean body (it is in no Program); a primitive's entry digest, read from its entry alone."""
     from verity.circuits import codec
     from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
     from verity.circuits.program import NoBooleanBody, Program
@@ -41,7 +41,7 @@ def _digest(fn) -> str | None:
         try:
             return codec.program_digest(codec.encode_program(Program(fn)))
         except NoBooleanBody:
-            return None
+            return "E_NO_BODY"
     if isinstance(fn, PrimitiveDefinition):
         return codec.definition_digest(codec._encode_definition(fn))
     return None
