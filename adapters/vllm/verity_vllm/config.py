@@ -251,9 +251,10 @@ def row_target(row: str) -> str | None:
 
 
 #: The protocols a run can enable, each with its adapter module in `verity_vllm.protocols`, in install order, innermost
-#: first: PoUW replaces the linear layers' GEMMs, POUS decodes the weights those GEMMs read, SPOT commits what the model
-#: computed.
-PROTOCOLS = {"pouw": "pouw", "sampled-proofs": "spot"}
+#: first: SPOT commits what the model computed.
+PROTOCOLS = {"sampled-proofs": "spot"}
+#: A protocol a run once enabled, each refused by name with why (`parse_protocols`, serve-openai's ``--protocols``).
+RETIRED = {"pouw": "the first stage is deleted; useful work is Pearl+'s, attached by its declared name"}
 #: The set a row runs when its target declares none: SPOT alone, the Commit under its committer's scheme
 #: (rows-sha512 by default, `pipeline.commit --commit-scheme`).
 DEFAULT_ROW_PROTOCOLS = ("sampled-proofs:rows-sha512",)
@@ -264,7 +265,7 @@ def parse_protocols(value: str | Mapping[str, str] | Any | None) -> tuple[str, .
     """A protocol set in its one spelling: ``name:scheme`` entries, one per protocol, in `PROTOCOLS` order.
 
     ``value`` is None, ``""`` or ``"none"`` (the empty set), a comma-separated string, an iterable of entries, or a mapping
-    ``{name: scheme}``.  Refuses (ValueError) an unknown protocol, an entry without a scheme, a malformed scheme and two
+    ``{name: scheme}``.  Refuses (ValueError) a retired protocol by name (`RETIRED`), an unknown protocol, an entry without a scheme, a malformed scheme and two
     entries of one protocol.  Whether a scheme is registered is the protocol package's to say
     (`verity_vllm.protocols.refusals`)."""
     if value is None or (isinstance(value, str) and value.strip() in ("", "none")):
@@ -278,6 +279,8 @@ def parse_protocols(value: str | Mapping[str, str] | Any | None) -> tuple[str, .
     got: dict[str, str] = {}
     for item in items:
         name, sep, scheme = item.partition(":")
+        if why := RETIRED.get(name):
+            raise ValueError(f"protocol entry {item!r}: {why}")
         if name not in PROTOCOLS:
             raise ValueError(f"protocol entry {item!r}: unknown protocol {name!r} (known: {', '.join(PROTOCOLS)})")
         if not sep or not _SCHEME.fullmatch(scheme):
