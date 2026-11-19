@@ -21,6 +21,7 @@ from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinit
 from verity.circuits.program import Program, is_input
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value
+from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import (
     audit,
     draw as D,
@@ -596,6 +597,60 @@ def test_r1_holds_the_registered_strata_to_the_verifiers_own():
     assert _check(rec, prog, q, sampling_design=SAMPLING_DESIGN).codes == ("R1-law",)
 
 
+def test_r1_takes_a_proposed_design_that_meets_a_stratified_rate():
+    prog, q, _, rec = _stratified_docket()
+    rule = "stratified-rate:1/2"
+    assert D.rule_rate(rule) == (1, 2) and D.rule_rate("rate:1/2:3") is None and D.rule_rate("work-rate:1/2") is None
+    mine, _ = S.params_sampling_design(rule, prog, q, None)
+    expanded = D.derive(prog, q, mine)
+    strata = expanded["strata"]
+    assert [s["k"] for s in strata] == [2, 2]
+
+    def check(law, rate=(1, 2)):
+        return _check({**rec, "law": law}, prog, q, sampling_design=mine, rate=rate)
+
+    assert check(expanded).ok
+    larger = dict(expanded, strata=[{**strata[0], "k": 3}, strata[1]])
+    assert check(larger).ok and check(larger, rate=None).codes == ("R1-law",)
+    short = dict(expanded, strata=[{**strata[0], "k": 1}, strata[1]])
+    v = check(short)
+    assert v.codes == ("R1-law",) and f"stratum '{strata[0]['template']}' misses the rate 1/2" in v.detail["R1-law"]["verifier"]
+    dropped = dict(expanded, strata=[strata[1]])
+    assert "the strata don't tile the population" in check(dropped).detail["R1-law"]["verifier"]
+    merged = dict(expanded, strata=[{**strata[1], "units": [[0, 6]], "k": 3}])
+    assert "the design has 1 strata, not the population's 2 templates" in check(merged).detail["R1-law"]["verifier"]
+    assert check({"law": "subset", "k": 6}).codes == ("R1-law",)
+    stranger = dict(expanded, strata=[strata[0], {**strata[1], "template": "z" * 128}])
+    assert "is no template of the population" in check(stranger).detail["R1-law"]["verifier"]
+
+
+def test_a_sample_is_held_to_the_registered_design_not_any_design_meeting_the_rate():
+    prog, q, _, rec = _stratified_docket()
+    mine, _ = S.params_sampling_design("stratified-rate:1/2", prog, q, None)
+    expanded = D.derive(prog, q, mine)
+    strata = expanded["strata"]
+    registered = dict(expanded, strata=[{**strata[0], "k": 3}, strata[1]])
+    rec = {**rec, "law": registered}
+    agreed = D.agreed(prog, q, mine, None, (1, 2), rec["law"])
+    assert agreed == registered
+    under = {"law": "stratified", "population": 6, "k": registered["k"], "strata": registered["strata"], "units": [0, 1, 2, 3, 5]}
+    assert D.check_draw(under, rec, agreed).ok
+    other = {**under, "strata": expanded["strata"], "units": [0, 1, 2, 3]}
+    assert D.check_draw(other, rec, D.agreed(prog, q, mine, None, (1, 2), expanded)).ok
+    assert D.check_draw(other, rec, agreed).codes == ("law",)
+
+
+def test_r1_takes_a_proposed_pooled_subset_that_meets_its_rate():
+    prog, q = PN.population_program(PAIR, 6), P.template_instance_query(PAIR.id)
+    mine, _ = S.params_sampling_design("rate:1/2", prog, q, None)
+    assert mine == {"law": "subset", "k": 3}
+    rec = _registration(6)[2]
+    assert _check({**rec, "law": {"law": "subset", "k": 4}}, prog, q, sampling_design=mine, rate=(1, 2)).ok
+    v = _check({**rec, "law": {"law": "subset", "k": 2}}, prog, q, sampling_design=mine, rate=(1, 2))
+    assert v.codes == ("R1-law",) and "the pooled subset misses the rate 1/2" in v.detail["R1-law"]["verifier"]
+    assert _check({**rec, "law": {"law": "subset", "k": 4}}, prog, q, sampling_design=mine).codes == ("R1-law",)
+
+
 def test_stratified_sample_checks():
     prog, q, rule, rec = _stratified_docket()
     sampling_design = D.derive(prog, q, rule)
@@ -604,7 +659,7 @@ def test_stratified_sample_checks():
     assert D.check_draw({**good, "units": [0, 1, 3, 4]}, rec, sampling_design).ok         # 2 and 2: another valid sample
     assert D.check_draw({**good, "units": [0, 1, 3, 5]}, rec, sampling_design).codes == ("strata-count",)
     assert D.check_draw({**good, "units": [1, 3, 4, 6]}, rec, sampling_design).codes == ("units-range", "strata-count")
-    assert D.check_draw({**good, "k": 5}, rec, sampling_design).codes == ("law", "strata")
+    assert D.check_draw({**good, "k": 5}, rec, sampling_design).codes == ("law",)            # k_s need not be k's rule here
     assert D.check_draw(good, rec, rule).codes == ("law",)            # the rule unexpanded is not the verifier's sampling design
     two = D.derive(prog, q, RND.parse_design("stratified:2"))                  # k_s = 1, 1
     ones = [{**two["strata"][0], "k": True}, two["strata"][1]]           # `true` is not 1, as the Lean verifier reads it
