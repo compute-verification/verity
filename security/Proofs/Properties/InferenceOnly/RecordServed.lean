@@ -113,9 +113,10 @@ theorem served_of_read (hFT : InferenceOnlyVerifier.Record.SecurityProofs.Finish
   have hO := ownRows_holds hP hown hrs
   have hG := gatesOwn hP hrs
   obtain ⟨ρ, hρ⟩ := ranked hS
-  obtain ⟨D, at_, hL⟩ := laysOut_exists c.f.P rs c.W c.wired hO (returnsOwn hP hrs hT hS) (unitsComputed hP hrs)
-    (operandsOwn hP hown hrs hT hS) hG ρ hρ
-  obtain ⟨θ, hθ, U, hN, hD⟩ := names_divides hL hO hG (fun r => (c.heldAt r).isSome) c.slot c.S
+  have hOw : OwnRowsW c.f.P rs c.W c.wired := ownRowsW_of_ownRows hO
+  obtain ⟨D, at_, hL⟩ := laysOut_exists c.f.P rs c.W c.wired hOw (returnsOwn hP hrs hT hS) (unitsComputed hP hrs)
+    (operandsOwn hP (InferenceOnlyVerifier.Record.SecurityProofs.inputParts_of_ownRuns hown) hrs hT hS) hG ρ hρ
+  obtain ⟨θ, hθ, U, hN, hD⟩ := names_divides hL hOw hG (fun r => (c.heldAt r).isSome) c.slot c.S
     (fun tid u sc hu => slot_of_unit h hrs hu)
   exact ⟨Verity.RegisteredCircuit.ofPartition D θ hθ c.S U, c.f.P, c.f.doc, text, c.wired, rs, at_,
     decode_of_read h, (inst_of_read h).2, htext, hcuts, hwires, slot_of_read h,

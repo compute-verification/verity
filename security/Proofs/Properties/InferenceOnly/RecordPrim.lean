@@ -129,7 +129,7 @@ end
 
 section
 variable (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
-  (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (hown : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
+  (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (hown : InferenceOnlyVerifier.Record.SecurityProofs.InputParts P)
 include hdec hov hlay hown
 
 /-- **A leaf of a unit's parameter resolves**, to the gate the root resolves the node's argument's reference to:
@@ -145,8 +145,8 @@ theorem unit_leaf_ok {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     ∃ g, resolveStep P (P.rootScope, (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get
         (argIdx ((P.defs[P.root]!).body.nodes[k]!) i m t)) = .ok (.inl g) ∧
       resolve P (.child P.rootScope d off k m) ⟨true, i, t⟩ = .ok g := by
-  have hx := argIdx_lt bytes P hdec hown hk hu hf hm hi ht
-  obtain ⟨n, j, -, -, -, -, hstep⟩ := arg_leaf bytes P hdec hov hlay hown hk hu hi hx
+  have hx := argIdx_lt_of bytes P hdec hk hf hm hi ht
+  obtain ⟨n, j, -, -, -, -, hstep⟩ := arg_input_leaf bytes P hdec hov hlay hown hk hu hi hx
   obtain ⟨fuel, hfuel⟩ : ∃ fuel, Flock.Steps.FUEL = fuel + 2 :=
     ⟨Flock.Steps.FUEL - 2, by unfold Flock.Steps.FUEL; omega⟩
   refine ⟨_, hstep, ?_⟩
@@ -285,7 +285,7 @@ theorem unit_member {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Rea
 /-- **A leaf of a unit's parameter resolves**, whatever the unit's Definition, where every unit's rows are its own
 (`Record.ownRows`). -/
 theorem unit_param_ok {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
-    (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
+    (hO : InferenceOnlyVerifier.Record.SecurityProofs.InputParts P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {i t : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
     (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves) :
@@ -303,7 +303,7 @@ a leaf of one of the unit's parameters resolves to. The gate's operands are the 
 member's references (`prim_unit_gate`), and a leaf of the unit's parameter resolves through the same reference to
 the same gate (`Resolve.unit_leaf_ok`). -/
 theorem prim_unit_operands {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
-    (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
+    (hO : InferenceOnlyVerifier.Record.SecurityProofs.InputParts P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = true) {p : ℕ} {ops : Array ℕ}
     {sc' : Scope} (h : P.gate sc.off = .ok (p, ops, sc')) :
@@ -324,16 +324,16 @@ theorem prim_unit_operands {P : Prog} {ts : Array String} {rs : Array TRange} (h
   obtain ⟨-, -, hno⟩ := Resolve.decoded_root bytes P hdec hrc k hk
   intro o ho
   obtain ⟨i, hi, t, ht, hres⟩ := Resolve.operands_spec P P.rootScope _ m ops hops o ho
-  have hd : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).dims.isSome = true := by
-    refine batch_dims hO (n := (P.defs[P.root]!).body.nodes[k]!) ?_ hf ?_
-    · refine List.mem_filter.2 ⟨?_, by simp [hnode]⟩
-      rw [getElem!_pos _ k hk]
-      exact Array.mem_toList_iff.2 (Array.getElem_mem hk)
-    · rw [getElem!_pos _ i hi]
-      exact Array.getElem_mem hi
-  rw [hf, hd] at ht
+  have ht' : t < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[i]!).2.leaves := by
+    rw [hf] at ht
+    cases hd : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).dims.isSome with
+    | true => rw [hd] at ht; exact ht
+    | false =>
+      rw [hd] at ht
+      simp only [BodiesOk.beq_batch_batch, Bool.and_false, Bool.false_eq_true, ↓reduceIte] at ht
+      rw [← Resolve.undimmed_count bytes P hdec hk hf hi hd]
+      exact ht
   rw [hf] at hres
-  have ht' : t < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[i]!).2.leaves := ht
   have hres' : Flock.Program.resolve P P.rootScope
       ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get
         (Resolve.memberIdx (((P.defs[P.root]!).body.nodes[k]!).args[i]!) m t)) = .ok o := by

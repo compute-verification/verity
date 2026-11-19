@@ -258,7 +258,7 @@ theorem rowLeaf_intro {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyV
         (inRow (P.defs[sc.d]!) i (W.cutsOf r.tid r.port) r.row).2[l]!) := by
   have hl' := hl
   rw [inRow_size _ _ _ _ hrow] at hl'
-  obtain ⟨g, hg⟩ := unit_param_ok hP hO hrs hu hi (inRow_get _ i _ _ l hrow hl').1
+  obtain ⟨g, hg⟩ := unit_param_ok hP (InferenceOnlyVerifier.Record.SecurityProofs.inputParts_of_ownRuns hO) hrs hu hi (inRow_get _ i _ _ l hrow hl').1
   exact ⟨g, sc, hu, i, hi, hp, hrow, hl, hg, rfl, rfl⟩
 
 /-! ## A parameter that is not passed on -/

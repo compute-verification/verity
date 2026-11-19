@@ -1,6 +1,8 @@
 module
 
+public import Proofs.Properties.InferenceOnly.RecordEdgesOf
 public import Proofs.Properties.InferenceOnly.RecordPrim
+public import Proofs.Properties.InferenceOnly.RecordRead
 public import Proofs.Properties.InferenceOnly.RecordRowBits
 public import Spot.WiresSound
 public import Mathlib.Tactic
@@ -219,7 +221,7 @@ theorem returnsOwn (hP : ReadProg P)
 
 /-- **What a gate of a unit reads is the unit's own** (`OperandsOwn`): an operand of a gate inside a unit is an
 earlier gate of the unit or a leaf of one of the unit's reader rows. -/
-theorem operandsOwn (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
+theorem operandsOwn (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.InputParts P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) : OperandsOwn P rs W := by
   have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
@@ -270,15 +272,9 @@ private theorem row_ext (r r' : Row) (h1 : r.tid = r'.tid) (h2 : r.unit = r'.uni
   cases r'
   simp_all
 
-/-- **A leaf of a reader row is an input gate**, of a record declaring the root input nodes `D` whose root reads no
-edge: `OwnRows`' first half, which a declared node's sharing leaves standing (`Resolve.unit_input_leaf`). -/
-theorem rowLeaf_input (hP : ReadProg P) {D : List ℕ} (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRunsOf P D)
-    (hne : ∀ nd ∈ InferenceOnlyVerifier.Record.SecurityProofs.unitsOf P,
-      ∀ q ∈ InferenceOnlyVerifier.Record.SecurityProofs.partsIn nd,
-        InferenceOnlyVerifier.Record.SecurityProofs.edgeOf P q = false)
-    (hD : ∀ n, D.contains n = true → n < (P.defs[P.root]!).body.nodes.size ∧
-      Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true ∧
-      (((P.defs[P.root]!).body.nodes[n]!).form = .prim ∨ ((P.defs[P.root]!).body.nodes[n]!).form = .batch))
+/-- **A leaf of a reader row is an input gate**, where every part a unit reads is over an input node: `OwnRows`'
+first half, which a declared node's sharing leaves standing (`Resolve.unit_input_leaf`). -/
+theorem rowLeaf_input (hP : ReadProg P) (hIP : InferenceOnlyVerifier.Record.SecurityProofs.InputParts P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs) :
     ∀ r l g lo hi, RowLeaf P rs W r l g lo hi →
       ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧ Flock.Program.isInputId (P.defs[p]!).key = true := by
@@ -290,7 +286,7 @@ theorem rowLeaf_input (hP : ReadProg P) {D : List ℕ} (hO : InferenceOnlyVerifi
   rintro r l g lo hi' ⟨sc, hu, i, hip, -, hrow, hl, hres, -, -⟩
   obtain ⟨j, m, -, -, -, rfl, hk, hnode, hform, hm, hargs⟩ := unit_place hP hrs hu
   have ht := inRow_lt _ i _ r.row l hrow hl
-  obtain ⟨n, x, hn, hinp', hx, ho, hg⟩ := Resolve.unit_input_leaf bytes P hdec hov hlay hO hne hD hk hnode hform hm
+  obtain ⟨n, x, hn, hinp', hx, ho, -, hg⟩ := Resolve.unit_input_leaf bytes P hdec hov hlay hIP hk hnode hform hm
     (Nat.lt_of_lt_of_eq hip hargs.symm) ht ((P.defs[P.root]!).body.nodes[rs[j]!.node]!).fn
     (P.child P.rootScope rs[j]!.node m).off
   have hgx := hg g hres
@@ -387,5 +383,55 @@ theorem ranked (hS : Spot.Wires.check W = .ok S) : ∃ ρ : String × ℤ → �
   refine ⟨ρ, ?_⟩
   intro r wt wu out hw
   exact hρ _ _ (Spot.Wires.writerOf_reads hS hw)
+
+/-- **Where every part a unit reads is over an input node, the record's wiring has no wire**: every lane is that
+node's (`laneWire_single`). -/
+theorem wiring_unwired (hIP : InferenceOnlyVerifier.Record.SecurityProofs.InputParts P) {doc : Lean.Json}
+    {W' : Spot.Wires.Wiring} (h : Spot.RecordText.wiring P doc = .ok W') : W'.wires = [] := by
+  refine InferenceOnlyVerifier.Record.SecurityProofs.wiring_nil ?_ h
+  intro k hk hu i hi qi hqi k0 L len cnt v hv
+  have hunit : (P.defs[P.root]!).body.nodes[k]! ∈ InferenceOnlyVerifier.Record.SecurityProofs.unitsOf P := by
+    have hu' : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false := hu
+    refine List.mem_filter.2 ⟨?_, by simp [hu']⟩
+    rw [getElem!_pos _ k hk]
+    exact Array.mem_toList_iff.2 (Array.getElem_mem hk)
+  have hpart : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[qi]! ∈
+      InferenceOnlyVerifier.Record.SecurityProofs.partsIn ((P.defs[P.root]!).body.nodes[k]!) := by
+    refine List.mem_flatMap.2 ⟨((P.defs[P.root]!).body.nodes[k]!).args[i]!, ?_, ?_⟩
+    · rw [getElem!_pos _ i hi]
+      exact Array.mem_toList_iff.2 (Array.getElem_mem hi)
+    · rw [getElem!_pos _ qi hqi]
+      exact Array.mem_toList_iff.2 (Array.getElem_mem hqi)
+  obtain ⟨n, hshape, -, hin, -⟩ := hIP _ hunit _ hpart
+  have hv1 : v.1 = n := by
+    rcases hshape with ⟨b, c, hp⟩ | ⟨b, inner, os, is, c, hp⟩
+    · rw [hp] at hv
+      exact InferenceOnlyVerifier.Record.SecurityProofs.laneWire_single hv
+    · rw [hp] at hv
+      exact InferenceOnlyVerifier.Record.SecurityProofs.laneWire_single hv
+  rw [hv1]
+  exact hin
+
+/-- **Where every part a unit reads is over an input node, no row has a writer**, in the summary SPOT's check gives
+a wiring whose wires are the record's (`wiring_unwired`). -/
+theorem unwritten (hIP : InferenceOnlyVerifier.Record.SecurityProofs.InputParts P) {doc : Lean.Json}
+    {text : Spot.Wires.Wiring} (ht : Spot.RecordText.wiring P doc = .ok text) (hw : W.wires = text.wires)
+    (hS : Spot.Wires.check W = .ok S) : ∀ t u p k, S.writerOf t u p k = none := by
+  intro t u p k
+  rw [Spot.Wires.check_summary hS]
+  unfold Spot.Wires.Summary.writerOf
+  rw [hw, wiring_unwired hIP ht]
+  rfl
+
+/-- **Of a record `read` accepts whose root reads no edge, every part a unit reads is over an input node**: a run
+`own-rows` holds, or a node the record declares, which `nodes` holds an input node. -/
+theorem inputParts_of_read {j tr : Lean.Json} {c : InferenceOnlyVerifier.Record.Case}
+    (h : InferenceOnlyVerifier.Record.read j tr = .ok c)
+    (hNE : InferenceOnlyVerifier.Record.SecurityProofs.NoEdge c.f.P) :
+    InferenceOnlyVerifier.Record.SecurityProofs.InputParts c.f.P := by
+  obtain ⟨-, -, -, -, hown, -⟩ := InferenceOnlyVerifier.Record.SecurityProofs.program_of_read h
+  exact InferenceOnlyVerifier.Record.SecurityProofs.inputParts_of_ownRunsOf hown hNE
+    (InferenceOnlyVerifier.Record.SecurityProofs.declared_inputs
+      (InferenceOnlyVerifier.Record.SecurityProofs.nodes_of_read h))
 
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs

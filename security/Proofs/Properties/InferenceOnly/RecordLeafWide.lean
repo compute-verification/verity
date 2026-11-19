@@ -100,7 +100,7 @@ theorem extract_get (ws : Array ℕ) (a b l : ℕ) (hl : l < (ws.extract a b).si
 unit's root node's argument to a gate of an input node; the gate is as wide as the leaf the reference names in the
 root's body, and that leaf as wide as the parameter's. -/
 theorem param_wide {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
-    (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
+    (hO : InferenceOnlyVerifier.Record.SecurityProofs.InputParts P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {i t g : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
     (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves)
@@ -115,7 +115,7 @@ theorem param_wide {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Read
   obtain ⟨⟨bytes, hdec⟩, -⟩ := hP'
   have hi' := hargs i hi
   -- the leaf is a leaf of an input node, at a gate of the root
-  obtain ⟨n, j, -, hn, hj, ho, hg⟩ := Resolve.unit_leaf bytes P hdec hov hlayb hO hk hnode hform hm hi' ht
+  obtain ⟨n, j, hn, -, hj, ho, -, hg⟩ := Resolve.unit_input_leaf bytes P hdec hov hlayb hO hk hnode hform hm hi' ht
     ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off
   have hlt : g < (P.defs[P.root]!).gates := by
     rw [hg g hres]
@@ -127,7 +127,7 @@ theorem param_wide {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Read
   have hgg : g' = g := Except.ok.inj (hg'.symm.trans hres)
   rw [hgg] at hstep
   have hgood : Resolve.Good P P.rootScope := ⟨rfl, rfl, rfl⟩
-  have hx := Resolve.argIdx_lt bytes P hdec hO hk hnode hform hm hi' ht
+  have hx := Resolve.argIdx_lt_of bytes P hdec hk hform hm hi' ht
   have href0 := ((hB P.rootScope hgood).1 k hk).2.1 i _ hx
   have href : Resolve.RefOk P P.rootScope.d (P.defs[P.rootScope.d]!).body.nodes.size
       ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get
@@ -153,7 +153,7 @@ theorem param_wide {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Read
 variable {P : Prog} {ts : Array String} {rs : Array TRange} {W : Spot.Wires.Wiring}
 
 /-- **A leaf of a reader row is a gate as wide as the leaf** (`LeafWide`, its first clause). -/
-theorem rowLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
+theorem rowLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.InputParts P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {r : Row} {l g lo hi : ℕ}
     (h : RowLeaf P rs W r l g lo hi) :
     ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧ (P.defs[p]!).ret = .value (hi - lo) := by
@@ -179,7 +179,7 @@ theorem rowLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.Securi
   exact hret
 
 /-- **A leaf of a unit's output row is a gate as wide as the leaf** (`LeafWide`, its second clause). -/
-theorem outLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
+theorem outLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.InputParts P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} {out : String} {l g lo hi : ℕ} (hu : UnitAt P rs tid u sc) (ho : OutLeaf P sc out l g lo hi) :
     ∃ p ops sc', P.gate g = .ok (p, ops, sc') ∧ (P.defs[p]!).ret = .value (hi - lo) := by
@@ -242,7 +242,7 @@ theorem outLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.Securi
 
 /-- **A gate is as wide as the leaf that names it** (`LeafWide`), of a Program the record check reads whose units'
 rows are their own. -/
-theorem leafWide (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
+theorem leafWide (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.InputParts P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) : LeafWide P rs W :=
   ⟨fun _ _ _ _ _ h => rowLeaf_wide hP hO hrs h, fun _ _ _ _ _ _ _ _ hu ho => outLeaf_wide hP hO hrs hu ho⟩
 

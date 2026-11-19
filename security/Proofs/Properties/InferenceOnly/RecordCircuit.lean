@@ -54,7 +54,7 @@ input gates (`OwnRows`), every computed gate lies in a unit (`GatesOwn`) and eve
 of input gates is the gates of the rows `held` holds (`Names`), and some division of `D`'s computed gates into `n`
 blocks gives each gate its unit's slot (`Divides`). -/
 theorem names_divides {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}
-    {D : Verity.Circuit} {at_ : Fin D.N → ℕ} (hL : LaysOut P rs W S D at_) (hO : OwnRows P rs W)
+    {D : Verity.Circuit} {at_ : Fin D.N → ℕ} (hL : LaysOut P rs W S D at_) (hO : OwnRowsW P rs W S)
     (hG : GatesOwn P rs) (held : Row → Bool) (slot : String → ℕ → Option ℕ) (n : ℕ)
     (hslot : ∀ tid u sc, UnitAt P rs tid u sc → ∃ s, slot tid u = some s ∧ s < n) :
     ∃ θ : Finset (Fin D.N), (∀ g ∈ θ, D.isInput g = true) ∧ ∃ U : Verity.Partition D n,

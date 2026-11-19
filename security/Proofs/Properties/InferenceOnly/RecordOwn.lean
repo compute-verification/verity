@@ -406,14 +406,59 @@ theorem declared_inputs {T : Theta.Trusted} {P : Prog} {doc : Lean.Json} {ts : L
   obtain ⟨⟨-, hall⟩, -⟩ := h
   obtain ⟨d, hd, rfl⟩ := List.mem_map.1 (List.contains_iff_mem.1 hn)
   have hok := List.all_eq_true.1 hall d hd
-  dsimp only at hok
   split at hok
   · rename_i nd hnd
     simp only [Bool.and_eq_true, Bool.or_eq_true] at hok
     obtain ⟨⟨hin, hf⟩, -⟩ := hok
     obtain ⟨hlt, heq⟩ := Array.getElem?_eq_some_iff.1 hnd
-    rw [getElem!_pos _ _ hlt, heq]
+    rw [getElem!_pos (P.defs[P.root]!).body.nodes d.node hlt, heq]
     exact ⟨hlt, hin, hf.elim (fun h => Or.inl (form_eq h)) (fun h => Or.inr (form_eq h))⟩
   · cases hok
+
+/-- **No unit of the root reads an edge.** -/
+def NoEdge (P : Prog) : Prop := ∀ n ∈ unitsOf P, ∀ q ∈ partsIn n, edgeOf P q = false
+
+theorem noEdge_of_edgeFree {P : Prog} {D : List Nat} (h : EdgeFree P D) : NoEdge P := fun n hn q hq => (h n hn q hq).1
+
+/-- **Every part a unit reads is over an input node of the root**: an affine or strided part, no parameter's, over
+a node of the root that is an input node, a primitive or a batch. `OwnRuns` gives it (`inputParts_of_ownRuns`), and
+so does `own-rows` of a record declaring the root input nodes `D` whose root reads no edge, where each node of `D` is
+such a node (`inputParts_of_ownRunsOf`). -/
+def InputParts (P : Prog) : Prop :=
+  ∀ nd ∈ unitsOf P, ∀ q ∈ partsIn nd, ∃ n, ((∃ b c, q = .affine false n b c) ∨
+      ∃ b inner os is c, q = .strided false n b inner os is c) ∧
+    n < (P.defs[P.root]!).body.nodes.size ∧ Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true ∧
+    (((P.defs[P.root]!).body.nodes[n]!).form = .prim ∨ ((P.defs[P.root]!).body.nodes[n]!).form = .batch)
+
+theorem inputParts_of_ownRuns {P : Prog} (h : OwnRuns P) : InputParts P := by
+  intro nd hn q hq
+  obtain ⟨⟨n, b, c⟩, hr⟩ := part_run h hn hq
+  obtain ⟨hqe, hlt, hin, hf⟩ := runOf_some hr
+  exact ⟨n, Or.inl ⟨b, c, hqe⟩, hlt, hin, hf⟩
+
+theorem inputParts_of_ownRunsOf {P : Prog} {D : List Nat} (h : OwnRunsOf P D)
+    (hne : NoEdge P)
+    (hD : ∀ n, D.contains n = true → n < (P.defs[P.root]!).body.nodes.size ∧
+      Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true ∧
+      (((P.defs[P.root]!).body.nodes[n]!).form = .prim ∨ ((P.defs[P.root]!).body.nodes[n]!).form = .batch)) :
+    InputParts P := by
+  intro nd hn q hq
+  cases hdq : overDeclared D q with
+  | false =>
+    obtain ⟨⟨n, b, c⟩, hr⟩ := ownPart_run h hn hq (hne nd hn q hq) hdq
+    obtain ⟨hqe, hlt, hin, hf⟩ := runOf_some hr
+    exact ⟨n, Or.inl ⟨b, c, hqe⟩, hlt, hin, hf⟩
+  | true =>
+    cases q with
+    | affine p n b c =>
+      cases p with
+      | true => cases hdq
+      | false => exact ⟨n, Or.inl ⟨b, c, rfl⟩, hD n hdq⟩
+    | strided p n b inner os is c =>
+      cases p with
+      | true => cases hdq
+      | false => exact ⟨n, Or.inr ⟨b, inner, os, is, c, rfl⟩, hD n hdq⟩
+    | explicit _ => cases hdq
+    | grid _ _ => cases hdq
 
 end InferenceOnlyVerifier.Record.SecurityProofs

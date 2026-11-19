@@ -158,7 +158,7 @@ theorem lands_unwired {o a : ℕ} (hw : ¬ Wired P rs W S o) (h : Lands P rs W S
     exact absurd ⟨r, l, lo, hi, Option.isSome_iff_exists.2 ⟨_, hwr⟩, hrl⟩ hw
 
 /-- A read of a leaf of a row with a writer lands where a leaf of the writer that meets it lands. -/
-theorem lands_wired_row (hO : OwnRows P rs W) (hN : PortsNamed P rs) {r : Row} {l g lo hi : ℕ}
+theorem lands_wired_row (hO : OwnRowsW P rs W S) (hN : PortsNamed P rs) {r : Row} {l g lo hi : ℕ}
     (hrl : RowLeaf P rs W r l g lo hi) (hw : (S.writerOf r.tid r.unit r.port r.row).isSome) {a : ℕ}
     (h : Lands P rs W S g a) :
     ∃ l' g' lo' hi', WriterLeaf P rs S r l' g' lo' hi' ∧ lo < hi' ∧ lo' < hi ∧ Lands P rs W S g' a := by
@@ -166,7 +166,7 @@ theorem lands_wired_row (hO : OwnRows P rs W) (hN : PortsNamed P rs) {r : Row} {
   | here _ hn => exact absurd ⟨r, l, lo, hi, hw, hrl⟩ hn
   | wire _ g' _ hf hl =>
     obtain ⟨r₁, l₁, l', lo₁, hi₁, lo', hi', hrl₁, hwl, hm1, hm2⟩ := hf
-    obtain ⟨e1, e2⟩ := hO.2 r₁ l₁ lo₁ hi₁ r l lo hi g hrl₁ hrl
+    obtain ⟨e1, e2⟩ := hO.2 r₁ l₁ lo₁ hi₁ r l lo hi g hrl₁ hrl (Or.inr hw)
     subst e1 e2
     obtain ⟨_, e3, e4⟩ := rowLeaf_fun hN hrl₁ hrl
     subst e3 e4
@@ -322,7 +322,7 @@ theorem writerLand_le {r : Row} {sc' : Scope} {f : ℕ}
 
 /-- **The bound for an output leaf**: a read of a leaf of a unit's output row lands on gates together no wider than
 the leaf. -/
-theorem outLeaf_land_le (hO : OwnRows P rs W) (hA : Aligned P rs W S) (hL : LaysOut P rs W S D at_)
+theorem outLeaf_land_le (hO : OwnRowsW P rs W S) (hA : Aligned P rs W S) (hL : LaysOut P rs W S D at_)
     (hH : LeafHolds P rs W S) (hR : ReturnsOwn P rs W) (hU : UnitsComputed P rs) (hN : PortsNamed P rs)
     (ρ : String × ℤ → ℕ) (hρ : Ranked S ρ) :
     ∀ (n : ℕ) (tid : String) (u : ℕ) (sc : Scope) (out : String) (l g lo hi : ℕ), ρ (tid, (u : ℤ)) = n →
@@ -394,7 +394,7 @@ theorem outLeaf_land_le (hO : OwnRows P rs W) (hA : Aligned P rs W S) (hL : Lays
       · -- the row has no writer: no wire covers the leaf
         have hnw : ¬ Wired P rs W S g := by
           rintro ⟨r, l₁, lo₁, hi₁, hsome, hrl₁⟩
-          obtain ⟨e, _⟩ := hO.2 r l₁ lo₁ hi₁ r' l'' lo'' hi'' g hrl₁ hrl
+          obtain ⟨e, _⟩ := hO.2 r l₁ lo₁ hi₁ r' l'' lo'' hi'' g hrl₁ hrl (Or.inl hsome)
           subst e
           exact hwr hsome
         exact landOf_unwired_le hL.1 hnw (hwd hnw)
@@ -404,7 +404,7 @@ theorem outLeaf_land_le (hO : OwnRows P rs W) (hA : Aligned P rs W S) (hL : Lays
 /-- **The landing bound**, from `LeafHolds`: the gates a row's reads land on are together no wider than the
 row. -/
 theorem landing_le_of_holds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary)
-    (D : Verity.Circuit) (at_ : Fin D.N → ℕ) (hO : OwnRows P rs W) (hA : Aligned P rs W S)
+    (D : Verity.Circuit) (at_ : Fin D.N → ℕ) (hO : OwnRowsW P rs W S) (hA : Aligned P rs W S)
     (hL : LaysOut P rs W S D at_) (hH : LeafHolds P rs W S) (hR : ReturnsOwn P rs W) (hU : UnitsComputed P rs)
     (hN : PortsNamed P rs) (hF : OutFits P rs W S) (ρ : String × ℤ → ℕ) (hρ : Ranked S ρ) (r : Row) (sc : Scope)
     (hsc : UnitAt P rs r.tid r.unit sc) (i : ℕ) (hi : i < (P.defs[sc.d]!).params.size)
@@ -438,7 +438,7 @@ theorem landing_le_of_holds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wirin
   · -- the row has no writer: its reads land on its own leaves
     have hown : ∀ l o lo hi', RowLeaf P rs W r l o lo hi' → ¬ Wired P rs W S o := by
       rintro l o lo hi' hrl ⟨r₁, l₁, lo₁, hi₁, hsome, hrl₁⟩
-      obtain ⟨e, _⟩ := hO.2 r₁ l₁ lo₁ hi₁ r l lo hi' o hrl₁ hrl
+      obtain ⟨e, _⟩ := hO.2 r₁ l₁ lo₁ hi₁ r l lo hi' o hrl₁ hrl (Or.inl hsome)
       rw [e] at hsome
       exact hwr hsome
     have h1 : D.width (landing P rs W S at_ r) ≤
@@ -467,7 +467,7 @@ theorem landing_le_of_holds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wirin
 
 /-- **The landing bound**: the gates a row's reads land on are together no wider than the row. -/
 theorem landing_le (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary)
-    (D : Verity.Circuit) (at_ : Fin D.N → ℕ) (hO : OwnRows P rs W) (hA : Aligned P rs W S)
+    (D : Verity.Circuit) (at_ : Fin D.N → ℕ) (hO : OwnRowsW P rs W S) (hA : Aligned P rs W S)
     (hL : LaysOut P rs W S D at_) (hW : LeafWide P rs W) (hR : ReturnsOwn P rs W) (hU : UnitsComputed P rs)
     (hN : PortsNamed P rs) (hF : OutFits P rs W S) (ρ : String × ℤ → ℕ) (hρ : Ranked S ρ) (r : Row) (sc : Scope)
     (hsc : UnitAt P rs r.tid r.unit sc) (i : ℕ) (hi : i < (P.defs[sc.d]!).params.size)

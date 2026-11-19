@@ -61,7 +61,7 @@ variable {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.
 gate on which a read of a row lands, the row one of a unit of slot `u`, not inside the block (`inside`) and not
 held. `inside` is any set of rows each of which has a writer, the writer in the row's slot where both have one;
 every unit has a slot, a held row has no writer, and a gate lies in one unit. -/
-theorem reads_land (hO : OwnRows P rs W) (hL : LaysOut P rs W S D at_) (hU : UnitsComputed P rs)
+theorem reads_land (hO : OwnRowsW P rs W S) (hL : LaysOut P rs W S D at_) (hU : UnitsComputed P rs)
     (hOp : OperandsOwn P rs W) (hR : ReturnsOwn P rs W) (hN : PortsNamed P rs) {ρ : String × ℤ → ℕ}
     (hρ : Ranked S ρ)
     (hA : ∀ tid u sc tid' u' sc' g, UnitAt P rs tid u sc → UnitAt P rs tid' u' sc' → sc.off ≤ g →
@@ -144,7 +144,7 @@ theorem reads_land (hO : OwnRows P rs W) (hL : LaysOut P rs W S D at_) (hU : Uni
           have hnone := hheld r hh
           have hnw : ¬ Wired P rs W S o := by
             rintro ⟨r₁, l₁, lo₁, hi₁, hsome, hrl₁⟩
-            obtain ⟨e, -⟩ := hO.2 r₁ l₁ lo₁ hi₁ r l lo hi o hrl₁ hrl
+            obtain ⟨e, -⟩ := hO.2 r₁ l₁ lo₁ hi₁ r l lo hi o hrl₁ hrl (Or.inl hsome)
             rw [e, hnone] at hsome
             cases hsome
           have e := lands_unwired hnw hla

@@ -182,7 +182,7 @@ theorem block_gates_of {P : Prog} {doc : Json} {ts : List Tmpl} {S : ℕ} {per :
     {D : Verity.Circuit} {at_ : Fin D.N → ℕ} {n : ℕ} {U : Verity.Partition D n}
     (hP : ReadProg P) (hts : templatesOf P doc = .ok ts) (hgr : gridsOf ts doc = .ok (S, per))
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs)
-    (hO : OwnRows P rs W) (hL : LaysOut P rs W Sw D at_) (hDiv : Divides P rs (slotIn S per) at_ U) (u : Fin n) :
+    (hO : OwnRowsW P rs W Sw) (hL : LaysOut P rs W Sw D at_) (hDiv : Divides P rs (slotIn S per) at_ U) (u : Fin n) :
     D.size (U.gates u) = (ts.map fun t => t.units / S * (P.defs[t.defn]!).gates).sum ∨ U.gates u = ∅ := by
   have hnd : (ts.map (·.tid)).Nodup := (tmpls_named hts).1
   have hr : P.root < P.defs.size := (read_bodies hP).1
@@ -301,15 +301,17 @@ theorem block_gates_of {P : Prog} {doc : Json} {ts : List Tmpl} {S : ℕ} {per :
 /-- **A block has the summary's gates, or none**: in a circuit a record the check reads lays out, of a root with no
 edge, every block has the gates the summary counts, or no gate. -/
 theorem block_gates {j tr : Json} {c : InferenceOnlyVerifier.Record.Case} (h : InferenceOnlyVerifier.Record.read j tr = .ok c)
-    (hNE : InferenceOnlyVerifier.Record.SecurityProofs.EdgeFree c.f.P (c.f.nodes.map (·.node))) {d : Verity.RegisteredCircuit} (hd : Served form c d) :
+    (hNE : InferenceOnlyVerifier.Record.SecurityProofs.NoEdge c.f.P) {d : Verity.RegisteredCircuit} (hd : Served form c d) :
     ∀ u, d.D.size (d.𝓘.gates u) = (form.summarize c).gates ∨ d.𝓘.gates u = ∅ := by
   intro u
-  obtain ⟨P, doc, W, Sw, rs, at_, hdec, -, -, -, -, -, -, -, hrs, -, -, -, -, -, hL, -, hDiv⟩ := hd
+  obtain ⟨P, doc, W, Sw, rs, at_, hdec, -, htext, -, hwires, -, -, hS, hrs, -, -, -, -, -, hL, -, hDiv⟩ := hd
   have hPc : c.f.P = P := Except.ok.inj ((decode_of_read h).symm.trans hdec)
   subst hPc
-  obtain ⟨-, -, -, -, hown, -⟩ := InferenceOnlyVerifier.Record.SecurityProofs.program_of_read h
-  have hO := ownRows_holds (readProg_of_read h)
-    (InferenceOnlyVerifier.Record.SecurityProofs.ownRuns_of_edgeFree hown hNE) hrs
+  have hrs' : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg c.f.P)
+      (c.W.templates.map (·.1)).toArray = .ok rs := hrs
+  have hIP := inputParts_of_read h hNE
+  have hO : OwnRowsW c.f.P rs c.W Sw :=
+    ownRowsW_of_unwired (rowLeaf_input (readProg_of_read h) hIP hrs') (unwritten hIP htext hwires hS)
   obtain ⟨f, pin, hf, hc⟩ := read_front h
   obtain ⟨rfl, hgr, -⟩ := finish_text hc
   have hDiv' : Divides c.f.P rs (slotIn c.S c.grids) at_ d.𝓘 := hDiv

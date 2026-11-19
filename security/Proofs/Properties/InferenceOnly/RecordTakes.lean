@@ -84,4 +84,28 @@ noncomputable def landing (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring)
     {D : Verity.Circuit} (at_ : Fin D.N → ℕ) (r : Row) : Finset (Fin D.N) :=
   Finset.univ.filter fun a => ∃ l o lo hi, RowLeaf P rs W r l o lo hi ∧ Lands P rs W S o (at_ a)
 
+/-- **Every unit's rows are input gates, and a row with a writer shares no gate**: a leaf of a reader row is an input
+gate, and a gate that is a leaf of a row with a writer is a leaf of no other row, nor another leaf of it. `OwnRows`
+gives it (`ownRowsW_of_ownRows`); under a summary with no wire, so does `OwnRows`' first half alone
+(`ownRowsW_of_unwired`), which rows that share a declared node's gates keep. -/
+def OwnRowsW (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) : Prop :=
+  (∀ r l g lo hi, RowLeaf P rs W r l g lo hi →
+      ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧ Flock.Program.isInputId (P.defs[p]!).key = true) ∧
+    ∀ r l lo hi r' l' lo' hi' g, RowLeaf P rs W r l g lo hi → RowLeaf P rs W r' l' g lo' hi' →
+      ((S.writerOf r.tid r.unit r.port r.row).isSome ∨ (S.writerOf r'.tid r'.unit r'.port r'.row).isSome) →
+      r = r' ∧ l = l'
+
+theorem ownRowsW_of_ownRows {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}
+    (h : OwnRows P rs W) : OwnRowsW P rs W S :=
+  ⟨h.1, fun r l lo hi r' l' lo' hi' g hr hr' _ => h.2 r l lo hi r' l' lo' hi' g hr hr'⟩
+
+theorem ownRowsW_of_unwired {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}
+    (h : ∀ r l g lo hi, RowLeaf P rs W r l g lo hi →
+      ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧ Flock.Program.isInputId (P.defs[p]!).key = true)
+    (hS : ∀ t u p k, S.writerOf t u p k = none) : OwnRowsW P rs W S :=
+  ⟨h, fun r _ _ _ r' _ _ _ _ _ _ hw => by
+    rcases hw with hw | hw
+    · rw [hS] at hw; cases hw
+    · rw [hS] at hw; cases hw⟩
+
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs
