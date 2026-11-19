@@ -147,7 +147,7 @@ no run are left out and listed under "Refused".
 ## A workload of several requests
 
 The census art holds one `census.json` at its root, or one a request at `REQUEST/census.json`, the tree
-`benchmarks/one_stage/block_census.sh` writes under its output for a row of several requests (`--request`). Its
+`benchmarks/one_stage/block_census.py` writes under its output for a row of several requests (`--request`). Its
 manifest's `model` names the workload's model. The requests are summed into one census, the row as served: each
 Definition's and each gap's rows and each phase's tokens (`prove.summed`).
 
