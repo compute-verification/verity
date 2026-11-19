@@ -118,6 +118,16 @@ def _words16(bits: list[int], words: int) -> list[int]:
     return [sum(bits[16 * w + j] << j for j in range(16)) for w in range(words)]
 
 
+def _split_outs(meta: dict, row: list[int]) -> dict:
+    """The output row ``row`` as `FC.write`'s ``outs``: each META out port's words, unpadded, in port order."""
+    import numpy as np
+    out, at = {}, 0
+    for nm, w in meta["out_ports"]:
+        out[nm] = np.asarray([row[at:at + w]], dtype=np.uint16)
+        at += w
+    return out
+
+
 def stage(d: Path, template: str, seed: int = 7) -> dict:
     """A STAGED witness for the block of the template's first unit ``u``: every input port is a row of in(S) read from
     one writer (else refused here by name). Each writer template's output field is one tree, a leaf for each of its
@@ -245,7 +255,7 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
     iset = SimpleNamespace(name=f"served-{u}", subcircuit=SimpleNamespace(id=fn.id, inputs=[], outputs=[]))
     FC.write(text, iset, 0, 1, s / "inst-1.bin", s / "pub-1.bin", indices=[u], tables=tables,
              refs={p: [0] for p in reads}, share_rows=True, salts=salts, registered=registered,
-             outs={"o0": np.asarray([orow], dtype=np.uint16)})
+             outs=_split_outs(meta, orow))
     (s / "unit.tmpl").write_text(FC.template_of(text))
     (s / "partition.json").write_text(json.dumps(part))
     (s / "program.json").write_bytes(c)
