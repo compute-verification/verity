@@ -1754,8 +1754,8 @@ def templateQueryCmd (paths : List String) : IO UInt32 := do
   return 0
 
 /-- `partition-object FILE...`: a partition object's form (`HmRow.checkPartitionObject`) for each case `{"object"}`, and
-with `"descriptor"` (the program's bytes as a string) its `blocks` as a reader gets them (`HmRow.blocksOf`), or the
-refusal. One `PARTITIONOBJECT` line per file. -/
+with `"descriptor"` (the program's bytes as a string) its levels of `blocks` as a reader gets them (`HmRow.levelsOf`),
+or the refusal. One `PARTITIONOBJECT` line per file. -/
 def partitionObjectCmd (paths : List String) : IO UInt32 := do
   for path in paths do
     let text ← try IO.FS.readFile path catch _ => pure ""
@@ -1764,9 +1764,9 @@ def partitionObjectCmd (paths : List String) : IO UInt32 := do
       let obj := (j.getObjVal? "object").toOption.getD Lean.Json.null
       discard <| HmRow.checkPartitionObject obj
       let some d := (j.getObjValAs? String "descriptor").toOption | return Lean.Json.mkObj []
-      let bs ← HmRow.blocksOf obj d.toUTF8
-      return Lean.Json.mkObj [("blocks", match bs with
-        | some ps => Lean.Json.arr (ps.map fun (lo, hi) => Lean.toJson #[lo, hi])
+      let ls ← HmRow.levelsOf obj d.toUTF8
+      return Lean.Json.mkObj [("blocks", match ls with
+        | some ls => Lean.Json.arr (ls.map fun ps => Lean.Json.arr (ps.map fun (lo, hi) => Lean.toJson #[lo, hi]))
         | none => Lean.Json.null)]
     let line := match res with
       | .ok r => (r.setObjVal! "file" (Lean.Json.str path)).setObjVal! "ok" (Lean.Json.bool true)
