@@ -355,7 +355,6 @@ theorem decode_walk (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
   swap; · exact absurd h (by intro h; injection h)
   split at h
   swap; · exact absurd h (by intro h; injection h)
-  extract_lets go at h
   obtain ⟨⟨root, st⟩, hgo, h⟩ := Walk.except_bind_ok h
   extract_lets rd jpR at h
   split at h
@@ -413,7 +412,7 @@ theorem decode_steps (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
         | simp [getElem!_neg, hlt]
   have hgo' := decodeDefs_plain hgo hr0
   unfold goOf at hgo'
-  exact ⟨kv, desc, rootId, programFn, bm, root, {}, st, st1, st2, pairs, hkv, hgo', rfl, rfl, rfl, hp, hpar, hall, hbk,
+  exact ⟨kv, desc, rootId, programFn, bm, root, _, st, st1, st2, pairs, hkv, hgo', rfl, rfl, rfl, hp, hpar, hall, hbk,
     hbod, hd, hi, hroot, hb⟩
 
 /-- **What `decode` returns**, where its root reads no input node at another width (`Body.recut`; every reader of a gate
