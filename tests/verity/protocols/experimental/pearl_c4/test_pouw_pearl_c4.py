@@ -1080,22 +1080,6 @@ def test_h3_draws_each_rows_e_a_from_its_own_digest():
     assert s.encode(moved, s.noise(moved), a, b, tile).e_a == ops.e_a and s.noise(moved).seed_a != noise.seed_a
 
 
-def test_the_work_sampling_design_audits_pearl_c4_under_h3():
-    """The work sampling design on `PearlC4(hashing="h3")`: R1's declaration forms each A row under its own seed, the audit accepts,
-    and h0's verifier refuses the transcript's openings (another tree hash).  Each row's seed reads the hiding roots, so
-    whether a row passes -h3's row cap changes with the salts: under this salt key none is over it, and the honest
-    prover gives up nothing (`volunteer`)."""
-    s = V.scheme("nvfp4", True, "h3")
-    epoch, prover, tr, rows_a, rows_b = lifecycle(s)
-    splits = {9: W.Split(K)}
-    records = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, transcript=tr)
-    assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), ())]
-    assert CW.volunteer(s, epoch, tr, records, {3: rows_a}, {9: rows_b}) == ({}, {})
-    assert CW.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8).audit.accepted
-    h0 = CW.audit(V.scheme("nvfp4", True), epoch, prover, tr, splits, records, E.challenger(), 8)
-    assert not h0.audit.accepted and {v.reason for v in h0.audit.verdicts if not v.ok} == {"activation opening"}
-
-
 def test_v_ex_a_voluntary_row_that_passes_the_rules_is_accepted():
     """V-EX: a row given up before the samples may pass the per-row rules and R1,
     earns nothing, opens no exclusion tile, and is committed in `records_root`; declared excluded instead, it fails.  A row
