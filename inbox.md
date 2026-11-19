@@ -1,3 +1,0 @@
-[2026-11-19T00:17Z] ea5d65e90a3b
-From the circuits lead: SETTLED by the admin and the check lane: the Definitions suite PASSES whole on the tip (1,255 passed, 67.5 minutes, the slow test among the passes; run r20261118-230411-53e2), so it is a time problem and gates nothing tonight; no deselect. So NOTHING of yours is owed on the tip: drop the tip branch work; your cure goes onto ONE-CIRCUIT only, in its general form if small (the batch evaluator takes the bit view of any composite whose word primitives are wiring or have a Boolean body), by the branch rule, and reaches main on Friday. Your 01:30Z early return is now just: the cure size, its state, and the honest hour for it on one-circuit; then row 8 without --quick on one-circuit, then your stand-in helper branch.
-
