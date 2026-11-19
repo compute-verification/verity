@@ -89,8 +89,8 @@ def liftDef (d : Defn) (fnOf : Nat → Nat) (calleeOf : Nat → Option Defn) : V
   let params := d.params.map fun (n, t) => (n, Ty.bitType t)
   let ret := Ty.bitType d.ret
   return { d with key := liftedKey d.key, params, ret, gates := offsets.back!,
-           paramLeaves := params.foldl (· + ·.2.leaves) 0, outLeaves := ret.leaves,
-           body := { params, retType := ret, nodes := nodes.map (·.1), ret := ← lseq b.ret, offsets } }
+                  paramLeaves := params.foldl (· + ·.2.leaves) 0, outLeaves := ret.leaves,
+                  body := { params, retType := ret, nodes := nodes.map (·.1), ret := ← lseq b.ret, offsets } }
 
 /-- **The lift** (the module docstring): `P` with the lift of every word composite the Definitions `start` reach appended,
 and each Definition's index on bits in the result: a word composite's its lift's, a word primitive's its Boolean
