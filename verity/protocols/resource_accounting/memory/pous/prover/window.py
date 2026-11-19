@@ -3,27 +3,28 @@
 `answer_circuit`, `verdict_circuit`), its values recorded into a `Window`, and the window's four records written for the
 workers, which stage from them as they do from an adapter's.
 
-`Setup` is the setup's one circuit C (the setup unit over every block of the store) and `SessionIntegration` a session's
-statements (the signature check, the message's hash and each round's opened block); each is an `Integration`, its
-`circuit()` and its `run(window)`. `write_window` closes a window an integration ran and writes its records. None is
-written yet.
+`Setup` is the setup's one circuit C (the setup unit over every block of the store), an `Integration`: its `circuit()`
+and its `run(window)`. `session_units` is a session's units in the registered circuit, its circuit alone: no values are
+recorded for it yet.
 """
 from __future__ import annotations
 
 from collections.abc import Sequence
-from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import bits as EB
+from verity.circuits.defs import bind
 from verity.commitments import registered_value as RV
-from verity.commitments.periods.interface import Circuit, Integration, Read, Registered, Window, Wire
+from verity.commitments.crypto import lms as R
+from verity.commitments.gates.embedding import read as table_read
+from verity.commitments.periods.interface import Circuit, Read, Registered, Table, TableOpening, TableRead, Window, Wire
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 
 from . import answer_circuit, decode_circuit, session_circuit, verdict_circuit
 from . import setup_circuit as SC
-from .session import SessionStatements, SessionUnit
 from .setup_proof import payload_bytes, place, setup_unit, unit_inputs
 
 DEFINITIONS = (decode_circuit, answer_circuit, verdict_circuit, session_circuit)
@@ -31,6 +32,10 @@ DEFINITIONS = (decode_circuit, answer_circuit, verdict_circuit, session_circuit)
 STORE, WEIGHTS = "store", "weights"
 #: the units of a proof block of the setup's C: one store block each
 CAP = 1
+#: the session's: the store's blocks as a table of one block a row, and the memory attester's public key
+STORE_TABLE, ATTESTER_KEY = "store/blocks", "attester-key"
+#: the session's supplied inputs (`coin_bound`): round j's coin value is ``ROUND_COIN/j``
+ROUND_COIN, SESSION_HEADER, SESSION_CONTEXT = "round-coin", "session-header", "session-context"
 
 
 class Setup:
@@ -108,46 +113,63 @@ def _bit_rows(rows: Sequence[bytes]) -> np.ndarray:
     return np.unpackbits(np.frombuffer(b"".join(rows), dtype=np.uint8).reshape(len(rows), -1), axis=1, bitorder="little")
 
 
-class SessionIntegration:
-    """PoUS's session as an integration (`session.session_statements`): the signature check (`PousSessionSig_v1`, one
-    unit), the message's hash (`PousSessionDigest_v1`, one unit) and one opened block a round (`PousRound_v1` at slot 0
-    for the even rounds and at slot 1 for the odd), each its own proof block. Its wires are the session's links: the
-    signature's ``m`` reads the digest's output m (``o1``), and round j's ``records`` the digest's records output ⌊j/2⌋
-    (``o{2 + ⌊j/2⌋}``). The rows the verifier knows (the key, the header, the signed context, j and i) and
-    each round's registered row are free rows here, which the session's tables are to fill."""
+def coin_bound(k: int, head: int, rounds: Sequence[str], opener: str, digest: str
+               ) -> tuple[dict[str, int], tuple[Read, ...], dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    """The session's supplied inputs (PROTOCOL.md §5.4), as their parameters in 16-bit leaves, the reads that put them
+    in the units' ports, their marks and their formats: round j's coin value ``pous.session.round_coin/v1`` (``round``
+    j, 96 bits, ``u32be(j) ‖ u64be(i_j)``) under ``halves``, three 32-bit leaves (``j``, ``ihi``, ``ilo``), since the
+    opening's key is a 32-bit leaf: round j's unit reads them whole as its ``j``, ``ihi`` and ``ilo`` and round j's
+    opening reads ``ilo`` (16-bit leaves 4 and 5) as its key; and the signed header (``pous.session.header/v1`` at
+    its ``head`` bytes) and context (``pous.session.context/v1``, 848 bits) under ``le``, which the digest's unit reads.
+    ``rounds`` is the round templates' ids by slot.
 
-    def __init__(self, statements: SessionStatements) -> None:
-        self.statements = statements
-        rounds = statements.rounds
-        self._parity = tuple(tuple(u for j, u in enumerate(rounds) if j % 2 == s) for s in (0, 1))
-
-    def _templates(self) -> list[tuple[SessionUnit, ...]]:
-        st = self.statements
-        return [g for g in ((st.signature,), (st.digest,), *self._parity) if g]
-
-    def circuit(self) -> Circuit:
-        groups = self._templates()
-        sig, dig = (descriptor_id(g[0].definition) for g in groups[:2])
-        wires = [Wire(sig, "m", dig, "o1", 0, (1,), 0, (0,))]
-        for group in self._parity:
-            wires += [Wire(descriptor_id(group[0].definition), "records", dig, f"o{2 + u}", u, (1,), 0, (0,))
-                      for u in range(len(group))]
-        return Circuit("pous-session", tuple((g[0].definition, len(g)) for g in groups), wires=tuple(wires))
-
-    def run(self, window: Window) -> None:
-        """Each unit's rows as bytes (a port's words, `octets`) and its outputs: the one-bit ok as a 16-bit integer, m and
-        the records rows as bytes."""
-        for group in self._templates():
-            def rows(values, group=group):
-                return np.frombuffer(b"".join(values), dtype=np.uint8).reshape(len(group), -1)
-            inputs = [rows([u.rows[p] for u in group]) for p in range(len(group[0].rows))]
-            outputs = [np.array([u.outputs[0][0] for u in group], dtype=np.uint16),
-                       *(rows([u.outputs[o] for u in group]) for o in range(1, len(group[0].outputs)))]
-            window.record(group[0].definition, inputs, outputs)
+    STAND-IN until `Registered.supplied` takes marks: `session_units` declares the parameters and reads and holds the
+    marks back, so the values are registered rows the prover fills and the circuit proves nothing about the coins.
+    Passing the marks as ``supplied`` is the switch."""
+    params = {SESSION_HEADER: session_circuit.head_bytes(head) // 2, SESSION_CONTEXT: session_circuit.CTX_BYTES // 2}
+    reads = [Read(digest, "head", SESSION_HEADER, 0, (1,), 0, (0,)), Read(digest, "ctx", SESSION_CONTEXT, 0, (1,), 0, (0,))]
+    marks = {SESSION_HEADER: {"supplied": "pous.session.header/v1", "args": {"head": head}, "layout": "le",
+                              "bits": 8 * session_circuit.head_bytes(head)},
+             SESSION_CONTEXT: {"supplied": "pous.session.context/v1", "args": {}, "layout": "le",
+                               "bits": 8 * session_circuit.CTX_BYTES}}
+    for j in range(k):
+        p = f"{ROUND_COIN}/{j}"
+        params[p] = 6
+        reads += [Read(rounds[j % 2], h, p, j // 2, (1,), 2 * t, (0,)) for t, h in enumerate(("j", "ihi", "ilo"))]
+        reads.append(Read(opener, "tok", p, j, (1,), 4, (0,)))
+        marks[p] = {"supplied": "pous.session.round_coin/v1", "args": {"round": j}, "layout": "halves", "bits": 96}
+    formats = {f"{ROUND_COIN}/{j}": {"row_schema": V2, "word_bits": 32} for j in range(k)}
+    return params, tuple(reads), marks, formats
 
 
-def write_window(integration: Integration, out_dir: Path, registrar: Any) -> Path:
-    """The window `integration` runs, closed and written under `out_dir` (`Window.close`, `Window.write`, its
-    registration record made by `registrar`): the four records the workers stage from. Returns the window's
-    directory."""
-    raise NotImplementedError("proofs/zero-knowledge: PoUS's window records for the workers (write_window)")
+def session_units(k: int, head: int, limit_ns: int, block_bytes: int, blocks: int, params: R.Params = R.DEPLOYED) -> Circuit:
+    """A session of ``k`` rounds over a store of ``blocks`` blocks of ``block_bytes`` bytes, as units of the registered
+    circuit, in the order its wires run (each writer before its readers):
+
+        PousSessionDigest_v1{k, head, limit_ns}  1 unit    (head, ctx, the records rows) -> (ok, m, the records rows)
+        PousSessionSig_v1{N, W, H}               1 unit    key: the registered key; m: the digest's m by wire
+        EmbeddingRead_v2{blocks, block_bytes/2}  k units   round j's opening of the store's table at its index
+        PousRound_v2{block_bytes, 0}             ⌈k/2⌉     round j = 2u: records row u by wire, row from opening j
+        PousRound_v2{block_bytes, 1}             ⌊k/2⌋     round j = 2u + 1: the same, at the record's second slot
+
+    The store's table and the key are registered values; the coins' are `coin_bound`'s. The store's table has at most
+    2^31 blocks (`gates.embedding`'s V), so i_j < 2^31 and the key, i_j's low 32 bits, is i_j."""
+    dig = bind(session_circuit.PousSessionDigest, K=k, HEAD=head, LIMIT=limit_ns)
+    sig = bind(session_circuit.PousSessionSig, N=params.N, W=params.W, H=params.H)
+    opener = table_read(blocks, block_bytes // 2)
+    slots = [(bind(session_circuit.PousRound, N=block_bytes, SLOT=s), (k - s + 1) // 2) for s in (0, 1)]
+    slots = [(t, n) for t, n in slots if n]
+    d, g, o = (descriptor_id(t) for t in (dig, sig, opener))
+    wires = [Wire(g, "m", d, "o1", 0, (1,), 0, (0,))]
+    for s, (t, n) in enumerate(slots):
+        r = descriptor_id(t)
+        wires += [Wire(r, "records", d, f"o{2 + u}", u, (1,), 0, (0,)) for u in range(n)]
+        wires.append(Wire(r, "row", o, "o0", 0, (n,), s, (2,)))
+    coins, reads, _marks, formats = coin_bound(k, head, [descriptor_id(t) for t, _ in slots], o, d)
+    registered = Registered(
+        {STORE: blocks * block_bytes // 2, ATTESTER_KEY: (16 + params.N) // 2, **coins},
+        tables=(Table(STORE_TABLE, STORE, 0, block_bytes // 2, blocks),),
+        reads=(Read(g, "key", ATTESTER_KEY, 0, (1,), 0, (0,)), *reads),
+        roots=(TableRead(o, "root", STORE_TABLE, "root", 0, k), TableRead(o, "domain", STORE_TABLE, "domain", 0, k)),
+        openings=(TableOpening(o, STORE_TABLE, "tok", ("row", "salt", "path"), "o1", 0, k, row="o0"),), formats=formats)
+    return Circuit("pous-session", ((dig, 1), (sig, 1), (opener, k), *slots), wires=tuple(wires), registered=registered)

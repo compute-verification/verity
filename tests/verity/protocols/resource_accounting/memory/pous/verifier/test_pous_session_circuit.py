@@ -13,6 +13,7 @@ import pytest
 from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import resolve
+from verity.circuits.ops.boolean import versions  # noqa: F401 - registers WordBits' Boolean bodies, which the round unit's row reads through
 from verity.commitments.crypto import lms as R
 from verity.commitments.rowleaf import sha512_row_v2_digest
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
@@ -28,10 +29,6 @@ def _bits(data: bytes) -> list[int]:
     return [(b >> k) & 1 for b in data for k in range(8)]
 
 
-def _int(v: int, width: int) -> list[int]:
-    return [(v >> t) & 1 for t in range(width)]
-
-
 def _flip(b: bytes, at: int = 0, bit: int = 0) -> bytes:
     return b[:at] + bytes([b[at] ^ 1 << bit]) + b[at + 1:]
 
@@ -43,14 +40,16 @@ def _run(d, rows: list[list[list[int]]]) -> list[int]:
 
 def test_the_rows_at_the_deployed_scheme() -> None:
     """The deployed signature's unit reads the 80-byte key, the 64-byte message and the 34,756-byte signature, and the
-    round's unit a 2,056-byte row, a records row of two 92-byte records and the public u32 j and u64 index; each outputs
-    one bit."""
+    round's unit a 2,056-byte row as 1,028 words, a records row of two 92-byte records and the 12 bytes u32 j || u64 i;
+    each outputs one bit."""
     p = R.DEPLOYED
     params, ret = resolve(bind(S.PousSessionSig, N=p.N, W=p.W, H=p.H)).signature()
     assert [(n, t.leaves) for n, t in params] == [("key", 640), ("m", 512), ("sig", 8 * p.signature_bytes())]
     assert ret.leaves == 1
     params, ret = resolve(bind(S.PousRound, N=2056, SLOT=1)).signature()
-    assert [(n, t.leaves) for n, t in params] == [("row", 16448), ("records", 1472), ("j", 32), ("i", 64)]
+    assert [(n, t.leaves, t.leaf_widths()[0]) for n, t in params] == [("row", 1028, 16), ("records", 1472, 1),
+                                                                        ("j", 1, 32), ("ihi", 1, 32),
+                                                                        ("ilo", 1, 32)]
     assert ret.leaves == 1
     assert len(Round(0, 0, 0, 0, bytes(64)).value()) == S.RECORD_BYTES
 
@@ -85,7 +84,8 @@ def _rand(n: int) -> bytes:
 def test_the_round_unit_agrees_with_its_reference(slot) -> None:
     """About 9 s at the first slot (the row digest's ends traced over a 136-byte row: a head and a tail with its rest).
     Round j's record at slot j mod 2 of its row, holding the row's digest, gives 1; another row, the other record of the
-    pair at the unit's slot, a flipped bit of the record's digest, the wrong round and the wrong index each give 0."""
+    pair at the unit's slot, a flipped bit of the record's digest, the wrong round and the wrong index each give 0. The
+    row is read as its words, each two bytes little-endian."""
     N = 136
     row, other = _rand(N), _rand(N)
     j, i = 2 * 5 + slot, 0x0123_4567_89AB
@@ -93,12 +93,20 @@ def test_the_round_unit_agrees_with_its_reference(slot) -> None:
     pair = Round(j ^ 1, 77, 11, 21, sha512_row_v2_digest(other, 8 * N)).value()
     recs = mine + pair if slot == 0 else pair + mine
     swapped = recs[S.RECORD_BYTES:] + recs[:S.RECORD_BYTES]
-    cases = [(row, recs, j, i), (other, recs, j, i), (row, swapped, j, i),
-             (row, _flip(recs, S.RECORD_BYTES * slot + 60, 2), j, i), (row, recs, j ^ 1, i), (row, recs, j, i ^ 1 << 40)]
+    def coin(j: int, i: int) -> bytes:
+        return j.to_bytes(4, "big") + i.to_bytes(8, "big")
+
+    ji = coin(j, i)
+    cases = [(row, recs, ji), (other, recs, ji), (row, swapped, ji),
+             (row, _flip(recs, S.RECORD_BYTES * slot + 60, 2), ji), (row, recs, coin(j ^ 1, i)),
+             (row, recs, coin(j, i ^ 1 << 40)), (row, recs, coin(j, i ^ 1 << 3))]
     want = [S.round_ok(N, slot, *c) for c in cases]
-    assert want == [1, 0, 0, 0, 0, 0]
-    rows = [[_bits(r), _bits(rs), _int(jj, 32), _int(ii, 64)] for r, rs, jj, ii in cases]
-    assert _run(bind(S.PousRound, N=N, SLOT=slot), rows) == want
+    assert want == [1, 0, 0, 0, 0, 0, 0]
+    halves = [[int.from_bytes(x[h:h + 4], "big") for h in (0, 4, 8)] for _, _, x in cases]
+    cols = [np.array([np.frombuffer(r, dtype="<u2") for r, _, _ in cases], dtype=np.uint16),
+            np.array([_bits(rs) for _, rs, _ in cases], dtype=np.uint8),
+            *(np.array([hs[h] for hs in halves], dtype=np.uint32) for h in range(3))]
+    assert np.asarray(E.evaluate_batch(bind(S.PousRound, N=N, SLOT=slot), *cols)).reshape(-1).tolist() == want
 
 
 def test_a_slot_past_the_row_is_refused() -> None:
@@ -156,3 +164,25 @@ def test_the_signed_digest_unit_agrees_with_its_reference() -> None:
     out = np.asarray(E.evaluate_batch(bind(S.PousSessionDigest, K=K, HEAD=n, LIMIT=c.limit_ns), *cols))
     assert out.reshape(len(cases), -1).tolist() == [[ok, *_bits(mm), *(b for r in rs for b in _bits(r))]
                                                      for ok, mm, rs in want]
+
+
+@pytest.mark.slow
+def test_the_door_takes_the_sessions_units_in_wire_order() -> None:
+    """The session's units as `window.session_units` lays them out (digest, signature, the store's openings, the rounds)
+    make one Program through the door (`wired_population_program`), and the signature ranked before the digest it reads
+    is refused. Building the Program takes about two minutes at toy size; nothing cheaper runs the door's rank and port
+    rules over these units."""
+    from verity.commitments.periods.interface import Circuit
+    from verity.protocols.resource_accounting.memory.pous.prover import window as W
+
+    c = W.session_units(3, 8, 1000, 264, 2, R.Params(R.TOY_N, 1, 1, toy=True))
+    assert [t.split("{")[0] for t in c.ids] == ["PousSessionDigest_v1", "PousSessionSig_v1", "EmbeddingRead_v2",
+                                                "PousRound_v2", "PousRound_v2"]
+    assert list(c.units.values()) == [1, 1, 3, 2, 1]
+    reads = {(r.port, r.param): (r.at, r.base) for r in c.registered.reads}
+    assert [reads[("tok", f"{W.ROUND_COIN}/{j}")] for j in range(3)] == [(0, 4), (1, 4), (2, 4)]
+    assert [reads[(h, f"{W.ROUND_COIN}/2")] for h in ("j", "ihi", "ilo")] == [(1, 0), (1, 2), (1, 4)]
+    c.program()
+    (dig, _), (sig, _), *rest = c.templates
+    with pytest.raises(ValueError, match="at or after reader"):
+        Circuit("pous-session", ((sig, 1), (dig, 1), *rest), wires=c.wires, registered=c.registered).program()
