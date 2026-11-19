@@ -1233,6 +1233,7 @@ theorem checkSampleFull_obj_nil (kvs : Std.TreeMap.Raw String Json compare) (pop
          apply imp_congr_right; intro _
          rw [hjb]
          obtain ⟨m, h1, h2⟩ := hpe hp
+         simp (config := {failIfUnchanged := false}) only [beq_iff_eq] at h2
          exact ⟨fun h => ⟨m, h1, h2, h⟩, fun ⟨_, _, _, h⟩ => h⟩)
       | (simp only [Bool.or_eq_false_iff, beq_eq_false_iff_ne]
          constructor
