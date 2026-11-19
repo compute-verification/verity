@@ -961,7 +961,7 @@ PASSES, PASSES_KEPT = "passes", 4000
 PASS_SCHEMA = "lean-records-pass/v2"
 #: `--records`' facts cache, beside its trees and shared by every slot's: each audited package's sealed facts document
 #: (`check.py --facts-cache`), named by its build's content address (`facts_key`), outside every slot tree's build roots
-FACTS_CACHE = "facts"
+FACTS_CACHE = LA.RECORDS_FACTS
 SELF = "tools/verity/lean/lean_changed.py"
 LOCK = "lean-audit.json"
 
@@ -2021,10 +2021,10 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                 args = opts + (SIBLINGS.lean_args(tree / pkg, plan, work) if checked else [])
                 at = os.path.relpath(SIBLINGS.source(plan, work), tree / pkg / PROBE.COPIES) if checked else rel
                 if rc == 0:
-                    step, (rc, said, text) = "lean", PROBE.probe(
+                    step, (rc, said, text) = f"{step} exit 0, then lean", PROBE.probe(
                         tree / pkg, at, (ROOT / file).read_text(),
                         lambda copy, show: build(pkg, tree, lake, sandbox=sandbox, cmd=["env", "lean", *args, copy],
-                                                 echo=show))
+                                                 echo=show), home=os.path.dirname(rel))
                 log(f"lean-try: {file}: {step} exit {rc} in {time.monotonic() - t0:.0f} s")
                 if rc and (healed := clashed(tree, closure(pkg), text)):
                     log(f"lean-try: {file}: an import clash between {' and '.join(healed)}, which this tree can leave when "

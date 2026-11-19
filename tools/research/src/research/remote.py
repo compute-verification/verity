@@ -107,6 +107,8 @@
                     slot.json names the copy that ran, with its commit.
     observe/fetch   `research fetch <id>` copies the small records (or --all files) into the local run dir over one ssh+tar, extracted
                     member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
+                    --all copies no private file (store.private, judged on the machine by PRIVATE_PROGRAM): remote.json and
+                    preserved.json list each as `refused`, and its only copy stays on the machine.
                     Unreachable means "last observed at T; current status unknown", never "failed".
     adopt           a run another VM launched has no local dir: `research inspect|fetch|status RUN` (a full run id) finds
                     <root>/runs/<id> on `--on NAME`, else on each ssh machine but the auditor devices (`restricted`; a pod belongs to
@@ -157,6 +159,7 @@ from pathlib import Path, PurePosixPath
 from typing import IO, Any, Callable
 
 from . import clone
+from .store.private import REFUSED_FILE
 from .telemetry.events import utc_now_ms
 from .telemetry.job import ADDRESS_MIN, REDACTED, address_names, hide_addresses, write_json_atomic
 
@@ -174,7 +177,8 @@ SHIP_CHUNK = 1 << 20                          # the launcher never holds more of
 STALE_PARTIAL_MIN = 30                        # a <root>/src/*.partial-* directory with nothing written for this long belongs to a dead ship
 _RC_DIGEST = 75                               # the ship script's exit when the received archive is not the launcher's (nothing extracted)
 WORKLOAD_CWD_DEFAULT = "run_dir"              # the machine-side runner's default workload cwd; a shipped package without this line predates it
-SMALL_FILES = ("job.json", "status.json", "failure.json", "result.json", "launch.json", "refused.json", "events.jsonl", "slot.json")
+SMALL_FILES = ("job.json", "status.json", "failure.json", "result.json", "launch.json", "refused.json", "events.jsonl", "slot.json",
+               REFUSED_FILE)
 TERMINAL = ("done", "failed", "cancelled")
 FETCHED_FILE = ".fetched"                     # <run>/.fetched on the machine: written by `fetch --all` once every file verified
 FETCHED_SCHEMA = "research/fetched/v0.1"
@@ -759,8 +763,18 @@ def source_tool_package(source: Path | None) -> Path | None:
 
 
 def tool_tarball(src: Path | None = None) -> tuple[bytes, str]:
-    """Deterministic tar of the research package source (no tests, no caches); sha256 of the tar is the tool identity."""
+    """Deterministic tar of the research package source (no tests, no caches), with the snapshot's floor beside it at store.private's
+    TREE_NAMES: the list of the repository the package sits in, else (a tree that predates it) this launcher's own floor; sha256 of
+    the tar is the tool identity.  Refused when neither is there: custody on the machine could judge nothing."""
+    from .store import private
+
     src = Path(src).resolve() if src is not None else Path(__file__).resolve().parent
+    floor = next((src.parents[i] / private.TREE_NAMES for i in (3, 0)
+                  if i < len(src.parents) and (src.parents[i] / private.TREE_NAMES).is_file()), None)
+    try:
+        floor_bytes = floor.read_bytes() if floor is not None else private.floor_text().encode()
+    except (OSError, private.PathsUnread) as e:
+        raise Refused(f"the research package {src} ships no private names ({e}), so its snapshot's custody could judge no file") from None
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tf:
         for p in sorted(src.rglob("*")):
@@ -772,6 +786,9 @@ def tool_tarball(src: Path | None = None) -> tuple[bytes, str]:
             ti.uname = ti.gname = ""
             with open(p, "rb") as f:
                 tf.addfile(ti, f)
+        ti = tarfile.TarInfo(private.TREE_NAMES)
+        ti.size, ti.mode = len(floor_bytes), 0o644
+        tf.addfile(ti, io.BytesIO(floor_bytes))
     data = buf.getvalue()
     return data, hashlib.sha256(data).hexdigest()[:16]
 
@@ -2661,6 +2678,59 @@ def _remote_status(ssh: list[str], rd: str, *, timeout: float = 120) -> dict[str
     return doc if isinstance(doc, dict) else {}
 
 
+#: what `fetch --all` runs on the machine as `python3 -c PROGRAM MODE .` in the run dir, after `SRC = ...` (store/private.py) and
+#: `NAMES = ...` (its floor's private names, `floor_text`): `list`
+#: prints {"refused": [...]} (or {"unread": why}, exit 3); `keep` prints, NUL-separated, every file and symlink tar may copy
+PRIVATE_PROGRAM = '''
+import json, os, sys, types
+P = types.ModuleType("research_private")
+P.__file__ = "research/store/private.py"
+P.NAMES_TEXT = NAMES
+sys.modules[P.__name__] = P
+exec(compile(SRC, P.__file__, "exec"), P.__dict__)
+mode, root = sys.argv[1], sys.argv[2]
+try:
+    refused = P.scan(root)
+except P.PathsUnread as e:
+    print(json.dumps({"unread": str(e)}))
+    sys.exit(3)
+if mode == "list":
+    print(json.dumps({"refused": refused}))
+    sys.exit(0)
+bad = {r["path"] for r in refused}
+out = sys.stdout.buffer
+for base, dirs, files in os.walk(root):
+    for n in [*files, *(d for d in dirs if os.path.islink(os.path.join(base, d)))]:
+        rel = os.path.relpath(os.path.join(base, n), root)
+        if rel not in bad:
+            out.write(b"./" + os.fsencode(rel) + b"\\0")
+'''
+
+
+def private_program() -> str:
+    """PRIVATE_PROGRAM with this package's store/private.py and its floor's private names; PathsUnread when the floor can't be read."""
+    from .store import private
+
+    return f"SRC = {Path(private.__file__).read_text()!r}\nNAMES = {private.floor_text()!r}\n" + PRIVATE_PROGRAM
+
+
+def _refused_on_machine(ssh: list[str], rd: str, timeout: float) -> list[dict[str, Any]]:
+    """The private files of the run dir on the machine (store.private, with the run's own PATHS_FILE), judged there; Refused when they
+    can't be told, so `fetch --all` copies nothing it hasn't judged."""
+    from .store.private import PathsUnread
+
+    try:
+        program = private_program()
+    except PathsUnread as e:
+        raise Refused(f"the run's private files can't be judged, so nothing was copied: {e}") from None
+    r = ssh_run(ssh, ["sh", "-c", f"cd {shlex.quote(rd)} || exit 2; exec python3 -c {shlex.quote(program)} list ."], timeout=timeout)
+    out = _json_line((r.stdout.decode(errors="replace").strip().splitlines() or [""])[-1])
+    if r.returncode != 0 or not isinstance(out.get("refused"), list):
+        why = out.get("unread") or r.stderr.decode(errors="replace").strip()[-300:] or f"rc {r.returncode}"
+        raise Refused(f"the machine could not list the run's private files, so nothing was copied: {why}")
+    return out["refused"]
+
+
 def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = (), timeout: float | None = None) -> dict[str, Any]:
     """Copy records (or everything) from the machine into the local run dir, with the run dir's files ``also`` names beside the
     records (paths under the run dir: the workload's own small progress files and logs).  Unreachable -> observed_utc
@@ -2682,18 +2752,24 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
     ssh = ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root")
     rd = rec["remote_run_dir"]
     if everything:
-        remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} || exit 2; tar -cf - .{TAR_CHANGED_OK}"]
+        rec["refused"] = _refused_on_machine(ssh, rd, within(900))
+        # the files tar packs are judged again as it packs them: a private file written since the listing is still left behind
+        remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} || exit 2; python3 -c {shlex.quote(private_program())} keep . | "
+                                  f"tar --null --no-recursion -cf - -T -{TAR_CHANGED_OK}"]
     else:
         # each name once: tar stores a second copy of a name as a hard link, which `extract` can't read off a stream, and the
         # files after it never arrive
         names = " ".join(shlex.quote(n) for n in dict.fromkeys((*SMALL_FILES, *also)))
         remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} || exit 2; ls {names} 2>/dev/null | tar -cf - -T -{TAR_CHANGED_OK}"]
 
+    private = {r.get("path") for r in rec.get("refused") or []} if everything else set()
+
     def extract(stream: IO[bytes]) -> None:           # member by member off the ssh pipe: a big run is never in the launcher's memory
         with tarfile.open(fileobj=stream, mode="r|") as tf:
             for m in tf:
                 name = m.name.removeprefix("./")
-                if m.name.startswith("/") or ".." in Path(m.name).parts or name in ("", ".", "remote.json", FETCHED_FILE, FETCHED_FILE + ".tmp"):
+                if (m.name.startswith("/") or ".." in Path(m.name).parts or name in private
+                        or name in ("", ".", "remote.json", FETCHED_FILE, FETCHED_FILE + ".tmp")):
                     continue
                 tf.extract(m, local_dir, **({"filter": "data"} if hasattr(tarfile, "data_filter") else {}))
 
@@ -2998,6 +3074,9 @@ def _verify_and_manifest(ssh: list[str], remote_dir: str, local_dir: Path, rec: 
             continue
         h, _, name = line.partition("  ")
         remote_sums[name.removeprefix("./")] = h
+    refused = rec.get("refused") or []
+    for r in refused:                                 # left on the machine, never copied: its copy there is the only one
+        remote_sums.pop(r.get("path"), None)
     files, mismatched = [], []
     for name, h in sorted(remote_sums.items()):
         p = local_dir / name
@@ -3010,7 +3089,7 @@ def _verify_and_manifest(ssh: list[str], remote_dir: str, local_dir: Path, rec: 
         rec["preserve_error"] = {"at_utc": utc_now_ms(), "mismatched_or_missing": mismatched}
         return None
     manifest = {"schema": PRESERVED_SCHEMA, "run_id": rec["run_id"], "source": f"{rec['host']}:{remote_dir}", "destination": str(local_dir),
-                "files": files, "completed_utc": utc_now_ms(), "verified_from_machine_epoch": t0,
+                "files": files, **({"refused": refused} if refused else {}), "completed_utc": utc_now_ms(), "verified_from_machine_epoch": t0,
                 "note": "copy on the control machine; the machine's copy is the other one"}
     write_json_atomic(local_dir / "preserved.json", manifest)   # written last
     return manifest

@@ -1401,6 +1401,14 @@ src = "tools/research/store.pod.toml"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-4"]
 owner = "infra"
 
+# the tree's private names at their path beside the copy above, custody's floor (store.private.FLOOR_ROOTS): without it the copy
+# stores nothing
+[[file]]
+path = "/workspace/custody/adapters/vllm/verity_vllm/pipeline/private_names.json"
+src = "adapters/vllm/verity_vllm/pipeline/private_names.json"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-4"]
+owner = "infra"
+
 # the node file and the card pods/nebius/check.py reads its figures from, beside the copy above as in the repository: the
 # node's python3 has no verity package, so the check reads them by path
 [[file]]

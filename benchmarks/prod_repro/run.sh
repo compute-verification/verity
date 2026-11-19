@@ -48,9 +48,10 @@
 # OUT/topk_counters.json.
 # The advice line is of the pass the replay re-runs: what its schedule costs as advice, by the scheduler replay's
 # loader (benchmarks/network_e2e/encodings/replay.py).
-# The --replay-of form serves nothing: it copies ours's directory from an earlier job's out/ into this job's and
-# re-runs the replay of the named pass from it, under a lease the benchmark's runner takes for the replay alone; its
-# report is of ours alone, with no cost.
+# The --replay-of form serves nothing: it re-runs the replay of the named pass from ours's directory in an earlier
+# job's out/, where it lies, under a lease the benchmark's runner takes for the replay alone, and copies into this
+# job's out/ only the fields of that directory's records prod_repro.py's NAMED lists (prod_repro.py carry); its report
+# reads ours there and is of ours alone, with no cost.
 # The --report form reads an earlier job's out/ and needs no GPU. Every form ends with the report (prod_repro.py
 # report), written to OUT/prod_repro.{json,txt}, which says how far each arm and the replay got, also where the job is
 # ended early (SIGTERM: the runner's children stop, and the report is of what was served and replayed by then); the
@@ -115,6 +116,7 @@ REPLAY_MODES=${REPLAY_MODES:-compiled}
 report() {
   local more=()
   [ "${2:-}" != job ] || [ -z "${PRIVATE:-}" ] || more+=(--private "$PRIVATE")
+  [ "${2:-}" != job ] || [ -z "$REPLAY_OF" ] || more+=(--served-at "$REPLAY_OF")
   [ -z "$REPLAYED" ] || [ "$REPLAYED" = none ] || more+=(--replayed "$REPLAYED" --expect-replay)
   [ ${#BESIDE[@]} = 0 ] || more+=(--beside "${BESIDE[@]}")
   "$PY" "$here/prod_repro.py" report "$1" --stock "$STOCK" --again "$AGAIN" --ours "$OURS" --load "${LOAD%%=*}" \
@@ -141,24 +143,20 @@ replays() {
 termed=0; trap 'termed=1' TERM
 if [ -n "$REPLAY_OF" ]; then
   # no arm is served: the benchmark's runner replays alone where it is given no arms and the directory of an arm that
-  # kept each request's ids, which here is the earlier job's, copied so that this job's out/ holds what its report reads
+  # kept each request's ids, which here is the earlier job's, read where it lies; this job's out/ holds the named
+  # fields of its records alone
   [ -n "${LOAD:-}" ] && [ -n "$REPLAYED" ] && [ "$REPLAYED" != none ] || {
     echo "prod_repro: --replay-of OUT --load NAME --replay PASS: the load the earlier job served and the pass of it to re-run"; exit 2; }
   [ -f "$REPLAY_OF/$OURS/meta.json" ] || {
     echo "prod_repro: --replay-of $REPLAY_OF holds no $OURS/meta.json: name the out/ of a job that served $OURS"; exit 2; }
-  if [ -e "$OUT/$OURS" ]; then
-    cmp -s "$REPLAY_OF/$OURS/meta.json" "$OUT/$OURS/meta.json" || {
-      echo "prod_repro: $OUT/$OURS is there already and is not $REPLAY_OF's: --replay-of is a job of its own"; exit 2; }
-  else
-    mkdir -p "$OUT" && cp -r "$REPLAY_OF/$OURS" "$OUT/$OURS" || { echo "prod_repro: could not copy $REPLAY_OF/$OURS into $OUT"; exit 2; }
-  fi
+  "$PY" "$here/prod_repro.py" carry "$REPLAY_OF/$OURS" "$OUT/$OURS" || { echo "prod_repro: could not carry $REPLAY_OF/$OURS into $OUT"; exit 2; }
   # the canonical top-k's counters of the arm's serving are the earlier job's; its replay's are not this replay's
   [ ! -f "$REPLAY_OF/topk_counters.json" ] || "$PY" -c 'import json, sys
 was = json.load(open(sys.argv[1]))
 json.dump({"replay": None, "served": was.get("served")} | {k: was[k] for k in ("dirs",) if k in was}, open(sys.argv[2], "w"), indent=1)' \
     "$REPLAY_OF/topk_counters.json" "$OUT/topk_counters.json" || { echo "prod_repro: could not read $REPLAY_OF/topk_counters.json"; exit 2; }
   STOCK=; AGAIN=; alone=0
-  ( unset ARMS LOADS; export CLIENT=corpus REPLAY=$REPLAYED REPLAY_FROM=$OUT/$OURS REPLAY_MODES; bash "$tax/run.sh" ); rc=$?
+  ( unset ARMS LOADS; export CLIENT=corpus REPLAY=$REPLAYED REPLAY_FROM=$REPLAY_OF/$OURS REPLAY_MODES; bash "$tax/run.sh" ); rc=$?
 else
 case $CLIENT in
   corpus)

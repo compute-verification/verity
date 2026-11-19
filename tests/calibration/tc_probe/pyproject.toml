@@ -31,4 +31,4 @@ inputs = ["calibration/census", "benchmarks/numerical/bench-instances", "verity/
 
 [[tool.verity.tests.reads]]
 tests = ["test_instances_hw.py"]
-paths = ["*/pyproject.toml", "tools/research/src/research"]
+paths = ["*/pyproject.toml", "tools/research/src/research", "adapters/vllm/verity_vllm/pipeline/private_names.json"]

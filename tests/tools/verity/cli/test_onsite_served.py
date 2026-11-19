@@ -1196,6 +1196,29 @@ def test_the_wipes_key_is_the_pin_when_bound_and_the_runs_otherwise_and_served_j
         assert (tmp_path / "tmpdir.txt").read_text().split() == [str(keys), "700"] and not keys.exists()
 
 
+#: demo.sh's stand-in that runs the streamer it is given, as the memory attester's gate does, while the wipe runs
+STREAMING = ARGS0 + """for ((i = 1; i < $#; i++)); do [ "${!i}" != --wipe-stream ] || j=$((i + 1)); done
+printf '%064d\\n' 0 | "${!j}" check --start 0 --count 2 > "$(dirname "$0")/labels.txt"
+"""
+
+
+def test_the_runs_streamer_is_built_and_run_outside_the_serve_dir(tmp_path):
+    """With the memory attester the run's, its native streamer is built into a directory of its own and handed to demo.sh
+    (`--wipe-stream`), so nothing under the serve dir, which may be mounted noexec (/dev/shm), is run: the key stays
+    under it (TMPDIR), the streamer runs from outside it and derives `streamed_wipe.label`'s labels, and both are gone
+    when the wipe ends."""
+    from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
+    demo = executable(tmp_path, "streaming.sh", STREAMING)
+    p, _ = served_wipe(tmp_path, {}, WIPE_DEMO=str(demo))
+    assert p.returncode == 0, p.stdout + p.stderr
+    argv, serve = args0(demo), tmp_path / "serve"
+    stream = Path(argv[argv.index("--wipe-stream") + 1])
+    assert not stream.resolve().is_relative_to(serve.resolve())
+    labels = (tmp_path / "labels.txt").read_text().splitlines()[1:]
+    assert b"".join(bytes.fromhex(x) for x in labels) == sw.labels(bytes(32), 0, 2)
+    assert not stream.exists() and not (serve / "private" / "run-keys" / "wipe").exists()
+
+
 @pytest.mark.parametrize("name", ["WIPE_KEY_SHA512", "WIPE_ADDRESS", "WIPE_CHALLENGER", "WIPE_COMMAND"])
 def test_the_wipes_run_keys_beside_a_pin_or_an_attester_is_refused_before_the_card(tmp_path, name):
     p, demo = served_wipe(tmp_path, {}, **{name: ""})

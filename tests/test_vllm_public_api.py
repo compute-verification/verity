@@ -60,6 +60,9 @@ PUBLIC = {
     "verity_vllm.settings": "I1: the record of the value settings in force in an environment (record): each variable set "
                             "there that can change what is computed or committed, a credential by name only, and their "
                             "digest, which benchmarks/serve_tax writes into an arm's meta.json and a replay's replay.json",
+    "verity_vllm.pipeline.serve_mirror": "I1: a record's public fields by kind: check_kinds refuses a table of fields whose "
+                                         "kind is not one of verity.channel's public kinds, and project keeps a record's "
+                                         "named fields and drops the rest; benchmarks/prod_repro states its NAMED in it",
     "verity_vllm.engine.handle": "I2: a built engine's vLLM objects",
     "verity_vllm.engine.stock": "I1: a stock engine at the pin, with no protocol on: an in-process LLMEngine, vLLM's "
                                 "SamplingParams and its version",
