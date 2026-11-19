@@ -1,14 +1,15 @@
 module
 
 public import Spot.BlockFront
-public import Flock.Lift
+public import Flock.Lower
 meta import Flock
 
 /-!
 # `restrict`: the block's Program, at the word level
 
 `restrict C S` is the Program of block S of the registered circuit C (`verity.circuits.restrict`), a value of
-`Flock.Program.Prog`, never bytes: the lowering takes it and lifts it to bits (`Spot.BlockFront.program`). On the decoded C
+`Flock.Program.Prog`, never bytes; `ported` makes its input nodes the root's parameters, the form `Flock.Lower.lower`
+lifts to bits (`Flock.Lift.lift`) and lowers. On the decoded C
 and the block's units (`Spot.BlockFront.members`), with in(S) and out(S) as `Spot.BlockFront.front` computes them:
 
 * the root `Root[Block_v1]_v1`, whose Program function is `Block_v1`, has one input batch node for each maximal run of
@@ -167,6 +168,36 @@ def restrict (P : Prog) (units : Array Nat) : V Prog := do
   let Q : Prog := { P with defs := defs.push blk, index := index.insert ROOT defs.size, root := defs.size, programFn := FN }
   return { Q with sha512 := ByteArray.empty }
 
+/-- `Q`'s root with its leading input nodes as its parameters, in order, each the node's type: a reference to input node
+`i` reads parameter `i`, one to a later node its index less the input nodes'. This is the block's Program as
+`Flock.Lower.lower` and `Prog.evalBool` read it, its parameters the input ports' bits in increasing C index. Refuses a
+root with parameters of its own, and a registered input node: a parameter does not say it is registered, so the verifier
+would commit its rows afresh. -/
+def ported (Q : Prog) : V Prog := do
+  let some root := Q.defs[Q.root]? | throw "ported: the root is not one of the Program's Definitions"
+  if !root.params.isEmpty then throw "ported: the root has parameters already"
+  let isIn := fun (x : Node) => ((Q.defs[x.fn]?).map fun d => d.prim && isInputId d.id).getD false
+  let k := (root.body.nodes.toList.takeWhile isIn).length
+  let ins := root.body.nodes.extract 0 k
+  let registered := fun (x : Node) => ((Q.defs[x.fn]?).map fun d => (inputId? d.id).map (·.1) == some REGISTRATION).getD false
+  if let some x := ins.find? registered then
+    throw s!"ported: the block reads a registered value ({(Q.defs[x.fn]!).id}), and a parameter does not carry that \
+      it is registered: its rows would be committed afresh"
+  if root.body.nodes.toList.drop k |>.any isIn then throw "ported: an input node after a node that is not one"
+  let re := fun (r : Ref) => if r.p then r else if r.i < k then { p := true, i := r.i, j := r.j } else { r with i := r.i - k }
+  let move := fun (s : Seq) => BlockFront.runs (s.toArray.map re)
+  let params := (Array.range k).zipWith (fun i (x : Node) => (s!"in{i}", x.out)) ins
+  let nodes := (root.body.nodes.extract k root.body.nodes.size).map fun x =>
+    { x with args := x.args.map fun a => { a with seq := move a.seq } }
+  let some o0 := root.body.offsets[k]? | throw "ported: the root's offsets are fewer than its input nodes"
+  let offsets := (root.body.offsets.extract k root.body.offsets.size).map (· - o0)
+  let blk : Defn := { root with params, gates := root.gates - o0, paramLeaves := params.foldl (· + ·.2.leaves) 0,
+                                body := { root.body with params, nodes, ret := move root.body.ret, offsets } }
+  return { Q with defs := Q.defs.set! Q.root blk }
+
+/-- Block `units`' Program in the lowering's form: `ported` of `restrict`. -/
+def portedOf (P : Prog) (units : Array Nat) : V Prog := restrict P units >>= ported
+
 /-- What `front`, `members` and `restrict` read of C for block `units`, by their loops' bounds, beside the size of C's
 description and C's gate count: the units; the root nodes held; the references `restrict` reads and resolves (each
 argument leaf of a node held, each return leaf); the leaves `front` resolves (each unit's parameter and return leaves);
@@ -253,9 +284,9 @@ partial def firstDiff (a b : Json) (at_ : String) : Option String :=
   | _, _ => some at_
 
 /-- The `restrict` piece: `{descriptor, units, python}` (C's text, the block's units, Python's `restrict` bytes as text) to
-`{agree, at, root_nodes, definitions, digest_bytes, cost, lifted}`: whether Lean's `restrict` equals `Flock.Program.decode` of Python's bytes as
-`dump` shows them, the first path where they differ, the size of Lean's, its digest's bytes, `cost`, and each word
-composite `Flock.Lift.lift` lifts for it, by key (`defJson`). -/
+`{agree, at, root_nodes, definitions, digest_bytes, cost, lowers}`: whether Lean's `restrict` equals `Flock.Program.decode`
+of Python's bytes as `dump` shows them, the first path where they differ, the size of Lean's, its digest's bytes, `cost`,
+and `Flock.Lower.lower`'s refusal of `ported` of it at the front's port widths, `null` where it lowers. -/
 def piece (j : Json) : Except String Json := do
   let some d := (j.getObjValAs? String "descriptor").toOption | throw "descriptor is not a string"
   let some us := (j.getObjValAs? (Array Nat) "units").toOption | throw "units is not a list of naturals"
@@ -266,12 +297,14 @@ def piece (j : Json) : Except String Json := do
   let b ← dump (← decode py.toUTF8)
   let at_ := firstDiff a b ""
   let nDefs := (keys ((a.getObjVal? "definitions").toOption.getD .null)).size
-  let (L, _) ← Flock.Lift.lift Q Q.root
-  let lifted := L.defs.toList.filter (·.key.endsWith "IR=\"boolean\"}")
+  let f ← front P us
+  let lowers := match ported Q >>= fun R => Flock.Lower.lower R R.root (f.ins.map (·.width)) (f.outs.map (·.width)) with
+    | .ok _ => Json.null
+    | .error e => .str e
   return Json.mkObj [("agree", toJson at_.isNone), ("at", match at_ with | some p => .str p | none => .null),
     ("root_nodes", toJson (((Q.defs[Q.root]?).map (·.body.nodes.size)).getD 0)), ("definitions", toJson nDefs),
     ("digest_bytes", toJson Q.sha512.size), ("cost", ← cost P us),
-    ("lifted", Json.mkObj (lifted.map fun x => (x.key, defJson L x)))]
+    ("lowers", lowers)]
 
 #guard sameInput (inputDefn "run" 16) (inputDefn "run" 16)
 #guard !sameInput (inputDefn "run" 16) { inputDefn "run" 16 with prim := false }

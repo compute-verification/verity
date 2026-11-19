@@ -4038,13 +4038,14 @@ TABLE_DIGEST = st.one_of(st.sampled_from(sorted(PF.MUFU_SHA512.values())), st.bi
 LOOKUPS = st.one_of(st.dictionaries(st.one_of(st.sampled_from(sorted(PF.MUFU_SHA512)), st.text("abx", max_size=4)),
                                     st.just({}), max_size=5),
                     st.none(), st.integers(-9, 9), st.text("abx", max_size=4), st.lists(st.sampled_from(sorted(PF.MUFU_SHA512))))
-TABLES_CASES = st.one_of(
+#: Each case names `BLOCKED`'s C and partition, so the verifier's circuit file is the derived one (`restrict`).
+TABLES_CASES = st.one_of(st.one_of(
     st.builds(lambda ds, lk: {"digests": ds, "lookups": lk}, st.lists(TABLE_DIGEST, max_size=5), LOOKUPS),
     st.builds(lambda ds, lk: {"digests": ds, "lookups": lk}, st.lists(TABLE_DIGEST, max_size=5), LOOKUPS),
     st.lists(TABLE_DIGEST, max_size=5).map(lambda ds: {"digests": ds}),
     st.lists(st.one_of(TABLE_DIGEST, st.sampled_from(["0", "AB", "0g", PF.MUFU_SHA512["rcp"].upper()]), st.integers(0, 3)),
              min_size=1, max_size=4).map(lambda ds: {"digests": ds}),
-    JSON)
+).map(lambda j: j | {"program": BLOCKED.desc, "partition": BLOCKED.partition}), JSON)
 TABLES_HELD = D.Port(PIECES, "tables_held", tables_held, TABLES_CASES, package=PACKAGE)
 OWN_TABLES = D.Port(PIECES, "own_tables", own_tables, TABLES_CASES, package=PACKAGE)
 
