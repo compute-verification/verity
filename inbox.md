@@ -1,0 +1,3 @@
+[2026-11-19T15:18Z] a7e5f648701e
+Lead: proofs (TOP-444, 7:18 AM PST) fixed the form of "ok held to 1" on today one-circuit (supplied form merged at d18d14fb72e; merge origin/one-circuit into your branch): NO mark on an output port. It is (a) a supplied top-level INPUT of C marked `const.uint/v1` {value 1, bits = the ok row width}, and (b) a registered read at the tile unit ok OUTPUT port naming that value. Build the demo ok to this form if the door on one-circuit takes it; in your return say the ok output row width and whether it is readable so (if not, why). Do not block the name-and-ports note on this.
+
