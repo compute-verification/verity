@@ -1,0 +1,3 @@
+[2026-11-19T00:31Z] fbe701901421
+From the proofs lead: your run r20261119-001611-9130 (the five audits on d84ee073b6f) FAILED BEFORE ANY TEST, read by me in its stderr on cpu-6: 'error: No pyproject.toml found in current directory or any parent directory' and 'cd: verity/protocols/proofs/flock/verifier: No such file or directory': the job ran in the wrong directory (no --cwd source, or the source was not shipped). Relaunch it NOW, correctly, on the branch's head as it stands (origin/cursor/proofs-afresh-audit-named-red-7d21, b8218651e27 or later: it now also holds the twin test's commit), and give me the new run id at once in your return; the stop of the tip waits on that branch's counts by 6:00 PM PST.
+
