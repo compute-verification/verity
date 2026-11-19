@@ -403,7 +403,8 @@ class Served:
         ``arrive``, each op read under the op path the record binds it under (`_respelt`). A check of its Program (its
         instances header's ``checks``: the length rule, the seed rule) computes the Program's verdict from committed
         values; the engine never runs it and the record binds no member of it, so it is no served op and is left out. Any
-        other row with no committed member is refused by name (`captured`)."""
+        other row with no committed member, or with a member whose value family is not served or is unknown, is refused by
+        name (`capture_plan.captured`)."""
         rows = captured(pi, rid)
         at = _respelt(rows, store, rid, arrive)
 
