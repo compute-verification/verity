@@ -260,49 +260,21 @@ def test_two_levels_refuse_the_honest_play_on_one_window(tmp_path) -> None:
     assert on.returncode == 1 and ONE_WINDOW in on.stdout, (on.stdout + on.stderr)[-4000:]
 
 
-#: Two levels' parameters are refused by name before their evidence is read, so an evidence check is reached only once
-#: a soundness theorem covers two levels and the refusal goes.
-AT_PARAMS = pytest.mark.xfail(strict=True, reason=R.TWO_LEVELS_REFUSED)
-
-
 def _evidence() -> dict:
     """The kept honest play's evidence, with its second-stage statements fetched."""
     return json.loads((_case_dir() / "evidence.json").read_text())
 
 
-def _refuses(tmp_path: Path, evidence: dict, reason: str) -> None:
-    """The kept play with its evidence replaced by `evidence` is refused, by `reason`."""
-    on = _check(tmp_path, evidence=evidence)
-    assert on.returncode == 1 and reason in on.stdout, (on.stdout + on.stderr)[-4000:]
-
-
 @pytest.mark.slow
-@AT_PARAMS
-def test_two_levels_refuse_a_session_count_mismatch(tmp_path) -> None:
-    """Two levels read one statement a session: the kept honest play (`CASE`) with one second-stage statement dropped,
-    so the statements are fewer than the sessions, is refused by `STMT_COUNT`, the reason the twin's reference gives.
-    The counts agree only at the honest play, which the accept test passes; no refusal case above reaches this check,
-    whose play's interior names no members."""
+def test_two_levels_are_refused_by_name_before_their_evidence_is_read(tmp_path) -> None:
+    """By design, two levels' parameters are refused by name before their evidence is read: the kept honest play
+    (`CASE`) with one second-stage statement dropped, which the twin's reference refuses by `STMT_COUNT` when it reads
+    the statements, is refused by `TWO_LEVELS_REFUSED` instead."""
     ev = _evidence()
     own = ev["statements"]
     assert len(own) >= 1, ev
     short = own[:-1]
-    reason = T.stmts_sessions(own, short)
-    assert reason == T.STMT_COUNT
-    _refuses(tmp_path, {**ev, "statements": short}, reason)
-
-
-@pytest.mark.slow
-@AT_PARAMS
-def test_two_levels_refuse_a_statement_that_is_not_its_session_s(tmp_path) -> None:
-    """Two levels read each statement as its session's: the kept honest play (`CASE`) with its first second-stage
-    statement replaced by another, so the statement at a position is not the one its session makes, is refused by
-    `STMT_SESSION 0`, the reason the twin's reference gives."""
-    ev = _evidence()
-    own = ev["statements"]
-    assert len(own) >= 1, ev
-    swapped = [{"template": "not-the-session-s"}, *own[1:]]
-    assert canonical(swapped[0]) != canonical(own[0])
-    reason = T.stmts_sessions(own, swapped)
-    assert reason == T.STMT_SESSION(0)
-    _refuses(tmp_path, {**ev, "statements": swapped}, reason)
+    assert T.stmts_sessions(own, short) == T.STMT_COUNT
+    on = _check(tmp_path, evidence={**ev, "statements": short})
+    assert on.returncode == 1 and R.TWO_LEVELS_REFUSED in on.stdout, (on.stdout + on.stderr)[-4000:]
+    assert T.STMT_COUNT not in on.stdout, on.stdout[-4000:]
