@@ -1,24 +1,18 @@
-"""A window's rows: every unit of a class circuit (`window_circuit.lower`) given its output rows from a served window's
-values, ready for `interface.Window.record`.
+"""A window's rows: every unit of a window's circuit (`window_circuit.lower`, a Program a served request, of its own
+positions) given its output rows from the window's served values, ready for `interface.Window.record`.
 
-A node of a slot's class Program has one value, its return fields: the served value where the engine computed it (its
-request's tapped words in the sealed record, `Served`), else the class Program's own, its family's row kernel
-(`numerics.rows.ROWS`) on the node's operands. The engine never computes the positions past a request's last output, nor,
-at a prompt position before the last, the nodes prefill prunes (the last layer from its query on, the final norm, the LM
-head and the token select), so those are computed. An embedding's value is the table's row at its position's token, and a
+A node of a request's Program has one value, its return fields: the served value where the engine computed it (its
+request's tapped words in the sealed record, `Served`), else the Program's own, its family's row kernel
+(`numerics.rows.ROWS`) on the node's operands. The engine never computes, at a prompt position before the last, the nodes
+prefill prunes (the last layer from its query on, the final norm, the LM head and the token select), so those are
+computed. An embedding's value is the table's row at its position's token, and a
 token select's the first maximum of its logits, whichever source gives it; a served one that isn't is refused by name. So
-is a node the engine computed under other statics of its Definition than the class node's whose value isn't the class
+is a node the engine computed under other statics of its Definition than the circuit node's whose value isn't the circuit
 node's on its operands: FA3's key block follows its launch's query rows (`targets.fa3_kblock_n`), so a prefill's
-attention isn't the class Program's one-row decode's, though at as few keys as one block of either holds the two agree.
+attention isn't the Program's one-row decode's, though at as few keys as one block of either holds the two agree.
 
 A unit its node's lowering filled holds its rows of that value (`_Program.outs`), and so does each add part of a fused norm
-cut at its residual add (`_Program.norms`): part AT its words of the node's second field, the sum; a quantizer that is
-`Int8RowQuant_v5` holds the value's words whole as its H1 leaf row too (`_Program.packed`). A circuit cut at its linears
-(Pearl+'s tables, `_Program._cut`) takes each cut linear's value, its y, as registered: its `LinearOut_v3` unit holds it as
-its output rows and, each word widened to FP32, as its input row, which the window commits by reference from the call's y
-that `Rows.value` makes of them, and a served y is taken under any statics of its Definition, which the circuit never
-computes (`Slot`'s ``cut``), at every prompt position, the last layer's too, which prefill prunes there but the engine
-computes (`Served`).
+cut at its residual add (`_Program.norms`): part AT its words of the node's second field, the sum.
 Every other unit holds its Definition's function of the window's values:
 - a slot's `ScanSlots_v3` every lane's first token and slot, occupancy word and head of the scan state row at its anchor
   (`io_shell.scan_reference`; its lane's row is the slot's, `scan_slots`), every later position's `TokenFeed_v1` below the
@@ -27,7 +21,6 @@ Every other unit holds its Definition's function of the window's values:
   `SelectEntry_v1` the slot's entry (`io_shell.entry_reference`);
 - each token select's group units each group's first maximum above -inf of its logits and its index in the group
   (`chunk_best`), and its ``x0`` unit ``logits[0]``;
-- each cut linear's `LinearARow_v3` its x widened to FP32 exactly, its A row;
 - each embedding read's verdict 1, its opening the table's row, salt and path at the token (the table's registered value,
   ``registered_value.Registered`` of ``row-seg`` rows or one like it);
 - each attention cut by key block (`window_circuit.CUTS`), every Call of a head but its last (the node's output) its
@@ -47,7 +40,7 @@ import bisect
 import os
 import re
 from collections import Counter
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -73,7 +66,7 @@ from . import scan_state as SS
 from .window_builder import WEIGHTS, _spans
 from .window_circuit import Lowered, WindowClass
 
-#: a unit's source: its node's served value, the class Program's value at a node the engine didn't compute, or its
+#: a unit's source: its node's served value, the Program's value at a node the engine didn't compute, or its
 #: Definition's function of the window's values. It follows occupancy and lengths, so it is the committer's own bookkeeping
 #: (`Rows.source`) and never a label
 SOURCES = ("served", "computed", "evaluated")
@@ -147,27 +140,26 @@ def _pinned(family: str) -> str | None:
 
 
 class Slot:
-    """Slot ``row``'s class Program ``fn`` of class ``cls`` evaluated (module docstring): ``row`` its lane's row of the scan
-    state row at its anchor (occupancy, prompt length, ids; `scan_slots`), ``weights`` the weights record's
-    fields and ``served`` its request's served values,
-    None for an empty slot; ``cut`` the nodes a circuit cut at its linears takes as registered (`Lowered.cut`), whose
-    served value is taken under any statics of its Definition and at every prompt position, a pruned one's too
-    (`Served`'s ``cut``). Each node's value (its return fields) and source, each
+    """A served request's Program ``fn`` in a window of class ``cls`` evaluated (module docstring): ``row`` its lane's row of
+    the scan state row at its anchor (occupancy, prompt length, ids; `scan_slots`), ``weights`` the weights record's
+    fields and ``served`` its served values, refused unless ``fn`` is of its served positions. Each node's value (its
+    return fields) and source, each
     position's token and, below the class's prompt bound, the slot its `TokenFeed_v1` reads and the one it carries on."""
 
-    def __init__(self, fn: Any, cls: WindowClass, row: Sequence[int], weights: Weights, served: Served | None = None,
-                 cut: Collection[int] = frozenset()) -> None:
-        self.fn, self.cls, self.weights, self.cut = fn, cls, weights, frozenset(cut)
+    def __init__(self, fn: Any, cls: WindowClass, row: Sequence[int], weights: Weights, served: Served) -> None:
+        self.fn, self.cls, self.weights = fn, cls, weights
         self.row = [int(x) & 0xFFFFFFFF for x in row]
         if len(self.row) != cls.prompt + 2:
             raise ValueError(f"a slot's row is (occupancy, prompt length, {cls.prompt} ids), not {len(self.row)} words")
-        if served is not None and self.row[1] != served.LP:
+        if self.row[1] != served.LP:
             raise ValueError(f"the served request's {served.LP} prompt ids, its slot row's {self.row[1]}")
         sig = dict(fn.signature()[0])
         self.params = [n for n, _ in fn.signature()[0]]
         self.labels = [label for label, _ in sig[WEIGHTS].fields]
         self.starts = [s[0] for s in _spans("weights", sig[WEIGHTS].fields)]
         self.position = positions(fn)
+        if self.position[-1] + 1 != served.positions:
+            raise ValueError(f"a Program of {self.position[-1] + 1} positions for a request served at {served.positions}")
         first: dict[int, int] = {}
         for j, p in enumerate(self.position):
             first.setdefault(p, j)
@@ -177,15 +169,14 @@ class Slot:
         self.slots: list[list[int] | None] = []
         self.carried: list[list[int] | None] = []
         for j, node in enumerate(fn.body.nodes):
-            self._node(j, node, None if served is None
-                       else served(self.position[j], j - first[self.position[j]], node, j in self.cut))
+            self._node(j, node, served(self.position[j], j - first[self.position[j]], node))
 
     def _node(self, j: int, node: Any, served: tuple[str, list[np.ndarray]] | None) -> None:
         fam, fields, what = node.fn.name, _fields(node.fn), f"node {j} ({node.fn.id}) at position {self.position[j]}"
         if fam == "Embedding":
             self._token(self.position[j], node.args[0])
         pin = _pinned(fam)
-        if served is not None and served[0] != descriptor_id(node.fn) and j not in self.cut:
+        if served is not None and served[0] != descriptor_id(node.fn):
             pin = f"its Definition's value on its operands (served as {served[0]})"
         got = None if served is None else served[1]
         if got is None:
@@ -338,23 +329,22 @@ def _fold_narrowed(ops: dict[tuple[str, tuple[str, ...]], list[Mapping[str, Any]
 
 @dataclass
 class Served:
-    """One request's served values by class node: its Program's rows as `ProgramIndex.describe` gives them, each with its
+    """One request's served values by node: its Program's rows as `ProgramIndex.describe` gives them, each with its
     row's ``spec`` (``{spec, step, op_path, members, row}``, its step the request's), ``read(step, op_path, member, lo,
     hi)``, a member's elements [lo, hi) at a request step (`CommittedStore.words` at the request's arrival plus it), and
     ``bound(step, op_path, member)``, the elements the record binds that member at.
 
     The request's prefill is its step 0: each op (its op path and members) a row a prompt position, or one row, its last
     position's, where prefill prunes it; the ops in the order of their last prompt position's rows, the one position that
-    computes them all, which is the class Program's node order within a position however the prefill interleaves the
+    computes them all, which is the Program's node order within a position however the prefill interleaves the
     others. A pruned op's one row is its member's last of the prompt's where the record binds the member at a row a prompt
-    position (the engine computes the last layer at them all; only the logits gather a row a request), else its only one;
-    one the circuit never computes, a cut linear (``cut``), is read a row a prompt position from those rows.
+    position (the engine computes the last layer at them all; only the logits gather a row a request), else its only one.
     A narrowed linear's rows (the last layer's fused qkv, keys' and values' columns only on the prompt rows before the
     last) are its node's there, beside its widest rows' one row, the last position's (`_fold_narrowed`): the node is read
     a row a prompt position, each its widest member's whole row, which the record must bind at every prompt position.
     Step s ≥ 1 is position LP − 1 + s, a row each of those ops, matched to them by site (`_sites`), since a call
     boundary's op path names an fx node numbered over the request's steps. A row of another Definition than its class
-    node's is refused by name; one of its Definition at other statics is `Slot`'s to hold to the class node's value."""
+    node's is refused by name; one of its Definition at other statics is `Slot`'s to hold to the circuit node's value."""
     rows: Sequence[Mapping[str, Any]]
     read: Callable[[int, str, str, int, int], tuple[np.ndarray | None, str]]
     bound: Callable[[int, str, str], int]
@@ -400,6 +390,11 @@ class Served:
                 raise ValueError(f"step {s}: op {extra[0]}, which the prefill never computes ({len(extra)} ops)")
             self.decode.append([at[site[o]] for o in order])
 
+    @property
+    def positions(self) -> int:
+        """Its Program's positions: its prompt's, then a decode step each."""
+        return self.LP + len(self.decode)
+
     @classmethod
     def of_record(cls, pi: Any, store: Any, rid: str, arrive: int) -> Served:
         """Request ``rid``'s served values from its `ProgramIndex` and the record's `CommittedStore`, arrived at engine step
@@ -425,20 +420,18 @@ class Served:
 
         return cls(rows, lambda s, op, m, lo, hi: store.words(rid, arrive + s, at.get((s, op), op), m, lo, hi), bound)
 
-    def __call__(self, p: int, k: int, node: Any, cut: bool = False) -> tuple[str, list[np.ndarray]] | None:
+    def __call__(self, p: int, k: int, node: Any) -> tuple[str, list[np.ndarray]] | None:
         """Position ``p``'s node ``k`` (``node``, its index within its position) as served, its row's spec and its values;
-        None where the engine didn't compute it. A node ``cut``, which the circuit never computes (a cut linear), is read
-        at every prompt position though prefill prunes it, its member's row there, and refused by name where the record
-        binds it at the last one alone."""
+        None where the engine didn't compute it."""
         if k >= len(self.prefill):
             raise ValueError(f"node {k} of a position, past the served request's {len(self.prefill)} ops a position")
         pruned = False
         if p < self.LP:
             v = self.prefill[k]
             pruned = len(v) != self.LP
-            d = v[p] if not pruned else v[0] if p == self.LP - 1 or cut else None
+            d = v[p] if not pruned else v[0] if p == self.LP - 1 else None
         else:
-            d = self.decode[p - self.LP][k] if p - self.LP < len(self.decode) else None
+            d = self.decode[p - self.LP][k]
         if d is None:
             return None
         if RM.spec_family(d["spec"]) != RM.spec_family(descriptor_id(node.fn)):
@@ -455,9 +448,6 @@ class Served:
             if n not in ({self.LP}, {1}):
                 raise ValueError(f"{op}: its one prefill row's members bound at {sorted(n)} rows, not a row a prompt position "
                                  f"({self.LP}) nor one")
-            if n == {1} and p < self.LP - 1:
-                raise ValueError(f"{op}: a node the circuit never computes, pruned at the prompt rows before the last, its "
-                                 f"members bound at its last one alone, not a row a prompt position ({self.LP})")
             row = p if n == {self.LP} else 0
         out = []
         for m, width, _dtype in members:
@@ -477,8 +467,13 @@ class Rows:
     its anchor. Refused unless every unit's every row is filled once."""
 
     def __init__(self, lowered: Lowered, slots: Sequence[Slot], registered: Mapping[str, Any]) -> None:
+        if lowered.requests is None:
+            raise ValueError("a class circuit's rows: the committer fills a served window's circuit (`window_circuit.lower` "
+                             "of its requests)")
         if len(slots) != len(lowered.programs):
-            raise ValueError(f"{len(slots)} slots' values for {len(lowered.programs)} class Programs")
+            raise ValueError(f"{len(slots)} slots' values for {len(lowered.programs)} Programs")
+        if bad := [k for k, (P, S) in enumerate(zip(lowered.programs, slots)) if S.fn is not P.fn]:
+            raise ValueError(f"slot {bad[0]}'s values are of another Program than the circuit's slot {bad[0]}")
         c = self.circuit = lowered.circuit
         self.lowered = lowered
         if getattr(registered.get(SS.SCAN_STATE), "rows", None) is None:
@@ -501,9 +496,6 @@ class Rows:
         ports = {(o.reader, p) for o in (c.registered.openings if c.registered else ()) for p in o.ports}
         self.inputs = {t: {p: np.zeros((n[t], w), dtype=np.uint16) for p, w in lay.rows if (t, p) in ports}
                        for t, lay in self.lays.items()}
-        #: input rows a node's value gives, which the window commits by reference (a cut linear's y widened), by template and
-        #: port
-        self.given: dict[str, dict[str, np.ndarray]] = {}
         for P, S in zip(lowered.programs, slots):
             self._slot(P, S)
         if bad := {t: int((~h).any(axis=1).sum()) for t, h in self.held.items() if not h.all()}:
@@ -518,7 +510,7 @@ class Rows:
         self.source[tid][unit:unit + k] = np.minimum(self.source[tid][unit:unit + k], src)
 
     def _slot(self, P: Any, S: Slot) -> None:
-        nodes = self.lowered.fn.body.nodes
+        nodes = P.fn.body.nodes
         for j, pieces in P.outs.items():
             w = _words(S.values[j])
             parts = P.norms.get(j, ())
@@ -526,21 +518,6 @@ class Rows:
             for lo, hi, r in [*pieces, *((lo, lo + r.words, r) for lo, r in sums)]:
                 self._put(r.tid, r.unit, r.out, w[lo:hi].reshape(-1, r.words), S.source[j])
                 self.node[r.tid][r.unit:r.unit + (hi - lo) // r.words] = True
-            if (r := P.ys.get(j)) is not None:
-                if 2 * len(w) != r.words:
-                    raise ValueError(f"{P.name}: node {j}'s {len(w)} words are not the {r.words // 2} bf16 its y row widens")
-                given = self.given.setdefault(r.tid, {}).setdefault(r.out, np.zeros((self.n[r.tid], r.words), np.uint16))
-                given[r.unit] = np.stack([np.zeros_like(w), w], axis=1).reshape(r.words)
-            if (r := P.packed.get(j)) is not None:
-                if len(w) != r.words:
-                    raise ValueError(f"{P.name}: node {j}'s {len(w)} words are not its leaf row {r}'s {r.words}")
-                self._put(r.tid, r.unit, r.out, w.reshape(1, r.words), S.source[j])
-        for j, r in P.arows.items():
-            x = S.operand(nodes[j].args[0])
-            if x.dtype.itemsize != 2 or 2 * len(x) != r.words:
-                raise ValueError(f"{P.name}: node {j}'s x is {len(x)} {x.dtype} elements, not the {r.words // 2} bf16 its A row "
-                                 "widens")
-            self._put(r.tid, r.unit, r.out, np.stack([np.zeros_like(x), x], axis=1).reshape(1, r.words), EVALUATED)
         emb = [j for j, node in enumerate(nodes) if node.fn.name == "Embedding"]
         for p, (j, feed) in enumerate(zip(emb, P.tokens)):
             r, t = P.outs[j][0][2], S.tokens[p]
@@ -639,34 +616,6 @@ class Rows:
         """Each unit of ``tid``'s slot (its lowering's), -1 for a unit of no slot's."""
         return self._span(tid, 2)
 
-    def value(self, param: str, rows: int, empty: Sequence[int]) -> np.ndarray:
-        """Registered value ``param``'s ``rows`` rows as u16 words as the circuit's proof blocks make them: each row a read of
-        an output row ties (`interface.Read`), its unit's output row, or a read of an input row a node's value gives (a cut
-        linear's y, which the window commits by reference from this value), and every other row ``empty`` (a row's words).
-        Refused where a read of ``param`` fills another input or reads past its rows, or two units make one row two ways."""
-        blank = np.asarray(empty, dtype=np.uint16)
-        out, made = np.tile(blank, (rows, 1)), np.zeros(rows, dtype=bool)
-        for r in self.circuit.registered.reads if self.circuit.registered else ():
-            if r.param != param:
-                continue
-            outs = [p for p, _ in self.lays[r.reader].outs]
-            if r.port in outs and self.lays[r.reader].outs[outs.index(r.port)][1] == len(empty):
-                have = self.outs[r.reader][outs.index(r.port)]
-            elif r.port in (given := self.given.get(r.reader, {})) and given[r.port].shape[1] == len(empty):
-                have = given[r.port]
-            else:
-                raise ValueError(f"{r.reader} {r.port} reads {param!r} other than as an output row of {len(empty)} words or "
-                                 "an input row a node's value gives")
-            leaf = r.source(np.arange(r.units))
-            at, got = leaf // len(empty), have[r.at:r.at + r.units]
-            if (leaf % len(blank)).any() or (at >= rows).any():
-                raise ValueError(f"{r.reader} {r.port} reads {param!r} off its {rows} rows of {len(blank)} words")
-            fresh = ~made[at]
-            out[at[fresh]], made[at] = got[fresh], True
-            if not np.array_equal(out[at], got):
-                raise ValueError(f"{param!r}: two units make one of its rows two ways")
-        return out
-
     def record(self, win: IF.Window) -> None:
         """Every unit into ``win``, template by template in unit order, in runs of one step, one slot and one form, each
         labelled ``{"step", "slot", "form"}`` (module docstring): each input by reference but an opening's ports, each port
@@ -689,7 +638,7 @@ def _elements(words: np.ndarray, width: int) -> np.ndarray:
 
 
 def _lanes(P: Any, state: Sequence[Any], of: Callable[..., list] = IO.slots_reference) -> list[Any]:
-    """Every lane of ``state``'s row at class Program ``P``'s anchor: its row and head (`io_shell.slots_reference`), or
+    """Every lane of ``state``'s row at Program ``P``'s anchor: its row and head (`io_shell.slots_reference`), or
     ``of``'s (`io_shell.scan_reference`: `ScanSlots_v3`'s outputs)."""
     b = P.scan.bindings
     row = np.asarray(state[P.anchor], dtype=np.uint16).reshape(-1)
@@ -697,7 +646,7 @@ def _lanes(P: Any, state: Sequence[Any], of: Callable[..., list] = IO.slots_refe
 
 
 def scan_slots(lowered: Lowered, state: Sequence[Any]) -> list[tuple[list[int], list[int]]]:
-    """Each class Program's slot as the scan state's rows ``state`` (`scan_state.SCAN_STATE`'s, a row a bucket of the
+    """Each Program's slot as the scan state's rows ``state`` (`scan_state.SCAN_STATE`'s, a row a bucket of the
     window) give it, in slot order: its lane's row (occupancy, prompt length, ids; a `Slot`'s ``row``) and head (prompt
     length, ``max_tokens``) of the row at its anchor."""
     return [_lanes(P, state)[P.lane] for P in lowered.programs]

@@ -70,7 +70,9 @@ candidate row costs an oracle query, and forming waits on that row's digest alon
 -h3 also bounds each credited row's inert work at ρ times
 its cells' credit (4ρ at a census k, `row_inert_share_at`) beside the tile's: that is (C2), under which
 `Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut` reduces the row-seeded TT_OUT to the per-unit one, and an aggregate bound
-doesn't transfer.  The registered -h3 schemes are ``pearl-c-sm120-v1-h3`` (the served default) and ``pearl-c-h100-v1-h3``.
+doesn't transfer.  The registered -h3 schemes are ``pearl-c-h100-v1-h3``, the one PoUW serves (`pouw.scheme.KERNEL`), and
+``pearl-c-sm120-v1-h3``, which no scheme serves: three of its device's constants are stand-ins (`pearl_c_device.SM120`'s
+``standins``: the peel `HOPPER_BF16_M16N8K16`, G = 4 and k_max = 2^16).
 
 **The device** (`pearl_c_device.Device`) is a scheme parameter: the atom, the peel's step, G and the W1 prices above are
 the record's, and the H100 names in this docstring are `pearl_c_device.H100`'s.  On `pearl_c_device.SM120` it is the
@@ -113,8 +115,7 @@ D_MESSAGE, D_LEAF = 0x21, 0x22     # TurboSHAKE128 domain bytes
 LABELS = {"seed-A": domains.PEARL_C_SEED_A.encode(), "seed-B": domains.PEARL_C_SEED_B.encode()}
 #: The hashing formats this scheme implements, of the one table (`verity.protocols.resource_accounting.compute.pouw.verifier.serving.HASH_FORMATS`): h0 (TurboSHAKE128
 #: messages and leaf, SHA-256 trees) and h3 (SHA-512 throughout: `s512` seeds, lines and tickets, a `sha512/row-seg/v1` tile
-#: leaf and `audit.HM96` trees, each row of A seeding its own E_A line from its row digest).  The BLAKE3 formats h1, h2 and
-#: BLAKE3 -h3 are in ``archive/pouw-blake3/`` (one hash, SHA-512).
+#: leaf and `audit.HM96` trees, each row of A seeding its own E_A line from its row digest).
 HASHINGS = ("h0", "h3")
 #: the formats whose rows seed their own E_A lines (`HashFormat.seed_a` ``row``)
 ROW_SEEDED = tuple(h for h in HASHINGS if HASH_FORMATS[h].seed_a == "row")
