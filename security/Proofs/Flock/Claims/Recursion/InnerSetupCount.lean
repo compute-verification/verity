@@ -119,7 +119,7 @@ theorem innerHidden_cost (h : ByteArray → ByteArray) {tags : Tags} {cf pf : By
   have hrow : HmRow.loadPublicWith (M := Except String) (Hashes.ofSha512 Sha512.hash) tags
       { st'.c with outPorts := #[] } pf = .ok pop :=
     (With.loadPublicWith_std _ _ _).trans (FlockSoundness.Discharge.Hidden.loadPublic_nil hpop)
-  obtain ⟨D, hD, hDp, -⟩ := FlockSoundness.Discharge.Layout.sampled_spec hdr
+  obtain ⟨D, hSD, hDp, -⟩ := FlockSoundness.Discharge.Layout.sampled_spec hdr
   have hN : D.population ≤ 2 ^ 17 := by
     rw [hDp, ← hpub]
     exact hn
@@ -135,7 +135,7 @@ theorem innerHidden_cost (h : ByteArray → ByteArray) {tags : Tags} {cf pf : By
     exact okC_of_V (fun k => With.hmInSampledWith_sim (With.Sim.forget _) With.Throws.exceptT With.Throws.v
       (With.Sim.forget_counted h) c pi p d k) fun pub hp => by
       obtain ⟨D', hD', hn, he⟩ := SetupValues.sampled_pop h hp
-      rw [hD] at hD'
+      rw [hSD] at hD'
       cases hD'
       refine ⟨by unfold PT at hpt ⊢; exact SetupValues.counts_le he hpt, ?_⟩
       unfold PN
