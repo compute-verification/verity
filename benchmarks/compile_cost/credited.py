@@ -9,6 +9,7 @@ from collections import Counter
 from pathlib import Path
 
 SCHEME = "pearl-c-h100-v1-h3"
+LAYOUT_MAX = 10**9
 LLAMA32_1B = {"repo": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da"}
 
 
@@ -69,13 +70,17 @@ def block(scheme: str, k: int, tm: int, tn: int, n: int, bits: bool = False, res
     got = CT.count(b.program)
     root = got[descriptor_id(b.program.root)]
     out["gates"], out["ands"] = root.gates, root.ands
+    phase("count")
+    print("CREDITED-COUNT", k, tm, tn, n, "gates", out["gates"], "ands", out["ands"], flush=True)
+    if b.program.gates > LAYOUT_MAX:
+        out["peak_gib"] = _peak_gib()
+        return out
     layout = Counter(descriptor_id(g.prim) for g in b.program.circuit.gates())
     out["by_primitive"] = sorted(({"primitive": p, "gates_each": got[p].gates, "ands_each": got[p].ands, "times": m,
                                    "gates": got[p].gates * m} for p, m in layout.items() if got[p].gates),
                                  key=lambda r: -r["gates"])
     out["sum_of_bodies"] = sum(r["gates"] for r in out["by_primitive"])
-    phase("count")
-    print("CREDITED-COUNT", k, tm, tn, n, "gates", out["gates"], "ands", out["ands"], flush=True)
+    phase("layout")
     if bits:
         import random
 
@@ -113,7 +118,7 @@ def main() -> int:
         k, tm, tn, n = map(int, a.size.split(","))
         got = block(a.scheme, k, tm, tn, n, a.bits, not a.no_restrict)
         (a.out / f"block-{k}-{tm}-{tn}-{n}.json").write_text(json.dumps(got, indent=1))
-        if a.no_restrict:
+        if "sum_of_bodies" not in got:
             return 0
         print("CREDITED-BLOCK", a.size, "gates", got["gates"], "ands", got["ands"], "sum_of_bodies", got["sum_of_bodies"],
               "inputs", [(r["port"], r["rows"], r["width"], r["binding"]) for r in got["inputs"]],
