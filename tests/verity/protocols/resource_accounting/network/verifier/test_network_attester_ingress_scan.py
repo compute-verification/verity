@@ -201,6 +201,31 @@ def test_each_egress_bucket_computes_the_network_attesters_row_from_the_view_its
     assert EG.outputs(SHAPE, ch.view(t))[1] != bytes(forged)
 
 
+def _egress(run, swap: int | None) -> tuple[list[int], int | None]:
+    """The buckets whose egress row the scan computes other than the network attester's, and the bucket it refuses at,
+    when the Programs' entries of bucket `swap` are read each into the other lane."""
+    outputs, st, wrong = dict(enumerate(RESPONSES, 1)), IS.empty(CLS), []
+    for t, row in enumerate(run.rows):
+        prog = IS.programs(CLS, st, outputs)
+        if t == swap:
+            assert [e[:2] for e in prog] == [(1, 3), (1, 8)]
+            prog = prog[::-1]
+        st = IS.step(CLS, row, st, prog)
+        if st is None:
+            return wrong, t
+        if EG.outputs(SHAPE, IS.view(CLS, st, t)) != (EG.ACCEPT, run.egress[t]):
+            wrong.append(t)
+    return wrong, None
+
+
+def test_lane_j_s_entry_is_read_by_slot_j_and_another_lane_s_breaks_the_egress(run):
+    """Slot j's entry is the outputs of lane j's request's Program: the two lanes' entries read each into the other give
+    egress rows the network attester didn't write, and the longer request's outputs hold slot 0 past request 1's end, so
+    request 3 finds no free slot."""
+    assert _egress(run, None) == ([], None)
+    assert _egress(run, 4) == ([5, 6], PARAMS.delay + 2)
+
+
 def test_scan_traffic_ticks_the_network_attester_s_rows(run):
     served = ST.serve(PARAMS, run.reqs, [0, 1, 1], [1 << 20] * 3, RESPONSES, 1)
     assert served.rows() == (run.rows, run.egress) and served.admitted == (0, 1, PARAMS.delay + 2)
