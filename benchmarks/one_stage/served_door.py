@@ -383,6 +383,11 @@ def window(a) -> int:
     win.supply()
     rows.record(win)
     win.write(win.close(), out, {"served_door": "window"}, registrar=DK)
+    pins: dict[str, dict] = {}
+    for p, v in sorted(values.items()):
+        if v.window is None:
+            pins.setdefault(v.program, {})[p] = v.entry()
+    (out / "pins.json").write_text(json.dumps([{"program": g, "values": e} for g, e in sorted(pins.items())]))
     print("STEP " + json.dumps({"step": "window", "wall_s": round(time.perf_counter() - t, 1), "peak_gib": _peak_gib(),
                                 "run": TW.RUN, "units": dict(rows.n),
                                 "circuit_sha512": hashlib.sha512((out / "circuit.json").read_bytes()).hexdigest(),

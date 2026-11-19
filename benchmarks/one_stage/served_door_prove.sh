@@ -78,7 +78,7 @@ if [ -n "${AUDIT_RULE:-}" ]; then  # the staged window on the audit's road: reco
   M0=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
   ( unset PYTHONPATH FC_COINS TU_PINNED; export PATH=$(dirname $RT_BIN):$PATH; RUST_MIN_STACK=$((64 << 20)) timed audit $UV run -q python benchmarks/prove_path/records_audit.py audit \
       --window $S/window --sampling-design "$AUDIT_RULE" --circuit $(sha512sum $S/window/circuit.json | cut -c1-128) \
-      --run $(python3 -c 'print("ab" * 64)') --challenger local --deployed-key --main $S/main.txt --m0-pythonpath $M0 \
+      --run $(python3 -c 'print("ab" * 64)') --challenger local --deployed-key --registered $S/window/pins.json --main $S/main.txt --m0-pythonpath $M0 \
       --bin $B --lean $LEAN_BIN --zk-server $FW_BIN --ports ${AUDIT_PORTS:-64} --out $S/audit ) > $O/audit.log 2> $O/audit.err
   r=$?; echo "audit rc $r"; cat $O/time-audit.txt; grep -h '^RECORDS\|^REFUSED\|^DRAW\|^MEMBER\|^VERDICT\|^CHECK' $O/audit.log | cut -c1-3000
   tail -c 3000 $O/audit.err
