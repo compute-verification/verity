@@ -1,7 +1,7 @@
 """`verity-vllm commit-arb`: the served Commit under arbitrary traffic, its records held to the streamed I/O.
 
     VERITY_RETAIN=host verity-vllm commit-arb --out DIR --model REPO --revision SHA [--precision int8_exact|verity_int8|pin]
-        --row-build PREDICTED [--hidden-so SO] [--norm-tap-so SO] [--tap-cap-mb N]
+        --row-build PREDICTED [--hidden-so SO] [--tap-cap-mb N]
         [--requests 32] [--seed 0] [--prompt-range 16:1024] [--tokens 64] [--rate 0.5]
         [--max-num-seqs 8] [--max-num-batched-tokens 2048] [--no-chunked-prefill] [--kv-cache-mb N] [--window-steps 64]
         [--prefix-caching] [--system-prompts N] [--system-tokens 384] [--turns N]
@@ -134,7 +134,7 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which, 
     """What the committer would refuse after the model has loaded, refused before it."""
     if not opts.row_build:
         raise UsageError(f"commit-arb commits as serve-openai does, under {SS.ROWS}: pass --row-build DIR, DIR the row's Build "
-                         "of record (`verity-vllm predict row --row ROW --out DIR`), and the row's --hidden-so, --norm-tap-so")
+                         "of record (`verity-vllm predict row --row ROW --out DIR`), and the row's --hidden-so")
     if why := RW.row_refusal(opts.row_build) or SS.class_refusal(opts):
         raise UsageError(why)
     if which("ninja") is None:

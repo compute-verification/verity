@@ -106,7 +106,7 @@ def scheme_refusal(opts: Any) -> str | None:
         return None
     if not opts.row_build:
         return (f"--scheme {ROWS} commits the row's capture plan, the registered compiler's: pass --row-build DIR, DIR the row's "
-                "Build of record (`verity-vllm predict row --row ROW --out DIR`), and the row's --hidden-so, --norm-tap-so, or "
+                "Build of record (`verity-vllm predict row --row ROW --out DIR`), and the row's --hidden-so, or "
                 "--no-commit to serve without a Commit")
     if why := class_refusal(opts):
         return why

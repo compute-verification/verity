@@ -26,7 +26,7 @@ PLACEMENT = tomllib.loads((HERE / "placement.toml").read_text())
 NODE_A = PLACEMENT["node"]["vy-spot-glm53"]
 H100 = PLACEMENT["node"]["vy-h100-1"]
 GIT = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com"]
-TAP = Path("adapters/vllm/verity_vllm/ops/pod_norm_tap.sh")
+TAP = Path("adapters/vllm/verity_vllm/ops/pod_fa3_tap.sh")
 
 
 def git(tree: Path, *args: str) -> str:

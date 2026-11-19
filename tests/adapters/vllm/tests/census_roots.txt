@@ -13,7 +13,6 @@
 # --- rules: every sweep runner and every negatives runner (the adversarial inputs the verifier must reject)
 verity_vllm/ops/pod_fa2_tap.sh
 verity_vllm/ops/pod_fa3_tap.sh
-verity_vllm/ops/pod_norm_tap.sh
 verity_vllm/ops/pod_router_tap.sh
 **/*_negatives.sh
 

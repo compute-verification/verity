@@ -17,6 +17,6 @@ have no plan yet: they still select their modules by `native_host`'s class table
 - `committer_api`   the committer interface the Δ_commit harness drives, and the coverage declaration every committer emits
 - `fa2_plane_classes`  the FA2/FA3 hidden planes a step is expected to hold, derived per attention layer
 - `h1_commit`       the Commit in H1's serving engine: its committer, its int8 source, its step-input port and H1's tap
-- `fa2_tap_src`, `fa3_tap_src`, `norm_tap_src`, `router_tap_src`
-                    the taps' kernels and the builds of their torch extensions (FA2, FA3, the norm scale, the router softmax)
+- `fa2_tap_src`, `fa3_tap_src`, `router_tap_src`
+                    the taps' kernels and the builds of their torch extensions (FA2, FA3, the router softmax)
 """

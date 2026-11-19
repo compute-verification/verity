@@ -151,10 +151,6 @@ tests = [
 paths = ["adapters/vllm/verity_vllm/check"]
 
 [[tool.verity.tests.reads]]
-tests = ["acquire/test_norm_tap_src.py"]
-paths = ["adapters/vllm/verity_vllm/acquire/norm_tap_src"]
-
-[[tool.verity.tests.reads]]
 tests = [
     "check/test_capture_map.py",
     "pipeline/test_tp_gpu_lease.py",

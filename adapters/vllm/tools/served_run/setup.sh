@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # What a row's window reads, made on its node (`run.sh setup`); a step STEPS names reruns even where its result exists.
 set -uo pipefail
-for v in CARD CORES END ROW_ID ROLE REPO REV VENV CUDA_HOME HF_HOME LLAMA_ROOT FLOCK_WORK HIDDEN_SO NORM_TAP_SO; do
+for v in CARD CORES END ROW_ID ROLE REPO REV VENV CUDA_HOME HF_HOME LLAMA_ROOT FLOCK_WORK HIDDEN_SO; do
   [ -n "${!v:-}" ] || { echo "setup.sh: no $v: start it with \`adapters/vllm/tools/served_run/run.sh setup\`"; exit 2; }
 done
 IN=${RESEARCH_RUN_DIR:?run under research run}/inputs OUT=$RESEARCH_RUN_DIR/out
@@ -27,13 +27,12 @@ if on pin && [[ $REPO == verity-int8/* ]] && { [ -n "${STEPS:-}" ] || [ ! -f "$H
   touch "$HF_HOME/.made"; log "pin: made, every file's sha256 the manifest's"
 fi
 . adapters/vllm/tools/served_run/workload_env.sh || exit 2
-if on taps && { [ -n "${STEPS:-}" ] || [ ! -s "$HIDDEN_SO" ] || [ ! -s "$NORM_TAP_SO" ]; }; then
+if on taps && { [ -n "${STEPS:-}" ] || [ ! -s "$HIDDEN_SO" ]; }; then
   S=$R/taps-staged
   rm -rf "$S/exactness" && mkdir -p "$S"
   (cd adapters/vllm && S=$S PY=$PY FA_SRC=${HIDDEN_SO%/build/*}/../vllm-flash-attn TP=$TREE/tests/adapters/vllm:$paths \
      gpu-lease 1 --on "$CARD" --cores "$CORES" --max-min 120 --mem-gb 64 -- bash -euc '
        for g in 0 1; do REPO=$PWD FA2=$S/fa2 FA3_TAP_ROW_GUARD=$g FA3_TAP_FORCE=1 bash verity_vllm/ops/pod_fa3_tap.sh; done
-       REPO=$PWD NT=$S/norm_tap NORM_TAP_FORCE=1 bash verity_vllm/ops/pod_norm_tap.sh
        cd ../../tests/adapters/vllm
        PYTHONPATH=$TP "$PY" -m tests.properties.fa_tap_exactness_gpu --so "$S/fa2/build/fa3_matReq/verity_fa3_matReq.so" \
          --construction check-inf-per-iteration --out "$S/exactness/fa3"
@@ -41,8 +40,8 @@ if on taps && { [ -n "${STEPS:-}" ] || [ ! -s "$HIDDEN_SO" ] || [ ! -s "$NORM_TA
          --baseline "$S/exactness/fa3/fa_tap_exactness.json" --construction check-inf-per-iteration --out "$S/exactness/fa3g"') \
     > "$OUT/taps.log" 2>&1 || { log "taps: NOT built or NOT exact, so not live: $(grep -E 'FAIL|Error' "$OUT/taps.log" | tail -n 1 | cut -c1-300)"; exit 3; }
   b=(-D --backup=simple --suffix=.replaced)
-  install "${b[@]}" "$S/fa2/build/fa3_matReqG/verity_fa3_matReqG.so" "$HIDDEN_SO" && install "${b[@]}" "$S/norm_tap/build/verity_norm_tap.so" "$NORM_TAP_SO" || exit 3
-  log "taps: FA3 built and exact, the norm tap built (NORM-TAP-OK; no exactness test covers it), both now live ($(grep -E '^(FA3-TAP-OK|NORM-TAP-OK|FA-TAP-EXACTNESS)' "$OUT/taps.log" | cut -c1-100 | tr '\n' ' ')), the replaced ones beside them as .replaced (revert: mv each back): set placement.toml's TAPS_AT to $(git rev-parse HEAD)"
+  install "${b[@]}" "$S/fa2/build/fa3_matReqG/verity_fa3_matReqG.so" "$HIDDEN_SO" || exit 3
+  log "taps: FA3 built and exact, now live ($(grep -E '^(FA3-TAP-OK|FA-TAP-EXACTNESS)' "$OUT/taps.log" | cut -c1-100 | tr '\n' ' ')), the replaced one beside it as .replaced (revert: mv it back): set placement.toml's TAPS_AT to $(git rev-parse HEAD)"
 fi
 if on flock && { [ -n "${STEPS:-}" ] || [ ! -x "$FLOCK_WORK/flock-gpu-link/flock/target/release/flock-circuit" ]; }; then
   mkdir -p "$FLOCK_WORK" "$OUT/m0-build"

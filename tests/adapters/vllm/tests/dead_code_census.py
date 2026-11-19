@@ -317,7 +317,7 @@ def shell_modules(g: Graph, text: str) -> set[str]:
                 mods.add(g.mod_of[tok])
             continue
         cands = non_test_by_base.get(os.path.basename(tok), [])
-        if len(cands) > 1:   # `$SRC/build_ext.py`: the dir the shell names (fa2_tap_src / norm_tap_src / router_tap_src) disambiguates
+        if len(cands) > 1:   # `$SRC/build_ext.py`: the dir the shell names (fa2_tap_src / router_tap_src) disambiguates
             cands = [c for c in cands if any(d in text for d in Path(c).parts[:-1] if d.endswith("_src"))]
         if len(cands) == 1:
             mods.add(g.mod_of[cands[0]])

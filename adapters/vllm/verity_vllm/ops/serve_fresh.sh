@@ -6,7 +6,7 @@
 #
 #   bash adapters/vllm/verity_vllm/ops/serve_fresh.sh [--work DIR] [--gpu N] [--dry-run]
 #
-# Everything it writes is under DIR (default ./.verity-work): WORK, VENV, HF_HOME, FA2, NT, RT, HOME and every cache, whatever
+# Everything it writes is under DIR (default ./.verity-work): WORK, VENV, HF_HOME, FA2, RT, HOME and every cache, whatever
 # the caller's environment holds; the install's uv and pip caches are the bootstrap's, under DIR and removed after the install.
 # --gpu N sets CUDA_VISIBLE_DEVICES=N (default: the caller's, else the first Hopper card). --dry-run prints the paths and the
 # steps and does nothing. Before building anything it refuses, in one line each, a machine with no Hopper card (the row is
@@ -27,7 +27,7 @@ done
 W=$(realpath -m "$W")
 ROW=llama32-1b__int8__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager
 MODEL=verity-int8/Llama-3.2-1B-INT8; REV=15b0976d400d796ee589e7737d03a919526bf800
-export WORK=$W VENV=$W/venv312 HF_HOME=$W/hf FA2=$W/cp/fa2 NT=$W/cp/norm_tap RT=$W/cp/router_tap HOME=$W/home
+export WORK=$W VENV=$W/venv312 HF_HOME=$W/hf FA2=$W/cp/fa2 RT=$W/cp/router_tap HOME=$W/home
 export XDG_CACHE_HOME=$W/home/.cache XDG_DATA_HOME=$W/home/.local/share UV_PYTHON_INSTALL_DIR=$W/uv-python TMPDIR=$W/tmp
 export TORCH_EXTENSIONS_DIR=$W/cache/torch_extensions TRITON_CACHE_DIR=$W/cache/triton VLLM_CACHE_ROOT=$W/cache/vllm
 export CUDA_CACHE_PATH=$W/cache/nv NATIVE_COLLECT_BUILD=$W/cp/nc_build FA2_TAP_HDIMS=64 FA3_TAP_HDIMS=64   # the row's head size
@@ -46,7 +46,7 @@ for m in $(toml_list "$TREE/pyproject.toml" tool.uv.workspace members); do
   done
 done
 export PY PY312=$PY PYTHONPATH=$ROOTS
-HSO=$FA2/build/fa3_matReqG/verity_fa3_matReqG.so; NSO=$NT/build/verity_norm_tap.so
+HSO=$FA2/build/fa3_matReqG/verity_fa3_matReqG.so
 WL=$TREE/adapters/vllm/workloads/$ROW.json; LOGS=$W/logs; PORT=${PORT:-$(( 18200 + RANDOM % 700 ))}
 fail() { stop_group; echo "SERVE-FRESH FAILED $1: $2"; exit 1; }
 refuse() { echo "serve_fresh: $1" >&2; echo "SERVE-FRESH FAILED check: $1"; exit 3; }
@@ -56,7 +56,7 @@ export CUDA_HOME PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
 [ -n "$GPU" ] && export CUDA_VISIBLE_DEVICES=$GPU
 if [ "$DRY" = 1 ]; then
   echo "serve_fresh --dry-run: tree $TREE"
-  for v in WORK VENV HF_HOME FA2 NT RT HOME XDG_CACHE_HOME XDG_DATA_HOME UV_PYTHON_INSTALL_DIR TMPDIR TORCH_EXTENSIONS_DIR \
+  for v in WORK VENV HF_HOME FA2 RT HOME XDG_CACHE_HOME XDG_DATA_HOME UV_PYTHON_INSTALL_DIR TMPDIR TORCH_EXTENSIONS_DIR \
            TRITON_CACHE_DIR VLLM_CACHE_ROOT CUDA_CACHE_PATH NATIVE_COLLECT_BUILD; do echo "path $v=${!v}"; done
   echo "pythonpath $PYTHONPATH"
   echo "path uv and pip caches: $W/.cache/{uv,pip} (the bootstrap's; removed after the install)"
@@ -128,7 +128,7 @@ step predict "$VENV/bin/verity-vllm" predict row --row "$ROW" --out "$W/predicte
 NA=network-attester
 SERVE=("$VENV/bin/verity-vllm" serve-openai --model "$MODEL" --revision "$REV" --out "$W/serve" --port "$PORT"
   --run-id "fresh-$(date -u +%Y%m%dT%H%M%SZ)" --seal --max-num-batched-tokens 512
-  --window-steps 256 --hidden-so "$HSO" --norm-tap-so "$NSO" --tap-cap-mb 2048
+  --window-steps 256 --hidden-so "$HSO" --tap-cap-mb 2048
   --protocols-config "{\"$NA\": {\"order\": \"release-order\"}}" --window-requests 1 --window-gb 4
   --disk-floor-gb 5 --seal-hold-gb 8)
 LOAD=("$PY" adapters/vllm/tools/served_run/serve_load.py --port "$PORT" --model "$MODEL" --varied 1 --rate 1000 --max-tokens 4

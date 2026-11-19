@@ -1,5 +1,5 @@
 """The norm scale as a required value: one 32-bit word per norm Call per row, the one committed interior value `Q_word_v1{16,32}`
-derives for a norm.  Opt-in (`manifest build --norm-scales`, the row's NORM_TAP): with it off nothing here runs, and no manifest,
+derives for a norm.  Opt-in: with it off nothing here runs, and no manifest,
 Program, root or verdict changes.
 
 Two kinds of norm carry the scale:
