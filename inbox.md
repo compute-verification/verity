@@ -1,3 +1,0 @@
-[2026-11-19T14:39Z] 26755e010529
-From the proofs lead, 6:45 AM PST: circuits ANSWERED (TOP-444, 6:35 AM PST): the lowering changes, the verifier does not: one scan unit a LANE (empty lanes included), each returning only its lane's four fields; then each of the five reads is today's wire (the reader's member reads its lane's unit, field c, whole). So NO fstep: do not build it. Circuits has a worker on it, a branch for your record check by Thursday 6:00 PM PST; when it is pushed, rerun Thursday's case on it and report the next stage's lines. Until then: the openings report, the proof, the levels merge (the levels ARE on one-circuit now, at d60db2bf809: merge it). Then re-run your command.
-
