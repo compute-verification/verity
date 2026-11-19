@@ -71,10 +71,10 @@ import gemm_slowdown as GS
 
 #: dtype -> the coordinate Definition, its dot, the census line of its dense peak at FP32 accumulate, and the campaign target
 #: (verity.circuits.targets.target) whose operands and accumulator these are: MXFP4 has none, so its result.json names none
-DTYPES = {"bf16": ("GemmCoordinate_v2", "HopperBF16WgmmaDot16_v1", "rtx-pro-6000-server/bf16", "bf16-hopper-mma-draft/2026-09-22"),
-          "e4m3": ("GemmCoordinateE4m3_v1", "BlackwellE4m3QmmaDot32_v1", "rtx-pro-6000-server/e4m3", "fp8-sm120-mma-draft/2026-09-30"),
-          "nvf4": ("GemmCoordinateNvf4_v1", "BlackwellNvf4OmmaDot64_v1", "rtx-pro-6000-server/e2m1", "nvfp4-sm120-mma-draft/2026-09-22"),
-          "mxf4": ("GemmCoordinateMxf4_v1", "BlackwellMxf4OmmaDot64_v1", "rtx-pro-6000-server/e2m1", None)}
+DTYPES = {"bf16": ("GemmCoordinate_v2", "HopperBF16WgmmaDot16_v1", "rtx-pro-6000-server-tensor/bf16", "bf16-hopper-mma-draft/2026-09-22"),
+          "e4m3": ("GemmCoordinateE4m3_v1", "BlackwellE4m3QmmaDot32_v1", "rtx-pro-6000-server-tensor/e4m3", "fp8-sm120-mma-draft/2026-09-30"),
+          "nvf4": ("GemmCoordinateNvf4_v1", "BlackwellNvf4OmmaDot64_v1", "rtx-pro-6000-server-tensor/e2m1", "nvfp4-sm120-mma-draft/2026-09-22"),
+          "mxf4": ("GemmCoordinateMxf4_v1", "BlackwellMxf4OmmaDot64_v1", "rtx-pro-6000-server-tensor/e2m1", None)}
 M = 35
 #: BF16's instances per statement at m = 35: 2^(35 - k_log), k_log the block circuit.compose packs one coordinate into (the unit's
 #: row slot and its rows' hashing): 24, 24, 25, 26, 27. K = 32768 is at Stmt.InRange's k_log <= 27. The FP8 / FP4 rows take theirs
