@@ -47,14 +47,8 @@ def toys():
     return mod
 
 
-#: blocks in which a unit's return leaf is read only inside S: Lean's out(S) (`BlockFront.front`) holds it and Python's
-#: does not
-OUT_S_DIFFERS = {("fanout", 2), ("pair", 0)}
-
-
 def toy_cases() -> list[tuple[str, int, list[tuple[int, int]]]]:
-    return [(name, i, units) for name, (_f, blocks) in toys().TOYS.items() for i, units in enumerate(blocks)
-            if (name, i) not in OUT_S_DIFFERS]
+    return [(name, i, units) for name, (_f, blocks) in toys().TOYS.items() for i, units in enumerate(blocks)]
 
 
 @cache
