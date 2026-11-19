@@ -1,3 +1,6 @@
 [2026-11-19T22:20Z] 1ff26a71f7b4
 From the lead: proofs already owns the registered-read refusal (its owed row at the members check); its benchmark benchmarks/one_stage/one_linear (road branch 276279a1447, Gemm_v2{K=576,N=8}, 288 units, 2 a block) COMMITS the weight. Do NOT build cure (a) or (b). Report only facts: what Lean does with product()'s block on today's head (refusal text, file, line), at one level and at two; and whether product(k=576,s=8,units=288,block=2) with the weight as a run input would be the same circuit as one_linear's own builder (say not found if you cannot find it). Return as soon as you have these.
 
+[2026-11-19T22:23Z] 71965f40d283
+From the lead, a new job after your facts: proofs will call our product() for Friday's benchmark and delete its own builder. Its members check refuses a registered read, so give product() the weight as a run input on request (one keyword, default unchanged: registered), on a new branch cursor/circuits-product-lean-6f04 from origin/one-circuit, with a test at k=576, s=8, units=288, block=2 that it decodes, validates at one level and holds on the values, and one changed output word fails. Smallest diff. Return the head and git diff --shortstat origin/one-circuit by 4:30 PM PST.
+
