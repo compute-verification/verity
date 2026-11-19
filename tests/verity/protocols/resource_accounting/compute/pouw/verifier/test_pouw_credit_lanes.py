@@ -1,20 +1,16 @@
 """`credit`'s lanes form (`leaf_lanes`): at a K the period-open commits as ``lane<K>`` and ``combine<K>``, credit
 still samples the window's leaves, and each sampled leaf is proved as `leaf_lanes.statements` (R/4)(C/8) lanes and the
-combine, each verified against its own one-call leaf Program, a population of one, with the ``--registered`` file credit
-builds at the leaf's served place, its partials ``<prefix>partials@<u>`` held to one produced record under the window's
-sample root. Every refusal of the form is shown here: ``missing``, ``outcome``, ``failed``, ``circuit``, ``proof``,
-``registration`` and ``lanes-shape``.
+combine, its partials ``<prefix>partials@<u>`` held to one produced record under the window's sample root. Every leaf
+statement reads an A, B or partials row in full, which proofs' verifier cannot mark, so credit refuses each at its
+``--registered`` file (`credit.leaf_registered_file`) and runs the verifier on none (`never`). The refusals before it are
+shown here: ``missing``, ``outcome``, ``circuit``, ``registration`` and ``lanes-shape``.
 
 The window is `test_circuit_h1window`'s stand-in tile at 8 × 16 (four lanes) and K = 384 and 416, so `credit.LANES_TILES`
 is widened to it; the 32 × 32 refusal is shown on its own. The stand-in's unit is not h1zy's, so its leaf Programs are
 stand-in bytes that `leaf_of` is replaced to accept; the slow test holds `leaf_of` and `leaf_unit_id` to the real
-`h1window.leaf_program`. The verifier is a stand-in `run` that accepts a session exactly when credit hands it the files
-the prover proved against (the prover's ``--registered`` file is `h1window.leaf_reads_file`'s at the served place, with
-`h1window.leaf_known_ports`) and reports what the Lean verifier would: the program, the registered finding, the units and
-the rows it opened (``openings``, which `produced.shared` reads)."""
+`h1window.leaf_program`."""
 from __future__ import annotations
 
-import dataclasses
 import hashlib
 import json
 import random
@@ -39,13 +35,6 @@ COIN = {"after": SAMPLE_ROOT, "coin": "c0" * 64, "epoch": 0, "index": 0, "label"
 SAMPLE = {"coin": COIN, "root": SAMPLE_ROOT}
 #: units 1 and 6 of K = 384's calls 0 and 4, unit 3 of K = 416's call 2
 SAMPLED = [1, 3, 6]
-
-
-@dataclasses.dataclass(frozen=True)
-class Opened(PF.Finding):
-    """A verdict with the rows its session opened (``{port: [[position, b || c] ...]}``), as `produced.shared` reads."""
-
-    openings: dict = dataclasses.field(default_factory=dict)
 
 
 @pytest.fixture(scope="module")
@@ -103,226 +92,114 @@ def _roots(w: dict) -> dict[str, str]:
     return {e["value"]: e["root"] for e in w["entries"]}
 
 
-def prove(w: dict, to: Path, files: dict, units=SAMPLED) -> tuple[dict, dict]:
-    """The window's lanes evidence as an honest prover delivers it, and what each statement was proved against (by its
-    public file): each tile-form call's statement as `test_pouw_credit_statements.prove`'s, and each sampled lanes-form
-    leaf's partials committed under the sample root and its lanes and combine, each against its leaf Program, its
-    `leaf_partition_of` query and `h1window.leaf_reads_file`'s served file with `h1window.leaf_known_ports`."""
-    prog, digest, layout, shape = w["prog"], w["digest"], w["layout"], w["shape"]
-    (r, c), roots, rng = LEAF, _roots(w), random.Random(0)
-    proved, statements, produced, openings = {}, [], [], {}
-    by_call: dict[int, list[int]] = {}
+def prove(w: dict, to: Path, units=SAMPLED) -> dict:
+    """The window's lanes evidence as an honest prover delivers it: each sampled lanes-form leaf's partials committed under
+    the sample root, and its lanes' and combine's statements."""
+    digest, layout = w["digest"], w["layout"]
+    (r, c), rng = LEAF, random.Random(0)
+    statements, produced, openings = [], [], {}
     for u in units:
-        call, _t, k = Cr.leaf_call(layout, u)
-        if f"k{k}" in files:
-            by_call.setdefault(call, []).append(u)
-            continue
+        _call, _t, k = Cr.leaf_call(layout, u)
         name = LL.served(PREFIX, LL.PARTIALS, u)
         tree = PP.commit(digest, name, [[rng.randrange(1 << 16) for _ in range(2 * LL.words(k))] for _ in range(LL.lanes(r, c))],
                          SAMPLE_ROOT)
         produced.append(tree.entry())
         openings[name] = PR.rows_of(tree)
-        at = HW.place(prog, u, STEPS, served=True)
-        mine = {**roots, name: tree.root.hex()}
-        partials = {x: y for x, y in tree.entry().items() if x not in ("value", "root")}
         for kind, ln in LL.statements(r, c):
-            known, kops = HW.leaf_known_ports(prog, kind, ln, u=u, registration=SAMPLE_ROOT, salt=bytes.fromhex(SALT),
-                                              roots=(bytes.fromhex(roots[at[LL.A][0]]), bytes.fromhex(roots[at[LL.B][0]])),
-                                              prog=digest)
-            reg = HW.leaf_reads_file(prog, u, kind, ln, mine, partials, known, prog=digest, window=WINDOW, steps=STEPS,
-                                     served=True)
-            seen = {p: [list(kops[e["value"]][0])] for p, e in reg["ports"].items() if e["value"] in kops}
-            seen.update({p: [[e["reads"][0], tree.bcs[e["reads"][0]].hex()]] for p, e in reg["ports"].items()
-                         if e["value"] == name})
             base = to / f"leaf-{u}-{kind}-{ln}"
             (base / "session").mkdir(parents=True)
             (base / "circuit.txt").write_bytes(circuit(f"{kind}{k}"))
             (base / "pub.bin").write_bytes(f"{u} {kind} {ln}\n".encode())
-            leaf = leaf_desc(kind, k)
-            partition = {"format": Cr.PARTITION_FORMAT, "program": _sha(leaf),
-                         "query": {"name": Cr.QUERY[0], "version": Cr.QUERY[1], "params": {"templates": [unit_id(kind, k)]}}}
-            proved[str(base / "pub.bin")] = {"circuit": circuit(f"{kind}{k}"), "program": leaf, "partition": partition,
-                                             "registered": reg, "units": (0,), "openings": seen}
             statements.append({"unit": u, "statement": [kind, ln], "circuit": str(base / "circuit.txt"),
                                "public": str(base / "pub.bin"), "sessions": [str(base / "session")]})
-    ks = {name: k for name, k, _n in layout["linears"]}
-    for call, us in sorted(by_call.items()):
-        k = ks[layout["calls"][call][0]]
-        reg, why = Cr.registered_file(digest, layout, shape, call, {v: [x] for v, x in roots.items()}, WINDOW, STEPS, SALT)
-        assert why is None, why
-        base = to / f"call-{call}"
-        (base / "session").mkdir(parents=True)
-        (base / "circuit.txt").write_bytes(circuit(f"k{k}"))
-        (base / "pub.bin").write_bytes(f"call {call}\n".encode())
-        proved[str(base / "pub.bin")] = {"circuit": circuit(f"k{k}"), "program": w["raw"],
-                                         "partition": Cr.partition_of(digest, shape), "registered": reg,
-                                         "units": tuple(us), "openings": {}}
-        statements.insert(0, {"call": call, "circuit": str(base / "circuit.txt"), "public": str(base / "pub.bin"),
-                              "sessions": [str(base / "session")]})
     rec = PR.record(SAMPLE_ROOT, COIN["coin"], produced, openings)
-    return ({"leaf_programs": {f"{kind}{k}": leaf_desc(kind, k).hex() for k in (384, 416) for kind in (LL.LANE, LL.COMBINE)},
-             "produced": rec, "statements": statements}, proved)
+    return {"leaf_programs": {f"{kind}{k}": leaf_desc(kind, k).hex() for k in (384, 416) for kind in (LL.LANE, LL.COMBINE)},
+            "produced": rec, "statements": statements}
 
 
-def runner(proved: dict, tamper=None):
-    """The stand-in verifier: accepts each session exactly when it was handed the files its statement was
-    proved against, and reports the program, registered finding, units and openings (each `tamper`ed per statement)."""
-    def run(proof: PF.Proof, *, circuit_sha512, program, partition, registered):
-        want = proved[str(proof.public)]
-        ok = (_sha(proof.circuit.read_bytes()) == circuit_sha512 == _sha(want["circuit"]) and program == want["program"]
-              and partition == want["partition"] and registered == want["registered"])
-        f = {"session": str(proof.sessions[0]), "accepted": ok, "why": "" if ok else "the proof does not verify",
-             "program": _sha(program), "units": want["units"] if ok else (),
-             "registered": {p: {"value": e["value"], "root": e["root"]} for p, e in registered["ports"].items()} if ok else {},
-             "openings": want["openings"]}
-        if tamper is not None:
-            f = tamper(str(proof.public), f)
-        return [Opened(**f)], None
-    return run
+def never(_proof: PF.Proof, **_kw):
+    raise AssertionError("the verifier ran on a leaf statement")
 
 
-def verified(w: dict, evidence, files: dict, run, units=SAMPLED, entries=None, sample=SAMPLE):
+def verified(w: dict, evidence, files: dict, units=SAMPLED, entries=None, sample=SAMPLE):
     return Cr._verified(evidence, files, w["raw"], w["layout"], w["entries"] if entries is None else entries, WINDOW,
-                        units, STEPS, run, SALT, sample)
+                        units, STEPS, never, SALT, sample)
 
 
 def _leaf_statements(evidence: dict, u: int | None = None) -> list[int]:
     return [i for i, s in enumerate(evidence["statements"]) if "unit" in s and (u is None or s["unit"] == u)]
 
 
-def test_each_sampled_leaf_proved_as_its_lanes_and_combine_is_one_accepted_outcome(world, lanes, tmp_path):
-    """Every sampled leaf at a lanes-form K, its four lanes and its combine verified against its leaf Programs with credit's
-    own files, is one accepted outcome under the window's program, its registered finding its statements' reads of the
-    window's tables (each of its tables' values, at the window's roots), which `_proved` holds to the sample. Beside a
-    tile-form K's call statement, verified as before."""
-    for files in (files_of(), files_of((384,), (416,))):
-        evidence, proved = prove(world, tmp_path / str(len(files)), files)
-        got, why = verified(world, evidence, files, runner(proved))
-        assert why is None, why
-        assert sorted(o["unit"] for o in got) == SAMPLED and Cr._proved(SAMPLED, got) is None
-        roots = _roots(world)
-        for o in got:
-            assert o["verdict"] == "accept" and o["program"] == world["digest"]
-            if Cr.form_of(files, Cr.leaf_k(world["layout"], o["unit"])) == "lanes":
-                assert o["registered"] and all(roots[e["value"]] == e["root"] for e in o["registered"].values())
-
-
-def test_credit_builds_the_provers_served_leaf_files(world):
-    """`credit.leaf_registered_file`, from the descriptor alone, is `h1window.leaf_reads_file` at the served place with
-    `h1window.leaf_known_ports`, port for port, and its known openings those ports' trees' row 0."""
+def test_credit_refuses_every_leaf_statement_at_its_registered_file(world):
+    """`credit.leaf_registered_file` places each sampled leaf at its served place, as `h1window.place` does, and refuses
+    each of its statements (``registration``): every one reads an A, B or partials row in full, which a
+    `registered.READS_V2` port cannot mark (`PouwWindow.Lanes.fullHole`)."""
     prog, digest, (r, c) = world["prog"], world["digest"], LEAF
     roots = _roots(world)
     for u in SAMPLED:
-        k = Cr.leaf_k(world["layout"], u)
         name = LL.served(PREFIX, LL.PARTIALS, u)
         at = HW.place(prog, u, STEPS, served=True)
         assert Cr.leaf_place(world["layout"], world["shape"], u, STEPS) == at and at[LL.PARTIALS] == (name, 0)
-        partials = PR.entry(digest, name, LL.lanes(r, c), 2 * LL.words(k), SAMPLE_ROOT)
         for kind, ln in LL.statements(r, c):
-            known, kops = HW.leaf_known_ports(prog, kind, ln, u=u, registration=SAMPLE_ROOT, salt=bytes.fromhex(SALT),
-                                              roots=(bytes.fromhex(roots[at[LL.A][0]]), bytes.fromhex(roots[at[LL.B][0]])),
-                                              prog=digest)
-            want = HW.leaf_reads_file(prog, u, kind, ln, {**roots, name: "ee" * 64}, partials, known, prog=digest,
-                                      window=WINDOW, steps=STEPS, served=True)
             got, why = Cr.leaf_registered_file(digest, world["layout"], world["shape"], u, (kind, ln),
                                                {v: [x] for v, x in roots.items()}, WINDOW, STEPS, SALT, SAMPLE_ROOT,
                                                {name: "ee" * 64})
-            assert why is None, why
-            assert got == (want, {v: [tuple(op) for op in ops] for v, ops in kops.items()})
+            assert got is None and why[0] == "registration" and "are read in full" in why[1], why
 
 
-def test_a_leaf_with_a_statement_missing_or_no_lanes_evidence_is_refused(world, lanes, tmp_path):
+def test_a_leaf_with_no_statement_or_no_lanes_evidence_is_refused(world, lanes, tmp_path):
     files = files_of()
-    evidence, proved = prove(world, tmp_path, files)
-    i = _leaf_statements(evidence, 6)[-1]
-    short = {**evidence, "statements": [s for j, s in enumerate(evidence["statements"]) if j != i]}
-    assert verified(world, short, files, runner(proved))[1] == ("missing", (
-        "drawn leaf 6 has no statement ['combine', None]: every drawn leaf's lanes and combine are proved and verified, "
-        "and a leaf with one missing refuses the window (no partial credit)"))
-    got, why = verified(world, [], files, runner(proved))
+    evidence = prove(world, tmp_path)
+    got, why = verified(world, {**evidence, "statements": []}, files)
+    assert got is None and why[0] == "missing" and why[1].startswith("drawn leaf 1 has no statement ") and \
+        why[1].endswith("a leaf with one missing refuses the window (no partial credit)"), why
+    got, why = verified(world, [], files)
     assert got is None and why[0] == "missing" and why[1].startswith("drawn leaf 1 is at a lanes-form K")
 
 
 def test_leaf_statements_the_sample_did_not_ask_for_are_refused(world, lanes, tmp_path):
-    """A leaf statement proved twice (a retry), one of a unit no sampled leaf, and one that is no lane or combine of the
-    tile: each refuses the window, whatever its other statements' verdicts."""
+    """A leaf statement of a unit no sampled leaf, and one that is no lane or combine of the tile: each refuses the
+    window, ahead of the statements after it."""
     files = files_of()
-    evidence, proved = prove(world, tmp_path, files)
+    evidence = prove(world, tmp_path)
     s = evidence["statements"][_leaf_statements(evidence)[0]]
     for extra, why in (
-            (s, ("drawn leaf 1's statement ['lane', 0] is proved twice: each statement is proved and verified once, and a "
-                 "retry never reproves it")),
             ({**s, "unit": 0}, ("unit 0 has a leaf statement and is no drawn lanes-form leaf: only the draw's leaves at a K "
                                 "committed as lanes are proved as lanes")),
             ({**s, "statement": ["lane", 4]}, ("drawn leaf 1's statement ['lane', 4] is none of leaf_lanes.statements(8, "
                                                "16): a lane with its index or the combine"))):
-        got = verified(world, {**evidence, "statements": evidence["statements"] + [extra]}, files, runner(proved))
+        got = verified(world, {**evidence, "statements": [extra] + evidence["statements"]}, files)
         assert got == (None, ("outcome", why))
-
-
-def test_a_rejected_leaf_session_or_one_proving_other_units_is_refused(world, lanes, tmp_path):
-    files = files_of()
-    evidence, proved = prove(world, tmp_path, files)
-    first = evidence["statements"][_leaf_statements(evidence, 3)[2]]["public"]
-    Path(first).parent.joinpath("circuit.txt").write_bytes(b"another circuit")
-    got, why = verified(world, evidence, files, runner(proved))
-    assert got is None and why[0] == "failed" and why[1].startswith("drawn leaf 3's lane416 session ")
-    Path(first).parent.joinpath("circuit.txt").write_bytes(circuit("lane416"))
-    for change in ({"units": (0, 1)}, {"program": "ab" * 64}):
-        got, why = verified(world, evidence, files, runner(proved, lambda p, f: {**f, **change} if p == first else f))
-        assert got is None and why[0] == "proof" and "checkFull" in why[1], why
 
 
 def test_a_leaf_program_other_than_the_committed_one_is_refused(world, lanes, tmp_path, monkeypatch):
     files = files_of()
-    evidence, proved = prove(world, tmp_path, files)
+    evidence = prove(world, tmp_path)
     other = {**evidence, "leaf_programs": {**evidence["leaf_programs"], "combine384": b"another".hex()}}
-    got, why = verified(world, other, files, runner(proved))
+    got, why = verified(world, other, files)
     assert got is None and why == ("circuit", ("the window's combine384 leaf Program is not the one the period-open "
                                                "committed (leaf_programs combine384): verify each lanes-form statement "
                                                "against it"))
     monkeypatch.setattr(Cr, "leaf_of", lambda *_: False)
-    got, why = verified(world, evidence, files, runner(proved))
+    got, why = verified(world, evidence, files)
     assert got is None and why[0] == "circuit" and "is not h1window.leaf_program's at K = 384" in why[1]
 
 
-def test_a_leaf_opening_other_values_roots_or_rows_is_refused(world, lanes, tmp_path):
-    """Each is ``registration``: a session reporting another root for a read; a produced record under another sampling coin
-    or missing a leaf's partials (its P- codes); a call whose receipts the window doesn't register; a session reporting
-    another opening of a partials row, or none (P-shared: a verdict without its openings, as `proofs.Finding` is today,
-    fails closed)."""
+def test_a_produced_record_receipts_or_sample_other_than_the_windows_are_refused(world, lanes, tmp_path):
+    """Each is ``registration``: a produced record under another sampling coin or missing a leaf's partials (its P-
+    codes); a call whose receipts the window doesn't register; a sample with no root."""
     files = files_of()
-    evidence, proved = prove(world, tmp_path, files)
-    first = evidence["statements"][_leaf_statements(evidence, 1)[1]]["public"]
-
-    def other_root(p, f):
-        if p != first:
-            return f
-        port = sorted(f["registered"])[0]
-        return {**f, "registered": {**f["registered"], port: {**f["registered"][port], "root": "01" * 64}}}
-
-    got, why = verified(world, evidence, files, runner(proved, other_root))
-    assert got is None and why[0] == "registration" and "opened its ports at other values or roots" in why[1]
+    evidence = prove(world, tmp_path)
     rec = evidence["produced"]
     for bad, codes in (({**rec, "draw": "c1" * 64}, "P-draw"),
                        ({**rec, "produced": rec["produced"][1:]}, "P-values")):
-        got, why = verified(world, {**evidence, "produced": bad}, files, runner(proved))
+        got, why = verified(world, {**evidence, "produced": bad}, files)
         assert got is None and why[0] == "registration" and why[1].startswith(f"the window's produced record ({PR.FORMAT}) "
                                                                               f"fails {codes}"), why
-    receipt = HW.place(world["prog"], 6, STEPS)[LL.RECEIPT][0]
-    got, why = verified(world, evidence, files, runner(proved), entries=[e for e in world["entries"] if e["value"] != receipt])
-    assert got is None and why[0] == "registration" and why[1].startswith("drawn leaf 6's combine reads its call's receipts")
-    partials = LL.served(PREFIX, LL.PARTIALS, 3)
-
-    def other_opening(p, f):
-        ops = {port: [[row, ("0" if bc[0] != "0" else "1") + bc[1:]] for row, bc in rows] if f["registered"][port]["value"]
-               == partials else rows for port, rows in f["openings"].items()}
-        return {**f, "openings": ops}
-
-    for tamper in (other_opening, lambda p, f: {**f, "openings": None}):
-        got, why = verified(world, evidence, files, runner(proved, tamper))
-        assert got is None and why[0] == "registration" and "(P-shared)" in why[1], why
-    assert verified(world, evidence, files, runner(proved), sample={"coin": COIN})[1][0] == "registration"
+    receipt = HW.place(world["prog"], 1, STEPS)[LL.RECEIPT][0]
+    got, why = verified(world, evidence, files, entries=[e for e in world["entries"] if e["value"] != receipt])
+    assert got is None and why[0] == "registration" and why[1].startswith("drawn leaf 1's combine reads its call's receipts")
+    assert verified(world, evidence, files, sample={"coin": COIN})[1][0] == "registration"
 
 
 def test_a_sampled_leaf_outside_leaflanessound_is_refused_lanes_shape(world, tmp_path, monkeypatch):
@@ -331,8 +208,8 @@ def test_a_sampled_leaf_outside_leaflanessound_is_refused_lanes_shape(world, tmp
     `h1zy.LEAST_K`, a chunked K and a J10-R template, the refusal read off the tile and K alone (J10-R's statement set,
     chunk lanes and combine v2, is still `leaf_lanes.statements`')."""
     files = files_of()
-    evidence, proved = prove(world, tmp_path, files)
-    got, why = verified(world, evidence, files, runner(proved))
+    evidence = prove(world, tmp_path)
+    got, why = verified(world, evidence, files)
     assert got is None and why[0] == "lanes-shape" and why[1].startswith("drawn leaf 1: the window's 8 × 16 tile")
     tile = {"tile": [32, 32]}
     plain, j10r = {"tiles": {k: {"j10r": False} for k in (352, 384, 400, 14336, 4096)}}, {"tiles": {4096: {"j10r": True}}}

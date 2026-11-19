@@ -8,8 +8,8 @@ by its key, from its memo, and otherwise runs the verifier and keeps the answer,
 step still judges every answer itself, in its own order, and refuses where it refuses.
 
 A run's key is the SHA-512 of all of its inputs (`key`): the verifier's executable, the circuit file, the public file,
-every file of each session directory (its name and SHA-512), the paths the verifier is handed, the committed circuit
-digest, the program's bytes, and the partition object and the ``--registered`` file as canonical JSON. Those are the
+every file of each session directory (its name and SHA-512), the paths the verifier is handed, the program's bytes,
+and the partition object, the draw and the ``--registered`` file as canonical JSON. Those are the
 statement's proof files and what credit builds from the window's entries, root, rounds, salt and sample, so a changed
 input is another key. The memo is the verifier's own: in memory, or a directory in the verifier's scratch (0700, each
 answer a 0600 file), never the serve dir or anywhere the prover writes. ``--lean-answers DIR`` hands a memo directory
@@ -64,7 +64,7 @@ def file_digest(path: Path) -> str:
     return got
 
 
-def key(proof: PF.Proof, *, exe: Path, circuit_sha512: str, program: bytes, partition: Mapping[str, Any],
+def key(proof: PF.Proof, *, exe: Path, program: bytes, partition: Mapping[str, Any], draw: Mapping[str, Any],
         registered: Mapping[str, Any] | None = None) -> str:
     """The SHA-512 of every input of `proofs.verify`'s run on `proof` (the module docstring); OSError when a file it names
     is missing, which `Answers` leaves to the verifier's own answer."""
@@ -77,7 +77,7 @@ def key(proof: PF.Proof, *, exe: Path, circuit_sha512: str, program: bytes, part
     return hashlib.sha512(canonical_json({
         "exe": file_digest(exe), "circuit": file_digest(proof.circuit), "public": file_digest(proof.public),
         "sessions": sessions, "paths": [str(proof.circuit), str(proof.public), [str(s) for s in proof.sessions]],
-        "circuit_sha512": circuit_sha512, "program": hashlib.sha512(program).hexdigest(), "partition": partition,
+        "program": hashlib.sha512(program).hexdigest(), "partition": partition, "draw": draw,
         "registered": registered})).hexdigest()
 
 
