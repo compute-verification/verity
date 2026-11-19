@@ -619,17 +619,19 @@ def creditedGate {α : Type} (prof : Core.Integrity) (o : Core.Outcome α Core.I
   | some why => .reject why
   | none => o
 
-/-- R1–R8, the sample's checks, the record's checks and the verdicts (module docstring, **check**), at no coins: the
-check `checkAt` runs once the coins drew the sample. R1–R8 is SPOT's check alone (`Docket.check`): this audit
+/-- R1–R8, the sample's checks under the level's sampling design `design` (the verifier's as derived, or one the level
+above computes), the record's checks and the verdicts (module docstring, **check**), at no coins: the check `checkAtIn`
+runs once the coins drew the sample. R1–R8 is SPOT's check alone (`Docket.check`): this audit
 refuses no record for the caller's facts (the declared day, the binding, the seed salt, the registered compiler, the
 pool's marks and chain, and the verdicts); SPOT, its caller, gates it (`VStar.Recursive.Caller.gate`), and
 this package's executables that run it on their own (`spot-one-stage` and `-zk`) do not. -/
-def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Core.Integrity :=
+def checkIn (p : Params) (c : Commitment) (e : Evidence) (design : Except String Json) :
+    Core.Outcome Public Core.Integrity :=
   let v := p.verifier
   let rec_ := c.record
   let codes := Docket.check rec_ v
   if !codes.isEmpty then .reject s!"registration: {", ".intercalate codes.toList}" else
-  match Draw.derive v.program v.query v.samplingDesign v.workTable with
+  match design with
   | .error err => .reject s!"registration: R1-law: {err}"
   | .ok samplingDesign =>
   let drawCodes := Draw.checkDraw e.draw (getD rec_ "population") samplingDesign
@@ -657,13 +659,22 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
       profile
   | _, _ => .reject "the law the draw passed under has no profile"
 
-/-- Why the sample is not the one the coins `src` give under the verifier's sampling design as derived (`coinsReason`); none when it
-is, and when the sampling design doesn't derive, which `check` refuses. -/
-def coinsWhy (p : Params) (c : Commitment) (e : Evidence) (src : ByteArray) : Option String :=
-  let v := p.verifier
-  match Draw.derive v.program v.query v.samplingDesign v.workTable with
+/-- The check at the verifier's sampling design as derived (`checkIn`). -/
+def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Core.Integrity :=
+  checkIn p c e (Draw.derive p.verifier.program p.verifier.query p.verifier.samplingDesign p.verifier.workTable)
+
+/-- Why the sample is not the one the coins `src` give under `design` (`coinsReason`); none when it is, and when the
+design is an error, which `checkIn` refuses. -/
+def coinsWhyIn (v : Docket.Verifier) (design : Except String Json) (c : Commitment) (e : Evidence) (src : ByteArray) :
+    Option String :=
+  match design with
   | .ok samplingDesign => coinsReason v samplingDesign c.record e.draw src
   | .error _ => none
+
+/-- `coinsWhyIn` at the verifier's sampling design as derived. -/
+def coinsWhy (p : Params) (c : Commitment) (e : Evidence) (src : ByteArray) : Option String :=
+  coinsWhyIn p.verifier (Draw.derive p.verifier.program p.verifier.query p.verifier.samplingDesign p.verifier.workTable)
+    c e src
 
 /-- Whether the coins `src` run out before the sample under the verifier's sampling design as derived ends (`sampledFrom` refused with
 `Draw.RAN_OUT`); false when the sampling design doesn't derive or the record names no population, which `check` refuses. -/
@@ -673,12 +684,24 @@ def ranOut (p : Params) (c : Commitment) (src : ByteArray) : Bool :=
   | .ok samplingDesign, some n => match Draw.ranOutOf (sampledFrom v samplingDesign n src) with | .ok b => b | .error _ => false
   | _, _ => false
 
+/-- The check at the coins `ξ` under the level's sampling design `design` (module docstring, **check**): with coins, a
+refusal when they don't sample the sample (`coinsWhyIn`), then `checkIn`. -/
+def checkAtIn (p : Params) (c : Commitment) (ξ : Option ByteArray) (e : Evidence) (design : Except String Json) :
+    Core.Outcome Public Core.Integrity :=
+  match ξ.bind (coinsWhyIn p.verifier design c e) with
+  | some why => .reject s!"draw: coins: {why}"
+  | none => checkIn p c e design
+
 /-- The check at the coins `ξ` (module docstring, **check**): with coins, a refusal when they don't sample the sample
 (`coinsWhy`), then `check`. -/
 def checkAt (p : Params) (c : Commitment) (ξ : Option ByteArray) (e : Evidence) : Core.Outcome Public Core.Integrity :=
-  match ξ.bind (coinsWhy p c e) with
-  | some why => .reject s!"draw: coins: {why}"
-  | none => check p c e
+  checkAtIn p c ξ e (Draw.derive p.verifier.program p.verifier.query p.verifier.samplingDesign p.verifier.workTable)
+
+/-- `checkAt` unfolded: the coins' refusal at the derived sampling design (`coinsWhy`), then `check`. -/
+theorem checkAt_eq (p : Params) (c : Commitment) (ξ : Option ByteArray) (e : Evidence) :
+    checkAt p c ξ e = match ξ.bind (coinsWhy p c e) with
+      | some why => .reject s!"draw: coins: {why}"
+      | none => check p c e := rfl
 
 /-- The audit's check: at the coins `coinsOf` reads (`checkAt`), refused with its reason when none read. -/
 def checkLive (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Core.Integrity :=

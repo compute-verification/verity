@@ -130,7 +130,7 @@ theorem oneStage_check_of_accept {p : Spot.OneStage.Params} {c : Spot.OneStage.C
   | error r => rw [hξ] at h; simp [Core.atCoins] at h
   | ok ξ =>
     rw [hξ] at h
-    simp only [Core.atCoins, Spot.OneStage.checkAt] at h
+    simp only [Core.atCoins, Spot.OneStage.checkAt_eq] at h
     cases hw : ξ.bind (Spot.OneStage.coinsWhy p c e) with
     | some why => rw [hw] at h; simp at h
     | none => rw [hw] at h; exact h

@@ -25,7 +25,7 @@ step before it returned, so no step holds the evidence to anything the listed on
   (`sourceRead`), the first session shows none of the second stage's coins (`interiorUnshown`), the stages' sessions
   are in order (`stagesOrdered`), the first session's log holds no coin tree's line (`firstTreeless`), the second
   session's log opens each coin tree's rounds stream by stream (`repStreamsOrdered`), the second stage's sampling design is
-  computed (`secondDesignOf`) and the interior audit's check at that sampling design accepts (`secondCheck`).
+  computed (`secondDesignOf`) and the interior audit's check at that sampling design accepts (`OneStage.checkAtIn` at `interiorAt`).
 * `accepts_iff_steps`: the check accepts exactly there.
 
 That an honest prover's evidence passes each step is not shown here.
@@ -146,8 +146,8 @@ theorem prepare_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
     (ho : stagesOrdered p e = .ok ()) (ht : firstTreeless p e = .ok ()) (hq : repStreamsOrdered p e = .ok ())
     (hl : secondDesignOf p run = .ok samplingDesign) :
     prepare p c ξ e bs =
-      .ok (secondCheck p.audit.base.verifier p.audit.base.delta c₂ samplingDesign ξ₂
-        { e.interior.base with verdicts := r.out }, run) := by
+      .ok (OneStage.checkAtIn (interiorAt p.audit.base c₂) c₂ (some ξ₂)
+        { e.interior.base with verdicts := r.out } (.ok samplingDesign), run) := by
   unfold prepare
   simp only [hb, hss]
   unfold prepareRun
@@ -172,8 +172,8 @@ theorem accepts_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
     (ho : stagesOrdered p e = .ok ()) (ht : firstTreeless p e = .ok ()) (hq : repStreamsOrdered p e = .ok ())
     (hl : secondDesignOf p run = .ok samplingDesign)
     (hj : Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true)
-    (htwo : secondCheck p.audit.base.verifier p.audit.base.delta c₂ samplingDesign ξ₂
-      { e.interior.base with verdicts := r.out } = .accept pub prof) :
+    (htwo : OneStage.checkAtIn (interiorAt p.audit.base c₂) c₂ (some ξ₂)
+      { e.interior.base with verdicts := r.out } (.ok samplingDesign) = .accept pub prof) :
     checkBlobsAtInner p c ξ e bs = .accept pub prof := by
   have hp := prepare_of_steps hb hss hi hfit hr hs hu ho ht hq hl
   unfold checkBlobsAtInner
@@ -201,8 +201,8 @@ theorem accepts_iff_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray
         stagesOrdered p e = .ok () ∧ firstTreeless p e = .ok () ∧ repStreamsOrdered p e = .ok () ∧
         secondDesignOf p run = .ok samplingDesign ∧
         Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true ∧
-        secondCheck p.audit.base.verifier p.audit.base.delta c₂ samplingDesign ξ₂
-          { e.interior.base with verdicts := r.out } = .accept pub prof := by
+        OneStage.checkAtIn (interiorAt p.audit.base c₂) c₂ (some ξ₂)
+          { e.interior.base with verdicts := r.out } (.ok samplingDesign) = .accept pub prof := by
   constructor
   · intro h
     unfold checkBlobsAtInner at h

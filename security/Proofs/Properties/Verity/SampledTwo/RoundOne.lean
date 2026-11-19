@@ -177,7 +177,7 @@ theorem second_source_size {p : Params} {c : OneStage.Commitment} {ξ : ByteArra
       64 ≤ ξ₂.size := by
   obtain ⟨c₂, ξ₂, r, i, run, samplingDesign, it, grain, replay, k, ns, ids, ks, hi, -, -, hsc, hit, hsrc, -, -, -, -, -, -,
     hlaw⟩ := accepted_samplingDesign_run h
-  obtain ⟨n, units, read, -, hdf, -⟩ := secondCheck_read hsc
+  obtain ⟨n, units, read, -, hdf, -⟩ := interiorCheck_read hsc
   subst hlaw
   exact ⟨c₂, ξ₂, r, i, it, hi, hit, hsrc,
     Properties.Spot.SecurityProofs.second_sample_size _ _ _ _ _ _ _ _ _ hdf⟩

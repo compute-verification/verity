@@ -6,7 +6,7 @@ public import Proofs.Flock.SpotFlock.RunsAs.OwnReadsOfCheck
 # At the form's accept, the reads its last step's record checks leave out, at that step's own reading
 
 `leftOut_of_check` states the fact at the run of record's input: its interior record `it.record` and its verdicts
-`i.verdicts`. The form's last step (`VStar.Recursive.SampledTwo.secondChecked`) calls `Spot.Record.checks` at another
+`i.verdicts`. The form's last step (`Spot.OneStage.checkIn` at the interior) calls `Spot.Record.checks` at another
 reading of the same two things: the commitment `c₂` of the interior record's canonical text, and the sessions' own
 verdicts `r.out`, before `stamped` names their sessions. `accepted_ownReads_form` restates the fact at that reading,
 from two premises, one for each:

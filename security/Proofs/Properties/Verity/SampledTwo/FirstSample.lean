@@ -154,14 +154,15 @@ the run of record's first stage drew `draw` on the first stage's bytes `ξ` (`Se
 `Select.resolve` gives the parameters' rule at the boundary's program and query, with no closure), held it to the
 boundary registration's record `j₁` as the check read it (`readBack`; `Draw.checkDraw`, under the sampling design the
 rule gives its population), and listed it as
-its `draw`; and the sampling design the last step held the interior audit's sample to (`secondCheck` at `samplingDesign`) is
+its `draw`; and the sampling design the last step held the interior audit's sample to (`OneStage.checkAtIn` at `samplingDesign`) is
 `Select.secondSamplingDesign` of `draw`'s proved units, over the replay block's cells under the interior's query at the rule's
 counts. -/
 theorem accepted_secondSamplingDesign {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : checkBlobsAtInner p c ξ e bs = .accept pub prof) :
     ∃ c₂ ξ₂ r i run samplingDesign, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ Spot.Run.run i = .ok run ∧
-      secondCheck p.audit.base.verifier p.audit.base.delta c₂ samplingDesign ξ₂ { e.interior.base with verdicts := r.out } =
+      OneStage.checkAtIn (interiorAt p.audit.base c₂) c₂ (some ξ₂)
+        { e.interior.base with verdicts := r.out } (.ok samplingDesign) =
         .accept pub prof ∧
       ∃ j₁ n rule samplingDesign₁ workTable derived resolved draw rest read, readBack c.record = .ok j₁ ∧
         nat? (getD j₁ "population") = some n ∧

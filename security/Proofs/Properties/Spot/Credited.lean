@@ -120,15 +120,15 @@ theorem provedUnits_of_checkAt {p : OneStage.Params} {c : OneStage.Commitment} {
       e.provedUnits = units.qsort (· < ·) := by
   cases hw : OneStage.coinsWhy p c e ξ with
   | some why =>
-    simp only [OneStage.checkAt, Option.bind_some, hw] at h
+    simp only [OneStage.checkAt_eq, Option.bind_some, hw] at h
     cases h
   | none =>
-    simp only [OneStage.checkAt, Option.bind_some, hw] at h
+    simp only [OneStage.checkAt_eq, Option.bind_some, hw] at h
     obtain ⟨samplingDesign, -, n, hreg, hdrawn, hunits, -, -, hn, -, -⟩ := acceptMeans p c e pub prof h
     have hder : Draw.derive p.verifier.program p.verifier.query p.verifier.samplingDesign p.verifier.workTable = .ok samplingDesign :=
       hreg.1.2.2.2.1
     obtain ⟨-, -, -, -, -, us, xs, hus, hxs, hasc, h0, -⟩ := hdrawn
-    simp only [OneStage.coinsWhy, hder] at hw
+    simp only [OneStage.coinsWhy, OneStage.coinsWhyIn, hder] at hw
     unfold OneStage.coinsReason at hw
     rw [hn] at hw
     dsimp only at hw

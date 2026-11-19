@@ -80,25 +80,26 @@ the levels and runs this check at two. The package's root imports it, so the pac
      stream, in the order the tree's spec lists its streams (`repStreamsOrdered`, `Challenger.REP_STREAM_ORDER`):
      a session's link points, then each rep's rounds, rep 0's before rep 1's, so no round's challenges are opened
      before the message of an earlier round is fixed;
-  5. the interior audit's verdict at its coins under the second stage's sampling design (`secondCheck`), which gives
-     the public output and the integrity profile;
+  5. the interior audit's verdict at its coins under the second stage's sampling design (`OneStage.checkAtIn`), which
+     gives the public output and the integrity profile;
   6. last (`finish`): the run must accept.
 
-**The last step** (`secondCheck`, step 5) is the form's own variant of `OneStage.checkAt`, since the interior
-registration is sampled under two sampling designs: its record's, a subset of all its `m` proof blocks (`subsetDesign`), which R1
-holds it to as the run of record does, and the second stage's, which its sample is sampled under. It reads the sample the
-coins `ξ₂` give under the second stage's sampling design, every coin opened read (`OneStage.coinsReason`), then R1–R8 at the
-subset design, the evidence's sample held to the second stage's sampling design (`Draw.checkDraw`), the record's checks over its proved
-units (`Record.checks`), the verdicts (`OneStage.verdictOf`), and the bound under the second stage's sampling design. The record's
-checks are the function the run of record of step 4 calls for the interior's record (`Record.record`'s
-`Record.checks`), at the reads it hands it under a two-stage rule (`own_reads`): a session's read of one of the
-registration's own ports at that port's own root is no registered read of the record (`Record.lessOwnReads`), its
-rows being the second-stage statement check's to hold, and a read of one of its ports at any other root is opened and
-not registered, which refuses. A member of an interior that reads another member's port reads it so.
+**The last step** (step 5) is the one-level check at the coins (`OneStage.checkAtIn`, which `OneStage.checkAt` is at
+the derived design) at a design the level above computes: the interior registration is sampled under two sampling
+designs, its record's, a subset of all its `m` proof blocks (`subsetDesign`, `interiorAt`), which R1 holds it to as the
+run of record does, and the second stage's, which its sample is sampled under. It reads the sample the coins `ξ₂` give
+under the second stage's sampling design, every coin opened read (`OneStage.coinsReason`), then R1–R8 at the subset
+design, the evidence's sample held to the second stage's sampling design (`Draw.checkDraw`), the record's checks over
+its proved units (`OneStage.recordChecks`), the verdicts (`OneStage.verdictOf`), and the bound under the second stage's
+sampling design. The record's checks hold the reads the one-level check holds (`Record.heldReads` at the interior's
+window values): a session's read of one of the registration's own ports at that port's own root is no registered read
+of the record (`Record.lessOwnReads`), its rows being the second-stage statement check's to hold, and a read of one of
+its ports at any other root is opened and not registered, which refuses. A member of an interior that reads another
+member's port reads it so.
 That design is computed, never read from the evidence (`secondDesignOf`): `Select.secondSamplingDesign` of the first stage's sample (the
 proved units of the sample the run of record decided) over the replay block's cells under the interior's query
 (`Select.replayCells`) at the rule's counts, the function and the arguments the run of record's second stage samples by.
-Its refusals carry `OneStage.check`'s step prefixes, so a reason names the same step in both forms.
+Its refusals are `OneStage.checkIn`'s, so a reason names the same step in both forms.
 -/
 module
 
@@ -714,56 +715,11 @@ def secondDesignOf (p : Params) (run : Json) : V Json := do
 /-- The interior registration's sampling design as the run of record reads it: a subset of all its `m` proof blocks. -/
 def subsetDesign (m : Nat) : Json := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)]
 
-/-- `secondCheck` past the coins: R1–R8 at the verifier `v`, the sample held to the second stage's sampling design
-`design`, the record's checks, the verdicts, and the bound under `design` at δ `delta`, as `OneStage.check` has them but for the reads
-the record's checks are handed. Those checks are `Record.checks`, which the run of record calls for this record, the
-`draw` entry aside (the sample is held to `design` above), at the reads the run of record hands it under a two-stage rule:
-the verdicts' own for the registration's own values (`Record.ownRegistered`), less the reads of the registration's
-own ports at their own roots (`Record.lessOwnReads`). -/
-def secondChecked (v : Docket.Verifier) (delta : Core.Ratio) (c : OneStage.Commitment) (m : Nat) (design : Json)
-    (e : OneStage.Evidence) : Core.Outcome OneStage.Public Core.Integrity :=
-  let rec_ := c.record
-  let codes := Docket.check rec_ v
-  if !codes.isEmpty then .reject s!"registration: {", ".intercalate codes.toList}" else
-  let sampleCodes := Draw.checkDraw e.draw (getD rec_ "population") design
-  if !sampleCodes.isEmpty then .reject s!"draw: {", ".intercalate sampleCodes.toList}" else
-  let units := match getD e.draw "units" with | .arr us => us.filterMap int? | _ => #[]
-  let cs := Record.checks rec_ e.receipt e.draw Json.null units (e.provedUnits.map Lean.toJson)
-    (Lean.toJson e.instances) (Flock.hexOf c.digest) (e.served.map (·.map fun (n : Nat) => (n : Int)))
-    (e.sessionRoots.map entries)
-    (Record.lessOwnReads rec_ (Record.ownRegistered rec_ (Record.sessionRegistered e.verdicts)))
-  let failed := (cs.filter fun (n, c) => n != "draw" && !c.codes.isEmpty).map (·.1)
-  if !failed.isEmpty then .reject s!"the audit's checks failed: {", ".intercalate failed.toList}" else
-  match OneStage.verdictOf e.verdicts with
-  | .reject r => .reject r
-  | .undecided r => .undecided r
-  | .accept () () =>
-  match Record.profileSample design with
-  | some prof =>
-    let units := match getD e.draw "units" with | .arr us => us.filterMap nat? | _ => #[]
-    let str := fun (k : String) => match getD rec_ k with | .str s => s | _ => ""
-    .accept
-      { drawn := units, proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
-        bound := Bound.boundOf m prof delta,
-        perTemplate := (Bound.strataOf m prof).map (·.map fun s => (s.name, Bound.stratumBound s delta)),
-        complete := Record.allRan e.verdicts }
-      { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
-        levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := m, draw := some prof }],
-        delta, drawn := #[(Record.LEVEL, units.size)] }
-  | none => .reject "the second stage's sampling design has no profile"
-
-/-- **The interior audit's check at the second stage's sampling design** (check, 5; module docstring, **the last
-step**): the interior registration's population `m`; the sample the coins `ξ₂` give under `design`
-(`OneStage.coinsReason` at the verifier whose sampling design is `subsetDesign m`, so that the sample is `design`'s,
-`Draw.flockSamplingDesign`), every coin opened read; then `secondChecked` at that verifier. -/
-def secondCheck (v : Docket.Verifier) (delta : Core.Ratio) (c : OneStage.Commitment) (design : Json)
-    (ξ₂ : ByteArray) (e : OneStage.Evidence) : Core.Outcome OneStage.Public Core.Integrity :=
-  match nat? (getD c.record "population") with
-  | none => .reject "registration: the interior record names no population"
-  | some m =>
-    match OneStage.coinsReason { v with samplingDesign := subsetDesign m } design c.record e.draw ξ₂ with
-    | some why => .reject s!"draw: coins: {why}"
-    | none => secondChecked { v with samplingDesign := subsetDesign m } delta c m design e
+/-- The interior audit's parameters as the last step reads them: its verifier's sampling design a subset of all the
+proof blocks its record `c` registers (`subsetDesign`), which R1 holds the record to as the run of record does. -/
+def interiorAt (p : OneStage.Params) (c : OneStage.Commitment) : OneStage.Params :=
+  { p with verifier := { p.verifier with
+      samplingDesign := subsetDesign ((nat? (getD c.record "population")).getD 0) } }
 
 /-- The refusal of a second-stage session whose statement is `2^64` bytes or more (`stmtsBytesFit`). -/
 def STMT_BYTES (session : String) : String :=
@@ -838,7 +794,8 @@ def prepareRun (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evid
   firstTreeless p e
   repStreamsOrdered p e
   let design ← secondDesignOf p run
-  pure (secondCheck p.audit.base.verifier p.audit.base.delta c₂ design ξ₂ { e.interior.base with verdicts := r.out }, run)
+  pure (OneStage.checkAtIn (interiorAt p.audit.base c₂) c₂ (some ξ₂) { e.interior.base with verdicts := r.out }
+    (.ok design), run)
 
 /-- Check steps 0 to 5: the sessions' statements' bytes (`stmtsBytesFit`), that each statement is its session's and
 the counts agree (`stmtsSessions`), then `prepareRun`. -/
@@ -910,7 +867,7 @@ def checkBlobsAtInner (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e
 
 /-- **The check at the first stage's bytes `ξ`**, held to the caller's check
 (`Caller.gate`) on the boundary's record at its verifier and on the interior's at the verifier the last step reads:
-neither the run of record nor the last step (`Spot.Run.run`, `secondChecked`) makes the caller's codes. -/
+neither the run of record nor the last step (`Spot.Run.run`, `OneStage.checkAtIn`) makes the caller's codes. -/
 def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   Caller.gate e.record p.audit.base.verifier

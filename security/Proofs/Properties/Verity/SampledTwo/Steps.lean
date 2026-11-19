@@ -177,7 +177,8 @@ theorem accepted_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {
       sourceRead ξ run = .ok () ∧ interiorUnshown p e = .ok () ∧
       Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true ∧
       ∃ samplingDesign, secondDesignOf p run = .ok samplingDesign ∧
-        secondCheck p.audit.base.verifier p.audit.base.delta c₂ samplingDesign ξ₂ { e.interior.base with verdicts := r.out } =
+        OneStage.checkAtIn (interiorAt p.audit.base c₂) c₂ (some ξ₂)
+          { e.interior.base with verdicts := r.out } (.ok samplingDesign) =
           .accept pub prof := by
   unfold checkBlobsAtInner at h
   cases hp : prepare p c ξ e bs with

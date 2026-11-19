@@ -1297,7 +1297,7 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
         UnitsRead p c e ∧ VerdictsAccept e.verdicts ∧
         Record.profileSample samplingDesign = some d ∧ nat? (getD c.record "population") = some n ∧
         pub = publicOf p e samplingDesign d n ∧ prof = profileOf p c e d n ∧ prof.creditedProblem = none := by
-  unfold OneStage.check
+  unfold OneStage.check OneStage.checkIn
   simp only []
   by_cases h1 : Docket.check c.record p.verifier = #[]
   · obtain ⟨samplingDesign, hreg⟩ := (docket_nil _ _).1 h1

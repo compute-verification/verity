@@ -282,7 +282,7 @@ theorem stage_registered_at {p : Spot.OneStage.Params} {c : Spot.OneStage.Commit
     {ξ : Option ByteArray} {e : Spot.OneStage.Evidence} {pub : Spot.OneStage.Public}
     {prof : Integrity} (h : Spot.OneStage.checkAt p c ξ e = .accept pub prof) :
     Properties.Spot.R2 c.record p.verifier := by
-  unfold Spot.OneStage.checkAt at h
+  rw [Spot.OneStage.checkAt_eq] at h
   split at h
   · cases h
   · obtain ⟨samplingDesign, d, n, hreg, -⟩ := Properties.Spot.acceptMeans _ _ _ _ _ h

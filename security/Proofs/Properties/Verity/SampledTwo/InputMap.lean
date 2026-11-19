@@ -102,7 +102,8 @@ theorem accepted_samplingDesign_run {p : Params} {c : OneStage.Commitment} {ξ :
     ∃ c₂ ξ₂ r i run samplingDesign it grain replay k ns ids ks,
       inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ Spot.Run.run i = .ok run ∧
       Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true ∧
-      secondCheck p.audit.base.verifier p.audit.base.delta c₂ samplingDesign ξ₂ { e.interior.base with verdicts := r.out } =
+      OneStage.checkAtIn (interiorAt p.audit.base c₂) c₂ (some ξ₂)
+        { e.interior.base with verdicts := r.out } (.ok samplingDesign) =
         .accept pub prof ∧
       i.interior = some it ∧ it.source = ξ₂ ∧ i.closure = none ∧ i.source = ξ ∧
       i.rule = .twoStage grain replay k ∧

@@ -819,7 +819,7 @@ theorem checkAt_proved {p : _root_.Spot.OneStage.Params} {c : _root_.Spot.OneSta
     {ξ : ByteArray} {e : _root_.Spot.OneStage.Evidence} {pub : _root_.Spot.OneStage.Public}
     {prof : _root_.Core.Integrity} (h : _root_.Spot.OneStage.checkAt p c (some ξ) e = .accept pub prof)
     (hc : _root_.Spot.field? e.draw "closure" = none) : sampledBlocks e.draw = e.provedUnits := by
-  unfold _root_.Spot.OneStage.checkAt at h
+  rw [_root_.Spot.OneStage.checkAt_eq] at h
   cases hw : _root_.Spot.OneStage.coinsWhy p c e ξ with
   | some why =>
     have hb : (some ξ).bind (_root_.Spot.OneStage.coinsWhy p c e) = some why := hw

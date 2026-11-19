@@ -9,16 +9,16 @@ public import VStarRecursive.SampledTwo
 `Spot.OneStage.check` hands the record's checks (`Spot.Record.checks`) the reads the verdicts report for the
 registration's own values less the reads of its own ports at their own roots, with those of the window values its
 params name less the reads at their window entries' roots (`openedRoots`), and `UnitsProved` says what those checks
-hold. The two-stage form's last step (`VStar.Recursive.SampledTwo.secondChecked`) calls the same function at the
-registration's own reads less its own ports' at their own roots (`Spot.Record.lessOwnReads`), naming no window value.
+hold. The two-stage form's last step is the same check at a sampling design it is handed (`Spot.OneStage.checkIn`), so
+it hands the record's checks the same reads.
 
 * `UnitsAt c e opened` is `UnitsProved`'s six clauses with the reads the registered check is handed a parameter;
   `UnitsProved named c e` is it at `openedRoots named c.record e.verdicts` (`unitsProved_at`).
 * `checksAt_nil`: none of the record's checks fails, the sample's aside, exactly where `UnitsAt` holds at the reads
   they are handed.
-* `secondChecked_units`: what `secondChecked` accepts keeps the registration's rules R1–R8, has its sample a sample
-  of the sampling design it is handed, has `UnitsAt` at the registration's own reads less its own ports' at their own roots, and
-  has verdicts that accept.
+* `checkIn_units`: what `checkIn` accepts at a sampling design it is handed keeps the registration's rules R1–R8, has
+  its sample a sample of that sampling design, has `UnitsAt` at the reads `openedRoots` gives at its params' window
+  values, and has verdicts that accept.
 -/
 
 @[expose] public section
@@ -70,24 +70,22 @@ private theorem accept_of_ite {α β : Type} {b : Bool} {r : String} {x : Core.O
   · simp at h
   · exact ⟨rfl, by simpa using h⟩
 
-/-- **What the two-stage form's last step accepts** (`VStar.Recursive.SampledTwo.secondChecked`): the registration
-keeps R1–R8 against the verifier `v`; the sample is a sample of the sampling design `samplingDesign` the step is handed, over the registered
-population; the units hold at the reads the step hands the record's checks, the verdicts' own for the registration's
-own values less the reads of its own ports at their own roots (`UnitsAt` at `Record.lessOwnReads` of
-`Record.ownRegistered`);
-and the verdicts accept. -/
-theorem secondChecked_units {v : Docket.Verifier} {delta : Core.Ratio} {c : Commitment} {m : Nat} {samplingDesign : Json}
-    {e : Evidence} {pub : Public} {prof : Core.Integrity}
-    (h : VStar.Recursive.SampledTwo.secondChecked v delta c m samplingDesign e = .accept pub prof) :
-    (∃ samplingDesign', Registered v c.record samplingDesign') ∧ Drawn e.draw (getD c.record "population") samplingDesign ∧
-      UnitsAt c e (Record.lessOwnReads c.record (Record.ownRegistered c.record (Record.sessionRegistered e.verdicts))) ∧
-      VerdictsAccept e.verdicts := by
-  unfold VStar.Recursive.SampledTwo.secondChecked at h
+/-- **What the check at a sampling design it is handed accepts** (`OneStage.checkIn`, the two-stage form's last step):
+the registration keeps R1–R8 against the params' verifier; the sample is a sample of the sampling design
+`samplingDesign`, over the registered population; the units hold at the reads the check hands the record's checks
+(`UnitsAt` at `openedRoots` of the params' window values); and the verdicts accept. -/
+theorem checkIn_units {p : Params} {c : Commitment} {e : Evidence} {samplingDesign : Json}
+    {pub : Public} {prof : Core.Integrity}
+    (h : OneStage.checkIn p c e (.ok samplingDesign) = .accept pub prof) :
+    (∃ samplingDesign', Registered p.verifier c.record samplingDesign') ∧
+      Drawn e.draw (getD c.record "population") samplingDesign ∧
+      UnitsAt c e (openedRoots p.windowValues c.record e.verdicts) ∧ VerdictsAccept e.verdicts := by
+  unfold OneStage.checkIn at h
   obtain ⟨h1, h⟩ := accept_of_ite h
   obtain ⟨h2, h⟩ := accept_of_ite h
   obtain ⟨h3, h⟩ := accept_of_ite h
   refine ⟨(docket_nil _ _).1 (Array.isEmpty_iff.1 h1), (checkSample_nil _ _ _).1 (Array.isEmpty_iff.1 h2),
-    (checksAt_nil c e _).1 (Array.isEmpty_iff.1 h3), ?_⟩
+    ((recordChecks_nil p c e).1 (Array.isEmpty_iff.1 h3)).1, ?_⟩
   rcases hv : OneStage.verdictOf e.verdicts with ⟨⟨⟩, ⟨⟩⟩ | r | r
   · exact (verdictOf_accept _).1 hv
   · rw [hv] at h; cases h

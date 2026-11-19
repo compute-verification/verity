@@ -330,7 +330,7 @@ theorem checkAt_drew {p : _root_.Spot.OneStage.Params} {c : _root_.Spot.OneStage
         .ok samplingDesign ∧
       _root_.Spot.nat? (_root_.Spot.getD c.record "population") = some n ∧
       _root_.Spot.OneStage.sampledFrom p.verifier samplingDesign n ξ = .ok (sampledBlocks e.draw, read) := by
-  unfold _root_.Spot.OneStage.checkAt at h
+  rw [_root_.Spot.OneStage.checkAt_eq] at h
   cases hw : _root_.Spot.OneStage.coinsWhy p c e ξ with
   | some why =>
     have hb : (some ξ).bind (_root_.Spot.OneStage.coinsWhy p c e) = some why := hw
@@ -343,7 +343,7 @@ theorem checkAt_drew {p : _root_.Spot.OneStage.Params} {c : _root_.Spot.OneStage
     have hd := _root_.Properties.Spot.registered_samplingDesign hreg
     have hr : _root_.Spot.OneStage.coinsReason p.verifier samplingDesign c.record e.draw ξ = none := by
       have h' := hw
-      unfold _root_.Spot.OneStage.coinsWhy at h'
+      unfold _root_.Spot.OneStage.coinsWhy _root_.Spot.OneStage.coinsWhyIn at h'
       simp only [hd] at h'
       exact h'
     obtain ⟨n, read, hn, hdf⟩ := coinsReason_none hr
