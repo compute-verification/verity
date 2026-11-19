@@ -28,8 +28,8 @@ says, which only the file's length bounds. So where the verifier holds the inner
 refuses one of more than `MAX_INNER_ROWS` instances or with a shared-row table of more than `MAX_INNER_ROWS` rows
 (`innerRows`): over its at most `1024` ports (`checkInRange`'s regions) the inner setup's evaluations are then at most
 `12 + 1024 · 20 · 2^17 < 2^32`, and the inner verifier's, with its tables' and a decision's, below `2^32` too. The inner
-setup digests its Program once a Definition, so `checkShape` also refuses files that carry no program, or a program of more
-than `defsCap` Definitions (`innerDefs`): the count grows with the Program's distinct templates and Boolean bodies, not
+setup digests its Program once a Definition, so `checkShape` also refuses files whose program names more than `defsCap`
+Definitions (`innerDefs`): the count grows with the Program's distinct templates and Boolean bodies, not
 with its layers or slots, and with `6 · defsCap` more the inner setup's evaluations stay below `2^32`.
 -/
 
@@ -136,12 +136,11 @@ def innerRows (st : Stmt) : V Unit :=
 digest hashes one a call. -/
 def defsCap : Nat := 2 ^ 20
 
-/-- **The inner statement's files carry its Program, naming at most `defsCap` Definitions**: the entries of its
-descriptor's `definitions`, one a key, a repeated key kept once as the parser keeps it. Bytes that parse to no such object
-are the decoder's to refuse. -/
+/-- **The inner statement's Program, where its files carry one, names at most `defsCap` Definitions**: the entries of
+its descriptor's `definitions`, one a key, a repeated key kept once as the parser keeps it. Files with no program have no
+Definition for the setup to digest; bytes that parse to no such object are the decoder's to refuse. -/
 def innerDefs (program : Option ByteArray) : V Unit := do
-  let some b := program
-    | throw s!"refused: the inner statement's files carry no program (--rec-inner-program): {tail}"
+  let some b := program | return
   if let some text := String.fromUTF8? b then
     if let .ok j := JsonParse.parse text then
       if let .obj kvs := j.getObjValD "definitions" then
@@ -149,7 +148,7 @@ def innerDefs (program : Option ByteArray) : V Unit := do
           throw (s!"refused: the inner statement's program names {kvs.toArray.size} Definitions, more than {defsCap}: " ++
             tail)
 
-#guard (innerDefs none).toOption.isNone
+#guard (innerDefs none).toOption.isSome
 
 end RecBudget
 end Flock

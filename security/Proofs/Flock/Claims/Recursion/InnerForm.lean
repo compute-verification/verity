@@ -153,17 +153,16 @@ theorem checkShape_rows {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
     exact decide_eq_true hlt
 
 /-- **The inner statement's program is within the cap**: where `RecSetup.checkShape` passes on the inner statement's
-files, they carry a program, and its descriptor's `definitions`, where its bytes parse to one, holds at most
+files, the descriptor's `definitions` of a program they carry, where its bytes parse to one, holds at most
 `RecBudget.defsCap` entries. -/
 theorem checkShape_defs {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
     (h : RecSetup.checkShape (some i) (some (.files f)) = .ok u) :
-    ∃ b, f.program = some b ∧ ∀ text j kvs, String.fromUTF8? b = some text → JsonParse.parse text = .ok j →
+    ∀ b, f.program = some b → ∀ text j kvs, String.fromUTF8? b = some text → JsonParse.parse text = .ok j →
       j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ RecBudget.defsCap := by
   obtain ⟨-, -, -, -, -, -, -, -, hd, -⟩ := checkShape_spec h
+  intro b hp text j kvs ht hj hk
+  refine Nat.le_of_not_lt fun hlt => ?_
   unfold RecBudget.innerDefs at hd
-  rcases hp : f.program with _ | b
-  · simp [hp, throw, throwThe, MonadExceptOf.throw] at hd
-  refine ⟨b, rfl, fun text j kvs ht hj hk => Nat.le_of_not_lt fun hlt => ?_⟩
   simp [hp, ht, hj, hk, hlt, throw, throwThe, MonadExceptOf.throw] at hd
 
 /-- **`innerDefs` refuses a Program that names more than `defsCap` Definitions.** -/

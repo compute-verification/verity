@@ -194,7 +194,7 @@ theorem innerSetup_calls {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
       some (innerFormOf r.innerRaw), r.innerRaw.program⟩) := by rw [filesOf, hp]; rfl
   rw [hfs] at hsh
   obtain ⟨spec', st', hstm, hn0, hrows0⟩ := checkShape_rows hsh
-  obtain ⟨pb, hpb, hdefs⟩ := checkShape_defs hsh
+  have hdefs := checkShape_defs hsh
   obtain ⟨spec2, st2, hstm2, -, -, -, -, hform⟩ := checkShape_files hsh
   have e2 : st2 = st' := congrArg Prod.snd (Except.ok.inj (hstm2.symm.trans hstm))
   rw [e2] at hform
@@ -223,10 +223,8 @@ theorem innerSetup_calls {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
   have hD : ∀ b, s.read.I.program = some b → ∀ text j kvs, String.fromUTF8? b = some text →
       JsonParse.parse text = .ok j → j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ RecBudget.defsCap := by
     intro b hb
-    have hpb' : r.innerRaw.program = some pb := hpb
-    rw [zp, hpb'] at hb
-    cases hb
-    exact hdefs
+    rw [zp] at hb
+    exact hdefs b hb
   have hpart : s.read.I.partition = some p := by
     have hpa := (readX_spec hr).2.1
     rw [z8] at hpa
