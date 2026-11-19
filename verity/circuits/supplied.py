@@ -109,6 +109,15 @@ FUNCTIONS: dict[str, Function] = {f.name: f for f in (
     Function("log.base/v1", "supplied", ("commitment",), (), _fixed(8)),
     # a constant u16 word, what a held output is held to (an opening's verdict, a check's ok)
     Function("const.u16/v1", "supplied", ("constant",), ("value",), lambda a: 2 if a["value"] < 1 << 16 else None),
+    # a constant u32 word, 32 bits
+    Function("const.u32/v1", "supplied", ("constant",), ("value",), lambda a: 4 if a["value"] < 1 << 32 else None),
+    # useful work, Pearl+: column `col`'s `tn` lines of 32 E4M3 bytes, 256 bits a line
+    Function("pouw.pearlplus.eb/v1", "supplied", ("coin", "commitment"), ("col", "tn"), _bits(lambda a: 256 * a["tn"])),
+    # useful work, Pearl+: `k` lines of 32 bytes each, 256 bits a line
+    Function("pouw.pearlplus.fa/v1", "supplied", ("coin", "commitment"), ("k",), _bits(lambda a: 256 * a["k"])),
+    Function("pouw.pearlplus.fb/v1", "supplied", ("coin", "commitment"), ("k",), _bits(lambda a: 256 * a["k"])),
+    # useful work, Pearl+: a 32 by 32 Gram matrix of FP32 words as u32, 32768 bits whatever `k` and `dev`
+    Function("pouw.pearlplus.gram/v1", "supplied", ("coin", "commitment"), ("k", "dev"), _fixed(4096)),
 )}
 
 

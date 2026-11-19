@@ -1638,6 +1638,8 @@ whose value changes takes a new name. -/
 def SUPPLIED_FUNCTIONS : List SuppliedFn :=
   let fixed := fun (n : Nat) (_ : Json) => some n
   let nat := fun (a : Json) (k : String) => natJ? (a.getObjValD k)
+  let bits := fun (b : Nat) => if 0 < b ∧ b % 8 = 0 then some (b / 8) else none
+  let per := fun (k : String) (b : Nat) (a : Json) => (nat a k).bind fun n => bits (b * n)
   [⟨"pous.session.round_coin/v1", ["round"], fixed 12⟩,
    ⟨"pous.session.header/v1", ["head"], fun a => (nat a "head").bind fun h => if h + h % 2 > 0 then some (h + h % 2) else none⟩,
    ⟨"pous.session.context/v1", [], fixed 106⟩,
@@ -1649,7 +1651,12 @@ def SUPPLIED_FUNCTIONS : List SuppliedFn :=
    ⟨"registered.root/v1", ["value"], fixed 64⟩,
    ⟨"record.root/v1", ["port"], fixed 64⟩,
    ⟨"log.base/v1", [], fixed 8⟩,
-   ⟨"const.u16/v1", ["value"], fun a => (nat a "value").bind fun v => if v < 2 ^ 16 then some 2 else none⟩]
+   ⟨"const.u16/v1", ["value"], fun a => (nat a "value").bind fun v => if v < 2 ^ 16 then some 2 else none⟩,
+   ⟨"const.u32/v1", ["value"], fun a => (nat a "value").bind fun v => if v < 2 ^ 32 then bits 32 else none⟩,
+   ⟨"pouw.pearlplus.eb/v1", ["col", "tn"], per "tn" 256⟩,
+   ⟨"pouw.pearlplus.fa/v1", ["k"], per "k" 256⟩,
+   ⟨"pouw.pearlplus.fb/v1", ["k"], per "k" 256⟩,
+   ⟨"pouw.pearlplus.gram/v1", ["k", "dev"], fun _ => bits 32768⟩]
 
 def SUPPLIED_LAYOUTS : List String := ["le", "halves", "digest"]
 

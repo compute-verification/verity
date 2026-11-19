@@ -26,7 +26,7 @@ paths = ["verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_supplied.py"]
-paths = ["verity/protocols/proofs/spot/verifier/lean/Spot/Supplied.lean"]
+paths = ["verity/protocols/proofs/spot/verifier/lean/Spot/Supplied.lean", "verity/circuits/lean/Circuits/Descriptor.lean"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_population_recorded.py"]

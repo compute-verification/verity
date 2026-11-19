@@ -132,3 +132,31 @@ def test_each_function_has_its_lean_body(name):
 
 def test_the_lean_registry_names_no_function_the_format_lacks():
     assert _lean_names() <= set(S.FUNCTIONS)
+
+
+#: a function's value at some args, in bits (None: no value there), as the format fixes it (§5.4)
+LENGTHS = [("const.u32/v1", {"value": 7}, 32), ("const.u32/v1", {"value": 1 << 32}, None),
+           ("pouw.pearlplus.eb/v1", {"col": 0, "tn": 3}, 768), ("pouw.pearlplus.eb/v1", {"col": 1, "tn": 0}, None),
+           ("pouw.pearlplus.fa/v1", {"k": 2}, 512), ("pouw.pearlplus.fb/v1", {"k": 5}, 1280),
+           ("pouw.pearlplus.gram/v1", {"k": 9, "dev": 3}, 32768), ("pouw.pearlplus.salt/v1", {}, 256),
+           ("registered.root/v1", {"value": "w"}, 512)]
+
+
+@pytest.mark.parametrize(("name", "args", "bits"), LENGTHS)
+def test_a_functions_length(name, args, bits):
+    n = S.FUNCTIONS[name].nbytes(args)
+    assert (None if n is None else 8 * n) == bits
+
+
+#: the Lean decoder's closed list of the functions a supplied input may name (`SUPPLIED_FUNCTIONS`)
+DECODER = Path(__file__).parents[3] / "verity/circuits/lean/Circuits/Descriptor.lean"
+
+
+def test_the_decoder_lists_the_format_s_functions():
+    """The decoder's list names exactly `supplied.FUNCTIONS`, each with its args; `decode_difftest`'s marks hold the two
+    lists' lengths equal."""
+    text = DECODER.read_text()
+    block = text[text.index("def SUPPLIED_FUNCTIONS"):text.index("def SUPPLIED_LAYOUTS")]
+    got = {m[1]: tuple(re.findall(r'"([^"]+)"', m[2])) for m in re.finditer(r'⟨"([^"]+)", \[([^\]]*)\]', block)}
+    want = {f.name: f.args for f in S.FUNCTIONS.values()}
+    assert got == want, f"only the decoder's: {sorted(got.keys() - want)}; only the codec's: {sorted(want.keys() - got)}"
