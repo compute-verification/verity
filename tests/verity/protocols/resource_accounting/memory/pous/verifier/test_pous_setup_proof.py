@@ -14,6 +14,8 @@ import numpy as np
 import pytest
 
 from verity.circuits.codec import descriptor_chunks, program_digest
+from verity.commitments import rowleaf as RL
+from verity.commitments.crypto import lms as R
 from verity.commitments.periods import interface as I
 from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
@@ -93,6 +95,7 @@ def test_the_setup_is_one_circuit_over_every_store_block():
     circuit = setup.circuit()
     assert setup.blocks == 12 and circuit.templates == ((setup.unit, 12),)
     assert circuit.registered.supplied == () and circuit.registered.params == {"store": 48, "weights": 32}
+    assert circuit.registered.tables == (WIN.store_table(12, 4),)
     (block, row) = circuit.reads
     units = np.arange(12)
     assert block.source(units).tolist() == (4 * units).tolist()
@@ -103,6 +106,19 @@ def test_the_setup_is_one_circuit_over_every_store_block():
     assert OC.block(_c, part, 5) == [(5, 6)]
     with pytest.raises(ValueError, match="12 blocks and 4 rows"):
         WIN.Setup(64, 189, 16, 4, 4, None, [b""] * 11, [b""] * 4).registered("00" * 64)
+
+
+def test_the_setup_and_the_session_read_one_store():
+    """The store is one registered value in one form: the table ``store/blocks`` of one block a row in row-seg/v1
+    rows, which the setup's units read and the session's openings open, its root the setup's; past 2^31 rows it is
+    refused."""
+    _, _, setup = setup_case()
+    reg = setup.registered("00" * 64)[WIN.STORE]
+    assert reg.schema == RL.SCHEMA_HM96_SHA512_ROW_SEG and reg.rows == WIN.commit_store("00" * 64, setup.store).rows
+    session = WIN.session_units(3, 8, 1000, 8, 12, R.Params(R.TOY_N, 1, 1, toy=True))
+    assert setup.circuit().registered.tables == session.registered.tables
+    with pytest.raises(ValueError, match="1 to 2\\^31 blocks"):
+        WIN.store_table((1 << 31) + 1, 4)
 
 
 def test_the_prover_commits_the_store_then_the_setups_values():

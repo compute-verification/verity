@@ -5,7 +5,9 @@ workers, which stage from them as they do from an adapter's.
 
 `Setup` is the setup's one circuit C (the setup unit over every block of the store), an `Integration`: its `circuit()`
 and its `run(window)`. `session_units` is a session's units in the registered circuit, its circuit alone: no values are
-recorded for it yet.
+recorded for it yet. Both read one store: the registered value ``store``, the table ``store/blocks`` of one block a row
+in ``hm96-sha512/row-seg/v1`` rows (`store_table`, `commit_store`), whose root the setup publishes and the session's
+openings pin.
 """
 from __future__ import annotations
 
@@ -19,23 +21,37 @@ from verity.circuits.evaluation import bits as EB
 from verity.circuits.defs import bind
 from verity.commitments import registered_value as RV
 from verity.commitments.crypto import lms as R
-from verity.commitments.gates.embedding import read as table_read
+from verity.commitments.gates.embedding import MAX_V, read as table_read
 from verity.commitments.periods.interface import Circuit, Read, Registered, Table, TableOpening, TableRead, Window, Wire
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 
 from . import answer_circuit, decode_circuit, session_circuit, verdict_circuit
 from . import setup_circuit as SC
 from .setup_proof import payload_bytes, place, setup_unit, unit_inputs
 
 DEFINITIONS = (decode_circuit, answer_circuit, verdict_circuit, session_circuit)
-#: the setup's registered parameters: the store's blocks and W's rows
-STORE, WEIGHTS = "store", "weights"
+#: the store, one registered value, and its table of one block a row; W's rows; the memory attester's public key
+STORE, STORE_TABLE, WEIGHTS, ATTESTER_KEY = "store", "store/blocks", "weights", "attester-key"
 #: the units of a proof block of the setup's C: one store block each
 CAP = 1
-#: the session's: the store's blocks as a table of one block a row, and the memory attester's public key
-STORE_TABLE, ATTESTER_KEY = "store/blocks", "attester-key"
 #: the session's supplied inputs (`coin_bound`): round j's coin value is ``ROUND_COIN/j``
 ROUND_COIN, SESSION_HEADER, SESSION_CONTEXT = "round-coin", "session-header", "session-context"
+
+
+def store_table(blocks: int, words: int) -> Table:
+    """The store as the table ``store/blocks`` of the registered ``store``: ``blocks`` rows of ``words`` 16-bit leaves,
+    one block a row, at most 2^31 rows (`gates.embedding`'s V), so a round's index is its opening's 32-bit key."""
+    if isinstance(blocks, bool) or not isinstance(blocks, int) or not 1 <= blocks <= MAX_V:
+        raise ValueError(f"the store is 1 to 2^31 blocks, not {blocks!r}")
+    return Table(STORE_TABLE, STORE, 0, words, blocks)
+
+
+def commit_store(program: str, blocks: Sequence[bytes]) -> RV.Registered:
+    """The store committed once, before any coin, under `program`: its `store_table`'s rows, each block's 16-bit words
+    in ``hm96-sha512/row-seg/v1``. Its root is the setup's published root, which the memory attester signs as the
+    session's ``binding``."""
+    store_table(len(blocks), len(blocks[0]) // 2 if blocks else 0)
+    return RV.Registered.commit(program, STORE, [np.frombuffer(b, "<u2").tolist() for b in blocks], schema=SEG)
 
 
 class Setup:
@@ -77,19 +93,20 @@ class Setup:
         tid = descriptor_id(self.unit)
         params = {STORE: self.blocks * (self.w // 16), WEIGHTS: self.rows * (self.row_bytes // 2)}
         return Circuit("pous-setup", ((self.unit, self.blocks),), external=(f"{tid}/salt", f"{tid}/at", f"{tid}/slot"),
-                       registered=Registered(params, reads=self.reads()))
+                       registered=Registered(params, tables=(store_table(self.blocks, self.w // 16),),
+                                             reads=self.reads()))
 
     def registered(self, program: str) -> dict[str, RV.Registered]:
-        """The store's blocks and W's rows, each committed once before the run under C's Program digest `program`, as
-        the rows of 16-bit words its reading port holds."""
+        """The store (`commit_store`) and W's rows, each committed once before the run under C's Program digest
+        `program`, as the rows of 16-bit words its reading port holds."""
         if self.store is None or self.weights is None:
             raise ValueError("Setup.registered reads the store's blocks and W's rows")
         if len(self.store) != self.blocks or len(self.weights) != self.rows:
             raise ValueError(f"the setup reads {self.blocks} blocks and {self.rows} rows, not {len(self.store)} and "
                              f"{len(self.weights)}")
-        return {p: RV.Registered.commit(program, p, [np.frombuffer(b, "<u2").tolist() for b in rows],
-                                        schema=RV.SCHEMA_HM96_SHA512_ROW_V2)
-                for p, rows in ((STORE, self.store), (WEIGHTS, self.weights))}
+        return {STORE: commit_store(program, self.store),
+                WEIGHTS: RV.Registered.commit(program, WEIGHTS, [np.frombuffer(b, "<u2").tolist() for b in self.weights],
+                                              schema=V2)}
 
     def run(self, window: Window) -> None:
         """Every unit recorded: its block and row by reference, the salt, its place and its slot as 16-bit words, and its
@@ -152,8 +169,9 @@ def session_units(k: int, head: int, limit_ns: int, block_bytes: int, blocks: in
         PousRound_v2{block_bytes, 0}             ⌈k/2⌉     round j = 2u: records row u by wire, row from opening j
         PousRound_v2{block_bytes, 1}             ⌊k/2⌋     round j = 2u + 1: the same, at the record's second slot
 
-    The store's table and the key are registered values; the coins' are `coin_bound`'s. The store's table has at most
-    2^31 blocks (`gates.embedding`'s V), so i_j < 2^31 and the key, i_j's low 32 bits, is i_j."""
+    The store (`store_table`, the setup's one) and the key are registered values; the coins' are `coin_bound`'s. An
+    index past the store's blocks opens a row of 0x7FFF words with a verdict of 1 (`gates.embedding`), so the verifier
+    holds every round's index below the store's blocks in the clear (`session_proofs.clear_reasons`)."""
     dig = bind(session_circuit.PousSessionDigest, K=k, HEAD=head, LIMIT=limit_ns)
     sig = bind(session_circuit.PousSessionSig, N=params.N, W=params.W, H=params.H)
     opener = table_read(blocks, block_bytes // 2)
@@ -168,7 +186,7 @@ def session_units(k: int, head: int, limit_ns: int, block_bytes: int, blocks: in
     coins, reads, _marks, formats = coin_bound(k, head, [descriptor_id(t) for t, _ in slots], o, d)
     registered = Registered(
         {STORE: blocks * block_bytes // 2, ATTESTER_KEY: (16 + params.N) // 2, **coins},
-        tables=(Table(STORE_TABLE, STORE, 0, block_bytes // 2, blocks),),
+        tables=(store_table(blocks, block_bytes // 2),),
         reads=(Read(g, "key", ATTESTER_KEY, 0, (1,), 0, (0,)), *reads),
         roots=(TableRead(o, "root", STORE_TABLE, "root", 0, k), TableRead(o, "domain", STORE_TABLE, "domain", 0, k)),
         openings=(TableOpening(o, STORE_TABLE, "tok", ("row", "salt", "path"), "o1", 0, k, row="o0"),), formats=formats)
