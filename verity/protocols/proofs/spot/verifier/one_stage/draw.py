@@ -139,6 +139,90 @@ def derive(program: Program, query: Mapping[str, Any], sampling_design: Mapping[
     return {"law": "work", "k": k, "strata": out}
 
 
+def amount_of(table: Mapping[str, tuple[int, int]], template: str) -> int:
+    """The amount of each proof block of `template` in an amount table (`work_table`'s, its work; the floor is not read).
+    Raises `ValueError` for a template the table does not name. Lean `Flock.Draw.amountOf`."""
+    if template not in table:
+        raise ValueError(f"the amount table names no amount for template '{template}'")
+    return table[template][0]
+
+
+def meets_at(num: int, den: int, n: int, c: int, k: int) -> bool:
+    """Whether a uniform k-subset of n proof blocks, each of amount at most c, meets the rate NUM/DEN: k = n or
+    k DEN >= n c NUM. Lean `Flock.Draw.meetsAt`."""
+    return k == n or n * c * num <= k * den
+
+
+def _rate_miss(num: int, den: int, what: str, n: int, c: int, k: int) -> None:
+    if not meets_at(num, den, n, c, k):
+        raise ValueError(f"{what} misses the rate {num}/{den}: k * DEN = {k * den} < n * c * NUM = {n * c * num} "
+                         f"(n = {n}, c = {c}, k = {k})")
+
+
+def meets_rate(num: int, den: int, table: Mapping[str, tuple[int, int]], strata: Sequence[tuple[str, Sequence[Sequence[int]]]],
+               sampling_design: Mapping[str, Any]) -> None:
+    """Whether the expanded sampling design over the population's strata (`partition.strata`) meets the rate NUM/DEN per
+    unit of the amount table's amount (`work_table`'s output); raises `ValueError` saying why not. Lean
+    `Flock.Draw.meetsRate`, whose docstring has the rule and what it gives; the messages are its."""
+    if den == 0:
+        raise ValueError(f"a rate needs DEN > 0, not {num}/{den}")
+    pop = [(t, [list(r) for r in rs], amount_of(table, t)) for t, rs in strata]
+    n = sum(_size(rs) for _, rs, _ in pop)
+    c = max((a for _, _, a in pop), default=0)
+    law = sampling_design.get("law")
+    if law == "subset":
+        k = sampling_design["k"]
+        if k > n:
+            raise ValueError(f"a subset design of {k} exceeds the population of {n}")
+        _rate_miss(num, den, "the pooled subset", n, c, k)
+    elif law == "bernoulli":
+        a_, _, b_ = str(sampling_design.get("p")).partition("/")
+        if not (digits(a_) and digits(b_)):
+            raise ValueError(f"a bernoulli design's p is NUM/DEN, not {sampling_design.get('p')!r}")
+        a, b = int(a_), int(b_)
+        if b == 0 or a > b:
+            raise ValueError(f"a bernoulli design's p = {a}/{b} is not a probability")
+        if not (a == b or b * c * num <= a * den):
+            raise ValueError(f"the bernoulli design misses the rate {num}/{den}: a * DEN = {a * den} < b * c * NUM = "
+                             f"{b * c * num} (p = {a}/{b}, c = {c})")
+    elif law in ("stratified", "work"):
+        ss = sampling_design["strata"]
+        if len(ss) != len(pop):
+            raise ValueError(f"the design has {len(ss)} strata, not the population's {len(pop)} templates")
+        seen: set[str] = set()
+        for s in ss:
+            t = s["template"]
+            if t in seen:
+                raise ValueError(f"the design names template '{t}' twice")
+            seen.add(t)
+            mine = next((p for p in pop if p[0] == t), None)
+            if mine is None:
+                raise ValueError(f"the design's stratum '{t}' is no template of the population")
+            units = [list(r) for r in s["units"]]
+            if units != mine[1]:
+                raise ValueError(f"stratum '{t}': its units are not the population's units of its template")
+            size = _size(units)
+            if s["k"] > size:
+                raise ValueError(f"stratum '{t}': k = {s['k']} exceeds its {size} proof blocks")
+            _rate_miss(num, den, f"stratum '{t}'", size, mine[2], s["k"])
+    else:
+        raise ValueError(f"a {law!r} design is not subset, bernoulli, stratified or work")
+
+
+def cheapest_for(num: int, den: int, table: Mapping[str, tuple[int, int]],
+                 strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> list[dict[str, Any]]:
+    """The prover's cheapest strata at the rate NUM/DEN: each of the population's strata with the least k_s that meets it,
+    min(n_s, ceil(n_s c_s NUM / DEN)), as `{template, units, k}`. Refused as `meets_rate` refuses. Lean
+    `Flock.Draw.cheapestFor`."""
+    if den == 0:
+        raise ValueError(f"a rate needs DEN > 0, not {num}/{den}")
+    out = []
+    for t, rs in strata:
+        c, n = amount_of(table, t), _size(rs)
+        out.append({"template": t, "units": [list(r) for r in rs], "k": min(n, (n * c * num + den - 1) // den)})
+    return out
+
+
 def sampling_design_of(draw: Mapping[str, Any]) -> dict[str, Any]:
     if draw.get("law") in ("stratified", "work"):
         return {"law": draw["law"], "k": draw.get("k"), "strata": draw.get("strata")}
@@ -302,6 +386,6 @@ def check_proved(draw: Mapping[str, Any], proved_units: Sequence[int], instances
     return c.verdict()
 
 
-__all__ = ["TABLES_SAMPLING_DESIGN", "check_draw", "check_proved", "derive", "fixed_count", "sampling_design_of",
-           "proved", "rate_count", "same_design", "strata_problem", "stratum_k", "tables_problem", "total_work", "work_k",
-           "work_table"]
+__all__ = ["TABLES_SAMPLING_DESIGN", "amount_of", "cheapest_for", "check_draw", "check_proved", "derive", "fixed_count",
+           "meets_at", "meets_rate", "sampling_design_of", "proved", "rate_count", "same_design", "strata_problem",
+           "stratum_k", "tables_problem", "total_work", "work_k", "work_table"]
