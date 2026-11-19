@@ -10,8 +10,10 @@ coins then reads."""
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
+import shutil
 
 import pytest
 
@@ -24,7 +26,6 @@ from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 from verity.protocols.proofs.spot.verifier.one_stage import closing as K, docket as DK, members as M, one_circuit as OC
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, proofs as PF
 
-from holes import waits_on
 from test_challenger import entropy
 
 XOR8 = PrimitiveDefinition("MembersRunXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
@@ -44,6 +45,15 @@ ROOTS = {A: ("11" * 64, "aa" * 64), B: ("22" * 64, "bb" * 64)}
 RECORD = {"population": 5, "scheme": SCHEME,
           "roots": [{"domain": ROOTS[m][1], "leaves": 4, "port": f"{m}/out", "root": ROOTS[m][0]} for m in (A, B)]}
 SAMPLED = {A: [1], B: [0, 2]}
+DESCRIPTOR = json.dumps(json.loads(json.dumps(codec.encode_program(PROGRAM))), sort_keys=True,
+                        separators=(",", ":")).encode()
+lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+
+
+@functools.cache
+def lowered(member: str) -> bytes:
+    """The member's circuit file: its block's C_S, lowered by Lean (`one_circuit.lower`)."""
+    return OC.lower(OC.restrict(DESCRIPTOR, PARTITION, UNITS[member]), PARTITION, PF.lower_executable)
 
 
 def header(member: str, **changes) -> dict:
@@ -56,20 +66,19 @@ class Window:
     """The two members' files under `at`, the sessions of the members of `sessions` on one challenger's release log,
     each tree's link, one round and its closing round before the next tree's first, and the per-member parameters and
     evidence over them. `headers` are the members' public files' headers (`header`'s by default). A member's circuit
-    file is C_S, which C and the partition give its block (`one_circuit.restrict`), among the files once it is
-    derived."""
+    file is its block's C_S lowered (`lowered`), among the files once it is derived."""
 
     def __init__(self, at, headers: dict | None = None, sessions: tuple[str, ...] = (A, B)) -> None:
         self.at, self.files = at, []
-        program = json.loads(json.dumps(codec.encode_program(PROGRAM)))
-        self.descriptor = json.dumps(program, sort_keys=True, separators=(",", ":")).encode()
+        program = json.loads(DESCRIPTOR)
+        self.descriptor = DESCRIPTOR
         challenger = C.LiveChallenger("verity/test/coins/v1", 0, [("sample", 1)], entropy("members-run"))
         log = [json.dumps({"event": "commitment", "root": challenger.commitment.root.hex()})]
         statements, members = [], {}
         for k, name in enumerate((A, B)):
             public = json.dumps((headers or {}).get(name) or header(name)).encode() + b"\nthe rows"
             try:
-                self.put(OC.restrict(self.descriptor, PARTITION, UNITS[name]))
+                self.put(lowered(name))
             except (OC.NotDerived, OC.Refused):
                 pass
             members[name] = {"public": self.put(public), "registered": None, "block": k, "vus_per_block": 4}
@@ -105,8 +114,8 @@ class Window:
                          "proofs": {"statements": statements}}
 
     def circuit(self, member: str) -> str:
-        """The SHA-512 of the member's circuit file, C_S."""
-        return hashlib.sha512(OC.restrict(self.descriptor, PARTITION, UNITS[member])).hexdigest()
+        """The SHA-512 of the member's circuit file."""
+        return hashlib.sha512(lowered(member)).hexdigest()
 
     def put(self, b: bytes) -> str:
         d = hashlib.sha512(b).hexdigest()
@@ -140,7 +149,7 @@ def ledger(monkeypatch):
     monkeypatch.setattr(C, "trusted_session_of", lambda *a: None)
 
 
-@waits_on("restrict", "lower")
+@lean
 def test_a_run_of_accepted_sessions_credits_each_members_units_and_names_no_refusal(tmp_path):
     """Each session is verified on its member's own files, with the program and partition every member reads, and
     credited the units of its member's public file its record drew; the run is no verdict, and it names no refusal
@@ -163,7 +172,7 @@ def test_a_run_of_accepted_sessions_credits_each_members_units_and_names_no_refu
                and [n for n, _ in st.reps] == ["circuit.rep0.bin"] for st in seen)
 
 
-@waits_on("restrict", "lower")
+@lean
 def test_proved_units_other_than_the_evidences_and_a_verdict_of_another_program_are_refused(tmp_path):
     w = Window(tmp_path)
     assert w.run(evidence=w.evidence | {"proved_units": [1, 2]}) == (None, M.PROVED_UNITS)
@@ -186,7 +195,7 @@ def test_a_statement_of_a_member_the_sample_missed_is_refused_before_any_session
     assert w.run(never, evidence=w.evidence | {"proved_units": []}) == (None, f"member {A}: {missed}")
 
 
-@waits_on("restrict", "lower")
+@lean
 def test_a_session_the_verifier_rejects_is_a_finding_and_the_run_proves_only_the_others_units(tmp_path):
     w = Window(tmp_path)
     run, refused = w.run(lambda st: accepting(st) if st.public.read_bytes().startswith(
@@ -208,7 +217,7 @@ def test_a_session_the_verifier_rejects_is_a_finding_and_the_run_proves_only_the
     ({"instances": 5}, "public file: not the registration's: population"),
     ({"instances": 3, "scheme": 5}, "public file: not the registration's: scheme, population"),
 ])
-@waits_on("restrict", "lower")
+@lean
 def test_a_member_is_refused_where_its_public_file_is_not_its_slice_with_or_without_a_session(tmp_path, change, why):
     """The first member's public file names other units than the member's, in another order or none, or another scheme,
     root, domain or count than the member's roots of the docket, ports bare: the run refuses the member with the
@@ -219,12 +228,12 @@ def test_a_member_is_refused_where_its_public_file_is_not_its_slice_with_or_with
         assert w.run(never) == (None, f"member {A}: {why}")
 
 
-@waits_on("restrict", "lower")
+@lean
 def test_every_members_files_are_held_in_the_members_order_before_any_session(tmp_path):
     """A window whose first member has no statement: its files are read and held as the second's are, both before the
     second's session is verified, and the run credits that session's units. A member whose circuit no blob holds, or
     whose files the verifier's form check refuses, is refused by its name, with no statement as with one. Its
-    circuit is C_S (`one_circuit.restrict`)."""
+    circuit is its block's C_S lowered (`lowered`)."""
     w = Window(tmp_path, sessions=(B,))
     ms, seen = w.params["proofs"]["members"], []
 
