@@ -58,11 +58,11 @@ inductive Ty where
 
 namespace Ty
 
-private theorem sizeOf_lt_of_mem {fs : Array Ty} {t : Ty} (h : t ∈ fs) : sizeOf t < 1 + sizeOf fs := by
+theorem sizeOf_lt_of_mem {fs : Array Ty} {t : Ty} (h : t ∈ fs) : sizeOf t < 1 + sizeOf fs := by
   have := Array.sizeOf_lt_of_mem h
   omega
 
-private theorem sizeOf_snd_lt_of_mem {fs : Array (String × Ty)} {f : String × Ty} (h : f ∈ fs) :
+theorem sizeOf_snd_lt_of_mem {fs : Array (String × Ty)} {f : String × Ty} (h : f ∈ fs) :
     sizeOf f.2 < 1 + sizeOf fs := by
   have := Array.sizeOf_lt_of_mem h
   obtain ⟨k, t⟩ := f
