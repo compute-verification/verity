@@ -183,10 +183,9 @@ def test_registered_reads_need_the_verifiers_own_roots(staged):
 
 
 def test_registered_reads_need_the_units_derived(staged):
-    """A read's position is the verifier's for a unit, and which unit an instance is comes from its label: without the
-    verifier's program the units are taken as stated, and registered reads are refused."""
+    """A read's position is derived from C, the verifier's program: without it registered reads are refused."""
     code, out = _statement(staged, _stage(staged, "as-stated"), staged.dir / "own.json", staged.bound[:2])
-    assert code == 1 and "units are taken as stated" in out, out
+    assert code == 1 and "a port's reads are derived from C, the verifier's program (--program)" in out, out
 
 
 def test_a_registered_value_committed_afresh_is_refused(staged):
@@ -317,8 +316,8 @@ def test_a_port_the_interface_declares_registered_is_never_bound(staged):
     assert code == 1 and ("registered reads (declared): port out is one the window's interface declares registered: it "
                           "reads at a registered root, never a window's") in out, out
     code, out = _statement(staged, both, out_neither, declared)
-    assert code == 1 and ("registered reads (declared): the statement's port out is one the window's interface declares "
-                          "registered, and no port of the verifier's registered reads") in out, out
+    assert code == 1 and ("registered reads (complete): the statement's port out is no port of the verifier's registered "
+                          "reads") in out, out
     code, out = _statement(staged, both, out_bound)
     assert code == 0, out
     code, out = _statement(staged, both, out_bound, staged.bound[:4])
