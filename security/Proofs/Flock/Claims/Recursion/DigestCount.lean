@@ -276,4 +276,68 @@ theorem digestGo_calls : ∀ (n : Nat) (fid : String) (S : List String) (m : Std
 
 end
 
+theorem size_foldl_insert (l : List (String × Json)) (f : Std.HashMap String Json → String × Json → Std.HashMap String Json)
+    (hf : ∀ m x, (f m x).size ≤ m.size + 1) :
+    ∀ init : Std.HashMap String Json, (l.foldl f init).size ≤ init.size + l.length := by
+  induction l with
+  | nil => intro init; simp
+  | cons x l ih =>
+    intro init
+    have := ih (f init x)
+    have := hf init x
+    simp only [List.foldl_cons, List.length_cons]
+    omega
+
+theorem run_calls {x : StateT σ CountV PUnit} {f : PUnit × σ → CountV β} {m : σ} {k B : Nat}
+    (hx : Spec x m k (fun _ _ k' => k' ≤ B) (fun k' => k' ≤ B)) (hf : ∀ p k', ((f p).go k').2 = k') :
+    ((x.run m >>= f).go k).2 ≤ B := by
+  simp only [StV.go, Id.run, ExceptT.run_bind, StateT.run_bind]
+  rcases hr : (StateT.run (ExceptT.run (StateT.run x m)) k) with ⟨r, k'⟩
+  obtain ⟨hok, herr⟩ := hx r k' hr
+  rcases r with e | ⟨a, m1⟩
+  · exact herr e rfl
+  · exact (le_of_eq (hf (a, m1) k')).trans (hok a m1 rfl)
+
+/-- **`definitionDigestsWith`'s calls**: at most the number of entries of the descriptor's `definitions`, at most `D`. -/
+theorem definitionDigests_calls (h : ByteArray → ByteArray) (j : Json) (D : Nat)
+    (hD : ∀ kvs, j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ D) (k : Nat) :
+    ((Program.definitionDigestsWith (Hashes.counted h).sha512 j).go k).2 ≤ k + D := by
+  unfold Program.definitionDigestsWith
+  extract_lets defs tab bm ddefs go
+  have h3 : defs.size ≤ D := by
+    simp only [defs]
+    split
+    next kvs heq => exact hD kvs heq
+    next => simp
+  have h2 : ddefs.size ≤ defs.size := by
+    simp only [ddefs]
+    rw [← Array.foldl_toList]
+    refine (size_foldl_insert _ _ ?_ _).trans ?_
+    · intro m x
+      rcases x with ⟨a, b⟩
+      exact Std.HashMap.size_insert_le
+    · simp
+  have h1 : ((Std.HashMap.keys ddefs).toFinset.filter
+      (fun x => Std.HashMap.contains (∅ : Std.HashMap String String) x = false)).card ≤ D := by
+    refine (Finset.card_filter_le _ _).trans ((List.toFinset_card_le (Std.HashMap.keys ddefs)).trans ?_)
+    rw [Std.HashMap.length_keys]
+    exact h2.trans h3
+  apply run_calls _ (fun p k' => by rcases p with ⟨⟨⟩, d⟩; rfl)
+  simp only [go]
+  rw [← Array.forIn_toList]
+  apply spec_bind
+  refine spec_mono (spec_forIn _ _ (fun _ => True)
+    (fun (m1 : Std.HashMap String String) =>
+      ((Std.HashMap.keys ddefs).toFinset.filter (fun x => Std.HashMap.contains m1 x = false)).card)
+    (fun _ => False) ?_ ∅ k trivial)
+    (fun _ _ k1 hk1 => spec_pure (show k1 ≤ k + D by have := hk1.2.2; omega)) (fun k1 hk1 => by omega)
+  intro kv _ m1 k1 _
+  rcases kv with ⟨key, v⟩
+  try dsimp only
+  apply spec_bind
+  apply spec_discard
+  refine spec_mono (digestGo_calls h ddefs _ _ _ _ key [] m1 k1 (by simp) (by simp)) ?_ (fun _ hk => hk)
+  intro _ m' k' ⟨_, _, _, hk'⟩
+  exact spec_pure ⟨rfl, id, trivial, hk'⟩
+
 end RecDeploy.DigestCount
