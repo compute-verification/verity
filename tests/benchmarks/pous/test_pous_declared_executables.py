@@ -29,5 +29,5 @@ def test_served_piece_builds_what_pous_and_the_bandwidth_audit_declare() -> None
 def test_served_wipe_builds_what_the_wipe_declares() -> None:
     text = (ROOT / "benchmarks/pous/streamed_wipe/served_wipe.sh").read_text()
     package = _assigned(text)["L"]
-    built = {(package, t) for t in re.findall(r"exec lake build ([a-z0-9-]+)\)", text)}
+    built = {(package, t) for t in re.findall(r" build ([a-z0-9-]+)\) > \"\$DIR/lake-build\.log\"", text)}
     assert built == _declared("wipe"), built

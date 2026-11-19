@@ -28,7 +28,7 @@ from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.memory.pous.attester import onsite
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
-from verity.protocols.resource_accounting.memory.pous import launch as PL
+from verity.protocols.resource_accounting.memory.pous import scheme as PL
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier.service import SamplingDesign
 from verity_cli import run as R
