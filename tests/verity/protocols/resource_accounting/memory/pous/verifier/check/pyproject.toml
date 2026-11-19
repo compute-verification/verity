@@ -53,7 +53,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/proofs/flock/verifier/lakefile.toml", "verity/protocols/proofs/flock/verifier/lake-manifest.json",
           # the deployment layer and its wire, which the period hook's memory attester is started through
           # (`verity.runtime.stream.Side`) and runs on
-          "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/channel.py",
+          "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/channel.py", "verity/attested.py", "verity/clock.py",
           "tests/verity/tests/test_channel.py", "verity/protocols/proofs/flock/verifier/lean-toolchain",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/vectors.json", "benchmarks/pous/p2_v1/__init__.py",

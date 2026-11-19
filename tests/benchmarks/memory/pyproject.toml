@@ -17,7 +17,7 @@ core = "verity bench memory"
 # PoUB's verifier, which the command reads its record with, imports; the session's sheets, its one card's figures; --local serves the checkpoint core's pin names
 inputs = ["benchmarks/memory", "benchmarks/poub_session/summary.py", "benchmarks/poub_session/sheets.py", "tests/verity/protocols/resource_accounting/memory/poub/figures.json",
     "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json",
-    "verity/protocol.py", "verity/channel.py", "tools/config/verity_config",
+    "verity/protocol.py", "verity/channel.py", "verity/attested.py", "verity/clock.py", "tools/config/verity_config",
     "verity/__init__.py",
     "tools/config/verity_config/verity_settings.py",
     "benchmarks/harness/verity_bench/__init__.py",

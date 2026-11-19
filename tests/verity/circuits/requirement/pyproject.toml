@@ -15,7 +15,7 @@ untraced = ["test_requirement_difftest.py"]
 # the vLLM adapter's builder to this package's Lean, is the adapter's (`tests/adapters/vllm/tests/commit/`).
 inputs = ["verity/circuits", "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py", "verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/errors.py", "tools/difftest", "adapters/vllm/verity_vllm/definitions",
-          "adapters/vllm/verity_vllm/__init__.py", "verity/channel.py",
+          "adapters/vllm/verity_vllm/__init__.py", "verity/channel.py", "verity/attested.py", "verity/clock.py",
           "verity/protocols/proofs/spot/verifier/profile.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier", "verity/protocols/resource_accounting/memory/poub/verifier",
           "verity/protocols/resource_accounting/compute/pouw/prover",

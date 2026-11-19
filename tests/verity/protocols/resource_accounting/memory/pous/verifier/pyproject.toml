@@ -15,7 +15,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # the wipe's declaration, whose attach runs the subprotocol (`wipe_served`), and the interface it is declared in
           "verity/protocols/resource_accounting/memory/pous/scheme.py", "verity/protocols/resource_accounting/scheme.py",
           "verity/hooks.py",
-          "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness", "verity/channel.py", "verity/runtime", "tests/verity/tests/test_channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py",
+          "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness", "verity/channel.py", "verity/attested.py", "verity/clock.py", "verity/runtime", "tests/verity/tests/test_channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py",
           "verity/protocols/resource_accounting/memory/pous/attester/__init__.py",
           "verity/protocols/resource_accounting/memory/pous/attester/challenger_party.py",
           "verity/protocols/resource_accounting/memory/pous/attester/wipe_challenger.py",

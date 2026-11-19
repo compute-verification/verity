@@ -38,7 +38,7 @@ inputs = ["tests/verity/protocols/resource_accounting/memory/poub/figures.json",
           # the deployment layer and its wire, which the session's parties run on (`session_parties.py`), the prover's
           # party (`session_prover.py`), which test_session_parties.py runs against the verifier's, and the monitoring
           # periods, which `monitoring` reads
-          "verity/channel.py", "verity/runtime", "tests/verity/tests/test_channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py",
+          "verity/channel.py", "verity/attested.py", "verity/clock.py", "verity/runtime", "tests/verity/tests/test_channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py",
           "verity/protocols/resource_accounting/memory/poub/prover/__init__.py", "verity/protocols/resource_accounting/memory/poub/prover/session_prover.py",
           # the honest provers and the period's prover side, which the tests run against the verifier's
           "verity/protocols/resource_accounting/memory/poub/prover/audit_prover.py", "verity/protocols/resource_accounting/memory/poub/prover/p2_prover.py",
