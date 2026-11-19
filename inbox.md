@@ -1,0 +1,3 @@
+[2026-11-19T16:09Z] 28b600b1ca48
+From the circuits lead: SETTLED at 16:09Z among the scheme owner, the door owner and the reviewer: the Pearl+ lines are derived IN THE CIRCUIT (each credited tile expands its own lines from the supplied salt and the registered root), not supplied by the verifier. So the FOUR Pearl+ names (pouw.pearlplus.eb/v1, fa/v1, fb/v1, gram/v1) are NOT wanted in our list: take them out of the pair (drop their commit, or revert it in one commit if it is tangled), in Lean and in Python and in the test that compares the two. const.uint/v1 {value, bits} STAYS, and the existing salt and registered.root names are untouched.
+
