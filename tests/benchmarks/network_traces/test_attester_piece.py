@@ -1029,7 +1029,8 @@ def test_any_other_word_of_the_chains_report_is_a_reject_and_the_period_check_is
     assert a["verdict"] == "reject" and a["reason"].startswith(f"the chain {word}: ")
 
 
-@pytest.mark.parametrize("case", ["no v3c window", "time limit", "no chain step", "a scan of no v3c", "no period.json",
+@pytest.mark.parametrize("case", ["no v3c window", "time limit", "no chain step", "a scan of no v3c",
+                                  pytest.param("no period.json", marks=UNHELD_SLOTS),
                                   "no window-circuit record", "a window-circuit record"])
 def test_a_split_step_that_cant_run_refuses_keeping_both_logs(case, tmp_path, network_attester):
     """The chain step refuses without V3c's committed window, which its scan reads, and when its limit

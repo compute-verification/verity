@@ -1069,6 +1069,7 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
     assert out["public"]["start"] == 0
     assert p["circuit"] == audit["registration"]["program"]
     window_record = tmp_path / "window-circuit.json"
+    window_record.write_text(json.dumps({"format": SP.CIRCUIT, "program": audit["registration"]["program"]}))
     held_to = audit["registration"]["program"]
     for k in (1, 2):
         (v3c := tmp_path / f"period-subset-{k}.json").write_text(json.dumps(block_audit(progs, sampled=k)))
