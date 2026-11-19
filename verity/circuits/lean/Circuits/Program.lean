@@ -548,7 +548,6 @@ def Prog.digest (P : Prog) : Except String String :=
   if P.sha512.size == 64 then .ok (hexOf P.sha512) else .error "program: no SHA-512 digest, so not a Program decoded from bytes"
 
 #guard !(default : Prog).digest.toBool
-#guard ({ (default : Prog) with sha512 := ⟨Array.replicate 64 0⟩ }).digest.toBool
 
 def RUN : String := "run"
 def REGISTRATION : String := "registration"

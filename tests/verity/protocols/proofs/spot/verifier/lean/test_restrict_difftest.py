@@ -1,6 +1,7 @@
 """Lean's `restrict` (`Spot.Restrict`, the ``restrict`` piece), the block's Program as a value, held to
 `Flock.Program.decode` of the bytes `verity.circuits.restrict` writes, value against value, every reference one by one: on
-the one-circuit chain's first block, an interior block and a unit block."""
+the one-circuit chain's first block, an interior block and a unit block, and `test_restrict`'s toys, a root batch among
+them taken whole, in part and one member."""
 
 from __future__ import annotations
 
@@ -36,6 +37,21 @@ def chain():
 
 
 @cache
+def toys():
+    """`test_restrict`'s toys by name: each descriptor's text and its blocks' units as Python names them."""
+    path = HERE.parents[5] / "circuits" / "test_restrict.py"
+    spec = importlib.util.spec_from_file_location("restrict_toys_for_lean", path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def toy_cases() -> list[tuple[str, int, list[tuple[int, int]]]]:
+    return [(name, i, units) for name, (_f, blocks) in toys().TOYS.items() for i, units in enumerate(blocks)]
+
+
+@cache
 def python(units: tuple[int, ...]) -> str:
     """Python's `restrict` bytes for the block of ``units``, consecutive units of the chain."""
     text, query = chain()
@@ -62,6 +78,41 @@ def test_lean_restrict_is_pythons(pieces, name):
     out = json.loads(body)
     assert out["agree"] is True and out["at"] is None, out
     assert out["root_nodes"] >= 2 and out["definitions"] > 1, out
+
+
+@pytest.mark.parametrize("name, i, ranges", toy_cases(), ids=lambda x: str(x))
+def test_lean_restrict_is_pythons_on_the_toys(pieces, name, i, ranges):
+    T = toys()
+    _p, c, bits = T.toy(name)
+    py = R.restrict(c, T.TOY_PARTITION, ranges, bits).descriptor.decode()
+    units = [u for lo, hi in ranges for u in range(lo, hi)]
+    kind, body = pieces.call("restrict", {"descriptor": c.decode(), "units": units, "python": py})
+    assert kind == "output", body
+    out = json.loads(body)
+    assert out["agree"] is True and out["at"] is None, out
+
+
+def test_a_repeated_unit_is_refused(pieces):
+    text, _ = chain()
+    kind, body = pieces.call("restrict", {"descriptor": text, "units": [6, 6], "python": python((6,))})
+    assert kind == "reject" and "a block names each of its units once" in body, body
+
+
+def test_the_blocks_program_carries_no_digest(pieces):
+    """`Prog.digest` refuses an empty digest, so nothing compares the block's Program with a record by one."""
+    text, _ = chain()
+    out = json.loads(pieces.call("restrict", {"descriptor": text, "units": [0, 1], "python": python((0, 1))})[1])
+    assert out["digest_bytes"] == 0
+
+
+def test_the_cost_reads_the_boundary_not_cs_gates(pieces):
+    """What `front`, `members` and `restrict` read on the chain's member block (a batch held whole) and unit block (a
+    batch held in part), printed for the count, against the description's size and C's gate count."""
+    text, _ = chain()
+    for units in ((0, 1), (6,)):
+        cost = json.loads(pieces.call("restrict", {"descriptor": text, "units": list(units), "python": python(units)})[1])["cost"]
+        print("restrict cost", units, json.dumps(cost, sort_keys=True))
+        assert cost["restrict_refs"] + cost["front_leaves"] < cost["c_gates"], cost
 
 
 def test_another_blocks_program_differs(pieces):
