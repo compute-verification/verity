@@ -97,6 +97,11 @@ inputs = ["tools/verity/circuit_check", "verity/__init__.py", "tools/config/veri
           "verity/protocols/experimental/dither/__init__.py",
           "verity/protocols/experimental/pearl_c4/prover", "verity/protocols/experimental/pearl_c4/__init__.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier/live_reads.py", "verity/protocols/resource_accounting/compute/pouw/prover/__init__.py",
+          # a session fixture's verity_vllm attach imports `verity_torch.pouw.hand_in`, and verity_torch.pouw imports serving.tensors
+          "verity/protocols/resource_accounting/compute/pouw/prover/serving/__init__.py",
+          "verity/protocols/resource_accounting/compute/pouw/prover/serving/tensors.py",
+          "verity/protocols/resource_accounting/compute/pouw/prover/serving/device.py",
+          "verity/protocols/resource_accounting/compute/pouw/prover/serving/row_table_kernels.py",
           "verity/protocols/resource_accounting/memory/pous/prover/__init__.py", "verity/protocols/resource_accounting/network/prover/__init__.py",
           "verity/protocols/resource_accounting/memory/pous/verifier/__init__.py", "verity/protocols/resource_accounting/memory/pous/prover/circuit.py",
           "verity/protocols/resource_accounting/memory/pous/prover/circuit.circuit-check.py", "verity/protocols/resource_accounting/memory/pous/prover/circuit.circuit-check.json",

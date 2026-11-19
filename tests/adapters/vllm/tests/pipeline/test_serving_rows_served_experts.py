@@ -95,10 +95,10 @@ def test_the_deferred_commits_bundle_commits_the_hooks_window_given_the_tables_a
     SX.same_commitment(served["hook"], deferred)
     with pytest.raises(AssertionError, match="the rows of port"):
         SX.same_commitment(served["hook"], SX.flipped(deferred, tmp_path / "flipped"))
-    man, root = RB.open_bundle(RB.path(served["out"], 1))["manifest_sha256"], served["run_root"]
+    root = served["run_root"]
     mine, hook = (_doc(d, "registration.json")["window"] for d in (deferred, served["hook"]))
-    assert DRW.source(mine, root, man, step_rows.NAME) == {"kind": True, "run": True, "commitment": True, "of": True, "link": True}
-    assert DRW.source(hook, root, man, step_rows.NAME, served["weights_root"]) == {
+    assert DRW.source(mine, root, step_rows.NAME) == {"kind": True, "run": True, "commitment": True, "of": True, "link": True}
+    assert DRW.source(hook, root, step_rows.NAME, served["weights_root"]) == {
         "kind": True, "run": True, "commitment": True, "sha512": True, "weights_sha512": True, "link": True}
 
 

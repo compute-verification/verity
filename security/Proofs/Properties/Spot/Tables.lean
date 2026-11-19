@@ -93,7 +93,8 @@ theorem checkBlobsAt_run {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ :
     obtain ⟨-, -, h5⟩ := bind_ok h4
     obtain ⟨f, -, h6⟩ := bind_ok h5
     obtain ⟨-, -, h7⟩ := bind_ok h6
-    exact ⟨r, h7⟩
+    obtain ⟨-, -, h8⟩ := bind_ok h7
+    exact ⟨r, h8⟩
 
 /-- What `tablesMatch` accepts: the tables handed are, by name and in order, the ones wanted. -/
 theorem tablesMatch_ok {tables : List (String × ByteArray)} {want : List String}
