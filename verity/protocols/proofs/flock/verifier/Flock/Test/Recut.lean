@@ -7,12 +7,13 @@ meta import Circuits.Program
 `Program.decode` on PROTOCOL.md §4.4's read at another width: one root over an input node of two 16-bit leaves, its
 `ret` reading the node as 8-bit leaves (read recut, `q = 2`), as 3-bit leaves (no divisor), past its `N·q = 4` leaves,
 off its whole leaves, and the same read of a node that is no input node. Each verdict is `codec.decode_program`'s on
-the same bytes, and the gate layout refuses the recut read as `Program.circuit` does (`recut-gates`).
+the same bytes, and the gate layout refuses the recut read as `Program.circuit` does (`recut-gates`): `resolve`,
+`operands` and `Prog.gate` each.
 -/
 
 namespace Flock.Test.Recut
 
-open Flock.Program (decode resolve)
+open Flock.Program (decode resolve operands)
 
 private def recutDesc_legal : String :=
   "{\"boolean\":{},\"callees\":[\"Input16_v1\"],\"definitions\":{\"Input16_v1\":{\"form\":\"primitive\",\"id\":\"Input16_v1\",\"params\":[],\"ret\":[\"Value\",16]},\"Root[P_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":0,\"form\":\"batch\",\"n\":2,\"out\":1}],\"params\":[],\"ret\":{\"affine\":[\"n\",0,0,4]},\"ret_type\":[\"Array\",4,[\"Value\",8]]},\"form\":\"composite\",\"id\":\"Root[P_v1]_v1\"}},\"program_fn\":\"P_v1\",\"root\":\"Root[P_v1]_v1\",\"schema\":\"verity-ir/descriptor/v2\",\"types\":[[\"Value\",16],[\"Array\",2,[\"Value\",16]],[\"Array\",4,[\"Value\",8]]]}"
@@ -44,6 +45,18 @@ private def recutVerdict (s : String) : String :=
 #guard (match decode recutDesc_legal.toUTF8 with
   | .ok P => match resolve P P.rootScope ((P.defs[P.root]!).body.ret.get 0) with
     | .ok g => s!"gate {g}"
+    | .error e => e
+  | .error e => e) ==
+  "recut-gates: input nodes [0] are read in leaves of part of their width, which the gate layout doesn't lay out"
+#guard (match decode recutDesc_legal.toUTF8 with
+  | .ok P => match operands P P.rootScope ((P.defs[P.root]!).body.nodes[0]!) 0 with
+    | .ok ops => s!"operands {ops.toList}"
+    | .error e => e
+  | .error e => e) ==
+  "recut-gates: input nodes [0] are read in leaves of part of their width, which the gate layout doesn't lay out"
+#guard (match decode recutDesc_legal.toUTF8 with
+  | .ok P => match P.gate 0 with
+    | .ok (p, _, _) => s!"gate of {p}"
     | .error e => e
   | .error e => e) ==
   "recut-gates: input nodes [0] are read in leaves of part of their width, which the gate layout doesn't lay out"
