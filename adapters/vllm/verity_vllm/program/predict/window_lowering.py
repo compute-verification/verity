@@ -26,7 +26,6 @@ from verity_vllm.definitions.registry.dead_free import (
     TokenSelectGroupsV1,
 )
 
-from . import scan_state as SS
 from .build import Unexpressible
 from .window_builder import WEIGHTS, Row, _Builder, _spans, _step, _word, weight_run
 from .window_class import FixedLoad, PearlTables, Request, Tables, WindowClass
@@ -58,7 +57,7 @@ class _Keys:
 
 class _Program:
     """Slot ``slot``'s class Program lowered into ``b``'s units, its request its lane's of the scan state row before its anchor
-    (`WindowClass.anchor`, `WindowClass.lane`) through ``scan`` (`scan_state.bridge`), its outputs the scan's through
+    (`WindowClass.anchor`, `WindowClass.lane`) through ``scan``, its lane's binding (`scan_state.bridge`), its outputs the scan's through
     ``entry`` (`io_shell.SlotEntry_v1`, its last position's `SelectEntry_v1`'s): each node's output as the rows that hold it,
     ``(lo, hi, row)`` its words [lo, hi) as ``row`` and the units after it, (hi - lo) / ``row.words`` rows of one output at
     consecutive units (none for the last position's select, which nothing reads). With ``tables`` it reads H1's tables
@@ -91,6 +90,8 @@ class _Program:
         self.outs: dict[int, list[tuple[int, int, Row]]] = {}
         self.words: dict[int, list[tuple[int, int, int]]] = {}
         self.gemms: dict[int, tuple[Any, tuple[Row, ...], int]] = {}
+        #: each node's output leaves at which a node's argument starts or ends (`_slices`)
+        self.read_at: dict[int, set[int]] | None = None
         self.keys: dict[tuple[str, tuple[str, Any, int, int]], _Keys] = {}
         self.position = 0
         self.slot: Row | None = None
@@ -105,7 +106,8 @@ class _Program:
         self.norms: dict[int, tuple[Row, ...]] = {}
         #: each attention cut by key block: its cut's plan (`_plan`) and each Call's first unit, a unit a head
         self.heads: dict[int, tuple[Any, tuple[tuple[str, int], ...]]] = {}
-        #: the slot's `ScanSlots_v3` unit, each position's `SelectCollect_v1` unit but the last and its `SelectEntry_v1` unit
+        #: its lane's `ScanSlots_v4` unit (`window_circuit.lower` gives it), each position's `SelectCollect_v1` unit but the
+        #: last and its `SelectEntry_v1` unit
         self.scan_unit: tuple[str, int] | None = None
         self.collects: list[tuple[str, int]] = []
         self.entry_unit: tuple[str, int] | None = None
@@ -255,8 +257,8 @@ class _Program:
         self.outs[j] = [(0, H, Row(tid, u, "o0", H))]
 
     def _token(self, tok: Any) -> tuple[Row, ...]:
-        """The next position's token: the first's its lane's of the scan state row the slot's `ScanSlots_v3` reads at its
-        anchor (with the slot it carries, its occupancy word and its head), below the class's prompt limit every other's
+        """The next position's token: the first's its lane's `ScanSlots_v4` unit's, of the scan state row at its anchor
+        (with the slot it carries, its occupancy word and its head), below the class's prompt limit every other's
         `TokenFeed_v1`'s (its slot its predecessor's, ``sel`` the previous position's select), past it the previous select.
         A served Program's below its prompt length is `TokenFeed_v1{FIRST=True}`'s, its prompt's id, and past it the previous
         select. With ``tables``, that row is held to the position's row of its round's input-ids table (`Tables.at`)."""
@@ -268,13 +270,11 @@ class _Program:
             raise Unexpressible(f"{self.name}: position {p}'s token reads {read}; a class Program reads its one prompt row "
                                 "at position 0 and every other position's token from its predecessor's select")
         if p == 0:
-            tid, u = self.b.unit(self.scan)
-            self.b.read(tid, "state", u, (1,), self.anchor * self.scan.bindings["NS"], (0,), SS.SCAN_STATE)
-            self.scan_unit, o = (tid, u), 4 * self.lane
-            self.slot, self.occ, self.head = (Row(tid, u, f"o{o + 1}", 2 * (NP + 1)), Row(tid, u, f"o{o + 2}", 2),
-                                              Row(tid, u, f"o{o + 3}", 4))
+            assert self.scan_unit is not None, f"{self.name}: its lane's scan unit before its first position"
+            tid, u = self.scan_unit
+            self.slot, self.occ, self.head = Row(tid, u, "o1", 2 * (NP + 1)), Row(tid, u, "o2", 2), Row(tid, u, "o3", 4)
             self.tokens.append(None)
-            rows: tuple[Row, ...] = (Row(tid, u, f"o{o}", 2),)
+            rows: tuple[Row, ...] = (Row(tid, u, "o0", 2),)
         elif p >= self.L:
             self.tokens.append(None)
             rows = self.rows(tok.refs)
@@ -382,6 +382,22 @@ class _Program:
         self._each(tid, "gu", u, pieces)
         self.outs[j] = [(0, n, Row(tid, u, "o0", w))]
 
+    def _slices(self, j: int, N: int, n: int) -> list[tuple[int, int, int]]:
+        """Node ``j``'s N columns as slices of n, the last of N mod n, in runs ``(first column, columns a slice, slices)``:
+        an allocation a run, a run ending where a node's argument starts or ends inside node ``j``'s output, so a reader of
+        a range of each slot's slices (a head of a fused projection) reads one allocation."""
+        if self.read_at is None:
+            self.read_at = {}
+            for nd in self.fn.body.nodes:
+                for a in nd.args:
+                    for space, idx, lo, hi in runs(a.refs):
+                        if space == "n":
+                            self.read_at.setdefault(idx, set()).update((lo, hi))
+        full, rest = divmod(N, n)
+        words = {_word(self.words[j], x, f"{self.name}: node {j}") for x in self.read_at.get(j, ())}
+        cuts = [0, *sorted({c // n for c in words if 0 < c < full * n and c % n == 0}), full]
+        return [(a * n, n, e - a) for a, e in zip(cuts, cuts[1:])] + ([(full * n, rest, 1)] if rest else [])
+
     def _Gemm(self, j: int, node: Any) -> None:
         if self.cut is not None and j not in self.cut.heads:
             cut_linear(self, j, node)
@@ -394,9 +410,8 @@ class _Program:
         while n > 1 and any(self.b.read_rows.get((descriptor_id(bind(node.fn.defn, **{**b, "N": m})), "x"), len(xs)) != len(xs)
                             for m in (n, N % n) if m):
             n //= 2
-        full, rest = divmod(N, n)
         pieces = []
-        for s0, m, count in ((0, n, full), (full * n, rest, int(rest > 0))):
+        for s0, m, count in self._slices(j, N, n):
             if not count:
                 continue
             tid, u = self.b.unit(bind(node.fn.defn, **{**b, "N": m}), count)
@@ -414,9 +429,8 @@ class _Program:
         x, sx, w, sw = node.args
         xs, ss = self.rows(x.refs), self.rows(sx.refs)
         lo, slo = self.weight(w.refs, N * K // 2), self.weight(sw.refs, 2 * N)
-        full, rest = divmod(N, n)
         pieces = []
-        for s0, m, count in ((0, n, full), (full * n, rest, int(rest > 0))):
+        for s0, m, count in self._slices(j, N, n):
             if not count:
                 continue
             tid, u = self.b.unit(IX.scaled_mm_words(K, m), count)
@@ -656,14 +670,14 @@ class _Program:
         self.b.feed(tid, "state", u, 1, (self.collect,))
         self.entry_unit = (tid, u)
 
-    def place_empty(self, scan: tuple[str, int], lane: int, collect: tuple[str, int], entry: tuple[str, int]) -> None:
-        """An empty lane's collector (`io_shell.OutCollect_v1{FIRST}`, unit ``collect``) on that lane's head and first token
-        of `ScanSlots_v3` unit ``scan``, and its entry (unit ``entry`` of the window's entries) on that lane's occupancy
+    def place_empty(self, scan: tuple[str, int], collect: tuple[str, int], entry: tuple[str, int]) -> None:
+        """An empty lane's collector (`io_shell.OutCollect_v1{FIRST}`, unit ``collect``) on the head and first token of its
+        lane's `ScanSlots_v4` unit ``scan``, and its entry (unit ``entry`` of the window's entries) on that unit's occupancy
         word and the collector's state: units of this Program's slot, so no wire leaves it."""
-        (tid, u), o, (ct, cu), (et, eu) = scan, 4 * lane, collect, entry
-        self.b.feed(ct, "head", cu, 1, (Row(tid, u, f"o{o + 3}", 4),))
-        self.b.feed(ct, "tok", cu, 1, (Row(tid, u, f"o{o}", 2),))
-        self.b.feed(et, "occ", eu, 1, (Row(tid, u, f"o{o + 2}", 2),))
+        (tid, u), (ct, cu), (et, eu) = scan, collect, entry
+        self.b.feed(ct, "head", cu, 1, (Row(tid, u, "o3", 4),))
+        self.b.feed(ct, "tok", cu, 1, (Row(tid, u, "o0", 2),))
+        self.b.feed(et, "occ", eu, 1, (Row(tid, u, "o2", 2),))
         self.b.feed(et, "state", eu, 1, (Row(ct, cu, "o0", 2 * (self.cls.outputs + 2)),))
 
     def _collect_alone(self, tok: tuple[Row, ...] | None = None) -> None:
