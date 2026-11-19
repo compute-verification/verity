@@ -128,7 +128,6 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
     import random
     from types import SimpleNamespace
     import numpy as np
-    from verity.circuits import boolean as BL
     from verity.circuits import partition_object as PO
     from verity.circuits.codec import program_digest
     from verity.circuits.evaluation.reference import evaluate
@@ -142,7 +141,7 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
     tp = PO.TemplatePartition(program, json.loads((d / "query.json").read_text()))
     fn = program.defs[template]
     params, ret = fn.signature()
-    widths = {p: BL.elements(t) for p, t in params}
+    widths = {p: t.leaf_widths() for p, t in params}
     gates = list(tp.inputs(u))
     rng = random.Random(seed)
     owner_cache: dict[int, list[int]] = {}
@@ -181,7 +180,7 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
         args.append(vals)
         trees.setdefault(tw, {})[leaf] = vals
     out = evaluate(fn, *args)
-    ow = BL.elements(ret)
+    ow = ret.leaf_widths()
     ports = {q[0]: q for q in meta["ports"]}
     rec["meta_ports"] = meta["ports"]
     prog = program_digest(json.loads(c))
