@@ -45,7 +45,10 @@ def _in_population(circuit, named):
     assert tp.population == sum(n.values())
 
 
+@pytest.mark.slow
 def test_a_tiny_window_the_older_composer_refuses_passes_and_names_its_small_templates():
+    """About a minute, the population's Program built: the one window small enough to pass here that the older composer
+    refuses."""
     circuit = _window(S._registered(), CLASS, *WHOLE, GRAIN)
     with pytest.raises(Unexpressible, match="no row past 111 B"):
         WC.check_provable(circuit)
@@ -64,9 +67,10 @@ def test_a_template_past_the_rows_flock_takes_is_refused_by_name(monkeypatch):
         WB.check_served(circuit)
 
 
+@pytest.mark.slow
 def test_a_served_window_at_the_class_of_record_passes_and_names_what_a_block_alone_cannot_prove():
     """The H100 smoke's window (4 requests of 27 prompt ids and 2 outputs, one window): passes, naming the small templates,
-    each of whose units is in the population."""
+    each of whose units is in the population. Some four minutes: the class's own templates, which no smaller class has."""
     hf = json.loads(pinned_hf_config(SERVE["model"], SERVE["revision"]).read_text())
     reg = Registered.of(served_phi(SERVE, hf), 657832114885280620, ADV.CAP_BITS)
     circuit = _window(reg, WC.WindowClass(4, 27, 2), [(27, 2, G2)] * 4,

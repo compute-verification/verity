@@ -333,16 +333,16 @@ def check_provable(circuit: IF.Circuit) -> None:
 def check_served(circuit: IF.Circuit) -> dict[str, str]:
     """`check_provable` for a served window, which the door proves: it refuses past `IF.MAX_ROWS` rows or `IF.K_MAX`, and
     does not ask the older composer's floor (a row past `IF.LAST_BLOCK_BYTES` bytes), which the door does not have. -> each
-    template a block of one unit of which is under the prover's zero-knowledge floor (``m >= ZK_M_MIN``), by id with why,
-    estimated from its unit's input and output bits and ANDs, since the door's lowering sets its ``k_log``. Such a
-    template's units stay in the circuit and its sample: a draw of one is a failed proof. The door's own check replaces
-    this when door-ready lands."""
+    template a block of all of whose units in the window is under the prover's zero-knowledge floor (``m >= ZK_M_MIN``),
+    by id with why, estimated from a unit's input and output bits and ANDs, since the door's lowering sets its ``k_log``.
+    Such a template's units stay in the circuit and its sample: a draw of one is a failed proof. The door's own check
+    replaces this when door-ready lands."""
     from verity.circuits.count import count
     from verity.circuits.laying import ZK_M_MIN
     from verity.circuits.program import Program
 
     why, alone = [], {}
-    for fn, _ in circuit.templates:
+    for fn, n in circuit.templates:
         tid, cuts = descriptor_id(fn), circuit.cuts.get(descriptor_id(fn))
         lay = IF.layout(fn)
         ins, outs = [2 * w for _, w, _ in lay.cut(cuts)], [2 * w for _, w in lay.outs]
@@ -352,9 +352,10 @@ def check_served(circuit: IF.Circuit) -> dict[str, str]:
             why.append(f"{tid}: its rows alone need a Flock block of 2^{k} bits, past 2^{IF.K_MAX}")
         prog = Program(fn)
         bits = 8 * (sum(ins) + sum(outs)) + count(prog)[descriptor_id(prog.root)].ands
-        if (k := max(bits - 1, 1).bit_length()) + 3 < ZK_M_MIN:
-            alone[tid] = (f"one unit is {bits} input, output and AND bits, so k_log about {k} and m = {k + 3}, under "
-                          f"{ZK_M_MIN}")
+        k = max(bits - 1, 1).bit_length()
+        if (m := k + max(3, (n - 1).bit_length())) < ZK_M_MIN:
+            alone[tid] = (f"a unit is {bits} input, output and AND bits, so k_log about {k}, and a block of all {n} units "
+                          f"is m = {m}, under {ZK_M_MIN}")
     if why:
         raise Unexpressible(f"{len(why)} templates Flock wouldn't prove: " + "; ".join(why))
     return alone
