@@ -356,6 +356,12 @@ def test_a_layout_refuses_an_overlap_and_an_overrun_by_name(fields, match) -> No
     assert dict(S.Layout(16, {"a": (0, 8), "pad": (8, 0), "b": (8, 8)}).fields)["b"] == (8, 8)
 
 
+def test_a_layouts_statics_are_integers_or_strings() -> None:
+    assert dict(S.Layout(16, {}, statics={"K": 256, "DEV": "h100"}).statics) == {"K": 256, "DEV": "h100"}
+    with pytest.raises(ValueError, match="static K is an integer or a string, not 1.5"):
+        S.Layout(16, {}, statics={"K": 1.5})
+
+
 def test_every_scheme_is_a_line_of_the_one_table() -> None:
     """Each name maps to the module that registers it, and every module that registers one is in the table."""
     from verity.protocols.compose import schemes

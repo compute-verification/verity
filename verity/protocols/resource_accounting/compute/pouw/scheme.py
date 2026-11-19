@@ -34,8 +34,8 @@ from verity.protocols.resource_accounting.compute.pouw.prover import serving, wo
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import runs_on
 from verity.config import COMPOSITES
 from verity.protocol import VERIFIER
-from verity.protocols.resource_accounting.scheme import (Block, Charge, Executable, Lacks, Launch, LaunchRefused, Order,
-                                                             Scheme, Term, register)
+from verity.protocols.resource_accounting.scheme import (Block, Charge, Executable, Lacks, Launch, LaunchRefused, Layout,
+                                                             Order, Port, Scheme, Term, register)
 
 #: the kernel scheme it runs, on every card its row allows
 KERNEL = "pearl-c-h100-v1-h3"
@@ -47,6 +47,24 @@ READS = ("bf16",)
 
 def tile_macs(statics: Mapping[str, int]) -> int:
     return statics["TR"] * statics["TN"] * statics["K"]
+
+
+#: the port a credited linear's y leaves its tile on, which every reader of the linear takes it from by wire
+TILE_PORT = "pearlplus-y"
+
+
+def _tile_layout(shape: Mapping[str, int]) -> Layout:
+    """The y of a tile of ``M`` real rows (TM when not given) of a credited linear of depth ``K`` and ``N`` columns, at the
+    kernel's TM x TN tile or the shape's ``TM`` and ``TN``: its M rows of TN BF16 words; counts ``TM``, ``TN`` and
+    ``ROW_ALIGN``, the rows a call's A is padded to a multiple of; statics the tile's (`pearl_plus_credited`), given K and N."""
+    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as PS
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
+
+    tm, tn = (shape["TM"], shape["TN"]) if "TM" in shape else PS.get(KERNEL).tile
+    m = shape.get("M", tm)
+    statics = dict(PC.credited_product(KERNEL, shape["K"], tm, tn, shape["N"], m).bindings) if "K" in shape else {}
+    return Layout(16 * m * tn, {"y": (0, 16 * m * tn)}, {"TM": tm, "TN": tn, "ROW_ALIGN": serving.PEARL_C_ROW_ALIGN},
+                  statics)
 
 
 @dataclass(frozen=True)
@@ -556,6 +574,7 @@ PEARL_PLUS = register(Scheme(
     protocol="verity/pouw/pearl-plus/v1",
     resource="compute",
     blocks=(Block("PearlPlusTileCoreWords_v2", tile_macs),),
+    ports=(Port(TILE_PORT, "output", "PearlPlusTileCoreWords_v2", "y", layout=_tile_layout),),
     assumptions=("Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1",),
     log=(Order("weightsRoot", "pouw/salt"), Order("commitment", "pouw/draw")),
     charges=(Charge("inert-work", "rho"), Charge("sample", "epsilon"), Charge("over-bound-tiles", "over_cap_draws"),

@@ -196,13 +196,15 @@ class Charge:
 class Layout:
     """A port's row at one public shape: its ``bits`` and each field's ``(offset, width)`` in bits, least significant bit
     first, and ``counts``, the public integers the shape derives that place a field's own items (the scan state's ``K0``
-    prompt ids in a first cell and ``K`` in each continuation). A layout is protocol structure, one of the four public
+    prompt ids in a first cell and ``K`` in each continuation), and ``statics``, the statics the port's Definition is bound
+    at for the shape, where a lowering binds it. A layout is protocol structure, one of the four public
     kinds: it says where a value's bits sit, never what they are. Refused by name: a field that runs past ``bits`` or
     overlaps another (a field of width 0 overlaps nothing)."""
 
     bits: int
     fields: Mapping[str, tuple[int, int]]
     counts: Mapping[str, int] = field(default_factory=dict)
+    statics: Mapping[str, int | str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if type(self.bits) is not int or self.bits < 1:
@@ -220,7 +222,11 @@ class Layout:
             if type(v) is not int:
                 raise ValueError(f"count {name} is an integer, not {v!r}")
         object.__setattr__(self, "fields", MappingProxyType(dict(self.fields)))
+        for name, v in self.statics.items():
+            if type(v) not in (int, str):
+                raise ValueError(f"static {name} is an integer or a string, not {v!r}")
         object.__setattr__(self, "counts", MappingProxyType(dict(self.counts)))
+        object.__setattr__(self, "statics", MappingProxyType(dict(self.statics)))
 
 
 @dataclass(frozen=True)

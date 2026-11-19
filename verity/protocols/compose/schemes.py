@@ -61,7 +61,7 @@ LOOKUPS = ("option", "provides", "ports", "framings", "processes")
 KEYS: Mapping[str, Mapping[str, tuple[str, ...]]] = MappingProxyType({
     "network-attester": {"provides": ("admission",), "ports": ("released", "scan-state"), "framings": ("ids",),
                          "processes": ("id-relay",)},
-    "pearl-plus": {"option": ("pouw:pearl-c-h100-v1-h3",), "provides": ("cut",)},
+    "pearl-plus": {"option": ("pouw:pearl-c-h100-v1-h3",), "provides": ("cut",), "ports": ("pearlplus-y",)},
     "poub": {"processes": ("poub-session",)},
     "pous": {"option": ("pous:p2-16448/v4",)},
 })
