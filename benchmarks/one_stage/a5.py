@@ -682,11 +682,15 @@ def circuit_of(path: Path, made: dict, read: set[Path]) -> FI.FlockCircuit:
     return FI.flock_circuit(path.read_bytes())
 
 
-def door_circuit(c: bytes, part: dict, k: int, st_dir: Path, lower: Path) -> tuple[Path, dict, FI.FlockCircuit]:
+def door_circuit(c: bytes, part: dict, k: int, st_dir: Path, lower: Path,
+                 decoded: OC.Decoded | None = None) -> tuple[Path, dict, FI.FlockCircuit]:
     """Member ``k``'s circuit as the door derives it from C's bytes ``c`` and the partition ``part`` (`one_circuit.block`,
-    `.restrict`, `.lower` by ``lower``, `flock-lower-check`), the file Lean's `restrict` derives too, written under
-    ``st_dir``; `one_circuit.Refused` or `.NotDerived` where the door refuses the block."""
-    text = OC.lower(OC.restrict(c, part, OC.block(c, part, k)), part, lambda: lower)
+    `.restrict`, `.lower` by ``lower``, `flock-lower-check`, at in(S)'s cuts `one_circuit.cuts`), the file Lean's
+    `restrict` derives too, written under ``st_dir``; `one_circuit.Refused` or `.NotDerived` where the door refuses the
+    block. ``decoded``: C decoded once for every member."""
+    decoded = decoded or OC.Decoded(c)
+    text = OC.lower(OC.restrict(c, part, OC.block(c, part, k, decoded), decoded), part, lambda: lower,
+                    cut=OC.cuts(c, part, decoded))
     circuit = st_dir / "circuit.txt"
     circuit.write_bytes(text)
     circ = FI.flock_circuit(text)
@@ -929,6 +933,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     members, publics, checks, composed, programs_ok, kept, read, makes = [], {}, {}, {}, {}, {}, set(), {}
     door = getattr(a, "door_lower", None)
     c_bytes = b"".join(descriptor_chunks(program)) if door else b""
+    decoded = OC.Decoded(c_bytes) if door else None
     unlowered: dict[int, dict] = {}     # by member: the door's refusal to lower its block (`one_circuit.lower`)
     t_stage = time.time()
     for k, m in enumerate(mine.members):
@@ -945,7 +950,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         t = time.time()
         if door:
             try:
-                circuit, made, circ = door_circuit(c_bytes, part, k, st_dir, door)
+                circuit, made, circ = door_circuit(c_bytes, part, k, st_dir, door, decoded)
             except (OC.Refused, OC.NotDerived) as e:
                 unlowered[k] = {"template": m.template, "base": m.base, "n": m.n, "why": f"{type(e).__name__}: {e}"[:600]}
                 print("UNLOWERED " + json.dumps({"k": k, **unlowered[k]}), flush=True)
