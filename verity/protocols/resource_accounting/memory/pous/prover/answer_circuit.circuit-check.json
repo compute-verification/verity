@@ -1,0 +1,16 @@
+{
+ "definitions": {
+  "PousEqual_v1{N=1536}": {
+   "and": 1535,
+   "type": "99cd1c6e6d8019ebbd9a391a79d7d5333ae699366cdcc112a3b7da96e82ea74d9a5f0e2fa020460e4b165874e044cd3bee4b3c6d18013a15ad1120c758261bd9"
+  },
+  "PousRowDigestEnd_v1{N=264,END='tail'}": {
+   "and": 77420,
+   "type": "a38535d896c8508b4335dec0c22ede3cdd493844e6888c41974948865754d2f158dde92e77ff490665567baec8a97ec67d416b0891e5da78342ec70d40cb7e03"
+  },
+  "PousSha512Compress_v1": {
+   "and": 81402,
+   "type": "643a75e578b1ebf11161f285098307d77dee4bd20a0c59286f6c8e8ee9d848326f8b635a77115855a2090179bd516b6a7c59371327a5a5a7e41dd98ac6dbcab7"
+  }
+ }
+}

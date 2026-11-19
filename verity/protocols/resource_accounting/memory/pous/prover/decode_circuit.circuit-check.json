@@ -1,0 +1,40 @@
+{
+ "definitions": {
+  "PousByteSwap_v1{N=8}": {
+   "and": 0,
+   "type": "1293e21659a0e0e5b351bb14435c207658622f04a11e30d6b2a498753e6bfa231fea733b1d6593791c54c6012dcdd219ad7748410dff256143c3c006592c0149"
+  },
+  "PousP2Finish_v1{W=64,C0=189}": {
+   "and": 332,
+   "type": "f4b751d374dc3a0214e7c156e58badc03f09b351c9223fed841fada26a289f1548d6800dfb16093739e9fad2ac68fae89e2be44c5e1c926323b2a99c0e2694c5"
+  },
+  "PousP2Negate_v1{W=64,C0=189}": {
+   "and": 121,
+   "type": "719551dc97b43d79e787a5eb1157bf665d38c7bad9a3c1313957c7916ee59837dfddd62c5a2d944a999a67c088fbdb32c08f5c91f0877d95affeea0115633283"
+  },
+  "PousP2Sigma_v1{W=64,C0=189}": {
+   "and": 127,
+   "type": "5f0fd8e708e75ff6352b41ee672b9fdbeb998ef3628522d110e3b10c85247d3e190dd2fe8f71659b5e56995757b76a268ef9c185ff9865764b90267cf108d62a"
+  },
+  "PousP2Sq_v1{W=64,C0=189}": {
+   "and": 3675,
+   "type": "7e4313701bedc2f5595aec2c357dc4c6bdd7e30d5430732f7bad9aa8e1d81dbbb8bb5738ea97387ac39995df1464e1f3d42f6e3c54e8c77c68fff50709d3bc1d"
+  },
+  "PousSha512CtrChunk_v1{L=144,D=116,I=0}": {
+   "and": 78086,
+   "type": "2f36049ba77fc06c22051b9cca4e60e40fbdab2cf0ef131f8d679fe773db902ebc79465cf7797287478a3391849f5fcbb0d4ebd5d8db391ee6e1616b7f85beaf"
+  },
+  "PousSha512Ctr_v1{L=144,D=116,NB=8}": {
+   "and": 77422,
+   "type": "ce38cc3418bc3e1946e756e44a963b563333835743f135a1cf9d54e6102ee48e7e4bbc1e6fead0ea5d296ee5c269c78306e0e570a53c112b28930acc32247e89"
+  },
+  "PousSha512Head_v1": {
+   "and": 80817,
+   "type": "93aea83904aff6feda708a17baa5297f599ea6baf97a8b46fbef31510e00f9c3841e97d03601198b8d83f05a588cc95eed7f75ec820ac67a7b4389c184d446c1"
+  },
+  "PousSha512Mid_v1{M=1}": {
+   "and": 80817,
+   "type": "93aea83904aff6feda708a17baa5297f599ea6baf97a8b46fbef31510e00f9c3841e97d03601198b8d83f05a588cc95eed7f75ec820ac67a7b4389c184d446c1"
+  }
+ }
+}
