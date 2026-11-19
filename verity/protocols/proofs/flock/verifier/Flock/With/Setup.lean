@@ -587,6 +587,7 @@ def deriveTemplateUnitsWith (hs : Hashes M) (c : Circuit) (obj : Json) (program 
   let rs ← match TemplateQuery.evaluate d ts with
     | .ok rs => pure rs
     | .error e => throw s!"partition: {e}"
+  checkBlocksCover obj (TemplateQuery.population rs)
   let some (t, cls) := queryTemplate c | throw "partition: META program_digests does not name the circuit's one template"
   if !ts.contains t then throw s!"partition: the circuit's template {t} is not one the query lists"
   let pop := TemplateQuery.population rs
@@ -767,6 +768,7 @@ def templateStrataWith (hs : Hashes M) (samplingDesign : String) (obj : Json) (p
   let rs ← match TemplateQuery.evaluate d ts with
     | .ok rs => pure rs
     | .error e => throw s!"partition: {e}"
+  checkBlocksCover obj (TemplateQuery.population rs)
   return (Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)), TemplateQuery.population rs)
 
 /-- `stratifiedSamplingDesign` through the oracle. -/

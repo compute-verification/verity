@@ -18,6 +18,9 @@ by the stratified sampling design alone.
 
 namespace Flock.Test.TableCap
 
+/-- The served statement with public outputs, the form only a superseded version has. -/
+def publicOutputs : Tags := { Tags.circuit with hiddenOutputs := false }
+
 def why (zk : Bool) (count : Nat) : String :=
   match ProvedScope.check Tags.circuit zk ByteArray.empty ByteArray.empty [] count false false with
   | .error e => e
@@ -34,7 +37,7 @@ def whyP (tags : Tags) (count : Nat) : String :=
   "refused: 2 tables in a session without --zk: a statement form the soundness proof does not cover"
 #guard ProvedScope.firstFailure (ProvedScope.statementRules Tags.circuit true ProvedScope.zkTableCap false) == none
 #guard ProvedScope.firstFailure (ProvedScope.statementRules Tags.circuit false 1 false) == none
-#guard whyP Tags.circuit967b8d06 65 ==
+#guard whyP publicOutputs 65 ==
   "refused: 65 tables in a session under --plain-tables, more than 64: a statement form the soundness proof does not cover"
 #guard whyP Tags.circuitPlainLeaves 2 == "refused: verity/flock-circuit+plain-leaves, a statement with hidden " ++
   "outputs and flock-leaf/sha512-unsalted leaves under --plain-tables: a statement form the soundness proof does not cover"
@@ -42,8 +45,8 @@ def whyP (tags : Tags) (count : Nat) : String :=
   "refused: 65 tables in a session under --plain-tables, more than 64: a statement form the soundness proof does not cover"
 #guard Tags.circuit.hiddenOutputs && Tags.circuit.merkleLeaf == "hm96-sha512/v1"
 #guard ProvedScope.plainTablesWhy Tags.circuit Tags.MAX_TABLES == none
-#guard ProvedScope.plainTablesWhy Tags.circuit967b8d06 Tags.MAX_TABLES == none
-#guard ProvedScope.plainTablesWhy Tags.circuit967b8d06 1 == none
+#guard ProvedScope.plainTablesWhy publicOutputs Tags.MAX_TABLES == none
+#guard ProvedScope.plainTablesWhy publicOutputs 1 == none
 
 /-- A circuit whose META binds `m` as its program, the one field `programWhyP` reads. -/
 def bound (m : Option String) : Circuit :=
@@ -68,9 +71,9 @@ def progSha : String :=
 def subsetD : Draw.UnitSample := { samplingDesign := .subset 2, population := 8, units := #[1, 6] }
 def stratD : Draw.UnitSample := { samplingDesign := .stratified 2 #[], population := 8, units := #[1, 6] }
 
-#guard ProvedScope.samplingDesignWhy false Tags.circuit967b8d06 true subsetD == none
-#guard ProvedScope.samplingDesignWhy false Tags.circuit967b8d06 true stratD == some "a stratified draw under --plain-tables"
-#guard ProvedScope.samplingDesignWhy false Tags.circuit967b8d06 false stratD == none
-#guard ProvedScope.samplingDesignWhy false Tags.circuit967b8d06 false subsetD == some "a subset draw without --zk"
+#guard ProvedScope.samplingDesignWhy false publicOutputs true subsetD == none
+#guard ProvedScope.samplingDesignWhy false publicOutputs true stratD == some "a stratified draw under --plain-tables"
+#guard ProvedScope.samplingDesignWhy false publicOutputs false stratD == none
+#guard ProvedScope.samplingDesignWhy false publicOutputs false subsetD == some "a subset draw without --zk"
 
 end Flock.Test.TableCap
