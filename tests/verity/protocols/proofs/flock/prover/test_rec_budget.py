@@ -70,13 +70,14 @@ def test_a_statements_recorded_calls_are_the_verifiers():
 
 def test_the_caps_bound_the_recursions_calls_by_2_32():
     """`DeployedCounts.deployedSetup_staged_le`: a V* part's setup inputs, check 5's `131072` and its registered reads,
-    times the 16 parts; `InnerSetupCount.innerB`: the inner setup's, `12 + 1024 · perRow K` at `2^K = MAX_INNER_ROWS`;
+    times the 16 parts; `InnerSetupCount.innerB`: the inner setup's, `12 + 6 · DEFS_CAP + 1024 · perRow K` at
+    `2^K = MAX_INNER_ROWS`;
     and `BitsKTight.nR`: the inner verifier's, with its tables' `2^28` and a decision's `2^24`."""
     part = 131072 + RB.MAX_INSTANCES * RB.MAX_PORTS * (2 + RB.MAX_DEPTH)
     assert part == 138543104 and RB.MAX_STATEMENTS * part < 2 ** 32
     k = RB.MAX_INNER_ROWS.bit_length() - 1
-    inner_b = 12 + 1024 * (k + 3) * 2 ** k
-    assert 2 ** k == RB.MAX_INNER_ROWS and inner_b == 2684354572
+    inner_b = 12 + 6 * RB.DEFS_CAP + 1024 * (k + 3) * 2 ** k
+    assert 2 ** k == RB.MAX_INNER_ROWS and inner_b == 2690646028
     assert 2 ** 28 + inner_b + 2 ** 24 < 2 ** 32
 
 

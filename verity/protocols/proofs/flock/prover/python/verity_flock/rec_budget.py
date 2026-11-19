@@ -3,7 +3,8 @@
 holds at most `MAX_INSTANCES` instances (`table`); V*'s list at the inner shape holds at most `MAX_STATEMENTS` statements
 (`count`), the V* parts the recursion's soundness bound covers, and records at most `MAX_RECORDED` hm96 calls (`recorded`,
 each statement's counted by `recorded_at`); and the inner statement's public file holds at most `MAX_INNER_ROWS`
-instances and shared-row table rows (`inner`). `verify` refuses a session past any of them, so a stager refuses to write
+instances and shared-row table rows (`inner`), and its program at most `DEFS_CAP` Definitions (`RecBudget.innerDefs`,
+which only the verifier checks). `verify` refuses a session past any of them, so a stager refuses to write
 one (`check`, `check_inner`), with the verifier's message."""
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ MAX_DEPTH = 64
 MAX_STATEMENTS = 16
 MAX_RECORDED = 2 ** 32
 MAX_INNER_ROWS = 131072
+DEFS_CAP = 2 ** 20
 TAIL = "the recursion's call bound covers no more"
 
 

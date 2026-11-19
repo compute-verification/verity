@@ -179,6 +179,7 @@ def checkShape (inner : Option RecVStar.Inner) (src : Option RecCoins.Source) : 
       s!"is not the inner statement's (m {st.m}, k_log {st.c.kLog}, regions {st.regions.size}, claims {claims}), " ++
       "which its files (--rec-inner-circuit, --rec-inner-public, --rec-inner-partition) set up")
   RecBudget.innerRows st
+  RecBudget.innerDefs f.program
   checkForm f.form st
 
 /-- **Candidate 3's checks before the session's own setup**, on the inner statement's files `src`: check 5's sparse
