@@ -829,32 +829,6 @@ nodes = ["vy-nebius-2"]
 run = ["systemd:vy-write-probe@vy-nebius-2"]
 owner = "infra"
 
-[[file]]
-path = "/workspace/verity-guest/bin/n2_build.sh"
-src = "tools/research/src/research/pods/nebius/n2_build.sh"
-nodes = ["vy-nebius-1"]
-run = ["systemd:vy-n2-offload"]
-owner = "infra"
-
-[[file]]
-path = "/workspace/verity-guest/bin/n2_commit.sh"
-src = "tools/research/src/research/pods/nebius/n2_commit.sh"
-nodes = ["vy-nebius-1"]
-run = ["systemd:vy-n2-commit-offload"]
-owner = "infra"
-
-[[file]]
-path = "/workspace/verity-guest/bin/n2_build.sh"
-src = "tools/research/src/research/pods/nebius/n2_build.sh"
-nodes = ["vy-nebius-2"]
-owner = "infra"
-
-[[file]]
-path = "/workspace/verity-guest/bin/n2_commit.sh"
-src = "tools/research/src/research/pods/nebius/n2_commit.sh"
-nodes = ["vy-nebius-2"]
-owner = "infra"
-
 # ---- both nodes: standing campaign targets (`research keeper`); after installing, `sudo systemctl enable --now vy-keeper.timer`
 
 [[file]]
@@ -876,13 +850,6 @@ nodes = ["vy-nebius-1", "vy-nebius-2"]
 owner = "infra"
 
 # ---- node 1: the Kueue cluster's host (pods/nebius/sky/cluster_up.sh)
-
-# what `cluster submit` places Jobs with ($VY_QUEUE_SRC); no `run`: each placement runs it afresh
-[[tree]]
-path = "/workspace/verity-guest/cluster-src"
-src = "infra/cluster"
-nodes = ["vy-nebius-1"]
-owner = "infra"
 
 [[file]]
 path = "/workspace/verity-guest/bin/gpu-lease"
@@ -1281,7 +1248,7 @@ nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-util"]
 owner = "compute-accounting"
 
-[[file]]  # node 2's runs to node 1's store and R2: the custody n2_commit.sh and n2_build.sh name to `research run`
+[[file]]  # node 2's runs to node 1's store and R2
 path = "/workspace/pouw/infra/bin/n2_custody.sh"
 src = "tools/research/src/research/pods/nebius/n2_custody.sh"
 nodes = ["vy-nebius-2"]
@@ -1419,41 +1386,6 @@ owner = "infra"
 # still runs the old version of a file whose entry names it. Each loop's cutover from its tmux session is by hand, one at a time.
 
 # ---- node 1
-
-[[file]]
-path = "/etc/systemd/system/vy-n2-offload.service"
-src = "tools/research/src/research/pods/nebius/units/vy-n2-offload.service"
-nodes = ["vy-nebius-1"]
-run = ["systemd:vy-n2-offload"]
-owner = "infra"
-
-[[file]]
-path = "/etc/vy/env/vy-n2-offload.env"
-src = "tools/research/src/research/pods/nebius/env/vy-n2-offload.env"
-nodes = ["vy-nebius-1"]
-run = ["systemd:vy-n2-offload"]
-owner = "infra"
-
-[[file]]
-path = "/etc/systemd/system/vy-n2-commit-offload.service"
-src = "tools/research/src/research/pods/nebius/units/vy-n2-commit-offload.service"
-nodes = ["vy-nebius-1"]
-run = ["systemd:vy-n2-commit-offload"]
-owner = "infra"
-
-[[file]]
-path = "/etc/vy/env/vy-n2-commit-offload.env"
-src = "tools/research/src/research/pods/nebius/env/vy-n2-commit-offload.env"
-nodes = ["vy-nebius-1"]
-run = ["systemd:vy-n2-commit-offload"]
-owner = "infra"
-
-[[file]]
-path = "/etc/vy/env/research.env"
-src = "tools/research/src/research/pods/nebius/env/research.env"
-nodes = ["vy-nebius-1"]
-run = ["systemd:vy-n2-offload", "systemd:vy-n2-commit-offload"]
-owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-write-probe@.service"

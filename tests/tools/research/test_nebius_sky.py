@@ -127,7 +127,7 @@ def test_a_replay_bundle_goes_only_with_its_complete_slim_keep(tmp_path):
     """A replay task must not delete a passed row's sealed bundle as soon as config_record.json exists: a tree that predates
     keep-leaves holds nothing else of the leaves a later CPU replay reads. A bundle goes only when
     commit/replay_slim_p<pair>/ is its complete keep (cpu_replay.keep's slim.json: this bundle's MANIFEST.json, dump_sha256, every
-    file's size and sha256); any doubt keeps it, with one line in row.log. config-run.yaml and n2_commit.sh run the same lines."""
+    file's size and sha256); any doubt keeps it, with one line in row.log. config-run.yaml runs them."""
     import hashlib
     import subprocess
     import textwrap
@@ -139,9 +139,6 @@ def test_a_replay_bundle_goes_only_with_its_complete_slim_keep(tmp_path):
         assert [d for d in yaml.safe_load_all(text) if d and d.get("name") == "replay"][0]["run"] == run
     assert subprocess.run(["bash", "-n"], input=run, text=True).returncode == 0
     body = run.split("<< 'EOF'", 1)[1].split("\n", 1)[1].split("\nEOF\n", 1)[0]
-    n2 = (SKY.parent / "n2_commit.sh").read_text()
-    assert n2.split("discard_kept_bundles() {", 1)[1].split("<< 'EOF'", 1)[1].split("\n", 1)[1].split("\nEOF\n", 1)[0] == body
-    assert 'then discard_kept_bundles "$row_dir"; fi' in n2 and "rm -rf \"$row_dir\"/commit/replay_bundle_p" not in n2
     (tmp_path / "discard.py").write_text(body)
     def sha(p):
         return hashlib.sha256(p.read_bytes()).hexdigest()

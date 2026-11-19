@@ -1606,7 +1606,7 @@ def test_the_units_deploy_toml_runs_on_a_machine_are_its_run_entries_less_held_o
     assert M.expected_units("vy-nebius-cpu-1", MANIFEST, NOTHING) == ["systemd:vy-a.service", "systemd:vy-b.timer"]
     real = set(M.expected_units("vy-nebius-2", M.MANIFEST.read_text(), NOTHING))
     assert real >= {"systemd:vy-watchdog.timer", "systemd:vy-lease.service", "systemd:vy-monitors.timer"}
-    assert "systemd:vy-n2-offload.service" not in real and all(M.EXPECTED_OFF.values())
+    assert all(M.EXPECTED_OFF.values())
 
 
 def test_a_step_that_isnt_applied_on_a_machine_holds_its_units_as_drift_holds_its_files():

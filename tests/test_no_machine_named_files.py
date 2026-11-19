@@ -31,13 +31,7 @@ ALLOWED = {
     "tests/infra/cluster/test_nebius1.py",
     "tests/infra/cluster/test_nebius2.py",
     "tests/verity/protocols/resource_accounting/network/prover/test_n2_tie_zk.py",
-    "tools/research/src/research/pods/nebius/env/vy-n2-commit-offload.env",
-    "tools/research/src/research/pods/nebius/env/vy-n2-offload.env",
-    "tools/research/src/research/pods/nebius/n2_build.sh",
-    "tools/research/src/research/pods/nebius/n2_commit.sh",
     "tools/research/src/research/pods/nebius/n2_custody.sh",
-    "tools/research/src/research/pods/nebius/units/vy-n2-commit-offload.service",
-    "tools/research/src/research/pods/nebius/units/vy-n2-offload.service",
     "verity/protocols/resource_accounting/network/prover/n2_tie_zk.py",
     "verity/protocols/resource_accounting/network/prover/n2_zk.py",
 }
