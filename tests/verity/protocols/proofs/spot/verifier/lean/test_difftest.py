@@ -3121,7 +3121,7 @@ def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
     """v2 reads its sample's coins as v1 does (`OneStageZk.coinsOf`, v1's `coinsOf`), and only from the auditor's
     challenger under a key at the deployed parameters: parameters naming none, one without a window (`NO_CHALLENGER`) or
     one whose key is at other parameters (`KEY_PARAMS`) are refused, as are parameters whose sampling design is no
-    `subset` one (`subset_only`: a `stratified` or `work` one, as an object or as a rate stated as text, while a rate
+    `subset` one (`subset_only`: a `stratified` or `work` one, as an object or as a rate stated as text, or a `rated` one, while a rate
     that names the audit's subset sampling design over the population is read as that sampling design), and evidence holding more than its limits
     (`Challenger.LIMITS`: an opening's path one digest past `MAX_PATH`, and the evidence at it read on), and evidence
     whose coins are not the challenger's signed release is rejected: none, the record carrying its own key, coins under
@@ -3144,7 +3144,8 @@ def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
                  "a work design": ({"k": 3, "law": "work"}, table, "work"),
                  "a work design with no table": ({"k": 3, "law": "work"}, None, "work"),
                  "a stratified rate": ("stratified-rate:1/2", None, "stratified"),
-                 "a work rate": ("work-rate:1/2", table, "work")}
+                 "a work rate": ("work-rate:1/2", table, "work"),
+                 "a rated law": ({"law": "rated", "rates": [{"rate": "1/2", "table": "plain"}]}, None, "rated")}
 
     def audit_of(d: Drawn, draw: dict, coins, **params) -> dict:
         proved = DR.proved(draw)
