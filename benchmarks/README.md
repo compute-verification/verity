@@ -391,6 +391,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
+| `boolean_bodies/` | every word primitive with no Boolean body, by the module that registers it (`no_body.json`) | maintained |
 | `compile_cost/` | what compiling a class-G window's Programs costs (`predict.steps.compile_steps`, GLM-5.3 at TP8 on one rank): wall time and peak RSS, by phase, its digests held to their pins | maintained |
 | `../calibration/circuit_properties/` | structural properties of a Boolean circuit's counted operations, measured exactly: fan-out, fan-in, their count and s_× | maintained |
 | `route_capture/` | what a model executes when served: every engine step's launch-shape class under CUDA-graph serving and the kernels of each class's first steps, and the (route, statics) pairs those steps need that class G's registered Definitions don't cover, with their owners | maintained |
