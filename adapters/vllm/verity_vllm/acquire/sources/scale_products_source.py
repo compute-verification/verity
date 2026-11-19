@@ -3,7 +3,7 @@ products of every token row, `<linear module>/scale_products` (f32 [rows, N/G * 
 same step stream and run root as the module's other values.  Attached whenever the capture plan names `scale_products` classes
 (a Program built under `fp8_scale_construction = shared-per-block`), refused on a plan that names none.
 
-The sites are the capture plan's `scale_products` classes (`program.predict.capture_plan.of_build`, taken as data), each with the
+The sites are the capture plan's `scale_products` classes (`check.capture_plan.of_build`, taken as data), each with the
 block geometry (N/G, K/G) of its plan rows' statics (`capture_plan.rows_of_build`: K, N, G); a class no row gives a geometry, or
 whose width is not the geometry's product, refuses the Commit.  A forward pre-hook marks the site module that runs; inside it, during a
 committed step, the wrapper of `torch.ops._C.cutlass_scaled_mm` reads the launch's `a_scales` (the [M, K/G] group scales

@@ -205,7 +205,7 @@ def attach_of_plan(com: Any, eng: Any, args: Any, classes: Sequence[Mapping[str,
         logger.error("[delta] REFUSE: the acquisition plan needs a hooking committer with a model (got %s)", kind)
         sys.exit(3)
     if MOE.MoeBlockSource(com, model).layers:
-        from verity_vllm.program.predict.capture_plan import NOT_SERVED
+        from verity_vllm.check.capture_plan import NOT_SERVED
 
         logger.error("[delta] REFUSE: the model has MoE layers, and %s", NOT_SERVED["moe_block_stream"])
         sys.exit(3)

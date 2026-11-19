@@ -1,6 +1,6 @@
 """The exact-int8 profile's quantizers (`engine.int8_ops`) as an acquisition source: the values the served linear and attention exchange
 inside one module body, committed as the ops computed them.  What it taps is read from the row's capture plan
-(`program.predict.capture_plan.of_build`'s classes), never from a request's rows:
+(`check.capture_plan.of_build`'s classes), never from a request's rows:
 
 - `verity_int8::row_quant` inside a linear module: its (x_q, s_a) are the plan's `call_boundary` classes `<linear>/<op>` of an
   `Int8RowQuant` Definition, members `0` and `1` (read only by the linear's `ScaledMmS8_v1`), claimed here (`claim`) so the

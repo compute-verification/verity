@@ -48,21 +48,21 @@ import numpy as np
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.refs import runs
+from verity.commitments import registered_value as RV
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
-from verity.commitments import registered_value as RV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     registered_commit,
 )
 
+from verity_vllm.check.capture_plan import NODE, captured
 from verity_vllm.definitions.numerics.rows import ROWS
 from verity_vllm.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.query.manifest import format as RM
 
 from . import scan_state as SS
-from .capture_plan import NODE, captured
 from .window_builder import WEIGHTS, _spans
 from .window_circuit import Lowered, WindowClass
 

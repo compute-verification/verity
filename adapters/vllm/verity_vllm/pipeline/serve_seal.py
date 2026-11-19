@@ -2,7 +2,7 @@
 
 `committer` builds the server's committer, rows-sha512's (``--scheme``), the declared Commit of record's
 (`pipeline.commit.make_committer`'s ``native_collect_v2b``: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots) with its
-acquisition over the row's capture plan (`program.predict.capture_plan.captured` over the registered compiler's slot
+acquisition over the row's capture plan (`check.capture_plan.captured` over the registered compiler's slot
 Programs) of the row's Build of record (``--row-build``, ``verity-vllm predict row``'s, `serve_row`), built at the serve's start:
 the sources of the values no module returns (`commit_attach.attach_of_plan`) and the plan's hook sets, a shared module's k-th
 call bound as its k-th path (`RuntimeTree.aliases`, sealed as the context's ``op_path_aliases``), and the arena sized from the
@@ -113,14 +113,15 @@ def committer_args(opts: Any) -> SimpleNamespace:
                            tap_sources=TapSources(), moe_source="off", required_classes=None)
 
 
-def window_class_of(opts: Any) -> Any:
-    """The window class ``opts.window_class`` (``S,P,O[,LANES,EVERY]``) declares, a `window_class.WindowClass`; `ValueError` when it declares none."""
-    from verity_vllm.program.predict.window_class import WindowClass
-
+def window_class_of(opts: Any) -> SimpleNamespace:
+    """The bounds the window class ``opts.window_class`` (``S,P,O[,LANES,EVERY]``) declares: its ``slots``, ``prompt`` and
+    ``positions`` (`WindowClass.positions`, the longest prompt's then every output but the last); `ValueError` when it declares
+    none.  The record path reaches the predictor, which defines the class, only through ``predict emit``."""
     parts = str(opts.window_class or "").split(",")
-    if not 3 <= len(parts) <= 5 or not all(p.strip().isdecimal() for p in parts):
-        raise ValueError(f"--window-class {opts.window_class!r} is not S,P,O[,LANES,EVERY]")
-    return WindowClass(*(int(p) for p in parts))
+    if not 3 <= len(parts) <= 5 or not all(p.strip().isdecimal() and int(p) >= 1 for p in parts):
+        raise ValueError(f"--window-class {opts.window_class!r} is not S,P,O[,LANES,EVERY] of positive integers")
+    slots, prompt, outputs = (int(p) for p in parts[:3])
+    return SimpleNamespace(slots=slots, prompt=prompt, positions=prompt + outputs - 1)
 
 
 def class_refusal(opts: Any) -> str | None:
@@ -180,12 +181,13 @@ def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
     if why := scheme_refusal(opts):
         raise UsageError(why)
     from verity_vllm import settings
+    from verity_vllm.check import capture_plan as CP
     from verity_vllm.commit.committer.host_retention import retain_exclude_families
     from verity_vllm.commit.served_record import SamplerInputsSource
     from verity_vllm.engine.handle import engine_of, model_runner
-    from verity_vllm.pipeline import commit as C, commit_attach as CA
+    from verity_vllm.pipeline import commit as C
+    from verity_vllm.pipeline import commit_attach as CA
     from verity_vllm.pipeline.advice import registered_compiler
-    from verity_vllm.program.predict import capture_plan as CP
 
     run_id = f"{label}:{opts.run_id}"
     rows, classes, args = CP.rows_of_build(opts.row_build), CP.of_build(opts.row_build), committer_args(opts)
@@ -298,7 +300,11 @@ def port_identities(plan: Sequence[Mapping[str, Any]]) -> dict[str, tuple[str, s
     one), compiled from the advice's rows, and the served-rows tie states that the port's positions are the window's served
     rows; no proof of it runs, so today the rows registered at serve time are the prover's word. A plan naming two ids is
     refused."""
-    from verity_vllm.query.manifest.format import SERVED_IDS, SERVED_POSITIONS, spec_family
+    from verity_vllm.query.manifest.format import (
+        SERVED_IDS,
+        SERVED_POSITIONS,
+        spec_family,
+    )
 
     have = {(str(d["op_path"]), str(m)) for d in plan for m, _w, _t in d["members"]}
     compiled_ids, compiled_pos = (tuple(n.rsplit("/", 1)) for n in (SERVED_IDS, SERVED_POSITIONS))

@@ -1,14 +1,14 @@
 """`acquire.sources.taps.attach` and `attached`, and the call-boundary source's front (`sites`, `claimed`, `unattached`), over
-capture plan classes (`program.predict.capture_plan.of_build`): the int8 source is attached where the plan names its classes, an
+capture plan classes (`check.capture_plan.of_build`): the int8 source is attached where the plan names its classes, an
 Int8RowQuant call boundary is its claim, and a class no source acquires refuses the Commit by name.  CPU only."""
 from __future__ import annotations
 
 import pytest
-
-from tests.acquire.test_int8_source import QUANT_OP, _class, _Committer, _Model, _plan
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import int8_source as I8
 from verity_vllm.acquire.sources import taps as TAPS
+
+from tests.acquire.test_int8_source import QUANT_OP, _class, _Committer, _Model, _plan
 
 ADD = _class("model.norm/add", "0", "call_boundary", 16, "bf16", "Add16_v1")
 

@@ -1,4 +1,4 @@
-"""The capture plan's rows and classes (`program.predict.capture_plan`)."""
+"""The capture plan's rows and classes (`check.capture_plan`)."""
 from __future__ import annotations
 
 import gzip
@@ -6,8 +6,8 @@ import json
 from typing import Any
 
 import pytest
+from verity_vllm.check import capture_plan as CP
 from verity_vllm.check.replay.index import SAMPLER_OP
-from verity_vllm.program.predict import capture_plan as CP
 
 
 class _Index:

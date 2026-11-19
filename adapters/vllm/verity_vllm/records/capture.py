@@ -1,4 +1,4 @@
-"""The capture plan's capture classes (`program.predict.capture_plan`): how the serve captures each value it commits."""
+"""The capture plan's capture classes (`check.capture_plan`): how the serve captures each value it commits."""
 
 #: a module's returned tensor, captured at its forward's output
 MODULE_OUTPUT = "module_output"

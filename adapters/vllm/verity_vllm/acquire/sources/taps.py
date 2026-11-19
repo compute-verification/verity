@@ -1,5 +1,5 @@
 """What a Commit attaches beside the record's sources.  The single-rank Commit (`attach`) attaches from the capture plan's classes
-(`program.predict.capture_plan.of_build`, taken as data): the exact-int8 quantizers' results (`int8_source`, which claims its
+(`check.capture_plan.of_build`, taken as data): the exact-int8 quantizers' results (`int8_source`, which claims its
 `call_boundary` classes from the call-boundary source) and the blockwise FP8 GEMM's scale products (`scale_products_source`); a
 plan with a call boundary no source claims is refused by name.  `attached` names what `attach` attaches for a plan, constructing nothing.  The norm-scale tap is not attached on
 this road.
@@ -61,7 +61,7 @@ class TapSources:
 
 def attach(com: Any, plan: Sequence[Mapping[str, Any]], required_classes: tuple[str, ...], *,
            rows: Sequence[Mapping[str, Any]] | None = None, explicit_classes: bool = False, model: Any = None) -> tuple[str, ...]:
-    """Attach to `com` the sources of the capture plan's classes (`program.predict.capture_plan.of_build`): the scale-products source
+    """Attach to `com` the sources of the capture plan's classes (`check.capture_plan.of_build`): the scale-products source
     when the plan names `scale_products` classes (its block geometry from the plan's `rows`, `capture_plan.rows_of_build`, without
     which it is refused) and the int8 source when it names Int8RowQuant call boundaries or Int8KvQuant module
     outputs.  A plan with a `call_boundary` class no source claims is refused by name (exit 3): the call-boundary source's host plan
