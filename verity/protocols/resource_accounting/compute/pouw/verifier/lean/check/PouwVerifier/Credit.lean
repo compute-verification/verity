@@ -463,7 +463,7 @@ def samplingDesign (ss : Array Flock.Draw.WorkStratum) (k : Json) : R (Array Flo
   let total := Flock.Draw.totalWork ss
   pure (ss.map fun s => { s.toStratum with k := Flock.Draw.workK k s.work s.size total s.floor })
 
-def SCHEMA : String := "verity-ir/descriptor/v1"
+def SCHEMA : String := Flock.Program.SCHEMA
 def WINDOW_FN : String := "PouwH1Window_v3"
 def RECORD : List String := ["TILES", "LINEARS", "CALLS", "M", "PREFIX"]
 def TILE_FN : String := "PouwH1WindowTile_v1"
@@ -475,7 +475,7 @@ def J10R : List String := ["call", "blocks"]
 def TILE_K_STEP : Nat := 32
 def TILE_K_LIMIT : Nat := 2 ^ 17
 def DESCRIPTOR_FORM : String :=
-  "the window's descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON (keys sorted, compact, " ++
+  s!"the window's descriptor is not a {SCHEMA} descriptor in canonical JSON (keys sorted, compact, " ++
   "ASCII: the bytes program_digest hashes) with its callees, definitions, program function and root"
 def NOT_WINDOW : String :=
   "the window's circuit is not an H1 window: its program function is not PouwH1Window_v3{TILES=…,LINEARS=…," ++
@@ -1140,10 +1140,9 @@ def partitionOf (program : String) (shape : Shape) : Json :=
       ("params", Json.mkObj [("templates",
         Json.arr ((shape.tiles.mergeSort (·.1 ≤ ·.1)).map (Json.str ·.2.fn)).toArray)])])]
 
-/-- `registered.READS_V1`: a `--registered` file's format, each port's reads from unit `reads_from` (`READS_FROM`). -/
+/-- A `--registered` file's format (`Flock.Registered.FORMAT`): it states no position, which C and the partition give
+(`Flock.OneCircuit.pos`). -/
 def READS : String := Flock.Registered.FORMAT
-/-- `registered_value.READS_FROM`: a port's first unit; every unit below it reads nothing (`Flock.Registered.Port.readAt`). -/
-def READS_FROM : String := Flock.Registered.READS_FROM_KEY
 def SCHEMA_KEY : String := "row_schema"
 
 /-- `credit.step_tables`: each round's A tables of a layout `strata` accepted, over its `steps` rounds (its calls the
@@ -1219,9 +1218,8 @@ call's z table `<prefix>zy@<call>`, each A and B row port naming the template pa
 (`Flock.Registered.PARAM_KEY`: `a_k<K>[i]` over the x·R chunk rows, or `a_k<K>` when x·R = 1, and likewise B); and,
 when the execution phase registers the call's receipt table
 `<prefix>receipt@<call>`, the statement's output row o0 (`RECEIPT_PORT`, the unit's receipt, `shapeOf`'s width) at its
-row t, so the receipts the round roots commit are the ones the units return; every other unit reads none of them: each
-port's reads start at the call's first unit u0 (`READS_FROM`) and end at its last (`Flock.Registered.Port.readAt` reads
-none below `reads_from` or past `reads`). Each value is a
+row t, so the receipts the round roots commit are the ones the units return; every other unit reads none of them. The
+file states none of these positions: C and the partition give each unit's row (`Flock.OneCircuit.pos`). Each value is a
 row/v2 value of 16-bit leaves under `Spot.Registered.domainAt` of its name, rows and words, binding the
 execution phase's open root `executionPhase` but for the weights' (`isHeld`), at the root `roots` (`{value: [root, ...]}`) gives it. Its
 reads cost the call's units, once a port; only the ok rows' known content is the execution phase's. The statement's public row `pub`
@@ -1262,12 +1260,11 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
   let (k, n) := kn
   let tile : Tile := (shape.tiles.lookup k).getD { fn := "", a := 0, b := 0, zy := 0 }
   let x := tile.n
-  let b0 : Nat := ((lins.takeWhile (·.1 != lin)).filter (·.2.1 == k)).foldl (fun s x => s + x.2.2) 0
   let sizes := (callWork layout).map (·.1)
   let u0 := (sizes.take call).foldl (· + ·) 0
   let size := sizes.getD call 0
   let per := n / c
-  let (s, callsK, at_) := stepRow layout steps call
+  let (s, callsK, _) := stepRow layout steps call
   let a := s!"{shape.pre}a/{k}@{s}"
   let zy := s!"{shape.pre}zy@{call}"
   let bv := s!"{shape.pre}b/{k}"
@@ -1292,21 +1289,19 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
   let (some ra, some rb) := (digest? (.str ((root.lookup a).getD "")), digest? (.str ((root.lookup bv).getD "")))
     | throw ("registration", s!"call {call}'s seed reads the roots of {a} and {bv}, which are not both SHA-512 " ++
         "digests (128 lowercase hex): register each table at its tree's root")
-  let ports : List (String × String × (Nat → Nat)) :=
-    (List.range (x * r)).map (fun i => (s!"a_k{k}_{i}", a, fun t => x * (at_ + r * (t / per)) + i)) ++
-    (List.range (x * c)).map (fun j => (s!"b_k{k}_{j}", bv, fun t => x * (b0 + c * (t % per)) + j)) ++
-    [("zy", zy, fun t => t)] ++ (if receipted then [(RECEIPT_PORT, rc, fun t => t)] else [])
+  let ports : List (String × String) :=
+    (List.range (x * r)).map (fun i => (s!"a_k{k}_{i}", a)) ++
+    (List.range (x * c)).map (fun j => (s!"b_k{k}_{j}", bv)) ++
+    [("zy", zy)] ++ (if receipted then [(RECEIPT_PORT, rc)] else [])
   let mut out : List (String × Json) := []
-  for (port, v, row) in ports do
-    let reads := (List.range size).map fun t => Lean.toJson (row t)
+  for (port, v) in ports do
     let lw : Nat × Nat := ((shapes.find? (·.1 == v)).map (·.2)).getD (0, 0)
     let (leaves, words) := lw
     let d ← (Spot.Registered.domainAt program v words leaves 16
       (if isHeld (.str v) then none else some executionPhase)).mapError fun why => ("registration", why)
     out := out ++ [(port, Json.mkObj [("value", Json.str v), ("root", Json.str ((root.lookup v).getD "")),
       ("leaves", Lean.toJson leaves), ("words", Lean.toJson words), ("word_bits", Lean.toJson (16 : Nat)),
-      ("domain", Json.str (Flock.hexOf d)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2),
-      ("reads", Json.arr reads.toArray), (READS_FROM, Lean.toJson u0)])]
+      ("domain", Json.str (Flock.hexOf d)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2)])]
   let pv := s!"{shape.pre}pub@{call}"
   let params : List (String × String) := [("a", x * r), ("b", x * c)].flatMap fun (p, n) =>
     (List.range n).map fun i => (s!"{p}_k{k}_{i}", if n == 1 then s!"{p}_k{k}" else s!"{p}_k{k}[{i}]")
@@ -1328,7 +1323,6 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
   out := out ++ [(PUB_PORT, Json.mkObj [("value", Json.str pv), ("root", Json.str (Flock.hexOf pr)),
     ("leaves", Lean.toJson size), ("words", Lean.toJson words), ("word_bits", Lean.toJson (16 : Nat)),
     ("domain", Json.str (Flock.hexOf d)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2),
-    ("reads", Json.arr ((List.range size).map Lean.toJson).toArray), (READS_FROM, Lean.toJson u0),
     ("known", Json.mkObj [("rows", Lean.toJson (ks.map (·.1))),
       ("salts", Json.arr (ks.map fun k => Json.str (Flock.hexOf k.2)))])])]
   let population := sizes.foldl (· + ·) 0
@@ -1342,7 +1336,6 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
   out := out ++ [(OK_PORT, Json.mkObj [("value", Json.str ov), ("root", Json.str (Flock.hexOf opr)),
     ("leaves", Lean.toJson population), ("words", Lean.toJson OK_ROW.size), ("word_bits", Lean.toJson (16 : Nat)),
     ("domain", Json.str (Flock.hexOf od)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2),
-    ("reads", Json.arr ((List.range size).map (fun t => Lean.toJson (u0 + t))).toArray), (READS_FROM, Lean.toJson u0),
     ("known", Json.mkObj [("rows", Lean.toJson (oks.map (·.1))),
       ("salts", Json.arr (oks.map fun k => Json.str (Flock.hexOf k.2)))])])]
   pure (Json.mkObj [("format", Json.str READS), ("ports", Json.mkObj out)])
@@ -1798,7 +1791,7 @@ def LIVE_FORM : String :=
   "(circuit.live.program_v2 of its tables' T, its S rounds and its PREFIX, canonical JSON without annotations) and " ++
   "each round's live@<s> proof outcome, unit s round s's"
 def LIVE_DESCRIPTOR_FORM : String :=
-  "the window's live descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON with its callees, " ++
+  s!"the window's live descriptor is not a {SCHEMA} descriptor in canonical JSON with its callees, " ++
   "definitions, program function and root"
 def NOT_LIVE : String :=
   "the window's live circuit is not a live Program: its program function is not PouwLiveWindow_v2{T=…,S=…," ++
@@ -2275,7 +2268,6 @@ example : DRAW_TAG = Domains.POUW_H1_SAMPLING := rfl
 example : ROUND_TAG = Domains.POUW_H1_ROUND_A := rfl
 example : COMMIT_TAG = Domains.POUW_H1_COMMIT.toUTF8.push 0 := rfl
 example : COMMIT_FORMAT = Domains.REGISTRATION := rfl
-example : SCHEMA = Domains.IR_DESCRIPTOR := rfl
 example : REQUESTS_IDS_TAG = Domains.POUW_H1_REQUEST_IDS := rfl
 example : WEIGHTS_TAG = Domains.POUW_H1_WEIGHTS := rfl
 

@@ -492,23 +492,27 @@ def test_the_window_circuit_command_refuses_a_class_whose_units_no_proof_block_t
 
 def test_class_circuit_from_phi_alone_is_window_circuits_record_and_serve_phi_names_the_runs_compiler_before_it_serves(
         tmp_path, monkeypatch, capsys):
-    """``prove_path.py class-circuit --serve F`` builds the class's circuit from φ alone, no advice, row dir or window, and
-    writes ``window-circuit``'s record of the run's window byte for byte, at the class of record and cut at Pearl+'s
-    linears under ``--pearl-tables`` alike (I2's class circuit stubbed, `window_circuit.window_circuit` left to call it).
-    ``serve-phi`` states what serve.json will record of φ from this device (`prove_path.device_target` stubbed with the
-    run's), and ``compiler --serve`` over it names the compiler ``compiler --serve-run`` names once the run has served."""
+    """``prove_path.py class-circuit --serve F`` builds the class's circuit from φ alone, no advice, row dir or window: under
+    ``--pearl-tables``, cut at Pearl+'s linears, it is ``window-circuit``'s record of the run's window byte for byte (the
+    window held to the fixed load, `FixedLoad.held` stubbed); without tables ``window-circuit``'s is the served circuit,
+    of the window's requests (`takes`, stubbed), and the class circuit takes none (I2's class circuit stubbed,
+    `window_circuit.window_circuit` left to call it). ``serve-phi`` states what serve.json will record of φ from this
+    device (`prove_path.device_target` stubbed with the run's), and ``compiler --serve`` over it names the compiler
+    ``compiler --serve-run`` names once the run has served."""
     import prove_path as PP
     from test_prove_path import _served
     from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.program.predict.window_class import FixedLoad
 
-    s, circuit, seen = _served(tmp_path, monkeypatch), _registered_circuit(), []
+    s, circuit, seen, taken = _served(tmp_path, monkeypatch), _registered_circuit(), [], ("the window's requests",)
 
-    def lower(registered, cls, programs=None, grain=None, tables=None):
-        seen.append((registered, cls, tables))
+    def lower(registered, cls, programs=None, grain=None, tables=None, requests=None):
+        seen.append((registered, cls, tables, requests))
         return circuit
 
     monkeypatch.setattr(WC, "class_circuit", lower)
-    monkeypatch.setattr(WC, "takes", lambda *a: None)
+    monkeypatch.setattr(WC, "takes", lambda *a: taken)
+    monkeypatch.setattr(FixedLoad, "held", lambda *a: None)
     (tmp_path / "advice.bin").write_bytes(s.data)
     serve = json.loads((s.run / "serve.json").read_text())
     monkeypatch.setattr(PP, "device_target", lambda async_scheduling=False: {
@@ -522,8 +526,9 @@ def test_class_circuit_from_phi_alone_is_window_circuits_record_and_serve_phi_na
         for given in (s.run / "serve.json", phi):
             assert PP.main(["class-circuit", "--serve", str(given), "--cap", "4", "--out", str(tmp_path / "c.json"),
                             *tables]) == 0
-            assert (tmp_path / "c.json").read_bytes() == (tmp_path / "w.json").read_bytes()
-        assert len(seen) == 3 and seen[0] == seen[1] == seen[2] and seen[0][1] == WC.CLASS_OF_RECORD
+            assert not tables or (tmp_path / "c.json").read_bytes() == (tmp_path / "w.json").read_bytes()
+        assert len(seen) == 3 and seen[1] == seen[2] and seen[1][3] is None and seen[0][:3] == seen[1][:3]
+        assert seen[0][1] == WC.CLASS_OF_RECORD and seen[0][3] == (None if tables else taken)
         assert (seen[0][2] is None) == (not tables) and (not tables or seen[0][2].scheme == "pearl-c-h100-v1-h3")
     capsys.readouterr()
     assert PP.main(["compiler", "--serve-run", str(s.run)]) == 0
@@ -1006,7 +1011,8 @@ def test_a_declared_day_holds_the_registrations_program_to_the_days_one_declarat
     assert day == {"day": 3, "declarations": [e.body() for e in entries]}
 
     def r2(d: dict) -> list[str]:
-        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {}, **d)
+        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {},
+                   partition=mine.partition, **d)
         return sorted(c for c in v.codes if c.startswith("R2"))
     assert r2(day) == []
     assert r2({**day, "day": 4}) == ["R2-declared"] and r2({**day, "day": 5}) == ["R2-undeclared"]
@@ -1108,7 +1114,8 @@ def test_the_device_day_is_the_challengers_declared_day_over_its_own_ledger_and_
     lines, key, _record = _device_ledger(tmp_path, [_declared(program), *_window(S1, 1, root)])
     day = RA.device_day(lines, root, key, _verify(key))
     assert day == {"day": DAY0, "declarations": [{"blocks": ["t"], "day": DAY0, "program": program}]}
-    assert not [c for c in R.check(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {}, **day).codes
+    assert not [c for c in R.check(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {},
+                                   partition=mine.partition, **day).codes
                 if c.startswith("R2")]
     rebuilt = G.Declaration(DAY0, program, ("t",)).digest()
     assert RA.device_day(lines, root, key, _verify(key), {"window": {"day": DAY0, "declaration": rebuilt}}) == day
@@ -1129,7 +1136,8 @@ def test_a_window_opened_before_its_days_declaration_or_of_a_lane_that_never_dec
     program = written.rec["program"]
 
     def r2(d: dict) -> list[str]:
-        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {}, **d)
+        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {},
+                   partition=mine.partition, **d)
         return sorted(c for c in v.codes if c.startswith("R2"))
     late, key, _ = _device_ledger(tmp_path / "late",
                                   [*_window(S1, 0, "01" * 64), _declared(program), *_window(S2, 3, "02" * 64)])
@@ -1170,7 +1178,8 @@ def test_a_window_that_crosses_utc_midnight_belongs_to_its_opens_day(written, tm
     program, root = written.rec["program"], "01" * 64
 
     def r2(d: dict) -> list[str]:
-        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {}, **d)
+        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {},
+                   partition=mine.partition, **d)
         return sorted(c for c in v.codes if c.startswith("R2"))
     def late(reserve_seq: int) -> list[tuple[str, str, dict]]:
         return _window(S1, reserve_seq, root, reserved_at="2026-10-20T23:55:00Z", expires="2026-10-21T00:05:00Z",

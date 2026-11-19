@@ -407,7 +407,7 @@ class Binding:
 
     @cached_property
     def partition(self) -> dict[str, Any]:
-        return PO.build(self.program, self.query)
+        return PO.build(self.program, self.query, [[m.base, m.base + m.n] for m in self.members] or None)
 
     @cached_property
     def partition_digest(self) -> str:
@@ -1292,7 +1292,7 @@ def registration(c: Committed, provenance: Mapping[str, Any], previous: str | No
     roots += [{k: o[k] for k in ("port", "root", "leaves", "domain")} for o in outputs]
     return registrar.record(w.program, w.query, w.law, SCHEME, roots, {**provenance, "kind": kind, "run": w.run},
                             leaf_layer=c.leaf_layer, previous=previous, work_table=w.work_table,
-                            registered=list(entries))
+                            registered=list(entries), partition=w.partition)
 
 
 def units_doc(m: Member) -> dict[str, Any]:
