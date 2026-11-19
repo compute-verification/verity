@@ -186,8 +186,14 @@ def SUBSET_ONLY (kind : String) : String :=
   s!"the sampling design is {kind}, which the one-statement audit's soundness statement doesn't cover: it covers a \
     subset sampling design"
 
+/-- v1's verifier parameters with no rate rule: `Draw.agreed` then agrees to the rule's expansion alone, so
+`Docket.check` refuses a record registering any other law, one that meets the rate included, as `R1-law`. A registered
+rate law is taken on v1's road only. -/
+def unrated (v : Docket.Verifier) : Docket.Verifier := { v with rate := none }
+
 /-- The one statement's parameters as parsed, before `paramsOfJson`'s refusal of a sampling design that is no `subset`
-one. The per-member form's parameters read them (`membersParamsOfJson`), under any sampling design v1 parses. -/
+one, with no rate rule (`unrated`). The per-member form's parameters read them (`membersParamsOfJson`), under any
+sampling design v1 parses. -/
 def paramsParsed (j : Json) : V Params := do
   let some pr := field? j "proofs"
     | throw ("the parameters name no proofs (the auditor's public file's digest and the verifier's " ++
@@ -196,6 +202,7 @@ def paramsParsed (j : Json) : V Params := do
   let (pub, registered) ← committedOf pr
   let rest := Json.mkObj (without j "proofs")
   let base ← OneStage.paramsOfJson rest
+  let base := { base with verifier := unrated base.verifier }
   let some (key, _) := base.challenger | throw NO_CHALLENGER
   if !deployedKey key then throw KEY_PARAMS
   let some partition := base.verifier.partition

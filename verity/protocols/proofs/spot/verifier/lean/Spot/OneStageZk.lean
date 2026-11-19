@@ -1183,6 +1183,23 @@ private def oneProofs : Json :=
   evidenceWhy (evidenceOf "{\"proofs\":{\"sessions\":[]}}".toUTF8)
 #guard evidenceWhy (evidenceEitherOf "not JSON".toUTF8) == evidenceWhy (evidenceOf "not JSON".toUTF8)
 
+private def subsetLaw (k : Nat) : Json := Json.mkObj [("law", "subset"), ("k", Lean.toJson k)]
+
+private def rated : Docket.Verifier :=
+  { program := default, query := Json.null, samplingDesign := subsetLaw 2, workTable := none, rate := some (1, 2),
+    scheme := "", ports := #[], leafLayer := none, anchors := #[], log := #[], partition := none }
+
+private def agreedUnrated (law : Json) : Option Bool :=
+  let v := unrated rated
+  (Draw.agreed v.program v.query v.samplingDesign v.workTable v.rate law).toOption.map (Draw.sameSamplingDesign law)
+
+-- v2's parameters hold no rate rule: a registered law other than the rule's expansion is not agreed to, which
+-- `Docket.check` names `R1-law`
+#guard (unrated rated).rate == none
+#guard agreedUnrated (subsetLaw 2) == some true
+#guard agreedUnrated (subsetLaw 3) == some false
+#guard agreedUnrated (subsetLaw 1) == some false
+
 private def memberT (name : String) (units : Array (Nat × Nat)) : Member := { name, units, g := 1, own := sharedT }
 
 private def statementT (member : String) (sessions : Nat := 1) : StatementFiles :=
