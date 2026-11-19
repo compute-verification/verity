@@ -1,3 +1,0 @@
-[2026-11-19T02:22Z] d9baf900de19
-From the circuits lead, a fact for the weight of the every-lane form: the serving lane says Thursday two serves do NOT depend on it: the remote application serves its class fixed load (four requests of 27 prompt ids and 2 outputs in a class of four slots), so its window is FULL. So: the 05:30Z merge of the slot order as it stands is what Thursday needs; the every-lane form is still owed as an answer at 05:00Z (can it be done, its cost) and is written only if small; do not let it delay the merge. The one-affine-reference question for the occupancy reads DOES matter for Thursday (their check reads the node arguments whole): answer it first.
-
