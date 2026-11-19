@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Core.LevelsCredited
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
 /-!
 # A scheme: what a resource accounting protocol supplies, and what it gets back
@@ -38,6 +39,8 @@ Pearl+'s.
 * `Scheme.GetsBackPeriod`, `Scheme.PeriodLayer` (proved, `Scheme.periodLayer`): the same over a period of execution
   phases, by the union bound over the phases: the probability is `T` times one phase's, and the phases' provers may
   adapt to one another.
+* `Scheme.GetsBackPeriodRate`: over a period at a rate, the missable cost once for the whole period, every phase
+  accepted.
 * `Scheme.Placed`: a scheme's blocks placed in a circuit, each block its gate set. `Placed.credited` is the credited
   set the levels setting and the integrity profile take, and `Placed.Unsplit` says it is credited unsplit
   (`Levels.CreditedUnsplit`): each block is a block of the first level and of every later one.
@@ -138,6 +141,17 @@ def PeriodLayer : Prop :=
     (∀ p q : R → Prop, pr (fun r => p r ∨ q r) ≤ pr p + pr q) →
     pr (fun _ => False) = 0 →
     (∀ t, S.GetsBack L (fun p => pr fun r => p (phase t r)) δ ε) → S.GetsBackPeriod L T phase pr δ ε
+
+/-- **What a scheme gets back over a period at a rate** `NUM/DEN` per unit of cost: at cutoff `δ`, every one of the
+period's `T` execution phases is accepted with a log that meets the conditions while, summed over the phases, `over`
+exceeds `under` by more than `⌊ln(1/δ) · DEN/NUM⌋` plus `T` times the charges, with probability at most
+`δ + ε + T · δscheme`, `ε` the phases' audit errors summed. The missable cost enters once for the whole period, not
+once a phase as in `GetsBackPeriod`. The period is accepted only when every phase is: a rejected phase ends it. -/
+def GetsBackPeriodRate (S : Scheme) {R : Type} (T : ℕ) (phase : Fin T → R → S.Run) (pr : (R → Prop) → ℝ≥0∞)
+    (num den : ℕ) (δ ε : ℝ≥0∞) : Prop :=
+  pr (fun r => (∀ t, S.accepts (phase t r) ∧ S.logOK (phase t r)) ∧
+      ∑ t, S.under (phase t r) + ⌊Real.log δ.toReal⁻¹ * den / num⌋₊ + T * S.charges < ∑ t, S.over (phase t r)) ≤
+    δ + ε + T * S.δscheme
 
 /-- **A scheme placed in a circuit** with gates `G`: each block's gate set, two blocks never the same set. -/
 structure Placed (S : Scheme) (G : Type) where
