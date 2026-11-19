@@ -602,7 +602,8 @@ def marked_rows(program: Program, registered: Mapping[str, int], supplied: Mappi
         if not (isinstance(h, str) and re.fullmatch(r"(?:[0-9a-f]{2})*", h)):
             raise ValueError(f"coins: {f}'s coin is not hex")
         held[f] = bytes.fromhex(h)
-    params = dict(program.fn.signature()[0])
+    # A decoded Program has no `fn`, only the lowered root, whose parameters are the same names.
+    params = dict(getattr(program, "fn", program.root).signature()[0]) if got else {}
     out = {}
     for v, m in got.items():
         if v not in registered:
