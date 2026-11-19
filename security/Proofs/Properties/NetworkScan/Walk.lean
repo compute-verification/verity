@@ -35,7 +35,7 @@ namespace Properties.NetworkScan
 gates of that activation, or a gate a reference of one of node `k`'s arguments resolves to from the root. -/
 def MemberReads : Prop :=
   ∀ (bytes : ByteArray) (P : Flock.Program.Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →
-    InferenceOnlyVerifier.Desc.bodiesLaidOut P = true →
+    InferenceOnlyVerifier.Desc.bodiesLaidOut P = true → (P.defs[P.root]!).body.recut = #[] →
     ∀ k < (P.defs[P.root]!).body.nodes.size, ∀ m < ((P.defs[P.root]!).body.nodes[k]!).members,
       (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false →
       ((P.defs[P.root]!).body.nodes[k]!).form ≠ .scan →
@@ -402,7 +402,7 @@ end
 
 /-- **The walk lemma.** -/
 theorem memberReads : MemberReads := by
-  intro bytes P hdec hov hbl k hk m hm hc hf g p ops sc hgate hg1 hg2 a ha
+  intro bytes P hdec hov hbl hrc k hk m hm hc hf g p ops sc hgate hg1 hg2 a ha
   obtain ⟨hr, hrp, -⟩ := BodiesOk.decode_root bytes P hdec
   obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P hdec
   obtain ⟨S, hS0, hS⟩ := BodiesOk.order_closed P hov

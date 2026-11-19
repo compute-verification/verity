@@ -44,12 +44,14 @@ Definition of the root's key before the root (`DecodeKeys.root_first`). -/
 theorem readProg_of_decode {bytes : ByteArray} {P : Prog} (hdec : Flock.Program.decode bytes = .ok P)
     (hov : P.orderViolation = none) (hl : Desc.rootLaidOut P = true) (hin : Desc.inputsAtRoot P = true)
     (hwk : Desc.walkable P = true) (hkey : Spot.RecordText.keyedAsInput P = false) : ReadProg P :=
+  have hrc := Resolve.walkable_recut P hwk
   ⟨⟨bytes, hdec⟩, hov, hl, hin, hwk, hkey, DecodeKeys.root_first bytes P hdec⟩
 
 /-- **The template query passes over the input nodes of a Program the record check reads**: a root node's callee is
 a Definition before the root and the first of its key (`DecodeKeys.decode_keys`), and where its key is an input id
 it is a primitive, since no root node calls a composite keyed as an input. -/
 theorem readProg_inputs {P : Prog} (hP : ReadProg P) : InputsRead P := by
+  have hrc := Resolve.walkable_recut P hP.2.2.2.2.1
   obtain ⟨⟨bytes, hdec⟩, -, -, -, -, hkey, -⟩ := hP
   obtain ⟨hr, -, -⟩ := BodiesOk.decode_root bytes P hdec
   obtain ⟨st, hPd, hinv, -⟩ := BodiesOk.decode_spec bytes P hdec
@@ -130,6 +132,7 @@ laid out, and every reference of a body that resolution reaches in range. -/
 theorem read_bodies {P : Prog} (hP : ReadProg P) :
     P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false ∧ (∀ d < P.defs.size, Walk.LaidOut P d) ∧
       ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hP.2.2.2.2.1
   obtain ⟨⟨bytes, hdec⟩, hov, -, -, hwk, -, -⟩ := hP
   obtain ⟨hr, hrp, -⟩ := BodiesOk.decode_root bytes P hdec
   unfold Desc.walkable at hwk

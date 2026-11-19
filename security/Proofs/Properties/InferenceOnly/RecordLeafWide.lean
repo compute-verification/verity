@@ -57,6 +57,7 @@ theorem read_wide {P : Prog} (hP : ReadProg P) :
       (∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!) ∧
       ∀ d < P.defs.size, (P.defs[d]!).prim = false →
         (P.defs[d]!).body.retType = (P.defs[d]!).ret ∧ LeafWidths.BodyWide (P.defs[d]!).body := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hP.2.2.2.2.1
   obtain ⟨hr, hrp, hlay, hB⟩ := read_bodies hP
   obtain ⟨⟨bytes, hdec⟩, -⟩ := hP
   obtain ⟨st, hPd, hinv, -⟩ := BodiesOk.decode_spec bytes P hdec

@@ -349,7 +349,8 @@ theorem closure {bytes : ByteArray} (hdec : decode bytes = .ok P) (hov : P.order
     (hinp : ∀ k < (P.defs[P.root]!).body.nodes.size,
       InferenceOnlyVerifier.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = true →
         ((P.defs[P.root]!).body.nodes[k]!).args = #[])
-    (x y : ℕ) (hy : y ∈ (C.gates[x]?.map Claims.Sampling.BGate.reads).getD []) (hx : InS P ke x) :
+    (x y : ℕ) (hy : y ∈ (C.gates[x]?.map Claims.Sampling.BGate.reads).getD []) (hx : InS P ke x)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     InS P ke y := by
   have hxl : x < C.gates.length := by
     by_contra hn
@@ -371,7 +372,7 @@ theorem closure {bytes : ByteArray} (hdec : decode bytes = .ok P) (hov : P.order
       Nat.mul_le_mul_right _ hm
     rw [Nat.add_mul, Nat.one_mul] at hle
     have hf : ((P.defs[P.root]!).body.nodes[ke]!).form ≠ .scan := fun h => by rw [hbatch] at h; cases h
-    rcases memberReads bytes P hdec hov hbl ke hk _ hm hcomp hf x p ops sc hgate
+    rcases memberReads bytes P hdec hov hbl hrc ke hk _ hm hcomp hf x p ops sc hgate
       (by rw [child_off]; omega) (by rw [child_off]; omega) y hyo with h | ⟨i, t, ht, h⟩
     · rw [child_off] at h
       exact Or.inl ⟨by omega, by omega⟩
@@ -418,6 +419,7 @@ theorem causal_of_facts {bytes : ByteArray} {P : Prog} {s : Schedule} {kl ke q' 
     (C : Claims.Sampling.Prog) (hF : Flattens P C) :
     ∀ t < s.window, ∀ t' < s.window, t < t' → ∀ ℓ σ, ∀ g ∈ NetTiming.slotGates ((scanLayout P s).egress t ℓ σ),
       ∀ i ∈ (scanLayout P s).ingress t', ¬ NetTiming.Depends C i g := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P F.walk
   obtain ⟨hr, hrprim, -⟩ := BodiesOk.decode_root bytes P hdec
   obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P hdec
   obtain ⟨S, hS0, hS⟩ := BodiesOk.order_closed P hov

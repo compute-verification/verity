@@ -604,4 +604,10 @@ theorem operandsEarlier_of (hB : BodiesOk) : Walk.OperandsEarlier := by
     omega
   exact gate_operands_lt P ⟨hr, hrp⟩ (hB bytes P hdec hov hlo hin hwk han) hlay hx a ha
 
+/-- `Desc.walkable` checks `Desc.resolvable`, so a walkable Program's root reads no input node recut. -/
+theorem walkable_recut (P : Prog) (h : Desc.walkable P = true) : (P.defs[P.root]!).body.recut = #[] := by
+  unfold Desc.walkable Desc.resolvable at h
+  simp only [Bool.and_eq_true] at h
+  exact Array.isEmpty_iff.mp h.2.1.1.2
+
 end InferenceOnlyVerifier.Properties.SecurityProofs.Resolve

@@ -423,7 +423,8 @@ end
 theorem ret_within_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
     (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (U : Scope) (hU : Good P U) (t : ℕ)
     (ht : t < (P.defs[U.d]!).body.ret.count) {b : ℕ}
-    (h : resolve P U ((P.defs[U.d]!).body.ret.get t) = .ok b) :
+    (h : resolve P U ((P.defs[U.d]!).body.ret.get t) = .ok b)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     (U.off ≤ b ∧ b < U.off + (P.defs[U.d]!).gates) ∨ ∃ i j, i < (P.defs[U.d]!).body.params.size ∧
       j < ((P.defs[U.d]!).body.params[i]!).2.leaves ∧ resolve P U ⟨true, i, j⟩ = .ok b := by
   obtain ⟨hr, hrp, -⟩ := BodiesOk.decode_root bytes P hdec

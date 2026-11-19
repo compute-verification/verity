@@ -252,7 +252,8 @@ end
 its root is a composite, every activation's body is `BodyOk` and laid out, a composite's parameters are its body's,
 and a return and each argument of each node are the sequences of their parts. -/
 theorem decoded_walk (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
-    (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) :
+    (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     (P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false) ∧ (∀ sc, Good P sc → BodyOk P sc.d) ∧
       (∀ d < P.defs.size, Walk.LaidOut P d) ∧
       (∀ d < P.defs.size, (P.defs[d]!).prim = false → (P.defs[d]!).body.params = (P.defs[d]!).params) ∧

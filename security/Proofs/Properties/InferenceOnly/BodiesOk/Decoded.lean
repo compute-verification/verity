@@ -73,7 +73,7 @@ theorem go_inv (desc : Desc) (rootId programFn : String) (root : ℕ) (s0 st : D
 /-- **What `decode` returns**, where its root reads no input node at another width (`Body.recut`; every reader of a gate
 refuses one that does): the Definitions of a decoder state that keeps `Inv`, its root one of them, a composite without
 parameters. -/
-theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) (hr : (P.defs[P.root]!).body.recut = #[]) :
+theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∃ st, P.defs = DecState.defs st ∧ Inv st ∧ (P.defs[P.root]!).prim = false ∧ P.root < P.defs.size ∧
       (P.defs[P.root]!).params.size = 0 := by
   unfold decode at h
@@ -131,14 +131,14 @@ theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) (h
 
 /-- **What `decode` returns**, where its root reads no input node at another width: the Definitions of a decoder state that
 keeps `Inv`, its root a composite. -/
-theorem decode_spec (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) (hr : (P.defs[P.root]!).body.recut = #[]) :
+theorem decode_spec (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∃ st, P.defs = DecState.defs st ∧ Inv st ∧ (P.defs[P.root]!).prim = false := by
   obtain ⟨st, h1, h2, h3, -⟩ := decode_full bytes P h hr
   exact ⟨st, h1, h2, h3⟩
 
 /-- **The root of a decoded Program** that reads no input node at another width is one of its Definitions, a composite whose
 body has no parameters. -/
-theorem decode_root (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) (hr : (P.defs[P.root]!).body.recut = #[]) :
+theorem decode_root (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false ∧ (P.defs[P.root]!).body.params.size = 0 := by
   obtain ⟨st, hP, hinv, hp, hlt, hp0⟩ := decode_full bytes P h hr
   have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1

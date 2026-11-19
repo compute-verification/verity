@@ -404,13 +404,14 @@ theorem decode_ret (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
   exact hr
 
 /-- **No Definition before the root of a decoded Program has the root's key.** -/
-theorem root_first (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
+theorem root_first (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∀ i < P.root, (P.defs[i]!).key ≠ (P.defs[P.root]!).key := by
   intro i hi he
-  have hr := (decode_root bytes P h).1
+  have hl := (decode_root bytes P h).1
   have hk := (decode_keys bytes P h).2
-  have h1 := hk i (Nat.lt_trans hi hr)
-  rw [he, hk P.root hr] at h1
+  have h1 := hk i (Nat.lt_trans hi hl)
+  rw [he, hk P.root hl] at h1
   exact absurd (Option.some.inj h1) (Nat.ne_of_gt hi)
 
 end InferenceOnlyVerifier.Properties.SecurityProofs.DecodeKeys

@@ -522,6 +522,7 @@ theorem facts {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA 
     (∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]!) ∧
       (P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false) ∧ (∀ d < P.defs.size, Walk.LaidOut P d) ∧
       InferenceOnlyVerifier.Desc.calleesFirst P = true := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hA.laid.2.2
   obtain ⟨st, hdefs, hinv, -⟩ := BodiesOk.decode_spec bytes P hd
   obtain ⟨hr, hp, -⟩ := BodiesOk.decode_root bytes P hd
   have hw := hA.laid.2.2
