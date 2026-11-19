@@ -32,6 +32,7 @@ def _load_registry() -> list[str]:
 
 
 def _families() -> tuple:
+    from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BDM
     from verity_vllm.definitions.registry import boolean_fp8_moe as BFM
     from verity_vllm.definitions.registry import boolean_gather as BGA
     from verity_vllm.definitions.registry import boolean_marlin_moe as BMM
@@ -44,7 +45,11 @@ def _families() -> tuple:
             (re.compile(r"^GatherI32x(\d+)_v1$"), lambda m: BGA.gather_i32(int(m[1]))),
             (re.compile(r"^GatherF32x(\d+)_v1$"), lambda m: BGA.gather_f32(int(m[1]))),
             (re.compile(r"^BitAtx(\d+)_v1$"), lambda m: BGA.bit_at(int(m[1]))),
-            (re.compile(r"^TopPMaskWordx(\d+)_v1$"), lambda m: BTM.topp_mask_word(int(m[1]))))
+            (re.compile(r"^TopPMaskWordx(\d+)_v1$"), lambda m: BTM.topp_mask_word(int(m[1]))),
+            (re.compile(r"^DsaTopKSlot(\d+)x(\d+)_v1$"), lambda m: BDM.slot(int(m[1]), int(m[2]))),
+            (re.compile(r"^DsaTopKLongRowCheck(\d+)x(\d+)_v1$"), lambda m: BDM.long_row_check(int(m[1]), int(m[2]))),
+            (re.compile(r"^DsaTopK(Counted)?Threshold(Key|Index)(\d+)x(\d+)_v1$"),
+             lambda m: BDM.threshold(int(m[3]), int(m[4]), bool(m[1]))[m[2] == "Index"]))
 
 
 catalog_loader(_load_registry, _families)

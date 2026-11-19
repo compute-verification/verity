@@ -231,3 +231,33 @@ def test_the_switch_setting_on_bits_is_its_word_at_every_small_stage_and_edge() 
     rows = [(t, kb, int(lo) | vl << 15, int(hi) | vh << 15) for t in stages for kb in stages for vl in (0, 1) for vh in (0, 1)
             for lo, hi in rng.integers(0, 1 << 15, (2, 2))]
     assert _on_bits(M.DsaButterflySet, *zip(*rows)) == [M.DsaButterflySet.evaluate(*r) for r in rows]
+
+
+def test_the_families_made_on_demand_on_bits_are_their_words_on_ties_and_every_count() -> None:
+    rng = np.random.default_rng(9)
+    edges = np.array([0, 0x80000000, 0x3F800000, 0xBF800000, 0x7FC00000, 0xFF800000, 0x00800000], np.uint64)
+    for N, K in ((2, 1), (5, 1), (6, 4), (6, 6), (9, 8), (17, 16), (33, 8)):
+        rows = np.array([rng.choice(edges, N) if i % 3 == 0 else rng.integers(0, 1 << 32, N, dtype=np.uint64)
+                         for i in range(24)])
+        for w in M.threshold(N, K):
+            assert _rows_on_bits(w, rows) == [w.evaluate(*map(int, r)) for r in rows]
+        for w in M.counted_threshold(N, K):
+            for n in [*range(N + 3), 1 << 31, 0xFFFFFFFF]:
+                assert _rows_on_bits(w, rows, n) == [w.evaluate(*map(int, r), n) for r in rows], (w.id, n)
+        slot = M.slot(N, K)
+        for s in [*range(K + 2), 1 << 31, 0xFFFFFFFF]:
+            assert _rows_on_bits(slot, rows, s) == [slot.evaluate(*map(int, r), s) for r in rows], (slot.id, s)
+        check = T.long_row_check(N, K)
+        for r in rows[:6]:
+            order = [M.slot(N, K).evaluate(*map(int, r), s) for s in range(K)]
+            orders = [order, order[::-1], [order[0] ^ 1, *order[1:]]]
+            want = [check.evaluate(*map(int, r), *o) for o in orders]
+            got = np.asarray(BS.evaluate_words(SW.boolean_version(check), np.tile(r, (3, 1)),
+                                               np.array(orders, np.uint64))).reshape(-1).tolist()
+            assert got == want
+
+
+def _rows_on_bits(word, rows, *scalars) -> list[int]:
+    b = SW.boolean_version(word)
+    assert b.id == word.name + "_v2"
+    return np.asarray(BS.evaluate_words(b, rows, *(np.full((len(rows), 1), v, np.uint64) for v in scalars))).reshape(-1).tolist()

@@ -25,6 +25,16 @@ circuit-check and tests/adapters/vllm/tests/program/test_dsa_topk_mask.py hold e
     DsaButterflyRowsPad_v2{T,N,K,W,E}  (sw: bits, rows: T x W x E bits, pad: (N - T) x W x E bits) -> K x W x E bits; word view
                                    DsaButterflyRowsPad_v1
     DsaTopKRow_v2{N,TOPK}          (scores: N x 32 bits) -> TOPK x 32 bits; word view DsaTopKRow_v1
+    DsaTopKSlot{N}x{TOPK}_v2       (scores: N x 32 bits, s: 32 bits) -> 32 bits; word view DsaTopKSlot{N}x{TOPK}_v1, made on
+                                   demand: `DsaTopKRow_v2`'s slot s (`DsaTopKSlotPick{TOPK}_v1`), 0 from s = TOPK on
+    DsaTopKLongRowCheck{N}x{TOPK}_v2  (scores: N x 32 bits, order: TOPK x 32 bits) -> bit; word view
+                                   DsaTopKLongRowCheck{N}x{TOPK}_v1, made on demand: order is `DsaTopKRow_v2`'s row word for word
+                                   (`DsaTopKOrderIs{TOPK}_v1`), the one order `canonical_ok` passes
+    DsaTopKThreshold{Key,Index}{N}x{TOPK}_v2, DsaTopKCountedThreshold{Key,Index}{N}x{TOPK}_v2
+                                   (scores: N x 32 bits[, n: 32 bits]) -> 32 bits; word views their _v1, made on demand: the
+                                   mask's radix select, and of the keys it takes at the threshold's key the one of largest index
+                                   j (`DsaTopKLast_v1`, a tree), whose key is the threshold's and j its index word (ext's index
+                                   part is ~j); with n < TOPK, key 0 and index 2^32 - 1
 
 `DsaTopKMask_v2` is an exact radix select over ext_j = (key_j, N - 1 - j) with no advice: the key's 32 bits most significant
 first, a `DsaRadixPass` each, then ext's index part at once (`DsaRadixTies`).  Before a pass over key bit i, eq_j says key_j agrees
@@ -55,16 +65,22 @@ ANDs (`verity_flock.ir_lower.definition_ands`) at TOPK = 2,048:
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import (
     NOT,
+    OR,
     ZERO,
     add,
+    and_reduce,
     compress_columns,
+    const_bits,
     mux,
     or_reduce,
     sub,
 )
+from verity.circuits.boolean.gather import gather
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.ops.boolean import elementwise as EW
@@ -423,6 +439,12 @@ DsaRowValidV2 = CompositeDefinition(
 def _select(B, S, scores, n=None, ties=DsaRadixTies, step=DsaRadixPass, valid=DsaRowValid):
     """The radix select over ``scores``' keys (`DsaTopKKey_v2`): 32 `DsaRadixPass_v1` from eq all 1 (with ``n``, `DsaRowValid_v1`),
     gt all 0 and r = TOPK, and `DsaRadixTies_v1` (or ``ties``, ``step`` and ``valid``, their `_v2`)."""
+    _, eq, gt, r = _passes(B, S, scores, n, step, valid)
+    return B.call(bind(ties, N=S.N, TOPK=S.TOPK), eq, gt, r)
+
+
+def _passes(B, S, scores, n=None, step=DsaRadixPass, valid=DsaRowValid):
+    """`_select`'s keys and its 32 passes' eq, gt and r."""
     check_statics(S.N, S.TOPK)
     N, RB = S.N, _rb(S)
     keys = B.batch(DsaTopKKeyV2, scores, axes=(0,))
@@ -434,7 +456,7 @@ def _select(B, S, scores, n=None, ties=DsaRadixTies, step=DsaRadixPass, valid=Ds
     for i in reversed(range(32)):
         out = B.call(step, eq, gt, r, Coll(Array(N, BIT), strided_view(keys, i, 1, 32, 1, N)))
         eq, gt, r = out[0], out[1], out[2]
-    return B.call(bind(ties, N=N, TOPK=S.TOPK), eq, gt, r)
+    return keys, eq, gt, r
 
 
 def _mask(B, S, scores):
@@ -647,3 +669,115 @@ BOOLEAN_DSA_TOPK_MASK = [DsaTopKKeyV2, DsaTopKAtLeastV2, DsaTopKAtLeastBelowV2, 
 #: `dsa_topk_mask.CUTS` on bits: the counted mask past `dsa_topk_mask_cut.WHOLE_MAX` keys as `dsa_topk_mask_cut`'s units, which
 #: import this module
 CUTS = {"DsaTopKMaskCounted_v2": "verity_vllm.definitions.registry.dsa_topk_mask_cut"}
+
+_ON_DEMAND: dict = {}
+
+
+def _pick(K: int):
+    d = _ON_DEMAND.get(("pick", K))
+    if d is None:
+        d = _ON_DEMAND[("pick", K)] = definition(
+            f"DsaTopKSlotPick{K}", 1, lambda C, *a: gather(C, list(a[K]), [list(w) for w in a[:K]], 0),
+            (("row", Array(K, I32)), ("s", I32)), I32, doc=f"row[s] for s < {K} (u32), else 0: no word Definition")
+    return d
+
+
+def _order_is(K: int):
+    d = _ON_DEMAND.get(("is", K))
+    if d is None:
+        d = _ON_DEMAND[("is", K)] = definition(
+            f"DsaTopKOrderIs{K}", 1,
+            lambda C, *a: [and_reduce(C, [NOT(x ^ y) for r, o in zip(a[:K], a[K:]) for x, y in zip(r, o)])],
+            (("row", Array(K, I32)), ("order", Array(K, I32))), BIT,
+            doc=f"1 when the {K} words of order are row's, word for word: no word Definition")
+    return d
+
+
+def _on_demand(word, body) -> CompositeDefinition:
+    params, ret = word.signature()
+    sig = (tuple((n, BL.bit_type(t)) for n, t in params), BL.bit_type(ret))
+    d = CompositeDefinition(word.name, 2, (), lambda st: sig, body, doc=f"{word.id} on bits", conformance="exact-model-tested")
+    d.word = word  # type: ignore[attr-defined]
+    return d
+
+
+def slot(N: int, TOPK: int) -> CompositeDefinition:
+    """`DsaTopKSlot{N}x{TOPK}_v2`: slot s of `DsaTopKRow_v2{N,TOPK}`, 0 from s = TOPK on."""
+    d = _ON_DEMAND.get(("slot", N, TOPK))
+    if d is None:
+        def body(B, st, scores, s):
+            return B.call(_pick(TOPK), B.call(bind(DsaTopKRowV2, N=N, TOPK=TOPK), scores), s)
+
+        d = _ON_DEMAND[("slot", N, TOPK)] = _on_demand(M.slot(N, TOPK), body)
+    return d
+
+
+def long_row_check(N: int, TOPK: int) -> CompositeDefinition:
+    """`DsaTopKLongRowCheck{N}x{TOPK}_v2`: 1 when order is `DsaTopKRow_v2{N,TOPK}` word for word."""
+    from verity_vllm.definitions.registry import dsa_topk
+
+    d = _ON_DEMAND.get(("check", N, TOPK))
+    if d is None:
+        def body(B, st, scores, order):
+            return B.call(_order_is(TOPK), B.call(bind(DsaTopKRowV2, N=N, TOPK=TOPK), scores), order)
+
+        d = _ON_DEMAND[("check", N, TOPK)] = _on_demand(dsa_topk.long_row_check(N, TOPK), body)
+    return d
+
+
+#: a lane of `DsaTopKLast_v1`'s tree: (taken, index, key)
+LANE = Array(65, BIT)
+DsaTopKLast = definition(
+    "DsaTopKLast", 1, lambda C, lo, hi: [OR(C, lo[0], hi[0])] + mux(C, hi[0], list(hi[1:]), list(lo[1:])),
+    (("lo", LANE), ("hi", LANE)), LANE, doc="hi when hi is taken, else lo, taken when either is: no word Definition")
+
+
+DsaTopKAt = definition("DsaTopKAt", 1, lambda C, short, j: [OR(C, short[0], b) for b in j], (("short", BIT), ("j", I32)), I32,
+                       doc="j, all ones when short: no word Definition")
+
+
+DsaTopKTaken = definition("DsaTopKTaken", 1, lambda C, e, m: [C.AND(e[0], m[0])], (("eq", BIT), ("m", BIT)), BIT,
+                          doc="eq AND m: no word Definition")
+DsaTopKKeyIf = definition("DsaTopKKeyIf", 1, lambda C, short, k: [C.AND(NOT(short[0]), b) for b in k],
+                          (("short", BIT), ("key", I32)), I32, doc="0 when short, else the key: no word Definition")
+
+
+def _threshold(B, N: int, TOPK: int, scores, n=None):
+    """(key, index word) of the TOPK-th largest ext: `DsaTopKLast_v1`'s tree over the lanes (eq_j and mask_j, j, key_j)."""
+    S = SimpleNamespace(N=N, TOPK=TOPK)
+    keys, eq, gt, r = _passes(B, S, scores, n)
+    mask = B.call(bind(DsaRadixTies, N=N, TOPK=TOPK), eq, gt, r)
+    taken = B.batch(DsaTopKTaken, eq, mask, axes=(0, 0))
+    zero, one = B.call(BL.constant(0)), B.call(BL.constant(1))
+    level = [Coll(LANE, concat([taken[j].refs] + [(one if j >> i & 1 else zero).refs for i in range(32)] + [keys[j].refs]))
+             for j in range(N)]
+    while len(level) > 1:
+        if len(level) % 2:
+            level.append(Coll(LANE, concat([zero.refs] * 65)))
+        h = len(level) // 2
+        lo = Coll(Array(h, LANE), concat([level[2 * i].refs for i in range(h)]))
+        hi = Coll(Array(h, LANE), concat([level[2 * i + 1].refs for i in range(h)]))
+        out = B.batch(DsaTopKLast, lo, hi, axes=(0, 0))
+        level = [out[i] for i in range(h)]
+    last = level[0]
+    short = B.call(BL.constant(0)) if n is None else B.call(_below(TOPK), n)
+    return B.call(DsaTopKKeyIf, short, last[33:65]), B.call(DsaTopKAt, short, last[1:33])
+
+
+def _below(K: int):
+    d = _ON_DEMAND.get(("below", K))
+    if d is None:
+        d = _ON_DEMAND[("below", K)] = definition(
+            f"DsaTopKBelow{K}", 1, lambda C, n: [sub(C, n, const_bits(K, 32), 32)[1]], (("n", I32),), BIT,
+            doc=f"n < {K} (u32): no word Definition")
+    return d
+
+
+def threshold(N: int, TOPK: int, counted: bool = False) -> tuple[CompositeDefinition, CompositeDefinition]:
+    """`DsaTopK[Counted]Threshold{Key,Index}{N}x{TOPK}_v2`: the threshold's key and index word on bits."""
+    d = _ON_DEMAND.get(("threshold", N, TOPK, counted))
+    if d is None:
+        words = M.counted_threshold(N, TOPK) if counted else M.threshold(N, TOPK)
+        d = _ON_DEMAND[("threshold", N, TOPK, counted)] = tuple(
+            _on_demand(w, lambda B, st, *a, _part=part: _threshold(B, N, TOPK, *a)[_part]) for part, w in enumerate(words))
+    return d
