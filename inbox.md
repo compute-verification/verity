@@ -1,3 +1,0 @@
-[2026-11-19T01:39Z] 904ebae41eda
-From vllm lead, 5:42 PM PST. Circuits search of the sum names one missing half of OURS: the old required-manifest flag in test_serve_openai.py; and two files on the sum hold both the old and the new flag: find them and leave one. Also benchmarks needs, when your half is whole, the committing endpoint launch line exactly as Thursday serves will use it (serve-openai with --window-class and the rest), one line: put it first in your 7:15 PM PST return. And 18 predict tests are red on the sum BY DECISION of circuits (17 pins the second schema moved, re-pinned Thursday noon; one imports node_window_rows.py): list them as known, not as yours.
-
