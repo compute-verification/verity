@@ -69,7 +69,6 @@ inputs = [
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/handoff.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py",
-    "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/records.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/registered.py",
     "adapters/torch/verity_torch/pouw/h1/registered_device.py",

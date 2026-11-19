@@ -11,9 +11,8 @@ acquired under that name inside the call (`ExpertGemm.apply`), as `Int8ExpertsMe
 an expert no token routed to is a call of zero rows, acquired as its zero rows [0, K] and scales [0]."""
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from functools import partial
-from types import SimpleNamespace
 from typing import Any
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
@@ -31,9 +30,7 @@ from verity_vllm import settings
 from verity_vllm.acquire.sources.int8_source import Int8Source
 from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
 from verity_vllm.engine import hooks
-from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw.h1_hooks import expert_names
-from verity_vllm.protocols.pouw.h1_ranks import RankExtension, RankRun, RankTap
 
 
 class _EveryStep(dict):
@@ -169,7 +166,7 @@ def port_tokens(com: Any, tokens: int) -> int:
 
 def attach(engine: Any, layers: Sequence[Any], tap: CommitTap | None = None, run_id: str = "h1"
            ) -> tuple[Any, Any, CommitTap]:
-    """The Commit on ``engine`` (`engine.build.build_engine`'s, or a rank's, `RankCommit.h1rank_commit`), installed: H1's
+    """The Commit on ``engine`` (`engine.build.build_engine`'s), installed: H1's
     committer (`committer`), refused unless it commits under rows-sha512; the int8 source (`source`); the step-input port,
     the step's one copy of its input ids (no module's input is acquired beside it), over the engine's token budget
     (`port_tokens`); the staging and its window ring sized for the engine's workload (`envelope`); and its `CommitTap`
@@ -192,40 +189,4 @@ def attach(engine: Any, layers: Sequence[Any], tap: CommitTap | None = None, run
     return com, src, tap
 
 
-class RankCommit(RankExtension):
-    """`protocols.pouw.h1.ranks.RankExtension` with the Commit on the rank (`h1rank_commit`), the ``worker_extension_cls``
-    `protocols.pouw.h1.ranks.COMMIT_EXTENSION`; here because it attaches the int8 source. The holder releases it with the rank
-    (`RankExtension.h1rank_release`)."""
-
-    def _h1rank_engine(self, model: Any, cp: Mapping[str, Any]) -> Any:
-        """What the committer reads of an engine (`attach`), on this rank: its model, runner, vLLM config (and of it what
-        `envelope` reads, as `engine.build.Engine.effective` holds it) and the checkpoint's pin ``cp`` (repo, revision)."""
-        vc = self.vllm_config  # type: ignore[attr-defined]
-        effective = {"max_num_batched_tokens": vc.scheduler_config.max_num_batched_tokens,
-                     "max_num_seqs": vc.scheduler_config.max_num_seqs, "max_model_len": vc.model_config.max_model_len}
-        return SimpleNamespace(llm=SimpleNamespace(llm_engine=SimpleNamespace(vllm_config=vc)), runner=self.model_runner,  # type: ignore[attr-defined]
-                               model=model, cp=dict(cp), effective=effective, vllm_config=vc)
-
-    def h1rank_commit(self, cp: Mapping[str, Any] | None = None, run_id: str = "h1") -> dict[str, Any]:
-        """The Commit on this rank (`attach`, its run ``run_id`` named with the rank's first linear), its tap a
-        `protocols.pouw.h1.ranks.RankTap` naming each of the rank's H1 linears as the window does; returns the committer's name, its
-        scheme and the port it acquires the step's input ids under. A site the rank's source acquires that the window has
-        no name for (a routed expert's included) is refused: under its rank-local name it would meet no call, or another
-        rank's site of the same name. A rank that holds no H1 window (before `h1rank_install`, after `h1rank_release`) is
-        refused."""
-        st = self._h1rank_state()
-        run: RankRun = st["run"]
-        model, layers = self._h1rank_layers()
-        names = {name: run.modules[run.lo + int(i)] for i, name in pouw._named(model, layers).items()}
-        com, src, tap = attach(self._h1rank_engine(model, cp or {}), layers, tap=RankTap(names=names),
-                               run_id=f"{run_id}/rank{run.lo}")
-        if unnamed := sorted({*src.modules, *src.experts} - set(names)):
-            com.close()
-            tap.untap()
-            raise ValueError(f"rank [{run.lo}, {run.hi}): the Commit acquires {len(unnamed)} sites the window has no name "
-                             f"for, {unnamed[:4]}")
-        st["commit"] = (com, tap)
-        return {"lo": run.lo, "committer": com.name, "commit_scheme": com.commit_scheme, "port": tap.port}
-
-
-__all__ = ["ENVELOPE", "H1Source", "RankCommit", "attach", "committer", "envelope", "port_tokens", "source", "tap"]
+__all__ = ["ENVELOPE", "H1Source", "attach", "committer", "envelope", "port_tokens", "source", "tap"]

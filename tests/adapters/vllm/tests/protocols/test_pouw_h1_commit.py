@@ -190,7 +190,7 @@ class Committer:
 
 
 def vllm_config(tokens=ROWS, seqs=8, model_len=64):
-    """A rank's vLLM config as `h1_commit.RankCommit` reads it: the token budget, the batch and the model length."""
+    """A vLLM config: the token budget, the batch and the model length."""
     return SimpleNamespace(scheduler_config=SimpleNamespace(max_num_batched_tokens=tokens, max_num_seqs=seqs),
                            model_config=SimpleNamespace(max_model_len=model_len))
 

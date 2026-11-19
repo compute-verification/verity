@@ -41,7 +41,6 @@ verity_vllm.program.predict.inference_blocks      # B's partition of a window ci
 verity_vllm.program.predict.step_needs      # one served engine step's needs: a library entry point (`StepNeeds`, `workload_phi`), for benchmarks/route_capture's gap
 verity_vllm.observe.kernel_trace      # a Kineto trace's device kernels: a library entry point (`kernels_of_trace_events`, `load_trace`), read by benchmarks/route_capture/routes.py
 verity_vllm.program.moe_difftest      # the MoE source's evidence names it as the check of the bf16 Triton experts (acquire/sources/moe_source.py)
-verity_vllm.acquire.h1_commit      # pouw_h1_ranks.COMMIT_EXTENSION: vLLM's workers import it by name (worker_extension_cls)
 verity_vllm.pipeline.boundary_rows      # a served window's boundary commitment: a library entry point, read by benchmarks/one_stage/two_stage.py
 verity_vllm.pipeline.boundary_stop      # a serve's stop rule and a stop class's stop record: a library entry point, read by benchmarks/one_stage/two_stage.py
 verity_vllm.pipeline.boundary_windows      # the boundary commitment's hook on the scheduler: a library entry point, installed by benchmarks/serve_tax's plugin
@@ -63,7 +62,6 @@ verity_vllm.protocols
 verity_vllm.protocols.interface
 verity_vllm.protocols.pouw
 verity_vllm.protocols.pouw.h1_hooks
-verity_vllm.protocols.pouw.h1_ranks
 verity_vllm.protocols.pouw.h1_settings
 verity_vllm.protocols.spot
 tests/regression/
