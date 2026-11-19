@@ -11,7 +11,8 @@ without one) and its message, on an accept the program's digest, its Boolean map
 
 The cases: `format_vectors.json`'s descriptors (the format's, `wide`'s and `registered_program`'s), each of
 `test_format_spec.REJECT`'s refusals of the first, a `boolean` key named twice (a JSON object keeps a key's last value,
-in both decoders' parsers), and `chain()`, a GEMM chain whose word primitives' bodies are the catalog's."""
+in both decoders' parsers), `chain()`, a GEMM chain whose word primitives' bodies are the catalog's, and
+`recut_vectors.reads()`, reads of an input node at another width."""
 from __future__ import annotations
 
 import argparse
@@ -20,6 +21,7 @@ import json
 import re
 from pathlib import Path
 
+import recut_vectors
 import stand_in  # noqa: F401  (the test primitives' Boolean bodies)
 import test_format_spec as spec
 
@@ -50,6 +52,7 @@ def cases() -> list[tuple[str, str, object]]:
     first = json.loads(base)["boolean"]["TSum2_v1"]
     out.append(("a boolean key named twice, the last kept", base.replace('"boolean":{', f'"boolean":{{"TAdd32_v1":"{first}",', 1), spec.REG))
     out.append(("chain", chain(), REGISTRY))
+    out += [(name, text, spec.REG) for name, text in recut_vectors.reads()]
     return out
 
 
