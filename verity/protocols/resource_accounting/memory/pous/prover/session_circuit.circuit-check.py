@@ -12,7 +12,7 @@ def _pous_roots() -> list[Any]:
     key's I and root, the message, q's four bytes big-endian and their low H bits, C, the chain values and the path, and
     the top bits' check. The round's unit over a 264-byte row of 132 words, which reaches the row digest's head, a middle
     compression and a tail with its rest, at both slots: the words' bytes, the record's place in its row, its first 12
-    bytes against ji, and its digest. And R_even and R_odd as served, over the store's 2,056-byte rows, whose `digests` pins hold
+    bytes against the coin value's three big-endian halves, and its digest. And R_even and R_odd as served, over the store's 2,056-byte rows, whose `digests` pins hold
     the two Programs the session's statements name. The signed digest's unit at K = 3 over a 753-byte header (the
     v2 header's length at three rounds, odd, so its row carries a pad byte) and the deployed limit: the records' stream
     digest over 276 bytes, a head, a middle compression and a tail, and the two message hashes, which reach the records' place in

@@ -48,7 +48,8 @@ def test_the_rows_at_the_deployed_scheme() -> None:
     assert ret.leaves == 1
     params, ret = resolve(bind(S.PousRound, N=2056, SLOT=1)).signature()
     assert [(n, t.leaves, t.leaf_widths()[0]) for n, t in params] == [("row", 1028, 16), ("records", 1472, 1),
-                                                                        ("ji", 96, 1)]
+                                                                        ("j", 1, 32), ("ihi", 1, 32),
+                                                                        ("ilo", 1, 32)]
     assert ret.leaves == 1
     assert len(Round(0, 0, 0, 0, bytes(64)).value()) == S.RECORD_BYTES
 
@@ -92,15 +93,19 @@ def test_the_round_unit_agrees_with_its_reference(slot) -> None:
     pair = Round(j ^ 1, 77, 11, 21, sha512_row_v2_digest(other, 8 * N)).value()
     recs = mine + pair if slot == 0 else pair + mine
     swapped = recs[S.RECORD_BYTES:] + recs[:S.RECORD_BYTES]
-    ji = S.round_ji(j, i)
+    def coin(j: int, i: int) -> bytes:
+        return j.to_bytes(4, "big") + i.to_bytes(8, "big")
+
+    ji = coin(j, i)
     cases = [(row, recs, ji), (other, recs, ji), (row, swapped, ji),
-             (row, _flip(recs, S.RECORD_BYTES * slot + 60, 2), ji), (row, recs, S.round_ji(j ^ 1, i)),
-             (row, recs, S.round_ji(j, i ^ 1 << 40))]
+             (row, _flip(recs, S.RECORD_BYTES * slot + 60, 2), ji), (row, recs, coin(j ^ 1, i)),
+             (row, recs, coin(j, i ^ 1 << 40)), (row, recs, coin(j, i ^ 1 << 3))]
     want = [S.round_ok(N, slot, *c) for c in cases]
-    assert want == [1, 0, 0, 0, 0, 0]
+    assert want == [1, 0, 0, 0, 0, 0, 0]
+    halves = [[int.from_bytes(x[h:h + 4], "big") for h in (0, 4, 8)] for _, _, x in cases]
     cols = [np.array([np.frombuffer(r, dtype="<u2") for r, _, _ in cases], dtype=np.uint16),
             np.array([_bits(rs) for _, rs, _ in cases], dtype=np.uint8),
-            np.array([_bits(x) for _, _, x in cases], dtype=np.uint8)]
+            *(np.array([hs[h] for hs in halves], dtype=np.uint32) for h in range(3))]
     assert np.asarray(E.evaluate_batch(bind(S.PousRound, N=N, SLOT=slot), *cols)).reshape(-1).tolist() == want
 
 
@@ -174,6 +179,9 @@ def test_the_door_takes_the_sessions_units_in_wire_order() -> None:
     assert [t.split("{")[0] for t in c.ids] == ["PousSessionDigest_v1", "PousSessionSig_v1", "EmbeddingRead_v2",
                                                 "PousRound_v2", "PousRound_v2"]
     assert list(c.units.values()) == [1, 1, 3, 2, 1]
+    reads = {(r.port, r.param): (r.at, r.base) for r in c.registered.reads}
+    assert [reads[("tok", f"{W.ROUND_COIN}/{j}")] for j in range(3)] == [(0, 4), (1, 4), (2, 4)]
+    assert [reads[(h, f"{W.ROUND_COIN}/2")] for h in ("j", "ihi", "ilo")] == [(1, 0), (1, 2), (1, 4)]
     c.program()
     (dig, _), (sig, _), *rest = c.templates
     with pytest.raises(ValueError, match="at or after reader"):
