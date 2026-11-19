@@ -95,7 +95,7 @@ def test_lean_restrict_is_pythons_on_the_toys(pieces, name, i, ranges):
 @pytest.mark.parametrize("at", [0, 1])
 def test_lean_restrict_is_pythons_on_the_products_blocks(pieces, at):
     from verity.circuits.ops import product as PR
-    p = PR.product(k=16, s=2, units=4, block=2)
+    p = PR.product(k=16, s=2, units=4, block=2, k_log=22, g=2)
     lo, hi = p.blocks[at]
     py = R.restrict(p.description, p.partition, [(lo, hi)]).descriptor.decode()
     kind, body = pieces.call("restrict", {"descriptor": p.description.decode(), "units": list(range(lo, hi)), "python": py})
