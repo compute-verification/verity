@@ -396,9 +396,13 @@ def test_a_run_that_pins_its_own_key_is_accepted_and_its_record_is_a_rehearsals(
     """A run that passes its own challenger key's SHA-512 as the pin has its session accepted under it (`key_pinned`),
     and its record says the pin was the run's (`key_pin`) and that `trusted-device` is a rehearsal's, with no bound:
     the committed configuration pins another key for the memory attester, so naming the auditor's device changes
-    nothing."""
+    nothing. Its accept is a development run's: ``development.json``, saying why, and no ``answer.json``."""
     answer, _ = _run(served, tmp_path, monkeypatch, host=host, deployment=_deployment("ab" * 64))
     assert answer["verdict"] == "accept", answer["reason"]
+    assert not (served.out / period.ANSWER).exists()
+    mark = json.loads((served.out / period.DEVELOPMENT).read_text())
+    key = json.loads((served.out / "pous.json").read_text())["key_sha512"]
+    assert mark["verdict"] == "accept" and mark["why"] == period.development_of(key, ())
     where = answer["profile"]["placement"]
     assert where["kind"] == "own-host" and where[CS.PREMISE] == (
         f"{mc.REHEARSAL} (configuration {CONF}); the memory attester ran on {mc.ATTESTER_MACHINE}, not on {mc.PROVER_MACHINE}")
@@ -725,9 +729,12 @@ def test_a_weights_registration_of_another_model_is_rejected(served, tmp_path, m
 
 
 def test_a_session_signed_under_another_key_is_rejected(served, tmp_path, monkeypatch):
+    """Under a key no pin names the run is a development run's, and its reject stays a reject there."""
     answer, _ = _run(served, tmp_path, monkeypatch, trusted_sha512="00" * 64)
     assert answer["verdict"] == "reject" and answer["reason"]
     assert not json.loads((served.out / "pous.json").read_text())["key_pinned"]
+    assert not (served.out / period.ANSWER).exists()
+    assert json.loads((served.out / period.DEVELOPMENT).read_text())["verdict"] == "reject"
 
 
 def test_a_challenger_whose_side_does_not_start_leaves_the_period_undecided(served, tmp_path):
@@ -1097,9 +1104,10 @@ def test_no_pous_session_leaves_the_bandwidth_piece_undecided_naming_why(served,
     assert doc["decided_by"] == {"program": "python", "host": mc.PROVER_MACHINE}
 
 
-def _bandwidth_files(s: Served) -> tuple[Path, dict, dict]:
+def _bandwidth_files(s: Served, answer: str = period.ANSWER) -> tuple[Path, dict, dict]:
     public = s.out.parent / "bandwidth"
-    return (s.serve / "private" / "bandwidth", json.loads((public / "answer.json").read_text()),
+    assert not (public / ({period.ANSWER, period.DEVELOPMENT} - {answer}).pop()).exists()
+    return (s.serve / "private" / "bandwidth", json.loads((public / answer).read_text()),
             json.loads((public / "bandwidth.json").read_text()))
 
 
@@ -1163,13 +1171,16 @@ def test_a_close_the_prover_signed_under_a_key_it_listed_itself_is_refused(regis
 
 @pytest.mark.slow
 def test_a_key_the_run_names_and_the_configuration_does_not_pin_is_a_rehearsals(registered, tmp_path, monkeypatch):
+    """A close under a key the run names and the configuration doesn't pin: the Lean's accept is a development run's,
+    written to ``development.json`` with why, and no ``answer.json`` is written, so it is never an onsite accept."""
     s = registered
     kw = _bandwidth(tmp_path, bw_case_exe=_bandwidth_judge(monkeypatch))
     pous = hashlib.sha512(kw["auditor"].signer.public_key).hexdigest()
     answer = _parts(s, tmp_path, monkeypatch, deployment=_deployment(pous, bw=None), bw_trusted_sha512=BW_KEY, **kw)
     assert answer["verdict"] == "accept", answer["reason"]
-    _, bw, summary = _bandwidth_files(s)
+    _, bw, summary = _bandwidth_files(s, period.DEVELOPMENT)
     assert bw["verdict"] == "accept", bw["reason"]
+    assert bw["why"] == period.development_of(BW_KEY, ()) == summary["development"]
     assert (summary["key_sha512"], summary["key_pinned"], summary["key_pin"], summary["pins_matched"]) == (
         BW_KEY, True, "run", False)
     assert summary[mc.PREMISE].startswith(mc.REHEARSAL) and "holds" not in summary[mc.PREMISE]
@@ -1182,7 +1193,7 @@ def test_with_no_key_named_for_the_close_the_bandwidth_session_has_no_case(regis
     pous = hashlib.sha512(kw["auditor"].signer.public_key).hexdigest()
     answer = _parts(s, tmp_path, monkeypatch, deployment=_deployment(pous, bw=None), **kw)
     assert answer["verdict"] == "accept", answer["reason"]
-    private, bw, summary = _bandwidth_files(s)
+    private, bw, summary = _bandwidth_files(s, period.DEVELOPMENT)
     assert bw["verdict"] == "undecided" and bw["reason"].startswith(BW.NO_KEY), bw
     assert "key_pin" not in summary and not (private / p2_case.CASE).exists()
     session = json.loads((private / BW.SESSION).read_text())

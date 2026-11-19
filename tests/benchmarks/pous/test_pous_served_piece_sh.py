@@ -2,8 +2,9 @@
 and the piece's Python are stand-ins on PATH, the library is one named already (P2_LIB) and HOME holds no elan. The
 library is loaded once by the piece's Python with no card to see, and one it doesn't load, or a node that refuses
 `setarch -R` and so builds none, ends the piece before anything else. The two Lean verifiers that decide,
-`pous-run-protocol` and `poub-p2-protocol`, are built in a scratch copy of ``verity/`` beside the run's key, the card
-and the sessions, and go to `served_piece.py` as ``--case-exe`` and ``--bw-case-exe``, always the ones built; one that
+`pous-run-protocol` and `poub-p2-protocol`, the declared ones (`declared.py`), are built in a scratch copy of
+``verity/`` beside the run's key, the card and the sessions, which goes to `served_piece.py` as ``--lean-root``; POUS_ARGS
+naming another executable is refused by name, and is split, never evaluated; one that
 doesn't build is no answer, and ends the piece with its own error wherever it was. The piece's Python then runs twice: its sessions under the lease (the node's
 `gpu-lease`, else the tree's own; none of the piece's own only inside the caller's), then, once that process ended
 and with it the lease, and both builds have ended, its answers with no card; the timeline of both is ``stamps.txt``."""
@@ -64,7 +65,11 @@ fi
 part=${*: -1}
 echo "piece $part ${CUDA_VISIBLE_DEVICES-unset}" >> "$FAKE_LOG"
 printf '%s\\n' "$@" > "$FAKE_ARGV$part"
-for a in "$@"; do case $a in */.lake/build/bin/*) [ -x "$a" ] && echo "$part $a" >> "$FAKE_BUILT" ;; esac; done
+prev=
+for a in "$@"; do
+  [ "$prev" != --lean-root ] || find "$a" -path '*/.lake/build/bin/*' -type f -perm -u+x | sort | sed "s|^|$part |" >> "$FAKE_BUILT"
+  prev=$a
+done
 if [ "$part" = --sessions ] && [ -n "${FAKE_FAIL_IN_SESSIONS:-}" ]; then
   echo started > "$FAKE_FIFO"
   exec tail -f /dev/null  # a session that ends only when it is stopped
@@ -142,9 +147,10 @@ def test_the_two_leans_build_in_a_scratch_copy_beside_the_card_and_are_there_for
     in its package of a copy of ``verity/`` outside the tree, whose ``.lake`` is never written, one after the other,
     started before the card is asked for, at the lease's defaults, for the piece's sessions alone; its answers run
     after the lease, with no card to see, once both builds have ended, and get the two built programs, which are
-    removed with the scratch copy at the end."""
+    removed with the scratch copy at the end. The programs are the declared ones whatever the former overrides
+    (``POUS_EXE``, ``BW_CASE_EXE``, ``BW_PARTY_EXE``) say."""
     d = tmp_path / "pieces" / "pous"
-    r = _piece(node, d)
+    r = _piece(node | {v: "/tmp/evil" for v in ("POUS_EXE", "BW_CASE_EXE", "BW_PARTY_EXE")}, d)
     assert r.returncode == 0, r.stdout + r.stderr
     load, (_, check, *run), (_, audit, *bw), lease, sessions, answers = _log(node)
     assert load == _load(node)
@@ -155,9 +161,9 @@ def test_the_two_leans_build_in_a_scratch_copy_beside_the_card_and_are_there_for
     assert sessions == ["piece", "--sessions", "GPU-own0"] and answers == ["piece", "--answers"]
     argv = _argv(node)
     exes = [str(scratch / CHECK / ".lake/build/bin" / RUN_EXE), str(scratch / AUDIT / ".lake/build/bin" / BW_EXE)]
-    assert [_option(argv, "--case-exe"), _option(argv, "--bw-case-exe")] == exes
+    assert _option(argv, "--lean-root") == str(scratch) and "--case-exe" not in argv and "--bw-case-exe" not in argv
     built = Path(node["FAKE_BUILT"]).read_text().splitlines()
-    assert [b for b in built if b.startswith("--answers ")] == ["--answers " + e for e in exes]
+    assert [b for b in built if b.startswith("--answers ")] == ["--answers " + e for e in sorted(exes)]
     assert not scratch.exists()
     assert argv[:4] == [str(ROOT / "benchmarks/pous/served_piece.py"), str(d.parent / "serve-run"), "3", str(d)]
     assert _option(argv, "--node") == "gpu-node" and (d / "lake-build.log").exists()
@@ -320,6 +326,11 @@ def test_a_node_with_no_gpu_lease_gets_the_trees_own_and_only_the_callers_lease_
     script.parent.mkdir(parents=True)
     script.write_text(SCRIPT.read_text())
     (script.parent / READY.name).write_text(READY.read_text())
+    declared = subprocess.run([sys.executable, str(SCRIPT.parent / "declared.py"), "pous", "bandwidth"], check=True,
+                              capture_output=True, text=True, env=os.environ | {"PYTHONPATH": str(ROOT)}).stdout
+    (script.parent / "declared.py").write_text(f"print({declared!r}, end='')\n")
+    (tree / ".venv" / "bin").mkdir(parents=True)
+    (tree / ".venv" / "bin" / "python").symlink_to(sys.executable)
     for package in (CHECK, AUDIT):
         (tree / package).mkdir(parents=True)
     (tree / TREE_LEASE).parent.mkdir(parents=True)
@@ -390,3 +401,26 @@ def test_the_scratch_copy_holds_every_package_the_two_leans_require():
         for p in manifest["packages"]:
             assert p["type"] == "path", f"{package} requires {p['name']} from {p.get('url')}, which no copy holds"
             assert ROOT / "verity" in (ROOT / package / p["dir"]).resolve().parents, (package, p["name"], p["dir"])
+
+
+@pytest.mark.parametrize("given", ["--case-exe /tmp/mine", "--bw-case-exe=/tmp/mine", "--lean-root /tmp/tree"])
+def test_pous_args_naming_another_lean_executable_is_refused_by_name(node, tmp_path, given):
+    """The executables that answer are the declaration's (`Launch.executables`): POUS_ARGS naming one, or the tree
+    they are built in, is refused by name before anything is built or leased."""
+    d = tmp_path / "pieces" / "pous"
+    r = _piece(node | {"POUS_ARGS": given}, d)
+    flag = given.split()[0].split("=")[0]
+    assert r.returncode == 2 and f"POUS REFUSED: POUS_ARGS names {flag}:" in r.stdout, r.stdout + r.stderr
+    assert "Launch.executables" in r.stdout and not _events(node)
+
+
+def test_pous_args_are_split_as_shell_words_and_never_evaluated(node, tmp_path):
+    """POUS_ARGS is split as a shell splits words, quotes kept, and nothing in it runs."""
+    d, ran = tmp_path / "pieces" / "pous", tmp_path / "ran"
+    r = _piece(node | {"POUS_ARGS": f"--rounds 9 --challenger-command 'ssh -i k host' $(touch {ran}) `touch {ran}`"}, d)
+    assert r.returncode == 0, r.stdout + r.stderr
+    argv = _argv(node)
+    assert not ran.exists() and _option(argv, "--rounds") == "9" and _option(argv, "--challenger-command") == "ssh -i k host"
+    assert "$(touch" in argv and "`touch" in argv
+    r = _piece(node | {"POUS_ARGS": "--rounds 'unclosed"}, d)
+    assert r.returncode == 2 and "POUS REFUSED: POUS_ARGS is not shell words" in r.stdout, r.stdout + r.stderr

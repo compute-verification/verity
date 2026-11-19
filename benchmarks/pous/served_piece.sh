@@ -35,8 +35,10 @@
 # hand (served_piece.py's arguments with --answers), with no new session; once each Lean has answered, C* is removed.
 #
 # POUS_ARGS adds served_piece.py's options, as shell words (--node, --private, --rounds, --challenger-*, --trusted-sha512, --device,
-# --bw-*, --no-bandwidth), which this script evaluates: `verity run` builds it from the configuration and its bindings
-# alone, and a caller who exports it by hand runs whatever it holds, on its own machine.
+# --bw-*, --no-bandwidth), which this script splits as a shell would (shlex) and never evaluates: `verity run` builds it
+# from the configuration and its bindings alone. The Lean executables that answer are the declaration's
+# (`Launch.executables`, read by declared.py), built here: POUS_ARGS naming --case-exe, --bw-case-exe or --lean-root
+# is refused by name, and nothing else a node sets names another.
 #
 # --run-keys among them is a development run's: the memory attester and the bandwidth party start on this node
 # (run_attester.sh, listening on loopback), under one key made for the run in SERVE_DIR/private/run-keys (0700) before
@@ -58,9 +60,24 @@ stamp() { echo "$(date -u +%FT%TZ) $*" >> "$DIR/stamps.txt"; }
 rm -f "$DIR/stamps.txt"
 stamp start
 PY=${PY:-/workspace/cp/venv312/bin/python}
-eval "GIVEN=(${POUS_ARGS:-})"
+GIVEN=()
+if [ -n "${POUS_ARGS:-}" ]; then
+  python3 -c 'import shlex, sys; sys.stdout.write("".join(w + "\0" for w in shlex.split(sys.argv[1])))' "$POUS_ARGS" \
+    > "$DIR/args.bin" 2> "$DIR/args.err" \
+    || { echo "POUS REFUSED: POUS_ARGS is not shell words: $(tail -n 1 "$DIR/args.err")"; stamp refused; exit 2; }
+  mapfile -d '' -t GIVEN < "$DIR/args.bin"
+  rm -f "$DIR/args.bin" "$DIR/args.err"
+fi
 EXTRA=() RUN_KEYS=
-for a in ${GIVEN[@]+"${GIVEN[@]}"}; do [ "$a" = --run-keys ] && RUN_KEYS=1 || EXTRA+=("$a"); done
+for a in ${GIVEN[@]+"${GIVEN[@]}"}; do
+  case $a in
+    --case-exe | --case-exe=* | --bw-case-exe | --bw-case-exe=* | --lean-root | --lean-root=*)
+      echo "POUS REFUSED: POUS_ARGS names ${a%%=*}: the Lean executables that answer are the declaration's" \
+        "(Launch.executables, benchmarks/pous/declared.py), built here, and nothing a node sets names another"
+      stamp refused; exit 2 ;;
+  esac
+  [ "$a" = --run-keys ] && RUN_KEYS=1 || EXTRA+=("$a")
+done
 if [ -n "$RUN_KEYS" ]; then
   for a in ${EXTRA[@]+"${EXTRA[@]}"}; do
     case $a in
@@ -95,21 +112,28 @@ fi
 LOADS=$(CUDA_VISIBLE_DEVICES='' "$PY" -c 'import ctypes, sys; ctypes.CDLL(sys.argv[1])' "$LIB/libp2v1.so" 2>&1) \
   || { echo "POUS: no answer: $PY doesn't load $LIB/libp2v1.so: $(echo "$LOADS" | tail -n 1)"; exit 3; }
 stamp "loaded libp2v1.so"
-CHECK=verity/protocols/resource_accounting/memory/pous/verifier/check
-POUB=verity/protocols/resource_accounting/memory/poub/verifier/lean
-POUS_EXE=$S/$CHECK/.lake/build/bin/pous-run-protocol BW_CASE_EXE=$S/$POUB/.lake/build/bin/poub-p2-protocol
-BW_PARTY_EXE=$S/$POUB/.lake/build/bin/poub-verifier
-B=$S/built BUILDS=("$CHECK pous-run-protocol") LOCKS=() BUILDING=
+# the declared executables (declared.py), storage's first; the bandwidth party's poub-verifier only for --run-keys, next
+DECLARED=$("$ROOT/.venv/bin/python" "$ROOT/benchmarks/pous/declared.py" pous bandwidth 2>&1) \
+  || { echo "POUS: no answer: the declared executables don't read: $DECLARED"; exit 7; }
+B=$S/built BUILDS=() LOCKS=() BUILDING= PARTY=
 READY=$ROOT/benchmarks/pous/lean_ready.sh
-[ -z "$RUN_KEYS" ] || BUILDS+=("$POUB poub-verifier")
-BUILDS+=("$POUB poub-p2-protocol")
+while read -r package target; do
+  if [ "$target" = poub-verifier ]; then
+    BW_PARTY_EXE=$S/$package/.lake/build/bin/$target
+    [ -z "$RUN_KEYS" ] || PARTY="$package $target"
+  else
+    BUILDS+=("$package $target")
+  fi
+done <<< "$DECLARED"
+[ -z "$PARTY" ] || BUILDS=("${BUILDS[0]}" "$PARTY" "${BUILDS[@]:1}")
 unlocked() {  # "$@" with none of the builds' locks, which only the builder holds
   for fd in "${LOCKS[@]}"; do eval "exec $fd>&-"; done
   exec "$@"
 }
 builds() {  # each of BUILDS in order, its lock released as it ends: B/EXE.ok, or B/failed with the build's error
   local i b
-  command -v lake > /dev/null 2>&1 || (unlocked bash "$ROOT/tools/verity/lean/setup.sh" "$S/$CHECK") > "$DIR/lake-setup.log" 2>&1
+  command -v lake > /dev/null 2>&1 \
+    || (unlocked bash "$ROOT/tools/verity/lean/setup.sh" "$S/${BUILDS[0]% *}") > "$DIR/lake-setup.log" 2>&1
   for i in "${!BUILDS[@]}"; do
     b=${BUILDS[$i]}
     if (cd "$S/${b% *}" && unlocked lake build "${b#* }") >> "$DIR/lake-build.log" 2>&1; then
@@ -162,7 +186,7 @@ print(hashlib.sha512(onsite.device_key(sys.argv[1], workers=int(sys.argv[2])).pu
 fi
 ARGS=("$ROOT/benchmarks/pous/served_piece.py" "$SERVE_DIR" "$WINDOW" "$DIR" --hf-home "${HF_HOME:-/workspace/hf}"
       --p2-lib "$LIB" --node "${POUS_NODE:-$(hostname)}" --bw-minutes "${BW_PARTY_MIN:-10}"
-      --case-exe "$POUS_EXE" --bw-case-exe "$BW_CASE_EXE" ${EXTRA[@]+"${EXTRA[@]}"})
+      --lean-root "$S" ${EXTRA[@]+"${EXTRA[@]}"})
 LEASE=(gpu-lease)
 command -v gpu-lease > /dev/null 2>&1 || LEASE=(bash "$ROOT/tools/research/src/research/pods/sh/gpu_lease.sh")
 [ ! -e "$B/failed" ] || { cat "$B/failed"; stamp "the piece stops: a Lean verifier didn't build"; exit 7; }

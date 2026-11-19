@@ -4,9 +4,9 @@ attester on the auditor's device; its core answer in ``DIR/answer.json``.
 
     served_piece.py SERVE_DIR WINDOW DIR --hf-home H [--p2-lib LIB] [--device cuda] [--node NAME] [--private P]
       [--rounds K] [--challenger-host NAME --challenger-address HOST:PORT --challenger-command ARGV] [--trusted-sha512 HEX]
-      [--case-exe EXE] [--sessions | --answers]
+      [--lean-root TREE] [--sessions | --answers]
       [--bw-party CMD --bw-host HOST --bw-minutes M] [--bw-windows W --bw-passes P --bw-samples S --bw-window-s T]
-      [--bw-out DIR] [--bw-private P] [--bw-case-exe EXE] [--no-bandwidth]
+      [--bw-out DIR] [--bw-private P] [--no-bandwidth]
 
 `served_piece.sh` runs it as the composed run starts a piece (``bash -c CMD _ SERVE_DIR WINDOW DIR``), in two parts.
 ``--sessions`` is the part that needs the card, run under its lease: the weights, setup, PoUS's session and then
@@ -45,7 +45,8 @@ same sessions, which no second session replaces. With neither, one process does 
    to refuse, and a record vouching for the key needs the auditor's compose gate), and what
    an accepted run certifies (`period.certify`): ``⌊ρ·|C|⌋`` bits at ``1% + 2^-128``, at `ROUNDS` challenges as at
    105 (`p2.wide320_certificate`'s ``2^-20`` is no run's certificate). The check's cost is the tie, which reads all of
-   ``C*``, not the rounds. ``--case-exe`` (``pous-run-protocol``, which `served_piece.sh` builds) is the verifier: its
+   ``C*``, not the rounds. ``pous-run-protocol``, the declared executable (`declared.py`) that `served_piece.sh` builds
+   under ``--lean-root``, is the verifier: its
    answer is the verdict alone, and a Lean that doesn't answer leaves the window undecided, saying so, and no case is
    written. Without it the window is undecided (`period.NO_JUDGE`): no Python decides it.
 5. **Zero knowledge**: the answer's commitment is a hiding one, one ``hm96-sha512/row/v2`` row in a ``frame-v3-sha512``
@@ -71,8 +72,10 @@ same sessions, which no second session replaces. With neither, one process does 
    the prover. The session's case and its answer go to ``--bw-private`` (by default ``SERVE_DIR/private/bandwidth``,
    0700), held to PoUS's run case's store (`p2_case.storing`), which the Lean refuses another store by; its public answer, under a hiding commitment to the
    case's digest, to ``--bw-out`` (by default ``DIR``'s sibling ``bandwidth``, where the composed run reads the bandwidth
-   piece's, ``served_piece.py collect-bandwidth``, `collect_bandwidth`). With ``--bw-case-exe`` (``poub-p2-protocol``) the Lean answers the
-   case, and its answer is the one written; without it the case is undecided (`p2_case.unjudged`).
+   piece's, ``served_piece.py collect-bandwidth``, `collect_bandwidth`). With ``--lean-root`` the declared
+   ``poub-p2-protocol`` answers the case, and its answer is the one written; without it the case is undecided
+   (`p2_case.unjudged`). A run whose session key is no pin of the configuration's (``--run-keys``, or a key given by
+   hand) writes each public answer as ``development.json`` and no ``answer.json`` (`period.publish`).
    ``--bw-windows``, ``--bw-passes``, ``--bw-samples``, ``--bw-window-s`` and
    ``--bw-deadline-s`` are the session's request, by default the auditor's (`p2_parties.SESSION`: two minutes), which
    its party holds every request to: it refuses one with another value before its first coin, naming each, and the
@@ -130,6 +133,7 @@ from verity_vllm import messages
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import declared
 import served_case as SC
 
 POUS, BANDWIDTH = table.get("pous"), table.get("bandwidth")
@@ -375,9 +379,11 @@ def _stamp(out: Path, event: str) -> None:
         f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {event}\n")
 
 
-def _done(out: Path, summary: Mapping[str, Any], answer: dict[str, Any], **more: Any) -> dict[str, Any]:
-    (out / "answer.json").write_text(json.dumps(answer, indent=1, sort_keys=True) + "\n")
-    (out / "pous.json").write_text(json.dumps(dict(summary) | more | {"verdict": answer["verdict"],
+def _done(out: Path, summary: Mapping[str, Any], answer: dict[str, Any], development: str | None = None,
+          **more: Any) -> dict[str, Any]:
+    period.publish(out, answer, development)
+    (out / "pous.json").write_text(json.dumps(dict(summary) | more | {"development": development,
+                                                                      "verdict": answer["verdict"],
                                                                       "reason": answer["reason"]},
                                               indent=1, sort_keys=True, default=str) + "\n")
     return answer
@@ -475,7 +481,7 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
                    "blocks": details["blocks"], "checkpoint_bytes": total,
                    "share": str(Fraction(details["tensor_bytes"], total))}
         summary |= {"load_s": load_s, "install_s": install_s, "weights": weights, "outside": outside,
-                    "details": details}
+                    "details": details, "card": bw_card}
         published = s.published()
         sid = CS.session_id(bind, s.commitment, s.salt)
         t = time.monotonic()
@@ -638,10 +644,11 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | No
             "weights": summary["weights"] | {"held": "loaded from the served snapshot on the card the window served "
                                                      "on, after its serve ended"},
             "outside": summary["outside"], "window": window}
-    _done(out, summary, answer, case_bytes=case_bytes, key_sha512=key_sha,
+    _done(out, summary, answer, period.development_of(trusted_sha512, pinned), case_bytes=case_bytes,
+          key_sha512=key_sha,
           key_pinned=bool(trusted), key_pin="run", pins_matched=trusted_sha512 in pinned,
           private=str(private), public=inner["public"], bandwidth=bandwidth,
-          decided_by=decided, setup=CS.SETUP, **lean)
+          decided_by=decided, executables=period.executables(case_exe), setup=CS.SETUP, **lean)
     # last, and only once each Lean asked for has answered its case: until then the same sessions can be answered again
     unanswered = not agreed or (bw is not None and bw["verdict"] == "undecided" and (bw_private / BW.held).is_file())
     if not unanswered:
@@ -698,18 +705,19 @@ def collect_bandwidth(out: Path, window: int) -> dict[str, Any] | None:
     sys.path.insert(0, str(ROOT / "benchmarks" / "one_stage"))
     import served_verdicts as S
 
-    files = [out / f for f in ("answer.json", "bandwidth.json")]
+    answer = out / period.ANSWER if (out / period.ANSWER).exists() else out / period.DEVELOPMENT
+    files = [answer, out / "bandwidth.json"]
     if not all(f.exists() for f in files):
         return None
     a, summary = (json.loads(f.read_text()) for f in files)
-    S.check_answer(a)
+    S.check_answer({k: v for k, v in a.items() if k not in ("why", "reasons")})
     if a.get("protocol") != BANDWIDTH.protocol:
         raise ValueError(f"the answer in {out} is {a.get('protocol')!r}'s, not PoUB's")
     if summary.get("window") != window:
         a = {"commitment": None, "profile": None, "protocol": BANDWIDTH.protocol, "public": None,
              "reason": f"the bandwidth answer in {out} is window {summary.get('window')}'s, not window {window}'s: the "
                        f"PoUS piece ran no bandwidth session for window {window}", "verdict": "undecided"}
-        (out / "answer.json").write_text(json.dumps(a, indent=1, sort_keys=True) + "\n")
+        period.publish(out, a, None)
     return a
 
 
@@ -738,7 +746,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["collect-bandwidth"]:
         return _collect_main(argv[1:])
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], allow_abbrev=False)
     ap.add_argument("serve_dir", type=Path)
     ap.add_argument("window", type=int)
     ap.add_argument("out", type=Path)
@@ -753,8 +761,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--challenger-command", help="the argv that starts the challenger's side, one shell-split line")
     ap.add_argument("--trusted-sha512", help="the SHA-512 of the challenger key the verifier trusts (default: the one "
                                              "VERITY_PINS pins for the memory attester's PoUS sessions)")
-    ap.add_argument("--case-exe", help="pous-run-protocol, whose answer on the case is the verdict and must agree with "
-                                       "period.answer (else period.answer's accept is undecided)")
+    ap.add_argument("--lean-root", type=Path, help="the tree the declared Lean executables are built in "
+                                                    "(`declared.py`: pous-run-protocol answers PoUS's case and "
+                                                    "poub-p2-protocol the bandwidth audit's; without it both are "
+                                                    "undecided)")
     part = ap.add_mutually_exclusive_group()
     part.add_argument("--sessions", action="store_true", help="only the part on the card: the sessions, kept for "
                                                               "--answers (exit 0), or the answer they leave already")
@@ -772,8 +782,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     bw.add_argument("--bw-deadline-s", type=float, default=BW.session["deadline_s"])
     bw.add_argument("--bw-out", type=Path, help="the bandwidth piece's directory (default: DIR's sibling bandwidth)")
     bw.add_argument("--bw-private", type=Path, help="its private directory (default SERVE_DIR/private/bandwidth)")
-    bw.add_argument("--bw-case-exe", help="poub-p2-protocol, which answers the case (else "
-                                          "it is undecided)")
     bw.add_argument("--bw-trusted-sha512", help="the SHA-512 of the key the bandwidth session's close is trusted under, "
                                                 "a rehearsal's (default: the one VERITY_PINS pins for the bandwidth "
                                                 "verifier's bandwidth sessions; none: no session has a case)")
@@ -792,7 +800,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             "bw_card": a.bw_card}
     both = {"private": a.private, "bw_out": a.bw_out, "bw_private": a.bw_private,
             "bw_trusted_sha512": a.bw_trusted_sha512}
-    none = {"trusted_sha512": a.trusted_sha512, "bw_case_exe": a.bw_case_exe, "case_exe": a.case_exe}
+    exes = {} if a.lean_root is None else {
+        "case_exe": str(declared.built(POUS.name, "pous-run-protocol", a.lean_root)),
+        "bw_case_exe": str(declared.built(BANDWIDTH.name, "poub-p2-protocol", a.lean_root))}
+    none = {"trusted_sha512": a.trusted_sha512, **exes}
     try:
         if a.answers:
             answer = answers(a.serve_dir, a.window, a.out, **both, **none)

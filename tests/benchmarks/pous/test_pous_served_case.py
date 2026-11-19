@@ -316,9 +316,20 @@ def test_the_cli_refuses_a_test_signed_session_and_what_is_no_piece(tmp_path, ca
     """Under the deployed schemes (`wipe-protocol`) a test signer's session is no accept, so the run's accept is
     refused (exit 1); an answer of another protocol is no piece (exit 2)."""
     window, serve, _ = _wipe_window(tmp_path, protocol=W.PROTOCOL)
-    assert SC.main(["--window", str(window), "--exe", str(SPT._built(ATTESTER, "wipe-protocol"))]) == 1
+    SPT._built(ATTESTER, "wipe-protocol")
+    assert SC.main(["--window", str(window), "--lean-root", str(ROOT)]) == 1
     assert "answers the case reject (signature scheme" in capsys.readouterr().out
     assert not (serve / "private" / "wipe" / "case.json").exists()
     _edit(window / "answer.json", lambda d: d.update(protocol="verity/other/v0"))
     assert SC.main(["--window", str(window)]) == 2
     assert "no PoUS or wipe answer" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("flag", ["--exe", "--ex", "--case-exe"])
+def test_the_cli_takes_no_executables_path(tmp_path, flag):
+    """The Lean that answers is the scheme's declared executable in ``--lean-root`` (`declared.py`), never a path
+    the caller names, nor one an abbreviation of a flag reaches."""
+    window, _, _ = _wipe_window(tmp_path, protocol=W.PROTOCOL)
+    with pytest.raises(SystemExit) as e:
+        SC.main(["--window", str(window), flag, "/bin/true"])
+    assert e.value.code == 2

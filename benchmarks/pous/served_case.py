@@ -1,11 +1,12 @@
 """PoUS's and the wipe's pieces for the composite (`benchmarks/one_stage/composite.py`), built from a served window's
 kept outputs: each piece's case, ``case.json``, the ``{"commitment", "evidence", "params"}`` its Lean component's
 ``serve`` reads (the commitment and evidence hex, no blobs), and that component's own answer on it, ``answer.json``,
-whose commitment is the component's digest of the case's commitment: its Lean's with ``--exe``; else, for PoUS,
+whose commitment is the component's digest of the case's commitment: its declared Lean executable's built under
+``--lean-root`` (`declared.py`); else, for PoUS,
 undecided (`period.NO_JUDGE`), and for the wipe its subprotocol's own. Both go to the piece's private directory (0700, its files 0600), which is then the
 directory composite.py takes as ``--piece``.
 
-    served_case.py --window DIR [--private P] [--exe LEAN] [--hf-home H] [--p2-lib LIB] [--device cuda]
+    served_case.py --window DIR [--private P] [--lean-root TREE] [--hf-home H] [--p2-lib LIB] [--device cuda]
 
 ``DIR`` is a piece's public directory as the served run keeps it, and its ``answer.json`` names the protocol:
 
@@ -23,7 +24,7 @@ directory composite.py takes as ``--piece``.
 
 Before anything is written, the case is held to what the run published: for PoUS, the private opening opens the public
 answer's commitment, under the window's binding, to the digest of the case's commitment. The verdict is the
-component's Lean's alone (``--exe``: `pous-run-protocol`, or `wipe-protocol` held to the served node ``served.json``
+component's Lean's alone (``--lean-root``: `pous-run-protocol`, or `wipe-protocol` held to the served node ``served.json``
 names, ``--server NODE serve``), refused unless it is the run's own answer but for the reason. A piece that fails any
 of these is refused (`Refused`) and nothing is written.
 
@@ -58,6 +59,11 @@ from verity.protocols.compose import schemes as registry
 from verity.protocols.resource_accounting import scheme as S
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
+
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import declared
 
 HERE = Path(__file__).resolve().parent
 CASE, ANSWER = "case.json", "answer.json"
@@ -274,13 +280,15 @@ def wipe_piece(window: Path, private: Path | None = None, *,
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], allow_abbrev=False)
     ap.add_argument("--window", type=Path, required=True, help="the piece's public directory (its answer.json)")
     ap.add_argument("--private", type=Path, help="its private directory (default: the one the run kept)")
     ap.add_argument("--hf-home", type=Path, help="PoUS (required): the HF cache the serve read its snapshot from")
     ap.add_argument("--p2-lib", help="PoUS: libp2v1.so's directory (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh's lib/)")
     ap.add_argument("--device", default="cuda", help="PoUS: where C* is encoded again")
-    ap.add_argument("--exe", help="the component's Lean (pous-run-protocol, wipe-protocol), whose answer is written")
+    ap.add_argument("--lean-root", type=Path, help="the tree the component's declared Lean executable is built in "
+                                                    "(`declared.py`: pous-run-protocol, wipe-protocol), whose answer "
+                                                    "is written")
     a = ap.parse_args(argv)
     try:
         protocol = _json(a.window / ANSWER).get("protocol")
@@ -291,10 +299,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         if protocol == period.PROTOCOL:
             if a.hf_home is None:
                 ap.error("a PoUS piece needs --hf-home, the HF cache the serve read its snapshot from")
-            private, answer = pous_piece(a.window, a.private, exe=a.exe, hf_home=a.hf_home, p2_lib=a.p2_lib,
+            exe = None if a.lean_root is None else declared.built("pous", "pous-run-protocol", a.lean_root)
+            private, answer = pous_piece(a.window, a.private, exe=exe, hf_home=a.hf_home, p2_lib=a.p2_lib,
                                          device=a.device)
         elif protocol == wipe_period.PROTOCOL:
-            private, answer = wipe_piece(a.window, a.private, exe=a.exe)
+            exe = None if a.lean_root is None else declared.built("wipe", "wipe-protocol", a.lean_root)
+            private, answer = wipe_piece(a.window, a.private, exe=exe)
         else:
             print(f"CASE: {a.window}/answer.json is no PoUS or wipe answer ({protocol})", file=sys.stderr)
             return 2

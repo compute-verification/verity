@@ -16,7 +16,9 @@ of a ``cuda`` store's card in use that counts as idle), and:
 - the development facts (`DEVELOPMENT`): ``run_keys``, a challenger on this node under a key the run makes;
   ``simulated``, a challenger on this node named the stand-in for one on its own host (``placement`` ``"simulated"``);
   ``foreign_bytes`` and ``foreign_past_bound``, the prover a cheat that keeps that much prior content (``"fM"``, one
-  label past the bound). A record made under any of them names them in ``served.development``, and its placement's
+  label past the bound). A record made under any of them, or under a key the configuration doesn't pin, says why in
+  ``served.development`` (`period.development_of`), its piece writes ``development.json`` and no ``answer.json``
+  (`period.publish`), and its placement's
   premise never holds (`wipe_party.placement`: a key the run made, or a challenger on the developer's node, reads
   rehearsal), so it never reads as a wipe.
 
@@ -59,6 +61,7 @@ from typing import Any
 
 from verity import hooks as H
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_run, wipe_store
+from verity.protocols.resource_accounting.memory.pous.verifier import period as pous_period
 
 NAME = "wipe"
 SMI = "nvidia-smi"
@@ -209,8 +212,8 @@ def refusals(ctx: Mapping[str, Any]) -> tuple[str, ...]:
 class Wiped:
     """The wipe's report: ``answer``, the verifier's, and ``wipe``, the record `wipe_run.subprotocol` wrote with
     ``served`` beside it: the wiped server, the card (a cuda store's UUID), ``key_pin``, ``configuration`` where the
-    trusted key is the one the pins give the wipe, else ``run``, and ``development``, the development facts it ran
-    under (`DEVELOPMENT`)."""
+    trusted key is the one the pins give the wipe, else ``run``, and ``development``, why the run is a development run
+    (the facts of `DEVELOPMENT` it ran under, a key no pin gives: `period.development_of`), None where it isn't."""
 
     answer: Mapping[str, Any]
     wipe: Mapping[str, Any]
@@ -251,8 +254,9 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
         answer = wipe_run.subprotocol(period, node, private,
                                       side_of=ctx["side_of"], ready=ctx.get("ready") or built)
     (private / "wipe.case.json").chmod(0o600)
-    served = {"server": node, "card": card, "key_pin": "configuration" if key and key == pin_of(pins, ctx["party"]) else "run",
-              "development": [k for k in DEVELOPMENT if s[k]]}
+    pin = pin_of(pins, ctx["party"])
+    served = {"server": node, "card": card, "key_pin": "configuration" if key and key == pin else "run",
+              "development": pous_period.development_of(key, {pin} - {None}, [k for k in DEVELOPMENT if s[k]])}
     record = json.loads((private / "wipe.json").read_text()) | {"served": served}
     (private / "wipe.json").write_text(json.dumps(record, indent=1, sort_keys=True))
     return Wiped(answer, record)

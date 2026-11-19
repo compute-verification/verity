@@ -296,6 +296,46 @@ def decided_by(exe: str | os.PathLike | None) -> dict[str, str]:
     return {"program": "python" if exe is None else Path(exe).name, "host": mc.PROVER_MACHINE}
 
 
+def executables(*exes: str | os.PathLike | None) -> dict[str, str | None]:
+    """Each of ``exes`` (none: left out) by file name, with its file's SHA-512 (None with no file): the field
+    ``executables`` of a piece's record. The node writes these about itself: they are held only where an auditor-side
+    composer compares them with the declared executables' builds (`Launch.executables`), and nothing here does."""
+    out: dict[str, str | None] = {}
+    for exe in exes:
+        if exe is not None:
+            path = Path(exe)
+            out[path.name] = hashlib.sha512(path.read_bytes()).hexdigest() if path.is_file() else None
+    return out
+
+
+#: a piece's public answer, and what a development run writes in its place (`publish`)
+ANSWER, DEVELOPMENT = "answer.json", "development.json"
+#: why a run is a development run where its session's key is no pin of the configuration's (`development_of`)
+UNPINNED = "no pinned key: the session was checked under a key the configuration doesn't pin (the run's own, or none)"
+
+
+def development_of(trusted_sha512: str | None, pinned: Collection[str], facts: Sequence[str] = ()) -> str | None:
+    """Why a piece's run is a development run, None where it isn't: each planted or simulated fact it ran with
+    (``facts``, by name), and `UNPINNED` where the key its session was checked under, ``trusted_sha512``, is none of
+    ``pinned`` (a run under ``--run-keys`` or a key given by hand among them)."""
+    why = [f"ran with {f}" for f in facts] + ([] if trusted_sha512 in pinned else [UNPINNED])
+    return "development run: " + "; ".join(why) if why else None
+
+
+def publish(public: Path, answer: Mapping[str, Any], development: str | None) -> Path:
+    """A piece's public answer into ``public``: ``answer.json``, or for a development run (``development``, why:
+    `development_of`) ``development.json`` and no ``answer.json``, the answer with ``why`` and its reason as
+    ``reasons``, which the composer reads as no verdict where it accepts and as a reject where it rejects
+    (`served_verdicts.piece_row`). Returns the file written."""
+    for name in (ANSWER, DEVELOPMENT):
+        (public / name).unlink(missing_ok=True)
+    doc = dict(answer) if development is None else {
+        **answer, "why": development, "reasons": [answer["reason"]] if answer.get("reason") else []}
+    path = public / (ANSWER if development is None else DEVELOPMENT)
+    path.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    return path
+
+
 #: why a PoUS answer no `pous-run-protocol` gave is undecided where the Python accepted (`unjudged`)
 NO_JUDGE = "no pous-run-protocol answered the case: the Lean decides PoUS, and the Python's accept decides nothing alone"
 

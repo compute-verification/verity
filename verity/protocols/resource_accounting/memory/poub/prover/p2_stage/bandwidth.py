@@ -741,9 +741,13 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
     (`p2_case.storing`), which the Lean refuses a session over another store by. With `case_exe` (``poub-p2-protocol``) the Lean answers the case and
     its answer is the one written, in ``lean_s`` seconds; a Lean that doesn't answer leaves the session undecided and no
     case written; without it, a session that made no case and a close that doesn't decode are undecided, never a verdict
-    of this Python's (`p2_case.unjudged`). With no key `key_of` gives, the session is undecided (`NO_KEY`). The summary names the program whose verdict the answer is and the machine it ran on, the
-    prover's (``decided_by``, `period.decided_by`): the Lean where it answered the case, else this Python. `HELD` stays, so the
-    same session can be answered again; the caller removes it once it needs no other answer."""
+    of this Python's (`p2_case.unjudged`). With no key `key_of` gives, the session is undecided (`NO_KEY`). Under a key
+    the configuration doesn't pin (``--run-keys``' or one given by hand), the public answer is ``development.json``
+    and no ``answer.json`` (`period.publish`). The summary names the program whose verdict the answer is, its digest
+    and the machine it ran on, the prover's (``decided_by``, `period.decided_by`): the Lean where it answered the case,
+    else this Python, with ``case_exe``'s SHA-512 (``executables``) and the card the session was against (``card``):
+    the node writes both about itself, and they are held only where an auditor-side composer compares them. `HELD` stays, so the same session can be answered again; the caller removes it once it needs no
+    other answer."""
     public.mkdir(parents=True, exist_ok=True)
     scope = SCOPE.format(k=window)
     deployed = period.deployment({}) if deployment is None else deployment
@@ -756,6 +760,7 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
     summary: dict[str, Any] = {"window": window, "request": request,
                                "pous_session": "the PoUS session the PoUS piece ran (its id private)",
                                "private": str(private), "decided_by": period.decided_by(None),
+                               "executables": period.executables(case_exe), "card": doc.get("card"),
                                "setup_s": doc["setup_s"], "session_wall_s": doc["session_wall_s"],
                                "verifier_rc": doc["verifier_rc"], "passes": len(steps),
                                "pass_s": [s["pass_s"] for s in steps]}
@@ -788,8 +793,11 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
     if out.get("reason"):
         out = out | {"reason": mc.unnamed(out["reason"], (doc["request"].get("node"), socket.gethostname()),
                                           (doc.get("party_host"),))}
-    _write(public / "answer.json", out)
-    _write(public / "bandwidth.json", summary | {"verdict": out["verdict"], "reason": out["reason"]})
+    pinned = mc.pinned(deployed["pins"], p2_parties.CLOSER_PARTY, p2_parties.COMPONENT)
+    development = period.development_of(trusted_sha512, pinned)
+    period.publish(public, out, development)
+    _write(public / "bandwidth.json", summary | {"development": development, "verdict": out["verdict"],
+                                                 "reason": out["reason"]})
     return out
 
 
@@ -797,7 +805,7 @@ def missing(public: Path, window: int, reason: str) -> dict[str, Any]:
     """No session ran: the public answer undecided, saying why, by this Python (``decided_by``)."""
     public.mkdir(parents=True, exist_ok=True)
     out = _no("undecided", f"{reason}; {SCOPE.format(k=window)}")
-    _write(public / "answer.json", out)
+    period.publish(public, out, None)
     _write(public / "bandwidth.json", {"window": window, "verdict": out["verdict"], "reason": out["reason"],
                                        "decided_by": period.decided_by(None)})
     return out

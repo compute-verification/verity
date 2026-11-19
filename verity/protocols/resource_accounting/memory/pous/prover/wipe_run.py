@@ -51,7 +51,7 @@ from verity.protocols.resource_accounting.memory.pous.attester import wipe_chall
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_party
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as W
-from verity.protocols.resource_accounting.memory.pous.verifier.period import decided_by, deployment, serve
+from verity.protocols.resource_accounting.memory.pous.verifier.period import decided_by, deployment, executables, serve
 from verity.protocols.resource_accounting.memory.pous.verifier.wipe_party import ACK, CHALLENGE, DONE, END, FILL, READS, _read
 from verity.protocols.resource_accounting.memory.pous.verifier.wipe_period import (LIMIT_NS, PROTOCOL, SEGMENT_BYTES, SEGMENT_LABELS,
                                                                    SEGMENTS, TIER, case, egress_of, foreign_labels,
@@ -490,7 +490,7 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     out.mkdir(parents=True, exist_ok=True)
     (out / "wipe.case.json").write_text(json.dumps(wipe.case, sort_keys=True))
     (out / "wipe.json").write_text(json.dumps({"answer": answer, "decided_by": decided_by(tools.get("wipe-protocol")),
-                                               "lean": lean, "placement": where, "prover": prover,
+                                               "executables": executables(tools.get("wipe-protocol")), "lean": lean, "placement": where, "prover": prover,
                                                "report": wipe.report, "seconds": seconds, "session": timing(wipe.signed),
                                                "uncertified": uncertified(
                                                    where, None if wipe.signed is None else egress_of(egress)),
@@ -505,14 +505,15 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
 
 def summary(record: Mapping[str, Any]) -> dict[str, Any]:
     """`wipe.json`'s headline: the verdict and who gave it (`decided_by`: the program, `wipe-protocol` or `python`, and
-    the host it ran on), the SHA-512 of the challenger key the session was signed under (`key_sha512`) and whether it is
+    the host it ran on; `executables`: its SHA-512, which the node writes about itself and only an auditor-side
+    composer comparing it holds), the SHA-512 of the challenger key the session was signed under (`key_sha512`) and whether it is
     the key the verifier pinned (`key_pinned`; an accept without it trusted the key of a challenger on the node itself),
     the reads the challenger ran (`k`), where each party ran, the session's window on the challenger's clock (`t0`,
     `t1`), what the bound doesn't cover, and the fill's and the reads' figures on each side."""
     a, prover, session, fill = record["answer"], record["prover"] or {}, record["session"] or {}, record["report"].get("fill")
     w, window = record[WP.COMPONENT], (record.get("window") or {}).get("challenger") or {}
     return {"verdict": a["verdict"], "reason": a["reason"], "public": a["public"], "decided_by": record["decided_by"],
-            "key_sha512": record["report"]["key_sha512"], "key_pinned": record["report"]["key_pinned"],
+            "executables": record.get("executables"), "key_sha512": record["report"]["key_sha512"], "key_pinned": record["report"]["key_pinned"],
             "k": w.get("k"), "segments": w["segments"], "tier": w["tier"],
             "foreign_labels": w.get("foreign_labels", 0),
             "placement": record["placement"], "seconds": record["seconds"],
