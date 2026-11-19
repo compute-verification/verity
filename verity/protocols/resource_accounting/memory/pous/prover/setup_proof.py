@@ -17,6 +17,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from verity.circuits.defs import bind
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
 
 from .setup_circuit import PousP2SetupCheck, slot_payload, slots
 
@@ -28,9 +29,15 @@ def payload_bytes(w: int) -> int:
     return (w - 16) // 8
 
 
+def prefix_head(w: int, c0: int) -> bytes:
+    """`expand_prefix`'s bytes before the salt at P2's point `w`, `c0` (`schemes.p2.prefix_head`)."""
+    return P2.prefix_head(P2.P2Params(w, c0, 1))
+
+
 def setup_unit(w: int, c0: int, row_bytes: int) -> Any:
-    """The setup unit at P2's point `w`, `c0` over rows of `row_bytes` bytes: `PousP2SetupCheck_v2{W, C0, N}`."""
-    return bind(PousP2SetupCheck, W=w, C0=c0, N=row_bytes)
+    """The setup unit at P2's point `w`, `c0` over rows of `row_bytes` bytes: `PousP2SetupCheck_v2{W, C0, N, HEAD}`,
+    `HEAD` `prefix_head`'s hex."""
+    return bind(PousP2SetupCheck, W=w, C0=c0, N=row_bytes, HEAD=prefix_head(w, c0).hex())
 
 
 def place(w: int, row_bytes: int, u: int) -> tuple[int, int]:

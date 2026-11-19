@@ -12,10 +12,11 @@ def _pous_roots() -> list[Any]:
     slot's tail is zero; its base alone; and its ok word alone.  The unit's ANDs are past the whole lowering's budget, so the family's struct
     budget in the pins (``struct_max_gates``) has its structural lowering compared with the reference on the vectors."""
     from verity.circuits.defs import bind
-    from verity.protocols.resource_accounting.memory.pous.prover.setup_circuit import PousBitWord, PousP2SetupBase, PousP2SetupCheck
+    from verity.protocols.resource_accounting.memory.pous.prover.setup_circuit import PousBitWord, PousP2SetupBase
+    from verity.protocols.resource_accounting.memory.pous.prover.setup_proof import prefix_head, setup_unit
 
     return [
-        bind(PousP2SetupCheck, W=64, C0=189, N=16),
-        bind(PousP2SetupBase, W=64, C0=189),
+        setup_unit(64, 189, 16),
+        bind(PousP2SetupBase, W=64, C0=189, HEAD=prefix_head(64, 189).hex()),
         bind(PousBitWord),
     ]

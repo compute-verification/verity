@@ -1,9 +1,9 @@
 """PoUS's setup unit as a Boolean circuit: one block of the store C decoded and held to the registered row of W that
 holds its payload, as one ok word.
 
-    PousP2SetupCheck_v2{W, C0, N}  (block: Array<W/16, Array<16>>, salt: Array<12, Array<16>>, at: Array<8, Array<16>>,
-                                    row: Array<N/2, Array<16>>, slot: Array<16>) -> Array<16>
-    PousP2SetupBase_v1{W, C0}      (salt: Array<192>, at: Array<128>) -> Array<1152>
+    PousP2SetupCheck_v2{W, C0, N, HEAD}  (block: Array<W/16, Array<16>>, salt: Array<12, Array<16>>, at: Array<8, Array<16>>,
+                                          row: Array<N/2, Array<16>>, slot: Array<16>) -> Array<16>
+    PousP2SetupBase_v1{W, C0, HEAD}      (salt: Array<192>, at: Array<128>) -> Array<1152>
     PousP2SlotMatch_v1{P, N}       (decoded: Array<8P + 1>, row: Array<8N>, slot: Array<16>) -> Array<1>
     PousBitWord_v1                 (bit: Array<1>) -> Array<16>
 
@@ -21,9 +21,10 @@ then its bytes [kP, kP + P), zero past N (`slot_payload`).
 **The unit.** ``block`` is C's row j (2,056 bytes at P2's point), block v of segment s; ``salt`` is the setup's salt
 (`pous.setup.salt/v1`, 24 bytes, the one value the verifier supplies); ``at`` is ``u64be(s) ‖ u64be(v)`` and ``slot``
 that payload's slot in ``row``, W's registered row that holds block j's payload: both constants of the unit in C. The
-unit builds its decode's expansion base ``expand_prefix(params, salt) ‖ at`` inside (`PousP2SetupBase_v1`: the keys' tag,
-the framed protocol id and the framed prime's id, constants, then the framed salt, zero-padded to 128 bytes; wiring and
-constants, no AND).  Its word is 1 iff
+unit builds its decode's expansion base ``expand_prefix(params, salt) ‖ at`` inside (`PousP2SetupBase_v1`: ``HEAD``,
+`expand_prefix`'s bytes before the salt, hex, bound by the prover's `setup_proof.prefix_head` from the verifier's scheme,
+then the salt, zero-padded to 128 bytes; wiring and constants, no AND).  The salt's length is the one ``HEAD``'s last
+frame header gives.  Its word is 1 iff
 
     ok ∧ slot < n ∧ payload = slot_payload(row, slot)
 
@@ -45,14 +46,11 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array
 
-from verity.commitments.randomness import frame
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import KEYS_TAG, PROTOCOL_ID, SALT_BITS
-
 from .circuit import _check, _traced_body, bits
 from .decode_circuit import P2_BASE_BYTES, PousP2Decode, _field_sig
 
 __all__ = ["AT_BYTES", "SLOT_BITS", "PousBitWord", "PousP2SetupBase", "PousP2SetupCheck", "PousP2SlotMatch",
-           "prefix_head", "slot_bits", "slot_payload", "slots"]
+           "salt_bytes", "slot_bits", "slot_payload", "slots"]
 
 #: the slot's width: one u16 word
 SLOT_BITS = 16
@@ -125,34 +123,40 @@ PousP2SlotMatch = CompositeDefinition(
         "are the row's bytes at that slot, zero past the row's end")
 
 
-def prefix_head(w: int, c0: int) -> bytes:
-    """`expand_prefix`'s bytes before the salt at P2's point `w`, `c0`: the keys' tag, the framed protocol id, the framed
-    prime's id and the salt's frame header."""
-    return KEYS_TAG + frame(PROTOCOL_ID) + frame(f"p2-p{w}-c{c0}") + frame(bytes(SALT_BITS // 8))[:-(SALT_BITS // 8)]
+def salt_bytes(head: str) -> int:
+    """The salt's bytes: the length `HEAD`'s last frame header (``b"b" ‖ u64be(len)``) gives."""
+    h = bytes.fromhex(head)
+    if len(h) < 9 or h[-9:-8] != b"b":
+        raise ValueError("PousP2SetupBase's HEAD ends in the salt's frame header, b'b' ‖ u64be(len)")
+    return int.from_bytes(h[-8:], "big")
 
 
 def _base_sig(S):
     _field_sig("PousP2SetupBase", S)
-    if len(prefix_head(S.W, S.C0)) + SALT_BITS // 8 > P2_BASE_BYTES - AT_BYTES:
+    if not isinstance(S.HEAD, str):
+        raise ValueError("PousP2SetupBase's HEAD is expand_prefix's bytes before the salt, in hex")
+    n = salt_bytes(S.HEAD)
+    if len(S.HEAD) // 2 + n > P2_BASE_BYTES - AT_BYTES:
         raise ValueError(f"PousP2SetupBase's prefix at W = {S.W}, C0 = {S.C0} is past one 128-byte block")
-    return (("salt", bits(SALT_BITS)), ("at", bits(8 * AT_BYTES))), bits(8 * P2_BASE_BYTES)
+    return (("salt", bits(8 * n)), ("at", bits(8 * AT_BYTES))), bits(8 * P2_BASE_BYTES)
 
 
-def setup_base(W: int, C0: int, salt, at):
-    """The base `expand_prefix(params, salt) ‖ at` as forms: the head's and the zero pad's bits constants, the salt's and
+def setup_base(head: str, salt, at):
+    """The base `expand_prefix(params, salt) ‖ at` as forms: `head`'s and the zero pad's bits constants, the salt's and
     `at`'s wired through."""
-    head = prefix_head(W, C0)
-    pad = bytes(P2_BASE_BYTES - AT_BYTES - len(head) - SALT_BITS // 8)
+    h = bytes.fromhex(head)
+    pad = bytes(P2_BASE_BYTES - AT_BYTES - len(h) - salt_bytes(head))
     const = lambda b: [ONE if x >> k & 1 else ZERO for x in b for k in range(8)]  # noqa: E731
-    return const(head) + list(salt) + const(pad) + list(at)
+    return const(h) + list(salt) + const(pad) + list(at)
 
 
 PousP2SetupBase = CompositeDefinition(
-    "PousP2SetupBase", 1, ("W", "C0"), _base_sig,
-    _traced_body(lambda S: ("setup-base", S.W, S.C0), lambda S: lambda C, s, a: setup_base(S.W, S.C0, s, a), _base_sig),
+    "PousP2SetupBase", 1, ("W", "C0", "HEAD"), _base_sig,
+    _traced_body(lambda S: ("setup-base", S.W, S.C0, S.HEAD), lambda S: lambda C, s, a: setup_base(S.HEAD, s, a),
+                 _base_sig),
     conformance="exact-model-tested",
-    doc="PoUS's setup base expand_prefix(params, salt) ‖ at at P2's point W, C0: constants and the salt's and the "
-        "block's place's bits, no gate")
+    doc="PoUS's setup base expand_prefix(params, salt) ‖ at at P2's point W, C0: HEAD's bytes, the salt's, a zero pad "
+        "and the block's place's bits, no gate")
 
 
 def _word_sig(S):
@@ -169,11 +173,12 @@ def _setup_sig(S):
     W = _field_sig("PousP2SetupCheck", S)
     _check("PousP2SetupCheck", N=S.N)
     bind(PousP2Decode, W=W, C0=S.C0, L=P2_BASE_BYTES).signature()
-    bind(PousP2SetupBase, W=W, C0=S.C0).signature()
+    bind(PousP2SetupBase, W=W, C0=S.C0, HEAD=S.HEAD).signature()
+    n = 8 * salt_bytes(S.HEAD)
     if W % 16 or S.N % 2:
         raise ValueError(f"PousP2SetupCheck's ports are u16 words, so W/16 and N/2 are whole: not W = {W}, N = {S.N}")
     bind(PousP2SlotMatch, P=(W - 16) // 8, N=S.N).signature()
-    return (("block", _words(W)), ("salt", _words(SALT_BITS)), ("at", _words(8 * AT_BYTES)), ("row", _words(8 * S.N)),
+    return (("block", _words(W)), ("salt", _words(n)), ("at", _words(8 * AT_BYTES)), ("row", _words(8 * S.N)),
             ("slot", bits(SLOT_BITS))), bits(16)
 
 
@@ -183,14 +188,15 @@ def _words(n: int):
 
 def _setup_body(B, S, block, salt, at, row, slot):
     flat = lambda x, n: Coll(bits(n), x.refs)  # noqa: E731
-    base = B.call(bind(PousP2SetupBase, W=S.W, C0=S.C0), flat(salt, SALT_BITS), flat(at, 8 * AT_BYTES))
+    base = B.call(bind(PousP2SetupBase, W=S.W, C0=S.C0, HEAD=S.HEAD), flat(salt, 8 * salt_bytes(S.HEAD)),
+                  flat(at, 8 * AT_BYTES))
     decoded = B.call(bind(PousP2Decode, W=S.W, C0=S.C0, L=P2_BASE_BYTES), flat(block, S.W), base)
     ok = B.call(bind(PousP2SlotMatch, P=(S.W - 16) // 8, N=S.N), decoded, flat(row, 8 * S.N), slot)
     return B.call(bind(PousBitWord), ok)
 
 
 PousP2SetupCheck = CompositeDefinition(
-    "PousP2SetupCheck", 2, ("W", "C0", "N"), _setup_sig, _setup_body, conformance="exact-model-tested",
+    "PousP2SetupCheck", 2, ("W", "C0", "N", "HEAD"), _setup_sig, _setup_body, conformance="exact-model-tested",
     doc="PoUS's setup unit: the word 1 iff the block decodes (P2 v4, keys from expand_prefix(params, salt) ‖ at, built "
         "inside from the salt) to the N-byte registered row's payload bytes at the slot, zero past the row's end, else "
         "0; P2's point is W = 16448, C0 = 21065")
