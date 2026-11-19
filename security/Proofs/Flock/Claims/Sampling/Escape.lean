@@ -398,6 +398,74 @@ theorem OneStage.wellFormed_counts_stratified {K : ℕ} {ns : List ℕ} (hw : (O
     exact OneStage.strata_le (d := .stratified K)
       (ss := ns.map fun n => (n, max 1 ((2 * K * n + ns.sum) / (2 * ns.sum)))) rfl hw p hp
 
+/-! ## One stratum's miss -/
+
+theorem window_eq_empty_of {o n : ℕ} {B : Finset ℕ} (h : ∀ v ∈ B, v < o ∨ o + n ≤ v) : window o n B = ∅ := by
+  rw [window, Finset.image_eq_empty, Finset.filter_eq_empty_iff]
+  intro v hv hp
+  rcases h v hv with h | h <;> omega
+
+theorem card_window_of_mem {o n : ℕ} {B : Finset ℕ} (h : ∀ v ∈ B, o ≤ v ∧ v < o + n) : (window o n B).card = B.card := by
+  rw [window, Finset.filter_true_of_mem h, Finset.card_image_of_injOn]
+  intro a ha b hb hab
+  have := h a ha
+  have := h b hb
+  simp only at hab
+  omega
+
+/-- Strata of `k_s ≤ n_s` from `o` all miss a `B` below `o`. -/
+theorem strataPa_eq_one : ∀ (ss : List (ℕ × ℕ)) (o : ℕ) (B : Finset ℕ), (∀ p ∈ ss, p.2 ≤ p.1) → (∀ v ∈ B, v < o) →
+    strataPa ss o B = 1
+  | [], _, _, _, _ => rfl
+  | (n, k) :: ss, o, B, hk, hB => by
+    rw [strataPa, window_eq_empty_of fun v hv => Or.inl (hB v hv), Finset.card_empty, Nat.sub_zero,
+      div_self (Nat.cast_ne_zero.2 (Nat.choose_pos (hk (n, k) (by simp))).ne'), one_mul,
+      strataPa_eq_one ss (o + n) B (fun p hp => hk p (by simp [hp])) fun v hv => by have := hB v hv; omega]
+
+/-- **Strata miss a `B` inside stratum `s` as that stratum alone does**: at `k_s ≤ n_s` in every stratum, the others'
+factors are 1. -/
+theorem strataPa_stratum : ∀ (ss : List (ℕ × ℕ)) (o s : ℕ) (hs : s < ss.length) (B : Finset ℕ),
+    (∀ p ∈ ss, p.2 ≤ p.1) →
+    (∀ v ∈ B, o + ((ss.take s).map Prod.fst).sum ≤ v ∧ v < o + ((ss.take s).map Prod.fst).sum + ss[s].1) →
+    strataPa ss o B = ((ss[s].1 - B.card).choose ss[s].2 : ℝ) / (ss[s].1.choose ss[s].2 : ℝ)
+  | [], _, _, hs, _, _, _ => absurd hs (Nat.not_lt_zero _)
+  | (n, k) :: ss, o, 0, _, B, hk, hB => by
+    simp only [List.take_zero, List.map_nil, List.sum_nil, add_zero, List.getElem_cons_zero] at hB ⊢
+    rw [strataPa, card_window_of_mem hB,
+      strataPa_eq_one ss (o + n) B (fun p hp => hk p (by simp [hp])) fun v hv => (hB v hv).2, mul_one]
+  | (n, k) :: ss, o, s + 1, hs, B, hk, hB => by
+    simp only [List.take_succ_cons, List.map_cons, List.sum_cons, List.getElem_cons_succ] at hB ⊢
+    rw [strataPa, window_eq_empty_of fun v hv => Or.inr (by have := hB v hv; omega), Finset.card_empty, Nat.sub_zero,
+      div_self (Nat.cast_ne_zero.2 (Nat.choose_pos (hk (n, k) (by simp))).ne'), one_mul]
+    exact strataPa_stratum ss (o + n) s (by simpa using hs) B (fun p hp => hk p (by simp [hp]))
+      fun v hv => by have := hB v hv; constructor <;> omega
+
+/-- **A counts design misses a `B` inside one stratum as that stratum's own uniform `k_s`-subset does**: for `B`
+inside stratum `s`'s slots, `P_a(B) = C(n_s − |B|, k_s)/C(n_s, k_s)`. -/
+theorem OneStage.Pa_counts_stratum {ns ks : List ℕ} (hw : (OneStage.counts ks).WellFormed ns) {s : ℕ}
+    (hs : s < ns.length) (hks : s < ks.length) {B : Finset ℕ}
+    (hB : ∀ v ∈ B, (ns.take s).sum ≤ v ∧ v < (ns.take s).sum + ns[s]) :
+    (OneStage.counts ks).Pa ns B = ((ns[s] - B.card).choose ks[s] : ℝ) / (ns[s].choose ks[s] : ℝ) := by
+  obtain ⟨hlen, hk⟩ := hw
+  have hz : s < (ns.zip ks).length := by simp [hlen, hs]
+  have hpre : (((ns.zip ks).take s).map Prod.fst).sum = (ns.take s).sum := by
+    rw [show (ns.zip ks).take s = (ns.take s).zip (ks.take s) from List.take_zipWith,
+      List.map_fst_zip (by simp [hlen])]
+  have hget : (ns.zip ks)[s] = (ns[s], ks[s]) := List.getElem_zip
+  rw [OneStage.Pa, strataPa_stratum (ns.zip ks) 0 s hz B (fun p hp => (hk p hp).2)
+    (by rw [hpre, hget]; simpa using hB), hget]
+
+/-- **The stratified design misses a `B` inside one stratum as that stratum's own uniform `k_s`-subset does**, at its
+count `k_s = max 1 ⌊(2Kn_s + Σn)/(2Σn)⌋`. -/
+theorem OneStage.Pa_stratified_stratum {K : ℕ} {ns : List ℕ} (hw : (OneStage.stratified K).WellFormed ns) {s : ℕ}
+    (hs : s < ns.length) {B : Finset ℕ} (hB : ∀ v ∈ B, (ns.take s).sum ≤ v ∧ v < (ns.take s).sum + ns[s]) :
+    (OneStage.stratified K).Pa ns B =
+      ((ns[s] - B.card).choose (max 1 ((2 * K * ns[s] + ns.sum) / (2 * ns.sum))) : ℝ) /
+        (ns[s].choose (max 1 ((2 * K * ns[s] + ns.sum) / (2 * ns.sum))) : ℝ) := by
+  rw [← OneStage.Pa_counts_stratified, OneStage.Pa_counts_stratum (OneStage.wellFormed_counts_stratified hw) hs
+    (by simpa [OneStage.stratifiedCounts] using hs) hB]
+  simp [OneStage.stratifiedCounts]
+
 /-! ## The classes' product -/
 
 /-- The slot at which class `i` starts: the proof blocks of the classes before it. -/
