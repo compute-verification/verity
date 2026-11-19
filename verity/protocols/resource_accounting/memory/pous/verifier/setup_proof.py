@@ -63,7 +63,7 @@ def check(block: Callable[..., Any], verify: Callable[..., tuple[Any, Any]], pro
           salt: bytes, row_bytes: int) -> list[Any]:
     """The door's findings on each sampled block `k` of the registered C `c` and its `partition` (`sample`, the proof
     system's, sampled after the store is committed): its units the partition's (`block`, SPOT's `one_circuit.block`), C's
-    base and slot bound (`bound`), and its proof `proofs[k]` verified against C, never the prover's circuit file
+    salt supplied (`bound`), and its proof `proofs[k]` verified against C, never the prover's circuit file
     (`verify`, SPOT's `proofs.verify`, `registered` the store's and W's registration). The door is the caller's, so the
     verifier loads none of SPOT. A partition or block the door refuses raises its refusal, a refusal of its verdict
     ValueError with its reason, and a session the door rejects ValueError naming it: a unit's ok word is held to 1
