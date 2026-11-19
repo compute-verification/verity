@@ -16,22 +16,22 @@
     "methodology": "datasheet dense tensor-core peak at FP32 accumulate; an FMA counts as two FLOP; sparsity figures never used"
   },
   {
-    "id": "h100-sxm-80gb-tensor/bf16",
+    "id": "h100-sxm-80gb-sm/bf16",
     "name": "H100 SXM5",
     "device": "NVIDIA H100 SXM5 80GB",
     "dtype": "bf16",
     "rate": "bf16 dense tensor-core peak, fp32 accumulate",
-    "flop_per_second": 989.42976e12,
+    "flop_per_second": 1070.53056e12,
     "accumulate": "fp32",
     "memory_bytes": 85899345920,
     "card": {
       "sku": "h100-sxm-80gb",
-      "reading": "tensor",
+      "reading": "sm",
       "weight": "bf16"
     },
     "sources": [
       {
-        "label": "calibration/hardware/cards/h100-sxm-80gb.toml: 2 x sm.count x rate.tensor / weight.bf16 x clock.tensor (verity.device.rate), dense, FP32 accumulate"
+        "label": "calibration/hardware/cards/h100-sxm-80gb.toml: 2 x sm.count x rate.tensor / weight.bf16 x clock.sm (verity.device.rate), dense, FP32 accumulate"
       }
     ],
     "methodology": "derived from the card file named in `card`: an FMA counts as two FLOP; the figure is the card's own, so a change to the card moves it. `readings` keeps the figure the data sheet states, with its ratio to this one",
@@ -39,7 +39,7 @@
       {
         "name": "datasheet",
         "flop_per_second": 989.4e12,
-        "ratio": 0.99997,
+        "ratio": 0.924215,
         "sources": [
           {
             "label": "NVIDIA Hopper whitepaper (BF16 1978.9 TFLOPS with sparsity)"
@@ -56,22 +56,22 @@
     ]
   },
   {
-    "id": "h100-sxm-80gb-tensor/e4m3",
+    "id": "h100-sxm-80gb-sm/e4m3",
     "name": "H100 SXM5",
     "device": "NVIDIA H100 SXM5 80GB",
     "dtype": "e4m3",
     "rate": "fp8 (e4m3) dense tensor-core peak, fp32 accumulate",
-    "flop_per_second": 1978.85952e12,
+    "flop_per_second": 2141.06112e12,
     "accumulate": "fp32",
     "memory_bytes": 85899345920,
     "card": {
       "sku": "h100-sxm-80gb",
-      "reading": "tensor",
+      "reading": "sm",
       "weight": "e4m3"
     },
     "sources": [
       {
-        "label": "calibration/hardware/cards/h100-sxm-80gb.toml: 2 x sm.count x rate.tensor / weight.e4m3 x clock.tensor (verity.device.rate), dense, FP32 accumulate"
+        "label": "calibration/hardware/cards/h100-sxm-80gb.toml: 2 x sm.count x rate.tensor / weight.e4m3 x clock.sm (verity.device.rate), dense, FP32 accumulate"
       }
     ],
     "methodology": "derived from the card file named in `card`: an FMA counts as two FLOP; the figure is the card's own, so a change to the card moves it. `readings` keeps the figure the data sheet states, with its ratio to this one",
@@ -79,7 +79,7 @@
       {
         "name": "datasheet",
         "flop_per_second": 1978.9e12,
-        "ratio": 1.00002,
+        "ratio": 0.924261,
         "sources": [
           {
             "label": "NVIDIA Hopper whitepaper (FP8 3957.8 TFLOPS with sparsity; FP32 accumulate at full rate on Hopper)"
