@@ -988,6 +988,11 @@ theorem lowerDef_spec {P : Prog} {T : Array Def} (hWF : ∀ e < T.size, (T.getD 
     split at h2
     · first | exact absurd h2 (st_throw_bind _ _ _ _) | exact absurd h2 (st_throw _ _ _)
     rename_i hpr
+    obtain ⟨u, s1, hb, h2⟩ := st_bind_ok h2
+    obtain ⟨_, -, hq⟩ := st_lift_ok hb
+    simp only [Prod.mk.injEq] at hq
+    obtain ⟨-, hq⟩ := hq
+    subst s1
     split at h2
     · first | exact absurd h2 (st_throw_bind _ _ _ _) | exact absurd h2 (st_throw _ _ _)
     rename_i hpar
