@@ -127,7 +127,7 @@ theorem provedUnits_of_checkAt {p : OneStage.Params} {c : OneStage.Commitment} {
     obtain ⟨samplingDesign, -, n, hreg, hdrawn, hunits, -, -, hn, -, -⟩ := acceptMeans p c e pub prof h
     have hag := hreg.1.2.2.2.1
     have hder : Draw.derive p.verifier.program p.verifier.query p.verifier.samplingDesign p.verifier.workTable = .ok samplingDesign :=
-      derive_of_agreed hag
+      SecurityProofs.derive_of_agreed hag
     obtain ⟨-, -, -, -, -, us, xs, hus, hxs, hasc, h0, -⟩ := hdrawn
     simp only [OneStage.coinsWhy, hag] at hw
     unfold OneStage.coinsReason at hw
