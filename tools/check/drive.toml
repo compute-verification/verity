@@ -1,9 +1,9 @@
 # The verified queue's flags, their one source: its loop (`research queue vqueue`) reads this file at `main` each tick
 # (`DriveFlags`, `flags_at` in tools/research/src/research/queue.py), so a change here is a reviewed commit and needs no
-# restart, and a temporary setting is a commit here too. The ready mark's preflight reads `landing_gates`, `warn_gates` and
-# `land_into` here at `main`, each key alone (`gates_at`, `land_into_key`). tests/test_drive_toml.py fails on a key the strict
-# parse doesn't take and on one whose code was deleted (`DELETED_KEYS`). Its owner is the handle whose `owns` in
-# .agents/skills/using-slack/registry.json covers it.
+# restart, and a temporary setting is a commit here too. The ready mark's preflight reads `landing_gates`, `warn_gates`,
+# `land_into` and `quiet_main` here at `main`, each key alone (`gates_at`, `land_into_key`, `quiet_at`).
+# tests/test_drive_toml.py fails on a key the strict parse doesn't take and on one whose code was deleted (`DELETED_KEYS`).
+# Its owner is the handle whose `owns` in .agents/skills/using-slack/registry.json covers it.
 
 # parsed (`DriveFlags`) and read by no other code. The loop's own `--on` overrides `on`, and the landing order is no key: it
 # is the loop's priority file (`research queue vqueue --priority-file`), read each tick
@@ -145,3 +145,12 @@ stale_days = 3
 stale_close_days = 7
 # open PRs the stale rule never judges, each kept open by its owner with a reason
 stale_keep = []
+# until `until` (UTC), the ready mark's preflight refuses a PR onto `main` whose own change touches a file outside `allowed`,
+# unless its body has a `Repair: <suite>::<test id>` line naming the red on `main` it cures, or its head is a branch of
+# `landings` in this repository; that work goes to `instead`. From `until` on it refuses nothing (`QuietMain`,
+# `Preflight._quiet`)
+[quiet_main]
+until = "2026-11-20T23:00:00Z"
+allowed = ["tools/", "infra/", "tests/tools/", "tests/infra/"]
+instead = "one-circuit"
+landings = ["interfaces", "one-circuit"]
