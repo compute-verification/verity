@@ -23,7 +23,9 @@ from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.ops.boolean import versions as SW
 
 from verity_vllm.definitions.registry import boolean_dsv4_moe as BD
+from verity_vllm.definitions.registry import boolean_moe as BMOE
 from verity_vllm.definitions.registry import dsv4_moe as D
+from verity_vllm.definitions.registry import moe as M
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -37,7 +39,7 @@ PINS = {
     "MoeRouterSqrtSoftplus_v2{E=8,SCALE=2.5}": (435870, 808659, 32308, "0b3e11c44e7883154b4b03c058455257c801435ad6c08407357061e3fe7a13238e9400038f38c6324ba345892217526f7e93141fa3257c2f3e0efc07f342b9e1"),
 }
 TARGETS = [bind(BD.MufuLg2Mantissa), bind(BD.SiluMulClampBf16, LIMIT=10.0), bind(BD.SiluMulClamp, I=4, LIMIT=10.0),
-           bind(BD.Ex2Approx), bind(BD.Dsv4HashWeight),
+           bind(BMOE.Ex2Approx), bind(BD.Dsv4HashWeight),
            *[pytest.param(t, marks=pytest.mark.slow) for t in (bind(BD.MoeRouterHash, E=8, SCALE=2.5), bind(BD.Dsv4SqrtSoftplus),
                                                                bind(BD.MoeRouterSqrtSoftplus, E=8, SCALE=2.5))]]
 
@@ -99,7 +101,7 @@ def test_pinned_counts_and_digests(target) -> None:
 def test_the_word_views() -> None:
     assert TR.word_of(bind(BD.MufuLg2Mantissa)).id == D.MufuLg2Mantissa.id == "MufuLg2Mantissa_v1"
     assert SW.boolean_version(D.MufuLg2Mantissa).id == "MufuLg2Mantissa_v2"
-    for b, w in ((BD.Ex2Approx, D.Ex2Approx), (BD.Dsv4HashWeight, D.Dsv4HashWeight), (BD.Dsv4SqrtSoftplus, D.Dsv4SqrtSoftplus)):
+    for b, w in ((BMOE.Ex2Approx, M.Ex2Approx), (BD.Dsv4HashWeight, D.Dsv4HashWeight), (BD.Dsv4SqrtSoftplus, D.Dsv4SqrtSoftplus)):
         assert TR.word_of(bind(b)).id == bind(w).id
         assert SW.boolean_version(bind(w)).id == bind(b).id
     for b, w, st in ((BD.MoeRouterHash, D.MoeRouterHash, {"E": 384, "SCALE": 2.5}),
@@ -131,7 +133,7 @@ def test_lg2_on_every_mantissa_is_the_measured_unit() -> None:
 
 
 def test_ex2_approx_on_special_edge_and_random_words() -> None:
-    _agree(bind(BD.Ex2Approx), _words(np.random.default_rng(0xE2), 3000, -160, 130))
+    _agree(bind(BMOE.Ex2Approx), _words(np.random.default_rng(0xE2), 3000, -160, 130))
 
 
 def test_the_hash_weight_on_special_edge_and_random_words() -> None:
