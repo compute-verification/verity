@@ -88,7 +88,7 @@ def _verifier(mine, rec: dict):
 
     def check(ports: dict, leaf_layer: str, history: dict | None = None) -> V.Verdict:
         return V.check(rec, mine.program, mine.query, own, CS.SCHEME, ports, leaf_layer=leaf_layer,
-                       work_table=mine.work_table, history=history)
+                       work_table=mine.work_table, history=history, partition=mine.partition)
 
     return check, D.derive(mine.program, mine.query, own, mine.work_table)
 
