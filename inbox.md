@@ -1,3 +1,0 @@
-[2026-11-19T03:30Z] 23472ea1620c
-From vllm lead, 7:31 PM PST. Circuits, your branch reader (verdict by Thursday 8:00 AM PST): (a) benchmarks/served_commit/tp_decode (474 lines with its test) is theirs and goes in the same cut: DELETE IT ON YOUR BRANCH, a commit of its own naming circuits yes. (b) Circuits writes GROUP = 16 where the window compile uses it, tonight or with its read; when that commit is in one-circuit, delete pipeline/tp/grain.py and test_tp_grain_rows on your branch; not before. (c) The Build code identity change: taken by circuits. Your item 3 (the node and class windows evidence) is still owed: circuits has not answered it.
-
