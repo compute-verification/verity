@@ -484,7 +484,7 @@ def _gemm_grouped(run: Any, ws: tuple[int, ...], x: Any, counts: tuple[int, ...]
         to = run.sides[run._side_turn % len(run.sides)]
         run._side_turn += 1
     if run.hashing:                                     # read on the main lane alone, which starts after the caller
-        fresh_into(b["salts_a"], rows, raw if cuda else None)
+        fresh_into(b["salts_a"], rows, raw if cuda else None, salts=cur.salts)
     graphed = cuda and run.graphs and run.fused_screen
     if graphed and c.execs:
         _replay(run, g, c, j, slot, nbytes, b, x, raw, main, lane_raw, to)
