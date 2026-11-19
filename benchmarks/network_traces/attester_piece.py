@@ -4,11 +4,11 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
     python attester_piece.py front PORT SERVE_DIR OUT --peer NAME --gate USER@HOST|local [--key KEY]
         [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--scan-class w63k4] [--height 10]
         [--minutes M] [--bucket-ms MS] [--warmup N]
-    python attester_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--lean EXE] [--rows EXE] [--draw K]
+    python attester_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--draw K]
         [--chain-cmd CMD] [CR_K=V ...]
-    python attester_piece.py chain SERVE_DIR WINDOW DIR V3C [--eos-ids IDS] [--rows EXE] [--draw K] [--class w63k4]
+    python attester_piece.py chain SERVE_DIR WINDOW DIR V3C [--eos-ids IDS] [--draw K] [--class w63k4]
         [--chain-cmd CMD] [CR_K=V ...]
-    python attester_piece.py period SERVE_DIR WINDOW DIR V3C [--lean EXE] [--rows EXE]
+    python attester_piece.py period SERVE_DIR WINDOW DIR V3C
     python attester_piece.py relay --listen PORT --to PORT
     python attester_piece.py front PORT SERVE_DIR OUT --peer NAME --session --client-port PORT --windows N
         --gate ... [--key KEY] [--scan-class w63k4] [--height H] [--minutes M] [--bucket-ms MS]
@@ -49,7 +49,7 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
      through the front (it wasn't set, or the gate, its tunnel or ssh failed); a rehearsal that failed (each request
      late past the network attester's D·τ, or cut) attested no served answer, so there is none for the protocol to
      reject (`rehearsed`). Its records are then audited as rows (`rows_check`): `network_attester_chain.rows_audit_case` of the
-     run, checked by ``network-rows`` (``--rows``, else built in verity/protocols/resource_accounting/network/verifier/lean;
+     run, checked by ``network-rows`` (the declared one, built here: `lean_exe`;
      `NetworkCheck.RowsAudit`, `ROWS`), which holds each record to its attested head and each attestation to the
      deployment's key in its session, then runs the attester program's rows audit (`NetworkAttester.Rows.audit`):
      every egress row must be the one the schedule the records show renders, so cells cut, clocked or ordered
@@ -71,7 +71,7 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
   4. The period's execution phase is the scan's (``answers.json``'s one window; the chain keeps its scan's answers on
      its private side, `chain_witness`): every window request's release and streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the network attester run and the chain's scan, checked by ``network-period``
-     (``--lean``, else built in verity/protocols/resource_accounting/network/verifier/lean); its answer is the piece's, an accept's profile
+     (the declared one, built here: `lean_exe`); its answer is the piece's, an accept's profile
      with its ``placement`` (`placement`): each machine by the party the configuration puts on it, never a host's
      name, and the piece's own steps' machines `UNNAMED`. The names are labels: the piece establishes no
      `trusted-device` and gives no bound on that ground (`UNMET`).
@@ -230,7 +230,6 @@ LOGS = ("piece.log", "chain.log", "period.log")
 #: every file DIR may hold when the leak guard reads it and the hold (its ``--public``): the answer, the logs, the
 #: split's `CHAINED`, the attestations and `PUBLIC`'s
 PIECE_FILES = ("answer.json", *LOGS, CHAINED, CERTIFICATES, *(f"chain/{rel}" for rel in PUBLIC))
-LEAN_DIR = TREE / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "lean"
 #: the window circuit's class (4 slots, prompts of at most 32 ids, 4 outputs) and the scan's lanes
 PROMPTS, PROMPT_IDS, TOKENS = 4, 24, 4
 HEIGHT = 10
@@ -782,18 +781,20 @@ def run_chain(keep: Path, run: str, endpoint: Path, eos: str, sample: int | None
         return run_group(argv, cwd=TREE, env=env, stdout=log, stderr=subprocess.STDOUT)
 
 
-def lean_exe(name: str, given: str | None) -> str:
-    """``given``, else the executable ``name`` of `LEAN_DIR`, built here under every test's Lake build lock
-    (`verifier.executable`): Lake builds `LEAN_DIR`'s path requires, SPOT's and Flock's among them, in their own `.lake`."""
+def lean_exe(name: str) -> str:
+    """The network attester's declared executable ``name`` (its piece's `Launch.executables`), built here under every
+    test's Lake build lock (`verifier.executable`): Lake builds its package's path requires, SPOT's and Flock's among
+    them, in their own `.lake`. Nothing a node sets names another."""
     from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
-    if given:
-        return given
+    declared = {e.target: e for e in schemes.get("network-attester").pieces["workers"].executables}
+    if name not in declared:
+        raise NotRun(f"{name} is no executable the network attester declares ({sorted(declared)})")
     try:
-        exe = V.executable(name, LEAN_DIR)
+        exe = V.executable(name, TREE / declared[name].package)
     except V.LeanError as e:
         raise NotRun(str(e)) from None
-    if not exe.is_file():
-        raise NotRun(f"lake build {name} wrote no {exe}")
+    if exe != declared[name].built(TREE) or not exe.is_file():
+        raise NotRun(f"lake build {name} wrote no {declared[name].built(TREE)}")
     return str(exe)
 
 
@@ -1136,7 +1137,7 @@ def piece(a: argparse.Namespace) -> int:
         return 2
 
     def step(hold: Path) -> tuple[dict | None, Path | None]:
-        exe, rows = lean_exe("network-period", a.lean), lean_exe("network-rows", a.rows)
+        exe, rows = lean_exe("network-period"), lean_exe("network-rows")
         chain = lambda keep, run, ep, n: run_chain(keep, run, ep, a.eos_ids, a.draw, sized(n, a.set),  # noqa: E731
                                                    a.chain_cmd)
         return decide(serve_dir, a.window, hold, chain=chain, check=lambda c, p: period_check(exe, c, p),
@@ -1173,7 +1174,7 @@ def chain_step(a: argparse.Namespace) -> int:
                                                    a.chain_cmd)
         got = settle(serve_dir, a.window, d, "CERTIFIER_TIMEOUT",
                      lambda hold: decide(serve_dir, a.window, hold, chain=chain, check=None,
-                                         rows=own_rows(lean_exe("network-rows", a.rows))))
+                                         rows=own_rows(lean_exe("network-rows"))))
     except NotRun as e:
         return refuse(d, str(e))
     if got is not None:
@@ -1197,7 +1198,7 @@ def period_step(a: argparse.Namespace) -> int:
     def step(hold: Path) -> tuple[dict | None, Path | None]:
         if not (d / CHAINED).is_file():
             raise NotRun(f"no {CHAINED} in DIR: the chain step (CERTIFIER_CHAIN_CMD) didn't run, or didn't finish")
-        exe, rows = lean_exe("network-period", a.lean), lean_exe("network-rows", a.rows)
+        exe, rows = lean_exe("network-period"), lean_exe("network-rows")
         return decide(serve_dir, a.window, hold, chain=None, check=lambda c, p: period_check(exe, c, p),
                       rows=own_rows(rows), case=v3c_case(v3c))
     try:
@@ -1240,8 +1241,6 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("window", type=int)
     q.add_argument("dir", type=Path)
     q.add_argument("--eos-ids", default="128001")
-    q.add_argument("--lean", help="network-period, built (else built here)")
-    q.add_argument("--rows", help="network-rows, built (else built here)")
     q.add_argument("--draw", type=int, help="the scan's sample, K proof blocks (every proof block by default)")
     q.add_argument("--chain-cmd", help="replaces served_session.py chain: bash -c CMD _ KEEP RUN ENDPOINT CR_K=V ...")
     q.add_argument("set", nargs="*", help="CR_K=V")
@@ -1251,7 +1250,6 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("window", type=int)
         q.add_argument("dir", type=Path)
         q.add_argument("v3c", type=Path, help="V3c's directory: window/ (window-commit's) and period.json")
-        q.add_argument("--rows", help="network-rows, built (else built here)")
     q = sub.choices["chain"]
     q.add_argument("--eos-ids", default="128001")
     q.add_argument("--draw", type=int, help="the scan's sample, K proof blocks (every proof block by default)")
@@ -1259,7 +1257,6 @@ def parser() -> argparse.ArgumentParser:
                    help=f"the scan's class, V3c's window class's (default {V3C_SCAN_CLASS})")
     q.add_argument("--chain-cmd", help="replaces served_session.py chain: bash -c CMD _ KEEP RUN ENDPOINT CR_K=V ...")
     q.add_argument("set", nargs="*", help="CR_K=V")
-    sub.choices["period"].add_argument("--lean", help="network-period, built (else built here)")
     r = sub.add_parser("relay")
     r.add_argument("--listen", type=int, required=True, action="append")
     r.add_argument("--to", type=int, required=True, action="append")
