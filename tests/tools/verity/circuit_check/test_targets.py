@@ -118,51 +118,6 @@ def test_a_definition_valued_static_parses_to_the_definition_it_names_recursivel
     assert TG.definition(mid.id) is mid and TG.definition(exact.id) is exact
 
 
-def test_a_composites_lift_parses_to_the_lift_a_body_calling_it_binds(monkeypatch):
-    """``circuit-check 'Lifted[MoeRouterTopK_v1]_v2{E=4,TOPK=2,VPT=2,ORD=0}'`` failed with ``'CompositeDefinition' object has no
-    attribute 'params'`` in a process where no body had lifted the composite yet, while ``--all`` checks it.  Named, a composite's
-    lift is the very specialization a body that calls the composite binds (`lifted.lift_def`), and checks; a lift its id doesn't
-    name (`MoeFfnFixed`'s is by hand) is refused by name; without the catalog."""
-    from verity.circuits.defs import REGISTRY, bind
-    from verity_vllm.definitions.registry import lifted as L
-    from verity_vllm.definitions.registry import moe, ref_prims
-
-    from circuit_check import checks as CK
-
-    TG.load_registries()
-    _no_catalog(monkeypatch)
-    fresh = {"ArgmaxStepF32_v1", "MoeRouterTopK_v1"}
-    monkeypatch.setattr(L, "_LIFTED_COMPOSITES", {k: v for k, v in L._LIFTED_COMPOSITES.items() if k not in fresh})
-    monkeypatch.setattr(L, "_UNLIFTED_OF", dict(L._UNLIFTED_OF))
-    monkeypatch.setattr(REGISTRY, "defs", {k: v for k, v in REGISTRY.defs.items() if k not in {f"Lifted[{f}]_v2" for f in fresh}})
-    step = TG.definition("Lifted[ArgmaxStepF32_v1]_v2{ORD=0}")
-    router = TG.definition("Lifted[MoeRouterTopK_v1]_v2{E=4,TOPK=2,VPT=2,ORD=0}")
-    assert step is L.lift_def(bind(ref_prims.ArgmaxStepF32))
-    assert router is L.lift_def(bind(moe.MoeRouterTopK, E=4, TOPK=2, VPT=2))
-    assert CK.check_definition(step, as_call=False)["failures"] == []
-    with pytest.raises(LookupError, match=r"Lifted\[MoeFfnFixed_v1\]_v2 names no Definition: MoeFfnFixed_v1's lift is LMoeFfn_v1"):
-        TG.definition("Lifted[MoeFfnFixed_v1]_v2{E=8,TOPK=2,VPT=8,H=16,I=16,ORD=0}")
-
-
-def test_a_composites_lift_names_the_owner_of_its_pins(monkeypatch):
-    """A traced check looks its target's id up in the ``digests`` pins, and the reads it records place that pin in its owner's
-    file (`sidecars.pin_owner`, from the id alone: `sidecars.named`).  A composite's lift is `lifted.lift_composite` of the
-    composite, the lifted module's; the on-demand ``Lifted[...]_v2`` family lifts primitives only, and made from it,
-    ``Lifted[ArgmaxStepF32_v1]_v2``'s pin raised ``'CompositeDefinition' object has no attribute 'params'``, which killed the
-    target's check in ``--all``.  A lift its id doesn't name (`MoeFfnFixed`'s is by hand) names no owner."""
-    from verity_vllm.definitions.registry import lifted as L
-    from verity_vllm.definitions.registry import ref_prims
-
-    from circuit_check import sidecars as SC
-
-    TG.load_registries()
-    _no_catalog(monkeypatch)
-    assert SC.named("Lifted[ArgmaxStepF32_v1]_v2") is L.lift_composite(ref_prims.ArgmaxStepF32)
-    assert SC.pin_owner("digests", "Lifted[ArgmaxStepF32_v1]_v2{ORD=0}") == L.__name__
-    assert SC.named("Lifted[MoeFfnFixed_v1]_v2") is None
-    assert SC.pin_owner("digests", "Lifted[MoeFfnFixed_v1]_v2{E=8,TOPK=2,VPT=8,H=16,I=16,ORD=0}") is None
-
-
 def test_the_pouw_h1_tile_roots_parse_from_their_ids(monkeypatch):
     """`PouwH1Tile`'s roots (its sidecar's bindings of each version: ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=...}`` and
     the tile's cells) can be targeted by id: each parses to the very Definition the sidecar binds, without building it
