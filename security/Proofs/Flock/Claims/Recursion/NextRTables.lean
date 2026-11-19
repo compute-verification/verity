@@ -141,9 +141,9 @@ theorem sessionRun_decides_tables {H : Hash.Msg → Hash.Msg} (h64 : Claims.Out6
     (fun i hi => ⟨(htab i hi).1, (htab i hi).2 c₁⟩) hS hrd hps hst
 
 /-- **Non-vacuity of `PlainTablesOk`'s table count**: `checkP`'s count refusal passes plain sessions of 2 and of
-`Tags.MAX_TABLES` tables at public outputs, and `sizesOk` passes two tables of `m = 22`. -/
-example : ProvedScope.plainTablesWhy Tags.circuit967b8d06 2 = none ∧
-    ProvedScope.plainTablesWhy Tags.circuit967b8d06 Tags.MAX_TABLES = none ∧
+`Tags.MAX_TABLES` tables at the served statement, and `sizesOk` passes two tables of `m = 22`. -/
+example : ProvedScope.plainTablesWhy Tags.circuit 2 = none ∧
+    ProvedScope.plainTablesWhy Tags.circuit Tags.MAX_TABLES = none ∧
     ProvedScope.sizesOk false #[22, 22] = .ok () :=
   ⟨rfl, rfl, rfl⟩
 
