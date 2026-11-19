@@ -26,9 +26,9 @@ Every other unit holds its Definition's function of the window's values:
 - each attention cut by key block (`window_circuit.CUTS`), every Call of a head but its last (the node's output) its
   Definition on the node's operands (`evaluate_batch`): the head's query, its KV group's keys and values in the Call's
   range, and the earlier Calls' running state;
-- the scan's start the state row before the window, its ingress unit t its Definition on the network attester's ingress
-  row t, the state row before t and the entries at t's boundary, and its egress unit t its Definition on ingress unit
-  t's view (`evaluate_bits`).
+- the scan's start at boundary a the state row before it (the first's the state before the window), as bits and as u16
+  words, its ingress unit t its Definition on the network attester's ingress row t, the state row before t and the
+  entries at t's boundary, and its egress unit t its Definition on ingress unit t's view (`evaluate_bits`).
 
 `Rows.record` gives a `Window` each template's units in runs of one step, one slot and one form (`FORMS`: a node's value,
 or its Definition's function of the window's values), every input by reference but an opening's ports. The lowering
@@ -496,11 +496,13 @@ class Rows:
             self._slot(P, S)
         P0, cls = lowered.programs[0], lowered.programs[0].cls
         start, bucket, egress = (descriptor_id(f) for f in (cls.scan.start, cls.scan.bucket, cls.scan.egress))
-        self._put(start, 0, "o0", np.asarray([self.state[0]], dtype=np.uint16), EVALUATED)
         ingress = registered[SS.INGRESS_ROWS].rows
         entries = {**{(P.anchor, P.lane): P.entry_unit for P in lowered.programs},
                    **{(cls.anchor(s), cls.lane(s)): e for s, _k, _c, e in lowered.empty}}
+        starts = {0: 0, **{a: k + 1 for k, (a, _) in enumerate(lowered.scans)}}
         for a in cls.boundaries:
+            for o in ("o0", "o1"):
+                self._put(start, starts[a], o, np.asarray([self.state[a]], dtype=np.uint16), EVALUATED)
             for _, (tid, u) in [x for x in lowered.scans if x[0] == a]:
                 for k, lane in enumerate(_lanes(P0, self.state, IO.scan_reference, a)):
                     for i, v in enumerate(lane):
