@@ -86,7 +86,7 @@ timed statement $B statement --zk "${UA[@]}" --instances $D/pub-1.bin > $O/state
 challenger_start $O/challenger || exit 1
 PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
 timed serve $B serve --zk --listen 127.0.0.1:$PORT --out $S/sessions --instances $D/pub-1.bin "${UA[@]}" --pin $PIN --operator tmpl-unit \
-  --draw subset:1 --sessions 1 > $O/serve.log 2>&1 &
+  --draw subset:1 --sessions 1 "${TREE_FROM[@]}" > $O/serve.log 2>&1 &
 SP=$!
 for i in $(seq 3600); do grep -q SERVING $O/serve.log && break; kill -0 $SP 2>/dev/null || break; sleep 1; done
 timed prove $B prove --zk --verifier 127.0.0.1:$PORT --instances $D/inst-1.bin "${UA[@]}" --runs 1 --warm 0 > $O/prove.txt 2> $O/prove.err
