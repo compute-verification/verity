@@ -615,6 +615,13 @@ def marked_rows(program: Program, registered: Mapping[str, int], supplied: Mappi
     return out
 
 
+def cut(got: list[list[int]], n: int, k: int) -> list[list[int]]:
+    """`got`'s one row of `n · k` leaves as `n` rows of `k` in order (`Supplied.cut`), where `n > 1`; else `got`."""
+    if len(got) == 1 and n > 1 and len(got[0]) == n * k:
+        return [got[0][i * k:(i + 1) * k] for i in range(n)]
+    return got
+
+
 def _in_format(program: Program, value: str, got: list[list[int]], word_bits: int, schema: str) -> list[list[int]]:
     """Supplied rows of the parameter's leaves as rows of `schema`: themselves under `SCHEMA`, else each packed into
     `word_bits`-bit leaves (`bit_words`)."""
@@ -629,10 +636,12 @@ def supplied_root(program: Program, value: str, rows: Sequence[Sequence[tuple[st
                   prog: str | None = None, binding: Mapping[str, str] | None = None, schema: str = RV.SCHEMA) -> str:
     """The root R7 holds a supplied value's entry to: its rows (`supplied_rows`), as many as the verifier's own entry's
     `leaves` (`registered_entries`), each the parameter's leaves of one row of its `words` leaves in `schema`
-    (`row_leaves`), committed in `schema` under `registered_value.supplied_salts` at its `word_bits`. `prog`: `program`'s digest
+    (`row_leaves`), committed in `schema` under `registered_value.supplied_salts` at its `word_bits`; a value given as
+    one row of all those leaves (a mark's, `of_mark`) is cut into them in order (`cut`). `prog`: `program`'s digest
     (`P.program_digest`), when the caller holds it."""
-    got = supplied_rows(program, value, rows, rec, supplied, log, binding)
+    given = supplied_rows(program, value, rows, rec, supplied, log, binding)
     k = row_leaves(program, value, want["words"], schema)
+    got = cut(given, want["leaves"], k)
     if len(got) != want["leaves"] or any(len(r) != k for r in got):
         raise ValueError(f"supplied value {value!r}: rows of {[len(r) for r in got]} leaves, not {want['leaves']} of "
                          f"{k}")
@@ -707,7 +716,7 @@ def bind_ports(file: Mapping[str, Any], ports: Iterable[str], roots: Mapping[str
 
 
 __all__ = ["BOUND", "DIGEST", "PARAM_KEY", "READS", "SCHEMA_SEG", "SCHEMA_V2",
-           "SOURCES", "WINDOW_SALT", "bind_ports", "bit_words", "bytes_leaves", "digest_leaves", "digests",
+           "SOURCES", "WINDOW_SALT", "bind_ports", "bit_words", "bytes_leaves", "cut", "digest_leaves", "digests",
            "half_leaves", "held_gates", "leaves_of", "log_base", "parameter_gates", "reads", "reads_file",
            "registered_entries", "row_leaves", "shape", "sources", "supplied_root", "supplied_rows",
            "supplied_value", "table", "verify_read", "width", "window_salt"]

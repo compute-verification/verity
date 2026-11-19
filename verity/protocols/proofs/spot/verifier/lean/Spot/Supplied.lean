@@ -197,16 +197,28 @@ def rowDigest (schema : String) (row : Array Nat) (wordBits : Nat) : ByteArray :
   if schema == Flock.HmRow.ROW_SCHEMA_V2 then Flock.Sha512.hash (Flock.HmRow.rowPrefixV2 (16 * ws.size) ++ bytes)
   else Flock.HmRow.segDigest (16 * ws.size) bytes
 
+/-- `registered.cut`: `got`'s one row of `n * k` leaves as `n` rows of `k` in order, where `n > 1`; else `got`. -/
+def cut (got : Array (Array Nat)) (n k : Nat) : Array (Array Nat) :=
+  match got with
+  | #[r] => if n > 1 && r.size == n * k then (Array.range n).map fun i => r.extract (i * k) (i * k + k) else got
+  | _ => got
+
+#guard cut #[#[1, 2, 3]] 3 1 == #[#[1], #[2], #[3]]
+#guard cut #[#[1, 2, 3]] 2 1 == #[#[1, 2, 3]]
+#guard cut #[#[1, 2], #[3, 4]] 4 1 == #[#[1, 2], #[3, 4]]
+
 /-- `registered.supplied_root`: the root R7 holds a supplied value's entry to (hex), the rows of `rs` in the value's row
-format of `schemas` committed under `salt` at the verifier's own entry `want`; an error where a source names nothing or
-the rows are not its shape. -/
+format of `schemas` committed under `salt` at the verifier's own entry `want`, a value given as one row of all their
+leaves (a mark's, `ofMark`) cut into them (`cut`); an error where a source names nothing or the rows are not its
+shape. -/
 def root (rec : Json) (log : Array Json) (binding : Option (String × String)) (ps : Array Registered.Param)
     (program : String) (supplied : Array String) (schemas : Array (String × String)) (value : String) (rs : Rows)
     (want : Registered.Entry) : V String := do
-  let got ← rows rec log binding ps supplied value rs
+  let given ← rows rec log binding ps supplied value rs
   let schema := (schemas.find? (·.1 == value)).elim Registered.SCHEMA (·.2)
   let some p := ps.find? (·.name == value) | throw s!"{value} is not a parameter of the program"
   let k ← Registered.rowLeaves p schema want.words want.wordBits
+  let got := cut given want.leaves k
   if got.size != want.leaves || got.any (·.size != k) then
     throw s!"supplied value {value}: rows of {got.map (·.size)} leaves, not {want.leaves} of {k}"
   let [w] := Registered.widthSet p.ty | throw s!"parameter {value}: its leaves are not one width"
@@ -346,7 +358,7 @@ def ofMark (coins : Array (String × ByteArray)) (v : String) (m : Mark) : V Row
 
 /-- The difftest's `supplied_marks`: on `{program, coins, widths, record, log, binding}` (`coins`: `{function: hex}`;
 `widths`: `{input: w}`; `binding`: `{stream, prover}` or null), each supplied input's rows as leaves of its width
-(`marks`, `ofMark`, then `rows`' reading), or the refusal. -/
+(`marks`, `ofMark`, then `rows`' reading), cut where `cuts` names it (`{input: [n, k]}`, `cut`), or the refusal. -/
 def piece (j : Json) : Except String Json := do
   let ms ← marks (getD j "program")
   let coins ← match getD j "coins" with
@@ -371,6 +383,12 @@ def piece (j : Json) : Except String Json := do
       let data ← (if le then r.extract 1 r.size else r).foldlM
         (fun acc s => return acc ++ (← sourceBytes rec_ log binding (ms.map (·.1)) v s)) ByteArray.empty
       if le then leLeaves data w else if m.layout == "digest" then digestLeaves data else leavesOf data w
+    let ls ← match getD (getD j "cuts") v with
+      | .null => pure ls
+      | .arr #[n, k] => match nat? n, nat? k with
+        | some n, some k => pure (cut ls n k)
+        | _, _ => throw s!"cuts: {v}'s is not [n, k]"
+      | _ => throw s!"cuts: {v}'s is not [n, k]"
     pure (v, Json.arr (ls.map fun l => Json.arr (l.map fun (x : Nat) => Json.num (Int.ofNat x))))
   return Json.mkObj out.toList
 

@@ -58,6 +58,11 @@ def reference(j):
             out[v] = [G.row_leaves_of(r, lambda k, n: G._source_bytes(rec, v, k, n, list(ms), log, binding), w,
                                       m["layout"] == "digest")
                       for r in G.of_mark(held, v, m)]
+            c = j["cuts"].get(v) if isinstance(j.get("cuts"), dict) else None
+            if c is not None:
+                if not (isinstance(c, list) and len(c) == 2 and all(G._nat(x) is not None for x in c)):
+                    raise ValueError("cuts")
+                out[v] = G.cut(out[v], *c)
         return out
     except ValueError as e:
         raise D.Reject(str(e)) from e
@@ -104,8 +109,10 @@ def instances(draw) -> dict:
               and isinstance(x[0], str)}
     if draw(st.integers(0, 9)) == 0:
         widths = draw(JUNK)
+    cuts = {x[0]: draw(st.one_of(st.tuples(st.integers(0, 16), st.integers(0, 16)).map(list), JUNK))
+            for x in inputs if isinstance(x, list) and x and isinstance(x[0], str) and draw(st.booleans())}
     return {"program": desc(inputs, fns), "coins": coins, "widths": widths, "record": rec, "log": log,
-            "binding": binding}
+            "binding": binding, **({"cuts": cuts} if cuts else {})}
 
 
 INPUTS = st.one_of(*[instances() for _ in range(6)], JUNK)
@@ -150,6 +157,11 @@ SETUP = {"program": desc([["store", 1], ["salt", 1, SALT], ["one", 1, ONE]], [1,
      None),
     ("a port the record doesn't name", lambda j: {**j, "program": desc([["r", 1, ROOTS[2]]], [2]),
                                                   "widths": {"r": 16}}, None),
+    ("the setup's salt cut into the three rows of four leaves its reads fix", lambda j: {**j, "cuts": {"salt": [3, 4]}},
+     {"salt": [[0x0100 + 0x0202 * i for i in range(4 * r, 4 * r + 4)] for r in range(3)], "one": [[1]]}),
+    ("a cut its leaves aren't: the one row", lambda j: {**j, "cuts": {"salt": [5, 4]}},
+     {"salt": [[0x0100 + 0x0202 * i for i in range(12)]], "one": [[1]]}),
+    ("a cut not [n, k]", lambda j: {**j, "cuts": {"salt": [3]}}, None),
     ("a window salt with no binding", lambda j: {**j, "binding": None, "coins": {"window.salt/v1": "07"},
                                                  "program": desc([["s", 1, ROOTS[3]]], [2]), "widths": {"s": 16}}, None),
 ], ids=lambda x: x if isinstance(x, str) else "")

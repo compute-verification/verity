@@ -2716,8 +2716,9 @@ class Window:
 
     def give(self, param: str, value: bytes) -> None:
         """Add ``param``, one of its circuit's ``Registered.supplied``, to ``registered``: ``value`` its function's value as
-        the verifier computes it (`one_stage.registered.body`), read as the parameter's leaves by its mark's layout
-        (`verity.circuits.supplied.leaves`) in rows of its reading port's words, committed under the public salts
+        the verifier computes it (`one_stage.registered.body`), read as the parameter's leaves of its format's width by its
+        mark's layout (`verity.circuits.supplied.leaves`), in the rows its reads fix (`read_shape`: a row its reading
+        port's 16-bit words, so 32-bit leaves hold half as many), committed under the public salts
         ``registered_value.supplied_salts`` gives at its Program's digest, so the verifier's root of them is the record's."""
         reg = self.circuit.registered or Registered({})
         mark = reg.supplied.get(param)
@@ -2727,12 +2728,7 @@ class Window:
             raise ValueError(f"supplied {param!r}: {mark['supplied']}'s value is {mark['bits']} bits, not {8 * len(value)}")
         schema, bits = value_format(reg, param)
         leaves = SU.leaves(mark["layout"], bytes(value), bits)
-        lays = self.circuit.layouts
-        words = {dict(lays[r.reader][0].rows + lays[r.reader][0].outs)[r.port] for r in self.circuit.reads if r.param == param}
-        if len(words) != 1 or len(leaves) % next(iter(words)):
-            raise ValueError(f"supplied {param!r}: read by ports of {sorted(words)} words, which its {len(leaves)} leaves "
-                             "aren't whole rows of")
-        k = next(iter(words))
+        k = read_shape(self.circuit, param)["words"]
         rows = [leaves[i:i + k] for i in range(0, len(leaves), k)]
         prog = program_digest(self.window.program)
         self.registered = {**(self.registered or {}),

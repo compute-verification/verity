@@ -27,7 +27,7 @@ from collections.abc import Mapping, Sequence
 import numpy as np
 import pytest
 
-from verity.circuits import codec, partition_object as PO
+from verity.circuits import codec, partition_object as PO, supplied as SU
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import CATALOG_PACKAGES, REGISTRY, CompositeDefinition, bind, catalog_package
 from verity.circuits.evaluation import evaluate_batch
@@ -797,6 +797,21 @@ def test_a_supplied_value_is_one_short_value_committed_under_public_salts_at_its
         win.give("s", value[:-2])
     with pytest.raises(ValueError, match="none of the circuit's supplied parameters"):
         win.give("t", value)
+
+
+def test_a_supplied_value_of_32_bit_leaves_is_given_in_the_rows_its_reads_fix():
+    """A supplied value whose format is 32-bit leaves (`FP32_SEG`), read by a port of ``K / 2`` 16-bit words, is given in
+    rows of ``K / 4`` leaves (`read_shape`), so the period over the given rows takes them as it takes a committed value's;
+    one value is three 32-bit halves read by two-word ports in the same way (storage's round coin under `halves`)."""
+    mark = {"supplied": "pous.session.header/v1", "args": {"head": 6 * K}, "layout": "halves", "bits": 6 * K * 8}
+    reg = I.Registered({"w": 6 * K // 2}, reads=(READ,), formats={"w": FP32_SEG}, supplied={"w": mark})
+    win = I.Window(I.Circuit("reads", ((COORD, 12),), registered=reg), RUN, SAMPLING_DESIGN, 4)
+    value = bytes(range(256)) + bytes(range(6 * K - 256))
+    win.give("w", value)
+    got, leaves = win.registered["w"], SU.leaves("halves", value, 32)
+    assert (got.leaves, got.words, got.word_bits) == (6, K // 4, 32)
+    assert got.rows == tuple(tuple(leaves[i * K // 4:(i + 1) * K // 4]) for i in range(6))
+    I.Window(win.circuit, RUN, SAMPLING_DESIGN, 4, registered=win.registered)
 
 
 def test_a_listed_records_registered_reads_fill_its_members_rows_and_count_registered_at_a_held_root():
