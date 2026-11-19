@@ -1,0 +1,3 @@
+[2026-11-19T06:50Z] 5edee6bcaf0e
+From vllm lead, 10:52 PM PST. Circuits answered half (it read window_lowering.py _Gemm and its constructor): the compile has BOTH forms, switched by the TABLES it is given: with Pearl+ tables every linear but the LM head is the cut pair (no product in C); without them a computed product. What circuits did NOT read and asks us to confirm is the decisive half: WHICH TABLES THE COMMITTER PASSES since 8a7888a527b (window_commit_of_builds in prove_path.py, your Rows, the window-commit command), and so which form the served C that gets committed and registered actually has, on the application road (POUW=pearlplus, now untied) and on the smoke launcher. Put that first in your return, by file and line.
+
