@@ -75,7 +75,6 @@ VARIABLES = {
     "POUS_ARGS": f"--trusted-sha512 {PIN['pous']} --rounds 320 --challenger-address 192.0.2.1:7000 "
                  f"--bw-trusted-sha512 {PIN['bandwidth']} --bw-host 192.0.2.2",
     "BANDWIDTH_CMD": '"$PY" benchmarks/pous/served_piece.py collect-bandwidth --serve-dir "$1" --window "$2" --out "$3"',
-    "PP_DEVELOPMENT_UNDER_HOLD": "1",
 }
 KEYS = ["network-attester.network-attester.gate", "network-attester.network-attester.peer"]
 #: each runtime party: its protocol (None while a half isn't in the tree), its role there, its machine and its clock
@@ -372,10 +371,11 @@ def test_a_dry_run_on_a_machine_resolves_its_parties(capsys):
 def test_the_runners_variables_and_the_bindings_keys_are_these():
     cfg = R.load(CONFIG, REG)
     deployed = {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": json.dumps(cfg["pin"], sort_keys=True)}
-    assert T.variables(cfg, BINDINGS) == VARIABLES | deployed
+    spot = {"PP_DEVELOPMENT_UNDER_HOLD": "1"}
+    assert T.variables(cfg, BINDINGS) == VARIABLES | deployed | spot
     assert T.unbound(cfg, {}) == KEYS and T.unbound(cfg, BINDINGS) == [] and sorted(set(KEYS) - WRITTEN) == UNBOUND
     unbound = T.variables(cfg, {})
-    assert set(unbound) == set(VARIABLES) - {"WIPE_ADDRESS", "H1_KEY_SHA512"} | set(deployed) | {"DEVELOPMENT"}
+    assert set(unbound) == set(VARIABLES) - {"WIPE_ADDRESS", "H1_KEY_SHA512"} | set(deployed) | {"DEVELOPMENT"} | set(spot)
     assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-attester.network-attester.gate>' "
                                                "--peer '<network-attester.network-attester.peer>' --tokens 2")
     assert unbound["CERTIFIER_CMD"] == VARIABLES["CERTIFIER_CMD"]
