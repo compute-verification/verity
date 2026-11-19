@@ -623,7 +623,7 @@ def _interface(made: dict):
     except ValueError:
         return "inputs", None
     try:
-        blocks = IF.Blocks.of(doc["blocks"], units, "") if "blocks" in doc else None
+        blocks = IF.Blocks.of(doc["blocks"], units, doc.get("partition", "")) if "blocks" in doc else None
     except ValueError:
         return "blocks", None
     return None, (lays, units, blocks, doc)

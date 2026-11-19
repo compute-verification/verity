@@ -101,7 +101,7 @@ from pathlib import Path
 
 import verity.circuits
 import verity.commitments.periods.interface as IF
-from verity.circuits import codec
+from verity.circuits import codec, partition_object as PO
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.population import mixed_population_program, wired_population_program
 from verity.circuits.program import Program
@@ -347,18 +347,23 @@ class Circuit:
         self.root = list(units.items())
         return codec.canonical_json(desc).decode(), codec.program_digest(desc)
 
-    def doc(self, digest: str, order: list | None = None) -> dict:
-        """The circuit's record (`verity/window-circuit/v1`), as far as a stated record's description goes."""
+    def doc(self, text: str, order: list | None = None) -> dict:
+        """The circuit's record (`verity/window-circuit/v1`) of its Program's text `text`, as far as a stated record's
+        description goes: its proof block's partition the object of the root's templates in one block."""
+        desc = json.loads(text)
+        digest = codec.program_digest(desc)
+        tids = [t for t, _ in self.listed(order)]
+        part = PO.digest(PO.build(desc, PO.template_instances_query(tids), [[[0, sum(self.units.values())]]]))
         reg = {"params": dict(self.params), "tables": self.tables, "reads": [r.doc() for r in self.reads],
                "roots": self.roots, "openings": self.openings, **({"values": self.values} if self.values else {}),
                **({"formats": self.formats} if self.formats else {})}
         return json.loads(json.dumps({
             "format": IF.CIRCUIT, "name": self.name, "templates": self.listed(order),
-            "program": digest, "wires": [w.doc() for w in self.wires],
+            "program": digest, "partition": part, "wires": [w.doc() for w in self.wires],
             **({"cuts": self.cuts} if self.cuts else {}), **({"registered": reg} if self.registered else {}),
             **({"ingress": self.ingress} if self.ingress else {}),
             **({"order": [list(b) for b in self.order]} if self.order is not None else {}),
-            "blocks": {"format": IF.BLOCKS, "proof": {"units": sum(self.units.values()), "partition": ""},
+            "blocks": {"format": IF.BLOCKS, "proof": {"units": sum(self.units.values()), "partition": part},
                        "inference": {"slots": self.slots, "steps": self.steps, "entries": self.entries}}}))
 
     def listed(self, order: list | None = None) -> list[list]:
@@ -1273,7 +1278,7 @@ def finish(rng, c: Circuit, held: dict[str, tuple], roots: dict[str, str], pins:
     or `refused` names the stage that refuses it, and what the blocks hold is what the reference counts without that
     stage."""
     text, digest = c.program(order)
-    record = IF.circuit_bytes(c.doc(digest, order)).decode()
+    record = IF.circuit_bytes(c.doc(text, order)).decode()
     inside = [all(s == t for s, t in _slots(c, w)) for w in c.wires]
     g = grids(c)
     for w, want in zip(c.wires, inside, strict=True):
@@ -2257,7 +2262,7 @@ def edged_case(what: str) -> dict:
         desc = json.loads(text)
         root(desc["definitions"][desc["root"]]["body"]["nodes"])
         text, digest = codec.canonical_json(desc).decode(), codec.program_digest(desc)
-    doc = c.doc(digest)
+    doc = c.doc(text)
     if record is not None:
         record(doc)
     text_record = IF.circuit_bytes(doc).decode()
