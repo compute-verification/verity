@@ -101,3 +101,13 @@ def test_a_claimed_wire_the_registered_C_lacks_is_refused() -> None:
     with pytest.raises((ValueError, IO.Undecided)):
         IF.descriptor_record(IF.Circuit("test/bad", ((g, 4), (r, 6)), wires=bad, cuts={rid: {"x": 2}},
                                         blocks=IF.Blocks(slots=2, steps=3, inference=entries)), 1)
+
+
+def test_a_record_whose_wires_do_not_hash_to_its_digest_is_refused() -> None:
+    """Negative soundness, the digest hold: `partition_instance` builds C from the record's wires and holds it to the
+    registration's digest (`doc["program"]`). A record that claims a digest its own wires and templates do not hash to is
+    refused (`Undecided`), so the count reads the registered C and never a description the record's bytes do not bind."""
+    doc = dict(made(True))
+    doc["program"] = "0" * 128  # a digest the record's own wires do not hash to
+    with pytest.raises(IO.Undecided, match="registration's"):
+        IO.partition_instance(doc, None, None, 10 ** 9, 10 ** 9, 10 ** 9)

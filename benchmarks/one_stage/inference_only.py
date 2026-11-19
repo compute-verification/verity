@@ -436,8 +436,9 @@ def partition_instance(doc: Mapping[str, Any], pins: Mapping[str, str] | None, r
     count applies to C to get its blocks, as the verifier holds its own program), θ the held registered root input nodes
     (`held_params_of`), and the policy (c, k, n). It rebuilds no Program from the record: C and the query are the served
     route's own, and `program_of_record` refuses a claimed wire C cannot carry (a wire that doesn't fit its templates, so
-    the registered C lacks it), which is then no edge and its row counts fresh. Refused (`Undecided`) where the record is
-    not one the compiler emits."""
+    the registered C lacks it), which is then no edge and its row counts fresh. It holds the built C to the registration's
+    digest (``doc["program"]``), refusing (`Undecided`) a record whose wires and templates do not hash to the digest it
+    registers, or one the compiler does not emit."""
     from verity.circuits import codec, partition_object as PO
     from verity.circuits.program import Program
     from verity.commitments.periods import interface as IF
@@ -447,6 +448,11 @@ def partition_instance(doc: Mapping[str, Any], pins: Mapping[str, str] | None, r
         circuit, query = IF.program_of_record(doc, BC.resolve)
     except (KeyError, TypeError, ValueError) as e:
         raise Undecided(f"the registered circuit C: {e}") from e
+    reg = doc.get("program")
+    got = codec.program_digest(circuit)
+    if reg is None or got != reg:
+        raise Undecided(f"the built circuit's digest {got!r} is not the registration's {reg!r}: the count reads the "
+                        "registered C, never a description the record's wires do not hash to")
     held = held_params_of(doc, pins, roots)
     program = Program(circuit.fn, circuit.annotations, registered=held, theta=held)
     text = codec.canonical_json(codec.encode_program(program)).decode()
