@@ -44,6 +44,7 @@ pytest.importorskip("torch")
 
 import verity_difftest as D  # noqa: E402
 from verity.commitments import docket_digest as DD  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw import scheme as PP  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[4]
 PACKAGE = ROOT / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
@@ -363,6 +364,28 @@ def test_an_epochs_passes(exe, tmp_path):
     c = T.proved_pass(tmp_path / "c", H100, (2, 3))[0]
     got = same(exe, [a, c], 8)
     assert got["verdict"] == "accept" and {v["pass"] for v in got["verdicts"]} == {0, 1} and len(got["verdicts"]) == 10
+
+
+def test_the_tiles_the_lean_draws_are_pearl_plus_credited_blocks_drawn(exe, tmp_path):
+    """Over two passes of one epoch, the tiles the Lean opens for its sample, (pass, tile id) in its order, are the
+    credited blocks `scheme.drawn_blocks` draws on the run's key, each pass's before its exclusion tiles, and each a block
+    of `scheme.credited_blocks` with a ticket."""
+    a, c = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("a", (0, 1)), ("c", (2, 3))))
+    draws = 16
+    got = same(exe, [a, c], draws)
+    passes = [VR.load(x, T.published(x)) for x in (a, c)]
+    records = [p.records for p in passes]
+    key = VR.derive(SOURCE, VR.RUN_DRAW_DOMAIN, {"run": VR.run_commitment(passes)})
+    drawn = PP.drawn_blocks(passes[0].scheme, records, key, draws)
+    opened = [(v["pass"], v["tile"]) for v in got["verdicts"]]
+    for i in (0, 1):
+        mine = [b.id for b in drawn if b.id[0] == i]
+        assert [x for x in opened if x[0] == i][:len(mine)] == mine
+    assert len(opened) == draws + sum(len(p.tile_ids(T.CW.exclusion_tiles(p.scheme, p.records))) for p in passes)
+    blocks = PP.credited_blocks(passes[0].scheme, records)
+    assert all(b in blocks and b.ticket > 0 for b in drawn)
+    assert [(b.id, b.rows, b.cols) for b in blocks] == [((i, r.id), r.tile.rows, r.tile.cols) for i, p in enumerate(passes)
+                                                        for r in p.verifier.refs]
 
 
 def test_a_served_runs_tile_and_salt(exe, tmp_path):
