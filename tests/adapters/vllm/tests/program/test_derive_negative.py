@@ -238,12 +238,8 @@ def test_cache_ownership_by_kind_rejects_miswired_kv(kind):
     assert bad, f"mis-wired ({kind}) K/V accepted by the name-independent ownership check"
 
 
-def _derive_examples():
-    return pytest.importorskip("verity_vllm.program.frontend.derive_examples", reason="DERIVE's derive_examples.py not merged yet")
-
-
 def _derive_serve(steps: int = 1, **kw):
-    dex = _derive_examples()
+    from verity_vllm.program.frontend import derive_examples as dex
     return _D.derive_report(dex.GreedyServe(TINY, steps, **kw), (torch.zeros(2, dtype=torch.int32),), mode="profile", profile="b1-eager", config=TINY)
 
 

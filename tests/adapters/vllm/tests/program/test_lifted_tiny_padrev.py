@@ -447,14 +447,11 @@ def test_lag_reference_lag0_equals_the_programs_live_values_and_lag1_shifts_by_e
     assert 11 + 1 == 12 and 11 + 0 != 12
 
 
-def test_a_lagged_lserve_if_present_matches_the_reference():
+def test_a_lagged_lserve_matches_the_reference():
     """The lagged LServe (`lag=1`): the live values must equal `padrev_live_ref(…, 1)` (one placeholder step at
     `a_r`), out[a_r] must be an Active token (the placeholder's sample, = the unlifted y_{a_r}) with out[a_r+1:] = ⊥; and — the acceptance
     property — NO step whose input token is ⊥ carries an Active(1) live value (the guard reads the
     FED token `tok_in_{s−1}`, not `out[s−2]`, which would report a live placeholder-successor)."""
-    import inspect
-    if "lag" not in inspect.signature(L.lserve).parameters:
-        pytest.skip("no lagged LServe on this tree")
     prompt, w = _inputs()
     prog = Program(L.lserve(TINY, LP, D_MAX, (EOS_FOR[3],), lag=1))
     t = ref.materialize(prog, [L.lift_words(Array(LP, Value(32)), list(prompt)), L.lift_words(weights_type(TINY), list(w))])
