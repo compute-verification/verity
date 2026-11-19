@@ -1,10 +1,9 @@
 """Pearl+ as a resource scheme (`verity.protocols.resource_accounting.scheme`), registered as ``pearl-plus``.
 
-Its verifier is `verity/pouw/pearl-plus/v1` (`verifier/lean/pearlplus/PouwPearlPlus/Protocol.lean`). A tile that passes
-the tile rule costs its credited cells at the record's kept width |K| (`Credit.lean`'s `creditAtAssumption`), so a
-block's cost reads the record's kept width (``K_KEPT``, `UnitRecord.k_kept`) beside the tile's real rows × TN (TR, the
-tile unit's static, where its shape has one, else TM), not the Definition's K, which is the unit's padded width. The cost
-is of a tile whose every real cell is credited: filler, excluded and given-up rows credit none (`UnitRecord.credited`).
+Its verifier is `verity/pouw/pearl-plus/v1` (`verifier/lean/pearlplus/PouwPearlPlus/Protocol.lean`). In C, a credited
+linear's check is its grid's units of `PearlPlusTileCoreWords_v1` (`prover.circuit.pearl_plus_credited`), each one proof block,
+which costs its credited MACs (`tile_macs`): its real rows × TN × K, its statics TR, TN and K, since the core checks every
+word of the linear's depth K and holds its filler rows to zero.
 
 On a served run (`attach`) it computes every linear block with its device run (`verity.hooks.ComputeBlockWith`), the
 workload's `PearlCDeviceRun` (`serving.tensors.pearl_c_device`), over the weight operands the run registers
@@ -15,9 +14,7 @@ in the first-stage linear's form, which the capture records; its coins are in-pr
 are issued (``steps``, `StepComputed`). It provides the ``cut`` (`Scheme.provides`): a phase's circuit is cut at the
 linears it computes, whose calls commit their A rows and y. Its credited product is one block per grid tile of every
 call of every pass, in the Lean verifier's tile order (`credited_blocks`), and its sample draws over those blocks
-(`drawn_blocks`), each drawn block's core taking its public inputs from the committed records (`drawn_inputs`, which
-refuses a block the core doesn't cover). Its settings are
-`SETTINGS`. A served run launches it untied (`_hooks`): its verdict is its own over its own passes, held to no window
+(`drawn_blocks`). Its settings are `SETTINGS`. A served run launches it untied (`_hooks`): its verdict is its own over its own passes, held to no window
 record, and credits nothing.
 """
 
@@ -48,8 +45,8 @@ OPTION = f"pouw:{KERNEL}"
 READS = ("bf16",)
 
 
-def tile_macs(shape: Mapping[str, int]) -> int:
-    return shape.get("TR", shape["TM"]) * shape["TN"] * shape["K_KEPT"]
+def tile_macs(statics: Mapping[str, int]) -> int:
+    return statics["TR"] * statics["TN"] * statics["K"]
 
 
 @dataclass(frozen=True)
@@ -91,42 +88,6 @@ def credited_blocks(scheme: Any, passes: Sequence[Sequence[Any]]) -> list[Credit
                                      (u.shape.k, len(tile.rows), tn, u.shape.n),
                                      sum(row < r.real_rows for row in tile.rows), ticket))
     return out
-
-
-class Uncovered(ValueError):
-    """A drawn block the credited block doesn't cover, by name (``code``): its core bounds inert work at the Definition's
-    K and checks no word past the record's kept width |K|, and admits every real row, while the tile rule
-    (`PouwPearlPlus/Rule.lean`) credits at |K|, fails excluded rows and skips voluntary ones."""
-
-    def __init__(self, code: str, why: str) -> None:
-        super().__init__(f"{code}: {why}")
-        self.code = code
-
-
-def drawn_inputs(passes: Sequence[Sequence[Any]], block: CreditedBlock, tr: int) -> dict[str, Any]:
-    """The public inputs of a drawn ``block``'s core, ``unit``, ``rows`` and ``col``, read with its kept width, real rows
-    and excluded and voluntary rows from the committed records ``passes`` (each pass's `UnitRecord`s, as
-    `credited_blocks` takes them), never from the caller; ``tr`` is the TR static of C's tile, the core it checks.
-    Refused (`Uncovered`): ``real-rows``, a TR that is not the tile's rows below its call's ``real_rows``
-    (min(TM, real_rows − i) for the tile's rows from i); ``kept-width``, a call whose kept width |K| is below K;
-    ``excluded-row`` and ``voluntary-row``, a tile holding an A row (of ``rows``) or B row (of ``cols``) its call
-    excludes or gives up."""
-    r = passes[block.id[0]][block.record]
-    u, k = r.matmul, r.matmul.shape.k
-    real = sum(row < r.real_rows for row in block.rows)
-    if tr != real:
-        raise Uncovered("real-rows", f"C's tile of call {u.index} at rows {block.rows[0]}..{block.rows[-1]} binds TR = "
-                                     f"{tr!r}, and its record's real rows ({r.real_rows}) leave it {real}")
-    if r.k_kept < k:
-        raise Uncovered("kept-width", f"call {u.index} keeps |K| = {r.k_kept} of K = {k}; the block checks no word past "
-                                      f"|K| and bounds inert work at K, while the tile rule credits at |K|")
-    for code, verb, rule, a, b in (("excluded-row", "excludes", "fails", r.excluded_a, r.excluded_b),
-                                   ("voluntary-row", "gives up", "skips", r.voluntary_a, r.voluntary_b)):
-        rows, cols = sorted(set(block.rows) & set(a)), sorted(set(block.cols) & set(b))
-        if rows or cols:
-            raise Uncovered(code, f"tile {block.id} of call {u.index} holds A rows {rows} and B rows {cols} its record "
-                                  f"{verb}; the block admits every real row, while the tile rule {rule} them")
-    return {"unit": u.index, "rows": list(block.rows), "col": block.col}
 
 
 def drawn_blocks(scheme: Any, passes: Sequence[Sequence[Any]], key: Any, t: int,
@@ -594,7 +555,7 @@ PEARL_PLUS = register(Scheme(
     messages=tuple(m for m in workload.MESSAGES if m.type in ("PoUWScheme", "PearlPass", "H1Registration")),
     protocol="verity/pouw/pearl-plus/v1",
     resource="compute",
-    blocks=(Block("PearlPlusTile_v1", tile_macs), Block("PearlCTileRead_v1", tile_macs)),
+    blocks=(Block("PearlPlusTileCoreWords_v1", tile_macs),),
     assumptions=("Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1",),
     log=(Order("weightsRoot", "pouw/salt"), Order("commitment", "pouw/draw")),
     charges=(Charge("inert-work", "rho"), Charge("sample", "epsilon"), Charge("over-bound-tiles", "over_cap_draws"),
