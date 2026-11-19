@@ -2592,13 +2592,16 @@ def vacuous_meets(body: dict, claim: str) -> str | None:
 #: (the one theorem's vocabulary, `Verity.Soundness` and its subprotocols' targets), or whose name's last component
 #: starts with one of `VERIFIER_PREFIXES`, in any case (a verifier's acceptance: `PeriodRun.accepts`, `Audits.Accepts`,
 #: `Flock.Zk.verify`), the
-#: `acceptance` kind; with none, a read of a module whose last component is one of `EXCLUSION_MODULES` and a conclusion
-#: headed by one of `BOUND_HEADS` (a partition's or a covering's bound, which no verifier accepts), as written or at the end
-#: of the definitions it unfolds through (`Facts.lean`'s `chain`, which `facts_of` hands `BOUND_HEADS`), the `exclusion` kind
+#: `acceptance` kind; with none, a read of a module whose last component is one of `EXCLUSION_MODULES`, or of a
+#: definition whose name's last component is one of `EXCLUSION_NAMES` (a sampling design, a requirement's placement of
+#: blocks), and a conclusion headed by one of `BOUND_HEADS` (a bound over a partition, a covering, a sample or a placement,
+#: which no verifier accepts and which holds emptily when nothing meets its hypotheses), as written or at the end of the
+#: definitions it unfolds through (`Facts.lean`'s `chain`, which `facts_of` hands `BOUND_HEADS`), the `exclusion` kind
 SCOPE_COMPONENT = "Claims"
 SCOPE_MODULES = ("Properties.Verity",)
 VERIFIER_PREFIXES = ("accept", "verify")
 EXCLUSION_MODULES = ("Partition", "PrivatePartition", "Cover", "Covering")
+EXCLUSION_NAMES = ("SamplingDesign", "Placement", "OneBlockEach")
 BOUND_HEADS = ("LE.le", "LT.lt", "GE.ge", "GT.gt")
 WITNESS_KINDS = ("acceptance", "exclusion")
 
@@ -2619,9 +2622,10 @@ def witness_scope(name: str, policy: dict, pin: dict) -> tuple[str, str] | None:
     `acceptance` when it states what an acceptance means (a property of a function's acceptance, `accepted`, or a
     statement reading a claim, a `SCOPE_COMPONENT` module, the one theorem's vocabulary, `SCOPE_MODULES`, or a verifier's
     acceptance, `VERIFIER_PREFIXES`); `exclusion` when it reads none of those but a partition or a covering
-    (`EXCLUSION_MODULES`) and concludes a bound (`BOUND_HEADS`, or a definition that unfolds to one, `concluded`). A
-    guarantee with no such read is about something else (a bound on a hash, a count, a device), where neither form means
-    anything, and so is one whose statement is a reflexivity (`reflexive`), whatever it reads."""
+    (`EXCLUSION_MODULES`), a sampling design or a placement (`EXCLUSION_NAMES`) and concludes a bound (`BOUND_HEADS`, or
+    a definition that unfolds to one, `concluded`). A guarantee with no such read is about something else (a bound on a
+    hash, a count, a device's memory blocks), where neither form means anything, and so is one whose statement is a
+    reflexivity (`reflexive`), whatever it reads."""
     if reflexive(pin):
         return None
     if fns := accepted(policy, name):
@@ -2641,6 +2645,10 @@ def witness_scope(name: str, policy: dict, pin: dict) -> tuple[str, str] | None:
             if (r.get("module") or "").split(".")[-1] in EXCLUSION_MODULES:
                 return "exclusion", (f"it concludes a bound and reads {r['name']} of {r['module']}, a partition or "
                                      f"covering, and no acceptance")
+        for r in reads:
+            if r.get("name", "").split(".")[-1] in EXCLUSION_NAMES:
+                return "exclusion", (f"it concludes a bound and reads {r['name']}, a sampling design or a placement, "
+                                     f"and no acceptance")
     return None
 
 

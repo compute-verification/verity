@@ -6571,6 +6571,34 @@ def test_an_exclusion_theorem_has_an_honest_witness_and_an_explicit_circuit_beat
     assert A.witness_scope("P.sound", device[0], device[1]["pins"]["P.sound"])[0] == "acceptance"
 
 
+def test_a_bound_over_a_sampling_design_or_a_placement_is_an_exclusion_and_one_over_memory_blocks_is_not():
+    """A bound over a sample, or over a requirement's placement of blocks, holds emptily when nothing meets its
+    hypotheses, as one over a partition does: a guarantee concluding a bound and reading a definition named for a
+    sampling design or a placement (`EXCLUSION_NAMES`, in whatever module) is of the `exclusion` kind, held to its
+    witnesses, and without them and an entry it fails `witnesses.missing`. A bound over a device's memory blocks reads
+    none of those and is out of scope, as is a statement that reads a sampling design and concludes no bound."""
+    def read(name, module):
+        return {"name": name, "module": module, "kind": "def", "hash": "8" * 32}
+
+    bound = wbody("LE.le", binders=["∀", "→", "→"], conclusion=[wk("LE.le", ["P.miss"])])
+    for name, module in [("Verity.SamplingDesign", "Definitions.Core.Draw"),
+                         ("Spot.Sampling.SamplingDesign", "Definitions.Spot.Sampling.SamplingDesign"),
+                         ("Core.SamplingDesign", "CoreProtocol.Profile"),
+                         ("ResourceAccounting.Requirement.Store.Placement", "Definitions.ResourceAccounting.Requirement"),
+                         ("ResourceAccounting.Requirement.Placement", "Definitions.Core.Requirement"),
+                         ("ResourceAccounting.Requirement.OneBlockEach", "Definitions.ResourceAccounting.Requirement")]:
+        pol, f = witnessed({"reads": [read(name, module)], "body": bound})
+        assert A.witness_scope("P.sound", pol, f["pins"]["P.sound"]) == (
+            "exclusion", f"it concludes a bound and reads {name}, a sampling design or a placement, and no acceptance")
+        assert witness_codes({**pol, "witnesses": {}}, f) == ["witnesses.missing"]
+    for reads, body in [([read("Pous.Dense.blocks", "Definitions.Pous.Model.Dense")], bound),
+                        ([read("Pous.FreeSet", "Definitions.Pous.Model.FreeBlocks")], bound),
+                        ([read("Verity.SamplingDesign.draw", "Definitions.Core.Draw")], bound),
+                        ([read("Verity.SamplingDesign", "Definitions.Core.Draw")], wbody("P.miss", binders=["∀"]))]:
+        pol, f = witnessed({"reads": reads, "body": body})
+        assert A.witness_scope("P.sound", pol, f["pins"]["P.sound"]) is None, reads
+
+
 def test_a_premise_free_exclusion_theorem_is_witnessed_by_its_bound_failing_at_an_explicit_circuit():
     """An exclusion theorem that takes no premise (`premise_free`: training's `ServingBlocks.UncertifiedElementary`, a
     bound at every unit of every refinement) has none to drop: its nontrivial witness is the bare `¬ bound` at an explicit
