@@ -147,8 +147,9 @@ import json
 import struct
 import subprocess
 import tempfile
+import copy
 from dataclasses import dataclass
-from functools import cached_property
+from functools import cache, cached_property
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -277,6 +278,37 @@ _UNIT = _unit()
 def unit(egress: tuple[int, int, int], ingress: tuple[int, int, int]):
     """N2's proof block for heads of the size classes `egress` and `ingress`, each (L, T, COUNTS) (`head_check.unit`)."""
     return bind(_UNIT, EGRESS=tuple(egress), INGRESS=tuple(ingress))
+
+
+class UnitProgram:
+    """A unit's registered Program, `n` instances of it (`population.population_program`), and what the verifier derives
+    from it and the unit alone: the partition object under the unit's template query, the Program's descriptor, and
+    `check`, the digest of the unit's own Program, which the spec's `Check` names."""
+
+    def __init__(self, unit, n: int) -> None:
+        self.unit, self.n = unit, n
+
+    @cached_property
+    def program(self) -> Program:
+        return PN.population_program(self.unit, self.n)
+
+    @cached_property
+    def partition(self) -> dict[str, Any]:
+        return P.partition(self.program, P.template_instance_query(self.unit))
+
+    @cached_property
+    def descriptor(self) -> bytes:
+        return canonical_json(encode_program(self.program))
+
+    @cached_property
+    def check(self) -> str:
+        return P.program_sha512(Program(self.unit))
+
+
+#: one `UnitProgram` a unit and population a process. Keyed on the unit object, which `bind` makes one a binding record of
+#: its own Definition: a Definition of the same id and statics built anew, with another body, is another key. The
+#: Program is shared and read only to encode; a caller takes its own copy of the partition object.
+unit_program = cache(UnitProgram)
 
 
 PUBLIC = (
@@ -511,12 +543,16 @@ class TransferBlocks:
         return P.template_instance_query(self.unit)
 
     @cached_property
+    def _built(self) -> UnitProgram:
+        return unit_program(self.unit, 1)
+
+    @property
     def _program(self) -> Program:
-        return PN.population_program(self.unit, 1)
+        return self._built.program
 
     @cached_property
     def _partition(self) -> dict[str, Any]:
-        return P.partition(self._program, self.query)
+        return copy.deepcopy(self._built.partition)
 
     @property
     def partition(self) -> dict[str, Any]:
@@ -532,7 +568,7 @@ class TransferBlocks:
             "parameters": {"egress": self.grid(0)[-HC.DIGEST_BYTES:].hex(),
                            "ingress": self.grid(1)[-HC.DIGEST_BYTES:].hex()},
             "occupancy": [None, None], "warden": [self.network_attester.windows, self.network_attester.digest.hex()]})
-        check = S.Check(P.program_sha512(Program(self.unit)), self.query, public_outputs=OUTPUTS,
+        check = S.Check(self._built.check, self.query, public_outputs=OUTPUTS,
                         proof_deadline=self.proof_deadline)
         return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.All(), check, PUBLIC, context)
 
@@ -720,7 +756,7 @@ class TransferBlocks:
     @cached_property
     def program(self) -> bytes:
         """The registered Program's descriptor, the verifier's own copy, whose SHA-512 the partition object names."""
-        return canonical_json(encode_program(self._program))
+        return self._built.descriptor
 
     def certified(self, window: int, certificates: Sequence[Certificate]) -> bool:
         """The attestations' check, on the host from their public fields alone: two attestations, each the attester's

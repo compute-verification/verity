@@ -66,6 +66,7 @@ the auditor's device's record of the link.
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 from dataclasses import dataclass
 from functools import cached_property
@@ -73,8 +74,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from verity.commitments import docket_digest as DD
-from verity.circuits import population as PN
-from verity.circuits.codec import canonical_json, encode_program
+from verity.circuits.codec import canonical_json
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.commitments.merkle import CommitmentDomain
@@ -350,12 +350,16 @@ class IngressTie:
         return P.template_instance_query(self.unit)
 
     @cached_property
+    def _built(self) -> SVC.UnitProgram:
+        return SVC.unit_program(self.unit, self.T)
+
+    @property
     def _program(self) -> Program:
-        return PN.population_program(self.unit, self.T)
+        return self._built.program
 
     @cached_property
     def _partition(self) -> dict[str, Any]:
-        return P.partition(self._program, self.query)
+        return copy.deepcopy(self._built.partition)
 
     @property
     def partition(self) -> dict[str, Any]:
@@ -364,13 +368,13 @@ class IngressTie:
     @cached_property
     def program(self) -> bytes:
         """The registered Program's descriptor, the verifier's own copy, whose SHA-512 the partition object names."""
-        return canonical_json(encode_program(self._program))
+        return self._built.descriptor
 
     @cached_property
     def spec(self) -> S.Spec:
         context = canonical_json({"format": SPEC, "link": self.link, "session": self.session.hex(),
                                   "params": self.params.digest.hex()})
-        check = S.Check(P.program_sha512(Program(self.unit)), self.query, public_outputs=OUTPUTS,
+        check = S.Check(self._built.check, self.query, public_outputs=OUTPUTS,
                         proof_deadline=self.proof_deadline)
         return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.All(), check, PUBLIC, context)
 

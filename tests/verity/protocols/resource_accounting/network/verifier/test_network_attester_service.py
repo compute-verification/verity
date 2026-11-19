@@ -290,6 +290,19 @@ def test_the_proof_block_is_the_registered_template(tmp_path):
     assert lw.partition is lw._partition
 
 
+def test_links_of_one_size_class_share_their_registered_program_and_others_dont(tmp_path):
+    """Two links of one size class (each end's L, T and COUNTS) on other runs and sessions share the registered Program
+    and what is derived from it, made once a process; a link of another size class, or a unit of the same id built anew,
+    shares none of it."""
+    lw = Run(tmp_path).lw
+    other = replace(lw, run="r-other", certifier_session=bytes(len(lw.certifier_session)))
+    assert other.unit is lw.unit and other._built is lw._built and other._program is lw._program
+    wide = replace(lw, params=GridParams(8, 2, 1))
+    assert wide._built is not lw._built and wide._built.unit is not lw.unit
+    anew = bind(replace(SVC._UNIT, register=False), EGRESS=lw.head_key(0), INGRESS=lw.head_key(1))
+    assert anew.id == lw.unit.id and SVC.unit_program(anew, 1) is not lw._built
+
+
 def test_n2s_program_reads_no_registered_value(tmp_path):
     """N2's verifier runs Lean without registered reads (`proofs.verify` with `registered` None), which
     `proofs.verify` refuses for a program that reads registered values; N2's proof block reads none, so its proofs reach

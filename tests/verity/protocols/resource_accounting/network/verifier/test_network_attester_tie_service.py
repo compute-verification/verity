@@ -21,7 +21,7 @@ import pytest
 
 import verity
 from verity.commitments import docket_digest as DD
-from verity.circuits import boolean as BL, codec
+from verity.circuits import boolean as BL, codec, population as PN
 from verity.circuits.defs import bind
 from verity.circuits.program import Program
 from verity.protocols.resource_accounting.network.prover import n2_tie_zk as N2T
@@ -30,6 +30,7 @@ from verity.protocols.resource_accounting.network.verifier import head_check as 
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
 from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.commitments import registered_value as RV
 
 import standin
@@ -384,6 +385,24 @@ def test_the_tie_unit_calls_io_tie_request_and_another_circuit_is_another_progra
     other = bind(replace(TS._UNIT, body=lambda B_, S_, *a: B_.call(bind(forged, B=S_.B, L=S_.L, R=S_.R), *a),
                          register=False), B=B, L=2, R=2)
     assert unit.id == other.id and HC.circuit_digest(unit) != HC.circuit_digest(other)
+
+
+def test_ties_of_one_size_class_share_their_registered_program_and_others_dont():
+    """Two ties of one size class (B, L, R and T) on other links and sessions share the registered Program and its
+    descriptor, each byte for byte what is built anew, and each owns its copy of the partition object, so editing one
+    leaves the other's. A tie of another size class, or a unit of the same id built anew, shares none of them."""
+    a, b = TS.IngressTie(LINK, PARAMS, SESSION), TS.IngressTie("other", PARAMS, hashlib.sha512(b"other").digest())
+    program = PN.population_program(a.unit, a.T)
+    assert a._program is b._program and a.program is b.program
+    assert a.program == codec.canonical_json(codec.encode_program(program))
+    assert a.partition == b.partition == P.partition(program, a.query) and a.partition is not b.partition
+    assert a.spec.check.program == b.spec.check.program == P.program_sha512(Program(a.unit))
+    a.partition["program"] = "edited"
+    assert b.partition["program"] == TS.IngressTie(LINK, PARAMS, SESSION).partition["program"] != "edited"
+    wide = TS.IngressTie(LINK, W.NetworkAttesterParams(cell_bytes=B, slots=2, lanes=3, window=4, delay=1), SESSION)
+    assert wide._program is not b._program and wide.partition["program"] != b.partition["program"]
+    anew = bind(replace(TS._UNIT, register=False), B=B, L=2, R=2)
+    assert anew.id == b.unit.id and SVC.unit_program(anew, b.T) is not b._built
 
 
 #: this link's registered Program (the partition object's ``program``) when its unit held IoTieRequest as a gate,
