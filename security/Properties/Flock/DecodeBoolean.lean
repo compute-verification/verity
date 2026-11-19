@@ -39,13 +39,16 @@ def Prog.BodyOf (P : Prog) (w b : Nat) : Prop :=
     (P.defs[b]!).params.map (·.2) = (P.defs[w]!).params.map (·.2.bitType) ∧
     (P.defs[b]!).ret = (P.defs[w]!).ret.bitType
 
-/-- **`decode`'s Boolean map (§4.9).** On an accepted descriptor, each word primitive's key leads (`P.bodyOf?`) to a
-Definition of `P` that is a Boolean Definition of its bit signature, and every key of the map is a word primitive's. -/
+/-- `P`'s Boolean map is §4.9's: each word primitive's key leads (`P.bodyOf?`) to a Definition of `P` that is a Boolean
+Definition of its bit signature, and every key of the map is a word primitive's. -/
+def Prog.BoolMapOk (P : Prog) : Prop :=
+  (∀ w < P.defs.size, isWordPrim (P.defs[w]!).prim (P.defs[w]!).key = true →
+    ∃ b < P.defs.size, P.bodyOf? (P.defs[w]!).key = some b ∧ P.BodyOf w b) ∧
+  (∀ k v, P.boolean[k]? = some v →
+    ∃ w < P.defs.size, P.index[k]? = some w ∧ (P.defs[w]!).key = k ∧ isWordPrim (P.defs[w]!).prim k = true)
+
+/-- **`decode`'s Boolean map (§4.9).** On an accepted descriptor, the Program's Boolean map is §4.9's. -/
 def DecodeBoolean : Prop :=
-  ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P →
-    (∀ w < P.defs.size, isWordPrim (P.defs[w]!).prim (P.defs[w]!).key = true →
-      ∃ b < P.defs.size, P.bodyOf? (P.defs[w]!).key = some b ∧ P.BodyOf w b) ∧
-    (∀ k v, P.boolean[k]? = some v →
-      ∃ w < P.defs.size, P.index[k]? = some w ∧ (P.defs[w]!).key = k ∧ isWordPrim (P.defs[w]!).prim k = true)
+  ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → P.BoolMapOk
 
 end Flock.Program
