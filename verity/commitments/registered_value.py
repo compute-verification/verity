@@ -5,7 +5,7 @@ import hashlib
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, ClassVar
 
 from verity.commitments import hm96
 from verity.commitments.identity import identity_digest_sha512
@@ -142,6 +142,9 @@ def supplied_salts(program: str, value: str, n: int) -> list[bytes]:
 class Registered:
     """The prover's side of one registered value: its rows and salts (private), every row's `b || c`, the tree."""
 
+    #: whether `domain` recomputes the binding the value's tree was committed under: False for a value whose entry
+    #: names its domain by id alone
+    BINDABLE: ClassVar[bool] = True
     program: str
     value: str
     words: int
