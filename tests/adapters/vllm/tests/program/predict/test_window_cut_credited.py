@@ -21,8 +21,9 @@ from verity.circuits.types import Array, Value
 from verity.commitments import registered_value as RV
 from verity.commitments.merkle import tree_levels
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
-    HM96, activation_binding, commit_rows, fresh_salts, rows_domain, weight_binding)
+    HM96, Hm96Domain, activation_binding, commit_rows, fresh_salts, rows_domain, weight_binding)
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import inert_bound, pc8
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as T
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
@@ -138,7 +139,7 @@ def test_the_credited_block_with_its_leaf_is_the_tile_unit_on_word_ports():
     assert got[descriptor_id(b.program.root)] == got[descriptor_id(tile)]
 
 
-def test_the_word_ports_rows_registered_at_row_format_are_at_the_devices_roots():
+def test_the_word_ports_registered_rows_are_the_devices_leaves_under_the_port_id_and_its_root_under_pouws():
     sig = dict(WK.credited_product(SCHEME, K, TM, TN, N, D).signature()[0])
     w = WK.ROW_FORMAT["word_bits"]
     assert sig["a"] == Array(TM, Array(K, Value(w))) and sig["b"] == Array(TN, Array(K, Value(w)))
@@ -149,21 +150,26 @@ def test_the_word_ports_rows_registered_at_row_format_are_at_the_devices_roots()
     b = rng.integers(0, 1 << 16, (TN, K), dtype=np.uint16).astype("<u4") << 16
     a_salts, y_salts, b_salts = fresh_salts(m16), fresh_salts(m16), fresh_salts(TN)
 
-    def registered(binding: bytes, owner: int, rows: np.ndarray, salts) -> bytes:
-        dom = rows_domain(binding, owner, len(rows), "sha512")
-        base = RV.Registered.commit(SCHEME, "v", rows.tolist(), salts, word_bits=w, schema=WK.ROW_FORMAT["row_schema"])
-        return tree_levels(dom, [RV.leaf(dom, j, bc, WK.ROW_FORMAT["row_schema"]) for j, bc in enumerate(base.bcs)])[-1][0]
-
-    def device(binding: bytes, owner: int, rows: np.ndarray, salts) -> bytes:
-        return commit_rows(binding, owner, [r.tobytes() for r in rows], HM96, salts).commitment.root
-
-    assert registered(activation_binding(salt, i), i, a, a_salts) == device(activation_binding(salt, i), i, a, a_salts)
-    assert registered(weight_binding(wid), -2, b, b_salts) == device(weight_binding(wid), -2, b, b_salts)
+    fmt, program, window = WK.ROW_FORMAT, "ab" * 64, "cd" * 64
     y = y16.astype("<u4") << 16
-    assert registered(SY.y_binding(salt, i), i, y, y_salts) == SY.commit_y(y16.tobytes(), N, salt, i, y_salts)[0]
-    flipped = a.copy()
-    flipped[TM - 1, 0] ^= 1
-    assert registered(activation_binding(salt, i), i, flipped, a_salts) != device(activation_binding(salt, i), i, a, a_salts)
+    values = [(PWR.a_value(0, 0), a, a_salts, activation_binding(salt, i), i, window),
+              (PWR.y_value(0, 0), y, y_salts, SY.y_binding(salt, i), i, window),
+              (PWR.b_value(wid), b, b_salts, weight_binding(wid), -2, None)]
+
+    def device(dom, rows: np.ndarray, salts) -> bytes:
+        d = Hm96Domain(dom.binding, dom.owner, dom.positions, hash="sha512")
+        return tree_levels(d, [d.leaf(j, j, fmt["row_schema"], r.tobytes() + s) for j, (r, s) in enumerate(zip(rows, salts))])[-1][0]
+
+    for value, rows, salts, binding, owner, win in values:
+        port = RV.Registered.commit(program, value, rows.tolist(), salts, word_bits=fmt["word_bits"],
+                                    schema=fmt["row_schema"], window=win)
+        assert device(port.domain, rows, salts) == port.root
+        pouw = rows_domain(binding, owner, len(rows), HM96)
+        assert device(pouw, rows, salts) == commit_rows(binding, owner, [r.tobytes() for r in rows], HM96, salts).commitment.root
+        flipped = rows.copy()
+        flipped[TM - 1, 0] ^= 1
+        assert device(port.domain, flipped, salts) != port.root
+    assert device(SY.y_domain(salt, i, m16), y, y_salts) == SY.commit_y(y16.tobytes(), N, salt, i, y_salts)[0]
 
 
 @pytest.mark.slow
