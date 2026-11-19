@@ -232,9 +232,11 @@ theorem forIn_ok_of {α : Type} {xs : Array α} {f : α → Flock.V Unit}
       · rw [(hb _ _ _ hc).2] at h
         exact ih h ha
 
-/-- The recursive setup checks each table's registered reads (`checkRegistered`). -/
+/-- The recursive setup checks each table's registered reads (`checkRegistered`) at the reads derived from C
+(`Registered.withPositions`). -/
 theorem RecIns.setup_registered {s : RecIns} {spec : SessionSpec} {sts : Array Stmt}
-    (h : s.setup = .ok (spec, sts)) : ∀ st ∈ sts, checkRegistered st s.base.registered = .ok () := by
+    (h : s.setup = .ok (spec, sts)) : ∀ st ∈ sts,
+      (Registered.withPositions st.c st.pub s.base.read.I.program s.base.registered >>= checkRegistered st) = .ok () := by
   unfold RecIns.setup at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
@@ -259,19 +261,23 @@ theorem digest_tables {pub : Public} {t : Tables} (ht : pub.tables = some t) (i 
   unfold Public.digest Registered.tableRow Registered.ref
   rw [ht]
 
-/-- **A registered port's rows at a checked table**: where the table passed `checkPubRows` and `checkRegistered`
-against the verifier's own reads `own`, a port `reg` of `own` registering a value `fixedRow` knows has a table `t`, a
-circuit port `p` and an entry's positions, with every instance `i`'s ref a row of that table read at the position its
-unit reads, and every row the value's `fixedRow` row at its position. -/
-theorem rowsAt {st : Stmt} {own : Array Registered.Port} {cs : RecVStar.InnerCommits}
-    {sparse : Option RecSparse.Shape} (hP : RecVStar.checkPubRows st (some own) (some cs) sparse = .ok ())
-    (hR : checkRegistered st (some own) = .ok ()) {reg : Registered.Port} (hmem : reg ∈ own)
+/-- **A registered port's rows at a checked table**: where the table passed `checkPubRows` against the verifier's own
+ports `own` and `checkRegistered` against `own'`, their reads derived from C (`Registered.withPositions`), a port `reg`
+of `own` registering a value `fixedRow` knows has its derived port `reg'`, a table `t`, a circuit port `p` and an
+entry's positions, with every instance `i`'s ref a row of that table read at the position its unit's derived read
+gives, and every row the value's `fixedRow` row at its position. -/
+theorem rowsAt {st : Stmt} {own own' : Array Registered.Port} {cs : RecVStar.InnerCommits}
+    {sparse : Option RecSparse.Shape} {program : Option ByteArray}
+    (hP : RecVStar.checkPubRows st (some own) (some cs) sparse = .ok ())
+    (hW : Registered.withPositions st.c st.pub program (some own) = .ok (some own'))
+    (hR : checkRegistered st (some own') = .ok ()) {reg : Registered.Port} (hmem : reg ∈ own)
     (hfix : (RecVStar.fixedRow { reps := #[] } reg.value 0).isSome = true) :
+    ∃ reg' ∈ own', reg' = { reg with readsRel := reg'.readsRel, readsFrom := reg'.readsFrom } ∧
     ∃ t idx p, ∃ positions : Array ℕ, st.pub.tables = some t ∧ Registered.unitIndices st.pub = .ok idx ∧
       (List.range st.c.ports.size).find? (fun p => st.c.ports[p]!.name == reg.name) = some p ∧
       positions.size = t.counts.getD p 0 ∧
       (∀ i < st.pub.n, Registered.ref t st.c.ports.size p i < positions.size ∧
-        reg.reads[idx.getD i 0]? = some (some (positions.getD (Registered.ref t st.c.ports.size p i) 0))) ∧
+        reg'.reads[idx.getD i 0]? = some (some (positions.getD (Registered.ref t st.c.ports.size p i) 0))) ∧
       ∀ r < positions.size, ∃ w c, RecVStar.fixedRow cs reg.value (positions.getD r 0)
         ((RecSparse.params st.c.unit.name).or sparse) = some (.ok (w, c)) ∧ Registered.tableRow st.pub t p r = c := by
   obtain ⟨t, ht, p, positions, paths, hp, hent, hrows⟩ := FlockC3.PubRows.checkPubRows_rows hP hmem hfix

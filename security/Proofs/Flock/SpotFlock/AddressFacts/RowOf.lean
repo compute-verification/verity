@@ -360,14 +360,17 @@ theorem blocks_of_ok (hr : r.Ok h) {st : Roots} {rec draw : Json} (hR : r.Reads 
   exact blocksOf_of_interiorOrderOk hord
 
 /-- **The header's position for the checked inner block's instance is the registered read's at the instance's
-slot** (`positionFact` at `sampleSlot`), where the second stage puts the inner block there (`Sits`). -/
+slot**, its reads derived from C (`Registered.withPositions`) (`positionFact` at `sampleSlot`), where the second stage
+puts the inner block there (`Sits`). -/
 theorem readAt_of_ok (hS : Sits h) (hr : r.Ok h) {own : Array _root_.Flock.Registered.Port}
     {reg : _root_.Flock.Registered.Port} (hown : r.ins.registered = some own) (hmem : reg ∈ own) {q : ℕ}
     (hfind : (List.range r.sts[0]!.c.ports.size).find? (fun p => r.sts[0]!.c.ports[p]!.name == reg.name) = some q)
     {tb} {positions} {paths} (htb : r.sts[0]!.pub.tables = some tb)
     (hent : _root_.Flock.Registered.entry r.sts[0]!.pub reg = .ok (positions, paths)) :
-    reg.readAt ((partOf h r).lo + unitOf r.ins.read.draw (r.n h)) =
-      some (some (positions.getD (_root_.Flock.Registered.ref tb r.sts[0]!.c.ports.size q (r.n h)) 0)) := by
+    ∃ own' reg', _root_.Flock.Registered.withPositions r.sts[0]!.c r.sts[0]!.pub r.ins.read.I.program (some own) =
+      .ok (some own') ∧ reg' ∈ own' ∧ reg' = { reg with readsRel := reg'.readsRel, readsFrom := reg'.readsFrom } ∧
+      reg'.readAt ((partOf h r).lo + unitOf r.ins.read.draw (r.n h)) =
+        some (some (positions.getD (_root_.Flock.Registered.ref tb r.sts[0]!.c.ports.size q (r.n h)) 0)) := by
   obtain ⟨hcnt, hlab, -⟩ := hS r hr
   have hpos := sts_pos hr
   obtain ⟨Pt, d, spec, hx, hP, h2, hin, hok, hu, hck, hb, hρ, hrb, hset⟩ := hr

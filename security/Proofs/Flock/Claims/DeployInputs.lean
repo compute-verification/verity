@@ -243,7 +243,8 @@ def noIdentifier (st : Stmt) : V Unit :=
   | .error _ => pure ()
   | .ok _ => throw "identifier: the public header names an identifier; pass the verifier's own (--identifier F)"
 
-/-- **`verifyCmd`'s setup** at the statement's sample, with no recursive input and no `--identifier`. -/
+/-- **`verifyCmd`'s setup** at the statement's sample, with no recursive input and no `--identifier`. Each
+statement's registered reads are checked at the reads `Registered.withPositions` derives from C, the verifier's program. -/
 def Ins.setup (s : Ins) : V (SessionSpec × Array Stmt) := do
   let r := s.read
   if !r.tags.hm96Rows then
@@ -251,7 +252,7 @@ def Ins.setup (s : Ins) : V (SessionSpec × Array Stmt) := do
   RecSetup.checkInner none none (pure (none, none))
   let (spec, sts) ← r.setup
   for st in sts do
-    checkRegistered st s.registered
+    checkRegistered st (← Registered.withPositions st.c st.pub r.I.program s.registered)
     noIdentifier st
   Registered.checkFull s.registered r.draw
   RecSetup.checks none none s.stmtTags r.I.tables sts r.I.circuitFile r.I.partition r.I.program s.registered none none

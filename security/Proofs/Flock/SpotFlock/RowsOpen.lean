@@ -116,19 +116,22 @@ variable (h : Held)
 a masked Flock statement with registered ports `own`, in Flock's scope with hidden outputs, and a Flock witness its
 relation accepts, at each table `j`, for each port `reg` of `own`, the table's port `q` named like it and each unit `n`:
 the commit string of row `q` of unit `n`, as the witness holds it (`InnerRows.rowBytes` under `InnerRows.salt`), opens
-`reg` at the position its reads give for the unit, through the path the session gives there. -/
+`reg` at the position its reads derived from C (`Registered.withPositions`, `reg'`) give for the unit, through the path
+the session gives there. -/
 theorem rows_open {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
     {sts : Array _root_.Flock.Stmt} {own} {w : Claims.Flock.Wit}
     (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts)) (hown : ins.registered = some own)
     (hsc : ScopedHidden xS)
     (hck : Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) xS w = true) :
-    ∀ j (hj : j < sts.size), ∃ tb idx, sts[j].pub.tables = some tb ∧
+    ∀ j (hj : j < sts.size), ∃ tb idx own', sts[j].pub.tables = some tb ∧
       _root_.Flock.Registered.unitIndices sts[j].pub = .ok idx ∧
-      ∀ reg ∈ own, ∃ q positions paths,
+      _root_.Flock.Registered.withPositions sts[j].c sts[j].pub ins.read.I.program (some own) = .ok (some own') ∧
+      ∀ reg ∈ own, ∃ reg' ∈ own', reg' = { reg with readsRel := reg'.readsRel, readsFrom := reg'.readsFrom } ∧
+        ∃ q positions paths,
         (List.range sts[j].c.ports.size).find? (fun q => sts[j].c.ports[q]!.name == reg.name) = some q ∧
         _root_.Flock.Registered.entry sts[j].pub reg = .ok (positions, paths) ∧ ∀ n < sts[j].pub.n,
           _root_.Flock.Registered.ref tb sts[j].c.ports.size q n < tb.counts.getD q 0 ∧
-          reg.reads[idx.getD n 0]? =
+          reg'.reads[idx.getD n 0]? =
             some (some (positions.getD (_root_.Flock.Registered.ref tb sts[j].c.ports.size q n) 0)) ∧
           _root_.Flock.Registered.opens reg
             (_root_.Flock.Hm96.Default512.commitString

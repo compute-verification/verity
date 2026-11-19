@@ -42,10 +42,12 @@ theorem forIn_ok_each_array {α β ε : Type} {f : α → β → Except ε (ForI
   rw [← Array.forIn_toList] at h
   exact forIn_ok_each hf xs.toList b r h a (Array.mem_toList_iff.2 ha)
 
-/-- **The setup checks each statement's registered reads** against the inputs' registered ports. -/
+/-- **The setup checks each statement's registered reads** against the inputs' registered ports, each port's reads
+derived from C at the statement's units (`Registered.withPositions`). -/
 theorem setup_checkRegistered {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
     {sts : Array _root_.Flock.Stmt} (hs : s.setup = .ok (spec, sts)) :
-    ∀ st ∈ sts, _root_.Flock.checkRegistered st s.registered = .ok () := by
+    ∀ st ∈ sts, (_root_.Flock.Registered.withPositions st.c st.pub s.read.I.program s.registered >>=
+      _root_.Flock.checkRegistered st) = .ok () := by
   unfold FlockDeploy.Ins.setup at hs
   simp only [bind, Except.bind, pure, Except.pure] at hs
   repeat' split at hs
@@ -65,18 +67,21 @@ theorem setup_checkRegistered {s : FlockDeploy.Ins} {spec : _root_.Flock.Session
         exact ⟨rfl, _, rfl⟩
 
 /-- **Each row the session reads from a registered port opens under the port**: at a session statement that sets up as
-a masked Flock statement with registered ports `own`, for every statement of its setup and every port of `own`, the
-circuit has the port by name, and each instance's table row opens the port's commitment at the position the port reads
+a masked Flock statement with registered ports `own`, for every statement of its setup, `Registered.withPositions`
+derives `own'` from C at the statement's units, each port of `own` its port of `own'` with the derived reads; the circuit
+has the port by name, and each instance's table row opens the port's commitment at the position the derived reads give
 for the instance's unit, through the path the session header gives for that row. -/
 theorem opens_of_setup {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
     {sts : Array _root_.Flock.Stmt} {own} (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts))
     (hown : ins.registered = some own) :
-    ∀ st ∈ sts, ∃ tb idx, st.pub.tables = some tb ∧ _root_.Flock.Registered.unitIndices st.pub = .ok idx ∧
-      ∀ reg ∈ own, ∃ p positions paths,
+    ∀ st ∈ sts, ∃ tb idx own', st.pub.tables = some tb ∧ _root_.Flock.Registered.unitIndices st.pub = .ok idx ∧
+      _root_.Flock.Registered.withPositions st.c st.pub ins.read.I.program (some own) = .ok (some own') ∧
+      ∀ reg ∈ own, ∃ reg' ∈ own', reg' = { reg with readsRel := reg'.readsRel, readsFrom := reg'.readsFrom } ∧
+        ∃ p positions paths,
         (List.range st.c.ports.size).find? (fun p => st.c.ports[p]!.name == reg.name) = some p ∧
         _root_.Flock.Registered.entry st.pub reg = .ok (positions, paths) ∧ ∀ i < st.pub.n,
           _root_.Flock.Registered.ref tb st.c.ports.size p i < tb.counts.getD p 0 ∧
-          reg.reads[idx.getD i 0]? =
+          reg'.reads[idx.getD i 0]? =
             some (some (positions.getD (_root_.Flock.Registered.ref tb st.c.ports.size p i) 0)) ∧
           _root_.Flock.Registered.opens reg
             (_root_.Flock.Registered.tableRow st.pub tb p (_root_.Flock.Registered.ref tb st.c.ports.size p i))
