@@ -279,6 +279,9 @@ inductive OneStage where
   | bernoulli (num den : ℕ)
   | stratified (K : ℕ)
   | work (K : ℕ) (w f : List ℕ)
+  /-- a uniform `k_s`-subset of each stratum, independently, at the counts `ks` in stratum order, which the sampling
+  design's own rule fixed -/
+  | counts (ks : List ℕ)
 
 /-- `B`'s members in `[o, o + n)`, shifted to `[0, n)`. -/
 def window (o n : ℕ) (B : Finset ℕ) : Finset ℕ := (B.filter fun v => o ≤ v ∧ v < o + n).image (· - o)
@@ -299,6 +302,7 @@ noncomputable def OneStage.Pa (ns : List ℕ) : OneStage → Finset ℕ → ℝ
   | .work K w f, B =>
     let W := ((ns.zip w).map fun p => p.1 * p.2).sum
     strataPa ((ns.zip (w.zip f)).map fun p => (p.1, min p.1 (max p.2.2 ((K * p.2.1 * p.1 + W - 1) / W)))) 0 B
+  | .counts ks, B => strataPa (ns.zip ks) 0 B
 
 /-- A class's strata sizes, in proof blocks. -/
 def strataSizes (c : List (List (List ℕ))) : List ℕ := c.map List.length
@@ -400,6 +404,7 @@ def OneStage.WellFormed (ns : List ℕ) : OneStage → Prop
   | .stratified K => 1 ≤ K ∧ K ≤ ns.sum ∧ ∀ n ∈ ns, 1 ≤ n
   | .work _ w f => w.length = ns.length ∧ f.length = ns.length ∧ (∀ x ∈ f, 1 ≤ x) ∧
       0 < ((ns.zip w).map fun p => p.1 * p.2).sum ∧ ∀ n ∈ ns, 1 ≤ n
+  | .counts ks => ks.length = ns.length ∧ ∀ p ∈ ns.zip ks, 1 ≤ p.2 ∧ p.2 ≤ p.1
 
 /-- The design is well formed on the partition: one rule per class, well formed over the class's strata. -/
 def Design.WellFormed (d : Design) (P : Partition) : Prop :=

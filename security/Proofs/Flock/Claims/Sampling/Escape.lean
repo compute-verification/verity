@@ -258,8 +258,8 @@ theorem OneStage.Pa_bernoulli (ns : List ℕ) {num den : ℕ} [NeZero den] (h : 
     bernoulli_miss_eq h, card_finOf hB]
   rfl
 
-/-- The strata `(n_s, k_s)` a one-stage design samples uniform subsets of, all but Bernoulli's: the stratified and work
-sampling designs' own, and one stratum of every slot for `all` (sampling all of it) and `subset`. -/
+/-- The strata `(n_s, k_s)` a one-stage design samples uniform subsets of, all but Bernoulli's: the stratified, work and
+counts designs' own, and one stratum of every slot for `all` (sampling all of it) and `subset`. -/
 def OneStage.strata (ns : List ℕ) : OneStage → Option (List (ℕ × ℕ))
   | .all => some [(ns.sum, ns.sum)]
   | .subset K => some [(ns.sum, K)]
@@ -268,6 +268,7 @@ def OneStage.strata (ns : List ℕ) : OneStage → Option (List (ℕ × ℕ))
   | .work K w f =>
     let W := ((ns.zip w).map fun p => p.1 * p.2).sum
     some ((ns.zip (w.zip f)).map fun p => (p.1, min p.1 (max p.2.2 ((K * p.2.1 * p.1 + W - 1) / W))))
+  | .counts ks => some (ns.zip ks)
 
 /-- **Every design but Bernoulli's is a strata sample**: its `P_a` is `strataPa` of its strata. -/
 theorem OneStage.Pa_strata {ns : List ℕ} {d : OneStage} {ss : List (ℕ × ℕ)} (h : d.strata ns = some ss)
@@ -298,6 +299,10 @@ theorem OneStage.Pa_strata {ns : List ℕ} {d : OneStage} {ss : List (ℕ × ℕ
     simp only [OneStage.strata, Option.some.injEq] at h
     subst h
     rfl
+  | counts ks =>
+    simp only [OneStage.strata, Option.some.injEq] at h
+    subst h
+    rfl
 
 /-- A well-formed design's strata cover its slots. -/
 theorem OneStage.strata_sum {ns : List ℕ} {d : OneStage} {ss : List (ℕ × ℕ)} (h : d.strata ns = some ss)
@@ -325,6 +330,10 @@ theorem OneStage.strata_sum {ns : List ℕ} {d : OneStage} {ss : List (ℕ × �
         ((K * p.2.1 * p.1 + ((ns.zip w).map fun p => p.1 * p.2).sum - 1) /
           ((ns.zip w).map fun p => p.1 * p.2).sum)))) = Prod.fst := rfl
     rw [this, List.map_fst_zip (by simp [hw, hf])]
+  | counts ks =>
+    simp only [OneStage.strata, Option.some.injEq] at h
+    subst h
+    rw [List.map_fst_zip (by rw [hw.1])]
 
 /-- A well-formed design's strata each sample at most their size. -/
 theorem OneStage.strata_le {ns : List ℕ} {d : OneStage} {ss : List (ℕ × ℕ)} (h : d.strata ns = some ss)
@@ -355,6 +364,10 @@ theorem OneStage.strata_le {ns : List ℕ} {d : OneStage} {ss : List (ℕ × ℕ
     intro p hp
     obtain ⟨q, -, rfl⟩ := List.mem_map.1 hp
     exact min_le_left _ _
+  | counts ks =>
+    simp only [OneStage.strata, Option.some.injEq] at h
+    subst h
+    exact fun p hp => (hw.2 p hp).2
 
 /-! ## The classes' product -/
 

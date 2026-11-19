@@ -284,6 +284,7 @@ def oneStageOk (ns : List ℕ) : OneStage → Bool
   | .stratified K => 1 ≤ K && K ≤ ns.sum && ns.all (1 ≤ ·)
   | .work _ w f => w.length == ns.length && f.length == ns.length && f.all (1 ≤ ·) &&
       0 < ((ns.zip w).map fun p => p.1 * p.2).sum && ns.all (1 ≤ ·)
+  | .counts ks => ks.length == ns.length && (ns.zip ks).all fun p => 1 ≤ p.2 && p.2 ≤ p.1
 
 /-- **The two-stage scope**, decided (`InScopeTwo` at a statement of program `C`). -/
 def scopeOk (C : Prog) (Pt : Partition) (d : Design.Two) : Bool :=
