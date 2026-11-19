@@ -43,6 +43,17 @@ def test_the_wired_program_is_its_members_evaluated_in_the_records_order():
     assert evaluate(prog.fn, w, x, k) == tuple(v for out in a + b for v in out)
 
 
+def test_a_value_the_record_supplies_is_a_supplied_input_with_its_mark():
+    mark = {"supplied": "poub.read.pass_root/v1", "args": {"window": 0, "pass": 0}, "layout": "le", "bits": 64}
+    rec = _record()
+    rec["registered"]["supplied"] = {"w": mark}
+    prog = wired_population_program([(A, 2), (B, 2)], rec)[0]
+    assert prog.bindings == ("supplied", "run", "run") and prog.supplied == {"w": mark}
+    assert [n.fn.id for n in prog.root.body.nodes if is_input(n.fn)][:1] == ["SuppliedInput16_v1"]
+    plain = wired_population_program([(A, 2), (B, 2)], _record())[0]
+    assert plain.bindings == ("run", "run", "run") and program_digest(plain) != program_digest(prog)
+
+
 def test_its_digest_moves_with_a_wire_and_with_a_count():
     digest = program_digest(wired_population_program([(A, 2), (B, 2)], _record())[0])
     assert program_digest(wired_population_program([(A, 2), (B, 2)], _record(base=1, step=-1))[0]) != digest
