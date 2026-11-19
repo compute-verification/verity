@@ -875,7 +875,7 @@ src = "tools/research/src/research/pods/nebius/vy-keeper.timer"
 nodes = ["vy-nebius-1", "vy-nebius-2"]
 owner = "infra"
 
-# ---- node 1: the Kueue cluster's host (pods/nebius/sky/cluster_up.sh, monitoring/host_up.sh)
+# ---- node 1: the Kueue cluster's host (pods/nebius/sky/cluster_up.sh)
 
 # what `cluster submit` places Jobs with ($VY_QUEUE_SRC); no `run`: each placement runs it afresh
 [[tree]]
@@ -1058,27 +1058,6 @@ nodes = ["vy-nebius-1"]
 run = ["systemd:vy-usage.timer"]
 owner = "infra"
 
-[[file]]
-path = "/usr/local/lib/vy-monitoring/alert_sink.py"
-src = "tools/research/src/research/pods/nebius/monitoring/alert_sink.py"
-nodes = ["vy-nebius-1"]
-run = ["systemd:vy-alert-sink"]
-owner = "infra"
-
-[[file]]
-path = "/usr/local/lib/vy-monitoring/vy_exporter.py"
-src = "tools/research/src/research/pods/nebius/monitoring/vy_exporter.py"
-nodes = ["vy-nebius-1"]
-run = ["systemd:vy-exporter"]
-owner = "infra"
-
-[[file]]
-path = "/usr/local/lib/vy-monitoring/lanes.tsv"
-src = "tools/research/src/research/pods/nebius/monitoring/lanes.tsv"
-nodes = ["vy-nebius-1"]
-run = ["systemd:vy-alert-sink"]
-owner = "infra"
-
 # node 2's monitors (research/monitors.py): `python3 -m research.monitors` from these files alone, each pass a new process, so
 # an install takes effect at the next pass (test_monitors checks that these files import every node-side check)
 
@@ -1236,18 +1215,6 @@ owner = "infra"
 [[file]]
 path = "/etc/systemd/system/vy-usage.timer"
 by = "tools/research/src/research/pods/nebius/sky/cluster_up.sh"
-nodes = ["vy-nebius-1"]
-owner = "infra"
-
-[[file]]
-path = "/etc/systemd/system/vy-alert-sink.service"
-by = "tools/research/src/research/pods/nebius/monitoring/host_up.sh"
-nodes = ["vy-nebius-1"]
-owner = "infra"
-
-[[file]]
-path = "/etc/systemd/system/vy-exporter.service"
-by = "tools/research/src/research/pods/nebius/monitoring/host_up.sh"
 nodes = ["vy-nebius-1"]
 owner = "infra"
 

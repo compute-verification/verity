@@ -91,7 +91,7 @@ def test_an_incident_opens_once_with_a_note_and_clears_once(tmp_path):
     assert state["open"] == {} and state["last_pass"] == T0 + 240
 
 
-def test_the_note_has_alert_sinks_front_matter_and_names_its_monitor(tmp_path):
+def test_the_note_has_the_lane_contracts_front_matter_and_names_its_monitor(tmp_path):
     passes(M.new_state(), mon(found()), [["a"]], tmp_path)
     text = next((tmp_path / "outbox").iterdir()).read_text()
     fm = M.front_matter(text)
