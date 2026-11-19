@@ -99,6 +99,46 @@ def test_its_credited_product_is_one_block_a_grid_tile_in_the_lean_verifiers_ord
     assert len(drawn) == 16 and {b.id for b in drawn} <= {(0, 0), (1, 0), (1, 1)}
 
 
+def test_a_drawn_block_takes_its_public_inputs_from_the_record_and_one_its_core_doesnt_cover_is_refused() -> None:
+    """`drawn_inputs` at K = 256 on 2 x 1 tiles: a drawn block of a full-width call with no excluded row gives its call's
+    index, rows and column block; a drawn block of a call keeping |K| = 200 of 256 is refused ``kept-width``, and a drawn
+    tile holding one excluded A row (the other row credited, so the tile is drawn) ``excluded-row``, and the block of a
+    tile holding a given-up A row ``voluntary-row`` (its ticket is 0 and the draw never takes it, as a tile holding an
+    excluded or given-up B row, whose column block it takes); and of a call with one real row, C's tile at TR = 1 passes
+    and one at TR = 2, the tile's TM, is refused ``real-rows``."""
+    from verity.commitments.randomness import derive
+    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_work import UnitRecord
+    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
+
+    scheme, k = pouw_schemes.get("pearl-c-h100-v1-h3", k_min=256, tile=(2, 1)), 256
+    key = derive(b"verifier" * 4, "verity/pouw/pearl-plus-run-draw/v1", {"run": bytes(64)})
+
+    def drawn(kept: int = k, **rows: tuple[int, ...]) -> tuple[list, PS.CreditedBlock]:
+        passes = [[UnitRecord(Matmul(7, Shape(2, k, 1), 0), 2, kept, **rows)]]
+        if "voluntary_a" in rows:
+            (block,) = PS.credited_blocks(scheme, passes)
+            assert block.ticket == 0
+        else:
+            (block,) = PS.drawn_blocks(scheme, passes, key, 1)
+        return passes, block
+
+    passes, block = drawn()
+    assert PS.drawn_inputs(passes, block, 2) == {"unit": 7, "rows": [0, 1], "col": 0}
+    for want, (kept, rows) in {"kept-width": (200, {}), "excluded-row": (k, {"excluded_a": (1,)}),
+                               "voluntary-row": (k, {"voluntary_a": (0,)})}.items():
+        passes, block = drawn(kept, **rows)
+        with pytest.raises(PS.Uncovered, match=f"^{want}: ") as e:
+            PS.drawn_inputs(passes, block, 2)
+        assert e.value.code == want
+    passes = [[UnitRecord(Matmul(7, Shape(2, k, 1), 0), 1, k)]]
+    (block,) = PS.drawn_blocks(scheme, passes, key, 1)
+    assert block.real == 1 and PS.drawn_inputs(passes, block, 1)["rows"] == [0, 1]
+    with pytest.raises(PS.Uncovered, match="^real-rows: ") as e:
+        PS.drawn_inputs(passes, block, 2)
+    assert e.value.code == "real-rows"
+
+
 def test_it_declares_the_cut_and_is_the_one_scheme_that_does() -> None:
     from verity.protocols.compose import schemes
 
@@ -545,9 +585,10 @@ def test_weights_outside_the_kernels_domain_are_refused_before_any_commitment(mo
 
 def test_its_settings_are_declared_and_checked() -> None:
     assert S.settings(PS.PEARL_PLUS, {}) == PS.SETTINGS
-    assert S.settings(PS.PEARL_PLUS, {"tie-uniform": True})["tie-uniform"] is True
-    with pytest.raises(ValueError, match="tie-uniform is a bool"):
-        S.settings(PS.PEARL_PLUS, {"tie-uniform": "yes"})
+    with pytest.raises(ValueError, match=r"pearl-plus has no setting \['tie-uniform'\]"):
+        S.settings(PS.PEARL_PLUS, {"tie-uniform": True})
+    with pytest.raises(ValueError, match="schedule is a str"):
+        S.settings(PS.PEARL_PLUS, {"schedule": 1})
     for given, refused in (({"schedule": "sideways"}, "schedule is one of serial"),
                            ({"coins": "beacon"}, "coins is 'in-process'"),
                            ({"coins": "in-process", **CTX["settings"]}, "coins and challenger are both set"),
@@ -574,7 +615,7 @@ def test_reports_are_the_runs_commitment_and_details(monkeypatch) -> None:
     assert on.commitment() == {} and on.run is None
     ex.emit(H.StepBegan(0, ("a",), 8))
     assert on.commitment() == {"salt_opening": "o"}
-    assert on.record() == {"entry": PS.OPTION, "schedule": "serial", "tie-uniform": False}
+    assert on.record() == {"entry": PS.OPTION, "schedule": "serial"}
     assert on.summary() == {"max_step_tokens": 64}
     on.release()
     assert run.finished and on.run is None
@@ -662,7 +703,7 @@ def test_the_plugins_report_reads_as_the_served_verdicts_read_served_json(tmp_pa
     session = {"session": "s-1", "seq": 4, "root": "ab" * 64, "commitment": "cd" * 64, "host": "auditor.s-1"}
     w = SV.weights_root({0: bytes([0]) * 64})
     reports = {"configuration": {"scheme": "pearl-plus", "settings": {**PS.SETTINGS, **CTX["settings"]},
-                                 "record": {"entry": PS.OPTION, "schedule": "serial", "tie-uniform": False}},
+                                 "record": {"entry": PS.OPTION, "schedule": "serial"}},
                "summary": {"max_step_tokens": 64, "passes": [{"units": 3, "tiles": 9, "transcript_root": "ef"}],
                            "challenger": {"closed": True}},
                "commitment": {"coin_source": SV.H1_CHALLENGER, "session": session, "pass_index": 2,

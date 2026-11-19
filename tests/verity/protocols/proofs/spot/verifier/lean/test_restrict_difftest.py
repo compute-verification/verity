@@ -126,11 +126,9 @@ def test_another_blocks_program_differs(pieces):
     assert out["agree"] is False and out["at"], out
 
 
-@pytest.mark.parametrize("units", [(0, 1), (4, 5), (6,)], ids=lambda us: "units-" + "-".join(map(str, us)))
-def test_the_two_lifts_agree(pieces, units):
-    """`Flock.Lift.lift` of `restrict`'s Program lifts each word composite as `Spot.BlockFront.program` lifts it."""
+@pytest.mark.parametrize("units", list(BLOCKS.values()), ids=list(BLOCKS))
+def test_the_block_lowers(pieces, units):
+    """`Flock.Lower.lower` takes the block's Program with its input nodes as parameters (`Spot.Restrict.ported`)."""
     text, _ = chain()
-    mine = json.loads(pieces.call("block_program", {"descriptor": text, "units": list(units)})[1])["lifted"]
-    lifted = json.loads(pieces.call("restrict", {"descriptor": text, "units": list(units), "python": python(units)})[1])["lifted"]
-    composites = {k: v for k, v in lifted.items() if not k.startswith("Root[")}
-    assert mine and composites == mine
+    out = json.loads(pieces.call("restrict", {"descriptor": text, "units": list(units), "python": python(units)})[1])
+    assert out["lowers"] is None, out["lowers"]

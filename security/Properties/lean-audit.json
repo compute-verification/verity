@@ -2955,12 +2955,12 @@
    "imports": [
     "Definitions.Core",
     "Properties.Flock",
-    "Spot.BlockFront",
+    "Spot.Restrict",
     "InferenceOnlyVerifier.Desc",
     "Properties.InferenceOnly"
    ],
    "except": [],
-   "why": "the chain's open premises from an accepted templated statement to a correct block of the registered description's circuit (`Flock.OfProgram.ofProgram`) are stated against core's blocks and openings (`Definitions.Core`, `Rblk`) and the code they join: the key circuit and the lowering (`Properties.Flock`), the block's front and Program (`Spot.BlockFront`), and the inference-only check's verdict and instance (`InferenceOnlyVerifier.Desc`, `Properties.InferenceOnly`), never a proof"
+   "why": "the chain's open premises from an accepted templated statement to a correct block of the registered description's circuit (`Flock.OfProgram.ofProgram`) are stated against core's blocks and openings (`Definitions.Core`, `Rblk`) and the code they join: the key circuit and the lowering (`Properties.Flock`), the block's front and Program (`Spot.Restrict`, which reads `Spot.BlockFront`), and the inference-only check's verdict and instance (`InferenceOnlyVerifier.Desc`, `Properties.InferenceOnly`), never a proof"
   }
  },
  "reads_exempt": {

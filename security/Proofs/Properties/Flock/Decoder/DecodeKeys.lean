@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.InferenceOnly.BodiesOk.Decoded
+public import Proofs.Properties.Flock.Decoder.Decoded
 public import Std.Tactic.Do
 import Batteries.Tactic.OpenPrivate
 import Std.Data.HashMap.Lemmas

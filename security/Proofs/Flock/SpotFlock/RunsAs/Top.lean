@@ -112,7 +112,7 @@ theorem stmtOk_of_accepted {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Js
   have hown : OwnAgrees h (runOwn i it ((Spot.Draw.proved draw).map Int.toNat) strata draw₂)
       ⟨i.record, portRoots i.record⟩ it.record draw₂ c₀ := by
     unfold Round2.OwnAgrees Round2.core runOwn ownOf
-    rw [hsample, ← hproved, hpa, hm.links, hm.wires, hm.rows, hm.refs, hm.refReads]
+    rw [hsample, ← hproved, hpa, hm.links, hm.wires, hm.rows, hm.refs, hm.refReads, hm.held]
     all_goals rfl
   obtain ⟨ss, hst⟩ := statements_some hcodes
   rw [hst] at hcodes

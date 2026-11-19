@@ -3,8 +3,9 @@
 `verity/flock-circuit+plain-leaves`, `verity/flock-circuit+wide-leaf` or the templated `verity/flock-circuit/tmpl` and
 `verity/flock-circuit/tmpl+wide-leaf` on the challenger's keyed coin tree. Every
 other version `Tags.all` knows (the superseded hm96 versions and the selftest builds' `+seed-injection` ones among them)
-and a plain session on seed coins are refused, each with its reason; a version before hm96 rows, or typed, is refused
-earlier by `ProvedScope.check`, and the version is named first.
+and a plain session on seed coins are refused, each with its reason; a typed version is refused earlier by
+`ProvedScope.check`, and the version is named first. A version `Tags.all` no longer holds is no name `Tags.byName?` finds,
+so `verify` refuses it as an unknown statement before it reads a file.
 -/
 module
 
@@ -61,21 +62,30 @@ def TAKEN : String :=
   "whose coins the prover injected: verify takes only " ++ TAKEN
 #guard why Tags.circuit967b8d06Selftest .seed == "refused: verity/flock-circuit@967b8d06+seed-injection, a selftest " ++
   "build's statement, whose coins the prover injected: verify takes only " ++ TAKEN
+#guard why Tags.circuitEb90718f tree == "refused: verity/flock-circuit@eb90718f, a superseded statement version: verify " ++
+  "takes only " ++ TAKEN
 #guard why Tags.circuitCec3e347 tree == "refused: verity/flock-circuit@cec3e347, a superseded statement version: verify " ++
   "takes only " ++ TAKEN
 
-/-- The versions `ProvedScope.check` admits (hm96 rows, untyped) that `verify` still refuses: the six superseded ones and
-five `+seed-injection` ones; the other two `+seed-injection` versions, `@b3727bd9`'s and `@cec3e347`'s, are gone. -/
+/-- The versions `ProvedScope.check` admits (hm96 rows, untyped) that `verify` still refuses: the three superseded ones and
+four `+seed-injection` ones. -/
 def refused : List String :=
   ((Tags.all.filter fun t => t.hm96Rows && !t.typed).filter fun t => (versionWhy t).isSome).map (·.name)
 
-#guard refused == ["verity/flock-circuit@eb90718f", "verity/flock-circuit@eb90718f+seed-injection",
-  "verity/flock-circuit@e51e2b86", "verity/flock-circuit@e51e2b86+seed-injection", "verity/flock-circuit@967b8d06",
-  "verity/flock-circuit@967b8d06+seed-injection", "verity/flock-circuit@f5df3bbc",
-  "verity/flock-circuit@f5df3bbc+seed-injection", "verity/flock-circuit@b3727bd9", "verity/flock-circuit@cec3e347",
-  "verity/flock-circuit+seed-injection"]
+#guard refused == ["verity/flock-circuit@eb90718f", "verity/flock-circuit@e51e2b86+seed-injection",
+  "verity/flock-circuit@967b8d06", "verity/flock-circuit@967b8d06+seed-injection",
+  "verity/flock-circuit@f5df3bbc+seed-injection", "verity/flock-circuit@cec3e347", "verity/flock-circuit+seed-injection"]
 #guard (Tags.all.filter fun t => (versionWhy t).isNone).map (·.name) ++ Tags.templated.map (·.name) == served
-#guard (Tags.find? "verity/flock-circuit@b3727bd9+seed-injection").isNone
-#guard (Tags.find? "verity/flock-circuit@cec3e347+seed-injection").isNone
+
+/-- Statement versions this verifier no longer knows: `verify` refuses each as an unknown statement, exit 2. -/
+def deleted : List String :=
+  ["verity/flock-netlist/v1", "verity/flock-circuit@19c7269a", "verity/flock-circuit@fd02e847", "verity/flock-circuit@631567f7",
+   "verity/flock-circuit@eb90718f+seed-injection", "verity/flock-circuit@e51e2b86", "verity/flock-circuit@f5df3bbc",
+   "verity/flock-circuit/types@f5df3bbc", "verity/flock-circuit@b3727bd9", "verity/flock-circuit/types@b3727bd9",
+   "verity/flock-circuit/types@b3727bd9+seed-injection", "verity/flock-circuit/types@cec3e347",
+   "verity/flock-circuit/types@cec3e347+seed-injection", "verity/flock-circuit@b3727bd9+seed-injection",
+   "verity/flock-circuit@cec3e347+seed-injection"]
+
+#guard deleted.all fun n => (Tags.byName? n).isNone
 
 end Flock.Test.Served
