@@ -44,21 +44,22 @@ from holes import waits_on
 
 #: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
 #: re-rendered in the canonical text the verifier requires)
-FIXTURE = "art:54456e32d1e801018ba6c9da92548482a0e9c8c8fd5c2fc956086cb6e3d8bd4b"
+FIXTURE = "art:49a1a88a003174e302e974951734bafd43abb6b52f64bc8652cb92f3674ff6f0"
 VERIFIER = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement"
 #: the docket's strata over the fixture's program and query (`partition.strata`): one template's 32 instances
 STRATA = (("RoPEHead_v1{D=64}", ((0, 32),)),)
 #: the fixture's registered roots: every port of the circuit is registered (`Flock.Registered.checkComplete`)
 REGISTERED_ROOTS = {
-    "cs": {"value": "cs_table", "root": "e06311d0afa0492b635c50a6a983041b1ed4a577f27209d705aebcb1d5690820"
-                                        "97d7da63c77fb2c614f5838501f22e2a557f838d48fa0c143a43751f4593296e"},
-    "x": {"value": "x", "root": "504f74c35b38fceacb9485685bf8a2fa753254d9e47eab2cd788584f4f2d417c"
-                                "bde4dc5c56538d21d7047a2b834c0c7ef816e3b8b68378738e38820ad0e3fe70"},
-    "out": {"value": "rope_out", "root": "cffcc31602347cbafa44022c617bae5506de1f8f800b5b0c4b75559020f3c50a"
-                                         "2960e8ff8e0968d9d4adf7281c8739366165795a5a72c1dd55d6798aaf1dd4fb"},
+    "cs": {"value": "cs_table", "root": "85292b4d73b4a2f9ac4429451f7f6ad95ff6054e372e2ac4b557d7df2d82c84b"
+                                        "f236ea2d67845e034944c6ca2deb6df384e6a84bd31e199b83ddcaa3072d128e"},
+    "x": {"value": "x", "root": "b4a7cbb6cae041ca9e291069059940c00e7a9f776e2f2038af4f69e8a190e960"
+                                "983b2495a73c0b78b37b4a9cd6d0f45d4dbabe2a720a174762161b58b71ed82e"},
+    "out": {"value": "RoPEHead_v1{D=64}/o0",
+            "root": "9b65f4ba583ca2491f6240c66adfdb622c1164dc84ed00ba042c58f5a42f1690"
+                    "96976200fcfc0a879d4c5639199291795a80754f964ad13c6fde3f18eaefdbc0"},
 }
 #: the instances the session's own sample holds, which are the proof blocks, the public file's indices being 0..31
-DRAWN = (1, 4, 6, 7, 9, 14, 16, 18, 19, 20, 21, 22, 23, 24, 27, 29)
+DRAWN = (3, 4, 6, 8, 10, 13, 14, 16, 17, 19, 21, 23, 26, 29, 30, 31)
 
 #: a test that runs Lean on the fixture
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -341,22 +342,15 @@ def _unnamed(fx: Path) -> str:
     return "pub-unnamed.bin"
 
 
-@lean
 @pytest.mark.slow
 @pytest.mark.parametrize("unnamed", [False, True], ids=["public file names its reads", "public file names none"])
-@waits_on("restrict", "lower")
-def test_lean_without_registered_reads_refuses_the_statement_that_reads_them(fx, unnamed):
-    """The program binds ``cs`` as a run input (`Input16_v1`), registered only by the verifier's own file, so `verify`
-    without that file goes on to Lean: the honest public file, which names the ``cs`` read, is refused by
-    `Registered.check`; with that name taken out and the shared rows kept, the session is still not accepted. Neither
-    finding proves a proof block."""
-    assert not PF.reads_registered((fx / "stage" / "program.json").read_bytes())
+def test_without_registered_reads_the_fixtures_statement_is_refused_before_lean_runs(fx, monkeypatch, unnamed):
+    """The program binds ``x`` and ``cs_table`` as registered inputs (`RegisteredInput16_v1`), so `verify` without the
+    verifier's own registered reads refuses before Lean runs, whether or not the public file names its reads."""
+    monkeypatch.setattr(PF, "executable", _never)
+    assert PF.reads_registered((fx / "stage" / "program.json").read_bytes())
     got, why = _verify(fx, fx / "session", public=_unnamed(fx) if unnamed else "pub-32.bin", own=False)
-    assert why is None, why
-    (f,) = got
-    assert f.accepted is False and f.units == (), f
-    if not unnamed:
-        assert "the verifier holds no registered roots" in f.why, f
+    assert got is None and why[0] == "registered", why
 
 
 def _pointed(fx: Path) -> str:
