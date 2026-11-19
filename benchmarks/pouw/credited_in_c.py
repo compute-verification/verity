@@ -397,7 +397,7 @@ def stage(a) -> int:
 
     def run(values: dict) -> tuple[list[list[int]], list[list[int]]]:
         """C's outputs: each unit's leaves (its digest's 512 bits, its y's TR · TN words, its ok), and the reader's rows."""
-        flat = evaluate_batch(program.fn, *(np.asarray([_flat(values[v])], dtype=np.int64) for v in params))
+        flat = evaluate_batch(ln.program.fn, *(np.asarray([_flat(values[v])], dtype=np.int64) for v in params))
         flat = flat.reshape(-1).tolist()
         per = nd + ny + 1
         assert len(flat) == per * units + (m * n if a.reader else 0), (len(flat), per, units, m, n)
@@ -419,7 +419,8 @@ def stage(a) -> int:
             y_rows[tile.rows[i]][tile.col * tn:(tile.col + 1) * tn] = y_of(g)[i * tn:(i + 1) * tn]
     add = evaluate_batch(bind(Bf16AddRow, N=n), np.asarray(y_rows, dtype=np.int64),
                          np.asarray(good["r"] if a.reader else [[0] * n] * m, dtype=np.int64))
-    rec["evaluate"] = {"of": "C on its words (`evaluate_batch` of its root): each unit's (digest, y, ok) and the reader's rows",
+    rec["evaluate"] = {"of": "C on its words (`evaluate_batch` of its root before laying, whose gates the laid C keeps): "
+                              "each unit's (digest, y, ok) and the reader's rows",
                        "drawn": {"rows": drawn.rows, "real": drawn.real, "credited": amounts[block_no]},
                        "honest_ok": [g[-1] for g in got_h], "dishonest_ok": [g[-1] for g in got_d],
                        "y": y_rows, "y_is_the_served_y": y_rows == served,
