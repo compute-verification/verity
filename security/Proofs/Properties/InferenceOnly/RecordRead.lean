@@ -62,6 +62,8 @@ theorem finish_text {f : Front} {pin : String → Option String} {c : Case} (h :
           · cases h
           split at h
           · cases h
+          split at h
+          · cases h
           · rename_i g hg
             split at h
             · cases h
@@ -88,13 +90,13 @@ theorem front_inst {j tr : Json} {f : Front} (h : front j tr = .ok f) :
 only, every body walkable, and every unit's rows its own. -/
 theorem front_program {j tr : Json} {f : Front} (h : front j tr = .ok f) :
     f.P.orderViolation = none ∧ Desc.rootLaidOut f.P = true ∧ Desc.inputsAtRoot f.P = true ∧
-      Desc.walkable f.P = true ∧ ownRows f.P = true := by
+      Desc.walkable f.P = true ∧ ownRows f.P (f.nodes.map (·.node)) = true := by
   unfold front at h
   simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   repeat (split at h <;> try cases h)
-  rename_i P _ ho hl hw _ _ _ _ _ _ _ _ _ _ _ hown
+  rename_i P _ ho hl hw _ _ _ _ _ _ _ _ _ _ _ _ _ _ hown
   show P.orderViolation = none ∧ Desc.rootLaidOut P = true ∧ Desc.inputsAtRoot P = true ∧
-    Desc.walkable P = true ∧ ownRows P = true
+    Desc.walkable P = true ∧ ownRows P _ = true
   simp only [Bool.not_eq_true', Bool.not_eq_false, Bool.and_eq_true] at hl hw hown
   refine ⟨?_, hl.1, hl.2, hw, hown⟩
   cases hov : P.orderViolation with
@@ -163,7 +165,7 @@ input nodes at the root only and none of a composite keyed as an input id, every
 rows its own. -/
 theorem program_of_read {j tr : Json} {c : Case} (h : read j tr = .ok c) :
     c.f.P.orderViolation = none ∧ Desc.rootLaidOut c.f.P = true ∧ Desc.inputsAtRoot c.f.P = true ∧
-      Desc.walkable c.f.P = true ∧ ownRows c.f.P = true ∧ keyedAsInput c.f.P = false := by
+      Desc.walkable c.f.P = true ∧ ownRows c.f.P (c.f.nodes.map (·.node)) = true ∧ keyedAsInput c.f.P = false := by
   obtain ⟨f, pin, hf, hc⟩ := read_front h
   obtain ⟨rfl, -⟩ := finish_text hc
   obtain ⟨h1, h2, h3, h4, h5⟩ := front_program hf

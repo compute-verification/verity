@@ -86,7 +86,7 @@ theorem cut_outer {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Sp
 a template of the record, inside its port's cut, and the gates its reads land on are together no wider than the row's
 bits in the record: the port's bits over its cut. -/
 theorem landing_bits {j tr : Json} {c : Case} (h : read j tr = .ok c)
-    (hNE : InferenceOnlyVerifier.Record.SecurityProofs.EdgeFree c.f.P) {rs : Array TRange} {S : Spot.Wires.Summary}
+    (hNE : InferenceOnlyVerifier.Record.SecurityProofs.EdgeFree c.f.P (c.f.nodes.map (·.node))) {rs : Array TRange} {S : Spot.Wires.Summary}
     {D : Verity.Circuit} {at_ : Fin D.N → ℕ}
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg c.f.P)
       (c.W.templates.map (·.1)).toArray = .ok rs)
@@ -134,7 +134,7 @@ fresh (`FreshRows`). A gate the block reads from outside itself that θ does not
 lands on, a row that is neither wired inside the slot nor held (`reads_land`); the gates one row's reads land on are
 no wider than the row's bits (`landing_bits`); and those rows' bits are within the summary's fresh. -/
 theorem block_fresh (hFR : FreshRows) {j tr : Json} {c : Case} (h : read j tr = .ok c)
-    (hNE : InferenceOnlyVerifier.Record.SecurityProofs.EdgeFree c.f.P)
+    (hNE : InferenceOnlyVerifier.Record.SecurityProofs.EdgeFree c.f.P (c.f.nodes.map (·.node)))
     {d : Verity.RegisteredCircuit} (hd : Served form c d) (u : Fin d.n) :
     InferenceOnly.freshInput d (d.𝓘.gates u) ≤ (form.summarize c).fresh := by
   classical

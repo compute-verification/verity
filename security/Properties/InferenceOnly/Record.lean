@@ -235,6 +235,22 @@ def OwnOrEdgeRows (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Sp
     ∀ r l lo hi r' l' lo' hi' g, RowLeaf P rs W r l g lo hi → RowLeaf P rs W r' l' g lo' hi' →
       S.writerOf r.tid r.unit r.port r.row = none → S.writerOf r'.tid r'.unit r'.port r'.row = none → r = r' ∧ l = l'
 
+/-- **Every unit's rows are input gates under their one declaration, or its writers' outputs**: a leaf of a reader
+row is an input gate or the gate of a leaf of the output row it is wired to, and where two rows that have no writer
+share a gate, they are one row and one leaf, or the record's text `doc` declares both to hold one registered read or
+one table read, the gate at the same bit of it in both (`Spot.RecordText.declaredAt`). An opening's ports are
+declared no such thing, so of them `OwnOrEdgeRows`' rule holds. `OwnOrEdgeRows` is it where no two rows share a
+gate. -/
+def OwnOrDeclaredRows (P : Prog) (doc : Json) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) :
+    Prop :=
+  (∀ r l g lo hi, RowLeaf P rs W r l g lo hi →
+      (∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧ Flock.Program.isInputId (P.defs[p]!).key = true) ∨
+        ∃ l' lo' hi', WriterLeaf P rs S r l' g lo' hi') ∧
+    ∀ r l lo hi r' l' lo' hi' g, RowLeaf P rs W r l g lo hi → RowLeaf P rs W r' l' g lo' hi' →
+      S.writerOf r.tid r.unit r.port r.row = none → S.writerOf r'.tid r'.unit r'.port r'.row = none →
+      (r = r' ∧ l = l') ∨ ∃ d b b', Spot.RecordText.declaredAt P doc r = some (d, b) ∧
+        Spot.RecordText.declaredAt P doc r' = some (d, b') ∧ b + lo = b' + lo'
+
 /-- The unit of the reader row `r` passes Program gate `g` on: `g` is a leaf of one of that unit's output rows. -/
 def PassedOn (P : Prog) (rs : Array TRange) (r : Row) (g : ℕ) : Prop :=
   ∃ sc out l lo hi, UnitAt P rs r.tid r.unit sc ∧ OutLeaf P sc out l g lo hi

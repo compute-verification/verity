@@ -125,12 +125,16 @@ def edgeOf (P : Prog) : Part → Bool
     lanes.all fun l => !l.p && ((P.defs[P.root]!).body.nodes[l.i]?.map fun n => !Desc.isInputNode P n).getD false
   | _ => false
 
-/-- **The root has no edge**: no part of an argument of a root node that is no input node reads another such node. -/
-def EdgeFree (P : Prog) : Prop := ∀ n ∈ unitsOf P, ∀ q ∈ partsIn n, edgeOf P q = false
+/-- **The root has no edge, and reads no input node of `D`**: no part of an argument of a root node that is no input
+node reads another such node, or a node of `D` (`Record.overDeclared`). -/
+def EdgeFree (P : Prog) (D : List Nat) : Prop :=
+  ∀ n ∈ unitsOf P, ∀ q ∈ partsIn n, edgeOf P q = false ∧ overDeclared D q = false
 
-/-- **Every record `read` accepts is of a root with no edge.** False of any root with an edge; the record proofs that
-take it cover the roots with none, and restating them over `OwnRowsEdges` replaces it. -/
-def EdgeFreeReads : Prop := ∀ (j tr : Lean.Json) (c : Case), read j tr = .ok c → EdgeFree c.f.P
+/-- **Every record `read` accepts is of a root with no edge, and reads no root input node its record declares.**
+False of any root with an edge, and of a record that declares a node a unit reads; the record proofs that take it
+cover the roots with neither, and restating them over `OwnRowsEdges` and `OwnRowsDeclared` replaces it. -/
+def EdgeFreeReads : Prop :=
+  ∀ (j tr : Lean.Json) (c : Case), read j tr = .ok c → EdgeFree c.f.P (c.f.nodes.map (·.node))
 
 private theorem flatMap_congr' {α β : Type} {l : List α} {f g : α → List β} (h : ∀ a ∈ l, f a = g a) :
     l.flatMap f = l.flatMap g := by
@@ -139,16 +143,26 @@ private theorem flatMap_congr' {α β : Type} {l : List α} {f g : α → List �
   | cons x xs ih =>
     simp only [List.flatMap_cons, h x List.mem_cons_self, ih fun a ha => h a (List.mem_cons_of_mem _ ha)]
 
-/-- **On a root with no edge, `own-rows` admits only roots the record proofs cover.** -/
-theorem ownRuns_of_edgeFree {P : Prog} (h : ownRows P = true) (hE : EdgeFree P) : OwnRuns P := by
-  have hp : ((unitsOf P).flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edgeOf P ·)) =
-      (unitsOf P).flatMap partsIn := by
+/-- **On a root with no edge that reads no declared node, `own-rows` admits only roots the record proofs cover.** -/
+theorem ownRuns_of_edgeFree {P : Prog} {D : List Nat} (h : ownRows P D = true) (hE : EdgeFree P D) : OwnRuns P := by
+  have hp : ((unitsOf P).flatMap fun n => n.args.toList.flatMap fun a =>
+      a.seq.parts.toList.filter fun q => !edgeOf P q && !overDeclared D q) = (unitsOf P).flatMap partsIn := by
     refine flatMap_congr' fun n hn => ?_
     rw [← List.filter_flatMap]
-    exact List.filter_eq_self.2 fun q hq => by simpa using hE n hn q hq
+    exact List.filter_eq_self.2 fun q hq => by simp [(hE n hn q hq).1, (hE n hn q hq).2]
+  have hd : ((unitsOf P).all fun n => n.form != .batch || n.args.all fun a =>
+      a.dims.isSome || a.seq.parts.any (overDeclared D)) =
+      (unitsOf P).all fun n => n.form != .batch || n.args.all (·.dims.isSome) := by
+    apply Bool.eq_iff_iff.2
+    simp only [List.all_eq_true, Bool.or_eq_true, Array.all_eq_true_iff_forall_mem, Array.any_eq_true']
+    refine forall_congr' fun n => forall_congr' fun hn => or_congr_right (forall_congr' fun a => forall_congr' fun ha =>
+      or_iff_left fun ⟨q, hq, hd⟩ => ?_)
+    have := (hE n hn q (List.mem_flatMap.2 ⟨a, Array.mem_toList_iff.2 ha, Array.mem_toList_iff.2 hq⟩)).2
+    rw [hd] at this
+    cases this
   unfold ownRows at h
   unfold OwnRuns
-  rw [← hp]
+  rw [← hp, ← hd]
   exact h
 
 theorem runLe_trans (a b c : Nat × Nat × Nat) (hab : runLe a b = true) (hbc : runLe b c = true) :

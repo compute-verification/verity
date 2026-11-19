@@ -13,10 +13,13 @@ public import Proofs.Properties.InferenceOnly.RecordWired
 
 `form_laidOut` (`Properties.Record.LaidOut`): every record `read` accepts lays out a registered circuit
 (`Properties.Record.Served`), clause by clause, under two hypotheses: every record `read` accepts is of a root with
-no edge (`EdgeFreeReads`), so `own-rows` admits only roots whose arguments are runs of input leaves
-(`ownRuns_of_edgeFree`), and the wiring has the front's templates (`FinishTemplates`). On a root with edges, every
-unit's rows are its own input gates or its writers' outputs (`OwnOrEdgeRows`) where `own-rows` holds
-(`OwnRowsEdges`, not yet proved); restating these proofs over it replaces `EdgeFreeReads`.
+no edge that reads no root input node its record declares (`EdgeFreeReads`), so `own-rows` admits only roots whose
+arguments are runs of input leaves (`ownRuns_of_edgeFree`), and the wiring has the front's templates
+(`FinishTemplates`). On a root with edges, every unit's rows are its own input gates or its writers' outputs
+(`OwnOrEdgeRows`) where `own-rows` holds (`OwnRowsEdges`, not yet proved); on a record that declares root input
+nodes, every unit's rows are input gates under their one declaration or its writers' outputs (`OwnOrDeclaredRows`)
+where `own-rows` and `nodes` hold (`OwnRowsDeclared`, not yet proved). Restating these proofs over the two replaces
+`EdgeFreeReads`; `OwnOrDeclaredRows` is weaker than `OwnOrEdgeRows` (`ownOrDeclaredRows_of_ownOrEdgeRows`).
 
 * The texts. The Program is the instance's, decoded (`decode_of_read`), and the record's text parses
   (`inst_of_read`); the wiring's cuts and wires, the slots and the reasons rows are held are the text's
@@ -75,6 +78,13 @@ theorem ownOrEdgeRows_of_ownRows {P : Flock.Program.Prog} {rs : Array Flock.Temp
   ⟨fun r l g lo hi hl => Or.inl (h.1 r l g lo hi hl),
     fun r l lo hi r' l' lo' hi' g h1 h2 _ _ => h.2 r l lo hi r' l' lo' hi' g h1 h2⟩
 
+/-- **Rows that no two share are rows under their one declaration**: `OwnOrEdgeRows` gives `OwnOrDeclaredRows` on any
+record's text. -/
+theorem ownOrDeclaredRows_of_ownOrEdgeRows {P : Flock.Program.Prog} {doc : Json}
+    {rs : Array Flock.TemplateQuery.TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}
+    (h : OwnOrEdgeRows P rs W S) : OwnOrDeclaredRows P doc rs W S :=
+  ⟨h.1, fun r l lo hi r' l' lo' hi' g h1 h2 hw hw' => Or.inl (h.2 r l lo hi r' l' lo' hi' g h1 h2 hw hw')⟩
+
 /-- **On a wiring with no wire, `OwnOrEdgeRows` is `OwnRows`.** -/
 theorem ownOrEdgeRows_iff {P : Flock.Program.Prog} {rs : Array Flock.TemplateQuery.TRange} {W : Spot.Wires.Wiring}
     {S : Spot.Wires.Summary} (hS : ∀ t u p k, S.writerOf t u p k = none) :
@@ -90,7 +100,7 @@ theorem ownOrEdgeRows_iff {P : Flock.Program.Prog} {rs : Array Flock.TemplateQue
 Program, with θ the gates of the rows the check holds and the blocks the slots. -/
 theorem served_of_read (hFT : InferenceOnlyVerifier.Record.SecurityProofs.FinishTemplates) {j tr : Json}
     {c : InferenceOnlyVerifier.Record.Case} (h : InferenceOnlyVerifier.Record.read j tr = .ok c)
-    (hNE : InferenceOnlyVerifier.Record.SecurityProofs.EdgeFree c.f.P) :
+    (hNE : InferenceOnlyVerifier.Record.SecurityProofs.EdgeFree c.f.P (c.f.nodes.map (·.node))) :
     ∃ d, Served form c d := by
   have hP := readProg_of_read h
   obtain ⟨-, -, -, -, hown, -⟩ := program_of_read h
@@ -121,10 +131,19 @@ gives it, and the ranges of its templates. Not yet proved; the record proofs res
 `EdgeFreeReads`. -/
 def OwnRowsEdges : Prop :=
   ∀ (P : Flock.Program.Prog) (doc : Lean.Json) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary)
-    (rs : Array Flock.TemplateQuery.TRange), ownRows P = true → Spot.RecordText.wiring P doc = .ok W →
+    (rs : Array Flock.TemplateQuery.TRange), ownRows P [] = true → Spot.RecordText.wiring P doc = .ok W →
     Spot.Wires.check W = .ok S →
     Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs →
     Properties.Record.OwnOrEdgeRows P rs W S
+
+/-- **Where `own-rows` and `nodes` hold, every unit's rows are input gates under their one declaration or its
+writers' outputs**: of a record whose front `read` takes and whose `finish` holds the root input nodes it declares
+(`nodesHeld`), on its wiring, the summary SPOT's check gives it, and the ranges of its templates. Not yet proved; the
+record proofs restated over it and `OwnRowsEdges` replace `EdgeFreeReads`. -/
+def OwnRowsDeclared : Prop :=
+  ∀ (j tr : Lean.Json) (c : Case) (rs : Array Flock.TemplateQuery.TRange), read j tr = .ok c →
+    Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg c.f.P) (c.W.templates.map (·.1)).toArray = .ok rs →
+    Properties.Record.OwnOrDeclaredRows c.f.P c.f.doc rs c.W c.wired
 
 /-- **The record check's own form lays out a circuit** (`Properties.Record.LaidOut`), where every record it reads
 is of a root with no edge. -/
