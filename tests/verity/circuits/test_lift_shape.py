@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from verity.circuits.codec import descriptor_id, lift_shape
+from verity.circuits.codec import descriptor_id, lift_shape, odd_fields
 from verity.circuits.ops import product as PR
 
 V32, BIT = ["Value", 32], ["Value", 1]
@@ -60,3 +60,17 @@ def test_products_template_is_lifted_with_nothing_left_wide(tokens):
     p = PR.product(w, x if tokens == 1 else x.reshape(1, 16).repeat(2, 0), k=16, s=2, units=2, block=2, k_log=22, g=2)
     lifted, wide = lift_shape(json.loads(p.description), descriptor_id(p.template))
     assert wide == [] and descriptor_id(p.template) in lifted and len(lifted) == 3
+
+
+def test_x_of_3_bits_then_y_is_flagged_as_in_leans_case():
+    c = {"form": "composite", "id": "C_v1", "bindings": {},
+         "body": {"nodes": [], "params": [["x", ["Value", 3]], ["y", ["Value", 16]]],
+                  "ret_type": ["Tuple", [["Value", 16], ["Array", 2, ["Value", 5]]]], "ret": {"affine": ["p", 1, 0, 1]}}}
+    assert odd_fields({"definitions": {"C_v1": c}}, "C_v1") == [("param", "x", 3, True), ("ret", "1", 10, False)]
+
+
+@pytest.mark.parametrize("tokens", [1, 2])
+def test_products_template_has_every_field_a_multiple_of_16(tokens):
+    w, x = PR.example(4, 16)
+    p = PR.product(w, x if tokens == 1 else x.reshape(1, 16).repeat(2, 0), k=16, s=2, units=2, block=2, k_log=22, g=2)
+    assert odd_fields(json.loads(p.description), descriptor_id(p.template)) == []
