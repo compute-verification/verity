@@ -305,7 +305,7 @@ def stage(a) -> int:
         query, population = PO.template_instances_query([core, bind(Bf16AddRow, N=n)]), units + m
     else:
         query, population = PO.template_instance_query(core), units
-    part = PO.build(program, query, [(u, u + 1) for u in range(population)])
+    part = PO.build(program, query, [[(u, u + 1) for u in range(population)]])
     c = b"".join(descriptor_chunks(program))
     key = core.id
     phase("program", descriptor_bytes=len(c), units=units)
