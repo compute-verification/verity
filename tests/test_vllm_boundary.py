@@ -37,7 +37,6 @@ ROUTE = ("route the code through verity_vllm's interface (PUBLIC in tests/test_v
 ALLOWED = {
     # stock engines a benchmark builds and drives beside the integration's
     "benchmarks/harness/verity_bench/vllm/engine.py": "benchmarks: verity-bench's vLLM arms, each a stock engine's requests",
-    "benchmarks/served_commit/tp_decode.py": "circuits: a stock vllm.LLM at TP8 against a Commit arm in the same engine",
     **dict.fromkeys(("benchmarks/pouw/pearl_c_vllm/e2e.py", "benchmarks/pouw/pearl_c_vllm/profile_decode.py",
                      "benchmarks/pouw/pearl_c_vllm/served_passes.py"),
                     "compute-accounting: Pearl-C served through verity_vllm.LLM, with vLLM's SamplingParams and a stock "
