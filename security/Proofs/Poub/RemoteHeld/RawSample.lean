@@ -218,4 +218,26 @@ theorem lands_le (hL : Live D) (x : X) (t : Fin n) (w : Fin n → Pous.Bits κ) 
 
 end Periods
 
+/-- An event of a pair of uniform coins whose every fiber over the first is at most `c` is at most `c`. -/
+theorem prCoin_le_of_fst {A B : Type} [Fintype A] [Fintype B] (P : A × B → Prop) (c : ℝ≥0∞)
+    (h : ∀ a, Verity.Game.prCoin (fun b => P (a, b)) ≤ c) : Verity.Game.prCoin P ≤ c := by
+  classical
+  rcases isEmpty_or_nonempty A with hA | hA
+  · unfold Verity.Game.prCoin Verity.Game.avg
+    simp
+  · unfold Verity.Game.prCoin at h ⊢
+    rw [Verity.Game.Tape.avg_prod]
+    exact (Verity.Game.avg_mono h).trans_eq (Verity.Game.avg_const c)
+
+/-- **Every window lands while the bounds multiply to at most `c`**, with probability at most `c`: at each value of the
+other coins, `Spot.Sampling.Periods.prCoin_forall_prod_le` with one period per window. -/
+theorem pr_lands_le {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] (D : ResourceAccounting.Remote.Sample.Run n m s κ X) (hL : Live D)
+    (c : ℝ≥0∞) :
+    Verity.Game.prCoin (fun ω : SampleCoins n κ X =>
+      (∀ t, Lands D t ω) ∧ ∏ t, ENNReal.ofReal (D.bound t ω) ≤ c) ≤ c :=
+  prCoin_le_of_fst _ c fun x =>
+    Spot.Sampling.Periods.prCoin_forall_prod_le (Ω := fun _ : Fin n => Pous.Bits κ)
+      (fun t w => Lands D t (x, w)) (fun t w => ENNReal.ofReal (D.bound t (x, w)))
+      (lands_adapted D hL x) (bound_predictable D hL x) (lands_le D hL x) c
+
 end ResourceAccounting.SecurityProofs.Remote.RawSample
