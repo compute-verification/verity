@@ -5,7 +5,7 @@ The checkpoint is a safetensors file of two decoder layers in the int8 pin's for
 model in the BF16 pin's form, each linear bf16 [N, K] with no scale. P2 runs at the small point's
 1,024-bit blocks, 8 a segment (`weight_store.geometry`), so the adapter encodes it in milliseconds. The memory attester's side is
 `challenger_party.serve` in a thread, signed by the PoUS tests' test signer on a counter clock, and the prover answers it
-over a socket pair, as `challenger_prover.session` would across hosts. The answer is read back as the composed run reads it
+over a socket pair, as `served_piece._session` would across hosts. The answer is read back as the composed run reads it
 (`served_verdicts.piece_row`, `block_record.subprotocol`).
 """
 from __future__ import annotations
@@ -157,7 +157,7 @@ def served_bf16(tmp_path, monkeypatch) -> Served:
 
 
 def _in_process_party(signer, log, keep=None, record=lambda request: request):
-    """`challenger_prover.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
+    """`served_piece._session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
     test signer, a counter clock) and the prover's over a socket pair (`challenger_prover.answer`); with `keep`, the
     challenger's device, where it keeps `record` of each completed session's request as `challenger_party.main` does."""
     calls = []
@@ -254,18 +254,43 @@ def _judge(monkeypatch, kw: dict) -> None:
         else serve(exe, cases))
 
 
+class _Loopback:
+    """A `Side` whose challenger is ``auditor``'s, `challenger_party.serve` in a thread over loopback TCP, so
+    `served_piece._session` drives it as it drives a side across hosts."""
+
+    def __init__(self, auditor: Auditor) -> None:
+        self.auditor, self.host, self.address = auditor, AUDITOR, None
+
+    def talk(self, request, drive):
+        CP.designate(request, self.auditor.salts, self.auditor.log)
+        CS.setup_of(request)
+        signer = self.auditor.signer
+        with socket.create_server(("127.0.0.1", 0)) as srv, futures.ThreadPoolExecutor(1) as pool:
+            def challenger():
+                conn, _ = srv.accept()
+                with conn, conn.makefile("rwb") as f:
+                    return CP.serve(f, request, signer=signer, log=self.auditor.log, coins=COINS,
+                                    domain=period.SESSION_DOMAIN, clock=fakes.Clock(step=1_000))
+            side = pool.submit(challenger)
+            with socket.create_connection(srv.getsockname()) as s:
+                got = drive(s)
+            sid, signed = side.result()
+        return CP.report(sid, signed, signer.public_key) | {"host": self.host}, got
+
+
 def _run(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, host: str = AUDITOR, node: str = NODE,
-         address: tuple[str, int] = ("192.0.2.36", 47610), **kw):
+         address: tuple[str, int] = ("192.0.2.36", 47610), side: _Loopback | None = None, **kw):
     auditor = auditor or Auditor(tmp_path)
     _judge(monkeypatch, kw)
     monkeypatch.setattr(CS, "salt", auditor.salt)
-    monkeypatch.setattr(CR, "session", auditor.session)
+    if side is None:
+        monkeypatch.setattr(SP, "_session", auditor.session)
     monkeypatch.setattr(CP, "serve", functools.partial(CP.serve, salts=auditor.salts))
     key = hashlib.sha512(auditor.signer.public_key).hexdigest()
     kw.setdefault("trusted_sha512", key)
     kw.setdefault("deployment", _deployment(key))
     answer = SP.run(s.serve, 3, s.out, hf_home=s.hf, device="cpu", node=node,
-                    party=Side(host, ("ssh", host, "challenger_party"), address),
+                    party=side or Side(host, ("ssh", host, "challenger_party"), address),
                     private=s.private, pins=[s.pins], protocol=TEST_PROTOCOL, **kw)
     return answer, auditor.calls
 
@@ -279,7 +304,7 @@ def _parts(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, bet
     `answers` with the challenger's sides and PoUS's setup out of reach."""
     auditor = auditor or Auditor(tmp_path)
     monkeypatch.setattr(CS, "salt", auditor.salt)
-    monkeypatch.setattr(CR, "session", auditor.session)
+    monkeypatch.setattr(SP, "_session", auditor.session)
     monkeypatch.setattr(CP, "serve", functools.partial(CP.serve, salts=auditor.salts))
     trusted = kw.pop("trusted_sha512", hashlib.sha512(auditor.signer.public_key).hexdigest())
     kw.setdefault("deployment", _deployment(hashlib.sha512(auditor.signer.public_key).hexdigest()))
@@ -293,7 +318,7 @@ def _parts(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, bet
     assert early is None
     between()
     with monkeypatch.context() as m:
-        for mod, name in ((CS, "salt"), (CR, "session"), (SP.messages, "Exchange"), (BW.Attached, "session")):
+        for mod, name in ((CS, "salt"), (SP, "_session"), (SP.messages, "Exchange"), (BW.Attached, "session")):
             m.setattr(mod, name, _gone)
         return SP.answers(s.serve, 3, s.out, trusted_sha512=trusted, private=s.private,
                           protocol=TEST_PROTOCOL, **kw)
@@ -478,6 +503,36 @@ def test_a_second_session_under_the_windows_binding_is_refused(served, tmp_path,
                                        f"the side on {mc.ATTESTER_MACHINE} refused: a session has run for the request's "
                                        "`audit`")
     assert len(auditor.log.path.read_text().splitlines()) == 2
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_a_prover_that_fails_mid_session_is_signed_abandoned_and_rejected_by_the_lean(served, tmp_path, monkeypatch,
+                                                                                      fails):
+    """`served_piece._session` over loopback TCP: an honest session is accepted; one whose prover fails after three
+    timed rounds leaves it, the memory attester signs it `abandoned`, and the run protocol's Lean, asked of the kept
+    case, rejects it by name."""
+    real, calls = CR.answer, []
+
+    def failing(f, block_bytes, respond):
+        def card(index):
+            calls.append(index)
+            if len(calls) > CS.WARMUPS + 3:
+                raise RuntimeError("the card's read failed")
+            return respond(index)
+        return real(f, block_bytes, card)
+
+    if fails:
+        monkeypatch.setattr(CR, "answer", failing)
+    auditor = Auditor(tmp_path)
+    answer, _ = _run(served, tmp_path, monkeypatch, auditor, side=_Loopback(auditor))
+    run = json.loads((served.private / "run.json").read_text())
+    if not fails:
+        assert answer["verdict"] == "accept" and run["session"]["signed"]["ended"] == mc.COMPLETE, answer
+        return
+    assert answer["verdict"] == "reject", answer
+    assert f"the session ended abandoned after 3 of {SP.ROUNDS} rounds" in answer["reason"], answer["reason"]
+    assert run["session"]["signed"]["ended"] == mc.ABANDONED and run["rounds_answered"] is None
+    assert run["answer"]["verdict"] == "reject"
 
 
 def test_a_session_whose_setup_salt_is_not_the_challengers_is_refused(served, tmp_path, monkeypatch):
@@ -777,7 +832,7 @@ def test_an_answer_the_sessions_part_leaves_already_is_never_answered_again(serv
             "protocol": TEST_PROTOCOL}
     with monkeypatch.context() as m:
         m.setattr(CS, "salt", auditor.salt)
-        m.setattr(CR, "session", auditor.session)
+        m.setattr(SP, "_session", auditor.session)
         m.setattr(CP, "serve", functools.partial(CP.serve, salts=auditor.salts))
         assert SP.sessions(served.serve, 3, tmp_path / "earlier", **card,
                            party=Side(AUDITOR, ("ssh", AUDITOR, "challenger_party"), ("192.0.2.36", 47610))) is None

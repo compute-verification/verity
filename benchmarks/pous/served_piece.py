@@ -31,7 +31,7 @@ same sessions, which no second session replaces. With neither, one process does 
    the root. Setup's own inputs are kept as it sent them, for the tie. A challenger that samples no salt leaves the period undecided.
 3. **The session**: the memory attester's side started on its host by ``--challenger-command`` (the auditor gate's
    ``challenger_party`` verb), the prover connecting to ``--challenger-address`` and answering each of ``--rounds``
-   indices (`ROUNDS` by default) from ``C*`` on the card (`challenger_prover.session`). The request names the window's
+   indices (`ROUNDS` by default) from ``C*`` on the card (`_session`). The request names the window's
    binding and setup's published outputs; the challenger refuses it unless they carry the salt it logged and the
    commitment it was sampled after, and runs one session a binding, under the id derived from them
    (`challenger_session.session_id`).
@@ -406,8 +406,10 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
     """The piece's part on the card (module docstring, 1 to 3 and 6's session): the weights, setup, PoUS's session
     of ``rounds`` challenges and, with ``bw_party`` (the bandwidth party's command), PoUB-P2's over the held store
     (`p2_stage.bandwidth.Attached.session`, under ``bw_request``, by default `p2_stage.bandwidth.request`'s). Where they leave an answer
-    already (weights that aren't the pin's, no salt, a session that didn't complete or ran under another id), it is
-    written as `answers` writes one and returned, never an accept. Else None: what the sessions left is kept for
+    already (weights that aren't the pin's, no salt, a session the memory attester signed no end of or that ran under
+    another id), it is written as `answers` writes one and returned, never an accept. A session signed with another end
+    than `complete` (a prover that left it, `_session`) is kept for `answers` like a complete one, whose Lean rejects
+    it by name, and no PoUB-P2 session runs on its store. Else None: what the sessions left is kept for
     `answers`, in ``private`` (``run.json`` and the table, `STORE`, `HELD`) and ``bw_private`` (by default
     ``SERVE_DIR/private/bandwidth``). The bandwidth session's γ is against the data sheet of ``bw_card``, the card's name
     as nvidia-smi gives it (by default torch's for a CUDA ``device``). `Refusal` when no answer can be made."""
@@ -486,8 +488,8 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
         sid = CS.session_id(bind, s.commitment, s.salt)
         t = time.monotonic()
         try:
-            rep = CR.session(party, CS.request_of(node, point, s.root, audit=bind, published=published),
-                             held.prover(()))
+            rep = _session(party, CS.request_of(node, point, s.root, audit=bind, published=published),
+                           held.prover(()))
             key = bytes.fromhex(rep["public_key"])
             session = R.ChallengePhaseRecord.from_json(rep["session"])
         except (OSError, RuntimeError, ValueError, KeyError, TypeError) as e:
@@ -511,7 +513,10 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
         _keep(private, store)
         del store
         bandwidth = None
-        if bw_party is not None:
+        ended = session.signed.ended
+        if bw_party is not None and ended != mc.COMPLETE:
+            BW.missing(bw_out, window, f"no PoUS session bound a store: the memory attester signed it {ended}")
+        elif bw_party is not None:
             if bw_card is None:
                 raise Refusal(f"no card on {device} whose data sheet's memory bandwidth the bandwidth session is "
                               "against: name it with --bw-card")
@@ -525,13 +530,30 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
                        private=bw_private, trusted_sha512=BW.key_of(deployed, bw_trusted_sha512))
             bandwidth = {"session_s": round(time.monotonic() - t, 3)}
             _stamp(out, "PoUB's session done")
-        (private / HELD).write_text(json.dumps({"summary": summary | {"session_s": session_s},
+        (private / HELD).write_text(json.dumps({"summary": summary | {"session_s": session_s, "left": rep.get("left")},
                                                 BANDWIDTH.name: bandwidth}, indent=1, sort_keys=True, default=str)
                                     + "\n")
         return None
     finally:
         if held is not None:
             held.release()
+
+
+def _session(side: Side, request: Mapping[str, Any], respond) -> dict[str, Any]:
+    """`challenger_prover.session`, except that a prover that fails mid-session leaves it: the stream closes, the
+    memory attester signs the session `abandoned`, and its report comes back with the prover's error as `left`."""
+    left: list[str] = []
+
+    def drive(s: socket.socket) -> int | None:
+        s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        try:
+            return CR.answer(CS.Polled(s), request["block_bytes"], respond)
+        except (OSError, RuntimeError, ValueError) as e:
+            left.append(f"{type(e).__name__}: {e}"[:1000])
+            return None
+
+    out, frames = side.talk(request, drive)
+    return out | {"rounds": None if frames is None else frames - out.get("warmups", 0), "left": (left or [None])[0]}
 
 
 def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | None = None,

@@ -316,7 +316,7 @@ def report(sid: bytes, session: R.ChallengePhaseRecord, public_key: bytes, warmu
 
 
 def keep(device: Path, sid: bytes, request: Mapping[str, Any]) -> Path:
-    """The completed session's request and id, `device/setups/<id>.json` (0700, the file 0600, written once)."""
+    """The completed session's request and id, kept for no other end, `device/setups/<id>.json` (0700, the file 0600, written once)."""
     d = device / SETUPS
     d.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(d, 0o700)
@@ -380,7 +380,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             sid, s = serve(Polled(conn), request, signer=signer, log=sessions, salts=salts,
                            coins=secrets.token_bytes(COIN_BYTES), domain=period.SESSION_DOMAIN)
-    keep(device, sid, request)
+    if s.signed.ended == mc.COMPLETE:
+        keep(device, sid, request)
     _reply(json.dumps(report(sid, s, signer.public_key), sort_keys=True))
     return 0
 
