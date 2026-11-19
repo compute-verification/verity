@@ -5,8 +5,9 @@ port's source and the served rows each reads where they are committed."""
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from verity_vllm.pipeline import advice as ADV
 

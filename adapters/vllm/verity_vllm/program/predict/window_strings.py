@@ -14,7 +14,11 @@ from typing import Any
 import numpy as np
 from verity.commitments import hm96
 from verity.commitments.cuda.salt_stream.engine import LEAF_BYTES, fill
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest, sha512_row_v2_prefix
+from verity.commitments.rowleaf import (
+    SCHEMA_HM96_SHA512_ROW_V2,
+    sha512_row_v2_digest,
+    sha512_row_v2_prefix,
+)
 
 from .window_plan import stage
 
@@ -157,5 +161,6 @@ def strings_of(win: Any, key: Any, hasher: Any, plan: Any = None,
     lrs = win.leaf_rows()
     staged = acquired(plan, block, lrs) if plan is not None and block is not None else {}
     strings, cost = leaf_strings(lrs, key, hasher, staged)
-    print("WINDOW-STRINGS " + json.dumps({"ports": len(strings), **cost}), file=sys.stderr, flush=True)
+    sys.stderr.write("WINDOW-STRINGS " + json.dumps({"ports": len(strings), **cost}) + "\n")
+    sys.stderr.flush()
     return strings

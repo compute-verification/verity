@@ -12,7 +12,14 @@ from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
 
-from tests.program.predict.test_window_rows import CLASS, SLOTS, _located, _read, _served, _window
+from tests.program.predict.test_window_rows import (
+    CLASS,
+    SLOTS,
+    _located,
+    _read,
+    _served,
+    _window,
+)
 from verity_vllm.program.predict import window_plan as WP
 from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict import window_strings as WS
