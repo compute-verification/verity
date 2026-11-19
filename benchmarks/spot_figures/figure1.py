@@ -99,7 +99,7 @@ ADVERSARY, DEPLOYMENTS, HARDWARE = ("calibration/census/adversary.json", "calibr
 SLOWDOWN, SLOWDOWN_HARDWARE = "benchmarks/slowdown/data/reference.toml", "benchmarks/slowdown/data/hardware.toml"
 WORLD, DATACENTER, CENSUS_WORLD = "world-h200", "dc-12500-machines-600s", "world-inference-2027"
 #: the H200's dense FP8 peak is the H100 SXM5's (one die, one clock)
-PEAK, READING = "h100-sxm-80gb-tensor/e4m3", "datasheet"
+PEAK, READING = "h100-sxm-80gb-sm/e4m3", "datasheet"
 DESIGNS = {"exfiltration": ("two-stage", "two-stage-uniform", "two-stage-capped", "two-stage-capped-uniform",
                             "two-stage-patterns", "two-stage-patterns-uniform", "request", "one-stage"),
            "skipped_work": ("one-stage", "request")}
