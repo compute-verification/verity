@@ -5,7 +5,7 @@
 # minutes:
 #   env N2_MEM_GB=56 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/n2_tie_zk.sh
-# On a GPU node with N2_GPU=1, the prover is a8_gpu.sh's CUDA build (70-class-sweep.sh BUILD_ONLY=1, kept under
+# On a GPU node with N2_GPU=1, the prover is the CUDA build of 70-class-sweep.sh BUILD_ONLY=1 (kept under
 # FLOCK_WORK) on the GPU the run leased, as a job of one GPU, 32 CPUs and 96 GB:
 #   env N2_MEM_GB=96 N2_GPU=1 N2_CLASS=served bash benchmarks/network_traces/n2_tie_zk.sh
 # env: N2_MEM_GB (what job.sh's stages may take, within the slot's)  N2_PORT (--port; the members are proved one after
