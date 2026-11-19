@@ -1,42 +1,46 @@
 """`verity/partition/v2`: the one partition form, private. Its content is a partition object's `blocks` (`partition_object`):
-ranges [lo, hi) of whole units of a template query, in order, covering them. Its envelope is advice: fixed-width rows
-committed before any coin (hm96-sha512 hiding rows in one frame-v3-sha512 tree, `verity.commitments.advice`), of which the
-verifier holds only the root and a statement naming the public predicates they meet. The public form is the same object
-with the advice opened (`blocks`).
+levels, coarsest first, each a list of ranges [lo, hi) of whole units of a template query, in order, covering them, and each a
+refinement of the one before. Its envelope is advice: fixed-width rows committed before any coin (hm96-sha512 hiding rows in
+one frame-v3-sha512 tree, `verity.commitments.advice`), of which the verifier holds only the root and a statement naming the
+public predicates they meet. The public form is the same object with the advice opened (`blocks`).
 
 **Statement** (public; `statement`, `validate`, `digest` = `SHA-512("verity/partition/v2\\0" || canon(statement))`)::
 
     {"format": "verity/partition/v2", "program": "<SHA-512 of C, hex>", "query": <a template query>,
      "predicates": {"X": int, "max_gates": int | null, "max_in_bits": int | null, "grid_bits": g},
-     "blocks": [grid(b_j) for each execution phase j], "advice": {"rows": grid(R), "root": "<frame-v3-sha512 root, hex>"}}
+     "blocks": [[grid(b_jl) for each level l] for each execution phase j],
+     "advice": {"rows": grid(R), "root": "<frame-v3-sha512 root, hex>"}}
 
-`b_j` and R are phase j's block count and the row count, rounded up to the public grid (`grid`: at most g significant bits),
-so the verifier learns a grid level of each, never the counts.
+`b_jl` and R are the block count of phase j at level l and the row count, rounded up to the public grid (`grid`: at most g
+significant bits), so the verifier learns a grid level of each, never the counts.
 
 **Rows** (private; `advice`, `rows`, `decode`). `ROW_BYTES` bytes, integers little-endian u64, every unused byte 0:
 
-* row 0, the header: `MAGIC`, C's SHA-512, the population N, the phase count p, the design section's first row and rows;
+* row 0, the header: `MAGIC`, C's SHA-512, the population N, the section count, the design section's first row and rows;
 * row 1: the SHA-512 of the partition object {format, program, query} (`partition_object.digest`);
-* rows 2 .. `header_rows(p)` - 1: one entry a phase, `PHASES_PER_ROW` to a row: its section's kind, first row and rows,
-  b_j and grid(b_j);
-* each phase's section, in phase order: grid(b_j) + 1 boundaries s_0 .. s_grid(b_j), `BOUNDS_PER_ROW` to a row (kind
-  `ENDS`): s_0 where the phase's units start (0, or the phase before's last end) and s_(i+1) block i's end, so block i is
-  [s_i, s_(i+1)); blocks b_j .. grid(b_j) - 1 are filler, empty, each ending at s_(b_j);
+* rows 2 .. `header_rows(n)` - 1: one entry a section, `SECTIONS_PER_ROW` to a row: its kind, phase, level, first row and
+  rows, b_jl and grid(b_jl);
+* a section per phase and level, phase by phase and level by level within it: grid(b_jl) + 1 boundaries s_0 ..
+  s_grid(b_jl), `BOUNDS_PER_ROW` to a row (kind `ENDS`): s_0 where the phase's units start (0, or the phase before's
+  last end) and s_(i+1) block i's end, so block i is [s_i, s_(i+1)); blocks b_jl .. grid(b_jl) - 1 are filler, empty,
+  each ending at s_(b_jl);
 * the design section: the sampling design's rows, none today;
 * zero rows up to grid(R).
 
 Each section's rows follow from the statement alone (`section_row`), so a sampled block's rows depend on its index and the
-public counts, never on b_j or N. A kind names a section's record; `ENDS` is the only one, and a reader refuses any other.
+public counts, never on b_jl or N. A kind names a section's record; `ENDS` is the only one, and a reader refuses any other.
 
 **Global check** (`check`; refusal codes in brackets), over C and the rows, once per registration: the rows' count and form
 [rows-count, rows-malformed]; the header names C, its object and its population [header-program, header-object,
-header-population] and lays the sections out as the statement does [header-layout]; no design rows [design-rows]; the
-blocks, the phases' real blocks side by side, are a valid `blocks` of the object covering C's units in order
-(`partition_object.verify`'s codes); a filler is empty [filler]; each phase's count is on the grid [blocks-bucket]; each
-block has at most X bits out and at most max_gates gates and max_in_bits bits in (`restrict.front`) [block-too-wide, block-too-large].
+header-population] and lays the sections out as the statement does [header-layout]; no design rows [design-rows]; a
+phase covers the same units at every level [phase-span]; each level, the phases' real blocks side by side, is a valid
+`blocks` of the object covering C's units in order (`partition_object.verify`'s codes, the level first in each witness),
+and each block of level l + 1 lies inside one of level l [blocks-refine]; a filler is empty [filler]; each section's count
+is on the grid [blocks-bucket]; each block of the last level has at most X bits out and at most max_gates gates and
+max_in_bits bits in (`restrict.front`) [block-too-wide, block-too-large].
 
-**Local check** (`check_block`), with sampled block i of phase j: the at most two rows holding s_i and s_(i+1) (`openings`),
-opened against the root, give its range; a filler is empty, and any other is the block the door restricts.
+**Local check** (`check_block`), with sampled block i of phase j at level l: the at most two rows holding s_i and s_(i+1)
+(`openings`), opened against the root, give its range; a filler is empty, and any other is the block the door restricts.
 """
 from __future__ import annotations
 
@@ -66,7 +70,8 @@ SIZE_CLASSES = tuple(16 << i for i in range((SIZE_CLASS_MAX // 16).bit_length())
 #: a section's kind: its blocks' boundaries as u64s
 ENDS = 1
 BOUNDS_PER_ROW = ROW_BYTES // 8
-PHASES_PER_ROW = ROW_BYTES // 40
+ENTRY = 7 * 8
+SECTIONS_PER_ROW = ROW_BYTES // ENTRY
 HEADER = 2
 
 _KEYS = {"format", "program", "query", "predicates", "blocks", "advice"}
@@ -98,36 +103,47 @@ def size_class(bits: int) -> int | None:
     return next((w for w in SIZE_CLASSES if bits <= w), None)
 
 
-def header_rows(phases: int) -> int:
-    return HEADER + -(-phases // PHASES_PER_ROW)
+def header_rows(sections: int) -> int:
+    return HEADER + -(-sections // SECTIONS_PER_ROW)
 
 
 def _section_rows(padded: int) -> int:
     return -(-(padded + 1) // BOUNDS_PER_ROW)
 
 
-def section_row(padded: Sequence[int], j: int) -> int:
-    """Phase j's first row, from the phases' padded block counts (the statement's `blocks`)."""
-    return header_rows(len(padded)) + sum(_section_rows(b) for b in padded[:j])
+def _order(padded: Sequence[Sequence[int]]) -> list[tuple[int, int, int]]:
+    return [(j, l, b) for j, ls in enumerate(padded) for l, b in enumerate(ls)]
+
+
+def section_row(padded: Sequence[Sequence[int]], j: int, l: int) -> int:
+    """The first row of phase j's section at level l, from the padded block counts (the statement's `blocks`); (j, l) past
+    the last section gives the design section's."""
+    order = _order(padded)
+    return header_rows(len(order)) + sum(_section_rows(b) for jj, ll, b in order if (jj, ll) < (j, l))
 
 
 @dataclass(frozen=True)
 class Advice:
     """The rows' content: C's SHA-512, its object's (`partition_object.digest`), the population N, and each phase's
-    boundaries s_0 .. s_b (b real blocks, no filler)."""
+    boundaries s_0 .. s_b at each level (b real blocks, no filler)."""
     program: str
     object: str
     population: int
-    phases: tuple[tuple[int, ...], ...]
+    phases: tuple[tuple[tuple[int, ...], ...], ...]
 
 
-def advice(program: Any, query: Mapping[str, Any], phases: Sequence[Sequence[tuple[int, int]]]) -> Advice:
-    """The advice of the template query's units grouped into ``phases``, each a list of [lo, hi) blocks, side by side."""
-    if not all(phases):
-        raise ValueError("a phase with no blocks")
+def advice(program: Any, query: Mapping[str, Any], levels: Sequence[Sequence[tuple[int, int]]],
+           starts: Sequence[int] = (0,)) -> Advice:
+    """The advice of ``levels``, the object's `blocks`, cut into phases at the units ``starts`` names, each an end of a block
+    at every level."""
+    phases = []
+    for lo, hi in zip(starts, (*starts[1:], None)):
+        cut = [tuple(b for b in lv if b[0] >= lo and (hi is None or b[1] <= hi)) for lv in levels]
+        if not all(cut) or any(c[0][0] != lo for c in cut):
+            raise ValueError(f"the phase from unit {lo} is not whole blocks at every level")
+        phases.append(tuple((c[0][0], *(h for _l, h in c)) for c in cut))
     obj = PO.build(program, query)
-    bounds = tuple((ps[0][0], *(hi for _lo, hi in ps)) for ps in phases)
-    return Advice(obj["program"], PO.digest(obj), PO.TemplatePartition(program, query).population, bounds)
+    return Advice(obj["program"], PO.digest(obj), PO.TemplatePartition(program, query).population, tuple(phases))
 
 
 def _u(x: int) -> bytes:
@@ -146,13 +162,15 @@ def _chunks(b: bytes) -> list[bytes]:
 
 def rows(adv: Advice, bits: int = GRID_BITS) -> list[bytes]:
     """The advice's rows, padded to the grid."""
-    padded = [grid(len(s) - 1, bits) for s in adv.phases]
-    design = section_row(padded, len(padded))
-    out = [_row(MAGIC + bytes.fromhex(adv.program) + b"".join(map(_u, (adv.population, len(padded), design, 0)))),
+    padded = [[grid(len(s) - 1, bits) for s in ls] for ls in adv.phases]
+    order = _order(padded)
+    out = [_row(MAGIC + bytes.fromhex(adv.program) + b"".join(map(_u, (adv.population, len(order), section_row(padded, len(padded), 0), 0)))),
            _row(bytes.fromhex(adv.object))]
-    out += _chunks(b"".join(b"".join(map(_u, (ENDS, section_row(padded, j), _section_rows(p), len(s) - 1, p)))
-                            for j, (s, p) in enumerate(zip(adv.phases, padded))))
-    for s, p in zip(adv.phases, padded):
+    ent = [b"".join(map(_u, (ENDS, j, l, section_row(padded, j, l), _section_rows(p), len(adv.phases[j][l]) - 1, p)))
+           for j, l, p in order]
+    out += [_row(b"".join(ent[k:k + SECTIONS_PER_ROW])) for k in range(0, len(ent), SECTIONS_PER_ROW)]
+    for j, l, p in order:
+        s = adv.phases[j][l]
         out += _chunks(b"".join(map(_u, s + (s[-1],) * (p + 1 - len(s)))))
     return out + [bytes(ROW_BYTES)] * (grid(len(out), bits) - len(out))
 
@@ -176,8 +194,10 @@ def _bounds(read: Any, first: int, i: int) -> int:
 
 @dataclass(frozen=True)
 class Section:
-    """A phase's section as the rows hold it: its first row, its rows, its b real blocks and all its boundaries, filler's
+    """A section as the rows hold it: its phase and level, first row, rows, b real blocks and all its boundaries, filler's
     included."""
+    phase: int
+    level: int
     first: int
     rows: int
     blocks: int
@@ -185,8 +205,8 @@ class Section:
 
 
 def decode(rs: Sequence[bytes]) -> tuple[Advice, list[Section], tuple[int, int]]:
-    """The rows `rows` wrote: the advice, each phase's section, and the design section's (first row, rows); `Malformed`
-    where they are no encoding."""
+    """The rows `rows` wrote: the advice, its sections, and the design section's (first row, rows); `Malformed` where they
+    are no encoding."""
     def read(i: int) -> bytes:
         if not 0 <= i < len(rs) or not isinstance(rs[i], (bytes, bytearray)) or len(rs[i]) != ROW_BYTES:
             raise Malformed(f"row {i} is not there or not {ROW_BYTES} bytes")
@@ -195,32 +215,43 @@ def decode(rs: Sequence[bytes]) -> tuple[Advice, list[Section], tuple[int, int]]
     h, m = read(0), len(MAGIC)
     if h[:m] != MAGIC:
         raise Malformed("row 0: not a verity/partition/v2 header")
-    n, p, d0, dn = (_int(h, m + 64 + 8 * k) for k in range(4))
+    n, ns, d0, dn = (_int(h, m + 64 + 8 * k) for k in range(4))
     _rest_zero(h, m + 96, "row 0")
     _rest_zero(read(1), 64, "row 1")
-    if not 1 <= p <= len(rs) * PHASES_PER_ROW:
-        raise Malformed(f"row 0: {p} phases")
-    table = b"".join(read(r) for r in range(HEADER, header_rows(p)))
-    _rest_zero(table, 40 * p, "the phase table")
+    if not 1 <= ns <= len(rs) * SECTIONS_PER_ROW:
+        raise Malformed(f"row 0: {ns} sections")
     sections = []
-    for j in range(p):
-        kind, first, count, b, padded = (_int(table, 40 * j + 8 * k) for k in range(5))
+    for k in range(ns):
+        e = read(HEADER + k // SECTIONS_PER_ROW)
+        kind, j, l, first, count, b, padded = (_int(e, ENTRY * (k % SECTIONS_PER_ROW) + 8 * x) for x in range(7))
+        if k % SECTIONS_PER_ROW == SECTIONS_PER_ROW - 1 or k == ns - 1:
+            _rest_zero(e, ENTRY * (k % SECTIONS_PER_ROW + 1), f"section {k}'s entry row")
         if kind != ENDS:
-            raise Malformed(f"phase {j}: section kind {kind}")
+            raise Malformed(f"section {k}: kind {kind}")
         if not (b <= padded and count == _section_rows(padded) and first + count <= len(rs)):
-            raise Malformed(f"phase {j}: {b} blocks padded to {padded} in {count} rows from row {first}")
+            raise Malformed(f"section {k}: {b} blocks padded to {padded} in {count} rows from row {first}")
         body = b"".join(read(r) for r in range(first, first + count))
-        _rest_zero(body, 8 * (padded + 1), f"phase {j}'s section")
-        sections.append(Section(first, count, b, tuple(_int(body, 8 * i) for i in range(padded + 1))))
+        _rest_zero(body, 8 * (padded + 1), f"section {k}")
+        sections.append(Section(j, l, first, count, b, tuple(_int(body, 8 * i) for i in range(padded + 1))))
+    if [(s.phase, s.level) for s in sections] != [(j, l) for j in range(sections[-1].phase + 1)
+                                                  for l in range(sections[-1].level + 1)]:
+        raise Malformed("the sections are not every phase at every level, in order")
     if any(any(read(r)) for r in range(d0 + dn, len(rs))):
         raise Malformed(f"rows past the {d0 + dn} used are not zero")
-    adv = Advice(h[m:m + 64].hex(), read(1)[:64].hex(), n, tuple(s.bounds[:s.blocks + 1] for s in sections))
-    return adv, sections, (d0, dn)
+    nl = sections[-1].level + 1
+    phases = tuple(tuple(s.bounds[:s.blocks + 1] for s in sections[j * nl:(j + 1) * nl]) for j in range(len(sections) // nl))
+    return Advice(h[m:m + 64].hex(), read(1)[:64].hex(), n, phases), sections, (d0, dn)
 
 
-def blocks(rs: Sequence[bytes]) -> list[tuple[int, int]]:
-    """The public form: the opened rows as the partition object's `blocks`, the phases' real blocks side by side."""
-    return [(s[i], s[i + 1]) for s in decode(rs)[0].phases for i in range(len(s) - 1)]
+def _levels(adv: Advice) -> list[list[tuple[int, int]]]:
+    return [[(s[i], s[i + 1]) for ls in adv.phases for s in (ls[l],) for i in range(len(s) - 1)]
+            for l in range(len(adv.phases[0]))]
+
+
+def blocks(rs: Sequence[bytes]) -> list[list[tuple[int, int]]]:
+    """The public form: the opened rows as the partition object's `blocks`, its levels, each the phases' real blocks side by
+    side."""
+    return _levels(decode(rs)[0])
 
 
 def predicates(X: int, max_gates: int | None = None, max_in_bits: int | None = None, grid_bits: int = GRID_BITS) -> dict[str, Any]:
@@ -231,8 +262,8 @@ def statement(query: Mapping[str, Any], preds: Mapping[str, Any], adv: Advice, r
     """The public statement of `adv` registered under `root`, its counts rounded up to the grid."""
     g = preds["grid_bits"]
     return {"format": FORMAT, "program": adv.program, "query": dict(query), "predicates": dict(preds),
-            "blocks": [grid(len(s) - 1, g) for s in adv.phases], "advice": {"rows": len(rows(adv, g)),
-                                                                             "root": root.hex() if isinstance(root, bytes) else root}}
+            "blocks": [[grid(len(s) - 1, g) for s in ls] for ls in adv.phases],
+            "advice": {"rows": len(rows(adv, g)), "root": root.hex() if isinstance(root, bytes) else root}}
 
 
 def _pos(x: Any) -> bool:
@@ -241,7 +272,8 @@ def _pos(x: Any) -> bool:
 
 def validate(st: Any) -> CutVerdict:
     """The statement's own form: exactly its keys; a SHA-512 program; a template query of valid form; predicates of exactly
-    their keys and ranges; each phase's count and the row count on the grid; a SHA-512 root."""
+    their keys and ranges; the same number of levels in each phase; each section's count and the row count on the grid; a
+    SHA-512 root."""
     bad: dict[str, list] = {}
 
     def fail(code: str, what: Any) -> None:
@@ -273,7 +305,8 @@ def validate(st: Any) -> CutVerdict:
         else:
             fail("predicates", {"grid_bits": p["grid_bits"]})
     b = st.get("blocks")
-    if not (isinstance(b, list) and b and all(_is_int(x) and x >= 1 and (g is None or grid(x, g) == x) for x in b)):
+    if not (isinstance(b, list) and b and all(isinstance(ls, list) and ls and len(ls) == len(b[0]) for ls in b)
+            and all(_is_int(x) and x >= 1 and (g is None or grid(x, g) == x) for ls in b for x in ls)):
         fail("blocks", b)
     a = st.get("advice")
     if not (isinstance(a, Mapping) and set(a) == {"rows", "root"} and _is_int(a["rows"]) and a["rows"] >= 1
@@ -323,16 +356,19 @@ def check(st: Mapping[str, Any], rs: Sequence[bytes], c: bytes) -> CutVerdict:
     if adv.object != PO.digest(obj):
         fail("header-object", adv.object)
     padded = st["blocks"]
-    got = [(s.first, len(s.bounds) - 1) for s in sections]
-    want = [(section_row(padded, j), b) for j, b in enumerate(padded)]
-    if got != want or d0 != section_row(padded, len(padded)):
+    got = [(s.phase, s.level, s.first, len(s.bounds) - 1) for s in sections]
+    want = [(j, l, section_row(padded, j, l), b) for j, l, b in _order(padded)]
+    if got != want or d0 != section_row(padded, len(padded), 0):
         fail("header-layout", {"got": [list(x) for x in got], "want": [list(x) for x in want], "design": d0})
+        return _verdict(bad)
     if dn:
         fail("design-rows", dn)
-    for j, s in enumerate(sections):
+    for s in sections:
         if any(x != s.bounds[s.blocks] for x in s.bounds[s.blocks:]):
-            fail("filler", j)
-    pairs = [[s[i], s[i + 1]] for s in adv.phases for i in range(len(s) - 1)]
+            fail("filler", [s.phase, s.level])
+    for j, ls in enumerate(adv.phases):
+        if len({(s[0], s[-1]) for s in ls}) != 1:
+            fail("phase-span", [j, [[s[0], s[-1]] for s in ls]])
     try:
         pop = PO.TemplatePartition(D, st["query"]).population
     except PO.QueryInapplicable as e:
@@ -340,15 +376,22 @@ def check(st: Mapping[str, Any], rs: Sequence[bytes], c: bytes) -> CutVerdict:
         return _verdict(bad)
     if adv.population != pop:
         fail("header-population", [adv.population, pop])
-    verdict = PO.verify({**obj, PO.BLOCKS: pairs}, D)
-    for code in verdict.codes:
-        bad.setdefault(code, []).extend(verdict.detail[code]["gates"])
-    for j, (s, b) in enumerate(zip(adv.phases, padded)):
-        if grid(len(s) - 1, st["predicates"]["grid_bits"]) != b:
-            fail("blocks-bucket", [j, b, len(s) - 1])
+    levels = _levels(adv)
+    for l, lv in enumerate(levels):
+        verdict = PO.verify({**obj, PO.BLOCKS: [list(b) for b in lv]}, D)
+        for code in verdict.codes:
+            bad.setdefault(code, []).extend([l, w] for w in verdict.detail[code]["gates"])
+    for l, (coarse, fine) in enumerate(zip(levels, levels[1:])):
+        ends = {hi for _lo, hi in coarse}
+        cross = next(([lo, hi] for lo, hi in fine if any(lo < e < hi for e in ends)), None)
+        if cross is not None:
+            fail("blocks-refine", [l + 1, cross])
+    for s in sections:
+        if grid(s.blocks, st["predicates"]["grid_bits"]) != padded[s.phase][s.level]:
+            fail("blocks-bucket", [s.phase, s.level, padded[s.phase][s.level], s.blocks])
     if not bad:
         p = st["predicates"]
-        for k, (lo, hi) in enumerate(pairs):
+        for k, (lo, hi) in enumerate(levels[-1]):
             words = R.unit_gates(D, st, [(lo, hi)])
             ins, outs = R.front(D, words)
             out_bits, in_bits = sum(gate_width(D, g) for g in outs), sum(gate_width(D, g) for g in ins)
@@ -357,34 +400,35 @@ def check(st: Mapping[str, Any], rs: Sequence[bytes], c: bytes) -> CutVerdict:
                 fail("block-too-wide", [k, out_bits])
             if (p["max_gates"] is not None and gates > p["max_gates"]) or (p["max_in_bits"] is not None and in_bits > p["max_in_bits"]):
                 fail("block-too-large", [k, gates, in_bits])
-    return _verdict(bad, {"population": adv.population, "blocks": [len(s) - 1 for s in adv.phases], "rows": len(rs)})
+    return _verdict(bad, {"population": adv.population, "blocks": [[len(s) - 1 for s in ls] for ls in adv.phases], "rows": len(rs)})
 
 
-def openings(st: Mapping[str, Any], j: int, i: int) -> list[int]:
-    """The rows sampled block ``i`` of phase ``j`` opens: those holding s_i and s_(i+1)."""
-    first = section_row(st["blocks"], j)
+def openings(st: Mapping[str, Any], j: int, l: int, i: int) -> list[int]:
+    """The rows sampled block ``i`` of phase ``j`` at level ``l`` opens: those holding s_i and s_(i+1)."""
+    first = section_row(st["blocks"], j, l)
     return sorted({first + i // BOUNDS_PER_ROW, first + (i + 1) // BOUNDS_PER_ROW})
 
 
-def check_block(c: bytes, st: Mapping[str, Any], j: int, i: int, opened: Mapping[int, bytes]) -> R.Block | None:
-    """The local check of sampled block ``i`` of phase ``j`` (module docstring) from the rows `openings` names alone, each
-    opened against the statement's root (`verity.commitments.advice.verify`): None for a filler, else the block the door
-    restricts, C_S of its range; `Malformed` where the rows are not those or give no range, `restrict.Refused` where C
-    gives no block of it."""
-    if not (_is_int(j) and 0 <= j < len(st["blocks"]) and _is_int(i) and 0 <= i < st["blocks"][j]):
-        raise Malformed(f"no block {i!r} of phase {j!r}")
-    want = openings(st, j, i)
+def check_block(c: bytes, st: Mapping[str, Any], j: int, l: int, i: int, opened: Mapping[int, bytes]) -> R.Block | None:
+    """The local check of sampled block ``i`` of phase ``j`` at level ``l`` (module docstring) from the rows `openings` names
+    alone, each opened against the statement's root (`verity.commitments.advice.verify`): None for a filler, else the block
+    the door restricts, C_S of its range; `Malformed` where the rows are not those or give no range, `restrict.Refused`
+    where C gives no block of it."""
+    b = st["blocks"]
+    if not (_is_int(j) and 0 <= j < len(b) and _is_int(l) and 0 <= l < len(b[j]) and _is_int(i) and 0 <= i < b[j][l]):
+        raise Malformed(f"no block {i!r} of phase {j!r} at level {l!r}")
+    want = openings(st, j, l, i)
     if sorted(opened) != want or any(len(opened[r]) != ROW_BYTES for r in want):
-        raise Malformed(f"block {i} of phase {j} opens rows {want}, not {sorted(opened)}")
-    first = section_row(st["blocks"], j)
+        raise Malformed(f"block {i} of phase {j} at level {l} opens rows {want}, not {sorted(opened)}")
+    first = section_row(b, j, l)
     lo, hi = (_bounds(lambda r: bytes(opened[r]), first, x) for x in (i, i + 1))
     if lo == hi:
         return None
     if lo > hi:
-        raise Malformed(f"block {i} of phase {j}: [{lo}, {hi})")
+        raise Malformed(f"block {i} of phase {j} at level {l}: [{lo}, {hi})")
     return R.restrict(c, st, [(lo, hi)])
 
 
 __all__ = ["Advice", "BINDING", "BOUNDS_PER_ROW", "ENDS", "FORMAT", "GRID_BITS", "MAGIC", "Malformed", "ROW_BITS", "ROW_BYTES",
-           "SIZE_CLASSES", "SIZE_CLASS_MAX", "advice", "blocks", "check", "check_block", "decode", "digest", "grid", "id_digest",
-           "openings", "predicates", "rows", "section_row", "size_class", "statement", "validate"]
+           "SECTIONS_PER_ROW", "SIZE_CLASSES", "SIZE_CLASS_MAX", "advice", "blocks", "check", "check_block", "decode", "digest",
+           "grid", "id_digest", "openings", "predicates", "rows", "section_row", "size_class", "statement", "validate"]

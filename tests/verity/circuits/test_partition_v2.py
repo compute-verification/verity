@@ -92,8 +92,8 @@ def wide() -> tuple[Program, bytes, dict]:
     return P, b"".join(codec.descriptor_chunks(P)), PO.template_instance_query(Inc)
 
 
-def _registered(P, q, phases, preds=PREDS, label="vtop"):
-    adv = V.advice(P, q, phases)
+def _registered(P, q, levels, preds=PREDS, label="vtop", starts=(0,)):
+    adv = V.advice(P, q, levels, starts)
     rs = V.rows(adv, preds["grid_bits"])
     reg = A.commit(rs, V.ROW_BITS, V.BINDING, _salts(label, len(rs)))
     return adv, rs, reg, V.statement(q, preds, adv, reg.root)
@@ -124,10 +124,11 @@ def test_the_rows_round_trip():
     P, _c = top()
     adv, rs, _reg, st = registered()
     got, sections, design = V.decode(rs)
-    assert got == adv and adv.population == 6 and adv.phases == ((0, 2, 3, 6),)
-    assert [(s.first, s.rows, s.blocks, s.bounds) for s in sections] == [(3, 1, 3, (0, 2, 3, 6))] and design == (4, 0)
+    assert got == adv and adv.population == 6 and adv.phases == (((0, 2, 3, 6),),)
+    assert [(s.phase, s.level, s.first, s.rows, s.blocks, s.bounds) for s in sections] == [(0, 0, 3, 1, 3, (0, 2, 3, 6))]
+    assert design == (4, 0)
     assert len(rs) == V.grid(len(rs)) == st["advice"]["rows"] and all(len(r) == V.ROW_BYTES for r in rs)
-    assert V.validate(st).ok and st["blocks"] == [3] and st["program"] == codec.program_digest(P)
+    assert V.validate(st).ok and st["blocks"] == [[3]] and st["program"] == codec.program_digest(P)
 
 
 def test_the_global_check_holds():
@@ -135,7 +136,7 @@ def test_the_global_check_holds():
     _adv, rs, _reg, st = registered()
     v = V.check(st, rs, c)
     assert v.ok, v.codes
-    assert v.detail == {"population": 6, "blocks": [3], "rows": len(rs)}
+    assert v.detail == {"population": 6, "blocks": [[3]], "rows": len(rs)}
 
 
 def _edit(row: int, at: int, value: int, n: int = 8):
@@ -163,7 +164,9 @@ REFUSALS = [
     ("long-cover", _edit(3, 24, 7), None, None, "blocks-range"),
     ("backwards", _edit(3, 16, 1), None, None, "blocks-form"),
     ("filler", None, None, None, "filler"),
-    ("bucket", None, {"blocks": [4]}, None, "blocks-bucket"),
+    ("bucket", "bucket", None, None, "blocks-bucket"),
+    ("coarser crossed", "refine", None, None, "blocks-refine"),
+    ("phase span", "span", None, None, "phase-span"),
     ("other C", None, None, "wide", "program"),
     ("too wide", None, {"predicates": {"X": 64}}, None, "block-too-wide"),
     ("too many gates", None, {"predicates": {"max_gates": 8}}, None, "block-too-large"),
@@ -176,6 +179,21 @@ def _refused(edit, sedit, cedit):
     if edit is None and sedit is None and cedit is None:
         adv, rs, _reg, st = _registered(P, QUERY, [BLOCKS], V.predicates(128, grid_bits=1))
         rs = _edit(3, 32, 5)(rs)
+    elif edit == "refine":
+        _adv, rs, _reg, st = _registered(P, QUERY, [[(0, 2), (2, 6)], [(0, 3), (3, 6)]], label="vrefine")
+        edit = None
+    elif edit == "bucket":
+        adv = V.advice(P, QUERY, [BLOCKS])
+        rs = V.rows(adv, 1)
+        st = {**V.statement(QUERY, PREDS, adv, A.commit(rs, V.ROW_BITS, V.BINDING, _salts("vbucket", len(rs))).root),
+              "blocks": [[4]]}
+        edit = None
+    elif edit == "span":
+        adv = V.advice(P, QUERY, [BLOCKS, BLOCKS])
+        adv = V.Advice(adv.program, adv.object, 6, (((0, 2), (0, 3)), ((2, 3, 6), (3, 6))))
+        rs = V.rows(adv)
+        st = V.statement(QUERY, PREDS, adv, A.commit(rs, V.ROW_BITS, V.BINDING, _salts("vspan", len(rs))).root)
+        edit = None
     else:
         _adv, rs, _reg, st = registered()
     st = json.loads(json.dumps(st))
@@ -192,7 +210,7 @@ def test_each_global_refusal(label, edit, sedit, cedit, code):
 
 def test_the_count_is_on_the_grid():
     st = json.loads(json.dumps(registered()[3]))
-    st["blocks"] = [17]
+    st["blocks"] = [[17]]
     assert "blocks" in V.validate(st).codes
 
 
@@ -202,6 +220,8 @@ def test_the_count_is_on_the_grid():
     (lambda st: st["predicates"].update(X=V.SIZE_CLASS_MAX + 1), "predicates"),
     (lambda st: st["predicates"].update(width=16), "predicate-keys"),
     (lambda st: st.update(blocks=[]), "blocks"),
+    (lambda st: st.update(blocks=[3]), "blocks"),
+    (lambda st: st.update(blocks=[[1], [1, 1]]), "blocks"),
     (lambda st: st["advice"].update(root="00"), "advice"),
 ])
 def test_the_statement_form_is_checked(edit, code):
@@ -210,9 +230,9 @@ def test_the_statement_form_is_checked(edit, code):
     assert code in V.validate(st).codes
 
 
-def _opened(rs, reg, st, j, i):
+def _opened(rs, reg, st, j, l, i):
     rows = {}
-    for r in V.openings(st, j, i):
+    for r in V.openings(st, j, l, i):
         o = reg.open(r)
         assert A.verify(bytes.fromhex(st["advice"]["root"]), st["advice"]["rows"], V.ROW_BITS, V.BINDING, o)
         rows[r] = o.row
@@ -223,23 +243,24 @@ def test_a_sampled_block_opens_its_rows_alone():
     P, c, q = wide()
     blocks = [(u, u + 1) for u in range(WIDE)]
     _adv, rs, reg, st = _registered(P, q, [blocks], V.predicates(16), "vwide")
-    assert V.check(st, rs, c).ok and st["blocks"] == [V.grid(WIDE)] == [20]
-    first = V.section_row(st["blocks"], 0)
-    assert [V.openings(st, 0, i) for i in (0, 14, 15, 16, 19)] == [[first], [first], [first, first + 1], [first + 1], [first + 1]]
+    assert V.check(st, rs, c).ok and st["blocks"] == [[V.grid(WIDE)]] == [[20]]
+    first = V.section_row(st["blocks"], 0, 0)
+    assert [V.openings(st, 0, 0, i) for i in (0, 14, 15, 16, 19)] == [[first], [first], [first, first + 1], [first + 1], [first + 1]]
     for i in (0, 15, 19):
-        b = V.check_block(c, st, 0, i, _opened(rs, reg, st, 0, i))
+        b = V.check_block(c, st, 0, 0, i, _opened(rs, reg, st, 0, 0, i))
         assert b.units == ((i, i + 1),)
     with pytest.raises(V.Malformed):
-        V.check_block(c, st, 0, 15, {first: rs[first]})
+        V.check_block(c, st, 0, 0, 15, {first: rs[first]})
 
 
 def test_the_opened_form_is_the_partition_objects_blocks():
     P, c = top()
     _adv, rs, reg, st = registered()
-    obj = PO.build(P, QUERY, V.blocks(rs))
+    assert V.blocks(rs) == [BLOCKS]
+    obj = PO.build(P, QUERY, V.blocks(rs)[0])
     assert PO.verify(obj, P).ok and PO.blocks(obj) == BLOCKS
     for i in range(len(BLOCKS)):
-        mine = V.check_block(c, st, 0, i, _opened(rs, reg, st, 0, i))
+        mine = V.check_block(c, st, 0, 0, i, _opened(rs, reg, st, 0, 0, i))
         theirs = door.restrict(c, obj, door.block(c, obj, i))
         assert mine.units == (BLOCKS[i],) and mine.descriptor == theirs
 
@@ -248,19 +269,36 @@ def test_a_filler_block_is_empty():
     P, c = top()
     blocks = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)]
     _adv, rs, reg, st = _registered(P, QUERY, [blocks], V.predicates(128, grid_bits=1), "vfill")
-    assert st["blocks"] == [V.grid(6, 1)] == [8] and V.check(st, rs, c).ok
+    assert st["blocks"] == [[V.grid(6, 1)]] == [[8]] and V.check(st, rs, c).ok
     assert V.decode(rs)[1][0].bounds == (0, 1, 2, 3, 4, 5, 6, 6, 6)
-    assert [V.check_block(c, st, 0, i, _opened(rs, reg, st, 0, i)) for i in (6, 7)] == [None, None]
-    assert V.blocks(rs) == blocks
+    assert [V.check_block(c, st, 0, 0, i, _opened(rs, reg, st, 0, 0, i)) for i in (6, 7)] == [None, None]
+    assert V.blocks(rs) == [blocks]
 
 
 def test_two_phases_lie_side_by_side():
     P, c = top()
-    _adv, rs, reg, st = _registered(P, QUERY, [[(0, 2)], [(2, 3), (3, 6)]], label="vphases")
-    assert V.check(st, rs, c).ok and st["blocks"] == [1, 2] and V.blocks(rs) == BLOCKS
-    assert V.check_block(c, st, 1, 1, _opened(rs, reg, st, 1, 1)).units == ((3, 6),)
-    _adv, rs, _reg, st = _registered(P, QUERY, [[(0, 2)], [(3, 6)]], label="vphases")
-    assert "blocks-gap" in V.check(st, rs, c).codes
+    _adv, rs, reg, st = _registered(P, QUERY, [BLOCKS], label="vphases", starts=(0, 2))
+    assert V.check(st, rs, c).ok and st["blocks"] == [[1], [2]] and V.blocks(rs) == [BLOCKS]
+    assert V.check_block(c, st, 1, 0, 1, _opened(rs, reg, st, 1, 0, 1)).units == ((3, 6),)
+    adv = V.advice(P, QUERY, [BLOCKS], (0, 2))
+    adv = V.Advice(adv.program, adv.object, 6, (((0, 2),), ((3, 6),)))
+    rs = V.rows(adv)
+    st = V.statement(QUERY, PREDS, adv, A.commit(rs, V.ROW_BITS, V.BINDING, _salts("vphases", len(rs))).root)
+    assert [0, [2, 3]] in V.check(st, rs, c).detail["blocks-gap"]["gates"]
+    with pytest.raises(ValueError):
+        V.advice(P, QUERY, [BLOCKS], (0, 1))
+
+
+def test_levels_refine_coarsest_first():
+    P, c = top()
+    levels = [[(0, 3), (3, 6)], BLOCKS]
+    _adv, rs, reg, st = _registered(P, QUERY, levels, V.predicates(128, max_in_bits=256), "vlevels", starts=(0, 3))
+    assert V.check(st, rs, c).ok and st["blocks"] == [[1, 2], [1, 1]] and V.blocks(rs) == levels
+    assert [(s.phase, s.level) for s in V.decode(rs)[1]] == [(0, 0), (0, 1), (1, 0), (1, 1)]
+    assert V.check_block(c, st, 0, 0, 0, _opened(rs, reg, st, 0, 0, 0)).units == ((0, 3),)
+    assert V.check_block(c, st, 0, 1, 1, _opened(rs, reg, st, 0, 1, 1)).units == ((2, 3),)
+    _adv, rs, _reg, st = _registered(P, QUERY, [BLOCKS, levels[0]], label="vlevels")
+    assert V.check(st, rs, c).detail["blocks-refine"]["gates"] == [[1, [0, 3]]]
 
 
 def build() -> dict:
@@ -280,7 +318,7 @@ def build() -> dict:
         "root": reg.root.hex(),
         "statement": st,
         "statement_digest": V.digest(st),
-        "blocks": [[i, V.openings(st, 0, i), list(V.blocks(rs)[i])] for i in range(st["blocks"][0])],
+        "blocks": [[i, V.openings(st, 0, 0, i), list(V.blocks(rs)[0][i])] for i in range(st["blocks"][0][0])],
         "refusals": [[label, list(_refused(e, s, k).codes)] for label, e, s, k, _code in REFUSALS],
     }
 
