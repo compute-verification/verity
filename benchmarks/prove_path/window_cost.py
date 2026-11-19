@@ -187,20 +187,21 @@ def canonical(lab: str) -> str:
 
 
 def units_of(census: dict) -> list[Unit]:
-    """A census's templates as `Unit`s (a wired+registered port counted wired)."""
+    """A census's templates as `Unit`s (a wired+registered port counted wired), those of one label and the same rows one."""
     def by_kind(d: dict) -> dict:
         return {"wired": sum(v for k, v in d.items() if "wired" in k),
                 "registered": sum(v for k, v in d.items() if "wired" not in k and "registered" in k),
                 "other": sum(v for k, v in d.items() if k != "out" and "wired" not in k and "registered" not in k)}
 
-    out = []
+    out: dict[Unit, int] = {}
     for lab, t in census["templates"].items():
         rows, b = by_kind(t["rows"]), by_kind(t["bytes"])
         o = t["rows"].get("out", 0)
         fresh = t["compressions_a_unit"] - CR.REUSED * sum(rows.values())
-        out.append(Unit(canonical(lab), t["units"], **rows, out=o, out_bytes=t["bytes"].get("out", 0),
-                        x=fresh - CR.FRESH_EXTRA * o, **{f"{k}_bytes": v for k, v in b.items()}))
-    return out
+        u = Unit(canonical(lab), 0, **rows, out=o, out_bytes=t["bytes"].get("out", 0), x=fresh - CR.FRESH_EXTRA * o,
+                 **{f"{k}_bytes": v for k, v in b.items()})
+        out[u] = out.get(u, 0) + t["units"]
+    return [replace(u, n=n) for u, n in out.items()]
 
 
 def kv_bytes(D: int) -> int:
@@ -519,7 +520,7 @@ def _slot_definition(lab: str, cls: WindowClass) -> object:
     none, which its rows don't read)."""
     fam, s = CS.statics(lab)
     if fam == CS.SCAN:
-        return SS.bridge(cls.scan, cls.prompt)
+        return SS.bridge(cls.scan, cls.prompt)[0]
     make = {CS.FEED: IO.TokenFeed, CS.COLLECT: IO.SelectCollect, CS.ENTRY: IO.SelectEntry}[fam]
     return bind(make, **s, **({"STOP": ()} if fam == CS.ENTRY else {}))
 
@@ -566,7 +567,7 @@ def project(census: dict, slots: int, prompt: int, outputs: int, target: str = "
         raise ValueError(f"the probe's token selects are group units of {sorted(groups)} logits, not one count")
     out = []
     for u in rest:
-        lab, n = CS.projected(u.label, u.n, at, to, CS.label(SS.bridge(to.scan, to.prompt)))
+        lab, n = CS.projected(u.label, u.n, at, to, CS.label(SS.bridge(to.scan, to.prompt)[0]))
         if CS.placed(u.label, 1, at.positions) is not None:
             u = _slot_unit(u, lab, at, to, next(iter(groups), None))
         out.append(replace(u, label=lab, n=slots * n))
