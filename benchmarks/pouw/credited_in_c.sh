@@ -3,12 +3,13 @@
 # flock-lower-check, flock-tmpl-unit and verity-verify-proof and the CPU flock-circuit built once per source;
 # `credited_in_c.py stage` evaluates C and stages the drawn block of OUT/honest and OUT/dishonest (BAD=y: the drawn tile's claimed y
 # a word other than the one it writes; BAD=cert: a certificate word not the prover's; BAD=filler: a word of its filler row nonzero;
+# BAD=eb: its wired eb row's first word with bit 15 flipped against the writer's committed tree;
 # each claiming the honest outputs, ok 1), whose prover skips its self-check
 # (FC_ZK_SELF_CHECK=skip) so that its proof reaches the verifiers; each is placed (flock-tmpl-unit), its statement built, proved over a live loopback session
 # (`flock-circuit serve --zk`) and verified by Lean (`verity-verify-proof verify --zk --registered`; the honest one also
 # against a registered file naming another call's public row, and one holding the drawn unit's ok to 0), and a forged proof
 # Lean must reject: the honest session against the dishonest statement (forged-$BAD); `credited_in_c.py door` then verifies
-# them through `proofs.verify`, with nothing of Pearl+'s. SIZE=K,TM,TN,N,M (256,1,1,1,2); BAD=y|cert|filler (y);
+# them through `proofs.verify`, with nothing of Pearl+'s. SIZE=K,TM,TN,N,M (256,1,1,1,2); BAD=y|cert|filler|eb (y);
 # READER=1 (default): C holds a reader of y beside its units, so its partition names two templates; READER=0: none.
 # research run --on auto --cwd source --wait --mem-gb 64 --cpus 16 --timeout 180m -- bash benchmarks/pouw/credited_in_c.sh
 set -uxo pipefail

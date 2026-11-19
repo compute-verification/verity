@@ -242,7 +242,8 @@ def reference(ln: Linear, index: int, vals: dict, unit: int) -> list[int]:
 
 def tamper(ln: Linear, index: int, vals: dict, bad: str) -> dict:
     """``vals`` with unit ``index``'s tile made false: ``cert``, its first certificate word's low bit flipped; ``filler``,
-    its last row, a filler row, with word 3 set to 1.0; ``y``, unchanged (the forgery is in the outputs it claims)."""
+    its last row, a filler row, with word 3 set to 1.0; ``y``, unchanged (the forgery is in the outputs it claims);
+    ``eb``, unchanged (the forgery is in the wired eb row its statement reads, `stage`)."""
     t = ln.tiles[index]
     r, out = t.rows[0] // len(t.rows), json.loads(json.dumps({v: vals[v] for v in ("x", "cert")}))
     if bad == "cert":
@@ -251,7 +252,7 @@ def tamper(ln: Linear, index: int, vals: dict, bad: str) -> dict:
         if t.real == len(t.rows):
             raise ValueError(f"unit {index}'s tile has no filler row: {t.real} of {len(t.rows)} rows are real")
         out["x"][r][-1][3] = 0x3F800000
-    elif bad != "y":
+    elif bad not in ("y", "eb"):
         raise ValueError(f"no tamper {bad!r}")
     return {**vals, **out}
 
@@ -552,7 +553,7 @@ def stage(a) -> int:
     assert all(rec["evaluate"]["drawn_reference_agrees"].values()), rec["evaluate"]
     assert rec["evaluate"]["y_is_the_served_y"] and rec["evaluate"]["reader_reads_y_by_wire"] in (True, None), rec["evaluate"]
     assert rec["evaluate"]["honest_ok"] == [1] * units
-    assert rec["evaluate"]["dishonest_ok"][index] == (1 if a.bad == "y" else 0), rec["evaluate"]
+    assert rec["evaluate"]["dishonest_ok"][index] == (1 if a.bad in ("y", "eb") else 0), rec["evaluate"]
 
     def fields_of(g: list[int]) -> dict[str, list[int]]:
         """A unit's output fields' bits, each leaf low bit first: o0 the digest, o1 y's words, o2 ok's word."""
@@ -658,6 +659,13 @@ def stage(a) -> int:
             rs, ss, entry = held[p].statement([tree_leaf(program, kw, m)])
             tables[p] = np.asarray([RV.row_words(r, 16, RV.SCHEMA_HM96_SHA512_ROW_V2) for r in rs], dtype=np.uint16)
             salts[p], registered[p] = ss, entry
+        if tag == "dishonest" and a.bad == "eb":
+            p = next(p for p in fed if p.partition("#")[0] == "eb")
+            tables[p] = tables[p].copy()
+            tables[p][0, 0] ^= 1 << 15
+            rec["eb_row"] = {"port": p, "word": 0, "bit": 15, "tree": committed[fed[p][0], fed[p][2]].value,
+                             "of": "the drawn statement's wired eb row with bit 15 of its first word flipped, its "
+                                   "writer's committed tree honest"}
         for p, o in outs.items():
             _rs, ss, entry = o.statement([index])
             salts[p], registered[p] = ss, entry
@@ -731,9 +739,10 @@ def main() -> int:
     st.add_argument("--out", type=Path, required=True)
     st.add_argument("--no-reader", dest="reader", action="store_false",
                     help="C without the reader: its units' y is C's output, the record a later reader is held to")
-    st.add_argument("--bad", choices=("y", "cert", "filler"), default="y",
+    st.add_argument("--bad", choices=("y", "cert", "filler", "eb"), default="y",
                     help="the dishonest proof of the drawn tile: its claimed y a word other than the one it writes, a "
-                         "certificate word not the prover's, or a word of its filler row nonzero")
+                         "certificate word not the prover's, a word of its filler row nonzero, or its wired eb row's "
+                         "first word with bit 15 flipped against its writer's committed tree")
     dr = sub.add_parser("door")
     dr.add_argument("--lower", required=True)
     dr.add_argument("--lean", required=True, help="verity-verify-proof")
