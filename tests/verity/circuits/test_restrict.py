@@ -14,7 +14,7 @@ from verity.circuits import boolean as BL
 from verity.circuits import partition_object as PO
 from verity.circuits import restrict as R
 from verity.circuits.codec import definition_digest, definition_entry, descriptor_chunks, descriptor_id
-from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation.reference import evaluate_region
 from verity.circuits.population import wired_population_program
 from verity.circuits.program import Program, input_id
@@ -284,6 +284,26 @@ def test_a_wired_populations_supplied_value_is_a_supplied_input_of_each_block_th
     b = R.restrict(c, TOY_PARTITION, units, bits)
     assert b.program.bindings.count(R.SUPPLIED) == 1
     assert R.listing_of(b.descriptor).split(b"\n")[2:2 + len(b.input_bits)].count(b"supplied") == 4
+
+
+def test_a_primitive_the_registry_lacks_keeps_the_ports_its_descriptor_declares():
+    from verity.circuits.ports import Out, Ports
+    from verity.circuits.types import Value
+    v8 = Value(8)
+    clamp = PrimitiveDefinition("RestrictToyClamp", 1, (("x", v8),), v8, lambda x: min(x, 100),
+                                ports=Ports(ret=Out(interval=(0, 100))), register=False)
+    unit = bind(CompositeDefinition("RestrictToyClampUnit", 1, (), lambda S: ((("x", v8),), v8),
+                                    lambda B, S, x: B.call(clamp, x), register=False))
+    c = b"".join(descriptor_chunks(Program(CompositeDefinition(
+        "RestrictToyPorts", 1, (), lambda S: ((("x", v8), ("y", v8)), Tuple(v8, v8)),
+        lambda B, S, x, y: tuple_of(B.call(unit, x), B.call(unit, y)), register=False))))
+    ports = json.loads(c)["definitions"][clamp.id]["ports"]
+    assert ports == {"ret": [[0, 1, {"interval": [0, 100]}]]}
+    assert R._declared(json.loads(c)).defs[clamp.id] is not clamp
+    q = {"query": {"name": "Q_template_instances", "version": 0, "params": {"templates": [descriptor_id(unit)]}}}
+    b = R.restrict(c, q, [(0, 1)], R.Bits(R.program(c)))
+    assert len(b.input_bits) == len(b.output_bits) == 8
+    assert json.loads(b.descriptor)["definitions"][clamp.id]["ports"] == ports
 
 
 def test_a_block_that_reads_no_supplied_value_has_no_supplied_input():

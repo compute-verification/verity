@@ -119,10 +119,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   (every proof block, plain), `zk` (every proof block, `--zk`, one docket), `sampled` (the one-stage audit, `LAYERS_K` proof blocks) or `all`,
   each on a CUDA build of `flock-circuit`, its scratch in `/dev/shm`. `layers.txt` holds its `ran with:` line, coins
   and parameters: a development challenger local to each session, never an auditor's device, so a measurement and not
-  an audit. The served table's benchmark results are `benchmarks/prove_path/run.sh`'s (`verity bench prove
-  layers`). Its rules are the three parts at the end of this file.
-- `proof_layers.sh`: the served table's first three benchmark results from a clone, as one command, from the bootstrap to
-  the printer's table, removing its work directory at the end.
+  an audit. Its rules are the three parts at the end of this file.
 - `composite.py`: onsite's or remote's case from its subprotocols' cases, and the Lean verdict on it. Each `--cases DIR`
   is a private directory (0700, files 0600) holding one subprotocol's `case.json` (its `serve` line, with `blobs` the
   paths of the files it reads) and its own Lean answer on it, `answer.json`, whose `commitment` is its digest (or a
