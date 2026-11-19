@@ -11,6 +11,7 @@ public import Spot.Wires
 public import Spot.Edges
 public import Spot.RecordText
 public import Spot.Restrict
+public import Circuits.DefinitionDigest
 public import Flock
 public import Flock.JsonParse
 public import Std.Data.HashMap
@@ -90,22 +91,80 @@ structure Own where
   pub : String
   registered : Option Json
   first : Nat := 0
+  /-- C decoded and the partition's blocks, once a session: every member's `Own` is `{ shared with … }`, which keeps
+  these, so no `Own` is updated at `program` or `partition`. -/
+  prog : Thunk (V Flock.Program.Prog) := Thunk.mk fun _ => Flock.Program.decode program
+  blocks : Thunk (V (Option (Array (Nat × Nat)))) := Thunk.mk fun _ => Flock.HmRow.blocksOf partition program
+
+/-- The layout C_S's template is lowered at (`one_circuit.LAYOUT`). -/
+def LAYOUT : String := "iv/hybrid/4"
+
+/-- The templates a template query lists (`one_circuit._listed`); none for another query. -/
+def listedOf (partition : Json) : Option (Array String) :=
+  let q := partition.getObjValD "query"
+  let ps := q.getObjValD "params"
+  match q.getObjValAs? String "name" with
+  | .ok "Q_template_instance" => some #[(ps.getObjValAs? String "template").toOption.getD ""]
+  | .ok "Q_template_instances" => match ps.getObjValD "templates" with
+    | .arr ts => some (ts.map fun t => (t.getStr?).toOption.getD "")
+    | _ => none
+  | _ => none
+
+/-- **C_S's block circuit** (`one_circuit.lower`): `S`, the block's Program, lowered at its one template (the Definition
+its root's non-input nodes call, which the query lists) by `Flock.Lower.lower` and written by `Flock.Compose.compose`:
+input rows the template's parameters as bit rows, output ports its return fields `o{j}` in whole u16 words, META's
+`program_digests` the template's `definitionDigest` read off `CJ`, C's descriptor. Refuses a block over several
+templates by name. -/
+def lowerBlock (CJ : Json) (partition : Json) (S : Flock.Program.Prog) : V ByteArray := do
+  let some listed := listedOf partition
+    | throw (Flock.OneCircuit.notDerived
+        "lower : C_S of a partition that is no template query (Q_template_instance, Q_template_instances) -> its Boolean block circuit")
+  let some root := S.defs[S.root]? | throw "lower: C_S's root is not one of its Definitions"
+  let mut called : Array String := #[]
+  for k in [0:root.body.nodes.size] do
+    if Spot.Edges.isInputNode S k then continue
+    let key := ((root.body.nodes[k]?).bind (S.defs[·.fn]?) |>.map (·.key)).getD ""
+    if !called.contains key then called := called.push key
+  let called := called.qsort (· < ·)
+  let #[key] := called
+    | throw s!"lower: C_S's root calls {called.toList}, and a block's units are instances of one template"
+  if !listed.contains key then throw s!"lower: C_S's template {key} is not one the partition's query lists"
+  let some d := S.index[key]? | throw s!"lower: C_S's template {key} is no Definition of C_S"
+  let some fn := S.defs[d]? | throw s!"lower: C_S's template {key} is no Definition of C_S"
+  let bits := fun (t : Flock.Program.Ty) => t.widths.foldl (· + ·) 0
+  let ins := fn.params.map fun (n, t) => (n, bits t)
+  let outs := (Flock.Program.fieldsOf fn.ret).toArray.mapIdx fun j f => (s!"o{j}", (bits f + 15) / 16)
+  let tab := fun (k : String) => match CJ.getObjValD k with | .arr xs => xs | _ => #[]
+  let digest ← Flock.DefinitionDigest.definitionDigest (tab "callees") (tab "types")
+    ((CJ.getObjValD "definitions").getObjValD key)
+  let nIn := ins.foldl (fun a p => a + (p.2 + 15) / 16) 0
+  let nOut := outs.foldl (· + ·.2) 0
+  let t ← Flock.Lower.lower S d (Array.replicate nIn 16) (Array.replicate nOut 16)
+  Flock.Compose.compose { name := s!"unit/{key}", body := .tmpl t LAYOUT, ins, outs, programDigests := [(key, digest)] }
+    ((partition.getObjValAs? String "program").toOption.getD "") (Flock.hexOf (← Flock.HmRow.partitionDigest partition))
 
 /-- **C_S**: `restrict : C -> Partition -> Block -> Circuit`, the circuit file of the proof block whose first unit
 is `block`: the Boolean lowering of its Definition in C, its ports in(S) and out(S), from C and the partition. The code's
-Core `Circuit.restrict`. The block is the partition's (`HmRow.blocksOf`) and its Program `Spot.Restrict.restrict`'s;
-no encoder writes a lowered Program as a circuit file, so it refuses after the Program. -/
-def restrict (C : ByteArray) (partition : Json) (block : Nat) : V ByteArray := do
-  let some bs ← Flock.HmRow.blocksOf partition C
-    | throw "restrict: the partition object has no blocks"
+Core `Circuit.restrict`. The block is the partition's (`blocks`, `HmRow.blocksOf`), its Program `Spot.Restrict.restrict`'s
+on `prog`, C decoded, and its file `lowerBlock`'s on `CJ`, C's descriptor. -/
+def restrictOn (CJ : V Json) (prog : V Flock.Program.Prog) (blocks : V (Option (Array (Nat × Nat)))) (partition : Json)
+    (block : Nat) : V ByteArray := do
+  let some bs ← blocks | throw "restrict: the partition object has no blocks"
   let some (lo, hi) := bs.find? (·.1 == block)
     | throw s!"restrict: no block of the partition starts at unit {block}"
-  discard <| Spot.Restrict.restrict (← Flock.Program.decode C) ((List.range' lo (hi - lo)).toArray)
-  throw (Flock.OneCircuit.notDerived
-    "restrict : C -> Partition -> Block -> Circuit (C_S: the block's Program lowered and written as a circuit file)")
+  let S ← Spot.Restrict.restrict (← prog) ((List.range' lo (hi - lo)).toArray)
+  lowerBlock (← CJ) partition S
 
-/-- The statement's circuit file, derived from C and the partition (`restrict`). -/
-def Own.circuitFile (p : Own) : V ByteArray := restrict p.program p.partition p.first
+/-- `restrictOn` on C's bytes. -/
+def restrict (C : ByteArray) (partition : Json) (block : Nat) : V ByteArray :=
+  let CJ : V Json := match Flock.Program.readJson C with
+    | some (.ok j) => pure j
+    | some (.error e) => throw s!"restrict: C is not JSON: {e}"
+    | none => throw "restrict: C is not UTF-8"
+  restrictOn CJ (Flock.Program.decode C) (Flock.HmRow.blocksOf partition C) partition block
+
+/-- The statement's circuit file, derived from C and the partition (`restrictOn`), on C decoded once a session. -/
+def Own.circuitFile (p : Own) : V ByteArray := restrictOn (pure p.programJ) p.prog.get p.blocks.get p.partition p.first
 
 /-- A member of the per-member form: its name, its units as `[lo, hi)` ranges, ascending, its circuit's units a proof
 block (META `vus_per_block`) and its statement's own inputs. -/

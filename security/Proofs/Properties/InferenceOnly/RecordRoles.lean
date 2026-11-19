@@ -153,7 +153,7 @@ theorem layoutOf_reads {d d' : Defn} (hp : d.params = d'.params) (hr : d.ret = d
 
 /-- **A pin is the template's closure digest in the descriptor, and one of the pins.** -/
 theorem pinOf_some {desc : Json} {pins : Array String} {tid d : String} (h : pinOf desc pins tid = some d) :
-    InferenceOnlyVerifier.DefinitionDigest.closureDigest desc tid = .ok d ∧ d ∈ pins.toList := by
+    Flock.DefinitionDigest.closureDigest desc tid = .ok d ∧ d ∈ pins.toList := by
   unfold pinOf at h
   repeat' split at h
   all_goals try (cases h; done)

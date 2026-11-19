@@ -1,7 +1,7 @@
 module
 
 public import Circuits.Program
-public import InferenceOnlyVerifier.DefinitionDigest
+public import Circuits.DefinitionDigest
 import Batteries.Tactic.OpenPrivate
 import all Lean.Data.Json.Basic
 
@@ -24,7 +24,7 @@ namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json JsonNumber)
 open Flock Flock.Program
-open InferenceOnlyVerifier.DefinitionDigest (flatParts written)
+open Flock.DefinitionDigest (flatParts written)
 open private natJ? from Circuits.Descriptor
 
 /-- One part, parsed: what `parsePartsIn` makes of a reference with no alias and no concatenation, at any fuel and

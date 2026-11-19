@@ -982,7 +982,9 @@ theorem evidenceEitherOf_one {b : ByteArray} {e : Evidence} (h : evidenceEitherO
 /-- `protocol.main`'s commands, and `verdicts OWN PROOFS [BLOB ...]`: the sessions' verdicts alone (`verdicts`, with no
 proved units to bind), from the verifier's own inputs (`ownOfJson`) and the evidence's `proofs` (`proofsOf`), each file
 canonical JSON; one line, `{"verdicts": [verdict, ...]}` in session order or `{"refused": why}`, exit 0 or 1. The
-difftest holds it to `verity-verify-proof verify --zk` (`one_stage.proofs.verify`). -/
+difftest holds it to `verity-verify-proof verify --zk` (`one_stage.proofs.verify`). `restrict C PARTITION BLOCK OUT`:
+the circuit file of the block whose first unit is `BLOCK` (`restrict`) written to `OUT`, `PARTITION` canonical JSON; exit
+0, or 1 on its refusal. -/
 def main (args : List String) : IO UInt32 := do
   match args with
   | "verdicts" :: own :: proofs :: blobs =>
@@ -997,6 +999,14 @@ def main (args : List String) : IO UInt32 := do
       | .error e => Json.mkObj [("refused", Json.str e)]
     IO.println ((Flock.canon line).toOption.getD line.compress)
     return if r.toBool then 0 else 1
+  | ["restrict", c, partition, block, out] =>
+    let cB ← IO.FS.readBinFile c
+    match Core.canonicalJson (← IO.FS.readBinFile partition), block.toNat? with
+    | .ok pj, some b => match restrict cB pj b with
+      | .ok bs => IO.FS.writeBinFile out bs; IO.println s!"RESTRICTED bytes={bs.size}"; return 0
+      | .error e => IO.eprintln s!"restrict: {e}"; return 1
+    | .error e, _ => IO.eprintln s!"restrict: the partition object: {e}"; return 2
+    | _, none => IO.eprintln "restrict: BLOCK is not a unit index"; return 2
   | _ => protocol.main args
 
 #guard registeredInputName "RegisteredInput96_v1"
@@ -1091,20 +1101,19 @@ private def withTables (c : ByteArray) (names : List String) : Core.Blobs :=
 private def held (lookups tables : List String) : String :=
   refusal (tablesHeld (ownOf (lookingUp lookups)) (withTables (lookingUp lookups) tables))
 
-/-- The refusal of every statement's circuit file while C_S is not derived (`restrict`): here, of a partition object
-with no blocks. -/
-private def HOLE_T : String := refusal ((fun _ => ()) <$> restrict .empty Json.null 0)
+/-- The refusal of a statement's circuit file (`restrict`) on a partition object with no blocks. -/
+private def NO_BLOCKS_T : String := refusal ((fun _ => ()) <$> restrict .empty Json.null 0)
 
-#guard HOLE_T == "restrict: the partition object has no blocks"
-#guard held [] [] == HOLE_T
-#guard held ["ex2", "rcp"] ["rcp", "ex2"] == HOLE_T
+#guard NO_BLOCKS_T == "restrict: the partition object has no blocks"
+#guard held [] [] == NO_BLOCKS_T
+#guard held ["ex2", "rcp"] ["rcp", "ex2"] == NO_BLOCKS_T
 #guard (lookupsOf "circuit\nMETA {\"lookups\":[]}\n".toUTF8).toOption == none
 #guard (lookupsOf "circuit\nMETA {\"lookups\":null}\n".toUTF8).toOption == some []
 #guard (lookupsOf "circuit\nMETA {\"lookups\":{\"foo\":{},\"ex2\":{}}}\n".toUTF8).toOption == some ["ex2"]
-#guard refusal ((fun _ => ()) <$> run (ownOf (lookingUp [])) #[] none (withTables (lookingUp []) ["rcp"])) == HOLE_T
+#guard refusal ((fun _ => ()) <$> run (ownOf (lookingUp [])) #[] none (withTables (lookingUp []) ["rcp"])) == NO_BLOCKS_T
 #guard (tablesPiece (Json.mkObj [("digests", Json.arr #[Json.str
   "8a317adbcc078bf70ae01959b679d49f97cd9c8a93d6f39b7325c93d0fd550fa4396a4c3a0568d2387c2ff2f33eb76453b33a7b8890d97752d86cc1d971aeacc"])])).toOption ==
-  some (Json.mkObj [("why", Json.str HOLE_T)])
+  some (Json.mkObj [("why", Json.str NO_BLOCKS_T)])
 #guard !(tablesPiece (Json.mkObj [("digests", Json.arr #[Json.str "0"])])).toBool
 
 #guard (rootBLen { (default : Flock.Setup) with m := 25, merkle := Flock.MerkleScheme.hm96Sha512 }).toOption == some 16384
@@ -1250,10 +1259,10 @@ private def unitsJ (us : Array Nat) : Json := Json.mkObj [("units", Json.mkObj [
 #guard whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2"] #[] ⟨#[]⟩) == unsampled "m2"
 #guard whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2", statementT "m10"] #[10] ⟨#[]⟩) ==
   unsampled "m2"
-#guard whyT (runMembers (fun _ => Json.null) membersT #[] #[] ⟨#[]⟩) == s!"member m2: {HOLE_T}"
+#guard whyT (runMembers (fun _ => Json.null) membersT #[] #[] ⟨#[]⟩) == s!"member m2: {NO_BLOCKS_T}"
 #guard whyT (runMembers (fun _ => Json.null) #[memberT "m0" #[(0, 1)], memberT "m2" #[(2, 3)]] #[statementT "m2"]
-  #[2] ⟨#[]⟩) == s!"member m0: {HOLE_T}"
-#guard whyT (membersFiles (fun _ => Json.null) ⟨#[]⟩ membersT.toList) == s!"member m2: {HOLE_T}"
+  #[2] ⟨#[]⟩) == s!"member m0: {NO_BLOCKS_T}"
+#guard whyT (membersFiles (fun _ => Json.null) ⟨#[]⟩ membersT.toList) == s!"member m2: {NO_BLOCKS_T}"
 #guard ((membersFiles (fun _ => Json.null) ⟨#[]⟩ []).toOption.map (·.length)) == some 0
 #guard whyT (statementAt [] (memberT "m2" #[(2, 3)])) == "the parameters name no such member"
 
@@ -1267,11 +1276,11 @@ refusal, which these members name none of, where its tables pass. -/
 private def statedT (c : ByteArray) (bs : Core.Blobs) : String :=
   whyT (({ name := "m", units := #[], g := 1, own := ownOf c } : Member).statement Json.null bs)
 
-#guard statedT (lookingUp []) (twoT ["rcp"]) == HOLE_T
-#guard statedT (lookingUp ["rcp"]) (twoT []) == HOLE_T
+#guard statedT (lookingUp []) (twoT ["rcp"]) == NO_BLOCKS_T
+#guard statedT (lookingUp ["rcp"]) (twoT []) == NO_BLOCKS_T
 #guard (ownTables (ownOf (lookingUp [])) (twoT ["rcp", "ex2"])).toOption.isNone
 #guard refusal (tablesMatch [("rcp", .empty)] []) == s!"{NO_TABLES}: the circuit looks up none, the blobs hold rcp"
-#guard whyT (statementOf (ownOf (lookingUp [])) (fun _ => pure ()) [("rcp", .empty)] (twoT [])) == HOLE_T
+#guard whyT (statementOf (ownOf (lookingUp [])) (fun _ => pure ()) [("rcp", .empty)] (twoT [])) == NO_BLOCKS_T
 
 /-- A statement of no file whose scope, ports, form, header and population checks are the ones given. -/
 private def stepT (scope ksFiles ksForm header population : V Unit) : Option StepAt :=
