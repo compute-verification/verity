@@ -14,6 +14,7 @@ from verity.circuits import count as CT
 from verity.circuits import restrict as R
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.codec import descriptor_chunks, descriptor_id
+from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_bits
 from verity.circuits.ops.boolean.versions import block_circuit, boolean_table
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import inert_bound, pc8
@@ -113,19 +114,22 @@ def test_the_credited_block_is_the_tile_with_its_bit_ports():
 
 
 @pytest.mark.slow
-def test_the_credited_block_with_its_leaf_is_the_tile_unit_with_one_output():
-    """At a depth, the block is `PearlPlusTile_v1`: the core's ports with the leaf's hsalt and path after its first four and
-    troot, tdomain and tpos last, all registered bits, and ok its one output. Slow: as above."""
+def test_the_credited_block_with_its_leaf_is_the_tile_unit_on_word_ports():
+    """At a depth, the block is `PearlPlusTile_v1` behind `WordBits` batches: one port per run of its parameters' words of one
+    width (FP32 and u32 words, bytes, tpos's bits), all registered, and ok its one output; its count is the tile's, the
+    `WordBits` wiring counting nothing. Slow: as above."""
     _program, part, _c, b = credited(D)
-    tile = WK.credited_product(SCHEME, K, TM, TN, N, D)
-    assert tile.defn is T.PearlPlusTile and part["query"]["params"]["template"] == descriptor_id(tile)
+    words = WK.credited_product(SCHEME, K, TM, TN, N, D)
+    tile = bind(T.PearlPlusTile, **words.bindings)
+    assert part["query"]["params"]["template"] == descriptor_id(words)
     params, ret = b.program.fn.signature()
-    core, _ = WK.credited_product(SCHEME, K, TM, TN, N).signature()
-    leaf = 8 * (192 + 64 * D + 2 * 64) + D
-    assert [(t.n, t.elem.w) for _p, t in params] == [(sum(t.leaves for _n, t in core) + leaf, 1)]
+    leaves = [w for _n, t in words.signature()[0] for w in t.leaf_widths()]
+    assert [x for _p, t in params for x in [t.elem.w] * t.n] == leaves
+    assert sum(t.n * t.elem.w for _p, t in params) == sum(t.leaves for _n, t in tile.signature()[0])
     assert {R._Gates(b.D).binding(g) for g in b.inputs} == {R.REGISTRATION}
     assert [(t.n, t.elem.w) for t in ret.fields] == [(1, 1)]
-    assert [n.fn.id for n in b.program.root.body.nodes if n.form == "call"] == [tile.id]
+    got = CT.count(b.program)
+    assert got[descriptor_id(b.program.root)] == got[descriptor_id(tile)]
 
 
 @pytest.mark.slow
