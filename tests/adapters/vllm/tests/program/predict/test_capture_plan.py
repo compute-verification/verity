@@ -104,6 +104,16 @@ def test_the_builds_plan_is_each_value_once_over_its_programs_with_the_prompt_id
          "definitions": ["TokenSelect_v1"]}]
 
 
+def test_a_steps_rows_are_each_op_path_once_with_every_members_of_its_rows(tmp_path):
+    """RoPE's query and key are rows of their own at every request row: one engine step commits the op path once, its
+    members in the order its rows first give them."""
+    rope = "model.layers.0.self_attn.rotary_emb"
+    rows = [_row(rope, [("query", 2048, "bf16")], "RoPE_v1"), _row(rope, [("key", 512, "bf16")], "RoPE_v1"),
+            _row(rope, [("query", 2048, "bf16")], "RoPE_v1", row=1), _row(rope, [("key", 512, "bf16")], "RoPE_v1", row=1)]
+    got = CP.rows_of_build(_build(tmp_path), index=lambda *_: _Index(rows, [{"query": "instance_outputs", "key": "instance_outputs"}] * 4))
+    assert [(r["op_path"], r["members"]) for r in got] == [(rope, [("query", 2048, "bf16"), ("key", 512, "bf16")])]
+
+
 def test_a_value_two_rows_capture_differently_and_a_build_without_programs_are_refused(tmp_path):
     with pytest.raises(ValueError, match="no request Program"):
         CP.of_build(tmp_path, index=lambda *_: _llama_like())

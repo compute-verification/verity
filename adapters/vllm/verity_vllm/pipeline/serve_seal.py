@@ -250,7 +250,7 @@ def served_binder_of(plan: Sequence[Mapping[str, Any]], steps: Sequence[int], po
     one: dict[tuple[str, str, int], dict[str, Any]] = {}
     shared = {str(k): (str(v[0]), int(v[1])) for k, v in (aliases or {}).items()}
     for d in plan:
-        op, k = shared.get(str(d["op_path"]), (str(d["op_path"]), int(d.get("row", 0))))
+        op, k = shared.get(str(d["op_path"]), (str(d["op_path"]), 0))
         for j, (m, _width, _dtype) in enumerate(d["members"]):
             key = (op, str(m), k)
             one.setdefault(key, {"op_path": key[0], "output_member": key[1], "invocation": key[2], "position": [j]})

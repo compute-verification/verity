@@ -134,12 +134,13 @@ def of_build(build: str | Path, *, index: Callable[[Mapping[str, Any], str], Any
 
 
 def rows_of_build(build: str | Path, *, index: Callable[[Mapping[str, Any], str], Any] = _index) -> list[dict[str, Any]]:
-    """The plan rows (`captured`) of every request Program of the Build ``build``, each (op path, row) once, as the first
-    Program in name order spells it."""
-    out: dict[tuple[str, int], dict[str, Any]] = {}
+    """What one engine step of the Build ``build`` commits at each op path: its first plan row (`captured`, request Programs in
+    name order) with the members of every row at it, in the order they first appear."""
+    out: dict[str, dict[str, Any]] = {}
     for d, pi in _programs(build, index):
         for r in captured(pi, d.name):
-            out.setdefault((str(r["op_path"]), int(r.get("row", 0))), r)
+            at = out.setdefault(str(r["op_path"]), {**r, "members": []})
+            at["members"] += [m for m in r["members"] if m[0] not in {x[0] for x in at["members"]}]
     return list(out.values())
 
 

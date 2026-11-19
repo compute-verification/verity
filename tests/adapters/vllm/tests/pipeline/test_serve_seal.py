@@ -165,15 +165,16 @@ def _plan(fx) -> list[dict[str, Any]]:
     each row's members in the order its Definition returns them (the record's tuple slots)."""
     slot = {(m["bound"][0], m["bound"][1]): int(m["name"].rsplit("/", 1)[1]) for ms in fx["committed"].values() for m in ms
             if m["name"].rsplit("/", 1)[-1].isdecimal()}
+    path = {(str(c), int(k)): p for p, (c, k) in (fx.get("op_path_aliases") or {}).items()}
     rows: dict[tuple[str, int], dict[str, Any]] = {}
     for r in fx["identities"]:
         if r.get("spec"):
-            d = rows.setdefault((r["op_path"], int(r.get("invocation", 0))), {"op_path": r["op_path"], "row": int(r.get("invocation", 0)),
-                                                                              "spec": r["spec"], "members": []})
+            at = (r["op_path"], int(r.get("invocation", 0)))
+            d = rows.setdefault(at, {"op_path": path.get(at, at[0]), "row": 0, "spec": r["spec"], "members": []})
             if r["output_member"] not in [m[0] for m in d["members"]]:
                 d["members"].append((r["output_member"], 0, ""))
-    for d in rows.values():
-        d["members"].sort(key=lambda m: slot.get((d["op_path"], m[0]), 0))
+    for (op, _k), d in rows.items():
+        d["members"].sort(key=lambda m, op=op: slot.get((op, m[0]), 0))
     return list(rows.values())
 
 
