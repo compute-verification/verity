@@ -25,6 +25,7 @@ from verity_vllm.correspondence.reader_for_acquire import (
     RuntimeTree,
 )
 from verity_vllm.log import write
+from verity_vllm.query.manifest.format import identity_rows
 from verity_vllm.records.capture import CALL_BOUNDARY
 from verity_vllm.records.schema_ids import CALL_BOUNDARIES_GATE_SCHEMA
 
@@ -46,17 +47,28 @@ def run_plan(classes: Sequence[Mapping[str, Any]], rt: RuntimeTree) -> Acquisiti
 
 def call_boundaries(manifest: Mapping[str, Any], *roots: str | None) -> dict[str, Any]:
     """Does every `call_boundaries` identity of `manifest` have a source the row's Commit attaches (`taps.attached`)?  One no source
-    claims must be covered by the call-boundary source's host plan over the Build dirs under `roots` (`call_boundary_source.plan_of`,
-    what its `attach` refuses the Commit without); a claimed one must name an attached source.  The record: the counts, the attached
-    sources and the identities without one, named."""
-    return call_boundaries_of(manifest, CB.plan_of(manifest, *roots) if CB.manifest_sites(manifest) else None)
+    claims must be covered by the call-boundary source's host plan over the Build dirs under `roots` (`host_plan`, what its `attach`
+    refuses the Commit without); a claimed one must name an attached source.  The record: the counts, the attached sources and the
+    identities without one, named."""
+    return call_boundaries_of(manifest, host_plan(manifest, *roots))
+
+
+def class_of_identity(r: Mapping[str, Any]) -> dict[str, Any]:
+    """A `call_boundaries` identity as a capture-plan class (`capture_plan.of_build`'s keys), the form the sources' claims
+    (`call_boundary_source.claimed`) read."""
+    return {"op_path": str(r["op_path"]), "member": str(r.get("output_member", "out")), "capture": CALL_BOUNDARY,
+            "definitions": [str(r.get("spec", ""))]}
 
 
 def classes_of_identities(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """The `call_boundaries` identities of `manifest` as capture-plan classes (`capture_plan.of_build`'s keys), the form the
-    sources' claims (`call_boundary_source.claimed`) read."""
-    return [{"op_path": str(r["op_path"]), "member": str(r.get("output_member", "out")), "capture": CALL_BOUNDARY,
-             "definitions": [str(r.get("spec") or "")]} for r in CB.manifest_sites(manifest)]
+    return [class_of_identity(r) for r in identity_rows(manifest) if r.get("family") == CB.FAMILY]
+
+
+def host_plan(manifest: Mapping[str, Any], *roots: str | None) -> Plan | None:
+    """The call-boundary source's host plan over the identities whose class no source claims, or None when there is none."""
+    evaluated = [r for r in identity_rows(manifest) if r.get("family") != CB.FAMILY or CB.claimed(class_of_identity(r)) is None]
+    unclaimed = {**manifest, "identities": evaluated}
+    return CB.plan_of(unclaimed, *roots) if CB.manifest_sites(unclaimed) else None
 
 
 def call_boundaries_of(manifest: Mapping[str, Any], plan: Plan | None) -> dict[str, Any]:
