@@ -32,11 +32,14 @@ def test_the_files_deploy_toml_installs_run_the_hourly_lean_prune(tmp_path):
         (records / name).mkdir(parents=True)
         (records / name / ".lock").touch()
         os.utime(records / name / ".lock", (1, ord(name)))
+    (records / "facts").mkdir()
+    (records / "facts" / "k.json").write_text("{}")
     r = subprocess.run([sys.executable, "-S", str(lib / argv[1][len(LIB):]), "--prune", "--cache", str(tmp_path / "cache" / "lean-audit")],
                        capture_output=True, text=True, cwd=tmp_path,
                        env={"HOME": str(tmp_path), "LEAN_SLOTS": str(tmp_path / "no-slots")})
     assert r.returncode == 0, r.stderr
-    assert "1 from lean-records" in r.stdout and sorted(p.name for p in records.iterdir()) == ["b", "c", "d"], r.stdout
+    assert "1 from lean-records," in r.stdout and sorted(p.name for p in records.iterdir()) == ["b", "c", "d", "facts"], r.stdout
+    assert "0 from lean-records/facts" in r.stdout and (records / "facts" / "k.json").exists(), r.stdout
 
 
 def test_every_cpu_node_gets_the_hourly_lean_prune_with_its_timer():

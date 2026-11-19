@@ -427,7 +427,7 @@ def test_the_scheme_that_provides_admission_is_found_by_its_role():
 def _declared(name: str, **declared) -> NS:
     attached = []
     return NS(**{"name": name, "settings": {}, "check_settings": lambda own: None, "requests": lambda ctx: (),
-                 "attach": lambda ex, ctx: attached.append(name), "attached": attached, "resource": "compute",
+                 "attach": lambda ex, ctx: attached.append(name), "attached": attached, "resource": "compute", "kernels": schemes.Lacks("a stand-in"),
                  "needs": frozenset(), "depends": (), "keeps_weight_copy": schemes.UNDECLARED, **declared})
 
 
