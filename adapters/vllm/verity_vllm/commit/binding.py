@@ -27,6 +27,7 @@ graded here: a late read or a relabel passes coverage, and openings that verify 
 from __future__ import annotations
 
 import json
+import math
 from collections import Counter
 from collections.abc import Collection, Iterable
 from typing import Any
@@ -34,7 +35,7 @@ from typing import Any
 from verity_vllm.commit import executed_prefix as _EPX
 from verity_vllm.commit import json_chunks as JC
 from verity_vllm.query.manifest import format as MF
-from verity_vllm.query.manifest.bind import HIDDEN_FAMILIES, runtime_place, split_name
+from verity_vllm.query.manifest.bind import HIDDEN_FAMILIES, split_name
 from verity_vllm.query.manifest.format import (
     PROMOTED_OBSERVATION_RULE as PROMOTED_INPUT_RULE,  # noqa: F401  -- re-exported
 )
@@ -109,6 +110,23 @@ def _numel(shape: Iterable[int]) -> int:
 
 
 # ---------------------------------------------------------------------- the binding map
+
+
+def runtime_place(binder: Any, step: int, key: tuple[str, str, int], request: str, lo: int, hi: int, goff: int,
+                  meta: Any) -> tuple[tuple[str, str, int], int, int, str | None]:
+    """A request's binding-map entry of `key` at `step`: its share [`lo`, `hi`) of `meta`'s runtime tensor at element `goff`, started at
+    row r0 of the share when the request's Values start there (`runtime_rows`).  -> (key, hi, goff, None), the range ending at the
+    share's end; unmoved, with why, when the share is not whole rows of the tensor or has no row r0; as it is without a binder."""
+    r0 = binder.offsets.get(int(step), {}).get(key, {}).get(str(request), 0) if binder is not None else 0
+    if not r0:
+        return key, hi, goff, None
+    rows = int(meta.shape[0]) if meta.shape else 0
+    per_row = math.prod(int(s) for s in meta.shape) // rows if rows else 0
+    n = (hi - lo) // per_row if per_row and (hi - lo) % per_row == 0 else None
+    if n is not None and r0 < n:
+        return key, hi - r0 * per_row, goff + r0 * per_row, None
+    return key, hi, goff, (f"{meta.name}: {request}'s values start at its row {r0}; its share is "
+                           + (f"rows [0, {n})" if n is not None else "not whole rows") + ": bound to no row")
 
 def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, program_digest: str, *, request_rows: dict[int, list[tuple[str, int, int]]] | None = None,
                       request_id: str = "r0", rank: int = 0, layout_version: str = "chunk-leaf-v1", chunk: int | None = None,
