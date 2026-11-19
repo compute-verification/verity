@@ -14,7 +14,7 @@ connects to LISTEN. It prints `listening 127.0.0.1:LISTEN` and relays each conne
 until SIGTERM, the tunnel's end or `--minutes`; then it runs to the end of its execution phase and writes `coin-link.json` to
 `--out` (`CoinLink.summary`, with PORT, LISTEN, the peer and how the tunnel ended), which the window's `end` entry seals.
 The defaults are D7's parameters (`CoinLinkParams`). The link's origin is a reading its device stamps in its own log on
-the clock its ticks read, the network attester's (`verity.clock.raw_ns`, under `--device-key`, late past `--slack-ms`);
+the clock its ticks read, the network attester's (`verity.clock.raw_ns`, under `DEVICE_KEY`, late past `--slack-ms`);
 on a host that gives no such clock the link refuses to start.
 
 The tunnel goes straight to the peer: `ProxyJump` and `ProxyCommand` are `none`, and a `--peers` line that names a jump
@@ -44,7 +44,8 @@ from verity.protocols.proofs.spot.verifier.challenger import remote  # noqa: E40
 from verity.protocols.proofs.spot.verifier.challenger.challenger import ChallengerRecord, CoinError, LiveCommitment  # noqa: E402
 
 SUMMARY = "coin-link.json"
-#: the key the link's device, the network attester's, reads its clock under until the registration carries it
+#: the key the link's device, the network attester's, reads its clock under; deleted by the change whose registration
+#: carries each device's key
 DEVICE_KEY = "network-attester"
 TUNNEL = ["ssh", "-N", "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=15",
           "-o", "ProxyJump=none", "-o", "ProxyCommand=none"]
@@ -64,7 +65,6 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--bucket-ms", type=int, default=d.bucket_ms)
     p.add_argument("--window", type=int, default=d.window)
     p.add_argument("--slack-ms", type=int, default=25)
-    p.add_argument("--device-key", default=DEVICE_KEY)
     return p.parse_args(argv)
 
 
@@ -92,7 +92,7 @@ def commitment(out: Path) -> LiveCommitment:
 async def serve(args: argparse.Namespace, params: CoinLinkParams, coins: LiveCommitment,
                 ssh: list[str] | None) -> dict:
     loop = asyncio.get_running_loop()
-    device = Device(args.device_key, raw_ns, raw_resolution_ns(), args.slack_ms * 1_000_000)
+    device = Device(DEVICE_KEY, raw_ns, raw_resolution_ns(), args.slack_ms * 1_000_000)
     log = Log(device.key)
     link = CoinLink(params, coins, lambda: asyncio.open_connection("127.0.0.1", args.port),
                     origin=stamp(device, log, {"origin": "bucket 0"}), device=device, log=log,
