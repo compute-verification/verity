@@ -872,7 +872,8 @@ def test_a_lean_that_does_not_answer_leaves_the_window_undecided(served, tmp_pat
     assert (served.private / SP.STORE).exists() and (served.private / SP.HELD).exists()
     monkeypatch.setattr(period, "serve", lambda exe, cases, *args: [
         REF.pous_answer(c, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL) for c in cases])
-    again = SP.answers(served.serve, 3, served.out, trusted_sha512=hashlib.sha512(bytes.fromhex(run["public_key"])).hexdigest(),
+    key = hashlib.sha512(bytes.fromhex(run["public_key"])).hexdigest()
+    again = SP.answers(served.serve, 3, served.out, trusted_sha512=key, deployment=_deployment(key),
                        private=served.private, protocol=TEST_PROTOCOL, case_exe=str(exe))
     assert again["verdict"] == "accept" and len(calls) == 1
     assert SV.piece_row("space", served.out.parent)["verdict"] == "accept" and (served.private / "case.json").exists()
