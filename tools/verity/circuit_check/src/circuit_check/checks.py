@@ -1529,7 +1529,7 @@ def _held_blocks(entries: list[dict], catalog: bool = False,
 
 def circuit_digest_pin(t: Any, pins: dict, F: Findings) -> dict:
     """A gated Definition's circuit digest, core's `program_digest` of its Program, which the gate a Program holds it as
-    names (`verity.protocols.resource_accounting.network.verifier.head_check.gate`), against its ``digests`` pin: the pin a verifier reads in
+    names (`verity.protocols.resource_accounting.network.verifier.head_check.pin_id`), against its ``digests`` pin: the pin a verifier reads in
     place of the digest is the Definition's.  Any other Definition holding a ``digests`` pin (a binding at served statics
     over `targets.MAX_GATES`, which the pin keeps in ``--all``) is held to it the same way, so every held pin is compared."""
     from verity.circuits.codec import program_digest
