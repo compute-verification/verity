@@ -233,7 +233,7 @@ SETUPS = [Setup(PN.population_program(PAIR, n), P.template_instance_query(PAIR.i
     Setup(call_program((0, 2, 0, 3)), PO.query()), Setup(call_program((1, 2, 3)), PO.call_query(8))]
 #: `SETUPS[3]` with a partition object naming its proof blocks, one unit each: the door derives the drawn block's circuit
 #: from them (`one_circuit.block`), and refuses an object naming none.
-BLOCKED = Setup(SETUPS[3].program, SETUPS[3].query, blocks=[(u, u + 1) for u in range(SETUPS[3].population)])
+BLOCKED = Setup(SETUPS[3].program, SETUPS[3].query, blocks=[[(u, u + 1) for u in range(SETUPS[3].population)]])
 
 
 def _registered_program(name: str, n: int, extra, registered) -> Program:
