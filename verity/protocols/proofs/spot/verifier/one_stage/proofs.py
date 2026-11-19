@@ -67,7 +67,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from verity.circuits.library import TABLES
 
-from verity.protocols.proofs.spot.verifier.challenger.challenger import SAMPLE_LINK_FIRST, sample_link_first
+from verity.protocols.proofs.spot.verifier.challenger.challenger import SAMPLE_LINK_FIRST, _nat, sample_link_first
 from verity.commitments.docket_digest import digest as registration_digest
 from . import one_circuit as OC
 from .verifier import BUILD_LOCK, ROOT
@@ -127,7 +127,9 @@ class Proof:
 class Finding:
     """One session's verdict from the verifier's own run: accepted or not and why, the program its verdict names, its
     registered finding (port -> {value, root}), the global proof blocks it proved (none unless accepted) and the rows it
-    opened (its verdict's ``openings``, which `produced.shared` reads; None when it reports none)."""
+    opened (its verdict's ``openings``, which `produced.shared` reads; None when it reports none), and the drawn block
+    its statement's units are exactly (`verify`'s match; None where no door matched one), by which a caller holds every
+    drawn block to exactly one proof."""
 
     session: str
     accepted: bool
@@ -136,6 +138,7 @@ class Finding:
     registered: dict
     units: tuple[int, ...]
     openings: Any = None
+    block: int | None = None
 
 
 def verifier_env(environ: Mapping[str, str] | None = None) -> dict[str, str]:
@@ -451,22 +454,30 @@ def drawn_block(program: bytes, partition: Mapping[str, Any], draw: Mapping[str,
                 ) -> tuple[int, list[tuple[int, int]]] | tuple[None, tuple[str, str]]:
     """The proof block of the partition object a statement's proof is of, and its units, taken from the challenger's
     `draw` (`service.select_draw`, `coins.draw_first`: its ``units`` and ``closure`` over the partition's blocks): the drawn
-    block holding the first unit the proof's public file names. None and the refusal otherwise (``circuit``: a drawn
-    block the partition object has not, `one_circuit.block`; ``proof``: a public file naming no unit; ``undrawn``: a
-    draw that sampled no block holding it)."""
+    block whose units the proof's public file names exactly (`units_exactly`). None and the refusal otherwise
+    (``circuit``: a drawn block the partition object has not, `one_circuit.block`; ``proof``: a public file naming no
+    unit, or one that is no natural number, a float or a bool included; ``undrawn``: a draw that sampled no block
+    holding its first unit, or a drawn block holding it whose units are not exactly the file's)."""
     ks = [*draw.get("units", ()), *draw.get("closure", ())] if isinstance(draw, Mapping) else []
     try:
         blocks = {k: OC.block(program, partition, k) for k in ks}
     except OC.Refused as e:
         return None, ("circuit", str(e))
     try:
-        u = _header(public)["units"]["indices"][0]
+        indices = list(_header(public)["units"]["indices"])
+        u = indices[0]
     except (OSError, ValueError, LookupError, TypeError):
         return None, ("proof", "the statement's public file names no unit")
+    if not all(map(_nat, indices)):
+        bad = next(x for x in indices if not _nat(x))
+        return None, ("proof", f"the statement's public file names unit {json.dumps(bad)}, which is no natural number")
     k = next((k for k, units in sorted(blocks.items()) if any(lo <= u < hi for lo, hi in units)), None)
     if k is None:
         return None, ("undrawn", f"the proof is of the proof block holding unit {u}, which the draw did not sample "
                                  f"(its blocks {sorted(blocks)})")
+    if not units_exactly(blocks[k], indices):
+        return None, ("undrawn", f"the statement's public file names units {indices}, not exactly drawn block {k}'s "
+                                 f"{[list(r) for r in blocks[k]]}")
     return k, blocks[k]
 
 
@@ -479,8 +490,9 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], draw: 
     registered value, such as N2's, whose proof block opens the committed value inside its circuit), on the circuit file
     of the drawn proof block, the block of the partition object `draw` sampled that the proof is of (`drawn_block`),
     derived from C and the partition (`one_circuit.restrict`), never `proof`'s own circuit file; the findings in session
-    order and None, or None and the refusal (``registered``: `registered` is None and the program reads registered
-    values, `reads_registered`; ``undrawn``: the proof is of a block `draw` did not sample; ``circuit``: C and the
+    order, each naming that block (``block``), and None, or None and the refusal (``registered``: `registered` is None
+    and the program reads registered values, `reads_registered`; ``undrawn``: the proof is of a block `draw` did not
+    sample, or its public file's units are not exactly the drawn block's; ``circuit``: C and the
     partition give no drawn block or no C_S of it, or its base circuit is not derived yet, `one_circuit.lower`;
     ``proof``: a file is missing or the
     verifier's answer is not one verdict a session naming the
@@ -561,7 +573,7 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], draw: 
             return None, ("proof", f"session {s}'s verdict names program {v.get('program_sha512')}, not the partition "
                                    f"object's {want}")
         out.append(Finding(str(s), ok, why, v.get("program_sha512"), v.get("registered") or {},
-                           proved_units(proof.public, s) if ok else (), v.get("openings")))
+                           proved_units(proof.public, s) if ok else (), v.get("openings"), k))
     return out, None
 
 

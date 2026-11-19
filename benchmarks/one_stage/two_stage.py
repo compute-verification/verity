@@ -1060,7 +1060,9 @@ def _round_two_own(replay: Program, key: str, sample: Sequence[int], window: CS.
                  returns=SS.replay_returns(replay, key, brec),
                  supplied=SS.supplied_of(RG.resolved(tie.get("supplied"), tie.get("history"))),
                  fixed=(*(tie.get("pinned") or ()), *(tie.get("outputs") or ())), reads=S.template_reads(proofs),
-                 tables=S.pinned_tables(proofs))
+                 tables=S.pinned_tables(proofs),
+                 held=SS.held_of(P.program_digest(window.program), tie.get("window_root"), tie.get("held"),
+                                 tie.get("pinned"), tie.get("supplied"), tie.get("outputs")))
     return own
 
 

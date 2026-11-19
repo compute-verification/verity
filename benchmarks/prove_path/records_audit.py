@@ -394,7 +394,7 @@ def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> di
     inputs = wired = ext_bits = 0
     ext = set(external)
     for m in members:
-        tables, wires = dict(m.tables), {p for p, _o, _ws in m.wired}
+        tables, wires = dict(m.tables), {w.port for w in m.wired}
         for p, words in m.rows:
             n = 16 * int(words) * int(tables.get(p, m.n))
             inputs += n

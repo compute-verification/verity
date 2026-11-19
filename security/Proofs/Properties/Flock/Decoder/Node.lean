@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Properties.InferenceOnly.BodiesOk.Basic
-public import Proofs.Properties.InferenceOnly.Resolve
+public import Proofs.Properties.Flock.Decoder.Basic
+public import Proofs.Properties.Flock.Decoder.Resolve
 import Batteries.Tactic.OpenPrivate
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Data.NNRat.Floor
