@@ -1,8 +1,9 @@
 /-
 `Flock.Partition`: the program format `verity-ir/descriptor/v2` (`verity/circuits/PROTOCOL.md`), as the verifier
-reads its own copy of a Program: the canonical JSON domain and the program digest (§1), types and leaves (§2), reference
-sequences (§3), the descriptor and what the decoder refuses (§4) and input nodes (§5), with each word primitive's
-one Boolean Definition (§4.9, `Prog.boolean`).
+reads its own copy of a Program: the program digest (§1), the descriptor and what the decoder refuses (§4) and input nodes
+(§5), with each word primitive's one Boolean Definition (§4.9, `Prog.boolean`), over `Circuits.Types`' canonical JSON
+domain (§1), types and leaves (§2) and reference sequences (§3). Its `#guard`s on `inputs` and supplied inputs are
+the flock verifier's `Flock.Test.Inputs`.
 
 The verifier evaluates no primitive, so it holds no registry: a primitive is taken as the descriptor declares it (its parameters
 and return type are under the program digest), and an input (`Input<w>_v1`, bound per run, or `RegisteredInput<w>_v1`,
@@ -17,6 +18,7 @@ public import Base.Hash
 public import Base.JsonParse
 public import Base.Sizes
 public import Circuits.Steps
+public import Circuits.Types
 public import Lean.Data.Json.FromToJson.Basic
 public import Std.Data.HashMap
 meta import Base.Canon
@@ -24,6 +26,7 @@ meta import Base.Hash
 meta import Base.JsonParse
 meta import Base.Sizes
 meta import Circuits.Steps
+meta import Circuits.Types
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -34,7 +37,6 @@ namespace Flock.Program
 open Lean (Json JsonNumber)
 
 def SCHEMA : String := "verity-ir/descriptor/v2"
-@[noinline] def MAX_SAFE_INT : Nat := 2 ^ 53 - 1
 
 private def natJ? : Json → Option Nat
   | .num n => if n.exponent == 0 && n.mantissa ≥ 0 then some n.mantissa.toNat else none
@@ -44,88 +46,7 @@ private def intJ? : Json → Option Int
   | .num n => if n.exponent == 0 then some n.mantissa else none
   | _ => none
 
-/-! ### §1 The canonical JSON domain -/
-
-/-- Where `j` leaves the domain on which canonical JSON is RFC 8785 (strings ASCII without DEL, integers of magnitude at most
-2^53 − 1, no other numbers), or none (`codec.jcs_domain_error`). -/
-def domainError (j : Json) (path : String := "$") : Option String :=
-  match j with
-  | .null | .bool _ => none
-  | .num n =>
-    if n.exponent != 0 then some s!"{path}: a float is not a JSON integer, string, boolean, null, array or object"
-    else if n.mantissa.natAbs > MAX_SAFE_INT then some s!"{path}: integer {n.mantissa} exceeds 2^53 - 1 in magnitude"
-    else none
-  | .str s => if s.toList.all (fun c : Char => c.toNat < 0x7f) then none else some s!"{path}: string is not ASCII without DEL"
-  | .arr a => (Array.range a.size).attach.findSome? fun i =>
-    domainError (a[i.1]'(Array.mem_range.1 i.2)) s!"{path}[{i.1}]"
-  | .obj kvs => kvs.toArray.attach.findSome? fun x =>
-    if x.1.1.toList.all (fun c : Char => c.toNat < 0x7f) then domainError x.1.2 s!"{path}.{x.1.1}"
-    else some s!"{path}.<key>: string is not ASCII without DEL"
-termination_by j
-decreasing_by
-  · exact sizeOf_lt_of_mem_arr (Array.getElem_mem _)
-  · exact sizeOf_lt_of_mem_obj x.2
-
-/-! ### §2 Types and leaves -/
-
-inductive Ty where
-  | value (w : Nat)
-  | array (n : Nat) (e : Ty)
-  | tuple (fs : Array Ty)
-  | record (fs : Array (String × Ty))
-  deriving Inhabited
-
 namespace Ty
-
-private theorem sizeOf_lt_of_mem {fs : Array Ty} {t : Ty} (h : t ∈ fs) : sizeOf t < 1 + sizeOf fs := by
-  have := Array.sizeOf_lt_of_mem h
-  omega
-
-private theorem sizeOf_snd_lt_of_mem {fs : Array (String × Ty)} {f : String × Ty} (h : f ∈ fs) :
-    sizeOf f.2 < 1 + sizeOf fs := by
-  have := Array.sizeOf_lt_of_mem h
-  obtain ⟨k, t⟩ := f
-  simp only [Prod.mk.sizeOf_spec] at this ⊢
-  omega
-
-def beq : Ty → Ty → Bool
-  | .value a, .value b => a == b
-  | .array n a, .array m b => n == m && beq a b
-  | .tuple a, .tuple b => a.size == b.size && (a.attach.zip b).all fun (x, y) => beq x.1 y
-  | .record a, .record b => a.size == b.size && (a.attach.zip b).all fun (x, y) => x.1.1 == y.1 && beq x.1.2 y.2
-  | _, _ => false
-termination_by t _ => t
-decreasing_by
-  all_goals simp only [Ty.array.sizeOf_spec, Ty.tuple.sizeOf_spec, Ty.record.sizeOf_spec]
-  · omega
-  · exact sizeOf_lt_of_mem x.2
-  · exact sizeOf_snd_lt_of_mem x.2
-
-instance instBEq : BEq Ty := ⟨beq⟩
-
-def leaves : Ty → Nat
-  | .value _ => 1
-  | .array n e => n * leaves e
-  | .tuple fs => fs.foldl (fun a t => a + leaves t) 0
-  | .record fs => fs.foldl (fun a t => a + leaves t.2) 0
-decreasing_by all_goals first | decreasing_tactic | (simp only [Ty.record.sizeOf_spec]; exact sizeOf_snd_lt_of_mem ‹_›)
-
-/-- The leaf widths in leaf order (row-major: an Array's elements in index order, fields in declared order). -/
-def widths : Ty → Array Nat
-  | .value w => #[w]
-  | .array n e => let w := widths e; (Array.range n).foldl (fun a _ => a ++ w) #[]
-  | .tuple fs => fs.foldl (fun a t => a ++ widths t) #[]
-  | .record fs => fs.foldl (fun a t => a ++ widths t.2) #[]
-decreasing_by all_goals first | decreasing_tactic | (simp only [Ty.record.sizeOf_spec]; exact sizeOf_snd_lt_of_mem ‹_›)
-
-def toJson : Ty → Json
-  | .value w => Json.arr #[Json.str "Value", Lean.toJson w]
-  | .array n e => Json.arr #[Json.str "Array", Lean.toJson n, toJson e]
-  | .tuple fs => Json.arr #[Json.str "Tuple", Json.arr (fs.map toJson)]
-  | .record fs => Json.arr #[Json.str "Record", Json.arr (fs.map fun f => Json.arr #[Json.str f.1, toJson f.2])]
-decreasing_by all_goals first | decreasing_tactic | (simp only [Ty.record.sizeOf_spec]; exact sizeOf_snd_lt_of_mem ‹_›)
-
-def render (t : Ty) : String := (toJson t).compress
 
 /-- `type_from_json` with its constructors' checks: a width a positive integer, a length a natural number (neither a boolean),
 a record's field names distinct strings. -/
@@ -170,178 +91,8 @@ decreasing_by
   · have h1 := sizeOf_lt_of_mem_arr (Array.getElem_mem (xs := ys) (i := 1) (by omega))
     rw [← hf] at h1
     exact Nat.lt_trans h1 (Nat.lt_trans (sizeOf_lt_of_mem_arr f.2) (sizeOf_lt_of_getElem?_arr h))
-
-/-- `remove_axis`: array axis `ax` stripped, with its length. -/
-def removeAxis : Ty → Nat → Option (Nat × Ty)
-  | .array n e, 0 => some (n, e)
-  | .array n e, ax + 1 => (removeAxis e ax).map fun (m, inner) => (m, .array n inner)
-  | _, _ => none
-
-/-- For member `m` along axis `ax`: the axis' length and the leaves below it. Leaf `ℓ` of the member is leaf
-`((ℓ / L) · d + m) · L + ℓ % L` of the whole (§3, members of a batch argument). -/
-def axisDims : Ty → Nat → Option (Nat × Nat)
-  | .array n e, 0 => some (n, leaves e)
-  | .array _ e, ax + 1 => axisDims e ax
-  | _, _ => none
-
-/-- `boolean.bit_type` (§9): each `Value<w>` an `Array<w, Value<1>>`, a `Value<1>` kept a bit. -/
-def bitType : Ty → Ty
-  | .value w => if w == 1 then .value 1 else .array w (.value 1)
-  | .array n e => .array n (bitType e)
-  | .tuple fs => .tuple (fs.attach.map fun x => bitType x.1)
-  | .record fs => .record (fs.attach.map fun x => (x.1.1, bitType x.1.2))
-termination_by t => t
-decreasing_by
-  all_goals simp only [Ty.array.sizeOf_spec, Ty.tuple.sizeOf_spec, Ty.record.sizeOf_spec]
-  · omega
-  · exact sizeOf_lt_of_mem x.2
-  · exact sizeOf_snd_lt_of_mem x.2
-
-/-- Every leaf one bit wide (`width_set() <= {1}`); a type without leaves too. -/
-def bits : Ty → Bool
-  | .value w => w == 1
-  | .array _ e => bits e
-  | .tuple fs => fs.attach.all fun x => bits x.1
-  | .record fs => fs.attach.all fun x => bits x.1.2
-termination_by t => t
-decreasing_by
-  all_goals simp only [Ty.array.sizeOf_spec, Ty.tuple.sizeOf_spec, Ty.record.sizeOf_spec]
-  · omega
-  · exact sizeOf_lt_of_mem x.2
-  · exact sizeOf_snd_lt_of_mem x.2
-
 end Ty
 
-/-- **A return's fields**: a Tuple's or a Record's, else the return itself. A Tuple or a Record of no field has no
-field. -/
-def fieldsOf : Ty → List Ty
-  | .tuple fs => fs.toList
-  | .record fs => fs.toList.map (·.2)
-  | t => [t]
-
-/-! ### §3 Reference sequences -/
-
-/-- A body-scoped reference: space `p` (a parameter of the body) when `p`, else `n` (a node's output); the collection; the leaf. -/
-structure Ref where
-  p : Bool
-  i : Nat
-  j : Nat
-  deriving Inhabited, BEq
-
-def Ref.toJson (r : Ref) : Json := Json.arr #[Json.str (if r.p then "p" else "n"), Lean.toJson r.i, Lean.toJson r.j]
-
-/-- A lane of a grid (PROTOCOL.md §3): its collection `(p, i)`, base `b`, inner stride `e` and levels `(radix, step)`,
-innermost first, the last one unbounded. -/
-structure Lane where
-  p : Bool
-  i : Nat
-  b : Int
-  e : Int
-  lv : List (Nat × Int)
-  deriving Inhabited, BEq
-
-/-- The periods a lane's levels count: their radices' product. -/
-def Lane.periods (l : Lane) : Nat := l.lv.foldl (fun a (r, _) => a * r) 1
-
-/-- The leaf of lane `l` at period `t`, offset `o` in its run (`refs.grid_ref`'s arithmetic). -/
-def Lane.leafAt (l : Lane) (t o : Nat) : Int :=
-  let rec go : List (Nat × Int) → Nat → Int
-    | [], _ => 0
-    | [(_, d)], t => (t : Int) * d
-    | (r, d) :: rest, t => ((t % r : Nat) : Int) * d + go rest (t / r)
-  l.b + (o : Int) * l.e + go l.lv t
-
-/-- The least and greatest leaf lane `l` of a whole grid of runs of `run` reaches (`refs.lane_bounds`). -/
-def Lane.bounds (run : Nat) (l : Lane) : Int × Int :=
-  ((run, l.e) :: l.lv).foldl (fun (lo, hi) (r, d) => (lo + ((r : Int) - 1) * min d 0, hi + ((r : Int) - 1) * max d 0))
-    (l.b, l.b)
-
-inductive Part where
-  | affine (p : Bool) (i base count : Nat)
-  | strided (p : Bool) (i : Nat) (base : Int) (inner : Nat) (os is : Int) (count : Nat)
-  | explicit (items : Array Ref)
-  | grid (run : Nat) (lanes : Array Lane)
-  deriving Inhabited
-
-def Part.count : Part → Nat
-  | .affine _ _ _ c => c
-  | .strided _ _ _ _ _ _ c => c
-  | .explicit it => it.size
-  | .grid run lanes => lanes.size * run * ((lanes[0]?.map Lane.periods).getD 0)
-
-@[inline] def Part.get : Part → Nat → Ref
-  | .affine p i b _, k => ⟨p, i, b + k⟩
-  | .strided p i b inner os is _, k => ⟨p, i, (b + ((k / inner : Nat) : Int) * os + ((k % inner : Nat) : Int) * is).toNat⟩
-  | .explicit it, k => it[k]!
-  | .grid run lanes, k =>
-    let l := lanes[k % (lanes.size * run) / run]!
-    ⟨l.p, l.i, (l.leafAt (k / (lanes.size * run)) (k % run)).toNat⟩
-
-/-- Adjacent levels where one continues the other, merged (`refs._merged_levels`). -/
-def mergedLevels (lv : List (Nat × Int)) : List (Nat × Int) :=
-  (lv.foldl (fun out (r, d) => match out with
-    | (r', d') :: rest => if d == (r' : Int) * d' then (r' * r, d') :: rest else (r, d) :: out
-    | [] => [(r, d)]) []).reverse
-
-/-- Whether the grid `(run, lanes)` needs the grid form: no affine, strided or explicit part spells it (`refs.spell`,
-which tries those first, after merging). -/
-def gridNeeded (run : Nat) (lanes : Array Lane) : Bool := Id.run do
-  let mut lanes := lanes.map fun l => { l with lv := mergedLevels l.lv }
-  let mut run := run
-  let g := lanes.size
-  if g ≥ 2 then
-    let l0 := lanes[0]!
-    if lanes.all (fun l => l.p == l0.p && l.i == l0.i && l.e == l0.e && l.lv == l0.lv) then
-      let c := lanes[1]!.b - l0.b
-      if (List.range g).all (fun j => lanes[j]!.b == l0.b + (j : Int) * c) && (run == 1 || c == (run : Int) * l0.e) then
-        lanes := #[{ l0 with e := if run == 1 then c else l0.e }]
-        run := run * g
-  if lanes.size == 1 then
-    let l := lanes[0]!
-    let mut e := l.e
-    let mut lv := l.lv
-    for _ in [0:l.lv.length] do
-      match lv with
-      | (r, d) :: rest =>
-        if run == 1 || d == (run : Int) * e then
-          e := if run == 1 then d else e
-          run := run * r
-          lv := mergedLevels rest
-        else break
-      | [] => break
-    if lv.length ≤ 1 then return false
-  if run == 1 && lanes.all (·.lv.isEmpty) then return false
-  return true
-
-/-- A flat sequence of parts (a concatenation spliced in), with each part's first index. -/
-structure Seq where
-  parts : Array Part
-  starts : Array Nat
-  count : Nat
-  deriving Inhabited
-
-def Seq.ofParts (ps : Array Part) : Seq :=
-  let (starts, count) := ps.foldl (fun (acc : Array Nat × Nat) q => (acc.1.push acc.2, acc.2 + q.count)) (#[], 0)
-  { parts := ps, starts, count }
-
-/-- Reference `k` (`k < count`): the part holding it, by bisection over the starts (each round narrows `[lo, hi)`, so as many
-rounds as parts finish it). -/
-def Seq.get (s : Seq) (k : Nat) : Ref := Id.run do
-  if s.parts.size == 1 then return s.parts[0]!.get k
-  let mut lo := 0
-  let mut hi := s.parts.size
-  for _ in [0:s.parts.size] do
-    if hi - lo ≤ 1 then break
-    let mid := (lo + hi) / 2
-    if s.starts[mid]! ≤ k then lo := mid else hi := mid
-  return s.parts[lo]!.get (k - s.starts[lo]!)
-
-/-- The references in order, repeats kept. -/
-def Seq.toArray (s : Seq) : Array Ref :=
-  s.parts.foldl (fun acc q => (Array.range q.count).foldl (fun acc k => acc.push (q.get k)) acc) #[]
-
-/-- The least leaf position or step a grid states. -/
-def gridLow : Int := -(2 ^ 62 : Nat)
 
 /-- A lane's level `[radix, step]`; `shape` is the refusal. -/
 def gridLevel (shape : String) (x : Json) : V (Nat × Int) := match x with
@@ -2193,87 +1944,5 @@ def decodeWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLift
     (#[rootId] ++ (recordFunctionIds programFn).filter desc.ddefs.contains ++ pairs.map (·.2)) : V _)
   let boolean := pairs.foldl (fun m p => m.insert p.1 p.2) {}
   return { defs := st.defs, index := st.index, root, programFn, sha512 := ← programDigestWith sha512 j, boolean }
-
-/-- `NotAnd_v1(x: Value<1>) = Not(x)` as `codec.encode_program` writes it, `codec.decode_program`'s accept; its digests are
-`codec.definition_digests`' and `codec.program_digest`'s on these bytes. -/
-private def NOT_DESC : String :=
-  r#"{"boolean":{},"callees":["Input1_v1","Not_v1"],"definitions":{"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[NotAnd_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":1,"out":0},{"args":[{"refs":{"affine":["n",0,0,1]},"type":1}],"fn":1,"form":"primitive","out":1}],"params":[],"ret":{"affine":["n",1,0,1]},"ret_type":["Value",1]},"form":"composite","id":"Root[NotAnd_v1]_v1"}},"inputs":[["x",1]],"program_fn":"NotAnd_v1","root":"Root[NotAnd_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Array",1,["Value",1]],["Value",1]]}"#
-
-/-- `NOT_DESC` with a registered input node after the run input node, the parameters as `inputs` names them. -/
-private def mixedDesc (inputs : String) : String :=
-  ((((NOT_DESC.replace r#"["Input1_v1","Not_v1"]"# r#"["Input1_v1","Not_v1","RegisteredInput1_v1"]"#).replace
-    r#""Root[NotAnd_v1]_v1":{"# r#""RegisteredInput1_v1":{"form":"primitive","id":"RegisteredInput1_v1","params":[],"ret":["Value",1]},"Root[NotAnd_v1]_v1":{"#).replace
-    r#""form":"batch","n":1,"out":0},"# r#""form":"batch","n":1,"out":0},{"args":[],"axes":[],"fn":2,"form":"batch","n":1,"out":0},"#).replace
-    r#""ret":{"affine":["n",1,0,1]}"# r#""ret":{"affine":["n",2,0,1]}"#).replace r#""inputs":[["x",1]]"# inputs
-
-/-- `decode`'s verdict on `s`: the program digest of an accept, else the refusal's code. -/
-private def verdict (s : String) : String := match decode s.toUTF8 with
-  | .ok P => hexOf P.sha512
-  | .error e => (e.splitOn ":").head!
-
-#guard verdict NOT_DESC == "8793c3fbb20b66b520af8987be9dc885a37593a13e866a6795c0619a6800aa07aa66e141722a09da83e0a3c30cda5339dd430122db2de67ff3271fa01bba536e"
-#guard match (JsonParse.parse NOT_DESC).toOption.map definitionDigests with
-  | some (.ok d) => d.toList.mergeSort (fun a b => a.1 ≤ b.1) == [
-      ("Input1_v1", "01a1a9db691df5e9a51666f246f71239e9681d94750b07fa28e9ae24228055d112e38b257c0728673e6635057cad11565109279e2b71116867e38ae5d8fa18b7"),
-      ("Not_v1", "e53494d3815c1d18a5eb3a18aae5781f0dfea16eec4cb1263e08f7b875c358a06b6007f7bf6de72f2b65cf840da36e3c9c84f4752f3bb32c3373654987230214"),
-      ("Root[NotAnd_v1]_v1", "b5a3def87804c6f07a020e710c0b1349c1719870efedebc9028a4a98329b57ac49e1dcc7a8ccce3a64fb2583a35e4b1a99d812264c8f7935ba3be2a35aa68bd0")]
-  | _ => false
-#guard verdict (NOT_DESC.replace r#""boolean":{},"# r#""boolean":{},"word":{},"#) == "E_KEYS"
-#guard verdict (NOT_DESC.replace r#""schema":"verity-ir/descriptor/v2","# r#""schema":"verity-ir/descriptor/v1","#) == "E_SCHEMA"
-#guard verdict (NOT_DESC.replace r#""inputs":[["x",1]],"# "") == "E_INPUTS"
-#guard verdict (NOT_DESC.replace r#""inputs":[["x",1]]"# r#""inputs":[["x","1"]]"#) == "E_INPUTS"
-#guard verdict (NOT_DESC.replace r#""inputs":[["x",1]]"# r#""inputs":[["",1]]"#) == "E_INPUTS_NAME"
-#guard verdict (NOT_DESC.replace r#""inputs":[["x",1]]"# r#""inputs":[["x",1],["x",0]]"#) == "E_INPUTS_NAME"
-#guard verdict (NOT_DESC.replace r#""inputs":[["x",1]]"# r#""inputs":[["x",2]]"#) == "E_INPUTS_COUNT"
-#guard verdict (mixedDesc r#""inputs":[["x",2]]"#) == "E_INPUTS_MIXED"
-#guard (verdict (mixedDesc r#""inputs":[["x",1],["y",1]]"#)).length == 128
-/-- `NOT_DESC` with a 64-leaf supplied input node after the run input node (`log.base/v1`'s 8 bytes, read `le`), the
-parameters as `inputs` names and marks them. -/
-private def suppliedDesc (inputs : String) : String :=
-  ((((NOT_DESC.replace r#"["Input1_v1","Not_v1"]"# r#"["Input1_v1","Not_v1","SuppliedInput1_v1"]"#).replace
-    r#""Root[NotAnd_v1]_v1":{"# r#""Root[NotAnd_v1]_v1":{"#).replace
-    r#""form":"batch","n":1,"out":0},"# r#""form":"batch","n":1,"out":0},{"args":[],"axes":[],"fn":2,"form":"batch","n":64,"out":0},"#).replace
-    r#""ret":{"affine":["n",1,0,1]}"# r#""ret":{"affine":["n",2,0,1]}"#).replace r#""inputs":[["x",1]]"# inputs
-  |>.replace r#""Root[NotAnd_v1]_v1":{"bindings""# r#""SuppliedInput1_v1":{"form":"primitive","id":"SuppliedInput1_v1","params":[],"ret":["Value",1]},"Root[NotAnd_v1]_v1":{"bindings""#
-  |>.replace r#""n":64,"out":0"# r#""n":64,"out":2"# |>.replace r#"["Value",1]]}"# r#"["Value",1],["Array",64,["Value",1]]]}"#
-
-private def logMark (m : String) : String := s!"\"inputs\":[[\"x\",1],[\"base\",1,{m}]]"
-private def LOG_MARK : String := r#"{"args":{},"bits":64,"layout":"le","supplied":"log.base/v1"}"#
-
-/-- `decode`'s whole refusal text on `s`, or the empty string on an accept. -/
-private def refusal (s : String) : String := match decode s.toUTF8 with
-  | .ok _ => ""
-  | .error e => e
-
-#guard (verdict (suppliedDesc (logMark LOG_MARK))).length == 128
-#guard verdict (suppliedDesc (logMark LOG_MARK)) != verdict (suppliedDesc (logMark (LOG_MARK.replace "log.base" "pous.setup.salt"
-  |>.replace "64," "192,")))
-#guard refusal (suppliedDesc r#""inputs":[["x",1],["base",1]]"#) ==
-  "E_INPUTS_MIXED: input 'base': supplied input nodes and no mark naming their function"
-#guard refusal (suppliedDesc r#""inputs":[["x",2,{"args":{},"bits":65,"layout":"le","supplied":"log.base/v1"}]]"#) ==
-  "E_INPUTS_MIXED: parameter 'x''s input nodes 0..1 mix run and supplied inputs"
-#guard refusal (NOT_DESC.replace r#""inputs":[["x",1]]"# (s!"\"inputs\":[[\"x\",1,{LOG_MARK}]]")) ==
-  "E_INPUTS_MIXED: input 'x': marked supplied, and its nodes are ['run']"
-#guard refusal (suppliedDesc (logMark (LOG_MARK.replace r#""bits":64"# r#""bits":0"#))) ==
-  "E_SUPPLIED_MARK: input 'base': a mark is {supplied, args, layout, bits}, a part's with of = [input, lo, hi], not " ++
-  "[{'args': {}, 'bits': 0, 'layout': 'le', 'supplied': 'log.base/v1'}]"
-#guard verdict (suppliedDesc (logMark (LOG_MARK.replace r#""layout":"le""# r#""layout":"be""#))) == "E_SUPPLIED_MARK"
-#guard verdict (suppliedDesc (logMark (LOG_MARK.replace r#""args":{}"# r#""args":{"k":""}"#))) == "E_SUPPLIED_MARK"
-#guard verdict (suppliedDesc (logMark (LOG_MARK.replace r#""args":{}"# r#""args":{},"of":["b",1,1]"#))) == "E_SUPPLIED_MARK"
-#guard verdict (suppliedDesc (logMark (LOG_MARK.replace r#""args":{}"# r#""args":{},"seed":1"#))) == "E_SUPPLIED_MARK"
-#guard refusal (suppliedDesc (logMark (LOG_MARK.replace "log.base/v1" "log.base/v2"))) ==
-  "E_SUPPLIED_FN: input 'base': 'log.base/v2' is no supplied function"
-#guard refusal (suppliedDesc (logMark (LOG_MARK.replace r#""args":{}"# r#""args":{"round":3}"#))) ==
-  "E_SUPPLIED_ARGS: input 'base': log.base/v1 takes the args [], not ['round']"
-#guard refusal (suppliedDesc (logMark r#"{"args":{"value":70000},"bits":16,"layout":"le","supplied":"const.u16/v1"}"#)) ==
-  "E_SUPPLIED_ARGS: input 'base': const.u16/v1 has no value at {'value': 70000}"
-#guard refusal (suppliedDesc (logMark (LOG_MARK.replace r#""bits":64"# r#""bits":32"#))) ==
-  "E_SUPPLIED_WIDTH: input 'base': log.base/v1's value is 64 bits, read by le as whole leaves of one width; the mark says " ++
-  "32 and its nodes hold 64 leaves of widths [1]"
-#guard verdict (suppliedDesc (logMark (LOG_MARK.replace r#""layout":"le""# r#""layout":"digest""#))) == "E_SUPPLIED_WIDTH"
-#guard (verdict (suppliedDesc (logMark r#"{"args":{},"bits":64,"layout":"le","of":["salt",0,64],"supplied":"window.salt/v1"}"#))).length == 128
-#guard verdict (suppliedDesc (logMark r#"{"args":{},"bits":64,"layout":"le","of":["salt",500,564],"supplied":"window.salt/v1"}"#)) == "E_SUPPLIED_WIDTH"
-#guard pyStr "it's" == "\"it's\"" && pyStr "a\\b" == "'a\\\\b'" && pyStr "\x01" == "'\\x01'"
-#guard verdict (NOT_DESC.replace r#""definitions":{"# r#""definitions":{"Const1[0x1]_v1":{"form":"primitive","id":"Const1[0x1]_v1","params":[],"ret":["Value",1]},"#) == "E_UNREACHED"
 
 end Flock.Program
