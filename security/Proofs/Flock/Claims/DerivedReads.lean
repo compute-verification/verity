@@ -66,8 +66,8 @@ theorem pos_reads {P : _root_.Flock.Program.Prog} {indices : Array Nat} {reg r :
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; rfl)
 
-theorem treeReads_reads {P : _root_.Flock.Program.Prog} {indices : Array Nat} {lo : Nat}
-    {reg r : Port} (h : treeReads P indices lo reg = .ok r) :
+theorem treeReads_reads {P : _root_.Flock.Program.Prog} {indices : Array Nat} {lo hi : Nat}
+    {reg r : Port} (h : treeReads P indices lo hi reg = .ok r) :
     r = { reg with readsRel := r.readsRel, readsFrom := r.readsFrom } := by
   unfold treeReads at h
   simp only [bind, Except.bind, pure, Except.pure] at h
