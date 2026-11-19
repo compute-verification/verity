@@ -377,12 +377,12 @@ def test_gelu_ref_vs_torch(DT, approx):
     x = _elementwise_domain(rng, DT)
     ref = ref_prims_twins.np_gelu_ref(x, DT, approx)
     xt = words_t(x, DT)
-    got_vec = t_words(F.gelu(xt, approximate=approx))  # contiguous: ATen's vectorised kernel (Vectorized erf/tanh)
-    got_sca = t_words(F.gelu(torch.stack([xt, xt], 1)[:, 0], approximate=approx))  # strided: ATen's scalar std::erf/std::tanh path
-    # gelu = 0.5*x*(1 + f(.)) with f = erf or tanh: a d-difference in f becomes 0.5*|x|*d absolutely, and for x < 0
+    got_vec = t_words(F.gelu(xt, approximate=approx))  # contiguous: ATen's vectorised kernel (Vectorized tanh)
+    got_sca = t_words(F.gelu(torch.stack([xt, xt], 1)[:, 0], approximate=approx))  # strided: ATen's scalar std::tanh path
+    # gelu = 0.5*x*(1 + tanh(.)): a d-difference in f becomes 0.5*|x|*d absolutely, and for x < 0
     # 1 + f cancels (factor |f|/(1+f): 2 at x=-1, unbounded in the tail) so that becomes many *ulps*; the bound is absolute.
     xv = np.abs(ref_prims_twins.np_widen(x, DT).astype(np.float64))
-    formula = "0.5*|x|*2^-21 + 4*ulp_DT(ref)   (oracle's erf/tanh within 4.8e-7 absolute of correctly rounded; measured worst 3.5e-7)"
+    formula = "0.5*|x|*2^-21 + 4*ulp_DT(ref)   (oracle's tanh within 4.8e-7 absolute of correctly rounded; measured worst 3.5e-7)"
     tol = 0.5 * xv * 2.0 ** -21 + 4 * ulp_dt(ref_prims_twins.np_widen(ref, DT), DT)
     res_vec = compare(ref, got_vec, DT, tol=tol, tol_formula=formula)
     res_sca = compare(ref, got_sca, DT, tol=tol, tol_formula=formula)
@@ -399,17 +399,13 @@ def test_gelu_ref_vs_torch(DT, approx):
                  oracle_op=f"torch.nn.functional.gelu(approximate={approx!r}) on a contiguous (vectorised) and a strided (scalar) tensor",
                  domain={"x": "every finite bf16 word (exhaustive)" if DT == "bf16" else "65,536 x N(0,4) f32 + 16 edge words"},
                  result=res, gate_check={"shape": {"N": 16}, "gates": n_gates, "twin_equals_gates": True},
-                 notes="The reference is the erf/tanh form x*0.5*(1+f(.)) with a correctly rounded f (F32ErfRn/F32TanhRn); torch "
-                       "uses the same formula on two code paths. (i) Strided tensors -> scalar libm std::erf/std::tanh: erf form "
-                       "98.8% of f32 words exact (glibc erff is not correctly rounded everywhere), tanh form 93.6%. (ii) Contiguous "
-                       "tensors (all bf16, f32) -> ATen Vectorized<float>::erf/tanh: the vectorised erf is a polynomial "
-                       "approximation with absolute error up to ~3.5e-7 near x=0 (worst tested word x=-0.03167: 8 ulps of the "
-                       "result) and is NOT the same erf as torch.erf on a contiguous tensor (MKL VML vsErf, <= 1 ulp: see the "
-                       "F32ErfRn_v1 record; probe: F.gelu(x) != x*0.5*(1+torch.erf(x*M_SQRT1_2)) at x=-1.0); the vectorised tanh is "
-                       "Sleef <= 1 ulp (tanh(-9.009) = -1.0 where correctly rounded is -0.99999994). For x < 0 the 1+f cancellation "
-                       "amplifies f's error (2 ulps at x=-1; factor-2 or -0.0-vs-1.6e-7 results for x < -5), which is why the f32 "
-                       "exact fraction is low while the absolute difference stays within 0.5*|x|*2^-21 + 4 ulp on every path. bf16 "
-                       "outputs absorb all of it but 3 (erf) / 4 (tanh, the tail -0.0) words of the exhaustive 65,280.")
+                 notes="The reference is the tanh form x*0.5*(1+tanh(.)) with a correctly rounded tanh (F32TanhRn); torch "
+                       "uses the same formula on two code paths. (i) Strided tensors -> scalar libm std::tanh: 93.6% of f32 words "
+                       "exact. (ii) Contiguous tensors (all bf16, f32) -> ATen Vectorized<float>::tanh, Sleef <= 1 ulp "
+                       "(tanh(-9.009) = -1.0 where correctly rounded is -0.99999994). For x < 0 the 1+f cancellation amplifies f's "
+                       "error (2 ulps at x=-1; factor-2 or -0.0-vs-1.6e-7 results for x < -5), which is why the f32 exact fraction "
+                       "is low while the absolute difference stays within 0.5*|x|*2^-21 + 4 ulp on every path. bf16 outputs "
+                       "absorb all of it but 4 words (the tail -0.0) of the exhaustive 65,280.")
 
 
 @pytest.mark.parametrize("DT", DTS)
@@ -737,9 +733,9 @@ def test_transcendental_specials():
     assert lg(0) == lg(0x80000000) == 0xFF800000 and lg(0x3F800000) == 0 and lg(0x40000000) == 0x3F317218  # ln 2
     # the smallest subnormal, the largest finite word, and the two neighbours of 1 (|ln x| ~ 2^-24 and 2^-23: normal results)
     assert lg(1) == 0xC2CE8ED0 and lg(0x7F7FFFFF) == 0x42B17218 and lg(0x3F7FFFFF) == 0xB3800000 and lg(0x3F800001) == 0x33FFFFFF
-    for f in (R.f32_erf_rn_bits, R.f32_tanh_rn_bits):
-        assert f(0) == 0 and f(0x80000000) == 0x80000000 and f(0x7F800000) == 0x3F800000 and f(0xFF800000) == 0xBF800000
-        assert f(0x7FC00000) == P.F32_NAN and f(0x41200000) == 0x3F800000 and f(0xC1200000) == 0xBF800000  # ±10 -> ±1
+    f = R.f32_tanh_rn_bits
+    assert f(0) == 0 and f(0x80000000) == 0x80000000 and f(0x7F800000) == 0x3F800000 and f(0xFF800000) == 0xBF800000
+    assert f(0x7FC00000) == P.F32_NAN and f(0x41200000) == 0x3F800000 and f(0xC1200000) == 0xBF800000  # ±10 -> ±1
     assert R.F32Sqrt.evaluate(0xBF800000) == P.F32_NAN and R.F32Sqrt.evaluate(0x80000000) == 0x80000000
     assert R.F32MaxRef.evaluate(0x7FC00000, 0) == P.F32_NAN and R.F32MaxRef.evaluate(0x3F800000, 0x40000000) == 0x40000000
     assert R.F32Sub.evaluate(0x7F800000, 0x7F800000) == P.F32_NAN

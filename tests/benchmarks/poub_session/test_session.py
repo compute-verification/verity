@@ -87,7 +87,8 @@ def test_an_accepted_sessions_gamma_is_the_leans(monkeypatch):
 def test_a_session_whose_windows_all_accept_is_not_accepted_unless_the_leans_outcome_is(monkeypatch, outcome):
     """The session's acceptance is the Lean's `outcome` at its end: an honest session whose every window verdict
     accepts, while the Lean's `outcome` is anything but `accepted` (another word, none, or no answer), is not
-    accepted, and the record says `disagreement` at the event `outcome`; the books' acceptance is the veto beside it."""
+    accepted, its failure the Lean's word, or undecided where the Lean gave none; the windows' acceptance decides
+    nothing beside it."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     end = verifier.Pair.end
 
@@ -98,8 +99,8 @@ def test_a_session_whose_windows_all_accept_is_not_accepted_unless_the_leans_out
 
     monkeypatch.setattr(verifier.Pair, "end", other)
     (r,), (pr,) = run("honest")
-    assert not r["accepted"] and not pr["accepted"] and r["failure"]["failure"] == "disagreement"
-    assert r["disagreement"]["event"] == "outcome" and r["disagreement"]["python"] == {"windows_accepted": True}
+    assert not r["accepted"] and not pr["accepted"] and r["disagreement"] is None
+    assert r["failure"]["failure"] == (outcome if outcome == "rejected" else verifier.DIVERGED)
 
 
 def test_a_session_on_the_pass_clock_runs_one_schedule(monkeypatch):
@@ -385,8 +386,8 @@ def test_a_session_reserves_append_coins_only_when_its_plan_appends_and_an_appen
     """Each session's coins are W challenges, W openings coins and its append coins: none, and no append family, under
     a plan of honest sessions (the hello says so), and `coins.APPENDS` under one with a kv session, on which both are
     accepted.  At `appends=0` the kv session's first append has no coin: the books reject it as `coin` and the Lean,
-    which takes only the append coins released, otherwise, so the session is refused there as `disagreement`, the
-    honest one accepted."""
+    which takes only the append coins released, otherwise, so the driver can't follow the Lean's session and it ends
+    undecided there (`DIVERGED`), the honest one accepted."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     from verity.protocols.resource_accounting.memory.poub.verifier.session import challengers
 
@@ -409,7 +410,7 @@ def test_a_session_reserves_append_coins_only_when_its_plan_appends_and_an_appen
     (honest, kv), (ph, pk) = run("honest,kv:2", sessions=2, samples=8, kv_every=4, kv_pool=8, appends=0)
     assert layouts == [pair] * 2
     assert honest["accepted"] and ph["accepted"] and honest["challenger"]["reason"] is None
-    assert not kv["accepted"] and kv["failure"]["failure"] == "disagreement" and kv["appended"] == 0
+    assert not kv["accepted"] and kv["failure"]["failure"] == verifier.DIVERGED and kv["appended"] == 0
     assert kv["disagreement"]["event"] == "append" and kv["disagreement"]["python"]["failure"] == "coin"
     assert kv["challenger"]["reason"] is None and not pk["accepted"]
 
@@ -1458,9 +1459,9 @@ def test_the_leans_line_of_a_transcript_sampled_four_windows_a_coin_reads_the_sa
         lean.close()
 
 
-def test_books_whose_record_is_not_the_leans_refuse_the_session_as_disagreement(monkeypatch):
-    """An accepted session's record is held to the Lean's whole, each pass's arrival, head and stale bound among what
-    the ledger reads: books whose record has another stale bound refuse the session at its end as `disagreement`."""
+def test_books_whose_record_is_not_the_leans_take_no_part_in_the_verdict(monkeypatch):
+    """An accepted session's record is the Lean's: books whose record has another stale bound leave the session
+    accepted, its record the Lean's."""
     import dataclasses
 
     record = audit.AuditRun.record
@@ -1473,8 +1474,7 @@ def test_books_whose_record_is_not_the_leans_refuse_the_session_as_disagreement(
 
     monkeypatch.setattr(audit.AuditRun, "record", stale)
     (r,), _ = run("honest")
-    assert not r["accepted"] and r["failure"]["failure"] == "disagreement", r["failure"]
-    assert r["disagreement"]["event"] == "record"
+    assert r["accepted"] and r["failure"] is None and r["disagreement"] is None, r["failure"]
 
 
 LEAN = verifier.lv.Lean
@@ -1560,10 +1560,11 @@ def test_a_lean_that_answers_nothing_until_the_passes_end_delays_no_coin_root_or
 
 
 @pytest.mark.parametrize("held", [False, True])
-def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(monkeypatch, held_lean, held):
+def test_an_event_the_lean_answers_otherwise_than_the_books_ends_the_session_undecided(monkeypatch, held_lean, held):
     """Each event goes to both verifiers at one reading of the clock, and their results are compared: a root the Lean
-    reads without its step is its `step` rejection where `audit.AuditRun` takes the root, and the session is refused
-    at that window as `disagreement`, also when the Lean's answer comes only after the prover's last pass."""
+    reads without its step is its `step` rejection where `audit.AuditRun` takes the root, and the session ends
+    undecided at that window (`DIVERGED`), never rejected on the books' word, also when the Lean's answer comes only
+    after the prover's last pass."""
     if not held:
         monkeypatch.setattr(verifier.lv, "Lean", LEAN)
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
@@ -1576,10 +1577,10 @@ def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(mo
     monkeypatch.setattr(verifier.lv, "receive_event", stepless)
     closed = []
     (r,), _ = run("honest", then=lambda v: closed.append(v.close_registration(b"test-node")))
-    assert not r["accepted"] and r["failure"] == {"t": 1, "failure": "disagreement", "at": None}
+    assert not r["accepted"] and r["failure"] == {"t": 1, "failure": verifier.DIVERGED, "at": None}
     d = r["disagreement"]
     assert d["event"] == "receive" and d["lean"]["failure"] == "step" and d["python"] == {"ok": True}
-    assert closed[0]["sessions"] == ["disagreement"] and "python" not in closed[0]
+    assert closed[0]["sessions"] == [verifier.DIVERGED] and "python" not in closed[0]
 
 
 def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_order():

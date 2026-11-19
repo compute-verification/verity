@@ -147,7 +147,7 @@ def test_the_greedy_rank_program_is_the_with_peers_one():
     rep = _derive(wrapped, all_inputs)
     old = _derive(vm.WithPeers(mod, bus), tuple(inputs) + tuple(bus.example_peers()))
     assert rep.digest == old.digest == program_digest(encode_program(rep.program))
-    assert rep.digest == "42d4f7c1c5d41a7f6e0f66c8b2aa498e5ccd7570eb58526ebc000f61e8e67467b2ff2fd6d62014d6beffee7eeebca2430d5c35ba68987af03a42dfddd83c7f5a"
+    assert rep.digest == "7adb90158b12bd36275b6658c426c655afeea539dc43c38f1c6ea2812e042599455f02e94266677652ff90f8fee19f3ebdceb780d59b01608a03dd2e3c1c07e7"
 
 
 @pytest.mark.parametrize("n", [0, 3, 4, 7])

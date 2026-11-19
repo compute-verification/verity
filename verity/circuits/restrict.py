@@ -3,7 +3,8 @@
 **C's index, the one that names things.** C's gates are its descriptor's word-level gates, numbered by PROTOCOL.md §6's
 layout of its root: bodies laid out in node order, recursively; a primitive node is one gate, a call node its callee's gates,
 a batch's members (a scan's iterations) consecutive in member order, each its callee's gates, a batch of a primitive one gate
-a member. An input node (`Input<w>_v1`, or `RegisteredInput<w>_v1` for a registered value) is a primitive node of the root,
+a member. An input node (`Input<w>_v1`, `RegisteredInput<w>_v1` for a registered value, `SuppliedInput<w>_v1` for a supplied
+one) is a primitive node of the root,
 one gate a member, at its node's place. A gate has its primitive's width. This index, and only it, names a block (`words`),
 a boundary (in(S) and out(S): `inputs`, `outputs`) and a leaf; `Block.to_c_gate` maps the block's descriptor gates into it.
 Units, and a partition's blocks, are counted in the population's own order (`TemplatePartition`), not in gates.
@@ -11,7 +12,7 @@ Units, and a partition's blocks, are counted in the population's own order (`Tem
 **C on bits, for a statement and a count only.** It never names a block, a boundary or a leaf. It numbers the bits of C's
 gates, gate by gate in C's index order: gate g's bit gates come after every bit gate of
 the gates before g (`Bits.base`), and are, in place:
-- an input gate of w bits, of either binding: w one-bit input gates of that binding, bit j at offset `split(w)[j]`, which is
+- an input gate of w bits, of any binding: w one-bit input gates of that binding, bit j at offset `split(w)[j]`, which is
   j (least significant bit first);
 - a gate of the Boolean profile (`And<n>_v1`, `Xor<n>_v1`, `Not_v1`, `Const1[0x0]_v1`, `Const1[0x1]_v1`): itself;
 - any other primitive's gate: the gates of its Boolean body (the descriptor's `boolean` map, §4.9) in the body's own §6
@@ -27,7 +28,8 @@ descriptor and never by a pass over C.
 
 **The object** (`restrict`): the Program whose root
 - has a parameter for each maximal run of in(S) of one width and one binding, in order, `p<i>` of type `Array<n, Value<w>>`,
-  bound at registration when its gates are `RegisteredInput` gates of C and per run otherwise;
+  bound at registration when its gates are `RegisteredInput` gates of C, supplied when they are `SuppliedInput` gates (the
+  kind only: the mark stays C's, under the input's name in C's description), and per run otherwise;
 - then has the units' root nodes of C in C's order, each as C has it when the block holds all of its members, and one call
   node a member, in member order, when it holds some (a unit is one member); each argument leaf names the parameter leaf
   of its gate of in(S), or the earliest leaf of the block's nodes whose gate it is, the leaves spelled as the maximal runs
@@ -39,7 +41,7 @@ and whose Definitions and Boolean map are C's (a word primitive's body is C's). 
 (`Block.to_c_gate`). On bits, its gates are in(S)'s bits, each gate's least significant first, then S's bit gates in order
 (`Block.to_c_bit`).
 `listing` writes the block on bits gate by gate, a test's reference: `verity/block-circuit/v1`; `I K O`; per input bit its
-binding (`run`, `registration`, or `wire` for a computed gate of C); per gate its kind and its operands; per output `out`
+binding (`run`, `registration`, `supplied`, or `wire` for a computed gate of C); per gate its kind and its operands; per output `out`
 and its gate, all in the block's numbering, one ASCII line each.
 """
 
@@ -57,7 +59,7 @@ from . import program as P
 from .codec import DecodedProgram, decode_program, descriptor_chunks, lookup_primitive
 from .defs import CompositeDefinition, DefinitionTable, PrimitiveDefinition, bind
 from .layout import Circuit, FunctionCall, resolve
-from .program import REGISTRATION, RUN, input_id, input_prim
+from .program import REGISTRATION, RUN, SUPPLIED, input_id, input_prim
 from .refs import Affine, Coll, Concat, Grid, Strided, concat
 from .types import Array, Tuple, Value, remove_axis, type_from_json
 
@@ -510,6 +512,7 @@ def _build(D: DecodedProgram, words: Sequence[tuple[int, int]], ins: list[int], 
 
     fn = CompositeDefinition("Block", 1, (), lambda S: (params, ret), build, register=False)
     registered = [n for (n, _), r in zip(params, in_runs) if gates.binding(r[0]) == REGISTRATION]
+    supplied = [n for (n, _), r in zip(params, in_runs) if gates.binding(r[0]) == SUPPLIED]
     saved = list(P._BODY_LOOKUP)
 
     def lookup(p):
@@ -520,14 +523,16 @@ def _build(D: DecodedProgram, words: Sequence[tuple[int, int]], ins: list[int], 
 
     P.register_boolean_bodies(lookup)
     try:
-        return P.Program(fn, registered=registered)
+        return P.Program(fn, registered=registered, supplied=supplied)
     finally:
         P._BODY_LOOKUP[:] = saved
 
 
-def restrict(c: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, int]], bits: Bits | None = None) -> Block:
-    """`compact (restrict C S)` for S the gates of ``units`` (module docstring: the index, the block and the object)."""
-    D = program(c) if bits is None else bits.D
+def restrict(c: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, int]], bits: Bits | None = None,
+             D: DecodedProgram | None = None) -> Block:
+    """`compact (restrict C S)` for S the gates of ``units`` (module docstring: the index, the block and the object);
+    ``D``: C decoded, when the caller holds it."""
+    D = D if D is not None else program(c) if bits is None else bits.D
     words = unit_gates(D, partition, units)
     ins, outs = front(D, words)
     prog = _build(D, words, ins, outs)
@@ -562,5 +567,5 @@ def evaluate(text: bytes, inputs: Sequence[int]) -> list[int]:
     return [v[int(next(it).split()[1])] for _ in range(O)]
 
 
-__all__ = ["Bits", "Block", "FORMAT", "REGISTRATION", "RUN", "Refused", "WIRE", "evaluate", "listing_of", "program", "restrict",
+__all__ = ["Bits", "Block", "FORMAT", "REGISTRATION", "RUN", "Refused", "SUPPLIED", "WIRE", "evaluate", "listing_of", "program", "restrict",
            "split", "unit_gates"]

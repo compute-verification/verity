@@ -20,7 +20,7 @@ where the torch op materialises a `DT` tensor.  With `DT="f32"` the widen/narrow
 **New primitives** (all `Name_v1`, total, NaN outputs canonical `0x7FC00000`):
   `F32Sub`      RN(a - b)                       `F32Sqrt`    RN(sqrt x) (IEEE; negative -> NaN, -0 -> -0)
   `F32MaxRef`   NaN-propagating max             `F32GtStrict` a > b on f32 values (NaN false) -> bit
-  `F32ExpRn`, `F32LogRn`, `F32ErfRn`, `F32TanhRn`  RN32 of the value computed by the stated `decimal` algorithm at 100
+  `F32ExpRn`, `F32LogRn`, `F32TanhRn`  RN32 of the value computed by the stated `decimal` algorithm at 100
       digits (`_DEC_PREC`); this coincides with correct rounding unless the exact value lies within 10^-90 relative of a
       rounding boundary — no binary32 argument is known to (Lefèvre/Muller worst cases for exp are ~2^-60), and the
       evaluator, not the mathematical function, is the registered definition.  `F32LogRn`'s is MPFR's correctly rounded
@@ -90,7 +90,7 @@ DTYPES: dict[str, Value] = {"bf16": BF16, "f32": F32}
 _DEC_PREC = 100
 _CTX = decimal.Context(prec=_DEC_PREC, rounding=decimal.ROUND_HALF_EVEN, Emax=10 ** 9, Emin=-(10 ** 9),
                        traps=[decimal.InvalidOperation, decimal.DivisionByZero, decimal.Overflow])
-_PI_100 = decimal.Decimal("3.14159265358979323846264338327950288419716939937510582097494459230781640628620899862803482534211706798214808651")
+
 
 np.seterr(all="ignore")
 
@@ -121,25 +121,6 @@ def _f32_of_dec(d: decimal.Decimal) -> int:
 
 def _dec_exp(d: decimal.Decimal) -> decimal.Decimal:
     return _CTX.exp(d)
-
-
-def _dec_erf(x: decimal.Decimal) -> decimal.Decimal:
-    """erf(x) = (2/sqrt(pi)) * sum_{n>=0} (-1)^n x^(2n+1) / (n! (2n+1)), summed until the term is below 10^-(prec+5)
-    relative to 1 (the series alternates; |x| < 4.2 here, so the largest term is < 10^6 and >= 90 digits survive)."""
-    x2 = _CTX.multiply(x, x)
-    term = x  # x^(2n+1) / n!
-    total = x
-    n = 0
-    tiny = decimal.Decimal(10) ** -(_DEC_PREC + 5)
-    while True:
-        n += 1
-        term = _CTX.divide(_CTX.multiply(term, x2), decimal.Decimal(n))
-        contrib = _CTX.divide(term, decimal.Decimal(2 * n + 1))
-        total = _CTX.add(total, contrib) if n % 2 == 0 else _CTX.subtract(total, contrib)
-        if abs(contrib) < tiny:
-            break
-    two_over_sqrt_pi = _CTX.divide(decimal.Decimal(2), _CTX.sqrt(_PI_100))
-    return _CTX.multiply(total, two_over_sqrt_pi)
 
 
 @lru_cache(maxsize=1 << 22)
@@ -173,26 +154,6 @@ def f32_log_rn_bits(u: int) -> int:
     if v == 0:
         return 0xFF800000
     return _f32_of_dec(_CTX.ln(_dec_of_frac(v)))
-
-
-@lru_cache(maxsize=1 << 22)
-def f32_erf_rn_bits(u: int) -> int:
-    """`F32ErfRn_v1`: RN32(erf(x)). NaN -> 0x7FC00000; ±0 -> ±0; ±inf and |x| >= 4.2 -> ±1.0 (1 - erf(4.2) < 2^-25, so
-    RN32 is exactly 1); otherwise the 100-digit Taylor series rounded."""
-    c, v = _frac_of_f32(u)
-    if c == 2:
-        return F32_NAN
-    if c == 1:
-        return 0x3F800000
-    if c == -1:
-        return 0xBF800000
-    if v == 0:
-        return u & 0x80000000
-    if v >= Fraction(21, 5):
-        return 0x3F800000
-    if v <= -Fraction(21, 5):
-        return 0xBF800000
-    return _f32_of_dec(_dec_erf(_dec_of_frac(v)))
 
 
 @lru_cache(maxsize=1 << 22)
@@ -267,12 +228,6 @@ def F32LogRn(x: int) -> int:
     return f32_log_rn_bits(x & 0xFFFFFFFF)
 
 
-@primitive("F32ErfRn", 1, [("x", F32)], F32, conformance=_REF_CONF)
-def F32ErfRn(x: int) -> int:
-    """Correctly-rounded erf: see `f32_erf_rn_bits`."""
-    return f32_erf_rn_bits(x & 0xFFFFFFFF)
-
-
 @primitive("F32TanhRn", 1, [("x", F32)], F32, conformance=_REF_CONF)
 def F32TanhRn(x: int) -> int:
     """Correctly-rounded tanh: see `f32_tanh_rn_bits`."""
@@ -305,7 +260,7 @@ def gather_f32(vocab: int) -> PrimitiveDefinition:
 
 register_lazy_family(r"^GatherF32x(\d+)_v1$", lambda m: gather_f32(int(m[1])))   # decodable where the program was not built
 
-REF_PRIMITIVES = [F32Sub, F32Sqrt, F32MaxRef, F32GtStrict, F32ExpRn, F32LogRn, F32ErfRn, F32TanhRn]
+REF_PRIMITIVES = [F32Sub, F32Sqrt, F32MaxRef, F32GtStrict, F32ExpRn, F32LogRn, F32TanhRn]
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -460,34 +415,28 @@ def LayerNormRef(B, S, x, g, b, eps=None):
 # activations
 # ---------------------------------------------------------------------------------------------------------
 
-GELU_APPROX = ("none", "tanh")
+#: torch's erf form, `approximate="none"`, has no kind
+GELU_APPROX = ("tanh",)
 
 
 @composite("GeluRefElem", 1, ["APPROX"], lambda S: ((("x", F32),), F32), conformance=_REF_CONF)
 def GeluRefElem(B, S, x):
-    """One f32 GELU.  `APPROX="none"` (torch `F.gelu`, erf form):
-        `y = RN(RN(x * 0.5) * RN(1 + erf(RN(x * RN32(1/sqrt 2)))))`  with `erf` = `F32ErfRn_v1`;
-    `APPROX="tanh"` (torch `F.gelu(approximate="tanh")` and HF `NewGELUActivation` / GPT-2 `gelu_new`):
+    """One f32 GELU.  `APPROX="tanh"` (torch `F.gelu(approximate="tanh")` and HF `NewGELUActivation` / GPT-2 `gelu_new`):
         `x3 = RN(RN(x * x) * x)`; `inner = RN(β * RN(x + RN(κ * x3)))`, `β = RN32(sqrt(2/π))`, `κ = RN32(0.044715)`;
         `y = RN(RN(x * 0.5) * RN(1 + tanh(inner)))`  with `tanh` = `F32TanhRn_v1`.
     Left-to-right evaluation of torch's `x * 0.5 * (1 + f(...))` (the `0.5` product is exact).  torch CPU's `f` is not
-    correctly rounded (contiguous: ATen's vectorised erf polynomial, abs. error up to ~3.5e-7 near 0, and Sleef tanh ≤ 1 ulp;
-    strided: libm), and for x < 0 the `1 + f` cancellation amplifies that, so f32 results differ from torch on a large
+    correctly rounded (contiguous: Sleef tanh ≤ 1 ulp; strided: libm), and for x < 0 the `1 + f` cancellation amplifies that, so f32 results differ from torch on a large
     fraction of words while staying within `0.5·|x|·2^-21 + 4 ulp` absolutely; bf16 results agree on all but a handful of
     the 65,280 finite words (measured, `docs/data/ref-prims/GeluRef_v1[...]`)."""
     if S.APPROX not in GELU_APPROX:
         raise ValueError(f"APPROX must be one of {GELU_APPROX}, got {S.APPROX!r}")
     half_x = B.call(P.F32Mul, x, B.call(b1.f32c(0.5)))
     one = B.call(b1.f32c(1.0))
-    if S.APPROX == "none":
-        a = B.call(P.F32Mul, x, B.call(b1.f32c(0.7071067811865476)))
-        f = B.call(F32ErfRn, a)
-    else:
-        x2 = B.call(P.F32Mul, x, x)
-        x3 = B.call(P.F32Mul, x2, x)
-        kx3 = B.call(P.F32Mul, B.call(b1.f32c(0.044715)), x3)
-        inner = B.call(P.F32Mul, B.call(b1.f32c(0.7978845608028654)), B.call(P.F32Add, x, kx3))
-        f = B.call(F32TanhRn, inner)
+    x2 = B.call(P.F32Mul, x, x)
+    x3 = B.call(P.F32Mul, x2, x)
+    kx3 = B.call(P.F32Mul, B.call(b1.f32c(0.044715)), x3)
+    inner = B.call(P.F32Mul, B.call(b1.f32c(0.7978845608028654)), B.call(P.F32Add, x, kx3))
+    f = B.call(F32TanhRn, inner)
     return B.call(P.F32Mul, half_x, B.call(P.F32Add, one, f))
 
 
@@ -837,8 +786,8 @@ def ref_vocab_digest() -> str:
 
 
 __all__ = ["REF_VOCAB_VERSION", "DTYPES", "REF_PRIMITIVES", "REF_COMPOSITES", "SHARED_PRIMITIVES", "ref_vocab_manifest",
-           "ref_vocab_digest", "gather_f32", "F32Sub", "F32Sqrt", "F32MaxRef", "F32GtStrict", "F32ExpRn", "F32LogRn", "F32ErfRn",
+           "ref_vocab_digest", "gather_f32", "F32Sub", "F32Sqrt", "F32MaxRef", "F32GtStrict", "F32ExpRn", "F32LogRn",
            "F32TanhRn",
            "DotRef", "LinearRef", "RMSNormRef", "LayerNormRef", "GeluRefElem", "GeluRef", "SiluRefElem", "SiluRef", "SoftmaxRef",
            "LogSoftmaxRef", "RoPERef", "RoPEHeadsRef", "EagerAttentionHeadRef", "EagerAttentionRef", "EmbeddingRef", "AddRef", "MulRef",
-           "ArgmaxStepF32", "ArgmaxRef", "f32_exp_rn_bits", "f32_log_rn_bits", "f32_erf_rn_bits", "f32_tanh_rn_bits"]
+           "ArgmaxStepF32", "ArgmaxRef", "f32_exp_rn_bits", "f32_log_rn_bits", "f32_tanh_rn_bits"]
