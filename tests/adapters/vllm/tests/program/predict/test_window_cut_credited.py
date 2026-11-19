@@ -138,9 +138,12 @@ def test_the_blocks_count_is_the_sum_of_its_bodies():
 def test_the_block_on_bits_is_its_word_view_and_the_scheme():
     """The block on bits computes what the σ core's word view computes on words, and that is
     `pearl_plus_tile.reference`: on an honest tile (ok 1) and with y's word flipped at its sign, at the lowest bit of its
-    BF16 word and below it (ok 0). Slow: the block on bits is hundreds of millions of gates, the only check that the
-    gates the count reads compute the tile."""
-    _program, _part, _c, b = credited()
+    BF16 word and below it (ok 0). The block returns out(S) in C's gate order, so each of the core's returned bits is read
+    at its gate's place. Slow: the block on bits is tens of millions of gates, the only check that the gates the count
+    reads compute the tile."""
+    program, _part, _c, b = credited()
+    at = {g: j for j, g in enumerate(b.outputs)}
+    place = [at[g] for g in program.circuit.root_outputs()]
     vectors = _vectors()
     want = [_reference(ref) for _args, ref in vectors]
     assert want[0][-1] == 1 and [w[-1] for w in want[1:]] == [0, 0, 0]
@@ -148,7 +151,7 @@ def test_the_block_on_bits_is_its_word_view_and_the_scheme():
     assert [list(evaluate(word, *(_flat(a) for a in args))) for args, _ref in vectors] == want
     got = evaluate_bits(block_circuit(b.program.fn, boolean_table(b.program)),
                         np.asarray([_bits(args) for args, _ref in vectors], dtype=np.uint8))
-    got = got.reshape(len(vectors), -1).tolist()
+    got = [[g[j] for j in place] for g in got.reshape(len(vectors), -1).tolist()]
     assert [[sum(g[8 * i + j] << j for j in range(8)) for i in range(64)] + [g[512]] for g in got] == want
 
 
