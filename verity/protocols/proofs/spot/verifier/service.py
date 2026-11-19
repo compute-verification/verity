@@ -1976,14 +1976,17 @@ class Stream:
                  counts: Mapping[str, int] | None = None,
                  outputs: Mapping[str, Mapping[str, str]] | None = None,
                  history: Mapping[str, Any] | None = None,
-                 certified: Mapping[str, Mapping[str, Any]] | None = None) -> WindowCommitmentRecord:
+                 certified: Mapping[str, Mapping[str, Any]] | None = None,
+                 partition: Mapping[str, Any] | None = None) -> WindowCommitmentRecord:
         """Receive a docket: the public-items rule (`check_public`), then one-stage's R1-R8 (`registration.check`),
         each by the verifier (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N (a window's: the mixed population of its
         templates, in its order, at `counts`, the challenger's own `{template's descriptor id: instances}` of the window,
         every template's at least one, taking the stream's `values`; or the stream's own `program`, its ranges `counts`),
         the check's query, the selection rule's sampling
-        design, `SCHEME`, the stream's log (the records of it R6 and R7 read, `_earlier`), and the per-registration
+        design, `SCHEME`, the stream's log (the records of it R6 and R7 read, `_earlier`), `partition` (the window's
+        partition object, its proof blocks included, which R2 holds the record's digest to; without it, the blockless
+        default), and the per-registration
         copies given here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, `supplied`, `pinned`,
         `schemas`, `window_root`, `held`, `outputs`, `history` and `certified`, as `registration.check` takes them), which
         the stream's run of record reads again at the outcome. Then the receipt. Under
@@ -2031,7 +2034,7 @@ class Stream:
                     v = r.verdict
             if v.ok:
                 earlier = self._earlier(record, supplied, outputs)
-                v = V.check(record, program, self.query, sampling_design, SCHEME, ports, leaf_layer, anchors, earlier, None,
+                v = V.check(record, program, self.query, sampling_design, SCHEME, ports, leaf_layer, anchors, earlier, partition,
                             table, registered, supplied, pinned, self.binding, schemas, window_root, held,
                             outputs=outputs, seed_salt=seed_salt, tied=self.spec.check.tied or None,
                             history=history, certified=certified)
