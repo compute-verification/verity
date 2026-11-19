@@ -19,8 +19,8 @@ def why (t : Tags) (zk : Bool) : Option String :=
 #guard why Tags.circuitPlainLeaves false == none
 #guard why Tags.circuitPlainLeaves true ==
   some "verity/flock-circuit+plain-leaves, a statement with flock-leaf/sha512-unsalted leaves under --zk"
-#guard why Tags.circuit967b8d06.withPlainLeaves false ==
-  some "verity/flock-circuit@967b8d06, a statement with flock-leaf/sha512-unsalted leaves"
+#guard why { Tags.circuit with hiddenOutputs := false }.withPlainLeaves false ==
+  some "verity/flock-circuit, a statement with flock-leaf/sha512-unsalted leaves"
 #guard why Tags.circuit false == none
 #guard why Tags.circuit true == none
 
