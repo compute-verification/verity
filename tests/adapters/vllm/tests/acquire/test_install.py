@@ -1,6 +1,7 @@
 """install_from_plan on a TINY nn.Module tree installs exactly the plan's sites -- and nothing a class table would have added."""
 from __future__ import annotations
 
+import types
 from typing import TYPE_CHECKING
 
 import pytest
@@ -15,9 +16,15 @@ else:
 from verity_vllm import messages
 from verity_vllm.acquire import plan as P
 from verity_vllm.acquire.install import (
+    IncompletePlan,
     OccurrenceSink,
+    apply_plan_to_committer,
     install_from_plan,
+    plan_selection,
 )
+from verity_vllm.correspondence.reader_for_acquire import AcquireCorrespondence
+from verity_vllm.check import capture_plan as CP
+from verity_vllm.records.runtime_tree import runtime_tree_of
 
 PD = "0" * 64
 
@@ -84,6 +91,12 @@ def row(family, op, member, step=0, **extra):
             "element_range": [0, 4], "rank": 0, **extra}
 
 
+def make(rows, model, runner):
+    capture = {"input_token_ids": CP.INPUT_IDS, "instance_outputs": CP.MODULE_OUTPUT, "sampled_token_ids": CP.SAMPLED}
+    classes = [{"op_path": r["op_path"], "member": r["output_member"], "capture": capture[r["family"]], "width": 8,
+                "dtype": r.get("dtype", "bf16"), "definitions": []} for r in rows if r["family"] in capture]
+    rt = runtime_tree_of(model, runner, source="tiny")
+    return P.plan_of_capture(classes, AcquireCorrespondence(rt), tables=TABLES), rt
 
 
 def base_rows():
@@ -95,14 +108,65 @@ def base_rows():
 
 
 
+def test_a_second_installation_on_the_runner_observes_its_own_sites_alone():
+    model, runner = Tiny(), Runner()
+    plan, _ = make(base_rows(), model, runner)
+    observe(plan, model, runner, OccurrenceSink()).remove()
+    sink = OccurrenceSink()
+    inst = observe(plan, model, runner, sink)
+    runner.sample(model(torch.tensor([[1, 2, 3]])))
+    assert sink.counts[("runner.sampler", "runner_return", ".sampled_token_ids")] == 1 and set(sink.counts.values()) == {1}
+    inst.remove()
+    assert isinstance(runner.sample, types.MethodType) and runner.sample.__func__ is Runner.sample
 
 
+def test_a_whole_return_site_of_a_module_returning_several_records_each_tensor():
+    model, runner = Tiny(), Runner()
+    rows = [r for r in base_rows() if r["op_path"] != "blocks.0.norm"] + [row("instance_outputs", "blocks.0.norm", "out")]
+    plan, _ = make(rows, model, runner)
+    sink = OccurrenceSink()
+    inst = observe(plan, model, runner, sink)
+    model(torch.tensor([[1, 2]]))
+    key = ("blocks.0.norm", "producer_output", "out")
+    assert sink.counts[key] == 1 and sink.shapes[key] == [[1, 2, 4]] and key not in sink.non_tensor
+    sink(("linear", "producer_output", "out"), (torch.zeros(3, 2, dtype=torch.bfloat16), None))
+    assert sink.shapes[("linear", "producer_output", "out")] == [[3, 2]] and sink.dtypes[("linear", "producer_output", "out")] == {"bfloat16"}
+    inst.remove()
 
 
+def test_refuses_a_plan_for_another_runtime():
+    model, runner = Tiny(), Runner()
+    plan, _ = make(base_rows(), model, runner)
+    other = nn.Sequential(nn.Linear(4, 4))
+    with pytest.raises(IncompletePlan, match="not in the built runtime"):
+        install_from_plan(plan, other, runner)
+    assert all(len(m._forward_hooks) == 0 and len(m._forward_pre_hooks) == 0 for m in other.modules())     # nothing left half-installed
+    # a runner without sample(): the runner_return site cannot be installed
+    with pytest.raises(IncompletePlan):
+        install_from_plan(plan, model, object())
 
 
+def test_refuses_incomplete_plan():
+    model, runner = Tiny(), Runner()
+    plan, _ = make(base_rows() + [row("instance_outputs", "blocks.0.gone", "out")], model, runner)
+    assert not plan.complete
+    with pytest.raises(IncompletePlan, match="unsupported"):
+        install_from_plan(plan, model, runner)
 
 
+def test_a_selection_refuses_what_an_install_refuses():
+    model, runner = Tiny(), Runner()
+    plan, _ = make(base_rows(), model, runner)
+    assert plan_selection(plan, model) == (["embed", "blocks.0.norm", "blocks.0.proj", "logits"], ["embed"])
+    with pytest.raises(IncompletePlan, match=r"^no model to install on$"):
+        plan_selection(plan, None)
+    with pytest.raises(IncompletePlan, match=r"^plan hook sites not in the built model: \['blocks.0.norm', 'blocks.0.proj', 'embed', 'logits', 'embed'\]$"):
+        plan_selection(plan, nn.Sequential(nn.Linear(4, 4)))
+    with pytest.raises(IncompletePlan, match=r"^the committer has no model to install on$"):
+        apply_plan_to_committer(types.SimpleNamespace(), plan)
+    gone, _ = make(base_rows() + [row("instance_outputs", "blocks.0.gone", "out")], model, runner)
+    with pytest.raises(IncompletePlan, match=r"^1 unsupported Value\(s\): blocks.0.gone/out: no legal site: producer_output at blocks.0.gone/out: "):
+        plan_selection(gone, model)
 
 
 def test_an_occurrence_that_holds_no_tensor_is_counted_apart():
