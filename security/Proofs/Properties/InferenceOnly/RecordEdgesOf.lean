@@ -167,8 +167,16 @@ theorem laneWire_fst {run : Nat} {lanes : List Flock.Program.Lane} {k0 L len n :
     {v : Nat × Nat × List Nat × List Int} (h : Flock.Program.laneWire run lanes k0 L len n = .ok v) :
     v.1 = (lanes[k0 % (lanes.length * run) / run]!).i := by
   unfold Flock.Program.laneWire at h
-  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
-  repeat' (first | (cases h; rfl) | (cases h; done) | split at h)
+  dsimp only at h
+  repeat' (first
+    | (cases h; rfl)
+    | (cases h; done)
+    | (refine bind_ok_elim h (fun _ hx h => ?_)
+       first
+         | (simp [throw, throwThe, MonadExceptOf.throw] at hx; done)
+         | skip)
+    | (refine ite_ok h (fun _ h => ?_) (fun _ h => ?_))
+    | (split at h))
 
 /-- **Of one lane, `laneWire` gives a wire from that lane's node.** -/
 theorem laneWire_single {run : Nat} {l : Flock.Program.Lane} {k0 L len n : Nat}
@@ -210,16 +218,11 @@ theorem partWires_nil {P : Prog} {fu W D k i q s0 out}
       repeat' (first
         | (cases hst; exact ha)
         | (cases hst
-           exfalso
-           split at hx
-           · rename_i v hv
-             cases hx
-             have e := hlw _ _ _ _ _ hv
-             simp_all
-           · simp [throw, throwThe, MonadExceptOf.throw] at hx)
+           exact absurd (hlw _ _ _ _ _ (by assumption)) (by assumption))
         | (refine bind_ok_elim hst (fun _ hx hst => ?_)
            first
              | (simp [throw, throwThe, MonadExceptOf.throw] at hx; done)
+             | (cases hx)
              | skip)
         | (refine ite_ok hst (fun _ hst => ?_) (fun _ hst => ?_))
         | (split at hst))
@@ -269,6 +272,29 @@ theorem edgesOf_nil {P : Prog} {rs W D ws}
     rw [hc, partWires_nil (hq k hk hnk' i hi' qi hqi) hl]
     rfl
   · refine bind_ok_elim hst (fun _ hx _ => ?_)
+    simp [throw, throwThe, MonadExceptOf.throw] at hx
+
+/-- **A record's wiring of a root whose every lane is from an input node has no wire** (`edgesOf_nil`). -/
+theorem wiring_nil {P : Prog} {doc : Lean.Json} {W : Spot.Wires.Wiring}
+    (hq : ∀ k < (P.defs[P.root]!).body.nodes.size, Spot.Edges.isInputNode P k = false →
+      ∀ i < ((P.defs[P.root]!).body.nodes[k]!).args.size,
+      ∀ qi < (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts.size,
+      ∀ k0 L len cnt v, Flock.Program.laneWire
+        (Flock.Program.partLanes ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[qi]!)).1
+        (Flock.Program.partLanes ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[qi]!)).2
+        k0 L len cnt = .ok v → Spot.Edges.isInputNode P v.1 = true)
+    (h : Spot.RecordText.wiring P doc = .ok W) : W.wires = [] := by
+  unfold Spot.RecordText.wiring at h
+  refine bind_ok_elim h (fun ts _ h => ?_)
+  dsimp only at h
+  split at h
+  · refine bind_ok_elim h (fun rs' hr h => ?_)
+    cases hr
+    refine bind_ok_elim h (fun cuts _ h => ?_)
+    refine bind_ok_elim h (fun ws hws h => ?_)
+    cases h
+    exact edgesOf_nil hq hws
+  · refine bind_ok_elim h (fun _ hx _ => ?_)
     simp [throw, throwThe, MonadExceptOf.throw] at hx
 
 end InferenceOnlyVerifier.Record.SecurityProofs
