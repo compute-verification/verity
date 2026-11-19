@@ -489,6 +489,14 @@ def test_remotes_verdict_covers_exactly_its_subprotocols(tmp_path, capsys):
     assert "network-attester" not in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("protocols", [REMOTE, ONSITE], ids=["remote", "onsite"])
+def test_a_composite_says_in_one_line_that_its_sampled_component_is_refused_and_why(tmp_path, capsys, protocols):
+    run(tmp_path, registry(), cfg=config(protocols))
+    err = capsys.readouterr().err.splitlines()
+    assert [x for x in err if x.startswith(f"verity run: refused {R.SAMPLED}:")] == \
+        [f"verity run: refused {R.SAMPLED}: {R.SAMPLED_REFUSED}"]
+
+
 def test_remotes_development_composite_is_no_composite():
     """H1's development composite (remote with PoUW's period as its work) is no composite a configuration can name:
     protocol soundness covers only onsite and remote v1, so `check` refuses it by name."""

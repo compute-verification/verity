@@ -10,7 +10,9 @@
 a _; one that is neither is refused by name, ``application``, with the applications' names). It checks the
 configuration, refusing any set of subprotocols that is neither a composite's nor one of onsite's smaller sets
 (``composite``, `verity.config.COMPOSITES`: onsite and remote, whose work is Pearl+'s run verdict, the only two protocol
-soundness covers; `verity.config.UNACCEPTED`; H1's development composite is refused), then runs
+soundness covers; `verity.config.UNACCEPTED`; H1's development composite is refused), prints on stderr one line
+``refused sampled-proofs`` with why the sampled component accepts no audit (`SAMPLED_REFUSED`) when the configuration
+lists it, then runs
 the parties it places on the machines this host stands for (``--on``, once for each, default ``local``, and for NAME each
 of the application's machines), or only the ``--party`` ones, for ``--periods`` periods (default 1), in the shared state
 ``--state`` (default a new directory under the system's temporary one). The parties are those of the static table
@@ -142,6 +144,12 @@ UNSENT = ("build", "logs", "transcripts", "run.json", BINDINGS, "tools.json", "r
           "record/verdicts.jsonl", "parties", "tree.tar")
 PUBLIC = ("record/", "public/")
 VERIFIER = "verifier"
+#: why the sampled component accepts no audit on the one circuit, printed beside the refusals wherever it is composed
+SAMPLED = "sampled-proofs"
+SAMPLED_REFUSED = ("verity/sampled-proofs/v1 accepts no audit, so no composite of it accepts: at one level the sampled "
+                   "blocks' circuits are not derived yet (one-circuit: not derived yet), two levels are refused by name "
+                   "(levels-not-proved) and so is the recursive form, since no soundness theorem over the one circuit "
+                   "covers their accept")
 RUN_KEY = lms.Params(64, 1, 4)
 STOP_SECONDS = 60
 Entry = Callable[[Mapping[str, Any], Path, bool], int]
@@ -724,6 +732,8 @@ def run_main(argv: Sequence[str], reg: Registry | None = None, in_process: bool 
         reg = reg or registry()
         config = application(a.config)
         cfg = load(config, reg)
+        if SAMPLED in cfg["protocols"]:
+            print(f"verity run: refused {SAMPLED}: {SAMPLED_REFUSED}", file=sys.stderr)
         bound = bindings(Path(a.bindings) if a.bindings else None, cfg, reg)
         named = config != Path(a.config)
         machines = list(dict.fromkeys(a.machines or (placed(cfg).values() if named else [K.LOCAL])))
