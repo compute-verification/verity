@@ -353,7 +353,7 @@
    "owner": "@lean",
    "issue": "LEAN-186",
    "due": "2026-11-30",
-   "why": "ServedComplies takes Record.LaidOut and Record.Counts, which form_laidOut and form_counts prove from it"
+   "why": "ServedComplies takes Record.LaidOut and Record.Counts, which form_laidOut and form_counts prove from it. No served record meets EdgeFreeReads: it holds only of a circuit with no wire, and OwnRowsEdges supersedes it and alone carries the date"
   },
   "InferenceOnlyVerifier.Record.SecurityProofs.FinishTemplates": {
    "owner": "@lean",
