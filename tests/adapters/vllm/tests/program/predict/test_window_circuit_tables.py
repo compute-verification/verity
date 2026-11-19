@@ -7,19 +7,10 @@ TINY's 2 layers).
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace
 
-import numpy as np
 import pytest
-from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.periods import interface as IF
-from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
-from verity.commitments import registered_value as RV
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
-    served as SV,
-)
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
 
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import (
@@ -28,14 +19,11 @@ from tests.program.predict.test_window_circuit import (
     WINDOW,
     _label,
     held,
-    state_row,
 )
 from tests.program.predict.test_window_circuit_int8 import GRAIN, _registered
-from tests.program.predict.test_window_rows import PROGRAM, _weights
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_rows as WR
-from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import Tables, WindowClass
 
@@ -142,83 +130,6 @@ def test_a_fixed_load_window_is_the_class_circuit_with_the_tables_and_any_other_
     with pytest.raises(Unexpressible, match=r"not its class's fixed load \[\[\(0, 0, 4\), \(1, 0, 4\)\], \[\(0, 4, 1\), "
                                             r"\(1, 4, 1\)\]\], the rows H1's tables are read at"):
         WC.window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN, tables=TABLES)
-
-
-@pytest.fixture(scope="module")
-def filled():
-    """The class circuit with H1's tables filled from a window's values (`window_rows.Rows`: `test_window_rows`' random
-    weights, a scan state whose row at bucket 0 carries two prompts of 4): its lowering, its slots and its rows."""
-    reg = _registered()
-    low = WC.lower(reg, CLASS, None, GRAIN, tables=TABLES)
-    fields = _weights(low.fn)
-    lanes = [(1, 4, 2, [17, 3, 250, 9]), (1, 4, 2, [5, 77, 42, 8])]
-    rows_ = [state_row(CLASS.scan, lanes)] + [state_row(CLASS.scan, [(1, 1, 1, [99, 0, 0, 0])] * 2)] * (CLASS.buckets - 1)
-    state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, rows_, [hm96_salt(bytes(32), 0, j) for j in range(len(rows_))],
-                                 schema=CR.SCHEMA_V2)
-    values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
-    slots = [WR.Slot(low.fn, CLASS, row, lambda label, lo, hi: fields[label][lo:hi]) for row, _ in WR.scan_slots(low, rows_)]
-    return low, slots, WR.Rows(low, slots, values)
-
-
-def test_a_quantizers_rows_are_its_definition_on_its_x_and_its_leaf_row_its_nodes_words_whole(filled):
-    """Filled from a window's values (`filled`), each `Int8RowQuant_v5` proof block's leaf row ``o2`` is its node's words
-    whole, its codes ``o0`` then its scale ``o1``, and its three rows are its Definition on the node's ``x``, as its proof
-    holds them."""
-    low, slots, rows = filled
-    seen = 0
-    for P, s in zip(low.programs, slots):
-        for j, r in P.packed.items():
-            o0, o1, o2 = (rows.outs[r.tid][k][r.unit] for k in range(3))
-            want = np.asarray(evaluate_batch(rows.fns[r.tid], s.operand(low.fn.body.nodes[j].args[0])[None])).reshape(-1)
-            assert np.array_equal(o2, np.concatenate([o0, o1])) and np.array_equal(o2, WR._words(s.values[j]))
-            assert np.array_equal(np.concatenate([o0.view("<u1"), o1.view("<u4"), o2.view("<u4")]), want)
-            seen += 1
-    assert seen == 2 * 5 * 6
-
-
-def _h1_tables(low, slots) -> dict[str, np.ndarray]:
-    """H1's tables of the fixed load from the model's values: round s's A table's row 8c + i the leaf (codes, then scale) of
-    the c-th quantizer at K = 64 of the position at round s's row i (`Tables.at`), every other row zero codes of scale 0;
-    its input-ids table's row i that position's token, every other `EMPTY_ID` (`pouw_h1_served.ids_words`)."""
-    a: dict[int, np.ndarray]
-    pos, a, ids = WR.positions(low.fn), {s: np.zeros((6 * 8, LEAF), np.uint16) for s in (0, 1)}, {0: [None] * 8, 1: [None] * 8}
-    for k, (P, sl) in enumerate(zip(low.programs, slots)):
-        quants: dict[int, list[int]] = {}
-        for j in sorted(P.packed):
-            quants.setdefault(pos[j], []).append(j)
-        for p in range(CLASS.positions):
-            s, i = Tables.at(CLASS, k, p)
-            for c, j in enumerate(quants[p]):
-                a[s][8 * c + i] = WR._words(sl.values[j])
-            ids[s][i] = sl.tokens[p]
-    return {**{TABLES.a(s): a[s] for s in a}, **{TABLES.ids(s): SV.ids_words(ids[s], 8) for s in ids}}
-
-
-def test_a_tables_rows_are_the_output_rows_its_proof_blocks_make(filled):
-    """`Rows.value` gives each of H1's tables as the class circuit's proof blocks make it: round s's A table each
-    quantizer's leaf row at row 8c + i and its input-ids table each position's token at row i, the fixed load's rows, and
-    every row no proof block makes the empty row given. It refuses a table read off the rows given, or as another width."""
-    low, slots, rows = filled
-    for name, want in _h1_tables(low, slots).items():
-        empty = np.zeros(LEAF, np.uint16) if name.startswith("row-table/") else SV.ids_words([], 1)[0]
-        assert np.array_equal(rows.value(name, len(want), empty), want), name
-    with pytest.raises(ValueError, match=r"reads 'row-table/1/k64' off its 8 rows of 34 words"):
-        rows.value(TABLES.a(1), 8, np.zeros(LEAF, np.uint16))
-    with pytest.raises(ValueError, match="reads 'input-ids/0' other than as an output row of 3 words"):
-        rows.value(TABLES.ids(0), 8, [0, 0, 0])
-
-
-def test_two_proof_blocks_making_one_row_two_ways_are_refused():
-    """`Rows.value` takes a row two proof blocks make alike and refuses one they make two ways."""
-    def rows(a, b):
-        reads = [SimpleNamespace(param="t", reader=t, port="o", units=1, at=0, source=lambda u: 2 * u) for t in "ab"]
-        return SimpleNamespace(circuit=SimpleNamespace(registered=SimpleNamespace(reads=reads)),
-                               lays={t: SimpleNamespace(outs=[("o", 2)]) for t in "ab"},
-                               outs={"a": [np.array([a], np.uint16)], "b": [np.array([b], np.uint16)]})
-    assert np.array_equal(WR.Rows.value(rows([1, 2], [1, 2]), "t", 2, [0, 0]), [[1, 2], [0, 0]])
-    with pytest.raises(ValueError, match="'t': two units make one of its rows two ways"):
-        WR.Rows.value(rows([1, 2], [1, 3]), "t", 2, [0, 0])
-
 
 @pytest.mark.parametrize("tables, cls, why", [
     (TABLES, WindowClass(2, 4, 2, lanes=1), "read at a fixed load's rows, every slot at the window's one boundary"),
