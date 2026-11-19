@@ -26,7 +26,8 @@ where `own-rows` and `nodes` hold (`OwnRowsDeclared`, not yet proved). Restating
   (`wiring_of_read`, `slot_of_read`, `declared_of_heldAt`).
 * The wiring. It passes `Spot.Wires.check` (`wired_of_read`), the template query accepts its template ids and its
   templates are the Program's (`templates_of_read`); every unit's rows are its own input gates (`ownRows_holds`),
-  so its own input gates or its writers' outputs (`ownOrEdgeRows_of_ownRows`);
+  so input gates under their one declaration or its writers' outputs (`ownOrEdgeRows_of_ownRows`,
+  `ownOrDeclaredRows_of_ownOrEdgeRows`);
   the wires pass the check's `unwhole` on the leaves the Program gives each template (`unwhole_of_read`), so every
   wire lands whole and every bit of a wired row is its writer's (`aligned`, `filled`); and no row the check holds has
   a writer (`held_unwired`).
@@ -118,7 +119,8 @@ theorem served_of_read (hFT : InferenceOnlyVerifier.Record.SecurityProofs.Finish
     (fun tid u sc hu => slot_of_unit h hrs hu)
   exact ⟨Verity.RegisteredCircuit.ofPartition D θ hθ c.S U, c.f.P, c.f.doc, text, c.wired, rs, at_,
     decode_of_read h, (inst_of_read h).2, htext, hcuts, hwires, slot_of_read h,
-    fun r hd hh => declared_of_heldAt h hh, hS, hrs, hT, ownOrEdgeRows_of_ownRows hO, aligned hP hown hrs hT hS hts hwh,
+    fun r hd hh => declared_of_heldAt h hh, hS, hrs, hT,
+    ownOrDeclaredRows_of_ownOrEdgeRows (ownOrEdgeRows_of_ownRows hO), aligned hP hown hrs hT hS hts hwh,
     filled hP hrs hT hS hts hwh, fun r hh => held_unwired h r hh, hL, hN, hD⟩
 
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs
