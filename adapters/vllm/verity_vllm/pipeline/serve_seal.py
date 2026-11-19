@@ -163,9 +163,9 @@ def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
     from verity_vllm.program.predict.window_class import CLASS_OF_RECORD
 
     run_id = f"{label}:{opts.run_id}"
+    rows, classes, args = CP.rows_of_build(opts.row_build), CP.of_build(opts.row_build), committer_args(opts)
     eng = SimpleNamespace(llm=llm.vllm, runner=model_runner(llm.vllm), model=llm.model, vllm_config=engine_of(llm.vllm).vllm_config,
                           cp={"repo": llm.pin.model, "revision": llm.pin.revision})
-    rows, classes, args = CP.rows_of_build(opts.row_build), CP.of_build(opts.row_build), committer_args(opts)
     spec = opts.retention.retain_exclude
     if spec:
         settings.put("VERITY_RETAIN_EXCLUDE", spec)
@@ -255,7 +255,7 @@ def served_binder_of(plan: Sequence[Mapping[str, Any]], steps: Sequence[int], po
             key = (op, str(m), k)
             one.setdefault(key, {"op_path": key[0], "output_member": key[1], "invocation": key[2], "position": [j]})
     placed = [{**r, "identity": None, "request_id": "*", "step": None, "engine_step": int(s), "rank": 0} for s in steps for r in one.values()]
-    binder = Binder.of_manifest({"identities": placed, "requests_declared": []}, rank=0, ports=dict(ports))
+    binder = Binder(placed, rank=0, ports=dict(ports))
     if has_port:
         binder.rebind.update(port_identities(plan))
     return binder
