@@ -601,7 +601,7 @@ class Prover:
         spotted = self._spot(seed, sigma, ys, cheat=cached or self.engine.skip_layer is not None)
         del sigma
         c = time.perf_counter()
-        salts = os.urandom(SALT * receipts.leaves(plan.length))
+        salts = b"".join(receipts.HM96.fresh_salt() for _ in range(receipts.leaves(plan.length)))
         tree = ReceiptTree(seed, plan, ys, salts, self.pool)
         d = time.perf_counter()
         self.passes[t, i] = (ys, salts, tree)
@@ -897,7 +897,7 @@ class Held:
         b = time.perf_counter()
         spotted = self._spot(seed, sigma, ys)
         del sigma
-        salts = os.urandom(SALT * receipts.leaves(self.plan.length))
+        salts = b"".join(receipts.HM96.fresh_salt() for _ in range(receipts.leaves(self.plan.length)))
         tree = ReceiptTree(seed, self.plan, ys, salts)
         self.passes[t, i] = (ys, salts, tree)
         rec = {"window": t, "pass": i, "sketch_s": round(a - t0, 3), "receipts_s": round(b - a, 3),
