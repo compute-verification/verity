@@ -26,7 +26,7 @@ from verity_vllm.check.commit_rules import (
 )
 from verity_vllm.commit import binding as BD
 from verity_vllm.log import init_logger
-from verity_vllm.program.predict import capture_plan as CP
+from verity_vllm.records.capture import CALL_BOUNDARY, RUN_VALUE, SCALE_PRODUCTS
 
 __all__ = ["attach_of_plan", "attach_of_record", "classes_of_record"]
 
@@ -191,7 +191,7 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
 
 
 #: the capture classes a source inside a module acquires (`taps.attach`), not a module hook
-TAPPED = (CP.CALL_BOUNDARY, CP.SCALE_PRODUCTS, CP.RUN_VALUE)
+TAPPED = (CALL_BOUNDARY, SCALE_PRODUCTS, RUN_VALUE)
 
 
 def attach_of_plan(com: Any, eng: Any, args: Any, classes: Sequence[Mapping[str, Any]], out: Path, *, kind: str,
@@ -205,7 +205,9 @@ def attach_of_plan(com: Any, eng: Any, args: Any, classes: Sequence[Mapping[str,
         logger.error("[delta] REFUSE: the acquisition plan needs a hooking committer with a model (got %s)", kind)
         sys.exit(3)
     if MOE.MoeBlockSource(com, model).layers:
-        logger.error("[delta] REFUSE: the model has MoE layers, and %s", CP.NOT_SERVED["moe_block_stream"])
+        from verity_vllm.program.predict.capture_plan import NOT_SERVED
+
+        logger.error("[delta] REFUSE: the model has MoE layers, and %s", NOT_SERVED["moe_block_stream"])
         sys.exit(3)
     tapped = [c for c in classes if c["capture"] in TAPPED]
     TAPS.attach(com, list(classes), (), rows=rows, model=model)
