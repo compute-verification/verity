@@ -42,7 +42,7 @@ from pathlib import Path
 import pytest
 
 import verity_difftest as D
-from verity.circuits import population as PN
+from verity.circuits import partition_object as PO, population as PN
 from verity.commitments import coin_tree as CT
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import (
@@ -101,7 +101,7 @@ class Audit:
         s = self.s = Setup(PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]),
                            P.template_instances_query([PAIR.id, TRIPLE.id]), names=ports)
         roots = [{"port": p, "root": rng.randbytes(64).hex(), **s.ports[p]} for p in s.ports]
-        self.partition = P.partition(s.program, s.query) | {"blocks": [UNITS[A][0], UNITS[B][0]]}
+        self.partition = PO.build(s.program, s.query, [[UNITS[A][0], UNITS[B][0]]])
         self.rec = DK.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF,
                              partition=self.partition)
         held = None

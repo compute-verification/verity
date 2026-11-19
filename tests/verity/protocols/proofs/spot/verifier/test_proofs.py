@@ -38,6 +38,7 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.proofs.spot.verifier.one_stage import members as M, one_circuit as OC, proofs as PF
+from verity.circuits import partition_object as PO
 from verity.commitments import hm96
 
 from holes import waits_on
@@ -307,7 +308,7 @@ def _verify(fx: Path, session: Path, public: str = "pub-32.bin", own: bool = Tru
 def _block(public: Path, partition: dict) -> int:
     """The partition's block holding the statement's first unit, as its public file names it."""
     u = PF._header(public)["units"]["indices"][0]
-    return next(k for k, (lo, hi) in enumerate(partition.get("blocks", [[0, u + 1]])) if lo <= u < hi)
+    return next(k for k, (lo, hi) in enumerate((PO.levels(partition) or [[(0, u + 1)]])[0]) if lo <= u < hi)
 
 
 @lean

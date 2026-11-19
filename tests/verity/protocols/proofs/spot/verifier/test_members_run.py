@@ -15,7 +15,7 @@ import json
 
 import pytest
 
-from verity.circuits import population as PN
+from verity.circuits import partition_object as PO, population as PN
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value
@@ -37,7 +37,7 @@ PROGRAM = PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3)])
 QUERY = P.template_instances_query([PAIR.id, TRIPLE.id])
 A, B = "a/c0", "b/c0"
 UNITS = {A: [[0, 2]], B: [[2, 5]]}
-PARTITION = {**P.partition(PROGRAM, QUERY), "blocks": [[UNITS[A][0], UNITS[B][0]]]}
+PARTITION = PO.build(PROGRAM, QUERY, [[UNITS[A][0], UNITS[B][0]]])
 SCHEME = "frame-v3-sha512/hm96-sha512"
 SPEC = {"block": 8, "rounds_log": 1, "scheme": CT.SCHEME, "streams": [CT.SESSION, "circuit/rep0", "circuit/rep1"]}
 ROOTS = {A: ("11" * 64, "aa" * 64), B: ("22" * 64, "bb" * 64)}

@@ -2917,7 +2917,7 @@ def test_the_per_member_form_as_written_is_what_v2_parses_and_its_check_reads(tm
     What the parsers refuse the command refuses with their reason: statements out of the members'
     order, a statement of two sessions, of a member the parameters don't name or of a member the sample holds no unit
     of, v1's ``sessions`` other than the statements', and either file in the one statement's form."""
-    blocked = Setup(SETUPS[3].program, SETUPS[3].query, blocks=[(0, 2), (2, 4), (4, 5)])
+    blocked = Setup(SETUPS[3].program, SETUPS[3].query, blocks=[[(0, 2), (2, 4), (4, 5)]])
     rec, _, base, params = _audit_v1_accepts(blocked, "v2-members", server)
 
     def member(k: int, name: str, lo: int, hi: int, *sessions: str) -> PF.Member:

@@ -25,7 +25,7 @@ def case(n: int) -> dict:
     t, tid = PAIR, codec.descriptor_id(PAIR)
     program, query = wired_population_program([(t, 10 * n)], {"templates": [[tid, 10 * n]], "order": [[tid, 0, 10 * n]]})
     blocks = [(10 * i, 10 * i + 10) for i in range(n)]
-    return {"program": codec.encode_program(program), "partition": PO.build(program, query, blocks)}
+    return {"program": codec.encode_program(program), "partition": PO.build(program, query, [blocks])}
 
 
 def main() -> None:
