@@ -1,0 +1,3 @@
+[2026-11-19T01:37Z] 86ad12d9e316
+From the lead, 5:58 PM PST. ADD to the cut list (held, on the credited block verdict, Thu 6:00 PM PST): benchmarks/one_stage/served_verdicts.py pearlplus_of_record and everything only it reaches (pearlplus_coins, pearlplus_live_sample, pearlplus_draw check, pearlplus_coin, _ledger_period if no other caller, PEARLPLUS_FROM, DEV_VERDICT, their tests): condition 3 is the tie that retires, so it can only return missing. Count its lines and its tests lines. Also ADD as held on Daniel word on the first stage: LeafLanesSound (security/Proofs/Pouw/TS/... Lanes) with leaf_lanes.py and h1window.py port mark.
+
