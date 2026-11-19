@@ -94,8 +94,8 @@ private theorem form_values_spec (j : Json) (w : String) :
 private theorem members_keys_spec (pr : Json) :
     ⦃⌜True⌝⦄ Spot.OneStageZk.membersKeysHeld pr ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
-private theorem members_wiring_spec (pr : Json) :
-    ⦃⌜True⌝⦄ Spot.OneStageZk.membersWiringOf pr ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
+private theorem form_circuit_spec (o : Spot.OneStageZk.Own) :
+    ⦃⌜True⌝⦄ o.circuitFile ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
 private theorem members_of_spec (o : Spot.OneStageZk.Own) (j : Json) :
     ⦃⌜True⌝⦄ Spot.OneStageZk.membersOf o j ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
@@ -116,7 +116,7 @@ theorem members_deployed {j : Json} {a : Spot.OneStageZk.Params}
     (Q := fun a => ∃ key label, a.base.challenger = some (key, label) ∧ key.params = Lms.deployed) ?_ h
   clear h
   mvcgen -trivial [Spot.OneStageZk.membersParamsOfJson, -Spec.throw_Except, throw_spec, members_keys_spec,
-    members_of_spec, members_wiring_spec, parsed_deployed_spec]
+    members_of_spec, parsed_deployed_spec]
   all_goals first
     | exact True.intro
     | assumption
@@ -133,7 +133,7 @@ theorem form_audit {j : Json} {p : VStar.Recursive.SampledTwo.Params}
   clear h
   mvcgen -trivial [VStar.Recursive.SampledTwo.paramsParsed, -Spec.throw_Except, throw_spec, form_split_spec,
     form_keys_spec, form_rule_spec, form_mapM_spec, form_paramsAt_spec, form_templates_spec, form_canon_spec,
-    form_program_spec, form_members_spec, form_values_spec] invariants
+    form_program_spec, form_members_spec, form_values_spec, form_circuit_spec] invariants
   · ⇓? _ => ⌜True⌝
   all_goals first
     | exact True.intro
