@@ -180,7 +180,7 @@ def test_the_served_shape(shaped):
     with none registered or committed, under another root, with an opening that reads no root, with an opening whose
     reader is another Definition under the pinned one's name, and with one wire from the next slot."""
     got = {what: vectors.results(m["case"]) for what, m in shaped.items()
-           if what not in LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS | ROW_ROLE | SPLITS | NODES}
+           if what not in LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS | ROW_ROLE | SPLITS | NODES | RECUT}
     verdicts = {what: (r["detail"]["failure"], r["count"]["failure"]) for what, r in got.items()}
     refused = ("nci", "fresh")
     assert verdicts == {
