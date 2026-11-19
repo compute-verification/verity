@@ -21,6 +21,7 @@ everything agrees.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import random
@@ -83,6 +84,8 @@ def reference_sample(sampling_design: dict, src: bytes) -> list[int] | None:
 
 
 def _templates(m: int):
+    spec = importlib.util.spec_from_file_location("stand_in", Path(__file__).resolve().parents[4] / "circuits" / "stand_in.py")
+    spec.loader.exec_module(importlib.util.module_from_spec(spec))
     from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
     from verity.circuits.types import Array, Value
     xor = PrimitiveDefinition("StratAgreeXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
