@@ -1,3 +1,0 @@
-[2026-11-19T04:04Z] 1922d7366dc6
-From the circuits lead: the author of the Lean decoder asks for THE DESCRIPTOR of the word-to-bits primitive your word ports use (condition 1: Lean takes it with no new form): name it on your next return FIRST: the primitive id as it appears in a description (WordBits..._v1 with its parameters), one small description file that uses it (the tile word-port block at the test instance is too large: make a tiny Program: one word input node, the primitive, one bit-typed consumer) put in the evidence store (research data put --kind evidence/v1 --file F --preserve) with its art id, and whether the Lean decoder (flock-circuit or the decode difference test) accepts that tiny description today: run it. It answers within the hour of the naming.
-
