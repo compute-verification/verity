@@ -197,7 +197,7 @@ def test_a_ceiling_is_read_from_the_card_file_and_from_nowhere_else(tmp_path):
         T.theta(tmp_path / "d")
 
 
-def test_the_command_and_the_render(capsys):
+def test_the_command(capsys):
     assert main(["--device", "sm_90", "theta"]) == 0
     out = capsys.readouterr().out
     assert "4096 / 128 [2 · alu.iadd3 64] = 32.00" in out
@@ -211,8 +211,5 @@ def test_the_command_and_the_render(capsys):
     assert "IMAD.HI    sheet    38.29 SM-clocks" in out and "L = 8192: sheet 0.02232" in out
     assert main(["--device", "sm_120", "theta", "--check"]) == 0
     assert "holds" in capsys.readouterr().out
-    assert main(["--device", "sm_120", "render", "theta"]) == 0
-    out = capsys.readouterr().out
-    assert "| `tensor.s8.k16` |" in out and "### FP8 atoms" in out and "### SHA-512's ceiling" in out
     with pytest.raises(SystemExit, match="no theta.toml"):
         main(["--device", "sm_100", "theta"])
