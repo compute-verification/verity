@@ -258,7 +258,7 @@ def test_the_opened_form_is_the_partition_objects_blocks():
     _adv, rs, reg, st = registered()
     assert V.blocks(rs) == [BLOCKS]
     obj = PO.build(P, QUERY, V.blocks(rs))
-    assert PO.verify(obj, P).ok and PO.blocks(obj) == [BLOCKS]
+    assert PO.verify(obj, P).ok and PO.levels(obj) == [BLOCKS] and PO.blocks(obj) == BLOCKS
     for i in range(len(BLOCKS)):
         mine = V.check_block(c, st, 0, 0, i, _opened(rs, reg, st, 0, 0, i))
         theirs = door.restrict(c, obj, door.block(c, obj, i))
@@ -298,8 +298,9 @@ def test_levels_refine_coarsest_first():
     assert V.check_block(c, st, 0, 0, 0, _opened(rs, reg, st, 0, 0, 0)).units == ((0, 3),)
     mine = V.check_block(c, st, 0, 1, 1, _opened(rs, reg, st, 0, 1, 1))
     obj = PO.build(P, QUERY, V.blocks(rs))
-    assert mine.units == ((2, 3),) and door.block(c, obj, 1, 1) == [(2, 3)] == door.block(c, obj, 1)
-    assert door.block(c, obj, 1, 0) == [(3, 6)] and mine.descriptor == door.restrict(c, obj, [(2, 3)])
+    assert mine.units == ((2, 3),) and PO.levels(obj) == levels and mine.descriptor == door.restrict(c, obj, [(2, 3)])
+    with pytest.raises(door.Refused, match="blocks-levels"):
+        door.block(c, obj, 1)
     _adv, rs, _reg, st = _registered(P, QUERY, [BLOCKS, levels[0]], label="vlevels")
     assert V.check(st, rs, c).detail["blocks-refine"]["gates"] == [[1, [0, 3]]]
 

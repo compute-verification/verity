@@ -52,7 +52,7 @@ def main():
     def verified(o, d):
         bad: dict[str, list] = {}
         v0 = PO.validate(o)
-        if not v0.ok or PO.blocks(o) is None:
+        if not v0.ok or PO.levels(o) is None:
             return v0
         PO._blocks_cover(o["blocks"], population[d], bad)
         return PO.CutVerdict(not bad, tuple(bad), {})
@@ -66,7 +66,7 @@ def main():
         f = a.out / f"held{i}.json"
         f.write_text(json.dumps({"object": o, "descriptor": v["descriptors"][d]}))
         files.append(str(f))
-        want[str(f)] = (verified(o, d), PO.blocks(o))
+        want[str(f)] = (verified(o, d), PO.levels(o))
     p = subprocess.run([a.lean, "partition-object", *files], capture_output=True, text=True)
     got = {}
     for line in p.stdout.splitlines():

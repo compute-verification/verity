@@ -53,7 +53,8 @@
   (`blocks-query`); then, at each level, a pair starting before the one before it (`blocks-unsorted`), or inside it
   (`blocks-overlap`), or after its end or a first pair not at 0 (`blocks-gap`), each witness with its level in front; and
   where levels i and i + 1 are each of valid form, an end of level i that is no end of level i + 1 (`blocks-refine`, witness
-  [i + 1, the first block of level i + 1 ending past it, else its last]). `verify` then refuses a level whose last pair ends
+  [i + 1, the first block of level i + 1 ending past it], else [i + 1, the end]). `levels` reads every level; `blocks`, a
+  one-level reader's, refuses more than one (`blocks-levels`). `verify` then refuses a level whose last pair ends
   past the population (`blocks-range`) or before it (`blocks-gap`), witness [level, [end, population]].
 * `validate` checks the object's form (exact keys, ``blocks`` optional; a known query with exactly its parameters); `digest`
   digests only a valid object.
@@ -171,9 +172,18 @@ def build(program: Any, q: Mapping[str, Any] | None = None,
     return obj
 
 
-def blocks(obj: Mapping[str, Any]) -> list[list[tuple[int, int]]] | None:
+def levels(obj: Mapping[str, Any]) -> list[list[tuple[int, int]]] | None:
     """The object's levels of blocks, coarsest first, each a list of (lo, hi), or None when it names no grouping."""
     return None if BLOCKS not in obj else [[(lo, hi) for lo, hi in lv] for lv in obj[BLOCKS]]
+
+
+def blocks(obj: Mapping[str, Any]) -> list[tuple[int, int]] | None:
+    """The object's proof blocks, its one level, or None when it names no grouping; `ValueError` (`blocks-levels`) for an
+    object of more than one level, which a one-level reader refuses."""
+    ls = levels(obj)
+    if ls is not None and len(ls) != 1:
+        raise ValueError(f"partition: blocks-levels: the object has {len(ls)} levels of blocks; this reader takes one")
+    return None if ls is None else ls[0]
 
 
 def _blocks_form(b: Any, template: bool, fail: Callable[[str, Any], None]) -> None:
@@ -213,7 +223,7 @@ def _blocks_form(b: Any, template: bool, fail: Callable[[str, Any], None]) -> No
         ends = {hi for _lo, hi in fine}
         e = next((hi for _lo, hi in coarse if hi not in ends), None)
         if e is not None:
-            fail("blocks-refine", [i + 1, next((p for p in fine if p[1] > e), fine[-1])])
+            fail("blocks-refine", [i + 1, next((p for p in fine if p[1] > e), e)])
 
 
 def _blocks_cover(b: Sequence[Sequence[Sequence[int]]], population: int, bad: dict[str, list]) -> None:
@@ -598,4 +608,4 @@ def _verdict(bad: dict[str, list]) -> CutVerdict:
 
 __all__ = ["FORMAT", "QUERIES", "PARAM_MAX", "QueryInapplicable", "QueryRefused", "Q_TEMPLATE_INSTANCE", "Q_TEMPLATE_INSTANCES", "Q_CALL", "Q_WORD",
            "call_query", "CallPartition", "template_id", "template_instance_query", "template_instances_query", "TemplatePartition", "ranges_digest", "query", "build", "canonical", "digest", "validate", "calls", "Partition", "evaluate",
-           "owners_digest", "program_sha512", "verify", "BLOCKS", "blocks"]
+           "owners_digest", "program_sha512", "verify", "BLOCKS", "blocks", "levels"]

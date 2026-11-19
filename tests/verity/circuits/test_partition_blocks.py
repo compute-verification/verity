@@ -43,7 +43,7 @@ def test_the_blocks_are_the_members_cut_at_the_order_and_the_cap(cap, want):
     got = I.partition_blocks(chain(), cap, built())
     assert got == want == [[m.base, m.base + m.n] for m in I.members(chain(), cap, built())]
     o = obj([got])
-    assert PO.verify(o, built()[0]).ok and PO.blocks(o) == [[tuple(p) for p in want]]
+    assert PO.verify(o, built()[0]).ok and PO.blocks(o) == [tuple(p) for p in want] and PO.levels(o) == [PO.blocks(o)]
 
 
 def test_the_pairs_cover_the_population_once_in_its_own_order():
@@ -76,7 +76,7 @@ def test_the_digest_moves_with_the_pairs():
     ([[[0, 8]], [[0, 2], [3, 8]]], "blocks-gap", [1, [2, 3]]),
     ([[[0, 4], [4, 8]], [[0, 2], [2, 6], [6, 8]]], "blocks-refine", [1, [2, 6]]),
     ([[[0, 2], [2, 8]], [[0, 4], [4, 8]]], "blocks-refine", [1, [0, 4]]),
-    ([[[0, 8]], [[0, 4]]], "blocks-refine", [1, [0, 4]]),
+    ([[[0, 8]], [[0, 4]]], "blocks-refine", [1, 8]),
     ([], "blocks-form", []),
     ([[]], "blocks-form", [0, []]),
     ([[0, 8]], "blocks-form", [0, 0]),
@@ -111,7 +111,9 @@ def test_a_grouping_past_or_short_of_the_population_is_refused_by_name(blocks, c
 def test_levels_refine_coarsest_first_and_may_repeat():
     for levels in ([[[0, 8]], [[0, 4], [4, 8]], [[0, 2], [2, 4], [4, 6], [6, 8]]], [[[0, 4], [4, 8]]] * 2):
         o = obj(levels)
-        assert PO.verify(o, built()[0]).ok and PO.blocks(o) == [[tuple(p) for p in lv] for lv in levels]
+        assert PO.verify(o, built()[0]).ok and PO.levels(o) == [[tuple(p) for p in lv] for lv in levels]
+        with pytest.raises(ValueError, match="blocks-levels"):
+            PO.blocks(o)
 
 
 def test_blocks_on_a_query_other_than_a_template_query_are_refused():
@@ -125,5 +127,5 @@ def test_restrict_with_a_pair_from_the_field_is_the_members_block():
     bits = R.Bits(R.program(c))
     o = obj([I.partition_blocks(chain(), 2, built())])
     members = I.members(chain(), 2, built())
-    for pair, m in list(zip(PO.blocks(o)[0], members))[:2]:
+    for pair, m in list(zip(PO.blocks(o), members))[:2]:
         assert R.restrict(c, o, [pair], bits).descriptor == R.restrict(c, o, [(m.base, m.base + m.n)], bits).descriptor
