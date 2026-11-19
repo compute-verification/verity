@@ -949,8 +949,8 @@ def test_pearl_plus_s_case_is_its_piece_s_parts_naming_the_records_digest(tmp_pa
     ‖ commitment), its public the exact work the protocol's check publishes, never the grid form's give-up. Nothing of
     the commitment is printed. A part naming a blob that isn't a file is refused saying so, and so are parts with no
     window, or one that isn't the protocol's; the other cases are still written."""
-    serve, v1, _ = tied_serve(tmp_path / "serve")
-    piece, parts = pearlplus_parts(serve)
+    serve, v1, w = tied_serve(tmp_path / "serve")
+    piece, parts = pearlplus_parts(serve, w)
     private = serve / "private"
     rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", private, "--alpha", "1", "--gamma", 1,
                                   *stand_ins(tmp_path, v1))
