@@ -48,8 +48,7 @@ def program():
         from verity.circuits.program import Program
         from verity.protocols.resource_accounting.compute.pouw.prover import schemes as PS
         from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
-        unit = PT.tile(PS.get("pearl-c-h100-v1-h3"), 2048, 16, 64, 2048, 1, 16)
-        core = bind(PT.PearlPlusTileCoreV2, **{s: unit.bindings[s] for s in PT.PearlPlusTileCoreV2.statics})
+        core = PT.core(PS.get("pearl-c-h100-v1-h3"), 2048, 16, 64, 2048, 16)
         params, ret = core.signature()
         root = CompositeDefinition("PearlPlusCreditedProbe", 1, (), lambda S_: (params, ret),
                                    lambda B, S_, *x: B.call(core, *x), register=False)
