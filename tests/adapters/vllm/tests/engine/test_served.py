@@ -11,11 +11,10 @@ from types import SimpleNamespace
 import pytest
 
 from tests import fake_vllm
-from verity_vllm.config import WORKLOADS, RowId, row_execution, workload_files
+from verity_vllm.config import WORKLOADS, RowId, workload_files
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine import served as SV
 from verity_vllm.engine import vllm_adapter as va
-from verity_vllm.program.frontend.target_profile import TargetProfile, parse_target_arg
 
 GLM = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 #: The switches GLM-5.3's Commit of record ran under (its versions.json: ``env`` VLLM_BATCH_INVARIANT=0,

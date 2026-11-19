@@ -273,7 +273,7 @@ def install(module: Any = None, align: Align | None = None) -> Align:
     """Replace `NAME` on ``module`` (`SITE`, imported when None) with `wrapper` of ``align`` (a new `Align` when None), once per
     process; returns the `Align` installed.  Refused when the module's `CALLER` does not load `NAME` as its global
     (`loads_global`): the Marlin experts would bypass the canonical op.  Refused while another patch of that name is on: a
-    capture's wrap of it (`acquire.sources.moe_align_source`) goes on top of this one, never under it."""
+    capture's wrap of it goes on top of this one, never under it."""
     global _INSTALLED
     if _INSTALLED is not None and _INSTALLED[0].installed:
         return _INSTALLED[1]

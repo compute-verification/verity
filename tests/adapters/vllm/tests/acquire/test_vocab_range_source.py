@@ -3,40 +3,17 @@ arithmetic on int32 and int64 ids, it commits `<site>/vocab_range` only inside t
 another range or a padded shard, and `attach` refuses a manifest without the family."""
 from __future__ import annotations
 
-import importlib.util
 import types
-from typing import Any
 
 import pytest
 
+from tests.acquire.recorder import Recorder, exactness_in_tree
 from tests.query.test_vocab_range import VS, V, _rank_manifest
 from verity_vllm.query import vocab_range as VR
 
 torch = pytest.importorskip("torch")
 
 from verity_vllm.acquire.sources import vocab_range_source as S  # noqa: E402
-
-
-class Recorder:
-    def __init__(self) -> None:
-        self._cur: types.SimpleNamespace | None = None
-        self.errors: list[str] = []
-        self.acquired: list[tuple[str, Any]] = []
-        self.sources: list = []
-        self.name = "rec"
-        self.model = None
-
-    def _acquire(self, name, t, job):
-        self.acquired.append((name, t.clone()))
-
-    def attach_source(self, src):
-        self.sources.append(src)
-
-
-def exactness_in_tree(source: Any) -> bool:
-    """Whether each class a source declares ends its evidence on a module that the tree has: the one that holds the exactness check of
-    what the source commits.  A name that is no module sends the declaration's reader nowhere."""
-    return all(importlib.util.find_spec(d["evidence"].rsplit(" ", 1)[-1]) is not None for d in source.declaration_classes())
 
 
 def _model():

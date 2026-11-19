@@ -23,15 +23,12 @@ except ModuleNotFoundError:
     pytest.skip("could not import 'torch'", allow_module_level=True)
 
 from tests.query.test_boolean_manifest import _write
-from verity_vllm.acquire.sources import narrowed_source as NS
 from verity_vllm.check.replay import coverage as COV
 from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import population as RP
 from verity_vllm.check.replay.evaluate import evaluate
-from verity_vllm.commit.binding import build_binding_map
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.definitions.registry import b1
-from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.program_view import from_instances
 from verity_vllm.query.required import request_manifest
 
@@ -182,53 +179,5 @@ def _metas(acquired: list) -> list:
     return metas
 
 
-def test_the_committed_words_of_the_narrowed_and_the_last_rows_are_the_programs_values(build):
-    """The fused GEMM's whole rows at the prompt step, through the committer's hook and the narrowed-rows source, bound by the manifest's
-    binder in the binding map: the words each step-0 identity of the last layer's qkv reads are the Values its Program Calls compute,
-    each from the weight rows the Call reads (the narrowed Calls the keys' and values' rows).  Row 0's words are not the last row's: the
-    whole rows' identity is bound at its runtime row."""
-    d, man, inst = build
-    pi = IX.ProgramIndex(inst, program_dir=str(d))
-    rng = np.random.default_rng(7)
-    x, W = _bf16(rng.standard_normal((LP, 64))), _bf16(rng.standard_normal((128, 64)) * 0.125)
-    calls = [r for r in inst["rows"] if str(r.get("name", "")).startswith(f"{LAST_QKV}/")][:LP]
-    assert [r["spec"] for r in calls] == ["Gemm_v1{K=64,N=64}"] * (LP - 1) + ["Gemm_v1{K=64,N=128}"]
-    program = []
-    for t, r in enumerate(calls):
-        (_p, _param, lo, hi), = r["args"][1]
-        field, flo, fhi, _shape = pi.weight_slice(lo, hi)
-        assert field == f"{LAST_QKV}.weight"
-        program.append(_gemm(x[t], W.reshape(-1)[flo:fhi], r["spec"]))
-    whole = np.stack([_gemm(x[t], W, "Gemm_v1{K=64,N=128}") for t in range(LP)])
-
-    root = torch.nn.Module()
-    root.lm = torch.nn.Module()
-    root.lm.model = torch.nn.Module()
-    root.lm.model.layers = torch.nn.ModuleList([torch.nn.Module(), torch.nn.Module()])
-    root.lm.model.layers[1].qkv_proj = _Qkv(torch.from_numpy(whole.view(np.int16).copy()).view(torch.bfloat16))
-    com = _Committer(root)
-    src = NS.attach(com, man)
-    assert com.sources == [src] and src.own_names == {f"{LAST_QKV}/out@64"}
-    src.install()
-    com._cur, com._plan_shape = SimpleNamespace(step=0), (LP, 1)
-    out, _bias = root.lm.model.layers[1].qkv_proj(None)
-    com.acquired.insert(0, (LAST_QKV, out.clone()))
-    assert [n for n, _t in com.acquired] == [LAST_QKV, f"{LAST_QKV}/out@64"] and not com.errors
-
-    bmap = build_binding_map({0: _metas(com.acquired)}, [], bytes(64), man["program_digest"], binder=Binder.of_manifest(man))
-    words = {n: t.view(torch.int16).numpy().view(np.uint16).reshape(-1) for n, t in com.acquired}
-    entry = {e["identity"]["output_member"]: e for e in bmap["entries"] if e["identity"]["op_path"] == LAST_QKV}
-    want = {r["output_member"]: r["element_range"] for r in man["identities"] if r["op_path"] == LAST_QKV and r["step"] == 0}
-    assert set(want) == set(entry) == {"out", "out@64"}
-    got = {}
-    for member, (lo, hi) in want.items():
-        e = entry[member]
-        elo, ehi = e["identity"]["element_range"]
-        assert "refused" not in e and elo <= lo and hi <= ehi
-        got[member] = words[e["name"]][e["element_offset"] + lo:e["element_offset"] + hi]
-    assert (entry["out"]["element_offset"], entry["out@64"]["element_offset"]) == ((LP - 1) * 128, 0)
-    assert got["out@64"].tolist() == np.concatenate(program[:LP - 1]).tolist()
-    assert got["out"].tolist() == program[LP - 1].tolist()
-    assert words[LAST_QKV][:128].tolist() != program[LP - 1].tolist()
 
 

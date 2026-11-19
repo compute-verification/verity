@@ -11,7 +11,6 @@ import re
 import pytest
 
 from verity_vllm.check.replay import coverage as COV
-from verity_vllm.check.replay import population as POP
 from verity_vllm.records.required_manifest import SCHEMA
 
 OLDER_ID = "Q_module (older header, no query_id)"

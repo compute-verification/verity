@@ -18,12 +18,10 @@ from verity_vllm.commit.partition import (
     require_partition,
     word_check_refusal,
 )
-from verity_vllm.pipeline import research_tools
 from verity_vllm.query.compose import _with_partitions
 from verity_vllm.query.required import (
     Q_MODULE_BODY_ID,
     Q_WORD_ID,
-    QUERY_OF_RECORD,
     partition_of,
 )
 

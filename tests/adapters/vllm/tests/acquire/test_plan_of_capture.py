@@ -1,10 +1,10 @@
-"""The acquisition plan of a capture plan's classes (`plan.plan_of_capture`, `gate.run_plan`) on synthetic runtime trees: one site
+"""The acquisition plan of a capture plan's classes (`plan.plan_of_capture`, `stage.run_plan`) on synthetic runtime trees: one site
 per capture class, a shared instance's path acquired under its first path's hooks, and a class with no site unsupported."""
 from __future__ import annotations
 
 import pytest
 
-from verity_vllm.acquire import gate as G
+from verity_vllm.acquire import stage as G
 from verity_vllm.records import capture as CP
 from verity_vllm.records.runtime_tree import RuntimeTree, runtime_tree_from_paths, runtime_tree_of
 

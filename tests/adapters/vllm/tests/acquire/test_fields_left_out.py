@@ -8,15 +8,12 @@ from typing import Any
 
 import pytest
 
-from tests.acquire.test_plan import manifest, row
+from tests.acquire.test_plan import row
 from tests.acquire.test_served_moe import RECORD, SMALL, _wired
-from verity_vllm.acquire import gate as G
 from verity_vllm.acquire import inductor_templates as T
-from verity_vllm.acquire import plan as P
 from verity_vllm.acquire import served_artifact as SA
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled
-from verity_vllm.acquire.sources import call_boundary_source as CB
 
 LEFT_OUT = object()
 EMPTY = [LEFT_OUT, None, [], {}, "", 0, False]

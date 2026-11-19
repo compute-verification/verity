@@ -2,22 +2,20 @@
 No model, no vLLM class, no module path of a real case: the shapes are the tests' own."""
 from __future__ import annotations
 
-import copy
 import hashlib
 import json
 import os
 import subprocess
 import sys
 
-import pytest
 
-from verity_vllm.acquire import plan as P
 from verity_vllm.correspondence.reader_for_acquire import (
     AcquireCorrespondence,
     ArgSlot,
     ReturnSlot,
 )
 from verity_vllm.query.manifest import format as RM
+from verity_vllm.records import capture as CP
 from verity_vllm.records.runtime_tree import runtime_tree_from_paths
 
 PD = hashlib.sha256(b"program").hexdigest()
@@ -130,7 +128,7 @@ if sys.argv[3] == "blocked":
     sys.modules["torch"] = None
 from verity_vllm.acquire import plan as P
 from verity_vllm.correspondence.reader_for_acquire import AcquireCorrespondence, RuntimeTree
-plan = P.acquisition_plan(json.load(open(sys.argv[1])), AcquireCorrespondence(RuntimeTree.load(sys.argv[2])))
+plan = P.plan_of_capture(json.load(open(sys.argv[1])), AcquireCorrespondence(RuntimeTree.load(sys.argv[2])))
 print(json.dumps({"digest": plan.digest, "residuals": {r.table: r.values for r in plan.residuals},
                   "tables": {k: sorted(v) for k, v in P._lifetime_tables().items()}, "torch": sys.modules.get("torch") is not None}))
 """
@@ -148,8 +146,9 @@ def test_default_tables_do_not_depend_on_torch(tmp_path):
     and digest, so a CPU gate without torch and the GPU phase evaluate one plan."""
     from verity_vllm.commit.committer import flush_points
 
-    rows = base_rows() + [row("instance_outputs", "body.blocks.0.qkv_proj", "0", spec="Gemm_v1"), row("instance_outputs", "body.norm", "out", spec="Norm_v1")]
-    (tmp_path / "manifest.json").write_text(json.dumps(manifest(rows)))
+    classes = [{"op_path": op, "member": m, "capture": CP.MODULE_OUTPUT, "width": 8, "dtype": "bf16", "definitions": [d]}
+               for op, m, d in (("body.blocks.0.qkv_proj", "0", "Gemm_v1"), ("body.norm", "out", "Norm_v1"))]
+    (tmp_path / "manifest.json").write_text(json.dumps(classes))
     tree(**{"body.blocks.0.qkv_proj": ["Lin", "Base", "Module"]}).save(tmp_path / "runtime_tree.json")
     free, blocked = _plan_in_a_fresh_process(tmp_path, "free"), _plan_in_a_fresh_process(tmp_path, "blocked")
     assert not blocked["torch"]

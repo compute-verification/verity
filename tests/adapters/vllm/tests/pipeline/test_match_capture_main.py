@@ -11,12 +11,8 @@ Held: the files `main` writes (`versions.json`, `spec_tokens.json`, `tokens.json
 returning or by exit 3.  CPU only."""
 from __future__ import annotations
 
-import contextlib
 import copy
-import json
-from collections.abc import Callable, Iterator
-from pathlib import Path
-from types import SimpleNamespace
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -27,10 +23,6 @@ pytest.importorskip("torch")
 import torch
 
 import verity_vllm.pipeline.match_capture as M1
-from verity_vllm import messages
-from verity_vllm.acquire import install, stage
-from verity_vllm.observe import capture as OC
-from verity_vllm.observe import capture_types
 
 Record = dict[str, Any]
 Lines = Callable[[], list[str]]

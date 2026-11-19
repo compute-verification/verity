@@ -119,11 +119,9 @@ def scheme_refusal(opts: Any) -> str | None:
 
 def committer_args(opts: Any) -> SimpleNamespace:
     """What `make_committer` and `pipeline.commit_attach.attach_of_plan` read of the serve's options."""
-    from verity_vllm.acquire.sources.taps import TapSources
-
     return SimpleNamespace(arena_mb=0, profile_hooks=False, pinned_populate_threads=None, commit_scheme=opts.scheme,
                            programs_root=programs_root_of(opts), program_dir=None, out=opts.out,
-                           tap_sources=TapSources(), moe_source="off", required_classes=None)
+                           moe_source="off", required_classes=None)
 
 
 def window_class_of(opts: Any) -> SimpleNamespace:

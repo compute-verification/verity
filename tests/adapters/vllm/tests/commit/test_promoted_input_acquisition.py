@@ -12,7 +12,6 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING
 
-import numpy as np
 import pytest
 
 if TYPE_CHECKING:
@@ -28,7 +27,6 @@ from verity_vllm.commit.committer.native_host import (
     _StepJob,
 )
 from verity_vllm.query.manifest import format as RM
-from verity_vllm.query.manifest.bind import Binder
 
 V, H, TOKENS = 8, 16, 3
 PD = hashlib.sha512(b"program").hexdigest()

@@ -16,17 +16,13 @@
 """
 from __future__ import annotations
 
-import copy
-import dataclasses
 import gc
 import hashlib
 import json
 from types import SimpleNamespace
 
 import pytest
-from verity_torch.correspondence.runtime import NAMESPACE as CORRESPONDENCE
 
-from tests.pipeline import tp_toy
 from verity_vllm import gc_tuning
 from verity_vllm.pipeline import build as B
 from verity_vllm.pipeline import cli

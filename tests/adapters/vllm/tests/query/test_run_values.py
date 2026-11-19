@@ -14,11 +14,6 @@ from verity.circuits.program import Program
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Tuple, Value
 
-from verity_vllm.acquire import plan as PL
-from verity_vllm.correspondence.reader_for_acquire import (
-    AcquireCorrespondence,
-    runtime_tree_from_paths,
-)
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.definitions.registry import prims
 from verity_vllm.query import program_view as pv

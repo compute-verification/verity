@@ -31,15 +31,11 @@ from verity.circuits.query_ast import oracle_gateset, oracle_out
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
 
-from verity_vllm.commit.partition import word_check_refusal
-from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.definitions.registry import fp8_moe_experts as XM
 from verity_vllm.definitions.registry import moe
 from verity_vllm.definitions.registry import sampling as SM
 from verity_vllm.pipeline import cli
 from verity_vllm.query import program_view as PV
-from verity_vllm.query.program_view import from_instances
-from verity_vllm.query.required import population
 
 
 def _fn(fam: str, **statics):

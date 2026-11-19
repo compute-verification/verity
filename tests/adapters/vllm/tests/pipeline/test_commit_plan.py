@@ -2,18 +2,10 @@
 its own key, and the row's `plan` stage that writes it.  CPU only: the Programs are the synthetic Gemma-like step of the oracle tests."""
 from __future__ import annotations
 
-import copy
-import json
 import types
-from pathlib import Path
 
 import pytest
 
-from tests.check.test_oracle_compare_v2_producers import RES, gemma_like_program
-from verity_vllm.check import oracle_compare as OC
-from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_vllm.pipeline import commit_plan as CP
-from verity_vllm.query.required import request_manifest
 
 pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
 

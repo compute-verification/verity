@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 
-from tests.acquire.test_vocab_range_source import Recorder
+from tests.acquire.recorder import Recorder
 from verity_vllm.definitions.registry import fp8
 from verity_vllm.query import scale_products as SP
 

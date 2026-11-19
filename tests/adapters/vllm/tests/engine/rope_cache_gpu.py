@@ -21,14 +21,9 @@ TB/s, and the saving per forward.
 """
 from __future__ import annotations
 
-import argparse
-import importlib
-import json
 import math
 import os
 import statistics
-import sys
-from pathlib import Path
 
 import torch
 

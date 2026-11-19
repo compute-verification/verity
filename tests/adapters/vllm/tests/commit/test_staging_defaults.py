@@ -14,7 +14,6 @@ torch = pytest.importorskip("torch")
 
 from tests.commit import test_native_collect_plan_cache as P  # noqa: E402
 from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
-from verity_vllm.pipeline import cli  # noqa: E402
 
 ENV = ("VERITY_RETAIN", "VERITY_WINDOW_MB", "VERITY_WINDOW_SLOTS", "VERITY_STAGING_BOUNDED")
 

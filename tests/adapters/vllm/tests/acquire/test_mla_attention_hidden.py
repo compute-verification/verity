@@ -9,7 +9,6 @@ import pytest
 import torch
 
 from tests.acquire.glm53_model import L, glm_model
-from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.acquire.sources.hidden_source import (
     attention_hidden,
     require_hidden_on_every_rank,
@@ -55,13 +54,6 @@ def _made(fams):
     return [{"rank": r, "attention_hidden": {"family": f, "why": "required manifest identities"}} for r, f in enumerate(fams)]
 
 
-def test_a_glm_tp8_commit_requires_no_hidden_class():
-    classes = REQUIRED_CLASSES_DEFAULT + ("tp_rank_partials",)
-    versions = {"required_classes_source": "default (REL-02) + tp_rank_partials (R14 TP-03), checked per rank"}
-    out = TAPS.require_on_every_rank(_made([None] * 8), classes, versions, TAPS.TapSources(), explicit_classes=False)
-    assert out == ("input_token_ids", "instance_outputs_native", "sampled_token_ids", "weights", "tp_rank_partials")
-    assert versions["required_classes"] == list(out) and "attention hidden class none" in versions["required_classes_source"]
-    assert set(versions["attention_hidden"]) == set(range(8))
 
 
 def test_a_fa3_tp_commit_requires_the_fa3_class_and_explicit_classes_stay():

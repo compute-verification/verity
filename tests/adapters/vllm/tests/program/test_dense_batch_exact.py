@@ -23,7 +23,6 @@ from verity.circuits.evaluation import evaluate_batch, kernels
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import signature_of, statics_of
 
-from verity_vllm.acquire.sources import call_boundary_plan as CP
 from verity_vllm.definitions.numerics import dense_rows as DR
 from verity_vllm.definitions.numerics import derived_rows as D
 from verity_vllm.definitions.numerics import kernel_registry as KR
@@ -258,25 +257,3 @@ def test_gemm_v2_batch_form_leaves_other_batches_to_the_instance_form(monkeypatc
     assert not declined.any() and np.array_equal(out, evaluate_batch(t, X, wb, kernel="reference")), "the instance form, per row"
 
 
-def test_kernel_rows_takes_the_batch_form_and_names_a_declined_instance(monkeypatch):
-    monkeypatch.setattr(DR, "FAST_GEMM_WORDS", 1)
-    rng = np.random.default_rng(8322)
-    X, w = _xs(rng)[:4], _mild_w(rng, 9)
-    t = _gemm("HopperBF16WgmmaDot16_v1", len(w))
-    spec = f"Gemm_v2{{K={K},N={len(w)},DOT=HopperBF16WgmmaDot16_v1}}"
-    wb = np.broadcast_to(w.reshape(1, -1), (4, w.size))
-    calls = []
-    def counted(*a, _g=DR.gemm_rows):
-        calls.append(len(a[0]))
-        return _g(*a)
-
-    monkeypatch.setattr(DR, "gemm_rows", counted)
-    got = CP._kernel_rows(t, spec, [X, wb])
-    assert calls == [4] and np.array_equal(got, evaluate_batch(t, X, wb, kernel="reference"))
-    X[2, 0] = 0x7F80
-    with pytest.raises(ValueError, match=r"the row kernel of Gemm_v2\{.*\} declines an instance \(a bf16 operand word is not finite\)"):
-        CP._kernel_rows(t, spec, [X, wb])
-    X[2, 0], w[3] = 0, _bf16(rng.standard_normal(K) * 2.0 ** 126)
-    X[1] = _bf16(rng.standard_normal(K) * 2.0 ** 10)
-    with pytest.raises(ValueError, match=r"declines an instance \(Gemm_v2: \d+ output coordinates have a non-finite bf16 operand"):
-        CP._kernel_rows(t, spec, [X, np.broadcast_to(w.reshape(1, -1), (4, w.size))])

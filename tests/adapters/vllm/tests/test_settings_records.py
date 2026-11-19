@@ -6,7 +6,6 @@ engine's records the environment fills (the replay's engine facts, the engine pr
 from __future__ import annotations
 
 import hashlib
-import importlib
 import json
 import os
 import types
@@ -18,7 +17,6 @@ import pytest
 from tests import fake_vllm
 from verity_vllm.check.match import global_match as GM
 from verity_vllm.check.match import global_match_fast as GMF
-from verity_vllm.pipeline import cli
 
 
 def _digest(doc: object) -> str:

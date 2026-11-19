@@ -2,7 +2,10 @@
  "schema": "vllm-dead-code-keep/v1",
  "dynamic_record": "art:a265fc569719ee1a410f0863416416af91c66d02b1ed8703a9f60fd19e614f2f",
  "modules": {
-  "verity_vllm.acquire.as_loaded": "a tensor-parallel rank's MXFP4 Marlin expert weights as loaded, read only by the multi-GPU Commit; it goes with `taps.attach_rank` and `narrowed_source` in the acquisition's cut of that road",
+  "verity_vllm.query.router_softmax": "the ordered router's softmax per token row, the IR side of the router-tap exactness property (tests.properties.router_tap_exactness, a registered property that moe_source's router declaration cites as its evidence)",
+  "verity_vllm.acquire.sources.router_softmax_source": "the router-softmax tap's source, which the router-tap exactness property's GPU check attaches (tests/properties/router_tap_exactness_gpu.py)",
+  "verity_vllm.query.vocab_range": "a TP rank's vocabulary-range values per token row, the IR side of the vocabulary-range exactness property (tests.properties.vocab_range_exactness, registered in records.property_record)",
+  "verity_vllm.acquire.sources.vocab_range_source": "the vocabulary-range source, which the vocabulary-range exactness property's GPU check attaches (tests/properties/vocab_range_exactness_gpu.py)",
   "verity_vllm.definitions.numerics.ref_prims_twins": "numpy twins of registry.ref_prims, checked against the registered bodies by tests/program/test_ref_prims.py (LIVE registry.ref_prims)",
   "verity_vllm.program.frontend.derive_examples": "source modules of the derivation tests (LIVE frontend.derive)",
   "verity_vllm.program.lifting.dump": "complete-assignment dump used by tests/program/test_lifted_tiny.py (LIVE registry.lifted / pad_prims)",

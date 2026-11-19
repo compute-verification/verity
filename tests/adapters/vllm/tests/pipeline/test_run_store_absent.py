@@ -3,18 +3,12 @@
 from __future__ import annotations
 
 import sys
-from types import SimpleNamespace
 
 import pytest
 
 from verity_vllm import config
 from verity_vllm.pipeline import (
-    advice,
     cli,
-    commit_plan,
-    research_tools,
-    serve_seal,
-    source_identity,
 )
 
 

@@ -28,13 +28,12 @@ from verity.circuits.ops.boolean import versions as BB  # noqa: E402
 from verity_torch.correspondence.runtime import correspondence_digest  # noqa: E402
 
 from verity_vllm.check.match import program_compare as PC  # noqa: E402
-from verity_vllm.correspondence.reader_for_query import Correspondence  # noqa: E402
 from verity_vllm.definitions.registry import b1  # noqa: E402
-from verity_vllm.pipeline import components
+from verity_vllm.pipeline import components  # noqa: E402
 from verity_vllm.pipeline.build import _spec_histogram  # noqa: E402
 from verity_vllm.pipeline.build_instances import write_instances  # noqa: E402
 from verity_vllm.query.program_view import from_instances  # noqa: E402
-from verity_vllm.query.required import SAMPLING_EVENTS, request_manifest  # noqa: E402
+from verity_vllm.query.required import SAMPLING_EVENTS  # noqa: E402
 
 C = {**b1.B0_CONFIG, "H": 64, "NH": 4, "KVH": 2, "D": 16, "I": 128, "QKV": 128, "GU": 256, "NL": 1, "V": 32, "MAX_POS": 64}
 

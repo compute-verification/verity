@@ -280,7 +280,7 @@ def test_the_seals_binder_places_the_kv_quantization_by_the_plans_member_names()
     src = I8.Int8Source(_Committer(), _Model(), {}, I8.kv_modules(plan))
     assert src.kv == [ATTN] and not hasattr(src, "ports")
     names = [*(f"{ATTN}/{m}" for m in I8.KV_LABELS), ATTN]
-    bound = Binder.of_manifest(man, rank=0).bind(0, names)
+    bound = Binder(man["identities"], rank=0, ports={}).bind(0, names)
     assert [(op, m, how) for op, m, _k, how in bound] == [*((ATTN, f"kv_quant.{p}", "label") for p in I8.KV_PORTS), (ATTN, "out", "slot")]
-    digits = Binder.of_manifest(man, rank=0).bind(0, [*(f"{ATTN}/{p}" for p in I8.KV_PORTS), ATTN])
+    digits = Binder(man["identities"], rank=0, ports={}).bind(0, [*(f"{ATTN}/{p}" for p in I8.KV_PORTS), ATTN])
     assert {how for *_x, how in digits} == {"unbound"}

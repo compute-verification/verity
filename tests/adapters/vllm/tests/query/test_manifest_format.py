@@ -14,7 +14,6 @@ from pathlib import Path
 import pytest
 
 from tests.check.test_sampled_replay import _program, v2_manifest
-from verity_vllm.commit import binding as B
 from verity_vllm.program.instances_file import write_instances_file
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.manifest.format import (

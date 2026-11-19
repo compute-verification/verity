@@ -20,7 +20,7 @@ import pytest
 
 from tests.check.capture_map_check import check, check_target, report
 from tests.check.test_capture_map_versions import violations
-from verity_vllm.acquire.sources import moe_source, route_source
+from verity_vllm.acquire.sources import moe_source
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.commit import identity as ID
 from verity_vllm.commit.committer.native_host import ACQUIRE_CLASSES
@@ -461,20 +461,6 @@ def test_target_only_taps_are_named_on_the_target_only():
     assert {on[n][0]["id"] for n in set(on) - set(elsewhere)} == {"attn.out.decode", "attn.o_einsum"}
 
 
-def test_the_route_site_decides_three_routes_and_every_binder_is_built():
-    """`route_site` names the calls that decide a step's rows, mHC and indexer routes, each decision's routes are the map's, and
-    a source builds every binder, so `route_source.attach` uses the map rather than refusing the run
-    (`tests/acquire/test_dsv4_route_source.py`, `test_dsv4_mhc_source.py` and `test_dsv4_attention_source.py` run the sources)."""
-    sites = CM.route_sites(CMAP)
-    decided: dict[str, set[str]] = {}
-    for s in sites:
-        decided.setdefault(s["decision"], set()).update(s["true"], s.get("false", ()))
-    assert decided == {"rows": {"decode-tokens", "prefill-tokens"}, "hc": {"hc-fused", "hc-split"},
-                       "indexer": {"indexer-short", "indexer-scored"}}
-    undecided = set(CMAP["routes"]) - set().union(*decided.values())
-    assert undecided == {"fp8-swapab", "fp8-deepgemm"} and not undecided & {t["route"] for t in CMAP["taps"] if "route" in t}
-    assert route_source.unbuilt(CMAP) == set()
-    assert [c["item"] for c in CMAP["capture_work"] if "done" in c] == [1, 2, 3, 4, 5, 6]
 
 
 def test_the_tp_partials_are_the_four_collectives_the_pinned_vllm_issues_at_tp8():

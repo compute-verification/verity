@@ -4,8 +4,6 @@ alone) not counted; the honest synthetic Program passes; the hierarchical suppor
 from __future__ import annotations
 
 import copy
-import gzip
-import json
 
 import numpy as np
 import pytest

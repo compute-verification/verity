@@ -23,14 +23,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from tests.check.test_sampled_replay import _program as _wired_program
-from tests.check.test_sampled_replay import v2_manifest
 from tests.check.test_weights_of_record import (  # noqa: F401 (fixture)
     PREFIX,
     _program,
@@ -41,7 +38,6 @@ from tests.check.test_weights_of_record import (  # noqa: F401 (fixture)
     write_safetensors,
 )
 from verity_vllm.check import weights_of_record as WR
-from verity_vllm.commit import binding as B
 from verity_vllm.pipeline import cli
 
 pytestmark = pytest.mark.usefixtures("code_versions_stood_in")

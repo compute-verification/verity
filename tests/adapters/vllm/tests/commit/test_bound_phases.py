@@ -7,8 +7,6 @@ replay cache is what the next B8 run is admitted on.
 """
 from __future__ import annotations
 
-import gzip
-import json
 
 import pytest
 

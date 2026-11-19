@@ -5,13 +5,11 @@ Program its AllReduce's) was dropped as a "second producer", and the manifest wa
 rank-0 partial of the dropped all-reduce outputs was left without its peer's collective output."""
 from __future__ import annotations
 
-import json
 
 import pytest
 
 from tests.query.test_module_body import W, _call
 from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_vllm.pipeline import cli
 from verity_vllm.query.compose import merge_ranks
 from verity_vllm.query.program_view import InputView, Port, ProgramView
 from verity_vllm.query.required import QUERIES, request_manifest

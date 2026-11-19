@@ -16,11 +16,9 @@ from typing import Any
 import pytest
 import torch
 
-from tests.acquire.test_vocab_range_source import Recorder, exactness_in_tree
+from tests.acquire.recorder import Recorder, exactness_in_tree
 from verity_vllm.acquire.router_tap_src.build_ext import NAME as TAP_NS
 from verity_vllm.acquire.router_tap_src.build_ext import TAP_VERSION
-from verity_vllm.acquire.sources import call_boundary_plan as CBP
-from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import router_softmax_source as R
 from verity_vllm.acquire.sources import scale_products_source as S
 from verity_vllm.acquire.sources import vocab_range_source as V
@@ -311,23 +309,5 @@ def test_attach_gives_the_committer_the_router_softmax_source_and_its_required_c
 
 # --- the call boundaries: forward pre-hooks alone ------------------------------------------------------------------------------------------
 
-def _plan(module: str) -> CBP.Plan:
-    """A plan whose one body is `module`'s at engine step 0; the hooks' wiring reads no more of it."""
-    return CBP.Plan(bodies={(0, module): CBP.Body(module=module, engine_step=0, parts=())})
 
 
-def test_the_call_boundary_source_installed_hooks_its_bodies_modules_and_uninstalled_leaves_none():
-    com, model = Recorder(), _two_modules(lambda *a, **kw: None, "site")
-    src = CB.CallBoundarySource(com, model, _plan("site"))
-    src.install()
-    assert src.active and src.modules == ["site"] and len(model.site._forward_pre_hooks) == 1 and _hooked(model.other) == 0
-    model.site(torch.zeros(1), hidden=torch.zeros(1))           # no committed step: the hook, which takes keywords, leaves the call alone
-    assert com.acquired == [] and com.errors == []
-    src.uninstall()
-    assert not src.active and _hooked(model.site) == 0
-    gone = CB.CallBoundarySource(com, model, _plan("gone"))
-    with pytest.raises(RuntimeError, match=r"not modules of the model: \['gone'\]"):
-        gone.install()
-    assert not gone.active and _hooked(model.site) == 0
-    with pytest.raises(ValueError, match="no module body to evaluate"):
-        CB.CallBoundarySource(com, model, CBP.Plan())

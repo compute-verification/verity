@@ -18,6 +18,8 @@ from verity_vllm.correspondence.reader_for_acquire import (
     runtime_tree_from_paths,
 )
 from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.pipeline import manifest as M
+from verity_vllm.pipeline import manifest_verify as MV
 from verity_vllm.query import program_view as PV
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query.manifest import format as fmt
@@ -111,8 +113,26 @@ def test_manifest_layers_refuses_a_layer_under_two_geometries():
         RS.manifest_layers(man)
 
 
+def test_the_family_is_in_every_vocabulary():
+    from verity_vllm.check.replay import coverage
+
+    assert RS.FAMILY in fmt.FAMILIES and plan.ROUTE_OF_FAMILY[RS.FAMILY] == "router_tap" and RS.FAMILY in coverage.QUERY_FAMILY_MECHANISM
+    entry = {"identity": {"op_path": "moe/L1", "output_member": RS.MEMBER}, "name": f"moe/L1/{RS.MEMBER}"}
+    assert OC._family_of(entry) == "hidden_stream", "the Match record holds no value for the router's softmax: form (B) never compares it"
+    row = {"family": RS.FAMILY, "op_path": "moe/L1", "output_member": RS.MEMBER, "step": 0}
+    assert Binder([row]).bind(0, [f"moe/L1/{RS.MEMBER}"]) == [("moe/L1", RS.MEMBER, 0, "label")]
 
 
+def test_the_plan_anchors_the_tap_on_the_moe_module():
+    man = _manifest(program(), on=True)
+    mod = next(x["moe_module"] for x in man["identities"] if x["family"] == RS.FAMILY)
+    rt = runtime_tree_from_paths({"": ["M"], mod: ["FusedMoE"]}, buffers=[], runner={"sample": True}, source="synthetic")
+    (v,) = [v for v in PL.value_classes(man) if v.family == RS.FAMILY]
+    legal, refused = PL.sites_of(v, AcquireCorrespondence(rt, wrapper_prefix="", aliases={}))
+    assert [(s.kind, s.module, s.slot) for s in legal] == [("native_tap", "moe/L1", RS.MEMBER)] and not refused
+    gone = runtime_tree_from_paths({"": ["M"]}, buffers=[], runner={"sample": True}, source="synthetic")
+    legal, refused = PL.sites_of(v, AcquireCorrespondence(gone, wrapper_prefix="", aliases={}))
+    assert not legal and "is not a module of the runtime tree" in refused[0]["why"]
 
 
 def test_word_check_sees_the_tapped_softmax_as_committed():
@@ -124,6 +144,12 @@ def test_word_check_sees_the_tapped_softmax_as_committed():
         W_.check_calls(groups[:1], acquired={"MoeRouterTopKOrdered_v1": 129}, specialize=PV.specialization)
 
 
+def test_the_manifest_cli_and_verify_carry_the_policy(monkeypatch):
+    assert M.taps_of() == () and M.taps_of(router_softmax=True) == (RS.FAMILY,) and M.TAPS[RS.FAMILY] is RS.POLICY
+    seen: dict[str, dict] = {}
+    monkeypatch.setattr(M, "build", lambda program, **kw: seen.setdefault("kw", kw) and {})
+    MV.rebuild(program="p", taps=M.taps_of(router_softmax=True))
+    assert seen["kw"]["taps"] == (RS.FAMILY,)
 
 
 def test_the_source_attaches_only_with_a_build_and_a_manifest_that_names_the_family():

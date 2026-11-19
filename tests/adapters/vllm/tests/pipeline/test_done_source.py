@@ -5,16 +5,12 @@ database's index (``config.RECORDS``)."""
 from __future__ import annotations
 
 import json
-import os
-import sys
 from pathlib import Path
 
 import pytest
 
 from tests.pipeline.test_global_program_regress import _derived_dir, _manifest
-from tests.row_paths import row_paths
 from verity_vllm import config as C
-from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import global_program as gp
 from verity_vllm.pipeline import workload as W
 

@@ -4,7 +4,7 @@ the stage's outputs; the caller installs (`install_from_plan`) or adapts the com
     docs = plan_at_stage(model, runner, classes, out_dir, source="commit serve")
     docs.plan / docs.runtime / docs.paths
 
-Writes DIR/runtime_tree.json (always: the CPU gate's off-pod input), and with classes DIR/acquisition_plan.json.  Fails closed by name
+Writes DIR/runtime_tree.json (always), and with classes DIR/acquisition_plan.json.  Fails closed by name
 (`IncompletePlan`) when the plan has an UNSUPPORTED Value.
 """
 from __future__ import annotations
@@ -14,10 +14,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.acquire.gate import run_plan as gate_run_plan
 from verity_vllm.acquire.install import IncompletePlan
-from verity_vllm.acquire.plan import AcquisitionPlan
+from verity_vllm.acquire.plan import AcquisitionPlan, plan_of_capture
+from verity_vllm.correspondence.reader_for_acquire import AcquireCorrespondence
 from verity_vllm.records.runtime_tree import RuntimeTree, runtime_tree_of
+
+
+def run_plan(classes: Sequence[Mapping[str, Any]], rt: RuntimeTree) -> AcquisitionPlan:
+    """The acquisition plan of a capture plan's classes (`capture_plan.of_build`) off `rt`, its shared instances aliased by the tree."""
+    return plan_of_capture(classes, AcquireCorrespondence(rt, aliases=rt.aliases()))
 
 
 @dataclass
@@ -45,7 +50,7 @@ def plan_at_stage(model: Any, runner: Any, capture: Sequence[Mapping[str, Any]] 
     docs = StageDocs(runtime=rt, paths={"runtime_tree": str(out / "runtime_tree.json")})
     if capture is None:
         return docs
-    plan = gate_run_plan(capture, rt)
+    plan = run_plan(capture, rt)
     plan.save(out / "acquisition_plan.json")
     docs.plan = plan
     docs.paths["acquisition_plan"] = str(out / "acquisition_plan.json")
@@ -54,4 +59,4 @@ def plan_at_stage(model: Any, runner: Any, capture: Sequence[Mapping[str, Any]] 
     return docs
 
 
-__all__ = ["plan_at_stage"]
+__all__ = ["plan_at_stage", "run_plan"]

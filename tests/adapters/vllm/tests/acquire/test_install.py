@@ -1,7 +1,6 @@
 """install_from_plan on a TINY nn.Module tree installs exactly the plan's sites -- and nothing a class table would have added."""
 from __future__ import annotations
 
-import types
 from typing import TYPE_CHECKING
 
 import pytest
@@ -16,15 +15,9 @@ else:
 from verity_vllm import messages
 from verity_vllm.acquire import plan as P
 from verity_vllm.acquire.install import (
-    IncompletePlan,
     OccurrenceSink,
-    apply_plan_to_committer,
     install_from_plan,
-    plan_selection,
 )
-from verity_vllm.correspondence.reader_for_acquire import AcquireCorrespondence
-from verity_vllm.query.manifest import format as RM
-from verity_vllm.records.runtime_tree import runtime_tree_of
 
 PD = "0" * 64
 

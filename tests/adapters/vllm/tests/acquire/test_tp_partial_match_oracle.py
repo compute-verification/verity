@@ -367,22 +367,3 @@ def test_what_a_differing_witness_implies(members, implies):
     assert OW.implied(members) == implies
 
 
-def test_a_schedule_difference_alone_never_reads_as_routing():
-    """Two atomic orders of one routing, the kernel's own freedom (`moe_align_source.align_values` over the emulated kernel): whatever
-    members differ, `implied` says routing or schedule, never routing."""
-    from tests.acquire.test_dsv4_moe_align_source import kernel
-    from verity_vllm.acquire.sources import moe_align_source as MA
-
-    g, E, BM, seen = torch.Generator().manual_seed(5), 6, 4, set()
-    for P in range(2, 30):
-        ids = torch.randint(0, E, (P,), generator=g, dtype=torch.int32)
-        ws = []
-        for _ in range(2):
-            *vals, ok = MA.align_values(ids.reshape(-1, 1), *kernel(ids.tolist(), E, BM, torch.randperm(P, generator=g).tolist()), E, BM)
-            assert bool(ok)
-            ws.append([tps._bytes(v.view(torch.float32)) for v in vals])
-        differs = [m for m, a, b in zip(OW.MEMBERS, *ws) if a != b]
-        if differs:
-            assert OW.implied(differs) == OW.ROUTING_OR_SCHEDULE, (ids.tolist(), differs)
-            seen.add(tuple(differs))
-    assert seen

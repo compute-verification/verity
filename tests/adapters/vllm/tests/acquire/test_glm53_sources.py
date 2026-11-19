@@ -16,7 +16,7 @@ import pytest
 import torch
 
 from tests import fake_vllm as stand_in
-from tests.acquire.test_vocab_range_source import exactness_in_tree
+from tests.acquire.recorder import exactness_in_tree
 from verity_vllm.acquire.sources import moe_source as MS
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.records import property_record as PR

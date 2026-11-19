@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 import torch
 
-from tests.acquire.test_vocab_range_source import Recorder, exactness_in_tree
+from tests.acquire.recorder import Recorder, exactness_in_tree
 from verity_vllm.acquire.sources import hidden_source as H
 from verity_vllm.engine import hooks
 

@@ -33,16 +33,13 @@ untraced = [
     "lint/test_mypy.py",
     "lint/test_ruff.py",
     "lint/test_ruff_vllm.py",
-    "ops/test_epoch_row.py",
     "ops/test_pod_bootstrap.py",
     "ops/test_vllm_env.py",
-    "pipeline/test_boundary_plan.py",
     "pipeline/test_commit_tree_of_record.py",
     "pipeline/test_experiment_index.py",
     "pipeline/test_gpu_lease.py",
     "pipeline/test_interior_rows.py",
     "pipeline/test_research_tools.py",
-    "pipeline/test_row.py",
     "pipeline/test_row_tables_stream.py",
     "pipeline/test_serve_h1.py",
     "pipeline/test_source_identity.py",
@@ -150,11 +147,6 @@ parts = 3
 
 [[tool.verity.tests.reads]]
 tests = [
-    "acquire/test_attention_source.py",
-    "acquire/test_dsv4_attention_source.py",
-    "acquire/test_dsv4_mhc_source.py",
-    "acquire/test_dsv4_route_source.py",
-    "acquire/test_route_source.py",
 ]
 paths = ["adapters/vllm/verity_vllm/check"]
 
@@ -232,7 +224,6 @@ paths = ["tests/adapters/vllm/tests", "adapters/vllm/tools"]
 [[tool.verity.tests.reads]]
 tests = [
     "pipeline/test_advice_commit.py",
-    "pipeline/test_boundary_plan.py",
     "pipeline/test_commit_plan.py",
     "pipeline/test_commit_tree_of_record.py",
     "pipeline/test_serve_seal.py",
@@ -245,7 +236,6 @@ paths = ["tools/research/src/research"]
 
 [[tool.verity.tests.reads]]
 tests = [
-    "pipeline/test_config_run.py",
     "pipeline/test_tp_run_root.py",
     "pipeline/test_tp_world_n.py",
 ]

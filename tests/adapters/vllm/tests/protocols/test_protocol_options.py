@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from tests.row_paths import row_paths
 import types
 from collections.abc import Callable
 from types import SimpleNamespace
@@ -20,9 +19,7 @@ import pytest
 from verity_vllm import config, errors
 from verity_vllm import llm as L
 from verity_vllm import protocols as PO
-from verity_vllm.config import RowConfig, UsageError
 from verity_vllm.engine import hooks
-from verity_vllm.pipeline import cli
 from verity_vllm.program.frontend.artifact import (
     ApplicabilityError,
     ArtifactIdentity,

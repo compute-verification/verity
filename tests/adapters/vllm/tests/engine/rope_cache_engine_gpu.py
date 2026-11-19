@@ -17,18 +17,11 @@ One process writes `<out>/rope_cache_engine_gpu.json`:
 """
 from __future__ import annotations
 
-import argparse
 import hashlib
-import json
-import statistics
-import sys
-import tempfile
-from pathlib import Path
 from typing import Any
 
 import torch
 
-from tests.engine import int8_pin as X
 
 RECORD = "rope_cache_engine_gpu.json"
 
