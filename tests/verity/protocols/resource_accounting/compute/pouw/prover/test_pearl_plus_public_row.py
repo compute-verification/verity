@@ -1,7 +1,7 @@
-"""The vectors of the noise a credited unit derives inside from its public row (`PearlPlusTileNoise_v2`, the eb, fa, fb and
-g of `pearl_plus_credited.PearlPlusTileCoreWords_v3`): ``fixtures/pearl_plus_public_row.json``, regenerated here from the
-reference functions (`pearl_plus_credited.row_eb` …) and compared byte for byte, and the Definition, on its words and on
-bits, held to them.
+"""The vectors of the noise a credited unit derives inside from its public row (the eb, fa, fb and g of
+`pearl_plus_credited.PearlPlusTileCoreWords_v3`, its units `PearlPlusTileSeed_v1`, `PearlPlusTileLine_v2` and
+`PearlPlusGramRow_v2`): ``fixtures/pearl_plus_public_row.json``, regenerated here from the reference functions
+(`pearl_plus_credited.row_eb` …) and compared byte for byte, and the units, on their words and on bits, held to them.
 
 Each case gives its inputs (salt, root_B, k, col, tn, dev), seed_B, and each value's SHA-512 digest; at k ≤ 64 it also gives
 the value's full bytes. Its `--write` rewrites the file; `REWRITE` names the command that runs it."""
@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 from verity.circuits.defs import bind
-from verity.circuits.evaluation import evaluate
+from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.bits import evaluate_words
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
@@ -81,35 +81,45 @@ def test_the_vectors_cover_two_devices_two_columns_and_full_bytes():
         assert c["fa"]["nbytes"] == 32 * c["k"] and c["eb"]["nbytes"] == 32 * c["tn"] and c["gram"]["nbytes"] == 4096
 
 
-def _noise(out: list[int], k: int, tn: int) -> dict[str, bytes]:
-    """The Definition's outputs as the reference's bytes: eb's, fa's and fb's codes, then g's FP32 words little-endian."""
-    eb, fa, fb = (bytes(out[lo:hi]) for lo, hi in ((0, 32 * tn), (32 * tn, 32 * (tn + k)), (32 * (tn + k), 32 * (tn + 2 * k))))
-    return {"eb": eb, "fa": fa, "fb": fb, "gram": b"".join(w.to_bytes(4, "little") for w in out[32 * (tn + 2 * k):])}
+def noise_units(c: dict, *, bits: bool) -> dict[str, bytes]:
+    """The case's noise as the node's units derive it, wired as the node wires them: the seed (key and line indices),
+    one line per index, one Gram row per F_B column; on their word bodies, or on bits (their σ, by word view).  eb's, fa's
+    and fb's codes, then g's FP32 words little-endian, as the reference's bytes."""
+    k, tn, dev = c["k"], c["tn"], c["dev"]
+    if bits:
+        run, seed, line, row = evaluate_words, PT.seed(k, tn), PT.line, PT.gram_row(k, dev)
+    else:
+        run, seed, row = evaluate_batch, bind(PT._SEED, K=k, TN=tn), bind(PT._GRAM_ROW, K=k, DEV=dev)
+        line = lambda kind: bind(PT._LINE, **dict(zip(("SIDE", "FACTOR"), PT.LINES[kind])))  # noqa: E731
+
+    def go(fn, *xs):
+        return run(fn, *(np.asarray(x, dtype=np.uint64 if bits else np.int64) for x in xs)).reshape(len(xs[0]), -1)
+
+    s = go(seed, [list(bytes.fromhex(c["salt"]))], [list(bytes.fromhex(c["root_b"]))], [[c["col"]]])[0].tolist()
+    key, ebi, fi = s[:32], s[32:32 + tn], s[32 + tn:]
+    eb = go(line("eb"), [key] * tn, [[i] for i in ebi])
+    fa, fb = (go(line(kind), [key] * k, [[i] for i in fi]) for kind in ("fa", "fb"))
+    g = go(row, [fb[:, p] for p in range(32)], [fa.reshape(-1)] * 32)
+    return {"eb": bytes(eb.reshape(-1).tolist()), "fa": bytes(fa.reshape(-1).tolist()), "fb": bytes(fb.reshape(-1).tolist()),
+            "gram": b"".join(int(w).to_bytes(4, "little") for w in g.reshape(-1))}
 
 
 def _agrees(c: dict, got: dict[str, bytes]) -> bool:
     return all(hashlib.sha512(got[n]).hexdigest() == c[n]["sha512"] for n in ("eb", "fa", "fb", "gram"))
 
 
-def _args(c: dict) -> list[list[int]]:
-    return [list(bytes.fromhex(c["salt"])), list(bytes.fromhex(c["root_b"])), [c["col"]]]
-
-
 def test_the_units_noise_on_words_is_the_vectors():
-    """`PearlPlusTileNoise_v2`'s word body at every case: col · TN + j from the column word, both chains and every device."""
+    """The noise units' word bodies at every case: col · TN + j from the column word, both chains and every device."""
     for c in json.loads(PATH.read_text())["cases"]:
-        word = bind(PT.PearlPlusTileNoiseV2.sigma_of, K=c["k"], TN=c["tn"], DEV=c["dev"])
-        assert _agrees(c, _noise(list(evaluate(word, *_args(c))), c["k"], c["tn"])), c
+        assert _agrees(c, noise_units(c, bits=False)), c
 
 
 @pytest.mark.slow
 def test_the_units_noise_on_bits_is_the_vectors():
-    """Slow: `PearlPlusTileNoise_v2` on bits (2K + TN noise lines and the Gram, lowered) at every case, by its word view:
-    the only check that the σ of the noise, the Definition the unit Calls, derives the vectors' bytes bit for bit."""
+    """Slow: the noise units on bits (the seed, 2K + TN lines and 32 Gram rows, lowered) at every case, by their word view:
+    the only check that the σ the node Calls and maps derive the vectors' bytes bit for bit."""
     for c in json.loads(PATH.read_text())["cases"]:
-        fn = bind(PT.PearlPlusTileNoiseV2, K=c["k"], TN=c["tn"], DEV=c["dev"])
-        out = evaluate_words(fn, *(np.asarray([x], dtype=np.uint64) for x in _args(c))).reshape(-1).tolist()
-        assert _agrees(c, _noise(out, c["k"], c["tn"])), c
+        assert _agrees(c, noise_units(c, bits=True)), c
 
 
 if __name__ == "__main__" and "--write" in sys.argv:
