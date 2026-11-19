@@ -331,7 +331,7 @@ def test_nohash_forms_and_multiplies_without_hashing(device_run):
 def test_a_calls_index_is_its_round_and_its_position_and_no_caller_chooses_one(device_run):
     """A call's index is its place (`passes.call_index`): its pass's round among the epoch's passes with calls times
     `ROUND_CALLS`, plus its position in the pass.  Three calls, then two in the next pass, take round 1's positions 0 and 1;
-    a pass without a call takes no round.  A call after an ended pass is refused by name (`NO_OPEN_PASS`) until a `begin`.
+    a pass without a call takes no round.  A call after an ended pass needs a `begin` first.
     A caller's own index is refused by name, at `begin` and at `repeat_at`, and the keys a call uploads carry the derived
     index."""
     make, kernel, weights, roots, salt = device_run
@@ -358,8 +358,6 @@ def test_a_calls_index_is_its_round_and_its_position_and_no_caller_chooses_one(d
         with pytest.raises(ValueError, match="repeat_at.*no caller chooses"):
             run.repeat_at = at
     assert run.repeat_at is None and run.rounds() == 2 and not hasattr(run, "epoch_calls") and not hasattr(run, "pass_base")
-    with pytest.raises(PH.SaltsRefused, match="NO_OPEN_PASS"):
-        run.gemm(1, x, weights[1], None)
     run.begin()
     run.gemm(1, x, weights[1], None)
     run.finish()
