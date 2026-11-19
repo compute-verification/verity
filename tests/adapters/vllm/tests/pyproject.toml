@@ -151,9 +151,6 @@ parts = 3
 [[tool.verity.tests.reads]]
 tests = [
     "acquire/test_attention_source.py",
-    "acquire/test_dsv4_attention_source.py",
-    "acquire/test_dsv4_mhc_source.py",
-    "acquire/test_dsv4_route_source.py",
     "acquire/test_route_source.py",
 ]
 paths = ["adapters/vllm/verity_vllm/check"]

@@ -79,7 +79,6 @@ SECONDS: dict[str, float] = {
     "program/test_boolean_tanh.py": 72,
     "program/test_tp_allreduce.py": 72,
     "program/test_kernel_self_check.py": 71,
-    "program/test_dsv4_derive.py": 68,
     "check/test_sampled_replay.py": 68,
     "program/test_sparse_mla.py": 67,
     "program/test_derive_stochastic.py": 65,
@@ -133,7 +132,6 @@ SECONDS: dict[str, float] = {
     "pipeline/test_admit_r19_host_working_set.py": 22,
     "regression/test_attempt_resolution.py": 21,
     "program/test_fp8_block_dot.py": 21,
-    "check/test_capture_map_dsv4.py": 20,
 }
 #: what each part's job runs, from the repository's root; {k}/{n} names the part and {opts} the suites.py options. A part that
 #: lists nothing stops the job: suites.py with no modules would run the whole suite

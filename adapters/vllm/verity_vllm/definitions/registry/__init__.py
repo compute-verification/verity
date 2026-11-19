@@ -71,19 +71,12 @@ def _register_lazy_families() -> None:
         from verity_vllm.definitions.registry import dsa_topk_mask
         return dsa_topk_mask
 
-    def _marlin_moe():
-        from verity_vllm.definitions.registry import marlin_moe
-        return marlin_moe
-
     register_lazy_family(r"^Const([1-9][0-9]*)\[0x([0-9a-f]+)\]_v1$", lambda m: _b1().const(int(m[1]), int(m[2], 16)))  # prims.CONST_ID
     register_lazy_family(r"^GatherBf16x(\d+)_v1$", lambda m: _prims().gather_bf16(int(m[1])))
     # [GLM-5.3] the FP8 MoE expert-row gathers are built per vocabulary while deriving (`fp8_moe_experts._gather`), so a cold decode
     # of such a descriptor (the Match of record, replay) must resolve them by id like GatherBf16
     register_lazy_family(r"^GatherE4m3x(\d+)_v1$", lambda m: _fp8_moe().gather_e4m3(int(m[1])))
     register_lazy_family(r"^GatherF32x(\d+)_v1$", lambda m: _fp8_moe().gather_f32(int(m[1])))
-    # [DeepSeek-V4] the Marlin W4A16 expert-row gathers, likewise built per expert count while deriving (`marlin_moe`)
-    register_lazy_family(r"^GatherE2m1Pairx(\d+)_v1$", lambda m: _marlin_moe().gather_e2m1_pair(int(m[1])))
-    register_lazy_family(r"^GatherE8m0x(\d+)_v1$", lambda m: _marlin_moe().gather_e8m0(int(m[1])))
     # [GLM-5.3] the canonical top-k row's accelerator, one per (row length, TOPK), built while deriving a row past TOPK
     register_lazy_family(r"^DsaTopKLongRowCheck(\d+)x(\d+)_v1$", lambda m: _dsa_topk().long_row_check(int(m[1]), int(m[2])))
     # the mask form's accelerators, one per (row length, TOPK): the threshold `DsaTopKMask` compares each key with (its key and its
