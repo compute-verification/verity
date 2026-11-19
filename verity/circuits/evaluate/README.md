@@ -33,7 +33,7 @@ this package adds the primitives. It is code, so it requires nothing of `securit
   `security/Definitions/Pouw/PearlC/RowPrims.lean`, the rest transcribed). `Evaluate/Libdevice.lean`: the sampler's
   `NvLogf`, Gumbel and `TopPNumkeep`, libdevice's FTZ steps as the host's doubles compute them, and Philox.
   `Evaluate/Mufu.lean` (with `MufuFits.lean`): the eight MUFU primitives, each a bit rule around its table held as the
-  unit's interpolant. `Evaluate/Decimal.lean`: `F32ExpRn`, `F32LogRn`, `F32ErfRn` and `F32TanhRn`, decimal arithmetic at
+  unit's interpolant. `Evaluate/Decimal.lean`: `F32ExpRn`, `F32LogRn` and `F32TanhRn`, decimal arithmetic at
   100 digits half to even. `Evaluate/Act.lean` (with `GeluErfTable.lean`,
   `adapters/vllm/verity_vllm/definitions/registry/act.py`'s stored `GeluErfBf16` region): SiLU, RoPE's outputs, tanh,
   the GELUs, the registered tables `gelu_tanh_bf16` and `tanh_rn`, and the lazy families. SiLU and tanh call the host C

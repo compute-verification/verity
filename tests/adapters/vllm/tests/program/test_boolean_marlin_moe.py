@@ -72,6 +72,33 @@ def test_divider_is_c_int_on_edge_and_random_words() -> None:
     assert [tuple(int(v) for v in r) for r in got] == [MM.i32_divrem(x, y) for x, y in pairs]
 
 
+@pytest.mark.parametrize("word,bits,n", [(MM.E2m1ToBf16, BM.E2m1ToBf16, 16), (MM.E8m0DequantBf16, BM.E8m0DequantBf16, 256),
+                                         (MM.E2m1x2Lo, BM.E2m1x2Lo, 256), (MM.E2m1x2Hi, BM.E2m1x2Hi, 256)])
+def test_the_code_and_byte_words_on_bits_are_their_words_on_every_input(word, bits, n: int) -> None:
+    assert SW.boolean_version(word).defn is bits
+    got = np.asarray(BS.evaluate_words(bind(bits), np.arange(n, dtype=np.uint64).reshape(-1, 1))).reshape(-1)
+    assert got.tolist() == [word.evaluate(u) for u in range(n)]
+
+
+def test_the_multiplier_is_mul_lo_on_edge_and_random_words() -> None:
+    assert SW.boolean_version(MM.I32Mul).defn is BM.I32Mul
+    rng = np.random.default_rng(11)
+    pairs = list(itertools.product(I32_EDGES, I32_EDGES))
+    pairs += [(int(a), int(b)) for a, b in zip(rng.integers(0, 1 << 32, 500, dtype=np.uint64), rng.integers(0, 1 << 32, 500, dtype=np.uint64))]
+    a, b = (np.array(c, dtype=np.uint64).reshape(-1, 1) for c in zip(*pairs))
+    got = np.asarray(BS.evaluate_words(bind(BM.I32Mul), a, b)).reshape(-1)
+    assert got.tolist() == [MM.I32Mul.evaluate(x, y) for x, y in pairs]
+
+
+@pytest.mark.parametrize("kind,vocab", [("E2m1Pair", 300), ("E8m0", 300)])
+def test_the_expert_gathers_are_made_on_demand(kind: str, vocab: int) -> None:
+    from verity.circuits.codec import lookup_primitive
+    from verity.circuits.defs import REGISTRY
+
+    word = lookup_primitive(REGISTRY, f"Gather{kind}x{vocab}_v1")
+    assert SW.boolean_version(word).id == f"Gather{kind}x{vocab}_v2"
+
+
 @pytest.mark.parametrize("KT,NT,GRID", [(4, 3, 7), (5, 2, 132)])
 def test_schedule_is_the_twin_and_the_word_schedule(KT: int, NT: int, GRID: int) -> None:
     rng = np.random.default_rng(KT)
