@@ -682,6 +682,39 @@ theorem samples_iff_length_of_opens_nothing {L : CompiledLev Coin A} {x : Msg} {
   refine ⟨hiff, fun h => hlen (hiff.1 h), fun r X => ?_⟩
   rw [Claims.Pr_congr (q := fun _ => True) fun e => iff_true_intro (by rw [hc]; simp), Claims.Sampling.Pr_true]
 
+/-- **`Samples` ties each middle entry of `upper` to its level's design**: by its third clause at `e ≡ 0`, below an
+entry `U_j` whose blocks the next level's design never leaves unsampled, every fork of level `j + 1`'s rounds names a
+nonempty entry `U_{j+1}`, so `[U₀, ∅, …]` meets no `Samples` at three levels or more. -/
+theorem samples_middle_nonempty {L : CompiledLev Coin A} {x : Msg} {Pt : Partition}
+    {Lv : Verity.Levels (Fin Pt.blocks.length)} (h : L.Samples x Pt Lv) {j : ℕ}
+    {l' : Verity.Level (Fin Pt.blocks.length)} (hl : Lv.levels[j + 1]? = some l') (hj : j + 2 < Lv.levels.length)
+    (r : Fin (L.V.k x) → Coin) (hU : ((L.upper x Pt r).getD j ∅).Nonempty)
+    (hdraw : ∀ X ∈ (L.upper x Pt r).getD j ∅, ∀ ω, ((l'.design X).draw ω).Nonempty) (d : Fin (L.V.k x) → Coin) :
+    ((L.upper x Pt (forkOn (L.stages x j) r d)).getD (j + 1) ∅).Nonempty := by
+  have h3 := (h.2.2.1 j l' hl hj r (fun _ => 0) (fun _ => zero_le_one)).1
+  have hR : (∏ X ∈ (L.upper x Pt r).getD j ∅,
+      Verity.Game.avg fun ω => ∏ Y ∈ (l'.design X).draw ω, (fun _ => (0 : ℝ≥0∞)) Y) = 0 := by
+    obtain ⟨X₀, hX₀⟩ := hU
+    refine Finset.prod_eq_zero hX₀ ?_
+    have h0 : (fun ω => ∏ Y ∈ (l'.design X₀).draw ω, (fun _ => (0 : ℝ≥0∞)) Y) = fun _ => 0 :=
+      funext fun ω => Finset.prod_eq_zero (hdraw X₀ hX₀ ω).choose_spec rfl
+    rw [h0]
+    unfold Verity.Game.avg
+    simp
+  rw [hR, ENNReal.toReal_zero] at h3
+  by_contra hne
+  rw [Finset.not_nonempty_iff_eq_empty] at hne
+  set f : (Fin (L.V.k x) → Coin) → ℝ := fun d =>
+    (∏ Y ∈ (L.upper x Pt (forkOn (L.stages x j) r d)).getD (j + 1) ∅, (fun _ => (0 : ℝ≥0∞)) Y).toReal with hf
+  have hf0 : ∀ d, 0 ≤ f d := fun _ => ENNReal.toReal_nonneg
+  have hfd : f d = 1 := by
+    rw [hf]
+    dsimp only
+    rw [hne, Finset.prod_empty, ENNReal.toReal_one]
+  have hsum : (1 : ℝ) ≤ ∑ a, f a := hfd.symm.le.trans (Finset.single_le_sum (fun a _ => hf0 a) (Finset.mem_univ d))
+  have hpos : 0 < Ex f := div_pos (lt_of_lt_of_le one_pos hsum) (by exact_mod_cast Fintype.card_pos)
+  exact absurd h3 (not_le.2 hpos)
+
 end CompiledLev
 
 end Claims.SamplingGeneric
