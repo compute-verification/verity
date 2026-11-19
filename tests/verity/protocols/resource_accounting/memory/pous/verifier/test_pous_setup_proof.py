@@ -1,5 +1,5 @@
-"""PoUS's setup as one circuit (`window.Setup`, `setup_proof` on both sides): the sampling design, the claim, a block's
-place and inputs, the setup's C over every store block through the door, the prover's commitments, the two places the
+"""PoUS's setup as one circuit (`window.Setup`, `setup_proof` on both sides): the claim and the proof layer's draw, a
+block's place and inputs, the setup's C over every store block through the door, the prover's commitments, the two places the
 verifier stops: C's supplied salt (`setup_proof.bound`) and the door's statement (`one_circuit.lower`), and the order of
 the weights' commitment before the salt, which nothing holds yet."""
 
@@ -17,6 +17,7 @@ from verity.circuits.codec import descriptor_chunks, program_digest
 from verity.commitments import rowleaf as RL
 from verity.commitments.crypto import lms as R
 from verity.commitments.periods import interface as I
+from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.resource_accounting.memory.pous.prover import setup_circuit as SC
@@ -26,21 +27,42 @@ from verity.protocols.resource_accounting.memory.pous.verifier import setup_proo
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
 
 RUN = "ab" * 64
-#: the proof system's sample of the twelve blocks (each costs the door a parse of C)
-SAMPLE = [0, 11]
 
 
-def test_sampling_design_samples_8828_at_any_size():
-    assert V.sampling_design(1) is None and V.sampling_design(V.SAMPLE) is None
-    assert V.sampling_design(V.SAMPLE + 1) == f"rate:8828/{V.SAMPLE + 1}"
-    assert V.sampling_design(1 << 19) == "rate:8828/524288"
-    with pytest.raises(ValueError):
-        V.sampling_design(0)
+def draw(units):
+    """The proof layer's draw of `units` among the setup's twelve blocks (each costs the door a parse of C)."""
+    law = {"law": "subset", "k": len(units)}
+    return S.Draw(S.WindowCommitmentRecord({}, {}, "", 0), law, {**law, "population": 12, "units": list(units)})
 
 
-def test_claim_round_trips():
-    c = V.Claim({"w": 64}, bytes(88), bytes(range(64)), V.sampling_design(1 << 19), b"\x01\x02")
+#: the proof layer's draw of two of the twelve blocks
+DRAW = draw([0, 11])
+
+
+def test_the_claim_is_the_draws_and_the_stores():
+    """The claim's law is the proof layer's draw's and its store the registered store's root; it round-trips."""
+    store = {"value": "store", "root": bytes(range(64)).hex(), "leaves": 12}
+    c = V.Claim.of({"w": 64}, bytes(88), store, DRAW, b"\x01\x02")
+    assert c.law == DRAW.law and c.store == bytes(range(64))
     assert V.Claim.from_json(c.to_json()) == c
+
+
+def test_proofs_of_other_blocks_than_the_draws_are_refused():
+    """The setup's check takes no sample of its own: proofs of a block the proof layer did not draw, or missing a drawn
+    block, are refused by name before the door reads anything; and a finding naming another block than the drawn one it
+    was offered for is refused too."""
+    params, salt, _ = setup_case()
+    for proofs in ({0: None, 5: None}, {0: None}, {0: None, 11: None, 5: None}):
+        with pytest.raises(V.Undrawn, match=r"^the proofs are of blocks .*, the proof layer drew \[0, 11\]$"):
+            V.check(None, None, proofs, b"", {}, {}, DRAW, params, salt, 16)
+    finding = type("F", (), {"block": 11, "session": "s0", "accepted": True, "why": ""})()
+    seen = []
+    verify = lambda proof, **kw: (seen.append(kw["draw"]) or ([finding], None))  # noqa: E731
+    with pytest.raises(V.Undrawn, match=r"^setup block 0: session s0 is of block 11$"):
+        with pytest.MonkeyPatch.context() as m:
+            m.setattr(V, "bound", lambda *a: None)
+            V.check(lambda *a: None, verify, {0: None, 11: None}, b"", {}, {}, DRAW, params, salt, 16)
+    assert seen == [DRAW.draw]
 
 
 def test_padded_is_each_blocks_slot_payload():
@@ -145,7 +167,7 @@ def test_the_prover_commits_the_store_then_the_setups_values():
 
 @pytest.mark.slow
 def test_the_verifier_refuses_at_cs_supplied_salt():
-    """The verifier reads the partition's blocks for the sample, then stops where C's one supplied value, the salt, needs
+    """The verifier reads the partition's blocks for the proof layer's draw, then stops where C's one supplied value, the salt, needs
     the supplied input, with each unit's place and slot constants of C and its ok held to 1 (circuits' and proofs' pair):
     `NotBound`, by name. A partition that leaves a block out is refused before, by the door (E_BLOCKS)."""
     params, salt, _ = setup_case()
@@ -153,14 +175,15 @@ def test_the_verifier_refuses_at_cs_supplied_salt():
     with pytest.raises(V.NotBound, match=r"^pous setup: no supplied input yet: salt = pous\.setup\.salt/v1, .* the one "
                                          r"value the verifier supplies; .*; its block's .* and its slot u mod n constants "
                                          r"of the unit in C, and its ok a public output held to 1$"):
-        V.check(OC.block, PF.verify, {}, c, part, reg, SAMPLE, params, salt, 16)
+        V.check(OC.block, PF.verify, dict.fromkeys(DRAW.units), c, part, reg, DRAW, params, salt, 16)
     with pytest.raises(OC.Refused, match="E_BLOCKS"):
-        V.check(OC.block, PF.verify, {}, c, {**part, "blocks": part["blocks"][:-1]}, reg, SAMPLE, params, salt, 16)
+        V.check(OC.block, PF.verify, dict.fromkeys(DRAW.units), c, {**part, "blocks": part["blocks"][:-1]}, reg, DRAW,
+                params, salt, 16)
 
 
 @pytest.mark.slow
 def test_the_door_stops_at_lower_on_a_setup_block(monkeypatch):
-    """Past the binding, the door's verdict on a sampled block: it restricts C to the block itself (C_S, never the
+    """Past the binding, the door's verdict on a drawn block: it restricts C to the block itself (C_S, never the
     prover's circuit file) and stops at its statement, `one_circuit.lower` (proofs'). Slow: restricting the setup's C
     takes over a minute, and no smaller circuit is the setup's."""
     params, salt, _ = setup_case()
@@ -169,11 +192,11 @@ def test_the_door_stops_at_lower_on_a_setup_block(monkeypatch):
     with tempfile.TemporaryDirectory() as d:
         cf, pub, s = Path(d, "circuit.txt"), Path(d, "pub.bin"), Path(d, "s0")
         cf.write_bytes(b"")
-        pub.write_bytes(b"")
+        pub.write_text('{"units": {"indices": [5]}}\n')
         s.mkdir()
         (s / "session.json").write_text("{}")
         with pytest.raises(ValueError, match=r"^setup block 5: the door refused \(circuit\): .*" + OC.PREFIX + "lower"):
-            V.check(OC.block, PF.verify, {5: PF.Proof(cf, pub, (s,))}, c, part, reg, [5], params, salt, 16)
+            V.check(OC.block, PF.verify, {5: PF.Proof(cf, pub, (s,))}, c, part, reg, draw([5]), params, salt, 16)
 
 
 @pytest.mark.xfail(strict=True, raises=ImportError, reason="nothing holds the order yet: the supplied input's order check "

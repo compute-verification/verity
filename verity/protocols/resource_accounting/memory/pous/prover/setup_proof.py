@@ -5,8 +5,8 @@ n = ⌈N/P⌉ slots a row of N bytes.  The setup's C (`window.Setup`) is one ins
 block of C*, over its block, the setup's salt, its place `u64be(s) ‖ u64be(v)`, the row of W that holds its payload and
 its slot, one proof block each: the salt the one value the verifier supplies, the place and the slot constants of the
 unit in C; the proof
-system samples `SAMPLE` of the B blocks after the store's commitment is registered (the verifier's
-`setup_proof.sampling_design`), and the auditor's check reads the door's verdict on them in place of the store.
+layer draws blocks after the store's commitment is registered (its `Draw`), and the auditor's check reads the door's
+verdict on the drawn ones in place of the store (the verifier's `setup_proof.check`).
 
 `SetupGives` (`security/Proofs/Properties/Pous/SetupInProofs.lean`) is the lemma over this: its `W` is `padded`'s, so its
 `slice q W u` is `slot_payload(row, slot)` at `place(u)`, and its `BlockOk` is what the unit computes.
