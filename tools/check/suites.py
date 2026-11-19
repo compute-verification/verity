@@ -324,6 +324,10 @@ STRIPPED: dict[str, tuple[str, dict[str, int | tuple[int, int]]]] = {
         "tests/tools/verity/circuit_check/test_catalog_fixture.py": 1,
         "tools/verity/circuit_check/src/circuit_check/ambient.py": 1,
     }),
+    "verity-vllm": ("vllm", {
+        "tests/adapters/vllm/tests/ops/test_pod_bootstrap.py": 3,
+        "tests/adapters/vllm/tests/pipeline/test_source_identity.py": 9,
+    }),
     "verity-ops": ("infra", {"infra/control/nightly_check.py": 1, "tests/infra/ops/test_deploy.py": 1}),
 }
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-verifier", "core-identity", "verity-core-composition",
