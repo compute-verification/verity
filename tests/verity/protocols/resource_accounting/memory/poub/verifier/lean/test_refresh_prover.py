@@ -230,13 +230,13 @@ def test_with_refresh_off_the_reference_prover_s_session_is_accepted_and_names_n
 def test_a_step_that_reads_a_coin_the_session_holds_empty_is_refused_by_name(exe):
     """A coin the session holds empty is one no step reads: the honest session is accepted, and the same session with
     window 0's boundary sent without the challenger's coin is refused there by name (`Verifier.unset`); its close sent
-    without its sample's coins is refused by the draw, which reads them and runs out, and with them a byte short by
-    `unset`. So a replay padded with empty coins and the live run can't differ."""
+    without its sample's coins is refused by the draw, which reads them and runs out, and with them a byte short as it
+    arrives (`withCoin`). So a replay padded with empty coins and the live run can't differ."""
     _, outcome, *_ = session(exe, refresh=False)
     assert outcome["outcome"] == "accepted", outcome
     with pytest.raises(lv.LeanError, match="window 1's challenge left without the challenger's coin"):
         session(exe, refresh=False, withhold="challenge")
     with pytest.raises(lv.LeanError, match="the randomness source ran out"):
         session(exe, refresh=False, withhold="sample")
-    with pytest.raises(lv.LeanError, match="window 0's openings were drawn without the challenger's coins"):
+    with pytest.raises(lv.LeanError, match=r"the coin is \d+ bytes"):
         session(exe, refresh=False, withhold="short")
