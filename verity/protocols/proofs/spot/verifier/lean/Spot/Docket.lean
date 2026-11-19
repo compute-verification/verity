@@ -60,10 +60,12 @@ day's.
 
 A value that is an output of an earlier run (`outputs`; never the inference-only policy's baseline θ, which holds registered public data only)
 reuses that run's commitment: its entry has the domain and root of the port in the `roots` of the log's record with that
-digest, whose leaf count must be the value's rows (`R7-output` otherwise). One may instead reuse an earlier record's
+digest, whose leaf count must be the value's rows (`R7-output` otherwise). One may instead reuse the previous record's
 registered value (`Earlier.value`): its entry has the domain and root of that value's entry in the `registered` of the
-log's record with that digest, whose leaves, words and word bits must be the value's own (`R7-output` otherwise), so
-nothing is registered afresh.
+log's record with that digest, which must be the log's last (`lastDigest`, the record R6 holds `previous` to), and whose
+leaves, words and word bits must be the value's own (`R7-output` otherwise), so nothing is registered afresh, and the
+record whose own check held the value's domain is the one the caller ties this record to (Pearl+'s window record W,
+`Core.Remote.V1.executionPhase`).
 
 An output value the parameters give only a port (`{"port"}`, a window's history) is that port of the previous record, the
 log's last, which R6 holds `previous` to (`lastDigest`): the verifier names the record itself, so the value is held to the
@@ -383,10 +385,11 @@ def valueRoot (log : Array Json) (leaves words bits : Nat) (record value : Strin
     | _, _, _ => none
 
 /-- The domain and root an output value with entry `want` takes from the log's record with digest `record`: its port's
-(`outputRoot`, at `want`'s leaf count) or its registered value's (`valueRoot`, at `want`'s leaves, words and bits). -/
+(`outputRoot`, at `want`'s leaf count) or its registered value's (`valueRoot`, at `want`'s leaves, words and bits), the
+latter of the log's last record alone (`lastDigest`). -/
 def earlierRoot (log : Array Json) (want : Registered.Entry) (record : String) : Earlier → Option (String × String)
   | .port p => outputRoot log want.leaves record p
-  | .value u => valueRoot log want.leaves want.words want.wordBits record u
+  | .value u => if record == lastDigest log then valueRoot log want.leaves want.words want.wordBits record u else none
 
 /-- One output value `(v, record, earlier)` with an entry in `mine` takes its earlier record's port or registered value
 (`earlierRoot`): its domain in `mine` and its root ahead of what `held` holds, or `R7-output` in `c`. -/
