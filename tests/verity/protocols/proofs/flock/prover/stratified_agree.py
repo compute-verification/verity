@@ -115,6 +115,9 @@ def _mutations(good: dict, rng: random.Random) -> list[tuple[str, dict]]:
             ("a unit past the population", m(lambda d: d["units"].append(d["population"])))]
     for i, s in enumerate(S):
         out += [(f"stratum {i} k + 1", m(lambda d, i=i: d["strata"][i].update(k=d["strata"][i]["k"] + 1))),
+                (f"stratum {i} k 0", m(lambda d, i=i: d["strata"][i].update(k=0))),
+                (f"stratum {i} k past its size", m(lambda d, i=i: d["strata"][i].update(
+                    k=sum(b - a for a, b in d["strata"][i]["units"]) + 1))),
                 (f"stratum {i} renamed", m(lambda d, i=i: d["strata"][i].update(template=d["strata"][i]["template"] + "x"))),
                 (f"stratum {i} extra key", m(lambda d, i=i: d["strata"][i].update(n=1))),
                 (f"stratum {i} without k", m(lambda d, i=i: d["strata"][i].pop("k"))),
