@@ -113,10 +113,10 @@ if [ -z "$GPU_UUID" ] && [ "$IMPL" != reference ] && [ "$(nvidia-smi -L 2>/dev/n
 fi
 GPU=$(smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
 case "$GPU" in                                            # the census id is the device's, never a default another GPU inherits
-  *"H100 80GB HBM3"*) HW=${HW:-h100-sxm5-80gb/bf16} ;;
+  *"H100 80GB HBM3"*) HW=${HW:-h100-sxm-80gb-tensor/bf16} ;;
   *L40S*) HW=${HW:-l40s-48gb/bf16} ;;
   *"RTX 4090"*) HW=${HW:-rtx-4090/e4m3} ;;                 # the census's RTX 4090 row (it has no bf16 row yet)
-  *"RTX PRO 6000 Blackwell Server Edition"*) HW=${HW:-rtx-pro-6000-server/bf16} ;;  # sm_120; other RTX PRO 6000s need HW=
+  *"RTX PRO 6000 Blackwell Server Edition"*) HW=${HW:-rtx-pro-6000-server-tensor/bf16} ;;  # sm_120; other RTX PRO 6000s need HW=
   *) [ -n "${HW:-}" ] || { echo "no census id for GPU '$GPU': pass HW=<calibration/census/hardware.json id>"; exit 2; } ;;
 esac
 SCHEME=${SCHEME:-band-chain/d12/v1}
