@@ -112,8 +112,10 @@ def test_levels_refine_coarsest_first_and_may_repeat():
     for levels in ([[[0, 8]], [[0, 4], [4, 8]], [[0, 2], [2, 4], [4, 6], [6, 8]]], [[[0, 4], [4, 8]]] * 2):
         o = obj(levels)
         assert PO.verify(o, built()[0]).ok and PO.levels(o) == [[tuple(p) for p in lv] for lv in levels]
-        with pytest.raises(ValueError, match="blocks-levels"):
+        with pytest.raises(ValueError) as e:
             PO.blocks(o)
+        assert str(e.value) == (f"partition: blocks-levels: the object has {len(levels)} levels of blocks; this reader "
+                                "takes one")
 
 
 def test_blocks_on_a_query_other_than_a_template_query_are_refused():
