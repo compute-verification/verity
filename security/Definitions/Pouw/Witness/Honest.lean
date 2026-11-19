@@ -15,7 +15,10 @@ What the witnesses of PoUW's guarantees, and of the compute guarantees PoUW give
   adversary of the output-priced model (`pricedHonest`);
 * the deadline's instances (`Witness.Deadline`): the run that delivers the honest reference at the deadline, and a
   protocol that compares nothing, on one unit of shape `0×0×0`, with an adversary that commits it at no cost on a run
-  that spends nothing.
+  that spends nothing;
+* the clock's instances (`Witness.Clock`): a Site with one auditor's device on a host that registers drift `0`, the
+  device's entries at given readings, real time equal to the reading, and a docket encoding whose digests are all the
+  empty message.
 -/
 
 @[expose] public section
@@ -90,3 +93,31 @@ instance instNonemptyDotTicket : Nonempty (Ticket (acceptAll.Wref dot.layout) do
   ⟨⟨⟨0, by decide⟩, ⟨0, by decide⟩⟩⟩
 
 end Pouw.Witness.Deadline
+
+namespace Pouw.Witness.Clock
+
+/-- The device's key in the witnesses. -/
+def key : String := "clock"
+
+/-- A Site with one auditor's host, which registers the drift `0`, and in it one memory challenger registered under
+`key`. -/
+def site : Verity.Site :=
+  ⟨[], [{ id := "host", kind := .auditorHost, drift := some 0 },
+    { id := "dev", kind := .challenger, parent := some "host", key := key }], []⟩
+
+/-- The device's entry at reading `n`, signing the empty message. -/
+def stamp (n : ℕ) : Verity.Challenger.Attested key := ⟨[[]], [], some ⟨n⟩⟩
+
+/-- An entry's real time: its reading, as on a clock with no drift; `0` for an entry without one. -/
+noncomputable def real {k : String} (a : Verity.Challenger.Attested k) : ℝ :=
+  match a.reading with
+  | some r => (r.ns : ℝ)
+  | none => 0
+
+/-- The salt's entry at reading `a` and the docket's at reading `b`, on every salt and oracle. -/
+noncomputable def stamps (Q R S : Type) (a b : ℕ) : Stamps Q R S key := ⟨fun _ => stamp a, fun _ _ => stamp b, real⟩
+
+/-- The docket encoding whose digests are all the empty message, every docket reading every entry. -/
+def docket (S Out : Type) : Docket S Out key := ⟨fun _ => [], fun _ _ => True, fun _ => []⟩
+
+end Pouw.Witness.Clock

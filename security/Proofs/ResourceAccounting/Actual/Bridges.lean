@@ -255,29 +255,43 @@ theorem timedRun_spentIn {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {
   simp only [Actual.costModel, Actual.timedRun, Pouw.TimedRun.spentIn, h₁, h₀, workIn_empty, Nat.cast_zero,
     sub_zero]
 
-/-- **The honest clock at `CM_A`**: for an adversary's timed run, at a deadline `td` at or after `t_d`, the adversary
-itself is the program `HonestClock` asks for, with equality: its cost, the prover's work in `[tₛ + ℓ, t_d − ℓ)`, is
-what the run spends in `(tₛ, td]` (`timedRun_spentIn`). -/
+/-- **The honest clock at `CM_A`**: for an adversary's timed run, with the device's salt entry signed at `tₛ` and a
+real window that reaches `t_d`, the adversary itself is the program `HonestClock` asks for, with equality: its cost,
+the prover's work in `[tₛ + ℓ, t_d − ℓ)`, is what the run spends in `(tₛ, tₛ + d]` (`timedRun_spentIn`). -/
 theorem honestClock {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {𝓕 : Set (Actual.Run L)} {V : Finset L}
     {tₛ t_d ℓ : ℕ} {read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Trace}
     {hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)} {π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ}
-    (U : Pouw.Workload) (A : Pouw.Adversary (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π)) {td : ℝ}
-    (htd : (t_d : ℝ) ≤ td) :
-    Pouw.Assumptions.HonestClock ((Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π).adversaries U) A
-      (Actual.timedRun A U) td :=
-  ⟨A, rfl, fun H s => ⟨fun _ => ⟨rfl, fun _ hm => hm⟩, (timedRun_spentIn U A H s htd).ge, le_rfl⟩⟩
+    (U : Pouw.Workload) (A : Pouw.Adversary (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π)) {k : String}
+    (dk : Pouw.Docket S Pouw.Trace k) (st : Pouw.Stamps Q R S k) {d : ℝ} (hts : ∀ s, st.ts s = (tₛ : ℝ))
+    (htd : (t_d : ℝ) ≤ tₛ + d) :
+    Pouw.Assumptions.HonestClock ((Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π).adversaries U) A dk st
+      (Actual.timedRun A U) d :=
+  ⟨A, rfl, fun H s => ⟨fun _ _ => ⟨rfl, fun _ hm => hm⟩,
+    by rw [hts s]; exact (timedRun_spentIn U A H s htd).ge, le_rfl⟩⟩
 
 end Actual
 
-/-- **PoUW's row, from B1**: the deadline theorem at `CM_A` with its honest clock at the deadline `t_d`, where what the
-timed run spends after the salt is the cost and the transcript, received at `t_d`, is in by then. -/
+/-- **PoUW's row, from B1**: the deadline theorem at `CM_A`, on the witnesses' clock (`Pouw.Witness.Clock`: a device
+of drift `0`, its salt entry at reading `tₛ` and its docket entry `t_d − tₛ` later, the deadline `Δ = t_d − tₛ`), with
+its honest clock in the real window that reaches `t_d`, where what the timed run spends after the salt is the cost and
+the transcript, received at `t_d`, is in by then. -/
 theorem pouwRow : Guarantees.pouwRow := by
   intro Q R S _ _ _ _ L _ _ 𝓕 V tₛ t_d ℓ read hash π P D γ₀ Ωmax ε hγ hΩ hW hB1 U hU A T hT q hq hA t εs hεs
+  have hst : ∀ s, (Pouw.Witness.Clock.stamps Q R S tₛ (tₛ + (t_d - tₛ))).ts s = (tₛ : ℝ) := fun s =>
+    Pouw.Witness.Clock.stamps_ts _ _ s
+  have hw : (t_d : ℝ) ≤ tₛ + Pouw.realWindow Pouw.Witness.Clock.site Pouw.Witness.Clock.key (t_d - tₛ) := by
+    rw [Pouw.Witness.Clock.realWindow_site]
+    exact_mod_cast (show t_d ≤ tₛ + (t_d - tₛ) by omega)
   have h := Pouw.SecurityProofs.WorkBetweenSaltAndDeadline Q R S _ P D γ₀ Ωmax ε hγ hΩ hW hB1 U hU A
-    (Actual.timedRun A U) t_d (Actual.honestClock U A le_rfl) T hT q hq
-    (fun H s => ⟨(Actual.timedRun_spentIn U A H s le_rfl).trans_le (hA H s).1, (hA H s).2⟩) t εs hεs
+    Pouw.Witness.Clock.site Pouw.Witness.Clock.key (Pouw.Witness.Clock.docket S Pouw.Trace)
+    (Pouw.Witness.Clock.stamps Q R S tₛ (tₛ + (t_d - tₛ))) (Actual.timedRun A U) (t_d - tₛ)
+    (Pouw.Witness.Clock.clockWithin_real _ _) (Actual.honestClock U A _ _ hst hw) T hT q hq
+    (fun H s => ⟨by rw [hst s]; exact (Actual.timedRun_spentIn U A H s hw).trans_le (hA H s).1, (hA H s).2⟩)
+    t εs hεs
   exact le_trans (Pouw.pr_mono fun x hx =>
-    ⟨⟨le_refl _, hx.1⟩, hx.2, Pouw.Proofs.not_breaks_of_hashless (fun _ _ _ _ _ _ => rfl) A U x.1 x.2.1⟩) h
+    ⟨⟨Pouw.Witness.Clock.site_ok,
+        Pouw.Witness.Clock.inTime tₛ (tₛ + (t_d - tₛ)) (t_d - tₛ) (Nat.le_add_right _ _) le_rfl _ _ _, hx.1⟩,
+      hx.2, Pouw.Proofs.not_breaks_of_hashless (fun _ _ _ _ _ _ => rfl) A U x.1 x.2.1⟩) h
 
 theorem B4 : Guarantees.B4 := by
   intro L E Ω _ _ _ S ℓ ends β link 𝒱 cert X spec record bucket jitter a b hcs hdl hT hsec
