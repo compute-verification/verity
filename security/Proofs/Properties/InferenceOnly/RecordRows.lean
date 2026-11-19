@@ -270,6 +270,46 @@ private theorem row_ext (r r' : Row) (h1 : r.tid = r'.tid) (h2 : r.unit = r'.uni
   cases r'
   simp_all
 
+/-- **A leaf of a reader row is an input gate**, of a record declaring the root input nodes `D` whose root reads no
+edge: `OwnRows`' first half, which a declared node's sharing leaves standing (`Resolve.unit_input_leaf`). -/
+theorem rowLeaf_input (hP : ReadProg P) {D : List ℕ} (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRunsOf P D)
+    (hne : ∀ nd ∈ InferenceOnlyVerifier.Record.SecurityProofs.unitsOf P,
+      ∀ q ∈ InferenceOnlyVerifier.Record.SecurityProofs.partsIn nd,
+        InferenceOnlyVerifier.Record.SecurityProofs.edgeOf P q = false)
+    (hD : ∀ n, D.contains n = true → n < (P.defs[P.root]!).body.nodes.size ∧
+      Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true ∧
+      (((P.defs[P.root]!).body.nodes[n]!).form = .prim ∨ ((P.defs[P.root]!).body.nodes[n]!).form = .batch))
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs) :
+    ∀ r l g lo hi, RowLeaf P rs W r l g lo hi →
+      ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧ Flock.Program.isInputId (P.defs[p]!).key = true := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
+  obtain ⟨hr, hrp, hL, -⟩ := read_bodies hP
+  obtain ⟨hov, hlay⟩ := read_walk hP
+  have hP' := hP
+  obtain ⟨⟨bytes, hdec⟩, -, hRL, hIR, -, -, -⟩ := hP'
+  rintro r l g lo hi' ⟨sc, hu, i, hip, -, hrow, hl, hres, -, -⟩
+  obtain ⟨j, m, -, -, -, rfl, hk, hnode, hform, hm, hargs⟩ := unit_place hP hrs hu
+  have ht := inRow_lt _ i _ r.row l hrow hl
+  obtain ⟨n, x, hn, hinp', hx, ho, hg⟩ := Resolve.unit_input_leaf bytes P hdec hov hlay hO hne hD hk hnode hform hm
+    (Nat.lt_of_lt_of_eq hip hargs.symm) ht ((P.defs[P.root]!).body.nodes[rs[j]!.node]!).fn
+    (P.child P.rootScope rs[j]!.node m).off
+  have hgx := hg g hres
+  have hmono := Resolve.offsets_mono P P.root (hL P.root hr) hrp (n + 1) (P.defs[P.root]!).body.nodes.size
+    (by omega) (Nat.le_refl _)
+  have hend : (P.defs[P.root]!).body.offsets[(P.defs[P.root]!).body.nodes.size]! = (P.defs[P.root]!).gates :=
+    (hL P.root hr hrp).2.1
+  have hlt : g < gates P := by
+    show g < (P.defs[P.root]!).gates
+    omega
+  obtain ⟨p, ops, sc', _, hgate, -, -⟩ := gate_located hP hlt
+  refine ⟨p, ops, sc', hgate, ?_⟩
+  have hkn : n < DescAgree.nodeCount P := hn
+  have hgk : (DescAgree.rootOffs P)[n]! ≤ g ∧ g < (DescAgree.rootOffs P)[n + 1]! := by
+    show (P.defs[P.root]!).body.offsets[n]! ≤ g ∧ g < (P.defs[P.root]!).body.offsets[n + 1]!
+    omega
+  rw [DescAgree.gate_input P hRL hIR hgate hkn hgk, DescAgree.inputs_get P hkn]
+  exact hinp'
+
 /-- **Every unit's rows are its own input gates** (`OwnRows`): a leaf of a reader row is an input gate, and a gate
 is a leaf of one row at most, at one place. -/
 theorem ownRows_holds (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)

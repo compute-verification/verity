@@ -15,7 +15,7 @@ lies (`ref_leaf`, `arg_part`); in a strided part, the leaf a member's stretch re
 one run at one place (`leafAt_inj`, from `Record.SecurityProofs.runs_apart`), and a batch's members read an argument
 at references of their own (`memberIdx_inj`). Of a record that declares root input nodes and whose root reads no
 edge, every reference of a unit's argument is a leaf of an input node (`arg_input_leaf`): a run's, or a declared
-node's.
+node's; and so is a leaf of a unit's parameter (`unit_input_leaf`).
 -/
 
 @[expose] public section
@@ -437,7 +437,7 @@ end
 /-- **A reference of an argument of a root unit is a leaf of an input node, and resolves from the root to that node's
 gate of the leaf**, of a record declaring the root input nodes `D` whose root reads no edge: a part `own-rows` reads
 is a run (`ownPart_run`), and a part over a declared node, affine or strided, reads a leaf of that node, an input
-node (`hD`, the `nodes` stage's). -/
+node (`hD`, the `nodes` stage's), at the leaf its stretch reads (`strided_leaf`). -/
 theorem arg_input_leaf (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
     (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) {D : List ℕ}
     (hown : InferenceOnlyVerifier.Record.SecurityProofs.OwnRunsOf P D)
@@ -453,6 +453,8 @@ theorem arg_input_leaf (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.deco
     ∃ n j, n < (P.defs[P.root]!).body.nodes.size ∧
       Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true ∧
       j < ((P.defs[P.root]!).body.nodes[n]!).out.leaves ∧
+      (P.defs[P.root]!).body.offsets[n + 1]! =
+        (P.defs[P.root]!).body.offsets[n]! + ((P.defs[P.root]!).body.nodes[n]!).out.leaves ∧
       resolveStep P (P.rootScope, (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get x) =
         .ok (.inl ((P.defs[P.root]!).body.offsets[n]! + j)) := by
   obtain ⟨q, hq, h1, h2, hget⟩ := arg_part bytes P hdec hov hlay hk hi hx
@@ -476,8 +478,8 @@ theorem arg_input_leaf (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.deco
     rw [hqe'] at hget
     have hget' : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get x =
         ⟨false, n, base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!)⟩ := hget
-    obtain ⟨hjlt, -, hres⟩ := ref_leaf bytes P hdec hov hlay hk hi hx hget' hn hin hform
-    exact ⟨n, _, hn, hin, hjlt, hres⟩
+    obtain ⟨hjlt, hol, hres⟩ := ref_leaf bytes P hdec hov hlay hk hi hx hget' hn hin hform
+    exact ⟨n, _, hn, hin, hjlt, hol, hres⟩
   | true =>
     cases hp : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]! with
     | affine fl n base count =>
@@ -488,17 +490,96 @@ theorem arg_input_leaf (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.deco
         obtain ⟨hn, hin, hform⟩ := hD n hdq
         have hget' : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get x =
             ⟨false, n, base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!)⟩ := hget
-        obtain ⟨hjlt, -, hres⟩ := ref_leaf bytes P hdec hov hlay hk hi hx hget' hn hin hform
-        exact ⟨n, _, hn, hin, hjlt, hres⟩
+        obtain ⟨hjlt, hol, hres⟩ := ref_leaf bytes P hdec hov hlay hk hi hx hget' hn hin hform
+        exact ⟨n, _, hn, hin, hjlt, hol, hres⟩
     | strided fl n b inner os is c =>
       rw [hp] at hdq
       cases fl with
       | true => cases hdq
       | false =>
         obtain ⟨hn, hin, hform⟩ := hD n hdq
-        obtain ⟨hjlt, hres⟩ := strided_leaf bytes P hdec hov hlay hk hi hx h1 h2 hget hp hn hin hform
-        exact ⟨n, _, hn, hin, hjlt, hres⟩
+        have hget' : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get x = ⟨false, n,
+            (b + (((x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) / inner : ℕ) : ℤ) * os +
+              (((x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) % inner : ℕ) : ℤ) * is).toNat⟩ := by
+          rw [hget, hp]
+          rfl
+        obtain ⟨hjlt, hol, hres⟩ := ref_leaf bytes P hdec hov hlay hk hi hx hget' hn hin hform
+        exact ⟨n, _, hn, hin, hjlt, hol, hres⟩
     | explicit items => rw [hp] at hdq; cases hdq
     | grid run lanes => rw [hp] at hdq; cases hdq
+
+/-- **A unit's parameter leaf is a reference of the node's argument**, where `own-rows` holds of a record declaring the
+root input nodes `D`: a batch's argument has `dims` or is the parameter whole (`BodiesOk.Shape`). -/
+theorem argIdx_lt_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P) {D : List ℕ}
+    (hown : InferenceOnlyVerifier.Record.SecurityProofs.OwnRunsOf P D) {k : ℕ}
+    (hk : k < (P.defs[P.root]!).body.nodes.size)
+    (hf : ((P.defs[P.root]!).body.nodes[k]!).form = .call ∨ ((P.defs[P.root]!).body.nodes[k]!).form = .batch)
+    {m : ℕ} (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members) {i : ℕ}
+    (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size) {t : ℕ}
+    (ht : t < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[i]!).2.leaves)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
+    argIdx ((P.defs[P.root]!).body.nodes[k]!) i m t <
+      ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).count := by
+  obtain ⟨-, hc, hno⟩ := decoded_root bytes P hdec hrc k hk
+  rcases hf with hf | hf
+  · rw [argIdx_call hf]
+    have hcp : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false := hno.2.2.2.1 (Or.inl hf)
+    have hbp := (hc.2 hcp).1
+    have hup := BodiesOk.up_ok _ _ hc hno i (by rw [hbp, ← hno.1]; exact hi) t (by rw [hbp]; exact ht) m hm
+    rw [hf] at hup
+    exact hup
+  · rw [argIdx_batch hf]
+    cases hd : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).dims.isSome with
+    | true =>
+      have hop := BodiesOk.op_ok _ _ hno i hi m hm t (by rw [hf, hd]; exact ht)
+      rw [hf] at hop
+      exact hop
+    | false =>
+      have hcnt := hno.2.1 i hi
+      have hsh := hno.2.2.2.2.1
+      rw [hf] at hsh
+      unfold BodiesOk.Shape at hsh
+      have hty : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).ty =
+          ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[i]!).2 := by
+        rcases hsh.2 i hi with ⟨-, h⟩ | ⟨ax, mt, hra, -, hdm⟩
+        · exact h
+        · obtain ⟨L, hL⟩ := axisDims_of_removeAxis ax _ hra
+          rw [hL] at hdm
+          rw [hdm] at hd
+          cases hd
+      have hop := BodiesOk.op_ok _ _ hno i hi m hm t (by
+        rw [hf, hd]
+        simp only [BodiesOk.beq_batch_batch, Bool.and_false, Bool.false_eq_true, ↓reduceIte]
+        rw [hcnt, hty]
+        exact ht)
+      rw [hf] at hop
+      exact hop
+
+/-- **A leaf of a unit's parameter resolves to a gate of an input node**, of a record declaring the root input nodes
+`D` whose root reads no edge (`arg_input_leaf`). -/
+theorem unit_input_leaf (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
+    (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) {D : List ℕ}
+    (hown : InferenceOnlyVerifier.Record.SecurityProofs.OwnRunsOf P D)
+    (hne : ∀ nd ∈ unitsOf P, ∀ q ∈ partsIn nd, edgeOf P q = false)
+    (hD : ∀ n, D.contains n = true → n < (P.defs[P.root]!).body.nodes.size ∧
+      Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true ∧
+      (((P.defs[P.root]!).body.nodes[n]!).form = .prim ∨ ((P.defs[P.root]!).body.nodes[n]!).form = .batch))
+    {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
+    (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false)
+    (hf : ((P.defs[P.root]!).body.nodes[k]!).form = .call ∨ ((P.defs[P.root]!).body.nodes[k]!).form = .batch)
+    {m : ℕ} (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members) {i : ℕ}
+    (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size) {t : ℕ}
+    (ht : t < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[i]!).2.leaves) (d off : ℕ)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
+    ∃ n j, n < (P.defs[P.root]!).body.nodes.size ∧
+      Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true ∧
+      j < ((P.defs[P.root]!).body.nodes[n]!).out.leaves ∧
+      (P.defs[P.root]!).body.offsets[n + 1]! =
+        (P.defs[P.root]!).body.offsets[n]! + ((P.defs[P.root]!).body.nodes[n]!).out.leaves ∧
+      ∀ g, resolve P (.child P.rootScope d off k m) ⟨true, i, t⟩ = .ok g →
+        g = (P.defs[P.root]!).body.offsets[n]! + j := by
+  have hx := argIdx_lt_of bytes P hdec hown hk hf hm hi ht
+  obtain ⟨n, j, hn, hin, hj, hol, hstep⟩ := arg_input_leaf bytes P hdec hov hlay hown hne hD hk hu hi hx
+  exact ⟨n, j, hn, hin, hj, hol, fun g hg => run_two (rs_unit P d off k m i t hf) hstep _ (Flock.Program.resolve_run hg)⟩
 
 end InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
