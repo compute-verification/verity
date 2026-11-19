@@ -629,9 +629,9 @@ def _row_port(dom: CommitmentDomain, rows: np.ndarray, ys: bytes, schema: str, f
             "inner": _inner(schema, int(r.shape[1])), "schema": schema, "first": first}
 
 
-def _row_strings(rows: np.ndarray, ys: bytes, schema: str) -> bytes:
+def row_strings(rows: np.ndarray, ys: bytes, schema: str) -> bytes:
     """Rows' ``b || c`` under their salts ``ys``, as `_chunk` makes them, with no leaf: rows a tree of several members
-    holds, whose leaves the tree's own pass makes (`_commit_into`)."""
+    holds, whose leaves the tree's own pass makes (`_commit_into`), and the strings `interface.Window.close` is handed."""
     r = np.ascontiguousarray(rows).astype("<u2")
     m, inner = int(r.shape[0]), _inner(schema, int(r.shape[1]))
     x = b"".join(inner(r[i].tobytes()) for i in range(m))
@@ -1008,7 +1008,7 @@ def commit(window: Binding, data: Iterable[dict[str, dict[str, Any]]], *,
         schemas[t] = schemas[qs[0]]
     for t, qs in outs.items():
         if any(q in given for q in qs):
-            given[t] = b"".join(given.pop(q) if q in given else _row_strings(rows[q], ys[q], schemas[q]) for q in qs)
+            given[t] = b"".join(given.pop(q) if q in given else row_strings(rows[q], ys[q], schemas[q]) for q in qs)
     tree_rows = {t: np.concatenate([rows[q] for q in qs]) for t, qs in outs.items() if t not in given}
     tree_ys = {t: b"".join(ys[q] for q in qs) for t, qs in outs.items() if t not in given}
     mine = {p: r for p, r in rows.items() if p not in given and p in domains and p not in tree_rows}
@@ -1204,7 +1204,7 @@ def _commit_into(window: Binding, data: Iterable[dict[str, Any]], d: Path, *, sa
                             jobs[port] = _row_port(domains[port], a, y, schemas[port], lo)
                             run[p] = [a, y, None]
                         else:
-                            run[p] = [a, y, _row_strings(a, y, schemas[port])]
+                            run[p] = [a, y, row_strings(a, y, schemas[port])]
                             continue
                     else:
                         v, at = src.value, src.positions[lo:hi]

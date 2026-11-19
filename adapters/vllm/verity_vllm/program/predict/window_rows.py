@@ -50,6 +50,7 @@ import numpy as np
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.refs import runs
+from verity.commitments import randomness as RND
 from verity.commitments import registered_value as RV
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
@@ -655,6 +656,15 @@ class Rows:
                 win.record(fn, ins, outs, {"step": int(steps[a]), "slot": int(slots[a]), "form": FORMS[0 if node[a] else 1]})
 
 
+def leaf_strings(win: IF.Window, key: RND.Key) -> dict[tuple[str, str], tuple[bytes, bytes]]:
+    """Each of ``win``'s `leaf_rows` ports, its rows' salts and ``b || c`` (`rows.row_strings`), the strings `Window.close`
+    takes: unit u's row of port q of template t (`interface.LeafRows`) is salted with ``key``'s stream at index (t, q), leaf u."""
+    return {k: (ys, CS.row_strings(lr.rows, ys, lr.schema))
+            for k, lr in win.leaf_rows().items()
+            for s in [key.stream((lr.template, lr.port), CS.SALT_BYTES * (lr.units[-1] + 1))]
+            for ys in [b"".join(s[u * CS.SALT_BYTES:(u + 1) * CS.SALT_BYTES] for u in lr.units)]}
+
+
 def _elements(words: np.ndarray, width: int) -> np.ndarray:
     """``(n, words)`` u16 words as ``width``-bit elements, the same little-endian bytes (`interface.words`' inverse)."""
     return np.ascontiguousarray(words, dtype=np.uint16).view(f"<u{width // 8}")
@@ -692,5 +702,5 @@ def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], *
                              window=window)
 
 
-__all__ = ["COMPUTED", "EVALUATED", "FORMS", "Rows", "SERVED", "SOURCES", "Served", "Slot", "positions", "scan_slots",
+__all__ = ["COMPUTED", "EVALUATED", "FORMS", "Rows", "SERVED", "SOURCES", "Served", "Slot", "leaf_strings", "positions", "scan_slots",
            "state_value"]

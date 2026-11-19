@@ -45,6 +45,7 @@ from verity.protocols.resource_accounting.memory.poub.verifier import coins  # n
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as spot_verifier  # noqa: E402
 from verity.protocols.proofs.spot.verifier.challenger.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
 from verity.commitments.crypto import lms  # noqa: E402
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch  # noqa: E402
 
 P = lms.Params(64, 4, 4)
 T0 = datetime(2026, 10, 21, 1, 0, 0, tzinfo=timezone.utc)
@@ -646,19 +647,112 @@ def test_without_their_lean_the_ledger_complete_and_main_leave_an_honest_gate_se
     assert doc["credit"]["credited_sessions"] == []
 
 
+def served_honest_run(tmp_path: Path) -> tuple[dict, dict]:
+    """An honest session paced through `challengers.Serve` (the challenger's process on the verifier's machine), read
+    with `verifier_process.verify`: its record and its registration."""
+    (tmp_path / "served").mkdir()
+    serve = (sys.executable, str(LIVE.parents[4] / "tests" / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "stub_serve.py"), "--coins-log", str(tmp_path / "coins.log"),
+             str(LIVE / "serve.py"), "--keygen-workers", "1")
+    source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", command=serve, verify=VP.verify)
+    got = {}
+    (honest,), _ = run_sessions("honest", paces=[verifier.pace_of("1:4:160:2", 1.0)], challenger=source,
+                                defer_openings=False,
+                                then=lambda v: got.update(reg=wire.registration_json(v.registration)))
+    return honest, got["reg"]
+
+
 def test_without_its_lean_a_served_sessions_lms_verify_leaves_an_honest_session_undecided(tmp_path, monkeypatch):
     """`challengers.Serve` reads its session with `verifier_process.verify`: where the Python's LMS verify holds, the
     Lean's (`lms_answer`) decides, and while that isn't written an honest session is undecided, with the goal's id,
     and not refused as `coins`."""
     lean_stands_in.unwritten(monkeypatch)
-    (tmp_path / "served").mkdir()
-    serve = (sys.executable, str(LIVE.parents[4] / "tests" / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "stub_serve.py"), "--coins-log", str(tmp_path / "coins.log"),
-             str(LIVE / "serve.py"), "--keygen-workers", "1")
-    source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", command=serve, verify=VP.verify)
-    (honest,), _ = run_sessions("honest", paces=[verifier.pace_of("1:4:160:2", 1.0)], challenger=source,
-                                defer_openings=False)
+    honest, _ = served_honest_run(tmp_path)
     assert not honest["accepted"] and honest["failure"]["failure"] == "undecided" and honest["challenger"]["undecided"]
     assert honest["failure"]["reason"] == coins.undecided("served session's LMS signatures")
+
+
+@pytest.fixture(scope="module")
+def lms_key() -> tuple[lms.PrivateKey, Ch.ChallengerKey]:
+    private = lms.keygen(P, bytes(range(P.N)))
+    return private, Ch.ChallengerKey(P.W, P.H, lms.public_key(private))
+
+
+def test_a_signature_the_python_accepts_is_undecided_by_name_until_the_lean_answers(lms_key, monkeypatch):
+    """`verifier_process.verify` of a signature `lms_verify` accepts raises `coins.Undecided` with exactly
+    `coins.undecided("served session's LMS signatures")`, which names `coins.UNWRITTEN`, and `lms_answer` itself
+    refuses with exactly `coins.UNWRITTEN`: neither accepts nor rejects."""
+    private, key = lms_key
+    signature = lms.sign_at(private, 0, b"a record").encode()
+    lean_stands_in.unwritten(monkeypatch)
+    assert VP.lms_verify(key, b"a record", signature) is True
+    with pytest.raises(NotImplementedError) as unwritten:
+        VP.lms_answer(key, b"a record", signature)
+    assert str(unwritten.value) == coins.UNWRITTEN
+    with pytest.raises(coins.Undecided) as undecided:
+        VP.verify(key, b"a record", signature)
+    assert str(undecided.value) == coins.undecided("served session's LMS signatures")
+    assert coins.UNWRITTEN in str(undecided.value)
+
+
+@pytest.mark.parametrize("message, tampered", [(b"another record", False), (b"a record", True)],
+                         ids=["other-message", "damaged-signature"])
+def test_a_signature_the_python_refuses_is_refused_not_undecided(lms_key, monkeypatch, message, tampered):
+    """Where `lms_verify` refuses (a message the signature isn't for, or bytes that don't decode), `verify` returns
+    False without asking the Lean: the Lean's `lms_answer` is never reached, so a refusal is never `Undecided`."""
+    private, key = lms_key
+    signature = lms.sign_at(private, 0, b"a record").encode()
+    if tampered:
+        signature = signature[:-1]
+    lean_stands_in.unwritten(monkeypatch)
+
+    def asked(*_):
+        raise AssertionError("the Lean's answer is asked for a signature the Python refuses")
+
+    monkeypatch.setattr(VP, "lms_answer", asked)
+    assert VP.lms_verify(key, message, signature) is False
+    assert VP.verify(key, message, signature) is False
+
+
+def test_an_undecided_served_session_is_the_challengers_undecided_close_and_a_row_credited_nothing(tmp_path, monkeypatch):
+    """With neither Lean answer written (`lean_stands_in.unwritten`), an honest served session ends with exactly the
+    fields `Serve.finish` gives an undecided read (the reason is the LMS text, `undecided` is True, and no released or
+    complete count) and is not accepted; and `auditor_line` reads the same directory through `served_session_answer`,
+    whose own refusal is the row's `undecided`, its credit not ok and that reason in `zero`. The verifier's side of the
+    first (the session's `failure`) is asserted by the test above."""
+    lean_stands_in.unwritten(monkeypatch)
+    honest, reg = served_honest_run(tmp_path)
+    lms_text = coins.undecided("served session's LMS signatures")
+    closed = honest["challenger"]
+    assert set(closed) == {"challenger", "session", "dir", "serve_rc", "closed", "commitment", "reason", "undecided"}
+    assert closed["challenger"] == "serve" and closed["reason"] == lms_text and closed["undecided"] is True
+    assert honest["accepted"] is False
+    assert honest["failure"]["failure"] == "undecided" and honest["failure"]["reason"] == lms_text
+    out = tmp_path / "line"
+    out.mkdir()
+    (out / "verifier.json").write_text(json.dumps({"registration": reg, "sessions": [honest]}))
+    doc = al.analyse(out, host_bytes=1 << 30, pin=None, period=None, heads=None)
+    (row,) = doc["sessions"]
+    served_read = coins.undecided("served session's read")
+    read = f"the challenger's session's read: {served_read}"
+    assert coins.UNWRITTEN in read
+    assert row["undecided"] == read and row["challenger"] == "serve" and row["verifier_coin_check"] == lms_text
+    assert row["credit"]["ok"] is False and read in row["credit"]["zero"]
+    assert "log" not in row and doc["credit"]["credited_sessions"] == []
+
+
+@pytest.mark.parametrize("name, args", [
+    ("periods_answer", ([], None, {})),
+    ("complete_answer", ([], "root", "p-1", None, None, {})),
+    ("on_main_answer", (PIN, MAIN, True)),
+    ("served_session_answer", (None, {}, {}))])
+def test_each_lean_answer_the_auditor_line_waits_for_refuses_with_exactly_the_goals_id(name, args):
+    """The ledger read, *complete* (the window's signed end and the period's close), the verifier's commit on main and a
+    served session's read are interfaces whose Lean answer isn't written: each raises `NotImplementedError` whose text is
+    exactly `coins.UNWRITTEN`, which `auditor_line` turns into its own undecided reason (asserted beside the
+    honest session's run above)."""
+    with pytest.raises(NotImplementedError) as e:
+        lean_stands_in.REAL[(al, name)](*args)
+    assert str(e.value) == coins.UNWRITTEN
 
 
 def test_a_session_sampled_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(

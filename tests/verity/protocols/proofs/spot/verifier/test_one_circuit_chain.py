@@ -16,6 +16,7 @@ import importlib.util
 import json
 import os
 import socket
+import subprocess
 import sys
 import tempfile
 from collections.abc import Mapping
@@ -231,7 +232,8 @@ def prove_block(member: Any) -> dict[str, Any]:
     try:
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(IL, "_lower_gate", _hand_piece)
-            text = OC.lower(block.descriptor, r["partition"], PF.lower_executable).decode()
+            text = OC.lower(block.descriptor, r["partition"], PF.lower_executable,
+                            cut=OC.cuts(r["C"], r["partition"])).decode()
     except (OC.NotDerived, OC.Refused) as e:
         raise Stop(f"prove: C_S derived {rec}; its statement is the door's one_circuit.lower ({OC.__file__}:lower): {e}") from e
     meta = FC.meta_of(text)
@@ -243,7 +245,7 @@ def prove_block(member: Any) -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as d:
         d = Path(d)
         (d / "circuit.txt").write_text(text)
-        iset = SimpleNamespace(name=f"block-{member.base}", subcircuit=SimpleNamespace(id=meta["unit"], inputs=[], outputs=[]))
+        iset = SimpleNamespace(name=f"block-{member.base}", subcircuit=SimpleNamespace(id=meta.get("unit", f"block-{member.base}"), inputs=[], outputs=[]))
         FC.write(text, iset, 0, n, d / f"inst-{n}.bin", d / f"pub-{n}.bin", indices=list(range(member.base, member.base + n)),
                  rows=rows, outs=outs)
         with socket.socket() as s:
@@ -270,12 +272,27 @@ def stage_python_door() -> str:
 
 
 def stage_lean_door() -> str:
-    """The Lean door built (`spot-one-stage-zk`): its own `#guard`s hold that a member's statement refuses at
-    `restrict`."""
-    PF.v2_executable()
-    text = LEAN_DOOR.read_text().splitlines()
-    at = next(i for i, x in enumerate(text, 1) if 'HOLE_T == "restrict: ' in x)
-    raise Stop(f"lean door: built; every statement refuses at Spot.OneStageZk.restrict ({LEAN_DOOR}:{at})")
+    """The Lean door (`spot-one-stage-zk restrict`): the drawn block's circuit file as Lean's `OneStageZk.restrict`
+    derives it from C and the partition, byte for byte the Python door's (`one_circuit.lower` of `one_circuit.restrict`)."""
+    r = registered()
+    m = drawn(committed()[0])
+    k = [x.base for x in r["window"].window.members].index(m.base)
+    try:
+        units = OC.block(r["C"], r["partition"], k)
+        want = OC.lower(OC.restrict(r["C"], r["partition"], units), r["partition"], PF.lower_executable,
+                        cut=OC.cuts(r["C"], r["partition"]))
+    except (OC.NotDerived, OC.Refused) as e:
+        raise Stop(f"lean door: the Python door derives no C_S for block {k} ({OC.__file__}): {e}") from e
+    with tempfile.TemporaryDirectory() as d:
+        c, p, out = Path(d, "C.json"), Path(d, "partition.json"), Path(d, "c_s.txt")
+        c.write_bytes(r["C"])
+        p.write_text(json.dumps(r["partition"], sort_keys=True, separators=(",", ":")))
+        run = subprocess.run([str(PF.v2_executable()), "restrict", str(c), str(p), str(units[0][0]), str(out)],
+                             capture_output=True, text=True)
+        assert run.returncode == 0, f"lean door: Lean's restrict refused block {k} ({LEAN_DOOR}): {run.stderr[-600:]}"
+        got = out.read_bytes()
+    assert got == want, f"lean door: Lean's C_S for block {k} ({len(got)} bytes) is not the Python door's ({len(want)})"
+    return f"block {k} at unit {units[0][0]}: Lean's C_S is the Python door's, {len(got)} bytes"
 
 
 def stage_crossing() -> str:

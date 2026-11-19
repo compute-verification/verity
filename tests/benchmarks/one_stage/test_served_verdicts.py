@@ -3882,7 +3882,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
         _script(path, body)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "K": "7",
            "OUT": str(tmp_path / "out"), "SERVE_ROOT": str(tmp_path / "root"), "FLOCK_WORK": str(tmp_path / "fw"),
-           "ROW": str(tmp_path / "row"), "HIDDEN_SO": str(tmp_path / "h.so"), "NORM_TAP_SO": str(tmp_path / "n.so"),
+           "ROW": str(tmp_path / "row"), "HIDDEN_SO": str(tmp_path / "h.so"),
            "ORDER": str(tmp_path / "order"), "H1_GATE": "", "V3C_CLASS": W63K4, "CLASSES": W63K4,
            "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD, "NODE_MEM_GB": "512",
            "MAIN_FILE": str(tmp_path / "main.txt"), "DEVELOPMENT": "1", "COMPOSITE": "", "PEARLPLUS_INODES": "0",
@@ -4213,8 +4213,8 @@ def test_an_untied_v3c_registers_its_window_at_the_sampling_design_its_audit_sam
 
 def test_v3c_on_an_existing_serve_dir_needs_no_row_dir_taps_or_gpu_lease(tmp_path):
     """`served_verdicts.sh v3c` serves nothing, so a CPU node with the audit's memory runs it: its preflight asks for the
-    venv's python alone, not the row dir, the FlashAttention and norm-tap builds or gpu-lease that serving reads."""
-    gone = {"ROW": str(tmp_path / "no-row"), "HIDDEN_SO": str(tmp_path / "no-h.so"), "NORM_TAP_SO": str(tmp_path / "no-n.so")}
+    venv's python alone, not the row dir, the FlashAttention build or gpu-lease that serving reads."""
+    gone = {"ROW": str(tmp_path / "no-row"), "HIDDEN_SO": str(tmp_path / "no-h.so")}
     rc, lines, order, _limits = _v3c(tmp_path, lease=False, **gone)
     assert rc == 0 and "audit" in order and not any(x.startswith("PREFLIGHT") for x in lines), (lines, order)
     rc, lines, _order, _limits = _v3c(tmp_path / "no-venv", lease=False, VENV=str(tmp_path / "no-venv" / "none"), **gone)
@@ -6191,7 +6191,7 @@ def test_no_launcher_line_quotes_a_tools_stderr():
     """A tool's stderr is free text from anything the prover runs: no say line of the served launchers quotes an ``.err``
     file by `tail`, `cut`, `head` or `grep`; `failed` says its class and exit, `said` a passing tool's own last line."""
     quoted = re.compile(r"\$\((?:tail|cut|head|grep)[^)]*\.err")
-    found = [f"{f.name}:{i}" for f in (Path(S.__file__).parent / n for n in ("served_verdicts.sh", "served_util.sh", "served_stock.sh",
+    found = [f"{f.name}:{i}" for f in (Path(S.__file__).parent / n for n in ("served_verdicts.sh", "served_stock.sh",
                                                           "served_composite.sh"))
              for i, line in enumerate(f.read_text().splitlines(), 1) if quoted.search(line)]
     assert found == [], found
@@ -8406,7 +8406,7 @@ def _workspace_reach(*modules: str) -> dict[str, str]:
     return {top: str(roots[top].relative_to(repo)) for top in {m.split(".")[0] for m in seen}}
 
 
-@pytest.mark.parametrize("script", ["served_verdicts.sh", "served_util.sh", "served_stock.sh"])
+@pytest.mark.parametrize("script", ["served_verdicts.sh", "served_stock.sh"])
 def test_the_serve_steps_python_path_names_the_import_root_of_every_workspace_package_it_reaches(script):
     """The serve step runs `verity_vllm.pipeline.cli serve-openai` under vLLM's venv, which holds none of the workspace,
     so it imports each workspace package from the PYTHONPATH the script exports: that path names the import root of every
