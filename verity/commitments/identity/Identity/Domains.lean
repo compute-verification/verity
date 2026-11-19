@@ -81,6 +81,7 @@ abbrev PROOF_SERVICE_OUTCOME : String := "verity/proof-service/outcome/v0"
 abbrev PROOF_SERVICE_STREAM : String := "verity/proof-service/stream/v0"
 abbrev REGISTERED_READS_V0 : String := "verity/registered-reads/v0"
 abbrev REGISTERED_READS_V1 : String := "verity/registered-reads/v1"
+abbrev REGISTERED_READS_V2 : String := "verity/registered-reads/v2"
 abbrev REGISTRATION_RECEIPT : String := "verity/registration-receipt/v1"
 abbrev REGISTRATION_PRODUCED : String := "verity/registration/produced/v1"
 
