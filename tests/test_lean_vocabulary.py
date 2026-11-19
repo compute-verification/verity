@@ -913,7 +913,7 @@ KNOWN: dict[str, str] = {
     "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Level0.lean::Flock.ZkServer.Level0.Registry":
         "homonym, the ZK server loop's tables: rename (proofs)",
     "verity/protocols/proofs/flock/verifier/Flock/Layout.lean::Flock.Layout": "homonym, Flock's block-type layout: rename (proofs)",
-    "verity/circuits/lean/Circuits/Program.lean::Flock.Program.Node":
+    "verity/circuits/lean/Circuits/Descriptor.lean::Flock.Program.Node":
         "homonym, a circuit program's node: rename (proofs)",
     "verity/protocols/proofs/flock/verifier/Flock/RecLinks.lean::Flock.RecLinks.Link":
         "homonym, a recursion link from a reader to a port: rename (proofs)",
