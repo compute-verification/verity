@@ -22,7 +22,8 @@ theorem portBits_congr {P : Prog} {X Y : (ofProgram P).Trace} {ports : Array Spo
     (h : ∀ q ∈ ports.toList, ∀ hq : q.gate < (ofProgram P).N, X ⟨q.gate, hq⟩ = Y ⟨q.gate, hq⟩) :
     portBits X ports = portBits Y ports := by
   unfold portBits
-  induction ports.toList with
+  generalize ports.toList = l at h ⊢
+  induction l with
   | nil => rfl
   | cons q l ih =>
     simp only [List.flatMap_cons]
@@ -47,9 +48,9 @@ theorem portsBind : PortsBind := by
       portBits_congr fun q hq => hall q (Array.mem_append.2 (Or.inr (Array.mem_toList_iff.1 hq)))
     exact ⟨fun i hi' => by rw [hi]; exact hYi i hi', fun k hk => by rw [ho]; exact hYo k hk⟩
   · right
-    push_neg at hall
+    push Not at hall
     obtain ⟨q, hq, hlt, hne⟩ := hall
-    obtain ⟨-, hmem⟩ := hio q hq
+    obtain ⟨_, hmem⟩ := hio q hq
     have hg : (⟨q.gate, hlt⟩ : Fin (ofProgram P).N) ∈
         (ofProgram P).into ((partOf P blocks).gates u.castSucc) ∪
           (ofProgram P).exits ((partOf P blocks).gates u.castSucc) := by
