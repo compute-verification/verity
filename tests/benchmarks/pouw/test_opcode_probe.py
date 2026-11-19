@@ -149,7 +149,7 @@ def test_rate_is_the_median_block_then_the_median_rep():
 
 
 def test_an_until_loop_counts_only_the_fixed_roles_time():
-    """side.cu's hs_* role runs while the honest warps do: its rate is its trips over the stop's cycles, block by block, not
+    """An until loop's fixed role (hs_*) runs while the honest warps do: its rate is its trips over the stop's cycles, block by block, not
     its iterations over the kernel's; stop_gap is how far before the kernel's end the honest warps stopped."""
     p = {"expect": "IMMA.16832.S8.S8=8;REDG*=1", "warps": "8;2", "counted": "", "tpb": 320, "until": 2}
     t = times("hs_red32", [[1000, 1000]], iters=10)
@@ -452,8 +452,7 @@ def test_probes_build_and_gate(tmp_path):
     _, verdicts = probe.gate_all(built)
     wrong = probe.verdict_lines([v for v in verdicts if not v["correct"]])
     assert not wrong, "\n".join(wrong)
-    assert {v["probe"] for v in verdicts if not v["passed"]} == {"bad_ldsm_merged", "bad_stsm_conflict",
-                                                                 "dsm_red_add64_self"}
+    assert not [v["probe"] for v in verdicts if not v["passed"]]
 
 
 def test_clock_ceiling_requires_the_memory_clock_naming_clock_memory_with_no_default():
