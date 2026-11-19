@@ -393,4 +393,27 @@ theorem runs_apart {P : Prog} (h : OwnRuns P) {k i q k' i' q' : Nat}
     rw [hnk, hnk'] at hout'
     exact hout' (by simp [hu]) (by simp [hu']) _ (hmem _ i q hi hq) _ (hmem _ i' q' hi' hq') r hr r' hr' hp hp'
 
+/-- **A root input node the record declares is an input node of the root, a primitive or a batch**, where `nodes`
+holds (`nodesHeld`'s `nodeOk`). -/
+theorem declared_inputs {T : Theta.Trusted} {P : Prog} {doc : Lean.Json} {ts : List Spot.RecordText.Tmpl} {W : Spot.Wires.Wiring}
+    {x : Spot.RecordText.Inputs} {ns : List Spot.RecordText.NodeDecl} (h : nodesHeld T P doc ts W x ns = true) :
+    ∀ n, (ns.map (·.node)).contains n = true → n < (P.defs[P.root]!).body.nodes.size ∧
+      Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true ∧
+      (((P.defs[P.root]!).body.nodes[n]!).form = .prim ∨ ((P.defs[P.root]!).body.nodes[n]!).form = .batch) := by
+  intro n hn
+  unfold nodesHeld at h
+  simp only [Bool.and_eq_true] at h
+  obtain ⟨⟨-, hall⟩, -⟩ := h
+  obtain ⟨d, hd, rfl⟩ := List.mem_map.1 (List.contains_iff_mem.1 hn)
+  have hok := List.all_eq_true.1 hall d hd
+  dsimp only at hok
+  split at hok
+  · rename_i nd hnd
+    simp only [Bool.and_eq_true, Bool.or_eq_true] at hok
+    obtain ⟨⟨hin, hf⟩, -⟩ := hok
+    obtain ⟨hlt, heq⟩ := Array.getElem?_eq_some_iff.1 hnd
+    rw [getElem!_pos _ _ hlt, heq]
+    exact ⟨hlt, hin, hf.elim (fun h => Or.inl (form_eq h)) (fun h => Or.inr (form_eq h))⟩
+  · cases hok
+
 end InferenceOnlyVerifier.Record.SecurityProofs

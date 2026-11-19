@@ -194,4 +194,37 @@ theorem declared_of_heldAt {j tr : Json} {c : Case} (h : read j tr = .ok c) {r :
   rw [hd']
   exact heldAt_declared hh
 
+/-- **`finish` holds the root input nodes the record declares** (`nodesHeld`), of the wiring and the declarations it
+keeps. -/
+theorem nodes_of_finish {f : Front} {pin : String → Option String} {c : Case} (h : finish f pin = .ok c) :
+    nodesHeld f.T f.P f.doc f.ts c.W c.x f.nodes = true := by
+  unfold finish at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  split at h
+  · cases h
+  · split at h
+    · split at h
+      · cases h
+      · split at h
+        · cases h
+        · split at h
+          · cases h
+          split at h
+          · cases h
+          rename_i hn
+          split at h
+          · cases h
+          · split at h
+            · cases h
+            · cases h
+              simpa using hn
+    · cases h
+
+/-- **A record `read` accepts holds the root input nodes it declares** (`nodesHeld`). -/
+theorem nodes_of_read {j tr : Json} {c : Case} (h : read j tr = .ok c) :
+    nodesHeld c.f.T c.f.P c.f.doc c.f.ts c.W c.x c.f.nodes = true := by
+  obtain ⟨f, pin, -, hc⟩ := read_front h
+  obtain ⟨rfl, -⟩ := finish_text hc
+  exact nodes_of_finish hc
+
 end InferenceOnlyVerifier.Record.SecurityProofs

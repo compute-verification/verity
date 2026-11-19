@@ -160,4 +160,115 @@ theorem edgeDigits : EdgeDigits := by
   · refine bind_ok_elim h (fun _ hx _ => ?_)
     simp [throw, throwThe, MonadExceptOf.throw] at hx
 
+/-! ## A root whose units read only input nodes states no wire -/
+
+/-- **`laneWire` gives a wire from the lane its first row lies in.** -/
+theorem laneWire_fst {run : Nat} {lanes : List Flock.Program.Lane} {k0 L len n : Nat}
+    {v : Nat × Nat × List Nat × List Int} (h : Flock.Program.laneWire run lanes k0 L len n = .ok v) :
+    v.1 = (lanes[k0 % (lanes.length * run) / run]!).i := by
+  unfold Flock.Program.laneWire at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  repeat' (first | (cases h; rfl) | (cases h; done) | split at h)
+
+/-- **Of one lane, `laneWire` gives a wire from that lane's node.** -/
+theorem laneWire_single {run : Nat} {l : Flock.Program.Lane} {k0 L len n : Nat}
+    {v : Nat × Nat × List Nat × List Int} (h : Flock.Program.laneWire run [l] k0 L len n = .ok v) : v.1 = l.i := by
+  rw [laneWire_fst h]
+  have h0 : k0 % ([l].length * run) / run = 0 := by
+    rcases Nat.eq_zero_or_pos run with hr | hr
+    · simp [hr]
+    · exact Nat.div_eq_of_lt (by simpa using Nat.mod_lt k0 hr)
+  rw [h0]
+  rfl
+
+/-- **A part whose every wire `laneWire` could give is from an input node gives no wire.** -/
+theorem partWires_nil {P : Prog} {fu W D k i q s0 out}
+    (hlw : ∀ k0 L len cnt v, Flock.Program.laneWire (Flock.Program.partLanes q).1 (Flock.Program.partLanes q).2
+      k0 L len cnt = .ok v → Spot.Edges.isInputNode P v.1 = true)
+    (h : partWires P fu W D k i q s0 = .ok out) : out = [] := by
+  unfold partWires at h
+  generalize hpl : Flock.Program.partLanes q = pl at h
+  obtain ⟨run, lanes⟩ := pl
+  rw [hpl] at hlw
+  dsimp only at hlw
+  split at h
+  · rename_i rt rb hfu
+    dsimp only at h
+    generalize (P.defs[(P.defs[P.root]!.body.nodes[k]!).fn]!).params[i]! = pt at h
+    obtain ⟨port, ty⟩ := pt
+    dsimp only at h
+    by_cases hc : (W.cutsOf rt port == 0 || ty.leaves % W.cutsOf rt port != 0 ||
+        Spot.Bits.bitsOf ty % W.cutsOf rt port != 0) = true
+    · rw [ite_eq_left_iff.2 (fun h' => absurd hc h')] at h
+      refine bind_ok_elim h (fun _ hx _ => ?_)
+      simp [throw, throwThe, MonadExceptOf.throw] at hx
+    · rw [ite_eq_right_iff.2 (fun h' => absurd h' hc)] at h
+      refine bind_ok_elim h (fun o hs h => ?_)
+      cases h
+      refine forIn_upto (fun o => o = []) _ _ ?_ _ _ rfl hs
+      intro j a st _ ha hst
+      repeat' (first
+        | (cases hst; exact ha)
+        | (cases hst
+           exfalso
+           split at hx
+           · rename_i v hv
+             cases hx
+             have e := hlw _ _ _ _ _ hv
+             simp_all
+           · simp [throw, throwThe, MonadExceptOf.throw] at hx)
+        | (refine bind_ok_elim hst (fun _ hx hst => ?_)
+           first
+             | (simp [throw, throwThe, MonadExceptOf.throw] at hx; done)
+             | skip)
+        | (refine ite_ok hst (fun _ hst => ?_) (fun _ hst => ?_))
+        | (split at hst))
+  · cases h
+
+/-- **A root whose units' parts give no wire states none**: `edgesOf` gives no wire where every part of an argument
+of a root node that is no input node is one `laneWire` reads only input nodes of (`partWires_nil`). -/
+theorem edgesOf_nil {P : Prog} {rs W D ws}
+    (hq : ∀ k < (P.defs[P.root]!).body.nodes.size, Spot.Edges.isInputNode P k = false →
+      ∀ i < ((P.defs[P.root]!).body.nodes[k]!).args.size,
+      ∀ qi < (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts.size,
+      ∀ k0 L len cnt v, Flock.Program.laneWire
+        (Flock.Program.partLanes ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[qi]!)).1
+        (Flock.Program.partLanes ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[qi]!)).2
+        k0 L len cnt = .ok v → Spot.Edges.isInputNode P v.1 = true)
+    (h : edgesOf P rs W D = .ok ws) : ws = [] := by
+  unfold edgesOf at h
+  dsimp only at h
+  refine ite_ok h (fun _ h => ?_) (fun _ h => ?_)
+  · refine bind_ok_elim h (fun _ hx _ => ?_)
+    simp [throw, throwThe, MonadExceptOf.throw] at hx
+  refine bind_ok_elim h (fun o hs h => ?_)
+  cases h
+  refine forIn_upto (fun o => o = []) _ _ ?_ _ _ rfl hs
+  intro k a st hk ha hst
+  refine ite_ok hst (fun _ hst => ?_) (fun hnk hst => ?_)
+  · cases hst; exact ha
+  have hnk' : Spot.Edges.isInputNode P k = false := by simpa using hnk
+  split at hst
+  · refine ite_ok hst (fun _ hst => ?_) (fun _ hst => ?_)
+    · refine bind_ok_elim hst (fun _ hx _ => ?_)
+      simp [throw, throwThe, MonadExceptOf.throw] at hx
+    refine ite_ok hst (fun _ hst => ?_) (fun _ hst => ?_)
+    · refine bind_ok_elim hst (fun _ hx _ => ?_)
+      simp [throw, throwThe, MonadExceptOf.throw] at hx
+    refine bind_ok_elim hst (fun a' hi hst => ?_)
+    cases hst
+    refine forIn_upto (fun o => o = []) _ _ ?_ _ _ ha hi
+    intro i b st' hi' hb hst'
+    refine bind_ok_elim hst' (fun b' hq' hst' => ?_)
+    cases hst'
+    refine forIn_upto (fun o => o = []) _ _ ?_ _ _ hb hq'
+    intro qi c st'' hqi hc hst''
+    refine bind_ok_elim hst'' (fun l hl hst'' => ?_)
+    cases hst''
+    show c ++ l = []
+    rw [hc, partWires_nil (hq k hk hnk' i hi' qi hqi) hl]
+    rfl
+  · refine bind_ok_elim hst (fun _ hx _ => ?_)
+    simp [throw, throwThe, MonadExceptOf.throw] at hx
+
 end InferenceOnlyVerifier.Record.SecurityProofs
