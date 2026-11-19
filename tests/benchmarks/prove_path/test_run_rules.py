@@ -1,10 +1,6 @@
 """The rules `run.sh` states and the partition files an audit reads, held to what a stream takes, without running the
 script:
 
-* each rule the script states for its stand-in, the honest run's and the forged run's, under ``--zk`` and under
-  ``PP_PLAIN=1``, is a rate (a stream refuses a fixed design as its rule), and over the stand-in's window, one template's
-  stratum of eight proof blocks a rank, its sampling design is the one the window registers under it: half the proof
-  blocks for the honest run, every one for the forged run, and a stratified design under ``PP_PLAIN=1``;
 * the rule the script's weights tie arm states to its records audit is the rate of every unit of the tie, which names
   the tie's own design, work over every one of its units;
 * that arm tells its records audit what each tie that must be refused forges, a registered read or a unit, and no other
@@ -28,9 +24,9 @@ REPO = BENCH.parents[1]
 RUN_SH = REPO / "benchmarks" / "prove_path" / "run.sh"
 #: where the partition files are kept: beside this benchmark's drivers and beside the one-stage audit's
 KEPT = (BENCH, REPO / "benchmarks" / "one_stage")
-#: the script's variable for the kind of its stand-in's rules, and a partition file's key for the rule it states
-VAR, KEY = "SAMPLING_DESIGN", "law"
-#: the stand-in's window a rank (`tests.pipeline.served_tp --world 2 --I 256`): its one template and its proof blocks
+#: a partition file's key for the rule it states
+KEY = "law"
+#: a window of one template's stratum: its template and its proof blocks
 STANDIN, UNITS = "SiluMul_v2{I=256}", 8
 RATE = "a rate (rate:NUM/DEN, stratified-rate:NUM/DEN or work-rate:NUM/DEN)"
 #: the partition files that still state a fixed design (``subset:K``, ``stratified:K`` or ``work:K``), by path from the
@@ -59,22 +55,6 @@ def rule_of(text: object) -> tuple[S.Selection | None, str | None]:
     return (None, S.BERNOULLI) if rule.text.startswith("bernoulli") else (rule, None)
 
 
-def stated() -> list[tuple[bool, bool, str]]:
-    """The rules the script's stand-in states, each as (under ``PP_PLAIN=1``, the forged run's, its text): the kind the
-    script's variable holds, first under ``--zk`` and then under ``PP_PLAIN=1``, with the rate the honest run hands
-    `served_tp` and the one the forged run writes to its partition file."""
-    text = RUN_SH.read_text()
-    kinds = re.findall(rf"\b{VAR}=([\w-]+)", text)
-    honest = re.findall(rf"--{KEY} \${VAR}:([\w/]+)", text)
-    forged = re.findall(rf'\\"{KEY}\\": \\"\${VAR}:([\w/]+)\\"', text)
-    assert (len(kinds), len(honest), len(forged)) == (2, 1, 1), (
-        f"{RUN_SH.name} no longer states its stand-in's rules as this test reads them ({VAR}=KIND twice, --{KEY} ${VAR}:RATE "
-        f"and \"{KEY}\": \"${VAR}:RATE\" once each): found {kinds}, {honest}, {forged}; state them so, or teach `stated` the "
-        "new form")
-    return [(plain, is_forged, f"{kind}:{arg}")
-            for plain, kind in zip((False, True), kinds, strict=True) for is_forged, arg in ((False, honest[0]), (True, forged[0]))]
-
-
 def partitions() -> dict[str, object]:
     """The rule each partition file states, by the file's path from the root: the JSON objects with ``templates`` and a
     rule among the files kept beside the drivers (`KEPT`) and each file the script names."""
@@ -85,29 +65,6 @@ def partitions() -> dict[str, object]:
         if isinstance(doc, dict) and {"templates", KEY} <= set(doc):
             out[path.relative_to(REPO).as_posix()] = doc[KEY]
     return out
-
-
-def test_each_rule_the_stand_in_states_is_a_rate_whose_design_its_window_registers():
-    """`prove_path.py audit` states its partition file's text as the stream's rule, so a fixed design there ends the audit
-    at the rule check, before any session opens. Each of the stand-in's four rules is a rate, and over a rank's window the
-    sampling design the stream names for it, which its `register` holds the docket to, is the one the window
-    registers: the serving rows read the partition file's text as a rate of that kind and resolve it over the window's
-    program, by the steps of `serving_rows.population`. The honest run samples half a rank's proof blocks and the forged
-    run every one, so its forged unit is sampled; a plain session's design is stratified."""
-    rules = stated()
-    refusals = {text: why for _plain, _forged, text in rules if (why := rule_of(text)[1])}
-    assert not refusals, (f"{RUN_SH.name}'s stand-in states a rule a stream refuses, so its audit ends at the rule check: "
-                          f"state {RATE} instead ({refusals})")
-    program, query = population_program([(SRW.template(STANDIN).fn, UNITS)])
-    for plain, forged, text in rules:
-        rule, _why = rule_of(text)
-        names = S.selection_sampling_design(rule, UNITS, S.selection_sizes(rule, program, query))
-        read = SRW.sampling_design_of(text)
-        assert read == {KEY: names[KEY], "rate": text}, (text, read)
-        registers, table = S.params_sampling_design(read["rate"], program, query, SRW.work_table_of(read, {STANDIN: UNITS}))
-        assert registers == names and table is None, (text, registers, names, table)
-        assert names["k"] == (UNITS if forged else UNITS // 2), (text, names)
-        assert not plain or names[KEY] == "stratified", (text, names)
 
 
 def test_the_weights_ties_arm_states_the_rate_of_every_unit_of_the_tie():

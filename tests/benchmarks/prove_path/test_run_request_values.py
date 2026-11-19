@@ -134,17 +134,6 @@ def test_records_finds_every_file_it_opens_after_served(tmp_path):
     assert b"4242424" in (tmp_path / "keep/served/audit.log").read_bytes()
 
 
-def test_the_standins_workload_prompts_never_reach_out(tmp_path):
-    s, out = tmp_path / "served", tmp_path / "out"
-    put(s, {"workload.json": {"requests": [{"request_id": "q0", "prompt_token_ids": PROMPT}]},
-            "commit/runs.jsonl": [{"rank": 0, "root": "ab"}], "commit/versions.json": {"root_tag": "t"},
-            "commit/rank0/rows.json": {"rows": [PROMPT]}})
-    code = f"O={out}; S={s}; PUBF={PUBF}\n" + block("  mkdir -p $O/standin", "  mkdir -p $O/standin")
-    got = subprocess.run(["bash", "-c", code], capture_output=True, text=True)
-    assert got.returncode == 0, got.stderr
-    assert published(out) == ["standin/runs.jsonl", "standin/versions.json"]
-
-
 #: the files a run keeps in PP_KEEP and never writes under $O: a window's partition and the files beside it, the advice's
 #: length, the tools' error output and logs no reader takes from $OUT, the compilers' argv (local paths), the machine's shape
 KEPT = ("partition.json", "index.json", "window.json", "m*-public.bin", "audit.err", "compilers.json", "advice.log",

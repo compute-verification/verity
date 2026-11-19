@@ -1,15 +1,11 @@
-"""The prove path's compiler, its advice commitment and its sample-order check, and its prover's and verifier's windows on the CPU
-TP stand-in (adapters/vllm's `tests.pipeline.served_tp`, deferred), without proving.
+"""The prove path's compiler, its advice commitment and its sample-order check, and its prover's and verifier's served
+windows, without proving.
 
 * The compiler is total: every byte string is the requests or a `ValueError` naming why, the same on every run; random and
   truncated advice is refused, advice over the registered cap ℓ is refused before it is read, and a malformed opening is
   refused the same way.
 * The advice is fixed before the sample: `advice_before_draw` holds the docket the verifier opens the advice under to the
   one the sample's receipt names, and refuses the advice re-committed after the coins.
-* On the stand-in: each rank's window over the compiler's Programs for the advice is held to the verifier's own from the
-  opening, the advice's negatives are refused by name, and a forged unit is committed consistently (one bit of its rows
-  changed, every check before the sample passing), so only the proof can refuse it. A plain audit (`--plain`) takes its window
-  only inside plain's interim scope, one table under a stratified sample, which a stratified rate states (`a5.plain_refusal`).
 * A forged rank's verdict (`forged_row`), on records written as a5 and a0 write an audit's: behind the ZK server it passes on
   no proof of the forged unit's member released, and in a plain audit on Lean refusing the proof it read. A Lean verdict on
   no proof, refused at setup or for want of the session's files, counts for neither. A window its caller says forges a
@@ -31,7 +27,7 @@ TP stand-in (adapters/vllm's `tests.pipeline.served_tp`, deferred), without prov
 * The per-expert fused cut over a block-FP8 MoE layer's committed step (adapters/vllm's `tests.pipeline.served_experts`, no
   engine): the step sealed as serve-openai seals a closed window, then committed by `commit1` with the tables' registration
   and the checkpoint, is the window the row driver's in-Commit hook commits over the same step (`_same_commitment`), a
-  stand-in `source1` accepts; it is refused without the tables or the checkpoint, and a TP rank's window is handed both."""
+  stand-in `source1` accepts; it is refused without the tables or the checkpoint."""
 from __future__ import annotations
 
 import argparse
@@ -55,7 +51,7 @@ import pytest
 from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
-from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, docket as R
 from verity.commitments import randomness as RND
 from verity.circuits.codec import canonical_json
 from verity.commitments import salt_file as SF
@@ -64,7 +60,7 @@ from verity_difftest import settings as opt
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline import window_advice as WA
-from verity_vllm.pipeline.tp import serving_rows as SRT
+from verity_vllm.commit import step_rows
 
 HERE = (Path(__file__).resolve().parent)
 VLLM = HERE.parents[2] / "tests" / "adapters" / "vllm"  # where adapters/vllm's `tests` imports from
@@ -169,7 +165,7 @@ def _rec(root: str, compiler: str = "cd" * 64) -> dict:
 
 
 def _bound(rec: dict) -> dict:
-    return {k: rec["window"][k] for k in SRT.BINDING}
+    return {k: rec["window"][k] for k in PP.BINDING}
 
 
 def test_the_advice_must_be_in_the_registration_the_challengers_stream_drew_after():
@@ -237,7 +233,7 @@ def test_a_single_gpu_window_proves_the_templates_its_compiler_lists_whole(monke
     from verity_vllm.pipeline import serving_rows as SRW
 
     got = {}
-    rec = SimpleNamespace(run=SimpleNamespace(run_root=bytes(64)), store=SimpleNamespace(commit_scheme=SRT.ROWS_SCHEME),
+    rec = SimpleNamespace(run=SimpleNamespace(run_root=bytes(64)), store=SimpleNamespace(commit_scheme=step_rows.NAME),
                           bundle={"manifest_sha256": "bb" * 32})
     monkeypatch.setattr(PP, "record1", lambda bundle, row_dir: rec)
     monkeypatch.setattr(SRW, "population", lambda progs, partition, run, dirs, arrivals=None, transfer_gates=():
@@ -574,34 +570,6 @@ def test_a_false_units_record_does_not_pass_as_a_forged_read(tmp_path):
     assert RA.forged_outcome(s, d)["ok"] is True
 
 
-@pytest.fixture(scope="module")
-def tp(tmp_path_factory):
-    """The deferred stand-in TP Commit and its advice; both ranks' windows over every unit (subset:8), and rank 0's again
-    with member 0's unit 1 forged, each commit with its own opening."""
-    pytest.importorskip("torch")
-    root = tmp_path_factory.mktemp("prove-path")
-    p = subprocess.run([sys.executable, "-m", "tests.pipeline.served_tp", str(root / "served"), "--world", "2", "--I", "256",
-                        "--law", "subset:4", "--deferred"], cwd=VLLM, capture_output=True, text=True)
-    assert p.returncode == 0, p.stderr[-3000:]
-    c = json.loads(p.stdout.strip().splitlines()[-1])
-    assert PP.main(["advice", "--workload", c["workload"], "--out", str(root / "advice.bin")]) == 0
-    c["all"] = root / "all.json"
-    c["all"].write_text(json.dumps({"templates": ["SiluMul_v2{I=256}"], "law": "subset:8"}))
-    base = ["--tp-commit", c["commit"], "--build-root", c["build"], "--advice", str(root / "advice.bin"), "--partition", str(c["all"]),
-            "--workers", "1"]
-    assert PP.main(["commit", *base, "--opening", str(root / "honest-opening.json"), "--out", str(root / "honest")]) == 0
-    assert PP.main(["commit", *base, "--opening", str(root / "forged-opening.json"), "--out", str(root / "forged"), "--ranks", "0",
-                    "--forge", "0:1"]) == 0
-    c.update(root=root, honest=root / "honest", forged=root / "forged")
-    c["args"] = {w: SimpleArgs(c, root / f"{w}-opening.json") for w in ("honest", "forged")}
-    return c
-
-
-def SimpleArgs(c: dict, opening: Path):
-    return argparse.Namespace(tp_commit=c["commit"], build_root=c["build"], opening=str(opening), cap_bits=PP.CAP_BITS,
-                              partition=str(c["all"]))
-
-
 def _mine(c, which: str, r: int):
     compiler, requests, bound, opening = PP.compiled(c["args"][which])
     return (compiler, bound, opening, *AW.window_of_advice(c["commit"], r, c["all"], compiler, requests, bound))
@@ -623,103 +591,6 @@ def _rows(d: Path) -> bytes:
     m = json.loads((d / "window.json").read_text())["members"][0]
     body = (d / "m0-private.bin").read_bytes()
     return body[:len(body) - m["n"] * len(m["ports"]) * CS.SALT_BYTES]
-
-
-@pytest.mark.slow
-def test_each_ranks_window_is_held_to_the_verifiers_window_from_the_opening(tp):
-    """Both ranks bind one advice root, the one the verifier recomputes from the opening, and the compiler's digest with ℓ in it."""
-    compiler, bound, opening, _mine0, _held0 = _mine(tp, "honest", 0)
-    data = bytes.fromhex(opening["advice"])
-    assert bound["advice"]["root"] == AW.commit_advice(compiler, data, [bytes.fromhex(s) for s in opening["salts"]]).root.hex()
-    assert bound["compiler"] == {"name": PP.CAPPED, "digest": PP.Capped(compiler.inner, PP.CAP_BITS).digest}
-    assert json.loads((tp["honest"] / "commit.json").read_text())["binding"] == bound
-    for r in range(2):
-        _c, _b, _o, mine, held = _mine(tp, "honest", r)
-        d = tp["honest"] / f"rank{r}"
-        rec = _registered(d)
-        assert {k: rec["window"][k] for k in SRT.BINDING} == bound
-        assert SRT.source(rec["window"], mine, held)["ok"]
-        assert _check(rec, mine, _publics(d, mine)).ok
-        assert [(m.template, m.n) for m in mine.members] == [("SiluMul_v2{I=256}", 8)]
-
-
-@pytest.mark.slow
-def test_the_advices_negatives_are_each_refused_by_name(tp):
-    compiler, _bound, opening, mine, held = _mine(tp, "honest", 0)
-    a = argparse.Namespace(**vars(tp["args"]["honest"]))
-    got = PP.more_negatives(a, 0, 2, compiler, mine, held, tp["honest"] / "rank0", opening)
-    assert {k: v["codes"] for k, v in got.items() if k != "registration-of-another-rank (source)"} == {
-        "registration-naming-another-compiler (source)": ["compiler"],
-        "registration-naming-another-advice (source)": ["advice"],
-        "opening-under-another-salt (source)": ["advice"],
-        "registration-binds-no-compiler-or-advice (source)": ["compiler", "advice"],
-        "registration-names-another-cap (source)": ["compiler"]}
-    other = got["registration-of-another-rank (source)"]
-    assert other["refused"] and {"run", "tp"} <= set(other["codes"])
-
-
-@pytest.mark.slow
-def test_advice_committed_after_the_sample_passes_every_check_before_it_and_is_refused(tp):
-    """With the receipt the stream writes on receiving the honest docket, the honest docket holds; the same advice
-    committed again after the coins (a fresh root, a true commitment of it, which `source` accepts with its opening) is refused."""
-    compiler, bound, opening, mine, held = _mine(tp, "honest", 0)
-    rec = _registered(tp["honest"] / "rank0")
-    receipt = R.receipt(rec, A5.CHALLENGER, received="0")
-    assert PP.advice_before_draw(receipt, rec, bound)["ok"]
-    got = PP.advice_after_sample(compiler, receipt, rec, opening, mine, held)
-    assert got == {"refused": True, "codes": ["after-the-draw"], "before_draw_checks_pass": True}
-
-
-@pytest.mark.slow
-def test_a_forged_unit_passes_every_check_before_the_sample_and_differs_in_one_bit(tp):
-    """The forged window's docket holds to the verifier's window and its own public bodies, as the honest one does: its
-    rows, commit strings and roots agree with the flipped word. Its rows differ from the honest window's in exactly one bit."""
-    _c, _b, _o, mine, held = _mine(tp, "forged", 0)
-    d = tp["forged"] / "rank0"
-    rec = _registered(d)
-    assert SRT.source(rec["window"], mine, held)["ok"]
-    assert _check(rec, mine, _publics(d, mine)).ok
-    honest, forged = _rows(tp["honest"] / "rank0"), _rows(d)
-    assert len(honest) == len(forged) and sum(bin(x ^ y).count("1") for x, y in zip(honest, forged, strict=True)) == 1
-    assert json.loads((tp["forged"] / "commit.json").read_text())["ranks"]["0"]["forged"] == {"member": 0, "unit": 1}
-
-
-@pytest.mark.slow
-def test_a_plain_audit_takes_the_stand_ins_window_under_a_stratified_rate_only_inside_one_table(tp):
-    """`--plain` covers one table under a stratified sample (`a5.PLAIN_SCOPE`): the stand-in's window, one member over every
-    unit, is inside it under the stratified rate a stream's rule states (stratified-rate:1/2, the stratified sampling design at the K its
-    one stratum needs), and refused before the sample under the subset or work rate, its own fixed count (subset:8), sampled
-    outside a stream, with a second member, or with registered reads or shared rows. A `--zk` audit is refused for none of these."""
-    compiler, requests, bound, _o = PP.compiled(tp["args"]["honest"])
-    _c, _b, _o, mine, _held = _mine(tp, "honest", 0)
-
-    def rated(sampling_design: str):
-        pf = tp["root"] / f"partition-{sampling_design.split(':')[0]}.json"
-        pf.write_text(json.dumps({"templates": ["SiluMul_v2{I=256}"], "law": sampling_design}))
-        return AW.window_of_advice(tp["commit"], 0, pf, compiler, requests, bound)[0]
-
-    stratified, subset, work = (rated(f"{kind}rate:1/2") for kind in ("stratified-", "", "work-"))
-    assert stratified.law == {"law": "stratified", "k": DR.strat_k(1, 2, [8], 8)} == {"law": "stratified", "k": 4}
-    assert (subset.law, work.law["law"]) == ({"law": "subset", "k": 4}, "work")
-    plain, zk = (argparse.Namespace(plain=p, coins="challenger") for p in (True, False))
-    assert A5.plain_refusal(plain, stratified, None) is None
-    m = mine.members[0]
-
-    def window(*members):
-        return SimpleNamespace(members=members, law=stratified.law, population=sum(x.n for x in members), row_tables=())
-
-    cases = [("a plain session's draw is stratified", plain, mine, None),
-             ("a plain session's draw is stratified", plain, subset, None),
-             ("a plain session's draw is stratified", plain, work, None),
-             ("through a rank's service.Stream", argparse.Namespace(plain=True, coins=None), stratified, None),
-             ("the window has 2 members", plain, window(m, replace(m, base=m.n)), None),
-             ("registered reads, shared rows", plain, stratified, {m.key: {"ports": {}}}),
-             ("registered reads, shared rows", plain, window(replace(m, tables=(("x", 1),))), None)]
-    for why, a, w, registered in cases:
-        got = A5.plain_refusal(a, w, registered)
-        assert got is not None and why in got and A5.PLAIN_SCOPE in got, (why, got)
-        assert A5.plain_refusal(argparse.Namespace(**{**vars(a), "plain": False}), w, registered) is None
-    assert A5.plain_refusal(zk, mine, None) is None
 
 
 def _accepted(sampling_design: dict, delta: float = 0.5) -> dict:
@@ -954,12 +825,12 @@ def test_a_builds_input_batches_are_its_parameters_as_src_shapes_them():
 
 
 def _single(root: str = "aa" * 64) -> tuple[dict, SimpleNamespace, dict]:
-    r = SimpleNamespace(store=SimpleNamespace(commit_scheme=SRT.ROWS_SCHEME), run=SimpleNamespace(run_root=bytes.fromhex(root)),
+    r = SimpleNamespace(store=SimpleNamespace(commit_scheme=step_rows.NAME), run=SimpleNamespace(run_root=bytes.fromhex(root)),
                         bundle={"manifest_sha256": "bb" * 32})
     si = PP.stand_in1(r)
-    held = {"commitment": SRT.ROWS_SCHEME, "served_programs": {"r0": "cc" * 64}, "stand_in": si,
+    held = {"commitment": step_rows.NAME, "served_programs": {"r0": "cc" * 64}, "stand_in": si,
             "compiler": {"name": PP.CAPPED, "digest": "dd" * 64}, "advice": {"root": "ee" * 64, "bits": 120}}
-    w = {"kind": "stand-in", "run": root, "commitment": SRT.ROWS_SCHEME, "of": si["of"], "link": si["link"],
+    w = {"kind": "stand-in", "run": root, "commitment": step_rows.NAME, "of": si["of"], "link": si["link"],
          "served_programs": held["served_programs"], "compiler": held["compiler"], "advice": held["advice"]}
     return w, SimpleNamespace(run=root), held
 
@@ -1012,7 +883,7 @@ def _serve_request(i: int, prompt: list[int], cap: int, windows: list[int], user
 SERVER = ("verity_vllm.program.predict.steps.compile_steps", "5e" * 64)
 
 
-def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str = SRT.ROWS_SCHEME, published: str | None = None,
+def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str = step_rows.NAME, published: str | None = None,
             uncapped: bool = False, gates: tuple[str, ...] | None = None) -> SimpleNamespace:
     """A serve-openai run dir with one closed window (w0, the stand-in workload's two requests by their `user`) and a request of
     another window, its advice committed as `verity-vllm advice` commits it under the served compiler (or, ``uncapped``, under
@@ -1699,7 +1570,7 @@ def test_the_prover_commits_a_served_window_under_the_published_binding(tmp_path
     assert bound == s.bound and opening["advice"] == s.data.hex()
     assert [q["digest"] for q in requests] == ["d0" * 64, "d1" * 64]
     assert PP.serve_check_of(s.a, bound) == {"ok": True, "codes": [], "detail": {
-        "window": 0, "published_root": s.root, "commitment": SRT.ROWS_SCHEME, "compiler": s.bound["compiler"],
+        "window": 0, "published_root": s.root, "commitment": step_rows.NAME, "compiler": s.bound["compiler"],
         "advice": s.bound["advice"], "run_id": "RUN/w0", "follows": {"last": None, "carried": []}}}
     by_id = PP.i2_against_record(s.a, requests, bound["compiler"])
     assert by_id["equal"] and by_id["units"]["r1"] == {"i2": "d1" * 64, "of_record": "d1" * 64, "equal": True}
@@ -1741,13 +1612,13 @@ def test_a_served_window_is_refused_before_any_commit_by_name(tmp_path, monkeypa
 def test_a_served_windows_negatives_are_each_refused_by_name(tmp_path, monkeypatch):
     s = _served(tmp_path, monkeypatch)
     w = PP.serve_window(str(s.run), 0)
-    assert {k: v["codes"] for k, v in PP.serve_negatives(w, s.compiler, s.bound, s.root, SRT.ROWS_SCHEME, s.data).items()} == {
+    assert {k: v["codes"] for k, v in PP.serve_negatives(w, s.compiler, s.bound, s.root, step_rows.NAME, s.data).items()} == {
         "registration-without-the-cap (serve)": ["cap", "compiler"],
         "registration-of-another-window (serve)": ["window"],
         "published-root-not-sha512 (serve)": ["sha512", "run_root", "commit"],
         "published-root-of-another-commit (serve)": ["run_root", "commit"]}
     ok = PP.source1({}, SimpleNamespace(run=s.root), {"commitment": "x", "served_programs": {}, "stand_in": {"of": 1, "link": 2}})
-    both = PP.with_serve(ok, PP.serve_check(w, s.bound, "cc" * 64, SRT.ROWS_SCHEME, s.data))
+    both = PP.with_serve(ok, PP.serve_check(w, s.bound, "cc" * 64, step_rows.NAME, s.data))
     assert not both["ok"] and both["codes"][-1] == "run_root" and both["detail"]["serve"]["published_root"] == s.root
 
 
@@ -2273,16 +2144,3 @@ def test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpo
     assert not any((tmp_path / d / "registration.json").exists() for d in ("w1", "w3"))
 
 
-def test_a_tp_ranks_window_is_handed_the_tables_and_the_checkpoint(monkeypatch, tmp_path):
-    assert PP.tables_of(argparse.Namespace(serving_rows_tables=None)) is None
-    assert PP.checkpoint_of(argparse.Namespace(checkpoint_dir=None)) is None
-    got = {}
-    monkeypatch.setattr(PP, "compiler_of_args", lambda a: "compiler")
-    monkeypatch.setattr(PP, "checkpoint_of", lambda a: ("checkpoint", a.checkpoint_dir))
-    monkeypatch.setattr(AW, "commit_window", lambda commit, r, partition, out, compiler, requests, bound, **kw:
-                        got.update(kw, at=(commit, r, partition, str(out), compiler)) or {"run": "x"})
-    a = argparse.Namespace(tp_commit="c", partition="p", out=str(tmp_path), workers=1, forge=None, checkpoint_dir="ck",
-                           serving_rows_tables="t-rank{rank}.json")
-    assert PP.commit_rank((a, 3, [], {})) == {"run": "x", "forged": None}
-    assert got == {"at": ("c", 3, "p", str(tmp_path / "rank3"), "compiler"), "workers": 1,
-                   "tables": {"registration": "t-rank{rank}.json"}, "checkpoint": ("checkpoint", "ck")}
