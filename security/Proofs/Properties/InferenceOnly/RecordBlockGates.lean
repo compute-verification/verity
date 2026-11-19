@@ -304,7 +304,7 @@ theorem block_gates {j tr : Json} {c : InferenceOnlyVerifier.Record.Case} (h : I
     (hNE : InferenceOnlyVerifier.Record.SecurityProofs.NoEdge c.f.P) {d : Verity.RegisteredCircuit} (hd : Served form c d) :
     ∀ u, d.D.size (d.𝓘.gates u) = (form.summarize c).gates ∨ d.𝓘.gates u = ∅ := by
   intro u
-  obtain ⟨P, doc, W, Sw, rs, at_, hdec, -, htext, -, hwires, -, -, hS, hrs, -, -, -, -, -, hL, -, hDiv⟩ := hd
+  obtain ⟨P, doc, W, Sw, rs, at_, hdec, -, htext, -, hwires, -, -, hS, hrs, -, -, -, hL, -, hDiv⟩ := hd
   have hPc : c.f.P = P := Except.ok.inj ((decode_of_read h).symm.trans hdec)
   subst hPc
   have hrs' : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg c.f.P)

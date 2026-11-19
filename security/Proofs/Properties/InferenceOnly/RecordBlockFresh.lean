@@ -82,6 +82,14 @@ theorem cut_outer {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Sp
   obtain ⟨hk0, hko, -⟩ := cut_divides hS hlt hlq
   exact ⟨hk0, by rw [← houter]; exact hko⟩
 
+/-- Where no row has a writer, no wire has a leaf to land: `Aligned` has nothing to say. -/
+theorem aligned_of_unwritten {P : Flock.Program.Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}
+    (hS : ∀ t u p k, S.writerOf t u p k = none) : Aligned P rs W S := by
+  intro r l' g' lo' hi' hwl
+  obtain ⟨wt, wu, out, sc', hw, -⟩ := hwl
+  rw [hS] at hw
+  cases hw
+
 /-- **A row's reads land on no more bits than the record gives the row.** A row some read lands through is a row of
 a template of the record, inside its port's cut, and the gates its reads land on are together no wider than the row's
 bits in the record: the port's bits over its cut. -/
@@ -90,7 +98,7 @@ theorem landing_bits {j tr : Json} {c : Case} (h : read j tr = .ok c)
     {D : Verity.Circuit} {at_ : Fin D.N → ℕ}
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg c.f.P)
       (c.W.templates.map (·.1)).toArray = .ok rs)
-    (hT : Templates c.f.P rs c.W) (hOwn : OwnRowsW c.f.P rs c.W S) (hAl : Aligned c.f.P rs c.W S)
+    (hT : Templates c.f.P rs c.W) (hOwn : OwnRowsW c.f.P rs c.W S)
     (hL : LaysOut c.f.P rs c.W S D at_) (hS : Spot.Wires.check c.W = .ok S) {r : Row} {a : Fin D.N}
     (ha : a ∈ landing c.f.P rs c.W S at_ r) :
     (∃ t ∈ c.f.ts, t.tid = r.tid ∧ ∃ row ∈ t.rows, row.1 = r.port) ∧ r.row < c.W.cutsOf r.tid r.port ∧
@@ -100,6 +108,8 @@ theorem landing_bits {j tr : Json} {c : Case} (h : read j tr = .ok c)
   have hts := front_text hf
   have hP := readProg_of_read h
   have hIP := inputParts_of_read h hNE
+  obtain ⟨text, htext, -, hwires⟩ := InferenceOnlyVerifier.Record.SecurityProofs.wiring_of_read h
+  have hAl : Aligned c.f.P rs c.W S := aligned_of_unwritten (unwritten hIP htext hwires hS)
   obtain ⟨hnd, hnames⟩ := tmpls_named hts
   obtain ⟨l, o, lo, hi, ⟨sc, hu, i, hi', hp, hrow, -⟩, -⟩ := mem_landing.1 ha
   obtain ⟨t, ht, htid, -, hdefn, r0, hr0⟩ := unit_tmpl hP hts hrs hu
@@ -137,14 +147,13 @@ theorem block_fresh (hFR : FreshRows) {j tr : Json} {c : Case} (h : read j tr = 
     {d : Verity.RegisteredCircuit} (hd : Served form c d) (u : Fin d.n) :
     InferenceOnly.freshInput d (d.𝓘.gates u) ≤ (form.summarize c).fresh := by
   classical
-  obtain ⟨P, doc, Wt, S, rs, at_, hdec, -, -, -, -, -, -, hS, hrs, hT, -, hAl, -, -, hL, hNm, hD⟩ := hd
+  obtain ⟨P, doc, Wt, S, rs, at_, hdec, -, -, -, -, -, -, hS, hrs, hT, -, -, hL, hNm, hD⟩ := hd
   obtain rfl : c.f.P = P := Except.ok.inj ((decode_of_read h).symm.trans hdec)
   obtain rfl : c.wired = S := Except.ok.inj ((wired_of_read h).symm.trans hS)
   have hS : Spot.Wires.check c.W = .ok c.wired := hS
   have hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg c.f.P)
       (c.W.templates.map (·.1)).toArray = .ok rs := hrs
   have hT : Templates c.f.P rs c.W := hT
-  have hAl : Aligned c.f.P rs c.W c.wired := hAl
   have hL : LaysOut c.f.P rs c.W c.wired d.D at_ := hL
   have hNm : Names c.f.P rs c.W (fun r => (c.heldAt r).isSome) at_ d.θ := hNm
   have hD : Divides c.f.P rs c.slot at_ d.𝓘 := hD
@@ -186,7 +195,7 @@ theorem block_fresh (hFR : FreshRows) {j tr : Json} {c : Case} (h : read j tr = 
     intro x hx
     obtain ⟨a, ha, rfl⟩ := Finset.mem_image.1 hx
     obtain ⟨hs, hni, hnt, hl⟩ := hrow a ha
-    obtain ⟨h1, h2, -⟩ := landing_bits h hNE hrs hT hOwn hAl hL hS hl
+    obtain ⟨h1, h2, -⟩ := landing_bits h hNE hrs hT hOwn hL hS hl
     exact ⟨h1, h2, hs, hni, hnt⟩)
   refine le_trans ?_ hbound
   show d.D.width (d.D.into (d.𝓘.gates u) \ d.θ) ≤ _
@@ -196,7 +205,7 @@ theorem block_fresh (hFR : FreshRows) {j tr : Json} {c : Case} (h : read j tr = 
   refine Finset.sum_le_sum fun x hx => ?_
   obtain ⟨a, ha, rfl⟩ := Finset.mem_image.1 hx
   obtain ⟨-, -, -, hl⟩ := hrow a ha
-  obtain ⟨-, -, hle⟩ := landing_bits h hNE hrs hT hOwn hAl hL hS hl
+  obtain ⟨-, -, hle⟩ := landing_bits h hNE hrs hT hOwn hL hS hl
   refine le_trans (Finset.sum_le_sum_of_subset ?_) hle
   intro b hb
   obtain ⟨hbA, hbφ⟩ := Finset.mem_filter.1 hb

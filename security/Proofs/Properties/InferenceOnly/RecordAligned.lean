@@ -20,9 +20,8 @@ rows do not line up, and this module states what a record it accepts has, in the
 
 * `aligned` (`Aligned`): a leaf of the writer's row lies inside one leaf of the reader's row, or the reader's unit
   returns no leaf of the row.
-* `filled` (`Filled`): every bit of a leaf of a wired row is a bit of a leaf of the writer's row.
 
-Both read `wired_row`, what the check has tested of a row with a writer: the row and the writer's output row have
+It reads `wired_row`, what the check has tested of a row with a writer: the row and the writer's output row have
 the same bits, and either the reader's parameter has leaves of one bit and is none of what its Definition passes on,
 or each row's leaves are of one width and the writer's divides the reader's.
 
@@ -374,7 +373,7 @@ theorem wired_row {tids : Array String} (hP : ReadProg P)
     rw [hB, Nat.mul_left_comm]
   rw [hA, hD, Nat.mul_div_cancel_left _ hk0, hC]
 
-/-! ## Aligned and Filled -/
+/-! ## Aligned -/
 
 /-- **Every wire lands whole** (`Aligned`), of a record whose wires pass the check's `unwhole`. -/
 theorem aligned (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
@@ -421,23 +420,5 @@ theorem aligned (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityPro
     · rw [bitAt_const _ (o * c) hR _ (Nat.le_of_lt hlt), bitAt_const _ o hWr _ (Nat.le_of_lt hl'), hR _ hlt,
         hWr _ hl']
       exact hin2
-
-/-- **A wired row is its writer's bits** (`Filled`), of a record whose wires pass the check's `unwhole`. -/
-theorem filled (hP : ReadProg P)
-    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
-    (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
-    (hts : templatesOf P doc = .ok ts)
-    (hwh : unwhole ts
-      (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S.wires = none) : Filled P rs W S := by
-  intro r l g lo up hsome hrl b _ hb2
-  obtain ⟨⟨wt, wu, out⟩, hw⟩ := Option.isSome_iff_exists.1 hsome
-  obtain ⟨sc, sc', i, f, hsc, h0, hsc', hi, hp, hf, rfl, hrow, hbits, -⟩ := wired_row hP hrs hT hS hts hwh hw
-  obtain ⟨hl, -, rfl, rfl⟩ := rowLeaf_data (portsNamed hrs hT) hsc hi hp hrl
-  have hb : b < bitAt (outRow (P.defs[sc'.d]!) f).2 (outRow (P.defs[sc'.d]!) f).2.size := by
-    rw [bitAt_size, ← hbits, ← bitAt_size]
-    exact Nat.lt_of_lt_of_le hb2 (bitAt_leaf_le _ l hl)
-  obtain ⟨l', hl', h1, h2⟩ := leaf_of_bit _ _ (Nat.le_refl _) b hb
-  obtain ⟨g', hg'⟩ := outLeaf_intro hP hrs hsc' hf hl'
-  exact ⟨l', g', _, _, ⟨wt, wu, _, sc', hw, h0, hsc', hg'⟩, h1, h2⟩
 
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs

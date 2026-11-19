@@ -25,9 +25,9 @@ front's templates (`FinishTemplates`). `form_laidOut` is it where the root also 
   (`wiring_of_read`, `slot_of_read`, `declared_of_heldAt`).
 * The wiring. It passes `Spot.Wires.check` (`wired_of_read`), the template query accepts its template ids and its
   templates are the Program's (`templates_of_read`); every unit's rows are input gates (`rowLeaf_input`), and two
-  rows that share a gate are one row, or declared at one bit of one read or table (`declaredShares_of_read`); no wire
-  has a writer (`unwritten`), so every wire lands whole and every bit of a wired row is its writer's vacuously; and no
-  row the check holds has a writer (`held_unwired`).
+  rows that share a gate are one row, or declared at one bit of one read or table (`declaredShares_of_read`); and no
+  row the check holds has a writer (`held_unwired`). `Served` states nothing of a wire's alignment or filling: the
+  rows have no writer (`unwritten`).
 * The circuit. What a unit returns and what its gates read are its own (`returnsOwn`, `operandsOwn`), a unit's gates
   are computed and every gate has its place (`unitsComputed`, `gatesOwn`), and the wires rank the units (`ranked`):
   so the Program's gates no wire covers are a circuit (`laysOut_exists`). θ is the gates of the rows held and the
@@ -117,13 +117,6 @@ theorem served_of_read_noEdge (hFT : InferenceOnlyVerifier.Record.SecurityProofs
     decode_of_read h, (inst_of_read h).2, htext, hcuts, hwires, slot_of_read h,
     fun r hd hh => declared_of_heldAt h hh, hS, hrs, hT,
     ⟨fun r l g lo hi hl => Or.inl (rowLeaf_input hP hIP hrs r l g lo hi hl), hSh⟩,
-    (fun r l' g' lo' hi' hwl => by
-      obtain ⟨wt, wu, out, sc', hw, -⟩ := hwl
-      rw [hunw] at hw
-      cases hw),
-    (fun r l g lo hi hsome => by
-      rw [hunw] at hsome
-      cases hsome),
     fun r hh => held_unwired h r hh, hL, hN, hD⟩
 
 /-- **A record `read` accepts of a root with no edge lays out a registered circuit**: the wired circuit of its

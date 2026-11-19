@@ -30,8 +30,8 @@ outer length, and its outputs that Definition's output rows, each its bits round
 the Program's, the writer it finds for a row is a unit and an output row of the Program, and a cut divides its port's
 leaves. No two parameters of a Definition have one name, so a row's leaves are one parameter's and share no bit.
 
-Every unit's rows are its own input gates (`OwnRows`), and every wire lands whole (`Aligned`: a writer's leaf lies
-inside one leaf of the row that reads it). `Spot.Wires.check` compares a wire's two rows in words alone, so a check
+Every unit's rows are its own input gates (`OwnRows`). A wire lands whole (`Aligned`) where a writer's leaf lies inside one
+leaf of the row that reads it. `Spot.Wires.check` compares a wire's two rows in words alone, so a check
 that stops there leaves a 16-bit reader leaf free to read sixteen gates of 16 bits through a writer that passes
 one-bit leaves on. A writer's leaf may instead straddle leaves of the row that reads it where the reader's unit passes
 on none of the leaves it meets (`PassedOn`: the leaf is also a leaf of an output row of that unit). A leaf that is not
@@ -39,11 +39,7 @@ passed on is read by its own unit's gates alone, and through it they read leaves
 no more bits than the reader's row has words for: a row of 32 one-bit leaves takes one 32-bit leaf so. That a writer's
 leaf inside one leaf of the row is read through that leaf alone rests on a row's leaves sharing no bit: were two
 parameters of one name one row, a writer's leaf inside its wide leaf would meet its narrow leaves too, which the unit
-may pass on.
-
-Every bit of a wired row lies in a leaf of its writer (`Filled`), so none is read as padding. `Spot.Wires.check`
-holds a reader row to its writer's words, an output row's bits rounded up, so a row wired to an output row that is
-not whole words has bits past its writer's and lays out no circuit.
+may pass on. `Served` does not state it: the records the proofs cover have no wire.
 
 **The record's text.** A record lays out a circuit only where the check reads it as its text states it (`Served`),
 by the readers a check of a circuit record is built on (`Spot.RecordText`), so that the check and these
@@ -80,7 +76,7 @@ counting, and a statement that offered it would say nothing.
 that pin, and the reader has the reference's roles, up to such a collision. It follows from `DigestPins`,
 `Provenance` and a layout that reads a Definition's signature alone (`LayoutReads`).
 
-What these do not say: that every row the text declares is held; which leaves of its parameter a declared read
+What these do not say: that a wire lands whole (`Aligned`) or fills its row; that every row the text declares is held; which leaves of its parameter a declared read
 takes; that the rows and outputs of the templates the text's readers lay the units out by
 (`Spot.RecordText.templatesOf`) are the wiring's (`Templates`), two definitions held to one Program with no lemma
 between them, though the two number a template's units alike (`unitAt_iff`, `Proofs.Properties.InferenceOnly.Record`);
@@ -262,14 +258,7 @@ def Aligned (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wir
     (∃ l g lo hi, RowLeaf P rs W r l g lo hi ∧ lo ≤ lo' ∧ hi' ≤ hi) ∨
       ∀ l g lo hi, RowLeaf P rs W r l g lo hi → lo < hi' → lo' < hi → ¬ PassedOn P rs r g
 
-/-- **A wired row is its writer's bits**: every bit of a leaf of a reader row that has a writer lies in a leaf of the
-output row it is wired to. -/
-def Filled (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) : Prop :=
-  ∀ (r : Row) l g lo hi, (S.writerOf r.tid r.unit r.port r.row).isSome → RowLeaf P rs W r l g lo hi →
-    ∀ b, lo ≤ b → b < hi → ∃ l' g' lo' hi', WriterLeaf P rs S r l' g' lo' hi' ∧ lo' ≤ b ∧ b < hi'
-
-/-- The wired gate `g` reads `g'`: `g'` is a leaf of the output row `g`'s row is wired to, and their bits meet. Under
-`Filled` every bit of `g` is in such a leaf. -/
+/-- The wired gate `g` reads `g'`: `g'` is a leaf of the output row `g`'s row is wired to, and their bits meet. -/
 def Feeds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (g' g : ℕ) : Prop :=
   ∃ r l l' lo hi lo' hi', RowLeaf P rs W r l g lo hi ∧ WriterLeaf P rs S r l' g' lo' hi' ∧ lo < hi' ∧ lo' < hi
 
@@ -306,7 +295,7 @@ and the edges of the Program's root (`Spot.RecordText.wiring`); the slots are th
 (`Spot.RecordText.slot`); and every row the check holds is one the text declares, for the reason it declares
 (`Spot.RecordText.declared`). The wiring passes `Spot.Wires.check`, and its templates are the Program's: the
 root's nodes (`Flock.TemplateQuery.evaluate`), with their units, rows and outputs (`Templates`); every unit's rows
-are input gates under their one declaration or its writers' outputs (`OwnOrDeclaredRows`), every wire lands whole, and every bit of a wired row is its writer's; no row the check
+are input gates under their one declaration or its writers' outputs (`OwnOrDeclaredRows`); no row the check
 holds has a writer; and `d` is the wired circuit, θ the rows the check holds and `𝓘` the slots.
 
 No clause asks that the text names its Program: where a gate is computed or a row is held it does, since the gate's
@@ -330,8 +319,7 @@ def Served (F : Form) (c : F.Case) (d : Verity.RegisteredCircuit) : Prop :=
     Spot.Wires.check (F.wiring c) = .ok S ∧
     Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P)
       ((F.wiring c).templates.map (·.1)).toArray = .ok rs ∧
-    Templates P rs (F.wiring c) ∧ OwnOrDeclaredRows P doc rs (F.wiring c) S ∧ Aligned P rs (F.wiring c) S ∧
-    Filled P rs (F.wiring c) S ∧ (∀ r, (F.held c r).isSome → S.writerOf r.tid r.unit r.port r.row = none) ∧
+    Templates P rs (F.wiring c) ∧ OwnOrDeclaredRows P doc rs (F.wiring c) S ∧ (∀ r, (F.held c r).isSome → S.writerOf r.tid r.unit r.port r.row = none) ∧
     LaysOut P rs (F.wiring c) S d.D at_ ∧
     Names P rs (F.wiring c) (fun r => (F.held c r).isSome) at_ d.θ ∧ Divides P rs (F.slot c) at_ d.𝓘
 
