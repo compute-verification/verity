@@ -129,7 +129,7 @@ def test_the_committers_registered_roots_hold_every_int8_weight_read_but_the_rot
 @pytest.mark.slow
 def test_the_int8_class_wired_program_reads_the_s8_weights_as_registered_words_and_is_its_members_fed_by_hand():
     """Each s8 slice (`ScaledMmS8_v1`) reads its weight rows as the weights registration's u16 words recut to bytes and its
-    row scales as 32-bit leaves, so the class circuit is one wired Program with no free row. Slow (about two minutes): only the
+    row scales as 32-bit leaves, so the class circuit is one wired Program with no free row. Slow (about fourteen minutes): only the
     whole int8 class holds the s8 reads."""
     circuit = WC.class_circuit(_registered(), CLASS, None, GRAIN)
     prog, _ = wired(circuit)
