@@ -48,15 +48,15 @@ import numpy as np
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.refs import runs
+from verity.commitments import registered_value as RV
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
-from verity.commitments import registered_value as RV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     registered_commit,
 )
 
-from verity_vllm.check.replay.checks import check_rows
+from verity_vllm.check.capture_plan import NODE, captured
 from verity_vllm.definitions.numerics.rows import ROWS
 from verity_vllm.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity_vllm.definitions.registry import io_shell as IO
@@ -263,9 +263,6 @@ def _op(d: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
     return str(d["op_path"]), tuple(str(m[0]) for m in d["members"])
 
 
-#: a call boundary's op path: its module, then its fx node, its op counted over the request (`naming`: ``row_quant``,
-#: ``row_quant_1``, ...)
-_NODE = re.compile(r"(.+)/(.+?)(?:_\d+)?")
 
 
 def _respelt(rows: Sequence[Mapping[str, Any]], store: Any, rid: str, arrive: int) -> dict[tuple[int, str], str]:
@@ -278,7 +275,7 @@ def _respelt(rows: Sequence[Mapping[str, Any]], store: Any, rid: str, arrive: in
     want: dict[tuple[int, str], set[str]] = {}
     for d in rows:
         want.setdefault((int(d["step"]), str(d["op_path"])), set()).update(str(m[0]) for m in d["members"])
-    node = {key: x.groups() for key in want if (x := _NODE.fullmatch(key[1]))}
+    node = {key: x.groups() for key in want if (x := NODE.fullmatch(key[1]))}
     alone = Counter((s, g) for (s, _op), g in node.items())
     out = {}
     for (s, op), members in want.items():
@@ -286,7 +283,7 @@ def _respelt(rows: Sequence[Mapping[str, Any]], store: Any, rid: str, arrive: in
         e, g = arrive + s, node.get((s, op))
         if g is None or alone[(s, g)] != 1 or store.resolve(op) != (op, 0) or all(store.has(rid, e, op, m) for m in members):
             continue
-        same = [o for o in store.ops(rid, e) if (x := _NODE.fullmatch(o)) and x.groups() == g]
+        same = [o for o in store.ops(rid, e) if (x := NODE.fullmatch(o)) and x.groups() == g]
         if len(same) == 1 and store.resolve(same[0]) == (same[0], 0) and all(store.has(rid, e, same[0], m) for m in members):
             out[(s, op)] = same[0]
     return out
@@ -401,16 +398,9 @@ class Served:
         ``arrive``, each op read under the op path the record binds it under (`_respelt`). A check of its Program (its
         instances header's ``checks``: the length rule, the seed rule) computes the Program's verdict from committed
         values; the engine never runs it and the record binds no member of it, so it is no served op and is left out. Any
-        other row with no committed member is refused by name."""
-        checks = {i for _what, i, _lo, _hi in check_rows(pi)}
-        rows = []
-        for r in pi.rows:
-            d = pi.describe(r)
-            if d is None or not d["members"]:
-                if int(r["i"]) in checks:
-                    continue
-                raise ValueError(f"{rid}: row {r['i']} ({r['spec']}) has no committed member")
-            rows.append({**d, "spec": r["spec"]})
+        other row with no committed member, or with a member whose value family is not served or is unknown, is refused by
+        name (`capture_plan.captured`)."""
+        rows = captured(pi, rid)
         at = _respelt(rows, store, rid, arrive)
 
         def bound(s: int, op: str, m: str) -> int:

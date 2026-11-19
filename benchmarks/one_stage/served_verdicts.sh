@@ -1176,8 +1176,9 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --seal \
     --max-num-batched-tokens "$T" --window-steps "$WINDOW_STEPS" "${h1[@]}" "${day[@]}" \
-    --required-manifest "$PRED/manifest.json" --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 \
-    --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" \
+    --row-build "$PRED" --hidden-so "$HIDDEN_SO" --tap-cap-mb 2048 \
+    --window-requests "$SLOTS" --window-class "${V3C_CLASS:-4,32,4}" --max-num-seqs "$SLOTS" \
+    --max-model-len "$(IFS=, read -r _ p o _ <<< "${V3C_CLASS:-4,32,4}"; echo $((p + o)))" \
     --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 ${SERVE_ARGS:-} \
     > "$D/serve.log" 2>&1 &
   local srv=$! up=0 c=0 s=0 rc=0 release
