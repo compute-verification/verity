@@ -256,16 +256,18 @@ UNPINNED = "no pinned key: the session was checked under a key the configuration
 def development_of(trusted_sha512: str | None, pinned: Collection[str], facts: Sequence[str] = ()) -> str | None:
     """Why a piece's run is a development run, None where it isn't: each planted or simulated fact it ran with
     (``facts``, by name), and `UNPINNED` where the key its session was checked under, ``trusted_sha512``, is none of
-    ``pinned`` (a run under ``--run-keys`` or a key given by hand among them)."""
+    ``pinned`` (a run under ``--run-keys`` or a key given by hand among them). This is a mark the node itself chooses to
+    write, so it cures an honest developer's mistake and nothing else; the real cure is the composer deriving the mark
+    from whether the session's verifying key is a pinned auditor's key."""
     why = [f"ran with {f}" for f in facts] + ([] if trusted_sha512 in pinned else [UNPINNED])
     return "development run: " + "; ".join(why) if why else None
 
 
 def publish(public: Path, answer: Mapping[str, Any], development: str | None) -> Path:
     """A piece's public answer into ``public``: ``answer.json``, or for a development run (``development``, why:
-    `development_of`) ``development.json`` and no ``answer.json``, the answer with ``why`` and its reason as
-    ``reasons``, which the composer reads as no verdict where it accepts and as a reject where it rejects
-    (`served_verdicts.piece_row`). Returns the file written."""
+    `development_of`, a mark the node chooses to write) ``development.json`` and no ``answer.json``, the answer with
+    ``why`` and its reason as ``reasons``, which the composer reads as no verdict where it accepts and as a reject where
+    it rejects (`served_verdicts.piece_row`). Returns the file written."""
     for name in (ANSWER, DEVELOPMENT):
         (public / name).unlink(missing_ok=True)
     doc = dict(answer) if development is None else {
