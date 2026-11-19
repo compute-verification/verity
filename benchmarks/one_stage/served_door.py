@@ -209,7 +209,9 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
             partial.append(p)
         args.append([full[j] for j in at_w])
         tree_widths[tw] = whole
-    out = evaluate(fn, *args)
+    from verity.circuits.codec import decode_program
+    from verity_vllm.definitions.registry.catalog import load
+    out = evaluate(decode_program(json.loads(c), load()[0]).defs[template], *args)
     ow = ret.leaf_widths()
     ports = {q[0]: q for q in meta["ports"]}
     rec["meta_ports"] = meta["ports"]
