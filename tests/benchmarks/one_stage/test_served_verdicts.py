@@ -675,12 +675,16 @@ def test_a_bound_of_every_proof_block_reads_vacuous_and_another_subprotocol_says
 
 
 @pytest.mark.parametrize("node, said", [
-    ("auditor = true\nadmin = true\n", "composed on the auditor's device"),
+    ("auditor = true\nadmin = true\n", "not known: the deploy manifest marks h auditor = true, a line of the manifest, "
+                                       "no device's word"),
+    ("auditor = true\n", "not known: the deploy manifest marks h auditor = true, a line of the manifest, no device's word"),
     ("admin = true\n", "not known: the deploy manifest marks h admin = true, which it gives the control host too"),
     ("record = \"/r\"\n", "composed off the auditor's device"),
     (None, "not known: the deploy manifest lists no node h"),
-], ids=["auditor", "admin alone", "a lanes' node", "unlisted"])
+], ids=["auditor", "auditor alone", "admin alone", "a lanes' node", "unlisted"])
 def test_the_record_says_whether_it_was_composed_on_the_auditors_device_as_the_deploy_manifest_says(tmp_path, node, said):
+    """The manifest can say a record was composed off the auditor's device, never on it: its ``auditor = true`` is not
+    known."""
     manifest = tmp_path / "deploy.toml"
     manifest.write_text("[nodes.other]\nadmin = true\n" + (f"[nodes.h]\n{node}" if node is not None else ""))
     assert S.auditor_device("h", manifest) == said
@@ -1626,11 +1630,12 @@ def no_scope(monkeypatch) -> None:
         monkeypatch.delenv(k, raising=False)
 
 
-def _lean_handed(tmp_path: Path) -> tuple[list[str], Path]:
+def _lean_handed(tmp_path: Path, monkeypatch) -> tuple[list[str], Path]:
     """A compose host's copy of a hand-off, off the served node vy-dc-h200: SPOT's records audit with the
     summary the served node wrote (a refusal of its own), v1's case and v2's naming one proof blob, PoUW's piece's
-    accepted answer, and a `FAKE_SAMPLED_LEAN`; then `record --off-node --sampled-lean` on it, remote's product. Its argv
-    and the stand-in."""
+    accepted answer, and a `FAKE_SAMPLED_LEAN` at the build path of the tree's SPOT Lean package (one under
+    ``tmp_path``); then `record --off-node --sampled-lean` on it, remote's product. Its argv and the stand-in."""
+    import served_cases as SC
     from verity.circuits import codec
 
     d = tmp_path / "serve"
@@ -1647,7 +1652,9 @@ def _lean_handed(tmp_path: Path) -> tuple[list[str], Path]:
     (p / "answer.json").write_text(json.dumps({"verdict": "accept", "reason": None, "commitment": "ef" * 64,
                                                **ACCEPTS["pouw"]}))
     (p / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
-    exe = tmp_path / "vstar-recursive"
+    monkeypatch.setattr(SC, "SAMPLED_LEAN", (tmp_path / "spot-lean", "vstar-recursive"))
+    exe = tmp_path / "spot-lean" / ".lake" / "build" / "bin" / "vstar-recursive"
+    exe.parent.mkdir(parents=True)
     exe.write_text(FAKE_SAMPLED_LEAN)
     exe.chmod(0o755)
     return (["record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "private/logs/sampled-proofs/keep/served"),
@@ -1676,7 +1683,7 @@ def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_
     source, and PoUW's, still read from its piece's answer file, as the served node wrote it, which its edit changes."""
 
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
-    argv, _exe = _lean_handed(tmp_path)
+    argv, _exe = _lean_handed(tmp_path, monkeypatch)
     answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": DD.digest(LEAN_RECORD)}
     monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
     monkeypatch.setenv("ANSWER", json.dumps(answer))
@@ -1686,6 +1693,8 @@ def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_
     pouw_from = f"{S.AS_WRITTEN} (its piece files in pouw/)"
     assert line["answers"] == {"sampled proofs": S.LEAN_HERE + MAIN, "PoUW": pouw_from}
     assert (rows["integrity"]["answer_from"], rows["work"]["answer_from"]) == (S.LEAN_HERE + MAIN, pouw_from)
+    assert rows["integrity"]["executable"] == {"name": "vstar-recursive",
+                                               "sha512": hashlib.sha512(FAKE_SAMPLED_LEAN.encode()).hexdigest()}
     seen = json.loads((tmp_path / "seen.json").read_text())
     w = tmp_path / "serve" / "private/logs/sampled-proofs/keep/served" / "window"
     assert seen["argv"][:2] == ["sampled", "check"] and seen["argv"][5:] == [str(w / "m0" / "p0.bin")]
@@ -1711,10 +1720,35 @@ def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_
     assert edited["integrity"] == rows["integrity"] and edited["work"]["verdict"] == "reject"
 
 
+@pytest.mark.parametrize("where", ["copy", "link"])
+def test_a_sampled_exe_off_the_trees_own_build_path_is_refused_by_name_and_never_run(tmp_path, monkeypatch, capsys,
+                                                                                     where):
+    """`--sampled-exe` names only the tree's own SPOT Lean build: the same bytes at another path are refused by name,
+    and nothing runs, while a link that resolves to the build path is that build."""
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
+    argv, exe = _lean_handed(tmp_path, monkeypatch)
+    other = tmp_path / "elsewhere" / "vstar-recursive"
+    other.parent.mkdir()
+    if where == "copy":
+        shutil.copy2(exe, other)
+    else:
+        other.symlink_to(exe)
+    monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
+    monkeypatch.setenv("ANSWER", json.dumps({**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1",
+                                             "commitment": DD.digest(LEAN_RECORD)}))
+    _rc, _line, rows = _recorded(tmp_path, [*argv[:-1], str(other)], capsys)
+    row = rows["integrity"]
+    if where == "copy":
+        assert row["verdict"] == "error" and S.SAMPLED_EXE_REFUSED in row["reason"], row
+        assert "executable" not in row and not (tmp_path / "seen.json").exists()
+    else:
+        assert row["verdict"] == "accept" and row["executable"]["name"] == "vstar-recursive", row
+
+
 def test_a_spot_row_the_lean_here_accepts_in_the_per_member_form_says_what_it_covers(tmp_path, monkeypatch, capsys):
 
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
-    argv, _exe = _lean_handed(tmp_path)
+    argv, _exe = _lean_handed(tmp_path, monkeypatch)
     answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": DD.digest(LEAN_RECORD)}
     monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
     monkeypatch.setenv("ANSWER", json.dumps(answer))
@@ -1760,7 +1794,7 @@ def test_a_spot_row_the_lean_here_cant_recompute_says_so_and_never_takes_the_nod
     saying so; a v2 case naming a missing blob, a Lean answer about another record, or one that answers no line is the
     row's error, recomputed here, never the node's verdict."""
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
-    argv, _exe = _lean_handed(tmp_path)
+    argv, _exe = _lean_handed(tmp_path, monkeypatch)
     w = tmp_path / "serve" / "private/logs/sampled-proofs/keep/served" / "window"
     monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
     other = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": "00" * 64}
@@ -1787,7 +1821,7 @@ def test_a_spot_check_that_was_not_started_leaves_the_audits_own_row_naming_the_
     import served_cases as SC
 
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
-    argv, _exe = _lean_handed(tmp_path)
+    argv, _exe = _lean_handed(tmp_path, monkeypatch)
     w = tmp_path / "serve" / "private/logs/sampled-proofs/keep/served" / "window"
     monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
     monkeypatch.setenv("ANSWER", json.dumps({**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1"}))
@@ -6790,38 +6824,36 @@ def _live_host():
 def test_gate_compose_sends_the_hand_off_to_the_compose_gate_which_composes_the_record_at_its_pin_and_answers_it(
         tmp_path, edit):
     """`gate-compose` sends the hand-off to the compose gate (lane vllm's key, the word `compose`, the tar on stdin), which
-    receives it in a scratch of its own, holds it to the served node's sums, rebases the cases' blobs onto its copy and
-    composes the record there with the pinned tree, off the served node: SPOT's row is its Lean's answer on the
-    copy's v2 case and blobs, whatever summary the served node wrote, and the record, pending the remote check's answer
-    with both its subprotocols accepted, names the gate's pin and the branch infra pinned it on. The answer lands in the
-    sender's $OUT/compose, and the gate removes its scratch. The compose exits 2 on that pending record, which the gate
-    logs and answers as composed but not accepted, so the sender exits 1."""
+    receives it in a scratch of its own, holds it to the served node's sums and composes the record there with the
+    pinned tree, off the served node, naming the gate's pin and the branch infra pinned it on. SPOT's row runs only the
+    pinned tree's own Lean build: a stand-in handed in at another path is refused by name and never run, whatever
+    summary the served node wrote, so the row is that error and the record a reject. The answer lands in the sender's
+    $OUT/compose, and the gate removes its scratch. The compose exits 1 on that record, which the gate logs and answers
+    as composed but not accepted, so the sender exits 1."""
     run, out = _gate_composed(tmp_path, edit)
     gate = tmp_path / "gate-host"
     lines = (out / "verdicts.txt").read_text().splitlines()
     assert run.returncode == 1, (run.stderr, lines)
     assert lines[0].startswith("HANDOFF ") and not [x for x in lines if "remote" in x.split(":", 1)[0]], lines
-    assert lines[-1].startswith(f"GATE-COMPOSE at the compose gate's tree {GATE_PIN[:12]}: exit 2, the record "
-                                "pending, ") and lines[-1].endswith(" files of its $OUT in the run's compose/"), lines
+    assert lines[-1].startswith(f"GATE-COMPOSE at the compose gate's tree {GATE_PIN[:12]}: exit 1, the record "
+                                "reject, ") and lines[-1].endswith(" files of its $OUT in the run's compose/"), lines
     argv = json.loads((tmp_path / "gate.argv").read_text())
     scratch = gate / "var" / "scratch" / "compose-20261104T120000Z-ab12"
     assert argv[:3] == ["runuser", "-u", "auditor"] and argv[-4:] == ["compose", str(scratch), GATE_PIN, "remote"]
     composed = json.loads((out / "compose" / "record" / "verdicts.json").read_text())
-    assert composed["composed"]["verdict"] == "pending" and all(
-        composed["protocols"][k]["verdict"] == "accept" for k in ("integrity", "work"))
+    assert composed["composed"]["verdict"] == "reject" and composed["protocols"]["work"]["verdict"] == "accept"
     assert isinstance(composed["composed_on"].pop("auditor_device"), str)  # by the pinned tree's manifest, of this host
     assert composed["composed_on"] == {"host": socket.gethostname(), "served_node": False, "from": S.HANDED_FROM,
                                        "tree": GATE_PIN, "tree_on": "remote"}
     row = composed["protocols"]["integrity"]
-    assert row["answer_from"] == S.LEAN_HERE + MAIN and row["answer"]["commitment"] == DD.digest(LEAN_RECORD), row
-    seen = json.loads((tmp_path / "seen.json").read_text())
-    assert seen["argv"][5:] == [str(scratch / "serve" / b) for b in BLOBS]
+    assert row["verdict"] == "error" and S.SAMPLED_EXE_REFUSED in row["reason"], row
+    assert row["answer_from"] == S.LEAN_HERE + MAIN and not (tmp_path / "seen.json").exists(), row
     assert not scratch.exists() and list((gate / "var" / "scratch").iterdir()) == []
     said = json.loads((out / "compose" / "gate.json").read_text())
     assert (said["pinned"], said["pin"], said["by"], said["compose"]["rc"]) == (
-        GATE_PIN, {"line": 0, "utc": "2026-11-04T11:00:00Z", "on": "remote"}, "vllm", 2)
+        GATE_PIN, {"line": 0, "utc": "2026-11-04T11:00:00Z", "on": "remote"}, "vllm", 1)
     logged = [json.loads(x) for x in (gate / "var" / "composes.jsonl").read_text().splitlines()]
-    assert [(x["by"], x["rc"], x["refused"]) for x in logged] == [("vllm", 2, None)]
+    assert [(x["by"], x["rc"], x["refused"]) for x in logged] == [("vllm", 1, None)]
     assert logged[0]["sums_sha512"] == hashlib.sha512(
         (tmp_path / "serve" / "private" / "compose" / "inputs.sha256").read_bytes()).hexdigest() == said["compose"]["sums_sha512"]
     assert not _window_data(out, 7)
@@ -8536,6 +8568,26 @@ def test_the_shells_hold_and_the_one_python_reader_agree_on_every_value(value):
                             str(HERE.parents[2] / "benchmarks" / "one_stage" / "placement.sh")], env=env, check=False)
     assert shell.returncode in (0, 1)
     assert (shell.returncode == 0) is cli.hold_placement(env) is (value == "1")
+
+
+@pytest.mark.parametrize("hold", [None, "1"])
+@pytest.mark.parametrize("marker", [None, "1"])
+@pytest.mark.parametrize("given", [None, "", "1"])
+def test_the_sampled_proofs_development_challenger_makes_a_development_run_only_under_the_hold(hold, marker, given):
+    """placement.sh's `development_under_hold`, which served_verdicts.sh runs once it has sourced it: the sampled-proofs
+    hooks' PP_DEVELOPMENT_UNDER_HOLD=1 sets DEVELOPMENT=1 under VERITY_HOLD_PLACEMENT=1, and DEVELOPMENT is otherwise as
+    given."""
+    env = {"PATH": os.defpath, **{k: v for k, v in (("VERITY_HOLD_PLACEMENT", hold),
+                                                   ("PP_DEVELOPMENT_UNDER_HOLD", marker), ("DEVELOPMENT", given))
+                                  if v is not None}}
+    shell = subprocess.run(["bash", "-c", '. "$1" && development_under_hold && bash -c \'echo "${DEVELOPMENT-unset}"\'',
+                            "_", str(HERE.parents[2] / "benchmarks" / "one_stage" / "placement.sh")],
+                           env=env, capture_output=True, text=True, check=True)
+    assert shell.stdout.strip() == ("1" if hold == marker == "1" else "unset" if given is None else given)
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text().splitlines()
+    sourced = next(i for i, x in enumerate(script) if x.startswith(". ") and "/placement.sh\"" in x)
+    assert script[sourced + 1] == "development_under_hold"
+    assert not [x for x in script[:sourced] if "DEVELOPMENT" in x and not x.lstrip().startswith(("#", "FOLLOWS="))]
 
 
 def test_the_launcher_and_the_composite_read_the_hold_only_through_placement_sh():

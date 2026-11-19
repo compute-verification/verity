@@ -1512,8 +1512,9 @@ def test_r7_reuses_an_earlier_records_registered_value():
     """A value may reuse an earlier record's registered value (`outputs: {value: {"record", "value"}}`, H1's `a/<K>@<s>` as
     a Commit's AROW, say): its entry takes that entry's domain and root, with no tree of its own, under another name or the
     same. A record entry of another root is `R7-held`, of another domain `R7-domain` too; a record or value the log
-    doesn't hold, or an earlier entry of other leaves, words or word bits, is `R7-output`; and a malformed `outputs` is
-    refused before the record is read."""
+    doesn't hold, a record that isn't the log's last (the previous record, whose own check held the entry's domain), or
+    an earlier entry of other leaves, words or word bits, is `R7-output`; and a malformed `outputs` is refused before the
+    record is read."""
     prog = _program()
     reg = _registered(prog)
     first, ports = _record(prog, reg)
@@ -1543,6 +1544,9 @@ def test_r7_reuses_an_earlier_records_registered_value():
     for bad in ({"record": "ee" * 64, "value": "a/16@0"}, {"record": DD.digest(earlier), "value": "nope"},
                 {"record": DD.digest(earlier), "value": "W"}, {"record": DD.digest(rec), "value": "a/16@0"}):
         assert R.check(rec, prog, Q, **kw, outputs={"W": bad}).codes[0] == "R7-output", bad
+    later = DK.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 7}, previous=DD.digest(earlier))
+    assert R.check({**rec, "previous": DD.digest(later)}, prog, Q, **{**kw, "log": [earlier, later]},
+                   outputs=out).codes[0] == "R7-output"
     for bad in ({"W": {**out["W"], "port": "prev.out"}}, {"W": {**out["W"], "value": 1}}, {"W": {"value": "a/16@0"}},
                 {"W": {**out["W"], "record": "EE" * 64}}):
         with pytest.raises(ValueError):

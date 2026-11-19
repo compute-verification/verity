@@ -23,12 +23,14 @@
   a B row's from the copy the pass kept beside the fixed operand's rows (its ``salts``) of the salts the weights'
   registration committed them under (`pearl_c.weight_row_salts`), 192 bytes a leaf, and the scheme reads the value less
   its salt.
-- **The tiles** are `clear_work.audit`'s: its t work-weighted samples (`draw`) and one tile per excluded row
+- **The tiles** are `clear_work.audit`'s: its t work-weighted samples (`draw`, as Pearl+'s credited blocks,
+  `scheme.drawn_blocks`) and one tile per excluded row
   (`exclusion_tiles`).  Each is held to `Verifier.check_tile` and `check_opened`, as `audit` does, but mapped over J
   processes, since each costs about 11 s of CPU per 1,024 of k (``--fast``: about a tenth of that on `fast_tile`'s batch
   forms, with the first tile and every ``--cross-check``-th after it, in the sample's order, replayed on the scalar reference
   too).  `tests/benchmarks/pouw/test_pearl_c_vllm.py` holds this to `audit`'s own verdict.
-- **The served y**, where a call commits it (`served_y`, the manifest's ``y``): an accepted tile's real rows of y open against
+- **The served y**, which every call with a credited cell commits (`served_y`, the manifest's ``y``; one that commits none
+  is refused at load, ``a credited call commits no y root``): an accepted tile's real rows of y open against
   its root, each holds a word for every column of the tile (the opening doesn't bind a row's length: one that ends before
   the tile's columns is refused, ``the opened row holds N words``), and each of the tile's words must be the unscale of
   the tile's checked U (`pearl_c_u.y`, the kernels' epilogue), so the y that leaves the linear is the one the credited
@@ -111,7 +113,6 @@ protocol's check is a ZK proof, PouwVerifier).
 from __future__ import annotations
 
 import argparse
-import bisect
 import copy
 import dataclasses
 import hashlib
@@ -156,6 +157,7 @@ from verity.errors import ProtocolError
 from verity.commitments.randomness import derive
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PD
 from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
+from verity.protocols.resource_accounting.compute.pouw import scheme as PP
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 from verity_config.settings import of
@@ -369,6 +371,8 @@ def load(path: Path, coins: CoinCommitment | LiveCommitment | None = None, man: 
         reason = "the records are not the ones whose root the pass published"
     if reason is not None:
         raise ValueError(reason)
+    if bad := next((r for u, r in zip(man["matmuls"], records) if "y" not in u and sum(credited_cells(scheme, r))), None):
+        raise ValueError(f"matmul {bad.matmul.index}: a credited call commits no y root")
     c = man["commitment"]
     transcript = Transcript(tuple(bytes.fromhex(u["root_a"]) for u in man["matmuls"]), Commitment(bytes.fromhex(c["root"]), c["count"]),
                             ())
@@ -503,8 +507,8 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         scheme, records, c, out["salt"] = p.scheme, p.records, man["commitment"], p.salt
         source = PV.coins(32) if source is None else source
         key = CW.replay_key(CW.RecordedDraw(1, source), p.transcript.commitment.root, bytes.fromhex(man["records_root"]), p.epoch.salt)
-        drawn, excluded = CW.draw(scheme, records, key, draws), CW.exclusion_tiles(scheme, records)
-        todo = [(0, pos, tid) for pos, tid in p.tile_ids(drawn + excluded)]
+        drawn, excluded = PP.drawn_blocks(scheme, [records], key, draws, CW.draw), CW.exclusion_tiles(scheme, records)
+        todo = [(0, b.record, b.id[1]) for b in drawn] + [(0, pos, tid) for pos, tid in p.tile_ids(excluded)]
         verdicts, fast = replay([p], todo, jobs, fast, cross_check)
         out["replay"] = "batch" if fast else "scalar"
         differ = [t for _, t, _, _, _, same in verdicts if same is False]
@@ -988,21 +992,15 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                                        "draw": drew}, indent=1) + "\n")
             os.replace(tmp, record)
     out["draw"] = (drew or {}).get("from")
-    key = derive(source, RUN_DRAW_DOMAIN, {"run": root})
-    at = [0]
-    for p in passes:
-        at.append(at[-1] + len(p.records))
-    records = [r for p in passes for r in p.records]
-    drawn: dict[int, list] = {}
-    for pos, tile in CW.draw(scheme, records, key, draws):
-        i = bisect.bisect_right(at, pos) - 1
-        drawn.setdefault(i, []).append((pos - at[i], tile))
+    drawn = PP.drawn_blocks(scheme, [p.records for p in passes], derive(source, RUN_DRAW_DOMAIN, {"run": root}), draws,
+                            CW.draw)
     todo, picked = [], []
     for i, p in enumerate(passes):
-        mine, ex = p.tile_ids(drawn.get(i, [])), p.tile_ids(CW.exclusion_tiles(p.scheme, p.records))
+        mine = [(b.record, b.id[1]) for b in drawn if b.id[0] == i]
+        ex = p.tile_ids(CW.exclusion_tiles(p.scheme, p.records))
         todo += [(i, pos, tid) for pos, tid in mine + ex]
         picked += [True] * len(mine) + [False] * len(ex)
-    excluded = len(todo) - sum(map(len, drawn.values()))
+    excluded = len(todo) - len(drawn)
     verdicts, fast = replay(passes, todo, jobs, fast, cross_check)
     uncredited = over_cap == UNCREDITED
     bad = [f"pass {i} tile {t}: {r}" for i, t, good, r, over, _ in verdicts if not good and not (over and uncredited)]

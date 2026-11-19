@@ -1338,6 +1338,20 @@ def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepte
 
 
 @pytest.mark.slow
+def test_a_credited_call_that_commits_no_y_root_is_refused_at_load(tmp_path):
+    """A call with a credited cell commits its y: without one no tile of it would be held to y, so the pass is refused
+    before the coin, by name."""
+    path = proved_pass(tmp_path, PROMOTED[0])[0]
+    man = json.loads(path.read_text())
+    del man["matmuls"][0]["y"]
+    path.write_text(json.dumps(man))
+    with pytest.raises(ValueError, match=f"^matmul {man['matmuls'][0]['index']}: a credited call commits no y root$"):
+        VR.load(path, published(path))
+    got = VR.verify_passes([path], 3, 1, "test", published(path), b"verifier" * 4, test_instance=True)
+    assert got["answer"]["verdict"] == "reject" and "a credited call commits no y root" in got["answer"]["reason"]
+
+
+@pytest.mark.slow
 def test_a_served_y_that_is_not_the_unscale_of_its_u_rejects_the_run(tmp_path):
     """A pass whose y is not what its U unscales to fails the run, whichever tile is sampled: committed as it is (a new root,
     so the run's commitment changes too) each sampled tile names a word that isn't its U's unscale, and left under the root

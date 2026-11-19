@@ -88,12 +88,10 @@ def _declared(desc: Mapping[str, Any]) -> DefinitionTable:
             continue
         try:
             lookup_primitive(DefinitionTable(), fid)
-            continue
         except KeyError:
-            pass
-        name, _, version = fid.rpartition("_v")
-        reg.add(PrimitiveDefinition(name, int(version), tuple((n, type_from_json(t)) for n, t in d["params"]),
-                                    type_from_json(d["ret"]), _unevaluated, register=False))
+            name, _, version = fid.rpartition("_v")
+            reg.add(PrimitiveDefinition(name, int(version), tuple((n, type_from_json(t)) for n, t in d["params"]),
+                                        type_from_json(d["ret"]), _unevaluated, register=False))
     return reg
 
 
