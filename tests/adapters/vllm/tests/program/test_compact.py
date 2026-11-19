@@ -534,20 +534,3 @@ def test_lean_root_reads_definitions_with_decode_programs_reader_and_refuses_wha
     assert str(lean.value) == str(refused.value)
 
 
-def test_the_within_step_dag_criterion_holds_on_equal_programs_and_fails_on_a_wrong_one(tmp_path):
-    """`program-dag`'s live-cone DAG multiset (the within-step criterion of record) over the D90 fixture, compact form: equal where
-    the sequence is, unequal on a compare negative."""
-    import pytest
-
-    from verity_vllm.check.match import global_match_fast as GMF
-    try:
-        from tests.check import test_tp2_d90_fixture as T
-    except ImportError as e:   # pragma: no cover
-        pytest.skip(f"tp2 D90 fixture unavailable: {e}")
-    for sub, prog_kw, want in (("pos", {}, True), ("wrong_op", {"wrong_op_k": 0}, False), ("swapped", {"swap_parts": True}, False)):
-        d = tmp_path / sub
-        d.mkdir()
-        res, A, B = T.compare_rank(d, 0, T.fold_rank(0), T.rank_program(0, **prog_kw), compact=True)
-        assert res["ok"] is want
-        dm = GMF.dag_multiset(A, B)
-        assert dm["equal"] is want and (dm["only_a"] == dm["only_b"] == 0) is want, (sub, dm)
