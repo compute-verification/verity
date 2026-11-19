@@ -34,10 +34,10 @@ public counts, never on b_jl or N. A kind names a section's record; `ENDS` is th
 [rows-count, rows-malformed]; the header names C, its object and its population [header-program, header-object,
 header-population] and lays the sections out as the statement does [header-layout]; no design rows [design-rows]; a
 phase covers the same units at every level [phase-span]; each level, the phases' real blocks side by side, is a valid
-`blocks` of the object covering C's units in order (`partition_object.verify`'s codes, the level first in each witness),
-and each block of level l + 1 lies inside one of level l [blocks-refine]; a filler is empty [filler]; each section's count
-is on the grid [blocks-bucket]; each block of the last level has at most X bits out and at most max_gates gates and
-max_in_bits bits in (`restrict.front`) [block-too-wide, block-too-large].
+level of the object's `blocks`, each covering C's units in order and refining the one before (`partition_object.verify`'s
+codes); a filler is empty [filler]; each section's count is on the grid [blocks-bucket]; each block of the last level has
+at most X bits out and at most max_gates gates and max_in_bits bits in (`restrict.front`) [block-too-wide,
+block-too-large].
 
 **Local check** (`check_block`), with sampled block i of phase j at level l: the at most two rows holding s_i and s_(i+1)
 (`openings`), opened against the root, give its range; a filler is empty, and any other is the block the door restricts.
@@ -377,15 +377,9 @@ def check(st: Mapping[str, Any], rs: Sequence[bytes], c: bytes) -> CutVerdict:
     if adv.population != pop:
         fail("header-population", [adv.population, pop])
     levels = _levels(adv)
-    for l, lv in enumerate(levels):
-        verdict = PO.verify({**obj, PO.BLOCKS: [list(b) for b in lv]}, D)
-        for code in verdict.codes:
-            bad.setdefault(code, []).extend([l, w] for w in verdict.detail[code]["gates"])
-    for l, (coarse, fine) in enumerate(zip(levels, levels[1:])):
-        ends = {hi for _lo, hi in coarse}
-        cross = next(([lo, hi] for lo, hi in fine if any(lo < e < hi for e in ends)), None)
-        if cross is not None:
-            fail("blocks-refine", [l + 1, cross])
+    verdict = PO.verify(PO.build(D, st["query"], levels), D)
+    for code in verdict.codes:
+        bad.setdefault(code, []).extend(verdict.detail[code]["gates"])
     for s in sections:
         if grid(s.blocks, st["predicates"]["grid_bits"]) != padded[s.phase][s.level]:
             fail("blocks-bucket", [s.phase, s.level, padded[s.phase][s.level], s.blocks])

@@ -26,16 +26,20 @@ class NotDerived(ValueError):
         super().__init__(PREFIX + what)
 
 
-def block(c: bytes, partition: Mapping[str, Any], k: int) -> list[tuple[int, int]]:
-    """Proof block ``k``'s units, the ``k``-th pair of the partition object's ``blocks``, which cover every unit of C's
-    population exactly once (`partition_object.blocks`); `Refused` where the object is not valid, names no blocks, its
-    blocks end short of or past the population, or has no block ``k``."""
+def block(c: bytes, partition: Mapping[str, Any], k: int, level: int | None = None) -> list[tuple[int, int]]:
+    """Block ``k``'s units, the ``k``-th pair of level ``level`` of the partition object's ``blocks`` (0 the coarsest, None
+    the last, its proof blocks), which cover every unit of C's population exactly once (`partition_object.blocks`);
+    `Refused` where the object is not valid, names no blocks or no level ``level``, its level ends short of or past the
+    population, or has no block ``k``."""
     v = PO.validate(partition)
     if not v.ok:
         raise Refused("E_PARTITION", f"the partition object is not valid: {list(v.codes)}")
-    bs = PO.blocks(partition)
-    if bs is None:
+    levels = PO.blocks(partition)
+    if levels is None:
         raise Refused("E_BLOCKS", "the partition object names no blocks")
+    if not (level is None or (type(level) is int and 0 <= level < len(levels))):
+        raise Refused("E_BLOCKS", f"no level {level!r} among the partition's {len(levels)}")
+    bs = levels[-1 if level is None else level]
     try:
         population = PO.TemplatePartition(R.program(c), partition["query"]).population
     except PO.QueryInapplicable as e:

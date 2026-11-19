@@ -43,14 +43,18 @@
 * **Every query** applies only to a topological program: every node of every body names only its body's parameters and earlier
   nodes (a body's `ret` any node).  `evaluate` checks it once, before any query (`order_violation`), so every query and `verify`
   refuse the same programs (`query-inapplicable`, with the definition, node, argument and reference).
-* **Blocks.** A template query's object may carry ``"blocks": [[lo, hi], ...]``, the population's proof blocks: each a range
-  [lo, hi) of units numbered as the query numbers them (`TemplatePartition`: node order, then member), ascending, the first
-  starting at 0, each starting where the one before ends and the last ending at the population, so every unit is in exactly
-  one. Being in the object, the grouping is under its digest. An object without it names no grouping, and its digest is
-  unchanged. `validate` refuses a ``blocks`` that isn't a non-empty list of integer pairs 0 <= lo < hi (`blocks-form`), one on
-  a query that is not a template query (`blocks-query`), a pair starting before the one before it (`blocks-unsorted`), or
-  inside it (`blocks-overlap`), or after its end or a first pair not at 0 (`blocks-gap`). `verify` then refuses a last pair
-  ending past the population (`blocks-range`) or before it (`blocks-gap`).
+* **Blocks.** A template query's object may carry ``"blocks": [[[lo, hi], ...], ...]``, the population's levels of blocks,
+  coarsest first, the last its proof blocks. A level is a list of ranges [lo, hi) of units numbered as the query numbers
+  them (`TemplatePartition`: node order, then member), ascending, the first starting at 0, each starting where the one
+  before ends and the last ending at the population, so every unit is in exactly one; each block of level i + 1 lies
+  inside one of level i, and a level may equal the one before. Being in the object, the grouping is under its digest. An
+  object without it names no grouping, and its digest is unchanged. `validate` refuses a ``blocks`` that isn't a non-empty
+  list of non-empty lists of integer pairs 0 <= lo < hi (`blocks-form`), one on a query that is not a template query
+  (`blocks-query`); then, at each level, a pair starting before the one before it (`blocks-unsorted`), or inside it
+  (`blocks-overlap`), or after its end or a first pair not at 0 (`blocks-gap`), each witness with its level in front; and
+  where levels i and i + 1 are each of valid form, an end of level i that is no end of level i + 1 (`blocks-refine`, witness
+  [i + 1, the first block of level i + 1 ending past it, else its last]). `verify` then refuses a level whose last pair ends
+  past the population (`blocks-range`) or before it (`blocks-gap`), witness [level, [end, population]].
 * `validate` checks the object's form (exact keys, ``blocks`` optional; a known query with exactly its parameters); `digest`
   digests only a valid object.
   `verify` evaluates the query and checks every Call's cut on its derived graph (the invariant, the width rule), and, given what serving
@@ -157,46 +161,68 @@ def template_instances_query(templates: Sequence[Any]) -> dict[str, Any]:
     return {"name": Q_TEMPLATE_INSTANCES[0], "version": Q_TEMPLATE_INSTANCES[1], "params": {"templates": [template_id(t) for t in templates]}}
 
 
-def build(program: Any, q: Mapping[str, Any] | None = None, blocks: Iterable[Sequence[int]] | None = None) -> dict[str, Any]:
-    """The object naming `program`'s partition as the query `q` (default `Q_word{X=16, W=32}` v1), with `blocks`, its proof
-    blocks as [lo, hi) unit ranges, when given."""
+def build(program: Any, q: Mapping[str, Any] | None = None,
+          blocks: Iterable[Iterable[Sequence[int]]] | None = None) -> dict[str, Any]:
+    """The object naming `program`'s partition as the query `q` (default `Q_word{X=16, W=32}` v1), with `blocks`, its levels
+    of [lo, hi) unit ranges, coarsest first, when given."""
     obj = {"format": FORMAT, "program": _program(program), "query": dict(q or query())}
     if blocks is not None:
-        obj[BLOCKS] = [[lo, hi] for lo, hi in blocks]
+        obj[BLOCKS] = [[[lo, hi] for lo, hi in lv] for lv in blocks]
     return obj
 
 
-def blocks(obj: Mapping[str, Any]) -> list[tuple[int, int]] | None:
-    """The object's proof blocks, each (lo, hi), or None when it names no grouping."""
-    return None if BLOCKS not in obj else [(lo, hi) for lo, hi in obj[BLOCKS]]
+def blocks(obj: Mapping[str, Any]) -> list[list[tuple[int, int]]] | None:
+    """The object's levels of blocks, coarsest first, each a list of (lo, hi), or None when it names no grouping."""
+    return None if BLOCKS not in obj else [[(lo, hi) for lo, hi in lv] for lv in obj[BLOCKS]]
 
 
 def _blocks_form(b: Any, template: bool, fail: Callable[[str, Any], None]) -> None:
     def pair(p: Any) -> bool:
         return isinstance(p, list) and len(p) == 2 and all(_is_int(x) for x in p) and 0 <= p[0] < p[1]
 
-    if not isinstance(b, list) or not b or not all(map(pair, b)):
-        fail("blocks-form", next((p for p in b if not pair(p)), b) if isinstance(b, list) and b else b)
+    if not isinstance(b, list) or not b:
+        fail("blocks-form", b)
+        return
+    formed = True
+    for l, lv in enumerate(b):
+        if not isinstance(lv, list) or not lv or not all(map(pair, lv)):
+            fail("blocks-form", [l, next((p for p in lv if not pair(p)), lv) if isinstance(lv, list) and lv else lv])
+            formed = False
+    if not formed:
         return
     if not template:
         fail("blocks-query", len(b))
-    if b[0][0] != 0:
-        fail("blocks-gap", [0, b[0][0]])
-    for prev, p in zip(b, b[1:]):
-        if p[0] < prev[0]:
-            fail("blocks-unsorted", [prev, p])
-        elif p[0] < prev[1]:
-            fail("blocks-overlap", [prev, p])
-        elif p[0] > prev[1]:
-            fail("blocks-gap", [prev[1], p[0]])
+    ok = []
+    for l, lv in enumerate(b):
+        bad = []
+        if lv[0][0] != 0:
+            bad.append(("blocks-gap", [l, [0, lv[0][0]]]))
+        for prev, p in zip(lv, lv[1:]):
+            if p[0] < prev[0]:
+                bad.append(("blocks-unsorted", [l, [prev, p]]))
+            elif p[0] < prev[1]:
+                bad.append(("blocks-overlap", [l, [prev, p]]))
+            elif p[0] > prev[1]:
+                bad.append(("blocks-gap", [l, [prev[1], p[0]]]))
+        for code, w in bad:
+            fail(code, w)
+        ok.append(not bad)
+    for i, (coarse, fine) in enumerate(zip(b, b[1:])):
+        if not (ok[i] and ok[i + 1]):
+            continue
+        ends = {hi for _lo, hi in fine}
+        e = next((hi for _lo, hi in coarse if hi not in ends), None)
+        if e is not None:
+            fail("blocks-refine", [i + 1, next((p for p in fine if p[1] > e), fine[-1])])
 
 
-def _blocks_cover(b: Sequence[Sequence[int]], population: int, bad: dict[str, list]) -> None:
-    end = b[-1][1]
-    if end > population:
-        bad.setdefault("blocks-range", []).append([end, population])
-    elif end < population:
-        bad.setdefault("blocks-gap", []).append([end, population])
+def _blocks_cover(b: Sequence[Sequence[Sequence[int]]], population: int, bad: dict[str, list]) -> None:
+    for l, lv in enumerate(b):
+        end = lv[-1][1]
+        if end > population:
+            bad.setdefault("blocks-range", []).append([l, [end, population]])
+        elif end < population:
+            bad.setdefault("blocks-gap", []).append([l, [end, population]])
 
 
 def canonical(obj: Mapping[str, Any]) -> bytes:

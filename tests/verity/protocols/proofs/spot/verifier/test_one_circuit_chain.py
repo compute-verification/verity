@@ -69,7 +69,7 @@ def registered() -> dict[str, Any]:
     win = I.Window(circuit(), TI.RUN, TI.SAMPLING_DESIGN, 2)
     program, _query = circuit().program()
     c = b"".join(descriptor_chunks(program))
-    assert win.window.partition["blocks"] == I.partition_blocks(circuit(), 2)
+    assert win.window.partition["blocks"] == [I.partition_blocks(circuit(), 2)]
     return {"window": win, "C": c, "theta": theta().doc(), "partition": win.window.partition}
 
 
@@ -302,7 +302,7 @@ def stage_left_out() -> str:
     """(c) a block left out, at the door: a partition whose blocks leave C's last block out."""
     win, _c = committed()
     part = registered()["partition"]
-    bad = {**part, "blocks": part["blocks"][:-1]}
+    bad = {**part, "blocks": [lv[:-1] for lv in part["blocks"]]}
     _f, why = python_door(drawn(win), partition=bad)
     stopped(why)
     assert why is not None, "cheat (c): the door accepted a partition that leaves C's units out"
