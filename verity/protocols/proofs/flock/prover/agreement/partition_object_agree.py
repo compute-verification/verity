@@ -35,20 +35,24 @@ def main():
         o = PO.build(json.loads(v["descriptors"][d]), q) | extra
         return o if blocks is MISSING else o | {"blocks": blocks}
 
-    form = [obj(three, q3, [[0, 1], [1, 2], [2, 3]]), obj(three, q3, []), obj(three, q3, "0-3"), obj(three, q3, [[0, 2], [2, 2]]),
-            obj(three, q3, [[-1, 2]]), obj(three, q3, [[0, 2, 4]]), obj(three, q3, [[0, True]]), obj(three, q3, [[0, 2.5]]),
-            obj(three, q3, [[0, 2.0]]), obj(three, q3, [[0, 1], None]), obj(three, q3, {}), obj(three, q3, [[1, 2], [2, 3]]),
-            obj(three, q3, [[0, 1], [2, 3]]), obj(three, q3, [[0, 2], [1, 3]]), obj(three, q3, [[0, 1], [1, 2], [0, 3]]),
-            obj(three, PO.query(), [[0, 1], [1, 3]]), obj(three, q3, [[0, 3]], grouping=[[0, 3]]), obj(three, q3)]
-    held = [(three, obj(three, q3, [[0, 3]])), (three, obj(three, q3, [[0, 1], [1, 3]])), (three, obj(three, q3, [[0, 4]])),
-            (three, obj(three, q3, [[0, 2]])), (three, obj(three, q3)), (seven, obj(seven, q7, [[0, 3], [3, 7]])),
-            (seven, obj(seven, q7, [[0, 8]])), (seven, obj(seven, q7, [[0, 6]]))]
+    form = [obj(three, q3, [[[0, 1], [1, 2], [2, 3]]]), obj(three, q3, []), obj(three, q3, [[]]), obj(three, q3, "0-3"),
+            obj(three, q3, [[0, 1], [1, 2], [2, 3]]), obj(three, q3, [[[0, 2], [2, 2]]]), obj(three, q3, [[[-1, 2]]]),
+            obj(three, q3, [[[0, 2, 4]]]), obj(three, q3, [[[0, True]]]), obj(three, q3, [[[0, 2.5]]]), obj(three, q3, [[[0, 2.0]]]),
+            obj(three, q3, [[[0, 1], None]]), obj(three, q3, {}), obj(three, q3, [[[1, 2], [2, 3]]]),
+            obj(three, q3, [[[0, 1], [2, 3]]]), obj(three, q3, [[[0, 2], [1, 3]]]), obj(three, q3, [[[0, 1], [1, 2], [0, 3]]]),
+            obj(three, q3, [[[0, 3]], [[0, 1], [2, 3]]]), obj(three, q3, [[[0, 2], [2, 3]], [[0, 1], [1, 3]]]),
+            obj(three, q3, [[[0, 3]], [[0, 2]]]), obj(three, q3, [[[0, 1], [1, 3]], [[0, 1], [1, 3]]]),
+            obj(three, PO.query(), [[[0, 1], [1, 3]]]), obj(three, q3, [[[0, 3]]], grouping=[[0, 3]]), obj(three, q3)]
+    held = [(three, obj(three, q3, [[[0, 3]]])), (three, obj(three, q3, [[[0, 1], [1, 3]]])), (three, obj(three, q3, [[[0, 4]]])),
+            (three, obj(three, q3, [[[0, 2]]])), (three, obj(three, q3)), (seven, obj(seven, q7, [[[0, 3], [3, 7]]])),
+            (seven, obj(seven, q7, [[[0, 8]]])), (seven, obj(seven, q7, [[[0, 6]]])),
+            (seven, obj(seven, q7, [[[0, 7]], [[0, 3], [3, 7]]])), (seven, obj(seven, q7, [[[0, 7]], [[0, 3], [3, 8]]]))]
     population = {three: e3["population"], seven: e7["population"]}
 
     def verified(o, d):
         bad: dict[str, list] = {}
         v0 = PO.validate(o)
-        if not v0.ok or PO.blocks(o) is None:
+        if not v0.ok or PO.levels(o) is None:
             return v0
         PO._blocks_cover(o["blocks"], population[d], bad)
         return PO.CutVerdict(not bad, tuple(bad), {})
@@ -62,7 +66,7 @@ def main():
         f = a.out / f"held{i}.json"
         f.write_text(json.dumps({"object": o, "descriptor": v["descriptors"][d]}))
         files.append(str(f))
-        want[str(f)] = (verified(o, d), PO.blocks(o))
+        want[str(f)] = (verified(o, d), PO.levels(o))
     p = subprocess.run([a.lean, "partition-object", *files], capture_output=True, text=True)
     got = {}
     for line in p.stdout.splitlines():
@@ -74,7 +78,7 @@ def main():
         g, (verdict, blocks) = got.get(f) or {}, want[f]
         if verdict.ok:
             ok = g.get("ok") is True and ("descriptor" not in json.loads(Path(f).read_text())
-                                          or g.get("blocks") == (None if blocks is None else [list(b) for b in blocks]))
+                                          or g.get("blocks") == (None if blocks is None else [[list(b) for b in lv] for lv in blocks]))
         else:
             ok = g.get("ok") is False and code(g.get("error", "")) == verdict.codes[0]
         if not ok:
