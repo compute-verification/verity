@@ -33,7 +33,6 @@ def main(argv: list[str] | None = None) -> int:
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--data", type=Path, help="a data directory, such as a copy of a device's with a candidate row")
     p.add_argument("--device", help=device_help())
-    # its own dest: `cover --card sm_NN` names a device
     p.add_argument("--card", dest="sku", help="the device whose model is this card's, by its SKU "
                                               "(calibration/hardware/cards/)")
     sub = p.add_subparsers(dest="cmd")
