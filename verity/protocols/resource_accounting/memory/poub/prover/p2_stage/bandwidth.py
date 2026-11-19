@@ -27,8 +27,7 @@ byte is read from HBM twice.
 **The session.** `session` starts the verifier with `--verifier CMD` (the ssh command that runs `p2_parties --stdio` on
 the auditor's device; on one host, the module itself, which certifies nothing), reaches `p2_parties --listen` at
 `--connect HOST:PORT`, or starts it as a party of the auditor's gate (`--party CMD`, the ssh command to the gate's verb,
-whose stdout says the port, reached at `--party-host`, and then the verifier's own record of the answer, which must be
-the one the session ended with), sends the request and answers each pass,
+whose stdout says the port, reached at `--party-host`; the verifier keeps no record of its answer), sends the request and answers each pass,
 each window's openings (each unit's four blocks from the segment files with their PoUS vk paths, `VkPaths`, from the
 store's row digests) and returns the verifier's answer, written to `OUT/session.json` with each step's timings, and
 the line `BW VERDICT ...`. `--skip-layer L` is a cheat: it neither reads nor decodes layer L's tensors, and the
@@ -949,8 +948,7 @@ class Attached:
         """One PoUB-P2 session over the store PoUS holds with the bandwidth party `party` (a shell command, to which
         ``--pous-session`` and PoUS's session id `sid` are added, and ``--session`` and a fresh id for this session,
         under which the memory attester signs the case's close; without `trusted_sha512`, no session has a case; its
-        port reached at `party_host`), under `request_`: the session's record (`SESSION`: the party's answer and its
-        own record of it, the registration, each pass and opening, the seconds) and, where the session made one, its
+        port reached at `party_host`), under `request_`: the session's record (`SESSION`: the answer the party sent, the registration, each pass and opening, the seconds) and, where the session made one, its
         case not yet answered (`HELD`), with the logs, to `private` (0700, files 0600), for `decide`. γ is against
         `r_bytes_per_s`, the data sheet's stated memory bandwidth of `card`, which the launcher reads."""
         private.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -966,12 +964,12 @@ class Attached:
                 print(m, file=log_f, flush=True)
 
             t0 = time.perf_counter()
-            record = rc = None
+            rc = None
             prover = None
             try:
                 prover = self.peer(node.encode(), log=log)
                 setup_s = time.perf_counter() - t0
-                answer, record, rc = _party(SimpleNamespace(party=command, party_host=party_host), private, prover,
+                answer, rc = _party(SimpleNamespace(party=command, party_host=party_host), private, prover,
                                               request_)
             except Exception as e:  # noqa: BLE001 - the prover's own failure, its answer, never the verifier's
                 log(json.dumps({"prover_error": f"{type(e).__name__}: {e}"}))
@@ -982,7 +980,7 @@ class Attached:
             with os.fdopen(fd, "wb") as f:
                 f.write(canonical_json_bytes(dict(prover.kept)) + b"\n")
         _write(private / SESSION, {
-            "answer": answer, "verifier_record": record, "verifier_rc": rc, "request": dict(request_),
+            "answer": answer, "verifier_rc": rc, "request": dict(request_),
             "registration": None if prover is None else p2_parties.registration_json(prover.registration, prover.plan),
             "steps": None if prover is None else prover.steps, "opened": None if prover is None else prover.opened,
             "pous_session": sid.hex(), "session": None if p2_session is None else p2_session.hex(), "party": command,
@@ -997,11 +995,10 @@ def registration_file(reg: p2.Registration, path: Path, plan: receipts.Plan | No
 
 # --- the session -------------------------------------------------------------------------------------------------------
 
-def verdict_line(answer: dict, expect: str | None, record: dict | None = None) -> str:
-    """The session's verdict line; with the verifier's own `record` of its answer (a party's stdout), whether the two
-    agree, and the session passes only if they do."""
+def verdict_line(answer: dict, expect: str | None) -> str:
+    """The session's verdict line, as the prover received the answer: a measurement's, which no verdict reads."""
     v = answer.get("verdict")
-    ok = (expect is None or {"accept": "accept", "reject": "reject"}[expect] == v) and record in (None, answer)
+    ok = expect is None or {"accept": "accept", "reject": "reject"}[expect] == v
     parts = [f"BW VERDICT {v}"]
     if v == "accept":
         rate = answer.get("credited_bytes_per_s")
@@ -1012,27 +1009,22 @@ def verdict_line(answer: dict, expect: str | None, record: dict | None = None) -
         parts += [f"failure={answer.get('failure')}", f"window={answer.get('window')}", f"at={answer.get('at')}",
                   f"reason={answer.get('reason')!r}"]
     parts += [f"verifier_host={answer.get('host')}", f"expect={expect}"]
-    if record is not None:
-        parts.append(f"verifier_record_agrees={record == answer}")
     return " ".join([*parts, "PASS" if ok else "FAIL"])
 
 
-def _party(a: argparse.Namespace, out: Path, prover: Prover, request: dict) -> tuple[dict, dict | None, int]:
+def _party(a: argparse.Namespace, out: Path, prover: Prover, request: dict) -> tuple[dict, int]:
     """A session with a party the auditor's gate starts (`--party CMD`, `p2_parties --listen` on the gate's host): its
-    `{"listening": port}` read from CMD's stdout, the session over TCP to `--party-host` at that port, and then its own
-    record of the answer from the rest of CMD's stdout. The gate kills a party once its session's minutes run out
+    `{"listening": port}` read from CMD's stdout, then the session over TCP to `--party-host` at that port. The gate kills a party once its session's minutes run out
     (`bw_party --minutes M`) and says so on that stdout, `{"killed": why}`: a session cut off so fails naming it."""
     with open(out / "verifier.err", "ab") as err:
         proc = subprocess.Popen(a.party, shell=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=err)
-        record = killed = None
+        killed = None
 
         def rest() -> None:
-            nonlocal record, killed
+            nonlocal killed
             for line in proc.stdout:
                 doc = json.loads(line)
-                if isinstance(doc, dict) and "answer" in doc:
-                    record = doc["answer"]
-                elif isinstance(doc, dict) and "killed" in doc:
+                if isinstance(doc, dict) and "killed" in doc:
                     killed = doc["killed"]
 
         try:
@@ -1056,7 +1048,7 @@ def _party(a: argparse.Namespace, out: Path, prover: Prover, request: dict) -> t
             rest()
         finally:
             rc = proc.wait()
-    return answer, record, rc
+    return answer, rc
 
 
 def session(a: argparse.Namespace) -> int:
@@ -1086,11 +1078,11 @@ def session(a: argparse.Namespace) -> int:
         log(json.dumps({"start": {"node": a.node, "units": reg.blocks, "registration": reg.digest.hex(),
                                   "request": request, "setup_s": round(setup_s, 3), "host": socket.gethostname(),
                                   "skip_layer": a.skip_layer, "cache": a.cache}}))
-        rc = record = None
+        rc = None
         t1 = time.perf_counter()
         try:
             if a.party is not None:
-                answer, record, rc = _party(a, out, prover, request)
+                answer, rc = _party(a, out, prover, request)
             elif a.connect is not None:
                 host, _, port = a.connect.rpartition(":")
                 with (socket.create_connection((host, int(port))) as conn, conn.makefile("rb") as r,
@@ -1120,14 +1112,12 @@ def session(a: argparse.Namespace) -> int:
             log(json.dumps({"case": case}))
     if pool is not None:
         pool.shutdown()
-    if a.party is not None and record is None and answer.get("verdict") != "prover-error":
-        record = {"verdict": "missing", "reason": "the party's stdout held no answer"}
-    line = verdict_line(answer, a.expect, record)
+    line = verdict_line(answer, a.expect)
     verifier = (f"party {a.party} at {a.party_host}" if a.party else a.verifier or f"tcp {a.connect}")
     doc = {"answer": answer, "request": request, "registration": p2_parties.registration_json(reg, engine.plan),
            "steps": prover.steps,
            "opened": prover.opened, "setup_s": round(setup_s, 3), "session_wall_s": round(wall, 3),
-           "verifier_rc": rc, "verifier": verifier, "verifier_record": record, "prover_host": socket.gethostname(),
+           "verifier_rc": rc, "verifier": verifier, "prover_host": socket.gethostname(),
            "skip_layer": a.skip_layer, "cache": a.cache, "store": str(a.store), "device": a.device, "verdict_line": line,
            "case": case}
     (out / "session.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")

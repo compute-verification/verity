@@ -52,16 +52,18 @@ clock's readings and the coins the challenger (`Challenger`, `coins.local` on th
 Lean took, which decide nothing.
 
 `python -m verity.protocols.resource_accounting.memory.poub.verifier.p2_parties (--registration FILE | --pous-record DIR --pous-session SID)
-(--stdio | --listen HOST:PORT [--sessions N]) [--answer FILE | --device DIR] [--lean-exe EXE] [--challenger DIR
+(--stdio | --listen HOST:PORT [--sessions N]) [--device DIR] [--lean-exe EXE] [--challenger DIR
 --session SID --trusted-sha512 HEX]` is the verifier's side (`main`), each session with fresh coins, the memory
 attester's key and session log in `--challenger`'s directory (the key loaded by the `device_key` the caller hands
 `main`, PoUS's device's `onsite.device_key` in the auditor's gate, refused unless `--trusted-sha512` pins it) signing the
 close of the one session the auditor named `--session SID`, which is claimed in its log before the session's first coin, the
 Lean built in its package (`lake build poub-verifier`) unless `--lean-exe` names a built one, or, without `lake`
-on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `{"listening": port}` and then each
-session's `{"answer"}` on stdout, the shape of a party the auditor's gate starts over ssh with its `--device` directory
+on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `{"listening": port}` on stdout and no
+record of any answer: the answer of record is the replay of the memory attester's signed close (`Poub.P2Protocol`), and
+the session's own is the Lean's, sent to the prover alone. It is the shape of a party the auditor's gate starts over ssh
+with its `--device` directory
 (`verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py`'s party verbs), where it keeps each session's case's
-digest too, the chain its signed close signs, a line of `private/case-digests.txt` (`CASE_DIGESTS`, `case_digest`;
+digest, the chain its signed close signs, a line of `private/case-digests.txt` (`CASE_DIGESTS`, `case_digest`;
 0700, the file 0600), and none of the case's values.
 """
 
@@ -844,11 +846,8 @@ def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.L
                                     "(default: SESSION's, the served bandwidth piece's; the auditor's gate passes none)")
     for k, v in SESSION.items():
         held_to.add_argument("--" + k.replace("_", "-"), type=int, default=v, metavar="N")
-    record = ap.add_mutually_exclusive_group()
-    record.add_argument("--answer", type=Path, help="a file each session's answer is appended to, a JSON line each: "
-                                                    "the verifier's own record of them")
-    record.add_argument("--device", type=Path, help="the party's directory, as the auditor's gate gives it: --answer "
-                                                    "is its answers.jsonl")
+    ap.add_argument("--device", type=Path, help="the party's directory, as the auditor's gate gives it: each "
+                                                "session's case digest is kept in it")
     ap.add_argument("--lean-exe", type=Path, help=f"the built {p2_lean.EXE}, the Lean verifier (default: built "
                                                   "in its Lake package, or without lake on the PATH, the one built "
                                                   "there)")
@@ -885,16 +884,12 @@ def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.L
     cases = None
     if a.device is not None:
         a.device.mkdir(parents=True, exist_ok=True)
-        a.answer = a.device / "answers.jsonl"
         cases = a.device / "private" / CASE_DIGESTS
 
     def log(m: str) -> None:
         print(f"p2_parties {time.strftime('%H:%M:%SZ', time.gmtime())}: {m}", file=sys.stderr, flush=True)
 
     def done(out: dict[str, Any]) -> None:
-        if a.answer is not None:
-            with a.answer.open("a") as f:
-                f.write(json.dumps(out, sort_keys=True) + "\n")
         log(f"answer {out['verdict']} {out.get('failure') or ''} q_bytes={out.get('q_bytes')} "
             f"host={socket.gethostname()}")
 
@@ -929,7 +924,6 @@ def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.L
             with conn, conn.makefile("rb") as r, conn.makefile("wb") as w:
                 out = served(r, w)
             done(out)
-            print(json.dumps({"answer": out}, sort_keys=True), flush=True)
     return 0
 
 

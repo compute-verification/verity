@@ -184,13 +184,13 @@ def test_a_registration_whose_plan_is_fewer_units_is_what_each_pass_reads(tmp_pa
     assert [s["covered_units"] for s in doc["steps"]] == [5] * 4 and doc["registration"]["plan"] == [[0, 2], [4, 3]]
 
 
-def test_sessions_reach_a_listening_verifier_which_records_their_answers(tmp_path) -> None:
+def test_sessions_reach_a_listening_verifier_which_records_no_answer(tmp_path) -> None:
     """The gate's shape: `p2_parties --listen --sessions 2` on the auditor, the honest prover and then the cheat at
-    `--connect`, each answer a line of `--answer`."""
+    `--connect`, each getting its answer; the verifier's stdout holds its port and no answer, and `--answer` is gone."""
     reg = BT.toy(tmp_path / "toy")
     verifier = subprocess.Popen([sys.executable, "-m", "verity.protocols.resource_accounting.memory.poub.verifier.p2_parties",
                                  "--registration", str(tmp_path / "toy" / "registration.json"), "--listen",
-                                 "127.0.0.1:0", "--sessions", "2", "--answer", str(tmp_path / "answers.jsonl"),
+                                 "127.0.0.1:0", "--sessions", "2",
                                  *held_to(1, 1, 8).split()],
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, cwd=ROOT)
     port = json.loads(verifier.stdout.readline())["listening"]
@@ -200,9 +200,8 @@ def test_sessions_reach_a_listening_verifier_which_records_their_answers(tmp_pat
             "--workers", "1"]
     assert B.main(base + ["--out", str(tmp_path / "honest"), "--expect", "accept"]) == 0
     assert B.main(base + ["--out", str(tmp_path / "cheat"), "--skip-layer", "1", "--expect", "reject"]) == 0
-    assert verifier.wait() == 0
-    mine = [json.loads(x) for x in (tmp_path / "answers.jsonl").read_text().splitlines()]
-    assert mine == [json.loads((tmp_path / s / "session.json").read_text())["answer"] for s in ("honest", "cheat")]
+    assert verifier.wait() == 0 and verifier.stdout.read() == ""
+    mine = [json.loads((tmp_path / s / "session.json").read_text())["answer"] for s in ("honest", "cheat")]
     assert mine[0]["verdict"] == "accept" and mine[0]["receipts"] == reg.blocks
     assert mine[1]["verdict"] == "reject" and mine[1]["failure"] == "receipt"
 
@@ -211,11 +210,10 @@ def test_sessions_reach_a_listening_verifier_which_records_their_answers(tmp_pat
 WITHOUT_LEAN = {"accept": "undecided", "reject": "undecided"}
 
 
-def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(tmp_path) -> None:
+def test_a_party_the_gate_starts_says_its_port_and_keeps_no_record_of_the_answer(tmp_path) -> None:
     """The auditor gate's party shape (`--party CMD`): the party run as the gate runs one, from the tree with no
     site-packages (`-S`: the standard library only, which the gate's `python3 -s -E` has) and its `--device`
-    directory; CMD's stdout says the port and then the verifier's record of the answer, which the verdict line holds
-    to the session's, and which the device's answers.jsonl keeps. Each session's core case, whose digest alone (the
+    directory; CMD's stdout says the port, and neither it nor the device keeps any record of the answer. Each session's core case, whose digest alone (the
     chain its signed close signs) the device's private case-digests.txt keeps, goes with its answer to `--case-dir` (0700, its files 0600), naming the
     toy's store, its log closed by the memory challenger's key (`p2_party_at_leaf`) under the session id the party was
     given, and `session.json` holds only its digest, store and verdict."""
@@ -238,8 +236,8 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
         assert B.main(base + more + ["--party", party(session), "--out", str(tmp_path / name), "--expect", expect,
                                      "--case-dir", str(private)]) == 0
         doc = json.loads((tmp_path / name / "session.json").read_text())
-        assert doc["verifier_record"] == doc["answer"] and doc["answer"]["verdict"] == expect
-        assert "verifier_record_agrees=True" in doc["verdict_line"]
+        assert "verifier_record" not in doc and doc["answer"]["verdict"] == expect
+        assert "verifier_record" not in doc["verdict_line"] and doc["verdict_line"].endswith("PASS")
         case, answer = (json.loads((private / f).read_text()) for f in (p2_case.CASE, p2_case.ANSWER))
         assert [(private / f).stat().st_mode & 0o777 for f in ("", p2_case.CASE, p2_case.ANSWER)] == [0o700, 0o600, 0o600]
         assert answer == p2_case.unjudged(case) and answer["verdict"] == WITHOUT_LEAN[expect]
@@ -249,13 +247,10 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
         assert case["evidence"] not in (tmp_path / name / "session.json").read_text()
         assert case["params"]["session"] == session.hex()
         cases.append(case)
-    kept = [json.loads(x) for x in (tmp_path / "party" / "answers.jsonl").read_text().splitlines()]
-    assert kept == [json.loads((tmp_path / s / "session.json").read_text())["answer"] for s in ("honest", "cheat")]
+    assert sorted(p.name for p in (tmp_path / "party").iterdir()) == ["private"]
     private = tmp_path / "party" / "private"
     assert (private / p2_parties.CASE_DIGESTS).read_text().splitlines() == [p2_parties.case_digest(c) for c in cases]
     assert sorted(p.name for p in private.iterdir()) == [p2_parties.CASE_DIGESTS]
-    record = {"verdict": "accept"}
-    assert B.verdict_line(doc["answer"], "reject", record).endswith("verifier_record_agrees=False FAIL")
     with pytest.raises(SystemExit, match="can't be under --out"):
         B.main(base + ["--party", party(session), "--out", str(tmp_path / "x"),
                        "--case-dir", str(tmp_path / "x" / "private")])

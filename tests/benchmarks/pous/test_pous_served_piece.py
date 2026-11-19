@@ -973,10 +973,6 @@ def test_the_held_sessions_request_is_the_auditors_session():
     assert SP.BW.session == {"windows": 6, "passes": 4, "samples": 1024, "window_s": 20.0, "deadline_s": 1.0}
 
 
-def _jsonl(path: Path) -> list:
-    return [json.loads(x) for x in path.read_text().splitlines()]
-
-
 @pytest.mark.slow
 @pytest.mark.parametrize("registered, form", [(f, FORMS[f]) for f in FORMS], ids=list(FORMS), indirect=["registered"])
 def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_the_leans(registered, form, tmp_path,
@@ -1035,7 +1031,7 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     kept = tmp_path / "parties" / "bw" / "private"
     assert (kept / BW.p2_parties.CASE_DIGESTS).read_text().splitlines() == [BW.p2_parties.case_digest(case)]
     assert sorted(p.name for p in kept.iterdir()) == [BW.p2_parties.CASE_DIGESTS]
-    assert _jsonl(tmp_path / "parties" / "bw" / "answers.jsonl")[-1]["verdict"] == "accept"
+    assert sorted(p.name for p in (tmp_path / "parties" / "bw").iterdir()) == ["private"]
 
     assert {k: v for k, v in bw["public"].items() if k not in ("gamma", "r_bytes_per_s")} == own["public"]
     assert "registration" not in bw["profile"] and bw["profile"]["units"] == 2
@@ -1358,7 +1354,7 @@ def test_no_machine_name_reaches_a_refused_bandwidth_audits_public_output_or_its
     private, public = tmp_path / "private", tmp_path / "public"
     private.mkdir()
     (private / BW.SESSION).write_text(json.dumps({
-        "answer": {"verdict": "refused", "reason": why}, "verifier_record": {"verdict": "refused", "reason": why},
+        "answer": {"verdict": "refused", "reason": why},
         "verifier_rc": 0, "request": {"node": node}, "steps": [], "r_bytes_per_s": None, "party_host": address,
         "setup_s": 0.0, "session_wall_s": 0.0}))
     got = BW.decide(private, public, bind=b"\x01" * 32, window=3, trusted_sha512=BW_KEY,

@@ -7,8 +7,8 @@
 #
 # The verifier is `p2_parties` on this host by default (VERIFIER, a shell command speaking --stdio), which certifies
 # nothing. PARTY is the auditor's instead: the ssh command to the auditor device's gate verb that starts `p2_parties --listen`
-# there, once a session (the honest one, then the cheat), whose port this host reaches at PARTY_HOST and whose stdout
-# ends with the verifier's own record of the answer (`bandwidth.py session --party`). Or CONNECT=HOST:PORT reaches a
+# there, once a session (the honest one, then the cheat), whose port this host reaches at PARTY_HOST
+# (`bandwidth.py session --party`). Or CONNECT=HOST:PORT reaches a
 # `p2_parties --listen --sessions 2` already listening, the cheat at CHEAT_CONNECT (by default the same listener), with
 # TUNNEL ('SSH_OPTIONS USER@HOST') through `ssh -L` to TUNNEL's host, CONNECT then the address there. The registration
 # the verifier holds is the tracked bandwidth-mem69-v2.json, and the store must be it, its plan the layout's tensors'
