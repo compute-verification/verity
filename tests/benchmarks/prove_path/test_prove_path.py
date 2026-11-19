@@ -2094,8 +2094,11 @@ def test_window_commit_fills_the_served_circuits_slots_and_rows_from_its_served_
         return filled["rows"]
 
     def window(*a, **k):
+        filled.update(advice=k.get("advice"))
         raise Closed
 
+    bound = {"compiler": {"name": "c", "digest": "cd" * 64}, "advice": {"root": "ef" * 64, "bits": 0}}
+    monkeypatch.setattr(PP, "served_binding", lambda a, c, data, r: bound)
     monkeypatch.setattr(WRS, "Rows", rows)
     monkeypatch.setattr(IF, "Window", window)
     (tmp_path / "advice.bin").write_bytes(b"")
@@ -2109,6 +2112,24 @@ def test_window_commit_fills_the_served_circuits_slots_and_rows_from_its_served_
     assert [P.positions for P in low.programs] == [5, 4] and len(slots) == 2
     assert [s.fn for s in slots] == [P.fn for P in low.programs]
     assert SS.SCAN_STATE in filled["values"] and sum(filled["rows"].n.values()) > 0
+    assert filled["advice"] is bound
+
+
+def test_a_served_window_commit_binds_the_advice_the_server_committed(tmp_path, monkeypatch):
+    """`served_binding`: the window commit's advice binding is the server's own (the root its opening opens, under the served
+    compiler), committed nothing a second time; advice bytes other than the opening's are refused by name, and so is a
+    docket binding another root."""
+    s = _served(tmp_path, monkeypatch)
+    a = argparse.Namespace(**vars(s.a), advice=str(tmp_path / "advice.bin"))
+    r = PP.record1(s.a.bundle, s.a.row_dir)
+    assert PP.served_binding(a, s.compiler, s.data, r) == s.bound
+    with pytest.raises(ValueError, match="^advice: .* other advice than window 0's committed opening"):
+        PP.served_binding(a, s.compiler, s.data + b"\0", r)
+    reg = s.run / "advice" / "w0" / "registration.json"
+    doc = json.loads(reg.read_text())
+    reg.write_text(json.dumps({**doc, "binding": {**doc["binding"], "advice": {**doc["binding"]["advice"], "root": "ee" * 64}}}))
+    with pytest.raises(ValueError, match=r"published records are refused \(advice\)"):
+        PP.served_binding(a, s.compiler, s.data, r)
 
 
 def test_window_circuits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
