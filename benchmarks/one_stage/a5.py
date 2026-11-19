@@ -238,7 +238,7 @@ import a5_memo as AM  # noqa: E402
 from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
 import r2_population as R2  # noqa: E402
-from verity.circuits.codec import canonical_json, descriptor_chunks, encode_program  # noqa: E402
+from verity.circuits.codec import canonical_json, definition_digest, descriptor_chunks, encode_program  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Session, Statement  # noqa: E402
@@ -990,7 +990,11 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         link(Path(got["pub"]), st_dir / f"pub-{m.n}.bin")
         meta = circ.meta
         header = a0.public_header(st_dir, m.n)
-        if (m.template, circ.pin) not in programs_ok:   # a function of the circuit's META and the template: once per circuit
+        if (m.template, circ.pin) not in programs_ok and door:   # the door binds the Definition's digest in C (`one_circuit.lower`)
+            D = decoded.get()
+            programs_ok[m.template, circ.pin] = meta.get("program_digests") == {
+                m.template: definition_digest(D.desc["definitions"][m.template], D.desc)}
+        elif (m.template, circ.pin) not in programs_ok:   # a function of the circuit's META and the template: once per circuit
             programs_ok[m.template, circ.pin] = a0.template_program_ok(meta, defn)
         # the header against the member's slice of the docket: the per-member form's rule, in its one Python
         why = form if isinstance(form, str) else MB.population_why([[m.base, m.base + m.n]], form[0], header, form[1][m.key])

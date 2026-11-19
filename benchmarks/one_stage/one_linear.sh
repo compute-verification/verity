@@ -2,9 +2,10 @@
 # One real linear layer's Gemm_v2 slices (`one_linear.py`) audited on the records audit's road (`served_door_prove.sh`'s
 # AUDIT_RULE branch): registered, committed, drawn on a local challenger's live coins, each drawn block cut, lowered and
 # composed by Lean's door, proved in zero knowledge behind the ZK server and verified by the Lean verifier. Then the
-# negatives: the partition at two levels refused at the door before any coin; a changed output word in every block
-# (so in every drawn one) refused; one changed output word in one unit, accepted unless its block is drawn; a
-# stratified rate refused by its kind (SUBSET_ONLY). RULE: the accept's rate over the population.
+# negatives: the weight as a registered read (refused today by the members check's header rule); the partition at
+# two levels refused at the door before any coin; a changed output word in every block (so in every drawn one)
+# refused; one changed output word in one unit, accepted unless its block is drawn; a stratified rate refused by its
+# kind (SUBSET_ONLY). The accept's weight is a run input each unit commits. RULE: the accept's rate over the population.
 # bash benchmarks/one_stage/one_linear.sh
 # research run --on auto --cwd source --mem-gb 96 --cpus 16 --timeout 4h -- bash benchmarks/one_stage/one_linear.sh
 set -uo pipefail
@@ -29,11 +30,12 @@ print("SUMMARY " + json.dumps({k: s[k] for k in s if k in keep}, default=str)[:3
 EOF
   return $r
 }
-audit honest $RULE "" ""; H=$?
-audit forged-drawn $RULE "--forge all" "--forged"; F=$?
-audit forged-one $RULE "--forge 1" ""; U=$?
-audit stratified stratified-${RULE#rate:} "" ""; R=$?
+audit honest $RULE "--weights committed" ""; H=$?
+audit registered $RULE "" ""; G=$?
+audit forged-drawn $RULE "--weights committed --forge all" "--forged"; F=$?
+audit forged-one $RULE "--weights committed --forge 1" ""; U=$?
+audit stratified stratified-${RULE#rate:} "--weights committed" ""; R=$?
 echo "LAW the zero-knowledge audit's proved statement covers a subset design, so the accept is under $RULE, a subset draw over one stratum; the audit under a rated law waits on its claim"
-echo "RESULT $(python3 -c 'import json,sys; print(json.dumps(dict(zip(["levels","honest","forged_drawn","forged_one","stratified"], map(int, sys.argv[1:])))))' $LV $H $F $U $R)"
+echo "RESULT $(python3 -c 'import json,sys; print(json.dumps(dict(zip(["levels","honest","registered","forged_drawn","forged_one","stratified"], map(int, sys.argv[1:])))))' $LV $H $G $F $U $R)"
 [ $LV = 0 ] && [ $H = 0 ] && echo "ACCEPT accepted by the Lean verifier, in zero knowledge, about the block circuits Lean's lowering derives from the registered circuit; that the lowering agrees with the circuit rests on three open premises"
 [ $LV = 0 ] && [ $H = 0 ] && [ $F = 0 ]
