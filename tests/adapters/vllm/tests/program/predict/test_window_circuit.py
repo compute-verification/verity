@@ -742,7 +742,7 @@ def _labels(circuit) -> dict[str, np.ndarray]:
     out = {tid: np.full((n, 2), -1, dtype=np.int64) for tid, n in circuit.units.items()}
     for e in circuit.blocks.inference:
         i, lab = np.arange(e.units, dtype=np.int64), np.zeros((e.units, 2), dtype=np.int64)
-        lab[:, 1] = e.step
+        lab[:, 0], lab[:, 1] = e.slot, e.step
         for r, a in zip(reversed(e.radix), reversed(e.axes)):
             if a != "-":
                 lab[:, int(a == "step")] += i % r
