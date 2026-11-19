@@ -96,7 +96,7 @@ so the session is the one statement's on their own files; the committed circuit 
 the lookup tables the blobs hold and the program; `o`'s partition object and registered file read
 (`FlockDeploy.jsonOf`) as the parameters' own; and the statement's tags are `A`'s. -/
 structure Names (A : Live) (o : Own) (p : _root_.Spot.OneStageZk.Params) (bs : Core.Blobs) : Prop where
-  circuit : bs.get p.own.circuit "circuit" = .ok A.I.circuitFile
+  circuit : p.own.circuitFile = .ok A.I.circuitFile
   pub : bs.get p.own.pub "public file" = .ok A.I.publicFile
   tables : _root_.Spot.OneStageZk.tablesOf bs = A.I.tables
   program : A.I.program = some p.own.program

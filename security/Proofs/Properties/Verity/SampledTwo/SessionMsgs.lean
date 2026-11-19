@@ -93,7 +93,7 @@ def stmtAtCase (k : Case) (t : ℕ) : Option Msg := do
   let m ← memberAt pe.1 pe.2 t
   let s ← filesAt pe.2 t
   let record ← recordAt k.blobs s
-  let circuit ← (k.blobs.get m.own.circuit "circuit").toOption
+  let circuit ← m.own.circuitFile.toOption
   let pub ← (k.blobs.get m.own.pub "public file").toOption
   pure (stmtRaw m circuit pub (Spot.OneStageZk.tablesOf k.blobs) (sampleBytes record)
     (m.own.registered.map fun j => (_root_.Flock.RecordText.printT j).toUTF8)).encode
@@ -231,7 +231,7 @@ theorem stmtAt_stmtsMsg (h : SpotFlock.Held) {k : Case} {m : Msg} (hm : stmtsMsg
 /-- **Template `t`'s session statement is its member's statement** at its session's record's sample. -/
 theorem stmtAtCase_some {k : Case} {t : ℕ} {x : Msg} (h : stmtAtCase k t = some x) :
     ∃ p e m s record circuit pub, formOf k = some (p, e) ∧ memberAt p e t = some m ∧ filesAt e t = some s ∧
-      recordAt k.blobs s = some record ∧ (k.blobs.get m.own.circuit "circuit").toOption = some circuit ∧
+      recordAt k.blobs s = some record ∧ m.own.circuitFile.toOption = some circuit ∧
       (k.blobs.get m.own.pub "public file").toOption = some pub ∧
       x = (stmtRaw m circuit pub (Spot.OneStageZk.tablesOf k.blobs) (sampleBytes record)
         (m.own.registered.map fun j => (_root_.Flock.RecordText.printT j).toUTF8)).encode := by

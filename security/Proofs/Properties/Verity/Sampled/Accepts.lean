@@ -162,7 +162,7 @@ theorem v2Verified_accepts {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.
     {bs : _root_.Core.Blobs} {record : String} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup}
     {rest : Json × Json} {proofs : Array ByteArray} (h : V2Verified p e bs record spec tabs rest proofs) :
     ∃ tags0 circuitB pubB sts, Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
-      bs.get p.own.circuit "circuit" = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
+      p.own.circuitFile = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       Exec.setupOfP (ZkExec.zkInputs (toExec (_root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB bs)))
         none record = .ok (spec, sts) ∧
       AcceptsZKP (toExec (_root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB bs)) none
@@ -213,14 +213,32 @@ theorem acceptsZKP_back {I : Exec.Inputs} {T' : List (String × ByteArray)} (hex
   exact ⟨spec, sts, setupOfP_back hext hcount ht hp own t.record _ hs, hshape, hv⟩
 
 /-- **v2 reads `A`'s files on the blobs sent**: under v2's parameters in what the prover sent (`ParamsAt`), the circuit
-and the public file v2 finds on the blobs by its parameters' digests are `A`'s, and the lookup tables the blobs hold
+file v2 derives (`Own.circuitFile`) and the public file it finds on the blobs by its parameters' digest are `A`'s, and the lookup tables the blobs hold
 (`Spot.OneStageZk.tablesOf`) find by name whatever `A`'s find (`TablesExtend`). -/
 structure FilesOn (A : Live) (s : Verity.Sent) : Prop where
   circuit : ∀ p, ParamsAt s.params p → ∀ b,
-    (_root_.Core.Blobs.ofArray s.blobs).get p.own.circuit "circuit" = .ok b → b = A.I.circuitFile
+    p.own.circuitFile = .ok b → b = A.I.circuitFile
   publicFile : ∀ p, ParamsAt s.params p → ∀ b,
     (_root_.Core.Blobs.ofArray s.blobs).get p.own.pub "public file" = .ok b → b = A.I.publicFile
   tables : TablesExtend A.I.tables (_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray s.blobs))
+
+/-- **v2 derives no circuit file yet**: `OneStageZk.restrict` refuses after the block's Program
+(`OneCircuit.notDerived`: no encoder writes a lowered Program as a circuit file), so `Own.circuitFile` is never `.ok`. -/
+theorem restrict_ne_ok (C : ByteArray) (partition : Json) (block : ℕ) (b : ByteArray) :
+    _root_.Spot.OneStageZk.restrict C partition block ≠ .ok b := by
+  intro h
+  unfold _root_.Spot.OneStageZk.restrict at h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  split at h
+  · split at h
+    · obtain ⟨_, -, h⟩ := ebind_ok h
+      obtain ⟨_, -, h⟩ := ebind_ok h
+      cases h
+    · cases h
+  · cases h
+
+theorem circuitFile_ne_ok (p : _root_.Spot.OneStageZk.Own) (b : ByteArray) : p.circuitFile ≠ .ok b :=
+  restrict_ne_ok _ _ _ b
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
@@ -408,11 +426,7 @@ theorem filesOn_of {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F B : A
     (hheld : Properties.Spot.HoldsRegisteredTables p₀.own (_root_.Core.Blobs.ofArray s.blobs))
     (ht : TablesSent T s) : FilesOn A s := by
   have hc : ∀ p, ParamsAt s.params p → ∀ b,
-      (_root_.Core.Blobs.ofArray s.blobs).get p.own.circuit "circuit" = .ok b → b = A.I.circuitFile := by
-    intro p hp b hg
-    rw [hs] at hg
-    rw [hA.circuit]
-    exact get_named (hD.circuit p (hθ ▸ hp)) hreg.1 hg
+      p.own.circuitFile = .ok b → b = A.I.circuitFile := fun p _ b hg => absurd hg (circuitFile_ne_ok p.own b)
   refine ⟨hc, fun p hp b hg => ?_, ?_⟩
   · rw [hs] at hg
     rw [hA.publicFile]

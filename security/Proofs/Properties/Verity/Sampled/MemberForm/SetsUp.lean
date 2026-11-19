@@ -74,15 +74,19 @@ theorem forall₂_imp {β γ : Type} {R S : β → γ → Prop} : ∀ {l₁ : Li
 
 /-! ## How v2 reads the members' files -/
 
-/-- **How v2 reads the member `vm`'s files among the files `R`**: `readOf` at the member's digests, the circuit and
-public files they name among `R` (`Verity.namedFile`), the lookup tables the circuit file registers at their
+/-- **A member's circuit file**, as v2 derives it from C and the partition (`Own.circuitFile`); empty where it derives
+none. -/
+def memberCircuit (vm : _root_.Spot.OneStageZk.Member) : ByteArray := vm.own.circuitFile.toOption.getD .empty
+
+/-- **How v2 reads the member `vm`'s files among the files `R`**: its circuit file as v2 derives it (`memberCircuit`), the
+public file its digest names among `R` (`Verity.namedFile`), the lookup tables the circuit file registers at their
 registered files `T` (`pinnedTables`) and `verify --zk`'s tags at the statement's tags and the circuit file
 (`zkTagsOf`). -/
 noncomputable def memberRead (T : PinnedTables) (R : Array ByteArray) (vm : _root_.Spot.OneStageZk.Member) :
     Verity.FileRead :=
   ⟨zkTagsOf ((Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT).getD default)
-      (Verity.namedFile (digestOf vm.own.circuit) R),
-    Verity.namedFile (digestOf vm.own.circuit) R, pinnedTables T (Verity.namedFile (digestOf vm.own.circuit) R),
+      (memberCircuit vm),
+    memberCircuit vm, pinnedTables T (memberCircuit vm),
     Verity.namedFile (digestOf vm.own.pub) R⟩
 
 /-- The members `ms` in the order of their first units. -/
@@ -107,15 +111,15 @@ def fileRead {nJ : ℕ} (m : Member nJ) : Verity.FileRead :=
 /-- A window's member's read is Flock's member's, at any budget. -/
 theorem fileRead_toV5 {nJ : ℕ} (m : Member nJ) (t : ℕ) : (m.toV5 t).fileRead = fileRead m := rfl
 
-/-- **The window's member `m` is the verifier's member `vm` on the files `F`**: the statement's tags; the circuit and
-public files `vm`'s digests name among `F` (`Verity.namedFile`); the lookup tables the circuit file registers, at
+/-- **The window's member `m` is the verifier's member `vm` on the files `F`**: the statement's tags; `vm`'s circuit file as v2 derives it
+(`memberCircuit`) and the public file its digest names among `F` (`Verity.namedFile`); the lookup tables the circuit file registers, at
 their registered files `T` (`pinnedTables`); one table; `vm`'s partition object and program as
 verity-verify-proof's inputs; no work, stratified or closure input and no recomputation of public input words; and `vm`'s units, as many as `m`'s proof blocks, each at
 its place of the window's population after `vm`'s first unit. -/
 structure MemberOn {nJ : ℕ} (T : PinnedTables) (F : Array ByteArray) (vm : _root_.Spot.OneStageZk.Member) (m : Member nJ) :
     Prop where
   tags : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some m.I.tags
-  circuit : m.I.circuitFile = Verity.namedFile (digestOf vm.own.circuit) F
+  circuit : m.I.circuitFile = memberCircuit vm
   publicFile : m.I.publicFile = Verity.namedFile (digestOf vm.own.pub) F
   tables : m.I.tables = pinnedTables T m.I.circuitFile
   count : m.I.count = 1
