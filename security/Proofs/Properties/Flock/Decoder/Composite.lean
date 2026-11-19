@@ -116,6 +116,28 @@ def NodesOk (defs : Array Defn) (outs : Array Ty) (leaves : Bool → ℕ → Opt
       ((nodes[k]!).args[a]!).seq = Seq.ofParts ps ∧ (∀ q ∈ ps, Walk.PartValid leaves q) ∧ (∀ q ∈ ps, PartNonneg q) ∧
         ∀ q ∈ ps, PartInner q
 
+/-- The node loop's offsets: from 0, each node's gates its members' callee's after the ones before. -/
+def OffsOk (defs : Array Defn) (nodes : Array Node) (offsets : Array ℕ) : Prop :=
+  offsets.size = nodes.size + 1 ∧ offsets[0]! = 0 ∧
+    ∀ k < nodes.size, offsets[k + 1]! = offsets[k]! + (nodes[k]!).members * (defs[(nodes[k]!).fn]!).gates
+
+theorem offsOk_mono {a b : Array Defn} {nodes : Array Node} {offsets : Array ℕ} (hp : Pre a b)
+    (hfn : ∀ k < nodes.size, (nodes[k]!).fn < a.size) (h : OffsOk a nodes offsets) : OffsOk b nodes offsets :=
+  ⟨h.1, h.2.1, fun k hk => by rw [hp.2 _ (hfn k hk)]; exact h.2.2 k hk⟩
+
+theorem offsOk_push {defs : Array Defn} {nodes : Array Node} {offsets : Array ℕ} (nd : Node) (x : ℕ)
+    (h : OffsOk defs nodes offsets) (hx : x = nd.members * (defs[nd.fn]!).gates) :
+    OffsOk defs (nodes.push nd) (offsets.push (offsets.back! + x)) := by
+  obtain ⟨h1, h2, h3⟩ := h
+  have hb : offsets.back! = offsets[nodes.size]! := by simp [Array.back!, h1]
+  refine ⟨by simp [h1], ?_, fun k hk => ?_⟩
+  · rw [getElem!_push_lt _ _ (by omega)]; exact h2
+  · simp only [Array.size_push] at hk
+    rcases Nat.lt_succ_iff_lt_or_eq.1 hk with hk | rfl
+    · rw [getElem!_push_lt _ _ (by omega), getElem!_push_lt _ _ (by omega), getElem!_push_lt _ _ hk]
+      exact h3 k hk
+    · rw [← h1, getElem!_push_eq, getElem!_push_lt _ _ (by omega), getElem!_push_eq, hb, hx]
+
 theorem nodesOk_mono {a b : Array Defn} {outs : Array Ty} {leaves : Bool → ℕ → Option ℕ} {nodes : Array Node}
     (hp : Pre a b) (h : NodesOk a outs leaves nodes) : NodesOk b outs leaves nodes := fun k hk => by
   obtain ⟨h1, h2, h3, h4⟩ := h k hk
@@ -291,13 +313,15 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
   rw [Std.Legacy.Range.forIn_eq_forIn_range'] at hloop
   have hL := forIn_stateT_inv _ (fun _ _ => False) _
     (fun i (st : Array Node × Array ℕ) s1 => Inv s1 ∧ Pre (DecState.defs s3) (DecState.defs s1) ∧ st.1.size = i ∧
-       NodesOk (DecState.defs s1) outs (leavesOf params outs) st.1) (nodes0, offsets0) _ _ _
-    ⟨hs3, pre_refl _, rfl, fun k hk => absurd hk (Nat.not_lt_zero k)⟩ ?step hloop
+       NodesOk (DecState.defs s1) outs (leavesOf params outs) st.1 ∧ OffsOk (DecState.defs s1) st.1 st.2)
+    (nodes0, offsets0) _ _ _
+    ⟨hs3, pre_refl _, rfl, fun k hk => absurd hk (Nat.not_lt_zero k), rfl, rfl, fun k hk => absurd hk (Nat.not_lt_zero k)⟩
+    ?step hloop
   case step =>
-    rintro i hi ⟨nodes1, offsets1⟩ s1 t s2 ⟨hs1, hp1, hsz1, hn1⟩ h
+    rintro i hi ⟨nodes1, offsets1⟩ s1 t s2 ⟨hs1, hp1, hsz1, hn1, ho1⟩ h
     simp only [List.length_range', Std.Legacy.Range.size] at hi
     simp (config := { zeta := false }) only [List.getElem_range', Nat.one_mul, Nat.zero_add] at h
-    dsimp only at hsz1 hn1
+    dsimp only at hsz1 hn1 ho1
     replace h := st_bind h; obtain ⟨fname, s3', h1, h⟩ := h
     replace h1 := st_liftV h1; obtain ⟨hfn, rfl⟩ := h1
     rcases fname with _ | _ | _ | fname | _ | _
@@ -428,7 +452,19 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
       (fun e => by have := hnxs e; omega)
       (fun a ha => by obtain ⟨ty, ps, e, -⟩ := hel a ha; rw [e])
     dsimp only
-    refine ⟨hs4, pre_trans hp1 hp4, by simp [hsz1], fun k hk => ?_⟩
+    refine ⟨hs4, pre_trans hp1 hp4, by simp [hsz1], fun k hk => ?_, ?_⟩
+    swap
+    · refine offsOk_push _ _ (offsOk_mono hp4 (fun k hk => (hn1 k hk).1) ho1) ?_
+      by_cases hF : F = Form.prim
+      · subst hF
+        have hcp : ((DecState.defs s4)[ci]!).prim = true := by
+          revert hprim; cases ((DecState.defs s4)[ci]!).prim <;> simp <;> decide
+        have hg1 : ((DecState.defs s4)[ci]!).gates = 1 := (hs4.2.2 ci hci).1 hcp
+        simp only [Node.members]
+        change 1 = 1 * ((DecState.defs s4)[ci]!).gates
+        rw [hg1]
+      · have : (F == Form.prim) = false := by cases F <;> first | rfl | exact absurd rfl hF
+        simp only [this]; rfl
     simp only [Array.size_push] at hk
     rcases Nat.lt_succ_iff_lt_or_eq.1 hk with hk | rfl
     · rw [getElem!_push_lt _ _ (by omega)]
@@ -452,9 +488,9 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
         refine ⟨ps, ?_, hv, hnn, hin⟩
         rw [c2, e]
   simp only [List.length_range', Std.Legacy.Range.size] at hL
-  rcases hL with ⟨hs5, hp5, hsz5, hn5⟩ | hL
+  rcases hL with ⟨hs5, hp5, hsz5, hn5, ho5⟩ | hL
   swap; · exact hL.elim
-  dsimp only at hsz5 hn5 h
+  dsimp only at hsz5 hn5 ho5 h
   replace h := st_bind h; obtain ⟨st, s7, h1, h⟩ := h
   obtain ⟨rfl, rfl⟩ := st_get h1
   rw [leavesFor_false] at h
@@ -486,7 +522,8 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
   have hv := Walk.parsePartsIn_valid _ _ (earlier_ok _ _ _ _ hn5) _ _ _ hret
   have hsz : nodes.size = outs.size := by omega
   have hout : ∀ k < nodes.size, (nodes[k]!).out = outs[k]! := fun k hk => (hn5 k hk).2.2.1
-  refine ⟨inv_congr ?_ ?_ hs5, pre_trans hp3 hp5, ⟨⟨fun h => absurd h (by simp), fun _ => ⟨rfl, ?_, rfl⟩⟩, ?_, ?_, ?_⟩⟩
+  refine ⟨inv_congr ?_ ?_ hs5, pre_trans hp3 hp5, ⟨⟨fun h => absurd h (by simp), fun _ => ⟨rfl, ?_, rfl⟩⟩, ?_, ?_, ?_⟩,
+    fun h => absurd h (by simp), fun _ => ?_⟩
   · rfl
   · rfl
   · simpa using hcnt
@@ -508,6 +545,8 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
     · try dsimp only at hq
       rw [(Walk.ofParts_spec ps).1] at hq
       exact parsePartsIn_inner _ _ (earlier_inner_bind _ _ _ _ hn5) _ _ _ hret q hq
+  · obtain ⟨o1, o2, o3⟩ := ho5
+    exact ⟨o1, o2, by simp [Array.back!, o1], fun k hk => ⟨(hn5 k hk).1, o3 k hk⟩⟩
 
 theorem getSpec_zero : GetSpec 0 := by
   intro desc fid s i s' h

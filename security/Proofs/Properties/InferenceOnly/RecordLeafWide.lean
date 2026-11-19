@@ -145,7 +145,7 @@ theorem param_wide {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Read
     have hw := LeafWidths.arg_wide P hroot hB hD hW P.rootScope hgood k hk m hm i hi t ht
     rcases hform with hf | hf
     · rw [Resolve.argIdx_call hf]
-      exact hw.1 hf
+      exact hw.1 (Or.inr hf)
     · rw [Resolve.argIdx_batch hf]
       exact hw.2 hf
   exact ⟨p, ops, sc', hgate, hret.trans (congrArg Ty.value (hwid.trans (LeafWidths.wAt_widths _ _ ht)))⟩
