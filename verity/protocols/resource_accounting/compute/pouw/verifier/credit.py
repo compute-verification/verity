@@ -77,9 +77,9 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   the tile's R and C. Each K of its ``TILES`` is one the tile's proof covers, a multiple of 32 below 2^17
   (`TILE_K_STEP`, `TILE_K_LIMIT`: the K its ``GemmAccumulatorS8`` binds), else the window is refused (``tile-k``,
   `tile_k`, its fix the K to pad to). Its root's nodes other than inputs must be, in order, each call's (M/R)·(n/C)
-  instances of K's template, so the record names the units the circuit has. No composite Flock's decoder reads of it
-  names a word at another width than it was committed with (`_reinterprets`, the codec's ``E_REINTERPRET``), else it
-  is refused as no descriptor (`DESCRIPTOR_FORM`), as `Flock.Program.decode` refuses it. The cost is the descriptor's
+  instances of K's template, so the record names the units the circuit has. The codec's decoder must read it from its
+  bytes alone (`_decodes`: its Boolean bodies, widths and references, everything `Flock.Program.decode` checks), else it
+  is refused as no descriptor (`DESCRIPTOR_FORM`), as the Lean refuses it. The cost is the descriptor's
   nodes and the record's calls, never the gates they unroll to.
 * **K is committed, and ε is what it established** (`committed_k`, `established`): K is the proof system's selection,
   committed in the period-open (`K_FIELD`, in the auditor's signed ledger beside the period's circuit and cap) before
@@ -220,11 +220,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
-from verity.circuits import codec
-from verity.circuits.codec import _checked_refs
-from verity.circuits.defs import _Widths
-from verity.circuits.refs import Coll, Concat, refs_from_json
-from verity.circuits.types import type_from_json
+from verity.circuits import codec, restrict
 from verity.commitments import domains
 from verity.commitments.merkle import root_from_subtrees
 
@@ -874,21 +870,6 @@ def _runs(xs: Any) -> list[list]:
     return out
 
 
-def _static_fns(v: Any) -> list:
-    """The functions a binding's static value names, as the decoder follows them (`Flock.Program.staticFns`): an
-    object's ``fn``, none in an ``f64``, a ``dict``'s values', a list's items', at any depth."""
-    out, todo = [], [v]
-    while todo:
-        x = todo.pop()
-        if isinstance(x, list):
-            todo += x
-        elif isinstance(x, dict) and "fn" in x:
-            out.append(x["fn"])
-        elif isinstance(x, dict) and "f64" not in x and isinstance(x.get("dict"), dict):
-            todo += x["dict"].values()
-    return out
-
-
 def _record_fns(v: Any) -> list:
     """Every ``{"fn": id}`` in a record value (`codec._record_function_ids`, `Flock.Program.recordFunctionIds`), at
     any depth."""
@@ -902,76 +883,15 @@ def _record_fns(v: Any) -> list:
     return out
 
 
-def _misreads(body: Any, types: list) -> bool:
-    """Whether a composite's `body` names, in a node's argument or its return, a leaf of another width than the
-    argument's or return's type gives that position: `defs.Builder.finish`'s check (`_Widths`), over the body's
-    references as the codec decodes them (`types` the descriptor's table). False for a body whose types or references
-    don't decode, which this check leaves to the rest."""
-    def entry(i: Any) -> Any:
-        if not (_nat(i) and i < len(types)):
-            raise IndexError(i)
-        return types[i]
-
-    def refs(j: Any, args: list[list]) -> Any:
-        if isinstance(j, dict) and "alias" in j:
-            k, a = j["alias"]
-            if not (_nat(k) and _nat(a) and k < len(args) and a < len(args[k])):
-                raise IndexError(k)
-            return args[k][a]
-        if isinstance(j, dict) and "concat" in j:
-            return Concat([refs(x, args) for x in j["concat"]])
-        return refs_from_json(j)
-
+def _decodes(descriptor: bytes) -> bool:
+    """Whether the codec's decoder reads `descriptor` from its bytes alone, each primitive as the descriptor declares it
+    (`restrict.program`), as `Credit.programOf` reads it with `Flock.Program.decode`: a descriptor it refuses (``E_BODY_KEY``,
+    ``E_BODY_MISSING``, ``E_REINTERPRET``, ...) is no descriptor."""
     try:
-        params = tuple((p[0], type_from_json(p[1])) for p in body["params"])
-        ret_type, nds = type_from_json(body["ret_type"]), body["nodes"]
-        nodes = [SimpleNamespace(out=entry(nd["out"])) for nd in nds]
-
-        def leaves(s: str, i: int) -> int | None:
-            t = params[i][1] if s == "p" and i < len(params) else nodes[i].out if s == "n" and i < len(nodes) else None
-            return None if t is None else t.leaves
-
-        W, args = _Widths(params, nodes), []
-        for k, nd in enumerate(nds):
-            W.below = k
-            got = [Coll(entry(a["type"]), _checked_refs(refs(a["refs"], args), leaves)) for a in nd["args"]]
-            if any(W.first(c) is not None for c in got):
-                return True
-            args.append([c.refs for c in got])
-        W.below = len(nodes)
-        return W.first(Coll(ret_type, _checked_refs(refs(body["ret"], args), leaves))) is not None
-    except (TypeError, ValueError, IndexError, KeyError, AttributeError, RecursionError):
+        restrict.program(descriptor)
+    except (restrict.Refused, IndexError, AttributeError, RecursionError):
         return False
-
-
-def _reinterprets(d: dict) -> bool:
-    """Whether a composite Flock's decoder reads of the descriptor `d` (one `_parsed` accepted) reads a word at
-    another width than it was committed with (`_misreads`, the codec's ``E_REINTERPRET``), which
-    `Flock.Program.decode` refuses.
-    Its composites are the root and the definitions its program function's record names, then each one's binding
-    statics' functions and its nodes' callees, as the decoder follows them."""
-    defs, callees, seen = d["definitions"], d["callees"], set()
-    todo = [d["root"]]
-    for _k, v in _record(d["program_fn"]):
-        todo += _record_fns(_loads(v)[1])
-    try:
-        types = [type_from_json(t) for t in d.get("types", [])]
-    except (TypeError, ValueError, IndexError, KeyError, AttributeError, RecursionError):
-        return False
-    while todo:
-        fid = todo.pop()
-        x = defs.get(fid) if type(fid) is str and fid not in seen else None
-        if not (isinstance(x, dict) and x.get("form") == "composite"):
-            continue
-        seen.add(fid)
-        body = x.get("body")
-        nds = body.get("nodes") if isinstance(body, dict) else None
-        todo += _static_fns(x.get("bindings"))
-        todo += [callees[nd["fn"]] for nd in nds if isinstance(nd, dict) and _nat(nd.get("fn"))
-                 and nd["fn"] < len(callees)] if type(nds) is list else []
-        if _misreads(body, types):
-            return True
-    return False
+    return True
 
 
 def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
@@ -983,14 +903,13 @@ def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
     multiple of `TILE_K_STEP` below `TILE_K_LIMIT`, checked before K's template), and the root's nodes other than inputs
     are each call's (M/R)·(n/C) instances of its K's template, in the calls' order: a call one instance and a batch its
     members, as the template query counts units (`Q_template_instances`). Its cost is the descriptor's bytes, never the
-    gates its nodes unroll to. The Lean reads the descriptor through Flock's decoder (`Credit.programOf`), so it also
-    refuses (`DESCRIPTOR_FORM`) a descriptor that decoder refuses; this checks its form (`_parsed`) and that no
-    composite the decoder reads names a word at another width (`_reinterprets`)."""
+    gates its nodes unroll to. A descriptor of another form (`_parsed`) or one the decoder refuses (`_decodes`, as the
+    Lean's `Credit.programOf` refuses one `Flock.Program.decode` refuses) is refused (`DESCRIPTOR_FORM`)."""
     def no(why: str) -> tuple[None, tuple[str, str]]:
         return None, ("layout", why)
 
     d = _parsed(descriptor)
-    if d is None or _reinterprets(d):
+    if d is None or not _decodes(descriptor):
         return no(DESCRIPTOR_FORM)
     callees, defs, fn = d["callees"], d["definitions"], d["program_fn"]
     rec = _record(fn) if fn.startswith(WINDOW_FN + "{") else []
