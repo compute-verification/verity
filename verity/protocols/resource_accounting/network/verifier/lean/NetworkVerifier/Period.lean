@@ -1367,7 +1367,7 @@ def protocol : Core.Protocol where
 -- and its eps is the scan's δ = 2^-64 and δ_i: 2^-63
 #guard
   let scan : Scan := ⟨32, 0, 300, 512, 8 * 112, 0⟩
-  let p : Params := ⟨#[⟨0, 0, "", 16, #[], #[]⟩], #[], 0, 1, "", Lms.deployed, #[], "",
+  let p : Params := ⟨#[⟨0, 0, "", 16, #[], #[], #[]⟩], #[], 0, 1, "", Lms.deployed, #[], "",
     .rows ⟨0, 0, 0, 0, 16, 0, 0, 4, 0, 0, 32, none, none, none, false⟩ .empty scan, 1, none⟩
   let at_ := fun (q : String) => Json.mkObj [("roots", Json.arr #[
     Json.mkObj [("port", .str q), ("root", .str "r"), ("domain", .str "d")]])]
@@ -1491,7 +1491,7 @@ private def statedSample (size : Nat) (d : Core.SamplingDesign) : Json :=
 -- and the scan's lane-1 tree alone ties the audit
 #guard
   let s : Schedule := ⟨0, 0, 0, 0, 2, 0, 0, 2, 0, 0, 4, none, none, none, false⟩
-  let a : Audit := ⟨0, 0, "", 4, #[("SlotEntry_v1{KO=1}", 4, slotEntryPins[0]!)], #[]⟩
+  let a : Audit := ⟨0, 0, "", 4, #[("SlotEntry_v1{KO=1}", 4, slotEntryPins[0]!)], #[], #[]⟩
   let port := fun (q root : String) (l : Nat) =>
     Json.mkObj [("port", .str q), ("leaves", toJson l), ("root", .str root), ("domain", .str "d")]
   let reg := fun (os : Array Json) => Json.mkObj [("roots", Json.arr os)]
