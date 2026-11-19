@@ -31,12 +31,12 @@ from verity_vllm.acquire.sources import (
     scale_products_source,
     vocab_range_source,
 )
-from verity_vllm.acquire.sources.call_boundary_plan import SCALE_PRODUCTS
 from verity_vllm.acquire.sources.hidden_source import require_hidden_on_every_rank
 from verity_vllm.config import option
 from verity_vllm.log import init_logger
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import vocab_range as VR
+from verity_vllm.records.capture import SCALE_PRODUCTS
 
 logger = init_logger(__name__)
 
@@ -59,10 +59,11 @@ class TapSources:
         return {f: getattr(self, f) for f, *_ in SOURCES if getattr(self, f)}
 
 
-def attach(com: Any, plan: Sequence[Mapping[str, Any]], required_classes: tuple[str, ...], *, explicit_classes: bool = False,
-           model: Any = None) -> tuple[str, ...]:
+def attach(com: Any, plan: Sequence[Mapping[str, Any]], required_classes: tuple[str, ...], *,
+           rows: Sequence[Mapping[str, Any]] | None = None, explicit_classes: bool = False, model: Any = None) -> tuple[str, ...]:
     """Attach to `com` the sources of the capture plan's classes (`program.predict.capture_plan.of_build`): the scale-products source
-    when the plan names `scale_products` classes and the int8 source when it names Int8RowQuant call boundaries or Int8KvQuant module
+    when the plan names `scale_products` classes (its block geometry from the plan's `rows`, `capture_plan.rows_of_build`, without
+    which it is refused) and the int8 source when it names Int8RowQuant call boundaries or Int8KvQuant module
     outputs.  A plan with a `call_boundary` class no source claims is refused by name (exit 3): the call-boundary source's host plan
     reads a row manifest's identities, which the capture plan does not carry.  Returns the required classes with the attached
     sources' capture classes added unless the caller gave them explicitly."""
@@ -72,7 +73,7 @@ def attach(com: Any, plan: Sequence[Mapping[str, Any]], required_classes: tuple[
         logger.error("[delta] REFUSE: %d classes of the capture plan have no acquisition source: %s", len(refused), refused[:4])
         raise SystemExit(3)
     required_classes, _src = scale_products_source.attach(com, any(c["capture"] == SCALE_PRODUCTS for c in plan), plan, required_classes,
-                                                          explicit_classes=explicit_classes, model=model)
+                                                          rows=rows, explicit_classes=explicit_classes, model=model)
     required_classes, _src = int8_source.attach(com, int8_source.applies(plan), plan, required_classes,
                                                 explicit_classes=explicit_classes, model=model)
     return required_classes

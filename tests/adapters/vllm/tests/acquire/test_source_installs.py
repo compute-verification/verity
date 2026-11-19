@@ -139,7 +139,7 @@ def test_the_vocab_range_source_refuses_a_site_that_is_no_module_and_installs_no
 
 def test_the_scale_products_source_installed_commits_from_its_site_and_uninstalled_leaves_nothing(c_ops):
     com, model, installed = Recorder(), _two_modules(_scaled_mm, "down_proj"), c_ops.cutlass_scaled_mm
-    src = S.ScaleProductsSource(com, model, {"down_proj": NB * KB})
+    src = S.ScaleProductsSource(com, model, {"down_proj": (NB, KB)})
     live = hooks.live()
     xs = torch.tensor([[1.5, 2.0], [0.25, 3.0]], dtype=torch.float32)
     ws = torch.tensor([[0.5, 4.0], [1.0, 0.125], [2.0, 8.0]], dtype=torch.float32).t()
@@ -163,7 +163,7 @@ def test_the_scale_products_source_installed_commits_from_its_site_and_uninstall
 
 def test_the_scale_products_source_refuses_a_site_that_is_no_module_and_installs_nothing(c_ops):
     model, installed, live = _two_modules(_scaled_mm, "down_proj"), c_ops.cutlass_scaled_mm, hooks.live()
-    src = S.ScaleProductsSource(Recorder(), model, {"up_proj": NB * KB})
+    src = S.ScaleProductsSource(Recorder(), model, {"up_proj": (NB, KB)})
     with pytest.raises(RuntimeError, match=r"not modules of the model: \['up_proj'\]"):
         src.install()
     assert not src.active and c_ops.cutlass_scaled_mm is installed and hooks.live() == live and _hooked(model.down_proj) == 0

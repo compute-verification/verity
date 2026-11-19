@@ -24,7 +24,7 @@ import time
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from verity_vllm.acquire.sources.call_boundary_plan import CALL_BOUNDARY, MODULE_OUTPUT
+from verity_vllm.records.capture import CALL_BOUNDARY, MODULE_OUTPUT
 from verity_vllm.log import init_logger
 
 logger = init_logger(__name__)

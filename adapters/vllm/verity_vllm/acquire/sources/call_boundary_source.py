@@ -31,7 +31,6 @@ import numpy as np
 from verity_vllm.acquire.sources import call_boundary_plan as CP
 from verity_vllm.acquire.sources import int8_source
 from verity_vllm.acquire.sources.call_boundary_plan import (
-    CALL_BOUNDARY,
     FAMILY,
     WORD_DTYPES,
     Body,
@@ -39,6 +38,7 @@ from verity_vllm.acquire.sources.call_boundary_plan import (
 )
 from verity_vllm.log import init_logger
 from verity_vllm.query.manifest.format import identity_rows
+from verity_vllm.records.capture import CALL_BOUNDARY
 
 logger = init_logger(__name__)
 

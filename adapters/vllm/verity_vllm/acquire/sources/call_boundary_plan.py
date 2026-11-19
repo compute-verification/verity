@@ -41,9 +41,6 @@ import numpy as np
 from verity_vllm.query.manifest.format import identity_rows, spec_family
 
 FAMILY = "call_boundaries"
-#: the capture plan's classes the sources read (`program.predict.capture_plan.CLASSES`, named there: predict is a layer above
-#: the acquisition, which so takes the plan as data; `tests/acquire/test_plan_classes.py` holds these to it)
-MODULE_OUTPUT, CALL_BOUNDARY, SCALE_PRODUCTS = "module_output", "call_boundary", "scale_products"
 #: the manifest's word dtype -> the numpy word it is evaluated as and the torch dtype it is committed as
 WORD_DTYPES = {"bf16": (np.uint16, "bfloat16"), "f32": (np.uint32, "float32"), "w8": (np.uint8, "uint8"), "i64": (np.uint64, "int64")}
 #: argument words per instance above which a Definition is its row kernel's alone: the reference holds an instance as Python ints (a
