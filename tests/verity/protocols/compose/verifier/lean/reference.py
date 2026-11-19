@@ -57,6 +57,7 @@ from verity_difftest import Reject, canonical
 from verity_difftest import protocol as P
 
 from verity.commitments import docket_digest as DD
+from verity.protocols.proofs.spot.verifier.levels import TWO_LEVELS_REFUSED
 from verity.protocols.resource_accounting.network.verifier import registered as RH
 from verity.protocols.resource_accounting.network.verifier import span
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
@@ -303,11 +304,6 @@ def _two_stage_evidence(j: Any) -> dict:
     rest = _two_stage().split(j, "evidence")
     _keys(rest, TWO_STAGE_EVIDENCE_KEYS, "the evidence")
     raise ValueError("outside the mirror: the two-stage form's evidence past its keys")
-
-
-#: `VStar.Recursive.Sampled.TWO_LEVELS_REFUSED`: two levels' parameters that parse, refused by name.
-TWO_LEVELS_REFUSED = ("levels-not-proved: the parameters name 2 levels: the two-level audit is built and refused, "
-                      "since no soundness theorem covers its accept; an audit is accepted at one level")
 
 
 def _form_params(j: Any) -> dict:

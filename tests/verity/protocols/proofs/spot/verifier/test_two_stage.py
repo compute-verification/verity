@@ -29,7 +29,7 @@ from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value as Bits
 from verity.protocols.proofs.spot.verifier.profile import Bernoulli, Subset
 from verity.protocols.proofs.spot.prover import optimize as O, plancheck as PC
-from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
+from verity.protocols.proofs.spot.verifier import levels as LV, second_stage as SS, service as S, window_place as WP
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
 from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments.window import window_binding
@@ -195,6 +195,18 @@ def _two_stage_outcome(stream: S.Stream, statements, reads=_reads_of, sample=lis
                                         tables=tables),
                           {"statement": "stub"}, session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)},
                           statements=statements, **params)
+
+
+def test_a_two_stage_stream_is_refused_by_name_at_registration():
+    """By design, a two-stage stream is the two-level audit, refused by name at its boundary docket's registration,
+    before any coin (`levels.TWO_LEVELS_REFUSED`, the Lean's `VStar.Recursive.Sampled.TWO_LEVELS_REFUSED`): the docket
+    passes R1-R8 and is refused after them, and nothing is logged."""
+    stream = _stream()
+    with pytest.raises(S.Refused) as e:
+        stream.register(*_boundary())
+    assert e.value.verdict.codes == (LV.NOT_PROVED,)
+    assert e.value.verdict.detail[LV.NOT_PROVED] == {"reason": LV.TWO_LEVELS_REFUSED}
+    assert stream._log == [] and stream._entries == []
 
 
 def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
