@@ -2,9 +2,7 @@
 
 Independent of `test_lifted_tiny.py`: the oracle for the specified class is a reading of the lifting spec's §2/§3.2/§9(a)
 written from the spec's letter (`_Ref` below), not from `lifted.py`; the vectors are this module's own grid (Active
-extremes, ⊥, INV, three other `1‖nonzero` words) and a fresh RNG seed.  Each test names the attack it runs.  A test marked
-`xfail(strict=True)` documents an OPEN finding: it flips to a failure the moment the finding is fixed, so the marker must then
-be removed.
+extremes, ⊥, INV, three other `1‖nonzero` words) and a fresh RNG seed.  Each test names the attack it runs.
 
 Needs the in-tree MUFU tables like `test_serve3.py` for the LServe_v1 cases.
 """
