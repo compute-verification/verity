@@ -156,7 +156,7 @@ free_port() { "$PY" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1",
 session() {   # session D O: one loopback --zk session with the proving build, the verifier serving its own public file and
   local D=$1 O=$2 port pin srv rc try up= tu=   # sampling all N instances (subset:N), as every soundness claim is about a sampled session
   pin=$(cat "$D/pin.txt")
-  # a templated statement's unit rows, placed by flock-tmpl-unit (h1_lanes/job.sh), which serve and prove read
+  # a templated statement's unit rows, placed by flock-tmpl-unit when the job's directory has them, which serve and prove read
   [ -L "$D/unit.placed" ] || [ -e "$D/unit.placed" ] && tu="--tmpl-unit $D/unit.placed"
   for try in 1 2 3 4 5; do   # the ephemeral port free_port picked can be taken by another worker before serve binds it: retake one
     port=$(free_port)

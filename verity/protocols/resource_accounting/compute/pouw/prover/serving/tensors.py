@@ -73,21 +73,21 @@ def dtype_name(x: Any) -> str:
 
 
 class H1Device(Protocol):
-    """H1's work on the device: its registered rows' hashes (`h1.registered`), its call tables (`h1.H1Run`), the check of a
+    """H1's work on the device: its registered rows' hashes (`registered`), its call tables (H1's runner (deleted)), the check of a
     call's z/y records where they are (`h1.records.holds_on`) and the credit gate's trace of a call (`credit_gate`)."""
 
     def available(self) -> bool:
-        """Whether `device_hash` can run in this process (`h1.registered.path`'s ``"auto"``)."""
+        """Whether `device_hash` can run in this process (`registered` ``"auto"``)."""
         ...
 
     def device_hash(self, words: Any, row_salts: bytes | None, domain_id: bytes,
                     public: tuple[bytes, int, bool] | None = None, also: tuple[bytes, bytes] | None = None) -> Any:
-        """`h1.registered.commit`'s ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16, hashed on the current
+        """`registered` ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16, hashed on the current
         device: an object whose ``result()`` gives them."""
         ...
 
     def device_public_salts(self, head: bytes, first: int, n: int, ok: bool = False) -> bytes:
-        """`h1.registered.public_salts` on the device."""
+        """`registered` on the device."""
         ...
 
     def hashing(self) -> AbstractContextManager[Any]:
@@ -95,7 +95,7 @@ class H1Device(Protocol):
         ...
 
     def commit_tables(self, run: Any, call: Any, a: Any, s_a: Any, records: np.ndarray | None, zy: Any = None) -> None:
-        """Queue ``call``'s A and z tables' hashes on the device, for ``run`` (an `h1.H1Run`) to settle."""
+        """Queue ``call``'s A and z tables' hashes on the device, for ``run`` (H1's runner, deleted) to settle."""
         ...
 
     def settle(self, run: Any, wait: bool) -> None:

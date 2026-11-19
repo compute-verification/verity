@@ -14,7 +14,7 @@ untraced = ["test_unit_lowering.py"]
 # names the statement as `pouw_h1_circuits` does (adapters/vllm, its tests package's two __init__.py on the way); run.py
 # reads the run's commit through verity_config.settings, and writes its metric with the harness kit's writer; h1form.py
 # reads its tile and form from PoUW's settings.py.
-inputs = ["verity", "benchmarks/pouw/h1_prove", "benchmarks/pouw/hidden_zk", "benchmarks/pouw/settings.py",
+inputs = ["verity", "benchmarks/pouw/hidden_zk", "benchmarks/pouw/settings.py",
           "tests/adapters/vllm/tests/__init__.py",
           "tests/adapters/vllm/tests/protocols/__init__.py", "tests/adapters/vllm/tests/protocols/pouw_h1_circuits.py",
           "tools/config/verity_config", "benchmarks/unit_lowering", "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",

@@ -1,6 +1,6 @@
 """H1's served tables registered at serving scale: `registered_value.Registered.commit` of rows of 16-bit words as
 ``hm96-sha512/row/v2`` bit rows, row j salted with its 192 given bytes (the run's fresh salts at the value's nonce,
-`pouw_h1_prover.RunSalts`), with the same salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words instead of Python ints.
+H1's runner (deleted)), with the same salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words instead of Python ints.
 
 * **The rows' digests.** Row j's bit row is its words little-endian, so ``x_j = SHA-512(sha512_row_v2_prefix(16 W) ||
   words[j])`` is hashed straight from the array's memory, rows split among threads (`hashlib` releases the GIL on a
@@ -12,7 +12,7 @@
 * **What it holds.** The ``b || c`` strings and the tree's levels, 64 bytes a node. The salts are held as the bytes handed in
   (`Salts`), or a public table's are sampled again on read (`PublicSalts`), and the rows are kept only with ``keep_rows`` (`Rows`), or stand for
   themselves (``rows``, a public table's, built again on read): a window's call tables and its own ``b/<K>`` are
-  rebuilt by the prover from what it keeps (`pouw_h1_prover.keep_call`, its weights), so `Served` keeps none of their
+  rebuilt by the prover from what it keeps (H1's runner (deleted), its weights), so `Served` keeps none of their
   rows and a window holds a few hundred bytes a row (its ``b || c`` and about two tree nodes, as Python bytes), where
   Python ints held some 36 bytes a word. The period's `Weights` keeps its rows, two bytes a word, for `Weights.matches`.
 
@@ -209,7 +209,7 @@ class PublicSalts(Sequence):
 
 class Rows(Sequence):
     """A registered value's rows: item j row j's words as ints (a slice, the words ``(·, W)`` u16; `at`, any rows' words),
-    when kept; else every read refused, the prover rebuilding them from what it keeps (`pouw_h1_prover`)."""
+    when kept; else every read refused, the prover rebuilding them from what it keeps (H1's prover (deleted))."""
 
     def __init__(self, words: np.ndarray | None, n: int) -> None:
         self.words, self.n = words, int(n)
@@ -232,7 +232,7 @@ class Rows(Sequence):
     def _kept(self) -> np.ndarray:
         if self.words is None:
             raise LookupError("this registered value's rows aren't kept here: the prover rebuilds them from its own "
-                              "(pouw_h1_prover.keep_call, its weights)")
+                              "(H1's prover, deleted)")
         return self.words
 
 
@@ -279,7 +279,7 @@ def commit(program: str, value: str, words: Any, row_salts: bytes | PublicSalts,
            also: tuple[bytes, bytes] | None = None, **binding: Any) -> RV.Registered | Later:
     """`registered_value.Registered.commit(program, value, rows, salts, schema=schema, **binding)` of ``words`` ``(n, W)``
     u16, ``rows`` their rows and ``salts`` ``row_salts``: n salts concatenated, each used once (the run's fresh bytes,
-    `pouw_h1_prover.RunSalts.at` the value's nonce), or a public table's `PublicSalts`, which the GPU path derives where
+    H1's runner, deleted, at the value's nonce), or a public table's `PublicSalts`, which the GPU path derives where
     it hashes. ``schema``: ``SCHEMA_V2``, or ``SCHEMA_SEG`` (an
     embedding table's rows, hashed with NumPy wherever `path` says). ``binding``: the domain's other arguments
     (``window``, ``produced``, ``session``). ``keep_rows``: hold the rows (`Rows`), else none; ``rows``: hold these,

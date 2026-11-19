@@ -1,22 +1,22 @@
 """H1's requests and rounds (`ResourceAccounting.Served`: a request entry is an `act` value, a run input under the root of the round that admits it, committed before that round's coin).
-`pouw_h1.H1Run` builds them as it serves; this module holds what they are and how they are checked.
+H1's runner, now deleted, built them as it served; this module holds what they are and how they are checked.
 
 * **Rounds.** Round s is step s, one round a step. The engine's scheduler admits a request in the step that first schedules it,
   and the adapter hands those and the step's batch order (each scheduled request's rows in the order its A tables hold
-  them, as the engine lays them out) to `pouw_h1.H1Run.admit` before the step's forward. Round s closes
+  them, as the engine lays them out) to H1's runner (deleted) before the step's forward. Round s closes
   once step s's last linear is recorded: its root (`round_root`) is over the step's calls (`step_digest`, their manifest
   rows with what the listeners bound), its request table's root and its slot table's root, and only then does the round
   coins' `LiveRecord` (the auditor device's session, the pouw setting ``challenger``; ``rounds`` in tests) open round s's coin.
   Round 0's request table comes before the salt: its root is in the window's open root (`salt.window_open_root`, over
   the weights' root, it and the session), which the gate opens the session on and the salt coin opens after
-  (`pouw_h1.H1Run.open_window`), so its binding reads no salt (`requests_binding`) and every later round's does.
+  (H1's runner (deleted)), so its binding reads no salt (`requests_binding`) and every later round's does.
 * **Entries and slots.** Each `RequestEntry` (its ordinal, round, first slot, cap and prompt tokens) is a hiding leaf of its
   round's request table (`request_table`: T hm96 leaves, the unused ones `EMPTY_REQUEST`), and slot i of round s's slot
   table (`slot_table`, T hm96 leaves) names the request whose row is slot i of step s's A tables, or none (`EMPTY_SLOT`). A
   request is keyed by its engine ``req_id``: one resumed after a preemption, which the adapter hands in again as admitted,
   keeps its entry and is counted readmitted. A served row of a request with no entry (refused at
   admission: prompt embeddings, a pooling request, past the window; or never admitted) is a gap
-  (`pouw_h1.H1Run.request_gaps`), and so is a step whose batch isn't its served rows; a window with a gap credits nothing.
+  (H1's runner (deleted)), and so is a step whose batch isn't its served rows; a window with a gap credits nothing.
 * **The checks.** `request_reason` refuses an entry opened under another round's root or under none, a root whose coin
   isn't the challenger's opened after it (`live_reason`), and an entry whose first slot in its round doesn't name it.
   `slot_reason` refuses a served slot that names no request, or one whose entry is under a later round than the slot's
@@ -29,7 +29,7 @@
   refused (`request_reason`); ``per-round`` admits in every round, for a statement that fixes each round's live tiles
   before that round's coin.
 * **Round values** (the live order): each call's A table (its T slots' s8 rows and f32 scales) and, when
-  its arm hands them over, its z table (one leaf a proof block, its z/y record: z, then y = dq(z)) are hiding tables of the call (`pouw_h1.H1Run`, ``tables`` in its manifest row),
+  its arm hands them over, its z table (one leaf a proof block, its z/y record: z, then y = dq(z)) are hiding tables of the call (``tables`` in its manifest row),
   so the step digest, and with it round s's root, commits them before round s's coin, and slot i of round s's slot
   table names leaf i of those A tables. `tables_reason` refuses a window where it names leaves of an A table no round
   root commits: a call with no A table root, at a step no round closes, or off its round's step digest. Round s + 1's
@@ -110,12 +110,12 @@ EMPTY_REQUEST = bytes(20)
 EMPTY_SLOT = bytes(4)
 #: the hm96 salt stream's nonces of round r's request and slot tables are REQUESTS_NONCE + r and SLOTS_NONCE + r. Both sit
 #: inside `audit`'s activation nonces (below 2^62); the streams are apart from the activation trees' only because each run
-#: samples its own salt key (`pouw_h1.H1Run`'s ``key``), which nothing persists
+#: samples its own salt key (H1's runner's ``key``, deleted), which nothing persists
 REQUESTS_NONCE = 1 << 61
 SLOTS_NONCE = REQUESTS_NONCE + (1 << 40)
 #: call c's A and z tables' nonces are TABLES_NONCE + 3c + 0 and 2 (`TABLE_NONCES`; 1 was the retired y table's)
 TABLES_NONCE = REQUESTS_NONCE + (1 << 41)
-#: a call's hiding tables under the run's salt key (`pouw_h1.H1Run`): A's T slot rows and scales, z's records
+#: a call's hiding tables under the run's salt key (H1's runner (deleted)): A's T slot rows and scales, z's records
 #: (`pouw_h1_records`)
 A_TABLE_TAG = "verity/pouw/h1/a-table/v1"
 Z_TABLE_TAG = "verity/pouw/h1/z-table/v2"
@@ -132,7 +132,7 @@ NO_RECEIPTS = bytes(64)
 #: the pouw setting ``admission``: requests admitted in round 0 only (the default), or in every round
 ROUND0, PER_ROUND = "round-0", "per-round"
 ADMISSIONS = (ROUND0, PER_ROUND)
-#: the credit refusal of a call in a window that served a row of a request with no entry (`pouw_h1.H1Run.request_gaps`)
+#: the credit refusal of a call in a window that served a row of a request with no entry (H1's runner (deleted))
 UNENTERED = "credit: request-without-entry: the window served a row of a request with no entry (details.requests.gaps)"
 
 
@@ -164,7 +164,7 @@ def slot_owner(leaf: bytes) -> int | None:
 
 def request_table(salt: bytes | None, r: int, rows: int, entries: Sequence[RequestEntry], salts: Any) -> Any:
     """Round r's request table: `rows` (T) hiding leaves, the entries the round admits in admission order, then
-    `EMPTY_REQUEST`, salted by the run's salts (`pouw_h1_prover.RunSalts`) at ``REQUESTS_NONCE`` + r. Each admitted
+    `EMPTY_REQUEST`, salted by the run's salts (H1's runner (deleted)) at ``REQUESTS_NONCE`` + r. Each admitted
     request schedules a token row in the step that admits it, so a step admits at most T."""
     if len(entries) > rows:
         raise ValueError(f"round {r} admits {len(entries)} requests, past its {rows} leaves")
@@ -173,7 +173,7 @@ def request_table(salt: bytes | None, r: int, rows: int, entries: Sequence[Reque
 
 
 def first_ids(prompts: Mapping[str, Sequence[int]], order: Sequence[tuple[str, int]]) -> list[int | None]:
-    """Step 0's input token ids in its batch order (the adapter's, as `pouw_h1.H1Run.admit` takes it): each request's first rows are its first prompt tokens
+    """Step 0's input token ids in its batch order (the adapter's, as H1's runner (deleted) takes it): each request's first rows are its first prompt tokens
     (a window opens on new requests, with no prefix cached), None for a row past its prompt or of a request with none."""
     out: list[int | None] = []
     for req_id, rows in order:
@@ -229,7 +229,7 @@ class HidingTable:
 
 def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], salts: bytes) -> HidingTable:
     """``audit.commit_rows(binding, owner, values, hash=HM96, salts=...)`` of ``salts``, leaf i's at bytes
-    [192 i, 192 i + 192): the caller's fresh bytes (`pouw_h1_prover.RunSalts`). The leaves are
+    [192 i, 192 i + 192): the caller's fresh bytes (H1's runner (deleted)). The leaves are
     hashed as `pouw_h1_registered`'s NumPy path hashes a table's (`Hm96Domain.leaf`'s bytes): each distinct preimage's
     ``row-seg`` digest once, every leaf's hm96 mask at once (`hm96.batch.tree_leaves`), and the frame's leaves and
     nodes from their constant prefixes, since `MerkleTree`'s leaf by leaf took some 0.1 ms a leaf, a round's request
@@ -254,7 +254,7 @@ def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], salts: byte
 
 
 def step_digest(salt: bytes, s: int, rows: Sequence[Mapping[str, Any]]) -> bytes:
-    """Step s's calls: SHA-512 over their manifest rows (`pouw_h1.H1Run.manifest`), in order, with what each call's listeners
+    """Step s's calls: SHA-512 over their manifest rows (H1's runner (deleted)), in order, with what each call's listeners
     bound (root(A) among it, once AROW binds it), each without its credit bit (`credit.CREDIT`): the step's last verdict
     comes after its round closes, and calls_root commits the bits before `draw_root`."""
     return tagged(STEP_TAG, salt, s, *(json.dumps({k: v for k, v in row.items() if k != CREDIT}, sort_keys=True)
@@ -269,7 +269,7 @@ def _root64(h: Any) -> bool:
 
 
 def table_root(row: Mapping[str, Any], name: str) -> Any:
-    """Manifest row `row`'s root of its call's table `name` (its ``tables``' ``a`` or ``z``, `pouw_h1.H1Run.manifest`);
+    """Manifest row `row`'s root of its call's table `name` (its ``tables``' ``a`` or ``z``, H1's runner (deleted));
     None for a row whose ``tables`` is absent or empty."""
     tables = row.get("tables")
     return tables.get(name) if tables else None
@@ -277,7 +277,7 @@ def table_root(row: Mapping[str, Any], name: str) -> Any:
 
 def tables_reason(salt: bytes, log: Sequence[Mapping[str, Any]], rows: Sequence[Mapping[str, Any]]) -> str | None:
     """Why a slot of some round's slot table names an A-table leaf that no round root commits, given the window's round log
-    and its manifest rows (`pouw_h1.H1Run.manifest`): a call at a step no round of the log closes, a logged round whose step
+    and its manifest rows (H1's runner (deleted)): a call at a step no round of the log closes, a logged round whose step
     has no call, a call whose row carries no A table root (``tables``' ``a``, 64 bytes), or a step whose rows aren't the
     ones its round's ``calls`` digest is over (`step_digest`); None when each call's A table is under its own round's
     root, and so recorded before that round's coin."""

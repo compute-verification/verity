@@ -3,7 +3,7 @@ scale first and no bias (`int8_exact.dequantize`, scaled_mm_zy's y), on words an
 (scales first, a bias add) is not; `PouwZyCheck` holds a unit's record to its z and that dequant, cell by cell; and
 `PouwH1TileZy` is the H1 tile and that check over the rows' codes and scales, returning the receipt and one bit; a leaf's
 lane (`PouwH1LaneZy`) checks its committed partial of the receipt (zero for a dead leaf) and its own cells, and the combine
-(`PouwH1Combine`) that the lanes' partials XOR to the receipt. `tests/benchmarks/pouw/test_h1_prove.py` and h1_prove's smoke run the unit end to end."""
+(`PouwH1Combine`) that the lanes' partials XOR to the receipt."""
 from __future__ import annotations
 
 import random

@@ -13,9 +13,7 @@ import pytest
 
 POUW = (Path(__file__).resolve().parents[3] / "benchmarks" / "pouw")
 #: each directory with a runner -> the scripts beside it its jobs source, never started
-RUNNERS = {"served_zk": set(), "hidden_zk": set(), "h1_prove": set(), "h1_lanes": set()}
-#: each directory whose jobs run a Python step that sits beside the runner -> that step's file
-STEP_BESIDE = {"h1_prove": "recorded.py", "h1_lanes": "leaf.py"}
+RUNNERS = {"served_zk": set(), "hidden_zk": set()}
 #: each directory -> how many of its jobs the README describes without a row
 NO_ROW: dict[str, int] = {}
 
@@ -55,22 +53,3 @@ def test_a_job_gets_the_arguments_the_environment_and_the_exit_code(d, tmp_path)
     r = subprocess.run(["bash", str(tmp_path / "run.sh"), "stand_in", "--steps 4", "16"], capture_output=True, text=True,
                        env={"PATH": "/usr/bin:/bin", "MODE": "smoke"})
     assert (r.returncode, r.stdout, r.stderr) == (7, "--steps 4|16|smoke|", "")
-
-
-@pytest.mark.parametrize("d", STEP_BESIDE)
-def test_the_runner_execs_only_a_job_script_beside_it(d, tmp_path):
-    """The runner's one command is the exec of `JOB.sh` beside it, so a job runs its own script and nothing else, and
-    the jobs' Python step beside it is never started, under any name."""
-    lines = (POUW / d / "run.sh").read_text().splitlines()
-    code = [s.strip() for s in lines if s.strip() and not s.lstrip().startswith("#")]
-    starts = re.compile(r"(?<![\w./$-])(exec|eval|source|bash|sh|python3?|uv)\b|^\. ")
-    assert [s for s in code if starts.search(s)] == ['exec bash "$HERE/$job.sh" "$@"']
-    step = POUW / d / STEP_BESIDE[d]
-    assert step.is_file()
-    shutil.copy(POUW / d / "run.sh", tmp_path / "run.sh")
-    (tmp_path / step.name).write_text("import pathlib; pathlib.Path(__file__).with_name('started').touch()\n")
-    (tmp_path / "job.sh").write_text("exit 0\n")
-    for name in (step.stem, step.name, f"{step.stem}_py"):
-        r = subprocess.run(["bash", str(tmp_path / "run.sh"), name], capture_output=True, text=True)
-        assert r.returncode == 2 and r.stderr.startswith("usage: run.sh JOB")
-    assert not (tmp_path / "started").exists()

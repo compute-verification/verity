@@ -138,9 +138,5 @@ REGISTRY = Registry(
     S("HZ_SALTS", str, None, WHERE, "a file of the hiding tile's rows' salts: read when it exists, else written with the "
                                     "fresh ones; unset, fresh salts kept nowhere"),
     # ---------------------------------------------------------------- which of the served path's tests run (tests/)
-    # ---------------------------------------------------------------- H1's harness (h1_prove/h1form.py)
-    S("H1_TILE", str, "v1", WHERE, "the H1 tile under the unit, v1 or v3 (h1unit.tile)"),
-    S("H1_TMPL", str, None, WHERE, "the H1 statement's form: unset, empty or flat the flat statement, structural or a "
-                                   "layout mode the templated one (h1unit.layout)"),
     standalone=STANDALONE,
 )

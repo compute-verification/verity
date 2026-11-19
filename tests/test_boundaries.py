@@ -156,8 +156,6 @@ BENCHMARKS_IMPORTERS = {
                     "infra: the store's tool registry names `benchmarks.<probe>.tool` modules (tc_probe, tc_probe_fp4, "
                     "native_peak, commitments, pouw)"),
     # tests and vector scripts that check against a benchmark's reference
-    "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/test_known_rows.py": "proofs: H1's known rows "
-                                                                       "(`benchmarks/pouw/h1_lanes/leaf.py`)",
     "tests/verity/circuits/ops/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`calibration/tc_probe`)",
 }

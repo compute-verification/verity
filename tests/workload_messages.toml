@@ -311,7 +311,6 @@ type = "H1Program"
 today = "PoUW H1's declared run Program (`h1/window-program.json.gz`, `h1/window-program.meta.json`)"
 writers = [
     { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py", find = "PROGRAM, PROGRAM_META = \"window-program\\.json\\.gz\"" },
-    { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served_program.py", find = "out / PH\\.PROGRAM_META" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.py", find = "^def program\\(" },
 ]
 readers = [

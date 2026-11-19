@@ -597,7 +597,7 @@ def test_a_challenger_opens_one_session_for_the_servers_life(monkeypatch, tmp_pa
     assert gate("s-1", "ab") == {"session": "s-1", "root": "ab", "commitment": "c"}
     assert on.run.made[2] == ("kernel", "k.so", None)
     assert on.run.made[5:] == ("c", "o", {"pass_index": 0, "schedule": "serial", "weight_salts": _Device.salted[-1]})
-    assert on.run.commits["coin_source"] == SV.H1_CHALLENGER and on.run.commits["session"] == {"gate": 1}
+    assert on.run.commits["coin_source"] == SV.PEARL_C_CHALLENGER and on.run.commits["session"] == {"gate": 1}
     on.release()
     assert finished == ["session"]
 
@@ -665,7 +665,7 @@ def test_the_plugins_report_reads_as_the_served_verdicts_read_served_json(tmp_pa
                                  "record": {"entry": PS.OPTION, "schedule": "serial"}},
                "summary": {"max_step_tokens": 64, "passes": [{"units": 3, "tiles": 9, "transcript_root": "ef"}],
                            "challenger": {"closed": True}},
-               "commitment": {"coin_source": SV.H1_CHALLENGER, "session": session, "pass_index": 2,
+               "commitment": {"coin_source": SV.PEARL_C_CHALLENGER, "session": session, "pass_index": 2,
                               "weights_root": w.hex(), "salt": "00" * 32}}
     for name, doc in reports.items():
         (tmp_path / f"{name}.json").write_text(json.dumps(doc))
@@ -673,7 +673,7 @@ def test_the_plugins_report_reads_as_the_served_verdicts_read_served_json(tmp_pa
     assert got["arm"] == PS.OPTION and got["retained"] is False and got["max_step_tokens"] == 64
     assert got["passes"] == [{"pass": 0, "timed": True, "units": 3, "tiles": 9, "transcript_root": "ef", "macs": None}]
     coins = got["coins"]
-    assert (coins["source"], coins["reserved"], coins["pass_index"], coins["closed"]) == (SV.H1_CHALLENGER, SESSION, 2,
+    assert (coins["source"], coins["reserved"], coins["pass_index"], coins["closed"]) == (SV.PEARL_C_CHALLENGER, SESSION, 2,
                                                                                           {"closed": True})
     assert coins["salt_after"] == PSALT.epoch_open_root(w, 2).hex()
     assert coins["manifest_head"] == {"session": {k: session[k] for k in ("session", "seq", "root", "commitment")},

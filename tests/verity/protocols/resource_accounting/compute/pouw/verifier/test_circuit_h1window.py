@@ -3,7 +3,7 @@ numbered call by call and row block major, and `unit_reads` gives each unit's ro
 Program's references: its call's A block of its K, its linear's B rows (the same in every step), its z/y record, the salt,
 its position and the roots, keyed by its K's template's parameters, so a mixed-K execution phase registers in one `registered.reads`.
 A stand-in tile of the zy unit's parameter shape (`h1zy`: rows of K codes and a scale, the record, a receipt as wide as K
-makes it and ``ok``) keeps the Program small; `tests/benchmarks/pouw/test_h1_prove.py` runs the real one."""
+makes it and ``ok``) keeps the Program small."""
 from __future__ import annotations
 
 import cProfile

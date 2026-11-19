@@ -507,7 +507,7 @@ class Attached:
             run = device.PearlCDeviceRun(scheme, OPTION, kernel, weights, roots, coins, opening, pass_index=k,
                                          schedule=own["schedule"], weight_salts=salts)
         if self.session is not None:
-            run.commits.update(coin_source=SV.H1_CHALLENGER, session=carried)
+            run.commits.update(coin_source=SV.PEARL_C_CHALLENGER, session=carried)
         run.commits["registration"] = registration(scheme, SV.DomainError)
         run.details["max_step_tokens"] = device.step_tokens(run, SV.PEARL_C_CALL_CAPACITY)
         if self.capture:

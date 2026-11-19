@@ -719,7 +719,7 @@ def _no_constant(s: str) -> Any:
 
 def public_row(salt: bytes, position: int, roots: tuple[bytes, bytes],
                j10r: tuple[int, tuple[int, int]] | None = None) -> bytes:
-    """A salted unit's public row, its `PUBLIC_ROW_BITS` bits as `ml.circuits.seeds` lays them out (`h1unit.pub_words`):
+    """A salted unit's public row, its `PUBLIC_ROW_BITS` bits as `ml.circuits.seeds` lays them out:
     `salt`, `position` as a u64 and the two roots, each 32 bits a u32 low bit first. With `j10r` ``(call, blocks)``, a
     J10-R unit's (`PUBLIC_ROW_J10R_BITS`): then its call's first position and its two blocks (`j10r_blocks`), each a u64
     in the same layout."""
@@ -765,9 +765,9 @@ def public_row_salt(context: str, position: int) -> bytes:
     return b"".join(hashlib.sha512(head + bytes([i])).digest() for i in range(SALT_BYTES // DIGEST_BYTES["sha512"]))
 
 
-#: the ok row the verifier accepts: a unit's one output bit, 1, in its one word (h1_prove's `OK`)
+#: the ok row the verifier accepts: a unit's one output bit, 1, in its one word
 OK_ROW = (1,)
-#: the ok row's hm96 salt tag (h1_prove's)
+#: the ok row's hm96 salt tag
 OK_SALT_TAG = domains.POUW_H1_OK_ROW_SALT.encode() + b"\0"
 
 

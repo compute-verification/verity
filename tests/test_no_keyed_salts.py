@@ -65,7 +65,6 @@ ALLOWED: dict[str, str] = {
     # both keep ChaCha20 for a caller that hands no salts, which none does now: every caller hands its rows' salts
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/registered_rows.cuh": "@vllm",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cuh": "@vllm",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/verifier/weights.py": "@compute-accounting",
 }
