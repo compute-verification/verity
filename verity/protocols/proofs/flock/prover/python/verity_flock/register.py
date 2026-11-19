@@ -132,7 +132,7 @@ def main(argv=None) -> int:
         doc = correct_waits(doc, coin_waits(point))
     else:
         doc.setdefault("interaction", {})["wait_correction"] = "not recomputed: the run's session lines (prove-s*.txt) are not present"
-    problems = contract.validate(doc, recorded=True)
+    problems = contract.validate(doc)
     doc["validation"]["contract_problems"] = problems
     from verity_numerical.bench import interaction
     ix = interaction.interaction(doc, interactive=True)

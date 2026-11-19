@@ -518,29 +518,51 @@ def test_rate_measurements_are_three_consistent_numbers_the_validator_recomputes
     assert any("needs K in the fingerprint and positive t.total and vu.count" in p for p in contract.validate(bare))
 
 
-def test_a_native_peak_at_a_named_reading_is_a_recorded_results_and_no_new_ones(conforming: dict) -> None:
-    """The H100's FP8 line is its card's ceiling (2141.06 TFLOPS), and its named `datasheet` reading, 1978.9, the vendor's
-    clock: a result recorded at it is read (`recorded=True`) with its overhead checked at that peak, and a new result at it
-    is refused."""
-
+def _hopper_result(conforming: dict, at: float | None = None, name: str | None = None) -> tuple[dict, float]:
+    """A conforming FP8 Hopper result whose native peak and overhead are the census line's own, or at ``at`` FLOP/s, and the
+    native-peak measurement naming ``name`` in `contract.READING_FIELD` where given."""
     t_total, B, K = 1.643, 4096, 1536
-    line = contract.native_reference(FP8_HOPPER_WGMMA.name)
-    sheet = next(r for r in line.readings if r.name == "datasheet").flop_per_second
-    assert contract.native_peak_reading(FP8_HOPPER_WGMMA.name, line.flop_per_second) == "line"
-    assert contract.native_peak_reading(FP8_HOPPER_WGMMA.name, sheet) == "datasheet" and sheet != line.flop_per_second
-    assert contract.native_peak_reading(FP8_HOPPER_WGMMA.name, 1.0e15) is None
     res = json.loads(json.dumps(conforming))
     res["workload_fingerprint"].update(profile=FP8_HOPPER_WGMMA.name, K=K, B=B)
     res["measurements"] = [m for m in res["measurements"] if not m["name"].startswith(("t.", "vu."))]
     ms = contract.rate_measurements(t_total, B, K, FP8_HOPPER_WGMMA.name)
     res["measurements"] += [contract.measurement("t.arithmetic", t_total), contract.measurement("t.total", t_total), contract.measurement("vu.count", B), *ms]
-    assert contract.validate(res) == contract.validate(res, recorded=True) == []
-    old = json.loads(json.dumps(res))
-    old["measurements"][-2]["value"] = sheet
-    old["measurements"][-1]["value"] = t_total / B * sheet / (2 * K)
-    problems = contract.validate(old)
-    assert len(problems) == 2 and problems[0].startswith("rate.native_peak_flop_per_second") and "'datasheet'" in problems[0], problems
-    assert contract.validate(old, recorded=True) == []
+    if at is not None:
+        res["measurements"][-2]["value"] = at
+        res["measurements"][-1]["value"] = t_total / B * at / (2 * K)
+    if name is not None:
+        res["measurements"][-2][contract.READING_FIELD] = name
+    return res, contract.native_reference(FP8_HOPPER_WGMMA.name).flop_per_second
+
+
+def test_an_overhead_at_a_named_reading_of_the_line_is_accepted_and_says_which(conforming: dict) -> None:
+    """The H100's FP8 line is its card's ceiling, and its `datasheet` reading is the vendor's clock: a result whose native-peak
+    measurement carries that reading's name is checked at it, passes, and the note states the reading beside the line's own."""
+    line = contract.native_reference(FP8_HOPPER_WGMMA.name)
+    sheet = next(r for r in line.readings if r.name == "datasheet").flop_per_second
+    assert sheet != line.flop_per_second
+    res, _ = _hopper_result(conforming, sheet, "datasheet")
+    assert contract.validate(res) == [] and contract.native_reading(res["measurements"]) == "datasheet"
+    note = contract.native_reading_note(res)
+    assert note and "'datasheet'" in note and line.id in note and f"{sheet:.6g}" in note and f"{line.flop_per_second:.6g}" in note
+    assert contract.native_reading_note(_hopper_result(conforming)[0]) is None
+    unknown, _ = _hopper_result(conforming, sheet, "no-such-reading")
+    assert any("names the reading 'no-such-reading'" in p for p in contract.validate(unknown))
+    wrong, _ = _hopper_result(conforming, line.flop_per_second, "datasheet")
+    assert [p.split(" ")[0] for p in contract.validate(wrong)] == ["rate.native_peak_flop_per_second", "overhead.vs_native_peak"]
+
+
+def test_an_overhead_at_another_reading_that_names_none_is_refused_at_the_lines_own_figure(conforming: dict) -> None:
+    """The same result without the name is checked at the line's own figure and fails on both numbers, the problem text
+    giving that figure and saying a named reading carries its name."""
+    line = contract.native_reference(FP8_HOPPER_WGMMA.name)
+    sheet = next(r for r in line.readings if r.name == "datasheet").flop_per_second
+    res, _ = _hopper_result(conforming, sheet)
+    problems = contract.validate(res)
+    assert [p.split(" ")[0] for p in problems] == ["rate.native_peak_flop_per_second", "overhead.vs_native_peak"], problems
+    assert all(f"{line.flop_per_second:.6g}" in p and "the line's own figure" in p for p in problems)
+    assert f"names it in `{contract.READING_FIELD}`" in problems[0]
+    assert contract.validate(_hopper_result(conforming)[0]) == []
 
 
 def test_the_verifiers_derived_numbers_are_recomputed_from_its_cpu_seconds(conforming: dict) -> None:

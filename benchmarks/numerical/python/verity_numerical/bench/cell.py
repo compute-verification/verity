@@ -313,7 +313,7 @@ def check(cell: Cell, doc: Mapping[str, Any], prover_run: Path | None = None, ve
     """What keeps ``doc`` from counting for ``cell`` (empty: nothing)."""
     drv = drivers.driver(cell.backend)
     fp = doc.get("workload_fingerprint") if isinstance(doc.get("workload_fingerprint"), Mapping) else {}
-    out = [f"contract: {p}" for p in contract.validate(doc, recorded=True)]
+    out = [f"contract: {p}" for p in contract.validate(doc)]
     why = interaction.protocol_problem(doc)
     if why:
         out.append(why)
