@@ -136,10 +136,9 @@ def session_record(doc: Mapping[str, Any], blocks: IF.Blocks) -> dict[str, Any]:
             raise ValueError(f"slot-split: slot {s}'s units of {e} are not one run")
         return [{**e, "at": a, "units": n} for a, n in out]
 
-    def share(s: int) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    def share(s: int) -> dict[str, Any]:
         wires = IF.coalesce([IF.Wire.of(w) for p in doc.get("wires", ()) for w in rows(p, s, p["writer"])])
-        read_rows = [r for p in reg.get("reads", ()) for r in rows(p, s, None)]
-        reads = IF.coalesce([IF.Read.of(r) for r in read_rows])
+        reads = IF.coalesce([IF.Read.of(r) for p in reg.get("reads", ()) for r in rows(p, s, None)])
         order = []
         for t, lo, n in doc.get("order") or ():
             for r in runs({"reader": t, "at": lo, "units": n}, s, False):
@@ -150,25 +149,21 @@ def session_record(doc: Mapping[str, Any], blocks: IF.Blocks) -> dict[str, Any]:
         registered = {**{k: reg[k] for k in _WHOLE if k in reg}, "reads": [r.doc() for r in reads],
                       "roots": [x for e in reg.get("roots", ()) for x in runs(e, s, False)],
                       "openings": [x for e in reg.get("openings", ()) for x in runs(e, s, True)]}
-        rec = {"templates": [[t, int((slot[t] == s).sum())] for t, _ in doc["templates"]],
-               "wires": [w.doc() for w in wires], **({"cuts": doc["cuts"]} if "cuts" in doc else {}),
-               **({"registered": registered} if "registered" in doc else {}),
-               **({"ingress": [x for e in doc["ingress"] for x in runs(e, s, False)]} if "ingress" in doc else {}),
-               **({"order": order} if "order" in doc else {})}
-        return rec, read_rows
+        return {"templates": [[t, int((slot[t] == s).sum())] for t, _ in doc["templates"]],
+                "wires": [w.doc() for w in wires], **({"cuts": doc["cuts"]} if "cuts" in doc else {}),
+                **({"registered": registered} if "registered" in doc else {}),
+                **({"ingress": [x for e in doc["ingress"] for x in runs(e, s, False)]} if "ingress" in doc else {}),
+                **({"order": order} if "order" in doc else {})}
 
-    def shape(share: tuple[dict[str, Any], list[dict[str, Any]]]) -> dict[str, str]:
-        rec, read_rows = share
-        reg_shape = {**rec.get("registered", {}), "reads": [{k: v for k, v in r.items() if k != "base"} for r in read_rows]}
-        return {k: json.dumps(v, sort_keys=True) for k, v in {**rec, "registered": reg_shape}.items()}
+    def unlike(rec: dict[str, Any]) -> str:
+        reads = [{k: v for k, v in r.items() if k != "base"} for r in rec.get("registered", {}).get("reads", ())]
+        return json.dumps({**rec, "registered": {**rec.get("registered", {}), "reads": reads}}, sort_keys=True)
 
     first = share(0)
     for s in range(1, m):
-        a, b = shape(first), shape(share(s))
-        if a != b:
-            raise ValueError(f"slot-unlike: {doc.get('name')}'s share of slot {s} is not slot 0's, in "
-                             f"{sorted(k for k in a.keys() | b.keys() if a.get(k) != b.get(k))}")
-    return first[0]
+        if unlike(share(s)) != unlike(first):
+            raise ValueError(f"slot-unlike: {doc.get('name')}'s share of slot {s} is not slot 0's")
+    return first
 
 
 def resolve(tid: str) -> Any:
