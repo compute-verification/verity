@@ -4199,7 +4199,7 @@ def meets_rate_cases(draw):
 def rate_agreed_cases(draw):
     """`rate_cases`' strata and rate with the rule's expansion and a registered law: the expansion itself, its strata
     each moved by at most one, a stratum dropped or merged into another, its law renamed, or a pooled subset of any
-    size up to one past the population."""
+    size up to one past the population; a stratified law's `k` is its strata's sum, or one off it."""
     case = draw(rate_cases())
     strata, n = case["strata"], sum(hi - lo for _, rs in case["strata"] for lo, hi in rs)
     if _one_in(draw, 4):
@@ -4210,6 +4210,7 @@ def rate_agreed_cases(draw):
           for t, rs in strata for lo, hi in [(0, sum(b - a for a, b in rs))]]
     mine = {"k": 1, "law": "stratified", "strata": ss}
     law = {**mine, "strata": [{**s, "k": max(0, s["k"] + draw(st.integers(-1, 1)))} for s in ss]}
+    skew = draw(st.sampled_from([0, 0, 0, 1, -1]))
     if len(ss) > 1 and _one_in(draw, 6):
         law = {**law, "strata": law["strata"][1:]}
     elif len(ss) > 1 and _one_in(draw, 6):
@@ -4217,6 +4218,7 @@ def rate_agreed_cases(draw):
         law = {**law, "strata": [{**ss[0], "units": [[merged[0][0], merged[-1][1]]], "k": 1}]}
     elif _one_in(draw, 10):
         law = {**law, "law": "work"}
+    law = {**law, "k": max(0, sum(s["k"] for s in law["strata"]) + skew)}
     return {"den": case["den"], "law": law, "mine": mine, "num": case["num"], "strata": strata}
 
 
@@ -4254,15 +4256,17 @@ _RA_MINE = {"k": 4, "law": "stratified", "strata": [{"k": 2, "template": "a", "u
                                                     {"k": 2, "template": "b", "units": [[2, 5]]}]}
 
 
-def _ra(*ks: int, strata=None) -> dict:
-    ss = strata if strata is not None else [{**s, "k": k} for s, k in zip(_RA_MINE["strata"], ks)]
-    return {"den": 2, "law": {**_RA_MINE, "strata": ss}, "mine": _RA_MINE, "num": 1, "strata": _RA_STRATA}
+def _ra(*ks: int, strata=None, k: int | None = None) -> dict:
+    ss = strata if strata is not None else [{**s, "k": k_s} for s, k_s in zip(_RA_MINE["strata"], ks)]
+    law = {**_RA_MINE, "k": sum(s["k"] for s in ss) if k is None else k, "strata": ss}
+    return {"den": 2, "law": law, "mine": _RA_MINE, "num": 1, "strata": _RA_STRATA}
 
 
-#: The rule's expansion, a larger k_s in one stratum, one short of the rate in one, a stratum dropped, two merged into
-#: one, a stratum no template of the population, and the pooled subset above and one short of its rate.
+#: The rule's expansion, a larger k_s in one stratum, one short of the rate in one, a top-level k one above and one
+#: below its strata's sum, a stratum dropped, two merged into one, a stratum no template of the population, and the pooled subset above and one short of its rate.
 RATE_AGREED_EDGES = st.sampled_from([
-    _ra(2, 2), _ra(3, 2), _ra(1, 2), _ra(strata=[_RA_MINE["strata"][1]]),
+    _ra(2, 2), _ra(3, 2), _ra(1, 2), _ra(2, 2, k=5), _ra(2, 2, k=3), _ra(3, 2, k=6), _ra(3, 2, k=4),
+    _ra(strata=[_RA_MINE["strata"][1]]),
     _ra(strata=[{"k": 3, "template": "a", "units": [[0, 6]]}]),
     _ra(strata=[_RA_MINE["strata"][0], {**_RA_MINE["strata"][1], "template": "z"}]),
     {"den": 2, "law": {"k": 4, "law": "subset"}, "mine": {"k": 3, "law": "subset"}, "num": 1, "strata": _RA_STRATA},
@@ -4277,6 +4281,10 @@ def test_rate_agreed_names_what_it_refuses():
     assert [g.get("refused") for g in got] == [
         None, None, "stratum 'a' misses the rate 1/2: k * DEN = 2 < n * c * NUM = 3 (n = 3, c = 1, k = 1)"]
     assert rate_agreed_piece(_ra(strata=[_RA_MINE["strata"][1]]))["refused"] == "rate: the strata don't tile the population"
+    off = [rate_agreed_piece(_ra(*ks, k=k)) for ks, k in (((2, 2), 5), ((2, 2), 3), ((3, 2), 6), ((3, 2), 4))]
+    assert [o.get("refused") for o in off] == [
+        f"rate: the stratified law's k = {k} is not the sum of its strata's k_s = {total}"
+        for k, total in ((5, 4), (3, 4), (6, 5), (4, 5))]
 CHEAPEST_FOR = D.Port(PIECES, "cheapest_for", cheapest_for_piece, st.one_of(rate_cases(), rate_cases(), rate_cases(),
                                                                             RATE_EDGES, JSON), package=PACKAGE)
 VERDICT_VALUE = st.sampled_from([True, False, None, 1, 0, "yes", [], {}, [0], ""])

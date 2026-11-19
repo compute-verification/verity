@@ -58,6 +58,21 @@ def test_todays_served_rules_meet_their_rate_at_amount_one(rule):
         DR.meets_rate(num, den, DR.work_table({t: 2 for t in table}), pop, design)
 
 
+def test_a_stratified_law_is_agreed_only_at_its_strata_sum():
+    pop = population([3, 3])
+    mine = stratified(pop, [2, 2])
+
+    def agreed(ks: list[int], k: int) -> dict:
+        law = {**stratified(pop, ks), "k": k}
+        return DR.rate_agreed(1, 2, pop, mine, law)
+
+    assert agreed([2, 2], 4)["k"] == 4 and agreed([3, 2], 5)["k"] == 5
+    for ks, k in (([2, 2], 5), ([2, 2], 3), ([3, 2], 6), ([3, 2], 4)):
+        with pytest.raises(ValueError) as refused:
+            agreed(ks, k)
+        assert str(refused.value) == f"rate: the stratified law's k = {k} is not the sum of its strata's k_s = {sum(ks)}"
+
+
 def _miss(kind: str, sizes, ks, p: Fraction, ts) -> Fraction:
     """The exact probability that the design samples none of a set with `ts[s]` proof blocks in stratum `s`."""
     if kind == "stratified":

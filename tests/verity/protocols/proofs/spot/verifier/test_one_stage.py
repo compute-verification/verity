@@ -604,24 +604,37 @@ def test_r1_takes_a_proposed_design_that_meets_a_stratified_rate():
     mine, _ = S.params_sampling_design(rule, prog, q, None)
     expanded = D.derive(prog, q, mine)
     strata = expanded["strata"]
-    assert [s["k"] for s in strata] == [2, 2]
+    assert expanded["k"] == 3 and [s["k"] for s in strata] == [2, 2]
 
     def check(law, rate=(1, 2)):
         return _check({**rec, "law": law}, prog, q, sampling_design=mine, rate=rate)
 
     assert check(expanded).ok
-    larger = dict(expanded, strata=[{**strata[0], "k": 3}, strata[1]])
+    larger = dict(expanded, k=5, strata=[{**strata[0], "k": 3}, strata[1]])
     assert check(larger).ok and check(larger, rate=None).codes == ("R1-law",)
-    short = dict(expanded, strata=[{**strata[0], "k": 1}, strata[1]])
+    for k in (4, 6):
+        v = check(dict(larger, k=k))
+        assert v.codes == ("R1-law",) and (
+            f"rate: the stratified law's k = {k} is not the sum of its strata's k_s = 5" in v.detail["R1-law"]["verifier"])
+    short = dict(expanded, k=3, strata=[{**strata[0], "k": 1}, strata[1]])
     v = check(short)
     assert v.codes == ("R1-law",) and f"stratum '{strata[0]['template']}' misses the rate 1/2" in v.detail["R1-law"]["verifier"]
     dropped = dict(expanded, strata=[strata[1]])
     assert "the strata don't tile the population" in check(dropped).detail["R1-law"]["verifier"]
-    merged = dict(expanded, strata=[{**strata[1], "units": [[0, 6]], "k": 3}])
+    merged = dict(expanded, k=3, strata=[{**strata[1], "units": [[0, 6]], "k": 3}])
     assert "the design has 1 strata, not the population's 2 templates" in check(merged).detail["R1-law"]["verifier"]
     assert check({"law": "subset", "k": 6}).codes == ("R1-law",)
-    stranger = dict(expanded, strata=[strata[0], {**strata[1], "template": "z" * 128}])
+    stranger = dict(expanded, k=4, strata=[strata[0], {**strata[1], "template": "z" * 128}])
     assert "is no template of the population" in check(stranger).detail["R1-law"]["verifier"]
+
+
+def test_the_rules_own_expansion_is_agreed_at_any_k_under_a_rate():
+    prog, q, _, rec = _stratified_docket()
+    mine = RND.parse_design("stratified:1")
+    expanded = D.derive(prog, q, mine)
+    assert expanded["k"] == 1 and sum(s["k"] for s in expanded["strata"]) == 2
+    assert D.agreed(prog, q, mine, None, (1, 2), expanded) == expanded
+    assert _check({**rec, "law": expanded}, prog, q, sampling_design=mine, rate=(1, 2)).ok
 
 
 def test_a_sample_is_held_to_the_registered_design_not_any_design_meeting_the_rate():
@@ -629,13 +642,13 @@ def test_a_sample_is_held_to_the_registered_design_not_any_design_meeting_the_ra
     mine, _ = S.params_sampling_design("stratified-rate:1/2", prog, q, None)
     expanded = D.derive(prog, q, mine)
     strata = expanded["strata"]
-    registered = dict(expanded, strata=[{**strata[0], "k": 3}, strata[1]])
+    registered = dict(expanded, k=5, strata=[{**strata[0], "k": 3}, strata[1]])
     rec = {**rec, "law": registered}
     agreed = D.agreed(prog, q, mine, None, (1, 2), rec["law"])
     assert agreed == registered
     under = {"law": "stratified", "population": 6, "k": registered["k"], "strata": registered["strata"], "units": [0, 1, 2, 3, 5]}
     assert D.check_draw(under, rec, agreed).ok
-    other = {**under, "strata": expanded["strata"], "units": [0, 1, 2, 3]}
+    other = {**under, "k": expanded["k"], "strata": expanded["strata"], "units": [0, 1, 2, 3]}
     assert D.check_draw(other, rec, D.agreed(prog, q, mine, None, (1, 2), expanded)).ok
     assert D.check_draw(other, rec, agreed).codes == ("law",)
 

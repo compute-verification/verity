@@ -289,7 +289,8 @@ def flockSamplingDesign (samplingDesign : Json) (population : Nat) : Except Stri
 
 /-- `draw.rate_agreed`: under a rate rule `NUM/DEN`, the registered sampling design `law` when it is the rule's expansion
 `mine`'s law (`subset` or `stratified`) and meets the rate over the population's `strata` at amount 1 a proof block
-(`Flock.Draw.meetsRate`), so it covers every stratum of the population exactly; else why not. -/
+(`Flock.Draw.meetsRate`), so it covers every stratum of the population exactly; else why not. A stratified `law`'s `k`
+is the sum of its strata's `k_s`, so a law other than the rule's expansion has one registered form. -/
 def rateAgreed (num den : Nat) (strata : Array (String × Array (Nat × Nat))) (mine law : Json) : Except String Json := do
   let kind := getD mine "law"
   if !(jeq kind "subset" || jeq kind "stratified") || !jeq (getD law "law") kind then
@@ -304,6 +305,8 @@ def rateAgreed (num den : Nat) (strata : Array (String × Array (Nat × Nat))) (
       if let some why := strataMessage law n then throw s!"rate: {why}"
       let (some k, .arr ss) := (nat? (getD law "k"), getD law "strata") | throw "rate: a stratified law's k and strata"
       let some st := ss.mapM (stratum? false) | throw "rate: a stratified law's strata"
+      let total := st.foldl (fun a s => a + s.k) 0
+      if k != total then throw s!"rate: the stratified law's k = {k} is not the sum of its strata's k_s = {total}"
       pure (Flock.Draw.SamplingDesign.stratified k (st.map (·.toStratum)))
   Flock.Draw.meetsRate num den (strata.map fun (t, _) => (t, 1, 1)) strata d
   pure law
