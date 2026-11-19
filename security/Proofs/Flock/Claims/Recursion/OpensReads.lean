@@ -5,6 +5,7 @@ public import Proofs.Flock.Claims.Recursion.DeployHonest
 public import Proofs.Flock.Claims.Recursion.LayoutBTops
 public import Proofs.Flock.Claims.Recursion.RecRecord
 public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.DerivedReads
 import all Init.Data.Repr
 import all Init.Data.String.Defs
 import Mathlib.Algebra.Order.Floor.Extended
@@ -244,16 +245,21 @@ theorem RecIns.setup_registered {s : RecIns} {spec : SessionSpec} {sts : Array S
   all_goals
     obtain ⟨-, h2⟩ := Prod.mk.inj (Except.ok.inj h)
     subst h2
-    refine forIn_ok_of ?_ (by assumption)
+    refine forIn_ok_of (f := fun st => Registered.withPositions st.c st.pub s.base.read.I.program s.base.registered >>=
+      checkRegistered st) ?_ (by assumption)
     intro a v r hr
     try dsimp only at hr
-    split at hr
-    · cases hr
-    · rename_i u hu
-      split at hr
-      · cases hr
-      · cases hr
-        exact ⟨hu, rfl⟩
+    cases hw : Registered.withPositions a.c a.pub s.base.read.I.program s.base.registered with
+    | error e => simp [hw] at hr
+    | ok regs =>
+      cases hc : checkRegistered a regs with
+      | error e => simp [hw, hc] at hr
+      | ok u =>
+        cases hn : FlockDeploy.noIdentifier a with
+        | error e => simp [hw, hc, hn] at hr
+        | ok w =>
+          simp [hw, hc, hn] at hr
+          exact ⟨by simp [hw, hc, bind, Except.bind], hr.symm⟩
 
 /-- A shared-row file's `b ‖ c` of instance `i`'s row `p` is its table row at the instance's ref. -/
 theorem digest_tables {pub : Public} {t : Tables} (ht : pub.tables = some t) (i p np : ℕ) :
@@ -285,15 +291,18 @@ theorem rowsAt {st : Stmt} {own own' : Array Registered.Port} {cs : RecVStar.Inn
     FlockSoundness.Discharge.ZkReg.check_tables (FlockSoundness.Discharge.ZkReg.checkRegistered_ok hR)
   rw [ht] at ht'
   cases ht'
-  obtain ⟨p', positions', paths', hp', hent', hall⟩ := FlockSoundness.Discharge.ZkReg.checkPort_at (hports _ hmem)
-  obtain ⟨p'', positions'', paths'', hp'', hent'', hsize⟩ := FlockC3.PubRows.checkPort_size (hports _ hmem)
-  rw [hp] at hp' hp''
+  obtain ⟨reg', hreg', hsame⟩ := Registered.withPositions_reads hW reg hmem
+  have hname : reg'.name = reg.name := by rw [hsame]
+  have hentE : Registered.entry st.pub reg' = Registered.entry st.pub reg := by rw [hsame]; rfl
+  obtain ⟨p', positions', paths', hp', hent', hall⟩ := FlockSoundness.Discharge.ZkReg.checkPort_at (hports _ hreg')
+  obtain ⟨p'', positions'', paths'', hp'', hent'', hsize⟩ := FlockC3.PubRows.checkPort_size (hports _ hreg')
+  rw [hname, hp] at hp' hp''
   cases hp'
   cases hp''
-  rw [hent] at hent' hent''
+  rw [hentE, hent] at hent' hent''
   cases hent'
   cases hent''
-  refine ⟨t, idx, p, positions, ht, hidx, hp, hsize, fun i hi => ?_, hrows⟩
+  refine ⟨reg', hreg', hsame, t, idx, p, positions, ht, hidx, hp, hsize, fun i hi => ?_, hrows⟩
   obtain ⟨hlt, hreads, -⟩ := hall i hi
   exact ⟨hsize ▸ hlt, hreads⟩
 

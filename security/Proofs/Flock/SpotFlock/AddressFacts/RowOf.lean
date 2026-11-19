@@ -366,17 +366,20 @@ theorem readAt_of_ok (hS : Sits h) (hr : r.Ok h) {own : Array _root_.Flock.Regis
     {reg : _root_.Flock.Registered.Port} (hown : r.ins.registered = some own) (hmem : reg ∈ own) {q : ℕ}
     (hfind : (List.range r.sts[0]!.c.ports.size).find? (fun p => r.sts[0]!.c.ports[p]!.name == reg.name) = some q)
     {tb} {positions} {paths} (htb : r.sts[0]!.pub.tables = some tb)
-    (hent : _root_.Flock.Registered.entry r.sts[0]!.pub reg = .ok (positions, paths)) :
-    ∃ own' reg', _root_.Flock.Registered.withPositions r.sts[0]!.c r.sts[0]!.pub r.ins.read.I.program (some own) =
-      .ok (some own') ∧ reg' ∈ own' ∧ reg' = { reg with readsRel := reg'.readsRel, readsFrom := reg'.readsFrom } ∧
+    (hent : _root_.Flock.Registered.entry r.sts[0]!.pub reg = .ok (positions, paths))
+    {own' : Array _root_.Flock.Registered.Port}
+    (hw : _root_.Flock.Registered.withPositions r.sts[0]!.c r.sts[0]!.pub r.ins.read.I.program (some own) =
+      .ok (some own')) :
+    ∃ reg' ∈ own', reg' = { reg with readsRel := reg'.readsRel, readsFrom := reg'.readsFrom } ∧
       reg'.readAt ((partOf h r).lo + unitOf r.ins.read.draw (r.n h)) =
         some (some (positions.getD (_root_.Flock.Registered.ref tb r.sts[0]!.c.ports.size q (r.n h)) 0)) := by
   obtain ⟨hcnt, hlab, -⟩ := hS r hr
   have hpos := sts_pos hr
   obtain ⟨Pt, d, spec, hx, hP, h2, hin, hok, hu, hck, hb, hρ, hrb, hset⟩ := hr
   have hsc := sessionScoped h r.x r.m₁ (unitStmt h r.m₂ r.u) r.c₀ r.c₁ _ (stmtOkAt_unit h hx hok hu)
-  exact positionFact (sampleSlot (partOf h r) r.ins.read.draw) hset hown hsc hck hpos hlab reg hmem q tb positions
-    paths hfind htb hent (r.n h) hcnt
+  obtain ⟨reg', hreg', hsame, hat⟩ := positionFact (sampleSlot (partOf h r) r.ins.read.draw) hset hown hsc hck hpos
+    hlab reg hmem q tb positions paths hfind htb hent own' hw
+  exact ⟨reg', hreg', hsame, hat (r.n h) hcnt⟩
 
 /-- **The row at a needed gate at a port a link names**, a gate the wiring leaves alone. A registered read is named
 like the port; the address's slot is not sized and counts no units, so under any roots its leaf count is the
