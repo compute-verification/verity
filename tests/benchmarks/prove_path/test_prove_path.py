@@ -1271,9 +1271,11 @@ def test_the_ran_with_line_names_the_coins_and_the_parameters_of_their_key(tmp_p
     assert PP.ran_with(gate) == f"ran with: coins the auditor device's challenger ({gate}); parameters not stated (no challenger key record given)"
     party = "loopback:127.0.0.1:4455"
     assert PP.ran_with(party) == (f"ran with: coins the challenger party's host on this machine ({party}), a development "
-                                  "session's, not an auditor's; parameters not stated (no challenger key record given)")
-    assert PP.ran_with(party, record(1, 20)).endswith("parameters deployed (the challenger's LMS key at W=1, H=20, its key record's)")
-    assert "auditor device" not in PP.ran_with(party, record(1, 20))
+                                  "session's, not an auditor's; parameters development (the party's own LMS key, no key "
+                                  "record given)")
+    at_deployed = PP.ran_with(party, record(1, 20))
+    assert at_deployed.endswith("parameters development (the party's own LMS key at W=1, H=20, its key record's)")
+    assert "deployed" not in at_deployed and "auditor device" not in at_deployed
     with pytest.raises(ValueError, match="local, loopback:HOST:PORT or gate:USER@HOST"):
         PP.ran_with("remote")
     assert PP.main(["ran-with", "--challenger", party]) == 0
