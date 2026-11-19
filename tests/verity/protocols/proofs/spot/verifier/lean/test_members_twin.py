@@ -142,7 +142,7 @@ class Audit:
                          "statement": {}, "proofs": {"statements": statements},
                          "sessions": [s["name"] for st in statements for s in st["sessions"]]}
         members = {name: {"public": self.put(json.dumps({"member": name}).encode() + b"\nnot a public file"),
-                          "registered": None, "block": k, "vus_per_block": 4} for k, name in enumerate((A, B))}
+                          "registered": None, "block": k, "vus_per_block": 1} for k, name in enumerate((A, B))}
         self.params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
                        "law": DESIGN, "leaf_layer": LEAF, "log": [], "partition": self.partition,
                        "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
