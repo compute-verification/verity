@@ -8,7 +8,8 @@ root or row count, and parts of which one or none name it; and, against the chal
 `challenger.RunRecord`), a part retried, a part whose session the record lacks, an opened session that is not the composed
 one, a session for a part V* lacks, a staging after the first Hello or a second one, other rows or another shared set
 staged, a record not closed or going on past its close, and a record that is none, of another kind or with an event out
-of its form. Each `rec-compose` builds V*'s statements at the inner shape (about 5 s), so the module is slow; it catches
+of its form. A part set the composition's checks pass is refused by name, by design (`RC.RECURSION_REFUSED`), and
+one they refuse keeps their reason. Each `rec-compose` builds V*'s statements at the inner shape (about 5 s), so the module is slow; it catches
 what `Flock/Test/RecCompose.lean`'s #guards can't: the binary's own reading of its flags and files (the inner shape's,
 rows file's and record's), the challenger's writer read by the Lean, and the mirror drifting from the Lean."""
 from __future__ import annotations
@@ -174,10 +175,10 @@ def _compose(d: Path, tmp_path: Path, n: int, inner: bytes, parts: list[tuple[st
     p = subprocess.run([str(BIN), "rec-compose", "--rec-inner", str(d / "inner.json"), "--rec-rows", str(d / "rows.json"),
                         "--rec-run", str(tmp_path / "run.json"), *flag, *logs], capture_output=True, text=True)
     [line] = [json.loads(ln[12:]) for ln in p.stdout.splitlines() if ln.startswith("REC-COMPOSE ")]
-    want = RC.check_twin(n, RC.digest(ROWS), RC.digest(inner), run, [(lg, t) for lg, (_, t) in zip(logs, parts)], links)
-    assert (line["accepted"], line["why"]) == want, line
-    assert p.returncode == (0 if want[0] else 1)
-    return want
+    args = (n, RC.digest(ROWS), RC.digest(inner), run, [(lg, t) for lg, (_, t) in zip(logs, parts)], links)
+    assert (line["accepted"], line["why"]) == RC.command_twin(*args), line
+    assert p.returncode == 1
+    return RC.check_twin(*args)
 
 
 @pytest.mark.parametrize("case", CASES)
