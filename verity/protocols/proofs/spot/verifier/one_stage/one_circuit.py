@@ -98,8 +98,11 @@ def _listed(query: Mapping[str, Any]) -> list[Any] | None:
 
 def cuts(c: bytes, partition: Mapping[str, Any], decoded: Decoded | None = None) -> dict[str, dict[str, int]]:
     """in(S)'s row cuts (`Spot.OneStageZk.cutsOf`, `edges.io_cuts`): ``{template: {port: k}}`` on C and the partition's
-    ranges; `NotDerived` at a scan node of C's root, `Refused` where the partition is no template query or C's root
-    reads a port in rows that no writer field divides."""
+    ranges; `NotDerived` (`LOWER`, as `lower`) before C is read where the partition is no template query, and at a scan
+    node of C's root; `Refused` where the query doesn't apply to C or C's root reads a port in rows that no writer field
+    divides."""
+    if _listed(partition.get("query") or {}) is None:
+        raise NotDerived(LOWER)
     D = (decoded or Decoded(c)).get()
     try:
         ranges = PO.TemplatePartition(D, partition["query"]).ranges

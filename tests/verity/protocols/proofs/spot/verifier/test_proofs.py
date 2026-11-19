@@ -143,7 +143,8 @@ def _derived(monkeypatch, circuit: Path) -> None:
     these tests are of what `verify` does with a verdict, whatever the derivation."""
     monkeypatch.setattr(OC, "restrict", lambda c, partition, units, *_: circuit.read_bytes())
     monkeypatch.setattr(OC, "block", lambda c, partition, k, *_: [(0, 1)])
-    monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe: c_s)
+    monkeypatch.setattr(OC, "cuts", lambda c, partition, *_: {})
+    monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe, **_: c_s)
 
 
 def test_a_session_lean_accepts_in_a_form_the_mirror_refuses_is_refused(tmp_path, monkeypatch):
@@ -421,7 +422,8 @@ def test_the_door_proves_only_a_block_the_draw_sampled_and_refuses_an_undrawn_on
     derived = []
     monkeypatch.setattr(OC, "block", lambda c, partition, k, *_: [(k, k + 1)])
     monkeypatch.setattr(OC, "restrict", lambda c, partition, units, *_: derived.append(units) or circuit.read_bytes())
-    monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe: c_s)
+    monkeypatch.setattr(OC, "cuts", lambda c, partition, *_: {})
+    monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe, **_: c_s)
     verdict = {"session": str(tmp_path / "s"), "accepted": False, "why": "refused", "zk": True}
     monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
     monkeypatch.setattr(PF.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(
@@ -447,7 +449,8 @@ def _door(tmp_path: Path, monkeypatch, name: str, indices: list, draw: dict, blo
     derived = []
     monkeypatch.setattr(OC, "block", lambda c, partition, k, *_: blocks(k))
     monkeypatch.setattr(OC, "restrict", lambda c, partition, units, *_: derived.append(units) or circuit.read_bytes())
-    monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe: c_s)
+    monkeypatch.setattr(OC, "cuts", lambda c, partition, *_: {})
+    monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe, **_: c_s)
     monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
     monkeypatch.setattr(PF.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, "VERDICT " + json.dumps(
         {"session": cmd[cmd.index("--session") + 1], "accepted": False, "why": "refused", "zk": True}) + "\n", ""))
@@ -493,8 +496,10 @@ def _two_templates(*counts: int) -> tuple[bytes, dict, list[str]]:
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.population import wired_population_program
     from verity.circuits.types import Array
-    ts = [bind(CompositeDefinition(f"DoorLowerXor{n}", 0, (), lambda S, n=n: ((("x", Array(n, BIT)),), BIT),
-                                   lambda B, S, x, n=n: B.call(xor_gate(n), x), register=False)) for n in (2, 3)]
+    # ``pad``, read by no gate, is a row past a compression before its last block, which a Flock block's pin needs
+    ts = [bind(CompositeDefinition(f"DoorLowerXor{n}", 0, (),
+                                   lambda S, n=n: ((("x", Array(n, BIT)), ("pad", Array(1024, BIT))), BIT),
+                                   lambda B, S, x, pad, n=n: B.call(xor_gate(n), x), register=False)) for n in (2, 3)]
     ts = [(t, m) for t, m in zip(ts, counts) if m]
     ids = [codec.descriptor_id(t) for t, _ in ts]
     program, query = wired_population_program(ts, {"templates": [[tid, m] for tid, (_, m) in zip(ids, ts)]})
