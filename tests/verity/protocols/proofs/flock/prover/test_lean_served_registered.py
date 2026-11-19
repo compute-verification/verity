@@ -41,9 +41,9 @@ BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 #: partition.json, served.json, registered.json, tables/), session/ (the sampled --zk session's record and proofs), live.json
 #: (the prover's LIVE record)
 FIXTURES = {
-    RV.SCHEMA: "art:54456e32d1e801018ba6c9da92548482a0e9c8c8fd5c2fc956086cb6e3d8bd4b",
-    G.SCHEMA_V2: "art:f14126710f23f62410d0387454ab8c69b236f75f5b92df10ddc214ebc45f37e6",
-    G.SCHEMA_SEG: "art:ae8f5cf2b166710fd2418eea10dddc217102587c75d00db85abf2474b2d0864c",
+    RV.SCHEMA: "art:b284035a495875f36492cfd26413a2053cf73dde9e94d3f758f59eec8fbfafd6",
+    G.SCHEMA_V2: "art:afb642fa3d905336f0458a713b093dbdb51481a2dfa92418302a39a3c0f25cc9",
+    G.SCHEMA_SEG: "art:f3712137e8e44952c937e7c42f9071475a70f3bb3c2e0afcf64003596cef8acd",
 }
 #: `pod/89-served-registered.sh ZK=0`'s fixture (row/v1): the same stage, with the verifier's own stratified sample of `PLAIN_K`
 #: (stage/draw.json), session/ a plain session (no --zk) sampled by it on the challenger's coin tree, and challenger/ its
