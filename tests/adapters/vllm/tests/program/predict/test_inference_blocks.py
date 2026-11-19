@@ -1,7 +1,7 @@
 """verity_vllm.program.predict.inference_blocks: B's partition of a window circuit into inference blocks, one a slot, as a
 private table under a hiding root with its budgets and padded counts public. Held, on `test_window_circuit`'s TINY class
-circuit (its class and grain), to the circuit unrolled unit by unit; with ``VERITY_VLLM_FA3_LLAMA_1B=1``, on int8
-Llama-3.2-1B's window circuit on the H200 at 4,32,4 too.
+circuit (its class and grain) and a served window of two equal requests, to the circuit unrolled unit by unit; with
+``VERITY_VLLM_FA3_LLAMA_1B=1``, on int8 Llama-3.2-1B's window circuit on the H200 at 4,32,4 too.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from verity.commitments import advice as AC
 from verity.commitments.periods import interface as IF
 
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import CLASS, GRAIN, WINDOW, _circuit, _labels, held
+from tests.program.predict.test_window_circuit import CLASS, FULL, GRAIN, WINDOW, _circuit, _labels, held
 from tests.program.predict.test_window_circuit_fa3 import H200, LLAMA_1B
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict import inference_blocks as IB
@@ -94,6 +94,30 @@ def test_every_block_has_c_gates_and_k_fresh_input_bits(window):
     gates, fresh = _unrolled(circuit, _slots(circuit, IB.rows(circuit, program)))
     assert gates == [c, c] and fresh == [k, k] and k == 2 * 4548 * 16
     assert {r.param for r in circuit.registered.reads if r.param.split("/", 1)[0] != WEIGHTS} == {SCAN_STATE}
+
+
+@pytest.fixture(scope="module")
+def full():
+    return _circuit(FULL)
+
+
+def test_a_served_window_of_equal_requests_has_blocks_of_equal_gates_and_fresh_bits_and_no_wire_across_them(full):
+    """FULL, two requests of one length, served: by its record's blocks (`Blocks.slots_steps`), unrolled unit by unit,
+    no wire crosses blocks and its two blocks have the same gates and fresh-input bits."""
+    gates, fresh = _unrolled(full, {t: full.blocks.slots_steps(t, 0, n)[0] for t, n in full.units.items()})
+    assert gates[0] == gates[1] and fresh[0] == fresh[1], (gates, fresh)
+
+
+@pytest.mark.xfail(strict=True, raises=ValueError,
+                   reason="the table takes only uniform blocks (`Blocks.uniform`): a served window's scan units are each "
+                          "lane's template of one unit in its own slot, so its equal blocks are refused")
+def test_a_served_window_of_equal_requests_has_a_table(full):
+    try:
+        rs = IB.rows(full, PROGRAM)
+    except ValueError as e:
+        assert "a served window's blocks are a request each of its own positions" in str(e), e
+        raise
+    assert IB.decode(rs)[:2] == (PROGRAM, 2)
 
 
 def test_a_served_windows_blocks_of_their_own_positions_are_refused_by_name():
