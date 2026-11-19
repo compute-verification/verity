@@ -37,7 +37,6 @@
     {"file": "benchmarks/pous/band_gpu/harness.py", "count": 8},
     {"file": "benchmarks/pous/band_gpu/native.py", "count": 1},
     {"file": "benchmarks/pous/bench.py", "count": 1},
-    {"file": "benchmarks/pous/p2_v1/decode_bench.py", "count": 1},
     {"file": "benchmarks/pous/p2_v1/scale.py", "count": 1},
     {"file": "benchmarks/pous/streamed_wipe/bench.py", "count": 1},
     {"file": "tests/benchmarks/pous/test_pous_harness.py", "count": 2},
