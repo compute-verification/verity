@@ -219,7 +219,7 @@ def test_a_session_the_verifier_rejects_is_a_finding_and_the_run_proves_only_the
      "public file: not the registration's: domains"),
     ({"frame_v3": {"domain_ids": {"out": "aa" * 64}, "roots": {"out": "11" * 64, "x": "11" * 64}}}, M.unwired_why("x")),
     ({"instances": 5}, "public file: not the registration's: population"),
-    ({"instances": 3, "scheme": 5}, "public file: not the registration's: scheme, population"),
+    ({"instances": 3, "scheme": 5}, M.POPULATION_WHY),
 ])
 @lean
 def test_a_member_is_refused_where_its_public_file_is_not_its_slice_with_or_without_a_session(tmp_path, change, why):
