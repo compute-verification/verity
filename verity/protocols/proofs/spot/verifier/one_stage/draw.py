@@ -58,7 +58,7 @@ from typing import Any, Mapping, Sequence
 
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
-from verity.commitments.randomness import digits
+from verity.commitments.randomness import digits, parse_rate, parse_strata_rate
 from verity.commitments.rate import _int, _nat, _size, rate_count, work_table
 
 from . import partition as P
@@ -223,6 +223,52 @@ def cheapest_for(num: int, den: int, table: Mapping[str, tuple[int, int]],
     return out
 
 
+def rule_rate(text: Any) -> tuple[int, int] | None:
+    """The rate NUM/DEN under which R1 also agrees to a registered law that meets it (`agreed`): `rate:NUM/DEN` over one
+    table, or `stratified-rate:NUM/DEN`; None for any other law. Lean `OneStage.rateOf`."""
+    if not isinstance(text, str):
+        return None
+    pooled = parse_rate(text)
+    if pooled is not None:
+        return (pooled[0], pooled[1]) if pooled[2] == 1 else None
+    strata = parse_strata_rate(text)
+    return (strata[1], strata[2]) if strata is not None and not strata[0] else None
+
+
+def rate_agreed(num: int, den: int, strata: Sequence[tuple[str, Sequence[Sequence[int]]]], mine: Mapping[str, Any],
+                law: Any) -> dict[str, Any]:
+    """Under a rate rule NUM/DEN, the registered sampling design `law` when it is the rule's expansion `mine`'s law (subset or
+    stratified) and meets the rate over the population's `strata` at amount 1 a proof block (`meets_rate`), so it covers
+    every stratum of the population exactly; raises `ValueError` saying why not. Lean `Spot.Draw.rateAgreed`."""
+    kind = mine.get("law") if isinstance(mine, Mapping) else None
+    if kind not in ("subset", "stratified") or not isinstance(law, Mapping) or law.get("law") != kind:
+        raise ValueError("rate: the registered law is not the rule's, subset or stratified")
+    n = sum(_size(rs) for _, rs in strata)
+    if kind == "subset":
+        if sorted(law) != ["k", "law"]:
+            raise ValueError("rate: a subset law is exactly {law, k}")
+        if not _nat(law["k"]):
+            raise ValueError("rate: a subset law's k is a natural number")
+    else:
+        if sorted(law) != ["k", "law", "strata"]:
+            raise ValueError("rate: a stratified law is exactly {law, k, strata}")
+        why = strata_problem(law, n)
+        if why is not None:
+            raise ValueError(f"rate: {why}")
+    meets_rate(num, den, {t: (1, 1) for t, _ in strata}, strata, law)
+    return dict(law)
+
+
+def agreed(program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any],
+           table: Mapping[str, Any] | None, rate: tuple[int, int] | None, law: Any) -> dict[str, Any]:
+    """The sampling design the verifier agrees to for the registered `law`: `derive`'s expansion, or under a rate rule
+    (`rate` = (NUM, DEN)) a different `law` that meets it (`rate_agreed`). Raises as they do. Lean `Spot.Draw.agreed`."""
+    mine = derive(program, query, sampling_design, table)
+    if rate is None or same_design(law, mine):
+        return mine
+    return rate_agreed(rate[0], rate[1], P.strata(program, query), mine, law)
+
+
 def sampling_design_of(draw: Mapping[str, Any]) -> dict[str, Any]:
     if draw.get("law") in ("stratified", "work"):
         return {"law": draw["law"], "k": draw.get("k"), "strata": draw.get("strata")}
@@ -240,8 +286,9 @@ def same_design(a: Any, b: Any) -> bool:
 def strata_problem(sampling_design: Mapping[str, Any], population: int) -> str | None:
     """Why a stratified or work sampling design object isn't well formed over `population` proof blocks, or None: each stratum is exactly
     {template, proof blocks, k} (a work stratum {template, proof blocks, work, floor, k}) with a distinct template; the ranges are
-    ascending, disjoint and non-empty and tile [0, population); each stratum's k is the rule's (a work sampling design's: a floor of
-    at least one, a population that does some work, and each k `work_k` above its floor; Lean `workProblem`)."""
+    ascending, disjoint and non-empty and tile [0, population); each stratum's k is in [1, its size] (a work sampling design's: a floor
+    of at least one, a population that does some work, and each k `work_k` above its floor; Lean `workProblem`). Which k_s the
+    verifier agrees to is `agreed`'s."""
     strata, k, work = sampling_design.get("strata"), sampling_design.get("k"), sampling_design.get("law") == "work"
     if not isinstance(strata, list) or not strata or not _int(k) or not 1 <= k <= population:
         return "strata and 1 <= k <= population"
@@ -269,9 +316,11 @@ def strata_problem(sampling_design: Mapping[str, Any], population: int) -> str |
             return f"stratum {s['template']!r}: ranges ascending, disjoint and not adjacent"
         if work and s["floor"] < 1:
             return f"stratum {s['template']!r}: a floor is at least one"
-        rule = work_k(k, s["work"], _size(rs), total, s["floor"]) if work else stratum_k(k, _size(rs), population)
-        if not _int(s["k"]) or s["k"] != rule:
-            return f"stratum {s['template']!r}: k is not the {'work ' if work else ''}rule's"
+        if work:
+            if not _int(s["k"]) or s["k"] != work_k(k, s["work"], _size(rs), total, s["floor"]):
+                return f"stratum {s['template']!r}: k is not the work rule's"
+        elif not _int(s["k"]) or not 1 <= s["k"] <= _size(rs):
+            return f"stratum {s['template']!r}: k is not in [1, {_size(rs)}]"
         ranges += rs
     for lo, hi in sorted(ranges):
         if lo != at:

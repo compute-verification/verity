@@ -251,7 +251,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
           history: Mapping[str, Any] | None = None, compiler: Any = UNREAD,
           certified: Mapping[str, Mapping[str, Any]] | None = None,
-          verdicts: Mapping[str, bool] | None = None) -> Verdict:
+          verdicts: Mapping[str, bool] | None = None, rate: tuple[int, int] | None = None) -> Verdict:
     """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
@@ -265,7 +265,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     verifier's own partition object when it isn't the canonical one (a record made before the canonical envelope); its
     program must still be `program`'s, and the population is `query`'s.  R1 holds the registered sampling design to the verifier's own
     sampling design expanded over its program and query (`draw.derive`): for `stratified`, the strata by template descriptor id and
-    each stratum's k by the rule; for `work`, also its own `work_table`.  R7 holds the registered values to the verifier's
+    each stratum's k by the rule; for `work`, also its own `work_table`; under a rate rule (`rate`: (NUM, DEN), `draw.rule_rate`) it
+    also takes a registered law that meets the rate (`draw.agreed`).  R7 holds the registered values to the verifier's
     own (`registered_entries`), a pinned value to its pinned root, and a value an earlier record of the log registered
     under the domain it takes now to that record's root (`held_roots`): a value is committed once a domain; a supplied
     value's root is the one it recomputes from this record and the log (`registered.supplied_root`) instead, and an output
@@ -342,7 +343,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     if (rec["format"], rec["protocol"]) != (DM.REGISTRATION if v2 else DM.REGISTRATION_V1, DM.ONE_STAGE_PROTOCOL):
         c.fail("R1-protocol", [rec["format"], rec["protocol"]])
     try:
-        mine = D.derive(program, query, sampling_design, work_table)
+        mine = D.agreed(program, query, sampling_design, work_table, rate, rec["law"])
     except (P.QueryRefused, ValueError) as e:
         c.fail("R1-law", {"registered": rec["law"], "verifier": f"{dict(sampling_design)} does not apply: {e}"})
     else:

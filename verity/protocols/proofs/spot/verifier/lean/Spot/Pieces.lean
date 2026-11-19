@@ -57,6 +57,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
 * `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
 * `meets_rate`, `cheapest_for`: whether an expanded design meets a rate per unit of amount, and the least strata that
   do (`Flock.Draw.meetsRate`, `Flock.Draw.cheapestFor`);
+* `rate_agreed`: the registered law R1 agrees to under a rate rule, or why not (`Draw.rateAgreed`);
 * `max_harm`: a certificate's bracket around `Flock.Guarantees.JointStratified`'s exact supremum of that harm
   (`Bound.maxHarmCheck`), which `certify` is held to;
 * `hidden_offsets`, `hidden_locate`, `hidden_witness`: the sample over hidden positions (`HiddenSample`): the honest table's
@@ -600,6 +601,18 @@ def cheapestFor (j : Json) : V Json := do
   let (num, den, table, strata) ← rateInput j
   return match Flock.Draw.cheapestFor num den table strata with
     | .ok ss => Json.mkObj [("strata", Json.arr (ss.map (·.toJson)))]
+    | .error e => Json.mkObj [("refused", Json.str e)]
+
+/-- `{"num", "den", "strata", "mine", "law"}` to `{"agreed"}`, the law R1 agrees to under the rate (`Draw.rateAgreed`), or
+`{"refused"}` with its refusal. -/
+def rateAgreed (j : Json) : V Json := do
+  let (some num, some den) := (nat? (getD j "num"), nat? (getD j "den")) | throw "num and den are natural numbers"
+  let .arr ss := getD j "strata" | throw "strata is a list of [template, units]"
+  let strata ← ss.mapM fun s => match s with
+    | .arr #[.str t, rs] => do pure (t, ← rateRanges rs)
+    | _ => throw "strata is a list of [template, units]"
+  return match Draw.rateAgreed num den strata (getD j "mine") (getD j "law") with
+    | .ok law => Json.mkObj [("agreed", law)]
     | .error e => Json.mkObj [("refused", Json.str e)]
 
 private def hiddenWidth (j : Json) : V Nat := do
@@ -1200,7 +1213,7 @@ def table : List (String × (Json → V Json)) :=
    ("replay_returns", replayReturns),
    ("replay_returned", replayReturned), ("second_schedule", secondSchedule),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
-   ("meets_rate", meetsRate), ("cheapest_for", cheapestFor),
+   ("meets_rate", meetsRate), ("cheapest_for", cheapestFor), ("rate_agreed", rateAgreed),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
    ("public_ports", publicPorts), ("session_registered", sessionRegistered), ("record", record), ("across", across),

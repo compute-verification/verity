@@ -362,13 +362,14 @@ private def stratumOfJson (j : Json) : V Stratum := do
   return { template := t, units, k }
 
 /-- A stratified samplingDesign over `population` units (`draw.strata_problem`): `1 ≤ k ≤ population`, distinct templates, each
-stratum's `k` the rule's, and the strata's ranges tiling `[0, population)` exactly. -/
+stratum's `k` in `[1, n_s]`, and the strata's ranges tiling `[0, population)` exactly. Which `k_s` a verifier agrees to is
+its own check: the rule's expansion, or a design meeting the rule's rate (`Spot.Draw.rateAgreed`). -/
 def strataProblem (k : Nat) (strata : Array Stratum) (population : Nat) : Option String := Id.run do
   if strata.isEmpty || k < 1 || k > population then return some "U2: strata and 1 <= k <= population"
   for i in [0:strata.size] do
     let s := strata[i]!
     if (strata.extract 0 i).any (·.template == s.template) then return some s!"U2: template '{s.template}' twice"
-    if s.k != stratumK k s.size population then return some s!"U2: stratum '{s.template}': k is not the rule's"
+    if s.k < 1 || s.k > s.size then return some s!"U2: stratum '{s.template}': k is not in [1, {s.size}]"
   let mut at_ := 0
   for (lo, hi) in (strata.foldl (· ++ ·.units) #[]).qsort (fun a b => a.1 < b.1) do
     if lo != at_ then return some "U2: the strata don't tile the population"

@@ -192,6 +192,15 @@ def design (program : Program) (query : Json) (samplingDesign : Json) (table : O
     | throw s!"a rate law over {n} units draws none of them or more than {n}"
   return (← over.samplingDesignOver n, ← (Select.Rule.samplingDesign t).tableOver program query table)
 
+/-- The rate `NUM/DEN` under which R1 also agrees to a registered law that meets it (`Draw.agreed`): a rule's
+`rate:NUM/DEN` over one table, or `stratified-rate:NUM/DEN`; none for any other law. -/
+def rateOf : Json → Option (Nat × Nat)
+  | .str t => match Select.parseRate t, Select.parseStrataRate t with
+    | some (num, den, 1), _ => some (num, den)
+    | _, some (false, num, den) => some (num, den)
+    | _, _ => none
+  | _ => none
+
 def PARAM_KEYS : Array String := #["anchors", "delta", "law", "leaf_layer", "log", "partition", "ports", "program", "query",
   "registered", "scheme", "work_table"]
 
@@ -479,7 +488,7 @@ def paramsParsed (j : Json) : V Params := do
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
-  let p : Params := { verifier := { program, query, samplingDesign, workTable, scheme, ports, leafLayer, anchors, log, partition,
+  let p : Params := { verifier := { program, query, samplingDesign, workTable, rate := rateOf (getD j "law"), scheme, ports, leafLayer, anchors, log, partition,
                                     registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
                                     declared, seedSalt, pool, verdicts, tied, compiler, certified },
                       delta, challenger, tables, windowValues }
@@ -593,11 +602,15 @@ def coveredDesign : Flock.Draw.SamplingDesign → V Flock.Draw.SamplingDesign
   | .bernoulli _ _ => throw Draw.BERNOULLI
   | samplingDesign => pure samplingDesign
 
-/-- The sample the coins `src` give over `population` units under the expanded `samplingDesign` (`Select.select`'s for a sampling design rule):
+/-- The sample the coins `src` give over `population` units under the agreed `samplingDesign` (`Select.select`'s for a sampling design rule):
 its units, and the number of bytes of `src` it read. A Bernoulli sampling design is refused (`coveredDesign`). -/
 def sampledFrom (v : Docket.Verifier) (samplingDesign : Json) (population : Nat) (src : ByteArray) : V (Array Nat × Nat) := do
   let derived ← Draw.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable
-  let l ← coveredDesign (derived.getD (← Draw.flockSamplingDesign samplingDesign population))
+  let flock : V Flock.Draw.SamplingDesign := match derived with
+    | some d => if Draw.sameSamplingDesign samplingDesign d.toJson then pure d
+      else Draw.flockSamplingDesign samplingDesign population
+    | none => Draw.flockSamplingDesign samplingDesign population
+  let l ← coveredDesign (← flock)
   Draw.sampleUnits l population src
 
 /-- Why the sample is not the one the coins `src` give under `samplingDesign` (`sampledFrom`), every coin opened read; none when it is. -/
@@ -629,7 +642,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
   let rec_ := c.record
   let codes := Docket.check rec_ v
   if !codes.isEmpty then .reject s!"registration: {", ".intercalate codes.toList}" else
-  match Draw.derive v.program v.query v.samplingDesign v.workTable with
+  match Draw.agreed v.program v.query v.samplingDesign v.workTable v.rate (getD rec_ "law") with
   | .error err => .reject s!"registration: R1-law: {err}"
   | .ok samplingDesign =>
   let drawCodes := Draw.checkDraw e.draw (getD rec_ "population") samplingDesign
@@ -657,19 +670,20 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
       profile
   | _, _ => .reject "the law the draw passed under has no profile"
 
-/-- Why the sample is not the one the coins `src` give under the verifier's sampling design as derived (`coinsReason`); none when it
+/-- Why the sample is not the one the coins `src` give under the verifier's agreed sampling design (`Draw.agreed`, `coinsReason`); none when it
 is, and when the sampling design doesn't derive, which `check` refuses. -/
 def coinsWhy (p : Params) (c : Commitment) (e : Evidence) (src : ByteArray) : Option String :=
   let v := p.verifier
-  match Draw.derive v.program v.query v.samplingDesign v.workTable with
+  match Draw.agreed v.program v.query v.samplingDesign v.workTable v.rate (getD c.record "law") with
   | .ok samplingDesign => coinsReason v samplingDesign c.record e.draw src
   | .error _ => none
 
-/-- Whether the coins `src` run out before the sample under the verifier's sampling design as derived ends (`sampledFrom` refused with
+/-- Whether the coins `src` run out before the sample under the verifier's agreed sampling design ends (`sampledFrom` refused with
 `Draw.RAN_OUT`); false when the sampling design doesn't derive or the record names no population, which `check` refuses. -/
 def ranOut (p : Params) (c : Commitment) (src : ByteArray) : Bool :=
   let v := p.verifier
-  match Draw.derive v.program v.query v.samplingDesign v.workTable, nat? (getD c.record "population") with
+  match Draw.agreed v.program v.query v.samplingDesign v.workTable v.rate (getD c.record "law"),
+      nat? (getD c.record "population") with
   | .ok samplingDesign, some n => match Draw.ranOutOf (sampledFrom v samplingDesign n src) with | .ok b => b | .error _ => false
   | _, _ => false
 

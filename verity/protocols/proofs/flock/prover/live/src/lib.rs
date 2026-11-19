@@ -342,7 +342,7 @@ pub mod unit_draw {
     }
 
     /// Why a stratified sampling design isn't well formed over `population` units (Lean `Flock.Draw.strataProblem`), or `None`:
-    /// `1 <= k <= population`, distinct templates, each stratum's `k` the rule's, the ranges tiling `[0, population)` exactly.
+    /// `1 <= k <= population`, distinct templates, each stratum's `k` in `[1, n_s]`, the ranges tiling `[0, population)` exactly.
     pub fn strata_problem(k: u64, strata: &[Stratum], population: u64) -> Option<String> {
         if strata.is_empty() || k < 1 || k > population {
             return Some("U2: strata and 1 <= k <= population".into());
@@ -351,8 +351,8 @@ pub mod unit_draw {
             if strata[..i].iter().any(|t| t.template == s.template) {
                 return Some(format!("U2: template '{}' twice", s.template));
             }
-            if s.k != stratum_k(k, s.size(), population) {
-                return Some(format!("U2: stratum '{}': k is not the rule's", s.template));
+            if s.k < 1 || s.k > s.size() {
+                return Some(format!("U2: stratum '{}': k is not in [1, {}]", s.template, s.size()));
             }
         }
         let mut ranges: Vec<(u64, u64)> = strata.iter().flat_map(|s| s.units.iter().copied()).collect();
@@ -581,8 +581,8 @@ pub mod unit_draw {
             let SamplingDesign::Stratified { k, strata } = sampling_design() else { unreachable!() };
             assert!(strata_problem(k, &strata, 17).is_some(), "the strata don't tile 17 units");
             let mut wrong = strata.clone();
-            wrong[1].k = 3;
-            assert!(strata_problem(k, &wrong, 16).is_some(), "k_s not the rule's");
+            wrong[1].k = 0;
+            assert!(strata_problem(k, &wrong, 16).is_some(), "k_s not in [1, n_s]");
             let mut twice = strata.clone();
             twice[1].template = "A".into();
             assert!(strata_problem(k, &twice, 16).is_some(), "a template twice");

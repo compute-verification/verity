@@ -380,7 +380,7 @@ def run (i : Input) : V Json := do
   let some rule := i.rule.over n (Select.strataSizes v.program v.query) | return refused "register" #["rate"]
   let samplingDesign ← rule.samplingDesignOver n
   let .ok workTable := i.rule.tableOver v.program v.query v.workTable | return refused "register" #["rate"]
-  let v := { v with samplingDesign, workTable }
+  let v := { v with samplingDesign, workTable, rate := none }
   let codes := Docket.check i.record v
   if !codes.isEmpty then return refused "register" codes
   if Draw.bernoulli samplingDesign then return refused "register" #["bernoulli"]
