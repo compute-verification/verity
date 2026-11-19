@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Soundness.ExecStratified
 import Batteries.Tactic.OpenPrivate
 import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.ExecCheck
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
@@ -16,8 +17,8 @@ on the statement's form: they follow from the verifier accepting.
 
 * `StrataExec.ofJson_stratified`: what `ofJson` checks of a stratified sampling design: `strataProblem` finds nothing, and each stratum
   passed `stratumOfJson`, whose units are non-empty ranges `lo < hi` (`stratumOfJson_ranges`).
-* `StrataExec.strataProblem_none`: what `strataProblem` checks: `1 ≤ k ≤ pop`, each stratum's `k` the rule's
-  (`stratumK`), and the ranges, sorted by their starts, chain from `0` to `pop` (`Chain`).
+* `StrataExec.strataProblem_none`: what `strataProblem` checks: `1 ≤ k ≤ pop`, each stratum's `k` in `[1, size]`,
+  and the ranges, sorted by their starts, chain from `0` to `pop` (`Chain`).
 * `StrataExec.chain_facts`: a chain of non-empty ranges from `a` to `b` covers each unit of `[a, b)` exactly once;
   `StrataExec.chain_covers`: any chain from `a` to `b` covers each unit of `[a, b)`.
 * `SamplingDesign.execStrata_of_strataProblem`: those checks give `σ`, each unit's stratum the one whose ranges hold it.
@@ -185,7 +186,7 @@ theorem forIn_ne_some_none {β : Type} (l : List β)
     · rw [h]; intro h'; cases h'
 
 theorem strataProblem_none {k : Nat} {S : Array Stratum} {pop : Nat} (h : strataProblem k S pop = none) :
-    1 ≤ k ∧ k ≤ pop ∧ (∀ s ∈ S, s.k = stratumK k s.size pop) ∧
+    1 ≤ k ∧ k ≤ pop ∧ (∀ s ∈ S, 1 ≤ s.k ∧ s.k ≤ s.size) ∧
       Chain 0 pop ((S.foldl (fun x1 x2 => x1 ++ x2.units) #[]).qsort fun a b => decide (a.fst < b.fst)).toList := by
   unfold strataProblem at h
   split at h
@@ -199,12 +200,13 @@ theorem strataProblem_none {k : Nat} {S : Array Stratum} {pop : Nat} (h : strata
                 (ForInStep.done
                   (some (some (toString "U2: template '" ++ toString S[i]!.template ++ toString "' twice")), ()))
             else
-              if (S[i]!.k != stratumK k S[i]!.size pop) = true then
+              if (S[i]!.k < 1 || S[i]!.k > S[i]!.size) = true then
                 pure
                   (ForInStep.done
                     (some
                         (some
-                          (toString "U2: stratum '" ++ toString S[i]!.template ++ toString "': k is not the rule's")),
+                          (toString "U2: stratum '" ++ toString S[i]!.template ++ toString "': k is not in [1, " ++
+                            toString S[i]!.size ++ toString "]")),
                       ()))
               else pure (ForInStep.yield (none, ()))) (by
         intro i
@@ -231,7 +233,10 @@ theorem strataProblem_none {k : Nat} {S : Array Stratum} {pop : Nat} (h : strata
           · cases this
           · split at this
             · cases this
-            · next hne => simpa [getElem!_pos S i hi] using hne
+            · next hne =>
+              simp only [getElem!_pos S i hi, Bool.or_eq_true, decide_eq_true_eq, not_or, Nat.not_lt] at hne
+              obtain ⟨h1, h2⟩ := hne
+              exact ⟨by omega, h2⟩
         · split at h
           · next heq => rw [← beq_iff_eq.1 heq]; exact hc
           · cases h
@@ -393,6 +398,153 @@ theorem ofJson_work {j : Json} {D : UnitSample} {k : ℕ} {S : Array WorkStratum
     have hp := ‹∀ (why : String), workProblem _ _ _ = some why → False›
     exact Option.eq_none_iff_forall_ne_some.2 fun w hw => hp w hw
 
+open private strataMeetRate rateMiss from Commitments.Draw
+
+theorem mapM_keep_list {α β γ : Type} (F : α × β → Flock.V (α × β × γ)) (hF : ∀ a b, F a = .ok b → (b.1, b.2.1) = a) :
+    ∀ (l : List (α × β)) (r : List (α × β × γ)), l.mapM F = .ok r → r.map (fun x => (x.1, x.2.1)) = l
+  | [], r, h => by
+    simp only [List.mapM_nil, pure, Except.pure, Except.ok.injEq] at h; subst h; rfl
+  | a :: l, r, h => by
+    simp only [List.mapM_cons] at h
+    obtain ⟨c, hc, h⟩ := ebind_ok h
+    obtain ⟨cs, hcs, h⟩ := ebind_ok h
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    simp only [List.map_cons, hF a c hc, mapM_keep_list F hF l cs hcs]
+
+theorem mapM_keep {α β γ : Type} (F : α × β → Flock.V (α × β × γ)) (hF : ∀ a b, F a = .ok b → (b.1, b.2.1) = a)
+    (as : Array (α × β)) (bs : Array (α × β × γ)) (h : as.mapM F = .ok bs) : bs.map (fun x => (x.1, x.2.1)) = as := by
+  obtain ⟨l⟩ := as
+  rw [List.mapM_toArray] at h
+  cases hl : l.mapM F with
+  | error e => rw [hl] at h; cases h
+  | ok r =>
+    rw [hl] at h
+    simp only [Functor.map, Except.map, Except.ok.injEq] at h
+    subst h
+    simp [mapM_keep_list F hF l r hl]
+
+/-- The population `meetsRate` reads: the strata, each with its template's amount. -/
+theorem pop_facts {table : Array (String × ℕ × ℕ)} {strata : Array (String × Array (ℕ × ℕ))}
+    {pop : Array (String × Array (ℕ × ℕ) × ℕ)} {F : String × Array (ℕ × ℕ) → Flock.V (String × Array (ℕ × ℕ) × ℕ)}
+    (hF : ∀ a b, F a = .ok b → (b.1, b.2.1) = a ∧ amountOf table a.1 = .ok b.2.2) (hm : strata.mapM F = .ok pop) :
+    pop.map (fun x => (x.1, x.2.1)) = strata ∧ ∀ x ∈ pop, amountOf table x.1 = .ok x.2.2 := by
+  refine ⟨mapM_keep F (fun a b h => (hF a b h).1) strata pop hm, fun x hx => ?_⟩
+  obtain ⟨a, -, ha⟩ := ok_of_mem_mapM F strata pop hm x hx
+  obtain ⟨h1, h2⟩ := hF a x ha
+  subst h1
+  exact h2
+
+theorem meetsRate_den {num den : ℕ} {table : Array (String × ℕ × ℕ)} {strata : Array (String × Array (ℕ × ℕ))}
+    {d : Flock.Draw.SamplingDesign} (h : meetsRate num den table strata d = .ok ()) : 0 < den := by
+  rcases Nat.eq_zero_or_pos den with rfl | hd
+  · simp only [meetsRate, beq_self_eq_true, ↓reduceIte, throw_bind'] at h
+    exact absurd h (throw_ne_ok _ _)
+  · exact hd
+
+private theorem strataMeetRate_ok {num den : ℕ} {pop : Array (String × Array (ℕ × ℕ) × ℕ)} {ss : Array Stratum}
+    (h : strataMeetRate num den pop ss = .ok ()) :
+    ss.size = pop.size ∧ ∀ s ∈ ss, ∃ rs c, (s.template, rs, c) ∈ pop ∧ s.units = rs ∧
+      (s.k = s.size ∨ s.size * c * num ≤ s.k * den) := by
+  have hsz : ss.size = pop.size := by
+    by_contra hne
+    have hb : (ss.size != pop.size) = true := by simpa using hne
+    simp only [strataMeetRate, hb, ↓reduceIte, throw_bind'] at h
+    exact absurd h (throw_ne_ok _ _)
+  refine ⟨hsz, ?_⟩
+  unfold strataMeetRate at h
+  simp only [throw_bind'] at h
+  repeat' walk_step
+  have hl := ‹forIn _ _ _ = Except.ok _›
+  clear h
+  have key := forIn_range_forall (P := fun i => ∃ rs c, (ss[i]!.template, rs, c) ∈ pop ∧ ss[i]!.units = rs ∧
+      (ss[i]!.k = ss[i]!.size ∨ ss[i]!.size * c * num ≤ ss[i]!.k * den)) ?step hl
+  case step =>
+    intro a _ _ st t h
+    try dsimp only at h
+    repeat' walk_step
+    all_goals
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      refine ⟨⟨_, rfl⟩, ?_⟩
+      have hf := ‹pop.find? _ = some _›
+      have hu := ‹¬ (ss[a]!.units != _) = true›
+      have hr := ‹rateMiss _ _ _ _ _ _ = Except.ok _›
+      unfold rateMiss at hr
+      split at hr
+      · next hm =>
+        simp only [meetsAt, Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq] at hm
+        have hmem := Array.mem_of_find?_eq_some hf
+        have hp := Array.find?_some hf
+        simp at hp
+        subst hp
+        exact ⟨_, _, hmem, by simpa using hu, hm⟩
+      · exact absurd hr (throw_ne_ok _ _)
+  intro s hs
+  obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hs
+  have := key i (Nat.zero_le _) hi
+  simpa only [getElem!_pos ss i hi] using this
+
+/-- What `meetsRate` checks of a stratified design: its strata are the population's, one a template, each sampled
+whole or meeting `n_s · c_s · NUM ≤ k_s · DEN` at its template's amount `c_s`. -/
+theorem meetsRate_stratified {num den k : ℕ} {table : Array (String × ℕ × ℕ)}
+    {strata : Array (String × Array (ℕ × ℕ))} {ss : Array Stratum}
+    (h : meetsRate num den table strata (.stratified k ss) = .ok ()) :
+    0 < den ∧ ss.size = strata.size ∧ ∀ s ∈ ss, ∃ c, (s.template, s.units) ∈ strata ∧
+      amountOf table s.template = .ok c ∧ (s.k = s.size ∨ s.size * c * num ≤ s.k * den) := by
+  refine ⟨meetsRate_den h, ?_⟩
+  unfold meetsRate at h
+  simp only [throw_bind'] at h
+  repeat' walk_step
+  try dsimp only at h
+  have hm := ‹Array.mapM _ strata = Except.ok _›
+  have hrest := h
+  clear h
+  obtain ⟨hkeep, hamt⟩ := pop_facts (fun a b h => by
+    obtain ⟨t, rs⟩ := a
+    dsimp only at h
+    repeat' walk_step
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    exact ⟨rfl, ‹_›⟩) hm
+  obtain ⟨hsz, hall⟩ := strataMeetRate_ok hrest
+  refine ⟨by rw [← hkeep, Array.size_map]; exact hsz, fun s hs => ?_⟩
+  obtain ⟨rs, c, hmem, hu, hr⟩ := hall s hs
+  refine ⟨c, ?_, hamt _ hmem, hr⟩
+  rw [← hkeep, hu]
+  exact Array.mem_map.2 ⟨_, hmem, rfl⟩
+
+/-- What `meetsRate` checks of a subset design: over the population's strata, each with its template's amount, the
+`k` units are all `n` or meet `n · c · NUM ≤ k · DEN` at the largest amount `c`. -/
+theorem meetsRate_subset {num den k : ℕ} {table : Array (String × ℕ × ℕ)} {strata : Array (String × Array (ℕ × ℕ))}
+    (h : meetsRate num den table strata (.subset k) = .ok ()) :
+    0 < den ∧ ∃ pop : Array (String × Array (ℕ × ℕ) × ℕ), pop.map (fun x => (x.1, x.2.1)) = strata ∧
+      (∀ x ∈ pop, amountOf table x.1 = .ok x.2.2) ∧
+      (k = pop.foldl (fun n x => n + ({ template := x.1, units := x.2.1, k := 0 } : Stratum).size) 0 ∨
+        pop.foldl (fun n x => n + ({ template := x.1, units := x.2.1, k := 0 } : Stratum).size) 0 *
+          pop.foldl (fun c x => max c x.2.2) 0 * num ≤ k * den) := by
+  refine ⟨meetsRate_den h, ?_⟩
+  unfold meetsRate at h
+  simp only [throw_bind'] at h
+  repeat' walk_step
+  try dsimp only at h
+  have hm := ‹Array.mapM _ strata = Except.ok _›
+  have hr := ‹rateMiss _ _ _ _ _ _ = Except.ok _›
+  clear h
+  obtain ⟨hkeep, hamt⟩ := pop_facts (fun a b h => by
+    obtain ⟨t, rs⟩ := a
+    dsimp only at h
+    repeat' walk_step
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    exact ⟨rfl, ‹_›⟩) hm
+  unfold rateMiss at hr
+  split at hr
+  · next hc =>
+    simp only [meetsAt, Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq] at hc
+    exact ⟨_, hkeep, hamt, hc⟩
+  · exact absurd hr (throw_ne_ok _ _)
+
 end ofJson
 
 end StrataExec
@@ -408,7 +560,7 @@ theorem execStrata_of_strataProblem {k pop : ℕ} {S : Array Stratum}
     (hlt : ∀ s ∈ S, ∀ r ∈ s.units, r.1 < r.2) (hne : ∀ s ∈ S, s.units ≠ #[]) (h : strataProblem k S pop = none) :
     ∃ σ : Fin pop → Fin S.size, ExecStrata σ (fun s => S[s].k) (fun s => S[s]) ∧
       ∀ s, S[s].k ≤ (stratum σ s).card := by
-  obtain ⟨hk1, hkp, hks, hc⟩ := strataProblem_none h
+  obtain ⟨-, -, hks, hc⟩ := strataProblem_none h
   set Q := (S.foldl (fun (x1 : Array (ℕ × ℕ)) (x2 : Stratum) => x1 ++ x2.units) #[]).qsort
     fun (a b : ℕ × ℕ) => decide (a.fst < b.fst) with hQ
   have hperm := StrataExec.qsort_perm (fun (a b : ℕ × ℕ) => decide (a.fst < b.fst))
@@ -476,15 +628,8 @@ theorem execStrata_of_strataProblem {k pop : ℕ} {S : Array Stratum}
     rw [← Finset.card_map Fin.valEmbedding, hset i, List.toFinset_card_of_nodup (hnodup i), StrataExec.size_eq]
   refine ⟨σ, fun i => ⟨rfl, hcard i, ?_⟩, fun i => ?_⟩
   swap
-  · have hmem : S[i] ∈ S := Array.getElem_mem _
-    rw [← hcard i, hks _ hmem]
-    refine stratumK_le ?_ hkp hk1
-    rw [StrataExec.size_eq]
-    obtain ⟨r, rs, hrs⟩ := List.exists_cons_of_ne_nil (fun h0 => hne _ hmem (Array.toList_eq_nil_iff.1 h0))
-    have hr := hlt _ hmem r (Array.mem_def.2 (hrs ▸ List.mem_cons_self))
-    rw [hrs]
-    simp [StrataExec.flat]
-    omega
+  · rw [← hcard i]
+    exact (hks _ (Array.getElem_mem _)).2
   · rw [hset i]
     ext x
     simp only [Finset.mem_image, Finset.mem_range, List.mem_toFinset, unit_eq, StrataExec.size_eq]

@@ -898,6 +898,43 @@ theorem linkRefused_false_iff (v : Docket.Verifier) : Docket.linkRefused v = fal
           fun ⟨_, _, h1, h⟩ => by cases h1; rw [hr] at h; exact Except.ok.inj h⟩
   · simp
 
+/-- R1's law clause at `law` and `samplingDesign`, where `law` reads as `samplingDesign`, is `Draw.agreed` agreeing to it. -/
+theorem agreed_of_law {p : Program} {q s : Json} {t : Option Json} {rate : Option (Nat × Nat)} {law sd : Json}
+    (h : Draw.derive p q s t = .ok sd ∨ ∃ num den mine strata, rate = some (num, den) ∧ Draw.derive p q s t = .ok mine ∧
+      jeq law mine = false ∧ Partition.strata p q = .ok strata ∧ Draw.rateAgreed num den strata mine law = .ok sd)
+    (hj : jeq law sd = true) : Draw.agreed p q s t rate law = .ok sd := by
+  rcases h with hd | ⟨num, den, mine, strata, rfl, hd, hne, hs, ha⟩
+  · rcases rate with _ | ⟨num, den⟩
+    · simp [Draw.agreed, hd, bind, Except.bind, pure, Except.pure]
+    · have hs : Draw.sameSamplingDesign law sd = true := hj
+      simp [Draw.agreed, hd, hs, bind, Except.bind, pure, Except.pure]
+  · have hs' : Draw.sameSamplingDesign law mine = false := hne
+    simp [Draw.agreed, hd, hs', hs, ha, bind, Except.bind]
+
+/-- `Draw.agreed` agrees to a design `law` reads as exactly where R1's law clause holds at one. -/
+theorem agreed_law_iff (p : Program) (q s : Json) (t : Option Json) (rate : Option (Nat × Nat)) (law : Json) :
+    (∃ sd, (Draw.derive p q s t = .ok sd ∨ ∃ num den mine strata, rate = some (num, den) ∧
+      Draw.derive p q s t = .ok mine ∧ jeq law mine = false ∧ Partition.strata p q = .ok strata ∧
+      Draw.rateAgreed num den strata mine law = .ok sd) ∧ jeq law sd = true) ↔
+      ∃ sd, Draw.agreed p q s t rate law = .ok sd ∧ jeq law sd = true := by
+  constructor
+  · rintro ⟨sd, h, hj⟩
+    exact ⟨sd, agreed_of_law h hj, hj⟩
+  · rintro ⟨sd, h, hj⟩
+    refine ⟨sd, ?_, hj⟩
+    rcases hd : Draw.derive p q s t with e | mine
+    · simp [Draw.agreed, hd, bind, Except.bind] at h
+    rcases rate with _ | ⟨num, den⟩
+    · simp [Draw.agreed, hd, bind, Except.bind, pure, Except.pure] at h
+      exact Or.inl (congrArg Except.ok h)
+    · cases hm : Draw.sameSamplingDesign law mine
+      · rcases hs : Partition.strata p q with e | strata
+        · simp [Draw.agreed, hd, hm, hs, bind, Except.bind] at h
+        · simp [Draw.agreed, hd, hm, hs, bind, Except.bind] at h
+          exact Or.inr ⟨num, den, mine, strata, rfl, rfl, hm, rfl, h⟩
+      · simp [Draw.agreed, hd, hm, bind, Except.bind, pure, Except.pure] at h
+        exact Or.inl (congrArg Except.ok h)
+
 /-- The registration check finds nothing exactly where the registration keeps R1–R8 (`Registered`). The caller's facts
 (`CallerHeld`) are the caller's check's (`VStar.Recursive.Caller.check`), not this one's. -/
 theorem docket_nil (rec : Json) (v : Docket.Verifier) :
@@ -1026,11 +1063,16 @@ theorem docket_nil (rec : Json) (v : Docket.Verifier) :
       exact Iff.rfl)
   have h1r := reset h1
   have h0 : ∀ c, j0 () c = #[] ↔ c = #[] ∧
-      (∃ samplingDesign, Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign ∧ jeq (get "law") samplingDesign = true) ∧
+      (∃ samplingDesign, (Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign ∨
+        ∃ num den mine strata, v.rate = some (num, den) ∧
+          Draw.derive v.program v.query v.samplingDesign v.workTable = .ok mine ∧ jeq (get "law") mine = false ∧
+          Partition.strata v.program v.query = .ok strata ∧
+          Draw.rateAgreed num den strata mine (get "law") = .ok samplingDesign) ∧ jeq (get "law") samplingDesign = true) ∧
       j1 () #[] = #[] := by
     intro c
     simp only [j0]
-    rcases hd : Draw.derive v.program v.query v.samplingDesign v.workTable with a | samplingDesign
+    rw [agreed_law_iff]
+    rcases hd : Draw.agreed v.program v.query v.samplingDesign v.workTable v.rate (get "law") with a | samplingDesign
     · rw [h1r]
       simp only [addCode_ne_nil, false_and, false_iff]
       rintro ⟨_, ⟨samplingDesign, hl, _⟩, _⟩
@@ -1057,7 +1099,11 @@ theorem docket_nil (rec : Json) (v : Docket.Verifier) :
         keys? rec = some (if v2 = true then Docket.KEYS_V2 else Docket.KEYS) ∧
         (jeq (get "format") (if v2 = true then Json.str Docket.FORMAT_V2 else Json.str Docket.FORMAT) = true ∧
           jeq (get "protocol") (Json.str Docket.PROTOCOL) = true) ∧
-        (∃ samplingDesign, Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign ∧ jeq (get "law") samplingDesign = true) ∧
+        (∃ samplingDesign, (Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign ∨
+        ∃ num den mine strata, v.rate = some (num, den) ∧
+          Draw.derive v.program v.query v.samplingDesign v.workTable = .ok mine ∧ jeq (get "law") mine = false ∧
+          Partition.strata v.program v.query = .ok strata ∧
+          Draw.rateAgreed num den strata mine (get "law") = .ok samplingDesign) ∧ jeq (get "law") samplingDesign = true) ∧
         j1 () #[] = #[]) := by
     intro bk bf hk hf
     cases bk
@@ -1288,7 +1334,8 @@ theorem checkSample_nil (draw pop samplingDesign : Json) : Draw.checkDraw draw p
     · rintro ⟨h, _⟩; cases h
 
 theorem registered_samplingDesign {v : Docket.Verifier} {rec samplingDesign : Json} (h : Registered v rec samplingDesign) :
-    Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign := h.1.2.2.2.1
+    Draw.agreed v.program v.query v.samplingDesign v.workTable v.rate (getD rec "law") = .ok samplingDesign :=
+  agreed_of_law h.1.2.2.2.1 h.1.2.2.2.2.1
 
 theorem creditedGate_accept {α : Type} {prof : Core.Integrity} {o : Core.Outcome α Core.Integrity} {a : α}
     {b : Core.Integrity} :

@@ -72,13 +72,20 @@ def partitionOf (v : Docket.Verifier) : Json :=
 /-- R1: the record has exactly a v1 record's keys, or a v2 record's when the verifier expects values registered or holds
 certified entries; its format
 is the matching one and its protocol one-stage's; its sampling design is `samplingDesign`, the verifier's agreed sampling design as `Draw.derive` expands it
-over the verifier's own program and query; and its window is an object of kind `served` or `stand-in`. -/
+over the verifier's own program and query, or, under the rule's rate `NUM/DEN` (`v.rate`), a registered design of the
+expansion's kind over the population's strata that meets the rate (`Draw.rateAgreed`); and its window is an object of
+kind `served` or `stand-in`. -/
 def R1 (rec : Json) (v : Docket.Verifier) (samplingDesign : Json) : Prop :=
   keys? rec = some (if v.registered.isEmpty && v.certified.isEmpty then Docket.KEYS else Docket.KEYS_V2) ∧
   jeq (getD rec "format")
     (.str (if v.registered.isEmpty && v.certified.isEmpty then Docket.FORMAT else Docket.FORMAT_V2)) ∧
   jeq (getD rec "protocol") (.str Docket.PROTOCOL) ∧
-  Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign ∧ jeq (getD rec "law") samplingDesign ∧
+  (Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign ∨
+    ∃ num den mine strata, v.rate = some (num, den) ∧
+      Draw.derive v.program v.query v.samplingDesign v.workTable = .ok mine ∧ jeq (getD rec "law") mine = false ∧
+      Partition.strata v.program v.query = .ok strata ∧
+      Draw.rateAgreed num den strata mine (getD rec "law") = .ok samplingDesign) ∧
+  jeq (getD rec "law") samplingDesign ∧
   (getD rec "window" matches .obj _) ∧ ∃ k ∈ Docket.KINDS, jeq (getD (getD rec "window") "kind") (.str k)
 
 /-- The window's declared day (`Docket.Verifier.declared`), for a verifier that reads the registration log's
