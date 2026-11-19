@@ -439,19 +439,14 @@ def _build(bits: Bits, words: Sequence[tuple[int, int]], ins: list[int], outs: l
 
     fn = CompositeDefinition("Block", 1, (), lambda S: (params, ret), build, register=False)
     registered = [n for (n, _), r in zip(params, in_runs) if _binding(bits, r[0]) == REGISTRATION]
-    saved = list(P._BODY_LOOKUP)
-
     def lookup(p):
         try:
             return D.boolean[p.id]
         except KeyError:
             raise LookupError(f"C names no Boolean body for {p.id}") from None
 
-    P.register_boolean_bodies(lookup)
-    try:
+    with P.boolean_bodies(lookup):
         return P.Program(fn, registered=registered)
-    finally:
-        P._BODY_LOOKUP[:] = saved
 
 
 def restrict(c: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, int]], bits: Bits | None = None) -> Block:

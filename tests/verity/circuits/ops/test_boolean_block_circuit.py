@@ -80,10 +80,8 @@ def test_a_primitive_the_table_lacks_is_refused_by_name():
 def catalog_lookup():
     """`Program` building under the catalog's lookup (`versions.boolean_version`), as outside the suite, and the lookup the
     test found (the suite's stand-in, once `conftest.py` loads) restored after."""
-    saved = list(PG._BODY_LOOKUP)
-    PG.register_boolean_bodies(V.boolean_version)
-    yield
-    PG._BODY_LOOKUP[:] = saved
+    with PG.boolean_bodies(V.boolean_version):
+        yield
 
 
 def test_a_program_with_a_word_primitive_with_no_boolean_body_is_refused_at_build_by_name(catalog_lookup):
@@ -92,3 +90,21 @@ def test_a_program_with_a_word_primitive_with_no_boolean_body_is_refused_at_buil
                                     lambda B, S, a: B.call(opaque, a), register=False))
     with pytest.raises(NoBooleanBody, match="E_NO_BODY: .*BlockCircuitTestOpaque_v1"):
         Program(wrap)
+
+
+def test_boolean_bodies_restores_the_lookup_before_it_whatever_the_block_raised(catalog_lookup):
+    def inner(p):
+        raise LookupError(p.id)
+
+    with pytest.raises(NoBooleanBody, match="E_NO_BODY: .*F2fpBf16_v1"), PG.boolean_bodies(inner):
+        assert PG._BODY_LOOKUP == [inner]
+        Program(GEMM)
+    assert PG._BODY_LOOKUP == [V.boolean_version]
+    saved = list(PG._BODY_LOOKUP)
+    PG._BODY_LOOKUP[:] = []
+    try:
+        with PG.boolean_bodies(inner):
+            pass
+        assert PG._BODY_LOOKUP == []
+    finally:
+        PG._BODY_LOOKUP[:] = saved

@@ -19,6 +19,8 @@ commitment.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any, Callable
 
 from . import ports
@@ -54,6 +56,18 @@ def register_boolean_bodies(lookup: Callable[[PrimitiveDefinition], Any]) -> Non
     """Make ``lookup`` (a word primitive -> its one Boolean Definition, `LookupError` where it has none) the one `Program`
     builds its Boolean map with."""
     _BODY_LOOKUP[:] = [lookup]
+
+
+@contextmanager
+def boolean_bodies(lookup: Callable[[PrimitiveDefinition], Any]) -> Iterator[None]:
+    """`register_boolean_bodies` ``lookup`` for the block; the lookup registered before it, or none, is back on exit,
+    whatever the block raised."""
+    saved = list(_BODY_LOOKUP)
+    register_boolean_bodies(lookup)
+    try:
+        yield
+    finally:
+        _BODY_LOOKUP[:] = saved
 
 
 def is_word_primitive(fn: Any) -> bool:
