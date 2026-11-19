@@ -157,11 +157,16 @@ def register(program, bits: dict[str, list[int]], supplied: tuple[str, ...] = DR
 
 
 def reads(program, partition, bits: dict[str, list[int]], roots: dict[str, str]) -> dict:
-    """The verifier's ``--registered`` file (`registered.reads_file`) over its program and the partition's query."""
+    """The verifier's ``--registered`` file over its program and the partition's query: `registered.reads_file`'s ports
+    in the position-free format the door reads (`interface.REGISTERED_FILE`, Lean's `Registered.FORMAT`), which derives
+    every position from C."""
     from verity.commitments import registered_value as RV
+    from verity.commitments.periods.interface import REGISTERED_FILE
     from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
-    return REG.reads_file(program, partition["query"], {p: len(v) // 16 for p, v in bits.items()}, roots,
-                          schemas={p: RV.SCHEMA_HM96_SHA512_ROW_V2 for p in bits})
+    f = REG.reads_file(program, partition["query"], {p: len(v) // 16 for p, v in bits.items()}, roots,
+                       schemas={p: RV.SCHEMA_HM96_SHA512_ROW_V2 for p in bits})
+    return {"format": REGISTERED_FILE, "ports": {p: {x: v for x, v in e.items() if x != "reads"}
+                                                 for p, e in f["ports"].items()}}
 
 
 def lean_lower(lower_bin: str, partition, fn) -> "callable":
