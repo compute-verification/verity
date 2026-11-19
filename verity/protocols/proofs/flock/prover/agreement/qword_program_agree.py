@@ -14,7 +14,8 @@ the `verity-ir/descriptor/v1`, `Flock.Extract` builds each Call's graph, `Flock.
   every descriptor's cuts at several (X, W) against core's `verify`.
 - `--widths` (the README's D22): descriptors whose references name leaves of other widths than their types
   give them, and their neighbours, each with the codec's refusal: the Lean decoder refuses each `E_REINTERPRET` the codec
-  does, word for word, and no other.
+  does, word for word, and each the codec refuses as a recut read (`recut-width`, `recut-boundary`) as `E_REINTERPRET`,
+  and no other.
 - `--program` (a real descriptor, e.g. a served Build's): per Call its units; per Definition a Call names, its units, the
   SHA-512 of its owners and, for a flat cut, of its graph. `--registry` names the module that registers its primitives.
   With `--cuts`, per Definition its cut on its Call's whole graph against core's `check_cut` (`--core-skip PREFIX`: one core
@@ -108,27 +109,38 @@ def check_format(a, out, bad):
     return refused, len(spec.REJECT)
 
 
+RECUT_NAMES = ("recut-width", "recut-boundary")
+
+
 def check_widths(a, out, bad):
     """Each `--widths` line is `{"program", "codec"}`: a descriptor and the codec's refusal of it (`decode_program`; null
-    where it decodes). The Lean decoder refuses every one the codec refuses as `E_REINTERPRET` with the codec's message,
-    and none other as `E_REINTERPRET`."""
+    where it decodes). The Lean decoder refuses every one the codec refuses as `E_REINTERPRET` with the codec's message
+    (`both_refuse`), every one the codec refuses by a recut read's name as `E_REINTERPRET` (`named_pair`, by the codec's
+    name), and none other as `E_REINTERPRET`."""
     both = neither = 0
+    named = {n: 0 for n in RECUT_NAMES}
     for k, line in enumerate(Path(a.widths).read_text().splitlines()):
         case = json.loads(line)
         (out / "widths.desc").write_text(case["program"])
         got = lean(a, out / "widths.desc")
         err = "" if got["ok"] else got.get("error", "")
         why = case["codec"] or ""
+        recut = next((n for n in RECUT_NAMES if why.startswith(n)), None)
         if "E_REINTERPRET" in why:
             if err == why:
                 both += 1
+            else:
+                bad.append(("widths", k, err[:300], why[:300]))
+        elif recut is not None:
+            if "E_REINTERPRET" in err:
+                named[recut] += 1
             else:
                 bad.append(("widths", k, err[:300], why[:300]))
         elif "E_REINTERPRET" in err:
             bad.append(("widths", k, err[:300], why[:300]))
         else:
             neither += 1
-    return {"both_refuse": both, "neither": neither}
+    return {"both_refuse": both, "named_pair": named, "neither": neither}
 
 
 def _root_body(d):
