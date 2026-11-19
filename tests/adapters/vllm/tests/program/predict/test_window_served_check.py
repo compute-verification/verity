@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 
 import pytest
 from verity.circuits import partition_object as PO
@@ -35,11 +36,13 @@ def _window(reg, cls, sizes, sched, grain=WC._GRAIN):
 
 
 def _in_population(circuit, named):
-    program, query = circuit.program()
-    ranges = {t: n for _k, t, _a, n in PO.TemplatePartition(program, query).ranges if n}
+    tp = PO.TemplatePartition(*circuit.program())
+    ranges = Counter()
+    for _k, t, _a, n in tp.ranges:
+        ranges[t] += n
     n = {IF.descriptor_id(fn): k for fn, k in circuit.templates}
-    assert all(n[t] > 0 and ranges[t] == n[t] for t in named)
-    assert PO.TemplatePartition(program, query).population == sum(n.values())
+    assert {t: ranges[t] for t in named} == {t: n[t] for t in named} and all(n[t] > 0 for t in named)
+    assert tp.population == sum(n.values())
 
 
 def test_a_tiny_window_the_older_composer_refuses_passes_and_names_its_small_templates():

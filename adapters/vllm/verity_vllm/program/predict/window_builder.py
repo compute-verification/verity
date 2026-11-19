@@ -339,9 +339,9 @@ def check_served(circuit: IF.Circuit) -> dict[str, str]:
     this when door-ready lands."""
     from verity.circuits.count import count
     from verity.circuits.laying import ZK_M_MIN
+    from verity.circuits.program import Program
 
     why, alone = [], {}
-    ands = {k: c.ands for k, c in count(circuit.program()[0]).items()}
     for fn, _ in circuit.templates:
         tid, cuts = descriptor_id(fn), circuit.cuts.get(descriptor_id(fn))
         lay = IF.layout(fn)
@@ -350,7 +350,7 @@ def check_served(circuit: IF.Circuit) -> dict[str, str]:
             why.append(f"{tid}: {len(ins) + len(outs)} rows, past a proof block's {IF.MAX_ROWS}")
         elif (k := IF.proof_block_k_log(ins, outs)) > IF.K_MAX:
             why.append(f"{tid}: its rows alone need a Flock block of 2^{k} bits, past 2^{IF.K_MAX}")
-        bits = 8 * (sum(ins) + sum(outs)) + ands.get(tid, 0)
+        bits = 8 * (sum(ins) + sum(outs)) + count(Program(fn))[tid].ands
         if (k := max(bits - 1, 1).bit_length()) + 3 < ZK_M_MIN:
             alone[tid] = (f"one unit is {bits} input, output and AND bits, so k_log about {k} and m = {k + 3}, under "
                           f"{ZK_M_MIN}")
