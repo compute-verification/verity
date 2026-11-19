@@ -10,8 +10,8 @@ the run dir first), publishes only its report, windows.jsonl and serve.json, and
 didn't serve the session's flags or when a published file would carry a request's values (a planted prompt length,
 seed or trace record); chain runs chain_record.sh's network attester path on the kept fetch with the endpoint's art or a dry
 rehearsal's records, and is refused without the leak guard; its sample on the gate's coins names the auditor's node as
-the coin link's peer by default, takes the served node and records it as the served node, and refuses it by
-VERITY_HOLD_PLACEMENT's name when that is 1. The gate's host is the challenger host's address, which the
+the coin link's peer by default, takes the served node under VERITY_LIFT_PLACEMENT_HOLD=1 and records it as the
+served node, and otherwise refuses it by the placement hold's name. The gate's host is the challenger host's address, which the
 environment holds and site.json only names the variable of: a session, or a chain on the gate's coins, without it is
 refused by that name before anything is sent."""
 from __future__ import annotations
@@ -619,6 +619,7 @@ def test_a_gate_coin_sample_runs_on_the_auditors_side_by_default(tmp_path, monke
 def test_a_gate_coin_sample_on_the_served_node_is_taken_and_recorded_as_the_served_nodes(tmp_path, monkeypatch):
     for peer in (SS.PEER, SOME_PEER):
         argv = _gate_chain(tmp_path, monkeypatch, SOME_PEER)
+        monkeypatch.setenv("VERITY_LIFT_PLACEMENT_HOLD", "1")
         assert SS.main([*argv, "--coin-peer", peer]) == 0
         scan, coin_peer = _seen(tmp_path)
         assert scan[scan.index("--peer") + 1] == peer
@@ -628,10 +629,10 @@ def test_a_gate_coin_sample_on_the_served_node_is_taken_and_recorded_as_the_serv
 def test_hold_placement_refuses_a_gate_coin_sample_on_the_served_node_by_its_name(tmp_path, monkeypatch, capsys):
     for peer in (SS.PEER, SOME_PEER):
         argv = _gate_chain(tmp_path, monkeypatch, SOME_PEER)
-        monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
+        monkeypatch.delenv("VERITY_LIFT_PLACEMENT_HOLD", raising=False)
         (tmp_path / "seen").unlink(missing_ok=True)
         assert SS.main([*argv, "--coin-peer", peer]) == 2
-        assert "is the served node, the prover's, and VERITY_HOLD_PLACEMENT=1 holds" in capsys.readouterr().err
+        assert "is the served node, the prover's, and the placement hold (VERITY_LIFT_PLACEMENT_HOLD unset) holds" in capsys.readouterr().err
         assert not (tmp_path / "seen").exists()
     assert SS.main(argv) == 0
     assert _seen(tmp_path)[1] == {"name": SS.AUDITOR, "served_node": False}

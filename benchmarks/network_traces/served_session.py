@@ -85,7 +85,7 @@ is each request's max_tokens, at most KO. ``--scan-class`` asks the gate for ano
 fetch. The challenger reserves one of P's ports in its /etc/vy/coin-ports and its coin link carries the
 session's coins over ssh to that port of P's loopback, where the sample's client connects. A ``--coin-peer`` that is
 the kept run's peer (its request.json's) or `PEER` is the served node, the prover's: the sample runs there and job.json's
-``coin_peer`` says so (``{"name": P, "served_node": true}``); under ``VERITY_HOLD_PLACEMENT=1`` it is refused, the gate
+``coin_peer`` says so (``{"name": P, "served_node": true}``); under the placement hold it is refused, the gate
 key and the network attester run's witness being the auditor's. Only P's own line serves P, and a reserve for a
 node with no line is refused: `AUDITOR`'s line is ports 7821-7830 (with its /etc/vy/peers entry), and on
 a node without one the chain samples on the verifier's coins. ``--main`` is the verifier's copy of main's first-parent
@@ -593,7 +593,7 @@ def input_file(path: Path, what: str) -> Path:
 def coin_args(a: argparse.Namespace, fetch: Path) -> tuple[list[str], dict | None]:
     """The scan's sample arguments: none (every proof block), ``--draw K`` on the verifier's coins, or K on the gate's,
     sampled on ``--coin-peer``; and, for the gate's, the coin peer as the chain's record names it (``coin_peer``: its
-    name and whether it is the served node, the prover's, which is refused only under ``VERITY_HOLD_PLACEMENT=1``)."""
+    name and whether it is the served node, the prover's, which is refused under the placement hold)."""
     if a.coins == "verifier":
         return ([] if a.draw is None else ["--draw", str(a.draw)]), None
     if a.draw is None:
@@ -604,8 +604,8 @@ def coin_args(a: argparse.Namespace, fetch: Path) -> tuple[list[str], dict | Non
                       "to the run's own lane's key), so the coin peer can't be checked")
     on_served = a.coin_peer in (served, PEER)
     if on_served and settings.hold_placement():
-        raise Refused(f"--coin-peer {a.coin_peer} is the served node, the prover's, and {settings.HOLD_PLACEMENT}=1 holds "
-                      f"the sample off it: the gate key and the network attester run's witness are the auditor's, so the "
+        raise Refused(f"--coin-peer {a.coin_peer} is the served node, the prover's, and the placement hold ({settings.HOLD_PLACEMENT} unset) "
+                      f"holds the sample off it: the gate key and the network attester run's witness are the auditor's, so the "
                       f"sample runs where the chain does, {AUDITOR} by default")
     if a.challenger_key is None:
         raise Refused("--coins gate needs --challenger-key, the deployment's challenger-key/v1 record "

@@ -6,8 +6,8 @@ import importlib.util
 import os
 from pathlib import Path
 
-#: ``1`` restores the refusals that rest only on where a party runs; unset, the run goes on and its record says where
-HOLD_PLACEMENT = "VERITY_HOLD_PLACEMENT"
+#: ``1`` lifts the refusals that rest only on where a party runs; unset, they hold
+HOLD_PLACEMENT = "VERITY_LIFT_PLACEMENT_HOLD"
 
 
 def hold_placement() -> bool:
