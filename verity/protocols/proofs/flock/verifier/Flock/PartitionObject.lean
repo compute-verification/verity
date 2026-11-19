@@ -35,36 +35,65 @@ def blockPair (p : Json) : Option (Nat × Nat) :=
   | _ => none
 
 /-- `blocks-form`'s refusal. -/
-def BLOCKS_FORM : String := "partition: blocks-form: blocks is not a non-empty list of pairs [lo, hi], 0 <= lo < hi"
+def BLOCKS_FORM : String :=
+  "partition: blocks-form: blocks is not a non-empty list of levels, each a non-empty list of pairs [lo, hi], 0 <= lo < hi"
 
-/-- A partition object's `blocks` (`b`, the value at the key) as `[lo, hi)` unit ranges, none where it has none; their
-form only, so a reader takes them from `blocksOf`. -/
-def blocksIn (b : Option Json) : V (Option (Array (Nat × Nat))) :=
+/-- A level of `blocks`: a non-empty list of pairs, none for any other value. -/
+def blockLevel (l : Json) : Option (Array (Nat × Nat)) :=
+  match l with
+  | .arr a => match a.mapM blockPair with
+    | some ps => if ps.isEmpty then none else some ps
+    | none => none
+  | _ => none
+
+/-- A partition object's `blocks` (`b`, the value at the key) as its levels, coarsest first, each `[lo, hi)` unit ranges,
+none where it has none; their form only, so a reader takes them from `levelsOf` or `blocksOf`. Today's flat spelling, a
+list of pairs, is no list of levels. -/
+def blocksIn (b : Option Json) : V (Option (Array (Array (Nat × Nat)))) :=
   match b with
   | none => pure none
   | some (.arr a) =>
-    match a.mapM blockPair with
-    | some ps => if ps.isEmpty then throw BLOCKS_FORM else pure (some ps)
+    match a.mapM blockLevel with
+    | some ls => if ls.isEmpty then throw BLOCKS_FORM else pure (some ls)
     | none => throw BLOCKS_FORM
   | some _ => throw BLOCKS_FORM
 
-/-- `blocks` on a template query only, the first from unit 0 and each from where the one before ends, in `validate`'s order. -/
-def checkBlocks (template : Bool) (ps : Array (Nat × Nat)) : V Unit := do
-  if !template then throw "partition: blocks-query: blocks on a query that is not a template query"
-  -- `ps` is non-empty: `blocksIn` refuses an empty list
-  if ps[0]!.1 != 0 then throw s!"partition: blocks-gap: units 0..{ps[0]!.1} are in no block"
+/-- One level `ps` (index `k`): the first block from unit 0 and each from where the one before ends. -/
+def checkLevel (k : Nat) (ps : Array (Nat × Nat)) : V Unit := do
+  -- `ps` is non-empty: `blockLevel` refuses an empty level
+  if ps[0]!.1 != 0 then throw s!"partition: blocks-gap: level {k}: units 0..{ps[0]!.1} are in no block"
   for i in [1:ps.size] do
     let (prev, p) := (ps[i - 1]!, ps[i]!)
-    if p.1 < prev.1 then throw s!"partition: blocks-unsorted: [{p.1}, {p.2}] after [{prev.1}, {prev.2}]"
-    else if p.1 < prev.2 then throw s!"partition: blocks-overlap: [{p.1}, {p.2}] inside [{prev.1}, {prev.2}]"
-    else if p.1 > prev.2 then throw s!"partition: blocks-gap: units {prev.2}..{p.1} are in no block"
+    if p.1 < prev.1 then throw s!"partition: blocks-unsorted: level {k}: [{p.1}, {p.2}] after [{prev.1}, {prev.2}]"
+    else if p.1 < prev.2 then throw s!"partition: blocks-overlap: level {k}: [{p.1}, {p.2}] inside [{prev.1}, {prev.2}]"
+    else if p.1 > prev.2 then throw s!"partition: blocks-gap: level {k}: units {prev.2}..{p.1} are in no block"
 
-/-- `blocks` against the population `pop`, as `partition_object.verify`: the last block ends at it. -/
+/-- Level `k + 1` (`fine`) refines level `k` (`coarse`): every end of a block of `coarse` is the end of a block of
+`fine`, in one pass over the two lists, which `checkLevel` holds in order. -/
+def checkRefines (k : Nat) (coarse fine : Array (Nat × Nat)) : V Unit := do
+  let mut j := 0
+  for (_, e) in coarse do
+    while j < fine.size && fine[j]!.2 < e do j := j + 1
+    if h : j < fine.size then
+      if fine[j].2 != e then
+        throw s!"partition: blocks-refine: level {k + 1}: [{fine[j].1}, {fine[j].2}] does not lie inside one block of level {k}"
+    else throw s!"partition: blocks-refine: level {k + 1}: no block ends at {e}, where a block of level {k} ends"
+
+/-- `blocks` on a template query only, each level as `checkLevel`, then each level refining the one before
+(`checkRefines`), in `validate`'s order. -/
+def checkBlocks (template : Bool) (ls : Array (Array (Nat × Nat))) : V Unit := do
+  if !template then throw "partition: blocks-query: blocks on a query that is not a template query"
+  for k in [0:ls.size] do checkLevel k ls[k]!
+  for k in [1:ls.size] do checkRefines (k - 1) ls[k - 1]! ls[k]!
+
+/-- `blocks` against the population `pop`, as `partition_object.verify`: each level's last block ends at it. -/
 def checkBlocksCover (obj : Json) (pop : Nat) : V Unit := do
-  let some ps ← blocksIn (obj.getObjVal? "blocks").toOption | pure ()
-  let e := ps.back!.2
-  if e > pop then throw s!"partition: blocks-range: the last block ends at {e}, past the population's {pop} units"
-  if e < pop then throw s!"partition: blocks-gap: units {e}..{pop} are in no block"
+  let some ls ← blocksIn (obj.getObjVal? "blocks").toOption | pure ()
+  for k in [0:ls.size] do
+    let e := ls[k]!.back!.2
+    if e > pop then
+      throw s!"partition: blocks-range: level {k}: the last block ends at {e}, past the population's {pop} units"
+    if e < pop then throw s!"partition: blocks-gap: level {k}: units {e}..{pop} are in no block"
 
 /-- A `verity/partition/v1` object's form (`verity.ir.cut`'s canonical form, open query names): exactly `format`, `program`, `query`, and `blocks`
 optionally (`blocksIn`, `checkBlocks`); a SHA-512 program; a query of exactly `name` (a non-empty string), `version` (a natural number) and `params` (an object). For a
