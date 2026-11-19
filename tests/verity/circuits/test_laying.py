@@ -88,7 +88,7 @@ def test_a_blocks_measure_is_the_block_restrict_cuts(program):
     c = b"".join(descriptor_chunks(P))
     m = LY.Measure(P, q)
     n = len(m.units)
-    for a, b in [(u, u + 1) for u in range(n)] + [(0, n), (1, n), (0, n // 2), (n // 3, n - 1)]:
+    for a, b in sorted({(u, u + 1) for u in range(n)} | {(0, u + 1) for u in range(n)} | {(u, n) for u in range(n)}):
         blk = R.restrict(c, {"query": q}, [(a, b)])
         g = R._Gates(blk.D)
         ins = tuple(sum(g.width(x) for x in r) for r in R._runs(list(blk.inputs), g.of))

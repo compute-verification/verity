@@ -68,7 +68,8 @@ def _laid(program: Any, over: set[int]) -> Program:
 
     def body(B, S, *_colls):
         new: dict[int, Any] = {k: Affine("n", k, 0, root.nodes[k].out.leaves) for k in range(inputs)}
-        look = lambda s, i: new[i]
+        def look(_s, i):
+            return new[i]
         for k in range(inputs, len(root.nodes)):
             node = root.nodes[k]
             args = [Coll(x.type, _subst(x.refs, look)) for x in node.args]
@@ -102,7 +103,8 @@ def _open(B, node, args: list) -> Any:
 
 def _body(B, fn, args: list) -> Any:
     body, local = fn.body, {}
-    look = lambda s, i: args[i].refs if s == "p" else local[i]
+    def look(s, i):
+        return args[i].refs if s == "p" else local[i]
     for j, nd in enumerate(body.nodes):
         a = [Coll(x.type, _subst(x.refs, look)) for x in nd.args]
         if nd.form == "primitive":
@@ -181,17 +183,30 @@ class Measure:
         raise IndexError(b)
 
     def grow(self, a: int) -> Iterator[tuple[int, tuple[tuple[int, ...], tuple[int, ...], int]]]:
-        start, ins, alive, ands = self.lo[a], [], [], 0
+        start, ins, outs, alive, ands, foreign = self.lo[a], _Rows(), _Rows(), [], 0, 0
         for b in range(a + 1, len(self.units) + 1):
             u = b - 1
-            ins = _merge(ins + [(lo, min(hi, start), w, x) for lo, hi, w, x in self.reads[u] if lo < start])
-            for p in self.held.get(u, ()):
-                heapq.heappush(alive, (p[3], p[:3]))
+            for lo, hi, w, x in self.reads[u]:
+                if lo < start:
+                    ins.add(lo, min(hi, start), w, (w, x))
+            for lo, hi, w, last in self.held.get(u, ()):
+                own = self.lo[u] <= lo and hi <= self.hi[u]
+                foreign += not own
+                heapq.heappush(alive, (last, lo, hi, w, own))
+                outs.add(lo, hi, w, w)
+            rebuild = False
             while alive and alive[0][0] < b:
-                heapq.heappop(alive)
+                _l, lo, hi, w, own = heapq.heappop(alive)
+                if own and not foreign:
+                    outs.remove(lo, hi, w)
+                else:
+                    rebuild, foreign = True, foreign - (not own)
+            if rebuild:
+                outs = _Rows()
+                for _l, lo, hi, w, _o in sorted(alive, key=lambda e: e[1]):
+                    outs.add(lo, hi, w, w)
             ands += self.ands[u]
-            outs = _merge([(lo, hi, w, RUN) for _l, (lo, hi, w) in alive])
-            yield b, (_rows(ins, lambda r: (r[2], r[3])), _rows(outs, lambda r: r[2]), ands)
+            yield b, (ins.rows(), outs.rows(), ands)
 
     def _unit_reads(self, u: int) -> Iterator[tuple[int, int, int, str]]:
         k, m = self.units[u]
@@ -267,6 +282,78 @@ class Measure:
                 runs.append((j, j + 1, e[1], e[2]))
         self._rets[id(fn)] = ([r[0] for r in runs], runs)
         return self._rets[id(fn)]
+
+
+class _Rows:
+
+    def __init__(self) -> None:
+        self.starts: list[int] = []
+        self.ends: list[int] = []
+        self.keys: list[Any] = []
+        self.widths: list[int] = []
+        self.ivs: list[list[tuple[int, int]]] = []
+        self.bits: list[int] = []
+
+    def rows(self) -> tuple[int, ...]:
+        return tuple(self.bits)
+
+    def add(self, lo: int, hi: int, w: int, key: Any) -> None:
+        if lo >= hi:
+            return
+        i = bisect.bisect_right(self.starts, lo) - 1
+        if i >= 0 and lo < self.ends[i] and self.keys[i] != key:
+            L, gk, gw = self.ivs[i], self.keys[i], self.widths[i]
+            k = bisect.bisect_left(L, (lo,))
+            lb = sum(h - l for l, h in L[:k]) * gw
+            self._insert(i + 1, gk, gw, L[k:], self.bits[i] - lb)
+            self._insert(i + 1, key, w, [(lo, hi)], (hi - lo) * w)
+            self.ivs[i], self.bits[i], self.ends[i] = L[:k], lb, L[k - 1][1]
+        elif i >= 0 and self.keys[i] == key:
+            self._put(i, lo, hi)
+        elif i + 1 < len(self.keys) and self.keys[i + 1] == key:
+            self._put(i + 1, lo, hi)
+        else:
+            self._insert(i + 1, key, w, [(lo, hi)], (hi - lo) * w)
+
+    def remove(self, lo: int, hi: int, w: int) -> None:
+        i = bisect.bisect_right(self.starts, lo) - 1
+        L = self.ivs[i]
+        k = bisect.bisect_right(L, (lo, float("inf"))) - 1
+        l, h = L[k]
+        L[k:k + 1] = [x for x in ((l, lo), (hi, h)) if x[0] < x[1]]
+        self.bits[i] -= (hi - lo) * w
+        if L:
+            self.starts[i], self.ends[i] = L[0][0], L[-1][1]
+            return
+        for col in (self.starts, self.ends, self.keys, self.widths, self.ivs, self.bits):
+            del col[i]
+        if 0 < i < len(self.keys) and self.keys[i - 1] == self.keys[i]:
+            self.ivs[i - 1] += self.ivs[i]
+            self.bits[i - 1] += self.bits[i]
+            self.ends[i - 1] = self.ends[i]
+            for col in (self.starts, self.ends, self.keys, self.widths, self.ivs, self.bits):
+                del col[i]
+
+    def _insert(self, i: int, key: Any, w: int, L: list[tuple[int, int]], bits: int) -> None:
+        self.starts.insert(i, L[0][0])
+        self.ends.insert(i, L[-1][1])
+        self.keys.insert(i, key)
+        self.widths.insert(i, w)
+        self.ivs.insert(i, L)
+        self.bits.insert(i, bits)
+
+    def _put(self, i: int, lo: int, hi: int) -> None:
+        L = self.ivs[i]
+        k = bisect.bisect_left(L, (lo,))
+        if k > 0 and L[k - 1][1] >= lo:
+            k -= 1
+        m, a, b, covered = k, lo, hi, 0
+        while m < len(L) and L[m][0] <= hi:
+            a, b, covered = min(a, L[m][0]), max(b, L[m][1]), covered + L[m][1] - L[m][0]
+            m += 1
+        L[k:m] = [(a, b)]
+        self.bits[i] += (b - a - covered) * self.widths[i]
+        self.starts[i], self.ends[i] = L[0][0], L[-1][1]
 
 
 def _last(events: list) -> list[tuple[int, int, int, int]]:
@@ -356,18 +443,6 @@ def _merge(runs: list) -> list[tuple[int, int, int, str]]:
             continue
         out.append((lo, hi, w, b))
     return out
-
-
-def _rows(runs: list, key: Callable[[tuple], Any]) -> tuple[int, ...]:
-    rows: list[int] = []
-    last = None
-    for r in runs:
-        if rows and key(r) == last:
-            rows[-1] += (r[1] - r[0]) * r[2]
-        else:
-            rows.append((r[1] - r[0]) * r[2])
-            last = key(r)
-    return tuple(rows)
 
 
 def pack(program: Any, fits: Fits, q: Any = None, m: Measure | None = None) -> list[tuple[int, int]]:
