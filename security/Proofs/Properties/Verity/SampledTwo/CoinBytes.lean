@@ -1,10 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.SampledTwo.SecondCoins
-public import Proofs.Flock.C3.VStarList.Accepts
-public import Proofs.Flock.Claims.Recursion.DeployHonest
-public import Proofs.Flock.Claims.Recursion.SlotsCheck
-public import Proofs.Flock.Claims.Recursion.VarLen
+public import Proofs.Flock.Claims.Recursion.RestFitsLift
 
 /-!
 # Any bytes are coins' bytes

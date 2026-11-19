@@ -1213,6 +1213,14 @@ theorem outRows_setupOne {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {ta
   have s := FlockSoundness.Discharge.Hidden.setupHidden_spec' hd'
   exact (FlockSoundness.Discharge.Hidden.committed_of_commit s.parse).outRows ht fun p hp => (hv1 p hp).1
 
+/-- `FlockDeploy.Raw.ins` reads its tags from `--statement`'s name, and C's are them. -/
+theorem raw_ins_tags {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) :
+    Tags.byName? w.statement = some s.stmtTags ∧ s.read.I.tags = s.stmtTags := by
+  unfold FlockDeploy.Raw.ins at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | (cases h; exact ⟨by assumption, rfl⟩)
+
 /-- A recursive statement's tags are a known statement's, and C's are them. -/
 theorem insO_tags {x : Msg} {i : RecIns} (h : insO x = some i) :
     (∃ nm, Tags.byName? nm = some i.base.stmtTags) ∧ i.base.read.I.tags = i.base.stmtTags := by
