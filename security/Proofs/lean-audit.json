@@ -371,7 +371,6 @@
   "Proofs.Flock.SpotFlock.RunsAs.OwnReadsForm",
   "Proofs.Flock.SpotFlock.RunsAs.OwnReadsOfCheck",
   "Proofs.Flock.SpotFlock.RunsAs.OwnReadsOut",
-  "Proofs.Flock.SpotFlock.RunsAs.SecondUnits",
   "Proofs.Flock.SpotFlock.RunsAs.StampedReads",
   "Proofs.Flock.SpotFlock.RunsAs.VerdictsWf",
   "Proofs.Properties.Challenger.RunCoins",
