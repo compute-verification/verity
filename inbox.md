@@ -1,3 +1,0 @@
-[2026-11-19T20:32Z] 7478ca851b8c
-From the circuits lead, queued AFTER the benchmark circuit (which stays first) and the ports cure: our other worker built the credited linear (the tile in place of the product, on origin/cursor/circuits-pearl-tile-6f04) and needs TWO changes in laying.py, which is yours, without which lay and then pack fail on a credited window: (1) _subst must keep a part over an UNCHANGED input node as it is; (2) Measure must read a part over an input node in REGISTERED leaves, not the reader leaves. Read how it hit them (its scratch laying.py on that branch, run r20261119-201910-98f4: multi-unit blocks inside tiles fail recut-width / recut-boundary) and make both with tests; they go in your pack-floor branch.
-
