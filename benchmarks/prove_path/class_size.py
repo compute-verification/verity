@@ -109,17 +109,18 @@ def placed(lab: str, T: int, P: int) -> int | None:
 def projected(lab: str, n: int, at: Any, cls: Any, scan: str) -> tuple[str, int]:
     """A template outside the heads, ``n`` units of one Program at the probe's class ``at``, as one Program at class ``cls``
     has it: a slot's template (`placed`) at the class's prompt and outputs (`ScanSlots_v4` at ``scan``, the label of its
-    binding at the class's scan state row) and
+    binding at the class's scan state row, a unit of each of the class's lanes) and
     `placed`'s units there, any other the probe's fixed count a position at each of the class's, refused unless ``n`` is
     the probe's by that rule."""
     if placed(lab, 1, at.positions) is None:
         if n % at.positions:
             raise ValueError(f"the probe has {n} {lab} units, not a fixed count at each of its {at.positions} positions")
         return lab, n // at.positions * cls.positions
-    if n != (want := sum(placed(lab, T, at.positions) or 0 for T in range(1, at.positions + 1))):
+    lanes = (at.lanes, cls.lanes) if lab.startswith(SCAN + "{") else (1, 1)
+    if n != (want := lanes[0] * sum(placed(lab, T, at.positions) or 0 for T in range(1, at.positions + 1))):
         raise ValueError(f"the probe has {n} {lab} units, not the {want} its slot places")
     to = scan if lab.startswith(SCAN + "{") else _relabel(lab, NP=cls.prompt, KO=cls.outputs)
-    return to, sum(placed(to, T, cls.positions) or 0 for T in range(1, cls.positions + 1))
+    return to, lanes[1] * sum(placed(to, T, cls.positions) or 0 for T in range(1, cls.positions + 1))
 
 
 def project(probe: Mapping[str, int], at: Any, cls: Any, scan: str, masked_from: Callable[[int, int], int]
