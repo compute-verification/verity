@@ -459,9 +459,10 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
       · subst hF
         have hcp : ((DecState.defs s4)[ci]!).prim = true := by
           revert hprim; cases ((DecState.defs s4)[ci]!).prim <;> simp <;> decide
-        have hg1 : callee.gates = 1 := (hs4.2.2 ci hci).1 hcp
-        simp only [Node.members, hg1, Nat.mul_one]
-        rfl
+        have hg1 : ((DecState.defs s4)[ci]!).gates = 1 := (hs4.2.2 ci hci).1 hcp
+        simp only [Node.members]
+        change 1 = 1 * ((DecState.defs s4)[ci]!).gates
+        rw [hg1]
       · have : (F == Form.prim) = false := by cases F <;> first | rfl | exact absurd rfl hF
         simp only [this]; rfl
     simp only [Array.size_push] at hk
