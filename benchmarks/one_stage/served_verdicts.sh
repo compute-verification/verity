@@ -8,7 +8,7 @@
 #     every Program digest and the manifest's digest, Program digest and identities, gates the serve.
 #  1. serve: `verity-vllm serve-openai` of LLAMA32_1B_INT8 (REPO at REV, --precision PRECISION: verity-int8/Llama-3.2-1B-INT8, verity_int8) on one GPU
 #     under `gpu-lease`, `--scheme rows-sha512 --seal --admit release-order --window-requests SLOTS`, its committer built from
-#     B's manifest (PRED/manifest.json) and taps (HIDDEN_SO, NORM_TAP_SO), T tokens a step (--max-num-batched-tokens; T defaults
+#     B's manifest (PRED/manifest.json) and tap (HIDDEN_SO), T tokens a step (--max-num-batched-tokens; T defaults
 #     to H1_T, else 512, with or without H1); B-OF-RECORD says each sealed sampling block's record names B's manifest, and its
 #     Program digest and manifest digest predict's (a record sealed before the seal recorded the manifest digest: the Program
 #     digest alone). Each closed window is sealed as a
@@ -278,8 +278,6 @@
 # H1_LIVE_EVIDENCE (files) go to PoUW's piece as its --statements and --live-evidence, the evidence core's credit reads.
 # H1_RECEIPTS=1 serves with --h1-receipts: each window registers each call's receipt table receipt@<c>, which a sampled
 # J10-R call statement's o0 and a lanes-form K's combine read (sampled refuses to stage either without it).
-# POUW_CMD='bash benchmarks/one_stage/served_pouw.sh "$1" "$2" "$3"' makes both on the node (the window's live rounds and
-# sampled proof blocks proved) and writes the period's case beside the piece, the one remote's composite reads.
 # With H1_TIE set too (and H1_CIRCUITS, V3C_CLASS not empty), V3c's window commit moves into the serve's close: at each H1
 # window's close, once it is sealed and before its sample coin, serve-openai's `--h1-window-commit` runs
 # `served_verdicts.sh tie` on the served node, under the serve's lease (LEASE_MIN then defaults to 150 and LEASE_MEM_GB to
@@ -540,7 +538,7 @@ if [ -n "$PEARLPLUS_TIE" ]; then  # the window served under Pearl+: Llama 3.2 1B
 fi
 H=/workspace/research/vllm-composed-h200int8
 ROW=${ROW:-$H/r20261030-210701-a20f/llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager} ROW_ID=${ROW_ID:-${ROW##*/}}
-HIDDEN_SO=${HIDDEN_SO:-$H/fa2/build/fa3_matReqG/verity_fa3_matReqG.so} NORM_TAP_SO=${NORM_TAP_SO:-$H/norm_tap/build/verity_norm_tap.so}
+HIDDEN_SO=${HIDDEN_SO:-$H/fa2/build/fa3_matReqG/verity_fa3_matReqG.so}
 VENV=${VENV:-/workspace/cp/venv312}
 REPO=${REPO:-verity-int8/Llama-3.2-1B-INT8} REV=${REV:-15b0976d400d796ee589e7737d03a919526bf800} PRECISION=${PRECISION:-verity_int8}
 PORT=${PORT:-18190} SLOTS=${SLOTS:-4} PROMPTS=${PROMPTS:-16:24} MAX_TOKENS=${MAX_TOKENS:-4} RATE=${RATE:-1000} SEED=${SEED:-1}
@@ -2083,7 +2081,7 @@ elif [ "${1:-}" = v3c ]; then  # V3c alone on an existing serve dir serves nothi
   [ -e "$PY" ] || { say "PREFLIGHT: no python under VENV (VENV, which a node without vLLM's venv sets to the tree's .venv)"; exit 3; }
 else
   host_set VY_CHALLENGER_1_HOST "$H1_GATE" "${PEARLC_CHALLENGER_GATE:-}" || exit 3
-  for f in ROW/manifest.json ROW/build_summary.json HIDDEN_SO NORM_TAP_SO PY; do
+  for f in ROW/manifest.json ROW/build_summary.json HIDDEN_SO PY; do
     fp=${f%%/*} && fp=${!fp}${f#"${f%%/*}"} && [ -e "$fp" ] || { say "PREFLIGHT: no $f"; exit 3; }
   done
   command -v gpu-lease >/dev/null || { say "PREFLIGHT: no gpu-lease on this node"; exit 3; }

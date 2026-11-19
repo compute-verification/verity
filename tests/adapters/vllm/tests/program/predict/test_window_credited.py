@@ -126,25 +126,16 @@ def _tiles(requests: list[Any]) -> dict[tuple[str, int], tuple[int, Any]]:
 
 def _public(tiles: dict, salt: bytes, root: bytes) -> dict[str, list[int]]:
     """The public row as its registered values' leaves: each tile's row of each port `credit` doesn't wire, tile by tile in
-    `credit`'s allocation order, a noise port the tile takes as a value the noise's bytes (`_noise`); a port of 32-bit leaves
-    its leaves, any other its 16-bit words."""
+    `credit`'s allocation order; a port of 32-bit leaves its leaves, any other its 16-bit words."""
     rows: dict[str, list[int]] = {}
     for i, t in tiles.values():
         core = bind(REGISTRY[TILE], **t.core.bindings)
         pub, types, words = PC.public(SCHEME, K, t, 7 + i, salt, root), dict(core.signature()[0]), dict(IF.layout(core).rows)
         for p in (p for p in types if p not in WL._WIRED):
-            leaves = _flat(pub[p]) if p in pub else _noise(p, t, salt, root, types[p].homogeneous_width())
+            leaves = _flat(pub[p])
             rows.setdefault(p, []).extend(leaves if types[p].homogeneous_width() == 32 else IF.rows_of_leaves(
                 np.asarray([leaves], dtype=np.uint64), types[p], words[p])[0].tolist())
     return rows
-
-
-def _noise(port: str, t: Any, salt: bytes, root: bytes, width: int) -> list[int]:
-    """Tile ``t``'s noise port ``port`` from the references' bytes, a port of bits each byte's bits low first."""
-    dev = pouw_schemes.get(SCHEME, k_min=K, tile=(len(t.rows), len(t.cols))).device.name
-    raw = {"eb": lambda: PC.row_eb(salt, root, t.col, len(t.cols)), "fa": lambda: PC.row_fa(salt, root, K),
-           "fb": lambda: PC.row_fb(salt, root, K), "g": lambda: PC.row_gram(salt, root, K, dev)}[port]()
-    return [(x >> j) & 1 for x in raw for j in range(8)] if width == 1 else list(raw)
 
 
 def _honest(t: Any, unit: int, salt: bytes, root: bytes, a: np.ndarray, b: np.ndarray, m: int) -> tuple[list[int], list[int]]:

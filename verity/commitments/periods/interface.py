@@ -2653,6 +2653,36 @@ class _Recorded:
     at: int                           # its first unit among its template's
 
 
+@dataclass(frozen=True)
+class LeafRows:
+    """A port `Window.close` commits in full and leafs from its own salts (`Window.leaf_rows`): ``template`` its template's
+    ordinal among the circuit's, ``port`` its ordinal among a member's ports (its rows, then its outputs), its row
+    ``schema``, and for each member holding it in full ``(member port, first unit, units)`` beside its rows (``parts``):
+    a template's members that wire the port hold none of its rows."""
+    template: int
+    port: int
+    schema: str
+    members: list[tuple[str, int, int]]
+    parts: list[np.ndarray]
+
+    @property
+    def rows(self) -> np.ndarray:
+        """Its rows in unit order, as `rows.commit` leafs them (an output row at its padded width)."""
+        return np.concatenate([x for _, x in sorted(zip((at for _, at, _ in self.members), self.parts), key=lambda t: t[0])])
+
+    @property
+    def units(self) -> list[int]:
+        """Each of `rows`' unit index within its template."""
+        return [u for _, at, n in sorted(self.members, key=lambda m: m[1]) for u in range(at, at + n)]
+
+    def split(self, b: bytes, size: int) -> dict[str, bytes]:
+        """``b``, ``size`` bytes a row of `rows`, by member port."""
+        out, i = {}, 0
+        for port, _, n in sorted(self.members, key=lambda m: m[1]):
+            out[port], i = bytes(b[i * size:(i + n) * size]), i + n
+        return out
+
+
 @dataclass
 class Window:
     """One period of an integration's values: ``circuit``'s units under ``run`` (the record's run root, hex) and ``law`` (the
@@ -2810,14 +2840,54 @@ class Window:
                 out[tid] = bad
         return out
 
-    def close(self, *, workers: int = 1, salts_of: Mapping[str, bytes] | None = None) -> CS.Committed:
+    def close(self, *, workers: int = 1, salts_of: Mapping[str, bytes] | None = None,
+              strings: Mapping[tuple[str, str], tuple[bytes, bytes]] | None = None) -> CS.Committed:
         """Commit every unit's rows (`rows.commit`), refused unless every template's units are all recorded. ``salts_of``:
         by port given in full (`rows.full_ports`), the salts a test hands in (`rows.commit`); a port whose salts the period
         fixes (a history table's row, a registered read's) takes those. A parameter recorded by reference (`record`) is committed as what it reads: a registered
         read's rows as its value's (`rows.ValueRows`), a wired row as its writer's output row (`rows.WIRED`); refused for a
         row that is neither. Each registered row the period reads has its salt sampled and its path made once (`_Drawn`).
         An input row recorded in full is committed by reference all the same, refused unless it is the value's row: a
-        registered value is leafed once, in its registration's tree (`rows.Member.values`)."""
+        registered value is leafed once, in its registration's tree (`rows.Member.values`).
+        ``strings``: by each of `leaf_rows`' ports, every row's salt and ``b || c`` (`rows.row_strings`) in the template's
+        unit order, which the period leafs as given and never re-hashes from the rows: a string that isn't its row's is a
+        leaf no opening of the row matches. Refused by name for a port missing or not `leaf_rows`', a length that isn't
+        whole salts and strings, or a count that isn't the port's rows. Only the weights' tie, the members' stand-in and the
+        direct `rows.commit` callers pass no ``strings``; a served window always passes them."""
+        data, salts_of_, strings_of, need, unplaced = self._plan()
+        if strings is not None:
+            if unplaced:
+                raise ValueError(f"strings: {unplaced[:4]} read through a table of other than one row a unit: a port "
+                                 "`leaf_rows` can't place")
+            if lacking := sorted(set(need) - set(strings)):
+                raise ValueError(f"strings: no strings for {lacking[:4]}: every port the period commits in full takes its "
+                                 "rows' strings (`leaf_rows`)")
+            if extra := sorted(set(strings) - set(need)):
+                raise ValueError(f"strings: {extra[:4]} is no port the period commits in full: a wired port's rows are its "
+                                 "writer's, a registered read's its value's, a history row's its table's")
+            for k, (ys, bc) in strings.items():
+                n = len(need[k].rows)
+                if len(ys) % CS.SALT_BYTES or len(bc) % CS.BC_BYTES:
+                    raise ValueError(f"strings: {k}: {len(ys)} bytes of salts and {len(bc)} of strings are not whole "
+                                     f"{CS.SALT_BYTES}-byte salts and {CS.BC_BYTES}-byte strings")
+                if len(ys) // CS.SALT_BYTES != n or len(bc) // CS.BC_BYTES != n:
+                    raise ValueError(f"strings: {k}: {len(ys) // CS.SALT_BYTES} salts and {len(bc) // CS.BC_BYTES} strings, "
+                                     f"not the port's {n} rows")
+            for k, lr in need.items():
+                salts_of_ |= lr.split(strings[k][0], CS.SALT_BYTES)
+                strings_of |= lr.split(strings[k][1], CS.BC_BYTES)
+        return CS.commit(self.window, data, workers=workers, salts_of={**(salts_of or {}), **salts_of_},
+                         strings_of=strings_of)
+
+    def leaf_rows(self) -> dict[tuple[str, str], LeafRows]:
+        """The ports `close` commits in full and leafs from its own salts, by (template, port): each one's rows as they are
+        leafed, in unit order (`LeafRows`), whose strings `close`'s ``strings`` may hand in."""
+        return self._plan()[3]
+
+    def _plan(self) -> tuple[list[dict[str, Any]], dict[str, bytes], dict[str, bytes], dict[tuple[str, str], LeafRows],
+                             list[str]]:
+        """`close`'s members' data for `rows.commit`, the salts and strings the period fixes by member port, `leaf_rows`,
+        and the member ports in full that it can't place (read through a table of other than one row a unit)."""
         missing = {tid: (self.count(tid), n) for tid, (_, n) in zip(self.circuit.ids, self.circuit.templates)
                    if self.count(tid) != n}
         if missing:
@@ -2838,7 +2908,7 @@ class Window:
                                      "(`refs.recut`)")
                 wanted.setdefault(param, []).append(positions)
         sampled, written = _Drawn(values, wanted), self._written(values)
-        given, (data, salts_of, strings_of, self._entries) = dict(salts_of or {}), ([], {}, {}, {})
+        data, salts_of, strings_of, self._entries = [], {}, {}, {}
         for m, reads, lo in zip(self.window.members, read_by, own, strict=True):
             lay = by[m.template][1]
             if m.template not in cat:
@@ -2884,7 +2954,25 @@ class Window:
                                          "that wrote it")
                     d["rows"][r] = CS.WIRED
             data.append(d)
-        return CS.commit(self.window, data, workers=workers, salts_of={**given, **salts_of}, strings_of=strings_of)
+        need: dict[tuple[str, str], LeafRows] = {}
+        unplaced: list[str] = []
+        tids = {t: i for i, t in enumerate(self.circuit.ids)}
+        for m, d, lo in zip(self.window.members, data, own, strict=True):
+            names, padded, tables = [p for p, _ in m.rows + m.outs], dict(m.out_rows), dict(m.tables)
+            full = [(p, x) for p, x in d["rows"].items() if isinstance(x, np.ndarray)]
+            full += [(o, x) for o, x in d["outs"].items() if m.port(o) not in salts_of]
+            for p, x in full:
+                if p in tables and tables[p] != m.n:
+                    unplaced.append(m.port(p))
+                    continue
+                if p in padded:
+                    row = np.zeros((m.n, padded[p]), dtype=np.uint16)
+                    row[:, :x.shape[1]] = x
+                    x = row
+                lr = need.setdefault((m.template, p), LeafRows(tids[m.template], names.index(p), m.schema(p), [], []))
+                lr.members.append((m.port(p), lo, m.n))
+                lr.parts.append(np.asarray(x, dtype=np.uint16))
+        return data, salts_of, strings_of, need, unplaced
 
     def _output(self, w: WI.Wired, cat: dict[str, Any]) -> np.ndarray:
         """Writer template ``w.writer``'s recorded ``w.out`` rows, its units in root order: the leaves of its tree."""
