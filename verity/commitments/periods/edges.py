@@ -1,5 +1,6 @@
 """The wires a Program's root states, read off its nodes (`Spot.Edges.edgesOf`): each argument part of a root node that
-reads an earlier non-input root node's outputs is one wire per row of the reader's port, in closed form, or the first
+reads an earlier non-input root node's outputs is one wire per row of the reader's port, in closed form (a part whose
+lanes all read earlier input nodes is none, whatever its rows), or the first
 refusal by name (`edge-parts`, `edge-template`, `edge-form`, `not-topological`, `edge-rows`, `edge-fields` where a part reads more than one output field of one writer, one field a
 part being the rule, `edge-width`). The program
 is a descriptor (`circuits/PROTOCOL.md` §4), the ranges ``[node, template, first, count]`` and the wiring the record's
@@ -292,6 +293,8 @@ def _part_wires(R: _Root, fu: dict, templates: Mapping, cuts_of, k: int, i: int,
                 if any(not p and r >= k for p, r, _ in q[1]):
                     raise Refusal("not-topological")
                 raise Refusal("edge-rows")
+            continue
+        if q[2] and all(not p and i < k and R.nodes[i]["input"] for p, i, *_ in q[2]):
             continue
         k0 = max(x0 + lo * L - s0, 0)
         rows = "edge-fields" if _crosses_fields(R, q, k0, L, ln, cnt) else "edge-rows"

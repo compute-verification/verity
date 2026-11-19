@@ -24,7 +24,9 @@ The rule is by row. A reader row (the port whole, or one of the `k` rows the wir
 one member of the writer node, at the field's bits. A part is a grid (`partLanes`): a row lies in one lane's run, and
 across the members a part covers its place moves by the argument's member stride, inside that run or by whole periods
 of the lanes; the writer leaves the members read are then a mixed radix of the lane's levels (`laneWire`), and a wire
-needs the writer field to stay the same, so each step is a whole number of writer members.
+needs the writer field to stay the same, so each step is a whole number of writer members. A part whose lanes all read
+earlier input nodes states no wire, whatever its rows: what such a part reads is the record's to state (its own input
+rows, or the node `registered.nodes` declares), not a wire's.
 
 The refusals, by name: `edge-parts` (an argument of a root node has more parts than `argPartsOk` allows),
 `edge-template` (a non-input root node whose template the ranges or the wiring don't list), `edge-form` (a scan at the
@@ -154,6 +156,7 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
         throw "edge-rows"
       continue
     let (run, lanes) := partLanes q
+    if !lanes.isEmpty && lanes.all (fun l => !l.p && l.i < k && isInputNode P l.i) then continue
     let k0 := x0 + lo * L - s0
     let rows := if crossesFields P run lanes q.count k0 L len cnt then "edge-fields" else "edge-rows"
     let (w, l0, radix, steps) ← match laneWire run lanes k0 L len cnt with
