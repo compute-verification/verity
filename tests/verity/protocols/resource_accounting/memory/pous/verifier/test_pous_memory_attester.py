@@ -7,6 +7,7 @@ from __future__ import annotations
 import dataclasses
 import gc
 import hashlib
+import json
 import os
 import tempfile
 
@@ -14,7 +15,7 @@ import pous_test_signer as ts
 import pytest
 from pous_fakes import Clock
 
-from verity.clock import Device
+from verity.clock import UNCOVERED, Device, Log, chain
 from verity.commitments import rowleaf
 from verity.commitments.crypto import lms
 from verity.commitments.randomness import derive
@@ -130,11 +131,14 @@ def test_bad_signature_and_edited_records_are_rejected():
     r = signed.rounds[5]
     receipt = dataclasses.replace(r.receipt, ns=r.receipt.ns - 1)
     edited = signed.rounds[:5] + (dataclasses.replace(r, receipt=receipt),) + signed.rounds[6:]
-    assert judge(c, dataclasses.replace(signed, rounds=edited), signer).reasons == ("the signature does not verify",)
+    assert judge(c, dataclasses.replace(signed, rounds=edited), signer).reasons == (
+        "the signature does not verify", f"round 5's receipt is not entry 11 of its device's closed log: {UNCOVERED}")
     stranger = ts.TestSigner(b"someone else", height=2)
     forged = dataclasses.replace(signed, public_key=stranger.public_key,
                                  signature=stranger.sign(signed.commitment.session, signed.message()))
-    assert judge(c, forged, signer).reasons == ("the session is signed by a key that is not a trusted memory challenger's",)
+    assert judge(c, forged, signer).reasons == (
+        "the session is signed by a key that is not a trusted memory challenger's",
+        f"entry 0 of device {stranger.public_key.hex()!r}'s log is not its chain's link 0: {UNCOVERED}")
     assert signed.commitment.binding == ROOT and signed.commitment.header()["binding"] == ROOT.hex()
     for moved in (dataclasses.replace(signed.commitment, limit_ns=LIMIT + 1),
                   dataclasses.replace(signed.commitment, binding=hashlib.sha512(b"another setup's root").digest())):
@@ -227,6 +231,26 @@ def test_a_clock_that_runs_backwards_ends_the_session_signed_and_refused_by_name
     c, signed, signer = session(spend=lambda j: -1 if j == 2 else 20_000)
     assert signed.ended == mc.CLOCK_BACKWARDS and len(signed.rounds) == 2
     assert judge(c, signed, signer).reasons == (f"the session ended clock-backwards after 2 of {K} rounds",)
+
+
+def test_the_close_signs_the_head_of_the_devices_log_and_a_round_outside_it_is_refused_by_name():
+    """The signature covers the head of the device's log, whose entries are each round's send and receipt: a log cut
+    short or re-linked fails the signature and names the round it no longer covers."""
+    c, signed, signer = session()
+    log = c.clock_log
+    assert signed.log == tuple(log.entries) and len(log.entries) == 2 * K
+    assert [e.data for e in log.entries[:2]] == [["send", 0], ["receipt", 0]] and chain(log.key, signed.log) == log.head
+    assert mc.SignedSession.from_json(json.loads(json.dumps(signed.to_json()))) == signed
+    cut = dataclasses.replace(signed, log=signed.log[:-1])
+    assert judge(c, cut, signer).reasons == (
+        "the signature does not verify", f"round {K - 1}'s receipt is not entry {2 * K - 1} of its device's closed log: {UNCOVERED}")
+    relinked = Log(log.key)
+    for e in signed.log[:-1]:
+        relinked.append(e.data, e.reading)
+    relinked.append(["receipt", K - 1], dataclasses.replace(signed.log[-1].reading, ns=signed.log[-1].reading.ns + 1))
+    moved = dataclasses.replace(signed, log=tuple(relinked.entries))
+    assert judge(c, moved, signer).reasons == (
+        "the signature does not verify", f"round {K - 1}'s receipt is not entry {2 * K - 1} of its device's closed log: {UNCOVERED}")
 
 
 def test_openings_must_match_the_revealed_indices():

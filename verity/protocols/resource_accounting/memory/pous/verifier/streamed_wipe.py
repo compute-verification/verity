@@ -34,9 +34,11 @@ session has five steps:
    (`verity.clock.ClockBackwards`), `clock-backwards` (`memory_attester.CLOCK_BACKWARDS`), with no record of the
    batch it was timing: no batch is retried, and no index is redrawn.  A clock refused at the fill's end signs the
    fill's start as its end.
-5. **Sign.** One signature over `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`, where the header is the
-   commitment, how the session ended, the start mark and the fill's times (`close`), and the records root is the
-   frame-v3-sha512 root of the batch records.  `end_message(signed)` is the end message, what the challenger hands the
+5. **Sign.** One signature over `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root ‖ chain head)`, where the
+   header is the commitment, how the session ended, the start mark, the fill's times and how many entries the device's
+   log holds (`close`), the records root is the frame-v3-sha512 root of the batch records, and the chain head is the
+   head of the device's log (`verity.clock.chain`): the fill's start and end, then each batch's send and receipt.  The
+   verdict recomputes the chain and refuses a reading that is not its entry (`verity.clock.UNCOVERED`).  `end_message(signed)` is the end message, what the challenger hands the
    network attester after its last read.  No egress count is signed: the count of what left between the two marks
    exists only after the signature, and the challenger never sees it.
 
@@ -67,19 +69,20 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.clock import Reading, elapsed
+from verity.clock import Entry, Reading, chain, elapsed
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.scheme import DIGEST_BYTES
 from verity.commitments.randomness import derive
 
-from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import SCHEMES, Verify
+from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import (CLOCK_BACKWARDS, SCHEMES, Verify,
+                                                                                   entry_json, uncovered_by)
 
 PROTOCOL = "verity-pous/streamed-wipe/v2"
 KEY_DOMAIN = "verity/pous/streamed-wipe-labels/v1"
 COIN_DOMAIN = "verity/pous/streamed-wipe-coins/v1"
 LABEL_TAG = b"verity-pous/streamed-wipe/label/v1\0"
-SESSION_TAG = b"verity-pous/streamed-wipe/session/v2\0"
+SESSION_TAG = b"verity-pous/streamed-wipe/session/v3\0"
 START_TAG = b"verity-pous/streamed-wipe/start/v1\0"
 END_TAG = b"verity-pous/streamed-wipe/end/v1\0"
 RECORD_BINDING = b"verity-pous/streamed-wipe/batch-records/v1\0"
@@ -250,6 +253,7 @@ class SignedWipe:
     scheme: str
     public_key: bytes
     signature: bytes
+    log: tuple[Entry, ...] = ()
 
     @property
     def fill_ns(self) -> int:
@@ -257,14 +261,28 @@ class SignedWipe:
         return elapsed(self.fill_start, self.fill_end)
 
     def message(self) -> bytes:
-        return message(self.commitment, self.ended, self.start_mark, self.fill_start.ns, self.fill_end.ns, self.batches)
+        """The signed message, its chain head recomputed from the log (`Uncovered` when it is no chain of the signer's
+        device)."""
+        return message(self.commitment, self.ended, self.start_mark, self.fill_start.ns, self.fill_end.ns, self.batches,
+                       len(self.log), chain(self.public_key.hex(), self.log))
+
+    def uncovered(self) -> str | None:
+        """Why the fill's two readings and each batch's send and receipt are not the device's closed log entry by
+        entry, or None (`memory_attester.uncovered_by`); a clock refused at the fill's end leaves the start alone."""
+        want = [("the fill's start", "fill start", self.fill_start), ("the fill's end", "fill end", self.fill_end)]
+        if self.ended == CLOCK_BACKWARDS and not self.batches and len(self.log) == 1:
+            want = want[:1]
+        want += [(f"batch {b}'s {what}", [what, b], t) for b, r in enumerate(self.batches)
+                 for what, t in (("send", r.send), ("receipt", r.receipt))]
+        return uncovered_by(self.public_key, self.log, want, self.ended)
 
     def to_json(self) -> dict[str, Any]:
         """The signed session as the Lean verdict reads it (`MemoryChallenger.StreamedWipe.Signed.ofJson`)."""
         return {"commitment": self.commitment.to_json(), "ended": self.ended, "start_mark": self.start_mark.hex(),
                 "fill_start_ns": self.fill_start.ns, "fill_end_ns": self.fill_end.ns,
                 "batches": [r.to_json() for r in self.batches], "scheme": self.scheme,
-                "public_key": self.public_key.hex(), "signature": self.signature.hex()}
+                "public_key": self.public_key.hex(), "signature": self.signature.hex(),
+                "log": [entry_json(e) for e in self.log]}
 
 
 def mark_of(text: str) -> bytes:
@@ -275,12 +293,14 @@ def mark_of(text: str) -> bytes:
 
 
 def message(commitment: WipeCommitment, ended: str, start_mark: bytes, fill_start_ns: int, fill_end_ns: int,
-            batches: Sequence[BatchRecord]) -> bytes:
-    """What the session's one signature signs: `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`."""
+            batches: Sequence[BatchRecord], entries: int, chain_head: bytes) -> bytes:
+    """What the session's one signature signs: `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root ‖ chain head)`,
+    the head of the device's log of `entries` entries."""
     head = json.dumps({**commitment.header(), "ended": ended, "start_mark": start_mark.hex(),
-                       "fill_start_ns": fill_start_ns, "fill_end_ns": fill_end_ns, "batches": len(batches)},
-                      sort_keys=True, separators=(",", ":")).encode()
-    return _sha512(SESSION_TAG, len(head).to_bytes(8, "big"), head, records_root(commitment.session, batches))
+                       "fill_start_ns": fill_start_ns, "fill_end_ns": fill_end_ns, "batches": len(batches),
+                       "entries": entries}, sort_keys=True, separators=(",", ":")).encode()
+    return _sha512(SESSION_TAG, len(head).to_bytes(8, "big"), head, records_root(commitment.session, batches),
+                   chain_head)
 
 
 def start_message(commitment: WipeCommitment) -> bytes:
@@ -345,6 +365,8 @@ def verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozense
         reasons.append("the session is signed by a key that is not a trusted memory challenger's")
     elif not _verifies(verify, signed):
         reasons.append("the signature does not verify")
+    if (why := signed.uncovered()) is not None:
+        reasons.append(why)
     if signed.commitment != commitment:
         reasons.append("the signed header is not the session's commitment")
     p = commitment.params

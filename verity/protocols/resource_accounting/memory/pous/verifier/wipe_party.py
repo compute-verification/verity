@@ -92,7 +92,8 @@ def signed_of(j: Mapping[str, Any]) -> sw.SignedWipe:
                                    r["wrong"], bytes.fromhex(r["digest"])) for r in j["batches"])
     return sw.SignedWipe(commitment_of(j["commitment"]), j["ended"], sw.mark_of(j["start_mark"]),
                          Reading(key, j["fill_start_ns"]), Reading(key, j["fill_end_ns"]), batches, j["scheme"],
-                         bytes.fromhex(key), bytes.fromhex(j["signature"]))
+                         bytes.fromhex(key), bytes.fromhex(j["signature"]),
+                         tuple(mc.entry_of(e, key) for e in j.get("log", ())))
 
 
 

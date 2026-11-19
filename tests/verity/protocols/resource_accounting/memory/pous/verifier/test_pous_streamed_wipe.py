@@ -17,7 +17,7 @@ import pous_test_signer as ts
 import pytest
 from pous_fakes import Clock, Server
 
-from verity.clock import Reading, raw_ns, raw_resolution_ns
+from verity.clock import UNCOVERED, Reading, raw_ns, raw_resolution_ns
 from verity.commitments.randomness import derive
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
@@ -206,6 +206,32 @@ def test_the_challengers_readings_are_its_devices_and_never_run_backwards():
     assert c.challenge() is None and c.ended == mc.CLOCK_BACKWARDS
 
 
+def test_the_close_signs_the_head_of_the_devices_log_and_a_reading_outside_it_is_refused_by_name():
+    """The signature covers the head of the device's log: the fill's start and end, then each batch's send and
+    receipt. A log cut short fails the signature and names the reading it no longer covers; a session a backwards
+    clock ended at the fill's end covers its start alone and is refused only for how it ended."""
+    signer = ts.TestSigner(b"wipe challenger", height=2)
+    clock = Clock(1_000_000)
+    c = challenger(clock=clock, signer=signer)
+    signed = run(c, clock=clock)
+    judge = lambda s: sw.verdict(s, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES).reasons
+    assert signed.log == tuple(c.clock_log.entries) and [e.data for e in signed.log[:3]] == ["fill start", "fill end",
+                                                                                           ["send", 0]]
+    assert judge(signed) == ()
+    n = len(signed.log)
+    assert judge(dataclasses.replace(signed, log=signed.log[:-1])) == (
+        "the signature does not verify", f"batch {len(signed.batches) - 1}'s receipt is not entry {n - 1} of its device's "
+        f"closed log: {UNCOVERED}")
+    back = Clock(1_000_000)
+    c = challenger(clock=back, signer=signer, server=b"server-8")
+    for _ in c.fill(100):
+        back.now -= 1
+    s = c.close()
+    assert s.ended == mc.CLOCK_BACKWARDS and len(s.log) == 1 and s.fill_end == s.fill_start
+    assert sw.verdict(s, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES).reasons == (
+        f"the session ended clock-backwards after 0 of {c.params.batches} batches",)
+
+
 CERTIFICATE = b"a start certificate, as the network certifier returned it"
 
 
@@ -239,19 +265,24 @@ def session(certificate: bytes | None = CERTIFICATE, server: bytes = SERVER):
 
 
 def signed_bytes(s: sw.SignedWipe) -> bytes:
-    """What a session signs, rebuilt here from the format: the header's 16 keys in sorted order, with no spaces, and no
-    egress count among them."""
+    """What a session signs, rebuilt here from the format: the header's 17 keys in sorted order, with no spaces, and no
+    egress count among them, then the records root and the head of the device's log, rebuilt link by link."""
     p = s.commitment.params
     header = {"batch": p.batch, "batches": len(s.batches), "clock": "CLOCK_MONOTONIC_RAW ns",
-              "ended": s.ended, "fill_end_ns": s.fill_end.ns, "fill_start_ns": s.fill_start.ns, "k": p.k,
+              "ended": s.ended, "entries": len(s.log), "fill_end_ns": s.fill_end.ns, "fill_start_ns": s.fill_start.ns, "k": p.k,
               "label_bytes": 64, "labels": p.labels, "limit_ns": p.limit_ns, "protocol": "verity-pous/streamed-wipe/v2",
               "records_tree": "verity-pous/streamed-wipe/batch-records/frame-v3-sha512/v1",
               "server": s.commitment.server.hex(), "session": s.commitment.session.hex(),
               "start_mark": s.start_mark.hex(), "tiers": [[t, b] for t, b in p.tiers]}
-    assert list(header) == sorted(header) and len(header) == 16 and "egress_bits" not in header
+    assert list(header) == sorted(header) and len(header) == 17 and "egress_bits" not in header
     head = json.dumps(header, separators=(",", ":")).encode()
-    return hashlib.sha512(b"verity-pous/streamed-wipe/session/v2\0" + len(head).to_bytes(8, "big") + head
-                          + sw.records_root(s.commitment.session, s.batches)).digest()
+    chain = hashlib.sha512(b"verity-clock/chain/v1\0" + s.public_key.hex().encode()).digest()
+    for i, e in enumerate(s.log):
+        body = json.dumps({"data": e.data, "ns": e.reading.ns}, separators=(",", ":")).encode()
+        chain = hashlib.sha512(b"verity-clock/chain/v1\0" + chain + i.to_bytes(8, "big") + len(body).to_bytes(8, "big")
+                               + body).digest()
+    return hashlib.sha512(b"verity-pous/streamed-wipe/session/v3\0" + len(head).to_bytes(8, "big") + head
+                          + sw.records_root(s.commitment.session, s.batches) + chain).digest()
 
 
 @pytest.mark.parametrize("how", ["fill", "fill_by"])
@@ -387,7 +418,7 @@ def test_the_reader_refuses_another_format_or_mark():
         signed = session(certificate)[1]
         j = json.loads(json.dumps(signed.to_json()))
         assert set(j) == {"commitment", "ended", "start_mark", "fill_start_ns", "fill_end_ns", "batches",
-                          "scheme", "public_key", "signature"}
+                          "scheme", "public_key", "signature", "log"}
         assert WP.signed_of(j) == signed
         assert j["commitment"]["clock"] == sw.CLOCK == "CLOCK_MONOTONIC_RAW ns"
         for other in ("CLOCK_MONOTONIC ns", "CLOCK_MONOTONIC_RAW", "CLOCK_REALTIME ns", None):

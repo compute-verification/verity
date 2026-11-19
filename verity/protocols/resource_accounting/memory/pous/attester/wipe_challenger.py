@@ -186,7 +186,7 @@ class WipeMemoryAttester:
         first = b * self.params.batch
         idx = self.indices[first:first + self.params.batch]
         try:
-            send = stamp(self.device, self.clock_log, ("send", b))
+            send = stamp(self.device, self.clock_log, ["send", b])
         except ClockBackwards:
             self.ended = mc.CLOCK_BACKWARDS
             return None
@@ -197,7 +197,7 @@ class WipeMemoryAttester:
         """The open batch's answers, `LABEL_BYTES` an index in order: the receipt time first, then the check.  None, and
         no batch recorded, when the clock runs backwards, which ends the session."""
         try:
-            receipt = stamp(self.device, self.clock_log, ("receipt", len(self.batches)))
+            receipt = stamp(self.device, self.clock_log, ["receipt", len(self.batches)])
         except ClockBackwards:
             receipt = None
         if self._open is None:
@@ -232,11 +232,12 @@ class WipeMemoryAttester:
             raise RuntimeError("the session has not ended")
         if self.signed is None:
             assert self.fill_start is not None and self.fill_end is not None
-            batches = tuple(self.batches)
-            m = message(self.commitment, self.ended, self.start_mark, self.fill_start.ns, self.fill_end.ns, batches)
+            batches, log = tuple(self.batches), tuple(self.clock_log.entries)
+            m = message(self.commitment, self.ended, self.start_mark, self.fill_start.ns, self.fill_end.ns, batches,
+                        len(log), self.clock_log.head)
             self.signed = SignedWipe(self.commitment, self.ended, self.start_mark, self.fill_start, self.fill_end,
                                      batches, self.signer.scheme, self.signer.public_key,
-                                     self.signer.sign(self.commitment.session, m))
+                                     self.signer.sign(self.commitment.session, m), log)
         return self.signed
 
     def coins(self) -> tuple[int, ...]:

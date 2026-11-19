@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 
 import pytest
 
@@ -53,13 +54,34 @@ def test_stamp_reads_the_devices_clock_into_its_own_log_and_nowhere_else():
     now = Counter(40)
     d, log = device(now), C.Log("attester")
     t = C.stamp(d, log, {"coin": 3})
-    assert t == C.Reading("attester", 40) and log.entries == [C.Entry({"coin": 3}, t)]
+    assert t == C.Reading("attester", 40) and log.entries == [C.Entry({"coin": 3}, t, 0, C.origin("attester"))]
     with pytest.raises(ValueError, match="only its own log, not the log under 'other'"):
         C.stamp(d, C.Log("other"))
     now.ns = 39
     with pytest.raises(C.ClockBackwards, match="read 39 ns after it read 40 ns"):
         C.stamp(d, log)
     assert len(log.entries) == 1
+
+
+def test_the_log_is_a_chain_its_head_covers_and_an_entry_out_of_it_is_refused_by_name():
+    """Each entry carries its sequence number and the chain's value before it; `chain` recomputes the head from the
+    device's origin, and refuses a reordered, dropped, re-linked or another device's entry as `uncovered`."""
+    now = Counter(5)
+    d, log = device(now), C.Log("attester")
+    C.stamp(d, log, ["send", 0])
+    log.record({"root": "r"})
+    now.ns = 9
+    C.stamp(d, log, ["receipt", 0])
+    assert [e.seq for e in log.entries] == [0, 1, 2] and log.entries[0].prev == C.origin("attester")
+    assert C.chain("attester", log.entries) == log.head != C.chain("attester", log.entries[:2])
+    assert C.Log("attester").head == C.origin("attester") != C.origin("other")
+    e = log.entries
+    for bad in ([e[1], e[0], e[2]], [e[0], e[2]], [e[0], dataclasses.replace(e[1], data={"root": "s"}), e[2]],
+                [e[0], e[1], dataclasses.replace(e[2], reading=C.Reading("other", 9))]):
+        with pytest.raises(C.Uncovered, match=C.UNCOVERED):
+            C.chain("attester", bad)
+    with pytest.raises(C.Uncovered, match="entry 0"):
+        C.chain("other", e)
 
 
 def _run(gen, n: int) -> list[C.Tick]:
@@ -88,7 +110,7 @@ def test_ticks_run_on_their_time_and_a_wait_that_ends_early_waits_again():
     origin = C.stamp(d, log)
     out = _run(C.ticks(d, origin, 100, sleep=short, log=log), 4)
     assert [(t.k, t.late_ns, t.late) for t in out] == [(k, 0, False) for k in range(4)]
-    assert now.ns == 1_300 and log.entries[1:] == [C.Entry({"tick": k}, t.reading) for k, t in enumerate(out)]
+    assert now.ns == 1_300 and [(e.data, e.reading) for e in log.entries[1:]] == [({"tick": k}, t.reading) for k, t in enumerate(out)]
     assert [t.reading.ns for t in out] == [1_000, 1_100, 1_200, 1_300]
 
 
@@ -106,7 +128,8 @@ def test_every_tick_is_an_entry_of_its_log_and_its_reading_says_whether_it_is_pa
     origin = C.stamp(d, log)
     out = _run(C.ticks(d, origin, 100, sleep=sleep, log=log), 4)
     assert [(t.late_ns, t.late) for t in out] == [(0, False), (0, False), (7, True), (3, False)]
-    assert log.entries[1:] == [C.Entry({"tick": k}, C.Reading("attester", ns)) for k, ns in enumerate((0, 100, 207, 303))]
+    assert [(e.data, e.reading) for e in log.entries[1:]] == [({"tick": k}, C.Reading("attester", ns))
+                                                       for k, ns in enumerate((0, 100, 207, 303))]
 
 
 def test_ticks_start_only_from_the_devices_own_reading():

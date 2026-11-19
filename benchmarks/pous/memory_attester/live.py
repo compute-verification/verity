@@ -273,9 +273,9 @@ def signature_control(doc: dict[str, Any], expected: Callable[[int], bytes]) -> 
         out["sessions"] += 1
         out["unedited_accepted"] += reasons(signed) == ()
         out["flipped_rejected"] += bad in reasons(mc.SignedSession(commitment, signed.ended, signed.rounds, signed.scheme,
-                                                                   signed.public_key, bytes(sig)))
+                                                                   signed.public_key, bytes(sig), signed.log))
         out["edited_rejected"] += bad in reasons(mc.SignedSession(commitment, signed.ended, tuple(rounds), signed.scheme,
-                                                                  signed.public_key, signed.signature))
+                                                                  signed.public_key, signed.signature, signed.log))
     out["passed"] = bool(out["sessions"]) and out["flipped_rejected"] == out["edited_rejected"] == out["sessions"]
     return out
 

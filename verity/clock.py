@@ -8,6 +8,12 @@ It mirrors Core's clock in Lean (`Definitions/Core/Challenger.lean`, `Definition
   its own device's log is not a reading, and outside tests `stamp` is the only way to make one: it reads the device's
   clock as it appends the entry to the device's log, refuses another key's log, and refuses a reading below the log's
   last by name (`ClockBackwards`).
+- The log is a **chain** (`chain`): entry `i` carries its sequence number `i` and the chain's value before it, and the
+  value after it is `link`'s SHA-512 of the two and what the entry says; a device's chain starts at `origin` of its key.
+  The device's one close signs the head (`Log.head`) with its consumer's record, so an entry is **covered** when it is a
+  link of a chain the device closed, and `chain` refuses one that is not by name (`Uncovered`, `UNCOVERED`). That the
+  device enters each entry into its chain before it releases what the entry says is the named premise `trusted-device`,
+  which nothing here checks.
 - A **tick** (`tick`) is a view of a reading: the reading counted in a registered period.
 - A prover's entry has no time of its own: a bracket (Core's `Bracketed`) bounds only the device's own two entries.
 - How a device's clock runs against real time is the named premise `clock-within-drift` (`ClockWithin`; `NotSlow`
@@ -24,6 +30,8 @@ clock. The module imports the standard library alone.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
@@ -35,6 +43,16 @@ NS = 10**9
 
 class ClockRefused(Exception):
     """The host gives no raw monotonic clock, so no device reads one here: a device runs on no other clock."""
+
+
+UNCOVERED = "uncovered"
+"""The name a consumer refuses an entry by that no closed chain of its device covers (`Uncovered`)."""
+CHAIN_TAG = b"verity-clock/chain/v1\0"
+"""The domain of a device's chain: its origin and every link."""
+
+
+class Uncovered(ValueError):
+    """An entry that is not the next link of its device's chain: refused by the name `UNCOVERED`."""
 
 
 class ClockBackwards(ValueError):
@@ -104,11 +122,39 @@ class Device:
 
 @dataclass(frozen=True, slots=True)
 class Entry:
-    """One entry of a device's log: what the entry says (`data`), with the reading the device took as it wrote the entry,
-    or with none for an entry that carries no reading (a value it recorded, a coin it released)."""
+    """One entry of a device's log: what the entry says (`data`, JSON), with the reading the device took as it wrote the
+    entry, or with none for an entry that carries no reading (a value it recorded, a coin it released); its sequence
+    number `seq` and the chain's value `prev` before it."""
 
     data: Any
-    reading: Reading | None = None
+    reading: Reading | None
+    seq: int
+    prev: bytes
+
+
+def origin(key: str) -> bytes:
+    """The chain's value before the first entry of the device registered under `key`: `SHA-512(CHAIN_TAG ‖ key)`."""
+    return hashlib.sha512(CHAIN_TAG + key.encode()).digest()
+
+
+def link(e: Entry) -> bytes:
+    """The chain's value after entry `e`: `SHA-512(CHAIN_TAG ‖ prev ‖ u64 seq ‖ u64 len ‖ body)`, where the body is the
+    canonical JSON of what the entry says and its reading's count (null for none)."""
+    body = json.dumps({"data": e.data, "ns": None if e.reading is None else e.reading.ns}, sort_keys=True,
+                      separators=(",", ":")).encode()
+    return hashlib.sha512(CHAIN_TAG + e.prev + e.seq.to_bytes(8, "big") + len(body).to_bytes(8, "big") + body).digest()
+
+
+def chain(key: str, entries: list[Entry] | tuple[Entry, ...]) -> bytes:
+    """The head of the chain of `entries`, the log of the device registered under `key`, recomputed from its origin:
+    entry `i` must carry sequence number `i`, the value before it and, if any, a reading of that device; the first that
+    does not is refused (`Uncovered`)."""
+    head = origin(key)
+    for i, e in enumerate(entries):
+        if e.seq != i or e.prev != head or (e.reading is not None and e.reading.key != key):
+            raise Uncovered(f"entry {i} of device {key!r}'s log is not its chain's link {i}: {UNCOVERED}")
+        head = link(e)
+    return head
 
 
 @dataclass
@@ -118,10 +164,20 @@ class Log:
     key: str
     entries: list[Entry] = field(default_factory=list)
 
+    @property
+    def head(self) -> bytes:
+        """The chain's value after the last entry, `origin` of the key for none: what the device's close signs."""
+        return link(self.entries[-1]) if self.entries else origin(self.key)
+
+    def append(self, data: Any, reading: Reading | None = None) -> Entry:
+        """Append the next link of the chain: what it says and its reading, if any."""
+        e = Entry(data, reading, len(self.entries), self.head)
+        self.entries.append(e)
+        return e
+
     def record(self, data: Any) -> int:
         """Append an entry that carries no reading; its index."""
-        self.entries.append(Entry(data))
-        return len(self.entries) - 1
+        return self.append(data).seq
 
 
 def stamp(device: Device, log: Log, data: Any = None) -> Reading:
@@ -134,7 +190,7 @@ def stamp(device: Device, log: Log, data: Any = None) -> Reading:
     if last is not None and t.ns < last.ns:
         raise ClockBackwards(f"device {device.key!r}'s clock read {t.ns} ns after it read {last.ns} ns: a device's "
                              "readings never run backwards")
-    log.entries.append(Entry(data, t))
+    log.append(data, t)
     return t
 
 
@@ -168,5 +224,5 @@ async def ticks(device: Device, origin: Reading, period_ns: int, *, sleep: Calla
         k += 1
 
 
-__all__ = ["NS", "ClockBackwards", "ClockRefused", "Device", "Entry", "Log", "Reading", "Tick", "elapsed", "raw_ns",
-           "raw_resolution_ns", "stamp", "tick", "ticks"]
+__all__ = ["CHAIN_TAG", "NS", "UNCOVERED", "ClockBackwards", "ClockRefused", "Device", "Entry", "Log", "Reading", "Tick",
+           "Uncovered", "chain", "elapsed", "link", "origin", "raw_ns", "raw_resolution_ns", "stamp", "tick", "ticks"]

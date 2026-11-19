@@ -15,9 +15,12 @@ A session has four steps:
    `(j, index, send time, receipt time, H(block))` (`Round`).  The first late round ends the session.  So does a clock
    that reads below its last reading (`verity.clock.ClockBackwards`), `clock-backwards` (`CLOCK_BACKWARDS`), with no
    record of the round it was timing and no index revealed for it.  No round is retried, and no index is resampled.
-3. **Sign.** One signature per session (`close`) over `SHA-512(SESSION_TAG ‖ header ‖ records digest)`: the header is
-   the commitment's fields and how the session ended, and the records digest is the `sha512/row/v2` digest of the round
-   records as one stream.  The records are witness: the prover proves things about them, and they never reach the auditor in the
+3. **Sign.** One signature per session (`close`) over `SHA-512(SESSION_TAG ‖ header ‖ records digest ‖ chain head)`:
+   the header is the commitment's fields, how the session ended and how many entries the device's log holds, the
+   records digest is the `sha512/row/v2` digest of the round records as one stream, and the chain head is the head of
+   the device's log (`verity.clock.chain`), whose entries are each round's send and receipt readings in order.  The
+   verdict recomputes the chain and refuses a round whose readings are not its entries (`verity.clock.UNCOVERED`).
+   The records and the log are witness: the prover proves things about them, and they never reach the auditor in the
    clear.
 4. **Release.** Once the session is signed the memory attester releases its commitment (`commitment`: the coin
    tree's root and hm96 key, the session's id and parameters, and the root the setup published for the `C*` it audits,
@@ -91,7 +94,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Protocol
 
-from verity.clock import ClockBackwards, Device, Log, Reading, elapsed, stamp
+from verity.clock import UNCOVERED, ClockBackwards, Device, Entry, Log, Reading, Uncovered, chain, elapsed, stamp
 from verity.commitments import hm96
 from verity.commitments.crypto import lms
 from verity.commitments.indexed import RangeIndexedDomain
@@ -117,7 +120,7 @@ COIN_TREE = "verity-pous/coin-tree/hm96-sha512/v1"
 RECORDS = "sha512/row/v2"
 COIN_TAG = b"verity-pous/memory-challenger/coin/v1\0"
 COIN_BINDING = b"verity-pous/memory-challenger/coin-tree/v1\0"
-SESSION_TAG = b"verity-pous/memory-challenger/session/v1\0"
+SESSION_TAG = b"verity-pous/memory-challenger/session/v2\0"
 SETUP_RECORD_TAG = b"verity-pous/memory-challenger/setup-record/v1\0"
 SESSION_LOG = "verity-pous/memory-challenger/session-log/v1"
 SALT_LOG = "verity-pous/memory-challenger/salt-log/v1"
@@ -299,11 +302,22 @@ def records_digest(rounds: Sequence[Round]) -> bytes:
     return block_digest(b"".join(r.value() for r in rounds))
 
 
-def message(commitment: SessionCommitment, ended: str, rounds: Sequence[Round]) -> bytes:
-    """What the session's one signature signs: `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records digest)`."""
-    head = json.dumps({**commitment.header(), "ended": ended, "rounds": len(rounds)}, sort_keys=True,
-                      separators=(",", ":")).encode()
-    return _sha512(SESSION_TAG, len(head).to_bytes(8, "big"), head, records_digest(rounds))
+def message(commitment: SessionCommitment, ended: str, rounds: Sequence[Round], entries: int, chain_head: bytes) -> bytes:
+    """What the session's one signature signs: `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records digest ‖ chain head)`,
+    the head of the device's log of `entries` entries."""
+    head = json.dumps({**commitment.header(), "ended": ended, "entries": entries, "rounds": len(rounds)},
+                      sort_keys=True, separators=(",", ":")).encode()
+    return _sha512(SESSION_TAG, len(head).to_bytes(8, "big"), head, records_digest(rounds), chain_head)
+
+
+def entry_json(e: Entry) -> dict[str, Any]:
+    """An entry of a device's log as a closed session carries it (`entry_of` reads it back)."""
+    return {"data": e.data, "ns": None if e.reading is None else e.reading.ns, "seq": e.seq, "prev": e.prev.hex()}
+
+
+def entry_of(doc: Mapping[str, Any], key: str) -> Entry:
+    return Entry(doc["data"], None if doc["ns"] is None else Reading(key, int(doc["ns"])), int(doc["seq"]),
+                 bytes.fromhex(doc["prev"]))
 
 
 class Signer(Protocol):
@@ -479,7 +493,8 @@ def holds(where: Mapping[str, Any]) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class SignedSession:
-    """A closed session: its commitment, how it ended, its round records, and the one signature over them."""
+    """A closed session: its commitment, how it ended, its round records, the one signature over them, and the device's
+    log, whose chain's head the signature covers."""
 
     commitment: SessionCommitment
     ended: str
@@ -487,18 +502,49 @@ class SignedSession:
     scheme: str
     public_key: bytes
     signature: bytes
+    log: tuple[Entry, ...] = ()
 
     def message(self) -> bytes:
-        return message(self.commitment, self.ended, self.rounds)
+        """The signed message, its chain head recomputed from the log (`Uncovered` when it is no chain of the signer's
+        device)."""
+        return message(self.commitment, self.ended, self.rounds, len(self.log), chain(self.public_key.hex(), self.log))
 
     def to_json(self) -> dict[str, Any]:
         return {"commitment": self.commitment.to_json(), "ended": self.ended, "rounds": [r.to_json() for r in self.rounds],
-                "scheme": self.scheme, "public_key": self.public_key.hex(), "signature": self.signature.hex()}
+                "scheme": self.scheme, "public_key": self.public_key.hex(), "signature": self.signature.hex(),
+                "log": [entry_json(e) for e in self.log]}
 
     @classmethod
     def from_json(cls, doc: Mapping[str, Any]) -> SignedSession:
         rounds = tuple(Round.from_json(r, doc["public_key"]) for r in doc["rounds"])
-        return cls(SessionCommitment.from_json(doc["commitment"]), doc["ended"], rounds, doc["scheme"], bytes.fromhex(doc["public_key"]), bytes.fromhex(doc["signature"]))
+        log = tuple(entry_of(e, doc["public_key"]) for e in doc.get("log", ()))
+        return cls(SessionCommitment.from_json(doc["commitment"]), doc["ended"], rounds, doc["scheme"],
+                   bytes.fromhex(doc["public_key"]), bytes.fromhex(doc["signature"]), log)
+
+
+def uncovered_by(public_key: bytes, log: Sequence[Entry], want: Sequence[tuple[str, Any, Reading]],
+                 ended: str) -> str | None:
+    """Why `want`, each a name, what its entry says and its reading, is not `log` entry by entry, or None: `log` must be
+    a chain of the device registered under `public_key`, and nothing follows `want` in it but the reading a backwards
+    clock ended the session at (`CLOCK_BACKWARDS`)."""
+    try:
+        chain(public_key.hex(), log)
+    except Uncovered as e:
+        return str(e)
+    for i, (name, data, t) in enumerate(want):
+        if i >= len(log) or log[i].data != data or log[i].reading != t:
+            return f"{name} is not entry {i} of its device's closed log: {UNCOVERED}"
+    if not (len(log) == len(want) or (len(log) == len(want) + 1 and ended == CLOCK_BACKWARDS)):
+        return f"the device's closed log holds {len(log)} entries, not the session's {len(want)}: {UNCOVERED}"
+    return None
+
+
+def uncovered(signed: SignedSession) -> str | None:
+    """Why the session's rounds are not the entries of its device's closed log, or None (`uncovered_by`): entries
+    `2j` and `2j + 1` are round `j`'s send and receipt."""
+    want = [(f"round {j}'s {what}", [what, j], t) for j, r in enumerate(signed.rounds)
+            for what, t in (("send", r.send), ("receipt", r.receipt))]
+    return uncovered_by(signed.public_key, signed.log, want, signed.ended)
 
 
 def _field(b: bytes) -> bytes:
@@ -805,7 +851,7 @@ class MemoryAttester:
             raise RuntimeError("the previous round is unanswered")
         j = len(self.rounds)
         try:
-            send = stamp(self.device, self.clock_log, ("send", j))
+            send = stamp(self.device, self.clock_log, ["send", j])
         except ClockBackwards:
             self.ended = CLOCK_BACKWARDS
             return None
@@ -816,7 +862,7 @@ class MemoryAttester:
         """The open round's answer: its receipt time, then `block_digest` of all of `block`, which must be `block_bytes`.
         None, and no round recorded, when the clock runs backwards, which ends the session."""
         try:
-            receipt = stamp(self.device, self.clock_log, ("receipt", len(self.rounds)))
+            receipt = stamp(self.device, self.clock_log, ["receipt", len(self.rounds)])
         except ClockBackwards:
             receipt = None
         if self._open is None:
@@ -850,10 +896,11 @@ class MemoryAttester:
         if self.ended is None:
             raise RuntimeError("the session has not ended")
         if self.signed is None:
-            rounds = tuple(self.rounds)
-            sig = self.signer.sign(self._commitment.session, message(self._commitment, self.ended, rounds))
+            rounds, log = tuple(self.rounds), tuple(self.clock_log.entries)
+            sig = self.signer.sign(self._commitment.session,
+                                   message(self._commitment, self.ended, rounds, len(log), self.clock_log.head))
             self.signed = SignedSession(self._commitment, self.ended, rounds, self.signer.scheme, self.signer.public_key,
-                                        sig)
+                                        sig, log)
         return self.signed
 
     def openings(self) -> tuple[CoinOpening, ...]:
@@ -912,6 +959,8 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
             ok = False
         if not ok:
             reasons.append("the signature does not verify")
+    if (why := uncovered(signed)) is not None:
+        reasons.append(why)
     if signed.commitment != commitment:
         reasons.append("the signed header is not the session's commitment")
     if signed.ended != COMPLETE or len(signed.rounds) != commitment.k:
@@ -933,7 +982,7 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
     return Verdict(not reasons, tuple(reasons), late, wrong)
 
 
-__all__ = ["CLOCK_BACKWARDS", "CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMMITTED", "COMPLETE", "HM96", "LATE", "LMS", "MATCHED", "PREMISE",
+__all__ = ["entry_json", "entry_of", "uncovered", "uncovered_by", "CLOCK_BACKWARDS", "CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMMITTED", "COMPLETE", "HM96", "LATE", "LMS", "MATCHED", "PREMISE",
            "PREMISE_BEFORE", "PROTOCOL", "REHEARSAL", "SEED_BYTES", "UNCOMMITTED", "committed", "create_leaf_state",
            "deployed_key", "holds", "key_tree", "pinned", "premise", "trusted_device",
            "RECORDS", "RECORD_BYTES", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "SETUP_RECORD_TAG",
