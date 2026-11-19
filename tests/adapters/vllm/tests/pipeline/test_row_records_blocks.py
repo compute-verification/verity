@@ -29,10 +29,8 @@ import pytest
 import verity_vllm.pipeline.row_records as R
 from tests.pipeline.test_row import PD, STAGE_START, _record_manifest, _summary_row
 from tests.pipeline.test_row_match import _match_row
-from tests.pipeline.test_tp_fold_match_records import _main as fold_match_run
 from verity_vllm.config import CHECKPOINTS, WORKLOADS, workload_file
 from verity_vllm.pipeline import row_json
-from verity_vllm.pipeline.workload import plan
 from verity_vllm.query.manifest.format import components_fold_digest
 
 SAMPLED = WORKLOADS / "llama32-1b__bf16__l40s__tp1__b8__i1024__o128__mixed__stoch-t0.8-p0.95__bi-eager.json"
@@ -540,55 +538,6 @@ def test_the_commit_line_and_a_tp_rows_world_read_a_document_without_its_runs_it
     assert R.tp_world(_put(tmp_path / "w.json", {"sweep": {"tp": 4}})) == 4
 
 
-def test_a_tp_build_summary_reads_each_ranks_results_without_their_program(tmp_path):
-    """A rank's derive that states no Program has no digest, and then the summary's step digest, rank 0's, is none."""
-    b = tmp_path / "build"
-    for program in _left_out("program"):
-        for r in (0, 1):
-            _put(b / f"rank{r}" / "build_step" / "result.json", {"ok": True, **program})
-            _put(b / f"rank{r}" / "build_request_LP8_T3" / "result.json", {"ok": True, "aot": True, **program})
-            _put(b / f"rank{r}" / "build_workload" / "workload_program.json", {"workload_digest": "w" * 64})
-        assert R.tp_build_summary(str(b), 2) == "PASS"
-        s = _read(tmp_path / "build_summary.json")
-        assert s["step"] == {"program_digest": None} and s["tp"] == {"world": 2}, program
-        for rank in (s["ranks"]["rank0"], s["ranks"]["rank1"]):
-            assert rank["build_step"] == {"ok": True, "unsupported": None, "message": "", "program_digest": None, "census_digest": None, "construction": "trace"}
-            assert (rank["build_request_LP8_T3"]["program_digest"], rank["build_request_LP8_T3"]["construction"]) == (None, "aot")
-    _put(b / "rank0" / "build_step" / "result.json", {"ok": True, "program": {"digest": "p" * 64}, "census": {"census": "c" * 64}})
-    assert R.tp_build_summary(str(b), 2) == "PASS"
-    s = _read(tmp_path / "build_summary.json")
-    assert s["step"] == {"program_digest": "p" * 64} and s["ranks"]["rank0"]["build_step"]["census_digest"] == "c" * 64
-    assert R.tp_build_digests(str(tmp_path)) == ("p" * 16, "")
-    for step in _left_out("build_step"):
-        _put(tmp_path / "build_summary.json", {**s, "ranks": {**s["ranks"], "rank1": {"workload": {}, **step}}})
-        assert R.tp_build_digests(str(tmp_path)) == ("p" * 16, ""), step
-    _put(tmp_path / "build_summary.json", {**s, "ranks": {**s["ranks"], "rank1": {"build_step": {"program_digest": "s" * 64}}}})
-    assert R.tp_build_digests(str(tmp_path)) == ("p" * 16, "s" * 16)
-    three = {**s["ranks"], "rank1": {"build_step": {"program_digest": "s" * 64}}, "rank2": {"workload": {}}}
-    _put(tmp_path / "build_summary.json", {**s, "tp": {"world": 3}, "ranks": three})
-    assert R.tp_build_digests(str(tmp_path)) == ("p" * 16, "s" * 16 + "/")   # a rank without its step joins as an empty digest
-
-
-def test_a_tp_rows_manifest_and_commit_lines_read_documents_with_blocks_left_out(tmp_path):
-    d = str(tmp_path)
-    for populations in _left_out("populations"):
-        for binding in _left_out("tp_peer_binding"):
-            _put(tmp_path / "manifest.json", {"complete": True, **populations, **binding})
-            assert R.tp_manifest_line(d) == "complete True identities None tp_peer_binding_n_unbound None unmodelled null digest ", (populations, binding)
-    _put(tmp_path / "manifest.json", {"complete": False, "populations": {"identities": 7}, "tp_peer_binding": {"n_unbound": 0}, "unmodelled": ["x"],
-                                      "manifest_digest": "m" * 64})
-    assert R.tp_manifest_line(d) == f"complete False identities 7 tp_peer_binding_n_unbound 0 unmodelled [\"x\"] digest {'m' * 16}"
-    blocks = ("sampled_replay", "boundary_linkage", "cross_rank_collectives", "fold_match_binding", "weights_pin")
-    nothing = "pass True pairs None delta None roots null tokens None replay None linkage None xrank None fold_binding None weights_pin None"
-    left_out: list[dict[str, Any]] = [{}, dict.fromkeys(blocks), dict.fromkeys(blocks, {})]
-    for summary in left_out:
-        _put(tmp_path / "commit" / "summary.json", {"pass": True, **summary})
-        assert R.tp_commit_line(d) == nothing, summary
-    _put(tmp_path / "commit" / "summary.json", {"pass": True, **{b: {"result": i} for i, b in enumerate(blocks)}})
-    assert R.tp_commit_line(d) == nothing.replace("replay None linkage None xrank None fold_binding None weights_pin None",
-                                                 "replay 0 linkage 1 xrank 2 fold_binding 3 weights_pin 4")
-
-
 def test_a_record_that_cannot_be_read_gives_its_named_default_and_one_that_can_gives_what_it_states(tmp_path):
     """The workload Program's digest and a failed compose's reason are "" where `build_workload/workload_program.json` is absent or
     no document; the compare's exit is 3 where `match_decomp.json` is no document; a TP row's manifest is complete only where it
@@ -682,21 +631,19 @@ def test_a_match_summary_compares_token_records_that_list_no_requests_by_their_t
 
 def test_a_manifest_built_under_other_tap_policies_than_the_commits_is_not_its_manifest_of_record(tmp_path):
     """Either way: a policy the manifest's query states that the Commit does not run, and one the Commit runs that it does not state."""
-    p, d = tmp_path / "manifest.json", str(tmp_path)
+    p = tmp_path / "manifest.json"
     _record_manifest(p, R.QUERY_OF_RECORD)
     _put(p, _read(p) | {"complete": True})
     every = SimpleNamespace(norm_tap="1", router_tap="1", vocab_tap="1")
-    assert R.manifest_not_of_record(_read(p), PD, every) == ("", "") and R.tp_manifest_not_of_record(d, every) == ""
+    assert R.manifest_not_of_record(_read(p), PD, every) == ("", "")
     no_router = SimpleNamespace(norm_tap="1", router_tap="0", vocab_tap="1")
     why = "disagrees with this Commit's taps on the router_softmax policy"
     assert R.manifest_not_of_record(_read(p), PD, no_router) == ("policy-router-softmax", why)
-    assert R.tp_manifest_not_of_record(d, no_router) == why
     doc = _read(p)
     del doc["query"]["vocab_range"]
     _put(p, doc)
     why = "disagrees with this Commit's taps on the router_softmax, vocab_range policy"
     assert R.manifest_not_of_record(doc, PD, no_router) == ("policy-router-softmax-vocab-range", why)
-    assert R.tp_manifest_not_of_record(d, no_router) == why
 
 
 def test_a_component_whose_result_cannot_be_read_is_passed_over_for_the_next(tmp_path):
@@ -802,33 +749,6 @@ def test_a_served_shape_is_said_for_a_request_that_generated_something_and_did_n
     assert R.served_shape(str(tmp_path)) == (f"LP=8 T_r={t} {row_t}=3" if said else "")
 
 
-def _tp_workload(tmp_path: Path, args: dict[str, Any], **top: Any) -> str:
-    """A workload of two requests, prompts of 8 and 5 tokens with token limits 4 and 3, in the sweep `workload.plan` writes: the
-    list of token limits is the one it writes after the prompt lengths."""
-    sweep = plan("row", 2, 8, 4, sampling="greedy", arrivals="none")
-    names = list(sweep)
-    sweep |= {"input_lengths": [8, 5], names[names.index("input_lengths") + 1]: [4, 3]}
-    return _put(tmp_path / "wl.json", {"sweep": sweep, "schema": "verity-vllm/workload/v2", "model": "m", "engine": {"revision": "0" * 40, "args": args}, **top})
-
-
-def test_a_tp_rows_shape_reads_its_engine_lengths_where_stated_else_its_envelope_and_counts_its_requests(tmp_path, monkeypatch):
-    """The token budget is the workload's where it is under ``B * MML``; the requests are the workload's list, else one per input length."""
-    asked = []
-
-    def checkpoint_dir(*a: Any) -> str:
-        asked.append(a)
-        return "/ck"
-
-    monkeypatch.setattr(R, "checkpoint_dir", checkpoint_dir)
-    shapes = [(5, 2), (8, 3)]
-    assert R.tp_shape(_tp_workload(tmp_path, {}), "cks.json", "hf") == {"B": 2, "I": 8, "O": 4, "requests": 2, "shapes": shapes, "MML": 12, "MNBT": 12, "ck": "/ck"}
-    assert asked == [("m", "0" * 40, "hf", "cks.json")]
-    wl = _tp_workload(tmp_path, {"max_model_len": 20, "max_num_batched_tokens": 10}, requests=[{}, {}, {}])
-    assert R.tp_shape(wl, "cks.json", "hf") == {"B": 2, "I": 8, "O": 4, "requests": 3, "shapes": shapes, "MML": 20, "MNBT": 10, "ck": "/ck"}
-    monkeypatch.setattr(R, "checkpoint_dir", lambda *a: None)
-    assert R.tp_shape(wl, "cks.json", "hf")["ck"] == ""
-
-
 def test_a_tp_build_summary_fails_on_any_ranks_refused_derive_or_absent_workload_and_states_each_whole(tmp_path):
     b = tmp_path / "build"
     _put(b / "rank0" / "build_step" / "result.json", {"ok": True, "program": {"digest": "p" * 64}})
@@ -856,70 +776,3 @@ def test_a_tp_build_summary_fails_on_any_ranks_refused_derive_or_absent_workload
     assert R.tp_rank_workload_digest(str(b), 1) == "" and R.tp_rank_workload_digest(str(b), 2) == ""
 
 
-def test_a_tp_manifest_that_is_absent_or_not_complete_is_not_of_record_for_that_reason(tmp_path):
-    d, every = str(tmp_path), SimpleNamespace(norm_tap="1", router_tap="1", vocab_tap="1")
-    assert R.tp_manifest_not_of_record(d, every) == "absent or not complete"
-    for doc in ([1], {"complete": False, "query": {"query_id": R.QUERY_OF_RECORD}}, {"complete": "True"}):
-        _put(tmp_path / "manifest.json", doc)
-        assert R.tp_manifest_not_of_record(d, every) == "absent or not complete", doc
-
-
-@pytest.fixture
-def stages_name(tmp_path_factory, monkeypatch) -> str:
-    """The name the fold Match's writer gives its block of verdicts by stage, the one that holds `fold_per_rank`: a `tp-fold-match`
-    (`test_tp_fold_match_records`'s, its stages stood in) writes the document, and its readers look the block up by that name."""
-    doc = fold_match_run(tmp_path_factory.mktemp("fold"), monkeypatch)[1]
-    return next(name for name, block in doc.items() if isinstance(block, dict) and "fold_per_rank" in block)
-
-
-def test_a_tp_rows_check_and_fold_lines_state_each_field_of_their_documents(tmp_path, stages_name):
-    m = str(tmp_path)
-    assert R.tp_check_line(m) == "" and R.tp_fold_line(m) == "" and R.tp_served_shapes(m) == []
-    rank0 = {"n_collectives": 11, "build_signature_len": 12, "n_steps": 13}
-    check = {"pass": True, "structure": {"pass": False, "per_rank": {"0": rank0}}, "provenance": {"pass": True, "collectives_checked": 14, "n_mismatches": 15}}
-    _put(tmp_path / "tp2_match.json", {**check, "tokens": {"pass": False}})
-    line = "pass True structure False n_coll_r0 11 sig_len 12 steps 13 provenance True 14 mismatches 15 tokens False"
-    assert R.tp_check_line(m) == line
-    _put(tmp_path / "tp2_match.json", {**check, "tokens": {}})
-    assert R.tp_check_line(m) == line.replace("tokens False", "tokens None")
-    _put(tmp_path / "fold_match" / "tp2_fold_match.json", {"pass": False, stages_name: {"a": 1}, "problems": ["p1", "p2", "p3", "p4"]})
-    assert R.tp_fold_line(m) == f'pass False {stages_name} {{"a": 1}} problems ["p1", "p2", "p3"]'
-    requests = [{"prompt_token_ids": [1, 2, 3], "generated_token_ids": [4, 5]}, {"prompt_token_ids": [1], "generated_token_ids": [7, 8, 9]}]
-    _put(tmp_path / "capture" / "tokens.json", {"requests": requests})
-    assert R.tp_served_shapes(m) == ["3,1", "1,2"]
-
-
-@pytest.mark.parametrize("passed", [R.tp_passed, lambda p: R.tp_commit_passed(os.path.dirname(os.path.dirname(p)))])
-def test_a_tp_document_passed_only_where_it_states_pass_true(tmp_path, passed):
-    p = tmp_path / "commit" / "summary.json"
-    assert passed(str(p)) is False
-    for doc, said in (({"pass": True}, True), ({"pass": False}, False), ({"pass": "False"}, False), ({}, False)):
-        _put(p, doc)
-        assert passed(str(p)) is said, doc
-
-
-def test_a_tp_match_summary_states_its_stages_exits_and_the_blocks_of_each_document_it_read(tmp_path, stages_name):
-    m = tmp_path / "match"
-    R.tp_match_summary(str(m), 1, 2, 3, -1, "FAIL", "")
-    assert _read(tmp_path / "match_summary.json") == {
-        "pass": False, "level": "collective-level (tp.match check; no TP rank profile)", "capture_rc": 1, "control_rc": 2, "check_rc": 3,
-        "fold_rc": None, "fold_profile": None, "tp2_match": {}, "tp2_fold_match": None}
-    check = {"pass": True, "structure": {"pass": True}, "provenance": {"pass": False}, "tokens": {"pass": True}}
-    _put(m / "tp2_match.json", {**check, "other": 1})
-    fold = {"pass": True, stages_name: [1], "problems": [], "seconds": 9}
-    _put(m / "fold_match" / "tp2_fold_match.json", {**fold, "other": 1})
-    for fold_rc in (0, 4):
-        R.tp_match_summary(str(m), 0, 0, 0, fold_rc, "PASS", "prof")
-        assert _read(tmp_path / "match_summary.json") == {
-            "pass": True, "level": "fold (D90 per-rank fold Match + collective-level)", "capture_rc": 0, "control_rc": 0, "check_rc": 0,
-            "fold_rc": fold_rc, "fold_profile": "prof", "tp2_match": check, "tp2_fold_match": fold}, fold_rc
-    _put(m / "tp2_match.json", {"pass": False, "tokens": {}})
-    R.tp_match_summary(str(m), 0, 0, 0, 0, "FAIL", "prof")
-    assert _read(tmp_path / "match_summary.json")["tp2_match"] == {"pass": False, "tokens": {}}   # a block it does not state is left out
-
-
-def test_a_tp_commit_line_states_its_pairs_delta_roots_and_tokens(tmp_path):
-    roots = ["r" * 100]
-    _put(tmp_path / "commit" / "summary.json", {"pass": False, "pairs": 3, "delta_wall_mean": 0.5, "tp_run_roots": roots, "tokens_equal": True})
-    assert R.tp_commit_line(str(tmp_path)) == (f"pass False pairs 3 delta 0.5 roots {json.dumps(roots)[:80]} tokens True replay None linkage None xrank None"
-                                               " fold_binding None weights_pin None")

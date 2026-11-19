@@ -28,7 +28,6 @@ from verity_torch.prune import BATCHED, registered_form
 
 from verity_vllm.config import RowConfig, option, workload_arg
 from verity_vllm.engine import env as engine_env
-from verity_vllm.engine import hooks
 from verity_vllm.errors import Refused
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import launch_context as LC
@@ -302,7 +301,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         applied_kernels,
         profile_mismatches,
     )
-    with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
+    with InputsTrace(os.path.join(out, "inputs.json")):
         import torch
 
         from verity_vllm.program.frontend import loader_parity
@@ -342,17 +341,10 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             res["model_pin"] = {"model": model_id or vm.PIN["model"], "revision": revision or vm.PIN["revision"], "dtype": engine_dtype(cfg.model_config), "tp": tp,
                                 "rank": rank, "max_model_len": max_model_len}
             vm.ensure_distributed(cfg, backend)
-            bus = _tp_bus(cfg, rank, tp, res, tp_stack) if tp > 1 else None
             from verity_vllm.engine import sparse_mla
             sparse_mla.arm()   # FA3's sparse-MLA split pin, armed as a serving process arms it before vLLM builds the model
             model = vm.instantiate_meta(cfg)
             res.update(loader_parity.as_the_loader_does(model, cfg))   # the Parameters the served model has once its weights are loaded
-            if tp > 1:
-                from verity_vllm.program.frontend.export_ops import (
-                    bind_vocab_parallel_embeddings,
-                )
-                res["tp"]["embedding_shards"] = bind_vocab_parallel_embeddings(model, tp_stack.enter_context(hooks.Hooks()))
-                res["tp"]["sharded_params"] = _sharded_param_summary(model)
             res["model_class"] = f"{type(model).__module__}.{type(model).__qualname__}"
             res["hf_config"] = {k: v for k, v in cfg.model_config.hf_config.to_dict().items()
                                 if k in ("hidden_size", "num_hidden_layers", "num_attention_heads", "num_key_value_heads", "intermediate_size", "vocab_size",
@@ -378,13 +370,6 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             chunks = list((launch or {}).get("chunks", ()))
             mod, inputs = vm.make_wrapper(wrapper, model, pos0=pos0, M=M, LP=LP, T=T, eos_id=eos, sampling=sampling, C=C, chunks=chunks)
             ntok = M if wrapper == "step" else LP - C
-            if tp > 1:
-                # probe: one meta forward records the rank's collectives in call order -> the PEER INPUTS of the Program (the other
-                # rank's partials, ordinary Inputs, bound by tp_links.json to the other rank's committed partials); then the traced wrapper
-                probe = vm.probe_collectives(mod, inputs, cfg, ntok, bus, profile=target)
-                res["tp"]["collectives"] = {"n": len(probe), "by_kind": _count([p["kind"] for p in probe]),
-                                            "by_shape": _count([f'{p["kind"]}{tuple(p["shape"])}' for p in probe]), "record": probe}
-                mod, inputs = vm.with_peers(mod, inputs, bus)
             applied_export: dict = {}
             ep = vm.export_module(mod, inputs, cfg, ntok, intercept_triton=intercept, launch_log=log, profile=target, applied_out=applied_export)
             res["export"] = {"secs": round(time.time() - t0, 2), "n_nodes": len(list(ep.graph.nodes)), "op_histogram": vm.op_histogram(ep),
@@ -411,7 +396,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 config = {**({"chunks": chunks} if chunks else {}), **({"stop": stop} if stop is not None else {})}
                 rep = derive_report(mod, inputs, mode="profile", profile=profile, config=config or None,
                                     rules=vllm_ruleset(), name=f"{_WRAPPER_NAMES[wrapper]}[{res['model_class'].rsplit('.', 1)[-1]}]",
-                                    check_registry=True, rank=(tp, rank) if tp > 1 else None, exported=ep, registered_values=bool(target.registered_values),
+                                    check_registry=True, rank=None, exported=ep, registered_values=bool(target.registered_values),
                                     dead_free=wrapper == "request" and (tp == 1 or dead_free) and (BATCHED if batched else registered_form(target.ir)))
             rep = derived(rep) if target.ir == "boolean" else rep
         res["derive_secs"] = round(time.time() - t1, 2)
@@ -425,35 +410,8 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             with open(os.path.join(out, "derive-report.json"), "w") as f:
                 json.dump(rep.provenance, f, indent=1, default=str)
         else:
-            # the model's path INSIDE the traced wrapper, by object identity (`WithPeers.inner` -> wrapper `.model`):
-            # the derive's module paths are the wrapper's `named_modules()` vocabulary, the recorder's are `model.named_modules()`;
-            # the root is recorded as DATA so no reader spells the wrapper prefix
-            model_root = next((n for n, m in mod.named_modules() if m is model), None) if tp > 1 else None
-            write_program = functools.partial(_write_program, target=target, applied=applied, sampling=sampling, launch=launch, tp=tp, model_root=model_root)
+            write_program = functools.partial(_write_program, target=target, applied=applied, sampling=sampling, launch=launch)
             write_program(out, res, rep, rank=rank)
-
-
-def _tp_bus(cfg, rank: int, tp: int, res: dict, stack: contextlib.ExitStack):
-    """Rank ``rank`` of ``tp``: vLLM's TP group := TPStub (shard sizes + collectives -> CollectiveBus) for instantiation,
-    export and derive, entered on ``stack``; the group's settings and what serving must match into ``res["tp"]``. The bus."""
-    from verity_vllm.definitions.registry.tp_allreduce import settings_of
-    from verity_vllm.program.frontend.export_ops import CollectiveBus, tp_group_override
-    from verity_vllm.program.frontend.rules.vllm_bindings import (
-        observe_allreduce_settings,
-    )
-    env_now = engine_env.snapshot()
-    allreduce_settings = settings_of(cfg.parallel_config.disable_custom_all_reduce, env_now)
-    observe_allreduce_settings(allreduce_settings)
-    bus = CollectiveBus(rank=rank, world=tp, settings=allreduce_settings)
-    stack.enter_context(tp_group_override(rank, tp, bus))
-    car_off = bool(cfg.parallel_config.disable_custom_all_reduce)
-    res["tp"]["engine_args_required"] = {"tensor_parallel_size": tp, "disable_custom_all_reduce": car_off}
-    # the workload's transport as the row set it (`row_tp.TpRow.p2p_env`) -- recorded, not consulted here
-    res["tp"]["env_required"] = {k: v for k, v in env_now.items() if k == "NCCL_P2P_DISABLE"}
-    res["tp"]["allreduce_settings"] = allreduce_settings
-    res["tp"]["collective_backend"] = ("pynccl (custom all-reduce disabled; BI pins NCCL tree/Simple/1 channel)" if car_off else
-                                       "vLLM's custom all-reduce where it admits the tensor, else pynccl")
-    return bus
 
 
 def _read_back_flash_attn_version(impls: dict, applied: dict) -> None:
@@ -468,9 +426,8 @@ def _read_back_flash_attn_version(impls: dict, applied: dict) -> None:
         applied["flash_attn_version"] = fav_ints.pop() if (len(fav_ints) == 1 and len(favs) == 1) else None
 
 
-def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling: dict, launch: dict | None, tp: int, rank: int,
-                   model_root: str | None) -> None:
-    """A successful derive's files under `out` (descriptor, derive report, instances, tp_links, artifact) and its `res` fields."""
+def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling: dict, launch: dict | None, rank: int) -> None:
+    """A successful derive's files under `out` (descriptor, derive report, instances, artifact) and its `res` fields."""
     from verity.circuits.codec import canonical_json, encode_program
     from verity_torch.correspondence.runtime import NAMESPACE as CORR_NS
     from verity_torch.correspondence.runtime import correspondence_digest
@@ -546,24 +503,6 @@ def _count(xs) -> dict:
     for x in xs:
         h[x] = h.get(x, 0) + 1
     return dict(sorted(h.items(), key=lambda kv: (-kv[1], kv[0])))
-
-
-def _sharded_param_summary(model) -> dict:
-    """The rank's parameter shapes AS INSTANTIATED at this rank (the sharded weight inputs the Program commits to), keyed by the
-    vLLM layer class: `{class: {shape: count}}` — the independent check that the shard shapes match the engine worker's loaded shards."""
-    by_cls: dict = {}
-    n_params = n_elems = 0
-    for name, m in model.named_modules():
-        own = list(m.named_parameters(recurse=False))
-        if not own:
-            continue
-        key = type(m).__name__
-        for pn, p in own:
-            n_params += 1
-            n_elems += p.numel()
-            by_cls.setdefault(key, {}).setdefault(f"{pn}{tuple(p.shape)}", 0)
-            by_cls[key][f"{pn}{tuple(p.shape)}"] += 1
-    return {"n_params": n_params, "n_elements": n_elems, "by_class": by_cls}
 
 
 def _write_json(out: str, name: str, doc: Any, **how: Any) -> None:

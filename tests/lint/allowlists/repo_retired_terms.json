@@ -2013,7 +2013,6 @@
     {"file": "tests/adapters/vllm/tests/pipeline/test_snapshot_cap.py", "count": 22},
     {"file": "tests/adapters/vllm/tests/pipeline/test_tick_step.py", "count": 10},
     {"file": "tests/adapters/vllm/tests/pipeline/test_tp_serving_rows.py", "count": 4},
-    {"file": "tests/adapters/vllm/tests/pipeline/test_tp_token_budget.py", "count": 2},
     {"file": "tests/adapters/vllm/tests/pipeline/test_vu_export.py", "count": 6},
     {"file": "tests/adapters/vllm/tests/pipeline/test_vu_store_budget.py", "count": 2},
     {"file": "tests/adapters/vllm/tests/pipeline/test_workload.py", "count": 2},

@@ -24,9 +24,7 @@ from verity_vllm.target_family import declared_profile
 
 __all__ = ["COMPOSE_PEAK_RATIO", "FOLD_PART_MIN_S", "applicable_taps", "build_jobs_auto", "compose_bytes", "composed_ok", "declared_target", "decomp_rc",
            "derived_ok", "fold_phase_s", "fold_plan", "load_json", "longest_first", "manifest_timeout", "missing_tap_build", "model_layers",
-           "tap_policy_flags", "tap_source_args", "tp_build_digests", "tp_build_summary", "tp_check_line", "tp_commit_line", "tp_commit_passed",
-           "tp_fold_line", "tp_manifest_complete", "tp_manifest_line", "tp_manifest_not_of_record", "tp_match_summary", "tp_passed", "tp_rank_workload_digest",
-           "tp_served_shapes", "tp_shape"]
+           "tap_policy_flags", "tap_source_args", "tp_build_summary", "tp_manifest_complete", "tp_rank_workload_digest"]
 
 
 def tail(path: str, n: int = 300) -> str:
@@ -665,26 +663,6 @@ def _field(path: str, fn: Any) -> str:
         return ""
 
 
-def tp_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
-    """A tensor-parallel row's batch, envelope, declared request shapes (LP, cap - 1), engine lengths and checkpoint dir.
-
-    ``MNBT`` is at most ``B * MML``: no step can schedule more tokens than ``max_num_seqs`` requests of ``max_model_len``, so the cap
-    changes no schedule, but vLLM's warm-up forward (`kernel_warmup.flashinfer_autotune`'s dummy run) packs the full budget into
-    ``max_num_seqs`` requests, longer than ``max_model_len``, and FlashAttention's varlen kernel then faults (an illegal memory access
-    on sm_120 at TP2 for head_dim > 64: 2048 tokens in one request of max_model_len 288 for Qwen3-4B, Phi-3-mini, Mistral-7B; plain
-    vLLM does the same, and passes at 288)."""
-    w = read_json(wl)
-    s = w["sweep"]
-    cfg = RowConfig.of(w)
-    req = cfg.engine.args
-    mml = req.get("max_model_len") or int(s["max_input"]) + int(s["max_output"])
-    batch = int(s["batch"])
-    return {"B": batch, "I": int(s["max_input"]), "O": int(s["max_output"]), "requests": len(w.get("requests") or s["input_lengths"]),
-            "shapes": sorted({(int(a), int(b) - 1) for a, b in zip(s["input_lengths"], s["output_caps"])}),
-            "MML": mml, "MNBT": min(int(req.get("max_num_batched_tokens") or mml), batch * int(mml)),
-            "ck": checkpoint_dir(cfg.model, cfg.engine.revision, hf_home, checkpoints) or ""}
-
-
 def tp_world(wl: str) -> int:
     """The manifest's ``sweep.tp`` (2 when it names none or does not read)."""
     try:
@@ -721,79 +699,7 @@ def tp_rank_workload_digest(b: str, r: int) -> str:
     return _field(f"{b}/rank{r}/build_workload/workload_program.json", lambda d: d.get("workload_digest") or "")
 
 
-def tp_build_digests(d: str) -> tuple[str, str]:
-    """(rank 0 step digest[:16], ranks 1.. step digests[:16] joined by /) from ``build_summary.json``."""
-    p = f"{d}/build_summary.json"
-    return (_field(p, lambda s: (s["step"]["program_digest"] or "")[:16]),
-            _field(p, lambda s: "/".join((field_of(s["ranks"][f"rank{r}"].get("build_step"), "program_digest") or "")[:16] for r in range(1, s["tp"]["world"]))))
-
-
-def tp_manifest_line(d: str) -> str:
-    return _field(f"{d}/manifest.json", lambda m: " ".join(str(x) for x in [
-        "complete", m.get("complete"), "identities", field_of(m.get("populations"), "identities"), "tp_peer_binding_n_unbound",
-        field_of(m.get("tp_peer_binding"), "n_unbound"), "unmodelled", json.dumps(m.get("unmodelled"))[:300], "digest", (m.get("manifest_digest") or "")[:16]]))
-
-
 def tp_manifest_complete(d: str) -> bool:
     return _field(f"{d}/manifest.json", lambda m: m.get("complete")) == "True"
 
 
-def tp_manifest_not_of_record(d: str, ck: Any) -> str:
-    """Why a TP row's `<d>/manifest.json` is not the Commit's manifest of record ("" when it is): complete, built under the query of
-    record with a partition, under the row's tap policies, recording the strict word check it passed.  The per-rank Program digests are
-    tp-commit's own check (each rank's rows against its Build), so a manifest the Build or a CPU host wrote is reused, not rebuilt on the
-    GPU host ([GLM-5.3] the rebuild is hours of CPU and ~470 GB beside the engine)."""
-    doc = load_json(f"{d}/manifest.json")
-    if not isinstance(doc, dict) or doc.get("complete") is not True:
-        return "absent or not complete"
-    q = doc["query"] if isinstance(doc.get("query"), dict) else {}
-    if q.get("query_id") != QUERY_OF_RECORD or not isinstance(q.get("partition"), dict):
-        return f"not built under the query of record {QUERY_OF_RECORD} with a partition"
-    mismatch = policy_mismatch(q, ck)
-    if mismatch:
-        return f"disagrees with this Commit's taps on the {', '.join(mismatch)} policy"
-    return word_check_refusal(q) or ""
-
-
-def tp_check_line(m: str) -> str:
-    return _field(f"{m}/tp2_match.json", lambda d: " ".join(str(x) for x in [
-        "pass", d["pass"], "structure", d["structure"]["pass"], "n_coll_r0", d["structure"]["per_rank"]["0"]["n_collectives"], "sig_len",
-        d["structure"]["per_rank"]["0"]["build_signature_len"], "steps", d["structure"]["per_rank"]["0"]["n_steps"], "provenance",
-        d["provenance"]["pass"], d["provenance"]["collectives_checked"], "mismatches", d["provenance"]["n_mismatches"], "tokens", d["tokens"].get("pass")]))
-
-
-def tp_passed(path: str) -> bool:
-    return _field(path, lambda d: d["pass"]) == "True"
-
-
-def tp_served_shapes(m: str) -> list[str]:
-    """``LP,T`` of every captured request (prompt length, generated - 1)."""
-    s = _field(f"{m}/capture/tokens.json", lambda d: " ".join(f"{len(q['prompt_token_ids'])},{len(q['generated_token_ids']) - 1}" for q in d["requests"]))
-    return s.split()
-
-
-def tp_fold_line(m: str) -> str:
-    return _field(f"{m}/fold_match/tp2_fold_match.json",
-                  lambda d: " ".join(["pass", str(d["pass"]), "legs", json.dumps(d["legs"]), "problems", json.dumps(d["problems"][:3])[:400]]))
-
-
-def tp_match_summary(m: str, rc_cap: int, rc_ctl: int, rc_chk: int, rc_fold: int, ok: str, prof: str) -> None:
-    """``match_summary.json`` beside ``m``: the collective-level check and the fold Match's stages."""
-    tm = read_json(f"{m}/tp2_match.json") if os.path.exists(f"{m}/tp2_match.json") else {}
-    fm = read_json(f"{m}/fold_match/tp2_fold_match.json") if os.path.exists(f"{m}/fold_match/tp2_fold_match.json") else None
-    write_json({"pass": ok == "PASS", "level": "fold (D90 per-rank fold Match + collective-level)" if prof else "collective-level (tp.match check; no TP rank profile)",
-               "capture_rc": rc_cap, "control_rc": rc_ctl, "check_rc": rc_chk, "fold_rc": None if rc_fold < 0 else rc_fold, "fold_profile": prof or None,
-               "tp2_match": {k: tm.get(k) for k in ("pass", "structure", "provenance", "tokens") if k in tm}, "tp2_fold_match": None if fm is None else {k: fm.get(k) for k in ("pass", "legs", "problems", "seconds")}},
-               f"{os.path.dirname(m)}/match_summary.json")
-
-
-def tp_commit_line(d: str) -> str:
-    return _field(f"{d}/commit/summary.json", lambda s: " ".join(str(x) for x in [
-        "pass", s.get("pass"), "pairs", s.get("pairs"), "delta", s.get("delta_wall_mean"), "roots", json.dumps(s.get("tp_run_roots"))[:80], "tokens",
-        s.get("tokens_equal"), "replay", field_of(s.get("sampled_replay"), "result"), "linkage", field_of(s.get("boundary_linkage"), "result"), "xrank",
-        field_of(s.get("cross_rank_collectives"), "result"), "fold_binding", field_of(s.get("fold_match_binding"), "result"), "weights_pin",
-        field_of(s.get("weights_pin"), "result")]))
-
-
-def tp_commit_passed(d: str) -> bool:
-    return _field(f"{d}/commit/summary.json", lambda s: s.get("pass")) == "True"

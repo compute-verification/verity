@@ -632,7 +632,6 @@ def test_a_row_whose_every_call_boundary_has_a_source_goes_on_to_match(tmp_path,
 # ---------------------------------------------------------------------------------------------------------------- taps
 
 
-
 def _tap_manifest(path: Path, *families: str) -> str:
     """A manifest built under every tap policy whose identities name `families` (a policy with no site writes its header only)."""
     query = {"engine": "v2-query", **{k: {} for k in ("norm_scales", "router_softmax", "vocab_range")}}
@@ -738,19 +737,6 @@ def test_a_manifest_of_an_older_query_another_program_or_no_partition_is_moved_a
     aside = list(Path(r.d).glob(f"manifest.{slug}-*.json"))
     assert len(aside) == 1 and why in (Path(r.d) / "row.log").read_text()
     assert R.manifest_not_of_record(R.load_json(f"{r.d}/manifest.json"), PD, r.ck_) == ("", "")
-
-
-@pytest.mark.parametrize("kw, why", [({}, ""), ({"complete": False}, "not complete"), ({"query_id": "Q_module_body_v1"}, "query of record"),
-                                     ({"partition": False}, "query of record"), ({"word_check": False}, "no word check recorded")])
-def test_a_tp_rows_complete_word_checked_manifest_is_reused_not_rebuilt_on_the_gpu_host(tmp_path, kw, why):
-    """[GLM-5.3] the TP Commit rebuilt manifest.json before leasing the GPUs every time: hours of CPU and ~470 GB beside the engine."""
-    r = _row(tmp_path)
-    p = Path(r.d) / "manifest.json"
-    complete = kw.pop("complete", True)
-    _record_manifest(p, kw.pop("query_id", R.QUERY_OF_RECORD), **kw)
-    p.write_text(json.dumps(json.loads(p.read_text()) | {"complete": complete}))
-    got = R.tp_manifest_not_of_record(r.d, r.ck_)
-    assert (got == "") if not why else why in got
 
 
 def test_a_dense_tp1_row_attaches_the_norm_tap_only(tmp_path):
@@ -947,8 +933,6 @@ def test_the_pin_at_b_ge_2_is_derived_from_the_first_manifest_component(tmp_path
     assert R.wor_component(str(d)) == str(d / "build_request_LP9_T2")
     (d / "build_request_LP9_T2" / "result.json").write_text(json.dumps({"ok": False, "LP": 9, "T": 2}))
     assert R.wor_component(str(d)) == str(d / "build_request_LP5_T3")
-
-
 
 
 def test_a_single_rows_commit_carries_the_serving_rows_request(tmp_path):
