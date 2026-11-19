@@ -991,9 +991,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         meta = circ.meta
         header = a0.public_header(st_dir, m.n)
         if (m.template, circ.pin) not in programs_ok and door:   # the door binds the Definition's digest in C (`one_circuit.lower`)
-            D = decoded.get()
+            desc = decoded.get().desc
             programs_ok[m.template, circ.pin] = meta.get("program_digests") == {
-                m.template: definition_digest(D.desc["definitions"][m.template], D.desc)}
+                m.template: definition_digest(desc["definitions"][m.template], desc)}
         elif (m.template, circ.pin) not in programs_ok:   # a function of the circuit's META and the template: once per circuit
             programs_ok[m.template, circ.pin] = a0.template_program_ok(meta, defn)
         # the header against the member's slice of the docket: the per-member form's rule, in its one Python
