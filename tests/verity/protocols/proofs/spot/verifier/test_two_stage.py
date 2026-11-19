@@ -497,7 +497,7 @@ FV = REFERENCE["frame_v3"]
     ({**REFERENCE, "scheme": "frame-v3-sha512/other"}, ["second-header"]),
     ({**REFERENCE, "units": {**REFERENCE["units"], "units_per_vu": 2}}, ["second-header"]),
     ({**REFERENCE, "frame_v3": {**FV, "schemas": {**FV["schemas"], "out": "hm96-sha512/row/v1"}}}, ["second-header"]),
-    ({**REFERENCE, "frame_v3": {**FV, "schemas": {**FV["schemas"], "y": SCHEMA}}}, ["second-header"]),
+    ({**REFERENCE, "frame_v3": {**FV, "schemas": {**FV["schemas"], "y": SCHEMA}}}, ["second-header", "second-place-none"]),
     ({**REFERENCE, "frame_v3": {k: v for k, v in FV.items() if k != "schemas"}}, ["second-header"]),
     ({"scheme": S.SCHEME}, ["second-header"]),
     (None, ["second-header", "second-values"]),
@@ -510,9 +510,9 @@ def test_round_two_holds_each_header_to_its_templates_reference(header, codes):
     `frame_v3.roots`, `frame_v3.domain_ids` and `registered`). The honest run passes unchanged,
     under a reference fixed before the run that names none of the run's fields or names them otherwise, or was staged at
     other slots, or names another set and bindings, which the verifier replaces; a reference with another scheme, another
-    `units.units_per_vu`, another schema, a port the interior record lacks or none of the ports, or a key the header
-    lacks, is refused by name, and so is the statement when the params give no reference (and no reference reads,
-    `second-values`)."""
+    `units.units_per_vu`, another schema, a port the interior record lacks (which no rule places either,
+    `second-place-none`) or none of the ports, or a key the header lacks, is refused by name, and so is the statement
+    when the params give no reference (and no reference reads, `second-values`)."""
     stream = _stream()
     out = _two_stage_outcome(stream, lambda s, second: [s], proofs=None if header is None else _circuits((PAIR,), header=header))
     checks = stream.records[0]["audit"]["checks"]
