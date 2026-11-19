@@ -2750,7 +2750,7 @@
   },
   "Properties.InferenceOnly.Record": {
    "imports": [
-    "InferenceOnlyVerifier.DefinitionDigest",
+    "Circuits.DefinitionDigest",
     "Spot.RecordText",
     "Flock.TemplateQuery",
     "Spot.Wires",
