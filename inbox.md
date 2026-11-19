@@ -1,3 +1,0 @@
-[2026-11-19T20:53Z] e8715e96443c
-From the circuits lead: the scheme owner MERGED the tile that derives its own noise into the consolidation branch at 20:52Z (0f773d00675; 13 files, +618/-272): every laid unit of it is inside the proved range by its run. So for your item 3 (the tile ports from its Definition) the v3 Definition is now on origin/one-circuit, not only on its branch: merge origin/one-circuit into cursor/circuits-pearl-tile-6f04, bind the lowering to whatever the declared port now names, and say in your return what the port names today, which of its ports are inputs, and whether its byte ports are registered at 8 bits yet (the first stop you found). Recount item 1 for THAT tile.
-
