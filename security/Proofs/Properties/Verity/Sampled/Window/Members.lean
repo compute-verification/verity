@@ -69,7 +69,7 @@ def statementOf (p : _root_.Spot.OneStageZk.Own) (bs : _root_.Core.Blobs) : Floc
       match p.registered.isNone && _root_.Spot.OneStageZk.readsRegistered p.programJ with
       | true => throw "registered: the program reads registered values and the verifier holds no registered reads"
       | false =>
-        bs.get p.circuit "circuit" >>= fun circuitB =>
+        p.circuitFile >>= fun circuitB =>
         bs.get p.pub "public file" >>= fun pubB =>
         match _root_.Spot.OneStageZk.fitsWhy _root_.Spot.OneStageZk.WORD circuitB pubB
             (_root_.Spot.OneStageZk.tablesOf bs) (some p.program) (some p.partition) p.registered with
@@ -86,7 +86,7 @@ theorem statementOf_ok_iff {p : _root_.Spot.OneStageZk.Own} {bs : _root_.Core.Bl
         _root_.Spot.OneStageZk.tablesHeld p bs = .ok () ∧
         Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧ tags0.plainLeaves = false ∧
         (p.registered.isNone && _root_.Spot.OneStageZk.readsRegistered p.programJ) = false ∧
-        bs.get p.circuit "circuit" = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
+        p.circuitFile = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
         _root_.Spot.OneStageZk.fitsWhy _root_.Spot.OneStageZk.WORD circuitB pubB
           (_root_.Spot.OneStageZk.tablesOf bs) (some p.program) (some p.partition) p.registered = none ∧
         _root_.Spot.OneStageZk.readsOf p.registered = .ok rd ∧ a = StepAt.ofOwn p tags0 circuitB pubB bs rd := by

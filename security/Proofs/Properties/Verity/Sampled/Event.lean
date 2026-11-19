@@ -103,7 +103,7 @@ theorem run_event {p : _root_.Spot.OneStageZk.Own} {s : _root_.Spot.OneStageZk.R
     {pu : Option (Array ℕ)} {bs : _root_.Core.Blobs} {r : _root_.Spot.OneStageZk.Run}
     (h : _root_.Spot.OneStageZk.run p #[s] pu bs = .ok r) :
     ∃ tags0 circuitB pubB rd, Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
-      bs.get p.circuit "circuit" = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
+      p.circuitFile = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
       _root_.Spot.OneStageZk.readsOf p.registered = .ok rd ∧
       ∃ scope programSha want,
         _root_.Spot.OneStageZk.step (_root_.Spot.OneStageZk.inputsOf tags0 p circuitB pubB bs) rd bs
@@ -219,7 +219,7 @@ theorem checkBlobsAt_event {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.
     (hm : p.members = none) (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ tags0 circuitB pubB record proofs n,
       Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
-      bs.get p.own.circuit "circuit" = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
+      p.own.circuitFile = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       sessionRecord e bs = some record ∧ sessionProofs p e bs = some proofs ∧
       _root_.Spot.nat? (_root_.Spot.getD c.record "population") = some n ∧
       Accepted (toExec (_root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB bs))
@@ -250,7 +250,7 @@ theorem checkBlobs_event {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.On
     (hm : p.members = none) (h : _root_.Spot.OneStageZk.checkBlobs p c e bs = .accept pub prof) :
     ∃ tags0 circuitB pubB record proofs n,
       Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
-      bs.get p.own.circuit "circuit" = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
+      p.own.circuitFile = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       sessionRecord e bs = some record ∧ sessionProofs p e bs = some proofs ∧
       _root_.Spot.nat? (_root_.Spot.getD c.record "population") = some n ∧
       Accepted (toExec (_root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB bs))
