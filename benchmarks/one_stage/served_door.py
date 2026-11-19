@@ -5,6 +5,7 @@ lowering's own query) with blocks ``[0, u), [u, u + 1), [u + 1, population)``, `
   python served_door.py build --tree TREE --out DIR                     # DIR/C.json, DIR/query.json
   python served_door.py step block|restrict|lower|door|one|stage --dir DIR --template ID
   python served_door.py step verify --dir DIR --template ID --unit U --lower EXE --lean EXE --session S...
+  python served_door.py window --tree TREE --out DIR [--seed N]         # a staged window, for records_audit.py audit
 
 ``block``, ``restrict`` and ``lower`` are the door's own steps (`one_circuit.block`, `.restrict`, `.lower`), each in its
 own process; ``door`` is `proofs.verify` on the drawn block, whose proof files (a public file naming the block's unit and
@@ -356,12 +357,40 @@ def step(a) -> int:
     return 0
 
 
+def window(a) -> int:
+    """The adapter's staged window (`test_window_rows._private`: TINY's class, random weights, every node computed)
+    recorded, closed and written as serving writes a window (`Window.supply`, `Rows.record`, `close`, `write` under the
+    docket), for ``records_audit.py audit``."""
+    tree, out = Path(a.tree), Path(a.out)
+    sys.path.insert(0, str(tree / "tests/adapters/vllm"))
+    from tests.program.predict import test_window_rows as TW
+    from verity.commitments.periods import interface as IF
+    from verity.protocols.proofs.spot.prover import docket as DK
+    from verity_vllm.program.predict import window_rows as WR
+    t = time.perf_counter()
+    low, values, rows = TW._private(a.seed)
+    win = IF.Window(low.circuit, TW.RUN, TW.DESIGN, 64, registered=values, forms=WR.FORMS)
+    win.supply()
+    rows.record(win)
+    rec = win.write(win.close(), out, {"served_door": "window"}, registrar=DK)
+    print("STEP " + json.dumps({"step": "window", "wall_s": round(time.perf_counter() - t, 1), "peak_gib": _peak_gib(),
+                                "run": TW.RUN, "units": dict(rows.n),
+                                "circuit_sha512": hashlib.sha512((out / "circuit.json").read_bytes()).hexdigest(),
+                                "registration_sha512": hashlib.sha512((out / "registration.json").read_bytes()).hexdigest(),
+                                "digest": rec.get("digest") if isinstance(rec, dict) else None}, default=str), flush=True)
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build")
     b.add_argument("--tree", required=True)
     b.add_argument("--out", required=True)
+    w = sub.add_parser("window")
+    w.add_argument("--tree", required=True)
+    w.add_argument("--out", required=True)
+    w.add_argument("--seed", type=int, default=3)
     s = sub.add_parser("step")
     s.add_argument("name", choices=("block", "restrict", "lower", "door", "one", "stage", "verify"))
     s.add_argument("--dir", required=True)
@@ -372,7 +401,7 @@ def main() -> int:
     s.add_argument("--registered", default="registered.json", help="verify: the stage's registered file")
     s.add_argument("--session", nargs="*", default=[], help="verify: the session directories")
     a = ap.parse_args()
-    return build(a) if a.cmd == "build" else step(a)
+    return build(a) if a.cmd == "build" else window(a) if a.cmd == "window" else step(a)
 
 
 if __name__ == "__main__":
