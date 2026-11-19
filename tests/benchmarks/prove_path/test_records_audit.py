@@ -1012,7 +1012,8 @@ def test_a_declared_day_holds_the_registrations_program_to_the_days_one_declarat
     assert day == {"day": 3, "declarations": [e.body() for e in entries]}
 
     def r2(d: dict) -> list[str]:
-        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {}, **d)
+        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {},
+                   partition=mine.partition, **d)
         return sorted(c for c in v.codes if c.startswith("R2"))
     assert r2(day) == []
     assert r2({**day, "day": 4}) == ["R2-declared"] and r2({**day, "day": 5}) == ["R2-undeclared"]
@@ -1114,7 +1115,8 @@ def test_the_device_day_is_the_challengers_declared_day_over_its_own_ledger_and_
     lines, key, _record = _device_ledger(tmp_path, [_declared(program), *_window(S1, 1, root)])
     day = RA.device_day(lines, root, key, _verify(key))
     assert day == {"day": DAY0, "declarations": [{"blocks": ["t"], "day": DAY0, "program": program}]}
-    assert not [c for c in R.check(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {}, **day).codes
+    assert not [c for c in R.check(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {},
+                                   partition=mine.partition, **day).codes
                 if c.startswith("R2")]
     rebuilt = G.Declaration(DAY0, program, ("t",)).digest()
     assert RA.device_day(lines, root, key, _verify(key), {"window": {"day": DAY0, "declaration": rebuilt}}) == day
@@ -1135,7 +1137,8 @@ def test_a_window_opened_before_its_days_declaration_or_of_a_lane_that_never_dec
     program = written.rec["program"]
 
     def r2(d: dict) -> list[str]:
-        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {}, **d)
+        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {},
+                   partition=mine.partition, **d)
         return sorted(c for c in v.codes if c.startswith("R2"))
     late, key, _ = _device_ledger(tmp_path / "late",
                                   [*_window(S1, 0, "01" * 64), _declared(program), *_window(S2, 3, "02" * 64)])
@@ -1176,7 +1179,8 @@ def test_a_window_that_crosses_utc_midnight_belongs_to_its_opens_day(written, tm
     program, root = written.rec["program"], "01" * 64
 
     def r2(d: dict) -> list[str]:
-        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {}, **d)
+        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {},
+                   partition=mine.partition, **d)
         return sorted(c for c in v.codes if c.startswith("R2"))
     def late(reserve_seq: int) -> list[tuple[str, str, dict]]:
         return _window(S1, reserve_seq, root, reserved_at="2026-10-20T23:55:00Z", expires="2026-10-21T00:05:00Z",

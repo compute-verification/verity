@@ -141,16 +141,17 @@ Per device:
   instructions no class lists count in it. On DC-90-ri it carries the JI90 lines too: IMAD.WIDE and LD.E, which count in
   it, were timed beside the IGMMA. Without ffill in ♭, `setup`'s floor program on DC-90-ri writes every word on the
   IGMMA, and `Sm90Measured.flat` is that floor, its fold's shares exact (`B_♭` 195.30 a unit, binding on `JPA90_0`; the
-  machine model's reading is 1.349% at `q = ½`). It is over 1%, and so is its twin; crediting ffill would need a check
-  that reads its chains. Folding by built routes alone costs both readings 0.28 points: li-bulk's trimmed W = ∞ member,
-  a counted fold, had carried 0.0195 of ♭'s words and held `B_♭` at 194.75 on JI90_0 (1.133% and 0.807%). The rest of
-  the gap is A6's scalar floor: at `q = ½` the lane route writes words at the IGMMA's rate on JI90_0 (65.28 against
-  65.27 a cycle), so `π*` stays on JI90_0, with a little on JI90_1 and issue, off ♭'s facet: ♭ has 0.47% slack there and
-  its fold is 1.0076 `φ*`. At 3/5 `π*` puts 0.15 on JPA90_0, ♭'s slack is 0.33% and its fold is 1.0042 `φ*`: the twin
-  reads 1.086%, over 1% (the machine model reads 1.022% at its `q* = 1.22`, over 1% too). ε_skip prices the P·V peel at
-  sm_90a's own instruction counts (`eps_budget`'s `SASS`: static nvdisasm counts with ncu's rule applied, not ncu):
-  0.858% on DS-90, 0.593% on DC-90-ri. DS-90's `f_max` (1980 MHz) is EPS1 DC's measured f_max at default clocks; the
-  sheet quotes its TOPS at 1830 MHz.
+  machine model's core ε at `q = ½` is `machine-model lean-headline --numbers`'s for DC-90-ri). It is over 1%, and so
+  is its twin; crediting ffill would need a check that reads its chains. Folding by built routes alone costs both
+  readings 0.28 points: li-bulk's trimmed W = ∞ member, a counted fold, had carried 0.0195 of ♭'s words and held `B_♭`
+  at 194.75 on JI90_0 (1.133% and 0.807%). The rest of the gap is A6's scalar floor: at `q = ½` the lane route writes
+  words at the IGMMA's rate on JI90_0 (65.28 against 65.27 a cycle), so `π*` stays on JI90_0, with a little on JI90_1
+  and issue, off ♭'s facet: ♭ has 0.47% slack there and its fold is 1.0076 `φ*`. At 3/5 `π*` puts 0.15 on JPA90_0,
+  ♭'s slack is 0.33% and its fold is 1.0042 `φ*`: the twin reads 1.086%, over 1% (the machine model's reading at its
+  `q* = 1.22` is what `machine-model headline --reading measured` prints). ε_skip prices the P·V peel at sm_90a's own
+  instruction counts (`eps_budget`'s `SASS`: static nvdisasm counts with ncu's rule applied, not ncu): 0.858% on DS-90,
+  0.593% on DC-90-ri. DS-90's `f_max` (1980 MHz) is EPS1 DC's measured f_max at default clocks; the sheet quotes its
+  TOPS at 1830 MHz.
 * The B200 (sm_100) runs `dither-2s-licpw-redux-ldtm0-l32` (Dither-2S, LI-CP-W redux, no filler): its fold is the one
   `PouwWarpCheck` recomputes (`PouwLiAbsorb_v2`, no extra keyed round), and its ♭ credits none of honest's 8
   `tcgen05.ld` a MMA: the operands-free cheater never pays them, so crediting them was all of DC-100-ri's `ε_machine`.
@@ -195,7 +196,7 @@ modelled menu, not proved over the B200: no program of 1 or 2 instructions on DS
 so such a program costs at least 2, above the LOP3's 4/3. The menu is IMAD, IMAD.HI, IDP.4A, IDP.2A and FFMA2;
 IMAD.WIDE, HFMA2 and the whole ALU class are outside it. The cheapest program known is 78 instructions, all on the IMAD
 pipe (33 IMAD, 45 IMAD.HI). FOLD-OPT is false for a keyed round's XOR with a constant, which takes 1 + 2|B| IMAD-pipe
-instructions (`benchmarks/pouw/theory/fold_min.py`), but plain li has no such round: every half step absorbs a word.
+instructions (`calibration/pouw/theory/fold_min.py`), but plain li has no such round: every half step absorbs a word.
 With the whole certificate at DS_issue alone, which needs no pipe premise, the sheet readings are 0.943% (H200, its
 `π*`) and 0.9998% (B200). With only the proved fan-in floor in its place each reading is tens of percent.
 
@@ -249,9 +250,9 @@ then outside an event of probability at most `2^-40` every accepted window's tim
 `150882547268931/16000000000000000` (0.9430159%); the folded gives 0.8618368%. FOLD-OPT's premise has no slack
 (`φ*` is CP_RED2's price, a fold the tree runs bit-exact); the reading's against 1% is 0.058% (every fold route that
 much cheaper). FILL-OPT is not a hypothesis: ♭ credits no filler. A3 (`SheetTensor`) is per SM clock at the clock
-each tensor figure is stated at, the 1830 MHz tensor boost clock, not f_max's 1980 MHz: read per second at f_max, the
-machine model put this reading at 2.253% on a menu whose only routes were CP_SEG4 and CP_SEG4U, since its ε first
-moves at tensor lines 1.060× the sheet's. -/
+each tensor figure is stated at, the 1830 MHz tensor boost clock, not f_max's 1980 MHz. With A3 read per second at
+f_max instead, this reading, and the factor on every tensor line at which its ε first moves, are what
+`machine-model --device sm_90 sheet --eps` prints. -/
 def Sm90SheetHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 50) (Fin 34) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
     (Uf : Unfolded Ω Sm90.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm90.checks nπ V) (δfork δzk : ℝ),
@@ -290,12 +291,11 @@ prices at 1.50 `φ*`). FOLD-OPT at `π*` is open: `φ*` is CP_RED's and CP_RED2'
 members tie), and every class a fold route issues prices above 0 there, the stores and ISETP at their measured JI90
 lines. FOLD-OPT's premise has no slack; the reading reaches its 3% target with every fold route 2.38% cheaper. Its twin
 at (I3)'s `q = q_T = 3/5` is `Sm90MeasuredI3Headline`. `NoSum` carries the tensor forms off the menu: DC-90-ri prices
-them at the scalar coefficient on its joint rows. Three kinds would move the reading if they were on it: the
-register-sourced IGMMA form, whose coefficient fitted from the H200's probes gives about 1.64% in the machine model at
-an earlier design; DMMA, which at the scalar coefficient heads a word for about 0.0077 against honest's 0.0153 (at its
-tensor-pipe coefficient, about 0.031, it moves nothing); and the 2:4-sparse forms, whose classes carry the issue row
-alone (no run timed them beside the IGMMA), so that chained into a dense product they head a word for under `2·10⁻⁶` at
-this `π*` and for 0 at the twin's. -/
+them at the scalar coefficient on its joint rows. Three kinds could move the reading if they were on it: the
+register-sourced IGMMA form, at the coefficient fitted from the H200's probes; DMMA, which at the scalar coefficient
+heads a word for about 0.0077 against honest's 0.0153 (at its tensor-pipe coefficient, about 0.031, it moves nothing);
+and the 2:4-sparse forms, whose classes carry the issue row alone (no run timed them beside the IGMMA), so that
+chained into a dense product they head a word for under `2·10⁻⁶` at this `π*` and for 0 at the twin's. -/
 def Sm90MeasuredHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 50) (Fin 2) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
     (Uf : Unfolded Ω Sm90.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm90.checks nπ V) (δfork δzk : ℝ),
