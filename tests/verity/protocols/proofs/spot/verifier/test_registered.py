@@ -307,6 +307,18 @@ def test_the_verifiers_reads_file_names_a_bit_row_values_format():
         G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()}, schemas={"W": "hm96-sha512/row/v3"})
 
 
+def test_the_verifiers_reads_file_without_positions_is_flocks_position_free_format():
+    """Without ``positions`` the file is Flock's `Registered.FORMAT` (`READS_V2`), whose verifier derives every read from
+    C: each port is the positioned file's but its ``reads``."""
+    prog = _program()
+    reg = _registered(prog)
+    v0 = G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()})
+    v2 = G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()}, positions=False)
+    assert (v0["format"], v2["format"]) == (G.READS, G.READS_V2 == "verity/registered-reads/v2" and G.READS_V2)
+    assert v2["ports"] == {p: {k: x for k, x in e.items() if k != "reads"} for p, e in v0["ports"].items()}
+    assert all("reads" in e for e in v0["ports"].values())
+
+
 def test_bind_ports_binds_each_port_the_file_leaves_out_at_the_registrations_root():
     """`bind_ports` (`Flock.RegBound`): a v1 file's ports the statement has and the file names no registered port for are
     bound at the docket's root and domain of their rows, its registered ports left as they are; a file with no

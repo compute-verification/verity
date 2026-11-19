@@ -1,20 +1,33 @@
 """The one circuit at the served verifier's door: C_S, which the door derives from C (the registered Program), the
-partition and the block's units (`restrict`), and the holes it does not yet derive, each refusing by name
-(`NotDerived`)."""
+partition and the block's units (`restrict`), its Boolean block circuit, Lean's lowering of C_S (`lower`), and the holes
+it does not yet derive, each refusing by name (`NotDerived`)."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+import json
+import subprocess
+import tempfile
+from collections.abc import Callable, Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
 from verity.circuits import partition_object as PO
 from verity.circuits import restrict as R
+from verity.circuits.codec import definition_digest
+
+from .certified_rows import _fields
 
 PREFIX = "one-circuit: not derived yet: "
 
 RESTRICT = "restrict : C -> Partition -> Block -> Circuit (C_S, the lowering of the block's Definition in C)"
 
-LOWER = "lower : C_S -> the base argument's circuit (Flock's verifier takes a Boolean block circuit and lowers it to rows)"
+LOWER = "lower : C_S of a partition that names no one template (Q_template_instance) -> its Boolean block circuit"
+
+#: Lean's lowering of C_S (`Flock.Lower.lower`, `Flock.Compose.compose`), a Lake target of Flock's verifier.
+LOWER_EXE = "flock-lower-check"
+
+#: The templated statement's layout mode (`Flock.Tmpl`'s `iv/hybrid/T`) the door lowers C_S at.
+LAYOUT = "iv/hybrid/4"
 
 Refused = R.Refused
 
@@ -58,7 +71,30 @@ def restrict(c: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, 
     return R.restrict(c, partition, [tuple(u) for u in units]).descriptor
 
 
-def lower(c_s: bytes) -> bytes:
-    """The base argument's circuit of C_S, the Boolean block circuit (`restrict`): the lowering to rows is the base
-    argument's, and Flock's verifier takes no Boolean block circuit yet."""
-    raise NotDerived(LOWER)
+def lower(c_s: bytes, partition: Mapping[str, Any], exe: Callable[[], Path | str], layout: str = LAYOUT) -> bytes:
+    """C_S's Boolean block circuit: Lean's lowering (`Flock.Lower.lower`, then `Flock.Compose.compose`),
+    `flock-lower-check compose`, the executable ``exe()`` builds, on C_S's template (the partition's ``Q_template_instance`` template): its input ports
+    the template's parameters as bit rows, in order, and one output port a return field, ``o{j}``, its bits in whole u16
+    words, each a field's tree (`Flock.Registered.outReads`); META binds the partition, C's digest and the template's
+    `definition_digest`. `NotDerived` where the partition names no one template; `Refused` where C_S defines no
+    such template, or the lowering refuses."""
+    query = partition.get("query") or {}
+    key = (query.get("params") or {}).get("template") if query.get("name") == "Q_template_instance" else None
+    if not isinstance(key, str):
+        raise NotDerived(LOWER)
+    D = R.program(c_s)
+    fn = D.defs.get(key)
+    if fn is None:
+        raise Refused("E_LOWER", f"the partition's template {key!r} is no Definition of C_S")
+    params, ret = fn.signature()
+    ins = ",".join(f"{name}:{sum(t.leaf_widths())}" for name, t in params)
+    outs = ",".join(f"o{j}:{-(-sum(f.leaf_widths()) // 16)}" for j, f in enumerate(_fields(ret)))
+    digests = json.dumps({key: definition_digest(D.desc["definitions"][key], D.desc)})
+    with tempfile.TemporaryDirectory(prefix="one-circuit-lower-") as d:
+        src, dst = Path(d, "c_s.json"), Path(d, "circuit.txt")
+        src.write_bytes(c_s)
+        p = subprocess.run([str(exe()), "compose", str(src), key, f"unit/{key}", ins, outs, layout, partition["program"],
+                            PO.digest(partition), digests, str(dst)], capture_output=True, text=True)
+        if p.returncode != 0:
+            raise Refused("E_LOWER", f"{LOWER_EXE} compose ({p.returncode}): {(p.stderr or p.stdout)[-2000:]}")
+        return dst.read_bytes()

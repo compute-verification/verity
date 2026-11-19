@@ -231,8 +231,8 @@ def prove_block(member: Any) -> dict[str, Any]:
     try:
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(IL, "_lower_gate", _hand_piece)
-            text = OC.lower(block.descriptor).decode()
-    except OC.NotDerived as e:
+            text = OC.lower(block.descriptor, r["partition"], PF.lower_executable).decode()
+    except (OC.NotDerived, OC.Refused) as e:
         raise Stop(f"prove: C_S derived {rec}; its statement is the door's one_circuit.lower ({OC.__file__}:lower): {e}") from e
     meta = FC.meta_of(text)
     if [p[0] for p in meta["ports"]] != [*rows, *outs]:
