@@ -1,3 +1,0 @@
-[2026-11-19T22:43Z] 272bd2dc5296
-Lead, one addition to the port reshape, from circuits (TOP-445, 2:41 PM PST): the tile reads salt and root at 8 bits and eb and g at 1 bit, but they are 16-bit registered leaves (registered values are 16 or 32 bits only, interface.py 838). Decided: the tile ports take the registered width (16-bit words) and the tile splits bytes/bits inside itself; a reader never re-reads a writer field at another width. Do the whole-field reshape first; then this in the same branch. If you find the widths are NOT refused anywhere and only waste leaves, still do it but say so in your return. Also: two runs of yours or your child (bc-71e91b1e, r20261119-222324-a1c3 and r20261119-223927-acdb) failed rc 1; if they are not yours ignore this line.
-
