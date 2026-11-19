@@ -270,7 +270,7 @@ private def sampledParams (log : Array Json) (outputs : Option Json) : Json := J
   ("challenger", challenger), ("delta", "1/10"), ("law", samplingDesign), ("leaf_layer", rep "ee"),
   ("log", Json.arr log), ("parameters", signature), ("partition", partition), ("ports", ports),
   ("program", jsonOf descriptor),
-  ("proofs", Json.mkObj [("circuit", rep "c0"), ("public", rep "c2"), ("registered", readsFile)]),
+  ("proofs", Json.mkObj [("public", rep "c2"), ("registered", readsFile)]),
   ("query", query), ("registered", Json.mkObj [(PouwVerifier.Credit.commitIds 0, 1), (PouwVerifier.Credit.commitRows 0 64, 1)]),
   ("scheme", "frame-v3-sha512/hm96-sha512"), ("window_root", rep "0e"), ("work_table", Json.null)] ++
     (outputs.map fun o => [("outputs", o)]).getD [])
