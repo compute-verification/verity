@@ -53,3 +53,9 @@ def test_render_prints_the_sections_named(capsys):
     assert out.startswith("# `machine-model render`: data/devices/sm_90/") and "| `dither-c-l32` |" in out
     with pytest.raises(SystemExit, match="no section nope"):
         main(["--device", "sm_120", "render", "nope"])
+
+
+def test_render_tabulates_theta(capsys):
+    assert main(["--device", "sm_120", "render", "theta"]) == 0
+    out = capsys.readouterr().out
+    assert "| `tensor.s8.k16` |" in out and "### FP8 atoms" in out and "### SHA-512's ceiling" in out
