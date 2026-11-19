@@ -173,6 +173,7 @@ theorem prim_unit {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadP
     ∃ k m, k < (P.defs[P.root]!).body.nodes.size ∧ ((P.defs[P.root]!).body.nodes[k]!).form = .batch ∧
       m < ((P.defs[P.root]!).body.nodes[k]!).members ∧ sc = P.child P.rootScope k m ∧
       (P.defs[sc.d]!).body = default ∧ (P.defs[sc.d]!).gates = 1 ∧ ∃ w, (P.defs[sc.d]!).ret = .value w := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hP.2.2.2.2.1
   obtain ⟨hr, -, -, -⟩ := read_bodies hP
   have hir := readProg_inputs hP
   obtain ⟨⟨bytes, hdec⟩, -, -, -, -, -, hfirst⟩ := hP
@@ -182,7 +183,7 @@ theorem prim_unit {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadP
     rw [getElem!_pos rs i hi]
     simp
   obtain ⟨hlt, -, hform, hcount⟩ := hall _ hmem
-  obtain ⟨-, hcallee, hnode⟩ := Resolve.decoded_root bytes P hdec _ hlt
+  obtain ⟨-, hcallee, hnode⟩ := Resolve.decoded_root bytes P hdec hrc _ hlt
   have hp' : (P.defs[((P.defs[P.root]!).body.nodes[rs[i]!.node]!).fn]!).prim = true := hp
   obtain ⟨hbody, hg1, -, hw⟩ := hcallee.1 hp'
   have hbatch : ((P.defs[P.root]!).body.nodes[rs[i]!.node]!).form = .batch := by
@@ -218,6 +219,7 @@ theorem returnsOwn_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP :
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} {out : String} {l g lo hi : ℕ} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = true)
     (ho : OutLeaf P sc out l g lo hi) : g = sc.off ∧ sc.off ≤ g ∧ g < sc.off + (P.defs[sc.d]!).gates := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hP.2.2.2.2.1
   obtain ⟨k, m, -, -, -, -, hbody, hg1, -⟩ := prim_unit hP hrs hu hp
   obtain ⟨f, -, -, -, hres, -, -⟩ := ho
   rw [Resolve.ret_default P sc _ hbody] at hres
@@ -246,6 +248,7 @@ theorem unit_place {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Read
       m < ((P.defs[P.root]!).body.nodes[rs[j]!.node]!).members ∧
       ((P.defs[P.root]!).body.nodes[rs[j]!.node]!).args.size =
         (P.defs[((P.defs[P.root]!).body.nodes[rs[j]!.node]!).fn]!).params.size := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hP.2.2.2.2.1
   obtain ⟨hr, -, -, -⟩ := read_bodies hP
   have hir := readProg_inputs hP
   obtain ⟨⟨bytes, hdec⟩, -, -, -, -, -, hfirst⟩ := hP
@@ -259,7 +262,7 @@ theorem unit_place {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Read
   rw [hnodes, List.mem_filter] at hno
   have hkey : Flock.Program.isInputId (P.defs[((P.defs[P.root]!).body.nodes[rs[j]!.node]!).fn]!).key = false := by
     simpa using hno.2
-  obtain ⟨-, -, hnode⟩ := Resolve.decoded_root bytes P hdec _ hlt
+  obtain ⟨-, -, hnode⟩ := Resolve.decoded_root bytes P hdec hrc _ hlt
   refine ⟨j, m, hj, htj, huj, hsc, hlt, ?_, hform, ?_, hnode.1⟩
   · simp [Desc.isInputNode, hkey]
   · rw [← hcount]
@@ -287,6 +290,7 @@ theorem unit_param_ok {P : Prog} {ts : Array String} {rs : Array TRange} (hP : R
     {sc : Scope} (hu : UnitAt P rs tid u sc) {i t : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
     (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves) :
     ∃ g, Flock.Program.resolve P sc (⟨true, i, t⟩ : Ref) = .ok g := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hP.2.2.2.2.1
   obtain ⟨hov, hlay⟩ := read_walk hP
   obtain ⟨k, m, hk, hnode, hform, hm, hargs, rfl⟩ := unit_member hP hrs hu
   obtain ⟨⟨bytes, hdec⟩, -⟩ := hP
@@ -305,6 +309,7 @@ theorem prim_unit_operands {P : Prog} {ts : Array String} {rs : Array TRange} (h
     {sc' : Scope} (h : P.gate sc.off = .ok (p, ops, sc')) :
     ∀ o ∈ ops, ∃ i t, i < (P.defs[sc.d]!).params.size ∧ t < ((P.defs[sc.d]!).params[i]!).2.leaves ∧
       Flock.Program.resolve P sc (⟨true, i, t⟩ : Ref) = .ok o := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hP.2.2.2.2.1
   obtain ⟨hpd, -, k, m, hk, hf, hm, hsc, hops⟩ := prim_unit_gate hP hrs hu hp h
   obtain ⟨-, -, -, -, -, -, -, hg1, -⟩ := prim_unit hP hrs hu hp
   have hkey : Flock.Program.isInputId (P.defs[p]!).key = false :=
@@ -316,7 +321,7 @@ theorem prim_unit_operands {P : Prog} {ts : Array String} {rs : Array TRange} (h
   have hkey' : Flock.Program.isInputId (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).key = false := hkey
   have hnode : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false := by
     simp [Desc.isInputNode, hkey']
-  obtain ⟨-, -, hno⟩ := Resolve.decoded_root bytes P hdec k hk
+  obtain ⟨-, -, hno⟩ := Resolve.decoded_root bytes P hdec hrc k hk
   intro o ho
   obtain ⟨i, hi, t, ht, hres⟩ := Resolve.operands_spec P P.rootScope _ m ops hops o ho
   have hd : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).dims.isSome = true := by
@@ -355,6 +360,7 @@ theorem outLeaf_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Re
     ∃ w, (P.defs[sc.d]!).ret = .value w ∧ OutLeaf P sc ("o" ++ toString 0) 0 sc.off 0 w ∧
       ∀ out l g lo hi, OutLeaf P sc out l g lo hi →
         out = "o" ++ toString 0 ∧ l = 0 ∧ g = sc.off ∧ lo = 0 ∧ hi = w := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hP.2.2.2.2.1
   obtain ⟨k, m, -, -, -, -, hbody, -, w, hw⟩ := prim_unit hP hrs hu hp
   have hfields : Flock.Program.fieldsOf (P.defs[sc.d]!).ret = [.value w] :=
     (congrArg Flock.Program.fieldsOf hw).trans rfl
