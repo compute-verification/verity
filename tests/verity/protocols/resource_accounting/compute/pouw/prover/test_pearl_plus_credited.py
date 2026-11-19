@@ -52,8 +52,8 @@ def test_the_nodes_top_level_is_maps_over_its_noise_and_one_wired_core_and_its_c
     top = [(n.fn, n.n if n.form == "batch" else 1) for n in node.body.nodes]
     assert [n.form for n in node.body.nodes] == ["call", "batch", "batch", "batch", *["call"] * 32, "call"]
     assert top == PC.cut(node)
-    assert [u.defn.id for u, _n in top] == ["PearlPlusTileSeed_v2", *["PearlPlusTileLine_v2"] * 3,
-                                             *["PearlPlusGramRow_v3"] * 32, "PearlPlusTileCoreWired_v1"]
+    assert [u.defn.id for u, _n in top] == ["PearlPlusTileSeed_v2", *["PearlPlusTileLine_v3"] * 3,
+                                             *["PearlPlusGramRow_v4"] * 32, "PearlPlusTileCoreWired_v2"]
     assert [u.bindings["P"] for u, _n in top[4:36]] == list(range(32))
     assert [n for _u, n in top] == [1, 1, K, K, *[1] * 32, 1]
     assert sum(n * ands(u) for u, n in top) == ands(node)
@@ -83,9 +83,10 @@ def test_the_node_reads_its_place_and_no_noise_and_writes_ok_as_one_word() -> No
     assert [p for p, _t in params] == ["a", "b", "cert", *PC.PUBLIC] and PC.PUBLIC == ("salt", "root", "unit", "rows", "col")
     assert ret.fields[2] == Value(16)
     assert "PearlPlusTileCoreWords_v4" in REGISTRY.defs and "PearlPlusTileCoreWords_v2" not in REGISTRY.defs
-    assert {"PearlPlusTileSeed_v2", "PearlPlusTileLine_v2", "PearlPlusGramRow_v3", "PearlPlusTileCoreWired_v1"} <= set(REGISTRY.defs)
+    assert {"PearlPlusTileSeed_v2", "PearlPlusTileLine_v3", "PearlPlusGramRow_v4", "PearlPlusTileCoreWired_v2"} <= set(REGISTRY.defs)
     assert not {"PearlPlusTileNoise_v1", "PearlPlusTileNoise_v2", "PearlPlusTileKey_v1", "PearlPlusTileSeed_v1",
-                "PearlPlusGramRow_v2", "PearlPlusTileCoreWords_v3"} & set(REGISTRY.defs)
+                "PearlPlusGramRow_v2", "PearlPlusGramRow_v3", "PearlPlusTileLine_v2", "PearlPlusTileCoreWired_v1",
+                "PearlPlusTileCoreWords_v3"} & set(REGISTRY.defs)
 
 
 def test_a_units_public_row_is_its_salt_root_and_place() -> None:
@@ -94,7 +95,8 @@ def test_a_units_public_row_is_its_salt_root_and_place() -> None:
     t = PC.tiles(SCHEME, K, 2, 2, tile=(1, 1))[3]
     got = PC.public(SCHEME, K, t, unit, salt, root)
     assert tuple(got) == PC.PUBLIC
-    assert got == {"salt": salt, "root": root, "unit": unit, "rows": [1], "col": 1}
+    assert got == {"salt": PC.le16(salt), "root": PC.le16(root), "unit": unit, "rows": [1], "col": 1}
+    assert got["salt"][0] == salt[0] | salt[1] << 8 and len(got["root"]) == 32
 
 
 def test_the_noise_a_unit_derives_is_the_noise_pearl_plus_forms_its_tile_with() -> None:

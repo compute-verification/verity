@@ -6,14 +6,19 @@ reader of the linear takes y by wire from the node that wrote it and the verifie
         (a: Array<TM, f32[K]>, b: Array<TN, f32[K]>, cert, salt: u8[32], root: u8[64], unit: u32, rows: Array<TM, u32>,
          eb: Array<TN, e4m3[32]>, fa, fb: Array<K, e4m3[32]>, g: Array<32, f32[32]>)
         -> (digest: u8[64], y: Array<TR, bf16[TN]>, ok: bit)
-    PearlPlusTileSeed_v2{K,TN}                          on words in, bits out
-        (salt: u8[32], root: u8[64], col: u32) -> (key: u8[32], eb_0 … eb_{TN-1}: u32, f_0 … f_{K-1}: u32)
+    PearlPlusTileSeed_v2{K,TN}                          on 16-bit words
+        (salt: u16[16], root: u16[32], col: u32) -> (key: u16[16], eb_0 … eb_{TN-1}: u16[2], f_0 … f_{K-1}: u16[2])
         key = `PearlCLineKey_v1`(`PearlCSeedB_v1`(salt, root)), and the line indices, one field each: eb's col·TN + j,
-        F's t (the σ of its unregistered word body behind `WordBits`)
-    PearlPlusTileLine_v2{SIDE,FACTOR}                   on bits: the σ of one line's word body
-        (key: u8[32], index: u32) -> e4m3[32]                 `PearlCNoiseLine_v1`(key, SIDE, FACTOR, index, norm)
-    PearlPlusGramRow_v3{K,DEV,P}                        on bits: the σ of one Gram row's word body
-        (fb, fa: Array<K, e4m3[32]>) -> f32[32]               row P of `PearlCGram_v1`, for F_B's column P
+        F's t (the σ of its unregistered word body behind `WordBits` and `BitsWord{16}`)
+    PearlPlusTileLine_v3{SIDE,FACTOR}                   on 16-bit words: the σ of one line's word body
+        (key: u16[16], index: u16[2]) -> u16[16]               `PearlCNoiseLine_v1`(key, SIDE, FACTOR, index, norm)
+    PearlPlusGramRow_v4{K,DEV,P}                        on 16-bit words: the σ of one Gram row's word body
+        (fb, fa: Array<K, u16[16]>) -> Array<32, u16[2]>       row P of `PearlCGram_v1`, for F_B's column P
+
+Each port and each output of these units is in 16-bit words, the width C commits a value in: a byte string two bytes a
+word, the first the low byte, and a value on bits (a line's 32 E4M3 codes, an index's or an FP32 word's 32 bits) its
+bits in order, low bit first, 16 a word; each unit takes its words' bits inside (`WordBits{16}`) and writes its bits
+back in words (`BitsWord{16}`), so no reader reads a writer's field at a width other than the writer's.
 
 The node (`pearl_plus_credited.PearlPlusTileCoreWords_v4`) maps the line over eb's TN indices (SIDE 1, FACTOR 0) and F's K
 (SIDE 0 and 1, FACTOR 1), and Calls the Gram row for each of F_B's 32 columns: each line and each row is independent given
@@ -66,7 +71,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, Speci
 from verity.circuits.ops.fp32 import F32MulV2
 from verity.circuits.ops.prims import Bf16ToF32, F32ToE4m3Sat
 from verity.circuits.ops.scalar import Bf16GtStrict, BitAnd, F32IsFinite, I32Add, I32Eq, I32Le
-from verity.circuits.population import WordBits
+from verity.circuits.population import BitsWord, WordBits
 from verity.circuits.refs import Coll, array_of, tuple_of
 from verity.circuits.silicon import fp32
 from verity.circuits.types import Array, Tuple, Value
@@ -89,11 +94,11 @@ from . import tile_units as U
 from . import leaves as L
 from verity.circuits.ops import words as W
 
-__all__ = ["LINES", "PUBLIC", "PearlPlusAdmit", "PearlPlusAdmitV2", "PearlPlusGramRowV3", "PearlPlusSaltDead",
-           "PearlPlusSaltDeadV2", "PearlPlusTileCoreV3", "PearlPlusTileLineV2", "PearlPlusTileSeed", "core", "gram_row", "line",
+__all__ = ["LINES", "PUBLIC", "PearlPlusAdmit", "PearlPlusAdmitV2", "PearlPlusGramRowV4", "PearlPlusSaltDead",
+           "PearlPlusSaltDeadV2", "PearlPlusTileCoreV3", "PearlPlusTileLineV3", "PearlPlusTileSeed", "core", "gram_row", "line",
            "noise", "reference", "seed", "served"]
 
-F32, U32, BIT, I32, BF16, E4M3 = Value(32), Value(32), Value(1), Value(32), Value(16), Value(8)
+F32, U32, BIT, I32, BF16, E4M3, W16 = Value(32), Value(32), Value(1), Value(32), Value(16), Value(8), Value(16)
 R = pc8.R
 SLICE = C.SLICE
 
@@ -302,29 +307,79 @@ _SEED = CompositeDefinition(
 _SEED_BITS = _on_bits(_SEED, 2, register=False)
 
 
-def _seed_words(S) -> tuple:
-    return dict(bind(_SEED, K=S.K, TN=S.TN).signature()[0])
+def _words(t) -> Array:
+    """The 16-bit words (`W16`) that hold the bits of bit type ``t``, low bit first: the width C commits a value in."""
+    n = t.leaves
+    if n % 16 or t.width_set() != {1}:
+        raise DomainError(f"{t!r} is no whole 16-bit words of bits")
+    return Array(n // 16, W16)
+
+
+def _unpack(B, x, t):
+    """Words ``x`` as the bit type ``t`` they hold, low bit first (`WordBits{16}`)."""
+    return Coll(t, B.batch(bind(WordBits, W=16), Coll(Array(t.leaves // 16, W16), x.refs), axes=(0,)).refs)
+
+
+def _pack(B, x, t):
+    """Bits ``x`` as the 16-bit words of type ``t``, low bit first (`BitsWord{16}`)."""
+    n = x.type.leaves // 16
+    return Coll(t, B.batch(bind(BitsWord, W=16), Coll(Array(n, Array(16, BIT)), x.refs), axes=(0,)).refs)
+
+
+def _seed_params(S) -> tuple:
+    bits = dict(bind(_SEED_BITS, K=S.K, TN=S.TN).signature()[0])
+    return ("salt", _words(bits["salt"])), ("root", _words(bits["root"])), ("col", U32)
 
 
 def _seed_ret(S) -> Tuple:
-    key, eb, f = BL.bit_type(bind(_SEED, K=S.K, TN=S.TN).signature()[1]).fields
-    return Tuple(key, *[eb.elem] * S.TN, *[f.elem] * S.K)
+    key, eb, f = bind(_SEED_BITS, K=S.K, TN=S.TN).signature()[1].fields
+    return Tuple(_words(key), *[_words(eb.elem)] * S.TN, *[_words(f.elem)] * S.K)
 
 
 def _seed_on_words(B, S, salt, root, col):
-    bits = []
-    for t, x in zip(_seed_words(S).values(), (salt, root, col)):
-        w = t.leaf_widths()[0]
-        bits.append(Coll(BL.bit_type(t), B.batch(bind(WordBits, W=w), Coll(Array(t.leaves, Value(w)), x.refs), axes=(0,)).refs))
-    return Coll(_seed_ret(S), B.call(bind(_SEED_BITS, K=S.K, TN=S.TN), *bits).refs)
+    sigma = bind(_SEED_BITS, K=S.K, TN=S.TN)
+    bits = dict(sigma.signature()[0])
+    cb = Coll(bits["col"], B.batch(bind(WordBits, W=32), Coll(Array(1, U32), col.refs), axes=(0,)).refs)
+    out = B.call(sigma, _unpack(B, salt, bits["salt"]), _unpack(B, root, bits["root"]), cb)
+    return _pack(B, out, _seed_ret(S))
 
 
 PearlPlusTileSeed = CompositeDefinition(
-    "PearlPlusTileSeed", 2, ("K", "TN"), lambda S: (tuple(_seed_words(S).items()), _seed_ret(S)),
+    "PearlPlusTileSeed", 2, ("K", "TN"), lambda S: (_seed_params(S), _seed_ret(S)),
     _seed_on_words, refuse=_refuse_slices, conformance=_NOISE_CONF,
-    doc="`PearlPlusTileKey_v1` on C's words: each port's leaves their bits (`WordBits`), then its σ "
-        "(`PearlPlusTileKey_v2`); the key and each line's index on bits, one field each (the key, eb's TN, F's K), so "
-        "that each line the node maps reads one field whole by wire")
+    doc="`PearlPlusTileKey_v1` on 16-bit words: the salt's and the root's words and col's bits (`WordBits`), its σ "
+        "(`PearlPlusTileKey_v2`), and the key and each line's index back in 16-bit words (`BitsWord{16}`), one field "
+        "each (the key, eb's TN, F's K), so that each line the node maps reads one field whole by wire, at the width C "
+        "commits it in")
+
+
+def _on_words16(bits: CompositeDefinition, version: int, doc: str) -> CompositeDefinition:
+    """``bits`` (a σ whose every port and return is bits) with each port and its return in the 16-bit words that hold
+    those bits, low bit first: each port's words its bits (`WordBits{16}`), then ``bits``, then its bits in words
+    (`BitsWord{16}`)."""
+    statics = tuple(bits.statics)
+
+    def sigma(S) -> SpecializedDefinition:
+        return bind(bits, **{k: getattr(S, k) for k in statics})
+
+    def signature(S):
+        params, ret = sigma(S).signature()
+        return tuple((n, _word_type(t)) for n, t in params), _word_type(ret)
+
+    def body(B, S, *xs):
+        f = sigma(S)
+        out = B.call(f, *(_unpack(B, x, t) for x, (_n, t) in zip(xs, f.signature()[0])))
+        return _pack(B, out, _word_type(f.signature()[1]))
+
+    return CompositeDefinition(bits.name, version, statics, signature, body, refuse=bits.refuse,
+                               conformance=bits.conformance, doc=doc)
+
+
+def _word_type(t) -> Any:
+    """A bit type's 16-bit words, an Array of them its elements' words (`_words`)."""
+    if isinstance(t, Array) and t.elem.leaves % 16 == 0 and t.elem.leaves > 16:
+        return Array(t.n, _word_type(t.elem))
+    return _words(t)
 
 
 def _line_body(B, S, key, index):
@@ -343,7 +398,11 @@ _LINE = CompositeDefinition(
     _line_body, refuse=_refuse_line, register=False, conformance=_NOISE_CONF,
     doc="One of a -h3 tile's noise lines on words: `PearlCNoiseLine_v1`(key, SIDE, FACTOR, index, norm), norm bf16 8192 "
         "for E_B's (FACTOR 0) and bf16 512 for F's")
-PearlPlusTileLineV2 = _on_bits(_LINE, 2)
+_LINE_BITS = _on_bits(_LINE, 2, register=False)
+PearlPlusTileLineV3 = _on_words16(
+    _LINE_BITS, 3, "One of a -h3 tile's noise lines on 16-bit words: the key's and the index's words their bits, "
+                   "`PearlPlusTileLine_v2` (σ of `PearlCNoiseLine_v1`(key, SIDE, FACTOR, index, norm)), and the line's "
+                   "32 E4M3 codes back in 16 words, low bit first")
 
 
 def _gram_row_body(B, S, fb, fa):
@@ -360,7 +419,11 @@ _GRAM_ROW = CompositeDefinition(
     doc="Row P of a -h3 tile's Gram matrix on words, from F_B's lines whole (``fb``) and F_A's (``fa``): "
         "`PearlCChain_v1`{K, the device's atom, its window (0: none)} of F_B's column P and each of F_A's 32 columns, "
         "`PearlCGram_v1`'s row P")
-PearlPlusGramRowV3 = _on_bits(_GRAM_ROW, 3)
+_GRAM_ROW_BITS = _on_bits(_GRAM_ROW, 3, register=False)
+PearlPlusGramRowV4 = _on_words16(
+    _GRAM_ROW_BITS, 4, "Row P of a -h3 tile's Gram matrix on 16-bit words: F_B's and F_A's lines' words their bits, "
+                       "`PearlPlusGramRow_v3` (σ of row P of `PearlCGram_v1`, F_B's column P against each of F_A's 32), "
+                       "and the row's 32 FP32 words back in 16-bit words, two each, low half first")
 
 
 def seed(k: int, tn: int) -> SpecializedDefinition:
@@ -373,16 +436,16 @@ LINES = {"eb": (1, 0), "fa": (0, 1), "fb": (1, 1)}
 
 def line(kind: str) -> SpecializedDefinition:
     side, factor = LINES[kind]
-    return bind(PearlPlusTileLineV2, SIDE=side, FACTOR=factor)
+    return bind(PearlPlusTileLineV3, SIDE=side, FACTOR=factor)
 
 
 def gram_row(k: int, dev: str, p: int) -> SpecializedDefinition:
-    return bind(PearlPlusGramRowV3, K=k, DEV=dev, P=p)
+    return bind(PearlPlusGramRowV4, K=k, DEV=dev, P=p)
 
 
 def noise(B, k: int, tn: int, dev: str, salt, root, col) -> tuple:
     """A tile's noise in the body under construction from C's words of its ``salt``, ``root`` and ``col``: (eb, fa, fb, g)
-    on bits, `seed`'s Call, then `line` mapped over each kind's indices and a `gram_row` Call for each of F_B's 32
+    in 16-bit words, `seed`'s Call, then `line` mapped over each kind's indices and a `gram_row` Call for each of F_B's 32
     columns, each reading F_B's and F_A's lines whole."""
     s = B.call(seed(k, tn), salt, root, col)
     key, index = s[0], s[1].type

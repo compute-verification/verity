@@ -2,15 +2,16 @@
 its noise derived inside, which are the linear's nodes in C and write its y, and each unit's public row.
 
     PearlPlusTileCoreWords_v4{K,TM,TR,TN,N,RHO,RHOR,DEV}   on words
-        (a: Array<TM, f32[K]>, b: Array<TN, bf16[K]>, cert, salt: u8[32], root: u8[64], unit: u32, rows: Array<TM, u32>,
+        (a: Array<TM, f32[K]>, b: Array<TN, bf16[K]>, cert, salt: u16[16], root: u16[32], unit: u32, rows: Array<TM, u32>,
          col: u32)
         -> (digest: u8[64] as bits, y: Array<TR, bf16[TN]>, ok: u16)
         maps of the noise (`pearl_plus_tile.noise`: eb, fa, fb, g of salt, root and col) and the wired core
-    PearlPlusTileCoreWired_v1{K,TM,TR,TN,N,RHO,RHOR,DEV}  on words, its noise on bits
-        (a, b, cert, salt, root, unit, rows as above, eb, fa, fb, g as `PearlPlusTileCore_v3`'s) -> as above
+    PearlPlusTileCoreWired_v2{K,TM,TR,TN,N,RHO,RHOR,DEV}  on words
+        (a, b, cert, salt, root, unit, rows as above, eb: Array<TN, u16[16]>, fa, fb: Array<K, u16[16]>,
+         g: Array<32, Array<32, u16[2]>>) -> as above
         `PearlPlusTileCore_v3` behind `WordBits` batches, b's words widened to FP32 first (`Bf16ToF32`), so each port is a
-        row of the words C holds; y's bits back to BF16 words (`BitsWord{16}`), ok one word, bit 0 the core's ok and the
-        rest zero
+        row of the words C holds, the salt's and the root's bytes and the noise's bits in 16-bit words, low bit first;
+        y's bits back to BF16 words (`BitsWord{16}`), ok one word, bit 0 the core's ok and the rest zero
     cut(t)                                -> [(Definition, n)] the units C's laying makes of node t (`CUTS`)
     tiles(scheme, k, m, n, tile)          -> [Tile]          the linear's TM × TN grid, row-major: one unit of C a tile
     public(scheme, k, t, unit, salt, root) -> {port: value}  tile t's public row (`PUBLIC`), in the node's port order
@@ -31,10 +32,10 @@ At a credited linear of C, y = x · Wᵀ over M rows of x (K words) and the weig
 
 The node derives its noise from seed_B = H_"seed-B"(salt ‖ root) inside: E_B's lines are its column tile's, F_A, F_B and G
 the call's; the core derives each row's E_A from the row's own digest.  Its top level is the noise's units and the core,
-each a Call or a map member: `PearlPlusTileSeed_v2` (the line key and each line's index), `PearlPlusTileLine_v2` mapped
-over eb's TN indices and over F's K for fa and for fb, `PearlPlusGramRow_v3` Called for each of F_B's 32 columns, and
-`PearlPlusTileCoreWired_v1`, eb, fa, fb and g crossing as values C wires from each producer's output row to its consumer's
-input row.  No K that the core takes fits the node whole in one proof block (the noise alone is about 370k · K ANDs), so
+each a Call or a map member: `PearlPlusTileSeed_v2` (the line key and each line's index), `PearlPlusTileLine_v3` mapped
+over eb's TN indices and over F's K for fa and for fb, `PearlPlusGramRow_v4` Called for each of F_B's 32 columns, and
+`PearlPlusTileCoreWired_v2`, eb, fa, fb and g crossing as values C wires from each producer's output row to its consumer's
+input row, each in the 16-bit words C commits its values in, which every reader reads at that width.  No K that the core takes fits the node whole in one proof block (the noise alone is about 370k · K ANDs), so
 C's laying (`verity.circuits.laying.lay`) opens it into those units (`cut`), each its own block: a line is 73,459 ANDs and
 a Gram row 32 chains (about 7,000 · K), in range at every K up to the served 2048; the wired core is in range whole at
 K = 256 (about 16.6M ANDs), and at K = 2048 (about 5.1G ANDs at a 16 × 64 tile) laying opens it too.  It writes ``y``,
@@ -114,9 +115,19 @@ def _bit_params(S) -> dict:
     return dict(_core(S).signature()[0])
 
 
+#: the core's ports C holds in 16-bit words, its bits low bit first: the salt and the root (bytes) and the noise (bits)
+_IN_WORDS16 = ("salt", "root") + _NOISE_PORTS
+
+
 def _word_params(S) -> tuple:
     params = dict(bind(PT.PearlPlusTileCoreV3.sigma_of, **{s: getattr(S, s) for s in _STATICS}).signature()[0])
-    return tuple((p, Array(S.TN, Array(S.K, BF16)) if p == "b" else params[p]) for p in _CORE_OWN)
+    bits = _bit_params(S)
+    return tuple((p, Array(S.TN, Array(S.K, BF16)) if p == "b" else PT._word_type(bits[p]) if p in _IN_WORDS16
+                  else params[p]) for p in _CORE_OWN)
+
+
+def _noise_params(S) -> tuple:
+    return tuple((p, PT._word_type(_bit_params(S)[p])) for p in _NOISE_PORTS)
 
 
 def _word_ret(S):
@@ -126,14 +137,12 @@ def _word_ret(S):
 
 def _wired_body(B, S, *xs):
     bits, bt = {}, _bit_params(S)
-    for (p, t), x in zip(_word_params(S), xs):
+    for (p, t), x in zip(_word_params(S) + _noise_params(S), xs):
         if p == "b":
             x = B.batch(Bf16ToF32, Coll(Array(t.leaves, BF16), x.refs), axes=(0,))
         w = 32 if p == "b" else t.leaf_widths()[0]
-        if w > 1:
-            x = Coll(bt[p], B.batch(bind(WordBits, W=w), Coll(Array(t.leaves, Value(w)), x.refs), axes=(0,)).refs)
-        bits[p] = x
-    out = B.call(_core(S), *(bits[p] for p in _CORE_OWN), *xs[len(_CORE_OWN):])
+        bits[p] = Coll(bt[p], B.batch(bind(WordBits, W=w), Coll(Array(t.leaves, Value(w)), x.refs), axes=(0,)).refs)
+    out = B.call(_core(S), *(bits[p] for p in _CORE_OWN + _NOISE_PORTS))
     n = S.TR * S.TN
     y = B.batch(bind(BitsWord, W=16), Coll(Array(n, Array(16, Value(1))), out[1].refs), axes=(0,))
     return tuple_of(out[0], Coll(Array(S.TR, Array(S.TN, BF16)), y.refs), U.ok_word(U._Emit(B), out[2]))
@@ -141,11 +150,12 @@ def _wired_body(B, S, *xs):
 
 _STATICS = tuple(PT.PearlPlusTileCoreV3.statics)
 PearlPlusTileCoreWired = CompositeDefinition(
-    "PearlPlusTileCoreWired", 1, _STATICS,
-    lambda S: (_word_params(S) + tuple((p, _bit_params(S)[p]) for p in _NOISE_PORTS), _word_ret(S)),
+    "PearlPlusTileCoreWired", 2, _STATICS,
+    lambda S: (_word_params(S) + _noise_params(S), _word_ret(S)),
     _wired_body, refuse=PT.PearlPlusTileCoreV3.refuse, conformance=PT.PearlPlusTileCoreV3.conformance,
-    doc="`PearlPlusTileCore_v3` on C's words with its noise on bits by wire: b's BF16 words widened (`Bf16ToF32`), then "
-        "each w-bit leaf, w > 1, its w bits by `WordBits{w}`; eb, fa, fb and g as the noise's units wrote them; y's 16-bit "
+    doc="`PearlPlusTileCore_v3` on C's words with its noise by wire: b's BF16 words widened (`Bf16ToF32`), then each "
+        "w-bit leaf its w bits by `WordBits{w}`, the salt, the root, eb, fa, fb and g each in the 16-bit words their "
+        "writers wrote, its bits low bit first; y's 16-bit "
         "leaves back to BF16 words by `BitsWord{16}`, and ok one 16-bit word, bit 0 the core's ok and bits 1-15 zero "
         "(`tile_units.ok_word`)")
 
@@ -163,8 +173,9 @@ PearlPlusTileCoreWords = CompositeDefinition(
     "PearlPlusTileCoreWords", 4, _STATICS, lambda S: (_node_params(S), _word_ret(S)),
     _on_words, refuse=PT.PearlPlusTileCoreV3.refuse, conformance=PT.PearlPlusTileCoreV3.conformance,
     doc="A -h3 tile on C's words, its noise derived inside as maps (`pearl_plus_tile.noise`): `PearlPlusTileSeed_v2`(salt, "
-        "root, col), `PearlPlusTileLine_v2` over eb's TN and F's K indices, `PearlPlusGramRow_v3` for each of F_B's 32 columns, and "
-        "`PearlPlusTileCoreWired_v1` on the tile's words and that noise by wire")
+        "root, col), `PearlPlusTileLine_v3` over eb's TN and F's K indices, `PearlPlusGramRow_v4` for each of F_B's 32 columns, and "
+        "`PearlPlusTileCoreWired_v2` on the tile's words and that noise by wire; the salt and the root in 16-bit words, two "
+        "bytes a word, low byte first")
 
 
 def cut(t: SpecializedDefinition) -> list[tuple[SpecializedDefinition, int]]:
@@ -218,12 +229,19 @@ def tiles(scheme: str, k: int, m: int, n: int, tile: tuple[int, int] | None = No
 
 def public(scheme: str, k: int, t: Tile, unit: int, salt: bytes, root: bytes) -> dict[str, Any]:
     """Tile ``t``'s public row (`PUBLIC`) for call ``unit`` under the epoch's ``salt`` and the weights' root ``root``, each
-    field as the node's port holds it: the epoch's salt, the weights' root, and the tile's place (``unit``, ``rows``,
-    ``col``)."""
+    field as the node's port holds it: the epoch's salt and the weights' root in 16-bit words (`le16`), and the tile's
+    place (``unit``, ``rows``, ``col``)."""
     s = PS.get(scheme, k_min=k, tile=(len(t.rows), len(t.cols)))
     if s.hashing != "h3":
         raise ValueError(f"{scheme}: the node derives -h3's noise, not {s.hashing}'s")
-    return {"salt": salt, "root": root, "unit": unit, "rows": list(t.rows), "col": t.col}
+    return {"salt": le16(salt), "root": le16(root), "unit": unit, "rows": list(t.rows), "col": t.col}
+
+
+def le16(data: bytes) -> list[int]:
+    """``data``'s bytes as the 16-bit words the node's ports hold them in: two bytes a word, the first the low byte."""
+    if len(data) % 2:
+        raise ValueError(f"{len(data)} bytes are no whole 16-bit words")
+    return [int.from_bytes(data[i:i + 2], "little") for i in range(0, len(data), 2)]
 
 
 def _seed(salt: bytes, root_b: bytes) -> bytes:
@@ -256,5 +274,6 @@ def row_gram(salt: bytes, root_b: bytes, k: int, dev: str) -> bytes:
                     for row in C.gram(_seed(salt, root_b), k, C.LINE_NORM_V1, DEVICES[dev]) for w in row)
 
 
-__all__ = ["CUTS", "PUBLIC", "PearlPlusTileCoreWired", "PearlPlusTileCoreWords", "Tile", "cut", "credited_product", "public", "row_eb", "row_fa",
+__all__ = ["CUTS", "PUBLIC", "PearlPlusTileCoreWired", "PearlPlusTileCoreWords", "Tile", "cut", "credited_product", "le16",
+           "public", "row_eb", "row_fa",
            "row_fb", "row_gram", "tiles"]

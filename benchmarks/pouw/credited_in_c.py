@@ -235,7 +235,8 @@ def reference(ln: Linear, index: int, vals: dict, unit: int) -> list[int]:
     t = ln.tiles[index]
     r, s = t.rows[0] // len(t.rows), t.core.bindings
     b = [[v << 16 for v in row] for row in vals["w"][t.col]]
-    d, y, ok = PT.reference(s["DEV"], s["K"], s["N"], vals["x"][r], b, vals["cert"][index], vals["salt"], vals["root"],
+    salt, root = (b"".join(w.to_bytes(2, "little") for w in vals[v]) for v in ("salt", "root"))
+    d, y, ok = PT.reference(s["DEV"], s["K"], s["N"], vals["x"][r], b, vals["cert"][index], salt, root,
                             unit, list(t.rows), list(t.cols), s["RHO"], s["RHOR"], t.real)
     return [*(d or bytes(64)), *(w for row in (y or [[0] * len(t.cols)] * t.real) for w in row), ok]
 
@@ -616,7 +617,7 @@ def stage(a) -> int:
     rec["public_row"] = {"of": "the verifier's: `public_values` from the salt, W's registered root and the tiles' places "
                          "alone, no noise value", "ports": list(PC.PUBLIC),
                          "salt": salt.hex(), "w_root": w_reg["w"].root.hex(), "supplied": list(supplied)}
-    other = PC.public(SCHEME, k, drawn, unit + 1, good["salt"], good["root"])
+    other = PC.public(SCHEME, k, drawn, unit + 1, salt, w_reg["w"].root)
     wrong_unit = rows_of(ln, {"unit": other["unit"]})
     rec["registered"] = {}
     for tag, vals in (("honest", good), ("dishonest", bad)):
