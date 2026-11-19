@@ -61,6 +61,7 @@ public import Proofs.Flock.SamplingGeneric.PhasesAvg
 public import Proofs.Flock.SamplingGeneric.Levels
 public import Proofs.Flock.SamplingGeneric.LevelsKS
 public import Proofs.Flock.SamplingGeneric.LevelsTwoKS
+public import Proofs.Flock.SamplingGeneric.LevelsDeepKS
 public import Proofs.Flock.SamplingGeneric.LevelsRealize
 public import Proofs.Flock.SamplingGeneric.LevelsReg
 public import Proofs.Flock.SpotFlock.Cap
