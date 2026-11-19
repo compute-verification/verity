@@ -4,7 +4,6 @@ with, its refusals by name, the weights of record, the manifest check and the ve
 process starts."""
 from __future__ import annotations
 
-import dataclasses
 import json
 import os
 import re
@@ -19,7 +18,6 @@ from tests.pipeline.test_row import (
     _derive_row,
     _match_record,
     _row,
-    _tap_manifest,
     _timeline,
 )
 from verity_vllm.pipeline import row_records as R
@@ -226,17 +224,6 @@ def test_a_commit_without_its_tap_build_is_refused_at_12_by_name_before_it_prepa
     assert e.value.rc == 12 and _stages(r) == [("commit", "FAIL", f"hidden .so missing: {r.d}/absent.so")]
     assert _events(r, "ok", "stopped_at") == [("stage.commit", "start", None, None), ("stage.commit", "end", False, None), ("row", "end", False, "commit")]
 
-    r = _commit_row(tmp_path / "norm")
-    r.env = dataclasses.replace(r.env, norm_tap_so=str(tmp_path / "absent" / "verity_norm_tap.so"))
-    man = _tap_manifest(tmp_path / "manifest.json", "norm_scales")
-    monkeypatch.setattr(r, "manifest_of_record", lambda stage="commit": man)
-    with pytest.raises(Stop) as e:
-        r.commit_prepare()
-    (stage, status, detail), = _stages(r)
-    assert e.value.rc == 12 and (stage, status) == ("commit", "FAIL")
-    assert detail == (f"NORM_TAP=1 and the manifest names its family, but the tap .so is missing: {r.env.norm_tap_so} (ops/pod_norm_tap.sh, "
-                      "run by ops/pod_bootstrap.sh)")
-    assert _events(r, "ok", "stopped_at")[-2:] == [("stage.commit", "end", False, None), ("row", "end", False, "commit")]
 
 
 @pytest.mark.parametrize("mrc, rc, detail", [

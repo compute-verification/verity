@@ -7,8 +7,7 @@
   "Spot.ZkMain": "the spot-one-stage-zk executable's entry point, one line; its command is Spot.OneStageZk.membersMain, audited under Spot",
   "Spot.VerifierMain": "the spot-verifier executable's entry point, one line; it serves Spot.Pieces.verifier, audited under Spot",
   "Spot.PlanCheckMain": "the spot-plancheck executable's entry point: it reads JSON lines into Spot.PlanCheck's designs and answers leakBound and checkWork, audited under Spot",
-  "Spot.MonitoringPeriodMain": "the spot-monitoring-period executable's entry point, one line; its command is Core.BlobProtocol.main over Spot.MonitoringPeriod.protocol, audited under Spot",
-  "Spot.WiredKeyDevMain": "the spot-wired-key-dev executable's entry point, for development plays only: it serves Spot.SecondStage.checkAny over Spot.Pieces.secondOwn with Own.wiredKey on, both audited under Spot"
+  "Spot.MonitoringPeriodMain": "the spot-monitoring-period executable's entry point, one line; its command is Core.BlobProtocol.main over Spot.MonitoringPeriod.protocol, audited under Spot"
  },
  "layers": {
   "Spot": {

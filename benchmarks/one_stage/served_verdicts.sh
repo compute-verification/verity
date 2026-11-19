@@ -574,6 +574,7 @@ else WINDOW_STEPS=${WINDOW_STEPS:-256}; fi
 MAIN_SHA=${MAIN_SHA-$(git -C "$TREE" rev-parse HEAD 2>/dev/null)}
 PRODUCT=${PRODUCT:-onsite}
 . "$(dirname "${BASH_SOURCE[0]}")/placement.sh" || exit 2  # hold_placement
+development_under_hold
 # off the node only where the caller runs a composer there (COMPOSE_OFF_NODE=1), or under VERITY_HOLD_PLACEMENT=1
 COMPOSE_OFF_NODE=${COMPOSE_OFF_NODE:-$(hold_placement && echo 1 || echo 0)} COMPOSE_NODE=${COMPOSE_NODE:-vy-auditor-2}
 COMPOSE_GATE=${COMPOSE_GATE:-ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes research@${VY_AUDITOR_2_HOST:-}}
@@ -1172,8 +1173,9 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --seal \
     --max-num-batched-tokens "$T" --window-steps "$WINDOW_STEPS" "${h1[@]}" "${day[@]}" \
-    --required-manifest "$PRED/manifest.json" --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 \
-    --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" \
+    --row-build "$PRED" --hidden-so "$HIDDEN_SO" --tap-cap-mb 2048 \
+    --window-requests "$SLOTS" --window-class "${V3C_CLASS:-4,32,4}" --max-num-seqs "$SLOTS" \
+    --max-model-len "$(IFS=, read -r _ p o _ <<< "${V3C_CLASS:-4,32,4}"; echo $((p + o)))" \
     --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 ${SERVE_ARGS:-} \
     > "$D/serve.log" 2>&1 &
   local srv=$! up=0 c=0 s=0 rc=0 release

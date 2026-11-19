@@ -1,6 +1,6 @@
 """`.cursor/hooks.json` runs the guard only from /opt/agent-guard, the copy boot.sh puts there from origin/main, and no file of
 the checkout: the checkout here is someone's branch whose every `tools/agent-guard` file, and a hook-named file at its top,
-is a tripwire that leaves a marker. Without that copy a Cursor cloud VM (one with /exec-daemon) refuses every call but the
+is a tripwire that leaves a marker. Without that copy, or with one from before the guard ran from there, a Cursor cloud VM (one with /exec-daemon) refuses every call but the
 one shell command that restores it; a machine with neither (a desktop agent's laptop) runs origin/main's committed guard
 out of git. Each command runs as Cursor runs it, with /opt/agent-guard and /exec-daemon moved under the test's directory.
 Programs first on the caller's PATH and variables naming files (PYTHONPATH, BASH_ENV, GIT_DIR and the like) are tripwires
@@ -22,7 +22,7 @@ RESTORE = ("git -C /workspace fetch -q origin main && git -C /workspace show ori
            "| bash -s -- /workspace")
 HOOK_FILES = ("shell_hook.py", "task_hook.py", "stop_hook.py")
 #: every program the wrapper, hook.sh and the hooks start, and the shells and interpreters a caller's PATH could swap
-PROGRAMS = ("sh", "dash", "bash", "python3", "python", "git", "awk", "cat", "dirname", "mkdir", "mktemp", "tar", "mv", "rm",
+PROGRAMS = ("sh", "dash", "bash", "python3", "python", "git", "awk", "cat", "grep", "dirname", "mkdir", "mktemp", "tar", "mv", "rm",
             "tmux")
 #: modules the hooks import, siblings and standard library alike
 MODULES = ("shell_hook", "task_hook", "stop_hook", "settings", "worktree_guard", "kept_session", "inbox", "json", "re",
@@ -139,6 +139,18 @@ def test_without_the_opt_copy_a_cloud_vm_refuses_every_call_but_the_command_that
     assert site.shell(" " + RESTORE)["permission"] == "deny"
     two = {"hook_event_name": "beforeShellExecution", "command": "ls", "tool_input": {"command": RESTORE}}
     assert site.run("beforeShellExecution", two)["permission"] == "deny", "only the event's one command decides"
+    assert site.tripped() == []
+
+
+def test_an_opt_copy_from_before_the_guard_ran_from_there_refuses_every_call_but_the_restore(site):
+    """A machine booted before the guard ran from /opt keeps a hook.sh there that looks for the checkout beside itself, finds
+    none and runs a file that doesn't exist: readable, so without this refusal the restore command would never be offered."""
+    (site.opt / "hook.sh").write_text('#!/bin/sh\nws=$(cd "$(dirname "$0")/../.." && pwd)\nexec python3 "$ws/tools/agent-guard/$1"\n')
+    for answer in (site.shell("ls"), site.task("Task"), site.task("^MCP:"), site.stop()):
+        assert answer["permission"] == "deny", answer
+        assert answer["agent_message"].endswith(f"Restore it with exactly this command: {RESTORE}")
+    assert site.shell(RESTORE) == {"permission": "allow"}
+    assert site.shell(RESTORE + "; ls")["permission"] == "deny"
     assert site.tripped() == []
 
 

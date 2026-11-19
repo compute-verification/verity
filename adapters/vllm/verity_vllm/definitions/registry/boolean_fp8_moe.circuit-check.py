@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+#: the E4M3 expert gathers' Boolean versions, which this module makes inside the expert-row bodies and the `GatherE4m3x{E}_v1`
+#: family makes on demand, and no id names alone (`circuit_check.sidecars.body_family`)
+BODY_FAMILIES = (r"GatherE4m3x\d+_v2",)
+
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
@@ -64,6 +68,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
                                                               SWAP=False, DOT=BG.HopperE4m3MmaV2Dot32, FIRST=False, LAST=False)),
         ("MoeExpertFp8CoordinateChunk_v2/last", lambda: bind(boolean_fp8_moe.MoeExpertFp8CoordinateChunkV2, E=3, K=64, G=64, KB=32,
                                                              SWAP=True, DOT=BG.HopperE4m3MmaV2Dot32, FIRST=False, LAST=True)),
+        # the expert gather at the served models' 256 experts
+        ("GatherE4m3x256_v2", lambda: bind(boolean_fp8_moe.gather_e4m3(256))),
         ("SiluMulFp8BlockQuantResult_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantResultV2)),
         ("SiluMulFp8BlockQuantGroup_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantGroupV2, G=4)),
         ("SiluMulFp8BlockQuant_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantV2, I=8, G=4)),

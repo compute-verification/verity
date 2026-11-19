@@ -49,7 +49,7 @@ from tests.protocols.test_pouw_h1 import AUDITOR, Experts, Runner, _host, _remot
 from tests.protocols.test_pouw_h1_served import _unit
 from verity_vllm import protocols as PO
 from verity_vllm.acquire import h1_commit as HC
-from verity_vllm.acquire.sources.int8_source import Int8Source
+from verity_vllm.acquire.sources.int8_source import Int8Source, Sites
 from verity_vllm.commit.served_record import StepInputPort
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_experts as X
@@ -249,16 +249,16 @@ GRAPH_PAD = 3
 _WINDOW_KEY = hashlib.sha512(b"w").digest()
 
 
-def _manifest_sites(steps=range(FIRST, FIRST + STEPS), modules=("model.layers.0", "model.layers.1")):
-    """The bench workload's manifest's Int8RowQuant_v1 sites (`int8_source.quant_sites`): (engine step, linear) -> its op path
-    ``<module>/<fx node>``, the fx nodes counted on through the run."""
-    return {(e, m): f"{m}/row_quant_{i}" for i, (e, m) in enumerate((e, m) for e in steps for m in modules)}
+def _plan_sites(modules=("model.layers.0", "model.layers.1")):
+    """The bench row's capture plan's Int8RowQuant sites (`int8_source.quant_sites`): each linear's op path ``<module>/<op>``,
+    at every engine step."""
+    return Sites({m: f"{m}/row_quant" for m in modules})
 
 
 def _served_commit(com, model, quant=None):
     """serve-openai's committer as H1 sees it (`pipeline.serve_seal.committer`): the step-input port and the int8 source
-    of the bench workload's manifest, ``com.sources``."""
-    port, src = StepInputPort(com, PORT_T), Int8Source(com, model, _manifest_sites() if quant is None else quant, [])
+    of the bench row's capture plan, ``com.sources``."""
+    port, src = StepInputPort(com, PORT_T), Int8Source(com, model, _plan_sites() if quant is None else quant, [])
     com.sources = [port, src]
     return port, src
 
@@ -823,7 +823,7 @@ def test_the_source_takes_every_linears_site_at_every_engine_step():
 def test_on_the_servers_commit_each_a_table_is_its_int8_sources_rows_and_each_rounds_ids_its_ports(tmp_path, monkeypatch):
     """serve-openai's rows-sha512 collector in the engine (`_served_commit`), H1's tap on it (`h1_commit.tap`) and no
     Commit of H1's own: the tap reads each linear's x_q and s_a where the bench workload's int8 source acquires them, under
-    the manifest's op paths, as the linear's site, and each step's ids at the port, its scheduled tokens only, so the
+    the capture plan's op paths, as the linear's site, and each step's ids at the port, its scheduled tokens only, so the
     graph's padded positions are neither ids nor cut from them again. The window ties as on H1's own Commit, core's
     ROOTS1 steps pass and every served call is credited; one whose served A is all zero, with the same honest Commit,
     credits nothing."""
@@ -836,7 +836,7 @@ def test_on_the_servers_commit_each_a_table_is_its_int8_sources_rows_and_each_ro
         assert tap.where[CR.commit_rows(s, K)]["sites"] == [CT.site(f"model.layers.{w}") for w in range(2)]
         assert tap.where[CR.commit_rows(s, K)]["steps"] == [FIRST + s] * 2
     assert sorted(n for j, n in com.got if j == FIRST) == sorted(
-        ["step.input/ids", "step.input/positions", *(f"model.layers.{w}/row_quant_{w}/{p}" for w in range(2) for p in "01")])
+        ["step.input/ids", "step.input/positions", *(f"model.layers.{w}/row_quant/{p}" for w in range(2) for p in "01")])
     assert PHC.manifest_reason(record) is None and _core(record, run) == (None, None)
     assert all(v["credit"] for v in run.gated().values())
     (tmp_path / "zero").mkdir()
@@ -861,7 +861,7 @@ def test_the_ports_ids_are_the_steps_scheduled_tokens_and_keep_no_graph_pad():
 
 def test_h1_taps_the_servers_commit_only_where_it_acquires_every_linear_at_every_step():
     """`h1_commit.tap` puts no source on the server's Commit: it needs the Commit's step-input port and int8 source, and
-    refuses a window step at which the manifest names no site of one of H1's linears, and H1's routed experts, whose
+    refuses a linear of H1's the capture plan names no site of, and H1's routed experts, whose
     sites only H1's own source acquires; a tap it refuses is never put on."""
     model = Model()
     layers = PHK.layers(model, (Linear,))
@@ -873,19 +873,18 @@ def test_h1_taps_the_servers_commit_only_where_it_acquires_every_linear_at_every
     com.sources = com.sources[:1]
     with pytest.raises(ValueError, match="no int8 source"):
         HC.tap(com, model, layers, steps)
-    _served_commit(com, model, _manifest_sites(steps=[FIRST]))
-    with pytest.raises(ValueError, match=rf"acquires 2 of H1's .* sites nowhere, \[\({FIRST + 1}, 'model.layers.0'\)"):
+    _served_commit(com, model, _plan_sites(modules=("model.layers.0",)))
+    with pytest.raises(ValueError, match=r"acquires 1 of H1's linears nowhere, \['model.layers.1'\]"):
         HC.tap(com, model, layers, steps)
     assert "_acquire" not in vars(com)
     moe = MoEModel()
-    _served_commit(com, moe, _manifest_sites(modules=("model.layers.0",)))
+    _served_commit(com, moe, _plan_sites(modules=("model.layers.0",)))
     with pytest.raises(ValueError, match="routed experts"):
         HC.tap(com, moe, PHK.layers(moe, (Linear,)), steps)
     _served_commit(com, model)
     tap = HC.tap(com, model, layers, steps)
     assert tap.port == "step.input/ids"
-    assert tap.ops == {f"model.layers.{w}/row_quant_{2 * i + w}": CT.site(f"model.layers.{w}")
-                       for i in range(STEPS) for w in range(2)}
+    assert tap.ops == {f"model.layers.{w}/row_quant": CT.site(f"model.layers.{w}") for w in range(2)}
     tap.untap()
     assert "_acquire" not in vars(com)
 

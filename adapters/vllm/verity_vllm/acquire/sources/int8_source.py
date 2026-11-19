@@ -1,87 +1,115 @@
 """The exact-int8 profile's quantizers (`engine.int8_ops`) as an acquisition source: the values the served linear and attention exchange
-inside one module body, committed as the ops computed them.
+inside one module body, committed as the ops computed them.  What it taps is read from the row's capture plan
+(`check.capture_plan.of_build`'s classes), never from a request's rows:
 
-- `verity_int8::row_quant` inside a linear module: its (x_q, s_a) are the `call_boundaries` identities `<linear>/<fx node>/0` and `/1`
-  (`Int8RowQuant_v1`, read only by the linear's `ScaledMmS8_v1`), claimed here (`claim`) so the call-boundary source never evaluates
-  them on the host.  The fx node's name counts on through the run, so the names come from the manifest: per (engine step, module) its
-  one Int8RowQuant_v1 site.
+- `verity_int8::row_quant` inside a linear module: its (x_q, s_a) are the plan's `call_boundary` classes `<linear>/<op>` of an
+  `Int8RowQuant` Definition, members `0` and `1` (read only by the linear's `ScaledMmS8_v1`), claimed here (`claim`) so the
+  call-boundary source never evaluates them on the host.  They are committed as `<linear>/<op>/0` and `/1` at every engine step: the
+  plan names the op, and the fx node's count over a request (`row_quant_3`) is the request's, which a served step batching several
+  requests has none of.  A module has one such op.
 - `verity_int8::kv_quant_batch` inside an attention module, or `verity_int8::kv_quant_window_batch` under a credited cache read:
   each request's (K', V', s_v, f32(V'_0)) per KV head, its slices of the batch's results (K'[r, :, :s]
-  and so on, s its window), are the `instance_outputs` identities of `Int8KvQuant_v1`'s ports 0..3 at `<attention>`, each over
-  every KV head; the requests of a step are committed in batch order, concatenated (a request with no window, none).  They are committed as `<attention>/kv_quant.<port>`, labels this source declares as those ports (`ports`), so the
-  binder binds them by structure whatever the manifest's member spelling (`<hint>.<port>`), and the attention's own return binds its
-  one remaining member.
+  and so on, s its window), are the plan's `module_output` classes of an `Int8KvQuant` Definition at `<attention>`, its ports 0..3
+  (the member's last dotted part), each over every KV head; the requests of a step are committed in batch order, concatenated (a
+  request with no window, none).  They are committed as `<attention>/kv_quant.<port>`, labels this source declares as those ports
+  (`ports`), so the binder binds them by structure whatever the plan's member spelling (`<hint>.<port>`), and the attention's own
+  return binds its one remaining member.
 
-Attached whenever the required manifest names either (`taps.attach`); no kernel changes: the wrappers run the installed ops unchanged
+Attached whenever the plan names either (`taps.attach`); no kernel changes: the wrappers run the installed ops unchanged
 and acquire their results on their device.
 """
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
-from verity_vllm.acquire.sources.call_boundary_plan import FAMILY
+from verity_vllm.records.capture import CALL_BOUNDARY, MODULE_OUTPUT
 from verity_vllm.log import init_logger
-from verity_vllm.query.manifest.bind import Port
-from verity_vllm.query.manifest.format import identity_rows
 
 logger = init_logger(__name__)
 
 SHORT_NAME = "int8"
-QUANT_SPEC = "Int8RowQuant_v1"
-KV_SPEC = "Int8KvQuant_v1"
-#: Int8KvQuant_v1's ports (K', V', s_v, f32(V'_0)) and the labels they are committed under (never a bare digit: the binder reads
+#: the Definitions, at any version, whose results this source commits
+QUANT, KV = "Int8RowQuant", "Int8KvQuant"
+#: Int8RowQuant's outputs (x_q, s_a), as the plan's members name them
+QUANT_MEMBERS = ("0", "1")
+#: Int8KvQuant's ports (K', V', s_v, f32(V'_0)) and the labels they are committed under (never a bare digit: the binder reads
 #: `<module>/<k>` as slot k of the module's return)
 KV_PORTS = ("0", "1", "2", "3")
 KV_LABELS = tuple(f"kv_quant.{p}" for p in KV_PORTS)
 KV_CLASS = "int8_kv_quant"
-#: the ops whose results hold each request's Int8KvQuant_v1, by the position of their `lens` argument: from the pages
+#: the ops whose results hold each request's Int8KvQuant, by the position of their `lens` argument: from the pages
 #: (`paged_attention`) or a credited read's windows
 KV_OPS = {"kv_quant_batch": 3, "kv_quant_window_batch": 3}
 
 
-def _spec(r: Mapping[str, Any]) -> str:
-    return str(r.get("spec") or "").split("{", 1)[0]
+def _of(c: Mapping[str, Any], definition: str) -> bool:
+    """Whether plan class ``c``'s rows are ``definition``'s (at any version); a class of it and of another Definition is refused."""
+    mine = [str(d).rsplit("_v", 1)[0] == definition for d in c["definitions"]]
+    if any(mine) and not all(mine):
+        raise ValueError(f"int8: {c['op_path']}/{c['member']} is {definition}'s and another Definition's ({c['definitions']}): one "
+                         "tap commits one of them")
+    return any(mine)
 
 
-def claim(r: Mapping[str, Any]) -> str | None:
-    """`call_boundary_source.CLAIMS`: an Int8RowQuant_v1 call boundary is this source's."""
-    return SHORT_NAME if r.get("family") == FAMILY and _spec(r) == QUANT_SPEC else None
+def claim(c: Mapping[str, Any]) -> str | None:
+    """`call_boundary_source.CLAIMS`: a plan class that is an Int8RowQuant call boundary is this source's; a row manifest's
+    identity (a TP rank's rows, which carry no capture class) is not."""
+    return SHORT_NAME if c.get("capture") == CALL_BOUNDARY and _of(c, QUANT) else None
 
 
-def quant_sites(manifest: Mapping[str, Any] | None) -> dict[tuple[int, str], str]:
-    """(engine step, linear module) -> the op path `<module>/<fx node>` of its Int8RowQuant_v1 call boundaries."""
-    out: dict[tuple[int, str], str] = {}
-    for r in identity_rows(manifest):
-        if claim(r):
-            op = str(r["op_path"])
-            out[(int(r.get("engine_step", r.get("step", 0))), op.split("/", 1)[0])] = op
-    return out
+class Sites(dict):
+    """(engine step, linear module) -> the op path `<module>/<op>` its Int8RowQuant outputs are committed under, the same at
+    every engine step: read with ``get`` and ``in``; its keys are step 0's."""
+
+    def __init__(self, ops: Mapping[str, str]) -> None:
+        super().__init__({(0, m): op for m, op in ops.items()})
+        self.ops = dict(ops)
+
+    def get(self, key: Any, default: Any = None) -> Any:
+        return self.ops.get(key[1], default)
+
+    def __contains__(self, key: Any) -> bool:
+        return key[1] in self.ops
 
 
-def kv_modules(manifest: Mapping[str, Any] | None) -> list[str]:
-    """The attention modules whose Int8KvQuant_v1 results the manifest requires (`instance_outputs` rows of its ports 0..3)."""
-    return sorted({str(r["op_path"]) for r in identity_rows(manifest)
-                   if r.get("family") == "instance_outputs" and _spec(r) == KV_SPEC
-                   and str(r.get("port", r.get("output_member"))) in KV_PORTS})
+def quant_sites(plan: Sequence[Mapping[str, Any]]) -> Sites:
+    """The plan's Int8RowQuant call boundaries, by linear module (`Sites`).  Refused by name: a member that is not one of its
+    outputs (`QUANT_MEMBERS`), and a module with two such ops (the wrapper tells a module's calls apart by nothing)."""
+    ops: dict[str, str] = {}
+    for c in plan:
+        if not claim(c):
+            continue
+        op, member = str(c["op_path"]), str(c["member"])
+        if member not in QUANT_MEMBERS:
+            raise ValueError(f"int8: {op}/{member}: an Int8RowQuant call boundary's member is its output 0 (the codes) or 1 (the "
+                             "scale)")
+        module = op.rsplit("/", 1)[0]
+        if ops.setdefault(module, op) != op:
+            raise ValueError(f"int8: {module} has two Int8RowQuant ops, {ops[module]} and {op}: the source commits one a module")
+    return Sites(ops)
+
+
+def kv_modules(plan: Sequence[Mapping[str, Any]]) -> list[str]:
+    """The attention modules whose Int8KvQuant results the plan captures (`module_output` classes of its ports 0..3)."""
+    return sorted({str(c["op_path"]) for c in plan
+                   if c["capture"] == MODULE_OUTPUT and _of(c, KV) and str(c["member"]).rsplit(".", 1)[-1] in KV_PORTS})
 
 
 class Int8Source:
     short_name = SHORT_NAME
 
     def __init__(self, committer: Any, model: Any, quant: Mapping[tuple[int, str], str], kv: list[str]) -> None:
+        """``quant``: (engine step, module) -> its op path, read with ``get`` at each step (`Sites`: the same at every step)."""
         import torch
 
         if not quant and not kv:
             raise ValueError("int8: no quantizer to tap")
         self.torch, self.c, self.model = torch, committer, model
-        self.quant, self.kv = dict(quant), list(kv)
+        self.quant, self.kv = quant, list(kv)
         self.modules = sorted({m for _e, m in self.quant} | set(self.kv))
-        self._at: dict[int, dict[str, int]] = {}
-        for (e, _m), op in self.quant.items():
-            self._at.setdefault(e, {}).update({f"{op}/0": 1, f"{op}/1": 1})
-        self._names = frozenset(n for d in self._at.values() for n in d)
+        self._names = frozenset(f"{op}/{m}" for op in self.quant.values() for m in QUANT_MEMBERS)
         self._hooks: list[Any] = []
         self._handles: list[Any] = []
         self._scope: list[str] = []
@@ -98,7 +126,7 @@ class Int8Source:
         mods = dict(self.model.named_modules())
         missing = sorted(set(self.modules) - set(mods))
         if missing:
-            raise RuntimeError(f"int8: the manifest's modules are not modules of the model: {missing[:4]}")
+            raise RuntimeError(f"int8: the capture plan's modules are not modules of the model: {missing[:4]}")
         for op in self.modules:
             self._handles.append(mods[op].register_forward_pre_hook(self._enter(op)))
             self._handles.append(mods[op].register_forward_hook(self._leave(op), always_call=True))
@@ -168,7 +196,7 @@ class Int8Source:
                 op = me.quant.get(key)
                 if op is not None:
                     if key in me._seen:
-                        me.error(f"int8: {key[1]} ran row_quant twice at engine step {key[0]}; the Program has one Int8RowQuant_v1 site")
+                        me.error(f"int8: {key[1]} ran row_quant twice at engine step {key[0]}; the Program has one Int8RowQuant site")
                     else:
                         me._seen.add(key)
                         t0 = time.perf_counter()
@@ -207,15 +235,12 @@ class Int8Source:
             spans.add("acquisition", time.perf_counter() - t0, step=job.step, nbytes=nbytes)
 
     def targets_at(self, engine_step: int) -> dict[str, int]:
-        """The call-boundary names this source commits at `engine_step`, once each (the KV names are module members, rule (4)'s)."""
-        return dict(self._at.get(int(engine_step), {}))
+        """The call-boundary names this source commits at `engine_step`, once each (the KV names are module members, rule (4)'s):
+        every site's, at every step."""
+        return dict.fromkeys(sorted(self._names), 1)
 
     def target_names(self) -> frozenset[str]:
         return self._names
-
-    def ports(self) -> dict[str, Port]:
-        """`bind.Binder`'s declared labels: each KV label, its Int8KvQuant_v1 port."""
-        return {label: Port(frozenset({KV_SPEC}), port) for label, port in zip(KV_LABELS, KV_PORTS)} if self.kv else {}
 
     def split_step_names(self, names: Mapping[str, int], engine_step: int, padding_only: bool) -> tuple[dict[str, int], dict[str, tuple[int, int]]]:
         """X-03 for the call-boundary names, as `call_boundary_source.CallBoundarySource.split_step_names`: (the step's other names,
@@ -245,9 +270,9 @@ class Int8Source:
     def declaration_classes(self) -> list[dict]:
         out = []
         if self.quant:
-            out.append({"class": FAMILY, "how": "bound-as-leaf", "rule": None, "count": self.stats["quant_tensors"], "bytes": self.stats["quant_bytes"],
+            out.append({"class": CALL_BOUNDARY, "how": "bound-as-leaf", "rule": None, "count": self.stats["quant_tensors"], "bytes": self.stats["quant_bytes"],
                         "tensors": self.stats["quant_tensors"], "errors": self.stats["errors"],
-                        "evidence": (f"int8 source: `<linear>/<fx node>/0|1` of {len(self.quant)} Int8RowQuant_v1 sites, the results of "
+                        "evidence": (f"int8 source: `<linear>/<op>/0|1` of {len(self.quant)} Int8RowQuant sites, the results of "
                                      "verity_int8::row_quant as the served op computed them (engine.int8_ops; no kernel change)")})
         if self.kv:
             out.append({"class": KV_CLASS, "how": "bound-as-leaf", "rule": None, "count": self.stats["kv_tensors"], "bytes": self.stats["kv_bytes"],
@@ -258,28 +283,28 @@ class Int8Source:
         return out
 
 
-def attach(com: Any, enabled: bool, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *,
+def attach(com: Any, enabled: bool, plan: Sequence[Mapping[str, Any]], required_classes: tuple[str, ...], *,
            explicit_classes: bool = False, model: Any = None) -> tuple[tuple[str, ...], Int8Source | None]:
-    """Attach the source to `com` when `enabled`; the required manifest must name an Int8RowQuant_v1 call boundary or an
-    Int8KvQuant_v1 output, else the Commit is refused (exit 3).  Returns the required classes with `call_boundaries` added (when the
-    manifest names quantizer sites) unless they were given explicitly."""
+    """Attach the source to `com` when `enabled`; the capture plan's classes (`capture_plan.of_build`) must name an Int8RowQuant
+    call boundary or an Int8KvQuant output, else the Commit is refused (exit 3).  Returns the required classes with `call_boundary`
+    added (when the plan names quantizer sites) unless they were given explicitly."""
     if not enabled:
         return required_classes, None
-    quant, kv = quant_sites(manifest), kv_modules(manifest)
+    quant, kv = quant_sites(plan), kv_modules(plan)
     if not quant and not kv:
-        logger.error("[delta] REFUSE: the int8 source but the required-value manifest names no Int8RowQuant_v1 call boundary and no "
-                     "Int8KvQuant_v1 output")
+        logger.error("[delta] REFUSE: the int8 source but the capture plan names no Int8RowQuant call boundary and no Int8KvQuant "
+                     "output")
         raise SystemExit(3)
     src = Int8Source(com, model if model is not None else getattr(com, "model", None), quant, kv)
     com.attach_source(src)
     logger.info("[delta] int8 source attached: %d row_quant sites, %d kv_quant modules -> committer %s", len(quant), len(kv), com.name)
-    if quant and not explicit_classes and FAMILY not in required_classes:
-        return (*required_classes, FAMILY), src
+    if quant and not explicit_classes and CALL_BOUNDARY not in required_classes:
+        return (*required_classes, CALL_BOUNDARY), src
     return required_classes, src
 
 
-def applies(manifest: Mapping[str, Any] | None) -> bool:
-    return bool(quant_sites(manifest) or kv_modules(manifest))
+def applies(plan: Sequence[Mapping[str, Any]]) -> bool:
+    return bool(quant_sites(plan) or kv_modules(plan))
 
 
-__all__ = ["Int8Source", "SHORT_NAME", "claim", "quant_sites", "kv_modules", "applies", "attach"]
+__all__ = ["Int8Source", "SHORT_NAME", "Sites", "claim", "quant_sites", "kv_modules", "applies", "attach"]

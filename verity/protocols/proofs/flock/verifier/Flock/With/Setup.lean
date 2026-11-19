@@ -574,29 +574,8 @@ def partitionDigestWith (hs : Hashes M) (obj : Json) : M ByteArray := do
 
 /-- `deriveTemplateUnits` through the oracle. -/
 def deriveTemplateUnitsWith (hs : Hashes M) (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) :
-    M String := do
-  let q := (obj.getObjVal? "query").toOption.getD Json.null
-  let name := (q.getObjValAs? String "name").toOption.getD ""
-  let version := (q.getObjValAs? Nat "version").toOption.getD 0
-  let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
-    | throw s!"partition: {name} v{version} is not a template query"
-  let ts ← ts
-  let d ← TemplateQuery.Desc.parseWith hs.sha512 program
-  if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
-    throw "partition: the verifier's program is not the one the partition object names"
-  let rs ← match TemplateQuery.evaluate d ts with
-    | .ok rs => pure rs
-    | .error e => throw s!"partition: {e}"
-  checkBlocksCover obj (TemplateQuery.population rs)
-  let some (t, cls) := queryTemplate c | throw "partition: META program_digests does not name the circuit's one template"
-  if !ts.contains t then throw s!"partition: the circuit's template {t} is not one the query lists"
-  let pop := TemplateQuery.population rs
-  for i in indices do
-    match TemplateQuery.locate rs i with
-    | none => throw s!"partition: unit {i} is outside the partition's {pop} units"
-    | some (_, _, ti) => if ti != t then throw s!"partition: unit {i} is an instance of {ti}, not the circuit's template {t}"
-  let of := if cls then s!" (META definition of the proof-block class {(circuitTemplate c).getD ""}; that the class circuit lowers it is not checked)" else ""
-  return s!"units derived: {name} v{version} over the verifier's program ({pop} units); the statement's {indices.size} units are instances of {t}{of}"
+    M String :=
+  deriveTemplateUnitsBy (TemplateQuery.Desc.parseWith hs.sha512) c obj program indices
 
 /-- `deriveQwordUnits` through the oracle. -/
 def deriveQwordUnitsWith (hs : Hashes M) (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) :
@@ -756,20 +735,8 @@ def sampledWith (hs : Hashes M) (c : Circuit) (pub : Public) (draw : Json) : M P
 
 /-- `stratifiedSamplingDesign`'s and `workSamplingDesign`'s strata through the oracle. -/
 def templateStrataWith (hs : Hashes M) (samplingDesign : String) (obj : Json) (program : ByteArray) :
-    M (Array (String × Array (Nat × Nat)) × Nat) := do
-  let (name, version) ← checkPartitionObject obj
-  let q := (obj.getObjVal? "query").toOption.getD Json.null
-  let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
-    | throw s!"{samplingDesign}: {name} v{version} defines no strata (Q_template_instance v0 and Q_template_instances v0 do)"
-  let ts ← ts
-  let d ← TemplateQuery.Desc.parseWith hs.sha512 program
-  if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
-    throw "partition: the verifier's program is not the one the partition object names"
-  let rs ← match TemplateQuery.evaluate d ts with
-    | .ok rs => pure rs
-    | .error e => throw s!"partition: {e}"
-  checkBlocksCover obj (TemplateQuery.population rs)
-  return (Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)), TemplateQuery.population rs)
+    M (Array (String × Array (Nat × Nat)) × Nat) :=
+  templateStrataBy (TemplateQuery.Desc.parseWith hs.sha512) samplingDesign obj program
 
 /-- `stratifiedSamplingDesign` through the oracle. -/
 def stratifiedSamplingDesignWith (hs : Hashes M) (obj : Json) (program : ByteArray) (k : Nat) : M (Draw.SamplingDesign × Nat) := do

@@ -522,7 +522,7 @@ theorem checkPartition_cost (c : Circuit) (obj : Option Json) :
 theorem templateStrata_cost (samplingDesign : String) (obj : Json) (program : ByteArray) :
     countC.P (HmRow.templateStrataWith (Hashes.counted h) samplingDesign obj program) 1 := by
   apply countC.mono
-  · unfold HmRow.templateStrataWith
+  · unfold HmRow.templateStrataWith HmRow.templateStrataBy HmRow.templateRangesBy
     repeat (first
       | extract_lets
       | (with_reducible apply throwBind)
@@ -717,7 +717,7 @@ theorem workSamplingDesign_cost (obj : Json) (program : ByteArray) (k : Nat) (ta
 theorem deriveTemplate_cost (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) :
     countC.P (HmRow.deriveTemplateUnitsWith (Hashes.counted h) c obj program indices) 1 := by
   apply countC.mono
-  · unfold HmRow.deriveTemplateUnitsWith
+  · unfold HmRow.deriveTemplateUnitsWith HmRow.deriveTemplateUnitsBy HmRow.templateRangesBy
     repeat (first
       | extract_lets
       | (with_reducible apply throwBind)
