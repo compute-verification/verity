@@ -156,6 +156,14 @@ def test_command_is_registered_and_defaults_to_the_setting_that_fits_network_cer
         cli.parse("serve-openai", ["--out", "/tmp/x"], environ={})
 
 
+@pytest.mark.parametrize("kw", [{"tensor_parallel_size": 2}, {"tensor_parallel_size": 8}, {"pipeline_parallel_size": 2}])
+def test_an_engine_over_more_than_one_gpu_is_refused_by_name(kw):
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r"], environ={})
+    assert so.one_gpu(so.engine_options(opts)) == so.engine_options(opts)
+    with pytest.raises(so.UsageError, match="the multi-GPU model is not served"):
+        so.one_gpu({**so.engine_options(opts), **kw})
+
+
 @pytest.mark.parametrize("precision, parts, scope", [("verity_int8", ("linears",), "linears"),
                                                      ("int8_exact", ("linears", "attention"), "all"), ("pin", ("linears",), None),
                                                      ("bfloat16", ("linears",), None)])

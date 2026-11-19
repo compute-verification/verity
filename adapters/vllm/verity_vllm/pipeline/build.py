@@ -12,7 +12,6 @@ the instance sequence (comparator input), and the inputs trace.
 from __future__ import annotations
 
 import contextlib
-import copy
 import functools
 import gzip
 import hashlib
@@ -47,16 +46,10 @@ from verity_vllm.pipeline.build_sampling import (
     sampling_policy,
 )
 from verity_vllm.pipeline.cli import write
-from verity_vllm.pipeline.tp.links import (  # noqa: F401 (read through here)
-    module_in_model_vocabulary,
-    read_tp_links,
-    same_module_path,
-    write_tp_links,
-)
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
 from verity_vllm.records import schema_ids as SID
 
-__all__ = ["Options", "main", "read_tp_links", "same_module_path", "sampler_geometry", "sampling_policy", "write_instances"]
+__all__ = ["Options", "main", "sampler_geometry", "sampling_policy", "write_instances"]
 logger = init_logger(__name__)
 
 
@@ -97,9 +90,8 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity/circuits/ops/boolean/versions.py",
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
                          "verity_vllm/engine/env.py",
-                         # the derive's report and its relabel per TP rank (`--emit-ranks`), and the tp_links.json writer
-                         "verity_torch/frontend/report.py", "verity_vllm/program/frontend/relabel.py",
-                         "verity_vllm/pipeline/tp/emit_ranks.py", "verity_vllm/pipeline/tp/links.py")
+                         # the derive's report and its relabel
+                         "verity_torch/frontend/report.py", "verity_vllm/program/frontend/relabel.py")
 
 
 def _source_root(rel: str) -> str:
@@ -203,9 +195,9 @@ def _cuda_available() -> bool:
 
 
 def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool = True, wrapper: str = "step", LP: int = 8, T: int = 4, eos: int = 0, model_id: str | None = None, revision: str | None = None, max_model_len: int = 2048,
-        target=None, sampling: dict | None = None, tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None, device_name: str | None = None, batch_dispatch: bool = False, cached: int = 0,
+        target=None, sampling: dict | None = None, tp: int = 1, rank: int = 0, launch: dict | None = None, engine_args: dict | None = None, device_name: str | None = None, batch_dispatch: bool = False, cached: int = 0,
         dead_free: bool = False, stop: dict | None = None, batched: bool = False, table_reads: bool = False) -> dict:
-    """`emit`: an `emit_ranks.Emit` (`--emit-ranks`): the other ranks' files are written from this rank's derivation.  `engine_args`:
+    """`engine_args`:
     the row's engine arguments the meta config takes (`workload_engine_args`).  `device_name`: the name the declared target's GPU
     reports, answered on a GPU-free host (`--target`'s card's, else the workload row class's: `engine.profiles.devices`;
     `export_compat.select_cuda_platform`).  `batch_dispatch`: see `LC.missing_batch`.
@@ -220,8 +212,8 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
         raise ValueError(f"--stop is a request's length rule over its outputs, not --wrapper {wrapper}'s")
     t_start = time.time()
     sampling = dict(sampling) if sampling is not None else {"kind": "greedy", "source": "default"}
-    if tp < 1 or not (0 <= rank < tp):
-        raise ValueError(f"--tp {tp} --rank {rank}")
+    if tp != 1 or rank != 0:
+        raise ValueError(f"the multi-GPU model is not served: --tp {tp} --rank {rank}; a Build derives one GPU's Program")
     if dead_free and (tp == 1 or wrapper != "request"):
         raise ValueError(f"--dead-free names a TP rank's request wrapper (a one-rank request's always is), not --wrapper {wrapper} at --tp {tp}")
     if batched and (wrapper != "request" or not (tp == 1 or dead_free) or (target is not None and target.ir == "boolean")):
@@ -278,15 +270,11 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
             from verity_vllm.program.frontend.export_compat import select_cuda_platform
             logger.info("[derive_step] declared target %s x%s: vLLM platform %s", target.sm_arch, tp, select_cuda_platform(tp, device_name))
         _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
-                   tp=tp, rank=rank, launch=launch, emit=emit, engine_args=engine_args, C=cached, dead_free=dead_free, stop=stop, batched=batched, table_reads=table_reads)
+                   tp=tp, rank=rank, launch=launch, engine_args=engine_args, C=cached, dead_free=dead_free, stop=stop, batched=batched, table_reads=table_reads)
     except Refused as e:
         if e.what != _CONSTRUCTION:
             raise
-    res = _finish(out, res, t_start)
-    if emit is not None:
-        from verity_vllm.pipeline.tp.emit_ranks import finish
-        finish(emit, out, res, _write_manifest)
-    return res
+    return _finish(out, res, t_start)
 
 
 _WRAPPER_NAMES = {"step": "vLLMStep", "request": "vLLMRequest", "padded": "vLLMPaddedRequest"}
@@ -308,7 +296,7 @@ def _platform_device_name() -> str | None:
 
 
 def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
-               tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None, C: int = 0,
+               tp: int = 1, rank: int = 0, launch: dict | None = None, engine_args: dict | None = None, C: int = 0,
                dead_free: bool = False, stop: dict | None = None, batched: bool = False, table_reads: bool = False) -> None:
     from verity_vllm.program.frontend.target_profile import (
         applied_kernels,
@@ -418,14 +406,13 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             res["declared_derived"] = declared_derived_accounting(target, applied)
             # derive: the wrapper module IS the source, derived from the export above (same module, same example input, same shims)
             t1 = time.time()
-            session: list | None = [] if emit is not None else None
             with _derive_context(vm, cfg, ntok, target, model):
                 # the rank coordinate goes to the runtime correspondence only (`annotations["correspondence"].rank`): the Program is unchanged
                 config = {**({"chunks": chunks} if chunks else {}), **({"stop": stop} if stop is not None else {})}
                 rep = derive_report(mod, inputs, mode="profile", profile=profile, config=config or None,
                                     rules=vllm_ruleset(), name=f"{_WRAPPER_NAMES[wrapper]}[{res['model_class'].rsplit('.', 1)[-1]}]",
                                     check_registry=True, rank=(tp, rank) if tp > 1 else None, exported=ep, registered_values=bool(target.registered_values),
-                                    session=session, dead_free=wrapper == "request" and (tp == 1 or dead_free) and (BATCHED if batched else registered_form(target.ir)))
+                                    dead_free=wrapper == "request" and (tp == 1 or dead_free) and (BATCHED if batched else registered_form(target.ir)))
             rep = derived(rep) if target.ir == "boolean" else rep
         res["derive_secs"] = round(time.time() - t1, 2)
         res["bindings_rules"] = [r.info.to_json() for r in VLLM_BINDING_RULES]
@@ -443,17 +430,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             # the root is recorded as DATA so no reader spells the wrapper prefix
             model_root = next((n for n, m in mod.named_modules() if m is model), None) if tp > 1 else None
             write_program = functools.partial(_write_program, target=target, applied=applied, sampling=sampling, launch=launch, tp=tp, model_root=model_root)
-            pre = copy.deepcopy(res) if emit is not None else {}        # rank r's `res` before its writer: the template's, at rank r
             write_program(out, res, rep, rank=rank)
-            if emit is not None:
-                from verity_vllm.pipeline.tp import emit_ranks
-                from verity_vllm.program.frontend.export_ops import (
-                    rank_embedding_shards,
-                )
-                del rep                                                    # the template's descriptor and correspondence: freed
-                emit_ranks.emit(emit, out, pre, session[0] if session else None, shards=lambda r: rank_embedding_shards(model, r),
-                                context=lambda: _derive_context(vm, cfg, ntok, target, model, apply_target=True),
-                                post=derived if target.ir == "boolean" else None, write=write_program)
 
 
 def _tp_bus(cfg, rank: int, tp: int, res: dict, stack: contextlib.ExitStack):
@@ -528,8 +505,6 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     res["rules_applied"] = rep.provenance["rules_applied"]
     res["n_applications"] = len(rep.provenance["applications"])
     res["weights"] = {"n_fields": len(rep.provenance["weights"]), "roles": rep.provenance.get("weight_roles")}
-    if tp > 1:
-        res["tp"]["links"] = write_tp_links(out, res, program, rep, tp, rank, model_root=model_root)
     res["mutation_effects"] = rep.provenance["mutation_effects"]
     res["kv_rewrites"] = (len(kv) if (kv := rep.provenance.get("kv_rewrites")) else 0) if isinstance(rep.provenance, dict) else None
     if (pfx := KP.layout_of(rep.provenance)) is not None:   # the cached prefix's input and layer order, for Match
@@ -675,9 +650,6 @@ class Options:
     tp: int = option("--tp", type=int, default=1,
                      help="tensor-parallel world size (structural input); the Program describes ONE rank")
     rank: int = option("--rank", type=int, default=0, help="which rank's Program to construct (0..tp-1)")
-    emit_ranks: str | None = option("--emit-ranks", default=None,
-                                    help="other ranks (comma list) whose files are written from this rank's derivation (pipeline.tp.emit_ranks)")
-    emit_root: str | None = option("--emit-root", default=None, help="with --emit-ranks: rank r's files go to <root>/rank<r>/<name of --out>")
     dead_free: bool = option("--dead-free", action="store_true", default=False,
                              help="a TP rank's request wrapper in the registered compiler's form (program.prune.dead_free), as one rank's always is: "
                                   "the rank Programs predict.steps.compile_steps compiles; a TP workload of record keeps every unit")
@@ -716,10 +688,8 @@ def main(a: Options) -> int:
     _gc_tune()
     try:
         from verity_vllm.engine.profiles.devices import device_name
-        from verity_vllm.pipeline.tp.emit_ranks import parse_ranks
         from verity_vllm.program.frontend.target_profile import parse_target_arg
         from verity_vllm.program.frontend.targets import parse_launch_context
-        emit = parse_ranks(a.emit_ranks, a.tp, a.rank, a.emit_root) if a.emit_ranks else None
         named = device_name(a.workload)
         target = parse_target_arg(a.target) if a.target else None
         carded = target.device_name if target is not None else None
@@ -727,7 +697,7 @@ def main(a: Options) -> int:
             raise ValueError(f"--target's card {target.card!r} reports {carded!r}, not the name the --workload row's class reports ({named!r})")
         res = run(a.out, a.M, a.pos0, a.profile, a.backend, wrapper=a.wrapper, LP=a.LP, T=a.T, eos=a.eos, model_id=a.model, revision=a.revision,
                   max_model_len=a.max_model_len, target=target, sampling=sampling_policy(a.sampling, a.workload),
-                  tp=a.tp, rank=a.rank, launch=parse_launch_context(a.launch_context), emit=emit,
+                  tp=a.tp, rank=a.rank, launch=parse_launch_context(a.launch_context),
                   engine_args=workload_engine_args(a.workload, a.tp), device_name=carded or named, batch_dispatch=LC.batch_dispatch_of(a.workload),
                   cached=a.cached, dead_free=a.dead_free, batched=a.batched, table_reads=a.dsa_table_reads, stop=_stop_arg(a.stop))
     except BaseException as e:  # noqa: BLE001

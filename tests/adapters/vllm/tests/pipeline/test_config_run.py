@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 from tests.pipeline.test_row import _row
-from tests.row_paths import row_paths
 from verity_vllm.check.replay.driver import family_strata
 from verity_vllm.check.replay.sample import sample
 from verity_vllm.engine import served as SV
@@ -246,20 +245,6 @@ def test_a_config_record_carries_the_replay_s_weights_attest(tmp_path):
 TP2 = "olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager"
 
 
-@pytest.mark.parametrize("W", [2, 4, 8])
-def test_the_tp_path_runs_a_config_run_at_worlds_2_4_and_8(W, tmp_path, monkeypatch):
-    from verity_vllm.pipeline import cli, row
-    from verity_vllm.pipeline.row_tp import TpRow
-    ran = []
-
-    def run(self) -> int:
-        ran.append((self.W, self.config_run))
-        return 0
-    monkeypatch.setattr(TpRow, "run", run)
-    o = cli.parse("row", ["run", TP2, "OLMOE", "r", "v", "--sweep-dir", str(tmp_path), "--config-run", "1", "--world", str(W)], row_paths(tmp_path))
-    assert row.run_row(o, o.stages) == 0 and ran == [(W, True)]
-
-
 def _tp(tmp_path, *argv):
     import os
 
@@ -322,21 +307,6 @@ def test_the_tp2_config_run_s_commit_is_one_instrumented_run_with_no_match(tmp_p
     i = plain.index("--required-manifest")
     assert plain[i + 2:i + 4] == ["--match-dir", row.M] and plain[plain.index("--pairs") + 1:plain.index("--pairs") + 6] == ["3", "--warmup", "2", "--value-check", "--replay-workers"]
     assert "--only-arm" not in plain and plain[-1] == "--require-fold-match", "a TP workload of record keeps its Match, pairs and value check"
-
-
-def test_tp_commit_s_own_parser_takes_every_flag_the_tp2_config_run_passes(tmp_path):
-    from verity_vllm.pipeline import cli
-    from verity_vllm.pipeline.tp.config_run import only_arm_summary, replay_k_per_rank
-    t = _tp(tmp_path, "--config-run", "1", "--replay-k", "460")
-    cmd = t.commit_cmd([])
-    args = cli.parse("tp-commit", cmd[cmd.index("tp-commit") + 1:], {})
-    assert (args.only_arm, args.replay_k, args.pairs, args.warmup, args.match_dir) == ("instrumented", 460, 1, 1, None)
-    assert replay_k_per_rank(460, 2) == {"0": 230, "1": 230} and replay_k_per_rank(461, 2) == {"0": 231, "1": 230}
-    assert replay_k_per_rank(None, 2) is None
-    one = [{"arm": "instrumented"}]
-    assert only_arm_summary("instrumented", one, one, [True]) == {"only_arm": "instrumented", "runs": 1, "commit_pass": True}
-    assert only_arm_summary("instrumented", one, one, [False])["commit_pass"] is False
-    assert only_arm_summary("instrumented", one, [], [])["commit_pass"] is False, "no instrumented run is not a pass"
 
 
 @pytest.mark.parametrize("commit_pass,expect", [(True, None), (False, 12)])

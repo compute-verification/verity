@@ -698,6 +698,14 @@ def engine_options(opts: Options) -> dict[str, Any]:
     return kw
 
 
+def one_gpu(kw: dict[str, Any]) -> dict[str, Any]:
+    """``kw``, refused when it builds an engine over more than one GPU."""
+    if (tp := int(kw.get("tensor_parallel_size") or 1)) != 1 or int(kw.get("pipeline_parallel_size") or 1) != 1:
+        raise UsageError(f"the multi-GPU model is not served: tensor_parallel_size {tp}, pipeline_parallel_size "
+                         f"{kw.get('pipeline_parallel_size') or 1}; serve-openai builds its engine on one GPU")
+    return kw
+
+
 def register_int8(precision: str, register: Callable[[Sequence[str]], Any] | None = None) -> str | None:
     """Register ``precision``'s int8 parts (`engine.int8_ranks.register`, or ``register``) before the engine is built, the
     ``verity_int8`` quantization method under every precision; returns the int8 scope its layers must then run (None: not
@@ -789,7 +797,7 @@ def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[st
                         process=H.ENGINE)
     from verity_vllm.llm import LLM
 
-    llm = RW.checked(opts, row, LLM(opts.model, revision=opts.revision, **(dict if session is None else session.engine_args)(engine_options(opts))))
+    llm = RW.checked(opts, row, LLM(opts.model, revision=opts.revision, **one_gpu((dict if session is None else session.engine_args)(engine_options(opts)))))
     if scope is not None:
         from verity_vllm.program.frontend.kernel_readback import int8_exact_of
         if (got := int8_exact_of(llm.model)) != scope:
