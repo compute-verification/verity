@@ -474,7 +474,7 @@ theorem resolve_lt (B : ℕ) (sc : Scope) (r : Ref) (hs : Inv P B (sc, r)) {a : 
     a < B :=
   DescAgree.run_inv "scope resolution" (resolveStep P) (Inv P B) (· < B)
     (fun s a hs h => (step_ok P hroot hB hL B s _ hs h).1 a rfl)
-    (fun s s' hs h => (step_ok P hroot hB hL B s _ hs h).2 s' rfl) _ _ _ hs h
+    (fun s s' hs h => (step_ok P hroot hB hL B s _ hs h).2 s' rfl) _ _ _ hs (Flock.Program.resolve_run h)
 
 /-- A reference of node `k`'s arguments starts resolution below the node. -/
 theorem start_ok (sc : Scope) (hg : Good P sc) (k : ℕ) (hk : k < (P.defs[sc.d]!).body.nodes.size) (r : Ref)
@@ -603,5 +603,11 @@ theorem operandsEarlier_of (hB : BodiesOk) : Walk.OperandsEarlier := by
     have h0 : (default : Flock.Program.Defn).gates = 0 := rfl
     omega
   exact gate_operands_lt P ⟨hr, hrp⟩ (hB bytes P hdec hov hlo hin hwk han) hlay hx a ha
+
+/-- `Desc.walkable` checks `Desc.resolvable`, so a walkable Program's root reads no input node recut. -/
+theorem walkable_recut (P : Prog) (h : Desc.walkable P = true) : (P.defs[P.root]!).body.recut = #[] := by
+  unfold Desc.walkable Desc.resolvable at h
+  simp only [Bool.and_eq_true] at h
+  exact Array.isEmpty_iff.mp h.2.1.1.2
 
 end InferenceOnlyVerifier.Properties.SecurityProofs.Resolve

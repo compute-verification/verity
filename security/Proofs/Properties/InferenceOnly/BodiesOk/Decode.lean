@@ -216,7 +216,7 @@ theorem bodyBad_default (defs : Array Defn) (key : String) (w : ℕ) :
   unfold Widths.bodyBad
   have h0 : (default : Body).nodes.size = 0 := rfl
   have hp : (default : Body).ret.parts = #[] := rfl
-  simp only [h0, hp, Widths.seqBad]
+  simp only [h0, hp, Widths.seqBad, Bool.false_eq_true, ↓reduceIte]
   rw [Std.Legacy.Range.forIn_eq_forIn_range']
   simp only [Std.Legacy.Range.size, Nat.sub_self, Nat.zero_add, Nat.zero_div, List.range'_zero, List.forIn_nil]
   rfl
@@ -293,15 +293,15 @@ theorem push_spec (s s' : DecState) (fid : String) (defn : Defn) (hs : Inv s)
     · have := hs.2 k v hk; omega
 
 def GetSpec (fuel : ℕ) : Prop := ∀ (desc : Desc) (fid : String) (s : DecState) (i : ℕ) (s' : DecState),
-  getDef fuel desc fid s = .ok (i, s') → Inv s → Inv s' ∧ Pre (DecState.defs s) (DecState.defs s') ∧
+  getDef fuel desc fid false s = .ok (i, s') → Inv s → Inv s' ∧ Pre (DecState.defs s) (DecState.defs s') ∧
     i < (DecState.defs s').size
 
 def CompSpec (fuel : ℕ) : Prop := ∀ (desc : Desc) (fid : String) (d : Lean.Json) (form id : String) (s : DecState)
-  (defn : Defn) (s' : DecState), composite fuel desc fid d form id s = .ok (defn, s') → Inv s →
+  (defn : Defn) (s' : DecState), composite fuel desc fid d form id false s = .ok (defn, s') → Inv s →
     Inv s' ∧ Pre (DecState.defs s) (DecState.defs s') ∧ DefOk (DecState.defs s') (DecState.defs s').size defn
 
 def StatSpec (fuel : ℕ) : Prop := ∀ (desc : Desc) (v : Lean.Json) (s : DecState) (u : Unit) (s' : DecState),
-  staticFns fuel desc v s = .ok (u, s') → Grows s s'
+  staticFns fuel desc v false s = .ok (u, s') → Grows s s'
 
 theorem default_bodyFacts (defs : Array Defn) (i : ℕ) : BodyFacts defs i default :=
   ⟨fun _ hk => absurd hk (Nat.not_lt_zero _), fun _ ht => absurd ht (Nat.not_lt_zero _), #[], rfl,

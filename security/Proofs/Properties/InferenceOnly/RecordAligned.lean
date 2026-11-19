@@ -229,7 +229,7 @@ theorem unit_ret_ok {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Rea
       have : ((Desc.activations P)[P.root]! + 1) * 2 ≤
           ((Desc.activations P)[P.root]! + 1) * ((Desc.depths P)[P.root]! + 2) := Nat.mul_le_mul_left _ (by omega)
       omega
-    exact OperandsResolve.resolve_ok P ⟨hr, hrp⟩ hB hlay hc hpar hz hfuel _ sc _
+    exact OperandsResolve.resolve_ok P ⟨hr, hrp⟩ hB hlay hc hpar hz hfuel (OperandsResolve.resolvable_recut P hres) _ sc _
       (Resolve.down_ok P ⟨hr, hrp⟩ hB hlay _ sc hgood (Nat.le_refl _) t (by rw [hcount]; exact ht))
 
 variable {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}

@@ -34,8 +34,8 @@ root is one of them (`getDef`'s index), a composite without parameters (`decode`
 
 namespace InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
 open Flock.Program
-open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy Desc Desc.types Desc.callees
-  Desc.ddefs liftV at_ paramsOf buildNode natJ? from Circuits.Program
+open private getDef composite staticFns goOf decodeDefs decodeDefs_plain DecState DecState.defs DecState.index DecState.busy Desc Desc.types
+  Desc.callees Desc.ddefs liftV at_ paramsOf buildNode natJ? from Circuits.Program
 
 theorem ex_throw_bind {α β : Type} {e : String} {f : α → Flock.V β} {b : β}
     (h : (throw e >>= f : Flock.V β) = .ok b) : False := by
@@ -70,9 +70,10 @@ theorem go_inv (desc : Desc) (rootId programFn : String) (root : ℕ) (s0 st : D
   · obtain ⟨-, rfl⟩ := st_pure hf
     exact grows_refl _
 
-/-- **What `decode` returns**: the Definitions of a decoder state that keeps `Inv`, its root one of them, a composite
-without parameters. -/
-theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
+/-- **What `decode` returns**, where its root reads no input node at another width (`Body.recut`; every reader of a gate
+refuses one that does): the Definitions of a decoder state that keeps `Inv`, its root one of them, a composite without
+parameters. -/
+theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∃ st, P.defs = DecState.defs st ∧ Inv st ∧ (P.defs[P.root]!).prim = false ∧ P.root < P.defs.size ∧
       (P.defs[P.root]!).params.size = 0 := by
   unfold decode at h
@@ -111,7 +112,6 @@ theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
   swap; · exact absurd h (by intro h; injection h)
   split at h
   swap; · exact absurd h (by intro h; injection h)
-  extract_lets go at h
   obtain ⟨⟨root, st⟩, hgo, h⟩ := Walk.except_bind_ok h
   extract_lets rd jpR at h
   split at h
@@ -122,24 +122,28 @@ theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
   obtain ⟨c, -, h⟩ := Walk.except_bind_ok h
   injection h with h
   subst h
-  obtain ⟨hinv, hlt⟩ := go_inv _ _ _ _ _ _ hgo
+  have hgo' := decodeDefs_plain hgo hr
+  unfold goOf at hgo'
+  obtain ⟨hinv, hlt⟩ := go_inv _ _ _ _ _ _ hgo'
     ⟨fun i hi => absurd hi (Nat.not_lt_zero i), fun k v hk => absurd hk (by simp)⟩
   simp only [rd, Bool.or_eq_true, not_or] at hrd
   exact ⟨st, rfl, hinv, by simpa using hrd.1, hlt, by simpa using hrd.2⟩
 
-/-- **What `decode` returns**: the Definitions of a decoder state that keeps `Inv`, its root a composite. -/
-theorem decode_spec (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
+/-- **What `decode` returns**, where its root reads no input node at another width: the Definitions of a decoder state that
+keeps `Inv`, its root a composite. -/
+theorem decode_spec (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∃ st, P.defs = DecState.defs st ∧ Inv st ∧ (P.defs[P.root]!).prim = false := by
-  obtain ⟨st, h1, h2, h3, -⟩ := decode_full bytes P h
+  obtain ⟨st, h1, h2, h3, -⟩ := decode_full bytes P h hr
   exact ⟨st, h1, h2, h3⟩
 
-/-- **The root of a decoded Program** is one of its Definitions, a composite whose body has no parameters. -/
-theorem decode_root (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
+/-- **The root of a decoded Program** that reads no input node at another width is one of its Definitions, a composite whose
+body has no parameters. -/
+theorem decode_root (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false ∧ (P.defs[P.root]!).body.params.size = 0 := by
-  obtain ⟨st, hP, hinv, hp, hr, hp0⟩ := decode_full bytes P h
+  obtain ⟨st, hP, hinv, hp, hlt, hp0⟩ := decode_full bytes P h hr
   have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
-  refine ⟨hr, hp, ?_⟩
-  rw [((hok P.root hr).1.2 hp).1]
+  refine ⟨hlt, hp, ?_⟩
+  rw [((hok P.root hlt).1.2 hp).1]
   exact hp0
 
 end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
