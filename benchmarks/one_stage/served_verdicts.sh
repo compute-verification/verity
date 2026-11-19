@@ -517,10 +517,14 @@ elif [ "${1:-}" = compose ]; then  # the compose follow-on of a hand-off, at the
   [ ! -f "$COMPOSE_DIR/compose.env" ] || follow_env "$COMPOSE_DIR/compose.env" "$COMPOSES" data
 fi
 PEARLPLUS_TIE=${PEARLPLUS_TIE:-}
-if [ -n "$PEARLPLUS_TIE" ]; then  # the window served under Pearl+: Llama 3.2 1B's BF16 checkpoint, whose linears Pearl-C reads
+if [ "${POUW:-}" = pearlplus ]; then  # Pearl+'s launch serves Llama 3.2 1B's BF16 checkpoint, whose linears Pearl-C reads
   HB=/workspace/research/vllm-pearlc-h200bf16
   ROW=${ROW:-$HB/r20261104-084130-0f59/llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager}
   REPO=${REPO:-unsloth/Llama-3.2-1B} REV=${REV:-9535bd9b1d1dea6acafbdc4813b728796aeb28da} PRECISION=${PRECISION:-bfloat16}
+  # the BF16 1B's compiler of record lists its RoPE heads as transfer gates, every unit of which step 3 proves (work-rate:NUM/DEN)
+  PP_PARTITION=${PP_PARTITION:-benchmarks/prove_path/llama32_1b_tg_l0_step1.json} PP_SETS=${PP_SETS:-rope-head/d64/bf16}
+fi
+if [ -n "$PEARLPLUS_TIE" ]; then  # the window served under Pearl+ itself, at its class's fixed load
   LOAD=${LOAD:-fixed} PEARLPLUS_ARM=${PEARLPLUS_ARM:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && python3 -m verity.protocols.compose.schemes pearl-plus option)} || { echo "PREFLIGHT: PEARLPLUS_ARM unset and the declared schemes name no Pearl+ option (python3 -m verity.protocols.compose.schemes pearl-plus option, above)" >&2; exit 3; }
   # the class's fixed load, at whose rows the circuit cut at Pearl+'s linears reads its tables
   IFS=, read -r slots prompt _ <<< "${V3C_CLASS-4,32,4}"
@@ -528,8 +532,6 @@ if [ -n "$PEARLPLUS_TIE" ]; then  # the window served under Pearl+: Llama 3.2 1B
   # sm_90's BF16-rows path off unless PEARLC_BF16_ROWS says otherwise (e2e.BF16_RACE); PEARLPLUS_CLASS is the class
   # Pearl+'s verdict holds the window's passes to (served_pearlplus.sh's `verify --class`)
   export PEARLPLUS_TIE PEARLPLUS_CLASS=${V3C_CLASS-4,32,4} PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
-  # the BF16 1B's compiler of record lists its RoPE heads as transfer gates, every unit of which step 3 proves (work-rate:NUM/DEN)
-  PP_PARTITION=${PP_PARTITION:-benchmarks/prove_path/llama32_1b_tg_l0_step1.json} PP_SETS=${PP_SETS:-rope-head/d64/bf16}
   # each tied row's Build of record, its workload digest, which the served compare holds PRED to (BUILD)
   case ${ROW_ID:-${ROW##*/}} in
     llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager)

@@ -5278,6 +5278,27 @@ def test_the_preflight_refuses_a_step_3_partition_that_leaves_out_the_served_com
         assert (rc, lines, order) == (3, [_no_transfer_gates(str(tmp_path / "partition.json"), *refusal)], [])
 
 
+@pytest.mark.parametrize("given", [None, {"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2"}])
+def test_an_untied_remote_pearlplus_launch_passes_the_preflight_on_the_bf16_rows_partition(tmp_path, given):
+    """The untied remote launch sets POUW=pearlplus and the remote placement's window settings, and no REPO or
+    PP_PARTITION: the window is the BF16 1B's, so step 3's partition defaults to the work-rate one holding its transfer
+    gates, which passes, and one without them is refused as the BF16 1B's."""
+    (pp := tmp_path / "tree" / "benchmarks" / "prove_path").mkdir(parents=True)
+    (pp / "llama32_1b_tg_l0_step1.json").write_text(json.dumps(TG_PARTITION))
+    extra = {}
+    if given is not None:
+        (part := tmp_path / "partition.json").write_text(json.dumps(given))
+        extra["PP_PARTITION"] = str(part)
+    rc, lines, order, _limits = _partition_preflight(tmp_path, False, POUW="pearlplus", PRODUCT="remote",
+                                                     PRECISION="bfloat16", V3C_CLASS="4,32,4",
+                                                     V3C_LAW="stratified-rate:1/2097152",
+                                                     CERTIFIER_CHAIN_CMD=None, CERTIFIER_PERIOD_CMD=None, **extra)
+    if given is None:
+        assert (rc, order) == (0, []) and lines[0].startswith("PREFLIGHT passed"), lines
+    else:
+        assert (rc, lines, order) == (3, [_no_transfer_gates(str(part), "subset:2", given["templates"])], [])
+
+
 def test_the_preflight_refuses_a_step_3_partition_it_cant_read_where_the_compiler_lists_transfer_gates(tmp_path):
     """A partition file that isn't there, where the served compiler lists transfer gates, is refused, not passed."""
     rc, lines, order, _limits = _partition_preflight(tmp_path, True)
