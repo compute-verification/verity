@@ -501,8 +501,10 @@ def _two_templates(*counts: int) -> tuple[bytes, dict, list[str]]:
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.population import wired_population_program
     from verity.circuits.types import Array
-    ts = [bind(CompositeDefinition(f"DoorLowerXor{n}", 0, (), lambda S, n=n: ((("x", Array(n, BIT)),), BIT),
-                                   lambda B, S, x, n=n: B.call(xor_gate(n), x), register=False)) for n in (2, 3)]
+    # ``pad``, read by no gate, is a row past a compression before its last block, which a Flock block's pin needs
+    ts = [bind(CompositeDefinition(f"DoorLowerXor{n}", 0, (),
+                                   lambda S, n=n: ((("x", Array(n, BIT)), ("pad", Array(1024, BIT))), BIT),
+                                   lambda B, S, x, pad, n=n: B.call(xor_gate(n), x), register=False)) for n in (2, 3)]
     ts = [(t, m) for t, m in zip(ts, counts) if m]
     ids = [codec.descriptor_id(t) for t, _ in ts]
     program, query = wired_population_program(ts, {"templates": [[tid, m] for tid, (_, m) in zip(ids, ts)]})
