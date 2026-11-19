@@ -1,24 +1,31 @@
 module
 
 public import Flock.TmplUnroll
+public import Flock.Lift
 public import Circuits.Program
 
 /-!
 # A Boolean Definition lowered to its template
 
 `lower P d inPorts outPorts` is the `flock-ir-tmpl/v2` template (`Flock.Tmpl`) of Definition `d` of the decoded Program
-`P`: every leaf `Value<1>` and every primitive it reaches one of PROTOCOL.md §9's gates. It is built from the
-Definition's own structure, in the description's size, and never from unrolled rows.
+`P`, a word Program (`restrict`'s) or one on bits. It is built from the Definition's own structure, in the description's
+size, and never from unrolled rows.
+
+- **The lift to bits first.** `d` is lifted (`Flock.Lift.lift`): each word composite it reaches on bits, each word
+  primitive its Boolean Definition in `P.boolean`. After it every leaf is `Value<1>` and every primitive one of PROTOCOL.md
+  §9's gates, or the lowering refuses.
 
 - **One Definition a template Definition.** Each composite Definition `d` reaches is lowered once (`lowerDef`), its
   callees first. A primitive batched by a node is a template Definition of one gate (`gateDef`), lowered once per
   primitive.
 - **A body, node by node.** A wire is a GF(2) sum of the body's references (`Form`). A primitive node's gate is computed in
   place: XOR and NOT add forms and write no row, a constant is a form, and an AND of two forms neither constant writes one
-  row `(c, A, B)`, `z_c = (A·z)(B·z)`; an AND of more inputs is that, left to right. A `call` node is a `CALL` of one copy,
-  and a `batch` node one `CALL` of `n` copies whose inputs step per copy, the steps read off the argument's references
-  (`stepping`), never member by member. A `scan` node is two `CALL`s: its first iteration on `init`, then the rest, each
-  reading the previous one's carry (`Work.scan`).
+  row `(c, A, B)`, `z_c = (A·z)(B·z)`; an AND of more inputs is that, left to right. A `call` node is a `CALL` of one copy.
+  A `batch` node's `n` copies are one region, written as one `CALL` a piece (`Work.batch`): members whose mapped
+  references lie in one affine part each are one `CALL` whose inputs step per copy, and a member with a reference the
+  descriptor lists in an explicit part is a `CALL` of its own. So a Definition's `CALL`s are at most `callBound`, its
+  nodes, parts and explicit references, never its members. A `scan` node is two `CALL`s: its first iteration on `init`,
+  then the rest, each reading the previous one's carry (`Work.scan`).
 - **Bindings and returns are columns.** A call's input that is not one reference, and a Definition's returned leaf that is
   not one of its own columns, is committed first: one row `(c, form, 1)`.
 - **The block.** The root holds the input rows (`z_c = z_c·z_c`, bit `i` at column `i`), places `d` once at the end of
@@ -220,6 +227,53 @@ def bindRef (a : Arg) (n t : Nat) : V (Ref × Nat) :=
   | some (d, L) =>
     stepping a.seq ((t / L * d) * L + t % L) n L "a batch argument"
 
+/-- The part of `q` holding reference `k` (`k < q.count`), by bisection over the starts, as `Seq.get` finds it. -/
+def partAt (q : Seq) (k : Nat) : Nat := Id.run do
+  let mut lo := 0
+  let mut hi := q.parts.size
+  for _ in [0:q.parts.size] do
+    if hi - lo ≤ 1 then break
+    let mid := (lo + hi) / 2
+    if q.starts[mid]! ≤ k then lo := mid else hi := mid
+  return lo
+
+/-- Member `m`'s reference for leaf `t` of a batch argument: its index in the argument's references (`Arg.memberRef`). -/
+def memberIx (a : Arg) (m t : Nat) : Nat :=
+  match a.dims with
+  | none => t
+  | some (d, L) => (t / L * d + m) * L + t % L
+
+/-- Where the batch's members from `m0 < n` stop sharing one CALL: `some m1` when each mapped input's references for
+members `[m0, m1)` lie in one affine part (`m1` as far as they all do), `none` when one of member `m0`'s is in an explicit
+part, which binds member `m0` alone. `ins` are the callee's inputs, each an argument and its leaf. -/
+def pieceEnd (ins : Array (Arg × Nat)) (n m0 : Nat) : V (Option Nat) := do
+  let mut m1 := n
+  for (a, t) in ins do
+    if let some (_, L) := a.dims then
+      if L == 0 then continue
+      let k := memberIx a m0 t
+      if a.seq.count ≤ k then throw s!"{PAST}: a batch argument's reference {k} of {a.seq.count}"
+      let i := partAt a.seq k
+      match a.seq.parts[i]! with
+      | .affine .. => m1 := min m1 (m0 + (a.seq.starts[i]! + a.seq.parts[i]!.count - k + L - 1) / L)
+      | .explicit _ => return none
+      | _ => throw "a batch argument stepping through strided or grid references"
+  return some m1
+
+/-- The CALLs `lower` writes for node `x` at most: a scan's two, a call's one, a primitive node's none, and a batch's one
+plus two for each part and one for each explicit reference of its mapped arguments (`Work.batch`). -/
+def nodeCallBound (x : Node) : Nat :=
+  match x.form with
+  | .prim => 0
+  | .call => 1
+  | .scan => 2
+  | .batch => x.args.foldl (fun acc a => if a.dims.isNone then acc else
+      a.seq.parts.foldl (fun acc q => acc + 2 + match q with | .explicit it => it.size | _ => 0) acc) 1
+
+/-- **The CALLs `lower` writes for Definition `d`'s template Definition at most**: `Σ` over its nodes of `nodeCallBound`,
+which is at most `2 · nodes + 2 · parts + explicit references` of its body: proportional to its description. -/
+def callBound (d : Defn) : Nat := d.body.nodes.foldl (fun acc x => acc + nodeCallBound x) 0
+
 /-- A Definition's resolved rows and calls, its columns counted. -/
 def Work.finish (w : Work) (ins : Nat) : Tmpl.Def :=
   let cols := w.next
@@ -296,6 +350,54 @@ def Work.bindOne (w : Work) (st : Array Nat) (r : Ref) (s n : Nat) : V (Work × 
     return (w', ⟨at_, 0⟩)
   else return (w, ← w.stepOf st r s n)
 
+/-- The batch's pieces from member `m0`: each its first member, its count and its bindings. A piece of members whose mapped
+references lie in one affine part each is one stepping CALL; a member with a reference in an explicit part is a piece of
+its own, each input bound to its reference. `shared` binds an argument not mapped, the same for every member. Each step
+takes at least one member, so the pieces are at most `nodeCallBound`'s. -/
+def Work.pieces (w : Work) (st : Array Nat) (ins : Array (Arg × Nat)) (shared : Array (Option Bind)) (n m0 : Nat)
+    (acc : Array (Nat × Nat × Array Bind)) : V (Work × Array (Nat × Nat × Array Bind)) := do
+  if _h : n ≤ m0 then return (w, acc) else
+  let m1 := ((← pieceEnd ins n m0).getD (m0 + 1))
+  if _h1 : m0 + 1 < m1 then
+    let bs ← (List.range ins.size).foldlM (fun bs j => do
+      match shared[j]! with
+      | some b => return bs.push b
+      | none =>
+        let (a, t) := ins[j]!
+        let L := (a.dims.map (·.2)).getD 0
+        return bs.push (← w.stepOf st (← getRef a.seq (memberIx a m0 t)) L (m1 - m0))) #[]
+    w.pieces st ins shared n m1 (acc.push (m0, m1 - m0, bs))
+  else
+    let (w, bs) ← (List.range ins.size).foldlM (fun (acc : Work × Array Bind) j => do
+      match shared[j]! with
+      | some b => return (acc.1, acc.2.push b)
+      | none =>
+        let (a, t) := ins[j]!
+        let (w', at_) := acc.1.commit (← acc.1.formOf st (← getRef a.seq (memberIx a m0 t)))
+        return (w', acc.2.push ⟨at_, 0⟩)) (w, #[])
+    w.pieces st ins shared n (m0 + 1) (acc.push (m0, 1, bs))
+termination_by n - m0
+decreasing_by all_goals omega
+
+/-- A batch node's `n` copies of template Definition `e` (`cols` columns, its returns `rets`) in one region of copies,
+as one CALL a piece (`Work.pieces`): at most `nodeCallBound x` CALLs. -/
+def Work.batch (w : Work) (st : Array Nat) (callee : Defn) (x : Node) (e cols : Nat) (rets : Array Nat) : V Work := do
+  if x.n == 0 then
+    let (w', bs) ← w.binds st callee x
+    return w'.place e cols 0 bs rets
+  let ins := (List.range x.args.size).foldl (fun acc i =>
+    let a := x.args[i]!
+    let cnt := if a.dims.isSome then (callee.params[i]!.2).leaves else a.seq.count
+    (List.range cnt).foldl (fun acc t => acc.push (a, t)) acc) #[]
+  let (w, shared) ← ins.foldlM (fun (acc : Work × Array (Option Bind)) (a, t) => do
+    if a.dims.isSome then return (acc.1, acc.2.push none)
+    let (w', at_) := acc.1.commit (← acc.1.formOf st (← getRef a.seq t))
+    return (w', acc.2.push (some ⟨at_, 0⟩))) (w, #[])
+  let (w, ps) ← w.pieces st ins shared x.n 0 #[]
+  let base := w.next
+  let calls := ps.map fun (m0, count, binds) => ({ def_ := e, count, base := base + m0 * cols, stride := cols, binds } : Pending)
+  return { w with calls := w.calls ++ calls, next := base + x.n * cols, outs := w.outs.push (.copies base cols x.n rets) }
+
 /-- A scan node's `n` iterations of template Definition `e` (`cols` columns, its returns `rets`, the first `c` its carry):
 copy 0 bound to `init`, copies `1 … n − 1` one `CALL` whose carry inputs are the previous copy's carry returns, stepping
 one copy; an `xs` argument steps its element's leaves an iteration, a shared one binds every copy alike. -/
@@ -352,8 +454,7 @@ def nodeStep (P : Prog) (low : Nat → M (Nat × Array Nat)) (defn : Defn) (d : 
     if x.form == .batch then
       let (e, rets) ← gateDef P x.fn
       let cols := ((← get).defs[e]!).cols
-      let (w', bs) ← StateT.lift (w.binds st callee x)
-      return w'.place e cols x.n bs rets
+      StateT.lift (w.batch st callee x e cols rets)
     else
       let ops ← StateT.lift (w.opsOf st x)
       let (w', f) ← StateT.lift (w.op g ops)
@@ -361,8 +462,10 @@ def nodeStep (P : Prog) (low : Nat → M (Nat × Array Nat)) (defn : Defn) (d : 
   else
     let (e, rets) ← low x.fn
     let cols := ((← get).defs[e]!).cols
-    let (w', bs) ← StateT.lift (w.binds st callee x)
-    return w'.place e cols (if x.form == .batch then x.n else 1) bs rets
+    if x.form == .batch then StateT.lift (w.batch st callee x e cols rets)
+    else
+      let (w', bs) ← StateT.lift (w.binds st callee x)
+      return w'.place e cols 1 bs rets
 
 /-- Definition `defn`'s returns committed to its own columns, after its nodes. -/
 def Work.rets (w : Work) (st : Array Nat) (ret : Seq) : V (Work × Array Nat) :=
@@ -393,10 +496,12 @@ def lowerDef (P : Prog) : Nat → Nat → M (Nat × Array Nat)
 /-- The output rows' first column: past `n` columns, aligned to `span`. -/
 def alignUp (n span : Nat) : Nat := (n + span - 1) / span * span
 
-/-- **The block's template**: Definition `d` of `P` and every Definition it reaches, one template Definition each, callees
+/-- **The block's template**: Definition `d` of `P` lifted to bits and every Definition it reaches, one template Definition each, callees
 first, then the root: the input rows (port bit `i` at column `i`, every port bit a row), `d` placed once on them, its returns copied to the
 output rows, and the constant. `inPorts`/`outPorts` are the port widths in bits, ports concatenated, low bit first. -/
 def build (P : Prog) (d : Nat) (inPorts outPorts : Array Nat) : V Tmpl.Tmpl := do
+  if P.defs[d]?.isNone then throw s!"no Definition {d}"
+  let (P, d) ← Lift.lift P d
   let some defn := P.defs[d]? | throw s!"no Definition {d}"
   let N := defn.paramLeaves
   let Mo := defn.outLeaves

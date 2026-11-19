@@ -45,8 +45,6 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   in both.
 - `llama32-1b-bf16-served-arm`: the same on Llama-3.2-1B in BF16, on one RTX PRO 6000, H200 or H100.
 - `qwen3-8b-bf16-served-arm`: the compiled served arm on Qwen3-8B in BF16.
-- `qwen3-8b-bf16-served-arm-eager`: the eager served arm on Qwen3-8B, in a run of its own: four Qwen3-8B engines
-  don't fit one GPU beside the Commit's buffers.
 
 ## PoUW
 
@@ -58,8 +56,6 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   step (`served_pearlplus.sh`'s step).
 - `llama32-1b-1gpu-pearl-c-whole-served`: the same on one H100 with the whole-step arm beside its three arms: the ceiling
   of the served Pearl-C arm under one CUDA graph a decode step, not the protocol arm.
-- `llama32-1b-1gpu-stock-served`: its two stock arms alone, with no setup: a served point on an H100 whose machine
-  has no CUDA toolkit to build Pearl-C with (`verity-bench run SPEC` on VCF's node).
 
 ## PoUS's bandwidth audit
 
@@ -80,8 +76,6 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   with ten cores, the units walked on the host.
 - `llama32-1b-flock-steady-gemm-walk`: the same point with the units' level walk on the card (`FC_UNIT_WALK=1`);
   with the one above, the same metric's Llama member.
-- `llama32-1b-flock-steady-small`: Llama 3.2 1B's census block types other than its attention, each under its
-  census name, at one prover on one H200 with ten cores.
 
 ## Sweeps
 

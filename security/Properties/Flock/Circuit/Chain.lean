@@ -7,6 +7,7 @@ public import Properties.InferenceOnly
 public import InferenceOnlyVerifier.Desc
 public import Spot.BlockFront
 public import Properties.Flock.EvalBool
+public import Properties.Flock.DecodeBoolean
 public import Definitions.Core.Rblk
 
 /-!
@@ -20,7 +21,8 @@ tree):
   each copy, the rows of the net its template unrolls to (Core's `Partition.Correct` read as `Rows.Sat`, through the key
   program's wiring).
 * `LowerEval`: rows of the net the template `Flock.Lower.lower` writes unrolls to, satisfied with the constant 1, hold at
-  each output port bit the value `Prog.evalBool` gives the block's Definition on the input port bits.
+  each output port bit the value `Prog.evalBool` gives the Definition's lift to bits (`Flock.Lift.lift`) on the input port
+  bits, an evaluation of exactly the output's width.
 * `BlockEval`: the block's Program (`Spot.BlockFront.program`) evaluates, on C's values at its input ports, to block `u`'s
   local evaluation (`Partition.localEval`) at its output ports, where each word primitive evaluates as its Boolean
   Definition in `P`'s own map (`BodyAgrees`).
@@ -57,6 +59,11 @@ def BodyAgrees (P : Prog) : Prop :=
   ∀ p < P.defs.size, ∀ b, (P.defs[p]!).prim = true → P.bodyOf? (P.defs[p]!).key = some b →
     Prog.evalBool P p = Prog.evalBool P b
 
+/-- **`DecodeBodyAgrees`**: every Program `decode` accepts has `BodyAgrees`. `P.BoolMapOk` alone does not give it:
+it also reads that a primitive's id is its key and no primitive is a gate family member spelt otherwise (`misspelt`). -/
+def DecodeBodyAgrees : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → BodyAgrees P
+
 /-- **`V5Rows`, the adapter to the sampled proof's guarantee.** A unit `u` correct in the key circuit of the templated
 statement `c` carrying the template `tu.t`: the statement's unit is the net `tu.t` unrolls to, and at every copy `u'` the
 unit's local evaluation, read at copy `u'`'s columns wired as the key program wires the unit (`rowsWireC`, cast along
@@ -74,17 +81,21 @@ def V5Rows : Prop :=
         else false
       (Rows.ofNet hU).Sat (fun x => z x.val) ∧ z (Flock.Desc.tmpl c).unroll.unit.constPos = true
 
-/-- **`LowerEval`, the template `lower` writes of Definition `d` computes `d`**: wherever the rows of the net it unrolls to
-hold with the constant 1, output port bit `k` of every output leaf `k` of `d` is `Prog.evalBool P d`'s bit `k` on the input
-port bits of `d`'s parameter leaves. The net's rows are `Rows.ofNet hb` at any proof `hb` that it is built, which every
-net `Tmpl.unroll` gives is; `Rows.ofNet` reads `hb` only as a proof, so the rows are the same at every one. -/
+/-- **`LowerEval`, the template `lower` writes of Definition `d` computes `d` on bits**: `lower` lowers `d`'s lift to bits,
+Definition `e` of `Q` (`Flock.Lift.lift`). Wherever the rows of the net its template unrolls to hold with the constant 1,
+`Prog.evalBool Q e` on the input port bits of `e`'s parameter leaves is exactly `e`'s output leaves, and output port bit
+`k` is its bit `k`, so an empty evaluation never counts as agreement. `P`'s own Boolean map is §4.9's (`Prog.BoolMapOk`,
+which `DecodeBoolean` gives every decoded Program) and its word primitives evaluate as their bodies (`BodyAgrees`). The
+net's rows are `Rows.ofNet hb` at any proof `hb` that it is built, which every net `Tmpl.unroll` gives is; `Rows.ofNet`
+reads `hb` only as a proof, so the rows are the same at every one. -/
 def LowerEval : Prop :=
-  ∀ {P : Program.Prog} {d : ℕ} {inP outP : Array ℕ} {t : Tmpl.Tmpl} {n : Net}
+  ∀ {P : Program.Prog} {d : ℕ} {inP outP : Array ℕ} {t : Tmpl.Tmpl} {n : Net} {Q : Program.Prog} {e : ℕ}
+    (_hm : P.BoolMapOk) (_hb : BodyAgrees P) (_hq : Flock.Lift.lift P d = .ok (Q, e))
     (_hl : Flock.Lower.lower P d inP outP = .ok t) (_h : Tmpl.unroll t = .ok n) (_hu : n.unitLog ≤ 32) (hb : Built n)
     {z : ℕ → Bool} (_hs : (Rows.ofNet hb).Sat fun c => z c.val) (_hone : z t.constPos = true),
-    ∀ k < (P.defs.getD d default).outLeaves,
-      z (Flock.Lower.outBit t k) =
-        (P.evalBool d ((List.range (P.defs.getD d default).paramLeaves).map fun i => z (Flock.Lower.inBit t i))).getD k false
+    let v := Q.evalBool e ((List.range (Q.defs.getD e default).paramLeaves).map fun i => z (Flock.Lower.inBit t i))
+    v.length = (Q.defs.getD e default).outLeaves ∧
+      ∀ k < (Q.defs.getD e default).outLeaves, z (Flock.Lower.outBit t k) = v.getD k false
 
 /-- **`BlockEval`, MERGE's (C).** The block's Program evaluates, on C's values at its input ports, to block `u`'s local
 evaluation at its output ports, bit for bit. -/
