@@ -96,6 +96,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program, input_id, is_input
 from verity.circuits.refs import array_of, record_of, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
+from verity.commitments.randomness import digits
 from verity.commitments.window import window_binding
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -1364,6 +1365,64 @@ def bernoulli_bound(j):
     if not 0 <= p <= 1 or not 0 < delta < 1:
         raise D.Reject("p is not in [0, 1] or delta not in (0, 1)")
     return {"bound": Bernoulli(p).count_bound(j["population"], delta)}
+
+
+def _rate_ranges(rs) -> list[list[int]]:
+    if not (isinstance(rs, list) and all(isinstance(r, list) and len(r) == 2 and _nat(r[0]) and _nat(r[1]) and r[0] < r[1]
+                                         for r in rs)):
+        raise D.Reject("units are a list of [lo, hi], lo < hi")
+    return rs
+
+
+def _rate_input(j) -> tuple:
+    """`Pieces.rateInput`: num and den, the amount table as `work_table` reads it, and the population's strata."""
+    if not (isinstance(j, dict) and _nat(j.get("num")) and _nat(j.get("den"))):
+        raise D.Reject("num and den are natural numbers")
+    try:
+        table = DR.work_table(j.get("table"))
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
+    ss = j.get("strata")
+    if not (isinstance(ss, list) and all(isinstance(s, list) and len(s) == 2 and isinstance(s[0], str) for s in ss)):
+        raise D.Reject("strata is a list of [template, units]")
+    return j["num"], j["den"], table, [(t, _rate_ranges(rs)) for t, rs in ss]
+
+
+def _rate_design(d) -> dict:
+    """`Pieces.rateDesign`: the design objects `meets_rate` reads, refused where the Lean's parse refuses."""
+    law = d.get("law") if isinstance(d, dict) else None
+    if law == "subset" and _nat(d.get("k")):
+        return d
+    if law == "bernoulli" and isinstance(d.get("p"), str):
+        parts = d["p"].split("/")
+        if len(parts) == 2 and all(map(digits, parts)):
+            return d
+    if law in ("stratified", "work") and isinstance(d.get("strata"), list):
+        for s in d["strata"]:
+            if not (isinstance(s, dict) and isinstance(s.get("template"), str) and _nat(s.get("k"))):
+                raise D.Reject("a stratum is {template, units, k}")
+            _rate_ranges(s.get("units"))
+        return d
+    raise D.Reject("not a design meets_rate reads")
+
+
+def meets_rate_piece(j):
+    j = _json(j)
+    num, den, table, strata = _rate_input(j)
+    design = _rate_design(j.get("design"))
+    try:
+        DR.meets_rate(num, den, table, strata, design)
+    except ValueError as e:
+        return {"refused": str(e)}
+    return {"refused": None}
+
+
+def cheapest_for_piece(j):
+    num, den, table, strata = _rate_input(_json(j))
+    try:
+        return {"strata": DR.cheapest_for(num, den, table, strata)}
+    except ValueError as e:
+        return {"refused": str(e)}
 
 
 def _hidden_width(j) -> int:
@@ -4075,6 +4134,83 @@ BERNOULLI_BOUND = D.Port(PIECES, "bernoulli_bound", bernoulli_bound, st.one_of(
               st.one_of(PROBABILITY, st.sampled_from(["3/2", "2/4", "-1/2", "1/0", "a", 1, None])),
               st.one_of(DELTA, st.sampled_from(["0", "1", "1/1", "3/2", "a"]))),
     JSON), package=PACKAGE)
+
+
+@st.composite
+def rate_cases(draw):
+    """A rate check's input: one to three templates' strata tiling the population, an amount table naming each (rarely
+    one missing), and a rate, rarely with `DEN = 0`."""
+    ts = draw(st.lists(st.sampled_from(["a", "b", "c"]), min_size=1, max_size=3, unique=True))
+    strata, at = [], 0
+    for t in ts:
+        n = draw(st.integers(1, 9))
+        strata.append([t, [[at, at + n]]])
+        at += n
+    table = {t: draw(st.one_of(st.integers(0, 5), st.builds(lambda w, f: {"floor": f, "work": w}, st.integers(0, 5),
+                                                             st.integers(1, 3)))) for t in ts}
+    if _one_in(draw, 10):
+        del table[draw(st.sampled_from(ts))]
+    den = draw(st.integers(0, 6)) if _one_in(draw, 20) else draw(st.integers(1, 6))
+    return {"den": den, "num": draw(st.integers(0, 4)), "strata": strata, "table": table}
+
+
+@st.composite
+def meets_rate_cases(draw):
+    """`rate_cases` with a design: the cheapest strata (`cheapest_for`) each moved by at most one, sometimes with a stratum
+    duplicated, dropped, renamed or shifted; a pooled subset of any size up to one past the population; or a Bernoulli
+    design at any `p`, some above one or over zero."""
+    case = draw(rate_cases())
+    n = sum(hi - lo for _, rs in case["strata"] for lo, hi in rs)
+    kind = draw(st.sampled_from(["stratified", "work", "subset", "bernoulli"]))
+    if kind == "subset":
+        return case | {"design": {"k": draw(st.integers(0, n + 1)), "law": "subset"}}
+    if kind == "bernoulli":
+        b = draw(st.integers(0, 8))
+        return case | {"design": {"law": "bernoulli", "p": f"{draw(st.integers(0, b + 1))}/{b}"}}
+    try:
+        ss = DR.cheapest_for(case["num"], case["den"], DR.work_table(case["table"]), case["strata"])
+    except ValueError:
+        ss = [{"k": 0, "template": t, "units": rs} for t, rs in case["strata"]]
+    ss = [{**s, "k": max(0, s["k"] + draw(st.integers(-1, 1)))} for s in ss]
+    if _one_in(draw, 8):
+        i = draw(st.integers(0, len(ss) - 1))
+        ss = draw(st.sampled_from([
+            [*ss, ss[i]], ss[:i] + ss[i + 1:], [*ss[:i], {**ss[i], "template": "z"}, *ss[i + 1:]],
+            [*ss[:i], {**ss[i], "units": [[lo + 1, hi + 1] for lo, hi in ss[i]["units"]]}, *ss[i + 1:]]]))
+    return case | {"design": {"k": 1, "law": kind, "strata": ss}}
+
+
+def _rate_case(strata, table, num, den, design):
+    return {"den": den, "design": design, "num": num, "strata": strata, "table": table}
+
+
+_A8 = [["a", [[0, 8]]]]
+_AB = [["a", [[0, 4]]], ["b", [[4, 8]]]]
+#: The boundaries by hand: `k DEN = n c NUM` passes and one less fails, `k = n` passes below the rate, amount 0 passes
+#: at `k = 0`, a template the table misses, the pooled subset at the largest amount, Bernoulli at its boundary and `p = 1`,
+#: `DEN = 0`, `NUM = 0`.
+RATE_EDGES = st.sampled_from([
+    _rate_case(_A8, {"a": 3}, 1, 4, {"law": "stratified", "k": 1, "strata": [{"template": "a", "units": [[0, 8]], "k": 6}]}),
+    _rate_case(_A8, {"a": 3}, 1, 4, {"law": "stratified", "k": 1, "strata": [{"template": "a", "units": [[0, 8]], "k": 5}]}),
+    _rate_case([["a", [[0, 2]]]], {"a": 5}, 1, 1, {"law": "work", "k": 1, "strata": [{"template": "a", "units": [[0, 2]], "k": 2}]}),
+    _rate_case(_AB, {"a": 0, "b": 1}, 1, 2, {"law": "stratified", "k": 1, "strata": [
+        {"template": "a", "units": [[0, 4]], "k": 0}, {"template": "b", "units": [[4, 8]], "k": 2}]}),
+    _rate_case(_AB, {"a": 1}, 1, 2, {"law": "subset", "k": 8}),
+    _rate_case(_AB, {"a": 1, "b": 3}, 1, 8, {"law": "subset", "k": 3}),
+    _rate_case(_AB, {"a": 1, "b": 3}, 1, 8, {"law": "subset", "k": 2}),
+    _rate_case(_AB, {"a": 1, "b": 3}, 1, 2, {"law": "subset", "k": 8}),
+    _rate_case(_AB, {"a": 1, "b": 3}, 1, 6, {"law": "bernoulli", "p": "1/2"}),
+    _rate_case(_AB, {"a": 1, "b": 3}, 1, 6, {"law": "bernoulli", "p": "1/3"}),
+    _rate_case(_AB, {"a": 1, "b": 3}, 5, 1, {"law": "bernoulli", "p": "2/2"}),
+    _rate_case(_AB, {"a": 1, "b": 3}, 1, 6, {"law": "bernoulli", "p": "3/2"}),
+    _rate_case(_A8, {"a": 3}, 1, 0, {"law": "subset", "k": 8}),
+    _rate_case(_A8, {"a": 3}, 0, 4, {"law": "stratified", "k": 1, "strata": [{"template": "a", "units": [[0, 8]], "k": 0}]}),
+])
+MEETS_RATE = D.Port(PIECES, "meets_rate", meets_rate_piece, st.one_of(meets_rate_cases(), meets_rate_cases(),
+                                                                      meets_rate_cases(), RATE_EDGES, JSON),
+                    package=PACKAGE)
+CHEAPEST_FOR = D.Port(PIECES, "cheapest_for", cheapest_for_piece, st.one_of(rate_cases(), rate_cases(), rate_cases(),
+                                                                            RATE_EDGES, JSON), package=PACKAGE)
 VERDICT_VALUE = st.sampled_from([True, False, None, 1, 0, "yes", [], {}, [0], ""])
 VERDICTS = st.dictionaries(st.sampled_from(["lean", "upstream", "rust"]), st.one_of(
     st.fixed_dictionaries({"accepted": VERDICT_VALUE, "of_record": VERDICT_VALUE}),
@@ -6460,7 +6596,7 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATE
               (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_SAMPLE, 500), (DRAW, 500), (RAN_OUT, 300), (SELECT, 600), (DESIGN, 300), (SLOTS, 400),
               (FILE_POPULATION, 400), (TABLES_HELD, 300), (OWN_TABLES, 300), (CHECK_PROVED, 300), (BOUND, 500),
-              (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
+              (BERNOULLI_BOUND, 500), (MEETS_RATE, 500), (CHEAPEST_FOR, 300), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (PUBLIC_PORTS, 300), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500),
               (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (PUBLIC_UNITS, 300),

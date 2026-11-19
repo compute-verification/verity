@@ -55,6 +55,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
   `OneStageZk.tablesMatch`);
 * `bound`: the exact bounds on incorrect proof blocks at δ;
 * `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
+* `meets_rate`, `cheapest_for`: whether an expanded design meets a rate per unit of amount, and the least strata that
+  do (`Flock.Draw.meetsRate`, `Flock.Draw.cheapestFor`);
 * `max_harm`: a certificate's bracket around `Flock.Guarantees.JointStratified`'s exact supremum of that harm
   (`Bound.maxHarmCheck`), which `certify` is held to;
 * `hidden_offsets`, `hidden_locate`, `hidden_witness`: the sample over hidden positions (`HiddenSample`): the honest table's
@@ -541,6 +543,64 @@ def bernoulliBound (j : Json) : V Json := do
   let δ ← Core.Ratio.ofString d "delta"
   if δ.num == 0 || δ.den ≤ δ.num then throw "delta is not in (0, 1)"
   return Json.mkObj [("bound", Lean.toJson (Bound.bernoulliBound population p δ))]
+
+private def rateRanges (j : Json) : V (Array (Nat × Nat)) := do
+  let .arr rs := j | throw "units are a list of [lo, hi], lo < hi"
+  rs.mapM fun r => match r with
+    | .arr #[lo, hi] => match nat? lo, nat? hi with
+      | some lo, some hi => if lo < hi then pure (lo, hi) else throw "units are a list of [lo, hi], lo < hi"
+      | _, _ => throw "units are a list of [lo, hi], lo < hi"
+    | _ => throw "units are a list of [lo, hi], lo < hi"
+
+/-- A rate check's input: `num` and `den` natural numbers, the amount table (`Flock.Draw.workTableOfJson`) and the
+population's strata `[[template, [[lo, hi], ...]], ...]`. -/
+private def rateInput (j : Json) : V (Nat × Nat × Array (String × Nat × Nat) × Array (String × Array (Nat × Nat))) := do
+  let (some num, some den) := (nat? (getD j "num"), nat? (getD j "den")) | throw "num and den are natural numbers"
+  let table ← Flock.Draw.workTableOfJson (getD j "table")
+  let .arr ss := getD j "strata" | throw "strata is a list of [template, units]"
+  let strata ← ss.mapM fun s => match s with
+    | .arr #[.str t, rs] => do pure (t, ← rateRanges rs)
+    | _ => throw "strata is a list of [template, units]"
+  return (num, den, table, strata)
+
+/-- A design object as `meets_rate` reads it: `{law: subset, k}`, `{law: bernoulli, p: "NUM/DEN"}` in ASCII digits, or
+`{law: stratified | work, strata: [{template, units, k, ...}]}`, other keys not read. -/
+private def rateDesign (j : Json) : V Flock.Draw.SamplingDesign := do
+  let digits := fun (s : String) => !s.isEmpty && s.all Char.isDigit
+  match getD j "law" with
+  | .str "subset" =>
+    let some k := nat? (getD j "k") | throw "a subset design's k is a natural number"
+    pure (.subset k)
+  | .str "bernoulli" =>
+    let .str p := getD j "p" | throw "a bernoulli design's p is NUM/DEN"
+    match p.splitOn "/" with
+    | [a, b] => if digits a && digits b then pure (.bernoulli a.toNat! b.toNat!) else throw "a bernoulli design's p is NUM/DEN"
+    | _ => throw "a bernoulli design's p is NUM/DEN"
+  | .str l =>
+    if !(l == "stratified" || l == "work") then throw "a design's law is subset, bernoulli, stratified or work"
+    let .arr ss := getD j "strata" | throw "a design's strata are a list"
+    let strata ← ss.mapM fun s => do
+      let (.str t, some k) := (getD s "template", nat? (getD s "k")) | throw "a stratum is {template, units, k}"
+      pure ({ template := t, units := ← rateRanges (getD s "units"), k } : Flock.Draw.Stratum)
+    pure (if l == "work" then .work 0 (strata.map fun s => { toStratum := s, work := 0, floor := 1 }) else .stratified 0 strata)
+  | _ => throw "a design's law is subset, bernoulli, stratified or work"
+
+/-- `{"num", "den", "table", "strata", "design"}` to `{"refused"}`: null when the design meets the rate
+(`Flock.Draw.meetsRate`), else its refusal, so the messages are compared. -/
+def meetsRate (j : Json) : V Json := do
+  let (num, den, table, strata) ← rateInput j
+  let d ← rateDesign (getD j "design")
+  return Json.mkObj [("refused", match Flock.Draw.meetsRate num den table strata d with
+    | .ok () => Json.null
+    | .error e => Json.str e)]
+
+/-- `{"num", "den", "table", "strata"}` to `{"strata": [{template, units, k}]}` (`Flock.Draw.cheapestFor`), or
+`{"refused"}` with its refusal. -/
+def cheapestFor (j : Json) : V Json := do
+  let (num, den, table, strata) ← rateInput j
+  return match Flock.Draw.cheapestFor num den table strata with
+    | .ok ss => Json.mkObj [("strata", Json.arr (ss.map (·.toJson)))]
+    | .error e => Json.mkObj [("refused", Json.str e)]
 
 private def hiddenWidth (j : Json) : V Nat := do
   match nat? (getD j "width") with
@@ -1140,6 +1200,7 @@ def table : List (String × (Json → V Json)) :=
    ("replay_returns", replayReturns),
    ("replay_returned", replayReturned), ("second_schedule", secondSchedule),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
+   ("meets_rate", meetsRate), ("cheapest_for", cheapestFor),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
    ("public_ports", publicPorts), ("session_registered", sessionRegistered), ("record", record), ("across", across),
