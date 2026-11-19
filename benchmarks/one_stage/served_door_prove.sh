@@ -82,7 +82,9 @@ timed tmpl $UNIT_BIN $D/unit.tmpl --layout iv/hybrid/4 --out $D/unit.placed > $O
 cat $O/time-tmpl.txt; tail -3 $O/tmpl.txt | cut -c1-600
 PIN=$(sha512sum $D/circuit.txt | cut -d' ' -f1)
 UA=(--circuit $D/circuit.txt --tmpl-unit $D/unit.placed --tables $D/tables)
-timed statement $B statement --zk "${UA[@]}" --instances $D/pub-1.bin > $O/statement.txt 2>&1; echo "statement rc $?"; tail -3 $O/statement.txt | cut -c1-1500; cat $O/time-statement.txt
+timed statement $B statement --zk "${UA[@]}" --instances $D/pub-1.bin > $O/statement.txt 2>&1
+r=$?; echo "statement rc $r"; tail -3 $O/statement.txt | cut -c1-1500; cat $O/time-statement.txt
+[ $r = 0 ] || exit 8
 challenger_start $O/challenger || exit 1
 PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
 timed serve $B serve --zk --listen 127.0.0.1:$PORT --out $S/sessions --instances $D/pub-1.bin "${UA[@]}" --pin $PIN --operator tmpl-unit \
