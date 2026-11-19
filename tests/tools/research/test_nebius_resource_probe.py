@@ -15,7 +15,7 @@ GB = 10**9
 T0 = 1_790_800_000.0
 
 
-def reading(node: str = "n1", *, root_free_gb: float = 150, ws_pct: float = 70.0, ipct: float = 35.0, iused: int = 7_000_000,
+def reading(node: str = "n2", *, root_free_gb: float = 150, ws_pct: float = 70.0, ipct: float = 35.0, iused: int = 7_000_000,
             avail_pct: float = 70.0, replay_gb: float = 0.0, reserved_gb: float = 0.0, idle=(), unpres: int = 0, t: float = T0):
     total = 1800 * GB
     ws_size = 5000 * GB
@@ -34,52 +34,51 @@ def lim(node: str) -> dict:
 
 
 def test_all_clear_under_every_watermark():
-    assert P.evaluate(reading("n1"), None, lim("n1")) == []
+    assert P.evaluate(reading(), None, lim("n2")) == []
     assert P.evaluate(reading("n2", ws_pct=40.0), None, lim("n2")) == []
 
 
 def test_workspace_watermarks_warn_at_80_and_stop_checks_at_85():
-    for node in ("n1", "n2"):
-        assert P.evaluate(reading(node, ws_pct=60.0), None, lim(node)) == []
-        assert P.evaluate(reading(node, ws_pct=81.0), None, lim(node))[0].startswith("/workspace 81.0%")
-        assert P.evaluate(reading(node, ws_pct=86.0), None, lim(node))[0].startswith("HARD /workspace")
+    assert P.evaluate(reading(ws_pct=60.0), None, lim("n2")) == []
+    assert P.evaluate(reading(ws_pct=81.0), None, lim("n2"))[0].startswith("/workspace 81.0%")
+    assert P.evaluate(reading(ws_pct=86.0), None, lim("n2"))[0].startswith("HARD /workspace")
 
 
 def test_root_free_alert_and_hard_stop():
-    assert P.evaluate(reading(root_free_gb=55), None, lim("n1"))[0].startswith("root free 55 GB")
-    assert P.evaluate(reading(root_free_gb=40), None, lim("n1"))[0].startswith("HARD root free 40 GB")
+    assert P.evaluate(reading(root_free_gb=55), None, lim("n2"))[0].startswith("root free 55 GB")
+    assert P.evaluate(reading(root_free_gb=40), None, lim("n2"))[0].startswith("HARD root free 40 GB")
 
 
 def test_inodes_ram_idle_gpu_and_custody():
-    b = P.evaluate(reading(ipct=81.0, avail_pct=8.0, idle=[{"gpu": 3, "min_gib": 50.0}], unpres=11), None, lim("n1"))
+    b = P.evaluate(reading(ipct=81.0, avail_pct=8.0, idle=[{"gpu": 3, "min_gib": 50.0}], unpres=11), None, lim("n2"))
     assert [x.split()[0] for x in b] == ["/workspace", "RAM", "GPU", "11"]
-    assert P.evaluate(reading(unpres=10), None, lim("n1")) == []
+    assert P.evaluate(reading(unpres=10), None, lim("n2")) == []
 
 
 def test_inode_growth_rate_uses_the_previous_reading():
     prev = reading(iused=7_000_000, t=T0)
-    assert P.evaluate(reading(iused=7_030_000, t=T0 + 1200), prev, lim("n1")) == []          # 30k in 20 min = 90k/h
-    b = P.evaluate(reading(iused=7_060_000, t=T0 + 1200), prev, lim("n1"))                  # 60k in 20 min = 180k/h
+    assert P.evaluate(reading(iused=7_030_000, t=T0 + 1200), prev, lim("n2")) == []          # 30k in 20 min = 90k/h
+    b = P.evaluate(reading(iused=7_060_000, t=T0 + 1200), prev, lim("n2"))                  # 60k in 20 min = 180k/h
     assert len(b) == 1 and "inodes/h" in b[0]
     assert not b[0].startswith("HARD")                                                     # 80% of 20M is 52 h away
-    assert P.evaluate(reading(iused=7_060_000, t=T0 + 300), prev, lim("n1")) == []           # a 5-min burst is not a rate
+    assert P.evaluate(reading(iused=7_060_000, t=T0 + 300), prev, lim("n2")) == []           # a 5-min burst is not a rate
     prev = reading(iused=14_000_000, t=T0)
-    b = P.evaluate(reading(iused=15_000_000, t=T0 + 3000), prev, lim("n1"))                 # 1.2M/h over 50 min, 1M left
+    b = P.evaluate(reading(iused=15_000_000, t=T0 + 3000), prev, lim("n2"))                 # 1.2M/h over 50 min, 1M left
     assert b[0].startswith("HARD /workspace gaining 1,200,000 inodes/h over 50 min: 80% of inodes in 0.8 h")
 
 
 def test_an_inode_rate_over_a_young_base_warns_and_pages_only_once_it_holds():
     prev = [reading(iused=14_000_000, t=T0)]
-    b = P.evaluate(reading(iused=14_400_000, t=T0 + 1200), prev, lim("n1"))                 # 1.2M/h over 20 min
+    b = P.evaluate(reading(iused=14_400_000, t=T0 + 1200), prev, lim("n2"))                 # 1.2M/h over 20 min
     assert len(b) == 1 and not b[0].startswith("HARD") and "pages once it holds for 45 min" in b[0]
     base = None
     for i, iused in enumerate((7_000_000, 7_010_000, 7_020_000, 7_030_000, 7_040_000, 7_400_000)):
         r = reading(iused=iused, t=T0 + 600 * i)                                            # a burst in the last 10 min
-        b = P.evaluate(r, base, lim("n1"))
-        base = P.next_base(r, base, lim("n1"))
+        b = P.evaluate(r, base, lim("n2"))
+        base = P.next_base(r, base, lim("n2"))
     assert b == ["/workspace gaining 480,000 inodes/h > 100,000"]                            # over the oldest base: 50 min
     assert [x["t"] for x in base] == [T0 + 600 * i for i in range(6)]
-    assert [x["t"] for x in P.next_base(reading(t=T0 + 3800), base, lim("n1"))][0] == T0 + 600
+    assert [x["t"] for x in P.next_base(reading(t=T0 + 3800), base, lim("n2"))][0] == T0 + 600
 
 
 def test_the_inode_line_names_the_directories_that_grew_most(tmp_path):
@@ -94,7 +93,7 @@ def test_the_inode_line_names_the_directories_that_grew_most(tmp_path):
                                          {"dir": "c/new", "gained": 9}]}
     r = reading(iused=15_000_000, t=T0 + 3000)
     r["inode_dirs"] = g
-    line = P.evaluate(r, reading(iused=14_000_000, t=T0), lim("n1"))[0]
+    line = P.evaluate(r, reading(iused=14_000_000, t=T0), lim("n2"))[0]
     assert line.endswith("(growing a/y +900, b +500, c/new +9 in 60 min)")
     assert P.inode_dirs(tmp_path / "none", ws, T0, 3600, walk=False) is None
 
@@ -114,23 +113,12 @@ def test_the_inode_line_finds_leaves_by_path_not_by_prefix_and_in_one_sorted_pas
 
 def test_replay_queue_against_half_of_available_ram_after_reservations():
     # 1800 GB * 40% = 720 GB available; half is 360
-    assert P.evaluate(reading(avail_pct=40.0, replay_gb=350), None, lim("n1")) == []
-    assert "queued replay" in P.evaluate(reading(avail_pct=40.0, replay_gb=350, reserved_gb=100), None, lim("n1"))[0]
+    assert P.evaluate(reading(avail_pct=40.0, replay_gb=350), None, lim("n2")) == []
+    assert "queued replay" in P.evaluate(reading(avail_pct=40.0, replay_gb=350, reserved_gb=100), None, lim("n2"))[0]
     # reservations past MemAvailable ("0 GB > half of available RAM -95 GB"): no queue, no breach
-    assert P.evaluate(reading(avail_pct=10.0, reserved_gb=275), None, lim("n1")) == []
-    b = P.evaluate(reading(avail_pct=10.0, replay_gb=90, reserved_gb=275), None, lim("n1"))
+    assert P.evaluate(reading(avail_pct=10.0, reserved_gb=275), None, lim("n2")) == []
+    b = P.evaluate(reading(avail_pct=10.0, replay_gb=90, reserved_gb=275), None, lim("n2"))
     assert "half of available RAM 0 GB" in b[-1]
-
-
-def test_replay_queue_kueue_counts_pending_replays_at_a_floor():
-    def wl(name, conds, mem):
-        return {"metadata": {"name": name}, "status": {"conditions": [{"type": k, "status": "True"} for k in conds]},
-                "spec": {"podSets": [{"count": 1, "template": {"spec": {"containers": [{"resources": {"requests": {"memory": mem}}}]}}}]}}
-    ws = [wl("job-a-replay-0", [], "64G"), wl("job-b-replay-0", ["QuotaReserved"], "64G"), wl("job-c-replay-0", ["Finished"], "64G"),
-          wl("job-d-build-0", [], "64G"), wl("job-e-replay-0", [], "128Gi")]
-    q = P.replay_queue_kueue(ws, floor_gb=90.0)
-    assert q["queued"] == 2
-    assert q["gb"] == round(90.0 + 128 * 2**30 / GB, 1)
 
 
 def test_replay_queue_fill_counts_queued_replays_and_running_commits(tmp_path):
@@ -161,27 +149,6 @@ def test_idle_gpus_sampler_needs_a_full_window_of_zero_util(tmp_path):
     f.write_text("\n".join(lines) + "\n")
     assert P.tail_lines(f, nbytes=500)[-1] == lines[-1]
     assert all(x.startswith("{") for x in P.tail_lines(f, nbytes=500))
-
-
-def test_idle_from_series_needs_one_pod_for_the_whole_window():
-    util = {(0, "new-pod"): 0.0, (0, "old-pod"): 0.0, (1, "idle-pod"): 0.0, (2, "busy-pod"): 40.0, (3, ""): 0.0}
-    fb = {(0, "new-pod"): 50_000, (0, "old-pod"): 50_000, (1, "idle-pod"): 88_000, (2, "busy-pod"): 90_000, (3, ""): 90_000}
-    n = {(0, "new-pod"): 16, (0, "old-pod"): 44, (1, "idle-pod"): 60, (2, "busy-pod"): 60, (3, ""): 60}
-    assert P.idle_from_series(util, fb, n, 20.0) == [{"gpu": 1, "min_gib": 85.9, "pod": "idle-pod"}]
-
-
-def test_pool_flagged_reads_only_a_fresh_pool_file(tmp_path):
-    import time
-    f = tmp_path / "pool.json"
-    def write(age_s):
-        f.write_text(json.dumps({"generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(T0 - age_s)),
-                                 "nodes": {"n1": {"monitors": [{"kind": "gpu-idle-in-lease", "gpu": 1},
-                                                               {"kind": "gpu-unleased", "gpu": 2}, {"kind": "template-drift"}]}}}))
-    write(60)
-    assert P.pool_flagged(f, T0) == {1}
-    write(1800)
-    assert P.pool_flagged(f, T0) == set()
-    assert P.pool_flagged(tmp_path / "absent.json", T0) == set()
 
 
 def test_unpreserved_counts_finished_runs_without_a_marker(tmp_path):
@@ -222,14 +189,6 @@ def test_a_reservation_that_does_not_parse_is_skipped_by_name_and_the_rest_count
     r = P.ramlock(tmp_path)
     assert (r["reserved_gb"], r["stale"]) == (12.0, 0)
     assert "resource_probe: reservation b.json skipped (JSONDecodeError" in capsys.readouterr().err
-
-
-def test_a_pool_report_that_does_not_parse_flags_no_gpu_and_says_so_but_a_missing_one_is_quiet(tmp_path, capsys):
-    assert P.pool_flagged(tmp_path / "pool.json", T0) == set()
-    assert capsys.readouterr().err == ""
-    (tmp_path / "pool.json").write_text("not json")
-    assert P.pool_flagged(tmp_path / "pool.json", T0) == set()
-    assert "unread, so no GPU counts as flagged by the pool file (JSONDecodeError" in capsys.readouterr().err
 
 
 def test_the_write_probes_kubectl_that_times_out_names_no_pod_and_says_why(monkeypatch, capsys):

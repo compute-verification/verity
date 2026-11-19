@@ -93,9 +93,6 @@
                                                  # (/etc/vy/peers), put on every node that lists it: each node takes the list's key first, then each file, one node at a time
   research monitors list|check|run|relay ...     # invariants with an owner, a threshold and an action: node 1's service writes each
                                                  # incident once and its clear once; the relay posts them (research/monitors.py)
-  research usage hourly [--node nebius-1|nebius-2|all] [--hours H] [--json] | wasters --day YYYY-MM-DD [--top 3] [--json]
-                                                 # GPU-h held, busy and useful per node and UTC hour, and the holdings that held GPUs
-                                                 # idle: `cluster usage` (infra/cluster usage.py) over the console's record on vy-nebius-1
   research lean-times [--hours 24] [--until T] [--over 15] [--json]   # each Lean task's wall time, from the store's attempts: records
                                                  # runs and checks' Lean steps, p50/p95/max per kind and package (research/lean_times.py)
   research run-times [--hours 12] [--until T] [--over 10] [--on MACHINE,...] [--json]   # each run's wait to start, setup and run
@@ -2527,23 +2524,6 @@ def _inspect_py_spy(run_dir: Path) -> int:
     return 0
 
 
-CLUSTER_SRC = Path(__file__).resolve().parents[4] / "infra" / "cluster" / "src"
-
-
-def cmd_usage(argv: list[str]) -> int:
-    """`research usage ...` is `cluster usage ...`, run from this tree's infra/cluster (research never imports cluster), with
-    its output and exit code: 0, 1 on a finding (the record unread, stale or short of hours), 2 on bad arguments or with no
-    infra/cluster here."""
-    import subprocess
-
-    if not (CLUSTER_SRC / "cluster" / "usage.py").is_file():
-        print(f"research usage: no infra/cluster beside this research package ({CLUSTER_SRC})", file=sys.stderr)
-        return 2
-    env = dict(os.environ)
-    env["PYTHONPATH"] = str(CLUSTER_SRC) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
-    return subprocess.run([sys.executable, "-m", "cluster", "usage", *argv], env=env).returncode
-
-
 OPS_COMMANDS = ("keeper", "deploy")
 OPS_SRC = Path(__file__).resolve().parents[4] / "infra" / "ops"
 
@@ -2686,8 +2666,6 @@ def main(argv: list[str] | None = None) -> int:
         if cmd == "slack":
             print("research: `research slack` is `research msg`; use `research msg`", file=sys.stderr)
         return slack_main(rest, prog="research msg")
-    if cmd == "usage":
-        return cmd_usage(rest)
     if cmd == "lean-times":
         from .lean_times import main as lean_times_main
 
