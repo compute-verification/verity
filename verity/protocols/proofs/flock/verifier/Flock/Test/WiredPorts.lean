@@ -241,4 +241,22 @@ def stated (p : Registered.Port) : Registered.Port := { p with readsRel := #[som
 #guard outRel outC regP 0 #[0, 1] (stated o0) == some (#[some 0, some 1], 0)
 #guard (OneCircuit.pos regP #[2] (stated theta)).toOption.isNone
 
+-- the recursive verifier's reader takes that file's stated reads, and refuses the door's version and a tree port by name
+def statedOf (j : Json) : Option (Array (Option Nat) × Nat) :=
+  ((ofJsonStated j).toOption.bind (·[0]?)).map fun p => (p.readsRel, p.readsFrom)
+def statedWhy (j : Json) : String := match ofJsonStated j with
+  | .error e => e
+  | .ok _ => ""
+def v1J (port : Json) : Json := Json.mkObj [("format", Json.str FORMAT_V1), ("ports", Json.mkObj [("x", port)])]
+def readsJ : List (String × Json) := [("reads", toJson ((List.range 8).map some))]
+#guard statedOf statedJ == some ((Array.range 8).map some, 0)
+#guard statedOf (v1J (portJ "v" (readsJ ++ [(READS_FROM_KEY, toJson 3)]))) == some ((Array.range 8).map some, 3)
+#guard (statedWhy (fileJ [("x", portJ (fieldTree (wkey 19) 0))])).startsWith s!"registered reads: not a {FORMAT_V1} file"
+#guard (statedWhy (v1J (portJ "v" (readsJ ++ [("tree", Json.mkObj [("template", Json.str "T"), ("field", Json.str "o0")])]))))
+  == "registered reads: port x: a tree port's reads are derived from C, and the recursive verifier reads only stated reads"
+#guard (statedWhy (Json.mkObj [("format", Json.str FORMAT_V0),
+  ("ports", Json.mkObj [("x", portJ "v" (readsJ ++ [(READS_FROM_KEY, toJson 3)]))])])).startsWith
+  s!"registered reads: port x: {READS_FROM_KEY} is a {FORMAT_V1} key"
+#guard (statedWhy (v1J (portJ "v"))).startsWith "registered reads"
+
 end Flock.Test.WiredPorts

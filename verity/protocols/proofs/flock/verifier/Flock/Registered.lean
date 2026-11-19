@@ -197,6 +197,74 @@ theorem ofJson_names {j : Json} {own : Array Port} (h : ofJson j = .ok own) :
     intro q hq q' hq' hn
     exact dupName?_none hd q (Array.mem_toList_iff.mpr hq) q' (Array.mem_toList_iff.mpr hq') hn
 
+/-- The first version's formats, whose ports state their reads: a `FORMAT_V1` port's from unit `reads_from`
+(`READS_FROM_KEY`, default 0) on, a `FORMAT_V0` port's from unit 0, keys beside its own ignored. Only the recursive
+verifier's setup reads them (`ofJsonStated`), where each V* check holds a port's stated reads to the reads it computes;
+`ofJson` refuses them by their format's name. -/
+def FORMAT_V1 : String := "verity/registered-reads/v1"
+def FORMAT_V0 : String := "verity/registered-reads/v0"
+def READS_FROM_KEY : String := "reads_from"
+/-- The keys a `FORMAT_V1` file's port holds. -/
+def STATED_PORT_KEYS : List String :=
+  ["value", "root", "leaves", "words", WIDTH_KEY, "domain", SCHEMA_KEY, "reads", READS_FROM_KEY, "known", "param"]
+
+/-- A first-version file's ports (`FORMAT_V1` or `FORMAT_V0`), each with its stated reads, one per entry of its `ports`
+object in its order. A tree port (`tree`) is refused: its reads would be derived, which this road does not do. -/
+def portsOfStated (j : Json) : V (Array Port) := do
+  let ctx := "registered reads"
+  let format ← J.str j "format" ctx
+  if format != FORMAT_V1 && format != FORMAT_V0 then
+    throw s!"{ctx}: not a {FORMAT_V1} file (nor a {FORMAT_V0} one): the recursive verifier reads its parts' stated reads"
+  let v1 := format == FORMAT_V1
+  if v1 && !keysIn j FILE_KEYS then throw s!"{ctx}: a {FORMAT_V1} file holds the keys {FILE_KEYS} and no other"
+  let .ok (.obj kvs) := j.getObjVal? "ports" | throw s!"{ctx}: ports is not an object"
+  if kvs.toArray.isEmpty then throw s!"{ctx}: no port"
+  kvs.toArray.mapM fun (name, e) => do
+    if J.has e "tree" then
+      throw s!"{ctx}: port {name}: a tree port's reads are derived from C, and the recursive verifier reads only stated reads"
+    if v1 && !keysIn e STATED_PORT_KEYS then
+      throw s!"{ctx}: port {name}: a {FORMAT_V1} port holds keys of {STATED_PORT_KEYS} and no other"
+    if !v1 && J.has e READS_FROM_KEY then
+      throw s!"{ctx}: port {name}: {READS_FROM_KEY} is a {FORMAT_V1} key, and a {FORMAT_V0} file's reads start at unit 0"
+    let readsFrom ← if J.has e READS_FROM_KEY then J.nat e READS_FROM_KEY ctx else pure 0
+    let root ← unhex (← J.str e "root" ctx)
+    let domain ← unhex (← J.str e "domain" ctx)
+    let leaves ← J.nat e "leaves" ctx
+    if root.size != 64 || domain.size != 64 || leaves == 0 then
+      throw s!"{ctx}: port {name}: a 64-byte root and domain, and at least one leaf"
+    let wordBits ← if J.has e "word_bits" then J.nat e "word_bits" ctx else pure 16
+    let words ← if J.has e "words" then some <$> J.nat e "words" ctx else pure none
+    if !(wordBits == 16 || wordBits == 32) || words == some 0 || (words.isNone && wordBits != 16) then
+      throw s!"{ctx}: port {name}: leaves of 16 or 32 bits, at least one to a row, and a row's words when they are 32"
+    let schema ← if J.has e SCHEMA_KEY then J.str e SCHEMA_KEY ctx else pure HmRow.ROW_SCHEMA
+    if !SCHEMAS.contains schema then throw s!"{ctx}: port {name}: {SCHEMA_KEY} is one of {SCHEMAS}, not {schema}"
+    if schema != HmRow.ROW_SCHEMA && words.isNone then
+      throw s!"{ctx}: port {name}: a {schema} row is a bit row of its words' bits, and the port names no words"
+    let reads ← (← J.arr e "reads" ctx).mapM fun r => match r with
+      | .null => pure none
+      | r => some <$> J.asNat r s!"{ctx}: a read position"
+    return { name, value := ← J.str e "value" ctx, root, leaves, words, wordBits, domain, readsRel := reads, schema, readsFrom }
+
+/-- **The recursive verifier's registered reads**: a first-version file's ports (`portsOfStated`), each name naming one
+port (`ofJsonStated_names`), read only at the recursive verifier's setup, which the verifier's own `--rec-inner` or the
+recursion's protocol chooses, never the file. -/
+def ofJsonStated (j : Json) : V (Array Port) := do
+  let own ← portsOfStated j
+  match dupName? own.toList with
+  | some nm => throw s!"registered reads: port {nm} twice: a verdict reports one port per name, and each check reads a name's port"
+  | none => pure own
+
+theorem ofJsonStated_names {j : Json} {own : Array Port} (h : ofJsonStated j = .ok own) :
+    ∀ q ∈ own, ∀ q' ∈ own, q'.name = q.name → q' = q := by
+  obtain ⟨ps, -, h⟩ := HmNets.bind_ok h
+  cases hd : dupName? ps.toList with
+  | some nm => rw [hd] at h; cases h
+  | none =>
+    rw [hd] at h
+    cases h
+    intro q hq q' hq' hn
+    exact dupName?_none hd q (Array.mem_toList_iff.mpr hq) q' (Array.mem_toList_iff.mpr hq') hn
+
 /-- The u16 words of a registered row of `words` leaves of `wordBits` bits, as the statement lays out the port's row:
 each leaf `wordBits / 16` words, low first, zero-padded to whole SHA-512 blocks of 64 words. -/
 def rowWords (words wordBits : Nat) : Nat := (words * (wordBits / 16) + 63) / 64 * 64
