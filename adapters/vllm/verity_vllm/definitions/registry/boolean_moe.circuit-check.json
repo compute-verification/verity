@@ -1,5 +1,17 @@
 {
  "definitions": {
+  "Ex2ApproxIn_v1": {
+   "and": 774,
+   "type": "4418bd1035f8e001f77c4ba24e7c9f11d029e8ae6c6d52ad88c6a405dab479bc0c510f82994b6ca286301d33f0f2430542866c4bbc856505d0dbcb78cf083dd4"
+  },
+  "Ex2ApproxOut_v1": {
+   "and": 2010,
+   "type": "a85d9a764784f33c7548e1cf1314dd7ce9382ff2792f5e68b7a1aa3e3331d4600c2a33368d6f8d53e6d055f9bd656c0ce3c1fcc654988a2be9490e0d9051ceb8"
+  },
+  "Ex2Approx_v2": {
+   "and": 3857,
+   "type": "d8e934653d84026c2527af5ae255dc2ee11f8f3012cca04a326f8c2e68bad26cd32a9bca430e8df5c495cca631eb5643f47e1a19f4ea35c4be74c51baf0f9c57"
+  },
   "MoeRouterBiasTopK_v1{E=8,TOPK=2,SCALE=2.5,KERNEL='block'}": {
    "and": 11371,
    "type": "389b57f106ba8f56be73fc1ce1064c8f00d1de0712a5aec0cb09a62cd339f5ee7c2ccb4bd55ad23bd288e74f3aa1fc0228f12ca1e77e2274fb5c9853d3d3ee83"
