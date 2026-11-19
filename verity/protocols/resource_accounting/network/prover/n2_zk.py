@@ -405,7 +405,7 @@ def registration(lw: TransferBlocks, opening: SVC.Hidden, previous: str | None =
     w = opening.window
     roots = [{"port": SVC.VALUE, "root": lw.root(opening), **lw.ports(w)[SVC.VALUE]}]
     return DK.record(lw._program, lw.query, {"law": "subset", "k": 1}, S.SCHEME, roots, lw.provenance(w),
-                    previous=previous)
+                    previous=previous, partition=lw.partition)
 
 
 def other_subset(sampled: dict) -> list[int]:

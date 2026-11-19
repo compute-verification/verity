@@ -449,7 +449,7 @@ def registration(tie: TS.IngressTie, head: WR.CellsHead, previous: str | None = 
     tie._held(head)
     roots = [{"port": TS.VALUE, "root": head.root.hex(), **tie.ports(head.window)[TS.VALUE]}]
     return DK.record(tie._program, tie.query, {"law": "subset", "k": tie.T}, S.SCHEME, roots,
-                    tie.provenance(head.window), previous=previous)
+                    tie.provenance(head.window), previous=previous, partition=tie.partition)
 
 
 def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleNamespace, out: Path,
