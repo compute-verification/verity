@@ -61,7 +61,7 @@ def test_a_command_whose_module_is_absent_is_refused_by_name(tmp_path, monkeypat
     monkeypatch.setitem(sys.modules, cli.COMMANDS["serve-openai"][0], None)
     assert cli.main(["serve-openai"]) == 2
     err = capsys.readouterr().err
-    assert "serve-openai: its module verity_vllm.pipeline.serve_openai is not on this tree" in err
+    assert "serve-openai: its module verity_vllm.program.predict.serve is not on this tree" in err
     (tmp_path / "cli_stand_in.py").write_text("import no_such_dependency\n")
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.setitem(sys.modules, "no_such_dependency", None)

@@ -605,13 +605,12 @@ class CommitWindows:
                 return {"error": why, "disk": short}
             reqs, request_rows = window_requests(served_rows(c.com), name_of, by_name.get)
             tokens = {q["request_id"]: list(by_name[q["request_id"]].streamed) for q in reqs if q["request_id"] in by_name}
-            view = view_of(c.com)
-            bmap, binding = binding_of(view, rc, self.out / "windows" / f"w{c.window}", request_rows)
-            if self.plan is not None:
+            binding = None
+            if self.plan is not None:  # the plan locates its served rows through the map, so the close builds it
+                view = view_of(c.com)
+                bmap, binding = binding_of(view, rc, self.out / "windows" / f"w{c.window}", request_rows)
                 with self._lock:
                     self._bindings[c.window] = SimpleNamespace(bmap=bmap, aliases=view.aliases)
-            else:
-                drop(bmap["entries"])
             kw = dict(rec=rec, reqs=reqs, request_rows=request_rows, tokens=tokens, sampling={}, extras=self._extras_of(c.com, rc),
                       binding=binding, **self.seal)
             if c.off_loop:
