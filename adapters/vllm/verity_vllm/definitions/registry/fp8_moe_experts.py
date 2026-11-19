@@ -26,6 +26,7 @@ and the last LAST, are its `MoeExpertFp8Coordinate_v1` word (`fp8_moe.triton_blo
 """
 from __future__ import annotations
 
+from verity.circuits.codec import register_lazy_family
 from verity.circuits.defs import PrimitiveDefinition, bind, composite
 from verity.circuits.refs import Coll, concat, strided_view
 from verity.circuits.types import Array
@@ -38,6 +39,7 @@ from verity_vllm.definitions.registry.fp8 import E4M3, E4M3_NAN, weight_blocks
 from verity_vllm.definitions.registry.prims import BF16, F32, I32
 
 F32_NAN_FILL = 0x7FC00000
+I32_FILL = 0xFFFFFFFF
 
 _GATHERS: dict[tuple[str, int], PrimitiveDefinition] = {}
 
@@ -71,6 +73,14 @@ def gather_f32(vocab: int) -> PrimitiveDefinition:
     """`GatherF32x{V}_v1`: column[token] of V f32 words, else 0x7FC00000. It is `ref_prims.gather_f32`'s Definition itself,
     since a registry holds one Definition per id."""
     return RP.gather_f32(vocab)
+
+
+def gather_i32(nb: int) -> PrimitiveDefinition:
+    """`GatherI32x{NB}_v1`: blocks[b] of NB i32 words for 0 <= b < NB, else -1."""
+    return _gather("GatherI32", nb, I32, I32_FILL)
+
+
+register_lazy_family(r"^GatherI32x(\d+)_v1$", lambda m: gather_i32(int(m[1])))   # decodable where the program was not built
 
 
 def columns(slab: Coll, E: int, K: int, word) -> Coll:
