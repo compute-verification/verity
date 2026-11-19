@@ -757,12 +757,13 @@ def TablesSent (T : PinnedTables) (s : Verity.Sent) : Prop :=
   ∀ t ∈ Flock.MUFU_TABLES, ∀ a b, tableFile t.sha512 s.blobs = some a → T.file t.sha512 = some b → a = b
 
 /-- **v2's parameters name the vocabulary's digests, and the vocabulary reads the registered lookup tables**: under
-v2's parameters in `θ`, the bytes v2's hex digests of the circuit file and the public file decode to are the
-vocabulary's `programDigest θ` and `publicDigest θ`, and the vocabulary reads, of the committed files, the lookup tables
-their circuit file registers (`pinnedTables`). -/
+v2's parameters in `θ`, the vocabulary's `programDigest θ` is the SHA-512 of the circuit file the door derives from C,
+the partition and the block (`Own.circuitFile`), its `publicDigest θ` the bytes v2's hex digest of the public file
+decodes to, and the vocabulary reads, of the committed files, the lookup tables their circuit file registers
+(`pinnedTables`). -/
 structure DigestsAt (V : Vocab d α) (T : PinnedTables) (θ : ByteArray) : Prop where
-  circuit : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.circuit = .ok dg →
-    V.programDigest θ = some fun i => dg.data.getD i.val 0
+  circuit : ∀ p, ParamsAt θ p → ∀ c, _root_.Spot.OneStageZk.Own.circuitFile p.own = .ok c →
+    V.programDigest θ = some (Verity.sha512 c.data.toList)
   publicFile : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.pub = .ok dg →
     V.publicDigest θ = some fun i => dg.data.getD i.val 0
   tables : ∀ F, (V.read θ F).first.tables = pinnedTables T (V.circuitFile θ F)
@@ -790,8 +791,10 @@ def digestOf (s : String) : Option Hash.Digest :=
   | .ok dg => some fun i => dg.data.getD i.val 0
   | .error _ => none
 
-/-- **The circuit file's digest the parameters `θ` hold, as deployed**: the one v2's parameters name. -/
-def programDigestOf (θ : ByteArray) : Option Hash.Digest := (paramsOf θ).bind fun p => digestOf p.own.circuit
+/-- **The circuit file's digest at the parameters `θ`, as deployed**: the SHA-512 of the circuit file the door
+derives from their C, partition and block (`Own.circuitFile`); none where it refuses. -/
+def programDigestOf (θ : ByteArray) : Option Hash.Digest :=
+  (paramsOf θ).bind fun p => p.own.circuitFile.toOption.map fun c => Verity.sha512 c.data.toList
 
 /-- **The public file's digest the parameters `θ` hold, as deployed**: the one v2's parameters name. -/
 def publicDigestOf (θ : ByteArray) : Option Hash.Digest := (paramsOf θ).bind fun p => digestOf p.own.pub
@@ -818,9 +821,9 @@ theorem digestsAt_of (V : Vocab d α) (T : PinnedTables) (hc : ∀ θ, V.program
     (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ)
     (hr : ∀ θ F, V.read θ F = Verity.ExecutionPhaseFiles.one (readOf T θ F)) (θ : ByteArray) :
     DigestsAt V T θ where
-  circuit p hθ dg hdg := by
+  circuit p hθ c hcf := by
     rw [hc, programDigestOf, paramsOf_eq hθ]
-    simp only [Option.bind, digestOf, hdg]
+    simp only [Option.bind, hcf, Except.toOption, Option.map]
   publicFile p hθ dg hdg := by
     rw [hp, publicDigestOf, paramsOf_eq hθ]
     simp only [Option.bind, digestOf, hdg]
