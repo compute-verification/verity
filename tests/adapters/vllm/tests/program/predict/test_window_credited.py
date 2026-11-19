@@ -162,7 +162,7 @@ def test_on_honest_values_every_tile_is_ok_writes_the_schemes_y_and_its_readers_
     sig = dict(prog.fn.signature()[0])
     inputs = made_up(prog)
     for name, t in sig.items():
-        if name.startswith("weights/") and not name.endswith("/root"):
+        if name.startswith("weights/") and "/table/" not in name and not name.endswith("/root") and t.homogeneous_width() == 16:
             inputs[name] = np.asarray([int(np.float32(rng.uniform(-0.25, 0.25)).view(np.uint32)) >> 16
                                        for _ in range(t.leaves)], dtype=np.uint64)
     port = dict(_units(c, TILE)[0][0].signature()[0])
