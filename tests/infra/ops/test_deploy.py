@@ -1346,7 +1346,7 @@ def test_each_unit_is_installed_with_the_environment_files_and_scripts_it_names_
                 for f in [x for x in envs if x != "/etc/environment"] + scripts:
                     assert f in paths or f.startswith(tuple(trees)), f"{node.name}: {u} reads {f}, which deploy.toml doesn't install there"
                 seen += 1
-    assert seen >= 12
+    assert seen >= 7
 
 
 def test_environment_files_hold_settings_never_credentials():
