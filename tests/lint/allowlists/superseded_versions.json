@@ -223,6 +223,8 @@
     {"file": "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1zy.py", "kind": "superseded", "symbol": "PouwH1Combine", "detail": "PouwH1Combine_v1"},
     {"file": "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1zy.py", "kind": "superseded", "symbol": "PouwH1LaneZy", "detail": "PouwH1LaneZy_v1"},
     {"file": "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1zy.py", "kind": "superseded", "symbol": "PouwH1LaneZyChunk", "detail": "PouwH1LaneZyChunk_v1"},
-    {"file": "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1zy.py", "kind": "superseded", "symbol": "PouwH1TileZyChunks", "detail": "PouwH1TileZyChunks_v1"}
+    {"file": "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1zy.py", "kind": "superseded", "symbol": "PouwH1TileZyChunks", "detail": "PouwH1TileZyChunks_v1"},
+    {"file": "adapters/vllm/verity_vllm/definitions/registry/fa3_check_inf.py", "kind": "superseded", "symbol": "Attention", "detail": "Attention_v20"},
+    {"file": "adapters/vllm/verity_vllm/definitions/registry/fa3_check_inf.py", "kind": "superseded", "symbol": "AttentionHead", "detail": "AttentionHead_v20"}
   ]
 }
