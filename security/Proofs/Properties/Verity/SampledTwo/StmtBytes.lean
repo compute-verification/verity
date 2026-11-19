@@ -78,7 +78,7 @@ theorem stmtRaw_le (m : Spot.OneStageZk.Member) (circuit pub : ByteArray) (table
       (m.own.registered.map fun j => (_root_.Flock.RecordText.printT j).toUTF8)).encode.length ≤
       VStar.Recursive.SampledTwo.stmtSize m.own circuit pub (VStar.Recursive.SampledTwo.tablesSize tables) draw := by
   have hF : FlockDeploy.FORMAT.utf8ByteSize = 25 := by decide +kernel
-  have hS : Spot.OneStageZk.STATEMENT.utf8ByteSize = 20 := by decide +kernel
+  have hS : Spot.OneStageZk.STATEMENT.utf8ByteSize = 25 := by decide +kernel
   have hd := len_printed draw
   have hr := len_printed m.own.registered
   have hp : (_root_.Flock.RecordText.printT m.own.partition).toUTF8.size =

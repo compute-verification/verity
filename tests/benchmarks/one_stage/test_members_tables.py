@@ -21,17 +21,15 @@ from verity_flock import ir_lower as IL
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tests/verity/protocols/proofs/spot/verifier/lean"))
 import test_members_twin as TW
-from holes import waits_on
 
 #: slow: it runs v2's executable, which the first test to need it builds
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")]
 
 
-@waits_on("restrict", "lower")
 def test_blobs_holding_a_table_no_circuit_looks_up_are_not_refused_for_it(tmp_path):
     """The audit's statement is of the second member alone, and neither member's circuit looks up a table. With
-    ``rcp``'s table among the blobs, Lean and the Python run get as far as the first member's circuit, C_S
-    (`one_circuit.restrict`), as the same play does without the table: the table is none of a member's own
+    ``rcp``'s table among the blobs, Lean and the Python run get past the first member's circuit, C_S
+    (`one_circuit.restrict`), to its stand-in public file, as the same play does without the table: the table is none of a member's own
     (`OneStageZk.ownTables`), so no member's statement refuses for it."""
     a = TW.Audit("members-tables-held", opened=(TW.B,))
     assert [st["member"] for st in a.evidence["proofs"]["statements"]] == [TW.B]
@@ -41,7 +39,7 @@ def test_blobs_holding_a_table_no_circuit_looks_up_are_not_refused_for_it(tmp_pa
 
     held, (run, refused) = a.ask(tmp_path / "holds")
     assert run is None and held == M.run_reason(run, refused), (held, refused)
-    assert held.startswith(f"proofs: member {TW.A}: {M.UNREAD[0]}"), held
+    assert held.startswith(f"proofs: member {TW.A}: {M.UNREAD[1]}"), held
 
     why, (run, refused) = a.ask(tmp_path / "without", without=(rcp,))
     assert run is None and why == M.run_reason(run, refused), (why, refused)

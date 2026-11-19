@@ -547,7 +547,7 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], draw: 
         return None, ("proof", "the statement's proof files are not a public file and at least one session directory "
                                "holding its session.json")
     try:
-        base = OC.lower(derived, partition, lower_executable)
+        base = OC.lower(derived, partition, lower_executable, cut=OC.cuts(program, partition, decoded))
     except (OC.NotDerived, OC.Refused) as e:
         return None, ("circuit", str(e))
     name = statement()
