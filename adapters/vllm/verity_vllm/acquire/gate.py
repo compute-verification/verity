@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.acquire.plan import AcquisitionPlan, acquisition_plan, plan_of_capture
+from verity_vllm.acquire.plan import AcquisitionPlan, plan_of_capture
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import taps
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
@@ -32,12 +32,6 @@ from verity_vllm.records.schema_ids import CALL_BOUNDARIES_GATE_SCHEMA
 CALL_BOUNDARIES_SCHEMA = CALL_BOUNDARIES_GATE_SCHEMA
 #: identities without a source the record names, per kind (its counts are complete)
 NAMED = 100
-
-
-def run(manifest: Mapping[str, Any], rt: RuntimeTree) -> AcquisitionPlan:
-    prefix, aliases = str(manifest.get("wrapper_prefix") or ""), manifest.get("op_path_aliases")
-    aliases = aliases if aliases else {}
-    return acquisition_plan(manifest, AcquireCorrespondence(rt, wrapper_prefix=prefix, aliases=aliases))
 
 
 def run_plan(classes: Sequence[Mapping[str, Any]], rt: RuntimeTree) -> AcquisitionPlan:
@@ -120,4 +114,4 @@ def main(a: CallBoundariesOptions) -> int:
     return 0 if rec["pass"] else 1
 
 
-__all__ = ["COMMANDS", "call_boundaries_line", "call_boundaries_of", "main", "run"]
+__all__ = ["COMMANDS", "call_boundaries_line", "call_boundaries_of", "main"]
