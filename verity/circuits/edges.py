@@ -330,6 +330,57 @@ def _part_wires(R: _Root, fu: dict, templates: Mapping, cuts_of, k: int, i: int,
     return out
 
 
+def io_cuts(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]]) -> dict[str, dict[str, int]]:
+    """in(S)'s row cuts (`Spot.OneStageZk.cutsOf`): ``{template: {port: k}}``, each port of a template that a root node's
+    argument part reads from a non-input root node cut into its leaves over the writer's output field at the part's
+    first reference, uncut ports left out; ``{}`` where the root has no edge. `ValueError` on a scan node at the root
+    (`NotDerived`'s text), a range-less node (``edge-template``), a field that does not divide the port
+    (``edge-rows``), or a port of one template read in rows of two lengths."""
+    R = _Root(desc)
+    def reads(q) -> list[int]:
+        return [ln[1] for ln in q[2] if not ln[0]] if q[0] == "g" else [i for s, i, _ in q[1] if not s]
+
+    if not any(r >= len(R.nodes) or not R.nodes[r]["input"] for x in R.nodes for g in x["args"] for q in g["parts"] for r in reads(q)):
+        return {}
+    fu = {node: t for node, t, _first, _count in ranges}
+    cs: dict[str, dict[str, int]] = {}
+    for k, x in enumerate(R.nodes):
+        if x["input"]:
+            continue
+        if x["form"] == "scan":
+            raise ValueError("one-circuit: not derived yet: ioCuts : a scan node of C's root (edge-form: no closed form yet)")
+        if k not in fu:
+            raise ValueError("edge-template")
+        rt = fu[k]
+        for i, g in enumerate(x["args"]):
+            port, ty = x["params"][i]
+            for q in g["parts"]:
+                if q[0] != "g":
+                    continue
+                at = _leaf_at(q, 0)
+                if at is None:
+                    continue
+                p, w, leaf = at
+                if p or leaf < 0 or w >= len(R.nodes) or R.nodes[w]["input"]:
+                    continue
+                wd = R.nodes[w]
+                if wd["out_leaves"] == 0:
+                    continue
+                f = _field_ix(wd["ret"], leaf % wd["out_leaves"])
+                if f is None:
+                    continue
+                fl = _leaves(_fields(wd["ret"])[f])
+                if fl == 0 or _leaves(ty) % fl:
+                    raise ValueError("edge-rows")
+                kc = _leaves(ty) // fl
+                ports = cs.setdefault(rt, {})
+                if port in ports and ports[port] != kc:
+                    raise ValueError(f"ioCuts: template {rt}'s port {port} is read in rows of {_leaves(ty) // ports[port]} "
+                                     f"and of {fl} leaves")
+                ports.setdefault(port, kc)
+    return {t: {p: n for p, n in ps.items() if n > 1} for t, ps in cs.items() if any(n > 1 for n in ps.values())}
+
+
 def edges(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], wiring: Mapping[str, Any]) -> dict:
     """``{"wires": [...]}`` in the root's node, argument and part order, each in the record's wire form with its
     ``cut``; or ``{"refusal": code}``, the first refusal."""

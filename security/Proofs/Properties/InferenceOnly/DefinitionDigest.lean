@@ -1,11 +1,11 @@
 module
 
-public import InferenceOnlyVerifier.DefinitionDigest
+public import Circuits.DefinitionDigest
 
 /-!
 # Which branch a Definition's digests take
 
-`InferenceOnlyCheck.DefinitionDigest`'s two digests treat a composite's descriptor entry apart from every other: the canonical
+`Flock.DefinitionDigest`'s two digests treat a composite's descriptor entry apart from every other: the canonical
 entry rewrites a composite's body and returns any other entry as it is, and the closure digest follows a composite's
 callees. Both decide it by `isComposite`, which compares the entry's `form` as a string.
 
@@ -15,7 +15,7 @@ callees. Both decide it by `isComposite`, which compares the entry's `form` as a
 
 @[expose] public section
 
-namespace InferenceOnlyVerifier.DefinitionDigest.SecurityProofs
+namespace Flock.DefinitionDigest.SecurityProofs
 
 open Lean (Json)
 
@@ -36,4 +36,4 @@ theorem canonicalEntry_of_not_composite (callees types : Array Json) (e : Json)
   simp only [hf]
   rfl
 
-end InferenceOnlyVerifier.DefinitionDigest.SecurityProofs
+end Flock.DefinitionDigest.SecurityProofs

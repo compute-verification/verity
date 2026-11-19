@@ -9,7 +9,7 @@ a reader of the linear takes by wire: the residual add of each row of y and the 
 `Bf16AddRow_v1`), C's output. y is no value C holds. No unit fits one proof block whole, so C is laid
 (`verity.circuits.laying.lay`) under the composer's limit (`fits`, `verity_flock.circuit.unit_block`'s rule on a block's
 ports and ANDs): each unit opens into its noise's seed, lines and Gram rows and its wired core
-(`pearl_plus_credited.cut`), each one proof block, and the credited blocks are the wired cores. A drawn core's outputs are
+(`pearl_plus_credited.cut`), each one proof block, and each tile is credited over all its blocks. A drawn core's outputs are
 registered as the record its reader holds them to: its digest and y under hiding salts, its ``ok`` (one u16) as 1 under
 public salts. The noise is seeded by the
 epoch's salt and W's registered root: the stager forms its tiles under them, and the verifier's side fills the public row
@@ -18,13 +18,15 @@ registered roots from that row, which every staged file's roots must equal; the 
 root to the supplied functions (`pouw.pearlplus.salt/v1`, `registered.root/v1`).
 ``stage`` evaluates C on an honest linear and stages a dishonest proof of the drawn tile (``--bad``: ``y``, its claimed y
 a word other than the one it computes; ``cert``, a certificate word other than the prover's; ``filler``, a nonzero word
-in its filler row; each claiming the honest outputs), places the units' amounts
-(`resource_accounting.scheme.credited` over the laid C's strata, `PEARL_PLUS.blocks`' cost on the template's statics),
-draws one credited block, cuts it (`restrict`), lowers it by the door (`one_circuit.lower`), and finds each of its input
-rows' writers in C: a row C wires from more than one writer unit (the core's fa and fb, K lines; g, 32 Gram rows) is no
-one writer's output field, which Lean's registered reads refuse (`Flock.Registered.treeReads`, ``FIELD_WHY``) unless the
-lowering cuts it into one row a writer (``p#j``, `Flock.OneCircuit.io`), and the door's lowering cuts none, so the stage
-stops there (``WIRED-ROWS``, exit 4); otherwise it stages the block for ``flock-circuit``.
+in its filler row; each claiming the honest outputs), places each laid block in its tile and each tile's amount
+(`scheme.laid_tiles` over the laid C's strata, `tile_macs` on the tile's statics), draws one block of the wired cores'
+stratum, cuts it (`restrict`), lowers it by the door (`one_circuit.lower` under C's `one_circuit.cuts`), and finds each
+of its input rows' writers in C: a row C wires from more than one writer unit (the core's fa and fb, K lines; g, 32 Gram
+rows) is no one writer's output field, which Lean's registered reads refuse (`Flock.Registered.treeReads`,
+``FIELD_WHY``) unless the lowering cuts it into one row a writer (``p#j``, `Flock.OneCircuit.io`), and the stage stops
+there when it does not (``WIRED-ROWS``, exit 4); a row one writer's field feeds is the writer's committed output, which
+this stage does not commit, so it stops there too (``WRITER-ROWS``, exit 4); otherwise it stages the block for
+``flock-circuit``.
 ``door`` hands each proof to `proofs.verify` with the verifier's own program, partition, draw and registered file, and
 nothing of Pearl+'s. `credited_in_c.sh` builds, proves and verifies; run it on a node."""
 from __future__ import annotations
@@ -315,7 +317,6 @@ def stage(a) -> int:
     from verity.circuits.program import input_id
     from verity.circuits.ops.rows import Bf16AddRow
     from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
-    from verity.protocols.resource_accounting import scheme as RS
     from verity.protocols.resource_accounting.compute.pouw import scheme as PS
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
     from verity.commitments import registered_value as RV
@@ -359,21 +360,23 @@ def stage(a) -> int:
     phase("lay", descriptor_bytes=len(c), population=population)
 
     strata = PQ.strata(program, part["query"])
-    credited = sorted(RS.credited([PS.PEARL_PLUS], strata))
-    decoded = R.program(c)
-    (block,) = PS.PEARL_PLUS.blocks
-    amounts = {u: block.cost(decoded.defs[tid].bindings) for tid, rs in strata for lo, hi in rs for u in range(lo, hi)
-               if u in credited}
-    rec["amounts"] = {"strata": [[tid, rs] for tid, rs in strata], "credited": credited, "amount": amounts,
-                      "tile_macs": [PS.tile_macs(tl.core.bindings) for tl in ln.tiles]}
+    tiles = PS.laid_tiles(ln.program, program, strata)
+    rec["amounts"] = {"strata": [[tid, rs] for tid, rs in strata],
+                      "tiles": [{"index": tl.index, "gates": tl.gates, "amount": tl.amount, "blocks": len(tl.blocks),
+                                 "kinds": dict(tl.kinds)} for tl in tiles]}
     print("AMOUNTS " + json.dumps(rec["amounts"]), flush=True)
-    assert len(credited) == units and [amounts[u] for u in credited] == rec["amounts"]["tile_macs"]
+    assert [tl.amount for tl in tiles] == [PS.tile_macs(tl.core.bindings) for tl in ln.tiles]
 
     coin = os.urandom(64)
-    block_no = credited[int.from_bytes(hashlib.sha512(coin).digest(), "little") % len(credited)]
-    index = credited.index(block_no)
-    rec["draw"] = {"coin": coin.hex(), "block": block_no, "tile": index, "amount": amounts[block_no],
-                   "of": "one block uniformly of the credited ones, whose amounts are equal"}
+    cores = [u for tid, rs in strata if tid == descriptor_id(core) for lo, hi in rs for u in range(lo, hi)]
+    if not cores:
+        raise SystemExit(f"no-core-block: the laying opened {descriptor_id(core)}, so no block of the laid C is a wired "
+                         "core for this stage to stage")
+    block_no = cores[int.from_bytes(hashlib.sha512(coin).digest(), "little") % len(cores)]
+    (index,) = [tl.index for tl in tiles if block_no in tl.blocks]
+    rec["draw"] = {"coin": coin.hex(), "block": block_no, "tile": index, "amount": tiles[index].amount,
+                   "of": "one block uniformly of the wired cores' stratum, the block this stage stages; its tile is "
+                         "credited its amount only when every stratum it has a block in passed (credited_tiles)"}
     print("DRAW " + json.dumps(rec["draw"]), flush=True)
     blk = OC.block(c, part, block_no)
     b = R.restrict(c, part, blk)
@@ -421,7 +424,7 @@ def stage(a) -> int:
                          np.asarray(good["r"] if a.reader else [[0] * n] * m, dtype=np.int64))
     rec["evaluate"] = {"of": "C on its words (`evaluate_batch` of its root before laying, whose gates the laid C keeps): "
                               "each unit's (digest, y, ok) and the reader's rows",
-                       "drawn": {"rows": drawn.rows, "real": drawn.real, "credited": amounts[block_no]},
+                       "drawn": {"rows": drawn.rows, "real": drawn.real, "credited": tiles[index].amount},
                        "honest_ok": [g[-1] for g in got_h], "dishonest_ok": [g[-1] for g in got_d],
                        "y": y_rows, "y_is_the_served_y": y_rows == served,
                        "reader_reads_y_by_wire": z_h == add.reshape(m, n).tolist() if a.reader else None,
@@ -445,7 +448,8 @@ def stage(a) -> int:
     a.out.mkdir(parents=True, exist_ok=True)
     t0 = time.perf_counter()
     try:
-        text = OC.lower(b.descriptor, part, lambda: a.lower).decode()
+        cut = OC.cuts(c, part)
+        text = OC.lower(b.descriptor, part, lambda: a.lower, cut=cut).decode()
     except (OC.NotDerived, OC.Refused) as e:
         rec["lower"] = {"refused": f"{type(e).__name__}: {e}", "query": part["query"]["name"]}
         print("LOWER-REFUSED " + json.dumps(rec["lower"]), flush=True)
@@ -454,7 +458,8 @@ def stage(a) -> int:
     meta = FC.meta_of(text)
     rec["lower"] = {"by": "the door's one_circuit.lower (flock-lower-check compose)", "wall_s": round(time.perf_counter() - t0, 2),
                     "peak_gib_children": _peak_gib(resource.RUSAGE_CHILDREN), "bytes": len(text), "k_log": meta.get("k_log"),
-                    "sha512": hashlib.sha512(text.encode()).hexdigest(), "ports": [q[:2] for q in meta.get("ports", [])]}
+                    "sha512": hashlib.sha512(text.encode()).hexdigest(), "ports": [q[:2] for q in meta.get("ports", [])],
+                    "cut": cut.get(descriptor_id(core), {})}
     print("LOWER " + json.dumps(rec["lower"]), flush=True)
     phase("lower")
 
@@ -471,11 +476,21 @@ def stage(a) -> int:
     if many:
         rec["wired_rows"] = {
             "refused": f"the drawn block's input rows {sorted(many)} are each wired from more than one writer unit "
-                       f"({many}), and the door's lowering (one_circuit.lower) gives each parameter one row: a row that is "
-                       "no one writer's output field, whole, is refused by Lean's registered reads "
-                       "(Flock.Registered.treeReads, FIELD_WHY); Lean's in(S) layout reads a parameter cut into one row a "
-                       "writer (p#0 … p#(k-1), Flock.OneCircuit.io), which the door's lowering does not yet emit"}
+                       f"({many}), and the door's lowering (one_circuit.lower under one_circuit.cuts) left each one row: "
+                       "a row that is no one writer's output field, whole, is refused by Lean's registered reads "
+                       "(Flock.Registered.treeReads, FIELD_WHY)"}
         print("WIRED-ROWS " + json.dumps(rec["wired_rows"]), flush=True)
+        (a.out / "stage.json").write_text(json.dumps(rec, indent=1, default=str))
+        return 4
+    if fed := {p: [r for r in rows if r == p or r.startswith(p + "#")] for p in wired}:
+        rec["writer_rows"] = {
+            "rows": {p: len(rs) for p, rs in fed.items()},
+            "refused": "the drawn block reads these rows each from one writer unit's output field (in(S)'s cut, "
+                       "one_circuit.cuts), which the door takes from each writer's committed output, as the period's "
+                       "members' rows (flock_inputs); this stage registers only C's registered values and the drawn "
+                       "block's own outputs (registered.reads_file), so it commits no writer's output and stages no "
+                       "proof"}
+        print("WRITER-ROWS " + json.dumps(rec["writer_rows"]), flush=True)
         (a.out / "stage.json").write_text(json.dumps(rec, indent=1, default=str))
         return 4
     verifier_row = public_values(ln, k, unit, salt, w_reg["w"].root)

@@ -391,8 +391,8 @@ def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dic
 
 def program_wires(desc: dict, tids, cuts) -> list[dict]:
     """The wires the Program's root states under the templates `tids` and the record's `cuts`, as a record states a
-    wire (`Spot.Edges.edgesOf`, by `verity.commitments.periods.edges`); a `ValueError` naming its refusal."""
-    from verity.commitments.periods.edges import edges
+    wire (`Spot.Edges.edgesOf`, by `verity.circuits.edges`); a `ValueError` naming its refusal."""
+    from verity.circuits.edges import edges
     by = set(tids)
     nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
     ranges, at = [], 0

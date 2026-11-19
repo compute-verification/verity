@@ -218,6 +218,69 @@ def test_close_commits_every_unit_under_the_window_domain_rule():
     assert changed.close(salts_of=fixed(changed)).roots[win.window.members[1].port("x")] != c.roots[m1.port("x")]
 
 
+def _leaf_strings(win: I.Window, seed: int = 0) -> tuple[dict, dict[str, bytes]]:
+    """Every `leaf_rows` port's salts and strings (`rows.row_strings`), and the same salts by member port."""
+    handed, by_member = {}, {}
+    for k, lr in win.leaf_rows().items():
+        ys = hashlib.shake_256(f"{seed} {k}".encode()).digest(CS.SALT_BYTES * len(lr.rows))
+        handed[k] = (ys, CS.row_strings(lr.rows, ys, lr.schema))
+        by_member |= lr.split(ys, CS.SALT_BYTES)
+    return handed, by_member
+
+
+def test_close_leafs_the_strings_it_is_handed_as_it_leafs_the_rows_it_hashes():
+    """`close` handed every port's strings makes the roots and strings it makes itself from the same rows and salts, and
+    `leaf_rows` is every port it commits in full."""
+    win, *_ = window()
+    handed, by_member = _leaf_strings(win)
+    assert set(by_member) == set(CS.full_ports(win.window))
+    got, made = win.close(strings=handed), win.close(salts_of=by_member)
+    assert got.roots == made.roots and all(got.bc[p] == made.bc[p] for p in by_member)
+
+
+def test_a_port_its_later_units_read_by_wire_takes_strings_for_its_external_units_alone():
+    """`chain`: ``x`` is held in full only by the units reading the embedding, so its `leaf_rows` port is theirs, at
+    their unit indices, and `close` handed its strings makes the roots it makes from the same salts."""
+    win = I.Window(chain(), RUN, SAMPLING_DESIGN, 2)
+    win.record(GEMM, *chain_values(), {"chain": 0})
+    lr = win.leaf_rows()[(GID, "x")]
+    assert lr.units == list(range(REQUESTS)) and [p for p, _, _ in lr.members] == [win.window.members[0].port("x")]
+    handed, by_member = _leaf_strings(win)
+    assert set(by_member) == set(CS.full_ports(win.window))
+    assert win.close(strings=handed).roots == win.close(salts_of=by_member).roots
+
+
+def test_close_refuses_strings_it_cannot_place():
+    win, *_ = window()
+    handed, _ = _leaf_strings(win)
+    k = next(iter(handed))
+    ys, bc = handed[k]
+    for bad, why in (({q: v for q, v in handed.items() if q != k}, "no strings for"),
+                     ({**handed, ("other", "x"): (ys, bc)}, "is no port the period commits in full"),
+                     ({**handed, k: (ys, bc[:-1])}, "not whole"),
+                     ({**handed, k: (ys[:-CS.SALT_BYTES], bc[:-CS.BC_BYTES])}, "not the port's 10 rows")):
+        with pytest.raises(ValueError, match=f"^strings: .*{why}"):
+            win.close(strings=bad)
+
+
+def test_a_handed_string_not_its_rows_is_closed_and_opens_no_root():
+    """`close` leafs a string that isn't its row's as given; an opening of the row (its row and salt hashed to its leaf, as
+    the door hashes them) doesn't make the root."""
+    win, *_ = window()
+    handed, _ = _leaf_strings(win)
+    lr = handed[(TID, "x")]
+    bad = bytearray(lr[1])
+    bad[CS.BC_BYTES * 5] ^= 1
+    c = win.close(strings={**handed, (TID, "x"): (lr[0], bytes(bad))})
+    honest = win.close(strings=handed)
+    m = win.window.members[1]
+    p = m.port("x")
+    assert c.window.tree(m, "x") == p and c.roots[p] != honest.roots[p]
+    assert CS.row_strings(c.rows[p], c.salts[p], m.schema("x")) == honest.bc[p] != c.bc[p]
+    remade, _ = CS.commit_ports({p: c.domains[p]}, {p: np.asarray(c.rows[p])}, {}, {p: c.salts[p]}, schemas={p: m.schema("x")})
+    assert remade[p] == honest.roots[p] != c.roots[p]
+
+
 def test_a_periods_salts_are_the_operating_systems_bytes_one_draw_a_port(monkeypatch):
     """Unless a test hands salts in, `rows.commit` takes every row's salt from the OS generator, 192 bytes a row in one sample a port in
     the ports' order, and stretches none from a key: each port's salts are the bytes the generator gave for it. Two closes
