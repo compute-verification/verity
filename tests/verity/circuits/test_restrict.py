@@ -227,15 +227,13 @@ TOYS = {"fanout": (fanout, [[(0, 1)], [(1, 3)], [(0, 3)], [(2, 3)]]),
         "wired": (wired, [[(0, 1)], [(1, 3)], [(0, 3)]])}
 
 
-#: a supplied 4-bit constant
-S4 = {"supplied": "const.uint/v1", "args": {"value": 5, "bits": 4}, "layout": "le", "bits": 4}
-
-
 def two_supplied() -> Program:
-    """u0 = T(s, t), s and t two supplied parameters of one width, adjacent in C's inputs, then u1 = T(u0, k)."""
+    """u0 = T(s's low 4 bits, t's), s and t two supplied parameters of one width, adjacent in C's inputs, then
+    u1 = T(u0, k)."""
     def body(B, S, k, s, t):
-        return B.call(T, B.call(T, s, t), k)
-    return _toy("RestrictToyTwoSupplied", (("k", A4), ("s", A4), ("t", A4)), A4, body, supplied={"s": S4, "t": S4})
+        return B.call(T, B.call(T, array_of([s[i] for i in range(4)]), array_of([t[i] for i in range(4)])), k)
+    return _toy("RestrictToyTwoSupplied", (("k", A4), ("s", Array(8, BL.BIT)), ("t", Array(8, BL.BIT))), A4, body,
+                supplied={"s": S_MARK, "t": S_MARK})
 
 
 def gapped() -> Program:
