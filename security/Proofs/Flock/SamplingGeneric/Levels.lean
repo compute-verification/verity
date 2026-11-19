@@ -202,6 +202,25 @@ namespace Claims.SamplingGeneric
 open Claims
 open Claims.Sampling
 
+namespace CompiledLev
+
+variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+/-- With at most two levels on every statement, no level is a middle one. -/
+theorem mid_eq_zero {L : CompiledLev Coin A} (h : ∀ s Pt Lv, L.levels s Pt = some Lv → Lv.levels.length ≤ 2)
+    (x : Msg) : L.mid x = 0 := by
+  unfold CompiledLev.mid
+  rcases hp : L.parse x with _ | s
+  · rfl
+  rcases hq : L.partition s with _ | Pt
+  · simp [hq]
+  rcases hl : L.levels s Pt with _ | Lv
+  · simp [hq, hl]
+  simp [hq, hl, h s Pt Lv hl]
+
+end CompiledLev
+
 namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
@@ -276,6 +295,11 @@ theorem sessions_liftLev (hreal : LevelsRealizeOne) {H : Msg → Msg} {L : Compi
   opens x s Pt Lv Ω Pv ω r u xS vS w hp hq hLv _ hacc hu hsess hR := by
     obtain ⟨b, hb, hc⟩ := S.opens x s Pt Ω Pv ω r u xS vS w hp hq (liftLev_levels hLv).1 hacc hu hsess hR
     exact ⟨b, u, b, hb, rfl, hb, hc⟩
+  nested x j hj := absurd hj (by
+    rw [CompiledLev.mid_eq_zero (fun _ _ Lv h => by
+      have h1 : Lv.levels.length = 1 := (liftLev_levels h).2.1
+      omega) x]
+    exact Nat.not_lt_zero j)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem rlev_liftLev_iff (hreal : LevelsRealizeOne) {H : Msg → Msg} {L : Compiled Coin A} {x : Msg}
@@ -554,6 +578,12 @@ theorem sessions_liftLev (hreal : LevelsRealizeTwo) {H : Msg → Msg} {L : Compi
       exact hρ
     · rw [top_liftLev hd]
       exact hrb
+  nested x j hj := absurd hj (by
+    rw [CompiledLev.mid_eq_zero (fun _ _ _ h => by
+      obtain ⟨_, -, -, -, -, -, l₁, l₂, hL, -⟩ := liftLev_levels h
+      rw [hL]
+      simp) x]
+    exact Nat.not_lt_zero j)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem rlev_liftLev_iff (hreal : LevelsRealizeTwo) {H : Msg → Msg} {L : CompiledTwo Coin A} {x : Msg}

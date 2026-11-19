@@ -142,8 +142,8 @@ open Claims.Sampling (AuditStatement Partition InScopeLev RLev slot topOf incorr
 /-- **A compiled sampled verifier at levels over `A`**: a compiled sampled verifier (`Compiled`) with the levels it
 evaluates on a statement and its partition (`levels`), the top partition (`top`), the samples of the levels above the
 last at a run's coins (`upper`, the `j`-th the blocks level `j` samples; the last level's sample is `checked`), and the
-rounds of each level's sample between the first and the last (`stages`, the `j`-th the rounds of level `j + 1`'s; the
-first level's are the rounds off every other, the last level's `secondStage`). -/
+rounds of each level's sample between the first and the last (`stages`, the `j`-th the rounds of level `j + 1`'s and
+of every level below it; the first level's are the rounds off every other, the last level's `secondStage`). -/
 structure CompiledLev (Coin : Type) (A : Arg Coin) extends Compiled Coin A where
   levels : (s : AuditStatement) → (Pt : Partition) → Option (Verity.Levels (Fin Pt.blocks.length))
   top : AuditStatement → Option Partition
@@ -158,6 +158,10 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 they are in scope with its top partition (`InScopeLev`). -/
 def Scope (L : CompiledLev Coin A) (x : Msg) : Prop :=
   ∃ s Pt Lv, L.parse x = some s ∧ L.partition s = some Pt ∧ L.levels s Pt = some Lv ∧ InScopeLev Pt Lv (L.top s) s
+
+/-- The levels strictly between the first and the last at `x`; `0` off scope and at one or two levels. -/
+def mid (L : CompiledLev Coin A) (x : Msg) : ℕ :=
+  ((L.parse x).bind fun s => (L.partition s).bind fun Pt => (L.levels s Pt).map fun Lv => Lv.levels.length - 2).getD 0
 
 /-! ## 6. The contract -/
 
@@ -214,6 +218,10 @@ def Unions (H : Msg → Msg) (L : CompiledLev Coin A) (x : Msg) (Pt : Partition)
 * `slots`, `shared`, `keys`, `refuses` (at `CompiledLev.Scope`), `fixed` and `runs`: `Compiled.Sessions`'.
 * `interior`: the interior roots a run shows are the same under fresh coins on the rounds of every level below the
   first, the last's included: the prover fixes them after the first level's coins.
+* `nested`: a middle level's rounds hold the last level's and every later middle level's, so rerunning a level redraws
+  every coin after it. Without it a middle rerun keeps the later coins: at three levels with coins `(i, m, z)`,
+  `stages 0 = {m}` and `secondStage = {z}`, a prover accepting exactly when `z = 0` has every middle rerun of an
+  accepted run accept while an inner rerun accepts with probability `1/|Coin|`.
 * `opens`: on a statement in scope, at an accepted run that samples `u` and shows its session, a witness in `A`'s
   relation at the session's statement reveals openings such that any values and interior values agreeing with those
   that pass (under the statement's roots, and under the interior roots the run showed for `u`'s top block `ρ`) make
@@ -253,12 +261,10 @@ structure Sessions (H : Msg → Msg) (L : CompiledLev Coin A) : Prop where
           (q.1 = s.roots → val q.2.pos = some q.2.val) ∧
           (q.1 = L.iroots x (run H Pv L.V x ω r).seen ρ → ι q.2.pos = q.2.val)) →
         s.prog.Correct (s.prog.refIn rb val ι) b
+  nested : ∀ x j, j < L.mid x →
+    L.secondStage x ⊆ L.stages x j ∧ (j + 1 < L.mid x → L.stages x (j + 1) ⊆ L.stages x j)
 
 /-! ## 7. The extractor at levels -/
-
-/-- The levels strictly between the first and the last at `x`; `0` off scope and at one or two levels. -/
-def mid (L : CompiledLev Coin A) (x : Msg) : ℕ :=
-  ((L.parse x).bind fun s => (L.partition s).bind fun Pt => (L.levels s Pt).map fun Lv => Lv.levels.length - 2).getD 0
 
 /-- The rounds of the middle levels' samples at `x`, from the second level down. -/
 def forks (L : CompiledLev Coin A) (x : Msg) : List (Finset (Fin (L.V.k x))) := (List.range (L.mid x)).map (L.stages x)
