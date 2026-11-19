@@ -86,6 +86,8 @@
   "Properties.Ties",
   "Properties.Flock.Nets",
   "Properties.Flock.EvalBool",
+  "Properties.Flock.DecodeBoolean",
+  "Properties.Flock.Circuit.Inline",
   "Properties.Assumptions",
   "Properties.Verity.ExecutionPhaseFiles",
   "Properties.Verity.Idle",

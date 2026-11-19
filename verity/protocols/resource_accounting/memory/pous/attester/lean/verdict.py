@@ -1,8 +1,8 @@
 """`memory_attester.verdict` computed by its Lean port, behind the Python's signature: `verdict(signed, commitment, openings,
 expected, trusted=..., schemes=...)` sends the record to `memory-challenger-verdict` (`MemoryChallenger.Judge`, built here
 with `lake` on first use) and returns its `Verdict`, the reasons the Python's word for word.  `memory_attester.verdict`
-stays the reference: `tests/test_verdict.py` holds this to it, and `benchmarks/pous/memory_attester/live.py`'s `judge`
-runs both on every session, records both, and rejects a session they disagree on.
+stays the reference, which `tests/test_verdict.py` holds this to; `benchmarks/pous/memory_attester/live.py` judges by
+this alone.
 
 The record goes as `to_json` writes its parts.  `expected` is read only at the labels the rounds name, so C's whole table
 never crosses; `schemes` goes by id, each one the port verifies (`MemoryChallenger.KNOWN_SCHEMES`: `memory_attester.LMS`

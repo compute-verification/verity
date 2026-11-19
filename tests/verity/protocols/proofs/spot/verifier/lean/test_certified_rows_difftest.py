@@ -19,7 +19,8 @@ from test_wires_difftest import PACKAGE, PIECES
 
 import verity_difftest as D
 from verity.circuits.codec import decode_program, descriptor_id, encode_program
-from verity.circuits.defs import REGISTRY, CompositeDefinition, bind, primitive
+from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
+from verity.circuits.ops.argmax import U16Add as Add16
 from verity.circuits.partition_object import evaluate, template_instances_query
 from verity.circuits.ports import In, Leaves, Out, Ports
 from verity.circuits.program import Program
@@ -31,11 +32,6 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 
 V16 = Value(16)
 ROW = Array(2, V16)
-
-
-@primitive("CertRowsTestAdd16", 1, (("a", V16), ("b", V16)), V16)
-def Add16(a, b):
-    return (a + b) & 0xFFFF
 
 
 def _a(ports=None, name: str = "CertRowsTestA"):
@@ -199,7 +195,7 @@ def test_a_program_without_marks_holds_no_labels_and_no_certified_entry(pieces):
 @pytest.mark.parametrize("where, ports, code", [
     ("root", {"ret": [[0, 1, {"certified": "out"}]]}, "certified-root"),
     ("root", {"inputs": [[0, 0, 2, {"certified": "in"}]]}, "certified-root"),
-    ("CertRowsTestAdd16_v1", {"params": [[0, 0, 1, {"certified": "in"}]]}, "certified-primitive"),
+    ("U16Add_v1", {"params": [[0, 0, 1, {"certified": "in"}]]}, "certified-primitive"),
     ("A", {"params": [[0, 0, 2, {"certified": "In"}]]}, "certified-malformed"),
     ("A", {"params": [[0, 0, 2, {"certified": 1}]]}, "certified-malformed"),
     ("A", {"params": [[0, 0, {"certified": "in"}]]}, "certified-malformed"),

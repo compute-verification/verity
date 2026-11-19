@@ -322,7 +322,6 @@ WIPE_EGRESS = "wipe-egress/v1"
 # Not yet read from here: PoUB
 POUB_P2_BLOCK4 = "p2-unit4/v0"
 STORE_ORDER = "store-order/v0"
-POUB_MONITORING_PERIOD = "verity/remote-bandwidth-monitoring-period/v1"
 POUB_PERIOD_CHALLENGER = "verity/remote-bandwidth-period/challenger/v1"
 POUB_APPEND = "verity/remote-bandwidth/append/v0"
 POUB_APPENDS = "verity/remote-bandwidth/appends/v0"

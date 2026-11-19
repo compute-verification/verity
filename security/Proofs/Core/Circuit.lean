@@ -162,25 +162,27 @@ theorem mem_incorrect {X : C.Trace} {u : Fin n} : u ∈ P.incorrect X ↔ ¬ P.C
   simp [incorrect]
 
 theorem mem_boundary {g : Fin C.N} :
-    g ∈ P.boundary ↔ g ∈ P.committed ∧ (C.isInput g = false ∨ ∃ h, g ∈ C.reads h) := by
+    g ∈ P.boundary ↔ g ∈ P.committed ∧ (C.isInput g = false ∨ g ∈ C.outputs ∨ ∃ h, g ∈ C.reads h) := by
   classical
-  simp only [boundary, io, Finset.mem_biUnion, Finset.mem_univ, true_and, Finset.mem_filter]
+  simp only [boundary, io, Finset.mem_union, Finset.mem_biUnion, Finset.mem_univ, true_and, Finset.mem_filter]
   constructor
-  · rintro ⟨u, hc, hu | ⟨h, -, hgh⟩⟩
+  · rintro (⟨u, hc, hu | ⟨h, -, hgh⟩⟩ | ho)
     · refine ⟨hc, Or.inl ?_⟩
       cases hi : C.isInput g
       · rfl
       · exact absurd ((P.input_iff g).2 hi) (by simp [hu])
-    · exact ⟨hc, Or.inr ⟨h, hgh⟩⟩
-  · rintro ⟨hc, hi | ⟨h, hgh⟩⟩
+    · exact ⟨hc, Or.inr (Or.inr ⟨h, hgh⟩)⟩
+    · exact ⟨P.mem_committed_of_output ho, Or.inr (Or.inl ho)⟩
+  · rintro ⟨hc, hi | ho | ⟨h, hgh⟩⟩
     · obtain ⟨u, hu⟩ := Option.ne_none_iff_exists'.1 fun hn => by simp [(P.input_iff g).1 hn] at hi
-      exact ⟨u, hc, Or.inl hu⟩
+      exact Or.inl ⟨u, hc, Or.inl hu⟩
+    · exact Or.inr ho
     · have hh : C.isInput h = false := by
         cases hi : C.isInput h
         · rfl
         · simp [C.input_reads h hi] at hgh
       obtain ⟨u, hu⟩ := Option.ne_none_iff_exists'.1 fun hn => by simp [(P.input_iff h).1 hn] at hh
-      exact ⟨u, hc, Or.inr ⟨h, hu, hgh⟩⟩
+      exact Or.inl ⟨u, hc, Or.inr ⟨h, hu, hgh⟩⟩
 
 theorem boundary_subset_committed : P.boundary ⊆ P.committed := fun _ hg => (P.mem_boundary.1 hg).1
 
@@ -243,8 +245,8 @@ theorem pos_inj {L : Layout C} {g h : Fin C.N} (hg : (P.pos L g).isSome) (he : P
 theorem io_subset_boundary (u : Fin n) : P.io u ⊆ P.boundary := by
   classical
   intro g hg
-  simp only [boundary, Finset.mem_biUnion, Finset.mem_univ, true_and]
-  exact ⟨u, hg⟩
+  simp only [boundary, Finset.mem_union, Finset.mem_biUnion, Finset.mem_univ, true_and]
+  exact Or.inl ⟨u, hg⟩
 
 /-- **A reader's input is its writer's output, at one position**: a gate of unit `w` that unit `r` reads as an input is
 also among `w`'s committed outputs, and both open it at the one position `pos g`, which every gate a unit opens has. -/
@@ -297,29 +299,22 @@ theorem restrict_run_iff_correct (X : C.Trace) (u : Fin n) :
   · rintro h g ⟨hc, hu⟩
     exact h g hc hu
 
-theorem rblk_iff {α : Type} (Sc : Hash.StringCommitment α) (H : Hash.Msg → Digest)
-    (enc : (g : Fin C.N) → BitVec (C.w g) → α) (L : Layout C) (c : Root → Sc.Com) (u : Fin n) (X : C.Trace)
-    (π : Fin C.N → Sc.Op) :
-    P.Rblk Sc H enc L c u X π ↔
-      (∀ g ∈ C.into (P.gates u) ∪ C.exits (P.gates u),
-          ∃ p, P.pos L g = some p ∧ Sc.Opens H (c p.1) p.2 (enc g (X g)) (π g)) ∧
-        P.Correct X u :=
-  and_congr Iff.rfl (P.restrict_run_iff_correct X u)
-
-/-- **How the boundary and the committed wires differ**: exactly by the input gates that no gate reads. -/
+/-- **How the boundary and the committed wires differ**: exactly by the input gates that no gate reads and that are
+not outputs. -/
 theorem mem_committed_sdiff_boundary {g : Fin C.N} :
-    g ∈ P.committed \ P.boundary ↔ C.isInput g = true ∧ ∀ h, g ∉ C.reads h := by
+    g ∈ P.committed \ P.boundary ↔ C.isInput g = true ∧ g ∉ C.outputs ∧ ∀ h, g ∉ C.reads h := by
   rw [Finset.mem_sdiff, P.mem_boundary]
   constructor
   · rintro ⟨hc, hb⟩
-    refine ⟨?_, fun h hgh => hb ⟨hc, Or.inr ⟨h, hgh⟩⟩⟩
+    refine ⟨?_, fun ho => hb ⟨hc, Or.inr (Or.inl ho)⟩, fun h hgh => hb ⟨hc, Or.inr (Or.inr ⟨h, hgh⟩)⟩⟩
     cases hi : C.isInput g
     · exact absurd ⟨hc, Or.inl hi⟩ hb
     · rfl
-  · rintro ⟨hi, hr⟩
+  · rintro ⟨hi, ho, hr⟩
     refine ⟨by simp [committed, hi], ?_⟩
-    rintro ⟨-, hi' | ⟨h, hgh⟩⟩
+    rintro ⟨-, hi' | ho' | ⟨h, hgh⟩⟩
     · simp [hi] at hi'
+    · exact ho ho'
     · exact hr h hgh
 
 theorem mem_cone {T : Finset (Fin C.N)} {u : Fin n} {t g : Fin C.N} (ht : t ∈ T) (hg : C.Feeds g t)
@@ -402,18 +397,6 @@ theorem correct_congr {X Y : C.Trace} {u : Fin n} (hXY : ∀ g ∈ P.io u, X g =
   have hio : g ∈ P.io u := by simp only [io, Finset.mem_filter]; exact ⟨hg, Or.inl hu⟩
   rw [hXY g hio, P.localEval_congr hXY g.val g rfl hu]
   exact hY g hg hu
-
-/-- **The free inputs are free**: `Rblk` reads the trace only at in(S) and out(S), so every other gate, a gate outside
-`S` that `S` never reads among them, takes any value without changing it. -/
-theorem rblk_congr {α : Type} (Sc : Hash.StringCommitment α) (H : Hash.Msg → Digest)
-    (enc : (g : Fin C.N) → BitVec (C.w g) → α) (L : Layout C) (c : Root → Sc.Com) (u : Fin n) {X X' : C.Trace}
-    (π : Fin C.N → Sc.Op) (hX : ∀ g ∈ C.into (P.gates u) ∪ C.exits (P.gates u), X g = X' g) :
-    P.Rblk Sc H enc L c u X π ↔ P.Rblk Sc H enc L c u X' π := by
-  have hio : ∀ g ∈ P.io u, X g = X' g := fun g hg => hX g (P.into_union_exits_eq_io u ▸ hg)
-  rw [P.rblk_iff, P.rblk_iff]
-  refine and_congr ?_ ⟨fun h => P.correct_congr (fun g hg => (hio g hg).symm) h, P.correct_congr hio⟩
-  refine forall₂_congr fun g hg => ?_
-  rw [hX g hg]
 
 /-! ## Refinement -/
 
@@ -692,18 +675,14 @@ theorem append_before_old (g h : Fin o.D.N) : (o.append b).P.Before (o.old b g) 
   rw [append_writerRank_old, append_writerRank_old]
   exact Iff.rfl
 
-/-- **The phase extends `o`'s boundary and no more**: it reads only `o`'s boundary gates among `o`'s, and declares
-no gate of `o` an output that was not one already. So every value it reads of `o`'s was committed in `o`'s phases. -/
-def Extends : Prop :=
-  (∀ g : Fin o.D.N, o.old b g ∈ b.E.outputs → g ∈ o.D.outputs) ∧
-    ∀ (i : Fin b.E.n) (g : Fin o.D.N), o.old b g ∈ (o.append b).D.reads (o.new b i) → g ∈ o.P.boundary
+theorem append_reads_new (i : Fin b.E.n) : (o.append b).D.reads (o.new b i) = b.E.reads i :=
+  Fin.append_right (fun g => (o.D.reads g).map (Fin.castAddEmb b.E.n)) b.E.reads i
 
 variable {o b}
 
-theorem append_mem_outputs_old (hout : ∀ g : Fin o.D.N, o.old b g ∈ b.E.outputs → g ∈ o.D.outputs)
-    (g : Fin o.D.N) : o.old b g ∈ (o.append b).D.outputs ↔ g ∈ o.D.outputs := by
+theorem append_mem_outputs_old (g : Fin o.D.N) : o.old b g ∈ (o.append b).D.outputs ↔ g ∈ o.D.outputs := by
   rw [append_outputs]
-  exact ⟨fun h => (Finset.mem_union.1 h).elim (mem_map_old o b _ g).1 (hout g),
+  exact ⟨fun h => (Finset.mem_union.1 h).elim (mem_map_old o b _ g).1 (b.outputs_old g),
     fun h => Finset.mem_union.2 (Or.inl ((mem_map_old o b _ g).2 h))⟩
 
 theorem append_unit_ne_old {g h : Fin o.D.N} :
@@ -716,18 +695,16 @@ theorem append_mem_boundary_old {g : Fin o.D.N} (hg : g ∈ o.P.boundary) : o.ol
   have hc' : o.old b g ∈ (o.append b).P.committed := by
     rcases (Finset.mem_filter.1 hc).2 with hi | ho | ⟨h, hgh, hne⟩
     · exact (o.append b).P.mem_committed_of_input (by rw [append_isInput_old]; exact hi)
-    · refine (o.append b).P.mem_committed_of_output ?_
-      rw [append_outputs]
-      exact Finset.mem_union.2 (Or.inl ((mem_map_old o b _ g).2 ho))
+    · exact (o.append b).P.mem_committed_of_output ((append_mem_outputs_old g).2 ho)
     · exact (o.append b).P.mem_committed_of_read ((append_mem_reads_old o b g h).2 hgh) (append_unit_ne_old.2 hne)
   refine (o.append b).P.mem_boundary.2 ⟨hc', ?_⟩
   rw [append_isInput_old]
-  rcases hr with hf | ⟨h, hgh⟩
+  rcases hr with hf | ho | ⟨h, hgh⟩
   · exact Or.inl hf
-  · exact Or.inr ⟨o.old b h, (append_mem_reads_old o b g h).2 hgh⟩
+  · exact Or.inr (Or.inl ((append_mem_outputs_old g).2 ho))
+  · exact Or.inr (Or.inr ⟨o.old b h, (append_mem_reads_old o b g h).2 hgh⟩)
 
-theorem mem_boundary_of_append (hext : o.Extends b) {g : Fin o.D.N} (hg : o.old b g ∈ (o.append b).P.boundary) :
-    g ∈ o.P.boundary := by
+theorem mem_boundary_of_append {g : Fin o.D.N} (hg : o.old b g ∈ (o.append b).P.boundary) : g ∈ o.P.boundary := by
   obtain ⟨hc, hr⟩ := (o.append b).P.mem_boundary.1 hg
   have hc := (Finset.mem_filter.1 hc).2
   rw [append_isInput_old] at hc hr
@@ -736,44 +713,43 @@ theorem mem_boundary_of_append (hext : o.Extends b) {g : Fin o.D.N} (hg : o.old 
     intro h hgh
     rcases o.append_cases b h with ⟨h, rfl⟩ | ⟨i, rfl⟩
     · exact Or.inl ⟨h, (append_mem_reads_old o b g h).1 hgh, rfl⟩
-    · exact Or.inr (hext.2 i g hgh)
-  have read : ∀ h, o.old b g ∈ (o.append b).D.reads h → g ∈ o.P.committed → g ∈ o.P.boundary := by
-    intro h hgh hcg
-    rcases key h hgh with ⟨h', hgh', -⟩ | hb
-    · exact o.P.mem_boundary.2 ⟨hcg, Or.inr ⟨h', hgh'⟩⟩
-    · exact hb
-  rcases hc with hi | ho | ⟨h, hgh, hne⟩
-  · obtain ⟨h, hgh⟩ := hr.resolve_left (by simp [hi])
-    exact read h hgh (o.P.mem_committed_of_input hi)
-  · have ho := (append_mem_outputs_old hext.1 g).1 ho
-    rcases hr with hf | ⟨h, hgh⟩
-    · exact o.P.mem_boundary.2 ⟨o.P.mem_committed_of_output ho, Or.inl hf⟩
-    · exact read h hgh (o.P.mem_committed_of_output ho)
-  · rcases key h hgh with ⟨h', hgh', rfl⟩ | hb
-    · exact read _ hgh (o.P.mem_committed_of_read hgh' (append_unit_ne_old.1 hne))
+    · rw [append_reads_new] at hgh
+      exact Or.inr (b.reads_boundary i g hgh)
+  have hcg : g ∈ o.P.committed := by
+    rcases hc with hi | ho | ⟨h, hgh, hne⟩
+    · exact o.P.mem_committed_of_input hi
+    · exact o.P.mem_committed_of_output ((append_mem_outputs_old g).1 ho)
+    · rcases key h hgh with ⟨h', hgh', rfl⟩ | hb
+      · exact o.P.mem_committed_of_read hgh' (append_unit_ne_old.1 hne)
+      · exact o.P.boundary_subset_committed hb
+  rcases hr with hf | ho | ⟨h, hgh⟩
+  · exact o.P.mem_boundary.2 ⟨hcg, Or.inl hf⟩
+  · exact o.P.mem_boundary.2 ⟨hcg, Or.inr (Or.inl ((append_mem_outputs_old g).1 ho))⟩
+  · rcases key h hgh with ⟨h', hgh', -⟩ | hb
+    · exact o.P.mem_boundary.2 ⟨hcg, Or.inr (Or.inr ⟨h', hgh'⟩)⟩
     · exact hb
 
 /-- **Appending a phase keeps the earlier phases' windows.** -/
-theorem append_window_old (hext : o.Extends b) {j : ℕ} (hj : j ≤ o.phases) :
+theorem append_window_old {j : ℕ} (hj : j ≤ o.phases) :
     (o.append b).P.window (o.append b).L j = (o.P.window o.L j).map (o.oldEmb b) := by
   ext x
   rcases o.append_cases b x with ⟨y, rfl⟩ | ⟨i, rfl⟩
   · rw [mem_map_old]
     unfold Partition.window
     rw [Finset.mem_filter, Finset.mem_filter, append_reg_old, append_phase_old]
-    exact and_congr ⟨mem_boundary_of_append hext, append_mem_boundary_old⟩ Iff.rfl
+    exact and_congr ⟨mem_boundary_of_append, append_mem_boundary_old⟩ Iff.rfl
   · refine iff_of_false (fun hx => ?_) (new_notMem_map o b _ i)
     have hx := (Finset.mem_filter.1 hx).2.2
     rw [append_phase_new] at hx
     omega
 
-/-- **Appending a phase that extends `o`'s boundary keeps every earlier boundary gate's position.** -/
-theorem append_pos_old (hext : o.Extends b) {g : Fin o.D.N} (hg : g ∈ o.P.boundary) :
+/-- **Appending a phase keeps every earlier boundary gate's position.** -/
+theorem append_pos_old {g : Fin o.D.N} (hg : g ∈ o.P.boundary) :
     (o.append b).P.pos (o.append b).L (o.old b g) = o.P.pos o.L g := by
   unfold Partition.pos
   rw [if_pos (append_mem_boundary_old hg), if_pos hg, append_reg_old, append_phase_old]
   rcases o.L.reg g with _ | ⟨i, r⟩
-  · rw [append_window_old hext (o.phase_le g), Finset.filter_map, Finset.card_map]
+  · rw [append_window_old (o.phase_le g), Finset.filter_map, Finset.card_map]
     simp only [Function.comp_def, oldEmb_apply, append_before_old]
   · rfl
 
