@@ -48,6 +48,7 @@ from typing import Any, BinaryIO, Protocol, TypeVar
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WC
+from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_party
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as W
 from verity.protocols.resource_accounting.memory.pous.verifier.period import decided_by, deployment, serve
@@ -246,7 +247,7 @@ what the fill doesn't reach counts in `R`."""
 
 def config(doc: Mapping[str, Any]) -> dict[str, Any]:
     """`period.json`'s `wipe` over `CONFIG`'s defaults; an unknown key or value raises."""
-    got = doc.get("wipe") or {}
+    got = doc.get(WP.COMPONENT) or {}
     if unknown := set(got) - set(CONFIG):
         raise ValueError(f"period.json's wipe has unknown keys {sorted(unknown)}: it takes {sorted(CONFIG)}")
     c = CONFIG | got
@@ -428,7 +429,7 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     tools, c = doc.get("tools") or {}, config(doc)
     extra = (("--streamer", tools.get("wipe-stream", "build"), *(("--threads", str(c["threads"])) if c["threads"] else ()))
              if c["streamer"] == "native" else ()) + (() if c["reads"] is None else ("--reads", str(c["reads"])))
-    party = side_of(doc, node, "wipe", wipe_party.command(Path(period_dir).parent / "wipe-challenger", extra),
+    party = side_of(doc, node, WP.COMPONENT, wipe_party.command(Path(period_dir).parent / "wipe-challenger", extra),
                     "the wipe")
     egress = None if c["egress_bits"] is None else sw.egress_units(c["egress_bits"])
     if party.host != node and c["trusted_sha512"] is None:
@@ -498,7 +499,7 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
                                                "uncertified": uncertified(
                                                    where, None if wipe.signed is None else egress_of(egress)),
                                                "window": window,
-                                               "wipe": c | {"foreign_labels": foreign, "k": k,
+                                               WP.COMPONENT: c | {"foreign_labels": foreign, "k": k,
                                                             "memory_bits": memory_bits(params),
                                                             "outside_bits": params.outside_bits,
                                                             "segments": params.labels // SEGMENT_LABELS, "tier": tier}},
@@ -513,7 +514,7 @@ def summary(record: Mapping[str, Any]) -> dict[str, Any]:
     the reads the challenger ran (`k`), where each party ran, the session's window on the challenger's clock (`t0`,
     `t1`), what the bound doesn't cover, and the fill's and the reads' figures on each side."""
     a, prover, session, fill = record["answer"], record["prover"] or {}, record["session"] or {}, record["report"].get("fill")
-    w, window = record["wipe"], (record.get("window") or {}).get("challenger") or {}
+    w, window = record[WP.COMPONENT], (record.get("window") or {}).get("challenger") or {}
     return {"verdict": a["verdict"], "reason": a["reason"], "public": a["public"], "decided_by": record["decided_by"],
             "key_sha512": record["report"]["key_sha512"], "key_pinned": record["report"]["key_pinned"],
             "k": w.get("k"), "segments": w["segments"], "tier": w["tier"],
