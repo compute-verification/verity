@@ -137,10 +137,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   (every proof block, plain), `zk` (every proof block, `--zk`, one docket), `sampled` (the one-stage audit, `LAYERS_K` proof blocks) or `all`,
   each on a CUDA build of `flock-circuit`, its scratch in `/dev/shm`. `layers.txt` holds its `ran with:` line, coins
   and parameters: a development challenger local to each session, never an auditor's device, so a measurement and not
-  an audit. The served table's benchmark results are `benchmarks/prove_path/run.sh`'s and `a5_llama1b_h200.sh`'s (`verity bench prove
-  layers`). Its rules are the three parts at the end of this file.
-- `proof_layers.sh`: the served table's first three benchmark results from a clone, as one command, from the bootstrap to
-  the printer's table, removing its work directory at the end ("The three benchmarks of the proof-layers table").
+  an audit. Its rules are the three parts at the end of this file.
 - `composite.py`: onsite's or remote's case from its subprotocols' cases, and the Lean verdict on it. Each `--cases DIR`
   is a private directory (0700, files 0600) holding one subprotocol's `case.json` (its `serve` line, with `blobs` the
   paths of the files it reads) and its own Lean answer on it, `answer.json`, whose `commitment` is its digest (or a
@@ -331,69 +328,6 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   blocks, their interiors replayed and registered, a second-stage sample per (replay block, template) cell, one Flock
   `--zk` session per template with link ports read at the boundary record, the Lean verifier, and the stream's outcome,
   with its negatives.
-
-## The three benchmarks of the proof-layers table
-
-The proof-layers table's first three benchmarks are three runs of `a5_llama1b_h200.sh` on one work directory: Flock (a
-plain audit), Flock with zero knowledge, and with sampling. They differ in their settings and in their partition file's
-sampling design (its `law` key): `stratified-rate:880/880` and `subset:880` take all 880 proof blocks of the window, and
-`subset:256` samples 256 of them. From a clone of `main` on an H200 node with at least 96 GB of host memory available
-and 96 GB of disk free under the work directory (75 GB left beside its peak of about 21 GB), at the tree's root:
-
-~~~sh
-A5_CARD=0 A5_CORES=40-59 WORK=/workspace/a5-layers GPU_LEASE_WHO=$USER bash benchmarks/one_stage/proof_layers.sh
-~~~
-
-Another lease may hold the example's cores: give `A5_CORES` cores no lease holds. `research run` can't ship a shallow
-clone: run it from a full clone. Each row prints an interim `config FAIL` before its `config PASS`; that is expected.
-
-`A5_CARD` is the jobs' card, `A5_CORES` their cores, `WORK` a new or empty work directory and `GPU_LEASE_WHO` who their
-leases are recorded for. `A5_STEPS=LO-HI`, optional, is the prover's batch: it sets each partition file's
-`scope.steps` to the request steps [LO, HI), so the window's proof blocks, which each layer's Flock statement holds
-(unset, or the file's own `1-8`, the file's [1, 8), 880 proof blocks); with other steps, the zero-knowledge layer's
-sampling design is `rate:1/1`, every proof block, in place of `subset:880`, and every member the table writes ends in
-the batch (`-b16` for 1-16). `A5_KEEP=DIR`, optional, a new directory outside `WORK`, keeps the sampling
-run's served window (its `serving-rows`, the prover's files included) there on the machine, for
-`benchmarks/recursion_e2e/stage.sh WINDOW=DIR UNITS=A-B`: the recursion over N of its proof blocks, whose served values it
-commits again under plain leaves, not the served commitment. `--out DIR` names where the results go (default `./out`, or the run's `out/` in a
-`research run`), and `--dry-run` makes every check and prints each step's command without running it. What it does:
-before anything is downloaded or built, it refuses a missing setting, a card that is not an H200, under 96 GB of host
-memory available, cores this job may not run on, under 96 GB free under `WORK`, a `WORK` that is not empty and results
-already in the results directory. Then it runs the eight steps below, stopping at the first that fails: the bootstrap,
-the three partition files, the three runs and the printer, whose table it keeps as `proof-layers.txt`. Its `steps.log`
-records each step's start, command, exit code and seconds; the peaks of the job's own memory (PSS over its session), of
-the machine's memory in use (other jobs' included) and of `WORK`'s size; and the largest process. At its end, success or
-failure, it copies the three runs' records and the bootstrap's to the results directory and removes `WORK`. It does not
-run the recursion benchmark. Its bootstrap is `kept_bootstrap.sh`'s: `pod_bootstrap.sh`'s environment kept on the node
-under `/workspace/cache/one-stage-bootstrap` (`BOOT_ROOT`), keyed by a digest of what it is built from (its `key.txt`),
-reused while the key matches and built anew when it doesn't, its venv and checkpoint before the card's lease and its taps
-under it; each run reads it under a shared lock. By hand, the same steps with the bootstrap in `WORK`:
-
-~~~sh
-export WORK=/workspace/a5-layers A5_CARD=0 A5_CORES=40-59 GPU_LEASE_WHO=$USER
-(cd adapters/vllm && taskset -c $A5_CORES bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B_INT8)
-for b in flock=stratified-rate:880/880 zk=subset:880 sampling=subset:256; do python3 -c 'import json, sys; p = json.load(open(sys.argv[1])); p["law"] = sys.argv[2]; json.dump(p, open(sys.argv[3], "w"))' benchmarks/one_stage/llama32_1b_rope_d64_l0.json "${b#*=}" "$WORK/partition-${b%%=*}.json"; done
-A5_COINS=challenger A5_PLAIN=1 A5_PARTITION=$WORK/partition-flock.json OUT=$WORK/out-flock taskset -c $A5_CORES bash benchmarks/one_stage/a5_llama1b_h200.sh
-A5_COINS=challenger A5_PARTITION=$WORK/partition-zk.json OUT=$WORK/out-zk taskset -c $A5_CORES bash benchmarks/one_stage/a5_llama1b_h200.sh
-A5_COINS=challenger A5_PARTITION=$WORK/partition-sampling.json OUT=$WORK/out-sampling taskset -c $A5_CORES bash benchmarks/one_stage/a5_llama1b_h200.sh
-uv run verity bench prove layers --flock $WORK/out-flock --zk $WORK/out-zk --sampling $WORK/out-sampling
-cp -r $WORK/out-flock $WORK/out-zk $WORK/out-sampling . && rm -rf "$WORK"
-~~~
-
-`taskset -c` gives each job its cores, and its builds, replay and audit run on them (`nproc`). On a node shared through
-`gpu-lease`, the bootstrap runs under a lease of the same card and cores instead, with
-`gpu-lease 1 --wait --on $A5_CARD --cores $A5_CORES --` in place of `taskset -c $A5_CORES`. The script leases `A5_CARD`
-for its Match capture and its Commit, and every lease it takes names `A5_CORES`, without which it refuses before any
-build; with no `gpu-lease` it takes that card directly. `gpu-lease status` shows each lease under `GPU_LEASE_WHO`;
-unset, the script records its leases as `vllm-sha512`. Unless `CUDA_HOME` is set, the script takes the machine's toolkit
-at 12.9, else at 13.0, else its default (`benchmarks/kernels/machine.py toolkit`). Where that
-toolkit lacks the CUDA math libraries' headers, it takes them from the venv's NVIDIA wheels, as the bootstrap's norm and
-router tap builds do. Each run's record is its `OUT`, which the printer reads as a directory, as it reads a
-`research run`'s id. The three `OUT` directories are inside `WORK`, so the last line copies them to the current
-directory before it removes `WORK` (the venv, the checkpoint, the taps and the Flock build).
-
-Development-only: the coins come from challengers run on the node, stand-ins for the auditor's device, so the printer
-calls the table a measurement, not an audit, and says its parameters are not stated.
 
 ## What you may change
 
