@@ -101,8 +101,12 @@ class Key:
         if not isinstance(self.value, bytes) or len(self.value) != 32:
             raise ValueError("a Key is 32 bytes")
 
+    def head(self, index: Index) -> bytes:
+        """Every block's message at `index` but its 8-byte counter: the stream's tag, the key and the index's frames."""
+        return _STREAM + self.value + _frames(index)
+
     def blocks(self, index: Index) -> Iterator[bytes]:
-        head = _STREAM + self.value + _frames(index)
+        head = self.head(index)
         c = 0
         while True:
             yield hashlib.sha512(head + c.to_bytes(8, "big")).digest()
@@ -116,6 +120,12 @@ class Key:
                 break
             out += block
         return bytes(out[:n])
+
+    def block(self, index: Index, c: int) -> bytes:
+        """Block `c` of the stream at `index`: its bytes [64c, 64c + 64), without the blocks before it."""
+        if isinstance(c, bool) or not isinstance(c, int) or not 0 <= c < 1 << 64:
+            raise ValueError("a block's counter is an int in [0, 2^64)")
+        return hashlib.sha512(self.head(index) + c.to_bytes(8, "big")).digest()
 
     def shard(self, index: Index) -> Key:
         """An independent sub-key for one shard of a population."""
