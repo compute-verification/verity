@@ -60,6 +60,7 @@ def agrees (b : Block) (c : Circuit) : V Bool := do
   pure (unitOk && c.name == b.name
     && (c.ports.extract 0 b.ins.size).map (fun p => (p.name, p.bits)) == b.ins
     && c.outPorts == b.outs
+    && (c.ports.extract b.ins.size c.ports.size).map (fun p => (p.name, p.words)) == b.outs
     && c.dummyOutputs == u.zero
     && (List.range c.ports.size).all fun p =>
         HmOut.rowBcZeroSalt (c.ports.getD p default) (HmOut.dummyRow c p) == c.dummyDigests.getD p ByteArray.empty)
@@ -84,6 +85,9 @@ def roundTrips : V Unit := do
 #guard match adder with
   | .ok b => (b.body.part b.name).toOption.isSome
   | .error _ => false
+-- an output port's row is a bit row of exactly its words, not padded to whole SHA-512 blocks
+#guard [1, 63, 64, 65].map (fun w => ((outPort "o" w).words, (outPort "o" w).bits)) ==
+  [(1, 16), (63, 1008), (64, 1024), (65, 1040)]
 -- a unit whose leaves are not the rows' words, or of a layout mode that isn't one
 #guard (compose { toy with ins := #[("x", 16), ("y", 16)] } hex128 hex128).toOption.isNone
 #guard match adder with
