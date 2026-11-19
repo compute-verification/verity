@@ -290,7 +290,7 @@ def flockSamplingDesign (samplingDesign : Json) (population : Nat) : Except Stri
 /-- `draw.rate_agreed`: under a rate rule `NUM/DEN`, the registered sampling design `law` when it is the rule's expansion
 `mine`'s law (`subset` or `stratified`) and meets the rate over the population's `strata` at amount 1 a proof block
 (`Flock.Draw.meetsRate`), so it covers every stratum of the population exactly; else why not. A stratified `law`'s `k`
-is the sum of its strata's `k_s`, so one design has one registered form. -/
+is the sum of its strata's `k_s`, so a law other than the rule's expansion has one registered form. -/
 def rateAgreed (num den : Nat) (strata : Array (String × Array (Nat × Nat))) (mine law : Json) : Except String Json := do
   let kind := getD mine "law"
   if !(jeq kind "subset" || jeq kind "stratified") || !jeq (getD law "law") kind then

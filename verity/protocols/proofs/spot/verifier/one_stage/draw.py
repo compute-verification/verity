@@ -240,7 +240,7 @@ def rate_agreed(num: int, den: int, strata: Sequence[tuple[str, Sequence[Sequenc
     """Under a rate rule NUM/DEN, the registered sampling design `law` when it is the rule's expansion `mine`'s law (subset or
     stratified) and meets the rate over the population's `strata` at amount 1 a proof block (`meets_rate`), so it covers
     every stratum of the population exactly; raises `ValueError` saying why not. A stratified `law`'s `k` is the sum of its
-    strata's `k_s`, so one design has one registered form. Lean `Spot.Draw.rateAgreed`."""
+    strata's `k_s`, so a law other than the rule's expansion has one registered form. Lean `Spot.Draw.rateAgreed`."""
     kind = mine.get("law") if isinstance(mine, Mapping) else None
     if kind not in ("subset", "stratified") or not isinstance(law, Mapping) or law.get("law") != kind:
         raise ValueError("rate: the registered law is not the rule's, subset or stratified")
