@@ -184,7 +184,7 @@ theorem partitionsOk_sound {P : Partition} {C : Prog} (hP : partitionsOk P C = t
 
 theorem oneStageOk_sound {ns : List ℕ} {o : OneStage} (h : oneStageOk ns o = true) : o.WellFormed ns := by
   cases o <;> simp_all [oneStageOk, OneStage.WellFormed]
-  exact fun a b hab => (h a b hab).1
+  exact fun a b hab => (h.2 a b hab).1
 
 theorem scopeOk_sound {C : Prog} {Pt : Partition} {d : Design.Two} (hs : scopeOk C Pt d = true) (s : AuditStatement)
     (hC : s.prog = C) : InScopeTwo Pt d s := by
