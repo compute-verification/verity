@@ -450,7 +450,10 @@
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
   "Proofs.Flock.Claims.ZkColsSession": "the masked reader on recorded `--zk` sessions (the `zk-sessions` fixture), run by hand (`lake env lean --run`): a probe, not a proof",
-  "Proofs.Flock.Claims.Recursion.IrDepSession": "IrDep at a deployed inner session, the Lean side of test_irdep_difftest.py, run by hand (`lake env lean --run`, or `lean_changed.py --try` with VERITY_IRDEP_ARGS): a probe, not a proof"
+  "Proofs.Flock.Claims.Recursion.IrDepSession": "IrDep at a deployed inner session, the Lean side of test_irdep_difftest.py, run by hand (`lake env lean --run`, or `lean_changed.py --try` with VERITY_IRDEP_ARGS): a probe, not a proof",
+  "Proofs.Flock.SpotFlock.InstanceStmt": "left out of the build: the reference statement is the first descriptor version, which the door refuses; the two-stage scope and `GateARow` have no witness that they are not vacuous until it is rebuilt as a second-version statement the door accepts",
+  "Proofs.Flock.SpotFlock.Honest.Ref": "left out of the build with the reference statement it reads, the first descriptor version, which the door refuses; the two-stage scope has no witness that it is not vacuous until that statement is rebuilt as a second-version statement the door accepts",
+  "Proofs.Flock.Bridge.GateARowChecks": "left out of the build with the reference statement it reads, the first descriptor version, which the door refuses; `GateARow` has no witness that it is not vacuous until that statement is rebuilt as a second-version statement the door accepts"
  },
  "runs": {
   "Proofs.Pouw.Bulk": {
