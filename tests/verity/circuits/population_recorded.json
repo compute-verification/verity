@@ -254,11 +254,11 @@
    "id_sha512": "4366093a44f4aad45a4d3b82b9cd90ada4f9768cea5eb380088b22749c9e2e9eac9d1a467c3a21bed5bc68aab6bd9dee527c5976ffc78e4ccc482ae386e588ef"
   },
   "TemplateInstances_v0|N=3|ScaledMmS8_v1{K=64,N=3,DOT={\"fn\":\"BlackwellS8ImmaDot32_v1\"}}": {
-   "digest": "d8541c68069febcd0496f2f62c9f12f0a0a46a410c8aafda84693ae10a180ea06d7628b5cee5b3a838655d6e1889d779513a87567bf71ca217e57b0238973d37",
+   "digest": "a8f4b86b0a673fabbbced6c5a8cddcb4f15e0f1b6dc401ac36faae8a011db41a362a04c1214e9ad2a46c30155b415a3f391b7abb89358bfefb512ee0f83867d8",
    "id_sha512": "4366093a44f4aad45a4d3b82b9cd90ada4f9768cea5eb380088b22749c9e2e9eac9d1a467c3a21bed5bc68aab6bd9dee527c5976ffc78e4ccc482ae386e588ef"
   },
   "TemplateInstances_v0|N=3|ScaledMmS8_v2{K=64,N=3,DOT={\"fn\":\"BlackwellS8ImmaDot32_v2\"}}": {
-   "digest": "920f4f41ecbf592e3e376d3fc774de59ce73bb9334bc42bff67f99e67ad7ec00d8a7dba225aa222d40eecab7da213b5c93345642aa87fcb49f580d5666856b0f",
+   "digest": "ddfacef507d0c4cd696f4068ed27849fceaef133ce1940858049362a49efd78e6d9c3e7d55148c6720f1094c94146984b59deb68f046ba7fbc211e3c180a8f2a",
    "id_sha512": "4366093a44f4aad45a4d3b82b9cd90ada4f9768cea5eb380088b22749c9e2e9eac9d1a467c3a21bed5bc68aab6bd9dee527c5976ffc78e4ccc482ae386e588ef"
   },
   "TemplateInstances_v1|N=1|BlackwellU8S8ImmaDot32_v2": {
@@ -514,11 +514,11 @@
    "id_sha512": "c6891f9296f3c329c58211d221f61df4bf93aa243159b30c26f43fcf29415d7a65781d8ade438af223697d0109bb68d7fc422d63b35b2a3c8feaed2c0185426c"
   },
   "TemplateInstances_v1|N=1|ScaledMmS8_v1{K=64,N=3,DOT={\"fn\":\"BlackwellS8ImmaDot32_v1\"}}": {
-   "digest": "fdf3fd56aa944306267b8e4bbaf49e76cf6f8082c58e6073e5f566bf09c9a94e0c6069ec0ed82b5fb1e58e1f8f5328dd192779d8e5ecf2b1944a71662788dfed",
+   "digest": "0aa3e1c9b6595245f2f782abfca55dd12bb05ed0db84287c3cdbe13c835d2d6d315f1e50cd920cebaf54995e97d216a4837711063b1aa9664b11ff3d0d4177da",
    "id_sha512": "468eb670aab13bac6b8d32f25c6d305899b3dcf3c24102d6e37e10ec7d72902259ba03ba64cfa82bf8b98f02fe4d10251137169380afc54018979df15601c51a"
   },
   "TemplateInstances_v1|N=1|ScaledMmS8_v2{K=64,N=3,DOT={\"fn\":\"BlackwellS8ImmaDot32_v2\"}}": {
-   "digest": "f57a152ddcca7899318d3fe9691e30d569fcc6c1098ebc4a3cae86314c67ce98412e913770eca09b9e2e69982fdd3a9dea303442980b56969a07dd5cadd2cc63",
+   "digest": "f9afb30c47acf0c4feb2f8f136912fce9b8871c7e11e1b7d4acb97966adf4396b6fee4a8e6d663346481116a086b12d7728444154641b8aedce2b4a8e7d6c432",
    "id_sha512": "b502dd61a1ab97543f296ecef36ef5447fbcaecc5d4581a6e988a179a96765895f1603fb52f0a2ac45ed5b2c084ebcc74aaf823a08d693bc17e3d165dc566af7"
   },
   "TemplateInstances_v1|N=3|BlackwellU8S8ImmaDot32_v2": {
@@ -774,11 +774,11 @@
    "id_sha512": "304383885919158e61685019e73ab74e8f0bb62b8bbe4d4a0066dde387a29b34a5c0d8d5b0b8432a996016ce710ee359ec2358129230ed7cf9906460dd47c6b6"
   },
   "TemplateInstances_v1|N=3|ScaledMmS8_v1{K=64,N=3,DOT={\"fn\":\"BlackwellS8ImmaDot32_v1\"}}": {
-   "digest": "1619eb1f37d9e9ee27ff15c59fcca3303914ae5d856ae70a0c526a35af76bd11f64eb74e05a3e33baaf2f88ccfde994a8bd269d1d01cfdaa4be733e2e1e1cd7e",
+   "digest": "dff4b5c867f5eb930a4e5c7ddd7db2abe7f2fa709d86decbc166d9dfc85bdeff481e2f9f003f93659c481fd2400d0d659bcbc58e3051a5ab4160594f4b0ab02a",
    "id_sha512": "5f3aaf372f504a80a352869d572446503db40573b7dc15c5332b962d7fab358831e27f2d96dab6a64547e22f68c45aaa7430dbf42bca762f8a4cbb0fb1e25b86"
   },
   "TemplateInstances_v1|N=3|ScaledMmS8_v2{K=64,N=3,DOT={\"fn\":\"BlackwellS8ImmaDot32_v2\"}}": {
-   "digest": "05d42f7821714fa44981920bfcb39b6c96f50b9eaa21399225837fc38f3d38ea4d7ad155b41b921972df952281eb1d2a24e8c7a9e2a071b4f30de6ab392b64de",
+   "digest": "6db6895d77764a2cbf196b59e364a17697df3797628d52a70702bc55663c75760e6d7c70c5285937c8d735c40447f70afe1409f8e15e2f7b617d40b1926e2454",
    "id_sha512": "924ed731384b1cb83da1d786172a9267f4e9559e89b524881627f21b988cca5d38f165f887f06e01728f32c8e37b6030852c8049e8ba428e610290d364100be6"
   },
   "TemplatePopulations_v0|1,2|BlackwellU8S8ImmaDot32_v2|S8Dot_v2{K=64,L=64,T0=\"zero\",C=null,DOT={\"fn\":\"BlackwellS8ImmaDot32_v2\"},A=[-127,127],B=[-127,127],TAIL=[],TDOT=null,NOISE=\"none\",LIMBS=\"none\",COMMIT=\"final\"}": {
@@ -1010,7 +1010,7 @@
    "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
   },
   "TemplatePopulations_v0|1,2|ScaledMmS8_v2{K=64,N=3,DOT={\"fn\":\"BlackwellS8ImmaDot32_v2\"}}|GfScale_v1{L=2}": {
-   "digest": "451fb2737169b6ab8dc5c472283957972955cf37ffe3c52d5a267fa55a878535196d38cc3fb6fffc55f1f0ee59b5ad63b27a66d68f7a73c37e25878a68e8701c",
+   "digest": "49d0b1ff1ea2d029dbb7b7b2425e2161c3b91f1f33797e3534ea6e8c15b909ca16c826e8de1d531daa681d856006ce569845b45b37c24b782618951370266154",
    "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
   },
   "TemplatePopulations_v1|1,2|BlackwellU8S8ImmaDot32_v2|S8Dot_v2{K=64,L=64,T0=\"zero\",C=null,DOT={\"fn\":\"BlackwellS8ImmaDot32_v2\"},A=[-127,127],B=[-127,127],TAIL=[],TDOT=null,NOISE=\"none\",LIMBS=\"none\",COMMIT=\"final\"}": {
@@ -1242,7 +1242,7 @@
    "id_sha512": "234a695512c98f1a2980ebb472093138fc149fea9503fecf889e6f85736d0d88dd5780c317ff56462729badf26cf42000751dd2f833ebc2f89445a2fb903f83a"
   },
   "TemplatePopulations_v1|1,2|ScaledMmS8_v2{K=64,N=3,DOT={\"fn\":\"BlackwellS8ImmaDot32_v2\"}}|GfScale_v1{L=2}": {
-   "digest": "ab8c475b63611c1eca377fad9e37ea17d7e2aba6ce4fafedab94db870abde1fec322cd33c89f706feda6b3f65d58f33c0b6e024815f9986264b61c07937154c0",
+   "digest": "fcb01675479a97601d60548d5594bb58d9abcbedbdcddf80901c25a889bb47d5e333861942daddc62b2ffdfbefd18fd6cf009d4a230dabc6cd1ffc1e81734c36",
    "id_sha512": "8fc1b9201ed4551713b26fe38ea6af0a12dcfef392a33c794ebb7b824a70ffa20b0352ac453fc3dcad91920153908a7000dd99b47fff11ee6f1b1bdf056b7558"
   }
  }
