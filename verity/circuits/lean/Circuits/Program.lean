@@ -1439,10 +1439,10 @@ private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form
         | none => throw s!"{pre}: scan counts"
       else pure 0
     let earlier := fun (k2 a : Nat) => if k2 < nodes.size then nodes[k2]!.args[a]?.map (·.seq) else none
-    let leavesK := leavesFor recut (← get).defs nodes leaves
     let args ← liftV (ajs.mapM fun aj => do
       let ty ← at_ desc.types ((aj.getObjVal? "type").toOption.getD Json.null) "types"
-      let ps ← match parseParts ((aj.getObjVal? "refs").toOption.getD Json.null) leavesK earlier with
+      let ps ← match parseParts ((aj.getObjVal? "refs").toOption.getD Json.null) (leavesFor recut st.defs nodes leaves)
+          earlier with
         | .ok ps => pure ps
         | .error e => throw s!"{pre}: {e}"
       let seq := Seq.ofParts ps
