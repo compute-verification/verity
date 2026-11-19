@@ -9,7 +9,8 @@ public import Proofs.Properties.InferenceOnly.RecordOwn
 A unit is a member of a root node that is no input node, a call or a batch. Where `Record.SecurityProofs.OwnRuns` holds, a leaf of
 one of its parameters resolves in two steps: up to the root, at a reference of the node's argument (`rs_unit`), and
 there to a gate of an input node, since the reference lies in a part that is a run of an input node's leaves
-(`arg_leaf`). So the leaf is gate `j` of input node `n` (`unit_leaf`), and no two leaves of units are one gate
+(`arg_leaf`). A reference to a leaf of an input node resolves to that node's gate of the leaf in whatever part it
+lies (`ref_leaf`, `arg_part`); in a strided part, the leaf a member's stretch reads (`strided_leaf`). So the leaf is gate `j` of input node `n` (`unit_leaf`), and no two leaves of units are one gate
 (`unit_leaf_inj`): a gate of the root names its node and the leaf (`node_of_gate`), a leaf of an input node lies in
 one run at one place (`leafAt_inj`, from `Record.SecurityProofs.runs_apart`), and a batch's members read an argument
 at references of their own (`memberIdx_inj`).
@@ -219,6 +220,103 @@ theorem argIdx_lt (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode by
     rw [hf] at hop
     exact hop
 
+/-- **A reference of an argument of a root node to a leaf of an input node resolves from the root to that node's gate
+of the leaf**: the reference is `⟨false, n, j⟩`, `n` an input node of the root, a primitive or a batch, and `j` within
+its leaves, whatever part of the argument the reference lies in. -/
+theorem ref_leaf (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
+    (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) {k : ℕ}
+    (hk : k < (P.defs[P.root]!).body.nodes.size) {i : ℕ}
+    (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size) {x : ℕ}
+    (hx : x < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).count) {n j : ℕ}
+    (hget : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get x = ⟨false, n, j⟩)
+    (hn : n < (P.defs[P.root]!).body.nodes.size)
+    (hin : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true)
+    (hform : ((P.defs[P.root]!).body.nodes[n]!).form = .prim ∨ ((P.defs[P.root]!).body.nodes[n]!).form = .batch)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
+    j < ((P.defs[P.root]!).body.nodes[n]!).out.leaves ∧
+      (P.defs[P.root]!).body.offsets[n + 1]! =
+        (P.defs[P.root]!).body.offsets[n]! + ((P.defs[P.root]!).body.nodes[n]!).out.leaves ∧
+      resolveStep P (P.rootScope, (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get x) =
+        .ok (.inl ((P.defs[P.root]!).body.offsets[n]! + j)) := by
+  obtain ⟨hroot, hB, hL, -, -, -⟩ := decoded_walk bytes P hdec hov hlay
+  have hbody : BodyOk P P.root := hB P.rootScope ⟨rfl, rfl, rfl⟩
+  obtain ⟨-, hargs, -, -, -⟩ := hbody.1 k hk
+  have href := (hargs i x hx).2 (by rw [hget])
+  rw [hget] at href
+  have hjlt : j < ((P.defs[P.root]!).body.nodes[n]!).out.leaves := href.2
+  obtain ⟨-, hc, hno⟩ := decoded_root bytes P hdec hrc n hn
+  have hprim : (P.defs[((P.defs[P.root]!).body.nodes[n]!).fn]!).prim = true := by
+    have h0 := hin
+    unfold Desc.isInputNode at h0
+    exact (Bool.and_eq_true_iff.1 h0).1
+  obtain ⟨hleaves, hg1, hol⟩ := input_node _ _ hc hno hprim hform
+  have hlaid := (hL P.root hroot.1 hroot.2).2.2 n hn
+  refine ⟨hjlt, by rw [hlaid, hg1, hleaves, Nat.mul_one], ?_⟩
+  rw [hget]
+  rcases hform with hf | hf
+  · have hj0 : j = 0 := by
+      rw [hleaves, prim_members _ (Or.inl hf)] at hjlt
+      omega
+    rw [hj0, Nat.add_zero]
+    exact rs_root_prim P n 0 hf
+  · exact rs_root_batch P n _ hf hprim hol
+
+/-- **A reference of an argument of a root node lies in one of the argument's parts**, at its place in the part. -/
+theorem arg_part (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
+    (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) {k : ℕ}
+    (hk : k < (P.defs[P.root]!).body.nodes.size) {i : ℕ}
+    (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size) {x : ℕ}
+    (hx : x < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).count)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
+    ∃ q < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts).size,
+      ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]! ≤ x ∧
+      x < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]! +
+        ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]!).count ∧
+      (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get x =
+        ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]!).get
+          (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) := by
+  obtain ⟨-, -, -, -, -, harg⟩ := decoded_walk bytes P hdec hov hlay
+  have hs := harg P.root (decoded_walk bytes P hdec hov hlay).1.1 k hk i hi
+  have hx' : x < (Seq.ofParts (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts).count := by
+    rw [← hs]
+    exact hx
+  obtain ⟨q, hq, h1, h2, hget⟩ := Walk.seq_get _ hx'
+  rw [← hs] at h1 h2 hget
+  exact ⟨q, hq, h1, h2, hget⟩
+
+/-- **A reference in a strided part over an input node resolves to the node's gate at the part's leaf**: reference `x`
+of argument `i` of root node `k` lies in part `q`, `.strided false n b inner os is c`, at `y = x − starts[q]`, and
+reads leaf `b + ⌊y / inner⌋ · os + (y mod inner) · is` of input node `n`, a primitive or a batch: the stretch a
+member reads (`Record.stretchOf`), as the record's `nodes` stage holds a declared node's readers to. -/
+theorem strided_leaf (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
+    (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) {k : ℕ}
+    (hk : k < (P.defs[P.root]!).body.nodes.size) {i : ℕ}
+    (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size) {x q : ℕ}
+    (hx : x < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).count)
+    (hq1 : ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]! ≤ x)
+    (hq2 : x < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]! +
+        ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]!).count)
+    (hget : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get x =
+        ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]!).get
+          (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!))
+    {n : ℕ} {b os is : ℤ} {inner c : ℕ}
+    (hpart : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]! = .strided false n b inner os is c)
+    (hn : n < (P.defs[P.root]!).body.nodes.size)
+    (hin : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true)
+    (hform : ((P.defs[P.root]!).body.nodes[n]!).form = .prim ∨ ((P.defs[P.root]!).body.nodes[n]!).form = .batch)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
+    let y := x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!
+    let j := (b + ((y / inner : ℕ) : ℤ) * os + ((y % inner : ℕ) : ℤ) * is).toNat
+    j < ((P.defs[P.root]!).body.nodes[n]!).out.leaves ∧
+      resolveStep P (P.rootScope, (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get x) =
+        .ok (.inl ((P.defs[P.root]!).body.offsets[n]! + j)) := by
+  intro y j
+  have hget' : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get x = ⟨false, n, j⟩ := by
+    rw [hget, hpart]
+    rfl
+  obtain ⟨hj, -, hres⟩ := ref_leaf bytes P hdec hov hlay hk hi hx hget' hn hin hform
+  exact ⟨hj, hres⟩
+
 section
 variable (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
   (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (hown : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
@@ -237,13 +335,7 @@ theorem arg_leaf {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
         (P.defs[P.root]!).body.offsets[n]! + ((P.defs[P.root]!).body.nodes[n]!).out.leaves ∧
       resolveStep P (P.rootScope, (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get x) =
         .ok (.inl ((P.defs[P.root]!).body.offsets[n]! + j)) := by
-  obtain ⟨hroot, hB, hL, -, -, harg⟩ := decoded_walk bytes P hdec hov hlay
-  have hs := harg P.root hroot.1 k hk i hi
-  have hx' : x < (Seq.ofParts (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts).count := by
-    rw [← hs]
-    exact hx
-  obtain ⟨q, hq, h1, h2, hget⟩ := Walk.seq_get _ hx'
-  rw [← hs] at h1 h2 hget
+  obtain ⟨q, hq, h1, h2, hget⟩ := arg_part bytes P hdec hov hlay hk hi hx
   have hunit : (P.defs[P.root]!).body.nodes[k]! ∈ unitsOf P := by
     refine List.mem_filter.2 ⟨?_, by simp [hu]⟩
     rw [getElem!_pos _ k hk]
@@ -258,37 +350,12 @@ theorem arg_leaf {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
   obtain ⟨⟨n, base, count⟩, hr⟩ := part_run hown hunit hpart
   obtain ⟨hqe, hn, hin, hform⟩ := runOf_some hr
   have hqe' : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]! = .affine false n base count := hqe
-  have hn' : n < (P.defs[P.root]!).body.nodes.size := hn
-  have hin' : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true := hin
-  have hform' : ((P.defs[P.root]!).body.nodes[n]!).form = .prim ∨
-      ((P.defs[P.root]!).body.nodes[n]!).form = .batch := hform
   rw [hqe'] at h2 hget
   have h2' : x < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]! + count := h2
   have hget' : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get x =
       ⟨false, n, base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!)⟩ := hget
-  have hbody : BodyOk P P.root := hB P.rootScope ⟨rfl, rfl, rfl⟩
-  obtain ⟨-, hargs, -, -, -⟩ := hbody.1 k hk
-  have href := (hargs i x hx).2 (by rw [hget'])
-  rw [hget'] at href
-  have hjlt : base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) <
-      ((P.defs[P.root]!).body.nodes[n]!).out.leaves := href.2
-  obtain ⟨-, hc, hno⟩ := decoded_root bytes P hdec hrc n hn'
-  have hprim : (P.defs[((P.defs[P.root]!).body.nodes[n]!).fn]!).prim = true := by
-    have h0 := hin'
-    unfold Desc.isInputNode at h0
-    exact (Bool.and_eq_true_iff.1 h0).1
-  obtain ⟨hleaves, hg1, hol⟩ := input_node _ _ hc hno hprim hform'
-  have hlaid := (hL P.root hroot.1 hroot.2).2.2 n hn'
-  refine ⟨n, base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!),
-    ⟨q, base, count, hq, hr, h1, h2', rfl⟩, hn', hjlt, by rw [hlaid, hg1, hleaves, Nat.mul_one], ?_⟩
-  rw [hget']
-  rcases hform' with hf | hf
-  · have hj0 : base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) = 0 := by
-      rw [hleaves, prim_members _ (Or.inl hf)] at hjlt
-      omega
-    rw [hj0, Nat.add_zero]
-    exact rs_root_prim P n 0 hf
-  · exact rs_root_batch P n _ hf hprim hol
+  obtain ⟨hjlt, hol, hres⟩ := ref_leaf bytes P hdec hov hlay hk hi hx hget' hn hin hform
+  exact ⟨n, _, ⟨q, base, count, hq, hr, h1, h2', rfl⟩, hn, hjlt, hol, hres⟩
 
 /-- **A leaf of a unit's parameter is a leaf of an input node, and resolves to that node's gate of the leaf.** The
 unit is member `m` of root node `k`, a call or a batch that is no input node; the leaf is leaf `t` of its parameter
