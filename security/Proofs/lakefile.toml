@@ -254,4 +254,5 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Verity.SampledTwo.Claim", "Proofs.Properties.Verity.SampledTwo.DevAgrees",
   "Proofs.Properties.Verity.SampledTwo.InputMap", "Proofs.Properties.Verity.SampledTwo.Projection",
   "Proofs.Properties.Verity.SampledTwo.Reading", "Proofs.Properties.Verity.SampledTwo.SecondRead",
-  "Proofs.Properties.Verity.SampledTwo.Steps", "Proofs.Properties.Verity.SampledTwo.Subprotocol"]
+  "Proofs.Properties.Verity.SampledTwo.Steps", "Proofs.Properties.Verity.SampledTwo.Subprotocol",
+  "Proofs.Flock.SpotFlock.RunsAs.StampedReads"]
