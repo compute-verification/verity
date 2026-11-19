@@ -106,13 +106,49 @@ theorem descParseWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Th
   sim_walk
   iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk)
 
+/-- `discard`'s `mapConst` on `StateT`: a bind and a `pure`, so it needs no lawful monad. -/
+theorem Sim.st_mapConst (S : Sim M N) {σ α β : Type} (b : β) {x : StateT σ M α} {y : StateT σ N α}
+    (h : (S.st σ).R x y) : (S.st σ).R (Functor.mapConst b x) (Functor.mapConst b y) :=
+  fun s => S.bind (h s) fun p => S.pure (b, p.2)
+
+theorem digestGo_sim (S : Sim M N) {h : ByteArray → M ByteArray}
+    {h' : ByteArray → N ByteArray} (hh : ∀ b, S.R (h b) (h' b)) (ddefs : Std.HashMap String Json)
+    (callees types : Array Json) (bm : Std.HashMap String String) :
+    ∀ n fid, (S.st _).R (Program.digestGo h ddefs callees types bm n fid) (Program.digestGo h' ddefs callees types bm n fid)
+  | 0, fid => by
+    unfold Program.digestGo
+    exact (S.st _).throw _
+  | n + 1, fid => by
+    unfold Program.digestGo
+    simp -zeta only [discard, Functor.discard]
+    sim_walk [Sim.st_mapConst S _ (digestGo_sim S hh ddefs callees types bm n _), S.monadLift_st (hh _), hh _]
+    iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals
+      sim_walk [Sim.st_mapConst S _ (digestGo_sim S hh ddefs callees types bm n _), S.monadLift_st (hh _), hh _])
+
+theorem definitionDigestsWith_sim (S : Sim M N) {h : ByteArray → M ByteArray}
+    {h' : ByteArray → N ByteArray} (hh : ∀ b, S.R (h b) (h' b)) (j : Json) :
+    S.R (Program.definitionDigestsWith h j) (Program.definitionDigestsWith h' j) := by
+  unfold Program.definitionDigestsWith
+  simp -zeta only [discard, Functor.discard]
+  sim_walk [Sim.st_mapConst S _ (digestGo_sim S hh _ _ _ _ _ _)]
+  iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals
+    sim_walk [Sim.st_mapConst S _ (digestGo_sim S hh _ _ _ _ _ _)])
+
+/-- The program digest under the two hashers (`Program.programDigestWith`). -/
+theorem programDigestWith_sim (S : Sim M N) {h : ByteArray → M ByteArray}
+    {h' : ByteArray → N ByteArray} (hh : ∀ b, S.R (h b) (h' b)) (j : Json) :
+    S.R (Program.programDigestWith h j) (Program.programDigestWith h' j) := by
+  unfold Program.programDigestWith
+  sim_walk [definitionDigestsWith_sim S hh j, hh _]
+  iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [definitionDigestsWith_sim S hh j, hh _])
+
 theorem programDecodeWith_sim (S : Sim M N) (tM : Throws M) (tN : Throws N) {hs : Flock.Hashes M}
     {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (bytes : ByteArray) :
     S.R (Program.decodeWith hs.sha512 bytes) (Program.decodeWith hs'.sha512 bytes) := by
   unfold Program.decodeWith
   simp -zeta only [tM.bind, tN.bind]
-  sim_walk
-  iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk)
+  sim_walk [programDigestWith_sim S hh.sha512 _]
+  iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [programDigestWith_sim S hh.sha512 _])
 
 theorem hmClassOfWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs')
     (bytes : ByteArray) (head : String) (mj : Json) :
