@@ -106,13 +106,14 @@ def _max_tokens(d: dict) -> list[int] | None:
 
 
 def live_reads(d: dict, s: int, m: int | None = None) -> dict:
-    """Round s's live@<s> ``--registered`` file (`live_reads.reads_file`) at the window's tables, its session, the
+    """Round s's live@<s> ``--registered`` file as the verifier holds it (`live_reads.reads_file`, no positions) at the window's tables, its session, the
     manifest's m_s (or `m`) and the max_tokens its period's open committed."""
     raw, live = bytes.fromhex(d["descriptor"]), Cr.live_of(bytes.fromhex(d["live"]["descriptor"]))[0]
     program, prefix, steps = hashlib.sha512(raw).hexdigest(), Cr._prefix(raw), len(d["rounds"])
     roots = {e["value"]: e["root"] for e in d["entries"]}
     ms = m if m is not None else d["calls"][s * (len(d["calls"]) // steps)][Cr.SERVED_ROWS]
-    return LR.reads_file(program, live["T"], steps, s, roots, d["window"]["root"], _session(d), ms, prefix, _max_tokens(d))
+    return LR.reads_file(program, live["T"], steps, s, roots, d["window"]["root"], _session(d), ms, prefix, _max_tokens(d),
+                         positions=False)
 
 
 def prove_live(d: dict, to: Path, m: dict[int, int] | None = None) -> dict:
