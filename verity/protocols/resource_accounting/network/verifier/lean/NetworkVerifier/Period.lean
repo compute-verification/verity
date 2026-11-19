@@ -797,16 +797,19 @@ def auditCheck (i : Nat) (a : Audit) (reg : Json) (x : Core.Answer) : Found Fact
 def auditChecks (p : Params) (c : Commitment) (e : Evidence) : Array (Found Facts) :=
   ((p.audits.zip c.audits).zip e.audits).zipIdx.map fun (((a, reg), x), i) => auditCheck i a reg x
 
+/-- Execution phase `w`'s slot finding, where `wired` holds: a refusal unless each entry is its slot's (`slotted`). -/
+def slotCheck (p : Params) (s : Schedule) (audits : Array Json) (w : Nat) (reg : Json) :
+    Option (Core.Verdict × String) :=
+  if slotted p.audits s audits reg then none else
+    some (.reject, s!"window {w}: an entry is not its slot's: unit j · {s.window / s.every} + b of the wired entries \
+      template does not read its occ from leaf 4j + 2 of a {scanSlotsId} member whose state is row b · {s.every} of \
+      one input node (slotRead)")
+
 /-- Execution phase `w`'s wiring finding in the rows form: a refusal unless its scan's Programs' row is a compute
-audit's slot entries (`wired`). -/
+audit's slot entries (`wired`), then `slotCheck`'s. -/
 def wiredCheck (p : Params) (s : Schedule) (audits : Array Json) (w : Nat) (reg : Json) :
     Option (Core.Verdict × String) :=
-  if wired p.audits s audits reg then
-    if slotted p.audits s audits reg then none else
-      some (.reject, s!"window {w}: an entry is not its slot's: chunk j of the audit's entries template reads another \
-        lane's occupancy than lane j's, or another row than its boundary's anchor's: each unit j · {s.window / s.every} \
-        + b reads its occ from leaf 4j + 2 of a {scanSlotsId} member whose state is row b · {s.every} of one input \
-        node (slotRead), so its entry is the one slot j · {s.window / s.every} + b's Program computed")
+  if wired p.audits s audits reg then slotCheck p s audits w reg
   else
     some (.reject, s!"window {w}: the scan's prog is no compute audit's slot entries: its scan/prog<j> entries' roots \
       and domains, j < {s.programSlots}, are not one audit's {slotEntryId} or {selectEntryId} entries ports \
@@ -1354,7 +1357,7 @@ def protocol : Core.Protocol where
 -- and its eps is the scan's δ = 2^-64 and δ_i: 2^-63
 #guard
   let scan : Scan := ⟨32, 0, 300, 512, 8 * 112, 0⟩
-  let p : Params := ⟨#[⟨0, 0, "", 16, #[]⟩], #[], 0, 1, "", Lms.deployed, #[], "",
+  let p : Params := ⟨#[⟨0, 0, "", 16, #[], #[]⟩], #[], 0, 1, "", Lms.deployed, #[], "",
     .rows ⟨0, 0, 0, 0, 16, 0, 0, 4, 0, 0, 32, none, none, none, false⟩ .empty scan, 1, none⟩
   let at_ := fun (q : String) => Json.mkObj [("roots", Json.arr #[
     Json.mkObj [("port", .str q), ("root", .str "r"), ("domain", .str "d")]])]

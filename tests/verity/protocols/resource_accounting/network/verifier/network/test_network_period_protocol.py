@@ -980,6 +980,39 @@ def test_a_scan_whose_prog_is_no_slot_entries_is_refused(server, monkeypatch):
         refused_by_lean_alone(build("rows-prog-unwired", n, small=True), server, PC.UNWIRED)
 
 
+#: `build`'s seeds at which `rows-prog-unslotted`'s small case is a window of two lanes, of two boundaries and of one
+UNSLOTTED_SEEDS = (1, 3)
+
+
+def test_an_entry_read_from_another_lanes_occupancy_is_refused(server, monkeypatch):
+    """A wired entries template of a full window of two lanes whose chunk j reads lane 1 - j's `occ` (the order a
+    lowering gives that numbers its entries shortest first, the shorter in the higher lane) is refused, in Lean and in
+    the mirror, by name (`PC.UNSLOTTED`, `slotted`); and a mirror that skips the slot check accepts it."""
+    for n in UNSLOTTED_SEEDS:
+        case = build("rows-prog-unslotted", n, small=True)
+        assert case["params"]["schedule"]["lanes"] == 2
+        assert PC.UNSLOTTED in reference(case)["reason"], (n, reference(case))
+        verdict, out = D.replay(PORT, case, server)
+        assert verdict == REJECT and PC.UNSLOTTED in json.loads(out)["reason"], (n, out)
+    monkeypatch.setattr(PC, "_slotted", PC._wired)
+    refused_by_lean_alone(build("rows-prog-unslotted", 1, small=True), server, PC.UNSLOTTED)
+
+
+def test_an_entry_read_from_its_own_lanes_occupancy_is_slotted(server, monkeypatch):
+    """`test_an_entry_read_from_another_lanes_occupancy_is_refused`'s twin: its cases with chunk j reading lane j's
+    `occ`, all else theirs, are accepted in Lean and in the mirror."""
+    real = PC._slotted_layout
+    monkeypatch.setattr(PC, "_slotted_layout", lambda j, lanes, nb, every, swapped: real(j, lanes, nb, every, False))
+    PC.audit_descriptor.cache_clear()
+    try:
+        for n in UNSLOTTED_SEEDS:
+            case = build("rows-prog-unslotted", n, small=True)
+            assert reference(case)["verdict"] == ACCEPT, (n, reference(case))
+            assert D.replay(PORT, case, server)[0] == ACCEPT, n
+    finally:
+        PC.audit_descriptor.cache_clear()
+
+
 def test_a_template_named_slot_entry_with_another_body_is_refused(server, monkeypatch):
     """`wired` pins the slot entry's and the select entry's Definitions by closure digest (`PC.SLOT_ENTRY_PINS` and
     `PC.SELECT_ENTRY_PINS`, Lean's `entryPins`): the cases' templates (`PC.slot_entry`, `io_shell.SlotEntry_v1` at its

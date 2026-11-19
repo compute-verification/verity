@@ -117,7 +117,7 @@ import math
 import random
 import re
 from fractions import Fraction
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 
 import verity_difftest as D
@@ -235,9 +235,9 @@ SLOT_ENTRY_PINS = ("8c8a033047ec49110114023204a9c265720ae9d1b63963c51a98e14f0314
 SELECT_ENTRY = "SelectEntry_v1"
 #: `entryIds`: the Definitions whose `o0` is a slot's entry
 ENTRY_IDS = (SLOT_ENTRY, SELECT_ENTRY)
-#: The slots' occupancy's Definition (`boolean_io_shell`'s `ScanSlots_v2`), the `occ` the `SelectEntry_v1` proof blocks
-#: read: a stratum the cases sample whole or in part (`_by_template`)
-SCAN_SLOTS = "ScanSlots_v2"
+#: `scanSlotsId`: the slots' occupancy's Definition, whose lane j's `occ` the entries' chunk j reads (`slot_read`): a
+#: stratum the cases sample whole or in part (`_by_template`)
+SCAN_SLOTS = "ScanSlots_v3"
 #: `selectEntryPins`: the closure digests of `SelectEntry_v1` at
 #: `SelectEntry_v1{V=256,C=16,KO=2,FIRST=false,IDB=17,NP=4,STOP=[]}`,
 #: `SelectEntry_v1{V=128256,C=16,KO=4,FIRST=false,IDB=17,NP=32,STOP=[128001]}` and
@@ -259,12 +259,14 @@ class Audit:
     """`Audit`: a compute audit's layout terms (its free inputs and monitoring period) and what its Program gives: its
     SHA-512, its units (its root's template instances) and its slot entries'
     templates (`entries`: each root template node calling `SlotEntry_v1` or `SelectEntry_v1`, by descriptor id, members
-    and closure digest, `slot_entry_digest`)."""
+    and closure digest, `slot_entry_digest`), with each one's `slot_read` at a schedule's lanes, `T / every` and `every`
+    (`slots`)."""
     free: int
     steps: int
     program: str
     units: int
     entries: tuple[tuple[str, int, str], ...] = ()
+    slots: tuple = ()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -658,9 +660,109 @@ def _audit(a, ctx: str) -> Audit:
     units = [_members(x) for x in nodes if defs[callees[x["fn"]]]["form"] != "primitive"]
     if not units:
         raise D.Reject(f"{ctx}: program: no template")
-    entries = tuple((k, _members(x), slot_entry_digest(j, k)) for x in nodes
-                    if (d := defs[k := callees[x["fn"]]])["form"] != "primitive" and d.get("id") in ENTRY_IDS)
-    return Audit(free, steps, program_sha512(j), sum(units), entries)
+    slots = [(k, x) for x in nodes
+             if (d := defs[k := callees[x["fn"]]])["form"] != "primitive" and d.get("id") in ENTRY_IDS]
+    entries = tuple((k, _members(x), slot_entry_digest(j, k)) for k, x in slots)
+    reads, at = [], {}
+    for k, x in slots:
+        reads.append(partial(_slot_read, j, x, at.get(k, 0)))
+        at[k] = at.get(k, 0) + _members(x)
+    return Audit(free, steps, program_sha512(j), sum(units), entries, tuple(reads))
+
+
+def _ty(t, j: dict):
+    return j["types"][t] if isinstance(t, int) else t
+
+
+def _params(d: dict) -> list:
+    return d["body"]["params"] if d["form"] == "composite" else d["params"]
+
+
+def _ret(d: dict):
+    return d["body"]["ret_type"] if d["form"] == "composite" else d["ret"]
+
+
+def _grid(q: dict, n: int, nb: int) -> tuple | None:
+    """`gridOf`: a part of `n` references read as `(space p, index, base, di, db)`, reference `i · nb + b` at
+    `base + i · di + b · db`."""
+    if "affine" in q:
+        s, i, b, c = q["affine"]
+        return (s == "p", i, b, nb, 1) if c == n else None
+    if "strided" in q:
+        s, i, b, inner, os, step, c = q["strided"]
+        if c != n or b < 0 or os < 0 or step < 0:
+            return None
+        if inner == nb:
+            return (s == "p", i, b, os, step)
+        if inner == 1:
+            return (s == "p", i, b, nb * os, os)
+        if inner >= n:
+            return (s == "p", i, b, nb * step, step)
+    return None
+
+
+def _arg_grid(x: dict, o: int, n: int, L: int, nb: int, j: dict) -> tuple | None:
+    """`argGrid`: argument `o` of node `x` as one part, of dims `(n, L)` where `n` > 1, in `gridOf`'s form."""
+    a, nodes = x["args"][o], j["definitions"][j["root"]]["body"]["nodes"]
+    ps = _parts(a["refs"], nodes)
+    ax = (x.get("axes") or [None] * len(x["args"]))[o]
+    dims = _axis_dims(_ty(a["type"], j), ax) if ax is not None else None
+    return _grid(ps[0], n * L, nb) if len(ps) == 1 and (n == 1 or dims == (n, L)) else None
+
+
+def _slot_read(j: dict, x: dict, U: int, lanes: int, nb: int, every: int) -> int | None:
+    """`slotRead`: the input node whose rows the entries node `x`, at unit `U`, reads its slots' occupancy against,
+    where unit `u = j · nb + b`'s `occ` is leaf `4j + 2` of a `ScanSlots_v3` member whose state is row `b · every`."""
+    defs, callees = j["definitions"], j["callees"]
+    nodes = defs[j["root"]]["body"]["nodes"]
+    d = defs[callees[x["fn"]]]
+    ps = _params(d)
+    io = next((k for k, (name, _) in enumerate(ps) if name == "occ"), None)
+    if io is None:
+        return None
+    ot, n = _ty(ps[io][1], j), _members(x)
+    if not (leaves_of(ot) == 1 and nb >= 1 and n >= 1) or io >= len(x["args"]):
+        return None
+    g = _arg_grid(x, io, n, 1, 1 if n == 1 else nb, j)
+    if g is None or g[0] or g[1] >= len(nodes):
+        return None
+    _, i, base, di, db = g
+    sx = nodes[i]
+    sd = defs[callees[sx["fn"]]]
+    ret = _ty(_ret(sd), j)
+    if sd.get("id") != SCAN_SLOTS or ret[0] != "Tuple":
+        return None
+    fs = [_ty(f, j) for f in ret[1]]
+    if len(fs) < 4 * lanes or any(fs[4 * q + f] != fs[f] for q in range(lanes) for f in range(4)):
+        return None
+    if lanes and fs[2] != ot:
+        return None
+    W = sum(leaves_of(f) for f in fs[:4])
+    o2, Ls = sum(leaves_of(f) for f in fs[:2]), leaves_of(ret)
+    sps = _params(sd)
+    isx = next((k for k, (name, _) in enumerate(sps) if name == "state"), None)
+    if isx is None or isx >= len(sx["args"]):
+        return None
+    NS, nS = leaves_of(_ty(sps[isx][1], j)), _members(sx)
+    sg = _arg_grid(sx, isx, nS, NS, NS, j)
+    if sg is None or sg[0] or sg[4] != 1 or NS < 1 or Ls < 1 or sg[1] >= len(nodes) \
+            or not _is_input(nodes[sg[1]], j):
+        return None
+    _, X, sb, so, _ = sg
+
+    def member(q: int, leaf: int) -> int | None:
+        r = leaf - q * W - o2
+        return r // Ls if r >= 0 and r % Ls == 0 else None
+    if n == 1:
+        q = U // nb
+        M = member(q, base) if q < lanes else None
+        return X if M is not None and M < nS and sb + M * so == U % nb * every * NS else None
+    if not (U % nb == 0 and n % nb == 0 and U // nb + n // nb <= lanes and (n == nb or di == W)
+            and (nb == 1 or db % Ls == 0)):
+        return None
+    M0, dM = member(U // nb, base), db // Ls
+    return X if M0 is not None and M0 + (nb - 1) * dM < nS and sb + M0 * so == 0 \
+        and (nb == 1 or dM * so == every * NS) else None
 
 
 def _scan(j, program: str, s: NetworkAttesterParams) -> Scan:
@@ -1157,14 +1259,32 @@ def _wired(p: Params, audits: list[dict], reg: dict) -> bool:
     (`entries_port`), of T / every leaves, of a `SlotEntry_v1` or `SelectEntry_v1` template of one audit's own Program
     (`Audit.entries`), a pinned Definition (its closure digest one of `SLOT_ENTRY_PINS` and `SELECT_ENTRY_PINS`,
     `entryPins`), with one member a slot of the window."""
-    s = p.schedule
+    return any(_wired_to(p, reg, r, e) for a, r in zip(p.audits, audits) for e in a.entries)
+
+
+def _wired_to(p: Params, reg: dict, r: dict, e: tuple[str, int, str]) -> bool:
+    """`wired.wiredTo`: `wired` at one audit's registration `r` and one of its entries templates `e`."""
+    s, (k, n, d) = p.schedule, e
     nb = s.window // s.every
-    return any(n == nb * s.lanes and d in SLOT_ENTRY_PINS + SELECT_ENTRY_PINS and all(
-        any(o.get("port") == entries_port(k, j) and _leaves(o) == nb and o.get("root") == e["root"]
-            and o.get("domain") == e["domain"] for e in _prog(reg, j)
+    return n == nb * s.lanes and d in SLOT_ENTRY_PINS + SELECT_ENTRY_PINS and all(
+        any(o.get("port") == entries_port(k, j) and _leaves(o) == nb and o.get("root") == x["root"]
+            and o.get("domain") == x["domain"] for x in _prog(reg, j)
             for o in _entries(r, "roots"))
         for j in range(s.lanes))
-        for a, r in zip(p.audits, audits) for k, n, d in a.entries)
+
+
+def _slotted(p: Params, audits: list[dict], reg: dict) -> bool:
+    """`slotted`: `wired` at an entries template every one of whose nodes reads its slots' occupancy against one input
+    node's rows (`slot_read`)."""
+    s = p.schedule
+    for a, r in zip(p.audits, audits):
+        for e in a.entries:
+            if not _wired_to(p, reg, r, e):
+                continue
+            xs = [f(s.lanes, s.window // s.every, s.every) for (k, _, _), f in zip(a.entries, a.slots) if k == e[0]]
+            if xs and xs[0] is not None and all(x == xs[0] for x in xs):
+                return True
+    return False
 
 
 def _states(reg: dict) -> list[dict]:
@@ -1462,6 +1582,8 @@ NO_SAMPLE = "registration: no sample"
 NOT_REGISTERED = "not the registration's sample"
 #: `wiredCheck`'s refusal, after its window's number.
 UNWIRED = "the scan's prog is no compute audit's slot entries"
+#: `wiredCheck`'s refusal where `wired` holds and `slotted` doesn't, after its window's number.
+UNSLOTTED = "an entry is not its slot's"
 #: `stateCheck`'s refusals, after its window's number: the state untied, its reads off the chain.
 UNSTATED = "the scan's state is no wired audit's SCAN_STATE"
 #: `tiedDelta`: δ_i, the δ at which the rows form reads a tied audit's sample (`chargedOf`), fixed before any coin.
@@ -1580,8 +1702,8 @@ def check(p: Params, c: Commitment, e) -> tuple:
         else:
             if tied and f.sampled < f.units:
                 charged[i] = f.at(TIED_DELTA)
-    findings += [Finding(REJECT, f"window {p.first + i}: {UNWIRED}") for i, reg in enumerate(c.windows)
-                 if not _wired(p, c.audits, reg)]
+    findings += [Finding(REJECT, f"window {p.first + i}: {UNWIRED if not _wired(p, c.audits, reg) else UNSLOTTED}")
+                 for i, reg in enumerate(c.windows) if not _slotted(p, c.audits, reg)]
     findings += [Finding(REJECT, f"window {p.first + i}: {why}") for i, reg in enumerate(c.windows)
                  if (why := _state_refusal(p, c.audits, reg))]
     findings += [Finding(REJECT, f"window {p.first + i}: {TIE_UNHELD}: its public outputs' {TIED_KEY} "
@@ -1654,7 +1776,7 @@ EXPECT = {
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
     "rows-answer-bound": REJECT, "rows-answer-oversampled": REJECT, "rows-answer-tied-unheld": REJECT,
     "rows-answer-unsampled": REJECT, "rows-answer-unregistered": REJECT, "rows-delta": REJECT, "rows-units": REJECT,
-    "rows-prog-untied": REJECT, "rows-prog-unwired": REJECT, "rows-state-untied": REJECT, "rows-state-misindexed": REJECT,
+    "rows-prog-untied": REJECT, "rows-prog-unwired": REJECT, "rows-prog-unslotted": REJECT, "rows-state-untied": REJECT, "rows-state-misindexed": REJECT,
     "rows-start-unpinned": REJECT, "rows-start-carried": REJECT, "rows-start-charged": ACCEPT, "rows-circuit-swapped": REJECT,
     "rows-ok-unheld": REJECT, "rows-ok-equal": ACCEPT, "rows-one-tick": REJECT,
     "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
@@ -1778,15 +1900,22 @@ BIT, BYTE, U16 = Value(1), Value(8), Value(16)
 LOW = PrimitiveDefinition("NetworkPeriodScanLow", 1, (("s", U16),), BYTE, lambda s: s & 0xFF, register=False)
 #: a byte and a u16 in the Boolean profile, as the scan's stand-ins type them (`BOOL_BYTE`, `BOOL_U16`)
 BYTE_BITS, U16_BITS = Array(8, BIT), Array(OUT_BITS, BIT)
+#: the scan slots' stand-in's gate: a u16 widened to a 32-bit word
+WIDE = PrimitiveDefinition("NetworkPeriodScanWide", 1, (("s", U16),), Value(32), lambda s: s * 0x10001,
+                           register=False)
 
 #: the scan's stand-ins' gate, a bit from two, and `N` bits from two (a byte's or a u16's)
 MIX = PrimitiveDefinition("NetworkPeriodScanMix", 2, (("a", BIT), ("b", BIT)), BIT, lambda a, b: a ^ b,
                           register=False)
-#: `LOW`'s and `MIX`'s one Boolean Definitions, which a Program's descriptor holds (`codec`'s `boolean`): the u16's low
-#: eight bits, and the Xor of the two bits
+#: `LOW`'s, `WIDE`'s and `MIX`'s one Boolean Definitions, which a Program's descriptor holds (`codec`'s `boolean`): the
+#: u16's low eight bits, the u16 twice, and the Xor of the two bits
 BOOLEAN = {LOW.id: bind(CompositeDefinition("NetworkPeriodScanLowBits", 1, (), lambda S: ((("s", U16_BITS),), BYTE_BITS),
                                             lambda B, S, s: array_of([Coll(BIT, Explicit((r,))) for r in list(s.refs)[:8]]),
                                             register=False)),
+           WIDE.id: bind(CompositeDefinition("NetworkPeriodScanWideBits", 1, (),
+                                             lambda S: ((("s", U16_BITS),), Array(32, BIT)),
+                                             lambda B, S, s: array_of([Coll(BIT, Explicit((r,))) for r in list(s.refs) * 2]),
+                                             register=False)),
            MIX.id: bind(CompositeDefinition("NetworkPeriodScanMixBits", 1, (), lambda S: ((("a", BIT), ("b", BIT)), BIT),
                                             lambda B, S, a, b: B.call(BL.xor_gate(2), BL.operands(a, b)), register=False))}
 
@@ -1954,8 +2083,19 @@ def _stand_in(name: str, version: int, statics: tuple[str, ...], out=lambda S: 2
 #: another body, the stand-in unit's.
 RENAMED_SLOT_ENTRY = _stand_in("SlotEntry", 1, tuple(SLOT_BINDING))
 RENAMED_SELECT_ENTRY = _stand_in("SelectEntry", 1, tuple(SELECT_BINDING))
-#: A stand-in of the scan slots' template under `ScanSlots_v2`'s Definition id, committing `NS` bytes.
-SCAN_SLOTS_UNIT = _stand_in("ScanSlots", 2, ("NS",), lambda S: S.NS)
+#: A stand-in of the scan slots' template under `ScanSlots_v3`'s Definition id and signature: a state of `NS` u16 words
+#: to `LANES` lanes of (occupancy count, `NP + 1` words, `occ`, two words), each word its state's first widened.
+def _slots_sig(S):
+    return (("state", Array(S.NS, U16)),), Tuple(*[f for _ in range(S.LANES) for f in (
+        Value(32), Array(S.NP + 1, Value(32)), Value(32), Array(2, Value(32)))])
+
+
+SCAN_SLOTS_UNIT = CompositeDefinition(
+    "ScanSlots", 3, ("NS", "NP", "LANES"), _slots_sig,
+    lambda B, S, x: Coll(_slots_sig(S)[1], B.batch(
+        WIDE, Coll(U16, x[0].refs.slice(0, 1)), axes=(None,), n=S.LANES * (S.NP + 5)).refs), register=False)
+#: The scan slots' stand-in's statics: one state word, one prompt token
+SCAN_SLOTS_STATICS = {"NS": 1, "NP": 1}
 
 
 @lru_cache(maxsize=None)
@@ -1979,22 +2119,55 @@ def select_entry():
 
 @lru_cache(maxsize=None)
 def audit_descriptor(units: tuple[tuple[int, int], ...], entries: tuple[int, ...] = (), renamed: bool = False,
-                     select: bool = False, scan_slots: tuple[int, ...] = ()) -> str:
+                     select: bool = False, scan_slots: tuple[int, ...] = (),
+                     layout: tuple[int, int, int] | None = None, swapped: bool = False) -> str:
     """The canonical descriptor of a compute audit's Program over the stand-in unit: `n` instances committing `out`
     bytes each, for each `(n, out)` of `units` (each `out` its own template), a scan slots' template of `n` members for
     each `n` of `scan_slots` (`SCAN_SLOTS_UNIT`), and a slot entries' template of `n` members for each `n` of `entries`
     (`slot_entry`, with `select` `select_entry`, or with `renamed` `RENAMED_SLOT_ENTRY` or `RENAMED_SELECT_ENTRY`),
     one template as the window's population program (`population_program`, `TemplateInstances_v1`), several as a mixed
-    one."""
+    one. With `layout` `(lanes, nb, every)`, the slot entries read their occupancy as `slotRead` holds (`_slotted_layout`),
+    lane j's chunk another lane's where `swapped`."""
     if renamed:
         entry = bind(RENAMED_SELECT_ENTRY, **SELECT_BINDING) if select else bind(RENAMED_SLOT_ENTRY, **SLOT_BINDING)
     else:
         entry = select_entry() if select else slot_entry()
+    lanes = layout[0] if layout else 1
     templates = [(bind(AUDIT_UNIT, OUT=out), n) for n, out in units] + \
-        [(bind(SCAN_SLOTS_UNIT, NS=1 + j), n) for j, n in enumerate(scan_slots)] + [(entry, n) for n in entries]
-    program = population.population_program(*templates[0]) if len(templates) == 1 else \
-        population.mixed_population_program(templates)
-    return D.canonical(codec.encode_program(program))
+        [(bind(SCAN_SLOTS_UNIT, **SCAN_SLOTS_STATICS, LANES=lanes), n) for n in scan_slots] + \
+        [(entry, n) for n in entries]
+    values = (("scan.state", layout[1] * layout[2] * SCAN_SLOTS_STATICS["NS"], 16),) if layout else ()
+    program = population.population_program(*templates[0]) if len(templates) == 1 and not values else \
+        population.mixed_population_program(templates, values=values)
+    j = codec.encode_program(program)
+    if layout and not renamed and entries == (layout[0] * layout[1],) and scan_slots == (layout[1],):
+        _slotted_layout(j, *layout, swapped)
+    return D.canonical(j)
+
+
+def _slotted_layout(j: dict, lanes: int, nb: int, every: int, swapped: bool) -> None:
+    """Rewrites a population's one scan slots' node to read its state from the registered value `scan.state`, member b
+    row `b · every`, and its one entries node's `occ` to read, for unit `q · nb + b`, lane q's `occ` of scan member b:
+    a strided part (`slotRead`'s form), or with `swapped` an explicit one in which lane q reads lane `lanes - 1 - q`'s,
+    or where there is one lane, its first word's."""
+    defs, callees = j["definitions"], j["callees"]
+    nodes = defs[j["root"]]["body"]["nodes"]
+    ids = [defs[callees[x["fn"]]].get("id") for x in nodes]
+    sN, eN = ids.index(SCAN_SLOTS), next(k for k, d in enumerate(ids) if d in ENTRY_IDS)
+    X = next(k for k, x in enumerate(nodes) if _is_input(x, j))
+    NS, NP = SCAN_SLOTS_STATICS["NS"], SCAN_SLOTS_STATICS["NP"]
+    W, o2 = NP + 5, NP + 2
+    Ls = lanes * W
+    nodes[sN]["args"][0]["refs"] = {"strided": ["n", X, 0, NS, every * NS, 1, nb * NS]}
+    io = next(k for k, (name, _) in enumerate(_params(defs[callees[nodes[eN]["fn"]]])) if name == "occ")
+    n = nodes[eN]["n"]
+    if not swapped:
+        nodes[eN]["args"][io]["refs"] = {"strided": ["n", sN, o2, nb, W, Ls, n]}
+    else:
+        lane = (lambda q: lanes - 1 - q) if lanes > 1 else (lambda q: q)
+        at = o2 if lanes > 1 else 0
+        nodes[eN]["args"][io]["refs"] = {"explicit": [["n", sN, u % nb * Ls + lane(u // nb) * W + at]
+                                                       for u in range(n)]}
 
 
 def templates_of(desc: dict) -> list[tuple[str, str, int]]:
@@ -2735,13 +2908,19 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     n_class = r.randint(2 if twos else 1, 40)
     class_split = r.randint(1, n_class - 1) if n_class > 1 and r.random() < 0.3 else None
     class_outs = r.sample(UNIT_BYTES, 1 if class_split is None else 2)
-    class_slots = (rp.randint(1, 2),) if select else ()
+    if select:
+        rp.randint(1, 2)
+    # one scan slots' member a boundary, whose occupancy the entries read lane by lane (`slotRead`), each chunk
+    # another lane's under `prog-unslotted`
+    layout = (sched.lanes, sched.window // sched.every, sched.every)
+    class_slots, unslot = (layout[1],), m == "prog-unslotted"
 
     def shape_of(n: int, split: int | None, outs: list[int]) -> tuple[tuple[int, int], ...]:
         return ((n, outs[0]),) if split is None or split >= n else ((split, outs[0]), (n - split, outs[1]))
 
     circuit = program_sha512(json.loads(audit_descriptor(
-        shape_of(n_class, class_split, class_outs), (slots + off,), unwire == "body", select, class_slots)))
+        shape_of(n_class, class_split, class_outs), (slots + off,), unwire == "body", select, class_slots, layout,
+        unslot)))
     for i in range(n_audits):
         sampled = i == a and m == "tied-sampled"
         partial = i == a and by_template
@@ -2761,7 +2940,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         else:
             split = r.randint(1, n_prog - 1) if n_prog > 1 and r.random() < 0.3 else None
             outs = r.sample(UNIT_BYTES, 1 if split is None else 2)
-        desc = json.loads(audit_descriptor(shape_of(n_prog, split, outs), entries, renamed, i in selects, scan_slots))
+        desc = json.loads(audit_descriptor(shape_of(n_prog, split, outs), entries, renamed, i in selects, scan_slots,
+                                           layout if in_class else None, unslot and in_class))
         prog = program_sha512(desc)
         if not in_class:
             untied.append(prog)
