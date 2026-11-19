@@ -28,7 +28,7 @@ LEASE_MIN=${LEASE_MIN:-$(( lease_min < 150 ? lease_min : 150 ))}
 
 [ ! -f "$IN/main.txt" ] || export MAIN_FILE=$IN/main.txt
 log "coins: ${PP_CHALLENGER:-local} (peer ${PP_PEER:-none}${DEVELOPMENT:+, a development run})"
-log "window run of $row_id from $SHA on $(hostname), card $CARD (free: 0 processes, ${used} MiB, lease: $lease), cores $CORES, lease at most $LEASE_MIN min, COMPOSE_NODE $COMPOSE_NODE${PEARLPLUS_TIE:+, tied to Pearl+}"
+log "window run of $row_id from $SHA on $(hostname), card $CARD (free: 0 processes, ${used} MiB, lease: $lease), cores $CORES, lease at most $LEASE_MIN min, COMPOSE_NODE $COMPOSE_NODE"
 export LEASE_MIN OUT
 mkdir -p "$SERVE_ROOT" /dev/shm/vllm-served-run && chmod 700 "$SERVE_ROOT" /dev/shm/vllm-served-run
 D=/dev/shm/vllm-served-run/${RESEARCH_RUN_ID:?run under research run}; export D
