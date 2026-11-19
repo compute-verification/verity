@@ -49,12 +49,13 @@ from __future__ import annotations
 
 import bisect
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import cached_property, lru_cache
 from typing import Any, Mapping, Sequence
 
 from . import boolean as BL
 from . import partition_object as PO
+from . import ports as PT
 from . import program as P
 from .codec import DecodedProgram, decode_program, descriptor_chunks, lookup_primitive
 from .defs import CompositeDefinition, DefinitionTable, PrimitiveDefinition, bind
@@ -93,8 +94,13 @@ def _declared(desc: Mapping[str, Any]) -> DefinitionTable:
             lookup_primitive(DefinitionTable(), fid)
         except KeyError:
             name, _, version = fid.rpartition("_v")
-            reg.add(PrimitiveDefinition(name, int(version), tuple((n, type_from_json(t)) for n, t in d["params"]),
-                                        type_from_json(d["ret"]), _unevaluated, register=False))
+            p = PrimitiveDefinition(name, int(version), tuple((n, type_from_json(t)) for n, t in d["params"]),
+                                    type_from_json(d["ret"]), _unevaluated, register=False)
+            if (pj := d.get("ports")) is not None:
+                runs = {k: v for k, v in pj.items() if k != "transfer"}
+                pt = PT.PortTypes.from_json(fid, runs, p.params, p.ret) if runs else PT.PortTypes(tuple(() for _ in p.params), ())
+                p.port_types = replace(pt, transfer=_unevaluated) if pj.get("transfer") else pt
+            reg.add(p)
     return reg
 
 

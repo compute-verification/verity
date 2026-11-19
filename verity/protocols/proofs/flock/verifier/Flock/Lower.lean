@@ -148,6 +148,9 @@ def starts (params : Array (String × Ty)) : Array Nat :=
 /-- The prefix of a refusal of a reference past the leaves of what it names, which `Program.decode` refuses too. -/
 def PAST : String := "a reference past its source's leaves"
 
+/-- The refusal of a Definition not on bits: a leaf of a word type would be read as one column, its other bits free. -/
+def WIDE : String := "a parameter or return leaf wider than one bit, not lifted to bits"
+
 /-- Reference `r`'s form, the same for every copy. -/
 def Work.formOf (w : Work) (st : Array Nat) (r : Ref) : V Form :=
   if r.p then match st[r.i]? with
@@ -483,6 +486,7 @@ def lowerDef (P : Prog) : Nat → Nat → M (Nat × Array Nat)
     if let some r := (← get).done[d]? then return r
     let defn := P.defs[d]!
     if defn.prim then throw s!"{defn.id}: a primitive is not lowered as a Definition"
+    if !(defn.ret.bits && defn.params.all (·.2.bits)) then throw s!"{defn.id}: {WIDE}"
     let body := defn.body
     let st := starts defn.params
     if (defn.params.foldl (fun a p => a + p.2.leaves) 0) != defn.paramLeaves then
