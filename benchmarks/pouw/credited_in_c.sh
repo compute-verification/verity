@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # A credited linear of C with Pearl+'s check as its nodes (`credited_in_c.py`), proved and verified on a CPU node: Lean's
 # flock-lower-check, flock-tmpl-unit and verity-verify-proof and the CPU flock-circuit built once per source;
-# `credited_in_c.py stage` evaluates C and stages the drawn block of OUT/honest and OUT/dishonest (the drawn tile's y word
-# flipped, its claimed ok 1); each is placed (flock-tmpl-unit), its statement built, proved over a live loopback session
+# `credited_in_c.py stage` evaluates C and stages the drawn block of OUT/honest and OUT/dishonest (BAD=y: the drawn tile's y
+# word flipped; BAD=filler: a word of its filler row nonzero; its claimed ok 1), whose prover skips its self-check
+# (FC_ZK_SELF_CHECK=skip) so that its proof reaches the verifiers; each is placed (flock-tmpl-unit), its statement built, proved over a live loopback session
 # (`flock-circuit serve --zk`) and verified by Lean (`verity-verify-proof verify --zk --registered`; the honest one also
 # against a registered file naming another call's public row, and one holding the drawn unit's ok to 0), and a forged proof
-# Lean must reject: the honest session against the dishonest statement (forged-y); `credited_in_c.py door` then verifies
-# them through `proofs.verify`, with nothing of Pearl+'s. SIZE=K,TM,TN,N,M (256,1,1,1,2).
+# Lean must reject: the honest session against the dishonest statement (forged-$BAD); `credited_in_c.py door` then verifies
+# them through `proofs.verify`, with nothing of Pearl+'s. SIZE=K,TM,TN,N,M (256,1,1,1,2); BAD=y|filler (y).
 # research run --on auto --cwd source --wait --mem-gb 64 --cpus 16 --timeout 180m -- bash benchmarks/pouw/credited_in_c.sh
 set -uxo pipefail
-SIZE=${SIZE:-256,1,1,1,2}
+SIZE=${SIZE:-256,1,1,1,2} BAD=${BAD:-y}
 export TU_PINNED=slot RAYON_NUM_THREADS=$(nproc)
 export FC_COINS=tree
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/credited-in-c}/out}; mkdir -p $O
@@ -68,7 +69,7 @@ challenger_built || exit 1
 $UV sync -q --all-packages --extra torch-cpu || exit 4
 export PATH=$W/py/bin:$PATH
 wait $LP; [ -x $LEAN_BIN ] && [ -x $UNIT_BIN ] && [ -x $FW_BIN ] && [ -x $LOW_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
-( unset PYTHONPATH; timed stage $UV run -q python benchmarks/pouw/credited_in_c.py stage --size $SIZE --lower $LOW_BIN --out $S ) > $O/stage.txt 2>&1
+( unset PYTHONPATH; timed stage $UV run -q python benchmarks/pouw/credited_in_c.py stage --size $SIZE --bad $BAD --lower $LOW_BIN --out $S ) > $O/stage.txt 2>&1
 src=$?; cat $O/time-stage.txt 2>/dev/null; grep -h '^AMOUNTS\|^DRAW\|^PHASE\|^EVALUATE\|^LOWER\|^STAGE' $O/stage.txt | cut -c1-3000
 cp $S/stage.json $O/ 2>/dev/null
 [ $src = 0 ] || { tail -c 4000 $O/stage.txt; exit 5; }
@@ -89,7 +90,8 @@ for v in honest dishonest; do
     --draw subset:$N --sessions 1 "${TREE_FROM[@]}" > $Ov/serve.log 2>&1 &
   SP=$!
   for i in $(seq 3600); do grep -q SERVING $Ov/serve.log && break; kill -0 $SP 2>/dev/null || break; sleep 1; done
-  timed prove-$v $B prove --zk --verifier 127.0.0.1:$PORT --instances $D/inst-$N.bin "${U[@]}" --runs 1 --warm 0 > $Ov/prove.txt 2> $Ov/prove.err
+  SKIP=(); [ $v = dishonest ] && SKIP=(env FC_ZK_SELF_CHECK=skip)
+  timed prove-$v "${SKIP[@]}" $B prove --zk --verifier 127.0.0.1:$PORT --instances $D/inst-$N.bin "${U[@]}" --runs 1 --warm 0 > $Ov/prove.txt 2> $Ov/prove.err
   echo "$v prove rc $?"; cat $O/time-prove-$v.txt; grep -h '^LIVE' $Ov/prove.txt | cut -c1-1500; tail -5 $Ov/prove.err | cut -c1-600
   for i in $(seq 1200); do kill -0 $SP 2>/dev/null || break; sleep 1; done
   kill $SP 2>/dev/null; wait $SP; cat $O/time-serve-$v.txt; grep -h 'accepted\|VERDICT\|REJECT' $Ov/serve.log | tail -3 | cut -c1-1500
@@ -104,9 +106,9 @@ for v in honest dishonest; do
   done
   if [ $v = honest ]; then
     X=$S/dishonest
-    timed lean-forged-y $LEAN_BIN verify --zk --statement verity/flock-circuit/tmpl --circuit $D/circuit.txt --public $X/pub-$N.bin --tables $X/tables \
-      --partition $D/partition.json --program $D/program.json --registered $X/registered.json --session $SESS > $Ov/lean-forged-y.log 2>&1
-    echo "forged-y lean rc $?"; cat $O/time-lean-forged-y.txt; grep -h '^VERDICT' $Ov/lean-forged-y.log | head -1 | cut -c1-1500; tail -3 $Ov/lean-forged-y.log | cut -c1-600
+    timed lean-forged-$BAD $LEAN_BIN verify --zk --statement verity/flock-circuit/tmpl --circuit $D/circuit.txt --public $X/pub-$N.bin --tables $X/tables \
+      --partition $D/partition.json --program $D/program.json --registered $X/registered.json --session $SESS > $Ov/lean-forged-$BAD.log 2>&1
+    echo "forged-$BAD lean rc $?"; cat $O/time-lean-forged-$BAD.txt; grep -h '^VERDICT' $Ov/lean-forged-$BAD.log | head -1 | cut -c1-1500; tail -3 $Ov/lean-forged-$BAD.log | cut -c1-600
   fi
   cp $D/partition.json $D/unit.tmpl $D/registered*.json $D/draw.json $Ov/; sha512sum $D/circuit.txt $D/unit.tmpl > $Ov/sha512.txt
 done

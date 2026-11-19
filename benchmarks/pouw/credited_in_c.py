@@ -3,9 +3,12 @@
 C is one linear y = x · Wᵀ over M rows of K and N columns whose nodes are its grid's units of `PearlPlusTileCoreWords_v1`
 (`pearl_plus_credited.tiles`), each reading its ports as rows of the values C holds: x's and W's rows (``a``, ``b``), the
 linear's one y (``y``), the prover's certificates (``cert``) and the public row (`pearl_plus_credited.PUBLIC`: ``salt``,
-``root``, ``unit``, ``rows``, ``col``, ``eb``, ``fa``, ``fb``, ``g``), registered under public salts from content the
-verifier computes itself (`pearl_plus_credited.public`), and each unit's ``ok`` registered as 1 the same way. ``stage``
-evaluates C on an honest linear and on one whose drawn tile's y word has its sign flipped, places the units' amounts
+``root``, ``unit``, ``rows``, ``col``, ``eb``, ``fa``, ``fb``, ``g``), registered under public salts; and each unit's ``ok``
+registered as 1 the same way. Here the stager computes the public row (`pearl_plus_credited.public`, from its own salt and
+a root of its own, not W's registered root) and writes the verifier's registered file from it: that the verifier computes
+each field itself is `Registered.supplied`'s, not this run's. ``stage``
+evaluates C on an honest linear and on one whose drawn tile is false (``--bad``: its y word's sign flipped, or a
+nonzero word in its filler row), places the units' amounts
 (`resource_accounting.scheme.credited` over C's strata, `PEARL_PLUS.blocks`' cost on the template's statics), draws one
 credited block, cuts it (`restrict`), lowers it by the door (`one_circuit.lower`) and stages it for ``flock-circuit``.
 ``door`` hands each proof to `proofs.verify` with the verifier's own program, partition, draw and registered file, and
@@ -76,22 +79,24 @@ def linear(k: int, m: int, n: int, tile: tuple[int, int]) -> Linear:
 
     tm, tn = tile
     ts = PC.tiles(SCHEME, k, m, n, tile)
+    if len({t.real for t in ts}) != 1:
+        raise ValueError(f"every row tile of M = {m} at TM = {tm} has the same real rows, so y's rows are one type: "
+                         "M below TM or a multiple of it")
     port, ret = ts[0].core.signature()
     port = dict(port)
     rt, ct = len({t.rows for t in ts}), n // tn
-    row = {"x": port["a"].elem, "w": port["b"].elem, "y": port["y"].elem, "cert": port["cert"], "rows": port["rows"],
+    row = {"x": port["a"], "w": port["b"], "y": port["y"], "cert": port["cert"], "rows": port["rows"],
            "col": port["col"], "eb": port["eb"]}
-    count = {"x": rt * tm, "w": n, "y": m, "cert": len(ts), "rows": rt, "col": ct, "eb": ct}
+    count = {"x": rt, "w": ct, "y": rt, "cert": len(ts), "rows": rt, "col": ct, "eb": ct}
     params = tuple((v, Array(count[v], row[v])) if v in count else (v, port[v])
                    for v in ("x", "w", "y", "cert", "salt", "root", "unit", "rows", "col", "eb", "fa", "fb", "g"))
     types = {v: row.get(v, t) for v, t in params}
     reads = []
     for i, t in enumerate(ts):
         r = t.rows[0] // tm
-        reads.append({"a": [("x", j) for j in t.rows], "b": [("w", j) for j in t.cols],
-                      "y": [("y", j) for j in t.rows[:t.real]], "cert": [("cert", i)], "salt": [("salt", 0)],
-                      "root": [("root", 0)], "unit": [("unit", 0)], "rows": [("rows", r)], "col": [("col", t.col)],
-                      "eb": [("eb", t.col)], "fa": [("fa", 0)], "fb": [("fb", 0)], "g": [("g", 0)]})
+        reads.append({"a": ("x", r), "b": ("w", t.col), "y": ("y", r), "cert": ("cert", i), "salt": ("salt", 0),
+                      "root": ("root", 0), "unit": ("unit", 0), "rows": ("rows", r), "col": ("col", t.col),
+                      "eb": ("eb", t.col), "fa": ("fa", 0), "fb": ("fb", 0), "g": ("g", 0)})
 
     def body(B, S, *xs):
         held = dict(zip((v for v, _ in params), xs))
@@ -99,8 +104,10 @@ def linear(k: int, m: int, n: int, tile: tuple[int, int]) -> Linear:
         for t, rd in zip(ts, reads):
             args = []
             for p, pt in t.core.signature()[0]:
-                got = [held[v] if v in ("salt", "root", "unit", "fa", "fb", "g") else held[v][j] for v, j in rd[p]]
-                args.append(got[0] if got[0].type == pt else Coll(pt, concat([g.refs for g in got])))
+                v, j = rd[p]
+                got = held[v][j] if v in count else held[v]
+                assert got.type == pt, (p, got.type, pt)
+                args.append(got)
             outs.append(B.call(t.core, *args))
         return Coll(Array(len(ts), ret), concat([o.refs for o in outs]))
 
@@ -109,9 +116,10 @@ def linear(k: int, m: int, n: int, tile: tuple[int, int]) -> Linear:
     return Linear(Program(root, registered=[v for v, _ in params]), ts, types, reads)
 
 
-def honest(k: int, m: int, n: int, ln: Linear, unit: int, seed: str) -> tuple[dict, list]:
+def honest(k: int, m: int, n: int, ln: Linear, unit: int, seed: str) -> dict:
     """An honest linear: x and W BF16 (widened to FP32), the epoch's salt and the weights' root, each tile's certificates
-    and the served y (`PearlC.checked`'s U unscaled, BF16), and the public row; every value as C holds it, row by row."""
+    and the served y (`PearlC.checked`'s U unscaled, BF16), and the public row; every value as C holds it, a row a port's
+    read (x and y a row tile's rows, W a column tile's)."""
     from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import inert_bound
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
@@ -131,7 +139,7 @@ def honest(k: int, m: int, n: int, ln: Linear, unit: int, seed: str) -> tuple[di
     dev = s.device.name
     _d, ng = inert_bound._promoted(dev, k)
     y = [[0] * n for _ in range(m)]
-    certs, refs = [], []
+    certs = []
     pub = {"rows": {}, "col": {}, "eb": {}}
     for t in ln.tiles:
         ctx = C.Context(salt, C.Matmul(unit, C.Shape(len(x), k, n), 0), bytes(64), root)
@@ -146,10 +154,37 @@ def honest(k: int, m: int, n: int, ln: Linear, unit: int, seed: str) -> tuple[di
         p = PC.public(SCHEME, k, t, unit, salt, root)
         pub["rows"][t.rows[0] // tm], pub["col"][t.col], pub["eb"][t.col] = p["rows"], p["col"], p["eb"]
         shared = {v: p[v] for v in ("salt", "root", "unit", "fa", "fb", "g")}
-        refs.append((a, b, t.rows, t.cols))
-    values = {"x": x, "w": [[v >> 16 for v in r] for r in w], "y": y, "cert": certs, **shared,
+    row_tiles = sorted({t.rows: t.real for t in ln.tiles}.items())
+    values = {"x": [[x[i] for i in rs] for rs, _ in row_tiles],
+              "w": [[[v >> 16 for v in w[j]] for j in range(c * tn, (c + 1) * tn)] for c in range(n // tn)],
+              "y": [[y[i] for i in rs[:real]] for rs, real in row_tiles], "cert": certs, **shared,
               **{v: [pub[v][r] for r in range(len(pub[v]))] for v in ("rows", "col", "eb")}}
-    return values, refs
+    return values
+
+
+def reference(ln: Linear, index: int, vals: dict, unit: int) -> list[int]:
+    """`pearl_plus_tile.reference`'s (digest, ok) of unit ``index`` on ``vals``, the digest's 64 bytes then ok."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
+    t = ln.tiles[index]
+    r, s = t.rows[0] // len(t.rows), t.core.bindings
+    b = [[v << 16 for v in row] for row in vals["w"][t.col]]
+    d, ok = PT.reference(s["DEV"], s["K"], s["N"], vals["x"][r], b, vals["y"][r], vals["cert"][index], vals["salt"],
+                         vals["root"], unit, list(t.rows), list(t.cols), t.col, s["RHO"], s["RHOR"])
+    return [*(d or bytes(64)), ok]
+
+
+def tamper(ln: Linear, index: int, vals: dict, bad: str) -> dict:
+    """``vals`` with unit ``index``'s tile made false: ``y``, its first real row's first word of its column tile with the
+    sign flipped; ``filler``, its last row, a filler row, with word 3 set to 1.0."""
+    t = ln.tiles[index]
+    r, out = t.rows[0] // len(t.rows), json.loads(json.dumps({v: vals[v] for v in ("x", "y")}))
+    if bad == "y":
+        out["y"][r][0][t.cols[0]] ^= 1 << 31
+    elif t.real < len(t.rows):
+        out["x"][r][-1][3] = 0x3F800000
+    else:
+        raise ValueError(f"unit {index}'s tile has no filler row: {t.real} of {len(t.rows)} rows are real")
+    return {**vals, **out}
 
 
 MANY = ("x", "w", "y", "cert", "rows", "col", "eb")
@@ -214,12 +249,10 @@ def stage(a) -> int:
     from verity.protocols.resource_accounting import scheme as RS
     from verity.protocols.resource_accounting.compute.pouw import scheme as PS
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
     from verity.commitments import registered_value as RV
     from verity_flock import circuit as FC
 
-    assert tm == 1 and tn == 1, "every core port one whole row: TM = TN = 1 (a wider tile's ports are arrays of rows)"
-    rec: dict = {"size": {"K": k, "TM": tm, "TN": tn, "N": n, "M": m}, "scheme": SCHEME, "phases": {}}
+    rec: dict = {"size": {"K": k, "TM": tm, "TN": tn, "N": n, "M": m}, "bad": a.bad, "scheme": SCHEME, "phases": {}}
     t = time.perf_counter()
 
     def phase(name: str, **extra) -> None:
@@ -258,10 +291,9 @@ def stage(a) -> int:
     phase("restrict", block_units=blk, block_bytes=len(b.descriptor), bit_gates=int(b.bits.size))
 
     unit = 7
-    good, refs = honest(k, m, n, ln, unit, "credited-in-c")
+    good = honest(k, m, n, ln, unit, "credited-in-c")
     drawn = ln.tiles[index]
-    bad = {**good, "y": [list(r) for r in good["y"]]}
-    bad["y"][drawn.rows[0]][drawn.cols[0]] ^= 1 << 31
+    bad = tamper(ln, index, good, a.bad)
 
     params = [v for v, _ in program.fn.signature()[0]]
 
@@ -275,12 +307,9 @@ def stage(a) -> int:
         return [sum(g[8 * i + j] << j for j in range(8)) for i in range(64)] + [g[512]]
 
     got = {"honest": run(good), "dishonest": run(bad)}
-    a_rows, b_rows, rws, cls = refs[index]
-    want = {tag: [*(d or bytes(64)), ok] for tag, vals in (("honest", good), ("dishonest", bad))
-            for d, ok in [PT.reference(drawn.core.bindings["DEV"], k, n, a_rows, b_rows, [vals["y"][i] for i in rws[:drawn.real]],
-                                       vals["cert"][index], vals["salt"], vals["root"], unit, list(rws), list(cls), drawn.col,
-                                       drawn.core.bindings["RHO"], drawn.core.bindings["RHOR"])]}
+    want = {tag: reference(ln, index, vals, unit) for tag, vals in (("honest", good), ("dishonest", bad))}
     rec["evaluate"] = {"of": "C on its words (`evaluate_batch` of its root): each unit's (digest, ok)",
+                       "drawn": {"rows": drawn.rows, "real": drawn.real, "credited": amounts[index]},
                        "honest_ok": [g[512] for g in got["honest"]], "dishonest_ok": [g[512] for g in got["dishonest"]],
                        "drawn_reference_agrees": {tag: words(got[tag][index]) == want[tag] for tag in got}}
     phase("evaluate")
@@ -327,7 +356,7 @@ def stage(a) -> int:
             (d / "registered-not-ok.json").write_text(json.dumps(reads(program, part, rows, roots, not_ok)))
         at = ln.reads[index]
         tables, salts, registered = {}, {}, {}
-        for p, ((v, j),) in at.items():
+        for p, (v, j) in at.items():
             rs, ss, entry = regs[v].statement([j])
             tables[p] = np.asarray([RV.row_words(r, regs[v].word_bits, RV.SCHEMA_HM96_SHA512_ROW_V2) for r in rs],
                                    dtype=np.uint16)
@@ -401,6 +430,8 @@ def main() -> int:
     st.add_argument("--size", default="256,1,1,1,2", help="K,TM,TN,N,M")
     st.add_argument("--lower", required=True, help="flock-lower-check, Lean's lowering")
     st.add_argument("--out", type=Path, required=True)
+    st.add_argument("--bad", choices=("y", "filler"), default="y",
+                    help="the dishonest linear: the drawn tile's y word flipped, or a word of its filler row nonzero")
     dr = sub.add_parser("door")
     dr.add_argument("--lower", required=True)
     dr.add_argument("--lean", required=True, help="verity-verify-proof")
