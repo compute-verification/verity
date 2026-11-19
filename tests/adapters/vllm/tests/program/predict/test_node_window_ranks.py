@@ -50,12 +50,11 @@ def test_eight_ranks_joined():
     """GLM-5.3's first decoder layer at each of the eight ranks, its window, and the eight joined: each rank as many units
     of each template; the joined circuit passes `interface.Circuit`'s checks (its order rising inside each rank) and keeps
     every rank's units, wires every peer input of every rank and leaves none unwired, takes each rank's boundary reads (its
-    prompt's, and rank 0's served ids) at that rank's units, and leaves no input free.
-    Not had: a rank's Program (`ranks_of`, through `population`) does not build. One template reads all 32 column block
-    tables of the embedding, so each table is opened by two runs of its units, the prefill's and the decode's, and an
-    opening is one run; the end is an opening over several runs, after the close. The refusal is that one, by its words:
-    the token's width and the scales' recut, which `population` checks before the openings, pass.
-    About 100 s: the only test that builds a rank other than 0 and the join."""
+    prompt's, and rank 0's served ids) at that rank's units, and leaves no input free. Each rank's Program builds
+    (`ranks_of`, through `population`), though one template reads all 32 column block tables of the embedding, so each
+    table is opened by two runs of its units, the prefill's and the decode's: each rank its own window, the same units, and
+    its own wires among the joined circuit's.
+    The only test that builds a rank other than 0, each rank's Program and the join."""
     ranks = [NJ.rank_window(r, glm_request(IDS, 1, rank=r).program.fn, FAMILIES, reads=NR.boundary_reads)
              for r in range(WORLD)]
     assert len({tuple(sorted(x.circuit.units.items())) for x in ranks}) == 1
@@ -72,8 +71,12 @@ def test_eight_ranks_joined():
     served = [r for r in j.circuit.boundary_reads if r.param == NR.EGRESS]
     assert served and served == [r for r in ranks[0].circuit.boundary_reads if r.param == NR.EGRESS]
     assert all(j.first[r][t] == r * n for r in range(WORLD) for t, n in ranks[0].circuit.units.items())
-    with pytest.raises(ValueError, match=r"weights/model\.embed_tokens\.weight@192/b0/vocab/row is opened once$"):
-        NJ.ranks_of(ranks, j, 1)
+    got = NJ.ranks_of(ranks, j, 1)
+    assert got["prefix"] == "r<rank>/" and len(got["of"]) == WORLD
+    assert len({x["window"] for x in got["of"]}) == WORLD
+    assert [x["units"] for x in got["of"]] == [dict(ranks[0].circuit.units)] * WORLD
+    assert [x["wires"] for x in got["of"]] == [len(x.circuit.wires) for x in ranks]
+    assert sum(x["wires"] for x in got["of"]) <= len(j.circuit.wires)
 
 
 def test_free_rows():
