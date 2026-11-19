@@ -407,7 +407,7 @@ class Binding:
 
     @cached_property
     def partition(self) -> dict[str, Any]:
-        return PO.build(self.program, self.query, [[m.base, m.base + m.n] for m in self.members] or None)
+        return PO.build(self.program, self.query, [[[m.base, m.base + m.n] for m in self.members]] if self.members else None)
 
     @cached_property
     def partition_digest(self) -> str:

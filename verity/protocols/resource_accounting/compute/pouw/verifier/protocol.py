@@ -21,13 +21,27 @@ from typing import Any, Protocol, runtime_checkable
 from verity.commitments.randomness import Part, frame
 
 U64 = 1 << 64
-CALL_RANGE = 1 << 32
+ROUND_CALLS = 1 << 16
+"""The calls one round holds, and the rounds one epoch (one salt) holds: a call's index is its place (`call_place`)."""
+CALL_RANGE = ROUND_CALLS * ROUND_CALLS
 """Call indices of one epoch (one salt) lie below this: -h3's row seed (`pearl_c.row_seed`) packs the index into the high
 half of a u64."""
+#: why `call_place` refuses a round or a position, by name: the device refuses there too, and never wraps
+OFF_PLACE = "a round and a position in it are each below 2^16 (`ROUND_CALLS`): end the pass, or the epoch, before"
 
 
 class DomainError(ValueError):
     """A declaration outside the scheme's domain; the verifier refuses it before any work."""
+
+
+def call_place(round_: int, position: int) -> int:
+    """The index of a call at its place: ``round_ * ROUND_CALLS + position``, the round its pass's among the epoch's
+    passes with calls (the ``s`` of W's ``pearl-a/<s>/<c>``) and the position its among its pass's calls (the ``c``).
+    -h3's row seed reads the index, so the place fixes the call's noise and no one chooses it. `DomainError`
+    (`OFF_PLACE`) for a round or a position at or past `ROUND_CALLS`."""
+    if not (0 <= round_ < ROUND_CALLS and 0 <= position < ROUND_CALLS):
+        raise DomainError(OFF_PLACE)
+    return round_ * ROUND_CALLS + position
 
 
 def tagged(tag: str, *parts: Part) -> bytes:
@@ -175,5 +189,5 @@ class PoUWScheme(Protocol):
         ...
 
 
-__all__ = ["CALL_RANGE", "U64", "Certificate", "Context", "DomainError", "Matmul", "PoUWScheme", "Shape", "Tile",
-           "fold_roots", "grid_tiles", "tagged"]
+__all__ = ["CALL_RANGE", "OFF_PLACE", "ROUND_CALLS", "U64", "Certificate", "Context", "DomainError", "Matmul", "PoUWScheme",
+           "Shape", "Tile", "call_place", "fold_roots", "grid_tiles", "tagged"]

@@ -99,7 +99,8 @@ theorem membersOf_apart {shared : _root_.Spot.OneStageZk.Own} {j : Json}
     Apart ms.toList := by
   unfold _root_.Spot.OneStageZk.membersOf at h
   split at h
-  · obtain ⟨ms', -, h⟩ := ebind_ok h
+  · obtain ⟨_, -, h⟩ := ebind_ok h
+    obtain ⟨ms', -, h⟩ := ebind_ok h
     dsimp only at h
     split at h
     · obtain ⟨_, h0, -⟩ := ebind_ok h

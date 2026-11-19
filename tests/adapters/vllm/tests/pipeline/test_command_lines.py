@@ -34,8 +34,6 @@ LINES: dict[tuple[str, ...], list[tuple[str, list[str], Any, Any]]] = {
         ("workload", ["--workload", "w.json"], "w.json", None),
         ("tp", ["--tp", "2"], 2, 1),
         ("rank", ["--rank", "1"], 1, 0),
-        ("emit_ranks", ["--emit-ranks", "0,1"], "0,1", None),
-        ("emit_root", ["--emit-root", "ranks"], "ranks", None),
         ("dead_free", ["--dead-free"], True, False),
         ("batched", ["--batched"], True, False),
         ("dsa_table_reads", ["--dsa-table-reads"], True, False),

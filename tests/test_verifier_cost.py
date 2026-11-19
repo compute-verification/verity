@@ -3,7 +3,7 @@
 A scan over the Lean under `verity/` outside `verity/protocols/proofs/flock/prover/` (the verifiers and the code they run) and over `security/`'s verifier code
 models (each `security/Proofs/**/Code.lean`, a verifier a guarantee is stated at, with the `security` modules it imports
 and the `Properties` modules those import) refuses the forms an unrolled walk takes there: locating gates one by one
-through the canonical layout (`P.gate g`, `Flock.Program.Prog.gate`), a range or loop bounded by a Definition's gate count
+through the canonical layout (`P.gate g`, `Prog.gate P g`, `Flock.Program.Prog.gate P g`), a range or loop bounded by a Definition's gate count
 (`List.range (P.defs[P.root]!).gates`, `[0:defn.gates]`, `List.range C.gates.length`), an array or loop bounded by a name
 bound to one (`let n := defn.gates` … `Array.mkEmpty n`, `for j in [0:n]`; `let gs := C.gates.toArray` … `List.range
 gs.size`), a range or loop over a key program's gates, inputs or units (`List.range kp.size`, `List.range kp.units`: a
@@ -20,6 +20,9 @@ file (`Stmt.setupTables innerTags …`), which `partialRangesT` folds row by row
 V*'s circuit text emitted outside V*'s namespace (`VStar.emitCircuitOf`), the whole unit laid out again. The fix is in the
 scan's failure message: summarize once per specialized Definition and multiply through batch members and scan
 iterations, as `InferenceOnlyCheck.Desc` does (its docstring), so a Definition's summary serves every activation of it.
+
+The scan is a net for the forms that have occurred, and no regex sees every spelling: the cost rule is held finally by the
+cost measurements and the count theorems.
 
 What may stay is listed in ``ALLOWED``, one line of reason each: the gate-by-gate references a description-sized
 verifier is difftested against, and the walks still open. An entry that no longer matches anything fails too.
@@ -125,8 +128,23 @@ FIX = ("a verifier does work proportional to the description, never to the unrol
 
 #: `/- … -/` and `-- …`, blanked so that line numbers stay
 COMMENT = re.compile(r"/-.*?-/|--[^\n]*", re.S)
-#: `P.gate g`: a value's gate locator (`Certificate.gate` and other namespaces' `gate` are not it)
-LOCATOR = re.compile(r"(?<![\w.'])(?:[a-z]\w*|P)\.gate\b(?![s'])")
+#: `P.gate g`, `Prog.gate P g` or `Flock.Program.Prog.gate P g`: a value's gate locator (`Certificate.gate` and other
+#: namespaces' `gate` are not it)
+LOCATOR = re.compile(r"(?<![\w.'])(?:[a-z]\w*|P)\.gate\b(?![s'])|(?<![\w'])(?<!def )(?:(?:Flock\.)?Program\.)?Prog\.gate\b(?![\w'])"
+                     r"|\|>\s*\.gate\b(?![\w'])")
+#: a source that opens `Prog`'s namespace (`namespace Prog`, `open Flock.Program.Prog`), where `gate P g` is the locator
+PROG_OPEN = re.compile(r"^[ \t]*(?:namespace|open)\s+(?:[\w.]+\s+)*(?:[\w.]*\.)?Prog(?=\s|$)", re.M)
+#: the locator by its bare name, in a source that opens `Prog`'s namespace
+BARE = re.compile(r"(?<![\w.'])(?<!def )gate[ \t]+(?=[\w(])")
+#: where a declaration ends: a line at the margin, or a line whose first word, after attributes and modifiers, opens
+#: a declaration, since Lean takes an indented command
+END = (r"(?=\n\S|\n[ \t]*(?:@\[[^\]\n]*\]\s*)*(?:(?:private|protected|noncomputable|public|meta|nonrec)\s+)*"
+       r"(?:def|abbrev|instance|structure|class|inductive|opaque|partial|unsafe|mutual)\b|\Z)")
+#: a theorem or lemma, its statement and its proof, to where it ends: what it says, never code that runs
+THEOREM = re.compile(r"^(?:@\[[^\]\n]*\]\s*)?(?:(?:private|protected|nonrec)\s+)*(?:theorem|lemma)\b.*?" + END,
+                     re.S | re.M)
+#: a test module's `#guard` or `example`, with its indented lines: a check at build time, not a verifier's code
+GUARD = re.compile(r"^(?:#guard|example)\b.*?" + END, re.S | re.M)
 _ARG = r"(?:\((?:[^()\n]|\([^()\n]*\))*\.gates\)|(?:\([^()\n]*\))?[\w.\[\]!]*\.gates\b)"
 #: a range or loop bounded by a gate count
 RANGE = re.compile(rf"\b(?:List|Array)\.range\s*{_ARG}|\[\s*\w*\s*:\s*[^\]\n]*\.gates\s*\]")
@@ -161,8 +179,13 @@ def _unit_gates(unit: str) -> re.Pattern:
 
 def offenses(source: str, test: bool = False) -> list[tuple[int, str]]:
     """(line, what) for every unrolled walk in Lean `source`; a test (`test`) may unroll a templated unit."""
-    src = COMMENT.sub(lambda m: re.sub(r"[^\n]", " ", m.group()), source)
+    blank = lambda m: re.sub(r"[^\n]", " ", m.group())
+    src = THEOREM.sub(blank, COMMENT.sub(blank, source))
+    if test:
+        src = GUARD.sub(blank, src)
     hits = [(m.start(), "the gate locator") for m in LOCATOR.finditer(src)]
+    if PROG_OPEN.search(src):
+        hits += [(m.start(), "the gate locator") for m in BARE.finditer(src)]
     if not test:
         hits += [(m.start(), "a templated unit unrolled") for m in UNROLLED.finditer(src)]
         if INNER.search(src):
@@ -288,6 +311,42 @@ def test_the_scan_sees_each_form():
     """
     assert [line for line, _ in offenses(src)] == [3, 4, 7, 8, 11, 12, 13, 15, 16, 19, 20, 24, 25, 26, 26, 27]
     assert [line for line, _ in offenses(src, test=True)] == [3, 4, 7, 8, 15, 16, 24, 25, 26]
+    spelt = """
+def u (P : Prog) := (List.range n).mapM fun g => Prog.gate P g
+def v (P : Prog) := (List.range n).mapM fun g => Flock.Program.Prog.gate P g
+def w (P : Prog) := (List.range n).mapM fun g => Program.Prog.gate P g
+theorem x {P : Prog} (h : P.gate g = .ok y) : Prog.gate P g = Flock.Program.Prog.gate P g := by
+  simp [Prog.gate] at h
+private theorem y {P : Prog} : Prog.gate P g = (do
+    Steps.run "gate location" (gateStep P g) Steps.FUEL P.rootScope) := by
+  unfold Prog.gate
+#guard (match P.gate 0 with
+  | .ok _ => "" | .error e => e) == ""
+def z (P : Prog) := Prog.gateAt P g ++ Prog.gate_of h g
+def Prog.gate (P : Prog) (g : Nat) : V Nat := pure g
+"""
+    assert [line for line, _ in offenses(spelt)] == [2, 3, 4, 10]
+    assert [line for line, _ in offenses(spelt, test=True)] == [2, 3, 4]
+    hidden = """
+theorem t : True := by
+  trivial
+  def walk (P : Prog) := (List.range n).mapM fun g => P.gate g
+#guard (match P.gate 0 with
+  | .ok _ => true | .error _ => false)
+  @[inline] private def walk' (P : Prog) := (List.range n).mapM fun g => P.gate g
+def piped (P : Prog) := (List.range n).mapM fun g => P |>.gate g
+"""
+    assert [line for line, _ in offenses(hidden, test=True)] == [4, 7, 8]
+    opened = """
+namespace Prog
+def walk (P : Prog) := (List.range n).mapM fun g => gate P g
+def gate (P : Prog) (g : Nat) : V Nat := pure g
+def held (gate : Nat) := gate
+end Prog
+"""
+    assert [line for line, _ in offenses(opened)] == [3]
+    assert [line for line, _ in offenses(opened.replace("namespace Prog", "open Flock.Program.Prog"))] == [3]
+    assert offenses(opened.replace("namespace Prog", "open Flock.Program (Prog Ty)")) == []
     plain = """
     def lincheck (c : CircuitFold) := c.folded alpha beta lw rho ts
     def stage := emitCircuitOf holo put u l sub b

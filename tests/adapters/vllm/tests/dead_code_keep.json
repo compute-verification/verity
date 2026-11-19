@@ -2,6 +2,7 @@
  "schema": "vllm-dead-code-keep/v1",
  "dynamic_record": "art:a265fc569719ee1a410f0863416416af91c66d02b1ed8703a9f60fd19e614f2f",
  "modules": {
+  "verity_vllm.acquire.as_loaded": "a tensor-parallel rank's MXFP4 Marlin expert weights as loaded, read only by the multi-GPU Commit; it goes with `taps.attach_rank` and `narrowed_source` in the acquisition's cut of that road",
   "verity_vllm.definitions.numerics.ref_prims_twins": "numpy twins of registry.ref_prims, checked against the registered bodies by tests/program/test_ref_prims.py (LIVE registry.ref_prims)",
   "verity_vllm.program.frontend.derive_examples": "source modules of the derivation tests (LIVE frontend.derive)",
   "verity_vllm.program.lifting.dump": "complete-assignment dump used by tests/program/test_lifted_tiny.py (LIVE registry.lifted / pad_prims)",

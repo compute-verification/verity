@@ -40,13 +40,16 @@ class NotDerived(ValueError):
 
 
 def block(c: bytes, partition: Mapping[str, Any], k: int) -> list[tuple[int, int]]:
-    """Proof block ``k``'s units, the ``k``-th pair of the partition object's ``blocks``, which cover every unit of C's
-    population exactly once (`partition_object.blocks`); `Refused` where the object is not valid, names no blocks, its
-    blocks end short of or past the population, or has no block ``k``."""
+    """Proof block ``k``'s units, the ``k``-th pair of the partition object's one level of ``blocks``, which cover every unit
+    of C's population exactly once (`partition_object.blocks`); `Refused` where the object is not valid, names no blocks or
+    more than one level (`blocks-levels`), its blocks end short of or past the population, or has no block ``k``."""
     v = PO.validate(partition)
     if not v.ok:
         raise Refused("E_PARTITION", f"the partition object is not valid: {list(v.codes)}")
-    bs = PO.blocks(partition)
+    try:
+        bs = PO.blocks(partition)
+    except ValueError as e:
+        raise Refused("E_BLOCKS", str(e)) from e
     if bs is None:
         raise Refused("E_BLOCKS", "the partition object names no blocks")
     try:
