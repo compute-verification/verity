@@ -1,15 +1,17 @@
 """A credited linear of C whose nodes write its y, through the door.
 
-C is one linear y = x · Wᵀ over M rows of K and N columns whose nodes are its grid's units of `PearlPlusTileCoreWords_v2`
+C is one linear y = x · Wᵀ over M rows of K and N columns whose nodes are its grid's units of `PearlPlusTileCoreWords_v3`
 (`pearl_plus_credited.tiles`), each reading its ports as rows of the values C holds: x's and W's rows (``a``, ``b``), the
 prover's certificates (``cert``) and the public row (`pearl_plus_credited.PUBLIC`: ``salt``, ``root``, ``unit``,
-``rows``, ``eb``, ``fa``, ``fb``, ``g``), registered under public salts; and each writing its tile of y (``o1``), which
+``rows``, ``col``), registered under public salts; each deriving its noise inside from the salt and the root, and each
+writing its tile of y (``o1``), which
 a reader of the linear takes by wire: the residual add of each row of y and the residual stream's row (``r``,
 `Bf16AddRow_v1`), C's output. y is no value C holds. A drawn unit's outputs are registered as the record its reader holds
-them to: its digest and y under hiding salts, its ``ok`` as 1 under public salts. The noise is seeded by the epoch's salt
-and W's registered root: the stager forms its tiles under them, and the verifier's side computes the public row from those
-two alone (`public_values`, on `pearl_plus_credited`'s reference) and its registered roots from that row, which every
-staged file's roots must equal; the door doesn't yet bind the row to the supplied functions (`Registered.supplied`).
+them to: its digest and y under hiding salts, its ``ok`` (one u16) as 1 under public salts. The noise is seeded by the
+epoch's salt and W's registered root: the stager forms its tiles under them, and the verifier's side fills the public row
+from the salt, W's registered root and each tile's place alone (`public_values`), no noise value among them, and its
+registered roots from that row, which every staged file's roots must equal; the door doesn't yet bind the salt and the
+root to the supplied functions (`pouw.pearlplus.salt/v1`, `registered.root/v1`).
 ``stage`` evaluates C on an honest linear and stages a dishonest proof of the drawn tile (``--bad``: ``y``, its claimed y
 a word other than the one it computes; ``cert``, a certificate word other than the prover's; ``filler``, a nonzero word
 in its filler row; each claiming the honest outputs), places the units' amounts
@@ -97,17 +99,16 @@ def linear(k: int, m: int, n: int, tile: tuple[int, int], reader: bool = True) -
     port = dict(port)
     rt, ct = len({t.rows for t in ts}), n // tn
     row = {"x": port["a"], "w": port["b"], "cert": port["cert"], "r": Array(n, BF16), "rows": port["rows"],
-           "eb": port["eb"]}
-    count = {"x": rt, "w": ct, "cert": len(ts), "r": m, "rows": rt, "eb": ct}
-    names = ("x", "w", "cert") + (("r",) if reader else ()) + ("salt", "root", "unit", "rows", "eb", "fa", "fb", "g")
+           "col": port["col"]}
+    count = {"x": rt, "w": ct, "cert": len(ts), "r": m, "rows": rt, "col": ct}
+    names = ("x", "w", "cert") + (("r",) if reader else ()) + PC.PUBLIC
     params = tuple((v, Array(count[v], row[v])) if v in count else (v, port[v]) for v in names)
     types = {v: row.get(v, t) for v, t in params}
     reads = []
     for i, t in enumerate(ts):
         r = t.rows[0] // tm
         reads.append({"a": ("x", r), "b": ("w", t.col), "cert": ("cert", i), "salt": ("salt", 0), "root": ("root", 0),
-                      "unit": ("unit", 0), "rows": ("rows", r), "eb": ("eb", t.col), "fa": ("fa", 0), "fb": ("fb", 0),
-                      "g": ("g", 0)})
+                      "unit": ("unit", 0), "rows": ("rows", r), "col": ("col", t.col)})
     add = bind(Bf16AddRow, N=n)
 
     def body(B, S, *xs):
@@ -138,16 +139,16 @@ def linear(k: int, m: int, n: int, tile: tuple[int, int], reader: bool = True) -
 
 
 def public_values(ln: Linear, k: int, unit: int, salt: bytes, root: bytes) -> dict:
-    """The public row of call ``unit`` as C's values (`pearl_plus_credited.public` of each tile): ``salt``, ``root``,
-    ``unit``, ``fa``, ``fb`` and ``g`` one row each, ``rows`` a row tile's, ``eb`` a column tile's."""
+    """The public row of call ``unit`` as C's values (`pearl_plus_credited.public` of each tile): ``salt``, ``root`` and
+    ``unit`` one row each, ``rows`` a row tile's, ``col`` a column tile's."""
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
 
-    pub: dict = {"rows": {}, "eb": {}}
+    pub: dict = {"rows": {}, "col": {}}
     for t in ln.tiles:
         p = PC.public(SCHEME, k, t, unit, salt, root)
-        pub["rows"][t.rows[0] // len(t.rows)], pub["eb"][t.col] = p["rows"], p["eb"]
-        shared = {v: p[v] for v in ("salt", "root", "unit", "fa", "fb", "g")}
-    return {**shared, **{v: [pub[v][r] for r in range(len(pub[v]))] for v in ("rows", "eb")}}
+        pub["rows"][t.rows[0] // len(t.rows)], pub["col"][t.col] = p["rows"], p["col"]
+        shared = {v: p[v] for v in ("salt", "root", "unit")}
+    return {**shared, **{v: [pub[v][r] for r in range(len(pub[v]))] for v in ("rows", "col")}}
 
 
 def honest(k: int, m: int, n: int, ln: Linear, unit: int, seed: str, salt: bytes, root_of) -> tuple[dict, list]:
@@ -220,7 +221,7 @@ def tamper(ln: Linear, index: int, vals: dict, bad: str) -> dict:
     return {**vals, **out}
 
 
-MANY = ("x", "w", "cert", "r", "rows", "eb")
+MANY = ("x", "w", "cert", "r", "rows", "col")
 
 
 def rows_of(ln: Linear, values: dict) -> dict[str, list[list[int]]]:
@@ -384,8 +385,9 @@ def stage(a) -> int:
     assert rec["evaluate"]["dishonest_ok"][index] == (1 if a.bad == "y" else 0), rec["evaluate"]
 
     def fields_of(g: list[int]) -> dict[str, list[int]]:
-        """A unit's output fields' bits, each leaf low bit first: o0 the digest, o1 y's words, o2 ok."""
-        return {"o0": g[:nd], "o1": [(w >> j) & 1 for w in y_of(g) for j in range(16)], "o2": [g[-1]]}
+        """A unit's output fields' bits, each leaf low bit first: o0 the digest, o1 y's words, o2 ok's word."""
+        return {"o0": g[:nd], "o1": [(w >> j) & 1 for w in y_of(g) for j in range(16)],
+                "o2": [(g[-1] >> j) & 1 for j in range(16)]}
 
     claimed = {"honest": [fields_of(g) for g in got_h], "dishonest": [fields_of(g) for g in got_h]}
     if a.bad == "y":
@@ -410,7 +412,8 @@ def stage(a) -> int:
     widths = dict((q[0], q[1]) for q in meta["ports"])
     verifier_row = public_values(ln, k, unit, salt, w_reg["w"].root)
     verifier_roots = {v: r.root.hex() for v, r in register(program, rows_of(ln, verifier_row), supplied).items()}
-    rec["public_row"] = {"of": "the verifier's: `public_values` from the salt and W's registered root alone",
+    rec["public_row"] = {"of": "the verifier's: `public_values` from the salt, W's registered root and the tiles' places "
+                         "alone, no noise value", "ports": list(PC.PUBLIC),
                          "salt": salt.hex(), "w_root": w_reg["w"].root.hex(), "supplied": list(supplied)}
     other = PC.public(SCHEME, k, drawn, unit + 1, good["salt"], good["root"])
     wrong_unit = rows_of(ln, {"unit": other["unit"]})

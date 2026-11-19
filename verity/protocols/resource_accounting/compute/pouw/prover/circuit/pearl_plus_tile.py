@@ -6,6 +6,10 @@ reader of the linear takes y by wire from the node that wrote it and the verifie
         (a: Array<TM, f32[K]>, b: Array<TN, f32[K]>, cert, salt: u8[32], root: u8[64], unit: u32, rows: Array<TM, u32>,
          eb: Array<TN, e4m3[32]>, fa, fb: Array<K, e4m3[32]>, g: Array<32, f32[32]>)
         -> (digest: u8[64], y: Array<TR, bf16[TN]>, ok: bit)
+    PearlPlusTileNoise_v2{K,TN,DEV}                     on bits: the σ of the noise's word body
+        (salt: u8[32], root: u8[64], col: u32) -> (eb: Array<TN, e4m3[32]>, fa, fb: Array<K, e4m3[32]>, g: Array<32, f32[32]>)
+        the core's eb, fa, fb and g for column tile col, from seed_B = H_"seed-B"(salt ‖ root) (`PearlCSeedB_v1`,
+        `PearlCLineKey_v1`, `PearlCNoiseLine_v1`, `PearlCGram_v1`)
 
 The core, from the registry's call Definitions (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_call`) and PoUW's inert-work bound (`inert_bound`):
 
@@ -50,14 +54,15 @@ from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.circuits.ops.fp32 import F32MulV2
 from verity.circuits.ops.prims import Bf16ToF32, F32ToE4m3Sat
-from verity.circuits.ops.scalar import Bf16GtStrict, BitAnd, F32IsFinite, I32Eq, I32Le
+from verity.circuits.ops.scalar import Bf16GtStrict, BitAnd, F32IsFinite, I32Add, I32Eq, I32Le
 from verity.circuits.refs import Coll, array_of, tuple_of
 from verity.circuits.silicon import fp32
 from verity.circuits.types import Array, Tuple, Value
 from verity.circuits.ops.boolean.versions import lift_body
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_call import PearlCRowA, PearlCRowB
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_forming import LINE
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_noise import BYTES32, BYTES64, PearlCRowDigest
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_forming import LINE, PearlCGram
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_noise import (
+    BYTES32, BYTES64, NORM_E, NORM_F, PearlCLineKey, PearlCNoiseLine, PearlCRowDigest, PearlCSeedB)
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_tile import PearlCUnscale
 
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError, Shape
@@ -73,7 +78,7 @@ from . import leaves as L
 from verity.circuits.ops import words as W
 
 __all__ = ["PUBLIC", "PearlPlusAdmit", "PearlPlusAdmitV2", "PearlPlusSaltDead", "PearlPlusSaltDeadV2", "PearlPlusTileCoreV3",
-           "core", "reference", "served"]
+           "PearlPlusTileNoiseV2", "core", "reference", "served"]
 
 F32, U32, BIT, I32, BF16 = Value(32), Value(32), Value(1), Value(32), Value(16)
 R = pc8.R
@@ -236,6 +241,60 @@ _CORE = CompositeDefinition(
         "words, ok: those rows and B's admitted, the tile's and each real row's inert-work bound, each served word finite, "
         "and each later row (filler) zero word for word).")
 PearlPlusTileCoreV3 = _on_bits(_CORE, 3)
+
+
+# ---- the tile's noise ---------------------------------------------------------------------------------------------------
+
+def _times(e: U._Emit, x, n: int):
+    """``x`` · ``n`` (u32, wrapping) for a static n >= 1: `I32Add` of x's doublings at n's set bits."""
+    total = None
+    while n:
+        if n & 1:
+            total = x if total is None else e.call(I32Add, total, x)
+        n >>= 1
+        if n:
+            x = e.call(I32Add, x, x)
+    return total
+
+
+def _refuse_noise(b: dict) -> str | None:
+    k, dev = b.get("K", 256), b.get("DEV", "h100")
+    if not (isinstance(k, int) and k >= SLICE and k % SLICE == 0):
+        return f"the Gram is over whole {SLICE}-code slices: K = {k!r}"
+    return None if dev in DEVICES else f"no device record {dev!r}"
+
+
+def _noise_ret(S) -> Tuple:
+    return Tuple(Array(S.TN, LINE), Array(S.K, LINE), Array(S.K, LINE), pc8.GRAM)
+
+
+def _noise_body(B, S, salt, root, col):
+    e, k, tn, d = U._Emit(B), S.K, S.TN, DEVICES[S.DEV]
+    key = B.call(PearlCLineKey, B.call(PearlCSeedB, salt, root))
+
+    def line(side: int, factor: int, t, norm: int):
+        return B.call(PearlCNoiseLine, key, e.c(8, side), e.c(8, factor), e.c(32, t) if isinstance(t, int) else t,
+                      e.c(16, norm))
+
+    base = _times(e, col, tn)
+    eb = [line(1, 0, base if j == 0 else e.call(I32Add, base, j), NORM_E) for j in range(tn)]
+    fa = [line(0, 1, t, NORM_F) for t in range(k)]
+    fb = [line(1, 1, t, NORM_F) for t in range(k)]
+    g = B.call(bind(PearlCGram, K=k, R=R, DOT=pc8.ATOMS[d.atom.name], G=d.g or 0), array_of(fb), array_of(fa))
+    return tuple_of(array_of(eb), array_of(fa), array_of(fb), g)
+
+
+_NOISE = CompositeDefinition(
+    "PearlPlusTileNoise", 1, ("K", "TN", "DEV"),
+    lambda S: ((("salt", BYTES32), ("root", BYTES64), ("col", U32)), _noise_ret(S)),
+    _noise_body, refuse=_refuse_noise, register=False,
+    conformance="protocol-defined; equal to `pearl_plus_credited`'s row references and the scheme's noise on their "
+                "fixtures (tests/verity/protocols/resource_accounting/compute/pouw/prover/test_pearl_plus_credited.py)",
+    doc="A -h3 tile's noise on words from the live salt and the weights' root: key = `PearlCLineKey_v1` of seed_B = "
+        "`PearlCSeedB_v1`(salt, root); eb, E_B's lines of the column tile col, `PearlCNoiseLine_v1`(key, 1, 0, col·TN + j, "
+        "bf16 8192) for j < TN; fa and fb, F_A's and F_B's K lines, (key, 0, 1, t, bf16 512) and (key, 1, 1, t, bf16 512) "
+        "for t < K; g = `PearlCGram_v1`{K, 32, the device's atom, its window (0: none)}(fb, fa)")
+PearlPlusTileNoiseV2 = _on_bits(_NOISE, 2)
 
 
 # ---- the unit -------------------------------------------------------------------------------------------------------
