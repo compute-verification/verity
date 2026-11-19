@@ -424,8 +424,8 @@ def stmtOf (name : String) (pub : ByteArray) (sampleB registeredB : Option ByteA
 /-- **The statement the `t`-th of the statements' sessions makes** (`stmtOf`): template `t`'s, at the public file of
 the member the session's statement names, the sample in the session's record and the member's registered reads, each
 as `Flock.RecordText.printT` prints it. None where the member's circuit is not template `t`'s, or the session's
-record or the member's public file is on no blob, its circuit file is not derived (`OneStageZk.restrict`), or a field
-doesn't read. -/
+record or the member's public file is on no blob, `OneStageZk.restrict` refuses its circuit file, or a field doesn't
+read. -/
 def stmtOwnAt (p : Params) (e : Evidence) (bs : Core.Blobs) (t : Nat) : Option Json := do
   let st ← (e.statements.toList.flatMap fun st => st.sessions.toList.map fun _ => st)[t]?
   let s ← (e.statements.toList.flatMap (·.sessions.toList))[t]?
@@ -809,8 +809,8 @@ def bytesFit (limit : Nat) (session : String) : Option Nat → V Unit
 #guard (bytesFit 300 "s" (some 299)).toOption.isSome
 #guard (bytesFit 300 "s" (some 300)).toOption.isNone
 #guard (bytesFit 300 "s" none).toOption.isSome
-#guard stmtSize ⟨.null, ⟨#[1, 2]⟩, .null, "", none, 0⟩ ⟨#[3]⟩ .empty 7 none == STMT_HEAD + 1 + 7 + 2 + 4
-#guard stmtSize ⟨.null, .empty, .null, "", some (.str "ab"), 0⟩ .empty .empty 0 (some .null) ==
+#guard stmtSize { programJ := .null, program := ⟨#[1, 2]⟩, partition := .null, pub := "", registered := none } ⟨#[3]⟩ .empty 7 none == STMT_HEAD + 1 + 7 + 2 + 4
+#guard stmtSize { programJ := .null, program := .empty, partition := .null, pub := "", registered := some (.str "ab") } .empty .empty 0 (some .null) ==
   STMT_HEAD + 4 + 4 + 4
 #guard tablesSize [("ab", ⟨#[1, 2, 3]⟩), ("", .empty)] == 16 + 2 + 3 + 16
 

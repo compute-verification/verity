@@ -102,7 +102,7 @@ structure Names (A : Live) (o : Own) (p : _root_.Spot.OneStageZk.Params) (bs : C
   program : A.I.program = some p.own.program
   partition : FlockDeploy.jsonOf "partition" o.partition = .ok p.own.partition
   registered : o.registered.mapM (FlockDeploy.jsonOf "registered reads") = .ok p.own.registered
-  tags : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags
+  tags : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags
   single : p.members = none
 
 /-- **The blobs show the run's session.** Where the run reaches the sample file round, at each session `s` the evidence
@@ -486,8 +486,7 @@ theorem ins_sess (hn : Names A o p bs) (hpl : A.I.tags.plainLeaves = false)
     (hJ : FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J) :
     ∃ si, ({ baseRaw A o with draw := some ⟨d.toArray⟩ } : FlockDeploy.Raw).ins = .ok si ∧
       SessionMatch si (inputsAt A p bs) rd ∧ si.read.draw = some (Flock.norm J) := by
-  have hf : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags :=
-    Flock.Tags.byName?_of_find? hn.tags
+  have hf : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags := hn.tags
   have hdm : (some (⟨d.toArray⟩ : ByteArray)).mapM (FlockDeploy.jsonOf "draw") = .ok (some J) := by
     rw [Option.mapM_some, hJ]
     rfl
