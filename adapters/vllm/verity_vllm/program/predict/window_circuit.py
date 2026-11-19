@@ -156,7 +156,7 @@ from verity_vllm.program.frontend.stop_rule import stop_ids as of_config
 
 from . import scan_state as SS
 from .build import Unexpressible
-from .steps import RequestUnit, advice_of, request_program
+from .steps import RequestUnit, advice_of, compile_steps, request_program
 from .window_builder import WEIGHTS, Grain, Row, _Builder, check_provable, inference
 from .window_class import (
     CLASS_OF_RECORD,
@@ -396,6 +396,18 @@ class Scheduled(NamedTuple):
     place: int
 
 
+def served_lowering(registered: Any, cls: WindowClass, advice: Any, ingress: Any, grain: Grain = _GRAIN,
+                    placed: Sequence[tuple[int, int | None]] | None = None) -> tuple[Any, Lowered]:
+    """A served window compiled and its circuit lowered, the one call the serve's close and the window commit make: I2's
+    Programs of ``advice`` over the bodies ``ingress`` brought (`steps.compile_steps`), their requests within ``cls``
+    (`takes`), the circuit (`lower`), refused (`Unexpressible`) where Flock's composer wouldn't prove a unit
+    (`check_provable`). -> the compile (its requests' ids and arrivals, which place the slots) and the lowering."""
+    compiled = compile_steps(registered, advice, ingress)
+    low = lower(registered, cls, None, grain, requests=takes(compiled, cls, placed))
+    check_provable(low.circuit)
+    return compiled, low
+
+
 def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN,
                    placed: Sequence[tuple[int, int | None]] | None = None,
                    tables: FixedLoad | None = None) -> IF.Circuit:
@@ -414,5 +426,6 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
 
 
 __all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Request", "Row", "Scheduled", "Tables",
-           "WEIGHTS", "WindowClass", "WindowCompiler", "check_provable", "class_circuit", "class_program", "lower", "requests_of", "stop_ids",
+           "WEIGHTS", "WindowClass", "WindowCompiler", "check_provable", "class_circuit", "class_program", "lower", "requests_of",
+           "served_lowering", "stop_ids",
            "takes", "window_circuit"]
