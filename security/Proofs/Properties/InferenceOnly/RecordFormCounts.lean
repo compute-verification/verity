@@ -5,6 +5,7 @@ public import Proofs.Properties.InferenceOnly.RecordBlockGates
 public import Proofs.Properties.InferenceOnly.RecordForm
 public import Proofs.Properties.InferenceOnly.RecordFresh
 public import Proofs.Properties.InferenceOnly.RecordFreshRows
+public import Proofs.Properties.InferenceOnly.RecordShares
 
 /-!
 # The summary counts every block
@@ -26,13 +27,23 @@ namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open InferenceOnlyVerifier.Record.SecurityProofs (form FreshRows fresh_rows)
 
+/-- **The summary counts every block**, where the fresh rows of a slot are within the summary's fresh and every record
+the check reads is of a root no unit of which reads an edge: a block reads at most the summary's fresh bits
+(`block_fresh`), and has the summary's gates or none (`block_gates`). -/
+theorem counts_of_fresh_noEdge (hFR : FreshRows) (hNE : InferenceOnlyVerifier.Record.SecurityProofs.NoEdgeReads) :
+    Counts form :=
+  fun j tr c h _ hd u => ⟨block_fresh hFR h (hNE j tr c h) hd u, block_gates h (hNE j tr c h) hd u⟩
+
 /-- **The summary counts every block**, where the fresh rows of a slot are within the summary's fresh: a block reads
 at most the summary's fresh bits (`block_fresh`), and has the summary's gates or none (`block_gates`). -/
 theorem counts_of_fresh (hFR : FreshRows) (hNE : InferenceOnlyVerifier.Record.SecurityProofs.EdgeFreeReads) :
     Counts form :=
-  fun j tr c h _ hd u =>
-    ⟨block_fresh hFR h (InferenceOnlyVerifier.Record.SecurityProofs.noEdge_of_edgeFree (hNE j tr c h)) hd u,
-      block_gates h (InferenceOnlyVerifier.Record.SecurityProofs.noEdge_of_edgeFree (hNE j tr c h)) hd u⟩
+  counts_of_fresh_noEdge hFR (InferenceOnlyVerifier.Record.SecurityProofs.noEdgeReads_of_edgeFreeReads hNE)
+
+/-- **The summary counts every block**, where every record the check reads is of a root no unit of which reads an
+edge. -/
+theorem form_counts_noEdge (hNE : InferenceOnlyVerifier.Record.SecurityProofs.NoEdgeReads) : Counts form :=
+  counts_of_fresh_noEdge fresh_rows hNE
 
 /-- **The summary counts every block**: in every circuit a record the check reads lays out, each block reads at
 most the summary's fresh bits, and has the summary's gates or none. -/
