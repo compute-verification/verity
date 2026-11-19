@@ -6,7 +6,7 @@ from typing import Any
 
 
 def _pouw_roots() -> list[Any]:
-    """The tile on C's words, its noise derived inside (`PearlPlusTileCoreWords_v3`, held as its cut, `CUTS`), and its
+    """The tile on C's words, its noise derived inside (`PearlPlusTileCoreWords_v4`, held as its cut, `CUTS`), and its
     core on words with that noise by wire (`PearlPlusTileCoreWired_v1`), at `pearl_plus_tile`'s core instances: a 1 × 1
     tile of a one-column linear at K = 256 on the H100's record, forming v1 under -h3, the 2 × 1 tile whose second row is
     filler (TR = 1), a column tile of a two-column linear (N = 2) and the 1 × 1 tile on the sm_120 record."""

@@ -1,6 +1,6 @@
 """The vectors of the noise a credited unit derives inside from its public row (the eb, fa, fb and g of
-`pearl_plus_credited.PearlPlusTileCoreWords_v3`, its units `PearlPlusTileSeed_v1`, `PearlPlusTileLine_v2` and
-`PearlPlusGramRow_v2`): ``fixtures/pearl_plus_public_row.json``, regenerated here from the reference functions
+`pearl_plus_credited.PearlPlusTileCoreWords_v4`, its units `PearlPlusTileSeed_v2`, `PearlPlusTileLine_v2` and
+`PearlPlusGramRow_v3`): ``fixtures/pearl_plus_public_row.json``, regenerated here from the reference functions
 (`pearl_plus_credited.row_eb` …) and compared byte for byte, and the units, on their words and on bits, held to them.
 
 Each case gives its inputs (salt, root_B, k, col, tn, dev), seed_B, and each value's SHA-512 digest; at k ≤ 64 it also gives
@@ -92,9 +92,10 @@ def noise_units(c: dict, *, bits: bool) -> dict[str, bytes]:
     reference's bytes."""
     k, tn, dev = c["k"], c["tn"], c["dev"]
     if bits:
-        run, seed, line, row = evaluate_words, PT.seed(k, tn), PT.line, PT.gram_row(k, dev)
+        run, seed, line, row = evaluate_words, PT.seed(k, tn), PT.line, lambda p: PT.gram_row(k, dev, p)
     else:
-        run, seed, row = evaluate_batch, bind(PT._SEED, K=k, TN=tn), bind(PT._GRAM_ROW, K=k, DEV=dev)
+        run, seed = evaluate_batch, bind(PT._SEED, K=k, TN=tn)
+        row = lambda p: bind(PT._GRAM_ROW, K=k, DEV=dev, P=p)  # noqa: E731
         line = lambda kind: bind(PT._LINE, **dict(zip(("SIDE", "FACTOR"), PT.LINES[kind])))  # noqa: E731
 
     def go(fn, *xs):
@@ -107,7 +108,7 @@ def noise_units(c: dict, *, bits: bool) -> dict[str, bytes]:
     key, ebi, fi = s[:32], s[32:32 + tn], s[32 + tn:]
     eb = go(line("eb"), [key] * tn, [[i] for i in ebi])
     fa, fb = (go(line(kind), [key] * k, [[i] for i in fi]) for kind in ("fa", "fb"))
-    g = go(row, [fb[:, p] for p in range(32)], [fa.reshape(-1)] * 32)
+    g = np.concatenate([go(row(p), [fb.reshape(-1)], [fa.reshape(-1)]) for p in range(32)])
     return {"eb": bytes(eb.reshape(-1).tolist()), "fa": bytes(fa.reshape(-1).tolist()), "fb": bytes(fb.reshape(-1).tolist()),
             "gram": b"".join(int(w).to_bytes(4, "little") for w in g.reshape(-1))}
 

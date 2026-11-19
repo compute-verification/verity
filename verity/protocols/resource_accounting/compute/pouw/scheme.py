@@ -1,7 +1,7 @@
 """Pearl+ as a resource scheme (`verity.protocols.resource_accounting.scheme`), registered as ``pearl-plus``.
 
 Its verifier is `verity/pouw/pearl-plus/v1` (`verifier/lean/pearlplus/PouwPearlPlus/Protocol.lean`). In C, a credited
-linear is its grid's units of `PearlPlusTileCoreWords_v3` (`prover.circuit.pearl_plus_credited`), which write its y; its
+linear is its grid's units of `PearlPlusTileCoreWords_v4` (`prover.circuit.pearl_plus_credited`), which write its y; its
 block (`TILE`) is the tile, which costs its credited MACs (`tile_macs`): its real rows × TN × K, its statics TR, TN and K,
 since the tile forms every word of the linear's depth K and holds its filler rows to zero. C's laying opens each tile into
 many proof blocks of many templates (its noise's units and its core, the core itself opened at the served K = 2048):
@@ -111,7 +111,7 @@ def drawn_blocks(scheme: Any, passes: Sequence[Sequence[Any]], key: Any, t: int,
 
 #: a credited tile's template in C before C is laid (`prover.circuit.pearl_plus_credited.PearlPlusTileCoreWords`): its
 #: statics are the tile's, and `tile_macs` of them is what the tile is credited
-TILE = "PearlPlusTileCoreWords_v3"
+TILE = "PearlPlusTileCoreWords_v4"
 #: `laid_tiles`' refusals: C holds no tile, so there is nothing to credit and no stratum to hold to its draw; the laid C's
 #: strata number blocks other than its root units, one template each, on which the stratified bound rests; a root unit
 #: of the laid C lies partly inside a tile's gates, so the rule places it in no tile

@@ -1,6 +1,6 @@
 """A credited linear of C whose nodes write its y, through the door.
 
-C is one linear y = x · Wᵀ over M rows of K and N columns whose nodes are its grid's units of `PearlPlusTileCoreWords_v3`
+C is one linear y = x · Wᵀ over M rows of K and N columns whose nodes are its grid's units of `PearlPlusTileCoreWords_v4`
 (`pearl_plus_credited.tiles`), each reading its ports as rows of the values C holds: x's and W's rows (``a``, ``b``), the
 prover's certificates (``cert``) and the public row (`pearl_plus_credited.PUBLIC`: ``salt``, ``root``, ``unit``,
 ``rows``, ``col``), registered under public salts; each deriving its noise inside from the salt and the root, and each

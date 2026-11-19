@@ -6,18 +6,21 @@ reader of the linear takes y by wire from the node that wrote it and the verifie
         (a: Array<TM, f32[K]>, b: Array<TN, f32[K]>, cert, salt: u8[32], root: u8[64], unit: u32, rows: Array<TM, u32>,
          eb: Array<TN, e4m3[32]>, fa, fb: Array<K, e4m3[32]>, g: Array<32, f32[32]>)
         -> (digest: u8[64], y: Array<TR, bf16[TN]>, ok: bit)
-    PearlPlusTileSeed_v1{K,TN}                          on words in, bits out
-        (salt: u8[32], root: u8[64], col: u32) -> (key: u8[32], eb: Array<TN, u32>, f: Array<K, u32>)
-        key = `PearlCLineKey_v1`(`PearlCSeedB_v1`(salt, root)), and the line indices: eb's col·TN + j, F's t (the σ
-        of its unregistered word body behind `WordBits`)
+    PearlPlusTileSeed_v2{K,TN}                          on words in, bits out
+        (salt: u8[32], root: u8[64], col: u32) -> (key: u8[32], eb_0 … eb_{TN-1}: u32, f_0 … f_{K-1}: u32)
+        key = `PearlCLineKey_v1`(`PearlCSeedB_v1`(salt, root)), and the line indices, one field each: eb's col·TN + j,
+        F's t (the σ of its unregistered word body behind `WordBits`)
     PearlPlusTileLine_v2{SIDE,FACTOR}                   on bits: the σ of one line's word body
         (key: u8[32], index: u32) -> e4m3[32]                 `PearlCNoiseLine_v1`(key, SIDE, FACTOR, index, norm)
-    PearlPlusGramRow_v2{K,DEV}                          on bits: the σ of one Gram row's word body
-        (fb: e4m3[K], fa: Array<K, e4m3[32]>) -> f32[32]      row p of `PearlCGram_v1` for fb F_B's column p
+    PearlPlusGramRow_v3{K,DEV,P}                        on bits: the σ of one Gram row's word body
+        (fb, fa: Array<K, e4m3[32]>) -> f32[32]               row P of `PearlCGram_v1`, for F_B's column P
 
-The node (`pearl_plus_credited.PearlPlusTileCoreWords_v3`) maps the line over eb's TN indices (SIDE 1, FACTOR 0) and F's K
-(SIDE 0 and 1, FACTOR 1), and the Gram row over F_B's 32 columns: each line and each row is independent given the key, so
-each is a unit of its own when C is laid (`verity.circuits.laying`), and eb, fa, fb and g reach the core as wired values.
+The node (`pearl_plus_credited.PearlPlusTileCoreWords_v4`) maps the line over eb's TN indices (SIDE 1, FACTOR 0) and F's K
+(SIDE 0 and 1, FACTOR 1), and Calls the Gram row for each of F_B's 32 columns: each line and each row is independent given
+the key, so each is a unit of its own when C is laid (`verity.circuits.laying`), and eb, fa, fb and g reach the core as
+wired values. Every unit reads each of its writers' output fields whole: a line its key and its own index (the seed
+writes one field an index), a Gram row F_B's and F_A's lines (its column P a static, so F_B's column is no part of a
+line's field), and the core the lines and the rows.
 
 The core, from the registry's call Definitions (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_call`) and PoUW's inert-work bound (`inert_bound`):
 
@@ -45,7 +48,7 @@ The core, from the registry's call Definitions (`verity.protocols.resource_accou
     a non-finite word and a BF16 overflow) and each filler row's every word zero, and-ed.
 
 The core reads no column index: E_B's lines ``eb`` are the column tile's, which the noise derives from ``col``.  The node
-(`pearl_plus_credited.PearlPlusTileCoreWords_v3`) derives the noise and Calls the core on the salt and B's root of the public row
+(`pearl_plus_credited.PearlPlusTileCoreWords_v4`) derives the noise and Calls the core on the salt and B's root of the public row
 the verifier fills itself (`pearl_plus_credited.public`), so the salt and the root reach the tile only through that row.
 
 The core is one registered Definition, its σ: its word body is an unregistered Definition the σ lifts and names as its
@@ -86,7 +89,7 @@ from . import tile_units as U
 from . import leaves as L
 from verity.circuits.ops import words as W
 
-__all__ = ["LINES", "PUBLIC", "PearlPlusAdmit", "PearlPlusAdmitV2", "PearlPlusGramRowV2", "PearlPlusSaltDead",
+__all__ = ["LINES", "PUBLIC", "PearlPlusAdmit", "PearlPlusAdmitV2", "PearlPlusGramRowV3", "PearlPlusSaltDead",
            "PearlPlusSaltDeadV2", "PearlPlusTileCoreV3", "PearlPlusTileLineV2", "PearlPlusTileSeed", "core", "gram_row", "line",
            "noise", "reference", "seed", "served"]
 
@@ -273,8 +276,9 @@ def _refuse_slices(b: dict) -> str | None:
 
 
 def _refuse_gram(b: dict) -> str | None:
-    dev = b.get("DEV", "h100")
-    return _refuse_slices(b) or (None if dev in DEVICES else f"no device record {dev!r}")
+    dev, p = b.get("DEV", "h100"), b.get("P", 0)
+    return _refuse_slices(b) or (None if dev in DEVICES else f"no device record {dev!r}") or \
+        (None if isinstance(p, int) and 0 <= p < R else f"P is F_B's column, 0 <= P < {R}: {p!r}")
 
 
 _NOISE_CONF = ("protocol-defined; equal to `pearl_plus_credited`'s row references and the scheme's noise on their fixtures "
@@ -302,20 +306,25 @@ def _seed_words(S) -> tuple:
     return dict(bind(_SEED, K=S.K, TN=S.TN).signature()[0])
 
 
+def _seed_ret(S) -> Tuple:
+    key, eb, f = BL.bit_type(bind(_SEED, K=S.K, TN=S.TN).signature()[1]).fields
+    return Tuple(key, *[eb.elem] * S.TN, *[f.elem] * S.K)
+
+
 def _seed_on_words(B, S, salt, root, col):
     bits = []
     for t, x in zip(_seed_words(S).values(), (salt, root, col)):
         w = t.leaf_widths()[0]
         bits.append(Coll(BL.bit_type(t), B.batch(bind(WordBits, W=w), Coll(Array(t.leaves, Value(w)), x.refs), axes=(0,)).refs))
-    return B.call(bind(_SEED_BITS, K=S.K, TN=S.TN), *bits)
+    return Coll(_seed_ret(S), B.call(bind(_SEED_BITS, K=S.K, TN=S.TN), *bits).refs)
 
 
 PearlPlusTileSeed = CompositeDefinition(
-    "PearlPlusTileSeed", 1, ("K", "TN"),
-    lambda S: (tuple(_seed_words(S).items()), BL.bit_type(bind(_SEED, K=S.K, TN=S.TN).signature()[1])),
+    "PearlPlusTileSeed", 2, ("K", "TN"), lambda S: (tuple(_seed_words(S).items()), _seed_ret(S)),
     _seed_on_words, refuse=_refuse_slices, conformance=_NOISE_CONF,
     doc="`PearlPlusTileKey_v1` on C's words: each port's leaves their bits (`WordBits`), then its σ "
-        "(`PearlPlusTileKey_v2`); the key and the indices on bits, the values the node's lines read by wire")
+        "(`PearlPlusTileKey_v2`); the key and each line's index on bits, one field each (the key, eb's TN, F's K), so "
+        "that each line the node maps reads one field whole by wire")
 
 
 def _line_body(B, S, key, index):
@@ -340,15 +349,18 @@ PearlPlusTileLineV2 = _on_bits(_LINE, 2)
 def _gram_row_body(B, S, fb, fa):
     d = DEVICES[S.DEV]
     chain = bind(PearlCChain, K=S.K, DOT=pc8.ATOMS[d.atom.name], G=d.g or 0)
-    return array_of([B.call(chain, fb, fa.take(1, q)) for q in range(R)])
+    column = fb.take(1, S.P)
+    return array_of([B.call(chain, column, fa.take(1, q)) for q in range(R)])
 
 
 _GRAM_ROW = CompositeDefinition(
-    "PearlPlusGramRow", 1, ("K", "DEV"), lambda S: ((("fb", Array(S.K, E4M3)), ("fa", Array(S.K, LINE))), Array(R, F32)),
+    "PearlPlusGramRow", 2, ("K", "DEV", "P"),
+    lambda S: ((("fb", Array(S.K, LINE)), ("fa", Array(S.K, LINE))), Array(R, F32)),
     _gram_row_body, refuse=_refuse_gram, register=False, conformance=_NOISE_CONF,
-    doc="Row p of a -h3 tile's Gram matrix on words, for fb F_B's column p: `PearlCChain_v1`{K, the device's atom, its "
-        "window (0: none)} of fb and each of F_A's 32 columns, `PearlCGram_v1`'s row p")
-PearlPlusGramRowV2 = _on_bits(_GRAM_ROW, 2)
+    doc="Row P of a -h3 tile's Gram matrix on words, from F_B's lines whole (``fb``) and F_A's (``fa``): "
+        "`PearlCChain_v1`{K, the device's atom, its window (0: none)} of F_B's column P and each of F_A's 32 columns, "
+        "`PearlCGram_v1`'s row P")
+PearlPlusGramRowV3 = _on_bits(_GRAM_ROW, 3)
 
 
 def seed(k: int, tn: int) -> SpecializedDefinition:
@@ -364,17 +376,21 @@ def line(kind: str) -> SpecializedDefinition:
     return bind(PearlPlusTileLineV2, SIDE=side, FACTOR=factor)
 
 
-def gram_row(k: int, dev: str) -> SpecializedDefinition:
-    return bind(PearlPlusGramRowV2, K=k, DEV=dev)
+def gram_row(k: int, dev: str, p: int) -> SpecializedDefinition:
+    return bind(PearlPlusGramRowV3, K=k, DEV=dev, P=p)
 
 
 def noise(B, k: int, tn: int, dev: str, salt, root, col) -> tuple:
     """A tile's noise in the body under construction from C's words of its ``salt``, ``root`` and ``col``: (eb, fa, fb, g)
-    on bits, `seed`'s Call, then `line` mapped over each kind's indices and `gram_row` over F_B's 32 columns."""
-    key, ebi, fi = (s := B.call(seed(k, tn), salt, root, col))[0], s[1], s[2]
+    on bits, `seed`'s Call, then `line` mapped over each kind's indices and a `gram_row` Call for each of F_B's 32
+    columns, each reading F_B's and F_A's lines whole."""
+    s = B.call(seed(k, tn), salt, root, col)
+    key, index = s[0], s[1].type
+    ebi, fi = (Coll(Array(n, index), s.refs.slice(s.type.field_offset(1 + at), s.type.field_offset(1 + at) + n * index.leaves))
+               for at, n in ((0, tn), (tn, k)))
     eb = B.batch(line("eb"), key, ebi, axes=(None, 0))
     fa, fb = (B.batch(line(kind), key, fi, axes=(None, 0)) for kind in ("fa", "fb"))
-    return eb, fa, fb, B.batch(gram_row(k, dev), fb, fa, axes=(1, None))
+    return eb, fa, fb, array_of([B.call(gram_row(k, dev, p), fb, fa) for p in range(R)])
 
 
 # ---- the unit -------------------------------------------------------------------------------------------------------
