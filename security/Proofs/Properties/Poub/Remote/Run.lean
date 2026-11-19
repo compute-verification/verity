@@ -607,6 +607,7 @@ theorem inv_close {s : State} {t : Int} {now : Nat} {r : Result} {s' : State} (h
   all_goals first
     | exact ⟨h, rfl, rfl, rfl⟩
     | exact ⟨inv_fail (inv_final h _) _ _ _, rfl, rfl, rfl⟩
+    | exact ⟨inv_final h _, rfl, rfl, rfl⟩
     | exact ⟨inv_sample (inv_final h _) _ _ _ (fun hu => by dsimp only at hu ⊢; rw [roots_final]; omega), rfl, rfl, rfl⟩
 
 theorem inv_verify {s : State} {t : Int} {openings : Array Opening} {r : Result} {s' : State} (h : Inv s)

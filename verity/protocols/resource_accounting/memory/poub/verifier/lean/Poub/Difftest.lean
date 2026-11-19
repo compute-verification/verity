@@ -221,7 +221,7 @@ def sessionOf (j : Json) : V (Session.Params × Array ByteArray × Array ByteArr
     throw "a paced session has at least one window and the closing window"
   let g ← perCoinOf j
   let coins ← hexes j "coins"
-  let sample := sampleBytes params.samples g
+  let sample := Session.sampleBytes params.samples g
   if coins.size ≠ params.windows + (params.windows + g - 1) / g
       || (coins.extract 0 params.windows).any (·.size ≠ Codec.COIN_BYTES)
       || (coins.extract params.windows coins.size).any fun c => c.size ≠ sample && c.size ≠ Codec.COIN_BYTES then
@@ -782,7 +782,7 @@ def p2SessionFn (j : Json) : V Json := do
   let coins ← hexes j "coins"
   let W := params.windows
   if coins.size ≠ 2 * W || (coins.extract 0 W).any (·.size ≠ Codec.COIN_BYTES)
-      || (coins.extract W coins.size).any (·.size ≠ sampleBytes params.samples 1) then
+      || (coins.extract W coins.size).any (·.size ≠ Session.sampleBytes params.samples 1) then
     throw "W challenges of 32 bytes, then W samples' coins, each whole"
   let chunk ← nat j "chunk"
   let mut s := P2Session.init held params coins (← nat j "not_before_ns")

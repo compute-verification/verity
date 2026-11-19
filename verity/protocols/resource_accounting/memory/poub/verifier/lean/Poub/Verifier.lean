@@ -159,7 +159,7 @@ releases them; an append's is the append coin of its slot (`Session.append`), th
 empty; every other coin is 32 bytes. -/
 def withCoin (g : Nat) (s : Session.State) (e : Session.Event) (c : ByteArray) : Except String Session.State := do
   let size := match e with
-    | .close _ _ => sampleBytes s.params.samples g
+    | .close _ _ => Session.sampleBytes s.params.samples g
     | _ => Codec.COIN_BYTES
   if c.size ≠ size then throw s!"the coin is {size} bytes"
   let set (i : Nat) : Except String Session.State :=
@@ -195,7 +195,7 @@ def unset (g : Nat) (s : Session.State) (e : Session.Event) (res : Option Sessio
   | .start _, some (.released (some t)) | .boundary _, some (.released (some t)) =>
     if missing t then some s!"window {t}'s challenge left without the challenger's coin" else none
   | .close t _, some (.sampled _) =>
-    if missing (s.params.windows + t.toNat / g) (sampleBytes s.params.samples g) then
+    if missing (s.params.windows + t.toNat / g) (Session.sampleBytes s.params.samples g) then
       some s!"window {t}'s openings were drawn without the challenger's coins"
     else none
   | _, _ => none

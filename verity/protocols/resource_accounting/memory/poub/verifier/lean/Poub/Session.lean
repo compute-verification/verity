@@ -42,9 +42,17 @@ namespace Poub.Session
 
 def STEP_LIMIT : Nat := 2 ^ 64
 
-/-- A window's receipts stay below this (`receive` rejects with `plan` a pass that would take them to it), so each
-sample's sampler word lies in its stream's first SHA-512 block (`Key._uniform` at `U < 2^448`). -/
+/-- `audit.RECEIPT_LIMIT`: a window's receipts stay below this (`receive` rejects with `plan` a pass that would take
+them to it), so a sample's coins have a size fixed before any pass (`sampleCoins`). -/
 def RECEIPT_LIMIT : Nat := 2 ^ 64
+
+/-- `coins.sample_coins`: the challenger's 64-byte coins a sample of `samples` receipts over `g` windows reserves, enough
+for the draw's first stream (`Flock.Draw.drawWith`'s `2k · width U + 64` bytes) at any `U < g · RECEIPT_LIMIT`. -/
+def sampleCoins (samples g : Nat) : Nat :=
+  (2 * samples * Flock.Draw.width (max 1 g * RECEIPT_LIMIT - 1) + 64 + 63) / 64
+
+/-- A sample's stream as the session holds it: its `sampleCoins` coins, whole, in order. -/
+def sampleBytes (samples g : Nat) : Nat := 64 * sampleCoins samples g
 
 /-- `audit.Pace`: a paced session's windows hold at most `k` roots each, and its γ is declared per `windowNs`. -/
 structure Pace where

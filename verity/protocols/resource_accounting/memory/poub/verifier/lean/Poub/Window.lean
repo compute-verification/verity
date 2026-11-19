@@ -214,17 +214,6 @@ def Verdict.reject (failure : Failure) (at? : Option (Nat × Nat)) : Verdict :=
 none, which no check here gives. -/
 def Verdict.rejection (v : Verdict) : Rejection := v.1.getD ⟨.malformed, none⟩
 
-/-- `audit.RECEIPT_LIMIT`: a window's receipts stay below it. -/
-def RECEIPT_LIMIT : Nat := 2 ^ 64
-
-/-- `coins.sample_coins`: the challenger's 64-byte coins a sample of `samples` receipts over `g` windows reserves, enough
-for the draw's first stream (`Flock.Draw.drawWith`'s `2k · width U + 64` bytes) at any `U < g · RECEIPT_LIMIT`. -/
-def sampleCoins (samples g : Nat) : Nat :=
-  (2 * samples * Flock.Draw.width (max 1 g * RECEIPT_LIMIT - 1) + 64 + 63) / 64
-
-/-- A sample's stream as the session holds it: its `sampleCoins` coins, whole, in order. -/
-def sampleBytes (samples g : Nat) : Nat := 64 * sampleCoins samples g
-
 /-- `Session.close`'s samples: `min(s, U)` distinct receipts (pass, position) uniform over the window's U receipts, in
 order, drawn by the proof system's draw (`Spot.Draw.sampleUnits`, a subset, as `coins.draw_first` draws it) from `src`,
 the sample's coins as the challenger released them, read in order with no derivation; with the bytes of `src` the draw

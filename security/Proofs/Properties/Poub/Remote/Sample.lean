@@ -69,7 +69,7 @@ theorem sampleIsSubset : SampleIsSubset := by
   · rw [if_pos hk0] at h
     replace h := (Option.some.inj h).symm
     subst h
-    exact ⟨#[], Or.inl ⟨hk0, rfl⟩, rfl, by simp [hk0], fun k hk => absurd hk (by simp),
+    exact ⟨#[], Or.inl ⟨hk0, rfl⟩, rfl, by simpa using hk0.symm, fun k hk => absurd hk (by simp),
       fun k₁ _ h₁ => absurd h₁ (by simp)⟩
   rw [if_neg hk0] at h
   cases hu : Spot.Draw.sampleUnits (.subset (min samples lengths.toList.sum)) lengths.toList.sum coin with
