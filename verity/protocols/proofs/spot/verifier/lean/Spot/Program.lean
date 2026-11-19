@@ -41,8 +41,8 @@ private def parseVerdict (s : String) : String :=
   | .ok p => s!"ok recut={(p.prog.defs[p.prog.root]!).body.recut.toList}"
   | .error e => e
 
-#guard parseVerdict recutRootDesc == "recut-root: the root reads an input node at a width other than its registered one; " ++
-  "Spot registers no such Program"
+#guard parseVerdict recutRootDesc ==
+  "recut-root: the root reads an input node at a width other than its registered one; Spot registers no such Program"
 #guard parseVerdict plainRootDesc == "ok recut=[]"
 
 end Spot
