@@ -1722,7 +1722,7 @@ one's with its mark (§5.4; `E_INPUTS`), the names nonempty and distinct (`E_INP
 nodes that lead the root's body, with no input node after them (`E_INPUTS_COUNT`), each parameter's nodes all run, all
 registered or all supplied inputs (`E_INPUTS_MIXED`), and each mark holding of its nodes (`markOf`, `checkEntry`). -/
 def checkInputs (defs : Array Defn) (root : Nat) (xs : Json) : V Unit := do
-  let bad := "E_INPUTS: `inputs` is not an array of [name, node count] pairs"
+  let bad := "E_INPUTS: `inputs` is not an array of [name, node count] entries, a supplied one's with its mark"
   let .arr xs := xs | throw bad
   let some ps := xs.mapM (fun x => match x with
       | .arr #[.str s, n] | .arr #[.str s, n, _] => (natJ? n).map (s, ·)

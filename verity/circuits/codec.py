@@ -1131,7 +1131,7 @@ def _check_inputs(xs: Any, root: SpecializedDefinition) -> None:
     from .supplied import check_entry
     if not isinstance(xs, list) or not all(isinstance(x, list) and len(x) in (2, 3) and isinstance(x[0], str) and _nat(x[1])
                                            for x in xs):
-        raise ValueError("E_INPUTS: `inputs` is not an array of [name, node count] pairs")
+        raise ValueError("E_INPUTS: `inputs` is not an array of [name, node count] entries, a supplied one's with its mark")
     names = [x[0] for x in xs]
     if "" in names or len(set(names)) != len(names):
         raise ValueError(f"E_INPUTS_NAME: the parameter names {names[:8]} hold an empty or a repeated name")

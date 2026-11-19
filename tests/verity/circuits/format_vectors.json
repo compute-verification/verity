@@ -1552,7 +1552,7 @@
   ],
   [
    "inputs that are not [name, count] pairs",
-   "ValueError: E_INPUTS: `inputs` is not an array of [name, node count] pairs"
+   "ValueError: E_INPUTS: `inputs` is not an array of [name, node count] entries, a supplied one's with its mark"
   ],
   [
    "an empty parameter name",
