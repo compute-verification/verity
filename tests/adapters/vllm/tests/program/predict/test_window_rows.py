@@ -502,6 +502,25 @@ def test_a_served_value_is_the_nodes_value_and_the_rest_are_computed(window):
         WR.Served(twice, *_read(store))
 
 
+def test_the_rows_print_their_units_by_source_and_their_readers_counts(window, capsys):
+    """`Rows` prints one ``WINDOW-ROWS`` line: every unit by source, and the reads, failures and members not retained of
+    the reader its served slots read through, summed once however many slots share it; ``opened`` is None with no reader."""
+    from collections import Counter
+    from types import SimpleNamespace
+
+    low, _f, tables, weights, slots = window
+    rows, store = _served(low, slots[0], T=1)
+    reader = SimpleNamespace(stats=Counter(reads=7, leaves=9, failed=0, not_retained=2))
+    got = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, *_read(store), reader))
+    filled = WR.Rows(low, [got, slots[1]], tables)
+    line, = [x for x in capsys.readouterr().err.splitlines() if x.startswith("WINDOW-ROWS ")]
+    doc = json.loads(line.removeprefix("WINDOW-ROWS "))
+    assert doc == filled.counts() and doc["opened"] == {"reads": 7, "failed": 0, "not_retained": 2}
+    assert sum(doc["units"].values()) == sum(filled.n.values()) and doc["units"]["served"] > 0
+    WR.Rows(low, slots, tables)
+    assert json.loads(capsys.readouterr().err.split("WINDOW-ROWS ", 1)[1])["opened"] is None
+
+
 def test_a_served_prefill_is_read_by_op_however_its_rows_interleave(window):
     """A Build's prefill runs position by position and prunes a node that isn't the last of a position's (the last layer's
     query side, its keys and values kept for the cache), so an op's first row can come after a later node's: its ops are

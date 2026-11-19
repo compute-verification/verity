@@ -106,7 +106,7 @@ def test_rb3_a_session_refuses_to_start_while_another_reads_the_store(store) -> 
     p = params(windows=2, samples=N * 3, window_ns=910)
     clock = Clock()
     sessions = [AuditRun(p, store.registration, None,
-                         coins.local(store.registration.digest, k, p.windows, Entropy(b"coins %d" % k), appends=1),
+                         coins.local(store.registration.digest, k, p.windows, Entropy(b"coins %d" % k), samples=p.samples, appends=1),
                          not_before_ns=0, clock=clock) for k in (0, 1)]
     provers = [audit_prover.Prover(store, None, entropy=Entropy(b"unused")) for _ in sessions]
     reads, entropy = [0], Entropy(b"joint salts")
@@ -130,10 +130,10 @@ def test_rb3_a_session_refuses_to_start_while_another_reads_the_store(store) -> 
     assert credited == 2 * reads[0] == 2 * 6 * N
     with pytest.raises((TypeError, ValueError)):
         AuditRun(p, store.registration, None,
-                 coins.local(store.registration.digest, 2, p.windows, Entropy(b"coins 2"), appends=1), clock=clock)
+                 coins.local(store.registration.digest, 2, p.windows, Entropy(b"coins 2"), samples=p.samples, appends=1), clock=clock)
     end = max(s.record().end_ns for s in sessions)
     nxt = AuditRun(p, store.registration, None,
-                   coins.local(store.registration.digest, 3, p.windows, Entropy(b"coins 3"), appends=1),
+                   coins.local(store.registration.digest, 3, p.windows, Entropy(b"coins 3"), samples=p.samples, appends=1),
                    not_before_ns=end, clock=clock)
     clock.now = end - 1
     with pytest.raises(audit.SessionError, match="may still be reading"):

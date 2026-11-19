@@ -53,7 +53,7 @@ def window(store: audit_prover.Store, prover_store: audit_prover.Store, passes: 
     reg = store.registration
     p = Params(blocks=reg.blocks, deadline_ns=10, windows=1, samples=passes * reg.blocks, delta=1e-6, window_ns=10)
     clock = Clock()
-    s = AuditRun(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins"), appends=1), not_before_ns=0,
+    s = AuditRun(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins"), samples=p.samples, appends=1), not_before_ns=0,
                  clock=clock)
     prover = audit_prover.Prover(prover_store, None, entropy=Entropy(b"receipt salts"))
     challenge, previous, out = s.start(), reg.digest, []

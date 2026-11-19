@@ -1,12 +1,12 @@
 """The P2 session's verifier as a party of its own (`p2_parties.py`), the Lean of record (`poub-verifier`,
-`Poub.P2Session`) with the Python's books beside it, over a channel to a prover serving the 9-block P2 store of
+`Poub.P2Session`) alone, over a channel to a prover serving the 9-block P2 store of
 `tests/test_p2.py`'s fixture: an honest prover accepted with its credited reads, under every unit or the registration's
 plan, one whose receipts skip a unit's reads, one whose openings are out of form and one that reads every unit when the
 plan is fewer rejected, and a request for another node, or off the auditor's session parameters in any of them, refused
 by the Lean before any coin, the party `main` starts holding its sessions to `SESSION` unless its flags name others; and
-the books' veto: a Lean that accepts a window the books reject, books that accept one the Lean rejects, a Lean whose
-answer isn't the books', one that fails mid-session, and a Lean that holds another store or session, each rejected or
-refused."""
+the Lean's answer alone: a Python opening check that accepts everything changes nothing, whatever the Lean answers is
+sent, a Lean that fails mid-session ends it unaccepted and one that never answers leaves it undecided, and the store
+and session are the ones the Lean holds."""
 
 from __future__ import annotations
 
@@ -249,7 +249,7 @@ def test_a_request_for_another_node_is_refused_before_any_coin(exe, store) -> No
                          ids=lambda off: "+".join(off))
 def test_a_request_off_the_auditors_session_is_refused_before_any_coin(exe, store, off) -> None:
     """A request for a longer allowance, fewer passes or openings, a shorter window or more windows than the auditor's,
-    or off it in two values, is refused by the Lean itself (it holds the auditor's, `hold`), in the books' words, before
+    or off it in two values, is refused by the Lean itself (it holds the auditor's, `hold`), in `params_of`'s words, before
     the registration or any coin is sent, naming each value."""
     provers: list[Prover] = []
 
@@ -286,53 +286,48 @@ def test_the_party_holds_its_sessions_to_the_served_parameters_unless_its_flags_
     assert "hold" in first(request(store), *[x for k, v in TOY.items() for x in ("--" + k.replace("_", "-"), str(v))])
 
 
-def test_a_lean_that_accepts_what_the_books_reject_is_vetoed(exe, store) -> None:
-    def accepting(lean):
-        return Lying(lean, "p2_openings", lambda req, _got: {"accepted": req["t"]})
-
-    _, answer = run(exe, store, lambda c: Prover(store, c, skip=1), request(store), lean_of=accepting)
-    assert answer["verdict"] == "reject" and answer["failure"] == p2_parties.DISAGREEMENT, answer
-    d = answer["disagreement"]
-    assert d["event"] == "openings" and d["lean"] == {"accepted": 0} and d["python"]["failure"] == "receipt"
-    assert "q_bytes" not in answer
-
-
-def test_books_that_accept_what_the_lean_rejects_are_vetoed(exe, store, monkeypatch) -> None:
+def test_the_python_check_takes_no_part_in_the_verdict(exe, store, monkeypatch) -> None:
+    """A Python opening check that accepts everything changes nothing: the skipping prover's window is the Lean's
+    reject."""
     monkeypatch.setattr(p2, "check", lambda *_a, **_k: None)
     _, answer = run(exe, store, lambda c: Prover(store, c, skip=1), request(store))
-    assert answer["verdict"] == "reject" and answer["failure"] == p2_parties.DISAGREEMENT, answer
-    d = answer["disagreement"]
-    assert d["event"] == "openings" and d["lean"]["failure"] == "receipt" and d["python"] == {"accepted": 0}
+    assert answer["verdict"] == "reject" and answer["failure"] == "receipt" and answer["window"] == 0, answer
 
 
-def test_a_lean_answer_that_isnt_the_books_is_vetoed(exe, store) -> None:
+def test_the_answer_is_the_leans_alone(exe, store) -> None:
+    """Whatever the Lean answers is the session's answer, with nothing beside it to refuse it: an answer that credits
+    twice the reads is sent as it is."""
+    _, honest = run(exe, store, lambda c: Prover(store, c), request(store))
+
     def inflated(lean):
         return Lying(lean, "p2_answer", lambda _req, got: got | {"q_bytes": 2 * got["q_bytes"]})
 
     _, answer = run(exe, store, lambda c: Prover(store, c), request(store), lean_of=inflated)
-    assert answer["verdict"] == "reject" and answer["failure"] == p2_parties.DISAGREEMENT, answer
-    assert answer["disagreement"]["event"] == "answer" and "q_bytes" not in answer
+    assert answer["verdict"] == "accept" and answer["q_bytes"] == 2 * honest["q_bytes"], answer
 
 
-def test_a_lean_that_fails_mid_session_rejects_it(exe, store) -> None:
+def test_a_lean_that_fails_mid_session_ends_it_unaccepted(exe, store) -> None:
     def failing(_req, _got):
         raise p2_lean.LeanError("the process ended (-9)")
 
     _, answer = run(exe, store, lambda c: Prover(store, c), request(store),
                     lean_of=lambda lean: Lying(lean, "p2_root", failing))
-    assert answer["verdict"] == "reject" and answer["failure"] == p2_parties.DISAGREEMENT, answer
-    assert answer["disagreement"]["event"] == "root" and answer["window"] == 0
+    assert answer["verdict"] in ("reject", "undecided") and "q_bytes" not in answer, answer
 
 
-def test_a_lean_that_holds_another_store_or_session_is_refused(exe, store) -> None:
-    """A Lean that holds another store, or holds requests to other session parameters than the Python's (its pinned
-    `P2Session.SESSION` when `hold` sends none, or the toy's it sends), is refused; one holding the same is held, once."""
+def test_a_lean_that_never_answers_leaves_the_session_undecided(exe, store) -> None:
+    def failing(_req, _got):
+        raise p2_lean.LeanError("the process ended (-9)")
+
+    _, answer = run(exe, store, lambda c: Prover(store, c), request(store),
+                    lean_of=lambda lean: Lying(lean, "p2_answer", failing))
+    assert answer["verdict"] == "undecided" and answer["reason"].startswith("the Lean verifier gave no answer"), answer
+
+
+def test_the_store_and_session_are_the_ones_the_lean_holds(exe, store) -> None:
+    """`hold` sends the Lean the auditor's session parameters only when they aren't its pinned `P2Session.SESSION`,
+    takes the plan the Lean holds, and a second hold of the same Lean is refused."""
     data = json.dumps(p2_parties.registration_json(store.registration)).encode()
-    for lie in (lambda _req, got: got | {"units": got["units"] + 1},
-                lambda _req, got: got | {"session": got["session"] | {"samples": 1}}):
-        for auditor in (p2_parties.SESSION, TOY):
-            with p2_lean.Lean(exe) as lean, pytest.raises(ValueError, match=p2_parties.DISAGREEMENT):
-                p2_parties.hold(Lying(lean, "p2_hold", lie), data, auditor=auditor)
     with p2_lean.Lean(exe) as lean:
         seen = Lying(lean, "p2_hold", lambda _req, got: got)
         p2_parties.hold(seen, data, auditor=TOY)
@@ -341,6 +336,10 @@ def test_a_lean_that_holds_another_store_or_session_is_refused(exe, store) -> No
         seen = Lying(lean, "p2_hold", lambda _req, got: got)
         p2_parties.hold(seen, data)
         assert "session" not in seen.last
+    with p2_lean.Lean(exe) as lean:
+        fewer = Lying(lean, "p2_hold", lambda _req, got: got | {"plan": [[1, store.registration.blocks - 1]]})
+        assert p2_parties.hold(fewer, data)[1] == receipts.Plan(((1, store.registration.blocks - 1),),
+                                                                 store.registration.blocks)
     with p2_lean.Lean(exe) as lean:
         assert p2_parties.hold(lean, data) == (store.registration, receipts.Plan.whole(store.registration.blocks))
         with pytest.raises(ValueError, match="refuses"):

@@ -70,7 +70,7 @@ class Run:
     parameters commit `schedule_cap` (`SCHEDULE_CAP` by default) on its schedule's bits."""
 
     def __init__(self, store: audit_prover.Store, prover_store: audit_prover.Store | None = None, windows: int = 2,
-                 samples: int = 10**6, lifetime: int | None = None, registry: audit.Registry | None = None,
+                 samples: int = 1024, lifetime: int | None = None, registry: audit.Registry | None = None,
                  deferred: bool = False, appends: int = coins.APPENDS, schedule_cap: int | None = SCHEDULE_CAP) -> None:
         reg = store.registration
         self.p = Params(blocks=reg.blocks, deadline_ns=10**6, windows=windows, samples=samples, delta=1e-6,
@@ -78,7 +78,7 @@ class Run:
                         schedule_cap=schedule_cap)
         self.clock = Clock()
         if registry is None:
-            self.s = AuditRun(self.p, reg, None, coins.local(reg.digest, 0, self.p.windows, Entropy(b"coins"),
+            self.s = AuditRun(self.p, reg, None, coins.local(reg.digest, 0, self.p.windows, Entropy(b"coins"), samples=self.p.samples,
                                                             appends=appends), not_before_ns=0, clock=self.clock)
         else:
             self.s = registry.session(self.p, reg, None, not_before_ns=0, clock=self.clock, entropy=Entropy(b"coins"))

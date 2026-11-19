@@ -65,8 +65,9 @@ blocks `A` (`Claims.SamplingGeneric.Compiled`). The extractor's coins at an acce
   the sample's slots at most `n_PU`, `Sessions.slots`), gives
   `Pr[acc]·Pr[bad for B] ≤ 2k_in/K_in + e^{−k_in/8} + c·(esc + κ)` (`rpow_kIn_le_slack`: one set).
 * `outer_bad_le`: over the refused sets (at most `2^{n_PU}`, `n_PU ≤ n_out` by `Sessions.unions`, against the outer
-  wait's slack, `rpow_kOut_le_slack`), with the sampling design's weights averaging at most `P_a(B) ≤ δ`.
-* `pr_fails_le_of`, `pr_fails_le`: **the composition**, `Pr[acc ∧ fails] ≤ κ_δ + √(γ·Pr[B])` with
+  wait's slack, `rpow_kOut_le_slack`), with the sampling design's weights averaging at most `P_a(B) ≤ δ`;
+  `outer_bad_le_pa` at any miss in place of `P_a`.
+* `pr_le_of_tape`, `pr_fails_le_of`, `pr_fails_le`: **the composition**, `Pr[acc ∧ fails] ≤ κ_δ + √(γ·Pr[B])` with
   `κ_δ = c²·(δ + κ_s) + (2k_out/K_out + e^{−k_out/8}) + c·(2k_in/K_in + e^{−k_in/8})`: independent of the judged coins,
   the outer bound at each tape, and
   the average of `√(k(x)·γ_s·β)` at most `√(k(x)·γ_s·Pr[B])` (Jensen).
@@ -508,18 +509,19 @@ theorem inner_bad_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → 
 
 set_option synthInstance.maxSize 1024 in
 omit [Inhabited Coin] in
-/-- **One tape's outer wait**: on a statement in scope at `(s, Pt)`, where the sampling design holds, the sample has at most
-`n_PU ≤ n_out` slots, and the block at the slot any selection picks at first-stage coins `r` is not found with
-probability at most `κr(r)`, the outer wait (times its acceptance) comes up short or, for some refused `B`, keeps only
-runs bad for `B`, with probability at most `T_out + c·(T_in + c·(δ + E[κr]))`, `T = 2k/K + e^{−k/8}` at each wait's
-count. -/
-theorem outer_bad_le (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
-    (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (s : AuditStatement)
-    (Pt : Partition) (hPU : L.nPU x = Pt.blocks.length) (hun : L.nPU x ≤ L.nOut x)
+/-- **One tape's outer wait, at any miss `pa`**: on a partition `Pt` whose sets `B` of proof blocks the sample misses
+with weights averaging at most `pa B`, the sample has at most `n_PU ≤ n_out` slots, and the block at the slot any
+selection picks at first-stage coins `r` is not found with probability at most `κr(r)`, the outer wait (times its
+acceptance) comes up short or, for some `B` with `pa B ≤ δ`, keeps only runs bad for `B`, with probability at most
+`T_out + c·(T_in + c·(δ + E[κr]))`, `T = 2k/K + e^{−k/8}` at each wait's count. -/
+theorem outer_bad_le_pa (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg)
+    (run' : (Fin (L.V.k x) → Coin) → Transcript)
+    (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop)
+    (Pt : Partition) (hPU : L.nPU x = Pt.blocks.length) (hun : L.nPU x ≤ L.nOut x) (pa : Finset ℕ → ℝ)
     (κr : (Fin (L.V.k x) → Coin) → ℝ) (hκr0 : ∀ r, 0 ≤ κr r)
     (hdraw : ∀ B ⊆ range Pt.blocks.length, ∃ esc : (Fin (L.V.k x) → Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
       (∀ r, Pr (fun d : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.secondStage x) r d), u ∉ B) ≤ esc r) ∧
-      Ex esc ≤ s.design.Pa Pt B)
+      Ex esc ≤ pa B)
     (hslots : ∀ r', (L.checked x r').length ≤ L.nPU x)
     (hsess : ∀ r (sel : List ℕ → Option (Fin (L.nPU x))),
       Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
@@ -532,14 +534,15 @@ theorem outer_bad_le (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg)
         Pr (fun c : (Fin (L.capOut x) → Fin (L.V.k x) → Coin) × (Fin (L.kOut x) → L.E1 x) =>
           (accList (fun r => (run' r).out = .acc) (L.kOut x) ((List.finRange (L.capOut x)).map c.1)).length <
               L.kOut x ∨
-            ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run' r).out = .acc) (L.kOut x)
-              (fun r e => L.BadOuter x run' found B (forkOn (L.secondStage x) r) e)
-              ((List.finRange (L.capOut x)).map c.1) c.2) ≤
+            ∃ B ∈ (range Pt.blocks.length).powerset.filter (fun B => pa B ≤ δ),
+              AllBad (fun r => (run' r).out = .acc) (L.kOut x)
+                (fun r e => L.BadOuter x run' found B (forkOn (L.secondStage x) r) e)
+                ((List.finRange (L.capOut x)).map c.1) c.2) ≤
       2 * (L.kOut x : ℝ) / L.capOut x + Real.exp (-(L.kOut x : ℝ) / 8) +
         slack * (2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (δ + Ex κr)) := by
   have hc := slack_pos
   have hEκ : 0 ≤ Ex κr := Ex_nonneg hκr0
-  have hy : ∀ B ∈ S₁ s.design Pt δ,
+  have hy : ∀ B ∈ (range Pt.blocks.length).powerset.filter (fun B => pa B ≤ δ),
       Pr (fun p : (Fin (L.V.k x) → Coin) × L.E1 x =>
         (run' p.1).out = .acc ∧ L.BadOuter x run' found B (forkOn (L.secondStage x) p.1) p.2) ≤
       2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (δ + Ex κr) := by
@@ -565,10 +568,78 @@ theorem outer_bad_le (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg)
   have hy0 : 0 ≤ 2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (δ + Ex κr) := by
     positivity
   have hw := wait_bad_le (fun r => (run' r).out = .acc) (L.kOut x) (L.capOut x) (L.capOut_pos x) (L.kOut_pos x)
-    (S₁ s.design Pt δ) (fun B r e => L.BadOuter x run' found B (forkOn (L.secondStage x) r) e) hy0 hy
-  have hcard : ((S₁ s.design Pt δ).card : ℝ) ^ (1 / (L.kOut x : ℝ)) ≤ slack :=
-    L.rpow_kOut_le_slack x (card_S₁_le _ _ _) (by rw [← hPU]; omega)
+    ((range Pt.blocks.length).powerset.filter (fun B => pa B ≤ δ))
+    (fun B r e => L.BadOuter x run' found B (forkOn (L.secondStage x) r) e) hy0 hy
+  have hcard : (((range Pt.blocks.length).powerset.filter (fun B => pa B ≤ δ)).card : ℝ) ^ (1 / (L.kOut x : ℝ)) ≤
+      slack :=
+    L.rpow_kOut_le_slack x ((card_filter_le _ _).trans (by rw [card_powerset, card_range])) (by rw [← hPU]; omega)
   exact hw.trans (add_le_add le_rfl (mul_le_mul_of_nonneg_right hcard hy0))
+
+set_option synthInstance.maxSize 1024 in
+omit [Inhabited Coin] in
+/-- **One tape's outer wait**: on a statement in scope at `(s, Pt)`, where the sampling design holds, the sample has at most
+`n_PU ≤ n_out` slots, and the block at the slot any selection picks at first-stage coins `r` is not found with
+probability at most `κr(r)`, the outer wait (times its acceptance) comes up short or, for some refused `B`, keeps only
+runs bad for `B`, with probability at most `T_out + c·(T_in + c·(δ + E[κr]))`, `T = 2k/K + e^{−k/8}` at each wait's
+count (`outer_bad_le_pa` at the design's `P_a`). -/
+theorem outer_bad_le (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
+    (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (s : AuditStatement)
+    (Pt : Partition) (hPU : L.nPU x = Pt.blocks.length) (hun : L.nPU x ≤ L.nOut x)
+    (κr : (Fin (L.V.k x) → Coin) → ℝ) (hκr0 : ∀ r, 0 ≤ κr r)
+    (hdraw : ∀ B ⊆ range Pt.blocks.length, ∃ esc : (Fin (L.V.k x) → Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
+      (∀ r, Pr (fun d : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.secondStage x) r d), u ∉ B) ≤ esc r) ∧
+      Ex esc ≤ s.design.Pa Pt B)
+    (hslots : ∀ r', (L.checked x r').length ≤ L.nPU x)
+    (hsess : ∀ r (sel : List ℕ → Option (Fin (L.nPU x))),
+      Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
+        (run' (forkOn (L.secondStage x) r p.1)).out = .acc ∧
+          ∃ i, sel (L.checked x (forkOn (L.secondStage x) r p.1)) = some i ∧
+            ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.secondStage x) r p.1))[i.val]? = some u.val ∧
+              ¬ found u (forkOn (L.secondStage x) r p.1) (p.2 i u)) ≤
+        κr r) :
+    Pr (fun r : Fin (L.V.k x) → Coin => (run' r).out = .acc) *
+        Pr (fun c : (Fin (L.capOut x) → Fin (L.V.k x) → Coin) × (Fin (L.kOut x) → L.E1 x) =>
+          (accList (fun r => (run' r).out = .acc) (L.kOut x) ((List.finRange (L.capOut x)).map c.1)).length <
+              L.kOut x ∨
+            ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run' r).out = .acc) (L.kOut x)
+              (fun r e => L.BadOuter x run' found B (forkOn (L.secondStage x) r) e)
+              ((List.finRange (L.capOut x)).map c.1) c.2) ≤
+      2 * (L.kOut x : ℝ) / L.capOut x + Real.exp (-(L.kOut x : ℝ) / 8) +
+        slack * (2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (δ + Ex κr)) :=
+  L.outer_bad_le_pa hδ x run' found Pt hPU hun (s.design.Pa Pt) κr hκr0 hdraw hslots hsess
+
+set_option synthInstance.maxSize 1024 in
+/-- **The composition at each tape**: over tapes, judged coins and the extractor's coins, the judged run accepts and an
+event `F` of the tape and the extractor's coins holds with probability at most `κ(δ) + √(γ·Pr[B])`, when at each tape
+`Pr[acc]·Pr[F] ≤ κ(δ) + c²·E_r[√(k(x)·γ_s·β(ω, r))]` for a weight `β` averaging at most `Pr[B]`: the event is
+independent of the judged coins, and the average of `√(k(x)·γ_s·β)` is at most `√(k(x)·γ_s·Pr[B])` (Jensen). -/
+theorem pr_le_of_tape (L : Compiled Coin A) (H : Msg → Msg) {δ : ℝ} (x : Msg)
+    (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (F : Ω → L.ECoins x → Prop)
+    (β : Ω → (Fin (L.V.k x) → Coin) → ℝ) (hβ0 : ∀ ω r, 0 ≤ β ω r)
+    (hβ : Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => β p.1 p.2) ≤ PrB H L.V P x)
+    (hper : ∀ ω, Pr (fun r => (run H P L.V x ω r).out = .acc) * Pr (F ω) ≤
+      L.κ δ x + slack ^ 2 * Ex (fun r => Real.sqrt (L.V.k x * L.γs x * β ω r))) :
+    Pr (fun s : Ω × (Fin (L.V.k x) → Coin) × L.ECoins x => (run H P L.V x s.1 s.2.1).out = .acc ∧ F s.1 s.2.2) ≤
+      L.κ δ x + Real.sqrt (L.γ x * PrB H L.V P x) := by
+  refine (Pr_indep (fun ω r => (run H P L.V x ω r).out = .acc) F).trans_le ?_
+  have hc := slack_pos
+  have hγ0 : 0 ≤ (L.V.k x : ℝ) * L.γs x := mul_nonneg (Nat.cast_nonneg _) (L.γs_nonneg x)
+  calc Ex (fun ω => Pr (fun r => (run H P L.V x ω r).out = .acc) * Pr (F ω))
+      ≤ Ex (fun ω => L.κ δ x + slack ^ 2 * Ex (fun r => Real.sqrt (L.V.k x * L.γs x * β ω r))) := Ex_mono hper
+    _ = L.κ δ x + slack ^ 2 *
+          Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => Real.sqrt (L.V.k x * L.γs x * β p.1 p.2)) := by
+        rw [Ex_add, Ex_const, Ex_mul_left,
+          Ex_prod (fun p : Ω × (Fin (L.V.k x) → Coin) => Real.sqrt (L.V.k x * L.γs x * β p.1 p.2))]
+    _ ≤ L.κ δ x + slack ^ 2 * Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) := by
+        refine add_le_add le_rfl (mul_le_mul_of_nonneg_left ?_ (by positivity))
+        refine (Ex_sqrt_le _ fun p => mul_nonneg hγ0 (hβ0 _ _)).trans (Real.sqrt_le_sqrt ?_)
+        rw [Ex_mul_left]
+        exact mul_le_mul_of_nonneg_left hβ hγ0
+    _ = L.κ δ x + Real.sqrt (L.γ x * PrB H L.V P x) := by
+        rw [show L.γ x * PrB H L.V P x = (slack ^ 2) ^ 2 * (L.V.k x * L.γs x * PrB H L.V P x) by
+            unfold Compiled.γ; ring,
+          Real.sqrt_mul (pow_nonneg (pow_nonneg hc.le 2) 2) (L.V.k x * L.γs x * PrB H L.V P x),
+          Real.sqrt_sq (pow_nonneg hc.le 2)]
 
 set_option synthInstance.maxSize 1024 in
 /-- **The failure event's probability, at any found event**: over tapes, judged coins and the extractor's coins, the
@@ -592,61 +663,37 @@ theorem pr_fails_le_of (H : Msg → Msg) (L : Compiled Coin A) {δ : ℝ} (hδ :
     Pr (fun s : Ω × (Fin (L.V.k x) → Coin) × L.ECoins x =>
       (run H P L.V x s.1 s.2.1).out = .acc ∧ L.Fails δ x (run H P L.V x s.1) (found s.1) s.2.2) ≤
       L.κ δ x + Real.sqrt (L.γ x * PrB H L.V P x) := by
-  refine (Pr_indep (fun ω r => (run H P L.V x ω r).out = .acc)
-    (fun ω c => L.Fails δ x (run H P L.V x ω) (found ω) c)).trans_le ?_
-  have hc := slack_pos
+  refine L.pr_le_of_tape H x Ω P (fun ω c => L.Fails δ x (run H P L.V x ω) (found ω) c) β hβ0 hβ fun ω => ?_
   have hκ0 := L.κ_nonneg hδ x
-  have hγ0 : 0 ≤ (L.V.k x : ℝ) * L.γs x := mul_nonneg (Nat.cast_nonneg _) (L.γs_nonneg x)
   by_cases hsc : ∃ s Pt, L.parse x = some s ∧ L.partition s = some Pt ∧ InScope Pt s
   swap
-  · have h0 : ∀ ω, Pr (fun c : L.ECoins x => L.Fails δ x (run H P L.V x ω) (found ω) c) = 0 := fun ω =>
+  · have h0 : Pr (fun c : L.ECoins x => L.Fails δ x (run H P L.V x ω) (found ω) c) = 0 :=
       (Pr_congr fun c => ⟨fun ⟨s, Pt, h1, h2, h3, _⟩ => hsc ⟨s, Pt, h1, h2, h3⟩, False.elim⟩).trans Pr_false
-    simp only [h0, mul_zero, Ex_const]
-    exact add_nonneg hκ0 (Real.sqrt_nonneg _)
+    rw [h0, mul_zero]
+    exact add_nonneg hκ0 (mul_nonneg (by positivity) (Ex_nonneg fun _ => Real.sqrt_nonneg _))
   obtain ⟨s, Pt, hs, hPt, hin⟩ := hsc
-  have hper : ∀ ω, Pr (fun r => (run H P L.V x ω r).out = .acc) *
-      Pr (fun c : L.ECoins x => L.Fails δ x (run H P L.V x ω) (found ω) c) ≤
-      L.κ δ x + slack ^ 2 * Ex (fun r => Real.sqrt (L.V.k x * L.γs x * β ω r)) := by
-    intro ω
-    have hF : Pr (fun c : L.ECoins x => L.Fails δ x (run H P L.V x ω) (found ω) c) =
-        Pr (fun c : (Fin (L.capOut x) → Fin (L.V.k x) → Coin) × (Fin (L.kOut x) → L.E1 x) =>
-          (accList (fun r => (run H P L.V x ω r).out = .acc) (L.kOut x)
-            ((List.finRange (L.capOut x)).map c.1)).length < L.kOut x ∨
-            ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run H P L.V x ω r).out = .acc) (L.kOut x)
-              (fun r e => L.BadOuter x (run H P L.V x ω) (found ω) B (forkOn (L.secondStage x) r) e)
-              ((List.finRange (L.capOut x)).map c.1) c.2) := by
-      refine Eq.trans ?_ (Claims.Sampling.Pr_equiv (L.ecoinsEquiv x) _)
-      refine Pr_congr fun c => ⟨fun ⟨s', Pt', hs', hPt', _, h⟩ => ?_, fun h => ⟨s, Pt, hs, hPt, hin, h⟩⟩
-      rw [hs, Option.some.injEq] at hs'
-      subst hs'
-      rw [hPt, Option.some.injEq] at hPt'
-      subst hPt'
-      exact h
-    rw [hF]
-    refine (L.outer_bad_le hδ x (run H P L.V x ω) (found ω) s Pt (nPU_eq hs hPt) (hS.unions x)
-      (fun r => L.κs x + Real.sqrt (L.V.k x * L.γs x * β ω r))
-      (fun r => add_nonneg (L.κs_nonneg x) (Real.sqrt_nonneg _))
-      (hS.draws x s Pt hs hPt hin) (hS.slots x) (hsess ω)).trans (le_of_eq ?_)
-    rw [Ex_add, Ex_const]
-    unfold Compiled.κ
-    ring
-  calc Ex (fun ω => Pr (fun r => (run H P L.V x ω r).out = .acc) *
-        Pr (fun c : L.ECoins x => L.Fails δ x (run H P L.V x ω) (found ω) c))
-      ≤ Ex (fun ω => L.κ δ x + slack ^ 2 * Ex (fun r => Real.sqrt (L.V.k x * L.γs x * β ω r))) := Ex_mono hper
-    _ = L.κ δ x + slack ^ 2 *
-          Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => Real.sqrt (L.V.k x * L.γs x * β p.1 p.2)) := by
-        rw [Ex_add, Ex_const, Ex_mul_left,
-          Ex_prod (fun p : Ω × (Fin (L.V.k x) → Coin) => Real.sqrt (L.V.k x * L.γs x * β p.1 p.2))]
-    _ ≤ L.κ δ x + slack ^ 2 * Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) := by
-        refine add_le_add le_rfl (mul_le_mul_of_nonneg_left ?_ (by positivity))
-        refine (Ex_sqrt_le _ fun p => mul_nonneg hγ0 (hβ0 _ _)).trans (Real.sqrt_le_sqrt ?_)
-        rw [Ex_mul_left]
-        exact mul_le_mul_of_nonneg_left hβ hγ0
-    _ = L.κ δ x + Real.sqrt (L.γ x * PrB H L.V P x) := by
-        rw [show L.γ x * PrB H L.V P x = (slack ^ 2) ^ 2 * (L.V.k x * L.γs x * PrB H L.V P x) by
-            unfold Compiled.γ; ring,
-          Real.sqrt_mul (pow_nonneg (pow_nonneg hc.le 2) 2) (L.V.k x * L.γs x * PrB H L.V P x),
-          Real.sqrt_sq (pow_nonneg hc.le 2)]
+  have hF : Pr (fun c : L.ECoins x => L.Fails δ x (run H P L.V x ω) (found ω) c) =
+      Pr (fun c : (Fin (L.capOut x) → Fin (L.V.k x) → Coin) × (Fin (L.kOut x) → L.E1 x) =>
+        (accList (fun r => (run H P L.V x ω r).out = .acc) (L.kOut x)
+          ((List.finRange (L.capOut x)).map c.1)).length < L.kOut x ∨
+          ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run H P L.V x ω r).out = .acc) (L.kOut x)
+            (fun r e => L.BadOuter x (run H P L.V x ω) (found ω) B (forkOn (L.secondStage x) r) e)
+            ((List.finRange (L.capOut x)).map c.1) c.2) := by
+    refine Eq.trans ?_ (Claims.Sampling.Pr_equiv (L.ecoinsEquiv x) _)
+    refine Pr_congr fun c => ⟨fun ⟨s', Pt', hs', hPt', _, h⟩ => ?_, fun h => ⟨s, Pt, hs, hPt, hin, h⟩⟩
+    rw [hs, Option.some.injEq] at hs'
+    subst hs'
+    rw [hPt, Option.some.injEq] at hPt'
+    subst hPt'
+    exact h
+  rw [hF]
+  refine (L.outer_bad_le hδ x (run H P L.V x ω) (found ω) s Pt (nPU_eq hs hPt) (hS.unions x)
+    (fun r => L.κs x + Real.sqrt (L.V.k x * L.γs x * β ω r))
+    (fun r => add_nonneg (L.κs_nonneg x) (Real.sqrt_nonneg _))
+    (hS.draws x s Pt hs hPt hin) (hS.slots x) (hsess ω)).trans (le_of_eq ?_)
+  rw [Ex_add, Ex_const]
+  unfold Compiled.κ
+  ring
 
 set_option synthInstance.maxSize 1024 in
 /-- **The acceptance-probability composition**: from the sessions' knowledge soundness (`SessionKS`) and the sampling design

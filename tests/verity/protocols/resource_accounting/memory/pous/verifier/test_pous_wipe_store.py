@@ -338,7 +338,7 @@ def test_the_subprotocol_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wi
     assert s["tier"] == "host-dram"
 
 
-def test_the_cheats_subprotocol_rejects_under_a_simulated_placement(tmp_path) -> None:
+def test_the_cheats_subprotocol_rejects_under_a_simulated_placement(tmp_path, monkeypatch) -> None:
     """The wipe attached for the cheat (``foreign_past_bound``, period.json's `foreign_bytes` `fM`) with the challenger a
     process of its own on the developer's node named `simulated` under the run's key (``run_keys``): the wipe rejects,
     and the record names the placement and what the prover kept."""
@@ -355,9 +355,10 @@ def test_the_cheats_subprotocol_rejects_under_a_simulated_placement(tmp_path) ->
     out = tmp_path / "private"
     out.mkdir()
     settings = S.settings(WIPE, {"store": "host", "segments": 1})
+    wipe_judge.stand_in(monkeypatch)
     got = WIPE.attach(None, {"settings": settings, **wipe_served.FACTS, "streamer": "python", "foreign_past_bound": True,
                              "simulated": True, "egress_bits": 0, "run_keys": True, "private": out, "process": H.PIECE, "side_of": side_of,
-                             "pins": [], "node": "n0"})
+                             "pins": [], "node": "n0", "judge": "wipe-protocol"})
     assert got.answer["verdict"] == "reject"
     assert extras == [()], "the period's egress count is the check's evidence, never the challenger's"
     assert json.loads(bytes.fromhex(json.loads((out / "wipe.case.json").read_text())["evidence"]))["egress_mib"] == 0

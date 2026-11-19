@@ -37,8 +37,10 @@ by its hiding leaf under the salt `Window.write` draws from the OS and keeps in 
 from __future__ import annotations
 
 import bisect
+import json
 import os
 import re
+import sys
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -148,7 +150,7 @@ class Slot:
     position's token and, below the class's prompt bound, the slot its `TokenFeed_v1` reads and the one it carries on."""
 
     def __init__(self, fn: Any, cls: WindowClass, row: Sequence[int], weights: Weights, served: Served) -> None:
-        self.fn, self.cls, self.weights = fn, cls, weights
+        self.fn, self.cls, self.weights, self.reader = fn, cls, weights, getattr(served, "reader", None)
         self.row = [int(x) & 0xFFFFFFFF for x in row]
         if len(self.row) != cls.prompt + 2:
             raise ValueError(f"a slot's row is (occupancy, prompt length, {cls.prompt} ids), not {len(self.row)} words")
@@ -329,8 +331,9 @@ def _fold_narrowed(ops: dict[tuple[str, tuple[str, ...]], list[Mapping[str, Any]
 class Served:
     """One request's served values by node: its Program's rows as `ProgramIndex.describe` gives them, each with its
     row's ``spec`` (``{spec, step, op_path, members, row}``, its step the request's), ``read(step, op_path, member, lo,
-    hi)``, a member's elements [lo, hi) at a request step (`CommittedStore.words` at the request's arrival plus it), and
-    ``bound(step, op_path, member)``, the elements the record binds that member at.
+    hi)``, a member's elements [lo, hi) at a request step (`CommittedStore.words` at the request's arrival plus it),
+    ``bound(step, op_path, member)``, the elements the record binds that member at, and ``reader`` the byte source those
+    reads verify through (`commit.opened.OpenedReader`), whose counts `Rows.counts` reports.
 
     The request's prefill is its step 0: each op (its op path and members) a row a prompt position, or one row, its last
     position's, where prefill prunes it; the ops in the order of their last prompt position's rows, the one position that
@@ -346,6 +349,7 @@ class Served:
     rows: Sequence[Mapping[str, Any]]
     read: Callable[[int, str, str, int, int], tuple[np.ndarray | None, str]]
     bound: Callable[[int, str, str], int]
+    reader: Any = None
     prefill: list[list[Mapping[str, Any]]] = field(init=False)
     decode: list[list[Mapping[str, Any]]] = field(init=False)
     LP: int = field(init=False)
@@ -409,7 +413,8 @@ class Served:
             ends = [e["identity"].get("element_range", (0, None))[1] for e in es]
             return max((int(x) for x in ends if x is not None), default=0)
 
-        return cls(rows, lambda s, op, m, lo, hi: store.words(rid, arrive + s, at.get((s, op), op), m, lo, hi), bound)
+        return cls(rows, lambda s, op, m, lo, hi: store.words(rid, arrive + s, at.get((s, op), op), m, lo, hi), bound,
+                   getattr(store, "committed", None))
 
     def __call__(self, p: int, k: int, node: Any) -> tuple[str, list[np.ndarray]] | None:
         """Position ``p``'s node ``k`` (``node``, its index within its position) as served, its row's spec and its values;
@@ -498,6 +503,17 @@ class Rows:
             self._empty(P0, s, c, e)
         if bad := {t: int((~h).any(axis=1).sum()) for t, h in self.held.items() if not h.all()}:
             raise ValueError(f"units with rows no node or Definition fills, by template: {bad}")
+        self.readers = list({id(r): r for S in slots if (r := getattr(S, "reader", None)) is not None}.values())
+        print("WINDOW-ROWS " + json.dumps(self.counts(), sort_keys=True), file=sys.stderr)
+
+    def counts(self) -> dict[str, Any]:
+        """The window's units by source (`SOURCES`) and its served reads' counts, summed over its slots' readers (``reads``,
+        ``failed``: an opening that didn't verify, ``not_retained``: a member the committer no longer holds); ``opened`` is
+        None where no slot read through a reader with counts."""
+        units = {s: int(sum((x == i).sum() for x in self.source.values())) for i, s in enumerate(SOURCES)}
+        stats = [r.stats for r in self.readers if isinstance(getattr(r, "stats", None), Counter)]
+        opened = {k: int(sum(c[k] for c in stats)) for k in ("reads", "failed", "not_retained")} if stats else None
+        return {"units": units, "opened": opened}
 
     def _put(self, tid: str, unit: int, out: str, rows: np.ndarray, src: int) -> None:
         o, k = int(out[1:]), len(rows)

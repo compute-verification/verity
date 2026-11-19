@@ -128,4 +128,20 @@ def blockAgrees (units : Array Nat) (ins outs : List Nat) : Bool :=
     | .ok _ => false
   | .error _ => false
 
+/-- The id and binding of the first input node of `restrict`'s Program for block `units`, on `WORD_DESC` with its
+`Input32_v1` spelt `id`. -/
+def restrictedInput (id : String) (units : Array Nat) : Option (String × Option String) :=
+  match Program.decode (WORD_DESC.replace "\"Input32_v1\"" s!"\"{id}\"").toUTF8 with
+  | .ok P => match Spot.Restrict.restrict P units with
+    | .ok Q => (Q.defs[Q.root]?).bind fun r => (r.body.nodes[0]?).bind fun x =>
+        (Q.defs[x.fn]?).map fun d => (d.id, d.binding)
+    | .error _ => none
+  | .error _ => none
+
+-- a block reading a supplied value (`TPair_v1` on `SuppliedInput32_v1`) is cut to a supplied input port; a registered
+-- one and a run one keep their kinds
+#guard restrictedInput "SuppliedInput32_v1" #[0] == some ("SuppliedInput32_v1", some "supplied")
+#guard restrictedInput "RegisteredInput32_v1" #[0] == some ("RegisteredInput32_v1", some "registration")
+#guard restrictedInput "Input32_v1" #[0] == some ("Input32_v1", some "run")
+
 end FlockSoundness.EvalBool

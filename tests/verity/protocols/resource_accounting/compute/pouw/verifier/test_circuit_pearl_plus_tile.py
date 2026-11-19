@@ -1,6 +1,6 @@
-"""Pearl+'s -h3 tile unit (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_plus_tile`): its σ core's word view
-equals the scheme (`reference`), the σ on bits equals its word view, the tile leaf opens as `leaf_reference`, and the whole unit's ``ok`` is the
-core's ``ok`` and the leaf's opening, on honest fixture tiles and tampered ones."""
+"""Pearl+'s -h3 tile core (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_plus_tile`): its σ core's word view
+equals the scheme (`reference`), its y the served y the scheme computes, the σ on bits equals its word view, and the tile leaf
+opens as `leaf_reference`, on honest fixture tiles and tampered ones."""
 from __future__ import annotations
 
 import random
@@ -44,15 +44,15 @@ def _f32(rng: random.Random, n: int) -> list[int]:
 
 
 class Tile:
-    """An honest fixture tile built from the scheme (`pearl_c`): the circuit inputs, the reference's (digest, ok), and a leaf
-    that opens the digest to a transcript root.  Its first ``tr`` rows are real (every row when None) and the rest zero
-    filler, as a call's A is padded to a multiple of 16; y holds the real rows."""
+    """An honest fixture tile built from the scheme (`pearl_c`): the circuit inputs, the reference's (digest, y, ok), the
+    served y the scheme computes, and a leaf that opens the digest to a transcript root.  Its first ``tr`` rows are real
+    (every row when None) and the rest zero filler, as a call's A is padded to a multiple of 16; y is the real rows'."""
 
-    def __init__(self, dev: str, k: int, tm: int, tn: int, n: int, col: int, depth: int, seed: str, tr: int | None = None):
+    def __init__(self, dev: str, k: int, tm: int, tn: int, n: int, depth: int, seed: str, tr: int | None = None):
         rng = random.Random(seed)
         d = DEVICES[dev]
         tr = tm if tr is None else tr
-        self.dev, self.k, self.tm, self.tr, self.tn, self.n, self.col, self.depth = dev, k, tm, tr, tn, n, col, depth
+        self.dev, self.k, self.tm, self.tr, self.tn, self.n, self.depth = dev, k, tm, tr, tn, n, depth
         self.a = [_f32(rng, k) for _ in range(tr)] + [[0] * k for _ in range(tm - tr)]
         self.b = [_f32(rng, k) for _ in range(tn)]
         self.rows, self.cols, self.midx = list(range(tm)), list(range(tn)), 7
@@ -75,11 +75,9 @@ class Tile:
         _d, ng = inert_bound._promoted(dev, k)
         self.cert = [[[list(inert_bound.certificates(ops.a.codes[i], ops.b.codes[j], dev))[2 * z:2 * z + 2] for z in range(ng - 1)]
                       for j in range(tn)] for i in range(tm)]
-        self.y = [[0] * n for _ in range(tr)]
-        for i in range(tr):
-            for j in range(tn):
-                self.y[i][col * tn + j] = CU.y(checked.u[i][j], ops.a.alpha[i], ops.b.alpha[j]) << 16
-        self.digest, self.ok = self.reference()
+        self.y = [[CU.y(checked.u[i][j], ops.a.alpha[i], ops.b.alpha[j]) for j in range(tn)] for i in range(tr)]
+        self.digest, y, self.ok = self.reference()
+        assert y == self.y
         # a transcript leaf that opens the honest digest
         self.hsalt = bytes(rng.randrange(256) for _ in range(192))
         self.tdomain = bytes(rng.randrange(256) for _ in range(64))
@@ -88,49 +86,62 @@ class Tile:
         payload = hm96_reference(self.digest, self.hsalt)[2]
         self.troot = F3.root_ref(self.tdomain, SCHEMA, payload, self.tpos, self.path)
 
-    def reference(self) -> tuple[bytes | None, int]:
-        return T.reference(self.dev, self.k, self.n, self.a, self.b, self.y, self.cert, self.salt, self.root, self.midx,
-                           self.rows, self.cols, self.col, self.rho, self.rhor)
+    def reference(self) -> tuple[bytes | None, list[list[int]] | None, int]:
+        return T.reference(self.dev, self.k, self.n, self.a, self.b, self.cert, self.salt, self.root, self.midx,
+                           self.rows, self.cols, self.rho, self.rhor, self.tr)
 
     def declare(self, tr: int) -> None:
-        """Bind the tile at ``tr`` real rows, y its first ``tr`` rows, as a builder calling its later rows filler would."""
-        self.tr, self.y = tr, self.y[:tr]
+        """Bind the tile at ``tr`` real rows, as a builder calling its later rows filler would."""
+        self.tr = tr
 
     def core(self):
         return word_of(self.core_v2())
 
     def core_v2(self):
-        return bind(T.PearlPlusTileCoreV2, K=self.k, TM=self.tm, TR=self.tr, TN=self.tn, N=self.n, RHO=self.rho,
-                    RHOR=self.rhor, DEV=self.dev)
+        return T.core(self.scheme, self.k, self.tm, self.tn, self.n, self.tr)
 
-    def on_words(self) -> tuple[bytes, int]:
+    def on_words(self) -> tuple[bytes, list[list[int]], int]:
+        """The word core's (digest, y, ok): its 64 digest bytes, then the real rows' TN y words, then ok."""
         out = list(evaluate(self.core(), *(_flat(a) for a in self.core_args())))
-        return bytes(out[:64]), out[64]
+        y = out[64:64 + self.tr * self.tn]
+        return bytes(out[:64]), [y[i * self.tn:(i + 1) * self.tn] for i in range(self.tr)], out[-1]
 
     def core_args(self) -> list:
-        return [self.a, self.b, self.y, self.cert, self.salt, self.root, self.midx, self.rows, self.col, self.eb, self.fa,
-                self.fb, self.g]
-
-    def tile_def(self):
-        return T.tile(self.scheme, k=self.k, tm=self.tm, tn=self.tn, n=self.n, depth=self.depth, tr=self.tr)
-
-    def tile_args(self) -> list:
-        return [self.a, self.b, self.y, self.cert, self.hsalt, self.path, self.salt, self.root, self.midx, self.rows,
-                self.col, self.eb, self.fa, self.fb, self.g, self.troot, self.tdomain, self.tpos]
+        return [self.a, self.b, self.cert, self.salt, self.root, self.midx, self.rows, self.eb, self.fa, self.fb, self.g]
 
 
-SHAPES = [("h100", 256, 1, 1, 1, 0, 1), ("h100", 256, 2, 2, 4, 0, 2)]
+SHAPES = [("h100", 256, 1, 1, 1, 1), ("h100", 256, 2, 2, 4, 2), ("sm120", 256, 1, 1, 2, 1)]
 
 
-@pytest.mark.parametrize("dev,k,tm,tn,n,col,depth", SHAPES)
-def test_core_on_words_is_the_scheme(dev, k, tm, tn, n, col, depth):
-    """The σ core's word view is `reference`: the digest and ok = 1 on an honest tile.  The word body is no registered
-    Definition: the σ is the core's one."""
-    t = Tile(dev, k, tm, tn, n, col, depth, f"core/{dev}/{k}/{tm}x{tn}")
-    assert "PearlPlusTileCore_v1" not in REGISTRY.defs and "PearlPlusTileCore_v2" in REGISTRY.defs
-    out = list(evaluate(t.core(), *(_flat(a) for a in t.core_args())))
+@pytest.mark.parametrize("dev,k,tm,tn,n,depth", SHAPES)
+def test_core_on_words_is_the_scheme(dev, k, tm, tn, n, depth):
+    """The σ core's word view is `reference`: the digest, the served y the scheme computes (`pearl_c_u.y`), bit for bit,
+    and ok = 1 on an honest tile.  The word body is no registered Definition: the σ is the core's one, and the
+    y-reading core before it is gone."""
+    t = Tile(dev, k, tm, tn, n, depth, f"core/{dev}/{k}/{tm}x{tn}")
+    assert "PearlPlusTileCore_v2" not in REGISTRY.defs and "PearlPlusTileCore_v3" in REGISTRY.defs
     assert t.ok == 1
-    assert bytes(out[:64]) == t.digest and out[64] == 1
+    assert t.on_words() == (t.digest, t.y, 1)
+
+
+def test_a_wrong_certificate_fails():
+    """A certificate word other than the prover's fails: the core on words is `reference`, ok = 0, and y is still the tile's
+    served y, which the certificates don't enter."""
+    t = Tile("h100", 256, 1, 1, 1, 1, "cert")
+    t.cert[0][0][0][0] ^= 1
+    digest, y, ok = t.reference()
+    assert ok == 0 and y == t.y
+    assert t.on_words() == (digest, t.y, 0)
+
+
+def test_a_tampered_b_row_writes_its_own_y():
+    """One flipped word of B is another tile: the core writes that tile's served y, not the honest one, as `reference`
+    does, so a reader of y reads the product of the rows the core was given."""
+    t = Tile("h100", 256, 1, 1, 1, 1, "b")
+    t.b[0][5] ^= 1 << 31
+    digest, y, ok = t.reference()
+    assert y != t.y
+    assert t.on_words() == (digest, y, ok)
 
 
 #: (TM, TR): a 2-row tile with one filler row, and a 4-row call's one tile, 16 rows of which 12 are filler (slow: a
@@ -139,17 +150,17 @@ FILLERS = [pytest.param(2, 1, id="2x1-tr1"), pytest.param(16, 4, id="16x1-tr4", 
 
 
 def _filler(tm: int, tr: int, seed: str) -> Tile:
-    return Tile("h100", 256, tm, 1, 1, 0, 1, f"{seed}/{tm}/{tr}", tr=tr)
+    return Tile("h100", 256, tm, 1, 1, 1, f"{seed}/{tm}/{tr}", tr=tr)
 
 
 @pytest.mark.parametrize("tm,tr", FILLERS)
 def test_filler_rows_pass(tm, tr):
     """A tile whose rows past its real rows are zero filler passes, as Lean's tile rule passes it (`Rule.rowsFailure`'s
-    filler kind, `UnitRecord.credited`): the core on words is `reference`, ok = 1, and y's port is its TR real rows."""
+    filler kind, `UnitRecord.credited`): the core on words is `reference`, ok = 1, and y is its TR real rows."""
     t = _filler(tm, tr, "filler")
     assert t.ok == 1
-    assert dict(t.core().signature()[0])["y"].n == tr
-    assert t.on_words() == (t.digest, 1)
+    assert t.core().signature()[1].fields[1].n == tr
+    assert t.on_words() == (t.digest, t.y, 1)
 
 
 @pytest.mark.parametrize("tm,tr", FILLERS)
@@ -159,46 +170,46 @@ def test_a_nonzero_filler_row_fails(tm, tr, word):
     the core on words is `reference`, ok = 0."""
     t = _filler(tm, tr, f"nonzero/{word:x}")
     t.a[tm - 1][3] = word
-    digest, ok = t.reference()
+    digest, y, ok = t.reference()
     assert ok == 0 and digest is not None
-    assert t.on_words() == (digest, 0)
+    assert t.on_words() == (digest, y, 0)
 
 
 @pytest.mark.parametrize("tm,tr", [pytest.param(2, 2, id="2x1-tr2"),
                                    pytest.param(16, 4, id="16x1-tr4", marks=pytest.mark.slow)])
 def test_a_real_row_declared_filler_fails(tm, tr):
     """A live row bound as filler by a smaller TR fails: TR is the record's real rows, so a builder that called a real
-    row filler gets ok = 0, never a pass that skips the row's admission, inert-work bound and y.  The digest still covers
-    every row."""
+    row filler gets ok = 0, never a pass that skips the row's admission and inert-work bound, and y is its TR − 1 rows.
+    The digest still covers every row."""
     t = _filler(tm, tr, "declared")
     assert t.ok == 1
     t.declare(tr - 1)
-    digest, ok = t.reference()
-    assert ok == 0 and digest == t.digest
-    assert t.on_words() == (t.digest, 0)
+    digest, y, ok = t.reference()
+    assert ok == 0 and digest == t.digest and y == t.y[:tr - 1]
+    assert t.on_words() == (t.digest, y, 0)
 
 
 def test_tr_is_within_the_tile():
     """TR is 1 to TM: a tile has a real row, and no more real rows than rows."""
     for tr in (0, 2):
         with pytest.raises(ValueError, match="real rows are 1 to its TM rows"):
-            bind(T.PearlPlusTileCoreV2, TM=1, TR=tr)
+            bind(T.PearlPlusTileCoreV3, TM=1, TR=tr)
 
 
-@pytest.mark.parametrize("tm,tn,n,gates", [(1, 1, 1, 11_443), (2, 2, 4, 24_340)])
+@pytest.mark.parametrize("tm,tn,n,gates", [(1, 1, 1, 11_440), (2, 2, 4, 24_322)])
 def test_a_full_tile_is_todays_core(tm, tn, n, gates):
-    """At TR = TM the core is today's, gate for gate: the word core's gate count as it was before TR (one-circuit at
-    c56dce91380, which the node-for-node comparison of the word core, its σ and the unit matched), and its y port TM rows."""
-    t = Tile("h100", 256, tm, tn, n, 0, 1, f"full/{tm}x{tn}")
+    """At TR = TM the core is today's, gate for gate: the word core's gate count at v3, the count of the y-reading core
+    before it (11,443 and 24,340) without its y comparison and with each served word's finiteness, and its y TM rows."""
+    t = Tile("h100", 256, tm, tn, n, 1, f"full/{tm}x{tn}")
     assert t.core().gates == gates
-    assert dict(t.core().signature()[0])["y"].n == tm
+    assert t.core().signature()[1].fields[1].n == tm
 
 
 @pytest.mark.slow
 def test_core_sigma_is_its_words():
     """The σ core equals the word core on an honest 1 × 1 tile: same digest and ok.  Slow: lowering the core to bits is the
     only check that its σ (what the unit Calls) computes what its words do."""
-    t = Tile("h100", 256, 1, 1, 1, 0, 1, "sigma")
+    t = Tile("h100", 256, 1, 1, 1, 1, "sigma")
     word = list(evaluate(t.core(), *(_flat(a) for a in t.core_args())))
     assert _words1(t.core_v2(), *t.core_args()) == word
 
@@ -209,12 +220,12 @@ def test_filler_sigma_is_its_words():
     (ok 0), in one batch.  Slow: as `test_core_sigma_is_its_words`, and the only check that the σ of the real-row rule
     (the filler rows' zero test, their constant admission word in the inert-work bound and the real rows' y) computes
     what its words do."""
-    t = Tile("h100", 256, 2, 1, 1, 0, 1, "sigma/filler", tr=1)
+    t = Tile("h100", 256, 2, 1, 1, 1, "sigma/filler", tr=1)
     honest = t.core_args()
     t.a = [t.a[0], [1] + t.a[1][1:]]
     tampered = t.core_args()
     word = [list(evaluate(t.core(), *(_flat(a) for a in args))) for args in (honest, tampered)]
-    assert [w[64] for w in word] == [1, 0]
+    assert [w[-1] for w in word] == [1, 0]
     got = evaluate_words(t.core_v2(), *(np.asarray([_flat(x), _flat(z)], dtype=np.uint64) for x, z in zip(honest, tampered)))
     assert got.reshape(2, -1).tolist() == word
 
@@ -223,19 +234,8 @@ def test_filler_sigma_is_its_words():
 def test_leaf_opens_as_its_reference():
     """`PearlPlusTileLeaf_v1` is `leaf_reference`: 1 when the digest's hm96 leaf opens at tpos to troot, 0 under a wrong
     root.  Slow: the leaf is two SHA-512 compressions and the frame reads, lowered to bits."""
-    t = Tile("h100", 256, 1, 1, 1, 0, 2, "leaf")
+    t = Tile("h100", 256, 1, 1, 1, 2, "leaf")
     leaf = bind(T.PearlPlusTileLeaf, D=t.depth)
     assert T.leaf_reference(t.digest, t.hsalt, t.troot, t.tdomain, t.tpos, t.path) == 1
     assert _words1(leaf, t.digest, t.hsalt, t.troot, t.tdomain, t.tpos, t.path) == [1]
     assert _words1(leaf, t.digest, t.hsalt, bytes(64), t.tdomain, t.tpos, t.path) == [0]
-
-
-@pytest.mark.slow
-def test_tile_unit_is_core_and_leaf():
-    """The whole unit's ok is the core's ok and the leaf's opening: 1 on an honest 1 × 1 tile, 0 when the served y is
-    tampered.  Slow: the whole unit (core σ and the leaf) lowered to bits, the only check it is their and."""
-    t = Tile("h100", 256, 1, 1, 1, 0, 1, "unit")
-    assert t.ok == 1
-    assert _words1(t.tile_def(), *t.tile_args()) == [1]
-    t.y[0][0] ^= 1 << 16
-    assert _words1(t.tile_def(), *t.tile_args()) == [0]
