@@ -306,7 +306,8 @@ private def coin (coins : Array (String × ByteArray)) (v : String) (m : Mark) :
 
 /-- A function's body: its value's sources (`sourceBytes`) and its length in bytes. `const.u16/v1`'s `value` as a u16
 little-endian; `pous.setup.salt/v1` the coin the verifier holds for it, 24 bytes (`coins`: the memory attester's salt,
-drawn after W's commitment); `window.salt/v1` the window's salt under the coin it holds for it (`runSalt`, 64 bytes);
+drawn after W's commitment); `pouw.pearlplus.salt/v1` the epoch's salt of Pearl+, the coin it holds for it, 32 bytes;
+`window.salt/v1` the window's salt under the coin it holds for it (`runSalt`, 64 bytes);
 `registered.root/v1` the root the record registers for its `value` and `record.root/v1` the root the record names for its
 `port` (64 bytes each); `log.base/v1` the first position after the log's records (8 bytes). "no statement" for any other
 function, whose body isn't written. -/
@@ -320,6 +321,10 @@ def body (coins : Array (String × ByteArray)) (v : String) (m : Mark) : V (Arra
     let c ← coin coins v m
     if c.size != 24 then throw s!"supplied input {v}: no statement: {m.fn}'s coin is {c.size} bytes, not 24"
     return (#[("bytes", Flock.hexOf c)], 24)
+  | "pouw.pearlplus.salt/v1" =>
+    let c ← coin coins v m
+    if c.size != 32 then throw s!"supplied input {v}: no statement: {m.fn}'s coin is {c.size} bytes, not 32"
+    return (#[("bytes", Flock.hexOf c)], 32)
   | "window.salt/v1" =>
     let c ← coin coins v m
     if c.isEmpty then throw s!"supplied input {v}: no statement: {m.fn}'s coin is no bytes"

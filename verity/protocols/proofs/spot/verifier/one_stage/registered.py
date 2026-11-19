@@ -552,6 +552,11 @@ def body(coins: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> tuple[l
         if len(c) != 24:
             raise ValueError(f"supplied input {name}: no statement: {f}'s coin is {len(c)} bytes, not 24")
         return [("bytes", c.hex())], 24
+    if f == "pouw.pearlplus.salt/v1":
+        c = _coin(coins, name, m)
+        if len(c) != 32:
+            raise ValueError(f"supplied input {name}: no statement: {f}'s coin is {len(c)} bytes, not 32")
+        return [("bytes", c.hex())], 32
     if f == "window.salt/v1":
         c = _coin(coins, name, m)
         if not c:

@@ -72,7 +72,8 @@ ROOTS = [{"supplied": "registered.root/v1", "args": {"value": "w"}, "layout": "d
          {"supplied": "record.root/v1", "args": {"port": "q"}, "layout": "halves", "bits": 512},
          {"supplied": "window.salt/v1", "args": {}, "layout": "halves", "bits": 512},
          {"supplied": "log.base/v1", "args": {}, "layout": "halves", "bits": 64}]
-MARKS = st.one_of(st.just(SALT), st.just(ONE), st.sampled_from(ROOTS), st.builds(lambda v: {**ONE, "args": {"value": v}}, st.integers(0, 70000)),
+PEARL = {"supplied": "pouw.pearlplus.salt/v1", "args": {}, "layout": "le", "bits": 256}
+MARKS = st.one_of(st.just(SALT), st.just(ONE), st.just(PEARL), st.sampled_from(ROOTS), st.builds(lambda v: {**ONE, "args": {"value": v}}, st.integers(0, 70000)),
                   st.builds(lambda f, lay, b: {"supplied": f, "args": {}, "layout": lay, "bits": b},
                             st.sampled_from([*SU.FUNCTIONS, "no.such/v1"]), st.sampled_from([*SU.LAYOUTS, "be"]),
                             st.sampled_from([0, 16, 192, 1 << 16, (1 << 16) + 8])))
@@ -94,7 +95,8 @@ def instances(draw) -> dict:
     if draw(st.integers(0, 9)) == 0:
         inputs.append(draw(JUNK))
     coins = draw(st.sampled_from([{}, {"pous.setup.salt/v1": "ab" * 24}, {"pous.setup.salt/v1": "ab" * 23},
-                                  {"pous.setup.salt/v1": 5}, {"window.salt/v1": "07" * 32}, {"window.salt/v1": ""}]))
+                                  {"pous.setup.salt/v1": 5}, {"window.salt/v1": "07" * 32}, {"window.salt/v1": ""},
+                                  {"pouw.pearlplus.salt/v1": "5a" * 32}, {"pouw.pearlplus.salt/v1": "5a" * 31}]))
     rec = draw(st.sampled_from([None, RECORD, {**RECORD, "population": 0}, {"window": 3}]))
     log = draw(st.sampled_from([[], [{"population": 5}], [{"population": -1}], 7]))
     binding = draw(st.sampled_from([None, BINDING, {"stream": 1}]))
@@ -140,6 +142,12 @@ SETUP = {"program": desc([["store", 1], ["salt", 1, SALT], ["one", 1, ONE]], [1,
                       "layout": "halves", "bits": 512}]], [2])}, None),
     ("the log's base after two records", lambda j: {**j, "log": [{"population": 2}, {"population": 3}], "program": desc(
         [["base", 1, ROOTS[4]]], [2]), "widths": {"base": 16}}, {"base": [[0, 0, 5, 0]]}),
+    ("Pearl+'s epoch salt, 16 leaves of 16 bits", lambda j: {**j, "coins": {"pouw.pearlplus.salt/v1": bytes(range(32)).hex()},
+                                                         "program": desc([["pp", 1, PEARL]], [2]), "widths": {"pp": 16}},
+     {"pp": [[0x0100 + 0x0202 * i for i in range(16)]]}),
+    ("Pearl+'s salt of 31 bytes: no statement", lambda j: {**j, "coins": {"pouw.pearlplus.salt/v1": "00" * 31},
+                                                           "program": desc([["pp", 1, PEARL]], [2]), "widths": {"pp": 16}},
+     None),
     ("a port the record doesn't name", lambda j: {**j, "program": desc([["r", 1, ROOTS[2]]], [2]),
                                                   "widths": {"r": 16}}, None),
     ("a window salt with no binding", lambda j: {**j, "binding": None, "coins": {"window.salt/v1": "07"},

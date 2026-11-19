@@ -118,7 +118,7 @@ LEAN_REGISTRY = Path(__file__).parents[3] / "verity/protocols/proofs/spot/verifi
 LEAN_BODY = re.compile(r'^  \| "([a-z0-9_]+(?:\.[a-z0-9_]+)+/v[1-9][0-9]*)" =>', re.M)
 #: the functions the Lean registry has no body of yet; each strict failure below is one to take off this list
 NO_LEAN_BODY = frozenset({"pous.session.round_coin/v1", "pous.session.header/v1", "pous.session.context/v1",
-                          "poub.read.pass_seed/v1", "poub.read.pass_root/v1", "pouw.pearlplus.salt/v1"})
+                          "poub.read.pass_seed/v1", "poub.read.pass_root/v1"})
 
 
 @pytest.mark.parametrize("name", [pytest.param(n, marks=pytest.mark.xfail(strict=True, reason="no Lean body yet"))
