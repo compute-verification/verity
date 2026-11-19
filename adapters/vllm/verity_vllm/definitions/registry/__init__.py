@@ -35,6 +35,11 @@ PROTOCOL SUMMARY (Build stage: the registry = the closed vocabulary every Progra
 # (`{ORD=n}` and `Lifted[..]`), which is why they are registered last, exactly as veritor listed them.  Importing any
 # `verity_vllm.definitions.registry.*` module runs this (Python imports the package first), so a descriptor decoded after such an import
 # resolves as it did in veritor.  The makers import lazily to keep this package import light and cycle-free.
+#: Definition ids of a model that is not served, refused by name when no module registered them.
+RETIRED = r"^(Dsv4|Mhc|Marlin|MoeAlign)\w*_v\d+(\{.*\})?$"
+RETIRED_WHY = "Definition {fid}: DeepSeek-V4 is not served through the one circuit, so its Definitions are refused"
+
+
 def _register_lazy_families() -> None:
     from verity.circuits.codec import lookup_primitive, register_lazy_family
     from verity.circuits.defs import REGISTRY
@@ -71,12 +76,16 @@ def _register_lazy_families() -> None:
         from verity_vllm.definitions.registry import dsa_topk_mask
         return dsa_topk_mask
 
+    def _retired(m):
+        raise KeyError(RETIRED_WHY.format(fid=m[0]))
+
     register_lazy_family(r"^Const([1-9][0-9]*)\[0x([0-9a-f]+)\]_v1$", lambda m: _b1().const(int(m[1]), int(m[2], 16)))  # prims.CONST_ID
     register_lazy_family(r"^GatherBf16x(\d+)_v1$", lambda m: _prims().gather_bf16(int(m[1])))
     # [GLM-5.3] the FP8 MoE expert-row gathers are built per vocabulary while deriving (`fp8_moe_experts._gather`), so a cold decode
     # of such a descriptor (the Match of record, replay) must resolve them by id like GatherBf16
     register_lazy_family(r"^GatherE4m3x(\d+)_v1$", lambda m: _fp8_moe().gather_e4m3(int(m[1])))
     register_lazy_family(r"^GatherF32x(\d+)_v1$", lambda m: _fp8_moe().gather_f32(int(m[1])))
+    register_lazy_family(RETIRED, _retired)
     # [GLM-5.3] the canonical top-k row's accelerator, one per (row length, TOPK), built while deriving a row past TOPK
     register_lazy_family(r"^DsaTopKLongRowCheck(\d+)x(\d+)_v1$", lambda m: _dsa_topk().long_row_check(int(m[1]), int(m[2])))
     # the mask form's accelerators, one per (row length, TOPK): the threshold `DsaTopKMask` compares each key with (its key and its

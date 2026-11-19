@@ -312,6 +312,12 @@ FAMILY_FACTS: dict[str, dict[str, Any]] = {
 #: `model_type`s whose vLLM d9105ea80 implementation this table describes; anything else refuses (no silently mis-fitted profile).
 FAMILIES: tuple[str, ...] = tuple(FAMILY_FACTS)
 
+#: `model_type`s that are not served, each refused by name with why.
+RETIRED: dict[str, str] = {
+    "deepseek_v4": "model_type 'deepseek_v4' (DeepSeek-V4) is refused: the model is not served through the one circuit, "
+                   "and its serving path is deleted",
+}
+
 
 def family_of(cfg: dict[str, Any]) -> str:
     return str(cfg.get("model_type", "")).lower()
@@ -319,6 +325,8 @@ def family_of(cfg: dict[str, Any]) -> str:
 
 def facts_for(cfg: dict[str, Any]) -> dict[str, Any]:
     fam = family_of(cfg)
+    if fam in RETIRED:
+        raise ValueError(RETIRED[fam])
     if fam not in FAMILY_FACTS:
         raise ValueError(f"model_type {fam!r} is not in the family facts table {FAMILIES} (needs its own mechanism record)")
     return FAMILY_FACTS[fam]
@@ -384,4 +392,4 @@ def table() -> list[dict[str, Any]]:
     return rows
 
 
-__all__ = ["FAMILY_FACTS", "FAMILIES", "family_of", "facts_for", "resolve_facts", "header_checks", "table", "math"]
+__all__ = ["FAMILY_FACTS", "FAMILIES", "RETIRED", "family_of", "facts_for", "resolve_facts", "header_checks", "table", "math"]

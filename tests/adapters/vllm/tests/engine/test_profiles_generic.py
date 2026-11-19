@@ -256,6 +256,14 @@ def test_the_sparse_attention_family_builds_its_h200_dsa_and_shared_moe_profile(
     assert vals["ATTN_SCALE"] == 256 ** -0.5 and vals["ROPE_NEOX"] is False and prov["SHARED_I"] == "derived"
 
 
+def test_a_retired_family_is_refused_by_name():
+    """DeepSeek-V4 is not served: `facts_for` and the structural refusal both say so in one sentence, not as an unknown model_type."""
+    cfg = {"model_type": "deepseek_v4"}
+    with pytest.raises(ValueError, match="DeepSeek-V4.*not served through the one circuit"):
+        FF.facts_for(cfg)
+    assert G.structural_refusal(cfg) == FF.RETIRED["deepseek_v4"] and "deepseek_v4" not in FF.FAMILY_FACTS
+
+
 def test_olmoe_rank_record_holds_the_whole_all_heads_qk_norm():
     """OLMoE's q/k RMSNorm spans every head (`RMSNorm(total_num_heads * head_dim)`): a TP rank all-gathers q and k first and holds the
     whole replicated weight, so the rank record's `q_norm` / `k_norm` have the full model's width while its heads are the rank's."""

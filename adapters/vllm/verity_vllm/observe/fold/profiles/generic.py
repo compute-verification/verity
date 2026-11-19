@@ -164,6 +164,8 @@ def _quant_config_for_profile(cfg: dict[str, Any], arch: str) -> dict[str, Any] 
 def structural_refusal(cfg: dict[str, Any]) -> str | None:
     """None when the family facts table describes the configuration's vLLM implementation; else why it is not served."""
     fam = FF.family_of(cfg)
+    if fam in FF.RETIRED:
+        return FF.RETIRED[fam]
     if fam not in FF.FAMILY_FACTS:
         return f"model_type {fam!r} is not in the family facts table {FF.FAMILIES} (needs its own mechanism record)"
     arch = FF.FAMILY_FACTS[fam]["arch"]
