@@ -69,9 +69,9 @@ def sites(plan: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
 
 
 def manifest_sites(manifest: Mapping[str, Any] | None) -> list[Mapping[str, Any]]:
-    """The `call_boundaries` identities of a row manifest, for the host plan (`plan_of`, `call_boundary_plan.plan`), which still reads
-    identities; the served road attaches by `sites` of the capture plan."""
-    return [r for r in identity_rows(manifest) if r.get("family") == FAMILY]
+    """The `call_boundaries` identities of a row manifest the host plan (`plan_of`, `call_boundary_plan.plan`) evaluates: every one
+    no other source claims.  The host plan still reads identities; the served road attaches by `sites` of the capture plan."""
+    return [r for r in identity_rows(manifest) if r.get("family") == FAMILY and claimed(r) is None]
 
 
 def plan_of(manifest: Mapping[str, Any], *roots: str | None) -> Plan:

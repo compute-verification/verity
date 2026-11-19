@@ -54,8 +54,9 @@ def _of(c: Mapping[str, Any], definition: str) -> bool:
 
 
 def claim(c: Mapping[str, Any]) -> str | None:
-    """`call_boundary_source.CLAIMS`: a plan class that is an Int8RowQuant call boundary is this source's."""
-    return SHORT_NAME if c["capture"] == CALL_BOUNDARY and _of(c, QUANT) else None
+    """`call_boundary_source.CLAIMS`: a plan class that is an Int8RowQuant call boundary is this source's; a row manifest's
+    identity (a TP rank's rows, which carry no capture class) is not."""
+    return SHORT_NAME if c.get("capture") == CALL_BOUNDARY and _of(c, QUANT) else None
 
 
 class Sites(dict):
