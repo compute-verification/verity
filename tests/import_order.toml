@@ -89,6 +89,11 @@ directory = "verity/protocols/resource_accounting/compute/pouw/prover/clear"
 owner = "compute-accounting"
 
 [[distribution]]
+directory = "verity/protocols/resource_accounting/compute/pouw/prover/lowering"
+owner = "compute-accounting"
+reason = "H1's lowering (`h1unit.py`) runs Flock's staging (`verity_flock`) for the KnownRows difftest's writer (`benchmarks/pouw/h1_lanes/leaf.py`); goes with H1's Lean change"
+
+[[distribution]]
 directory = "verity/protocols/resource_accounting/compute/pouw/verifier/receipts"
 owner = "compute-accounting"
 
@@ -516,6 +521,7 @@ loaded_by = [
     "verity/protocols/proofs/spot/prover/served.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1window.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/lowering/h1unit.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/challenger.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/requests.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/sample.py",
@@ -642,6 +648,7 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/of_record.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/stage_tile.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/lowering/h1unit.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/schemes/__init__.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/schemes/ncp.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/schemes/pearl_c.py",

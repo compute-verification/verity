@@ -166,6 +166,8 @@
   "benchmarks/pous/wipe_resume/resume.py": 3,
   "benchmarks/pouw/filler/pfill_ref.py": 1,
   "benchmarks/pouw/grind_price.py": 1,
+  "benchmarks/pouw/h1_lanes/leaf.py": 5,
+  "benchmarks/pouw/h1_prove/h1form.py": 1,
   "benchmarks/pouw/harness/ledger.py": 1,
   "benchmarks/pouw/hidden_zk/served_stage.py": 1,
   "benchmarks/pouw/hidden_zk/stage.py": 3,
