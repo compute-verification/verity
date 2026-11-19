@@ -272,6 +272,24 @@ def test_a_rate_first_stage_keeps_one_wrong_proof_blocks_escape_however_the_prov
         S.TwoStage(GRAIN, "subset:2", K)
 
 
+def test_a_two_stage_rule_of_another_form_is_refused_by_design():
+    """By design, a two-stage rule's form is fixed before any coin: a replay law that is no rate law, a count below one,
+    counts that don't name each of the check's templates once, and proofs under a check that is no template query are
+    each refused by their text (Lean `Select`'s twins)."""
+    cases = [(lambda: S.TwoStage(GRAIN, "subset:2", K),
+              "a two-stage rule's replay law is a rate law, rate:NUM/DEN or rate:NUM/DEN:T, not 'subset:2'"),
+             (lambda: S.TwoStage(GRAIN, "rate:1/2", 0),
+              "a two-stage rule samples k >= 1 proof blocks in each cell: one count, or one per template {descriptor id: k_t}"),
+             (lambda: S.second_counts({"a": 1}, ["a", "b"], [2, 2]),
+              "a two-stage rule's counts name each of the check's templates once: ['a'] vs ['a', 'b']"),
+             (lambda: S.template_circuits({"templates": []}, {"name": "Q_all", "version": 0, "params": {}}),
+              "a two-stage design's check is a template query")]
+    for make, why in cases:
+        with pytest.raises(ValueError) as e:
+            make()
+        assert str(e.value) == why
+
+
 @pytest.mark.parametrize("port", BOUNDARY)
 def test_a_replay_block_is_held_to_the_boundary_values_committed_while_serving(port):
     """A replay block's starting state (`bx`) and its far edge (`bout`) are boundary values, committed in the docket
