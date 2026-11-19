@@ -129,8 +129,9 @@ is a one-time pad on `M·y`, which is why the direct bound above is tighter.
   uniform-bytes assumption of the trust base.
 - **The randomness module's keyed SHA-512 stream** (`verity.commitments.randomness`: `derive`, then `stream`), under a key derived
   from fresh operating-system bytes for the one unit it salts, a step, a pass or a registration, and used for no other. Hiding is
-  then computational: it rests on the named assumption that this stream under a uniform key passes as uniform bytes
-  (`KeyedUniform` in the Lean), one term for each key.
+  then computational, and no better than the key's 256 bits: it rests on the named assumption that this stream under a uniform
+  key passes as uniform bytes (`KeyedUniform` in the Lean), one term for each key. Every block of the stream at one index hashes
+  a message of one fixed length (`salt_stream.message_bytes`), which the card's fill asserts.
 
 A salt made on a host is of the first kind. On a card, where salts of the first kind would be drawn by the host and carried over,
 gigabytes a step at served sizes, a salt may be of the second kind, computed by one shared expander. Nothing else salts a leaf: not
@@ -146,7 +147,7 @@ these expansions, and no hiding is quoted for these leaves.
 
 **Custody.** Salts drawn for each leaf are kept beside the values by the member that commits them and are private as the values
 are. A key's salts are exposed together if the key is. A key is private and is never sent to a verifier. It is kept only while an
-opening may still need it: a pass's key is never written; a key that a replay must reopen rows with is written to the store's
+opening may still need it: a pass's key is never written and is dropped at the pass's end; a key that a replay must reopen rows with is written to the store's
 private directory and nowhere else, outside every run's output, where custody refuses to upload it.
 
 `tests/test_no_keyed_salts.py` holds three lists: the files that still salt a leaf any other way, which only shrinks, the

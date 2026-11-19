@@ -566,7 +566,7 @@ def test_the_spec_states_no_new_lemma():
 #: the lines a module may run to: one module is one unit of rebuild, so a long one costs every check and train its build
 LONG = 2000
 #: the lines past `LONG` of each package's modules, summed
-OVERLONG = {"security": 963, "security/Proofs": 53427, "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check": 282, "verity/protocols/proofs/flock/verifier": 725}
+OVERLONG = {"security": 963, "security/Proofs": 53427, "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check": 282, "verity/protocols/proofs/flock/verifier": 690}
 
 
 def overlong(lines: dict[str, int]) -> dict[str, int]:

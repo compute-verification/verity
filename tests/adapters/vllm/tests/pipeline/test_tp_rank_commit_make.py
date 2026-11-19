@@ -374,7 +374,7 @@ def test_a_flash_attention_model_given_a_tap_build_gets_the_hidden_source_first(
     assert answer["attention_hidden"] == {"family": family, "why": f"the attention impls' vllm_flash_attn_version [{version}]"}
     assert answer["hidden_source"] == "/taps/verity_fa2_matReq.so"
     assert com.sources[0] == "hidden source" and type(com.sources[1]) is TPPartialSource
-    assert asked == [(com, "/taps/verity_fa2_matReq.so", {"ns": "verity_fa2_matReq", "manifest": None, "fa2_cls": HS.HiddenM1Source,
+    assert asked == [(com, "/taps/verity_fa2_matReq.so", {"ns": "verity_fa2_matReq", "fa2_cls": HS.HiddenM1Source,
                                                           "fa3_cls": None})]
     assert answer["arena_sizing"]["hidden_m1"] is True
 
@@ -382,7 +382,7 @@ def test_a_flash_attention_model_given_a_tap_build_gets_the_hidden_source_first(
 def test_the_hidden_source_takes_the_namespace_the_driver_gives_and_the_committers_own_source_classes(monkeypatch):
     asked = _hidden(monkeypatch)
     _made("checking", model=_Model(flash_attn=2), hidden_so="/taps/tap.so", hidden_ns="verity_fa2_matAll")
-    assert [kw for _, _, kw in asked] == [{"ns": "verity_fa2_matAll", "manifest": None, "fa2_cls": "the committer's FA2 source",
+    assert [kw for _, _, kw in asked] == [{"ns": "verity_fa2_matAll", "fa2_cls": "the committer's FA2 source",
                                            "fa3_cls": "the committer's FA3 source"}]
 
 
@@ -398,23 +398,14 @@ def test_without_a_tap_build_or_a_flash_attention_impl_no_hidden_source_is_attac
     assert answer["arena_sizing"]["hidden_m1"] is False
 
 
-def test_a_manifest_that_names_no_hidden_stream_leaves_the_hidden_source_out(monkeypatch, tmp_path):
+@pytest.mark.parametrize("families", [["tp_partial"], ["fa2_hidden_m1_stream", "tp_partial"]])
+def test_the_hidden_class_is_the_model_s_attention_s_whatever_the_required_manifest_names(monkeypatch, tmp_path, families):
     asked = _hidden(monkeypatch)
     man = tmp_path / "required.json"
-    man.write_text(json.dumps({"identities": [{"family": "tp_partial"}]}))
+    man.write_text(json.dumps({"identities": [{"family": f} for f in families]}))
     answer, _, _ = _made(model=_Model(flash_attn=2), hidden_so="/taps/tap.so", required_manifest=str(man))
-    assert answer["attention_hidden"] == {"family": None, "why": "the required manifest names no attention hidden stream"}
-    assert asked == [] and "hidden_source" not in answer
-
-
-def test_the_hidden_source_is_handed_the_manifest_that_names_its_stream(monkeypatch, tmp_path):
-    asked = _hidden(monkeypatch)
-    doc = {"identities": [{"family": "fa2_hidden_m1_stream"}, {"family": "tp_partial"}]}
-    man = tmp_path / "required.json"
-    man.write_text(json.dumps(doc))
-    answer, _, _ = _made(model=_Model(flash_attn=2), hidden_so="/taps/tap.so", required_manifest=str(man))
-    assert answer["attention_hidden"] == {"family": "fa2_hidden_m1_stream", "why": "required manifest identities"}
-    assert [kw["manifest"] for _, _, kw in asked] == [doc]
+    assert answer["attention_hidden"] == {"family": "fa2_hidden_m1_stream", "why": "the attention impls' vllm_flash_attn_version [2]"}
+    assert [so for _, so, _ in asked] == ["/taps/tap.so"] and all("manifest" not in kw for _, _, kw in asked)
 
 
 def test_the_taps_the_driver_binds_are_made_for_this_rank(tmp_path):

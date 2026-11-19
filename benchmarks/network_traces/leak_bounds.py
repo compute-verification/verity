@@ -163,7 +163,7 @@ WORKLOAD = "benchmarks/spot_figures/cards/workload.glm-5.3.json"
 #: server's line at its last step, at the 128k serving plan's request
 PLANNER, PLAN_CASE = "benchmarks/spot_figures/breakeven", "P5+poolwin600"
 #: the served model, the slowdown calculator's world fleet and the census's GPU peak, the H200's dense FP8 rate
-MODEL, WORLD, PEAK = "GLM-5.3", "world-h200", "h100-sxm5-80gb/e4m3"
+MODEL, WORLD, PEAK, READING = "GLM-5.3", "world-h200", "h100-sxm-80gb-tensor/e4m3", "datasheet"
 #: a GB's bits, and FP4's bits a parameter
 GB, FP4 = 8 * 10 ** 9, 4
 
@@ -724,7 +724,7 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
         raise ValueError(f"the request counted is one of {', '.join(REQUESTS)}, not {requests!r}")
     counted = "given" if world_requests is not None else requests
     census, dc = _reference("adversary.json"), _reference("deployments.json")
-    peak = next(e for e in _json(HARDWARE) if e["id"] == PEAK)
+    peak = next(r for e in _json(HARDWARE) if e["id"] == PEAK for r in e["readings"] if r["name"] == READING)
     fleet, card = _toml(SLOWDOWN)["fleet"][WORLD], _json(WORKLOAD)
     count, mfu = fleet["count"], fleet["mfu_serve"]
     gpus = _toml(SLOWDOWN_HARDWARE)["location"][fleet["location"]]["devices"]
@@ -743,7 +743,7 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
         "mfu_serve": Input(mfu["value"], "", _MARK[mfu["status"]],
                            f"{SLOWDOWN} fleet.{WORLD}.mfu_serve, {mfu['low']} to {mfu['high']}: {mfu['source']}"),
         "peak_flops": Input(peak["flop_per_second"], "FLOP/s", "assumed",
-                            f"{HARDWARE} {PEAK}.flop_per_second: the data sheet's dense FP8 peak, the H200's too "
+                            f"{HARDWARE} {PEAK}, reading {READING}: the data sheet's dense FP8 peak, the H200's too "
                             "(one die, one clock)"),
         "request_tokens": Input(census["tokens_per_request"], "token", "modeled",
                                 f"{ADVERSARY} {census['id']}.tokens_per_request"),

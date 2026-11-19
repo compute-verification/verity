@@ -7,10 +7,10 @@ public import Mathlib.Basic.Real.Basic
 /-!
 # The clock's premise
 
-`ClockWithin S k real`, an assumption about one of the auditor's devices, beside `trusted-host`, and not a part of the
+`ClockWithin S k real`, an assumption about one of the auditor's devices, beside `trusted-device`, and not a part of the
 model: the clock of the device registered under key `k` runs at the true rate within the drift the Site registers for
 it (`Site.Loc.drift`, on the auditor's host the device is in). For two of that device's entries
-(`Challenger.Attested k`) that carry readings, `real` giving the real time in nanoseconds at which it signed each, the
+(`Challenger.Attested k`) that carry readings, `real` giving the real time in nanoseconds at which it made each, the
 readings' difference (`Challenger.Reading.elapsed`) is within that share of the real time between them. It is
 two-sided, and each consumer leans on one side:
 
@@ -27,7 +27,7 @@ times as its own hypothesis: it checks `0 ≤ ra.elapsed rb` and derives `real a
 `Proofs.Core.Challenger`). Useful work's
 `honest-clock` and the bandwidth audit's `Paced` are restated over this premise, not kept beside it.
 How late the device acts after it reads its clock is a term of a consumer's statement, not of this premise. It is a
-premise about the auditor's device on a host the prover doesn't control (`trusted-host`), which nothing attests.
+premise about the auditor's device on a host the prover doesn't control (`trusted-device`), which nothing attests.
 -/
 
 @[expose] public section
@@ -43,9 +43,9 @@ def NotSlow (q : ℚ≥0) (d e : ℝ) : Prop := (1 - (q : ℝ)) * d ≤ e
 def NotFast (q : ℚ≥0) (d e : ℝ) : Prop := e ≤ (1 + (q : ℝ)) * d
 
 /-- **`clock-within-drift`**: the auditor's device registered under key `k` in the Site `S`, in a host that registers
-the drift `q`, has a clock that runs at the true rate within `q`: for two entries `a` and `b` it signs, with readings
+the drift `q`, has a clock that runs at the true rate within `q`: for two of its entries `a` and `b`, with readings
 `ra` and `rb`, at the real times `real a ≤ real b` in nanoseconds, `ra.elapsed rb` is not slow and not fast against
-`real b - real a`. It is trust in the auditor's device and its host (`trusted-host`). -/
+`real b - real a`. It is trust in the auditor's device and its host (`trusted-device`). -/
 def ClockWithin (S : Site) (k : String) (real : Attested k → ℝ) : Prop :=
   ∀ x ∈ S.locs, x.kind.auditor = true → x.key = k → ∀ p ∈ x.parent, ∀ h ∈ S.loc? p, ∀ q ∈ h.drift,
     ∀ (a b : Attested k), ∀ ra ∈ a.reading, ∀ rb ∈ b.reading, real a ≤ real b →

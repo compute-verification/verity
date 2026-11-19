@@ -2,8 +2,7 @@
 A field that holds another empty value (`OTHER_EMPTY`) in its block's place reads as the absent one too.
 
 Each reader below takes a document whose writer may leave a field out: a required manifest's `identities`
-(`verity_vllm.acquire.sources.int8_source`, `verity_vllm.acquire.sources.call_boundary_source`,
-`verity_vllm.acquire.sources.call_boundary_plan`, `verity_vllm.acquire.sources.taps`), a narrowed row's `identity`
+(`verity_vllm.acquire.sources.call_boundary_plan`, `verity_vllm.acquire.sources.taps`'s rank side), a narrowed row's `identity`
 (`verity_vllm.acquire.sources.narrowed_source`), the manifest's `requests`, `engine_steps` and `fixture`, a
 Build's `result.json`, a capture map's `pins`, what a rank recorded of the sources it attached, a step the declared composition or the
 recorded routes do not hold (`verity_vllm.acquire.sources.route_source`), a capture's stored tensors
@@ -25,7 +24,6 @@ from verity_vllm.acquire.sources import attention_source as AT
 from verity_vllm.acquire.sources import call_boundary_plan as CP
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import dsv4_attention_source as D4
-from verity_vllm.acquire.sources import int8_source as I8
 from verity_vllm.acquire.sources import mhc_source as MH
 from verity_vllm.acquire.sources import narrowed_source as NR
 from verity_vllm.acquire.sources import partial_source as P
@@ -38,47 +36,11 @@ from verity_vllm.commit import capture_map as CM
 NO_IDENTITIES: list[dict[str, Any] | None] = [None, {}, {"identities": None}, {"identities": []}]
 #: the other empty values a writer may leave in an optional block's place; each reads as the absent block
 OTHER_EMPTY: list[Any] = [0, "", False, 0.0, []]
-QUANT = {"family": CP.FAMILY, "spec": f"{I8.QUANT_SPEC}{{w=8}}", "op_path": "model.layers.0.q/quant", "engine_step": 2,
-         "output_member": "0", "request_id": "r0"}
-KV = {"family": "instance_outputs", "spec": I8.KV_SPEC, "op_path": "model.layers.0.attn", "port": 1}
 ADD = {"family": CP.FAMILY, "spec": "Add16", "op_path": "model.norm/add", "engine_step": 0, "output_member": "0", "request_id": "r0"}
-STATED = {"identities": [QUANT, KV, ADD]}
+STATED = {"identities": [ADD]}
 NARROWED = {"narrowed_of": "0", "op_path": "model.layers.1.attn.qkv", "output_member": "0@4", "columns": [2, 6], "width": 4, "dtype": "bf16"}
 NARROWED_SITES = {"model.layers.1.attn.qkv": {"0@4": {"columns": (2, 6), "bytes": 2}}}
 OPROJ = "model.layers.0.self_attn.o_proj"
-
-
-@pytest.mark.parametrize("manifest", NO_IDENTITIES)
-def test_a_manifest_that_names_no_identities_has_no_int8_site(manifest):
-    """`verity_vllm.acquire.sources.int8_source.quant_sites` and `kv_modules`."""
-    assert I8.quant_sites(manifest) == {} and I8.kv_modules(manifest) == [] and not I8.applies(manifest)
-
-
-def test_a_manifests_int8_identities_are_its_quantizer_sites_and_kv_modules():
-    assert I8.quant_sites(STATED) == {(2, "model.layers.0.q"): "model.layers.0.q/quant"}
-    assert I8.kv_modules(STATED) == ["model.layers.0.attn"] and I8.applies(STATED)
-
-
-@pytest.mark.parametrize("manifest", NO_IDENTITIES)
-def test_a_manifest_that_names_no_identities_has_no_call_boundary_site(manifest):
-    """`verity_vllm.acquire.sources.call_boundary_source.manifest_sites` and `unattached`."""
-    assert CB.manifest_sites(manifest) == [] and CB.unattached(manifest, ()) == []
-
-
-def test_a_manifests_call_boundaries_are_the_sources_unless_another_source_claims_them():
-    assert CB.manifest_sites(STATED) == [ADD]
-    assert CB.unattached(STATED, ()) == ["model.layers.0.q/quant/0 of r0 @ engine step 2: claimed by int8, a source the Commit does not attach"]
-    assert CB.unattached(STATED, (I8.SHORT_NAME,)) == []
-
-
-@pytest.mark.parametrize("manifest", NO_IDENTITIES)
-def test_a_manifest_that_names_no_identities_attaches_no_source(manifest):
-    """`verity_vllm.acquire.sources.taps.attached`."""
-    assert TAPS.attached(manifest) == []
-
-
-def test_a_manifests_identities_name_the_sources_its_commit_attaches():
-    assert TAPS.attached(STATED) == [CB.CallBoundarySource.short_name, I8.SHORT_NAME]
 
 
 @pytest.mark.parametrize("manifest", [*NO_IDENTITIES, *OTHER_EMPTY, *({"identities": v} for v in OTHER_EMPTY)])

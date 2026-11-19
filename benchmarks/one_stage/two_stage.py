@@ -850,7 +850,7 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
     tie = {**({"registered": IR.link_words(d.links), "schemas": IR.link_schemas(d.members, d.links)} if d.links else {}),
            **({"supplied": supplied} if supplied else {}),
            **({} if window_root is None else {"window_root": window_root})}
-    ireg, draw = again.second(record, it.ports, leaf_layer=it.leaf_layer, **tie)
+    ireg, draw = again.second(record, it.ports, leaf_layer=it.leaf_layer, partition=it.committed.window.partition, **tie)
     return Replayed(again, d, it, Path(directory), record, ireg, draw, tie, launches, commit_s)
 
 
@@ -1060,7 +1060,9 @@ def _round_two_own(replay: Program, key: str, sample: Sequence[int], window: CS.
                  returns=SS.replay_returns(replay, key, brec),
                  supplied=SS.supplied_of(RG.resolved(tie.get("supplied"), tie.get("history"))),
                  fixed=(*(tie.get("pinned") or ()), *(tie.get("outputs") or ())), reads=S.template_reads(proofs),
-                 tables=S.pinned_tables(proofs))
+                 tables=S.pinned_tables(proofs),
+                 held=SS.held_of(P.program_digest(window.program), tie.get("window_root"), tie.get("held"),
+                                 tie.get("pinned"), tie.get("supplied"), tie.get("outputs")))
     return own
 
 

@@ -218,31 +218,6 @@ theorem ProgramRead.readers_kept (program : ByteArray) : (ProgramRead.kept progr
 
 namespace HmRow
 
-/-- `deriveTemplateUnits`, the program read by `readDesc`. -/
-def deriveTemplateUnitsBy (readDesc : ByteArray → V TemplateQuery.Desc)
-    (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) : V String := do
-  let q := (obj.getObjVal? "query").toOption.getD Json.null
-  let name := (q.getObjValAs? String "name").toOption.getD ""
-  let version := (q.getObjValAs? Nat "version").toOption.getD 0
-  let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
-    | throw s!"partition: {name} v{version} is not a template query"
-  let ts ← ts
-  let d ← readDesc program
-  if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
-    throw "partition: the verifier's program is not the one the partition object names"
-  let rs ← match TemplateQuery.evaluate d ts with
-    | .ok rs => pure rs
-    | .error e => throw s!"partition: {e}"
-  let some (t, cls) := queryTemplate c | throw "partition: META program_digests does not name the circuit's one template"
-  if !ts.contains t then throw s!"partition: the circuit's template {t} is not one the query lists"
-  let pop := TemplateQuery.population rs
-  for i in indices do
-    match TemplateQuery.locate rs i with
-    | none => throw s!"partition: unit {i} is outside the partition's {pop} units"
-    | some (_, _, ti) => if ti != t then throw s!"partition: unit {i} is an instance of {ti}, not the circuit's template {t}"
-  let of := if cls then s!" (META definition of the proof-block class {(circuitTemplate c).getD ""}; that the class circuit lowers it is not checked)" else ""
-  return s!"units derived: {name} v{version} over the verifier's program ({pop} units); the statement's {indices.size} units are instances of {t}{of}"
-
 /-- `deriveQwordUnits`, the program read by `readProg`. -/
 def deriveQwordUnitsBy (readProg : ByteArray → V Program.Prog)
     (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) : V String := do
@@ -305,23 +280,6 @@ def qwordFindingBy (readProg : ByteArray → V Program.Prog)
     let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
     pure (some { f with derived := true, note := ← deriveQcallUnitsBy readProg c obj program indices })
   else pure (some f)
-
-/-- `templateStrata`, the program read by `readDesc`. -/
-def templateStrataBy (readDesc : ByteArray → V TemplateQuery.Desc)
-    (samplingDesign : String) (obj : Json) (program : ByteArray) :
-    V (Array (String × Array (Nat × Nat)) × Nat) := do
-  let (name, version) ← checkPartitionObject obj
-  let q := (obj.getObjVal? "query").toOption.getD Json.null
-  let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
-    | throw s!"{samplingDesign}: {name} v{version} defines no strata (Q_template_instance v0 and Q_template_instances v0 do)"
-  let ts ← ts
-  let d ← readDesc program
-  if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
-    throw "partition: the verifier's program is not the one the partition object names"
-  let rs ← match TemplateQuery.evaluate d ts with
-    | .ok rs => pure rs
-    | .error e => throw s!"partition: {e}"
-  return (Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)), TemplateQuery.population rs)
 
 /-- `stratifiedSamplingDesign`, the program read by `readDesc`. -/
 def stratifiedDesignBy (readDesc : ByteArray → V TemplateQuery.Desc)

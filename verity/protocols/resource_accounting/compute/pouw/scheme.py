@@ -2,9 +2,9 @@
 
 Its verifier is `verity/pouw/pearl-plus/v1` (`verifier/lean/pearlplus/PouwPearlPlus/Protocol.lean`). A tile that passes
 the tile rule costs its credited cells at the record's kept width |K| (`Credit.lean`'s `creditAtAssumption`), so a
-block's cost reads the record's kept width (``K_KEPT``, `UnitRecord.k_kept`) beside the tile's TM × TN, not the
-Definition's K, which is the unit's padded width. The cost is of a tile whose every cell is credited: filler, excluded and
-given-up rows credit none (`UnitRecord.credited`).
+block's cost reads the record's kept width (``K_KEPT``, `UnitRecord.k_kept`) beside the tile's real rows × TN (TR, the
+tile unit's static, where its shape has one, else TM), not the Definition's K, which is the unit's padded width. The cost
+is of a tile whose every real cell is credited: filler, excluded and given-up rows credit none (`UnitRecord.credited`).
 
 On a served run (`attach`) it computes every linear block with its device run (`verity.hooks.ComputeBlockWith`), the
 workload's `PearlCDeviceRun` (`serving.tensors.pearl_c_device`), over the weight operands the run registers
@@ -13,16 +13,20 @@ arrives (`Attached.step`); outside an epoch a block is the workload's own. At a 
 ``capture``) each call is one dispatcher op, ``verity_pouw::pearl_plus_linear`` (`serving.tensors.PearlCDevice.linear_op`),
 in the first-stage linear's form, which the capture records; its coins are in-process and credit nothing. It ends the run's pass once each step's blocks
 are issued (``steps``, `StepComputed`). It provides the ``cut`` (`Scheme.provides`): a phase's circuit is cut at the
-linears it computes, whose calls commit their A rows and y. Its settings are
-`SETTINGS`; ``tie-uniform`` lets a uniform sampling rate stand under the tie to its tables, with the weaker tie its
-record states.
+linears it computes, whose calls commit their A rows and y. Its credited product is one block per grid tile of every
+call of every pass, in the Lean verifier's tile order (`credited_blocks`), and its sample draws over those blocks
+(`drawn_blocks`), each drawn block's core taking its public inputs from the committed records (`drawn_inputs`, which
+refuses a block the core doesn't cover). Its settings are
+`SETTINGS`. A served run launches it untied (`_hooks`): its verdict is its own over its own passes, held to no window
+record, and credits nothing.
 """
 
 from __future__ import annotations
 
 import os
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
@@ -31,8 +35,10 @@ from typing import Any
 from verity import hooks as H
 from verity.protocols.resource_accounting.compute.pouw.prover import serving, workload
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import runs_on
+from verity.config import COMPOSITES
 from verity.protocol import VERIFIER
-from verity.protocols.resource_accounting.scheme import Block, Charge, Lacks, Launch, Order, Scheme, Term, register
+from verity.protocols.resource_accounting.scheme import (Block, Charge, Executable, Lacks, Launch, LaunchRefused, Order,
+                                                             Scheme, Term, register)
 
 #: the kernel scheme it runs, on every card its row allows
 KERNEL = "pearl-c-h100-v1-h3"
@@ -43,7 +49,100 @@ READS = ("bf16",)
 
 
 def tile_macs(shape: Mapping[str, int]) -> int:
-    return shape["TM"] * shape["TN"] * shape["K_KEPT"]
+    return shape.get("TR", shape["TM"]) * shape["TN"] * shape["K_KEPT"]
+
+
+@dataclass(frozen=True)
+class CreditedBlock:
+    """One credited block: tile ``id`` = (pass, tile id) of the run, the tile id its transcript leaf's position; ``record``
+    its call's position in the pass, ``unit`` the call's index, ``rows`` and ``cols`` the tile's, ``col`` its column block
+    (``cols[0] // TN``), ``size`` its template's (K, TM, TN, N), ``real`` its template's static real-row count TR (its
+    rows below the call's ``real_rows``; the rest are filler, held to zero), and ``ticket`` its integer sample weight."""
+
+    id: tuple[int, int]
+    record: int
+    unit: int
+    rows: tuple[int, ...]
+    cols: tuple[int, ...]
+    col: int
+    size: tuple[int, int, int, int]
+    real: int
+    ticket: int
+
+
+def credited_blocks(scheme: Any, passes: Sequence[Sequence[Any]]) -> list[CreditedBlock]:
+    """The run's credited product as blocks, one per grid tile of every call of every pass (``passes``, each pass's
+    `UnitRecord`s in order), in the Lean verifier's order (`Run.lean`'s `tile?` and `tickets`): pass by pass, call by call,
+    each call's tiles row-major (`audit.tile_refs` over `grid_tiles`), each ticketed at its credited cells' `wref` share
+    (`clear_work.tickets` over every pass's records together). A tile with no credited cell has ticket 0 and is never
+    drawn."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.clear import clear_work as CW
+    from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Workload, tile_refs
+
+    tickets = iter(CW.tickets(scheme, [r for records in passes for r in records]))
+    tn, out = scheme.tile[1], []
+    for i, records in enumerate(passes):
+        for ref in tile_refs(scheme, Workload(tuple(r.matmul for r in records))):
+            _, tile, ticket = next(tickets)
+            r = records[ref.matmul]
+            u = r.matmul
+            assert tile == ref.tile, "clear_work.tickets and audit.tile_refs enumerate one grid"
+            out.append(CreditedBlock((i, ref.id), ref.matmul, u.index, tile.rows, tile.cols, tile.cols[0] // tn,
+                                     (u.shape.k, len(tile.rows), tn, u.shape.n),
+                                     sum(row < r.real_rows for row in tile.rows), ticket))
+    return out
+
+
+class Uncovered(ValueError):
+    """A drawn block the credited block doesn't cover, by name (``code``): its core bounds inert work at the Definition's
+    K and checks no word past the record's kept width |K|, and admits every real row, while the tile rule
+    (`PouwPearlPlus/Rule.lean`) credits at |K|, fails excluded rows and skips voluntary ones."""
+
+    def __init__(self, code: str, why: str) -> None:
+        super().__init__(f"{code}: {why}")
+        self.code = code
+
+
+def drawn_inputs(passes: Sequence[Sequence[Any]], block: CreditedBlock, tr: int) -> dict[str, Any]:
+    """The public inputs of a drawn ``block``'s core, ``unit``, ``rows`` and ``col``, read with its kept width, real rows
+    and excluded and voluntary rows from the committed records ``passes`` (each pass's `UnitRecord`s, as
+    `credited_blocks` takes them), never from the caller; ``tr`` is the TR static of C's tile, the core it checks.
+    Refused (`Uncovered`): ``real-rows``, a TR that is not the tile's rows below its call's ``real_rows``
+    (min(TM, real_rows − i) for the tile's rows from i); ``kept-width``, a call whose kept width |K| is below K;
+    ``excluded-row`` and ``voluntary-row``, a tile holding an A row (of ``rows``) or B row (of ``cols``) its call
+    excludes or gives up."""
+    r = passes[block.id[0]][block.record]
+    u, k = r.matmul, r.matmul.shape.k
+    real = sum(row < r.real_rows for row in block.rows)
+    if tr != real:
+        raise Uncovered("real-rows", f"C's tile of call {u.index} at rows {block.rows[0]}..{block.rows[-1]} binds TR = "
+                                     f"{tr!r}, and its record's real rows ({r.real_rows}) leave it {real}")
+    if r.k_kept < k:
+        raise Uncovered("kept-width", f"call {u.index} keeps |K| = {r.k_kept} of K = {k}; the block checks no word past "
+                                      f"|K| and bounds inert work at K, while the tile rule credits at |K|")
+    for code, verb, rule, a, b in (("excluded-row", "excludes", "fails", r.excluded_a, r.excluded_b),
+                                   ("voluntary-row", "gives up", "skips", r.voluntary_a, r.voluntary_b)):
+        rows, cols = sorted(set(block.rows) & set(a)), sorted(set(block.cols) & set(b))
+        if rows or cols:
+            raise Uncovered(code, f"tile {block.id} of call {u.index} holds A rows {rows} and B rows {cols} its record "
+                                  f"{verb}; the block admits every real row, while the tile rule {rule} them")
+    return {"unit": u.index, "rows": list(block.rows), "col": block.col}
+
+
+def drawn_blocks(scheme: Any, passes: Sequence[Sequence[Any]], key: Any, t: int,
+                 draw: Callable[..., Any] | None = None) -> list[CreditedBlock]:
+    """The ``t`` blocks of `credited_blocks` that ``key`` draws (``draw``, `clear_work.draw` unless a caller holding
+    `clear_work` by its bare name gives its own: work-weighted with replacement, in its order): `Run.lean`'s `draw` under
+    `drawKey`."""
+    if draw is None:
+        from verity.protocols.resource_accounting.compute.pouw.prover.clear.clear_work import draw
+
+    blocks, at = credited_blocks(scheme, passes), [0]
+    for records in passes:
+        at.append(at[-1] + len(records))
+    by_tile = {(at[b.id[0]] + b.record, b.rows[0], b.cols[0]): b for b in blocks}
+    return [by_tile[(pos, tile.rows[0], tile.cols[0])]
+            for pos, tile in draw(scheme, [r for records in passes for r in records], key, t)]
 
 
 #: Its settings (`Scheme.settings`), each a default of its type: ``kernel`` the kernel's library (required on a served
@@ -53,10 +152,10 @@ def tile_macs(shape: Mapping[str, int]) -> int:
 #: process, crediting nothing) or ``challenger`` (the auditor device's, HOST:PORT), whose sessions the launcher's
 #: ``ctx["gate"]``, the gate in its own words, opens: ``session``, a reserve answer the gate already gave, opened by the
 #: first epoch, and ``lane`` and ``peer``, under which each later epoch reserves its own (`Attached.reserve`);
-#: ``users``, a regular expression a phase's inputs' users must all match in full for its epoch to open (unset: every
-#: phase's); and ``tie-uniform``
-SETTINGS: dict[str, Any] = {"tie-uniform": False, "kernel": "", "cubin": "", "schedule": "serial", "transcript_dir": "",
-                            "coins": "", "challenger": "", "session": {}, "lane": "", "peer": "", "users": ""}
+#: and ``users``, a regular expression a phase's inputs' users must all match in full for its epoch to open (unset:
+#: every phase's)
+SETTINGS: dict[str, Any] = {"kernel": "", "cubin": "", "schedule": "serial", "transcript_dir": "", "coins": "",
+                            "challenger": "", "session": {}, "lane": "", "peer": "", "users": ""}
 COINS = ("", "in-process")
 
 
@@ -328,7 +427,7 @@ class Attached:
         return dict(self.life["commitment"]) if self.life else dict(self.run.commits) if self.run is not None else {}
 
     def record(self) -> Mapping[str, Any]:
-        return {"entry": OPTION, "schedule": self.own["schedule"], "tie-uniform": self.own["tie-uniform"]}
+        return {"entry": OPTION, "schedule": self.own["schedule"]}
 
     def summary(self) -> Mapping[str, Any]:
         if self.phased:
@@ -505,14 +604,11 @@ PEARL_PLUS = register(Scheme(
     under="400 × the MACs spent: the prover's cost in the cost model, priced at a credited MAC's honest cost (TT_OUT's T "
           "at g₀ = 1/400)",
     settings=SETTINGS,
-    # the class's slots and outputs are the tied workload's slots and window steps (4, 2): Pearl+'s launcher refuses
-    # any other, so an application on other workload values does not tie
-    tie={"class": "4,27,2", "tie-uniform": True},
     check_settings=check_settings,
     option=OPTION,
     hooks=("blocks", "declared", "memory", "steps"),
     provides=("cut",),
-    requires={"one-labelling": "its own pass manifests, tied to the window record's pearl-a/, pearl-y/ and pearl-b/ values",
+    requires={"one-labelling": "its own pass manifests, held to no window record",
               "log-order": "its own coin sessions: the salt's opened on the weights' root, the sample's on the run's "
                            "commitment",
               "one-design": "its own tile sampling by ticket weight"},
@@ -525,16 +621,20 @@ PEARL_PLUS = register(Scheme(
     depends=(),
     pieces={"workers": Launch(optional=("gate", "peer", "key-sha512", "lane", "main-file"), development="gate",
                               starts=("gate", "peer", "lane", "key-sha512", "main-file"),
-                              starts_optional=("lane", "main-file"))},
+                              starts_optional=("lane", "main-file"),
+                              entry="verity.protocols.resource_accounting.compute.pouw.scheme:launch_pearlplus",
+                              executables=(Executable(
+                                  "verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus",
+                                  "pouw-pearlplus"),))},
     answers=Lacks("has no piece that answers outside an exchange"),
     # until the salt and sample sessions' signature pin is in Lean
     unchecked={"coins-signatures-checked-by-the-auditor":
                "coins' signatures checked on the served node only; not checked by the auditor",
                # no record the verifier reads states vLLM's graph mode: `requests`' eager is held on the serving node
-               "cuda-graph-rows-outside-the-tie":
-               "the tie covers a workload served eager (vLLM's graph mode NONE): under a CUDA graph (FULL or PIECEWISE) "
-               "a step's linear runs at the capture size, with rows no request owns, and those rows are outside what "
-               "the tie covers"},
+               "cuda-graph-rows-outside-the-verdict":
+               "Pearl+'s verdict covers a workload served eager (vLLM's graph mode NONE): under a CUDA graph (FULL or "
+               "PIECEWISE) a step's linear runs at the capture size, with rows no request owns, and those rows are "
+               "outside what its verdict covers"},
     record="work",
     symbol="V",
     published=("MACs", Fraction(1)),
@@ -554,3 +654,35 @@ PEARL_PLUS = register(Scheme(
                               "with Pearl+'s formed FP8 buffers as a third form, and storage's release of a weight frees "
                               "nothing.",
 ))
+
+SCRIPT = "benchmarks/one_stage/served_pearlplus.sh"
+#: served_verdicts.sh's variable for each binding of Pearl+'s live challenger, the party that sends its salt
+_LIVE = {"gate": "PEARLC_CHALLENGER_GATE", "peer": "PEARLC_CHALLENGER_PEER", "key-sha512": "H1_KEY_SHA512"}
+_CHALLENGER = workload.PEARL_CHANNELS[0].sender
+
+
+def _hooks(cfg, params, bound, pinned):
+    """Pearl+ on the workload's engine (POUW=pearlplus), untied: each engine step's passes retained under the gate's
+    salts, then its verdict over its own passes, held to no window record, and the Lean verifier
+    (served_pearlplus.sh). With no gate bound the gate variables are set empty, since unset served_verdicts.sh takes the
+    lane's gate: Pearl+'s epoch coins are then an in-process challenger's on the workload's machine, its verdict claims
+    none, and the run is a development one."""
+    product = "remote" if sorted(cfg["protocols"]) == sorted(COMPOSITES["verity/remote/v1"]) else "onsite"
+    hooks = {"POUW": "pearlplus", "PRODUCT": product}
+    if given := [k for k in _LIVE if k in bound]:
+        if lacking := [k for k in _LIVE if k not in bound]:
+            raise LaunchRefused("unbound", f"Pearl+'s live challenger takes {', '.join(_LIVE)} together, and the "
+                                           f"deploy bindings bind {', '.join(given)} without "
+                                           f"{', '.join(f'{_CHALLENGER}.pearl-plus.{k}' for k in lacking)}: bind "
+                                           f"them, or none for coins flipped on the workload's machine")
+        hooks |= {v: bound[k] for k, v in _LIVE.items()}
+    else:
+        hooks |= {"PEARLC_CHALLENGER_GATE": "", "PEARLC_CHALLENGER_PEER": "", "DEVELOPMENT": "1"}
+    return hooks | {v: bound[k] for k, v in (("lane", "PEARLC_CHALLENGER_LANE"), ("main-file", "MAIN_FILE"))
+                    if k in bound}
+
+
+def launch_pearlplus(declaration: Scheme) -> tuple[Any, tuple[str, ...]]:
+    """Pearl+'s workers piece (its `Launch.entry`): its hooks and the script they run. It launches and collects, and
+    decides no verdict."""
+    return _hooks, (SCRIPT,)

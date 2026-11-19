@@ -70,6 +70,9 @@ from verity.circuits.codec import canonical_json
 from verity.commitments.periods.interface import CIRCUIT
 
 ATTESTATION_KEYS = ("digest", "direction", "key_id", "link", "signature", "window")
+#: why the period step refuses every period case whose compute audit is a window commit
+SERVED = ("a served window's circuit writes its Programs' entries in the order its Programs end, and the period check "
+          "reads entry k as slot k's: refused until the check holds each entry to its slot")
 
 
 def certificates(run: Path, w: int) -> list[dict]:
@@ -148,11 +151,12 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
 def circuit_of_record(path: Path) -> str:
     """The class circuit a window-circuit record names (``verity/window-circuit/v1``, the verifier's own, which
     ``served_verdicts.sh`` keeps as ``window-circuit-w<K>-<class>.json`` beside V3c's ``v3c-w<K>-<class>``): its
-    Program's digest, which a window's registration under that class names too."""
+    Program's digest, which a window's registration under that class names too. Refused (`SERVED`) whatever the
+    record holds: no field of it lifts the refusal."""
     doc = json.loads(path.read_text())
     if doc.get("format") != CIRCUIT or not isinstance(doc.get("program"), str):
         raise SystemExit(f"{path}: not a {CIRCUIT} record naming its program")
-    return doc["program"]
+    raise SystemExit(f"{path}: {SERVED}")
 
 
 def mirror(path: Path):
