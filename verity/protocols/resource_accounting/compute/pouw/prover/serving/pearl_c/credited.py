@@ -1,5 +1,5 @@
 """The credited block's inputs from a Pearl+ pass: `credited_inputs` fills every port of Pearl+'s tile unit
-(`circuit.pearl_plus_tile`: `PearlPlusTileCore`'s, then the leaf's) for one tile from the pass's directory, each value
+(`circuit.pearl_plus_tile`: `PearlPlusTileCoreV2`'s, then the leaf's) for one tile from the pass's directory, each value
 with the opening that ties it to the pass's commitments.
 
 - **a**, the tile's TM rows of A as FP32 words, each opened at the call's ``root_a`` (`opened.Opened.open`); rows past the
@@ -47,7 +47,7 @@ def _words(value: bytes) -> list[int]:
 
 @dataclass(frozen=True)
 class Credited:
-    """One tile's ports of Pearl+'s tile unit, in `PearlPlusTileCore`'s order then the leaf's, with the openings that tie
+    """One tile's ports of Pearl+'s tile unit, in `PearlPlusTileCoreV2`'s order then the leaf's, with the openings that tie
     a, b, y and the digest's leaf to the pass's roots. ``real`` is the tile's real rows (TR), the rows y holds."""
 
     ref: TileRef
@@ -86,14 +86,13 @@ class Credited:
         return len(self.b)
 
     def statics(self) -> dict:
-        """The unit's statics at this tile, TR among them where the unit takes one."""
+        """The unit's statics at this tile, TR its real rows."""
         d = self.scheme.device
-        out = dict(K=self.k, TM=self.tm, TN=self.tn, N=self.n, RHO=inert_bound._rho(d.name, None),
-                   RHOR=inert_bound.row_rho(self.scheme, self.k), DEV=d.name)
-        return {**out, "TR": self.real} if "TR" in T.PearlPlusTileCore.statics else out
+        return dict(K=self.k, TM=self.tm, TR=self.real, TN=self.tn, N=self.n, RHO=inert_bound._rho(d.name, None),
+                    RHOR=inert_bound.row_rho(self.scheme, self.k), DEV=d.name)
 
     def core(self) -> SpecializedDefinition:
-        return bind(T.PearlPlusTileCore, **self.statics())
+        return bind(T.PearlPlusTileCoreV2, **self.statics())
 
     def core_args(self) -> list:
         return [self.a, self.b, self.y, self.cert, self.salt, self.root, self.unit, self.rows, self.col, self.eb, self.fa,
