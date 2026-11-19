@@ -3,8 +3,7 @@
 This is the harness benchmarks share. Its main job is one measurement: what an arm, a protocol option or an
 experimental install, adds to served inference over stock vLLM, on the same GPU, through the vLLM adapter's public
 interfaces. A spec names a model, its arms and a sweep. The harness expands it into points, times each point with the
-arms interleaved and gated to give the same tokens, and records one run per point. A table only ever puts results
-side by side whose identities agree.
+arms interleaved and gated to give the same tokens, and records one run per point.
 
 It also holds the kit: the few calls every benchmark's runner shares to lease a GPU, stamp the host, pair a ratio,
 write a result and print a core benchmark's number.
@@ -27,10 +26,7 @@ verity-bench run SPEC        # in a research run: the spec's point without a pas
                              # (--point POINT: one of several; --again POINT: that point though a passing run
                              # stands for it; plan takes --again to show it first)
 verity-bench check SPEC      # exit 0 only when every point has a passing run, here or on the store's remote
-verity-bench compare A B     # accept two results only when their identities agree (--allow PATH to permit one)
-verity-bench table R1 R2...  # one table from one spec's per-point results, only when their identities agree
 verity-bench served-table    # every protocol's served overhead from the store: runs of record, else newest passing (--json)
-verity-bench breakdown [RESULT...]  # where the bandwidth audit's time goes, by span: the store's newest passing runs, or these files
 verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, no point's run: under a
                                                         # research run its numbers go into the run's result (the kit's writer)
 verity-bench overhead points|run|table  # the front door for γ at a card's operating points (`verity bench overhead`,
