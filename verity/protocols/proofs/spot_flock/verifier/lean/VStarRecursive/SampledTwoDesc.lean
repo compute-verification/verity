@@ -30,6 +30,7 @@ module
 
 public import VStarRecursive.SampledTwo
 public import Spot.Bits
+meta import Commitments.Draw
 
 @[expose] public section
 

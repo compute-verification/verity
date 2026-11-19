@@ -47,9 +47,9 @@ population `n`, a Bernoulli one refused, as `OneStage.sampledFrom` samples (`sam
 def sampledDesign (desc : Hash.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) : Except String Flock.Draw.SamplingDesign := do
   let p ← Spot.Program.parse ⟨desc.toArray⟩
   let derived ← Spot.Draw.deriveSamplingDesign p q lj tb
-  let samplingDesign ← match derived with
+  let samplingDesign ← (match derived with
     | some d => pure d
-    | none => Spot.Draw.flockSamplingDesign lj n
+    | none => Spot.Draw.flockSamplingDesign lj n : Except String Flock.Draw.SamplingDesign)
   Spot.OneStage.coveredDesign samplingDesign
 
 /-- A stratum's object is printable. -/
@@ -144,7 +144,9 @@ theorem sampledFrom_sampledDesign {desc : Hash.Msg} {v : Spot.Docket.Verifier} {
   unfold Spot.OneStage.sampledFrom sampledDesign
   rw [hp, SecurityProofs.bind_ok, hd, SecurityProofs.bind_ok]
   cases derived with
-  | none => cases Spot.Draw.flockSamplingDesign v.samplingDesign n <;> rfl
+  | none =>
+    rw [show SecurityProofs.samplingDesignObj v.samplingDesign none = v.samplingDesign from rfl]
+    cases Spot.Draw.flockSamplingDesign v.samplingDesign n <;> rfl
   | some d =>
     simp only [SecurityProofs.samplingDesignObj, Option.map_some, Option.getD_some, sameSamplingDesign_self, ↓reduceIte]
     rfl
@@ -300,7 +302,7 @@ theorem samplingDesignOn_sampledDesign {desc : Hash.Msg} {q lj : Lean.Json} {tb 
       have hle : SecurityProofs.rsSize s₀.2 ≤ SecurityProofs.strataSize S :=
         List.le_sum_of_mem (List.mem_map_of_mem (f := fun p => SecurityProofs.rsSize p.2) hs₀)
       exact ⟨by unfold Flock.Draw.stratumK; exact le_max_left _ _,
-        stratumK_le (by rw [← hns']; exact hkn) (strata_pos hS s₀ hs₀) hle⟩
+        stratumK_le hkn (strata_pos hS s₀ hs₀) hle⟩
   · obtain ⟨ws, hF, rfl⟩ := SecurityProofs.deriveWork_ok k S tab samplingDesign hwork
     have hunits := SecurityProofs.units_of_forall₂ _ _ hF
     have htot : Flock.Draw.totalWork (ws.map fun s => { s with
