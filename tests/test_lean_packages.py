@@ -100,12 +100,32 @@ UNWITNESSED = {"security": 192, "security/Properties": 172, "verity/protocols/pr
 
 
 def test_the_unwitnessed_list_only_shrinks():
-    """A lock's `unwitnessed` never grows. A new guarantee of what an acceptance means, and one whose statement
-    changed, carries its witnesses instead; when a guarantee gets them, its entry goes, and its lock's number here comes
-    down with it (`_held`)."""
+    """A lock's `unwitnessed` grows only by an exemption soundness rules, with its reason. A new guarantee of what an
+    acceptance means, and one whose statement changed, carries its witnesses instead; when a guarantee gets them, its
+    entry goes, and its lock's number here comes down with it (`_held`)."""
     _held("UNWITNESSED", UNWITNESSED, {_rel(p): len(_lock(p).get("unwitnessed", {})) for p in lake_packages()},
-          "`unwitnessed`", "it only shrinks; give the guarantee you added its `honest` and `nontrivial` "
-          "witnesses under `witnesses` (check.py's failure names both) instead")
+          "`unwitnessed`", "give the guarantee you added its `honest` and `nontrivial` witnesses under `witnesses` "
+          "(check.py's failure names both) instead; an exemption is soundness's ruling, which raises this cap in its PR")
+
+
+#: the count of each lock's `unwitnessed` entries that exempt both witnesses with no reason (a bare hash, or {type_hash,
+#: unfolded_hash}), carried from before {type_hash, why} was the form: each owner gives its guarantee a witness, a
+#: reason or its removal from the listed guarantees
+UNREASONED = {"security": 183, "security/Properties": 162, "verity/protocols/proofs/flock/verifier": 7}
+
+
+def test_no_exemption_is_written_without_a_reason():
+    """No `unwitnessed` entry is added without its `why`: a whole exemption is {type_hash, why}, the reason its owner's
+    on soundness's word, and the entries carried without one only go (`_held`; the lock run lowers the cap and never
+    raises it, `lean_audit.NEVER_RAISED`). A merge that dropped a carried entry writes it back as it was."""
+    spec = importlib.util.spec_from_file_location("lean_audit", ROOT / "tools" / "verity" / "lean" / "lean_audit.py")
+    audit = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(audit)
+    count = audit.LOCK_CAPS["UNREASONED"]
+    _held("UNREASONED", UNREASONED, {_rel(p): count(_lock(p)) for p in lake_packages()},
+          "`unwitnessed` without a reason", "write the exemption as {\"type_hash\": …, \"why\": \"its owner's reason\"} "
+          "on soundness's word, never a bare hash or {type_hash, unfolded_hash} alone, or give the guarantee its "
+          "`honest` and `nontrivial` witnesses")
 
 
 def test_the_trust_base_is_one_list():

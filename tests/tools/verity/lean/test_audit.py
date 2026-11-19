@@ -5469,10 +5469,10 @@ def test_a_guarantee_of_what_an_acceptance_means_has_an_honest_and_a_nontrivial_
         "it builds the instance at the model level (a small hand-built descriptor, not a parsed file), with any one field "
         "that can't be built a named assumption. List both under `guarantees`, and write \"P.sound\": {\"honest\": "
         "[\"P.sound_honest\"], \"nontrivial\": \"P.sound_nontrivial\"} under `witnesses`: a guarantee carries an honest and "
-        "a nontrivial witness. Only if `unwitnessed` listed it and a merge dropped the entry, write the entry back: "
-        f"\"P.sound\": \"{f['pins']['P.sound']['type_sha256']}\"; a new guarantee gets its witnesses, not an entry "
-        "(`UNWITNESSED` only shrinks). No run writes an entry: an exemption is a ruling, written by hand on soundness's "
-        "word, its reason in `why` where `witnesses` lists the other half"]
+        "a nontrivial witness. Only if `unwitnessed` listed it and a merge dropped the entry, write the entry back as it "
+        f"was; at its statement as built that is \"P.sound\": \"{f['pins']['P.sound']['type_sha256']}\". Otherwise it "
+        "gets its witnesses, or an exemption: a ruling, which no run writes, written by hand on soundness's word with its "
+        "owner's reason in `why` ({type_hash, why}), never as a bare hash (`UNREASONED` only shrinks)"]
     out_of_scope = witnessed(guarantee={"reads": fact()["reads"]})
     assert witness_codes({**out_of_scope[0], "witnesses": {}}, out_of_scope[1]) == []
     assert witness_codes(*out_of_scope) == []
@@ -5679,13 +5679,13 @@ def test_a_listed_guarantee_left_with_neither_witnesses_nor_an_unwitnessed_entry
         "it builds the instance at the model level (a small hand-built descriptor, not a parsed file), with any one field "
         "that can't be built a named assumption. List both under `guarantees`, and write \"P.sound\": {\"honest\": "
         "[\"P.sound_honest\"], \"nontrivial\": \"P.sound_nontrivial\"} under `witnesses`: a guarantee carries an honest and "
-        "a nontrivial witness. Only if `unwitnessed` listed it and a merge dropped the entry, write the entry back: "
-        f"\"P.sound\": \"{h}\"; a new guarantee gets its witnesses, not an entry (`UNWITNESSED` only shrinks). No run "
-        "writes an entry: an exemption is a ruling, written by hand on soundness's word, its reason in `why` where "
-        "`witnesses` lists the other half")
+        "a nontrivial witness. Only if `unwitnessed` listed it and a merge dropped the entry, write the entry back as it "
+        f"was; at its statement as built that is \"P.sound\": \"{h}\". Otherwise it gets its witnesses, or an exemption: "
+        "a ruling, which no run writes, written by hand on soundness's word with its owner's reason in `why` "
+        "({type_hash, why}), never as a bare hash (`UNREASONED` only shrinks)")
 
     def printed(failure) -> dict:
-        return json.loads("{" + failure.split("write the entry back: ")[1].split("; a new guarantee gets")[0] + "}")
+        return json.loads("{" + failure.split("as built that is ")[1].split(". Otherwise it gets")[0] + "}")
     assert printed(missing) == {"P.sound": h} == {"P.sound": lock["guarantees"]["P.sound"]["type_hash"]}
     assert A.judge({**lock, "unwitnessed": printed(missing)}, now, FILES)[0] == []
     kept, rec = A.judge(lock, now, FILES, update=True)
@@ -5700,9 +5700,9 @@ def test_a_listed_guarantee_left_with_neither_witnesses_nor_an_unwitnessed_entry
     bare = {**POLICY, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": pair["type_hash"]}}}
     (lifted,) = A.witness_failures(bare, stated, WOWN)
     assert lifted.code == "witnesses.missing" and lifted.endswith(
-        "write the entry back: \"P.sound\": " + json.dumps(pair) + "; a new guarantee gets its witnesses, not an entry "
-        "(`UNWITNESSED` only shrinks). No run writes an entry: an exemption is a ruling, written by hand on soundness's "
-        "word, its reason in `why` where `witnesses` lists the other half")
+        "as built that is \"P.sound\": " + json.dumps(pair) + ". Otherwise it gets its witnesses, or an exemption: a "
+        "ruling, which no run writes, written by hand on soundness's word with its owner's reason in `why` "
+        "({type_hash, why}), never as a bare hash (`UNREASONED` only shrinks)")
     assert printed(lifted) == {"P.sound": pair}
     assert A.witness_failures({**bare, "unwitnessed": printed(lifted)}, stated, WOWN) == []
     assert not A.repaired(bare, stated, FILES, A.judge(bare, stated, FILES)[0], TICKET).get("unwitnessed")
@@ -5720,7 +5720,7 @@ def test_the_lock_run_fails_by_name_on_a_guarantee_with_no_unwitnessed_entry_and
     rep, work = audit("2026-11-14")
     assert A.reported(rep)["failure_codes"] == ["witnesses.missing"] and rep["failures"][0].startswith(
         "witnesses: P.sound lists no witnesses"), rep["failures"]
-    assert "No run writes an entry" in rep["failures"][0] and rep.get("bookkeeping_left") == 1
+    assert "which no run writes" in rep["failures"][0] and rep.get("bookkeeping_left") == 1
     assert "regenerated" not in rep and "bookkeeping" not in rep and not (work / A.POLICY).exists()
 
     held, now = bookkeeping_cases()["witnesses.unwitnessed-changed"]
@@ -5731,6 +5731,41 @@ def test_the_lock_run_fails_by_name_on_a_guarantee_with_no_unwitnessed_entry_and
     assert rep["bookkeeping"] == ["bookkeeping: P.sound (@lean): its `unwitnessed` entry re-keyed to its statement's "
                                   "hashes now: it owes its `honest` and `nontrivial` witnesses "
                                   "(witnesses.unwitnessed-changed)"]
+
+
+def test_a_whole_exemption_keeps_its_reason_through_the_update_a_move_and_the_lock_run(tmp_path, monkeypatch):
+    """{type_hash, why} exempts both witnesses, as a bare hash does, and its `why` stays through `--update`, a move and
+    the lock run's re-key; a `why` that is empty or not text is no form. The bare hash and {type_hash, unfolded_hash},
+    the entries carried from before the reason was required (`UNREASONED`), are still read."""
+    _, f = witnessed()
+    h = f["pins"]["P.sound"]["type_sha256"]
+    whole = {"type_hash": h, "why": "its owner's reason, on soundness's word"}
+    lock = {**POLICY, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": h}}, "unwitnessed": {"P.sound": whole}}
+    assert A.unwitnessed_entry(whole) == (h, None) and A.witness_failures(lock, f, WOWN) == []
+    assert A.unwitnessed_kept(lock, f, {}) == {"P.sound": whole}
+    for bad in ("", None, 3):
+        assert witness_codes({**lock, "unwitnessed": {"P.sound": {"type_hash": h, "why": bad}}}, f) == ["witnesses.form"]
+    assert str(A.witness_failures({**lock, "unwitnessed": {"P.sound": {"type_hash": h, "why": ""}}}, f, WOWN)[0]) == (
+        "witnesses: unwitnessed[P.sound] is {type_hash, why}, or {type_hash, missing: honest or nontrivial, why} for a "
+        "guarantee whose `witnesses` entry lacks that half, each with `unfolded_hash` for a guarantee whose statement is a "
+        "definition and `why` its owner's reason, on soundness's word")
+    assert A.unwitnessed_entry(h) == A.unwitnessed_entry({"type_hash": h, "unfolded_hash": sha("u")}) == (h, None)
+    assert witness_codes({**lock, "unwitnessed": {"P.sound": h}}, f) == []
+
+    old = sha("before the move")
+    moved = facts(pins={"P.sound": f["pins"]["P.sound"] | {"moved": {"sha256": old}}}, own_modules=sorted(WOWN))
+    was = {**lock, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": old}},
+           "unwitnessed": {"P.sound": whole | {"type_hash": old}}}
+    assert witness_codes(was, moved) == [] and A.unwitnessed_kept(was, moved, {}) == {"P.sound": whole}
+
+    held, now = bookkeeping_cases()["witnesses.unwitnessed-changed"]
+    held = held | {"unwitnessed": {"P.sound": {"type_hash": held["unwitnessed"]["P.sound"], "why": whole["why"]}}}
+    frozen = {"default_owner": "@lean", "shape": {"frozen": dict.fromkeys(held["guarantees"], "frozen: open")}}
+    _, audit = bookkeeping_audit(tmp_path, monkeypatch, held | frozen, now)
+    rep, work = audit("2026-11-14")
+    assert "bookkeeping_left" not in rep, rep["failures"]
+    assert json.loads((work / A.POLICY).read_text())["unwitnessed"] == {
+        "P.sound": {"type_hash": now["pins"]["P.sound"]["type_sha256"], "why": whole["why"]}}
 
 
 def lifted_pin(body: str) -> dict:
@@ -5780,6 +5815,8 @@ def test_an_unwitnessed_entry_of_a_restated_definition_fails():
     keyed = {**bare, "unwitnessed": {"P.sound": {"type_hash": h, "unfolded_hash": u}}}
     assert witness_codes(keyed, f) == []
     assert A.unwitnessed_kept(keyed, f, {}) == keyed["unwitnessed"]
+    reasoned = {**bare, "unwitnessed": {"P.sound": keyed["unwitnessed"]["P.sound"] | {"why": "its owner's reason"}}}
+    assert witness_codes(reasoned, f) == [] and A.unwitnessed_kept(reasoned, f, {}) == reasoned["unwitnessed"]
     assert witness_codes(keyed, g) == ["witnesses.unwitnessed-changed"]
     assert A.unwitnessed_kept(keyed, g, {}) == {}
     unkeyed = {**bare, "unwitnessed": {"P.sound": h}}
