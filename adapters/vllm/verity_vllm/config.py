@@ -796,7 +796,7 @@ class CommitConfig:
                                               "with its first instrumented run (verity.protocols.resource_accounting.memory.poub.prover.commit_session; single-GPU rows)")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
-                                "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")
+                                "norm_scales) through the norm-scale tap when its manifest names norm scales (no source attaches it since the capture plan)")
     guarded_max_tap: str = option("--guarded-max-tap", env="GUARDED_MAX_TAP", default="1",
                                   help="0 opts out, for A/B only: by default the row loads the guarded-max FA2/FA3 tap build, whose "
                                        "stream's ROW word 3 carries GuardNegInfZero(m) after a row's first key block and its MS class every "

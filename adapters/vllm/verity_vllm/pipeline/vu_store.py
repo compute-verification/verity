@@ -38,7 +38,7 @@ from verity.circuits.query_ast import NameSel
 
 from verity_vllm.check.replay import driver as SR
 from verity_vllm.check.replay.index import ProgramIndex
-from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.check.replay.opening import CommittedStore, alias_table
 from verity_vllm.check.replay.population import (
     phase_anchor,
     population,
@@ -178,7 +178,7 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
     logger.info("[vu-export] population: %d/%d request Programs, %d VUs, %d sampled, %.0f s%s%s", len(indices), len(programs), len(all_vus),
                 len(picked), t_draw - t0, " (the replay's own)" if reuse else "",
                 f"; {len(skipped)} Programs past the population budget" if skipped else "")
-    _FORK.update(picked=picked, indices=indices, store=CommittedStore.of_record(bmap, committed, manifest), weights=weights,
+    _FORK.update(picked=picked, indices=indices, store=CommittedStore.of_record(bmap, committed, alias_table(manifest)), weights=weights,
                  arrivals=arrivals, key=key, limits=limits)
     digest_of = {rid: str(inst.get("digest") or "program") for rid, inst in programs.items()}
     fam_stats: dict[str, Counter] = {}

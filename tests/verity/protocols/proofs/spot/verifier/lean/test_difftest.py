@@ -195,15 +195,16 @@ def _json(value):
 
 
 class Setup:
-    """A verifier's program and query, with its descriptor and the ports its layout derives, each `rows` rows a unit."""
+    """A verifier's program and query, with its descriptor and the ports its layout derives, each `rows` rows a unit, and
+    its partition object, with `blocks` (`partition_object.build`) where given."""
 
-    def __init__(self, program, query, names=("out", "x"), rows=(2, 1)):
+    def __init__(self, program, query, names=("out", "x"), rows=(2, 1), blocks=None):
         self.program, self.query = program, query
         self.desc = _json(codec.encode_program(program))
         self.sha512 = PO.program_sha512(program)
         self.population = P.units(program, query)
         self.templates = [t for t, _ in P.strata(program, query)]
-        part = P.partition(program, query)
+        part = self.partition = P.partition(program, query) if blocks is None else PO.build(program, query, blocks)
         self.ports = {p: {"domain": R.window_domain(self.sha512, P.digest(part), p, schema, leaves, "r-test"), "leaves": leaves}
                       for p, schema, leaves in ((names[0], "u16", rows[0] * self.population),
                                                 (names[1], "hm96-sha512/row/v1", rows[1] * self.population))}
@@ -229,6 +230,9 @@ SETUPS = [Setup(PN.population_program(PAIR, n), P.template_instance_query(PAIR.i
     Setup(PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]), P.template_instances_query([PAIR.id, TRIPLE.id])),
     Setup(PN.mixed_population_program([(PAIR, 1), (TRIPLE, 2), (PAIR, 2)]), P.template_instances_query([TRIPLE.id, PAIR.id])),
     Setup(call_program((0, 2, 0, 3)), PO.query()), Setup(call_program((1, 2, 3)), PO.call_query(8))]
+#: `SETUPS[3]` with a partition object naming its proof blocks, one unit each: the door derives the drawn block's circuit
+#: from them (`one_circuit.block`), and refuses an object naming none.
+BLOCKED = Setup(SETUPS[3].program, SETUPS[3].query, blocks=[(u, u + 1) for u in range(SETUPS[3].population)])
 
 
 def _registered_program(name: str, n: int, extra, registered) -> Program:
@@ -2773,10 +2777,10 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     the blobs hold another, or its sessions are not the evidence's. The public file is the parameters', committed before
     any coin: evidence naming one of its own, or parameters naming none, are refused. `test_proofs.py` holds the
     verdicts to `verify`'s on a real session, and `test_challenger_difftest.py` the trees' check to its Python."""
-    s = SETUPS[3]
+    s = BLOCKED
     sampling_design = {"k": 2, "law": "subset"}
     rec = DK.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                   WINDOW, leaf_layer=LEAF)
+                   WINDOW, leaf_layer=LEAF, partition=s.partition)
     rng = random.Random("v2-verdicts")
     circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
 
@@ -2787,7 +2791,7 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
                     "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
                     "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
         params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
-                  "law": sampling_design, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
+                  "law": sampling_design, "leaf_layer": LEAF, "log": [], "partition": s.partition,
                   "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
                   "window_root": ch.ledger.window["root"], "work_table": None}
         v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
@@ -2863,14 +2867,14 @@ def _audit_v1_accepts(s: Setup, seed: str, server) -> tuple:
     ``verdicts``, and v1's parameters, which v2 reads with ``proofs``."""
     sampling_design = {"k": 2, "law": "subset"}
     rec = DK.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                   WINDOW, leaf_layer=LEAF)
+                   WINDOW, leaf_layer=LEAF, partition=s.partition)
     ch, d, coins = _challenger_sample(random.Random(seed), s, sampling_design, rec)
     proved = DR.proved(d)
     base = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
             "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
             "statement": {}}
     params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
-              "law": sampling_design, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
+              "law": sampling_design, "leaf_layer": LEAF, "log": [], "partition": s.partition,
               "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
               "window_root": ch.ledger.window["root"], "work_table": None}
     v1 = base | {"sessions": [], "verdicts": {"lean": {"accepted": True, "of_record": True}}}
@@ -2885,10 +2889,10 @@ def test_v2_refuses_a_population_out_of_order(server, server_v2):
     in order (`OneStageZk.popHeld`, `Slots.popOk`), before any session is verified, as the service's run refuses it at
     docket (`population-order`): the session's knowledge soundness reads slot `u` as proof block `u`. v1, whose
     R2 holds only the population's count, accepts the same audit on its verdicts. `SETUPS[4]` and `SETUPS[5]` are out
-    of order (`test_the_run_refuses_a_population_out_of_order`); `SETUPS[3]`'s audit goes on to its session's
+    of order (`test_the_run_refuses_a_population_out_of_order`); `BLOCKED`'s audit goes on to its session's
     verdict."""
     circuit = STAND_IN_CIRCUIT
-    for s, ok in ((SETUPS[4], False), (SETUPS[5], False), (SETUPS[3], True)):
+    for s, ok in ((SETUPS[4], False), (SETUPS[5], False), (BLOCKED, True)):
         assert P.in_order(s.program, s.query, s.population) is ok, s.templates
         rec, ch, base, params = _audit_v1_accepts(s, f"v2-order-{s.templates}", server)
         public, record = _public_of(rec), D.canonical(ch.trees[0].record).encode()
@@ -2990,10 +2994,10 @@ def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
     (`sample-late`), and one whose first round opened is of another stream than the link's (`link-late`), are refused
     (`SAMPLE_LINK_FIRST`). The Python twins (`challenger.sample_link_first`, `one_stage.proofs.order_why`) agree;
     `test_challenger_difftest.py` holds the first to Lean's piece."""
-    s = SETUPS[3]
+    s = BLOCKED
     sampling_design = {"k": 2, "law": "subset"}
     rec = DK.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                   WINDOW, leaf_layer=LEAF)
+                   WINDOW, leaf_layer=LEAF, partition=s.partition)
     circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
     for order in ORDERS:
         ch, d, coins = _challenger_sample(random.Random(f"v2-order-{order}"), s, sampling_design, rec, 1, order=order)
@@ -3002,7 +3006,7 @@ def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
                     "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
                     "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
         params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
-                  "law": sampling_design, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
+                  "law": sampling_design, "leaf_layer": LEAF, "log": [], "partition": s.partition,
                   "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
                   "window_root": ch.ledger.window["root"], "work_table": None}
         v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
@@ -3051,9 +3055,9 @@ def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
     than theirs is rejected after them (`checkBlobsAt`, v1's `checkAt`). Each step Lean rejects at is the Python
     reference's: `decode_params_v2`, `coins_within`, `_coins_of`, then v1's `check` with the session's verdict the
     reject its blobs give, its record on the coin tree the challenger sampled."""
-    s, sampling_design = SETUPS[3], {"k": 3, "law": "subset"}
+    s, sampling_design = BLOCKED, {"k": 3, "law": "subset"}
     rec = DK.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                   WINDOW, leaf_layer=LEAF)
+                   WINDOW, leaf_layer=LEAF, partition=s.partition)
     after = bytes.fromhex(DD.digest(rec))
     circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
     failed = {"flock-verify/s": {"accepted": False, "of_record": True}}
@@ -3074,7 +3078,7 @@ def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
         if coins is not None:
             evidence["coins"] = coins
         p = {"anchors": [], "challenger": {"key": d.s.key.to_json(), "label": "draw"}, "delta": "1/20", "law": sampling_design,
-             "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query), "ports": s.ports,
+             "leaf_layer": LEAF, "log": [], "partition": s.partition, "ports": s.ports,
              "program": s.desc, "proofs": {"public": _sha(public), "registered": None},
              "query": s.query, "registered": None, "scheme": SCHEME, "window_root": d.ledger.window["root"],
              "work_table": None}

@@ -1,12 +1,11 @@
 """serve-openai's row: its Build of record, predict's, and its scheduler: ``--async-scheduling`` (off by default) sets the
 engine's, and a bench row's Programs must be specialized for it.
 
-The row's ``--required-manifest`` is the one the ahead-of-time compiler wrote with the row's Build of record (``verity-vllm
-predict row``): `row_refusal` refuses any other, a traced Build's among them, committing or not, and the Build is the
-manifest's own directory (`programs_root_of`).
+The row's ``--row-build`` is the Build of record the ahead-of-time compiler wrote (``verity-vllm predict row``): `row_refusal`
+refuses any other, a traced Build's among them, and one whose registered compiler is not this tree's, committing or not.
 
 The engine is built with vLLM's ``async_scheduling`` as ``--async-scheduling`` says (`serve_openai.engine_options`), never
-left to vLLM's own resolution (on at the pinned revision). Under ``--required-manifest`` the row's Build of record
+left to vLLM's own resolution (on at the pinned revision). Under ``--row-build`` the row's Build of record
 records the engine its workload Program models in `WORKLOAD_PROGRAM` (`global_program`'s
 ``applicability.engine``). Its ``async_scheduling`` is the value the Program's ``lag`` static is built from (LAG 1 under
 async scheduling, 0 synchronous), and the one a record of the row must attest (GM-01 G1). serve-openai reads it (`of`;
@@ -19,7 +18,6 @@ synchronous step does, under the same rows-sha512 root (``tests/pipeline/serve_a
 """
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Mapping
 from pathlib import Path
@@ -33,30 +31,33 @@ from verity_vllm.records import predicted_row as PR
 WORKLOAD_PROGRAM = Path("build_workload", "workload_program.json")
 
 
-def row_refusal(manifest: str) -> str | None:
-    """Why the served Commit can't bind the row whose required manifest is ``manifest`` (None: it can). The row's Build of record
-    is the ahead-of-time compiler's (`program.predict.aot.write_row`), whose record beside the manifest (`records.predicted_row`)
-    names the manifest's bytes by their sha256: a manifest without that record, a traced Build's among them, is refused."""
-    m = Path(manifest)
-    if not m.is_file():
-        return f"--required-manifest {manifest}: no such file"
+def row_refusal(build: str, compiler: Mapping[str, str] | None = None) -> str | None:
+    """Why the served Commit can't bind the row whose Build of record is the directory ``build`` (None: it can): it is the
+    ahead-of-time compiler's (`program.predict.aot.write_row`), whose record (`records.predicted_row`) it holds, and that
+    record binds ``compiler`` (default: this tree's, `pipeline.advice.registered_compiler`), the one every sealed window names.
+    A directory without the record, a traced Build's among them, is refused."""
     how = ("the served Commit binds the row's Build of record, the ahead-of-time compiler's: write it with `verity-vllm predict "
-           "row --row ROW --out DIR` and pass --required-manifest DIR/manifest.json (a traced Build is its cross-check, `verity-vllm "
-           "predict compare ROW_DIR --predicted DIR`)")
+           "row --row ROW --out DIR` and pass --row-build DIR (a traced Build is its cross-check, `verity-vllm predict compare "
+           "ROW_DIR --predicted DIR`)")
+    from verity_vllm import messages as M
+
     try:
-        rec = PR.PredictedRow.of(json.loads((path := m.parent / PR.FILE).read_text()), str(path))
+        rec = PR.PredictedRow.of(json.loads(M.read(path := Path(build) / PR.FILE, "Circuit")), str(path))
     except (OSError, ValueError) as e:
-        return f"--required-manifest {manifest}: no record of predict's beside it ({type(e).__name__}: {e}): {how}"
-    if (got := hashlib.sha256(m.read_bytes()).hexdigest()) != rec.manifest_sha256:
-        return (f"--required-manifest {manifest}: its sha256 {got[:16]}… is not the {rec.manifest_sha256[:16]}… {path} names, so "
-                f"predict didn't write it: {how}")
+        return f"--row-build {build}: no record of predict's in it ({type(e).__name__}: {e}): {how}"
+    if compiler is None:
+        from verity_vllm.pipeline.advice import registered_compiler
+        here = registered_compiler()
+        compiler = {"name": here.name, "digest": here.digest}
+    if dict(rec.compiler) != dict(compiler):
+        return (f"--row-build {build}: {path} binds compiler {rec.compiler.get('name')} {str(rec.compiler.get('digest'))[:16]}…, "
+                f"not this tree's {compiler['name']} {compiler['digest'][:16]}…: re-run `verity-vllm predict row` from this tree")
     return None
 
 
 def programs_root_of(opts: Any) -> str | None:
-    """The row's Build of record the manifest's partition and the attention record are read from: the manifest's own directory,
-    where `row_refusal` found predict's record."""
-    return str(Path(opts.required_manifest).resolve().parent) if opts.required_manifest else None
+    """The row's Build of record, ``--row-build``, the attention record and the workload Program are read from."""
+    return str(Path(opts.row_build).resolve()) if opts.row_build else None
 
 
 def _flag(on: bool) -> str:
@@ -66,15 +67,15 @@ def _flag(on: bool) -> str:
 def of(opts: Any) -> dict[str, Any] | None:
     """The scheduler the bench row's workload Program is specialized for, ``{"async_scheduling", "source"}``: what its Build of
     record's `WORKLOAD_PROGRAM` (`programs_root_of`) declares as ``applicability.engine.async_scheduling``.
-    None without ``--required-manifest``; `UsageError` naming the file when the row has none, it declares no boolean, or it
+    None without ``--row-build``; `UsageError` naming the file when the row has none, it declares no boolean, or it
     declares other than ``--async-scheduling``."""
-    if not opts.required_manifest:
+    if not opts.row_build:
         return None
     path = Path(programs_root_of(opts)) / WORKLOAD_PROGRAM
     try:
         got = json.loads(path.read_text())["applicability"]["engine"]["async_scheduling"]
     except OSError as e:
-        raise UsageError(f"--required-manifest {opts.required_manifest}: the row's Build has no workload Program to take the "
+        raise UsageError(f"--row-build {opts.row_build}: the row's Build has no workload Program to take the "
                          f"engine's scheduler from ({type(e).__name__}: {e})") from None
     except (ValueError, KeyError, TypeError) as e:
         raise UsageError(f"{path} declares no applicability.engine.async_scheduling ({type(e).__name__}: {e}): the engine has no "

@@ -23,7 +23,6 @@ Value acquisition: how a served run's values reach the Commit. The package's doc
   of `sources` are not listed here.
 - **Loaded by:** the integration's `pipeline`, `commit`, `program.predict` and `protocols` packages,
   `benchmarks/served_commit` and `benchmarks/harness`.
-- **Loads:** torch and numpy, vLLM inside functions, and Triton in the norm tap's kernel
-  (`norm_tap_src.rms_norm_tap`); the integration's `engine`, `query`, `commit`, `config`, `settings`, `program`,
+- **Loads:** torch and numpy, and vLLM inside functions; the integration's `engine`, `query`, `commit`, `config`, `settings`, `program`,
   `protocols`, `correspondence`, `definitions`, `records` and `log`; and `verity.circuits`, `verity.device` and PoUW's
   serving code (`verity.protocols.resource_accounting.compute.pouw.prover.serving`, in `h1_commit`).
