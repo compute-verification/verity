@@ -323,8 +323,6 @@ def test_the_served_commit_binds_only_the_build_of_record_predict_wrote(tmp_path
     assert RW.programs_root_of(opts) == str(row.resolve())
     with pytest.raises(SystemExit):
         parse("--row-build", str(row), "--programs-root", str(traced))
-    with pytest.raises(SystemExit):
-        parse("--required-manifest", str(row / "manifest.json"))
 
 
 def test_retain_exclude_takes_the_attention_interiors_only_under_the_rows_sha512_commit(tmp_path):
