@@ -1,3 +1,0 @@
-[2026-11-19T20:12Z] ca940a582219
-From the proofs lead, 12:20 PM PST: (1) circuits' worker writes the benchmark's circuit as ONE function in verity/circuits (the registered Program of Gemm_v2 slices, its partition object at one level and at two, the values; sized with zk_min_units so every block is over the floor and under 2^27); its path, branch and signature are posted on TOP-444 by 3:00 PM PST: read TOP-444's newest comments for it before writing your own. (2) soundness's scope line for the result (TOP-444, 12:12 PM PST; read whole): the result's FIRST line says 'one template, no wired port between units'; it does not exercise a wire between blocks, a block of several templates, or a scan. Then re-run your command.
-
