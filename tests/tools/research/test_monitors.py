@@ -114,9 +114,9 @@ def test_an_incident_clears_only_once_gone_for_its_clear_s(tmp_path):
 
 
 def test_a_timers_unit_that_fails_every_run_is_one_incident(tmp_path):
-    """vy-custody.service fails each 5-minute run and is out of `systemctl --failed` while the next one runs: one open, no clears."""
+    """vy-node-sweep.service fails each 5-minute run and is out of `systemctl --failed` while the next one runs: one open, no clears."""
     [m] = [m for m in M.MONITORS if m.id == "units-n2"]
-    out = passes(M.new_state(), m, [["system:vy-custody.service"], []] * 6, tmp_path, every=300)
+    out = passes(M.new_state(), m, [["system:vy-node-sweep.service"], []] * 6, tmp_path, every=300)
     assert [e["event"] for evs in out for e in evs] == ["open"]
 
 

@@ -59,14 +59,11 @@ untraced = [
     "test_merge_sweep.py",
     "test_monitors.py",
     "test_nebius.py",
-    "test_nebius_commit_pack.py",
-    "test_nebius_dispatch_place.py",
     "test_nebius_fill_timing.py",
     "test_nebius_image.py",
     "test_nebius_lean_sandbox.py",
     "test_nebius_lockout.py",
     "test_nebius_monitoring.py",
-    "test_nebius_n2_spill.py",
     "test_nebius_sky.py",
     "test_nebius_verifier_packaging.py",
     "test_notes.py",
@@ -229,22 +226,7 @@ tests = ["test_linear.py", "test_slack.py"]
 paths = ["tests"]
 
 [[tool.verity.tests.reads]]
-tests = ["test_nebius_commit_pack_sizes.py"]
-paths = ["tools/research/src/research/pods/nebius/sky"]
-
-[[tool.verity.tests.reads]]
-tests = [
-    "test_nebius_dispatch_lease_pool.py",
-    "test_nebius_dispatch_pin.py",
-    "test_nebius_dispatch_place.py",
-    "test_nebius_dispatch_settings.py",
-    "test_nebius_dispatch_stop.py",
-    "test_nebius_dispatch_submit.py",
-    "test_nebius_dispatch_tick.py",
-    "test_nebius_fill_timing.py",
-    "test_nebius_n2_spill.py",
-    "test_nebius_release.py",
-]
+tests = ["test_nebius_fill_timing.py"]
 paths = ["tools/research/src/research/pods/nebius"]
 
 [[tool.verity.tests.reads]]

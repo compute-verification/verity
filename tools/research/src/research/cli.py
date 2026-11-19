@@ -2255,7 +2255,7 @@ def _read_holds(rows: list[dict]) -> None:
             s["scope_memory_error"] = r["error"]
             continue
         s["scope_memory"] = r["run"]["memory"]
-        s["holds"] = holds.lines(s.get("run_id") or s["id"], r["machine"], r)
+        s["holds"] = holds.lines(s.get("run_id") or s["id"], r)
 
 
 def _fmt(s: dict) -> str:

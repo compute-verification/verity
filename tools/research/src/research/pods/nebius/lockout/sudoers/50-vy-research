@@ -13,7 +13,6 @@ Cmnd_Alias VY_RESEARCH = \
     /usr/local/sbin/vy-seal-runs delete *, \
     /usr/local/sbin/vy-seal-runs evict *, \
     /usr/local/bin/vy-lean-sandbox *, \
-    /usr/bin/systemctl start vy-steward-watch.service, \
     /usr/bin/true "", \
     /usr/local/sbin/vy-sudo du-bundles
 
