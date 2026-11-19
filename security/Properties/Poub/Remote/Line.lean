@@ -226,6 +226,6 @@ def LineHeld : Prop :=
       δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
-        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
+        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding ((F.play com).opened prf rest)).toReal)
 
 end Properties.Poub.Line
