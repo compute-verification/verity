@@ -680,7 +680,8 @@
   "Proofs.Properties.Verity.Recursive.PartStatement": "a proof about V*'s concrete checks, out of the build with the recursion's guarantees, which left the lock; kept as what V*'s rebuild on the door's forms starts from",
   "Proofs.Properties.Verity.Recursive.Refusals": "a proof about V*'s concrete checks, out of the build with the recursion's guarantees, which left the lock; kept as what V*'s rebuild on the door's forms starts from",
   "Proofs.Properties.Verity.Recursive.SetupChecks": "a proof about V*'s concrete checks, out of the build with the recursion's guarantees, which left the lock; kept as what V*'s rebuild on the door's forms starts from",
-  "Proofs.Properties.Verity.Recursive.Target": "a proof about V*'s concrete checks, out of the build with the recursion's guarantees, which left the lock; kept as what V*'s rebuild on the door's forms starts from"
+  "Proofs.Properties.Verity.Recursive.Target": "a proof about V*'s concrete checks, out of the build with the recursion's guarantees, which left the lock; kept as what V*'s rebuild on the door's forms starts from",
+  "Proofs.Flock.Recursive.LoopHonest": "the honest witnesses of the ZK loop's guarantees, which read V*'s honest fixture (`BaseParses.fixture_stmt`); out of the build with the recursion's proofs, the guarantees' nontrivial witnesses in `LoopWitness`"
  },
  "runs": {
   "Proofs.Pouw.Bulk": {
