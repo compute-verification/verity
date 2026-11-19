@@ -187,6 +187,32 @@ def test_util_json_and_util_txt_hold_the_serves_aggregates_alone(tmp_path, monke
     assert SECRET not in out.read_text() and SECRET not in said, said
 
 
+def test_a_commit_arm_serves_under_predict_rows_record_in_a_build_with_no_manifest(tmp_path, predicted_row):
+    """serve-openai takes the argv served_util.sh's leased part launches a Commit arm with, and its row check
+    (`serve_row.row_refusal`) passes on the Build dir PRED holding predict row's record and no manifest."""
+    from verity_vllm.pipeline import cli, serve_row
+
+    bin_, venv, cuda, root = (tmp_path / x for x in ("bin", "venv/bin", "cuda", "root"))
+    for d in (bin_, venv, cuda / "bin", root / "scratch" / "local" / "serve"):
+        d.mkdir(parents=True)
+    argv = tmp_path / "serve.argv"
+    stubs = {bin_ / "nsys": f"case $1 in launch) printf '%s\\0' \"$@\" > {argv}; exit 1 ;; esac",
+             bin_ / "nvidia-smi": "", bin_ / "sleep": "", venv / "python": ""}
+    for path, body in stubs.items():
+        path.write_text(f"#!/bin/sh\n{body}\n")
+        path.chmod(0o755)
+    pred = predicted_row(tmp_path / "predicted")
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "ARM": "seal", "CARD": "h200-sxm-141gb", "T": "1024",
+           "N": "1", "UTIL_ROOT": str(root), "VENV": str(venv.parent), "CUDA_HOME": str(cuda), "NSYS": str(bin_ / "nsys"),
+           "OUT": str(tmp_path / "out"), "TREE": str(HERE.parents[2]), "ROW": str(tmp_path / "row"), "PRED": str(pred)}
+    run = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_util.sh"), "leased"],
+                         env=env, capture_output=True, text=True, check=False)
+    assert run.returncode == 10 and argv.exists(), run.stdout + run.stderr
+    got = argv.read_text().split("\0")[:-1]
+    opts = cli.parse("serve-openai", got[got.index("serve-openai") + 1:], environ={})
+    assert opts.row_build == str(pred) and opts.commit and serve_row.row_refusal(opts.row_build, predicted_row.compiler) is None
+
+
 def test_a_stub_runs_out_and_log_hold_no_trace_timings_summary_or_serve_options(tmp_path):
     """served_util.sh's leased part, under stand-ins for nsys, nvidia-smi, the venv's python and sleep, whose serve writes
     the step trace, summary, pauses, serve options and the loads' timings into the serve dir and scratch: none of those

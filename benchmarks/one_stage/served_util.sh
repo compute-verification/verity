@@ -65,12 +65,11 @@ VENV=${VENV:-/workspace/cp/venv312}; PY=$VENV/bin/python
 REPO=verity-int8/Llama-3.2-1B-INT8 REV=15b0976d400d796ee589e7737d03a919526bf800
 ROW=${ROW:-$(dirname "$(find "$ROOT" -maxdepth 3 -path '*__b4__i256__*' -name build_summary.json | sort | tail -1)")} ROW_ID=${ROW_ID:-${ROW##*/}}
 HIDDEN_SO=${HIDDEN_SO:-$ROOT/fa2/build/fa3_matReqG/verity_fa3_matReqG.so}
-NORM_TAP_SO=${NORM_TAP_SO:-$ROOT/norm_tap/build/verity_norm_tap.so}
 CUDA_HOME=$(python3 "$TREE/benchmarks/kernels/machine.py" toolkit 13.0) || { echo "served-util: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
 NSYS=${NSYS:-$CUDA_HOME/bin/nsys}
 SCR=$ROOT/scratch/${RESEARCH_RUN_ID:-local}; D=$SCR/serve; PRED=${PRED:-$SCR/predicted}
 PORT=${PORT:-18190}
-export TREE ARM CARD LABEL T N SLOTS SEQS WARM ROOT VENV PY REPO REV ROW ROW_ID HIDDEN_SO NORM_TAP_SO NSYS SCR D PRED PORT OUT CUDA_HOME
+export TREE ARM CARD LABEL T N SLOTS SEQS WARM ROOT VENV PY REPO REV ROW ROW_ID HIDDEN_SO NSYS SCR D PRED PORT OUT CUDA_HOME
 say() { echo "$*" | tee -a "$OUT/steps.txt"; }
 
 if [ "${1:-}" != leased ]; then
@@ -79,8 +78,8 @@ if [ "${1:-}" != leased ]; then
   { echo "tree $(git -C "$TREE" log -1 --format='%H parents %P' 2>/dev/null)"; for h in ${HEADS:-}; do echo "$h"; done; } > "$OUT/heads.txt"
   [ $(( T % 1024 )) = 0 ] || { say "T $T: not a multiple of 1,024"; exit 2; }
   [ -f "$ROW/build_summary.json" ] || { say "no B4 row Build under $ROOT"; exit 3; }
-  if [ "$ARM" != stock ] && [ "$ARM" != graphs ] && [ "$ARM" != async ] && { [ ! -f "$HIDDEN_SO" ] || [ ! -f "$NORM_TAP_SO" ]; }; then
-    say "no taps: $HIDDEN_SO, $NORM_TAP_SO"; exit 3
+  if [ "$ARM" != stock ] && [ "$ARM" != graphs ] && [ "$ARM" != async ] && [ ! -f "$HIDDEN_SO" ]; then
+    say "no hidden tap: $HIDDEN_SO"; exit 3
   fi
   mkdir -p "$D"
   if [ "$ARM" != graphs ] && [ "$ARM" != async ]; then
@@ -139,7 +138,7 @@ args=(--model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --window-reque
 [ "$ARM" = graphs ] || [ "$ARM" = async ] || args+=(--row-build "$PRED")
 [ -n "${PROTOCOLS_CONFIG:-}" ] && args+=(--protocols-config "$PROTOCOLS_CONFIG")
 [ -n "${RELEASE_AFTER:-}" ] && args+=(--retain device --retain-device-gb "${RETAIN_DEVICE_GB:-32}" --release-after "$RELEASE_AFTER")
-commit=(--hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb "${TAP_CAP_MB:-2048}"
+commit=(--hidden-so "$HIDDEN_SO" --tap-cap-mb "${TAP_CAP_MB:-2048}"
         --seal-hold-gb "${SEAL_HOLD_GB:-32}" --disk-floor-gb "${DISK_FLOOR_GB:-20}")
 serve=("$PY" -m verity_vllm.pipeline.cli serve-openai)
 case $ARM in
