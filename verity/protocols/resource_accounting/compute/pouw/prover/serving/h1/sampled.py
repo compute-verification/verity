@@ -675,7 +675,7 @@ def stage(a: Any) -> int:
             (d / "circuit.txt").unlink(missing_ok=True)
             (d / "circuit.txt").symlink_to(circuit)
             (d / "registered.json").write_text(json.dumps(reg))
-            bind_files(d, win["raw"], CR.partition_of(win["program"], win["shape"]))
+            bind_files(d, win["raw"], CR.partition_of(win["program"], win["shape"], lay))
             plan["calls"].append({"call": c, "k": k, "dir": str(d.resolve()), "units": units, "instances": len(units),
                                   "circuit": str(circuit), "pin": got["circuit_sha512"]})
             print(f"STAGED call {c}: units {units}", flush=True)
