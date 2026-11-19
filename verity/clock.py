@@ -9,8 +9,7 @@ It mirrors Core's clock in Lean (`Definitions/Core/Challenger.lean`, `Definition
   clock as it appends the entry to the device's log, refuses another key's log, and refuses a reading below the log's
   last by name (`ClockBackwards`).
 - A **tick** (`tick`) is a view of a reading: the reading counted in a registered period.
-- A prover's entry has no time of its own; it has a **bracket** (`between`): by index in the device's log, after one of
-  the device's readings and before another.
+- A prover's entry has no time of its own: a bracket (Core's `Bracketed`) bounds only the device's own two entries.
 - How a device's clock runs against real time is the named premise `clock-within-drift` (`ClockWithin`; `NotSlow`
   for a deadline and a salt's age, `NotFast` for a bucket's period), which nothing here checks.
 
@@ -139,15 +138,6 @@ def stamp(device: Device, log: Log, data: Any = None) -> Reading:
     return t
 
 
-def between(log: Log, i: int, a: int, b: int) -> bool:
-    """Whether entry `i` of `log` lies after the reading at index `a` and before the reading at index `b`, both of the
-    device whose log it is."""
-    n = len(log.entries)
-    if not (0 <= a < i < b < n):
-        return False
-    return all((t := log.entries[j].reading) is not None and t.key == log.key for j in (a, b))
-
-
 @dataclass(frozen=True, slots=True)
 class Tick:
     """Tick `k`: the reading of its entry in the device's log, how much later than its time that reading is, in
@@ -178,5 +168,5 @@ async def ticks(device: Device, origin: Reading, period_ns: int, *, sleep: Calla
         k += 1
 
 
-__all__ = ["NS", "ClockBackwards", "ClockRefused", "Device", "Entry", "Log", "Reading", "Tick", "between", "elapsed", "raw_ns",
+__all__ = ["NS", "ClockBackwards", "ClockRefused", "Device", "Entry", "Log", "Reading", "Tick", "elapsed", "raw_ns",
            "raw_resolution_ns", "stamp", "tick", "ticks"]

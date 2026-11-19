@@ -27,12 +27,13 @@ untraced = [
 ]
 # Test-only: `lake` builds this package and, through its path requires, Flock's verifier's Lean, core's randomness, LMS,
 # the auditor parties' period checks, the protocol interface and the difftest server; the sessions are signed by the PoUS
-# tests' test signer, read by path.
+# tests' test signer and clocked by their fake clock, both read by path.
 inputs = ["verity/protocols/proofs/flock/verifier/Flock", "verity/protocols/proofs/flock/verifier/lakefile.toml",
           "verity/protocols/proofs/flock/verifier/lake-manifest.json", "verity/protocols/proofs/flock/verifier/lean-toolchain",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "verity/commitments/randomness", "verity/commitments/lms/lean", "verity/commitments/attest/lean",
           "verity/protocols/interface",
           "verity/circuits/difftest", "tests/verity/protocols/resource_accounting/memory/pous/verifier/pous_test_signer.py",
+          "tests/verity/protocols/resource_accounting/memory/pous/verifier/pous_fakes.py",
           "verity/__init__.py", "verity/commitments/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py", "verity/commitments/attest/__init__.py",
           "verity/protocols/resource_accounting/memory/pous/__init__.py", "verity/protocols/resource_accounting/memory/pous/attester/__init__.py"]

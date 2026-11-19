@@ -6,12 +6,14 @@ register are refused, each by name. The case's evidence is not read here: `lean/
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import importlib.util
 import json
 from pathlib import Path
 from types import ModuleType
 
+import poub_fakes
 import pytest
 
 from verity.clock import Device
@@ -45,18 +47,8 @@ def _signer() -> ModuleType:
     return m
 
 
-class Clock:
-    """The generic verifier's clock: each reading a microsecond after the last, and waiting moves it on."""
-
-    def __init__(self) -> None:
-        self.now = 10 ** 9
-
-    def __call__(self) -> int:
-        self.now += 1_000
-        return self.now
-
-    def sleep_until(self, clock, t: int) -> None:
-        self.now = max(self.now, t)
+Clock = functools.partial(poub_fakes.Clock, 10 ** 9, 1_000)
+"""The generic verifier's clock: each reading a microsecond after the last, and waiting moves it on."""
 
 
 def _entropy(label: bytes):

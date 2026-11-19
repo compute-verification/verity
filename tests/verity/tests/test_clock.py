@@ -1,4 +1,4 @@
-"""The one clock (`verity.clock`): readings of one device, the bracket, and the tick source, on injected clocks."""
+"""The one clock (`verity.clock`): readings of one device and the tick source, on injected clocks."""
 
 from __future__ import annotations
 
@@ -60,20 +60,6 @@ def test_stamp_reads_the_devices_clock_into_its_own_log_and_nowhere_else():
     with pytest.raises(C.ClockBackwards, match="read 39 ns after it read 40 ns"):
         C.stamp(d, log)
     assert len(log.entries) == 1
-
-
-def test_an_entry_is_between_two_readings_of_the_logs_device_by_index():
-    now = Counter(0)
-    d, log = device(now), C.Log("attester")
-    C.stamp(d, log)
-    i = log.record({"root": "r"})
-    now.ns = 30
-    C.stamp(d, log)
-    assert C.between(log, i, 0, 2)
-    assert not C.between(log, i, 0, 1) and not C.between(log, 0, 0, 2) and not C.between(log, i, 0, 3)
-    j = log.record({"answer": "a"})
-    assert not C.between(log, i, 0, j)
-    assert C.elapsed(log.entries[0].reading, log.entries[2].reading) == 30
 
 
 def _run(gen, n: int) -> list[C.Tick]:

@@ -33,15 +33,16 @@ PACKAGE = HERE.parents[7] / "verity" / "protocols" / "resource_accounting" / "me
 ROOT = Path(__file__).resolve().parents[8]
 
 
-def _test_signer():
+def _verifier_suites(name: str):
     spec = importlib.util.spec_from_file_location(
-        "pous_test_signer", ROOT / "tests/verity/protocols/resource_accounting/memory/pous/verifier/pous_test_signer.py")
+        name, ROOT / f"tests/verity/protocols/resource_accounting/memory/pous/verifier/{name}.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-ts = _test_signer()
+ts = _verifier_suites("pous_test_signer")
+Clock = _verifier_suites("pous_fakes").Clock
 TEST_ID = mc.TEST_PREFIX + mc.PROTOCOL
 SCHEMES_ALL = {**mc.SCHEMES, **ts.SCHEMES}
 
@@ -247,14 +248,6 @@ def deployed_signer() -> AtLeaf:
 
 def block(i: int, n: int) -> bytes:
     return hashlib.shake_256(b"C%d" % i).digest(n)
-
-
-class Clock:
-    def __init__(self, now: int) -> None:
-        self.now = now
-
-    def __call__(self) -> int:
-        return self.now
 
 
 @dataclass(frozen=True)
