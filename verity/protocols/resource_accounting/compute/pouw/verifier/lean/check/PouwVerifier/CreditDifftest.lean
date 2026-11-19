@@ -126,7 +126,7 @@ def registeredFileOf (j : Json) : Except String Json := do
     let program := Flock.hexOf (Flock.Sha512.hash d)
     let file ← Credit.registeredFile program layout shape ((PouwVerifier.nat? call).getD 0) roots
       ((PouwVerifier.str? window).getD "") ((PouwVerifier.nat? steps).getD 1) ((PouwVerifier.str? salt).getD "")
-    pure (Json.mkObj [("file", file), ("partition", Credit.partitionOf program shape)])
+    pure (Json.mkObj [("file", file), ("partition", Credit.partitionOf program shape layout)])
   PouwVerifier.Difftest.refusal id got
 
 def passesDistinctOf (j : Json) : Except String Json := do

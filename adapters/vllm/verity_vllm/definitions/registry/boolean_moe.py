@@ -121,6 +121,7 @@ def _moe_sum_sig(S):
 
 
 MoeSum = EW.on_bits("MoeSum", 2, ("TOPK", "H"), _moe_sum_sig, _moe_sum, M.MoeSum)
+MoeSum.opt_in = True  # type: ignore[attr-defined]  (`MoeSum_v3` is the word's Boolean version; this one serves a reader that names it)
 
 #: the columns of one `MoeSum_v3` member
 SUM_CHUNK = 64

@@ -26,7 +26,8 @@ reads (`pooled`, `Poub.Pooled`), and `ledger.gamma`'s γ terms (`gamma`, `Poub.G
 so their reasons are compared, as are those of `schedule.py`'s schedule check (`schedule`, `Poub.Schedule`).
 `p2.py`'s P2 store (`Poub.P2`): a registration's digest (`p2_registration_digest`), a unit's partials, sketch
 and receipt (`p2_sketch`) and an opening's check on PoUS's vk (`p2_opening`); and a whole P2 session as
-`p2_parties.py` runs it (`p2_session`, `Poub.P2Session`), on the registration file's bytes and the prover's lines.
+`p2_parties.py` runs it (`p2_session`, `Poub.P2Session`), on the registration file's bytes and the prover's lines,
+and the reading of a line under it (`p2_line_json`, `P2Session.lineJsonOf`, `p2_parties.line_json`).
 The span's check (`Poub.Span`): on a session run to its samples, the rows the verifier derives for each sample
 (`span_public`), the window decided on public files taken as accepted (`span_held`), and decided from the statements
 the proof system's audit must accept (`span`).
@@ -192,8 +193,8 @@ def flightOf (j : Json) : V Nat := do
 an appended block's residency to its encode (`deferred`), which `audit.Params` refuses at a lifetime of one window: a
 block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1; its pace (`null`, or
 `{"k", "window_ns"}`, with `"in_flight"` if it names it, `flightOf`), which `audit.Params` takes only with at least
-two windows; and, if they name it, the windows a sample's openings coin covers (`groups_per_coin`, `perCoinOf`,
-`Shared.run`). The coins are W challenges and ⌈W/g⌉ openings coins. -/
+two windows; and, if they name it, the windows a sample's coins cover (`groups_per_coin`, `perCoinOf`,
+`Shared.run`). The coins are W challenges and ⌈W/g⌉ samples' coins. -/
 def sessionOf (j : Json) : V (Session.Params × Array ByteArray × Array ByteArray × Nat) := do
   let p ← J.get j "params" "input"
   let pace ← match ← J.get p "pace" "params" with
@@ -221,8 +222,11 @@ def sessionOf (j : Json) : V (Session.Params × Array ByteArray × Array ByteArr
     throw "a paced session has at least one window and the closing window"
   let g ← perCoinOf j
   let coins ← hexes j "coins"
-  if coins.size ≠ params.windows + (params.windows + g - 1) / g || coins.any (·.size ≠ Codec.COIN_BYTES) then
-    throw "W + ⌈W/g⌉ coins of 32 bytes"
+  let sample := Session.sampleBytes params.samples g
+  if coins.size ≠ params.windows + (params.windows + g - 1) / g
+      || (coins.extract 0 params.windows).any (·.size ≠ Codec.COIN_BYTES)
+      || (coins.extract params.windows coins.size).any fun c => c.size ≠ sample && c.size ≠ Codec.COIN_BYTES then
+    throw "W challenges of 32 bytes, then ⌈W/g⌉ samples' coins, each whole or 32 bytes for one never released"
   let appendCoins ← hexes j "append_coins"
   if appendCoins.any fun c => c.size != Codec.COIN_BYTES && !c.isEmpty then
     throw "append coins are 32 bytes, or empty for a slot whose coin was never released"
@@ -396,9 +400,9 @@ def leafReceiptFn (j : Json) : V Json := do
 def receiptSampleFn (j : Json) : V Json := do
   let lengths ← (← J.arr j "lengths" "input").mapM (J.asNat · "lengths")
   if lengths.isEmpty || lengths.any (· = 0) then throw "a window's passes are each one or more receipts"
-  let some ds := receiptSample (← hex j "registration") (← nat j "window") (← hex j "coin") (← nat j "samples") lengths
-    | throw "the draw ran past its reads"
-  pure (.arr (ds.map pairJ))
+  match receiptSample (← nat j "samples") (← hex j "src") lengths with
+  | some ds => pure (.arr (ds.map pairJ))
+  | none => pure .null
 
 private def refusedOr (x : Except String Json) : Json :=
   match x with
@@ -762,7 +766,7 @@ def p2OpeningFn (j : Json) : V Json := do
 /-- A P2 session of record (`P2Session`) on the bytes the verifier reads: `{"registration", "request", "session",
 "not_before_ns", "coins", "chunk", "events"}`, the registration file's bytes and the prover's request line (lowercase
 hex), the auditor's session parameters (`P2Session.Auditor.ofJson`, or `P2Session.SESSION` for null), the session's
-2W coins, the samples a thread checks, and its events: `start` and `boundary` `{"now"}`, `close` `{"t", "now"}`, `root`
+W challenges of 32 bytes and W samples' coins, each whole (`sampleBytes`), the samples a thread checks, and its events: `start` and `boundary` `{"now"}`, `close` `{"t", "now"}`, `root`
 `{"t", "i", "now", "line"}` and `openings` `{"t", "line"}` (each line lowercase hex, as the prover sent it), and `fail`.
 The held store (`Held.json`), every event's result (`resultJ`) and the answer (`P2Session.answer`); a registration
 or a request refused is `{"refused": "registration"}` or `{"refused": "request"}`, and a request off the auditor's
@@ -777,7 +781,10 @@ def p2SessionFn (j : Json) : V Json := do
     | .ok p => pure p
     | .error why => return Json.mkObj [("refused", .str "request"), ("reason", .str why)]
   let coins ← hexes j "coins"
-  if coins.size ≠ 2 * params.windows || coins.any (·.size ≠ Codec.COIN_BYTES) then throw "2W coins of 32 bytes"
+  let W := params.windows
+  if coins.size ≠ 2 * W || (coins.extract 0 W).any (·.size ≠ Codec.COIN_BYTES)
+      || (coins.extract W coins.size).any (·.size ≠ Session.sampleBytes params.samples 1) then
+    throw "W challenges of 32 bytes, then W samples' coins, each whole"
   let chunk ← nat j "chunk"
   let mut s := P2Session.init held params coins (← nat j "not_before_ns")
   let mut results : Array Json := #[]
@@ -793,6 +800,12 @@ def p2SessionFn (j : Json) : V Json := do
     results := results.push (resultJ r)
     s := s'
   pure (Json.mkObj [("held", held.json), ("results", .arr results), ("answer", P2Session.answer held s)])
+
+/-- `P2Session.lineJsonOf` on `{"line"}`, a line's bytes without its newline (lowercase hex): the JSON it reads, or a
+refusal. -/
+def p2LineJsonFn (j : Json) : V Json := do
+  let some v := P2Session.lineJsonOf (← hex j "line") | throw "not a line's JSON as the prover alone reads it"
+  pure v
 
 /-- The session `j` gives (`sessionFn`'s input) run through its events by `Session.run`, and its window `t`. -/
 private def sampledRun (j : Json) : V (Session.State × Int) := do
@@ -855,6 +868,6 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("line", lineFn), ("line_record", lineRecordFn), ("pooled", pooledFn), ("gamma", gammaFn),
   ("named_bits", namedBitsFn),
   ("p2_registration_digest", p2RegistrationDigestFn), ("p2_sketch", p2SketchFn), ("p2_opening", p2OpeningFn),
-  ("p2_session", p2SessionFn), ("span_public", spanPublicFn), ("span_held", spanHeldFn), ("span", spanFn)]
+  ("p2_session", p2SessionFn), ("p2_line_json", p2LineJsonFn), ("span_public", spanPublicFn), ("span_held", spanHeldFn), ("span", spanFn)]
 
 end Poub.Difftest

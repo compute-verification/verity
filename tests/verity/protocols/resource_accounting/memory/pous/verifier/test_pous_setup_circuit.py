@@ -1,4 +1,5 @@
-"""PoUS's setup unit (`pous.setup_circuit`) against `schemes.p2`'s decode and the row's slot (`setup_circuit.slot_payload`)."""
+"""PoUS's setup unit (`pous.setup_circuit`) against `schemes.p2`'s decode and the row's slot (`setup_circuit.slot_payload`),
+its base built inside from the salt and the block's place."""
 
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as EB
 from verity.protocols.resource_accounting.memory.pous.prover import decode_circuit as D
 from verity.protocols.resource_accounting.memory.pous.prover import setup_circuit as S
+from verity.protocols.resource_accounting.memory.pous.prover.setup_proof import prefix_head
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
 
 RNG = random.Random(17)
@@ -20,6 +22,7 @@ PB = PARAMS.payload_bytes
 SALT = bytes(RNG.getrandbits(8) for _ in range(24))
 PREFIX = P2.expand_prefix(PARAMS, SALT)
 L = len(PREFIX) + 16
+HEAD = prefix_head(PARAMS.w, PARAMS.c0).hex()
 
 
 def _bits(rows: list[bytes]) -> np.ndarray:
@@ -34,8 +37,12 @@ def _slots(ks: list[int], width: int) -> np.ndarray:
     return np.array([[k >> i & 1 for i in range(width)] for k in ks], dtype=np.uint8)
 
 
+def _at(j: int, s: int = 0) -> bytes:
+    return s.to_bytes(8, "big") + j.to_bytes(8, "big")
+
+
 def _base(j: int, s: int = 0) -> bytes:
-    return PREFIX + s.to_bytes(8, "big") + j.to_bytes(8, "big")
+    return PREFIX + _at(j, s)
 
 
 def _decode(j: int, block: bytes) -> bytes | None:
@@ -52,12 +59,23 @@ def _store(row: bytes) -> list[bytes]:
     return P2.encode_blocks(PARAMS, SALT, 0, 0, b"".join(S.slot_payload(row, k, PB) for k in range(n)))
 
 
-def _unit(N: int, cases: list[tuple[bytes, int, bytes, int]]) -> list[int]:
-    """The unit's bit for each (block, j, row, slot)."""
-    fn = bind(S.PousP2SetupCheck, W=PARAMS.w, C0=PARAMS.c0, L=L, N=N)
-    out = EB.evaluate_bits(fn, _bits([c[0] for c in cases]), _bits([_base(c[1]) for c in cases]),
+def _unit(N: int, cases: list[tuple[bytes, int, bytes, int]], salt: bytes = SALT) -> list[int]:
+    """The unit's word for each (block, j, row, slot), under `salt`."""
+    fn = bind(S.PousP2SetupCheck, W=PARAMS.w, C0=PARAMS.c0, N=N, HEAD=HEAD)
+    out = EB.evaluate_bits(fn, _bits([c[0] for c in cases]), _bits([salt] * len(cases)), _bits([_at(c[1]) for c in cases]),
                            _bits([c[2] for c in cases]), _slots([c[3] for c in cases], S.SLOT_BITS))
+    assert not out[:, 1:].any()
     return [int(r[0]) for r in out]
+
+
+def test_the_base_is_expand_prefix_and_the_place():
+    """The base the unit builds is `expand_prefix(params, salt) ‖ u64be(s) ‖ u64be(v)`, with no gate."""
+    fn = bind(S.PousP2SetupBase, W=PARAMS.w, C0=PARAMS.c0, HEAD=HEAD)
+    salts = [SALT, bytes(24), bytes(range(24))]
+    places = [(0, 0), (1, 3), (5, (1 << 16) - 1)]
+    out = EB.evaluate_bits(fn, _bits(salts), _bits([_at(j, s) for s, j in places]))
+    assert [_bytes(r) for r in out] == [P2.expand_prefix(PARAMS, t) + _at(j, s) for t, (s, j) in zip(salts, places)]
+    assert EB.compile(fn).counts["and"] == 0
 
 
 def _reference(block: bytes, j: int, row: bytes, slot: int) -> int:
@@ -93,12 +111,13 @@ def test_each_wrong_input_gives_0():
         "wrong slot": ((blocks[1], 1, row, 0), 0),
         "slot past the row": ((blocks[1], 1, row, 3), 0),
         "slot's high bit": ((blocks[1], 1, row, 1 | 1 << 15), 0),
-        "wrong base": ((blocks[1], 2, row, 1), 0),
+        "wrong place": ((blocks[1], 2, row, 1), 0),
         "nonzero tail": ((bad_tail, 2, row, 2), 0),
     }
     got = _unit(N, [c for c, _ in cases.values()])
     assert dict(zip(cases, got)) == {k: want for k, (_, want) in cases.items()}
     assert got == [_reference(*c) for c, _ in cases.values()]
+    assert _unit(N, [(blocks[1], 1, row, 1)], salt=bytes(24)) == [0]
 
 
 def test_a_decode_that_is_not_ok_gives_0():
@@ -152,13 +171,13 @@ def test_slot_match_counts_at_p2():
 
 def test_refuses_what_the_decode_refuses():
     with pytest.raises(ValueError, match="whole number of bytes"):
-        bind(S.PousP2SetupCheck, W=60, C0=189, L=L, N=15).signature()
-    with pytest.raises(ValueError, match="at most"):
-        bind(S.PousP2SetupCheck, W=64, C0=189, L=128 + D.MAX_REST + 1, N=15).signature()
+        bind(S.PousP2SetupCheck, W=60, C0=189, N=15, HEAD=HEAD).signature()
     with pytest.raises(ValueError, match="N is an int"):
-        bind(S.PousP2SetupCheck, W=64, C0=189, L=L, N=0).signature()
+        bind(S.PousP2SetupCheck, W=64, C0=189, N=0, HEAD=HEAD).signature()
     with pytest.raises(ValueError, match="u16 words"):
-        bind(S.PousP2SetupCheck, W=64, C0=189, L=L, N=15).signature()
+        bind(S.PousP2SetupCheck, W=64, C0=189, N=15, HEAD=HEAD).signature()
+    with pytest.raises(ValueError, match="salt's frame header"):
+        bind(S.PousP2SetupBase, W=64, C0=189, HEAD=HEAD[:-2]).signature()
     with pytest.raises(ValueError, match="at most 65536 slots"):
         bind(S.PousP2SlotMatch, P=1, N=(1 << 16) + 1).signature()
 
@@ -169,6 +188,6 @@ SLOW = pytest.mark.skipif(not settings.SLOW, reason="minutes at P2's width: VERI
 @SLOW
 def test_counts_at_p2():
     """The unit at P2's point over a bf16 row of 16,384 bytes is the decode's ANDs and the slot match's, nothing more:
-    the composition adds no gate, which the slot match's own count can't show."""
-    at = dict(W=P2.POINT[0], C0=P2.POINT[1], L=D.P2_BASE_BYTES)
+    the composition and the base built inside add no gate, which the slot match's own count can't show."""
+    at = dict(W=P2.POINT[0], C0=P2.POINT[1], HEAD=prefix_head(*P2.POINT).hex())
     assert EB.compile(bind(S.PousP2SetupCheck, N=16384, **at)).counts["and"] == 31960530 + 131469

@@ -436,10 +436,9 @@ def _subprotocol(opt, tmp_path, n):
     return got, json.loads((out / "pous.json").read_text())
 
 
-def test_where_a_period_names_the_lean_tools_the_subprotocols_answer_is_theirs_and_must_be_the_pythons(toy, tmp_path, monkeypatch):
+def test_where_a_period_names_the_lean_tools_the_subprotocols_answer_is_theirs_alone(toy, tmp_path, monkeypatch):
     """The run tool is asked every period with the run's case and the setup tool at the first alone, with the setup's;
-    the subprotocol answers with the run tool's answer, and refuses one that differs from the Python's in more than its
-    reason, writing nothing."""
+    the subprotocol answers with the run tool's answer, a reject where the Python accepted among them."""
     say, runs, served_ = _lean(monkeypatch, tmp_path)
     opt, _ = _held(toy)
     got, doc = _subprotocol(opt, tmp_path, 0)
@@ -451,10 +450,10 @@ def test_where_a_period_names_the_lean_tools_the_subprotocols_answer_is_theirs_a
     got, doc = _subprotocol(opt, tmp_path, 1)
     assert served_[2:] == [("RUN", [runs[1].case])] and set(doc["lean"]) == {"run"} and got["reason"] == "the Lean's words"
 
-    say["run"] = lambda answer: answer | {"verdict": "reject"}
-    with pytest.raises(RuntimeError, match="^pous-run-protocol answered .*'verdict': 'reject'.*, the Python .*'verdict': 'accept'"):
-        _subprotocol(opt, tmp_path, 2)
-    assert not (tmp_path / "out2").exists()
+    say["run"] = lambda answer: answer | {"verdict": "reject", "public": None, "profile": None, "reason": "no"}
+    got, doc = _subprotocol(opt, tmp_path, 2)
+    assert runs[2].answer["verdict"] == "accept" and got["verdict"] == "reject" and got["reason"] == "no"
+    assert doc["answer"] == got
 
 
 def test_a_setup_the_lean_refuses_fails_the_first_period_whatever_the_python_said(toy, tmp_path, monkeypatch):

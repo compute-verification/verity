@@ -65,7 +65,8 @@ def _check(p: dict, reg: audit.Registration, e: dict) -> tuple:
             params = M.params_of(reg, kw)
         clock = M.Clock()
         s = audit.AuditRun(params, reg, None,
-                           M.replayed(reg, 0, params.windows, committed, appends, params.groups_per_coin),
+                           M.replayed(reg, 0, params.windows, committed, appends, params.groups_per_coin,
+                                    samples=params.samples),
                            not_before_ns=not_before, clock=clock)
         for x in events:
             M.apply(s, clock, x)
@@ -132,7 +133,7 @@ def _part(answer: dict) -> dict:
 def test_a_small_periods_answers_agree(server) -> None:
     """The hook's own answer (the live session's) is the Python verifier's of its case and the Lean's: accepted with the
     receipts its openings don't show wrong, rejected for the dropped chunks' paths, and undecided with a window
-    unverified. The accepted one's ε is its two openings coins' at `samples` each, `LineHeldAtSubprotocol`'s term, though
+    unverified. The accepted one's ε is its two samples' coins' at `samples` each, `LineHeldAtSubprotocol`'s term, though
     its windows of 3 receipts drew fewer."""
     got = {}
     for name, p in periods().items():

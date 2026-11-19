@@ -111,14 +111,15 @@ at least 4 for `N < 2^64`.
 * `Receipts`: **the receipts as the window's roots hold them.** Window `t` registers its receipts as
   `hm96-sha512/row/v2` leaves, 16 receipts a leaf, in frame-v3-sha512 trees, and sends their roots before its coin is
   released (`Poub.verifyWindow`). `opened t ω p` is the opening the prover presents for receipt `p` when the
-  window opens it. `Shows D prf rest t p ω v`: the window opens `p` at `ω` and the verifier accepts the presented
-  opening, of row `v`, at the receipt's root and rank as that run has them. `held D prf rest t ω p` is **the row the
+  window opens it. Each reads which receipts a window opens through `O t ω`, the sample as a function of the coins
+  (`Run.opened prf rest` for a keyed draw). `Shows O t p ω v`: the window opens `p` at `ω` and the verifier accepts the
+  presented opening, of row `v`, at the receipt's root and rank as that run has them. `held O t ω p` is **the row the
   root holds for it**, a definition, not the prover's: the plurality of the rows `p` shows over window `t`'s
   continuations of `ω` (`ResourceAccounting.TS.plural` at `cont t`, ties broken by `Classical.epsilon`), as
-  `ResourceAccounting.TS.SampledLayer.committed` is a position's. It reads only `ω`'s cut, and no row is shown on more of the
-  cut's continuations (`ResourceAccounting.SecurityProofs.Remote.Binding.held_cont`, `tally_le_held`). A root alone fixes no
-  row: the prover may present another one. `Moved D prf rest t ω p` is the verifier accepting the presented opening at
-  the receipt's root and rank with a row other than the held one. `binding D prf rest` is **the receipts' binding
+  `ResourceAccounting.TS.SampledLayer.committed` is a position's. It reads only `ω`'s cut, and no row is shown on more
+  of the cut's continuations (`ResourceAccounting.SecurityProofs.Remote.Binding.held_cont`, `tally_le_held`). A root
+  alone fixes no row: the prover may present another one. `Moved O t ω p` is the verifier accepting the presented
+  opening at the receipt's root and rank with a row other than the held one. `binding O` is **the receipts' binding
   term**: the probability that some window's opened receipt moved. Its bound is the fork form (`Remote.Fork`,
   `ReceiptsBindingOfFork`): two runs from window `t`'s cut show the receipt two accepted rows, which at one root, rank
   and verifier hash a SHA-512 collision (`Hash.Guarantees.RowBinding`, proved), and otherwise split the receipt's
@@ -309,32 +310,28 @@ variable {n κ : ℕ} {X : Type} (R : Receipts n κ X)
 
 /-- **Receipt `p` of window `t` shows row `v` at coins `ω`**: the window opens it, the verifier accepts the opening the
 prover presents at the receipt's root and rank, and its row is `v`. -/
-def Shows {m : ℕ} {s : Fin n → ℕ} (D : Run n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (p : ℕ) (ω : SampleCoins n κ X) (v : Hash.Row) : Prop :=
-  p ∈ D.opened prf rest t ω ∧
+def Shows (O : Fin n → SampleCoins n κ X → Finset ℕ) (t : Fin n) (p : ℕ) (ω : SampleCoins n κ X) (v : Hash.Row) :
+    Prop :=
+  p ∈ O t ω ∧
     Hash.RowLeaf.accepts R.hash R.hash (R.verifier t ω p) (R.root t ω p) (R.rank t ω p) (R.opened t ω p) ∧
     (R.opened t ω p).row = v
 
 /-- **The row receipt `p`'s root holds** at window `t` and coins `ω`: the plurality of the rows it shows over window
 `t`'s continuations of `ω`, a row that the most of them show (`ResourceAccounting.TS.plural` at `cont t`, ties broken by
 `Classical.epsilon`). -/
-noncomputable def held [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Run n m s κ X)
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n)
-    (ω : SampleCoins n κ X)
+noncomputable def held [Fintype X] (O : Fin n → SampleCoins n κ X → Finset ℕ) (t : Fin n) (ω : SampleCoins n κ X)
     (p : ℕ) : Hash.Row :=
-  ResourceAccounting.TS.plural (cont t) (R.Shows D prf rest t p) ω
+  ResourceAccounting.TS.plural (cont t) (R.Shows O t p) ω
 
 /-- **Receipt `p` of window `t` moved**: the verifier accepts the opening presented, at the receipt's root and rank,
 with a row other than the one its root holds. -/
-def Moved [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Run n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : SampleCoins n κ X) (p : ℕ) : Prop :=
+def Moved [Fintype X] (O : Fin n → SampleCoins n κ X → Finset ℕ) (t : Fin n) (ω : SampleCoins n κ X) (p : ℕ) : Prop :=
   Hash.RowLeaf.accepts R.hash R.hash (R.verifier t ω p) (R.root t ω p) (R.rank t ω p) (R.opened t ω p) ∧
-    (R.opened t ω p).row ≠ R.held D prf rest t ω p
+    (R.opened t ω p).row ≠ R.held O t ω p
 
 /-- **The receipts' binding term**: the probability that some window opens a receipt that moved. -/
-noncomputable def binding [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Run n m s κ X)
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) : ℝ≥0∞ :=
-  Pous.pr fun ω => ∃ t, ∃ p ∈ D.opened prf rest t ω, R.Moved D prf rest t ω p
+noncomputable def binding [Fintype X] (O : Fin n → SampleCoins n κ X → Finset ℕ) : ℝ≥0∞ :=
+  Pous.pr fun ω => ∃ t, ∃ p ∈ O t ω, R.Moved O t ω p
 
 end Receipts
 

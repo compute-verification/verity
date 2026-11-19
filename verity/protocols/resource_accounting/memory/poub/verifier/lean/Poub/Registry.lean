@@ -33,7 +33,7 @@ def Registry.SCHEMA : String := "verity/remote-bandwidth/registry/v0"
 def Registry.UNENDED : String := "unended"
 
 /-- A live registration's session: one this registry started, as it stands, with its windows in flight (`Flight`)
-and the windows a sample's openings coin covers (`Shared`), or the outcome it was read back with. -/
+and the windows a sample's coins cover (`Shared`), or the outcome it was read back with. -/
 inductive Registry.Run
   | running (s : Session.State) (inFlight perCoin : Nat)
   | read (outcome : String)

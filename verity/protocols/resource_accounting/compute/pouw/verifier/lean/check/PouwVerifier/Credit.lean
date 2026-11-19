@@ -1132,13 +1132,20 @@ def PARTITION_FORMAT : String := Domains.PARTITION
 def QUERY_NAME : String := "Q_template_instances"
 def QUERY_VERSION : Nat := 0
 
-/-- `credit.partition_of`: the partition object of the execution phase whose circuit's descriptor has SHA-512 `program` and whose
-`shapeOf` is `shape`: every instance of each K's template one unit, its templates by ascending K. -/
-def partitionOf (program : String) (shape : Shape) : Json :=
+/-- The one level of one-unit proof blocks over a population of `n` units, `[[[0, 1], ..., [n - 1, n]]]`: block u is
+unit u. -/
+def unitBlocks (n : Nat) : Json :=
+  Json.arr #[Json.arr ((List.range n).map fun u => Json.arr #[Lean.toJson u, Lean.toJson (u + 1)]).toArray]
+
+/-- `credit.partition_of`: the partition object of the execution phase whose circuit's descriptor has SHA-512 `program`,
+whose `shapeOf` is `shape` and whose layout is `layout`: every instance of each K's template one unit, its templates by
+ascending K, and each unit its own proof block (`unitBlocks` of the layout's population). -/
+def partitionOf (program : String) (shape : Shape) (layout : Json) : Json :=
   Json.mkObj [("format", Json.str PARTITION_FORMAT), ("program", Json.str program),
     ("query", Json.mkObj [("name", Json.str QUERY_NAME), ("version", Lean.toJson QUERY_VERSION),
       ("params", Json.mkObj [("templates",
-        Json.arr ((shape.tiles.mergeSort (·.1 ≤ ·.1)).map (Json.str ·.2.fn)).toArray)])])]
+        Json.arr ((shape.tiles.mergeSort (·.1 ≤ ·.1)).map (Json.str ·.2.fn)).toArray)])]),
+    ("blocks", unitBlocks ((callWork layout).foldl (fun n w => n + w.1) 0))]
 
 /-- A `--registered` file's format (`Flock.Registered.FORMAT`): it states no position, which C and the partition give
 (`Flock.OneCircuit.pos`). -/

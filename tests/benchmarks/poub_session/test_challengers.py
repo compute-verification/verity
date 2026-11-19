@@ -163,8 +163,9 @@ def host(tmp_path, monkeypatch) -> Host:
 def session(store, gate: challengers.ChallengerGate):
     """An honest session over `store` whose coins come from `gate`'s session for window 0: the session and verdicts."""
     p = params()
-    client = gate.open(store.registration.digest, 0, p.windows, 8)
-    c = coins.SessionCoins(client, store.registration.digest, 0, p.windows, clock=itertools.count().__next__)
+    client = gate.open(store.registration.digest, 0, p.windows, 8, samples=p.samples)
+    c = coins.SessionCoins(client, store.registration.digest, 0, p.windows, samples=p.samples,
+                           clock=itertools.count().__next__)
     s, prover, passes, clock = drive(store, p, SCHEDULE, coins_=c)
     return s, finish(s, prover, passes, clock)
 
@@ -183,7 +184,7 @@ def test_a_session_whose_coins_the_gates_session_released_is_held_to_the_ledger_
     assert kinds == [("period-open", None), ("reserve", sid), ("open", sid), ("end", sid)]
     reserve = host.ledger()[1]["body"]
     assert (reserve["by"], reserve["peer"], reserve["scheme"], reserve["epoch"]) == (LANE, "cpu-node", coins.SCHEME, 0)
-    assert reserve["families"] == [list(f) for f in coins.families(params().windows, 8)]
+    assert reserve["families"] == [list(f) for f in coins.families(params().windows, 8, samples=params().samples)]
     assert (tmp_path / "out" / f"{sid}.ledger.jsonl").read_bytes() == host.host.ledger.read_bytes()
     assert (tmp_path / "out" / f"{sid}.pins.jsonl").read_bytes() == host.host.pins.read_bytes()
     assert not (tmp_path / "out" / sid / "secret").exists()
@@ -273,14 +274,16 @@ def test_the_verifiers_entry_hands_its_main_the_lms_verify_and_the_live_challeng
 def test_a_challenger_key_other_than_the_pinned_one_is_refused_before_a_reserve(store, host, tmp_path):
     host.period()
     with pytest.raises(CoinError, match="not the pinned"):
-        host.gate(tmp_path / "out", pin="0" * 128).open(store.registration.digest, 0, params().windows, 8)
+        host.gate(tmp_path / "out", pin="0" * 128).open(store.registration.digest, 0, params().windows, 8,
+            samples=params().samples)
     assert [e["kind"] for e in host.ledger()] == ["period-open"]
 
 
 def test_a_reserve_outside_the_audits_period_is_refused_before_its_open(store, host, tmp_path):
     host.period("p-0")
     with pytest.raises(CoinError, match="in period p-0, not the audit's period p-1: it expires unopened"):
-        host.gate(tmp_path / "out").open(store.registration.digest, 0, params().windows, 8)
+        host.gate(tmp_path / "out").open(store.registration.digest, 0, params().windows, 8,
+            samples=params().samples)
     assert [e["kind"] for e in host.ledger()] == ["period-open", "reserve"]
 
 
@@ -290,7 +293,8 @@ def test_a_second_session_for_the_window_is_refused_at_its_open(store, host, tmp
     s, verdicts = session(store, gate)
     assert gate.finish(s)["reason"] is None
     with pytest.raises(CoinError, match="one session a root, ever"):
-        host.gate(tmp_path / "again").open(store.registration.digest, 0, params().windows, 8)
+        host.gate(tmp_path / "again").open(store.registration.digest, 0, params().windows, 8,
+            samples=params().samples)
     assert [e["kind"] for e in host.ledger()] == ["period-open", "reserve", "open", "end", "reserve"]
 
 
@@ -303,7 +307,8 @@ def test_a_challenger_whose_commitment_isnt_the_opens_is_refused_before_its_firs
 
     host.period()
     with pytest.raises(CoinError, match="refused before its first coin"):
-        host.gate(tmp_path / "out", call=call).open(store.registration.digest, 0, params().windows, 8)
+        host.gate(tmp_path / "out", call=call).open(store.registration.digest, 0, params().windows, 8,
+            samples=params().samples)
     host.pause()
     end = host.ledger()[-1]["body"]
     assert host.ledger()[-1]["kind"] == "end" and end["released"] == {label: 0 for label in coins.LABELS}
@@ -317,7 +322,7 @@ def test_the_gates_ports_are_the_hosts():
 def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tmp_path, kind):
     """The verifier's paced sessions over one registration, an honest one and a 1/16 dropper, their coins from the
     gate's sessions (`challengers.ChallengerGate`) or from serve.py on this machine (`challengers.Serve`), its Lean coins stubbed.
-    The plan appends nothing (its hello says so), so each reserves W challenges and W openings coins and no append
+    The plan appends nothing (its hello says so), so each reserves W challenges and each window's sample's coins and no append
     family. The honest session's
     challenger released every coin it reserved: its end on the served log is complete. The prover sends each window's
     openings as its samples arrive (`defer_openings=False`), so the dropper, refused at its first window, left openings
@@ -336,13 +341,14 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
     w = honest["windows"]
     end, dropped = ((r["challenger"]["end"] if kind == "gate" else r["challenger"]) for r in (honest, dropper))
     assert honest["accepted"] and honest["challenger"]["reason"] is None
-    assert end["released"] == {coins.CHALLENGE: w, coins.OPENINGS: w} and end["complete"] is True
+    m = coins.sample_coins(honest["samples"])
+    assert end["released"] == {coins.CHALLENGE: w, coins.SAMPLE: w * m} and end["complete"] is True
     assert not dropper["accepted"] and dropper["failure"]["failure"] == "receipt"
     assert dropper["challenger"]["reason"] is None
-    assert dropped["released"][coins.OPENINGS] < w and dropped["complete"] is False
+    assert dropped["released"][coins.SAMPLE] < w * m and dropped["complete"] is False
     if kind == "gate":
         reserves = [e["body"]["families"] for e in host.ledger() if e["kind"] == "reserve"]
-        assert reserves == [[[coins.CHALLENGE, w], [coins.OPENINGS, w]]] * 2
+        assert reserves == [[[coins.CHALLENGE, w], [coins.SAMPLE, w * m]]] * 2
         rc, out = host.call(["period-close", "--name", "p-1"])
         assert rc == 0, out
         close = json.loads(out)["body"]
@@ -487,7 +493,7 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         assert zero(doc) == {0: ["not complete"], 1: ["not complete", "not accepted"]}
         assert honest["credit"]["complete"]["reason"] == "period p-1 closed incomplete (1 of its 2 windows incomplete)"
         assert re.fullmatch(r"its window closed incomplete: the challenger released (\d+ of its \d+ [\w/]+ coins, )?"
-                            r"\d+ of its \d+ poub/openings coins; period p-1 closed incomplete \(1 of its 2 windows "
+                            r"\d+ of its \d+ poub/sample coins; period p-1 closed incomplete \(1 of its 2 windows "
                             r"incomplete\)", dropper["credit"]["complete"]["reason"])
         assert doc["line"][t][al.line.TIME_HELD] == {**dict.fromkeys(al.SHARES, 0.0),
                                                      "exact": dict.fromkeys(al.SHARES, "0")}
@@ -658,10 +664,10 @@ def test_without_its_lean_a_served_sessions_lms_verify_leaves_an_honest_session_
 def test_a_session_sampled_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(
         host, tmp_path, monkeypatch):
     """`--groups-per-coin 4` at two windows in flight: `auditor_line`'s line of record over a gate run of an honest
-    session and a prover that skips half its reads, each paced in twelve windows sampled on three openings coins, which
+    session and a prover that skips half its reads, each paced in twelve windows sampled on three samples' coins, which
     the gate reserves and releases (⌈12/4⌉). The period closes complete; the honest session, which the Lean accepts
     and whose record names g, is credited, its twelve windows' last roots read on the challenger's clock off its
-    three openings coins and the challenges after them (`auditor_seen`), its pooled bound over its three samples
+    three samples' coins and the challenges after them (`auditor_seen`), its pooled bound over its three samples
     (`line.samples_of`), and the Lean verifier's line is line.py's; the skipper, rejected at a receipt, earns none."""
     host.seal(monkeypatch, PINS)
     out = tmp_path / "run"
@@ -670,7 +676,7 @@ def test_a_session_sampled_four_windows_a_coin_is_credited_by_the_line_of_record
     assert honest["accepted"] and honest["windows"] == 12 and honest["record"]["public"]["groups_per_coin"] == 4
     assert not skipper["accepted"] and skipper["failure"]["failure"] == "receipt"
     reserves = [e["body"]["families"] for e in host.ledger() if e["kind"] == "reserve"]
-    assert reserves == [[[coins.CHALLENGE, 12], [coins.OPENINGS, 3]]] * 2
+    assert reserves == [[[coins.CHALLENGE, 12], [coins.SAMPLE, 3 * coins.sample_coins(honest["samples"], 4)]]] * 2
     rc, closed = host.call(["period-close", "--name", "p-1"])
     assert rc == 0 and json.loads(closed)["body"]["complete"] is True, closed
     doc = analysed(out, host, sessions, reg, desc)

@@ -16,6 +16,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import itertools
+import random
 import re
 
 import pytest
@@ -90,6 +91,35 @@ def test_more_coins_than_a_batch_open_in_batches():
     segment = coins.commit(ROOT)
     assert len(coins((R.MAX_BATCH + 3) * 64)) == (R.MAX_BATCH + 3) * 64
     assert [o.index for o in segment.openings] == list(range(R.MAX_BATCH + 3))
+
+
+@pytest.mark.parametrize("seed", range(8))
+def test_the_next_free_slot_is_the_lowest_slot_not_yet_asked(seed):
+    """After any sequence of roots at chosen slots, each slot once and in any order, `LiveRecord._next` is the lowest
+    slot of the family not yet asked, and the slots' count once every slot is: the scan it replaced."""
+    rng = random.Random(seed)
+    record = C.LiveRecord(C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host")), "draw", itertools.count().__next__)
+    count = dict(FAMILIES)["draw"]
+    order = list(range(count))
+    rng.shuffle(order)
+    by_record = set(rng.sample(range(count), count // 4))
+
+    def scan() -> int:
+        return next((i for i in range(count) if i not in record.slots), len(record.slots))
+
+    assert record._next() == scan() == 0
+    for slot in order:
+        if slot in record.slots:
+            continue
+        if slot in by_record:
+            record.record(ROOT)
+        else:
+            record.record_slot(slot, ROOT)
+        assert record._next() == scan()
+    while len(record.slots) < count:
+        record.record(ROOT)
+        assert record._next() == scan()
+    assert sorted(record.slots) == list(range(count)) and record._next() == count
 
 
 class _Tampered(C.LiveChallenger):
