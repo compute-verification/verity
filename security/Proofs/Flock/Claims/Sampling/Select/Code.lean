@@ -17,7 +17,7 @@ and `SessionRuns`, `SessionOpens` and `InnerNumbers` are one statement about the
 * `innerNumbers_code_iff`: `InnerNumbers` is Flock's numbers at the one session's statement.
 
 And of `Spot.Run.run` itself, `run_decided`: a run that doesn't refuse (a `{"step", "codes"}` object) passed
-the population and R1–R8 (`Docket.check`) under the sampling design of the rule over the population (`Select.Rule.over`)
+the population and R1–R8 (`Docket.check`) under the sampling design of the rule over the program's units (`Select.Rule.over`)
 and the work table it expands (`Select.Rule.tableOver`), ran
 the sample of record (`Select.select`, under `Select.resolve`'s rule) on the challenger's bytes (`source`) and held it to
 the registration (`Draw.checkDraw`), and its `draw` and `read` are that sample's (under a two-stage rule, the first
@@ -117,7 +117,7 @@ theorem ite_eq_ok {c : Prop} [Decidable c] {a j : Json} {rest : V Json}
 -- `run` unfolds to about 50 decided leaves under one `match` or `if` per step, hence the heartbeat budget.
 set_option maxHeartbeats 4000000 in
 /-- **A decided run passed its registration and ran the sample of record**: `run` either refuses at a step or passed the
-population, R1–R7 under the sampling design of the rule over it and the program's strata (`Rule.over`, `strataSizes`, a
+population, R1–R7 under the sampling design of the rule over the program's units and its strata (`Rule.over`, `strataSizes`, a
 rate sampling design's `subset:K`) and the work table it expands (`Rule.tableOver`, a work rate sampling design's), and the sample's own check,
 with its `draw` and `read` those of `Select.select` under `Select.resolve`'s rule on the challenger's bytes. -/
 theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :

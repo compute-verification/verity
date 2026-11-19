@@ -264,7 +264,7 @@ theorem accepted_steps {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} 
     exact codes_of_attach hwf hacc.symm
 
 /-- **The registrations an accepted two-stage run checked.** Its boundary record passed the registration check with
-no code, under the run's parameters with the sampling design the rule gives the record's population and the work table the rule
+no code, under the run's parameters with the sampling design the rule gives the program's units and the work table the rule
 expands; and its interior record states the population the first stage's proved units give the replay block's cells,
 and passed the registration check with no code under the interior's parameters with the subset sampling design at that
 population. The first stage's sample is `accepted_steps`'s: `Rule.tableOver`, `Select.resolve` and `Select.select` are

@@ -113,7 +113,7 @@ private theorem run_path {i : Spot.Run.Input} {j : Json} (h : Spot.Run.run i = .
 /-- **An accepted run of record's `draw` is its first stage's sample**: a run of `Spot.Run.run`, at either switch,
 whose symbol is `accept` drew the sample of record (`Select.select` under `Select.resolve`'s rule and the work table
 `Rule.tableOver` expands) on the bytes it was handed, held it to the registration (`Draw.checkDraw` under the
-sampling design `Rule.over` gives the population), and lists it as its `draw`. -/
+sampling design `Rule.over` gives the program's units), and lists it as its `draw`. -/
 theorem run_sample {i : Spot.Run.Input} {run : Json} (h : Spot.Run.run i = .ok run)
     (ha : Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true) :
     ∃ n rule samplingDesign workTable derived resolved draw rest read,
