@@ -71,7 +71,8 @@ $UV sync -q --all-packages --extra torch-cpu || exit 4
 wait $LP; [ -x $LEAN_BIN ] && [ -x $UNIT_BIN ] && [ -x $FW_BIN ] && [ -x $LOW_BIN ] && [ -x $RT_BIN ] && [ -x $CC_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
 SD="$UV run -q python benchmarks/one_stage/served_door.py"
 if [ -n "${AUDIT_RULE:-}" ]; then  # the staged window on the audit's road: records_audit.py audit on a local challenger
-  ( unset PYTHONPATH; timed window $SD window --tree . --out $S/window ) > $O/window.txt 2>&1
+  WIN="$SD window --tree ."; [ -n "${WINDOW_ARGS:-}" ] && WIN="$UV run -q python $WINDOW_ARGS"  # another window's builder
+  ( unset PYTHONPATH; timed window $WIN --out $S/window ) > $O/window.txt 2>&1
   r=$?; cat $O/time-window.txt; grep -h '^STEP' $O/window.txt | cut -c1-3000; [ $r = 0 ] || { tail -c 4000 $O/window.txt; exit 5; }
   cp $S/window/registration.json $S/window/circuit.json $O/
   git -C $REPO rev-list --first-parent HEAD > $S/main.txt 2>/dev/null || git -C $REPO rev-parse HEAD > $S/main.txt || echo 00 > $S/main.txt
@@ -79,7 +80,7 @@ if [ -n "${AUDIT_RULE:-}" ]; then  # the staged window on the audit's road: reco
   ( unset PYTHONPATH FC_COINS TU_PINNED; export PATH=$(dirname $RT_BIN):$PATH; RUST_MIN_STACK=$((64 << 20)) timed audit $UV run -q python benchmarks/prove_path/records_audit.py audit \
       --window $S/window --sampling-design "$AUDIT_RULE" --circuit $(sha512sum $S/window/circuit.json | cut -c1-128) \
       --run $(python3 -c 'print("ab" * 64)') --challenger local --deployed-key --registered $S/window/pins.json --main $S/main.txt --m0-pythonpath $M0 \
-      --bin $B --lean $LEAN_BIN --zk-server $FW_BIN --lower $LOW_BIN --ports ${AUDIT_PORTS:-64} --out $S/audit ) > $O/audit.log 2> $O/audit.err
+      --bin $B --lean $LEAN_BIN --zk-server $FW_BIN --lower $LOW_BIN --ports ${AUDIT_PORTS:-64} ${AUDIT_FLAGS:-} --out $S/audit ) > $O/audit.log 2> $O/audit.err
   r=$?; echo "audit rc $r"; cat $O/time-audit.txt; grep -h '^RECORDS\|^REFUSED\|^DRAW\|^MEMBER\|^VERDICT\|^CHECK\|^UNLOWERED\|^A5' $O/audit.log | cut -c1-3000
   tail -c 3000 $O/audit.err
   cp -r $S/audit/summary.json $S/audit/window/summary.json $S/audit/window/case-v2.json $O/ 2>/dev/null
