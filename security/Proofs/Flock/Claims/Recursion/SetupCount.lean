@@ -1218,7 +1218,7 @@ theorem drawn_cost (c : Circuit) (pub : Public) (draw : Json) :
         | (with_reducible apply iteAny)
         | (with_reducible apply diteMax)
         | (with_reducible apply diteAny)
-        | split)
+        | (split <;> try (with_reducible apply throwBindAny)))
       iterate 40
         all_goals try (dsimp +zetaDelta -zeta only)
         all_goals repeat (first
@@ -1248,7 +1248,7 @@ theorem drawn_cost (c : Circuit) (pub : Public) (draw : Json) :
           | (with_reducible apply iteAny)
           | (with_reducible apply diteMax)
           | (with_reducible apply diteAny)
-          | split)
+          | (split <;> try (with_reducible apply throwBindAny)))
       all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
     · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); omega
 
