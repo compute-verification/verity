@@ -163,16 +163,14 @@ def test_remote_and_onsite_full_have_their_workload_values_pearl_plus_untied_and
         assert "pearl-plus" not in cfg["protocols"], name
 
 
-def test_the_front_application_is_the_networks_with_the_fronts_load_and_the_split_attester():
+def test_the_front_application_is_the_networks_with_the_fronts_load():
     """`onsite_network_front.toml` is `onsite_network.toml` but for its load: served_verdicts.sh's LOAD=front, the
-    front's group the run's one load and its audited window, with the network attester's piece split around V3c."""
+    front's group the run's one load and its audited window."""
     front = R.load(ROOT / "applications" / "onsite_network_front.toml", REG)
     network = R.load(NETWORK, REG)
     assert front["protocols"] == network["protocols"] and front["params"] == network["params"]
     assert front["workload"]["params"] == {**network["workload"]["params"], "load": "front"}
-    hooks = T.variables(front, {})
     assert T.SERVE.variables(front, {})["LOAD"] == "front"
-    assert {"CERTIFIER_FRONT", "CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"} <= set(hooks) and "CERTIFIER_CMD" not in hooks
 
 
 def test_the_configuration_states_no_host_or_address():
@@ -295,8 +293,7 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     assert all(hooks[k] == VARIABLES[k] for k in ("WIPE_CMD", "POUS_CMD", "BANDWIDTH_CMD"))
     assert " ".join(e["hooks"]["POUS_ARGS"] for x in got["plan"] for e in x["entries"]
                     if "POUS_ARGS" in e["hooks"]) == VARIABLES["POUS_ARGS"]
-    assert {e["component"]: e["hooks"]["SERVE_ARGS"] for x in got["plan"] for e in x["entries"]
-            if "SERVE_ARGS" in e["hooks"]} == {"network-attester": NS.ID_FORM}
+    assert not any("SERVE_ARGS" in e["hooks"] for x in got["plan"] for e in x["entries"])
     assert (hooks["PEARLC_CHALLENGER_GATE"], hooks["PEARLC_CHALLENGER_PEER"], hooks["H1_KEY_SHA512"]) == (
         "gate-command", "peer-1", KEY)
     assert hooks["POUW"] == "pearlplus" and not TIE_VARIABLES & set(hooks) and "H1_GATE" not in hooks
@@ -390,12 +387,11 @@ def test_the_runners_variables_and_the_bindings_keys_are_these():
     assert unbound["CERTIFIER_CMD"] == VARIABLES["CERTIFIER_CMD"]
 
 
-def test_the_attesters_script_is_its_developer_sides_and_no_gate_piece_names_one(tmp_path, capsys):
+def test_the_attesters_script_is_its_developer_sides_and_no_gate_piece_names_one():
     cfg = R.load(CONFIG, REG)
     side, device = REG.parties["network-attester"][NC.WORKERS], REG.parties["network-attester"][NC.NETWORK_ATTESTER]
     assert (side.runs, side.scripts, side.reaches, side.binds, side.optional) == (
         T.SERVED_WINDOW, (NS.ATTESTER_PIECE,), NC.NETWORK_ATTESTER, ("gate", "peer"), ())
-    assert set(side.variables(cfg, BINDINGS)) == {"SERVE_ARGS", "CERTIFIER_FRONT", "CERTIFIER_CMD"}
     assert device.runs == T.GATE
     gates = [e for ps in REG.parties.values() for e in ps.values() if e.runs == T.GATE]
     assert len(gates) == 7
@@ -404,13 +400,6 @@ def test_the_attesters_script_is_its_developer_sides_and_no_gate_piece_names_one
     assert all(principal[p] == "auditor" for ps in REG.parties.values() for p, e in ps.items() if e.runs == T.GATE)
     assert all(principal[p] == "developer" for ps in REG.parties.values() for p, e in ps.items()
                if e.runs == T.SERVED_WINDOW)
-    rc, got, _ = dry(capsys, "--bindings", bindings(tmp_path))
-    plan = {x["party"]: {e["component"]: e for e in x["entries"]} for x in got["plan"]}
-    mine, its = plan[NC.WORKERS]["network-attester"], plan[NC.NETWORK_ATTESTER]["network-attester"]
-    assert rc == 0 and (mine["runs"], mine["reaches"], mine["scripts"]) == (T.SERVED_WINDOW, NC.NETWORK_ATTESTER,
-                                                                            [NS.ATTESTER_PIECE])
-    assert (its["runs"], its["reaches"], its["scripts"], its["hooks"], its["unbound"]) == (T.GATE, NC.NETWORK_ATTESTER,
-                                                                                         [], {}, [])
 
 
 def test_two_pieces_setting_different_classes_are_refused_by_name(monkeypatch):
@@ -433,16 +422,12 @@ def test_two_pieces_setting_different_classes_are_refused_by_name(monkeypatch):
 
 #: `BINDINGS` without the network attester's
 NO_NETWORK_ATTESTER = {p: cs for p, cs in BINDINGS.items() if p != NC.NETWORK_ATTESTER}
-#: the network attester's piece's variables, bound
-BOUND_FRONT = {k: VARIABLES[k] for k in ("SERVE_ARGS", "CERTIFIER_FRONT", "CERTIFIER_CMD")}
 
 
-def test_the_network_attester_starts_first_as_the_local_gate_on_the_workloads_machine(tmp_path, capsys):
+def test_the_network_attester_starts_first_as_the_local_gate_on_the_workloads_machine(tmp_path):
     """With none of its bindings given, `verity run` starts the network attester's party first: it writes the front's
-    local gate and the workload's machine as the configuration names it as its peer, which the front then runs with,
-    and the dry run counts both bound. Bound, the front reaches that gate and peer, and the party isn't started."""
-    cfg, side, start = R.load(CONFIG, REG), REG.parties["network-attester"][NC.WORKERS], REG.starts[NC.NETWORK_ATTESTER]
-    assert side.variables(cfg, BINDINGS) == BOUND_FRONT
+    local gate and the workload's machine as the configuration names it as its peer. Bound, the party isn't started."""
+    cfg, start = R.load(CONFIG, REG), REG.starts[NC.NETWORK_ATTESTER]
     assert R.starting(REG, [NC.NETWORK_ATTESTER], NO_NETWORK_ATTESTER) == [NC.NETWORK_ATTESTER]
     assert R.starting(REG, [NC.NETWORK_ATTESTER], BINDINGS) == []
     start.serve(cfg, tmp_path)
@@ -450,12 +435,7 @@ def test_the_network_attester_starts_first_as_the_local_gate_on_the_workloads_ma
                               pause=lambda s: None)
     assert written == {"network-attester": {"gate": "local", "peer": T.PROVER_NODE}}
     R.bind(tmp_path, NC.NETWORK_ATTESTER, written)
-    assert side.variables(cfg, T.bindings_of(tmp_path)) == {
-        **BOUND_FRONT, "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" '
-                                          f'"$3" --gate local --peer {T.PROVER_NODE} --tokens 2'}
-    rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, NO_NETWORK_ATTESTER))
-    assert rc == 0 and got["dry"][0]["unbound"] == [], err
-    assert {x["party"]: x.get("writes") for x in got["plan"]}[NC.NETWORK_ATTESTER] == {"network-attester": ["gate", "peer"]}
+    assert T.bindings_of(tmp_path)[NC.NETWORK_ATTESTER] == written
 
 
 def test_a_network_attester_without_its_peer_is_refused_by_name_with_the_fix(tmp_path, capsys):
@@ -770,15 +750,6 @@ def test_the_workloads_piece_hands_the_runner_the_nodes_settings(tmp_path, capsy
                      str(state)], REG)
     assert rc == 0, capsys.readouterr().err
     assert dict(x.split("=", 1) for x in (state / "out" / "node.txt").read_text().splitlines()) == settings
-
-
-def test_serve_openais_flags_are_every_listed_pieces():
-    cfg = R.load(CONFIG, REG)
-    assert T.variables(cfg, BINDINGS)["SERVE_ARGS"] == NS.ID_FORM == "--protocol ids --id-payload 503"
-    without = {**cfg, "protocols": [c for c in cfg["protocols"] if c not in ("network-attester", "pearl-plus")]}
-    assert "SERVE_ARGS" not in T.variables(without, BINDINGS)
-    # the runner's own preflight of the front reads the id form's flag as a word of SERVE_ARGS
-    assert " --protocol ids " in f" {T.variables(cfg, BINDINGS)['SERVE_ARGS']} "
 
 
 COMPOSITE = """mkdir -p "$OUT"

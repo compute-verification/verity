@@ -88,7 +88,7 @@
   },
   {
    "name": "N2's summary",
-   "writer": "verity/protocols/resource_accounting/network/prover/n2_zk.py (prove, the public side of its summary; the rest goes to --witness)",
+   "writer": "benchmarks/network_traces/chain_record.sh (the n2 step, CR_N2_CMD: the public side of its summary)",
    "files": [
     "n2/summary.json"
    ],
