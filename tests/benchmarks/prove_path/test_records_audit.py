@@ -317,9 +317,11 @@ def test_the_leak_count_is_the_circuits_unwired_input_bits_and_vacuous_past_the_
 
 
 def _registered_circuit(n: int = 2, free: str | None = None) -> IF.Circuit:
-    """``n`` coordinates whose every input row is a registered read of one parameter ``a``, but port ``free``'s."""
+    """``n`` coordinates whose every input row is a registered read of one parameter ``a``, but port ``free``'s; each read
+    starts on a whole row of its port's words (`interface._reads_of`)."""
     rows, at, reads = IF.layout(BITS).rows, 0, []
     for p, words in rows:
+        at = -(-at // words) * words
         if p != free:
             reads.append(IF.Read(descriptor_id(BITS), p, "a", at=0, radix=(n,), base=at, step=(words,)))
         at += n * words
