@@ -56,7 +56,7 @@ def run(tmp_path_factory) -> tuple[Path, Path, dict]:
         mp.setattr(sys.modules[SP.__name__], "CLOCK", iter(VERIFY_CLOCK).__next__)
         for k in ("PEARLC_CHALLENGER_GATE", "PEARLC_CHALLENGER_PEER"):
             mp.delenv(k, raising=False)
-        a, b = (T.proved_pass(tmp / name, H100, ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
+        a, b = (T.proved_pass(tmp / name, H100, s)[0] for name, s in (("a", 0), ("b", 1)))
         d = T._serve_dir(tmp, [a, b])
         rc, doc, _answer = T.served_verify(d, tmp / "piece" / "verify.json")
     assert rc == 0 and doc["answer"]["verdict"] == "accept" and doc["source"] == SOURCE.hex(), doc["line"]
@@ -298,8 +298,8 @@ def test_verify_sh_exits_on_the_leans_verdict_on_each_pass(tmp_path, monkeypatch
         monkeypatch.delenv(k, raising=False)
     run, passes, said = "r-window", tmp_path / "work" / "passes" / "r-window", tmp_path / "said"
     said.mkdir()
-    for name, ix in (("prefill", (0, 1)), ("decode", (2, 3)), ("control", (4, 5))):
-        T.proved_pass(passes / name, H100, ix)
+    for s, name in enumerate(("prefill", "decode", "control")):
+        T.proved_pass(passes / name, H100, s)
     (passes / "coins.json").write_text((passes / "prefill" / "coins.json").read_text())
     rows = passes / "control" / json.loads((passes / "control" / "manifest.json").read_text())["weights"]["0"]["rows"]["path"]
     rows.write_bytes(bytes(b ^ 1 for b in rows.read_bytes()))

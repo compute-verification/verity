@@ -357,7 +357,7 @@ theorem planMeans : PlanMeans := by
   split at h
   · cases h
   dsimp (config := { zeta := false }) only [j0] at h
-  cases hd : passesDistinct i.manifests with
+  cases hd : passesPlaced i.manifests i.rounds with
   | some w => rw [throwRefusal.eq_def, hd] at h; cases h
   | none =>
   rw [throwRefusal.eq_def, hd] at h

@@ -8,8 +8,9 @@
   when its scheme is `window.LIVE_SCHEME`, `epoch_coins`), as the salt coin, opened after the fixed operands' root (a live
   session's after its salt execution phase's root), and the salt must be the manifest's.  A pass recorded before the execution
   phase's coins (a v1 manifest, which carries a beacon instead) is refused, as the Lean `PouwVerifier.PearlPlus` refuses it.
-- **The call indices** are each below 2^32 and none twice (`credit.passes_distinct`: ``call-range``, ``repeated-call``);
-  `served_passes.py` holds a run's passes of one salt to distinct indices too.
+- **The call indices** are each below 2^32 and none twice in a pass (`credit.passes_distinct`: ``call-range``,
+  ``repeated-call``); over a run (`verify_passes`), each is its place, round s's call c at `protocol.call_place` (s, c),
+  each part below 2^16 (`passes_placed`: ``call-place``, ``repeated-call``, ``call-range``).
 - **The records** (each matmul's real rows, width, excluded and voluntary rows; each fixed operand's excluded and voluntary rows)
   are the manifest's (`records_of`).  Their root must be the one the pass published before any sample.
 - **The samples' source** is 32 bytes of the Lean verifier's coins (`pouw.verifier.coins`, `IO.getRandomBytes`,
@@ -141,8 +142,8 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
 )
 from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment
-from verity.protocols.resource_accounting.compute.pouw.verifier.credit import passes_distinct
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape, Tile, tagged
+from verity.protocols.resource_accounting.compute.pouw.verifier.credit import CALL_RANGE_CODE, REPEATED_CALL, passes_distinct
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError, Matmul, Shape, Tile, call_place, tagged
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as PCU
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c import H100, K_MIN, TILE
@@ -263,11 +264,46 @@ class Opened:
 
 
 class Refused(ValueError):
-    """A pass refused before anything is opened, with `credit.passes_distinct`'s (code, why)."""
+    """A pass refused before anything is opened, with `passes_placed`'s or `credit.passes_distinct`'s (code, why)."""
 
     def __init__(self, why: tuple[str, str]):
         super().__init__(": ".join(why))
         self.why = why
+
+
+#: why `passes_placed` refuses a call whose index is not its place
+CALL_PLACE = "call-place"
+
+
+def passes_placed(passes: Any, rounds: list[int] | None = None) -> tuple[str, str] | None:
+    """Why a run's pass manifests `passes`, pass i round ``rounds[i]`` (default i), are refused, or None: each call's index
+    is its place, `protocol.call_place` of its pass's round and its position among the pass's calls, recomputed here and
+    never read: ``manifest`` for a pass that is not a manifest with a string salt and a list of matmuls, ``call-place``
+    for rounds that are not one a pass or a call whose index is another, ``repeated-call`` for two passes at one round
+    (their calls' places, so their seeds and tickets, repeat), and ``call-range`` for a round or a position at or past
+    2^16 (`protocol.OFF_PLACE`). The Lean `PouwPearlPlus.passesPlaced`, step for step."""
+    ss = list(range(len(passes))) if rounds is None else list(rounds)
+    if len(ss) != len(passes):
+        return (CALL_PLACE, f"the run names {len(ss)} rounds for its {len(passes)} passes: a pass is one round")
+    held: dict[int, int] = {}
+    for p, (m, s) in enumerate(zip(passes, ss)):
+        us = m.get("matmuls") if isinstance(m, dict) else None
+        if not isinstance(m.get("salt") if isinstance(m, dict) else None, str) or not isinstance(us, list) \
+                or not all(isinstance(u, dict) for u in us):
+            return ("manifest", f"pass {p} is not a Pearl-C manifest with a string salt and a list of matmuls")
+        if (q := held.setdefault(s, p)) != p:
+            return (REPEATED_CALL, f"passes {q} and {p} are both round {s}: calls at one place repeat their seeds and "
+                                   "tickets")
+        for c, u in enumerate(us):
+            try:
+                want = call_place(s, c)
+            except DomainError as e:
+                return (CALL_RANGE_CODE, f"pass {p}'s call {c} is at round {s}, position {c}: {e}")
+            if type(i := u.get("index")) is not int or i != want:
+                return (CALL_PLACE, f"pass {p}'s call {c} holds index {i!r}, not its place {want} (round {s}, position "
+                                    f"{c}): -h3's row seed reads the index, so its place fixes the call's noise and no "
+                                    "one chooses it")
+    return None
 
 
 def read(path: Path) -> tuple[dict, str, str]:
@@ -869,7 +905,8 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     (`credit_at_assumption`'s ``credited``, ``credited_tiles`` and ``macs``) is the profile's ``exact_work``, held on the
     node. Without a class the structural credit is not defined, and ``public.work`` is the exact credit.
 
-    ``paths`` are the passes the prover retained, pass i the served run's round ``rounds[i]`` (default i), the rounds
+    ``paths`` are the passes the prover retained, pass i the served run's round ``rounds[i]`` (default i), each of its calls
+    at its place there, refused before anything is read otherwise (`passes_placed`), the rounds
     ``dropped`` left out before the coin: they credit nothing, and W may register them (`tie`).  ``record`` is the
     verifier's record of its coin: the first verdict writes the run's commitment and the source there before any replay,
     and a later one over passes whose commitment is another (a retention or a give-up changed after the coin) is refused
@@ -895,7 +932,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     if not paths:
         return reject("the run holds no pass with calls")
     try:
-        why = passes_distinct([read(x)[0] for x in paths])
+        why = passes_placed([read(x)[0] for x in paths], rounds)
         if why is not None:
             out["refused"] = list(why)
             raise Refused(why)

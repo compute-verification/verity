@@ -20,6 +20,10 @@ gives it (`TYPE: why`, the exception Python raises):
 
 `passesDistinct` refuses passes credited together whose call indices leave `[0, 2^32)` (`call-range`) or repeat under one
 salt (`repeated-call`), or one that is not a manifest with a string salt and a list of matmuls (`manifest`).
+`passesPlaced` holds a run's passes, pass i round `rounds[i]`, to each call's index being its place (`callPlace`, the one
+formula: round * 2^16 + position, each below 2^16), refusing another index or rounds not one a pass (`call-place`), two
+passes at one round (`repeated-call`) and a round or position at or past 2^16 (`call-range`); the run's verdict reads it
+(`Check.plan`) where a pass alone reads `passesDistinct`.
 
 Out of this port's scope, each refused by name: the sm_120 records' schemes and a manifest's `instance` other than `k_min`
 and `tile`.
@@ -94,6 +98,49 @@ def passesDistinct (passes : List Json) : Option (String × String) := Id.run do
       held := (i, p) :: held
     seen := (salt, held) :: seen.filter (·.1 != salt)
   return none
+
+/-- `protocol.ROUND_CALLS`: the calls one round holds, and the rounds one epoch holds. -/
+def ROUND_CALLS : Nat := 2 ^ 16
+/-- `protocol.OFF_PLACE`: why `callPlace` refuses a round or a position. -/
+def OFF_PLACE : String :=
+  "a round and a position in it are each below 2^16 (`ROUND_CALLS`): end the pass, or the epoch, before"
+
+/-- `protocol.call_place(round, position)`: a call's index at its place, `round * ROUND_CALLS + position`, or
+`OFF_PLACE` for a round or a position at or past `ROUND_CALLS`. -/
+def callPlace (round position : Nat) : Except String Nat :=
+  if round < ROUND_CALLS && position < ROUND_CALLS then pure (round * ROUND_CALLS + position) else throw OFF_PLACE
+
+/-- `verify_run.passes_placed(passes, rounds)`: (code, why), or none. Pass i is round `rounds[i]` (default i), and each
+call's index is `callPlace` of its round and its position, recomputed and never read. -/
+def passesPlaced (passes : List Json) (rounds : Option (List Nat)) : Option (String × String) := Id.run do
+  let ss := rounds.getD (List.range passes.length)
+  if ss.length != passes.length then
+    return some ("call-place", s!"the run names {ss.length} rounds for its {passes.length} passes: a pass is one round")
+  let mut held : List (Nat × Nat) := []
+  for ((m, s), p) in (passes.zip ss).zipIdx do
+    let us ← match get? m "salt", get? m "matmuls" with
+      | some (.str _), some (.arr us) =>
+        if us.all (fun u => match u with | .obj _ => true | _ => false) then us.toList
+        else return some ("manifest", s!"pass {p} is not a Pearl-C manifest with a string salt and a list of matmuls")
+      | _, _ => return some ("manifest", s!"pass {p} is not a Pearl-C manifest with a string salt and a list of matmuls")
+    if let some q := held.lookup s then
+      return some ("repeated-call", s!"passes {q} and {p} are both round {s}: calls at one place repeat their seeds and " ++
+        "tickets")
+    held := (s, p) :: held
+    for (u, c) in us.zipIdx do
+      match callPlace s c with
+      | .error e => return some ("call-range", s!"pass {p}'s call {c} is at round {s}, position {c}: {e}")
+      | .ok want =>
+        let i? := get? u "index"
+        if (i? >>= jsonInt?) != some (want : Int) then
+          return some ("call-place", s!"pass {p}'s call {c} holds index {pyReprJson (i?.getD .null)}, not its place " ++
+            s!"{want} (round {s}, position {c}): -h3's row seed reads the index, so its place fixes the call's noise " ++
+            "and no one chooses it")
+  return none
+
+#guard (callPlace 0 0).toOption == some 0 && (callPlace 3 5).toOption == some (3 * 65536 + 5) &&
+  (callPlace (2 ^ 16 - 1) (2 ^ 16 - 1)).toOption == some (2 ^ 32 - 1)
+#guard [callPlace (2 ^ 16) 0, callPlace 0 (2 ^ 16)].all fun r => match r with | .error e => e == OFF_PLACE | .ok _ => false
 
 /-- A JSON field Python reads as `man[k]`, refused as its `KeyError`. -/
 def key (j : Json) (k : String) : Except Refusal Json :=

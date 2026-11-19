@@ -16,8 +16,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import CALL_CAPACITY
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import CALL_RANGE
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import CALL_RANGE, ROUND_CALLS, call_place
 
 from verity_torch.pouw.pearl_c.ends import _RunState
 
@@ -53,9 +52,6 @@ def room(run: Any, tiles: int, rows: int, calls: int) -> Any:
     return p
 
 
-#: calls a round holds: a call's index is its round's number times this, plus its position in the round
-#: (`pearl_c.CALL_CAPACITY`, the calls one pass's buffers take, so no position reaches it)
-ROUND_CALLS = CALL_CAPACITY
 #: rounds one epoch (one salt) holds: past it an index would leave -h3's row seed's range (`protocol.CALL_RANGE`)
 EPOCH_ROUNDS = CALL_RANGE // ROUND_CALLS
 
@@ -67,7 +63,7 @@ CHOSEN_INDEX = ("a call's index is its place, its round in the epoch and its pos
 
 
 def call_index(run: Any, calls: int = 1) -> int:
-    """The index of ``run``'s next call: its place, ``round * ROUND_CALLS + position``, the round the pass's number among
+    """The index of ``run``'s next call: its place (`protocol.call_place`, the verifier's), the round the pass's number among
     the epoch's passes with calls (the install's salt; a pass takes its round at its first call, so a pass without calls
     takes none) and the position the call's among the pass's calls.  -h3's row seed binds the salt and the index, so a
     place is one seed, and nothing here takes an index from a caller.  The pass's own buffers stay positional
@@ -79,7 +75,7 @@ def call_index(run: Any, calls: int = 1) -> int:
             raise RuntimeError(f"{run.entry}: the epoch has used its {EPOCH_ROUNDS} rounds, and a call of another would "
                                "reach 2^32 calls, the range of -h3's row seed (`protocol.CALL_RANGE`); end the epoch: "
                                "reinstall under a new salt")
-        p.base, run._rounds = run._rounds * ROUND_CALLS, run._rounds + 1
+        p.base, run._rounds = call_place(run._rounds, 0), run._rounds + 1
     position = len(p.matmuls)
     if position + calls > ROUND_CALLS:
         raise RuntimeError(f"{run.entry}: the round is at call {position}, and {calls} more would pass its {ROUND_CALLS} "
