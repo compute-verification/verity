@@ -1,7 +1,6 @@
 # The opcode table: the evidence for the card assumption, that every instruction a
 # card executes is dominated by an ACCEL op (envelope.toml: `Accel.Opcode` and the proposed
-# entries) at no fewer units of the same resource. It is evidence, not the trusted base: `machine-model cover` renders
-# it, and tests/test_cover.py fails when an opcode has no row or a dominated row's rate exceeds its resource's ρ.
+# entries) at no fewer units of the same resource. It is evidence, not the trusted base.
 #
 # A `[[row]]` covers the opcodes `ops` on `devices` (default both). With `forms` (regexes on the dotted SASS opcode) it
 # covers only those forms, ahead of the plain row of its opcode; every opcode a device lists has a plain row there.
