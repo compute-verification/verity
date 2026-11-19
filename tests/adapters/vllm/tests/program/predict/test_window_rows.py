@@ -47,7 +47,6 @@ from verity_vllm.check.replay.checks import check_rows
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.definitions.registry import io_shell as IO
-from verity_vllm.pipeline.tp.grain import GROUP
 from verity_vllm.program.instances_file import read_instances
 from verity_vllm.program.predict import inference_blocks as IB
 from verity_vllm.program.predict import scan_state as SS
@@ -57,6 +56,7 @@ from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.naming import write_build
 from verity_vllm.program.predict.steps import compile_steps
+from verity_vllm.program.predict.window_lowering import GROUP
 
 PROGRAM = "test/model"
 DESIGN = {"law": "stratified", "k": 2}

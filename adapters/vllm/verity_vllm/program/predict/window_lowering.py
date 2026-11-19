@@ -25,7 +25,6 @@ from verity_vllm.definitions.registry.dead_free import (
     AttnBlockFirstV2,
     TokenSelectGroupsV1,
 )
-from verity_vllm.pipeline.tp.grain import GROUP
 
 from . import scan_state as SS
 from .build import Unexpressible
@@ -34,6 +33,8 @@ from .window_class import FixedLoad, PearlTables, Request, Tables, WindowClass
 from .window_cut import Linears, cut_linear
 
 PROMPT = "prompt"
+#: a token select's group of logits: a word of each `TokenSelectGroups_v1` unit's row of bests
+GROUP = 16
 
 
 def _field(fn: Any, lo: int, hi: int) -> tuple[str, int]:
