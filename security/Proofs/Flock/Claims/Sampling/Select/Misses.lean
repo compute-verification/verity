@@ -183,6 +183,31 @@ theorem strata_eq (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQu
 theorem length_popUnits (S : Array (String × Array (ℕ × ℕ))) : (popUnits S).length = (S.toList.map fun p => rsSize p.2).sum := by
   simp [popUnits, rsSize, List.length_flatMap]
 
+/-- **The population `popOk` holds is the registered partition's size**: `n` is the sum of the strata sizes of the
+program under its query, read off them alone. -/
+theorem popOk_strataSizes {d : Program} {query : Lean.Json} {n : ℕ} (h : Slots.popOk d query n = true) :
+    n = (_root_.Spot.Select.strataSizes d query).sum := by
+  unfold Slots.popOk at h
+  split at h
+  · cases h
+  rename_i l hl
+  have hu := of_decide_eq_true h
+  obtain ⟨rs, he, pop, rfl, hf⟩ := layout_ok d query l hl
+  have hsz := (laysOut_units _ _ hf).2
+  have hn : (Slots.popOf { classes := #[pop, inputClass d] }).length = n := by
+    simpa only [List.length_map, List.length_range] using congrArg List.length hu
+  have hlen : (Slots.popOf { classes := #[pop, inputClass d] }).length = (pop.toList.map Array.size).sum := by
+    simp [Slots.popOf, List.length_flatten, List.map_map, Function.comp_def]
+  unfold _root_.Spot.Select.strataSizes
+  rw [strata_eq d query rs he]
+  dsimp only
+  rw [← hn, hlen, hsz]
+  congr 1
+  apply List.map_congr_left
+  intro p _
+  obtain ⟨_, rs'⟩ := p
+  exact (size_rs rs').symm
+
 /-- The units at the slots of `W`, a set of as many units of `[0, n)` when the population's units are `[0, n)`, each once. -/
 theorem image_units (U0 : List ℕ) (hnd : U0.Nodup) (hlt : ∀ x ∈ U0, x < U0.length) (W : Finset ℕ)
     (hW : W ⊆ range U0.length) :
