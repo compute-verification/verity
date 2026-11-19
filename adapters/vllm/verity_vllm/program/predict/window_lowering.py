@@ -64,10 +64,14 @@ class _Program:
     consecutive units (none for the last position's select, which nothing reads). With ``tables`` it reads H1's tables
     (`Tables`), or Pearl+'s (`PearlTables`) cut at its linears, ``cut`` their layout (`window_cut.linears`). With ``at``,
     a served request's Program instead, at the request's anchor and lane and of its positions (`_dead`, `_token`,
-    `_collect`)."""
+    `_collect`), its `ScanSlots_v3` reading ``state``, the scan's unit's state row before its anchor, by wire."""
 
     def __init__(self, b: _Builder, fn: Any, cls: WindowClass, name: str, slot: int, scan: Any, entry: Any,
-                 tables: FixedLoad | None = None, cut: Linears | None = None, at: Request | None = None) -> None:
+                 tables: FixedLoad | None = None, cut: Linears | None = None, at: Request | None = None,
+                 state: Row | None = None) -> None:
+        if (at is None) != (state is None):
+            raise ValueError(f"{name}: a served Program reads the scan's state row by wire, and only it")
+        self.state = state
         self.b, self.fn, self.cls, self.name, self.slot_index = b, fn, cls, name, slot
         self.anchor, self.lane = (cls.anchor(slot), cls.lane(slot)) if at is None else (at.anchor, at.lane)
         self.positions = cls.positions if at is None else at.positions
@@ -269,7 +273,10 @@ class _Program:
                                 "at position 0 and every other position's token from its predecessor's select")
         if p == 0:
             tid, u = self.b.unit(self.scan)
-            self.b.read(tid, "state", u, (1,), self.anchor * self.scan.bindings["NS"], (0,), SS.SCAN_STATE)
+            if self.state is None:
+                self.b.read(tid, "state", u, (1,), self.anchor * self.scan.bindings["NS"], (0,), SS.SCAN_STATE)
+            else:
+                self.b.feed(tid, "state", u, 1, (self.state,))
             self.scan_unit, o = (tid, u), 4 * self.lane
             self.slot, self.occ, self.head = (Row(tid, u, f"o{o + 1}", 2 * (NP + 1)), Row(tid, u, f"o{o + 2}", 2),
                                               Row(tid, u, f"o{o + 3}", 4))

@@ -11,7 +11,7 @@ request has no Program. The class circuit (`class_circuit`), every slot's Progra
 positions, is the fixed load's, at which PoUW's tables are read (`FixedLoad`). Arrival steps are values, never structure.
 
 A slot's request comes from the network attester's scan: boundary b's Programs read the scan's state row before it
-(`scan_state.SCAN_STATE`, registered) through `boolean_io_shell.ScanSlots_v3` (`scan_state.bridge`), which gives each lane
+(in the class circuit `scan_state.SCAN_STATE`, registered, a row a bucket) through `boolean_io_shell.ScanSlots_v3` (`scan_state.bridge`), which gives each lane
 its first position's token (its prompt's first id) and the slot it carries on, its occupancy word and its head (its prompt's
 length and ``max_tokens``). Every later position's token is `io_shell.TokenFeed_v1{prompt, FIRST=False}`'s below the class's
 prompt limit (the prompt's id below its length, else the previous position's select), and past it the previous position's
@@ -27,12 +27,20 @@ position below L feeds its prompt's id (`io_shell.TokenFeed_v1{FIRST=True}`, no 
 last builds nothing a later token doesn't read (its LM head, select and final norm, and its last layer's query and that
 layer from its attention on), its select's collector `io_shell.OutCollect_v1` alone. Its last select is collected like the
 others, then ``outputs`` - O pads shift its O outputs to the front, and its entry is `io_shell.SlotEntry_v1{NP=1}`, which
-fits only where the scan's prompt length is L: an advice of another prompt length gives ``outputs`` + 1. The entries are
-one allocation after the walk, in slot order, whatever the Programs' order: entry j is lane j's, the slot the scan's
-Programs' row reads it as. A Program past the
+fits only where the scan's prompt length is L: an advice of another prompt length gives ``outputs`` + 1. A Program past the
 positions a key block holds at the model and grain is refused at the first position past them, naming that bound. A
 collector's rows and an entry's are a few words at a small class, too narrow for a proof block of their own, so none is a
-unit of its own. The state rows and the entries are the circuit's external ports.
+unit of its own. In the class circuit the entries are one allocation after the walk, in slot order, and the state rows and
+the entries are the circuit's external ports.
+
+A served window's circuit holds the scan too (the network scheme's ports, `scan_state.Scan`): its start unit
+(`IngressScanStart`) reads ``SCAN_STATE``'s one row, the state before the window; its ingress unit t
+(`IngressScanBucket`) reads the network attester's ingress row t (``INGRESS_ROWS``), S_{t−1} by wire (the start's at
+t = 0) and, as ``prog<j>``, the entry of lane j at t's boundary; its egress unit t (`EgressBucket`) reads ingress unit
+t's view and its row is held to the attester's released row t (``RELEASED_ROWS``). The Programs at bucket a read
+S_{a−1} by wire. A boundary at a time after the walk: its lone `ScanSlots_v3`, its gap collectors and its entries (one
+allocation, lane j's entry j), then its ingress units, one allocation each, so the order puts every read after its
+writer. Those three ports are the circuit's external ports.
 A slot's Program
 hands all its outputs to the scan at its anchor, which carries them across windows (`SC_GROUP`), so no Program runs into the
 next window. `window_circuit(registered, compiled, cls, grain, placed=...)` refuses a window past the class's envelope and
@@ -229,7 +237,8 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     a call and every position has ``tables.calls`` int8 linears of K = ``tables.k``; with Pearl+'s, unless every position's
     linears are the first's (`window_cut.linears`). With ``requests`` (`window_class.takes`, `window_class.requests_of`),
     the served window's circuit: a Program a request of the request's own positions, longest first, reading its lane at
-    its anchor, so it holds exactly the requests' positions, and one entry a slot of the class in slot order, an empty
+    its anchor, so it holds exactly the requests' positions, the scan's units (module docstring), and one entry a slot
+    of the class a boundary at a time, an empty
     slot's in the slot of the first Program at its boundary (`_Program.place_empty`), or of the first Program, beside a
     `ScanSlots_v3` unit of that boundary's state row, at a boundary no request is anchored at; refused with ``tables`` or
     ``programs``, or for a window of no request."""
@@ -253,6 +262,17 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     entry = bind(IO.SlotEntry, KO=cls.outputs, IDB=cls.scan.IDB, NP=1 if requests is not None else cls.prompt,
                  STOP=stop_ids(registered))
     b = _Builder(grain, programs)
+    if order is not None:
+        if cls.boundaries != tuple(range(0, cls.buckets, cls.every)):
+            raise Unexpressible(f"{cls}: boundaries {list(cls.boundaries)}, not every {cls.every}th bucket from 0")
+        start, bucket, egress = cls.scan.start, cls.scan.bucket, cls.scan.egress
+        ttid, _ = b.allocation(start, [(0, 0)])
+        b.value(ttid, "sin", 0, SS.SCAN_STATE, 0, 1)
+        itid, outs = descriptor_id(bucket), dict(IF.layout(bucket).outs)
+
+        def state(a: int) -> Row:
+            """The scan's state row before bucket ``a``: the start's at 0, else ingress unit a − 1's S_{a−1}."""
+            return Row(ttid, 0, "o0", outs["o1"]) if a == 0 else Row(itid, a - 1, "o1", outs["o1"])
     if order is None:
         fn = class_program(registered, cls.positions).program.fn
         layout = linears(fn, tables.words, grain.rows) if isinstance(tables, PearlTables) else None
@@ -263,8 +283,8 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
         layout, built = None, {n: class_program(registered, n).program.fn for n in {r.positions for r in requests}}
         fns = [built[requests[i].positions] for i in order]
         fn = fns[0]
-        progs = [_Program(b, f, cls, f"request {i}'s Program", k, scan, entry, at=requests[i])
-                 for k, (i, f) in enumerate(zip(order, fns))]
+        progs = [_Program(b, f, cls, f"request {i}'s Program", k, scan, entry, at=requests[i],
+                          state=state(requests[i].anchor)) for k, (i, f) in enumerate(zip(order, fns))]
         ids = [n.fn.id for n in fn.body.nodes]
         for i, f in zip(order, fns):
             if [n.fn.id for n in f.body.nodes] != ids[:len(f.body.nodes)]:
@@ -292,25 +312,33 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
             if k is not None:
                 host.setdefault(cls.anchor(s), k)
         unit = {a: progs[k].scan_unit for a, k in host.items()}
-        if lone := [a for a in cls.boundaries if a not in host]:
-            stid, su = b.allocation(scan, [progs[0].entry_label] * len(lone))
-            for i, a in enumerate(lone):
-                b.read(stid, "state", su + i, (1,), a * scan.bindings["NS"], (0,), SS.SCAN_STATE)
-                host[a], unit[a] = 0, (stid, su + i)
-                scans.append((a, (stid, su + i)))
-        gaps = [s for s, k in enumerate(filled) if k is None]
-        if gaps:
-            ctid, cu = b.allocation(bind(IO.OutCollect, KO=cls.outputs, FIRST=True),
-                                    [progs[host[cls.anchor(s)]].entry_label for s in gaps])
-        etid, eu = b.allocation(entry, [progs[k if k is not None else host[cls.anchor(s)]].entry_label
-                                        for s, k in enumerate(filled)])
-        for s, k in enumerate(filled):
-            if k is not None:
-                progs[k].place_entry(etid, eu + s)
-        for i, s in enumerate(gaps):
-            k = host[cls.anchor(s)]
-            progs[k].place_empty(unit[cls.anchor(s)], cls.lane(s), (ctid, cu + i), (etid, eu + s))
-            empty.append((s, k, (ctid, cu + i), (etid, eu + s)))
+        words = dict(IF.layout(entry).outs)["o0"]
+        for a in cls.boundaries:
+            if a not in host:
+                stid, su = b.allocation(scan, [progs[0].entry_label])
+                b.feed(stid, "state", su, 1, (state(a),))
+                host[a], unit[a] = 0, (stid, su)
+                scans.append((a, (stid, su)))
+            lanes = [s for s in range(cls.slots) if cls.anchor(s) == a]
+            if gaps := [s for s in lanes if filled[s] is None]:
+                ctid, cu = b.allocation(bind(IO.OutCollect, KO=cls.outputs, FIRST=True),
+                                        [progs[host[a]].entry_label for _ in gaps])
+            etid, eu = b.allocation(entry, [progs[host[a] if filled[s] is None else filled[s]].entry_label for s in lanes])
+            for i, s in enumerate(lanes):
+                if (k := filled[s]) is not None:
+                    progs[k].place_entry(etid, eu + i)
+            for i, s in enumerate(gaps):
+                progs[host[a]].place_empty(unit[a], cls.lane(s), (ctid, cu + i), (etid, eu + lanes.index(s)))
+                empty.append((s, host[a], (ctid, cu + i), (etid, eu + lanes.index(s))))
+            for t in range(a, a + cls.every):
+                b.allocation(bucket, [(0, 0)])
+                b.feed(itid, "sin", t, 1, (state(t),))
+                for j in range(len(lanes)):
+                    b.feed(itid, f"prog{j}", t, 1, (Row(etid, eu + j, "o0", words),))
+        b.value(itid, "row", 0, SS.INGRESS_ROWS, 0, cls.buckets, cls.buckets)
+        gtid, _ = b.allocation(egress, [(0, 0)] * cls.buckets)
+        b.feed(gtid, "state", 0, cls.buckets, (Row(itid, 0, "o2", outs["o2"]),), lead=((cls.buckets, 1),))
+        b.value(gtid, "o1", 0, SS.RELEASED_ROWS, 0, cls.buckets, cls.buckets)
     for r in progs:
         if r.position != r.positions:
             raise Unexpressible(f"{r.name}: {r.position} positions, not its {r.positions}")
@@ -321,7 +349,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
             raise Unexpressible(f"{r.name}: linears cut by position {r.linears}, not the layout's {len(layout.calls)} calls")
     b.settle()
     roots, openings = b.merged()
-    params = {**b.params, SS.SCAN_STATE: cls.buckets * scan.bindings["NS"]}
+    params = {SS.SCAN_STATE: cls.buckets * scan.bindings["NS"], **b.params}
     if isinstance(tables, Tables):
         held = tuple(v for s in range(cls.outputs) for v in (tables.a(s), tables.ids(s)))
     elif isinstance(tables, PearlTables) and layout is not None:
@@ -329,14 +357,15 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     else:
         held = ()
     reg = IF.Registered(dict(sorted(params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
-                        tuple(openings), values=(*held, SS.SCAN_STATE),
+                        tuple(openings), values=(*held, SS.SCAN_STATE, *(() if order is None else (SS.INGRESS_ROWS, SS.RELEASED_ROWS))),
                         formats={v: ROW_FORMAT for v in held} if layout is not None else {})
     wires = tuple(IF.coalesce(b.wires if order is None else b.allocation_wires()))
     entry_units = {r.entry_unit[0] for r in progs if r.entry_unit is not None}
     if len(entry_units) != 1 or any(r.entry_unit is None for r in progs):
         raise Unexpressible(f"the Programs' entries are units of {sorted(entry_units)}, not each one of one template")
     circuit = IF.Circuit(NAME, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
-                         external=(f"{descriptor_id(scan)}/state", f"{entry_units.pop()}/o0"),
+                         external=(f"{descriptor_id(scan)}/state", f"{entry_units.pop()}/o0") if order is None else
+                                  (f"{ttid}/sin", f"{itid}/row", f"{gtid}/o1"),
                          wires=wires, cuts=b.cuts, registered=reg, order=IF.ordered(b.units, wires, b.starts) if wires else None,
                          blocks=IF.Blocks(programs, max(r.positions for r in progs), tuple(inference(b.spans, programs))))
     return Lowered(circuit, fn, tuple(progs), b.spans, None if order is None else tuple(order), tuple(empty),
