@@ -13,10 +13,13 @@ lifts to bits (`Flock.Lift.lift`) and lowers. On the decoded C
 and the block's units (`Spot.BlockFront.members`), with in(S) and out(S) as `Spot.BlockFront.front` computes them:
 
 * the root `Root[Block_v1]_v1`, whose Program function is `Block_v1`, has one input batch node for each maximal run of
-  in(S) of one width and one binding, in increasing C index: `RegisteredInput<w>_v1` for a run of C's registered inputs,
+  in(S) of one width, one binding and, for a registered or supplied input, one parameter of C, a supplied run cut where
+  its gates skip one (`inRuns`), in increasing C index: `RegisteredInput<w>_v1` for a run of C's registered inputs,
   `SuppliedInput<w>_v1` for a run of its supplied inputs, `Input<w>_v1` for any other (a run input, or a gate a unit
-  outside S computes); a supplied input keeps its kind and not its mark, which C's description holds by the input's
-  name;
+  outside S computes);
+* its `inputs` name each node a parameter (`portEntry`): `<name>/p<i>` for a run of C's registered or supplied parameter
+  `name`, else `p<i>`, and a supplied one's mark is C's with `of` its range of the parameter's leaves and `bits` the
+  part's, as `verity.circuits.restrict` writes them;
 * then each root node of C that S holds: a call, or a batch S holds whole, as C has it; a batch S holds in part, one node a
   member, its arguments cut on their mapped axis. Each argument leaf is the port or the earlier node that carries its gate
   of C, the first to carry it;
@@ -65,6 +68,53 @@ def bindingOf (P : Prog) (root : Defn) (g : Nat) : String :=
     | none => RUN
   | none => RUN
 
+/-- C's parameters by root input node, as `Prog.inputs` lays them out: each node's parameter name, the parameter's first
+gate, and a supplied one's mark. -/
+def paramsByNode (P : Prog) (root : Defn) : Array (String × Nat × Option Json) := Id.run do
+  let mut out := #[]
+  let mut k := 0
+  for (name, n, mark) in P.inputs do
+    let g0 := root.body.offsets[k]?.getD 0
+    for _ in [0:n] do out := out.push (name, g0, mark)
+    k := k + n
+  return out
+
+/-- Gate `g`'s parameter of C (`paramsByNode`) where it is a registered or supplied input's; `none` for a run input or a
+gate a node computes. -/
+def paramOf (P : Prog) (root : Defn) (byNode : Array (String × Nat × Option Json)) (g : Nat) :
+    Option (String × Nat × Option Json) :=
+  let b := bindingOf P root g
+  if b == REGISTRATION || b == SUPPLIED then (nodeOf root g).bind (byNode[·]?) else none
+
+/-- `ps` cut where their gates skip one. -/
+def spans (ps : Array BlockFront.Port) : Array (Array BlockFront.Port) :=
+  ps.foldl (fun acc p => match acc.back? with
+    | some r => if r.back?.map (Port.gate · + 1) == some (Port.gate p) then acc.pop.push (r.push p) else acc.push #[p]
+    | none => #[#[p]]) #[]
+
+/-- in(S)'s runs, each a port of the block: maximal runs of one width, one binding and, for a registered or supplied
+input, one parameter of C; a supplied run then cut where its gates skip one. -/
+def inRuns (P : Prog) (root : Defn) (ins : Array BlockFront.Port) : Array (Array BlockFront.Port) :=
+  let byNode := paramsByNode P root
+  (runsBy ins fun p => (p.width, bindingOf P root (Port.gate p), (paramOf P root byNode (Port.gate p)).map (·.1))).foldl
+    (fun acc r => if (r[0]?.map fun p => bindingOf P root (Port.gate p) == SUPPLIED).getD false then acc ++ spans r
+      else acc.push r) #[]
+
+/-- Port `i`'s `inputs` entry, the run `r` of in(S): `<name>/p<i>` for a registered or supplied parameter of C, else
+`p<i>`, one node; a supplied part's mark C's with `of` its range of the parameter's leaves and `bits` the part's. -/
+def portEntry (P : Prog) (root : Defn) (byNode : Array (String × Nat × Option Json)) (i : Nat)
+    (r : Array BlockFront.Port) : V (String × Nat × Option Json) := do
+  let some p0 := r[0]? | throw "restrict: an empty run of in(S)"
+  let some pl := r.back? | throw "restrict: an empty run of in(S)"
+  match paramOf P root byNode (Port.gate p0) with
+  | none => pure (s!"p{i}", 1, none)
+  | some (name, g0, mark) =>
+    if bindingOf P root (Port.gate p0) != SUPPLIED then pure (s!"{name}/p{i}", 1, none) else
+    let some m := mark | throw s!"restrict: C's supplied input '{name}' has no mark"
+    let (lo, hi) := (Port.gate p0 - g0, Port.gate pl + 1 - g0)
+    pure (s!"{name}/p{i}", 1, some ((m.setObjVal! "bits" (toJson ((hi - lo) * p0.width))).setObjVal! "of"
+      (Json.arr #[.str name, toJson lo, toJson hi])))
+
 def inputKey (b : String) (w : Nat) : String :=
   (if b == REGISTRATION then "RegisteredInput" else if b == SUPPLIED then "SuppliedInput" else "Input") ++ s!"{w}_v1"
 
@@ -100,7 +150,11 @@ def restrict (P : Prog) (units : Array Nat) : V Prog := do
   let mut index := P.index
   let mut nodes : Array Node := #[]
   let mut ref : Std.HashMap Nat Ref := {}
-  for r in runsBy f.ins fun p => (p.width, bindingOf P root (Port.gate p)) do
+  let byNode := paramsByNode P root
+  let runsIn := inRuns P root f.ins
+  let mut inputs : Array (String × Nat × Option Json) := #[]
+  for i in [0:runsIn.size] do inputs := inputs.push (← portEntry P root byNode i runsIn[i]!)
+  for r in runsIn do
     let some p0 := r[0]? | throw "restrict: an empty run of in(S)"
     let w := p0.width
     let b := bindingOf P root (Port.gate p0)
@@ -168,7 +222,8 @@ def restrict (P : Prog) (units : Array Nat) : V Prog := do
   let blk : Defn := { key := ROOT, id := ROOT, prim := false, params := #[], ret := retType, gates := at_,
                       paramLeaves := 0, outLeaves := retType.leaves,
                       body := { params := #[], retType, nodes, ret := runs ret, offsets } }
-  let Q : Prog := { P with defs := defs.push blk, index := index.insert ROOT defs.size, root := defs.size, programFn := FN }
+  let Q : Prog := { P with defs := defs.push blk, index := index.insert ROOT defs.size, root := defs.size, programFn := FN,
+                           inputs }
   return { Q with sha512 := ByteArray.empty }
 
 /-- `Q`'s root with its leading input nodes as its parameters, in order, each the node's type: a reference to input node
@@ -240,8 +295,8 @@ def cost (P : Prog) (units : Array Nat) : V Json := do
     ("c_gates", toJson root.gates)]
 
 /-- A Program as `restrict`'s difference test compares it: its root's key, its Program function, every Definition the root
-reaches by key (`defJson`, with whether it is a primitive and its binding), and the Boolean map on the word primitives it
-reaches, each reference one by one. -/
+reaches by key (`defJson`, with whether it is a primitive and its binding), the Boolean map on the word primitives it
+reaches, each reference one by one, and its `inputs`. -/
 def dump (P : Prog) : V Json := do
   let bound := P.defs.foldl (fun n d => n + d.body.nodes.size + 1) 1
   let mut seen : Std.HashSet Nat := {}
@@ -267,7 +322,8 @@ def dump (P : Prog) : V Json := do
   return Json.mkObj [("root", .str (P.defs[P.root]!).key), ("program_fn", .str P.programFn),
     ("definitions", Json.mkObj (defs.toList.map fun d => (d.key, (defJson P d).setObjVal! "prim" (toJson d.prim)
       |>.setObjVal! "binding" (match d.binding with | some b => .str b | none => .null)))),
-    ("boolean", Json.mkObj ((bool.qsort (·.1 < ·.1)).toList))]
+    ("boolean", Json.mkObj ((bool.qsort (·.1 < ·.1)).toList)),
+    ("inputs", Json.arr (P.inputs.map fun (n, c, m) => Json.arr (#[.str n, toJson c] ++ (m.map (#[·])).getD #[])))]
 
 def keys (j : Json) : Array String := match j with
   | .obj kvs => kvs.foldl (init := #[]) fun acc k _ => acc.push k

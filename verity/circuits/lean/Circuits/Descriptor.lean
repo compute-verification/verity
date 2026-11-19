@@ -299,6 +299,9 @@ structure Prog where
   sha512 : ByteArray
   /-- §4.9: each word primitive's key to its one Boolean Definition's key, both in `defs` -/
   boolean : Std.HashMap String String := {}
+  /-- §5.1's `inputs`: each of the root's parameters in order, its name, its input node count and a supplied one's mark
+  (§5.4); a Program `restrict` builds names its ports so -/
+  inputs : Array (String × Nat × Option Json) := #[]
   deriving Inhabited
 
 /-- `sha512` in hex, refused unless it is a SHA-512 digest: a Program built from another (a block's, by
@@ -1510,6 +1513,14 @@ def checkInputs (defs : Array Defn) (root : Nat) (xs : Json) : V Unit := do
     checkEntry name (← markOf name x) bound
     k := k + n
 
+/-- §5.1's `inputs` as `Prog.inputs` holds them, read once `checkInputs` has held of them. -/
+def inputsOf (xs : Json) : Array (String × Nat × Option Json) := match xs with
+  | .arr xs => xs.filterMap fun x => match x with
+    | .arr #[.str s, n] => (natJ? n).map (s, ·, none)
+    | .arr #[.str s, n, m] => (natJ? n).map (s, ·, some m)
+    | _ => none
+  | _ => #[]
+
 /-- Whether descriptor entry `e` is a composite's: its `form` the string `composite`, compared by a match. -/
 def isCompositeEntry (e : Json) : Bool := match e.getObjValD "form" with
   | .str s => s == "composite"
@@ -1825,7 +1836,7 @@ def decode (bytes : ByteArray) : V Prog := do
     (#[rootId] ++ (recordFunctionIds programFn).filter desc.ddefs.contains ++ pairs.map (·.2))
   let boolean := pairs.foldl (fun m p => m.insert p.1 p.2) {}
   return { defs := st.defs, index := st.index, root, programFn, sha512 := ← programDigestWith (fun b => pure (Sha512.hash b)) j,
-           boolean }
+           boolean, inputs := inputsOf (j.getObjValD "inputs") }
 
 
 /-- A descriptor's bytes read as JSON: none for bytes that are not UTF-8, else `JsonParse.parse`'s verdict on their text. Every
@@ -1882,7 +1893,7 @@ def decodeOf (read : Option (Except String Json)) : V Prog := do
     (#[rootId] ++ (recordFunctionIds programFn).filter desc.ddefs.contains ++ pairs.map (·.2))
   let boolean := pairs.foldl (fun m p => m.insert p.1 p.2) {}
   return { defs := st.defs, index := st.index, root, programFn, sha512 := ← programDigestWith (fun b => pure (Sha512.hash b)) j,
-           boolean }
+           boolean, inputs := inputsOf (j.getObjValD "inputs") }
 
 set_option maxRecDepth 20000 in
 theorem decode_eq_of (bytes : ByteArray) : decode bytes = decodeOf (readJson bytes) := by
@@ -1938,6 +1949,7 @@ def decodeWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLift
   (checkReached dkv.toArray callees
     (#[rootId] ++ (recordFunctionIds programFn).filter desc.ddefs.contains ++ pairs.map (·.2)) : V _)
   let boolean := pairs.foldl (fun m p => m.insert p.1 p.2) {}
-  return { defs := st.defs, index := st.index, root, programFn, sha512 := ← programDigestWith sha512 j, boolean }
+  return { defs := st.defs, index := st.index, root, programFn, sha512 := ← programDigestWith sha512 j, boolean,
+           inputs := inputsOf (j.getObjValD "inputs") }
 
 end Flock.Program

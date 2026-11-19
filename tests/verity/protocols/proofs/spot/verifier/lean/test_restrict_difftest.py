@@ -160,12 +160,11 @@ def test_a_C_that_reads_a_supplied_input_at_another_width_is_refused_as_python_r
 
 @pytest.mark.parametrize("name, ranges", [(n, r) for n, (_f, rs) in toys().SPLIT_TOYS.items() for r in rs],
                          ids=lambda x: str(x))
-def test_lean_restrict_cuts_the_split_toys_supplied_reads_into_fewer_inputs_than_python(pieces, name, ranges):
+def test_lean_restrict_cuts_the_split_toys_supplied_reads_as_python_does(pieces, name, ranges):
     """`test_restrict`'s split toys: a unit reading two adjacent supplied parameters of one width, and one reading a
-    supplied parameter with a gap. Python's block has an input node per parameter and per contiguous span, each marked
-    ``of=[input, lo, hi]``; Lean's `restrict` runs in(S) by width and binding alone (`runsBy`), so its block has one
-    supplied input node where Python's has two, which no one mark of the amended decoder can name. Lean decodes
-    Python's block; the two differ at the root's nodes."""
+    supplied parameter with a gap. Python's block has an input node per parameter and per contiguous span, each named
+    and marked ``of=[input, lo, hi]``; Lean's `restrict` cuts in(S) so (`inRuns`) and names and marks its ports so
+    (`portEntry`), and the two Programs are equal, `inputs` included, as values: Lean writes no block's bytes."""
     T = toys()
     _p, c, bits = T.toy(name)
     py = R.restrict(c, T.TOY_PARTITION, ranges, bits).descriptor.decode()
@@ -175,5 +174,4 @@ def test_lean_restrict_cuts_the_split_toys_supplied_reads_into_fewer_inputs_than
     kind, body = pieces.call("restrict", {"descriptor": c.decode(), "units": units, "python": py})
     assert kind == "output", body
     out = json.loads(body)
-    n = out["root_nodes"]
-    assert out["agree"] is False and out["at"] == f"/definitions/Root[Block_v1]_v1/nodes (lengths {n} and {n + 1})", out
+    assert out["agree"] is True and out["at"] is None, out
