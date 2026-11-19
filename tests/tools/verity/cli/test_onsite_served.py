@@ -1322,7 +1322,7 @@ def test_the_wipes_key_is_the_pin_when_bound_and_the_runs_otherwise(tmp_path, bo
     assert p.returncode == 3 and "the stand-in attach" in (tmp_path / "wipe" / "refused.txt").read_text(), p.stdout + p.stderr
     handed = json.loads(log.read_text())
     if bound:
-        assert handed["trusted"] == WIPE_PIN and handed["settings"] == {"reads": 5500} and handed["facts"] == {
+        assert handed["trusted"] == WIPE_PIN and handed["settings"] == {} and handed["facts"] == {
             "host": "auditor-1", "address": "192.0.2.1:7001", "command": ["ssh", "auditor-1"], "run_keys": False,
             "links": handed["facts"]["links"]}
         assert handed["wipe_stream"] is None
