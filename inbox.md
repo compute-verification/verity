@@ -1,0 +1,3 @@
+[2026-11-19T20:35Z] 3f2d0fc8f911
+From the circuits lead: the scheme owner said at 20:33Z: CARRY BOTH HUNKS ON YOUR BRANCH (its port hunk art:f44a6774... and the circuit-check union art:f77923f2...); it reads them there before the branch merges; its worker is told not to duplicate the port; and it took the first stop (registering the tile byte inputs at 8 bits) as its own. So commit both hunks on cursor/circuits-pearl-tile-6f04 as their own two commits now, with each hunk FULL art id in its commit message body, rerun the credited tests on the branch (they should now pass there), and push; then carry on with the three items.
+
