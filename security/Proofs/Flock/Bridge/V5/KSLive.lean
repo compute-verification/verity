@@ -39,6 +39,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Bridge.FaultyRightC
 import Proofs.Flock.Bridge.Count
+import Proofs.Flock.Claims.Sampling.Escape
 
 /-!
 # `SampledKSLiveV5`, proved
@@ -79,7 +80,7 @@ theorem Flock.Bridge.tagsOkZHJ_of_ksScope {I : FlockSoundness.Discharge.Exec.Inp
 (`Flock.Guarantees.SampledKSLiveV5`). -/
 theorem Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5 := by
   intro n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup desc qr hpop lj tb samplingDesign kd hdiv dj S₀ d₀ y₀ wr dg
-    N Ω _ _ Lb src hA3 hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q
+    N Ω _ _ Lb src hA3 pd hpd hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q
   split
   swap
   · next hTags =>
@@ -92,8 +93,8 @@ theorem Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5 
   rcases Flock.Bridge.designAt_cases desc qr lj tb n with hlaw | h0
   · exact Flock.Bridge.le_add_ecrBoundL (FlockSoundness.Game.prob_le_one _ _ τ) fun hroots =>
       Flock.Bridge.sampledKSLiveV5R n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots desc qr hpop lj tb samplingDesign
-        kd hlaw (Flock.Bridge.notBernoulli_samplesUnder hlaw) hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk
-        hRw hM ρ hρ hr t' ht' B τ qF qS q hTab hLink
+        kd hlaw (Flock.Bridge.notBernoulli_samplesUnder hlaw) hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags pd hpd hCust k Rw M
+        hk hRw hM ρ hρ hr t' ht' B τ qF qS q hTab hLink
   · have hδ : δ = 1 := by
       change (Flock.Bridge.designOf (Properties.Spot.oneStageOf (Flock.Bridge.designAt desc qr lj tb n))).Pa
         (Flock.Bridge.partOf P κ ns) B = 1
@@ -104,3 +105,35 @@ theorem Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5 
     refine (FlockSoundness.Game.prob_le_one _ _ τ).trans ?_
     rw [hδ, ENNReal.ofReal_one]
     exact le_add_right (le_add_right (le_add_right le_rfl))
+
+/-- **`SampledKSLiveV5R` is its statement at the drawn sampling design, widened**. -/
+theorem Flock.Bridge.sampledKSLiveV5RAtDraw_of (h : Flock.Bridge.SampledKSLiveV5R) :
+    Flock.Bridge.SampledKSLiveV5RAtDraw := by
+  intro n Reg I own ht D hD hU pi hpi pub hpub hscope hrows hdup hroots desc qr hpop lj tb samplingDesign kd hlaw hb hdiv dj
+    S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags hCust
+  exact h n Reg I own ht D hD hU pi hpi pub hpub hscope hrows hdup hroots desc qr hpop lj tb samplingDesign kd hlaw hb hdiv dj
+    S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags samplingDesign (Flock.Bridge.samplingDesignSized_samplesUnder hlaw hb) hCust
+
+/-- **`SampledKSLiveV5` is its statement at the drawn sampling design, widened**. -/
+theorem Flock.Bridge.sampledKSLiveV5AtDraw_of (h : Flock.Guarantees.SampledKSLiveV5) :
+    Flock.Guarantees.SampledKSLiveV5AtDraw := by
+  intro n Reg I own ht D hD hU pi hpi pub hpub hscope hrows hdup desc qr hpop lj tb samplingDesign kd hdiv dj S₀ d₀ y₀ wr dg
+    N Ω _ _ Lb src hA3 hCust
+  exact h n Reg I own ht D hD pi hpi pub hpub hscope hrows hdup desc qr hpop lj tb hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3
+    samplingDesign (Flock.Bridge.sized_designAt desc qr lj tb n) hCust
+
+/-- **`SampledKSLiveV5`'s `δ` at a stratified sampling design, for proof blocks inside one stratum**: the stratum's own
+miss, `C(n_s − |B|, k_s)/C(n_s, k_s)` at its count `k_s` (`Claims.Sampling.OneStage.Pa_stratified_stratum`). -/
+theorem Flock.Bridge.pa_stratified_stratum {C : Verity.Boolean.Circuit} {n : ℕ} {κ : Fin C.N → Option Bool}
+    (P : Spot.Sampling.Partition C n) {ns : List ℕ} (hns : ns.sum = n) {K : ℕ} (St : Array Flock.Draw.Stratum)
+    (hw : (Claims.Sampling.OneStage.stratified K).WellFormed ns) {s : ℕ} (hs : s < ns.length) {B : Finset ℕ}
+    (hB : ∀ v ∈ B, (ns.take s).sum ≤ v ∧ v < (ns.take s).sum + ns[s]) :
+    (Flock.Bridge.designOf (Properties.Spot.oneStageOf (.stratified K St))).Pa (Flock.Bridge.partOf P κ ns) B =
+      ((ns[s] - B.card).choose (max 1 ((2 * K * ns[s] + n) / (2 * n))) : ℝ) /
+        (ns[s].choose (max 1 ((2 * K * ns[s] + n) / (2 * n))) : ℝ) := by
+  have hle : (ns.take s).sum + ns[s] ≤ n := by
+    rw [← List.sum_take_succ, ← hns]
+    exact (List.take_sublist _ _).sum_le_sum fun _ _ => Nat.zero_le _
+  rw [Flock.Bridge.pa_partOf P hns _ B fun v hv => Finset.mem_range.2 (by have := (hB v hv).2; omega)]
+  subst hns
+  exact Claims.Sampling.OneStage.Pa_stratified_stratum hw hs hB
