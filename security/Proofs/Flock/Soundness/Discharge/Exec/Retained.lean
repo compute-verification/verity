@@ -15,8 +15,7 @@ import Proofs.Flock.Soundness.Refine.Walk
 only the framed bytes absorbed since round `k - 1`, exactly (`Transcript.squeeze`, R2). This file shows that every
 `hm96Rows` tag pinned today is of that kind, and that a record verity-verify-proof accepts under it has every round's bytes.
 
-* `retainRounds_circuitEb90718f`, `retainRounds_circuit`, `retainRounds_circuit967b8d06`, `retainRounds_circuitTypes`:
-  each `hm96Rows` tag has `retainRounds = true`, inherited from `circuit631567f7` (rfl).
+* `retainRounds_circuit`, `retainRounds_circuitTypes`: each statement a prover writes today has `retainRounds = true` (rfl).
 * `setupH_tags`, `setupTables_retain`: the session's spec retains rounds when its tags do.
 * `decode_retained`: when the spec retains rounds, `Record.decode` gives every round of every stream its bytes (S12).
 * `accepts_retained`: so every round of a record verity-verify-proof accepts under such tags carries its bytes.
@@ -33,9 +32,7 @@ namespace FlockSoundness.Discharge.Exec
 open Flock Refine
 open Lean (Json)
 
-theorem retainRounds_circuitEb90718f : Tags.circuitEb90718f.retainRounds = true := rfl
 theorem retainRounds_circuit : Tags.circuit.retainRounds = true := rfl
-theorem retainRounds_circuit967b8d06 : Tags.circuit967b8d06.retainRounds = true := rfl
 theorem retainRounds_circuitTypes : Tags.circuitTypes.retainRounds = true := rfl
 
 set_option maxHeartbeats 4000000 in
