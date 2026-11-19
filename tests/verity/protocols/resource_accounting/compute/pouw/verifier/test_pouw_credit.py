@@ -443,7 +443,7 @@ def _period(name: str, seed: int):
 def test_a_draw_at_the_record_k():
     """At a committed K = `plan.RECORD_K` (the least K with (1 − ε)^K ≤ δ at ε = 0.1% and δ = 2⁻⁴⁰) over a larger
     population, the work sampling design samples K units, each stratum's k_s rounded up, so at most one more a stratum."""
-    assert cases.PLAN_K == plan.RECORD_K == plan.record_k(plan.Fraction(1, 1000), plan.Fraction(1, 2 ** 40))
+    assert cases.PLAN_K == plan.RECORD_K == plan.record_k(Fraction(1, 1000), Fraction(1, 2 ** 40))
     for seed in range(2):
         got, refused = _drawn("budget", seed)
         ss, _ = Cr.strata(cases.drawn_instance(random.Random(f"budget/{seed}"), "budget")["layout"])
@@ -546,12 +546,18 @@ def test_a_tile_at_a_k_its_proof_does_not_cover_refuses():
                 bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)
 
 
+def _positionless(file: dict) -> dict:
+    """``file`` as credit builds it (`registered.READS_V2`, Flock's `Registered.FORMAT`): no port states a position."""
+    return {"format": G.READS_V2, "ports": {p: {k: v for k, v in e.items() if k not in ("reads", RV.READS_FROM)}
+                                            for p, e in file["ports"].items()}}
+
+
 @pytest.mark.parametrize("prefix,unit", [("", h1.unit), ("h1/w-3/", h1.unit), ("h1/w-3/", h1.unit_j10r)])
 def test_the_registered_file_is_h1windows_from_the_descriptor_alone(prefix, unit):
     """`credit.registered_file` builds each call's ``--registered`` file from the committed descriptor alone, and it is
     `h1window.table_reads_file`'s over the compiled Program (its ports `window_ports`', its domains binding the window's
     open root but the weights', its A rows in its step's A table of its K, and a J10-R window's public rows its units'
-    call and blocks), byte for byte, at each step count that divides the calls; and `credit.partition_of` is the
+    call and blocks) without its positions (`_positionless`), byte for byte, at each step count that divides the calls; and `credit.partition_of` is the
     Program's partition object under `h1window.query`."""
     window, salt = "ef" * 64, "5a" * 64
     for linears, calls, m in COMPILED:
@@ -575,7 +581,7 @@ def test_the_registered_file_is_h1windows_from_the_descriptor_alone(prefix, unit
             got, refused = Cr.registered_file(digest, lay, shape, call, {v: [x] for v, x in roots.items()}, window,
                                               steps, salt)
             assert refused is None
-            assert json.dumps(got) == json.dumps(want), (linears, calls, m, steps, call)
+            assert json.dumps(got) == json.dumps(_positionless(want)), (linears, calls, m, steps, call)
             assert got["ports"][Cr.PUB_PORT]["words"] == (112 if unit is h1.unit_j10r else 100)
             rc = h1.HW.table(prog, h1.HW.RECEIPTS, call)
             receipted = {**roots, rc: hashlib.sha512(rc.encode()).hexdigest()}
@@ -584,7 +590,7 @@ def test_the_registered_file_is_h1windows_from_the_descriptor_alone(prefix, unit
             got, refused = Cr.registered_file(digest, lay, shape, call, {v: [x] for v, x in receipted.items()}, window,
                                               steps, salt)
             assert refused is None and Cr.RECEIPT_PORT in got["ports"]
-            assert json.dumps(got) == json.dumps(want), (linears, calls, m, steps, call)
+            assert json.dumps(got) == json.dumps(_positionless(want)), (linears, calls, m, steps, call)
             got, refused = Cr.registered_file(digest, lay, shape, call, {**{v: [x] for v, x in roots.items()},
                                                                           vals[1]: []}, window, steps, salt)
             assert got is None and refused == ("registration", f"call {call}'s statement reads {vals[1]}, which the "

@@ -17,6 +17,7 @@ circuit, the frame-v3-sha512 roots from the public `b ‖ c` and outputs, and th
 -/
 module
 
+public import Circuits.Lanes
 public import Flock.Statement
 public import Flock.TemplateQuery
 public import Flock.PartitionObject
@@ -1357,13 +1358,6 @@ private def templateStrata (samplingDesign : String) (obj : Json) (program : Byt
     V (Array (String × Array (Nat × Nat)) × Nat) :=
   templateStrataBy TemplateQuery.Desc.parse samplingDesign obj program
 
-/-- The partition object's `blocks`, only once they cover the population the query derives from the verifier's own
-`program` (`templateStrata`); none where it has none. A reader of `blocks` takes them here, never from the object. -/
-def blocksOf (obj : Json) (program : ByteArray) : V (Option (Array (Nat × Nat))) := do
-  let some b := (obj.getObjVal? "blocks").toOption | pure none
-  discard <| templateStrata "blocks" obj program
-  blocksIn (some b)
-
 /-- `stratified:K` expanded over the verifier's own program and partition object (`draw.derive`), and the population. -/
 def stratifiedSamplingDesign (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.SamplingDesign × Nat) := do
   let (strata, population) ← templateStrata "stratified" obj program
@@ -2274,11 +2268,21 @@ def treeLeaf (P : Program.Prog) (ns : List NodeUnits) (v : Nat) : Option (String
   let before := ns.foldl (fun n (k', mm, _, _) => if k' < k && body.nodes[k']!.fn == fn then n + mm else n) 0
   pure ((P.defs[fn]!).key, before + m)
 
+/-- The output field of unit `v` (node `k`, its outputs `og`) that reader leaves `rd` are, whole and in order: its
+index, the field starting at `rd`'s first leaf in `v`'s template's return type (`Program.fieldSpan`), from C alone; none
+where `rd` is no one whole field. A single-field writer's whole output is its field 0. -/
+def fieldRead (P : Program.Prog) (og rd : Array Nat) (k : Nat) : Option Nat := do
+  let g ← rd[0]?
+  let o ← (List.range og.size).find? (og[·]! == g)
+  let (j, l) ← Program.fieldSpan (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).ret o
+  if l == rd.size && og.extract o (o + l) == rd then some j else none
+
 /-- Linking for the population's reader `i` (its place in the public file), with `unitOf` a unit's node and member and
 `ownerOf` the unit whose gates hold a gate (of `n` units): every parameter leaf of the unit that reads another unit's output
 lies in a row of in(S)'s layout (`OneCircuit.io`, read only where such a leaf is); each row's leaves are either all
-circuit inputs (the row is an ordinary input row) or exactly one unit's outputs in order, which its row reads by path in
-the writer's output field's tree, whether or not the writer is a unit of the file. The wires checked. -/
+circuit inputs (the row is an ordinary input row), or exactly one unit's outputs in order, or exactly one output field of
+one unit whole and in order (`fieldRead`), which its row reads by path in the writer's output field's tree, whether or
+not the writer is a unit of the file. The wires checked. -/
 def checkUnit (c : Circuit) (P : Program.Prog) (popIdx : Array Nat)
     (unitOf : Nat → Option (Nat × Nat)) (ownerOf : Nat → Option Nat) (n i : Nat) : V Nat := do
   let some u := popIdx[i]? | throw s!"links: unit {i} of the draw is outside the public file's {popIdx.size} units"
@@ -2302,8 +2306,8 @@ def checkUnit (c : Circuit) (P : Program.Prog) (popIdx : Array Nat)
     | some v =>
       let (kv, mv) := (unitOf v).getD (0, 0)
       let og ← outGates P kv mv
-      if og != rd then
-        throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) are not exactly unit {v}'s {og.size} outputs in order"
+      if og != rd && (fieldRead P og rd kv).isNone then
+        throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) are not exactly unit {v}'s {og.size} outputs in order, nor one output field of them whole"
       wires := wires + 1
   return wires
 

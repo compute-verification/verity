@@ -465,13 +465,15 @@ theorem acceptMeans_nontrivial : ∀ pl, ¬ ((acceptAllCheck emptyRun noOpening)
 
 namespace Witness
 
-/-- `checkTile`'s outcome on a tile on which each of its other checks passes, at a call that commits no y: the tile is
-the verifier's own and its call in the scheme's domain, the openings cover it and open against their roots, the words
-formed from the opened rows at the noise `wn'` are `ch`, their leaf is the opened one, and its rows keep the per-row rules;
-the inert-work bound's verdict `bound` is the tile's, a pass at `none` and over the bound at `some why`. Each hypothesis
-is one computation the kernel does on its own. -/
+/-- `checkTile`'s outcome on a tile on which each of its other checks passes: the tile is the verifier's own and its call
+in the scheme's domain, the openings cover it and open against their roots, the words formed from the opened rows at the
+noise `wn'` are `ch`, their leaf is the opened one, and its rows keep the per-row rules; the call's y root is `yRoot`,
+its opened y rows `ys` are the tile's real rows, open against it, and hold the unscale of `ch`'s U; the inert-work bound's
+verdict `bound` is the tile's, a pass at `none` and over the bound at `some why`. Each hypothesis is one computation the
+kernel does on its own. -/
 theorem checkTile_eq_outcome {p : Pass} {wn : Except String Words.FixedNoise} {tid : Nat} {o : TileOpening} {pos : Nat}
     {rows cols : List Nat} {wn' : Words.FixedNoise} {ops : Words.Ops} {ch : Words.Checked} {bound : Option String}
+    {yRoot : ByteArray} {ys : List LeafOpening}
     (ht : p.tile? tid = some (pos, rows, cols))
     (hd : p.scheme.domainReason p.records[pos]!.matmul = none)
     (hc : (o.a.map (·.position) != rows || o.b.map (·.position) != cols) = false)
@@ -489,12 +491,16 @@ theorem checkTile_eq_outcome {p : Pass} {wn : Except String Words.FixedNoise} {t
     (hleaf : (Words.leaf ch != openedValue o.leaf.value) = false)
     (hrows : Rule.rowsFailure p.records[pos]! rows cols ops = none)
     (hcap : Rule.inertBoundCheck p.scheme p.records[pos]! rows cols ops = .ok bound)
-    (hy : p.yRoots[pos]! = none) :
+    (hy : p.yRoots[pos]! = some yRoot) (hyo : o.y = .ok ys)
+    (hys : (ys.map (·.position) != rows.filter (· < p.records[pos]!.realRows) ||
+      !ys.all (opens (rowsDomain (yBinding p.salt p.records[pos]!.matmul.index) p.records[pos]!.matmul.index
+        p.records[pos]!.realRows HM96 false) yRoot ROW_SCHEMA)) = false)
+    (hyr : Rule.yReason rows cols ops ch (ys.map fun y => words32 (openedValue y.value)) = none) :
     checkTile p wn tid o = (match bound with | none => .pass | some why => .overInertBound why) := by
   subst hwn
   cases bound <;>
   simp only [checkTile, ht, hd, hc, ha, hb, hl, bind, Except.bind, he, hch, pure, Except.pure, hleaf, hrows, hcap, hy,
-    Bool.not_true, Bool.false_eq_true, ↓reduceIte] <;>
+    hyo, hys, hyr, Bool.not_true, Bool.false_eq_true, ↓reduceIte] <;>
   rfl
 
 deriving instance DecidableEq for Words.Formed, Words.Ops, Words.Checked
@@ -769,20 +775,36 @@ theorem test_inert_bound : Rule.inertBoundCheck testPass.scheme testPass.records
   apply eq_ok_of_toOption
   decide +kernel
 
-theorem test_y : testPass.yRoots[0]! = none := rfl
+theorem test_y : testPass.yRoots[0]! = some testRootY := rfl
+
+theorem test_opensY : (([⟨0, testRowY ++ zeroSalt, []⟩] : List LeafOpening).map (·.position) !=
+    [0].filter (· < testPass.records[0]!.realRows) ||
+    !([⟨0, testRowY ++ zeroSalt, []⟩] : List LeafOpening).all (opens (rowsDomain (yBinding testPass.salt
+      testPass.records[0]!.matmul.index) testPass.records[0]!.matmul.index testPass.records[0]!.realRows HM96 false)
+      testRootY ROW_SCHEMA)) = false := by
+  simp +unfoldPartialApp only [opens, RowsDomain.verify, RowsDomain.leaf, Flock.Hm96.Default512.leaf,
+    Flock.Hm96.Default512.treeLeaf, Flock.Hm96.Default512.commitString, mask_eq_maskOr, leafPrefix_eq]
+  decide +kernel
+
+theorem test_yReason : Rule.yReason [0] [0] testOps testChecked
+    (([⟨0, testRowY ++ zeroSalt, []⟩] : List LeafOpening).map fun y => words32 (openedValue y.value)) = none := by
+  simp only [List.map_cons, List.map_nil, openedValue_salted]
+  decide +kernel
 
 end Witness
 
 /-- The test tile passes `checkTile` at the test noise: its call is in the scheme's domain, its A row, its B row and its
 leaf open against the test pass's roots, the words formed from its rows are its leaf's, its rows keep the per-row rules,
-and its credited cell's replayed inert work is within the inert-work bound. `TileAcceptMeans` ranges over every
+its credited cell's replayed inert work is within the inert-work bound, and its y row opens against the call's y root and
+holds the unscale of the cell's U. `TileAcceptMeans` ranges over every
 noise `wn`: the deployed check's is `fixedNoise` of the pass's salt and B's root (`noiseOf`), and the test noise
 `testNoise` is given here as the Python derives it, and derived in `Witness.test_noise` (`tileAcceptMeans_derived`). Each
 check is its own kernel computation (`Witness.checkTile_eq_outcome`), the formed words and the checked words given as the
 Python computes them (`Witness.testOps`, `Witness.testChecked`). -/
 theorem tileAcceptMeans_honest : checkTile testPass (.ok testNoise) 0 testOpening = .pass :=
-  checkTile_eq_outcome (bound := none) test_tile test_domain test_covers test_opensA test_opensB test_opensLeaf rfl
-    test_encode test_checked test_leaf test_rows test_inert_bound test_y
+  checkTile_eq_outcome (bound := none) (ys := [⟨0, testRowY ++ zeroSalt, []⟩]) test_tile test_domain test_covers
+    test_opensA test_opensB test_opensLeaf rfl test_encode test_checked test_leaf test_rows test_inert_bound test_y rfl
+    test_opensY test_yReason
 
 /-- A tile check that accepts every tile passes tile 0 of a pass with no calls, which is no tile of the verifier's own. -/
 theorem tileAcceptMeans_nontrivial :

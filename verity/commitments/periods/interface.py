@@ -129,8 +129,8 @@ from typing import Any, ClassVar, Protocol
 
 import numpy as np
 
-from verity.circuits import boolean as B, partition_object as PO
-from verity.circuits.codec import canonical_json, descriptor_id
+from verity.circuits import boolean as B, partition_object as PO, supplied as SU
+from verity.circuits.codec import canonical_json, descriptor_id, program_digest
 from verity.circuits.defs import (CATALOG_PACKAGES, REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition,
                                   bind)
 from verity.circuits.evaluation import evaluate_batch
@@ -138,6 +138,7 @@ from verity.circuits.population import wired_population_program
 from verity.circuits.refs import recut
 from verity.circuits.types import Array
 from verity.commitments import advice as AC, history as HT, registered_value as RV
+from verity.commitments.domains import REGISTERED_READS_V2
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 
 from . import rows as CS, wiring as WI
@@ -795,9 +796,9 @@ class Registered:
     there are some. ``formats``: by parameter, the rows its reads read when they aren't 16-bit leaves in
     ``hm96-sha512/row/v2`` rows (`value_format`), ``{"row_schema", "word_bits"}``: Pearl+'s A rows and y are FP32 words in
     ``hm96-sha512/row-seg/v1`` rows, as its trees commit them; ``formats`` and ``histories`` recorded only when there are
-    some. ``supplied``: registered parameters whose rows the verifier makes itself, one row for each unit that reads it,
-    each a public function of the unit's sampled index (`Window.give`), committed under public salts as a table's
-    supplied values are (`supplied`); recorded only when there are some. Not written: a circuit with one is refused."""
+    some. ``supplied``: by parameter, its mark (`verity.circuits.supplied`, PROTOCOL.md §5.4): a short value the verifier
+    computes by the function the mark names, which units read through their registered reads and expand inside, committed
+    under public salts (`Window.give`); recorded only when there are some."""
     params: Mapping[str, int]
     tables: tuple[Table, ...] = ()
     reads: tuple[Read, ...] = ()
@@ -806,12 +807,24 @@ class Registered:
     values: tuple[str, ...] = ()
     formats: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     histories: tuple[History, ...] = ()
-    supplied: tuple[str, ...] = ()
+    supplied: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if self.supplied:
-            raise NotImplementedError("proofs/zero-knowledge: registered rows the verifier makes for each sampled proof block "
-                                      f"(Registered.supplied {list(self.supplied)})")
+        if not isinstance(self.supplied, Mapping):
+            raise ValueError(f"supplied {self.supplied!r}: an object of a mark by parameter")
+        object.__setattr__(self, "supplied", {str(v): dict(SU.mark_of([v, 1, dict(m)]) or {}) for v, m in self.supplied.items()})
+        tables = {t.param for t in self.tables}
+        for v, m in self.supplied.items():
+            if v not in self.params or v in tables or v in self.values or "of" in m or m["supplied"] not in SU.FUNCTIONS:
+                raise ValueError(f"supplied {v!r}: a registered parameter, no table's or program value's, marked with a "
+                                 f"function of the registry (`verity.circuits.supplied.FUNCTIONS`), not {m}")
+            f = SU.FUNCTIONS[m["supplied"]]
+            if set(m["args"]) != set(f.args) or f.nbytes(m["args"]) is None or 8 * f.nbytes(m["args"]) != m["bits"]:
+                raise ValueError(f"supplied {v!r}: {f.name} takes the args {sorted(f.args)} and its value at {m['args']} "
+                                 f"is not {m['bits']} bits")
+            if int(self.params[v]) * 16 != m["bits"]:
+                raise ValueError(f"supplied {v!r}: its {self.params[v]} 16-bit leaves are not its value's {m['bits']} bits: a "
+                                 "supplied value is short and whole, what grows with the population is computed in C")
         if not isinstance(self.formats, Mapping) or not all(isinstance(f, Mapping) for f in self.formats.values()):
             raise ValueError(f"formats {self.formats!r}: an object of a format by parameter")
         object.__setattr__(self, "formats", {str(v): dict(f) for v, f in self.formats.items()})
@@ -831,7 +844,7 @@ class Registered:
                 "openings": [o.doc() for o in self.openings], **({"values": list(self.values)} if self.values else {}),
                 **({"formats": dict(sorted(self.formats.items()))} if self.formats else {}),
                 **({"histories": [h.doc() for h in self.histories]} if self.histories else {}),
-                **({"supplied": list(self.supplied)} if self.supplied else {})}
+                **({"supplied": dict(sorted(self.supplied.items()))} if self.supplied else {})}
 
     @classmethod
     def of(cls, d: Any) -> Registered:
@@ -844,7 +857,7 @@ class Registered:
                        tuple(Read.of(r) for r in d["reads"]), tuple(TableRead(**r) for r in d["roots"]),
                        tuple(TableOpening(**{**o, "ports": tuple(o["ports"])}) for o in d["openings"]),
                        tuple(d.get("values", ())), d.get("formats", {}),
-                       tuple(History(**h) for h in d.get("histories", ())), tuple(d.get("supplied", ())))
+                       tuple(History(**h) for h in d.get("histories", ())), d.get("supplied", {}))
         except (TypeError, ValueError, KeyError, AttributeError) as e:
             raise ValueError(f"a circuit's registered reads are {{params, tables, reads, roots, openings}}, its values, "
                              f"their formats and its histories: {e}") from e
@@ -1669,7 +1682,7 @@ class Circuit:
         if self.blocks is None:
             return None
         built = self.program()
-        return self.blocks.doc(sum(self.units.values()), PO.digest(PO.build(*built, partition_blocks(self, cap, built))))
+        return self.blocks.doc(sum(self.units.values()), PO.digest(PO.build(*built, [partition_blocks(self, cap, built)])))
 
     @functools.cached_property
     def _ids(self) -> tuple[str, ...]:
@@ -1757,7 +1770,7 @@ def members(circuit: Circuit, cap: int, built: tuple[Any, Mapping[str, Any]] | N
 
 
 def partition_blocks(circuit: Circuit, cap: int, built: tuple[Any, Mapping[str, Any]] | None = None) -> list[list[int]]:
-    """The partition object's ``blocks`` (`partition_object`) of the period's members (`members`: cut over the order's
+    """The one level of the partition object's ``blocks`` (`partition_object`) of the period's members (`members`: cut over the order's
     ranges, at every wire's and registered read's ends, and at ``cap``): each member's units [base, base + n) in the
     population's order."""
     return [[m.base, m.base + m.n] for m in members(circuit, cap, built)]
@@ -2306,7 +2319,7 @@ def descriptor_record(circuit: Circuit, cap: int) -> dict[str, Any]:
     if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
         raise ValueError(f"a statement holds at least one unit, not {cap!r}")
     program, query = circuit.program()
-    part = PO.build(program, query, partition_blocks(circuit, cap, (program, query)))
+    part = PO.build(program, query, [partition_blocks(circuit, cap, (program, query))])
     sts, seg = {}, seg_ports(circuit.registered)
     for fn, tid in zip((f for f, _ in circuit.templates), circuit.ids):
         i, o = unit_rows(fn, circuit.cuts.get(tid), seg.get(tid, ()))
@@ -2502,7 +2515,7 @@ def _listed_count(doc: Mapping[str, Any], pins: Mapping[str, str] | str | None =
 
 #: the position-free registered file the door reads (`Flock.Registered.FORMAT`): no ``reads`` and no ``reads_from``, the
 #: door computing each proof block's position from C (`Flock.OneCircuit.pos`)
-REGISTERED_FILE = "verity/registered-reads/v2"
+REGISTERED_FILE = REGISTERED_READS_V2
 
 
 def registered_file(doc: Mapping[str, Any], w: CS.Binding, pins: Mapping[str, Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -2702,14 +2715,26 @@ class Window:
         entries = {p: v.entry() for p, v in reg.items() if p in {t.param for t in tables}}
         self.registered = {**reg, **supplied(self.circuit.registered, entries, self.window.partition_digest)}
 
-    def give(self, param: str, rows: Sequence[bytes], module: Any) -> None:
-        """Add ``param``, one of its circuit's ``Registered.supplied``, to ``registered``: ``rows`` its bytes for each unit
-        that reads it in read order, as the verifier makes them from the unit's sampled index (its supplied value's
-        ``{"bytes": hex}`` sources, `one_stage.registered.supplied_rows`, which read them by the parameter's leaf width),
-        committed under the public salts ``registered_value.supplied_salts`` gives at the period's partition digest, so `close`
-        leaves their salts out and the verifier's root of them is the record's. Not written."""
-        raise NotImplementedError("proofs/zero-knowledge: registered rows the verifier makes for each sampled proof block "
-                                  "(Window.give)")
+    def give(self, param: str, value: bytes) -> None:
+        """Add ``param``, one of its circuit's ``Registered.supplied``, to ``registered``: ``value`` its function's value as
+        the verifier computes it (`one_stage.registered.body`), read as the parameter's leaves of its format's width by its
+        mark's layout (`verity.circuits.supplied.leaves`), in the rows its reads fix (`read_shape`: a row its reading
+        port's 16-bit words, so 32-bit leaves hold half as many), committed under the public salts
+        ``registered_value.supplied_salts`` gives at its Program's digest, so the verifier's root of them is the record's."""
+        reg = self.circuit.registered or Registered({})
+        mark = reg.supplied.get(param)
+        if mark is None:
+            raise ValueError(f"{param!r} is none of the circuit's supplied parameters {sorted(reg.supplied)}")
+        if 8 * len(value) != mark["bits"]:
+            raise ValueError(f"supplied {param!r}: {mark['supplied']}'s value is {mark['bits']} bits, not {8 * len(value)}")
+        schema, bits = value_format(reg, param)
+        leaves = SU.leaves(mark["layout"], bytes(value), bits)
+        k = read_shape(self.circuit, param)["words"]
+        rows = [leaves[i:i + k] for i in range(0, len(leaves), k)]
+        prog = program_digest(self.window.program)
+        self.registered = {**(self.registered or {}),
+                           param: RV.Registered.commit(prog, param, rows, RV.supplied_salts(prog, param, len(rows)), bits,
+                                                       schema)}
 
     def count(self, tid: str) -> int:
         """Template ``tid``'s units recorded so far."""

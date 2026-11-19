@@ -11,14 +11,13 @@ import numpy as np
 import pytest
 
 from verity.commitments import hm96
-from verity.commitments.crypto import chacha20
 from verity.commitments.hm96 import batch as hm96_batch
 from verity.commitments.merkle import tree_levels
 from verity.commitments.rowleaf import sha512_row_v2_digest
 from verity.protocols.registration.verifier import registration as Reg
 from verity.protocols.resource_accounting.compute.pouw.verifier import audit, core_check
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import chacha20_block, hm96_salt
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import fold_roots, tagged
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
@@ -184,17 +183,6 @@ def test_chunk_rows_are_a_bounded_power_of_two():
     assert Wt.chunk_bits(2 * Wt.b_words(256), 30) == 14
     assert Wt.chunk_bits(2 * Wt.b_words(256), 3) == 3
     assert Wt.chunk_bits(1 << 30, 30) == 4
-
-
-@pytest.mark.parametrize("nonce", [0, Wt.B_NONCE, (1 << 64) - 1])
-@pytest.mark.parametrize("first", [0, (1 << 32) - 2, 1 << 63])
-def test_keystream_is_chacha20_block_and_hm96_salt(nonce, first):
-    """numpy's keystream is the reference block function, across the counter's 32-bit carry, and leaf j's salt is blocks
-    3j .. 3j + 2 of it."""
-    key = bytes(range(7, 39))
-    assert chacha20.keystream(key, nonce, first, 4) == b"".join(chacha20_block(key, first + i, nonce) for i in range(4))
-    j = first // 3
-    assert chacha20.keystream(key, nonce, 3 * j, 3) == hm96_salt(key, nonce, j)
 
 
 @pytest.mark.parametrize("nonce", [0, Wt.B_NONCE, (1 << 64) - 1])

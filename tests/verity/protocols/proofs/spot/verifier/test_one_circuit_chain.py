@@ -69,7 +69,7 @@ def registered() -> dict[str, Any]:
     win = I.Window(circuit(), TI.RUN, TI.SAMPLING_DESIGN, 2)
     program, _query = circuit().program()
     c = b"".join(descriptor_chunks(program))
-    assert win.window.partition["blocks"] == I.partition_blocks(circuit(), 2)
+    assert win.window.partition["blocks"] == [I.partition_blocks(circuit(), 2)]
     return {"window": win, "C": c, "theta": theta().doc(), "partition": win.window.partition}
 
 
@@ -231,8 +231,8 @@ def prove_block(member: Any) -> dict[str, Any]:
     try:
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(IL, "_lower_gate", _hand_piece)
-            text = OC.lower(block.descriptor).decode()
-    except OC.NotDerived as e:
+            text = OC.lower(block.descriptor, r["partition"], PF.lower_executable).decode()
+    except (OC.NotDerived, OC.Refused) as e:
         raise Stop(f"prove: C_S derived {rec}; its statement is the door's one_circuit.lower ({OC.__file__}:lower): {e}") from e
     meta = FC.meta_of(text)
     if [p[0] for p in meta["ports"]] != [*rows, *outs]:
@@ -302,7 +302,7 @@ def stage_left_out() -> str:
     """(c) a block left out, at the door: a partition whose blocks leave C's last block out."""
     win, _c = committed()
     part = registered()["partition"]
-    bad = {**part, "blocks": part["blocks"][:-1]}
+    bad = {**part, "blocks": [lv[:-1] for lv in part["blocks"]]}
     _f, why = python_door(drawn(win), partition=bad)
     stopped(why)
     assert why is not None, "cheat (c): the door accepted a partition that leaves C's units out"

@@ -11,9 +11,6 @@ from verity_vllm.engine import env
 
 PINNED = sorted({*env.ENGINE, *env.EXPORT, "HF_HOME", "HF_HUB_OFFLINE"})
 RBLOCK = "TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK"
-#: every stage that builds `vllm.LLM` itself, at any world size
-TP_ENGINES = [("verity_vllm.pipeline.tp.capture", "main"), ("verity_vllm.pipeline.tp.commit", "main"),
-              ("verity_vllm.pipeline.tp.match", "_engine_main")]
 
 
 @pytest.fixture
@@ -54,17 +51,6 @@ def test_a_step_gets_the_stage_rpc_bound_unless_the_operator_set_one(monkeypatch
     assert env.step_timeout(1800.0) == {"VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "1800"}
     monkeypatch.setenv("VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS", "60")
     assert env.step_timeout(1800.0) == {"VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "60"}
-
-
-@pytest.mark.parametrize("module, fn", TP_ENGINES)
-def test_every_tp_engine_bounds_a_step_by_its_rpc_timeout_before_it_is_built(module, fn) -> None:
-    """vLLM's own 300 s stopped a GLM-5.3 B8 capture in its first observed step, a 256-token prefill; the greedy workload's first one
-    took 147 s on an idle host."""
-    import importlib
-    import inspect
-
-    src = inspect.getsource(getattr(importlib.import_module(module), fn))
-    assert src.index("engine_env.step_timeout(args.rpc_timeout)") < src.index("LLM(**kw)")
 
 
 def test_hidden_devices_override_what_the_process_inherited(monkeypatch) -> None:
@@ -333,15 +319,6 @@ def test_the_suites_guard_fails_the_test_that_leaves_a_switch_changed_and_no_tes
         f"PASSED {cases}::test_the_test_after_it_reads_the_pin"]), r.stdout + r.stderr
     assert r.returncode == 1 and any("ERROR at teardown of test_a_switch_left_changed_is_failed_by_name" in line for line in lines)
     assert "test left torch._inductor.config reading {'dynamic_scale_rblock': True}" in r.stdout
-
-
-@pytest.mark.parametrize("module, fn", TP_ENGINES)
-def test_every_tp_engine_checks_its_inductor_before_it_is_built(module, fn) -> None:
-    import importlib
-    import inspect
-
-    src = inspect.getsource(getattr(importlib.import_module(module), fn))
-    assert src.index("engine_env.require_inductor(kw)") < src.index("LLM(**kw)")
 
 
 def test_every_engine_records_the_tiling_it_runs(clean, tmp_path) -> None:

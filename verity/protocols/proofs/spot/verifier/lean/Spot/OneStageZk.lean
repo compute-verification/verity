@@ -74,9 +74,9 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   parameters that name members with evidence that names statements (`checkBlobsAt_accept`); parameters of one form
   with evidence of the other reject. Its parameters' `proofs` is exactly
   `{"members"}`: `members` (`membersOf`) an object from each member's name to exactly
-  `{"public", "registered", "units", "vus_per_block"}`: its public file and theta's registered file, as the one
-  statement's, its units as `[lo, hi)` ranges, ascending, no unit in two members', and its circuit's units a proof
-  block; its circuit file is C_S, derived from C and the partition (`restrict`). Its evidence's `proofs` is exactly `{"statements"}` (`statementsOf`), a list of
+  `{"public", "registered", "block", "vus_per_block"}`: its public file and theta's registered file, as the one
+  statement's, its block of the partition object's `blocks`, whose range is its units, no unit in two members', and
+  its circuit's units a proof block (a member handed `units` is refused by name); its circuit file is C_S, derived from C and the partition (`restrict`). Its evidence's `proofs` is exactly `{"statements"}` (`statementsOf`), a list of
   exactly `{"member", "sessions"}`, the statements' sessions in order being v1's `sessions`. The statements are held as
   public structure before any session is read (`membersHeld`): each names a member of the parameters that no earlier
   statement named, in the members' order (by first unit), with exactly one session, on live coins and never retried;
@@ -1114,24 +1114,27 @@ private def HOLE_T : String := refusal ((fun _ => ()) <$> restrict .empty Json.n
 private def sharedT : Own :=
   { programJ := Json.null, program := .empty, partition := Json.null, pub := "", registered := none }
 
-private def memberJ (units : List (Nat × Nat)) : Json :=
-  Json.mkObj [("public", Json.str ("".pushn 'd' 128)),
-    ("registered", Json.null),
-    ("units", Json.arr (units.toArray.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi])),
+private def memberJ (block : Nat) : Json :=
+  Json.mkObj [("block", Lean.toJson block), ("public", Json.str ("".pushn 'd' 128)), ("registered", Json.null),
     ("vus_per_block", Lean.toJson (1 : Nat))]
 
-#guard ((membersOf sharedT (Json.mkObj [("a", memberJ [(0, 4)]), ("b", memberJ [(4, 6), (8, 9)])])).toOption.map
-  (·.map fun m => (m.name, m.units, m.g, m.own.first, m.own.pub.length))) ==
-  some #[("a", #[(0, 4)], 1, 0, 128), ("b", #[(4, 6), (8, 9)], 1, 4, 128)]
-#guard (membersOf sharedT (Json.mkObj [("a", memberJ [(0, 4)]), ("b", memberJ [(3, 6)])])).toOption.isNone
-#guard (membersOf sharedT (Json.mkObj [("a", memberJ [(0, 4), (2, 3)])])).toOption.isNone
-#guard (membersOf sharedT (Json.mkObj [("a", memberJ [(5, 6), (0, 1)])])).toOption.isNone
-#guard (membersOf sharedT (Json.mkObj [("a", memberJ [])])).toOption.isNone
-#guard (membersOf sharedT (Json.mkObj [("", memberJ [(0, 4)])])).toOption.isNone
-#guard (membersOf sharedT (Json.mkObj [])).toOption.isNone
-#guard (membersOf sharedT (Json.mkObj [("a", (memberJ [(0, 4)]).setObjVal! "vus_per_block"
-  (Lean.toJson (0 : Nat)))])).toOption.isNone
-#guard (membersOf sharedT (Json.mkObj [("a", (memberJ [(0, 4)]).setObjVal! "interface" Json.null)])).toOption.isNone
+private def membersWhy (j : Json) : String :=
+  match membersOf sharedT j with
+  | .error e => e
+  | .ok _ => ""
+
+-- `sharedT`'s partition names no blocks, so every member's block is refused by name; one handed units, before that
+#guard membersWhy (Json.mkObj [("a", memberJ 0)]) == NO_BLOCK "a" none
+#guard membersWhy (Json.mkObj [("a", (memberJ 0).setObjVal! "units" (Json.arr #[]))]) ==
+  s!"proofs: member a: {UNITS_HANDED}"
+#guard membersWhy (Json.mkObj [("a", (memberJ 0).setObjVal! "block" (Lean.toJson (-1 : Int)))]) ==
+  "proofs: member a's block is not a natural number"
+#guard membersWhy (Json.mkObj [("", memberJ 0)]) == "proofs: a member's name is empty"
+#guard membersWhy (Json.mkObj []) == "proofs: members names no member"
+#guard membersWhy (Json.mkObj [("a", (memberJ 0).setObjVal! "vus_per_block" (Lean.toJson (0 : Nat)))]) ==
+  "proofs: member a's vus_per_block is not a positive natural number"
+#guard membersWhy (Json.mkObj [("a", (memberJ 0).setObjVal! "interface" Json.null)]) ==
+  "the keys of member a are not block, public, registered, vus_per_block"
 #guard (statementsOf (Json.mkObj [("statements", Json.arr #[Json.mkObj [("member", Json.str "a"),
   ("sessions", Json.arr #[])]])])).toOption.map (·.map (·.member)) == some #[some "a"]
 #guard (statementsOf (Json.mkObj [("statements", Json.arr #[Json.mkObj [("member", Json.str ""),
@@ -1194,9 +1197,6 @@ private def whyT {α : Type} : V α → String
 
 #guard (memberT "m0" #[(0, 1), (5, 6)]).first == 0
 #guard (memberT "m" #[(2, 4), (7, 8)]).indices == #[2, 3, 7]
-#guard ascending 0 [(0, 1), (1, 3), (7, 8)]
-#guard !ascending 0 [(0, 2), (1, 3)]
-#guard !ascending 0 [(2, 2)]
 #guard ((membersHeld membersT #[statementT "m0", statementT "m2", statementT "m10"]).toOption.map (·.map (·.name))) ==
   some #["m0", "m2", "m10"]
 #guard ((membersHeld membersT #[statementT "m2", statementT "m10"]).toOption.map (·.map (·.name))) ==
@@ -1355,6 +1355,14 @@ private def rootsT (roots : List (String × String)) (name : String) : Option (A
 #guard whyT (rootsOf #[memberT "W/c0" #[(0, 1)], memberT "V" #[(1, 2)]] (recordT 2 [("W/y", "aa"), ("V/y", "bb")])) == ""
 #guard whyT (publicPorts (recordT 2 [("t/c0/y", "aa"), ("t/y", "bb")])) == OWN_FIELD "t/c0" "y"
 #guard whyT (publicPorts (recordT 2 [("t/c0/x", "aa"), ("t/y", "bb")])) == ""
+-- a run input node's tree `input/n<w>` is the window's, no member's and no public file's
+#guard rootsT [("t/c0/x", "aa"), ("input/n3", "ee")] "t/c0" == some #[("x", "aa")]
+#guard rootsT [("t/c0/x", "aa"), ("input/n3", "ee")] "t/c1" == some #[]
+#guard (whyT (rootsOf keyedT (recordT 5 [("input/n03", "ee")]))).startsWith
+  "roots: the registration's root input/n03 is no member's"
+#guard whyT (rootsOf #[memberT "input" #[(0, 2)], memberT "t/c1" #[(2, 5)]] (recordT 5 [])) == INPUT_MEMBER
+#guard (publicPorts (recordT 2 [("x", "aa"), ("input/n3", "ee")])).toOption.map (·.map (·.1)) == some #["x"]
+#guard (publicPorts (recordT 2 [("t/c0/x", "aa"), ("input/n3", "ee")])).toOption.map (·.map (·.1)) == some #["x"]
 #guard (memberT "m" #[(2, 4), (7, 8)]).count == 3
 #guard refusal (laidHeld keyedT (recordT 5 [])) == ""
 #guard refusal (laidHeld keyedT (recordT 6 [])) == MEMBERS_LAID
@@ -1465,6 +1473,28 @@ private def treeRegT (c : Char) (leaves : Nat := 2) (value : String := "committe
 #guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'a' (value := "committed/W/o0"))] treeRecT) ==
   TREE_UNHELD "member R/c0" "x" "W/o0"
 #guard !fieldTreeName "o0" && !fieldTreeName "W/o" && !fieldTreeName "W/ox" && fieldTreeName "a/b/o12"
+
+/-- `treeRecT` with run input node 3's tree, `input/n3`, at the root of `f`s. -/
+private def treeFreshRecT : Json :=
+  Json.mkObj [("population", Lean.toJson (4 : Nat)),
+    ("roots", Json.arr #[hexRootT "W/y" 'a', hexRootT "R/c0/z" 'b', hexRootT "input/n3" 'f']), ("scheme", Json.str "s")]
+
+-- a fresh input, node 3's tree, opened at the record's one root of it
+#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'f' (value := "input/n3"))] treeFreshRecT) == ""
+-- the fresh row changed after the coin: its tree's root is not the record's
+#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'c' (value := "input/n3"))] treeFreshRecT) ==
+  TREE_OTHER "member R/c0" "x" "input/n3" "root"
+-- a block reading a run node the record holds no entry of: refused, with no fall back to the file's root
+#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'f' (value := "input/n4"))] treeFreshRecT) ==
+  TREE_UNHELD "member R/c0" "x" "input/n4"
+#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'f' (value := "input/n3"))] treeRecT) ==
+  TREE_UNHELD "member R/c0" "x" "input/n3"
+-- two blocks of one window opening node 3 under two roots: each held to the record's, and to each other's
+#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'f' (value := "input/n3")),
+  readerT "R/c1" (treeRegT 'c' (value := "input/n3"))] treeFreshRecT) == TREE_OTHER "member R/c1" "x" "input/n3" "root"
+#guard (whyT (classHeld #[readerT "R/c0" (treeRegT 'f' (value := "input/n3")),
+  readerT "R/c1" (treeRegT 'c' (value := "input/n3"))])).startsWith
+  "registered: members R/c0 and R/c1 read the registered value input/n3 as two"
 #guard refusal (treePortsHeld #[memberT "R/c0" #[(0, 1)]] treeRecT) == ""
 
 /-- A writer `W/c0`, template `W`'s two units, and a reader `R/c0`, template `R`'s two after them. -/

@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
@@ -42,7 +42,7 @@ from tests.program.predict.test_window_circuit import (
     state_row,
 )
 from tests.program.predict.test_window_circuit import SLOTS as SLOTS_CLASS
-from tests.program.predict.test_window_circuit_fa3 import H200
+from tests.program.predict.test_window_circuit_fa3 import H200, _wired_in_slot_and_step
 from verity_vllm.check.replay.checks import check_rows
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
@@ -376,6 +376,42 @@ def test_a_full_windows_entry_j_is_the_request_the_scan_started_in_slot_j_whatev
             assert entry_of(low, k, slots[1 - j][1], 2)[1] == CLASS.outputs + 1
 
 
+def test_a_window_of_lanes_1_and_3_of_four_has_an_entry_a_lane_and_the_scan_takes_them():
+    """Requests in lanes 1 and 3 of a class of four lanes: the window's one `SlotEntry_v1` has four units in lane order,
+    lanes 0 and 2 each on its occupancy word and a collector of its own (`OutCollect_v1{FIRST}`), both in lane 1's
+    Program's slot, so no wire crosses slots. Their entries read 0 and the occupied lanes' read 1 with their 2 outputs,
+    and the network attester's scan step takes that Programs' row at the lanes' anchor, where it refuses the two
+    occupied lanes' entries as the first two of the row."""
+    cls = WC.WindowClass(4, 4, 2)
+    lanes = [(0, 0, 0, [0] * 4), (1, 3, 2, [5, 77, 42, 0]), (0, 0, 0, [0] * 4), (1, 2, 2, [9, 8, 0, 0])]
+    requests = tuple(WC.Request(cls.anchor(k), cls.lane(k), lp, m) for k, (occ, lp, m, _ids) in enumerate(lanes) if occ)
+    reg = _registered()
+    low = WC.lower(reg, cls, None, GRAIN, requests=requests)
+    _wired_in_slot_and_step(low.circuit)
+    assert [(s, k) for s, k, _c, _e in low.empty] == [(0, 0), (2, 0)] and low.programs[0].lane == 1
+    rows_ = [state_row(cls.scan, lanes)] * cls.buckets
+    fields = _weights(low.fn)
+    state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, rows_, [hm96_salt(bytes(32), 0, j) for j in range(len(rows_))],
+                                 schema=CR.SCHEMA_V2)
+    values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
+    slots = [WR.Slot(P.fn, cls, row, lambda label, lo, hi: fields[label][lo:hi], Unserved(row[1], P.positions))
+             for P, (row, _) in zip(low.programs, WR.scan_slots(low, rows_))]
+    rows = WR.Rows(low, slots, values)
+    et = low.programs[0].entry_unit[0]
+    assert rows.n[et] == 4 and [P.entry_unit[1] for P in low.programs] == [1, 3]
+    scan = IS.Class(**cls.scan.shape)
+    bits = [w >> j & 1 for e in rows.outs[et][0] for w in e for j in range(16)]
+    got = IS.prog_decode(scan, bits)
+    assert [(x, n) for x, n, _ids in got] == [(0, 0), (1, 2), (0, 0), (1, 2)]
+    st = IS.decode(scan, [w >> j & 1 for w in rows_[0] for j in range(16)][:IS.state_bits(scan)])
+    for j in (1, 3):
+        st.slots[j] = replace(st.slots[j], live=1, done=1, q=j, anchor=st.now)
+    st.last = 3
+    row = bytes(scan.S * scan.B)
+    assert IS.step(scan, row, st, got) is not None
+    assert IS.step(scan, row, st, [got[1], got[3], IS.NONE, IS.NONE]) is None
+
+
 def test_a_chunks_best_is_its_first_maximum_above_minus_infinity():
     """`TokenSelectChunk_v2`'s scan from (-inf, 0): a NaN is never taken (not even first), equal maxima keep the first, and a
     chunk of no number above -inf is (-inf, 0)."""
@@ -464,6 +500,25 @@ def test_a_served_value_is_the_nodes_value_and_the_rest_are_computed(window):
     twice = rows + [{**d} for d in rows if (d["op_path"], d["step"]) == ("op2", 1)]
     with pytest.raises(ValueError, match=r"step 1: op \('op2', .*\) served at two rows"):
         WR.Served(twice, *_read(store))
+
+
+def test_the_rows_print_their_units_by_source_and_their_readers_counts(window, capsys):
+    """`Rows` prints one ``WINDOW-ROWS`` line: every unit by source, and the reads, failures and members not retained of
+    the reader its served slots read through, summed once however many slots share it; ``opened`` is None with no reader."""
+    from collections import Counter
+    from types import SimpleNamespace
+
+    low, _f, tables, weights, slots = window
+    rows, store = _served(low, slots[0], T=1)
+    reader = SimpleNamespace(stats=Counter(reads=7, leaves=9, failed=0, not_retained=2))
+    got = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, *_read(store), reader))
+    filled = WR.Rows(low, [got, slots[1]], tables)
+    line, = [x for x in capsys.readouterr().err.splitlines() if x.startswith("WINDOW-ROWS ")]
+    doc = json.loads(line.removeprefix("WINDOW-ROWS "))
+    assert doc == filled.counts() and doc["opened"] == {"reads": 7, "failed": 0, "not_retained": 2}
+    assert sum(doc["units"].values()) == sum(filled.n.values()) and doc["units"]["served"] > 0
+    WR.Rows(low, slots, tables)
+    assert json.loads(capsys.readouterr().err.split("WINDOW-ROWS ", 1)[1])["opened"] is None
 
 
 def test_a_served_prefill_is_read_by_op_however_its_rows_interleave(window):
@@ -902,7 +957,8 @@ ONE = [(1, 3, 1, [5, 77, 42, 0]), (0, 0, 0, [0, 0, 0, 0])]
 def test_a_window_of_fewer_requests_than_slots_is_its_one_requests_rows():
     """A window serving one request in the class's two slots lowers to that request's Program alone, of its 3 positions,
     and its rows fill every unit of it once (`Rows` refuses otherwise) from that request's values: no slot for the lane
-    that served nothing and no position past the request's end. `record` hands the window every unit."""
+    that served nothing, whose collector and entry are in the request's slot, and no position past the request's end.
+    `record` hands the window every unit."""
     low, _values, rows = _rows((WC.Request(CLASS.anchor(0), CLASS.lane(0), 3, 1),), ONE)
     assert len(low.programs) == 1 and low.programs[0].positions == 3 and len(low.fn.body.nodes) == 3 * NODES
     assert low.circuit.blocks.slots == 1

@@ -812,7 +812,7 @@ def _check_verifier_rates(measurements: Any) -> list[str]:
 def _check_rates(fp: Any, measurements: Any) -> list[str]:
     """The rate measurements, when reported, must be what the contract computes from the fingerprint's ``profile`` and
     ``K`` and the result's ``t.total`` and ``vu.count``: ``rate.proved_flop_per_second`` = 2 K vu.count / t.total and
-    ``rate.native_peak_flop_per_second`` = :func:`native_reference` (profile) to :data:`RATE_TOLERANCE`;
+    ``rate.native_peak_flop_per_second`` = :func:`native_reference` (profile), or a named reading of its census line, to :data:`RATE_TOLERANCE`;
     ``overhead.vs_native_peak`` = their ratio, i.e. :func:`overhead` at the fingerprint's ``K`` **and profile**, to
     :data:`TOLERANCE`.  An overhead divided by another target's peak fails here.  A profile that is not a target is
     reported by :func:`validate_fingerprint`; the rates are not checked against it."""
@@ -829,10 +829,12 @@ def _check_rates(fp: Any, measurements: Any) -> list[str]:
     if profile not in PROFILES:
         return []
     p: list[str] = []
-    native = native_reference(profile).flop_per_second
+    line = native_reference(profile)
+    native = line.flop_per_second
+    quoted = [native, *(r.flop_per_second for r in getattr(line, "readings", ()))]
     got = reported.get(RATE_NATIVE)
-    if got is not None and (not _is_number(got) or abs(got - native) > RATE_TOLERANCE * native):
-        p.append(f"{RATE_NATIVE} {got!r} is not the native peak of profile {profile!r}, {native:.6g} FLOP/s")
+    if got is not None and (not _is_number(got) or not any(abs(got - q) <= RATE_TOLERANCE * q for q in quoted)):
+        p.append(f"{RATE_NATIVE} {got!r} is neither the native peak of profile {profile!r}, {native:.6g} FLOP/s, nor a named reading of it")
     if RATE_PROVED not in reported and OVERHEAD not in reported:
         return p
     K, total, count = fp.get("K"), values.get(T_TOTAL), values.get("vu.count")

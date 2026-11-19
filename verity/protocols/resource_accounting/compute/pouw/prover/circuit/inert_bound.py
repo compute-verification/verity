@@ -103,7 +103,7 @@ and the strip's bits and bound, all through their committed rows (`PORTS`; the c
     the verifier accepts a sampled tile only when its tile check passes (the digest is the miner's h0) and the verdict is
     ok.
   - A sampled tile's closure holds its A rows, its strip, all TM·TN of its word units, its TM row digests and row
-    tallies, its tile and its tally (`plan.tile_layout`): every word of the inert-work bound is proved, never sampled.
+    tallies, its tile and its tally: every word of the inert-work bound is proved, never sampled.
   - The inert-work bound's rows: A's salt-dead counts (``sd``), each word's ``cap-word`` (C̃ ‖ U) and ``cap-flags``
     (flags ‖ their count ‖ the later +0 promotions ‖ good) rows, each tile row's ``cap-chunks`` (its chunk digests ‖
     zeros) and ``cap-sums`` (its sums ‖ good) rows, and each strip's ``cap-rows`` (admission bits ‖ bound ‖ zeros) row

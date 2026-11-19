@@ -25,7 +25,7 @@ namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 open Lean (Json JsonNumber)
 open Flock Flock.Program
 open InferenceOnlyVerifier.DefinitionDigest (flatParts written)
-open private natJ? from Circuits.Program
+open private natJ? from Circuits.Descriptor
 
 /-- One part, parsed: what `parsePartsIn` makes of a reference with no alias and no concatenation, at any fuel and
 with any earlier arguments. -/

@@ -37,8 +37,10 @@ by its hiding leaf under the salt `Window.write` draws from the OS and keeps in 
 from __future__ import annotations
 
 import bisect
+import json
 import os
 import re
+import sys
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -147,7 +149,7 @@ class Slot:
     position's token and, below the class's prompt bound, the slot its `TokenFeed_v1` reads and the one it carries on."""
 
     def __init__(self, fn: Any, cls: WindowClass, row: Sequence[int], weights: Weights, served: Served) -> None:
-        self.fn, self.cls, self.weights = fn, cls, weights
+        self.fn, self.cls, self.weights, self.reader = fn, cls, weights, getattr(served, "reader", None)
         self.row = [int(x) & 0xFFFFFFFF for x in row]
         if len(self.row) != cls.prompt + 2:
             raise ValueError(f"a slot's row is (occupancy, prompt length, {cls.prompt} ids), not {len(self.row)} words")
@@ -328,8 +330,9 @@ def _fold_narrowed(ops: dict[tuple[str, tuple[str, ...]], list[Mapping[str, Any]
 class Served:
     """One request's served values by node: its Program's rows as `ProgramIndex.describe` gives them, each with its
     row's ``spec`` (``{spec, step, op_path, members, row}``, its step the request's), ``read(step, op_path, member, lo,
-    hi)``, a member's elements [lo, hi) at a request step (`CommittedStore.words` at the request's arrival plus it), and
-    ``bound(step, op_path, member)``, the elements the record binds that member at.
+    hi)``, a member's elements [lo, hi) at a request step (`CommittedStore.words` at the request's arrival plus it),
+    ``bound(step, op_path, member)``, the elements the record binds that member at, and ``reader`` the byte source those
+    reads verify through (`commit.opened.OpenedReader`), whose counts `Rows.counts` reports.
 
     The request's prefill is its step 0: each op (its op path and members) a row a prompt position, or one row, its last
     position's, where prefill prunes it; the ops in the order of their last prompt position's rows, the one position that
@@ -345,6 +348,7 @@ class Served:
     rows: Sequence[Mapping[str, Any]]
     read: Callable[[int, str, str, int, int], tuple[np.ndarray | None, str]]
     bound: Callable[[int, str, str], int]
+    reader: Any = None
     prefill: list[list[Mapping[str, Any]]] = field(init=False)
     decode: list[list[Mapping[str, Any]]] = field(init=False)
     LP: int = field(init=False)
@@ -408,7 +412,8 @@ class Served:
             ends = [e["identity"].get("element_range", (0, None))[1] for e in es]
             return max((int(x) for x in ends if x is not None), default=0)
 
-        return cls(rows, lambda s, op, m, lo, hi: store.words(rid, arrive + s, at.get((s, op), op), m, lo, hi), bound)
+        return cls(rows, lambda s, op, m, lo, hi: store.words(rid, arrive + s, at.get((s, op), op), m, lo, hi), bound,
+                   getattr(store, "committed", None))
 
     def __call__(self, p: int, k: int, node: Any) -> tuple[str, list[np.ndarray]] | None:
         """Position ``p``'s node ``k`` (``node``, its index within its position) as served, its row's spec and its values;
@@ -488,8 +493,26 @@ class Rows:
                        for t, lay in self.lays.items()}
         for P, S in zip(lowered.programs, slots):
             self._slot(P, S)
+        P0 = lowered.programs[0] if lowered.programs else None
+        for a, (tid, u) in lowered.scans:
+            for k, lane in enumerate(_lanes(P0, self.state, IO.scan_reference, a)):
+                for i, v in enumerate(lane):
+                    self._put(tid, u, f"o{4 * k + i}", _i32(v if isinstance(v, list) else [v]), EVALUATED)
+        for s, _k, c, e in lowered.empty:
+            self._empty(P0, s, c, e)
         if bad := {t: int((~h).any(axis=1).sum()) for t, h in self.held.items() if not h.all()}:
             raise ValueError(f"units with rows no node or Definition fills, by template: {bad}")
+        self.readers = list({id(r): r for S in slots if (r := getattr(S, "reader", None)) is not None}.values())
+        print("WINDOW-ROWS " + json.dumps(self.counts(), sort_keys=True), file=sys.stderr)
+
+    def counts(self) -> dict[str, Any]:
+        """The window's units by source (`SOURCES`) and its served reads' counts, summed over its slots' readers (``reads``,
+        ``failed``: an opening that didn't verify, ``not_retained``: a member the committer no longer holds); ``opened`` is
+        None where no slot read through a reader with counts."""
+        units = {s: int(sum((x == i).sum() for x in self.source.values())) for i, s in enumerate(SOURCES)}
+        stats = [r.stats for r in self.readers if isinstance(getattr(r, "stats", None), Counter)]
+        opened = {k: int(sum(c[k] for c in stats)) for k in ("reads", "failed", "not_retained")} if stats else None
+        return {"units": units, "opened": opened}
 
     def _put(self, tid: str, unit: int, out: str, rows: np.ndarray, src: int) -> None:
         o, k = int(out[1:]), len(rows)
@@ -569,6 +592,17 @@ class Rows:
         et, eu = P.entry_unit
         self._put(et, eu, "o0", np.array([entry], dtype=np.uint16), EVALUATED)
 
+    def _empty(self, P: Any, s: int, collect: tuple[str, int], entry: tuple[str, int]) -> None:
+        """Empty slot ``s``'s collector and entry (`_Program.place_empty`), on its lane of the scan state row at its
+        anchor."""
+        a, lane = P.cls.anchor(s), P.cls.lane(s)
+        (row, head), tok = _lanes(P, self.state, anchor=a)[lane], _lanes(P, self.state, IO.scan_reference, a)[lane][0]
+        KO, e = P.cls.outputs, P.entry.bindings
+        a = IO.collect_reference(head, tok, KO, True)
+        self._put(*collect, "o0", _i32(a), EVALUATED)
+        self._put(*entry, "o0", np.array([IO.entry_reference(row[0], a, KO, e["IDB"], e["NP"], e["STOP"])], dtype=np.uint16),
+                  EVALUATED)
+
     def _heads(self, node: Any, plan: Any, calls: Sequence[tuple[str, int]], S: Slot) -> None:
         """An attention cut by key block: every Call but its last (whose output is the node's) its Definition on the node's
         operands, a unit a head: the head's query, its KV group's keys and values in the Call's range, and earlier Calls'
@@ -628,11 +662,12 @@ def _elements(words: np.ndarray, width: int) -> np.ndarray:
     return np.ascontiguousarray(words, dtype=np.uint16).view(f"<u{width // 8}")
 
 
-def _lanes(P: Any, state: Sequence[Any], of: Callable[..., list] = IO.slots_reference) -> list[Any]:
-    """Every lane of ``state``'s row at Program ``P``'s anchor: its row and head (`io_shell.slots_reference`), or
-    ``of``'s (`io_shell.scan_reference`: `ScanSlots_v3`'s outputs)."""
+def _lanes(P: Any, state: Sequence[Any], of: Callable[..., list] = IO.slots_reference,
+           anchor: int | None = None) -> list[Any]:
+    """Every lane of ``state``'s row at Program ``P``'s anchor (or ``anchor``): its row and head
+    (`io_shell.slots_reference`), or ``of``'s (`io_shell.scan_reference`: `ScanSlots_v3`'s outputs)."""
     b = P.scan.bindings
-    row = np.asarray(state[P.anchor], dtype=np.uint16).reshape(-1)
+    row = np.asarray(state[P.anchor if anchor is None else anchor], dtype=np.uint16).reshape(-1)
     return of(row.tolist(), b["NP"], b["IDB"], b["K0"], b["K"], b["OCC"], b["LP"], b["MAX"], b["IDS"])
 
 

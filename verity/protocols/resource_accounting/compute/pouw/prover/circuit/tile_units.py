@@ -82,7 +82,7 @@ class ProofBlock:
     role: str                   # a key of a tile check's `templates`, or of `rowk.ROLES`
     node: int                   # its root-body node
     member: int                 # its member of that batch node
-    template: str = ""          # its template's descriptor id (`plan.template_strata`'s stratum)
+    template: str = ""          # its template's descriptor id
     where: tuple[int, ...] = field(default=())    # a row unit's row; a tile or tally unit's (tile row, tile column); a
                                                   # word unit's (row, column); a `rowk` form's (row, segment)
 

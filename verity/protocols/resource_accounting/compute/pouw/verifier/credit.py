@@ -220,6 +220,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
+from verity.circuits import codec
 from verity.circuits.codec import _checked_refs
 from verity.circuits.defs import _Widths
 from verity.circuits.refs import Coll, Concat, refs_from_json
@@ -358,8 +359,8 @@ LEAF_UNIT = {LL.LANE: "PouwH1LaneZy_v1", LL.COMBINE: "PouwH1Combine_v1"}
 ZY_UNIT = "PouwH1TileZy_v1"
 DESCRIPTOR_HEX = ("the window's descriptor is not the bytes of the circuit its proofs were verified against in "
                   "lowercase hex (its canonical JSON without annotations, the bytes program_digest hashes)")
-#: the descriptor schema `layout_of` reads
-SCHEMA = domains.IR_DESCRIPTOR
+#: the descriptor schema `layout_of` reads: the decoder's (`codec.SCHEMA`, Lean's `Flock.Program.SCHEMA`)
+SCHEMA = codec.SCHEMA
 #: h1window's Program function, `h1window.PouwH1Window`, and its record's bindings in order
 WINDOW_FN = "PouwH1Window_v3"
 RECORD = ("TILES", "LINEARS", "CALLS", "M", "PREFIX")
@@ -373,7 +374,7 @@ SHARED_J10R = (*SHARED, "call", "blocks")
 TILE_K_STEP = 32
 TILE_K_LIMIT = 1 << 17
 _INPUT = re.compile(r"(?:Registered)?Input[1-9][0-9]*_v1")
-DESCRIPTOR_FORM = ("the window's descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON (keys sorted, "
+DESCRIPTOR_FORM = (f"the window's descriptor is not a {SCHEMA} descriptor in canonical JSON (keys sorted, "
                    "compact, ASCII: the bytes program_digest hashes) with its callees, definitions, program function and "
                    "root")
 NOT_WINDOW = ("the window's circuit is not an H1 window: its program function is not PouwH1Window_v3{TILES=…,LINEARS=…,"
@@ -441,7 +442,7 @@ LIVE_STATEMENTS_FORM = ("the window's live evidence is not {descriptor, statemen
                         "lowercase hex and a list of {circuit, public, round, sessions}, each round's live@<s> proof "
                         "files: the paths of its circuit file and its public file, and its sessions' directories (at "
                         "least one)")
-LIVE_DESCRIPTOR_FORM = ("the window's live descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON "
+LIVE_DESCRIPTOR_FORM = (f"the window's live descriptor is not a {SCHEMA} descriptor in canonical JSON "
                         "with its callees, definitions, program function and root")
 NOT_LIVE = ("the window's live circuit is not a live Program: its program function is not PouwLiveWindow_v2{T=…,S=…,"
             "PREFIX=…}, each binding canonical JSON, T and S positive integers and PREFIX a string "
@@ -1122,24 +1123,24 @@ def partition_of(program: str, shape: dict) -> dict:
 
 def registered_file(program: str, layout: dict, shape: dict, call: int, roots: dict, window: str, steps: int, salt: str
                     ) -> tuple[dict | None, tuple[str, str] | None]:
-    """The verifier's ``--registered`` file (`registered.READS_V1`) of call `call`'s statement in the window `layout` (one
-    `strata` accepted, its circuit's descriptor of SHA-512 `program` and `shape_of` `shape`, its calls `steps` rounds'
-    equal blocks), and None; or None and the refusal (``registration``: the window registers no root, or two, for a value
-    the statement reads). It is `h1window.table_reads_file`'s, built from the descriptor alone: unit u, tile t =
-    ti·(n/C) + tj of the call, reads its A row i (port ``a_k<K>_<i>``) at row o + R·ti + i of its round s's A table of
-    K ``<prefix>a/<K>@<s>`` (M rows for each of the round's calls of K, o the call's first, `step_row`), its B row j
-    (``b_k<K>_<j>``) at row b0 + C·tj + j of the weights' ``<prefix>b/<K>`` (b0 the call's linear's first row in it,
-    its rows each of K's linears' n in turn); at a K of x = `weights.chunks` (K) > 1 chunks each row is x leaves, so
-    its chunk row i of x·R (port ``a_k<K>_<i>``) is leaf x·(o + R·ti) + i, its chunk row j of x·C leaf
-    x·(b0 + C·tj) + j, and each of those values has x leaves a row; and its record (``zy``) at row t of the call's z table ``<prefix>zy@<call>``
-    (a row a unit of the call); and, when the window registers the call's receipt table ``<prefix>receipt@<call>``,
-    the statement's output row o0 (`RECEIPT_PORT`, the unit's receipt, `shape_of`'s width) at its row t, so the
-    receipts the round roots commit are the ones the units return; every other unit reads none of them: each port's
-    reads start at the call's first unit u0 (``reads_from``, `core_check.call_reads`) and end at its last (the verifier
-    reads none below ``reads_from`` or past ``reads``). Each value is a row/v2 value of 16-bit leaves under
-    `registered_value.domain` of its name, rows and words, binding the window's open root `window` but for the weights',
-    held across windows (`domain_of`), at the root `roots` (``{value: [root, ...]}``, each value's registered roots)
-    gives it. Its reads cost the call's units, once a port; only the ok rows' known content is the window's.
+    """The verifier's ``--registered`` file (`registered.READS_V2`, Flock's `Registered.FORMAT`) of call `call`'s
+    statement in the window `layout` (one `strata` accepted, its circuit's descriptor of SHA-512 `program` and
+    `shape_of` `shape`, its calls `steps` rounds' equal blocks), and None; or None and the refusal (``registration``:
+    the window registers no root, or two, for a value the statement reads). It is `h1window.table_reads_file`'s, built
+    from the descriptor alone: unit u, tile t = ti·(n/C) + tj of the call, reads its A row i (port ``a_k<K>_<i>``) at
+    row o + R·ti + i of its round s's A table of K ``<prefix>a/<K>@<s>`` (M rows for each of the round's calls of K, o
+    the call's first, `step_row`), its B row j (``b_k<K>_<j>``) at row b0 + C·tj + j of the weights' ``<prefix>b/<K>``
+    (b0 the call's linear's first row in it, its rows each of K's linears' n in turn); at a K of x = `weights.chunks`
+    (K) > 1 chunks each row is x leaves, so its chunk row i of x·R (port ``a_k<K>_<i>``) is leaf x·(o + R·ti) + i, its
+    chunk row j of x·C leaf x·(b0 + C·tj) + j, and each of those values has x leaves a row; and its record (``zy``) at
+    row t of the call's z table ``<prefix>zy@<call>`` (a row a unit of the call); and, when the window registers the
+    call's receipt table ``<prefix>receipt@<call>``, the statement's output row o0 (`RECEIPT_PORT`, the unit's receipt,
+    `shape_of`'s width) at its row t, so the receipts the round roots commit are the ones the units return; every other
+    unit reads none of them. The file states none of these positions: C and the partition give each unit's row
+    (`Flock.OneCircuit.pos`). Each value is a row/v2 value of 16-bit leaves under `registered_value.domain` of its name,
+    rows and words, binding the window's open root `window` but for the weights', held across windows (`domain_of`), at
+    the root `roots` (``{value: [root, ...]}``, each value's registered roots) gives it. Its reads cost the call's
+    units, once a port; only the ok rows' known content is the window's.
 
     The statement's public row ``pub`` (`PUB_PORT`), each unit's seed's inputs, is the verifier's own: unit u0 + t reads
     row t of the call's public table ``<prefix>pub@<call>`` (`h1window.public_table`), which the file names at its known
@@ -1166,14 +1167,9 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
     ks = {name: (k, n) for name, k, n in layout["linears"]}
     k, n = ks[lin]
     tile = shape["tiles"][k]
-    b0 = 0
-    for name, kk, nn in layout["linears"]:
-        if name == lin:
-            break
-        b0 += nn if kk == k else 0
     sizes = [size for size, _work in call_work(layout)]
     u0, size, per, x = sum(sizes[:call]), sizes[call], n // c, tile["n"]
-    s, calls_k, at = step_row(layout, steps, call)
+    s, calls_k, _ = step_row(layout, steps, call)
     a, zy, b = f"{prefix}a/{k}@{s}", f"{prefix}zy@{call}", f"{prefix}b/{k}"
     rows_of = {a: (x * m * calls_k, tile["a"]), zy: (size, tile["zy"]),
                b: (x * sum(nn for _name, kk, nn in layout["linears"] if kk == k), tile["b"])}
@@ -1191,32 +1187,30 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
     if any(_digest(roots[v][0]) is None for v in (a, b)):
         return None, ("registration", f"call {call}'s seed reads the roots of {a} and {b}, which are not both SHA-512 "
                                       "digests (128 lowercase hex): register each table at its tree's root")
-    ports: list[tuple[str, str, Any]] = (
-        [(f"a_k{k}_{i}", a, lambda t, i=i: x * (at + r * (t // per)) + i) for i in range(x * r)]
-        + [(f"b_k{k}_{j}", b, lambda t, j=j: x * (b0 + c * (t % per)) + j) for j in range(x * c)]
-        + [("zy", zy, lambda t: t)] + ([(RECEIPT_PORT, rc, lambda t: t)] if rc in rows_of else []))
+    ports: list[tuple[str, str]] = (
+        [(f"a_k{k}_{i}", a) for i in range(x * r)] + [(f"b_k{k}_{j}", b) for j in range(x * c)]
+        + [("zy", zy)] + ([(RECEIPT_PORT, rc)] if rc in rows_of else []))
     params = {f"{p}_k{k}_{i}": {G.PARAM_KEY: f"{p}_k{k}" if n == 1 else f"{p}_k{k}[{i}]"}
               for p, n in (("a", x * r), ("b", x * c)) for i in range(n)}
     out = {}
-    for port, v, row in ports:
+    for port, v in ports:
         leaves, words = rows_of[v]
         out[port] = {**params.get(port, {}), "value": v, "root": roots[v][0], "leaves": leaves, "words": words,
                      "word_bits": RV.WORD_BITS,
                      "domain": RV.domain(program, v, words, leaves,
                                         window=None if is_held(v) else window).domain_id.hex(),
-                     **RV.schema_entry(G.SCHEMA_V2), **CC.call_reads(u0, [row(t) for t in range(size)])}
+                     **RV.schema_entry(G.SCHEMA_V2)}
     pv = f"{prefix}pub@{call}"
     blocks = [CC.j10r_blocks(m, k, (r, c), t // per, t % per) for t in range(size)] if tile["j10r"] else None
     rows, salts, reg = public_table(program, pv, salt, window, u0, size, (roots[a][0], roots[b][0]), blocks)
     out[PUB_PORT] = {"value": pv, "root": reg.root.hex(), "leaves": size, "words": len(rows[0]), "word_bits": RV.WORD_BITS,
                      "domain": reg.domain.domain_id.hex(), **RV.schema_entry(G.SCHEMA_V2),
-                     **CC.call_reads(u0, list(range(size))), "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
+                     "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
     rows, salts, reg = ok_table(program, ov, window, sum(sizes))
     out[OK_PORT] = {"value": ov, "root": reg.root.hex(), "leaves": sum(sizes), "words": len(CC.OK_ROW),
                     "word_bits": RV.WORD_BITS, "domain": reg.domain.domain_id.hex(), **RV.schema_entry(G.SCHEMA_V2),
-                    **CC.call_reads(u0, list(range(u0, u0 + size))),
                     "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
-    return {"format": G.READS_V1, "ports": out}, None
+    return {"format": G.READS_V2, "ports": out}, None
 
 
 def public_table(program: str, value: str, salt: str, window: str, u0: int, n: int, roots: tuple[str, str],
