@@ -148,7 +148,7 @@ REQUIRE_LINE = re.compile(r'\s*(\[\[require\]\]|(name|path|git|rev|scope|version
 ITEM_LINE = re.compile(r'\s*(\w+\s*=\s*\[)?\s*("[^"]*"\s*,?\s*)+\]?\s*$')
 COMMENT_LINE = re.compile(r"\s*#")
 #: the ratchet caps of `tests/test_lean_packages.py`, each on one line there
-CAP_NAMES = ("UNWITNESSED", "INLINE", "ROOM", "TREES_EXCEPT", "FOUR_NAMES_EXCEPT", "UNDOCUMENTED", "SPEC_THEOREMS", "OVERLONG",
+CAP_NAMES = ("UNWITNESSED", "UNREASONED", "INLINE", "ROOM", "TREES_EXCEPT", "FOUR_NAMES_EXCEPT", "UNDOCUMENTED", "SPEC_THEOREMS", "OVERLONG",
              "RETIRED_NAMES", "IMPORT_ALL_USES")
 #: a ratchet cap's line (`UNWITNESSED = {"security": 355, "verity/protocols/proofs/flock/verifier": 7}`), and one of its entries
 CAP_LINE = re.compile(rf'(\s*(?:{"|".join(CAP_NAMES)}) = )\{{([^{{}}]*)\}}\s*$')

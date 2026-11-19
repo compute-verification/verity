@@ -204,7 +204,8 @@ keeps or drops from and never adds to.
 - `claims`: every predicate the spec declares under `claims.modules` has its `fails` and `meets` witnesses under
   `claims.witnesses`, a reason under `claims.not`, or its guarantee under `claims.generic` (`claim_failures`).
 - `witnesses`, `unwitnessed`, `witnesses_assumed`: a guarantee of an acceptance or an exclusion has `honest` and
-  `nontrivial` witnesses, or an `unwitnessed` entry, which only shrinks (`witness_failures`, `witness_scope`,
+  `nontrivial` witnesses, or an `unwitnessed` entry: {type_hash, why}, its owner's reason on soundness's word, which no
+  run writes; the entries carried without a reason only go (`UNREASONED`; `witness_failures`, `witness_scope`,
   `assumed_failures`).
 - `compile_time`: the modules that must run code while they compile, one by one, each with its `why` and the `digest`
   of its file as it was reviewed (`listings`, `scans`). None may declare a guarantee or a definition a guarantee reads,

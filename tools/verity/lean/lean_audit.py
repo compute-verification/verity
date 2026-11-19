@@ -309,7 +309,11 @@ UNREAD_KEPT = 64
 UNREAD_CAPS = "tools/verity/lean/unread-caps.json"
 CAPS_TEST = "tests/test_lean_packages.py"
 LOCK_CAPS = {"UNWITNESSED": lambda lock: len(lock.get("unwitnessed") or {}),
+             "UNREASONED": lambda lock: sum(isinstance(v, str) or (isinstance(v, dict) and "why" not in v)
+                                            for v in (lock.get("unwitnessed") or {}).values()),
              "INLINE": lambda lock: sum(map(len, ((lock.get("shape") or {}).get("inline") or {}).values()))}
+#: the caps of `LOCK_CAPS` that the lock run lowers and never raises: a count above one fails it
+NEVER_RAISED = ("UNREASONED",)
 #: who a repaired cap's warning names
 CAPS_OWNER = "@lean"
 
@@ -342,7 +346,7 @@ def held_caps(text: str, locks: dict[str, dict]) -> tuple[str, list[str]]:
     """``text`` (`CAPS_TEST`) with each cap of `LOCK_CAPS` that ``locks`` ({package: its lock}) break (`_held`: a count above
     its cap, raised to the count; a cap above its count by more than its `ROOM`, lowered to the count and its room, which
     changes queued still use), and a warning naming each. LookupError when a cap's line is not one dict literal
-    there."""
+    there, and ValueError when a count is above a cap of `NEVER_RAISED`."""
     def literal(name: str) -> tuple[re.Match, dict]:
         if not (m := re.search(rf"^{name} = (\{{.*\}})$", text, re.M)):
             raise LookupError(f"{CAPS_TEST} has no line `{name} = {{...}}` for --bookkeeping warn to hold to the locks")
@@ -353,6 +357,10 @@ def held_caps(text: str, locks: dict[str, dict]) -> tuple[str, list[str]]:
         got = {p: n for p, lock in sorted(locks.items()) if (n := count(lock)) or p in caps}
         new = dict(caps)
         for p, n in got.items():
+            if name in NEVER_RAISED and n > caps.get(p, 0):
+                raise ValueError(f"{name}[{p!r}] in {CAPS_TEST}: {p}'s lock has {n}, above its cap of {caps.get(p, 0)}, "
+                                 f"and no run raises it: a whole `unwitnessed` exemption is {{type_hash, why}}, its "
+                                 f"owner's reason on soundness's word, never a bare hash")
             held = n if n > caps.get(p, 0) else n + room.get(f"{name} {p}", 0)
             if held != caps.get(p, 0) and (n > caps.get(p, 0) or caps.get(p, 0) > held):
                 new[p] = held
