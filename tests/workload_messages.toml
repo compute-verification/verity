@@ -269,7 +269,6 @@ writers = [
 ]
 readers = [
     { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_openai.py", find = "option\\(\"--(protocols|protocols-config)\"" },
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_h1.py", find = "def config_of|config_of\\(opts\\.protocols_config\\)" },
 ]
 
 [[message]]
@@ -279,19 +278,16 @@ writers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--h1-prover \"\\$D/private/h1\"" },
 ]
 readers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_h1.py", find = "option\\(\"--h1-prover\"|prover=opts\\.h1\\.h1_prover" },
 ]
 
 [[message]]
 type = "H1RunCommitment"
 today = "`--h1-window-commit CMD`: at each run's close run the prover's run commit, `bash -c CMD _ SERVE_DIR K W R PROVER_DIR`"
 writers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_tie.py", find = "argv = \\[\"bash\", \"-c\", self\\.command" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "h1\\+=\\(--h1-window-commit " },
 ]
 readers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "^tie\\(\\) \\{|window_commit \\\"\\$D/h1/w\\$K/window-commit\\.json\\\"" },
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_h1.py", find = "option\\(\"--h1-window-commit\"|WindowTie\\(opts\\.h1\\.h1_window_commit" },
 ]
 
 [[message]]
@@ -336,7 +332,6 @@ readers = [
 type = "H1Registration"
 today = "H1's tie: the run's registration W (`h1/w<k>/registration.json`) and the log of ties (`h1/log.jsonl`)"
 writers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_tie.py", find = "LOG = \"log\\.jsonl\"|W_FILE, R_FILE, COMMAND_LOG = \"registration\\.json\"|M\\.(write|append)\\((wf|self\\.log), \"H1Registration\"" },
 ]
 readers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--window-registration \"\\$3\"|\"\\$D/h1/log\\.jsonl\"" },
@@ -352,7 +347,6 @@ writers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "cp \"\\$VW/window/registration\\.json\" \"\\$4\"" },
 ]
 readers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_tie.py", find = "R_FILE" },
 ]
 
 [[message]]

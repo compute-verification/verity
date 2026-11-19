@@ -20,7 +20,6 @@ from verity_vllm import messages as M
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import advice as A
 from verity_vllm.pipeline import serve_day as SD
-from verity_vllm.pipeline import serve_h1 as SH
 
 
 def test_useful_works_workload_messages_are_types_with_no_scheme_declared():
@@ -43,18 +42,15 @@ def test_a_type_no_protocol_declares_is_refused():
         M.body("Summary", b"{}")
 
 
-@pytest.mark.parametrize("entry", ["serve_h1.config_of", "serve_day.declare"])
-def test_a_body_its_declaration_refuses_is_a_usage_error_naming_the_bound(tmp_path, monkeypatch, entry):
-    type_ = "MonitoringPeriodDeclaration" if entry == "serve_day.declare" else "PoUWScheme"
+def test_a_body_its_declaration_refuses_is_a_usage_error_naming_the_bound(tmp_path, monkeypatch):
+    type_ = "MonitoringPeriodDeclaration"
     narrowed = MessageTypes(dataclasses.replace(s, body=Body(max=8)) if s.type == type_ else s
                             for s in M.types().schemas.values())
     monkeypatch.setattr(M, "types", lambda: narrowed)
     (big := tmp_path / "big.json").write_text(json.dumps({"pouw": {}}))
     day = SD.DayOptions(day=0, day_log=str(tmp_path / "log.json"), day_program="5a" * 64, day_params=str(big))
-    call = {"serve_h1.config_of": lambda: SH.config_of(str(big)),
-            "serve_day.declare": lambda: SD.declare(NS(day=day), tmp_path)}[entry]
     with pytest.raises(UsageError, match=f"oversized: {type_}'s body is at most 8 bytes, not 12"):
-        call()
+        SD.declare(NS(day=day), tmp_path)
 
 
 def test_run_totals_bytes_unchanged(tmp_path):

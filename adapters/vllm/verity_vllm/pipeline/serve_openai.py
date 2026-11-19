@@ -133,7 +133,7 @@ from typing import Any
 from verity import hooks as H
 from verity_vllm import messages as M
 from verity_vllm import settings
-from verity_vllm.config import RETIRED, UsageError, group, option
+from verity_vllm.config import UsageError, group, option, retired
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
 from verity_vllm.llm import option_settings
 from verity_vllm.pipeline import (commit_coins as CC, seal_process as SP, serve_guard as SG, serve_learn as SL, serve_release as RL, serve_day as SD, serve_poub as SR,
@@ -584,7 +584,7 @@ def listed(opts: Any, out: Path) -> list[tuple[Any, dict[str, Any]]]:
     found = [(e, M.named(e)) for e in entries]
     if bad := [e for e, s in found if s is None]:
         raise UsageError(f"--protocols {opts.protocols}: " + "; ".join(
-            f"{e}: {why}" if (why := RETIRED.get(e.partition(":")[0])) else f"{e} names no declared scheme" for e in bad))
+            f"{e}: {why}" if (why := retired(e.partition(":")[0])) else f"{e} names no declared scheme" for e in bad))
     g = opts.gate
     held = {"challenger": "127.0.0.1:0" if g.challenger_gate else "", "coins": "" if g.challenger_gate else "in-process",
             "lane": g.challenger_lane or "", "peer": g.challenger_peer or "", "transcript_dir": str(out / "pearl")}

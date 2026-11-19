@@ -1055,21 +1055,15 @@ def _adapter_importers(texts: dict[str, str], modules: tuple[str, ...], shared: 
 #: Files of the vLLM adapter that name a module of a resource-accounting protocol all the same. It only shrinks: a scheme
 #: attaches through `verity_vllm.messages` and `verity.hooks`, and its own code moves to its package.
 RESOURCE_ACCOUNTING_IMPORTERS = (
-    "adapters/vllm/verity_vllm/acquire/h1_commit.py",
     "adapters/vllm/verity_vllm/commit/history_tables_device.py",
     "adapters/vllm/verity_vllm/commit/row_tables_device.py",
     "adapters/vllm/verity_vllm/definitions/registry/catalog.circuit-check.py",
     "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
     "adapters/vllm/verity_vllm/pipeline/expert_rows.py",
     "adapters/vllm/verity_vllm/pipeline/expert_tables.py",
-    "adapters/vllm/verity_vllm/pipeline/serve_h1.py",
-    "adapters/vllm/verity_vllm/pipeline/serve_tie.py",
     "adapters/vllm/verity_vllm/program/predict/window_class.py",
     "adapters/vllm/verity_vllm/program/predict/window_rows.py",
     "adapters/vllm/verity_vllm/program/predict/window_weights.py",
-    "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
-    "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
-    "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
 )
 
 
@@ -1118,7 +1112,6 @@ SPOT_VERIFIER = ("verity.protocols.proofs.spot.verifier",)
 SPOT_VERIFIER_IMPORTERS = (
     "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
     "adapters/vllm/verity_vllm/pipeline/serving_rows.py",
-    "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
 )
 
 
