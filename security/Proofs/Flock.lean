@@ -62,6 +62,7 @@ public import Proofs.Flock.SamplingGeneric.Levels
 public import Proofs.Flock.SamplingGeneric.LevelsKS
 public import Proofs.Flock.SamplingGeneric.LevelsTwoKS
 public import Proofs.Flock.SamplingGeneric.LevelsRealize
+public import Proofs.Flock.SamplingGeneric.LevelsReg
 public import Proofs.Flock.SpotFlock.Cap
 public import Proofs.Flock.SpotFlock.Code
 public import Proofs.Flock.Claims.Sampling.Refused
