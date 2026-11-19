@@ -2,21 +2,19 @@
 
 ## Epochs, rows and the census
 
-An *epoch* is a state of the census and the attacks, named after the vector that introduced it. A census line or an
-attack holds from its `since` epoch (empty: the first) through its `until` epoch (empty: the last), so every vector
-re-solves on the data it was published on while new measurements land beside it. An epoch's census lines are a file of
+An *epoch* is a state of the census, named after the vector that introduced it. A census line holds from its `since`
+epoch (empty: the first) through its `until` epoch (empty: the last), so every vector keeps the data it was published
+on while new measurements land beside it. An epoch's census lines are a file of
 their own, so the census grows by a file an epoch, and the tests keep every file under a quarter of the repository's 256
 KiB limit. A class's measured cost at an epoch is the largest of its census lines there. A kind with no coefficient on a
-vector's rows is refused, and the check fails on it.
+vector's rows is refused.
 
 A *row* is a ceiling of the card: one class's rate, a port, or a joint frontier (a facet) of two or more classes. Π is a
 vector's rows at its epoch, read as SMSP-cycles a warp instruction a row; a program takes at least its largest row.
 
-## The check and the claims
+## The claims
 
-`solve` checks every price at or below its class's measured cost, every CUDA lane class at least ρ of the MMA's per-lane
-price, every credit of the vector, and every attack of the epoch at X ≥ x_min. It then reads the claims in `floors.csv`,
-each a per-word price floor, and lists what is under each:
+The claims in `floors.csv` are each a per-word price floor:
 
 - `pi32`, (π₃₂): every root-writing kind at ≥ 32 MACs a word.
 - `loads16`: every load into registers at ≥ 16 MACs a word.
