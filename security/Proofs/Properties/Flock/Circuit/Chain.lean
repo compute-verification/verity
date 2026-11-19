@@ -184,7 +184,7 @@ theorem lower_root {P : Program.Prog} {d : ℕ} {inP outP : Array ℕ} {t : Tmpl
     have hbound : c.bound (D.ref 0 [] T.constPos) 0 = List.range defn.paramLeaves := by
       by_cases h0 : defn.paramLeaves = 0
       · simp [c, sg, Call.bound, h0]
-      · simp only [c, sg, Call.bound, h0, beq_iff_eq, if_false, Array.toList_empty, List.nil_append,
+      · simp only [c, sg, Call.bound, h0, beq_iff_eq, ite_false,
           List.flatMap_cons, List.flatMap_nil, List.append_nil, List.range_one, Nat.zero_mul, Nat.zero_add,
           Nat.add_zero, Nat.mul_zero]
         exact (List.map_congr_left fun x hx => hrefin x (by
@@ -209,7 +209,7 @@ theorem lower_root {P : Program.Prog} {d : ℕ} {inP outP : Array ℕ} {t : Tmpl
     obtain ⟨acc2, h3, h4⟩ := Flock.TmplOrder.bind_ok h1
     have hmem : (oStart + k, #[inW * WORD + rets[k]!], #[oStart + outW * WORD + 1]) ∈ D.rows.toList := by
       rw [hDrows]
-      simp only [Array.toList_append, List.mem_append, List.toList_toArray]
+      simp only [Array.toList_append, List.mem_append]
       exact Or.inr (List.mem_map.2 ⟨k, List.mem_range.2 hk, rfl⟩)
     obtain ⟨l1, l2, u, u', -, e1, e2, e3⟩ := Flock.TmplValue.foldlM_split h3 hmem
     have hsu : Flock.TmplRows.Sized u :=
@@ -227,7 +227,7 @@ theorem lower_root {P : Program.Prog} {d : ℕ} {inP outP : Array ℕ} {t : Tmpl
     have hx := hrow (oStart + k) (by rw [hinC]; omega) (by rw [hK]; have := houtb; omega)
     unfold Flock.TmplValue.RowHolds at hx
     rw [hk4.2.1, hk4.2.2, xorAt_canon, xorAt_canon] at hx
-    simp only [Array.toList_map, List.toList_toArray, List.map_cons, List.map_nil, xorAt_single,
+    simp only [Array.toList_map, List.map_cons, List.map_nil, xorAt_single,
       hrefone, hone, Bool.and_true] at hx
     rw [hrefin _ (by rw [hDcols]; omega)] at hx
     rw [hout]
