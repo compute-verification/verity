@@ -22,10 +22,8 @@ tree):
 * `LowerEval`: rows of the net the template `Flock.Lower.lower` writes unrolls to, satisfied with the constant 1, hold at
   each output port bit the value `Prog.evalBool` gives the block's Definition on the input port bits.
 * `BlockEval`: the block's Program (`Spot.BlockFront.program`) evaluates, on C's values at its input ports, to block `u`'s
-  local evaluation (`Partition.localEval`) at its output ports, where each word primitive evaluates as the Boolean
-  Definition C's Boolean map names for it (`BooleanAgrees`).
-* `LiftEval`: the lift to bits (`Spot.BlockFront.program`) keeps every Definition's value, each word primitive
-  evaluating as its Boolean Definition (`BodyAgrees`).
+  local evaluation (`Partition.localEval`) at its output ports, where each word primitive evaluates as its Boolean
+  Definition in `P`'s own map (`BodyAgrees`).
 * `BlockCorrect`: those rows, agreeing with a trace of C at the ports, make block `u` correct.
 * `PortsBind`: the trace a proof block's openings show (`Partition.Rblk`) and the statement's own openings at the same
   positions (`PortsOpenAt`) agree at the ports, so the rows agree with C's committed values there, or SHA-512 collides.
@@ -96,19 +94,12 @@ def LowerEval : Prop :=
 /-- **`BlockEval`, MERGE's (C).** The block's Program evaluates, on C's values at its input ports, to block `u`'s local
 evaluation at its output ports, bit for bit. -/
 def BlockEval : Prop :=
-  ∀ (P : Prog) (units : Array ℕ) (boolean : Std.HashMap String String) (fr : Spot.BlockFront.Front) (Q : Prog),
-    Spot.BlockFront.front P units boolean = .ok fr → Spot.BlockFront.program P units boolean = .ok Q →
-    BooleanAgrees P boolean →
+  ∀ (P : Prog) (units : Array ℕ) (fr : Spot.BlockFront.Front) (Q : Prog),
+    Spot.BlockFront.front P units P.boolean = .ok fr → Spot.BlockFront.program P units P.boolean = .ok Q →
+    BodyAgrees P →
     ∀ (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size), BlockIs P blocks u fr →
     ∀ X : (ofProgram P).Trace,
       Prog.evalBool Q Q.root (portBits X fr.ins) = portBits ((partOf P blocks).localEval X u.castSucc) fr.outs
-
-/-- **`LiftEval`, MERGE's (C2): the lift to bits keeps every Definition's value.** In the block's Program `Q`, each of
-`P`'s Definitions (a lifted word composite keeps its index) evaluates on the same bits as in `P`: a word leaf is its
-`bitAt` bits, consecutive and low bit first, as `Prog.evalBool` reads it. -/
-def LiftEval : Prop :=
-  ∀ (P : Prog) (units : Array ℕ) (Q : Prog), Spot.BlockFront.program P units P.boolean = .ok Q → BodyAgrees P →
-    ∀ d < P.defs.size, Prog.evalBool Q d = Prog.evalBool P d
 
 /-- **`BlockCorrect`, (J): the block is correct.** Rows of the net `lower`'s template of the block's Program unrolls to,
 satisfied by `z` with the constant 1 (`LowerEval`'s form) and agreeing with a trace `X` of C at
