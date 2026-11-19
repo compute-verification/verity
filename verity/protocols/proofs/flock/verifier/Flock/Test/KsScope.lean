@@ -31,7 +31,7 @@ open Flock Flock.KsScope
 
 #guard tagsWhy Tags.circuit == none
 #guard (tagsWhy Tags.circuitTypes).isSome
-#guard (tagsWhy Tags.circuitEb90718f).isSome
+#guard (tagsWhy { Tags.circuit with hiddenOutputs := false }).isSome
 #guard (tagsWhy { Tags.circuit with retainRounds := false }).isSome
 #guard (tagsWhy { Tags.circuit with merkleLeaf := "flock-leaf/sha512-unsalted" }).isSome
 #guard Tags.all.all fun t => (tagsWhy t).isSome || t.hm96Rows
