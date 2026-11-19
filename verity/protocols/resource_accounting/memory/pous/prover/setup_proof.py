@@ -18,6 +18,7 @@ from typing import Any
 
 from verity.circuits.defs import bind
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
+from verity.protocols.resource_accounting.memory.pous.verifier.setup_proof import SALT, SALT_MARK
 
 from .setup_circuit import PousP2SetupCheck, slot_payload, slots
 
@@ -65,4 +66,4 @@ def unit_inputs(w: int, salt: bytes, blocks_per_segment: int, block: bytes, row:
     return block, salt, at(blocks_per_segment, u), row, place(w, row_bytes, u)[1]
 
 
-__all__ = ["at", "padded", "payload_bytes", "place", "setup_unit", "unit_inputs"]
+__all__ = ["SALT", "SALT_MARK", "at", "padded", "payload_bytes", "place", "setup_unit", "unit_inputs"]

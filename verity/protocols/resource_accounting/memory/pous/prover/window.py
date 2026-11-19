@@ -26,8 +26,7 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA
 
 from . import session_circuit
 from . import setup_circuit as SC
-from .setup_proof import payload_bytes, place, setup_unit, unit_inputs
-from verity.protocols.resource_accounting.memory.pous.verifier.setup_proof import SALT, SALT_MARK
+from .setup_proof import SALT, SALT_MARK, payload_bytes, place, setup_unit, unit_inputs
 
 #: the store, one registered value, and its table of one block a row; W's rows; the memory attester's public key
 STORE, STORE_TABLE, WEIGHTS, ATTESTER_KEY = "store", "store/blocks", "weights", "attester-key"
