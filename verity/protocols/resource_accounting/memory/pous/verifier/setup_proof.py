@@ -1,106 +1,128 @@
 """PoUS's setup as a sampled proof about the store, the auditor's side: what its check takes in place of the store.
 
 Today's setup check (`setup.verifier_key_from_encoding`, `PousCheck.SetupProtocol`) reads all of C* and decodes it.  In
-proofs it reads none of it: the store's blocks are committed and their root registered, the challenger samples
-`SAMPLE` blocks on its live coins after that (`sampling_design`), each sampled block is proved to decode to the
-registered rows of W at its place (`verity/protocols/resource_accounting/memory/pous/prover/window.py`, one instance of
-`PousP2SetupCheck_v1` a block), and the check takes the `Claim`: the parameters and commitment as today, the store's
-root, the unit's Program digest and SPOT's outcome.  The Lean check `PousCheck.SetupInProofs.check` decides; Python only
-carries the claim.
+proofs it reads none of it. The setup is one circuit C (`verity/protocols/resource_accounting/memory/pous/prover/window.py`,
+`Setup`): ``PousP2SetupCheck_v2`` over every block of the store, one proof block a store block, the store (the table
+``store/blocks``, `window.store_table`) and W's rows registered values. The prover commits the store and W, then the
+setup's values; the proof layer draws blocks on its live coins after that (its `Draw`, `service.Draw`), and `check`
+reads the door's verdict on each drawn block (SPOT's `proofs.verify` on C, the partition and the draw, the block's units
+the partition's, the caller's door), with no sample or design of its own. The claim (`Claim`) carries the parameters
+and commitment as today, the store's registered root, the draw's law and SPOT's outcome to the Lean check
+`PousCheck.SetupInProofs.check`.
 
-Each sampled block's base and slot are rows the verifier makes from its own `expand_prefix` and the sample (`supplied`),
-which SPOT's one-stage verifier takes as its ``supplied`` values (`BASE`, `SLOT`), so a sampled block is tied to its
-index. Each unit's ok output reads the verifier's row 1 (`OK`), as an opening's verdict reads its table's supplied 1: a
-unit whose ok is 0 commits a row that opens no root the verifier pins, so its proof is refused inside the proof system.
-`register` hands the proof system's challenger the setup's docket with these copies (`Stream.register`).
+The one value the verifier supplies to C is the setup's salt (`SALT`, marked `SALT_MARK`: ``pous.setup.salt/v1``, the
+memory attester's coin, drawn after W is committed), which every unit reads and builds its base from with its place
+inside; `check` refuses a registration that does not mark it so (`NotBound`). Two places stop it: each unit's place and
+slot are constants of the unit in C and its ok word an output held to 1, which C's format has no form for yet (circuits'
+and proofs' pair), so `bound` refuses (`NotBound`); and the door's restriction of a block keeps no supplied input's part yet
+(`supplied.part`, circuits'), so it refuses the block's bit reads of the salt (recut-boundary) before its statement,
+which is not derived either (`one_circuit.lower`, proofs').
 """
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from .schemes.p2 import P2Params, expand_prefix
+from .schemes.p2 import P2Params
 
-GOAL = "memory-accounting/pous-setup-as-proof"
-#: the supplied values a sampled block reads: its expansion base and its slot in its row of W, and the 1 its ok output
-#: is held to
-BASE, SLOT, OK = "setup/base", "setup/slot", "setup/ok"
-#: the blocks the challenger samples: a uniform 8,828-subset misses ⌊B/100⌋ + 1 wrong blocks with probability at most
-#: 0.99^8828 ≤ 2^-128, at any store size
-SAMPLE = 8828
-
-
-def sampling_design(blocks: int) -> str | None:
-    """The sampling design over a store of `blocks` blocks: `rate:SAMPLE/B`, which samples `SAMPLE` of them; None, every
-    block, when there are no more than `SAMPLE`."""
-    if not (isinstance(blocks, int) and not isinstance(blocks, bool) and blocks >= 1):
-        raise ValueError(f"a store has a positive number of blocks, not {blocks!r}")
-    return None if blocks <= SAMPLE else f"rate:{SAMPLE}/{blocks}"
+#: the setup's supplied salt, every unit's, and its mark (PROTOCOL.md §5.4): unit u builds its base
+#: expand_prefix(params, salt) || u64be(u / S) || u64be(u mod S) inside
+SALT = "setup/salt"
+SALT_MARK = {"supplied": "pous.setup.salt/v1", "args": {}, "layout": "le", "bits": 192}
+NOT_BOUND = "pous setup: not bound: "
+CONSTANTS = ("its block's u64be(u / S) || u64be(u mod S) and its slot u mod n constants of the unit in C, and its ok a "
+             "public output held to 1")
 
 
-def base(prefix: bytes, blocks_per_segment: int, u: int) -> bytes:
-    """Block `u`'s expansion base, `prefix ‖ u64be(s) ‖ u64be(v)`: block v of segment s."""
-    s, v = divmod(u, blocks_per_segment)
-    return prefix + s.to_bytes(8, "big") + v.to_bytes(8, "big")
+class NotBound(ValueError):
+    """C's salt is not the supplied ``pous.setup.salt/v1``, or its units' constants and its held ok, which C's format
+    has no form for yet."""
 
 
-def leaf_bytes(data: bytes) -> bytes:
-    """The bytes whose 16-bit leaves, as SPOT reads a supplied row (`one_stage.registered.bytes_leaves`: each big-endian
-    32-bit half, its two leaves least significant first), are `data`'s little-endian 16-bit words in order, the words
-    the unit's port holds: each 4-byte group reversed."""
-    if len(data) % 4:
-        raise ValueError(f"{len(data)} bytes are no whole 32-bit halves")
-    return b"".join(data[i:i + 4][::-1] for i in range(0, len(data), 4))
+def salted(registered: Mapping[str, Any]) -> None:
+    """C's registration marks its salt the supplied ``pous.setup.salt/v1`` (`SALT`, `SALT_MARK`), so the verifier
+    computes it and the prover chooses none of it; else `NotBound`."""
+    if (got := dict(registered.get("supplied") or {}).get(SALT)) != SALT_MARK:
+        raise NotBound(f"{NOT_BOUND}C's {SALT} is marked {got}, not {SALT_MARK}")
 
 
-def supplied(params: P2Params, salt: bytes, row_bytes: int, sample: Sequence[int]) -> dict[str, list[list[dict[str, str]]]]:
-    """The rows the verifier makes for the sampled blocks, in sample order, as SPOT's one-stage verifier takes its
-    ``supplied`` values: each unit's base (`base`, from the verifier's own `expand_prefix`) as one ``{"bytes": hex}``
-    source of its port's words (`leaf_bytes`), and its slot u mod n, n the ⌈N/P⌉ slots of a row of `row_bytes` bytes, as
-    one big-endian 16-bit leaf; and one row for every unit's ok output, the word 1."""
-    prefix, n = expand_prefix(params, salt), -(-row_bytes // params.payload_bytes)
-    return {BASE: [[{"bytes": leaf_bytes(base(prefix, params.blocks_per_segment, u)).hex()}] for u in sample],
-            SLOT: [[{"bytes": f"{u % n:04x}"}] for u in sample],
-            OK: [[{"bytes": "0001"}]]}
+def bound(params: P2Params, salt: bytes, row_bytes: int) -> None:
+    """Each unit's place and slot bound to its constants and its ok word held to 1 (`CONSTANTS`): refused, `NotBound`,
+    until C's format has constants of a unit and held outputs."""
+    raise NotBound(f"{NOT_BOUND}{CONSTANTS}")
 
 
-def register(stream: Any, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]],
-             registered: Mapping[str, int], params: P2Params, salt: bytes, row_bytes: int, sample: Sequence[int]) -> Any:
-    """The setup's docket `record` handed to the proof system's challenger, `stream` (SPOT's `service.Stream`, which
-    runs R1-R8 by the verifier against its own copies): the layout's `ports`, the store's and W's `registered` leaf
-    counts, and the supplied rows the verifier makes from the salt and the sample (`supplied`)."""
-    return stream.register(record, ports, registered=dict(registered),
-                           supplied=supplied(params, salt, row_bytes, sample))
+class Undrawn(ValueError):
+    """Proofs of other blocks than the proof layer's draw: a block it did not draw, a drawn block with no proof, or a
+    finding naming another block than the drawn one it was offered for."""
+
+
+def check(block: Callable[..., Any], verify: Callable[..., tuple[Any, Any]], proofs: Mapping[int, Any], c: bytes,
+          partition: Mapping[str, Any], registered: Mapping[str, Any], draw: Any, params: P2Params,
+          salt: bytes, row_bytes: int) -> list[Any]:
+    """The door's findings on each block `k` of the proof layer's `draw` (`service.Draw`, drawn on its live coins after
+    the store is committed: its ``units`` the blocks, its ``draw`` the sample object the door matches a proof to) of the
+    registered C `c` and its `partition`: `proofs` exactly one a drawn block, else `Undrawn`; its units the partition's
+    (`block`, SPOT's `one_circuit.block`), C's salt supplied (`salted`), its constants and held ok bound (`bound`), and its proof `proofs[k]` verified against C,
+    never the prover's circuit file (`verify`, SPOT's `proofs.verify`, `registered` the store's and W's registration),
+    each finding naming block k. The door is the caller's, so the verifier loads none of SPOT. A partition or block the
+    door refuses raises its refusal, a refusal of its verdict ValueError with its reason, and a session the door rejects
+    ValueError naming it: a unit's ok word is held to 1 inside its proof, so an accepted session is every unit's 1."""
+    drawn = list(draw.units)
+    if sorted(proofs) != sorted(drawn):
+        raise Undrawn(f"the proofs are of blocks {sorted(proofs)}, the proof layer drew {sorted(drawn)}")
+    for k in drawn:
+        block(c, partition, k)
+    salted(registered)
+    bound(params, salt, row_bytes)
+    out: list[Any] = []
+    for k in drawn:
+        findings, why = verify(proofs[k], program=c, partition=partition, draw=draw.draw, registered=registered)
+        if why is not None:
+            raise ValueError(f"setup block {k}: the door refused ({why[0]}): {why[1]}")
+        for f in findings or []:
+            if f.block != k:
+                raise Undrawn(f"setup block {k}: session {f.session} is of block {f.block}")
+            if not f.accepted:
+                raise ValueError(f"setup block {k}: session {f.session} rejected: {f.why}")
+        out += findings or []
+    return out
 
 
 @dataclass(frozen=True)
 class Claim:
     """What the setup's check reads in place of C*: `params`, the codec's manifest, and `commitment`, the server's
-    `w_commitment ‖ salt`, as today's check reads them; `store`, the store's registered root; `unit`, the setup unit's
-    Program digest, which the auditor pins; `law`, the sampling design (`sampling_design`); `outcome`, SPOT's outcome
-    record of the sampled audit."""
+    `w_commitment ‖ salt`, as today's check reads them; `store`, the store's registered root (`window.commit_store`),
+    which the memory attester signs as the session's binding; `law`, the proof layer's draw's (`Claim.of`); `outcome`,
+    SPOT's outcome record of the sampled audit."""
 
     params: dict[str, Any]
     commitment: bytes
     store: bytes
-    unit: str
-    law: str | None
+    law: Mapping[str, Any]
     outcome: bytes
+
+    @classmethod
+    def of(cls, params: Mapping[str, Any], commitment: bytes, store: Mapping[str, Any], draw: Any,
+           outcome: bytes) -> "Claim":
+        """The claim of a check over `draw`: its law the draw's, its store the root of `store`, the store's registered
+        entry as the verifier pinned it."""
+        return cls(dict(params), commitment, bytes.fromhex(store["root"]), dict(draw.law), outcome)
 
     def to_json(self) -> dict[str, Any]:
         return {"params": dict(self.params), "commitment": self.commitment.hex(), "store": self.store.hex(),
-                "unit": self.unit, "law": self.law, "outcome": self.outcome.hex()}
+                "law": dict(self.law), "outcome": self.outcome.hex()}
 
     @classmethod
     def from_json(cls, j: dict[str, Any]) -> "Claim":
-        return cls(dict(j["params"]), bytes.fromhex(j["commitment"]), bytes.fromhex(j["store"]), j["unit"], j["law"],
+        return cls(dict(j["params"]), bytes.fromhex(j["commitment"]), bytes.fromhex(j["store"]), dict(j["law"]),
                    bytes.fromhex(j["outcome"]))
 
     def encode(self) -> bytes:
         return json.dumps(self.to_json(), sort_keys=True, separators=(",", ":")).encode()
 
 
-__all__ = ["BASE", "Claim", "GOAL", "OK", "SAMPLE", "SLOT", "base", "leaf_bytes", "register", "sampling_design",
-           "supplied"]
+__all__ = ["CONSTANTS", "Claim", "NOT_BOUND", "NotBound", "SALT", "SALT_MARK", "Undrawn", "bound", "check",
+           "salted"]
