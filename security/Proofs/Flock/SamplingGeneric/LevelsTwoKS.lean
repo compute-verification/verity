@@ -13,9 +13,10 @@ with probability at most `δ` (`cands`), each standing for the sets the last lev
 first-level block (`aboveLev`); each kept outer run's inner wait unions over those sets on the proof blocks inside the
 blocks the first level sampled.
 
-* `Ex_toReal_avg`, `Ex_prod_parts_le`: **the first level's average**. Over coins whose first-level sample misses each
-  set of first-level blocks no more often than the first level's design, the product of the last level's misses over
-  the sampled blocks averages at most the levels' miss (`Verity.Levels.missProb_two`).
+* `Ex_toReal_avg`, `Ex_prod_parts_le_avg`, `Ex_prod_parts_le`: **the first level's average**. Over coins whose
+  first-level sample misses each set of first-level blocks no more often than the first level's design, a product of
+  factors `≤ 1` over the sampled blocks averages at most its average over the design's draw; at the last level's
+  misses, the levels' miss (`Verity.Levels.missProb_two`).
 * `esc_proj_le`: a set below `Y` in every first-level block, projected on the sampled blocks' proof blocks, is missed
   by the last level no more often than `Y` is, factor by factor.
 * `FailsTwoLev`, `pr_failsTwoLev_le`: **the failure event at two levels** and its probability, `κ(δ) + √(γ·Pr[B])`.
@@ -50,27 +51,18 @@ theorem Ex_toReal_avg {α : Type} [Fintype α] [Nonempty α] (f : α → ℝ≥0
   rw [ENNReal.toReal_mul, ENNReal.toReal_inv, ENNReal.toReal_natCast]
   ring
 
-/-- **The first level's average**: over coins `r` whose sample `S r` of first-level blocks misses each set of them no
-more often than the first level's design, the product over the sampled blocks of the last level's miss of `T`
-averages at most the levels' miss of `T`. -/
-theorem Ex_prod_parts_le {R G : Type} [Fintype R] [Nonempty R] [Fintype G] [DecidableEq G] (Lv : Verity.Levels G)
-    {l₁ l₂ : Verity.Level G} (hL : Lv.levels = [l₁, l₂]) (S : R → Finset (Finset G))
+/-- **The first level's average, at any factors**: over coins `r` whose sample `S r` of first-level blocks misses
+each set of them no more often than the first level's design, the product over the sampled blocks of factors `e ≤ 1`
+averages at most its average over the design's draw. -/
+theorem Ex_prod_parts_le_avg {R G : Type} [Fintype R] [Nonempty R] [Fintype G] [DecidableEq G] (l₁ : Verity.Level G)
+    (hd : ∀ ω, (l₁.design Finset.univ).draw ω ⊆ l₁.blocks.parts) (S : R → Finset (Finset G))
     (hS : ∀ T, Pr (fun r => Disjoint (S r) T) ≤ ((l₁.design Finset.univ).missProb T).toReal)
-    (T : Finset (Finset G)) :
-    Ex (fun r => ∏ Z ∈ (S r).filter (· ∈ l₁.blocks.parts), ((l₂.design Z).missProb T).toReal) ≤
-      (Lv.design.missProb T).toReal := by
+    (e : Finset G → ℝ≥0∞) (he1 : ∀ Z, e Z ≤ 1) :
+    Ex (fun r => ∏ Z ∈ (S r).filter (· ∈ l₁.blocks.parts), (e Z).toReal) ≤
+      (Verity.Game.avg fun ω => ∏ Z ∈ (l₁.design Finset.univ).draw ω, e Z).toReal := by
   classical
-  have hi := Lv.inside
-  rw [hL] at hi
-  simp only [Verity.Level.InsideBelow, Finset.mem_singleton, forall_eq, and_true] at hi
-  obtain ⟨h₁, h₂⟩ := hi
   set Ap := l₁.blocks.parts
-  let e : Finset G → ℝ≥0∞ := fun Z => (l₂.design Z).missProb (T.filter (· ⊆ Z))
-  have he1 : ∀ Z ∈ Ap, e Z ≤ 1 := fun Z _ => Verity.SamplingDesign.missProb_le_one _ _
-  have hfin : ∀ Z, e Z ≠ ⊤ := fun Z =>
-    ne_top_of_le_ne_top ENNReal.one_ne_top (Verity.SamplingDesign.missProb_le_one _ _)
-  have heq : ∀ Z ∈ Ap, (l₂.design Z).missProb T = e Z := fun Z hZ =>
-    (Verity.SamplingDesign.missProb_filter (l₂.design Z) (· ⊆ Z) (fun ω b hb => (h₂ Z hZ ω b hb).2) T).symm
+  have hfin : ∀ Z, e Z ≠ ⊤ := fun Z => ne_top_of_le_ne_top ENNReal.one_ne_top (he1 Z)
   let D' : Verity.SamplingDesign (Finset G) := { Ω := R, draw := fun r => (S r).filter (· ∈ Ap) }
   have hw : ∀ R' ∈ Ap.powerset, ((∏ u ∈ R', (1 - e u)) * ∏ u ∈ Ap \ R', e u) ≠ ⊤ := fun R' _ =>
     ENNReal.mul_ne_top (ENNReal.prod_ne_top fun _ _ => ENNReal.sub_ne_top ENNReal.one_ne_top)
@@ -95,25 +87,50 @@ theorem Ex_prod_parts_le {R G : Type} [Fintype R] [Nonempty R] [Fintype G] [Deci
       ← ENNReal.ofReal_toReal (ne_top_of_le_ne_top ENNReal.one_ne_top
         (Verity.SamplingDesign.missProb_le_one (l₁.design Finset.univ) R'))]
     exact ENNReal.ofReal_le_ofReal (hS R')
-  calc Ex (fun r => ∏ Z ∈ (S r).filter (· ∈ Ap), ((l₂.design Z).missProb T).toReal)
+  calc Ex (fun r => ∏ Z ∈ (S r).filter (· ∈ Ap), (e Z).toReal)
       = Ex (fun r : R => (∏ Z ∈ D'.draw r, e Z).toReal) := by
         congr 1
         funext r
         rw [ENNReal.toReal_prod]
-        exact Finset.prod_congr rfl fun Z hZ => by rw [heq Z (Finset.mem_filter.1 hZ).2]
     _ = (Verity.Game.avg fun r : R => ∏ Z ∈ D'.draw r, e Z).toReal :=
         Ex_toReal_avg _ fun r => ENNReal.prod_ne_top fun Z _ => hfin Z
     _ = (∑ R' ∈ Ap.powerset, D'.missProb R' * ((∏ u ∈ R', (1 - e u)) * ∏ u ∈ Ap \ R', e u)).toReal := by
         rw [Verity.SamplingDesign.avg_prod_draw D' Ap
-          (fun r x hx => (Finset.mem_filter.1 hx).2) e he1]
+          (fun r x hx => (Finset.mem_filter.1 hx).2) e fun u _ => he1 u]
     _ ≤ (∑ R' ∈ Ap.powerset,
           (l₁.design Finset.univ).missProb R' * ((∏ u ∈ R', (1 - e u)) * ∏ u ∈ Ap \ R', e u)).toReal := by
         refine ENNReal.toReal_mono (ENNReal.sum_ne_top.2 fun R' hR' => ENNReal.mul_ne_top
           (ne_top_of_le_ne_top ENNReal.one_ne_top (Verity.SamplingDesign.missProb_le_one _ _)) (hw R' hR')) ?_
         exact Finset.sum_le_sum fun R' hR' => mul_le_mul_left (hmiss R' hR') _
-    _ = (Lv.design.missProb T).toReal := by
-        rw [Lv.missProb_two hL, Verity.SamplingDesign.avg_prod_draw (l₁.design Finset.univ) Ap
-          (fun ω b hb => (h₁ ω b hb).1) e he1]
+    _ = (Verity.Game.avg fun ω => ∏ Z ∈ (l₁.design Finset.univ).draw ω, e Z).toReal := by
+        rw [Verity.SamplingDesign.avg_prod_draw (l₁.design Finset.univ) Ap hd e fun u _ => he1 u]
+
+/-- **The first level's average**: over coins `r` whose sample `S r` of first-level blocks misses each set of them no
+more often than the first level's design, the product over the sampled blocks of the last level's miss of `T`
+averages at most the levels' miss of `T`. -/
+theorem Ex_prod_parts_le {R G : Type} [Fintype R] [Nonempty R] [Fintype G] [DecidableEq G] (Lv : Verity.Levels G)
+    {l₁ l₂ : Verity.Level G} (hL : Lv.levels = [l₁, l₂]) (S : R → Finset (Finset G))
+    (hS : ∀ T, Pr (fun r => Disjoint (S r) T) ≤ ((l₁.design Finset.univ).missProb T).toReal)
+    (T : Finset (Finset G)) :
+    Ex (fun r => ∏ Z ∈ (S r).filter (· ∈ l₁.blocks.parts), ((l₂.design Z).missProb T).toReal) ≤
+      (Lv.design.missProb T).toReal := by
+  classical
+  have hi := Lv.inside
+  rw [hL] at hi
+  simp only [Verity.Level.InsideBelow, Finset.mem_singleton, forall_eq, and_true] at hi
+  obtain ⟨h₁, h₂⟩ := hi
+  let e : Finset G → ℝ≥0∞ := fun Z => (l₂.design Z).missProb (T.filter (· ⊆ Z))
+  have heq : ∀ Z ∈ l₁.blocks.parts, (l₂.design Z).missProb T = e Z := fun Z hZ =>
+    (Verity.SamplingDesign.missProb_filter (l₂.design Z) (· ⊆ Z) (fun ω b hb => (h₂ Z hZ ω b hb).2) T).symm
+  calc Ex (fun r => ∏ Z ∈ (S r).filter (· ∈ l₁.blocks.parts), ((l₂.design Z).missProb T).toReal)
+      = Ex (fun r => ∏ Z ∈ (S r).filter (· ∈ l₁.blocks.parts), (e Z).toReal) := by
+        congr 1
+        funext r
+        exact Finset.prod_congr rfl fun Z hZ => by rw [heq Z (Finset.mem_filter.1 hZ).2]
+    _ ≤ (Verity.Game.avg fun ω => ∏ Z ∈ (l₁.design Finset.univ).draw ω, e Z).toReal :=
+        Ex_prod_parts_le_avg l₁ (fun ω b hb => (h₁ ω b hb).1) S hS e fun _ =>
+          Verity.SamplingDesign.missProb_le_one _ _
+    _ = (Lv.design.missProb T).toReal := by rw [Lv.missProb_two hL]
 
 /-! ## The failure event -/
 
@@ -421,18 +438,18 @@ theorem incorrectLev_subset (s : AuditStatement) (Pt : Partition) (top : Option 
   unfold incorrectLev
   exact filter_subset _ _
 
-/-- **A first-level block reads one top block's interior**: in a first-level block whose proof blocks all have top
-block `ρ`, the last level misses the incorrect set alike at any two interiors that agree at `ρ`. -/
+/-- **A first-level block reads one top block's interior**: in a first-level block `Z` whose proof blocks all have top
+block `ρ`, a design drawing inside `Z` misses the incorrect set alike at any two interiors that agree at `ρ`. -/
 theorem missProb_incorrectLev_congr {s : AuditStatement} {Pt Q : Partition} {val : ℕ → Option Bool}
-    {l₂ : Verity.Level (Fin Pt.blocks.length)} {Z : Finset (Fin Pt.blocks.length)}
-    (hZ : ∀ ω, ∀ b ∈ (l₂.design Z).draw ω, b ⊆ Z) {ρ : ℕ} (hZρ : ∀ i ∈ Z, replayOf Pt Q i.val = some ρ)
+    {D : Verity.SamplingDesign (Finset (Fin Pt.blocks.length))} {Z : Finset (Fin Pt.blocks.length)}
+    (hZ : ∀ ω, ∀ b ∈ D.draw ω, b ⊆ Z) {ρ : ℕ} (hZρ : ∀ i ∈ Z, replayOf Pt Q i.val = some ρ)
     (ι ι' : ℕ → ℕ → Bool) (h : ι ρ = ι' ρ) :
-    (l₂.design Z).missProb ((incorrectLev s Pt (some Q) val ι).image (slot Pt)) =
-      (l₂.design Z).missProb ((incorrectLev s Pt (some Q) val ι').image (slot Pt)) := by
+    D.missProb ((incorrectLev s Pt (some Q) val ι).image (slot Pt)) =
+      D.missProb ((incorrectLev s Pt (some Q) val ι').image (slot Pt)) := by
   classical
-  rw [← Verity.SamplingDesign.missProb_filter (l₂.design Z) (· ⊆ Z) hZ
+  rw [← Verity.SamplingDesign.missProb_filter D (· ⊆ Z) hZ
       ((incorrectLev s Pt (some Q) val ι).image (slot Pt)),
-    ← Verity.SamplingDesign.missProb_filter (l₂.design Z) (· ⊆ Z) hZ
+    ← Verity.SamplingDesign.missProb_filter D (· ⊆ Z) hZ
       ((incorrectLev s Pt (some Q) val ι').image (slot Pt))]
   congr 1
   ext b
