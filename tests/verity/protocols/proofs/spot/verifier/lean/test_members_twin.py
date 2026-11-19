@@ -101,7 +101,9 @@ class Audit:
         s = self.s = Setup(PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]),
                            P.template_instances_query([PAIR.id, TRIPLE.id]), names=ports)
         roots = [{"port": p, "root": rng.randbytes(64).hex(), **s.ports[p]} for p in s.ports]
-        self.rec = DK.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF)
+        self.partition = P.partition(s.program, s.query) | {"blocks": [UNITS[A][0], UNITS[B][0]]}
+        self.rec = DK.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF,
+                             partition=self.partition)
         held = None
         while held != set(sampled):
             ch, sample, _ = _challenger_sample(rng, s, DESIGN, self.rec, trees=0)
@@ -140,9 +142,9 @@ class Audit:
                          "statement": {}, "proofs": {"statements": statements},
                          "sessions": [s["name"] for st in statements for s in st["sessions"]]}
         members = {name: {"public": self.put(json.dumps({"member": name}).encode() + b"\nnot a public file"),
-                          "registered": None, "units": UNITS[name], "vus_per_block": 4} for name in (A, B)}
+                          "registered": None, "block": k, "vus_per_block": 4} for k, name in enumerate((A, B))}
         self.params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
-                       "law": DESIGN, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
+                       "law": DESIGN, "leaf_layer": LEAF, "log": [], "partition": self.partition,
                        "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
                        "window_root": ch.ledger.window["root"], "work_table": None, "proofs": {"members": members}}
 
@@ -173,6 +175,23 @@ class Audit:
     def members(self, name: str, **changes) -> dict:
         ms = self.params["proofs"]["members"]
         return self.params | {"proofs": {"members": ms | {name: ms[name] | changes}}}
+
+    def without(self, name: str) -> dict:
+        return self.params | {"proofs": {"members": {k: m for k, m in self.params["proofs"]["members"].items()
+                                                     if k != name}}}
+
+    def refused(self, at: Path, params: dict) -> str:
+        """Lean's refusal of the parameters `params` at its parse, which the twin raises as `Outside` with the same
+        reason."""
+        at.mkdir(parents=True, exist_ok=True)
+        p = _json(params)
+        verdict, why = M.check(p, D.canonical(self.rec).encode(), D.canonical(self.evidence).encode())
+        assert verdict == "reject" and why.startswith("params: "), (verdict, why)
+        with pytest.raises(M.Outside) as e:
+            M.members_run(p, _json(self.rec), _json(self.evidence), {}, program=self.s.program, verify=lms_verify,
+                          verdict=_never)
+        assert str(e.value) == why, (str(e.value), why)
+        return why
 
 
 @waits_on("restrict", "lower")
@@ -210,7 +229,9 @@ def test_the_twin_answers_leans_reason_on_each_refusal_of_the_per_member_run(tmp
          evidence=a.proofs([{**first, "sessions": [{**s0, "reps": {"circuit.rep0.bin": changed}}]}, last]))
     same("unused", f"the challenger's release log shows 2 coin trees and the sessions use 1: {Ch.UNUSED_TREE}",
          evidence=a.proofs([first]))
-    same("laid", M.MEMBERS_LAID, params=a.members(B, units=[[2, 4]]))
+    laid = Audit("members-twin-laid", opened=(A,))
+    why, (run, refused) = laid.ask(tmp_path / "laid", params=laid.without(B))
+    assert run is None and why == M.run_reason(run, refused) == f"proofs: {M.MEMBERS_LAID}", (why, refused)
     port = {"value": "v", "leaves": 4, "domain": "dd" * 64, "reads": [0]}
 
     def registered(root: str) -> dict:
@@ -350,3 +371,27 @@ def test_a_statement_of_a_member_the_sample_missed_is_refused_by_both_before_any
         assert run is None and why == M.run_reason(run, refused), (k, why, refused)
         assert why == (f"proofs: member {missed}: the sample holds none of its units, and a member the sample missed "
                        "has no statement")
+
+
+def test_leans_parse_and_the_twin_take_a_members_units_from_its_block_and_refuse_the_same_parameters(tmp_path):
+    """A member names its block of the partition object's ``blocks`` (`one_circuit.block`, `OneStageZk.membersOf`):
+    Lean's parse (`proofs.members_parsed`, the executable's ``members``) reads each member's units as the twin's
+    `members._block` does. Lean refuses at its parse, and the twin raises `Outside` with the same ``params:`` reason:
+    a member handed ``units`` (`UNITS_HANDED`) beside its block, a block the partition lacks, a partition naming no
+    blocks, and two members naming one block, whose units are then one unit in two members'."""
+    a = Audit("members-twin-blocks")
+    got, refused = PF.members_parsed(a.params, a.evidence)
+    assert refused is None, refused
+    descriptor = json.dumps(a.params["program"], sort_keys=True, separators=(",", ":")).encode()
+    assert {m["name"]: m["units"] for m in got["members"]} == {
+        name: [list(u) for u in M._block(name, m, descriptor, a.params["partition"])]
+        for name, m in a.params["proofs"]["members"].items()} == UNITS
+    assert a.refused(tmp_path / "handed", a.members(A, units=UNITS[A])) == (
+        f"params: proofs: member {A}: {M.UNITS_HANDED}")
+    assert a.refused(tmp_path / "range", a.members(B, block=2)) == (
+        f"params: proofs: member {B}: partition: E_BLOCKS: no block 2 among the partition's 2")
+    none = a.params | {"partition": {k: v for k, v in a.params["partition"].items() if k != "blocks"}}
+    assert a.refused(tmp_path / "none", none) == (
+        f"params: proofs: member {min(A, B)}: partition: E_BLOCKS: the partition object names no blocks")
+    assert a.refused(tmp_path / "one-block", a.members(B, block=0)) == (
+        "params: proofs: unit 0 is in two members' units: a unit is one member's")
