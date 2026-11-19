@@ -11,7 +11,7 @@ public import Poub.Shared
 sample is `Key.subset` on the first blocks `prf t` derives from its coin, at error
 `δ + Σ_t s_t/2^256 + Σ_t adv_t + binding`. The verifier draws no such sample: window `t`'s sample is the proof layer's
 draw, `Spot.Draw.sampleUnits (.subset k)`, on its sample's coins as the challenger released them (`Poub.receiptSample`,
-`receiptSampleRead_draw`). `Run.openedRaw` is that draw on the bytes of window `t`'s coin (`coinBytes`), none when the
+`receiptSampleRead_draw`). `openedRaw` is that draw on the bytes of window `t`'s coin (`coinBytes`), none when the
 coins run out, which ends the session (`Session.close` throws). There is no second model of the draw: on it there is no
 key, so no distinguisher's advantage, and no rejected first block, so no `s_t/2^256`.
 
