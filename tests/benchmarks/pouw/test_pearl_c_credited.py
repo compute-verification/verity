@@ -4,9 +4,9 @@ served y word other than the committed one fails."""
 from __future__ import annotations
 
 import pytest
+from verity.circuits.boolean.trace import word_of
 from verity.circuits.evaluation import evaluate
 from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as T
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.credited import credited_inputs
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import tile_refs
 
@@ -17,8 +17,6 @@ SCHEME = "pearl-c-h100-v1-h3"
 TILE = (2, 2)
 #: the core's cap circuit needs two whole promotion windows of 128 (`inert_bound._promoted`)
 K = 256
-#: the core takes its tile's real rows as a static (TR), so a tile part filler has y on its real rows alone
-TAKES_TR = "TR" in T.PearlPlusTileCore.statics
 
 
 def _flat(x) -> list[int]:
@@ -30,7 +28,7 @@ def _flat(x) -> list[int]:
 
 
 def _on_words(c) -> tuple[bytes, int]:
-    out = list(evaluate(c.core(), *(_flat(a) for a in c.core_args())))
+    out = list(evaluate(word_of(c.core()), *(_flat(a) for a in c.core_args())))
     return bytes(out[:64]), out[64]
 
 
@@ -66,7 +64,6 @@ def test_a_full_tiles_ports_pass_the_core_with_its_leaf_as_digest(full):
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not TAKES_TR, reason="the core takes no real-row count yet (pearl_plus_tile's TR)")
 def test_a_partial_tiles_ports_pass_with_y_on_its_real_rows(tmp_path):
     """A round of a class's fixed load (13 real rows of 16): call 1's tile at rows 12-13 has one real row, so y holds it
     alone and row 13 is zero filler; its ports pass the core (TR = 1) with the pass's leaf as digest, and the tile at
