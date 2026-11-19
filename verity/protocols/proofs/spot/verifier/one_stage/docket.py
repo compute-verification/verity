@@ -252,12 +252,13 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
           history: Mapping[str, Any] | None = None, compiler: Any = UNREAD,
           certified: Mapping[str, Mapping[str, Any]] | None = None,
           verdicts: Mapping[str, bool] | None = None,
-          coins: Mapping[str, str] | None = None) -> Verdict:
+          coins: Mapping[str, str] | None = None, released: Mapping[str, int] | None = None) -> Verdict:
     """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
     fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`; and C's supplied inputs, by their
-    marks under its `coins`, `registered.marked_rows`) and the roots it held before the
+    marks under its `coins`, `registered.marked_rows`, held to the order rule at `released`, its place of each coin,
+    `registered.order`) and the roots it held before the
     record for others (`pinned`: `{parameter: root}`, the weights' root recorded before the salt, say), and of the rest the
     ones that are outputs of an earlier run or reuse an earlier record's registered value (`outputs`: `{parameter:
     {"record", "port" | "value"}}`, or `{parameter: {"port"}}`, that port of the log's last record); and
@@ -323,7 +324,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     supplied, outputs, schemas = pool_values(pool, program, supplied, outputs, schemas, log)
     supplied = with_history(supplied, history, leaf_layer)
     sup = G.sources(supplied if supplied is not None else {})
-    sup = {**sup, **G.marked_rows(program, registered or {}, sup, coins)}
+    sup = {**sup, **G.marked_rows(program, registered or {}, sup, coins, released, len(log))}
     if supplied is not None and not registered:
         raise ValueError("supplied values are registered values: the verifier expects none registered")
     cert = _certified(certified, registered or {}, sup)
@@ -931,10 +932,11 @@ def public_ports(rec: Mapping[str, Any]) -> dict[str, Any]:
     own where no root's port holds a ``/``; else, where every root's port but the window's trees of a template's field
     (``<template>/<field>``, its template another port's name's template) is ``<member>/<port>`` of one member, whose
     own port names hold no ``/``, that member's roots with its name and the ``/`` taken off, with its template's fields'
-    trees at its fields. Raises `ValueError` with v2's refusal where the roots are two members' or more, or bare and a
+    trees at its fields; a run input node's tree ``input/n<w>`` is the window's, no public file's. Raises `ValueError`
+    with v2's refusal where the roots are two members' or more, or bare and a
     member's (`NOT_ONE_MEMBER`), or one is a row tables' (`ROW_TABLES`) or names no port, or the member holds a root of
     its own at a field its template has a tree of (`own_field`)."""
-    roots = rec["roots"]
+    roots = [r for r in rec["roots"] if not G.is_fresh_value(r.get("port"))]
     ports = [r["port"] for r in roots if isinstance(r.get("port"), str)]
     if all("/" not in p for p in ports):
         return {r["port"]: r for r in roots if isinstance(r.get("port"), str)}

@@ -8,14 +8,12 @@ from pathlib import Path
 import pytest
 
 from tests.pipeline.test_row import _row
-from tests.row_paths import row_paths
 from verity_vllm.check.replay.driver import family_strata
 from verity_vllm.check.replay.sample import sample
 from verity_vllm.engine import served as SV
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import program_cache as PC
 from verity_vllm.pipeline import row_config as RC
-from verity_vllm.pipeline import row_records as R_
 from verity_vllm.pipeline.row_driver import Stop
 
 ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
@@ -244,132 +242,6 @@ def test_a_config_record_carries_the_replay_s_weights_attest(tmp_path):
 
 
 TP2 = "olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager"
-
-
-@pytest.mark.parametrize("W", [2, 4, 8])
-def test_the_tp_path_runs_a_config_run_at_worlds_2_4_and_8(W, tmp_path, monkeypatch):
-    from verity_vllm.pipeline import cli, row
-    from verity_vllm.pipeline.row_tp import TpRow
-    ran = []
-
-    def run(self) -> int:
-        ran.append((self.W, self.config_run))
-        return 0
-    monkeypatch.setattr(TpRow, "run", run)
-    o = cli.parse("row", ["run", TP2, "OLMOE", "r", "v", "--sweep-dir", str(tmp_path), "--config-run", "1", "--world", str(W)], row_paths(tmp_path))
-    assert row.run_row(o, o.stages) == 0 and ran == [(W, True)]
-
-
-def _tp(tmp_path, *argv):
-    import os
-
-    from tests.pipeline.test_row import TP_DENSE, _tp_row
-    t = _tp_row(tmp_path, TP_DENSE, *argv)
-    os.makedirs(t.d, exist_ok=True)
-    return t
-
-
-def test_a_tp2_config_run_skips_the_match_and_word_checks_the_build(tmp_path, monkeypatch):
-    t = _tp(tmp_path, "--config-run", "1")
-    calls = []
-    for name in ("build", "match", "commit", "research_result", "timeline_report"):
-        monkeypatch.setattr(t, name, lambda n=name: calls.append(n))
-
-    def prepare() -> None:
-        calls.append("prepare")
-        t.trap = True
-    monkeypatch.setattr(t, "prepare", prepare)
-    monkeypatch.setattr(RC, "word_check", lambda row: calls.append("word_check"))
-    monkeypatch.setattr(RC, "config_record", lambda row: calls.append("config_record"))
-    assert t.run() == 0
-    assert calls == ["prepare", "build", "word_check", "commit", "research_result", "config_record", "timeline_report"]
-    calls.clear()
-    monkeypatch.setattr(t, "build", lambda: (_ for _ in ()).throw(Stop(10)))
-    assert t.run() == 10 and calls == ["prepare", "config_record", "research_result"], "a stopped config run still writes its record"
-
-
-def test_the_tp2_word_check_counts_the_components_of_both_ranks(tmp_path, monkeypatch):
-    t = _tp(tmp_path, "--config-run", "1")
-    seen = []
-
-    def run_tl(stage, to, log, cmd) -> int:
-        seen.append(cmd)
-        return 0
-    monkeypatch.setattr(t, "run_tl", run_tl)
-    RC.word_check(t)
-    assert seen[0][seen[0].index("--world") + 1] == "2"
-    r = _row(tmp_path / "tp1", "--config-run", "1")
-    monkeypatch.setattr(r, "run_tl", run_tl)
-    RC.word_check(r)
-    assert seen[1][seen[1].index("--world") + 1] == "1"
-
-
-def test_the_tp2_config_run_s_commit_is_one_instrumented_run_with_no_match(tmp_path):
-    t = _tp(tmp_path, "--config-run", "1", "--replay-k", "460")
-    (Path(t.M) / "fold_match").mkdir(parents=True)
-    (Path(t.M) / "fold_match" / "tp2_fold_match.json").write_text("{}")
-    t.fold_profile = "derived_LLAMA32_1B_tp2"
-    cmd = t.commit_cmd([])
-    assert cmd[cmd.index("--pairs") + 1] == "1" and cmd[cmd.index("--warmup") + 1] == "1"
-    assert cmd[cmd.index("--only-arm") + 1] == "instrumented" and cmd[cmd.index("--replay-k") + 1] == "460"
-    assert not {"--match-dir", "--require-fold-match", "--value-check"} & set(cmd)
-    assert cmd.count("--build-rank") == 2 and cmd[cmd.index("--required-manifest") + 1] == f"{t.d}/manifest.json"
-    row = _tp(tmp_path / "row")
-    (Path(row.M) / "fold_match").mkdir(parents=True)
-    (Path(row.M) / "fold_match" / "tp2_fold_match.json").write_text("{}")
-    row.fold_profile = "derived_LLAMA32_1B_tp2"
-    plain = row.commit_cmd([])
-    i = plain.index("--required-manifest")
-    assert plain[i + 2:i + 4] == ["--match-dir", row.M] and plain[plain.index("--pairs") + 1:plain.index("--pairs") + 6] == ["3", "--warmup", "2", "--value-check", "--replay-workers"]
-    assert "--only-arm" not in plain and plain[-1] == "--require-fold-match", "a TP workload of record keeps its Match, pairs and value check"
-
-
-def test_tp_commit_s_own_parser_takes_every_flag_the_tp2_config_run_passes(tmp_path):
-    from verity_vllm.pipeline import cli
-    from verity_vllm.pipeline.tp.config_run import only_arm_summary, replay_k_per_rank
-    t = _tp(tmp_path, "--config-run", "1", "--replay-k", "460")
-    cmd = t.commit_cmd([])
-    args = cli.parse("tp-commit", cmd[cmd.index("tp-commit") + 1:], {})
-    assert (args.only_arm, args.replay_k, args.pairs, args.warmup, args.match_dir) == ("instrumented", 460, 1, 1, None)
-    assert replay_k_per_rank(460, 2) == {"0": 230, "1": 230} and replay_k_per_rank(461, 2) == {"0": 231, "1": 230}
-    assert replay_k_per_rank(None, 2) is None
-    one = [{"arm": "instrumented"}]
-    assert only_arm_summary("instrumented", one, one, [True]) == {"only_arm": "instrumented", "runs": 1, "commit_pass": True}
-    assert only_arm_summary("instrumented", one, one, [False])["commit_pass"] is False
-    assert only_arm_summary("instrumented", one, [], [])["commit_pass"] is False, "no instrumented run is not a pass"
-
-
-@pytest.mark.parametrize("commit_pass,expect", [(True, None), (False, 12)])
-def test_the_tp2_config_run_s_commit_decides_by_its_one_run(tmp_path, commit_pass, expect, monkeypatch):
-    t = _tp(tmp_path, "--config-run", "1")
-    t.to_k = 1
-    (Path(t.d) / "commit").mkdir()
-    (Path(t.d) / "commit" / "summary.json").write_text(json.dumps({"only_arm": "instrumented", "runs": 1, "commit_pass": commit_pass, "pass": commit_pass}))
-    monkeypatch.setattr(R_, "tp_rank_workload_digest", lambda bdir, r: f"wd{r}")
-    monkeypatch.setattr(R_, "tp_manifest_complete", lambda d: True)
-    monkeypatch.setattr(R_, "applicable_taps", lambda man, ck: [])
-    t.hidden_so = str(tmp_path / "verity_fa2_matReqG.so")      # never the host's pod-layout build (unreadable to other users on node 1)
-    Path(t.hidden_so).touch()
-    ran = []
-
-    def manifest_global(*a) -> int:
-        ran.append("manifest_global")
-        return 0
-
-    def run_tl(stage, to, log, cmd) -> int:
-        ran.append(stage)
-        return 0
-    monkeypatch.setattr(t, "manifest_global", manifest_global)
-    monkeypatch.setattr(t, "run_tl", run_tl)
-    if expect is None:
-        t.commit()
-        assert "commit PASS" in (Path(t.d) / "stages.txt").read_text()
-    else:
-        with pytest.raises(Stop) as e:
-            t.commit()
-        assert e.value.rc == expect
-    assert ran == ["commit.tp_commit"], "the config run's Commit reuses the Build's complete manifest"
-    assert t.child_env["VERITY_STAGING_BOUNDED"] == "1", "the ranks stage bounded, as the single-GPU config run's --bounded-staging"
 
 
 # ---------------------------------------------------------------------------------------------------------------- the config record

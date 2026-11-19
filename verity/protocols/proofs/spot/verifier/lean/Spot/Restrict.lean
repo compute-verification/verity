@@ -14,7 +14,9 @@ and the block's units (`Spot.BlockFront.members`), with in(S) and out(S) as `Spo
 
 * the root `Root[Block_v1]_v1`, whose Program function is `Block_v1`, has one input batch node for each maximal run of
   in(S) of one width and one binding, in increasing C index: `RegisteredInput<w>_v1` for a run of C's registered inputs,
-  `Input<w>_v1` for any other (a run input, or a gate a unit outside S computes);
+  `SuppliedInput<w>_v1` for a run of its supplied inputs, `Input<w>_v1` for any other (a run input, or a gate a unit
+  outside S computes); a supplied input keeps its kind and not its mark, which C's description holds by the input's
+  name;
 * then each root node of C that S holds: a call, or a batch S holds whole, as C has it; a batch S holds in part, one node a
   member, its arguments cut on their mapped axis. Each argument leaf is the port or the earlier node that carries its gate
   of C, the first to carry it;
@@ -63,7 +65,8 @@ def bindingOf (P : Prog) (root : Defn) (g : Nat) : String :=
     | none => RUN
   | none => RUN
 
-def inputKey (b : String) (w : Nat) : String := (if b == REGISTRATION then "RegisteredInput" else "Input") ++ s!"{w}_v1"
+def inputKey (b : String) (w : Nat) : String :=
+  (if b == REGISTRATION then "RegisteredInput" else if b == SUPPLIED then "SuppliedInput" else "Input") ++ s!"{w}_v1"
 
 /-- The input primitive of width `w` and binding `b`, as `decode` makes it. -/
 def inputDefn (b : String) (w : Nat) : Defn :=
@@ -311,5 +314,9 @@ def piece (j : Json) : Except String Json := do
 #guard !sameInput (inputDefn "run" 16) { inputDefn "run" 16 with binding := some "registration" }
 #guard !sameInput (inputDefn "run" 16) { inputDefn "run" 16 with params := #[("x", .value 16)] }
 #guard inputKey "registration" 16 == "RegisteredInput16_v1" && inputKey "run" 1 == "Input1_v1"
+#guard inputKey "supplied" 32 == "SuppliedInput32_v1" && inputKey "supplied" 1 == "SuppliedInput1_v1"
+#guard !sameInput (inputDefn "supplied" 16) (inputDefn "run" 16)
+#guard !sameInput (inputDefn "supplied" 16) (inputDefn "registration" 16)
+#guard (inputId? (inputDefn "supplied" 16).id).map (·.1) == some SUPPLIED
 
 end Spot.Restrict

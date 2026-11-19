@@ -461,7 +461,7 @@ def not_zk_why(line: Mapping[str, Any]) -> str | None:
 
 
 def drawn_block(program: bytes, partition: Mapping[str, Any], draw: Mapping[str, Any], public: Path,
-                ) -> tuple[int, list[tuple[int, int]]] | tuple[None, tuple[str, str]]:
+                decoded: OC.Decoded | None = None) -> tuple[int, list[tuple[int, int]]] | tuple[None, tuple[str, str]]:
     """The proof block of the partition object a statement's proof is of, and its units, taken from the challenger's
     `draw` (`service.select_draw`, `coins.draw_first`: its ``units`` and ``closure`` over the partition's blocks): the drawn
     block whose units the proof's public file names exactly (`units_exactly`). None and the refusal otherwise
@@ -470,7 +470,8 @@ def drawn_block(program: bytes, partition: Mapping[str, Any], draw: Mapping[str,
     holding its first unit, or a drawn block holding it whose units are not exactly the file's)."""
     ks = [*draw.get("units", ()), *draw.get("closure", ())] if isinstance(draw, Mapping) else []
     try:
-        blocks = {k: OC.block(program, partition, k) for k in ks}
+        decoded = decoded or OC.Decoded(program)
+        blocks = {k: OC.block(program, partition, k, decoded) for k in ks}
     except OC.Refused as e:
         return None, ("circuit", str(e))
     try:
@@ -504,7 +505,7 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], draw: 
     order, each naming that block (``block``), and None, or None and the refusal (``registered``: `registered` is None
     and the program reads registered values, `reads_registered`; ``undrawn``: the proof is of a block `draw` did not
     sample, or its public file's units are not exactly the drawn block's; ``inputs``: `inputs`, a scheme's reading of
-    the drawn block's public inputs from its committed records (PoUW's `drawn_inputs`), called with the drawn block's
+    the drawn block's public inputs from its committed records, called with the drawn block's
     index, raises a ValueError; ``circuit``: C and the partition give no drawn block or no C_S of it, or Lean's
     lowering of C_S refuses, `one_circuit.lower`;
     ``proof``: a file is missing or the
@@ -529,7 +530,8 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], draw: 
     if registered is None and reads_registered(program):
         return None, ("registered", "the program reads registered values (a RegisteredInput among its definitions) and "
                                     "the verifier holds no registered reads: verify with its own registered file")
-    k, units = drawn_block(program, partition, draw, proof.public)
+    decoded = OC.Decoded(program)
+    k, units = drawn_block(program, partition, draw, proof.public, decoded)
     if k is None:
         return None, units
     if inputs is not None:
@@ -538,7 +540,7 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], draw: 
         except ValueError as e:
             return None, ("inputs", f"drawn block {k}: {e}")
     try:
-        derived = OC.restrict(program, partition, units)
+        derived = OC.restrict(program, partition, units, decoded)
     except OC.Refused as e:
         return None, ("circuit", str(e))
     if not (proof.public.is_file() and proof.sessions and all((s / "session.json").is_file() for s in proof.sessions)):

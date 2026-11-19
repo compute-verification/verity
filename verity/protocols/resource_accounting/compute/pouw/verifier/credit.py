@@ -77,9 +77,9 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   the tile's R and C. Each K of its ``TILES`` is one the tile's proof covers, a multiple of 32 below 2^17
   (`TILE_K_STEP`, `TILE_K_LIMIT`: the K its ``GemmAccumulatorS8`` binds), else the window is refused (``tile-k``,
   `tile_k`, its fix the K to pad to). Its root's nodes other than inputs must be, in order, each call's (M/R)·(n/C)
-  instances of K's template, so the record names the units the circuit has. No composite Flock's decoder reads of it
-  names a word at another width than it was committed with (`_reinterprets`, the codec's ``E_REINTERPRET``), else it
-  is refused as no descriptor (`DESCRIPTOR_FORM`), as `Flock.Program.decode` refuses it. The cost is the descriptor's
+  instances of K's template, so the record names the units the circuit has. The codec's decoder must read it from its
+  bytes alone (`_decodes`: its Boolean bodies, widths and references, everything `Flock.Program.decode` checks), else it
+  is refused as no descriptor (`DESCRIPTOR_FORM`), as the Lean refuses it. The cost is the descriptor's
   nodes and the record's calls, never the gates they unroll to.
 * **K is committed, and ε is what it established** (`committed_k`, `established`): K is the proof system's selection,
   committed in the period-open (`K_FIELD`, in the auditor's signed ledger beside the period's circuit and cap) before
@@ -216,14 +216,12 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
 from verity.protocols.resource_accounting.compute.pouw.verifier.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, leaf_words, theta_root, weights_root
 from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
-from verity.circuits.codec import _checked_refs
-from verity.circuits.defs import _Widths
-from verity.circuits.refs import Coll, Concat, refs_from_json
-from verity.circuits.types import type_from_json
+from verity.circuits import codec, restrict
 from verity.commitments import domains
 from verity.commitments.merkle import root_from_subtrees
 
@@ -358,8 +356,8 @@ LEAF_UNIT = {LL.LANE: "PouwH1LaneZy_v1", LL.COMBINE: "PouwH1Combine_v1"}
 ZY_UNIT = "PouwH1TileZy_v1"
 DESCRIPTOR_HEX = ("the window's descriptor is not the bytes of the circuit its proofs were verified against in "
                   "lowercase hex (its canonical JSON without annotations, the bytes program_digest hashes)")
-#: the descriptor schema `layout_of` reads
-SCHEMA = domains.IR_DESCRIPTOR
+#: the descriptor schema `layout_of` reads: the decoder's (`codec.SCHEMA`, Lean's `Flock.Program.SCHEMA`)
+SCHEMA = codec.SCHEMA
 #: h1window's Program function, `h1window.PouwH1Window`, and its record's bindings in order
 WINDOW_FN = "PouwH1Window_v3"
 RECORD = ("TILES", "LINEARS", "CALLS", "M", "PREFIX")
@@ -373,7 +371,7 @@ SHARED_J10R = (*SHARED, "call", "blocks")
 TILE_K_STEP = 32
 TILE_K_LIMIT = 1 << 17
 _INPUT = re.compile(r"(?:Registered)?Input[1-9][0-9]*_v1")
-DESCRIPTOR_FORM = ("the window's descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON (keys sorted, "
+DESCRIPTOR_FORM = (f"the window's descriptor is not a {SCHEMA} descriptor in canonical JSON (keys sorted, "
                    "compact, ASCII: the bytes program_digest hashes) with its callees, definitions, program function and "
                    "root")
 NOT_WINDOW = ("the window's circuit is not an H1 window: its program function is not PouwH1Window_v3{TILES=…,LINEARS=…,"
@@ -441,7 +439,7 @@ LIVE_STATEMENTS_FORM = ("the window's live evidence is not {descriptor, statemen
                         "lowercase hex and a list of {circuit, public, round, sessions}, each round's live@<s> proof "
                         "files: the paths of its circuit file and its public file, and its sessions' directories (at "
                         "least one)")
-LIVE_DESCRIPTOR_FORM = ("the window's live descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON "
+LIVE_DESCRIPTOR_FORM = (f"the window's live descriptor is not a {SCHEMA} descriptor in canonical JSON "
                         "with its callees, definitions, program function and root")
 NOT_LIVE = ("the window's live circuit is not a live Program: its program function is not PouwLiveWindow_v2{T=…,S=…,"
             "PREFIX=…}, each binding canonical JSON, T and S positive integers and PREFIX a string "
@@ -873,21 +871,6 @@ def _runs(xs: Any) -> list[list]:
     return out
 
 
-def _static_fns(v: Any) -> list:
-    """The functions a binding's static value names, as the decoder follows them (`Flock.Program.staticFns`): an
-    object's ``fn``, none in an ``f64``, a ``dict``'s values', a list's items', at any depth."""
-    out, todo = [], [v]
-    while todo:
-        x = todo.pop()
-        if isinstance(x, list):
-            todo += x
-        elif isinstance(x, dict) and "fn" in x:
-            out.append(x["fn"])
-        elif isinstance(x, dict) and "f64" not in x and isinstance(x.get("dict"), dict):
-            todo += x["dict"].values()
-    return out
-
-
 def _record_fns(v: Any) -> list:
     """Every ``{"fn": id}`` in a record value (`codec._record_function_ids`, `Flock.Program.recordFunctionIds`), at
     any depth."""
@@ -901,76 +884,15 @@ def _record_fns(v: Any) -> list:
     return out
 
 
-def _misreads(body: Any, types: list) -> bool:
-    """Whether a composite's `body` names, in a node's argument or its return, a leaf of another width than the
-    argument's or return's type gives that position: `defs.Builder.finish`'s check (`_Widths`), over the body's
-    references as the codec decodes them (`types` the descriptor's table). False for a body whose types or references
-    don't decode, which this check leaves to the rest."""
-    def entry(i: Any) -> Any:
-        if not (_nat(i) and i < len(types)):
-            raise IndexError(i)
-        return types[i]
-
-    def refs(j: Any, args: list[list]) -> Any:
-        if isinstance(j, dict) and "alias" in j:
-            k, a = j["alias"]
-            if not (_nat(k) and _nat(a) and k < len(args) and a < len(args[k])):
-                raise IndexError(k)
-            return args[k][a]
-        if isinstance(j, dict) and "concat" in j:
-            return Concat([refs(x, args) for x in j["concat"]])
-        return refs_from_json(j)
-
+def _decodes(descriptor: bytes) -> bool:
+    """Whether the codec's decoder reads `descriptor` from its bytes alone, each primitive as the descriptor declares it
+    (`restrict.program`), as `Credit.programOf` reads it with `Flock.Program.decode`: a descriptor it refuses (``E_BODY_KEY``,
+    ``E_BODY_MISSING``, ``E_REINTERPRET``, ...) is no descriptor."""
     try:
-        params = tuple((p[0], type_from_json(p[1])) for p in body["params"])
-        ret_type, nds = type_from_json(body["ret_type"]), body["nodes"]
-        nodes = [SimpleNamespace(out=entry(nd["out"])) for nd in nds]
-
-        def leaves(s: str, i: int) -> int | None:
-            t = params[i][1] if s == "p" and i < len(params) else nodes[i].out if s == "n" and i < len(nodes) else None
-            return None if t is None else t.leaves
-
-        W, args = _Widths(params, nodes), []
-        for k, nd in enumerate(nds):
-            W.below = k
-            got = [Coll(entry(a["type"]), _checked_refs(refs(a["refs"], args), leaves)) for a in nd["args"]]
-            if any(W.first(c) is not None for c in got):
-                return True
-            args.append([c.refs for c in got])
-        W.below = len(nodes)
-        return W.first(Coll(ret_type, _checked_refs(refs(body["ret"], args), leaves))) is not None
-    except (TypeError, ValueError, IndexError, KeyError, AttributeError, RecursionError):
+        restrict.program(descriptor)
+    except (restrict.Refused, IndexError, AttributeError, RecursionError):
         return False
-
-
-def _reinterprets(d: dict) -> bool:
-    """Whether a composite Flock's decoder reads of the descriptor `d` (one `_parsed` accepted) reads a word at
-    another width than it was committed with (`_misreads`, the codec's ``E_REINTERPRET``), which
-    `Flock.Program.decode` refuses.
-    Its composites are the root and the definitions its program function's record names, then each one's binding
-    statics' functions and its nodes' callees, as the decoder follows them."""
-    defs, callees, seen = d["definitions"], d["callees"], set()
-    todo = [d["root"]]
-    for _k, v in _record(d["program_fn"]):
-        todo += _record_fns(_loads(v)[1])
-    try:
-        types = [type_from_json(t) for t in d.get("types", [])]
-    except (TypeError, ValueError, IndexError, KeyError, AttributeError, RecursionError):
-        return False
-    while todo:
-        fid = todo.pop()
-        x = defs.get(fid) if type(fid) is str and fid not in seen else None
-        if not (isinstance(x, dict) and x.get("form") == "composite"):
-            continue
-        seen.add(fid)
-        body = x.get("body")
-        nds = body.get("nodes") if isinstance(body, dict) else None
-        todo += _static_fns(x.get("bindings"))
-        todo += [callees[nd["fn"]] for nd in nds if isinstance(nd, dict) and _nat(nd.get("fn"))
-                 and nd["fn"] < len(callees)] if type(nds) is list else []
-        if _misreads(body, types):
-            return True
-    return False
+    return True
 
 
 def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
@@ -982,14 +904,13 @@ def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
     multiple of `TILE_K_STEP` below `TILE_K_LIMIT`, checked before K's template), and the root's nodes other than inputs
     are each call's (M/R)·(n/C) instances of its K's template, in the calls' order: a call one instance and a batch its
     members, as the template query counts units (`Q_template_instances`). Its cost is the descriptor's bytes, never the
-    gates its nodes unroll to. The Lean reads the descriptor through Flock's decoder (`Credit.programOf`), so it also
-    refuses (`DESCRIPTOR_FORM`) a descriptor that decoder refuses; this checks its form (`_parsed`) and that no
-    composite the decoder reads names a word at another width (`_reinterprets`)."""
+    gates its nodes unroll to. A descriptor of another form (`_parsed`) or one the decoder refuses (`_decodes`, as the
+    Lean's `Credit.programOf` refuses one `Flock.Program.decode` refuses) is refused (`DESCRIPTOR_FORM`)."""
     def no(why: str) -> tuple[None, tuple[str, str]]:
         return None, ("layout", why)
 
     d = _parsed(descriptor)
-    if d is None or _reinterprets(d):
+    if d is None or not _decodes(descriptor):
         return no(DESCRIPTOR_FORM)
     callees, defs, fn = d["callees"], d["definitions"], d["program_fn"]
     rec = _record(fn) if fn.startswith(WINDOW_FN + "{") else []
@@ -1122,24 +1043,24 @@ def partition_of(program: str, shape: dict) -> dict:
 
 def registered_file(program: str, layout: dict, shape: dict, call: int, roots: dict, window: str, steps: int, salt: str
                     ) -> tuple[dict | None, tuple[str, str] | None]:
-    """The verifier's ``--registered`` file (`registered.READS_V1`) of call `call`'s statement in the window `layout` (one
-    `strata` accepted, its circuit's descriptor of SHA-512 `program` and `shape_of` `shape`, its calls `steps` rounds'
-    equal blocks), and None; or None and the refusal (``registration``: the window registers no root, or two, for a value
-    the statement reads). It is `h1window.table_reads_file`'s, built from the descriptor alone: unit u, tile t =
-    ti·(n/C) + tj of the call, reads its A row i (port ``a_k<K>_<i>``) at row o + R·ti + i of its round s's A table of
-    K ``<prefix>a/<K>@<s>`` (M rows for each of the round's calls of K, o the call's first, `step_row`), its B row j
-    (``b_k<K>_<j>``) at row b0 + C·tj + j of the weights' ``<prefix>b/<K>`` (b0 the call's linear's first row in it,
-    its rows each of K's linears' n in turn); at a K of x = `weights.chunks` (K) > 1 chunks each row is x leaves, so
-    its chunk row i of x·R (port ``a_k<K>_<i>``) is leaf x·(o + R·ti) + i, its chunk row j of x·C leaf
-    x·(b0 + C·tj) + j, and each of those values has x leaves a row; and its record (``zy``) at row t of the call's z table ``<prefix>zy@<call>``
-    (a row a unit of the call); and, when the window registers the call's receipt table ``<prefix>receipt@<call>``,
-    the statement's output row o0 (`RECEIPT_PORT`, the unit's receipt, `shape_of`'s width) at its row t, so the
-    receipts the round roots commit are the ones the units return; every other unit reads none of them: each port's
-    reads start at the call's first unit u0 (``reads_from``, `core_check.call_reads`) and end at its last (the verifier
-    reads none below ``reads_from`` or past ``reads``). Each value is a row/v2 value of 16-bit leaves under
-    `registered_value.domain` of its name, rows and words, binding the window's open root `window` but for the weights',
-    held across windows (`domain_of`), at the root `roots` (``{value: [root, ...]}``, each value's registered roots)
-    gives it. Its reads cost the call's units, once a port; only the ok rows' known content is the window's.
+    """The verifier's ``--registered`` file (`registered.READS_V2`, Flock's `Registered.FORMAT`) of call `call`'s
+    statement in the window `layout` (one `strata` accepted, its circuit's descriptor of SHA-512 `program` and
+    `shape_of` `shape`, its calls `steps` rounds' equal blocks), and None; or None and the refusal (``registration``:
+    the window registers no root, or two, for a value the statement reads). It is `h1window.table_reads_file`'s, built
+    from the descriptor alone: unit u, tile t = ti·(n/C) + tj of the call, reads its A row i (port ``a_k<K>_<i>``) at
+    row o + R·ti + i of its round s's A table of K ``<prefix>a/<K>@<s>`` (M rows for each of the round's calls of K, o
+    the call's first, `step_row`), its B row j (``b_k<K>_<j>``) at row b0 + C·tj + j of the weights' ``<prefix>b/<K>``
+    (b0 the call's linear's first row in it, its rows each of K's linears' n in turn); at a K of x = `weights.chunks`
+    (K) > 1 chunks each row is x leaves, so its chunk row i of x·R (port ``a_k<K>_<i>``) is leaf x·(o + R·ti) + i, its
+    chunk row j of x·C leaf x·(b0 + C·tj) + j, and each of those values has x leaves a row; and its record (``zy``) at
+    row t of the call's z table ``<prefix>zy@<call>`` (a row a unit of the call); and, when the window registers the
+    call's receipt table ``<prefix>receipt@<call>``, the statement's output row o0 (`RECEIPT_PORT`, the unit's receipt,
+    `shape_of`'s width) at its row t, so the receipts the round roots commit are the ones the units return; every other
+    unit reads none of them. The file states none of these positions: C and the partition give each unit's row
+    (`Flock.OneCircuit.pos`). Each value is a row/v2 value of 16-bit leaves under `registered_value.domain` of its name,
+    rows and words, binding the window's open root `window` but for the weights', held across windows (`domain_of`), at
+    the root `roots` (``{value: [root, ...]}``, each value's registered roots) gives it. Its reads cost the call's
+    units, once a port; only the ok rows' known content is the window's.
 
     The statement's public row ``pub`` (`PUB_PORT`), each unit's seed's inputs, is the verifier's own: unit u0 + t reads
     row t of the call's public table ``<prefix>pub@<call>`` (`h1window.public_table`), which the file names at its known
@@ -1166,14 +1087,9 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
     ks = {name: (k, n) for name, k, n in layout["linears"]}
     k, n = ks[lin]
     tile = shape["tiles"][k]
-    b0 = 0
-    for name, kk, nn in layout["linears"]:
-        if name == lin:
-            break
-        b0 += nn if kk == k else 0
     sizes = [size for size, _work in call_work(layout)]
     u0, size, per, x = sum(sizes[:call]), sizes[call], n // c, tile["n"]
-    s, calls_k, at = step_row(layout, steps, call)
+    s, calls_k, _ = step_row(layout, steps, call)
     a, zy, b = f"{prefix}a/{k}@{s}", f"{prefix}zy@{call}", f"{prefix}b/{k}"
     rows_of = {a: (x * m * calls_k, tile["a"]), zy: (size, tile["zy"]),
                b: (x * sum(nn for _name, kk, nn in layout["linears"] if kk == k), tile["b"])}
@@ -1191,32 +1107,30 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
     if any(_digest(roots[v][0]) is None for v in (a, b)):
         return None, ("registration", f"call {call}'s seed reads the roots of {a} and {b}, which are not both SHA-512 "
                                       "digests (128 lowercase hex): register each table at its tree's root")
-    ports: list[tuple[str, str, Any]] = (
-        [(f"a_k{k}_{i}", a, lambda t, i=i: x * (at + r * (t // per)) + i) for i in range(x * r)]
-        + [(f"b_k{k}_{j}", b, lambda t, j=j: x * (b0 + c * (t % per)) + j) for j in range(x * c)]
-        + [("zy", zy, lambda t: t)] + ([(RECEIPT_PORT, rc, lambda t: t)] if rc in rows_of else []))
+    ports: list[tuple[str, str]] = (
+        [(f"a_k{k}_{i}", a) for i in range(x * r)] + [(f"b_k{k}_{j}", b) for j in range(x * c)]
+        + [("zy", zy)] + ([(RECEIPT_PORT, rc)] if rc in rows_of else []))
     params = {f"{p}_k{k}_{i}": {G.PARAM_KEY: f"{p}_k{k}" if n == 1 else f"{p}_k{k}[{i}]"}
               for p, n in (("a", x * r), ("b", x * c)) for i in range(n)}
     out = {}
-    for port, v, row in ports:
+    for port, v in ports:
         leaves, words = rows_of[v]
         out[port] = {**params.get(port, {}), "value": v, "root": roots[v][0], "leaves": leaves, "words": words,
                      "word_bits": RV.WORD_BITS,
                      "domain": RV.domain(program, v, words, leaves,
                                         window=None if is_held(v) else window).domain_id.hex(),
-                     **RV.schema_entry(G.SCHEMA_V2), **CC.call_reads(u0, [row(t) for t in range(size)])}
+                     **RV.schema_entry(G.SCHEMA_V2)}
     pv = f"{prefix}pub@{call}"
     blocks = [CC.j10r_blocks(m, k, (r, c), t // per, t % per) for t in range(size)] if tile["j10r"] else None
     rows, salts, reg = public_table(program, pv, salt, window, u0, size, (roots[a][0], roots[b][0]), blocks)
     out[PUB_PORT] = {"value": pv, "root": reg.root.hex(), "leaves": size, "words": len(rows[0]), "word_bits": RV.WORD_BITS,
                      "domain": reg.domain.domain_id.hex(), **RV.schema_entry(G.SCHEMA_V2),
-                     **CC.call_reads(u0, list(range(size))), "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
+                     "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
     rows, salts, reg = ok_table(program, ov, window, sum(sizes))
     out[OK_PORT] = {"value": ov, "root": reg.root.hex(), "leaves": sum(sizes), "words": len(CC.OK_ROW),
                     "word_bits": RV.WORD_BITS, "domain": reg.domain.domain_id.hex(), **RV.schema_entry(G.SCHEMA_V2),
-                    **CC.call_reads(u0, list(range(u0, u0 + size))),
                     "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
-    return {"format": G.READS_V1, "ports": out}, None
+    return {"format": G.READS_V2, "ports": out}, None
 
 
 def public_table(program: str, value: str, salt: str, window: str, u0: int, n: int, roots: tuple[str, str],
@@ -1918,7 +1832,8 @@ def leaf_registered_file(program: str, layout: dict, shape: dict, u: int, statem
     record's root `produced` (``{value: root}``); its known ports `h1window.leaf_known_ports`' (``pub`` of the window's
     Program salt `salt`, position u and the call's roots root(``a/<K>@<s>``) and root(``b/<K>``), ``admit`` every row and
     every ``o0`` the row 1, each its own served value under `leaf_lanes.known_salt`). A read of an A row, a B row or
-    a partials row is marked ``read_in_full``."""
+    a partials row is read in full, which the verifier's `registered.READS_V2` file cannot mark: a statement with one is
+    refused by name (``registration``, `PouwWindow.Lanes.fullHole`), and every leaf statement has one."""
     (r, c), prefix, kind, m = layout["tile"], shape["prefix"], statement[0], layout["m"]
     ln, ch = (statement[1:] + (None, None))[:2]
     at = leaf_place(layout, shape, u, steps)
@@ -1934,6 +1849,10 @@ def leaf_registered_file(program: str, layout: dict, shape: dict, u: int, statem
                                       f"registers {'twice' if roots.get(rc) else 'not'}: a lanes-form call registers "
                                       "its receipt table once, the receipts the combine checks the lanes' XOR against")
     logical = LL.reads(r, c, kind, ln, ch, j10r=k if j10r else None)
+    if full := [port for port, (v, _row) in logical.items() if v in (LL.A, LL.B, LL.PARTIALS)]:
+        return None, ("registration", str(OC.NotDerived(
+            f"a leaf statement's ports [{', '.join(full)}] are read in full, and a {G.READS_V2} port has no "
+            f"{LL.READ_IN_FULL} (Flock.Registered.PORT_KEYS)")))
     values = LL.produced_values(r, c, k, j10r=j10r)
     ports = {}
     for port, (v, row) in logical.items():
@@ -2443,7 +2362,8 @@ def _live_asks(files: Any, statements: Any, raw: bytes, got: dict, roots: dict, 
             return out, (LIVE, f"round {s} has {'two live statements' if s in seen else 'a live statement'} and the "
                                f"window has {got['S']} rounds: each round's live@<s> is one statement, verified once")
         seen.add(s)
-        reg = LR.reads_file(program, got["T"], got["S"], s, roots, window, session, ms[s], got["prefix"], max_tokens)
+        reg = LR.reads_file(program, got["T"], got["S"], s, roots, window, session, ms[s], got["prefix"], max_tokens,
+                            positions=False)
         out.append({"statement": i, "circuit_sha512": files[LIVE], "registered": reg, "partition": partition})
     return out, None
 

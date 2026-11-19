@@ -15,8 +15,8 @@ and a file past zip's 32-bit sizes written by ``np.savez`` (`pouw_h1_prover.save
 And what a window's own parts refuse with no GPU: its sessions (`pouw_h1_window`: a lane's open period, a salt coin
 that doesn't open, the gate's withheld open, a sample session's reserve, open and layout, a second open), a receipt
 producer's launches, run, codes, weight and roots (`pouw_h1_receipts.Receipts`), the sampled statements' window,
-weights, weights' key and sessions (`drawn.window_of`, `linear_weights`, `weights_key`, `statements`, `check`), a
-multiprocess window's ranks (`pouw_h1_ranks.install`, `ingest`, `RankExtension`), a call that committed nothing
+weights, weights' key and sessions (`drawn.window_of`, `linear_weights`, `weights_key`, `statements`, `check`), a call
+that committed nothing
 (`pouw_h1_served.Served.close`, `pouw_h1_kept.kept_row`), and the host's libraries and table roots
 (`pouw_h1_registered_device.host_lib`, `zy_host_lib`, `pouw_h1_tables_device.host_roots`).
 
@@ -31,8 +31,7 @@ host's salts (`pouw_h1_registered_device.host_commit`), and records that say the
 And what the GPU path does that a CPU reaches: a window hashed where that path says by the host's twins of the
 kernels (`pouw_h1_tables_device.flush`, `pouw_h1_registered.commit`, `public_salts`, `pouw_h1_served.Served.settle`),
 kernels that don't build and a library off `ZyArgs` (`pouw_h1_registered_device.available`, `zy_host_lib`). Beside
-it, a pull that holds two engine steps and a rank call with no rows or off the Program's order
-(`pouw_h1_ranks.Holder.pull`, `ingest`, `pouw_h1_served.Served.commit`), a leaf's committed files, its staged table
+it, a call off the Program's order (`pouw_h1_served.Served.commit`), a leaf's committed files, its staged table
 and its record's root (`drawn.leaf_stagers`, `prover.lowering.stagers`' `FileStager.stage`, `stage_leaves`), and a saved window's Program
 (`pouw_h1_handoff.resume`).
 
@@ -113,19 +112,16 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     salt_of,
     weights_root,
 )
-from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
 from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
 from verity.protocols.proofs.spot.verifier.challenger import remote as R
 from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError, LiveRecord
 from verity.commitments import registered_value as RV
 
 import verity_vllm.protocols.pouw.h1_hooks as PHK
-import verity_vllm.protocols.pouw.h1_ranks as PHR
 from tests.protocols import challenger_host as CH
 from tests.protocols import pouw_h1_circuits as PC
 from tests.protocols import test_pouw_h1_commit as TC
 from tests.protocols import test_pouw_h1_handoff as TH
-from tests.protocols import test_pouw_h1_ranks as TR
 from tests.protocols import test_pouw_h1_served as TS
 from tests.protocols.test_pouw_h1 import (
     AUDITOR,
@@ -1558,95 +1554,6 @@ def test_a_windows_record_is_read_under_its_declared_programs_layout_and_only_wi
     assert refusal({"served": {"entries": [], "refused": refused}}) == f"the window's served trees were refused: {refused}"
 
 
-def _ranks(*ranks, cls=TR.FakeRank):
-    """An executor over one worker for each (pp, tp) of `ranks`, two linears each, and the workers."""
-    layers = TR._layers()
-    workers = [cls(tp, layers[2 * i:2 * i + 2]) for i, (_pp, tp) in enumerate(ranks)]
-    for worker, rank in zip(workers, ranks):
-        worker.rank = rank
-    return TR.Executor(workers), workers
-
-
-def _install(executor, **kw):
-    return PHR.install(None, executor=executor, rows=32, steps=4, entry="t", **kw)
-
-
-def test_a_multiprocess_window_is_refused_before_a_rank_is_installed_when_its_salt_or_its_ranks_dont_fit():
-    """`install` refuses, by the window's entry and before any rank holds a window: a salt from both coins and an
-    opener, or from neither; ranks whose runners disagree on decode_query_len; and the Commit over more than one
-    pipeline stage, whose later stages acquire no input ids."""
-    coins = Challenger(0, random.Random(0).randbytes)
-    executor, workers = _ranks((0, 0), (0, 1))
-    for salt in ({}, {"coins": coins, "opener": lambda requests: None}):
-        with pytest.raises(ValueError, match="^t: the window's salt is from coins or opened by its opener, one of the two$"):
-            _install(executor, **salt)
-    workers[1].model_runner.decode_query_len = 2
-    with pytest.raises(ValueError, match="^t: the ranks' runners disagree on decode_query_len$"):
-        _install(executor, coins=coins)
-    executor, staged = _ranks((0, 0), (1, 0))
-    with pytest.raises(ValueError, match="^t: the Commit across pipeline stages: a later stage acquires no input ids$"):
-        _install(executor, coins=coins, served=SV.Served(PH.TILE, TS._unit()), commit={})
-    assert all(worker._h1rank is None for worker in (*workers, *staged))
-
-
-class _ShortOfARoot(TR.FakeRank):
-    """A rank whose install answers without its last linear's weight root."""
-
-    def h1rank_install(self, **kw):
-        out = super().h1rank_install(**kw)
-        out["roots"].popitem()
-        return out
-
-
-class _Committing(TR.FakeRank):
-    """A rank whose Commit acquires input ids under a port named by its tensor-parallel rank."""
-
-    def h1rank_commit(self, **kw):
-        return {"port": f"ids@tp{self.rank[1]}"}
-
-
-def test_a_multiprocess_window_is_refused_when_its_ranks_roots_or_their_commits_ports_dont_make_one_window():
-    """Every linear of the window has its weight root from the rank that holds it, and with the Commit every rank
-    acquires input ids under one port. `install` refuses ranks whose roots cover fewer linears than their shapes
-    hold, and ranks whose Commits name two ports, each by the window's entry."""
-    coins = Challenger(0, random.Random(0).randbytes)
-    for cls, kw, said in ((_ShortOfARoot, {}, "t: the ranks' weight roots cover 2 of 4 linears"),
-                          (_Committing, {"served": SV.Served(PH.TILE, TS._unit()), "commit": {}},
-                           "t: the ranks' Commits acquire input ids under ['ids@tp0', 'ids@tp1'], not one port")):
-        executor, workers = _ranks((0, 0), (0, 1), cls=cls)
-        try:
-            with pytest.raises(RuntimeError) as refused:
-                _install(executor, coins=coins, **kw)
-        finally:
-            executor.collective_rpc("h1rank_release")
-        assert str(refused.value) == said and all(worker._h1rank is None for worker in workers)
-
-
-def test_a_rank_with_no_window_refuses_its_salt_and_its_rows_and_releases_nothing():
-    """Before `h1rank_install` and after `h1rank_release` a rank holds no window: it refuses the holder's salt and a
-    pull of its rows, and a release there returns None."""
-    rank = PHR.RankExtension()
-    for ask in (lambda: rank.h1rank_open(SALT), rank.h1rank_rows):
-        with pytest.raises(RuntimeError) as refused:
-            ask()
-        assert str(refused.value) == ("this rank holds no H1 window: h1rank_install has not run on it, or "
-                                      "h1rank_release has")
-    assert rank.h1rank_release() is None
-
-
-def test_a_rank_call_that_does_not_follow_the_windows_last_call_is_refused():
-    """The holder takes its ranks' calls in index order. One at or before the last call the window holds, here a
-    pulled call handed over again, is refused by both indices, and the window keeps its calls."""
-    holder, _executor = TR._staged()
-    run = holder.run
-    calls = list(run.calls)
-    again = {"call": dataclasses.asdict(calls[3])}
-    with pytest.raises(RuntimeError) as refused:
-        PHR.ingest(run, [again])
-    assert str(refused.value) == f"t: rank call 3 after call {calls[-1].index}"
-    assert run.calls == calls and calls[-1].index == len(calls) - 1
-
-
 def test_a_calls_statement_is_listed_with_the_one_session_that_proved_it_and_check_needs_credits_verification(tmp_path):
     """`statements` lists each planned call's statement with the one session that proved it: a call whose directory
     holds no session, or two, is refused by the call and the count, and with one the statement names it. `check` is
@@ -2090,52 +1997,6 @@ def test_a_zy_library_whose_args_are_not_the_bytes_of_zyargs_is_refused(monkeypa
     monkeypatch.setattr(RGD, "ZyArgs", Short)
     with pytest.raises(RuntimeError, match=f"^zy_commit.cuh's Args is {args} bytes, ZyArgs 4$"):
         RGD.zy_host_lib.__wrapped__()
-
-
-def test_a_pull_that_holds_two_engine_steps_of_the_ranks_commits_is_refused_by_its_steps():
-    """The window's tap keeps one engine step a site, so what the ranks' Commits acquired by one pull is of one
-    engine step. A pull that holds two is refused by its steps; what each rank acquired is still fed to the tap, and
-    a rank with no Commit, which answers with nothing acquired, keeps its place."""
-    x: np.ndarray = np.zeros((1, 8), np.int8)
-
-    def rank(lo, *acquired):
-        return {"lo": lo, "rows": [], "refused": [], "order_ok": True, "unopened": None,
-                **({"acquired": list(acquired)} if acquired else {})}
-    pulls = [[rank(2), rank(0, ("m/row_quant/0", 4, x), ("m/row_quant/1", 4, np.ones(1, "<f4"))),
-              rank(4, ("n/row_quant/0", 5, x))],
-             [rank(0, ("m/row_quant/0", 6, x)), rank(2), rank(4, ("n/row_quant/0", 6, x))]]
-    tap = CT.CommitTap()
-    run = SimpleNamespace(served=SimpleNamespace(tap=tap), shapes_=[])
-    holder = PHR.Holder(run, SimpleNamespace(collective_rpc=lambda method: pulls.pop(0)), [{"decode_query_len": 1}], None)
-    assert holder.pull() == 0
-    assert tap.refused == ["one pull held engine steps [4, 5]: the window's tap keeps one step a site"]
-    assert sorted(tap.acquired) == [(4, "m/row_quant", "0"), (4, "m/row_quant", "1"), (5, "n/row_quant", "0")]
-    assert holder.pull() == 0 and len(tap.refused) == 1 and len(tap.acquired) == 5
-    assert holder.pulls == 2 and sorted(holder.ranks) == [0, 2, 4]
-
-
-def test_a_rank_call_with_no_rows_or_off_the_programs_order_refuses_the_windows_registered_tables():
-    """A multiprocess window registers its tables from the rows its ranks ship with each call (`ingest`). A call
-    whose rank shipped none refuses the window's tables by the call. One that is not at its step's and linear's
-    place in the declared Program, or is past its calls, is refused by its index, step and linear
-    (`Served.commit`). Either way the call is the window's and registers nothing."""
-    linears = len(TS.SHAPES)
-
-    def row(index, step, layer, **shipped):
-        n, k = TS.SHAPES[layer]
-        return {"call": dataclasses.asdict(PH.Call(index, step, layer, TS.MODULES[layer], 0, k, n, 0, TS.T)), "salts": {},
-                **shipped}
-    past = TS.STEPS * linears
-    for shipped, said in ((row(0, 0, 0), "call 0: its rank shipped no rows for the window's registered tables"),
-                          (row(1, 0, 0, served={}), "call 1 (step 0, linear 0) is off the declared Program's order"),
-                          (row(past, TS.STEPS, 0, served={}),
-                           f"call {past} (step {TS.STEPS}, linear 0) is off the declared Program's order")):
-        run = PH.H1Run("t", SALT, TS.MODULES, TS.SHAPES, TS.T, TS.STEPS,
-                       served=SV.Served(TS.TILE, TS._unit(), TS.BLOCKS, window=TS.W1))
-        PHR.ingest(run, [shipped])
-        index = shipped["call"]["index"]
-        assert run.served.refused == [said]
-        assert [c.index for c in run.calls] == [index] and run.tables[index]["registered"] == {}
 
 
 def test_a_leafs_committed_files_are_held_to_the_manifest_and_a_staged_table_to_its_instances_rows(tmp_path):

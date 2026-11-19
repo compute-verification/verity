@@ -296,9 +296,10 @@ private def poolValues (pool : Option Docket.Pool) (program : String) (log : Arr
 /-- The rows of C's supplied inputs (`Supplied.marks` of the program's descriptor), each its function's value under the
 coins the verifier holds (`coins`, `{function: hex}`): refused where the verifier registers no read of the input (a
 supplied input is read only through a port of its own registered reads), where the scheme supplies rows for it too, and
-where its layout is `digest` and its parameter's leaves aren't whole digests or the other way round. -/
+where its layout is `digest` and its parameter's leaves aren't whole digests or the other way round; and refused by the
+order rule (`Supplied.order`) at `released`, the verifier's place of each coin, after `records` records of the log. -/
 def markedRows (j : Json) (registered : Array (String × Nat)) (params : Array Registered.Param)
-    (supplied : Array (String × Supplied.Rows)) : V (Array (String × Supplied.Rows)) := do
+    (supplied : Array (String × Supplied.Rows)) (records : Nat) : V (Array (String × Supplied.Rows)) := do
   let marked ← Supplied.marks (getD j "program")
   let coins ← match getD j "coins" with
     | .null => pure #[]
@@ -308,7 +309,7 @@ def markedRows (j : Json) (registered : Array (String × Nat)) (params : Array R
         pure (f, ← Flock.unhex s)
       | _ => throw s!"coins: {f}'s coin is not hex"
     | _ => throw "coins are an object of hex by supplied function"
-  marked.mapM fun (v, m) => do
+  let rows ← marked.mapM fun (v, m) => do
     if !registered.any (·.1 == v) then
       throw s!"supplied input {v}: the verifier registers no read of it: a supplied input is read only through a port of the verifier's own registered reads"
     if supplied.any (·.1 == v) then
@@ -317,6 +318,8 @@ def markedRows (j : Json) (registered : Array (String × Nat)) (params : Array R
     if (m.layout == "digest") != Supplied.digests p.ty then
       throw s!"supplied input {v}: layout {m.layout} reads whole digests only into a parameter of whole digests"
     return (v, ← Supplied.ofMark coins v m)
+  Supplied.order marked rows coins (getD j "released") records
+  return rows
 
 /-- The parameters as parsed, before `paramsOfJson`'s refusal of the sampling design: the stream's run reads them and
 refuses the sampling design its rule names itself (`Run.run`, `bernoulli`). -/
@@ -327,6 +330,7 @@ def paramsParsed (j : Json) : V Params := do
   let keys := if tiedGiven then keys.push "tied" else keys
   let keys := if (field? j "supplied").isSome then keys.push "supplied" else keys
   let keys := if (field? j "coins").isSome then keys.push "coins" else keys
+  let keys := if (field? j "released").isSome then keys.push "released" else keys
   let keys := if (field? j "pinned").isSome then keys.push "pinned" else keys
   let keys := if (field? j "outputs").isSome then keys.push "outputs" else keys
   let keys := if (field? j "row_schemas").isSome then keys.push "row_schemas" else keys
@@ -399,7 +403,7 @@ def paramsParsed (j : Json) : V Params := do
     | some s => do
       if registered.isEmpty then throw "supplied values are registered values: the verifier expects none registered"
       Supplied.sources s
-  let supplied := supplied ++ (← markedRows j registered params supplied)
+  let supplied := supplied ++ (← markedRows j registered params supplied log.size)
   let pinned ← match field? j "pinned" with
     | none => pure #[]
     | some (.obj kvs) => do

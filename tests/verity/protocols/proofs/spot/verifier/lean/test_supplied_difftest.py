@@ -50,6 +50,7 @@ def reference(j):
                                         and isinstance(binding.get("prover"), str)):
             raise ValueError("binding")
         held = {f: bytes.fromhex(h) for f, h in coins.items()}
+        G.order(ms, {v: G.of_mark(held, v, m) for v, m in ms.items()}, held, j.get("released"), len(log))
         out = {}
         for v, m in ms.items():
             w = G._nat(widths.get(v))
@@ -132,6 +133,22 @@ SETUP = {"program": desc([["store", 1], ["salt", 1, SALT], ["one", 1, ONE]], [1,
          "record": RECORD, "log": [], "binding": BINDING}
 
 
+#: the setup's salt read beside the root the record registers for ``w`` (`registered.root/v1`), as input ``rw``
+ORDERED = {"program": desc([["salt", 1, SALT], ["rw", 1, ROOTS[0]]], [2, 3]), "widths": {"salt": 16, "rw": 1}}
+
+
+def test_the_order_rule_names_the_commitments_registered_after_the_coin():
+    """`registered.order` refuses by name (E_SUPPLIED_ORDER) a commitment C's marks read whose place is at or after
+    the place of a coin they read, and needs a place for such a coin."""
+    j = {**SETUP, **ORDERED}
+    with pytest.raises(D.Reject, match=r"^E_SUPPLIED_ORDER: \['w'\] registered after pous.setup.salt/v1, which a "
+                                       r"supplied value reads$"):
+        reference({**j, "released": {"pous.setup.salt/v1": 0}})
+    with pytest.raises(D.Reject, match="names no place of pous.setup.salt/v1's coin"):
+        reference(j)
+    assert reference({**j, "released": {"pous.setup.salt/v1": 1}})["salt"]
+
+
 @needs_lake
 @pytest.mark.parametrize("name, change, want", [
     ("the setup's salt and the held 1", lambda j: j, {"salt": [[0x0100 + 0x0202 * i for i in range(12)]], "one": [[1]]}),
@@ -162,6 +179,22 @@ SETUP = {"program": desc([["store", 1], ["salt", 1, SALT], ["one", 1, ONE]], [1,
     ("a cut its leaves aren't: the one row", lambda j: {**j, "cuts": {"salt": [5, 4]}},
      {"salt": [[0x0100 + 0x0202 * i for i in range(12)]], "one": [[1]]}),
     ("a cut not [n, k]", lambda j: {**j, "cuts": {"salt": [3]}}, None),
+    ("a coin released after the record's root it is read beside", lambda j: {**j, **ORDERED, "released": {
+        "pous.setup.salt/v1": 1}}, {"salt": [[0x0100 + 0x0202 * i for i in range(12)]], "rw": [G.digest_leaves(bytes.fromhex("11" * 64))]}),
+    ("W's root registered after the setup's salt: E_SUPPLIED_ORDER", lambda j: {**j, **ORDERED, "released": {
+        "pous.setup.salt/v1": 0}}, None),
+    ("no place of the coin read beside a root", lambda j: {**j, **ORDERED}, None),
+    ("a place that is no natural", lambda j: {**j, **ORDERED, "released": {"pous.setup.salt/v1": -1}}, None),
+    ("a place of no supplied function", lambda j: {**j, **ORDERED, "released": {"no.such/v1": 1}}, None),
+    ("the log's base after the coin of two records", lambda j: {
+        **j, "log": [{"population": 2}, {"population": 3}], "program": desc([["salt", 1, SALT], ["base", 1, ROOTS[4]]],
+                                                                          [2, 2]),
+        "widths": {"salt": 16, "base": 16}, "released": {"pous.setup.salt/v1": 1}}, None),
+    ("the log's base before it", lambda j: {
+        **j, "log": [{"population": 2}, {"population": 3}], "program": desc([["salt", 1, SALT], ["base", 1, ROOTS[4]]],
+                                                                          [2, 2]),
+        "widths": {"salt": 16, "base": 16}, "released": {"pous.setup.salt/v1": 2}},
+     {"salt": [[0x0100 + 0x0202 * i for i in range(12)]], "base": [[0, 0, 5, 0]]}),
     ("a window salt with no binding", lambda j: {**j, "binding": None, "coins": {"window.salt/v1": "07"},
                                                  "program": desc([["s", 1, ROOTS[3]]], [2]), "widths": {"s": 16}}, None),
 ], ids=lambda x: x if isinstance(x, str) else "")

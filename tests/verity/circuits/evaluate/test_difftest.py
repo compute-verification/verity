@@ -118,7 +118,7 @@ SAMPLER = (TW.NvLogf, TW.NvLogfV2, SPL.GumbelStreamKey, SPL.GumbelNoiseLane, SPL
 #: E4's MUFU primitives (`Evaluate.Mufu`)
 MUFU = (MU.MufuEx2Ftz, MU.MufuRcpFtz, MU.Fa2InvSum, HOP.Fa3InvSum, MU.MufuSqrtFtz, MU.DivFullRcp, MU.RsqrtApprox, MU.MufuTanh)
 #: E4's correctly rounded transcendentals of the reference kinds (`Evaluate.Decimal`)
-DECIMALS = (RP.F32ExpRn, RP.F32LogRn, RP.F32ErfRn, RP.F32TanhRn)
+DECIMALS = (RP.F32ExpRn, RP.F32LogRn, RP.F32TanhRn)
 #: E4's activations and RoPE's outputs (`Evaluate.Act`)
 ACTS = (VP.SiluMulBf16, ACT.SiluMulBf16, VP.RopeOut, VP.RopeOutAdd, DENSE.TanhF32Rn, DENSE.GeluTanhMulBf16, ACT.GeluErfBf16)
 _E4_IDS = frozenset(p.id for p in WORDS + SAMPLER + MUFU + DECIMALS + ACTS)

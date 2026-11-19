@@ -56,7 +56,7 @@ def run(tmp_path_factory) -> tuple[Path, Path, dict]:
         mp.setattr(sys.modules[SP.__name__], "CLOCK", iter(VERIFY_CLOCK).__next__)
         for k in ("PEARLC_CHALLENGER_GATE", "PEARLC_CHALLENGER_PEER"):
             mp.delenv(k, raising=False)
-        a, b = (T.proved_pass(tmp / name, H100, ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
+        a, b = (T.proved_pass(tmp / name, H100, s)[0] for name, s in (("a", 0), ("b", 1)))
         d = T._serve_dir(tmp, [a, b])
         rc, doc, _answer = T.served_verify(d, tmp / "piece" / "verify.json")
     assert rc == 0 and doc["answer"]["verdict"] == "accept" and doc["source"] == SOURCE.hex(), doc["line"]
@@ -283,7 +283,7 @@ def test_case_writes_nothing_without_the_lean_answer_its_coin_record_or_its_pass
 
 def test_verify_sh_exits_on_the_leans_verdict_on_each_pass(tmp_path, monkeypatch):
     """``verify.sh`` on a window's passes (an honest prefill and decode and a control whose weight rows are flipped, each
-    `test_pearl_c_vllm.proved_pass`'s, of one epoch, as a test instance, ``TEST_INSTANCE=1``), their coin records drawn
+    `test_pearl_c_vllm.proved_pass`'s, of one epoch, each round 0 of a device run of its own as verified alone, as a test instance, ``TEST_INSTANCE=1``), their coin records drawn
     first on a fixed source, which the script's twin reads as a retry does, and a ``pouw-pearlplus`` that gives each pass
     the twin's verdict but those ``REFUSE`` names, where it answers nothing: the script exits 0 where the Lean accepts
     prefill and decode and rejects the control, and 1 where the Lean answers nothing on the prefill, which the twin
@@ -298,8 +298,8 @@ def test_verify_sh_exits_on_the_leans_verdict_on_each_pass(tmp_path, monkeypatch
         monkeypatch.delenv(k, raising=False)
     run, passes, said = "r-window", tmp_path / "work" / "passes" / "r-window", tmp_path / "said"
     said.mkdir()
-    for name, ix in (("prefill", (0, 1)), ("decode", (2, 3)), ("control", (4, 5))):
-        T.proved_pass(passes / name, H100, ix)
+    for name in ("prefill", "decode", "control"):
+        T.proved_pass(passes / name, H100)
     (passes / "coins.json").write_text((passes / "prefill" / "coins.json").read_text())
     rows = passes / "control" / json.loads((passes / "control" / "manifest.json").read_text())["weights"]["0"]["rows"]["path"]
     rows.write_bytes(bytes(b ^ 1 for b in rows.read_bytes()))

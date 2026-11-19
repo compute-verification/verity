@@ -109,6 +109,18 @@ SHORT_BITS = 65536
 _INST = hm96.SHA512
 _HEX = re.compile(r"[0-9a-f]+")
 _DEC = re.compile(r"0|[1-9][0-9]*")
+#: `Flock.Registered.freshValue`'s prefix: ``input/n<w>`` is run input node ``w``'s one tree
+FRESH = "input/n"
+
+
+def fresh_value(w: int) -> str:
+    """`Flock.Registered.freshValue`."""
+    return f"{FRESH}{w}"
+
+
+def is_fresh_value(v: Any) -> bool:
+    """`Flock.Registered.isFreshValue`: ``v`` is ``fresh_value(w)`` for some node ``w``."""
+    return type(v) is str and v.startswith(FRESH) and _DEC.fullmatch(v[len(FRESH):]) is not None
 
 
 def width(program: Program, value: str) -> int:
@@ -585,11 +597,13 @@ def of_mark(coins: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> list
 
 
 def marked_rows(program: Program, registered: Mapping[str, int], supplied: Mapping[str, Any],
-                coins: Mapping[str, str] | None) -> dict[str, list[list[tuple[str, str]]]]:
+                coins: Mapping[str, str] | None, released: Mapping[str, int] | None = None,
+                records: int = 0) -> dict[str, list[list[tuple[str, str]]]]:
     """The rows of `program`'s supplied inputs (`marks`), each its function's value under the verifier's `coins`
     (`{function: hex}`; `OneStage.markedRows`): ValueError where the verifier registers no read of the input, where
     `supplied` (the scheme's) has rows for it too, or where its layout is `digest` and its leaves aren't whole digests or
-    the other way round."""
+    the other way round; and refused by the order rule (`order`) at `released`, the verifier's place of each coin, after
+    `records` records of the log."""
     got = marks(json.loads(b"".join(descriptor_chunks(program))))
     if not isinstance(coins or {}, Mapping):
         raise ValueError("coins are an object of hex by supplied function")
@@ -600,7 +614,8 @@ def marked_rows(program: Program, registered: Mapping[str, int], supplied: Mappi
         if not (isinstance(h, str) and re.fullmatch(r"(?:[0-9a-f]{2})*", h)):
             raise ValueError(f"coins: {f}'s coin is not hex")
         held[f] = bytes.fromhex(h)
-    params = dict(program.fn.signature()[0])
+    # A decoded Program has no `fn`, only the lowered root, whose parameters are the same names.
+    params = dict(getattr(program, "fn", program.root).signature()[0]) if got else {}
     out = {}
     for v, m in got.items():
         if v not in registered:
@@ -614,7 +629,36 @@ def marked_rows(program: Program, registered: Mapping[str, int], supplied: Mappi
             raise ValueError(f"supplied input {v}: layout {m['layout']} reads whole digests only into a parameter of "
                              "whole digests")
         out[v] = of_mark(held, v, m)
+    order(got, out, held, released, records)
     return out
+
+
+def order(marked: Mapping[str, Mapping[str, Any]], rows: Mapping[str, list[list[tuple[str, str]]]],
+          held: Mapping[str, bytes], released: Mapping[str, int] | None, records: int) -> None:
+    """§5.4's order rule at registration (`Supplied.order`): every commitment C's marks read is registered before every
+    coin they read, `E_SUPPLIED_ORDER` naming the late ones. A mark reads a coin where its function's value is one the
+    verifier holds (`held`), at its place in `released` (`{function: n}`: the coin was released after n records, this
+    one the `records`-th, its commitments before any coin it reads); its body's sources read the commitments: a
+    ``value``'s or ``port``'s root this record's, at place `records`, and ``position`` the log's, at `records` - 1.
+    ValueError where `released` is not an object of a place by supplied function, or names no place of a coin read
+    beside a commitment."""
+    if released is not None and not (isinstance(released, Mapping) and all(
+            f in SU.FUNCTIONS and _nat(n) is not None for f, n in released.items())):
+        raise ValueError("released is an object of a place by supplied function")
+    reads: dict[str, int] = {}
+    for rs in rows.values():
+        for k, n in (s for r in rs for s in r):
+            at = records if k in ("value", "port") else records - 1 if k == "position" and records else None
+            if at is not None:
+                name = "log" if k == "position" else n
+                reads[name] = max(reads.get(name, at), at)
+    for f in sorted({m["supplied"] for m in marked.values() if m["supplied"] in held}):
+        if not reads:
+            return
+        if f not in (released or {}):
+            raise ValueError(f"released: the verifier names no place of {f}'s coin, which a supplied value reads beside "
+                             "commitments")
+        SU.check_order(reads, released[f], f)
 
 
 def cut(got: list[list[int]], n: int, k: int) -> list[list[int]]:

@@ -221,11 +221,10 @@ def test_the_audited_windows_values_are_ws_from_the_rows_its_proof_blocks_make(t
     """`reuse` commits each value W registers from the rows the audited circuit's proof blocks make of it, under the salts
     the pass kept, as Pearl+ committed the call's A rows and y, so each value's entry is W's and its tree opens each row at
     W's root, at the round W numbers it (round 2, the timed call's first), W at version 2 or at version 1 (built at the
-    version it states). At version 2 each weight's B rows are a value too, from the pass's weight file at PoUW's root and
-    `weight_binding`'s domain; version 1 has none. W holds no salt. Rows the proof blocks make otherwise (one bit of one A
-    row), another pass's salts, a W other than the passes' record at its version (a version-2 W's values under a header
-    that states none), or the passes at another round is refused, and so is a caller that names no directory of the
-    passes, a weight file with one bit changed or of another size, and a weight's salts that are another pass's."""
+    version it states); W's weights are none of them. W holds no salt. Rows the proof blocks make otherwise (one bit of
+    one A row), another pass's salts, a W other than the passes' record at its version (a version-2 W's values under a
+    header that states none), or the passes at another round is refused, and so is a caller that names no directory of
+    the passes."""
     man, rows, _b, _s = committed(tmp_path / "p", CALLS, s=2)
     w = PWR.record([man], rounds=[2])
     kept = [(tmp_path / "p" / u["salts"]["path"]).read_bytes().hex() for u in man["matmuls"]]
@@ -233,9 +232,8 @@ def test_the_audited_windows_values_are_ws_from_the_rows_its_proof_blocks_make(t
     got = PWR.reuse(w, [man], lambda name, n, empty: rows[name], rounds=[2], dirs=[tmp_path / "p"])
     theirs = {e["value"]: e for e in w["registered"]}
     calls = {v: e for v, e in theirs.items() if not v.startswith("pearl-b/")}
-    assert sorted(got) == sorted(theirs) == ["pearl-a/2/0", "pearl-a/2/1", "pearl-b/0", "pearl-b/1", "pearl-y/2/0",
-                                             "pearl-y/2/1"]
-    assert {v: x.entry() for v, x in got.items()} == theirs
+    assert sorted(got) == sorted(calls) == ["pearl-a/2/0", "pearl-a/2/1", "pearl-y/2/0", "pearl-y/2/1"]
+    assert {v: x.entry() for v, x in got.items()} == calls
     for v, x in got.items():
         root = bytes.fromhex(theirs[v]["root"])
         assert all(G.verify_read(x.domain, root, p, x.bcs[p], x.path(p), G.SCHEMA_SEG) for p in range(x.leaves))
@@ -245,7 +243,7 @@ def test_the_audited_windows_values_are_ws_from_the_rows_its_proof_blocks_make(t
         == calls
     named = PWR.record([man], rounds=[2], naming={"day": 3, "declaration": "5d" * 64})
     assert {v: x.entry() for v, x in PWR.reuse(named, [man], lambda name, n, empty: rows[name], rounds=[2], dirs=of).items()} \
-        == theirs
+        == calls
     with pytest.raises(ValueError, match="W names a declared day by its number"):
         PWR.reuse({**w, "window": {**w["window"], "day": 3}}, [man], lambda name, n, empty: rows[name], rounds=[2], dirs=of)
     with pytest.raises(NotImplementedError, match="the passes' directories"):
@@ -262,23 +260,11 @@ def test_the_audited_windows_values_are_ws_from_the_rows_its_proof_blocks_make(t
             (w, tmp_path / "p", rows, None, "W is not the window record of these passes")):
         with pytest.raises(ValueError, match=why):
             PWR.reuse(bad, [man], lambda name, n, empty, of=of_rows: of[name], rounds=at, dirs=[at_dir])
-    weight = tmp_path / "p" / man["weights"]["1"]["rows"]["path"]
-    kept = weight.read_bytes()
-    for changed, why in ((bytes([kept[0] ^ 1]) + kept[1:], "pearl-b/1: the rows the pass's weight file holds are not the "
-                                                           "rows PoUW committed"),
-                         (kept[:-2], "weights/1.rows.bf16: .* bytes, and 64 rows of 128 BF16 words are")):
-        weight.write_bytes(changed)
-        with pytest.raises(ValueError, match=why):
-            PWR.reuse(w, [man], lambda name, n, empty: rows[name], rounds=[2], dirs=of)
-    weight.write_bytes(kept)
-    (tmp_path / "p" / "weights" / "1.salts").write_bytes((tmp_path / "other" / "weights" / "1.salts").read_bytes())
-    with pytest.raises(ValueError, match="pearl-b/1: the rows the pass's weight file .* or the salts are another pass's"):
-        PWR.reuse(w, [man], lambda name, n, empty: rows[name], rounds=[2], dirs=of)
 
 
 def test_two_commits_of_the_same_rows_take_other_salts_and_roots_and_each_is_reused(tmp_path):
     """Each leaf's salt is fresh bytes from the OS: two passes committing the same rows keep other salts, so their A, y
-    and B roots differ, and `reuse` takes each pass's values under its own kept salts."""
+    and B roots differ, and `reuse` takes each pass's calls' values under its own kept salts."""
     one, rows, _b, s1 = committed(tmp_path / "one", CALLS, s=2)
     two, rows2, _b2, s2 = committed(tmp_path / "two", CALLS, s=2)
     assert all(np.array_equal(rows[v], rows2[v]) for v in rows)
@@ -291,7 +277,8 @@ def test_two_commits_of_the_same_rows_take_other_salts_and_roots_and_each_is_reu
     for man, d in ((one, "one"), (two, "two")):
         w = PWR.record([man], rounds=[2])
         got = PWR.reuse(w, [man], lambda name, n, empty: rows[name], rounds=[2], dirs=[tmp_path / d])
-        assert {v: x.entry() for v, x in got.items()} == {e["value"]: e for e in w["registered"]}
+        assert {v: x.entry() for v, x in got.items()} == {e["value"]: e for e in w["registered"]
+                                                          if not e["value"].startswith("pearl-b/")}
 
 
 def test_ws_b_rows_are_at_pouws_weight_root_the_hm96_root_of_the_same_rows(tmp_path):
