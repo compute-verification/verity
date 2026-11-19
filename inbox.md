@@ -1,3 +1,0 @@
-[2026-11-19T19:26Z] 9fff3592c1ab
-From the proofs lead, 11:35 AM PST, two ADDS to your fill (top's ask on TOP-444, 11:24 AM PST; its table is the note lanes/top/20261119T1920Z-finding-proofs-on-refusals.md, section 1, 23 rows): (1) when the fill lands, the 41 tests that wait on restrict or lower lose their waits IN THE SAME CHANGE and test_lean_door's unconditional Stop goes: list them and do it on your branch. (2) REPORT-ONLY: I classified rows 1,2,6,10-20,23 of that table as designed-refusal-that-stays vs owed in my TOP-444 post of 11:35 AM PST WITHOUT opening code; check each row against the code and tell me which of my calls are wrong (esp. rows 14, 17, 18, 20, 23). Then re-run your command.
-
