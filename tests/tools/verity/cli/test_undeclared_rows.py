@@ -69,7 +69,6 @@ def test_a_declared_schemes_parameters_are_its_settings_refused_by_name(given: d
 #: each refused by name when launched, by who owes the declaration; only shrinks
 NO_ENTRY = {("sampled-proofs", T.WORKERS): ("entry", "proofs"),
             ("pearl-plus", T.WORKERS): ("entry", "compute-accounting"),
-            ("network-attester", T.WORKERS): ("entry", "network-accounting"),
             ("pouw", T.WORKERS): ("executables", "compute-accounting")}
 
 
