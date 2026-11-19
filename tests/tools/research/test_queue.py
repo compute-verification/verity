@@ -64,10 +64,11 @@ class FakeGitHub:
     def __init__(self, origin: Path):
         self.origin, self.prs, self.ready = origin, {}, set()
 
-    def put(self, n: int, head: str, *, body: str | None = None, draft: bool = False, labels: tuple[str, ...] = (), ready: bool = True) -> None:
+    def put(self, n: int, head: str, *, body: str | None = None, draft: bool = False, labels: tuple[str, ...] = (), ready: bool = True,
+            branch: str = "") -> None:
         """A PR at `head`; `ready`: its owner has said so at this head (`research queue ready`), as every PR here has unless told."""
         _git(self.origin, "update-ref", f"refs/pull/{n}/head", head)
-        self.prs[n] = PR(n, head, f"change {n}", f"Lane `lane-{n}`." if body is None else body, draft, labels)
+        self.prs[n] = PR(n, head, f"change {n}", f"Lane `lane-{n}`." if body is None else body, draft, labels, branch=branch)
         if ready:
             self.ready.add((n, head))
 
@@ -3368,51 +3369,63 @@ def test_the_preflight_prints_what_a_warn_gate_at_main_says_as_a_warning_and_tak
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
 
 
-QUIET = {DRIVE_FLAGS: '[quiet_main]\nuntil = "2026-11-20T23:00:00Z"\nfrozen = ["verity/", "adapters/"]\n'
-                      'allowed = ["tools/", "tests/tools/"]\n'}
+QUIET = {DRIVE_FLAGS: '[quiet_main]\nuntil = "2026-11-20T23:00:00Z"\nallowed = ["tools/", "tests/tools/"]\n'
+                      'landings = ["interfaces", "one-circuit"]\n'}
 #: 2026-11-20T22:59:59Z and 23:00:00Z, the last second the quiet-main rule above holds and its expiry
 QUIET_LAST, QUIET_OVER = 1795215599.0, 1795215600.0
 
 
-def test_until_it_expires_the_preflight_refuses_a_change_to_a_frozen_directory_onto_main_but_a_repair_or_tools(world, capsys):
+def _quiet_refusal(files: str) -> str:
+    return (f"  - its own change touches {files}, outside tools/, tests/tools/, the only places `main` takes a change until "
+            "2026-11-20T23:00:00Z other than a repair of a red or a landing of interfaces, one-circuit (drive.toml's "
+            "`quiet_main`): open it on `one-circuit` instead (`research queue open --base one-circuit`), or, if it cures a red "
+            "on `main`, add a line `Repair: <suite>::<test id>` naming that test to the PR's body")
+
+
+def _quiet_marks(world: World, capsys, prs: dict[int, tuple[dict[str, str], dict]], now: float = QUIET_LAST) -> dict:
+    """Each PR of ``prs`` ({n: (its files, `put`'s keywords)}) put on ``world`` and marked through the preflight at ``now``:
+    {n: None when marked, else the refusal's lines}."""
     from research.queue import MarkOnly, StoreLabels, ready
 
     _preflight_main(world, QUIET)
-    pre = lambda: _preflight(world, now=lambda: QUIET_LAST)   # noqa: E731
-    world.gh.put(2, h2 := world.change({"verity/a.py": "2\n", "tests/adapters/test_b.py": "2\n", "tools/c.py": "2\n"}),
-                 ready=False)
-    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=pre()) == 1
-    [said] = [ln for ln in capsys.readouterr().err.splitlines() if ln.startswith("  - ")]
-    assert said == (
-        "  - its own change touches tests/adapters/test_b.py, verity/a.py, under verity/, adapters/ (or tests/ under them), "
-        "which `main` takes only as a repair of a red until 2026-11-20T23:00:00Z (drive.toml's `quiet_main`; outside them it "
-        "takes tools/, tests/tools/): open it on `one-circuit` instead (`research queue open --base one-circuit`), or, if it "
-        "cures a red on `main`, add a line `Repair: <suite>::<test id>` naming that test to the PR's body"), said
-    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False
-    world.gh.put(3, h3 := world.change({"verity/a.py": "3\n"}), body="Lane `lane-3`.\nRepair: verity-core::test_x.py::test_y\n",
-                 ready=False)
-    world.gh.put(4, h4 := world.change({"tools/c.py": "4\n"}), ready=False)
-    world.gh.put(5, h5 := world.change({"tests/tools/test_c.py": "5\n"}), ready=False)
-    for n, h in ((3, h3), (4, h4), (5, h5)):
-        assert ready(world.gh, world.store, n, f"lane-{n}", MarkOnly(), preflight=pre()) == 0, capsys.readouterr().err
-        assert StoreLabels(world.store, log=world.logs.append).ready(n, h) is True
+    got = {}
+    for n, (files, kw) in prs.items():
+        world.gh.put(n, h := world.change(files), ready=False, **kw)
+        rc = ready(world.gh, world.store, n, f"lane-{n}", MarkOnly(), preflight=_preflight(world, now=lambda: now))
+        lines = [ln for ln in capsys.readouterr().err.splitlines() if ln.startswith("  - ")]
+        assert StoreLabels(world.store, log=world.logs.append).ready(n, h) is (rc == 0), (n, lines)
+        got[n] = None if rc == 0 else lines
+    return got
+
+
+def test_until_it_expires_the_preflight_refuses_a_change_outside_tools_onto_main_naming_each_file_outside(world, capsys):
+    assert _quiet_marks(world, capsys, {
+        2: ({"verity/a.py": "2\n", "tests/adapters/test_b.py": "2\n", "tools/c.py": "2\n"}, {}),
+        3: ({"tools/c.py": "3\n", "AGENTS.md": "3\n"}, {}),
+        4: ({"verity/a.py": "4\n"}, {"branch": "cursor/foo"})}) == {
+        2: [_quiet_refusal("tests/adapters/test_b.py, verity/a.py")], 3: [_quiet_refusal("AGENTS.md")],
+        4: [_quiet_refusal("verity/a.py")]}
+
+
+def test_a_repair_a_change_under_tools_or_its_tests_and_a_landing_s_head_pass_the_quiet_main_rule(world, capsys):
+    assert _quiet_marks(world, capsys, {
+        2: ({"verity/a.py": "2\n"}, {"body": "Lane `lane-2`.\nRepair: verity-core::test_x.py::test_y\n"}),
+        3: ({"tools/c.py": "3\n"}, {}),
+        4: ({"tests/tools/test_c.py": "4\n"}, {}),
+        5: ({"verity/a.py": "5\n", "AGENTS.md": "5\n"}, {"branch": "interfaces"}),
+        6: ({"verity/b.py": "6\n"}, {"branch": "one-circuit"})}) == dict.fromkeys(range(2, 7))
 
 
 def test_from_its_expiry_the_quiet_main_rule_refuses_nothing(world, capsys):
-    from research.queue import MarkOnly, StoreLabels, ready
-
-    _preflight_main(world, QUIET)
-    world.gh.put(2, h2 := world.change({"verity/a.py": "2\n"}), ready=False)
-    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world, now=lambda: QUIET_OVER)) == 0, \
-        capsys.readouterr().err
-    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True
+    assert _quiet_marks(world, capsys, {2: ({"verity/a.py": "2\n", "AGENTS.md": "2\n"}, {})}, now=QUIET_OVER) == {2: None}
 
 
 @pytest.mark.parametrize("table, why", [
-    ('until = "Fri"\nfrozen = ["verity/"]', "`until` a UTC time"),
-    ('until = "2026-11-20T23:00:00Z"\nfrozen = []', "`frozen` a non-empty list"),
-    ('until = "2026-11-20T23:00:00Z"\nfrozen = ["verity"]', "`frozen` a non-empty list"),
-    ('until = "2026-11-20T23:00:00Z"\nfrozen = ["verity/"]\nonto = "x"', "a table of `until`, `frozen`")])
+    ('until = "Fri"\nallowed = ["tools/"]', "`until` a UTC time"),
+    ('until = "2026-11-20T23:00:00Z"\nallowed = []', "`allowed` a non-empty list"),
+    ('until = "2026-11-20T23:00:00Z"\nallowed = ["tools"]', "`allowed` a non-empty list"),
+    ('until = "2026-11-20T23:00:00Z"\nallowed = ["tools/"]\nlandings = "interfaces"', "`landings` a list of branches"),
+    ('until = "2026-11-20T23:00:00Z"\nfrozen = ["verity/"]', "a table of `until`, `allowed`")])
 def test_a_malformed_quiet_main_is_refused_naming_what_it_takes(table, why):
     from research.queue import DriveFlags, QueueError
 

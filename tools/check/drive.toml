@@ -145,11 +145,12 @@ stale_days = 3
 stale_close_days = 7
 # open PRs the stale rule never judges, each kept open by its owner with a reason
 stale_keep = []
-# until `until` (UTC), the ready mark's preflight refuses a PR onto `main` whose own change touches a file under `frozen`, or
-# tests/ under one, unless its body has a `Repair: <suite>::<test id>` line naming the red on `main` it cures; that work goes
-# to `instead`. A file under `allowed` is never frozen. From `until` on it refuses nothing (`QuietMain`, `Preflight._quiet`)
+# until `until` (UTC), the ready mark's preflight refuses a PR onto `main` whose own change touches a file outside `allowed`,
+# unless its body has a `Repair: <suite>::<test id>` line naming the red on `main` it cures, or its head is a branch of
+# `landings` in this repository; that work goes to `instead`. From `until` on it refuses nothing (`QuietMain`,
+# `Preflight._quiet`)
 [quiet_main]
 until = "2026-11-20T23:00:00Z"
-frozen = ["verity/", "adapters/", "security/", "benchmarks/", "calibration/", "applications/"]
 allowed = ["tools/", "infra/", "tests/tools/", "tests/infra/"]
 instead = "one-circuit"
+landings = ["interfaces", "one-circuit"]
