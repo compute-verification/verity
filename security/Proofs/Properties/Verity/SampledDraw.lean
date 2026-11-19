@@ -483,6 +483,45 @@ theorem params_of_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a 
   rw [hxy] at hyp
   exact (Except.ok.inj (hyp.symm.trans hp)).symm
 
+/-- **v2's registered law in what the prover sent**: the `law` of the record v2's commitment decodes to, in the case
+the composition's evidence names by SPOT's id. The case comes with the evidence; the composite's commitment, sent before
+any coin, binds only its digest. -/
+def LawAt (s : Verity.Sent) (law : Lean.Json) : Prop :=
+  ∃ evs, _root_.Core.Composition.decodeEvidence s.evidence = .ok evs ∧
+    ∃ x, evs.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) = some x ∧
+      ∃ c, _root_.Spot.OneStage.commitmentOf x.commitment = .ok c ∧ _root_.Spot.getD c.record "law" = law
+
+/-- At most one `law` is v2's registered law in what the prover sent. -/
+theorem LawAt.unique {s : Verity.Sent} {law law' : Lean.Json} (h : LawAt s law) (h' : LawAt s law') : law = law' := by
+  obtain ⟨evs, he, x, hx, c, hc, rfl⟩ := h
+  obtain ⟨evs', he', x', hx', c', hc', rfl⟩ := h'
+  obtain rfl : evs = evs' := Except.ok.inj (he.symm.trans he')
+  obtain rfl : x = x' := Option.some.inj (hx.symm.trans hx')
+  obtain rfl : c = c' := Except.ok.inj (hc.symm.trans hc')
+  rfl
+
+/-- **The case's record carries the registered law**: in a composition composite `k` accepted, the record of the
+commitment SPOT's case decodes to has the law `LawAt` reads, since the components' ids are distinct. -/
+theorem law_of_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
+    (hS : Verity.SameAccepts k s) (hcase : V2Case k s a b e) {c : _root_.Spot.OneStage.Commitment}
+    (hc : _root_.Spot.OneStage.commitmentOf b = .ok c) {law : Lean.Json} (h : LawAt s law) :
+    _root_.Spot.getD c.record "law" = law := by
+  obtain ⟨ps, c₀, evs, ⟨hps, -, hevs⟩, x, hx, hx1, rfl, rfl, rfl⟩ := hcase
+  obtain ⟨ps', c₀', evs', ⟨hps', -, hevs'⟩, pub, prof, ⟨⟨⟨hfp, hfe, -, -⟩, -⟩, -⟩, -⟩ := hS
+  rw [Except.ok.inj (hps'.symm.trans hps)] at hfp
+  rw [Except.ok.inj (hevs'.symm.trans hevs)] at hfe
+  obtain ⟨evs'', hevs'', y, hfind, c', hc', rfl⟩ := h
+  have hy := List.mem_of_find?_eq_some hfind
+  have hyid : y.id = VStar.Recursive.Sampled.PROTOCOL := by simpa using List.find?_some hfind
+  rw [Except.ok.inj (hevs''.symm.trans hevs)] at hy
+  have hid : x.1.id = VStar.Recursive.Sampled.PROTOCOL := (congrArg (·.id) hx1).trans rfl
+  have heid : x.2.2.id = x.1.id := (ids_of_zip hfp hfe hx).2
+  have hxy : y = x.2.2 :=
+    eq_of_ids (by rw [hfe]; exact components_nodup k s) hy (List.of_mem_zip (List.of_mem_zip hx).2).2
+      (hyid.trans (hid.symm.trans heid.symm))
+  rw [hxy] at hc'
+  rw [Except.ok.inj (hc.symm.trans hc')]
+
 /-- **v2's case accepts only at coins it read under its parameters' challenger**, in a composition composite `k`
 accepted whose parameters name SPOT's one-stage form (`ParamsAt`). -/
 theorem case_drew {k : Verity.Registration.Composite} {s : Verity.Sent} (hS : Verity.SameAccepts k s)
