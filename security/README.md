@@ -34,7 +34,7 @@ incorrect set of the trace the extractor recovers.
    - Real: SHA-512 collision resistance (`TableCRZAt` and `LinkCRZCAt` unfold to it) and `UniformRandomBytes` (the
      verifier's bytes, exactly uniform).
    - Folds into: `RecordCustodyZKJPLaw` (the record is live) into Core's challenger premises.
-2. **The recursion.** `Claims.RecGeneric.CompilerKS` (`Definitions/Claims/RecursionGeneric.lean`, proved in
+2. **The recursion.** `Claims.RecGeneric.CompilerKS` (`Definitions/Flock/Recursive/Generic.lean`, proved in
    `Proofs/Flock/RecGeneric/OuterProof.lean`): for every Π_in its repetition extractor shows knowledge sound, binding
    ZK server and knowledge-sound Π_out, the compiled verifier is knowledge sound wherever the compiler's contract holds;
    its premises are its domain. Deployed, `Flock.Guarantees.RecursiveKS` (`Proofs/Flock/Recursive/KSStatement.lean`):

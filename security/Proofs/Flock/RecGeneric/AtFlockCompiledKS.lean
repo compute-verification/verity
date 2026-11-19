@@ -5,11 +5,12 @@ public import Proofs.Flock.RecGeneric.AtFlockCompiledContract
 public import Proofs.Flock.RecGeneric.AtFlockEvery
 public import Proofs.Flock.RecGeneric.AtFlockServer
 public import Proofs.Flock.RecGeneric.OuterProof
+public import Definitions.Flock.Recursive.Generic
 
 /-!
 # L2 at Flock: the compiled recursive verifier's knowledge soundness at every statement
 
-L2 (`compilerKS`, `Definitions.Claims.RecursionGeneric`'s `CompilerKS`) at `Proto.ofFlock`, `Server.ofBound`,
+L2 (`compilerKS`, `Definitions.Flock.Recursive.Generic`'s `CompilerKS`) at `Proto.ofFlock`, `Server.ofBound`,
 `Arg.ofFlock DO` and
 `recCompiler` gives `KSCompiledOn` at the statements where the compiler's contract holds (`ksCompiledOn_of`), from F4
 (`protoWFOfFlock`, `kSAbortLinOfFlockLin`), F8, F2 (`bindsOfBound`), Flock's KS as the outer argument's and the

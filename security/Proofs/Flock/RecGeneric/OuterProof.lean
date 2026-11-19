@@ -10,6 +10,7 @@ public import Proofs.Flock.Claims.Recursion.Hybrid
 public import Proofs.Flock.Claims.Recursion.CostExp
 public import Proofs.Flock.Claims.Recursion.Cost
 public import Proofs.Flock.Claims.Aggregate
+public import Definitions.Flock.Recursive.Generic
 
 /-!
 # O1 and L2, proved
@@ -29,7 +30,7 @@ public import Proofs.Flock.Claims.Aggregate
   verifier's `k(x)` (`Compiled.Ex_sPrB_le`), so session `s` costs `κb_s + √(γb_s·k(x)·Pr[B])`
   (`Compiled.sessKS`), and the sum of the roots is `√(γ_O·Pr[B])`.
 
-`compilerKS` is L2, `Definitions.Claims.RecursionGeneric`'s `CompilerKS`: L1 (`compositionKS`) at
+`compilerKS` is L2, `Definitions.Flock.Recursive.Generic`'s `CompilerKS`: L1 (`compositionKS`) at
 `compile(Π_in, A, S)` with O1 for its `E_O`.
 -/
 
