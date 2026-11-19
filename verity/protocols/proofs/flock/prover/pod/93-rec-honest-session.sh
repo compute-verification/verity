@@ -9,7 +9,7 @@
 # inner/ (rec_live's session), stage.json, statement.txt, schedule.json, proxy.log, prove.txt/.err, summary.json.
 # Pins its own slices where it can take slice locks (node 1); on a vy-cpu pod, run it in a check slot (--pool), which pins it.
 # env: N=1 (RoPE heads: 1 to 8 are m=25, the smallest fast100 takes)  CPUS=32  FLOCK_WORK (as 80-rec-inner.sh; where neither
-#      /workspace nor /workspace/jobs is writable, /workspace/cache/flock, as 71-gemm-slowdown.sh's)
+#      /workspace nor /workspace/jobs is writable, /workspace/cache/flock)
 # Refused: the prover has no per-round OS coins (FC_COINS is tree, or unset for the seed), and `flock-zk-server live`'s
 # inner session takes a Hello that names no coins (`Flock.ZkServer.step`), so no honest session can be recorded until the
 # ZK server's inner session takes the challenger's coin tree.

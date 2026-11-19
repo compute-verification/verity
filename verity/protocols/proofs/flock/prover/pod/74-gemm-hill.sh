@@ -78,7 +78,7 @@ export MAX_ANDS=${MAX_ANDS:-33554432}
 for c in $FLOCK_WORK/cuda-root /workspace/cache/flock/cuda-root; do
   [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x $c/usr/local/cuda-13.3/bin/nvcc ] && export CUDA_TK=$c/usr/local/cuda-13.3
 done
-if [ "${GPU:-1}" = 1 ] && [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ]; then echo "no CUDA 13.3 (run 71-gemm-slowdown.sh once to unpack it)"; exit 1; fi
+if [ "${GPU:-1}" = 1 ] && [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ]; then echo "no CUDA 13.3 (source cuda-13.3.sh once to unpack it)"; exit 1; fi
 ph() { printf '%s\t%s\t%s\n' "$1" "$2" "$(date +%s.%N)" >> $R/out/phases.tsv; }
 printf 'job\tstart\t%s\n' "$HILL_T0" >> $R/out/phases.tsv
 Q=name,uuid,driver_version,memory.total,compute_cap,clocks.sm,clocks.max.sm,power.limit,temperature.gpu

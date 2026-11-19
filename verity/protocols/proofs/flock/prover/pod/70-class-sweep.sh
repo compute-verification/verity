@@ -77,7 +77,7 @@ if [ -z "${BINARY:-}" ]; then   # BINARY / PYBIN: a prebuilt flock-circuit and a
 fi
 [ "${BUILD_ONLY:-0}" = 1 ] && { echo "BINARY=$BINARY"; echo "SELFTEST_BINARY=${SELFTEST_BINARY:-$BINARY}"; exit 0; }
 B=$BINARY; SB=${SELFTEST_BINARY:-$BINARY}; sha256sum $B $SB | tee $O/binary.sha256
-# WRAP: a command the prover's prove sessions run under (71-gemm-slowdown.sh NSYS=1); binary.sha256 is the prover's own
+# WRAP: a command the prover's prove sessions run under (a profiler); binary.sha256 is the prover's own
 if [ -n "${WRAP:-}" ]; then
   printf '#!/bin/sh\ncase "$1" in prove) exec %s %s "$@" ;; *) exec %s "$@" ;; esac\n' "$WRAP" "$B" "$B" > $O/prover-wrapped
   chmod +x $O/prover-wrapped; B=$O/prover-wrapped
