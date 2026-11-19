@@ -973,7 +973,15 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             circ = circuit_of(circuit, made, read)
             composed[m.template] = (circuit, made, circ)
         compose_s = round(time.time() - t, 1)
-        got = FI.flock_input_files(served, k, circ, st_dir / "prover", write=("pub",), files=files)
+        try:
+            got = FI.flock_input_files(served, k, circ, st_dir / "prover", write=("pub",), files=files)
+        except ValueError as e:
+            if not door:
+                raise
+            # the door's circuit lays the member's rows otherwise than the period committed them
+            unlowered[k] = {"template": m.template, "base": m.base, "n": m.n, "why": f"UNLAID: {e}"[:600]}
+            print("UNLOWERED " + json.dumps({"k": k, **unlowered[k]}), flush=True)
+            continue
         link(Path(got["pub"]), st_dir / f"pub-{m.n}.bin")
         meta = circ.meta
         header = a0.public_header(st_dir, m.n)
