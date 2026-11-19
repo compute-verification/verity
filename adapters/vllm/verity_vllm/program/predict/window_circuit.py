@@ -27,7 +27,9 @@ position below L feeds its prompt's id (`io_shell.TokenFeed_v1{FIRST=True}`, no 
 last builds nothing a later token doesn't read (its LM head, select and final norm, and its last layer's query and that
 layer from its attention on), its select's collector `io_shell.OutCollect_v1` alone. Its last select is collected like the
 others, then ``outputs`` - O pads shift its O outputs to the front, and its entry is `io_shell.SlotEntry_v1{NP=1}`, which
-fits only where the scan's prompt length is L: an advice of another prompt length gives ``outputs`` + 1. A Program past the
+fits only where the scan's prompt length is L: an advice of another prompt length gives ``outputs`` + 1. The entries are
+one allocation after the walk, in slot order, whatever the Programs' order: entry j is lane j's, the slot the scan's
+Programs' row reads it as. A Program past the
 positions a key block holds at the model and grain is refused at the first position past them, naming that bound. A
 collector's rows and an entry's are a few words at a small class, too narrow for a proof block of their own, so none is a
 unit of its own. The state rows and the entries are the circuit's external ports.
@@ -274,6 +276,11 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
             b.among = (lo, hi)
             r.lower(j, f.body.nodes[j])
     b.among = None
+    if order is not None:
+        slots = sorted(progs, key=lambda r: r.lane)
+        etid, eu = b.allocation(entry, [r.entry_label for r in slots])
+        for i, r in enumerate(slots):
+            r.place_entry(etid, eu + i)
     for r in progs:
         if r.position != r.positions:
             raise Unexpressible(f"{r.name}: {r.position} positions, not its {r.positions}")

@@ -151,8 +151,8 @@ def test_a_served_window_is_its_requests_programs_and_no_padded_unit():
     """A served window's circuit is a Program a request of the request's own positions (prompt + outputs - 1), longest
     first: WINDOW's requests of 5 and 4 positions hold exactly the units of each alone, template by template, 9 embeddings
     against the class's 10, and its blocks are its 2 Programs over 5 steps. A prompt position before the last feeds its
-    prompt's id (`TokenFeed_v1{FIRST=True}`) and collects it with no select (`OutCollect_v1`); the second's last position
-    makes its entry (`SlotEntry_v1{NP=1}`) beside the first's collector at that step, an inference entry from slot 1."""
+    prompt's id (`TokenFeed_v1{FIRST=True}`) and collects it with no select (`OutCollect_v1`); the entries
+    (`SlotEntry_v1{NP=1}`) are one allocation in slot order, each an inference entry at its slot's last step."""
     low = _lowered(WINDOW)
     circuit = low.circuit
     alone = [_circuit(ONE), _circuit(SHORT)]
@@ -164,7 +164,7 @@ def test_a_served_window_is_its_requests_programs_and_no_padded_unit():
     assert _counts(class_circuit(S._registered(), CLASS, None, GRAIN))[EMB] == 10
     assert (circuit.blocks.slots, circuit.blocks.steps) == (2, 5) and not circuit.blocks.uniform
     entry = {_label(fn): IF.descriptor_id(fn) for fn, _ in circuit.templates}[SLOT_ENTRY]
-    assert [(e.slot, e.radix, e.step) for e in circuit.blocks.inference if e.template == entry] == [(1, (1,), 3), (0, (1,), 4)]
+    assert [(e.slot, e.radix, e.step) for e in circuit.blocks.inference if e.template == entry] == [(0, (1,), 4), (1, (1,), 3)]
     IF.Blocks.of(json.loads(json.dumps(circuit.blocks.doc(sum(circuit.units.values()), ""))), circuit.units, "")
     assert IF.input_count(circuit.description(), **held(circuit))["free"] == 0
 
@@ -196,8 +196,8 @@ def test_the_fixed_load_is_the_class_circuit_less_what_no_token_reads_before_the
     query rotation and every node from that layer's attention on (the rest of the layer, the final norm, the LM head and
     the select) are dead and lower to nothing but the select's collector (`OutCollect_v1`), the attention's keys still
     its layer's; and each feed takes its prompt's id with no select (FIRST=True).
-    At the prompt's last position on, every node is the class's; the last position's entry is `SlotEntry_v1{NP=1}`, its
-    collector `SelectCollect_v1` beside it."""
+    At the prompt's last position on, every node is the class's, but the last position's collector is `SelectCollect_v1`
+    and the entries are `SlotEntry_v1{NP=1}`, one allocation in slot order of each slot's last step."""
     reg = S._registered()
     cls = WC.lower(reg, CLASS, None, GRAIN)
     for window in (FULL, FULL_LATER):
@@ -220,13 +220,13 @@ def test_the_fixed_load_is_the_class_circuit_less_what_no_token_reads_before_the
                     assert served[s][j] == (Counter({OUT0 if position[j] == 0 else OUT: 1}) if n.fn.name == "TokenSelect"
                                             else Counter())
                 elif n.fn.name == "TokenSelect" and position[j] == 4:
-                    assert served[s][j] - whole[s][j] == Counter({COLLECT: 1, SLOT_ENTRY: 1})
+                    assert served[s][j] - whole[s][j] == Counter({COLLECT: 1})
                     assert whole[s][j] - served[s][j] == Counter({ENTRY: 1})
                 else:
                     assert served[s][j] == whole[s][j], (s, j, n.fn.id)
         served_entry = {_label(fn): IF.descriptor_id(fn) for fn, _ in low.circuit.templates}[SLOT_ENTRY]
         class_entry = {_label(fn): IF.descriptor_id(fn) for fn, _ in cls.circuit.templates}[ENTRY]
-        assert low.circuit.blocks.uniform and \
+        assert low.spans[served_entry] == [(0, 1, 0, 4), (1, 1, 1, 4)] and low.circuit.blocks.uniform and \
             [x.replace(served_entry, class_entry) for x in low.circuit.external] == list(cls.circuit.external)
     assert _bytes(_circuit(FULL)) == _bytes(_circuit(FULL_LATER)) and _blocks(_circuit(FULL)) == _blocks(_circuit(FULL_LATER))
 
@@ -513,17 +513,17 @@ def test_a_slots_outputs_are_its_selects_collected_into_its_entry(window):
     assert all(f"{t}/o0" not in circuit.external for t in (first, rest)) and f"{entry}/o0" in circuit.external
 
 
-def _outputs_counted(low, k: int, lp: int, m: int) -> int:
-    """Program k's entry's output count where the scan gives its slot prompt length ``lp`` and ``max_tokens`` ``m``: its
-    collectors' functions in the order its lowering chains them (`io_shell.collect_reference`; a select's collector's token
-    is its select's, any token here), then its entry's (`io_shell.entry_reference`)."""
-    prog, state = low.programs[k], None
+def entry_of(low, k: int, lp: int, m: int) -> IS.Entry:
+    """Program k's entry of the scan's Programs' row at `CLASS` where the scan gives its slot prompt length ``lp`` and
+    ``max_tokens`` ``m``: its collectors' functions in the order its lowering chains them (`io_shell.collect_reference`; a
+    select's collector's token is its select's, any token here), then its entry's (`io_shell.entry_reference`)."""
+    prog, state, scan = low.programs[k], None, IS.Class(**CLASS.scan.shape)
     for i, (tid, _u) in enumerate(prog.collects):
         b = low.circuit.template(tid).bindings
         state = IO.collect_reference([lp, m] if b["FIRST"] else state, 3 + i, b["KO"], b["FIRST"])
     e = low.circuit.template(prog.entry_unit[0]).bindings
-    words = IO.entry_reference(1, state, e["KO"], e["IDB"], e["NP"], tuple(e["STOP"]))
-    return sum(w << 16 * j for j, w in enumerate(words)) >> 1 & 0xFFFFFFFF
+    bits = [w >> j & 1 for w in IO.entry_reference(1, state, e["KO"], e["IDB"], e["NP"], tuple(e["STOP"])) for j in range(16)]
+    return IS.prog_decode(scan, bits + IS.entry_encode(scan, IS.NONE) * (scan.NR - 1))[0]
 
 
 def test_a_served_programs_entry_fits_only_the_prompt_length_its_advice_gives():
@@ -539,9 +539,9 @@ def test_a_served_programs_entry_fits_only_the_prompt_length_its_advice_gives():
             names = [low.circuit.template(tid).name for tid, _u in low.programs[k].collects]
             assert names == ["OutCollect"] * (L - 1) + ["SelectCollect"] * O + ["OutCollect"] * (KO - O)
             assert low.circuit.template(low.programs[k].entry_unit[0]).bindings["NP"] == 1
-            assert _outputs_counted(low, k, L, O) == O
+            assert entry_of(low, k, L, O)[1] == O
             for lp in {1, L - 1, L + 1, CLASS.prompt} - {0, L}:
-                assert _outputs_counted(low, k, lp, O) == KO + 1, (window, k, lp)
+                assert entry_of(low, k, lp, O)[1] == KO + 1, (window, k, lp)
 
 
 def test_the_scan_takes_a_served_programs_entry_at_its_prompt_length_and_refuses_it_at_another_as_over_ko():
@@ -553,21 +553,11 @@ def test_the_scan_takes_a_served_programs_entry_at_its_prompt_length_and_refuses
     st.slots[0] = replace(st.slots[0], live=1, done=1, occ=1)
     row, rest = bytes(scan.S * scan.B), [IS.NONE] * (scan.NR - 1)
     assert IS.due(scan, st)[0]
-
-    def entry(k: int, lp: int, m: int) -> IS.Entry:
-        prog, state = low.programs[k], None
-        for i, (tid, _u) in enumerate(prog.collects):
-            b = low.circuit.template(tid).bindings
-            state = IO.collect_reference([lp, m] if b["FIRST"] else state, 3 + i, b["KO"], b["FIRST"])
-        e = low.circuit.template(prog.entry_unit[0]).bindings
-        bits = [w >> j & 1 for w in IO.entry_reference(1, state, e["KO"], e["IDB"], e["NP"], tuple(e["STOP"])) for j in range(16)]
-        return IS.prog_decode(scan, bits + IS.entry_encode(scan, IS.NONE) * (scan.NR - 1))[0]
-
     for k, (L, O, _s) in enumerate(WINDOW[0][i] for i in low.requests):
-        honest = IS.step(scan, row, st, [entry(k, L, O), *rest])
+        honest = IS.step(scan, row, st, [entry_of(low, k, L, O), *rest])
         assert honest is not None and honest.slots[0].n == O
         for lp in (L - 1, L + 1):
-            wrong = entry(k, lp, O)
+            wrong = entry_of(low, k, lp, O)
             assert wrong == (1, scan.KO + 1, (0,) * scan.KO)
             assert IS.step(scan, row, st, [wrong, *rest]) is None
             assert IS.step(scan, row, st, [(1, scan.KO, wrong[2]), *rest]) is not None

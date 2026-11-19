@@ -191,6 +191,16 @@ class _Builder:
         self.starts.setdefault(tid, []).append(start)
         return tid, at
 
+    def allocation(self, fn: Any, labels: Sequence[tuple[int, int]]) -> tuple[str, int]:
+        """One allocation of ``fn``, unit i of the slot and step ``labels[i]``: its descriptor id and first unit."""
+        tid = descriptor_id(fn)
+        self.fns.setdefault(tid, fn)
+        start = self.units.get(tid, 0)
+        self.units[tid] = start + len(labels)
+        self.spans.setdefault(tid, []).extend((start + i, 1, *label) for i, label in enumerate(labels))
+        self.starts.setdefault(tid, []).append(start)
+        return tid, start
+
     def allocation_wires(self) -> list[IF.Wire]:
         """Each reader allocation's wires coalesced on their own: `interface.ordered` bounds what a range reads by a box over
         a wire's digits, which a digit cut across allocations of other sizes widens past what the range reads, to a cycle."""

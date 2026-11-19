@@ -38,6 +38,7 @@ from tests.program.predict.test_window_circuit import (
     GRAIN,
     SPLIT,
     SPLIT_GRAIN,
+    entry_of,
     state_row,
 )
 from tests.program.predict.test_window_circuit import SLOTS as SLOTS_CLASS
@@ -329,6 +330,29 @@ def test_the_scans_state_value_gives_the_window_its_slots(window):
     v = WR.state_value(PROGRAM, CLASS, rows, window=RUN)
     assert WR.scan_slots(low, v.rows) == WR.scan_slots(low, STATE) == [(r, [r[1], 2]) for r in SLOTS]
     WR.Rows(low, slots, {**values, SS.SCAN_STATE: v})
+
+
+def test_a_full_windows_entry_j_is_the_request_the_scan_started_in_slot_j_whatever_the_programs_order():
+    """A full window of two requests of 4 and 2 prompt ids, in either lane order, through the network attester's scan:
+    TINY's window 1 starts the first in slot 0 and the second in slot 1. The served Programs are the longest first, and
+    entry j (unit j of the window's one `SlotEntry_v1`) is slot j's Program's: at slot j's certified prompt length it
+    counts the request's 2 outputs, and read as the other slot's, whose length differs, it is KO + 1, which the scan
+    refuses. Swapping the lanes swaps the Programs' order and the entries' prompt lengths, not the entries' slots."""
+    scan, prompts = IS.Class(**CLASS.scan.shape), ((17, 3, 250, 9), (5, 77))
+    for lanes in (prompts, prompts[::-1]):
+        ingress, outputs = _traffic(CLASS, lanes, (0, 0))
+        rows, starts = SR.scan_state(CLASS, ingress, outputs, CLASS.buckets)
+        assert starts == [1, 2]
+        slots = IS.token_row(scan, IS.decode(scan, rows[0]))
+        assert [s[:3] for s in slots] == [(1, len(p), p) for p in lanes]
+        low = WC.lower(S._registered(), CLASS, None, GRAIN, requests=tuple(WC.Request(0, j, len(p), 2)
+                                                                          for j, p in enumerate(lanes)))
+        assert [p.positions for p in low.programs] == [5, 3]
+        by_entry = sorted(range(2), key=lambda k: low.programs[k].entry_unit[1])
+        assert [low.programs[k].lane for k in by_entry] == [0, 1] and [low.programs[k].L for k in by_entry] == [len(p) for p in lanes]
+        for j, k in enumerate(by_entry):
+            assert entry_of(low, k, slots[j][1], 2)[1] == 2
+            assert entry_of(low, k, slots[1 - j][1], 2)[1] == CLASS.outputs + 1
 
 
 def test_a_chunks_best_is_its_first_maximum_above_minus_infinity():

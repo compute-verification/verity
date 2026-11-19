@@ -108,6 +108,8 @@ class _Program:
         self.scan_unit: tuple[str, int] | None = None
         self.collects: list[tuple[str, int]] = []
         self.entry_unit: tuple[str, int] | None = None
+        #: a served Program's last step's label, its entry's (`entry`)
+        self.entry_label: tuple[int, int] | None = None
         #: with ``tables``: each position's int8 linears of K = tables.k so far, and each such quantizer's H1 leaf row
         #: (`Int8RowQuant_v5`'s ``o2``, the node's words whole), which no reader reads
         self.quants: list[int] = []
@@ -612,8 +614,8 @@ class _Program:
         too (`io_shell.SelectEntry_v1`, reading its occupancy word), whose select is no row: its one output is the entry. With
         H1's tables, a select that is a later round's token (`_token`) is collected at that round (`io_shell.SelectCollect_v2`).
         A served Program's last select is collected on too, then KO - O more collectors shift its O outputs to the front of
-        the state, and its entry is `io_shell.SlotEntry_v1{NP=1}` (``entry``), which fits only where the scan's prompt
-        length is its own."""
+        the state, and its entry is `io_shell.SlotEntry_v1{NP=1}` (``entry``, `place_entry`), which fits only where the
+        scan's prompt length is its own."""
         p, KO = self.position - 1, self.cls.outputs
         at = {"V": V, "C": GROUP, "KO": KO, "FIRST": p == 0}
         e = self.entry.bindings
@@ -638,11 +640,17 @@ class _Program:
             tok = (Row(ctid, cu, "o0", 2),)
             for _ in range(KO - self.O):
                 self._collect_alone(tok)
-            etid, eu = self.b.unit(self.entry)
-            self.b.feed(etid, "occ", eu, 1, (occ,))
-            self.b.feed(etid, "state", eu, 1, (self.collect,))
-            self.entry_unit = (etid, eu)
+            self.entry_label = self.b.label
         return ctid, cu
+
+    def place_entry(self, tid: str, u: int) -> None:
+        """A served Program's entry, unit ``u`` of the window's entries (`io_shell.SlotEntry_v1{NP=1}`), on its occupancy
+        word and its last collector's state."""
+        if self.occ is None or self.collect is None or self.entry_label is None:
+            raise Unexpressible(f"{self.name}: an entry before its last position's select")
+        self.b.feed(tid, "occ", u, 1, (self.occ,))
+        self.b.feed(tid, "state", u, 1, (self.collect,))
+        self.entry_unit = (tid, u)
 
     def _collect_alone(self, tok: tuple[Row, ...] | None = None) -> None:
         """A collector with no select (`io_shell.OutCollect_v1`): at a prompt position before the last, whose select is
