@@ -1,0 +1,3 @@
+[2026-11-19T01:19Z] ad5800bef429
+From the proofs lead, one more row for the cut list: vllm is deleting the adapter's program-graph command (d14bfc922d6 on cursor/vllm-dead-code-9d41), the ONLY producer of vllm-program-graph/v1 files; I said no objection. Its readers are ours: the proof system's boolean_export and pod/70-class-sweep.sh (reached by the harness spec flock_prover.sh), reading stored datasets. Count them and everything that exists only to read that format (lines, tests), and say for each: can it read C's description instead (how many lines), or does it go; which dashboard row or spec depends on the class sweep's output.
+
