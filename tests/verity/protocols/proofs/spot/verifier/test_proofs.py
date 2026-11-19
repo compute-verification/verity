@@ -142,7 +142,7 @@ def _derived(monkeypatch, circuit: Path) -> None:
     these tests are of what `verify` does with a verdict, whatever the derivation."""
     monkeypatch.setattr(OC, "restrict", lambda c, partition, units: circuit.read_bytes())
     monkeypatch.setattr(OC, "block", lambda c, partition, k: [(0, 1)])
-    monkeypatch.setattr(OC, "lower", lambda c_s: c_s)
+    monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe: c_s)
 
 
 def test_a_session_lean_accepts_in_a_form_the_mirror_refuses_is_refused(tmp_path, monkeypatch):
@@ -429,7 +429,7 @@ def test_the_door_proves_only_a_block_the_draw_sampled_and_refuses_an_undrawn_on
     derived = []
     monkeypatch.setattr(OC, "block", lambda c, partition, k: [(k, k + 1)])
     monkeypatch.setattr(OC, "restrict", lambda c, partition, units: derived.append(units) or circuit.read_bytes())
-    monkeypatch.setattr(OC, "lower", lambda c_s: c_s)
+    monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe: c_s)
     verdict = {"session": str(tmp_path / "s"), "accepted": False, "why": "refused", "zk": True}
     monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
     monkeypatch.setattr(PF.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(
@@ -443,7 +443,8 @@ def test_the_door_proves_only_a_block_the_draw_sampled_and_refuses_an_undrawn_on
         assert why is None and derived == [want] and [f.why for f in got] == ["refused"], (why, derived)
 
 
-def _door(tmp_path: Path, monkeypatch, name: str, indices: list, draw: dict, blocks=lambda k: [(k, k + 1)]):
+def _door(tmp_path: Path, monkeypatch, name: str, indices: list, draw: dict, blocks=lambda k: [(k, k + 1)],
+          inputs=None):
     """`verify` on a proof whose public file names `indices`, each block ``k`` of the partition object `blocks(k)`, the
     verifier answering a rejection; the derivations it asked for beside its answer."""
     d = tmp_path / name
@@ -454,12 +455,40 @@ def _door(tmp_path: Path, monkeypatch, name: str, indices: list, draw: dict, blo
     derived = []
     monkeypatch.setattr(OC, "block", lambda c, partition, k: blocks(k))
     monkeypatch.setattr(OC, "restrict", lambda c, partition, units: derived.append(units) or circuit.read_bytes())
-    monkeypatch.setattr(OC, "lower", lambda c_s: c_s)
+    monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe: c_s)
     monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
     monkeypatch.setattr(PF.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, "VERDICT " + json.dumps(
         {"session": cmd[cmd.index("--session") + 1], "accepted": False, "why": "refused", "zk": True}) + "\n", ""))
     return PF.verify(PF.Proof(circuit, public, (d / "s",)), program=RUN_ONLY, partition={"program": "p"}, draw=draw,
-                     registered=None), derived
+                     registered=None, inputs=inputs), derived
+
+
+def test_the_door_holds_the_drawn_blocks_inputs_to_the_schemes_reading_of_its_records(tmp_path, monkeypatch):
+    """The scheme's reading of the drawn block's public inputs from its committed records (``inputs``) is
+    called with the block the proof matched, once, and its refusal refuses the proof as ``inputs``
+    before C_S is derived or Lean runs; a reading that passes leaves the verdict to Lean."""
+    asked = []
+
+    def uncovered(k):
+        asked.append(k)
+        raise ValueError("kept-width: call 0 keeps |K| = 128 of K = 256")
+
+    (got, why), derived = _door(tmp_path, monkeypatch, "refused", [3], {"units": [1, 3]}, inputs=uncovered)
+    assert got is None and derived == [] and asked == [3], (why, derived, asked)
+    assert why == ("inputs", "drawn block 3: kept-width: call 0 keeps |K| = 128 of K = 256"), why
+    (got, why), derived = _door(tmp_path, monkeypatch, "held", [3], {"units": [1, 3]}, inputs=asked.append)
+    assert why is None and asked == [3, 3] and [f.block for f in got] == [3], (why, asked)
+
+
+def test_the_doors_lowering_of_a_partition_of_no_one_template_is_a_named_hole():
+    """`one_circuit.lower` is Lean's lowering of C_S's one template (``Q_template_instance``): a partition of no one
+    template is the hole ``lower``, refused before any executable is built."""
+    def never():
+        raise AssertionError("built an executable for a partition the lowering does not cover")
+
+    for partition in ({"program": "p"}, {"program": "p", "query": {"name": "Q_all", "params": {"template": "T"}}}):
+        with pytest.raises(OC.NotDerived, match="lower : C_S of a partition that names no one template"):
+            OC.lower(b"{}", partition, never)
 
 
 @pytest.mark.parametrize("indices, blocks, want", [

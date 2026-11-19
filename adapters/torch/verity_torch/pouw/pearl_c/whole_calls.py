@@ -286,7 +286,7 @@ class WholeCalls(_RunState):
         self._slots_copied = self._slots_copied or torch.cuda.Event()
         self._slots_copied.record()
         for c in calls:
-            fresh_into(c.salts, c.m16)
+            fresh_into(c.salts, c.m16, salts=cur.salts)
         self._uploaded = s
         return staged
 

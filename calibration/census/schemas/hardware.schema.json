@@ -6,6 +6,14 @@
   "items": {
     "type": "object",
     "additionalProperties": false,
+    "dependentRequired": {
+      "card": [
+        "readings"
+      ],
+      "readings": [
+        "card"
+      ]
+    },
     "required": [
       "id",
       "name",
@@ -22,7 +30,7 @@
       "id": {
         "type": "string",
         "pattern": "^[a-z0-9]+(-[a-z0-9]+)*/[a-z0-9]+$",
-        "description": "<device slug>/<dtype>"
+        "description": "<device slug>/<dtype>; a line derived from a card has the card's sku and its reading as its slug"
       },
       "name": {
         "type": "string",
@@ -46,7 +54,7 @@
       "flop_per_second": {
         "type": "number",
         "exclusiveMinimum": 0,
-        "description": "dense peak; an FMA counts as two FLOP"
+        "description": "dense peak; an FMA counts as two FLOP; where the line names a card, derived from it"
       },
       "accumulate": {
         "type": "string",
@@ -85,6 +93,71 @@
       "methodology": {
         "type": "string",
         "minLength": 1
+      },
+      "card": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sku",
+          "reading",
+          "weight"
+        ],
+        "properties": {
+          "sku": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+            "description": "the stem of the calibration/hardware/cards file this line's flop_per_second is derived from"
+          },
+          "reading": {
+            "enum": [
+              "tensor",
+              "sm"
+            ],
+            "description": "the card's clock reading (verity.device.READINGS) the figure is taken at"
+          },
+          "weight": {
+            "type": "string",
+            "minLength": 1,
+            "description": "the card's weight.<key> of this line's operand format"
+          }
+        }
+      },
+      "readings": {
+        "type": "array",
+        "minItems": 1,
+        "description": "the other figures the line's peak is quoted at, each named, with its ratio to flop_per_second; present with card",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "flop_per_second",
+            "ratio",
+            "sources"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "flop_per_second": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "ratio": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "this reading's flop_per_second over the line's, to six places"
+            },
+            "sources": {
+              "$ref": "#/items/properties/sources"
+            },
+            "methodology": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
       },
       "memory_bytes_per_second": {
         "type": "number",

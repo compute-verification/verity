@@ -97,10 +97,11 @@ def shortAgrees (P : Flock.Program.Prog) (d k s : ℕ) : Bool :=
 
 /-- **Every primitive of a decoded Program is spelt as its family's id, and each gate has §9's signature**
 (`DecodeBoolean.decode_facts`). -/
-theorem decode_gates (bytes : ByteArray) (P : Flock.Program.Prog) (h : decode bytes = .ok P) :
+theorem decode_gates (bytes : ByteArray) (P : Flock.Program.Prog) (h : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∀ w < P.defs.size, (P.defs[w]!).prim = true → misspelt (P.defs[w]!).key = false ∧
       ∀ g, gateKind? (P.defs[w]!).key = some g →
         (P.defs[w]!).params = g.signature.1 ∧ (P.defs[w]!).ret = g.signature.2 :=
-  fun w hw hp => ((DecodeBoolean.decode_facts bytes P h).2 w hw hp).2
+  fun w hw hp => ((DecodeBoolean.decode_facts bytes P h hr).2 w hw hp).2
 
 end FlockSoundness.Inline
