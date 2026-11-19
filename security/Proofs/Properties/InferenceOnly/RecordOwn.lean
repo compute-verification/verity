@@ -190,15 +190,6 @@ def OwnRunsOf (P : Prog) (D : List Nat) : Prop :=
 /-- **`own-rows` is `OwnRunsOf`.** -/
 theorem ownRunsOf_iff {P : Prog} {D : List Nat} : ownRows P D = true ↔ OwnRunsOf P D := Iff.rfl
 
-/-- **A part `own-rows` reads as a run is one**: of a unit, no edge and over no declared node. -/
-theorem ownPart_run {P : Prog} {D : List Nat} (h : OwnRunsOf P D) {n : Node} (hn : n ∈ unitsOf P) {q : Part}
-    (hq : q ∈ partsIn n) (he : edgeOf P q = false) (hd : overDeclared D q = false) : ∃ r, runOf P q = some r := by
-  unfold OwnRunsOf at h
-  rw [Bool.and_eq_true, Bool.and_eq_true] at h
-  refine filterMap_all (runOf P) _ (by simpa using h.1.2) q (List.mem_flatMap.2 ⟨n, hn, ?_⟩)
-  obtain ⟨a, ha, hqa⟩ := List.mem_flatMap.1 hq
-  exact List.mem_flatMap.2 ⟨a, ha, List.mem_filter.2 ⟨hqa, by simp [he, hd]⟩⟩
-
 /-- **A batch that is no input node maps each argument that reads no declared node over its members.** -/
 theorem ownBatch_dims {P : Prog} {D : List Nat} (h : OwnRunsOf P D) {n : Node} (hn : n ∈ unitsOf P)
     (hb : n.form = .batch) {a : Arg} (ha : a ∈ n.args) (hd : a.seq.parts.any (overDeclared D) = false) :
@@ -281,6 +272,15 @@ theorem flatMap_at {α β : Type} {A : β → β → Prop} (hs : ∀ x y, A x y 
 theorem flatMap_in {α β : Type} {A : β → β → Prop} {l : List α} {f : α → List β} (h : (l.flatMap f).Pairwise A)
     {a : α} (ha : a ∈ l) : (f a).Pairwise A :=
   (List.pairwise_flatMap.1 h).1 a ha
+
+/-- **A part `own-rows` reads as a run is one**: of a unit, no edge and over no declared node. -/
+theorem ownPart_run {P : Prog} {D : List Nat} (h : OwnRunsOf P D) {n : Node} (hn : n ∈ unitsOf P) {q : Part}
+    (hq : q ∈ partsIn n) (he : edgeOf P q = false) (hd : overDeclared D q = false) : ∃ r, runOf P q = some r := by
+  unfold OwnRunsOf at h
+  rw [Bool.and_eq_true, Bool.and_eq_true] at h
+  refine filterMap_all (runOf P) _ (by simpa using h.1.2) q (List.mem_flatMap.2 ⟨n, hn, ?_⟩)
+  obtain ⟨a, ha, hqa⟩ := List.mem_flatMap.1 hq
+  exact List.mem_flatMap.2 ⟨a, ha, List.mem_filter.2 ⟨hqa, by simp [he, hd]⟩⟩
 
 section
 variable {P : Prog} (h : OwnRuns P)
