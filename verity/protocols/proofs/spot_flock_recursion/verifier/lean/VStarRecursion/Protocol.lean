@@ -234,11 +234,12 @@ def shapeOf (circuitB pubB : ByteArray) (partition : Json) (program : ByteArray)
   let i ← (Flock.RecVStar.innerOf circuitB pubB (some partition) (some program) false).mapError (s!"rec-inner: " ++ ·)
   pure { i with holo := false, sparse := none, stacked := none }
 
-/-- `verity-verify-proof`'s `registeredFile` on a canonical object: the ports, `true` (`verity-verify-proof` runs `checkComplete` on
-every registered file), the known rows and the template parameters the ports read. -/
+/-- `verity-verify-proof`'s `registeredFile` under `--rec-inner` on a canonical object: the ports with their stated reads
+(`Registered.ofJsonStated`), `true` (`verity-verify-proof` runs `checkComplete` on every registered file), the known rows
+and the template parameters the ports read. -/
 def registeredOf (j : Json) :
     V (Array Flock.Registered.Port × Bool × Array (String × Array (Array Nat × ByteArray)) × Array String) := do
-  let own ← Flock.Registered.ofJson j
+  let own ← Flock.Registered.ofJsonStated j
   let known ← Flock.Registered.knownOf j
   Flock.Registered.checkKnownAll own known
   pure (own, true, known, ← Flock.Registered.paramsOf j)
@@ -369,7 +370,7 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
         Flock.RecLinkPart.checkShape inner none
         Flock.RecBudget.regs inner registered
         Flock.RecBudget.statements inner
-        let r ← OneStageZk.buildSessionOf parsed tags circuitB pubB coins tables count draw partition program registered
+        let r ← OneStageZk.buildSessionOfStated parsed tags circuitB pubB coins tables count draw partition program registered
         if complete then r.2.forM fun (st : Flock.Stmt) => Flock.Registered.checkComplete st.c (registered.getD #[])
         r.2.forM fun (st : Flock.Stmt) => Flock.Registered.checkCover st.c program partition registered regParams
         r.2.forM fun (st : Flock.Stmt) => Flock.KnownRead.check st.c known

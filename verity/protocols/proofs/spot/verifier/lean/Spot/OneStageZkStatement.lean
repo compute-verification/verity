@@ -277,6 +277,22 @@ def buildSessionOf (parsed : V Flock.Circuit) (tags : Flock.Tags) (circuitB pubB
   Flock.Registered.checkFull registered draw
   return r
 
+/-- `buildSessionOf` on the recursive verifier's road: each statement held to `registered`'s stated reads
+(`Flock.Registered.ofJsonStated`), which the V* checks hold to the reads they compute, in place of reads derived from C. -/
+def buildSessionOfStated (parsed : V Flock.Circuit) (tags : Flock.Tags) (circuitB pubB : ByteArray) (coins : Flock.Coins)
+    (tables : List (String × ByteArray)) (count : Nat) (draw partition : Option Json) (program : Option ByteArray)
+    (registered : Option (Array Flock.Registered.Port)) : V (Flock.SessionSpec × Array Flock.Stmt) := do
+  (if !tags.hm96Rows then throw s!"{tags.name}: not an hm96-sha512 row statement" else pure () : V Unit)
+  let r ← (if tags.hiddenOutputs then
+      Flock.Stmt.setupTablesOf parsed tags circuitB pubB coins count tables draw partition program
+    else Flock.Stmt.setupTables tags circuitB pubB coins count tables draw partition program :
+      V (Flock.SessionSpec × Array Flock.Stmt))
+  for st in r.2 do
+    Flock.checkRegistered st registered
+    checkIdentifier st
+  Flock.Registered.checkFull registered draw
+  return r
+
 /-- `verity-verify-proof`'s `programDigest`: SHA-512 of the canonical descriptor without `annotations`. -/
 def programDigest (b : ByteArray) : Option String := do
   let j ← (Flock.JsonParse.parse (← String.fromUTF8? b)).toOption
