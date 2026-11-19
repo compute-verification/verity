@@ -296,6 +296,19 @@ def test_the_word_level_ports_are_the_boundary_the_partition_gives(name, units):
     assert list(b.outputs) == sorted({g for u in mine for g in tp.outputs(u)} & (read_outside | set(program.circuit.root_outputs())))
 
 
+def test_out_s_reads_a_reference_part_by_part():
+    """out(S) reads a part only where it names a node S holds, and a broadcast once: a served window's root arguments
+    hold billions of references, read by every member of thousands of batches."""
+    from verity.circuits.refs import Affine, Explicit, Grid, Strided, concat
+    leaves = {3: (8, 12)}
+    huge = 10**15
+    refs = concat([Affine("n", 5, 0, huge), Strided("n", 3, 9, 1, 0, 0, huge), Affine("n", 3, 0, 10),
+                   Strided("n", 3, 0, 4, 4, 1, 16), Explicit((("n", 3, 11), ("p", 3, 9))),
+                   Grid(2, (("n", 3, 10, 1, ((2, 6),)), ("n", 7, 0, 1, ((2, huge),))))])
+    assert sorted(set(R._into(refs, leaves))) == [("n", 3, j) for j in (8, 9, 10, 11)]
+    assert list(R._into(Strided("n", 3, 9, 1, 0, 0, huge), leaves)) == [("n", 3, 9)]
+
+
 def test_the_bit_rule_is_one_function():
     assert R.split(16) == tuple(range(16))
     _, _, bits = chain()
