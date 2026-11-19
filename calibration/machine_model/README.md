@@ -33,7 +33,7 @@ What it computes:
 - **ε** (`eps`): a design's core ε in the tensor–scalar model, every term from data.
 - **The headline** (`headline`): each GPU family's design of record at the data-sheet and measured readings, the numbers
   the Lean headline guarantees are exported from ("The headline is per node").
-- **The card table** (`theta`, `sheet`): each card's rates, capacities and clocks with their sources, and its data-sheet
+- **The card table** (`sheet`): each card's rates, capacities and clocks with their sources, and its data-sheet
   lines.
 - **The opcode table** (`cover`): the evidence for the card assumption.
 
