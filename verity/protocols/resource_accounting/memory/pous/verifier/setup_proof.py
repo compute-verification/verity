@@ -59,6 +59,10 @@ class Undrawn(ValueError):
     finding naming another block than the drawn one it was offered for."""
 
 
+class NotOneSession(ValueError):
+    """A drawn block whose proof gave other than exactly one accepted session: none, or more than one."""
+
+
 def check(block: Callable[..., Any], verify: Callable[..., tuple[Any, Any]], proofs: Mapping[int, Any], c: bytes,
           partition: Mapping[str, Any], registered: Mapping[str, Any], draw: Any, params: P2Params,
           salt: bytes, row_bytes: int) -> list[Any]:
@@ -67,7 +71,7 @@ def check(block: Callable[..., Any], verify: Callable[..., tuple[Any, Any]], pro
     registered C `c` and its `partition`: `proofs` exactly one a drawn block, else `Undrawn`; its units the partition's
     (`block`, SPOT's `one_circuit.block`), C's salt supplied (`salted`), its constants and held ok bound (`bound`), and its proof `proofs[k]` verified against C,
     never the prover's circuit file (`verify`, SPOT's `proofs.verify`, `registered` the store's and W's registration),
-    each finding naming block k. The door is the caller's, so the verifier loads none of SPOT. A partition or block the
+    each finding naming block k and exactly one session accepted for it (`NotOneSession` otherwise). The door is the caller's, so the verifier loads none of SPOT. A partition or block the
     door refuses raises its refusal, a refusal of its verdict ValueError with its reason, and a session the door rejects
     ValueError naming it: a unit's ok word is held to 1 inside its proof, so an accepted session is every unit's 1."""
     drawn = list(draw.units)
@@ -87,7 +91,9 @@ def check(block: Callable[..., Any], verify: Callable[..., tuple[Any, Any]], pro
                 raise Undrawn(f"setup block {k}: session {f.session} is of block {f.block}")
             if not f.accepted:
                 raise ValueError(f"setup block {k}: session {f.session} rejected: {f.why}")
-        out += findings or []
+        if (n := sum(1 for f in findings or [] if f.accepted)) != 1:
+            raise NotOneSession(f"setup block {k}: {n} accepted sessions, and a drawn block has exactly one")
+        out += findings
     return out
 
 
@@ -124,5 +130,5 @@ class Claim:
         return json.dumps(self.to_json(), sort_keys=True, separators=(",", ":")).encode()
 
 
-__all__ = ["CONSTANTS", "Claim", "NOT_BOUND", "NotBound", "SALT", "SALT_MARK", "Undrawn", "bound", "check",
+__all__ = ["CONSTANTS", "Claim", "NOT_BOUND", "NotBound", "NotOneSession", "SALT", "SALT_MARK", "Undrawn", "bound", "check",
            "salted"]

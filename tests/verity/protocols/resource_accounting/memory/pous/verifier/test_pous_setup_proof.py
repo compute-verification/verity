@@ -172,6 +172,32 @@ def test_the_prover_commits_the_store_then_the_setups_values():
 
 
 @pytest.mark.slow
+def _finding(block: int, session: str, accepted: bool = True):
+    return type("F", (), {"block": block, "session": session, "accepted": accepted, "why": ""})()
+
+
+def _drawn(findings_of):
+    """`check` past the binding on a draw of two blocks, the door giving each block `findings_of(k)`."""
+    params, salt, _ = setup_case()
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(V, "bound", lambda *a: None)
+        return V.check(lambda *a: None, lambda proof, **kw: (findings_of(proof), None), {0: 0, 11: 11}, b"", {},
+                       {"supplied": {V.SALT: V.SALT_MARK}}, DRAW, params, salt, 16)
+
+
+def test_a_drawn_block_has_exactly_one_accepted_session():
+    """A drawn block whose proof gives no finding, a rejected one only, or two accepted sessions is refused by name, and
+    a block with exactly one accepted session passes: the honest case."""
+    honest = lambda k: [_finding(k, f"s{k}")]  # noqa: E731
+    assert [f.block for f in _drawn(honest)] == [0, 11]
+    with pytest.raises(V.NotOneSession, match=r"^setup block 0: 0 accepted sessions, and a drawn block has exactly one$"):
+        _drawn(lambda k: [])
+    with pytest.raises(V.NotOneSession, match=r"^setup block 11: 0 accepted sessions, and a drawn block has exactly one$"):
+        _drawn(lambda k: [] if k == 11 else honest(k))
+    with pytest.raises(V.NotOneSession, match=r"^setup block 0: 2 accepted sessions, and a drawn block has exactly one$"):
+        _drawn(lambda k: [_finding(k, "a"), _finding(k, "b")])
+
+
 def test_the_verifier_refuses_at_the_units_constants():
     """The verifier reads the partition's blocks for the proof layer's draw and holds C's salt to the supplied
     ``pous.setup.salt/v1``, then stops where each unit's place and slot are constants of C and its ok held to 1, which
