@@ -83,17 +83,17 @@ theorem le_pow2_words (b : ℕ) : b ≤ ((b + WORD - 1) / WORD).nextPowerOfTwo *
 theorem xorAt_single (y : ℕ) (z : ℕ → Bool) : xorAt [y] z = z y := by
   simp [xorAt]
 
-/-- **The root `lower` writes**: rows of the net its template unrolls to, satisfied with the constant 1, hold at the
-root's one copy of the lowered Definition `e'` (at `base`) its value on the input bits `0 … N − 1`, and at output bit `k`
-that copy's return column `rets[k]`. What is left of `LowerEval` is `lowerDef`'s: `e'`'s returns are `e`'s value. -/
+/-- **The root `lower` writes**: rows of the net its template unrolls to, satisfied with the constant 1, make the root's
+one copy of the lowered Definition `e'` (at `base`) satisfy its equations on the input bits `0 … N − 1`, and hold at
+output bit `k` that copy's return column `rets[k]`; `lowerDef`'s template Definitions begin the template's. -/
 theorem lower_root {P : Program.Prog} {d : ℕ} {inP outP : Array ℕ} {t : Tmpl.Tmpl} {n : Net}
     (hl : Flock.Lower.lower P d inP outP = .ok t) (h : Tmpl.unroll t = .ok n) (hu : n.unitLog ≤ 32)
     (hB : Built n) {z : ℕ → Bool} (hs : (Rows.ofNet hB).Sat fun c => z c.val) (hone : z t.constPos = true) :
     ∃ (Q : Program.Prog) (e : ℕ) (defn : Program.Defn) (e' : ℕ) (rets : Array ℕ) (s : Flock.Lower.St) (base : ℕ),
       Flock.Lift.lift P d = .ok (Q, e) ∧ Q.defs[e]? = some defn ∧
       (Flock.Lower.lowerDef Q (Q.defs.size + 1) e).run {} = .ok ((e', rets), s) ∧
-      (∀ y < (t.defs.getD e' default).cols,
-        z (base + y) = t.evalDef e' ((List.range defn.paramLeaves).map z) true y) ∧
+      s.defs.toList <+: t.defs.toList ∧
+      Holds t.defs true t.defs.size e' (fun y => z (base + y)) ((List.range defn.paramLeaves).map z) ∧
       ∀ k < defn.outLeaves, rets[k]! < (s.defs[e']!).cols →
         z (Flock.Lower.outBit t k) = z (base + rets[k]!) := by
   obtain ⟨hwf, hap, hord, -, -⟩ := Flock.Lower.lower_checked hl
@@ -179,7 +179,8 @@ theorem lower_root {P : Program.Prog} {d : ℕ} {inP outP : Array ℕ} {t : Tmpl
     intro x hx; simp [Def.ref, hx]
   have hrefone : D.ref 0 [] T.constPos (oStart + outW * WORD + 1) = T.constPos := by
     simp [Def.ref, hDcols, hDins]
-  refine ⟨Q, e, defn, e', rets, s, inW * WORD, rfl, hdf, hrun, ?_, ?_⟩
+  refine ⟨Q, e, defn, e', rets, s, inW * WORD, rfl, hdf, hrun,
+    by rw [← hT]; simp only [Array.toList_push]; exact List.prefix_append _ _, ?_, ?_⟩
   · have hc : c ∈ D.calls.toList := by rw [hDcalls]; simp
     have hbound : c.bound (D.ref 0 [] T.constPos) 0 = List.range defn.paramLeaves := by
       by_cases h0 : defn.paramLeaves = 0
@@ -189,15 +190,9 @@ theorem lower_root {P : Program.Prog} {d : ℕ} {inP outP : Array ℕ} {t : Tmpl
           Nat.add_zero, Nat.mul_zero]
         exact (List.map_congr_left fun x hx => hrefin x (by
           have := List.mem_range.1 hx; omega)).trans (List.map_id _)
-    have hev := FlockSoundness.TmplValue.unroll_eval hwf hap hord h hu hs (c := c) (j := 0)
-      (f := T.defs.size) (e := e') (o := c.base + 0 * c.stride)
-      (inp := c.bound ((T.defs.getD T.root default).ref 0 [] T.constPos) 0)
-      (by rw [hD]; exact hc) (by rw [hinC]) Nat.one_pos .refl
-    rw [hD] at hev
-    intro y hy
-    have := hev y hy
-    rw [hbound, hone] at this
-    simpa [c] using this
+    have hH := Flock.TmplValue.rows_holds hwf hap hacc z hrow c (by rw [hD]; exact hc) (by rw [hinC]) 0 Nat.one_pos
+    rw [hD, hbound, hone] at hH
+    simpa [c] using hH
   · intro k hk hlt
     rw [hC] at hlt
     unfold Tmpl.unroll at h
