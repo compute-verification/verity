@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+testpaths = ["."]
+
+[tool.verity.tests]
+inputs = ["benchmarks/kernels/port_trees", "verity"]
