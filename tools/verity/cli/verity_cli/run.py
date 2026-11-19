@@ -74,7 +74,7 @@ memory attesters, whose bindings say where they ran).
 
 onsite's ``block`` is its execution phase's seal digest, the one the served window publishes (`served_table.PHASE`).
 onsite's line reads a record the workload's node composed, its verdicts as the record has them; ``answer_from`` names
-each row's stated source and decides nothing. Under ``VERITY_HOLD_PLACEMENT=1`` its accepts, each row's and the combined
+each row's stated source and decides nothing. Under the placement hold (`verity_cli.settings.hold_placement`) its accepts, each row's and the combined
 one, read ``undecided`` (`served_table.AS_WRITTEN` in the reason).
 remote's line read from a record the prover composed, the serving node's own or a deferral's follow-on's, not a compose
 gate's answer, has ``source`` (``serving-node``, ``follow-on``), its reason led by a sentence saying so, and

@@ -390,7 +390,7 @@ def test_with_no_gate_answer_the_nodes_own_record_reads_development_never_the_au
     """Gate's answer absent, the serving node's record and composite present: the record is the prover's own word that
     it passed, so each of its accepts, the line's and each row's, reads `T.DEVELOPMENT_VERDICT`, never accept (under the
     placement hold, undecided); a reject stands, and a Lean that gave no answer reads undecided with its reason."""
-    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+    monkeypatch.setenv("VERITY_LIFT_PLACEMENT_HOLD", "1")
     cfg = R.load(CONFIG, REG)
     nodes_composite(tmp_path / "out")
     written(tmp_path / "out", YES, {**ACCEPTED, "inference-only": CHECKED})
@@ -398,11 +398,11 @@ def test_with_no_gate_answer_the_nodes_own_record_reads_development_never_the_au
     assert (got["verdict"], got["reason"], got["block"], got["source"]) == (
         T.DEVELOPMENT_VERDICT, T.FROM_SERVING_NODE, 3, T.SERVING_NODE)
     assert set(got["components"].values()) == {T.DEVELOPMENT_VERDICT} and "accept" not in json.dumps(got["components"])
-    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
+    monkeypatch.delenv("VERITY_LIFT_PLACEMENT_HOLD", raising=False)
     got = T.remote_check(cfg, tmp_path)
     assert got["verdict"] == "undecided" and set(got["components"].values()) == {"undecided"}
     assert f"the composed verdict {T.AS_WRITTEN}" in got["reason"]
-    monkeypatch.delenv("VERITY_HOLD_PLACEMENT")
+    monkeypatch.setenv("VERITY_LIFT_PLACEMENT_HOLD", "1")
     written(tmp_path / "out", {"composed": "reject", "product": "remote"}, {**ACCEPTED, "work": {"verdict": "reject"}})
     got = T.remote_check(cfg, tmp_path)
     assert (got["verdict"], got["components"]["pearl-plus"], got["components"]["sampled-proofs"]) == (
@@ -416,7 +416,7 @@ def test_with_no_gate_answer_the_nodes_own_record_reads_development_never_the_au
 def test_with_the_gates_answer_and_the_nodes_record_both_present_the_gates_answer_wins(tmp_path, monkeypatch):
     """Both present: the line is the compose gate's answer, its accept the auditor's, with no ``source`` and no
     development sentence, whatever the node's own record says."""
-    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+    monkeypatch.setenv("VERITY_LIFT_PLACEMENT_HOLD", "1")
     cfg = R.load(CONFIG, REG)
     nodes_composite(tmp_path / "out")
     for node, gate, want in ((YES, {"composed": "reject", "product": "remote"}, "reject"),
@@ -433,7 +433,7 @@ def test_a_deferred_composite_is_refused_as_deferred_until_the_follow_ons_record
     """A served node short of the audit's memory defers the tied audit and the composite to a follow-on on a prover
     node: until that follow-on's ``OUT`` is copied to ``out/follow-on``, the line is refused as ``deferred``, naming
     where it reads it; then it is the follow-on's record, `T.FOLLOW_ON` its source, its accepts development."""
-    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+    monkeypatch.setenv("VERITY_LIFT_PLACEMENT_HOLD", "1")
     cfg = R.load(CONFIG, REG)
     written(tmp_path / "out", {"composed": "pending", "product": "remote", "deferred": "196 GB, under 290"},
             {**ACCEPTED, "work": {"verdict": "missing"}})
@@ -453,7 +453,7 @@ def test_a_line_from_the_serving_nodes_own_record_says_so_and_a_gates_does_not(t
     """Nothing the prover runs is trusted: a line read from the serving node's own record says so in words, leading
     its reason, and by its ``source``, in the VERDICT line and the record `verity run` writes; a line read from the
     compose gate's answer carries neither."""
-    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+    monkeypatch.setenv("VERITY_LIFT_PLACEMENT_HOLD", "1")
     assert T.FROM_SERVING_NODE == ("read from the serving node's own record: a development verdict; the auditor's "
                                    "device did not compose it")
     for gate in (False, True):

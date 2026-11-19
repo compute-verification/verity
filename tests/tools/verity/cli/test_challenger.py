@@ -148,9 +148,9 @@ def test_spots_piece_hands_the_runner_the_loopback_host_its_development_marker_w
     loop = {"loopback": ADDRESS, "main-file": "/s/public/challenger/main.txt"}
     for hold in (None, "1"):
         if hold is None:
-            monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+            monkeypatch.setenv("VERITY_LIFT_PLACEMENT_HOLD", "1")
         else:
-            monkeypatch.setenv("VERITY_HOLD_PLACEMENT", hold)
+            monkeypatch.delenv("VERITY_LIFT_PLACEMENT_HOLD", raising=False)
         assert piece.variables(cfg, {"challenger": {"sampled-proofs": loop}}) == {
             "PP_CHALLENGER": f"loopback:{ADDRESS}", "MAIN_FILE": "/s/public/challenger/main.txt",
             "PP_DEVELOPMENT_UNDER_HOLD": "1"}

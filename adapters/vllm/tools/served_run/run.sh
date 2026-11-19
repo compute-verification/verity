@@ -92,11 +92,11 @@ placed = {**{k: v for k, v in node.items() if not isinstance(v, dict)}, **r.get(
 # PRODUCT is the configuration's, and a launch parameter with no default the launch's
 env = {k: fill(str(v), k) for k, v in placed.items()
        if k not in given and not (run == "settings" and (k == "PRODUCT" or unset(str(v))))}
-# where an application's record is composed is the runner's default, by its product and VERITY_HOLD_PLACEMENT
+# where an application's record is composed is the runner's default, by its product and VERITY_LIFT_PLACEMENT_HOLD
 if run == "settings":
     env.pop("COMPOSE_OFF_NODE", None)
-elif "VERITY_HOLD_PLACEMENT" in held and "VERITY_HOLD_PLACEMENT" not in given:
-    env["VERITY_HOLD_PLACEMENT"] = held["VERITY_HOLD_PLACEMENT"]  # carried as set: the runner's one reader judges it
+elif "VERITY_LIFT_PLACEMENT_HOLD" in held and "VERITY_LIFT_PLACEMENT_HOLD" not in given:
+    env["VERITY_LIFT_PLACEMENT_HOLD"] = held["VERITY_LIFT_PLACEMENT_HOLD"]  # carried as set: the runner's one reader judges it
 send = [fill(s, f"{run} run's send") for s in r.get("send", [])]
 for name in send:
     if not Path(name).is_file():

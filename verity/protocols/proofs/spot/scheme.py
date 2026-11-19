@@ -34,7 +34,7 @@ def _spot_hooks(cfg, params, bound, pinned):
     """The window's values committed under hiding leaves and sealed, its registration before the sample, and the sampled
     proof blocks proved in Flock --zk; the sample on the live challenger when its gate is bound, else on the challenger
     party's loopback host's coins where ``loopback`` is bound, else on a local development session's, simulated either
-    way, which served_verdicts.sh takes as a development run under VERITY_HOLD_PLACEMENT=1 (`PP_DEVELOPMENT_UNDER_HOLD`,
+    way, which served_verdicts.sh takes as a development run under the placement hold (`PP_DEVELOPMENT_UNDER_HOLD`,
     placement.sh's ``development_under_hold``)."""
     hooks = {v: f"gate:{bound[k]}" if k == "gate" else bound[k] for k, v in _PP.items() if k in bound}
     if "gate" in bound:

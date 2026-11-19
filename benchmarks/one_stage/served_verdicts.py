@@ -219,6 +219,7 @@ import argparse
 import contextlib
 import fnmatch
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -399,6 +400,15 @@ COPIED_FROM = ("a prover-side copy of each piece's answer file as the served nod
 #: verdict was computed, and where the record is composed none of them is run again or held to anything.
 TAKEN_AS_GIVEN = "a verdict computed off the auditor's device and handed in is taken as given, for the whole chain"
 #: what `record --off-node` composes from: the served node's compose hand-off (`served_verdicts.sh handoff`), no witness
+def placement_settings() -> Any:
+    """`verity_cli.settings`, the placement hold's one reader, loaded by its path: the record is composed under any python3."""
+    spec = importlib.util.spec_from_file_location(
+        "verity_cli_settings", ROOT / "tools" / "verity" / "cli" / "verity_cli" / "settings.py")
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    return cli
+
+
 HANDED_FROM = ("the served node's compose hand-off, held here to the sums it wrote, never a witness: each row's answer from "
                "where its answer_from says, sampled proofs' recomputed here by its Lean verifier from the case's proofs "
                "where the hand-off carries them, and each other's answer file as the served node wrote it, not the party "
@@ -2711,7 +2721,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     verifier gave a verdict, ``error`` where it gave none (`UNDECIDED`). ``front_group``: the network attester's row is
     over its front's group (`FRONT_GROUP`), which its row and the line's ``not_covered`` say, and the block record
     doesn't read. ``manifest``: infra's deploy manifest, by which ``composed_on`` says whether this host is the
-    auditor's device (`auditor_device`)."""
+    auditor's device (`auditor_device`). A run that lifted the placement hold says so in ``composed_on``'s
+    ``placement_hold``, which a held run's record has not."""
     from verity_e2e_demo import block_record as BR
 
     host = socket.gethostname()
@@ -2741,6 +2752,9 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     where = {"host": host, "served_node": host == node,
              "from": HANDED_FROM if off_node else COMPOSED_FROM if host == node else COPIED_FROM,
              "auditor_device": auditor_device(host, manifest, host == node), **(tree or {})}
+    cli = placement_settings()
+    if not cli.hold_placement():
+        where["placement_hold"] = f"lifted ({cli.LIFT_PLACEMENT_HOLD}=1)"
     left = {k: v for k, v in (("deferred", deferred), ("served_compare", served_compare)) if v}
     report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": rows,
               "servers": {k: at[k][0] for k in rows}, "composed_on": where, **left}

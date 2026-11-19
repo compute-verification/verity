@@ -55,7 +55,7 @@
 # under POUW=h1 onsite's Lean rejects naming Pearl+'s case missing.
 # On the served node itself (SERVED_NODE unset or its own host), which the prover controls, it is composed and its
 # first line, COMPOSITE ON-NODE, says so; COMPOSE_ON_NODE=WHY says WHY there instead (a deferral's follow-on, on a prover
-# node). Under VERITY_HOLD_PLACEMENT=1 a composite on the served node claims no record: it is refused (COMPOSITE
+# node). Under the placement hold (the default) a composite on the served node claims no record: it is refused (COMPOSITE
 # refused, exit 1) unless COMPOSE_OFF_NODE=0, and then composed as a development check, its first line COMPOSITE
 # DEVELOPMENT and each product's composite.json and verdicts.txt led by it (composite.py --development), and the
 # follow-on sets COMPOSE_DEVELOPMENT. COMPOSE_DEVELOPMENT=WHY composes it as a development check anywhere, WHY its
@@ -83,7 +83,7 @@ elif [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
   elif [ "${COMPOSE_OFF_NODE:-1}" != 0 ]; then
     say "COMPOSITE refused: this is the served node (SERVED_NODE), which the prover controls, so a composite here claims" \
         "no record; served_verdicts.sh composes it off the node from its compose hand-off (COMPOSE_OFF_NODE=0 composes it" \
-        "here as a development check, VERITY_HOLD_PLACEMENT unset composes it here)"
+        "here as a development check, VERITY_LIFT_PLACEMENT_HOLD=1 composes it here)"
     exit 1
   else
     dev=(--development "composed on the served node, which the prover controls: a development check, no claim of record (COMPOSE_OFF_NODE=0)")

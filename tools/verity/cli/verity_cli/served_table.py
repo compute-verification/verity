@@ -820,7 +820,7 @@ def attested(cfg: Mapping[str, Any], state: Path) -> dict[str, str]:
 
 def composite(env: Mapping[str, str]) -> dict[str, str]:
     """The runner's ``COMPOSITE``, set empty where it composes off the served node (``COMPOSE_OFF_NODE=1``, set by a
-    caller that runs a composer there, or its default under ``VERITY_HOLD_PLACEMENT=1``), where onsite's composite, which
+    caller that runs a composer there, or its default under the placement hold), where onsite's composite, which
     reads PoUS's and the wipe's cases that only the node's card writes, can't be made, and it refuses to start. ``env``
     is what the runner gets before it; a caller that names ``COMPOSITE`` or ``COMPOSE_OFF_NODE=0`` keeps what it named."""
     off = env.get("COMPOSE_OFF_NODE", "1" if machine_settings.hold_placement(env) else "0")
@@ -874,7 +874,7 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     """The verifier's onsite line over what the application's serving step published in ``state``'s ``out/`` and
     nothing else: the record (``record/verdicts.json``) of the execution phase ``serve/phase.json`` names, the line's
     ``block`` its seal's SHA-512, in `verity_cli.run`'s verdict form: its verdicts as the record has them, each row's
-    ``answer_from`` (printed, deciding nothing) saying who wrote it. Under ``VERITY_HOLD_PLACEMENT=1``
+    ``answer_from`` (printed, deciding nothing) saying who wrote it. Under the placement hold
     (`verity_cli.settings.hold_placement`), since the workload's node composed that record, each of its accepts, each
     row's and the combined verdict, reads undecided, `AS_WRITTEN` in the reason; a reject or an error stands either way.
     A component that charges nothing keeps its row's verdict like any other; the line's ``charges_nothing`` says why it
@@ -933,7 +933,7 @@ def remote_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     composed over its composite (``out/composite``, served_composite.sh's, under ``COMPOSE_OFF_NODE=0`` with
     ``COMPOSITE`` not set empty). A record the prover composed says so: its ``source`` (`SERVING_NODE`, `FOLLOW_ON`),
     its reason led by `FROM_SERVING_NODE` or `FROM_FOLLOW_ON`, and each of its accepts, a row's or the composed
-    verdict, reads `DEVELOPMENT_VERDICT`, or under ``VERITY_HOLD_PLACEMENT=1`` undecided, `AS_WRITTEN` in the reason, as
+    verdict, reads `DEVELOPMENT_VERDICT`, or under the placement hold undecided, `AS_WRITTEN` in the reason, as
     onsite's. Refused by name: ``record`` where the record can't be read or is another product's, ``deferred`` where
     the served node deferred its composite to a follow-on whose record isn't here, ``composite`` where the record it
     reads has no composite beside it."""

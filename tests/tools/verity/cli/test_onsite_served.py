@@ -301,9 +301,9 @@ def test_with_no_gate_bound_spots_coins_are_simulated_and_the_hooks_mark_them_fo
     hooks = T.PIECES["sampled-proofs"][T.WORKERS].hooks
     for hold in (None, "1"):
         if hold is None:
-            monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+            monkeypatch.setenv("VERITY_LIFT_PLACEMENT_HOLD", "1")
         else:
-            monkeypatch.setenv("VERITY_HOLD_PLACEMENT", hold)
+            monkeypatch.delenv("VERITY_LIFT_PLACEMENT_HOLD", raising=False)
         assert hooks({}, {}, {"peer": "peer-1"}, []) == {"PP_PEER": "peer-1", "PP_DEVELOPMENT_UNDER_HOLD": "1"}
         assert hooks({}, {}, {"gate": "u@g"}, []) == {"PP_CHALLENGER": "gate:u@g"}
 
@@ -816,23 +816,23 @@ echo "${COMPOSITE-unset}|${COMPOSE_OFF_NODE-unset}" > "$OUT/composite.txt"
 
 
 @pytest.mark.parametrize("named, sets, got", [
-    ({}, {}, "unset|unset"),
-    ({"VERITY_HOLD_PLACEMENT": "1"}, {"COMPOSITE": ""}, "|unset"),
-    ({"COMPOSE_OFF_NODE": "1"}, {"COMPOSITE": ""}, "|1"),
-    ({"COMPOSITE": "1"}, {}, "1|unset"),
-    ({"COMPOSITE": ""}, {}, "|unset"),
+    ({"VERITY_LIFT_PLACEMENT_HOLD": "1"}, {}, "unset|unset"),
+    ({}, {"COMPOSITE": ""}, "|unset"),
+    ({"COMPOSE_OFF_NODE": "1", "VERITY_LIFT_PLACEMENT_HOLD": "1"}, {"COMPOSITE": ""}, "|1"),
+    ({"COMPOSITE": "1", "VERITY_LIFT_PLACEMENT_HOLD": "1"}, {}, "1|unset"),
+    ({"COMPOSITE": "", "VERITY_LIFT_PLACEMENT_HOLD": "1"}, {}, "|unset"),
+    ({"COMPOSE_OFF_NODE": "0", "VERITY_LIFT_PLACEMENT_HOLD": "1"}, {}, "unset|0"),
     ({"COMPOSE_OFF_NODE": "0"}, {}, "unset|0"),
-    ({"COMPOSE_OFF_NODE": "0", "VERITY_HOLD_PLACEMENT": "1"}, {}, "unset|0"),
-    ({"PRODUCT": "remote"}, {}, "unset|unset"),
-    ({"PRODUCT": "remote", "COMPOSE_OFF_NODE": "1"}, {"COMPOSITE": ""}, "|1"),
-    ({"PRODUCT": "remote", "VERITY_HOLD_PLACEMENT": "1"}, {"COMPOSITE": ""}, "|unset"),
+    ({"PRODUCT": "remote", "VERITY_LIFT_PLACEMENT_HOLD": "1"}, {}, "unset|unset"),
+    ({"PRODUCT": "remote", "COMPOSE_OFF_NODE": "1", "VERITY_LIFT_PLACEMENT_HOLD": "1"}, {"COMPOSITE": ""}, "|1"),
+    ({"PRODUCT": "remote"}, {"COMPOSITE": ""}, "|unset"),
 ])
 def test_the_served_window_asks_for_no_composite_unless_its_caller_names_one(tmp_path, capsys, monkeypatch, named,
                                                                              sets, got):
     """The runner composes on the node by default, remote's as onsite's; where it composes off the node (a caller's
-    COMPOSE_OFF_NODE=1, or the default under VERITY_HOLD_PLACEMENT=1), where it refuses onsite's, the table hands it
+    COMPOSE_OFF_NODE=1, or the default under the placement hold), where it refuses onsite's, the table hands it
     ``COMPOSITE`` empty; a caller that names ``COMPOSITE`` or ``COMPOSE_OFF_NODE`` gets the runner what it named."""
-    for name in ("COMPOSITE", "COMPOSE_OFF_NODE", "VERITY_HOLD_PLACEMENT", "PRODUCT"):
+    for name in ("COMPOSITE", "COMPOSE_OFF_NODE", "VERITY_LIFT_PLACEMENT_HOLD", "PRODUCT"):
         monkeypatch.delenv(name, raising=False)
     for name, value in named.items():
         monkeypatch.setenv(name, value)
@@ -914,7 +914,7 @@ def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(
     published record and the execution phase's seal digest; under the placement hold, since the workload's node
     composed that record, a reject or an error stands and each accept, a row's or the composed verdict, reads
     undecided."""
-    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
+    monkeypatch.delenv("VERITY_LIFT_PLACEMENT_HOLD", raising=False)
     state = tmp_path / "state"
     published(state, rows, composed, "the network attester: error")
     assert sorted(p.relative_to(state).as_posix() for p in state.rglob("*") if p.is_file()) == [
@@ -959,7 +959,7 @@ def test_an_entry_the_launchers_record_says_already_is_said_once_on_the_line() -
 def test_a_row_the_serving_node_says_came_from_elsewhere_is_no_accept_either(tmp_path, capsys, monkeypatch, source):
     """``answer_from`` is the serving node's word too: under the placement hold, a record whose every row says it was
     recomputed elsewhere, under a composed accept, is still undecided."""
-    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
+    monkeypatch.delenv("VERITY_LIFT_PLACEMENT_HOLD", raising=False)
     state = tmp_path / "state"
     published(state, {"bandwidth": "accept", "inference-only": "accept"}, source=source)
     assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
@@ -980,10 +980,10 @@ def test_a_row_the_serving_node_says_came_from_elsewhere_is_no_accept_either(tmp
 ])
 def test_without_the_placement_hold_the_onsite_line_is_the_record_as_the_workloads_node_wrote_it(
         tmp_path, capsys, monkeypatch, rows, composed, lean, verdict, rc, reason):
-    """With ``VERITY_HOLD_PLACEMENT`` unset, the line's verdicts are the record's, the composed one and each row's,
+    """With ``VERITY_LIFT_PLACEMENT_HOLD=1``, the line's verdicts are the record's, the composed one and each row's,
     and each row's ``answer_from`` still says the workload's node wrote it; a record composed with no composite stays
     undecided, and a reject or an error stands."""
-    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+    monkeypatch.setenv("VERITY_LIFT_PLACEMENT_HOLD", "1")
     state = tmp_path / "state"
     published(state, rows, composed, lean=lean)
     assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == rc
@@ -1360,7 +1360,7 @@ def test_the_wipes_run_keys_beside_a_pin_or_an_attester_is_refused_before_the_ca
 ])
 def test_a_set_no_lean_verifier_takes_reads_the_published_record_and_no_python_verdict(tmp_path, monkeypatch, rows,
                                                                                       composed, source, verdict, reason):
-    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
+    monkeypatch.delenv("VERITY_LIFT_PLACEMENT_HOLD", raising=False)
     state = tmp_path / "state"
     published(state, rows, composed, source=source)
     line = T.onsite_check(R.load(NETWORK, REG), state)
@@ -1378,9 +1378,9 @@ def test_a_set_no_lean_verifier_takes_is_undecided_under_its_own_id(tmp_path, ca
                                                                     reason):
     """Python never accepts where a Lean verifier is written: with the placement hold or without it."""
     if hold:
-        monkeypatch.setenv("VERITY_HOLD_PLACEMENT", hold)
+        monkeypatch.delenv("VERITY_LIFT_PLACEMENT_HOLD", raising=False)
     else:
-        monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+        monkeypatch.setenv("VERITY_LIFT_PLACEMENT_HOLD", "1")
     state = tmp_path / "state"
     published(state, rows, composed)
     assert R.run_main([str(NETWORK), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
