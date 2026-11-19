@@ -45,7 +45,7 @@ def test_each_capture_class_has_its_one_site():
 def test_a_class_at_no_module_of_the_tree_is_unsupported():
     plan = G.run_plan([cls("body.blocks.7.proj_a", "0", CP.MODULE_OUTPUT), cls("body.embed", "x", "hidden")], tree())
     assert [v.why for v in plan.unsupported] == [
-        "no legal site: producer_output at body.blocks.7.proj_a/out: 'body.blocks.7.proj_a' is not a module of the runtime tree",
+        "no legal site: producer_output at body.blocks.7.proj_a/0: 'body.blocks.7.proj_a' is not a module of the runtime tree",
         "no legal site: ? at body.embed/x: capture class 'hidden' has no site rule"]
 
 

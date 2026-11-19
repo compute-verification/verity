@@ -161,7 +161,10 @@ def _i64(xs, T):
 
 
 def _plan(fx) -> list[dict[str, Any]]:
-    """The fixture's rows of the row's Programs (those naming their Definition) as `capture_plan.captured` gives a capture plan."""
+    """The fixture's rows of the row's Programs (those naming their Definition) as `capture_plan.captured` gives a capture plan,
+    each row's members in the order its Definition returns them (the record's tuple slots)."""
+    slot = {(m["bound"][0], m["bound"][1]): int(m["name"].rsplit("/", 1)[1]) for ms in fx["committed"].values() for m in ms
+            if m["name"].rsplit("/", 1)[-1].isdecimal()}
     rows: dict[tuple[str, int], dict[str, Any]] = {}
     for r in fx["identities"]:
         if r.get("spec"):
@@ -169,6 +172,8 @@ def _plan(fx) -> list[dict[str, Any]]:
                                                                               "spec": r["spec"], "members": []})
             if r["output_member"] not in [m[0] for m in d["members"]]:
                 d["members"].append((r["output_member"], 0, ""))
+    for d in rows.values():
+        d["members"].sort(key=lambda m: slot.get((d["op_path"], m[0]), 0))
     return list(rows.values())
 
 
