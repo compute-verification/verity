@@ -1702,15 +1702,3 @@ def test_no_flag_names_an_executable_and_the_piece_builds_only_its_declared_ones
     with pytest.raises(CP.NotRun, match="other is no executable the network attester declares"):
         CP.lean_exe("other")
     assert built == [(e.target, ROOT / e.package) for e in declared]
-
-
-def test_the_launchers_scan_class_is_v3cs_setup_in_scan_zk():
-    """The network attester's launcher's `SCAN_CLASS` is `V3C_SCAN_CLASS`'s setup (`scan_zk.W63K4`) as
-    served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,LANES,EVERY: a slot stride's Program slots over an execution phase's
-    strides, KI, KO, the lanes and EVERY."""
-    from verity.protocols.resource_accounting.network import scheme as NS
-    from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
-
-    setup = SZ.SETUPS[CP.V3C_SCAN_CLASS]
-    c = setup.cls
-    assert NS.SCAN_CLASS == f"{c.SLOTS * setup.params.window // c.EVERY},{c.KI},{c.KO},{c.lanes},{c.EVERY}"

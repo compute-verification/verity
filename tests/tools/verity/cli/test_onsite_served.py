@@ -271,6 +271,15 @@ def test_the_attester_and_the_policy_are_declared_from_their_manifests_whole():
     assert all(sent[c.sender, c.receiver] == list(c.messages) for c in NC.MANIFEST.channels)
 
 
+@pytest.mark.parametrize("name", ["onsite_network", "onsite_network_front", "onsite_compute", "onsite_full"])
+def test_each_configuration_listing_the_network_attester_is_refused_not_run_at_its_pieces_entry(name):
+    cfg = R.load(ROOT / "applications" / f"{name}.toml", REG)
+    assert "network-attester" in cfg["protocols"]
+    with pytest.raises(Refused) as e:
+        REG.parties["network-attester"][NC.WORKERS].variables(cfg, BINDINGS)
+    assert (e.value.name, e.value.detail) == ("not-run", NS.NOT_RUN)
+
+
 # --- the dry run -------------------------------------------------------------------------------------------------------
 
 def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
@@ -404,37 +413,6 @@ def test_the_attesters_script_is_its_developer_sides_and_no_gate_piece_names_one
                                                                                          [], {}, [])
 
 
-#: the network attester's piece without Pearl+ listed: split around V3c at network attestation's scan class
-SPLIT = {"SERVE_ARGS": NS.ID_FORM,
-         "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" '
-                            "--gate user@gate-1 --peer peer-1",
-         "CERTIFIER_CHAIN_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py chain "$@"',
-         "CERTIFIER_PERIOD_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py period "$@"',
-         "V3C_CLASS": "8,32,4,4,16", "CLASSES": "4,32,4 8,32,4,4,16"}
-
-
-def test_with_pearl_plus_listed_the_attesters_piece_is_whole_sets_no_class_and_fits_a_window():
-    """With Pearl+ listed the network attester's piece runs whole on its front's own window and sets no class, and the
-    front's requests ask for no more outputs than the workload's window steps; untied, no piece sets the class."""
-    cfg = R.load(CONFIG, REG)
-    got = T.variables(cfg, BINDINGS)
-    assert not TIE_VARIABLES & set(got)
-    assert got["CERTIFIER_CMD"] == VARIABLES["CERTIFIER_CMD"]
-    assert not {"CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"} & set(got)
-    assert got["CERTIFIER_FRONT"].endswith("--gate user@gate-1 --peer peer-1 --tokens 2")
-    assert REG.parties["network-attester"][NC.WORKERS].variables(cfg, BINDINGS) == {
-        "SERVE_ARGS": NS.ID_FORM, "CERTIFIER_CMD": VARIABLES["CERTIFIER_CMD"],
-        "CERTIFIER_FRONT": SPLIT["CERTIFIER_FRONT"] + " --tokens 2"}
-
-
-def test_without_pearl_pluss_tie_the_attesters_piece_is_split_at_the_scan_class():
-    cfg = R.load(ROOT / "applications" / "onsite_network.toml", REG)
-    assert "pearl-plus" not in cfg["protocols"]
-    assert REG.parties["network-attester"][NC.WORKERS].variables(cfg, BINDINGS) == SPLIT
-    got = T.variables(cfg, BINDINGS)
-    assert {k: got[k] for k in SPLIT} == SPLIT and "CERTIFIER_CMD" not in got
-
-
 def test_two_pieces_setting_different_classes_are_refused_by_name(monkeypatch):
     cfg = R.load(CONFIG, REG)
     pearl = T.PIECES["pearl-plus"][T.WORKERS]
@@ -442,7 +420,7 @@ def test_two_pieces_setting_different_classes_are_refused_by_name(monkeypatch):
         pearl, hooks=lambda cfg, params, bound, pinned: {**pearl.hooks(cfg, params, bound, pinned), "V3C_CLASS": "4,27,2"}))
     side = T.PIECES["network-attester"][T.WORKERS]
     monkeypatch.setitem(T.PIECES["network-attester"], T.WORKERS, dataclasses.replace(
-        side, hooks=lambda cfg, params, bound, pinned: {"V3C_CLASS": NS.SCAN_CLASS}))
+        side, hooks=lambda cfg, params, bound, pinned: {"V3C_CLASS": "8,32,4,4,16"}))
     with pytest.raises(Refused) as e:
         T.variables(cfg, BINDINGS)
     assert e.value.name == "params" and e.value.detail == (
