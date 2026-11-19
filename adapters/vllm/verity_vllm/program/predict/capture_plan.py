@@ -106,8 +106,10 @@ def _index(inst: Mapping[str, Any], program_dir: str) -> Any:
 def of_build(build: str | Path, *, index: Callable[[Mapping[str, Any], str], Any] = _index) -> list[dict[str, Any]]:
     """The plan classes of the row whose Build of record is the directory ``build``: every value a row of its request Programs
     (`build_request_*`) commits, and the prompt ids at each Program's embedding, sorted by op path and member. A value two
-    rows give another width, dtype or capture class is refused by name, and so is a Build with no request Program."""
+    rows give another width, dtype or capture class is refused by name, and so are two calls of one op in one module at one
+    step, which fold to one class name, and a Build with no request Program."""
     out: dict[tuple[str, str], dict[str, Any]] = {}
+    spelled: dict[tuple[str, Any, str], str] = {}
 
     def add(op: str, member: str, capture: str, width: int, dtype: str, definition: str, where: str) -> None:
         c = out.setdefault((op, member), {"op_path": op, "member": member, "capture": capture, "width": int(width), "dtype": str(dtype),
@@ -123,6 +125,9 @@ def of_build(build: str | Path, *, index: Callable[[Mapping[str, Any], str], Any
             for name, width, dtype in r["members"]:
                 capture = r["classes"][str(name)]
                 op = "/".join(NODE.fullmatch(r["op_path"]).groups()) if capture == CALL_BOUNDARY else str(r["op_path"])
+                if spelled.setdefault((d.name, r["step"], op), r["op_path"]) != r["op_path"]:
+                    raise ValueError(f"{d.name}: {spelled[(d.name, r['step'], op)]} and {r['op_path']} are two calls of one op at step "
+                                     f"{r['step']}, and both fold to the class {op}")
                 add(op, str(name), capture, width, dtype, str(r["family"]), d.name)
         embed = pi.embed_op_path()
         if embed is None:

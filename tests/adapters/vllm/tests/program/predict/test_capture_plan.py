@@ -104,6 +104,17 @@ def test_the_builds_plan_is_each_value_once_over_its_programs_with_the_prompt_id
          "definitions": ["TokenSelect_v1"]}]
 
 
+def test_two_calls_of_one_op_at_one_step_are_refused_by_the_class_name_they_fold_to(tmp_path):
+    def index(inst, program_dir):
+        pi = _llama_like()
+        pi.described[3]["step"] = 0
+        return pi
+
+    with pytest.raises(ValueError, match=r"row_quant_3 and model.layers.0.mlp.down_proj/row_quant_67 are two calls of one op at "
+                                         r"step 0, and both fold to the class model.layers.0.mlp.down_proj/row_quant"):
+        CP.of_build(_build(tmp_path), index=index)
+
+
 def test_a_steps_rows_are_each_op_path_once_with_every_members_of_its_rows(tmp_path):
     """RoPE's query and key are rows of their own at every request row: one engine step commits the op path once, its
     members in the order its rows first give them."""
