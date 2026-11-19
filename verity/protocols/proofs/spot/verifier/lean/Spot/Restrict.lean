@@ -74,12 +74,6 @@ def sameInput (d e : Defn) : Bool :=
   d.key == e.key && d.id == e.id && d.prim == e.prim && d.params.isEmpty && e.params.isEmpty && w d.ret == w e.ret &&
     d.binding == e.binding && d.gates == e.gates && d.paramLeaves == e.paramLeaves && d.outLeaves == e.outLeaves
 
-/-- The root nodes of C that the units are, each `(k, first member, end member)`, in increasing C index. -/
-def kept (ms : Array (Nat × Nat × Scope)) : Array (Nat × Nat × Nat) :=
-  ms.foldl (fun acc (k, m, _) => match acc.back? with
-    | some (k', m0, m1) => if k' == k && m1 == m then acc.pop.push (k, m0, m + 1) else acc.push (k, m, m + 1)
-    | none => #[(k, m, m + 1)]) #[]
-
 /-- A root-scoped reference of C as the port or earlier node of the block that carries its gate. -/
 def leaf (P : Prog) (ref : Std.HashMap Nat Ref) (r : Ref) : V Ref := do
   let g ← resolve P P.rootScope r
