@@ -119,6 +119,14 @@ def _wiring(fn: PrimitiveDefinition) -> int | None:
     return int(m[2]) if m else -1 if WORD_OF_ID.fullmatch(fn.id) else None
 
 
+def _boolean_body(fn: PrimitiveDefinition) -> Any:
+    from verity.circuits.program import boolean_body
+    try:
+        return boolean_body(fn)
+    except LookupError:
+        return None
+
+
 def _group(gates: list[tuple[int, int, np.ndarray, np.ndarray]], size: int) -> list[tuple[int, np.ndarray, np.ndarray, np.ndarray]]:
     """A run of gate nodes, (kind, out, a, b) each, as groups of equal depth and kind (depth counted within the run)."""
     depth = np.zeros(size, dtype=np.int64)
@@ -137,7 +145,8 @@ def _group(gates: list[tuple[int, int, np.ndarray, np.ndarray]], size: int) -> l
 
 def compile(target: Any, words: bool = False) -> Compiled:  # shadows `builtins.compile`, unused here: the module's verb
     """``words``: also a composite with word leaves, each its bits least significant first, whose word primitives are the
-    wiring ones (`BitOf`, `WordOf`); TypeError at any other."""
+    wiring ones (`BitOf`, `WordOf`), copies, or have a Boolean body (`program.boolean_body`), a call of it; TypeError at any
+    other."""
     spec = _spec(target, words)
     hit = _COMPILED.get(spec)
     if hit is not None:
@@ -209,7 +218,10 @@ def compile(target: Any, words: bool = False) -> Compiled:  # shadows `builtins.
             gk = BL.gate_kind(fn)
             wire = None if gk is not None or not words else _wiring(fn)
             if gk is None and wire is None:
-                raise TypeError(f"{spec.id} node {q}: {fn.id} is not a Boolean gate, constant bit or wiring primitive")
+                fn = _boolean_body(fn) if words else None
+                if not isinstance(fn, SpecializedDefinition):
+                    raise TypeError(f"{spec.id} node {q}: {nd.fn.id} is not a Boolean gate, constant bit, wiring primitive "
+                                    "or word primitive with a Boolean body")
         if wire is not None:
             ops = (np.concatenate([idx(a.refs) for a in nd.args])[None] if nd.form == "primitive" else
                    member_refs(nd)[:].reshape(nd.n, -1))
@@ -239,7 +251,7 @@ def compile(target: Any, words: bool = False) -> Compiled:  # shadows `builtins.
         flush()
         child = compile(fn, words)
         max_size = max(max_size, child.max_size)
-        if nd.form == "call":
+        if nd.form in ("call", "primitive"):
             members = np.stack([np.concatenate([idx(a.refs) for a in nd.args]) if nd.args else np.empty(0, np.int64)])
         elif nd.form == "batch":
             members = member_refs(nd)
