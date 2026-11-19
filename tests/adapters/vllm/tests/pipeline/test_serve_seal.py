@@ -285,19 +285,12 @@ def test_a_sealed_windows_record_binds_the_registered_compiler(tmp_path):
     assert r.ctx["served_window"]["compiler"] == COMPILER and "required_manifest" not in r.ctx["served_window"]
 
 
-def test_the_arena_is_sized_from_the_window_class_under_the_engines_limits():
-    """`arena_envelope`: the class's slots a step, each of at most its prompt, its positions a sequence, under the engine's
-    own limits."""
-    from verity_vllm.program.predict.window_class import CLASS_OF_RECORD, WindowClass
-
-    opts = SimpleNamespace(max_num_seqs=16, max_num_batched_tokens=8192, max_model_len=4096)
-    assert ss.arena_envelope(opts, CLASS_OF_RECORD) == {"batch": 8, "max_prompt": 1024, "max_new": 1, "max_num_batched_tokens": 8192,
-                                                        "max_model_len": 1088}
-    assert ss.arena_envelope(opts, WindowClass(4, 27, 2)) == {"batch": 4, "max_prompt": 27, "max_new": 1, "max_num_batched_tokens": 108,
-                                                              "max_model_len": 29}
-    small = SimpleNamespace(max_num_seqs=2, max_num_batched_tokens=512, max_model_len=64)
-    assert ss.arena_envelope(small, CLASS_OF_RECORD) == {"batch": 2, "max_prompt": 1024, "max_new": 1, "max_num_batched_tokens": 512,
-                                                         "max_model_len": 64}
+def test_the_arena_is_sized_from_the_declared_window_class_alone():
+    """`arena_envelope`: the class ``--window-class`` declares, its slots a step, each of at most its prompt, its positions a
+    sequence; the engine's flags size nothing."""
+    opts = SimpleNamespace(window_class="4,27,2", max_num_seqs=16, max_num_batched_tokens=8192, max_model_len=4096)
+    assert ss.arena_envelope(ss.window_class_of(opts)) == {"batch": 4, "max_prompt": 27, "max_new": 1,
+                                                           "max_num_batched_tokens": 108, "max_model_len": 29}
 
 
 def test_a_shared_modules_kth_path_binds_as_its_first_paths_kth_call():

@@ -62,11 +62,9 @@ want=$(awk -v n="$ROW.json" '$2==n{print $1}' adapters/vllm/workloads/SHA256SUMS
 [ "$(sha256sum < "$WL" | cut -c1-64)" = "$want" ] || { say "SMOKE FAILED workload: $WL is not SHA256SUMS's"; exit 1; }
 (cd adapters/vllm && "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW" --out "$PRED") > "$SR/predict.log" 2>&1 \
   || { say "SMOKE FAILED predict ($SR/predict.log)"; exit 1; }
-"$PY" -c 'import json, sys; from verity_vllm.check.commit_rules import hidden_classes_required as h
-sys.exit(h(json.load(open(sys.argv[1]))) is not False)' "$PRED/manifest.json" \
-  || { say "SMOKE FAILED manifest: it names the hidden class, and this smoke attaches no hidden tap"; exit 1; }
 
-STEPS=256 REQS=1 PP=()
+# the window class the serve's arena is sized from (S,P,O: slots, prompt ids, outputs), the load's bound
+STEPS=256 REQS=1 CLASS=1,24,4 PP=()
 LOAD=(adapters/vllm/tools/served_run/serve_load.py --port "$PORT" --model "$MODEL" --varied 1 --rate 1000 --max-tokens 4
   --prompt-range 16:24 --seed 1 --out "$SR/load.jsonl")
 if [ "$SCHEME" = pearl-plus ]; then
@@ -100,7 +98,8 @@ EOF
 fi
 SERVE=(serve-openai --model "$MODEL" --revision "$REV" --out "$D" --port "$PORT" --precision bfloat16
   --run-id "smoke-${RESEARCH_RUN_ID:-local}" --seal --max-num-batched-tokens 512 --window-steps "$STEPS"
-  --required-manifest "$PRED/manifest.json" --norm-tap-so "$NSO" --window-requests "$REQS"
+  --row-build "$PRED" --norm-tap-so "$NSO" --window-requests "$REQS" --window-class "$CLASS" --max-num-seqs "$REQS"
+  --max-model-len "$(IFS=, read -r _ p o <<< "$CLASS"; echo $((p + o)))"
   --window-gb 4 --disk-floor-gb 5 --seal-hold-gb 8 "${PP[@]}")
 
 if [ "$DRY" = 1 ]; then

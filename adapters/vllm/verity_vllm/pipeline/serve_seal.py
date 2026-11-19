@@ -6,7 +6,7 @@ acquisition over the row's capture plan (`program.predict.capture_plan.captured`
 Programs) of the row's Build of record (``--row-build``, ``verity-vllm predict row``'s, `serve_row`), built at the serve's start:
 the sources of the values no module returns (`commit_attach.attach_of_plan`) and the plan's hook sets, a shared module's k-th
 call bound as its k-th path (`RuntimeTree.aliases`, sealed as the context's ``op_path_aliases``), and the arena sized from the
-window class of record (`arena_envelope`). Then `served_record.StepInputPort` (each step's
+window class the application declares (``--window-class``, `arena_envelope`). Then `served_record.StepInputPort` (each step's
 stream starts with its input ids, then its positions, each padded to ``--max-num-batched-tokens``: the port network attestation's
 served-rows tie's Definition reads; no proof of it runs, so today the rows registered at serve time are the
 prover's word) and `served_record.SamplerInputsSource` are attached and the arena sized; under ``--seal`` it registers
@@ -95,6 +95,8 @@ def scheme_refusal(opts: Any) -> str | None:
         return (f"--scheme {ROWS} commits the row's capture plan, the registered compiler's: pass --row-build DIR, DIR the row's "
                 "Build of record (`verity-vllm predict row --row ROW --out DIR`), and the row's --hidden-so, --norm-tap-so, or "
                 "--no-commit to serve without a Commit")
+    if why := class_refusal(opts):
+        return why
     if int(opts.max_num_batched_tokens) % PORT_IDS:
         return (f"--scheme {ROWS} starts each step's stream with its step-input port, the step's ids in whole "
                 f"{step_rows.ROW_BYTES}-byte rows: pass --max-num-batched-tokens a multiple of {PORT_IDS}, not "
@@ -111,14 +113,38 @@ def committer_args(opts: Any) -> SimpleNamespace:
                            tap_sources=TapSources(norm_tap_so=opts.norm_tap_so), moe_source="off", required_classes=None)
 
 
-def arena_envelope(opts: Any, cls: Any) -> dict[str, Any]:
-    """The workload envelope the committer's arena is sized from (`size_arena`): the window class ``cls``'s public bounds (a
-    `window_class.WindowClass`: its slots a step, each of at most its prompt, its positions a sequence), under the engine's own
-    limits, one new token a decode step."""
-    batch = min(int(opts.max_num_seqs), cls.slots)
-    tokens = min(int(opts.max_num_batched_tokens), batch * cls.prompt)
-    return {"batch": batch, "max_prompt": cls.prompt, "max_new": 1, "max_num_batched_tokens": tokens,
-            "max_model_len": min(int(opts.max_model_len), cls.positions + 1)}
+def window_class_of(opts: Any) -> Any:
+    """The window class ``opts.window_class`` (``S,P,O``) declares, a `window_class.WindowClass`; `ValueError` when it declares none."""
+    from verity_vllm.program.predict.window_class import WindowClass
+
+    parts = str(opts.window_class or "").split(",")
+    if len(parts) != 3 or not all(p.strip().isdecimal() for p in parts):
+        raise ValueError(f"--window-class {opts.window_class!r} is not S,P,O")
+    return WindowClass(*(int(p) for p in parts))
+
+
+def class_refusal(opts: Any) -> str | None:
+    """Why the Commit can't size its arena (None: it can): the bound is the window class the application declares
+    (``--window-class``), and the engine's limits admit no more than it, slots a step and positions a sequence."""
+    if not opts.window_class:
+        return (f"--scheme {ROWS} sizes the Commit's arena from the window class the application declares: pass --window-class "
+                "S,P,O (the remote application's 4,27,2)")
+    try:
+        cls = window_class_of(opts)
+    except ValueError as e:
+        return str(e)
+    if int(opts.max_num_seqs) > cls.slots or int(opts.max_model_len) > cls.positions + 1:
+        return (f"--window-class {opts.window_class} bounds a step at {cls.slots} sequences of {cls.positions + 1} positions, and the "
+                f"engine admits {opts.max_num_seqs} of {opts.max_model_len}: pass --max-num-seqs {cls.slots} --max-model-len "
+                f"{cls.positions + 1}")
+    return None
+
+
+def arena_envelope(cls: Any) -> dict[str, Any]:
+    """The workload envelope the committer's arena is sized from (`size_arena`): the window class ``cls``'s bounds (its slots a
+    step, each of at most its prompt, its positions a sequence), one new token a decode step."""
+    return {"batch": cls.slots, "max_prompt": cls.prompt, "max_new": 1, "max_num_batched_tokens": cls.slots * cls.prompt,
+            "max_model_len": cls.positions + 1}
 
 
 def target_of(model: Any = None, async_scheduling: bool = False) -> dict[str, Any]:
@@ -150,7 +176,7 @@ def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
     """The server's committer over ``llm`` under ``opts.scheme`` (module docstring), its run ``label:<run id>``, refused unless the
     scheme may commit (`scheme_refusal`) and it retains on the host (the served record is read back from there). Its capture
     plan is the row's Build of record's (`capture_plan.rows_of_build` for the seal's binder, `capture_plan.of_build` for the
-    acquisition, whose prompt ids the step-input port carries), and its arena is sized from the window class of record."""
+    acquisition, whose prompt ids the step-input port carries), and its arena is sized from the window class the application declares."""
     if why := scheme_refusal(opts):
         raise UsageError(why)
     from verity_vllm import settings
@@ -160,7 +186,6 @@ def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
     from verity_vllm.pipeline import commit as C, commit_attach as CA
     from verity_vllm.pipeline.advice import registered_compiler
     from verity_vllm.program.predict import capture_plan as CP
-    from verity_vllm.program.predict.window_class import CLASS_OF_RECORD
 
     run_id = f"{label}:{opts.run_id}"
     rows, classes, args = CP.rows_of_build(opts.row_build), CP.of_build(opts.row_build), committer_args(opts)
@@ -186,7 +211,7 @@ def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
     except ValueError as e:
         raise UsageError(str(e)) from None
     com.attach_source(SamplerInputsSource(com))
-    com.arena_sizing_record = com.size_arena(arena_envelope(opts, CLASS_OF_RECORD), hidden_m1=False)
+    com.arena_sizing_record = com.size_arena(arena_envelope(window_class_of(opts)), hidden_m1=False)
     if getattr(com, "windowed", False):
         com.window_ring = com.enable_windows(com.arena_sizing_record)     # windowed staging's ring replaces the per-step blocks
     if opts.retention.retain == "device":
