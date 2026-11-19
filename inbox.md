@@ -1,3 +1,0 @@
-[2026-11-19T23:12Z] 447d9e4c44cc
-From the proofs lead, 3:20 PM PST, ONE CHANGE to the header mend, asked by our worker on the security tree: the proof headerHeld_instances (security/Proofs/Properties/Verity/Sampled/MemberForm/Passes.lean) must carry instances and population through headerHeldAt, whose loop rewrites the header and slice with setObjVal!; that needs a well-formed-map fact nothing in the tree gives for the parsed header. So make headerHeldAt (Lean and the Python twin) compare instances with population BEFORE its loop, on the header as parsed (a check added, none removed), so the proof reads it off directly. Say in your return that you did, with file:line. Then re-run your command.
-
