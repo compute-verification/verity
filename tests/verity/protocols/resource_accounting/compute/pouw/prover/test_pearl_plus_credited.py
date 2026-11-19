@@ -1,5 +1,5 @@
-"""A credited linear of C as Pearl+'s tile check (`pearl_plus_credited`): its grid's units of `PearlPlusTileCore_v2`, each
-one proof block whose amount is its credited MACs, and each unit's public row. That the core on these ports evaluates and
+"""A credited linear of C as Pearl+'s tile check (`pearl_plus_credited`): its grid's units of `PearlPlusTileCoreWords_v1`,
+each one proof block whose amount is its credited MACs, and each unit's public row. That the core on these ports evaluates and
 one drawn unit goes through the door is ``benchmarks/pouw/credited_in_c.py``'s run."""
 from __future__ import annotations
 
@@ -11,9 +11,7 @@ import pytest
 from verity.protocols.resource_accounting.compute.pouw import scheme as PS
 from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError
 
 SCHEME = "pearl-c-h100-v1-h3"
 K = 256
@@ -23,9 +21,9 @@ def test_a_linears_units_are_its_grid_row_major_its_last_row_tile_part_filler() 
     got = PC.tiles(SCHEME, K, 3, 2, tile=(2, 1))
     assert [(t.rows, t.cols, t.col, t.real) for t in got] == [
         ((0, 1), (0,), 0, 2), ((0, 1), (1,), 1, 2), ((2, 3), (0,), 0, 1), ((2, 3), (1,), 1, 1)]
-    assert {t.core.defn.id for t in got} == {PT.PearlPlusTileCoreV2.id}
+    assert {t.core.defn.id for t in got} == {PC.PearlPlusTileCoreWords.id}
     assert all({s: t.core.bindings[s] for s in ("K", "TM", "TN", "N")} == {"K": K, "TM": 2, "TN": 1, "N": 2} for t in got)
-    with pytest.raises(DomainError, match="whole column tiles"):
+    with pytest.raises(ValueError, match="whole column tiles"):
         PC.tiles(SCHEME, K, 3, 3, tile=(1, 2))
 
 

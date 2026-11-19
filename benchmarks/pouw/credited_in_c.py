@@ -1,6 +1,6 @@
 """A credited linear of C with Pearl+'s check as its nodes, through the door.
 
-C is one linear y = x · Wᵀ over M rows of K and N columns whose nodes are its grid's units of `PearlPlusTileCore_v2`
+C is one linear y = x · Wᵀ over M rows of K and N columns whose nodes are its grid's units of `PearlPlusTileCoreWords_v1`
 (`pearl_plus_credited.tiles`), each reading its ports as rows of the values C holds: x's and W's rows (``a``, ``b``), the
 linear's one y (``y``), the prover's certificates (``cert``) and the public row (`pearl_plus_credited.PUBLIC`: ``salt``,
 ``root``, ``unit``, ``rows``, ``col``, ``eb``, ``fa``, ``fb``, ``g``), registered under public salts from content the
@@ -147,15 +147,23 @@ def honest(k: int, m: int, n: int, ln: Linear, unit: int, seed: str) -> tuple[di
         pub["rows"][t.rows[0] // tm], pub["col"][t.col], pub["eb"][t.col] = p["rows"], p["col"], p["eb"]
         shared = {v: p[v] for v in ("salt", "root", "unit", "fa", "fb", "g")}
         refs.append((a, b, t.rows, t.cols))
-    values = {"x": x, "w": w, "y": y, "cert": certs, **shared,
+    values = {"x": x, "w": [[v >> 16 for v in r] for r in w], "y": y, "cert": certs, **shared,
               **{v: [pub[v][r] for r in range(len(pub[v]))] for v in ("rows", "col", "eb")}}
     return values, refs
 
 
+MANY = ("x", "w", "y", "cert", "rows", "col", "eb")
+
+
 def rows_of(ln: Linear, values: dict) -> dict[str, list[list[int]]]:
-    """Each value's registered rows: a many-row value's rows, a one-row value its one, each its bits as u16 words."""
-    many = ("x", "w", "y", "cert", "rows", "col", "eb")
-    return {v: [words16(value_bits(ln.types[v], r)) for r in (values[v] if v in many else [values[v]])] for v in values}
+    """Each value's registered rows (a many-row value's rows, a one-row value its one), each its leaves packed into the
+    value's registered width (`registered.width`, `registered.bit_words`)."""
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+    out = {}
+    for v, x in values.items():
+        w, b = REG.width(ln.program, v), ln.types[v].leaf_widths()[0]
+        out[v] = [REG.bit_words(_flat(r), b, w) for r in (x if v in MANY else [x])]
+    return out
 
 
 def register(program, rows: dict, supplied: tuple[str, ...]) -> dict:
@@ -167,9 +175,8 @@ def register(program, rows: dict, supplied: tuple[str, ...]) -> dict:
     prog = program_digest(program)
     out = {}
     for v, rs in rows.items():
-        assert REG.width(program, v) == 16, v
         out[v] = RV.Registered.commit(prog, v, rs, RV.supplied_salts(prog, v, len(rs)) if v in supplied else None,
-                                      word_bits=16, schema=RV.SCHEMA_HM96_SHA512_ROW_V2)
+                                      word_bits=REG.width(program, v), schema=RV.SCHEMA_HM96_SHA512_ROW_V2)
     return out
 
 
@@ -202,12 +209,13 @@ def stage(a) -> int:
     from verity.circuits import partition_query as PQ
     from verity.circuits import restrict as R
     from verity.circuits.codec import descriptor_chunks
-    from verity.circuits.evaluation import evaluate_bits
+    from verity.circuits.evaluation import evaluate_batch
     from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
     from verity.protocols.resource_accounting import scheme as RS
     from verity.protocols.resource_accounting.compute.pouw import scheme as PS
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
+    from verity.commitments import registered_value as RV
     from verity_flock import circuit as FC
 
     assert tm == 1 and tn == 1, "every core port one whole row: TM = TN = 1 (a wider tile's ports are arrays of rows)"
@@ -258,8 +266,8 @@ def stage(a) -> int:
     params = [v for v, _ in program.fn.signature()[0]]
 
     def run(values: dict) -> list[list[int]]:
-        bits = [np.asarray([value_bits(pt, values[v])], dtype=np.uint8) for v, pt in program.fn.signature()[0]]
-        flat = evaluate_bits(program.fn, *bits).reshape(-1).tolist()
+        flat = evaluate_batch(program.fn, *(np.asarray([_flat(values[v])], dtype=np.int64) for v in params))
+        flat = flat.reshape(-1).tolist()
         n_out = len(flat) // units
         return [flat[n_out * u:n_out * (u + 1)] for u in range(units)]
 
@@ -272,7 +280,7 @@ def stage(a) -> int:
             for d, ok in [PT.reference(drawn.core.bindings["DEV"], k, n, a_rows, b_rows, [vals["y"][i] for i in rws[:drawn.real]],
                                        vals["cert"][index], vals["salt"], vals["root"], unit, list(rws), list(cls), drawn.col,
                                        drawn.core.bindings["RHO"], drawn.core.bindings["RHOR"])]}
-    rec["evaluate"] = {"of": "C on bits (`evaluate_bits` of its root): each unit's (digest, ok)",
+    rec["evaluate"] = {"of": "C on its words (`evaluate_batch` of its root): each unit's (digest, ok)",
                        "honest_ok": [g[512] for g in got["honest"]], "dishonest_ok": [g[512] for g in got["dishonest"]],
                        "drawn_reference_agrees": {tag: words(got[tag][index]) == want[tag] for tag in got}}
     phase("evaluate")
@@ -295,7 +303,7 @@ def stage(a) -> int:
     pub_rows = rows_of(ln, good)
     verifier_roots = {v: r.root.hex() for v, r in register(program, {v: pub_rows[v] for v in supplied}, supplied).items()}
     other = PC.public(SCHEME, k, drawn, unit + 1, good["salt"], good["root"])
-    wrong_unit = {"unit": [words16(value_bits(ln.types["unit"], other["unit"]))]}
+    wrong_unit = rows_of(ln, {"unit": other["unit"]})
     rec["registered"] = {}
     for tag, vals in (("honest", good), ("dishonest", bad)):
         d = a.out / tag
@@ -321,7 +329,9 @@ def stage(a) -> int:
         tables, salts, registered = {}, {}, {}
         for p, ((v, j),) in at.items():
             rs, ss, entry = regs[v].statement([j])
-            tables[p], salts[p], registered[p] = np.asarray(rs, dtype=np.uint16), ss, entry
+            tables[p] = np.asarray([RV.row_words(r, regs[v].word_bits, RV.SCHEMA_HM96_SHA512_ROW_V2) for r in rs],
+                                   dtype=np.uint16)
+            salts[p], registered[p] = ss, entry
         for p, o in outs.items():
             _rs, ss, entry = o.statement([index])
             salts[p], registered[p] = ss, entry

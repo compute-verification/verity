@@ -1,7 +1,7 @@
 """Pearl+ as a resource scheme (`verity.protocols.resource_accounting.scheme`), registered as ``pearl-plus``.
 
 Its verifier is `verity/pouw/pearl-plus/v1` (`verifier/lean/pearlplus/PouwPearlPlus/Protocol.lean`). In C, a credited
-linear's check is its grid's units of `PearlPlusTileCore_v2` (`prover.circuit.pearl_plus_credited`), each one proof block,
+linear's check is its grid's units of `PearlPlusTileCoreWords_v1` (`prover.circuit.pearl_plus_credited`), each one proof block,
 which costs its credited MACs (`tile_macs`): its real rows × TN × K, its statics TR, TN and K, since the core checks every
 word of the linear's depth K and holds its filler rows to zero.
 
@@ -555,7 +555,7 @@ PEARL_PLUS = register(Scheme(
     messages=tuple(m for m in workload.MESSAGES if m.type in ("PoUWScheme", "PearlPass", "H1Registration")),
     protocol="verity/pouw/pearl-plus/v1",
     resource="compute",
-    blocks=(Block("PearlPlusTileCore_v2", tile_macs),),
+    blocks=(Block("PearlPlusTileCoreWords_v1", tile_macs),),
     assumptions=("Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1",),
     log=(Order("weightsRoot", "pouw/salt"), Order("commitment", "pouw/draw")),
     charges=(Charge("inert-work", "rho"), Charge("sample", "epsilon"), Charge("over-bound-tiles", "over_cap_draws"),
