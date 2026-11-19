@@ -2,6 +2,7 @@ module
 
 public import Properties.Flock.DecodeBoolean
 public import Proofs.Properties.InferenceOnly.DecodeKeys
+public import Proofs.Properties.Flock.EvalBool.Fuel
 public import Std.Tactic.Do
 import Batteries.Tactic.OpenPrivate
 import Std.Data.HashMap.Lemmas
@@ -333,6 +334,71 @@ theorem decodeBodies_run (desc : Desc) (rootKey : String) (pairs : Array (String
 def IsWord (defs : Array Defn) (index : Std.HashMap String Nat) (f : String) : Bool :=
   (index[f]?.map fun i => isWordPrim defs[i]!.prim f).getD false
 
+theorem params_beq {a b : Array (String × Ty)} (h : (a == b) = true) : a = b := by
+  obtain ⟨hs, hr⟩ := Array.isEqv_iff_rel.1 h
+  refine Array.ext hs (fun i h1 h2 => ?_)
+  have hi := hr i h1
+  generalize a[i] = p at hi ⊢
+  generalize b[i] = q at hi ⊢
+  obtain ⟨p1, p2⟩ := p
+  obtain ⟨q1, q2⟩ := q
+  change (p1 == q1 && p2 == q2) = true at hi
+  rw [Bool.and_eq_true, beq_iff_eq] at hi
+  rw [hi.1, BodiesOk.ty_beq hi.2]
+
+theorem forIn_ok_all {α ε : Type} {f : α → PUnit → Except ε (ForInStep PUnit)} {Q : α → Prop}
+    (hf : ∀ x r, f x PUnit.unit = .ok r → Q x ∧ r = .yield PUnit.unit) :
+    ∀ (l : List α) {u : PUnit}, forIn l PUnit.unit f = .ok u → ∀ x ∈ l, Q x
+  | [], _, _, x, hx => absurd hx List.not_mem_nil
+  | y :: l, u, h, x, hx => by
+    rw [List.forIn_cons] at h
+    cases hy : f y PUnit.unit with
+    | error e => rw [hy] at h; cases h
+    | ok r =>
+      obtain ⟨hq, rfl⟩ := hf y r hy
+      rw [hy] at h
+      rcases List.mem_cons.1 hx with rfl | hx
+      · exact hq
+      · exact forIn_ok_all hf l h x hx
+
+/-- `booleanKeys` accepts only Definitions whose primitives are spelt as their family's ids and whose gates have
+§9's signature. -/
+theorem booleanKeys_sig {defs : Array Defn} {index : Std.HashMap String Nat} {prims : Array String} {bm : Lean.Json}
+    {pairs : Array (String × String)} (h : booleanKeys defs index prims bm = .ok pairs) :
+    ∀ d ∈ defs, d.prim = true → misspelt d.key = false ∧
+      ∀ g, gateKind? d.key = some g → d.params = g.signature.1 ∧ d.ret = g.signature.2 := by
+  unfold booleanKeys at h
+  obtain ⟨u, h1, -⟩ := Walk.except_bind_ok h
+  rw [← Array.forIn_toList] at h1
+  intro d hd
+  refine forIn_ok_all (Q := fun d => d.prim = true → misspelt d.key = false ∧
+      ∀ g, gateKind? d.key = some g → d.params = g.signature.1 ∧ d.ret = g.signature.2) ?_ _ h1 d
+    (Array.mem_toList_iff.2 hd)
+  intro x r hx
+  dsimp only at hx
+  split at hx
+  · cases hx
+  rename_i hms
+  split at hx
+  · rename_i g hg
+    generalize hsig : g.signature = sg at hx
+    obtain ⟨ps, rt⟩ := sg
+    dsimp only at hx
+    split at hx
+    · cases hx
+    rename_i hbeq
+    cases hx
+    refine ⟨fun hp => ⟨by simpa [hp] using hms, fun g' hg' => ?_⟩, rfl⟩
+    simp only [hp, ↓reduceIte, hg'] at hg
+    cases hg
+    simp only [Bool.not_eq_true', Bool.not_eq_false, Bool.and_eq_true] at hbeq
+    rw [hsig]
+    exact ⟨params_beq hbeq.1, BodiesOk.ty_beq hbeq.2⟩
+  · rename_i hg
+    cases hx
+    refine ⟨fun hp => ⟨by simpa [hp] using hms, fun g' hg' => ?_⟩, rfl⟩
+    simp [hp, hg'] at hg
+
 theorem booleanKeys_ok {defs : Array Defn} {index : Std.HashMap String Nat} {prims : Array String} {bm : Lean.Json}
     {pairs : Array (String × String)} (h : booleanKeys defs index prims bm = .ok pairs) :
     (∀ f ∈ prims, IsWord defs index f = true → ∃ v, (f, v) ∈ pairs) ∧
@@ -401,9 +467,13 @@ theorem mem_primEntries {kv : Array (String × Lean.Json)} {k : String} {d : Lea
     subst hf
     simp [ho]
 
-/-- **`decode` guarantees the Boolean map (`DecodeBoolean`).** -/
-theorem decode_boolean : DecodeBoolean := by
-  intro bytes P h
+/-- **What `decode` guarantees of its primitives**: the Boolean map (`Prog.BoolMapOk`), and every primitive keyed by
+its id, no gate family member spelt otherwise (`misspelt`), and each gate of §9's signature. -/
+theorem decode_facts (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
+    P.BoolMapOk ∧ ∀ w < P.defs.size, (P.defs[w]!).prim = true →
+      (P.defs[w]!).id = (P.defs[w]!).key ∧ misspelt (P.defs[w]!).key = false ∧
+        ∀ g, gateKind? (P.defs[w]!).key = some g →
+          (P.defs[w]!).params = g.signature.1 ∧ (P.defs[w]!).ret = g.signature.2 := by
   obtain ⟨kv, desc, rootId, programFn, bm, root, s0, st, st1, st2, pairs, hdd, hgo, hd0, hi0', -, -, -, hall, hbk, hbod,
     hd, hi, -, hbo⟩ := decode_steps bytes P h
   have hk0 := of_triple (go_kept _ _ _) hgo (DecodeKeys.kept_empty desc hd0 hi0')
@@ -422,12 +492,11 @@ theorem decode_boolean : DecodeBoolean := by
   have hK2 := hb2.1.1
   have hfold := fun k => hm_foldl_some (α := String) (β := String) (γ := String × String)
     (fun m p => m.insert p.1 p.2) id (fun _ _ => rfl) k
-  refine ⟨fun w hw' hword => ?_, fun k v hkv => ?_⟩
-  · rw [hd] at hw' hword ⊢
-    have hprim : ((DecState.defs st2)[w]!).prim = true := by
-      simp only [isWordPrim, Bool.and_eq_true] at hword
-      exact hword.1.1
-    obtain ⟨d, hdd', hform⟩ := hb2.1.2.2.2 w hw' hprim
+  have hearly : ∀ w < (DecState.defs st2).size, ((DecState.defs st2)[w]!).prim = true →
+      w < (DecState.defs st1).size ∧ (DecState.index st1)[(DecState.defs st2)[w]!.key]? = some w ∧
+      ((DecState.defs st2)[w]!).id = ((DecState.defs st2)[w]!).key ∧ (DecState.defs st2)[w]!.key ∈ primEntries kv := by
+    intro w hw' hprim
+    obtain ⟨⟨d, hdd', hform⟩, hid⟩ := hb2.1.2.2.2 w hw' hprim
     rw [hdd, ← Array.foldl_toList] at hdd'
     have hmem : ((DecState.defs st2)[w]!.key, d) ∈ kv := by
       rcases hm_foldl_some (fun m x => m.insert x.1 x.2) id (fun _ _ => rfl) _ _ kv.toList ∅ hdd' with h0 | ⟨x, hx, he⟩
@@ -444,28 +513,35 @@ theorem decode_boolean : DecodeBoolean := by
     have hw2 := hK2.2.1 w hw'
     have hjw : j = w := by rw [hj2] at hw2; exact Option.some.inj hw2
     subst hjw
-    have hjlt := (hK1.1 _ _ hj).1
-    have hword1 : IsWord (DecState.defs st1) (DecState.index st1) ((DecState.defs st2)[j]!.key) = true := by
+    exact ⟨(hK1.1 _ _ hj).1, hj, hid, hkp⟩
+  refine ⟨⟨fun w hw' hword => ?_, fun k v hkv => ?_⟩, fun w hw' hprim => ?_⟩
+  · rw [hd] at hw' hword ⊢
+    have hprim : ((DecState.defs st2)[w]!).prim = true := by
+      simp only [isWordPrim, Bool.and_eq_true] at hword
+      exact hword.1.1
+    obtain ⟨hjlt, hj, -, hkp⟩ := hearly w hw' hprim
+    have hw2 := hK2.2.1 w hw'
+    have hword1 : IsWord (DecState.defs st1) (DecState.index st1) ((DecState.defs st2)[w]!.key) = true := by
       unfold IsWord
       rw [hj]
       simp only [Option.map_some, Option.getD_some]
       rw [← hp2.2 _ hjlt]
       exact hword
     obtain ⟨v, hv⟩ := hmiss _ hkp hword1
-    have hsome := hm_foldl_isSome (α := String) (β := String) (γ := String × String) (fun m p => m.insert p.1 p.2) id (fun _ _ => rfl) ((DecState.defs st2)[j]!.key)
-      pairs.toList ∅ (Or.inr ⟨_, by simpa using hv, rfl⟩)
+    have hsome := hm_foldl_isSome (α := String) (β := String) (γ := String × String) (fun m p => m.insert p.1 p.2) id
+      (fun _ _ => rfl) ((DecState.defs st2)[w]!.key) pairs.toList ∅ (Or.inr ⟨_, by simpa using hv, rfl⟩)
     rw [Array.foldl_toList] at hsome
     obtain ⟨v', hv'⟩ := Option.isSome_iff_exists.1 hsome
     have hv'' := hv'
     rw [← Array.foldl_toList] at hv''
-    have hmem' : ((DecState.defs st2)[j]!.key, v') ∈ pairs := by
+    have hmem' : ((DecState.defs st2)[w]!.key, v') ∈ pairs := by
       rcases hfold _ v' pairs.toList ∅ hv'' with h0 | ⟨x, hx, he⟩
       · simp at h0
       · simp only [id] at he
         subst he
         simpa using hx
     obtain ⟨bi, wi, h1, h2, h3⟩ := hch _ hmem'
-    have hwi : wi = j := by rw [hw2] at h2; exact (Option.some.inj h2).symm
+    have hwi : wi = w := by rw [hw2] at h2; exact (Option.some.inj h2).symm
     subst hwi
     refine ⟨bi, (hK2.1 _ _ h1).1, ?_, ?_⟩
     · show (P.boolean[_]? >>= (P.index[·]?)) = some bi
@@ -493,5 +569,161 @@ theorem decode_boolean : DecodeBoolean := by
       refine ⟨i, by rw [hd]; exact hilt2, by rw [hi]; exact hi2, by rw [hd]; exact hkey, ?_⟩
       rw [hd, hp2.2 _ hilt]
       exact hg
+  · rw [hd] at hw' hprim ⊢
+    obtain ⟨hjlt, -, hid, -⟩ := hearly w hw' hprim
+    refine ⟨hid, ?_⟩
+    rw [hp2.2 _ hjlt] at hprim ⊢
+    exact booleanKeys_sig hbk _ (by rw [getElem!_pos (DecState.defs st1) w hjlt]; exact Array.getElem_mem hjlt) hprim
+
+/-- **`decode` guarantees the Boolean map (`DecodeBoolean`).** -/
+theorem decode_boolean : DecodeBoolean := fun bytes P h => (decode_facts bytes P h).1
+
+/-! ## `decode_body_agrees` -/
+
+/-- A Slice whose first digits, before its last three characters, are digits starts with a digit. -/
+theorem front_digit (S : String.Slice) (hl : (S.dropEnd 3).toString.length > 0)
+    (ha : (S.dropEnd 3).toString.all Char.isDigit = true) : S.toString.front.isDigit = true := by
+  simp only [String.Slice.toString_eq] at hl ha ⊢
+  rw [← String.length_toList, String.Slice.toList_copy_dropEnd] at hl
+  rw [String.all_bool_eq, String.Slice.toList_copy_dropEnd] at ha
+  rw [String.front_eq, String.front?_eq]
+  generalize S.copy.toList = L at *
+  cases L with
+  | nil => simp at hl
+  | cons c L =>
+    obtain ⟨m, hm⟩ : ∃ m, (c :: L).length - 3 = m + 1 := ⟨(c :: L).length - 3 - 1, by simp at hl ⊢ <;> omega⟩
+    rw [hm, List.take_succ_cons, List.all_cons, Bool.and_eq_true] at ha
+    simpa using ha.1
+
+/-- A member of `Flock.Lower`'s gate family `pre` is spelt `pre`, then a digit. -/
+theorem family_front {pre k : String} (h : Flock.Lower.family? pre k = true) :
+    k.startsWith pre = true ∧ (k.drop pre.length).toString.front.isDigit = true := by
+  unfold Flock.Lower.family? at h
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+  exact ⟨h.1.1, front_digit _ h.2.1.1 h.2.1.2⟩
+
+theorem word_ids {prim : Bool} {k : String} (h : isWordPrim prim k = true) :
+    isInputId k = false ∧ isBooleanPrim k = false := by
+  unfold isWordPrim at h
+  cases h1 : isInputId k <;> cases h2 : isBooleanPrim k <;> simp_all
+
+/-- **A word primitive's id that is no misspelt family member is no gate of `Flock.Lower`.** `gateOf?` and `gateKind?`
+differ only on `And1_v1` and `Xor1_v1`, which `misspelt` holds of. -/
+theorem gateOf_none {k : String} (hb : isBooleanPrim k = false) (hm : misspelt k = false)
+    (hi : isInputId k = false) : Flock.Lower.gateOf? k = none := by
+  have hg : gateKind? k = none := by
+    cases h : gateKind? k with
+    | none => rfl
+    | some g => simp [isBooleanPrim, h] at hb
+  have hfam : ∀ pre ∈ ["Input", "RegisteredInput", "And", "Xor"], Flock.Lower.family? pre k = true → False := by
+    intro pre hpre hf
+    obtain ⟨hs, hd⟩ := family_front hf
+    have hany : ["Input", "RegisteredInput", "And", "Xor"].any (fun pre =>
+        k.startsWith pre && (k.drop pre.length).toString.front.isDigit) = true :=
+      List.any_eq_true.2 ⟨pre, hpre, by simp only [hs, hd, Bool.and_self]⟩
+    have : misspelt k = true := by
+      unfold misspelt
+      rw [hany, hi, hg]
+      rfl
+    rw [hm] at this
+    cases this
+  unfold Flock.Lower.gateOf?
+  split
+  · rename_i h; obtain rfl := eq_of_beq h; simp [gateKind?] at hg
+  split
+  · rename_i h; obtain rfl := eq_of_beq h; simp [gateKind?] at hg
+  split
+  · rename_i h; obtain rfl := eq_of_beq h; simp [gateKind?] at hg
+  split
+  · exact (hfam "And" (by simp) ‹_›).elim
+  split
+  · exact (hfam "Xor" (by simp) ‹_›).elim
+  rfl
+
+open EvalBool (Refines evalDef?_succ evalStep_mono_at evalDef?_mono_succ evalDef?_body)
+
+/-- A key the Boolean map leads from is no Boolean primitive's. -/
+theorem bool_none {P : Prog} (h2 : ∀ k v, P.boolean[k]? = some v →
+      ∃ w < P.defs.size, P.index[k]? = some w ∧ (P.defs[w]!).key = k ∧ isWordPrim (P.defs[w]!).prim k = true)
+    (k : String) (hk : isBooleanPrim k = true) : P.bodyOf? k = none := by
+  unfold Prog.bodyOf?
+  cases hv : P.boolean[k]? with
+  | none => rfl
+  | some v =>
+    obtain ⟨w, -, -, -, hw⟩ := h2 k v hv
+    simp [isWordPrim, hk] at hw
+
+theorem get!_of {P : Prog} {d : Nat} {defn : Defn} (h : P.defs[d]? = some defn) : P.defs[d]! = defn := by
+  simp [getElem!_def, h]
+
+theorem prim_down (P : Prog) (hB : ∀ k, isBooleanPrim k = true → P.bodyOf? k = none) {e : Nat}
+    (hp : (P.defs[e]!).prim = true) (hbp : isBooleanPrim (P.defs[e]!).key = true) (k : Nat) (x : List Bool) :
+    Refines (evalDef? P (k + 1 + 1) e x) (evalDef? P (k + 1) e x) := by
+  rw [evalDef?_succ P (k + 1), evalDef?_succ P k]
+  refine evalStep_mono_at P (fun defn hd _ b hb => ?_) (fun defn hd hpf => ?_) x
+  · rw [← get!_of hd, hB _ hbp] at hb
+    cases hb
+  · rw [← get!_of hd, hp] at hpf
+    cases hpf
+
+/-- **A Boolean Definition's value needs no fuel beyond its place:** a value at fuel `m + 1 > d + 1` is the value at
+fuel `m`. -/
+theorem fuel_down (P : Prog) (hB : ∀ k, isBooleanPrim k = true → P.bodyOf? k = none) {d : Nat} (hd : P.BoolDef d) :
+    ∀ m, d < m → ∀ x, Refines (evalDef? P (m + 1) d x) (evalDef? P m d x) := by
+  induction hd with
+  | prim hp hbp =>
+    intro m hm x
+    obtain ⟨k, rfl⟩ : ∃ k, m = k + 1 := ⟨m - 1, by omega⟩
+    exact prim_down P hB hp hbp k x
+  | @comp d hpf hprimc _ _ ih =>
+    intro m hm x
+    obtain ⟨k, rfl⟩ : ∃ k, m = k + 1 := ⟨m - 1, by omega⟩
+    rw [evalDef?_succ P (k + 1), evalDef?_succ P k]
+    refine evalStep_mono_at P (fun defn hd hpt => ?_) (fun defn hd _ nd hnd hfn ins => ?_) x
+    · rw [← get!_of hd, hpf] at hpt
+      cases hpt
+    · rw [← get!_of hd] at hnd
+      have hmem : nd ∈ (P.defs[d]!).body.nodes := Array.mem_def.2 hnd
+      cases hc : (P.defs[nd.fn]!).prim
+      · exact ih nd hmem hc k (by omega) ins
+      · obtain ⟨j, rfl⟩ : ∃ j, k = j + 1 := ⟨k - 1, by omega⟩
+        exact prim_down P hB hc (hprimc nd hmem hc) j ins
+
+theorem fuel_stable (P : Prog) (hB : ∀ k, isBooleanPrim k = true → P.bodyOf? k = none) {b m : Nat}
+    (hb : P.BoolDef b) (hm : b < m) (x : List Bool) : evalDef? P (m + 1) b x = evalDef? P m b x := by
+  cases h : evalDef? P m b x with
+  | some v => exact evalDef?_mono_succ P m b x v h
+  | none =>
+    cases h' : evalDef? P (m + 1) b x with
+    | none => rfl
+    | some v =>
+      rw [fuel_down P hB hb m hm x v h'] at h
+      cases h
+
+/-- **`decode` guarantees `BodyAgrees` (`DecodeBodyAgrees`).** -/
+theorem decode_body_agrees : DecodeBodyAgrees := by
+  intro bytes P h p hp b hprim hb
+  obtain ⟨⟨hmap, hkeys⟩, hids⟩ := decode_facts bytes P h
+  have hidx := (DecodeKeys.decode_keys bytes P h).2 p hp
+  have hb0 := hb
+  unfold Prog.bodyOf? at hb0
+  cases hv : P.boolean[(P.defs[p]!).key]? with
+  | none => rw [hv] at hb0; simp at hb0
+  | some v =>
+    obtain ⟨w, -, hiw, -, hword⟩ := hkeys _ _ hv
+    rw [hidx] at hiw
+    obtain rfl := Option.some.inj hiw
+    obtain ⟨b', hb', hbo, hbody⟩ := hmap p hp hword
+    obtain rfl : b = b' := (Option.some.inj (hbo.symm.trans hb)).symm
+    obtain ⟨hid, hmis, -⟩ := hids p hp hprim
+    obtain ⟨hin, hbp⟩ := word_ids hword
+    have hg : Flock.Lower.gateOf? (P.defs[p]!).id = none := by
+      rw [hid]
+      exact gateOf_none hbp hmis hin
+    have hd : P.defs[p]? = some (P.defs[p]!) := by rw [getElem!_pos P.defs p hp]; exact getElem?_pos P.defs p hp
+    funext x
+    unfold Prog.evalBool
+    rw [show 2 * P.defs.size + 2 = (2 * P.defs.size + 1) + 1 from rfl, evalDef?_body P hd hprim hg hb,
+      fuel_stable P (bool_none hkeys) hbody.1 (by omega : b < 2 * P.defs.size + 1) x]
 
 end FlockSoundness.DecodeBoolean
