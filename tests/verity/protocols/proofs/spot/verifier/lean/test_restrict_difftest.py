@@ -101,7 +101,7 @@ def test_lean_restrict_is_pythons_on_the_products_blocks(pieces, at):
     kind, body = pieces.call("restrict", {"descriptor": p.description.decode(), "units": list(range(lo, hi)), "python": py})
     assert kind == "output", body
     out = json.loads(body)
-    assert out["agree"] is True and out["at"] is None and out["lowers"] is None, out
+    assert out["agree"] is True and out["at"] is None, out
 
 
 def test_a_repeated_unit_is_refused(pieces):

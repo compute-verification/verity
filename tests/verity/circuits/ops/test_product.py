@@ -94,3 +94,9 @@ def test_a_block_under_the_floor_or_past_the_range_is_refused():
         PR.product(k=16, units=4, block=2, k_log=20)
     with pytest.raises(ValueError, match="past 2"):
         PR.product(k=16, units=1024, block=1024, k_log=26)
+
+
+def test_the_default_is_256_units_in_blocks_at_the_least_zero_knowledge_m():
+    p = PR.product()
+    assert p.outputs.shape == (256, 1) and len(p.blocks) == 16 and p.m == 25
+    assert PO.validate(p.partition).ok and PO.validate(p.partition_levels).ok

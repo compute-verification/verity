@@ -54,8 +54,8 @@ def example(rows: int, k: int) -> tuple[np.ndarray, np.ndarray]:
     return bf16(0.05 * np.sin(0.37 * n + 0.11 * j + 1.0)), bf16(np.cos(0.23 * np.arange(k)))
 
 
-def product(weight: Any = None, x: Any = None, *, k: int = 64, s: int = 1, units: int = 256, block: int = 128,
-            k_log: int = 22, g: int = 16, dot: dict = G.GEMM_HOPPER) -> Product:
+def product(weight: Any = None, x: Any = None, *, k: int = 64, s: int = 1, units: int = 256, block: int = 16,
+            k_log: int = 22, g: int = 2, dot: dict = G.GEMM_HOPPER) -> Product:
     if weight is None and x is None:
         weight, x = example(units * s, k)
     w, x = bf16(weight), bf16(x)
