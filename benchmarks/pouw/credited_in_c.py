@@ -365,9 +365,9 @@ def stage(a) -> int:
     got = {"honest": got_h, "dishonest": got_d}
     want = {tag: reference(ln, index, vals, unit) for tag, vals in (("honest", good), ("dishonest", bad))}
     y_rows = [[0] * n for _ in range(m)]
-    for t, g in zip(ln.tiles, got_h):
-        for i in range(t.real):
-            y_rows[t.rows[i]][t.col * tn:(t.col + 1) * tn] = y_of(g)[i * tn:(i + 1) * tn]
+    for tile, g in zip(ln.tiles, got_h):
+        for i in range(tile.real):
+            y_rows[tile.rows[i]][tile.col * tn:(tile.col + 1) * tn] = y_of(g)[i * tn:(i + 1) * tn]
     add = evaluate_batch(bind(Bf16AddRow, N=n), np.asarray(y_rows, dtype=np.int64),
                          np.asarray(good["r"] if a.reader else [[0] * n] * m, dtype=np.int64))
     rec["evaluate"] = {"of": "C on its words (`evaluate_batch` of its root): each unit's (digest, y, ok) and the reader's rows",
@@ -403,7 +403,7 @@ def stage(a) -> int:
     meta = FC.meta_of(text)
     rec["lower"] = {"by": "the door's one_circuit.lower (flock-lower-check compose)", "wall_s": round(time.perf_counter() - t0, 2),
                     "peak_gib_children": _peak_gib(resource.RUSAGE_CHILDREN), "bytes": len(text),
-                    "sha512": hashlib.sha512(text.encode()).hexdigest(), "ports": [q[0] for q in meta.get("ports", [])]}
+                    "sha512": hashlib.sha512(text.encode()).hexdigest(), "ports": [q[:2] for q in meta.get("ports", [])]}
     print("LOWER " + json.dumps(rec["lower"]), flush=True)
     phase("lower")
 
