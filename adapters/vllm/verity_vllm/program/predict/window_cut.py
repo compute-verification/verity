@@ -15,9 +15,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from verity.circuits.defs import bind
+from verity.circuits import partition_object as PO
+from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
+from verity.circuits.program import Program
 from verity.circuits.refs import runs
 from verity.commitments.periods import interface as IF
+from verity.protocols.resource_accounting.compute.pouw.prover import schemes as PS
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
 
 from verity_vllm.definitions.registry import linear_cut as LC
 
@@ -141,4 +145,27 @@ def census(lowered: Any) -> list[dict[str, Any]]:
     return out
 
 
-__all__ = ["Linears", "ROW_FORMAT", "UNTIED", "census", "cut_linear", "cut_values", "linears"]
+def credited_product(scheme: str, k: int, tm: int, tn: int, n: int) -> SpecializedDefinition:
+    unit = PT.tile(PS.get(scheme), k, tm, tn, n, 1)
+    return bind(PT.PearlPlusTileCoreV2, **{s: unit.bindings[s] for s in PT.PearlPlusTileCoreV2.statics})
+
+
+def credited(scheme: str, k: int, tm: int, tn: int, n: int) -> tuple[Program, dict[str, Any]]:
+    core = credited_product(scheme, k, tm, tn, n)
+    params, ret = core.signature()
+    root = CompositeDefinition("PearlPlusCredited", 1, (), lambda S: (params, ret),
+                               lambda B, S, *a: B.call(core, *a), register=False)
+    program = Program(root, registered=[p for p, _ in params])
+    return program, PO.build(program, PO.template_instance_query(core), [(0, 1)])
+
+
+def credited_sizes(lowered: Any) -> list[tuple[int, int, int, int]]:
+    rows = census(lowered)
+    if not rows:
+        return []
+    th, tw = PS.get(rows[0]["scheme"]).tile
+    return sorted({(r["k"], min(th, r["a"]["rows"] - i), tw, r["n"]) for r in rows for i in range(0, r["a"]["rows"], th)})
+
+
+__all__ = ["Linears", "ROW_FORMAT", "UNTIED", "census", "credited", "credited_product", "credited_sizes", "cut_linear",
+           "cut_values", "linears"]

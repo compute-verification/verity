@@ -65,6 +65,7 @@ untraced = [
 # tests/regression/test_attempt_resolution.py resolves. Test-only: tests/pipeline checks the fixtures
 # this package registers and the demo's stored workload (adapters/vllm/tools/served_run/workloads/SHA256SUMS); tests/program/test_fp8_moe.py replays the Hopper e4m3 k32 step's pinned vectors (under `verity`);
 # tests/engine's int8 tests run benchmarks/ppl's int8 steps as their oracle;
+# tests/program/predict/test_window_cut_credited_door.py holds benchmarks/compile_cost/credited_door.py's staging of the credited block;
 # tests/store/test_poub_session.py runs the remote session's prover and verifier (`store.remote`), and the verifier
 # imports lean_verifier.py, challengers.py and store_layout.py; tests/protocol_options/test_pouw_h1_circuits.py parses a
 # period-open's --circuit-files with infra's gate (verity/protocols/compose/verifier/live_challenger/auditor.py), and the in-process gate
@@ -100,6 +101,7 @@ inputs = ["adapters/vllm", "verity", "adapters/vllm/verity_vllm/definitions", "a
           "verity/protocols/resource_accounting/memory/poub/verifier/lean/lakefile.toml",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
           "benchmarks/ppl/windows.py", "benchmarks/ppl/datasets.json",
+          "benchmarks/compile_cost/credited_door.py",
           "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/fattn_ref.py",
           "verity/protocols/resource_accounting/memory/poub/verifier/session/verifier.py",
