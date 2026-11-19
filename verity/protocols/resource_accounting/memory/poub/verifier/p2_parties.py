@@ -40,7 +40,7 @@ the prover (`verity/protocols/resource_accounting/memory/poub/prover/p2_party_pr
 whole as its body (`Lines`), so the Lean reads every line the prover sent as it sent it, and the verifier takes the line
 it waits for whatever its key, one it can't name as `Malformed`. `session` and the prover's `prove` step each side over
 the channel with PoUS's loop (`drive`, `challenger_session.run`), the verifier's side handed a failed write as its
-channel failing (`broken`). The runtime's start of the verifier from a configuration and its deploy bindings (`start`,
+channel failing (`challenger_session.closed`). The runtime's start of the verifier from a configuration and its deploy bindings (`start`,
 `starts`) raises `NotImplementedError` (`GOAL`): no source the runtime gives a party holds its registration or session.
 
 The verifier is the Lean, since the trusted base is the compiled Lean verifier, which parses bytes of
@@ -621,21 +621,16 @@ class _Pair:
         self.readline, self.write, self.flush = f_in.readline, f_out.write, f_out.flush
 
 
-def broken(e: OSError) -> Message:
-    """A failed write to the prover, as the runtime tells a party its channel failed."""
-    return Message("Closed", {"how": f"{type(e).__name__}: {e}"})
-
-
 def drive(party: Any, params: Mapping[str, Any], identity: Identity, f_in: BinaryIO, f_out: BinaryIO, *, peer: str,
           clock: Callable[[], int] | None = None, coins: Callable[[int], bytes] | None = None,
           wait: Callable[[Callable[[], int], int], None] = P._sleep_until) -> Finish:
     """`party` against `peer` over the channel (`f_in`, `f_out`) until it finishes, stepped by
     `challenger_session.run` on the codec of its side (`Lines`): its finish. The verifier's side is handed a failed
-    write as the prover's side failing (`broken`)."""
+    write as the prover's side failing (`challenger_session.closed`)."""
     side = VERIFIER if peer == PROVER else PROVER
     codec = Lines(LINES[peer], strict=side == PROVER)
     done, _ = CS.run(party, params, identity, _Pair(f_in, f_out), codec, peer=peer, clock=clock, coins=coins,
-                     wait=wait, broken=broken if side == VERIFIER else None)
+                     wait=wait, broken=CS.closed if side == VERIFIER else None)
     return done
 
 
@@ -987,7 +982,7 @@ PROTOCOLS = {ID: ProtocolDef(MANIFEST, {VERIFIER: Verifier})}
 
 __all__ = ["CASE_DIGESTS", "CLOSER_PARTY", "COIN_BYTES", "COMPONENT", "Closer", "DELTA", "EPS_TERMS", "GAMMA_TERMS", "GOAL",
            "ID", "LINES", "Lines", "MANIFEST", "PROTOCOL", "PROTOCOLS", "PROVER", "SESSION", "Challenger", "LeanSession",
-           "VERIFIER", "VERSION", "Verifier", "broken", "case_digest", "core_answer", "deployed_request",
+           "VERIFIER", "VERSION", "Verifier", "case_digest", "core_answer", "deployed_request",
            "drive", "hold", "line_of", "main", "message", "opening_json", "opening_of", "params_of",
            "plan_of", "pous_record", "recv", "registration_json", "registration_of",
            "registration_of_setup", "request_of", "send", "session", "start", "starts"]

@@ -144,8 +144,27 @@ def test_the_whole_block_is_hashed():
     c, signed, signer = session(lambda i: tampered(i) if i == coins().indices[7] else block(i))
     v = judge(c, signed, signer)
     assert not v.accepted and v.wrong == 1 and v.reasons == ("1 answers are not their blocks of C",)
-    with pytest.raises(ValueError, match="whole 64-byte block"):
-        session(lambda i: block(i)[:-1])
+    c, short, signer = session(lambda i: block(i)[:-1] if i == coins().indices[3] else block(i))
+    assert (short.ended, len(short.rounds)) == (mc.MALFORMED, 3)
+    assert judge(c, short, signer).reasons == (f"the session ended malformed after 3 of {K} rounds",)
+
+
+def test_a_prover_that_leaves_ends_the_session_abandoned_and_signed():
+    """`abandon` ends the session where it stopped, the open round unrecorded and its coin unopened; the signature covers
+    the end and the round count, and the verdict rejects it by name. An ended session keeps its end."""
+    clock = Clock(1_000_000)
+    signer = ts.TestSigner(b"challenger key", height=2)
+    c = mc.MemoryAttester(coins(), signer, log=ts.session_log(), limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT,
+                          clock=clock)
+    for _ in range(4):
+        c.receive(block(c.challenge()))
+    c.challenge()
+    c.abandon()
+    c.abandon(mc.MALFORMED)
+    signed = c.close()
+    assert (signed.ended, len(signed.rounds), len(c.openings())) == (mc.ABANDONED, 4, 4)
+    assert judge(c, signed, signer).reasons == (f"the session ended abandoned after 4 of {K} rounds",)
+    assert judge(c, dataclasses.replace(signed, ended=mc.COMPLETE), signer).reasons[0] == "the signature does not verify"
 
 
 def test_receipt_time_is_read_before_hashing(monkeypatch):

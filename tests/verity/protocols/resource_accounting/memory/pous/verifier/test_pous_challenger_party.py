@@ -94,6 +94,38 @@ def test_the_split_session_is_the_periods() -> None:
     assert refused["verdict"] == "reject" and refused["reason"].endswith("answers are not their blocks of C"), refused
 
 
+def test_a_prover_that_leaves_has_its_session_signed_abandoned_and_rejected_by_name() -> None:
+    """The prover leaves after 3 rounds: the side signs the session as it stopped (`ABANDONED`, 3 rounds) instead of
+    leaving it unsigned, and the run's check rejects it for that end."""
+    p, point, published, blocks, digests = _in_process()
+    signer, answered, got = ts.TestSigner(b"challenger host", 2), [], {}
+
+    def respond(i: int) -> bytes:
+        if len(answered) == CS.WARMUPS + 3:
+            raise ConnectionError("the prover leaves")
+        answered.append(i)
+        return blocks[i]
+
+    a, b = socket.socketpair()
+
+    def side() -> None:
+        with a:
+            got["session"] = CP.serve(CS.Polled(a), CS.request_of("n0", point, published.root), signer=signer,
+                                      log=ts.session_log(), coins=COINS, domain=period.SESSION_DOMAIN, clock=Clock())
+
+    t = threading.Thread(target=side)
+    t.start()
+    with b, pytest.raises(ConnectionError, match="the prover leaves"):
+        CR.answer(CS.Polled(b), point.params.block_bytes, respond)
+    t.join()
+    sid, session = got["session"]
+    assert (session.signed.ended, len(session.signed.rounds)) == (mc.ABANDONED, 3)
+    answer = period.answer(point, ts.SCHEMES, (signer.public_key,), published, digests, session, sid, TEST_ID,
+                           setup_inputs=period.setup_inputs(p.setup_case))
+    assert answer["verdict"] == "reject", answer
+    assert answer["reason"].endswith(f"the session ended abandoned after 3 of {point.k} rounds"), answer
+
+
 def test_a_challenger_of_its_own_takes_the_provers_session_from_the_caller() -> None:
     """With `party`, `period_prover.run` hands the caller's `session` the side, the request and the prover's answers, and judges
     the session it returns. With no `session` it refuses, naming what to pass."""

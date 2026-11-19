@@ -78,6 +78,7 @@ from verity.protocols.resource_accounting.memory.pous.attester.challenger_sessio
     WARMUPS,
     Frames,
     Polled,
+    closed,
     coin_session_id,
     deployed_request,
     run,
@@ -165,7 +166,8 @@ class Challenger:
     (`capabilities["signer"]`, a `memory_attester.Signer`, with `capabilities["log"]`, its session log);
     `resolution_ns` is how finely its clock ticks (`memory_attester.resolution_of`). It finishes with the session and
     its id (private: what it signs is witness), or refused: with `designate`'s reason before any frame, or by name when
-    the prover leaves (`closed`), sends a frame the wire refuses, or one out of phase."""
+    the prover leaves (`closed`), sends a frame the wire refuses, or one out of phase, and then, once its session has
+    claimed its id, with the session signed as it ended (`memory_attester.ABANDONED`, `MALFORMED`)."""
 
     def __init__(self, domain: str, warmups: int = WARMUPS, resolution_ns: float = 1) -> None:
         self.domain, self.warmups, self.resolution_ns = domain, warmups, resolution_ns
@@ -200,14 +202,14 @@ class Challenger:
     def on(self, r: Received) -> list[Any]:
         m = r.message
         if m.type in ("Refused", "Closed"):
-            return [Finish(None, m.fields["name"] if m.type == "Refused" else "closed", kind="private")]
+            return self._stop(m.fields["name"] if m.type == "Refused" else "closed")
         if m.type == "ClockReading":
             self._reading = m.fields["ns"]
             return self._challenge() if self._block is None else self._receive()
         try:
             self.phase.check(m)
         except Refused as e:
-            return [Finish(None, e.name, kind="private")]
+            return self._stop(e.name)
         self.phase.expect()
         if m.type == "Coins":
             return self._coins(m.body)
@@ -252,10 +254,20 @@ class Challenger:
         self.c.receive(block)
         if not self.c.done:
             return [_read_clock()]
+        return [Send(PROVER, Message("End")), self._signed(None)]
+
+    def _stop(self, refused: str) -> list[Any]:
+        """The prover left (`closed`) or sent what the session refuses: unsigned before the session claims its id, else
+        the session ends there, signed."""
+        if self.c is None:
+            return [Finish(None, refused, kind="private")]
+        self.c.abandon(mc.ABANDONED if refused == "closed" else mc.MALFORMED)
+        return [self._signed(refused)]
+
+    def _signed(self, refused: str | None) -> Finish:
         self.session = R.ChallengePhaseRecord(self.c.close(), self.c.commitment, self.c.openings())
-        return [Send(PROVER, Message("End")),
-                Finish({"public_key": self.signer.public_key.hex(), "session": self.session.to_json(),
-                        "session_id": self.sid.hex()}, kind="private")]
+        return Finish({"public_key": self.signer.public_key.hex(), "session": self.session.to_json(),
+                       "session_id": self.sid.hex()}, refused, kind="private")
 
 
 def _challenger() -> Challenger:
@@ -281,15 +293,16 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
     """The challenger's side of one session over the connection `f`: `Challenger` on `coins` and `clock`, under its
     audit's id from `salts` when `request` names one, else the id designated under `domain`, its coin tree's hiding key
     and salts from `entropy`, `warmups` untimed exchanges first, the session signed by `signer`, with the collector paused
-    (`memory_attester.collector_paused`); its id and record. `Refusal` when the party refuses the session."""
+    (`memory_attester.collector_paused`); its id and record, signed however it ended. `Refusal` when the party refuses
+    before its session claims an id."""
     party, given = Challenger(domain, warmups, mc.resolution_of(clock)), [coins]
     with mc.collector_paused():
         done, _ = run(party, request,
                       Identity(CHALLENGER, capabilities={"signer": signer, "log": log, "salts": salts}), f,
-                      Frames(request["block_bytes"]), peer=PROVER, clock=clock,
+                      Frames(request["block_bytes"]), peer=PROVER, clock=clock, closed=closed,
                       coins=lambda n: given.pop() if given else entropy(n))
-    if done.refused is not None:
-        raise Refusal(done.refused)
+    if party.session is None:
+        raise Refusal(done.refused or "the session did not end")
     return party.sid, party.session
 
 

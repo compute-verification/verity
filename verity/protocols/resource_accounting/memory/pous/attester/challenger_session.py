@@ -167,10 +167,12 @@ def sleep_until(clock: Callable[[], int], at: int) -> None:
 def run(party: Party, params: Params, identity: Identity, f: BinaryIO, codec: Codec, *, peer: str,
         clock: Callable[[], int] | None = None, coins: Callable[[int], bytes] | None = None,
         wait: Callable[[Callable[[], int], int], None] = sleep_until,
-        broken: Callable[[OSError], Message] | None = None) -> tuple[Finish, list[LogEntry]]:
+        broken: Callable[[OSError], Message] | None = None,
+        closed: Callable[[OSError], Message] | None = None) -> tuple[Finish, list[LogEntry]]:
     """`party` against `peer` over `f` until it finishes (module docstring): its finish, and what it recorded. With
     `broken`, a write to `peer` that raises OSError drops the rest of its step but a `Finish`, and the party is handed
-    `broken(error)` from `peer` next, before any source's answer; without it, the error is the caller's."""
+    `broken(error)` from `peer` next, before any source's answer; with `closed`, a read from `peer` that raises OSError
+    hands the party `closed(error)` from `peer` instead; without them, the error is the caller's."""
     records: list[LogEntry] = []
     asked: deque[tuple[str, int]] = deque()
     told: list[Message] = []
@@ -216,10 +218,22 @@ def run(party: Party, params: Params, identity: Identity, f: BinaryIO, codec: Co
     while done is None:
         if told:
             r = Received(peer, told.pop())
+        elif asked:
+            r = answer(*asked.popleft())
         else:
-            r = answer(*asked.popleft()) if asked else Received(peer, codec.read(f))
+            try:
+                r = Received(peer, codec.read(f))
+            except OSError as e:
+                if closed is None:
+                    raise
+                r = Received(peer, closed(e))
         done = act(party.on(r))
     return done, records
+
+
+def closed(e: OSError) -> Message:
+    """A failed read or write to the peer, as the runtime tells a party its channel failed (`Closed`)."""
+    return Message("Closed", {"how": f"{type(e).__name__}: {e}"[:1024]})
 
 
 def _read(f: BinaryIO, n: int) -> bytes:
@@ -349,5 +363,6 @@ def setup_of(request: Mapping[str, Any]) -> dict[str, Any] | None:
 
 
 __all__ = ["CHALLENGER", "COMPONENT", "END", "ID", "MANIFEST", "MODULE", "ONSITE_GOAL", "PARAMS", "PREMISE", "PROVER",
-           "SESSION_ID_TAG", "SETUPS", "WARMUPS", "WARMUP_INDEX", "Codec", "Frames", "Polled", "coin_session_id", "command",
+           "SESSION_ID_TAG", "SETUPS", "WARMUPS", "WARMUP_INDEX", "Codec", "Frames", "Polled", "closed", "coin_session_id",
+           "command",
            "deployed_request", "placement", "request_of", "run", "salt", "session_id", "setup_of", "sleep_until"]

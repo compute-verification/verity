@@ -124,8 +124,9 @@ def test_verdict_agrees_at_the_deployed_parameters(server):
     assert python.accepted and V.verdict(*args, trusted=set(s.trusted)) == python
 
 
-def _honest(spends=(1, 1, 1)) -> M.Session:
-    """A three-round session over 8 labels of 16 bytes, its limit 10 ns, signed at leaf 1 of a height-1 test key."""
+def _honest(spends=(1, 1, 1), stop: tuple[int, str] | None = None) -> M.Session:
+    """A three-round session over 8 labels of 16 bytes, its limit 10 ns, signed at leaf 1 of a height-1 test key; with
+    `stop = (j, end)`, ended `end` at round j, its index revealed and unanswered (`MemoryAttester.abandon`)."""
     signer = M.test_signer(M.SECRETS[0], 1, 1)
     tree = mc.CoinTree.draw(b"source", bytes(32), 8, 3, key=M.COIN_KEYS[0], salts=[bytes([j]) * 192 for j in range(3)])
     clock = M.Clock(1_000)
@@ -134,6 +135,9 @@ def _honest(spends=(1, 1, 1)) -> M.Session:
     while not c.done:
         j = len(c.rounds)
         i = c.challenge()
+        if stop is not None and j == stop[0]:
+            c.abandon(stop[1])
+            break
         clock.now += spends[j]
         c.receive(M.block(i, 16))
     expected = tuple(mc.block_digest(M.block(i, 16)) for i in range(8))
@@ -165,6 +169,8 @@ def controls() -> dict[str, tuple[M.Session, tuple[str, ...]]]:
                  ("the session ended late after 2 of 3 rounds", f"1 answers are past Δ + RTT = {limit} ns")),
         "negative elapsed": (_honest(spends=[1, -1, 1]),
                              ("the session ended late after 2 of 3 rounds", f"1 answers are past Δ + RTT = {limit} ns")),
+        "abandoned": (_honest(stop=(2, mc.ABANDONED)), ("the session ended abandoned after 2 of 3 rounds",)),
+        "malformed": (_honest(stop=(0, mc.MALFORMED)), ("the session ended malformed after 0 of 3 rounds",)),
         "out-of-range index": (M._round(s, 0, index=lambda r: r.index + blocks),
                                ("round 0's index is not its committed coin", "1 answers are not their blocks of C")),
     }
@@ -172,7 +178,8 @@ def controls() -> dict[str, tuple[M.Session, tuple[str, ...]]]:
 
 def test_negative_controls(server):
     """Each negative control by name, through `verdict.verdict` (the call a call site switches to) and the difftest port:
-    the Lean's verdict is the Python's, reasons word for word, and the controls are rejected for their own reason."""
+    the Lean's verdict is the Python's, reasons word for word, the honest session is accepted, and each control is
+    rejected for its own reason alone (a session signed `abandoned` or `malformed` for its end)."""
     port_ = port(st.none())
     for name, (s, reasons) in controls().items():
         args = (s.signed, s.commitment, s.openings, expected_of(s))

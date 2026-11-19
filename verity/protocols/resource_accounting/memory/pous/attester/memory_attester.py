@@ -12,8 +12,9 @@ A session has four steps:
    a coin not yet revealed leaves the device before the session's last answer is in.
 2. **Rounds.** Round `j` reveals index `j` (`challenge`), receives the whole answer block (`receive`), reads its clock
    for the receipt before it hashes anything, then hashes the received bytes itself (`block_digest`).  Its record is
-   `(j, index, send time, receipt time, H(block))` (`Round`).  The first late round ends the session.  No round is
-   retried, and no index is resampled.
+   `(j, index, send time, receipt time, H(block))` (`Round`).  The first late round ends the session, and so does a
+   prover that leaves (`ABANDONED`) or sends an answer the session refuses (`MALFORMED`), at the round it stopped at.
+   No round is retried, and no index is resampled.
 3. **Sign.** One signature per session (`close`) over `SHA-512(SESSION_TAG ‖ header ‖ records digest)`: the header is
    the commitment's fields and how the session ended, and the records digest is the `sha512/row/v2` digest of the round
    records as one stream.  The records are witness: the prover proves things about them, and they never reach the auditor in the
@@ -124,7 +125,10 @@ RECORD_BYTES = 92
 TEST_PREFIX = "test/"
 CLOCK_RESOLUTION_NS = 1_000
 """The coarsest clock the memory attester runs on: a microsecond (the network attester's 100 ms buckets are far too coarse)."""
-COMPLETE, LATE = "complete", "late"
+COMPLETE, LATE, ABANDONED, MALFORMED = "complete", "late", "abandoned", "malformed"
+"""How a session ends, signed in its header: every round answered on time, a late round, the prover gone with a round
+open or none (`abandon`), or an answer the session refuses (`receive`, or a frame the wire refuses). The header's round
+count is the round it stopped at; every end but `COMPLETE` is rejected by name."""
 HM96 = hm96.SHA512
 LIMITS = VerificationLimits()
 
@@ -725,13 +729,15 @@ class MemoryAttester:
         self._open = (j, i, self.clock())
         return i
 
-    def receive(self, block: bytes) -> Round:
-        """The open round's answer: its receipt time, then `block_digest` of all of `block`, which must be `block_bytes`."""
+    def receive(self, block: bytes) -> Round | None:
+        """The open round's answer: its receipt time, then `block_digest` of all of `block`, which must be `block_bytes`;
+        another size ends the session `MALFORMED`, the round unrecorded."""
         receipt = self.clock()
         if self._open is None:
             raise RuntimeError("no round is open")
         if len(block) != self._commitment.block_bytes:
-            raise ValueError(f"an answer is the whole {self._commitment.block_bytes}-byte block, not {len(block)} bytes")
+            self.abandon(MALFORMED)
+            return None
         j, i, send = self._open
         self._open = None
         r = Round(j, i, send, receipt, block_digest(block))
@@ -741,6 +747,12 @@ class MemoryAttester:
         elif len(self.rounds) == self.coins.k:
             self.ended = COMPLETE
         return r
+
+    def abandon(self, end: str = ABANDONED) -> None:
+        """End the session `end` where it stopped, an open round unrecorded, so that `close` signs it; a session that has
+        ended keeps its end."""
+        if self.ended is None:
+            self._open, self.ended = None, end
 
     def run(self, respond: Callable[[int], bytes]) -> SignedSession:
         """Drive the session against `respond(index)`, the collector paused for its rounds (`collector_paused`), and close
@@ -838,7 +850,7 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
     return Verdict(not reasons, tuple(reasons), late, wrong)
 
 
-__all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMMITTED", "COMPLETE", "HM96", "LATE", "LMS", "MATCHED", "PREMISE",
+__all__ = ["ABANDONED", "CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMMITTED", "COMPLETE", "HM96", "LATE", "LMS", "MALFORMED", "MATCHED", "PREMISE",
            "PREMISE_BEFORE", "PROTOCOL", "REHEARSAL", "SEED_BYTES", "UNCOMMITTED", "committed", "create_leaf_state",
            "deployed_key", "holds", "key_tree", "pinned", "premise", "trusted_device",
            "RECORDS", "RECORD_BYTES", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "SETUP_RECORD_TAG",
