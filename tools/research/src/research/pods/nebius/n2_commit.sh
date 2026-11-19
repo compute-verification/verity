@@ -29,11 +29,11 @@
 # keeps the row on node 1, and once the fill job is written the placement is appended to node 1's $GUEST/placed.jsonl. Node 2's
 # fill queue stays the executor, so these count apart from `research run --queue` (top-level 5:14 AM PDT). A queue that gives no
 # answer doesn't hold the row back.
-# run (as research on node 2, inside the fill job) runs config-run.yaml's gpu task with REPLAY_DEFERRED=1, records the GPU's
+# run (as research on node 2, inside the fill job) runs the Commit with REPLAY_DEFERRED=1, records the GPU's
 # driver, clocks and vLLM version in the row (n2_gpu_env.json), then sends the row (without the replay bundle) and the run dir back
 # to node 1, publishes the Attempt into node 1's store, preserves it in R2 (from node 2 when node 2 has the R2 environment and the
 # run dir is under 64 MiB, else from a pod on node 1 with the Secret research-r2), and queues the replay on node 2. replay runs
-# config-run.yaml's replay task there and custodies it the same way. A Commit or replay that fails on node 2 goes back to node 1's
+# the replay there and custodies it the same way. A Commit or replay that fails on node 2 goes back to node 1's
 # dispatcher (`dispatch.py submit config-run COMMIT_KEY --task 1|2`) with the whole row, and offload never moves a Commit that
 # went back to node 2 again; VY_N2_REPLAY=n1 sends every replay there.
 # A rerun after a stage finished (the .n2-commit / .n2-replay marker) only redoes the return.
@@ -291,7 +291,7 @@ in_ns() {  # in_ns MODE KEY
     "$(readlink -f "$0")" "$1" "$2"
 }
 
-load_item() {  # load_item ITEM.json: config-run.yaml's task envs, then the item's over them (dispatch.py's order); HF_HOME is node 2's own
+load_item() {  # load_item ITEM.json: the task envs, then the item's over them (dispatch.py's order); HF_HOME is node 2's own
   export HF_HOME=/workspace/jobs/hf HF_HUB_OFFLINE=1 SWEEP_DIR=/workspace/cp/sweep CUDA_HOME=/workspace/jobs/cuda-12.9 \
     TORCH_EXTENSIONS_DIR=/workspace/jobs/torch-extensions PY=/workspace/jobs/venv312/bin/python PY312=/workspace/jobs/venv312/bin/python \
     RESEARCH_PY=/workspace/jobs/bin/py312 RESEARCH_RUNS=/workspace/jobs/runs RESEARCH_STORE=/workspace/jobs/store \
@@ -468,7 +468,7 @@ EOF
   echo "n2-commit $KEY: Commit $run_id on node 2 rc 0 (verdict ${commit_art:-none}); its replay is queued here"
 }
 
-# a passed replay's bundle goes only with its complete slim keep, as config-run.yaml's replay task checks it (the same lines); a
+# a passed replay's bundle goes only with its complete slim keep; a
 # bundle kept goes home to node 1 with the row, where release.py counts it against the bundle limit
 discard_kept_bundles() {  # discard_kept_bundles ROW_DIR
   python3 - "$1" << 'EOF' || echo "$(date -u +%FT%TZ) replay bundles kept: the keep check failed" | tee -a "$1/row.log" || true

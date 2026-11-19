@@ -84,64 +84,21 @@ def test_every_job_template_names_a_defined_queue_and_priority():
         assert queue in local and prio in priorities, f.name
         assert "provision_timeout: -1" in t and "infra: ssh/vy-nebius" in t and "budget-line:" in t, f.name
         seen[f.stem] = (queue, prio)
-    assert seen == {"config-run": ("deployments-cpu", "circuits"), "config-run-row": ("deployments-gpu", "circuits-gpu"),
-                    "commit-pack": ("deployments-gpu", "circuits-gpu"),
+    assert seen == {"commit-pack": ("deployments-gpu", "circuits-gpu"),
                     "port-capture": ("deployments-gpu", "capture"), "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench"),
                     "store-push": ("backfill", "backfill"), "store-fetch": ("backfill", "backfill")}
-
-
-def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
-    import subprocess
-    text = (SKY / "jobs" / "config-run.yaml").read_text()
-    head, build, gpu, replay = text.split("\n---\n")
-    assert "accelerators" not in replay and "queue-name: deployments-cpu" in replay and "row stage replay" in replay
-    assert 'if [ "$REPLAY_DEFERRED" != 1 ]; then' in replay and "REPLAY_DEFERRED: auto" in replay and "REPLAY_DEFERRED: auto" in gpu
-    assert '[ "$REPLAY_DEFERRED" != 1 ] || deferred=(--replay-deferred 1)' in gpu and '"${deferred[@]}"' in gpu
-    detect = "grep -q VLLM_REPLAY"
-    assert gpu.count(detect) == 1 and replay.count(detect) == 2                        # setup and run resolve it as the Commit does
-    assert 'if [ "$rc" = 0 ] && [ -s "$SWEEP_DIR/$ROW/config_record.json" ]; then\n    python3 - "$SWEEP_DIR/$ROW" << \'EOF\'' in replay
-    assert "rm -rf" not in replay                                     # the keep check alone deletes a bundle (the next test)
-    assert "accelerators" not in build and 'verity.dev/build: "true"' in build and "CUDA_VISIBLE_DEVICES=" in build
-    assert "row stage build \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in build
-    assert "row stage commit \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in gpu
-    assert "accelerators: RTXPRO6000:1" in gpu and "row stage match" not in text                     # config runs have no Match
-    assert "kueue.x-k8s.io/priority-class: circuits-gpu" in gpu and "kueue.x-k8s.io/priority-class: circuits\n" in build  # Commits first
-    assert "kueue.x-k8s.io/priority-class: circuits-gpu" in replay                                    # replays drain bundles before Builds
-    assert build.count("kueue.x-k8s.io/queue-name: deployments-cpu") == gpu.count("kueue.x-k8s.io/queue-name: deployments-gpu") == 1
-    assert 'ov.noisy: "true"' in gpu and "--out" in build and "--out" in gpu                          # bootstrap writes outside the tree
-    for part in (build, gpu):
-        assert "GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve" in part
-    sub = (SKY / "submit.sh").read_text()
-    (tmp_path / "cls.py").write_text(sub[sub.index("<<'PY'\n") + 7:sub.index("\nPY\n")])
-    def render(*args):
-        out = subprocess.run(["python3", str(tmp_path / "cls.py"), str(SKY / "jobs" / "config-run.yaml"), *args, *[""] * (4 - len(args))],
-                             capture_output=True, text=True, check=True).stdout
-        return out.split("\n---\n")[1:]
-    b2, g2, r2 = render("tp2", "", "")
-    assert "  memory: 160" in b2 and "  memory: 340" in g2 and "accelerators: RTXPRO6000:2" in g2 and "  cpus: 8 " in g2
-    b3, g3, r3 = render("moe", "300", "", "96")                                                                  # a per-cell figure wins
-    assert "  memory: 300" in b3 and 'BUILD_RAM_BUDGET_GB: "300"' in b3 and "  memory: 170 " in g3
-    assert "  memory: 96 " in r3 and "  memory: 64 " in r2                                                  # VY_REPLAY_MEMORY
 
 
 def test_a_replay_bundle_goes_only_with_its_complete_slim_keep(tmp_path):
     """A replay task must not delete a passed row's sealed bundle as soon as config_record.json exists: a tree that predates
     keep-leaves holds nothing else of the leaves a later CPU replay reads. A bundle goes only when
     commit/replay_slim_p<pair>/ is its complete keep (cpu_replay.keep's slim.json: this bundle's MANIFEST.json, dump_sha256, every
-    file's size and sha256); any doubt keeps it, with one line in row.log. config-run.yaml and n2_commit.sh run the same lines."""
+    file's size and sha256); any doubt keeps it, with one line in row.log."""
     import hashlib
     import subprocess
-    import textwrap
 
-    text = (SKY / "jobs" / "config-run.yaml").read_text()
-    run = textwrap.dedent(text.split("\n---\n")[3].split("\nrun: |\n", 1)[1].split("\n\nconfig:", 1)[0]) + "\n"
-    if importlib.util.find_spec("yaml") is not None:
-        import yaml
-        assert [d for d in yaml.safe_load_all(text) if d and d.get("name") == "replay"][0]["run"] == run
-    assert subprocess.run(["bash", "-n"], input=run, text=True).returncode == 0
-    body = run.split("<< 'EOF'", 1)[1].split("\n", 1)[1].split("\nEOF\n", 1)[0]
     n2 = (SKY.parent / "n2_commit.sh").read_text()
-    assert n2.split("discard_kept_bundles() {", 1)[1].split("<< 'EOF'", 1)[1].split("\n", 1)[1].split("\nEOF\n", 1)[0] == body
+    body = n2.split("discard_kept_bundles() {", 1)[1].split("<< 'EOF'", 1)[1].split("\n", 1)[1].split("\nEOF\n", 1)[0]
     assert 'then discard_kept_bundles "$row_dir"; fi' in n2 and "rm -rf \"$row_dir\"/commit/replay_bundle_p" not in n2
     (tmp_path / "discard.py").write_text(body)
     def sha(p):
@@ -380,60 +337,6 @@ def test_provers_gives_up_one_gpu_per_gpu_held_for_direct_runs(tmp_path):
         assert out.split("metadata: {name: provers}")[0] == (SKY / "kueue.yaml").read_text().split("metadata: {name: provers}")[0]
     pouw = subprocess.run(["python3", str(tmp_path / "render.py"), str(SKY / "kueue-pouw.yaml"), "0"], capture_output=True, text=True, check=True).stdout
     assert pouw == (SKY / "kueue-pouw.yaml").read_text()
-
-
-def test_the_coverage_build_task_has_no_gpu_but_finds_the_hosts_cuda_driver():
-    """A GPU-less pod has no driver libraries, yet vLLM's CUDA platform loads libcuda.so.1 at import: the build task puts the
-    host's copy, which cluster_up.sh maintains, on LD_LIBRARY_PATH."""
-    head, build, gpu, _ = (SKY / "jobs" / "config-run.yaml").read_text().split("\n---\n")
-    assert "accelerators" not in build and "LD_LIBRARY_PATH=/workspace/jobs/cuda-driver" in build
-    assert "accelerators: RTXPRO6000:1" in gpu and "cuda-driver" not in gpu
-    assert "/workspace/jobs/cuda-driver" in (SKY / "cluster_up.sh").read_text()
-
-
-def test_each_coverage_task_is_one_stage_attempt_whose_tool_reads_the_row():
-    """A two-task cell publishes what `row chain` does: each task's `row stage` is the workload of one `research run --tool vllm.<stage>`
-    Attempt, as plain argv (a `bash -c` string hides the row from the Tool's key params), and the Commit cites the Build's artifact."""
-    import shlex
-
-    from research.store import tools_registry
-    repo = Path(__file__).resolve().parents[3]
-    row = "smollm2-135m__bf16__rtxpro6000__tp1__b2__i64__o16__single__greedy__bi-eager"
-    env = {"PY": "/venv/bin/python", "ROW": row, "ROLE": "SMOLLM2", "REPO": "HuggingFaceTB/SmolLM2-135M", "REVISION": "abc123"}
-    _, build, gpu, _ = (SKY / "jobs" / "config-run.yaml").read_text().split("\n---\n")
-    for stage, task in (("build", build), ("commit", gpu)):
-        run = task[task.index("\nrun: |"):task.index("\nconfig:")].replace("\\\n", " ")
-        line = next(ln for ln in run.splitlines() if "-m research run" in ln or '"${research[@]}" run ' in ln)
-        assert f'--tool vllm.{stage} --project verity --cwd "$SRC"' in line and "bash -c" not in line
-        argv = line.split(" -- ", 1)[1].replace('${deferred[@]+"${deferred[@]}"}', '')
-        for k, v in env.items():
-            argv = argv.replace(f'"${k}"', v)
-        _, key = tools_registry.load(f"vllm.{stage}", repo).resolve_params(shlex.split(argv), repo)
-        assert (key["stage"], key["row"], key["batch"], key["revision"]) == (stage, row, 2, "abc123")
-    assert "two-task-build-run" in build and "two-task-build-run" in gpu and '--input "build=$build_art"' in gpu
-
-
-def test_gpu_tasks_keep_compiled_kernels_per_tree_on_the_host(tmp_path):
-    """Each cell's Commit otherwise JIT-compiles vLLM's batch-invariant Triton kernels and rebuilds hidden_gpu_tree again (most of a
-    small cell's 436 s GPU hold; 83-88 s with both). Eager rows only for the Triton cache, and the shared JIT dirs only for trees whose
-    native_jit stages its sources."""
-    import subprocess
-    for f in ("config-run.yaml", "config-run-row.yaml"):
-        gpu = next(p for p in (SKY / "jobs" / f).read_text().split("\n---\n") if "accelerators:" in p)
-        run = gpu[gpu.index("\nrun: |"):gpu.index("\nconfig:")]
-        start = run.index('  case "$ROW" in *__bi-eager)')
-        block = "\n".join(ln[2:] for ln in run[start:].split("\n")[:4])
-        assert run.index("job_tree.sh\" --mine") < start and block.endswith("fi"), f
-        for row, fixed, want in (("m__bi-eager", True, "/workspace/jobs/cache/triton/T|/workspace/jobs/cache/jit/hidden_gpu"),
-                                 ("m__bi-compiled", True, "|/workspace/jobs/cache/jit/hidden_gpu"),
-                                 ("m__bi-eager", False, "/workspace/jobs/cache/triton/T|")):
-            tree = tmp_path / ("fixed" if fixed else "old") / "T"
-            jit = tree / "adapters/vllm/verity_vllm/commit/committer/native_jit.py"
-            jit.parent.mkdir(parents=True, exist_ok=True)
-            jit.write_text("def staged_sources(): ...\n" if fixed else "def jit_load(): ...\n")
-            out = subprocess.run(["bash", "-c", block + '\necho "${TRITON_CACHE_DIR:-}|${HIDDEN_GPU_BUILD:-}"'], capture_output=True,
-                                 text=True, check=True, env={"PATH": "/usr/bin:/bin", "ROW": row, "SRC": str(tree)}).stdout.strip()
-            assert out == want, (f, row, fixed, out)
 
 
 def test_submit_limits_what_waits_in_kueue_until_the_dispatcher_runs(tmp_path):
@@ -977,59 +880,6 @@ def test_backfill_takes_its_credentials_on_stdin_only(tmp_path, monkeypatch):
     r = subprocess.run(["bash", str(script)], input="only-one-line\n", capture_output=True, text=True)
     assert r.returncode == 2 and "want the 4 credential lines on stdin" in r.stderr
     assert list(tmp.iterdir()) == []
-
-
-def test_a_quiet_commit_is_stopped_and_a_progressing_one_is_not(tmp_path):
-    """The Commit's watchdog: when commit.log hasn't changed for COMMIT_STALL_S (Gemma-2-2B Commits held GPUs 50-90 min silent) it
-    lowers the run's timeout through `research tele set-timeout`, whose harness stops the workload's session and records the attempt
-    as cancelled, and exits 86; a run the harness doesn't stop is killed with its workload's group (status.json `pgid`) after
-    COMMIT_STALL_GRACE_S; a Commit whose log keeps changing runs to its own exit. Clocks are shims (each `date +%s` call advances
-    400 s, `sleep` returns at once, `stat` reads the log's mtime from a file), and each Commit exits on a FIFO or a kill, so nothing
-    here waits on wall-clock time."""
-    import os
-    import subprocess
-    gpu = (SKY / "jobs" / "config-run.yaml").read_text().split("\n---\n")[2]
-    fn = "\n".join(ln[2:] for ln in gpu[gpu.index("\n  # >>> commit watchdog") + 1:gpu.index("  # <<< commit watchdog")].splitlines())
-    assert 'watch_commit "$SWEEP_DIR/$ROW/commit.log" "$RESEARCH_RUNS/$run_id" "${research[@]}" run --id "$run_id"' in gpu
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    (bin_dir / "sleep").write_text("#!/bin/sh\nexit 0\n")
-    (bin_dir / "date").write_text('#!/bin/sh\nn=$(cat "$CLOCK"); echo $((n + 400)) > "$CLOCK"; [ "$1" = +%s ] && echo "$n" || echo T\n')
-    # a progressing log (CALLS set) has the clock's next reading as its mtime, and its Commit exits at the 5th poll (the FIFO it reads);
-    # a quiet one has mtime 0
-    (bin_dir / "stat").write_text('#!/bin/sh\nif [ -n "$CALLS" ]; then c=$(($(cat "$CALLS") + 1)); echo $c > "$CALLS"\n'
-                                  '[ $c -eq 5 ] && echo > "$FIFO"; cat "$CLOCK"; else echo 0; fi\n')
-    # the runner's harness, stopping the workload (the FIFO it reads) when HARNESS_FIFO is set
-    (bin_dir / "research").write_text('#!/bin/sh\necho "$*" >> "$CALLED"\n[ -z "$HARNESS_FIFO" ] || echo > "$HARNESS_FIFO"\n')
-    for f in bin_dir.iterdir():
-        f.chmod(0o755)
-    log, run_dir, called = tmp_path / "row" / "commit.log", tmp_path / "runs" / "r1", tmp_path / "called"
-    log.parent.mkdir()
-    run_dir.mkdir(parents=True)
-    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "CLOCK": str(tmp_path / "clock"), "CALLED": str(called), "COMMIT_STALL_S": "900",
-           "COMMIT_STALL_POLL_S": "0"}
-
-    def watch(cmd: str, **extra: str) -> tuple[str, str]:
-        (tmp_path / "clock").write_text("1000\n")
-        for f in (called, log.parent / "row.log"):
-            f.unlink(missing_ok=True)
-        r = subprocess.run(["bash", "-c", f"research=({bin_dir}/research)\n{fn}\nwatch_commit {log} {run_dir} {cmd}; echo rc=$?"],
-                           capture_output=True, text=True, env=env | extra)
-        return r.stdout.strip().splitlines()[-1], (log.parent / "row.log").read_text() if (log.parent / "row.log").exists() else ""
-
-    fifo = tmp_path / "workload"
-    os.mkfifo(fifo)
-    rc, row_log = watch(f"cat {fifo}", HARNESS_FIFO=str(fifo), COMMIT_STALL_GRACE_S="1000000000")
-    assert rc == "rc=86" and "stopping the Commit" in row_log and "killing it" not in row_log
-    assert called.read_text().split() == ["tele", "set-timeout", "--attempt-dir", str(run_dir), "--timeout-s", "1", "--actor", "guardian",
-                                          "--reason", "commit", "watchdog:", "commit.log", "unchanged", "for", "1200", "s"]
-    workload = subprocess.Popen(["tail", "-f", "/dev/null"], start_new_session=True)
-    (run_dir / "status.json").write_text(f'{{"pgid": {workload.pid}}}')
-    rc, row_log = watch("tail -f /dev/null", COMMIT_STALL_GRACE_S="0")
-    assert rc == "rc=86" and "killing it" in row_log and workload.wait() == -9
-    (tmp_path / "calls").write_text("0\n")
-    rc, row_log = watch(f"cat {fifo}", CALLS=str(tmp_path / "calls"), FIFO=str(fifo), COMMIT_STALL_GRACE_S="0")
-    assert rc == "rc=0" and row_log == "" and not called.exists()
 
 
 def test_the_store_eviction_drops_only_preserved_copies_hourly_as_ubuntu_and_fails_on_a_tool_error(tmp_path):

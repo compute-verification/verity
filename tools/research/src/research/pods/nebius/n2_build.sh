@@ -18,7 +18,7 @@
 #      the vy-cluster key, never while node 2 has a timed window running or waiting;
 #   2. writes the fill job, whose item lives in /workspace/verity-guest/items/KEY.json on node 2.
 # run (as research on node 2, inside the fill job):
-#   1. the Build, exactly as config-run.yaml's build task runs it: same paths, so every path it records holds on node 1. Node 2's
+#   1. the Build, with node 1's paths, so every path it records holds on node 1. Node 2's
 #      HF_HOME is /workspace/jobs/hf, which on node 1 is a symlink to /workspace/hf; node 2's own /workspace/hf (PoUW's) is untouched;
 #   2. sends the row and the run dir back to node 1, publishes the Attempt into node 1's store, and submits the Commit there with
 #      node 1's dispatcher (`dispatch.py submit config-run n2-build/KEY --task 1`), which chains the GPU task and supplies R2 custody.
@@ -151,7 +151,7 @@ run() {
     exit 0
   fi
   [ -e "$item" ] || { echo "n2-build $key: no item $item and no record that it finished" >&2; exit 2; }
-  # config-run.yaml's build envs, then the item's over them (dispatch.py's order); HF_HOME is node 2's own (see above)
+  # the Build's envs, then the item's over them (dispatch.py's order); HF_HOME is node 2's own (see above)
   export HF_HOME=/workspace/jobs/hf HF_HUB_OFFLINE=1 SWEEP_DIR=/workspace/cp/sweep CUDA_HOME=/workspace/jobs/cuda-12.9 \
     TORCH_EXTENSIONS_DIR=/workspace/jobs/torch-extensions PY=/workspace/jobs/venv312/bin/python PY312=/workspace/jobs/venv312/bin/python \
     RESEARCH_PY=/workspace/jobs/bin/py312 RESEARCH_RUNS=/workspace/jobs/runs RESEARCH_STORE=/workspace/jobs/store \
