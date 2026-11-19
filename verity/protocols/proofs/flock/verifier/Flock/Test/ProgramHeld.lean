@@ -2,8 +2,10 @@ module
 
 public import Flock.ProvedScope
 public import Flock.Registered
+public import Flock.Test.DescOfProg
 meta import Flock.ProvedScope
 meta import Flock.Registered
+meta import Flock.Test.DescOfProg
 
 @[expose] public section
 
@@ -177,5 +179,70 @@ def note (why : String) : String :=
 -- a reader that looks for `program_sha512` finds it in no field of a program that was not held
 #guard (fields (.ok (cover (some (sha mine)))) (some other) ++ fields (.ok (bound unread)) (some other)).all
   fun (k, v) => ((k ++ " " ++ v).splitOn "program_sha512").length == 1
+
+/-! The object's `blocks`, the population's proof blocks, refused under `partition_object`'s codes. -/
+
+def withBlocks (obj b : Json) : Json := obj.setObjVal! "blocks" b
+
+def pairs (ps : List (Int × Int)) : Json := Json.arr (ps.toArray.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi])
+
+def chain : Json := pairs [(0, 2), (2, 4), (4, 6), (6, 8)]
+
+def form (obj : Json) : String :=
+  match HmRow.checkPartitionObject obj with
+  | .error e => e
+  | .ok (n, v) => s!"{n} v{v}"
+
+def code (e : String) : String := ((e.splitOn ": ")[1]?).getD ""
+
+-- the eight-unit chain's blocks pass the form and cover its population; an object without blocks names no grouping
+#guard form (withBlocks template chain) == "Q_template_instance v0"
+#guard (HmRow.checkBlocksCover (withBlocks template chain) 8).toBool
+#guard form template == "Q_template_instance v0" && (HmRow.checkBlocksCover template 5).toBool
+#guard form (template.setObjVal! "grouping" chain) ==
+  "partition: the object's keys are not format, program, query and optionally blocks"
+-- the form: a non-empty list of pairs of naturals lo < hi
+#guard [Json.arr #[], Json.str "0-8", pairs [(0, 2), (2, 2)], pairs [(-1, 2)],
+  Json.arr #[Json.arr #[Lean.toJson 0, Lean.toJson 2, Lean.toJson 4]]].all fun b => code (form (withBlocks template b)) == "blocks-form"
+#guard code (form (withBlocks unread chain)) == "blocks-query"
+-- ascending, each from where the one before ends
+#guard code (form (withBlocks template (pairs [(1, 2), (2, 8)]))) == "blocks-gap"
+#guard code (form (withBlocks template (pairs [(0, 2), (3, 8)]))) == "blocks-gap"
+#guard code (form (withBlocks template (pairs [(0, 4), (2, 8)]))) == "blocks-overlap"
+#guard code (form (withBlocks template (pairs [(0, 2), (2, 4), (0, 8)]))) == "blocks-unsorted"
+-- against the population: the last block ends at it
+#guard code (why (HmRow.checkBlocksCover (withBlocks template chain) 7)) == "blocks-range"
+#guard code (why (HmRow.checkBlocksCover (withBlocks template chain) 9)) == "blocks-gap"
+/-- The template query over `DescOfProg.pops`, whose five instances are its population. -/
+def five : Json := object (sha Flock.Test.DescOfProg.pops) "Q_template_instances" 0
+  (Json.mkObj [("templates", Json.arr (Flock.Test.DescOfProg.templates.map Json.str))])
+
+def units (obj : Json) : String :=
+  match HmRow.deriveTemplateUnits default obj Flock.Test.DescOfProg.pops #[] with
+  | .error e => e
+  | .ok note => note
+
+def NO_TEMPLATE : String := "partition: META program_digests does not name the circuit's one template"
+
+-- where the setup evaluates the query: the units derived (refused past the cover for want of a template) and a sample's strata
+#guard ((TemplateQuery.Desc.parse Flock.Test.DescOfProg.pops).toOption.bind fun d =>
+  (TemplateQuery.evaluate d Flock.Test.DescOfProg.templates).toOption.map TemplateQuery.population) == some 5
+#guard units five == NO_TEMPLATE && units (withBlocks five (pairs [(0, 2), (2, 5)])) == NO_TEMPLATE
+#guard code (units (withBlocks five (pairs [(0, 2), (2, 6)]))) == "blocks-range"
+#guard code (units (withBlocks five (pairs [(0, 2), (2, 4)]))) == "blocks-gap"
+#guard code (match HmRow.stratifiedSamplingDesign (withBlocks five (pairs [(0, 6)])) Flock.Test.DescOfProg.pops 1 with
+  | .error e => e
+  | .ok _ => "") == "blocks-range"
+
+def blocks (obj : Json) : Except String (Option (Array (Nat × Nat))) := HmRow.blocksOf obj Flock.Test.DescOfProg.pops
+
+-- a reader's blocks: only once they cover the population
+#guard (blocks (withBlocks five (pairs [(0, 2), (2, 5)]))).toOption == some (some #[(0, 2), (2, 5)])
+#guard (blocks five).toOption == some none
+#guard [pairs [(0, 2), (2, 6)], pairs [(0, 2), (2, 4)], pairs [(0, 2), (3, 5)], pairs [(0, 0)]].map
+  (fun b => match blocks (withBlocks five b) with | .error e => code e | .ok _ => "") ==
+  ["blocks-range", "blocks-gap", "blocks-gap", "blocks-form"]
+-- over another program than the verifier's, no blocks
+#guard (match blocks (withBlocks template chain) with | .error e => e | .ok _ => "") == NOT_THE_OBJECTS
 
 end Flock.Test.ProgramHeld
