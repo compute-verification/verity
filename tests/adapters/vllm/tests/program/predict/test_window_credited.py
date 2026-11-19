@@ -67,13 +67,14 @@ def test_with_no_credited_linear_the_circuit_is_todays():
 
 def test_a_credited_linear_is_its_tiles_their_a_rows_and_their_y_rows_in_the_slices_place():
     """Position 3's two rows are one row tile of 8 column tiles, position 4's one row another with a filler row: 3 A rows,
-    16 units of two templates and 16 y splits replace the 3 · 64 / 4 slices of `Gemm_v2{K=256,N=4}`; the certificates
+    16 units of two templates and 24 row splits, a tile row each, replace the 3 · 64 / 4 slices of `Gemm_v2{K=256,N=4}`; the certificates
     and the filler row are the only free rows, the salt and the weight's root are supplied, the rest registered."""
     plain, c = _lower(None).circuit, _lower(CREDITED).circuit
     old, new = Counter(dict((fn.id, n) for fn, n in plain.templates)), Counter(dict((fn.id, n) for fn, n in c.templates))
     (down,) = [i for i in old if i.startswith("Gemm_v2{K=256,N=4,")]
     assert old[down] - new[down] == 3 * N // 4
-    assert sum(n for _fn, n in _units(c, "LinearARow_v3")) == 3 and sum(n for _fn, n in _units(c, "LinearYRows_v1")) == 16
+    assert sum(n for _fn, n in _units(c, "LinearARow_v3")) == 3
+    assert sorted((fn.bindings["TR"], fn.bindings["I"], n) for fn, n in _units(c, "LinearYRow_v1")) == [(1, 0, 8), (2, 0, 8), (2, 1, 8)]
     assert sorted((fn.bindings["TR"], n) for fn, n in _units(c, TILE)) == [(1, 8), (2, 8)]
     assert sorted((f.port, f.units, f.cut) for f in c.free) == [("a", 8, (1, 1)), ("cert", 8, None), ("cert", 8, None)]
     prog, _q = wired(c)
@@ -147,8 +148,8 @@ def _honest(t: Any, unit: int, salt: bytes, root: bytes, a: np.ndarray, b: np.nd
 def test_on_honest_values_every_tile_is_ok_writes_the_schemes_y_and_its_readers_take_it_by_wire():
     """Node by node on the wired Program: weights small BF16 words, every other parameter made up, the public row, the
     salt and the root as the verifier fills them, each tile's certificates the prover's on the A rows and weight columns it
-    is wired and read, the filler row zero. Each tile's ok is 1 and its y the scheme's (`pearl_c_u.y`), its split hands
-    those words on to down_proj's reader; a weight word or a certificate word changed makes the tile's ok 0. Slow (16
+    is wired and read, the filler row zero. Each tile's ok is 1 and its y the scheme's (`pearl_c_u.y`), each row's split
+    hands that row's words on to down_proj's reader; a weight word or a certificate word changed makes the tile's ok 0. Slow (16
     tiles of about 280 million gates): only evaluating a tile on the rows its wires and reads gather shows that `credit`'s
     reads and the registered values' layout give it its inputs."""
     c = _lower(CREDITED).circuit
@@ -219,13 +220,14 @@ def test_on_honest_values_every_tile_is_ok_writes_the_schemes_y_and_its_readers_
             continue
         args = gather(node)
         out = np.asarray(evaluate_batch(node.fn, *args), dtype=np.uint64).reshape(-1)
-        if tid.startswith("LinearYRows_v1"):
+        if tid.startswith("LinearYRow_v1"):
             splits.add(k)
-            split.append(np.array_equal(out, args[0].reshape(-1)))
+            tr, tn = node.fn.bindings["TR"], node.fn.bindings["TN"]
+            split.append(np.array_equal(out, args[0].reshape(node.n, tr, tn)[:, node.fn.bindings["I"]].reshape(-1)))
         readers |= {tid.split("{")[0] for a in node.args for _s, i, _lo, _hi in runs(a.refs) if i in splits}
         vals.append(out)
 
     print("readers of y", sorted(readers), "ok", ok, "tampered", bad)
     assert ok == [1] * 16 and all(ys) and bad == [0] * len(bad) and len(bad) >= 4, (ok, ys, bad)
     assert split and all(split), split
-    assert readers and not readers & {"LinearYRows_v1", TILE}, readers
+    assert readers and not readers & {"LinearYRow_v1", TILE}, readers

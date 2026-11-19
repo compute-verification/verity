@@ -10,7 +10,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     RMSNorm row), at o_proj (K = 2,048 read as its 32 heads' rows) and at down_proj (K = 8,192 from one SiluMul row), and
     at one row of a small K; y at qkv (N = 3,072 in rows of 64), at o_proj's and down_proj's (N = 2,048 in rows of 64) and
     at gate_up's, the widest (N = 16,384 in rows of 256); each word Definition and its σ. A credited tile's y (TN = 64) in
-    the slices' rows, 16 words at K = 2,048 and 4 at down_proj, of a partial row tile (TR = 8) and a whole one."""
+    the slices' rows, 16 words at K = 2,048 and 4 at down_proj, its first and last rows of a partial row tile (TR = 8), and of a whole one."""
     from verity.circuits.defs import bind
 
     from verity_vllm.definitions.registry import linear_cut as LC
@@ -30,7 +30,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("LinearOut_v4", lambda: bind(LC.LinearOutV4, N=2048, W=64)),
         ("LinearOut_v4/qkv", lambda: bind(LC.LinearOutV4, N=3072, W=64)),
         ("LinearOut_v4/wide", lambda: bind(LC.LinearOutV4, N=16384, W=256)),
-        ("LinearYRows_v1", lambda: bind(LC.LinearYRows, TR=8, TN=64, W=16)),
-        ("LinearYRows_v1/down", lambda: bind(LC.LinearYRows, TR=8, TN=64, W=4)),
-        ("LinearYRows_v1/whole", lambda: bind(LC.LinearYRows, TR=16, TN=64, W=16)),
+        ("LinearYRow_v1", lambda: bind(LC.LinearYRow, TR=8, TN=64, W=16, I=0)),
+        ("LinearYRow_v1/last", lambda: bind(LC.LinearYRow, TR=8, TN=64, W=16, I=7)),
+        ("LinearYRow_v1/down", lambda: bind(LC.LinearYRow, TR=8, TN=64, W=4, I=3)),
+        ("LinearYRow_v1/whole", lambda: bind(LC.LinearYRow, TR=16, TN=64, W=16, I=15)),
     ]

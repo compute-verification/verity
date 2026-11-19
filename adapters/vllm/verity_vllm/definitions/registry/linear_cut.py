@@ -3,7 +3,7 @@ PoUW's call of it commits and takes its y as that call commits it, computing nei
 
     LinearARow_v3{K,R}   (x: Array<R, Array<K/R, BF16>>) -> Array<K, F32>   its A row: each of x's K elements widened
     LinearOut_v3{N,W}    (y: Array<N, F32>) -> N/W × Array<W, BF16>         y: each committed word's high half, no gate
-    LinearYRows_v1{TR,TN,W} (y: Array<TR, Array<TN, BF16>>) -> TR·TN/W × Array<W, BF16>   a credited tile's y in rows, no gate
+    LinearYRow_v1{TR,TN,W,I} (y: Array<TR, Array<TN, BF16>>) -> TN/W × Array<W, BF16>   a credited tile's row I, no gate
     each _v4             σ of its _v3 (`verity.circuits.ops.boolean.versions.sigma_lift`)
 
 **The A row** is the FP32 input row Pearl-C's A rows are (`verity.protocols.resource_accounting.compute.pouw.verifier.circuit.pc8`): the call's x widened to
@@ -13,9 +13,9 @@ BF16 words each widened to FP32 exactly as its A rows are, and the unit hands on
 (`U32Hi16_v1`, a wire), as N / W rows of W words, so each reader of y reads whole rows of it (a head's at q/k/v): its
 output rows are its input row's high halves in order, and it has no gate.
 
-A credited linear's tile writes its y as one row of its TR rows' TN words, and `LinearYRows_v1` hands it on as TR · TN / W
-rows of W words in order (row i's TN / W rows, then row i + 1's), so each reader of y reads its own row's words as whole
-rows: its body is its input's words, and it has no gate.
+A credited linear's tile writes its y as one row of its TR rows' TN words, and `LinearYRow_v1` hands on row I of it as
+TN / W rows of W words in order, so each reader of y reads its own row's words as whole rows, each a field of a unit of
+its own row: its body is its input's words, and it has no gate.
 
 A unit names no call: which call's tables it reads is its registered read's, so every call of one shape is one template.
 """
@@ -31,23 +31,25 @@ from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.int8_exact import row_parts_refusal
 from verity_vllm.definitions.registry.prims import BF16, F32
 
-__all__ = ["LinearARow", "LinearARowV4", "LinearOut", "LinearOutV4", "LinearYRows"]
+__all__ = ["LinearARow", "LinearARowV4", "LinearOut", "LinearOutV4", "LinearYRow"]
 
 A_CONFORMANCE = ("protocol-defined; a cut linear's A row, its x's BF16 elements widened to FP32 exactly (Bf16ToF32_v1 each): "
                  "the FP32 input row Pearl-C's A rows are (verity.protocols.resource_accounting.compute.pouw.verifier.circuit.pc8)")
 OUT_CONFORMANCE = ("protocol-defined; a cut linear's y as its call commits it, each BF16 word widened to FP32: its N / W "
                    "output rows are its one input row's high halves (U32Hi16_v1 each) in order")
-ROWS_CONFORMANCE = ("protocol-defined; a credited tile's y, its TR rows of TN BF16 words, as TR·TN/W rows of W words in "
-                    "order, its body its input's words")
+ROW_CONFORMANCE = ("protocol-defined; row I of a credited tile's y, its TR rows of TN BF16 words, as TN/W rows of W words "
+                   "in order, its body its input's words")
 
 
-def _rows_refusal(b: dict) -> str | None:
-    TN, W = b.get("TN"), b.get("W")
+def _row_refusal(b: dict) -> str | None:
+    TR, TN, W, I = (b.get(k) for k in ("TR", "TN", "W", "I"))
     for name in ("TR", "TN", "W"):
         if (v := b.get(name)) is not None and (type(v) is not int or v < 1):
             return f"{name}={v!r}: a tile's rows, columns and the rows' words are positive integers"
     if TN is not None and W is not None and TN % W:
         return f"TN={TN}, W={W}: each row's TN words are handed on in rows of W, so W divides TN"
+    if I is not None and (type(I) is not int or not 0 <= I < (TR if type(TR) is int else I + 1)):
+        return f"I={I!r}: one of the tile's TR={TR} rows"
     return None
 
 
@@ -78,13 +80,12 @@ def LinearOut(B, S, y):
     return tuple_of(*(h[k * S.W:(k + 1) * S.W] for k in range(S.N // S.W)))
 
 
-@composite("LinearYRows", 1, ["TR", "TN", "W"],
-           lambda S: ((("y", Array(S.TR, Array(S.TN, BF16))),), Tuple(*[Array(S.W, BF16)] * (S.TR * S.TN // S.W))),
-           conformance=ROWS_CONFORMANCE, refuse=_rows_refusal)
-def LinearYRows(B, S, y):
-    """y's words as TR · TN / W rows of W in order, by reference."""
-    flat = Coll(Array(S.TR * S.TN, BF16), y.refs)
-    return tuple_of(*(flat[k * S.W:(k + 1) * S.W] for k in range(S.TR * S.TN // S.W)))
+@composite("LinearYRow", 1, ["TR", "TN", "W", "I"],
+           lambda S: ((("y", Array(S.TR, Array(S.TN, BF16))),), Tuple(*[Array(S.W, BF16)] * (S.TN // S.W))),
+           conformance=ROW_CONFORMANCE, refuse=_row_refusal)
+def LinearYRow(B, S, y):
+    """Row I of y's words as TN / W rows of W in order, by reference."""
+    return tuple_of(*(y[S.I][k * S.W:(k + 1) * S.W] for k in range(S.TN // S.W)))
 
 
 LinearARowV4 = sigma_lift(LinearARow, 4)

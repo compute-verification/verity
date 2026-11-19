@@ -724,8 +724,9 @@ def credit(b: _Builder, progs: Sequence[_Program], j: int, node: Any, credited: 
     (`LinearARow_v3`), as Pearl+'s grid of units (`pearl_plus_credited.tiles`), row tile by row tile, each a column tile a
     unit labelled with its first row's slot. A unit reads its real rows' A rows by wire (filler rows free, which the core
     holds to zero), its weight columns by registered read, the epoch's salt and that read's registered root supplied, its
-    place and noise as registered values (`pearlplus/<port>@<words>`) and its certificates free; its y is handed on by a
-    `LinearYRows_v1` unit in rows of the words the uncredited slices write, which each Program's readers read by wire."""
+    place and noise as registered values (`pearlplus/<port>@<words>`) and its certificates free; each of its rows of y is
+    handed on by a `LinearYRow_v1` unit of that row's slot, in rows of the words the uncredited slices write, which that
+    Program's readers read by wire, one field a row."""
     rows = [(P, P.pending.pop(j)) for P in progs if j in P.pending]
     if not rows:
         return
@@ -762,7 +763,7 @@ def credit(b: _Builder, progs: Sequence[_Program], j: int, node: Any, credited: 
             groups[-1][1].append(r)
         else:
             groups.append((core, [r]))
-    split: dict[int, tuple[str, int]] = {}
+    split: dict[tuple[int, int], tuple[str, int]] = {}
     for core, rts in groups:
         TR, count = core.bindings["TR"], len(rts) * ct
         labels = [(rows[r * TM][0].slot_index, step) for r in rts for _c in range(ct)]
@@ -782,12 +783,14 @@ def credit(b: _Builder, progs: Sequence[_Program], j: int, node: Any, credited: 
             base = (first[port] + (rts[0] if port == "rows" else 0)) * w
             radix, st = _digits(digits)
             b.reads.append(IF.Read(tid, port, f"pearlplus/{port}@{w}", at=u0, radix=radix, base=base, step=st))
-        stid, su0 = b.allocation(bind(LC.LinearYRows, TR=TR, TN=TN, W=n), labels)
-        b.feed(stid, "y", su0, count, (Row(tid, u0, "o1", TR * TN),), ((count, 1),))
-        split.update((r, (stid, su0 + i * ct)) for i, r in enumerate(rts))
+        for i in range(TR):
+            stid, su0 = b.allocation(bind(LC.LinearYRow, TR=TR, TN=TN, W=n, I=i),
+                                     [(rows[r * TM + i][0].slot_index, step) for r in rts for _c in range(ct)])
+            b.feed(stid, "y", su0, count, (Row(tid, u0, "o1", TR * TN),), ((count, 1),))
+            split.update(((r, i), (stid, su0 + x * ct)) for x, r in enumerate(rts))
     for g, (P, _pending) in enumerate(rows):
-        (stid, su), i = split[g // TM], g % TM
-        P.outs[j] = [(c * TN + q * n, c * TN + (q + 1) * n, Row(stid, su + c, f"o{i * (TN // n) + q}", n))
+        stid, su = split[(g // TM, g % TM)]
+        P.outs[j] = [(c * TN + q * n, c * TN + (q + 1) * n, Row(stid, su + c, f"o{q}", n))
                      for c in range(ct) for q in range(TN // n)]
 
 
