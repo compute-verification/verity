@@ -2,16 +2,18 @@
 
 Today's setup check (`setup.verifier_key_from_encoding`, `PousCheck.SetupProtocol`) reads all of C* and decodes it.  In
 proofs it reads none of it. The setup is one circuit C (`verity/protocols/resource_accounting/memory/pous/prover/window.py`,
-`Setup`): ``PousP2SetupCheck_v1`` over every block of the store, one proof block a store block, its blocks and W's rows
+`Setup`): ``PousP2SetupCheck_v2`` over every block of the store, one proof block a store block, its blocks and W's rows
 registered values. The prover commits the store and W, then the setup's values; the proof system samples `SAMPLE`
 blocks on its live coins after that (`sampling_design`), and `check` reads the door's verdict on each sampled block
 (SPOT's `proofs.verify` on C and the partition, the block's units the partition's, the caller's door), with no list of positions of its own. The
 claim (`Claim`) carries the parameters and commitment as today, the store's root and SPOT's outcome to the Lean check
 `PousCheck.SetupInProofs.check`.
 
-Two places stop it. C's base and slot are input nodes, and the base is a function of the verifier's salt and the slot
-of the unit's position: no input kind binds an input node to such a function yet (circuits' format, Core's side lean's),
-so `bound` refuses (`NotBound`). And the door's statement of a block is not derived (`one_circuit.lower`, proofs').
+Two places stop it. The one value the verifier supplies to C is the setup's salt (`pous.setup.salt/v1`, the memory
+attester's coin, drawn after W is committed); each unit builds its base from it and its place inside, its place and slot
+are constants of the unit in C, and its ok word is an output held to 1. No supplied input binds the salt to C yet, nor a
+constant of a unit or a held output (circuits' and proofs' pair), so `bound` refuses (`NotBound`). And the door's
+statement of a block is not derived (`one_circuit.lower`, proofs').
 """
 from __future__ import annotations
 
@@ -36,28 +38,24 @@ def sampling_design(blocks: int) -> str | None:
     return None if blocks <= SAMPLE else f"rate:{SAMPLE}/{blocks}"
 
 
-def base(prefix: bytes, blocks_per_segment: int, u: int) -> bytes:
-    """Block `u`'s expansion base, `prefix ‖ u64be(s) ‖ u64be(v)`: block v of segment s."""
-    s, v = divmod(u, blocks_per_segment)
-    return prefix + s.to_bytes(8, "big") + v.to_bytes(8, "big")
-
-
-#: where C's input nodes wait on circuits' coin-bound input kind
-NOT_BOUND = "pous setup: no coin-bound input kind yet: "
-BASE_INPUT = ("base(u) = expand_prefix(params, salt) || u64be(u / S) || u64be(u mod S), the salt the verifier's coin after "
-              "W is committed")
-SLOT_INPUT = "slot(u) = u mod n, of unit u's position in C"
+#: where C's one supplied value waits on the supplied input
+NOT_BOUND = "pous setup: no supplied input yet: "
+SALT_INPUT = ("salt = pous.setup.salt/v1, the memory attester's coin drawn after W is committed, the one value the "
+              "verifier supplies; unit u builds its base expand_prefix(params, salt) || u64be(u / S) || u64be(u mod S) "
+              "inside")
+CONSTANTS = ("its block's u64be(u / S) || u64be(u mod S) and its slot u mod n constants of the unit in C, and its ok a "
+             "public output held to 1")
 
 
 class NotBound(ValueError):
-    """C's base and slot inputs are bound to nothing: an input node bound to a named function of the verifier's coins
-    or of a unit's position is circuits' input kind, which isn't in C's format yet."""
+    """C's salt is bound to nothing, nor its units' constants or its held ok: the supplied input (circuits' and proofs'
+    pair) isn't in C's format yet."""
 
 
 def bound(params: P2Params, salt: bytes, row_bytes: int) -> None:
-    """C's base and slot input nodes bound to `params`' expansion of `salt` and to each unit's position (`BASE_INPUT`,
-    `SLOT_INPUT`): refused, `NotBound`, until C's format has an input kind that binds them."""
-    raise NotBound(f"{NOT_BOUND}{BASE_INPUT}; {SLOT_INPUT}")
+    """C's salt input bound to the verifier's `salt`, each unit's place and slot to its constants and its ok word held
+    to 1 (`SALT_INPUT`, `CONSTANTS`): refused, `NotBound`, until C's format has the supplied input."""
+    raise NotBound(f"{NOT_BOUND}{SALT_INPUT}; {CONSTANTS}")
 
 
 def check(block: Callable[..., Any], verify: Callable[..., tuple[Any, Any]], proofs: Mapping[int, Any], c: bytes,
@@ -67,8 +65,9 @@ def check(block: Callable[..., Any], verify: Callable[..., tuple[Any, Any]], pro
     system's, sampled after the store is committed): its units the partition's (`block`, SPOT's `one_circuit.block`), C's
     base and slot bound (`bound`), and its proof `proofs[k]` verified against C, never the prover's circuit file
     (`verify`, SPOT's `proofs.verify`, `registered` the store's and W's registration). The door is the caller's, so the
-    verifier loads none of SPOT. A partition or block the door refuses raises its refusal, and a refusal of its verdict
-    ValueError with its reason."""
+    verifier loads none of SPOT. A partition or block the door refuses raises its refusal, a refusal of its verdict
+    ValueError with its reason, and a session the door rejects ValueError naming it: a unit's ok word is held to 1
+    inside its proof, so an accepted session is every unit's 1."""
     for k in sample:
         block(c, partition, k)
     bound(params, salt, row_bytes)
@@ -77,6 +76,9 @@ def check(block: Callable[..., Any], verify: Callable[..., tuple[Any, Any]], pro
         findings, why = verify(proofs[k], program=c, partition=partition, block=k, registered=registered)
         if why is not None:
             raise ValueError(f"setup block {k}: the door refused ({why[0]}): {why[1]}")
+        for f in findings or []:
+            if not f.accepted:
+                raise ValueError(f"setup block {k}: session {f.session} rejected: {f.why}")
         out += findings or []
     return out
 
@@ -106,5 +108,5 @@ class Claim:
         return json.dumps(self.to_json(), sort_keys=True, separators=(",", ":")).encode()
 
 
-__all__ = ["BASE_INPUT", "Claim", "GOAL", "NOT_BOUND", "NotBound", "SAMPLE", "SLOT_INPUT", "base", "bound", "check",
+__all__ = ["CONSTANTS", "Claim", "GOAL", "NOT_BOUND", "NotBound", "SALT_INPUT", "SAMPLE", "bound", "check",
            "sampling_design"]
