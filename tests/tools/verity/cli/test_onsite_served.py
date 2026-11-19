@@ -997,6 +997,47 @@ def test_without_the_placement_hold_the_onsite_line_is_the_record_as_the_workloa
                                                           ("integrity", "work", "space", "communication", "wipe", *rows)})
 
 
+def _accepting_run(tmp_path, capsys):
+    state = tmp_path / "state"
+    published(state, {"bandwidth": "accept", "inference-only": "accept"}, "accept")
+    rc = R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG)
+    out = capsys.readouterr()
+    (line,) = said(out.out, "VERDICT")
+    return rc, line, out
+
+
+def test_a_lifted_onsite_accept_is_printed_as_lifted_on_the_verdict_and_each_row_and_the_json_keeps_accept(
+        tmp_path, capsys, monkeypatch):
+    """Under ``VERITY_LIFT_PLACEMENT_HOLD=1`` `verity run` prints the verdict and each accepting row as ``accept
+    (placement hold lifted)`` (`settings.printed_verdict`), on stderr; the VERDICT line's JSON, which code compares,
+    and the file ``record/verdicts.jsonl`` keep ``accept``."""
+    monkeypatch.setenv("VERITY_LIFT_PLACEMENT_HOLD", "1")
+    rc, line, out = _accepting_run(tmp_path, capsys)
+    assert rc == 0 and line["verdict"] == "accept"
+    rows = sorted(c for c, v in line["components"].items() if v == "accept")
+    assert rows and set(line["components"].values()) == {"accept"}
+    assert "placement hold lifted" not in out.out
+    assert out.err.strip().splitlines() == [f"verity run: block {SEAL}: verdict accept (placement hold lifted); "
+                                            + "; ".join(f"{c} accept (placement hold lifted)" for c in rows)]
+    assert json.loads((tmp_path / "state" / "record" / "verdicts.jsonl").read_text())["verdict"] == "accept"
+
+
+def test_a_held_onsite_run_prints_no_lifted_note_and_reads_undecided(tmp_path, capsys, monkeypatch):
+    monkeypatch.delenv("VERITY_LIFT_PLACEMENT_HOLD", raising=False)
+    rc, line, out = _accepting_run(tmp_path, capsys)
+    assert rc == 2 and line["verdict"] == "undecided" and "accept" not in line["components"].values()
+    assert "placement hold lifted" not in out.out + out.err
+
+
+@pytest.mark.parametrize("lift, word, printed", [
+    (None, "accept", "accept"), ("1", "accept", "accept (placement hold lifted)"), ("0", "accept", "accept"),
+    ("1", "reject", "reject"), ("1", "undecided", "undecided"), ("1", "development", "development"),
+])
+def test_only_a_lifted_runs_accept_is_printed_with_the_note(lift, word, printed):
+    env = {} if lift is None else {"VERITY_LIFT_PLACEMENT_HOLD": lift}
+    assert R.settings.printed_verdict(word, env) == printed
+
+
 @pytest.mark.parametrize("left", [T.PHASE, "verdicts.json"])
 def test_the_onsite_check_without_the_published_phase_or_record_is_refused_by_name(tmp_path, capsys, left):
     state = tmp_path / "state"

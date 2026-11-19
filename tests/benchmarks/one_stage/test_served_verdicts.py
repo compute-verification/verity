@@ -7352,6 +7352,47 @@ def test_a_remote_composite_is_v1_under_pearl_plus_and_none_where_the_tree_lacks
         assert [x.name for x in (out / "composite").iterdir()] == [composed]
 
 
+@pytest.mark.parametrize("lift, line", [
+    (None, "COMPOSITE remote: VERDICT remote accept"),
+    ("1", "COMPOSITE remote: VERDICT remote accept (placement hold lifted)"),
+])
+def test_a_composite_accept_is_printed_as_lifted_only_while_the_placement_hold_is_lifted(tmp_path, lift, line):
+    tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
+    out.mkdir()
+    (d / "private").mkdir(parents=True)
+    _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
+    _script(bin_ / "systemd-run", "exit 1")
+    (tree / "verity" / "protocols" / "compose" / "verifier" / "remote").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(PRODUCT_COMPOSITE)
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
+           "PRODUCT": "remote", "SERVED_NODE": "vy-elsewhere", "COMPOSE_HANDOFF": "1",
+           **({} if lift is None else {"VERITY_LIFT_PLACEMENT_HOLD": lift})}
+    r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)],
+                       cwd=tree, env=env, check=False, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert (out / "verdicts.txt").read_text().splitlines()[0] == line
+
+
+@pytest.mark.parametrize("lift", [None, "0", "1"])
+def test_the_shells_printed_verdict_lines_and_the_one_python_function_print_the_same_words(lift):
+    """placement.sh's `printed_verdict_lines` ends each accepting `VERDICT ID accept` line as
+    `verity_cli.settings.printed_verdict` prints its word, and leaves every other line as it is."""
+    spec = importlib.util.spec_from_file_location(
+        "verity_cli_settings", HERE.parents[2] / "tools" / "verity" / "cli" / "verity_cli" / "settings.py")
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    env = {"PATH": os.defpath, **({} if lift is None else {"VERITY_LIFT_PLACEMENT_HOLD": lift})}
+    lines = ["VERDICT verity/remote/v0 accept", "VERDICT verity/remote/v0 reject components",
+             "VERDICT verity/remote/v0 undecided", "NOT_ESTABLISHED missing verity/wipe/v0"]
+    shell = subprocess.run(["bash", "-c", '. "$1" && printed_verdict_lines', "_",
+                            str(HERE.parents[2] / "benchmarks" / "one_stage" / "placement.sh")], env=env,
+                           input="".join(f"{x}\n" for x in lines), capture_output=True, text=True, check=True)
+    want = [x.removesuffix(" accept") + " " + cli.printed_verdict("accept", env) if x.endswith(" accept") else x for x in lines]
+    assert shell.stdout.splitlines() == want
+    assert (want[0] == lines[0] + " (placement hold lifted)") is (lift == "1")
+
+
 @pytest.mark.parametrize("extra, first, rc", [
     ({"VERITY_LIFT_PLACEMENT_HOLD": "1"}, "COMPOSITE ON-NODE: composed on the served node (SERVED_NODE), which the prover controls", 1),
     ({"COMPOSE_ON_NODE": "composed by a follow-on here"}, "COMPOSITE ON-NODE: composed by a follow-on here", 1),

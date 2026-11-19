@@ -79,6 +79,8 @@ one, read ``undecided`` (`served_table.AS_WRITTEN` in the reason).
 remote's line read from a record the prover composed, the serving node's own or a deferral's follow-on's, not a compose
 gate's answer, has ``source`` (``serving-node``, ``follow-on``), its reason led by a sentence saying so, and
 ``development`` where the record says accept, a row's or the line's (`served_table.DEVELOPMENT_VERDICT`): no accept of it counts.
+Under the lifted hold, `verity run` also prints to stderr each line's accepts, the verdict and each row, as
+``accept (placement hold lifted)`` (`settings.printed_verdict`); the VERDICT line's own values stay ``accept``.
 onsite's line also has ``trusted-device``: each memory attester's premise that its device ran on a machine the
 developer doesn't control (`memory_attester.trusted_device`), by component, from the outcome of its run here, and the
 network attester's, from its piece's placement (where it ran, its key and its ``coins_on``).
@@ -685,10 +687,21 @@ def _parties(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequenc
                   f"{line['combined_by']}; no composite takes {line['product']}", file=sys.stderr)
     (state / "record").mkdir(parents=True, exist_ok=True)
     (state / "record" / "verdicts.jsonl").write_text("".join(json.dumps(x, sort_keys=True) + "\n" for x in lines))
+    for line in lines:
+        if note := printed_accepts(line):
+            print(note, file=sys.stderr)
     verdicts = {x["verdict"] for x in lines}
     if "reject" in verdicts:
         return 1
     return 0 if verdicts == {"accept"} and len(lines) == run["periods"] and not refused else 2
+
+
+def printed_accepts(line: Mapping[str, Any]) -> str | None:
+    """The line's accepts, its verdict and each row, as `settings.printed_verdict` prints them under the lifted placement
+    hold; None while it is held or nothing accepts. The VERDICT line's JSON keeps the plain word."""
+    words = [("verdict", line["verdict"]), *sorted((line.get("components") or {}).items())]
+    shown = [f"{name} {printed}" for name, v in words if (printed := settings.printed_verdict(v)) != v]
+    return f"verity run: block {line['block']}: " + "; ".join(shown) if shown else None
 
 
 def hooks_of(cfg: Mapping[str, Any], reg: Registry) -> set[str]:

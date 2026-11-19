@@ -185,7 +185,7 @@ EOF
   "${scope[@]}" timeout -k 1m "${COMPOSITE_TIMEOUT:-60m}" "$TPY" benchmarks/one_stage/composite.py "$x" "${cases[@]}" \
     --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" "${dev[@]}" > "$P/$x.log" 2>&1
   r=$?
-  grep -E '^(NOT_ESTABLISHED|VERDICT) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
+  grep -E '^(NOT_ESTABLISHED|VERDICT) ' "$P/$x.log" | printed_verdict_lines | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
   case $r in
     0 | 1 | 2) ;;
     65) say "COMPOSITE $x: composite.py wrote no public line (exit 65: they share bytes with a case's evidence)"; bad=1 ;;

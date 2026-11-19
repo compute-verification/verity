@@ -26,3 +26,15 @@ def hold_placement(env: Mapping[str, str] | None = None) -> bool:
         raise ValueError(f"{RETIRED_HOLD} is retired: the hold is the default, and {LIFT_PLACEMENT_HOLD}=1 lifts it; "
                          f"unset {RETIRED_HOLD}")
     return env.get(LIFT_PLACEMENT_HOLD) != "1"
+
+
+#: what follows ``accept`` where a lifted run's accept is printed
+LIFTED_NOTE = "placement hold lifted"
+
+
+def printed_verdict(verdict: str, env: Mapping[str, str] | None = None) -> str:
+    """The word a reader sees for ``verdict``: an accept while the placement hold is lifted reads ``accept (placement
+    hold lifted)``; every other word, and every word of a held run, as it is. Printed text only: a JSON value code
+    compares keeps its plain word. `benchmarks/one_stage/placement.sh`'s `printed_verdict_lines` is the shell's, held to
+    this by a test."""
+    return f"{verdict} ({LIFTED_NOTE})" if verdict == "accept" and not hold_placement(env) else verdict

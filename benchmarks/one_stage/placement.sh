@@ -7,6 +7,9 @@ if [ -n "${VERITY_HOLD_PLACEMENT+set}" ]; then
 fi
 # true unless VERITY_LIFT_PLACEMENT_HOLD=1, which lifts the holds that rest only on where coins are flipped or a composite made
 hold_placement() { [ "${VERITY_LIFT_PLACEMENT_HOLD:-}" != 1 ]; }
+# stdin's accepting `VERDICT ID accept` lines, each ending in ` (placement hold lifted)` while the hold is lifted:
+# verity_cli.settings.printed_verdict's text, held to it by a test
+printed_verdict_lines() { if hold_placement; then cat; else sed -E 's/^(VERDICT [^ ]+ accept)$/\1 (placement hold lifted)/'; fi; }
 # the sampled-proofs piece's challenger is a development session, local or loopback (PP_DEVELOPMENT_UNDER_HOLD=1, its
 # hooks'): under the hold its run is a development run (DEVELOPMENT=1); lifted it is simulated and DEVELOPMENT is as given
 development_under_hold() { if [ "${PP_DEVELOPMENT_UNDER_HOLD:-}" = 1 ] && hold_placement; then export DEVELOPMENT=1; fi; }
