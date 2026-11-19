@@ -534,26 +534,26 @@ def test_a_short_tile_row_is_its_own_template_instance(side, hidden):
 #: each whole-tile shape's Programs (their ids, queries and, up to 4,096 words, digests) and tile layout, pinned: a short
 #: last tile row leaves every whole-tile shape as it is, with the row cut (``row_k``) or without
 WHOLE = {
-    pc8.Shape(1, 128, 1, tile=(1, 1)): "c906341a1377f29d1d03abda8cd10f9e45e0c5df4fc76e9c8418a7503e25f076",
-    pc8.Shape(1, 128, 1, tile=(1, 1), hidden=True): "bfcdf4bda1ae9cec62b2184b5fb3f0794e7a48b3186963c7b850c31522160f22",
-    pc8.Shape(4, 128, 6, tile=(2, 3)): "bb12e1f6ee0cfa62c4fc6136b7b7172987ffcb347e732edb20e42f7389337cc4",
-    pc8.Shape(4, 128, 6, tile=(2, 3), hidden=True): "9ac3bada057d19b71ad95001f8c2a4b2010fbd1321a0ae17d882090d60ff3083",
-    pc8.Shape(16, 128, 16, tile=(4, 8), dev="h100"): "5d7f419bdc59301605dc7869ceb664a2346172d9893b5cd13c4191df51010ebd",
+    pc8.Shape(1, 128, 1, tile=(1, 1)): "2086b5f79d6652c488721e9338fd7086e38c4debef34fc4e066c60c2e66658b0",
+    pc8.Shape(1, 128, 1, tile=(1, 1), hidden=True): "9a7142c275b8ae8ecdb0f87c760ed81dc8dbdccb8fc88dc22430bb78907b910d",
+    pc8.Shape(4, 128, 6, tile=(2, 3)): "8054c48480dc43412ae4863c0f02ef09c12197af93e27f34ce87617a511e5064",
+    pc8.Shape(4, 128, 6, tile=(2, 3), hidden=True): "4350e2680dff9d306536349d2ca0f47dae36fd42bd2465ea0b3c5b72f79653f3",
+    pc8.Shape(16, 128, 16, tile=(4, 8), dev="h100"): "4a6c0d493a8bfbc78c4e1342fcb7e558908187780a39d197856fb5a353bbb0f7",
     pc8.Shape(16, 160, 16, tile=(8, 16), dev="sm120-unpromoted"):
-        "ebbcf53de05b062e9a0e4fbddb59813f23227510730db5d8a9b5ee361a5f665b",
-    pc8.Shape(32, 128, 64, tile=(32, 64), hidden=True): "53a0e0a4ba17c301d5b2c2342696f9e85317ccd9eca43e529224985c05a78195",
-    pc8.Shape(64, 128, 64, hidden=True): "46bbd94ebd4d295805b18aa3900d902a10dab58029f4a616d96a757a61469ccf",
-    pc8.Shape(128, 128, 128): "42bf79753583e3318a6ee174dc9eecf279eabd011963a715d1fb79028dd445cd",
-    pc8.Shape(128, 128, 128, hidden=True): "8df370c86fb0876347efc0efd99aa338656f73d91e3ea6bf7ba511e4e2ac5c67",
+        "6c930399c9f9636a76c05522a4a63ca45a7bcc3939643abe01f88a836d730960",
+    pc8.Shape(32, 128, 64, tile=(32, 64), hidden=True): "f889ba7fced7075e905ea56cfc258a5e27317fa80e45e132ffe060ab5e499b20",
+    pc8.Shape(64, 128, 64, hidden=True): "6be4f90bb923b9994c4b5690fe87f3b94044129ebfe2cd6493a4964f62c9bf3e",
+    pc8.Shape(128, 128, 128): "3de261703c612d5524684be247327dc8058004757dc34c9327b7a31f9f1d06ae",
+    pc8.Shape(128, 128, 128, hidden=True): "e2f3e46e38b57b61d21314ac2d61092930ecd78ab2136fae0d9e128e40eea0c6",
     pc8.Shape(2, 384, 2, tile=(1, 1), dev="h100", row_k=128):
-        "6e57e2e6bfa3ac03b0ec43028e24740643e2ad9a1861cc061f8503d31115848f",
+        "ea8b058dbcae7b5c65e00368f4f3f9795b10b2b11584cbeaff28de529cfb77f9",
     pc8.Shape(2, 384, 2, tile=(1, 1), hidden=True, row_k=128):
-        "533372e79842f43f1494b08255cc2ad65b28622bc10fb78b8df79cceee6fe66f",
+        "a7656a2653a178e74fd4ceba411bf353c14792bd376242e9051306db21c37d14",
     pc8.Shape(2, 96, 2, tile=(1, 1), dev="sm120-unpromoted", row_k=32):
-        "52dc8f86afba68200cbc9f6e58666de2c52d14d61ccd3df4c033e3dba810b489",
+        "22067fdfcebc405791401b436e9394ad93d302094a0e8322512f02baf71f8d16",
     pc8.Shape(4, 384, 6, tile=(2, 3), hidden=True, row_k=128):
-        "98527b5e389229acebc30c4dae44d757f666255a7b8ff28b45eb40adba2feda6",
-    pc8.Shape(64, 256, 64, hidden=True, row_k=128): "f7140c9770354efbfd59c4c4db0f1977a04f4fb25942ba6c2ccb5b4a6abf7788",
+        "69d0a0a88193baef5dc988379f50a23497f42805d158c403e4937f320086bf8a",
+    pc8.Shape(64, 256, 64, hidden=True, row_k=128): "aa5db62aa625dbf16d5c5af43a9e60695fe2a342e7e79053050f66c18109188b",
 }
 
 
