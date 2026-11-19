@@ -1,5 +1,9 @@
 {
  "definitions": {
+  "GatherE4m3x256_v2": {
+   "and": 2232,
+   "type": "70866335f3e046ab0fcdd47822699cfdae25018511b2d4d766f65f939cc0c0527a5011c8f326c81a081763fb263f6f6c4a81a755b4fdb7e494eb6d9021e90565"
+  },
   "MoeExpertFp8BlockCoordinateW_v2{K=64,G=32,KB=32,SWAP=True}": {
    "and": 27929,
    "type": "de68ec83362253c42d8db4e59348eb2ee3e5b492d3eaace90c1023c21322b727ebd36c1d275a3786f15440f7fb38b90e959a55b87f77b6b8c13a6ba86c33e82a"

@@ -33,6 +33,7 @@ its `GetsBack` gives. The term and the sides are not yet one statement: `Run.sch
 
 from __future__ import annotations
 
+import shlex
 from collections.abc import Mapping
 from fractions import Fraction
 from importlib import import_module
@@ -144,7 +145,7 @@ _REQUIRES = {
 }
 
 BANDWIDTH = S.register(S.Scheme(
-    name="bandwidth",
+    name=P2.COMPONENT,
     protocol=domains.POUB_P2,
     resource="read",
     blocks=S.Lacks(_OUTSIDE + "no block of the workload's circuit carries its cost"),
@@ -176,7 +177,12 @@ BANDWIDTH = S.register(S.Scheme(
     colocated=(),
     needs=frozenset({"receipts"}),
     depends=("pous",),
-    pieces={"prover": S.Launch(optional=("host", "command"), development="host")},
+    pieces={"prover": S.Launch(
+        optional=("host", "command"), development="host",
+        entry="verity.protocols.resource_accounting.memory.poub.scheme:launch_bandwidth",
+        executables=(S.Executable("verity/protocols/resource_accounting/memory/poub/verifier/lean", "poub-p2-protocol"),
+                     S.Executable("verity/protocols/resource_accounting/memory/poub/verifier/lean", "poub-verifier")))},
+    reads={P2.CLOSER_PARTY: {"challenger": ("pous", "memory-challenger")}},
     answers="verity.protocols.resource_accounting.memory.poub.prover.p2_stage.bandwidth:ANSWERS",
     unchecked=P2.mc.UNCHECKED,
     record="bandwidth",
@@ -333,6 +339,27 @@ def session(verifier: str, **kw: Any) -> Any:
     return prover(SESSION_PROCESS)(verifier, **kw)
 
 
-__all__ = ["BANDWIDTH", "CHARGES", "DEADLINE_NS", "DELTA_SCHEME", "DELTA_SKETCH", "GOAL", "LAUNCHER", "POUB", "PROVER",
+BANDWIDTH_SCRIPT = "benchmarks/pous/served_piece.py"
+#: served_piece.py's flag for each binding of PoUB's bandwidth verifier
+_BANDWIDTH = {"host": "--bw-host", "command": "--bw-party"}
+
+
+def _bandwidth_hooks(cfg, params, bound, pinned):
+    """PoUB's prover inside PoUS's piece (served_piece.py's --bw-*): the held store proved to the bandwidth verifier a
+    pass at a time, its answer collected by BANDWIDTH_CMD. The close's key is the configuration's pin for the bandwidth verifier alone; with no pin the session has no
+    case. Unbound, PoUS's run keys start the bandwidth party too, under PoUS's key made for the run."""
+    words = [*(["--bw-trusted-sha512", *pinned] if pinned else []),
+             *(w for k, flag in _BANDWIDTH.items() if k in bound for w in (flag, bound[k]))]
+    return {**({"POUS_ARGS": shlex.join(words)} if words else {"DEVELOPMENT": "1"}),
+            "BANDWIDTH_CMD": f'"$PY" {BANDWIDTH_SCRIPT} collect-bandwidth --serve-dir "$1" --window "$2" --out "$3"'}
+
+
+def launch_bandwidth(declaration: S.Scheme) -> tuple[Any, tuple[str, ...]]:
+    """The bandwidth audit's prover piece (its `Launch.entry`): its hooks and the script they run. It launches and
+    collects, and decides no verdict."""
+    return _bandwidth_hooks, (BANDWIDTH_SCRIPT,)
+
+
+__all__ = ["BANDWIDTH", "BANDWIDTH_SCRIPT", "CHARGES", "DEADLINE_NS", "DELTA_SCHEME", "DELTA_SKETCH", "GOAL", "LAUNCHER", "POUB", "PROVER",
            "REUSE_OLDEST_FREED", "SESSION", "SESSION_PROCESS", "SETTINGS", "attach", "delta_sketch", "prover",
-           "requests", "session"]
+           "launch_bandwidth", "requests", "session"]
