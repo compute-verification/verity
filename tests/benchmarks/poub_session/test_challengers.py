@@ -274,14 +274,16 @@ def test_the_verifiers_entry_hands_its_main_the_lms_verify_and_the_live_challeng
 def test_a_challenger_key_other_than_the_pinned_one_is_refused_before_a_reserve(store, host, tmp_path):
     host.period()
     with pytest.raises(CoinError, match="not the pinned"):
-        host.gate(tmp_path / "out", pin="0" * 128).open(store.registration.digest, 0, params().windows, 8)
+        host.gate(tmp_path / "out", pin="0" * 128).open(store.registration.digest, 0, params().windows, 8,
+            samples=params().samples)
     assert [e["kind"] for e in host.ledger()] == ["period-open"]
 
 
 def test_a_reserve_outside_the_audits_period_is_refused_before_its_open(store, host, tmp_path):
     host.period("p-0")
     with pytest.raises(CoinError, match="in period p-0, not the audit's period p-1: it expires unopened"):
-        host.gate(tmp_path / "out").open(store.registration.digest, 0, params().windows, 8)
+        host.gate(tmp_path / "out").open(store.registration.digest, 0, params().windows, 8,
+            samples=params().samples)
     assert [e["kind"] for e in host.ledger()] == ["period-open", "reserve"]
 
 
@@ -291,7 +293,8 @@ def test_a_second_session_for_the_window_is_refused_at_its_open(store, host, tmp
     s, verdicts = session(store, gate)
     assert gate.finish(s)["reason"] is None
     with pytest.raises(CoinError, match="one session a root, ever"):
-        host.gate(tmp_path / "again").open(store.registration.digest, 0, params().windows, 8)
+        host.gate(tmp_path / "again").open(store.registration.digest, 0, params().windows, 8,
+            samples=params().samples)
     assert [e["kind"] for e in host.ledger()] == ["period-open", "reserve", "open", "end", "reserve"]
 
 
@@ -304,7 +307,8 @@ def test_a_challenger_whose_commitment_isnt_the_opens_is_refused_before_its_firs
 
     host.period()
     with pytest.raises(CoinError, match="refused before its first coin"):
-        host.gate(tmp_path / "out", call=call).open(store.registration.digest, 0, params().windows, 8)
+        host.gate(tmp_path / "out", call=call).open(store.registration.digest, 0, params().windows, 8,
+            samples=params().samples)
     host.pause()
     end = host.ledger()[-1]["body"]
     assert host.ledger()[-1]["kind"] == "end" and end["released"] == {label: 0 for label in coins.LABELS}
@@ -337,7 +341,7 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
     w = honest["windows"]
     end, dropped = ((r["challenger"]["end"] if kind == "gate" else r["challenger"]) for r in (honest, dropper))
     assert honest["accepted"] and honest["challenger"]["reason"] is None
-    m = coins.sample_coins(6)
+    m = coins.sample_coins(honest["samples"])
     assert end["released"] == {coins.CHALLENGE: w, coins.SAMPLE: w * m} and end["complete"] is True
     assert not dropper["accepted"] and dropper["failure"]["failure"] == "receipt"
     assert dropper["challenger"]["reason"] is None
@@ -672,7 +676,7 @@ def test_a_session_sampled_four_windows_a_coin_is_credited_by_the_line_of_record
     assert honest["accepted"] and honest["windows"] == 12 and honest["record"]["public"]["groups_per_coin"] == 4
     assert not skipper["accepted"] and skipper["failure"]["failure"] == "receipt"
     reserves = [e["body"]["families"] for e in host.ledger() if e["kind"] == "reserve"]
-    assert reserves == [[[coins.CHALLENGE, 12], [coins.SAMPLE, 3 * coins.sample_coins(6, 4)]]] * 2
+    assert reserves == [[[coins.CHALLENGE, 12], [coins.SAMPLE, 3 * coins.sample_coins(honest["samples"], 4)]]] * 2
     rc, closed = host.call(["period-close", "--name", "p-1"])
     assert rc == 0 and json.loads(closed)["body"]["complete"] is True, closed
     doc = analysed(out, host, sessions, reg, desc)

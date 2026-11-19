@@ -209,9 +209,9 @@ CONDITIONAL_ON = {"NoOutsideCompute": (
     "entered it over the credited span"),
     "binding-split": (
     "the receipts' binding term (ledger.binding, Accounting.Guarantees.Remote.ReceiptsBindingOfCR) is charged with "
-    "split_t, the chance that two runs of the prover from window t's cut on independent samples' coins root the window "
+    "split_t, the chance that two runs of the prover from window t's cut on independent openings coins root the window "
     "differently, taken as 0; the prover is sent no coin commitment before the session's end (coins.Released, "
-    "audit.AuditRun.disclose), so its roots can't depend on a sample's coins before it is released, and what remains "
+    "audit.AuditRun.disclose), so its roots can't depend on an openings coin before it is released, and what remains "
     "is the statement that the play fixes each window's receipts by its cut (PROTOCOL.md §8)")}
 """What the line's error rests on that no record of the run discharges, each with what it says: the premises of its
 statement and the gaps in its charge (`GAPS`). A line (`auditor_line.json`'s `conditional_on`, `credit.md`) is

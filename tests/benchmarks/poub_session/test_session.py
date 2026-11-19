@@ -859,14 +859,14 @@ def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_tri
     roots = [bytes.fromhex(e["root"]) for e in case["events"] if e["kind"] == "receive"]
     n, last = r["windows"], [roots[k * g + k - 1] for g in range(r["windows"])]
     window = asked[0][0][2]
-    m = coins.sample_coins(6)
+    m = coins.sample_coins(case["params"]["samples"])
     if k == 1:
         assert asked == ([[("poub/challenge", 0, window)], [("poub/challenge", 1, window)]]
                          + [[*(("poub/sample", g * m + j, last[g]) for j in range(m)), ("poub/challenge", g + 2, last[g])]
                             for g in range(n - 2)]
                          + [[("poub/sample", g * m + j, last[g]) for j in range(m)] for g in (n - 2, n - 1)])
     else:
-        assert [len(b) for b in asked] == [1, m] * n
+        assert [len(b) for b in asked] == [1, 1] + [m, 1] * (n - 2) + [m, m]
         assert [q[2] for b in asked for q in b if q[0] == "poub/sample"] == [x for x in last for _ in range(m)]
     with replay.server() as s:
         row = replay.replay(case, s)
