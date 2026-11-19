@@ -13,13 +13,12 @@ import pytest
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[5] / "adapters" / "vllm")))
 
-L = pytest.importorskip("verity_vllm.definitions.registry.lifted")
-_ = pytest.importorskip("verity_vllm.definitions.registry.lifted", reason="the lifted registry").leaf_words  # DENSE B1 additions present?
+from verity_vllm.definitions.registry import lifted as L
 
-from verity.circuits import Program  # noqa: E402
+from verity.circuits import Program
 
-from tests.program.test_serve3 import LP, TINY  # noqa: E402
-from verity_vllm.definitions.registry import b1  # noqa: E402
+from tests.program.test_serve3 import LP, TINY
+from verity_vllm.definitions.registry import b1
 
 RNG = np.random.default_rng(20260920)
 CAP = 9  # TINY: D_MAX = 8 decode steps = cap − 1
