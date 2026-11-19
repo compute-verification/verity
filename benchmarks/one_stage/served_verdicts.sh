@@ -517,7 +517,7 @@ elif [ "${1:-}" = compose ]; then  # the compose follow-on of a hand-off, at the
   [ ! -f "$COMPOSE_DIR/compose.env" ] || follow_env "$COMPOSE_DIR/compose.env" "$COMPOSES" data
 fi
 PEARLPLUS_TIE=${PEARLPLUS_TIE:-}
-if [ "${POUW:-}" = pearlplus ]; then  # Pearl+'s launch serves Llama 3.2 1B's BF16 checkpoint, whose linears Pearl-C reads
+if [ "${POUW:-}" = pearlplus ] || [ -n "$PEARLPLUS_TIE" ]; then  # Pearl+ serves Llama 3.2 1B's BF16 checkpoint, whose linears Pearl-C reads
   HB=/workspace/research/vllm-pearlc-h200bf16
   ROW=${ROW:-$HB/r20261104-084130-0f59/llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager}
   REPO=${REPO:-unsloth/Llama-3.2-1B} REV=${REV:-9535bd9b1d1dea6acafbdc4813b728796aeb28da} PRECISION=${PRECISION:-bfloat16}
