@@ -142,7 +142,8 @@ def _derived(monkeypatch, circuit: Path) -> None:
     these tests are of what `verify` does with a verdict, whatever the derivation."""
     monkeypatch.setattr(OC, "restrict", lambda c, partition, units, *_: circuit.read_bytes())
     monkeypatch.setattr(OC, "block", lambda c, partition, k, *_: [(0, 1)])
-    monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe: c_s)
+    monkeypatch.setattr(OC, "cuts", lambda c, partition, *_: {})
+    monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe, **_: c_s)
 
 
 def test_a_session_lean_accepts_in_a_form_the_mirror_refuses_is_refused(tmp_path, monkeypatch):
@@ -426,7 +427,8 @@ def test_the_door_proves_only_a_block_the_draw_sampled_and_refuses_an_undrawn_on
     derived = []
     monkeypatch.setattr(OC, "block", lambda c, partition, k, *_: [(k, k + 1)])
     monkeypatch.setattr(OC, "restrict", lambda c, partition, units, *_: derived.append(units) or circuit.read_bytes())
-    monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe: c_s)
+    monkeypatch.setattr(OC, "cuts", lambda c, partition, *_: {})
+    monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe, **_: c_s)
     verdict = {"session": str(tmp_path / "s"), "accepted": False, "why": "refused", "zk": True}
     monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
     monkeypatch.setattr(PF.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(
@@ -452,7 +454,8 @@ def _door(tmp_path: Path, monkeypatch, name: str, indices: list, draw: dict, blo
     derived = []
     monkeypatch.setattr(OC, "block", lambda c, partition, k, *_: blocks(k))
     monkeypatch.setattr(OC, "restrict", lambda c, partition, units, *_: derived.append(units) or circuit.read_bytes())
-    monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe: c_s)
+    monkeypatch.setattr(OC, "cuts", lambda c, partition, *_: {})
+    monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe, **_: c_s)
     monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
     monkeypatch.setattr(PF.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, "VERDICT " + json.dumps(
         {"session": cmd[cmd.index("--session") + 1], "accepted": False, "why": "refused", "zk": True}) + "\n", ""))
