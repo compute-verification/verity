@@ -22,8 +22,11 @@ refused at the cell that takes it past; a window
 circuit's state rows (`window_state`) are the scan's from t0 − 1, the empty state's first; the ingress circuit at the
 empty state is the reference from no state; the egress circuit is its reference on the views;
 `scan_traffic.serve`, the zk run's driver, ticks the same rows as the network attester; and the w63 class's state is
-the scan's sized layout, with the outputs N2's view reads; and the carried start's unit (`IngressScanStart`) outputs
-the state row it is given, bit for bit."""
+the scan's sized layout, with the outputs N2's view reads; the carried start's unit (`IngressScanStart`) outputs
+the state row it is given, bit for bit; and the ingress circuit and its reference refuse each row no attributed,
+in-sequence reading has (request 3's cells on an unknown stream, on ordinal 0, after its `END`, twice, one dropped, or
+its `END` before a continuation) at the check its case names, while two full continuation cells swapped, at C = 8,
+are read in their order (an expected failure: no gate refuses it)."""
 from __future__ import annotations
 
 import asyncio
@@ -41,11 +44,13 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.protocols.resource_accounting.network.prover import egress as EG
 from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
+from verity.protocols.resource_accounting.network.verifier import io_request as Q
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
-from verity.protocols.resource_accounting.network.verifier.network_attester import DATA, END, PAD, NetworkAttesterParams, cells
+from verity.protocols.resource_accounting.network.verifier.network_attester import (
+    DATA, END, PAD, NetworkAttesterParams, cell, cells)
 
 B = 512
 PARAMS = NetworkAttesterParams(cell_bytes=B, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
@@ -250,6 +255,42 @@ def test_the_state_is_the_layout_neg_sized():
 Case = tuple[bytes, list[int], list[int]]
 
 
+def _tamper(run, rows: dict[int, bytes]) -> tuple[int, Case, IS.State]:
+    """The first bucket the reference refuses when `rows` replace the window's ingress rows: the bucket, its case, and
+    the state the tampered rows before it reach."""
+    outputs, st = dict(enumerate(RESPONSES, 1)), IS.empty(CLS)
+    for t, honest in enumerate(run.rows):
+        row, prog = rows.get(t, honest), IS.programs(CLS, st, outputs)
+        nxt = IS.step(CLS, row, st, prog)
+        if nxt is None:
+            return t, (row, IS.encode(CLS, st), IS.prog_encode(CLS, prog)), st
+        st = nxt
+    raise AssertionError("the scan accepts the tampered rows")
+
+
+def _on(c: bytes, q: int) -> bytes:
+    return c[:1] + q.to_bytes(4, "big") + c[5:]
+
+
+def _sequence_negatives(run) -> dict[str, tuple[dict[int, bytes], int, str]]:
+    """Rows no attributed, in-sequence reading of the window has, each request 3's cells (k0, k1 at bucket 8, its `END`
+    k2 at 9) tampered: the rows, the bucket the reference refuses at, and the check that refuses it there."""
+    blk = [_blocks(r) for r in run.rows]
+    (k0, k1), (k2, pad) = blk[8][0], blk[9][0]
+    assert [HEADER.unpack_from(c)[:2] for c in (k0, k1, k2, pad)] == [(DATA, 3), (DATA, 3), (END, 3), (PAD, 3)]
+    assert not any(c for b in blk[8][1:] + blk[9][1:] + blk[10] for c in b if any(c))
+    return {
+        "unknown-stream": ({9: _join([[_on(k2, 1), _on(pad, 1)], *blk[9][1:]])}, 9, "new ordinal not above last"),
+        "nonempty-as-empty": ({9: _join([[_on(k2, 0), _on(pad, 0)], *blk[9][1:]])}, 9, "empty block not zero"),
+        "after-end": ({10: _join([[k1, pad], *blk[10][1:]])}, 10, "data on a done slot"),
+        "duplicated-same-row": ({8: _join([[k0, k1], [k0, k1]])}, 8, "blocks not increasing"),
+        "duplicated-later-row": ({9: _join([[k1, k2], *blk[9][1:]])}, 9, "not the request's next bytes"),
+        "dropped": ({8: _join([[k0, pad], *blk[8][1:]])}, 9, "not the request's next bytes"),
+        "moved": ({8: _join([[k0, k2], *blk[8][1:]]), 9: _join([[k1, pad], *blk[9][1:]])}, 8,
+                  "not the request's next bytes"),
+    }
+
+
 def _negatives(run) -> tuple[dict[str, Case], dict[str, tuple[int, Case]], dict[str, tuple[Case, Case]]]:
     """The cases a check refuses, those of bucket t whose S_t is another than the scan's (the state row t, which the
     unit's o1 must open, refuses them), and pairs of cases whose entries differ only where the unit ignores them."""
@@ -322,6 +363,7 @@ def _negatives(run) -> tuple[dict[str, Case], dict[str, tuple[int, Case]], dict[
     out["unread-read-bit"] = honest(4, prog=IS.prog_encode(CLS, [(0, *entries[0][1:]), entries[1]]))
     other["prog-outputs"] = 4, honest(4, prog=IS.prog_encode(CLS, [IS.entry(2, RESPONSES[0][:2]), entries[1]]))
     other["prog-no-outputs"] = 4, honest(4, prog=IS.prog_encode(CLS, [IS.entry(0, ()), entries[1]]))
+    out |= {name: _tamper(run, rows)[1] for name, (rows, _, _) in _sequence_negatives(run).items()}
     return out, other, ignored
 
 
@@ -352,6 +394,62 @@ def test_each_negative_is_refused_by_the_reference_or_computes_another_state(run
     for name in ("prog-off-anchor", "over-KO-off-anchor", "entry-padding"):
         t = 10 if "anchor" in name else 4
         assert IS.reference(CLS, *ignored[name][0]) == (1, *run.chain.outputs(t)), name
+
+
+def _why(st: IS.State, row: bytes) -> str | None:
+    """The first of `step`'s row checks a row fails at state `st`, by the name `_sequence_negatives` gives it."""
+    blocks = _blocks(row)
+    heads = [[HEADER.unpack_from(c) for c in b] for b in blocks]
+    qs = [h[0][1] for h in heads]
+    if any(q == 0 and any(any(c) for c in b) for q, b in zip(qs, blocks)):
+        return "empty block not zero"
+    assert all(q == 0 or all(o == q and k in (DATA, END, PAD) for k, o, _ in h) for q, h in zip(qs, heads))
+    if any((not a and b) or (a and b and a >= b) for a, b in zip(qs, qs[1:])):
+        return "blocks not increasing"
+    live = {s.q: s for s in st.slots if s.live}
+    if any(q and q not in live and q <= st.last for q in qs):
+        return "new ordinal not above last"
+    for q, b, h in zip(qs, blocks, heads):
+        s, left, padded = live.get(q), live[q].left if q in live else 0, False
+        for c, (kind, _, n) in zip(b, h):
+            if kind == PAD:
+                padded = True
+                continue
+            if s is not None and s.done:
+                return "data on a done slot"
+            assert not padded
+            fr = Q.parse_frame(CLS.lay, c[HEADER.size:], left == 0, left)
+            rest = None if fr is None else (fr.length if left == 0 else left) - fr.used
+            if fr is None or (kind == END) != (rest == 0) or n != fr.used:
+                return "not the request's next bytes"
+            left = rest
+    return None
+
+
+@pytest.mark.parametrize("name", ("unknown-stream", "nonempty-as-empty", "after-end", "duplicated-same-row",
+                                  "duplicated-later-row", "dropped", "moved"))
+def test_a_row_no_attributed_in_sequence_reading_has_is_refused_by_its_own_check(run, name):
+    rows, at, why = _sequence_negatives(run)[name]
+    t, case, st = _tamper(run, rows)
+    assert (t, _why(st, case[0])) == (at, why)
+    assert _why(run.states[t], run.rows[t]) is None
+    assert IS.reference(CLS, *case) == (0, None, None)
+
+
+@pytest.mark.xfail(strict=True, reason="no gate refuses this yet")
+def test_two_continuation_cells_of_a_request_swapped_are_refused():
+    """The scan's step is total only if every cell is its connection's next: a request of more than one full
+    continuation cell (a class of C = 8), its second and third cells swapped, is read with its ids reordered."""
+    cls = IS.Class(B=B, r=2, lanes=2, C=8, EVERY=2, WITHIN=3, D=5, KO=8, KI=300)
+    req = cells(_request(0, [3000 + k for k in range(250)]), B, 1)
+    cs = [req[i * B:(i + 1) * B] for i in range(len(req) // B)]
+    assert [HEADER.unpack_from(c)[0] for c in cs] == [DATA] * 6 + [END]
+    zero = [bytes(B)] * 2
+    rows = [_join([cs[i:i + 2], zero]) for i in range(0, 6, 2)] + [_join([[cs[6], cell(PAD, 1, b"", B)], zero])]
+    rows += [_join([zero, zero])] * 8
+    assert IS.scan(cls, rows, {1: (5,)}) is not None
+    rows[1] = _join([[cs[3], cs[2]], zero])
+    assert IS.scan(cls, rows, {1: (5,)}) is None
 
 
 def test_the_carried_start_s_unit_outputs_its_state_row_bit_for_bit(run):

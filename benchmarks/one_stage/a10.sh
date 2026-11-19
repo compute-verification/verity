@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-stage audit, run A10, on a CPU machine: A11's kinds and A9's routed-expert launches on rank 0's committed values (a10.py),
-# on hidden_zk's builds as a11.sh runs them. Two modes:
+# on hidden_zk's builds. Two modes:
 #   values reads the tree, so it runs from the source, on the node holding the Build's row dir:
 #     A10_MODE=values A10_MEM_GB=256 bash benchmarks/one_stage/a10.sh
 #     (a job run from the source tree, 256 GB, up to 4 h)
@@ -14,7 +14,7 @@
 #     (a job run from a clone of the tree, 128 GB, up to 4 h)
 #   It runs `a10.py audit` (a11.py with the committed window) on $A10_SET's saved directory of the values run A10_VALUES (a run
 #   id) on this machine ($A10_SAVED_ROOT/$A10_VALUES/saved-$A10_SET, or A10_SAVED_DIR, a copy the operator made), its records in
-#   $OUT/a11 as a11.sh keeps them. It refuses by name where that directory is not here.
+#   $OUT/a11. It refuses by name where that directory is not here.
 # env: A10_MODE  A10_MEM_GB (the job's --mem-gb)  A10_ARGS (more a10.py arguments)  A10_ROW  A10_CACHE  A11_CACHE (the build cache)
 #      A10_SAVED_ROOT (default $HOME/.cache/verity-a10-saved)  A10_SAVED_DIR (audit: a saved-<set> directory to read instead)
 set -uo pipefail

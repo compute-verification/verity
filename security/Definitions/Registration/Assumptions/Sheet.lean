@@ -138,7 +138,7 @@ def SheetWords (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
 /-- `accounting-sheet-semantics` (PTX ISA). **A7 SEMANTICS**: each instruction computes the function its ISA defines
 and writes nothing else; whether a unit multiplies, and in which format, is read off its definition. Lean has no model
 of instruction semantics, so it is stated as what the ISA reconciliation reads off the definitions
-(`benchmarks/pouw/theory/isa_escape.py`, with A3): no unit outside the menu heads a fresh word (`NoSum`), and a side
+(`calibration/pouw/theory/isa_escape.py`, with A3): no unit outside the menu heads a fresh word (`NoSum`), and a side
 unit's words cost at least its per-word vector, read off its definition and priced on the sheet's rows
 (`SideUnits`). -/
 def SheetSemantics (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop := NoSum A ∧ SideUnits Z A
