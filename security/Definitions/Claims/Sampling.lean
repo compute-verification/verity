@@ -271,13 +271,14 @@ def PrivateCircuit.args (c : SizeClass) (n : PrivateCircuit) : List Bool :=
 
 /-- **A one-stage sampling design** over a population in strata: every member (`all`); a uniform `K`-subset
 (`subset:K`); each member independently at rate `num/den` (`bernoulli:NUM/DEN`); a uniform `k_s`-subset of each
-stratum, independently, with `k_s = max(1, round(K·n_s/N))` (`stratified:K`), or
+stratum, independently, at the design's own `ks` (`stratified`, whose rule `stratified:K` gives
+`k_s = max(1, round(K·n_s/N))`), or
 `k_s = min(n_s, max(f_s, ⌈K·w_s·n_s/W⌉))` from each stratum's work `w_s` and floor `f_s`, `W = Σ w_s·n_s` (`work:K`). -/
 inductive OneStage where
   | all
   | subset (K : ℕ)
   | bernoulli (num den : ℕ)
-  | stratified (K : ℕ)
+  | stratified (K : ℕ) (ks : List ℕ)
   | work (K : ℕ) (w f : List ℕ)
 
 /-- `B`'s members in `[o, o + n)`, shifted to `[0, n)`. -/
@@ -295,7 +296,7 @@ noncomputable def OneStage.Pa (ns : List ℕ) : OneStage → Finset ℕ → ℝ
   | .all, B => if B = ∅ then 1 else 0
   | .subset K, B => ((ns.sum - B.card).choose K : ℝ) / (ns.sum.choose K : ℝ)
   | .bernoulli num den, B => (((den - num : ℕ) : ℝ) / den) ^ B.card
-  | .stratified K, B => strataPa (ns.map fun n => (n, max 1 ((2 * K * n + ns.sum) / (2 * ns.sum)))) 0 B
+  | .stratified _ ks, B => strataPa (ns.zip ks) 0 B
   | .work K w f, B =>
     let W := ((ns.zip w).map fun p => p.1 * p.2).sum
     strataPa ((ns.zip (w.zip f)).map fun p => (p.1, min p.1 (max p.2.2 ((K * p.2.1 * p.1 + W - 1) / W)))) 0 B
@@ -397,7 +398,8 @@ def OneStage.WellFormed (ns : List ℕ) : OneStage → Prop
   | .all => True
   | .subset K => 1 ≤ K ∧ K ≤ ns.sum
   | .bernoulli num den => 0 < den ∧ num ≤ den
-  | .stratified K => 1 ≤ K ∧ K ≤ ns.sum ∧ ∀ n ∈ ns, 1 ≤ n
+  | .stratified K ks => 1 ≤ K ∧ K ≤ ns.sum ∧ (∀ n ∈ ns, 1 ≤ n) ∧ ks.length = ns.length ∧
+      ∀ p ∈ ns.zip ks, 1 ≤ p.2 ∧ p.2 ≤ p.1
   | .work _ w f => w.length = ns.length ∧ f.length = ns.length ∧ (∀ x ∈ f, 1 ≤ x) ∧
       0 < ((ns.zip w).map fun p => p.1 * p.2).sum ∧ ∀ n ∈ ns, 1 ≤ n
 

@@ -83,14 +83,7 @@ theorem OneStage.Pa_empty (ns : List ℕ) (st : OneStage) (h : st.WellFormed ns)
     simp only [OneStage.Pa, Finset.card_empty, Nat.sub_zero]
     exact div_self (Nat.cast_ne_zero.2 (Nat.choose_pos h.2).ne')
   | bernoulli num den => simp [OneStage.Pa]
-  | stratified K =>
-    obtain ⟨hK1, hKN, hn⟩ := h
-    refine strataPa_empty _ 0 fun p hp => ?_
-    obtain ⟨n, hnm, rfl⟩ := List.mem_map.1 hp
-    have h1 := hn n hnm
-    refine max_le h1 (Nat.lt_succ_iff.1 ((Nat.div_lt_iff_lt_mul (by omega)).2 ?_))
-    have : K * n ≤ ns.sum * n := Nat.mul_le_mul_right n hKN
-    nlinarith
+  | stratified K ks => exact strataPa_empty _ 0 fun p hp => (h.2.2.2.2 p hp).2
   | work K w f =>
     refine strataPa_empty _ 0 fun p hp => ?_
     obtain ⟨q, -, rfl⟩ := List.mem_map.1 hp

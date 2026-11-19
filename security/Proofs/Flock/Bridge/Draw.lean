@@ -15,8 +15,8 @@ sampling design's own `P_a`. This file holds what the statement reads and how th
 
 * `StrataOn St ns`: the strata `St`'s ranges, in order, are the slots `0, …, Σ ns − 1`, at sizes `ns`, so each stratum
   is one run of consecutive slots;
-* `SamplingDesignOn samplingDesign ns kd`: `samplingDesign` is `subset kd`, or `stratified K` or `work K` over strata at `ns`, each stratum's `k` the
-  rule's (`stratumK`, `workK`) and `kd` their sum. A Bernoulli sampling design is none (`NotBernoulli`);
+* `SamplingDesignOn samplingDesign ns kd`: `samplingDesign` is `subset kd`, or `stratified K` or `work K` over strata at `ns`, each stratified
+  stratum's `k` in `[1, n_s]` and each work stratum's the rule's (`workK`), and `kd` their sum. A Bernoulli sampling design is none (`NotBernoulli`);
 * `pa_stratified`, `pa_work`: such a sampling design's claims design (`oneStageOf`) misses `B` with `strataPa` of its strata's sizes
   and samples; `pa_empty_of_samplingDesignOn`: it misses nothing with probability `1`;
 * `wellFormed_of_samplingDesignOn`: such a sampling design, where it is the one the verifier's agreed sampling design gives (`deriveSamplingDesign`, else
@@ -80,13 +80,14 @@ def StrataOn (St : List Flock.Draw.Stratum) (ns : List ℕ) : Prop :=
     St.map (·.size) = ns
 
 /-- **A sampling design at the strata `ns` that samples `kd` units**: `subset kd`, or `stratified K` or `work K` over strata at `ns`
-(`StrataOn`), each stratum's `k` the rule's (`stratumK`, `workK`) and `kd` their sum. A Bernoulli sampling design is none. -/
+(`StrataOn`), each stratified stratum's `k` in `[1, n_s]` and each work stratum's the rule's (`workK`), and `kd` their sum. A
+Bernoulli sampling design is none. -/
 def SamplingDesignOn (samplingDesign : Flock.Draw.SamplingDesign) (ns : List ℕ) (kd : ℕ) : Prop :=
   match samplingDesign with
   | .subset k => k = kd ∧ kd ≤ ns.sum
   | .bernoulli _ _ => False
   | .stratified K St => StrataOn St.toList ns ∧ K ≤ ns.sum ∧ (∀ x ∈ ns, 1 ≤ x) ∧
-      (∀ s ∈ St.toList, s.k = Flock.Draw.stratumK K s.size ns.sum) ∧ (St.toList.map (·.k)).sum = kd
+      (∀ s ∈ St.toList, 1 ≤ s.k ∧ s.k ≤ s.size) ∧ (St.toList.map (·.k)).sum = kd
   | .work K ws => StrataOn (ws.toList.map (·.toStratum)) ns ∧
       (∀ s ∈ ws.toList, s.k = Flock.Draw.workK K s.work s.size (Flock.Draw.totalWork ws) s.floor) ∧
       (ws.toList.map (·.k)).sum = kd
@@ -95,18 +96,25 @@ def SamplingDesignOn (samplingDesign : Flock.Draw.SamplingDesign) (ns : List ℕ
 `SamplingDesignSized` require. -/
 def NotBernoulli (samplingDesign : Flock.Draw.SamplingDesign) : Prop := ∀ a b, samplingDesign ≠ .bernoulli a b
 
-/-- A stratified sampling design's design misses `B` with `strataPa` of its strata's sizes and samples, when its strata have sizes `ns`
-and each stratum's `k` is the rule's. -/
+/-- A stratified sampling design's design misses `B` with `strataPa` of its strata's sizes and samples, when its strata have sizes
+`ns`. -/
 theorem pa_stratified {K : ℕ} {St : Array Flock.Draw.Stratum} {ns : List ℕ} (hsz : St.toList.map (·.size) = ns)
-    (hk : ∀ s ∈ St.toList, s.k = Flock.Draw.stratumK K s.size ns.sum) (B : Finset ℕ) :
+    (B : Finset ℕ) :
     (Properties.Spot.oneStageOf (.stratified K St)).Pa ns B =
       Claims.Sampling.strataPa (St.toList.map fun s => (s.size, s.k)) 0 B := by
   subst hsz
-  simp only [Properties.Spot.oneStageOf, Claims.Sampling.OneStage.Pa, List.map_map]
-  congr 1
-  refine List.map_congr_left fun s hs => ?_
-  rw [Function.comp_apply, hk s hs]
-  rfl
+  simp only [Properties.Spot.oneStageOf, Claims.Sampling.OneStage.Pa]
+  rw [List.zip_map']
+
+/-- A stratified sampling design's strata, each `k` in `[1, n_s]` at sizes `ns`, give its claims design's clause on `ks`. -/
+theorem strata_ks_wf {St : List Flock.Draw.Stratum} {ns : List ℕ} (hsz : St.map (·.size) = ns)
+    (hk : ∀ s ∈ St, 1 ≤ s.k ∧ s.k ≤ s.size) :
+    (St.map (·.k)).length = ns.length ∧ ∀ p ∈ ns.zip (St.map (·.k)), 1 ≤ p.2 ∧ p.2 ≤ p.1 := by
+  subst hsz
+  refine ⟨by simp, fun p hp => ?_⟩
+  rw [List.zip_map'] at hp
+  obtain ⟨s, hs, rfl⟩ := List.mem_map.1 hp
+  exact hk s hs
 
 /-- A work sampling design's design misses `B` with `strataPa` of its strata's sizes and samples, when its strata have sizes `ns` and
 each stratum's `k` is the work rule's. -/
@@ -143,13 +151,11 @@ theorem pa_empty_of_samplingDesignOn {samplingDesign : Flock.Draw.SamplingDesign
     exact div_self (Nat.cast_ne_zero.2 (Nat.choose_pos hk).ne')
   | bernoulli a b => exact h.elim
   | stratified K St =>
-    obtain ⟨⟨-, hsz⟩, hK, hn, hk, -⟩ := h
-    rw [pa_stratified hsz hk]
+    obtain ⟨⟨-, hsz⟩, -, -, hk, -⟩ := h
+    rw [pa_stratified hsz]
     refine Claims.Sampling.strataPa_empty _ 0 fun p hp => ?_
     obtain ⟨s, hs, rfl⟩ := List.mem_map.1 hp
-    have hm : s.size ∈ ns := hsz ▸ List.mem_map_of_mem hs
-    rw [hk s hs]
-    exact stratumK_le hK (hn _ hm) (List.le_sum_of_mem hm)
+    exact (hk s hs).2
   | work K ws =>
     obtain ⟨⟨-, hsz⟩, hk, -⟩ := h
     rw [pa_work hsz hk]
@@ -229,8 +235,8 @@ theorem sampleUnits_miss_le {samplingDesign : Flock.Draw.SamplingDesign} {ns : L
     simp only [Properties.Spot.oneStageOf, Claims.Sampling.OneStage.Pa, hns]
   | bernoulli a b => exact hlaw.elim
   | stratified K St =>
-    obtain ⟨⟨hon, hsz⟩, -, -, hk, -⟩ := hlaw
-    rw [pa_stratified hsz hk]
+    obtain ⟨⟨hon, hsz⟩, -, -, -, -⟩ := hlaw
+    rw [pa_stratified hsz]
     exact strata_bound_on _ St (Or.inl ⟨K, rfl⟩) n (by rw [← hns]; exact hon) U hU L
   | work K ws =>
     obtain ⟨⟨hon, hsz⟩, hk, -⟩ := hlaw
@@ -462,8 +468,8 @@ theorem wellFormed_of_samplingDesignOn {p : Spot.Program} {query samplingDesign 
   · rcases hlaw' with hder | ⟨t, tab, ht, hwork⟩
     · obtain ⟨hk1, -⟩ := derive_bounds k S samplingDesign' hder
       obtain rfl := derive_ok k S samplingDesign' hder
-      obtain ⟨-, hK, hpos, -⟩ := hlaw
-      exact ⟨hk1, hK, hpos⟩
+      obtain ⟨⟨-, hsz⟩, hK, hpos, hks, -⟩ := hlaw
+      exact ⟨hk1, hK, hpos, strata_ks_wf hsz hks⟩
     · obtain ⟨ws, hF, htot, rfl⟩ := deriveWork_wf k S tab samplingDesign' hwork
       have hSpos : ∀ q ∈ S.toList, 1 ≤ rsSize q.2 := by
         unfold Spot.Partition.strata at hS

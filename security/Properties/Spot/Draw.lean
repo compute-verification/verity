@@ -75,7 +75,7 @@ def slotPartition (l : Slots.SlotOrder) : Claims.Sampling.Partition :=
 def oneStageOf : Flock.Draw.SamplingDesign → Claims.Sampling.OneStage
   | .subset k => .subset k
   | .bernoulli num den => .bernoulli num den
-  | .stratified k _ => .stratified k
+  | .stratified k St => .stratified k (St.toList.map (·.k))
   | .work k ws => .work k (ws.toList.map (·.work)) (ws.toList.map (·.floor))
 
 /-- **The design `Slots.select` samples** under `rule` on `d` and `query` with the work `table`: the population's design,

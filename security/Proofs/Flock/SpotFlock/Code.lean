@@ -281,7 +281,8 @@ def oneStageOk (ns : List ℕ) : OneStage → Bool
   | .all => true
   | .subset K => 1 ≤ K && K ≤ ns.sum
   | .bernoulli num den => 0 < den && num ≤ den
-  | .stratified K => 1 ≤ K && K ≤ ns.sum && ns.all (1 ≤ ·)
+  | .stratified K ks => 1 ≤ K && K ≤ ns.sum && ns.all (1 ≤ ·) && ks.length == ns.length &&
+      (ns.zip ks).all fun p => 1 ≤ p.2 && p.2 ≤ p.1
   | .work _ w f => w.length == ns.length && f.length == ns.length && f.all (1 ≤ ·) &&
       0 < ((ns.zip w).map fun p => p.1 * p.2).sum && ns.all (1 ≤ ·)
 

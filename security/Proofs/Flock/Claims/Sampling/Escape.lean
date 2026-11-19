@@ -264,10 +264,23 @@ def OneStage.strata (ns : List ℕ) : OneStage → Option (List (ℕ × ℕ))
   | .all => some [(ns.sum, ns.sum)]
   | .subset K => some [(ns.sum, K)]
   | .bernoulli _ _ => none
-  | .stratified K => some (ns.map fun n => (n, max 1 ((2 * K * n + ns.sum) / (2 * ns.sum))))
+  | .stratified _ ks => some (ns.zip ks)
   | .work K w f =>
     let W := ((ns.zip w).map fun p => p.1 * p.2).sum
     some ((ns.zip (w.zip f)).map fun p => (p.1, min p.1 (max p.2.2 ((K * p.2.1 * p.1 + W - 1) / W))))
+
+/-- **At the rule's expansion, a stratified design's `P_a` is the rule's**: with `ks` the rule `stratified:K`'s
+`k_s = max(1, round(K·n_s/N))`, `strataPa` of each stratum's size and that `k_s`. -/
+theorem OneStage.Pa_stratified_rule (ns : List ℕ) (K : ℕ) (B : Finset ℕ) :
+    (OneStage.stratified K (ns.map fun n => max 1 ((2 * K * n + ns.sum) / (2 * ns.sum)))).Pa ns B =
+      strataPa (ns.map fun n => (n, max 1 ((2 * K * n + ns.sum) / (2 * ns.sum)))) 0 B := by
+  have h : ∀ (l : List ℕ) (f : ℕ → ℕ), l.zip (l.map f) = l.map fun n => (n, f n) := by
+    intro l f
+    induction l with
+    | nil => rfl
+    | cons a l ih => simp [ih]
+  simp only [OneStage.Pa]
+  rw [h]
 
 /-- **Every design but Bernoulli's is a strata sample**: its `P_a` is `strataPa` of its strata. -/
 theorem OneStage.Pa_strata {ns : List ℕ} {d : OneStage} {ss : List (ℕ × ℕ)} (h : d.strata ns = some ss)
@@ -290,7 +303,7 @@ theorem OneStage.Pa_strata {ns : List ℕ} {d : OneStage} {ss : List (ℕ × ℕ
     rw [strataPa, strataPa, window_zero hB, mul_one]
     rfl
   | bernoulli num den => exact absurd h (by simp [OneStage.strata])
-  | stratified K =>
+  | stratified K ks =>
     simp only [OneStage.strata, Option.some.injEq] at h
     subst h
     rfl
@@ -312,10 +325,10 @@ theorem OneStage.strata_sum {ns : List ℕ} {d : OneStage} {ss : List (ℕ × �
     subst h
     simp
   | bernoulli num den => exact absurd h (by simp [OneStage.strata])
-  | stratified K =>
+  | stratified K ks =>
     simp only [OneStage.strata, Option.some.injEq] at h
     subst h
-    simp [Function.comp_def]
+    exact congrArg List.sum (List.map_fst_zip (le_of_eq hw.2.2.2.1.symm))
   | work K w f =>
     simp only [OneStage.strata, Option.some.injEq] at h
     subst h
@@ -339,16 +352,10 @@ theorem OneStage.strata_le {ns : List ℕ} {d : OneStage} {ss : List (ℕ × ℕ
     subst h
     simpa using hw.2
   | bernoulli num den => exact absurd h (by simp [OneStage.strata])
-  | stratified K =>
+  | stratified K ks =>
     simp only [OneStage.strata, Option.some.injEq] at h
     subst h
-    obtain ⟨-, hK, hn⟩ := hw
-    intro p hp
-    obtain ⟨n, hnm, rfl⟩ := List.mem_map.1 hp
-    have h1 := hn n hnm
-    have hN : n ≤ ns.sum := List.le_sum_of_mem hnm
-    refine max_le h1 (Nat.lt_succ_iff.1 ((Nat.div_lt_iff_lt_mul (by omega)).2 ?_))
-    nlinarith
+    exact fun p hp => (hw.2.2.2.2 p hp).2
   | work K w f =>
     simp only [OneStage.strata, Option.some.injEq] at h
     subst h

@@ -4,6 +4,8 @@ public import Proofs.Flock.Bridge.Draw
 public import Proofs.Flock.Bridge.PopMatches
 public import Proofs.Flock.Claims.Sampling.Select.Design
 public import Spot.OneStage
+import Proofs.Flock.Claims.Complete.Json.Canon
+import Proofs.Flock.Claims.Complete.Json.Record
 import Proofs.Flock.Claims.Sampling.Select.Misses
 import Proofs.Flock.Claims.Sampling.Select.Take
 
@@ -45,8 +47,65 @@ population `n`, a Bernoulli one refused, as `OneStage.sampledFrom` samples (`sam
 def sampledDesign (desc : Hash.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) : Except String Flock.Draw.SamplingDesign := do
   let p ← Spot.Program.parse ⟨desc.toArray⟩
   let derived ← Spot.Draw.deriveSamplingDesign p q lj tb
-  let parsed ← Spot.Draw.flockSamplingDesign (SecurityProofs.samplingDesignObj lj derived) n
-  Spot.OneStage.coveredDesign (derived.getD parsed)
+  let samplingDesign ← match derived with
+    | some d => pure d
+    | none => Spot.Draw.flockSamplingDesign lj n
+  Spot.OneStage.coveredDesign samplingDesign
+
+/-- A stratum's object is printable. -/
+theorem good_stratumJson (s : Flock.Draw.Stratum) : Claims.Json.Good s.toJson := by
+  unfold Flock.Draw.Stratum.toJson
+  refine FlockComplete.JsonRT.good_mkObj (by simp) ?_
+  simp only [List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq]
+  refine ⟨.str _, FlockComplete.JsonRT.good_arr_of fun x hx => ?_, FlockComplete.JsonRT.good_toJson _⟩
+  obtain ⟨⟨lo, hi⟩, -, rfl⟩ := Array.mem_map.1 hx
+  refine FlockComplete.JsonRT.good_arr_of fun y hy => ?_
+  simp only [List.mem_toArray, List.mem_cons, List.mem_nil_iff, or_false] at hy
+  rcases hy with rfl | rfl <;> exact FlockComplete.JsonRT.good_toJson _
+
+/-- A work stratum's object is printable. -/
+theorem good_workStratumJson (s : Flock.Draw.WorkStratum) : Claims.Json.Good s.toJson := by
+  unfold Flock.Draw.WorkStratum.toJson
+  refine FlockComplete.JsonRT.good_mkObj (by simp) ?_
+  simp only [List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq]
+  refine ⟨FlockComplete.JsonRT.good_toJson _, FlockComplete.JsonRT.good_toJson _, .str _,
+    FlockComplete.JsonRT.good_arr_of fun x hx => ?_, FlockComplete.JsonRT.good_toJson _⟩
+  obtain ⟨⟨lo, hi⟩, -, rfl⟩ := Array.mem_map.1 hx
+  refine FlockComplete.JsonRT.good_arr_of fun y hy => ?_
+  simp only [List.mem_toArray, List.mem_cons, List.mem_nil_iff, or_false] at hy
+  rcases hy with rfl | rfl <;> exact FlockComplete.JsonRT.good_toJson _
+
+/-- A sampling design's object is printable. -/
+theorem good_samplingDesignJson (d : Flock.Draw.SamplingDesign) : Claims.Json.Good d.toJson := by
+  cases d with
+  | subset k =>
+    refine FlockComplete.JsonRT.good_mkObj (by simp) ?_
+    simp only [List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq]
+    exact ⟨.str _, FlockComplete.JsonRT.good_toJson _⟩
+  | bernoulli a b =>
+    refine FlockComplete.JsonRT.good_mkObj (by simp) ?_
+    simp only [List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq]
+    exact ⟨.str _, .str _⟩
+  | stratified k St =>
+    refine FlockComplete.JsonRT.good_mkObj (by simp) ?_
+    simp only [List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq]
+    refine ⟨.str _, FlockComplete.JsonRT.good_toJson _, FlockComplete.JsonRT.good_arr_of fun x hx => ?_⟩
+    obtain ⟨s, -, rfl⟩ := Array.mem_map.1 hx
+    exact good_stratumJson s
+  | work k ws =>
+    refine FlockComplete.JsonRT.good_mkObj (by simp) ?_
+    simp only [List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq]
+    refine ⟨.str _, FlockComplete.JsonRT.good_toJson _, FlockComplete.JsonRT.good_arr_of fun x hx => ?_⟩
+    obtain ⟨s, -, rfl⟩ := Array.mem_map.1 hx
+    exact good_workStratumJson s
+
+/-- A sampling design's object is the same sampling design as itself (`Draw.sameSamplingDesign`), so `sampledFrom` samples an
+expansion as it is. -/
+theorem sameSamplingDesign_self (d : Flock.Draw.SamplingDesign) : Spot.Draw.sameSamplingDesign d.toJson d.toJson = true := by
+  obtain ⟨t, ht⟩ := FlockComplete.JsonRT.canon_ok_some _ (good_samplingDesignJson d)
+  unfold Spot.Draw.sameSamplingDesign Spot.jeq
+  rw [ht]
+  simp
 
 /-- `OneStage.coveredDesign` refuses a Bernoulli sampling design. -/
 theorem coveredDesign_bernoulli (a b : ℕ) :
@@ -83,8 +142,12 @@ theorem sampledFrom_sampledDesign {desc : Hash.Msg} {v : Spot.Docket.Verifier} {
   obtain ⟨derived, hd, hlo⟩ := SecurityProofs.bind_eq_ok.1 hlo
   obtain rfl : SecurityProofs.samplingDesignObj v.samplingDesign derived = lo := Except.ok.inj hlo
   unfold Spot.OneStage.sampledFrom sampledDesign
-  rw [hp, SecurityProofs.bind_ok, hd, SecurityProofs.bind_ok, SecurityProofs.bind_ok]
-  cases Spot.Draw.flockSamplingDesign (SecurityProofs.samplingDesignObj v.samplingDesign derived) n <;> rfl
+  rw [hp, SecurityProofs.bind_ok, hd, SecurityProofs.bind_ok]
+  cases derived with
+  | none => cases Spot.Draw.flockSamplingDesign v.samplingDesign n <;> rfl
+  | some d =>
+    simp only [SecurityProofs.samplingDesignObj, Option.map_some, Option.getD_some, sameSamplingDesign_self, ↓reduceIte]
+    rfl
 
 /-- **The verifier samples `kd` units under `samplingDesign`**: `samplingDesign` is the sampling design it samples under from the registration's descriptor
 `desc`, query `q`, sampling design object `lj` and work table `tb` at the population `n` (`sampledDesign`), and `kd` the units it samples
@@ -106,18 +169,22 @@ theorem samplesUnder_of_sampledFrom {desc : Hash.Msg} {v : Spot.Docket.Verifier}
   obtain ⟨samplingDesign, hl, hd⟩ := SecurityProofs.bind_eq_ok.1 h
   exact ⟨samplingDesign, ⟨hl, rfl⟩, hd⟩
 
-/-- `sampledDesign`'s steps: the descriptor's program, the sampling design `deriveSamplingDesign` expands over its strata, if any, and the sampling design
-`flockSamplingDesign` parses from the sampling design object `Draw.derive` writes. -/
+/-- `sampledDesign`'s steps: the descriptor's program, the sampling design `deriveSamplingDesign` expands over its strata, if any, else the
+sampling design `flockSamplingDesign` parses from the sampling design object itself. -/
 theorem sampledDesign_ok {desc : Hash.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ} {samplingDesign : Flock.Draw.SamplingDesign}
     (h : sampledDesign desc q lj tb n = .ok samplingDesign) :
-    ∃ p derived parsed, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧
+    ∃ p derived, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧
       Spot.Draw.deriveSamplingDesign p q lj tb = .ok derived ∧
-      Spot.Draw.flockSamplingDesign (SecurityProofs.samplingDesignObj lj derived) n = .ok parsed ∧ samplingDesign = derived.getD parsed := by
+      (derived = some samplingDesign ∨ derived = none ∧ Spot.Draw.flockSamplingDesign lj n = .ok samplingDesign) := by
   unfold sampledDesign at h
   obtain ⟨p, hp, h⟩ := SecurityProofs.bind_eq_ok.1 h
   obtain ⟨derived, hd, h⟩ := SecurityProofs.bind_eq_ok.1 h
   obtain ⟨parsed, hpar, h⟩ := SecurityProofs.bind_eq_ok.1 h
-  exact ⟨p, derived, parsed, hp, hd, hpar, (coveredDesign_ok h).1⟩
+  obtain ⟨rfl, -⟩ := coveredDesign_ok h
+  refine ⟨p, derived, hp, hd, ?_⟩
+  cases derived with
+  | none => exact Or.inr ⟨rfl, hpar⟩
+  | some d => exact Or.inl (congrArg some (Except.ok.inj hpar).symm)
 
 /-- **The audit samples under no Bernoulli sampling design**: `sampledDesign` refuses one (`OneStage.coveredDesign`). -/
 theorem notBernoulli_sampledDesign {desc : Hash.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ}
@@ -136,14 +203,16 @@ theorem sampledDesign_cases {desc : Hash.Msg} {q lj : Lean.Json} {tb : Option Le
     (∃ k, samplingDesign = .subset k ∧ k ≤ n) ∨ (∃ a b, samplingDesign = .bernoulli a b) ∨
       ∃ p S k, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧ Spot.Partition.strata p q = .ok S ∧
         (Flock.Draw.derive k S = .ok samplingDesign ∨ ∃ tab, Flock.Draw.deriveWork k S tab = .ok samplingDesign) := by
-  obtain ⟨p, derived, parsed, hp, hd, hpar, rfl⟩ := sampledDesign_ok h
+  obtain ⟨p, derived, hp, hd, hder⟩ := sampledDesign_ok h
   rcases SecurityProofs.deriveSamplingDesign_cases p q lj tb derived hd with ⟨rfl, hk1, hk2⟩ | ⟨S, k, samplingDesign', hS, rfl, hlaw⟩
-  · rcases SecurityProofs.flockSamplingDesign_cases _ _ _ hpar with ⟨k, rfl, hk, -⟩ | ⟨a, b, rfl, -⟩ | hk | hk
+  · obtain ⟨-, hpar⟩ := hder.resolve_left nofun
+    rcases SecurityProofs.flockSamplingDesign_cases _ _ _ hpar with ⟨k, rfl, hk, -⟩ | ⟨a, b, rfl, -⟩ | hk | hk
     · exact Or.inl ⟨k, rfl, hk⟩
     · exact Or.inr (Or.inl ⟨a, b, rfl⟩)
     · exact absurd hk hk1
     · exact absurd hk hk2
-  · refine Or.inr (Or.inr ⟨p, S, k, hp, hS, ?_⟩)
+  · obtain rfl : samplingDesign' = samplingDesign := Option.some.inj (hder.resolve_right fun h => nomatch h.1)
+    refine Or.inr (Or.inr ⟨p, S, k, hp, hS, ?_⟩)
     rcases hlaw with hder | ⟨-, tab, -, hwork⟩
     · exact Or.inl hder
     · exact Or.inr ⟨tab, hwork⟩
@@ -206,7 +275,7 @@ theorem popMatches_strata {desc : Hash.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.
 /-- **The sampling design the audit samples under is on the registration's strata**: at `PopMatches`, a `sampledDesign` that is not a
 Bernoulli sampling design is `SamplingDesignOn` the strata's sizes `nsOf`, sampling `samplingDesignK` units: a subset sampling design within the `n` units they sum to,
 or the stratified or work sampling design over the strata, whose slots are the units `0, …, n − 1` in order, each stratum's `k` the
-rule's. -/
+rule's (a stratified one's in `[1, n_s]`). -/
 theorem samplingDesignOn_sampledDesign {desc : Hash.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ} {samplingDesign : Flock.Draw.SamplingDesign}
     (hpop : PopMatches desc q n) (h : sampledDesign desc q lj tb n = .ok samplingDesign) (hb : NotBernoulli samplingDesign) :
     SamplingDesignOn samplingDesign (nsOf desc q) (samplingDesignK samplingDesign) := by
@@ -226,8 +295,12 @@ theorem samplingDesignOn_sampledDesign {desc : Hash.Msg} {q lj : Lean.Json} {tb 
     · rw [hns, Array.toList_map]
       simp only [List.map_map, Function.comp_def, SecurityProofs.stratum_size, SecurityProofs.rsSize]
     · rw [hns]; intro x hx; obtain ⟨s, hs, rfl⟩ := List.mem_map.1 hx; exact strata_pos hS s hs
-    · intro s hs; rw [Array.toList_map] at hs; obtain ⟨s₀, -, rfl⟩ := List.mem_map.1 hs
-      simp only [SecurityProofs.stratum_size, hns']
+    · intro s hs; rw [Array.toList_map] at hs; obtain ⟨s₀, hs₀, rfl⟩ := List.mem_map.1 hs
+      simp only [SecurityProofs.stratum_size]
+      have hle : SecurityProofs.rsSize s₀.2 ≤ SecurityProofs.strataSize S :=
+        List.le_sum_of_mem (List.mem_map_of_mem (f := fun p => SecurityProofs.rsSize p.2) hs₀)
+      exact ⟨by unfold Flock.Draw.stratumK; exact le_max_left _ _,
+        stratumK_le (by rw [← hns']; exact hkn) (strata_pos hS s₀ hs₀) hle⟩
   · obtain ⟨ws, hF, rfl⟩ := SecurityProofs.deriveWork_ok k S tab samplingDesign hwork
     have hunits := SecurityProofs.units_of_forall₂ _ _ hF
     have htot : Flock.Draw.totalWork (ws.map fun s => { s with
@@ -302,14 +375,15 @@ theorem designAt_cases (desc : Hash.Msg) (q lj : Lean.Json) (tb : Option Lean.Js
 theorem sampledDesign_subset {desc : Hash.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ} {samplingDesign : Flock.Draw.SamplingDesign}
     (hs : SecurityProofs.kindOf lj = "subset") (h : sampledDesign desc q lj tb n = .ok samplingDesign) : ∃ k, samplingDesign = .subset k := by
   have hnb := notBernoulli_sampledDesign h
-  obtain ⟨p, derived, parsed, -, hd, hpar, rfl⟩ := sampledDesign_ok h
+  obtain ⟨p, derived, -, hd, hder⟩ := sampledDesign_ok h
   rw [SecurityProofs.deriveSamplingDesign_none p q lj tb (by rw [hs]; decide) (by rw [hs]; decide)] at hd
   obtain rfl : derived = none := (Except.ok.inj hd).symm
-  rcases SecurityProofs.flockSamplingDesign_cases _ n parsed hpar with ⟨k, rfl, -⟩ | ⟨a, b, rfl, -⟩ | hk | hk
+  obtain ⟨-, hpar⟩ := hder.resolve_left nofun
+  rcases SecurityProofs.flockSamplingDesign_cases _ n _ hpar with ⟨k, rfl, -⟩ | ⟨a, b, rfl, -⟩ | hk | hk
   · exact ⟨k, rfl⟩
   · exact (hnb a b rfl).elim
   all_goals
-    rw [show SecurityProofs.samplingDesignObj lj none = lj from rfl, hs] at hk
+    rw [hs] at hk
     exact absurd hk (by decide)
 
 /-- **Under a sampling design object of kind `subset`, `designAt` is the subset sampling design of its own `samplingDesignK`**

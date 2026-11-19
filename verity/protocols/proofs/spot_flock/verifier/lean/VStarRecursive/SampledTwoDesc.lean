@@ -89,10 +89,16 @@ def samplingDesignOk (ns : List Nat) : Option Draw.SamplingDesign → Bool
   | none => true
   | some (.subset K) => 1 ≤ K && K ≤ ns.sum
   | some (.bernoulli num den) => 0 < den && num ≤ den
-  | some (.stratified K _) => 1 ≤ K && K ≤ ns.sum && ns.all (1 ≤ ·)
+  | some (.stratified K St) => 1 ≤ K && K ≤ ns.sum && ns.all (1 ≤ ·) && (St.toList.map (·.k)).length == ns.length &&
+      (ns.zip (St.toList.map (·.k))).all fun p => 1 ≤ p.2 && p.2 ≤ p.1
   | some (.work _ ws) => (ws.toList.map (·.work)).length == ns.length &&
       (ws.toList.map (·.floor)).length == ns.length && (ws.toList.map (·.floor)).all (1 ≤ ·) &&
       0 < ((ns.zip (ws.toList.map (·.work))).map fun p => p.1 * p.2).sum && ns.all (1 ≤ ·)
+
+#guard samplingDesignOk [2, 3] (some (.stratified 3 #[⟨"a", #[(0, 2)], 1⟩, ⟨"b", #[(2, 5)], 2⟩]))
+#guard !samplingDesignOk [2, 3] (some (.stratified 2 #[⟨"a", #[(0, 2)], 0⟩, ⟨"b", #[(2, 5)], 2⟩]))
+#guard !samplingDesignOk [2, 3] (some (.stratified 3 #[⟨"a", #[(0, 2)], 3⟩, ⟨"b", #[(2, 5)], 2⟩]))
+#guard !samplingDesignOk [2, 3] (some (.stratified 1 #[⟨"a", #[(0, 2)], 1⟩]))
 
 /-- **The first stage's design on the replay layout's strata**: its two rules, the first stage's sampling design and the input
 class's `All`, one a class of `l`, each well formed over its class's strata sizes in slots. -/

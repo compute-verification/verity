@@ -376,11 +376,8 @@ theorem units_error_le {samplingDesign : Flock.Draw.SamplingDesign} {ns : List �
     exact hb
   | bernoulli a b => exact hlaw.elim
   | stratified K St =>
-    obtain ⟨⟨-, hsz⟩, hK, hn1, hk, hsum⟩ := hlaw
-    have hks : ∀ s ∈ St.toList, s.k ≤ s.size := fun s hs => by
-      have hm : s.size ∈ ns := hsz ▸ List.mem_map_of_mem hs
-      rw [hk s hs]
-      exact stratumK_le hK (hn1 _ hm) (List.le_sum_of_mem hm)
+    obtain ⟨-, -, -, hk, hsum⟩ := hlaw
+    have hks : ∀ s ∈ St.toList, s.k ≤ s.size := fun s hs => (hk s hs).2
     have hb := strata_fail_le St hks L hL
     rw [hsum] at hb
     exact hb

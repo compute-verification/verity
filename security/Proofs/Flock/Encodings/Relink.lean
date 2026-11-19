@@ -53,7 +53,7 @@ theorem oneStagePa_nonneg (ns : List ℕ) : ∀ (r : OneStage) (B : Finset ℕ),
   | .bernoulli num den, B => by
     simp only [OneStage.Pa]
     exact pow_nonneg (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)) _
-  | .stratified K, B => by
+  | .stratified K ks, B => by
     simp only [OneStage.Pa]
     exact strataPa_nonneg _ _ _
   | .work K w f, B => by
@@ -77,7 +77,7 @@ theorem oneStagePa_anti (ns : List ℕ) {B B' : Finset ℕ} (h : B' ⊆ B) : ∀
     simp only [OneStage.Pa]
     exact pow_le_pow_of_le_one (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
       (div_le_one_of_le₀ (by exact_mod_cast Nat.sub_le den num) (Nat.cast_nonneg _)) (Finset.card_le_card h)
-  | .stratified K => by
+  | .stratified K ks => by
     simp only [OneStage.Pa]
     exact strataPa_anti h _ 0
   | .work K w f => by

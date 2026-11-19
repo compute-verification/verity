@@ -262,7 +262,7 @@ theorem samplingDesign_bound (d : Program) (query : Lean.Json) (rs : Array Flock
       refine le_trans (Claims.Pr_mono fun src ⟨units, read, hu, hm⟩ => ⟨units, read, hu, fun v hv => ?_⟩)
         (strata_bound _ _ (Or.inl ⟨k, rfl⟩) _ W L) |>.trans_eq ?_
       · rw [hns]
-        simp [oneStageOf, OneStage.Pa, stratum_size, Flock.Draw.stratumK, strataSize, Function.comp_def]
+        simp [oneStageOf, OneStage.Pa, stratum_size, Flock.Draw.stratumK, strataSize, Function.comp_def, List.zip_map']
       · simpa [popUnits, List.flatMap_map] using hm v hv
     · obtain ⟨ws, hF, rfl⟩ := deriveWork_ok k _ tab samplingDesign' hwork
       have hunits := units_of_forall₂ _ _ hF

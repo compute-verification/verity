@@ -11,8 +11,8 @@ counts. A selection rule that names a rate fixes each count from the rate and th
 least the rate at whatever sizes the prover registers. This file holds that step:
 
 * `RateOn num den samplingDesign n`: each of `samplingDesign`'s counts is at least `num/den` of what it is taken from: a subset's `k` of the
-  `n` units, and each stratum's count under a stratified or work design (the rule's, `stratumK` or `workK`) of the
-  stratum's units. A Bernoulli design is none;
+  `n` units, and each stratum's count under a stratified design (its own `k_s`) or a work design (the rule's `workK`) of
+  the stratum's units. A Bernoulli design is none;
 * `rateOn_subset`, `rateOn_stratified`, `rateOn_work`: the designs a rate names are `RateOn`: `subset k` at
   `k = Spot.Rate.count`, `stratified K` at `K = Spot.Rate.stratK` over the strata's sizes, and `work K` at floors
   `Spot.Rate.floor`;
@@ -28,13 +28,13 @@ so they read this at `subset k` alone (`Proofs.Flock.Bridge.RatePeriod`).
 namespace Flock.Bridge
 
 /-- **A sampling design whose every count is at least `num/den` of what it is taken from**: a subset's `k` of the `n`
-units; under a stratified design each stratum's count `stratumK K n_s n` of its `n_s` units; under a work design each
+units; under a stratified design each stratum's count `k_s` of its `n_s` units; under a work design each
 stratum's count `workK` of its units. A Bernoulli design is none. -/
 def RateOn (num den : ℕ) (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) : Prop :=
   match samplingDesign with
   | .subset k => num * n ≤ den * k
   | .bernoulli _ _ => False
-  | .stratified K St => ∀ s ∈ St.toList, num * s.size ≤ den * Flock.Draw.stratumK K s.size n
+  | .stratified _ St => ∀ s ∈ St.toList, num * s.size ≤ den * s.k
   | .work K ws => ∀ s ∈ ws.toList,
       num * s.size ≤ den * Flock.Draw.workK K s.work s.size (Flock.Draw.totalWork ws) s.floor
 
@@ -44,13 +44,15 @@ theorem rateOn_subset (num den tables n : ℕ) (hd : 0 < den) (ht : 0 < tables) 
   Spot.Rate.count_ge num den tables n hd ht
 
 /-- A stratified rate's design, `stratified K` at `K = Spot.Rate.stratK` over strata of sizes `ns`, each at least one
-unit, is `RateOn`. -/
+unit and sampled at the rule's `stratumK`, is `RateOn`. -/
 theorem rateOn_stratified {num den : ℕ} {St : Array Flock.Draw.Stratum} {ns : List ℕ}
-    (hsz : St.toList.map (·.size) = ns) (hn : ∀ x ∈ ns, 1 ≤ x) (hd : 0 < den) (hq : num ≤ den) :
+    (hsz : St.toList.map (·.size) = ns) (hn : ∀ x ∈ ns, 1 ≤ x) (hd : 0 < den) (hq : num ≤ den)
+    (hk : ∀ s ∈ St.toList, s.k = Flock.Draw.stratumK (Spot.Rate.stratK num den ns ns.sum) s.size ns.sum) :
     RateOn num den (.stratified (Spot.Rate.stratK num den ns ns.sum) St) ns.sum := by
-  show ∀ s ∈ St.toList, num * s.size ≤ den * Flock.Draw.stratumK (Spot.Rate.stratK num den ns ns.sum) s.size ns.sum
+  show ∀ s ∈ St.toList, num * s.size ≤ den * s.k
   intro s hs
   have hm : s.size ∈ ns := hsz ▸ List.mem_map_of_mem hs
+  rw [hk s hs]
   exact Spot.Rate.stratK_ge num den s.size ns.sum ns hm (hn _ hm) (List.le_sum_of_mem hm) hd hq
 
 /-- A work rate's design, each stratum's floor `Spot.Rate.floor` at its own units, is `RateOn`, at any `K`. -/
@@ -82,13 +84,10 @@ theorem rateOn_count {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ
     exact hr
   | bernoulli a b => exact h.elim
   | stratified K St =>
-    obtain ⟨⟨-, hsz⟩, -, -, hk, hsum⟩ := h
+    obtain ⟨⟨-, hsz⟩, -, -, -, hsum⟩ := h
     subst hsz
     subst hsum
-    refine sum_mul_le _ _ num den St.toList fun s hs => ?_
-    show num * s.size ≤ den * s.k
-    rw [hk s hs]
-    exact hr s hs
+    exact sum_mul_le _ _ num den St.toList fun s hs => hr s hs
   | work K ws =>
     obtain ⟨⟨-, hsz⟩, hk, hsum⟩ := h
     subst hsz
