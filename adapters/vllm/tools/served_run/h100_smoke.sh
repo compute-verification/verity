@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Does: serves ONE window of bf16 Llama 3.2 1B (unsloth at 9535bd9b) on the H100 at the window class CLASS (default 4,27,2: 4
-#   slots of 27-token prompts, 2 outputs) through serve-openai with its rows-sha512 Commit, no scheme, and seals it; then, the
-#   lease released, opens the sealed bundle against its record and commits the fixed load's window as its class circuit's units
+#   slots of 27-token prompts, 2 outputs) through serve-openai with its rows-sha512 Commit, no scheme, and seals it, each
+#   window's close planning its class circuit and making its record (RECORD=0: the plan alone); then, the lease released,
+#   opens the sealed bundle against its record and commits the fixed load's window as its class circuit's units
 #   (`benchmarks/one_stage/window_commit.py window-commit`, as served_verdicts.sh's window_commit() calls it), on the CPU.
 # Does NOT show: an audit, a proof, or a traced Build on the H100.
 # Needs: PY (default the node's /workspace/venv312/bin/python), gpu-lease (it leases one card for the serve alone, at most
@@ -9,7 +10,8 @@
 #   CARD_SKU (machine.py sku), PYTHONPATH and VERITY_PROTOCOLS_CONFIG are set here.
 # Writes: the serve's directory, the private directory (keys, salts) and every log under SR, outside the run's directory
 #   (named private in the run's private-paths.json); under $OUT the window's registration.json and circuit.json, the
-#   deployment registration and smoke.txt, the last line: the reader's counts, the units by source and the registration's digest.
+#   deployment registration and smoke.txt: the reader's counts, the units by source and the registration's digest, then the
+#   window's plan, its strings (card and host, the twin's comparison) and its record beside window-commit's.
 #   research run --on vy-h100-1 --cwd source -- taskset -c 0-9 bash adapters/vllm/tools/served_run/h100_smoke.sh   (DRY=1: off the card)
 set -euo pipefail
 [ -z "${PEARLPLUS_TIE:-}" ] || [ "$PEARLPLUS_TIE" = 0 ] || { echo "h100_smoke.sh: PEARLPLUS_TIE is retired (the window commit takes no tie); unset it" >&2; exit 3; }
