@@ -326,6 +326,13 @@ theorem sampled_facts (h : ByteArray → ByteArray) (c : Circuit) (pop pub : Pub
   simp (config := { zeta := false }) only [Hashes.ofSha512, monadLift_self] at hp
   (have hh := except_bind_ok hp; clear hp; obtain ⟨D, hD, hp⟩ := hh)
   refine ⟨D, hD, ?_⟩
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpR at hp
+  obtain ⟨_, hp⟩ : ∃ u, jpR u = .ok pub := by
+    split at hp
+    · (have hh := except_bind_ok hp; clear hp; obtain ⟨_, hh, -⟩ := hh)
+      cases hh
+    · exact ⟨_, hp⟩
+  simp (config := { zeta := false }) only [jpR] at hp
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) proved jpA at hp
   obtain ⟨hb, hp⟩ := ite_throw_okP hp
   have hpop : D.population = pop.n := by

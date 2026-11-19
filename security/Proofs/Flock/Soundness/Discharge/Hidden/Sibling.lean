@@ -1,6 +1,7 @@
 module
 
 public import Flock.Zk
+public import Proofs.Flock.Bridge.Draw
 public import Proofs.Flock.Claims.JsonNorm
 public import Proofs.Flock.Soundness.Discharge.Hidden.CanonOk
 public import Proofs.Flock.Soundness.Discharge.Hidden.EmptySample
@@ -129,12 +130,12 @@ theorem canonUtf8_sampledHeader {c : Circuit} {pop : Public} {d : Json} {k : Nat
 -- `ok_step` down `HmRow.drawn`'s unfolded do-block, a goal per step that returns on its own
 set_option maxHeartbeats 2000000 in
 /-- **A sample over a loaded public file returns**, with the header, count, population and tables `HmRow.drawn`
-gives it: the sample decodes at the population's size, the header's unit indices were read, and `canonUtf8` prints the
-header and the sample. -/
+gives it: the sample decodes at the population's size by a design that is not rated (Flock refuses a rated draw,
+`Draw.RATED_UNCHECKED`), the header's unit indices were read, and `canonUtf8` prints the header and the sample. -/
 theorem sampled_okWith {c : Circuit} {pop : Public} {d : Json} {D : Draw.UnitSample} {u : Json} {a : Array Json}
     {idx : Array Nat} {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pop.header = .obj m)
-    (hD : Draw.UnitSample.ofJson d = .ok D) (hn : D.population = pop.n) (hpn : pop.population = none)
-    (hu : J.get pop.header "units" "public file" = .ok u) (ha : J.arr u "indices" "public file" = .ok a)
+    (hD : Draw.UnitSample.ofJson d = .ok D) (hr : Flock.Bridge.NotRated D.samplingDesign) (hn : D.population = pop.n)
+    (hpn : pop.population = none) (hu : J.get pop.header "units" "public file" = .ok u) (ha : J.arr u "indices" "public file" = .ok a)
     (hi : a.mapM (fun x => J.asNat x "a unit index") = .ok idx)
     (hh : (canonUtf8 pop.header).isOk = true) (hd : (canonUtf8 d).isOk = true) :
     OkWith (HmRow.drawn c pop d) fun pub =>
@@ -151,6 +152,7 @@ theorem sampled_okWith {c : Circuit} {pop : Public} {d : Json} {D : Draw.UnitSam
   simp only [throw_bind']
   repeat' ok_step
   all_goals first
+    | exact (hr _ _ ‹_›).elim
     | exact ⟨rfl, rfl, rfl, rfl⟩
     | exact okWith_forIn_array _ _ _
     | exact publicDigest_okWith hcan
@@ -357,7 +359,7 @@ theorem sibling_core {tags : Tags} {cf pf₁ pf₂ : ByteArray} {coins : Coins} 
     obtain ⟨hpn, ⟨m, hp, hm⟩, ⟨u, a, idx, hu, ha, hi⟩, hnd, hh⟩ := loadPublic_reads hl₂
     have hpr₂ : (⟨.subset 0, pop.n, #[], #[]⟩ : Draw.UnitSample).proved = #[] := rfl
     obtain ⟨pub₂, hdr₂, hh₂, hn₂, hpop₂, ht₂⟩ :=
-      sampled_okWith (c := { c with outPorts := #[] }) hm hp hd₂ rfl hpn hu ha hi hh hcan
+      sampled_okWith (c := { c with outPorts := #[] }) hm hp hd₂ (fun _ _ h => by cases h) rfl hpn hu ha hi hh hcan
     have hu₂ := units_noUnit hm hp hd₂ hpr₂ hdr₂
     have hcp₂ := checkPublic_sampled (c := c) hm hp hd₂ hpn hnd hh₂ hn₂ hpop₂ ht₂ hpub
     have hn₂ : pub₂.n = 0 := hn₂
