@@ -202,7 +202,7 @@ theorem resolve_lt (B : ℕ) (sc : Scope) (r : Ref) (hs : Inv P B (sc, r)) {a : 
     a < B :=
   DescAgree.run_inv "scope resolution" (resolveStep P) (Inv P B) (· < B)
     (fun s a hs h => (step_ok P hroot hB hL B s _ hs h).1 a rfl)
-    (fun s s' hs h => (step_ok P hroot hB hL B s _ hs h).2 s' rfl) _ _ _ hs h
+    (fun s s' hs h => (step_ok P hroot hB hL B s _ hs h).2 s' rfl) _ _ _ hs (Flock.Program.resolve_run h)
 
 /-- A reference of node `k`'s arguments starts resolution below the node. -/
 theorem start_ok (sc : Scope) (hg : Good P sc) (k : ℕ) (hk : k < (P.defs[sc.d]!).body.nodes.size) (r : Ref)
@@ -222,7 +222,7 @@ def WalkQ (P : Prog) (g : ℕ) (sc : Scope) : Prop :=
 /-- **Every operand is an earlier gate**, on bodies `BodyOk` wherever the walk reaches. -/
 theorem gate_operands_lt {g p : ℕ} {ops : Array ℕ} {sc : Scope} (h : P.gate g = .ok (p, ops, sc)) :
     ∀ a ∈ ops, a < g := by
-  unfold Prog.gate at h
+  rw [Prog.gate_of (Prog.gate_recut h)] at h
   by_cases hge : g ≥ (P.defs[P.root]!).gates
   · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
   simp only [hge, ite_false, bind, Except.bind] at h

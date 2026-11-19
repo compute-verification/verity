@@ -168,10 +168,11 @@ theorem unit_good {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadP
 theorem unit_callee {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) : BodiesOk.CalleeOk (P.defs[sc.d]!) := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
   obtain ⟨hr, -, -, -⟩ := read_bodies hP
   obtain ⟨k, m, hk, -, -, -, rfl⟩ := unit_node hr hP.2.2.2.2.2.2 (readProg_inputs hP) hrs hu
   obtain ⟨⟨bytes, hdec⟩, -⟩ := hP
-  exact (Resolve.decoded_root bytes P hdec k hk).2.1
+  exact (Resolve.decoded_root bytes P hdec hrc k hk).2.1
 
 /-- **A leaf of a unit's parameter is no gate of the unit**: it is a gate of an input node of the root, and the
 unit's gates are inside a root node that is no input node. -/
@@ -182,6 +183,7 @@ theorem unit_param_out {P : Prog} {ts : Array String} {rs : Array TRange} (hP : 
     (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves)
     (hg : Flock.Program.resolve P sc (⟨true, i, t⟩ : Ref) = .ok g) :
     g < sc.off ∨ sc.off + (P.defs[sc.d]!).gates ≤ g := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
   obtain ⟨hr, hrp, hlay, -⟩ := read_bodies hP
   obtain ⟨hov, hbl⟩ := read_walk hP
   obtain ⟨k, m, hk, hnode, hform, hm, hargs, rfl⟩ := unit_member hP hrs hu
@@ -212,6 +214,7 @@ theorem unit_ret_ok {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Rea
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {t : ℕ} (ht : t < (P.defs[sc.d]!).ret.leaves) :
     ∃ g, Flock.Program.resolve P sc ((P.defs[sc.d]!).body.ret.get t) = .ok g := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
   by_cases hp : (P.defs[sc.d]!).prim = true
   · obtain ⟨k, m, -, -, -, -, hbody, -, -⟩ := prim_unit hP hrs hu hp
     exact ⟨sc.off, Resolve.ret_default P sc t hbody⟩
@@ -229,7 +232,7 @@ theorem unit_ret_ok {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Rea
       have : ((Desc.activations P)[P.root]! + 1) * 2 ≤
           ((Desc.activations P)[P.root]! + 1) * ((Desc.depths P)[P.root]! + 2) := Nat.mul_le_mul_left _ (by omega)
       omega
-    exact OperandsResolve.resolve_ok P ⟨hr, hrp⟩ hB hlay hc hpar hz hfuel _ sc _
+    exact OperandsResolve.resolve_ok P ⟨hr, hrp⟩ hB hlay hc hpar hz hfuel (OperandsResolve.resolvable_recut P hres) _ sc _
       (Resolve.down_ok P ⟨hr, hrp⟩ hB hlay _ sc hgood (Nat.le_refl _) t (by rw [hcount]; exact ht))
 
 variable {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}
@@ -271,6 +274,7 @@ theorem closed_not_returned {ts : Array String} (hP : ReadProg P) (hO : Inferenc
     (hg : Flock.Program.resolve P sc (⟨true, i, t⟩ : Ref) = .ok g)
     (hn : i ∉ (passedOn P)[sc.d]?.getD (List.range (P.defs[sc.d]!).params.size)) {out : String} {l lo up : ℕ}
     (ho : OutLeaf P sc out l g lo up) : False := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
   have hout := unit_param_out hP hO hrs hu hi ht hg
   by_cases hp : (P.defs[sc.d]!).prim = true
   · obtain ⟨-, h1, h2⟩ := returnsOwn_prim hP hrs hu hp ho
