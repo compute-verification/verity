@@ -194,11 +194,9 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots, why_not_pearl  # noqa: E402, F401
 from verity.commitments import docket_digest as DD
-from verity.commitments import randomness as RND  # noqa: E402
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU  # noqa: E402
 from verity.circuits import partition_query as PQ  # noqa: E402
-from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments.periods import interface as IF, rows as RW  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
@@ -207,6 +205,8 @@ from verity_vllm.pipeline import edge as E  # noqa: E402
 from verity_vllm.pipeline import window_advice as WA  # noqa: E402
 from verity_vllm.pipeline.advice_windows import CAP_BITS, CAPPED, Capped  # noqa: E402
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
+from verity_vllm.program.predict import window_record as WREC  # noqa: E402
+from verity_vllm.program.predict.window_record import place_slots, window_design  # noqa: E402
 
 I2 = "verity/prove-path/i2-compile-steps/v0"
 #: the checkpoint config I2's φ reads when none is given: unsloth/Llama-3.2-1B's (I2's test fixture)
@@ -1544,45 +1544,6 @@ def scan_state_opening(value: Any, path: Path) -> Path:
     return path
 
 
-def place_slots(cls: Any, served: Sequence[str], ingress: Mapping[str, Mapping[str, Any]],
-                scan: tuple[Sequence[str | None], Sequence[tuple[Sequence[int], Sequence[int]]]] | None = None,
-                ) -> list[tuple[str | None, list[int], int]]:
-    """Each slot of a window of class ``cls`` serving the requests of I1 ids ``served``, whose bodies ``ingress`` holds:
-    its request (None for an empty slot), its row (occupancy, prompt length, ids) and its ``max_tokens``. Without a
-    scan, slot k holds the k-th served request, its row its prompt's. With one, ``scan`` is the scan's starts
-    (`kept_scan`'s) and each slot's row and head (`window_rows.scan_slots`'s): slot k holds the request the scan starts
-    there, its row and ``max_tokens`` the scan's. Refused where the scan starts one request in two slots, a served
-    request in none, or a request that wasn't served, and where a slot's prompt or ``max_tokens`` isn't its served
-    request's."""
-    if scan is None:
-        placed, heads = [served[k] if k < len(served) else None for k in range(cls.slots)], None
-    else:
-        placed, heads = list(scan[0]), scan[1]
-        named = [s for s in placed if s is not None]
-        if len(set(named)) != len(named):
-            raise ValueError("the scan starts one request in two slots of the window")
-        if unplaced := set(served) - set(named):
-            raise ValueError(f"{len(unplaced)} of the window's {len(set(served))} served requests start in none of its "
-                             "slots: the scan anchors them in another window")
-        if extra := sorted(set(named) - set(served)):
-            raise ValueError(f"the scan starts certified requests in the window that it didn't serve: {extra[:4]}")
-    out = []
-    for k, u in enumerate(placed):
-        row, max_tokens = [0] * (cls.prompt + 2), 0
-        if heads is not None:
-            row, max_tokens = list(heads[k][0]), int(heads[k][1][1])
-        if u is not None:
-            body = ingress[u]
-            ids = [int(x) for x in body["prompt"]]
-            want = [1, len(ids), *ids, *[0] * (cls.prompt - len(ids))]
-            if heads is None:
-                row, max_tokens = want, int(body["max_tokens"])
-            elif row[:len(ids) + 2] != want[:len(ids) + 2] or max_tokens != int(body["max_tokens"]):
-                raise ValueError(f"slot {k}: the scan's request isn't the served one: its prompt or max_tokens differ")
-        out.append((u, row, max_tokens))
-    return out
-
-
 def h1_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], dict[str, Any], Any] | None:
     """With ``--window-registration``: H1's docket W of the window, its window Program's meta (the serve dir's
     ``h1/`` `pouw_h1.PROGRAM_META`) and the circuit's tables of it (`window_class.Tables`, `pouw_h1_commit.shape`); None
@@ -1602,18 +1563,6 @@ def h1_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], dict[str, A
         raise ValueError(f"H1's windows are {meta['steps']} rounds, and the class's {cls.outputs} outputs are the rounds whose "
                          "tables the circuit reads")
     return w, meta, WC.Tables(*CT.shape(meta["layout"], int(meta["steps"])))
-
-
-def window_design(rule: str, circuit: IF.Circuit) -> dict[str, Any]:
-    """The sampling design a window of ``circuit`` is committed under (``window-commit --sampling-design``): the one the rate ``rule``,
-    which the window's audit states to its stream, names over the circuit's proof blocks (`service.params_sampling_design`), so the
-    window registers the design the stream holds it to. A fixed count is refused by name (`service.SamplingDesign`): no stream
-    takes it, and the audit would hold the window to another design."""
-    from verity.protocols.proofs.spot.verifier import service as S
-
-    S.SamplingDesign(rule)
-    program, query = circuit.program()
-    return dict(S.params_sampling_design(rule, program, query, None)[0])
 
 
 def window_commit_of_advice(a: argparse.Namespace, kept_ingress: KeptIngress | None = None,
@@ -1735,20 +1684,10 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
               else state}
     held = sorted(p for p, e in reg.values.items() if p in values and values[p].entry() == dict(e))
     lap("weights")
-    filled = WRS.Rows(low, slots, values)
-    lap("rows")
-    win = IF.Window(low.circuit, run, window_design(a.sampling_design, low.circuit), a.cap, advice=bound, registered=values,
-                    forms=WRS.FORMS)
-    win.supply()
-    filled.record(win)
-    lap("record")
-    key = RND.derive(os.urandom(64), "verity/window-commit/salts/v1", {"window": run})
-    c = win.close(workers=a.workers or min(16, os.cpu_count() or 1), strings=WRS.leaf_strings(win, key))
-    lap("close")
-    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)}}
-    win.write(c, a.out, prov, registrar=DK)
+    filled, win = WREC.commit(low, cls, slots, values, run, window_design(a.sampling_design, low.circuit), a.cap, bound, a.out,
+                              int(a.window), strings=WRS.leaf_strings, workers=a.workers or min(16, os.cpu_count() or 1), lap=lap)
     scan_state_opening(values[SS.SCAN_STATE], Path(a.out) / scan_state_file)
-    lap("write")
+    lap("scan_state")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}
     return {"run": run, "circuit": hashlib.sha512((Path(a.out) / "circuit.json").read_bytes()).hexdigest(),
             "population": sum(filled.n.values()), "members": len(win.window.members), "sources": sources,
