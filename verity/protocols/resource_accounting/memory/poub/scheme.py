@@ -17,9 +17,10 @@ No verifier loads this module: each verifier states its own id, component name a
 equal to the declarations. It reads each one's parties and channels from its verifier's manifest (`verifier.p2_parties`,
 `verifier.session_parties`).
 
-Neither declares a block: PoUB's opening unit (`verifier.commitments.gates.block_check`, ``BlockOpeningCheck_v2``) is
-proved in the read session's own window (`prover.window`), not as a template of the served circuit's first level, and
-P2's openings go to its verifier in the clear. Each says its own term (`Scheme.delta_scheme`) as a `Term`: the sketch
+`POUB`'s blocks are its window's (`prover.window`): one unit of the opening unit ``BlockOpeningUnit_v2``
+(`verifier.commitments.gates.block_check`, ``BlockOpeningCheck_v2`` in its six rows) a sampled receipt, each costing
+the bits of the block a receipt reads, its static ``BYTES`` (`verifier.codec.BLOCK_BYTES`), which the verifier reads
+from the registered circuit. `BANDWIDTH` declares none: P2's openings go to its verifier in the clear. Each says its own term (`Scheme.delta_scheme`) as a `Term`: the sketch
 bound's error `δSketch g b Q P N εrank` (`DELTA_SCHEME`) at its receipts' layout (g, b), a function of the prover's hash
 budget ``Q``, the session's passes ``P``, the store's blocks ``N`` and the sign blocks' rank tail ``rank_tail`` (the
 Lean's εrank, which is not the audit's error ε).
@@ -202,7 +203,7 @@ POUB = S.register(S.Scheme(
     name="poub",
     protocol=domains.POUB_PROTOCOL,
     resource="read",
-    blocks=S.Lacks(_OUTSIDE + "no block of the workload's circuit carries its cost"),
+    blocks=(S.Block("BlockOpeningUnit_v2", lambda shape: 8 * shape["BYTES"]),),
     assumptions=(*_SKETCH, "ResourceAccounting.Assumptions.WorkHardness",
                  "ResourceAccounting.Remote.Held.Assumptions.SquaringCeiling"),
     log=(S.Order("registration", "challenge"), S.Order("roots", "openings")),
@@ -217,9 +218,9 @@ POUB = S.register(S.Scheme(
     requires={
         **_REQUIRES,
         "one-labelling": "its own trees: the node store's registration root and a receipt root a pass",
-        "one-design": _OUTSIDE + "in the read session's own window (prover.window), whose circuit is not built "
-                                 "(memory-accounting/read-session-in-zero-knowledge); today its own sample of "
-                                 "receipts a window and its own pooled bound",
+        "one-design": "its blocks are proved in the read session's own window (prover.window), whose rows the "
+                      "verifier makes are not yet given (Window.give); today its own sample of receipts a window "
+                      "and its own pooled bound",
     },
     over="the credited bits: the committed receipts' words, committed · b bits (`Remote.Run.committed`)",
     under="what the run paid for words: its tier reads, the state held at the pass boundaries and the bits rebuilt "

@@ -243,7 +243,7 @@ class StoreView(Protocol):
     store's registration root without one); `plan` is a pass's blocks in read order
     (store indices, each once; their runs' digest is in the commitment); `open` answers the
     verifier's sample with each block as that pass read it, or raises `Stale`.  Both take the window's index (None:
-    the latest); a window's passes are kept until the window after the next begins, since its openings coin comes
+    the latest); a window's passes are kept until the window after the next begins, since its sample's coins come
     only once the next window's first root is in."""
 
     def layout(self) -> Layout: ...

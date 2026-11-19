@@ -33,4 +33,4 @@ inputs = ["tests/verity/circuits/stand_in.py", "verity/__init__.py", "verity/err
           "verity/protocols/proofs/flock/verifier",
           "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "tools/difftest",
           "verity/channel.py",
-          "verity", "tests/verity/protocols/proofs/spot/verifier/holes.py"]
+          "verity"]

@@ -189,7 +189,7 @@ def weight_leaves(C: ModelShape, world: int = 1) -> list[tuple[str, Type]]:
     """The weights record of the model class on meta, as `derive._weights_of` lists it: the distinct parameters in module order
     (the tied `lm_head.weight` is the embedding's leaf), then the distinct buffers (the embedding's 0-d bf16 `normalizer` where the
     family scales it, the one shared rotary `cos_sin_cache` [max_pos, rot] bf16, each attention layer's four f32 scalar scales).  The
-    field names are informational (the descriptor carries types only) and, as every decoder's (`predict.dsa`, `predict.dsv4`), the
+    field names are informational (the descriptor carries types only) and, as every decoder's (`predict.dsa`), the
     vLLM model's own (`model.layers.0.…`, `lm_head.weight`), never the prefix of the module a trace wraps it in.  Under `world`
     ranks each is one rank's shard (`rank_shape`)."""
     def bf(*s: int) -> Type:
