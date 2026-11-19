@@ -11,8 +11,8 @@ Lean's) and `epsilon`.
   `PINNED`'s art (`pinned`), the one `verity bench overhead run --scheme pearl-plus --cubin ART` sends: the record's
   ``cubin.art`` names it when the loaded bytes are its, and is None otherwise.
 - **The call** (`prepare`): one `PearlCDeviceRun` a weight (the operand set's B, BF16, read in place; its root and weight
-  side at construction), whose served call (`gemm`, at call index `INDEX` in a pass of its own) makes the call's shape,
-  pipeline and keys. `launch` is that call's device work on the harness's stream, into the buffers a served call at a
+  side at construction), and a twin of it a call (`PearlCDeviceRun.twin`), whose served call (`gemm`, at call index
+  `INDEX`, the twin's first pass) makes the call's shape, pipeline and keys. `launch` is that call's device work on the harness's stream, into the buffers a served call at a
   pass's first position writes: x widened into A's FP32 words, the call's steps, and with hashing y's commitment (`_YTree`:
   y's real rows widened to FP32 words by `widen_a` a chunk at a time, their row digests and y's tree, the served call's
   `served_y` launches over buffers made in `prepare`), A's root into the pass and the records' screen. The keys are the
@@ -23,11 +23,11 @@ Lean's) and `epsilon`.
   served call overlaps it on its retain stream, and widens y's rows by `widen_a`, where the served call uses torch's copy.
   The bytes are the served call's and the launches are not, so the arm's time for y bounds the served call's from above.
 - **The gate**: y's m rows and, with hashing, y's tree, A's root, the tile leaves and the screen's flags equal, byte for
-  byte, the served call's on the same operands at the same index (``all`` each; y's tree is `served_y_device.y_tree`'s over the
-  served call's y, every node).
+  byte, the served call's on the same operands at the same index, the first pass of another twin (``all`` each; y's tree is
+  `served_y_device.y_tree`'s over the served call's y, every node).
 - **The transcript** (`dump`): the harness poisons what it reads (`transcript_buffers`: A's words and tree, A's root, the
   leaves, the flags, y's rows and y's tree) and launches the call, which is then recorded and its pass ended as a retained
-  served pass ends (`end`: the tile tree; A's and B's rows and trees, y's rows and the tree the launch wrote, the leaves and
+  served pass ends, as the first pass of another twin, which takes the pass's A root, leaves and flags the launch wrote (`end`: the tile tree; A's and B's rows and trees, y's rows and the tree the launch wrote, the leaves and
   the manifest `verify_run.py` reads, which opens y's rows), with the epoch's coin commitment beside it (``coins.json``).
   The no-write control is the same over the poisoned buffers: y's tree in it is the poison, never made again at the dump.
 - **The stock scaling** (`FAMILY`) is rowwise: the chain multiplies A's and B's FP8 codes, each row under its own scale
@@ -73,7 +73,8 @@ PINNED = HERE / "overhead_arm.json"
 SERVED_PASSES = "benchmarks/pouw/pearl_c_vllm/served_passes.py"
 #: the samples each shape's pass is verified at
 DRAWS = 3
-#: the call index of every call the arm makes: the served reference's, whose keys the launch reads
+#: the call index of every call the arm makes, each the first of a device run of its own: round 0's first place
+#: (`protocol.call_place`), the served reference's, whose keys the launch reads, and the one a pass verified alone holds
 INDEX = 0
 #: the challenger's epoch for the arm's coins
 EPOCH = 1
@@ -357,15 +358,27 @@ class _Held:
             return
         import torch
 
-        for pipe, _, _ in self.run.pipes.values():
+        _free(self.run)
+        for pipe in getattr(self.ytrees, "pipes", {}).values():
             pipe.free()
-        for trees in (self.ytrees, self.run._y_trees):
-            for pipe in getattr(trees, "pipes", {}).values():
-                pipe.free()
         self.wpipe.free()
         self.arm._held.pop(self.key, None)
         self.run = self.w = self.xb = self.seg = self.ytrees = None
         torch.cuda.empty_cache()
+
+
+def _free(run: Any) -> None:
+    """`run`'s pipelines freed, its calls' and its y trees'."""
+    for pipe, _, _ in run.pipes.values():
+        pipe.free()
+    for pipe in getattr(run._y_trees, "pipes", {}).values():
+        pipe.free()
+
+
+def _views(run: Any, m: int, tiles: int) -> dict[str, Any]:
+    """The pass buffers of `run` a served call of m rows and `tiles` tiles at a pass's first position writes, beside y:
+    A's root, the tile leaves and the screen's flags."""
+    return {"root_a": run.roots_buf[:run.nb], "leaves": run.leaves[:run.nb * tiles], "flags": run.flag_buf[:m]}
 
 
 class _YTree:
@@ -417,8 +430,8 @@ class _Call:
         self.held, self.hashing = held, hashing
         self.m, self.m16, self.n, self.k = shape.m, m16(shape.m), shape.n, shape.k
         self.x = _bf16(operands.a, shape.m, shape.k)
-        run = held.run
-        self.reference()
+        self.run = run = held.run.twin()
+        self.reference(run)
         self.sh = run.shapes[(self.m16, self.n, self.k)]
         self.pipe, steps, side = run._pipe(0, self.sh)
         if side:
@@ -426,13 +439,11 @@ class _Call:
         self.steps = list(steps)
         self.tiles = tiles_of(self.m, self.n)
         self.y = torch.empty((self.sh.mp, self.n), dtype=torch.bfloat16, device=run.device)
-        nb = run.nb
         self.views = {"y": self.y[:self.m]}
         if hashing:
             ytree, y = _YTree(held.ytrees, self.m, self.n, INDEX), self.y.data_ptr()
             self.y_steps, self.y_salts = [lambda: ytree.launch(y)], ytree.salts
-            self.views |= {"tree_y": ytree.tree, "root_a": run.roots_buf[:nb], "leaves": run.leaves[:nb * self.tiles],
-                           "flags": run.flag_buf[:self.m]}
+            self.views |= {"tree_y": ytree.tree, **_views(run, self.m, self.tiles)}
         self.outputs = {name: _buffer(t) for name, t in self.views.items()}
         if hashing:
             from arm import Buffer
@@ -442,7 +453,7 @@ class _Call:
                 "tree_a": Buffer(self.sh.b["tree_a"].data_ptr(), self.pipe.size["tree_a"])}
 
     def launch(self, stream: int) -> None:
-        run = self.held.run
+        run = self.run
         K, nb = run.kernel, run.nb
         K.run.widen_a(K.dev, self.x.data_ptr(), self.sh.xa.data_ptr(), self.m, self.m16, self.k, stream=stream)
         self.pipe.b["y"], self.pipe.b["leaves"] = self.y.data_ptr(), run.leaves.data_ptr()
@@ -462,19 +473,21 @@ class _Call:
     def weight_side(self, stream: int) -> None:
         self.held.weight_side(stream)
 
-    def reference(self) -> Any:
-        """The served call on the call's operands at `INDEX`, in a pass of its own: y's m rows (with hashing, A's root,
-        the leaves and the flags are where the launch's views read them)."""
+    def reference(self, run: Any) -> Any:
+        """The served call on the call's operands as the first pass with calls of `run`, a twin (`PearlCDeviceRun.twin`):
+        at `INDEX`.  Its y's m rows (with hashing, A's root, the leaves and the flags are in `run`'s pass buffers,
+        `_views`)."""
         import torch
 
-        run = self.held.run
         run.hashing = self.hashing
-        run.begin(at=INDEX)
+        run.begin()
         sh = run.shapes.get((self.m16, self.n, self.k))
         if sh is not None:
             sh.dirty = self.m16
         y = run.gemm(0, self.x, self.held.w, None)
         torch.cuda.synchronize()
+        if (index := run.cur.matmuls[-1].index) != INDEX:
+            raise RuntimeError(f"{SCHEME}: the served reference is at call index {index}, not {INDEX}: a twin's first call")
         return y
 
     def check(self) -> tuple[bool, dict[str, str], dict]:
@@ -484,11 +497,14 @@ class _Call:
         from verity_torch.pouw.pearl_c import served_y_device as SYD
 
         mine = {name: t if name == "y" else t.clone() for name, t in self.views.items()}
-        y = self.reference()
-        ref = {"y": y} | {name: t for name, t in self.views.items() if name not in ("y", "tree_y")}
-        if "tree_y" in mine:
-            ref["tree_y"] = SYD.y_tree(self.held.run, y, INDEX, self.y_salts)
-        same = {name: bool(torch.equal(mine[name], ref[name])) for name in mine}
+        twin = self.run.twin()
+        try:
+            y = self.reference(twin)
+            ref = {"y": y} | ({"tree_y": SYD.y_tree(twin, y, INDEX, self.y_salts), **_views(twin, self.m, self.tiles)}
+                              if "tree_y" in mine else {})
+            same = {name: bool(torch.equal(mine[name], ref[name])) for name in mine}
+        finally:
+            _free(twin)
         return all(same.values()), {name: "all" for name in mine}, {"equal_to_served_call": same, "index": INDEX}
 
     def retain(self, out: Path) -> None:
@@ -501,24 +517,32 @@ class _Call:
 
         if not self.hashing:
             raise RuntimeError(f"{SCHEME}: only a hashing call has a transcript")
-        run = self.held.run
+        run = self.run
         torch.cuda.synchronize()
-        run.hashing = True
-        run.begin(at=INDEX)
-        cur = run.cur
-        cur.retain, cur.run = out, settings().RESEARCH_RUN_ID
-        mm = Matmul(PPDR.call_index(run), Unit(self.m16, self.k, self.n), 0)
-        cur.matmuls.append(mm)
-        cur.flag_rows, cur.tiles = self.m, self.tiles
-        run._retained(cur, mm, self.m, self.views["flags"], *run._kept(self.sh, self.pipe),
-                      run.salts_a(self.sh, self.pipe), y=self.views["y"],
-                      y_tree=self.views["tree_y"], y_salts=self.y_salts)
-        run.end()
+        twin = run.twin()
+        try:
+            twin.hashing = True
+            twin.begin()
+            for got, wrote in zip(_views(twin, self.m, self.tiles).values(), _views(run, self.m, self.tiles).values(),
+                                  strict=True):
+                got.copy_(wrote)
+            cur = twin.cur
+            cur.retain, cur.run = out, settings().RESEARCH_RUN_ID
+            mm = Matmul(PPDR.call_index(twin), Unit(self.m16, self.k, self.n), 0)
+            cur.matmuls.append(mm)
+            cur.flag_rows, cur.tiles = self.m, self.tiles
+            twin._retained(cur, mm, self.m, self.views["flags"], *run._kept(self.sh, self.pipe),
+                           run.salts_a(self.sh, self.pipe), y=self.views["y"],
+                           y_tree=self.views["tree_y"], y_salts=self.y_salts)
+            twin.end()
+        finally:
+            _free(twin)
         (out / "coins.json").write_text(json.dumps(run.coins.to_json()) + "\n")
 
     def free(self) -> None:
         if self.held is None:
             return
         self.views, self.outputs, self.y, self.y_steps = {}, {}, None, []
+        _free(self.run)
         self.held.release()
-        self.held = None
+        self.held = self.run = None

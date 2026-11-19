@@ -187,7 +187,7 @@ private theorem tmOf_same {ps ps' : Json} (h : Same ps ps') : tmOf ps = tmOf ps'
 /-- `HmRow.checkPartitionObject`'s text, with each read of the object an argument (`chkObj_view`). -/
 private def chkObjV (okeys : Array String) (fmt : Option String) (prog : String) (qkeys : Array String) (name : String)
     (ver : Option Json) (ps : Json) (pkeys : Array String) (px : String → Option Json)
-    (tm : String → Nat → Option (V (Array String))) (blk : V (Option (Array (Nat × Nat)))) : V (String × Nat) := do
+    (tm : String → Nat → Option (V (Array String))) (blk : V (Option (Array (Array (Nat × Nat))))) : V (String × Nat) := do
   if okeys != #["format", "program", "query"] && okeys != #["blocks", "format", "program", "query"] then
     throw "partition: the object's keys are not format, program, query and optionally blocks"
   if fmt != some PARTITION_V1 then throw s!"partition: not a {PARTITION_V1} object"
@@ -231,7 +231,7 @@ private theorem chkObj_view (obj : Json) :
 section
 
 variable {ok qk pk : Array String} {f : Option String} {p nm : String} {v : Option Json} {ps : Json}
-  {px : String → Option Json} {tm : String → Nat → Option (V (Array String))} {bk : V (Option (Array (Nat × Nat)))}
+  {px : String → Option Json} {tm : String → Nat → Option (V (Array String))} {bk : V (Option (Array (Array (Nat × Nat))))}
 
 set_option smartUnfolding false in
 private theorem chkObjV_ver {va vb : Option Json} (h : Alike va vb) :
@@ -278,25 +278,35 @@ private theorem blockPair_same : ∀ {p q : Json}, Same p q → HmRow.blockPair 
     · have h' : ¬b.size = 2 := hs ▸ h
       simp only [HmRow.blockPair, h, h', ↓reduceDIte]
 
-private theorem pairs_same {a b : Array Json} (hs : a.size = b.size)
+private theorem mapM_same {β : Type} {f : Json → Option β} (hf : ∀ {p q : Json}, Same p q → f p = f q)
+    {a b : Array Json} (hs : a.size = b.size)
     (he : ∀ (i : Nat) (h₁ : i < a.size) (h₂ : i < b.size), Same a[i] b[i]) :
-    a.mapM HmRow.blockPair = b.mapM HmRow.blockPair := by
-  have e : a.map HmRow.blockPair = b.map HmRow.blockPair := by
+    a.mapM f = b.mapM f := by
+  have e : a.map f = b.map f := by
     apply Array.ext
     · rw [Array.size_map, Array.size_map]; exact hs
     · intro i h₁ h₂
       rw [Array.getElem_map, Array.getElem_map]
-      exact blockPair_same (he i _ _)
-  have m : ∀ x : Array Json, x.mapM HmRow.blockPair = (x.map HmRow.blockPair).mapM (fun o => o) := fun x =>
-    (Array.mapM_map (f := HmRow.blockPair) (g := fun o => o) (xs := x)).symm
+      exact hf (he i _ _)
+  have m : ∀ x : Array Json, x.mapM f = (x.map f).mapM (fun o => o) := fun x =>
+    (Array.mapM_map (f := f) (g := fun o => o) (xs := x)).symm
   rw [m a, m b, e]
+
+private theorem blockLevel_same : ∀ {p q : Json}, Same p q → HmRow.blockLevel p = HmRow.blockLevel q
+  | _, _, .null => rfl
+  | _, _, .bool _ => rfl
+  | _, _, .num _ => rfl
+  | _, _, .str _ => rfl
+  | _, _, .obj _ _ _ _ => rfl
+  | _, _, @Same.arr a b hs he => by
+    simp only [HmRow.blockLevel, mapM_same blockPair_same hs he]
 
 /-- **Alike `blocks` read alike.** -/
 private theorem blocksIn_same {x y : Option Json} (h : Alike x y) : HmRow.blocksIn x = HmRow.blocksIn y := by
   rcases h with ⟨rfl, rfl⟩ | ⟨a, b, rfl, rfl, hs⟩
   · rfl
   · cases hs with
-    | @arr a' b' hs he => simp only [HmRow.blocksIn, pairs_same hs he]
+    | @arr a' b' hs he => simp only [HmRow.blocksIn, mapM_same blockLevel_same hs he]
     | _ => rfl
 
 /-- **Alike partition objects cover a population alike.** -/

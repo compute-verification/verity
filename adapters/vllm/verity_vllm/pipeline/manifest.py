@@ -27,7 +27,7 @@ import os
 import re
 import sys
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -35,7 +35,7 @@ from typing import Any, Protocol
 from verity.circuits import cross_call
 from verity.circuits import word as word_query
 
-from verity_vllm.config import option, workload_arg
+from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline.cli import write
@@ -628,8 +628,19 @@ def _unbound_peers(man: dict[str, Any]) -> int | None:
 COMMANDS = {"build": BuildOptions, "build-global": BuildGlobalOptions}
 
 
+def one_gpu(rank: Sequence[int], ranks: int, roots: int = 1) -> None:
+    """Refused unless the manifest is of one GPU's Program."""
+    if ranks != 1 or roots != 1 or any(rank):
+        raise UsageError(f"the multi-GPU model is not served: --rank {list(rank)} --ranks {ranks} over {roots} --programs-root; "
+                         "a manifest is of one GPU's Program")
+
+
 def main(a: Any) -> int:
     log = logger.info
+    if a.cmd == "build":
+        one_gpu([a.rank], a.ranks)
+    elif a.cmd == "build-global":
+        one_gpu(a.rank or [], a.ranks, len(a.programs_root))
     if a.cmd in ("build", "build-global"):
         # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
         from verity_vllm.gc_tuning import tune as _gc_tune
