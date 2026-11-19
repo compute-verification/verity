@@ -1,0 +1,3 @@
+[2026-11-19T01:12Z] 782f5d257aa6
+From the lead, 5:13 PM PST. PROOFS BY A RUN (r20261119-010220-21f8): Lean lower takes the tile core at (256,1,1,1) built by circuits builder with no cut: all 253 Definitions lower, none refused; 41 s and 3.4 GB for lowering and template (124 MB template, 2.47M calls for 51.7M gates), 71 s and 1.2 GB to build the Program. It stopped before the rows (no input words): the unroll and the proof are YOURS tonight on the same code. one-circuit is now 2fe4065e7fc (the lowering merged; 13 unreached launchers deleted): rebase or merge if you need the lowering. Read that run for its command before writing your own.
+
