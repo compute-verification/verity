@@ -1,18 +1,14 @@
 """`cluster policy`: the policy a cluster description declares for its nodes, and every key where a node's live value differs.
 
-Policy here is what node services read from outside git today: node 1's lease pools from their tmux panes' environment,
-Kueue's ClusterQueue quotas and stop policies, the Lean audit and merge-check slot files, `gpu-lease`'s direct-run GPU and CPU
-maps, the cpuset delegation drop-in, and node 2's booked timed windows and CPU sets. The description declares each under
-`[policy]` as a dotted key, `NODE.SURFACE.NAME[.FIELD]` (`vy-nebius-1.lease-pool.provers.max`), and every key has an owner,
-the handle who decides a change: an `owner` in a table covers every key under it, unless a table below names its own.
-`NODE.pools.NAME` comes from the node's own table (`pools`, the CPU pools the planner reserves), with the owner of
-`[policy.NODE.pools]`, else the node's.
+Policy here is what node services read from outside git today: the merge-check slot files, `gpu-lease`'s direct-run GPU and
+CPU maps, the cpuset delegation drop-in, and node 2's booked timed windows and CPU sets. The description declares each under
+`[policy]` as a dotted key, `NODE.SURFACE.NAME[.FIELD]` (`vy-nebius-2.check-slots.a`), and every key has an owner, the handle
+who decides a change: an `owner` in a table covers every key under it, unless a table below names its own.
 
 `show` prints the declared policy, each key with its owner and where its live value is read (`source`). `diff` reads every
-key's live value over SSH, read-only (`COMMANDS`: tmux, ps and /proc reads, `kubectl get`, `cat` and `grep`), and reports
-each key where it differs: `drift` (live differs, or is absent), `undeclared` (live has a key the description lacks) or
-`unknown` (it couldn't be read; unknown is never no drift). Of a process's environment only the lease pool's own variables
-leave the node (`ENV`'s, and any other `VY_POOL_*`). Node 2 is read in one command whose gate, on node 2's clock and before any
+key's live value over SSH, read-only (`COMMANDS`: `cat`, `grep` and /proc reads), and reports each key where it differs:
+`drift` (live differs, or is absent), `undeclared` (live has a key the description lacks) or `unknown` (it couldn't be
+read; unknown is never no drift). Node 2 is read in one command whose gate, on node 2's clock and before any
 other read, reads only the fill runner's `status.txt` and `windows`: unless `status.txt` says `QUIET`, is at most
 `STATUS_FRESH_S` old and not ahead of the clock, and no booked window is on or starts within `WINDOW_LEAD_S`, it reads nothing
 else and every node 2 key is unknown. A `status.txt` older than `STATUS_STALE_S` while no fill runner runs is read from
@@ -20,20 +16,16 @@ gpu-lease's own state instead: node 2 is read as quiet (and `diff` says so) whil
 nobody waits for every GPU and no booked window is on or starts within `STALE_WINDOW_LEAD_S`. A write on node 2 (`cluster
 policy apply`) still needs the runner's fresh quiet status.
 
-Values are compared in one spelling per surface (`canon`): Kubernetes quantities by amount (`384Gi` is 412316860416), CPU
-lists by their CPUs, a window by its start and minutes. A window that has ended is not compared. A ClusterQueue held
-(`stopPolicy: Hold`) by a declared writer (`HOLDERS`: the quiet hour, the disk guard), each of which lists the queues it holds
-in its state file, is as declared; held by anyone else, it is drift.
+Values are compared in one spelling per surface (`canon`): CPU lists by their CPUs, a window by its start and minutes. A
+window that has ended is not compared.
 
 An override (`override`) replaces one key's value until an absolute UTC time, or until a later override of the same key, and
 records who and why. Each node keeps its own keys' overrides in its own log (`OVERRIDES`), hash-chained as the allocation
 ledger is (`ledger.Ledger`). `show` merges the overrides in force from a local log; `diff` reads each node's log along with
 its live values and compares live with the policy in force, the description's value with any override applied. A log that
 doesn't verify is refused (exit 3): the policy in force can't be told from it. Recording an override changes nothing on a
-node: n1_lease.py takes its pool's `max`, `borrow` and `borrow-until` from `show` when `$VY_POOL_POLICY` names the command,
-`cluster policy apply` (policy_apply.py) writes the values whose surface has an applier, and every other value is set by
-hand. Those three of such a loop are read from the `LIMITS` file it writes, and while it
-says they came from anywhere but the policy, they are drift whatever their values.
+node: `cluster policy apply` (policy_apply.py) writes the values whose surface has an applier, and every other value is set
+by hand.
 """
 from __future__ import annotations
 
@@ -45,25 +37,21 @@ import sys
 import time
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import datetime, UTC
-from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable
 
-from . import cpuset, ledger, model, nebius1, nebius2, status
+from . import cpuset, ledger, model, nebius2, status
 
 DESCRIPTION = Path(__file__).parents[2] / "descriptions" / "nebius.toml"
 NODES = status.NODES
-LEAN_SLOTS = "/workspace/research/locks/lean-slots"
 CHECK_SLOTS = "/workspace/research/locks/slots"
 DIRECT = {"direct-gpus": "/etc/vy/direct-gpus", "direct-cpus": "/etc/vy/direct-cpus"}
 USER_CPUSET = "/etc/systemd/system/user@.service.d/vy-cpuset.conf"
-DISPATCH_ENV = "/workspace/jobs/dispatch/dispatch.env"
 FILL = "/workspace/pouw/fill"
-#: node 2 is read only while its status.txt's first line says this (the quiet form dispatch.py and n2_commit.sh wait for),
-#: it is at most STATUS_FRESH_S old by node 2's clock (fill_runner.py rewrites it every 10 s), and no booked window is on or
-#: starts within WINDOW_LEAD_S (status.txt lags a window's start by up to a fill tick)
+#: node 2 is read only while its status.txt's first line says this, it is at most STATUS_FRESH_S old by node 2's clock
+#: (fill_runner.py rewrites it every 10 s), and no booked window is on or starts within WINDOW_LEAD_S (status.txt lags a window's start by up to a fill tick)
 QUIET = "timed False, window waiting False"
 STATUS_FRESH_S = 60
 WINDOW_LEAD_S = 60
@@ -74,27 +62,8 @@ STATUS_STALE_S = 900
 STALE_WINDOW_LEAD_S = 1800
 RUNNER_RE = r"^[^ ]*python[0-9.]*( [^ ]+)* [^ ]*fill_runner\.py( |$)"
 LEASE_DIR = str(nebius2.LEASE_DIR)
-HOLDERS = {"vy-quiet-hour": "/var/lib/vy-quiet-hour/held", "vy-disk-guard": "/var/lib/vy-disk-guard/held"}
-#: a lease pool's tmux session, where its n1_lease.py loop runs
-SESSIONS = {"provers": "n1-lease", "circuits": "n1-lease-circuits"}
-#: a lease pool's keys and the environment variables n1_lease.py reads them from
-ENV = {"name": "VY_POOL_NAME", "dir": "GPU_LEASE_DIR", "queue": "VY_POOL_QUEUE", "local-queue": "VY_POOL_LOCAL_QUEUE",
-       "priority": "VY_POOL_PRIORITY", "max": "VY_POOL_MAX", "idle-s": "VY_POOL_IDLE_S", "borrow": "VY_POOL_BORROW",
-       "borrow-until": "VY_POOL_BORROW_UNTIL", "grace-s": "VY_LEASE_EXPIRY_GRACE_S"}
-#: with this set, n1_lease.py takes these keys from the policy in force and writes the values it uses to LIMITS in its lease
-#: directory, so that file, not its environment, is their live value
-POLICY_VAR = "VY_POOL_POLICY"
-POLICY_FIELDS = ("max", "borrow", "borrow-until")
-#: of those, the numbers of GPUs: whole numbers, at most the node's GPUs
-GPU_FIELDS = ("max", "borrow")
-LIMITS = "n1-lease.limits"
-KUEUE_RESOURCES = {"gpu": "nvidia.com/gpu", "cpu": "cpu", "memory": "memory"}
-KUEUE_FIELDS = {"nominal": "nominalQuota", "borrowing": "borrowingLimit", "lending": "lendingLimit"}
 #: each node's surfaces, and the command each is read with
-SURFACES = {nebius1.NODE: {"lease-pool": "lease", "kueue": "kueue", "lean-slots": "files", "check-slots": "files",
-                           "direct-gpus": "files", "direct-cpus": "files", "user-cpuset": "files", "pools": "files"},
-            nebius2.NODE: {"fill": "n2", "check-slots": "n2", "direct-gpus": "n2", "direct-cpus": "n2", "user-cpuset": "n2"}}
-POOL_SOURCES = {"provers": f"{DISPATCH_ENV} VY_PROVER_CPUS", "checks": f"{CHECK_SLOTS}: every slot's CPUs"}
+SURFACES = {nebius2.NODE: {"fill": "n2", "check-slots": "n2", "direct-gpus": "n2", "direct-cpus": "n2", "user-cpuset": "n2"}}
 UNTIL_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 #: on each node, the overrides of that node's keys
 OVERRIDES = "/workspace/research/policy/overrides.jsonl"
@@ -142,7 +111,7 @@ def _owner_of(key: str, owners: dict[str, str]) -> str | None:
 
 
 def load(path: str | Path = DESCRIPTION) -> dict[str, Key]:
-    """The description's policy keys, the node tables' pools among them, checked (`problems`)."""
+    """The description's policy keys, checked (`problems`)."""
     return _load(path)[1]
 
 
@@ -155,12 +124,6 @@ def _load(path: str | Path) -> tuple[model.Cluster, dict[str, Key]]:
         if not isinstance(table, dict):
             raise PolicyError(f"policy.{node} is not a table")
         _flatten(node, table, None, flat, owners)
-    for name, n in cluster.nodes.items():
-        for pool, cpus in n.pools.items():
-            key = f"{name}.pools.{pool}"
-            if key in flat:
-                raise PolicyError(f"{key} is the node's own `pools`; the policy table declares only its owner")
-            flat[key] = (cpuset.format(cpus), _owner_of(key, owners))
     keys = {k: Key(k, v, o or "") for k, (v, o) in sorted(flat.items())}
     errs = problems(cluster, keys)
     if errs:
@@ -169,8 +132,7 @@ def _load(path: str | Path) -> tuple[model.Cluster, dict[str, Key]]:
 
 
 def problems(cluster: model.Cluster, keys: dict[str, Key]) -> list[str]:
-    """Why these keys can't be read or compared: no owner, an unknown node or surface, a value of the wrong shape, or a
-    workstream whose GPU quota (the planner's) the Kueue keys contradict."""
+    """Why these keys can't be read or compared: no owner, an unknown node or surface, or a value of the wrong shape."""
     out = []
     for k in keys.values():
         parts = k.key.split(".")
@@ -191,28 +153,12 @@ def problems(cluster: model.Cluster, keys: dict[str, Key]) -> list[str]:
             out.append(f"{k.key}: {e}")
             continue
         s, rest = k.surface, parts[2:]
-        if s == "lease-pool" and (len(rest) != 2 or rest[0] not in SESSIONS or rest[1] not in ENV):
-            out.append(f"{k.key}: a lease pool key is lease-pool.POOL.FIELD, POOL one of {sorted(SESSIONS)}, FIELD one of "
-                       f"{sorted(ENV)}")
-        elif s == "lease-pool" and rest[1] in GPU_FIELDS and int(canon(k.key, k.value)) > len(cluster.nodes[k.node].gpus):
-            out.append(f"{k.key}: {k.value} is more GPUs than {k.node} has ({len(cluster.nodes[k.node].gpus)})")
-        elif s == "lease-pool" and rest[1] == "borrow-until":
-            try:
-                datetime.strptime(str(k.value), UNTIL_FORMAT)
-            except ValueError:
-                out.append(f"{k.key}: n1_lease.py reads only {UNTIL_FORMAT} (else it never stops borrowing)")
-        elif s == "kueue" and not (len(rest) == 2 and rest[1] == "stop-policy"
-                                   or len(rest) == 3 and rest[1] in KUEUE_RESOURCES and rest[2] in KUEUE_FIELDS):
-            out.append(f"{k.key}: a Kueue key is kueue.QUEUE.stop-policy or kueue.QUEUE.RESOURCE.FIELD, RESOURCE one of "
-                       f"{sorted(KUEUE_RESOURCES)}, FIELD one of {sorted(KUEUE_FIELDS)}")
-        elif s in ("lean-slots", "check-slots") and len(rest) != 1:
+        if s == "check-slots" and len(rest) != 1:
             out.append(f"{k.key}: a slot key is {s}.NAME")
         elif s in DIRECT and rest:
             out.append(f"{k.key}: {s} is one value")
         elif s == "user-cpuset" and rest != ["delegate"]:
             out.append(f"{k.key}: the cpuset drop-in's only key is user-cpuset.delegate")
-        elif s == "pools" and (len(rest) != 1 or rest[0] not in POOL_SOURCES):
-            out.append(f"{k.key}: no live source for pool {'.'.join(rest)!r} (one of {sorted(POOL_SOURCES)})")
         elif s == "fill" and not (len(rest) == 2 and rest[0] in ("window", "cpu-sets")):
             out.append(f"{k.key}: a fill key is fill.window.START or fill.cpu-sets.OWNER")
         elif s == "fill" and rest[0] == "window":
@@ -221,21 +167,7 @@ def problems(cluster: model.Cluster, keys: dict[str, Key]) -> list[str]:
                     out.append(f"{k.key}: write the start as {_minute(_start(rest[1]))}")
             except ValueError:
                 out.append(f"{k.key}: {rest[1]!r} is not a UTC start (2026-10-04T06:30Z)")
-    for w in cluster.workstreams:
-        for quota, want in (("nominal", w.gpus), ("borrowing", w.borrow_gpus)):
-            k = keys.get(f"{w.node}.kueue.{w.name}.gpu.{quota}")
-            if k is not None and want is not None and canon(k.key, k.value) != canon(k.key, want):
-                out.append(f"{k.key} = {k.value}, but workstream {w.name} says {want} (one of them is stale)")
     return out
-
-
-def _quantity(q: str) -> Fraction:
-    units = {"Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "Ti": 2**40, "Pi": 2**50, "Ei": 2**60, "k": 10**3, "M": 10**6, "G": 10**9,
-             "T": 10**12, "P": 10**15, "E": 10**18, "m": Fraction(1, 1000)}
-    for u in sorted(units, key=len, reverse=True):
-        if q.endswith(u) and q[:-len(u)]:
-            return Fraction(q[:-len(u)]) * units[u]
-    return Fraction(q)
 
 
 def _start(s: str) -> int:
@@ -251,17 +183,11 @@ def canon(key: str, value: Any) -> str:
     """`value` in the one spelling `diff` compares for `key`'s surface; ValueError when it isn't that surface's shape."""
     parts = key.split(".")
     s, v = parts[1], str(value).strip()
-    if s == "kueue" and parts[-1] in KUEUE_FIELDS:
-        return str(_quantity(v))
-    if s in ("pools", "direct-cpus"):
+    if s == "direct-cpus":
         return cpuset.format(cpuset.parse(v))
     if s == "check-slots":
         cpus, *opts = v.split()
         return " ".join([cpuset.format(cpuset.parse(cpus)), *sorted(opts)])
-    if s == "lean-slots" or s == "lease-pool" and parts[-1] in GPU_FIELDS:
-        if not (v.isascii() and v.isdigit()):
-            raise ValueError(f"{v!r} is not a whole number")
-        return str(int(v))
     if s == "fill" and parts[2] == "window":
         m = float(v)
         if not 0 < m < float("inf"):
@@ -289,17 +215,9 @@ def source(key: str) -> str:
     """Where `diff` reads `key`'s live value on its node."""
     parts = key.split(".")
     s, rest = parts[1], parts[2:]
-    if s == "lease-pool":
-        return (f"tmux {SESSIONS[rest[0]]}: n1_lease.py loop's {ENV[rest[1]]}"
-                + (f", or its {LIMITS} under {POLICY_VAR}" if rest[1] in POLICY_FIELDS else "")) if rest[1] in ENV \
-            else f"tmux {SESSIONS[rest[0]]}"
-    if s == "kueue":
-        return (f"ClusterQueue {rest[0]} spec.stopPolicy" if rest[1] == "stop-policy"
-                else f"ClusterQueue {rest[0]} {KUEUE_RESOURCES.get(rest[1], rest[1])} {KUEUE_FIELDS.get(rest[2], rest[2])}")
     if s in DIRECT:
         return DIRECT[s]
-    return {"lean-slots": LEAN_SLOTS, "check-slots": CHECK_SLOTS, "user-cpuset": f"{USER_CPUSET} Delegate=",
-            "pools": POOL_SOURCES.get(rest[0], "") if rest else "",
+    return {"check-slots": CHECK_SLOTS, "user-cpuset": f"{USER_CPUSET} Delegate=",
             "fill": f"{FILL}/{'windows' if rest[:1] == ['window'] else 'cpu-sets'}"}.get(s, "")
 
 
@@ -341,14 +259,10 @@ def effective(keys: dict[str, Key], records: list[dict[str, Any]], now: int, nod
 
 def override_problems(cluster: model.Cluster, keys: dict[str, Key], key: str, value: Any, until: str, by: str, reason: str,
                       now: int) -> list[str]:
-    """Why an override can't be recorded: a key no node's reader knows or a value of the wrong shape (an override may differ
-    from a workstream's quota: that is what it is for), a node pool (the planner reads those from the description), an
-    `until` that isn't an absolute UTC time still to come, or no `by` or `reason`."""
-    out = []
-    if key.split(".")[1:2] == ["pools"]:
-        out.append(f"{key}: a node's pools are its own `pools`, which the planner reads from the description: change them there")
+    """Why an override can't be recorded: a key no node's reader knows or a value of the wrong shape, an `until` that isn't an
+    absolute UTC time still to come, or no `by` or `reason`."""
     owner = keys[key].owner if key in keys else _owner_guess(key, keys) or "?"
-    out += problems(replace(cluster, workstreams=()), {key: Key(key, value, owner)})
+    out = problems(cluster, {key: Key(key, value, owner)})
     try:
         if ledger.epoch(until) <= now:
             out.append(f"--until {until} has passed")
@@ -390,32 +304,6 @@ def _files(text: str) -> dict[str, str | None]:
             out[path] += line + "\n"
     return out
 
-
-_ENV_RE = "^(" + "|".join(sorted({v for v in ENV.values() if not v.startswith("VY_POOL_")} | {"VY_POOL_[A-Z0-9_]+"})) + ")="
-# the loop is the python process itself, not the pane's `bash -c` whose command line names it too; its environment is matched
-# a variable at a time (`grep -z`) and each one's newlines printed as spaces, so no part of another variable's value can pass
-_LEASE = (
-    "set -f\n"
-    'kids() { for c in $(ps --ppid "$1" -o pid=); do echo "$c"; kids "$c"; done; }\n'
-    "panes=$(tmux list-panes -a -F '#{session_name} #{pane_pid}') || exit 1\n"
-    'echo "$panes" | while read -r s p; do\n'
-    f'  case " {" ".join(sorted(SESSIONS.values()))} " in *" $s "*) ;; *) continue ;; esac\n'
-    '  echo "session $s"\n'
-    '  for c in $p $(kids "$p"); do\n'
-    '    set -- $(tr "\\0" " " < /proc/$c/cmdline 2>/dev/null)\n'
-    '    case "${1##*/} ${2##*/} ${3:-}" in python*" n1_lease.py loop") ;; *) continue ;; esac\n'
-    "    e=/proc/$c/environ\n"
-    '    grep -zq "" "$e" 2>/dev/null; [ $? -le 1 ] || { echo "unreadable $s $c"; continue; }\n'
-    '    echo "loop $s $c"\n'
-    f"    grep -zE '{_ENV_RE}' \"$e\" | tr '\\n\\0' ' \\n'\n"
-    f"    grep -zq '^{POLICY_VAR}=.' \"$e\" || continue\n"
-    "    d=$(grep -z '^GPU_LEASE_DIR=' \"$e\" | tr '\\n\\0' ' \\n' | cut -d= -f2-)\n"
-    f'    if l=$(cat "${{d:-/run/gpu-lease}}/{LIMITS}" 2>/dev/null); then echo "limits $l"; else echo "limits"; fi\n'
-    "  done\n"
-    "done\n")
-# only VY_PROVER_CPUS of the dispatcher's env file; grep's 1 is no such line, anything above an error
-_DISPATCH = (f'f={shlex.quote(DISPATCH_ENV)}; if [ -e "$f" ]; then echo "{FILE_MARK}$f"; '
-             f'grep -E "^VY_PROVER_CPUS=" "$f" || [ $? -eq 1 ]; else echo "{ABSENT_MARK}$f"; fi')
 
 # the stale form of the gate, read-only, from gpu-lease's own lines and /proc (never a `flock -n` probe: nebius2.py): a live
 # owner line tagged timed=1, every GPU's lock under one live pid, or a live waiter for every GPU is a timed window on or
@@ -498,14 +386,9 @@ N2_GATE = _n2_gate(stale_ok=True)
 N2_WRITE_GATE = _n2_gate(stale_ok=False)
 
 COMMANDS = {
-    "lease": _LEASE,
-    "kueue": shlex.join([*nebius1.KUBECTL, "get", "clusterqueues", "-o", "json"]),
-    "holds": _dump(sorted(HOLDERS.values())),
-    "files": _dump([LEAN_SLOTS, CHECK_SLOTS, *DIRECT.values(), USER_CPUSET]) + " && " + _DISPATCH,
-    "overrides": _dump([OVERRIDES]),
     "n2": N2_GATE + _dump([f"{FILL}/windows", f"{FILL}/cpu-sets", CHECK_SLOTS, *DIRECT.values(), USER_CPUSET, OVERRIDES]),
 }
-READS = {nebius1.NODE: ("lease", "kueue", "holds", "files", "overrides"), nebius2.NODE: ("n2",)}
+READS = {nebius2.NODE: ("n2",)}
 
 
 def read(node: str, run: Callable[[str], str]) -> dict[str, str | Exception]:
@@ -521,14 +404,11 @@ def read(node: str, run: Callable[[str], str]) -> dict[str, str | Exception]:
 
 @dataclass
 class Live:
-    """A node's live policy: each key's value as read, the prefixes that couldn't be read (with why), notes on keys, faults
-    (keys whose live value is drift whatever it is: the value in force came from the wrong place), and the records of the
+    """A node's live policy: each key's value as read, the prefixes that couldn't be read (with why), and the records of the
     node's override log."""
     values: dict[str, str]
     unknown: dict[str, str]
-    notes: dict[str, str]
     overrides: list[dict[str, Any]] = field(default_factory=list)
-    faults: dict[str, str] = field(default_factory=dict)
     #: why node 2's gate read it as quiet with no fresh status from its fill runner (its stale form), with that status
     quiet: str | None = None
 
@@ -544,26 +424,11 @@ def _slots(text: str) -> list[list[str]]:
     return [f for f in (line.split("#")[0].split() for line in text.splitlines()) if f]
 
 
-def _read_files(node: str, files: dict[str, str | None], live: Live, *, pools: bool) -> None:
+def _read_files(node: str, files: dict[str, str | None], live: Live) -> None:
     v = live.values
-    if files.get(LEAN_SLOTS) is not None:
-        for f in _slots(files[LEAN_SLOTS]):
-            v[f"{node}.lean-slots.{f[0]}"] = " ".join(f[1:])
-    checks: set[int] = set()
     if files.get(CHECK_SLOTS) is not None:
         for f in _slots(files[CHECK_SLOTS]):
             v[f"{node}.check-slots.{f[0]}"] = " ".join(f[1:])
-            if len(f) > 1:
-                try:
-                    checks |= cpuset.parse(f[1])
-                except cpuset.CpuSetError:
-                    live.unknown[f"{node}.pools.checks"] = f"{CHECK_SLOTS}: slot {f[0]}'s CPUs {f[1]!r} don't parse"
-    if pools:
-        v[f"{node}.pools.checks"] = cpuset.format(checks)
-        env = files.get(DISPATCH_ENV) or ""
-        cpus = [line.split("=", 1)[1].strip() for line in env.splitlines() if line.startswith("VY_PROVER_CPUS=")]
-        if cpus:
-            v[f"{node}.pools.provers"] = cpus[-1]
     for s, p in DIRECT.items():
         text = files.get(p)
         lines = [x for x in (line.split("#")[0].strip() for line in (text or "").splitlines()) if x]
@@ -573,106 +438,6 @@ def _read_files(node: str, files: dict[str, str | None], live: Live, *, pools: b
     if text is not None:
         d = [line.split("=", 1)[1] for line in text.splitlines() if line.strip().startswith("Delegate=")]
         v[f"{node}.user-cpuset.delegate"] = d[-1].strip() if d else ""
-
-
-def _read_lease(node: str, text: str, live: Live) -> None:
-    sessions: set[str] = set()
-    unreadable: set[str] = set()
-    loops: dict[str, list[dict[str, str]]] = {}
-    cur: dict[str, str] | None = None
-    for line in text.splitlines():
-        f = line.split()
-        if f[:1] == ["session"] and len(f) == 2:
-            sessions.add(f[1])
-            cur = None
-        elif f[:1] == ["unreadable"] and len(f) == 3:
-            unreadable.add(f[1])
-            cur = None
-        elif f[:1] == ["loop"] and len(f) == 3:
-            cur = {}
-            loops.setdefault(f[1], []).append(cur)
-        elif f[:1] == ["limits"] and cur is not None:
-            cur[f"@{LIMITS}"] = line[len("limits"):].strip()
-        elif cur is not None and "=" in line:
-            k, _, val = line.partition("=")
-            cur[k] = val
-    var_key = {var: k for k, var in ENV.items()}
-    for pool, sess in SESSIONS.items():
-        prefix = f"{node}.lease-pool.{pool}"
-        envs = loops.get(sess, [])
-        if sess not in sessions:
-            live.unknown[prefix] = f"no tmux session {sess}"
-        elif sess in unreadable:
-            live.unknown[prefix] = f"the environment of tmux session {sess}'s n1_lease.py loop can't be read"
-        elif not envs:
-            live.unknown[prefix] = f"no n1_lease.py loop in tmux session {sess}"
-        elif any(e != envs[0] for e in envs):
-            live.unknown[prefix] = f"{len(envs)} n1_lease.py loops in tmux session {sess}, with different settings"
-        else:
-            env = dict(envs[0])
-            limits = env.pop(f"@{LIMITS}", None)
-            if env.pop(POLICY_VAR, ""):
-                for var in (ENV[f] for f in POLICY_FIELDS):
-                    env.pop(var, None)
-                _read_limits(prefix, limits, live)
-            for var, val in env.items():
-                live.values[f"{prefix}.{var_key.get(var, var)}"] = val
-
-
-def _read_limits(prefix: str, text: str | None, live: Live) -> None:
-    """A loop under $VY_POOL_POLICY: the max, borrow and borrow-until it last wrote to its LIMITS file, those in force. An
-    empty borrow-until is none, as in its environment."""
-    got = dict(w.partition("=")[::2] for w in (text or "").split())
-    missing = [f for f in (*POLICY_FIELDS, "from") if f not in got]
-    for f in POLICY_FIELDS:
-        key = f"{prefix}.{f}"
-        if missing:
-            live.unknown[key] = (f"n1_lease.py runs under ${POLICY_VAR} and its {LIMITS} "
-                                 + (f"lacks {', '.join(missing)}" if text else "can't be read"))
-            continue
-        if got[f]:
-            live.values[key] = got[f]
-        if got["from"] != "policy":
-            live.faults[key] = (f"n1_lease.py can't read ${POLICY_VAR}, so "
-                                + ("the values it last read there are" if got["from"] == "last-policy"
-                                   else "its environment's values are") + " in force")
-
-
-def _read_kueue(node: str, raw: str | Exception, holds: str | Exception, live: Live) -> None:
-    prefix = f"{node}.kueue"
-    if isinstance(raw, Exception):
-        live.unknown[prefix] = f"kubectl get clusterqueues failed: {raw}"
-        return
-    res_key = {v: k for k, v in KUEUE_RESOURCES.items()}
-    held: dict[str, list[str]] | None = None
-    if not isinstance(holds, Exception):
-        files = _files(holds)
-        held = {}
-        for who, path in HOLDERS.items():
-            for q in (files.get(path) or "").split():
-                held.setdefault(q, []).append(who)
-    for q in json.loads(raw)["items"]:
-        name, spec = q["metadata"]["name"], q.get("spec") or {}
-        stop = spec.get("stopPolicy") or "None"
-        live.values[f"{prefix}.{name}.stop-policy"] = stop
-        if stop != "None":
-            key = f"{prefix}.{name}.stop-policy"
-            if held is None:
-                live.unknown[key] = f"held ({stop}), and the holders' state files can't be read: {holds}"
-            elif held.get(name):
-                live.notes[key] = f"held by {', '.join(held[name])}"
-        seen: dict[str, int] = {}
-        for rg in spec.get("resourceGroups") or ():
-            for fl in rg.get("flavors") or ():
-                for r in fl.get("resources") or ():
-                    res = res_key.get(r["name"], r["name"])
-                    seen[res] = seen.get(res, 0) + 1
-                    for quota, k8s in KUEUE_FIELDS.items():
-                        if k8s in r:
-                            live.values[f"{prefix}.{name}.{res}.{quota}"] = str(r[k8s])
-        for res, n in seen.items():
-            if n > 1:
-                live.unknown[f"{prefix}.{name}.{res}"] = f"{n} flavors give {res}: the description declares one"
 
 
 def _read_n2(node: str, raw: str, now: int, live: Live) -> None:
@@ -701,34 +466,17 @@ def _read_n2(node: str, raw: str, now: int, live: Live) -> None:
     for f in _slots(files.get(f"{FILL}/cpu-sets") or ""):
         if len(f) >= 3 and re.fullmatch(r"[\d,-]+", f[1]) and f[2].isdigit() and (len(f) < 4 or f[3].isdigit()):
             live.values[f"{node}.fill.cpu-sets.{f[0]}"] = " ".join(f[1:4])
-    _read_files(node, files, live, pools=False)
+    _read_files(node, files, live)
     _read_overrides(node, files, live)
 
 
 def live(node: str, raw: dict[str, str | Exception], now: int) -> Live:
     """The node's live policy from `read`'s outputs, at `now`."""
-    out = Live({}, {}, {})
-    if node == nebius2.NODE:
-        if isinstance(raw["n2"], Exception):
-            out.unknown[node] = f"node 2 couldn't be read: {raw['n2']}"
-        else:
-            _read_n2(node, raw["n2"], now, out)
-        return out
-    if isinstance(raw["lease"], Exception):
-        out.unknown[f"{node}.lease-pool"] = f"the lease pools' tmux panes couldn't be read: {raw['lease']}"
+    out = Live({}, {})
+    if isinstance(raw["n2"], Exception):
+        out.unknown[node] = f"node 2 couldn't be read: {raw['n2']}"
     else:
-        _read_lease(node, raw["lease"], out)
-    _read_kueue(node, raw["kueue"], raw["holds"], out)
-    if isinstance(raw["files"], Exception):
-        for s, cmd in SURFACES[node].items():
-            if cmd == "files":
-                out.unknown[f"{node}.{s}"] = f"the policy files couldn't be read: {raw['files']}"
-    else:
-        _read_files(node, _files(raw["files"]), out, pools=True)
-    if isinstance(raw["overrides"], Exception):
-        out.unknown[node] = f"its override log couldn't be read, so the policy in force can't be told: {raw['overrides']}"
-    else:
-        _read_overrides(node, _files(raw["overrides"]), out)
+        _read_n2(node, raw["n2"], now, out)
     return out
 
 
@@ -758,13 +506,10 @@ def diff(keys: dict[str, Key], node: str, lv: Live, now: int) -> list[dict[str, 
                 same, bad = canon(k, d.value) == canon(k, lv.values[k]), None
             except (ValueError, IndexError) as e:
                 same, bad = False, f"the live value doesn't parse: {e}"
-            if same and k not in lv.faults:
+            if same:
                 row["status"] = "ok"
-            elif k.endswith(".stop-policy") and k in lv.notes and canon(k, d.value) == "None":
-                row.update(status="ok", why=lv.notes[k])
             else:
-                row.update(status="drift", why=bad or lv.faults.get(k) or lv.notes.get(k) or (
-                    "held by no declared writer" if k.endswith(".stop-policy") else "live differs"))
+                row.update(status="drift", why=bad or "live differs")
         rows.append(row)
     for k, val in lv.values.items():
         if k in mine or _unknown(k, lv.unknown) is not None:
@@ -920,9 +665,8 @@ def main_override(description: str | Path, key: str, value: str, until: str, by:
     else:
         print(f"{'overrode' if apply else 'would override'} {key}: {was} -> {v} until {until}, by {by}: {reason}"
               f"{'' if apply else f' (in {path}; --apply records it)'}\n"
-              "Nothing carries it to the node but n1_lease.py, for its pool's max, borrow and borrow-until while $VY_POOL_POLICY "
-              f"is set, and `cluster policy apply --key {key} --apply --as WHO --reason R`: set any other value yourself. "
-              "`cluster policy diff` compares the live value with it.")
+              f"Nothing carries it to the node but `cluster policy apply --key {key} --apply --as WHO --reason R`: set any other "
+              "value yourself. `cluster policy diff` compares the live value with it.")
     return 0
 
 
@@ -945,7 +689,7 @@ def main_diff(description: str | Path, which: str, as_json: bool, key: Path | No
             lv = live(node, raw, now)
             rows = diff(effective(keys, lv.overrides, now, node), node, lv, now)
         except Exception as e:  # noqa: BLE001  (output of any unexpected shape is unknown, exit 3, never drift's 1)
-            lv = Live({}, {node: f"its live policy couldn't be parsed: {type(e).__name__}: {e}"}, {})
+            lv = Live({}, {node: f"its live policy couldn't be parsed: {type(e).__name__}: {e}"})
             rows = diff(keys, node, lv, now)
         reports.append({"node": node, "keys": rows, **({"quiet": lv.quiet} if lv.quiet else {})})
     found = [r for rep in reports for r in rep["keys"] if r["status"] != "ok"]
@@ -959,6 +703,6 @@ def main_diff(description: str | Path, which: str, as_json: bool, key: Path | No
     return 1 if found else 0
 
 
-__all__ = ["DESCRIPTION", "OVERRIDES", "COMMANDS", "READS", "SESSIONS", "ENV", "HOLDERS", "Key", "Live", "PolicyError", "load",
+__all__ = ["DESCRIPTION", "OVERRIDES", "COMMANDS", "READS", "Key", "Live", "PolicyError", "load",
            "problems", "canon", "source", "window_ends", "read_overrides", "overrides", "effective", "override_problems", "read",
            "live", "diff", "show", "render_show", "render_diff", "main_show", "main_diff", "main_override"]

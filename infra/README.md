@@ -24,12 +24,11 @@ Each reaches the nodes, so it needs the team's keys and the nodes' addresses.
 
 | Directory | What it is |
 | --- | --- |
-| [`cluster/`](cluster/README.md) | The shared nodes' policy, planner and allocation ledger, and their GPU-hours by node and hour. |
+| [`cluster/`](cluster/README.md) | The shared nodes' policy, planner and allocation ledger. |
 | [`control/`](control/README.md) | The control pod, `vy-control-verity`: its loops, its services and how each is deployed. |
 | [`cursor/`](cursor/README.md) | Launching, handing over and archiving the coordinators. |
 | [`slack-events/`](slack-events/README.md) | The service that routes people's Slack posts to lanes. |
 | `ops/` | The `ops` command: deploys to the nodes and their drift, and each node's keepers. |
-| `nebius/` | The units that run the console's panels on node 1. |
 | `dashboard/` | The Metrics dashboard's own number: how many top goals have a number that runs. |
 | `vcf/` | A benchmark run on VCF's Slurm cluster, sent from the control pod and published from it (`benchmarks/README.md`, "On VCF's Slurm cluster"), deployed there as `/data/vcf/`. |
 

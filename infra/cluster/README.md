@@ -26,7 +26,7 @@ It needs nothing beyond `uv sync`. `uv run cluster --help` lists every other com
 | `cluster submit` | A declared job's node and the wrappers its node's executor runs it under. |
 | `cluster agent` | The planner live on a node: on node 2 it carries the plan out through `gpu-lease`, or in shadow mode records what it would have done. |
 | `cluster ledger`, `cluster shadow` | The ledger read and verified; the shadow replayed over a day's logs and held to its pass bar. |
-| `cluster status`, `cluster usage` | Each node's jobs and holds, and its GPU-hours by hour, read over SSH. |
+| `cluster status` | The node's jobs, GPU-hours ready and disk, read over SSH. |
 | `cluster policy` | The policy node services read from outside git: what is in force, where a node differs, and the change that converges it. |
 
 The rules the planner keeps (no GPU, CPU or lock in two allocations, owner before guest, only a strictly higher rank

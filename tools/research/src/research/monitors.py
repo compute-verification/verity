@@ -22,7 +22,7 @@ its last read. One that fails otherwise keeps its incidents open, and once it ha
 `<id>|unreadable` for infra.
 
 **Sinks.** Each open and clear is a line of `<alerts>/monitors.jsonl` (`research/monitors-event/v1`), and each open also a note
-in `<alerts>/outbox/` in the lane contract's note format, so one relay posts these and any other note there alike. A write there that fails opens or
+in `<alerts>/outbox/` in the lane contract's note format. A write there that fails opens or
 clears nothing, so the next pass tries again. A node pass ends by PASS_S, inside the unit's timeout: a check still due then is
 Late and runs next pass. The state is saved after each monitor, and an event monitors.jsonl already has (a pass killed before
 it saved) isn't written again. With `$VY_MONITORS_SLACK_WEBHOOK` set (an incoming webhook; its URL is never
@@ -40,7 +40,7 @@ UNWATCHED_S past the end of any booked window, fill-status-n2 opens `unwatched`:
 local one to #agent-alerts as `vy-monitors`, tagging the owners; each clear is a reply in its alert's thread (a post of its
 own when that thread is gone). An owner other than infra also gets a pointer in #agent-coordination, where its doorbell rings
 (#agent-alerts rings only infra). A finding with a `thread` (failed-checks': the merge thread) is instead a reply there,
-ringing its owners. Grafana's notes in the node's outbox are posted too. On its first pass over an alert dir it
+ringing its owners. On its first pass over an alert dir it
 posts only the incidents still open. A post that fails stops only its own source, until the next pass; one Slack refuses for
 good, or that has failed for RELAY_GIVE_UP_S, is dropped with a log line.
 
@@ -2019,14 +2019,8 @@ def still_open(events: list[dict]) -> list[dict]:
     return list(live.values())
 
 
-def front_matter(text: str) -> dict[str, str]:
-    m = re.match(r"---\n(.*?)\n---\n", text, re.S)
-    return dict(ln.split(": ", 1) for ln in m[1].splitlines() if ": " in ln) if m else {}
-
-
 class Source:
-    """An alert dir the relay reads: node 2's over ssh, or a local one. `lines(after)` -> (total, the lines after `after`);
-    `notes()` -> the outbox's names; `head(name)` -> a note's start."""
+    """An alert dir the relay reads: node 2's over ssh, or a local one. `lines(after)` -> (total, the lines after `after`)."""
 
     def __init__(self, name: str, path: str, host: str | None = None, run: Callable[..., subprocess.CompletedProcess] = subprocess.run):
         self.name, self.path, self.host, self.run = name, path.rstrip("/"), host, run
@@ -2044,12 +2038,6 @@ class Source:
         if not out or out[0].strip() == "missing":
             return None
         return int(out[0].strip() or 0), out[1:]
-
-    def notes(self) -> list[str]:
-        return sorted(n for n in self._sh(f"ls -1 {shlex.quote(self.path)}/outbox 2>/dev/null || true").split() if n.endswith(".md"))
-
-    def head(self, name: str) -> str:
-        return self._sh(f"head -c 4000 {shlex.quote(self.path)}/outbox/{shlex.quote(name)}")
 
 
 def _event(line: str) -> dict:
@@ -2069,7 +2057,7 @@ FINAL = re.compile(r"thread_not_found|message_not_found|channel_not_found|is_arc
 
 def relay_pass(rstate: dict, sources: list[Source], post: Callable[[dict, dict | None], dict], now: float, *,
                log: Callable[[str], None] = print, checkpoint: Callable[[], None] | None = None) -> int:
-    """Post each source's new events and Grafana's new notes; returns how many. An open's thread (a dict `post` fills in as it
+    """Post each source's new events; returns how many. An open's thread (a dict `post` fills in as it
     goes) is kept from its first attempt, so a pointer that fails doesn't post its alert again. A post that fails is logged:
     Slack refusing it for good (FINAL), or its failing for RELAY_GIVE_UP_S, drops it; otherwise its source stops there until
     the next pass, which tries it first. A source that can't be read is logged too, and the others go on. `checkpoint()`
@@ -2123,24 +2111,6 @@ def relay_pass(rstate: dict, sources: list[Source], post: Callable[[dict, dict |
                     if not one(src, _event(ln)):
                         break
                     s["lines"] += 1
-        names = src.notes()
-        if "notes" not in s:
-            s["notes"] = names
-            return
-        seen = set(s["notes"]) & set(names)
-        for n in names:
-            if n in seen:
-                continue
-            text = src.head(n)
-            fm = front_matter(text)
-            if "monitor" not in fm and not one(src, {
-                    "event": "note", "monitor": "grafana", "key": n, "owners": [fm.get("lane", "infra")], "severity": "warn",
-                    "text": text.split("\n---\n", 1)[-1].strip()[:2500], "action": f"read `{n}` in node 2's alert outbox",
-                    "by": fm.get("origin", "grafana")}):
-                break
-            seen.add(n)
-            s["notes"] = sorted(seen)
-        s["notes"] = sorted(seen)
 
     for src in sources:
         try:
