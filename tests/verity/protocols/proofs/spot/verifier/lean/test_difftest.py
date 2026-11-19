@@ -6558,6 +6558,38 @@ def test_a_piece_agrees(pieces, port, examples):
     assert stats.outputs > examples // 4 and stats.rejects > 0, stats
 
 
+def test_the_sample_reads_the_expansion_only_under_the_counts_guard(pieces):
+    """`OneStage.sampledFrom` samples under the verifier's own expansion (`Draw.deriveSamplingDesign`), not the design
+    `Draw.agreed` agrees to; the two are one design only while `Draw.COUNTS_AWAIT_THEIR_CLAIM` refuses a rated design at
+    counts of its own. So while `sampledFrom` reads the expansion, Lean's `agreed` and the mirror's refuse such a design by
+    that name, and the one Lean agrees to under a rated law is the expansion. The change that lets a design's own counts
+    stand deletes this test with the read."""
+    import hypothesis
+    one_stage = (PACKAGE / "Spot" / "OneStage.lean").read_text()
+    body = one_stage[one_stage.index("def sampledFrom"):].split("\n\n", 1)[0]
+    assert "Draw.deriveSamplingDesign" in body, "sampledFrom no longer reads the expansion: delete this test with the read"
+    refused, agreed_rated = [], []
+
+    @hypothesis.settings(derandomize=True, database=None, deadline=None, max_examples=400,
+                         suppress_health_check=[hypothesis.HealthCheck.too_slow, hypothesis.HealthCheck.filter_too_much])
+    @hypothesis.given(agreed_inputs())
+    def guarded(j):
+        python, lean = AGREED.python(j), AGREED.lean(pieces, j)
+        out = json.loads(python[1]) if python[0] == "output" else {}
+        law = j["params"]["law"]
+        if out == {"why": DR.COUNTS_AWAIT_THEIR_CLAIM}:
+            assert lean == python, (j, lean)
+            refused.append(j)
+        elif "law" in out and isinstance(law, dict) and law.get("law") == "rated":
+            p = _params_of(j)
+            assert lean[0] == "output", (j, lean)
+            assert json.loads(lean[1])["law"] == DR.derive(p["program"], p["query"], p["law"], p["work_table"]), (j, lean)
+            agreed_rated.append(j)
+
+    guarded()
+    assert len(refused) >= 5 and len(agreed_rated) >= 5, (len(refused), len(agreed_rated))
+
+
 def test_the_callers_check_agrees(callers):
     """The caller's check (`VStar.Recursive.Caller.check`, `spot-flock-caller`) gives the Python's codes
     (`caller.check`) on the docket piece's inputs: SPOT's check no longer makes these codes, so this port is the
