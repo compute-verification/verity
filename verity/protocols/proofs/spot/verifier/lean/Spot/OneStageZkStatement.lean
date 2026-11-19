@@ -435,13 +435,13 @@ refuses (`NOT_ONE_MEMBER`). A function of the record alone, fixed before any coi
 def publicPorts (rec : Json) : V (Array (String × Json)) := do
   let rs := (match getD rec "roots" with | .arr rs => rs | _ => #[]).filter fun r =>
     !(match getD r "port" with | .str p => Flock.Registered.isFreshValue p | _ => false)
-  let rec := rec.setObjVal! "roots" (.arr rs)
+  let rec' := rec.setObjVal! "roots" (.arr rs)
   let ports := rs.toList.filterMap fun r => match getD r "port" with | .str p => some p | _ => none
-  if ports.all fun p => (splitsOf p).isEmpty then return Record.byPort rec
+  if ports.all fun p => (splitsOf p).isEmpty then return Record.byPort rec'
   let ts := templatesOf (ports.filterMap fun p => (templateOf p).map (·.1))
   let some n := commonMember (ports.filter fun p => !(templateOf p).any (ts.contains ·.1)) | throw NOT_ONE_MEMBER
   let acc ← rs.foldlM (rootStep ts) (({} : Std.HashMap String (Array Json)).insert n #[])
-  let ft := fieldTreesOf ts rec
+  let ft := fieldTreesOf ts rec'
   ownFieldsHeld ft n (acc.getD n #[])
   return Record.byPort (Json.mkObj [("roots", .arr (ownFieldsOf ft n (acc.getD n #[])))])
 
