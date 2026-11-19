@@ -297,13 +297,15 @@ def test_n2s_program_reads_no_registered_value(tmp_path):
     assert not PF.reads_registered(Run(tmp_path).lw.program)
 
 
+@pytest.mark.slow
 def test_the_verdict_of_record_is_the_proofs(tmp_path):
     """The verifier decides on the delivered proof and public inputs alone, and reads the opening only for
     the debug comparison it is given. Each of these rejects an honest execution phase's sample: the Lean run rejecting
     the session, a public file whose instance is another proof block, the
     public or the output row's salt not the one committed, a proof on a head edited under its attestation (its
     verdict bit 0), with or without a forged output word, a forged signature, an attestation whose signed digest isn't
-    the one the proof's public row holds, and the attestations swapped."""
+    the one the proof's public row holds, and the attestations swapped. It registers a window of N2's Program, which takes
+    minutes: it is the one test of the Lean verdict of record on each forgery, which the tests of `proved` alone don't reach."""
     run = Run(tmp_path)
     lw = run.lw
     opening = run.honest(0)
@@ -353,13 +355,15 @@ def _finding(program, accepted=True):
 GATED_PROGRAM = "8bd6d50cc53a4fbf7f15c07588c8c4b2bb55d6f527c107ef5b9767308693379d8403f8730caaf5693583ec49e92300c0095c19b3c8ce669bc88982fc959e7900"
 
 
+@pytest.mark.slow
 def test_a_proof_of_another_circuit_with_the_same_interface_is_refused(tmp_path, monkeypatch):
     """The proof block calls each head check with its body, so its Program, which the spec and each registration bind,
     binds the head check's circuit. A head check with the same id and signature that accepts every head makes a proof
     block of the same id and another Program, and a proof naming it is refused, as one naming the Program the gated unit
     registered is, by the verdict of record (the Lean, `NetworkVerifier.TransferBlocks.verdict`) and by its Python
     reference (`TransferBlocks.proved`), while one of the registered Program is accepted. A size class no sidecar pins
-    has no accepted proof."""
+    has no accepted proof. It registers a window of N2's Program, which takes minutes: it is the one test that the Lean
+    verdict of record refuses another circuit behind the same interface, which the tests of `proved` alone don't reach."""
     run = Run(tmp_path)
     lw = run.lw
     key = lw.head_key(0)
@@ -378,13 +382,11 @@ def test_a_proof_of_another_circuit_with_the_same_interface_is_refused(tmp_path,
     assert not lw.proved([_finding(program)]) and not lw.proved([_finding(GATED_PROGRAM)]) and not lw.proved([])
     assert not lw.proved([_finding(registered), _finding(registered, accepted=False)])
 
+    opening = run.honest(0)
+    sample = run.stream.select(run.register(opening))
     for w, named in enumerate((program, GATED_PROGRAM, registered)):
-        (tmp_path / str(w)).mkdir()
-        one = Run(tmp_path / str(w))
-        opening = one.honest(0)
-        sample = one.stream.select(one.register(opening))
-        delivered = one.prove(opening, sample, program=named)
-        v = one.lw.verify(sample, [r.certificate for r in opening.records], SYNCS, delivered)
+        delivered = standin.prove(lw, opening, sample, SYNCS, tmp_path / f"proof-{w}", program=named)
+        v = lw.verify(sample, [r.certificate for r in opening.records], SYNCS, delivered)
         assert v["by"] == SVC.OF_RECORD == "lean" and v["decided_by"] == "proof", w
         assert v["accepted"] is (named == registered) and v["reference"] == {"accepted": named == registered}, w
 
