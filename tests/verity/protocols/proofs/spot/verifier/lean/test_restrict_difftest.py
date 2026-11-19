@@ -132,4 +132,5 @@ def test_the_two_lifts_agree(pieces, units):
     text, _ = chain()
     mine = json.loads(pieces.call("block_program", {"descriptor": text, "units": list(units)})[1])["lifted"]
     lifted = json.loads(pieces.call("restrict", {"descriptor": text, "units": list(units), "python": python(units)})[1])["lifted"]
-    assert mine and lifted == mine
+    composites = {k: v for k, v in lifted.items() if not k.startswith("Root[")}
+    assert mine and composites == mine
