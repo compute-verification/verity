@@ -1228,7 +1228,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         lean_v = got[f"lean-verify/m{k}"]
         return {"mm": mm, "sdir": sdir, "staged_s": s["staged_s"], "verdicts": got, "lean_verify": lean_v,
                 "served": [m.base + u for u in draw_t.get("units", []) if m.base + u in drawn_units],  # a closure's are `proved`
-                "roots": {mine.tree(m, p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()},
+                # a port at a shared tree is held by its registered reads there, and its header root is its own rows' alone
+                "roots": {mine.tree(m, p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()
+                          if mine.tree(m, p_name) == m.port(p_name)},
                 "proved": a0.proved_units(mm["header"], live or {}), "instances": (live or {}).get("instances", 0),
                 "statement": {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
                               "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
