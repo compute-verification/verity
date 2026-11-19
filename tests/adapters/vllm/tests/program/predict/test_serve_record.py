@@ -9,7 +9,7 @@ from verity_vllm.program.predict import serve as SV
 
 
 def _opts(tmp_path, *more):
-    return cli.parse("serve-openai", ["--out", str(tmp_path / "serve"), *more])
+    return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path / "serve"), *more])
 
 
 def test_the_record_options_parse_into_the_serves_record(tmp_path):
