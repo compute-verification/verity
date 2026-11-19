@@ -32,6 +32,6 @@ def test_a_memory_change_and_an_admission_say_one_thing_each() -> None:
 def test_unmet_names_each_request_the_properties_do_not_meet() -> None:
     eager, one = H.RequireProperty("eager", True, "e"), H.RequireProperty("world", 1, "w")
     bf16, kernels = H.RequireProperty("dtype", "bf16", "d"), H.RequireProperty("kernels", "profile", "k", fixes=True)
-    asked = [("pouw", eager), ("pouw", one), ("pous", bf16), ("spot", kernels), ("spot", H.ReuseOldestFreed())]
+    asked = [("pouw", eager), ("pouw", one), ("pous", bf16), ("spot", kernels)]
     assert H.unmet(asked, {"eager": True, "world": 1, "dtype": "bf16", "kernels": "profile"}) == []
     assert H.unmet(asked, {"eager": False, "world": 1, "dtype": "fp8"}) == [("pouw", eager), ("pous", bf16), ("spot", kernels)]

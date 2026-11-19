@@ -27,6 +27,7 @@ class Exchange:
         self.subscribers: dict[str, list] = {h: [] for h in H.HOOKS}
         self.requests: list[tuple[str, H.Request]] = []
         self.kernels: list[tuple[str, H.Kernel]] = []
+        self.releases: list[tuple[str, object]] = []
 
     def subscribe(self, name, hook, fn):
         self.subscribers[hook].append(fn)
@@ -34,15 +35,15 @@ class Exchange:
     def request(self, name, request):
         self.requests.append((name, request))
 
+    def release(self, name, value, restore):
+        self.releases.append((value, restore))
+
     def compute_with(self, name, kernel):
         self.kernels.append((name, kernel))
 
     def emit(self, event):
         for fn in self.subscribers[event.hook]:
             fn(event)
-
-    def filed(self, kind):
-        return [r for _, r in self.requests if isinstance(r, kind)]
 
 
 def same(got, want) -> bool:
@@ -71,10 +72,9 @@ def test_the_weights_are_committed_before_the_salt_released_and_restored_from_c_
     s, ex, plain = run
     _, commitment = ws.commit(P2, plain)
     assert s.commitment()["commitment"] == commitment.hex() and s.summary()["weights"] == 2
-    released = ex.filed(H.ReleaseValue)
-    assert [r.value for r in released] == ["a.weight", "b.weight"]                  # the scale is no linear weight
-    for r in released:
-        assert same(r.restore(), plain[r.value])
+    assert [v for v, _ in ex.releases] == ["a.weight", "b.weight"]                  # the scale is no linear weight
+    for value, restore in ex.releases:
+        assert same(restore(), plain[value])
 
 
 def test_what_the_setup_holds_and_its_prover_are_the_stores(run):
@@ -206,13 +206,12 @@ def decoded_bits(monkeypatch, point, weights):
     pb = s.store.params.payload_bytes
     assert all(0 < (t.numel() * t.element_size()) % pb for t in plain.values())        # each ends inside its last block
     [(_, kernel)] = ex.kernels
-    released = ex.filed(H.ReleaseValue)
-    assert [r.value for r in released] == list(plain)
-    for r in released:
-        due = H.BlockDue(r.value, 0, {}, "bf16", {"x": None}, weights={"weight": r.value})
-        for got in (r.restore(), kernel(due, lambda given: given["weight"])):
-            assert same(got, plain[r.value]), r.value
-            assert got.is_contiguous() and got.data_ptr() != plain[r.value].data_ptr()
+    assert [v for v, _ in ex.releases] == list(plain)
+    for value, restore in ex.releases:
+        due = H.BlockDue(value, 0, {}, "bf16", {"x": None}, weights={"weight": value})
+        for got in (restore(), kernel(due, lambda given: given["weight"])):
+            assert same(got, plain[value]), value
+            assert got.is_contiguous() and got.data_ptr() != plain[value].data_ptr()
     return s
 
 

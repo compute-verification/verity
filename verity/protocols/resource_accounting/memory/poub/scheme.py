@@ -243,7 +243,8 @@ POUB = S.register(S.Scheme(
 ))
 
 #: a freed range is reused as late as the workload allows, so one freed inside a window is not written again in it
-REUSE_OLDEST_FREED = H.ReuseOldestFreed()
+REUSE_OLDEST_FREED = H.RequireProperty("reuse", "oldest-freed",
+                                       "a range freed inside a window is not written again in it")
 #: what a session in lockstep with the run asks of it (one engine step a pass, `prover.node_store.serving.Lockstep`),
 #: in the properties a served run declares (`verity.hooks.Declared`): one GPU's store, a step's outputs read before the
 #: next step is scheduled, and no range brought back holding the values another input wrote
@@ -260,7 +261,8 @@ def requests(ctx: Mapping[str, Any]) -> tuple[H.Request, ...]:
     workload's memory hold exactly that many (a session whose store's size is its registration's)."""
     return (*((REUSE_OLDEST_FREED,) if ctx.get("fifo", True) else ()),
             *(SESSION if ctx.get("session") else ()),
-            *(() if ctx.get("ranges") is None else (H.FixRanges(ctx["ranges"]),)))
+            *(() if ctx.get("ranges") is None else
+              (H.RequireProperty("ranges", ctx["ranges"], "the session's store is its registration's size"),)))
 
 
 #: `POUB`'s prover, by what the declaration hands out, each as ``module:name``. The prover is a distribution of its

@@ -7,8 +7,8 @@ MemoryChanged registered            each weight tensor a region (kind weights, t
 RangesDeclared                      the KV pool, a region per store (a layer's KV cache), every page filler (with
                                     kv=False, unregistered)
 MemoryChanged allocated             kv_alloc of the pages (with kv=False, none)
-MemoryChanged freed                 kv_free of the pages (with kv=False, none); with fifo, the binder files
-                                    ReuseOldestFreed, so a page freed inside a window is reused as late as the pool
+MemoryChanged freed                 kv_free of the pages (with kv=False, none); with fifo, the binder requires
+                                    reuse oldest-freed, so a page freed inside a window is reused as late as the pool
                                     allows
 MemoryChanged allocated reused      refused: a prefix-cache hit would bring a page back with its KV (run without it)
 MemoryChanged written               the step's writes, kept for its StepBegan (with kv=False, none)
@@ -385,7 +385,7 @@ class Binder:
 
     def install(self, exchange: Any) -> Binder:
         """Subscribe to ``exchange`` (the adapter's: ``subscribe(name, hook, fn)`` returning the removal, and
-        ``request(name, request)``), filing the declaration's requests (`POUB.requests`: `ReuseOldestFreed` with
+        ``request(name, request)``), filing the declaration's requests (`POUB.requests`: ``reuse`` oldest-freed with
         ``fifo``); before the engine is built."""
         if self._off:
             raise RuntimeError("the binder is installed")

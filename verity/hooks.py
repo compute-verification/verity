@@ -33,8 +33,9 @@ type Handle = object
 class Declared:
     """``declared``: what the workload declares before it runs: the card's file id, its properties (``stage``: serve,
     capture or commit; ``world``; ``eager``; ``async_steps``, whether a step is scheduled before the last one's outputs
-    are read; a precision, a cache, a sampler), the schemes attached to it by name and, under each one's name, its
-    settings."""
+    are read; ``ranges``, how many ranges its memory holds (`RangesDeclared`); ``reuse``, ``oldest-freed`` where a freed
+    range is handed out again only after every range freed before it; a precision, a cache, a sampler), the schemes
+    attached to it by name and, under each one's name, its settings."""
 
     hook: ClassVar[str] = "declared"
     card: str
@@ -313,34 +314,11 @@ class Broken(Exception):
     """Why a reader of the workload's (one a scheme's process beside it reads) ends before its stream does."""
 
 
-@dataclass(frozen=True)
-class ReuseOldestFreed:
-    """A scheme's request that a freed range be handed out again only after every range freed before it, so a freed
-    range keeps its values as long as the workload has other ranges to hand out."""
-
-
-@dataclass(frozen=True)
-class FixRanges:
-    """A scheme's request that the workload's memory hold exactly ``ranges`` ranges (`RangesDeclared`)."""
-
-    ranges: int
-
-
-@dataclass(frozen=True)
-class ReleaseValue:
-    """A scheme's request that registered value ``value``'s storage be released once it is resident, the scheme's
-    kernels computing every block that reads it (`Kernel`), and restored to ``restore()``, the same bytes,
-    when the workload's memory hook comes off."""
-
-    value: str
-    restore: Callable[[], Handle]
-
-
-type Request = RequireProperty | AdmitInput | ReuseOldestFreed | FixRanges | ReleaseValue
+type Request = RequireProperty | AdmitInput
 
 
 __all__ = ["ADMITS", "CHANGES", "EVENTS", "HOOKS", "AdmitInput", "BlockDue", "BlockResult", "Declared",
-           "Gate", "Handle", "Broken", "ENGINE", "FRONT", "PIECE", "FixRanges", "Front", "InputArrived", "Kernel",
-           "MemoryChanged", "OutputLeft", "RangesDeclared", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
+           "Gate", "Handle", "Broken", "ENGINE", "FRONT", "PIECE", "Front", "InputArrived", "Kernel",
+           "MemoryChanged", "OutputLeft", "RangesDeclared", "Request", "RequireProperty",
            "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "StepBegan", "StepComputed",
            "StepDue", "StepEnded", "unmet"]

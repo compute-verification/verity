@@ -150,8 +150,8 @@ def test_a_setting_handed_beside_the_settings_is_refused_by_name(name, value) ->
 def test_the_sessions_requests_refuse_a_run_it_cannot_follow() -> None:
     assert poub.POUB.requests({}) == (poub.REUSE_OLDEST_FREED,) and poub.BANDWIDTH.requests({}) == ()
     filed = poub.POUB.requests({"fifo": False, "session": True, "ranges": 8})
-    assert filed == (*poub.SESSION, H.FixRanges(8))
-    ok = {"world": 1, "prefix_cache": False, "async_steps": False}
+    assert filed[:-1] == poub.SESSION and (filed[-1].property, filed[-1].value) == ("ranges", 8)
+    ok = {"world": 1, "prefix_cache": False, "async_steps": False, "ranges": 8}
     named = [("poub", r) for r in filed]
     assert H.unmet(named, ok) == []
     for key, bad in (("world", 2), ("prefix_cache", True), ("async_steps", True), ("async_steps", None)):

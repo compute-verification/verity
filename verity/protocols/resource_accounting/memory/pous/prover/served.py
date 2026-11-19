@@ -12,7 +12,7 @@ weight store (`weight_store`), and the adapter's hooks emit the events and answe
   weight operand (``operands``), in the order of their blocks' keys; the commitment to it
   (`weight_store.commit`) before any salt exists, the salt from the auditor's coin flipped after it
   (`weight_store.salt_from`, `weight_store.salt`), ``C*`` encoded on the weights' device (`weight_store.encode`), and a
-  `ReleaseValue` for each weight of ``W``, whose ``restore`` decodes it from ``C*``;
+  release of each weight of ``W`` (``exchange.release``), whose ``restore`` decodes it from ``C*``;
 * ``blocks``: a kernel (`verity.hooks.Kernel`, filed with ``exchange.compute_with``) that decodes a due block's
   registered weight (`BlockDue.weights["weight"]`) from ``C*`` into a fresh buffer and hands it inward, so the blocks inside it read what PoUS stores. It is filed after
   PoUW's (an executor's), so it runs outside it.
@@ -156,7 +156,7 @@ class Served:
                         "storage_root": self.store.root.hex(), "blocks": q.blocks, "segments": q.segments,
                         "layout": ws.layout_digest(layout)}
         for name in tensors:
-            self.exchange.request(NAME, H.ReleaseValue(name, (lambda n: lambda: self.decoded(n))(name)))
+            self.exchange.release(NAME, name, (lambda n: lambda: self.decoded(n))(name))
         for fn in self._bound:
             fn(self.store)
 
