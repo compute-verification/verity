@@ -10,10 +10,12 @@ public import Properties.Flock.Circuit.OfProgram
 /-!
 # A gate's operands are no wider than its primitive's parameters
 
-In a decoded Program whose root reads no input node recut, the gate `Prog.gate` locates calls a primitive at a member
-of a node, and its operands are the leaves of the node's arguments, resolved, in order (`gate_loc`, `operands_lists`).
-Each resolves to a gate as wide as the parameter leaf it is bound to (`LeafWidths.resolve_wide`, `LeafWidths.arg_wide`),
-or to one `Prog.gate` doesn't locate, of width 0: `gate_operand_widths`, and its sum, `gate_operand_bits`.
+In a decoded Program whose root reads no input node recut and whose nodes read only earlier nodes
+(`Prog.orderViolation`), the gate `Prog.gate` locates calls a primitive at a member of a node, and its operands are the
+leaves of the node's arguments, resolved, in order (`gate_loc`, `operands_lists`). Each resolves to a gate as wide as
+the parameter leaf it is bound to (`LeafWidths.resolve_wide`, `LeafWidths.arg_wide`), or to one `Prog.gate` doesn't
+locate, of width 0: `gate_operand_widths`, and its sum, `gate_operand_bits`. The order is needed: `decode`'s width check
+reads a node's references to later nodes as no source, so they may name leaves of any width.
 -/
 
 @[expose] public section
@@ -42,7 +44,8 @@ theorem forall₂_append {R : ℕ → ℕ → Prop} :
 
 theorem forall₂_flatten {R : ℕ → ℕ → Prop} :
     ∀ (A B : List (List ℕ)), A.length = B.length →
-      (∀ i (ha : i < A.length) (hb : i < B.length), List.Forall₂ R A[i] B[i]) → List.Forall₂ R A.flatten B.flatten
+      (∀ i (ha : i < A.length) (hb : i < B.length), List.Forall₂ R A[i] B[i]) →
+        List.Forall₂ R A.flatten B.flatten
   | [], [], _, _ => .nil
   | [], _ :: _, h, _ => absurd h (by simp)
   | _ :: _, [], h, _ => absurd h (by simp)
@@ -73,7 +76,7 @@ theorem decoded_laid (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
 /-- **`Prog.gate` locates a gate at a member of a node calling a primitive**, in an activation resolution reaches,
 with that member's operands. -/
 theorem gate_loc (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
-    (hB : ∀ sc, Resolve.Good P sc → Resolve.BodyIn P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
+    (hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
     {g p : ℕ} {ops : Array ℕ} {sc : Scope} (h : P.gate g = .ok (p, ops, sc)) :
     ∃ k m, Resolve.Good P sc ∧ k < (P.defs[sc.d]!).body.nodes.size ∧ ((P.defs[sc.d]!).body.nodes[k]!).fn = p ∧
       (P.defs[p]!).prim = true ∧ m < ((P.defs[sc.d]!).body.nodes[k]!).members ∧
@@ -85,12 +88,13 @@ theorem gate_loc (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).
   refine DescAgree.run_inv "gate location" (gateStep P g) (Resolve.WalkQ P g)
     (fun b => ∃ k m, Resolve.Good P b.2.2 ∧ k < (P.defs[b.2.2.d]!).body.nodes.size ∧
       ((P.defs[b.2.2.d]!).body.nodes[k]!).fn = b.1 ∧ (P.defs[b.1]!).prim = true ∧
-      m < ((P.defs[b.2.2.d]!).body.nodes[k]!).members ∧ operands P b.2.2 ((P.defs[b.2.2.d]!).body.nodes[k]!) m = .ok b.2.1)
+      m < ((P.defs[b.2.2.d]!).body.nodes[k]!).members ∧
+        operands P b.2.2 ((P.defs[b.2.2.d]!).body.nodes[k]!) m = .ok b.2.1)
     ?_ ?_ _ _ (p, ops, sc)
     ⟨by show Resolve.Good P (.top P.root 0 none); unfold Resolve.Good; exact ⟨rfl, rfl, rfl⟩, Nat.zero_le _,
       by show g - 0 < (P.defs[P.root]!).gates; omega⟩ h
   · intro sc b ⟨hg, hoff, hlt⟩ hb
-    obtain ⟨hd, hpc⟩ := Resolve.good_d_in P hroot hB sc hg
+    obtain ⟨hd, hpc⟩ := Resolve.good_d P hroot hB sc hg
     obtain ⟨h0, hK, hnodes⟩ := hL sc.d hd hpc
     unfold gateStep at hb
     simp only [bind, Except.bind] at hb
@@ -115,7 +119,7 @@ theorem gate_loc (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).
         cases hb
     · simp [throw, throwThe, MonadExceptOf.throw] at hb
   · intro sc sc' ⟨hg, hoff, hlt⟩ hb
-    obtain ⟨hd, hpc⟩ := Resolve.good_d_in P hroot hB sc hg
+    obtain ⟨hd, hpc⟩ := Resolve.good_d P hroot hB sc hg
     obtain ⟨h0, hK, hnodes⟩ := hL sc.d hd hpc
     unfold gateStep at hb
     simp only [bind, Except.bind] at hb
@@ -228,22 +232,28 @@ theorem gate_of_gateAt {P : Prog} {g p : ℕ} {ops : Array ℕ} (h : gateAt P g 
     exact ⟨sc', rfl⟩
 
 /-- **A gate's operands are, one by one, at most as wide as its primitive's parameter leaves**, in a decoded Program
-whose root reads no input node recut: an operand `Prog.gate` locates is exactly as wide, one it doesn't is of width 0. -/
+whose root reads no input node recut and whose nodes read only earlier nodes: an operand `Prog.gate` locates is exactly
+as wide, one it doesn't is of width 0. -/
 theorem gate_operand_widths (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
-    (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) (g p : ℕ) (ops : Array ℕ)
+    (hov : P.orderViolation = none) (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) (g p : ℕ)
+    (ops : Array ℕ)
     (hg : gateAt P g = some (p, ops)) :
-    List.Forall₂ (· ≤ ·) (ops.toList.map (widthAt P)) ((P.defs[p]!).params.toList.flatMap fun q => q.2.widths.toList) := by
+    List.Forall₂ (· ≤ ·) (ops.toList.map (widthAt P))
+      ((P.defs[p]!).params.toList.flatMap fun q => q.2.widths.toList) := by
   obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_full bytes P h hr
   have hD : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   obtain ⟨hrt, hrp, -⟩ := BodiesOk.decode_root bytes P h hr
   have hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false := ⟨hrt, hrp⟩
-  have hB : ∀ sc, Resolve.Good P sc → Resolve.BodyIn P sc.d := fun sc _ => BodiesOk.body_in P hD sc.d
+  obtain ⟨S, hS0, hS⟩ := BodiesOk.order_closed P hov
+  have hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := fun sc hg => by
+    obtain ⟨hSd, hpd⟩ := BodiesOk.good_closed P S hS0 hrp (fun d hd hp => (hS d hd hp).2) sc hg
+    exact BodiesOk.body_ok P hD sc.d (hS sc.d hSd hpd).1
   have hL := decoded_laid bytes P h hr
   have hW := LeafWidths.decoded_wide bytes P h hr
   obtain ⟨sc, hgo⟩ := gate_of_gateAt hg
   obtain ⟨k, m, hsc, hk, hfn, hpp, hm, hops⟩ := gate_loc P hroot hB hL hgo
   obtain ⟨L, hlen, hflat, hLi⟩ := operands_lists P sc _ m ops hops
-  obtain ⟨hd, -⟩ := Resolve.good_d_in P hroot hB sc hsc
+  obtain ⟨hd, -⟩ := Resolve.good_d P hroot hB sc hsc
   obtain ⟨-, hnd, -⟩ := (hD sc.d hd).2.1 k hk
   obtain ⟨hsz, hcnt, -, hcomp, hshape, -⟩ := hnd
   obtain ⟨-, -, -, -, hop⟩ := (hB sc hsc).1 k hk
@@ -303,7 +313,10 @@ theorem gate_operand_widths (bytes : ByteArray) (P : Prog) (h : decode bytes = .
     · rw [if_neg hb] at hu ⊢
       exact ⟨t, rfl, hu⟩
   obtain ⟨u, hu, hul⟩ := hidx
-  have href := ((hB sc hsc).1 k hk).2.1 i u hul
+  have href0 := ((hB sc hsc).1 k hk).2.1 i u hul
+  have href : Resolve.RefOk P sc.d (P.defs[sc.d]!).body.nodes.size
+      ((((P.defs[sc.d]!).body.nodes[k]!).args[i]!).seq.get u) :=
+    ⟨href0.1, fun h => ⟨Nat.lt_trans (href0.2 h).1 hk, (href0.2 h).2⟩⟩
   rw [← hu] at href
   -- the leaf it names is as wide as the parameter's
   have harg : Widths.wAt (LeafWidths.tyOf P sc (refOf ((P.defs[sc.d]!).body.nodes[k]!) m i t))
@@ -332,9 +345,9 @@ theorem gate_operand_widths (bytes : ByteArray) (P : Prog) (h : decode bytes = .
 
 /-- **A gate's operands are at most as many bits as its primitive's parameters.** -/
 theorem gate_operand_bits (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
-    (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) (g p : ℕ) (ops : Array ℕ)
-    (hg : gateAt P g = some (p, ops)) :
+    (hov : P.orderViolation = none) (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) (g p : ℕ)
+    (ops : Array ℕ) (hg : gateAt P g = some (p, ops)) :
     (ops.toList.map (widthAt P)).sum ≤ ((P.defs[p]!).params.toList.flatMap fun q => q.2.widths.toList).sum :=
-  sum_le_of_forall₂ (gate_operand_widths bytes P h hr g p ops hg)
+  sum_le_of_forall₂ (gate_operand_widths bytes P h hov hr g p ops hg)
 
 end FlockSoundness.OperandWidths

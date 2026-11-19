@@ -170,34 +170,6 @@ def BodyOk (P : Prog) (d : ℕ) : Prop :=
       OpOk ((P.defs[d]!).body.nodes[k]!) (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!))) ∧
   ∀ t < (P.defs[d]!).body.ret.count, RefOk P d (P.defs[d]!).body.nodes.size ((P.defs[d]!).body.ret.get t)
 
-/-- `BodyOk` without the order: a node's arguments name parameters and any of the body's nodes. -/
-def BodyIn (P : Prog) (d : ℕ) : Prop :=
-  (∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn < P.defs.size ∧
-    (∀ i : ℕ, ∀ t < (((P.defs[d]!).body.nodes[k]!).args[i]!).seq.count,
-      RefOk P d (P.defs[d]!).body.nodes.size ((((P.defs[d]!).body.nodes[k]!).args[i]!).seq.get t)) ∧
-    UpOk ((P.defs[d]!).body.nodes[k]!) (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!) ∧
-    DownOk ((P.defs[d]!).body.nodes[k]!) (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!) ∧
-    ((P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).prim = true →
-      OpOk ((P.defs[d]!).body.nodes[k]!) (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!))) ∧
-  ∀ t < (P.defs[d]!).body.ret.count, RefOk P d (P.defs[d]!).body.nodes.size ((P.defs[d]!).body.ret.get t)
-
-theorem BodyOk.toIn {P : Prog} {d : ℕ} (h : BodyOk P d) : BodyIn P d := by
-  refine ⟨fun k hk => ?_, h.2⟩
-  obtain ⟨h1, h2, h3, h4, h5⟩ := h.1 k hk
-  exact ⟨h1, fun i t ht => ⟨(h2 i t ht).1,
-    fun hp => ⟨Nat.lt_trans ((h2 i t ht).2 hp).1 hk, ((h2 i t ht).2 hp).2⟩⟩, h3, h4, h5⟩
-
-theorem good_d_in (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
-    (hB : ∀ sc, Good P sc → BodyIn P sc.d) :
-    ∀ sc, Good P sc → sc.d < P.defs.size ∧ (P.defs[sc.d]!).prim = false
-  | .top d off st, h => by obtain ⟨rfl, -, -⟩ := h; exact hroot
-  | .child parent d off k m, h => by
-    obtain ⟨hp, hk, hfn, hc, -, -⟩ := h
-    refine ⟨?_, hc⟩
-    have := ((hB parent hp).1 k hk).1
-    rw [hfn] at this
-    exact this
-
 theorem offsets_mono (P : Prog) (d : ℕ) (hl : Walk.LaidOut P d) (hp : (P.defs[d]!).prim = false) :
     ∀ a b, a ≤ b → b ≤ (P.defs[d]!).body.nodes.size → (P.defs[d]!).body.offsets[a]! ≤ (P.defs[d]!).body.offsets[b]! := by
   intro a b hab hb
@@ -288,8 +260,14 @@ variable (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = f
   (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
 include hroot hB
 
-theorem good_d : ∀ sc, Good P sc → sc.d < P.defs.size ∧ (P.defs[sc.d]!).prim = false :=
-  good_d_in P hroot fun sc h => (hB sc h).toIn
+theorem good_d : ∀ sc, Good P sc → sc.d < P.defs.size ∧ (P.defs[sc.d]!).prim = false
+  | .top d off st, h => by obtain ⟨rfl, -, -⟩ := h; exact hroot
+  | .child parent d off k m, h => by
+    obtain ⟨hp, hk, hfn, hc, -, -⟩ := h
+    refine ⟨?_, hc⟩
+    have := ((hB parent hp).1 k hk).1
+    rw [hfn] at this
+    exact this
 
 include hL
 

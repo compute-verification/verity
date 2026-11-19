@@ -31,7 +31,7 @@ activation, to the gate that computes it. This module proves that the gate is as
 
 namespace InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths
 open Flock.Program
-open InferenceOnlyVerifier.Properties.SecurityProofs.Resolve (Good RefOk BodyOk BodyIn)
+open InferenceOnlyVerifier.Properties.SecurityProofs.Resolve (Good RefOk BodyOk)
 
 /-! ## A leaf's width is its type's -/
 
@@ -284,7 +284,7 @@ private theorem seq_wide (P : Prog) (d : ℕ) (sc : Scope) (hd : sc.d = d) (belo
 
 /-- **Down from a node's leaf.** The step ends at a member of the node, of a primitive that returns one value as wide
 as the leaf, or goes into a member, at a leaf of its return as wide as the leaf. -/
-private theorem down_wide (P : Prog) (hB : ∀ sc, Good P sc → BodyIn P sc.d)
+private theorem down_wide (P : Prog) (hB : ∀ sc, Good P sc → BodyOk P sc.d)
     (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
     (hW : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
       (P.defs[d]!).body.retType = (P.defs[d]!).ret ∧ BodyWide (P.defs[d]!).body)
@@ -381,7 +381,7 @@ private theorem down_wide (P : Prog) (hB : ∀ sc, Good P sc → BodyIn P sc.d)
 /-- **Up through a parameter's leaf.** The step goes to the parent, at a leaf of the argument the parameter is bound
 to, or to the member before, at a leaf of its return; either is as wide as the parameter's leaf. -/
 private theorem up_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
-    (hB : ∀ sc, Good P sc → BodyIn P sc.d) (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
+    (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
     (hW : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
       (P.defs[d]!).body.retType = (P.defs[d]!).ret ∧ BodyWide (P.defs[d]!).body)
     (parent : Scope) (d off k m i j : ℕ) (hg : Good P (.child parent d off k m))
@@ -389,10 +389,10 @@ private theorem up_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.r
     (h : resolveStep P (.child parent d off k m, ⟨true, i, j⟩) = .ok x) :
     ∃ s', x = .inr s' ∧
       Widths.wAt (tyOf P s'.1 s'.2) s'.2.j = Widths.wAt ((P.defs[d]!).body.params[i]!).2 j := by
-  have hdd : d < P.defs.size := (Resolve.good_d_in P hroot hB _ hg).1
+  have hdd : d < P.defs.size := (Resolve.good_d P hroot hB _ hg).1
   unfold Good at hg
   obtain ⟨hp, hk, hfn, hc, hm, -⟩ := hg
-  obtain ⟨hpd, hpp⟩ := Resolve.good_d_in P hroot hB parent hp
+  obtain ⟨hpd, hpp⟩ := Resolve.good_d P hroot hB parent hp
   obtain ⟨-, hargs, hup, -, -⟩ := (hB parent hp).1 k hk
   rw [hfn] at hup
   have hu := hup i hi j hj m hm
@@ -408,7 +408,7 @@ private theorem up_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.r
       Widths.wAt (tyOf P parent ((((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get t))
           ((((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get t).j =
         Widths.wAt (((P.defs[parent.d]!).body.nodes[k]!).args[i]!).ty t :=
-    fun t ht => seq_wide P parent.d parent rfl _ _ _ (Nat.le_refl _) hsw t ht (hargs i t ht)
+    fun t ht => seq_wide P parent.d parent rfl k _ _ (Nat.le_of_lt hk) hsw t ht (hargs i t ht)
   rw [hpar] at hj ⊢
   rcases hf : ((P.defs[parent.d]!).body.nodes[k]!).form
   · simp only [hf] at hu
@@ -481,11 +481,11 @@ private theorem up_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.r
 
 /-- **A member's argument leaf is as wide as the callee's parameter leaf, for any callee.** Member `m` of node `k`
 of an activation's body reads leaf `j` of its parameter `i` at a reference of the node's argument `i`: reference
-`j` where the node is a call, reference `Resolve.memberIdx _ m j` where it is a batch. The leaf that reference
+`j` where the node is a primitive's or a call, reference `Resolve.memberIdx _ m j` where it is a batch. The leaf that reference
 names in the activation's body is as wide as leaf `j` of the callee's parameter, the callee a composite or a
 primitive: nothing here reads the callee's body. -/
 theorem arg_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
-    (hB : ∀ sc, Good P sc → BodyIn P sc.d) (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
+    (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
     (hW : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
       (P.defs[d]!).body.retType = (P.defs[d]!).ret ∧ BodyWide (P.defs[d]!).body)
     (parent : Scope) (hp : Good P parent) (k : ℕ) (hk : k < (P.defs[parent.d]!).body.nodes.size) (m : ℕ)
@@ -502,7 +502,7 @@ theorem arg_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).
           ((((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get
             (Resolve.memberIdx (((P.defs[parent.d]!).body.nodes[k]!).args[i]!) m j)).j =
         Widths.wAt ((P.defs[((P.defs[parent.d]!).body.nodes[k]!).fn]!).params[i]!).2 j) := by
-  obtain ⟨hpd, hpp⟩ := Resolve.good_d_in P hroot hB parent hp
+  obtain ⟨hpd, hpp⟩ := Resolve.good_d P hroot hB parent hp
   obtain ⟨-, hargs, -, -, -⟩ := (hB parent hp).1 k hk
   obtain ⟨-, ⟨hsz, hcnt, -, -, hshape, -⟩, -⟩ := (hD parent.d hpd).2.1 k hk
   have hia : i < ((P.defs[parent.d]!).body.nodes[k]!).args.size := by
@@ -513,7 +513,7 @@ theorem arg_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).
       Widths.wAt (tyOf P parent ((((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get t))
           ((((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get t).j =
         Widths.wAt (((P.defs[parent.d]!).body.nodes[k]!).args[i]!).ty t :=
-    fun t ht => seq_wide P parent.d parent rfl _ _ _ (Nat.le_refl _) hsw t ht (hargs i t ht)
+    fun t ht => seq_wide P parent.d parent rfl k _ _ (Nat.le_of_lt hk) hsw t ht (hargs i t ht)
   refine ⟨fun hf => ?_, fun hf => ?_⟩
   · have hty : (((P.defs[parent.d]!).body.nodes[k]!).args[i]!).ty =
         ((P.defs[((P.defs[parent.d]!).body.nodes[k]!).fn]!).params[i]!).2 := by
@@ -533,137 +533,28 @@ theorem arg_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).
       rw [hidx, harg _ (by rw [hc]; exact hb j (by rw [hmt]; exact hj) m hmn),
         axis_wide ax _ _ mt L hrem hax j (by rw [hmt]; exact hj) m hmn, hmt]
 
-/-- **One step of resolution stays in range**: it moves to an activation resolution reaches, at a reference of its
-body in range. Unlike `Resolve.step_ok` it reads no order of a body's nodes. -/
-private theorem step_in (P : Prog) (hB : ∀ sc, Good P sc → BodyIn P sc.d) (s s' : Scope × Ref)
-    (hs : Good P s.1 ∧ RefOk P s.1.d (P.defs[s.1.d]!).body.nodes.size s.2) (h : resolveStep P s = .ok (.inr s')) :
-    Good P s'.1 ∧ RefOk P s'.1.d (P.defs[s'.1.d]!).body.nodes.size s'.2 := by
-  obtain ⟨sc, ⟨p, i, j⟩⟩ := s
-  obtain ⟨hg, hr⟩ := hs
-  dsimp only at hg hr
-  have down : ∀ c : Scope, Good P c → ∀ t < (P.defs[c.d]!).body.ret.count,
-      Good P c ∧ RefOk P c.d (P.defs[c.d]!).body.nodes.size ((P.defs[c.d]!).body.ret.get t) :=
-    fun c hc t ht => ⟨hc, (hB c hc).2 t ht⟩
-  cases p
-  · have hi : i < (P.defs[sc.d]!).body.nodes.size := (hr.2 rfl).1
-    have hj := (hr.2 rfl).2
-    dsimp only at hi hj
-    obtain ⟨-, -, -, hdown, -⟩ := (hB sc hg).1 i hi
-    have hdn := hdown j hj
-    rcases hf : ((P.defs[sc.d]!).body.nodes[i]!).form
-    · rw [Resolve.rs_prim P sc i j hf] at h
-      cases h
-    · simp only [hf] at hdn
-      rw [Resolve.rs_call P sc i j hf] at h
-      cases h
-      exact down _ (Resolve.good_child P hg hi rfl hdn.1 (by rw [Resolve.prim_members _ (Or.inr hf)]; omega)
-        (by omega)) j hdn.2
-    · simp only [hf] at hdn
-      rw [Resolve.rs_batch P sc i j hf] at h
-      obtain ⟨hm, -, hrc⟩ := hdn
-      by_cases hcp : (P.defs[((P.defs[sc.d]!).body.nodes[i]!).fn]!).prim = true
-      · simp only [hcp, ite_true] at h
-        cases h
-      · simp only [hcp, Bool.false_eq_true, ite_false] at h
-        cases h
-        have hcp' : (P.defs[((P.defs[sc.d]!).body.nodes[i]!).fn]!).prim = false := by simpa using hcp
-        exact down _ (Resolve.good_child P hg hi rfl hcp' (by rw [Resolve.bs_members _ (Or.inl hf)]; exact hm)
-          (by omega)) _ (hrc hcp')
-    · simp only [hf] at hdn
-      obtain ⟨hcp, hdn⟩ := hdn
-      by_cases hn : ((P.defs[sc.d]!).body.nodes[i]!).n = 0
-      · exact absurd h (Resolve.rs_scan0 P sc i j _ hf hn)
-      obtain ⟨carry, y, hret, hm, hjj⟩ := hdn hn
-      rw [Resolve.rs_scan P sc i j carry y hf hn hret] at h
-      have e1 : (if j < carry.leaves then (((P.defs[sc.d]!).body.nodes[i]!).n - 1, j)
-          else ((j - carry.leaves) / y.leaves, carry.leaves + (j - carry.leaves) % y.leaves)).1 =
-          if j < carry.leaves then ((P.defs[sc.d]!).body.nodes[i]!).n - 1 else (j - carry.leaves) / y.leaves := by
-        split <;> rfl
-      have e2 : (if j < carry.leaves then (((P.defs[sc.d]!).body.nodes[i]!).n - 1, j)
-          else ((j - carry.leaves) / y.leaves, carry.leaves + (j - carry.leaves) % y.leaves)).2 =
-          if j < carry.leaves then j else carry.leaves + (j - carry.leaves) % y.leaves := by
-        split <;> rfl
-      simp only [e1, e2] at h
-      cases h
-      exact down _ (Resolve.good_child P hg hi rfl hcp (by rw [Resolve.bs_members _ (Or.inr hf)]; exact hm)
-        (by omega)) _ hjj
-  · rcases sc with ⟨d, off, st⟩ | ⟨parent, d, off, k, m⟩
-    · unfold Good at hg
-      obtain ⟨-, -, rfl⟩ := hg
-      exact absurd h (Resolve.rs_top P d off i j _)
-    · simp only [Scope.d.eq_2] at hr
-      have hg' := hg
-      unfold Good at hg'
-      obtain ⟨hp, hk, hfn, hc, hm, ho⟩ := hg'
-      have hi : i < (P.defs[d]!).body.params.size := (hr.1 rfl).1
-      have hj : j < ((P.defs[d]!).body.params[i]!).2.leaves := (hr.1 rfl).2
-      obtain ⟨-, hargs, hup, -, -⟩ := (hB parent hp).1 k hk
-      rw [hfn] at hup
-      have hu := hup i hi j hj m hm
-      have harg : ∀ (i' t : ℕ), t < ((((P.defs[parent.d]!).body.nodes[k]!).args[i']!).seq.count) →
-          Good P parent ∧ RefOk P parent.d (P.defs[parent.d]!).body.nodes.size
-            ((((P.defs[parent.d]!).body.nodes[k]!).args[i']!).seq.get t) :=
-        fun i' t ht => ⟨hp, hargs i' t ht⟩
-      rcases hf : ((P.defs[parent.d]!).body.nodes[k]!).form
-      · simp only [hf] at hu
-        rw [Resolve.rs_up P parent d off k m i j (Or.inl hf)] at h
-        cases h
-        exact harg i j hu
-      · simp only [hf] at hu
-        rw [Resolve.rs_up P parent d off k m i j (Or.inr hf)] at h
-        cases h
-        exact harg i j hu
-      · simp only [hf] at hu
-        rw [Resolve.rs_up_batch P parent d off k m i j hf, Resolve.memberRef_eq] at h
-        cases h
-        exact harg i _ hu
-      · simp only [hf] at hu
-        by_cases hi0 : i = 0
-        · subst hi0
-          simp only [ite_true] at hu
-          rw [Resolve.rs_up_scan0 P parent d off k m j hf] at h
-          by_cases hm0 : m = 0
-          · subst hm0
-            simp only [ite_true] at hu h
-            cases h
-            exact harg 0 j hu
-          · simp only [hm0, ite_false] at hu h
-            cases h
-            obtain ⟨m', rfl⟩ := Nat.exists_eq_succ_of_ne_zero hm0
-            rw [Nat.succ_mul] at ho
-            exact down _ (Resolve.good_child P hp hk hfn hc (by omega) (by rw [Nat.succ_sub_one]; omega)) j hu
-        · simp only [hi0, ite_false] at hu
-          rw [Resolve.rs_up_scan P parent d off k m i j hi0 hf] at h
-          cases h
-          by_cases hx : i ≤ ((P.defs[parent.d]!).body.nodes[k]!).nxs
-          · simp only [hx, ite_true] at hu ⊢
-            exact harg i _ hu
-          · simp only [hx, ite_false] at hu ⊢
-            exact harg i _ hu
-
 /-- **One step of resolution keeps the width.** From a state that resolves below a bound, a step ends at a member of
 a node of the activation, of a primitive that returns one value as wide as the leaf the state names, or it moves to a
 state that names a leaf as wide. -/
 private theorem step_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
-    (hB : ∀ sc, Good P sc → BodyIn P sc.d) (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
+    (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
     (hW : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
       (P.defs[d]!).body.retType = (P.defs[d]!).ret ∧ BodyWide (P.defs[d]!).body)
-    (s : Scope × Ref) (x) (hs : Good P s.1 ∧ RefOk P s.1.d (P.defs[s.1.d]!).body.nodes.size s.2)
-    (h : resolveStep P s = .ok x) :
+    (B : ℕ) (s : Scope × Ref) (x) (hs : Resolve.Inv P B s) (h : resolveStep P s = .ok x) :
     (∀ g, x = .inl g → ∃ k m, k < (P.defs[s.1.d]!).body.nodes.size ∧
       (P.defs[((P.defs[s.1.d]!).body.nodes[k]!).fn]!).prim = true ∧
       m < ((P.defs[s.1.d]!).body.nodes[k]!).members ∧ g = s.1.off + (P.defs[s.1.d]!).body.offsets[k]! + m ∧
       (P.defs[((P.defs[s.1.d]!).body.nodes[k]!).fn]!).ret = .value (Widths.wAt (tyOf P s.1 s.2) s.2.j)) ∧
     (∀ s', x = .inr s' → Widths.wAt (tyOf P s'.1 s'.2) s'.2.j = Widths.wAt (tyOf P s.1 s.2) s.2.j) := by
   obtain ⟨sc, ⟨p, i, j⟩⟩ := s
-  obtain ⟨hg, hr⟩ := hs
+  obtain ⟨hg, hr, -, -⟩ := hs
   dsimp only at hg hr ⊢
   cases p
   · have hi : i < (P.defs[sc.d]!).body.nodes.size := (hr.2 rfl).1
     have hj : j < ((P.defs[sc.d]!).body.nodes[i]!).out.leaves := (hr.2 rfl).2
     have hty : tyOf P sc ⟨false, i, j⟩ = ((P.defs[sc.d]!).body.nodes[i]!).out := rfl
     rw [hty]
-    rcases down_wide P hB hD hW sc hg (Resolve.good_d_in P hroot hB sc hg).1 i j hi hj x h with
+    rcases down_wide P hB hD hW sc hg (Resolve.good_d P hroot hB sc hg).1 i j hi hj x h with
       ⟨m, rfl, hp, hm, hw⟩ | ⟨s', rfl, hw⟩
     · exact ⟨fun g hg' => by cases hg'; exact ⟨i, m, hi, hp, hm, rfl, hw⟩, fun s' hs' => by cases hs'⟩
     · exact ⟨fun g hg' => (by cases hg'), fun s'' hs' => by cases hs'; exact hw⟩
@@ -682,7 +573,8 @@ private theorem step_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P
 /-- **Where resolution ends**: at a member of a node of a primitive, in an activation resolution reaches, whose
 primitive returns one value as wide as the leaf the reference names. -/
 theorem resolve_node (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
-    (hB : ∀ sc, Good P sc → BodyIn P sc.d) (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
+    (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
+    (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
     (hW : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
       (P.defs[d]!).body.retType = (P.defs[d]!).ret ∧ BodyWide (P.defs[d]!).body)
     (sc : Scope) (hsc : Good P sc) (r : Ref) (hr : RefOk P sc.d (P.defs[sc.d]!).body.nodes.size r) (g : ℕ)
@@ -690,21 +582,24 @@ theorem resolve_node (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root
     ∃ sc' k m, Good P sc' ∧ k < (P.defs[sc'.d]!).body.nodes.size ∧
       (P.defs[((P.defs[sc'.d]!).body.nodes[k]!).fn]!).prim = true ∧
       m < ((P.defs[sc'.d]!).body.nodes[k]!).members ∧ g = sc'.off + (P.defs[sc'.d]!).body.offsets[k]! + m ∧
-      (P.defs[((P.defs[sc'.d]!).body.nodes[k]!).fn]!).ret = .value (Widths.wAt (tyOf P sc r) r.j) :=
-  DescAgree.run_inv "scope resolution" (resolveStep P)
-    (fun s => (Good P s.1 ∧ RefOk P s.1.d (P.defs[s.1.d]!).body.nodes.size s.2) ∧
+      (P.defs[((P.defs[sc'.d]!).body.nodes[k]!).fn]!).ret = .value (Widths.wAt (tyOf P sc r) r.j) := by
+  have hinv : Resolve.Inv P (sc.off + (P.defs[sc.d]!).body.offsets[r.i + 1]!) (sc, r) := by
+    unfold Resolve.Inv
+    exact ⟨hsc, hr, fun _ => Nat.le_add_right _ _, fun _ => Nat.le_refl _⟩
+  exact DescAgree.run_inv "scope resolution" (resolveStep P)
+    (fun s => Resolve.Inv P (sc.off + (P.defs[sc.d]!).body.offsets[r.i + 1]!) s ∧
       Widths.wAt (tyOf P s.1 s.2) s.2.j = Widths.wAt (tyOf P sc r) r.j)
     (fun g => ∃ sc' k m, Good P sc' ∧ k < (P.defs[sc'.d]!).body.nodes.size ∧
       (P.defs[((P.defs[sc'.d]!).body.nodes[k]!).fn]!).prim = true ∧
       m < ((P.defs[sc'.d]!).body.nodes[k]!).members ∧ g = sc'.off + (P.defs[sc'.d]!).body.offsets[k]! + m ∧
       (P.defs[((P.defs[sc'.d]!).body.nodes[k]!).fn]!).ret = .value (Widths.wAt (tyOf P sc r) r.j))
     (fun s g hs hx => by
-      obtain ⟨k, m, hk, hp, hm, hgg, hw⟩ := (step_wide P hroot hB hD hW s _ hs.1 hx).1 g rfl
+      obtain ⟨k, m, hk, hp, hm, hgg, hw⟩ := (step_wide P hroot hB hD hW _ s _ hs.1 hx).1 g rfl
       rw [hs.2] at hw
       exact ⟨s.1, k, m, hs.1.1, hk, hp, hm, hgg, hw⟩)
-    (fun s s' hs hx => ⟨step_in P hB s s' hs.1 hx,
-      ((step_wide P hroot hB hD hW s _ hs.1 hx).2 s' rfl).trans hs.2⟩)
-    _ _ _ ⟨⟨hsc, hr⟩, rfl⟩ (Flock.Program.resolve_run h)
+    (fun s s' hs hx => ⟨(Resolve.step_ok P hroot hB hL _ s _ hs.1 hx).2 s' rfl,
+      ((step_wide P hroot hB hD hW _ s _ hs.1 hx).2 s' rfl).trans hs.2⟩)
+    _ _ _ ⟨hinv, rfl⟩ (Flock.Program.resolve_run h)
 
 /-! ## The walk arrives where the layout says -/
 
@@ -744,7 +639,7 @@ private theorem under_child (U : Scope) : ∀ sc, Resolve.Under U sc → U ≠ s
 
 /-- An activation resolution reaches ends no later than an activation over it. -/
 private theorem under_end (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
-    (hB : ∀ sc, Good P sc → BodyIn P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d) (U : Scope) :
+    (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d) (U : Scope) :
     ∀ sc, Good P sc → Resolve.Under U sc → sc.off + (P.defs[sc.d]!).gates ≤ U.off + (P.defs[U.d]!).gates
   | .top d off st, _, hu => by
     have hu' : U = .top d off st := hu
@@ -755,7 +650,7 @@ private theorem under_end (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P
     · exact hu' ▸ Nat.le_refl _
     · obtain ⟨hp, hk, hfn, hc, hm, ho⟩ := hg
       have ih := under_end P hroot hB hL U parent hp hu'
-      obtain ⟨hpd, hpp⟩ := Resolve.good_d_in P hroot hB parent hp
+      obtain ⟨hpd, hpp⟩ := Resolve.good_d P hroot hB parent hp
       obtain ⟨-, hK, hnodes⟩ := hL parent.d hpd hpp
       have hstep := hnodes k hk
       have hmono := Resolve.offsets_mono P parent.d (hL parent.d hpd) hpp (k + 1) _ (by omega) (Nat.le_refl _)
@@ -770,7 +665,7 @@ private theorem under_end (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P
 the node when the activation is the node's, and otherwise goes on to the activation below that is still over the
 node's. -/
 private theorem walk_step (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
-    (hB : ∀ sc, Good P sc → BodyIn P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d) (sc : Scope)
+    (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d) (sc : Scope)
     (hsc : Good P sc) (k m : ℕ) (hk : k < (P.defs[sc.d]!).body.nodes.size)
     (hp : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true)
     (hg1 : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates = 1)
@@ -778,14 +673,14 @@ private theorem walk_step (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P
     (x : (ℕ × Array ℕ × Scope) ⊕ Scope)
     (h : gateStep P (sc.off + (P.defs[sc.d]!).body.offsets[k]! + m) w = .ok x) :
     (∃ ops, x = .inl (((P.defs[sc.d]!).body.nodes[k]!).fn, ops, sc)) ∨ ∃ w', x = .inr w' ∧ Resolve.Under w' sc := by
-  obtain ⟨hd, hpc⟩ := Resolve.good_d_in P hroot hB sc hsc
+  obtain ⟨hd, hpc⟩ := Resolve.good_d P hroot hB sc hsc
   by_cases hw : w = sc
   · rw [hw] at h
     obtain ⟨ops, hx, -⟩ := Resolve.gateStep_at_prim P hL sc hd hpc hk hm hp
       (Nat.le_of_eq (by rw [hg1, Nat.mul_one])) (by rw [hg1, Nat.mul_one]; exact Nat.lt_add_one _) h
     exact Or.inl ⟨ops, hx⟩
   · obtain ⟨d', off', k', m', hc⟩ := under_child w sc hu hw
-    obtain ⟨hwd, hwp⟩ := Resolve.good_d_in P hroot hB w (under_good P w sc hsc hu)
+    obtain ⟨hwd, hwp⟩ := Resolve.good_d P hroot hB w (under_good P w sc hsc hu)
     have hlo := Resolve.under_off P _ sc hsc hc
     have hhi := under_end P hroot hB hL _ sc hsc hc
     obtain ⟨-, hk', hfn', hc', hm', ho'⟩ := under_good P _ sc hsc hc
@@ -807,7 +702,7 @@ private theorem walk_step (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P
 /-- **The walk arrives where the layout says**: the gate of member `m` of a primitive's node `k`, in an activation
 resolution reaches, is located at that node, with its callee for primitive. -/
 theorem gate_of_node (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
-    (hB : ∀ sc, Good P sc → BodyIn P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
+    (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
     (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!) (sc : Scope)
     (hsc : Good P sc) (k m : ℕ) (hk : k < (P.defs[sc.d]!).body.nodes.size)
     (hp : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true)
@@ -835,14 +730,14 @@ theorem gate_of_node (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root
 
 /-- **A gate a reference resolves to is as wide as the leaf it names**, wherever the gate is located. -/
 theorem resolve_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
-    (hB : ∀ sc, Good P sc → BodyIn P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
+    (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
     (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
     (hW : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
       (P.defs[d]!).body.retType = (P.defs[d]!).ret ∧ BodyWide (P.defs[d]!).body)
     (sc : Scope) (hsc : Good P sc) (r : Ref) (hr : RefOk P sc.d (P.defs[sc.d]!).body.nodes.size r) (g : ℕ)
     (h : resolve P sc r = .ok g) (p : ℕ) (ops : Array ℕ) (sc' : Scope) (hg : P.gate g = .ok (p, ops, sc')) :
     (P.defs[p]!).ret = .value (Widths.wAt (tyOf P sc r) r.j) := by
-  obtain ⟨sc₁, k, m, hsc₁, hk, hp, hm, rfl, hw⟩ := resolve_node P hroot hB hD hW sc hsc r hr g h
+  obtain ⟨sc₁, k, m, hsc₁, hk, hp, hm, rfl, hw⟩ := resolve_node P hroot hB hL hD hW sc hsc r hr g h
   rw [(gate_of_node P hroot hB hL hD sc₁ hsc₁ k m hk hp hm p ops sc' hg).1]
   exact hw
 
