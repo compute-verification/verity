@@ -180,6 +180,37 @@ openings lie in `C`; true when it rejects every word of one. -/
 def test {m : ℕ} (U k : ℕ) (C : Finset ℕ) (b : Blocks m) : Prop :=
   accepted U k b → openings U k b (fun _ => 0) ⊆ C
 
+/-- The `width N`-bit word of a `κ`-bit coin from bit `pos` on, read big-endian, when `pos + width N ≤ κ`. -/
+def wordFrom (N pos : ℕ) {κ : ℕ} (c : Pous.Bits κ) : Pous.Bits (width N) :=
+  (Pous.bitsEquiv (width N)).symm
+    ⟨Pous.bitsVal c / 2 ^ (κ - (pos + width N)) % 2 ^ width N, Nat.mod_lt _ (Nat.two_pow_pos _)⟩
+
+/-- **One step of the draw on a raw coin** at `N`, from bit `pos` on, within `fuel` words: the first word the sampler
+accepts and the bit after it, none when the coin runs out first (`coins._uniform` on `OwnRandomness`). -/
+def stepRaw (N : ℕ) {κ : ℕ} (c : Pous.Bits κ) : ℕ → ℕ → Option (ℕ × ℕ)
+  | 0, _ => none
+  | fuel + 1, pos =>
+    if pos + width N ≤ κ then
+      match Actual.wordIndex N (wordFrom N pos c) with
+      | some j => some (j, pos + width N)
+      | none => stepRaw N c fuel (pos + width N)
+    else none
+
+/-- The draw's offsets on a raw coin: steps `i, …, i + k − 1` of a window of `U`, step `i` below `U − i`, each from the
+bit after the last one's word, none when the coin runs out. -/
+def offsetsRaw (U : ℕ) {κ : ℕ} (c : Pous.Bits κ) : ℕ → ℕ → ℕ → Option (List ℕ)
+  | 0, _, _ => some []
+  | k + 1, i, pos => do
+    let (j, pos') ← stepRaw (U - i) c κ pos
+    let rest ← offsetsRaw U c k (i + 1) pos'
+    pure (j :: rest)
+
+/-- **The proof service's draw on a raw coin**: the receipts a window of `U` opens with `k` samples when the sample's
+coins, as released and with no derivation, are its stream (`coins.draw_first`'s subset law on `OwnRandomness`); none
+when they run out, which refuses the close. -/
+def drawRaw (U k : ℕ) {κ : ℕ} (c : Pous.Bits κ) : Option (Finset ℕ) :=
+  (offsetsRaw U c k 0 0).map fun js => (range k).image (arrange (fun i => js.getD i 0) k)
+
 /-- **The threshold coin**: `u` read as a number below `2^512` is below `⌊δ·2^512/P⌋`, or `P ≤ δ`. -/
 def below (δ P : ℝ) (u : Pous.Bits 512) : Prop := P ≤ δ ∨ Pous.bitsVal u < ⌊δ * 2 ^ 512 / P⌋₊
 
@@ -216,6 +247,11 @@ fallbacks `rest ω t` where the sampler rejects every word of a first block. -/
 def opened (prf : Fin n → Pous.Bits κ → Blocks m) (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n)
     (ω : SampleCoins n κ X) : Finset ℕ :=
   openings (D.size t ω) (D.samples t ω) (prf t (ω.2 t)) (rest ω t)
+
+/-- The receipts window `t` opens at coins `ω` by the proof service's draw on its raw coin (`drawRaw`), none when the
+coin runs out and the close is refused. -/
+def openedRaw (t : Fin n) (ω : SampleCoins n κ X) : Option (Finset ℕ) :=
+  drawRaw (D.size t ω) (D.samples t ω) (ω.2 t)
 
 /-- Window `t`'s correct receipts among its `U_t`. -/
 def good (t : Fin n) (ω : SampleCoins n κ X) : ℕ :=
