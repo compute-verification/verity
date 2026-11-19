@@ -1124,7 +1124,7 @@ theorem checkSampleFull_obj_nil (kvs : Std.TreeMap.Raw String Json compare) (pop
   have hcl : dcl = closure := rfl
   have hkeys : ∀ x, keys? (Json.obj kvs) = some x → have_ = x := by intro x h; simp [have_, h]
   simp only []
-  by_cases hc : ["subset", "bernoulli", "stratified", "work"].contains kind = true
+  by_cases hc : ["subset", "bernoulli", "stratified", "work", "rated"].contains kind = true
   rotate_left
   · simp only [hc, Bool.not_false, Bool.or_true, ↓reduceIte, Id.run_pure]
     constructor
@@ -1175,7 +1175,7 @@ theorem checkSampleFull_obj_nil (kvs : Std.TreeMap.Raw String Json compare) (pop
           · rename_i t ht; exfalso; have := h s hs t ht; simp only [countIn] at this; simp [this] at hb
           · rfl
         · rfl
-    have hmem : kind ∈ ["subset", "bernoulli", "stratified", "work"] := by
+    have hmem : kind ∈ ["subset", "bernoulli", "stratified", "work", "rated"] := by
       simpa only [List.contains_iff_mem] using hc
     have hkeys' : keys? (Json.obj kvs) = some (sampleKeys kind closure) := by
       have : have_ = want := by simpa only [Bool.not_eq_true, bne_eq_false_iff_eq] using hk
@@ -1187,11 +1187,12 @@ theorem checkSampleFull_obj_nil (kvs : Std.TreeMap.Raw String Json compare) (pop
         have e : Json.arr xs = Json.arr us' := hxs.symm.trans h1
         cases e; rw [hm] at h2; cases h2; exact h3
       · intro h; exact ⟨xs, units, hxs, hm, h⟩
-    have hpn : ∀ m, int? (getD (Json.obj kvs) "population") = some m → Draw.strataMessage (Json.obj kvs) m = none →
+    have hpn : ∀ m, int? (getD (Json.obj kvs) "population") = some m →
+        (if kind == "rated" then Draw.ratedMessage (Json.obj kvs) m else Draw.strataMessage (Json.obj kvs) m) = none →
         problem = none := by
       intro m h1 h2; simp only [problem, n, h1]; exact h2
     have hpe : problem = none → ∃ m, int? (getD (Json.obj kvs) "population") = some m ∧
-        Draw.strataMessage (Json.obj kvs) m = none := by
+        (if kind == "rated" then Draw.ratedMessage (Json.obj kvs) m else Draw.strataMessage (Json.obj kvs) m) = none := by
       intro h; simp only [problem, n] at h; revert h
       cases int? (getD (Json.obj kvs) "population") <;> simp
     have hcs_some : ∀ ys, cs = some ys → ∃ zs, getD (Json.obj kvs) "closure" = .arr zs ∧ zs.mapM int? = some ys := by
@@ -1228,18 +1229,19 @@ theorem checkSampleFull_obj_nil (kvs : Std.TreeMap.Raw String Json compare) (pop
         simp only [ok]
         split <;> simp_all
     all_goals first
-      | (simp only [Bool.or_eq_true, beq_iff_eq, Bool.not_eq_false']
+      | (simp only [Bool.or_eq_true, beq_iff_eq, Bool.not_eq_false', or_assoc]
          apply imp_congr_right; intro _
          rw [hjb]
          obtain ⟨m, h1, h2⟩ := hpe hp
          exact ⟨fun h => ⟨m, h1, h2, h⟩, fun ⟨_, _, _, h⟩ => h⟩)
       | (simp only [Bool.or_eq_false_iff, beq_eq_false_iff_ne]
          constructor
-         · rintro ⟨h1, h2⟩ (h | h) <;> contradiction
+         · rintro ⟨⟨h1, h2⟩, h3⟩ (h | h | h) <;> contradiction
          · intro h
-           refine ⟨fun hs => ?_, fun hw => ?_⟩
+           refine ⟨⟨fun hs => ?_, fun hw => ?_⟩, fun hr => ?_⟩
            · obtain ⟨m, h1, h2, _⟩ := h (.inl hs); rw [hpn m h1 h2] at hp; cases hp
-           · obtain ⟨m, h1, h2, _⟩ := h (.inr hw); rw [hpn m h1 h2] at hp; cases hp)
+           · obtain ⟨m, h1, h2, _⟩ := h (.inr (.inl hw)); rw [hpn m h1 h2] at hp; cases hp
+           · obtain ⟨m, h1, h2, _⟩ := h (.inr (.inr hr)); rw [hpn m h1 h2] at hp; cases hp)
       | (constructor
          · intro h1 h2; rw [h1] at h2; cases h2
          · intro h

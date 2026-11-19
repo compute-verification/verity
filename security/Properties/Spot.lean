@@ -368,11 +368,12 @@ def kindOf (draw : Json) : String :=
   | .str s => s
   | _ => ""
 
-/-- A sample's keys: its sampling design, population and units, with `k` (subset), `p` (bernoulli) or `k` and `strata` (stratified,
-work), and a work sample's `closure` when it has one. -/
+/-- A sample's keys: its sampling design, population and units, with `k` (subset), `p` (bernoulli), `rates` and `strata` (rated)
+or `k` and `strata` (stratified, work), and a work sample's `closure` when it has one. -/
 def sampleKeys (kind : String) (closure : Bool) : Array String :=
   let keys := sortStrings (#["law", "population", "units"] ++
-    if kind == "subset" then #["k"] else if kind == "bernoulli" then #["p"] else #["k", "strata"])
+    if kind == "subset" then #["k"] else if kind == "bernoulli" then #["p"] else if kind == "rated" then #["rates", "strata"]
+    else #["k", "strata"])
   if closure then sortStrings (keys.push "closure") else keys
 
 /-- Strictly ascending. -/
@@ -384,25 +385,27 @@ def countIn (units : Array Int) (s : Json) : Int :=
   units.foldl (fun acc u => if rs.any (fun (lo, hi) => lo ≤ u && u < hi) then acc + 1 else acc) 0
 
 /-- A sample of the sampling design `samplingDesign` over the registered `population` (`draw.check_draw`): an object naming subset, bernoulli,
-stratified or work, with exactly its sampling design's keys; the sampling design it names is `samplingDesign` and its population the registered one; its
+stratified, work or rated, with exactly its sampling design's keys; the sampling design it names is `samplingDesign` and its population the registered one; its
 units integers, strictly ascending, in `[0, population)`; a subset's `k` its number of units; a Bernoulli `p` written
 `NUM/DEN` with `0 ≤ NUM ≤ DEN`, `0 < DEN`; a stratified or work sample's strata well formed over its population
 (`Draw.strataMessage` none: each stratum exactly its keys, a distinct string template, its ranges ascending, disjoint and
-tiling `[0, population)`, its `k` the rule's), and each stratum's `k`, where its template is a string (as
-`Draw.strataMessage` none has every one), the number of units sampled in it; and a work sample's closure, when it has one,
+tiling `[0, population)`, its `k` the rule's), a rated sample's rates and strata well formed over it (`Draw.ratedMessage`
+none), and each stratum's `k`, where its template is a string (as either has every one), the number of units sampled in
+it; and a work sample's closure, when it has one,
 integers, non-empty, strictly ascending, in `[0, population)` and none of them sampled. -/
 def Drawn (draw population samplingDesign : Json) : Prop :=
   let kind := kindOf draw
   let closure := kind == "work" && (field? draw "closure").isSome
-  (draw matches .obj _) ∧ kind ∈ ["subset", "bernoulli", "stratified", "work"] ∧
+  (draw matches .obj _) ∧ kind ∈ ["subset", "bernoulli", "stratified", "work", "rated"] ∧
   keys? draw = some (sampleKeys kind closure) ∧
   jeq (Draw.samplingDesignOf draw) samplingDesign ∧ jeq (getD draw "population") population ∧
   ∃ us units, getD draw "units" = .arr us ∧ us.mapM int? = some units ∧ Ascending units ∧
     (∀ (h : 0 < units.size), 0 ≤ units[0] ∧ ∃ n, int? (getD draw "population") = some n ∧ units[units.size - 1] < n) ∧
     (kind = "subset" → int? (getD draw "k") = some (units.size : Int)) ∧
     (kind = "bernoulli" → ∃ p, getD draw "p" = .str p ∧ (Draw.probability? p).isSome) ∧
-    ((kind = "stratified" ∨ kind = "work") →
-      ∃ n, int? (getD draw "population") = some n ∧ Draw.strataMessage draw n = none ∧
+    ((kind = "stratified" ∨ kind = "work" ∨ kind = "rated") →
+      ∃ n, int? (getD draw "population") = some n ∧
+        (if kind == "rated" then Draw.ratedMessage draw n else Draw.strataMessage draw n) = none ∧
         ∀ ss, getD draw "strata" = .arr ss → ∀ s ∈ ss, ∀ t, getD s "template" = .str t →
           int? (getD s "k") = some (countIn units s)) ∧
     (closure → ∃ cs ys, getD draw "closure" = .arr cs ∧ cs.mapM int? = some ys ∧ ∃ (h : 0 < ys.size),
