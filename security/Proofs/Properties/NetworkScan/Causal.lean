@@ -380,7 +380,7 @@ theorem closure {bytes : ByteArray} (hdec : decode bytes = .ok P) (hov : P.order
       have hmem : ((P.defs[P.root]!).body.nodes[ke]!).args[i]! ∈ ((P.defs[P.root]!).body.nodes[ke]!).args := by
         rw [getElem!_pos ((P.defs[P.root]!).body.nodes[ke]!).args i hi]; exact Array.getElem_mem hi
       obtain ⟨q, hq⟩ := Option.isSome_iff_exists.1 (hargs _ hmem)
-      exact Or.inr ⟨_, hmem, q, hq, arg_lands P hroot hB hL hk hq ht _ y h⟩
+      exact Or.inr ⟨_, hmem, q, hq, arg_lands P hroot hB hL hk hq ht _ y (Flock.Program.resolve_run h)⟩
   · obtain ⟨-, hqK, hin⟩ := inputArg_some hq
     have := gate_input P hroot hL hqK hin hx1 hx2 (hinp q hqK hin) hgate
     rw [this] at hyo
