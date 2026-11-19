@@ -5,4 +5,5 @@ pythonpath = ["../../../../../.."]   # the repository root: its tests import oth
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-inputs = ["verity"]
+# the Python reference of the load's check (`load_reference`), which the relay's signed heads are read by
+inputs = ["verity", "tests/verity/protocols/resource_accounting/network/verifier/load_reference.py"]

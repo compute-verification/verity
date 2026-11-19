@@ -114,7 +114,8 @@
   "FlockRecLinks": "the flock-rec-links executable's entry point, one line; its command is Flock.RecLinksCmd.cmd, audited under Flock",
   "FlockFrameTape": "the flock-frame-tape executable's entry point, a test's: Flock.ZkServer.Frame.cmdWith (audited under Flock) with the rep's draws read from a file, so tests/verity/protocols/proofs/flock/prover/test_zk_server_frame.py knows the pads the frame masks with",
   "FlockReadTmpl": "the flock-read-tmpl executable's entry point, one line; its command is Flock.ReadTmplCmd.cmd, audited under Flock",
-  "FlockComposeCheck": "the flock-compose-check executable's entry point, a test's: Flock.Test.Compose.roundTrips compiled, audited under Flock.Test.Compose"
+  "FlockComposeCheck": "the flock-compose-check executable's entry point, a test's: Flock.Test.Compose.roundTrips compiled, audited under Flock.Test.Compose",
+  "FlockLowerCheck": "the flock-lower-check executable's entry point, a test's (tests/verity/protocols/proofs/flock/prover/test_lean_lower.py): Flock.Lower.lower, Flock.Lift.lift and Flock.Compose.compose (audited under Flock) on a decoded descriptor, its template's rows solved lane-wise"
  },
  "assumptions": {},
  "open": {

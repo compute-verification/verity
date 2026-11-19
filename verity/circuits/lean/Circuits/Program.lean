@@ -544,6 +544,13 @@ structure Prog where
   boolean : Std.HashMap String String := {}
   deriving Inhabited
 
+/-- `sha512` in hex, refused unless it is a SHA-512 digest: a Program built from another (a block's, by
+`Spot.Restrict.restrict`) carries none, so no reader compares it with a record's. -/
+def Prog.digest (P : Prog) : Except String String :=
+  if P.sha512.size == 64 then .ok (hexOf P.sha512) else .error "program: no SHA-512 digest, so not a Program decoded from bytes"
+
+#guard !(default : Prog).digest.toBool
+
 def RUN : String := "run"
 def REGISTRATION : String := "registration"
 

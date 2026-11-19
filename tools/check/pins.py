@@ -159,6 +159,7 @@ CIRCUITS_TESTS, VLLM_PROGRAM_TESTS = "tests/verity/circuits/", "tests/adapters/v
 WRITERS = (
     *(Writer(CIRCUITS_TESTS + f, CIRCUITS_TESTS + m) for f, m in (
         ("boolean_vectors.json", "test_boolean.py"),
+        ("count_vectors.jsonl", "test_count.py"),
         ("format_vectors.json", "test_format_spec.py"),
         ("partition_v2_vectors.json", "test_partition_v2.py"),
         ("population_recorded.json", "test_population_recorded.py"),

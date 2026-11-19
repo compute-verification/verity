@@ -19,6 +19,7 @@ module
 
 public import Flock.Statement
 public import Flock.TemplateQuery
+public import Flock.PartitionObject
 public import Flock.Extract
 public import Flock.Qcall
 public import Flock.RecSparse
@@ -55,10 +56,7 @@ def MAX_COMPS : Nat := 2 ^ 16
 def MAX_K_LOG : Nat := 27
 /-- META's bindings (what the statement binds about the circuit): a class leaves them out. -/
 def BINDING_KEYS : List String := ["partition", "program_sha512", "program_digests"]
-def PARTITION_V1 : String := "verity/partition/v1"
 def PARTITION_PROVISIONAL : String := "flock-circuit/unit-cover/v0"
-
-def isSha512Hex (s : String) : Bool := s.length == 128 && s.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f'))
 
 /-- The class of the instances a circuit file proves: SHA-512 of the file with META's bindings removed (META re-serialized
 compact and sorted, strings in UTF-8 as upstream's `serde_json` writes them: `canonUtf8`), which a partition can name before
@@ -1113,50 +1111,6 @@ def unitsEntry (c : Circuit) (indices : Array Nat) : Json :=
   Json.mkObj (if c.classSha.isEmpty then base
     else base ++ [("classes", Json.arr (Array.replicate indices.size (Json.str (hexOf c.classSha))))])
 
-/-- The queries the verifier can evaluate itself (`Flock.Qword`), given the program's Call graphs. -/
-def EVALUABLE : List (String × Nat) := [("Q_word", 1), ("Q_word", 2)]
-
-/-- `Q_call` v1, which the verifier evaluates itself (`Flock.Qcall`). -/
-def Q_CALL : String × Nat := ("Q_call", 1)
-
-/-- A `verity/partition/v1` object's form (`verity.ir.cut`'s canonical form, open query names): exactly `format`, `program`, `query`; a
-SHA-512 program; a query of exactly `name` (a non-empty string), `version` (a natural number) and `params` (an object). For a
-query the verifier evaluates, its parameters too (`Q_word` v1 and v2: exactly `X`, `W`, positive integers; `Q_call` v1: exactly
-`X`, an integer in 1..2^16). The query's name and version. -/
-def checkPartitionObject (obj : Json) : V (String × Nat) := do
-  let keys := fun (j : Json) => match j with
-    | .obj kvs => (kvs.toArray.map (·.1)).qsort (· < ·)
-    | _ => #[]
-  if keys obj != #["format", "program", "query"] then throw "partition: the object's keys are not format, program, query"
-  if (obj.getObjValAs? String "format").toOption != some PARTITION_V1 then throw s!"partition: not a {PARTITION_V1} object"
-  if !isSha512Hex ((obj.getObjValAs? String "program").toOption.getD "") then throw "partition: program is not a SHA-512 digest"
-  let q := (obj.getObjVal? "query").toOption.getD Json.null
-  if keys q != #["name", "params", "version"] then throw "partition: the query's keys are not name, version, params"
-  let name := (q.getObjValAs? String "name").toOption.getD ""
-  if name.isEmpty then throw "partition: the query's name is not a non-empty string"
-  let version ← match (q.getObjVal? "version").toOption with
-    | some (.num n) => if n.exponent == 0 && n.mantissa ≥ 0 then pure n.mantissa.toNat else throw "partition: the query's version is not a natural number"
-    | _ => throw "partition: the query's version is not a natural number"
-  let ps := (q.getObjVal? "params").toOption.getD Json.null
-  match ps with
-  | .obj _ => pure ()
-  | _ => throw "partition: the query's params are not an object"
-  if EVALUABLE.contains (name, version) then
-    if keys ps != #["W", "X"] then throw s!"partition: Q_word v{version}'s parameters are not X, W"
-    for k in ["X", "W"] do
-      match (ps.getObjVal? k).toOption with
-      | some (.num n) => if !(n.exponent == 0 && n.mantissa > 0) then throw s!"partition: {k} is not a positive integer"
-      | _ => throw s!"partition: {k} is not a positive integer"
-  if (name, version) == Q_CALL then
-    if keys ps != #["X"] then throw "partition: Q_call v1's parameters are not X"
-    match (ps.getObjVal? "X").toOption with
-    | some (.num n) =>
-      if !(n.exponent == 0 && n.mantissa > 0 && n.mantissa ≤ Qcall.PARAM_MAX) then
-        throw s!"partition: X is not an integer in 1..{Qcall.PARAM_MAX}"
-    | _ => throw s!"partition: X is not an integer in 1..{Qcall.PARAM_MAX}"
-  if let some ts := TemplateQuery.templatesOf name version ps then discard ts
-  return (name, version)
-
 /-- `SHA-512("verity/partition/v1\0" ‖ canon(object))`. -/
 def partitionDigest (obj : Json) : V ByteArray := do
   return Sha512.hash (PARTITION_V1.toUTF8.push 0 ++ (← canon obj).toUTF8)
@@ -1207,6 +1161,7 @@ def deriveTemplateUnits (c : Circuit) (obj : Json) (program : ByteArray) (indice
   let rs ← match TemplateQuery.evaluate d ts with
     | .ok rs => pure rs
     | .error e => throw s!"partition: {e}"
+  checkBlocksCover obj (TemplateQuery.population rs)
   let some (t, cls) := queryTemplate c | throw "partition: META program_digests does not name the circuit's one template"
   if !ts.contains t then throw s!"partition: the circuit's template {t} is not one the query lists"
   let pop := TemplateQuery.population rs
@@ -1417,7 +1372,15 @@ private def templateStrata (samplingDesign : String) (obj : Json) (program : Byt
   let rs ← match TemplateQuery.evaluate d ts with
     | .ok rs => pure rs
     | .error e => throw s!"partition: {e}"
+  checkBlocksCover obj (TemplateQuery.population rs)
   return (Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)), TemplateQuery.population rs)
+
+/-- The partition object's `blocks`, only once they cover the population the query derives from the verifier's own
+`program` (`templateStrata`); none where it has none. A reader of `blocks` takes them here, never from the object. -/
+def blocksOf (obj : Json) (program : ByteArray) : V (Option (Array (Nat × Nat))) := do
+  let some b := (obj.getObjVal? "blocks").toOption | pure none
+  discard <| templateStrata "blocks" obj program
+  blocksIn (some b)
 
 /-- `stratified:K` expanded over the verifier's own program and partition object (`draw.derive`), and the population. -/
 def stratifiedSamplingDesign (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.SamplingDesign × Nat) := do

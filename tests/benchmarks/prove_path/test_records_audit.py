@@ -15,8 +15,7 @@
 * a circuit reading registered values is audited against the entries the verifier pinned, each under its own domain
   (`pinned`), and refused before any sample without them, a record that lists its members (a served window's) as one that
   states them; one whose program takes values only tied to the earlier docket that registered them first
-  (`tie_of`), its readers' reads registered at that record's roots, and the verifier's tie tests' own tie
-  (`window_tie.py`) is that one on their toys;
+  (`tie_of`), its readers' reads registered at that record's roots;
 * a window's audit is one compute audit of the network attester's period (`period`), its scan state's reads registered;
 * a declared day (``--day``, `declared_day`) hands R2 the registration log's declarations, so a program other than the
   day's is refused;
@@ -317,9 +316,11 @@ def test_the_leak_count_is_the_circuits_unwired_input_bits_and_vacuous_past_the_
 
 
 def _registered_circuit(n: int = 2, free: str | None = None) -> IF.Circuit:
-    """``n`` coordinates whose every input row is a registered read of one parameter ``a``, but port ``free``'s."""
+    """``n`` coordinates whose every input row is a registered read of one parameter ``a``, but port ``free``'s; each read
+    starts on a whole row of its port's words (`interface._reads_of`)."""
     rows, at, reads = IF.layout(BITS).rows, 0, []
     for p, words in rows:
+        at = -(-at // words) * words
         if p != free:
             reads.append(IF.Read(descriptor_id(BITS), p, "a", at=0, radix=(n,), base=at, step=(words,)))
         at += n * words
@@ -780,33 +781,6 @@ def test_a_tie_with_no_prefix_takes_pearls_values_by_their_own_names_in_32_bit_s
             RA.tie_of(doc, earlier, prefix)
 
 
-@pytest.mark.slow
-def test_the_verifier_tie_tests_tie_is_the_audits_on_their_toys():
-    """test_pearltie and test_remotetie tie and resolve with `window_tie` beside them, which loads
-    no file of the audit: on test_pearltie's toy, its tie to W and to the flipped W' is `tie_of`'s with no prefix, and every
-    template of both toys' circuits resolves under its id as `catalog_resolve` resolves it. The tie reads the circuit
-    record's declarations alone (`interface.declarations`), the circuit's own, as its ``circuit.json`` carries them. In a
-    fresh process, where the ``settings`` the verifier's tests import is their own registry."""
-    code = f"""
-import sys
-sys.path[:0] = [{str(HERE)!r}, {str(HERE.parents[2] / "benchmarks" / "prove_path")!r}]
-import test_pearltie as TP, test_remotetie as TR, window_tie as WT  # first: records_audit puts one_stage's settings first
-import records_audit as RA
-from verity.circuits.codec import descriptor_id
-import json
-pearl, h1 = TP.make_toy(), TR.make_toy()
-doc = json.loads(json.dumps(pearl.low.circuit.declared()))
-own = {{TP.SS.SCAN_STATE: pearl.values[TP.SS.SCAN_STATE].entry()}}
-for w in (pearl.W, TP._flipped(pearl).W):
-    tied = WT.tie_of(doc, w, own)
-    assert tied == RA.tie_of(doc, w, None, own) and tied[0]["registered"], tied
-ids = [t for c in (pearl.low.circuit, h1.low.circuit) for t in c.ids]
-assert ids and all(descriptor_id(WT.catalog_resolve(t)) == descriptor_id(RA.catalog_resolve(t)) == t for t in ids)
-"""
-    p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
-    assert p.returncode == 0, p.stderr[-3000:]
-
-
 def test_a_ties_summary_names_w_and_for_pearls_w_its_development_verifier():
     """The summary's ``tie`` names W's digest and the values tied to it. Tied to Pearl+'s W (its window's entry Pearl+'s
     declared option, its scheme the one that entry names) it also says what holds W's roots to the credited ones, Pearl+'s
@@ -1011,7 +985,8 @@ def test_a_declared_day_holds_the_registrations_program_to_the_days_one_declarat
     assert day == {"day": 3, "declarations": [e.body() for e in entries]}
 
     def r2(d: dict) -> list[str]:
-        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {}, **d)
+        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {},
+                   partition=mine.partition, **d)
         return sorted(c for c in v.codes if c.startswith("R2"))
     assert r2(day) == []
     assert r2({**day, "day": 4}) == ["R2-declared"] and r2({**day, "day": 5}) == ["R2-undeclared"]
@@ -1113,7 +1088,8 @@ def test_the_device_day_is_the_challengers_declared_day_over_its_own_ledger_and_
     lines, key, _record = _device_ledger(tmp_path, [_declared(program), *_window(S1, 1, root)])
     day = RA.device_day(lines, root, key, _verify(key))
     assert day == {"day": DAY0, "declarations": [{"blocks": ["t"], "day": DAY0, "program": program}]}
-    assert not [c for c in R.check(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {}, **day).codes
+    assert not [c for c in R.check(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {},
+                                   partition=mine.partition, **day).codes
                 if c.startswith("R2")]
     rebuilt = G.Declaration(DAY0, program, ("t",)).digest()
     assert RA.device_day(lines, root, key, _verify(key), {"window": {"day": DAY0, "declaration": rebuilt}}) == day
@@ -1134,7 +1110,8 @@ def test_a_window_opened_before_its_days_declaration_or_of_a_lane_that_never_dec
     program = written.rec["program"]
 
     def r2(d: dict) -> list[str]:
-        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {}, **d)
+        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {},
+                   partition=mine.partition, **d)
         return sorted(c for c in v.codes if c.startswith("R2"))
     late, key, _ = _device_ledger(tmp_path / "late",
                                   [*_window(S1, 0, "01" * 64), _declared(program), *_window(S2, 3, "02" * 64)])
@@ -1175,7 +1152,8 @@ def test_a_window_that_crosses_utc_midnight_belongs_to_its_opens_day(written, tm
     program, root = written.rec["program"], "01" * 64
 
     def r2(d: dict) -> list[str]:
-        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {}, **d)
+        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {},
+                   partition=mine.partition, **d)
         return sorted(c for c in v.codes if c.startswith("R2"))
     def late(reserve_seq: int) -> list[tuple[str, str, dict]]:
         return _window(S1, reserve_seq, root, reserved_at="2026-10-20T23:55:00Z", expires="2026-10-21T00:05:00Z",

@@ -850,7 +850,7 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
     tie = {**({"registered": IR.link_words(d.links), "schemas": IR.link_schemas(d.members, d.links)} if d.links else {}),
            **({"supplied": supplied} if supplied else {}),
            **({} if window_root is None else {"window_root": window_root})}
-    ireg, draw = again.second(record, it.ports, leaf_layer=it.leaf_layer, **tie)
+    ireg, draw = again.second(record, it.ports, leaf_layer=it.leaf_layer, partition=it.committed.window.partition, **tie)
     return Replayed(again, d, it, Path(directory), record, ireg, draw, tie, launches, commit_s)
 
 
