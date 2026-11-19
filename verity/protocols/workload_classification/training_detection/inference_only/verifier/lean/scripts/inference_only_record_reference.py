@@ -395,9 +395,10 @@ def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dic
         assert all(lands_whole(leaves, out) for leaves in filled)
 
 
-def program_wires(desc: dict, tids, cuts) -> list[dict]:
-    """The wires the Program's root states under the templates `tids` and the record's `cuts`, as a record states a
-    wire (`Spot.Edges.edgesOf`, by `verity.commitments.periods.edges`); a `ValueError` naming its refusal."""
+def program_wires(desc: dict, tids, cuts, declared=()) -> list[dict]:
+    """The wires the Program's root states under the templates `tids`, the record's `cuts` and the root input nodes it
+    declares, as a record states a wire (`Spot.Edges.edgesOf`, by `verity.commitments.periods.edges`); a `ValueError`
+    naming its refusal."""
     from verity.commitments.periods.edges import edges
     by = set(tids)
     nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
@@ -410,7 +411,7 @@ def program_wires(desc: dict, tids, cuts) -> list[dict]:
             at += n
     if not isinstance(cuts, dict):
         raise ValueError("the record states its cuts as an object")
-    got = edges(desc, ranges, {"templates": {t: {} for t in by}, "cuts": cuts})
+    got = edges(desc, ranges, {"templates": {t: {} for t in by}, "cuts": cuts}, declared)
     if "refusal" in got:
         raise ValueError(got["refusal"])
     return got["wires"]
@@ -438,7 +439,11 @@ def wires_of(templates: list[Template], rec: dict, desc: dict) -> tuple[list[dic
     lays = {t.tid: (IF.RowLayout(tuple((p, w) for p, w, _ in t.rows), tuple(t.outs), (), tuple(n for *_, n in t.rows)),
                     t.units) for t in templates}
     try:
-        wires = tuple(IF.Wire.of(x) for x in program_wires(desc, (t.tid for t in templates), cuts))
+        try:
+            declared = [n for n, _ in nodes_of(rec)]
+        except Malformed:
+            declared = []
+        wires = tuple(IF.Wire.of(x) for x in program_wires(desc, (t.tid for t in templates), cuts, declared))
         IF.check_wires(lays, wires, IF._cuts(cuts), root_order(desc, [t.tid for t in templates]))
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         raise Malformed("wires") from e

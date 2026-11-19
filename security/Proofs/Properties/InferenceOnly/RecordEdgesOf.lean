@@ -77,7 +77,7 @@ private theorem appended {a : List Spot.Wires.Wire} {wire : Spot.Wires.Wire} {ra
     exact Or.inr ⟨r, hm, beq_iff_eq.2 (by omega)⟩
 
 /-- **A part's wires have a step for each digit and no digit of radix zero.** -/
-theorem partWires_wire {P : Prog} {fu W k i q s0 out} (h : partWires P fu W k i q s0 = .ok out) :
+theorem partWires_wire {P : Prog} {fu W D k i q s0 out} (h : partWires P fu W D k i q s0 = .ok out) :
     ∀ w ∈ out, Digits w := by
   unfold partWires at h
   split at h
@@ -108,7 +108,7 @@ theorem partWires_wire {P : Prog} {fu W k i q s0 out} (h : partWires P fu W k i 
   · cases h
 
 /-- **Each wire `edgesOf` gives has a step for each digit and no digit of radix zero.** -/
-theorem edgesOf_wire {P : Prog} {rs W ws} (h : edgesOf P rs W = .ok ws) : ∀ w ∈ ws, Digits w := by
+theorem edgesOf_wire {P : Prog} {rs W D ws} (h : edgesOf P rs W D = .ok ws) : ∀ w ∈ ws, Digits w := by
   unfold edgesOf at h
   dsimp only at h
   refine ite_ok h (fun _ h => ?_) (fun _ h => ?_)

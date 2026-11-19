@@ -989,8 +989,8 @@ def replayWires (j : Json) : V Json := do
     | none => .null
 
 /-- `periods.edges`' input to the wires a Program's root states (`Edges.edgesOf`): a program object, its ranges
-(`[node, template, first, count]` each) and a wiring (`Wires.Wiring.ofJson`'s); `{"wires": [...]}` or
-`{"refusal": code}`. -/
+(`[node, template, first, count]` each), a wiring (`Wires.Wiring.ofJson`'s) and the input nodes it declares
+(`declared`, none where absent); `{"wires": [...]}` or `{"refusal": code}`. -/
 def edges (j : Json) : V Json := do
   let .obj _ := getD j "program" | throw "program is not an object"
   let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
@@ -1001,7 +1001,13 @@ def edges (j : Json) : V Json := do
       | _, _, _ => throw "a range is [node, template, first, count]"
     | _ => throw "a range is [node, template, first, count]"
   let w ← Wires.Wiring.ofJson (getD j "wiring")
-  return match Edges.edgesOf p.prog rs w with
+  let D ← match getD j "declared" with
+    | .null => pure []
+    | .arr ds => ds.toList.mapM fun d => match d.getNat? with
+      | .ok n => pure n
+      | .error _ => throw "declared is a list of node indices"
+    | _ => throw "declared is a list of node indices"
+  return match Edges.edgesOf p.prog rs w D with
     | .error e => Json.mkObj [("refusal", Json.str e)]
     | .ok ws => Json.mkObj [("wires", Json.arr (ws.toArray.map fun e => Json.mkObj [("reader", Json.str e.reader),
         ("port", Json.str e.port), ("writer", Json.str e.writer), ("out", Json.str e.out), ("at", Lean.toJson e.start),

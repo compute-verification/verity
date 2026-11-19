@@ -651,8 +651,8 @@ def orderOf (rs : Array Flock.TemplateQuery.TRange) : List (String × Nat × Nat
     ([], [])).2
 
 /-- **The record's wiring**: the Program's templates (`templatesOf`), the text's cuts (`cutsOf`), the wires the
-Program's root states under the templates' ranges (`Spot.Edges.edgesOf`, whose refusal it is), and the ranges' order
-(`orderOf`). -/
+Program's root states under the templates' ranges and the root input nodes the record declares (`Spot.Edges.edgesOf`,
+whose refusal it is; `nodesOf`, none where it refuses them), and the ranges' order (`orderOf`). -/
 def wiring (P : Prog) (doc : Json) : Except String Spot.Wires.Wiring := do
   let ts ← templatesOf P doc
   let rs ← match Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (ts.map (·.tid)).toArray with
@@ -660,7 +660,10 @@ def wiring (P : Prog) (doc : Json) : Except String Spot.Wires.Wiring := do
     | .error _ => throw "templates"
   let W : Spot.Wires.Wiring :=
     { templates := ts.map fun t => (t.tid, t.wired), cuts := ← cutsOf doc, wires := [], order := some (orderOf rs) }
-  return { W with wires := ← Spot.Edges.edgesOf P rs W }
+  let D := match nodesOf doc with
+    | .ok ds => ds.map (·.node)
+    | .error _ => []
+  return { W with wires := ← Spot.Edges.edgesOf P rs W D }
 
 /-- **What the record's text declares a row to hold**: of the row `r`, by the Program's templates (`templatesOf`),
 the record's wiring (`wiring`) and its declarations (`inputsOf`); none where one of them refuses, or the row is

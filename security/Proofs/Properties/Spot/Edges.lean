@@ -48,7 +48,7 @@ theorem argPartsOk_card {k np : ℕ} {s : Flock.Program.Seq} (h : Edges.argParts
   simpa using this
 
 theorem edgesOf_partsOk {P : Prog} {rs : Array Flock.TemplateQuery.TRange} {W : Spot.Wires.Wiring}
-    {ws : List Spot.Wires.Wire} (h : Edges.edgesOf P rs W = .ok ws) : Edges.partsOk P = true := by
+    {D : List Nat} {ws : List Spot.Wires.Wire} (h : Edges.edgesOf P rs W D = .ok ws) : Edges.partsOk P = true := by
   cases hP : Edges.partsOk P
   · unfold Edges.edgesOf at h
     simp [hP, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
@@ -56,7 +56,7 @@ theorem edgesOf_partsOk {P : Prog} {rs : Array Flock.TemplateQuery.TRange} {W : 
 
 /-- **A root `edgesOf` accepts is within the parts bound.** -/
 theorem edgesOf_partsWithin {P : Prog} {rs : Array Flock.TemplateQuery.TRange} {W : Spot.Wires.Wiring}
-    {ws : List Spot.Wires.Wire} (h : Edges.edgesOf P rs W = .ok ws) : PartsWithin P := by
+    {D : List Nat} {ws : List Spot.Wires.Wire} (h : Edges.edgesOf P rs W D = .ok ws) : PartsWithin P := by
   have hp := edgesOf_partsOk h
   unfold Edges.partsOk at hp
   intro k hk j hj

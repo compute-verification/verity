@@ -25,8 +25,9 @@ one member of the writer node, at the field's bits. A part is a grid (`partLanes
 across the members a part covers its place moves by the argument's member stride, inside that run or by whole periods
 of the lanes; the writer leaves the members read are then a mixed radix of the lane's levels (`laneWire`), and a wire
 needs the writer field to stay the same, so each step is a whole number of writer members. A part whose lanes all read
-earlier input nodes states no wire, whatever its rows: what such a part reads is the record's to state (its own input
-rows, or the node `registered.nodes` declares), not a wire's.
+earlier input nodes the caller declares (`D`, the record's `registered.nodes`) states no wire, whatever its rows: what
+such a part reads is the declaration's, which the record's check holds. A caller declaring none keeps every such part's
+rows to the rule.
 
 The refusals, by name: `edge-parts` (an argument of a root node has more parts than `argPartsOk` allows),
 `edge-template` (a non-input root node whose template the ranges or the wiring don't list), `edge-form` (a scan at the
@@ -128,7 +129,7 @@ def isInputNode (P : Prog) (k : Nat) : Bool :=
 
 /-- The wires of the reads of argument `i`'s part `q` (at `[s0, s0 + c)` of the argument) by root node `k`'s members,
 one per row of the port: the module docstring's rule, or its refusal. -/
-def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.Wiring) (k i : Nat) (q : Part)
+def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.Wiring) (D : List Nat) (k i : Nat) (q : Part)
     (s0 : Nat) : Except String (List Spot.Wires.Wire) := do
   let nodes := (P.defs[P.root]!).body.nodes
   let node := nodes[k]!
@@ -156,7 +157,7 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
         throw "edge-rows"
       continue
     let (run, lanes) := partLanes q
-    if !lanes.isEmpty && lanes.all (fun l => !l.p && l.i < k && isInputNode P l.i) then continue
+    if !lanes.isEmpty && lanes.all (fun l => !l.p && l.i < k && isInputNode P l.i && D.contains l.i) then continue
     let k0 := x0 + lo * L - s0
     let rows := if crossesFields P run lanes q.count k0 L len cnt then "edge-fields" else "edge-rows"
     let (w, l0, radix, steps) ← match laneWire run lanes k0 L len cnt with
@@ -182,8 +183,10 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
   return out
 
 /-- **The wires the Program's root states**, under the ranges `rs` and the record's wiring `W` (its templates and
-cuts): the module docstring's rule, in the root's node, argument and part order, or the first refusal. -/
-def edgesOf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Except String (List Spot.Wires.Wire) := do
+cuts) and the input nodes `D` the caller declares: the module docstring's rule, in the root's node, argument and part
+order, or the first refusal. -/
+def edgesOf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (D : List Nat := []) :
+    Except String (List Spot.Wires.Wire) := do
   if !partsOk P then throw "edge-parts"
   let fu := firstUnits rs
   let nodes := (P.defs[P.root]!).body.nodes
@@ -197,7 +200,7 @@ def edgesOf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Except Stri
     for i in [0:node.args.size] do
       let s := node.args[i]!.seq
       for qi in [0:s.parts.size] do
-        out := out ++ (← partWires P fu W k i s.parts[qi]! s.starts[qi]!)
+        out := out ++ (← partWires P fu W D k i s.parts[qi]! s.starts[qi]!)
   return out
 
 /-! ## Examples: the A, B, A layout -/

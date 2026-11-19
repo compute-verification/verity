@@ -94,6 +94,14 @@ CASES = [
      {"wires": [_wire(TB, TA, "o0", 0, 0), _wire(TA, TB, "o0", 2, 0)]}),
     ("an argument over the parts bound", _of(ARR, b_refs=lambda a, a2: _affine((a, 0, 2), (a, 2, 1), (a, 3, 1))),
      {"refusal": "edge-parts"}),
+    ("an input node's leaf broadcast, the node not declared",
+     _of(ARR, b_refs=lambda a, a2: {"strided": ["n", 0, 0, 1, 0, 1, 4]}), {"refusal": "edge-rows"}),
+    ("an input node's leaf broadcast, the node declared",
+     {**_of(ARR, b_refs=lambda a, a2: {"strided": ["n", 0, 0, 1, 0, 1, 4]}), "declared": [0]},
+     {"wires": [_wire(TA, TB, "o0", 2, 0)]}),
+    ("a writer's leaf broadcast, a node declared",
+     {**_of(ARR, b_refs=lambda a, a2: {"strided": ["n", a, 0, 1, 0, 1, 4]}), "declared": [0, 1]},
+     {"refusal": "edge-rows"}),
     ("an explicit read of a node that is no input node",
      _of(ARR, b_refs=lambda a, a2: {"explicit": [["n", a, i] for i in range(4)]}), {"refusal": "edge-rows"}),
     ("a read of a later node", _of(ARR, b_refs=lambda a, a2: {"affine": ["n", a2, 0, 4]}), {"refusal": "not-topological"}),
@@ -194,7 +202,7 @@ def _variants():
 
 
 def reference(j) -> dict:
-    return edges(j["program"], j["ranges"], j["wiring"])
+    return edges(j["program"], j["ranges"], j["wiring"], j.get("declared", ()))
 
 
 EDGES = D.Port("spot-difftest", "edges", reference, st.sampled_from([c[1] for c in CASES] + _variants()),

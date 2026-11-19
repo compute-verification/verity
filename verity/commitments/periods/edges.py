@@ -1,6 +1,6 @@
 """The wires a Program's root states, read off its nodes (`Spot.Edges.edgesOf`): each argument part of a root node that
 reads an earlier non-input root node's outputs is one wire per row of the reader's port, in closed form (a part whose
-lanes all read earlier input nodes is none, whatever its rows), or the first
+lanes all read earlier input nodes the caller declares, ``declared``, is none, whatever its rows), or the first
 refusal by name (`edge-parts`, `edge-template`, `edge-form`, `not-topological`, `edge-rows`, `edge-fields` where a part reads more than one output field of one writer, one field a
 part being the rule, `edge-width`). The program
 is a descriptor (`circuits/PROTOCOL.md` §4), the ranges ``[node, template, first, count]`` and the wiring the record's
@@ -263,7 +263,8 @@ class _Root:
                                "params": ps, "ret": ret, "out_leaves": _leaves(ret), "args": node_args})
 
 
-def _part_wires(R: _Root, fu: dict, templates: Mapping, cuts_of, k: int, i: int, q, s0: int) -> list[dict]:
+def _part_wires(R: _Root, fu: dict, templates: Mapping, cuts_of, declared: frozenset, k: int, i: int, q,
+                s0: int) -> list[dict]:
     node = R.nodes[k]
     if k not in fu:
         raise Refusal("edge-template")
@@ -294,7 +295,7 @@ def _part_wires(R: _Root, fu: dict, templates: Mapping, cuts_of, k: int, i: int,
                     raise Refusal("not-topological")
                 raise Refusal("edge-rows")
             continue
-        if q[2] and all(not p and i < k and R.nodes[i]["input"] for p, i, *_ in q[2]):
+        if q[2] and all(not p and i < k and R.nodes[i]["input"] and i in declared for p, i, *_ in q[2]):
             continue
         k0 = max(x0 + lo * L - s0, 0)
         rows = "edge-fields" if _crosses_fields(R, q, k0, L, ln, cnt) else "edge-rows"
@@ -333,10 +334,12 @@ def _part_wires(R: _Root, fu: dict, templates: Mapping, cuts_of, k: int, i: int,
     return out
 
 
-def edges(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], wiring: Mapping[str, Any]) -> dict:
+def edges(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], wiring: Mapping[str, Any],
+          declared: Sequence[int] = ()) -> dict:
     """``{"wires": [...]}`` in the root's node, argument and part order, each in the record's wire form with its
     ``cut``; or ``{"refusal": code}``, the first refusal."""
     R = _Root(desc)
+    decl = frozenset(declared)
     templates, cuts = wiring["templates"], wiring["cuts"]
 
     def cuts_of(t: str, p: str) -> int:
@@ -364,7 +367,7 @@ def edges(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], wiring: Mapp
                 for q in g["parts"]:
                     if q[0] == "g" and q[4]:
                         _grid_ok(R, k, q)
-                    out += _part_wires(R, fu, templates, cuts_of, k, i, q, s0)
+                    out += _part_wires(R, fu, templates, cuts_of, decl, k, i, q, s0)
                     s0 += _count(q)
         return {"wires": out}
     except Refusal as e:
