@@ -232,6 +232,33 @@ theorem deriveSamplingDesign_none (d : Program) (query samplingDesign : Json) (t
     rfl
   next => rfl
 
+/-- **`agreed` is `derive` at a law that is not rated**: `Draw.agreed`'s first step, whatever the registered design. -/
+theorem agreed_eq_derive {d : Program} {query samplingDesign : Json} {table : Option Json} (registered : Json)
+    (h : Draw.rated samplingDesign = false) :
+    Draw.agreed d query samplingDesign table registered = Draw.derive d query samplingDesign table := by
+  unfold Draw.agreed
+  simp only [h, Bool.not_false, ↓reduceIte]
+  all_goals (cases Draw.derive d query samplingDesign table <;> rfl)
+
+/-- **The design `agreed` agrees to is `derive`'s**, at every law: at a rated law it is the rated expansion
+`deriveSamplingDesign` returns, which `Draw.ratedAgrees` (`COUNTS_AWAIT_THEIR_CLAIM`) holds the registered design to;
+so `OneStage.sampledFrom`'s read of that expansion samples under the design `agreed` agrees to. -/
+theorem derive_of_agreed {d : Program} {query samplingDesign registered x : Json} {table : Option Json}
+    (h : Draw.agreed d query samplingDesign table registered = .ok x) :
+    Draw.derive d query samplingDesign table = .ok x := by
+  cases hr : Draw.rated samplingDesign
+  · rwa [agreed_eq_derive registered hr] at h
+  unfold Draw.agreed at h
+  simp only [hr, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
+  obtain ⟨o, ho, h⟩ := bind_eq_ok.1 h
+  unfold Draw.derive
+  rw [ho]
+  split at h
+  · obtain ⟨-, -, h⟩ := bind_eq_ok.1 h
+    obtain rfl := Except.ok.inj h
+    rfl
+  · exact absurd h (throw_ne _ _)
+
 /-- The units of ascending ranges `[lo, hi)`. -/
 def rsSize (rs : Array (ℕ × ℕ)) : ℕ := (expand rs.toList).length
 
