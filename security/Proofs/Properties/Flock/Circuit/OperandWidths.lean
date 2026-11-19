@@ -188,10 +188,10 @@ theorem operands_lists (P : Prog) (sc : Scope) (node : Node) (m : ℕ) (ops : Ar
   refine ⟨_, rfl, ?_⟩
   have key := ReadsExact.forIn_range_idx
     (fun t (r : Array ℕ) => ∃ l : List ℕ, l.length = t ∧ r.toList = b.toList ++ l ∧
-      ∀ t' (ht : t' < l.length), resolve P sc (refOf node m i t') = .ok l[t'])
+      ∀ t' (ht : t' < l.length), resolve P sc (refOf node m L.length t') = .ok l[t'])
     _ _ ?_ _ 0 b inner (le_refl _) ⟨[], rfl, by simp, fun t ht => absurd ht (by simp)⟩ hinner
   · obtain ⟨l, hl, hrl, hres⟩ := key
-    have hl' : l.length = cntOf P node i := hl.trans (by simp [Std.Legacy.Range.size, cntOf])
+    have hl' : l.length = cntOf P node L.length := hl.trans (by simp [Std.Legacy.Range.size, cntOf])
     refine ⟨L ++ [l], by simp, by rw [hrl, hflat, List.flatten_append, List.flatten_singleton], ?_⟩
     intro i' hi'
     simp only [List.length_append, List.length_singleton] at hi'
@@ -203,7 +203,7 @@ theorem operands_lists (P : Prog) (sc : Scope) (node : Node) (m : ℕ) (ops : Ar
       exact ⟨hl', hres⟩
   intro t r' y ht hr' hy
   obtain ⟨l, rfl, hrl, hres⟩ := hr'
-  dsimp only at hy
+  try dsimp only at hy
   split at hy
   · cases hy
   rename_i v hv
