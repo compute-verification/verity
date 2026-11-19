@@ -2104,7 +2104,7 @@ def test_window_commit_fills_the_served_circuits_slots_and_rows_from_its_served_
     (tmp_path / "advice.bin").write_bytes(b"")
     a = argparse.Namespace(sampling_design="rate:1/4", advice=str(tmp_path / "advice.bin"), window_class="2,4,2", cap=64, bundle="unread",
                            row_dir="unread", checkpoint_dir="unread", checkpoints=None, serve_run=str(tmp_path),
-                           registration=str(tmp_path / "registration.json"))
+                           registration=str(tmp_path / "registration.json"), window=0, workers=1)
     (tmp_path / "registration.json").write_text("{}")
     with pytest.raises(Closed):
         PP.window_commit_of_builds(a, kept_ingress=lambda serve_dir: None, scan_state_file="unread")
