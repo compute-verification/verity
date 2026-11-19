@@ -18,7 +18,7 @@
 # (`--from-division`), or ALPHA and GAMMA where both are set, and its log the serve's H1 log through R's previous record,
 # or, on a serve with no H1 log, the serve's own records walked back from R's previous to its first (on a
 # serve tied to Pearl+, the window's W and the serve's first record, which a compose hand-off carries);
-# and PoUW's period case (`served_pouw.sh`'s SERVE_DIR/private/pouw/period) once every window of it names R as its
+# and PoUW's period case (SERVE_DIR/private/pouw/period) once every window of it names R as its
 # Commit record, refused otherwise, and Pearl+'s run case naming R from the parts its piece wrote
 # (`served_pearlplus.sh`'s SERVE_DIR/private/pearlplus/case). Each CASE line's protocol and verdict go to
 # OUT/verdicts.txt, and α and Γ, which count the block's gates, stay in the case's private policy.json. Then

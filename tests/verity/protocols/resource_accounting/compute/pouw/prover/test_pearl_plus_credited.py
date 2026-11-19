@@ -1,6 +1,6 @@
 """A credited linear of C as Pearl+'s product (`pearl_plus_credited`): its grid's units of `PearlPlusTileCoreWords_v3`,
-each a top level of maps over its noise's lines and Gram rows and one wired core, the units C's laying makes of it, whose
-core is one proof block whose amount is its credited MACs, each unit's public row, the noise the unit derives inside, and
+each a top level of maps over its noise's lines and Gram rows and one wired core, the units C's laying makes of it, each
+unit the scheme's block whose amount is its credited MACs, each unit's public row, the noise the unit derives inside, and
 the unit on C's words beside the core fed that noise. That one drawn unit goes through the door is
 ``benchmarks/pouw/credited_in_c.py``'s run."""
 from __future__ import annotations
@@ -36,12 +36,11 @@ def test_a_linears_units_are_its_grid_row_major_its_last_row_tile_part_filler() 
         PC.tiles(SCHEME, K, 3, 3, tile=(1, 2))
 
 
-def test_each_units_wired_core_is_one_block_of_the_scheme_whose_amount_is_its_credited_macs() -> None:
+def test_each_unit_is_the_schemes_block_whose_amount_is_its_credited_macs() -> None:
     (block,) = PS.PEARL_PLUS.blocks
     for t in PC.tiles(SCHEME, K, 3, 2, tile=(2, 1)):
-        (core,) = [u for u, _n in PC.cut(t.core) if u.defn.id == block.definition]
-        assert core == bind(PC.PearlPlusTileCoreWired, **t.core.bindings)
-        assert block.cost(core.bindings) == t.real * 1 * K
+        assert t.core.defn.id == block.definition
+        assert block.cost(t.core.bindings) == t.real * 1 * K
 
 
 def test_the_nodes_top_level_is_maps_over_its_noise_and_one_wired_core_and_its_cut_is_them() -> None:

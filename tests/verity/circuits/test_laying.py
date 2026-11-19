@@ -9,11 +9,12 @@ from verity.circuits import boolean as BL
 from verity.circuits import laying as LY
 from verity.circuits import partition_object as PO
 from verity.circuits import restrict as R
-from verity.circuits.codec import descriptor_chunks
+from verity.circuits.codec import descriptor_chunks, descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate_region
+from verity.circuits.population import wired_population_program
 from verity.circuits.program import Program, input_id
-from verity.circuits.refs import array_of, tuple_of
+from verity.circuits.refs import Affine, Strided, array_of, tuple_of
 from verity.circuits.types import Array, Tuple
 
 A4 = Array(4, BL.BIT)
@@ -68,6 +69,16 @@ def with_s(binding: str) -> Program:
                    supplied={"s": MARK} if binding == "supplied" else {})
 
 
+@functools.cache
+def recut(n: int) -> Program:
+    tid = descriptor_id(U)
+    rec = {"templates": [[tid, n]],
+           "registered": {"params": {"w": 2}, "formats": {"w": {"word_bits": 4}}, "tables": [], "roots": [], "openings": [],
+                          "reads": [{"reader": tid, "port": "k", "param": "w", "at": 0, "radix": [n], "base": 1, "step": [0]}]}}
+    w = wired_population_program([(U, n)], rec)[0]
+    return Program(w.fn, registered=("w",), annotations=w.annotations)
+
+
 def ands(limit):
     return lambda ins, outs, n: n <= limit
 
@@ -105,6 +116,16 @@ def test_laying_keeps_a_supplied_input_supplied_with_its_mark():
     assert ids == [nd.fn.id for nd in P0.root.body.nodes if input_id(nd.fn.id)] and ids[-1] == "SuppliedInput1_v1"
     assert [input_id(i)[0] for i in ids].count("supplied") == 1
     assert [g.prim.id for g in P0.circuit.gates()] == [g.prim.id for g in P1.circuit.gates()]
+
+
+@pytest.mark.parametrize("n", [1, 4])
+def test_a_unit_reading_a_registered_input_in_narrower_leaves_is_laid_and_measured_in_the_inputs_leaves(n):
+    P0, P1 = recut(n), LY.lay(recut(n), ands(4))
+    assert len(P1.root.body.nodes) > len(P0.root.body.nodes)
+    parts = [x.refs for nd in P1.root.body.nodes for x in nd.args]
+    assert {r.base for r in parts if isinstance(r, (Affine, Strided)) and (r.space, r.idx) == ("n", 0)} == {16}
+    m = LY.Measure(P1, LY.query(P1))
+    assert {r for rs in m.reads for r in rs if r[3] == "registration"} == {(4, 5, 4, "registration")}
 
 
 def test_the_measure_reads_a_supplied_input_as_a_port_of_its_own_binding_as_it_reads_a_registered_one():
@@ -173,3 +194,63 @@ def test_a_body_with_a_scan_is_refused():
     with pytest.raises(LY.Unlaid) as e:
         LY.lay(_program(body, A4), lambda *_a: False)
     assert e.value.code == "lay-scan"
+
+
+class _Line:
+    def __init__(self, ands):
+        self.w, self.units = list(ands), list(range(len(ands)))
+
+    def block(self, a, b):
+        return (), (), sum(self.w[a:b])
+
+    def grow(self, a):
+        for b in range(a + 1, len(self.w) + 1):
+            yield b, self.block(a, b)
+
+
+def _packed(ands_, ends=()):
+    return LY.pack(None, ands(12), m=_Line(ands_), enough=lambda _i, _o, n, _u: n >= 4, ends=ends)
+
+
+@pytest.mark.parametrize("units, blocks", [
+    ([5, 5, 1, 12], [(0, 3), (3, 4)]),
+    ([5, 6, 6, 5, 1], [(0, 2), (2, 5)]),
+    ([2, 1, 3, 12, 4], [(0, 3), (3, 4), (4, 5)]),
+])
+def test_a_block_under_the_floor_takes_the_units_after_it_or_joins_the_block_before(units, blocks):
+    assert _packed(units) == blocks
+
+
+@pytest.mark.parametrize("units, ends", [([12, 1, 12], ()), ([1, 1], ()), ([5, 5, 1, 12], (2,))])
+def test_a_block_under_the_floor_that_nothing_takes_is_refused(units, ends):
+    with pytest.raises(LY.Unlaid) as e:
+        _packed(units, ends)
+    assert e.value.code == "pack-floor"
+
+
+def test_a_floor_every_block_meets_leaves_the_packing_and_a_trailing_block_under_it_is_refused():
+    P = laid(3)
+    assert LY.pack(P, ands(10), enough=lambda _i, _o, n, _u: n >= 4) == LY.pack(P, ands(10))
+    with pytest.raises(LY.Unlaid) as e:
+        LY.pack(P, ands(10), enough=lambda _i, _o, n, _u: n >= 5)
+    assert e.value.code == "pack-floor"
+
+
+def test_a_level_packed_within_a_coarser_levels_ends_refines_it():
+    P = laid(3)
+    coarse = LY.pack(P, ands(12))
+    fine = LY.pack(P, ands(5), ends=[b for _a, b in coarse])
+    assert {b for _a, b in coarse} <= {b for _a, b in fine} and len(fine) > len(coarse)
+    assert PO.validate(PO.build(P, LY.query(P), [coarse, fine])).ok
+    with pytest.raises(LY.Unlaid) as e:
+        LY.pack(P, ands(5), ends=[0])
+    assert e.value.code == "pack-ends"
+
+
+def test_the_provers_floor_is_a_floor_pack_takes():
+    floor = lambda _i, _o, _n, u: u >= LY.zk_min_units(21, 1)
+    assert LY.zk_min_units(21, 1) == 9 and LY.zk_min_units(21, 2) == 17 and LY.zk_min_units(22, 64) == 1
+    assert LY.pack(None, ands(12), m=_Line([1] * 21), enough=floor) == [(0, 12), (12, 21)]
+    with pytest.raises(LY.Unlaid) as e:
+        LY.pack(None, ands(12), m=_Line([1] * 20), enough=floor)
+    assert e.value.code == "pack-floor"

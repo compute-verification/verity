@@ -104,10 +104,10 @@ that SPOT assigns in the source run; the census records the run's counts, not a 
   the value was read from.
 - Hardware lines also state their `methodology`. Peaks are **dense** figures at the accumulate width the relations use (FP32). An
   FMA counts as two FLOP, and sparsity figures are never used. A line with a card is the card's figure, 2 x `verity.device.rate`
-  at its `reading` (`tensor`, the tensor cores' clock ceiling, which is where the data sheets' dense figures sit; the card's
-  `clock.default` is `sm`, and the two readings are one clock on the RTX PRO 6000). `tests/calibration/native_peak` recomputes it
-  from the card and holds each reading's `ratio` to it, so the data sheet's figure is 1.0688 times the RTX PRO 6000 card's and within
-  a part in 10^4 of the H100's. Any other line is the data sheet's.
+  at its `reading`: the card's tensor ceiling (`tensor` where the card marks `clock.tensor` a ceiling, as on the RTX PRO 6000, whose two
+  readings are one clock; `sm` where it does not, as on the H100, whose whitepaper tensor clock a run of `calibration/tensor_duty`
+  exceeded). `tests/calibration/native_peak` recomputes it from the card at that reading and holds each reading's `ratio` to it, so
+  the data sheet's figure is 1.0688 times the RTX PRO 6000 card's and 0.9243 times the H100's. Any other line is the data sheet's.
 - A measured value (rather than a datasheet one) says how it was measured, and names the artifact that holds the
   measurement.
 

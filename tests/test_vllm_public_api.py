@@ -315,9 +315,7 @@ PUBLIC = {
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.
 KNOWN = frozenset({
     "verity_vllm.check.fold_compare",
-    "verity_vllm.check.replay.evaluate",
     "verity_vllm.commit.committer.host_retention",
-    "verity_vllm.commit.opened",
     # the compile slice and its pieces (`verity_vllm.compiler`), which the network attester's drivers under `benchmarks/` import
     "verity_vllm.compiler.cache_step",
     "verity_vllm.compiler.compile_slice",
@@ -397,7 +395,6 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.advice",
     "verity_vllm.pipeline.advice_windows",
     "verity_vllm.pipeline.build_instances",
-    "verity_vllm.pipeline.c2_replay",
     "verity_vllm.pipeline.chunk_rows",
     "verity_vllm.pipeline.cpu_replay",
     "verity_vllm.pipeline.deferred_rows",
@@ -405,7 +402,6 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.serve_protocol",
     "verity_vllm.pipeline.serving_rows",
     "verity_vllm.pipeline.slice_rows",
-    "verity_vllm.pipeline.tp.commit_replay",
     "verity_vllm.pipeline.tp.serving_rows",
     "verity_vllm.pipeline.window_advice",
     "verity_vllm.program.compact",
@@ -425,9 +421,6 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.check.fold_compare', '_attach_specs'),
     ('verity_vllm.check.fold_compare', '_component_ranges'),
     ('verity_vllm.check.fold_compare', '_in_place'),
-    ('verity_vllm.check.replay.evaluate', '_Unresolved'),
-    ('verity_vllm.check.replay.evaluate', '_evaluate_row'),
-    ('verity_vllm.check.replay.evaluate', '_weight_runs'),
     ('verity_vllm.compiler.served_tie', '_bits'),
     ('verity_vllm.compiler.served_tie', '_int'),
     ('verity_vllm.definitions.registry.hopper', '_BoundPrims'),
@@ -436,7 +429,6 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.pipeline.serving_rows', '_bind'),
     ('verity_vllm.pipeline.serving_rows', '_operand'),
     ('verity_vllm.pipeline.serving_rows', '_read_s8'),
-    ('verity_vllm.pipeline.tp.commit_replay', '_of_record'),
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
 })
 
