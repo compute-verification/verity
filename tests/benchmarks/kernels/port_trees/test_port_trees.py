@@ -1,5 +1,5 @@
 """port_trees.py on a pass written by Pearl+'s own committers: the three trees are the manifest's under Pearl+'s domains
-and the registered values' under theirs, a changed salt is caught on Pearl+'s side, and the result holds no salt."""
+and the registered values' under theirs, `reuse` takes the device's roots as they are, a changed salt is caught on Pearl+'s side, and the result holds no salt."""
 from __future__ import annotations
 
 import importlib.util
@@ -9,6 +9,7 @@ from pathlib import Path
 
 import numpy as np
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as W
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (HM96, HM96_SALT, activation_binding,
                                                                              commit_rows, weight_binding)
 
@@ -48,7 +49,8 @@ def _pass(d: Path) -> list[bytes]:
                   "salts": _write(d, f"y/{INDEX}.salts", b"".join(salts["y"]))}}
     wt = {"root": root_b.hex(), "rows": _write(d, f"weights/{WEIGHT}.rows.bf16", b),
           "salts": _write(d, f"weights/{WEIGHT}.salts", b"".join(salts["b"]))}
-    (d / "manifest.json").write_text(json.dumps({"salt": salt.hex(), "matmuls": [call], "weights": {str(WEIGHT): wt}}))
+    (d / "manifest.json").write_text(json.dumps({"salt": salt.hex(), "matmuls": [call], "weights": {str(WEIGHT): wt},
+                                                 "entry": "port-trees", "scheme": "pearl-c-h100-v1-h3"}))
     return [salt, *salts["a"], *salts["y"], *salts["b"]]
 
 
@@ -82,3 +84,15 @@ def test_the_result_holds_no_salt(tmp_path):
     text = out.read_text()
     assert not any(s.hex() in text for s in secrets)
     assert json.loads(text)["stand_in"] == {"program": False, "window": False}
+
+
+def test_reuse_takes_the_device_roots(tmp_path):
+    _pass(tmp_path)
+    w = W.record([json.loads((tmp_path / "manifest.json").read_text())])
+    (tmp_path / "w.json").write_text(json.dumps(w))
+    assert PT.main(["--reuse", str(tmp_path / "w.json"), str(tmp_path), "--out", str(tmp_path / "r.json")]) == 0
+    assert json.loads((tmp_path / "r.json").read_text()) == {"rounds": [0], "values": 2, "ok": True}
+    f = tmp_path / f"calls/{INDEX}.salts"
+    f.write_bytes(bytes([f.read_bytes()[0] ^ 1]) + f.read_bytes()[1:])
+    got = PT.reuse(tmp_path / "w.json", [tmp_path])
+    assert not got["ok"] and "not the rows Pearl+ committed" in got["refused"]
