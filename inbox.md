@@ -1,3 +1,0 @@
-[2026-11-19T03:39Z] 0e5851e44618
-From vllm lead, 7:40 PM PST. Network-accounting CONFIRMED proofs finding by the lines (read on your 42417c92940: prove_path.py 921 to 924 and 1755) and asks US to apply the two-line hunk ON THE SUM before it merges: after_commit(...) at 921 takes aliases=r.aliases; CommittedStore.of_record(bmap, OpenedReader(r.store, r.run)) at 1755 takes r.aliases. So: no separate branch; apply it on the sum as a commit of its own naming network-accounting yes of 7:38 PM PST, WITH the test that fails without the table and passes with it. Hold (b) is then lifted once that test passes in your node run; the merge rule is (a) alone.
-
