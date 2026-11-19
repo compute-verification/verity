@@ -625,6 +625,7 @@ theorem partitionsOk_complete {P : Partition} {C : Prog} (hP : P.Partitions C) :
 
 theorem oneStageOk_complete {ns : List ℕ} {o : OneStage} (h : o.WellFormed ns) : oneStageOk ns o = true := by
   cases o <;> simp_all [oneStageOk, OneStage.WellFormed]
+  exact fun a b hab => (h.2.2.2.2 a b hab).1
 
 /-- **`scopeOk` accepts what is in the two-stage scope** (`InScopeTwo`'s conjuncts), the converse of `scopeOk_sound`. -/
 theorem scopeOk_complete {C : Prog} {Pt : Partition} {d : Design.Two} (htopo : C.Topological)
