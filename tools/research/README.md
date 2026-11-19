@@ -226,7 +226,7 @@ script goes into the repository and the manifest before it runs; a backup of a r
 a path inside a `whole` tree, where the tree's next install drops what main lacks.
 A Lean build kept from node 1's credentials (the Lean cache's daily one) runs in `vy-lean-sandbox` (`lean_sandbox.py`).
 
-Monitors (`research monitors list|check|run|relay`, `research/monitors.py`) wake their owners: node 1's `vy-monitors.timer`
+Monitors (`research monitors list|check|run|relay`, `research/monitors.py`) wake their owners: node 2's `vy-monitors.timer`
 writes an alert note per incident and per clear, and the relay posts them in `#agent-alerts`.
 
 An unlisted or foreign machine is refused before anything is contacted. The

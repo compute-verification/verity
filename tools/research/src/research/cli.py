@@ -91,7 +91,7 @@
                                                  # nodes (pods/nebius/deploy.toml) against main; installs from a pushed commit, restarting its units (`ops deploy`, verity_ops/deploy.py)
   research deploy roll PATH --by WHO [--on N ...] [--keys-only] [--apply]   # a file made from the register of machines
                                                  # (/etc/vy/peers), put on every node that lists it: each node takes the list's key first, then each file, one node at a time
-  research monitors list|check|run|relay ...     # invariants with an owner, a threshold and an action: node 1's service writes each
+  research monitors list|check|run|relay ...     # invariants with an owner, a threshold and an action: node 2's service writes each
                                                  # incident once and its clear once; the relay posts them (research/monitors.py)
   research lean-times [--hours 24] [--until T] [--over 15] [--json]   # each Lean task's wall time, from the store's attempts: records
                                                  # runs and checks' Lean steps, p50/p95/max per kind and package (research/lean_times.py)
@@ -364,9 +364,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                         "around the workload, so the runner's custody runs in the CPU allocation")
     q.add_argument("--preemptible", action="store_true", help="it may be stopped for higher-ranked work and requeued (a guest's must be)")
     q.add_argument("--gpu-host", action="store_true",
-                   help="a job without --gpus whose workload takes its GPUs with gpu-lease itself, around each GPU step: its CPU "
-                        "allocation runs at a GPU job's weight (node 1: not CPUWeight=idle), with GPU_LEASE naming the node's "
-                        "lease tool")
+                   help="a job without --gpus whose workload takes its GPUs with gpu-lease itself, around each GPU step, with "
+                        "GPU_LEASE naming the node's lease tool")
     ap.add_argument("--id", default=None, help="use this run id (rYYYYMMDD-HHMMSS-xxxx) instead of allocating one")
     ap.add_argument("--claimed", action="store_true", help=argparse.SUPPRESS)          # machine side: the dir was created by launch-request
     ap.add_argument("--cost-json", default=None, help=argparse.SUPPRESS)
