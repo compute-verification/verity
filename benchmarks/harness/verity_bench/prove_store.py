@@ -456,4 +456,4 @@ def serving(root: Path, workload: Workload) -> P.Serving:
     return P.Serving(mfu["value"], peak,
                      f"MFU {mfu['value']:g} ({mfu['status']}, {mfu['low']:g} to {mfu['high']:g}: {mfu['source']}; {FLEETS} "
                      f"`{workload.fleet}`) of the {gpu.name}'s data-sheet peak, {peak:.5g} FLOP/s "
-                     f"({overhead_records.CENSUS}/hardware.json `{gpu.datasheet}`), at {P.FLOP_PER_MAC} FLOP a MAC")
+                     f"({overhead_records.CENSUS}/hardware.json `{gpu.datasheet}`, reading `{overhead_records.READING}`), at {P.FLOP_PER_MAC} FLOP a MAC")

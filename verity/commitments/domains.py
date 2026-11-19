@@ -242,6 +242,7 @@ PROOF_SERVICE_OUTCOME = "verity/proof-service/outcome/v0"
 PROOF_SERVICE_STREAM = "verity/proof-service/stream/v0"
 REGISTERED_READS_V0 = "verity/registered-reads/v0"
 REGISTERED_READS_V1 = "verity/registered-reads/v1"
+REGISTERED_READS_V2 = "verity/registered-reads/v2"
 REGISTRATION_RECEIPT = "verity/registration-receipt/v1"
 REGISTRATION_PRODUCED = "verity/registration/produced/v1"
 
@@ -315,9 +316,7 @@ POUS_P2_SIGNED_RUN = "verity/pous/p2/v4/signed-run"
 POUS_SALT = "verity/pous/salt/v1"
 POUS_STREAMED_WIPE_COINS = "verity/pous/streamed-wipe-coins/v1"
 POUS_STREAMED_WIPE_LABELS = "verity/pous/streamed-wipe-labels/v1"
-WIPE_MONITORING_PERIOD = "verity/wipe-monitoring-period/v1"
 WIPE_PROTOCOL = "verity/wipe/v0"
-WIPE_EGRESS = "wipe-egress/v1"
 
 # Not yet read from here: PoUB
 POUB_P2_BLOCK4 = "p2-unit4/v0"
