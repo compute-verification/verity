@@ -244,7 +244,7 @@ def test_the_ports_are_exactly_the_verifiers(staged):
     code, out = _statement(staged, _stage(staged, "x-afresh", afresh=("x",)), staged.dir / "own.json")
     assert code == 1 and "commits port x's rows of x afresh" in out
     code, out = _statement(staged, public, _own(staged, "own-y", lambda ps: ps.__setitem__("y", ps["cs"])))
-    assert code == 1 and "y is not a row of the circuit (an input port, or an output port's row)" in out
+    assert code == 1 and "parameter y of root node 2: RoPEHead_v1{D=64} has no parameter y" in out, out
     code, out = _statement(staged, public, _own(staged, "own-no-x", lambda ps: ps.pop("x")))
     assert code == 1 and "names port x registered, and the verifier's registered reads do not" in out
     bad = staged.dir / "bad.json"
@@ -280,7 +280,7 @@ def _bound(s, name: str, drop: tuple[str, ...], public: Path, bound: tuple[str, 
     before any coin), or at `root`."""
     fv = json.loads(public.read_bytes().split(b"\n", 1)[0])["frame_v3"]
     doc = {**s.own, "ports": {p: e for p, e in s.own["ports"].items() if p not in drop},
-           G.BOUND: {p: {"root": root or fv["roots"][p], "domain": fv["domain_ids"][p]} for p in bound}}
+           **({G.BOUND: {p: {"root": root or fv["roots"][p], "domain": fv["domain_ids"][p]} for p in bound}} if bound else {})}
     (s.dir / f"{name}.json").write_text(json.dumps(doc))
     return s.dir / f"{name}.json"
 
@@ -299,8 +299,8 @@ def test_a_port_the_reads_leave_out_is_bound_to_the_windows_committed_root(stage
     code, out = _statement(staged, public, _bound(staged, "own-out-cs-bound", ("out",), public, ("out", "cs")))
     assert code == 1 and "registered reads (bound): port cs is a registered port and bound" in out, out
     code, out = _statement(staged, public, _bound(staged, "own-out-neither", ("out",), public, ()))
-    assert code == 1 and ("registered reads (complete): the statement's port out is neither a port of the verifier's "
-                          "registered reads nor bound") in out, out
+    assert code == 1 and ("registered reads (complete): the statement's port out is no port of the verifier's "
+                          "registered reads") in out, out
 
 
 def test_a_port_the_interface_declares_registered_is_never_bound(staged):
