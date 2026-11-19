@@ -137,7 +137,6 @@
     {"file": "verity_vllm/program/frontend/targets.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_80"},
     {"file": "verity_vllm/program/frontend/targets.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_89"},
     {"file": "verity_vllm/program/frontend/targets.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_90"},
-    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "layer-class", "symbol": "TP2CaptureWorkerExtension.tp2_param_hashes", "detail": "ParallelLinear"},
     {"file": "verity_vllm/check/fold_sources.py", "kind": "model", "symbol": "<module>", "detail": "smollm"},
     {"file": "verity_vllm/commit/committer/acquired.py", "kind": "layer-class", "symbol": "<module>", "detail": "ColumnParallelLinear"},
     {"file": "verity_vllm/commit/committer/acquired.py", "kind": "layer-class", "symbol": "<module>", "detail": "GeluAndMul"},

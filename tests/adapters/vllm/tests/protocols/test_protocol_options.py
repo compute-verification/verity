@@ -20,7 +20,7 @@ import pytest
 from verity_vllm import config, errors
 from verity_vllm import llm as L
 from verity_vllm import protocols as PO
-from verity_vllm.config import RowConfig
+from verity_vllm.config import RowConfig, UsageError
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli, row_stages
 from verity_vllm.pipeline import row as ROW
@@ -570,7 +570,8 @@ def test_run_row_refuses_first_and_hands_the_set_to_the_stages(monkeypatch, tmp_
     enabled = ("hold:s1", "sampled-proofs:rows-sha512")
     assert seen["protocols"] == enabled
     tp = SimpleNamespace(**{**vars(o), "row": row.replace("__tp1__", "__tp2__"), "protocols": "hold:s1,sampled-proofs:rows-sha512"})
-    assert ROW.run_row(tp, "build") == 3
+    with pytest.raises(UsageError, match="the multi-GPU model is not served"):
+        ROW.run_row(tp, "build")
     wl = tmp_path / "wl.json"
     wl.write_text(json.dumps({"engine": {"target": {"flash_attn_version": 2}}}))
     assert R.declared_target(str(wl)) == '{"flash_attn_version": 2}'

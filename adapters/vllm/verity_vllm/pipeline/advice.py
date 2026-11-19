@@ -283,7 +283,7 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
                 continue
             if q is not None:
                 raise ValueError(f"request {r['request']} arrives twice")
-            if window and (r.get("sampling") or {}).get("temperature", 0) != 0:
+            if window and r.get("sampling", {}).get("temperature", 0) != 0:
                 raise ValueError(f"request {r['request']} samples at temperature {r['sampling']['temperature']!r}, and a served "
                                  "window's Program is greedy (window_class.GREEDY): its advice says no sampled request yet")
             reqs[r["request"]] = _Req(r["request"], int(r["prompt_len"]))
