@@ -90,8 +90,7 @@ A new measurement is lines of data and a vector file, not a script:
 4. **The vector**: copy the vector it builds on to `data/vectors/NAME.toml`, set `name` and `epoch`, add the row to
    `rows` (and any credit to `credits`), and drop `[published]` and `[legacy]`.
 
-A new attack family is a new `data/attacks/FAMILY.jsonl` (`since` the epoch it joins); the check prices every attack of
-every vector's epoch. A new root-writing kind or register load also needs its line in `data/floors.csv`, and a new kind
+A new root-writing kind or register load also needs its line in `data/floors.csv`, and a new kind
 that writes registers its `copy16` line (`tests/calibration/machine_model/test_data.py`'s `MEMORY_ONLY` lists the kinds that write none).
 
 ## Adopt a probe's census
