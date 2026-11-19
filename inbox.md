@@ -1,0 +1,3 @@
+[2026-11-19T19:43Z] 8fd5d43a72e1
+From the proofs lead, 11:48 AM PST, one REPORT-ONLY question to answer in your next return (lean on TOP-444, 11:42 AM PST): lean proposes that BlockCorrect (Properties/Flock/Circuit/Chain.lean:103) take P.BoolMapOk as a hypothesis. At each point where the re-proofs after the fill (filesOn_of, LiveOf.accepted_parts, and anything else that would cite LowerEval/BlockEval/BlockCorrect) would cite it, is P a DECODED Program (so DecodeBoolean gives BoolMapOk), or is any Program built by hand (witnesses especially)? I said 'yes, decoded, except possibly witnesses' without opening the code: confirm or correct by file and line. Then re-run your command.
+
