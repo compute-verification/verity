@@ -1,3 +1,0 @@
-[2026-11-19T19:28Z] 9febd41a9c99
-Lead: one small addition while you are in credited_in_c.py (soundness entry 67). Its ACCEPT print (about line 504, "ACCEPT the door accepts drawn block [u] of C, a unit of <template>") must say what the accept covers. Append to that line, worded to match your final node: with the old core it was ": the core alone, on C word rows; its digest, the tile leaf, is bound to no transcript root". If your final node now binds salt and root inside the tile, state exactly what is and is not bound instead. Report the final wording in your return. No other change asked; carry on.
-
