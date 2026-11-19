@@ -116,7 +116,8 @@ if [ -n "${PP_KEEP:-}" ] && [ -d "${RESEARCH_RUN_DIR:-}" ]; then   # the keep na
 import json, pathlib, sys
 f, k = pathlib.Path(sys.argv[1]), sys.argv[2]
 doc = json.loads(f.read_text()) if f.is_file() else {}
-f.write_text(json.dumps({**doc, "schema": "private-paths/v1", "private": sorted({*doc.get("private", []), k})}, indent=1) + "\n")
+f.write_text(json.dumps({**doc, "schema": "private-paths/v1", "private": sorted({*doc.get("private", []), k}),
+                         "names": doc.get("names", [])}, indent=1) + "\n")
 EOF
 fi
 ROW=glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager
