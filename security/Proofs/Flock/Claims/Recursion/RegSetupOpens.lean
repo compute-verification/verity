@@ -51,13 +51,7 @@ theorem regOpenings_opens {xO : Hash.Msg} {reg : _root_.Flock.Registered.Port} {
       obtain ⟨rfl, rfl⟩ := Prod.mk.inj he
       have hcr := RecIns.setup_registered (setupO_some hS).2 st (by simpa using hst)
       rw [hown] at hcr
-      obtain ⟨o', hw, hc⟩ := FlockSoundness.Refine.ebind_ok hcr
-      obtain ⟨own', rfl⟩ := _root_.Flock.Registered.withPositions_some hw
-      obtain ⟨r', hr', hsame⟩ := _root_.Flock.Registered.withPositions_reads hw reg' (by simpa using hreg')
-      have hpo : portOpenings st reg' = portOpenings st r' := by rw [hsame]; rfl
-      have hop := portOpenings_opens hc (by simpa using hr') (bc, pos, path) (hpo ▸ hoo)
-      rw [hsame] at hop
-      exact hop
+      exact portOpenings_opens hcr hreg' (bc, pos, path) hoo
 
 /-- **`bc_eq_of_regOpenings` at the setup's own openings**: two openings the setup lists at V\* statements of `xs`, at
 one position under one tree, have one commit string wherever the true calls `l` and the setup's evaluations at `xs`
