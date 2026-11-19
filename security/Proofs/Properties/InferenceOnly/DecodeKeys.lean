@@ -138,14 +138,16 @@ def Rets (s : DecState) : Prop :=
 /-- The form a definition entry declares (`getDef`'s `form`). -/
 def formOf (d : Lean.Json) : String := (d.getObjValAs? String "form").toOption.getD ""
 
-/-- Each primitive Definition decoded so far is keyed by an entry of `definitions` of form `primitive`. -/
+/-- Each primitive Definition decoded so far is keyed by an entry of `definitions` of form `primitive`, and by its id. -/
 def Src (desc : Desc) (s : DecState) : Prop :=
   ∀ i < (DecState.defs s).size, ((DecState.defs s)[i]!).prim = true →
-    ∃ d, (Desc.ddefs desc)[((DecState.defs s)[i]!).key]? = some d ∧ formOf d = "primitive"
+    (∃ d, (Desc.ddefs desc)[((DecState.defs s)[i]!).key]? = some d ∧ formOf d = "primitive") ∧
+      ((DecState.defs s)[i]!).id = ((DecState.defs s)[i]!).key
 
 theorem src_push {desc : Desc} {s s' : DecState} {defn : Defn} (h : Src desc s)
     (hd : DecState.defs s' = (DecState.defs s).push defn)
-    (hn : defn.prim = true → ∃ d, (Desc.ddefs desc)[defn.key]? = some d ∧ formOf d = "primitive") :
+    (hn : defn.prim = true →
+      (∃ d, (Desc.ddefs desc)[defn.key]? = some d ∧ formOf d = "primitive") ∧ defn.id = defn.key) :
     Src desc s' := by
   intro i hi hp
   rw [hd] at hi hp ⊢
@@ -204,7 +206,9 @@ private theorem kept_busy {desc : Desc} {B : String → Prop} {s s1 : DecState} 
 of `B` busy when none of them is `fid`. -/
 private theorem kept_push {desc : Desc} {B : String → Prop} {s s' : DecState} {defn : Defn} {fid : String}
     (hk : Keys s) (hr : Rets s) (hs : Src desc s)
-    (hn : defn.prim = true → ∃ d, (Desc.ddefs desc)[defn.key]? = some d ∧ formOf d = "primitive") (hnone : (DecState.index s)[fid]? = none)
+    (hn : defn.prim = true →
+      (∃ d, (Desc.ddefs desc)[defn.key]? = some d ∧ formOf d = "primitive") ∧ defn.id = defn.key)
+    (hnone : (DecState.index s)[fid]? = none)
     (hsub : ∀ k, B k → (DecState.busy s).contains k = true ∧ k ≠ fid) (hkey : defn.key = fid)
     (hret : defn.prim = false → defn.body.retType = defn.ret)
     (hd : DecState.defs s' = (DecState.defs s).push defn)
@@ -273,11 +277,13 @@ private theorem push_prim {desc : Desc} {B : String → Prop} {s s' : DecState} 
     {defn : Defn} {d : Lean.Json}
     (h : Kept desc B s) (ho : (DecState.index s)[fid]? = o) (hno : ∀ i, o = some i → False)
     (hb : ¬ (DecState.busy s).contains fid = true) (hdd : (Desc.ddefs desc)[fid]? = some d)
-    (hf : ((d.getObjValAs? String "form").toOption.getD "" == "primitive") = true) (hkey : defn.key = fid)
+    (hf : ((d.getObjValAs? String "form").toOption.getD "" == "primitive") = true)
+    (hid : ¬ (defn.id != fid) = true) (hkey : defn.key = fid)
     (hprim : defn.prim = true) (hd : DecState.defs s' = (DecState.defs s).push defn)
     (hi : DecState.index s' = (DecState.index s).insert fid (DecState.defs s).size)
     (hb' : DecState.busy s' = (DecState.busy s).erase fid) : Kept desc B s' :=
-  kept_push h.1 h.2.1 h.2.2.2 (fun _ => ⟨d, by rw [hkey]; exact hdd, eq_of_beq hf⟩) (ho.trans (none_of hno))
+  kept_push h.1 h.2.1 h.2.2.2
+    (fun _ => ⟨⟨d, by rw [hkey]; exact hdd, eq_of_beq hf⟩, by rw [hkey]; simpa using hid⟩) (ho.trans (none_of hno))
     (fun k hk => ⟨h.2.2.1 k hk, fun e => hb (e ▸ h.2.2.1 k hk)⟩) hkey
     (fun hp => absurd (hprim.symm.trans hp) (by decide)) hd hi hb'
 
@@ -317,7 +323,7 @@ theorem getDef_step (n : Nat) (hc : CompositeKept n) (desc : Desc) (fid : String
   mvcgen [hc', liftV_spec, throw_spec, -Spec.throw_Except]
   all_goals first
     | exact push_prim (by assumption) (by assumption) (by assumption) (by assumption) (by assumption)
-        (by assumption) rfl rfl rfl rfl rfl
+        (by assumption) (by assumption) rfl rfl rfl rfl rfl
     | exact busy_pre (by assumption) (by assumption) (by assumption)
     | exact push_comp (by assumption) (by assumption) (by assumption) rfl rfl rfl
 

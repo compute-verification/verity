@@ -198,16 +198,25 @@ def _stub_rows(tmp_path: Path, answer: dict | None = None) -> Path:
     return rows
 
 
+def _declared(tmp_path: Path, answer: dict, lean: Path | None = None, rows: Path | None = None) -> dict[str, str]:
+    """Stand-ins for the network attester's declared executables: `network-period` `_stub_lean`'s answering ``answer``
+    (or ``lean``) and `network-rows` `_stub_rows`' accept (or ``rows``)."""
+    return {"network-period": str(lean or _stub_lean(tmp_path, answer)), "network-rows": str(rows or _stub_rows(tmp_path))}
+
+
+def _stubbed(step: str, declared: dict[str, str]) -> str:
+    """``attester_piece.py STEP`` as a command whose process's `lean_exe` gives ``declared``'s stand-ins: the piece
+    takes no flag or variable that names an executable."""
+    code = (f"import sys; sys.path.insert(0, {str(HERE)!r}); import attester_piece as CP; "
+            f"CP.lean_exe = {declared!r}.__getitem__; sys.exit(CP.main(sys.argv[1:]))")
+    return f"{shlex.quote(sys.executable)} -c {shlex.quote(code)} {step}"
+
+
 def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None, lean: Path | None = None,
                rows: Path | None = None) -> str:
-    """The piece's command, its `network-period` `_stub_lean`'s answering ``answer`` and its `network-rows`
-    `_stub_rows`' accept (or ``rows``)."""
-    lean = lean or _stub_lean(tmp_path, answer)
-    rows = rows or _stub_rows(tmp_path)
+    """The piece's command on `_declared`'s stand-ins."""
     cmd = cmd or _copied(chain)
-    piece = ROOT / "benchmarks/network_traces/attester_piece.py"
-    return (f"{shlex.quote(sys.executable)} {shlex.quote(str(piece))} piece \"$@\" "
-            f"--lean {shlex.quote(str(lean))} --rows {shlex.quote(str(rows))} --chain-cmd {shlex.quote(cmd)}")
+    return f"{_stubbed('piece', _declared(tmp_path, answer, lean, rows))} \"$@\" --chain-cmd {shlex.quote(cmd)}"
 
 
 def _integrity() -> dict:
@@ -460,7 +469,7 @@ def test_a_step_that_cant_run_refuses_and_leaves_the_attester_refused_by_its_sen
     _refused_leg(rec, line, why)
 
 
-def _piece(tmp_path: Path, network_attester: dict, chain: Path) -> tuple[int, Path, Path]:
+def _piece(tmp_path: Path, network_attester: dict, chain: Path, monkeypatch) -> tuple[int, Path, Path]:
     """The piece run in this process on a kept run and `chain`'s outputs, the period check a stub that accepts: its
     exit, DIR and the serve dir."""
     d = _serve_dir(tmp_path / "serve", network_attester)
@@ -468,8 +477,8 @@ def _piece(tmp_path: Path, network_attester: dict, chain: Path) -> tuple[int, Pa
     lean.write_text(f"#!/bin/sh\ncat <<'EOF'\n{json.dumps(CP.answer('reject', 'stub'))}\nEOF\n")
     lean.chmod(0o755)
     piece = tmp_path / "pieces" / "certifier"
-    rc = CP.main(["piece", str(d), str(K), str(piece), "--lean", str(lean), "--rows", str(_stub_rows(tmp_path)),
-                  "--chain-cmd", _copied(chain)])
+    monkeypatch.setattr(CP, "lean_exe", _declared(tmp_path, {}, lean).__getitem__)
+    rc = CP.main(["piece", str(d), str(K), str(piece), "--chain-cmd", _copied(chain)])
     return rc, piece, d
 
 
@@ -487,8 +496,8 @@ def test_no_host_name_reaches_a_byte_of_dir_or_the_answer(tmp_path, network_atte
     lean.chmod(0o755)
     piece = tmp_path / "pieces" / "certifier"
     chain = _chain_out(tmp_path / "chain", "accepted", network_attester["w"], network_attester["registrations"])
-    rc = CP.main(["piece", str(d), str(K), str(piece), "--lean", str(lean), "--rows", str(_stub_rows(tmp_path)),
-                  "--chain-cmd", _copied(chain)])
+    monkeypatch.setattr(CP, "lean_exe", _declared(tmp_path, {}, lean).__getitem__)
+    rc = CP.main(["piece", str(d), str(K), str(piece), "--chain-cmd", _copied(chain)])
     assert rc == 0, sorted(p.name for p in piece.iterdir())
     names = [n.encode() for n in (here, gate, peer) if n]
     assert len(names) >= 2
@@ -509,7 +518,7 @@ def test_sigterm_while_the_guard_reads_releases_nothing_to_dir(tmp_path, network
         os.kill(os.getpid(), signal.SIGTERM)
         pytest.fail("SIGTERM didn't end the piece")
     monkeypatch.setattr(CP, "guard", slow_guard)
-    rc, piece, d = _piece(tmp_path, network_attester, _chain_out(tmp_path / "chain", "accepted", network_attester["w"]))
+    rc, piece, d = _piece(tmp_path, network_attester, _chain_out(tmp_path / "chain", "accepted", network_attester["w"]), monkeypatch)
     assert rc == 3 and "SIGTERM: the piece's time limit" in (piece / CP.REFUSED).read_text()
     assert [p.name for p in piece.iterdir()] == [CP.REFUSED]
     (hold,) = (d / CP.PRIVATE / "held").iterdir()
@@ -523,7 +532,7 @@ def test_a_step_the_leak_guard_refuses_keeps_no_case_and_a_step_that_cant_start_
     """A case is its step's: the guard refusing the release (exit 2) leaves none, and a step with no kept run removes
     the one an earlier step on the serve dir left."""
     monkeypatch.setattr(CP, "guard", lambda d, hold, unpacked, quarantine: 2)
-    rc, piece, d = _piece(tmp_path, network_attester, _chain_out(tmp_path / "chain", "accepted", network_attester["w"]))
+    rc, piece, d = _piece(tmp_path, network_attester, _chain_out(tmp_path / "chain", "accepted", network_attester["w"]), monkeypatch)
     assert rc == 3 and "the leak guard failed (exit 2)" in (piece / CP.REFUSED).read_text()
     assert not _named(tmp_path, CP.CASE) and (d / CP.CASES).stat().st_mode & 0o777 == 0o700
     bare = _serve_dir(tmp_path / "bare", network_attester, kept=False)
@@ -534,7 +543,7 @@ def test_a_step_the_leak_guard_refuses_keeps_no_case_and_a_step_that_cant_start_
     assert "no network attester run kept" in (out / CP.REFUSED).read_text() and not _named(tmp_path, CP.CASE)
 
 
-def test_a_chain_file_holding_a_witness_value_is_moved_out_of_dir(tmp_path, network_attester):
+def test_a_chain_file_holding_a_witness_value_is_moved_out_of_dir(tmp_path, network_attester, monkeypatch):
     """The chain's report carrying a piece of the run's witness (a salt of its cells.salts, as hex) in a key
     `PUBLIC` keeps: the guard moves DIR/chain/report/report.json to the quarantine and releases the rest, the answer
     with it. The chain's job.json carrying it is never published, so it reaches neither DIR nor the quarantine."""
@@ -544,7 +553,7 @@ def test_a_chain_file_holding_a_witness_value_is_moved_out_of_dir(tmp_path, netw
     chain = _chain_out(tmp_path / "chain", "accepted", network_attester["w"])
     (chain / "out" / "job.json").write_text(json.dumps({"x": salt.hex()}))
     (chain / "out" / "report" / "report.json").write_text(json.dumps({"verdict": "accepted", "stubbed": [salt.hex()]}))
-    rc, piece, d = _piece(tmp_path, network_attester, chain)
+    rc, piece, d = _piece(tmp_path, network_attester, chain, monkeypatch)
     assert rc == 1 and _files(piece) == {"answer.json", CP.CERTIFICATES}
     assert (d / CP.CASES / CP.CASE).is_file()
     assert (d / CP.PRIVATE / "quarantine" / "files" / "chain" / "report" / "report.json").is_file()
@@ -685,7 +694,7 @@ def rows_exe() -> str:
     """``network-rows``, built where the piece builds it."""
     if shutil.which("lake") is None:
         pytest.skip("no Lean toolchain")
-    return CP.lean_exe("network-rows", None)
+    return CP.lean_exe("network-rows")
 
 
 #: the synthetic run's cells a connection a bucket, and a cell's bytes
@@ -916,11 +925,10 @@ def _v3c(serve: Path, period: dict | None = None, committed: bool = True, circui
     return v3c
 
 
-def _hook(step: str, d: Path, dir_: Path, v3c: Path, *args: str) -> int:
+def _hook(step: str, d: Path, dir_: Path, v3c: Path, declared: dict[str, str], *args: str) -> int:
     """The split piece's ``step`` as `served_verdicts.sh`'s ``attester_step`` runs it: ``bash -c CMD _ D K DIR V3C`` in
-    the tree, its output DIR/<step>.log."""
-    cmd = f"{shlex.quote(sys.executable)} {shlex.quote(str(HERE / 'attester_piece.py'))} {step} \"$@\" " + \
-        " ".join(map(shlex.quote, args))
+    the tree, on ``declared``'s stand-ins (`_stubbed`), its output DIR/<step>.log."""
+    cmd = f"{_stubbed(step, declared)} \"$@\" " + " ".join(map(shlex.quote, args))
     dir_.mkdir(parents=True, exist_ok=True)
     with open(dir_ / f"{step}.log", "w") as log:
         return subprocess.run(["bash", "-c", cmd, "_", str(d), str(K), str(dir_), str(v3c)], cwd=ROOT, stdout=log,
@@ -929,16 +937,11 @@ def _hook(step: str, d: Path, dir_: Path, v3c: Path, *args: str) -> int:
 
 def _chained(tmp_path: Path, v3c: Path | None, verdict: str = "accepted", w: int = 0) -> list[str]:
     """``chain``'s arguments: a chain that leaves `_chain_out`'s report, its scan's summary naming V3c's window (``v3c``;
-    None: no V3c window), and notes what it was given in TMP/chain-args; its `network-rows` `_stub_rows`' accept."""
+    None: no V3c window), and notes what it was given in TMP/chain-args."""
     out = _chain_out(tmp_path / "chain", verdict, w)
     (out / "out" / "scan" / "summary.json").write_text(json.dumps({"v3c": v3c and {"window": str(v3c / "window")}}))
     note = shlex.quote(str(tmp_path / "chain-args"))
-    return ["--rows", str(_stub_rows(tmp_path)),
-            "--chain-cmd", f'printf "%s\\n" "$@" > {note}; {_copied(out)}']
-
-
-def _lean(tmp_path: Path, answer: dict) -> list[str]:
-    return ["--lean", str(_stub_lean(tmp_path, answer)), "--rows", str(_stub_rows(tmp_path))]
+    return ["--chain-cmd", f'printf "%s\\n" "$@" > {note}; {_copied(out)}']
 
 
 #: V3c's period.json as `records_audit.py period` writes it (its values stand-ins: the period check here is a stub)
@@ -966,7 +969,7 @@ def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_pa
     v3c, piece = _v3c(d), tmp_path / "pieces" / "certifier"
     (d / CP.CASES).mkdir(parents=True)
     (d / CP.CASES / CP.CASE).write_text("an earlier run's")
-    assert _hook("chain", d, piece, v3c, *_chained(tmp_path, v3c, w=network_attester["w"]), "CR_SCAN_ARGS=--x 1") == 0
+    assert _hook("chain", d, piece, v3c, _declared(tmp_path, {}), *_chained(tmp_path, v3c, w=network_attester["w"]), "CR_SCAN_ARGS=--x 1") == 0
     assert not _named(tmp_path, CP.CASE, CP.CERTIFICATES)
     assert (piece / "chain.log").read_text().splitlines()[-1] == (
         f"CERTIFIER-CHAIN accepted on V3c's window {v3c / 'window'}: the period step checks its period.json")
@@ -974,7 +977,7 @@ def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_pa
     assert f"CR_SCAN_ARGS=--class w63k4 --v3c {v3c / 'window'} --x 1" in (tmp_path / "chain-args").read_text()
     assert not (piece / "answer.json").exists()
     (v3c / "period.json").write_text(json.dumps(PERIOD))
-    assert _hook("period", d, piece, v3c, *_lean(tmp_path, accept)) == 0, (piece / "period.log").read_text()
+    assert _hook("period", d, piece, v3c, _declared(tmp_path, accept)) == 0, (piece / "period.log").read_text()
     params = json.loads((tmp_path / "seen" / "params.json").read_text())
     assert params["audits"] == [{k: PERIOD[k] for k in ("free", "program", "steps")}]
     assert params["circuit"] == CIRCUIT["program"]
@@ -993,10 +996,10 @@ def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_pa
 def test_a_chain_the_split_rejects_stands_and_its_period_step_checks_nothing(tmp_path, network_attester):
     d = _serve_dir(tmp_path / "serve", network_attester)
     v3c, piece = _v3c(d, PERIOD), tmp_path / "pieces" / "certifier"
-    assert _hook("chain", d, piece, v3c, *_chained(tmp_path, v3c, "refused", network_attester["w"])) == 1
+    assert _hook("chain", d, piece, v3c, _declared(tmp_path, {}), *_chained(tmp_path, v3c, "refused", network_attester["w"])) == 1
     a = json.loads((piece / "answer.json").read_text())
     assert a["verdict"] == "reject" and a["reason"].startswith("the chain refused") and not (piece / CP.CHAINED).exists()
-    assert _hook("period", d, piece, v3c, *_lean(tmp_path, {})) == 1
+    assert _hook("period", d, piece, v3c, _declared(tmp_path, {})) == 1
     assert json.loads((piece / "answer.json").read_text()) == a and not (tmp_path / "seen").exists()
 
 
@@ -1014,10 +1017,10 @@ def test_a_chain_accepted_on_the_period_check_goes_on_to_that_check_whose_answer
     assert seen == ["period", "period"]
     d = _serve_dir(tmp_path / "serve", network_attester)
     v3c, piece = _v3c(d, PERIOD), tmp_path / "pieces" / "certifier"
-    assert _hook("chain", d, piece, v3c, *_chained(tmp_path, v3c, CR.RESTS, network_attester["w"])) == 0
+    assert _hook("chain", d, piece, v3c, _declared(tmp_path, {}), *_chained(tmp_path, v3c, CR.RESTS, network_attester["w"])) == 0
     assert (piece / CP.CHAINED).is_file() and not (piece / "answer.json").exists()
     answer = period.reference(period.case("accept", 1))
-    assert _hook("period", d, piece, v3c, *_lean(tmp_path, answer)) == 0, (piece / "period.log").read_text()
+    assert _hook("period", d, piece, v3c, _declared(tmp_path, answer)) == 0, (piece / "period.log").read_text()
     assert json.loads((piece / "answer.json").read_text())["verdict"] == "accept" and (tmp_path / "seen").is_dir()
 
 
@@ -1044,10 +1047,10 @@ def test_a_split_step_that_cant_run_refuses_keeping_both_logs(case, tmp_path, ne
                       circuit=case != "no window-circuit record"), tmp_path / "pieces" / "certifier"
     args = _chained(tmp_path, None if case == "a scan of no v3c" else v3c, w=network_attester["w"])
     if case == "time limit":
-        args = ["--rows", str(_stub_rows(tmp_path)), "--chain-cmd", 'kill -TERM "$PPID"; while :; do :; done']
+        args = ["--chain-cmd", 'kill -TERM "$PPID"; while :; do :; done']
     if case != "no chain step":
-        _hook("chain", d, piece, v3c, *args)
-    assert _hook("period", d, piece, v3c, *_lean(tmp_path, {})) == 3
+        _hook("chain", d, piece, v3c, _declared(tmp_path, {}), *args)
+    assert _hook("period", d, piece, v3c, _declared(tmp_path, {})) == 3
     why = (piece / CP.REFUSED).read_text()
     assert {"no v3c window": f"V3c committed no window at {v3c / 'window'}",
             "time limit": "SIGTERM: the piece's time limit (CERTIFIER_TIMEOUT)",
@@ -1707,16 +1710,39 @@ def test_the_local_tunnel_relays_each_listen_port_to_its_own(monkeypatch):
         CP.main(["relay", "--listen", "1", "--to", "2", "--listen", "3"])
 
 
-def test_the_served_tables_scan_class_is_v3cs_setup_in_scan_zk():
-    """`served_table.SCAN_CLASS` is `V3C_SCAN_CLASS`'s setup (`scan_zk.W63K4`) as served_verdicts.sh's
-    SLOTS,PROMPT,OUTPUTS,LANES,EVERY: a slot stride's Program slots over an execution phase's strides, KI, KO, the
-    lanes and EVERY."""
+@pytest.mark.parametrize("step", ["piece", "chain", "period"])
+def test_no_flag_names_an_executable_and_the_piece_builds_only_its_declared_ones(step, tmp_path, monkeypatch, capsys):
+    """``--lean`` and ``--rows`` are refused by name, and `lean_exe` builds only network-period and network-rows of
+    the network attester's declaration (`Launch.executables`), in its own package."""
+    from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
+
+    args = [str(tmp_path), str(K), str(tmp_path), *([] if step == "piece" else [str(tmp_path)])]
+    for flag in ("--lean", "--rows"):
+        with pytest.raises(SystemExit) as e:
+            CP.parser().parse_args([step, *args, f"{flag}=/tmp/other"])
+        assert e.value.code == 2 and f"unrecognized arguments: {flag}=/tmp/other" in capsys.readouterr().err
+    built = []
+
+    def executable(name: str, package: Path) -> Path:
+        built.append((name, package))
+        raise V.LeanError(f"not built: {name}")
+    monkeypatch.setattr(V, "executable", executable)
+    declared = CP.schemes.get("network-attester").pieces["workers"].executables
+    for e in declared:
+        with pytest.raises(CP.NotRun, match=f"not built: {e.target}"):
+            CP.lean_exe(e.target)
+    with pytest.raises(CP.NotRun, match="other is no executable the network attester declares"):
+        CP.lean_exe("other")
+    assert built == [(e.target, ROOT / e.package) for e in declared]
+
+
+def test_the_launchers_scan_class_is_v3cs_setup_in_scan_zk():
+    """The network attester's launcher's `SCAN_CLASS` is `V3C_SCAN_CLASS`'s setup (`scan_zk.W63K4`) as
+    served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,LANES,EVERY: a slot stride's Program slots over an execution phase's
+    strides, KI, KO, the lanes and EVERY."""
+    from verity.protocols.resource_accounting.network import scheme as NS
     from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
 
-    spec = importlib.util.spec_from_file_location("served_table", ROOT / "tools/verity/cli/verity_cli/served_table.py")
-    table = importlib.util.module_from_spec(spec)
-    sys.modules["served_table"] = table
-    spec.loader.exec_module(table)
     setup = SZ.SETUPS[CP.V3C_SCAN_CLASS]
     c = setup.cls
-    assert table.SCAN_CLASS == f"{c.SLOTS * setup.params.window // c.EVERY},{c.KI},{c.KO},{c.lanes},{c.EVERY}"
+    assert NS.SCAN_CLASS == f"{c.SLOTS * setup.params.window // c.EVERY},{c.KI},{c.KO},{c.lanes},{c.EVERY}"

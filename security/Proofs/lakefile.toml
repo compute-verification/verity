@@ -129,7 +129,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Challenger.ChallengePhase", "Proofs.Properties.Challenger.CanonRead",
   "Proofs.Properties.Challenger.Window", "Proofs.Properties.Challenger.Lines", "Proofs.Properties.Challenger.Coins",
   "Proofs.Properties.Pous.WipeSigned", "Proofs.Properties.Pous.WipeCount", "Proofs.Properties.Challenger", "Proofs.Properties.Challenger.CanonLine",
-  "Proofs.Properties.Challenger.Drawn", "Proofs.Properties.ZkServer", "Proofs.Properties.Flock.Nets", "Proofs.Properties.Flock.EvalBool", "Proofs.Properties.Flock.DecodeBoolean",
+  "Proofs.Properties.Challenger.Drawn", "Proofs.Properties.ZkServer", "Proofs.Properties.Flock.Nets", "Proofs.Properties.Flock.EvalBool", "Proofs.Properties.Flock.Circuit.Inline", "Proofs.Properties.Flock.DecodeBoolean",
   "Proofs.Properties.Core.Site", "Proofs.Properties.InferenceOnly.Protocol",
   "Proofs.Properties.InferenceOnly.RecordRead", "Proofs.Properties.InferenceOnly.RecordForm",
   "Proofs.Properties.InferenceOnly.RecordCounts", "Proofs.Properties.InferenceOnly.DecodeKeys",
