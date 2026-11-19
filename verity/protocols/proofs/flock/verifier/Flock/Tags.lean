@@ -371,9 +371,20 @@ def circuitTypesCec3e347Selftest : Tags :=
     name := "verity/flock-circuit/types@cec3e347+seed-injection",
     identity := identityHidden true "verity/flock-circuit/types" (leafScheme := leafSchemeHm96Os) }
 
-/-- `verity/flock-circuit` (`HmOut`): `cec3e347`'s statement, its prover's every random value the OS's bytes,
-as its `--zk` identity's `hooks` say (`osMasks`). -/
-def circuit : Tags := { circuitCec3e347 with name := "verity/flock-circuit", osMasks := true }
+/-- `verity/flock-circuit` (`HmOut`), the served statement: `hm96-sha512/row/v1` serving rows and hidden output rows proved in
+the circuit, `hm96-sha512/v1` Merkle leaves salted by the OS's bytes, the e2e bindings, shared-row public files, retained
+rounds, sessions of several tables, and its prover's every random value the OS's bytes, as its `--zk` identity's `hooks`
+say (`osMasks`). -/
+def circuit : Tags :=
+  { name := "verity/flock-circuit", statement := "verity/flock-circuit", fileFormat := "flock-circuit", blockKeyword := "CIRCUIT",
+    publicFormat := "flock-circuit-inputs", publicCircuitKey := "circuit_sha512", sigmaTag := "verity/flock-circuit/sigma",
+    domainPrefix := "flock-circuit/fast100x2/rep", table := "circuit", merkleLeaf := "hm96-sha512/v1",
+    identity := identityHidden false (leafScheme := leafSchemeHm96Os), coinScheme := "coin-commit/sha512",
+    pinnedLeafScheme := some leafSchemeHm96Os, retainRounds := true, hm96Rows := true, bindings := true, sharedRows := true,
+    manyTables := some { sigmaTag := "verity/flock-circuit/sigma-tables", domainPrefix := "flock-circuit/fast100x2/" },
+    hiddenOutputs := true, osMasks := true }
+
+theorem circuit_eq_cec3e347 : circuit = { circuitCec3e347 with name := "verity/flock-circuit", osMasks := true } := rfl
 
 /-- The same statement as the selftest harness's build pins it (`seed_injection: true`): the selftest's records only, which
 `verify` refuses once every check has passed (`ProvedScope.servedForm`). -/
