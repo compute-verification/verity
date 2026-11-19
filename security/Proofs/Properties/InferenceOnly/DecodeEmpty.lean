@@ -2,6 +2,7 @@ module
 
 public import Circuits.Program
 import Batteries.Tactic.OpenPrivate
+import Proofs.Core.QSort
 import Proofs.Flock.SessionLoop.Concrete.Fwd
 import Std.Data.HashMap.Lemmas
 import Std.Data.HashSet.Lemmas
@@ -58,17 +59,18 @@ import all Init.Data.String.Legacy
 The kernel runs most of `decode` on a closed text, and the walk's rules are the steps it does not:
 * the descriptor's parse, through `JsonParse.parseList` on its characters (`parse_empty`);
 * the definitions by well-founded recursion on `Json` or `Ty` (`domainError`, by the fuelled check `cleanF`;
-  `Ty.ofJson` and `Ty.leaves`, by one unfolding each);
+  `canon`, by `intsF`, its value left as `canonOf`; `fnRefs` and `subFns` on the empty object; `Ty.ofJson` and
+  `Ty.leaves`, by one unfolding each);
 * the lookups in hash maps keyed by strings, whose hash the kernel does not compute (`ddefs_rule`, `index_rule`,
-  `busy_rule`), and the duplicate-name check on the root's empty parameter list (`dup_rule`);
+  `busy_rule`, `memo_none`, `memo_one`), and the duplicate-name checks on empty lists (`dup_rule`, `names_rule`);
 * the string calls `contains`, `all`, `splitOn` and `toNat!`;
-* the decoder's state monad applied to its state (`st_bind` and the rest).
+* the state monads applied to their state, the decoder's and the digests' memo (`st_bind` and the rest).
 -/
 
 namespace Flock.Program.Closed
 
 open Lean (Json JsonNumber)
-open private DecState from Circuits.Descriptor
+open private DecState fnRefs from Circuits.Descriptor
 
 /-- The characters of `programEmpty`. -/
 @[expose] public def emptyChars : List Char :=
@@ -80,7 +82,8 @@ open private DecState from Circuits.Descriptor
    '"', 'r', 'e', 't', '"', ':', '{', '"', 'c', 'o', 'n', 'c', 'a', 't', '"', ':', '[', ']', '}', ',', '"', 'r', 'e',
    't', '_', 't', 'y', 'p', 'e', '"', ':', '[', '"', 'T', 'u', 'p', 'l', 'e', '"', ',', '[', ']', ']', '}', ',', '"',
    'f', 'o', 'r', 'm', '"', ':', '"', 'c', 'o', 'm', 'p', 'o', 's', 'i', 't', 'e', '"', ',', '"', 'i', 'd', '"', ':',
-   '"', 'R', 'o', 'o', 't', '_', 'v', '1', '"', '}', '}', ',', '"', 'p', 'r', 'o', 'g', 'r', 'a', 'm', '_', 'f', 'n',
+   '"', 'R', 'o', 'o', 't', '_', 'v', '1', '"', '}', '}', ',', '"', 'i', 'n', 'p', 'u', 't', 's', '"', ':', '[', ']',
+   ',', '"', 'p', 'r', 'o', 'g', 'r', 'a', 'm', '_', 'f', 'n',
    '"', ':', '"', 'R', 'o', 'o', 't', '_', 'v', '1', '"', ',', '"', 'r', 'o', 'o', 't', '"', ':', '"', 'R', 'o', 'o',
    't', '_', 'v', '1', '"', ',', '"', 's', 'c', 'h', 'e', 'm', 'a', '"', ':', '"', 'v', 'e', 'r', 'i', 't', 'y', '-',
    'i', 'r', '/', 'd', 'e', 's', 'c', 'r', 'i', 'p', 't', 'o', 'r', '/', 'v', '2', '"', ',', '"', 't', 'y', 'p', 'e',
@@ -184,34 +187,155 @@ theorem dup_rule (ps : Array (String × Ty)) (h : ps = #[]) :
     ((ps.foldl (fun s p => s.insert p.1) (∅ : Std.HashSet String)).size != ps.size) = false := by
   subst h; simp
 
+theorem names_rule (names : Array String) (h : names = #[]) :
+    (names.contains "" ||
+      (names.foldl (fun s x => s.insert x) (∅ : Std.HashSet String)).size != names.size) = false := by
+  subst h; simp
+
 theorem index_rule (k : String) : (∅ : Std.HashMap String Nat)[k]? = none := Std.HashMap.getElem?_empty
 
 theorem busy_rule (k : String) : (∅ : Std.HashSet String).contains k = false := Std.HashSet.contains_empty
 
-/-- The decoder's monad: its state over its refusals. -/
-abbrev DM := StateT DecState (Except String)
+theorem toArray_nil : (∅ : Std.TreeMap.Raw String Json compare).toArray = #[] := by
+  first | rfl | decide | simp [Std.TreeMap.Raw.toArray, Std.DTreeMap.Raw.toArray]
 
-theorem st_run {α} (x : DM α) (s : DecState) : StateT.run x s = x s := rfl
-theorem st_bind {α β} (x : DM α) (f : α → DM β) (s : DecState) : (x >>= f) s = (x s >>= fun p => f p.1 p.2) := rfl
-theorem st_get (s : DecState) : (get : DM DecState) s = .ok (s, s) := rfl
-theorem st_set (s s' : DecState) : (set s' : DM PUnit) s = .ok (⟨⟩, s') := rfl
-theorem st_modify (f : DecState → DecState) (s : DecState) : (modify f : DM PUnit) s = .ok (⟨⟩, f s) := rfl
-theorem st_pure {α} (a : α) (s : DecState) : (pure a : DM α) s = .ok (a, s) := rfl
-theorem st_ite {α} (c : Prop) [Decidable c] (t e : DM α) (s : DecState) :
+theorem fnRefs_leaf (acc : Array String) : fnRefs acc (.obj ∅) = acc := by
+  rw [fnRefs]
+  have hq : ∀ (lt : _ → _ → Bool), (∅ : Std.TreeMap.Raw String Json compare).toArray.attach.qsort lt = #[] :=
+    fun lt => Array.eq_empty_of_size_eq_zero (by rw [Verity.QSort.size_qsort, Array.size_attach, toArray_nil]; rfl)
+  simp only [hq]
+  rfl
+
+theorem refs_rule (c : Array Json) (e : Json) (hb : e.getObjValD "bindings" = .obj ∅)
+    (hn : (e.getObjValD "body").getObjValD "nodes" = .arr #[]) : entryRefs c e = #[] := by
+  simp only [entryRefs]
+  rw [hb, hn, fnRefs_leaf]
+  split <;> rfl
+
+theorem refs_root : entryRefs #[] rootE = #[] := refs_rule #[] rootE (by kernel_rfl') (by kernel_rfl')
+
+theorem subFns_rule (d : String → Option String) (j : Json) (h : j = .obj ∅) :
+    subFns d j = .ok (Json.mkObj []) := by
+  subst h
+  have ha : (∅ : Std.TreeMap.Raw String Json compare).toArray.attach = #[] :=
+    Array.eq_empty_of_size_eq_zero (by rw [Array.size_attach, toArray_nil]; rfl)
+  rw [subFns]
+  simp only [ha, toArray_nil, Array.size_empty, Nat.reduceBEq, Bool.false_and, Bool.false_eq_true, ↓reduceIte,
+    Array.mapM_empty]
+  first | rfl | simp
+
+theorem list_mapM_ok {α β : Type} (f : α → V β) :
+    ∀ (l : List α), (∀ x ∈ l, ∃ t, f x = .ok t) → ∃ r, l.mapM f = .ok r
+  | [], _ => ⟨[], rfl⟩
+  | x :: l, h => by
+    obtain ⟨t, ht⟩ := h x List.mem_cons_self
+    obtain ⟨r, hr⟩ := list_mapM_ok f l (fun y hy => h y (List.mem_cons_of_mem _ hy))
+    exact ⟨t :: r, by rw [List.mapM_cons, ht]; show (do let as ← l.mapM f; pure (t :: as)) = _; rw [hr]; rfl⟩
+
+theorem array_mapM_ok {α β : Type} (f : α → V β) (xs : Array α) (h : ∀ x ∈ xs, ∃ t, f x = .ok t) :
+    ∃ r, xs.mapM f = .ok r := by
+  rw [Array.mapM_eq_mapM_toList]
+  obtain ⟨r, hr⟩ := list_mapM_ok f xs.toList (fun x hx => h x (Array.mem_toList_iff.1 hx))
+  exact ⟨r.toArray, by rw [hr]; rfl⟩
+
+/-- Where `canon` succeeds, read with fuel: every number an integer, the strings never read. -/
+def intsF : Nat → Json → Bool
+  | 0, _ => false
+  | n + 1, j => match j with
+    | .num m => m.exponent == 0
+    | .arr a => a.toList.all (intsF n)
+    | .obj kvs => kvs.toArray.toList.all fun x => intsF n x.2
+    | _ => true
+
+/-- `canon` succeeds where `intsF` holds. -/
+theorem canon_ok : ∀ (n : Nat) (j : Json), intsF n j = true → ∃ s, canon j = .ok s
+  | 0, _, h => by simp [intsF] at h
+  | n + 1, j, h => by
+    cases j with
+    | null => rw [canon]; exact ⟨_, rfl⟩
+    | bool b => rw [canon]; exact ⟨_, rfl⟩
+    | str s => rw [canon]; exact ⟨_, rfl⟩
+    | num m =>
+      simp only [intsF, beq_iff_eq] at h
+      rw [canon]; simp only [h, beq_self_eq_true, ↓reduceIte]; exact ⟨_, rfl⟩
+    | arr a =>
+      simp only [intsF, List.all_eq_true] at h
+      rw [canon]
+      obtain ⟨parts, hp⟩ := array_mapM_ok (fun x : {x // x ∈ a} => canon x.1) a.attach
+        (fun x _ => canon_ok n x.1 (h x.1 (Array.mem_toList_iff.2 x.2)))
+      exact ⟨_, by rw [hp]; rfl⟩
+    | obj kvs =>
+      simp only [intsF, List.all_eq_true] at h
+      rw [canon]
+      obtain ⟨vals, hv⟩ := array_mapM_ok (fun p : {x // x ∈ kvs.toArray} => do pure (p.1.1, ← canon p.1.2))
+        kvs.toArray.attach (fun p _ => by
+          obtain ⟨t, ht⟩ := canon_ok n p.1.2 (h p.1 (Array.mem_toList_iff.2 p.2))
+          exact ⟨(p.1.1, t), by simp only [ht]; rfl⟩)
+      exact ⟨_, by rw [hv]; rfl⟩
+
+/-- `canon j`'s text, where it has one. -/
+def canonOf (j : Json) : String := (canon j).toOption.getD ""
+
+theorem canon_rule (j : Json) (h : intsF 64 j = true) : canon j = .ok (canonOf j) := by
+  obtain ⟨s, hs⟩ := canon_ok 64 j h
+  rw [canonOf, hs]; rfl
+
+theorem reached_rule (defs : Array (String × Json)) (callees : Array Json) (roots : Array String)
+    (hd : defs = #[("Root_v1", rootE)]) (hc : callees = #[]) (hr : roots = #["Root_v1"]) :
+    checkReached defs callees roots = .ok () := by
+  subst hd hc hr
+  unfold checkReached
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, ← Array.foldl_toList, List.foldl_cons,
+    List.foldl_nil, refs_root]
+  simp (config := {decide := true}) [List.range', List.forIn_cons,
+    Std.HashMap.getD_insert_self, refs_root]
+  rfl
+
+/-- A state monad over the decoder's refusals: the decoder's (`DecState`) and the digests' memo. -/
+abbrev DM (σ : Type) := StateT σ (Except String)
+
+theorem st_run {σ α} (x : DM σ α) (s : σ) : StateT.run x s = x s := rfl
+theorem st_bind {σ α β} (x : DM σ α) (f : α → DM σ β) (s : σ) :
+    (x >>= f) s = (x s >>= fun p => f p.1 p.2) := rfl
+theorem st_get {σ} (s : σ) : (get : DM σ σ) s = .ok (s, s) := rfl
+theorem st_set {σ} (s s' : σ) : (set s' : DM σ PUnit) s = .ok (⟨⟩, s') := rfl
+theorem st_modify {σ} (f : σ → σ) (s : σ) : (modify f : DM σ PUnit) s = .ok (⟨⟩, f s) := rfl
+theorem st_pure {σ α} (a : α) (s : σ) : (pure a : DM σ α) s = .ok (a, s) := rfl
+theorem st_ite {σ α} (c : Prop) [Decidable c] (t e : DM σ α) (s : σ) :
     (if c then t else e) s = if c then t s else e s := by split <;> rfl
-theorem st_forIn_nil {α β} (xs : Array α) (h : xs = #[]) (b : β) (f : α → β → DM (ForInStep β)) (s : DecState) :
-    (forIn xs b f : DM β) s = .ok (b, s) := by subst h; rfl
-theorem st_forIn_range0 {β} (m : Nat) (h : m = 0) (b : β) (f : Nat → β → DM (ForInStep β)) (s : DecState) :
-    (forIn [0:m] b f : DM β) s = .ok (b, s) := by
+theorem st_mapConst {σ α β} (b : β) (x : DM σ α) (s : σ) :
+    (Functor.mapConst b x) s = (x s >>= fun p => .ok (b, p.2)) := rfl
+theorem st_lift {σ α} (x : Except String α) (s : σ) :
+    (monadLift x : DM σ α) s = (x >>= fun a => .ok (a, s)) := rfl
+theorem st_forIn_nil {σ α β} (xs : Array α) (h : xs = #[]) (b : β) (f : α → β → DM σ (ForInStep β))
+    (s : σ) :
+    (forIn xs b f : DM σ β) s = .ok (b, s) := by subst h; rfl
+theorem st_forIn_range0 {σ β} (m : Nat) (h : m = 0) (b : β) (f : Nat → β → DM σ (ForInStep β)) (s : σ) :
+    (forIn [0:m] b f : DM σ β) s = .ok (b, s) := by
   subst h; rw [Std.Legacy.Range.forIn_eq_forIn_range']; rfl
+theorem st_forIn_root {σ β} (xs : Array (String × Json)) (h : xs = #[("Root_v1", rootE)]) (b : β)
+    (f : String × Json → β → DM σ (ForInStep β)) (s : σ) :
+    (forIn xs b f : DM σ β) s = (f ("Root_v1", rootE) b s >>= fun p => .ok (p.1.value, p.2)) := by
+  subst h
+  rw [← Array.forIn_toList]
+  show (do let r ← f ("Root_v1", rootE) b s; _) = _
+  apply congrArg; funext p; rcases p with ⟨_ | _, _⟩ <;> rfl
 
-set_option maxHeartbeats 1000000 in -- the walk steps through `decode` and leaves closed checks to the kernel
+theorem lift_self {α} (x : Except String α) : (monadLift x : Except String α) = x := rfl
+
+theorem memo_none (m : Std.HashMap String String) (h : m = ∅) (k : String) : m[k]? = none := by
+  subst h; exact Std.HashMap.getElem?_empty
+theorem memo_one (k k' v : String) (h : k = k') : ((∅ : Std.HashMap String String).insert k v)[k']? = some v := by
+  subst h; exact Std.HashMap.getElem?_insert_self
+
+set_option maxHeartbeats 4000000 in -- the walk steps through `decode` and leaves closed checks to the kernel
 fwd_def progEmpty decode_empty : decode programEmpty.toUTF8 by
   [fromUTF8?_toUTF8, parse_empty, domain_none, ofJson_tuple0, split_rule, toNat_rule, rfi_rule, ddefs_rule,
     index_rule, busy_rule, String.contains_char_eq, String.all_bool_eq, Array.mapM_empty,
-    st_run, st_bind, st_get, st_set, st_modify, st_pure, st_ite,
-    st_forIn_nil, st_forIn_range0, leaves_rule, dup_rule]
-  block [domainError, Ty.ofJson]
+    st_run, st_bind, st_get, st_set, st_modify, st_pure, st_ite, st_mapConst, st_lift,
+    st_forIn_nil, st_forIn_range0, st_forIn_root, memo_one, memo_none, lift_self, leaves_rule, dup_rule,
+    names_rule, reached_rule, refs_rule, subFns_rule, canon_rule]
+  block [domainError, Ty.ofJson, checkReached]
   shallow [programEmpty]
 
 end Flock.Program.Closed

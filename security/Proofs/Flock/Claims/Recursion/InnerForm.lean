@@ -99,12 +99,12 @@ theorem checkForm_ok {fm : RecCoins.InnerForm} {st : Stmt} {u : Unit}
 
 /-- **The setup's shape check, whole**: where `RecSetup.checkShape` passes on the inner statement's files, they set it
 up, the inner shape's `m`, `k_log`, regions and claims are the ones they set it up at, its shared-row tables are within
-`RecBudget.innerRows`, and `RecSetup.checkForm` passes there. -/
+`RecBudget.innerRows`, its program within `RecBudget.innerDefs`, and `RecSetup.checkForm` passes there. -/
 theorem checkShape_spec {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
     (h : RecSetup.checkShape (some i) (some (.files f)) = .ok u) :
     ∃ spec st, f.stmt "the inner session" = .ok (spec, st) ∧ i.m = st.m ∧ i.kLog = st.c.kLog ∧
       i.regions = st.regions.size ∧ i.claims = 2 + spec.points * st.regions.size ∧
-      RecBudget.innerRows st = .ok () ∧ RecSetup.checkForm f.form st = .ok u := by
+      RecBudget.innerRows st = .ok () ∧ RecBudget.innerDefs f.program = .ok () ∧ RecSetup.checkForm f.form st = .ok u := by
   unfold RecSetup.checkShape at h
   rcases hf : f.stmt "the inner session" with e | ⟨spec, st⟩
   · simp [hf, bind, Except.bind] at h
@@ -117,8 +117,11 @@ theorem checkShape_spec {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
     rcases hr : RecBudget.innerRows st with e | v
     · simp [e1, e2, e3, e4, hr, pure, Except.pure] at h
     · cases v
-      refine ⟨spec, st, rfl, e1, e2, e3, e4, hr, ?_⟩
-      simpa [e1, e2, e3, e4, hr, pure, Except.pure] using h
+      rcases hd : RecBudget.innerDefs f.program with e | v
+      · simp [e1, e2, e3, e4, hr, hd, pure, Except.pure] at h
+      · cases v
+        refine ⟨spec, st, rfl, e1, e2, e3, e4, by first | exact hr | rfl, by first | exact hd | rfl, ?_⟩
+        simpa [e1, e2, e3, e4, hr, hd, pure, Except.pure] using h
 
 /-- **The setup's shape check**: where `RecSetup.checkShape` passes on the inner statement's files, they set it up, the
 inner shape's `m`, `k_log`, regions and claims are the ones they set it up at, and `RecSetup.checkForm` passes there. -/
@@ -127,7 +130,7 @@ theorem checkShape_files {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
     ∃ spec st, f.stmt "the inner session" = .ok (spec, st) ∧ i.m = st.m ∧ i.kLog = st.c.kLog ∧
       i.regions = st.regions.size ∧ i.claims = 2 + spec.points * st.regions.size ∧
       RecSetup.checkForm f.form st = .ok u := by
-  obtain ⟨spec, st, hf, e1, e2, e3, e4, -, hform⟩ := checkShape_spec h
+  obtain ⟨spec, st, hf, e1, e2, e3, e4, -, -, hform⟩ := checkShape_spec h
   exact ⟨spec, st, hf, e1, e2, e3, e4, hform⟩
 
 /-- **The inner statement's public file is within the cap**: where `RecSetup.checkShape` passes on the inner
@@ -137,7 +140,7 @@ theorem checkShape_rows {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
     (h : RecSetup.checkShape (some i) (some (.files f)) = .ok u) :
     ∃ spec st, f.stmt "the inner session" = .ok (spec, st) ∧ st.pub.n ≤ RecBudget.MAX_INNER_ROWS ∧
       ∀ t, st.pub.tables = some t → ∀ r ∈ t.counts, r ≤ RecBudget.MAX_INNER_ROWS := by
-  obtain ⟨spec, st, hf, -, -, -, -, hr, -⟩ := checkShape_spec h
+  obtain ⟨spec, st, hf, -, -, -, -, hr, -, -⟩ := checkShape_spec h
   unfold RecBudget.innerRows at hr
   by_cases hn : RecBudget.MAX_INNER_ROWS < st.pub.n
   · simp [hn, throw, throwThe, MonadExceptOf.throw] at hr
@@ -148,6 +151,25 @@ theorem checkShape_rows {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
   · simp [ha, throw, throwThe, MonadExceptOf.throw] at hr
   · refine Nat.le_of_not_lt fun hlt => ha (Array.any_eq_true'.2 ⟨r, hrt, ?_⟩)
     exact decide_eq_true hlt
+
+/-- **The inner statement's program is within the cap**: where `RecSetup.checkShape` passes on the inner statement's
+files, the descriptor's `definitions` of a program they carry, where its bytes parse to one, holds at most
+`RecBudget.defsCap` entries. -/
+theorem checkShape_defs {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
+    (h : RecSetup.checkShape (some i) (some (.files f)) = .ok u) :
+    ∀ b, f.program = some b → ∀ text j kvs, String.fromUTF8? b = some text → JsonParse.parse text = .ok j →
+      j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ RecBudget.defsCap := by
+  obtain ⟨-, -, -, -, -, -, -, -, hd, -⟩ := checkShape_spec h
+  intro b hp text j kvs ht hj hk
+  refine Nat.le_of_not_lt fun hlt => ?_
+  unfold RecBudget.innerDefs at hd
+  simp [hp, ht, hj, hk, hlt, throw, throwThe, MonadExceptOf.throw] at hd
+
+/-- **`innerDefs` refuses a Program that names more than `defsCap` Definitions.** -/
+theorem innerDefs_refuses {b : ByteArray} {text : String} {j : Lean.Json} {kvs}
+    (ht : String.fromUTF8? b = some text) (hj : JsonParse.parse text = .ok j) (hk : j.getObjValD "definitions" = .obj kvs)
+    (hlt : RecBudget.defsCap < kvs.toArray.size) : ∃ e, RecBudget.innerDefs (some b) = .error e := by
+  simp [RecBudget.innerDefs, ht, hj, hk, hlt, throw, throwThe, MonadExceptOf.throw]
 
 /-! ## Flock's plain verifier on the inner statement -/
 
@@ -187,21 +209,21 @@ theorem check_plain {r : Readable.Read} (h : r.check = .ok ()) (hz : r.zk = fals
 
 /-- **Flock's plain verifier reads a `Tags.circuitPlainLeaves` statement** (which it refuses with `--coins os`) at the
 files' tags (`RecCoins.innerTags`), on a seed's coins, with the statement's files, table count, lookup tables,
-partition, sample and public inputs. -/
+partition, sample, public inputs and program. -/
 theorem ins_plainLeaves {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) (hz : w.zk = false)
     (hs : w.statement = Tags.circuitPlainLeaves.name) :
     s.read.zk = false ∧ s.read.tags = RecCoins.innerTags ∧ s.read.coins = Coins.seed ∧
       s.read.I.circuitFile = w.circuit ∧ s.read.I.publicFile = w.publicFile ∧ s.read.I.count = w.count ∧
       s.read.I.tables = w.tables ∧ w.partition.mapM (FlockDeploy.jsonOf "partition") = .ok s.read.I.partition ∧
       (∃ dr, w.draw.mapM (FlockDeploy.jsonOf "draw") = .ok dr ∧ s.read.draw = dr.map Flock.norm) ∧
-      s.read.publicInputs = w.publicInputs := by
+      s.read.publicInputs = w.publicInputs ∧ s.read.I.program = w.program := by
   have hf : Tags.byName? w.statement = some Tags.circuitPlainLeaves := Tags.byName?_of_find? (by rw [hs]; rfl)
   unfold FlockDeploy.Raw.ins at h
   simp only [hf, hz, Bool.false_and, Bool.false_eq_true, ↓reduceIte, bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first
     | (cases h; done)
-    | (cases h; exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, by assumption, ⟨_, by assumption, rfl⟩, rfl⟩)
+    | (cases h; exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, by assumption, ⟨_, by assumption, rfl⟩, rfl, rfl⟩)
 
 /-! ## A full sample keeps the files' numbers -/
 

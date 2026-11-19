@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Claims.Recursion.Deploy
 public import Proofs.Flock.Claims.Recursion.SetupCount
 public import Proofs.Flock.Claims.Recursion.SetupValues
+public import Flock.RecBudget
 import Flock.With.SetupEq
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -51,14 +52,16 @@ import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 (`innerSetupIns`). Here it is a fact about the verifier's own setup at any statement some run of the compiled verifier
 accepts, and it holds for every hash `h`, not only SHA-512 (`innerSetupCalls_le_acc`):
 
-* `Stmt.setupTablesWith`'s calls are at most `innerB = 12 + 1024 · perRow 17`, where `perRow K = (K + 3) · 2^K`
-  (`innerTables_cost`), from `SetupCount.setupHidden_cost` at the circuit's ports (at most `1024`), the public file's
-  shared-row tables (at most `2^17` rows each) and the sampled population (at most `2^17`);
+* `Stmt.setupTablesWith`'s calls are at most `innerB = 12 + 6 · defsCap + 1024 · perRow 17`, where
+  `perRow K = (K + 3) · 2^K` (`innerTables_cost`), from `SetupCount.setupHidden_cost` at the circuit's ports (at most
+  `1024`), the public file's shared-row tables (at most `2^17` rows each), the sampled population (at most `2^17`) and
+  the program's Definitions (at most `RecBudget.defsCap`, each digest of the program at most `defsCap + 1` calls);
 * those three are functions of the files alone, whatever the hash (`SetupValues`), so the bounds the verifier
   establishes at SHA-512 hold at `h`: the ports from `checkInRange`'s regions (`read_setup_in`, `regions_size`), and
   the rows and the files' statement's `n`, which the sample's population is (`Layout.sampled_spec`), from
-  `RecBudget.innerRows` (`checkShape_rows`);
-* `innerB = 12 + 5 · 2^29 ≤ 2^32` (`innerB_le`).
+  `RecBudget.innerRows` (`checkShape_rows`), and the program's Definitions from `RecBudget.innerDefs`
+  (`checkShape_defs`);
+* `innerB = 12 + 6 · 2^20 + 5 · 2^29 ≤ 2^32` (`innerB_le`).
 
 `RecDeploy.lamLin2_R_ge_in` (CallsClosed) takes `hS` and `c_B` from here.
 -/
@@ -73,28 +76,31 @@ open Flock FlockComplete
 open Lean (Json)
 
 /-- The inner session's setup calls, at most. -/
-def innerB : Nat := 12 + 1024 * perRow 17
+def innerB : Nat := 12 + 6 * RecBudget.defsCap + 1024 * perRow 17
 
-theorem innerB_eq : innerB = 2684354572 := by
-  unfold innerB perRow
+theorem innerB_eq : innerB = 2690646028 := by
+  unfold innerB perRow RecBudget.defsCap
   norm_num
 
 theorem innerB_le : innerB ≤ 2 ^ 32 := by
   rw [innerB_eq]
   norm_num
 
-/-- **`Stmt.setupHiddenWith`'s calls at the inner statement, in any hash**: at most `10 + 1024 · perRow 17`, where at
-SHA-512 the sampled statement (`hst`) has at most `1024` regions and the unsampled one (`hst'`) at most `2^17` instances
-and `2^17` rows in each shared-row table. -/
+/-- **`Stmt.setupHiddenWith`'s calls at the inner statement, in any hash**: at most
+`10 + 4 · defsCap + 1024 · perRow 17`, where at SHA-512 the sampled statement (`hst`) has at most `1024` regions and the
+unsampled one (`hst'`) at most `2^17` instances and `2^17` rows in each shared-row table, and the program names at most
+`RecBudget.defsCap` Definitions (`hD`). -/
 theorem innerHidden_cost (h : ByteArray → ByteArray) {tags : Tags} {cf pf : ByteArray} {d : Json} {co co' : Coins}
     {pa pa' : Option Json} {pr pr' : Option ByteArray} {st st' : Stmt} (ht : tags.typed = false)
     (hi : tags.isTmpl = false) (hst : Stmt.setupHidden tags cf pf co [] (some d) pa pr = .ok st)
     (hst' : Stmt.setupHidden tags cf pf co' [] none pa' pr' = .ok st')
     (hreg : st.regions.size ≤ 1024) (hn : st'.pub.n ≤ 2 ^ 17)
     (hrows : ∀ t, st'.pub.tables = some t → ∀ r ∈ t.counts, r ≤ 2 ^ 17)
-    (coins : Coins) (partition : Option Json) (program publicInputs : Option ByteArray) :
+    (coins : Coins) (partition : Option Json) (program publicInputs : Option ByteArray)
+    (hD : ∀ b, program = some b → ∀ text j kvs, String.fromUTF8? b = some text → JsonParse.parse text = .ok j →
+      j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ RecBudget.defsCap) :
     countC.P (Stmt.setupHiddenWith (Hashes.counted h) tags cf pf coins [] (some d) partition program publicInputs)
-      (10 + 1024 * perRow 17) := by
+      (10 + 4 * RecBudget.defsCap + 1024 * perRow 17) := by
   have s := FlockSoundness.Discharge.Hidden.setupHidden_spec' hst
   have s' := FlockSoundness.Discharge.Hidden.setupHidden_spec' hst'
   have hc : st.c = st'.c := Except.ok.inj (s.parse.symm.trans s'.parse)
@@ -113,12 +119,12 @@ theorem innerHidden_cost (h : ByteArray → ByteArray) {tags : Tags} {cf pf : By
   have hrow : HmRow.loadPublicWith (M := Except String) (Hashes.ofSha512 Sha512.hash) tags
       { st'.c with outPorts := #[] } pf = .ok pop :=
     (With.loadPublicWith_std _ _ _).trans (FlockSoundness.Discharge.Hidden.loadPublic_nil hpop)
-  obtain ⟨D, hD, hDp, -⟩ := FlockSoundness.Discharge.Layout.sampled_spec hdr
+  obtain ⟨D, hSD, hDp, -⟩ := FlockSoundness.Discharge.Layout.sampled_spec hdr
   have hN : D.population ≤ 2 ^ 17 := by
     rw [hDp, ← hpub]
     exact hn
   refine setupHidden_cost h tags cf pf coins [] d partition program publicInputs (fun c => c.ports = st'.c.ports)
-    1024 17 ht hi (fun c hc' => by have e : c.ports = st'.c.ports := hc'; rw [e]; exact hP) ?_ ?_ ?_
+    1024 17 RecBudget.defsCap hD ht hi (fun c hc' => by have e : c.ports = st'.c.ports := hc'; rw [e]; exact hP) ?_ ?_ ?_
   · exact okC_of_V (fun k => With.hmOutParseWith_sim (With.Sim.forget _) With.Throws.exceptT With.Throws.v
       (With.Sim.forget_counted h) tags cf [] k) fun c hc' => SetupValues.parse_ports_eq h Sha512.hash ht hc' hstd
   · intro c pi hc'
@@ -129,7 +135,7 @@ theorem innerHidden_cost (h : ByteArray → ByteArray) {tags : Tags} {cf pf : By
     exact okC_of_V (fun k => With.hmInSampledWith_sim (With.Sim.forget _) With.Throws.exceptT With.Throws.v
       (With.Sim.forget_counted h) c pi p d k) fun pub hp => by
       obtain ⟨D', hD', hn, he⟩ := SetupValues.sampled_pop h hp
-      rw [hD] at hD'
+      rw [hSD] at hD'
       cases hD'
       refine ⟨by unfold PT at hpt ⊢; exact SetupValues.counts_le he hpt, ?_⟩
       unfold PN
@@ -137,7 +143,7 @@ theorem innerHidden_cost (h : ByteArray → ByteArray) {tags : Tags} {cf pf : By
       exact hN
 
 /-- **`Stmt.setupTablesWith`'s calls at the inner statement, in any hash**: at most `innerB`, at one table with hidden
-outputs. -/
+outputs and a program of at most `RecBudget.defsCap` Definitions. -/
 theorem innerTables_cost (h : ByteArray → ByteArray) {tags : Tags} {cf pf : ByteArray} {d : Json} {co co' : Coins}
     {pa pa' : Option Json} {pr pr' : Option ByteArray} {st st' : Stmt} (ht : tags.typed = false)
     (hi : tags.isTmpl = false) (hh : tags.hiddenOutputs = true)
@@ -147,12 +153,15 @@ theorem innerTables_cost (h : ByteArray → ByteArray) {tags : Tags} {cf pf : By
     (hrows : ∀ t, st'.pub.tables = some t → ∀ r ∈ t.counts, r ≤ 2 ^ 17)
     (coins : Coins) (count : Nat) (hcount : count ≤ 1) (partition : Option Json) (program : Option ByteArray)
     (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
-    (closure : Option (Std.HashMap Nat (Array Nat))) (publicInputs : Option ByteArray) :
+    (closure : Option (Std.HashMap Nat (Array Nat))) (publicInputs : Option ByteArray)
+    (hD : ∀ b, program = some b → ∀ text j kvs, String.fromUTF8? b = some text → JsonParse.parse text = .ok j →
+      j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ RecBudget.defsCap) :
     Stmt.setupCalls h tags cf pf coins count [] (some d) partition program work stratified closure publicInputs ≤
       innerB := by
   have hc := countC.mono (setupTables_cost h tags cf pf coins count [] d partition program work stratified closure
-    publicInputs _ hcount hh (innerHidden_cost h ht hi hst hst' hreg hn hrows coins partition program publicInputs))
-    (show 2 + (10 + 1024 * perRow 17) ≤ innerB by unfold innerB; omega)
+    publicInputs _ RecBudget.defsCap hD hcount hh
+    (innerHidden_cost h ht hi hst hst' hreg hn hrows coins partition program publicInputs hD))
+    (show 2 + 2 * RecBudget.defsCap + (10 + 4 * RecBudget.defsCap + 1024 * perRow 17) ≤ innerB by unfold innerB; omega)
   have h0 := hc 0
   unfold Stmt.setupCalls
   omega
@@ -185,6 +194,7 @@ theorem innerSetup_calls {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
       some (innerFormOf r.innerRaw), r.innerRaw.program⟩) := by rw [filesOf, hp]; rfl
   rw [hfs] at hsh
   obtain ⟨spec', st', hstm, hn0, hrows0⟩ := checkShape_rows hsh
+  have hdefs := checkShape_defs hsh
   obtain ⟨spec2, st2, hstm2, -, -, -, -, hform⟩ := checkShape_files hsh
   have e2 : st2 = st' := congrArg Prod.snd (Except.ok.inj (hstm2.symm.trans hstm))
   rw [e2] at hform
@@ -208,8 +218,13 @@ theorem innerSetup_calls {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
     · cases hw
     change r.innerRaw.ins.toOption = some s at hw
     exact ⟨not_not.1 hz, toOption_eq_some hw⟩
-  obtain ⟨z1, z2, z3, z4, z5, -, z7, z8, z9, -⟩ := ins_plainLeaves hw.2 hw.1 hs1
+  obtain ⟨z1, z2, z3, z4, z5, -, z7, z8, z9, -, zp⟩ := ins_plainLeaves hw.2 hw.1 hs1
   obtain ⟨hcount, hpi⟩ := check_plain hchk z1
+  have hD : ∀ b, s.read.I.program = some b → ∀ text j kvs, String.fromUTF8? b = some text →
+      JsonParse.parse text = .ok j → j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ RecBudget.defsCap := by
+    intro b hb
+    rw [zp] at hb
+    exact hdefs b hb
   have hpart : s.read.I.partition = some p := by
     have hpa := (readX_spec hr).2.1
     rw [z8] at hpa
@@ -233,7 +248,7 @@ theorem innerSetup_calls {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
     obtain ⟨-, hreg, -⟩ := (show _ ∧ st.regions.size ≤ 1024 ∧ _ from hrange st (by simp))
     unfold FlockDeploy.setupCallsOf
     rw [z2, z3, z4, z5, z7, hs3, hdraw, hpart, hpi]
-    exact SetupCount.innerTables_cost h ht hi hh hst hst' hreg hn hrows _ _ hcount _ _ _ _ _ _
+    exact SetupCount.innerTables_cost h ht hi hh hst hst' hreg hn hrows _ _ hcount _ _ _ _ _ _ hD
   · omega
 
 section Runs

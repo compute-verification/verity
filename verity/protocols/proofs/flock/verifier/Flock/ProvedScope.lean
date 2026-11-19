@@ -439,14 +439,12 @@ every check has passed. -/
 def NO_PROGRAM : String :=
   "refused: a session without the verifier's program (--program): a verifier that cannot read the Program cannot know what the statement computes, nor which of its values are registered"
 
-/-- `program_sha512` of the verifier's own `--program` bytes: SHA-512 of the canonical descriptor without `annotations`
-(`TemplateQuery.Desc`'s, the digest a partition object and META name); none for bytes that are not a JSON descriptor. -/
+/-- `program_sha512` of the verifier's own `--program` bytes: the program digest (`Program.programDigestWith`,
+`TemplateQuery.Desc`'s, the digest a partition object and META name); none for bytes that are not a JSON descriptor or
+whose digest refuses. -/
 def programDigest (b : ByteArray) : Option String := do
   let j ← (JsonParse.parse (← String.fromUTF8? b)).toOption
-  let bare := match j with
-    | .obj kvs => Lean.Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
-    | x => x
-  return hexOf (Sha512.hash (← (canon bare).toOption).toUTF8)
+  return hexOf (← (Program.programDigestWith (M := V) (fun b => pure (Sha512.hash b)) j).toOption)
 
 /-- META's `program_sha512`, the Program the circuit binds; none when META names none. -/
 def metaProgram (c : Circuit) : Option String := (c.metaJ.getObjValAs? String "program_sha512").toOption
