@@ -32,11 +32,14 @@ __all__ = ["attach_of_plan", "attach_of_record", "classes_of_record"]
 
 logger = init_logger(__name__)
 
+#: the manifest families a tap acquired on the rows' route, which now attaches none
+TAP_FAMILIES = frozenset({"norm_scales", "router_softmax", "vocab_range", "scale_products", "call_boundaries", "run_values"})
+
 
 def classes_of_record(required_manifest: dict[str, Any] | None, model: Any, fa_version: int | None) -> tuple[tuple[str, ...], str | None]:
     """The required classes of an eager Commit whose engine runs FA``fa_version``, with the attention hidden class the manifest names
     for ``model`` (`hidden_source.attention_hidden`), and that class (None: none)."""
-    hidden_family = HS.attention_hidden(required_manifest, model)["family"]
+    hidden_family = HS.attention_hidden(model)["family"]
     return HS.with_hidden_class(required_classes_default(fa_version), hidden_family), hidden_family
 
 
@@ -79,7 +82,7 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
         if args.tap_cap_mb is not None:
             settings.put("VERITY_FA2_TAP_CAP_MB", str(int(args.tap_cap_mb)))   # read by NativeHiddenM1Source at construction
         com.attach_source(HS.make_hidden_source(com, args.hidden_so, ns=(args.hidden_ns or Path(args.hidden_so).stem), flash_attn_version=fa_version,
-                                                fa2_cls=src_cls, fa3_cls=getattr(com, "hidden_source_cls_fa3", None), manifest=required_manifest))
+                                                fa2_cls=src_cls, fa3_cls=getattr(com, "hidden_source_cls_fa3", None)))
         logger.info("[delta] hidden source attached: %s -> committer %s (%s, engine FA%s)", args.hidden_so, com.name,
                     type(com.sources[-1]).__name__ if getattr(com, "sources", None) else "?", fa_version)
         _hsrc = com.sources[-1] if getattr(com, "sources", None) else None
@@ -90,7 +93,10 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
             logger.info("[delta] fa2 tap bound: %s MiB (%s); telemetry %s", _hsrc.tap_cap_bytes >> 20,
                         "ONE bounded device buffer; launches above it are split into sequence groups" if _hsrc.tap_cap_bytes
                         else "OFF: unbounded per-geometry buffers", _hsrc.telemetry_path)
-    required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root), call_boundary_plan=cb_plan)
+    if tapped := sorted(set(families) & TAP_FAMILIES):
+        logger.error("[delta] REFUSE: the rows' route attaches no taps, and the manifest names %s: `taps.attach` takes the capture "
+                     "plan of the row's Build (serve-openai --row-build)", ", ".join(tapped))
+        sys.exit(3)
     # the MoE block source stages six planes per MoE layer
     # per step by NAME (moe/L<k>/<plane>); the gather collector lays the arena out from the required-value MANIFEST, so a plane the manifest
     # does not name has no slot and the stage is a wild write (SIGSEGV in Collector::push_desc).  Under the PADDED construction the
@@ -188,9 +194,10 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
 TAPPED = (CP.CALL_BOUNDARY, CP.SCALE_PRODUCTS, CP.RUN_VALUE)
 
 
-def attach_of_plan(com: Any, eng: Any, args: Any, classes: Sequence[Mapping[str, Any]], out: Path, *, kind: str) -> SimpleNamespace:
-    """The served Commit's acquisition on ``com`` for the row's plan classes (`capture_plan.of_build`): the sources `taps.attach`
-    attaches for them (those of the classes a module's own return doesn't carry, `TAPPED`, among them), the X-03 attention plane classes from the Build's
+def attach_of_plan(com: Any, eng: Any, args: Any, classes: Sequence[Mapping[str, Any]], out: Path, *, kind: str,
+                   rows: Sequence[Mapping[str, Any]]) -> SimpleNamespace:
+    """The served Commit's acquisition on ``com`` for the row's plan classes (`capture_plan.of_build`) and plan rows
+    (`capture_plan.rows_of_build`): the sources `taps.attach` attaches for them (those of the classes a module's own return doesn't carry, `TAPPED`, among them), the X-03 attention plane classes from the Build's
     record, and the hook sets of the acquisition plan, written into ``out``. An MoE model is refused by name (its block stream
     is `capture_plan.NOT_SERVED`), and so is a class with no site (exit 3)."""
     model = getattr(com, "model", None)
@@ -201,7 +208,7 @@ def attach_of_plan(com: Any, eng: Any, args: Any, classes: Sequence[Mapping[str,
         logger.error("[delta] REFUSE: the model has MoE layers, and %s", CP.NOT_SERVED["moe_block_stream"])
         sys.exit(3)
     tapped = [c for c in classes if c["capture"] in TAPPED]
-    TAPS.attach(com, list(classes), (), model=model)
+    TAPS.attach(com, list(classes), (), rows=rows, model=model)
     _impls, _impls_path = FP.attention_impls_of_record(program_dir=None, programs_root=args.programs_root)
     if _decls := (FP.declarations_from_attention_impls(_impls) if _impls else []):
         com.attention_layer_decls = _decls

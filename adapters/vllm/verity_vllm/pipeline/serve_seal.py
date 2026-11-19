@@ -202,7 +202,7 @@ def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
     if com.retain != "host":
         raise UsageError(f"VERITY_RETAIN={com.retain}: the served record is read back from the values retained on the host")
     att = CA.attach_of_plan(com, eng, args, [c for c in classes if c["capture"] != CP.INPUT_IDS], Path(opts.out) / "acquisition",
-                            kind=DECLARED_COMMITTER)
+                            kind=DECLARED_COMMITTER, rows=rows)
     com.capture_plan, com.op_path_aliases = rows, {k: list(v) for k, v in att.runtime.aliases().items()}
     here = registered_compiler()
     com.compiler = {"name": here.name, "digest": here.digest}   # the row's, `row_refusal` held it to this tree's

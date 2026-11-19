@@ -25,6 +25,7 @@ from verity_vllm.correspondence.reader_for_acquire import (
     RuntimeTree,
 )
 from verity_vllm.log import write
+from verity_vllm.records.capture import CALL_BOUNDARY
 from verity_vllm.records.schema_ids import CALL_BOUNDARIES_GATE_SCHEMA
 
 CALL_BOUNDARIES_SCHEMA = CALL_BOUNDARIES_GATE_SCHEMA
@@ -51,12 +52,19 @@ def call_boundaries(manifest: Mapping[str, Any], *roots: str | None) -> dict[str
     return call_boundaries_of(manifest, CB.plan_of(manifest, *roots) if CB.manifest_sites(manifest) else None)
 
 
+def classes_of_identities(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """The `call_boundaries` identities of `manifest` as capture-plan classes (`capture_plan.of_build`'s keys), the form the
+    sources' claims (`call_boundary_source.claimed`) read."""
+    return [{"op_path": str(r["op_path"]), "member": str(r.get("output_member", "out")), "capture": CALL_BOUNDARY,
+             "definitions": [str(r.get("spec") or "")]} for r in CB.manifest_sites(manifest)]
+
+
 def call_boundaries_of(manifest: Mapping[str, Any], plan: Plan | None) -> dict[str, Any]:
     """`call_boundaries` of `manifest` with its host plan given (None when it names no identity the call-boundary source evaluates)."""
-    on = taps.attached(manifest)
-    rows = manifest.get("identities")
-    ids = sum(1 for r in (rows if rows else []) if r.get("family") == CB.FAMILY)
-    uncovered, unattached = (plan.uncovered if plan else []), CB.unattached(manifest, on)
+    classes = classes_of_identities(manifest)
+    on = taps.attached(classes)
+    ids = len(classes)
+    uncovered, unattached = (plan.uncovered if plan else []), CB.unattached(classes, on)
     return {"schema": CALL_BOUNDARIES_SCHEMA, "pass": not uncovered and not unattached, "identities": ids,
             "claimed": ids - (plan.identities if plan else 0), "covered": plan.covered if plan else 0, "uncovered": len(uncovered),
             "unattached": len(unattached), "sources": on, "program_dirs": dict(plan.program_dirs) if plan else {},
