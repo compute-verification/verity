@@ -919,7 +919,7 @@ def commit1(a: argparse.Namespace, compiler: Capped, requests: list[dict], bound
                        roles=CPU.registered_roles(p.dirs.values(), prefix) if ck is not None else None)
     bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
     res = SRW.after_commit(str(out), partition_file=str(a.partition), programs=p.progs, bmap=bmap, committed=OpenedReader(r.store, r.run),
-                           weights=CPU.provider(words, prefix, set()), run_root=r.run.run_root,
+                           weights=CPU.provider(words, prefix, set()), aliases=r.aliases, run_root=r.run.run_root,
                            row=r.row.get("label"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                            committer={"from": "replay bundle", "pair": r.pair, "source": r.ctx.get("code")}, workers=a.workers,
                            stand_in=stand_in1(r), binding=dict(bound), transfer_gates=compiler.transfer_gates, tables=tables)
@@ -1710,7 +1710,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
         return w
 
     bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
-    store = CommittedStore.of_record(bmap, OpenedReader(r.store, r.run))
+    store = CommittedStore.of_record(bmap, OpenedReader(r.store, r.run), r.aliases)
     units = [u for u in compiled.requests if u is not None]
     scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units], kept_ingress=kept_ingress)
     population = program_digest(low.circuit.program()[0])
