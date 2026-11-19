@@ -116,7 +116,7 @@ def check_widths(a, out, bad):
     """Each `--widths` line is `{"program", "codec"}`: a descriptor and the codec's refusal of it (`decode_program`; null
     where it decodes). The Lean decoder refuses every one the codec refuses as `E_REINTERPRET` with the codec's message
     (`both_refuse`), every one the codec refuses by a recut read's name as `E_REINTERPRET` (`named_pair`, by the codec's
-    name), and none other as `E_REINTERPRET`."""
+    name), and none other as `E_REINTERPRET`; of the rest (`neither`) it accepts exactly those the codec accepts."""
     both = neither = 0
     named = {n: 0 for n in RECUT_NAMES}
     for k, line in enumerate(Path(a.widths).read_text().splitlines()):
@@ -136,7 +136,7 @@ def check_widths(a, out, bad):
                 named[recut] += 1
             else:
                 bad.append(("widths", k, err[:300], why[:300]))
-        elif "E_REINTERPRET" in err:
+        elif "E_REINTERPRET" in err or bool(err) != bool(why):
             bad.append(("widths", k, err[:300], why[:300]))
         else:
             neither += 1
