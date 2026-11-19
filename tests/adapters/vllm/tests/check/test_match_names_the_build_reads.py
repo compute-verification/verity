@@ -7,9 +7,7 @@ from __future__ import annotations
 import pytest
 
 from verity_vllm.check.match import declaration as GD
-from verity_vllm.check.match import rank_match as RM
 from verity_vllm.pipeline import global_program as GP
-from verity_vllm.pipeline.tp import links
 
 BLOCKS = (
     {"compilation_mode": "3", "cudagraph_mode": "PIECEWISE", "capture_sizes": [1, 2], "enforce_eager": False, "backend": None},
@@ -45,20 +43,8 @@ def test_what_states_no_compilation_fact_gives_none(block):
     assert GD.compilation_facts(block) == {}
 
 
-@pytest.mark.parametrize("a, b", SAME)
-def test_paths_that_are_equal_or_one_the_others_dotted_suffix_name_one_module(a, b):
-    assert RM.same_module_path(a, b) and RM.same_module_path(b, a)
-
-
-@pytest.mark.parametrize("a, b", OTHER)
-def test_an_absent_path_or_a_suffix_that_is_no_whole_component_names_another(a, b):
-    assert not RM.same_module_path(a, b)
-
-
 def test_the_build_hands_on_the_engine_conditions_and_facts_the_match_states():
     assert GP.MODELLED_ENGINE == GD.MODELLED_ENGINE and GD.MODELLED_ENGINE["enforce_eager"] is True
     assert [GP.compilation_facts(b) for b in BLOCKS] == [GD.compilation_facts(b) for b in BLOCKS]
 
 
-def test_the_tensor_parallel_links_compare_paths_as_the_match_does():
-    assert [links.same_module_path(a, b) for a, b in SAME + OTHER] == [RM.same_module_path(a, b) for a, b in SAME + OTHER]

@@ -1068,13 +1068,11 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/pipeline/expert_tables.py",
     "adapters/vllm/verity_vllm/pipeline/serve_h1.py",
     "adapters/vllm/verity_vllm/pipeline/serve_tie.py",
-    "adapters/vllm/verity_vllm/program/predict/node_window_values.py",
     "adapters/vllm/verity_vllm/program/predict/window_class.py",
     "adapters/vllm/verity_vllm/program/predict/window_rows.py",
     "adapters/vllm/verity_vllm/program/predict/window_weights.py",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
-    "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
     # the shell files', by owning lane
     "adapters/vllm/tools/served_run/h100_smoke.sh",  # compute: Pearl+'s tie class
@@ -1126,7 +1124,6 @@ SPOT_VERIFIER = ("verity.protocols.proofs.spot.verifier",)
 SPOT_VERIFIER_IMPORTERS = (
     "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
     "adapters/vllm/verity_vllm/pipeline/serving_rows.py",
-    "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
 )
 
