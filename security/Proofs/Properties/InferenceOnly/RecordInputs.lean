@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.InferenceOnly.RecordRead
+public import Proofs.Properties.InferenceOnly.RecordWireRead
 public import Spot.WiresSound
 
 /-!
@@ -15,6 +16,9 @@ each of its loops by one invariant (a `for` loop in `Except` whose body never br
 * every later declaration is no wire's; its reader is a template, its units are among the template's and its rows
   among its port's cut; and its bits are its row's over the cut, or none where its port is no row of the template
   (a registered read of an output).
+
+A second walk (`inputsOf_reads`) gives each registered read's digits: a step each, and the last its cut's where it
+has more than one row a unit (`ReadShaped`).
 
 A table read, an opening's port and an ingress declare a rectangle (`RecordText.rect`) of units `[at, at + units)`
 and every row of the port's cut `k`. Its reader units are `units` where `0 < k` and none where `k = 0`, so in both
@@ -275,6 +279,150 @@ theorem inputsOf_wires {W : Spot.Wires.Wiring} {ts : List Tmpl} {doc : Json} {x 
       ({ w, bits := 16 * rowWords ts W w, fill := .wire i } : Decl)) ++ rest := by
   obtain ⟨-, rest, hrest, -⟩ := inputsOf_decls h
   exact ⟨rest, hrest⟩
+
+/-- A registered read's digits as `inputsOf` takes them: a step each, and one row a unit or the last digit its cut. -/
+def ReadShaped (w : Spot.Wires.Wire) : Prop :=
+  w.step.length = w.radix.length ∧ (w.cuts == 1 || w.radix.getLast? == some w.cuts) = true
+
+/-- Every registered read among the declarations `a` is `ReadShaped`. -/
+private def ReadsShaped (a : Array Decl) : Prop := ∀ d ∈ a.toList, ∀ p, d.fill = .read p → ReadShaped d.w
+
+private theorem readOf_digits {j : Json} {w : Spot.Wires.Wire} (h : Spot.RecordText.readOf j = .ok w) :
+    w.step.length = w.radix.length := by
+  unfold Spot.RecordText.readOf at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  repeat' split at h
+  all_goals first
+    | (cases h; done)
+    | exact (InferenceOnlyVerifier.Record.SecurityProofs.wire_digits
+        (InferenceOnlyVerifier.Record.SecurityProofs.recode_ok h)).1
+
+private theorem reads_push {a : Array Decl} {d : Decl} (h : ReadsShaped a) (hd : ∀ p, d.fill = .read p → ReadShaped d.w) :
+    ReadsShaped (a.push d) := by
+  intro e he p hp
+  rw [Array.toList_push] at he
+  rcases List.mem_append.1 he with he | he
+  · exact h e he p hp
+  · rw [List.mem_singleton.1 he] at hp ⊢
+    exact hd p hp
+
+private theorem reads_read {a : Array Decl} {w : Spot.Wires.Wire} {j : Json} {bits k : Nat} (h : ReadsShaped a)
+    (hw : Spot.RecordText.readOf j = .ok w)
+    (hc : ¬(!(decide (w.cut0 + w.cuts ≤ k) && (w.cuts == 1 || w.radix.getLast? == some w.cuts) &&
+      w.units % w.cuts == 0)) = true) :
+    ReadsShaped (a.push { w, bits, fill := .read w.writer }) := by
+  refine reads_push h fun _ _ => ⟨readOf_digits hw, ?_⟩
+  have hc' := of_not_not hc
+  simp only [Bool.and_eq_true] at hc'
+  exact hc'.1.2
+
+/-- **Every registered read the declarations hold has a step for each digit, and its cut as its last digit where it
+has more than one row a unit.** -/
+theorem inputsOf_reads {W : Spot.Wires.Wiring} {ts : List Tmpl} {doc : Json} {x : Inputs}
+    (h : inputsOf ts W doc = .ok x) : ∀ d ∈ x.decls, ∀ p, d.fill = .read p → ReadShaped d.w := by
+  have h0 : ReadsShaped (W.wires.zipIdx.map fun (w, i) =>
+      ({ w, bits := 16 * rowWords ts W w, fill := .wire i } : Decl)).toArray := by
+    intro d hd p hp
+    rw [List.toList_toArray] at hd
+    obtain ⟨⟨w, i⟩, -, rfl⟩ := List.mem_map.1 hd
+    cases hp
+  unfold inputsOf at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  split at h
+  · cases h
+  · split at h
+    · split at h
+      · cases h
+      · split at h
+        · split at h
+          · cases h
+          · split at h
+            · cases h
+            split at h
+            · split at h
+              · cases h
+              · rename_i d1 h1
+                have b1 : ReadsShaped d1 := forIn_keeps_array ReadsShaped _ (by
+                  intro a b s hb hs
+                  split at hs
+                  · cases hs
+                  · rename_i w hw
+                    split at hs
+                    · cases hs
+                    · split at hs
+                      · split at hs
+                        · cases hs
+                        · rename_i hcut
+                          split at hs
+                          · cases hs
+                          · split at hs
+                            · split at hs
+                              · cases hs
+                              · cases hs
+                                exact ⟨_, rfl, reads_read hb hw hcut⟩
+                            · cases hs
+                      · split at hs
+                        · cases hs
+                        · rename_i hcut
+                          split at hs
+                          · cases hs
+                          · split at hs
+                            · split at hs
+                              · cases hs
+                              · cases hs
+                                exact ⟨_, rfl, reads_read hb hw hcut⟩
+                            · cases hs
+                      · cases hs) _ _ _ h0 h1
+                split at h
+                · split at h
+                  · cases h
+                  · rename_i d2 h2
+                    have b2 : ReadsShaped d2.1 :=
+                      forIn_keeps_array (fun s => ReadsShaped s.1) _ (by
+                      intro a b s hb hs
+                      repeat' split at hs
+                      all_goals try (cases hs; done)
+                      cases hs
+                      exact ⟨_, rfl, reads_push hb fun _ e => by cases e⟩) _ _ _ b1 h2
+                    split at h
+                    · split at h
+                      · cases h
+                      · rename_i d3 h3
+                        have b3 : ReadsShaped d3.1 :=
+                          forIn_keeps_array (fun s => ReadsShaped s.1) _ (by
+                          intro a b s hb hs
+                          repeat' split at hs
+                          all_goals try (cases hs; done)
+                          rename_i hin
+                          cases hs
+                          exact ⟨_, rfl, forIn_keeps_array (fun s => ReadsShaped s.1) _ (by
+                            intro a' b' s' hb' hs'
+                            repeat' split at hs'
+                            all_goals try (cases hs'; done)
+                            cases hs'
+                            exact ⟨_, rfl, reads_push hb' fun _ e => by cases e⟩)
+                            _ _ _ hb hin⟩) _ _ _ b2 h3
+                        split at h
+                        · split at h
+                          · cases h
+                          · rename_i d4 h4
+                            have b4 : ReadsShaped d4 := forIn_keeps_array ReadsShaped _ (by
+                              intro a b s hb hs
+                              repeat' split at hs
+                              all_goals try (cases hs; done)
+                              cases hs
+                              exact ⟨_, rfl, reads_push hb fun _ e => by cases e⟩)
+                              _ _ _ b3 h4
+                            split at h
+                            · cases h
+                            · cases h
+                              exact b4
+                        · cases h
+                    · cases h
+                · cases h
+            · cases h
+        · cases h
+    · cases h
 
 /-! ## What `finish` puts in the case -/
 
