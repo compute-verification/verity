@@ -1,9 +1,11 @@
 """Pearl+ as a resource scheme (`verity.protocols.resource_accounting.scheme`), registered as ``pearl-plus``.
 
 Its verifier is `verity/pouw/pearl-plus/v1` (`verifier/lean/pearlplus/PouwPearlPlus/Protocol.lean`). In C, a credited
-linear is its grid's units of `PearlPlusTileCoreWords_v2` (`prover.circuit.pearl_plus_credited`), which write its y, each one
-proof block, which costs its credited MACs (`tile_macs`): its real rows × TN × K, its statics TR, TN and K, since the core
-forms every word of the linear's depth K and holds its filler rows to zero.
+linear is its grid's units of `PearlPlusTileCoreWords_v3` (`prover.circuit.pearl_plus_credited`), which write its y. C's
+laying opens each into its noise's units and one `PearlPlusTileCoreWired_v1`, the tile's core on its words and that noise by
+wire, each one proof block where it fits whole (K = 256; not the served K = 2048, `pearl_plus_credited`'s docstring); the
+core's block costs its credited MACs (`tile_macs`): its real rows × TN × K, its statics TR, TN and K, since the core forms
+every word of the linear's depth K and holds its filler rows to zero.
 
 On a served run (`attach`) it computes every linear block with its device run (`verity.hooks.ComputeBlockWith`), the
 workload's `PearlCDeviceRun` (`serving.tensors.pearl_c_device`), over the weight operands the run registers
@@ -573,8 +575,8 @@ PEARL_PLUS = register(Scheme(
     messages=tuple(m for m in workload.MESSAGES if m.type in ("PoUWScheme", "PearlPass", "H1Registration")),
     protocol="verity/pouw/pearl-plus/v1",
     resource="compute",
-    blocks=(Block("PearlPlusTileCoreWords_v2", tile_macs),),
-    ports=(Port(TILE_PORT, "output", "PearlPlusTileCoreWords_v2", "y", layout=_tile_layout),),
+    blocks=(Block("PearlPlusTileCoreWired_v1", tile_macs),),
+    ports=(Port(TILE_PORT, "output", "PearlPlusTileCoreWords_v3", "y", layout=_tile_layout),),
     assumptions=("Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1",),
     log=(Order("weightsRoot", "pouw/salt"), Order("commitment", "pouw/draw")),
     charges=(Charge("inert-work", "rho"), Charge("sample", "epsilon"), Charge("over-bound-tiles", "over_cap_draws"),

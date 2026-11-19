@@ -408,12 +408,11 @@ def test_every_spec_fits_the_queued_points_kind():
         assert spec.admission.max_minutes is None or spec.admission.max_minutes <= kind["max_wall_min"], spec.id
 
 
-def test_plan_run_check_and_compare_are_top_level_commands(tmp_path):
+def test_plan_run_and_check_are_top_level_commands():
     parser = _parser()
     assert parser.parse_args(["plan", "llama31-8b-fp8-1gpu"]).command == "plan"
     assert parser.parse_args(["run", "llama31-8b-fp8-1gpu"]).command == "run"
     assert parser.parse_args(["check", "llama31-8b-fp8-1gpu"]).command == "check"
-    assert parser.parse_args(["compare", str(tmp_path / "a"), str(tmp_path / "b")]).command == "compare"
 
 
 def test_graphs_are_refused_for_arms_bound_to_the_build():

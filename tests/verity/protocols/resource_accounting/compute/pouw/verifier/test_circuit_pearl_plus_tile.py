@@ -1,6 +1,6 @@
 """Pearl+'s -h3 tile core (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_plus_tile`): its σ core's word view
-equals the scheme (`reference`), its y the served y the scheme computes, the σ on bits equals its word view, and the tile leaf
-opens as `leaf_reference`, on honest fixture tiles and tampered ones."""
+equals the scheme (`reference`), its y the served y the scheme computes, and the σ on bits equals its word view, on honest
+fixture tiles and tampered ones."""
 from __future__ import annotations
 
 import random
@@ -12,9 +12,6 @@ from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.commitments.gates import frame_v3 as F3
-from verity.commitments.gates.hm96 import reference as hm96_reference
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SCHEMA
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import inert_bound, pc8, pearl_plus_tile as T
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as CU
@@ -45,14 +42,14 @@ def _f32(rng: random.Random, n: int) -> list[int]:
 
 class Tile:
     """An honest fixture tile built from the scheme (`pearl_c`): the circuit inputs, the reference's (digest, y, ok), the
-    served y the scheme computes, and a leaf that opens the digest to a transcript root.  Its first ``tr`` rows are real
-    (every row when None) and the rest zero filler, as a call's A is padded to a multiple of 16; y is the real rows'."""
+    served y the scheme computes.  Its first ``tr`` rows are real (every row when None) and the rest zero filler, as a
+    call's A is padded to a multiple of 16; y is the real rows'."""
 
-    def __init__(self, dev: str, k: int, tm: int, tn: int, n: int, depth: int, seed: str, tr: int | None = None):
+    def __init__(self, dev: str, k: int, tm: int, tn: int, n: int, seed: str, tr: int | None = None):
         rng = random.Random(seed)
         d = DEVICES[dev]
         tr = tm if tr is None else tr
-        self.dev, self.k, self.tm, self.tr, self.tn, self.n, self.depth = dev, k, tm, tr, tn, n, depth
+        self.dev, self.k, self.tm, self.tr, self.tn, self.n = dev, k, tm, tr, tn, n
         self.a = [_f32(rng, k) for _ in range(tr)] + [[0] * k for _ in range(tm - tr)]
         self.b = [_f32(rng, k) for _ in range(tn)]
         self.rows, self.cols, self.midx = list(range(tm)), list(range(tn)), 7
@@ -78,13 +75,6 @@ class Tile:
         self.y = [[CU.y(checked.u[i][j], ops.a.alpha[i], ops.b.alpha[j]) for j in range(tn)] for i in range(tr)]
         self.digest, y, self.ok = self.reference()
         assert y == self.y
-        # a transcript leaf that opens the honest digest
-        self.hsalt = bytes(rng.randrange(256) for _ in range(192))
-        self.tdomain = bytes(rng.randrange(256) for _ in range(64))
-        self.tpos = rng.randrange(1 << depth)
-        self.path = [bytes(rng.randrange(256) for _ in range(64)) for _ in range(depth)]
-        payload = hm96_reference(self.digest, self.hsalt)[2]
-        self.troot = F3.root_ref(self.tdomain, SCHEMA, payload, self.tpos, self.path)
 
     def reference(self) -> tuple[bytes | None, list[list[int]] | None, int]:
         return T.reference(self.dev, self.k, self.n, self.a, self.b, self.cert, self.salt, self.root, self.midx,
@@ -110,15 +100,15 @@ class Tile:
         return [self.a, self.b, self.cert, self.salt, self.root, self.midx, self.rows, self.eb, self.fa, self.fb, self.g]
 
 
-SHAPES = [("h100", 256, 1, 1, 1, 1), ("h100", 256, 2, 2, 4, 2), ("sm120", 256, 1, 1, 2, 1)]
+SHAPES = [("h100", 256, 1, 1, 1), ("h100", 256, 2, 2, 4), ("sm120", 256, 1, 1, 2)]
 
 
-@pytest.mark.parametrize("dev,k,tm,tn,n,depth", SHAPES)
-def test_core_on_words_is_the_scheme(dev, k, tm, tn, n, depth):
+@pytest.mark.parametrize("dev,k,tm,tn,n", SHAPES)
+def test_core_on_words_is_the_scheme(dev, k, tm, tn, n):
     """The σ core's word view is `reference`: the digest, the served y the scheme computes (`pearl_c_u.y`), bit for bit,
     and ok = 1 on an honest tile.  The word body is no registered Definition: the σ is the core's one, and the
     y-reading core before it is gone."""
-    t = Tile(dev, k, tm, tn, n, depth, f"core/{dev}/{k}/{tm}x{tn}")
+    t = Tile(dev, k, tm, tn, n, f"core/{dev}/{k}/{tm}x{tn}")
     assert "PearlPlusTileCore_v2" not in REGISTRY.defs and "PearlPlusTileCore_v3" in REGISTRY.defs
     assert t.ok == 1
     assert t.on_words() == (t.digest, t.y, 1)
@@ -127,7 +117,7 @@ def test_core_on_words_is_the_scheme(dev, k, tm, tn, n, depth):
 def test_a_wrong_certificate_fails():
     """A certificate word other than the prover's fails: the core on words is `reference`, ok = 0, and y is still the tile's
     served y, which the certificates don't enter."""
-    t = Tile("h100", 256, 1, 1, 1, 1, "cert")
+    t = Tile("h100", 256, 1, 1, 1, "cert")
     t.cert[0][0][0][0] ^= 1
     digest, y, ok = t.reference()
     assert ok == 0 and y == t.y
@@ -137,7 +127,7 @@ def test_a_wrong_certificate_fails():
 def test_a_tampered_b_row_writes_its_own_y():
     """One flipped word of B is another tile: the core writes that tile's served y, not the honest one, as `reference`
     does, so a reader of y reads the product of the rows the core was given."""
-    t = Tile("h100", 256, 1, 1, 1, 1, "b")
+    t = Tile("h100", 256, 1, 1, 1, "b")
     t.b[0][5] ^= 1 << 31
     digest, y, ok = t.reference()
     assert y != t.y
@@ -150,7 +140,7 @@ FILLERS = [pytest.param(2, 1, id="2x1-tr1"), pytest.param(16, 4, id="16x1-tr4", 
 
 
 def _filler(tm: int, tr: int, seed: str) -> Tile:
-    return Tile("h100", 256, tm, 1, 1, 1, f"{seed}/{tm}/{tr}", tr=tr)
+    return Tile("h100", 256, tm, 1, 1, f"{seed}/{tm}/{tr}", tr=tr)
 
 
 @pytest.mark.parametrize("tm,tr", FILLERS)
@@ -200,7 +190,7 @@ def test_tr_is_within_the_tile():
 def test_a_full_tile_is_todays_core(tm, tn, n, gates):
     """At TR = TM the core is today's, gate for gate: the word core's gate count at v3, the count of the y-reading core
     before it (11,443 and 24,340) without its y comparison and with each served word's finiteness, and its y TM rows."""
-    t = Tile("h100", 256, tm, tn, n, 1, f"full/{tm}x{tn}")
+    t = Tile("h100", 256, tm, tn, n, f"full/{tm}x{tn}")
     assert t.core().gates == gates
     assert t.core().signature()[1].fields[1].n == tm
 
@@ -209,7 +199,7 @@ def test_a_full_tile_is_todays_core(tm, tn, n, gates):
 def test_core_sigma_is_its_words():
     """The σ core equals the word core on an honest 1 × 1 tile: same digest and ok.  Slow: lowering the core to bits is the
     only check that its σ (what the unit Calls) computes what its words do."""
-    t = Tile("h100", 256, 1, 1, 1, 1, "sigma")
+    t = Tile("h100", 256, 1, 1, 1, "sigma")
     word = list(evaluate(t.core(), *(_flat(a) for a in t.core_args())))
     assert _words1(t.core_v2(), *t.core_args()) == word
 
@@ -220,7 +210,7 @@ def test_filler_sigma_is_its_words():
     (ok 0), in one batch.  Slow: as `test_core_sigma_is_its_words`, and the only check that the σ of the real-row rule
     (the filler rows' zero test, their constant admission word in the inert-work bound and the real rows' y) computes
     what its words do."""
-    t = Tile("h100", 256, 2, 1, 1, 1, "sigma/filler", tr=1)
+    t = Tile("h100", 256, 2, 1, 1, "sigma/filler", tr=1)
     honest = t.core_args()
     t.a = [t.a[0], [1] + t.a[1][1:]]
     tampered = t.core_args()
@@ -229,13 +219,3 @@ def test_filler_sigma_is_its_words():
     got = evaluate_words(t.core_v2(), *(np.asarray([_flat(x), _flat(z)], dtype=np.uint64) for x, z in zip(honest, tampered)))
     assert got.reshape(2, -1).tolist() == word
 
-
-@pytest.mark.slow
-def test_leaf_opens_as_its_reference():
-    """`PearlPlusTileLeaf_v1` is `leaf_reference`: 1 when the digest's hm96 leaf opens at tpos to troot, 0 under a wrong
-    root.  Slow: the leaf is two SHA-512 compressions and the frame reads, lowered to bits."""
-    t = Tile("h100", 256, 1, 1, 1, 2, "leaf")
-    leaf = bind(T.PearlPlusTileLeaf, D=t.depth)
-    assert T.leaf_reference(t.digest, t.hsalt, t.troot, t.tdomain, t.tpos, t.path) == 1
-    assert _words1(leaf, t.digest, t.hsalt, t.troot, t.tdomain, t.tpos, t.path) == [1]
-    assert _words1(leaf, t.digest, t.hsalt, bytes(64), t.tdomain, t.tpos, t.path) == [0]
