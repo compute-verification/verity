@@ -56,7 +56,7 @@ def test_every_one_compression_head_length(lib):
     lengths = set()
     for n in range(26):
         index = (bytes(range(n)),)
-        lengths.add(len(E.head(KEY, index)))
+        lengths.add(len(KEY.head(index)))
         assert _fill(lib, KEY, index, 5, 3) == KEY.stream(index, 192 * 8)[192 * 5:]
     assert lengths == set(range(78, E.HEAD_MAX + 1))
 
@@ -67,7 +67,7 @@ def test_random_keys_indices_and_offsets(lib):
         key = Key(rng.randbytes(32))
         index = tuple(rng.choice((rng.randbytes(rng.randrange(6)), "yat"[:rng.randrange(1, 4)], rng.randrange(1 << 32)))
                       for _ in range(rng.randrange(1, 3)))
-        if len(E.head(key, index)) > E.HEAD_MAX:
+        if len(key.head(index)) > E.HEAD_MAX:
             continue
         leaves = rng.randrange(1, 5)
         first = rng.choice((rng.randrange(40), rng.randrange(1 << 40), E.LEAVES_MAX - leaves))
@@ -85,7 +85,7 @@ def test_three_compressions_a_leaf(lib):
 
 @pytest.mark.parametrize("index", [(bytes(26),), ("salts", "t", 2**32 - 1)], ids=["104-byte head", "three-part index"])
 def test_a_two_compression_head_is_refused(lib, index):
-    assert len(E.head(KEY, index)) > E.HEAD_MAX
+    assert len(KEY.head(index)) > E.HEAD_MAX
     out = np.full((2, E.LEAF_BYTES), 0xA5, np.uint8)
     with pytest.raises(E.Refused, match="REFUSED_HEAD") as e:
         E.fill(lib, out, KEY, index, 0)
@@ -121,7 +121,7 @@ def test_the_loaders_own_build_agrees(lib, tmp_path):
 def test_a_one_part_str_index_fixes_every_blocks_message_length(lib):
     """At ``"s"`` every block hashes tag (28) ‖ key (32) ‖ frames (19) ‖ counter (8) = 87 bytes, whatever the key and the
     counter; a fill given another length is refused before it writes."""
-    assert E.message_bytes("s") == 87 == len(E.head(KEY, "s")) + 8 == len(E.head(Key(bytes(32)), "s")) + 8
+    assert E.message_bytes("s") == 87 == len(KEY.head("s")) + 8 == len(Key(bytes(32)).head("s")) + 8
     assert _fill(lib, KEY, "s", 5, 2) == _blocks(KEY, "s", 5, 2)
     out = np.full((2, E.LEAF_BYTES), 0xA5, np.uint8)
     E.fill(lib, out, KEY, "s", 0, length=87)
@@ -130,6 +130,16 @@ def test_a_one_part_str_index_fixes_every_blocks_message_length(lib):
     with pytest.raises(E.Refused, match="REFUSED_LENGTH"):
         E.fill(lib, out, KEY, ("s", 0), 0, length=87)
     assert (out == 0xA5).all()
+
+
+def test_a_change_to_the_streams_framing_moves_the_fills_head(lib, monkeypatch):
+    """The fill holds no framing of its own: under another stream tag it writes that stream's blocks, and the message
+    length it asserts moves with the tag."""
+    import verity.commitments.randomness as R
+    before = _fill(lib, KEY, ("a", 7), 3, 2)
+    monkeypatch.setattr(R, "_STREAM", b"verity/randomness/stream/v10\0")
+    assert _fill(lib, KEY, ("a", 7), 3, 2) == _blocks(KEY, ("a", 7), 3, 2) != before
+    assert E.message_bytes("s") == 88
 
 
 def _no_card() -> str | None:
