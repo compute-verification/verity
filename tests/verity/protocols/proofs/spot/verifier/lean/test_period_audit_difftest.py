@@ -671,6 +671,9 @@ def test_the_check_agrees_and_each_case_is_answered_as_named(pieces):
             else:
                 assert got["verdict"] == verdict, (name, seed, got)
                 assert code is None or got["reason"].startswith(f"{code}: "), (name, seed, got)
+            if name == "shared-rows":
+                # owed until the check holds a file's references into rows its members share to the registration
+                assert got["reason"].startswith("names: session ") and got["reason"].endswith(f": {SHARED_ROWS}"), got
 
 
 def test_three_windows_pass_and_each_audit_is_handed_the_records_before_it(pieces):

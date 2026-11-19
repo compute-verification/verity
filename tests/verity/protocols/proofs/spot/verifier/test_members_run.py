@@ -384,6 +384,17 @@ def test_a_members_own_output_port_reads_its_templates_field_tree():
     assert M.population_why(UNITS[B], strata, named, got[B]) is None
 
 
+def test_one_statement_refuses_roots_of_several_members():
+    """Owed until the one statement's public file covers a window of members: v2's one statement holds its public file
+    to one member's roots, so a registration naming two members' roots, or a bare root beside a member's, is refused
+    by `OneStageZk.NOT_ONE_MEMBER`'s text (`public_ports`)."""
+    bare = {**RECORD["roots"][0], "port": "out"}
+    for roots in (RECORD["roots"], [bare, RECORD["roots"][1]]):
+        with pytest.raises(ValueError) as e:
+            DK.public_ports({"roots": roots})
+        assert str(e.value) == DK.NOT_ONE_MEMBER
+
+
 def test_a_member_named_as_another_members_template_is_refused():
     """Members ``a`` and ``a/c0``: a root ``a/out`` would be the member ``a``'s own port and template ``a``'s tree of
     ``out`` at once, so the window is refused by name in either order of the members (`OneStageZk.NAME_TEMPLATE`)."""
