@@ -4,8 +4,8 @@ registered (`RegisteredInput<w>_v1`, `WorkloadProgram(theta_registered=True)`).
     write(program_digest, params, theta, values, window) -> {"record", "digest", "trusted", "provenance", "salts"}
     record(program_digest, params, theta, entries, window) -> {"record", "digest", "trusted", "provenance"}
 
-`record` takes each θ parameter's entry as `registered_rows.commit` made it, where the values were committed elsewhere (one
-process per rank of a node Program: `predict.node_registration`), and `write` commits `values` here.
+`record` takes each θ parameter's entry as `registered_rows.commit` made it, where the values were committed elsewhere, and
+`write` commits `values` here.
 
 * **The record.** One `verity/registration/v2` record, `previous` null, whose `registered` list has one value per parameter
   that holds a θ node, named as the parameter, its rows committed under hiding leaves (`commit.registered_rows`, R7's

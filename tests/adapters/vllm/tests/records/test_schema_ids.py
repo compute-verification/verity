@@ -53,7 +53,6 @@ ON_DISK = {
     "META_INVENTORY_SCHEMA": "verity-vllm/meta-inventory/v1",
     "MOE_PLANE_ALIAS_CHECK_SCHEMA": "verity-sweep/moe-plane-alias-check/v1",
     "NEUTRALITY_REPORT_SCHEMA": "verity-vllm/neutrality/v1",
-    "NODE_REGISTRATION_SCHEMA": "verity-vllm/node-registration/v1",
     "NOT_EXECUTED_RECONCILIATION_SCHEMA": "verity-sweep/not-executed-reconciliation/v3",
     "ORACLE_COMPARE_SCHEMA": "verity-sweep/oracle-compare/v1",
     "PHI_SCHEMA": "verity-predict/phi/v1",

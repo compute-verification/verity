@@ -252,8 +252,6 @@ PHI_SCHEMA = "verity-predict/phi/v1"
 AOT_COMPARISON_SCHEMA = "verity-vllm/aot-comparison/v1"
 #: `node.json`, which `program.predict.cli.node_main` writes
 PREDICT_NODE_SCHEMA = "verity-predict/node/v1"
-#: `registration.json`, which `program.predict.node_registration.register` writes
-NODE_REGISTRATION_SCHEMA = "verity-vllm/node-registration/v1"
 #: a compilation's summary (`program.predict.steps.SCHEMA`), which `Compiled.summary` returns and
 #: `tools/advice_compile.py` writes as `compiled.json`; the comparison with the Build traces, which `steps.compare`
 #: returns and the tool writes as `comparison.json`, carries it with `/comparison` after it

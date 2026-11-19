@@ -20,8 +20,7 @@ a served window's values), `scan_state` (the network attester's scan state as a 
 `inference_blocks` (its partition into inference blocks, a private table) and `window_weights` (its registered weights)
 with `weights_tie` (`verity-vllm weights-tie`: the checkpoint tie of the committer's registration of them), `block_counts`
 (`verity-vllm block-counts`: a day's inference blocks counted from its windows' circuit records and judged against the day's
-declared numbers), `node_registration` (θ of a node's Program, registered from its TP Commit of record),
-and `step_needs` (what `dsa` calls for one served engine step at its launch, each refusal counted in its place).
+declared numbers) and `step_needs` (what `dsa` calls for one served engine step at its launch, each refusal counted in its place).
 
 The record path reaches this package only through a switched row (its `aot` in `manifests/records.json`): its Build's derives are
 `predict emit` (`aot`), each refused unless the predicted Program is the one its comparison's trace holds.  No module of the Build,

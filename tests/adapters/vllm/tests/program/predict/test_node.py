@@ -140,18 +140,18 @@ def test_the_node_command_writes_the_descriptor_and_prints_the_summary(tmp_path,
 
 
 def test_the_predict_command_hands_each_commands_options_to_the_module_that_runs_it(monkeypatch):
-    """`cli.main` is what the command line calls with a command's parsed options.  `node` is `cli`'s own, `node-registration`
-    `node_registration`'s, `compare`, `emit` and `row` `aot`'s and the two of `compiled` its own: each gets the options as
+    """`cli.main` is what the command line calls with a command's parsed options.  `node` is `cli`'s own, `compare`, `emit` and
+    `row` `aot`'s and the two of `compiled` its own: each gets the options as
     given, and what it returns is `main`'s."""
     pytest.importorskip("torch")  # as above
     from verity_vllm.program.predict import cli as CLI
-    for at, name in ((CLI, "node_main"), (CLI.NR, "main"), (CLI.A, "main"), (CLI.PC, "main")):
+    for at, name in ((CLI, "node_main"), (CLI.A, "main"), (CLI.PC, "main")):
         module = at.__name__.rsplit(".", 1)[-1]
         monkeypatch.setattr(at, name, lambda a, _by=module: (_by, a))
     made = {cmd: options(**{f.name: None for f in dataclasses.fields(options) if f.init and f.default is dataclasses.MISSING})
             for cmd, options in CLI.COMMANDS.items()}
     assert {cmd: CLI.main(a) for cmd, a in made.items()} == {
-        "node": ("cli", made["node"]), "node-registration": ("node_registration", made["node-registration"]),
+        "node": ("cli", made["node"]),
         **{cmd: ("aot", made[cmd]) for cmd in ("compare", "emit", "row")},
         **{cmd: ("compiled", made[cmd]) for cmd in ("compiled", "compiled-pin")}}
 
