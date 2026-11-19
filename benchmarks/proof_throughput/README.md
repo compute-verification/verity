@@ -83,8 +83,8 @@ the sweep's results, `table --baseline` renders it, and a candidate is `compare`
 
 R_native is the H200's dense peak for the workload's number format. The census has no H200 line, and the H200 has the
 H100 SXM5's tensor cores and clocks (it differs in memory), so the profiles' anchors are the H100 SXM5's dense peaks:
-the frozen bf16 and fp8 Hopper input sets, `workloads.BF16` (989.4 TFLOPS bf16) and `workloads.FP8` (1978.9 TFLOPS
-e4m3).
+the frozen bf16 and fp8 Hopper input sets, `workloads.BF16` (census line `h100-sxm-80gb-tensor/bf16`) and
+`workloads.FP8` (`h100-sxm-80gb-tensor/e4m3`), each at the line's `datasheet` reading.
 
 ## The verifier's profile
 

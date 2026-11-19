@@ -57,8 +57,8 @@ The headline is throughput, ``vu.per_second``, and better its inverse relative t
 
 ``R_proved`` is intrinsic to the prover (one VU of GemmCoordinate<K> is K MACs = 2K FLOP).  ``R_native`` depends on
 the target named by the fingerprint's ``profile``: the datasheet dense tensor-core peak of the target's conformance
-anchor for its operand dtype at FP32 accumulate (the census line of ``Target.anchor_device``, :func:`native_peak_of`; A100 BF16
-312 TFLOPS for FIRST, RTX 4090 FP8 330.3 TFLOPS for FP8_ADA_MMA, H100 FP8 1978.9 TFLOPS for FP8_HOPPER_WGMMA).  The
+anchor for its operand dtype at FP32 accumulate (the census line of ``Target.anchor_device``, :func:`native_peak_of`: ``a100-sxm4-80gb/bf16`` for FIRST,
+``rtx-4090/e4m3`` for FP8_ADA_MMA, ``h100-sxm-80gb-tensor/e4m3`` for FP8_HOPPER_WGMMA, its ``datasheet`` reading beside the card's).  The
 identity ``overhead.vs_native_peak == rate.native_peak_flop_per_second / rate.proved_flop_per_second`` holds by
 construction (:func:`rate_measurements`); :func:`validate` recomputes each of the three from ``t.total``,
 ``vu.count``, ``K`` and ``profile`` and rejects a mismatch, so an overhead divided by another target's peak fails.
