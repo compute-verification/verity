@@ -343,63 +343,8 @@ def test_each_sparse_mla_call_boundary_holds_the_attn_tensor_of_its_layer_and_st
     assert off.att.stats["call_boundaries_held"] == 0 and off.com.errors == [], "off the target the attn tap is not bound, so neither are they"
 
 
-@pytest.mark.slow
-def test_the_binding_map_covers_each_held_call_boundary_exactly_and_names_the_rest(bruns):
-    on = bruns[True]
-    layouts: dict[int, list[TensorMeta]] = {}
-    for k, recs in on.rec.items():
-        layouts[k], off = [], 0
-        for j, (name, t) in enumerate(recs):
-            nb = t.numel() * t.element_size()
-            m = TensorMeta(j, name, "bfloat16", tuple(t.shape), nb, GPU_CHUNK_BYTES, off // GPU_CHUNK_BYTES, 1)
-            m.stream_off, off = off, off + nb
-            layouts[k].append(m)
-    steps = [types.SimpleNamespace(root=bytes([k]) * 32) for k in range(len(STEPS))]
-    bmap = B.build_binding_map(layouts, steps, b"\0" * 32, PD, rank=3, binder=Binder(BOUNDARIES, rank=3, ports=source_ports([on.att])))
-    pop = [B.identity(PD, r["request_id"], r["engine_step"], 0, r["op_path"], "out", *r["element_range"], 3) for r in BOUNDARIES]
-    cov = B.coverage_check(pop, bmap)
-    assert (cov["expected_n"], cov["bound_n"], cov["ambiguous_n"]) == (len(BOUNDARIES), 2 * L, 0)
-    assert sorted((m["step"], m["op_path"]) for m in cov["missing"]) == [(0, boundary(0, 0, 3)["op_path"]), (2, boundary(2, 0, 4)["op_path"])]
-    attn = on.att.names[AS.ATTN_MQA]
-    tapped = [e for e in bmap["entries"] if e.get("observation") == "port"]
-    assert len(tapped) == 2 * L + 1, "every attn tensor at a step whose layer has its call boundary, the mixed step's among them"
-    for e in tapped:
-        i, st, rows = AS.call_tap({**e["identity"], "family": CB.FAMILY, "dtype": "bf16", "spec": "SparseMlaSplit_v1"})[1], e["identity"]["step"], e["encoding"]["shape"][0]
-        assert e["name"] == attn[i] and e["encoding"]["shape"] == [rows, G.NHL, G.KVL]
-        assert e["identity"]["op_path"] == next(r["op_path"] for r in BOUNDARIES if r["step"] == st and AS.call_tap(r)[1] == i)
-    mixed = next(e for e in tapped if e["identity"]["step"] == 2)
-    assert mixed["identity"]["element_range"] == [0, WIDTH] != boundary(2, 0, 4)["element_range"], "bound, and short of the 4 rows it must hold"
 
 
-def test_a_step_batching_requests_at_different_steps_of_their_own_holds_and_maps_each_requests_call_boundary():
-    """[GLM-5.3 B8 mixed arrivals] Each request's Program numbers its fx nodes over its own steps, so engine step 9 spells r0's sparse
-    MLA (its step 9, 1 row) `dsa_indexer_attn_<9 * L>` and r1's (its step 0, 3 rows) `dsa_indexer_attn`: the step's one attn tensor
-    holds both, and the binding map writes each request's rows under its own spelling."""
-    rows = (boundary(9, 0, 1), {**boundary(0, 0, 3), "request_id": "r1", "engine_step": 9})
-    src = object.__new__(AS.AttentionSource)
-    src.c, src.stats, src.boundaries = types.SimpleNamespace(errors=[]), {"call_boundaries_held": 0}, {}
-    for r in rows:
-        src.boundaries.setdefault((9, *AS.call_tap(r)), []).append(r)
-    job = types.SimpleNamespace(step=9)
-    src._hold_boundary(AS.ATTN_MQA, 0, torch.zeros(4, G.NHL, G.KVL, dtype=torch.bfloat16), job)
-    assert (src.c.errors, src.stats["call_boundaries_held"]) == ([], 2)
-    src._hold_boundary(AS.ATTN_MQA, 0, torch.zeros(3, G.NHL, G.KVL, dtype=torch.bfloat16), job)
-    assert len(src.c.errors) == 1, "short of the 4 rows the two requests state"
-    src.boundaries[(9, AS.ATTN_MQA, 0)].append({**rows[0], "op_path": rows[1]["op_path"]})
-    src._hold_boundary(AS.ATTN_MQA, 0, torch.zeros(5, G.NHL, G.KVL, dtype=torch.bfloat16), job)
-    assert len(src.c.errors) == 2, "two boundaries of one request at one layer and step"
-
-    name = "model.layers.0.self_attn/attn"
-    m = TensorMeta(0, name, "bfloat16", (4, G.NHL, G.KVL), 4 * WIDTH * 2, GPU_CHUNK_BYTES, 0, 1)
-    m.stream_off = 0
-    steps = [types.SimpleNamespace(root=bytes([k]) * 32) for k in range(10)]
-    binder = Binder(rows, rank=3, ports={"attn": AS.TAP_PORTS[AS.ATTN_MQA]})
-    bmap = B.build_binding_map({9: [m]}, steps, b"\0" * 32, PD, rank=3, request_rows={9: [("r0", 0, 1), ("r1", 1, 4)]}, binder=binder)
-    got = sorted((e["identity"]["request_id"], e["identity"]["op_path"], e["identity"]["element_range"], e["element_offset"]) for e in bmap["entries"])
-    assert got == [("r0", rows[0]["op_path"], [0, WIDTH], 0), ("r1", rows[1]["op_path"], [0, 3 * WIDTH], WIDTH)]
-    pop = [B.identity(PD, r["request_id"], r["engine_step"], 0, r["op_path"], "out", *r["element_range"], 3) for r in rows]
-    cov = B.coverage_check(pop, bmap)
-    assert (cov["expected_n"], cov["bound_n"], cov["ambiguous_n"], cov["missing"]) == (2, 2, 0, [])
 
 
 def run_row(step: int, layer: int, pos: int, topk: int) -> dict[str, Any]:

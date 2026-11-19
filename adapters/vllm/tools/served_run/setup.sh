@@ -15,7 +15,7 @@ export CUDA_VISIBLE_DEVICES= OMP_NUM_THREADS=$(nproc) HF_HUB_OFFLINE=1 PATH=$VEN
 paths=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/tools/research/src
 vv() { (cd "$TREE/adapters/vllm" && PYTHONPATH=$paths nice -n 5 "$PY" -m verity_vllm.pipeline.cli "$@"); }
 mkdir -p "$R" && chmod 700 "$R" || { log "can't make $R"; exit 2; }
-research keep "$R" --owner @vllm --expires 3d --priority high --why "the served run's pin, taps, traced Builds and Flock build" 2>&1 | tail -1 | tee -a "$OUT/job.log"
+research keep "$R" --owner @vllm --expires 3d --priority high --why "the served run's pin, taps, predicted Builds and Flock build" 2>&1 | tail -1 | tee -a "$OUT/job.log"
 cp "$IN/$ROW_ID.json" adapters/vllm/workloads/ || exit 2
 log "setup of $ROW_ID from $(git rev-parse HEAD) on $(hostname), cores $CORES, card $CARD only under its lease"
 
@@ -53,7 +53,7 @@ if on flock && { [ -n "${STEPS:-}" ] || [ ! -x "$FLOCK_WORK/flock-gpu-link/flock
 fi
 on build || { log "setup: DONE"; exit 0; }
 BASE=$LLAMA_ROOT/$RESEARCH_RUN_ID KEPT=$LLAMA_ROOT/$RESEARCH_RUN_ID-unpublished
-mkdir -p "$BASE/predicted" "$KEPT" "$R/cache"
+mkdir -p "$BASE/predicted" "$KEPT"
 (cd "$TREE" && PYTHONPATH=$paths "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW_ID" --out "$BASE/predicted") \
   > "$OUT/predict_row.json" 2> "$KEPT/predict_row.err" || { log "predict: refused: $(tail -n 2 "$KEPT/predict_row.err" | cut -c1-400)"; exit 3; }
 pin=$(python3 - "$TREE" "$ROW_ID" "$REPO" "$BASE/predicted/predicted.json" <<'EOF'
@@ -68,7 +68,7 @@ if repo.startswith("verity-int8/"):
     want = [(pins[0].get(row) or {}).get("workload") if pins else None]
 else:
     # served_verdicts.sh's BUILD_OF_RECORD pins a Program and a manifest digest, which a predicted row's record (v2) holds neither of
-    print(f"{row}: its predicted workload {g.get('workload_digest')} is held to its traced Build by predict compare, below")
+    print(f"{row}: its predicted workload {g.get('workload_digest')}: no pin holds a row's but an int8 one's")
     sys.exit(0)
 have = [g.get(k) for k in keys]
 print(f"{keys} {':'.join(map(str, have))} are {of}" if have == want else
@@ -77,23 +77,4 @@ sys.exit(have != want)
 EOF
 ) || { log "predict: $pin"; exit 3; }
 log "predict: $pin"
-max=$(( (end - $(date -u +%s)) / 60 - 30 )); [ "$max" -gt 30 ] || { log "build: $max min left before END: not started"; exit 75; }
-# the row driver's derives need the torch adapter and the settings package, which the venv lacks
-PYW=$R/py/bin
-rm -rf "$R/py" && mkdir -p "$PYW" && for f in "$VENV"/bin/*; do ln -s "$f" "$PYW/${f##*/}"; done
-rm -f "$PYW/python" "$PYW/python3"
-printf '#!/usr/bin/env bash\n[ -z "${VERITY_CORE:-}" ] || export PYTHONPATH=${PYTHONPATH:+$PYTHONPATH:}$VERITY_CORE/adapters/torch:$VERITY_CORE/tools/config\nexec %s "$@"\n' \
-  "$VENV/bin/python" > "$PYW/python" && chmod +x "$PYW/python" && ln -s python "$PYW/python3"
-(cd "$TREE/adapters/vllm" && PYTHONPATH=$paths PY=$PYW/python PY312=$PYW/python TORCH_EXTENSIONS_DIR=$R/cache/torch-extensions \
-   TRITON_CACHE_DIR=$R/cache/triton VLLM_CACHE_ROOT=$R/cache/vllm NATIVE_COLLECT_BUILD=$R/cache/jit/nc \
-   gpu-lease 1 --on "$CARD" --cores "$CORES" --max-min "$max" --mem-gb 128 -- \
-   "$PY" -m verity_vllm.pipeline.cli row run "$ROW_ID" "$ROLE" "$REPO" "$REV" --sweep-dir "$BASE" --research-run-dir "$KEPT" \
-     --stages build --config-run 1 --replay-k 460 --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO") > "$KEPT/build.out" 2>&1
-rc=$?
-awk '$2 ~ /^(PASS|FAIL|WAIVED|PENDING)$/ {print $1, $2, $3}' "$BASE/$ROW_ID/stages.txt" 2>/dev/null > "$OUT/build_verdicts.txt"
-log "build: exit $rc; stages: $(tr '\n' ' ' < "$OUT/build_verdicts.txt")"
-[ "$rc" = 0 ] && [ -s "$BASE/$ROW_ID/manifest.json" ] && [ -s "$BASE/$ROW_ID/build_summary.json" ] || { log "build: NOT done"; exit 3; }
-config=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["config"])' "$BASE/predicted/predicted.json")
-vv predict compare "$BASE/$ROW_ID" --row "$ROW_ID" --config "$config" --predicted "$BASE/predicted" \
-  --out "$OUT/predict_compare.json" > "$OUT/predict_compare.log" 2>&1 || { log "compare: NOT equal: $(tail -n 2 "$OUT/predict_compare.log" | cut -c1-400)"; exit 3; }
-log "setup: DONE; the traced Build of $ROW_ID passed: name $RESEARCH_RUN_ID for it in placement.toml's builds"
+log "setup: DONE; the predicted Build of $ROW_ID is $BASE/predicted"

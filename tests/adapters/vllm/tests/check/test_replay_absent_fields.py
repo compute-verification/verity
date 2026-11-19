@@ -16,7 +16,6 @@ from typing import Any
 import numpy as np
 import pytest
 
-from tests.check import test_executed_prefix as XP
 from tests.check import test_sampled_replay as T
 from verity_vllm.check.replay import coverage as COV
 from verity_vllm.check.replay import driver as DR
@@ -273,38 +272,8 @@ def test_a_request_that_states_no_prompt_ids_declares_an_empty_prompt(left_out, 
     assert LK.boundary_linkage(bmap, committed, [stated | {"prompt_token_ids": [1, 3]}])["unlinked"][0]["kind"] == "prompt"
 
 
-@NO_LIST
-def test_a_stop_rule_s_block_that_states_no_problems_found_none(left_out, tmp_path):
-    """The mixed-stop record's first request, eleven tokens served under LAG 1, under a rule that returns the block stated here."""
-    block = {"executed_prefix_len": 12, "eos_step": 10, "lag_steps": 1, "first_eos_index": 10, "served_past_first_eos": 0, "eos_stop": True}
-    facts = XP._linked_facts(tmp_path)
-
-    def prefix(problems: Any) -> dict:
-        return POP.executed_prefix_of_record("r0", **facts, served=XP._served({"r0": 11}, {"r0"})["r0"], eos_ids=[XP.EOS],
-                                             rule=lambda served, **stated: _with(block, "problems", problems))
-
-    record = prefix(left_out)
-    assert (record["faults"], record["n_exec"], record["r3_one_mechanism"]) == ([], 12, True)
-    assert record["by_rule"]["problems"] == (None if left_out is ABSENT else left_out)
-    assert prefix(["the last served token is no declared EOS"])["faults"] == ["Continuation_v1 rule: the last served token is no declared EOS"]
 
 
-@pytest.mark.parametrize("left_out", [ABSENT, None, 0], ids=["absent", "null", "zero"])
-def test_an_executed_prefix_that_states_no_lag_anchors_its_last_phase_under_lag_0(left_out, tmp_path):
-    """The mixed-stop record's first request, of thirty-two steps: as served, stopping twenty steps short of its last; and served
-    thirty-one tokens, where its lag step is its last step.  Under LAG 0 neither has a lag step, nor has the second where its
-    record states no served length: it is then taken to have run to its last step."""
-    facts = XP._linked_facts(tmp_path)
-    short, reaching = (POP.executed_prefix_of_record("r0", **facts | {"a_r": served, "served_len_commit": served}) for served in (11, 31))
-    for record, served in ((short, 11), (reaching, 31)):
-        anchor, stated = POP.phase_anchor(32, _with(record, "lag", left_out)), POP.phase_anchor(32, record)
-        assert (record["faults"], record["n_exec"]) == ([], served + 1)
-        assert (anchor["last_step"], anchor["lag_step"], "is the lag step" in anchor["why"]) == (served, None, False)
-        assert (stated["last_step"], stated["lag_step"], "is the lag step" in stated["why"]) == (served, served, True)
-    assert POP.phase_anchor(32, _with(short, "lag", left_out))["why"].startswith(
-        "the request stopped at a_r 11 under LAG 0: steps [12, 32) are not executed; its last EXECUTED step 11 is the EOS step (LAG 0: no lag step)")
-    unsaid = POP.phase_anchor(32, _with(reaching, "a_r", ABSENT))
-    assert (unsaid["last_step"], unsaid["lag_step"], "is the lag step" in unsaid["why"]) == (31, None, False)
 
 
 

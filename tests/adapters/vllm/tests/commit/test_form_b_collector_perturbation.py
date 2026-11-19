@@ -112,19 +112,6 @@ def test_collector_row_boundary_off_by_one_observer_unchanged_fails_named(tmp_pa
     assert not any(m["identity"]["op_path"] == "runner.sampler" for m in res["mismatch"])
 
 
-def test_collector_omits_a_request_from_the_row_map_is_a_missing_identity_not_a_pass(tmp_path):
-    """The collector attributes every row to r1 (r0 dropped from step_rows): the map binds the whole packed member to r1 -> the oracle
-    refutes r1's block (8 rows vs 3), and r0 has NO identity in the map at all -- C1 coverage names it (the compare cannot vouch for an
-    identity the collector never bound)."""
-    d, vals = make_match(str(tmp_path))
-    layouts, committed = _collector_layouts(vals)
-    bmap = _map(layouts, {0: [("r1", 0, 8)]})
-    res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))
-    assert res["result"] is False and all(m["identity"]["request_id"] == "r1" for m in res["mismatch"])
-    assert not any(e["identity"]["request_id"] == "r0" for e in bmap["entries"])
-    pop = [B.identity(PD, "r0", 0, 0, "model.embed_tokens", "in", 0, 5), B.identity(PD, "r1", 0, 0, "model.embed_tokens", "in", 0, 3)]
-    cov = B.coverage_check(pop, bmap)
-    assert not cov["ok"] and cov["missing_n"] == 1 and cov["missing"][0]["request_id"] == "r0"
 
 
 def test_perturbation_is_collector_side_only(tmp_path):

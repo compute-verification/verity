@@ -68,49 +68,6 @@ def copies(nbytes: int) -> int:
     return max(2, math.ceil(3 * torch.cuda.get_device_properties(0).L2_cache_size / nbytes))
 
 
-class Layer:
-    """One layer's buffers at T: a served-like qkv buffer, positions, a slot mapping and FA's NHD cache sized to hold T
-    tokens in shuffled blocks."""
-
-    def __init__(self, t: int, seed: int, cs: torch.Tensor):
-        g = torch.Generator(device="cuda").manual_seed(seed)
-        self.t, self.cs = t, cs
-        self.qkv = (torch.randn(t, (H + 2 * KVH) * D, generator=g, device="cuda") * 2.0).bfloat16()
-        self.positions = (torch.arange(t, device="cuda") % SEQ).to(torch.int64)
-        blocks = t // BS + 8
-        order = torch.randperm(blocks, generator=g, device="cuda")
-        i = torch.arange(t, device="cuda")
-        self.slots = (order[i // BS] * BS + i % BS).to(torch.int64)
-        self.kv_cache = torch.zeros(blocks, BS, KVH, 2 * D, dtype=torch.bfloat16, device="cuda").permute(0, 2, 1, 3)
-        q, k, v = self.qkv.split([H * D, KVH * D, KVH * D], dim=-1)
-        self.q, self.k, self.v = q, k, v
-        self.kc, self.vc = self.kv_cache.transpose(1, 2).split(D, dim=-1)
-        self.one = torch.ones(1, dtype=torch.float32, device="cuda")
-
-    def stock(self, part: str = "both"):
-        if part != "cache":
-            torch.ops._C.rotary_embedding(self.positions, self.q, self.k, D, self.cs, True)
-        if part != "rope":
-            torch.ops._C_cache_ops.reshape_and_cache_flash(self.k.view(-1, KVH, D), self.v.view(-1, KVH, D), self.kc, self.vc,
-                                                           self.slots, "auto", self.one, self.one)
-
-    def fused(self, cfg: tuple[int, int] | None = None):
-        from verity_vllm.engine import rope_cache as R
-        kw = {"block_t": cfg[0], "num_warps": cfg[1]} if cfg else {}
-        return R.rope_cache(self.positions, self.q, self.k, self.v, self.cs, self.kc, self.vc, self.slots, **kw)
-
-    def gate(self, cfg: tuple[int, int]) -> dict:
-        from verity_vllm.engine import rope_cache as R
-        qkv0, cache0 = self.qkv.clone(), self.kv_cache.clone()
-        self.stock()
-        want_qkv, want_cache = self.qkv.clone(), self.kv_cache.clone()
-        self.qkv.copy_(qkv0)
-        self.kv_cache.copy_(cache0)
-        launch = self.fused(cfg)
-        ok = torch.equal(bits(self.qkv), bits(want_qkv)) and torch.equal(bits(self.kv_cache), bits(want_cache))
-        self.qkv.copy_(qkv0)
-        self.kv_cache.copy_(cache0)
-        return {"equal": ok, "ptx": R.ptx_check(launch)["ok"]}
 
 
 def timed(fns: dict, seconds: float, clock, calls: dict) -> dict:
@@ -165,76 +122,7 @@ def timed(fns: dict, seconds: float, clock, calls: dict) -> dict:
             for arm, v in us.items()}
 
 
-def each(layers: list[Layer], f):
-    def run():
-        for x in layers:
-            f(x)
-    return run
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--ts", default="8192,16384,32768")
-    ap.add_argument("--sustain", type=float, default=2.0)
-    ap.add_argument("--sweep-seconds", type=float, default=0.3)
-    a = ap.parse_args()
-    a.out.mkdir(parents=True, exist_ok=True)
-    importlib.import_module("vllm._custom_ops")  # registers torch.ops._C and torch.ops._C_cache_ops
-    from verity_vllm.engine import rope_cache as R
-    clock = nvml()
-    dev = torch.cuda.get_device_properties(0)
-    cs = table()
-    engine_cfg = (R.BLOCK_T, R.WARPS)
-    doc: dict = {"device": dev.name, "l2_bytes": dev.L2_cache_size, "H": H, "KVH": KVH, "D": D, "layers": LAYERS, "seq": SEQ,
-                 "block_size": BS, "item_ms": ITEM_MS, "sustain_s": a.sustain, "engine_cfg": engine_cfg,
-                 "fused_bytes_per_token": FUSED_BYTES, "stock_bytes_per_token": STOCK_BYTES, "rows": []}
-    ok = True
-    for t in (int(v) for v in a.ts.split(",")):
-        n = copies(t * (H + 2 * KVH) * D * 2)
-        reps = [Layer(t, 10 + i, cs) for i in range(n)]
-        gates = {f"{bt}x{w}": reps[0].gate((bt, w)) for bt, w in CONFIGS}
-        print(json.dumps({"t": t, "gates": gates}), flush=True)
-        if not all(g["equal"] and g["ptx"] for g in gates.values()):
-            ok = False
-            doc["rows"].append({"t": t, "gates": gates})
-            continue
-        sweep = timed({f"{bt}x{w}": each(reps, lambda x, c=(bt, w): x.fused(c)) for bt, w in CONFIGS}, a.sweep_seconds, clock,
-                      {f"{bt}x{w}": n for bt, w in CONFIGS})
-        best = min(CONFIGS, key=lambda c: sweep[f"{c[0]}x{c[1]}"]["us"])
-        launch = timed({"stock": each(reps, lambda x: x.stock()), "rope_alone": each(reps, lambda x: x.stock("rope")),
-                        "cache_alone": each(reps, lambda x: x.stock("cache")),
-                        "fused_best": each(reps, lambda x, best=best: x.fused(best)),
-                        "fused_engine": each(reps, lambda x: x.fused(engine_cfg))}, a.sustain, clock,
-                       dict.fromkeys(("stock", "rope_alone", "cache_alone", "fused_best", "fused_engine"), n))
-        del reps
-        torch.cuda.empty_cache()
-        layers = [Layer(t, 100 + i, cs) for i in range(LAYERS)]
-        fwd = timed({"forward_stock": each(layers, lambda x: x.stock()),
-                     "forward_fused": each(layers, lambda x: x.fused(engine_cfg))}, a.sustain, clock,
-                    {"forward_stock": 1, "forward_fused": 1})
-        d = launch["stock"]["us"] - launch["fused_engine"]["us"]
-        row = {"t": t, "gates": gates, "copies": n, "best": best, "sweep": sweep, "launch": launch, "forward": fwd,
-               "saving_per_launch_us": d, "saving_per_forward_us_modelled": LAYERS * d,
-               "saving_per_forward_us_timed": fwd["forward_stock"]["us"] - fwd["forward_fused"]["us"],
-               "launches_removed_per_forward": LAYERS,
-               "fused_tb_s": t * FUSED_BYTES / (launch["fused_engine"]["us"] * 1e6),
-               "fused_best_tb_s": t * FUSED_BYTES / (launch["fused_best"]["us"] * 1e6),
-               "rope_tb_s": t * STOCK_BYTES["rope"] / (launch["rope_alone"]["us"] * 1e6),
-               "cache_tb_s": t * STOCK_BYTES["cache"] / (launch["cache_alone"]["us"] * 1e6)}
-        doc["rows"].append(row)
-        print(json.dumps({k: row[k] for k in ("t", "best", "saving_per_launch_us", "saving_per_forward_us_modelled",
-                                              "saving_per_forward_us_timed", "fused_tb_s", "fused_best_tb_s", "rope_tb_s",
-                                              "cache_tb_s")}), flush=True)
-        print(json.dumps({k: round(v["us"], 2) for k, v in {**launch, **fwd}.items()}), flush=True)
-        del layers
-        torch.cuda.empty_cache()
-    doc["ok"] = ok
-    doc["versions"] = {"triton": __import__("triton").__version__, "torch": torch.__version__}
-    (a.out / "rope_cache_gpu.json").write_text(json.dumps(doc, indent=1) + "\n")
-    print(json.dumps({"ok": ok, "out": str(a.out / "rope_cache_gpu.json")}), flush=True)
-    return 0 if ok else 4
 
 
-if __name__ == "__main__":
-    sys.exit(main())

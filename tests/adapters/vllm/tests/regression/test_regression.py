@@ -34,7 +34,6 @@ with the current code, and the two are diffed as canonical JSON on every field t
                           statuses (sha256), declared facts, Program S; the snapshot steps (every engine step)             STRONG   T0
     executed_prefix       executed_prefix_of_record re-run over the record's served tokens / caps / declared EOS + LAG == tokens.json,
                           G6 lengths, eos_stop_requests                                                                               weak*   T0
-    coverage              coverage_check(manifest of record, instrumented layouts) == the Commit's recorded coverage                    STRONG   T0(+manifest)
     commit_summary        commit_summary.summarize re-derivation == recorded (stable fields) + commit/verdict.json lifted as the verdict   STRONG   T0
                           (commit_summary.json is deprecated as a verdict in favour of verdict.json; its execution-configuration fields stay the contract)
     verdict               verdict.json (vllm-verdict/v1; read, or rebuilt in memory from the Commit evidence): outcome == the fixture
@@ -48,7 +47,7 @@ with the current code, and the two are diffed as canonical JSON on every field t
       is false on every row) -- the check catches a v2 that changes a verdict or a count, not one that changes the unexercised branch.
 
 CPU-ONLY.  Every check here runs without a GPU.  T0 inputs are <= ~100 MB per row (the small records); `manifest_digest` needs the
-row's request Programs (50-300 MB of instances.json.gz) and rebuilds for minutes; `coverage` needs the 39-222 MB manifest.json.  T1
+row's request Programs (50-300 MB of instances.json.gz) and rebuilds for minutes.  T1
 needs the multi-GB fold records / binding maps; T2 the Build rebuild.  NONE of it is meant for a laptop: run on a pod.
 
 NOT PINNED BY ANY RECORD (gaps -- do not read a green run as covering these): committed bytes / the arena, opening proofs (counts only),
@@ -117,7 +116,7 @@ def _params():
     for row in resolver.rows():
         for chk in checks.all_checks():
             marks = [pytest.mark.regression]
-            if chk.TIER != "T0" or chk.NAME in ("coverage", "manifest_digest", "step_segmentation", "stoch_value"):
+            if chk.TIER != "T0" or chk.NAME in ("manifest_digest", "step_segmentation", "stoch_value"):
                 marks.append(pytest.mark.pod)
             if chk.STRENGTH == "weak":
                 marks.append(pytest.mark.weak)

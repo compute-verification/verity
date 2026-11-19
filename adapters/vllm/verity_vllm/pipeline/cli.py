@@ -38,7 +38,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "block-counts": ("verity_vllm.program.predict.block_counts", "a day's (c, k)-inference blocks from its served windows' circuit records, judged against its declared n: the judgment public, the counts private"),
     "boundary-plan": ("verity_vllm.pipeline.boundary_plan", "a row's call-boundary check over its Commit's Programs, and the Commit's call-boundary plan, keyed"),
     "build": ("verity_vllm.pipeline.build", "derive one request wrapper's Program (Build step)"),
-    "commit": ("verity_vllm.pipeline.commit", "Commit stage: pairs protocol, commitment root and overhead"),
     "commit-arb": ("verity_vllm.pipeline.commit_arb", "the served Commit under seeded varied traffic, each request's record held to its streamed ids"),
     "commit-plan": ("verity_vllm.pipeline.commit_plan", "a Commit's plan, derived before the GPU: its producer facts, keyed"),
     "commit-replay": ("verity_vllm.pipeline.cpu_replay", "a deferred Commit's C2 replay on CPU, from its sealed replay bundle"),
@@ -62,11 +61,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "ids-front": ("verity_vllm.pipeline.ids_front", "the network attester's id form in front of vLLM's own OpenAI server"),
     "launch-context": ("verity_vllm.pipeline.launch_context", "launch context of a workload's request shapes"),
     "m1-capture": ("verity_vllm.pipeline.match_capture", "capture the observation log under the observer"),
-    "manifest": ("verity_vllm.pipeline.manifest", "the required-value manifest (build, build-global, compare)"),
-    "manifest-verify": ("verity_vllm.pipeline.manifest_verify", "is manifest.json the manifest of record"),
     "match": ("verity_vllm.pipeline.match", "Match stage driver of one configuration"),
     "meta-inventory": ("verity_vllm.engine.meta_inventory", "a checkpoint's modules on the meta device, from its config.json alone"),
-    "neutrality": ("verity_vllm.pipeline.neutrality", "rebuild the rows of record's Programs; fail if a Program digest moved"),
     "norm-tap-build": ("verity_vllm.acquire.norm_tap_src.build_ext", "build or check the norm-scale tap's CUDA op"),
     "predict": ("verity_vllm.program.predict.cli", "ahead-of-time Program prediction from φ, compared with the traced Builds; a switched row's Build"),
     "served-match": ("verity_vllm.pipeline.served_match", "the Match of a served-compiled row on live data: serve committed, Build from the process's own artifact, check"),
@@ -81,7 +77,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "research-outputs": ("verity_vllm.pipeline.research_outputs", "typed outputs of a sweep stage"),
     "research-result": ("verity_vllm.pipeline.research_result", "a sweep row's result.json"),
     "resolve-log": ("verity_vllm.observe.fold.resolve_log", "resolve an observation log against a profile"),
-    "row": ("verity_vllm.pipeline.row", "run a sweep row's stages: Build, Match, Commit (run, stage, chain, shed)"),
     "runtime-tree": ("verity_vllm.observe.runtime_tree", "the runtime's module tree"),
     "serving-rows": ("verity_vllm.pipeline.deferred_rows", "a deferred Commit's serving rows and one-stage registration, from its sealed replay bundle"),
     "source-identity": ("verity_vllm.pipeline.source_identity", "source identity and precheck"),
@@ -99,18 +94,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "workload": ("verity_vllm.pipeline.workload", "the deterministic sweep workload generator"),
     "workload-file": ("verity_vllm.pipeline.workload_file", "workload files fetched by their art ids and checked against SHA256SUMS"),
 }
-
-#: The pod layout's machine paths: the default of an option (``Class.field``) that neither its flag nor its
-#: environment variable sets.
-MACHINE: dict[str, str] = {
-    "RunEnv.py": "/workspace/venv312/bin/python",
-    "RunEnv.sweep_dir": "/workspace/cp/sweep",
-    "RunEnv.hf_home": "/workspace/hf",
-    "RunEnv.build_root": "/workspace/cp",
-    "RunEnv.guard_preserve_file": "/root/dm/guard.preserve",
-    "RunEnv.pod_guard": "/root/dm/pod_guard.sh",
-}
-
 
 def usage() -> str:
     w = max(map(len, COMMANDS))
@@ -136,8 +119,6 @@ def _add_options(parser: argparse.ArgumentParser, cls: type, environ: Mapping[st
             raise TypeError(f"{cls.__name__}.{f.name} is not a config.option")
         flags, kw, env = f.metadata["flags"], dict(f.metadata["kw"]), f.metadata["env"]
         positional = not flags[0].startswith("-")
-        if f"{cls.__name__}.{f.name}" in MACHINE:
-            kw["default"] = MACHINE[f"{cls.__name__}.{f.name}"]
         if env is not None:
             value = environ.get(env)
             if value is not None and (value != "" or f.metadata["env_empty"]):

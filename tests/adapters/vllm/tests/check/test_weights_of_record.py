@@ -787,33 +787,6 @@ def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equali
     assert cli.main(["weights-of-record", "--programs-root", str(tmp_path / "empty"), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(tmp_path / "x.json")]) == 2
 
 
-@pytest.mark.usefixtures("code_versions_stood_in")
-def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersedes(checkpoint, tmp_path, monkeypatch):
-    """A record the CLI writes carries `derived` = {tool, code (git HEAD or null), at, sources (Program files, checkpoint
-    dir, checkpoints.json), argv, supersedes}; check() ignores it (digests are the evidence).  argv is the command's own flags, as the
-    process `verity-vllm weights-of-record ...` sees them."""
-    from verity_vllm.pipeline import row_records as R
-
-    d, man, t = checkpoint
-    prog, fields = _program()
-    pdir = tmp_path / "build_request_LP9_T2"
-    _write_program(pdir, prog, "d" * 128, 9, 2)
-    stale = pdir / "weights_of_record.stale-20260920T042250Z.json"
-    stale.write_text(json.dumps({"schema": WR.SCHEMA_V1, "program_digest": "d" * 128, "complete": True, "unpinned": []}))
-    out = pdir / "weights_of_record.json"
-    argv = ["--program-dir", str(pdir), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(out), f"--supersedes={stale}"]
-    monkeypatch.setattr("sys.argv", ["verity-vllm", "weights-of-record", *argv])
-    assert cli.main() == 0
-    rec = json.loads(Path(out).read_text())
-    dv = rec["derived"]
-    assert dv["tool"] == "verity_vllm.check.weights_of_record" and dv["supersedes"] == str(stale) and dv["argv"] == argv
-    assert dv["sources"]["program_dir"] == str(pdir) and dv["sources"]["program_files"] == ["instances.json.gz", "result.json"]
-    assert dv["sources"]["checkpoint_dir"] == str(d) and dv["sources"]["checkpoints_manifest"] == str(man)
-    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", dv["at"]) and (dv["code"] is None or re.fullmatch(r"[0-9a-f]{40}", dv["code"]))
-    assert WR.check(rec, live_digests(_served(t, fields)), program_digests_of_record={"d" * 128})["result"] is True
-    # the row's reuse rule accepts the freshly derived record (current schema, this Program)
-    (pdir / "result.json").write_text(json.dumps({"ok": True, "program_digest": "d" * 128, "LP": 9, "T": 2}))
-    assert R.wor_stale(str(out), str(pdir / "result.json"), WR.SCHEMA) == ""
 
 
 def test_provenance_names_why_the_code_is_null_or_came_from_the_git_fallback(tmp_path, monkeypatch):

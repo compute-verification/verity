@@ -13,13 +13,11 @@ from pathlib import Path
 import pytest
 
 from tests.acquire.call_boundary_programs import LP, PF, build_dir, dense_program
-from tests.pipeline.test_row import _built, _row
 from verity_vllm.acquire.sources import call_boundary_plan as CBP
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.pipeline import boundary_plan as BP
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import commit_plan as CP
-from verity_vllm.pipeline import row_plan as RP
 from verity_vllm.pipeline.timeline import Timeline
 
 
@@ -136,47 +134,6 @@ def test_the_commit_s_parser_takes_the_call_boundary_plan(tmp_path):
 
 
 # ------------------------------------------------------------------------------------------------------------------ the row's Build
-@pytest.mark.usefixtures("gnu_timeout")
-def test_the_builds_check_leaves_the_plan_the_commit_stage_passes_under_the_commits_key(tmp_path, monkeypatch):
-    """After a PASS Build the row's check is `boundary-plan` over the Programs the Commit reads: `call_boundaries.json` and the verdict
-    line as before, and the plan keyed by the workload, manifest, Program digest and Programs the Commit stage names, which passes it."""
-    r = _row(tmp_path, "--stages", "build,match")
-    man = _built(r, monkeypatch)
-    monkeypatch.setattr(r, "match", lambda: None)
-    Path(RP.boundary_path(r)).write_text("{}")                                     # an earlier attempt's plan
-    cmd = RP.call_boundaries_cmd(r)
-    assert cmd[cmd.index("boundary-plan") + 1:] == ["--workload", r.wl, "--required-manifest", f"{r.d}/manifest.json", "--program-dir",
-                                                    f"{r.d}/build_request", "--gate-out", f"{r.d}/call_boundaries.json", "--out", RP.boundary_path(r)]
-    assert not Path(RP.boundary_path(r)).exists()
-    assert r.run() == 0
-    n = sum(1 for x in man["identities"] if x["family"] == "call_boundaries")
-    gate = (Path(r.d) / "stages.txt").read_text().splitlines()[1].split(" ", 3)
-    assert gate[:2] == ["build-call-boundaries", "PASS"] and gate[3].startswith(f"identities={n} claimed=0 covered={n} uncovered=0 ")
-    assert json.loads((Path(r.d) / "call_boundaries.json").read_text())["covered"] == n
-    doc = json.loads(Path(RP.boundary_path(r)).read_text())
-    args = types.SimpleNamespace(workload=os.path.join(r.tree, r.wl), required_manifest=f"{r.d}/manifest.json", program_digest=None,
-                                 program_dir=f"{r.d}/build_request", programs_root=None)
-    assert doc["schema"] == BP.SCHEMA and doc["key"] == CP.key(args) and doc["plan"]["identities"] == n
-    monkeypatch.setattr(r, "weights_of_record", lambda stage="commit": [])
-    flags = RP.commit_flags(r)
-    assert flags[flags.index("--call-boundary-plan") + 1] == RP.boundary_path(r)
 
 
-def test_a_row_without_the_builds_programs_checks_the_row_dir(tmp_path, monkeypatch):
-    r = _row(tmp_path)
-    r.B = 1
-    Path(RP.boundary_path(r)).write_text("{}")
-    assert RP.call_boundaries_cmd(r) is None and not Path(RP.boundary_path(r)).exists()
-    ran = []
-
-    def run_tl(stage, to, lf, cmd, *extra):
-        ran.append(cmd)
-        Path(lf).write_text("line\n")
-        return 0
-
-    monkeypatch.setattr(r, "run_tl", run_tl)
-    r.call_boundaries(60)
-    assert ran[0][ran[0].index("gate"):] == ["gate", "call-boundaries", r.d, "--out", f"{r.d}/call_boundaries.json"]
-    monkeypatch.setattr(r, "weights_of_record", lambda stage="commit": [])
-    assert "--call-boundary-plan" not in RP.commit_flags(r)
 

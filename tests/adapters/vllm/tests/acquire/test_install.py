@@ -91,10 +91,6 @@ def row(family, op, member, step=0, **extra):
             "element_range": [0, 4], "rank": 0, **extra}
 
 
-def make(rows, model, runner):
-    man = {"schema": RM.SCHEMA, "program_digest": PD, "identities": rows, "manifest_digest": RM.manifest_digest(rows), "wrapper_prefix": "", "op_path_aliases": {}}
-    rt = runtime_tree_of(model, runner, source="tiny")
-    return P.acquisition_plan(man, AcquireCorrespondence(rt), tables=TABLES), rt
 
 
 def base_rows():
@@ -104,98 +100,16 @@ def base_rows():
             row("weights", "logits.weight", "weight", step="*", dtype="f32")]
 
 
-def test_installs_exactly_the_sites_and_observes_them():
-    torch.manual_seed(0)
-    model, runner = Tiny(), Runner()
-    plan, rt = make(base_rows(), model, runner)
-    assert plan.complete, [v.why for v in plan.unsupported]
-    sink = OccurrenceSink()
-    inst = observe(plan, model, runner, sink)
-    expect = [("blocks.0.norm", "producer_output", "0"), ("blocks.0.norm", "producer_output", "1"), ("blocks.0.proj", "producer_output", "out"),
-              ("embed", "consumer_input", "in[0]"), ("embed", "producer_output", "out"), ("logits", "producer_output", "out"),
-              ("runner.sampler", "runner_return", ".sampled_token_ids")]
-    assert inst.keys() == expect and inst.keys() == [h.key() for h in plan.hooks()]
-    assert [s.key() for s in inst.deferred] == [("logits.weight", "registered_input", "weight")]
-    # the class table would also hook `blocks.0.extra` (a Linear): the plan does not
-    assert not any(s.module == "blocks.0.extra" for s in inst.installed)
-    assert len(model.blocks[0].extra._forward_hooks) == 0 and len(model.blocks[0].proj._forward_hooks) == 1 and len(model.embed._forward_pre_hooks) == 1
-    ids = torch.tensor([[1, 2, 3]])
-    for _ in range(2):
-        out = model(ids)
-        runner.sample(out)
-    assert {k: v for k, v in sink.counts.items()} == {k: 2 for k in expect}
-    assert sink.shapes[("blocks.0.norm", "producer_output", "1")] == [[1, 3, 4]] and sink.shapes[("embed", "consumer_input", "in[0]")] == [[1, 3]]
-    assert sink.shapes[("runner.sampler", "runner_return", ".sampled_token_ids")] == [[1, 3]] and sink.dtypes[("embed", "consumer_input", "in[0]")] == {"int64"}
-    doc = sink.to_json()
-    assert doc["schema"] == "verity-vllm/acquisition-observed/v1"
-    assert [(s["module"], s["kind"], s["slot"]) for s in doc["sites"]] == expect and all(s["occurrences"] == 2 for s in doc["sites"])
-    inst.remove()
-    assert len(model.blocks[0].proj._forward_hooks) == 0 and len(model.embed._forward_pre_hooks) == 0
-    assert isinstance(runner.sample, types.MethodType) and runner.sample.__func__ is Runner.sample
-    model(ids)
-    runner.sample(out)
-    assert sink.counts[("logits", "producer_output", "out")] == 2          # nothing fires after remove()
 
 
-def test_a_second_installation_on_the_runner_observes_its_own_sites_alone():
-    model, runner = Tiny(), Runner()
-    plan, _ = make(base_rows(), model, runner)
-    observe(plan, model, runner, OccurrenceSink()).remove()
-    sink = OccurrenceSink()
-    inst = observe(plan, model, runner, sink)
-    runner.sample(model(torch.tensor([[1, 2, 3]])))
-    assert sink.counts[("runner.sampler", "runner_return", ".sampled_token_ids")] == 1 and set(sink.counts.values()) == {1}
-    inst.remove()
-    assert isinstance(runner.sample, types.MethodType) and runner.sample.__func__ is Runner.sample
 
 
-def test_a_whole_return_site_of_a_module_returning_several_records_each_tensor():
-    model, runner = Tiny(), Runner()
-    rows = [r for r in base_rows() if r["op_path"] != "blocks.0.norm"] + [row("instance_outputs", "blocks.0.norm", "out")]
-    plan, _ = make(rows, model, runner)
-    sink = OccurrenceSink()
-    inst = observe(plan, model, runner, sink)
-    model(torch.tensor([[1, 2]]))
-    key = ("blocks.0.norm", "producer_output", "out")
-    assert sink.counts[key] == 1 and sink.shapes[key] == [[1, 2, 4]] and key not in sink.non_tensor
-    sink(("linear", "producer_output", "out"), (torch.zeros(3, 2, dtype=torch.bfloat16), None))
-    assert sink.shapes[("linear", "producer_output", "out")] == [[3, 2]] and sink.dtypes[("linear", "producer_output", "out")] == {"bfloat16"}
-    inst.remove()
 
 
-def test_refuses_a_plan_for_another_runtime():
-    model, runner = Tiny(), Runner()
-    plan, _ = make(base_rows(), model, runner)
-    other = nn.Sequential(nn.Linear(4, 4))
-    with pytest.raises(IncompletePlan, match="not in the built runtime"):
-        install_from_plan(plan, other, runner)
-    assert all(len(m._forward_hooks) == 0 and len(m._forward_pre_hooks) == 0 for m in other.modules())     # nothing left half-installed
-    # a runner without sample(): the runner_return site cannot be installed
-    with pytest.raises(IncompletePlan):
-        install_from_plan(plan, model, object())
 
 
-def test_refuses_incomplete_plan():
-    model, runner = Tiny(), Runner()
-    plan, _ = make(base_rows() + [row("instance_outputs", "blocks.0.gone", "out")], model, runner)
-    assert not plan.complete
-    with pytest.raises(IncompletePlan, match="unsupported"):
-        install_from_plan(plan, model, runner)
 
 
-def test_a_selection_refuses_what_an_install_refuses():
-    model, runner = Tiny(), Runner()
-    plan, _ = make(base_rows(), model, runner)
-    assert plan_selection(plan, model) == (["embed", "blocks.0.norm", "blocks.0.proj", "logits"], ["embed"])
-    with pytest.raises(IncompletePlan, match=r"^no model to install on$"):
-        plan_selection(plan, None)
-    with pytest.raises(IncompletePlan, match=r"^plan hook sites not in the built model: \['blocks.0.norm', 'blocks.0.proj', 'embed', 'logits', 'embed'\]$"):
-        plan_selection(plan, nn.Sequential(nn.Linear(4, 4)))
-    with pytest.raises(IncompletePlan, match=r"^the committer has no model to install on$"):
-        apply_plan_to_committer(types.SimpleNamespace(), plan)
-    gone, _ = make(base_rows() + [row("instance_outputs", "blocks.0.gone", "out")], model, runner)
-    with pytest.raises(IncompletePlan, match=r"^1 unsupported Value\(s\): blocks.0.gone/out: no legal site: producer_output at blocks.0.gone/out: "):
-        plan_selection(gone, model)
 
 
 def test_an_occurrence_that_holds_no_tensor_is_counted_apart():
@@ -223,14 +137,3 @@ def test_a_site_whose_slot_names_no_place_of_its_call_hands_the_sink_nothing():
     inst.remove()
 
 
-def test_promoted_consumer_pre_hook_only():
-    model, runner = Tiny(), Runner()
-    rows = base_rows() + [row("instance_outputs", "blocks.0", RM.PROMOTED_MEMBER, **RM.promoted_annotations({"rows": 3, "width": 4, "dtype": "f32", "spec": "Add_v1", "consumers": ["logits"]}))]
-    plan, _ = make(rows, model, runner)
-    assert plan.complete
-    sink = OccurrenceSink()
-    inst = observe(plan, model, runner, sink)
-    assert ("logits", "consumer_input", "in[0]") in set(inst.keys()) and not any(s.module == "blocks.0" for s in inst.installed)
-    model(torch.tensor([[1, 2]]))
-    assert sink.counts[("logits", "consumer_input", "in[0]")] == 1 and sink.shapes[("logits", "consumer_input", "in[0]")] == [[1, 2, 4]]
-    inst.remove()

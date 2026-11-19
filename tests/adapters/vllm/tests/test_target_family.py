@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from tests.pipeline.test_row import _row
 from verity_vllm import target_family as tf
 
 TREE = (Path(__file__).resolve().parents[4] / "adapters" / "vllm")
@@ -163,19 +162,6 @@ def test_the_cli_opens_the_build_summary_by_the_name_as_it_is_handed(tmp_path):
     assert [[m["fact"] for m in r["mismatches"]] for r in _main_reads(tmp_path, "build_summary")] == [["built"], ["built"]]
 
 
-def test_the_row_match_argv_carries_the_explicit_snapshot_cap_only_when_set(tmp_path):
-    """--snapshot-max-bytes N (MATCH_SNAP_MAX_BYTES) arms the Match's cap; unset -> the argv without it."""
-
-    def argv(*flags, environ=None):
-        r = _row(tmp_path, *flags, environ=environ)
-        r.B, r.ck, r.snap_def, r.snap_steps = 1, "/tmp/ck", "0,1", None
-        return r.match_cmd()
-    unset = argv()
-    assert "--snapshot-max-bytes" not in unset
-    for st in (argv("--snapshot-max-bytes", "33554432"), argv(environ={"MATCH_SNAP_MAX_BYTES": "33554432"})):
-        i = st.index("--snapshot-max-bytes")
-        assert st[i + 1] == "33554432" and st[i - 1] == "0,1" and st[i + 2] == "--skip"
-        assert [x for x in st if x != "--snapshot-max-bytes" and x != "33554432"] == unset
 
 
 def test_a_builds_target_reads_a_summary_whose_step_target_or_applicability_is_absent_null_or_empty():

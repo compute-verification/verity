@@ -17,7 +17,6 @@ from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
 
 from verity_vllm.definitions.registry import prims as P
-from verity_vllm.pipeline import manifest as M
 from verity_vllm.query import program_view as PV
 
 F32 = P.F32
@@ -122,14 +121,6 @@ def test_the_hierarchical_analysis_is_the_gate_by_gate_one(fam, statics):
     assert a.total == W.Graph(fn).n
 
 
-def test_the_manifest_build_runs_the_check(tmp_path):
-    inst = _honest()
-    (tmp_path / "instances.json.gz").write_bytes(gzip.compress(json.dumps(inst).encode()))
-    assert M.cross_call_check(str(tmp_path))["ok"]
-    (tmp_path / "instances.json.gz").write_bytes(gzip.compress(json.dumps(_append(inst, [dict(inst["rows"][2], name="dup")])).encode()))
-    with pytest.raises(X.RecomputeViolation, match="dup"):
-        M.cross_call_check(str(tmp_path))
-    assert M.BuildOptions.__dataclass_fields__["cross_call_check"].default is False            # opt-in
 
 
 def test_members_of_a_separable_definition_are_compared():

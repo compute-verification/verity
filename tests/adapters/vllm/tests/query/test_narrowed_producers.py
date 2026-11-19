@@ -31,7 +31,7 @@ from verity_vllm.check.replay.evaluate import evaluate
 from verity_vllm.commit.binding import build_binding_map
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.definitions.registry import b1
-from verity_vllm.query.manifest.bind import Binder, coverage_check
+from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.program_view import from_instances
 from verity_vllm.query.required import request_manifest
 
@@ -103,15 +103,6 @@ def test_the_replay_addresses_each_producer_at_its_own_identity_and_names_a_mani
         assert [(v["op_path"], v["member"]) for v in checks["vus_outside_query"]["first"]] == [(LAST_QKV, member)]
 
 
-def test_the_modules_returned_tensor_binds_the_whole_rows_and_only_a_label_binds_the_narrowed(build):
-    """The tuple slot of `qkv_proj`'s return binds `out`, never the narrowed rows; a committed tensor labelled `out@64` binds
-    those.  With the returned tensor alone, the Commit's coverage names the narrowed rows missing, and only them."""
-    _d, man, _inst = build
-    binder = Binder.of_manifest(man)
-    assert binder.bind(0, [LAST_QKV]) == [(LAST_QKV, "out", 0, "slot")]
-    assert binder.bind(0, [LAST_QKV, f"{LAST_QKV}/out@64"]) == [(LAST_QKV, "out", 0, "slot"), (LAST_QKV, "out@64", 0, "label")]
-    cov = coverage_check(man, {0: [{"name": LAST_QKV, "shape": [LP, 128]}]}, request_id="r0", max_report=10**6)
-    assert [(m["op_path"], m["output_member"]) for m in cov["missing"] if m["op_path"] == LAST_QKV and m["step"] == 0] == [(LAST_QKV, "out@64")]
 
 
 def test_the_manifest_places_the_last_layers_prompt_identities_at_the_last_runtime_row(build):
@@ -241,17 +232,3 @@ def test_the_committed_words_of_the_narrowed_and_the_last_rows_are_the_programs_
     assert words[LAST_QKV][:128].tolist() != program[LP - 1].tolist()
 
 
-def test_a_share_without_the_runtime_row_is_refused_and_coverage_names_it(build):
-    """A committed qkv of one row (a committer that kept only the identity's rows) has no row LP - 1: the binding map refuses its
-    entry by name, and coverage names the whole rows missing while the narrowed rows stay covered."""
-    _d, man, _inst = build
-    metas = [SimpleNamespace(name=LAST_QKV, shape=(1, 128), chunk=256, stream_off=0, first_leaf=0, nbytes=256, dtype="bf16", ordinal=0)]
-    bmap = build_binding_map({0: metas}, [], bytes(64), man["program_digest"], binder=Binder.of_manifest(man))
-    assert [e.get("refused") for e in bmap["entries"]] == [
-        f"{LAST_QKV}: r0's values start at its row {LP - 1}; its share is rows [0, 1): bound to no row"]
-    layouts = {0: [{"name": LAST_QKV, "shape": [1, 128]}, {"name": f"{LAST_QKV}/out@64", "shape": [LP, 64]}]}
-    cov = coverage_check(man, layouts, request_id="r0", max_report=10**6)
-    assert [(m["op_path"], m["output_member"]) for m in cov["missing"] if m["op_path"] == LAST_QKV and m["step"] == 0] == [(LAST_QKV, "out")]
-    layouts[0][0]["shape"] = [LP, 128]
-    cov = coverage_check(man, layouts, request_id="r0", max_report=10**6)
-    assert not [m for m in cov["missing"] if m["op_path"] == LAST_QKV and m["step"] == 0]

@@ -19,14 +19,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
-from tests.check.test_absent_commit_fields import ABSENT, put
-from tests.check.test_absent_link_fields import NOTHING, left_out
-from tests.check.test_oracle_compare import U0, U1, H, make_bmap, make_match, reader
 from verity_vllm.check import match_oracle as MO
 from verity_vllm.check import oracle_compare as OC
 from verity_vllm.observe.events import DTYPE_BYTES
 from verity_vllm.records.fields import RecordError
+
+from tests.check.test_absent_commit_fields import ABSENT, NOTHING, left_out, put
+from tests.check.test_oracle_compare import U0, U1, H, make_bmap, make_match, reader
 
 EMBED, NORM = "model.embed_tokens", "model.layers.0.post_attention_layernorm"
 #: the record's files: its path under the Match directory, and whether it holds a document a line

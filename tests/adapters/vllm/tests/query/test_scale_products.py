@@ -22,7 +22,6 @@ from verity_vllm.check import oracle_compare as OC
 from verity_vllm.check.replay import coverage
 from verity_vllm.definitions.numerics import fp8_twins
 from verity_vllm.definitions.registry import fp8
-from verity_vllm.pipeline import manifest as M
 from verity_vllm.query import program_view as PV
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query.manifest import format as fmt
@@ -109,11 +108,3 @@ def test_manifest_sites_refuses_two_geometries_at_one_site():
         SP.manifest_sites(man)
 
 
-def test_the_family_is_in_every_vocabulary():
-    assert SP.FAMILY in fmt.FAMILIES and plan.ROUTE_OF_FAMILY[SP.FAMILY] == "scale_tap" and SP.FAMILY in coverage.QUERY_FAMILY_MECHANISM
-    assert M.DEFAULT_TAPS == (SP.POLICY,)
-    entry = {"identity": {"op_path": DN, "output_member": SP.MEMBER}, "name": f"{DN}/{SP.MEMBER}"}
-    assert OC._family_of(entry) == "hidden_stream"
-    g = {"family": fp8.ScaledMmFp8BlockSharedScale.id, "statics": {"K": 256, "N": 384, "G": 128},
-         "definition": f"{fp8.ScaledMmFp8BlockSharedScale.id}{{K=256,N=384,G=128}}", "calls": 3, "where": DN}
-    assert W_.check_calls([g], acquired=SP.TAP_WORDS, specialize=PV.specialization)["acquired_interior_words"] == 3 * 3 * 2

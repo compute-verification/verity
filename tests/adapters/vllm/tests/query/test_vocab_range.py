@@ -69,10 +69,3 @@ def test_manifest_sites_refuses_two_ranges_at_one_site():
         VR.manifest_sites(man)
 
 
-def test_the_family_is_in_every_vocabulary():
-    assert VR.FAMILY in fmt.FAMILIES and plan.ROUTE_OF_FAMILY[VR.FAMILY] == "vocab_tap" and VR.FAMILY in coverage.QUERY_FAMILY_MECHANISM
-    entry = {"identity": {"op_path": "model.embed_tokens", "output_member": VR.MEMBER}, "name": f"model.embed_tokens/{VR.MEMBER}"}
-    assert OC._family_of(entry) == "hidden_stream"
-    g = {"family": "EmbeddingShard_v1", "statics": {"VS": 8, "H": 32, "START": 8}, "definition": "EmbeddingShard_v1{VS=8,H=32,START=8}",
-         "calls": 3, "where": "model.embed_tokens"}
-    assert W_.check_calls([g], acquired=VR.TAP_WORDS, specialize=PV.specialization)["acquired_interior_words"] == 9

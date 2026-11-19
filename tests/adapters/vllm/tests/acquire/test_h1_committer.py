@@ -1,7 +1,7 @@
 """`verity_vllm.acquire.h1_commit.committer` on CPU, with a stand-in for the windowed collector's class that keeps what it is
 built with and what the environment says of retention as it is built.
 
-It catches H1's committer built another way than the declared Commit's collector (`pipeline.commit`'s native_collect_v2b, with
+It catches H1's committer built another way than the declared Commit's collector (`serve_seal`'s native_collect_v2b, with
 its wrap and no arena size, as `pipeline.served_match` builds it), on another engine or run than the one given, or under
 another scheme than rows-sha512, whose roots H1 binds; and a collector built before retention is set, or over a retention the
 environment names (an empty one too, which the collector refuses by name): left to itself H1's collector retains its values
@@ -16,7 +16,7 @@ import pytest
 from verity_vllm import settings
 from verity_vllm.acquire import h1_commit as HC
 from verity_vllm.commit.committer import native_collect as NC
-from verity_vllm.pipeline import commit as PC
+from verity_vllm.pipeline import serve_seal as PC
 
 
 class Collector:

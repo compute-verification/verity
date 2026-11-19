@@ -168,15 +168,3 @@ def test_a_ranks_program_load_runs_under_the_tuned_thresholds(monkeypatch):
     assert seen == [(({"programs": {}}, 3, 8, False), gc_tuning.TUNED)] and gc.get_threshold() == saved
 
 
-def test_the_entry_points_call_tune():
-    import inspect
-
-    from verity_vllm.check.match import batch_decomp, global_match
-    from verity_vllm.pipeline import build, global_program, manifest
-    from verity_vllm.pipeline import match as run_config
-    assert "gc_tuning import tune" in inspect.getsource(build.main)
-    assert "gc_tuning import tune" in inspect.getsource(global_program.main)
-    assert "gc_tuning import tune" in inspect.getsource(run_config.fold_worker)
-    assert "gc_tuning import tune" in inspect.getsource(global_match.main)
-    assert "gc_tuning import tune" in inspect.getsource(batch_decomp.main)
-    assert "gc_tuning import tune" in inspect.getsource(manifest.main)

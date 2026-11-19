@@ -9,11 +9,11 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
-
-from tests.check.test_verdict import _base, _both
 from verity_vllm.check import commit_rules as CR
 from verity_vllm.check import verdict as V
 from verity_vllm.check.commit_pass import commit_verdict
+
+from tests.check.test_verdict import _base, _both
 
 ABSENT = object()   # a field its record leaves out, beside the null and the empty one
 SCOPED = "PASS (C2 population scope (query of record Q_module (older header)): )"
@@ -206,3 +206,15 @@ def test_a_declaration_that_lists_no_class_covers_none(declaration):
 @pytest.mark.parametrize("stated", [ABSENT, None, {}])
 def test_a_binding_that_states_no_population_openings_passes_on_its_coverage(stated):
     assert CR.binding_check(put(_base()["binding"], ("openings_population",), stated)) == (True, "PASS")
+
+
+#: every value that tests false: each is nothing stated to a reader that takes a value by its truth
+NOTHING: tuple[Any, ...] = (None, {}, [], 0, "", False)
+
+
+def left_out(empty: Any) -> pytest.MarkDecorator:
+    """A field absent, null and empty (`empty`: the empty value of its kind), and every other value that tests false.  The readers
+    take a field by its truth: one that took only an absent or a null field as nothing stated would answer the others differently."""
+    others = {"zero": 0, "no-text": "", "false": False, "no-item": [], "no-key": {}}
+    names = [name for name, value in others.items() if type(value) is not type(empty)]
+    return pytest.mark.parametrize("stated", [ABSENT, None, empty, *(others[name] for name in names)], ids=["absent", "null", "empty", *names])

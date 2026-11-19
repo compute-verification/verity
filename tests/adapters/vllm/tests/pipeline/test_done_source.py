@@ -124,17 +124,6 @@ def test_a_research_row_keeps_its_eos_stops_until_the_index_lists_it(monkeypatch
         C.RowConfig.load(EOS_ROW)
 
 
-def test_the_row_precheck_refuses_a_row_of_record_that_stops_at_eos_before_writing_anything(monkeypatch, tmp_path, capsys):
-    from verity_vllm.pipeline import row
-    _of_record(monkeypatch, tmp_path, SINGLE)
-    sweep = tmp_path / "sweep"
-    env = {**{k: v for k, v in os.environ.items() if k not in ("VERITY_TREE", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID")}, **row_paths(tmp_path)}
-    o = cli.parse("row", ["run", SINGLE, "LLAMA32_1B", "unsloth/Llama-3.2-1B", "9535bd9b", "--sweep-dir", str(sweep), "--py", sys.executable,
-                          "--native-collect-default", str(tmp_path / "nc_build")], env)
-    assert row.run_row(o, "build,match,commit") == 3
-    err = capsys.readouterr().err
-    assert f"PRECHECK_FAIL_DONE_SOURCE: {SINGLE}: a row of record" in err and "its done source is 'eos-token'" in err
-    assert not sweep.exists()
 
 
 def _swept(path: str, row: str) -> str:

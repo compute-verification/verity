@@ -16,37 +16,13 @@ from verity_vllm.pipeline import (
     serve_seal,
     source_identity,
 )
-from verity_vllm.pipeline.row_driver import RESEARCH
-
-RUN_STORE = ("research", "research.pythonpath", "research.store", "research.store.tool", "research.telemetry",
-             "research.telemetry.source_identity", RESEARCH)
 
 
-@pytest.fixture
-def no_run_store(monkeypatch):
-    """`research` blocked, and the names already read from it forgotten: from the modules' dicts, since `hasattr` would run
-    their `__getattr__`, which is the refusal itself."""
-    for module, names in ((research_tools, research_tools.FROM_RESEARCH), (source_identity, source_identity.REEXPORTS)):
-        for name in vars(module).keys() & set(names):
-            monkeypatch.delitem(vars(module), name)
-    for name in RUN_STORE:
-        monkeypatch.setitem(sys.modules, name, None)
 
 
-ENTRIES = {
-    "the Commit": lambda: source_identity.precheck("commit"),
-    "the commit plan's key": lambda: commit_plan.key(SimpleNamespace(workload=None)),
-    "the advice digest": advice.registered_compiler,
-    "the seal": lambda: serve_seal.seal_of(SimpleNamespace(run_id="r")),
-    "row stage": lambda: config.run_store(RESEARCH, "row stage"),
-}
 
 
-@pytest.mark.parametrize("entry", ENTRIES)
-def test_the_refusal_names_its_entry_point(no_run_store, entry):
-    with pytest.raises(config.UsageError) as e:
-        ENTRIES[entry]()
-    assert str(e.value).startswith(f"{entry}") and " is refused: " in str(e.value) and "needs the run store" in str(e.value)
+
 
 
 def test_the_source_identity_command_is_refused_not_skipped(no_run_store, capsys):

@@ -1,7 +1,7 @@
 """The Commit scheme and the sealing of `verity_vllm.pipeline.serve_openai`'s windows.
 
 `committer` builds the server's committer, rows-sha512's (``--scheme``), the declared Commit of record's
-(`pipeline.commit.make_committer`'s ``native_collect_v2b``: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots) with its
+(`make_committer`'s ``native_collect_v2b``: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots) with its
 acquisition over the row's capture plan (`check.capture_plan.captured` over the registered compiler's slot
 Programs) of the row's Build of record (``--row-build``, ``verity-vllm predict row``'s, `serve_row`), built at the serve's start:
 the sources of the values no module returns (`commit_attach.attach_of_plan`) and the plan's hook sets, a shared module's k-th
@@ -77,8 +77,21 @@ SCHEMES = (ROWS,)
 SERVED_WINDOW = "verity-vllm/served-window/v1"
 
 
-#: the committer a declared Commit commits rows-sha512 with (`pipeline.commit`'s default ``--committer``)
+#: the committer a declared Commit commits rows-sha512 with
 DECLARED_COMMITTER = "native_collect_v2b"
+
+
+def make_committer(kind: str, engine: Any, args: Any, run_id: str) -> Any:
+    """The windowed worker (native hook bodies and FA2 tap glue, size-adaptive gather windows, the native worker step), which
+    commits rows-sha512 (`step_rows`) over a ring of device windows; refused (ValueError) for any other ``kind``."""
+    if kind != DECLARED_COMMITTER:
+        raise ValueError(f"--committer {kind}: the Commit's committers are {DECLARED_COMMITTER} (the windowed worker, rows-sha512)")
+    from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
+
+    return NativeCollectCommitter(engine, run_id=run_id, arena_bytes=((args.arena_mb << 20) if args.arena_mb else None), gather=True,
+                                  native_hooks=True, auto_blocks=True, native_worker=True,
+                                  populate_threads=getattr(args, "pinned_populate_threads", None),
+                                  commit_scheme=getattr(args, "commit_scheme", None))
 
 
 def scheme_refusal(opts: Any) -> str | None:
@@ -105,7 +118,7 @@ def scheme_refusal(opts: Any) -> str | None:
 
 
 def committer_args(opts: Any) -> SimpleNamespace:
-    """What `pipeline.commit.make_committer` and `pipeline.commit_attach.attach_of_plan` read of the serve's options."""
+    """What `make_committer` and `pipeline.commit_attach.attach_of_plan` read of the serve's options."""
     from verity_vllm.acquire.sources.taps import TapSources
 
     return SimpleNamespace(arena_mb=0, profile_hooks=False, pinned_populate_threads=None, commit_scheme=opts.scheme,
@@ -185,7 +198,6 @@ def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
     from verity_vllm.commit.committer.host_retention import retain_exclude_families
     from verity_vllm.commit.served_record import SamplerInputsSource
     from verity_vllm.engine.handle import engine_of, model_runner
-    from verity_vllm.pipeline import commit as C
     from verity_vllm.pipeline import commit_attach as CA
     from verity_vllm.pipeline.advice import registered_compiler
 
@@ -196,7 +208,7 @@ def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
     spec = opts.retention.retain_exclude
     if spec:
         settings.put("VERITY_RETAIN_EXCLUDE", spec)
-    com = C.make_committer(DECLARED_COMMITTER, eng, args, run_id)
+    com = make_committer(DECLARED_COMMITTER, eng, args, run_id)
     if spec and set(getattr(com, "retain_exclude", ())) != retain_exclude_families(spec):
         raise RuntimeError(f"--retain-exclude {spec}: the committer {com.name} excludes {sorted(getattr(com, 'retain_exclude', ()))}")
     if com.commit_scheme != opts.scheme:

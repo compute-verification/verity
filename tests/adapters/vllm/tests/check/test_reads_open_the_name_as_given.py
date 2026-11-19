@@ -16,7 +16,6 @@ from tests.check.test_oracle_compare import make_match
 from tests.check.test_verdict import _base, _row_dir
 from tests.check.test_weightsource_mla import _tensors, _write
 from verity_vllm.check import checkpoint_index as CI
-from verity_vllm.check import executed_prefix as EPL
 from verity_vllm.check import match_oracle as MO
 from verity_vllm.check import verdict as V
 from verity_vllm.check import weights_of_record as WR
@@ -45,15 +44,6 @@ def test_a_checkpoint_index_opens_its_config_by_the_joined_name(tmp_path, opened
     assert (os.path.join(str(tmp_path), "config.json"), "r") in opened
 
 
-def test_the_match_account_opens_its_two_files_by_their_joined_names(tmp_path, opened):
-    match_dir = tmp_path / "attempt" / "match"
-    (match_dir / "capture").mkdir(parents=True)
-    (match_dir / "capture" / "tokens.json").write_text('{"requests": []}')
-    (tmp_path / "attempt" / "global_match.json").write_text("{}")
-    account = EPL.load_match_account(str(match_dir))
-    assert account["tokens"] == {"requests": []}
-    assert (os.path.join(str(match_dir), "capture", "tokens.json"), "rb") in opened
-    assert (os.path.join(str(tmp_path / "attempt"), "global_match.json"), "rb") in opened
 
 
 def test_a_verdict_opens_a_wrappers_result_by_the_name_the_glob_found(tmp_path, opened):

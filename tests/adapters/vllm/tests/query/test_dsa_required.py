@@ -23,7 +23,6 @@ from verity_vllm.acquire.sources import attention_source as AS
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.definitions.registry import hopper
-from verity_vllm.pipeline import manifest as M
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa
 from verity_vllm.program.frontend.rules.vocab import PROFILES
@@ -135,37 +134,8 @@ def test_the_indexers_logits_and_top_k_are_unreturned_and_not_required(glm):
     assert {r["spec"].split("{")[0] for r in boundaries} == CALL_BOUNDARIES and all(AS.claims(r) == AS.BINDER for r in boundaries)
 
 
-def test_the_word_check_skips_the_unreturned_indexer_calls(glm):
-    P, corr, _man = glm
-    r = request_manifest(P, corr, RES, request_id="r0")
-    assert r.unreturned == Population(P, corr).unreturned and r.unreturned
-    dsa = ("DsaMqaLogits_v3", "DsaTopKShortRow_v1")
-    def flagged(unreturned):
-        wc = M.word_check(P, corr, r.required, "16/32", strict=False, unreturned=unreturned)
-        return {v["definition"].split("{")[0] for v in wc["violations"]} & set(dsa)
-    assert flagged(frozenset()) == set(dsa) and flagged(r.unreturned) == set()
 
 
-def test_the_manifest_build_word_check_flags_no_indexer_call(glm, tmp_path, monkeypatch):
-    """`manifest.build` as each rank's check runs it, its `16/32` word check included, over the GLM Program: the check it runs names no
-    DSA Call (strict, it raised output-not-committed on the unreturned indexer logits and top-k at the end of every rank's check).  The
-    fixture's own stand-ins (o_proj's `Gemm_v1{N=4}`, the argmax) are no registered Definitions, so the check runs unstrict here."""
-    P, corr, _man = glm
-    (tmp_path / "result.json").write_text(json.dumps(RES))
-    monkeypatch.setattr(M, "from_instances", lambda _path: P)
-    monkeypatch.setattr(M.Correspondence, "of", classmethod(lambda cls, *_a, **_k: corr))
-    checks: list[dict] = []
-    word_check = M.word_check
-
-    def lax_word_check(*a, **k):
-        checks.append(word_check(*a, **{**k, "strict": False}))
-        return checks[-1]
-
-    monkeypatch.setattr(M, "word_check", lax_word_check)
-    man = M.build(str(tmp_path), request_id="r0", word="16/32")
-    (wc,) = checks
-    assert wc["calls"] and man["complete"] is True
-    assert not [v for v in wc["violations"] if v["definition"].startswith(("Dsa", "SparseMla"))], wc["violations"]
 
 
 def test_without_the_runtime_record_the_logits_stay_required():

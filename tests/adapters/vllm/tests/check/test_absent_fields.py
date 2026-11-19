@@ -14,12 +14,6 @@ from typing import Any
 
 import numpy as np
 import pytest
-
-from tests.check.test_gates_fixtures import gate, passing_artifacts, query_use_doc
-from tests.check.test_oracle_compare import make_bmap, make_match, reader
-from tests.check.test_oracle_compare_v2_producers import gemma_like_program
-from tests.check.test_verdict import CLASSES, _base
-from tests.check.test_weights_of_record import write_safetensors
 from verity_vllm.check import checkpoint_index as CI
 from verity_vllm.check import cublas_route_pin, fp8_moe_scales
 from verity_vllm.check import fp8_ue8m0 as U
@@ -30,6 +24,12 @@ from verity_vllm.check import verdict as V
 from verity_vllm.check.component_programs import post_load_tensors
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query import program_view
+
+from tests.check.test_gates_fixtures import gate, passing_artifacts, query_use_doc
+from tests.check.test_oracle_compare import make_bmap, make_match, reader
+from tests.check.test_oracle_compare_v2_producers import gemma_like_program
+from tests.check.test_verdict import CLASSES, _base
+from tests.check.test_weights_of_record import write_safetensors
 
 NO_BLOCK_SIZE = [{}, {"quantization_config": None}, {"quantization_config": {}}]
 PINNED = "GemmF32Out_v1"
