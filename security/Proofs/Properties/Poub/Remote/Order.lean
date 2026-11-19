@@ -157,7 +157,7 @@ theorem close_keeps {s : State} {t' : Int} {now : Nat} {r : Result} {s₁ : Stat
       | exact keep_refl _
       | (apply keep_trans _ (keep_fail _ _ _ _); refine keep_modify _ _ _ ?_; intro; rfl))
   all_goals
-    have _ := ‹receiptSample _ _ _ _ _ = some _›
+    have _ := ‹receiptSample _ _ _ = some _›
     refine ⟨record_of (s := s) ?_ ?_ t, rfl⟩
     · rfl
     · intro v

@@ -35,8 +35,8 @@ namespace Properties.Poub
 theorem acceptSamplesOpenable : AcceptSamplesOpenable := by
   intro reg appends w coin samples openings h
   obtain ⟨sampled, hd, hsz, hk⟩ := acceptChecksOpenings reg appends w coin samples openings h
-  obtain ⟨L, us, hs, hsz', -, hrange, -⟩ := sampleIsSubset _ _ _ _ _ _ hd
-  refine ⟨L, us, hs, fun u hu => ?_⟩
+  obtain ⟨us, hs, hsz', -, hrange, -⟩ := sampleIsSubset _ _ _ _ hd
+  refine ⟨us, hs, fun u hu => ?_⟩
   obtain ⟨k, hk', rfl⟩ := Array.mem_iff_getElem.1 hu
   have hkd : k < sampled.size := by omega
   obtain ⟨hi, hp, hidx⟩ := hrange k hkd
@@ -203,7 +203,7 @@ theorem close_coins {s : State} {c : Array ByteArray} {t : Int} {now : Nat} {r :
     simp only [Bool.or_eq_true, decide_eq_true_eq, not_or] at hb
     have ht : t.toNat < s.windows.size := by omega
     cases h₁
-    rw [hc t.toNat (by simp [sampledOf, ht, Array.getElem_modify]), ‹receiptSample _ _ _ _ _ = some _›] at hres
+    rw [hc t.toNat (by simp [sampledOf, ht, Array.getElem_modify]), ‹receiptSample _ _ _ = some _›] at hres
     cases hres
     rfl
 

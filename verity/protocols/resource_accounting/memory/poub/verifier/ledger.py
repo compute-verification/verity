@@ -224,7 +224,7 @@ def rejection(record: audit.Record) -> Fraction:
         raise ValueError("the record states no samples, the receipts every sample requested, at which the memory "
                          "line's δ charges the sample's rejection (Σ_t k_t/2^64): give the record its session's "
                          "Params.samples")
-    return Fraction(coins.openings_coins(len(record.windows), record.groups_per_coin) * record.samples,
+    return Fraction(coins.draws(len(record.windows), record.groups_per_coin) * record.samples,
                     2 ** REJECTION_LOG2)
 
 
@@ -275,18 +275,18 @@ def binding(record: audit.Record) -> Fraction:
     """The receipts' binding term (`ResourceAccounting.Remote.Sample.Receipts.binding`): the probability that some opened
     receipt was presented with an accepted row other than the one its root holds (`Receipts.held`, the plurality of
     the rows it shows over its window's continuations from the cut before its coin).  Window t's fork finder runs the
-    prover twice from that cut on independent openings coins and checks both runs' openings, q_t = 2·Q +
+    prover twice from that cut on independent samples' coins and checks both runs' openings, q_t = 2·Q +
     2·s_t·`OPENING_HASHES` SHA-512 calls, Q = 2^`audit.QUERIES_LOG2` the prover's budget (`sketch`'s); under
     claim `cr/sha-512` it finds a collision with probability ε_t ≤ q_t²/2^513.
     `ResourceAccounting.Guarantees.Remote.ReceiptsBindingOfCR` proves the term at most Σ_t √(|L_t|·s_t·(ε_t + split_t)),
     L_t a set holding every receipt window t opens at every outcome, s_t the session's sample cap and split_t the chance
     that the two runs' roots differ.  Both are the session's bounds, not one outcome's U_t and s'_t, which follow the
     prover's play: this charges them at `window_receipts` and the record's `samples`.  At `groups_per_coin` g > 1 the
-    term's t is a sample, one openings coin over g windows (`LineHeld`'s `Receipts` over `Node.draws`): ⌈W/g⌉ of them,
+    term's t is a sample, one sample's coins over g windows (`LineHeld`'s `Receipts` over `Node.draws`): ⌈W/g⌉ of them,
     each opening at most g·|L_t| receipts, its windows' together, at the cap s over them.  Where the cut fixes the
     roots, split_t = 0 and the term is Σ_t √(|L_t|·s_t)·q_t/2^256.5 (`Binding.binding_le_of_fixed`), this charge.  The
     prover is sent no coin commitment before the session's end (`coins.Released`, `audit.AuditRun.disclose`), so
-    nothing it holds before a window's openings coin is released depends on that coin; the statement that the play
+    nothing it holds before a window's sample's coins are released depends on that coin; the statement that the play
     then fixes each window's roots by its cut is not yet in Lean, and this charge takes split_t as 0 (the gap
     `binding-split`, `PROTOCOL.md` §8)."""
     if record.samples is None or record.append_coins is None:
@@ -294,7 +294,7 @@ def binding(record: audit.Record) -> Fraction:
                          "which a record no session made doesn't state")
     g = record.groups_per_coin
     L = window_receipts(record.pace, record.blocks, record.append_coins, record.codec.max_blocks)
-    return binding_over(coins.openings_coins(len(record.windows), g), g * L, record.samples, 2 ** audit.QUERIES_LOG2)
+    return binding_over(coins.draws(len(record.windows), g), g * L, record.samples, 2 ** audit.QUERIES_LOG2)
 
 
 @dataclass(frozen=True, slots=True)
