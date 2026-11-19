@@ -99,12 +99,12 @@ MACHINE = ("ubuntu\nnode\nabc\nrow dir /w/r/llama32-1b__int8__h200__tp1__b4\nCUD
 SERVES = "llama-3.2-1b-h200"
 
 
-def a5_out(root: Path, *, stopped: bool = False, steps: str | None = None, prover_log: str | None = None,
+def a5_out(root: Path, *, stopped: bool = False, predicted: object = None, prover_log: str | None = None,
            **summary: object) -> Path:
     out = root / "out"
     (out / "a5" / "a5").mkdir(parents=True)
-    if steps is not None:
-        (out / "steps.txt").write_text(steps)
+    if predicted is not None:
+        (out / "predicted.json").write_text(predicted if isinstance(predicted, str) else json.dumps(predicted))
     if prover_log is not None:
         (out / "a5" / "window" / "proof-server").mkdir(parents=True)
         (out / "a5" / "window" / "proof-server" / "prover-cpu.log").write_text(prover_log)
@@ -334,8 +334,10 @@ def test_a_run_id_is_read_from_the_record_its_fetcher_lands(tmp_path):
 #: `benchmarks/prove/run.py`'s ``LAYER_METRICS``
 IDS = {"benchmarks/proof-layer-prover-seconds": "prover_s", "benchmarks/proof-layer-lean-seconds": "lean_s",
        "benchmarks/proof-layer-proof-bytes": "proof_bytes", "benchmarks/proof-layer-build-seconds": "build_s"}
-STEPS = ("10:00:00Z build: --stages build --config-run 1 --replay-k 460\n10:01:29Z build rc=0\n"
-         "10:01:29Z build cache: no (no Program cache; the JIT caches under /w/a5-llama1b/cache held 0 files before it)\n")
+#: predict row's record as `verity_vllm.program.predict.aot.write_row` writes it
+PREDICTED = {"schema": "verity-vllm/predicted-row/v2", "row": "llama32-1b__int8__h200__tp1__b4", "config": "/w/config.json",
+             "code_version": "c0", "requests": {"build_request_LP8_T4": "d" * 128}, "workload_digest": "e" * 128, "lag": 0,
+             "compiler": {"name": "verity/prove-path/capped-compiler/v0", "digest": "f" * 128}, "secs": 89.0}
 
 
 def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_then_sampling(tmp_path, monkeypatch,
@@ -345,7 +347,7 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
     monkeypatch.setenv("OUT", str(tmp_path / "report"))
     assert main(["prove-layers", "--recursion", str(recursion(tmp_path / "r")),
                  "--zk", str(prove_path_arm(tmp_path / "z", "llama")),
-                 "--sampling", str(a5_out(tmp_path / "s", steps=STEPS))], metrics=IDS) == 0
+                 "--sampling", str(a5_out(tmp_path / "s", predicted=PREDICTED))], metrics=IDS) == 0
     text, line = capsys.readouterr().out.rstrip("\n").rsplit("\n", 1)
     for title in PL.LAYERS.values():
         assert f"| {title} |" in text
@@ -383,33 +385,51 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
 
 
 
-def test_an_a5_runs_build_step_gives_its_wall_and_its_cache_and_its_prover_log_the_batch(tmp_path):
-    """The build step's wall is its start line to its ``rc=0`` line, across midnight too, and the point carries its ``build
-    cache:`` words and the proof blocks the prover's statement holds."""
+def test_an_a5_runs_predicted_row_gives_its_build_seconds_and_compiler_and_its_prover_log_the_batch(tmp_path):
+    """The build's seconds are predict row's record's ``secs``, and the point carries the registered compiler the record
+    names and the proof blocks the prover's statement holds."""
 
     log = "statement rope-head/neox-bf16/pair instances=880\nprove ok\nstatement rope-head/neox-bf16/pair instances=880\n"
-    result = PL.read("sampling", str(a5_out(tmp_path / "a", steps=STEPS, prover_log=log)))
+    result = PL.read("sampling", str(a5_out(tmp_path / "a", predicted=PREDICTED, prover_log=log)))
     assert (result.build_s, result.prover_batch) == (89.0, 880)
-    assert result.build_cache.startswith("no (no Program cache;") and "holds 880 proof blocks, the prover's batch" in result.prover_what
+    assert result.build_compiler == "verity/prove-path/capped-compiler/v0 " + "f" * 128
+    assert "holds 880 proof blocks, the prover's batch" in result.prover_what
     none = [PL.read("flock", None), PL.read("zk", None)]
     (point,) = [m for m in PL.measured([*none, result], {"benchmarks/proof-layer-build-seconds": "build_s"}) if m["value"] is not None]
-    assert point["unit"] == "s a build" and point["extra"]["build_cache"] == result.build_cache
-    assert point["extra"]["prover_batch"] == 880
-    assert "| 89 s a build, wall (steps.txt's build step" in table_lines(PL.render([result]))["with sampling"]
-    late = PL.read("sampling", str(a5_out(tmp_path / "b", steps="23:59:30Z build: x\n00:00:40Z build rc=0\n")))
-    assert (late.build_s, late.build_cache) == (70.0, PL.NOT_STATED)
-    (unstated,) = PL.measured([*none, late], {"benchmarks/proof-layer-build-seconds": "build_s"})[2:]
-    assert unstated["value"] is None and "no build cache: line" in unstated["why"]
+    assert point["unit"] == "s a build" and point["extra"]["build_compiler"] == result.build_compiler
+    assert point["extra"]["prover_batch"] == 880 and "build_cache" not in point["extra"]
+    assert ("| 89 s a build (predicted.json's secs: predict row's Build of record" in
+            table_lines(PL.render([result]))["with sampling"])
 
 
-@pytest.mark.parametrize("steps", ["10:00:00Z build: x\n10:01:00Z build rc=10\n", "10:00:00Z build: x\n", ""])
-def test_a_build_step_with_no_rc_0_gives_no_build_seconds(tmp_path, steps):
-    result = PL.read("sampling", str(a5_out(tmp_path, steps=steps,
-                                            prover_log="statement a instances=4\nstatement b instances=8\n")))
-    assert result.build_s is None and result.prover_batch is None
+V1 = {k: v for k, v in PREDICTED.items() if k != "compiler"} | {
+    "schema": "verity-vllm/predicted-row/v1", "manifest_digest": "a" * 64, "manifest_sha256": "b" * 64,
+    "program_digest": "c" * 64, "identities": 4}
+
+
+@pytest.mark.parametrize(("predicted", "noted"), [
+    (None, False),
+    (V1, True),
+    ({k: v for k, v in PREDICTED.items() if k != "compiler"}, True),
+    (PREDICTED | {"secs": True}, True),
+    (PREDICTED | {"secs": "89"}, True),
+    (PREDICTED | {"compiler": {"name": "verity/prove-path/capped-compiler/v0"}}, True),
+    ("[]", True),
+    ("{", True),
+])
+def test_an_a5_run_without_predict_rows_v2_record_gives_no_build_seconds(tmp_path, predicted, noted):
+    """No record, the manifest's v1 record (its secs a build that wrote the manifest too), or one without its secs and its
+    compiler give no build seconds, a traced build's steps.txt lines beside them or not."""
+
+    out = a5_out(tmp_path, predicted=predicted, prover_log="statement a instances=4\nstatement b instances=8\n")
+    (out / "steps.txt").write_text("10:00:00Z build: --stages build\n10:01:29Z build rc=0\n10:01:29Z build cache: no\n")
+    result = PL.read("sampling", str(out))
+    assert result.build_s is None and result.build_compiler == PL.NOT_STATED and result.prover_batch is None
+    assert any(n.startswith("predicted.json ") for n in result.notes) is noted
     (point,) = PL.measured([PL.read("flock", None), PL.read("zk", None), result],
                            {"benchmarks/proof-layer-build-seconds": "build_s"})[2:]
-    assert point["value"] is None and "no build step's wall" in point["why"]
+    assert point["value"] is None
+    assert point["why"] == "its output holds no predict row's Build of record (predicted.json, verity-vllm/predicted-row/v2)"
 
 def test_a_layer_without_an_accept_or_a_per_block_figure_writes_no_number_under_any_id(tmp_path):
     """A refused Lean verify and an a5 member whose timing is keyed by its chunk's name (no count of its sampled proof
@@ -583,7 +603,8 @@ def test_a_stand_in_result_writes_no_figure_a_proof_block_under_the_metric_ids(t
     results[0].serves = SERVES
     written = PL.measured(results, IDS)
     assert len(written) == 12 and all(m["value"] is None for m in written)
-    assert all(m["why"] == ("its output gives no build step's wall (steps.txt)" if IDS[m["name"]] == "build_s" else
+    assert all(m["why"] == ("its output holds no predict row's Build of record (predicted.json, verity-vllm/predicted-row/v2)"
+                            if IDS[m["name"]] == "build_s" else
                             "stand-in values, never served: its figures are a statement's, not a proof block's") for m in written)
 
 

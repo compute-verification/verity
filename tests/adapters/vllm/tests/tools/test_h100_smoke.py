@@ -63,7 +63,7 @@ def run_dry(tmp_path: Path) -> list[dict]:
     py.chmod(0o755)
     log = tmp_path / "calls.jsonl"
     env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path), "PY": str(py), "STUB_LOG": str(log), "DRY": "1",
-           "SCHEME": "pearl-plus", "PEARLPLUS_TIE": "1", "CARD_SKU": "h100", "TMPDIR": str(tmp_path)}
+           "SCHEME": "pearl-plus", "CARD_SKU": "h100", "TMPDIR": str(tmp_path)}
     p = subprocess.run(["bash", str(tree / SMOKE)], cwd=tree, env=env, capture_output=True, text=True)
     assert p.returncode == 0 and "SMOKE DRY OK" in p.stdout, p.stdout[-2000:] + p.stderr[-2000:]
     return [json.loads(line) for line in log.read_text().splitlines()]
@@ -82,3 +82,9 @@ def test_the_pearl_plus_arm_serves_and_sends_the_fixed_load_as_the_applications_
     verdicts = VERDICTS.read_text()
     assert "--protocols pearl-plus" in verdicts and '"order": "release-order"' in verdicts and "network-attester" in verdicts
     assert re.search(r'serve_load\.py".*\n.*--release "\$release"', verdicts)
+
+
+def test_the_launcher_refuses_the_retired_tie_by_name(tmp_path):
+    env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path), "DRY": "1", "PEARLPLUS_TIE": "1"}
+    p = subprocess.run(["bash", str(ROOT / SMOKE)], env=env, capture_output=True, text=True)
+    assert p.returncode == 3 and "h100_smoke.sh: PEARLPLUS_TIE is retired" in p.stderr, p.stdout + p.stderr

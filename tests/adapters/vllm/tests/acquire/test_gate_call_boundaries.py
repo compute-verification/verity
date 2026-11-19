@@ -62,20 +62,30 @@ def test_a_claim_naming_a_source_the_commit_does_not_attach_stops_the_row_by_nam
     assert rc == 1 and rec["pass"] is False
     assert (rec["claimed"], rec["covered"], rec["uncovered"], rec["unattached"]) == (len(logits), n - len(logits), 0, len(logits))
     r = logits[0]
-    assert line.endswith(f"first: {r['op_path']}/{r['output_member']} of {r['request_id']} @ engine step {r['engine_step']}: claimed by "
-                         f"logits_tap, a source the Commit does not attach")
+    assert line.endswith(f"first: {r['op_path']}/{r['output_member']}: claimed by logits_tap, a source the Commit does not attach")
+
+
+QUANT = {"family": CB.FAMILY, "request_id": "r0", "engine_step": 0, "op_path": "model.layers.0.mlp.down_proj/int8_row_quant",
+         "output_member": "0", "spec": "Int8RowQuant_v1"}
+
+
+def test_an_int8_row_quant_call_boundary_is_claimed_by_the_int8_source_the_commit_attaches(tmp_path):
+    man = _row_dir(tmp_path)
+    n = _cb(man)
+    man = {**man, "identities": [*man["identities"], QUANT]}
+    assert taps.attached(G.classes_of_identities(man)) == ["int8"]
+    rec = G.call_boundaries(man, str(tmp_path))
+    assert rec["pass"] is True and (rec["identities"], rec["claimed"], rec["covered"], rec["uncovered"]) == (n + 1, 1, n, 0)
+    assert rec["sources"] == ["int8", "call_boundary"]
 
 
 def test_a_claim_naming_an_attached_source_passes(tmp_path, monkeypatch):
     man = _row_dir(tmp_path)
-    man = {**man, "identities": [*man["identities"], {"family": "norm_scales"}]}
-    assert "norm_scale" in taps.attached(man)
-    monkeypatch.setattr(CB, "CLAIMS", [lambda r: "norm_scale" if r["op_path"].startswith("logits_processor") else None])
+    man = {**man, "identities": [*man["identities"], QUANT]}
+    monkeypatch.setattr(CB, "CLAIMS", [lambda c: "int8" if c["op_path"].startswith(("logits_processor", "model.layers.0.mlp.down_proj"))
+                                       else None])
     rec = G.call_boundaries(man, str(tmp_path))
-    assert rec["pass"] is True and rec["claimed"] > 0 and rec["covered"] == rec["identities"] - rec["claimed"]
-    monkeypatch.setattr(CB, "CLAIMS", [lambda r: "norm_scale"])
-    rec = G.call_boundaries(man, str(tmp_path))
-    assert rec["pass"] is True and rec["claimed"] == rec["identities"] and rec["sources"] == ["norm_scale"]
+    assert rec["pass"] is True and rec["claimed"] > 1 and rec["covered"] == rec["identities"] - rec["claimed"]
 
 
 def test_a_manifest_naming_no_call_boundaries_passes(tmp_path, capsys):
@@ -102,18 +112,18 @@ def _sparse_mla_manifest(model="zai-org/GLM-5.3", ranks=8):
     return {"ranks": ranks, "fixture": {"model": model}, "identities": ids}
 
 
-def test_the_attention_source_claims_every_sparse_mla_call_boundary_of_glm53_tp8(tmp_path):
+def test_the_attention_source_claims_every_sparse_mla_call_boundary_of_glm53_tp8_and_the_plan_s_road_attaches_it_not(tmp_path):
     man = _sparse_mla_manifest()
-    assert "attention" in taps.attached(man)
+    assert all(G.claimant(r) == "attention" for r in man["identities"])
     rec = G.call_boundaries(man, str(tmp_path))
     n = len(man["identities"])
-    assert rec["pass"] is True and (rec["identities"], rec["claimed"], rec["uncovered"], rec["unattached"]) == (n, n, 0, 0)
-    assert rec["sources"] == ["attention"]
+    assert rec["pass"] is False and (rec["identities"], rec["claimed"], rec["uncovered"], rec["unattached"]) == (n, n, 0, n)
+    assert rec["sources"] == []
 
 
 def test_a_sparse_mla_call_boundary_without_an_attached_attention_source_stops_the_row(tmp_path):
     for man in (_sparse_mla_manifest(model="other/model"), _sparse_mla_manifest(ranks=4)):
-        assert "attention" not in taps.attached(man)
+        assert "attention" not in taps.attached(G.classes_of_identities(man))
         rec = G.call_boundaries(man, str(tmp_path))
         assert rec["pass"] is False and rec["unattached"] == rec["identities"] == len(man["identities"])
         assert rec["named"]["unattached"][0].endswith("claimed by attention, a source the Commit does not attach")
@@ -135,13 +145,13 @@ def _marlin_moe_manifest(ranks=8, planes=False):
     return {"ranks": ranks, "identities": ids + ([{"family": "moe_block_stream"}] if planes else [])}
 
 
-def test_the_moe_source_claims_every_marlin_block_call_boundary_of_dsv4_tp8(tmp_path):
+def test_the_moe_source_claims_every_marlin_block_call_boundary_of_dsv4_tp8_and_the_plan_s_road_attaches_it_not(tmp_path):
     man = _marlin_moe_manifest()
-    assert "moe" in taps.attached(man)
+    assert all(G.claimant(r) == "moe" for r in man["identities"])
     rec = G.call_boundaries(man, str(tmp_path))
     n = len(man["identities"])
-    assert rec["pass"] is True and (rec["identities"], rec["claimed"], rec["uncovered"], rec["unattached"]) == (n, n, 0, 0)
-    assert rec["sources"] == ["moe"]
+    assert rec["pass"] is False and (rec["identities"], rec["claimed"], rec["uncovered"], rec["unattached"]) == (n, n, 0, n)
+    assert rec["sources"] == []
 
 
 def test_a_marlin_block_call_boundary_the_moe_source_binds_no_label_of_is_not_its(tmp_path):
@@ -150,11 +160,12 @@ def test_a_marlin_block_call_boundary_the_moe_source_binds_no_label_of_is_not_it
     assert CB.claimed(man["identities"][0]) is None
     rec = G.call_boundaries(man, str(tmp_path))
     assert rec["pass"] is False and rec["claimed"] == rec["identities"] - 1 and rec["uncovered"] == 1
+    assert rec["unattached"] == rec["claimed"]
 
 
 def test_a_marlin_block_call_boundary_without_the_moe_source_at_calls_stops_the_row(tmp_path):
     for man in (_marlin_moe_manifest(planes=True), _marlin_moe_manifest(ranks=1)):
-        assert "moe" not in taps.attached(man)
+        assert "moe" not in taps.attached(G.classes_of_identities(man))
         rec = G.call_boundaries(man, str(tmp_path))
         n = sum(1 for r in man["identities"] if r["family"] == CB.FAMILY)
         assert rec["pass"] is False and rec["unattached"] == rec["identities"] == n
