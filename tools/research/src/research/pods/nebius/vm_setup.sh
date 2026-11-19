@@ -91,6 +91,11 @@ if [ ! -e "$CC" ] && [ ! -L "$CC" ]; then
 elif [ ! -L "$CC" ]; then
   log "$CC is a directory on the root disk: move it onto /workspace/research/cache with the node's check slots drained"
 fi
+# a login shell's exit status must be the job's: Ubuntu's stock ~/.bash_logout ends in clear_console, which fails with no console
+for f in /etc/skel/.bash_logout /root/.bash_logout /home/*/.bash_logout; do
+  [ -f "$f" ] && grep -q '^ *\[ -x /usr/bin/clear_console \] && /usr/bin/clear_console -q$' "$f" || continue
+  sed -i 's|^\( *\[ -x /usr/bin/clear_console \] && /usr/bin/clear_console -q\)$|\1 \|\| true|' "$f"
+done
 if [ -n "${VY_FS_TAG:-}" ]; then   # a shared filesystem launch.sh attached (NEBIUS_FILESYSTEM_ID), shared by every VM it is attached to
   mkdir -p /workspace/fs
   grep -q ' /workspace/fs ' /etc/fstab || echo "$VY_FS_TAG /workspace/fs virtiofs defaults,nofail 0 0" >> /etc/fstab
