@@ -7,7 +7,7 @@ public import PousVerifier.SetupProtocol
 # PoUS's setup as a sampled proof about the store
 
 `verity/pous/p2/v4/setup-in-proofs` is the setup check that reads no block of `C*`. The setup is one circuit `C`, the
-setup unit `PousP2SetupCheck_v1` over every block of the store, one proof block a block
+setup unit `PousP2SetupCheck_v2` over every block of the store, one proof block a block
 (`verity/protocols/resource_accounting/memory/pous/prover/window.py`, `Setup`); the store's blocks and `W`'s rows are
 its registered values, committed before the run, and the proof system samples `SAMPLE` of the blocks on its live coins
 after that (`samplingDesign`). The check takes the parameters and the commitment as `SetupProtocol` does, and in place of
@@ -64,7 +64,7 @@ unit builds its base from the salt and its block's constants, and its slot is a 
 def notBound : String :=
   "pous setup: no supplied input yet: salt = pous.setup.salt/v1, the memory attester's coin drawn after W is " ++
     "committed, the one value the verifier supplies; unit u builds its base expand_prefix(params, salt) || " ++
-    "u64be(u / S) || u64be(u mod S) inside, its block's u64be(u / S) || u64be(u mod S) and its slot u mod n " ++
+    "u64be(u / S) || u64be(u mod S) inside; its block's u64be(u / S) || u64be(u mod S) and its slot u mod n " ++
     "constants of the unit in C, and its ok a public output held to 1"
 
 /-- The setup check in proofs: the door's acceptance of the sampled blocks of the setup's `C`, refused where `C`'s
