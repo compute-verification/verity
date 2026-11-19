@@ -216,6 +216,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
 from verity.protocols.resource_accounting.compute.pouw.verifier.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, leaf_words, theta_root, weights_root
 from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
@@ -1831,7 +1832,8 @@ def leaf_registered_file(program: str, layout: dict, shape: dict, u: int, statem
     record's root `produced` (``{value: root}``); its known ports `h1window.leaf_known_ports`' (``pub`` of the window's
     Program salt `salt`, position u and the call's roots root(``a/<K>@<s>``) and root(``b/<K>``), ``admit`` every row and
     every ``o0`` the row 1, each its own served value under `leaf_lanes.known_salt`). A read of an A row, a B row or
-    a partials row is marked ``read_in_full``."""
+    a partials row is read in full, which the verifier's `registered.READS_V2` file cannot mark: a statement with one is
+    refused by name (``registration``, `PouwWindow.Lanes.fullHole`), and every leaf statement has one."""
     (r, c), prefix, kind, m = layout["tile"], shape["prefix"], statement[0], layout["m"]
     ln, ch = (statement[1:] + (None, None))[:2]
     at = leaf_place(layout, shape, u, steps)
@@ -1847,6 +1849,10 @@ def leaf_registered_file(program: str, layout: dict, shape: dict, u: int, statem
                                       f"registers {'twice' if roots.get(rc) else 'not'}: a lanes-form call registers "
                                       "its receipt table once, the receipts the combine checks the lanes' XOR against")
     logical = LL.reads(r, c, kind, ln, ch, j10r=k if j10r else None)
+    if full := [port for port, (v, _row) in logical.items() if v in (LL.A, LL.B, LL.PARTIALS)]:
+        return None, ("registration", str(OC.NotDerived(
+            f"a leaf statement's ports [{', '.join(full)}] are read in full, and a {G.READS_V2} port has no "
+            f"{LL.READ_IN_FULL} (Flock.Registered.PORT_KEYS)")))
     values = LL.produced_values(r, c, k, j10r=j10r)
     ports = {}
     for port, (v, row) in logical.items():
