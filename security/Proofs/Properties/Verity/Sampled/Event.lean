@@ -16,9 +16,8 @@ record and proof files is in that event:
 * **v2's verdict, whole** (`verdictOf_event`, `step_event`, `run_event`): a session's verdict accepts only where
   `Zk.verify` accepts, the files' ports and roots pass (`Flock.PortRoots.checkOf`), the files' form and the record's
   sample pass (`Flock.KsScope.checkOf`), and the population check passes.
-* **v2's circuit is the one the events read** (`circuitOf_tmpl`, `statement_zkTags`): V5's event reads
-  `ProvedScope.circuitOf`'s circuit, as v2's checks do, and at a templated statement with hidden outputs, as v2's is,
-  that circuit is `HmOut.parseTmpl`'s, which `PortRoots.check` and `KsScope.check` read.
+* **v2's circuit is the one the events read** (`circuitOf_tmpl`, `statement_zkTags`, in `Sampled`): V5's event
+  reads `ProvedScope.circuitOf`'s circuit, as v2's checks do, and at v2's statement that is `HmOut.parseTmpl`'s.
 * **What acceptance gives** (`Accepted`, `checkBlobsAt_event`, `checkBlobs_event`): at the session's inputs and
   transcript, `AcceptsZK`, the ports and roots check and the form check at the record's sample, the program's proof
   blocks under the verifier's query the record's population `n` in order (`popHeld`), and every public file the
@@ -175,21 +174,6 @@ theorem popHeld_ok {v : _root_.Spot.Docket.Verifier} {record : Json}
     · rename_i hp
       exact ⟨n, hn, hp⟩
     · cases h
-
-/-! ## v2's circuit is the one the events read -/
-
-/-- **At a templated statement with hidden outputs, the circuit v2's checks read is `HmOut.parseTmpl`'s**, which
-`Flock.PortRoots.check` and `Flock.KsScope.check` read. -/
-theorem circuitOf_tmpl {t : Flock.Tags} (hh : t.hiddenOutputs = true) (ht : t.isTmpl = true) (f : ByteArray)
-    (tb : List (String × ByteArray)) : Flock.ProvedScope.circuitOf t f tb = Flock.HmOut.parseTmpl t f tb := by
-  simp only [Flock.ProvedScope.circuitOf, hh, ↓reduceIte, Flock.HmOut.parseCommit, ht]
-
-/-- **v2's statement under `--zk`'s tags has hidden outputs and is templated**, at any mask and table count. -/
-theorem statement_zkTags {t : Flock.Tags} (h : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some t)
-    (m k : ℕ) : (Flock.Zk.tags t m k).hiddenOutputs = true ∧ (Flock.Zk.tags t m k).isTmpl = true := by
-  have htg : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some Flock.Tags.circuitTmpl := rfl
-  obtain rfl := Option.some.inj (htg.symm.trans h)
-  exact ⟨rfl, rfl⟩
 
 /-! ## What acceptance gives -/
 

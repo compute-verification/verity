@@ -137,7 +137,7 @@ structure Live where
   own : Option ByteArray
   ht : I.tags.typed = false
   D : Flock.Desc
-  hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D
+  hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D
   hU : FlockSoundness.Built D.unroll.unit
   /-- the circuit names no public input port -/
   hpi : Flock.HmIn.parse D.unroll = .ok {}
@@ -700,6 +700,32 @@ def circuitFileOf (θ : ByteArray) : ByteArray :=
 theorem circuitFileOf_eq {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp : ParamsAt θ p) {b : ByteArray}
     (hb : p.own.circuitFile = .ok b) : circuitFileOf θ = b := by
   simp only [circuitFileOf, paramsOf_eq hp, Option.bind, hb, Except.toOption, Option.getD_some]
+
+/-! ## v2's circuit -/
+
+/-- **At a templated statement with hidden outputs, the circuit v2's checks read is `HmOut.parseTmpl`'s**, which
+`Flock.PortRoots.check` and `Flock.KsScope.check` read. -/
+theorem circuitOf_tmpl {t : Flock.Tags} (hh : t.hiddenOutputs = true) (ht : t.isTmpl = true) (f : ByteArray)
+    (tb : List (String × ByteArray)) : Flock.ProvedScope.circuitOf t f tb = Flock.HmOut.parseTmpl t f tb := by
+  simp only [Flock.ProvedScope.circuitOf, hh, ↓reduceIte, Flock.HmOut.parseCommit, ht]
+
+/-- **v2's statement under `--zk`'s tags has hidden outputs and is templated**, at any mask and table count. -/
+theorem statement_zkTags {t : Flock.Tags} (h : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some t)
+    (m k : ℕ) : (Flock.Zk.tags t m k).hiddenOutputs = true ∧ (Flock.Zk.tags t m k).isTmpl = true := by
+  have htg : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some Flock.Tags.circuitTmpl := rfl
+  obtain rfl := Option.some.inj (htg.symm.trans h)
+  exact ⟨rfl, rfl⟩
+
+/-- **A templated file's descriptor is `HmOut.parseTmpl`'s circuit**, where `Flock.Desc.parseStmt` reads it. -/
+theorem parseTmpl_of_parseStmt {t : Flock.Tags} {f : ByteArray} {tb : List (String × ByteArray)} {D : Flock.Desc}
+    (hi : t.isTmpl = true) (h : Flock.Desc.parseStmt t f tb = .ok D) :
+    ∃ c, Flock.HmOut.parseTmpl t f tb = .ok c ∧ D = .tmpl c := by
+  simp only [Flock.Desc.parseStmt, hi, ↓reduceIte] at h
+  split at h
+  · next c hc =>
+    cases h
+    exact ⟨c, hc, rfl⟩
+  · cases h
 
 /-- **`A` is the session v2 sets up on the parameters `θ` and the committed files `F`**: v2's parameters in the
 composite's (`ParamsAt`), which name no members, so the session is the one statement's (`single`, `OneStatement`; a
