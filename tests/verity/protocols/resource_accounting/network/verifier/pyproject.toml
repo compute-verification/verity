@@ -7,11 +7,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
-    "test_network_attester_transfer_blocks_lean.py",
-    "test_network_attester_period.py",
     "test_network_attester_relay_lean.py",
     "test_network_attester_registered.py",
-    "test_network_attester_service.py",
     "test_network_attester_tie_service.py",
 ]
 # the served circuits' Definitions (`verity_vllm.definitions`) its tests import, with the package they sit in

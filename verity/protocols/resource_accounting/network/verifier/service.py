@@ -76,8 +76,7 @@ block's public parameters) and ``wit`` (each end's head, its leaf's salt, its tw
 each the little-endian concatenation of its parameters' bits in whole u16 words (`TransferBlocks.layout`,
 `TransferBlocks.row`), and the output row ``o0``, one u16 word holding the two output bits (`OUT_BITS`); each row committed
 under a hiding salt. Its circuit is `TransferBlocks.proof_block`, the registered proof block with each gate the Definition
-its pinned digest names, bound to the registered partition and Program (`verity/protocols/resource_accounting/network/prover/n2_zk.py` proves it
-behind the ZK server).
+its pinned digest names, bound to the registered partition and Program; no prover of the tree proves it.
 
 Its verifier is `TransferBlocks.verify`, which decides on the delivered proof (`Delivered`) and public inputs
 alone. It accepts when

@@ -539,7 +539,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/window.py",
     "verity/protocols/resource_accounting/memory/pous/prover/served_weights.py",
     "verity/protocols/resource_accounting/network/prover/n2_tie_zk.py",
-    "verity/protocols/resource_accounting/network/prover/n2_zk.py",
     "verity/protocols/resource_accounting/network/prover/network_attester_zk.py",
     "verity/protocols/resource_accounting/network/prover/scan_zk.py",
 ]
@@ -932,7 +931,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/io_ids.py",
     "verity/protocols/resource_accounting/network/prover/lengths_row.py",
     "verity/protocols/resource_accounting/network/prover/n2_tie_zk.py",
-    "verity/protocols/resource_accounting/network/prover/n2_zk.py",
     "verity/protocols/resource_accounting/network/prover/network_attester_zk.py",
     "verity/protocols/resource_accounting/network/prover/response_tie.py",
     "verity/protocols/resource_accounting/network/prover/scan_period.py",

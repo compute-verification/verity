@@ -125,7 +125,7 @@ def reads(stream: bytes, rd=None) -> tuple[tuple[tuple[int, int], ...], frozense
     `proof_drivers`' when None."""
     readers, RD = [], rd or proof_drivers.drivers().redigest
     # `transcript_check.R` is swapped process-wide while `redigest.layout` reads: one caller at a time, or a recorder
-    # subclasses another's and stays installed (n2_zk scans its members in threads).
+    # subclasses another's and stays installed (a driver may scan its members in threads).
     with _SWAP:
         class Reads(RD.tc.R):
             def __init__(s, b, hlen=32):

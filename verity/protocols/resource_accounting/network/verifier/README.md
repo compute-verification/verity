@@ -395,8 +395,7 @@ N2's verifier, `TransferBlocks.verify`, decides each execution phase on a `--zk`
 block (`NetworkTransferBlocks` v5) and public inputs alone: its own run of Flock's Lean
 verifier accepts the proof, the proof's public row opens to its own copy of the proof block's public arguments, the
 output row's verdict and deadline bits are 1, and the attestations verify on their public fields (`TransferBlocks.certified`).
-It reads no head, salt or sibling. `verity/protocols/resource_accounting/network/prover/n2_zk.py` proves a
-`../attester/network_attester_serve.py` run's execution phases this way through the link's own stream, and scans what the verifier received. The
+It reads no head, salt or sibling. No prover of the tree proves it. The
 in-the-clear check, `TransferBlocks.clear`, is a debug comparison, off by default. What's open:
 - **The attestations aren't a Spec item.** The verifier receives them in the clear from the network attester, the auditor's
   device, beside the proof system, whose public kinds have none for a trusted device's signature over a hiding

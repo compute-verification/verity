@@ -35,7 +35,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   in the proof system.
 - **Proofs in zero knowledge.** Each driver, in network attestation's `prover/`, proves its
   proof blocks with Flock `prove --zk` behind the Lean ZK server and holds them by the Lean
-  `verity-verify-proof verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of record), `n2_tie_zk.py`
+  `verity-verify-proof verify --zk`: `n2_tie_zk.py`
   (the ingress tie), `scan_zk.py` (the step-indexed scan), `scan_period.py` (the
   scan's answers held by `NetworkCheck.Period`). `leak_scan.py`, in
   `prover/` too, is the scan of what the verifier received that every one of them runs.
@@ -277,12 +277,11 @@ binding and the two provers, and writes `out/report/report.json` and `report.md`
 | custody | each gate run's files against the SHA-512s in its `end.json` | none: a check of files | the files' digests |
 | attestations | each execution phase's two attested records, at the client, under the network attester's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature of the client's kept attestations by the Lean (`NetworkCheck.TransferBlocks.refusals`, `audit.certificate_refusals` its reference), and the Lean's audit (`NetworkCheck.Records`, `audit.Audit` its reference) of the run's attested heads, under no sync (the network attester's link declares none) |
 | endpoint | the endpoint's own advice bound to the run (each Commit period opened to its registered root, rebuilt from the attested I/O off the network attester's cells: `chain_record.py endpoint`) | none: in the clear | all of it |
-| N2 | each execution phase's N2 proof block, proved `--zk` and decided by N2's verifier (`n2_zk.py`); not run on the advice profile, whose egress counts no N2 proof block holds | Selection All: no execution phase unsampled; a sample of k of n execution phases hides at most b incorrect ones except with probability δ (the report's `incorrect_at_delta`) | the registration, the sample, the attestations' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
+| N2 | each execution phase's N2 proof block, proved `--zk` and decided by N2's verifier (no driver proves it: the step is not run); not run on the advice profile, whose egress counts no N2 proof block holds | Selection All: no execution phase unsampled; a sample of k of n execution phases hides at most b incorrect ones except with probability δ (the report's `incorrect_at_delta`) | the registration, the sample, the attestations' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
 | scan | the scan's ingress and egress proof blocks of an execution phase, one registration, `verify --zk --registered` | the audit's `wrong_units` at the sample's sampling design | each proof block's output bit |
 | Lean | every proof of both steps is the verifier's own `verity-verify-proof verify --zk` run | per proof, ε_ks + ε_bind | nothing |
 
-The job's environment picks what it runs: N2's sample on the relay path is `CR_N2_DRAW` (`n2_zk.py prove
---warden-run --draw K`, on the verifier's coins) and any other N2 command is `CR_N2_CMD`, the scan of the gate's own
+The job's environment picks what it runs: N2's command is `CR_N2_CMD` (no driver of the tree proves N2), the scan of the gate's own
 rows is `CR_WARDEN_RUN` with `CR_SCAN_ARGS="--draw K --challenger gate:…"` (`scan_zk.py prove --warden-run`), and the
 client's directory, with its `certificates.jsonl`, is `CR_CLIENT`, by default the network attester rehearsal's own
 `client/`. A step on a stand-in (the scan on its own synthetic run) never makes the report accepted, and a step that
@@ -335,8 +334,7 @@ attested lines. That check requires the session's attested start, so a gate run 
 start is refused here: such a run is read by the chain of the tree its gate ran. The relay signs no clock attestation,
 so none is read. The endpoint step binds the endpoint's own
 advice to the attested I/O read off the relay's cells (`chain_record.py endpoint`, with `CR_EOS_IDS` the model's EOS
-ids). N2 is the plain proof block on the relay's link (`n2_zk.py prove --warden-run`: both heads at the relay's grid and
-parameters digest, no sync declared or charged). The ingress tie (lengths and order, no id) is proved on the relay's
+ids). N2 is the plain proof block on the relay's link, which no driver of the tree proves. The ingress tie (lengths and order, no id) is proved on the relay's
 ingress (`n2_tie_zk.py prove --class warden`, the report's `tie` step), and the scan is `scan_zk.py prove
 --warden-run`'s. Each step is held to the one relay run the attestations step read, and every one is required.
 

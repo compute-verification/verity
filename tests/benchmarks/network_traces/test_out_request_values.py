@@ -96,15 +96,6 @@ def holds_none_of_the_run(out: Path, at: str) -> None:
     assert not any(v in text for v in ("cd" * 64, "ef" * 64, "17" * 64, "salt_c", "wiring", "cost", "head"))
 
 
-def test_n2_zk_publishes_what_the_gate_publishes_of_a_network_attester_run(tmp_path):
-    r, out = tmp_path / "run", tmp_path / "OUT"
-    put(r, NETWORK_ATTESTER_RUN)
-    out.mkdir()
-    got = run(block("n2_zk.sh", 'mkdir -p "$OUT/run"', '"$PY" -m'), RUN=r, OUT=out, PY=sys.executable)
-    assert got.returncode == 0, got.stderr
-    holds_none_of_the_run(out, "run")
-
-
 def test_scan_zk_publishes_what_the_gate_publishes_of_its_own_rehearsal(tmp_path):
     w, out = tmp_path / "W", tmp_path / "OUT"
     put(w / "warden", NETWORK_ATTESTER_RUN)
@@ -216,14 +207,6 @@ N2_RUN = {"summary.json": {"ok": True}, "stager/program.json": {"units": 1}, "st
           "honest/verifier/w000-delivered.json": {"salts": {"0": {"pub": "cd" * 32}}},
           "honest/verifier/w000-outcome.json": {"public": {"verdict": 1}}, "honest/verifier/period.json": {"units": [0]},
           "honest/verifier/w000-pub-1.bin": "p", "honest/verifier/w000-session-s-session.json": {}}
-
-
-def test_n2_zk_keeps_its_summary_and_public_parameters_and_nothing_the_verifier_received(tmp_path):
-    w, out = tmp_path / "W", tmp_path / "OUT"
-    put(w / "n2zk", N2_RUN)
-    got = run(block("n2_zk.sh", 'mkdir -p "$OUT/n2zk"', "  [ -f"), W=w, OUT=out)
-    assert got.returncode == 0, got.stderr
-    assert published(out) == [f"n2zk/{f}" for f in TIE_KEPT]
 
 
 def test_the_chains_n2_and_scan_steps_keep_their_summaries_and_the_scans_program_alone(tmp_path):
@@ -358,12 +341,12 @@ def test_scan_period_reads_every_file_it_opens_from_the_scans_private_keep(tmp_p
 
 
 def test_each_runner_fails_by_name_when_the_publisher_fails(tmp_path):
-    """The four runners that publish a network attester run stop, by name, when the publisher exits nonzero, rather
+    """The three runners that publish a network attester run stop, by name, when the publisher exits nonzero, rather
     than going on with an empty outcome.json."""
     (py := tmp_path / "py").write_text("#!/bin/sh\nexit 3\n")
     py.chmod(0o755)
-    for script, first in (("capture_loopback.sh", 'mkdir -p "$OUT/run"'), ("n2_zk.sh", 'mkdir -p "$OUT/run"'),
-                          ("network_attester_zk.sh", 'mkdir -p "$OUT/run"'), ("scan_zk.sh", '  mkdir -p "$OUT/warden"')):
+    for script, first in (("capture_loopback.sh", 'mkdir -p "$OUT/run"'), ("network_attester_zk.sh", 'mkdir -p "$OUT/run"'),
+                          ("scan_zk.sh", '  mkdir -p "$OUT/warden"')):
         out = tmp_path / script / "OUT"
         out.mkdir(parents=True)
         got = run(block(script, first, first.split("mkdir")[0] + '"$PY" -m') + "echo went on\n",
