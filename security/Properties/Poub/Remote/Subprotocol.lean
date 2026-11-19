@@ -264,7 +264,7 @@ def honestParams : Poub.Protocol.Params where
     ("min_passes", (1 : ℕ)), ("pace", .null), ("samples", (33273 : ℕ)), ("window_ns", (100000000 : ℕ)),
     ("windows", (2 : ℕ))]
 
-/-- The log of `honestParams`' session before its first event: its two challenges and two openings coins, 32 bytes
+/-- The log of `honestParams`' session before its first event: its two challenges and two samples' coins, 32 bytes
 each, no append coin and no event. -/
 def honestEvidence : Poub.Protocol.Evidence where
   appendCoins := .arr #[]
