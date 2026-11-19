@@ -425,7 +425,8 @@ theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
   obtain ⟨_, _, _, _, _, root, s0, st, st1, st2, _, -, hgo, hd0, hi0, -, hp0, hpar, hall, -, hbod, hd, -, hroot, -⟩ :=
     decode_steps bytes P h hr
   obtain ⟨hinv, hlt⟩ := go_inv _ _ _ _ _ _ hgo
-    ⟨fun i hi => absurd hi (by rw [hd0]; exact Nat.not_lt_zero i), fun k v hk => absurd hk (by rw [hi0]; simp)⟩
+    ⟨fun i hi => absurd hi (by rw [hd0]; exact Nat.not_lt_zero i), fun k v hk => absurd hk (by rw [hi0]; simp),
+      fun i hi => absurd hi (by rw [hd0]; exact Nat.not_lt_zero i)⟩
   obtain ⟨hinv1, hp1⟩ := decodeAll_grows _ _ _ _ _ hall hinv
   obtain ⟨hinv2, hp2⟩ := decodeBodies_grows _ _ _ _ _ _ hbod hinv1
   have hp := pre_trans hp1 hp2
