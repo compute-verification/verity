@@ -1,0 +1,3 @@
+[2026-11-19T17:35Z] 0ecec97a7bfd
+Lead, on item 3 (soundness candidate 109 asks): the old check was the period-open CIRCUIT_FILES digest handed to verify as circuit_sha512; now verify derives the circuit from the committed descriptor and only presence of k<K> is checked. Answer in your return, each marked run/read: (a) trace in proofs.verify that the circuit really is derived from program= bytes and no circuit file is read; (b) every remaining reader of CIRCUIT_FILES digests (Python, Lean twin, period-open writer, benches); (c) if none needs the digest, delete the entry and its presence check in Python and the Lean twin in one commit (stop and tell me if a lock record or a statement would move, or if the period-open format is another lane file).
+
