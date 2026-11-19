@@ -1,6 +1,6 @@
 """A credited linear of C as Pearl+'s tile check (`pearl_plus_credited`): its grid's units of `PearlPlusTileCore_v2`, each
 one proof block whose amount is its credited MACs, and each unit's public row. That the core on these ports evaluates and
-one drawn unit goes through the door is ``benchmarks/compile_cost/credited_in_c.py``'s run."""
+one drawn unit goes through the door is ``benchmarks/pouw/credited_in_c.py``'s run."""
 from __future__ import annotations
 
 import random
