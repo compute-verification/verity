@@ -488,8 +488,13 @@ class Rows:
                        for t, lay in self.lays.items()}
         for P, S in zip(lowered.programs, slots):
             self._slot(P, S)
-        for s, k, c, e in lowered.empty:
-            self._empty(lowered.programs[k], lowered.programs[k].cls.lane(s), c, e)
+        P0 = lowered.programs[0] if lowered.programs else None
+        for a, (tid, u) in lowered.scans:
+            for k, lane in enumerate(_lanes(P0, self.state, IO.scan_reference, a)):
+                for i, v in enumerate(lane):
+                    self._put(tid, u, f"o{4 * k + i}", _i32(v if isinstance(v, list) else [v]), EVALUATED)
+        for s, _k, c, e in lowered.empty:
+            self._empty(P0, s, c, e)
         if bad := {t: int((~h).any(axis=1).sum()) for t, h in self.held.items() if not h.all()}:
             raise ValueError(f"units with rows no node or Definition fills, by template: {bad}")
 
@@ -571,10 +576,11 @@ class Rows:
         et, eu = P.entry_unit
         self._put(et, eu, "o0", np.array([entry], dtype=np.uint16), EVALUATED)
 
-    def _empty(self, P: Any, lane: int, collect: tuple[str, int], entry: tuple[str, int]) -> None:
-        """An empty lane's collector and entry (`_Program.place_empty`), on lane ``lane`` of the scan state row ``P``'s
-        `ScanSlots_v3` reads."""
-        (row, head), tok = _lanes(P, self.state)[lane], _lanes(P, self.state, IO.scan_reference)[lane][0]
+    def _empty(self, P: Any, s: int, collect: tuple[str, int], entry: tuple[str, int]) -> None:
+        """Empty slot ``s``'s collector and entry (`_Program.place_empty`), on its lane of the scan state row at its
+        anchor."""
+        a, lane = P.cls.anchor(s), P.cls.lane(s)
+        (row, head), tok = _lanes(P, self.state, anchor=a)[lane], _lanes(P, self.state, IO.scan_reference, a)[lane][0]
         KO, e = P.cls.outputs, P.entry.bindings
         a = IO.collect_reference(head, tok, KO, True)
         self._put(*collect, "o0", _i32(a), EVALUATED)
@@ -640,11 +646,12 @@ def _elements(words: np.ndarray, width: int) -> np.ndarray:
     return np.ascontiguousarray(words, dtype=np.uint16).view(f"<u{width // 8}")
 
 
-def _lanes(P: Any, state: Sequence[Any], of: Callable[..., list] = IO.slots_reference) -> list[Any]:
-    """Every lane of ``state``'s row at Program ``P``'s anchor: its row and head (`io_shell.slots_reference`), or
-    ``of``'s (`io_shell.scan_reference`: `ScanSlots_v3`'s outputs)."""
+def _lanes(P: Any, state: Sequence[Any], of: Callable[..., list] = IO.slots_reference,
+           anchor: int | None = None) -> list[Any]:
+    """Every lane of ``state``'s row at Program ``P``'s anchor (or ``anchor``): its row and head
+    (`io_shell.slots_reference`), or ``of``'s (`io_shell.scan_reference`: `ScanSlots_v3`'s outputs)."""
     b = P.scan.bindings
-    row = np.asarray(state[P.anchor], dtype=np.uint16).reshape(-1)
+    row = np.asarray(state[P.anchor if anchor is None else anchor], dtype=np.uint16).reshape(-1)
     return of(row.tolist(), b["NP"], b["IDB"], b["K0"], b["K"], b["OCC"], b["LP"], b["MAX"], b["IDS"])
 
 

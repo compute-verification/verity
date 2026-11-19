@@ -194,14 +194,16 @@ class Lowered:
     """A window's circuit with what its lowering knows (`window_rows` fills its units from it): the longest Program's
     function, each slot's lowered Program (node j's output as the rows that hold it, ``outs[j]``), each template's runs of
     units by their (slot, step), ``(at, count, slot, step)``, and in a served window's, each slot's request's index among
-    the window's requests (`window_class.takes`), none in a class circuit's; and each empty slot of a served window,
-    ``(slot, the Program whose slot holds its units, its collector unit, its entry unit)`` (`_Program.place_empty`)."""
+    the window's requests (`window_class.takes`), none in a class circuit's; each empty slot of a served window,
+    ``(slot, the Program whose slot holds its units, its collector unit, its entry unit)`` (`_Program.place_empty`); and
+    each boundary of a served window no request is anchored at, ``(anchor, its ScanSlots_v3 unit)``."""
     circuit: IF.Circuit
     fn: Any
     programs: tuple[_Program, ...]
     spans: dict[str, list[tuple[int, int, int, int]]]
     requests: tuple[int, ...] | None = None
     empty: tuple[tuple[int, int, tuple[str, int], tuple[str, int]], ...] = ()
+    scans: tuple[tuple[int, tuple[str, int]], ...] = ()
 
     @property
     def cut(self) -> frozenset[int]:
@@ -228,8 +230,9 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     linears are the first's (`window_cut.linears`). With ``requests`` (`window_class.takes`, `window_class.requests_of`),
     the served window's circuit: a Program a request of the request's own positions, longest first, reading its lane at
     its anchor, so it holds exactly the requests' positions, and one entry a slot of the class in slot order, an empty
-    slot's in the slot of a Program at its boundary (`_Program.place_empty`); refused with ``tables`` or ``programs``, for
-    a window of no request, or for an empty slot at a boundary no request is anchored at."""
+    slot's in the slot of the first Program at its boundary (`_Program.place_empty`), or of the first Program, beside a
+    `ScanSlots_v3` unit of that boundary's state row, at a boundary no request is anchored at; refused with ``tables`` or
+    ``programs``, or for a window of no request."""
     if requests is not None and (tables is not None or programs is not None):
         raise Unexpressible("a served window's circuit is every request's Program, reading no tables")
     if requests is not None and not requests:
@@ -280,23 +283,33 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
             r.lower(j, f.body.nodes[j])
     b.among = None
     empty: list[tuple[int, int, tuple[str, int], tuple[str, int]]] = []
+    scans: list[tuple[int, tuple[str, int]]] = []
     if order is not None:
         by = {(r.anchor, r.lane): k for k, r in enumerate(progs)}
         filled = [by.get((cls.anchor(s), cls.lane(s))) for s in range(cls.slots)]
-        hosts = {s: next((k for t, k in enumerate(filled) if k is not None and cls.anchor(t) == cls.anchor(s)), None)
-                 for s, k in enumerate(filled) if k is None}
-        if (s := next((s for s, k in hosts.items() if k is None), None)) is not None:
-            raise Unexpressible(f"slot {s} is empty and no request is anchored at its boundary, bucket {cls.anchor(s)}, "
-                                "whose scan unit holds its lane")
-        if hosts:
+        host: dict[int, int] = {}
+        for s, k in enumerate(filled):
+            if k is not None:
+                host.setdefault(cls.anchor(s), k)
+        unit = {a: progs[k].scan_unit for a, k in host.items()}
+        if lone := [a for a in cls.boundaries if a not in host]:
+            stid, su = b.allocation(scan, [progs[0].entry_label] * len(lone))
+            for i, a in enumerate(lone):
+                b.read(stid, "state", su + i, (1,), a * scan.bindings["NS"], (0,), SS.SCAN_STATE)
+                host[a], unit[a] = 0, (stid, su + i)
+                scans.append((a, (stid, su + i)))
+        gaps = [s for s, k in enumerate(filled) if k is None]
+        if gaps:
             ctid, cu = b.allocation(bind(IO.OutCollect, KO=cls.outputs, FIRST=True),
-                                    [progs[k].entry_label for k in hosts.values()])
-        etid, eu = b.allocation(entry, [progs[k if k is not None else hosts[s]].entry_label for s, k in enumerate(filled)])
+                                    [progs[host[cls.anchor(s)]].entry_label for s in gaps])
+        etid, eu = b.allocation(entry, [progs[k if k is not None else host[cls.anchor(s)]].entry_label
+                                        for s, k in enumerate(filled)])
         for s, k in enumerate(filled):
             if k is not None:
                 progs[k].place_entry(etid, eu + s)
-        for i, (s, k) in enumerate(hosts.items()):
-            progs[k].place_empty(cls.lane(s), (ctid, cu + i), (etid, eu + s))
+        for i, s in enumerate(gaps):
+            k = host[cls.anchor(s)]
+            progs[k].place_empty(unit[cls.anchor(s)], cls.lane(s), (ctid, cu + i), (etid, eu + s))
             empty.append((s, k, (ctid, cu + i), (etid, eu + s)))
     for r in progs:
         if r.position != r.positions:
@@ -326,7 +339,8 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
                          external=(f"{descriptor_id(scan)}/state", f"{entry_units.pop()}/o0"),
                          wires=wires, cuts=b.cuts, registered=reg, order=IF.ordered(b.units, wires, b.starts) if wires else None,
                          blocks=IF.Blocks(programs, max(r.positions for r in progs), tuple(inference(b.spans, programs))))
-    return Lowered(circuit, fn, tuple(progs), b.spans, None if order is None else tuple(order), tuple(empty))
+    return Lowered(circuit, fn, tuple(progs), b.spans, None if order is None else tuple(order), tuple(empty),
+                   tuple(scans))
 
 
 @dataclass(frozen=True)

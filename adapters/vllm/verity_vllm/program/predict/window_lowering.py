@@ -656,13 +656,11 @@ class _Program:
         self.b.feed(tid, "state", u, 1, (self.collect,))
         self.entry_unit = (tid, u)
 
-    def place_empty(self, lane: int, collect: tuple[str, int], entry: tuple[str, int]) -> None:
+    def place_empty(self, scan: tuple[str, int], lane: int, collect: tuple[str, int], entry: tuple[str, int]) -> None:
         """An empty lane's collector (`io_shell.OutCollect_v1{FIRST}`, unit ``collect``) on that lane's head and first token
-        of this Program's `ScanSlots_v3` unit, and its entry (unit ``entry`` of the window's entries) on that lane's
-        occupancy word and the collector's state: units of this Program's slot, so no wire leaves it."""
-        if self.scan_unit is None:
-            raise Unexpressible(f"{self.name}: lane {lane}'s entry before its scan unit")
-        (tid, u), o, (ct, cu), (et, eu) = self.scan_unit, 4 * lane, collect, entry
+        of `ScanSlots_v3` unit ``scan``, and its entry (unit ``entry`` of the window's entries) on that lane's occupancy
+        word and the collector's state: units of this Program's slot, so no wire leaves it."""
+        (tid, u), o, (ct, cu), (et, eu) = scan, 4 * lane, collect, entry
         self.b.feed(ct, "head", cu, 1, (Row(tid, u, f"o{o + 3}", 4),))
         self.b.feed(ct, "tok", cu, 1, (Row(tid, u, f"o{o}", 2),))
         self.b.feed(et, "occ", eu, 1, (Row(tid, u, f"o{o + 2}", 2),))
