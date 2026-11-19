@@ -113,7 +113,7 @@ class Committed:
     def __init__(self, a) -> None:
         from verity_vllm.check import oracle_compare as OC
         from verity_vllm.check.checkpoint_index import CheckpointIndex
-        from verity_vllm.check.replay.opening import CommittedStore
+        from verity_vllm.check.replay.opening import CommittedStore, alias_table
         from verity_vllm.pipeline import cpu_replay as CPU, replay_bundle as RB
         from verity_vllm.pipeline.tp import commit_replay as CR, rank_replay as RR
         t0 = time.time()
@@ -128,7 +128,7 @@ class Committed:
         if sha != ctx.get("required_manifest_sha256"):
             raise SystemExit(f"{a.manifest}: sha256 {sha[:16]} is not the Commit's required manifest {str(ctx.get('required_manifest_sha256'))[:16]}")
         self.reader = OC.OpenedReader(store, run)
-        self.store = CommittedStore.of_record(bmap, self.reader, RR.manifest_of_rank(json.loads(Path(a.manifest).read_text()), 0))
+        self.store = CommittedStore.of_record(bmap, self.reader, alias_table(RR.manifest_of_rank(json.loads(Path(a.manifest).read_text()), 0)))
         del bmap
         tree = json.loads((bdir / "weights" / "tree.json").read_text())
         root = (c.get("weight_registration") or {}).get("root")
