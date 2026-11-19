@@ -1123,24 +1123,31 @@ def decode_program(desc: dict, registry: DefinitionTable) -> DecodedProgram:
 
 
 def _check_inputs(xs: Any, root: SpecializedDefinition) -> None:
-    """``xs``, a descriptor's `inputs` (PROTOCOL.md §5.1): [name, node count] per parameter (`E_INPUTS`), the names nonempty and
-    distinct (`E_INPUTS_NAME`), the counts summing to the root's input nodes, which lead its body (`E_INPUTS_COUNT`), and each
-    parameter's nodes all run or all registered inputs (`E_INPUTS_MIXED`)."""
-    from .program import is_registered
-    if not isinstance(xs, list) or not all(isinstance(x, list) and len(x) == 2 and isinstance(x[0], str) and _nat(x[1]) for x in xs):
+    """``xs``, a descriptor's `inputs` (PROTOCOL.md §5.1): [name, node count] per parameter, a supplied one's with its mark
+    (§5.4; `E_INPUTS`), the names nonempty and distinct (`E_INPUTS_NAME`), the counts summing to the root's input nodes, which
+    lead its body (`E_INPUTS_COUNT`), each parameter's nodes all run, all registered or all supplied inputs
+    (`E_INPUTS_MIXED`), and each mark holding of its nodes (`supplied.check_entry`: `E_SUPPLIED_*`)."""
+    from .parts import n_members
+    from .supplied import check_entry
+    if not isinstance(xs, list) or not all(isinstance(x, list) and len(x) in (2, 3) and isinstance(x[0], str) and _nat(x[1])
+                                           for x in xs):
         raise ValueError("E_INPUTS: `inputs` is not an array of [name, node count] pairs")
     names = [x[0] for x in xs]
     if "" in names or len(set(names)) != len(names):
         raise ValueError(f"E_INPUTS_NAME: the parameter names {names[:8]} hold an empty or a repeated name")
     nodes = root.body.nodes
     lead = next((k for k, n in enumerate(nodes) if not is_input(n.fn)), len(nodes))
-    if sum(n for _, n in xs) != lead or any(is_input(n.fn) for n in nodes[lead:]):
-        raise ValueError(f"E_INPUTS_COUNT: `inputs` counts {sum(n for _, n in xs)} input nodes, where the root's body leads with {lead} "
+    if sum(x[1] for x in xs) != lead or any(is_input(n.fn) for n in nodes[lead:]):
+        raise ValueError(f"E_INPUTS_COUNT: `inputs` counts {sum(x[1] for x in xs)} input nodes, where the root's body leads with {lead} "
                          "and holds no input node after them")
     k = 0
-    for name, n in xs:
-        if len({is_registered(nd.fn) for nd in nodes[k:k + n]}) > 1:
-            raise ValueError(f"E_INPUTS_MIXED: parameter {name!r}'s input nodes {k}..{k + n - 1} mix run and registered inputs")
+    for x in xs:
+        n = x[1]
+        bound = [(*input_id(nd.fn.id), n_members(nd)) for nd in nodes[k:k + n]]
+        if len(times := {b for b, _w, _m in bound}) > 1:
+            mixed = " and ".join(a for b, a in (("run", "run"), ("registration", "registered"), ("supplied", "supplied")) if b in times)
+            raise ValueError(f"E_INPUTS_MIXED: parameter {x[0]!r}'s input nodes {k}..{k + n - 1} mix {mixed} inputs")
+        check_entry(x, bound)
         k += n
 
 
