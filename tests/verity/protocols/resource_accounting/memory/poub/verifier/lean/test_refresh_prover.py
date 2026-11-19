@@ -108,7 +108,7 @@ def session(exe, refresh: bool = True, freed: dict[int, list[int]] | None = None
     window, whose re-key slots then stay empty (`ServingTrace`'s).  Every receipt is sampled and opened, `tamper`
     rewriting each opening.  The windows' settled verdicts, the session's outcome, the appends sent as (slot, origin,
     count) and the blocks withdrawn.  Without refresh the session appends nothing.  `withhold` sends window 0's boundary
-    ("challenge") or close ("sample") without the challenger's coin."""
+    ("challenge") or close ("sample") without the challenger's coin, or its close with the coin a byte short ("short")."""
     payloads = [payload(b"weights %d" % j) for j in range(N)]
     ys = salts(b"payload salts", N)
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
@@ -177,7 +177,7 @@ def session(exe, refresh: bool = True, freed: dict[int, list[int]] | None = None
     verdicts = []
     for t in range(WINDOWS):
         coin = lean.coins.sample(t, passes[t, PASSES - 1].root)
-        coin = None if (t, withhold) == (0, "sample") else coin
+        coin = {"sample": None, "short": coin[:-1]}.get(withhold, coin) if t == 0 else coin
         drew = lean.event({"kind": "close", "t": t}, coin, at=CLOSE_NS + t)
         opened = [prover.open(passes[t, i], q) for i, q in drew["draws"]]
         verdicts.append(lean.verdict(t, [tamper(s, o) if tamper else o for o in opened]))
@@ -229,11 +229,14 @@ def test_with_refresh_off_the_reference_prover_s_session_is_accepted_and_names_n
 
 def test_a_step_that_reads_a_coin_the_session_holds_empty_is_refused_by_name(exe):
     """A coin the session holds empty is one no step reads: the honest session is accepted, and the same session with
-    window 0's boundary or close sent without the challenger's coin is refused there, by name (`Verifier.unset`), so a
-    replay padded with empty coins and the live run can't differ."""
+    window 0's boundary sent without the challenger's coin is refused there by name (`Verifier.unset`); its close sent
+    without its sample's coins is refused by the draw, which reads them and runs out, and with them a byte short by
+    `unset`. So a replay padded with empty coins and the live run can't differ."""
     _, outcome, *_ = session(exe, refresh=False)
     assert outcome["outcome"] == "accepted", outcome
     with pytest.raises(lv.LeanError, match="window 1's challenge left without the challenger's coin"):
         session(exe, refresh=False, withhold="challenge")
-    with pytest.raises(lv.LeanError, match="window 0's openings were drawn without the challenger's coins"):
+    with pytest.raises(lv.LeanError, match="the randomness source ran out"):
         session(exe, refresh=False, withhold="sample")
+    with pytest.raises(lv.LeanError, match="window 0's openings were drawn without the challenger's coins"):
+        session(exe, refresh=False, withhold="short")
