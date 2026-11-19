@@ -1,3 +1,0 @@
-[2026-11-19T00:20Z] 00193fa0e302
-From the lead, for RED 1: on one-circuit (1e5d35b1751) TWO tests of test_pearlplus_lean.py fail the same way, with Lean and Python verdicts EQUAL (same() holds) and every verdict ok: the row test (key 4, 16x1, 96 draws, tile 14, debit 168 over cap 38) and test_the_forming_term_reads_a_block_every_credited_word_flags_and_not_one_some_flag (16x1 case, zero key, 64 draws, "the replayed debit 672 exceeds"; its 16x16 case passes). The verdict list is truncated in the log, so print the drawn tile ids untruncated. Worker CUTDIFF is settling the one-circuit copy (with and without our cut mends); you settle the TIP copy; top now expects it by 5:30 PM PST and the tip is 65611c7213a (check your branch merges onto it). Re-run your refused command.
-
