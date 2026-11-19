@@ -104,7 +104,8 @@ def test_a_drawn_block_takes_its_public_inputs_from_the_record_and_one_its_core_
     index, rows and column block; a drawn block of a call keeping |K| = 200 of 256 is refused ``kept-width``, and a drawn
     tile holding one excluded A row (the other row credited, so the tile is drawn) ``excluded-row``, and the block of a
     tile holding a given-up A row ``voluntary-row`` (its ticket is 0 and the draw never takes it, as a tile holding an
-    excluded or given-up B row, whose column block it takes)."""
+    excluded or given-up B row, whose column block it takes); and of a call with one real row, C's tile at TR = 1 passes
+    and one at TR = 2, the tile's TM, is refused ``real-rows``."""
     from verity.commitments.randomness import derive
     from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
     from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_work import UnitRecord
@@ -123,13 +124,19 @@ def test_a_drawn_block_takes_its_public_inputs_from_the_record_and_one_its_core_
         return passes, block
 
     passes, block = drawn()
-    assert PS.drawn_inputs(passes, block) == {"unit": 7, "rows": [0, 1], "col": 0}
+    assert PS.drawn_inputs(passes, block, 2) == {"unit": 7, "rows": [0, 1], "col": 0}
     for want, (kept, rows) in {"kept-width": (200, {}), "excluded-row": (k, {"excluded_a": (1,)}),
                                "voluntary-row": (k, {"voluntary_a": (0,)})}.items():
         passes, block = drawn(kept, **rows)
         with pytest.raises(PS.Uncovered, match=f"^{want}: ") as e:
-            PS.drawn_inputs(passes, block)
+            PS.drawn_inputs(passes, block, 2)
         assert e.value.code == want
+    passes = [[UnitRecord(Matmul(7, Shape(2, k, 1), 0), 1, k)]]
+    (block,) = PS.drawn_blocks(scheme, passes, key, 1)
+    assert block.real == 1 and PS.drawn_inputs(passes, block, 1)["rows"] == [0, 1]
+    with pytest.raises(PS.Uncovered, match="^real-rows: ") as e:
+        PS.drawn_inputs(passes, block, 2)
+    assert e.value.code == "real-rows"
 
 
 def test_it_declares_the_cut_and_is_the_one_scheme_that_does() -> None:

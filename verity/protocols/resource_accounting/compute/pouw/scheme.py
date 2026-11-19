@@ -103,14 +103,20 @@ class Uncovered(ValueError):
         self.code = code
 
 
-def drawn_inputs(passes: Sequence[Sequence[Any]], block: CreditedBlock) -> dict[str, Any]:
-    """The public inputs of a drawn ``block``'s core, ``unit``, ``rows`` and ``col``, read with its kept width and its
-    excluded and voluntary rows from the committed records ``passes`` (each pass's `UnitRecord`s, as `credited_blocks`
-    takes them), never from the caller. Refused (`Uncovered`): ``kept-width``, a call whose kept width |K| is below K;
+def drawn_inputs(passes: Sequence[Sequence[Any]], block: CreditedBlock, tr: int) -> dict[str, Any]:
+    """The public inputs of a drawn ``block``'s core, ``unit``, ``rows`` and ``col``, read with its kept width, real rows
+    and excluded and voluntary rows from the committed records ``passes`` (each pass's `UnitRecord`s, as
+    `credited_blocks` takes them), never from the caller; ``tr`` is the TR static of C's tile, the core it checks.
+    Refused (`Uncovered`): ``real-rows``, a TR that is not the tile's rows below its call's ``real_rows``
+    (min(TM, real_rows − i) for the tile's rows from i); ``kept-width``, a call whose kept width |K| is below K;
     ``excluded-row`` and ``voluntary-row``, a tile holding an A row (of ``rows``) or B row (of ``cols``) its call
     excludes or gives up."""
     r = passes[block.id[0]][block.record]
     u, k = r.matmul, r.matmul.shape.k
+    real = sum(row < r.real_rows for row in block.rows)
+    if tr != real:
+        raise Uncovered("real-rows", f"C's tile of call {u.index} at rows {block.rows[0]}..{block.rows[-1]} binds TR = "
+                                     f"{tr!r}, and its record's real rows ({r.real_rows}) leave it {real}")
     if r.k_kept < k:
         raise Uncovered("kept-width", f"call {u.index} keeps |K| = {r.k_kept} of K = {k}; the block checks no word past "
                                       f"|K| and bounds inert work at K, while the tile rule credits at |K|")

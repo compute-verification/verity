@@ -63,7 +63,8 @@ def draw(k: int, tm: int, tn: int, n: int, coin: bytes) -> tuple[object, int]:
     scheme, passes = run(k, tm, tn, n)
     (block,) = PS.drawn_blocks(scheme, passes, derive(coin, RUN_DRAW, {"run": bytes(64)}), 1)
     assert block.size == (k, tm, tn, n), block
-    inputs = PS.drawn_inputs(passes, block)
+    from verity_vllm.program.predict import window_cut as WK
+    inputs = PS.drawn_inputs(passes, block, WK.credited_product(SCHEME, k, tm, tn, n).bindings["TR"])
     assert inputs == {"unit": block.unit, "rows": list(block.rows), "col": block.col}, (inputs, block)
     return block, PS.credited_blocks(scheme, passes).index(block)
 
@@ -159,17 +160,28 @@ def register(program, bits: dict[str, list[int]], supplied: tuple[str, ...] = DR
     return out
 
 
-def reads(program, partition, bits: dict[str, list[int]], roots: dict[str, str]) -> dict:
+def output(program, row: list[int]):
+    """The block's output row ``o0`` registered as the record a later reader holds it to: one ``sha512/row/v2`` row of
+    the circuit port's u16 words (the outputs zero-padded to whole SHA-512 blocks, as `FC.write` writes them)."""
+    from verity.circuits.codec import program_digest
+    from verity.commitments import registered_value as RV
+    return RV.Registered.commit(program_digest(program), "o0", [row], word_bits=16, schema=RV.SCHEMA_HM96_SHA512_ROW_V2)
+
+
+def reads(program, partition, bits: dict[str, list[int]], roots: dict[str, str], out) -> dict:
     """The verifier's ``--registered`` file over its program and the partition's query: `registered.reads_file`'s ports
     in the position-free format the door reads (`interface.REGISTERED_FILE`, Lean's `Registered.FORMAT`), which derives
-    every position from C."""
+    every position from C, and the output row ``out`` (`output`), since Lean holds every port of the statement to a
+    registered root (`Registered.checkComplete`)."""
     from verity.commitments import registered_value as RV
     from verity.commitments.periods.interface import REGISTERED_FILE
     from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
     f = REG.reads_file(program, partition["query"], {p: len(v) // 16 for p, v in bits.items()}, roots,
                        schemas={p: RV.SCHEMA_HM96_SHA512_ROW_V2 for p in bits})
-    return {"format": REGISTERED_FILE, "ports": {p: {x: v for x, v in e.items() if x != "reads"}
-                                                 for p, e in f["ports"].items()}}
+    ports = {p: {x: v for x, v in e.items() if x != "reads"} for p, e in f["ports"].items()}
+    ports["o0"] = {"value": out.value, "root": out.root.hex(), "leaves": out.leaves, "words": out.words, "word_bits": 16,
+                   "domain": out.domain.domain_id.hex(), RV.SCHEMA_KEY: out.schema}
+    return {"format": REGISTERED_FILE, "ports": ports}
 
 
 def lean_lower(lower_bin: str, partition, fn) -> "callable":
@@ -271,6 +283,7 @@ def stage(a) -> int:
     phase("lower")
 
     outs_h = {"o0": np.asarray([words16(got[0])], dtype=np.uint16)}
+    out_row = words16(got[0]) + [0] * (dict((q[0], q[1]) for q in meta["ports"])["o0"] - len(words16(got[0])))
     verifier_roots = {p: r.root.hex() for p, r in register(program, mine).items()}
     wrong = {"unit": drawn_bits(core, SimpleNamespace(unit=block.unit + 1, rows=block.rows, col=block.col))["unit"]}
     rec["registered"] = {}
@@ -281,16 +294,17 @@ def stage(a) -> int:
         regs = register(program, bits)
         assert all(regs[p].root.hex() == verifier_roots[p] for p in DRAWN)
         roots = {p: r.root.hex() for p, r in regs.items()} | verifier_roots
-        (d / "registered.json").write_text(json.dumps(reads(program, part, bits, roots)))
+        out = output(program, out_row)
+        (d / "registered.json").write_text(json.dumps(reads(program, part, bits, roots, out)))
         if tag == "honest":
             bad = roots | {p: r.root.hex() for p, r in register(program, wrong).items()}
-            (d / "registered-wrong.json").write_text(json.dumps(reads(program, part, bits, bad)))
+            (d / "registered-wrong.json").write_text(json.dumps(reads(program, part, bits, bad, out)))
         tables = {p: np.asarray([words16(v)], dtype=np.uint16) for p, v in bits.items()}
-        salts = {p: [r.salts[0]] for p, r in regs.items()} | {"o0": [os.urandom(192)]}
+        salts = {p: [r.salts[0]] for p, r in regs.items()} | {"o0": [out.salts[0]]}
         iset = SimpleNamespace(name=f"credited-{tag}", subcircuit=SimpleNamespace(id=core.id, inputs=[], outputs=[]))
         FC.write(text, iset, 0, 1, d / "inst-1.bin", d / "pub-1.bin", indices=[units[0][0]], tables=tables,
                  refs={p: [0] for p in bits}, share_rows=True, salts=salts,
-                 registered={p: r.statement([0])[2] for p, r in regs.items()}, outs=outs_h)
+                 registered={p: r.statement([0])[2] for p, r in regs.items()} | {"o0": out.statement([0])[2]}, outs=outs_h)
         (d / "unit.tmpl").write_text(FC.template_of(text))
         (d / "partition.json").write_text(json.dumps(part))
         (d / "program.json").write_bytes(c)
