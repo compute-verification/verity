@@ -1,3 +1,0 @@
-[2026-11-19T19:36Z] 155a6d6b455e
-From the circuits lead, a NARROWING of the constraint on your job: the adapter owner posted every file fate at 19:35Z. OURS in your change are TWO only: program/predict/window_class.py (the Pearl+ tables class imports) and the catalog sidecar catalog.circuit-check.py (the string). window_rows.py and window_weights.py import ONE function, registered_commit, from the first stage package: the adapter owner MOVES that file to verity/commitments tonight and edits those two imports itself: do NOT touch those two import lines (you would conflict). The rule stands: the lowering never imports the scheme package; the tile reaches it through the declared port. The early return of the four fates is no longer needed.
-
