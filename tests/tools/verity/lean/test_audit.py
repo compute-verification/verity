@@ -1293,7 +1293,6 @@ def bookkeeping_cases() -> dict[str, tuple[dict, dict]]:
         "assumptions.outside-module": ({**opol, "open": {}, "assumptions": {"P.Sound": {"owner": "@lean"}}}, now),
         "domain.uncovered": (uncovered, wfacts),
         "open.seed": ({**opol, "open_seed": seed}, now),
-        "witnesses.missing": ({**bare, "unwitnessed": {}}, wfacts),
         "witnesses.unwitnessed-changed": ({**bare, "unwitnessed": {"P.sound": sha("its statement before")}}, wfacts),
         "witnesses.stale": ({**wrec, "witnesses": wrec["witnesses"] | {"P.gone": wrec["witnesses"]["P.sound"]}}, wfacts),
         "witnesses.assumed-stale": ({**wrec, "witnesses_assumed": {"P.Gone": "assumed as it stands"}}, wfacts),
@@ -1306,6 +1305,13 @@ def bookkeeping_cases() -> dict[str, tuple[dict, dict]]:
         "open.no-owner": ({**opol, "open": {"P.Sound": without(sound, "owner")}}, now),
         "domain.no-owner": (covered, wfacts),
     }
+
+
+def unwitnessed_missing() -> tuple[dict, dict]:
+    """(lock, facts): `P.sound`, which the witnesses rule holds to witnesses, listed with neither witnesses nor an
+    `unwitnessed` entry (`witnesses.missing`), which no repair settles."""
+    lock, now = bookkeeping_cases()["witnesses.unwitnessed-changed"]
+    return {**lock, "unwitnessed": {}}, now
 
 
 def test_every_bookkeeping_code_is_repaired_with_a_warning_and_fails_without_the_flag():
@@ -1333,9 +1339,8 @@ def test_every_bookkeeping_code_is_repaired_with_a_warning_and_fails_without_the
     fixed, _ = fix("open.unlisted")
     assert {k: v for k, v in fixed["open"]["P.Sound"].items() if k != "digest"} == {
         "owner": "@lean", "issue": "LEAN-186", "due": "2026-11-14"}
-    for code in ("witnesses.missing", "witnesses.unwitnessed-changed"):
-        fixed, now = fix(code)
-        assert fixed["unwitnessed"]["P.sound"] == now["pins"]["P.sound"]["type_sha256"], "listed at its hashes now"
+    fixed, now = fix("witnesses.unwitnessed-changed")
+    assert fixed["unwitnessed"]["P.sound"] == now["pins"]["P.sound"]["type_sha256"], "re-keyed at its hashes now"
     fixed, now = fix("witnesses.unwitnessed-unlisted")
     assert fixed["unwitnessed"] == {"P.sound": now["pins"]["P.sound"]["type_sha256"]}, "only the entry of no guarantee goes"
     assert "open_seed" not in fix("open.seed")[0]
@@ -5655,11 +5660,10 @@ def test_a_listed_guarantee_left_with_neither_witnesses_nor_an_unwitnessed_entry
     """A guarantee in scope that the lock lists with neither witnesses nor an `unwitnessed` entry, as a merge leaves one
     that one side lists and whose entry the other side dropped: the check holds it to its witnesses
     (`witnesses.missing`). The failure says how to carry them and, for that case alone, prints the entry to write back
-    at its statement as built, in the form the lock run writes: its type hash, or {type_hash, unfolded_hash} of a
-    guarantee stated as a definition; a new guarantee gets its witnesses. Written back as printed, the lock passes.
-    `--update` lists it under no `unwitnessed`, which only shrinks; after a landing the lock run lists it there and
-    warns."""
-    lock, now = bookkeeping_cases()["witnesses.missing"]
+    at its statement as built: its type hash, or {type_hash, unfolded_hash} of a guarantee stated as a definition; a new
+    guarantee gets its witnesses. Written back as printed, the lock passes. Neither `--update` nor the lock run's repair
+    lists it under `unwitnessed`, which only shrinks: an exemption is a ruling, written by hand."""
+    lock, now = unwitnessed_missing()
     h = now["pins"]["P.sound"]["type_sha256"]
     assert "P.sound" in lock["guarantees"] and "witnesses" not in lock and lock["unwitnessed"] == {}
     (missing,) = fails = A.judge(lock, now, FILES)[0]
@@ -5675,7 +5679,9 @@ def test_a_listed_guarantee_left_with_neither_witnesses_nor_an_unwitnessed_entry
         "that can't be built a named assumption. List both under `guarantees`, and write \"P.sound\": {\"honest\": "
         "[\"P.sound_honest\"], \"nontrivial\": \"P.sound_nontrivial\"} under `witnesses`: a guarantee carries an honest and "
         "a nontrivial witness. Only if `unwitnessed` listed it and a merge dropped the entry, write the entry back: "
-        f"\"P.sound\": \"{h}\"; a new guarantee gets its witnesses, not an entry (`UNWITNESSED` only shrinks)")
+        f"\"P.sound\": \"{h}\"; a new guarantee gets its witnesses, not an entry (`UNWITNESSED` only shrinks). No run "
+        "writes an entry: an exemption is a ruling, written by hand on soundness's word, its reason in `why` where "
+        "`witnesses` lists the other half")
 
     def printed(failure) -> dict:
         return json.loads("{" + failure.split("write the entry back: ")[1].split("; a new guarantee gets")[0] + "}")
@@ -5684,10 +5690,8 @@ def test_a_listed_guarantee_left_with_neither_witnesses_nor_an_unwitnessed_entry
     kept, rec = A.judge(lock, now, FILES, update=True)
     assert [(x.code, x.entry) for x in kept] == [("witnesses.missing", "P.sound")] and rec["unwitnessed"] == {}
     fixed = A.repaired(lock, now, FILES, fails, TICKET)
-    assert fixed["unwitnessed"] == printed(missing) and A.judge(fixed, now, FILES)[0] == []
-    assert A.bookkeeping_warnings(fails, fixed, TICKET) == [
-        "bookkeeping: P.sound (@lean): listed under `unwitnessed` at its statement's hashes now: it owes its `honest` and "
-        "`nontrivial` witnesses (witnesses.missing)"]
+    assert fixed["unwitnessed"] == {} and A.judge(fixed, now, FILES)[0] == fails
+    assert not A.BOOKKEEPING.match(missing) and A.bookkeeping_warnings(fails, fixed, TICKET) == []
 
     body = wbody("P.Holds", binders=["∀", "→", "→"])
     _, stated = witnessed({"lift": lifted_pin("P.Holds, first")["lift"], "body": body})
@@ -5696,10 +5700,36 @@ def test_a_listed_guarantee_left_with_neither_witnesses_nor_an_unwitnessed_entry
     (lifted,) = A.witness_failures(bare, stated, WOWN)
     assert lifted.code == "witnesses.missing" and lifted.endswith(
         "write the entry back: \"P.sound\": " + json.dumps(pair) + "; a new guarantee gets its witnesses, not an entry "
-        "(`UNWITNESSED` only shrinks)")
+        "(`UNWITNESSED` only shrinks). No run writes an entry: an exemption is a ruling, written by hand on soundness's "
+        "word, its reason in `why` where `witnesses` lists the other half")
     assert printed(lifted) == {"P.sound": pair}
     assert A.witness_failures({**bare, "unwitnessed": printed(lifted)}, stated, WOWN) == []
-    assert A.repaired(bare, stated, FILES, A.judge(bare, stated, FILES)[0], TICKET)["unwitnessed"] == {"P.sound": pair}
+    assert not A.repaired(bare, stated, FILES, A.judge(bare, stated, FILES)[0], TICKET).get("unwitnessed")
+
+
+def test_the_lock_run_fails_by_name_on_a_guarantee_with_no_unwitnessed_entry_and_re_keys_one_it_holds(
+        tmp_path, monkeypatch):
+    """The lock run (`--bookkeeping warn`) on a lock listing `P.sound`, which the witnesses rule holds to witnesses, with
+    neither witnesses nor an `unwitnessed` entry: it fails on `witnesses.missing` naming `P.sound`, with the fix, and
+    writes no repaired lock, so no entry; on a lock holding an entry at `P.sound`'s statement before, it passes and the
+    lock it writes holds the entry re-keyed to the statement as built, with one warning."""
+    lock, now = unwitnessed_missing()
+    frozen = {"default_owner": "@lean", "shape": {"frozen": dict.fromkeys(lock["guarantees"], "frozen: open")}}
+    _, audit = bookkeeping_audit(tmp_path / "missing", monkeypatch, lock | frozen, now)
+    rep, work = audit("2026-11-14")
+    assert A.reported(rep)["failure_codes"] == ["witnesses.missing"] and rep["failures"][0].startswith(
+        "witnesses: P.sound lists no witnesses"), rep["failures"]
+    assert "No run writes an entry" in rep["failures"][0] and rep.get("bookkeeping_left") == 1
+    assert "regenerated" not in rep and "bookkeeping" not in rep and not (work / A.POLICY).exists()
+
+    held, now = bookkeeping_cases()["witnesses.unwitnessed-changed"]
+    _, audit = bookkeeping_audit(tmp_path / "held", monkeypatch, held | frozen, now)
+    rep, work = audit("2026-11-14")
+    assert "bookkeeping_left" not in rep and rep["regenerated"] == str(work / A.POLICY), rep["failures"]
+    assert json.loads((work / A.POLICY).read_text())["unwitnessed"] == {"P.sound": now["pins"]["P.sound"]["type_sha256"]}
+    assert rep["bookkeeping"] == ["bookkeeping: P.sound (@lean): its `unwitnessed` entry re-keyed to its statement's "
+                                  "hashes now: it owes its `honest` and `nontrivial` witnesses "
+                                  "(witnesses.unwitnessed-changed)"]
 
 
 def lifted_pin(body: str) -> dict:

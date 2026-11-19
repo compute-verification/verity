@@ -2941,10 +2941,11 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     list exempts nothing today, and would exempt a guarantee listed under that name later with the same statement: it
     fails `witnesses.unwitnessed-unlisted`, as a `witnesses` entry of no guarantee fails `witnesses.stale`, and `--update`
     drops it, its own audit not failing on it (`judge`). `--update` keeps an entry only while its guarantee is in scope
-    without witnesses and says the same (re-keyed when moved or lifted, `unwitnessed_kept`) and adds none, so the list
-    only shrinks (`tests/test_lean_packages.py` holds its size). A merge can drop the entry of a guarantee one side
-    still lists: for that case alone the failure of a guarantee without witnesses (`witnesses.missing`) prints the entry
-    at its statement as built, in the form the lock run writes (`repaired`), to be written back."""
+    without witnesses and says the same (re-keyed when moved or lifted, `unwitnessed_kept`) and adds none, and the lock
+    run (`repaired`) re-keys only an entry the lock holds and adds none, so the list only shrinks
+    (`tests/test_lean_packages.py` holds its size). A merge can drop the entry of a guarantee one side still lists: for
+    that case alone the failure of a guarantee without witnesses (`witnesses.missing`) prints the entry at its statement
+    as built, to be written back by hand."""
     ws, allow = policy.get("witnesses", {}), policy.get("unwitnessed", {})
     if not isinstance(ws, dict) or not isinstance(allow, dict):
         return [Failure("witnesses.form", None, "witnesses: `witnesses` is {guarantee: {honest: [theorem], nontrivial: "
@@ -3007,7 +3008,9 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                                      f"and the rule holds it to them ({why}): {witness_shapes(g, pin, policy, own)}. "
                                      f"Only if `unwitnessed` listed it and a merge dropped the entry, write the entry "
                                      f"back: {json.dumps({g: back}, ensure_ascii=False)[1:-1]}; a new guarantee gets "
-                                     f"its witnesses, not an entry (`UNWITNESSED` only shrinks)"))
+                                     f"its witnesses, not an entry (`UNWITNESSED` only shrinks). No run writes an "
+                                     f"entry: an exemption is a ruling, written by hand on soundness's word, its reason "
+                                     f"in `why` where `witnesses` lists the other half"))
             continue
         w = ws[g]
         honest = w.get("honest") if isinstance(w, dict) else None
@@ -3747,11 +3750,12 @@ RECORD_DIFFERENCE = Codes({
 
 #: the bookkeeping `--bookkeeping warn` (drive's lock run after a landing) repairs in the lock it regenerates
 #: instead of failing, each with one warning naming the entry and its owner, so the next PR does the work: a premise's
-#: kind and its ticket, an entry no guarantee has, an owner, a guarantee the witnesses rule holds to witnesses it lacks,
-#: and a `trust_gap` entry that lists more than its deployed guarantee rests on outside its trust
+#: kind and its ticket, an entry no guarantee has, an owner, an `unwitnessed` entry its guarantee's statement has moved
+#: from, and a `trust_gap` entry that lists more than its deployed guarantee rests on outside its trust. A guarantee
+#: without witnesses and without an entry (`witnesses.missing`) is none: an exemption is a ruling, which no run writes
 BOOKKEEPING = Codes({
     "open.unlisted", "assumptions.outside-module", "domain.uncovered", "open.seed",    # under `open`, on the default ticket
-    "witnesses.missing", "witnesses.unwitnessed-changed",                              # under `unwitnessed`, as it is now
+    "witnesses.unwitnessed-changed",                                                   # its entry re-keyed, as it is now
     "witnesses.stale", "witnesses.assumed-stale", "shape.properties-stale", "shape.frozen-stale",   # dropped
     "witnesses.unwitnessed-unlisted",                                                  # dropped from `unwitnessed`
     "guarantees.no-owner", "assumptions.no-owner", "open.no-owner", "domain.no-owner",               # owned
@@ -3783,8 +3787,9 @@ def repaired(policy: dict, facts: dict, files: dict[str, str], fails: list[str],
     """The lock `--bookkeeping warn` writes for ``policy``, failing with ``fails``: the records as `--update` writes them
     (`regenerated`), an open premise the lock doesn't list, and an `assumptions` or uncovered `domain` entry that is one,
     listed under `open` on ``ticket`` (`bookkeeping_ticket`; `open_seed` first, which goes), an entry without an owner given
-    its guarantees' (the first, of several) or ``ticket``'s, each guarantee failing `witnesses.missing` or
-    `witnesses.unwitnessed-changed` under `unwitnessed` with its statement's hashes as built, each entry of no guarantee
+    its guarantees' (the first, of several) or ``ticket``'s, the `unwitnessed` entry of each guarantee failing
+    `witnesses.unwitnessed-changed` re-keyed to its statement's hashes as built (one failing `witnesses.missing`, which
+    has no entry, gets none, so the audit fails on it by name), each entry of no guarantee
     (`witnesses.stale`, `witnesses.assumed-stale`, `shape.properties-stale`, `shape.frozen-stale`; an `unwitnessed` one,
     `witnesses.unwitnessed-unlisted`, as the update drops it) dropped, and `trust_gap` as an update keeps it
     (`trust_gap_kept`).  The audit then judges the package on it (`audit`): what still fails there fails."""
@@ -3796,7 +3801,7 @@ def repaired(policy: dict, facts: dict, files: dict[str, str], fails: list[str],
     drops = {"witnesses.stale": ("witnesses",), "witnesses.assumed-stale": ("witnesses_assumed",),
              "shape.properties-stale": ("shape", "properties"), "shape.frozen-stale": ("shape", "frozen")}
     for f in fails:
-        if (c := code_of(f)) in ("witnesses.missing", "witnesses.unwitnessed-changed") and (pin := facts["pins"].get(f.entry)):
+        if (c := code_of(f)) == "witnesses.unwitnessed-changed" and (pin := facts["pins"].get(f.entry)):
             _, half = unwitnessed_entry((policy.get("unwitnessed") or {}).get(f.entry)) or (None, None)
             unfolded = (pin.get("lift") or {}).get("unfolded_sha256")
             at = {"type_hash": pin["type_sha256"]} | ({"unfolded_hash": unfolded} if unfolded else {})
@@ -3851,7 +3856,8 @@ def bookkeeping_repairs(fails: list[str], lock: dict, ticket: dict, was: dict | 
         elif c == "witnesses.unwitnessed-unlisted":
             what = "its `unwitnessed` entry dropped: no guarantee has it"
         elif c.startswith("witnesses.") and c not in ("witnesses.stale", "witnesses.assumed-stale"):
-            what = "listed under `unwitnessed` at its statement's hashes now: it owes its `honest` and `nontrivial` witnesses"
+            what = ("its `unwitnessed` entry re-keyed to its statement's hashes now: it owes its `honest` and `nontrivial` "
+                    "witnesses")
         elif c == "trust.gap-gone":
             what = f"dropped from its `trust_gap` entry, outside its trust no longer: {dropped(e)}"
         elif c == "trust.gap-stale":
@@ -7574,8 +7580,8 @@ def main(argv: list[str]) -> int:
                     "the record `--update` writes for it under --out, which drive commits when it lands that commit; the "
                     "package's own lock is never written")
     ap.add_argument("--bookkeeping", choices=["warn"], help="with --regenerate, drive's lock run after a landing: a package "
-                    "whose lock's bookkeeping fails (`BOOKKEEPING`: an unlisted or misfiled premise, a guarantee the "
-                    "witnesses rule holds to witnesses it lacks, a stale entry, an owner) passes once the lock with it "
+                    "whose lock's bookkeeping fails (`BOOKKEEPING`: an unlisted or misfiled premise, an `unwitnessed` "
+                    "entry its guarantee's statement moved from, a stale entry, an owner) passes once the lock with it "
                     "repaired (`repaired`, on the lock's `open_default_issue`, else without an issue, due in "
                     f"{BOOKKEEPING_DAYS} days; an entry with no owner takes its guarantees', else the lock's "
                     "`default_owner`) passes, and each repair prints a warning naming its entry and owner")
