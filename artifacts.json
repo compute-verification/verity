@@ -187,7 +187,7 @@
     "tests/verity/protocols/proofs/flock/prover/fixtures/rec-coins": "a recorded recursive session's salts and private part at 64 instances, a toy circuit on generated values"
   },
   "art:ffb752134ed6741854086128a1d7927069a7ddbaa05f26df861e22bf0311620f": "tests/verity/circuits/count_vectors.jsonl",
-  "art:b5e643a1e0eb5e1909ee308862d24f5ca8a12c81f314781fb7a1c5d3017fc988": "tests/verity/circuits/format_vectors.json",
+  "art:405bef2fc8986d4f9925d9505acbe3ea3302f6ede33841867c6a9debca206209": "tests/verity/circuits/format_vectors.json",
   "art:2ce47615b65c175bd07f5aaf0febe95758936fc2bf3afb3ac9807cbed68d2896": "tests/verity/circuits/qcall_vectors.json",
   "art:53cc5d7c13071d600c085b8247411c5f09c23d6cf5c3515c57cfbc651547a333": "tests/verity/circuits/qword_vectors.json",
   "previous": {
