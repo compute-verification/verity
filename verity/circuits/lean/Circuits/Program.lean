@@ -552,6 +552,7 @@ structure Prog where
 
 def RUN : String := "run"
 def REGISTRATION : String := "registration"
+def SUPPLIED : String := "supplied"
 
 private def widthAfter? (pre id : String) : Option Nat :=
   if !(id.startsWith pre && id.endsWith "_v1") then none else
@@ -559,11 +560,14 @@ private def widthAfter? (pre id : String) : Option Nat :=
   if w.length > 0 && w.all Char.isDigit && w.front != '0' then w.toNat? else none
 
 /-- `program.input_id`: an input id's binding time and width: `run` for `^Input([1-9][0-9]*)_v1$` (`program.INPUT_ID`),
-`registration` for `^RegisteredInput([1-9][0-9]*)_v1$` (`program.REGISTERED_ID`); none for any other id. -/
+`registration` for `^RegisteredInput([1-9][0-9]*)_v1$` (`program.REGISTERED_ID`), `supplied` for
+`^SuppliedInput([1-9][0-9]*)_v1$` (`program.SUPPLIED_ID`, §5.4); none for any other id. -/
 def inputId? (id : String) : Option (String × Nat) :=
   match widthAfter? "Input" id with
   | some w => some (RUN, w)
-  | none => (widthAfter? "RegisteredInput" id).map (REGISTRATION, ·)
+  | none => match widthAfter? "RegisteredInput" id with
+    | some w => some (REGISTRATION, w)
+    | none => (widthAfter? "SuppliedInput" id).map (SUPPLIED, ·)
 
 def inputWidth? (id : String) : Option Nat := (inputId? id).map (·.2)
 
@@ -593,7 +597,7 @@ def GateKind.signature : GateKind → Array (String × Ty) × Ty
 
 /-- A primitive a Boolean Definition may reach (§9): a gate, a constant bit, or a 1-bit input. -/
 def isBooleanPrim (id : String) : Bool :=
-  (gateKind? id).isSome || id == "Input1_v1" || id == "RegisteredInput1_v1"
+  (gateKind? id).isSome || id == "Input1_v1" || id == "RegisteredInput1_v1" || id == "SuppliedInput1_v1"
 
 /-- §4.9's word primitive: a primitive that is no gate, constant bit or input. -/
 def isWordPrim (prim : Bool) (id : String) : Bool := prim && !isInputId id && !isBooleanPrim id
@@ -1520,10 +1524,10 @@ private def decodeAll (desc : Desc) (fs : Array String) : D Unit := do
   for f in fs do
     if desc.ddefs.contains f then discard (getDef Steps.FUEL desc f)
 
-/-- An id spelt as a member of the input families or the gates' (`Input`, `RegisteredInput`, `And` or `Xor`, then a
+/-- An id spelt as a member of the input families or the gates' (`Input`, `RegisteredInput`, `SuppliedInput`, `And` or `Xor`, then a
 digit) that is no member's id: a family member spelt otherwise than its id (§4.6), which no registry holds. -/
 def misspelt (id : String) : Bool :=
-  ["Input", "RegisteredInput", "And", "Xor"].any (fun pre =>
+  ["Input", "RegisteredInput", "SuppliedInput", "And", "Xor"].any (fun pre =>
       id.startsWith pre && (id.drop pre.length).toString.front.isDigit) &&
     !isInputId id && (gateKind? id).isNone
 
@@ -1588,18 +1592,144 @@ def checkTopKeys (keys : Array String) : V Unit := do
   if !extra.isEmpty then
     throw s!"E_KEYS: the top-level keys {extra.toList.take 4} are not {SCHEMA}'s, and the program digest does not cover them"
 
-/-- §5.1's `inputs` against the root `defs[root]` (`codec._check_inputs`): `[name, node count]` per parameter (`E_INPUTS`),
-the names nonempty and distinct (`E_INPUTS_NAME`), the counts summing to the input nodes that lead the root's body, with no
-input node after them (`E_INPUTS_COUNT`), and each parameter's nodes all run or all registered inputs (`E_INPUTS_MIXED`). -/
+/-- Python's `repr` of string `s` of the canonical domain (ASCII, no DEL): single quotes unless `s` holds one and no double
+quote, the quote, backslash and control characters escaped. -/
+def pyStr (s : String) : String :=
+  let q := if s.contains '\'' && !s.contains '"' then '"' else '\''
+  let hex := fun (n : Nat) => String.ofList ((Nat.toDigits 16 n).leftpad 2 '0')
+  let body := s.foldl (fun acc c => acc ++
+    if c == '\\' then "\\\\" else if c == q then "\\" ++ c.toString else if c == '\n' then "\\n"
+    else if c == '\r' then "\\r" else if c == '\t' then "\\t" else if c.toNat < 32 then "\\x" ++ hex c.toNat
+    else c.toString) ""
+  q.toString ++ body ++ q.toString
+
+/-- Python's `repr` of a list of strings. -/
+def pyStrs (xs : List String) : String := "[" ++ ", ".intercalate (xs.map pyStr) ++ "]"
+
+/-- Python's `repr` of `json.loads`' value for `j`, in the canonical domain (integers only), an object's keys in key order. -/
+def pyRepr : Json → String
+  | .null => "None"
+  | .bool b => if b then "True" else "False"
+  | .num n => toString n.mantissa
+  | .str s => pyStr s
+  | .arr a => "[" ++ ", ".intercalate (a.attach.map fun x => pyRepr x.1).toList ++ "]"
+  | .obj kvs => "{" ++ ", ".intercalate (kvs.toArray.attach.map fun x => pyStr x.1.1 ++ ": " ++ pyRepr x.1.2).toList ++ "}"
+termination_by j => j
+decreasing_by
+  · exact sizeOf_lt_of_mem_arr x.2
+  · exact sizeOf_lt_of_mem_obj x.2
+
+/-- A function a supplied input names (§5.4, `supplied.Function`), as the decoder reads it: its static arguments by name,
+and its value's bytes at `args`, none where it has no value there. Its body is the verifier's, not the format's. -/
+structure SuppliedFn where
+  name : String
+  args : List String
+  nbytes : Json → Option Nat
+
+/-- §5.4's closed registry (`supplied.FUNCTIONS`): every function a supplied input may name. A name is versioned: a function
+whose value changes takes a new name. -/
+def SUPPLIED_FUNCTIONS : List SuppliedFn :=
+  let fixed := fun (n : Nat) (_ : Json) => some n
+  let nat := fun (a : Json) (k : String) => natJ? (a.getObjValD k)
+  [⟨"pous.session.round_coin/v1", ["round"], fixed 12⟩,
+   ⟨"pous.session.header/v1", ["head"], fun a => (nat a "head").bind fun h => if h + h % 2 > 0 then some (h + h % 2) else none⟩,
+   ⟨"pous.session.context/v1", [], fixed 106⟩,
+   ⟨"pous.setup.salt/v1", [], fixed 24⟩,
+   ⟨"poub.read.pass_seed/v1", ["window", "pass"], fixed 64⟩,
+   ⟨"poub.read.pass_root/v1", ["window", "pass"], fixed 64⟩,
+   ⟨"window.salt/v1", [], fixed 64⟩,
+   ⟨"pouw.pearlplus.salt/v1", [], fixed 32⟩,
+   ⟨"registered.root/v1", ["value"], fixed 64⟩,
+   ⟨"record.root/v1", ["port"], fixed 64⟩,
+   ⟨"log.base/v1", [], fixed 8⟩,
+   ⟨"const.u16/v1", ["value"], fun a => (nat a "value").bind fun v => if v < 2 ^ 16 then some 2 else none⟩]
+
+def SUPPLIED_LAYOUTS : List String := ["le", "halves", "digest"]
+
+/-- `supplied.layout_fits`: whether `nbytes` bytes read by `layout` are whole leaves of `w` bits. -/
+def layoutFits (layout : String) (w nbytes : Nat) : Bool :=
+  if layout == "le" then [1, 8, 16, 32, 64].contains w && 8 * nbytes % w == 0
+  else if layout == "halves" then 0 < w && w ≤ 32 && 32 % w == 0 && nbytes % 4 == 0
+  else layout == "digest" && w == 1 && nbytes % 64 == 0
+
+/-- `supplied.mark_of`: entry `x`'s mark, none for `[name, n]`; `E_SUPPLIED_MARK` unless its third element is an object of
+exactly `supplied` (a string), `args` (names to nonempty strings or naturals), `layout` (`SUPPLIED_LAYOUTS`) and `bits` (a
+positive natural), and a part's `of` (`[input, lo, hi]`, `0 ≤ lo < hi`). -/
+def markOf (name : String) (x : Json) : V (Option Json) := do
+  let .arr #[_, _, m] := x | return none
+  let ok : Bool := match m with
+    | .obj kvs =>
+      let keys := kvs.toArray.map (·.1)
+      (keys.filter (· != "of")).toList == ["args", "bits", "layout", "supplied"] &&
+      (match m.getObjValD "of" with
+        | .null => !keys.contains "of"
+        | .arr #[.str _, lo, hi] => match intJ? lo, intJ? hi with
+          | some lo, some hi => decide (0 ≤ lo) && decide (lo < hi)
+          | _, _ => false
+        | _ => false) &&
+      (match m.getObjValD "supplied" with | .str _ => true | _ => false) &&
+      (match m.getObjValD "args" with
+        | .obj a => a.toArray.all fun (_, v) => match v with
+          | .str s => s != ""
+          | v => (natJ? v).isSome
+        | _ => false) &&
+      (match m.getObjValD "layout" with | .str l => SUPPLIED_LAYOUTS.contains l | _ => false) &&
+      ((natJ? (m.getObjValD "bits")).any (· > 0))
+    | _ => false
+  unless ok do
+    throw (s!"E_SUPPLIED_MARK: input {pyStr name}: a mark is {"{"}supplied, args, layout, bits}, a part's with of = " ++
+      s!"[input, lo, hi], not [{pyRepr m}]")
+  return some m
+
+/-- `supplied.check_entry`: entry `name`'s mark `mark` (`markOf`) against its input nodes `nodes`, each (binding, width,
+leaves): a marked entry's nodes all supplied and an unmarked one's none (`E_INPUTS_MIXED`), its function in
+`SUPPLIED_FUNCTIONS` (`E_SUPPLIED_FN`), its args that function's with a value there (`E_SUPPLIED_ARGS`), and its leaves of
+one width, the value's bits by its layout, or a part's `[lo, hi)` of them (`E_SUPPLIED_WIDTH`). -/
+def checkEntry (name : String) (mark : Option Json) (nodes : Array (String × Nat × Nat)) : V Unit := do
+  let some m := mark | do
+    if nodes.any (·.1 == SUPPLIED) then
+      throw s!"E_INPUTS_MIXED: input {pyStr name}: supplied input nodes and no mark naming their function"
+  unless nodes.all (·.1 == SUPPLIED) do
+    let bs := (nodes.foldl (fun l b => if l.contains b.1 then l else l ++ [b.1]) ([] : List String)).mergeSort (· ≤ ·)
+    throw s!"E_INPUTS_MIXED: input {pyStr name}: marked supplied, and its nodes are {pyStrs bs}"
+  let fname := match m.getObjValD "supplied" with | .str s => s | _ => ""
+  let some f := SUPPLIED_FUNCTIONS.find? (·.name == fname)
+    | throw s!"E_SUPPLIED_FN: input {pyStr name}: {pyStr fname} is no supplied function"
+  let args := m.getObjValD "args"
+  let given := match args with | .obj a => a.toArray.toList.map (fun (x : String × Json) => x.1) | _ => []
+  if given.mergeSort (· ≤ ·) != f.args.mergeSort (· ≤ ·) then
+    throw s!"E_SUPPLIED_ARGS: input {pyStr name}: {f.name} takes the args {pyStrs (f.args.mergeSort (· ≤ ·))}, not {pyStrs (given.mergeSort (· ≤ ·))}"
+  let some nbytes := f.nbytes args
+    | throw s!"E_SUPPLIED_ARGS: input {pyStr name}: {f.name} has no value at {pyRepr args}"
+  let widths := (nodes.foldl (fun l b => if l.contains b.2.1 then l else l ++ [b.2.1]) ([] : List Nat)).mergeSort (· ≤ ·)
+  let leaves := nodes.foldl (· + ·.2.2) 0
+  let bits := (natJ? (m.getObjValD "bits")).getD 0
+  let layout := match m.getObjValD "layout" with | .str l => l | _ => ""
+  let of := match m.getObjValD "of" with
+    | .arr #[_, lo, hi] => some ((natJ? lo).getD 0, (natJ? hi).getD 0)
+    | _ => none
+  let (lo, hi) := of.getD (0, leaves)
+  let fits := match widths with
+    | [w] => leaves * w == bits && hi - lo == leaves && hi * w ≤ 8 * nbytes && layoutFits layout w nbytes &&
+        (of.isSome || bits == 8 * nbytes)
+    | _ => false
+  unless fits do
+    throw (s!"E_SUPPLIED_WIDTH: input {pyStr name}: {f.name}'s value is {8 * nbytes} bits, read by {layout} as whole " ++
+      s!"leaves of one width; the mark says {bits} and its nodes hold {leaves} leaves of widths {widths}")
+
+/-- §5.1's `inputs` against the root `defs[root]` (`codec._check_inputs`): `[name, node count]` per parameter, a supplied
+one's with its mark (§5.4; `E_INPUTS`), the names nonempty and distinct (`E_INPUTS_NAME`), the counts summing to the input
+nodes that lead the root's body, with no input node after them (`E_INPUTS_COUNT`), each parameter's nodes all run, all
+registered or all supplied inputs (`E_INPUTS_MIXED`), and each mark holding of its nodes (`markOf`, `checkEntry`). -/
 def checkInputs (defs : Array Defn) (root : Nat) (xs : Json) : V Unit := do
   let bad := "E_INPUTS: `inputs` is not an array of [name, node count] pairs"
   let .arr xs := xs | throw bad
   let some ps := xs.mapM (fun x => match x with
-      | .arr #[.str s, n] => (natJ? n).map (s, ·)
+      | .arr #[.str s, n] | .arr #[.str s, n, _] => (natJ? n).map (s, ·)
       | _ => none) | throw bad
   let names := ps.map (·.1)
   if names.contains "" || (names.foldl (·.insert ·) ({} : Std.HashSet String)).size != names.size then
-    throw s!"E_INPUTS_NAME: the parameter names {names.toList.take 8} hold an empty or a repeated name"
+    throw s!"E_INPUTS_NAME: the parameter names {pyStrs (names.toList.take 8)} hold an empty or a repeated name"
   let nodes := defs[root]!.body.nodes
   let isIn := fun (x : Node) => let c := defs[x.fn]!; c.prim && isInputId c.key
   let lead := (nodes.findIdx? (!isIn ·)).getD nodes.size
@@ -1608,10 +1738,16 @@ def checkInputs (defs : Array Defn) (root : Nat) (xs : Json) : V Unit := do
     throw (s!"E_INPUTS_COUNT: `inputs` counts {total} input nodes, where the root's body leads with {lead} " ++
       "and holds no input node after them")
   let mut k := 0
-  for (name, n) in ps do
-    let reg := (nodes.extract k (k + n)).map fun x => (inputId? defs[x.fn]!.key).map (·.1) == some REGISTRATION
-    if reg.any id && reg.any (!·) then
-      throw s!"E_INPUTS_MIXED: parameter '{name}''s input nodes {k}..{k + n - 1} mix run and registered inputs"
+  for ((name, n), x) in ps.zip xs do
+    let bound := (nodes.extract k (k + n)).map fun nd =>
+      let (b, w) := (inputId? defs[nd.fn]!.key).getD ("", 0)
+      (b, w, nd.members)
+    let times := [(RUN, "run"), (REGISTRATION, "registered"), (SUPPLIED, "supplied")].filter fun (b, _) =>
+      bound.any fun (x : String × Nat × Nat) => x.1 == b
+    if times.length > 1 then
+      throw (s!"E_INPUTS_MIXED: parameter {pyStr name}'s input nodes {k}..{k + n - 1} mix " ++
+        s!"{" and ".intercalate (times.map (·.2))} inputs")
+    checkEntry name (← markOf name x) bound
     k := k + n
 
 /-- Whether descriptor entry `e` is a composite's: its `form` the string `composite`, compared by a match. -/
@@ -2077,6 +2213,53 @@ private def verdict (s : String) : String := match decode s.toUTF8 with
 #guard verdict (NOT_DESC.replace r#""inputs":[["x",1]]"# r#""inputs":[["x",2]]"#) == "E_INPUTS_COUNT"
 #guard verdict (mixedDesc r#""inputs":[["x",2]]"#) == "E_INPUTS_MIXED"
 #guard (verdict (mixedDesc r#""inputs":[["x",1],["y",1]]"#)).length == 128
+/-- `NOT_DESC` with a 64-leaf supplied input node after the run input node (`log.base/v1`'s 8 bytes, read `le`), the
+parameters as `inputs` names and marks them. -/
+private def suppliedDesc (inputs : String) : String :=
+  ((((NOT_DESC.replace r#"["Input1_v1","Not_v1"]"# r#"["Input1_v1","Not_v1","SuppliedInput1_v1"]"#).replace
+    r#""Root[NotAnd_v1]_v1":{"# r#""Root[NotAnd_v1]_v1":{"#).replace
+    r#""form":"batch","n":1,"out":0},"# r#""form":"batch","n":1,"out":0},{"args":[],"axes":[],"fn":2,"form":"batch","n":64,"out":0},"#).replace
+    r#""ret":{"affine":["n",1,0,1]}"# r#""ret":{"affine":["n",2,0,1]}"#).replace r#""inputs":[["x",1]]"# inputs
+  |>.replace r#""Root[NotAnd_v1]_v1":{"bindings""# r#""SuppliedInput1_v1":{"form":"primitive","id":"SuppliedInput1_v1","params":[],"ret":["Value",1]},"Root[NotAnd_v1]_v1":{"bindings""#
+  |>.replace r#""n":64,"out":0"# r#""n":64,"out":2"# |>.replace r#"["Value",1]]}"# r#"["Value",1],["Array",64,["Value",1]]]}"#
+
+private def logMark (m : String) : String := s!"\"inputs\":[[\"x\",1],[\"base\",1,{m}]]"
+private def LOG_MARK : String := r#"{"args":{},"bits":64,"layout":"le","supplied":"log.base/v1"}"#
+
+/-- `decode`'s whole refusal text on `s`, or the empty string on an accept. -/
+private def refusal (s : String) : String := match decode s.toUTF8 with
+  | .ok _ => ""
+  | .error e => e
+
+#guard (verdict (suppliedDesc (logMark LOG_MARK))).length == 128
+#guard verdict (suppliedDesc (logMark LOG_MARK)) != verdict (suppliedDesc (logMark (LOG_MARK.replace "log.base" "pous.setup.salt"
+  |>.replace "64," "192,")))
+#guard refusal (suppliedDesc r#""inputs":[["x",1],["base",1]]"#) ==
+  "E_INPUTS_MIXED: input 'base': supplied input nodes and no mark naming their function"
+#guard refusal (suppliedDesc r#""inputs":[["x",2,{"args":{},"bits":65,"layout":"le","supplied":"log.base/v1"}]]"#) ==
+  "E_INPUTS_MIXED: parameter 'x''s input nodes 0..1 mix run and supplied inputs"
+#guard refusal (NOT_DESC.replace r#""inputs":[["x",1]]"# (s!"\"inputs\":[[\"x\",1,{LOG_MARK}]]")) ==
+  "E_INPUTS_MIXED: input 'x': marked supplied, and its nodes are ['run']"
+#guard refusal (suppliedDesc (logMark (LOG_MARK.replace r#""bits":64"# r#""bits":0"#))) ==
+  "E_SUPPLIED_MARK: input 'base': a mark is {supplied, args, layout, bits}, a part's with of = [input, lo, hi], not " ++
+  "[{'args': {}, 'bits': 0, 'layout': 'le', 'supplied': 'log.base/v1'}]"
+#guard verdict (suppliedDesc (logMark (LOG_MARK.replace r#""layout":"le""# r#""layout":"be""#))) == "E_SUPPLIED_MARK"
+#guard verdict (suppliedDesc (logMark (LOG_MARK.replace r#""args":{}"# r#""args":{"k":""}"#))) == "E_SUPPLIED_MARK"
+#guard verdict (suppliedDesc (logMark (LOG_MARK.replace r#""args":{}"# r#""args":{},"of":["b",1,1]"#))) == "E_SUPPLIED_MARK"
+#guard verdict (suppliedDesc (logMark (LOG_MARK.replace r#""args":{}"# r#""args":{},"seed":1"#))) == "E_SUPPLIED_MARK"
+#guard refusal (suppliedDesc (logMark (LOG_MARK.replace "log.base/v1" "log.base/v2"))) ==
+  "E_SUPPLIED_FN: input 'base': 'log.base/v2' is no supplied function"
+#guard refusal (suppliedDesc (logMark (LOG_MARK.replace r#""args":{}"# r#""args":{"round":3}"#))) ==
+  "E_SUPPLIED_ARGS: input 'base': log.base/v1 takes the args [], not ['round']"
+#guard refusal (suppliedDesc (logMark r#"{"args":{"value":70000},"bits":16,"layout":"le","supplied":"const.u16/v1"}"#)) ==
+  "E_SUPPLIED_ARGS: input 'base': const.u16/v1 has no value at {'value': 70000}"
+#guard refusal (suppliedDesc (logMark (LOG_MARK.replace r#""bits":64"# r#""bits":32"#))) ==
+  "E_SUPPLIED_WIDTH: input 'base': log.base/v1's value is 64 bits, read by le as whole leaves of one width; the mark says " ++
+  "32 and its nodes hold 64 leaves of widths [1]"
+#guard verdict (suppliedDesc (logMark (LOG_MARK.replace r#""layout":"le""# r#""layout":"digest""#))) == "E_SUPPLIED_WIDTH"
+#guard (verdict (suppliedDesc (logMark r#"{"args":{},"bits":64,"layout":"le","of":["salt",0,64],"supplied":"window.salt/v1"}"#))).length == 128
+#guard verdict (suppliedDesc (logMark r#"{"args":{},"bits":64,"layout":"le","of":["salt",500,564],"supplied":"window.salt/v1"}"#)) == "E_SUPPLIED_WIDTH"
+#guard pyStr "it's" == "\"it's\"" && pyStr "a\\b" == "'a\\\\b'" && pyStr "\x01" == "'\\x01'"
 #guard verdict (NOT_DESC.replace r#""definitions":{"# r#""definitions":{"Const1[0x1]_v1":{"form":"primitive","id":"Const1[0x1]_v1","params":[],"ret":["Value",1]},"#) == "E_UNREACHED"
 
 /-! ### §6 The canonical layout and §7 scope resolution -/
