@@ -4,7 +4,8 @@
 
 The Python codec refuses such a Program as it decodes it (`defs.Builder.finish`), and so does Flock's decoder, which
 `InferenceOnlyCheck` decodes with (`Flock.Program.Widths`), with the codec's message. The descriptors here are written as JSON, since
-the Builder refuses to build them. `cases()` holds, as `InferenceOnlyCheck.Desc` reads an instance (θ and the owners per root node):
+the Builder refuses to build them, in the second schema: each word primitive has a Boolean body in `boolean`, and `tamper` moves a
+reference only in a word Definition, since a Boolean body's leaves are all 1 bit. `cases()` holds, as `InferenceOnlyCheck.Desc` reads an instance (θ and the owners per root node):
 
 * `shapes()`: the five shapes on which a draft of the liveness test gave `InferenceOnlyCheck` mistyped Programs
   (`swap`, `exit_xs`, `carry_read` with and without `xs`, `xs_part`, each with inputs of 8, 16, 32 and 64 bits a carry or a
@@ -22,11 +23,28 @@ from __future__ import annotations
 import json
 import random
 
-SCHEMA = "verity-ir/descriptor/v1"
+SCHEMA = "verity-ir/descriptor/v2"
 
 
 def V(w):
     return ["Value", w]
+
+
+def bits(t):
+    """The bit form of a word type (`verity.circuits.boolean.bit_type`)."""
+    if t[0] == "Value":
+        return V(1) if t[1] == 1 else ["Array", t[1], V(1)]
+    if t[0] == "Array":
+        return ["Array", t[1], bits(t[2])]
+    return ["Tuple", [bits(f) for f in t[1]]]
+
+
+def leaves(t) -> int:
+    if t[0] == "Value":
+        return 1
+    if t[0] == "Array":
+        return t[1] * leaves(t[2])
+    return sum(leaves(f) for f in t[1])
 
 
 def A(n, e):
@@ -69,9 +87,23 @@ class Program:
         self.gates[key] = body.gates
         return key
 
+    def bodies(self) -> dict[str, str]:
+        """Each word primitive's Boolean body, a composite of 1-bit leaves that returns the first leaves of its first
+        parameter (no gate): what the second schema's `boolean` map holds, so a case reaches the width check."""
+        out = {}
+        for key, d in list(self.defs.items()):
+            if d["form"] != "primitive" or key.startswith(("Input", "RegisteredInput")):
+                continue
+            params = [bits(t) for _, t in d["params"]]
+            ret = bits(d["ret"])
+            assert leaves(params[0]) >= leaves(ret), key
+            out[key] = self.composite(f"{key}Bits", Body(self, params), ret, aff("p", 0, 0, leaves(ret)))
+        return out
+
     def text(self) -> str:
-        d = {"annotations": {}, "callees": self.callees, "definitions": self.defs, "program_fn": "R_v1", "root": "R_v1",
-             "schema": SCHEMA, "types": self.types}
+        boolean = self.bodies()
+        d = {"annotations": {}, "boolean": boolean, "callees": self.callees, "definitions": self.defs, "program_fn": "R_v1",
+             "root": "R_v1", "schema": SCHEMA, "types": self.types}
         return json.dumps(d, separators=(",", ":"), sort_keys=True)
 
 
@@ -289,12 +321,28 @@ def _parts(refs: dict):
         yield refs
 
 
+def _bodies(desc: dict) -> set[str]:
+    """The Definitions the description's `boolean` map names as Boolean bodies, with every composite they call: their
+    leaves are all 1 bit, so a reference moved between them is never a width mismatch."""
+    defs, callees = desc["definitions"], desc["callees"]
+    todo, out = list(desc.get("boolean", {}).values()), set()
+    while todo:
+        k = todo.pop()
+        if k in out or defs.get(k, {}).get("form") != "composite":
+            continue
+        out.add(k)
+        todo += [callees[n["fn"]] for n in defs[k]["body"]["nodes"]]
+    return out
+
+
 def tamper(rng: random.Random, inst: dict) -> dict | None:
-    """`inst` with one reference of a random composite's body moved to another leaf source, or None where it has none."""
+    """`inst` with one reference of a random word composite's body (no Boolean body of a word primitive) moved to another
+    leaf source, or None where it has none."""
     desc = json.loads(inst["program"])
     sites = []
+    bodies = _bodies(desc)
     for d in desc["definitions"].values():
-        if d.get("form") != "composite":
+        if d.get("form") != "composite" or d["id"] in bodies:
             continue
         body = d["body"]
         for k, nd in enumerate(body["nodes"]):
