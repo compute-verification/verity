@@ -32,10 +32,10 @@ Verity itself knows nothing of vLLM.
 | --- | --- |
 | `serve-openai` | the committing endpoint |
 | `row run\|stage\|chain` | a workload's Build, Match and Commit (`chain` also publishes its record) |
-| `build`, `match`, `commit` | one stage of one workload |
+| `build`, `match` | one stage of one workload |
 | `predict row\|compare\|emit` | the Build of record from the workload alone; held to a traced Build; a switched workload's Build |
 | `advice` | a served run's advice, from its step trace and Commit record |
-| `commit-replay`, `serving-rows` | a sealed Commit's replay on CPU; its serving rows and registration |
+| `serving-rows` | a sealed Commit's serving rows and registration |
 | `records show\|programs\|fetch\|publish` | the circuit database |
 | `neutrality --tier fast\|heavy` | rebuilds the workloads of record's Programs and fails when a digest moved |
 | `block-counts` | a day's inference blocks, judged against its declared c, k and n |

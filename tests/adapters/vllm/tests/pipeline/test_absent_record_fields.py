@@ -323,7 +323,7 @@ NO_BLOCK = {"eos_token_ids": None, "lag": None, "async_scheduling": None, "moe_c
 def test_the_workload_program_s_summary_states_null_for_a_block_its_result_does_not_have(tmp_path, monkeypatch, capsys, blocks, stated):
     monkeypatch.setattr(GP, "build", lambda *_a, **_k: {**RESULT, **blocks})
     (tmp_path / "w.json").write_text("{}")
-    a = cli.parse("global-program", ["--workload", str(tmp_path / "w.json"), "--derived", str(tmp_path), "--out", str(tmp_path)], {})
+    a = cli.parse(GP, ["--workload", str(tmp_path / "w.json"), "--derived", str(tmp_path), "--out", str(tmp_path)], {})
     assert GP.main(a) == 0
     assert json.loads(capsys.readouterr().out) == {**SUMMARY, **stated}
     monkeypatch.setattr(GP, "build", lambda *_a, **_k: {"ok": False, "reason": "refused", "message": "why"})

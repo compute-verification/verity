@@ -62,8 +62,8 @@ def _write_request(rep, d: Path, LP: int, STEPS: int, S: int) -> None:
 
 
 def _compose(workload: Path, derived: Path, out: Path, eos: int) -> dict:
-    """GP-01 as the Build runs it: `verity-vllm global-program` in its own interpreter."""
-    p = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "global-program", "--workload", str(workload),
+    """GP-01 as the Build runs it: `cli.run(global_program)` in its own interpreter."""
+    p = subprocess.run([sys.executable, "-c", "import importlib, sys; from verity_vllm.pipeline import cli; raise SystemExit(cli.run(importlib.import_module(sys.argv[1]), sys.argv[2:]))", "verity_vllm.pipeline.global_program", "--workload", str(workload),
                         "--derived", str(derived), "--out", str(out), "--eos-token-ids", str(eos)],
                        cwd=VLLM_DIR, capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-3000:]

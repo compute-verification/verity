@@ -77,9 +77,9 @@ def test_a_diff_of_two_records_opens_each_name_as_the_command_line_gives_it(tmp_
         p.write_text("{}")
     monkeypatch.chdir(tmp_path)
     with pytest.raises(raised):
-        cli.main(["weights-of-record", "--diff", name.format(a=a), str(b)])
+        cli.run(WR, ["--diff", name.format(a=a), str(b)])
     with pytest.raises(raised):
-        cli.main(["weights-of-record", "--diff", str(a), name.format(a=b)])
+        cli.run(WR, ["--diff", str(a), name.format(a=b)])
 
 
 def test_the_oracles_tie_facts_open_the_two_files_by_their_joined_names(tmp_path, opened):

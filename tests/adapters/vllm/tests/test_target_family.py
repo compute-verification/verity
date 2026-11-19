@@ -124,18 +124,18 @@ def test_cli_fails_by_name_with_rc_3_and_writes_the_record(tmp_path):
     out = tmp_path / "target_family.json"
     env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(TREE), str(TREE / "vllm-poc"), os.environ.get("PYTHONPATH")]))}
     env.pop("TARGET_FAMILY_WAIVER", None)
-    r = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "target-family", "--row", ROW_PRO, "--stages", "build", "--no-device",
+    r = subprocess.run([sys.executable, "-c", "import importlib, sys; from verity_vllm.pipeline import cli; raise SystemExit(cli.run(importlib.import_module(sys.argv[1]), sys.argv[2:]))", "verity_vllm.target_family", "--row", ROW_PRO, "--stages", "build", "--no-device",
                         "--build-summary", str(bs), "--out", str(out)], capture_output=True, text=True, env=env, cwd=TREE)
     assert r.returncode == 3, r.stderr
     assert r.stderr.startswith("PRECHECK_FAIL_TARGET_FAMILY:") and "Build target 9.0 != row family 12.0" in r.stderr
     rec = json.loads(out.read_text())
     assert rec["schema"] == "verity-sweep/target-family/v1" and rec["fail_class"] == "PRECHECK_FAIL_TARGET_FAMILY"
     # the waiver from the environment (canary.sh exports TARGET_FAMILY_WAIVER) turns it into a named WAIVED, rc 0
-    r2 = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "target-family", "--row", ROW_PRO, "--stages", "build", "--no-device",
+    r2 = subprocess.run([sys.executable, "-c", "import importlib, sys; from verity_vllm.pipeline import cli; raise SystemExit(cli.run(importlib.import_module(sys.argv[1]), sys.argv[2:]))", "verity_vllm.target_family", "--row", ROW_PRO, "--stages", "build", "--no-device",
                          "--build-summary", str(bs), "--out", str(out)], capture_output=True, text=True, env={**env, "TARGET_FAMILY_WAIVER": "canary t"}, cwd=TREE)
     assert r2.returncode == 0 and r2.stdout.startswith("TARGET-FAMILY-WAIVED (canary t)")
     assert json.loads(out.read_text())["verdict"] == "WAIVED"
-    r3 = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "target-family", "--row", ROW_PRO, "--stages", "build", "--out", str(out)],
+    r3 = subprocess.run([sys.executable, "-c", "import importlib, sys; from verity_vllm.pipeline import cli; raise SystemExit(cli.run(importlib.import_module(sys.argv[1]), sys.argv[2:]))", "verity_vllm.target_family", "--row", ROW_PRO, "--stages", "build", "--out", str(out)],
                         capture_output=True, text=True, env={**env, "CUDA_VISIBLE_DEVICES": ""}, cwd=TREE)
     assert r3.returncode == 3 and "CUDA_VISIBLE_DEVICES hides" in r3.stderr, "the row's empty CUDA_VISIBLE_DEVICES reaches the check"
 

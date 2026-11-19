@@ -41,7 +41,7 @@ The Build carries the compile artifact it read (`artifact`, `served_artifact.rec
 `verity-vllm served-match` makes the Build in the serving process (`pipeline.served_match`): `build` without routes, `probe_routes`
 on the serving GPU for the GEMM routes that Build lacks, then `build` with them.
 
-    verity-vllm compiled verify --manifest USED --rebuilt REBUILT --out verify.json
+    cli.run(compiled) verify --manifest USED --rebuilt REBUILT --out verify.json
 """
 from __future__ import annotations
 

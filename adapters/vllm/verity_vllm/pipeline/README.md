@@ -8,8 +8,8 @@ the next stage and the checks to read.
 | --- | --- | --- |
 | Build | Derives the workload's Programs from the pinned vLLM model class, on a CPU. | `verity-vllm build` |
 | Match | Serves the workload under the observer and checks the Programs against what vLLM executed. | `verity-vllm match` |
-| Commit | Serves the workload with the committer attached, and holds what it committed to what it served. | `verity-vllm commit` |
-| Replay | Replays a sample of a Commit's committed values, in the Commit's process or later on a CPU. | `verity-vllm commit-replay` |
+| Commit | Serves the workload with the committer attached, and holds what it committed to what it served. | `verity-vllm serve-openai --seal` |
+| Replay | Replays a sample of a Commit's committed values, in the Commit's process or later on a CPU. | `cpu_replay`'s `main`, under `cli.run` |
 
 The package also holds the committing endpoint, `verity-vllm serve-openai`: an OpenAI-compatible server on the
 in-process engine, with every step committed.

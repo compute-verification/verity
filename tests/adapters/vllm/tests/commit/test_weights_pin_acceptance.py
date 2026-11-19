@@ -270,7 +270,7 @@ def test_pin_record_is_built_once_per_row_not_per_request(checkpoint, tmp_path, 
     shapes = B1_SHAPES if name == "b1" else B2_SHAPES
     root, ofr, _ = _row(tmp_path, name, prog, shapes, workload_digest="c" * 128)
     out = root / "weights_of_record.json"
-    rc = cli.main(["weights-of-record", "--programs-root", str(root), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(out)])
+    rc = cli.run(WR, ["--programs-root", str(root), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(out)])
     rec = json.loads(Path(out).read_text())
     assert rc == 0 and rec["of_record"] is True and set(rec["of_record_set"]["program_digests"]) == ofr
     live = live_digests(_served(t, fields))

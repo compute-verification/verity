@@ -1,6 +1,6 @@
 """Verity source identity + precheck: the job runs the tree it names, and a mixed tree is refused by construction.
 
-    verity-vllm source-identity [--tree ROOT] [--sha SHA] [--out FILE] [--stage NAME]
+    cli.run(source_identity) [--tree ROOT] [--sha SHA] [--out FILE] [--stage NAME]
         exit 0  every important package (verity, verity_vllm, research) resolves from ROOT
         exit 3  PRECHECK_FAIL_SOURCE_IDENTITY -- the first line of stderr names the class, the following lines each mismatch
 

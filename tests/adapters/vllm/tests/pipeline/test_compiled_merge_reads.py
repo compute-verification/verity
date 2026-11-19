@@ -69,7 +69,7 @@ def merge(tmp_path: Path, control: list[dict[str, Any]], treatment: list[dict[st
             argv += [f"--{arm}", str(d)]
     out = tmp_path / "merged"
     with pytest.raises(SystemExit) as e:
-        cm.main(cli.parse("compiled-merge", [*argv, "--out", str(out)], {}))
+        cm.main(cli.parse(cm, [*argv, "--out", str(out)], {}))
     return e.value.code, json.loads((out / "summary.json").read_text()), json.loads((out / "verdict.json").read_text())
 
 

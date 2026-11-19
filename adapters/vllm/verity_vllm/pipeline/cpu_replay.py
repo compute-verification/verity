@@ -1,6 +1,6 @@
 """The C2 replay of a deferred Commit, on CPU, from its sealed replay bundle (`pipeline.replay_bundle`).
 
-    verity-vllm commit-replay BUNDLE --row-dir D --checkpoint-dir CK [--checkpoints-manifest M --model REPO --revision REV]
+    cli.run(cpu_replay) BUNDLE --row-dir D --checkpoint-dir CK [--checkpoints-manifest M --model REPO --revision REV]
 
 The replay is the prover's pre-flight check: it reads committed values, the requests and the weights in the clear on the
 prover's node, so neither it nor its keep is verifier-facing.  A verifier checks the sampled proof blocks' proofs

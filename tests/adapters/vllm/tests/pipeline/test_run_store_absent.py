@@ -49,7 +49,7 @@ def test_the_refusal_names_its_entry_point(no_run_store, entry):
 
 def test_the_source_identity_command_is_refused_not_skipped(no_run_store, capsys):
     with pytest.raises(SystemExit) as e:
-        cli.main(["source-identity"])
+        cli.run(source_identity, [])
     assert e.value.code == 2
     assert "the source-identity precheck of stage 'precheck' is refused" in capsys.readouterr().err
 

@@ -21,28 +21,24 @@ import importlib
 import os
 import sys
 from collections.abc import Callable, Mapping, MutableMapping
+from types import ModuleType
 from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.config import UsageError
 from verity_vllm.log import write
 
-__all__ = ["main", "parse", "write"]
+__all__ = ["main", "parse", "run", "write"]
 
 PROG = "verity-vllm"
 
 #: command -> (module, one-line help).  Modules are imported only when their command runs.
 COMMANDS: dict[str, tuple[str, str]] = {
     "advice": ("verity_vllm.pipeline.advice", "a served run's advice (I1) for the precommitted compiler, from its step trace and Commit record"),
-    "batch-decomp": ("verity_vllm.check.match.batch_decomp", "B>1 Match by per-request decomposition"),
     "block-counts": ("verity_vllm.program.predict.block_counts", "a day's (c, k)-inference blocks from its served windows' circuit records, judged against its declared n: the judgment public, the counts private"),
     "build": ("verity_vllm.pipeline.build", "derive one request wrapper's Program (Build step)"),
     "commit-arb": ("verity_vllm.pipeline.commit_arb", "the served Commit under seeded varied traffic, each request's record held to its streamed ids"),
-    "commit-plan": ("verity_vllm.pipeline.commit_plan", "a Commit's plan, derived before the GPU: its producer facts, keyed"),
-    "commit-replay": ("verity_vllm.pipeline.cpu_replay", "a deferred Commit's C2 replay on CPU, from its sealed replay bundle"),
     "replay-plan": ("verity_vllm.pipeline.replay_plan", "a slim replay bundle's planner process (started by a `--replay-deferred slim` Commit)"),
-    "compiled": ("verity_vllm.acquire.compiled", "hold the Build an Execution=compiled row's treatment ran with to the one it rederived (verify)"),
-    "compiled-merge": ("verity_vllm.pipeline.compiled_merge", "merge control/treatment outputs of a compiled row"),
     "coverage-workloads": ("verity_vllm.pipeline.coverage_workloads", "coverage campaign workloads"),
     "epoch": ("verity_vllm.pipeline.epoch", "the re-baseline epoch's row job (job, resolve, row-state, word-check, digests, ...)"),
     "fa2-tap-apply": ("verity_vllm.acquire.fa2_tap_src.apply_fa2_tap", "patch a pinned vllm-flash-attn tree into the FA2 tapped tree"),
@@ -53,11 +49,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "fp8-checkpoint": ("verity_vllm.engine.fp8_checkpoint", "make or re-make a block-FP8 checkpoint from a BF16 pin"),
     "int8-checkpoint": ("verity_vllm.engine.int8_checkpoint", "make or re-make an int8 checkpoint (exact-int8 linears) from a BF16 or FP8-block pin"),
     "gemm-correspondence": ("verity_vllm.program.gemm_target_correspondence", "a target's bf16 linear vs its registered GEMM Definition"),
-    "global-match": ("verity_vllm.check.match.global_match", "global Match of a batched execution"),
     "device-pin": ("verity_vllm.pipeline.device_pin", "probe this device's cuBLAS routes and route conditions: its device pin (probe)"),
-    "global-program": ("verity_vllm.pipeline.global_program", "workload Program from the derived request Programs"),
     "ids-front": ("verity_vllm.pipeline.ids_front", "the network attester's id form in front of vLLM's own OpenAI server"),
-    "launch-context": ("verity_vllm.pipeline.launch_context", "launch context of a workload's request shapes"),
     "m1-capture": ("verity_vllm.pipeline.match_capture", "capture the observation log under the observer"),
     "match": ("verity_vllm.pipeline.match", "Match stage driver of one configuration"),
     "meta-inventory": ("verity_vllm.engine.meta_inventory", "a checkpoint's modules on the meta device, from its config.json alone"),
@@ -69,21 +62,12 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "records": ("verity_vllm.pipeline.circuit_db",
                 ("the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch, "
                  "switch), and a checkpoint's staging (staged)")),
-    "release-json": ("verity_vllm.pipeline.release_json", "RELEASE.json writer, reader and release line"),
     "router-tap-build": ("verity_vllm.acquire.router_tap_src.build_ext", "build or check the router-softmax tap's CUDA op"),
-    "research-outputs": ("verity_vllm.pipeline.research_outputs", "typed outputs of a sweep stage"),
-    "research-result": ("verity_vllm.pipeline.research_result", "a sweep row's result.json"),
     "resolve-log": ("verity_vllm.observe.fold.resolve_log", "resolve an observation log against a profile"),
-    "runtime-tree": ("verity_vllm.observe.runtime_tree", "the runtime's module tree"),
     "serving-rows": ("verity_vllm.pipeline.deferred_rows", "a deferred Commit's serving rows and one-stage registration, from its sealed replay bundle"),
-    "source-identity": ("verity_vllm.pipeline.source_identity", "source identity and precheck"),
     "stoch-recompute": ("verity_vllm.check.replay.stoch_recompute", "value check of a stochastic row"),
-    "target-family": ("verity_vllm.target_family", "target-family preflight"),
-    "timeline": ("verity_vllm.pipeline.timeline", "stage telemetry (report)"),
     "topp-split-probe": ("verity_vllm.pipeline.topp_split_probe", "top-p split fixture"),
     "tp-register-tables": ("verity_vllm.pipeline.expert_tables", "a TP rank's registration of the per-expert cut's tables, from the checkpoint"),
-    "verdict": ("verity_vllm.pipeline.verdict_record", "a row's Commit verdict record, rebuilt from its evidence"),
-    "weights-of-record": ("verity_vllm.check.weights_of_record", "the weights of record"),
     "weights-tie": ("verity_vllm.program.predict.weights_tie", "the weights registration's checkpoint tie: its window (commit), the verifier's (verify), the pins (pins)"),
     "workload": ("verity_vllm.pipeline.workload", "the deterministic sweep workload generator"),
     "workload-file": ("verity_vllm.pipeline.workload_file", "workload files fetched by their art ids and checked against SHA256SUMS"),
@@ -97,6 +81,10 @@ DELETED: dict[str, str] = {
     "neutrality": "the traced Build it compared a predicted one against is deleted",
     "tp-serving-rows": "the tensor-parallel Commit's stand-in windows are deleted with it; the serve commits the window's circuit",
     "advice-windows": "the tensor-parallel Commit's advice windows are deleted with it; `advice_windows` commits the advice alone",
+    **dict.fromkeys(("compiled", "batch-decomp", "global-match", "weights-of-record", "runtime-tree", "commit-plan", "compiled-merge",
+                     "commit-replay", "global-program", "launch-context", "release-json", "research-outputs", "research-result",
+                     "source-identity", "timeline", "verdict", "target-family"),
+                    "no stage or script runs it since the rows' route went; its module's `main` runs under `cli.run`"),
 }
 
 
@@ -169,14 +157,29 @@ def _parser(prog: str, description: str | None) -> argparse.ArgumentParser:
     return argparse.ArgumentParser(prog=prog, description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
 
 
-def parse(command: str, argv: list[str], environ: Mapping[str, str] | None = None) -> Any:
-    """The options object of ``verity-vllm COMMAND ARGV...`` (exits 2 on a usage error, like any command line)."""
-    return _parse(command, argv, os.environ if environ is None else environ)[1]
+def parse(command: str | ModuleType, argv: list[str], environ: Mapping[str, str] | None = None) -> Any:
+    """The options object of ``verity-vllm COMMAND ARGV...``, or of a command module's ARGV (exits 2 on a usage error, like any
+    command line)."""
+    environ = os.environ if environ is None else environ
+    if isinstance(command, ModuleType):
+        return _parse_module(command, f"{PROG} {command.__name__}", argv, environ)[1]
+    return _parse(command, argv, environ)[1]
+
+
+def run(module: ModuleType, argv: list[str], environ: Mapping[str, str] | None = None) -> Any:
+    """A command module's `main` on the options of ARGV, as a command line gives them, for a module no command runs."""
+    parser, opts, _ = _parse_module(module, f"{PROG} {module.__name__}", argv, os.environ if environ is None else environ)
+    try:
+        return module.main(opts)
+    except UsageError as e:
+        parser.error(str(e))
 
 
 def _parse(command: str, argv: list[str], environ: Mapping[str, str]) -> tuple[argparse.ArgumentParser, Any, Any]:
-    mod = importlib.import_module(COMMANDS[command][0])
-    prog = f"{PROG} {command}"
+    return _parse_module(importlib.import_module(COMMANDS[command][0]), f"{PROG} {command}", argv, environ)
+
+
+def _parse_module(mod: ModuleType, prog: str, argv: list[str], environ: Mapping[str, str]) -> tuple[argparse.ArgumentParser, Any, Any]:
     subs = getattr(mod, "COMMANDS", None)
     if subs is None:
         parser = _parser(prog, _doc(mod.Options) or mod.__doc__)

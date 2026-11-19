@@ -10,7 +10,7 @@ One append-only JSONL file per row attempt (`<row>/timeline.jsonl`, path in `VER
 Fields every runner log must carry: hot/cold process (`hot`), engine reused or restarted (`engine_reused`) + reason
 (`restart_reason`), compile/warmup time (`prep.*` stages), workload/Commit time (`work.*`), offline validation time (`validate.*`).
 
-    verity-vllm timeline report <timeline.jsonl> [--json out.json] [--md out.md]
+    cli.run(timeline) report <timeline.jsonl> [--json out.json] [--md out.md]
 
 `report` folds the events into the stage table (process/model startup · preparation · workload · validation · closure) from the
 stage-name prefixes below, counts engine starts vs reuses and lists the restart reasons.  Overlapping spans are NOT summed into

@@ -311,6 +311,7 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
     from tests.check import test_global_match as T
     from verity_vllm.check.match import global_match_fast as GMF
     from verity_vllm.check.match import program_loaders as PL
+    from verity_vllm.check.match import global_match as gm
     from verity_vllm.pipeline import cli
     from verity_vllm.pipeline import match_fold as MF
     monkeypatch.delenv(MF.INSTANCES_FORM_ENV, raising=False)
@@ -326,7 +327,7 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
             gpp = tmp_path / f"gp_{tag}.json"
             gpp.write_text(json.dumps(gp))
             out = tmp_path / f"gm_{impl}_{tag}.json"
-            cli.main(["global-match", "--oracle", o, "--global-program", str(gpp), "--no-x09", "--no-alternate", "--out", str(out)])
+            cli.run(gm, ["--oracle", o, "--global-program", str(gpp), "--no-x09", "--no-alternate", "--out", str(out)])
             docs[(impl, tag)] = json.loads(_text(out))
     for (impl, tag), d in docs.items():
         assert d["verdict"] == "PASS" and d["impl"]["name"] == impl, (impl, tag, d["reasons"])
