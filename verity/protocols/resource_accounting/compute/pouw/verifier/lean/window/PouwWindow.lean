@@ -15,7 +15,6 @@ public import PouwWindow.Lanes
 public import PouwWindow.KnownRows
 public import PouwWindow.OwnPorts
 public import PouwWindow.FullSample
-public import PouwWindow.RegFile
 
 /-!
 # PoUW's audit execution phase as executable Lean
@@ -30,10 +29,8 @@ challenger (`PouwWindow.Rounds`), and a sampled H1 leaf's 33 statements port by 
 output's port, bits and registered row, and each input wire of the lowered unit's port and bit (`PouwWindow.Lanes`,
 `h1zy.statement_ports`' layout and `class_statement.unit_lowering`'s wires, which proofs' decoders read), and the rows
 the verifier registers at their known content (`PouwWindow.KnownRows`: lane `l`'s `pub` and `admit`, every statement's
-`o0`), and its registered data ports, one tree per value at the layout's rows (`PouwWindow.OwnPorts`), with each
-statement's `--registered` file built from, and checked against, the accepted registration and produced record
-(`PouwWindow.RegFile`, which `pouw-leaf-own` runs), and each statement's session held to the full sample
-(`PouwWindow.FullSample`, which `pouw-leaf-own` runs too). Code: Lean core plus PoUW's commitments (`pouw_commit`: its
+`o0`), and its registered data ports, one tree per value at the layout's rows (`PouwWindow.OwnPorts`), and the full
+sample a statement's session is held to (`PouwWindow.FullSample`). Code: Lean core plus PoUW's commitments (`pouw_commit`: its
 frame-v3-sha512 domains, Flock's SHA-512 and hm96, core's tagged identity), and never `security/`. The difftest's functions (`PouwWindow.Difftest`, on the shared harness) sit
 outside this root, so what imports the execution phase imports no harness. Its properties are stated in
 `security/Properties/Pouw.lean`.

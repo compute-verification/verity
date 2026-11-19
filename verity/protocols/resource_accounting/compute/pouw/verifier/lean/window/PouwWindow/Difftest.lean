@@ -6,7 +6,7 @@ public import PouwWindow.Statement
 public import PouwWindow.Inputs
 public import PouwWindow.Rounds
 public import PouwWindow.KnownRows
-public import PouwWindow.RegFile
+public import PouwWindow.FullSample
 
 /-!
 # The difftest's functions: the execution phase's Lean behind `Difftest.serve`
@@ -43,7 +43,7 @@ to Python.
 * a sampled leaf's known rows (`PouwWindow.KnownRows`, held to `h1_lanes`' `known_rows` by `tests/test_known_rows.py`):
   `known_rows` (`admit` 0/1 list, `salt` and the two `roots` 64-byte hex, `position` a u64, `lane` or null for the
   combine): each known port's rows' words.
-* a sampled leaf's sample policy (`PouwWindow.Lanes.checkFull`, by `tests/test_reg_file.py`): `full_draw` (`record`, a
+* a sampled leaf's sample policy (`PouwWindow.Lanes.checkFull`, by `tests/test_full_sample.py`): `full_draw` (`record`, a
   session record's text): `true` where `checkFull` accepts its sample, a reject where it refuses.
 
 A domain `{binding, count}` is `CommitmentDomain(binding, OWNER, RangeIndexedDomain(0, count), hash="sha512")`; bytes are

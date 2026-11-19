@@ -19,7 +19,6 @@ after-sample value, `leaf_lanes.produced_values`).
   1's last chunk is 0, so the combine's ok is 0 against its known 1 (REJECT); ``lane1-last-ok-row-zero``, that chunk on
   that tree, its ok 1 against the row's 0 (REJECT). At n = 1 only the ok-row ones.
 
-`pouw-leaf-own-window` (`PouwCheck.LeafOwn`) states v1's statements only, so this runner has no leaf-own check;
 `summarize` exits 1 unless every check's verdict is the expected one, the honest statements' reported roots are the
 produced record's (`produced.opened`) and their opened rows its openings (`produced.shared`).
 """
@@ -421,8 +420,7 @@ def summarize(args: argparse.Namespace) -> int:
                "circuits": prep["circuits"], "lean_accepts": sum(r["lean"] == "ACCEPT" for r in rows.values()),
                "produced_check": prep["produced_check"], "opened": opened, "opened_codes": opened_codes,
                "shared_codes": shared_codes, "checks": rows, "registration": prep["registration"], "draw": prep["draw"],
-               "produced": record, "binding": prep["binding"], "leaf_own": "not run: pouw-leaf-own-window states v1's "
-               "statements only"}
+               "produced": record, "binding": prep["binding"]}
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     for tag, r in rows.items():
         print(f"{tag:28s} {r['lean']:7s} expect {r['expect']:7s} ok={r['ok']} {'ok' if r['as_expected'] else 'MISMATCH'}  "

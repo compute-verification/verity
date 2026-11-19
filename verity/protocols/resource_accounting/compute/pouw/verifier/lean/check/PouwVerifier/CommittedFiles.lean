@@ -16,7 +16,7 @@ namespace PouwVerifier.CommittedFiles
 
 open Lean (Json)
 open PouwVerifier.Credit
-open PouwVerifier.Verified (CIRCUIT_FILES)
+open PouwVerifier.Verified (CIRCUIT_FILES LEAF_PROGRAMS LANES_REFUSED leafFile? lanesForm)
 
 /-- `credit._TEMPLATE`: a committed circuit file's template, `k<K>` (K a positive integer, no leading zero) or `live`. -/
 def template? (x : String) : Bool :=
@@ -30,18 +30,18 @@ def noFiles (name : String) : String :=
   "window's statements can be verified: commit them in the period-open, beside its circuit and K"
 
 /-- `credit.committed_files`: the circuit files period `name`'s open committed (`CIRCUIT_FILES`, `{k<K>: SHA-512,
-live: SHA-512}`: each template's circuit file, as the auditor's lowering built it, a lanes-form K's `lane<K>` and
-`combine<K>` with their leaf Programs' digests in `Lanes.LEAF_PROGRAMS`) in the auditor's ledger `ledger`, one `period`
-has trusted, in the lanes form (`Lanes.lanesFiles`); else the refusal (`circuit`). -/
+live: SHA-512}`: each template's circuit file, as the auditor's lowering built it) in the auditor's ledger `ledger`,
+one `period` has trusted; else the refusal (`circuit`), or `lanes-form` for files in the lanes form (`lane<K>`,
+`combine<K>`, `LEAF_PROGRAMS`), which is refused (`Verified.LANES_REFUSED`). -/
 def committedFiles (ledger : Json) (name : String) : R Json := do
   let .arr lines := ledger | throw ("period", "the period is not named")
   let body := ((lines.filterMap Spot.Challenger.ledgerEntry?).find? fun e =>
     e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
   let files := (body.map (get · CIRCUIT_FILES)).getD .null
   unless isObj files && !(fields files).isEmpty && (fields files).all (fun (x, v) =>
-      x == Lanes.LEAF_PROGRAMS || ((template? x || (Lanes.leafFile? x).isSome) && (digest? v).isSome)) do
+      x == LEAF_PROGRAMS || ((template? x || (leafFile? x).isSome) && (digest? v).isSome)) do
     throw ("circuit", noFiles name)
-  if let some why := Lanes.lanesFiles files then throw ("circuit", s!"period {name}'s open: {why}")
+  if lanesForm files then throw ("lanes-form", LANES_REFUSED)
   pure files
 
 /-- `credit-committed-files`: on `{ledger, name}`, `{"files": …}` (`committedFiles`) or `{"refused": [code, why]}`. -/

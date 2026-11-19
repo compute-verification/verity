@@ -80,7 +80,7 @@ def test_live_verified(server):
           f"outcome: {dict(sorted(VERIFIED.items()))}")
     assert {"run", "accept"} <= set(VERIFIED)
     for part in ("circuit: the committed circuit files are not",
-                 "circuit: K = # commits ['lane'] of its lanes form's two files", "circuit: leaf_programs is not",
+                 "lanes-form: the lanes form (a sampled leaf proved as its lanes and the combine",
                  "circuit: the period's open commits no circuit file for the live Program's template",
                  "live: the window's live evidence is not {descriptor, statements}",
                  "a live statement and the window has", "two live statements and the window has",
@@ -92,7 +92,7 @@ def test_live_verified(server):
 
 def committed_files(case: dict) -> dict:
     files, why = Cr.committed_files(case["ledger"], case["name"])
-    VERIFIED["files: " + (why[0] + (" lanes" if "'s open: " in why[1] else "") if why else "accept")] += 1
+    VERIFIED["files: " + (why[0] if why else "accept")] += 1
     return {"refused": list(why)} if why is not None else {"files": files}
 
 
@@ -104,14 +104,14 @@ FILES_PORT = D.Port("pouw-verifier-difftest", "credit-committed-files", committe
 
 def test_committed_files(server):
     """A period's open's circuit files read by the Lean of record as `credit.committed_files` reads them: honest, with a
-    K in the lanes form, each form that commits none, and each that breaks the lanes form."""
+    K in the lanes form or that form broken (each refused by name, ``lanes-form``), and each form that commits none."""
     VERIFIED.clear()
     stats = D.run(FILES_PORT, examples=60, server=server)
     for name in cases.FILES_NAMES:
         for seed in range(3):
             D.replay(FILES_PORT, cases.files_instance(random.Random(f"files/{name}/{seed}"), name), server)
     print(f"pouw-verifier-difftest credit-committed-files: {stats}; by outcome: {dict(sorted(VERIFIED.items()))}")
-    assert set(VERIFIED) == {"files: accept", "files: circuit", "files: circuit lanes"}, VERIFIED
+    assert set(VERIFIED) == {"files: accept", "files: circuit", "files: lanes-form"}, VERIFIED
 
 
 def test_served_live_answers():

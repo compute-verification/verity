@@ -1,5 +1,5 @@
-"""`pouw-leaf-own`'s sample policy (`PouwWindow.Lanes.checkFull`) on the shared harness (`verity_difftest`): it accepts a
-session record that samples every unit and refuses one that doesn't.
+"""A sampled leaf's sample policy (`PouwWindow.Lanes.checkFull`, `PouwWindow.FullSample`) on the shared harness
+(`verity_difftest`): it accepts a session record that samples every unit and refuses one that doesn't.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 LEAN = (Path(__file__).resolve().parents[9] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "window")
 EXE = "pouw-window-difftest"
 
-#: `pouw-leaf-own`'s sample policy alone: a session record's verdict (no Python counterpart)
+#: the sample policy alone: a session record's verdict (no Python counterpart)
 FULL = D.Port(EXE, "full_draw", reference=lambda x: None, inputs=st.nothing(), package=LEAN)
 
 server = D.server_fixture(FULL)

@@ -341,11 +341,11 @@ def verifier_entries(registration: Mapping[str, Any], produced: Mapping[str, Any
                      words_: int, *, values: Mapping[str, tuple[int, int]] | None = None,
                      ) -> tuple[dict[str, Mapping[str, Any]], dict[str, str]]:
     """The verifier's entries and roots of a sampled leaf's values, from the accepted registration record and the accepted
-    produced record alone (Lean's `PouwWindow.Lanes.roots?`): each registered value's entry in the registration's
+    produced record alone: each registered value's entry in the registration's
     ``registered`` (the first of its value) and that entry's root, and ``partials``' own entry (`produced.entry`:
     ``lanes_`` rows of ``words_`` u16 words under the registration's digest) at the produced record's root of
     ``partials``; with ``values`` (`produced_values`, a J10-R leaf's) each of those produced values' the same way.
-    `registered_file` reads them; `pouw-leaf-own` holds a statement's file to them."""
+    `registered_file` reads them."""
     ent: dict[str, Mapping[str, Any]] = {}
     roots: dict[str, str] = {}
     for e in registration.get("registered") or ():

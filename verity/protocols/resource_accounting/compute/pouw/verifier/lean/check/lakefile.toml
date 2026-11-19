@@ -7,10 +7,8 @@
 # the Python on generated cases. `pouw-period` is a period's credit as a core protocol (`PouwCheck.Period`,
 # `verity/pouw/period/v1`, the work of remote's development composite), held to `period_check.py` by
 # `tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/test_period_difftest.py`.
-# `pouw-leaf-own-window` is the leaf verifier's check of a window unit's leaf statement's `--registered` file at the
-# unit's placement, from the window's descriptor and round log (`PouwCheck.LeafOwn`).
 name = "pouw_verifier"
-defaultTargets = ["PouwVerifier", "pouw-verifier", "pouw-period", "pouw-verifier-difftest", "pouw-leaf-own-window"]
+defaultTargets = ["PouwVerifier", "pouw-verifier", "pouw-period", "pouw-verifier-difftest"]
 
 [leanOptions]
 autoImplicit = false
@@ -52,7 +50,3 @@ root = "PouwVerifier.PeriodMain"
 [[lean_exe]]
 name = "pouw-verifier-difftest"
 root = "PouwVerifier.DifftestMain"
-
-[[lean_exe]]
-name = "pouw-leaf-own-window"
-root = "PouwVerifier.LeafOwnMain"

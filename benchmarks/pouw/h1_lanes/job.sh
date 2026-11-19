@@ -4,22 +4,20 @@
 # the protocol and the negatives).
 #   research run --on MACHINE --pool proofs --project verity --source . --cwd source \
 #     --mem-gb G --declared-output 'out/*' --env H1L_MEM_GB=G -- bash benchmarks/pouw/h1_lanes/job.sh
-#   1. hidden_zk/job.sh's builds (flock-circuit's proving build, the Lean verifier, a venv), PoUW's pouw-leaf-own-window
-#      and, under H1_TMPL=structural, the prover's flock-tmpl-unit (tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean, which
-#      unrolls the unit and so is no part of the verifier), built beside the Lean verifier's sources
+#   1. hidden_zk/job.sh's builds (flock-circuit's proving build, the Lean verifier, a venv) and, under H1_TMPL=structural,
+#      the prover's flock-tmpl-unit (tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean, which unrolls the unit
+#      and so is no part of the verifier), built beside the Lean verifier's sources
 #   2. leaf.py prepare: the statements' Programs, the leaf's registered values and partials, every statement staged (WORK/plan.tsv),
 #      each circuit flat, or under H1_TMPL=structural the templated statement of its structural lowering (h1unit.layout),
 #      whose unit rows flock-tmpl-unit then places (circuits/<kind>/unit.placed, the prover's --tmpl-unit)
 #   3. one loopback --zk session per statement, H1L_PAR at a time, each sampling its one instance
-#   4. the plan's Lean checks, each with its statement's own Program, partition, public file and registered reads, and
-#      pouw-leaf-own-window's check of those reads, placed from the window's descriptor and round log, against the
-#      registration and produced record the verifier holds, and of each session's sample against the sample policy (every unit)
+#   4. the plan's Lean checks, each with its statement's own Program, partition, public file and registered reads
 #   5. leaf.py summarize: out/summary.json
 # env: H1L_MEM_GB (the job's --mem-gb)  H1L_K (448; h1zy.combine takes K >= 384)  H1L_JOBS (8: prepare's stagers)  H1L_PAR (3: sessions at a time)
 #      H1L_LPAR (8: Lean checks at a time)  H1_TILE (v1 or v3)  H1_TMPL (h1unit.layout's: unset or flat the flat statement,
 #      structural the templated one at iv/hybrid/4)  HZ_CACHE: hidden_zk's
 #      H1L_J10R=1: j10r.py's J10-R leaf in place of leaf.py's (H1L_K 4608 by default, its lanes in 3 chunks; H1L_RC its
-#      R x C, 16x16), with no pouw-leaf-own-window check, which states v1's statements only
+#      R x C, 16x16)
 set -uo pipefail
 export HZ_CONFIGS=h1-lanes HZ_MEM_GB=${H1L_MEM_GB:?} HZ_RUNS=1 HZ_WARM=0
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -32,19 +30,6 @@ RUN=$H/leaf.py K=${H1L_K:-448} PAR=${H1L_PAR:-3} LPAR=${H1L_LPAR:-8}
 WK=$W/work
 mkdir -p "$OUT/lean"
 setup
-build_own() {       # build_own DEST: DEST/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/.lake/build/bin/pouw-leaf-own-window
-  command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-  local D=$1
-  rm -rf "$D.tmp" && mkdir -p "$D.tmp" \
-    && (cd "$SRC" && tar --exclude=.lake --exclude=__pycache__ -cf - verity) | tar -xf - -C "$D.tmp" \
-    && (cd "$D.tmp/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" && lake build pouw-leaf-own-window) && rm -rf "$D" && mv "$D.tmp" "$D"
-}
-OWN=:
-if [ -z "${H1L_J10R:-}" ]; then
-  OWN=$(cached leafownwin "$(tree_key verity)" build_own)/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/.lake/build/bin/pouw-leaf-own-window
-  [ -x "$OWN" ] || { log "pouw-leaf-own-window build FAILED: $(tail -20 "$OUT/build-leafownwin.log")"; exit 1; }
-  sha256sum "$OWN" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
-fi
 TU= TUP=
 if [ "${H1_TMPL:-flat}" != flat ]; then
   cached tmplunit "$(lean_key "$SRC/tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean")" build_tmpl_unit > "$W/tu.dir" &
@@ -90,11 +75,10 @@ log "proved: $(ls -d "$WK"/st/*/sessions/*/ 2>/dev/null | wc -l) sessions"
 
 # ---- Lean: the plan's checks -----------------------------------------------------------------------------------------------
 cap=$(( STAGE_GB / LPAR ))
-while IFS=$'\t' read -r kind tag D pub reg prog part _expect regrec prodrec desc rounds unit stmt fstmt; do
+while IFS=$'\t' read -r kind tag D pub reg prog part _expect _regrec _prodrec _desc _rounds _unit _stmt fstmt; do
   [ "$kind" = C ] || continue
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tr '\n' ' ')
   [ -n "$s" ] || { echo "no session under $D" > "$OUT/lean/$tag.err"; continue; }
-  "$OWN" "$desc" "$rounds" "$regrec" "$prodrec" "$reg" "$unit" "$stmt" $s > "$OUT/lean/$tag.own" 2>&1
   while [ "$(jobs -rp | wc -l)" -ge "$LPAR" ]; do wait -n; done
   $TIME "$OUT/lean/$tag.time" bash -c "$(vlimit $cap) exec $(verifier_env) $LEAN verify --zk --circuit $D/circuit.txt \
     --statement $fstmt --public $pub --partition $part --program $prog --registered $reg --session $s" \

@@ -1,6 +1,6 @@
 module
 
-public import PouwVerifier.Lanes
+public import PouwVerifier.Credit
 
 /-!
 # A served window's statements verified (`credit._verified`)
@@ -32,10 +32,9 @@ call one of the window's), a statement only for a call with a sampled proof bloc
 a committed circuit file for its K (`noStatementFiles`), and the call's `--registered` file (its refusals,
 `registration`). Every refusal is (code, why), the first rule the input breaks, with Python's words.
 
-**The lanes form** (`PouwCheck.Lanes`): the window's statements may be its lanes evidence (`Lanes.LANES_KEYS`), whose
-statements are call statements and sampled leaves' (`Lanes.leafStatement?`), at the Ks the circuit files commit as
-`lane<K>` and `combine<K>`. The sampled lanes-form leaves' checks follow the call statements' (`Lanes.leafAsks`, under
-the window's sample) and name no run: every leaf statement is refused at its `--registered` file, so none credits.
+**The lanes form** (a sampled leaf proved as its lanes and the combine) is refused by name at its entry
+(`lanes-form`, `LANES_REFUSED`): circuit files naming `lane<K>`, `combine<K>` or `LEAF_PROGRAMS` (`filesRefusal`), and
+statements that are the lanes evidence (`LANES_KEYS`, `asks`).
 -/
 
 @[expose] public section
@@ -60,15 +59,36 @@ def FILES_FORM : String :=
   s!"the committed circuit files are not \{k<K>: SHA-512, live: SHA-512} (the period-open's " ++
   s!"{CIRCUIT_FILES}, each digest 128 lowercase hex)"
 
-/-- `credit._files_refusal`: the refusal (`circuit`) of committed circuit files `files` that are not an object of
-SHA-512 digests, but for `Lanes.LEAF_PROGRAMS`, an object of them, in the lanes form (`Lanes.lanesFiles`); none when
-they are. -/
+/-- `credit.LEAF_PROGRAMS`: the lanes form's field of the committed circuit files. -/
+def LEAF_PROGRAMS : String := "leaf_programs"
+/-- `credit.LANES_KEYS`: the lanes form's evidence, a window's statements. -/
+def LANES_KEYS : List String := ["leaf_programs", "produced", "statements"]
+
+/-- `credit.LANES_REFUSED`: why the lanes form is refused wherever it enters. -/
+def LANES_REFUSED : String :=
+  "the lanes form (a sampled leaf proved as its lanes and the combine: circuit files lane<K>, combine<K> and " ++
+  "leaf_programs, or the window's lanes evidence {leaf_programs, produced, statements}) is not verified, so it " ++
+  "credits nothing: commit each K's template as k<K> and prove each drawn unit by its call's statement"
+
+/-- `credit._LEAF_FILE`: a lanes-form circuit file's name, `lane<K>` or `combine<K>` (K positive, no leading zero). -/
+def leafFile? (x : String) : Option (String × Nat) :=
+  let num := fun (d : List Char) => match d with
+    | c :: _ => if c != '0' && d.all Char.isDigit then (String.ofList d).toNat? else none
+    | [] => none
+  if x.startsWith "lane" then ("lane", ·) <$> num (x.toList.drop 4)
+  else if x.startsWith "combine" then ("combine", ·) <$> num (x.toList.drop 7)
+  else none
+
+/-- `credit._lanes_form`: the committed circuit files `files` (an object) name the lanes form. -/
+def lanesForm (files : Json) : Bool :=
+  (fields files).any fun (x, _) => x == LEAF_PROGRAMS || (leafFile? x).isSome
+
+/-- `credit._files_refusal`: the refusal of committed circuit files `files` in the lanes form (`lanes-form`), or that
+are not an object of SHA-512 digests (`circuit`); none when they are. -/
 def filesRefusal (files : Json) : Option (String × String) :=
-  let form := isObj files && (fields files).all fun (x, v) =>
-    if x == Lanes.LEAF_PROGRAMS then isObj v && (fields v).all fun (_, w) => (digest? w).isSome
-    else (digest? v).isSome
-  if form && (Lanes.lanesFiles files).isNone then none
-  else some ("circuit", if isObj files then (Lanes.lanesFiles files).getD FILES_FORM else FILES_FORM)
+  if isObj files && lanesForm files then some ("lanes-form", LANES_REFUSED)
+  else if isObj files && (fields files).all fun (_, v) => (digest? v).isSome then none
+  else some ("circuit", FILES_FORM)
 
 def noStatementFiles (k : Nat) : String :=
   s!"the period's open commits no circuit file for K = {k}'s template ({CIRCUIT_FILES} k{k}, the SHA-512 of the " ++
@@ -112,26 +132,20 @@ structure Ask where
 /-- `credit._asks`: the verifier runs in statement order up to the first statement a check before the verifier refuses,
 and that refusal (none when every statement passes them), each run's partition object `partitionOf` the descriptor's.
 Over the window's circuit (its descriptor's SHA-512 `program`, and `shape` and `layout`, `shapeOf` and `layoutOf` of
-its Program), its registered `entries`, open root `window`, sampled `units`, `steps` rounds, Program salt `salt` and
-sample `draw`. `statements` is a list of call statements, or the lanes evidence (`Lanes.LANES_KEYS`) whose `statements`
-hold call statements and sampled leaves'; the sampled leaves' checks (`Lanes.leafAsks`) follow the call statements'. -/
+its Program), its registered `entries`, open root `window`, sampled `units`, `steps` rounds, Program salt `salt` (the sample
+`_draw` is read by no statement). `statements` is a list of call statements; the lanes evidence (`LANES_KEYS`) is
+refused (`lanes-form`). -/
 def asks (statements files : Json) (program : String) (shape : Shape) (layout entries : Json) (window : String)
-    (units : List Nat) (steps : Nat) (salt : String) (draw : Json) :
+    (units : List Nat) (steps : Nat) (salt : String) (_draw : Json) :
     R (Array Ask × Option (String × String)) := do
   if let some why := filesRefusal files then throw why
-  let lanes : Option Json := if keys statements == some Lanes.LANES_KEYS then some statements else none
-  if let some ev := lanes then
-    let progs := get ev Lanes.LEAF_PROGRAMS
-    unless isObj progs && (fields progs).all (fun (_, v) => (str? v).isSome) do throw ("proof", Lanes.LANES_FORM)
-  let form := if lanes.isSome then Lanes.LANES_FORM else STATEMENTS_FORM
+  if keys statements == some LANES_KEYS then throw ("lanes-form", LANES_REFUSED)
   let sizes := (callWork layout).map (·.1)
-  let .arr xs := (match lanes with | some ev => get ev "statements" | none => statements) | throw ("proof", form)
+  let .arr xs := statements | throw ("proof", STATEMENTS_FORM)
   let mut ss : Array (Nat × Nat) := #[]
-  let mut leafs : Array (Nat × Nat × Lanes.St) := #[]
   for (s, i) in xs.toList.zip (List.range xs.size) do
     if let some c := (call? s).filter (· < sizes.length) then ss := ss.push (i, c)
-    else if let some (u, st) := lanes.bind fun _ => Lanes.leafStatement? s sizes.sum then leafs := leafs.push (i, u, st)
-    else throw ("proof", form)
+    else throw ("proof", STATEMENTS_FORM)
   let starts := startsOf sizes
   let drawn := units.map fun u => (starts.filter (· ≤ u)).length - 1
   let roots := rootsOf entries
@@ -151,7 +165,7 @@ def asks (statements files : Json) (program : String) (shape : Shape) (layout en
     match registeredFile program layout shape c roots window steps salt with
     | .ok reg => out := out.push ⟨i, c, reg, drew⟩
     | .error why => return (out, some why)
-  return (out, ← Lanes.leafAsks lanes leafs files program layout shape roots window units steps salt draw)
+  return (out, none)
 
 /-- A run's input as the caller reads it: `{statement, draw, registered, partition}`. -/
 def Ask.toJson (a : Ask) (partition : Json) : Json :=

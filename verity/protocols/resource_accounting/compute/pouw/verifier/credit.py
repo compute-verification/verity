@@ -31,13 +31,9 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   (`PouwCheck.Verified.verified`, through `verifier.lean`): it names each statement to verify and the inputs (`_asks`: up
   to the first statement a check before the verifier refuses), this module only runs the verifier on them, and the
   Lean judges the answers (`_lean_verified`).
-* **A leaf past the cap credits nothing** (`leaf_lanes`, the lanes form): at a K the open commits as ``lane<K>`` and
-  ``combine<K>`` with their leaf Programs' digests (`LEAF_PROGRAMS`, `lanes_files`: one form a K), the sample is the
-  same, and each sampled leaf's `leaf_lanes.statements` are checked against their one-call leaf Programs and its
-  partials ``<prefix>partials@<u>`` against one produced record under the sample root (`_leaf_asks`), then refused at the
-  file credit builds at the leaf's served place (`leaf_registered_file`: a leaf statement reads rows in full, which
-  proofs' verifier cannot mark). A leaf outside what `LeafLanesSound` covers is ``lanes-shape`` (`lanes_shape`). The
-  verdict is the Lean's here too (`PouwCheck.Lanes`, through `PouwCheck.Verified`).
+* **The lanes form credits nothing**: circuit files committing a K as ``lane<K>`` and ``combine<K>`` (or naming
+  `LEAF_PROGRAMS`), and a window's lanes evidence (`LANES_KEYS`), are refused by name where they enter (``lanes-form``,
+  `LANES_REFUSED`: `_files_refusal`, `_asks`, `committed_files`), as the Lean refuses them (`PouwCheck.Verified`).
 * **The seed's inputs are the verifier's** (`registered_file`'s ``pub``): each unit's public row, the salt, position
   and roots its seed and its receipt's fold keys are derived from, is a row of its call's public table
   ``<prefix>pub@<c>``, which credit builds itself from the window's Program salt, the unit's position and the call's
@@ -203,7 +199,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable
 
-from verity.protocols.resource_accounting.compute.pouw.verifier import coins as Co
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
@@ -215,8 +210,6 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
 from verity.protocols.resource_accounting.compute.pouw.verifier.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, leaf_words, theta_root, weights_root
 from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
-from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
-from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
@@ -334,20 +327,20 @@ CIRCUIT_FILES = "circuit_files"
 FILES_FORM = (f"the committed circuit files are not {{k<K>: SHA-512, live: SHA-512}} (the period-open's "
               f"{CIRCUIT_FILES}, each digest 128 lowercase hex)")
 _TEMPLATE = re.compile(r"k[1-9][0-9]*|live")
-#: the lanes form (`leaf_lanes`): a K whose sampled leaves are proved as their lanes and the combine commits the two
-#: circuit files ``lane<K>`` and ``combine<K>``, and in `LEAF_PROGRAMS` each one's leaf Program's descriptor digest
+#: the lanes form (`leaf_lanes`), which credit refuses (`LANES_REFUSED`): a K whose sampled leaves are proved as their
+#: lanes and the combine commits the two circuit files ``lane<K>`` and ``combine<K>``, and in `LEAF_PROGRAMS` each one's
+#: leaf Program's descriptor digest
 LEAF_PROGRAMS = "leaf_programs"
 _LEAF_FILE = re.compile(r"(lane|combine)([1-9][0-9]*)")
 #: the tiles a sampled leaf may be proved as lanes at: `LeafLanesSound` is stated over `Fin 32` lanes and 32 × 32 cells
 LANES_TILES = ((32, 32),)
 #: the lanes evidence: the window's statements, each sampled leaf's leaf Programs' descriptors and the produced record
 LANES_KEYS = ("leaf_programs", "produced", "statements")
-#: a sampled leaf's statement: ``statement`` its `leaf_lanes.statements` entry (``["lane", l]`` or ``["combine", null]``)
-LEAF_STATEMENT_KEYS = ("circuit", "public", "sessions", "statement", "unit")
-LANES_FORM = ("the window's lanes evidence is not {leaf_programs, produced, statements}: each lanes-form K's lane and "
-              "combine leaf Program's descriptor in lowercase hex by lane<K> and combine<K>, the produced record "
-              "(verity/registration/produced/v1) and the statements, each a call's {call, circuit, public, sessions} "
-              "or a drawn leaf's {unit, statement, circuit, public, sessions}")
+#: why the lanes form is refused wherever it enters (``lanes-form``, Lean's `PouwCheck.Verified.LANES_REFUSED`)
+LANES_REFUSED = ("the lanes form (a sampled leaf proved as its lanes and the combine: circuit files lane<K>, combine<K> "
+                 "and leaf_programs, or the window's lanes evidence {leaf_programs, produced, statements}) is not "
+                 "verified, so it credits nothing: commit each K's template as k<K> and prove each drawn unit by its "
+                 "call's statement")
 #: a sampled leaf's statements' wrappers (`h1window.PouwH1WindowLane`, ``PouwH1WindowCombine``) and their units over the
 #: window's template's TILE (`h1zy.lane`, `h1zy.combine`), and the window's zy unit that TILE is read from
 LEAF_FN = {LL.LANE: "PouwH1WindowLane_v1", LL.COMBINE: "PouwH1WindowCombine_v1"}
@@ -1544,19 +1537,11 @@ def _verified(statements: Any, files: Any, raw: bytes, layout: dict, entries: li
     refused. A session the verifier rejects refuses the window (``failed``: no partial credit, and no retry), and one
     that proved a unit of another call refuses it (``proof``). Each unit an accepted session proved is one outcome:
     accepted, the program its verdict names and its registered finding, which `_proved` and `_registration` then hold
-    to the sample and to the window's registration.
-
-    **The lanes form** (`leaf_lanes`): at a K `files` commits as ``lane<K>`` and ``combine<K>`` (`form_of`), the
-    sampled leaves' statements are checked before any run (`_leaf_asks`) and each is refused at its ``--registered``
-    file (`leaf_registered_file`: every leaf statement reads an A, B or partials row in full, which proofs' verifier
-    cannot mark), so no leaf statement is verified and none credits. The Python reference of the Lean's
-    `PouwCheck.Lanes`."""
+    to the sample and to the window's registration. The lanes form is refused (``lanes-form``, `_asks`)."""
     asks, refused = _asks(statements, files, raw, layout, entries, window, units, steps, salt, draw)
-    lanes = statements if isinstance(statements, dict) and sorted(statements) == list(LANES_KEYS) else None
-    listed = lanes["statements"] if lanes is not None else statements
     out: list[dict] = []
     for a in asks:
-        s = listed[a["statement"]]
+        s = statements[a["statement"]]
         what = f"call {s['call']}'s statement"
         try:
             got, why = run(PF.Proof(Path(s["circuit"]), Path(s["public"]), tuple(map(Path, s["sessions"]))),
@@ -1573,19 +1558,19 @@ def _verified(statements: Any, files: Any, raw: bytes, layout: dict, entries: li
     return out, None
 
 
-def _files(files: Any) -> bool:
-    return (isinstance(files, dict) and all(type(x) is str for x in files)
-            and all(_digest(v) is not None if x != LEAF_PROGRAMS else
-                    isinstance(v, dict) and all(type(y) is str and _digest(w) is not None for y, w in v.items())
-                    for x, v in files.items()) and lanes_files(files) is None)
+def _lanes_form(files: dict) -> bool:
+    """Whether the committed circuit files `files` name the lanes form (Lean's `PouwCheck.Verified.lanesForm`)."""
+    return any(x == LEAF_PROGRAMS or _LEAF_FILE.fullmatch(x) for x in files)
 
 
 def _files_refusal(files: Any) -> tuple[str, str] | None:
-    """The refusal (``circuit``) of committed circuit files `files` that are not `_files`', or None (Lean's
-    `PouwCheck.Verified.filesRefusal`): `lanes_files`' reason when it has one, else `FILES_FORM`."""
-    if _files(files):
-        return None
-    return "circuit", (isinstance(files, dict) and all(type(x) is str for x in files) and lanes_files(files)) or FILES_FORM
+    """The refusal of committed circuit files `files` in the lanes form (``lanes-form``, `LANES_REFUSED`), or that are
+    not an object of SHA-512 digests (``circuit``, `FILES_FORM`), or None (Lean's `PouwCheck.Verified.filesRefusal`)."""
+    if not (isinstance(files, dict) and all(type(x) is str for x in files)):
+        return "circuit", FILES_FORM
+    if _lanes_form(files):
+        return "lanes-form", LANES_REFUSED
+    return None if all(_digest(v) is not None for v in files.values()) else ("circuit", FILES_FORM)
 
 
 def _proof_files(s: dict) -> bool:
@@ -1601,33 +1586,21 @@ def _asks(statements: Any, files: Any, raw: bytes, layout: dict, entries: list, 
     one-unit blocks (`partition_of`), of which the statement's public file names one. The Python reference of the Lean's
     `PouwCheck.Verified.asks`, which `_lean_verified` runs the verifier on.
 
-    `statements` is a list of call statements (`STATEMENT_KEYS`), or the lanes evidence (`LANES_KEYS`) whose
-    ``statements`` hold call statements and sampled leaves' (`LEAF_STATEMENT_KEYS`); the sampled leaves' checks follow
-    the call statements' (`_leaf_asks`, under the window's `draw`), and name no run."""
+    `statements` is a list of call statements (`STATEMENT_KEYS`); the lanes evidence (`LANES_KEYS`) is refused
+    (``lanes-form``, `LANES_REFUSED`). `draw`, the window's sample, is read by no statement."""
     why = _files_refusal(files)
     if why is not None:
         return [], why
-    lanes = None
     if isinstance(statements, dict) and sorted(statements) == list(LANES_KEYS):
-        if not (isinstance(statements["leaf_programs"], dict)
-                and all(type(x) is str and type(v) is str for x, v in statements["leaf_programs"].items())):
-            return [], ("proof", LANES_FORM)
-        lanes, statements = statements, statements["statements"]
+        return [], ("lanes-form", LANES_REFUSED)
     sizes = [size for size, _work in call_work(layout)]
 
     def call_form(s: Any) -> bool:
         return (isinstance(s, dict) and sorted(s) == list(STATEMENT_KEYS) and _nat(s["call"]) and _proof_files(s)
                 and s["call"] < len(sizes))
 
-    def leaf_form(s: Any) -> bool:
-        return (lanes is not None and isinstance(s, dict) and sorted(s) == list(LEAF_STATEMENT_KEYS) and _proof_files(s)
-                and _nat(s["unit"]) and s["unit"] < sum(sizes) and type(s["statement"]) is list
-                and 1 <= len(s["statement"]) <= 3 and type(s["statement"][0]) is str
-                and all(x is None or _nat(x) for x in s["statement"][1:]))
-
-    if not (isinstance(statements, list) and all(call_form(s) or leaf_form(s) for s in statements)):
-        return [], ("proof", STATEMENTS_FORM if lanes is None else LANES_FORM)
-    leafs = [(i, s) for i, s in enumerate(statements) if leaf_form(s)]
+    if not (isinstance(statements, list) and all(call_form(s) for s in statements)):
+        return [], ("proof", STATEMENTS_FORM)
     starts = list(itertools.accumulate(sizes, initial=0))[:-1]
     drawn = {bisect.bisect_right(starts, u) - 1 for u in units}
     program, shape = hashlib.sha512(raw).hexdigest(), shape_of(raw)
@@ -1638,8 +1611,6 @@ def _asks(statements: Any, files: Any, raw: bytes, layout: dict, entries: list, 
     ks = {name: k for name, k, _n in layout["linears"]}
     out: list[dict] = []
     for i, s in enumerate(statements):
-        if leaf_form(s):
-            continue
         c = s["call"]
         if c not in drawn:
             return out, ("outcome", f"call {c} has a statement and no drawn unit: only the draw's units are proved")
@@ -1650,7 +1621,7 @@ def _asks(statements: Any, files: Any, raw: bytes, layout: dict, entries: list, 
         if why is not None:
             return out, why
         out.append({"statement": i, "draw": {"units": units}, "registered": reg, "partition": partition})
-    return out, _leaf_asks(lanes, leafs, files, raw, layout, shape, roots, window, units, steps, salt, draw)
+    return out, None
 
 
 def _judged(layout: dict, c: int, reg: dict, got: list[PF.Finding], out: list[dict]) -> tuple[str, str] | None:
@@ -1696,7 +1667,7 @@ def _ok_held(c: int, session: Any, registered: Any, ok: dict) -> tuple[str, str]
     return None
 
 
-# -- a sampled leaf proved as its lanes and the combine (`leaf_lanes`) ------------------------------------------------------
+# -- the lanes form's names (`leaf_lanes`), which credit refuses (`LANES_REFUSED`) and `unit_lowering`'s and vLLM's H1 builds read
 
 def form_of(files: dict, k: int) -> str | None:
     """K's form in the committed circuit files `files` (`lanes_files` held): ``"tile"`` (``k<K>``), ``"lanes"``
@@ -1778,200 +1749,6 @@ def leaf_partition_of(program: str, unit: str) -> dict:
             "query": {"name": QUERY[0], "version": QUERY[1], "params": {"templates": [unit]}}}
 
 
-def leaf_call(layout: dict, u: int) -> tuple[int, int, int]:
-    """Unit `u`'s call, its tile in it (row block major) and its K, of a layout `strata` accepted."""
-    sizes = [size for size, _work in call_work(layout)]
-    call = bisect.bisect_right(list(itertools.accumulate(sizes, initial=0))[:-1], u) - 1
-    return call, u - sum(sizes[:call]), {name: k for name, k, _n in layout["linears"]}[layout["calls"][call][0]]
-
-
-def leaf_k(layout: dict, u: int) -> int:
-    """Unit `u`'s K: its call's linear's."""
-    return leaf_call(layout, u)[2]
-
-
-def leaf_place(layout: dict, shape: dict, u: int, steps: int) -> dict[str, tuple[str, int]]:
-    """`h1window.place` of unit `u` with its served names (``served``), from the layout alone: each value a sampled leaf's
-    statements read, its table and the leaf's first row in it."""
-    (r, c), prefix = layout["tile"], shape["prefix"]
-    call, t, k = leaf_call(layout, u)
-    lin = layout["calls"][call][0]
-    n = {name: nn for name, _kk, nn in layout["linears"]}[lin]
-    b0 = sum(nn for name, kk, nn in itertools.takewhile(lambda x: x[0] != lin, layout["linears"]) if kk == k)
-    ti, tj = divmod(t, n // c)
-    x, (s, _calls, at) = chunks(k), step_row(layout, steps, call)
-    values = LL.produced_values(r, c, k, j10r=shape["tiles"][k]["j10r"])
-    return {LL.A: (f"{prefix}a/{k}@{s}", x * (at + r * ti)), LL.B: (f"{prefix}b/{k}", x * (b0 + c * tj)),
-            LL.ZY: (f"{prefix}zy@{call}", t), LL.RECEIPT: (f"{prefix}receipt@{call}", t),
-            **{v: (LL.served(prefix, v, u), 0) for v in values}}
-
-
-def leaf_registered_file(program: str, layout: dict, shape: dict, u: int, statement: tuple, roots: dict, window: str,
-                         steps: int, salt: str, registration: str, produced: dict[str, str]
-                         ) -> tuple[tuple[dict, dict] | None, tuple[str, str] | None]:
-    """The verifier's ``--registered`` file of sampled leaf `u`'s statement `statement` (a `leaf_lanes.statements` entry)
-    and its known openings, and None; or None and the refusal (``registration``). It is `h1window.leaf_reads_file`'s at
-    the served `place` (``served``), built from the descriptor alone: each `leaf_lanes.reads` port at its value's table
-    and row past the leaf's place (`leaf_place`), each table's entry the verifier's own (a ``row/v2`` value of 16-bit
-    leaves under `registered_value.domain` of its name, rows and width, binding the window's open root `window` but for the
-    weights' ``b/<K>``) at the one root `roots` (``{value: [root, ...]}``) gives it, each after-draw value's entry
-    `produced.entry` under the window's descriptor digest `program` and its sample root `registration` at the produced
-    record's root `produced` (``{value: root}``); its known ports `h1window.leaf_known_ports`' (``pub`` of the window's
-    Program salt `salt`, position u and the call's roots root(``a/<K>@<s>``) and root(``b/<K>``), ``admit`` every row and
-    every ``o0`` the row 1, each its own served value under `leaf_lanes.known_salt`). A read of an A row, a B row or
-    a partials row is read in full, which the verifier's `registered.READS_V2` file cannot mark: a statement with one is
-    refused by name (``registration``, `PouwWindow.Lanes.fullHole`), and every leaf statement has one."""
-    (r, c), prefix, kind, m = layout["tile"], shape["prefix"], statement[0], layout["m"]
-    ln, ch = (statement[1:] + (None, None))[:2]
-    at = leaf_place(layout, shape, u, steps)
-    call, t, k = leaf_call(layout, u)
-    tile, x, j10r = shape["tiles"][k], chunks(k), shape["tiles"][k]["j10r"]
-    sizes = [size for size, _work in call_work(layout)]
-    a, b, zy, rc = at[LL.A][0], at[LL.B][0], at[LL.ZY][0], at[LL.RECEIPT][0]
-    rows_of = {a: (x * m * step_row(layout, steps, call)[1], tile["a"]), zy: (sizes[call], tile["zy"]),
-               b: (x * sum(nn for _name, kk, nn in layout["linears"] if kk == k), tile["b"]),
-               rc: (sizes[call], tile["receipt"])}
-    if len(roots.get(rc, ())) != 1:
-        return None, ("registration", f"drawn leaf {u}'s combine reads its call's receipts {rc}, which the window "
-                                      f"registers {'twice' if roots.get(rc) else 'not'}: a lanes-form call registers "
-                                      "its receipt table once, the receipts the combine checks the lanes' XOR against")
-    logical = LL.reads(r, c, kind, ln, ch, j10r=k if j10r else None)
-    if full := [port for port, (v, _row) in logical.items() if v in (LL.A, LL.B, LL.PARTIALS)]:
-        return None, ("registration", str(OC.NotDerived(
-            f"a leaf statement's ports [{', '.join(full)}] are read in full, and a {G.READS_V2} port has no "
-            f"{LL.READ_IN_FULL} (Flock.Registered.PORT_KEYS)")))
-    values = LL.produced_values(r, c, k, j10r=j10r)
-    ports = {}
-    for port, (v, row) in logical.items():
-        table, base = at[v]
-        if v in values:
-            leaves, words = values[v]
-            e, root = PR.entry(program, table, leaves, words, registration), produced.get(table)
-        else:
-            if len(roots.get(table, ())) != 1:
-                return None, ("registration", f"drawn leaf {u}'s statement {list(statement)} reads {table}, which the "
-                                              f"window registers {'twice' if roots.get(table) else 'not'}: register "
-                                              "each of a call's tables and its weights once")
-            leaves, words = rows_of[table]
-            e = {"leaves": leaves, "words": words, "word_bits": RV.WORD_BITS,
-                 "domain": RV.domain(program, table, words, leaves, window=None if table == b else window).domain_id.hex()}
-            root = roots[table][0]
-        if _digest(root) is None:
-            return None, ("registration", f"drawn leaf {u}'s statement {list(statement)} reads {table}, whose root the "
-                                          "verifier does not hold as a SHA-512 digest")
-        ports[port] = RV.port(table, e, root, [base + row], G.SCHEMA_V2)
-        if LL.read_in_full(v) and port != LL.OK:
-            ports[port][LL.READ_IN_FULL] = True
-    if any(_digest(roots.get(v, [None])[0]) is None for v in (a, b)):
-        return None, ("registration", f"drawn leaf {u}'s pub row reads the roots of {a} and {b}, which are not both "
-                                      "SHA-512 digests (128 lowercase hex): register each table at its tree's root")
-    call_blocks = {}
-    if j10r:
-        per = {name: nn for name, _kk, nn in layout["linears"]}[layout["calls"][call][0]] // c
-        call_blocks = {"j10r": k, "call": u - t, "blocks": CC.j10r_blocks(m, k, (r, c), t // per, t % per)}
-    rows = LL.known_rows(r, c, kind, ln, ch, admit=[1] * r, salt=bytes.fromhex(salt), position=u,
-                         roots=(bytes.fromhex(roots[a][0]), bytes.fromhex(roots[b][0])), **call_blocks)
-    known, openings = {}, {}
-    for port, (value, words) in rows.items():
-        name = LL.served(prefix, value, u)
-        known[port], op = PR.known_port(program, name, words, LL.known_salt(registration, name), registration)
-        openings[name] = [op]
-    return ({"format": G.READS, "ports": {**ports, **known}}, openings), None
-
-
-def _lanes_record(lanes: dict, layout: dict, shape: dict, program: str, registration: str, draw: str,
-                  units: list[int]) -> tuple[dict | None, tuple[str, str] | None]:
-    """The produced record's root of each after-draw value of the window's sampled lanes-form leaves `units`, and None,
-    when the lanes evidence's record holds (`produced.check` against the sample root `registration`, the sampling coin's value
-    `draw` and the verifier's own entries: each leaf u's ``<prefix>partials@<u>``, (R/4)(C/8) rows of 2·`words`(K) u16
-    words under `produced.domain` of the window's descriptor digest `program` and the sample root); else None and the
-    refusal (``registration``, its P- codes)."""
-    (r, c), prefix, mine = layout["tile"], shape["prefix"], {}
-    for u in units:
-        k = leaf_k(layout, u)
-        for v, (leaves, words) in LL.produced_values(r, c, k, j10r=shape["tiles"][k]["j10r"]).items():
-            name = LL.served(prefix, v, u)
-            mine[name] = PR.entry(program, name, leaves, words, registration)
-    rec = lanes["produced"]
-    codes = PR.check(rec, registration, draw, mine)
-    if codes:
-        return None, ("registration", f"the window's produced record ({PR.FORMAT}) fails {', '.join(codes)}: it holds "
-                                      "each drawn lanes-form leaf's partials@<u> under the window's draw root, fixed "
-                                      "after the draw coin, and every row's opening once")
-    return {e["value"]: e["root"] for e in rec["produced"]}, None
-
-
-def _leaf_asks(lanes: dict | None, leafs: list[tuple[int, dict]], files: dict, raw: bytes, layout: dict, shape: dict,
-               roots: dict, window: str, units: list[int], steps: int, salt: str, draw: Any
-               ) -> tuple[str, str] | None:
-    """`_asks`' checks of the window's sampled lanes-form leaves (the units among `units` whose K `files` commits as lanes,
-    `form_of`), from its sampled leaves' statements `leafs` (each its index among the window's statements and the
-    statement): the refusal of the first that refuses, or None. In order: each such leaf's K within `lanes_shape`
-    (``lanes-shape``); the lanes evidence `lanes` present (``missing``); each lanes-form K's leaf Programs, the
-    evidence's descriptors, hashing to `LEAF_PROGRAMS`' digests and `leaf_of` the window's template at K (``circuit``);
-    the produced record (`_lanes_record`, ``registration``); then each statement: of a sampled lanes-form leaf, in
-    `leaf_lanes.statements`, and once (``outcome``), its ``--registered`` file (`leaf_registered_file`, which refuses
-    every leaf statement); and last each sampled lanes-form leaf with every one of its statements (``missing``). It
-    names no verifier run: a leaf whose file were built would have no outcome, which `_proved` refuses."""
-    program, (r, c) = hashlib.sha512(raw).hexdigest(), layout["tile"]
-    drawn = [u for u in units if form_of(files, leaf_k(layout, u)) == "lanes"]
-    for u in drawn:
-        why = lanes_shape(layout, shape, leaf_k(layout, u))
-        if why is not None:
-            return ("lanes-shape", f"drawn leaf {u}: {why}")
-    if not drawn and not leafs:
-        return None
-    if lanes is None:
-        return ("missing", f"drawn leaf {drawn[0]} is at a lanes-form K and the window carries no lanes evidence "
-                           f"({', '.join(LANES_KEYS)}): prove every drawn lanes-form leaf as its lanes and combine")
-    for k in sorted({leaf_k(layout, u) for u in drawn}):
-        for kind in (LL.LANE, LL.COMBINE):
-            name, unit = f"{kind}{k}", leaf_unit_id(shape, k, kind)
-            got = lanes["leaf_programs"].get(name)
-            leaf = bytes.fromhex(got) if type(got) is str and _HEX.fullmatch(got) else None
-            if leaf is None or hashlib.sha512(leaf).hexdigest() != files[LEAF_PROGRAMS][name]:
-                return ("circuit", f"the window's {name} leaf Program is not the one the period-open committed "
-                                   f"({LEAF_PROGRAMS} {name}): verify each lanes-form statement against it")
-            if unit is None or not leaf_of(leaf, unit, k, kind):
-                return ("circuit", f"the window's {name} leaf Program is not h1window.leaf_program's at K = {k}: "
-                                   f"the one-call Program of {LEAF_FN[kind]} over the TILE of the window's own "
-                                   "template at K")
-    if not (isinstance(draw, dict) and _digest(draw.get("root")) is not None):
-        return ("registration", "the window's draw root, the produced record's registration, is not a SHA-512 "
-                                "digest")
-    try:
-        coin = Ch.LiveOpening.from_json(draw.get("coin")).coin.hex()
-    except Ch.CoinError as e:
-        return ("registration", f"the window's draw coin, the produced record's draw, is not a live opening: {e}")
-    produced, why = _lanes_record(lanes, layout, shape, program, draw["root"], coin, drawn)
-    if why is not None:
-        return why
-    seen: dict[int, set[tuple]] = {}
-    for _i, s in leafs:
-        u, st = s["unit"], tuple(s["statement"])
-        if u not in drawn:
-            return ("outcome", f"unit {u} has a leaf statement and is no drawn lanes-form leaf: only the draw's "
-                               "leaves at a K committed as lanes are proved as lanes")
-        if st not in LL.statements(r, c):
-            return ("outcome", f"drawn leaf {u}'s statement {list(st)} is none of leaf_lanes.statements({r}, {c}): "
-                               "a lane with its index or the combine")
-        if st in seen.setdefault(u, set()):
-            return ("outcome", f"drawn leaf {u}'s statement {list(st)} is proved twice: each statement is proved "
-                               "and verified once, and a retry never reproves it")
-        seen[u].add(st)
-        _got, why = leaf_registered_file(program, layout, shape, u, st, roots, window, steps, salt, draw["root"],
-                                         produced)
-        if why is not None:
-            return why
-    for u in drawn:
-        left = [list(x) for x in LL.statements(r, c) if x not in seen.get(u, set())]
-        if left:
-            return ("missing", f"drawn leaf {u} has no statement {left[0]}: every drawn leaf's lanes and combine "
-                               "are proved and verified, and a leaf with one missing refuses the window (no "
-                               "partial credit)")
-    return None
-
-
 def _finding_json(f: PF.Finding) -> dict:
     """A verifier finding as `PouwCheck.Verified` reads it: ``{session, accepted, why, program, registered, units,
     openings}``, its ``openings`` (the rows it reports opening, `produced.shared`'s) None when it reports none."""
@@ -1999,14 +1776,12 @@ def _lean_verified(statements: Any, files: Any, raw: bytes, entries: list, windo
     window refused (``proof``)."""
     q = {"statements": statements, "files": files, "descriptor": raw.hex(), "entries": entries, "window": window,
          "units": units, "steps": steps, "salt": salt, "draw": draw, "runs": None}
-    lanes = isinstance(statements, dict) and sorted(statements) == list(LANES_KEYS)
-    listed = statements["statements"] if lanes else statements
     try:
         got = V.lean("credit-verified", q)
         if "run" in got:
             runs = []
             for a in got["run"]:
-                runs.append(_answer(run, listed[a["statement"]], a, raw))
+                runs.append(_answer(run, statements[a["statement"]], a, raw))
                 if "findings" not in runs[-1] or not all(f["accepted"] for f in runs[-1]["findings"]):
                     break
             got = V.lean("credit-verified", {**q, "runs": runs})
@@ -2743,7 +2518,7 @@ def committed_weights(ledger: list, name: str) -> tuple[str | None, tuple[str, s
 def committed_files(ledger: list, name: str) -> tuple[dict | None, tuple[str, str] | None]:
     """The circuit files period `name`'s open committed (`CIRCUIT_FILES`, ``{k<K>: SHA-512}``: each K's template's
     circuit file, as the auditor's lowering built it) in the auditor's ledger `ledger`, one `period` has trusted, and
-    None; or None and the refusal (``circuit``). The Python reference of the Lean's `PouwCheck.CommittedFiles`
+    None; or None and the refusal (``circuit``, or ``lanes-form`` for files in the lanes form, `LANES_REFUSED`). The Python reference of the Lean's `PouwCheck.CommittedFiles`
     (`_lean_committed_files`), which `period_credit` reads when `verifier.RECORD_VERDICT` is ``"lean"``."""
     body = next(e["body"] for e in map(json.loads, ledger)
                 if e["kind"] == "period-open" and e["body"]["period"] == name)
@@ -2756,8 +2531,7 @@ def committed_files(ledger: list, name: str) -> tuple[dict | None, tuple[str, st
                                  "the auditor's lowering built for it), so no "
                                  "window's statements can be verified: commit them in the period-open, beside its "
                                  "circuit and K")
-    why = lanes_files(files)
-    return (None, ("circuit", f"period {name}'s open: {why}")) if why is not None else (files, None)
+    return (None, ("lanes-form", LANES_REFUSED)) if _lanes_form(files) else (files, None)
 
 
 def lanes_files(files: dict) -> str | None:
@@ -3353,13 +3127,13 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
     return w, None
 
 
-__all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LANES_FORM", "LANES_KEYS",
-           "LANES_TILES", "LAYOUT_KEYS", "LEAF_FN", "LEAF_PROGRAMS", "LEAF_STATEMENT_KEYS", "LEAF_UNIT", "LENGTH_FIELD",
+__all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LANES_KEYS", "LANES_REFUSED",
+           "LANES_TILES", "LAYOUT_KEYS", "LEAF_FN", "LEAF_PROGRAMS", "LEAF_UNIT", "LENGTH_FIELD",
            "LENGTH_KEYS", "ROWS_FIELD", "LEVELS",
            "LIVE", "LIVE_FN", "LIVE_KEYS", "LIVE_RECORD", "LIVE_STATEMENT_KEYS", "LIVE_STATEMENTS", "LIVE_UNIT", "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PEARL_C_KEYS", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "REPEATED_CALL", "REQUESTS_IDS_TAG", "REQUESTS_OUTSIDE", "REQUESTS_TABLE", "ROUND_TAG",
            "SCHEMA", "SERVED_ROWS", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WINDOW_FN", "WINDOW_KEYS",
            "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_length", "committed_rows", "committed_weights", "cover",
-           "credited_work", "domain_of", "draw_root", "drawn", "drawn_twin", "established", "a_value", "form_of", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "lanes_files", "lanes_shape", "sampling_design", "layout_of", "leaf_call", "leaf_k", "leaf_of", "leaf_partition_of", "leaf_place", "leaf_registered_file", "leaf_unit_id", "live_of",
+           "credited_work", "domain_of", "draw_root", "drawn", "drawn_twin", "established", "a_value", "form_of", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "lanes_files", "lanes_shape", "sampling_design", "layout_of", "leaf_of", "leaf_partition_of", "leaf_unit_id", "live_of",
            "partition_of", "passes_distinct", "passes_distinct_twin", "period", "period_twin", "presented", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
            "served_rows", "served_work", "slots_step", "step_row", "step_tables", "strata", "table_rows",
            "weights_root", "window"]

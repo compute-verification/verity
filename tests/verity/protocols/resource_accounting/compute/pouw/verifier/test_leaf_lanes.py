@@ -241,7 +241,7 @@ def test_a_statements_row_ports_and_only_those_are_read_in_full():
 def test_the_verifiers_entries_are_the_registrations_and_the_produced_records():
     """Each registered value's entry and root are the registration's first of its value; the partials' are the
     verifier's own entry under the registration's digest at the produced record's root, over any registered entry of
-    that name (Lean's `PouwWindow.Lanes.roots?`)."""
+    that name."""
     e = {v: {"value": v, "root": f"{i:02x}" * 64, "leaves": 4, "words": 2, "domain": f"{i + 8:02x}" * 64}
          for i, v in enumerate((LL.A, LL.B, LL.PARTIALS))}
     rec = {"format": "verity/registration/v2", "program": "12" * 64,

@@ -1,11 +1,12 @@
 """The Lean verifier of a served window's statements (`PouwCheck.Verified`, `pouw-check-difftest`'s
 ``credit-verified``) held to its Python reference, `credit._asks` and `credit._verified`, on `pouw_verified_cases`:
 with `runs` null, the verifier runs the Lean names (or the verdict, when it names none); with the answers, the verdict,
-each sampled proof block's outcome or the refusal, string for string, the lanes form's (`PouwCheck.Lanes`) among them.
+each sampled proof block's outcome or the refusal, string for string, the lanes form's (``lanes-form``) among them.
 `credit.window` and `credit.period_credit` take their outcomes from the Lean (`credit._lean_verified`), so here the Lean
 is of record."""
 from __future__ import annotations
 
+import json
 import random
 import re
 import shutil
@@ -45,8 +46,7 @@ def verified(case: dict) -> dict:
                 return {"run": asks}
         else:
             got, refused = Cr._verified(*args, cases.replay(case["runs"]), case["salt"], case["draw"])
-    lanes = isinstance(case["statements"], dict)
-    VERIFIED[f"{refused[0]}: {_template(refused[1])}" if refused else "lanes: accept" if lanes else "accept"] += 1
+    VERIFIED[f"{refused[0]}: {_template(refused[1])}" if refused else "accept"] += 1
     return {"refused": list(refused)} if refused is not None else {"outcomes": got}
 
 
@@ -58,13 +58,12 @@ server = D.server_fixture(VERIFIED_PORT)
 
 
 def test_verified(server):
-    """Generated windows' statements, null and answered, then each mutation over a few seeds (`replay`; ten for a
-    lanes mutation, which picks among more variants), so every refusal before the verifier runs and of its answers is
-    reached whatever the sample."""
+    """Generated windows' statements, null and answered, then each mutation over a few seeds (`replay`), so every
+    refusal before the verifier runs and of its answers is reached whatever the sample."""
     VERIFIED.clear()
     stats = D.run(VERIFIED_PORT, examples=300, server=server)
     swept = Counter(D.replay(VERIFIED_PORT, cases.verified_instance(random.Random(f"{name}/{seed}"), name), server)[0]
-                    for name in ["honest", *cases.NAMES] for seed in range(10 if name in cases.LANES_NAMES else 4))
+                    for name in ["honest", *cases.NAMES] for seed in range(4))
     print(f"pouw-verifier-difftest credit-verified: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(VERIFIED.items()))}")
     assert {"run", "accept"} <= set(VERIFIED)
@@ -75,21 +74,41 @@ def test_verified(server):
                  "proof: call #'s statement could not be verified", "'s statement: the statement's public file",
                  "failed: call #'s session ", "opened a public table at another port",
                  "opened the ok rows at another port", "which is no unit of call #",
-                 "lanes-shape: drawn leaf #: the window's # × # tile", "lanes-shape: drawn leaf #: K = # is below LEAST_K",
-                 "lanes-shape: drawn leaf #: K = # fails PouwWindow.Lanes.Tile.check",
-                 "lanes-shape: drawn leaf #: K = #'s lanes are # chunk lanes",
-                 "is at a lanes-form K and the window carries no lanes evidence",
-                 "leaf Program is not the one the period-open committed", "leaf Program is not h#window.leaf_program's",
-                 "the window's produced record (verity/registration/produced/v#) "
-                 "fails P-", "combine reads its call's receipts", "the window's draw root, the produced record's",
-                 "the window's draw coin, the produced record's draw, is not a live opening",
-                 "proof: the window's lanes evidence is not", "of its lanes form's two files", "commits both k#",
-                 "leaf_programs is not",
-                 # every leaf statement reads a row in full, which no v2 port marks (PouwWindow.Lanes.fullHole), so
-                 # none is verified and none of the checks past its file is reached
-                 "registration: one-circuit: not derived yet: a leaf statement's ports [a#",
-                 "registration: one-circuit: not derived yet: a leaf statement's ports [p#"):
+                 f"lanes-form: {_template(Cr.LANES_REFUSED)}"):
         assert any(part in k for k in VERIFIED), part
+
+
+def test_the_lanes_form_is_refused_by_name_at_both_entries():
+    """A window in the lanes form (`cases.LANES_NAMES`: its statements the lanes evidence, its circuit files naming
+    ``lane<K>``, ``combine<K>`` or ``leaf_programs``, or both) is refused by name (``lanes-form``,
+    `credit.LANES_REFUSED`) before any run at the served path's entry, the Lean's ``credit-verified``
+    (`credit._lean_verified`, which `credit._runner` hands the window to), and at the Python's (`credit._verified`,
+    `credit._asks`); and a period-open whose circuit files are in the lanes form, each a digest, is refused by name at
+    the Lean's ``credit-committed-files`` (`credit._lean_committed_files`) and the Python's (`credit.committed_files`),
+    which agree on every such period-open."""
+    want = ("lanes-form", Cr.LANES_REFUSED)
+
+    def no_run(_proof, **_kw):
+        raise AssertionError("the lanes form reached the verifier")
+    for name in cases.LANES_NAMES:
+        for seed in range(6):
+            case = cases.verified_instance(random.Random(f"lanes/{name}/{seed}"), name)
+            raw = bytes.fromhex(case["descriptor"])
+            lay, refused = Cr.layout_of(raw)
+            assert refused is None, refused
+            at = (case["entries"], case["window"], case["units"], case["steps"])
+            assert Cr._lean_verified(case["statements"], case["files"], raw, *at, no_run, case["salt"],
+                                     case["draw"]) == (None, want), (name, seed)
+            assert Cr._verified(case["statements"], case["files"], raw, lay, *at, no_run, case["salt"],
+                                case["draw"]) == (None, want), (name, seed)
+            assert Cr._asks(case["statements"], case["files"], raw, lay, *at, case["salt"], case["draw"]) == ([], want)
+            if name == "lanes-evidence":
+                continue
+            files = case["files"]
+            ledger = [json.dumps({"kind": "period-open", "body": {"period": "p", Cr.CIRCUIT_FILES: files}})]
+            if all(x == Cr.LEAF_PROGRAMS or re.fullmatch(r"[0-9a-f]{128}", v) for x, v in files.items()):
+                assert Cr.committed_files(ledger, "p") == (None, want), (name, seed)
+            assert Cr._lean_committed_files(ledger, "p") == Cr.committed_files(ledger, "p"), (name, seed)
 
 
 def test_served_answers():

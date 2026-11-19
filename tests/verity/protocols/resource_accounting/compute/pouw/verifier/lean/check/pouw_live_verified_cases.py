@@ -6,14 +6,13 @@ A `live_verified` case is a live Program (`pouw_credit_cases.live_program`, at T
 rounds, under a prefix or none), its registered entries (each round's slot table and round 0's request table, T rows
 each, `credit._live_roots`', with other values beside them), each step's m_s (at most T), the execution phase Program's digest,
 its open root, its session and its credit period's committed max_tokens (fewer or more requests than T), one statement a round in a shuffled order (its circuit and public files' paths and one or
-two sessions' directories), the committed circuit files (the live template's among them, and perhaps a K in the lanes
-form, `lanes_files`), and `runs`: null, the first
+two sessions' directories), the committed circuit files (the live template's among them), and `runs`: null, the first
 of the Lean's two calls (`credit._lean_live_verified`), or the answers the served path gives: one a statement
 `credit._live_asks` names, in its order, until one the Lean refuses at, each session accepted with its round's unit and
 its registered finding the ``--registered`` file's ports at their values and roots.
 
-Its mutations before any run (`PRE_NAMES`, with `runs` null or answered) break the circuit files' form or their lanes
-form (``files-lanes``), drop the live circuit file, break the statements' form, name a round past the execution phase's or one twice, give a descriptor that is no
+Its mutations before any run (`PRE_NAMES`, with `runs` null or answered) break the circuit files' form or bring a K in
+the lanes form, which is refused by name (``files-lanes``: ``lanes-form``), drop the live circuit file, break the statements' form, name a round past the execution phase's or one twice, give a descriptor that is no
 v2 live Program (``not-live``, a v1 Program among them), and leave a live table unregistered, registered twice or at other than T rows
 (``no-table``). Its mutations of the answers (`RUN_NAMES`) make one statement's verifier fail to run (``error``) or
 refuse it (``refused``), reject one session (``rejected``), and prove another unit than its round's (``unit-other``).
@@ -91,7 +90,7 @@ def live_verified_instance(rng: random.Random, name: str = "honest") -> dict:
                    "sessions": [f"/w/live-{s}/s{j}" for j in range(rng.randint(1, 2))]} for s in range(steps)]
     rng.shuffle(statements)
     files = {Cr.LIVE: C._hex(rng), **{f"k{k}": C._hex(rng) for k in rng.sample([64, 128, 4096], rng.randint(0, 2))}}
-    if name == "files-lanes" or rng.random() < 0.4:
+    if name == "files-lanes":
         files |= lanes_files(rng)
     entries = _entries(rng, prefix, t, steps)
     case = {"files": files, "statements": statements, "descriptor": C.live_hex(p), "entries": entries,
@@ -106,7 +105,7 @@ def live_verified_instance(rng: random.Random, name: str = "honest") -> dict:
             case["files"] = rng.choice([[], None, {**files, Cr.LIVE: C._hex(rng).upper()},
                                         {**files, "k32": C._hex(rng)[:-2]}, {**files, "x": 7}])
         case "files-lanes":
-            case["files"] = broken_lanes(rng, files)
+            case["files"] = rng.choice([files, broken_lanes(rng, files)])
         case "no-live-file":
             del files[Cr.LIVE]
         case "statements-form":
@@ -142,16 +141,16 @@ def live_verified_instance(rng: random.Random, name: str = "honest") -> dict:
 
 
 def lanes_files(rng: random.Random) -> dict:
-    """A K committed in the lanes form (`credit.lanes_files`): ``lane<K>`` and ``combine<K>``, and their leaf
-    Programs' digests in `credit.LEAF_PROGRAMS`, at a K no ``k<K>`` here commits."""
+    """A K committed in the lanes form, which credit refuses by name (``lanes-form``): ``lane<K>`` and ``combine<K>``,
+    and their leaf Programs' digests in `credit.LEAF_PROGRAMS`, at a K no ``k<K>`` here commits."""
     k = rng.choice([384, 448])
     names = [f"lane{k}", f"combine{k}"]
     return {**{x: C._hex(rng) for x in names}, Cr.LEAF_PROGRAMS: {x: C._hex(rng) for x in names}}
 
 
 def broken_lanes(rng: random.Random, files: dict) -> dict:
-    """`files` (holding the lanes form) not in it: a K's combine dropped, the K also committed as ``k<K>``, its leaf
-    Programs dropped, null, over other files or not digests."""
+    """`files` (holding the lanes form) with its lanes form broken, each still naming it: a K's combine dropped, the K
+    also committed as ``k<K>``, its leaf Programs dropped, null, over other files or not digests."""
     k = next(int(x[len("lane"):]) for x in files if x.startswith("lane"))
     progs = files[Cr.LEAF_PROGRAMS]
     return rng.choice([{x: v for x, v in files.items() if x != f"combine{k}"}, {**files, f"k{k}": C._hex(rng)},
@@ -163,7 +162,8 @@ def broken_lanes(rng: random.Random, files: dict) -> dict:
 
 #: each way a credit period's open commits no circuit files of `credit.committed_files`' form: none, null, empty, a list, a key
 #: that is no template (``k0``, ``k064``, ``K64``, ``x``, ``lane0``), a digest that is none (upper case, short, a
-#: number), or files not in the lanes form (``files-lanes``, `broken_lanes`); ``lanes``, a K in that form
+#: number); ``lanes``, a K in the lanes form, and ``files-lanes``, that form broken (`broken_lanes`), each refused by name
+#: (``lanes-form``)
 FILES_NAMES = ["honest", "lanes", "files-none", "files-null", "files-empty", "files-list", "files-key", "files-digest",
                "files-lanes"]
 

@@ -32,10 +32,7 @@ statement reading the leaf's lane partials, a value committed after the sample (
   `h1unit.ok_salt`. The ``--registered`` file is `leaf_lanes.registered_file`'s at the entries and roots of the world's
   registration record and produced record alone (`leaf_lanes.verifier_entries`), at the leaf's placement in the window's
   tables (`h1window.place`: unit 0 of the one-call window, one round), the public file `h1unit.verifier_pub`'s.
-  Each check is the Lean verifier's verdict and `pouw-leaf-own-window`'s (PoUW's `PouwCheck.LeafOwn.leafOwn?`): from the
-  window's descriptor and round log it places unit 0's reads (`placeOf`), and the file, as the Lean verifier parses it, holds
-  the layout's data ports there at the roots of the records the verifier holds (``holds``), and each of the statement's
-  sessions samples every unit of its partition (`PouwWindow.Lanes.checkFull`, the sample policy).
+  Each check is the Lean verifier's verdict.
 * **The negatives**, each a statement proved and checked like the others:
   ``swap-lane3`` and ``swap-lane4``: a partials tree with rows 3 and 4 swapped (its record well-formed); each lane reads
   its own row, which holds the other lane's partial, so its ok is 0 (REJECT). ``swap-combine``: the combine on that tree,
@@ -59,10 +56,6 @@ statement reading the leaf's lane partials, a value committed after the sample (
   the verifier's file marks every A, B and partials port ``read_in_full`` (`leaf_lanes.registered_file`), and Flock's
   `KnownRead.fullRows` refuses the circuit by name (REJECT, ``WHY``); ``combine-skips-p5-bit-unmarked``, the same session
   against that file with ``p5``'s mark removed, which nothing else refuses (ACCEPT, by design: the control).
-  ``other-registration-file``: lane 0 of the other leaf, its file and session that leaf's own and consistent, so
-  the Lean verifier accepts it, checked with the verifier holding this leaf's records: `pouw-leaf-own` refuses the file by name
-  (REJECT, ``WHY``); ``other-registration-file-held``, the same check holding the other leaf's records (ACCEPT, by
-  design: the control).
   Every check registers ok = 1 (``o0``'s known row), so a statement whose ok is 0 is refused at its session's parameters
   (S2/R7: its instance's output commitment is not the verifier's).
 * **The shared openings** (``shared_codes``, `produced.shared`): every row the honest sessions report opening (their
@@ -72,7 +65,7 @@ statement reading the leaf's lane partials, a value committed after the sample (
 
 ``cost`` counts a lane's and the combine's ANDs at a K (4096, the served one) without staging anything. ``prepare`` writes
 WORK/plan.tsv (``S tag dir`` a session; ``C tag dir pub registered program partition expect registration produced
-descriptor rounds unit statement flock-statement`` a Lean check and `pouw-leaf-own-window`'s), WORK/plan.json
+descriptor rounds unit statement flock-statement`` a Lean check), WORK/plan.json
 and WORK/prepare.json; ``summarize`` writes OUT/summary.json from the Lean verdicts, and exits 1 unless every check's verdict
 is the expected one, the honest statements' reported roots are the produced record's (`produced.opened`) and their
 opened rows its openings (`produced.shared`).
@@ -131,18 +124,12 @@ EXPECT = {"swap-lane3": "REJECT", "swap-lane4": "REJECT", "swap-combine": "ACCEP
           "other-leaf": "REJECT", "other-leaf-in-tree-lane5": "REJECT", "other-leaf-in-tree": "REJECT",
           "lane5-partial-off-tree": "REJECT", "receipt-mismatch": "REJECT", "lane3-index4": "REJECT",
           "ok-from-public": "REJECT", "lane3-index-from-public": "REJECT",
-          "combine-skips-p5-bit": "REJECT", "combine-skips-p5-bit-unmarked": "ACCEPT", "other-registration-file": "REJECT",
-          "other-registration-file-held": "ACCEPT"}
+          "combine-skips-p5-bit": "REJECT", "combine-skips-p5-bit-unmarked": "ACCEPT"}
 #: the refusal a negative's verdict names
 WHY = {"lane3-index-from-public": "registered reads (complete): the statement's port pub is no port of the verifier's",
-       "combine-skips-p5-bit": "registered reads: known port p5: no computed row of the circuit reads bit",
-       "other-registration-file": "registered reads: port a0 is not the layout's read of "}
+       "combine-skips-p5-bit": "registered reads: known port p5: no computed row of the circuit reads bit"}
 #: a check of another check's statement against its registered file with one port's ``read_in_full`` mark removed
 UNMARKED = {"combine-skips-p5-bit-unmarked": ("combine-skips-p5-bit", "p5")}
-#: the world whose records the verifier holds at a check, where it is not the statement's own
-HOLDS = {"other-registration-file": "honest"}
-#: a check of another check's statement, the verifier holding that statement's own world's records
-HELD = {"other-registration-file-held": "other-registration-file"}
 #: the combine row ``combine-skips-p5-bit``'s circuit leaves a bit of unread
 LAZY_ROW = 5
 def tile(k: int) -> Any:
@@ -320,7 +307,7 @@ def world(name: str, ctx: Ctx, leaf: Leaf, regs: dict, roots: tuple, rows: list)
 
 def entries(ctx: Ctx, w: World) -> tuple[dict, dict]:
     """The verifier's entries and roots of ``w``, from its registration record and produced record alone
-    (`leaf_lanes.verifier_entries`, Lean's `PouwWindow.Lanes.roots?`, which `pouw-leaf-own` holds each file to)."""
+    (`leaf_lanes.verifier_entries`)."""
     return LL.verifier_entries(w.reg_record, w.record, LL.lanes(*RC), ctx.wp)
 
 
@@ -493,8 +480,7 @@ def jobs(ctx: Ctx) -> list[tuple]:
                      ("receipt-mismatch", LL.COMBINE, None, "receipt", None),
                      ("lane3-index4", LL.LANE, 3, "honest", "index4"), ("ok-from-public", LL.COMBINE, None, "honest", "ok-free"),
                      ("lane3-index-from-public", LL.LANE, 3, "honest", "pub-free"),
-                     ("combine-skips-p5-bit", LL.COMBINE, None, "honest", "lazy"),
-                     ("other-registration-file", LL.LANE, 0, "other", None)]
+                     ("combine-skips-p5-bit", LL.COMBINE, None, "honest", "lazy")]
 
 
 def run_job(job: tuple) -> dict:
@@ -609,13 +595,9 @@ def prepare(args: argparse.Namespace) -> None:
         path = work / "verifier" / f"{tg}.registered.json"
         path.write_text(json.dumps(reads))
         by[tg] = {**by[of], "tag": tg, "registered": str(path)}
-    for tg, of in HELD.items():
-        by[tg] = {**by[of], "tag": tg}
-    for tg, r in by.items():
-        r["holds"] = HOLDS.get(tg, r["world"])
     honest = [jb[0] for jb in js if jb[0] not in EXPECT]
     proved = [jb[0] for jb in js]
-    checks = proved + list(UNMARKED) + list(HELD)
+    checks = proved + list(UNMARKED)
     vd = work / "verifier"
     with open(work / "plan.tsv", "w") as f:
         for tg in proved:
@@ -623,8 +605,8 @@ def prepare(args: argparse.Namespace) -> None:
         for tg in checks:
             r = by[tg]
             f.write(f"C\t{tg}\t{r['dir']}\t{r['pub']}\t{r['registered']}\t{r['program']}\t{r['partition']}\t"
-                    f"{EXPECT.get(tg, 'ACCEPT')}\t{vd / (r['holds'] + '.registration.json')}\t"
-                    f"{vd / (r['holds'] + '.produced.json')}\t{vd / 'window.json'}\t{vd / 'rounds.json'}\t0\t{r['stmt']}\t"
+                    f"{EXPECT.get(tg, 'ACCEPT')}\t{vd / (r['world'] + '.registration.json')}\t"
+                    f"{vd / (r['world'] + '.produced.json')}\t{vd / 'window.json'}\t{vd / 'rounds.json'}\t0\t{r['stmt']}\t"
                     f"{r['statement']}\n")
     plan = {"checks": {tg: {**by[tg], "expect": EXPECT.get(tg, "ACCEPT")} for tg in checks}, "honest": honest}
     (work / "plan.json").write_text(json.dumps(plan, indent=1))
@@ -651,14 +633,6 @@ def _verdict(p: Path) -> dict | None:
             "why": next((x.get("why", "") for x in v if not x.get("accepted")), "")}
 
 
-def _own(p: Path) -> dict | None:
-    """`pouw-leaf-own`'s verdict on a check's registered file."""
-    if not p.exists():
-        return None
-    v = [json.loads(x[4:]) for x in p.read_text(errors="replace").splitlines() if x.startswith("OWN ")]
-    return v[0] if v else None
-
-
 def _time(p: Path) -> dict | None:
     return json.loads(p.read_text()) if p.exists() else None
 
@@ -669,15 +643,12 @@ def summarize(args: argparse.Namespace) -> int:
     rows, opened, verdicts, known = {}, {}, {}, {}
     for tag, c in plan["checks"].items():
         v = _verdict(out / "lean" / f"{tag}.out")
-        own = _own(out / "lean" / f"{tag}.own")
         err = out / "lean" / f"{tag}.err"
         flock = "NONE" if v is None else "ACCEPT" if v["accepted"] else "REJECT"
-        word = "NONE" if v is None or own is None else ("ACCEPT" if flock == "ACCEPT" and own["accepted"] else "REJECT")
+        word = flock
         why = (v or {}).get("why") or (err.read_text(errors="replace").strip().splitlines()[-1:] if err.exists() else "")
-        if own is not None and not own["accepted"]:
-            why = own.get("why", "")
         rows[tag] = {"expect": c["expect"], "lean": word, "as_expected": word == c["expect"] and WHY.get(tag, "") in str(why),
-                     "why": why, "flock_verify": flock, "statement": c.get("statement"), "leaf_own": own, "holds": c["holds"],
+                     "why": why, "flock_verify": flock, "statement": c.get("statement"), "world": c["world"],
                      "ok": c["ok"], "ands": c["ands"], "prove": _time(out / tag / "prove.time"),
                      "lean_time": _time(out / "lean" / f"{tag}.time"), "registered": (v or {}).get("registered")}
         if tag in plan["honest"] and word == "ACCEPT":

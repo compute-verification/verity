@@ -11,8 +11,6 @@ public import PouwVerifier.Rounds
 public import PouwVerifier.Credit
 public import PouwVerifier.Period
 public import PouwVerifier.Chunks
-public import PouwVerifier.LeafOwn
-public import PouwVerifier.Lanes
 public import PouwVerifier.Verified
 public import PouwVerifier.LiveVerified
 public import PouwVerifier.CommittedFiles
@@ -30,8 +28,7 @@ sample (`PouwVerifier.Pass`) and on a live execution phase's salt and round coin
 The rules on a served execution phase's credited set, its sampled proof blocks (the sampling coin's over its layout) and their outcome, its
 credit period (counted only closed and complete) and its A rows (`PouwVerifier.Credit`, whose one entry is `window` and
 `periodCredit`, every rule composed on one execution phase and its round log) are held to `credit.py` the same way, through
-`pouw-verifier-difftest` (`PouwVerifier.CreditDifftest`). An execution phase unit's leaf statements read their values at the unit's
-placement in the execution phase's tables, from its descriptor and round log (`PouwVerifier.LeafOwn`, `pouw-leaf-own-window`). An H1
+`pouw-verifier-difftest` (`PouwVerifier.CreditDifftest`). An H1
 lane's chunks along K, and so the chunk rows a table at K commits a row as (`PouwVerifier.Chunks`, `weights.chunks`), are held
 to the Python through `pouw-verifier-difftest` too.
 -/
