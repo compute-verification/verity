@@ -81,7 +81,7 @@ class Program:
 
     def text(self) -> str:
         d = {"annotations": {}, "program_fn": "R_v1", "root": "R_v1",
-             **stand_ins.v2(self.defs, self.callees, self.types)}
+             **stand_ins.v2(self.defs, self.callees, self.types, "R_v1")}
         return json.dumps(d, separators=(",", ":"), sort_keys=True)
 
 

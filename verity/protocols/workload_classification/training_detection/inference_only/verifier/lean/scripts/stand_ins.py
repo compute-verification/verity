@@ -21,6 +21,7 @@ import re
 SCHEMA = "verity-ir/descriptor/v2"
 MADE_UP = re.compile(r"(NciOp|NciSum|NciConst|RecOp|RecConst)[0-9a-z]*_v1")
 CONST0 = "Const1[0x0]_v1"
+INPUT = re.compile(r"(Registered)?Input[1-9][0-9]*_v1")
 #: PROTOCOL.md §4.9's ids that are no word primitive: the gates, the constant bits and the inputs
 NOT_WORD = re.compile(r"(And|Xor)([2-9]|[1-9][0-9]+)_v1|Not_v1|Const1\[0x[01]\]_v1|(Registered)?Input[1-9][0-9]*_v1")
 
@@ -37,10 +38,17 @@ def _bits(t):
     return ["Tuple", [_bits(f) for f in t[1]]]
 
 
-def v2(defs: dict, callees: list, types: list) -> dict:
-    """A hand-written descriptor's `schema`, `definitions`, `callees`, `types` and `boolean` under schema v2: its own
-    tables, then a stand-in body for each word primitive among `defs`, in key order (PROTOCOL.md §4.6, §4.9)."""
-    defs, callees, types, boolean = dict(defs), list(callees), list(types), {}
+def v2(defs: dict, callees: list, types: list, root: str) -> dict:
+    """A hand-written descriptor's `schema`, `definitions`, `callees`, `types`, `boolean` and `inputs` under schema v2: its
+    own tables, the definitions `root` reaches, a stand-in body for each word primitive among them, in key order, and one
+    parameter per input node leading `root`'s body (PROTOCOL.md §4.1, §4.6, §4.9, §5.1)."""
+    reached, todo = set(), [root]
+    while todo:
+        k = todo.pop()
+        if k not in reached and k in defs:
+            reached.add(k)
+            todo += [callees[n["fn"]] for n in (defs[k].get("body") or {}).get("nodes", [])]
+    defs, callees, types, boolean = {k: d for k, d in defs.items() if k in reached}, list(callees), list(types), {}
 
     def intern(table: list, x) -> int:
         if x not in table:
@@ -60,7 +68,10 @@ def v2(defs: dict, callees: list, types: list) -> dict:
             "params": [[n, _bits(t)] for n, t in d["params"]], "ret_type": _bits(d["ret"]), "nodes": [node],
             "ret": {"affine": ["n", 0, 0, r]}}}
         boolean[key] = name
-    return {"schema": SCHEMA, "definitions": defs, "callees": callees, "types": types, "boolean": boolean}
+    nodes = defs[root]["body"]["nodes"]
+    lead = next((k for k, n in enumerate(nodes) if not INPUT.fullmatch(callees[n["fn"]])), len(nodes))
+    return {"schema": SCHEMA, "definitions": defs, "callees": callees, "types": types, "boolean": boolean,
+            "inputs": [[f"x{k}", 1] for k in range(lead)]}
 
 
 def made_up(p) -> bool:
