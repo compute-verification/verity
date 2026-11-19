@@ -481,6 +481,28 @@ where
       if r.readsRel.isEmpty then OneCircuit.pos P indices reg else pure r
     | none => OneCircuit.pos P indices reg
 
+/-- **The derived port named `nm`**: the verifier's port of that name in `own` with its reads as `withPositions` derives
+them at the statement's circuit `c` and public file `pub` from C, the verifier's `program`, the port the session's
+registered check opens (`checkRegistered`); none where `own` is none or names no such port. A check of a port's reads
+reads this port, never the file's, whose reads a `FORMAT` file never states. -/
+def derivedPort (c : Circuit) (pub : Public) (program : Option ByteArray) (own : Option (Array Port)) (nm : String) :
+    V (Option Port) := do
+  let some own' ← withPositions c pub program own | return none
+  return own'.find? (·.name == nm)
+
+theorem derivedPort_ok {c : Circuit} {pub : Public} {program : Option ByteArray} {own : Option (Array Port)}
+    {nm : String} {p : Port} (h : derivedPort c pub program own nm = .ok (some p)) :
+    ∃ own', withPositions c pub program own = .ok (some own') ∧ own'.find? (·.name == nm) = some p := by
+  unfold derivedPort at h
+  cases hw : withPositions c pub program own with
+  | error e => simp [hw, bind, Except.bind] at h
+  | ok o =>
+    cases o with
+    | none => simp [hw, bind, Except.bind, pure, Except.pure] at h
+    | some own' =>
+      simp only [hw, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
+      exact ⟨own', rfl, h⟩
+
 /-- The statement's registered reads against the verifier's own `own` (`--registered`). The header's `registered` must
 name exactly `own`'s ports, each a port of the circuit and a table of a shared-row file: every table row's `b ‖ c`, as the
 value's row at its stated position, opens the registered root through its path, and every instance reads, by its ref,
