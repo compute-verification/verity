@@ -8,6 +8,7 @@ the toy's plan or one of fewer units, and rejected when the prover skips a layer
 private."""
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import multiprocessing as mp
@@ -29,6 +30,7 @@ sys.path.insert(0, str((ROOT / "verity/protocols/resource_accounting/memory/poub
 import bandwidth as B  # noqa: E402
 from p2_v1 import bandwidth_toy as BT  # noqa: E402
 
+from verity.commitments.merkle import levels, merkle_depth
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import verifier as V
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
@@ -80,19 +82,31 @@ def test_the_sketch_of_stored_rows_is_the_unit_sketch() -> None:
         assert sk.sigma[g].numpy().astype("<i4").tobytes() == ref.sketch(rows[4 * g:4 * g + 4].tobytes())
 
 
-@pytest.mark.parametrize(("units", "runs"), [(8, None), (16 * 40 + 5, None), (16 * 40 + 5, ((100, 500), (0, 50)))])
-def test_the_receipt_tree_is_receipts_tree(units, runs, monkeypatch) -> None:
-    plan = receipts.Plan.whole(units) if runs is None else receipts.Plan(runs, units)
-    rng = np.random.default_rng(units)
+TREES = [(1, 4, False, None), (17, 4, False, None), (33, 4, False, None), (128, 4, False, None), (129, 4, False, None),
+         (64, 4, False, None), (65, 4, False, None), (550, 4, True, ((100, 500), (0, 50))), (16 * 2049, 64, False, None),
+         (129, 3, False, None)]
+
+
+@pytest.mark.parametrize(("positions", "chunk", "pooled", "runs"), TREES)
+def test_the_receipt_tree_is_one_levels_call(positions, chunk, pooled, runs, monkeypatch) -> None:
+    plan = receipts.Plan.whole(positions) if runs is None else receipts.Plan(runs, 645)
+    rng = np.random.default_rng(positions)
     ys = rng.integers(0, 256, (plan.length, 64), dtype=np.uint8)
     n = receipts.leaves(plan.length)
     salts = rng.integers(0, 256, n * receipts.SALT_BYTES, dtype=np.uint8).tobytes()
-    ref = receipts.tree(SEED, plan, [bytes(y) for y in ys],
-                        [salts[192 * c:192 * (c + 1)] for c in range(n)])
-    monkeypatch.setattr(B.ReceiptTree, "CHUNK", 4)
-    with ProcessPoolExecutor(2, mp_context=mp.get_context("fork")) as pool:
+    monkeypatch.setattr(B.ReceiptTree, "CHUNK", chunk)
+    with ProcessPoolExecutor(2, mp_context=mp.get_context("fork")) if pooled else contextlib.nullcontext() as pool:
+        if chunk & (chunk - 1):
+            with pytest.raises(ValueError, match="CHUNK 3 is not a power of two"):
+                B.ReceiptTree(SEED, plan, ys, salts, pool)
+            return
         got = B.ReceiptTree(SEED, plan, ys, salts, pool)
-    assert got.root == ref.commitment.root
+    d = receipts.domain(SEED, plan)
+    nodes = [d.leaf(c, c, receipts.SCHEMA, receipts.hidden(ys[16 * c:16 * c + 16].tobytes(), salts[192 * c:192 * c + 192]))
+             for c in range(n)] + [d.pad(r) for r in range(n, 1 << merkle_depth(n))]
+    assert [[lv[i:i + 64] for i in range(0, len(lv), 64)] for lv in got.levels] == [list(lv) for lv in levels(
+        d.domain_id, nodes, hash=d.hash)]
+    ref = receipts.tree(SEED, plan, [bytes(y) for y in ys], [salts[192 * c:192 * c + 192] for c in range(n)])
     assert all(got.path(c) == ref.open(c).path for c in range(n))
 
 

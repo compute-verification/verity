@@ -2105,6 +2105,8 @@ class LiveRecord:
         self.challenger, self.label, self._clock = challenger, label, clock
         self.roots: list[bytes] = []
         self.slots: list[int] = []
+        self._taken: set[int] = set()
+        self._free = 0
         self.openings: list[LiveOpening] = []
         self.commits = 0
         self._log: list[dict[str, Any]] = []
@@ -2136,7 +2138,9 @@ class LiveRecord:
         self.commits += 1
 
     def _next(self) -> int:
-        return next((i for i in range(_count(self.challenger, self.label)) if i not in self.slots), len(self.slots))
+        while self._free in self._taken:
+            self._free += 1
+        return self._free if self._free < _count(self.challenger, self.label) else len(self.slots)
 
     def _root(self, root: bytes, slot: int) -> tuple[str, int, bytes]:
         count = _count(self.challenger, self.label)
@@ -2144,10 +2148,11 @@ class LiveRecord:
             raise CoinError(f"every {self.label} coin of the epoch is open")
         if type(slot) is not int or not 0 <= slot < count:
             raise CoinError(f"the epoch's {self.label} family has no coin {ascii(slot)}")
-        if slot in self.slots:
+        if slot in self._taken:
             raise CoinError(f"the epoch's {self.label} coin {slot} is opened twice: a retry never redraws")
         self.roots.append(bytes(root))
         self.slots.append(slot)
+        self._taken.add(slot)
         self._log.append({"event": "root", "label": self.label, "index": slot, "root": bytes(root).hex(),
                           "received_at": self._clock()})
         return self.label, slot, bytes(root)
