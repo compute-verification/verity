@@ -314,3 +314,6 @@ packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/cvt_special.json
 packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz
 packages/verity/tests/ml/fixtures/vectors/tc-ampere-bf16-total-hw.json
 packages/verity/tests/ml/fixtures/vectors/tc-ampere-bf16-total.json
+
+# a uv run inside a test suite directory writes one; a suite that pins its own lock adds it with `git add -f`
+/tests/**/uv.lock

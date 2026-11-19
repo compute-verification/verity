@@ -27,8 +27,8 @@ is the bound cover is held back from it, and the record says so. After `archive-
 **The program is not held to the circuit.** A unit statement's `program_sha512` is no digest of a program file: the
 stager writes there the SHA-512 of its `program_digests`, the unit's name with a SHA-256 over the staged Definition's
 id and the row layout, which no program descriptor holds. So the command hashes no program against it. It reads the
-program only to record which was handed (its digest as the verifier computes it, the SHA-512 of the descriptor's
-canonical JSON without `annotations`, and the Definition it names, `program_fn`) and to refuse one that names another
+program only to record which was handed (its program digest, `codec.program_digest`, and the Definition it names,
+`program_fn`) and to refuse one that names another
 Definition than `stage.json`'s `word`: a comparison of two names, which binds nothing. Under `PARTITION_V1` the bound
 partition object names its Program (`program`), and the verifier refuses a session handed any other; so there the handed
 Program is held to that digest instead (a bound statement's is the population Program of its word, which names the
@@ -197,7 +197,7 @@ def hold(f: Files, stage: Mapping[str, Any]) -> dict:
     binds nothing for, is refused here. `held` names
     the files that passed, and `withheld` the ones the verifier isn't given: the partition under `PARTITION_COVER`,
     for which it takes no object. The program is held to nothing the circuit states. `program` is the one handed: its
-    digest as the verifier computes it (`ProvedScope.programDigest`: the descriptor without `annotations`) and the
+    program digest (`program_digest`, none for a descriptor that is no Program) and the
     Definition it names (`program_fn`), which is refused when `stage` names another as its `word`, unless the held
     partition is under `PARTITION_V1`: then it is refused unless it is the Program the partition object names."""
 
@@ -210,7 +210,7 @@ def hold(f: Files, stage: Mapping[str, Any]) -> dict:
         if not isinstance(desc, dict):
             raise ValueError(f"{f.program} (--program) is not a program descriptor, a JSON object: no verifier was started")
         fn = desc.get("program_fn")
-        doc["program"] = {"sha512": program_digest(desc), "fn": fn}
+        doc["program"] = {"sha512": program_digest(desc) if {"schema", "program_fn", "root", "definitions"} <= desc.keys() else None, "fn": fn}
         if named is None and None not in (fn, stage.get("word")) and fn != stage["word"]:
             raise ValueError(f"{f.program} is the program of another Definition than the statement's: its `program_fn` "
                              f"is {fn}, and {f.stage} names the `word` {stage['word']}: no verifier was started (the "

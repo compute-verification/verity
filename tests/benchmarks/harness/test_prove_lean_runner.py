@@ -171,11 +171,11 @@ def test_the_lean_verifiers_runner_holds_the_partition_and_the_circuit_and_label
     verifier = Verifier(monkeypatch, [(ACCEPTED, 1.0)] * 8)
 
     # the program: any descriptor is handed on, since the circuit's `program_sha512` is no digest of it; the record
-    # says which, by the digest the verifier computes (annotations in none) and the Definition it names
+    # says which, by its program digest (none for a descriptor that is no Program) and the Definition it names
     other = {"schema": "another", "definitions": PROGRAM["definitions"]}
     program.write_text(json.dumps(other | {"annotations": {"theta": [9, 9]}}, separators=(",", ":")))
     doc = measured()
-    assert doc["statement"]["program"] == {"sha512": _sha512(b"", other), "fn": None} and doc["statement"]["bound"]["held"] == []
+    assert doc["statement"]["program"] == {"sha512": None, "fn": None} and doc["statement"]["bound"]["held"] == []
     assert verifier.calls[-1][verifier.calls[-1].index("--program") + 1] == "key-program-word.json"
     program.write_text("not a descriptor")
     refused(r"program-word\.json \(--program\) is not JSON .*: no verifier was started")

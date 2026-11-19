@@ -159,6 +159,7 @@ theorem bodyBad_sound (defs defs' : Array Defn) (i : ℕ) (key : String) (B : Bo
     (h : (Widths.bodyBad defs' key B).run w = .ok none w') : BodyWide B := by
   unfold Widths.bodyBad at h
   dsimp only at h
+  try simp only [Bool.false_eq_true, ↓reduceIte] at h
   obtain ⟨r, w₂, hloop, h⟩ := m_bind h
   rw [Std.Legacy.Range.forIn_eq_forIn_range'] at hloop
   have hL := forIn_m_inv _

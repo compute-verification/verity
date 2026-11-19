@@ -30,12 +30,12 @@ namespace InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
 open Flock.Program
 
 /-- A reference whose first step of resolution ends resolves to where the step ends. -/
-theorem resolve_one {P : Prog} {sc : Scope} {r : Ref} {g : ℕ} (h : resolveStep P (sc, r) = .ok (.inl g)) :
+theorem resolve_one {P : Prog} {sc : Scope} {r : Ref} {g : ℕ} (h : resolveStep P (sc, r) = .ok (.inl g))
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     resolve P sc r = .ok g := by
   obtain ⟨n, hn⟩ : ∃ n, Flock.Steps.FUEL = n + 1 :=
     ⟨Flock.Steps.FUEL - 1, by unfold Flock.Steps.FUEL; omega⟩
-  unfold resolve
-  rw [hn]
+  rw [Flock.Program.resolve_eq hrc, hn]
   exact run_one h n
 
 end InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
@@ -57,6 +57,7 @@ theorem read_wide {P : Prog} (hP : ReadProg P) :
       (∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!) ∧
       ∀ d < P.defs.size, (P.defs[d]!).prim = false →
         (P.defs[d]!).body.retType = (P.defs[d]!).ret ∧ LeafWidths.BodyWide (P.defs[d]!).body := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hP.2.2.2.2.1
   obtain ⟨hr, hrp, hlay, hB⟩ := read_bodies hP
   obtain ⟨⟨bytes, hdec⟩, -⟩ := hP
   obtain ⟨st, hPd, hinv, -⟩ := BodiesOk.decode_spec bytes P hdec
@@ -106,6 +107,7 @@ theorem param_wide {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Read
     (hres : Flock.Program.resolve P sc (⟨true, i, t⟩ : Ref) = .ok g) :
     ∃ p ops sc', P.gate g = .ok (p, ops, sc') ∧
       (P.defs[p]!).ret = .value (((P.defs[sc.d]!).params[i]!).2.widths[t]!) := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hP.2.2.2.2.1
   obtain ⟨hroot, hB, hL, hD, hW⟩ := read_wide hP
   obtain ⟨hov, hlayb⟩ := read_walk hP
   obtain ⟨k, m, hk, hnode, hform, hm, hargs, rfl⟩ := unit_member hP hrs hu
@@ -181,6 +183,7 @@ theorem outLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.Securi
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} {out : String} {l g lo hi : ℕ} (hu : UnitAt P rs tid u sc) (ho : OutLeaf P sc out l g lo hi) :
     ∃ p ops sc', P.gate g = .ok (p, ops, sc') ∧ (P.defs[p]!).ret = .value (hi - lo) := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hP.2.2.2.2.1
   by_cases hp : (P.defs[sc.d]!).prim = true
   · -- a unit of a primitive: its one output leaf is its own gate
     obtain ⟨w, hw, -, hall⟩ := outLeaf_prim hP hrs hu hp

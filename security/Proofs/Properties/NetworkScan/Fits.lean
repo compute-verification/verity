@@ -393,9 +393,11 @@ theorem down_step (lo hi : ℕ) (s : Scope × Ref) (hs : Down P lo hi s) :
 walk's fuel: each step goes one callee deeper (`down_step`), and the activation's callees nest less deep than the
 fuel. -/
 theorem resolve_own {lo hi : ℕ} (sc : Scope) (r : Ref) (hs : Down P lo hi (sc, r))
-    (hdep : (InferenceOnlyVerifier.Desc.depths P)[sc.d]! < Flock.Steps.FUEL) :
-    ∃ a, resolve P sc r = .ok a ∧ lo ≤ a ∧ a < hi :=
-  Walk.run_of_potential (what := "scope resolution") (Down P lo hi)
+    (hdep : (InferenceOnlyVerifier.Desc.depths P)[sc.d]! < Flock.Steps.FUEL)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
+    ∃ a, resolve P sc r = .ok a ∧ lo ≤ a ∧ a < hi := by
+  rw [Flock.Program.resolve_eq hrc]
+  exact Walk.run_of_potential (what := "scope resolution") (Down P lo hi)
     (fun s => (InferenceOnlyVerifier.Desc.depths P)[s.1.d]!) (fun b => lo ≤ b ∧ b < hi) (down_step P hok hL hc lo hi)
     Flock.Steps.FUEL (sc, r) hs hdep
 
@@ -409,7 +411,8 @@ theorem resolve_param_input (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).
     (hin : InferenceOnlyVerifier.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[kr]!) = true)
     (hm : m < ((P.defs[P.root]!).body.nodes[k]!).n)
     (hp0 : 0 < (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params.size)
-    (hj : j < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[0]!).2.leaves) :
+    (hj : j < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[0]!).2.leaves)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∃ g, resolve P (P.child P.rootScope k m) ⟨true, 0, j⟩ = .ok g ∧ kr < (P.defs[P.root]!).body.nodes.size ∧
       (P.defs[P.root]!).body.offsets[kr]! ≤ g ∧ g < (P.defs[P.root]!).body.offsets[kr + 1]! := by
   have hmem := node_mem _ hk
@@ -459,6 +462,7 @@ theorem resolve_param_input (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).
       show Flock.Steps.run "scope resolution" (resolveStep P) (0 + 1) (P.rootScope, ⟨false, kr, x⟩) = .ok g
       rw [Flock.Steps.run.eq_2, hg]
       rfl
+    rw [Flock.Program.resolve_eq hrc]
     exact Flock.Steps.run_mono (m := Flock.Steps.FUEL) (by unfold Flock.Steps.FUEL; norm_num) h2
   rcases hf : ((P.defs[P.root]!).body.nodes[kr]!).form with _ | _ | _ | _
   · rw [hf] at hdownr; dsimp only at hdownr
@@ -522,6 +526,7 @@ theorem facts {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA 
     (∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]!) ∧
       (P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false) ∧ (∀ d < P.defs.size, Walk.LaidOut P d) ∧
       InferenceOnlyVerifier.Desc.calleesFirst P = true := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hA.laid.2.2
   obtain ⟨st, hdefs, hinv, -⟩ := BodiesOk.decode_spec bytes P hd
   obtain ⟨hr, hp, -⟩ := BodiesOk.decode_root bytes P hd
   have hw := hA.laid.2.2
@@ -536,6 +541,7 @@ theorem fits_egress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P
     (hF : Flattens P C) :
     ∀ t < s.window, ∀ ℓ σ, ∀ g ∈ NetTiming.slotGates ((scanLayout P s).egress t ℓ σ),
       g ∈ C.outs ∧ C.gates[g]? ≠ some .input := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hA.laid.2.2
   obtain ⟨hok, hroot, hL, hc⟩ := facts hd hA
   obtain ⟨hke, hkc⟩ := templateNodes_mem P hA.egress_mem
   have hmono := Resolve.offsets_mono P P.root (hL _ hroot.1) hroot.2
@@ -601,6 +607,7 @@ bucket's `row` parameter, which resolves up through the bucket's template node t
 leaves, and down to that input node's gates. -/
 theorem fits_ingress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA : Accepted P s)
     (hF : Flattens P C) : ∀ t < s.window, ∀ g ∈ (scanLayout P s).ingress t, C.gates[g]? = some .input := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hA.laid.2.2
   obtain ⟨hok, hroot, hL, hc⟩ := facts hd hA
   have hmono := Resolve.offsets_mono P P.root (hL _ hroot.1) hroot.2
   have hend := ((hL _ hroot.1) hroot.2).2.1

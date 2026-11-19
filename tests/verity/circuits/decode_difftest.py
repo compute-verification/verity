@@ -4,13 +4,16 @@ decoder (`Circuits/Program.lean`'s `decode`).
     uv run python tests/verity/circuits/decode_difftest.py --out DIR
 
 Writes `DIR/decode_difftest/`, one line per case: `cases.jsonl`, `{"name", "descriptor"}`, the descriptor's text as the
-decoder reads it; `python.jsonl`, `{"name", "ok", "error", "message", "program_digest", "boolean"}`, `codec.decode_program`'s
-verdict on that text: on a refusal its first `E_` code (none for a refusal without one) and its message, on an accept the
-program's digest and its Boolean map; and `digests.json`, each file's SHA-256.
+decoder reads it; `python.jsonl`, `{"name", "ok", "error", "message", "program_digest", "boolean", "inputs",
+"definition_digests"}`, `codec.decode_program`'s verdict on that text: on a refusal its first `E_` code (none for a refusal
+without one) and its message, on an accept the program's digest, its Boolean map, its `inputs` and each definition's digest
+(§4.8); and `digests.json`, each file's SHA-256.
 
 The cases: `format_vectors.json`'s descriptors (the format's, `wide`'s and `registered_program`'s), each of
 `test_format_spec.REJECT`'s refusals of the first, a `boolean` key named twice (a JSON object keeps a key's last value,
-in both decoders' parsers), and `chain()`, a GEMM chain whose word primitives' bodies are the catalog's."""
+in both decoders' parsers), `chain()`, a GEMM chain whose word primitives' bodies are the catalog's, and
+`recut_vectors.reads()`, reads of an input node at another width, and `supplied_cases()`, a supplied input's mark (§5.4)
+as a program and a block carry it and each of its refusals."""
 from __future__ import annotations
 
 import argparse
@@ -19,10 +22,13 @@ import json
 import re
 from pathlib import Path
 
+import recut_vectors
+import test_supplied_block as SB
 import stand_in  # noqa: F401  (the test primitives' Boolean bodies)
 import test_format_spec as spec
 
 from verity.circuits import codec
+from verity.circuits import restrict as R
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.ops import gemm as G
 from verity.commitments.periods import interface as I
@@ -38,9 +44,35 @@ def chain() -> str:
     return b"".join(codec.descriptor_chunks(c.program()[0])).decode()
 
 
+def supplied_cases() -> list[tuple[str, str]]:
+    """`test_supplied_block`'s program (`k` supplied, `const.u16/v1`), the block reading part of `k` (a mark with `of`), and
+    the program with its mark edited to each refusal, in `check_entry`'s order."""
+    c = b"".join(codec.descriptor_chunks(SB.program()))
+    block = R.restrict(c, SB.PARTITION, [(1, 2)], R.Bits(R.program(c))).descriptor
+    base = json.loads(c)
+    mark = base["inputs"][1][2]
+    edits = [("mark: bits 0", lambda i: i[1].__setitem__(2, {**mark, "bits": 0})),
+             ("mark: a key beyond the four", lambda i: i[1].__setitem__(2, {**mark, "seed": 1})),
+             ("mark: of with lo = hi", lambda i: i[1].__setitem__(2, {**mark, "of": ["k", 1, 1]})),
+             ("supplied nodes, no mark", lambda i: i[1].pop()),
+             ("a mark on run nodes", lambda i: i[0].append(mark)),
+             ("mark: no such function", lambda i: i[1].__setitem__(2, {**mark, "supplied": "const.u16/v2"})),
+             ("mark: the wrong args", lambda i: i[1].__setitem__(2, {**mark, "args": {"round": 5}})),
+             ("mark: no value at its args", lambda i: i[1].__setitem__(2, {**mark, "args": {"value": 70000}})),
+             ("mark: bits not its nodes'", lambda i: i[1].__setitem__(2, {**mark, "bits": 8})),
+             ("mark: a function of another length", lambda i: i[1].__setitem__(2, {**mark, "supplied": "log.base/v1", "args": {}})),
+             ("mark: digest of a 2-byte value", lambda i: i[1].__setitem__(2, {**mark, "layout": "digest"}))]
+    out = [("supplied: program", c.decode()), ("supplied: block", block.decode() if isinstance(block, bytes) else block)]
+    for label, edit in edits:
+        d = json.loads(c)
+        edit(d["inputs"])
+        out.append((f"supplied: {label}", json.dumps(d, ensure_ascii=False, separators=(",", ":"))))
+    return out
+
+
 def cases() -> list[tuple[str, str, object]]:
     base = VECTORS["descriptor"]
-    out = [("format", base, spec.REG), ("wide", VECTORS["wide"]["descriptor"], spec.REG),
+    out = [("format", base, spec.REG), ("wide", spec.wide_descriptor(), spec.REG),
            ("registered_program", VECTORS["registered_program"]["descriptor"], spec.REG)]
     for label, edit, _why in spec.REJECT:
         d = json.loads(base)
@@ -49,6 +81,8 @@ def cases() -> list[tuple[str, str, object]]:
     first = json.loads(base)["boolean"]["TSum2_v1"]
     out.append(("a boolean key named twice, the last kept", base.replace('"boolean":{', f'"boolean":{{"TAdd32_v1":"{first}",', 1), spec.REG))
     out.append(("chain", chain(), REGISTRY))
+    out += [(name, text, spec.REG) for name, text in recut_vectors.reads()]
+    out += [(name, text, REGISTRY) for name, text in supplied_cases()]
     return out
 
 
@@ -58,7 +92,8 @@ def verdict(text: str, registry) -> dict:
     except Exception as e:  # noqa: BLE001
         m = re.search(r"\bE_[A-Z_]+", str(e))
         return {"ok": False, "error": m[0] if m else None, "message": f"{type(e).__name__}: {e}"}
-    return {"ok": True, "program_digest": codec.program_digest(p.desc), "boolean": p.desc["boolean"]}
+    return {"ok": True, "program_digest": codec.program_digest(p.desc), "boolean": p.desc["boolean"], "inputs": p.inputs,
+            "definition_digests": dict(sorted(codec.definition_digests(p.desc).items()))}
 
 
 def main() -> None:

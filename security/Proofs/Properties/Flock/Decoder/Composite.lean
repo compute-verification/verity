@@ -410,6 +410,7 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
       dsimp only at h2
       split at h2
       · rename_i ps hps
+        rw [leavesFor_false] at hps
         obtain ⟨ps', h3, h2⟩ := Walk.except_bind_ok h2
         injection h3 with h3; subst h3
         split at h2
@@ -454,6 +455,9 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
   rcases hL with ⟨hs5, hp5, hsz5, hn5⟩ | hL
   swap; · exact hL.elim
   dsimp only at hsz5 hn5 h
+  replace h := st_bind h; obtain ⟨st, s7, h1, h⟩ := h
+  obtain ⟨rfl, rfl⟩ := st_get h1
+  rw [leavesFor_false] at h
   rcases hret : parseParts ((b.getObjVal? "ret").toOption.getD Lean.Json.null) (leavesOf params outs)
     (fun k2 a => nodes[k2]?.bind fun x => Option.map (fun x => x.seq) x.args[a]?) with e | ps
   all_goals rw [show (fun p i => if p = true then Option.map (fun (x : String × Ty) => x.2.leaves) params[i]?
@@ -468,8 +472,6 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
   · replace h := st_bind h; obtain ⟨a, s7, h1, -⟩ := h
     exact absurd h1 (by intro h; injection h)
   rename_i hcnt
-  replace h := st_bind h; obtain ⟨st, s7, h1, h⟩ := h
-  obtain ⟨rfl, rfl⟩ := st_get h1
   generalize hwalk : EStateM.run _ _ = r at h
   rcases r with ⟨_ | m, w⟩ | ⟨e, w⟩
   all_goals dsimp only at h

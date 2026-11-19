@@ -1,11 +1,11 @@
 /-
 `Flock.Partition`: the program format `verity-ir/descriptor/v2` (`verity/circuits/PROTOCOL.md`), as the verifier
-reads its own copy of a Program: the canonical JSON domain and the program's SHA-512 (§1), types and leaves (§2), reference
+reads its own copy of a Program: the canonical JSON domain and the program digest (§1), types and leaves (§2), reference
 sequences (§3), the descriptor and what the decoder refuses (§4), input nodes (§5), the canonical layout (§6) and scope
 resolution (§7), with each word primitive's one Boolean Definition (§4.9, `Prog.boolean`).
 
 The verifier evaluates no primitive, so it holds no registry: a primitive is taken as the descriptor declares it (its parameters
-and return type are under the program's SHA-512), and an input (`Input<w>_v1`, bound per run, or `RegisteredInput<w>_v1`,
+and return type are under the program digest), and an input (`Input<w>_v1`, bound per run, or `RegisteredInput<w>_v1`,
 bound at registration; §5.2) must declare no parameters and `Value<w>`. Definitions
 are decoded on demand from the root and from the functions `program_fn`'s record names, as core decodes them, and each callee
 gets a smaller index than its callers.
@@ -19,6 +19,11 @@ public import Base.Sizes
 public import Circuits.Steps
 public import Lean.Data.Json.FromToJson.Basic
 public import Std.Data.HashMap
+meta import Base.Canon
+meta import Base.Hash
+meta import Base.JsonParse
+meta import Base.Sizes
+meta import Circuits.Steps
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -513,6 +518,8 @@ structure Body where
   nodes : Array Node
   ret : Seq
   offsets : Array Nat
+  /-- the input nodes the body reads at another width, each with its `q` (`defs.Body.recut`) -/
+  recut : Array (Nat × Nat) := #[]
   deriving Inhabited
 
 structure Defn where
@@ -536,7 +543,8 @@ structure Prog where
   index : Std.HashMap String Nat
   root : Nat
   programFn : String
-  /-- SHA-512 of the canonical descriptor without `annotations` (`partition_object.program_sha512`) -/
+  /-- the program digest (§1, `codec.program_digest`, `partition_object.program_sha512`), composed from the definitions'
+  digests (§4.8, `programDigestWith`) -/
   sha512 : ByteArray
   /-- §4.9: each word primitive's key to its one Boolean Definition's key, both in `defs` -/
   boolean : Std.HashMap String String := {}
@@ -887,6 +895,10 @@ structure Src where
   hp : Array (Option Nat)
   hn : Array (Option Nat)
   below : Nat
+  /-- each node's leaf width where it is an input node (PROTOCOL.md §5.2), else none -/
+  inp : Array (Option Nat) := #[]
+  /-- each input node's first reader width in `defs.Builder.finish`'s order, where one reads it -/
+  first : Array (Option Nat) := #[]
 
 def Src.ty? (s : Src) (p : Bool) (i : Nat) : Option Ty :=
   if p then s.params[i]? else if i < s.below then s.nodes[i]? else none
@@ -894,9 +906,235 @@ def Src.ty? (s : Src) (p : Bool) (i : Nat) : Option Ty :=
 def Src.homo? (s : Src) (p : Bool) (i : Nat) : Option Nat :=
   if p then (s.hp[i]?).join else (s.hn[i]?).join
 
+/-! #### §4.4's read at another width
+
+An input node of `N` leaves of width `W` read at a width `w` that divides `W`, `q = W / w`: its references index its `N·q`
+leaves of width `w`, leaf `j` the bits `[(j mod q)·w, (j mod q + 1)·w)` of its leaf `j div q`. `recutOk` is `defs`'s width
+check's input-node path (`_Widths.other`, through `misread`'s cut of a part into runs of one width, and a grid's pieces),
+and `recut` is `refs.recut` on one such run, refused by the codec's names and words: `recut-width`, `recut-boundary`,
+`recut-overrun`. Decided by structure, but where a strided run falls apart into single references, a grid lane overruns
+its node, or a grid is read as leaves of more than one width. -/
+
+/-- The leaf width of source `(p, i)` where it is an input node below `s.below`. -/
+def Src.inW? (s : Src) (p : Bool) (i : Nat) : Option Nat :=
+  if p || s.below ≤ i then none else (s.inp[i]?).join
+
+private def pySpace (p : Bool) : String := if p then "'p'" else "'n'"
+
+/-- `part.to_json()` as Python prints it in a message. -/
+def pyPart : Part → String
+  | .affine p i b c => s!"\{'affine': [{pySpace p}, {i}, {b}, {c}]}"
+  | .strided p i b inner os is c => s!"\{'strided': [{pySpace p}, {i}, {b}, {inner}, {os}, {is}, {c}]}"
+  | .explicit it => "{'explicit': [" ++ ", ".intercalate (it.toList.map fun r => s!"[{pySpace r.p}, {r.i}, {r.j}]") ++ "]}"
+  | .grid run lanes => s!"\{'grid': [{run}, [" ++ ", ".intercalate (lanes.toList.map fun l =>
+      s!"[{pySpace l.p}, {l.i}, {l.b}, {l.e}, [" ++ ", ".intercalate (l.lv.map fun (r, d) => s!"[{r}, {d}]") ++ "]]") ++
+      "]]}"
+
+/-- `refs.recut(W, w, sl, N)`, then `_recut(i, q)` against the node's first reader width `w0`: input node `i` of `N` leaves of
+width `W` read by `sl` (an affine or strided part, or an explicit one of one reference, not empty) as leaves of width `w`. -/
+def recut (i N W w w0 : Nat) (sl : Part) : M Unit := do
+  if w == 0 || W % w != 0 then
+    throw s!"recut-width: an input node of {W}-bit leaves read in {w}-bit leaves: the reader's width divides the registered width"
+  let q := W / w
+  let qi : Int := q
+  -- `refs.as_grid`'s one lane: its run, base, inner stride and levels; and `lane_bounds`, or a strided part's corners
+  let (run, b, e, lv, lo, hi) : Nat × Int × Int × List (Nat × Int) × Int × Int := match sl with
+    | .affine _ _ b c => (c, b, 1, [], b, (b : Int) + c - 1)
+    | .strided _ _ b inner os is c =>
+      let k := (c - 1) / inner
+      let corners : List (Nat × Nat) :=
+        [(0, 0), (0, min inner c - 1), (k, 0), (k, (c - 1) % inner)] ++ (if k > 0 then [(k - 1, inner - 1)] else [])
+      let vals := corners.map fun (x, y) => b + (x : Int) * os + (y : Int) * is
+      (inner, b, is, if (c + inner - 1) / inner > 1 then [((c + inner - 1) / inner, os)] else [],
+        vals.foldl min vals.head!, vals.foldl max vals.head!)
+    | .explicit it => let j : Int := (it[0]!).j; (1, j, 0, [], j, j)
+    | .grid .. => (0, 0, 0, [], 0, 0)
+  if q > 1 && !(e == 1 && b % qi == 0 && run % q == 0 && sl.count % q == 0 && lv.all fun (_, d) => d % qi == 0) then
+    throw (s!"recut-boundary: {pyPart sl} reads an input node of {W}-bit leaves in {w}-bit leaves other than whole " ++
+      "registered leaves")
+  if !(0 ≤ lo && hi < ((N * q : Nat) : Int)) then
+    throw s!"recut-overrun: {pyPart sl} reads past the {N} {W}-bit leaves of its input node"
+  if w != w0 then
+    throw s!"recut-width: input node {i} read in leaves of two widths; an input node is read at one"
+
+/-- References `lo … hi - 1` of part `q` as a part (`Refs.slice`): an affine or strided part's run, else its references. -/
+def sliceOf (q : Part) (lo hi : Nat) : Part :=
+  match q with
+  | .affine p i b c => .affine p i (b + min lo c) (min hi c - min lo c)
+  | .strided p i b inner os is c =>
+    let hi := min hi c
+    if hi ≤ lo then .explicit #[]
+    else if lo % inner == 0 && (hi % inner == 0 || hi == c) then
+      .strided p i (b + ((lo / inner : Nat) : Int) * os) inner os is (hi - lo)
+    else if hi - lo ≤ inner - lo % inner then
+      if is == 1 then .affine p i (q.get lo).j (hi - lo) else .strided p i (q.get lo).j 1 is 0 (hi - lo)
+    else .explicit ((Array.range (hi - lo)).map fun k => q.get (lo + k))
+  | .explicit it => .explicit (it.extract lo hi)
+  | g => g
+
+/-- `misread`'s cut of `t`'s leaves `pos … pos + n - 1` into runs of one width, in order, each given to `f` as
+`(pos, n, w)`: a run of one width whole, else the smallest part of `t` holding them cut at its elements or fields. -/
+def bySlices (f : Nat → Nat → Nat → M Unit) : Nat → Ty → Nat → Nat → M Unit
+  | 0, _, _, _ => throw UNCHECKED
+  | fuel + 1, t, pos, n => do
+    if n == 0 then return
+    match rangeWidths t pos (pos + n) with
+    | [w] => f pos n w
+    | _ =>
+      let (c, off) := cover t pos (pos + n)
+      let pieces : Array (Nat × Nat) := match c with
+        | .array _ e =>
+          let L := e.leaves
+          if L == 0 then #[] else
+            let first := (pos - off) / L
+            (Array.range ((pos + n - 1 - off) / L + 1 - first)).map fun k => (off + (first + k) * L, L)
+        | _ => (childLeaves c).foldl (fun (acc : Array (Nat × Nat) × Nat) m => (acc.1.push (acc.2, m), acc.2 + m)) (#[], off) |>.1
+      for (o, m) in pieces do
+        let a := max pos o
+        let b := min (pos + n) (o + m)
+        if a < b then bySlices f fuel t a (b - a)
+
+/-- A grid's piece: lane `l`'s run of period `t` (`Grid.pieces`). -/
+def gridPiece (run : Nat) (l : Lane) (t : Nat) : Part :=
+  let leaf := (l.leafAt t 0).toNat
+  if l.e == 1 || run == 1 then .affine l.p l.i leaf run else .strided l.p l.i leaf run 0 l.e run
+
+/-- The first period of a lane of runs of `run` reading an input node at `q` that `refs.recut` refuses as off whole leaves,
+where one is: `0` if its first run is, else the first period that steps a level by a whole number of leaves short. -/
+def offWhole (run q : Nat) (l : Lane) : Option Nat :=
+  let qi : Int := q
+  if q ≤ 1 then none
+  else if !((l.e == 1 || run == 1) && run % q == 0 && l.b % qi == 0) then some 0
+  else (l.lv.foldl (fun (acc : Option Nat × Nat) (r, d) => match acc.1 with
+      | some t => (some t, acc.2)
+      | none => (if d % qi != 0 then some acc.2 else none, acc.2 * r)) (none, 1)).1
+
+/-- The read at another width of part `q`, read as `t`'s leaves `a …` (`t`'s one width `ht`, if it has one): `none` where
+`q` reads no input node, and the rest of `partOk` decides it; else refused by name, `some false` where it names a leaf of
+another source at another width, or `some true`. An explicit part's input nodes are checked here and its other leaves by
+`partOk`. -/
+def recutOk (s : Src) (t : Ty) (ht : Option Nat) (a : Nat) (q : Part) : M (Option Bool) := do
+  let N := fun (i : Nat) => ((s.nodes[i]?).map Ty.leaves).getD 0
+  let w0 := fun (i w : Nat) => ((s.first[i]?).join).getD w
+  match q with
+  | .affine p i _ n | .strided p i _ _ _ _ n =>
+    let some W := s.inW? p i | return none
+    bySlices (fun x m w => recut i (N i) W w (w0 i w) (sliceOf q (x - a) (x - a + m))) DEPTH t a n
+    return some true
+  | .explicit items =>
+    if !items.any (fun r => (s.inW? r.p r.i).isSome) then return none
+    for k in [0:items.size] do
+      let r := items[k]!
+      if let some W := s.inW? r.p r.i then
+        recut r.i (N r.i) W (wAt t (a + k)) (w0 r.i (wAt t (a + k))) (.explicit #[r])
+    return none
+  | .grid run lanes =>
+    if !lanes.any (fun l => (s.inW? l.p l.i).isSome) then return none
+    let g := lanes.size
+    let P := (lanes[0]?.map Lane.periods).getD 0
+    let some w := ht | do
+      -- read as leaves of more than one width: piece by piece, in `Grid.pieces`' order
+      for t' in [0:P] do
+        for j in [0:g] do
+          step
+          let l := lanes[j]!
+          let pos := a + (t' * g + j) * run
+          match s.inW? l.p l.i with
+          | some W =>
+            let f := fun x m w => recut l.i (N l.i) W w (w0 l.i w) (sliceOf (gridPiece run l t') (x - pos) (x - pos + m))
+            bySlices f DEPTH t pos run
+          | none => for o in [0:run] do
+              if let some S := s.ty? l.p l.i then
+                if wAt S (l.leafAt t' o).toNat != wAt t (pos + o) then return some false
+      return some true
+    -- one width: each input lane's first piece refused, at its place in `Grid.pieces`' order; the earliest is the refusal
+    let mut first : Option (Nat × Nat × Nat) := none
+    for j in [0:g] do
+      let l := lanes[j]!
+      let some W := s.inW? l.p l.i | continue
+      let q := if w == 0 then 0 else W / w
+      let fits := fun (lo hi : Int) => 0 ≤ lo && hi < ((N l.i * q : Nat) : Int)
+      let over ← if w == 0 || W % w != 0 || fits (l.bounds run).1 (l.bounds run).2 then pure none else do
+        let t' := (List.range (min P (WALK + 1))).find? fun t' =>
+          let (lo, hi) := Lane.bounds run { l with b := l.leafAt t' 0, lv := [] }
+          !fits lo hi
+        if t'.isNone then throw UNCHECKED
+        pure t'
+      let bad := if w == 0 || W % w != 0 then [0] else
+        [offWhole run q l, over, if w != w0 l.i w then some 0 else none].filterMap id
+      if let some t' := bad.min? then
+        let at_ := t' * g + j
+        if first.all (at_ < ·.1) then first := some (at_, j, t')
+    if let some (_, j, t') := first then
+      let l := lanes[j]!
+      recut l.i (N l.i) ((s.inW? l.p l.i).getD 0) w (w0 l.i w) (gridPiece run l t')
+    -- every other lane: its source's one width, or one width over the leaves between its extremes
+    return some (lanes.all fun l => (s.inW? l.p l.i).isSome || match s.ty? l.p l.i with
+      | none => true
+      | some S => s.homo? l.p l.i == some w ||
+        let (lo, hi) := l.bounds run
+        rangeWidths S lo.toNat (hi.toNat + 1) == [w])
+
+/-- `recutOk`'s verdict on part `q` of a 16-bit input node of 4 leaves, read as a `t`, its first reader width `w0`. -/
+private def recutAt (w0 : Nat) (t : Ty) (q : Part) : String :=
+  let s : Src := { params := #[], nodes := #[.array 4 (.value 16)], hp := #[], hn := #[some 16], below := 1,
+                   inp := #[some 16], first := #[some w0] }
+  match (recutOk s t (homo t) 0 q).run 0 with
+  | .ok (some b) _ => toString b
+  | .ok none _ => "none"
+  | .error e _ => e
+
+-- the codec's verdicts (`refs.recut`) on the same reads
+#guard recutAt 8 (.array 8 (.value 8)) (.affine false 0 0 8) == "true"
+#guard recutAt 8 (.array 4 (.value 8)) (.strided false 0 2 2 4 1 4) == "true"
+#guard recutAt 16 (.array 3 (.value 16)) (.affine false 0 1 3) == "true"
+#guard recutAt 32 (.array 1 (.value 32)) (.affine false 0 0 1) ==
+  "recut-width: an input node of 16-bit leaves read in 32-bit leaves: the reader's width divides the registered width"
+#guard recutAt 8 (.array 4 (.value 8)) (.affine false 0 1 4) == "recut-boundary: {'affine': ['n', 0, 1, 4]} reads an " ++
+  "input node of 16-bit leaves in 8-bit leaves other than whole registered leaves"
+#guard recutAt 8 (.array 1 (.value 8)) (.explicit #[⟨false, 0, 2⟩]) == "recut-boundary: {'explicit': [['n', 0, 2]]} " ++
+  "reads an input node of 16-bit leaves in 8-bit leaves other than whole registered leaves"
+#guard recutAt 8 (.array 6 (.value 8)) (.affine false 0 4 6) ==
+  "recut-overrun: {'affine': ['n', 0, 4, 6]} reads past the 4 16-bit leaves of its input node"
+#guard recutAt 8 (.array 4 (.value 4)) (.affine false 0 0 4) ==
+  "recut-width: input node 0 read in leaves of two widths; an input node is read at one"
+#guard recutAt 16 (.array 2 (.value 16)) (.grid 1 #[⟨false, 0, 0, 0, [(2, 1)]⟩]) == "true"
+
+/-- Each input node's first reader width in `defs.Builder.finish`'s order (each node's arguments, then the return), over
+the sources `s` gives each: of a part's first reference into it. -/
+def firstReads (inp : Array (Option Nat)) (B : Body) : Array (Option Nat) := Id.run do
+  let mut first : Array (Option Nat) := Array.replicate B.nodes.size none
+  let seqs : Array (Nat × Ty × Seq) :=
+    (B.nodes.mapIdx fun k nd => nd.args.map fun a => (k, a.ty, a.seq)).flatten.push (B.nodes.size, B.retType, B.ret)
+  for (below, t, seq) in seqs do
+    for q in seq.parts, a in seq.starts do
+      let reads : List (Bool × Nat × Nat) := match q with
+        | .affine p i _ n | .strided p i _ _ _ _ n => if n == 0 then [] else [(p, i, a)]
+        | .explicit it => (List.range it.size).map fun k => (it[k]!.p, it[k]!.i, a + k)
+        | .grid run lanes => (List.range lanes.size).map fun j => (lanes[j]!.p, lanes[j]!.i, a + j * run)
+      for (p, i, pos) in reads do
+        if !p && i < below && ((inp[i]?).join).isSome && ((first[i]?).join).isNone then
+          first := first.set! i (some (wAt t pos))
+  return first
+
+/-- Each node's leaf width where it is an input node (`defs._Widths.input_width`): a call of an input primitive, its
+output of one width. -/
+def inputWidths (defs : Array Defn) (B : Body) : Array (Option Nat) :=
+  B.nodes.map fun nd => match defs[nd.fn]? with
+    | some c => if c.prim && c.binding.isSome then homo nd.out else none
+    | none => none
+
+/-- The input nodes body `B` reads at another width, each with its `q` above 1 (`Body.recut`), in node order. -/
+def recutOf (defs : Array Defn) (B : Body) : Array (Nat × Nat) :=
+  let inp := inputWidths defs B
+  ((firstReads inp B).zip inp).zipIdx.filterMap fun ((f, W), i) => match f, W with
+    | some w, some W => if 0 < w && W % w == 0 && W / w > 1 then some (i, W / w) else none
+    | _, _ => none
+
 /-- Whether the references of part `q`, read as `t`'s leaves `a …` (`t`'s one width `ht`, if it has one), name leaves of
 the widths `t` gives them. -/
 def partOk (s : Src) (t : Ty) (ht : Option Nat) (a : Nat) (q : Part) : M Bool := do
+  if let some r ← recutOk s t ht a q then return r
   match q with
   | .explicit items =>
     return (List.range items.size).all fun k =>
@@ -941,7 +1179,7 @@ other's leaf by leaf. -/
 def firstBad (s : Src) (t : Ty) (a : Nat) (q : Part) : M (Option Nat) := do
   let bad := fun (k : Nat) => let r := q.get k
     match s.ty? r.p r.i with
-    | some S => wAt S r.j != wAt t (a + k)
+    | some S => (s.inW? r.p r.i).isNone && wAt S r.j != wAt t (a + k)
     | none => false
   match q with
   | .affine p i base n =>
@@ -989,11 +1227,13 @@ def refusal (B : Body) (key what : String) (s : Src) (t : Ty) (a : Nat) (q : Par
       s!"than its type {t.render} gives them: {TAIL}"
 
 /-- Where the body `B` of composite `key` reads a leaf at another width (`defs.Builder.finish`'s order: each node's
-arguments, then the return), as its refusal; `defs` holds its callees. -/
-def bodyBad (defs : Array Defn) (key : String) (B : Body) : M (Option String) := do
+arguments, then the return), as its refusal; `defs` holds its callees. With `recut`, an input node may be read at a width
+dividing its own (§4.4, `recutOk`); without, every leaf is read at its own width. -/
+def bodyBad (defs : Array Defn) (key : String) (B : Body) (recut : Bool := false) : M (Option String) := do
   let outs := B.nodes.map (·.out)
+  let inp := if recut then inputWidths defs B else #[]
   let s : Src := { params := B.params.map (·.2), nodes := outs, hp := B.params.map (homo ·.2), hn := outs.map homo,
-                   below := 0 }
+                   below := 0, inp, first := if recut then firstReads inp B else #[] }
   for k in [0:B.nodes.size] do
     let node := B.nodes[k]!
     let callee := defs[node.fn]!
@@ -1094,6 +1334,24 @@ private def buildNode (fid : String) (k : Nat) (form : Form) (callee : Defn) (ar
     if lengths.size == 1 && lengths[0]! != n then throw s!"{pre}: scan: explicit n disagrees with xs length"
     return (.tuple #[carry, .array n y], out)
 
+/-- The leaf counts references are parsed against (`codec`'s `leaves`). With `recut`, an input node among `nodes` as leaves
+of one bit, `N·W` (§4.4: read at a width that divides `W`, `refs.recut` then holds its references under `N·q`); every other
+collection, and every one without `recut`, as `leaves` gives it. -/
+def leavesFor (recut : Bool) (defs : Array Defn) (nodes : Array Node) (leaves : Bool → Nat → Option Nat) :
+    Bool → Nat → Option Nat := if !recut then leaves else fun p i =>
+  match p, nodes[i]? with
+  | false, some nd => match defs[nd.fn]? with
+    | some c => if c.prim && c.binding.isSome then some (nd.out.leaves * (Widths.homo nd.out).getD 1) else leaves p i
+    | none => leaves p i
+  | _, _ => leaves p i
+
+theorem leavesFor_false (defs : Array Defn) (nodes : Array Node) (leaves : Bool → Nat → Option Nat) :
+    leavesFor false defs nodes leaves = leaves := rfl
+
+/-- The input nodes `B` reads at another width, with `recut`; none without. -/
+def recutFor (recut : Bool) (defs : Array Defn) (B : Body) : Array (Nat × Nat) :=
+  if recut then Widths.recutOf defs B else #[]
+
 private def nodeKeys : Form → List String
   | .batch => ["args", "axes", "fn", "form", "n", "out"]
   | .scan => ["args", "fn", "form", "n", "n_xs", "out"]
@@ -1102,8 +1360,8 @@ private def nodeKeys : Form → List String
 mutual
 
 /-- Decode definition `fid` (core's `decode_program.get`), and first every definition it depends on, through at most `fuel`
-nested definitions and static values. -/
-private def getDef (fuel : Nat) (desc : Desc) (fid : String) : D Nat := do
+nested definitions and static values; with `recut`, a body may read an input node at a width dividing its own (§4.4). -/
+private def getDef (fuel : Nat) (desc : Desc) (fid : String) (recut : Bool := false) : D Nat := do
   let n + 1 := fuel | throw "definitions nest deeper than this verifier follows"
   if let some i := (← get).index[fid]? then return i
   if (← get).busy.contains fid then throw s!"definition '{fid}' depends on itself"
@@ -1120,12 +1378,13 @@ private def getDef (fuel : Nat) (desc : Desc) (fid : String) : D Nat := do
         if !(params.isEmpty && w == iw) then throw s!"primitive {fid} signature differs from the registry"
       pure ({ key := fid, id, prim := true, params, ret, binding := input.map (·.1), gates := 1,
               paramLeaves := params.foldl (· + ·.2.leaves) 0, outLeaves := 1 } : Defn)
-    else composite n desc fid d form id
+    else composite n desc fid d form id recut
   let s ← get
   set { s with defs := s.defs.push defn, index := s.index.insert fid s.defs.size, busy := s.busy.erase fid }
   return s.defs.size
 
-private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form id : String) : D Defn := do
+private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form id : String) (recut : Bool := false) :
+    D Defn := do
   let n + 1 := fuel | throw "definitions nest deeper than this verifier follows"
   let parts := id.splitOn "_v"
   let name := "_v".intercalate parts.dropLast
@@ -1146,7 +1405,7 @@ private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form
   let key := id ++ (if statics.isEmpty then "" else "{" ++ ",".intercalate rec_.toList ++ "}")
   modify fun s => { s with busy := s.busy.insert fid }
   if key != fid then throw s!"definition '{fid}': a composite is keyed by its id and binding record, '{key}'"
-  for (_, v) in bkv.toArray do staticFns n desc v
+  for (_, v) in bkv.toArray do staticFns n desc v recut
   let b := (d.getObjVal? "body").toOption.getD Json.null
   let params ← liftV (paramsOf ((b.getObjVal? "params").toOption.getD Json.null) s!"definition '{fid}'")
   let retType ← liftV (Ty.ofJson ((b.getObjVal? "ret_type").toOption.getD Json.null))
@@ -1160,8 +1419,9 @@ private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form
     let pre := s!"definition '{fid}' node {k}"
     let fname ← liftV (at_ desc.callees ((nd.getObjVal? "fn").toOption.getD Json.null) "callees")
     let .str fname := fname | throw s!"KeyError: no definition {fname.compress}"
-    let ci ← getDef n desc fname
-    let callee := (← get).defs[ci]!
+    let ci ← getDef n desc fname recut
+    let st ← get
+    let callee := st.defs[ci]!
     let fstr := (nd.getObjValAs? String "form").toOption.getD ""
     let keys : Array String := match nd with
       | .obj kvs => (kvs.toArray.map (fun (kv : String × Json) => kv.1)).qsort (· < ·)
@@ -1198,7 +1458,8 @@ private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form
     let earlier := fun (k2 a : Nat) => if k2 < nodes.size then nodes[k2]!.args[a]?.map (·.seq) else none
     let args ← liftV (ajs.mapM fun aj => do
       let ty ← at_ desc.types ((aj.getObjVal? "type").toOption.getD Json.null) "types"
-      let ps ← match parseParts ((aj.getObjVal? "refs").toOption.getD Json.null) leaves earlier with
+      let ps ← match parseParts ((aj.getObjVal? "refs").toOption.getD Json.null) (leavesFor recut st.defs nodes leaves)
+          earlier with
         | .ok ps => pure ps
         | .error e => throw s!"{pre}: {e}"
       let seq := Seq.ofParts ps
@@ -1210,34 +1471,34 @@ private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form
     nodes := nodes.push node
     offsets := offsets.push (offsets.back! + (if form == .prim then 1 else node.members * callee.gates))
   let earlier := fun (k2 a : Nat) => nodes[k2]?.bind fun x => x.args[a]?.map (·.seq)
-  let ret ← match parseParts ((b.getObjVal? "ret").toOption.getD Json.null) leaves earlier with
+  let st ← get
+  let ret ← match parseParts ((b.getObjVal? "ret").toOption.getD Json.null) (leavesFor recut st.defs nodes leaves) earlier with
     | .ok ps => pure (Seq.ofParts ps)
     | .error e => throw s!"definition '{fid}' ret: {e}"
   if ret.count != retType.leaves then
     throw s!"definition '{fid}' ret: reference count {ret.count} does not match type {retType.render} ({retType.leaves} leaves)"
   let body : Body := { params, retType, nodes, ret, offsets }
-  let st ← get
-  match (Widths.bodyBad st.defs fid body).run st.walked with
+  match (Widths.bodyBad st.defs fid body recut).run st.walked with
   | .ok (some m) _ => throw m
   | .ok none w => set { st with walked := w }
-  | .error e _ => throw s!"definition '{fid}': E_REINTERPRET unchecked: {e}"
-  return { key := fid, id, prim := false, params, ret := retType, body,
+  | .error e _ => throw (if e.startsWith "recut-" then e else s!"definition '{fid}': E_REINTERPRET unchecked: {e}")
+  return { key := fid, id, prim := false, params, ret := retType, body := { body with recut := recutFor recut st.defs body },
            gates := offsets.back!, paramLeaves := params.foldl (· + ·.2.leaves) 0, outLeaves := retType.leaves }
 
 /-- The functions a static value names (`static_of`): `{"fn": id}` decodes `id`. -/
-private def staticFns (fuel : Nat) (desc : Desc) (v : Json) : D Unit := do
+private def staticFns (fuel : Nat) (desc : Desc) (v : Json) (recut : Bool := false) : D Unit := do
   let n + 1 := fuel | throw "definitions nest deeper than this verifier follows"
   match v with
   | .obj _ =>
     if let .ok f := v.getObjVal? "fn" then
       let .str f := f | throw s!"KeyError: no definition {f.compress}"
-      discard (getDef n desc f)
+      discard (getDef n desc f recut)
     else if let .ok f := v.getObjVal? "f64" then
       let .str _ := f | throw s!"a float static is written as its hex string, not {f.compress}"
     else if let .ok d := v.getObjVal? "dict" then
       let .obj kvs := d | throw s!"a dict static is an object, not {d.compress}"
-      for (_, x) in kvs.toArray do staticFns n desc x
-  | .arr a => for x in a do staticFns n desc x
+      for (_, x) in kvs.toArray do staticFns n desc x recut
+  | .arr a => for x in a do staticFns n desc x recut
   | _ => pure ()
 
 end
@@ -1326,12 +1587,442 @@ private def decodeBodies (desc : Desc) (rootKey : String) (pairs : Array (String
     reach := extendReach s.defs reach
     liftV (checkBody s.defs s.index rootKey lo reach w b bi)
 
+/-! ### §4.1 The keys, §5.1 the inputs, §4.8 the definition digest and §1 the program digest -/
+
+/-- §4.1's top-level keys and `annotations` (`codec._TOP_KEYS`). -/
+def TOP_KEYS : List String :=
+  ["schema", "program_fn", "inputs", "root", "boolean", "callees", "types", "definitions", "annotations"]
+
+/-- `E_KEYS` (§4.6): a top-level key outside `TOP_KEYS`, which the program digest does not cover. `keys` in key order. -/
+def checkTopKeys (keys : Array String) : V Unit := do
+  let extra := keys.filter (!TOP_KEYS.contains ·)
+  if !extra.isEmpty then
+    throw s!"E_KEYS: the top-level keys {extra.toList.take 4} are not {SCHEMA}'s, and the program digest does not cover them"
+
+/-- Python's `repr` of string `s` of the canonical domain (ASCII, no DEL): single quotes unless `s` holds one and no double
+quote, the quote, backslash and control characters escaped. -/
+def pyStr (s : String) : String :=
+  let q := if s.contains '\'' && !s.contains '"' then '"' else '\''
+  let hex := fun (n : Nat) => String.ofList ((Nat.toDigits 16 n).leftpad 2 '0')
+  let body := s.foldl (fun acc c => acc ++
+    if c == '\\' then "\\\\" else if c == q then "\\" ++ c.toString else if c == '\n' then "\\n"
+    else if c == '\r' then "\\r" else if c == '\t' then "\\t" else if c.toNat < 32 then "\\x" ++ hex c.toNat
+    else c.toString) ""
+  q.toString ++ body ++ q.toString
+
+/-- Python's `repr` of a list of strings. -/
+def pyStrs (xs : List String) : String := "[" ++ ", ".intercalate (xs.map pyStr) ++ "]"
+
+/-- Python's `repr` of `json.loads`' value for `j`, in the canonical domain (integers only), an object's keys in key order. -/
+def pyRepr : Json → String
+  | .null => "None"
+  | .bool b => if b then "True" else "False"
+  | .num n => toString n.mantissa
+  | .str s => pyStr s
+  | .arr a => "[" ++ ", ".intercalate (a.attach.map fun x => pyRepr x.1).toList ++ "]"
+  | .obj kvs => "{" ++ ", ".intercalate (kvs.toArray.attach.map fun x => pyStr x.1.1 ++ ": " ++ pyRepr x.1.2).toList ++ "}"
+termination_by j => j
+decreasing_by
+  · exact sizeOf_lt_of_mem_arr x.2
+  · exact sizeOf_lt_of_mem_obj x.2
+
+/-- A function a supplied input names (§5.4, `supplied.Function`), as the decoder reads it: its static arguments by name,
+and its value's bytes at `args`, none where it has no value there. Its body is the verifier's, not the format's. -/
+structure SuppliedFn where
+  name : String
+  args : List String
+  nbytes : Json → Option Nat
+
+/-- §5.4's closed registry (`supplied.FUNCTIONS`): every function a supplied input may name. A name is versioned: a function
+whose value changes takes a new name. -/
+def SUPPLIED_FUNCTIONS : List SuppliedFn :=
+  let fixed := fun (n : Nat) (_ : Json) => some n
+  let nat := fun (a : Json) (k : String) => natJ? (a.getObjValD k)
+  [⟨"pous.session.round_coin/v1", ["round"], fixed 12⟩,
+   ⟨"pous.session.header/v1", ["head"], fun a => (nat a "head").bind fun h => if h + h % 2 > 0 then some (h + h % 2) else none⟩,
+   ⟨"pous.session.context/v1", [], fixed 106⟩,
+   ⟨"pous.setup.salt/v1", [], fixed 24⟩,
+   ⟨"poub.read.pass_seed/v1", ["window", "pass"], fixed 64⟩,
+   ⟨"poub.read.pass_root/v1", ["window", "pass"], fixed 64⟩,
+   ⟨"window.salt/v1", [], fixed 64⟩,
+   ⟨"pouw.pearlplus.salt/v1", [], fixed 32⟩,
+   ⟨"registered.root/v1", ["value"], fixed 64⟩,
+   ⟨"record.root/v1", ["port"], fixed 64⟩,
+   ⟨"log.base/v1", [], fixed 8⟩,
+   ⟨"const.u16/v1", ["value"], fun a => (nat a "value").bind fun v => if v < 2 ^ 16 then some 2 else none⟩]
+
+def SUPPLIED_LAYOUTS : List String := ["le", "halves", "digest"]
+
+/-- `supplied.layout_fits`: whether `nbytes` bytes read by `layout` are whole leaves of `w` bits. -/
+def layoutFits (layout : String) (w nbytes : Nat) : Bool :=
+  if layout == "le" then [1, 8, 16, 32, 64].contains w && 8 * nbytes % w == 0
+  else if layout == "halves" then 0 < w && w ≤ 32 && 32 % w == 0 && nbytes % 4 == 0
+  else layout == "digest" && w == 1 && nbytes % 64 == 0
+
+/-- `supplied.mark_of`: entry `x`'s mark, none for `[name, n]`; `E_SUPPLIED_MARK` unless its third element is an object of
+exactly `supplied` (a string), `args` (names to nonempty strings or naturals), `layout` (`SUPPLIED_LAYOUTS`) and `bits` (a
+positive natural), and a part's `of` (`[input, lo, hi]`, `0 ≤ lo < hi`). -/
+def markOf (name : String) (x : Json) : V (Option Json) := do
+  let .arr #[_, _, m] := x | return none
+  let ok : Bool := match m with
+    | .obj kvs =>
+      let keys := kvs.toArray.map (·.1)
+      (keys.filter (· != "of")).toList == ["args", "bits", "layout", "supplied"] &&
+      (match m.getObjValD "of" with
+        | .null => !keys.contains "of"
+        | .arr #[.str _, lo, hi] => match intJ? lo, intJ? hi with
+          | some lo, some hi => decide (0 ≤ lo) && decide (lo < hi)
+          | _, _ => false
+        | _ => false) &&
+      (match m.getObjValD "supplied" with | .str _ => true | _ => false) &&
+      (match m.getObjValD "args" with
+        | .obj a => a.toArray.all fun (_, v) => match v with
+          | .str s => s != ""
+          | v => (natJ? v).isSome
+        | _ => false) &&
+      (match m.getObjValD "layout" with | .str l => SUPPLIED_LAYOUTS.contains l | _ => false) &&
+      ((natJ? (m.getObjValD "bits")).any (· > 0))
+    | _ => false
+  unless ok do
+    throw (s!"E_SUPPLIED_MARK: input {pyStr name}: a mark is {"{"}supplied, args, layout, bits}, a part's with of = " ++
+      s!"[input, lo, hi], not [{pyRepr m}]")
+  return some m
+
+/-- `supplied.check_entry`: entry `name`'s mark `mark` (`markOf`) against its input nodes `nodes`, each (binding, width,
+leaves): a marked entry's nodes all supplied and an unmarked one's none (`E_INPUTS_MIXED`), its function in
+`SUPPLIED_FUNCTIONS` (`E_SUPPLIED_FN`), its args that function's with a value there (`E_SUPPLIED_ARGS`), and its leaves of
+one width, the value's bits by its layout, or a part's `[lo, hi)` of them (`E_SUPPLIED_WIDTH`). -/
+def checkEntry (name : String) (mark : Option Json) (nodes : Array (String × Nat × Nat)) : V Unit := do
+  let some m := mark | do
+    if nodes.any (·.1 == SUPPLIED) then
+      throw s!"E_INPUTS_MIXED: input {pyStr name}: supplied input nodes and no mark naming their function"
+  unless nodes.all (·.1 == SUPPLIED) do
+    let bs := (nodes.foldl (fun l b => if l.contains b.1 then l else l ++ [b.1]) ([] : List String)).mergeSort (· ≤ ·)
+    throw s!"E_INPUTS_MIXED: input {pyStr name}: marked supplied, and its nodes are {pyStrs bs}"
+  let fname := match m.getObjValD "supplied" with | .str s => s | _ => ""
+  let some f := SUPPLIED_FUNCTIONS.find? (·.name == fname)
+    | throw s!"E_SUPPLIED_FN: input {pyStr name}: {pyStr fname} is no supplied function"
+  let args := m.getObjValD "args"
+  let given := match args with | .obj a => a.toArray.toList.map (fun (x : String × Json) => x.1) | _ => []
+  if given.mergeSort (· ≤ ·) != f.args.mergeSort (· ≤ ·) then
+    throw s!"E_SUPPLIED_ARGS: input {pyStr name}: {f.name} takes the args {pyStrs (f.args.mergeSort (· ≤ ·))}, not {pyStrs (given.mergeSort (· ≤ ·))}"
+  let some nbytes := f.nbytes args
+    | throw s!"E_SUPPLIED_ARGS: input {pyStr name}: {f.name} has no value at {pyRepr args}"
+  let widths := (nodes.foldl (fun l b => if l.contains b.2.1 then l else l ++ [b.2.1]) ([] : List Nat)).mergeSort (· ≤ ·)
+  let leaves := nodes.foldl (· + ·.2.2) 0
+  let bits := (natJ? (m.getObjValD "bits")).getD 0
+  let layout := match m.getObjValD "layout" with | .str l => l | _ => ""
+  let of := match m.getObjValD "of" with
+    | .arr #[_, lo, hi] => some ((natJ? lo).getD 0, (natJ? hi).getD 0)
+    | _ => none
+  let (lo, hi) := of.getD (0, leaves)
+  let fits := match widths with
+    | [w] => leaves * w == bits && hi - lo == leaves && hi * w ≤ 8 * nbytes && layoutFits layout w nbytes &&
+        (of.isSome || bits == 8 * nbytes)
+    | _ => false
+  unless fits do
+    throw (s!"E_SUPPLIED_WIDTH: input {pyStr name}: {f.name}'s value is {8 * nbytes} bits, read by {layout} as whole " ++
+      s!"leaves of one width; the mark says {bits} and its nodes hold {leaves} leaves of widths {widths}")
+
+/-- §5.1's `inputs` against the root `defs[root]` (`codec._check_inputs`): `[name, node count]` per parameter, a supplied
+one's with its mark (§5.4; `E_INPUTS`), the names nonempty and distinct (`E_INPUTS_NAME`), the counts summing to the input
+nodes that lead the root's body, with no input node after them (`E_INPUTS_COUNT`), each parameter's nodes all run, all
+registered or all supplied inputs (`E_INPUTS_MIXED`), and each mark holding of its nodes (`markOf`, `checkEntry`). -/
+def checkInputs (defs : Array Defn) (root : Nat) (xs : Json) : V Unit := do
+  let bad := "E_INPUTS: `inputs` is not an array of [name, node count] entries, a supplied one's with its mark"
+  let .arr xs := xs | throw bad
+  let some ps := xs.mapM (fun x => match x with
+      | .arr #[.str s, n] | .arr #[.str s, n, _] => (natJ? n).map (s, ·)
+      | _ => none) | throw bad
+  let names := ps.map (·.1)
+  if names.contains "" || (names.foldl (·.insert ·) ({} : Std.HashSet String)).size != names.size then
+    throw s!"E_INPUTS_NAME: the parameter names {pyStrs (names.toList.take 8)} hold an empty or a repeated name"
+  let nodes := defs[root]!.body.nodes
+  let isIn := fun (x : Node) => let c := defs[x.fn]!; c.prim && isInputId c.key
+  let lead := (nodes.findIdx? (!isIn ·)).getD nodes.size
+  let total := ps.foldl (· + ·.2) 0
+  if total != lead || (nodes.extract lead nodes.size).any isIn then
+    throw (s!"E_INPUTS_COUNT: `inputs` counts {total} input nodes, where the root's body leads with {lead} " ++
+      "and holds no input node after them")
+  let mut k := 0
+  for ((name, n), x) in ps.zip xs do
+    let bound := (nodes.extract k (k + n)).map fun nd =>
+      let (b, w) := (inputId? defs[nd.fn]!.key).getD ("", 0)
+      (b, w, nd.members)
+    let times := [(RUN, "run"), (REGISTRATION, "registered"), (SUPPLIED, "supplied")].filter fun (b, _) =>
+      bound.any fun (x : String × Nat × Nat) => x.1 == b
+    if times.length > 1 then
+      throw (s!"E_INPUTS_MIXED: parameter {pyStr name}'s input nodes {k}..{k + n - 1} mix " ++
+        s!"{" and ".intercalate (times.map (·.2))} inputs")
+    checkEntry name (← markOf name x) bound
+    k := k + n
+
+/-- Whether descriptor entry `e` is a composite's: its `form` the string `composite`, compared by a match. -/
+def isCompositeEntry (e : Json) : Bool := match e.getObjValD "form" with
+  | .str s => s == "composite"
+  | _ => false
+
+/-- The functions entry `e` references (`codec._references`): each node's callee, by id or (in a descriptor entry) by its
+index into `callees`, then each `{"fn": id}` of its binding record. -/
+def entryRefs (callees : Array Json) (e : Json) : Array String :=
+  let nodes := if isCompositeEntry e then
+      match (e.getObjValD "body").getObjValD "nodes" with
+      | .arr xs => xs
+      | _ => #[]
+    else #[]
+  let fns := nodes.filterMap fun n => match n.getObjValD "fn" with
+    | .str s => some s
+    | i => match i.getNat? with
+      | .ok i => match callees[i]? with
+        | some (.str s) => some s
+        | _ => none
+      | .error _ => none
+  fnRefs fns (e.getObjValD "bindings")
+
+/-- `E_UNREACHED` (§4.1): a definition of `defs` that none of `roots` (the root, the functions `program_fn`'s record names
+among `definitions`, the Boolean map's bodies) reaches through node callees and binding records (`codec._walk`). -/
+def checkReached (defs : Array (String × Json)) (callees : Array Json) (roots : Array String) : V Unit := do
+  let ddefs : Std.HashMap String Json := defs.foldl (fun m (k, v) => m.insert k v) {}
+  let fuel := defs.foldl (fun n (_, e) => n + (entryRefs callees e).size) (roots.size + 1)
+  let mut seen : Std.HashSet String := {}
+  let mut todo := roots.toList
+  for _ in [0:fuel] do
+    match todo with
+    | [] => break
+    | k :: rest =>
+      todo := rest
+      if seen.contains k then continue
+      seen := seen.insert k
+      todo := (entryRefs callees (ddefs.getD k .null)).toList ++ todo
+  let extra := (defs.map (·.1)).filter (!seen.contains ·)
+  if !extra.isEmpty then
+    throw s!"E_UNREACHED: {extra.toList.take 4} are reached from neither the root, `program_fn`'s record nor the Boolean map"
+
+/-- The parts reference sequence `j` stands for, flat (§4.8): an alias's are the parts of argument `a` of node `k` (`rows`,
+the nodes before the one `j` is in), a concatenation's its parts' spliced in, any other its one part. Concatenations nest
+at most `fuel` deep. -/
+def entryFlat (rows : Array (Array (Array Json))) : Nat → Json → V (Array Json)
+  | 0, _ => throw "program: references nest deeper than this verifier follows"
+  | fuel + 1, j => do
+    if let .ok a := j.getObjVal? "alias" then
+      let ps := match a with
+        | .arr #[k, x] => match k.getNat?, x.getNat? with
+          | .ok k, .ok x => rows[k]?.bind (·[x]?)
+          | _, _ => none
+        | _ => none
+      let some ps := ps | throw s!"program: alias {a.compress} names no argument of an earlier node"
+      return ps
+    if let .ok (.arr ps) := j.getObjVal? "concat" then
+      return (← ps.mapM (entryFlat rows fuel)).foldl (· ++ ·) #[]
+    return #[j]
+
+/-- A flat sequence as a canonical entry writes it: its one part, or `{"concat": parts}`. -/
+def entryWritten (ps : Array Json) : Json := match ps with
+  | #[p] => p
+  | ps => Json.mkObj [("concat", .arr ps)]
+
+/-- `j` with key `k` set to `v`, when `j` is an object. -/
+private def setKey (j : Json) (k : String) (v : Json) : Json := match j with
+  | .obj kvs => Json.obj (kvs.insert k v)
+  | j => j
+
+/-- A definition's canonical entry (§4.8, `codec.canonical_entry`) from its descriptor entry `e` and the descriptor's
+interning (`callees`, `types`): each node's callee id and types inline, every alias replaced by the parts it stands for and
+every reference sequence flat. Any entry but a composite's is itself. -/
+def canonEntry (callees types : Array Json) (e : Json) : V Json := do
+  let at_ := fun (xs : Array Json) (i : Json) => match i.getNat? with
+    | .ok i => xs.getD i .null
+    | .error _ => .null
+  unless isCompositeEntry e do return e
+  let body := e.getObjValD "body"
+  let .arr nodes := body.getObjValD "nodes" | return e
+  let mut rows : Array (Array (Array Json)) := #[]
+  let mut out : Array Json := #[]
+  for n in nodes do
+    let .arr args := n.getObjValD "args" | throw "program: a node's arguments are not a list"
+    let row ← args.mapM fun a => entryFlat rows Steps.FUEL (a.getObjValD "refs")
+    rows := rows.push row
+    let args := (args.zip row).map fun (a, ps) =>
+      setKey (setKey a "type" (at_ types (a.getObjValD "type"))) "refs" (entryWritten ps)
+    out := out.push (setKey (setKey (setKey n "fn" (at_ callees (n.getObjValD "fn"))) "out" (at_ types (n.getObjValD "out")))
+      "args" (.arr args))
+  let ret ← entryFlat rows Steps.FUEL (body.getObjValD "ret")
+  return setKey e "body" (setKey (setKey body "nodes" (.arr out)) "ret" (entryWritten ret))
+
+/-- `codec._composed`'s substitution in a binding record: each `{"fn": id}` (an object of that one key, a string) becomes
+`{"fn": d id}`. -/
+def subFns (d : String → Option String) : Json → V Json
+  | .obj kvs =>
+    let items := kvs.toArray
+    match (if items.size == 1 && items[0]!.1 == "fn" then items[0]!.2 else .null) with
+    | .str s => match d s with
+      | some x => pure (Json.mkObj [("fn", .str x)])
+      | none => throw s!"KeyError: no digest of {s}"
+    | _ => do pure (Json.mkObj (← items.attach.mapM fun x => do pure (x.1.1, ← subFns d x.1.2)).toList)
+  | .arr a => do pure (.arr (← a.attach.mapM fun x => subFns d x.1))
+  | x => pure x
+termination_by j => j
+decreasing_by
+  · exact sizeOf_lt_of_mem_obj x.2
+  · exact sizeOf_lt_of_mem_arr x.2
+
+/-- Canonical entry `e` composed (§4.8, `codec._composed`): each reference replaced by its digest in `d`, and `body`'s digest
+under `boolean` for a word primitive. -/
+def composeEntry (d : String → Option String) (e : Json) (body : Option String) : V Json := do
+  let need := fun (s : String) => match d s with
+    | some x => pure (Json.str x)
+    | none => (throw s!"KeyError: no digest of {s}" : V Json)
+  let mut out := e
+  if let .ok b := e.getObjVal? "bindings" then out := setKey out "bindings" (← subFns d b)
+  if isCompositeEntry e then
+    let body := e.getObjValD "body"
+    let .arr nodes := body.getObjValD "nodes" | throw "program: a composite without body nodes"
+    let nodes ← nodes.mapM fun n => match n.getObjValD "fn" with
+      | .str f => do pure (setKey n "fn" (← need f))
+      | _ => throw "program: a node's callee is not an id"
+    out := setKey out "body" (setKey body "nodes" (.arr nodes))
+  if let some b := body then out := setKey out "boolean" (← need b)
+  return out
+
+/-- Definition `fid`'s digest (§4.8), every definition it references first, each once (`memo`), the hash by `h`. A chain of
+references longer than `fuel` is refused, so a cycle ends. -/
+def digestGo {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (h : ByteArray → M ByteArray)
+    (ddefs : Std.HashMap String Json) (callees types : Array Json) (bm : Std.HashMap String String) :
+    Nat → String → StateT (Std.HashMap String String) M String
+  | 0, fid => throw s!"program: {fid}: definitions reference each other deeper than this descriptor holds definitions"
+  | n + 1, fid => do
+    if let some x := (← get)[fid]? then return x
+    let some raw := ddefs[fid]? | throw s!"KeyError: no definition {fid}"
+    let e ← (canonEntry callees types raw : V Json)
+    for r in entryRefs callees e ++ (bm[fid]?).toArray do
+      discard (digestGo h ddefs callees types bm n r)
+    let memo ← get
+    let c ← (composeEntry (memo[·]?) e bm[fid]? : V Json)
+    let x := hexOf (← h (← (canon c : V String)).toUTF8)
+    modify (·.insert fid x)
+    return x
+
+/-- Every definition's digest (§4.8, `codec.definition_digests`) of descriptor `j`, by descriptor id, the hash by `h`. -/
+def definitionDigestsWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
+    (h : ByteArray → M ByteArray) (j : Json) : M (Std.HashMap String String) := do
+  let defs := match j.getObjValD "definitions" with
+    | .obj kvs => kvs.toArray
+    | _ => #[]
+  let tab := fun (k : String) => match j.getObjValD k with
+    | .arr xs => xs
+    | _ => #[]
+  let bm : Std.HashMap String String := match j.getObjValD "boolean" with
+    | .obj kvs => kvs.toArray.foldl (fun m (k, v) => match v with | .str s => m.insert k s | _ => m) {}
+    | _ => {}
+  let ddefs : Std.HashMap String Json := defs.foldl (fun m (k, v) => m.insert k v) {}
+  let go : StateT (Std.HashMap String String) M Unit := do
+    for (k, _) in defs do discard (digestGo h ddefs (tab "callees") (tab "types") bm (defs.size + 1) k)
+  let ((), d) ← go.run {}
+  return d
+
+/-- `definitionDigestsWith` by SHA-512. -/
+def definitionDigests (j : Json) : V (Std.HashMap String String) := definitionDigestsWith (fun b => pure (Sha512.hash b)) j
+
+/-- The program digest (§1, `codec.program_digest`) of descriptor `j`, the hash by `h`: the hash of the canonical JSON of
+its schema, `program_fn`, `inputs`, its root's digest, the digests of the functions `program_fn`'s record names, and the
+Boolean map's bodies' digests, each a definition's digest (§4.8). `annotations` never enter it. -/
+def programDigestWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
+    (h : ByteArray → M ByteArray) (j : Json) : M ByteArray := do
+  let d ← definitionDigestsWith h j
+  let need := fun (s : String) => match d[s]? with
+    | some x => pure (Json.str x)
+    | none => (throw s!"KeyError: no definition {s}" : V Json)
+  let pfn := j.getObjValD "program_fn"
+  let root ← match j.getObjValD "root" with
+    | .str r => (need r : V Json)
+    | _ => throw "program: root"
+  let functions := (recordFunctionIds (match pfn with | .str s => s | _ => "")).filterMap fun f => d[f]?.map (f, Json.str ·)
+  let boolean ← match j.getObjValD "boolean" with
+    | .obj kvs => (kvs.toArray.mapM fun (k, v) => match v with
+        | .str b => do pure (k, ← need b)
+        | _ => throw "E_BODY_KEY: `boolean` is not an object of descriptor ids" : V _)
+    | _ => pure #[]
+  let obj := Json.mkObj [("schema", j.getObjValD "schema"), ("program_fn", pfn), ("inputs", j.getObjValD "inputs"),
+    ("root", root), ("functions", Json.mkObj functions.toList), ("boolean", Json.mkObj boolean.toList)]
+  h (← (canon obj : V String)).toUTF8
+
 /-- The primitive entries of `definitions`, in key order. -/
 private def primEntries (dkv : Array (String × Json)) : Array String :=
   dkv.filterMap fun (k, d) => if (d.getObjValAs? String "form").toOption == some "primitive" then some k else none
 
+/-- The Definitions the root and the program record's functions need, decoded (`decode_program`'s walk), each body read as
+`getDef` reads it with `recut`. -/
+private def goOf (desc : Desc) (rootId programFn : String) (recut : Bool) : D Nat := do
+  let r ← getDef Steps.FUEL desc rootId recut
+  for f in recordFunctionIds programFn do
+    if desc.ddefs.contains f then discard (getDef Steps.FUEL desc f recut)
+  return r
+
+/-- The codec's refusal of a Program whose Definitions the plain walk refuses with `e`, from the walk `r` that reads an input
+node at a width dividing its own (§4.4) and reads none in its root: its refusal; else the root's and the input nodes'
+(`decode`'s, in its order); else `e`. -/
+private def recutRefusal (e rootId : String) (r : Except String (Nat × DecState)) : String :=
+  match r with
+  | .error e' => e'
+  | .ok (root, st) =>
+    let rd := st.defs[root]!
+    if rd.prim || !rd.params.isEmpty then s!"root '{rootId}': the root is a composite without parameters" else
+    let input := st.defs.toList.findSome? fun d => if d.prim || d.key == rootId then none else
+      (List.range d.body.nodes.size).findSome? fun k =>
+        let c := st.defs[d.body.nodes[k]!.fn]!
+        if c.prim && (isInputId c.key || (c.key.startsWith "Registered" && isInputId (c.key.drop 10).toString)) then
+          some s!"definition '{d.key}' node {k}: an input node ({c.key}) appears only in the root's body"
+        else none
+    input.getD e
+
+/-- The decoded Definitions and the root's place: the plain walk's, every body read at its own widths, where it accepts; where
+it refuses, the walk that reads an input node at a width dividing its own (§4.4) where that one accepts with its root reading
+one (`Body.recut`), else the codec's refusal (`recutRefusal`). So a decoded Program is the plain walk's or has a recut root. -/
+private def decodeDefs (desc : Desc) (rootId programFn : String) : V (Nat × DecState) :=
+  match (goOf desc rootId programFn false).run {} with
+  | .ok r => .ok r
+  | .error e => match (goOf desc rootId programFn true).run {} with
+    | .ok (root, st) =>
+      if (st.defs[root]!).body.recut.isEmpty then .error (recutRefusal e rootId (.ok (root, st))) else .ok (root, st)
+    | r => .error (recutRefusal e rootId r)
+
+/-- Decoded Definitions are one walk's. -/
+private theorem decodeDefs_walk {desc : Desc} {rootId programFn : String} {r : Nat × DecState}
+    (h : decodeDefs desc rootId programFn = .ok r) : ∃ recut, (goOf desc rootId programFn recut).run {} = .ok r := by
+  unfold decodeDefs at h
+  split at h
+  next r' hp => exact ⟨false, hp.trans h⟩
+  next =>
+    split at h
+    next root' st' hp =>
+      split at h
+      · cases h
+      · exact ⟨true, hp.trans h⟩
+    next => cases h
+
+/-- Decoded Definitions whose root reads no input node at another width are the plain walk's. -/
+private theorem decodeDefs_plain {desc : Desc} {rootId programFn : String} {root : Nat} {st : DecState}
+    (h : decodeDefs desc rootId programFn = .ok (root, st)) (hr : (st.defs[root]!).body.recut = #[]) :
+    (goOf desc rootId programFn false).run {} = .ok (root, st) := by
+  unfold decodeDefs at h
+  split at h
+  next r hp => rw [hp]; exact h
+  next =>
+    split at h
+    next root' st' _ =>
+      split at h
+      · cases h
+      · rename_i hne
+        have h0 := Except.ok.inj h
+        have h1 : root' = root := congrArg Prod.fst h0
+        have h2 : st' = st := congrArg Prod.snd h0
+        rw [h1, h2, hr] at hne
+        exact absurd rfl hne
+    next => cases h
+
 /-- `decode_program` on a descriptor's bytes: the refusals of PROTOCOL.md §4.6 (a primitive's signature is the descriptor's own,
-see the module docstring), then the program's SHA-512. -/
+see the module docstring), `E_KEYS` after `E_SCHEMA`, the Boolean map's, then §5.1's `inputs` and `E_UNREACHED`, and the
+program digest (`programDigestWith`). -/
 def decode (bytes : ByteArray) : V Prog := do
   let some text := String.fromUTF8? bytes | throw "program: not UTF-8"
   let j ← match JsonParse.parse text with
@@ -1341,6 +2032,7 @@ def decode (bytes : ByteArray) : V Prog := do
   match (j.getObjValAs? String "schema").toOption with
   | some s => if s != SCHEMA then throw s!"E_SCHEMA: unexpected descriptor schema '{s}' (this verifier reads {SCHEMA})"
   | none => throw s!"E_SCHEMA: unexpected descriptor schema (this verifier reads {SCHEMA})"
+  checkTopKeys (top.toArray.map (·.1))
   let .ok (.obj dkv) := j.getObjVal? "definitions" | throw "program: definitions"
   for (fid, d) in dkv.toArray do
     let .obj _ := d | throw s!"definition '{fid}': not an object"
@@ -1360,12 +2052,7 @@ def decode (bytes : ByteArray) : V Prog := do
   let desc : Desc := { ddefs := dkv.toArray.foldl (fun m (k, v) => m.insert k v) {}, callees, types }
   let some rootId := (j.getObjValAs? String "root").toOption | throw "program: root"
   let some programFn := (j.getObjValAs? String "program_fn").toOption | throw "program: program_fn"
-  let go : D Nat := do
-    let r ← getDef Steps.FUEL desc rootId
-    for f in recordFunctionIds programFn do
-      if desc.ddefs.contains f then discard (getDef Steps.FUEL desc f)
-    return r
-  let (root, st) ← go.run {}
+  let (root, st) ← decodeDefs desc rootId programFn
   let rd := st.defs[root]!
   if rd.prim || !rd.params.isEmpty then throw s!"root '{rootId}': the root is a composite without parameters"
   -- an input node (`Input<w>_v1` or `RegisteredInput<w>_v1`) appears only in the root's body (PROTOCOL.md §5.2)
@@ -1380,9 +2067,13 @@ def decode (bytes : ByteArray) : V Prog := do
   let ((), st) ← (decodeAll desc prims).run st
   let pairs ← booleanKeys st.defs st.index prims bm
   let ((), st) ← (decodeBodies desc rootId pairs).run st
+  checkInputs st.defs root (j.getObjValD "inputs")
+  checkReached dkv.toArray callees
+    (#[rootId] ++ (recordFunctionIds programFn).filter desc.ddefs.contains ++ pairs.map (·.2))
   let boolean := pairs.foldl (fun m p => m.insert p.1 p.2) {}
-  let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
-  return { defs := st.defs, index := st.index, root, programFn, sha512 := Sha512.hash (← canon bare).toUTF8, boolean }
+  return { defs := st.defs, index := st.index, root, programFn, sha512 := ← programDigestWith (fun b => pure (Sha512.hash b)) j,
+           boolean }
+
 
 /-- A descriptor's bytes read as JSON: none for bytes that are not UTF-8, else `JsonParse.parse`'s verdict on their text. Every
 reader of a descriptor starts with it (`decode_eq_of`). -/
@@ -1398,6 +2089,7 @@ def decodeOf (read : Option (Except String Json)) : V Prog := do
   match (j.getObjValAs? String "schema").toOption with
   | some s => if s != SCHEMA then throw s!"E_SCHEMA: unexpected descriptor schema '{s}' (this verifier reads {SCHEMA})"
   | none => throw s!"E_SCHEMA: unexpected descriptor schema (this verifier reads {SCHEMA})"
+  checkTopKeys (top.toArray.map (·.1))
   let .ok (.obj dkv) := j.getObjVal? "definitions" | throw "program: definitions"
   for (fid, d) in dkv.toArray do
     let .obj _ := d | throw s!"definition '{fid}': not an object"
@@ -1417,12 +2109,7 @@ def decodeOf (read : Option (Except String Json)) : V Prog := do
   let desc : Desc := { ddefs := dkv.toArray.foldl (fun m (k, v) => m.insert k v) {}, callees, types }
   let some rootId := (j.getObjValAs? String "root").toOption | throw "program: root"
   let some programFn := (j.getObjValAs? String "program_fn").toOption | throw "program: program_fn"
-  let go : D Nat := do
-    let r ← getDef Steps.FUEL desc rootId
-    for f in recordFunctionIds programFn do
-      if desc.ddefs.contains f then discard (getDef Steps.FUEL desc f)
-    return r
-  let (root, st) ← go.run {}
+  let (root, st) ← decodeDefs desc rootId programFn
   let rd := st.defs[root]!
   if rd.prim || !rd.params.isEmpty then throw s!"root '{rootId}': the root is a composite without parameters"
   -- an input node (`Input<w>_v1` or `RegisteredInput<w>_v1`) appears only in the root's body (PROTOCOL.md §5.2)
@@ -1437,9 +2124,12 @@ def decodeOf (read : Option (Except String Json)) : V Prog := do
   let ((), st) ← (decodeAll desc prims).run st
   let pairs ← booleanKeys st.defs st.index prims bm
   let ((), st) ← (decodeBodies desc rootId pairs).run st
+  checkInputs st.defs root (j.getObjValD "inputs")
+  checkReached dkv.toArray callees
+    (#[rootId] ++ (recordFunctionIds programFn).filter desc.ddefs.contains ++ pairs.map (·.2))
   let boolean := pairs.foldl (fun m p => m.insert p.1 p.2) {}
-  let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
-  return { defs := st.defs, index := st.index, root, programFn, sha512 := Sha512.hash (← canon bare).toUTF8, boolean }
+  return { defs := st.defs, index := st.index, root, programFn, sha512 := ← programDigestWith (fun b => pure (Sha512.hash b)) j,
+           boolean }
 
 set_option maxRecDepth 20000 in
 theorem decode_eq_of (bytes : ByteArray) : decode bytes = decodeOf (readJson bytes) := by
@@ -1447,7 +2137,7 @@ theorem decode_eq_of (bytes : ByteArray) : decode bytes = decodeOf (readJson byt
   generalize String.fromUTF8? bytes = o
   cases o <;> rfl
 
-/-- `decode` in a verdict monad `M`, the program's SHA-512 by `sha512` (`Flock.With.Setup`). It is here because `decode`'s
+/-- `decode` in a verdict monad `M`, each SHA-512 of the program digest by `sha512` (`Flock.With.Setup`). It is here because `decode`'s
 decoder state is this module's own. -/
 def decodeWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (sha512 : ByteArray → M ByteArray)
     (bytes : ByteArray) : M Prog := do
@@ -1459,6 +2149,7 @@ def decodeWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLift
   match (j.getObjValAs? String "schema").toOption with
   | some s => if s != SCHEMA then throw s!"E_SCHEMA: unexpected descriptor schema '{s}' (this verifier reads {SCHEMA})"
   | none => throw s!"E_SCHEMA: unexpected descriptor schema (this verifier reads {SCHEMA})"
+  (checkTopKeys (top.toArray.map (·.1)) : V _)
   let .ok (.obj dkv) := j.getObjVal? "definitions" | throw "program: definitions"
   for (fid, d) in dkv.toArray do
     let .obj _ := d | throw s!"definition '{fid}': not an object"
@@ -1476,12 +2167,7 @@ def decodeWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLift
   let desc : Desc := { ddefs := dkv.toArray.foldl (fun m (k, v) => m.insert k v) {}, callees, types }
   let some rootId := (j.getObjValAs? String "root").toOption | throw "program: root"
   let some programFn := (j.getObjValAs? String "program_fn").toOption | throw "program: program_fn"
-  let go : D Nat := do
-    let r ← getDef Steps.FUEL desc rootId
-    for f in recordFunctionIds programFn do
-      if desc.ddefs.contains f then discard (getDef Steps.FUEL desc f)
-    return r
-  let (root, st) ← (go.run {} : V _)
+  let (root, st) ← (decodeDefs desc rootId programFn : V _)
   let rd := st.defs[root]!
   if rd.prim || !rd.params.isEmpty then throw s!"root '{rootId}': the root is a composite without parameters"
   for d in st.defs do
@@ -1495,9 +2181,93 @@ def decodeWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLift
   let ((), st) ← ((decodeAll desc prims).run st : V _)
   let pairs ← (booleanKeys st.defs st.index prims bm : V _)
   let ((), st) ← ((decodeBodies desc rootId pairs).run st : V _)
+  (checkInputs st.defs root (j.getObjValD "inputs") : V _)
+  (checkReached dkv.toArray callees
+    (#[rootId] ++ (recordFunctionIds programFn).filter desc.ddefs.contains ++ pairs.map (·.2)) : V _)
   let boolean := pairs.foldl (fun m p => m.insert p.1 p.2) {}
-  let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
-  return { defs := st.defs, index := st.index, root, programFn, sha512 := ← sha512 (← canon bare).toUTF8, boolean }
+  return { defs := st.defs, index := st.index, root, programFn, sha512 := ← programDigestWith sha512 j, boolean }
+
+/-- `NotAnd_v1(x: Value<1>) = Not(x)` as `codec.encode_program` writes it, `codec.decode_program`'s accept; its digests are
+`codec.definition_digests`' and `codec.program_digest`'s on these bytes. -/
+private def NOT_DESC : String :=
+  r#"{"boolean":{},"callees":["Input1_v1","Not_v1"],"definitions":{"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[NotAnd_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":1,"out":0},{"args":[{"refs":{"affine":["n",0,0,1]},"type":1}],"fn":1,"form":"primitive","out":1}],"params":[],"ret":{"affine":["n",1,0,1]},"ret_type":["Value",1]},"form":"composite","id":"Root[NotAnd_v1]_v1"}},"inputs":[["x",1]],"program_fn":"NotAnd_v1","root":"Root[NotAnd_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Array",1,["Value",1]],["Value",1]]}"#
+
+/-- `NOT_DESC` with a registered input node after the run input node, the parameters as `inputs` names them. -/
+private def mixedDesc (inputs : String) : String :=
+  ((((NOT_DESC.replace r#"["Input1_v1","Not_v1"]"# r#"["Input1_v1","Not_v1","RegisteredInput1_v1"]"#).replace
+    r#""Root[NotAnd_v1]_v1":{"# r#""RegisteredInput1_v1":{"form":"primitive","id":"RegisteredInput1_v1","params":[],"ret":["Value",1]},"Root[NotAnd_v1]_v1":{"#).replace
+    r#""form":"batch","n":1,"out":0},"# r#""form":"batch","n":1,"out":0},{"args":[],"axes":[],"fn":2,"form":"batch","n":1,"out":0},"#).replace
+    r#""ret":{"affine":["n",1,0,1]}"# r#""ret":{"affine":["n",2,0,1]}"#).replace r#""inputs":[["x",1]]"# inputs
+
+/-- `decode`'s verdict on `s`: the program digest of an accept, else the refusal's code. -/
+private def verdict (s : String) : String := match decode s.toUTF8 with
+  | .ok P => hexOf P.sha512
+  | .error e => (e.splitOn ":").head!
+
+#guard verdict NOT_DESC == "8793c3fbb20b66b520af8987be9dc885a37593a13e866a6795c0619a6800aa07aa66e141722a09da83e0a3c30cda5339dd430122db2de67ff3271fa01bba536e"
+#guard match (JsonParse.parse NOT_DESC).toOption.map definitionDigests with
+  | some (.ok d) => d.toList.mergeSort (fun a b => a.1 ≤ b.1) == [
+      ("Input1_v1", "01a1a9db691df5e9a51666f246f71239e9681d94750b07fa28e9ae24228055d112e38b257c0728673e6635057cad11565109279e2b71116867e38ae5d8fa18b7"),
+      ("Not_v1", "e53494d3815c1d18a5eb3a18aae5781f0dfea16eec4cb1263e08f7b875c358a06b6007f7bf6de72f2b65cf840da36e3c9c84f4752f3bb32c3373654987230214"),
+      ("Root[NotAnd_v1]_v1", "b5a3def87804c6f07a020e710c0b1349c1719870efedebc9028a4a98329b57ac49e1dcc7a8ccce3a64fb2583a35e4b1a99d812264c8f7935ba3be2a35aa68bd0")]
+  | _ => false
+#guard verdict (NOT_DESC.replace r#""boolean":{},"# r#""boolean":{},"word":{},"#) == "E_KEYS"
+#guard verdict (NOT_DESC.replace r#""schema":"verity-ir/descriptor/v2","# r#""schema":"verity-ir/descriptor/v1","#) == "E_SCHEMA"
+#guard verdict (NOT_DESC.replace r#""inputs":[["x",1]],"# "") == "E_INPUTS"
+#guard verdict (NOT_DESC.replace r#""inputs":[["x",1]]"# r#""inputs":[["x","1"]]"#) == "E_INPUTS"
+#guard verdict (NOT_DESC.replace r#""inputs":[["x",1]]"# r#""inputs":[["",1]]"#) == "E_INPUTS_NAME"
+#guard verdict (NOT_DESC.replace r#""inputs":[["x",1]]"# r#""inputs":[["x",1],["x",0]]"#) == "E_INPUTS_NAME"
+#guard verdict (NOT_DESC.replace r#""inputs":[["x",1]]"# r#""inputs":[["x",2]]"#) == "E_INPUTS_COUNT"
+#guard verdict (mixedDesc r#""inputs":[["x",2]]"#) == "E_INPUTS_MIXED"
+#guard (verdict (mixedDesc r#""inputs":[["x",1],["y",1]]"#)).length == 128
+/-- `NOT_DESC` with a 64-leaf supplied input node after the run input node (`log.base/v1`'s 8 bytes, read `le`), the
+parameters as `inputs` names and marks them. -/
+private def suppliedDesc (inputs : String) : String :=
+  ((((NOT_DESC.replace r#"["Input1_v1","Not_v1"]"# r#"["Input1_v1","Not_v1","SuppliedInput1_v1"]"#).replace
+    r#""Root[NotAnd_v1]_v1":{"# r#""Root[NotAnd_v1]_v1":{"#).replace
+    r#""form":"batch","n":1,"out":0},"# r#""form":"batch","n":1,"out":0},{"args":[],"axes":[],"fn":2,"form":"batch","n":64,"out":0},"#).replace
+    r#""ret":{"affine":["n",1,0,1]}"# r#""ret":{"affine":["n",2,0,1]}"#).replace r#""inputs":[["x",1]]"# inputs
+  |>.replace r#""Root[NotAnd_v1]_v1":{"bindings""# r#""SuppliedInput1_v1":{"form":"primitive","id":"SuppliedInput1_v1","params":[],"ret":["Value",1]},"Root[NotAnd_v1]_v1":{"bindings""#
+  |>.replace r#""n":64,"out":0"# r#""n":64,"out":2"# |>.replace r#"["Value",1]]}"# r#"["Value",1],["Array",64,["Value",1]]]}"#
+
+private def logMark (m : String) : String := s!"\"inputs\":[[\"x\",1],[\"base\",1,{m}]]"
+private def LOG_MARK : String := r#"{"args":{},"bits":64,"layout":"le","supplied":"log.base/v1"}"#
+
+/-- `decode`'s whole refusal text on `s`, or the empty string on an accept. -/
+private def refusal (s : String) : String := match decode s.toUTF8 with
+  | .ok _ => ""
+  | .error e => e
+
+#guard (verdict (suppliedDesc (logMark LOG_MARK))).length == 128
+#guard verdict (suppliedDesc (logMark LOG_MARK)) != verdict (suppliedDesc (logMark (LOG_MARK.replace "log.base" "pous.setup.salt"
+  |>.replace "64," "192,")))
+#guard refusal (suppliedDesc r#""inputs":[["x",1],["base",1]]"#) ==
+  "E_INPUTS_MIXED: input 'base': supplied input nodes and no mark naming their function"
+#guard refusal (suppliedDesc r#""inputs":[["x",2,{"args":{},"bits":65,"layout":"le","supplied":"log.base/v1"}]]"#) ==
+  "E_INPUTS_MIXED: parameter 'x''s input nodes 0..1 mix run and supplied inputs"
+#guard refusal (NOT_DESC.replace r#""inputs":[["x",1]]"# (s!"\"inputs\":[[\"x\",1,{LOG_MARK}]]")) ==
+  "E_INPUTS_MIXED: input 'x': marked supplied, and its nodes are ['run']"
+#guard refusal (suppliedDesc (logMark (LOG_MARK.replace r#""bits":64"# r#""bits":0"#))) ==
+  "E_SUPPLIED_MARK: input 'base': a mark is {supplied, args, layout, bits}, a part's with of = [input, lo, hi], not " ++
+  "[{'args': {}, 'bits': 0, 'layout': 'le', 'supplied': 'log.base/v1'}]"
+#guard verdict (suppliedDesc (logMark (LOG_MARK.replace r#""layout":"le""# r#""layout":"be""#))) == "E_SUPPLIED_MARK"
+#guard verdict (suppliedDesc (logMark (LOG_MARK.replace r#""args":{}"# r#""args":{"k":""}"#))) == "E_SUPPLIED_MARK"
+#guard verdict (suppliedDesc (logMark (LOG_MARK.replace r#""args":{}"# r#""args":{},"of":["b",1,1]"#))) == "E_SUPPLIED_MARK"
+#guard verdict (suppliedDesc (logMark (LOG_MARK.replace r#""args":{}"# r#""args":{},"seed":1"#))) == "E_SUPPLIED_MARK"
+#guard refusal (suppliedDesc (logMark (LOG_MARK.replace "log.base/v1" "log.base/v2"))) ==
+  "E_SUPPLIED_FN: input 'base': 'log.base/v2' is no supplied function"
+#guard refusal (suppliedDesc (logMark (LOG_MARK.replace r#""args":{}"# r#""args":{"round":3}"#))) ==
+  "E_SUPPLIED_ARGS: input 'base': log.base/v1 takes the args [], not ['round']"
+#guard refusal (suppliedDesc (logMark r#"{"args":{"value":70000},"bits":16,"layout":"le","supplied":"const.u16/v1"}"#)) ==
+  "E_SUPPLIED_ARGS: input 'base': const.u16/v1 has no value at {'value': 70000}"
+#guard refusal (suppliedDesc (logMark (LOG_MARK.replace r#""bits":64"# r#""bits":32"#))) ==
+  "E_SUPPLIED_WIDTH: input 'base': log.base/v1's value is 64 bits, read by le as whole leaves of one width; the mark says " ++
+  "32 and its nodes hold 64 leaves of widths [1]"
+#guard verdict (suppliedDesc (logMark (LOG_MARK.replace r#""layout":"le""# r#""layout":"digest""#))) == "E_SUPPLIED_WIDTH"
+#guard (verdict (suppliedDesc (logMark r#"{"args":{},"bits":64,"layout":"le","of":["salt",0,64],"supplied":"window.salt/v1"}"#))).length == 128
+#guard verdict (suppliedDesc (logMark r#"{"args":{},"bits":64,"layout":"le","of":["salt",500,564],"supplied":"window.salt/v1"}"#)) == "E_SUPPLIED_WIDTH"
+#guard pyStr "it's" == "\"it's\"" && pyStr "a\\b" == "'a\\\\b'" && pyStr "\x01" == "'\\x01'"
+#guard verdict (NOT_DESC.replace r#""definitions":{"# r#""definitions":{"Const1[0x1]_v1":{"form":"primitive","id":"Const1[0x1]_v1","params":[],"ret":["Value",1]},"#) == "E_UNREACHED"
 
 /-! ### §6 The canonical layout and §7 scope resolution -/
 
@@ -1507,6 +2277,11 @@ inductive Scope where
   | top (d : Nat) (off : Nat) (starts : Option (Array Nat))
   | child (parent : Scope) (d : Nat) (off : Nat) (node : Nat) (member : Nat)
   deriving Inhabited
+
+/-- The Definition whose activation `sc`'s chain of parents starts from. -/
+def Scope.base : Scope → Nat
+  | .top d _ _ => d
+  | .child parent _ _ _ _ => parent.base
 
 def Scope.d : Scope → Nat
   | .top d _ _ => d
@@ -1560,8 +2335,44 @@ def resolveStep (P : Prog) : Scope × Ref → V (Nat ⊕ (Scope × Ref))
       pure (.inr (.child sc node.fn (o + m * callee.gates) k m, callee.body.ret.get jj))
 
 /-- `layout.resolve`: the gate a body-scoped reference denotes in an activation, up through parameters and down through node
-outputs until a primitive. -/
-def resolve (P : Prog) (sc : Scope) (r : Ref) : V Nat := Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r)
+outputs until a primitive. Refused (`recut-gates`, `Program.circuit`'s refusal) in an activation under the root's while
+the root reads an input node recut (`Body.recut`): a gate is one leaf of its width, and the layout has no operand of part
+of a gate. An activation of a Definition taken on its own (`Scope.top d _ (some starts)`, `d` not the root) resolves to
+its own parameters and gates, and never reads the root's. -/
+def resolve (P : Prog) (sc : Scope) (r : Ref) : V Nat :=
+  if sc.base != P.root || (P.defs[P.root]!).body.recut.isEmpty then Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r)
+  else throw (s!"recut-gates: input nodes {((P.defs[P.root]!).body.recut.map (·.1)).toList} are read in leaves of part " ++
+    "of their width, which the gate layout doesn't lay out")
+
+theorem resolve_run {P : Prog} {sc : Scope} {r : Ref} {a : Nat} (h : resolve P sc r = .ok a) :
+    Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r) = .ok a := by
+  unfold resolve at h
+  split at h
+  · exact h
+  · cases h
+
+theorem resolve_of {P : Prog} {sc : Scope} (h : sc.base ≠ P.root ∨ (P.defs[P.root]!).body.recut = #[]) (r : Ref) :
+    resolve P sc r = Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r) := by
+  unfold resolve
+  rw [if_pos]
+  rcases h with h | h <;> simp [h]
+
+theorem resolve_eq {P : Prog} (h : (P.defs[P.root]!).body.recut = #[]) (sc : Scope) (r : Ref) :
+    resolve P sc r = Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r) :=
+  resolve_of (.inr h) r
+
+theorem resolve_cond {P : Prog} {sc : Scope} {r : Ref} {a : Nat} (h : resolve P sc r = .ok a) :
+    sc.base ≠ P.root ∨ (P.defs[P.root]!).body.recut = #[] := by
+  unfold resolve at h
+  split at h
+  · next hc =>
+    simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, Array.isEmpty_iff] at hc
+    exact hc
+  · cases h
+
+theorem resolve_recut {P : Prog} {sc : Scope} {r : Ref} {a : Nat} (hb : sc.base = P.root)
+    (h : resolve P sc r = .ok a) : (P.defs[P.root]!).body.recut = #[] :=
+  (resolve_cond h).resolve_left (· hb)
 
 /-- `partition_object.order_violation`: the first reference naming neither a parameter of its body nor an earlier node of it
 (a body's `ret` may name any node), over every body the root reaches, root first and callees in node order, each

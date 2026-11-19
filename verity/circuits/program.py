@@ -19,6 +19,7 @@ commitment.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from typing import Any, Callable
 
 from . import ports
@@ -33,9 +34,12 @@ _INPUT_PRIMS: dict[tuple[str, int], PrimitiveDefinition] = {}
 INPUT_ID = re.compile(r"^Input([1-9][0-9]*)_v1$")
 #: the ids that denote `RegisteredInput<w>`: a node is a registered-input node exactly when its callee's id matches
 REGISTERED_ID = re.compile(r"^RegisteredInput([1-9][0-9]*)_v1$")
+#: the ids that denote `SuppliedInput<w>`: a node is a supplied-input node exactly when its callee's id matches (§5.4)
+SUPPLIED_ID = re.compile(r"^SuppliedInput([1-9][0-9]*)_v1$")
 
 RUN = "run"
 REGISTRATION = "registration"
+SUPPLIED = "supplied"
 
 #: the catalog's lookup of a word primitive's one Boolean Definition (`register_boolean_bodies`), which `Program` calls at
 #: build; a decoder never calls it, as the descriptor holds every body
@@ -101,14 +105,20 @@ def is_registered(fn: Any) -> bool:
     return isinstance(fn, PrimitiveDefinition) and REGISTERED_ID.fullmatch(fn.id) is not None
 
 
+def is_supplied(fn: Any) -> bool:
+    """A supplied input: `SuppliedInput<w>_v1`, the verifier's value by the function its parameter's mark names (§5.4)."""
+    return isinstance(fn, PrimitiveDefinition) and SUPPLIED_ID.fullmatch(fn.id) is not None
+
+
 def is_input(fn: Any) -> bool:
-    """An input gate's primitive: `Input<w>_v1` (bound per run) or `RegisteredInput<w>_v1` (bound at registration)."""
-    return isinstance(fn, PrimitiveDefinition) and (INPUT_ID.fullmatch(fn.id) is not None or REGISTERED_ID.fullmatch(fn.id) is not None)
+    """An input gate's primitive: `Input<w>_v1` (bound per run), `RegisteredInput<w>_v1` (bound at registration) or
+    `SuppliedInput<w>_v1` (the verifier's, §5.4)."""
+    return isinstance(fn, PrimitiveDefinition) and input_id(fn.id) is not None
 
 
 def input_id(fid: str) -> tuple[str, int] | None:
     """(binding time, width) of an input id, or None for any other id."""
-    for when, rx in ((RUN, INPUT_ID), (REGISTRATION, REGISTERED_ID)):
+    for when, rx in ((RUN, INPUT_ID), (REGISTRATION, REGISTERED_ID), (SUPPLIED, SUPPLIED_ID)):
         m = rx.fullmatch(fid)
         if m is not None:
             return when, int(m[1])
@@ -121,14 +131,15 @@ def input_prim(w: int, binding: str = RUN) -> PrimitiveDefinition:
     key = (binding, w)
     p = _INPUT_PRIMS.get(key)
     if p is None:
-        if binding not in (RUN, REGISTRATION):
-            raise ValueError(f"an input is bound per {RUN!r} or at {REGISTRATION!r}, not {binding!r}")
+        if binding not in (RUN, REGISTRATION, SUPPLIED):
+            raise ValueError(f"an input is bound per {RUN!r}, at {REGISTRATION!r} or {SUPPLIED!r}, not {binding!r}")
 
         def _no_eval(*_a: int) -> int:
             raise ValueError("Input gates take their value from the trace, they are not evaluated")
 
-        name, doc = (("Input", f"prescribed input leaf of width {w}, bound per run") if binding == RUN else
-                     ("RegisteredInput", f"prescribed input leaf of width {w}, bound at registration"))
+        name, doc = {RUN: ("Input", f"prescribed input leaf of width {w}, bound per run"),
+                     REGISTRATION: ("RegisteredInput", f"prescribed input leaf of width {w}, bound at registration"),
+                     SUPPLIED: ("SuppliedInput", f"prescribed input leaf of width {w}, the verifier's (§5.4)")}[binding]
         p = PrimitiveDefinition(f"{name}{w}", 1, (), Value(w), _no_eval, doc=doc, conformance="exact-model-tested")
         p.family = "Input"  # type: ignore[attr-defined]
         p.binding = binding  # type: ignore[attr-defined]
@@ -156,6 +167,14 @@ def _lower_input(B: Builder, t: Type, name: str, binding: str = RUN) -> Coll:
     raise TypeError(t)
 
 
+def refuse_recut(root: SpecializedDefinition) -> None:
+    """Refused (ValueError, `recut-gates`) where `root` reads an input node in leaves of part of its width (`refs.recut`):
+    the gate layout has no operand of part of a gate. Lean's decoder refuses the same Program with the same message."""
+    if root.body.recut:
+        raise ValueError(f"recut-gates: input nodes {sorted(root.body.recut)} are read in leaves of part of "
+                         "their width, which the gate layout doesn't lay out")
+
+
 class Program:
     """`Program(fn)` where `fn` is a fully-bound `SpecializedDefinition` (or a static-free `CompositeDefinition`).
     `registered`: the names of `fn`'s parameters bound at registration; every other parameter is bound per run. `theta`: the
@@ -168,21 +187,26 @@ class Program:
     def __init__(self, fn: SpecializedDefinition | CompositeDefinition, annotations: dict[str, Any] | None = None,
                  registered: tuple[str, ...] | list[str] | frozenset[str] = (),
                  strict: Callable[[Any], dict] | None = None,
-                 theta: tuple[str, ...] | list[str] | frozenset[str] = ()) -> None:
+                 theta: tuple[str, ...] | list[str] | frozenset[str] = (),
+                 supplied: Mapping[str, Mapping[str, Any]] | None = None) -> None:
         if isinstance(fn, CompositeDefinition):
             fn = bind(fn)
         if not fn.complete:
             raise TypeError(f"program function {fn.id} is not fully bound")
         names = [n for n, _t in fn.signature()[0]]
-        for what, given in (("register", registered), ("mark theta", theta)):
+        supplied = {n: dict(m) for n, m in (supplied or {}).items()}
+        for what, given in (("register", registered), ("mark theta", theta), ("supply", supplied)):
             unknown = sorted(set(given) - set(names))
             if unknown:
                 raise ValueError(f"program function {fn.id} has no parameter {unknown} to {what} (it has {names})")
         self.fn = fn
         self.annotations: dict[str, Any] = {k: v for k, v in (annotations or {}).items() if k != "theta"}
-        self.bindings: tuple[str, ...] = tuple(REGISTRATION if n in set(registered) else RUN for n in names)
+        if both := sorted(set(registered) & set(supplied)):
+            raise ValueError(f"program function {fn.id}: {both} registered and supplied; a parameter has one binding time")
+        self.bindings: tuple[str, ...] = tuple(REGISTRATION if n in set(registered) else SUPPLIED if n in supplied else RUN
+                                               for n in names)
         self.theta: tuple[str, ...] = tuple(n for n in names if n in set(theta))
-        self.root = _lower_root(fn, self.bindings, frozenset(theta))
+        self.root = _lower_root(fn, self.bindings, frozenset(theta), supplied)
         if self.root.theta:
             self.annotations["theta"] = sorted(self.root.theta)
         _refuse_inner_inputs(self.root)
@@ -199,15 +223,18 @@ class Program:
         """The gate layout. Refused (ValueError) while the root reads an input node recut (`refs.recut`): a gate is one
         leaf of its width, and the layout has no operand of part of a gate."""
         if self._circuit is None:
-            if self.root.body.recut:
-                raise ValueError(f"recut-gates: input nodes {sorted(self.root.body.recut)} are read in leaves of part of "
-                                 "their width, which the gate layout doesn't lay out")
+            refuse_recut(self.root)
             self._circuit = Circuit(self.root)
         return self._circuit
 
     @property
     def gates(self) -> int:
         return self.root.gates
+
+    @property
+    def inputs(self) -> list[list]:
+        """Each parameter of the program function, in order, as [name, how many input nodes it lowers to] (PROTOCOL.md §5.1)."""
+        return self.root.inputs  # type: ignore[attr-defined]
 
     @property
     def input_gates(self) -> int:
@@ -219,11 +246,16 @@ class Program:
 
 
 def _lower_root(fn: SpecializedDefinition, bindings: tuple[str, ...] | None = None,
-                theta: frozenset[str] = frozenset()) -> SpecializedDefinition:
+                theta: frozenset[str] = frozenset(),
+                supplied: Mapping[str, Mapping[str, Any]] | None = None) -> SpecializedDefinition:
     params, ret = fn.signature()
     B = Builder((), ret)
     bindings = bindings or (RUN,) * len(params)
-    input_colls = [_lower_input(B, t, name, when) for (name, t), when in zip(params, bindings)]
+    input_colls, inputs = [], []
+    for (name, t), when in zip(params, bindings):
+        k = len(B.nodes)
+        input_colls.append(_lower_input(B, t, name, when))
+        inputs.append([name, len(B.nodes) - k, *([dict((supplied or {})[name])] if when == SUPPLIED else [])])
     theta_nodes = frozenset(k for (name, _t), c in zip(params, input_colls) if name in theta for _s, k, _a, _b in ref_runs(c.refs))
     out = fn.defn.body(B, fn.S(), *input_colls)
     body = B.finish(out)
@@ -233,6 +265,7 @@ def _lower_root(fn: SpecializedDefinition, bindings: tuple[str, ...] | None = No
     root.theta = theta_nodes  # type: ignore[attr-defined]
     root.set_port_types(ports.root_ports(fn, input_colls, [b == REGISTRATION for b in bindings], [n.out for n in body.nodes]))
     root.program_fn = fn  # type: ignore[attr-defined]
+    root.inputs = inputs  # type: ignore[attr-defined]
     # Gate indices of the Input gates per parameter, as collections over refs ("g", 0, gate_index). Kept
     # affine (an Input batch is one contiguous interval) so weight tensors stay O(1).
     root.input_colls = [_gate_coll(c, body) for c in input_colls]  # type: ignore[attr-defined]
