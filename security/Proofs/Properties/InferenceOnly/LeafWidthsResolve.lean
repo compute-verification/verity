@@ -709,7 +709,7 @@ theorem gate_of_node (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root
     (h : P.gate (sc.off + (P.defs[sc.d]!).body.offsets[k]! + m) = .ok (p, ops, sc')) :
     p = ((P.defs[sc.d]!).body.nodes[k]!).fn ∧ sc' = sc := by
   obtain ⟨-, hg1, -, -⟩ := (hD _ ((hB sc hsc).1 k hk).1).1.1 hp
-  unfold Prog.gate at h
+  rw [Prog.gate_of (Prog.gate_recut h)] at h
   by_cases hge : sc.off + (P.defs[sc.d]!).body.offsets[k]! + m ≥ (P.defs[P.root]!).gates
   · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
   simp only [hge, ite_false, bind, Except.bind] at h

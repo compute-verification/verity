@@ -199,7 +199,7 @@ theorem gate_not_input (hin : InferenceOnlyVerifier.Desc.inputsAtRoot P = true) 
     (h : P.gate g = .ok (p, ops, sc)) : Flock.Program.isInputId (P.defs[p]!).key = false := by
   have hmono := Resolve.offsets_mono P P.root (hL _ hroot.1) hroot.2
   have hspec := inputsAtRoot_spec P hin
-  unfold Flock.Program.Prog.gate at h
+  rw [Flock.Program.Prog.gate_of (Flock.Program.Prog.gate_recut h)] at h
   by_cases hge : g ≥ (P.defs[P.root]!).gates
   · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
   simp only [hge, ite_false, bind, Except.bind] at h
@@ -235,7 +235,7 @@ theorem gate_at_prim {k g p : ℕ} {ops : Array ℕ} {sc : Scope}
     (h1 : (P.defs[P.root]!).body.offsets[k]! ≤ g) (h2 : g < (P.defs[P.root]!).body.offsets[k + 1]!)
     (h : P.gate g = .ok (p, ops, sc)) : p = ((P.defs[P.root]!).body.nodes[k]!).fn := by
   have hmono := Resolve.offsets_mono P P.root (hL _ hroot.1) hroot.2
-  unfold Flock.Program.Prog.gate at h
+  rw [Flock.Program.Prog.gate_of (Flock.Program.Prog.gate_recut h)] at h
   by_cases hge : g ≥ (P.defs[P.root]!).gates
   · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
   simp only [hge, ite_false, bind, Except.bind] at h
@@ -526,7 +526,7 @@ theorem facts {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA 
     (∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]!) ∧
       (P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false) ∧ (∀ d < P.defs.size, Walk.LaidOut P d) ∧
       InferenceOnlyVerifier.Desc.calleesFirst P = true := by
-  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hA.laid.2.2
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hA.laid.2.2
   obtain ⟨st, hdefs, hinv, -⟩ := BodiesOk.decode_spec bytes P hd
   obtain ⟨hr, hp, -⟩ := BodiesOk.decode_root bytes P hd
   have hw := hA.laid.2.2
@@ -541,7 +541,7 @@ theorem fits_egress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P
     (hF : Flattens P C) :
     ∀ t < s.window, ∀ ℓ σ, ∀ g ∈ NetTiming.slotGates ((scanLayout P s).egress t ℓ σ),
       g ∈ C.outs ∧ C.gates[g]? ≠ some .input := by
-  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hA.laid.2.2
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hA.laid.2.2
   obtain ⟨hok, hroot, hL, hc⟩ := facts hd hA
   obtain ⟨hke, hkc⟩ := templateNodes_mem P hA.egress_mem
   have hmono := Resolve.offsets_mono P P.root (hL _ hroot.1) hroot.2
@@ -607,7 +607,7 @@ bucket's `row` parameter, which resolves up through the bucket's template node t
 leaves, and down to that input node's gates. -/
 theorem fits_ingress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA : Accepted P s)
     (hF : Flattens P C) : ∀ t < s.window, ∀ g ∈ (scanLayout P s).ingress t, C.gates[g]? = some .input := by
-  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hA.laid.2.2
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hA.laid.2.2
   obtain ⟨hok, hroot, hL, hc⟩ := facts hd hA
   have hmono := Resolve.offsets_mono P P.root (hL _ hroot.1) hroot.2
   have hend := ((hL _ hroot.1) hroot.2).2.1

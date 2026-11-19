@@ -2746,7 +2746,7 @@ theorem operands_mem (P : Prog) (sc : Flock.Program.Scope) (node : Flock.Program
         ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
       Flock.Program.resolve P sc (if (node.form == .batch) = true then (node.args[i]!).memberRef m t
         else (node.args[i]!).seq.get t) = .ok a := by
-  unfold Flock.Program.operands at h
+  rw [Flock.Program.operands_of (Flock.Program.operands_cond h)] at h
   simp only [Std.Legacy.Range.forIn_eq_forIn_range'] at h
   have h' := ok_bind_pure h
   rw [forIn_nest_mem _ _ _ _ _ h' a]
@@ -2806,7 +2806,7 @@ theorem reads_rootPrim (P : Prog) (c : GateTable) (hc : circuitOf P = .ok c) (hl
     have := DescAgree.offs_mono (rootOffs P) (nodeCount P) hmono (k + 1) (nodeCount P) (by omega) le_rfl
     omega
   obtain ⟨p, sc, hgate, -⟩ := circuitOf_gate hc hgG
-  unfold Flock.Program.Prog.gate at hgate
+  rw [Flock.Program.Prog.gate_of (Flock.Program.Prog.gate_recut hgate)] at hgate
   rw [if_neg (by unfold gates at hgG; omega)] at hgate
   have hF : Flock.Steps.FUEL = (Flock.Steps.FUEL - 1) + 1 := by unfold Flock.Steps.FUEL; omega
   rw [hF, Flock.Steps.run.eq_2, gateStep_at P g P.rootScope k (find_root P hl hk hg)] at hgate
@@ -10842,7 +10842,7 @@ theorem gate_root_prim (P : Prog) (hl : Desc.rootLaidOut P = true) {g p : Nat} {
     p = ((DescAgree.rootBody P).nodes[k]!).fn ∧ sc = P.rootScope := by
   rw [DescAgree.mem_nodeGates] at hg
   obtain ⟨-, -, -, hmono⟩ := DescAgree.rootLaidOut_spec P hl
-  unfold Flock.Program.Prog.gate at h
+  rw [Flock.Program.Prog.gate_of (Flock.Program.Prog.gate_recut h)] at h
   by_cases hge : g ≥ (P.defs[P.root]!).gates
   · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
   simp only [hge, ite_false, bind, Except.bind] at h
@@ -10985,7 +10985,7 @@ theorem run_locW (P : Prog) (g : Nat) : ∀ (n : Nat) (sc : Flock.Program.Scope)
 theorem locW_root {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {g : Nat} (hg : g < gates P) :
     LocW P P.root g c.w[g]! := by
   obtain ⟨p, sc, hp, hw, -⟩ := circuitOf_gate hc hg
-  unfold Flock.Program.Prog.gate at hp
+  rw [Flock.Program.Prog.gate_of (Flock.Program.Prog.gate_recut hp)] at hp
   by_cases hge : g ≥ (P.defs[P.root]!).gates
   · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at hp
   simp only [hge, ite_false, bind, Except.bind] at hp

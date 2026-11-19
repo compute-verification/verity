@@ -328,7 +328,7 @@ theorem gate_below {k m g p : ℕ} {ops : Array ℕ} {sc : Scope} (hk : k < (P.d
     (Below.child Below.self) hA).2
   rw [child_d, rootScope_off, rootScope_d, Nat.zero_add] at hAin
   have hrg : g < (P.defs[P.root]!).gates := by omega
-  unfold Prog.gate at h
+  rw [Prog.gate_of (Prog.gate_recut h)] at h
   have hng : ¬ (g ≥ (P.defs[P.root]!).gates) := by omega
   simp only [hng, ite_false, bind, Except.bind] at h
   have hF : Flock.Steps.FUEL = (Flock.Steps.FUEL - 1) + 1 := by unfold Flock.Steps.FUEL; omega

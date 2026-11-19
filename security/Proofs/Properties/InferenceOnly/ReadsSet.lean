@@ -183,7 +183,7 @@ theorem locR_unique {P : Prog} {sc : Flock.Program.Scope} {g : Nat} {ops ops' : 
 theorem locR_root {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {g : Nat} (hg : g < gates P) :
     LocR P P.rootScope g c.reads[g]! := by
   obtain ⟨p, sc, hp, -⟩ := circuitOf_gate hc hg
-  unfold Flock.Program.Prog.gate at hp
+  rw [Flock.Program.Prog.gate_of (Flock.Program.Prog.gate_recut hp)] at hp
   by_cases hge : g ≥ (P.defs[P.root]!).gates
   · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at hp
   simp only [hge, ite_false, bind, Except.bind] at hp
@@ -431,7 +431,7 @@ theorem operands_ok (P : Prog) (sc : Flock.Program.Scope) (node : Flock.Program.
         ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
       ∃ a, Flock.Program.resolve P sc (if (node.form == .batch) = true then (node.args[i]!).memberRef m t
         else (node.args[i]!).seq.get t) = .ok a := by
-  unfold Flock.Program.operands at h
+  rw [Flock.Program.operands_of (Flock.Program.operands_cond h)] at h
   simp only [Std.Legacy.Range.forIn_eq_forIn_range'] at h
   have h' := ok_bind_pure h
   intro i hi t ht

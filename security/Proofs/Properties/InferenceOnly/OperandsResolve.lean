@@ -370,12 +370,13 @@ theorem forIn_list_ne {α β ε : Type} (l : List α) (f : α → β → Except 
 
 /-- **`operands` returns** when every reference it resolves does. -/
 theorem operands_ok (P : Prog) (sc : Scope) (node : Node) (m : ℕ)
+    (hrc : sc.base ≠ P.root ∨ (P.defs[P.root]!).body.recut = #[])
     (h : ∀ i < node.args.size, ∀ t < (if (node.form == Form.batch && (node.args[i]!).dims.isSome) = true then
         ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
       ∃ a, resolve P sc (if (node.form == Form.batch) = true then (node.args[i]!).memberRef m t
         else (node.args[i]!).seq.get t) = .ok a) :
     ∃ ops, operands P sc node m = .ok ops := by
-  unfold operands
+  rw [operands_of hrc]
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', bind, Except.bind]
   split
   · rename_i err herr
@@ -447,7 +448,7 @@ theorem operands_prim (hc : Desc.calleesFirst P = true) (hrp : (P.defs[P.root]!)
     (m : ℕ) (hm : m < ((P.defs[sc.d]!).body.nodes[k]!).members) :
     ∃ ops, operands P sc ((P.defs[sc.d]!).body.nodes[k]!) m = .ok ops := by
   obtain ⟨-, hargs, -, -, hop⟩ := (hB sc hg).1 k hk
-  refine operands_ok P sc _ m fun i hi t ht => ?_
+  refine operands_ok P sc _ m (.inr hrc) fun i hi t ht => ?_
   have hidx := hop hpk i hi m hm t ht
   have hr : (if (((P.defs[sc.d]!).body.nodes[k]!).form == Form.batch) = true then
       (((P.defs[sc.d]!).body.nodes[k]!).args[i]!).memberRef m t

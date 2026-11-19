@@ -1697,6 +1697,11 @@ def resolveStep (P : Prog) : Scope × Ref → V (Nat ⊕ (Scope × Ref))
       let (m, jj) := if j < c then (node.n - 1, j) else ((j - c) / y.leaves, c + (j - c) % y.leaves)
       pure (.inr (.child sc node.fn (o + m * callee.gates) k m, callee.body.ret.get jj))
 
+/-- The gate layout's refusal of a root that reads an input node recut (`Body.recut`). -/
+def recutGates (P : Prog) : String :=
+  s!"recut-gates: input nodes {((P.defs[P.root]!).body.recut.map (·.1)).toList} are read in leaves of part " ++
+    "of their width, which the gate layout doesn't lay out"
+
 /-- `layout.resolve`: the gate a body-scoped reference denotes in an activation, up through parameters and down through node
 outputs until a primitive. Refused (`recut-gates`, `Program.circuit`'s refusal) in an activation under the root's while
 the root reads an input node recut (`Body.recut`): a gate is one leaf of its width, and the layout has no operand of part
@@ -1704,8 +1709,7 @@ of a gate. An activation of a Definition taken on its own (`Scope.top d _ (some 
 its own parameters and gates, and never reads the root's. -/
 def resolve (P : Prog) (sc : Scope) (r : Ref) : V Nat :=
   if sc.base != P.root || (P.defs[P.root]!).body.recut.isEmpty then Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r)
-  else throw (s!"recut-gates: input nodes {((P.defs[P.root]!).body.recut.map (·.1)).toList} are read in leaves of part " ++
-    "of their width, which the gate layout doesn't lay out")
+  else throw (recutGates P)
 
 theorem resolve_run {P : Prog} {sc : Scope} {r : Ref} {a : Nat} (h : resolve P sc r = .ok a) :
     Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r) = .ok a := by
@@ -1783,8 +1787,10 @@ def Prog.child (P : Prog) (sc : Scope) (k m : Nat) : Scope :=
   let node := body.nodes[k]!
   .child sc node.fn (sc.off + body.offsets[k]! + m * (P.defs[node.fn]!).gates) k m
 
-/-- Member `m` of a primitive node, or the node itself: its operands, per argument in order, repeats kept (§6). -/
+/-- Member `m` of a primitive node, or the node itself: its operands, per argument in order, repeats kept (§6). Refused
+where `resolve` refuses, an argument or none. -/
 def operands (P : Prog) (sc : Scope) (node : Node) (m : Nat) : V (Array Nat) := do
+  if sc.base == P.root && !(P.defs[P.root]!).body.recut.isEmpty then throw (recutGates P)
   let callee := P.defs[node.fn]!
   let mut ops := #[]
   for i in [0:node.args.size] do
@@ -1792,6 +1798,30 @@ def operands (P : Prog) (sc : Scope) (node : Node) (m : Nat) : V (Array Nat) := 
     let cnt := if node.form == .batch && a.dims.isSome then (callee.params[i]!.2).leaves else a.seq.count
     for t in [0:cnt] do ops := ops.push (← resolve P sc (if node.form == .batch then a.memberRef m t else a.seq.get t))
   return ops
+
+theorem operands_of {P : Prog} {sc : Scope} (h : sc.base ≠ P.root ∨ (P.defs[P.root]!).body.recut = #[]) (node : Node)
+    (m : Nat) : operands P sc node m = (do
+      let callee := P.defs[node.fn]!
+      let mut ops := #[]
+      for i in [0:node.args.size] do
+        let a := node.args[i]!
+        let cnt := if node.form == .batch && a.dims.isSome then (callee.params[i]!.2).leaves else a.seq.count
+        for t in [0:cnt] do ops := ops.push (← resolve P sc (if node.form == .batch then a.memberRef m t else a.seq.get t))
+      return ops : V (Array Nat)) := by
+  have hc : (sc.base == P.root && !(P.defs[P.root]!).body.recut.isEmpty) = false := by
+    rcases h with h | h <;> simp [h]
+  unfold operands
+  rw [hc]
+  rfl
+
+theorem operands_cond {P : Prog} {sc : Scope} {node : Node} {m : Nat} {ops : Array Nat}
+    (h : operands P sc node m = .ok ops) : sc.base ≠ P.root ∨ (P.defs[P.root]!).body.recut = #[] := by
+  cases hc : (sc.base == P.root && !(P.defs[P.root]!).body.recut.isEmpty)
+  · simp only [Bool.and_eq_false_iff, beq_eq_false_iff_ne, Bool.not_eq_false', Array.isEmpty_iff] at hc
+    exact hc
+  · unfold operands at h
+    rw [hc] at h
+    cases h
 
 /-- One step of locating gate `g` from an activation: its primitive, operands and activation when the node holding it is a
 primitive's, else the activation of the node's member that holds it. -/
@@ -1808,8 +1838,24 @@ def gateStep (P : Prog) (g : Nat) (sc : Scope) : V ((Nat × Array Nat × Scope) 
 
 /-- A gate's primitive and operands (`layout.Circuit.gate`): located through the offsets along the call hierarchy. -/
 def Prog.gate (P : Prog) (g : Nat) : V (Nat × Array Nat × Scope) := do
+  if !(P.defs[P.root]!).body.recut.isEmpty then throw (recutGates P)
   if g ≥ (P.defs[P.root]!).gates then throw s!"gate {g} outside the circuit"
   Steps.run "gate location" (gateStep P g) Steps.FUEL P.rootScope
+
+theorem Prog.gate_of {P : Prog} (h : (P.defs[P.root]!).body.recut = #[]) (g : Nat) : P.gate g = (do
+    if g ≥ (P.defs[P.root]!).gates then throw s!"gate {g} outside the circuit"
+    Steps.run "gate location" (gateStep P g) Steps.FUEL P.rootScope : V (Nat × Array Nat × Scope)) := by
+  unfold Prog.gate
+  rw [h]
+  rfl
+
+theorem Prog.gate_recut {P : Prog} {g : Nat} {x : Nat × Array Nat × Scope} (h : P.gate g = .ok x) :
+    (P.defs[P.root]!).body.recut = #[] := by
+  cases hc : (P.defs[P.root]!).body.recut.isEmpty
+  · unfold Prog.gate at h
+    rw [hc] at h
+    cases h
+  · exact Array.isEmpty_iff.mp hc
 
 /-- A Program's canonical layout (§6) read gate by gate, as `Prog.gate` locates each gate: the width of its value in bits,
 whether it is an input gate, whether it is an input bound at registration (`RegisteredInput<w>_v1`, §5.2), and the gates

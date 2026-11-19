@@ -1063,11 +1063,17 @@ inductive Reach (P : Prog) (g : ℕ) : Flock.Program.Scope → Prop
   | root : Reach P g P.rootScope
   | step {sc sc' : Flock.Program.Scope} : Reach P g sc → Flock.Program.gateStep P g sc = .ok (.inr sc') → Reach P g sc'
 
+theorem walkable_recut (P : Prog) (h : Desc.walkable P = true) : (P.defs[P.root]!).body.recut = #[] := by
+  unfold Desc.walkable Desc.resolvable at h
+  simp only [Bool.and_eq_true] at h
+  exact Array.isEmpty_iff.mp h.2.1.1.2
+
 /-- **`Prog.gate`'s walk goes down to a primitive**: on a Program its decoder laid out, every gate of the root's is located
 within the root's depth of steps, where the operands of each primitive node's member resolve in the activations the walk
 visits (`Reach`). -/
 theorem gate_ok_of (P : Prog) (hc : Desc.calleesFirst P = true) (hlo : ∀ d < P.defs.size, LaidOut P d)
     (hr : P.root < P.defs.size) (hrp : (P.defs[P.root]!).prim = false)
+    (hrc : (P.defs[P.root]!).body.recut = #[])
     (hfuel : (Desc.depths P)[P.root]! < Flock.Steps.FUEL) {g : ℕ} (hg : g < (P.defs[P.root]!).gates)
     (hops : ∀ sc, Reach P g sc → Holds P g sc → ∀ k < (P.defs[sc.d]!).body.nodes.size,
       (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true → ∀ m < ((P.defs[sc.d]!).body.nodes[k]!).members, ∀ e,
@@ -1084,7 +1090,8 @@ theorem gate_ok_of (P : Prog) (hc : Desc.calleesFirst P = true) (hlo : ∀ d < P
     ⟨Reach.root, ⟨hr, hrp, Nat.zero_le _, (by show g - 0 < (P.defs[P.root]!).gates; omega)⟩⟩ hfuel
   have hng : ¬ (g ≥ (P.defs[P.root]!).gates) := by omega
   refine ⟨b, ?_⟩
-  simp only [Flock.Program.Prog.gate, hng, ite_false, bind, Except.bind]
+  rw [Flock.Program.Prog.gate_of hrc]
+  simp only [hng, ite_false, bind, Except.bind]
   exact hb
 
 /-- **`Desc.walkable` leaves the descent its fuel.** -/
@@ -1169,7 +1176,7 @@ theorem gateStep_inr (P : Prog) (g : ℕ) (sc sc' : Flock.Program.Scope)
 
 theorem operands_nil (P : Prog) (sc : Flock.Program.Scope) (node : Flock.Program.Node) (m : ℕ) (ops : Array ℕ)
     (hargs : node.args = #[]) (h : Flock.Program.operands P sc node m = .ok ops) : ops = #[] := by
-  unfold Flock.Program.operands at h
+  rw [Flock.Program.operands_of (Flock.Program.operands_cond h)] at h
   simp [hargs, pure, Except.pure, bind, Except.bind] at h
   first | exact h | exact h.symm
 
@@ -1179,7 +1186,7 @@ theorem gate_reads_of (P : Prog) (hb : Desc.bodiesLaidOut P = true) {g p : ℕ} 
     {sc : Flock.Program.Scope} (h : P.gate g = .ok (p, ops, sc)) :
     (∃ w, (P.defs[p]!).ret = .value w) ∧ (Flock.Program.isInputId (P.defs[p]!).key = true → ops = #[]) := by
   obtain ⟨hr, -, hret, hinp⟩ := bodiesLaidOut_spec P hb
-  unfold Flock.Program.Prog.gate at h
+  rw [Flock.Program.Prog.gate_of (Flock.Program.Prog.gate_recut h)] at h
   by_cases hge : g ≥ (P.defs[P.root]!).gates
   · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
   simp only [hge, ite_false, bind, Except.bind] at h
@@ -1241,7 +1248,7 @@ theorem gatesLocated_of (hO : OperandsResolve) (hE : OperandsEarlier) : GatesLoc
     rw [getElem!_neg P.defs P.root (by omega)] at hg'
     have h0 : (default : Flock.Program.Defn).gates = 0 := rfl
     omega
-  obtain ⟨⟨p, ops, sc⟩, hx⟩ := gate_ok_of P hc hlay hr hrp (depth_lt_fuel P hwk) hg
+  obtain ⟨⟨p, ops, sc⟩, hx⟩ := gate_ok_of P hc hlay hr hrp (walkable_recut P hwk) (depth_lt_fuel P hwk) hg
     (hO bytes P hdec hov hlo hin hwk han g hg)
   obtain ⟨⟨w, hw⟩, hinp⟩ := gate_reads_of P hb hx
   exact ⟨p, ops, w, ⟨⟨sc, hx⟩, hw, hinp⟩, hE bytes P hdec hov hlo hin hwk han g hg p ops sc hx⟩

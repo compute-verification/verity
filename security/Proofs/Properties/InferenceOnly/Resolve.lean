@@ -243,7 +243,7 @@ def OpsQ (P : Prog) (sc : Scope) (node : Node) (m : ℕ) (ops : Array ℕ) : Pro
 the count `operands` reads it to. -/
 theorem operands_spec (P : Prog) (sc : Scope) (node : Node) (m : ℕ) (ops : Array ℕ)
     (h : operands P sc node m = .ok ops) : OpsQ P sc node m ops := by
-  unfold operands at h
+  rw [operands_of (operands_cond h)] at h
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', bind, Except.bind] at h
   split at h
   · cases h
@@ -498,7 +498,7 @@ def WalkQ (P : Prog) (g : ℕ) (sc : Scope) : Prop :=
 /-- **Every operand is an earlier gate**, on bodies `BodyOk` wherever the walk reaches. -/
 theorem gate_operands_lt {g p : ℕ} {ops : Array ℕ} {sc : Scope} (h : P.gate g = .ok (p, ops, sc)) :
     ∀ a ∈ ops, a < g := by
-  unfold Prog.gate at h
+  rw [Prog.gate_of (Prog.gate_recut h)] at h
   by_cases hge : g ≥ (P.defs[P.root]!).gates
   · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
   simp only [hge, ite_false, bind, Except.bind] at h
@@ -609,9 +609,5 @@ theorem operandsEarlier_of (hB : BodiesOk) : Walk.OperandsEarlier := by
   exact gate_operands_lt P ⟨hr, hrp⟩ (hB bytes P hdec hov hlo hin hwk han) hlay hx a ha
 
 /-- `Desc.walkable` checks `Desc.resolvable`, so a walkable Program's root reads no input node recut. -/
-theorem walkable_recut (P : Prog) (h : Desc.walkable P = true) : (P.defs[P.root]!).body.recut = #[] := by
-  unfold Desc.walkable Desc.resolvable at h
-  simp only [Bool.and_eq_true] at h
-  exact Array.isEmpty_iff.mp h.2.1.1.2
 
 end InferenceOnlyVerifier.Properties.SecurityProofs.Resolve

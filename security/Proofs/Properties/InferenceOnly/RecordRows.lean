@@ -188,7 +188,7 @@ gates or a leaf of one of the unit's reader rows. -/
 theorem returnsOwn (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) : ReturnsOwn P rs W := by
-  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hP.2.2.2.2.1
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
   intro tid u sc out l g lo hi' hu ho
   cases hp : (P.defs[sc.d]!).prim with
   | true => exact Or.inl (returnsOwn_prim hP hrs hu hp ho).2
@@ -222,7 +222,7 @@ earlier gate of the unit or a leaf of one of the unit's reader rows. -/
 theorem operandsOwn (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) : OperandsOwn P rs W := by
-  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hP.2.2.2.2.1
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
   intro tid u sc g p ops sc' hu hlo hhi hgate o ho
   cases hp : (P.defs[sc.d]!).prim with
   | true =>
@@ -275,7 +275,7 @@ is a leaf of one row at most, at one place. -/
 theorem ownRows_holds (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs) :
     OwnRows P rs W := by
-  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hP.2.2.2.2.1
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
   obtain ⟨hr, hrp, hL, -⟩ := read_bodies hP
   obtain ⟨hov, hlay⟩ := read_walk hP
   have hP' := hP

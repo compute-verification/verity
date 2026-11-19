@@ -328,7 +328,7 @@ theorem gate_input {q x p : ℕ} {ops : Array ℕ} {sc : Scope} (hq : q < (P.def
     omega
   have hprim : (P.defs[((P.defs[P.root]!).body.nodes[q]!).fn]!).prim = true := by
     simp only [InferenceOnlyVerifier.Desc.isInputNode, Bool.and_eq_true] at hin; exact hin.1
-  unfold Prog.gate at h
+  rw [Prog.gate_of (Prog.gate_recut h)] at h
   have hng : ¬ (x ≥ (P.defs[P.root]!).gates) := by omega
   simp only [hng, ite_false, bind, Except.bind] at h
   rw [fuel_succ, Flock.Steps.run.eq_2] at h
@@ -419,7 +419,7 @@ theorem causal_of_facts {bytes : ByteArray} {P : Prog} {s : Schedule} {kl ke q' 
     (C : Claims.Sampling.Prog) (hF : Flattens P C) :
     ∀ t < s.window, ∀ t' < s.window, t < t' → ∀ ℓ σ, ∀ g ∈ NetTiming.slotGates ((scanLayout P s).egress t ℓ σ),
       ∀ i ∈ (scanLayout P s).ingress t', ¬ NetTiming.Depends C i g := by
-  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P F.walk
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P F.walk
   obtain ⟨hr, hrprim, -⟩ := BodiesOk.decode_root bytes P hdec
   obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P hdec
   obtain ⟨S, hS0, hS⟩ := BodiesOk.order_closed P hov

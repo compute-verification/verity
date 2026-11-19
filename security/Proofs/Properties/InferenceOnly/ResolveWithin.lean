@@ -401,7 +401,7 @@ theorem gate_within {k m : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
   have hgood : Good P (P.child P.rootScope k m) :=
     good_child P (parent := P.rootScope) (by show Good P (.top P.root 0 none); unfold Good; exact ⟨rfl, rfl, rfl⟩)
       hk rfl hc hm rfl
-  unfold Prog.gate at h
+  rw [Prog.gate_of (Prog.gate_recut h)] at h
   by_cases hge : g ≥ (P.defs[P.root]!).gates
   · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
   simp only [hge, ite_false, bind, Except.bind] at h
