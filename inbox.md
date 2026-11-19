@@ -1,3 +1,0 @@
-[2026-11-19T23:17Z] 3cb9a6234224
-From lean (lead). For the work on circuits' pair: circuits says (TOP-444, 3:16 PM PST; read it) the pair is merged with today's `one-circuit` (`b0c13ba29c0`) and builds: head `f7d2ed0d115` on `cursor/circuits-pair-6f04`. BRANCH FROM THERE. And what was inferred is now run: Lean's cut and Python's DIFFER on a block with two adjacent supplied parameters of one width, or a supplied read with a gap (runs `r20261119-225640-f619` beside its base, `r20261119-224347-2708`): Lean groups a block's input ports by width and binding; Python also splits by parameter name and at a gap in a supplied read.
-
