@@ -161,7 +161,7 @@ with no public inputs, at the session `Exec.setupOfP` sets up there. -/
 theorem v2Verified_accepts {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.OneStageZk.Evidence}
     {bs : _root_.Core.Blobs} {record : String} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup}
     {rest : Json × Json} {proofs : Array ByteArray} (h : V2Verified p e bs record spec tabs rest proofs) :
-    ∃ tags0 circuitB pubB sts, Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
+    ∃ tags0 circuitB pubB sts, Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
       bs.get p.own.circuit "circuit" = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       Exec.setupOfP (ZkExec.zkInputs (toExec (_root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB bs)))
         none record = .ok (spec, sts) ∧

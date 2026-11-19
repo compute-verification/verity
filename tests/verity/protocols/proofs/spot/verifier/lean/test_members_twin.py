@@ -2,8 +2,8 @@
 form (`members.check`, the executable's ``check``) on a window of two members whose sessions' trees the challenger
 session opens one after another, each closed after its session's evidence.
 
-The files are stand-ins, so no member's files are held: an audit with nothing else wrong ends at its first member's
-circuit, which does not parse, on both sides and before any session, and each other row changes one thing and reads
+The public files are stand-ins, so no member's files are held: an audit with nothing else wrong ends at its first
+member's public file, which does not load, on both sides and before any session (its circuit is C_S, derived), and each other row changes one thing and reads
 Lean's reason off the twin. An audit's sample holds a unit of each member (`Audit`'s `sampled`), so no statement is of
 a member it missed; where it misses a member that has a statement, both refuse that statement before any member's file
 is read (`OneStageZk.sampledHeld`). A case every session accepts, which Lean accepts, is a whole audit's, which
@@ -15,10 +15,8 @@ closed after other evidence or never closed, a tree the log does not show, one t
 session records, and trees opened in another order or before the one before is closed. What it refuses of a session's
 tree as any session's (`session_tree_reason`) is `test_challenger_difftest.py`'s.
 
-Three rows are where the twin is not Lean's step for step (the module's docstring). One is here: a circuit file whose
-META names another ``vus_per_block`` than the parameters' and that does not parse, which Lean refuses for not parsing
-and the twin for its ``vus_per_block``. The other two are not run. A session whose link's ``root_B`` is not the length
-its statement fixes, which Lean refuses by `challenger.LINK_ROOT_LEN` and the twin's session's own verdict rejects,
+Three rows are where the twin is not Lean's step for step (the module's docstring); none is run here. A session whose
+link's ``root_B`` is not the length its statement fixes, which Lean refuses by `challenger.LINK_ROOT_LEN` and the twin's session's own verdict rejects,
 needs a statement Lean sets up, on real files, under a release log this file's challenger signs, and
 `test_challenger_difftest.py` holds the two sides of the trees' check with and without the length. A member whose
 circuit parses and is outside the scope's rules, or whose ports' roots are, which Lean refuses with its files and the
@@ -56,7 +54,6 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
 from verity.protocols.proofs.spot.prover import docket as DK
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from holes import waits_on
 from test_challenger_difftest import Ledger, TreeSession, _pinned, lms_verify
 from test_difftest import (LEAF, PAIR, RECEIVED, SCHEME, TRIPLE, V2_TABLES, WINDOW, Setup, _challenger_sample,
                            _json)
@@ -142,7 +139,7 @@ class Audit:
                          "statement": {}, "proofs": {"statements": statements},
                          "sessions": [s["name"] for st in statements for s in st["sessions"]]}
         members = {name: {"public": self.put(json.dumps({"member": name}).encode() + b"\nnot a public file"),
-                          "registered": None, "block": k, "vus_per_block": 4} for k, name in enumerate((A, B))}
+                          "registered": None, "block": k, "vus_per_block": 1} for k, name in enumerate((A, B))}
         self.params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
                        "law": DESIGN, "leaf_layer": LEAF, "log": [], "partition": self.partition,
                        "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
@@ -194,10 +191,9 @@ class Audit:
         return why
 
 
-@waits_on("restrict", "lower")
 def test_the_twin_answers_leans_reason_on_each_refusal_of_the_per_member_run(tmp_path):
     """On an audit with nothing wrong but its stand-in files, Lean's check ends at the first member's files, its
-    circuit one that does not parse, and the twin answers that reason, the Flock verifier's own (`members.flock_form`);
+    public file one that does not load, and the twin answers that reason, the Flock verifier's own (`members.flock_form`);
     neither verifies a session. Each change below is refused by both with one reason, before any session is verified:
     the statements out of the members' order, a statement of a
     member the parameters don't name, a second statement of one member, a statement of two sessions, a record or a proof
@@ -245,10 +241,9 @@ def test_the_twin_answers_leans_reason_on_each_refusal_of_the_per_member_run(tmp
                   f"{'bb' * 64}): a value the window registers is one tree", params=two)
     why, (run, refused) = a.ask(tmp_path / "honest")
     assert run is None and why == M.run_reason(run, refused), (why, refused)
-    assert why.startswith(f"proofs: member {A}: {M.UNREAD[0]}"), why
+    assert why.startswith(f"proofs: member {A}: {M.UNREAD[1]}"), why
 
 
-@waits_on("restrict", "lower")
 def test_a_member_with_no_statement_has_its_files_held_by_both_before_any_session(tmp_path):
     """A window audited with a statement of its second member alone, that statement's tree logged and closed: Lean
     holds every member's files, sampled or not (`OneStageZk.membersFiles`), so it refuses the first member, which has
@@ -257,10 +252,9 @@ def test_a_member_with_no_statement_has_its_files_held_by_both_before_any_sessio
     assert [st["member"] for st in a.evidence["proofs"]["statements"]] == [B] and a.evidence["sessions"] == ["s1"]
     why, (run, refused) = a.ask(tmp_path / "no-statement")
     assert run is None and why == M.run_reason(run, refused), (why, refused)
-    assert why.startswith(f"proofs: member {A}: {M.UNREAD[0]}"), why
+    assert why.startswith(f"proofs: member {A}: {M.UNREAD[1]}"), why
 
 
-@waits_on("restrict", "lower")
 def test_a_member_with_no_session_has_its_public_files_header_and_rows_held_by_both(tmp_path):
     """A window audited with a statement of its second member alone, its first member's files a circuit a prover
     staged and that circuit's public file: Lean holds the public file's header and rows as a session's setup takes
@@ -286,7 +280,7 @@ def test_a_member_with_no_session_has_its_public_files_header_and_rows_held_by_b
             header(h)
         public = a.put(json.dumps(h, separators=(",", ":"), sort_keys=True).encode() + b"\n"
                        + (body if rows is None else rows(body)))
-        why, (run, refused) = a.ask(tmp_path / "held", params=a.members(A, public=public, vus_per_block=2))
+        why, (run, refused) = a.ask(tmp_path / "held", params=a.members(A, public=public))
         assert run is None and why == M.run_reason(run, refused), (why, refused)
         assert why.startswith(f"proofs: member {A}: "), why
         return why.removeprefix(f"proofs: member {A}: ")
@@ -303,14 +297,13 @@ def test_a_member_with_no_session_has_its_public_files_header_and_rows_held_by_b
         f"refused: {HEADER_WHY} (row r0: schema is not hm96-sha512/row/v2){FORM}")
 
 
-@waits_on("restrict", "lower")
 def test_a_member_no_statement_names_is_held_to_its_own_circuits_lookup_tables(tmp_path):
     """A window audited with a statement of its second member alone: the first member, which no statement names, is
     held to its own circuit's lookup tables among the blobs as a sampled one is (`OneStageZk.ownTables`, the first read
     of every member's files), before any session. With its circuit looking up ``rcp`` where the blobs hold no table,
     both refuse it for the tables. The other way, blobs holding a file under ``rcp``'s pinned digest where its circuit
     looks up none: the twin does not refuse it for the table, and answers as it does without it, at the member's
-    circuit, a stand-in that does not parse. Lean's check finds a blob by the SHA-512 of its bytes, so its side of that
+    public file, a stand-in that does not load. Lean's check finds a blob by the SHA-512 of its bytes, so its side of that
     row needs the table's own bytes, which this suite does not load: both sides on the table itself are
     `benchmarks/one_stage`'s (``tests/test_members_tables.py``)."""
     a = Audit("members-twin-no-statement-tables", opened=(B,))
@@ -320,7 +313,7 @@ def test_a_member_no_statement_names_is_held_to_its_own_circuits_lookup_tables(t
     held = M.members_run(_json(a.params), _json(a.rec), _json(a.evidence),
                          blobs | {PF.MUFU_SHA512["rcp"]: next(iter(blobs.values()))}, program=a.s.program,
                          verify=lms_verify, verdict=_never)
-    assert held == plain and held[0] is None and held[1].startswith(f"member {A}: {M.UNREAD[0]}"), (held, plain)
+    assert held == plain and held[0] is None and held[1].startswith(f"member {A}: {M.UNREAD[1]}"), (held, plain)
 
 
 def test_the_twin_answers_leans_reason_on_the_logs_order_and_the_registrations_roots(tmp_path):
