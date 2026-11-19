@@ -132,3 +132,14 @@ def test_the_block_lowers(pieces, units):
     text, _ = chain()
     out = json.loads(pieces.call("restrict", {"descriptor": text, "units": list(units), "python": python(units)})[1])
     assert out["lowers"] is None, out["lowers"]
+
+
+@pytest.mark.parametrize("units", [[0], [0, 1], [1]])
+def test_a_C_that_reads_a_supplied_input_at_another_width_is_refused_as_python_refuses_it(pieces, units):
+    """`test_restrict`'s C whose unit reads a supplied input of 16-bit leaves as its bits: Python refuses every block of it
+    (`E_RECUT`), and so does Lean."""
+    T = toys()
+    c = b"".join(T.descriptor_chunks(T.supplied_bits())).decode()
+    kind, body = pieces.call("restrict", {"descriptor": c, "units": units, "python": c})
+    print("lean restrict on a recut supplied read", units, kind, body)
+    assert kind == "reject", body

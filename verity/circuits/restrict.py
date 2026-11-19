@@ -576,6 +576,9 @@ def restrict(c: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, 
     """`compact (restrict C S)` for S the gates of ``units`` (module docstring: the index, the block and the object);
     ``D``: C decoded, when the caller holds it."""
     D = D if D is not None else program(c) if bits is None else bits.D
+    if D.root.body.recut:
+        raise Refused("E_RECUT", f"C's root reads input nodes {sorted(D.root.body.recut)} in leaves of part of their width, "
+                                 "which the gate layout doesn't lay out (`Program.circuit`'s recut-gates)")
     words = unit_gates(D, partition, units)
     ins, outs = front(D, words)
     prog = _build(D, words, ins, outs)

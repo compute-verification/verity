@@ -173,4 +173,3 @@ def test_a_body_with_a_scan_is_refused():
     with pytest.raises(LY.Unlaid) as e:
         LY.lay(_program(body, A4), lambda *_a: False)
     assert e.value.code == "lay-scan"
-

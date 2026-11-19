@@ -18,8 +18,8 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate_region
 from verity.circuits.population import wired_population_program
 from verity.circuits.program import Program, input_id
-from verity.circuits.refs import array_of, tuple_of
-from verity.circuits.types import Array, Tuple
+from verity.circuits.refs import Affine, Coll, array_of, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 
 _SPEC = importlib.util.spec_from_file_location("restrict_chain", Path(__file__).parent / "ops/test_boolean_block_circuit.py")
 _BB = importlib.util.module_from_spec(_SPEC)
@@ -292,6 +292,37 @@ def test_a_wired_populations_supplied_value_is_a_supplied_input_of_each_block_th
     b = R.restrict(c, TOY_PARTITION, units, bits)
     assert b.program.bindings.count(R.SUPPLIED) == 1
     assert R.listing_of(b.descriptor).split(b"\n")[2:2 + len(b.input_bits)].count(b"supplied") == 4
+
+
+#: a supplied salt of twelve 16-bit leaves, which a unit reads as its 192 bits
+SALT = {"supplied": "pous.setup.salt/v1", "args": {}, "layout": "le", "bits": 192}
+W = bind(CompositeDefinition("RestrictToyW", 1, (), lambda S: ((("a", A4), ("k", Array(192, BL.BIT))), A4),
+                             lambda B, S, a, k: array_of([B.call(BL.XOR, BL.operands(a[i], k[5 * i + 3])) for i in range(4)]),
+                             register=False))
+BITS_PARTITION = {"query": {"name": "Q_template_instances", "version": 0, "params": {"templates": [descriptor_id(W),
+                                                                                                    descriptor_id(T)]}}}
+
+
+def supplied_bits() -> Program:
+    """u0 = W(x, s read as its 192 bits), s supplied in 16-bit leaves, then u1 = T(u0, x)."""
+    def body(B, S, x, s):
+        sp, ix, _ = s.refs[0]
+        return B.call(T, B.call(W, x, Coll(Array(192, BL.BIT), Affine(sp, ix, 0, 192))), x)
+    return Program(CompositeDefinition("RestrictToySuppliedBits", 1, (), lambda S: ((("x", A4), ("s", Array(12, Value(16)))), A4),
+                                       body, register=False), supplied={"s": SALT})
+
+
+#: the cut toys whose C reads an input at another width than its leaves', with the blocks the tests ask for
+RECUT_TOYS = {"supplied_bits": (supplied_bits, [[(0, 1)], [(0, 2)], [(1, 2)]])}
+
+
+@pytest.mark.parametrize("units", RECUT_TOYS["supplied_bits"][1])
+def test_a_block_of_a_C_that_reads_a_supplied_input_at_another_width_is_refused_by_name(units):
+    program = supplied_bits()
+    assert program.root.body.recut == {1: 16} and program.bindings == ("run", "supplied")
+    c = b"".join(descriptor_chunks(program))
+    with pytest.raises(R.Refused, match="E_RECUT"):
+        R.restrict(c, BITS_PARTITION, units, R.Bits(R.program(c)))
 
 
 def test_a_block_that_reads_no_supplied_value_has_no_supplied_input():
