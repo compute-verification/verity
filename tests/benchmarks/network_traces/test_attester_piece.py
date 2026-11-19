@@ -153,10 +153,12 @@ def _serve_dir(d: Path, network_attester: dict, records: list[dict] | None = Non
     return d
 
 
-def _chain_out(d: Path, verdict: str, w: int, registrations: tuple | list = (), witness: Path | None = None) -> Path:
+def _chain_out(d: Path, verdict: str, w: int, registrations: tuple | list = (), witness: Path | None = None,
+               steps: dict | None = None) -> Path:
     """What the chain leaves in its run dir's out/: its report and the endpoint's; and on its private side
     (``witness``, D/witness by default, which `_copied` copies to the chain's quarantine), the scan's answers: its one
-    execution phase, with the row registrations ``registrations``."""
+    execution phase, with the row registrations ``registrations``. ``steps`` (step -> its verdict and why) is the
+    report's steps, its why each step's not accepted as `chain_record.report` writes it."""
     out, witness = d / "out", witness or d / "witness"
     (witness / "scan").mkdir(parents=True)
     (out / "report").mkdir(parents=True)
@@ -164,8 +166,11 @@ def _chain_out(d: Path, verdict: str, w: int, registrations: tuple | list = (), 
     (out / "endpoint" / "report.json").write_text(json.dumps({"chain": {"bits": {"commit_windows": [
         {"window": K, "requests": 3, "carried": 0, "outputs": 12, "t0_s": 0.5}]}}}))
     (out / "scan" / "joint").mkdir(parents=True)
-    (out / "report" / "report.json").write_text(json.dumps({"verdict": verdict, "why": None if verdict == "accepted"
-                                                            else {"n2": "a window refused"}}))
+    report = {"verdict": verdict, "why": None if verdict == "accepted" else {"n2": "a window refused"}}
+    if steps is not None:
+        report = {"verdict": verdict, "steps": steps,
+                  "why": {k: f"{s['verdict']}: {s['why']}" for k, s in steps.items() if s["verdict"] != "accepted"} or None}
+    (out / "report" / "report.json").write_text(json.dumps(report))
     (witness / "scan" / "answers.json").write_text(json.dumps({"registration": {"program": "ab" * 64}, "windows": [
         {"window": w, "registration": {"program": "ab" * 64}, "answer": {"verdict": "accept"},
          "registrations": list(registrations)}]}))
@@ -343,13 +348,13 @@ def test_records_the_rows_audit_refuses_are_the_pieces_reject_before_any_chain(t
     assert rec is None and (line["composed"], line["by"]) == ("reject", ["the network certifier"])
 
 
-def _decide(tmp_path, network_attester, verdict="accepted", w=None, records=None, check=None):
+def _decide(tmp_path, network_attester, verdict="accepted", w=None, records=None, check=None, steps=None):
     d = _serve_dir(tmp_path / "serve", network_attester, records)
 
     def chain(keep, run, ep, windows):
         assert sorted(p.name for p in ep.iterdir()) == sorted(CP.ENDPOINT) and windows == network_attester["windows"]
         _chain_out(keep / run / "chain", verdict, network_attester["w"] if w is None else w,
-                   witness=CP.chain_witness(keep, run))
+                   witness=CP.chain_witness(keep, run), steps=steps)
         return 0
     (tmp_path / "dir").mkdir()
     a, unpacked = CP.decide(d, K, tmp_path / "dir", chain=chain, check=check or (lambda c, p: pytest.fail("no check")),
@@ -375,6 +380,29 @@ def test_a_refused_chain_a_request_off_the_scans_phase_and_a_rejected_period_are
         assert a["verdict"] == "reject" and "spans execution phases" in a["reason"]
     rejected = CP.answer("reject", "window 0: certificates")
     assert _decide(tmp_path / "period", network_attester, check=lambda c, p: rejected) == rejected
+
+
+#: a network attester chain's steps (`chain_record.report`'s) with every step accepted
+STEPS = {k: {"verdict": "accepted", "why": None} for k in ("custody", "certificates", "endpoint", "tie", "n2", "scan")}
+#: N2 crashed (its tool exited 1 with no summary: `chain_record.n2_step`'s ``failed``), every other step accepted
+CRASHED = STEPS | {"n2": {"verdict": "failed", "why": "N2ZK failed: NoBooleanBody"}}
+
+
+def test_a_chain_step_that_crashed_is_not_run_and_one_that_refused_is_a_reject(tmp_path, network_attester):
+    """A step that failed or didn't run (``failed``, ``not run``, no verdict) is no verdict of the protocol: the piece
+    can't run (`NotRun`, naming the step and its why), never a reject. A step that ran and refused is the chain's
+    reject, beside a crashed one too, and every step accepted goes on to the period check."""
+    for step, v in (("n2", "failed"), ("tie", "not run"), ("scan", None)):
+        steps = STEPS | {step: {"verdict": v, "why": "it exited 1"}}
+        with pytest.raises(CP.NotRun, match=f"^the chain's {step} didn't run to a verdict: "):
+            _decide(tmp_path / step, network_attester, "refused", steps=steps)
+    refused = STEPS | {"tie": {"verdict": "refused", "why": "window 0's ingress isn't its request"}}
+    for name, steps in (("refused", refused), ("both", CRASHED | {"tie": refused["tie"]})):
+        a = _decide(tmp_path / name, network_attester, "refused", steps=steps)
+        assert a["verdict"] == "reject" and a["reason"].startswith('the chain refused: {"') and (
+            "refused: window 0's ingress isn't its request" in a["reason"]), a
+    accepted = CP.answer("accept", "")
+    assert _decide(tmp_path / "accepted", network_attester, "accepted", steps=STEPS, check=lambda c, p: accepted) == accepted
 
 
 LOOP = "while :; do :; done"
@@ -435,16 +463,17 @@ def _refused_leg(rec: dict | None, line: dict, why: str) -> None:
     assert "the network certifier" not in line["missing"] and "certifier" not in line["record_missing"]
 
 
-@pytest.mark.parametrize("case", ["no kept run", "corrupt fetch", "no report", "no build", "no rows build",
-                                  "time limit", "foreign answer"])
+@pytest.mark.parametrize("case", ["no kept run", "corrupt fetch", "no report", "crashed step", "no build",
+                                  "no rows build", "time limit", "foreign answer"])
 def test_a_step_that_cant_run_refuses_and_leaves_the_attester_refused_by_its_sentence(case, tmp_path, network_attester, capsys, monkeypatch):
     """The front's failures (the gate refusing or busy, its tunnel or ssh) keep no run; a corrupt fetch, a chain that
-    ends without a report, a missing Lean build (``network-period``'s or ``network-rows``'), SIGTERM from the piece's time limit and a check that answers no
+    ends without a report or with a step that crashed, a missing Lean build (``network-period``'s or ``network-rows``'), SIGTERM from the piece's time limit and a check that answers no
     certifier/v0 verdict can't run: each leaves DIR/refused.txt and its log, no answer, and the attester refused by that sentence."""
     d = _serve_dir(tmp_path / "serve", network_attester, kept=case != "no kept run")
     if case == "corrupt fetch":
         (d / CP.PRIVATE / RUN / "fetch.tar.gz").write_bytes(b"not a tarball")
-    chain = _chain_out(tmp_path / "chain", "accepted", network_attester["w"])
+    chain = _chain_out(tmp_path / "chain", "refused" if case == "crashed step" else "accepted", network_attester["w"],
+                       steps=CRASHED if case == "crashed step" else None)
     pids = tmp_path / "pids"
     cmd = {"no report": "exit 7", "time limit": f'({LOOP}) & echo "$$ $!" > {shlex.quote(str(pids))}; '
                                                 f'kill -TERM "$PPID"; {LOOP}'}.get(case)
@@ -460,6 +489,7 @@ def test_a_step_that_cant_run_refuses_and_leaves_the_attester_refused_by_its_sen
     assert {p.name for p in piece.iterdir()} - {"piece.json"} == {CP.REFUSED, "piece.log"}, why
     assert _refused_row(tmp_path / "pieces", why)
     assert {"no kept run": "no network attester run kept", "corrupt fetch": "fetch.tar.gz: ReadError", "no report": "the chain wrote no report (exit 7)",
+            "crashed step": "the chain's n2 didn't run to a verdict: {\"n2\": \"failed: N2ZK failed: NoBooleanBody\"}",
             "no build": "network-period check: FileNotFoundError",
             "no rows build": "network-rows check: FileNotFoundError", "time limit": "SIGTERM: the piece's time limit",
             "foreign answer": "the protocol 'other', not verity/certifier/v0"}[case] in why

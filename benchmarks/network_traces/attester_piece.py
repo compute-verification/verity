@@ -67,7 +67,8 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
      take every execution phase of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on, and so does
      ``accepted on the period check`` (`chain_record.RESTS`: the scan's acceptance rests on step 5's check, which
-     then decides); any other is a reject with its why.
+     then decides). A report where no step refused and a step failed or did not run (``failed``, ``not run``, no
+     verdict) is `NotRun` naming those steps and their why; any other is a reject with its why.
   4. The period's execution phase is the scan's (``answers.json``'s one window; the chain keeps its scan's answers on
      its private side, `chain_witness`): every window request's release and streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the network attester run and the chain's scan, checked by ``network-period``
@@ -942,6 +943,12 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
                 raise NotRun(f"the chain wrote no report (exit {rc}): see chain/ and the kept run's stdout.log")
         doc = json.loads(report.read_text())
         if doc.get("verdict") not in ("accepted", CR.RESTS):
+            steps = doc.get("steps") or {}
+            ran = {k: steps[k].get("verdict") if k in steps else "refused" for k in doc.get("why") or {}}
+            unran = {k: doc["why"][k] for k, v in ran.items() if v in (None, "failed", "not run")}
+            if unran and "refused" not in ran.values():
+                raise NotRun(f"the chain's {', '.join(unran)} didn't run to a verdict: "
+                             f"{json.dumps(unran, default=str)}"[:1800])
             raise Rejected(f"the chain {doc.get('verdict')}: {json.dumps(doc.get('why'), default=str)}"[:1800])
         answers = chain_witness(keep, run) / "scan" / "answers.json"
         try:
