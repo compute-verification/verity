@@ -1621,7 +1621,7 @@ class GpuBackend:
         params = audit.Params(reg.blocks, 1000, 2, self.gate_samples, 2.0 ** -40, window_ns=1, codec=reg.codec,
                               receipt=reg.receipt, rows=reg.rows)
         session = audit.AuditRun(params, reg, None,
-                                 coins.local(reg.digest, 0, params.windows, secrets.token_bytes, appends=1),
+                                 coins.local(reg.digest, 0, params.windows, secrets.token_bytes, samples=params.samples, appends=1),
                                  clock=lambda: now[0], not_before_ns=0)
         small.arm(dropped)
         coin, prev, kept = session.start(), reg.digest, {}

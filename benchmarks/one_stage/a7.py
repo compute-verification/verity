@@ -332,7 +332,7 @@ def poub_session(req, layout, store, plans: dict[int, list[int]], salts: dict[in
     p = audit.Params(blocks=NR, deadline_ns=10**6, windows=WINDOWS, samples=c3.samples, delta=1e-6, window_ns=10, codec=P512,
                      lifetime=LIFE, schedule_cap=SCHEDULE_CAP)
     clock = Clock()
-    s = audit.AuditRun(p, rs.registration, None, coins.local(rs.registration.digest, 0, p.windows, Entropy(b"a7 coins")),
+    s = audit.AuditRun(p, rs.registration, None, coins.local(rs.registration.digest, 0, p.windows, Entropy(b"a7 coins"), samples=p.samples),
                        not_before_ns=0, clock=clock)
     prover = audit_prover.Prover(rs, None, entropy=Entropy(b"a7 receipt salts"))
     head = MM.Header(rs.registration.digest, NR)
