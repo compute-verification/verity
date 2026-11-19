@@ -217,3 +217,18 @@ def test_across_the_connection_no_message_before_the_end_carries_the_commitment(
         assert all(word not in text for word in ('"commitment"', '"salt"', '"path"')), m
     assert sorted(last["end"]) == ["commitment", "openings"]
     assert prover.calls[-1][1] == C.LiveCommitment.from_json(last["end"]["commitment"])
+
+
+def test_the_session_verifier_refuses_a_step_that_read_a_coin_never_released_by_the_lean_s_name():
+    """`session.verifier.unset` mirrors `Verifier.unset`: a release or a close with its coin reads it, and without it is
+    refused in the Lean's words."""
+    from types import SimpleNamespace
+
+    from verity.protocols.resource_accounting.memory.poub.verifier.session.verifier import unset
+    released, drew = SimpleNamespace(index=1), [(0, 3)]
+    assert unset({"kind": "boundary"}, released, b"c" * C.COIN_BYTES) is None
+    assert unset({"kind": "close", "t": 0}, drew, b"s" * 64) is None
+    assert unset({"kind": "boundary"}, SimpleNamespace(index=None), None) is None
+    assert unset({"kind": "start"}, released, None) == "window 1's challenge left without the challenger's coin"
+    assert unset({"kind": "boundary"}, released, b"") == "window 1's challenge left without the challenger's coin"
+    assert unset({"kind": "close", "t": 0}, drew, None) == "window 0's openings were drawn without the challenger's coins"

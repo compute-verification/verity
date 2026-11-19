@@ -678,6 +678,18 @@ def start_lean(source: bytes, registry: audit.Registry, exe: Path | None, done) 
     return lean
 
 
+def unset(event: dict, out, coin: bytes | None) -> str | None:
+    """`Verifier.unset`: why `event`'s result `out` read a coin the challenger never released (`coin` None or empty);
+    None when it read none or the coin is there."""
+    if coin or out is None or isinstance(out, audit.Verdict):
+        return None
+    if event["kind"] in ("start", "boundary") and out.index is not None:
+        return f"window {out.index}'s challenge left without the challenger's coin"
+    if event["kind"] == "close":
+        return f"window {event['t']}'s openings were drawn without the challenger's coins"
+    return None
+
+
 def accepts(failure: dict | None, verdicts: dict, windows: int, outcome: dict | None) -> tuple[bool, bool]:
     """A session's acceptance at its end, as `(the Lean's, the windows')`: the Lean's `outcome` (its answer to the
     `outcome` request) is `accepted`, and every one of its `windows` window verdicts accepted; each only where no
@@ -844,6 +856,10 @@ class Pair:
         finally:
             self.v._stamp = held
         c = coin(out) if coin is not None else None
+        if coin is not None and got != lv.REFUSED and (why := unset(ev, out, c)) is not None:
+            out, got = None, lv.REFUSED
+        else:
+            why = None
         request = {"op": "event", "node": self.node, "session": self.k, "event": ev,
                    "coin": None if c is None else c.hex()}
         where = t if type(t) is int and t >= 0 else self.s.filling
@@ -856,7 +872,7 @@ class Pair:
         if lean != got:
             return self._disagree(where, ev["kind"], lean, got), False
         if got == lv.REFUSED:
-            raise audit.SessionError("refused by both verifiers")
+            raise audit.SessionError(why or "refused by both verifiers")
         return out, True
 
     def _released(self, label: str, index: int) -> bytes | None:
@@ -1882,7 +1898,7 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
     return 0
 
 
-__all__ = ["AVERAGE", "Pair", "TIME_HELD", "UNRECORDED_SLACK_LOG2", "Verifier",
+__all__ = ["AVERAGE", "Pair", "TIME_HELD", "UNRECORDED_SLACK_LOG2", "Verifier", "unset",
            "WORST_PASS", "accepts", "gamma_answer", "ingress_bursts", "lean_record", "load_registry", "main", "memory",
            "memory_error",
            "node_line", "pace_of", "paced_groups", "paced_line", "recorded_inputs", "recorded_line", "recorded_memory",
