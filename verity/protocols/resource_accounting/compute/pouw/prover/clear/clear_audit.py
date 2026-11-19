@@ -1,7 +1,7 @@
 """PoUW's clear audit: the protocol's lifecycle run in the clear, the same for every `PoUWScheme` (``PROTOCOL.md``,
 "Lifecycle").  It is a reference tool, not a verifier: every protocol is zero-knowledge, PoUW's served path is the served-ZK
 window, and its verifier is the Lean (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/check`, `pouw.verifier`).  Benchmarks
-replay recorded clear runs through it (`pearl_c_vllm/verify_run.py`, `pearl_c4/replay.py`), the schemes' tests run their
+replay recorded clear runs through it (`pearl_c_vllm/verify_run.py`), the schemes' tests run their
 end-to-end vectors through it, and the Lean's samples (`PouwCommit.Samples`) are difftested against `Sampled.select` and
 `draw_coin`.  Each module here has two names: `verity.protocols.resource_accounting.compute.pouw.prover.clear.clear_audit`, and the bare `clear_audit` for
 a caller that puts this directory on ``sys.path``.  A caller keeps to one of the two: they are two copies of every class

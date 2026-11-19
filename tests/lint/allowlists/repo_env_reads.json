@@ -164,7 +164,6 @@
     {"file": "tests/verity/protocols/compose/verifier/live_challenger/stub_serve.py", "count": 3},
     {"file": "tests/verity/protocols/compose/verifier/live_challenger/test_auditor_rt4.py", "count": 1},
     {"file": "tests/verity/protocols/compose/verifier/live_challenger/test_serve.py", "count": 1},
-    {"file": "verity/protocols/experimental/pearl_c4/prover/kernels/dev.py", "count": 2},
     {"file": "verity/protocols/proofs/flock/prover/agreement/ci.py", "count": 2},
     {"file": "verity/protocols/proofs/flock/prover/cuda_chunk_patch.py", "count": 2},
     {"file": "benchmarks/proof_throughput/gemm_hill.py", "count": 11},

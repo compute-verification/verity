@@ -1,7 +1,7 @@
 ---
 name: kernel-engineering
 description: >
-  How to design, evaluate, record and land PoUW GPU kernels in Verity: Pearl-C (FP8 E4M3) and Pearl-C4 (NVFP4) on the
+  How to design, evaluate, record and land PoUW GPU kernels in Verity: Pearl-C (FP8 E4M3) on the
   RTX PRO 6000 (sm_120), or any kernel whose output a verifier recomputes bit for bit. Covers checking what's been tried
   before starting, the evaluation ladder (CPU conformance, a one-GPU screen, the timed whole-node benchmark result on the panel, served vLLM),
   what a timed run must pass (the SASS gate, 0xA5 poisoning and a no-write control, the reference verifier on the run's

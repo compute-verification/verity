@@ -13,7 +13,7 @@ POUW = (Path(__file__).resolve().parents[3] / "benchmarks" / "pouw")
 def test_loads_by_path_and_holds_the_runners_to_their_declarations():
     reg = of(POUW / "pearl_c_vllm" / "bench_arm.py")
     assert reg is of(POUW / "harness" / "verify.py") and Path(reg.path) == POUW / "settings.py"
-    assert reg.prefixes == ("PEARLC_", "PEARLC4_", "PEARL_C4_")
+    assert reg.prefixes == ("PEARLC_",)
     assert reg.standalone_problems() == []
 
 

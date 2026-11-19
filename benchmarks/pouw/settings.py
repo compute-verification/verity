@@ -1,12 +1,12 @@
 """Every environment variable PoUW's benchmarks read, declared once (`verity_config.settings`): the Pearl-C kernels'
-(``pearl_c_sm120``, ``pearl_c_sm90``, ``pearl_c4``), their vLLM arm (``pearl_c_vllm``), the GPU harness (``harness``)
+(``pearl_c_sm120``, ``pearl_c_sm90``), their vLLM arm (``pearl_c_vllm``), the GPU harness (``harness``)
 and the served path's opt-in tests.  Code reads them through ``of(__file__)``::
 
     from verity_config.settings import of
     S = of(__file__)
     S.PEARLC_SCHEDULE
 
-The registry owns ``PEARLC_``, ``PEARLC4_`` and ``PEARL_C4_``: a variable with one of them that nothing declares fails the
+The registry owns ``PEARLC_``: a variable with it that nothing declares fails the
 first `of` of a process.  It declares the ``POUW_`` variables these directories read without owning the prefix, which the
 distribution's other directories read too.
 
@@ -23,7 +23,7 @@ from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, 
 #: moves, and a bare one only in a file it moves too
 STANDALONE = ("../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py",
               "../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py",
-              "../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/grouped.py", "../../verity/protocols/experimental/pearl_c4/prover/kernels/dev.py",
+              "../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/grouped.py",
               "../../verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py")
 
 
@@ -35,7 +35,7 @@ def places(raw: str) -> frozenset[str]:
 LIB = "a library the runner loads by name, which a test points at its stand-in; the driver it opens computes nothing itself"
 
 REGISTRY = Registry(
-    __file__, ("PEARLC_", "PEARLC4_", "PEARL_C4_"),
+    __file__, ("PEARLC_",),
     # ---------------------------------------------------------------- the Pearl-C runners (pearl_c_sm120, pearl_c_sm90)
     S("PEARLC_SPLIT", not_zero, True, VALUE, "decode's split kernels (words_k, stats_r); 0 runs the kernels they replace "
                                              "(words, stats_s5), the same words"),
@@ -74,14 +74,6 @@ REGISTRY = Registry(
                                       "h100); empty, none", empty=True),
     S("SHAPES", words, ("8192",), VALUE, "the timed shapes, N (m = n = k) or MxNxK; empty, the check alone", empty=True),
     S("REPS", int, 5, VALUE, "each kernel's timed repetitions after a warm-up"),
-    # ---------------------------------------------------------------- pearl_c4
-    S("PEARLC4_LIBCUDA", str, "libcuda.so.1", WHERE, f"the CUDA driver: {LIB}"),
-    S("PEARLC4_CUBIN", str, None, VALUE, "the cubin the Pearl-C4 arm loads; unset, pearl_c4.cubin beside it"),
-    S("PEARLC4_VERIFY_WORKERS", int, 16, WHERE, "the verifier's worker processes: how fast it runs, not what it checks"),
-    S("PEARLC4_GATE_TILES", int, 2, VALUE, "the tiles the arm's gate checks a call"),
-    S("PEARL_C4_F1", str, None, VALUE, "real.py's F1 check: fast checks a seeded tile through the fast path, else exact "
-                                       "(real.py --f1 sets it for the processes it starts)"),
-    S("VERITY_COMMIT", str, None, WHERE, "the commit a Pearl-C4 replay names for its provenance; unset, unknown"),
     # ---------------------------------------------------------------- the vLLM arm (pearl_c_vllm)
     S("PEARLC_KERNEL", str, None, VALUE, "the kernel directory the arm serves with; unset, the tree's of its kernel scheme on "
                                          "the card (bench_arm.kernel_directory)"),
