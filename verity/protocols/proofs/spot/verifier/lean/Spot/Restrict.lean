@@ -2,7 +2,7 @@ module
 
 public import Spot.BlockFront
 public import Flock.Lift
-meta import Circuits.Program
+meta import Flock
 
 /-!
 # `restrict`: the block's Program, at the word level
