@@ -53,11 +53,6 @@ def BlockIs (P : Prog) (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.siz
   ∀ g : Fin (ofProgram P).N,
     (partOf P blocks).unit g = some u.castSucc ↔ (Spot.BlockFront.inside fr.ranges g.val = true ∧ inputAt P g = false)
 
-/-- Each word primitive of `P` the Boolean map `boolean` names a Definition for evaluates as that Definition. -/
-def BooleanAgrees (P : Prog) (boolean : Std.HashMap String String) : Prop :=
-  ∀ p q, (P.defs[p]!).prim = true → boolean[(P.defs[p]!).key]? = some (P.defs[q]!).key →
-    Prog.evalBool P p = Prog.evalBool P q
-
 /-- **`BodyAgrees`**: each primitive of `P` with a Boolean Definition in `P`'s own map (`Prog.bodyOf?`) evaluates as
 that Definition. -/
 def BodyAgrees (P : Prog) : Prop :=
@@ -121,7 +116,7 @@ def BlockCorrect : Prop :=
     Spot.BlockFront.front P units = .ok fr → Spot.BlockFront.program P units = .ok Q →
     Flock.Lower.lower Q Q.root (fr.ins.map (·.width)) (fr.outs.map (·.width)) = .ok t → Tmpl.unroll t = .ok nt →
     nt.unitLog ≤ 32 → ∀ (hb : Built nt) (z : ℕ → Bool), (Rows.ofNet hb).Sat (fun c => z c.val) → z t.constPos = true →
-    BooleanAgrees P P.boolean →
+    BodyAgrees P →
     ∀ (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size), BlockIs P blocks u fr →
     ∀ X : (ofProgram P).Trace,
       (∀ i < portWidth fr.ins, (portBits X fr.ins).getD i false = z (Flock.Lower.inBit t i)) →
