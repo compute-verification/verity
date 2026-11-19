@@ -10,12 +10,12 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.acquire.plan import AcquisitionPlan, acquisition_plan
+from verity_vllm.acquire.plan import AcquisitionPlan, acquisition_plan, plan_of_capture
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import taps
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
@@ -36,6 +36,11 @@ def run(manifest: Mapping[str, Any], rt: RuntimeTree) -> AcquisitionPlan:
     prefix, aliases = str(manifest.get("wrapper_prefix") or ""), manifest.get("op_path_aliases")
     aliases = aliases if aliases else {}
     return acquisition_plan(manifest, AcquireCorrespondence(rt, wrapper_prefix=prefix, aliases=aliases))
+
+
+def run_plan(classes: Sequence[Mapping[str, Any]], rt: RuntimeTree) -> AcquisitionPlan:
+    """The acquisition plan of a capture plan's classes (`capture_plan.of_build`) off `rt`, its shared instances aliased by the tree."""
+    return plan_of_capture(classes, AcquireCorrespondence(rt, aliases=rt.aliases()))
 
 
 def call_boundaries(manifest: Mapping[str, Any], *roots: str | None) -> dict[str, Any]:

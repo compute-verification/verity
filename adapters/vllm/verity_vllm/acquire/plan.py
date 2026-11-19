@@ -109,6 +109,7 @@ class ValuePlan:
     spec: list[str] = field(default_factory=list)
     anchor: str | None = None                                # the runtime module a tap Value is anchored on (`attention_module` / `moe_module`)
     prescribed_identities: int = 0                           # identities materialised by rule (padding steps: no runtime producer)
+    capture: str = ""                                        # the capture plan's class (`capture_plan.CLASSES`); "" for a manifest's Value
     sites: list[AcquisitionSite] = field(default_factory=list)  # the LEGAL sites
     rejected: list[dict[str, str]] = field(default_factory=list)   # candidates the structure refuses, with the reason
     chosen: AcquisitionSite | None = None
@@ -282,12 +283,55 @@ def value_classes(manifest: Mapping[str, Any]) -> list[ValuePlan]:
 # sites
 # ---------------------------------------------------------------------------------------------------------------------------------
 
+def values_of_plan(classes: Iterable[Mapping[str, Any]]) -> list[ValuePlan]:
+    """One Value class per plan class (`capture_plan.of_build`), in its order."""
+    return [ValuePlan(op_path=str(c["op_path"]), output_member=str(c["member"]), family="", identities=1, spec=list(c["definitions"]),
+                      capture=str(c["capture"])) for c in classes]
+
+
+def _capture_sites(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[AcquisitionSite], list[dict[str, str]]]:
+    """The legal sites of a plan class, by its capture class."""
+    from verity_vllm.program.predict import capture_plan as CP
+
+    rt: RuntimeTree = corr.runtime
+    call = {"op_path": v.op_path, "output_member": v.output_member}
+    module = corr.owning_module(call)
+    legal: list[AcquisitionSite] = []
+    refused: list[dict[str, str]] = []
+    shared = f" (a shared instance's call: {v.op_path} is {module}'s)" if module != v.op_path else ""
+
+    def at(kind: str, mod: str, slot: str, lifetime: str, why: str) -> None:
+        if rt.has_module(mod):
+            legal.append(AcquisitionSite(kind, mod, slot, lifetime, why + shared))
+        else:
+            refused.append({"kind": kind, "module": mod, "slot": slot, "why": f"{mod!r} is not a module of the runtime tree"})
+
+    if v.capture == CP.MODULE_OUTPUT:
+        rs = corr.return_slot(call)
+        at("producer_output", module, rs.label(), corr.output_lifetime(module), f"return slot `{rs.label()}` of the module's forward")
+    elif v.capture == CP.INPUT_IDS:
+        at("consumer_input", module, corr.arg_slot(call, 0).label(), corr.input_lifetime(module), "positional argument 0 of the module's forward")
+    elif v.capture in (CP.CALL_BOUNDARY, CP.SCALE_PRODUCTS, CP.RUN_VALUE):
+        owner = module.rsplit("/", 1)[0] if v.capture == CP.CALL_BOUNDARY else module
+        at("native_tap", owner, v.output_member, "n/a", f"the {v.capture} source inside module {owner}")
+    elif v.capture == CP.SAMPLED:
+        if rt.runner.get("sample"):
+            legal.append(AcquisitionSite("runner_return", module, _slot_label(corr.return_slot(call)), "n/a", "the runner's sample()"))
+        else:
+            refused.append({"kind": "runner_return", "module": module, "slot": v.output_member, "why": "the runtime has no runner with sample()"})
+    else:
+        refused.append({"kind": "?", "module": module, "slot": v.output_member, "why": f"capture class {v.capture!r} has no site rule"})
+    return legal, refused
+
+
 def _slot_label(rs: ReturnSlot | None) -> str:
     return "in" if rs is None else rs.label()
 
 
 def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[AcquisitionSite], list[dict[str, str]]]:
     """The legal sites of one Value class and the refused candidates (each with its reason).  Structure only."""
+    if v.capture:
+        return _capture_sites(v, corr)
     rt: RuntimeTree = corr.runtime
     call = {"op_path": v.op_path, "output_member": v.output_member}
     module = corr.owning_module(call)
@@ -519,7 +563,22 @@ def acquisition_plan(manifest: Mapping[str, Any], correspondence: AcquireCorresp
     """The plan of `manifest`'s required Values over `correspondence`: each Value's legal sites and the one the policy chooses,
     with the residuals.  `tables` is a test seam: lifetime tables to read in place of the committer's own (`_lifetime_tables`).
     No library call passes it."""
-    values = value_classes(manifest)
+    return plan_of_values(value_classes(manifest), correspondence, program_digest=str(manifest.get("program_digest") or ""),
+                          source_digest=str(manifest.get("manifest_digest") or ""), tables=tables)
+
+
+def plan_of_capture(classes: Iterable[Mapping[str, Any]], correspondence: AcquireCorrespondence, *,
+                    tables: Mapping[str, Any] | None = None) -> AcquisitionPlan:
+    """The plan of a capture plan's classes (`capture_plan.of_build`) over `correspondence`; its source digest is the classes'
+    (SHA-512 of their canonical JSON)."""
+    classes = [dict(c) for c in classes]
+    digest = hashlib.sha512(json.dumps(classes, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return plan_of_values(values_of_plan(classes), correspondence, program_digest="", source_digest=digest, tables=tables)
+
+
+def plan_of_values(values: list[ValuePlan], correspondence: AcquireCorrespondence, *, program_digest: str, source_digest: str,
+                   tables: Mapping[str, Any] | None = None) -> AcquisitionPlan:
+    """The plan of `values` over `correspondence` (`acquisition_plan`'s)."""
     for v in values:
         legal, refused = sites_of(v, correspondence)
         v.sites, v.rejected = legal, refused
@@ -538,9 +597,8 @@ def acquisition_plan(manifest: Mapping[str, Any], correspondence: AcquireCorresp
     residuals = residuals_of(values, rt, tabs)
     notes = [("every identity of a Value at a step >= its request's executed prefix is a PRESCRIBED materialisation (enablement, no runtime producer); "
               "the plan's runtime sites are for the executed steps")]
-    pdig = str(manifest.get("program_digest") or "")
-    mdig = str(manifest.get("manifest_digest") or "")
-    return AcquisitionPlan(program_digest=pdig, manifest_digest=mdig, runtime_source=rt.source, values=values, residuals=residuals, notes=notes, correspondence=prov)
+    return AcquisitionPlan(program_digest=program_digest, manifest_digest=source_digest, runtime_source=rt.source, values=values,
+                           residuals=residuals, notes=notes, correspondence=prov)
 
 
-__all__ = ["HOOK_KINDS", "AcquisitionPlan", "AcquisitionSite", "acquisition_plan", "analytic_table_of_buffer"]
+__all__ = ["HOOK_KINDS", "AcquisitionPlan", "AcquisitionSite", "acquisition_plan", "analytic_table_of_buffer", "plan_of_capture", "values_of_plan"]
