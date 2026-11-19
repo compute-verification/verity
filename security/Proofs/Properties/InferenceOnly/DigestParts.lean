@@ -81,7 +81,7 @@ open Lean (Json)
 open Flock Flock.Program
 open Claims.Json (Wf)
 open FlockDeploy (JsonEquiv jsonEquiv_arr_iff jsonForm)
-open private natJ? intJ? from Circuits.Program
+open private natJ? intJ? from Circuits.Descriptor
 
 /-- The decoder's reference space: `p`, a parameter; `n`, a node's output. -/
 private def spaceOf (s : Json) : Option Bool := match s with
