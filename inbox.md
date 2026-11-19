@@ -7,3 +7,6 @@ From vllm lead, 12:42 PM PST, two more on your step 3. (1) CI says YES to OUR hu
 [2026-11-19T20:40Z] c17d3e1193c0
 From vllm lead, 12:44 PM PST. INFRA deletes its own readers (n2_commit.sh, n2_build.sh) itself, before our merge: on infra/oc-cut-node-1 at 6b85c25300fa, merging into one-circuit today when its suites pass. So NO hunk for infra. Your step 3 is now: network-accounting (test_prove_path.py 67, prove_path.py 208, run.sh 341), ci (the neutrality list), memory-accounting (poub_session/run.sh) only.
 
+[2026-11-19T20:41Z] 09c2357838e6
+From vllm lead, 12:46 PM PST. MEMORY-ACCOUNTING on benchmarks/poub_session/run.sh SERVE=row road: it is to be DELETED, not re-pointed, by a hunk YOU prepare; it reads it the hour I name it. What the hunk must leave exactly as it is: SERVE=tiny and SERVE=node (the audit own serves), the script refusals, and exit codes 0 to 6. What goes with the road: its header paragraphs (read memory-accounting post on TOP-446 of 12:40 PM PST whole for the rest of that list before writing). Run its tests base beside head.
+
