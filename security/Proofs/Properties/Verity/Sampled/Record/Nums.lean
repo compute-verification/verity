@@ -2,11 +2,20 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Record
 public import Proofs.Properties.Verity.Recursive.BaseSetup
-public import Proofs.Properties.Verity.Recursive.Numbers
+public import Proofs.Flock.C3.Reps.LigNames
+public import Proofs.Flock.Claims.KS.PlainR
+public import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
+public import Proofs.Flock.Claims.Recursion.OpenedDecode
+public import Proofs.Flock.Claims.Recursion.RowSlots
+public import Proofs.Flock.Claims.Recursion.VStarPartsB
+public import Proofs.Flock.Recursive.ValueInner
+public import Proofs.Flock.SessionLoop.FinPoints
+public import Proofs.Flock.VBridge.AlgResZero
+public import Proofs.Flock.VBridge.Family.OutCols
+public import Proofs.Flock.VBridge.Family.Setup
 public import Proofs.Flock.Claims.Sampling.Select.Size
 public import Proofs.Flock.Claims.Complete.ZkTables.Stmt
 import all Lean.Data.Json.Basic
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 
 /-!
 # The session's numbers at a sample file

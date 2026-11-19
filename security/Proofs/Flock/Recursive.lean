@@ -84,14 +84,9 @@ public import Proofs.Flock.Recursive.KSProved
 public import Proofs.Flock.Recursive.KSCoinTreeProved
 public import Proofs.Flock.Recursive.KSCoinTreeWitnesses
 public import Proofs.Flock.Recursive.KSLinked
-public import Proofs.Flock.Claims.Recursion.DeployedCounts
-public import Proofs.Flock.Claims.Recursion.LamDeployedTight
-public import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
-public import Proofs.Flock.Claims.Recursion.KappaEpsCap
 public import Proofs.Flock.Recursive.BitsK
-public import Proofs.Flock.Claims.Recursion.AcceptedScope
-public import Proofs.Flock.Claims.Recursion.InnerSetupCount
-public import Proofs.Flock.Claims.Recursion.IVStarCalls
+public import Proofs.Flock.Claims.Recursion.SetupCount
+public import Proofs.Flock.Claims.Recursion.SetupValues
 public import Proofs.Flock.Recursive.Loop
 public import Proofs.Flock.Recursive.LoopZK
 public import Proofs.Flock.Recursive.ZkServerSalted

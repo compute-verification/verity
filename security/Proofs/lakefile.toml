@@ -168,8 +168,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Verity.Sampled.Record.Scope", "Proofs.Properties.Verity.Sampled.Record.Inner",
   "Proofs.Properties.Verity.Sampled.Record.Reg", "Proofs.Flock.Claims.Sampling.Select.Prefix",
   "Proofs.Properties.Verity.Subprotocols", "Proofs.Properties.Verity.Coupling",
-  "Proofs.Properties.Remote", "Proofs.Properties.Remote.Honest", "Proofs.Properties.Verity.Recursive",
-  "Proofs.Properties.Verity.Recursive.Target", "Proofs.Properties.Verity.Recursive.Refusals",
+  "Proofs.Properties.Remote", "Proofs.Properties.Remote.Honest",
   "Proofs.Properties.Verity.Sampled.RecursiveRefused", "Proofs.Properties.Verity.Sampled.MemberForm",
   "Proofs.Properties.Verity.Sampled.Target", "Proofs.Properties.Verity.Assembled",
   "Proofs.Properties.Verity.Sampled.Place", "Proofs.Properties.Verity.Sampled.Instance",
@@ -255,4 +254,8 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Verity.SampledTwo.Claim", "Proofs.Properties.Verity.SampledTwo.DevAgrees",
   "Proofs.Properties.Verity.SampledTwo.InputMap", "Proofs.Properties.Verity.SampledTwo.Projection",
   "Proofs.Properties.Verity.SampledTwo.Reading", "Proofs.Properties.Verity.SampledTwo.SecondRead",
-  "Proofs.Properties.Verity.SampledTwo.Steps", "Proofs.Properties.Verity.SampledTwo.Subprotocol"]
+  "Proofs.Properties.Verity.SampledTwo.Steps", "Proofs.Properties.Verity.SampledTwo.Subprotocol",
+  "Proofs.Properties.Verity.Recursive.Assumptions",
+  "Proofs.Properties.Verity.Recursive.Compiled",
+  "Proofs.Properties.Verity.Recursive.PartVerdict",
+  "Proofs.Properties.Verity.Recursive.ScheduleRun"]

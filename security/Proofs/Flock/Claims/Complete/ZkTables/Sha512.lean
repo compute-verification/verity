@@ -1,7 +1,12 @@
 module
 
 public import Proofs.Flock.Claims.Complete.ZkTables.Accepts
-import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
+import Proofs.Flock.C3.Compose.HoloStreamSizes
+import Proofs.Flock.Claims.Complete.WalkPacked
+import Proofs.Flock.Claims.KS.PlainR
+import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
+import Proofs.Flock.Claims.Recursion.RowSlots
+import Proofs.Flock.Claims.Recursion.VStarPartsB
 
 /-!
 # Masked completeness at SHA-512

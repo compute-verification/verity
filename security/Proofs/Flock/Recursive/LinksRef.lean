@@ -1,6 +1,5 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 public import Proofs.Flock.Recursive.LinksRows
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

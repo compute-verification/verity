@@ -6,7 +6,6 @@ public import Proofs.Flock.RecGeneric.Outer
 public import Proofs.Flock.RecGeneric.ZK
 public import Proofs.Flock.RecGeneric.AtFlock
 public import Proofs.Flock.RecGeneric.PlansProof
-public import Proofs.Flock.Claims.Recursion.AcceptedScope
 public import Proofs.Flock.RecGeneric.AtFlockPlans
 public import Proofs.Flock.RecGeneric.AtFlockServer
 public import Proofs.Flock.RecGeneric.AtFlockProof

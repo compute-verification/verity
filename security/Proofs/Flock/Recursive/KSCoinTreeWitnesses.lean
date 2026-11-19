@@ -1,7 +1,13 @@
 module
 
 public import Proofs.Flock.Recursive.KSNontrivial
-public import Proofs.Flock.Claims.Recursion.Assumptions.HonestFixture
+public import Proofs.Flock.C3.Reps.RoundOfHolo
+public import Proofs.Flock.Claims.Recursion.DecodeSame
+public import Proofs.Flock.Claims.Recursion.HonestRun
+public import Proofs.Flock.Claims.Recursion.HonestWitR
+public import Proofs.Flock.Claims.Recursion.SeqPrefix
+public import Proofs.Flock.Claims.Recursion.VStarNets
+public import Proofs.Flock.Recursive.HoloSchedCheck
 public import Proofs.Flock.Claims.Recursion.KSLin2Committed
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -36,7 +42,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployEfficient
-import Proofs.Flock.Claims.Recursion.HonestHalfTops
 import Proofs.Flock.Claims.Recursion.PlainKSAbortFails
 import Proofs.Flock.Claims.Witnesses.RecursionLin2
 import Proofs.Flock.Soundness.CROnly.Hiding

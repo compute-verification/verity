@@ -1,6 +1,10 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.NextRFits
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
+public import Proofs.Flock.C3.VStarList.Accepts
+public import Proofs.Flock.Claims.Recursion.DeployHonest
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.VarLen
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

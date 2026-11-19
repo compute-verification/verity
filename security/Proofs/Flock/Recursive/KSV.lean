@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.KSDec
-public import Proofs.Flock.Claims.Recursion.RegSetupOpens
-public import Proofs.Flock.Claims.Recursion.ResLowerD
+public import Proofs.Flock.C3.RegLevels.VRows
+public import Proofs.Flock.Claims.Recursion.DecodeSame
+public import Proofs.Flock.Claims.Recursion.InnerSetupSame
+public import Proofs.Flock.Claims.Recursion.LabelsFull
 public import Proofs.Flock.Recursive.KSStatement
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Recursion.MoreSlotsAll
 
 /-!
 # `RecursiveKSAt` from `DecompBV`

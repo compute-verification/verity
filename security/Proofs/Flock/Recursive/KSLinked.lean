@@ -32,7 +32,8 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Recursion.HresAsm
+import Proofs.Flock.Recursive.KSDeployed
+import Proofs.Flock.VBridge.Family.PartKeys
 
 /-!
 # The recursive verifier's knowledge soundness at the linked relation

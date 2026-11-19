@@ -3,7 +3,9 @@ module
 public import Proofs.Flock.Claims.KS.PlainSampleJ
 public import Proofs.Flock.Claims.KS.PlainSampleJMove
 public import Proofs.Flock.Claims.Recursion.CallsBridgeE
-public import Proofs.Flock.Claims.Recursion.NextJ
+public import Proofs.Flock.C3.VStarList.Accepts
+public import Proofs.Flock.Claims.Recursion.DeployHonest
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Flock.With.SimVerify
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

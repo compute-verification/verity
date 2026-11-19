@@ -6,7 +6,6 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Claims.Complete.ZkTables.Stmt
-import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
 import Proofs.Flock.Claims.Complete.ZkTables.HelloSize
 import Proofs.Flock.Claims.Complete.Json.CanonSize
 import Proofs.Flock.Claims.Complete.ZkTables.StmtOne

@@ -2,7 +2,9 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Record.Opens
 public import Proofs.Properties.Verity.Sampled.Record.Scope
-public import Proofs.Flock.Claims.Recursion.AcceptedScope
+public import Proofs.Flock.Claims.KS.PlainRCapPrefix
+public import Proofs.Flock.Claims.Recursion.LamDeployed
+public import Proofs.Flock.Claims.Recursion.LastColsE
 public import Proofs.Flock.Claims.Bridge.Custody
 public import Proofs.Flock.Claims.Scope.Setup
 public import Proofs.Flock.Claims.KS.Range
