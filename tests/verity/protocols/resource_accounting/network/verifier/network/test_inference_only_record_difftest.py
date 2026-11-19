@@ -1,8 +1,8 @@
 """The inference-only policy's check of an execution phase's circuit record (`InferenceOnlyCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 727 cases (600 random circuits,
-two in five broken in one way, 101 shaped ones, most in the shape of a served class, and 26 toys of edges) and, on each,
+`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 728 cases (600 random circuits,
+two in five broken in one way, 102 shaped ones, most in the shape of a served class, and 26 toys of edges) and, on each,
 `scripts/inference_only_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/RecordDifftestMain.lean` fails unless
 `Record`, `RecordCount`, `RecordRows` and `RecordChosen` give Python's results on every case, and unless SPOT's reader reads the
@@ -113,6 +113,8 @@ ROW_ROLE = {f"2x3 {what}": stage for what, (stage, _) in vectors.ROW_ROLE.items(
 SPLITS = {f"2x3 {what}": ("templates" if short else None) for what, (_, short) in vectors.SPLITS.items()}
 #: the cases on a root input node the record declares, each with the stage that refuses it, None where the form takes it
 NODES = {f"2x3 {what}": stage for what, (_, _, _, _, stage, _) in vectors.NODES.items()}
+#: the case that reads an input node at another width, refused before the record
+RECUT = {"a read at another width": "recut-unread"}
 
 
 @pytest.fixture(scope="module")
@@ -127,7 +129,7 @@ def shaped() -> dict[str, dict]:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 727 cases and the reference's results, byte for byte as the record pins them."""
+    """All 728 cases and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", str(vectors.total())]
@@ -142,7 +144,7 @@ def test_the_generator_covers_what_it_says(random_cases, shaped):
         assert detail.get("error") == m["broken"], (m["shape"], m.get("how"))
         assert (m["case"]["spot"] is None) == (m["broken"] in vectors.EARLY)
         assert isinstance(r["kinds"], list) == isinstance(r["exported"], list) == ("error" not in detail)
-        assert ("message" in detail) == (m["broken"] in ("own-rows", "leaf-widths"))
+        assert ("message" in detail) == (m["broken"] in ("own-rows", "leaf-widths", "recut-unread"))
     assert {m["broken"] for m in made} == set(vectors.BROKEN) | {"wires", "nodes", None}
     assert {m["how"] for m in random_cases if m["broken"]} == {how for hows in vectors.BROKEN.values() for how in hows}
     good = [r for r in results if "error" not in r["detail"]]
@@ -248,7 +250,7 @@ def test_a_pinned_readers_layout(shaped, monkeypatch):
     The layout's stage alone refuses them: without it the reference refuses none, and accepts the token among the
     ports with a block's fresh bits those of the case that wires it."""
     assert {what for what, m in shaped.items() if m["broken"]} == {
-            what for what, v in (LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS | ROW_ROLE | SPLITS | NODES).items()
+            what for what, v in (LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS | ROW_ROLE | SPLITS | NODES | RECUT).items()
             if isinstance(v, str)}
     got = {what: vectors.results(shaped[what]["case"]) for what in LAYOUT}
     for what, want in LAYOUT.items():
