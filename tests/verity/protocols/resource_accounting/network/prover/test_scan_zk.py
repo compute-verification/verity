@@ -919,7 +919,8 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
     entry's session's, attested under its key in its session. The period's mirror reads the block's
     `SlotEntry_v1` template's entries off its descriptor, a stand-in whose closure digest is no pinned Definition's
     (`period_case.SLOT_ENTRY_PINS`), and refuses the honest case at the wiring (`period_case.UNWIRED`); with that digest
-    pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, accepts it
+    pinned, at the slot check (`period_case.UNSLOTTED`: the stand-in reads no `ScanSlots_v3` occupancy); with that
+    check skipped too it accepts it, its scan's terms read off the test class's own templates with no free inputs, accepts it
     with the block's audit as V3c's ``period.json`` (`rows_case`'s ``v3c``) sampled at one or two proof blocks
     (``subset:1``, ``subset:2``, the demo's sample: the consistency check holds at any sample), with its state entry
     among the audit's ``roots``, and accepts it with that entry among its ``registered``, as a workload's execution
@@ -1064,6 +1065,9 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
     out = PC.reference(case)
     assert (out["verdict"], out["reason"]) == ("reject", f"window 0: {PC.UNWIRED}"), out
     monkeypatch.setattr(PC, "SLOT_ENTRY_PINS", (*PC.SLOT_ENTRY_PINS, digest))
+    out = PC.reference(case)
+    assert (out["verdict"], out["reason"]) == ("reject", f"window 0: {PC.UNSLOTTED}"), out
+    monkeypatch.setattr(PC, "_slotted", PC._wired)
     out = PC.reference(case)
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, N), out
     assert out["public"]["start"] == 0

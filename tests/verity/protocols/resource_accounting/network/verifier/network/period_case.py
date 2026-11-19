@@ -1702,8 +1702,8 @@ def check(p: Params, c: Commitment, e) -> tuple:
         else:
             if tied and f.sampled < f.units:
                 charged[i] = f.at(TIED_DELTA)
-    findings += [Finding(REJECT, f"window {p.first + i}: {UNWIRED if not _wired(p, c.audits, reg) else UNSLOTTED}")
-                 for i, reg in enumerate(c.windows) if not _slotted(p, c.audits, reg)]
+    findings += [Finding(REJECT, f"window {p.first + i}: {why}") for i, reg in enumerate(c.windows)
+                 if (why := UNWIRED if not _wired(p, c.audits, reg) else None if _slotted(p, c.audits, reg) else UNSLOTTED)]
     findings += [Finding(REJECT, f"window {p.first + i}: {why}") for i, reg in enumerate(c.windows)
                  if (why := _state_refusal(p, c.audits, reg))]
     findings += [Finding(REJECT, f"window {p.first + i}: {TIE_UNHELD}: its public outputs' {TIED_KEY} "

@@ -964,8 +964,8 @@ def test_a_scan_whose_prog_is_no_slot_entries_is_refused(server, monkeypatch):
     the chunk's own `o1`), at the entries port of a `SlotEntry_v1` template the audit's Program doesn't have, at
     another chunk's entries port, of other than T / every leaves, the scan's lane entry named another lane's, that
     template one member off a slot each, or that template under the slot entry's name and descriptor id with another
-    body; and a mirror that skips the wiring, which the state tie reads too, accepts what Lean refuses at the
-    wiring."""
+    body; and a mirror that skips the wiring and the slot check, the state tie reading the wiring too, accepts what
+    Lean refuses at the wiring."""
     unwire = PC.UNWIRES
     for u in unwire:
         monkeypatch.setattr(PC, "UNWIRES", (u,))
@@ -976,6 +976,7 @@ def test_a_scan_whose_prog_is_no_slot_entries_is_refused(server, monkeypatch):
             assert verdict == REJECT and PC.UNWIRED in json.loads(out)["reason"], (u, n, out)
     monkeypatch.setattr(PC, "UNWIRES", unwire)
     monkeypatch.setattr(PC, "_wired", lambda p, audits, reg: True)
+    monkeypatch.setattr(PC, "_slotted", lambda p, audits, reg: True)
     for n in range(2):
         refused_by_lean_alone(build("rows-prog-unwired", n, small=True), server, PC.UNWIRED)
 
@@ -1020,7 +1021,8 @@ def test_a_template_named_slot_entry_with_another_body_is_refused(server, monkey
     first, and a template under either's name and
     descriptor id (`PC.SLOT_KEY`, `PC.SELECT_KEY`) with another body (`PC.RENAMED_SLOT_ENTRY`,
     `PC.RENAMED_SELECT_ENTRY`) has none, so Lean and the mirror refuse its execution phase at the wiring, Lean by the
-    pin; and a mirror that pins that digest too accepts it, the pin being all that refuses it."""
+    pin; and a mirror that pins that digest too refuses it at the slot check (`PC.UNSLOTTED`: the other body reads no
+    occupancy), and with that check skipped accepts it, the pin being all that `wired` refuses it by."""
     others = {}
     for select, key, entry, pins in ((False, PC.SLOT_KEY, PC.SLOT_ENTRY, "SLOT_ENTRY_PINS"),
                                      (True, PC.SELECT_KEY, PC.SELECT_ENTRY, "SELECT_ENTRY_PINS")):
@@ -1042,6 +1044,8 @@ def test_a_template_named_slot_entry_with_another_body_is_refused(server, monkey
         with monkeypatch.context() as mp:
             for pins, other in others.items():
                 mp.setattr(PC, pins, (*getattr(PC, pins), other))
+            assert PC.UNSLOTTED in reference(case)["reason"], (n, reference(case))
+            mp.setattr(PC, "_slotted", PC._wired)
             assert reference(case)["verdict"] == ACCEPT, (n, reference(case))
     assert selects == {False, True}, selects
 
