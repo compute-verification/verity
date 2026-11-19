@@ -541,7 +541,8 @@ class _Program:
 
     def _bound(self, T: int, fn: Any, ports: Any, keys: dict[str, _Keys], qs: Sequence[tuple[Row, ...]]) -> None:
         """Refuse T keys where the first visited key block's unit, a head's rows in and out, passes ``grain.rows``, naming
-        the most positions a Program holds at this model and grain: its fixed rows and its rows a key."""
+        the most positions a Program holds at this model and grain: its fixed rows and its rows a key. A grain no key fits
+        is `settle`'s to refuse, with every other unit past it."""
         n = [len(qs[0]) if kind == "q" else 1 if kind == "state" else len(self._block(keys[kind], *x)[0])
              for _port, (kind, x) in ports]
         a, b = next(x for _port, (kind, x) in ports if kind == "k")
@@ -550,6 +551,8 @@ class _Program:
             return
         per = sum(len(self._block(keys[k], a, b)[0]) for k in ("k", "v")) // (b - a)
         fixed = total - (b - a) * per
+        if fixed + per > R:
+            return
         raise Unexpressible(f"{self.name}: position {T - 1}, past the {(R - fixed) // per} positions a Program holds at this model and "
                             f"grain: its first key block at {T} keys is {total} rows in and out ({fixed} and {per} a key), "
                             f"past a unit's {R}")
