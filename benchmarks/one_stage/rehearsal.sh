@@ -11,9 +11,8 @@
 #                         $OUT/steps.txt, and the exit status is 0 only where every step's is. The steps: this tree's
 #                         environment (uv sync); the filter around a stand-in harness (a made-up secret, an exit status
 #                         carried, a TERM waited out); the settings file as `serve` holds it (a one-output class needs
-#                         its own PP_PARTITION: its window has no step 1; the tied window's sampling design is stated, a
-#                         stratified-rate:NUM/DEN, which the harness gives no default; the record form's pair is
-#                         stated, HELD_ALPHA and HELD_GAMMA in the form the limits-held step writes); `serve` around a
+#                         its own PP_PARTITION: its window has no step 1; the record form's pair is stated,
+#                         HELD_ALPHA and HELD_GAMMA in the form the limits-held step writes); `serve` around a
 #                         stand-in harness (the deferral's copy asked once, only after a serve that exited 0 or 2,
 #                         pending, and never after one that exited 1 or any other status); the class's
 #                         circuit cut at Pearl+'s linears from the serve's phi (a stand-in for `serve-phi`, which
@@ -88,7 +87,7 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
     set +a
     bad=0
     no() { echo "SETTINGS refused: $*"; bad=3; }
-    for want in POUW=pearlplus PEARLPLUS_TIE=1 PRODUCT=remote; do
+    for want in POUW=pearlplus PRODUCT=remote; do
       v=${want%%=*}
       [ "${!v-}" = "${want#*=}" ] || no "$v is ${!v-unset}, and the rehearsal serves at $want"
     done
@@ -115,17 +114,6 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
     for v in MAIN_FILE PP_CHALLENGER_KEY DAY_PARAMS; do
       [ -z "${!v-}" ] || [ -s "${!v}" ] || no "$v names ${!v}, which is missing or empty: send it with the run"
     done
-    # the tied window's rule, which the harness gives no default: its preflight refuses a launch that states none, or one
-    # that is no stratified rate, on the serve node. NUM and DEN are compared as digits, whatever their length
-    if [ -n "${PEARLPLUS_TIE-}" ]; then
-      num='' den='' design=${V3C_LAW-}; rule=$design
-      [ "${PEARLPLUS_TIE_UNIFORM-}" != 1 ] || [[ $rule != rate:* ]] || rule=stratified-$rule
-      [[ $rule =~ ^stratified-rate:0*([0-9]*)/0*([0-9]*)$ ]] && num=${BASH_REMATCH[1]} den=${BASH_REMATCH[2]}
-      [ -n "$num" ] && { [ "${#num}" -lt "${#den}" ] || { [ "${#num}" = "${#den}" ] && [[ ! $num > $den ]]; }; } \
-        || no "the sampling design is ${design:-unset}: under PEARLPLUS_TIE it has no default, and the launch states it, a" \
-          "stratified rate, stratified-rate:NUM/DEN (0 < NUM <= DEN): stratified-rate:1/DEN samples one proof block of" \
-          "each template while none holds more than DEN"
-    fi
     # the class the window is committed at, the harness's default where the settings name none
     cls=${V3C_CLASS-4,32,4}
     if [[ $cls =~ ^[1-9][0-9]*,[1-9][0-9]*,([1-9][0-9]*)$ ]]; then
@@ -138,12 +126,12 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
         || no "V3C_CLASS $cls has one output, so its window is the prefill step alone, and step 3's partition of record" \
           "proves at step 1 (llama32_1b_tg_l0_step1.json): set PP_PARTITION to a partition at step 0"
     else
-      no "V3C_CLASS is '$cls', and the tied window is committed at a class SLOTS,PROMPT,OUTPUTS"
+      no "V3C_CLASS is '$cls', and the window is committed at a class SLOTS,PROMPT,OUTPUTS"
     fi
     # `check` builds and profiles the settings' class and no other
     [ -z "${WANT_CLASS-}" ] || [ "$WANT_CLASS" = "$cls" ] \
       || no "CLASS is $WANT_CLASS and the settings serve $cls: name the class in the settings (V3C_CLASS and CLASSES)"
-    [ "$bad" != 0 ] || echo "SETTINGS held: Pearl+ tied to the window at class $cls, product remote, limits $ALPHA and" \
+    [ "$bad" != 0 ] || echo "SETTINGS held: Pearl+ on its own passes, tied to no window, class $cls, product remote, limits $ALPHA and" \
       "$GAMMA with their unit and what they prove, the record form's pair $HELD_ALPHA and $HELD_GAMMA, day $DAY at" \
       "program ${DAY_PROGRAM:0:16}…"
     exit "$bad"

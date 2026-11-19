@@ -5138,29 +5138,15 @@ def test_an_untied_launch_goes_on_where_the_cut_reads_a_template_a_shape(tmp_pat
     assert rc == 0 and "audit" in order and not any(x.startswith("PREFLIGHT") for x in lines), (lines, order)
 
 
-@pytest.mark.parametrize("uniform", [None, "1"])
-@pytest.mark.parametrize("design, held", [
-    (None, False), ("", False), (RULE, False), ("stratified:1", False), ("stratified-rate:0/977", False),
-    ("stratified-rate:978/977", False), ("stratified-rate:1/977", True), ("stratified-rate:977/977", True),
-    ("rate:0/977", False), ("rate:978/977", False)])
-def test_the_rehearsals_settings_state_the_tied_windows_sampling_design_a_stratified_rate(tmp_path, design, held,
-                                                                                           uniform):
-    """`rehearsal.sh settings FILE`, what `rehearsal.sh serve` holds its settings to before the harness runs, refuses a
-    Pearl+-tied serve's settings that state no sampling design, or one that is no ``stratified-rate:NUM/DEN`` with
-    0 < NUM <= DEN: the tied window's sampling design has no default, and the harness's preflight refuses such a launch
-    (`NO_PEARL_RULE`), which the rehearsal would learn only on the serve node. The refusal names the design and the form
-    in the preflight's words; settings that state one are held, and under PEARLPLUS_TIE_UNIFORM=1 so are those that state
-    ``rate:NUM/DEN``."""
-    held = held or bool(uniform) and design == RULE
-    rc, said, err = _rehearsal_settings(tmp_path, V3C_LAW=design, PEARLPLUS_TIE_UNIFORM=uniform)
-    if held:
-        assert rc == 0 and len(said) == 1 and said[0].startswith("SETTINGS held: "), (rc, said, err)
-    else:
-        assert (rc, said) == (3, [
-            f"SETTINGS refused: the sampling design is {design or 'unset'}: under PEARLPLUS_TIE it has no default, and the "
-            "launch states it, a stratified rate, stratified-rate:NUM/DEN (0 < NUM <= DEN): stratified-rate:1/DEN samples one "
-            "proof block of each template while none holds more than DEN"]), (rc, said, err)
-
+@pytest.mark.parametrize("design", [None, "rate:1/977"])
+def test_the_rehearsals_settings_serve_pearlplus_untied_and_read_no_tie(tmp_path, design):
+    """`rehearsal.sh settings FILE`, what `rehearsal.sh serve` holds its settings to before the harness runs, holds a
+    Pearl+ serve that sets no PEARLPLUS_TIE, stating a sampling design or not (the harness's untied default), and says
+    the piece is tied to no window; it neither requires nor reads PEARLPLUS_TIE, which the harness refuses at its start."""
+    rc, said, err = _rehearsal_settings(tmp_path, V3C_LAW=design)
+    assert rc == 0 and len(said) == 1 and said[0].startswith("SETTINGS held: Pearl+ on its own passes, tied to no window, "
+                                                             "class 4,32,4, product remote, "), (rc, said, err)
+    assert "PEARLPLUS_TIE" not in (HERE.parents[2] / "benchmarks" / "one_stage" / "rehearsal.sh").read_text()
 
 
 HELD_FORM = {"HELD_ALPHA": "the record form's alpha is a positive number P/Q or P, each a whole number with no sign or "
@@ -5197,15 +5183,15 @@ def test_the_rehearsals_settings_state_the_record_forms_pair_in_the_form_the_lim
 
 
 def _rehearsal_settings(tmp_path: Path, **changed: str | None) -> tuple[int, list[str], str]:
-    """`rehearsal.sh settings` on settings a Pearl+-tied rehearsal's serve holds, but for ``changed`` (None: unset): its
+    """`rehearsal.sh settings` on settings the rehearsal's untied Pearl+ serve holds, but for ``changed`` (None: unset): its
     exit status, its lines and its stderr."""
     for name in ("main.txt", "key.json", "day-params.json"):
         (tmp_path / name).write_text("x\n")
-    settings = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote", "ROW": "stand-in",
+    settings = {"POUW": "pearlplus", "PRODUCT": "remote", "ROW": "stand-in",
                 "PP_CHALLENGER": "gate:nobody@gate.invalid", "PP_PEER": "stand-in", "MAIN_FILE": tmp_path / "main.txt",
                 "PP_CHALLENGER_KEY": tmp_path / "key.json", "ALPHA": "1/2", "GAMMA": "4", "LIMITS_UNIT": "a unit",
                 "LIMITS_PROVE": "what they prove", "DAY": "0", "DAY_PROGRAM": "00" * 64, "DAY_LOG": tmp_path / "day-log.json",
-                "DAY_PARAMS": tmp_path / "day-params.json", "V3C_LAW": "stratified-rate:1/977", "HELD_ALPHA": "3/4",
+                "DAY_PARAMS": tmp_path / "day-params.json", "HELD_ALPHA": "3/4",
                 "HELD_GAMMA": "25"}
     settings = {k: v for k, v in {**settings, **changed}.items() if v is not None}
     (tmp_path / "record.env").write_text("".join(f"{k}={shlex.quote(str(v))}\n" for k, v in settings.items()))
