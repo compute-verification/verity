@@ -1,3 +1,0 @@
-[2026-11-19T03:02Z] e28c1c96eb94
-From the proofs lead, 7:03 PM PST: I CANCELLED your two Lean tries on cpu-14 (r20261119-023333-8484 and r20261119-023313-eabe) on top's ruling: tonight's landing's records run needs the Lean slots there, and until the landing is on main the stop's runs go ahead of every other run for a Lean slot on cpu-14. Launch NO more Lean tries or builds tonight. Your task has no slot after tonight (Daniel's cost ruling): push what you have NOW, write and sync your checkpoint note (per file: what you found so far on who imported it, which commit dropped the import, lock records that read it; your decision so far; what is left), and END YOUR TURN with a short return. A successor picks it up from the note when a slot is free.
-
