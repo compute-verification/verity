@@ -69,7 +69,7 @@ def params(reg: p2.Registration, **kw) -> audit.Params:
 def drive(store: p2_prover.Store, p: audit.Params, run=None):
     clock = Clock()
     reg = store.registration
-    s = audit.AuditRun(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins")), not_before_ns=0,
+    s = audit.AuditRun(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins"), samples=p.samples), not_before_ns=0,
                        clock=clock)
     prover = p2_prover.Prover(store, entropy=Entropy(b"receipt salts"))
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(SCHEDULE.boundaries)]
@@ -227,7 +227,7 @@ def test_a_p2_store_takes_no_append_no_tiles_and_no_sloth_session(store) -> None
     """One session type over either codec: over a P2 store its blocks are units, an append is refused, check 3's unit
     (which decodes) has no samples to take, no tiles bind, and the registration and codec are P2's together."""
     reg = store.registration
-    s = audit.AuditRun(params(reg), reg, None, coins.local(reg.digest, 0, 2, Entropy(b"c")), not_before_ns=0,
+    s = audit.AuditRun(params(reg), reg, None, coins.local(reg.digest, 0, 2, Entropy(b"c"), samples=params(reg).samples), not_before_ns=0,
                        clock=Clock())
     assert s.block_bytes == p2.UNIT_BYTES
     s.start()
@@ -236,14 +236,14 @@ def test_a_p2_store_takes_no_append_no_tiles_and_no_sloth_session(store) -> None
     v = s.append(bytes(64), 1)
     assert isinstance(v, audit.Verdict) and v.failure == "append"
     with pytest.raises(ValueError, match="takes None"):
-        audit.AuditRun(params(reg), reg, audit.NoiseTiles(), coins.local(reg.digest, 0, 2, Entropy(b"c")),
+        audit.AuditRun(params(reg), reg, audit.NoiseTiles(), coins.local(reg.digest, 0, 2, Entropy(b"c"), samples=params(reg).samples),
                        not_before_ns=0)
     sloth = audit.register(SOURCE, NODE, 2, bytes(64), nonce=bytes(32))
     with pytest.raises(ValueError, match="P2 Registration"):
-        audit.AuditRun(params(reg), sloth, None, coins.local(sloth.digest, 0, 2, Entropy(b"c")), not_before_ns=0)
+        audit.AuditRun(params(reg), sloth, None, coins.local(sloth.digest, 0, 2, Entropy(b"c"), samples=params(reg).samples), not_before_ns=0)
     with pytest.raises(ValueError, match="not the registration's"):
         audit.AuditRun(audit.Params(blocks=2, deadline_ns=A, windows=2), reg, None,
-                       coins.local(reg.digest, 0, 2, Entropy(b"c")), not_before_ns=0)
+                       coins.local(reg.digest, 0, 2, Entropy(b"c"), samples=params(reg).samples), not_before_ns=0)
     for kw in (dict(layout=receipts.STORE_ORDER), dict(receipt=receipts.BLOCK_SHA512, rows=0), dict(bind=True)):
         with pytest.raises(ValueError, match="P2 store's session"):
             params(reg, **kw)

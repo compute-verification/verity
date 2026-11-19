@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The proof-block census made again at this tree from a stored census's families (`census-rank<r>.json`, each rank's
-# `m1_families.py --steps all`, fetched from the census artifact ART): each family's unit templates and template
+# families, fetched from the census artifact ART): each family's unit templates and template
 # recomputed from its spec at this tree (`serving_rows.unit_templates`, `serving_rows.template`), each rank sized
 # (`m1_families.py --estimate`) and cut (`block_census.py`), which writes census.json, table.md and card.json under $OUT.
 # The Programs, rows and steps are the census's, so a change to the cut or to a family's units needs no Commit Build or row

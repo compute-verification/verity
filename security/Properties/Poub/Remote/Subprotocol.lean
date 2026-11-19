@@ -187,7 +187,7 @@ def LineHeldBy (ver : Node → Record → Prop) (sum : Node → Record → Optio
       δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
-        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
+        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding ((F.play com).opened prf rest)).toReal)
 
 /-- **`LineHeldAtSubprotocol` at a verifier**: its node, trace, records, premises and bound verbatim, with `acc` for the
 component's acceptance in the event (`Plays`), the trace's verdict `ver` (`Verified`) and the record the line and its
@@ -213,7 +213,7 @@ def LineHeldAtSubprotocolBy (acc : Node → Record → ByteArray → ByteArray �
       δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
-        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
+        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding ((F.play com).opened prf rest)).toReal)
 
 /-- Each sample's receipts `U_c` in a verifier's record `sum node r` of record `r` on the node, none where it has none:
 `Record.receipts` at `sum = Record.summary`. -/
@@ -253,7 +253,7 @@ def QBytesAtSubprotocolBy
       (Poub.Protocol.DELTA : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (Poub.Protocol.DELTA : ℝ) t)).toReal +
-        (∑ t, F.hide com prf (Poub.Protocol.DELTA : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal
+        (∑ t, F.hide com prf (Poub.Protocol.DELTA : ℝ) t).toReal + (R.binding ((F.play com).opened prf rest)).toReal
 
 /-- The deployed period's parameters (`period.run`'s defaults): two windows of 100 ms, one pass each, the audit's
 33 273 samples a sample, a 500 ms deadline, the lifetime cap of 300 windows, unpaced and not deferred, one window a
@@ -264,7 +264,7 @@ def honestParams : Poub.Protocol.Params where
     ("min_passes", (1 : ℕ)), ("pace", .null), ("samples", (33273 : ℕ)), ("window_ns", (100000000 : ℕ)),
     ("windows", (2 : ℕ))]
 
-/-- The log of `honestParams`' session before its first event: its two challenges and two openings coins, 32 bytes
+/-- The log of `honestParams`' session before its first event: its two challenges and two samples' coins, 32 bytes
 each, no append coin and no event. -/
 def honestEvidence : Poub.Protocol.Evidence where
   appendCoins := .arr #[]

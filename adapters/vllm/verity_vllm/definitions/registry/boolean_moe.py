@@ -82,7 +82,7 @@ from verity.circuits.types import Array, Tuple
 from verity_vllm.definitions.registry import moe as M
 from verity_vllm.definitions.registry import prims as P
 
-__all__ = ["MoeRouterBiasTopK", "MoeRouterNormalize", "MoeRouterProbs", "MoeRouterSelect", "MoeRouterShift", "MoeRouterSigmoidBias",
+__all__ = ["Ex2Approx", "Ex2ApproxIn", "Ex2ApproxOut", "MoeRouterBiasTopK", "MoeRouterNormalize", "MoeRouterProbs", "MoeRouterSelect", "MoeRouterShift", "MoeRouterSigmoidBias",
            "MoeRouterSigmoidBiasSlots", "MoeRouterSigmoidIn", "MoeRouterSigmoidMid", "MoeRouterSigmoidOut", "MoeRouterSigmoidScore",
            "MoeRouterTopKOrdered", "MoeSum", "MoeSumCoordinate", "MoeSumV3", "NvExpf", "NvExpfIn", "NvExpfOut", "SUM_CHUNK",
            "jb_low_byte", "moe_sum", "nv_expf_in", "nv_expf_out", "router_bias_topk", "router_sigmoid_in", "router_sigmoid_mid",
@@ -121,6 +121,7 @@ def _moe_sum_sig(S):
 
 
 MoeSum = EW.on_bits("MoeSum", 2, ("TOPK", "H"), _moe_sum_sig, _moe_sum, M.MoeSum)
+MoeSum.opt_in = True  # type: ignore[attr-defined]  (`MoeSum_v3` is the word's Boolean version; this one serves a reader that names it)
 
 #: the columns of one `MoeSum_v3` member
 SUM_CHUNK = 64
@@ -529,3 +530,40 @@ def _sigmoid_bias_slots(B, S, logits, bias):
 
 MoeRouterSigmoidBiasSlots = EW.on_bits("MoeRouterSigmoidBiasSlots", 2, ("E", "TOPK", "SCALE", "KERNEL"), M.slots_signature(F32, I32),
                                        _sigmoid_bias_slots, M.MoeRouterSigmoidBiasSlots)
+
+
+# --- ex2.approx.f32 ------------------------------------------------------------------------------------------------------------
+
+def _ex2_in(C, t):
+    """(the MUFU.EX2 operand, whether t < -126): ``t * 0.5`` (F32Mul_v1) below -126, else t; a NaN is not below."""
+    small = C.AND(NOT(_nan(C, t)), _less(C, _key(C, t), const_bits(_key_of(M.MINUS_126), 32)))
+    return mux(C, small, fp.f32_mul(C, t, const_bits(M.HALF, 32), ir_nan=True), list(t)), small
+
+
+def _ex2_out(C, y, small):
+    """``y * y`` (F32Mul_v1) where t was below -126, else y."""
+    return mux(C, small, fp.f32_mul(C, y, y, ir_nan=True), list(y))
+
+
+def ex2_approx_in(C, t):
+    op, small = _ex2_in(C, t)
+    return [op, [small]]
+
+
+def ex2_approx_out(C, y, small):
+    return _ex2_out(C, y, small[0])
+
+
+Ex2ApproxIn = definition("Ex2ApproxIn", 1, ex2_approx_in, (("t", F32),), Tuple(F32, Array(1, BL.BIT)),
+                         doc="ex2.approx.f32 before its MUFU.EX2: the operand (t * 0.5 below -126) and whether t < -126")
+Ex2ApproxOut = definition("Ex2ApproxOut", 1, ex2_approx_out, (("y", F32), ("small", Array(1, BL.BIT))), F32,
+                          doc="ex2.approx.f32 after its MUFU.EX2: y * y where t < -126")
+
+
+def _ex2_approx(B, S, t):
+    """`Ex2Approx_v1` on bits: `Ex2ApproxIn_v1`, `MufuEx2Ftz_v2`, `Ex2ApproxOut_v1`."""
+    a = B.call(Ex2ApproxIn, t)
+    return B.call(Ex2ApproxOut, B.call(MufuEx2Ftz, a[0]), a[1])
+
+
+Ex2Approx = EW.on_bits("Ex2Approx", 2, (), lambda S: ((("t", F32),), F32), _ex2_approx, M.Ex2Approx)

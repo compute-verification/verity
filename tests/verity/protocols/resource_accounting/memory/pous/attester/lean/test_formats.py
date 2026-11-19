@@ -19,6 +19,7 @@ from hypothesis import strategies as st
 
 from verity.commitments.crypto import lms
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.resource_accounting.memory.pous.verifier import session_proofs as SP
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -437,3 +438,56 @@ def test_wipe_egress_units(server):
     stats = D.run(port("wipe_egress_units", lambda v: sw.egress_units(W.int_(v, "egress_bits")), inputs), examples=300,
                   server=server)
     assert stats.outputs > 150 and stats.rejects > 30, stats
+
+
+def clear_reasons(v) -> list[str]:
+    """`session_proofs.clear_reasons` on the registered store `{"root", "leaves"}` at the deployed schemes."""
+    store = {"root": M.hex_(v, "store_root").hex(), "leaves": M.nat(v, "store_blocks")}
+    return list(SP.clear_reasons(M.commitment_of(M._get(v, "commitment")), [M.opening_of(o) for o in M.list_(v, "openings")],
+                                 M._str(v, "scheme"), M.hex_(v, "public_key"), store=store,
+                                 trusted=set(M.hexes(v, "trusted")), schemes=mc.SCHEMES))
+
+
+@st.composite
+def clear_reasons_inputs(sample) -> dict:
+    """The honest case (the session's own binding and rows, key, scheme and openings), and each refusal: another root, another
+    block count, a store of fewer blocks than an opening's index (past it, with and without the count agreeing), an untrusted
+    key, an unknown scheme, a missing opening, a coin that doesn't open, and the three at once."""
+    s = sample(M.sessions())
+    c, key = s.commitment, s.signed.public_key
+    openings = list(s.openings)
+    case = {"commitment": c.to_json(), "openings": openings, "scheme": mc.LMS, "public_key": key, "trusted": [key],
+            "store_root": c.binding, "store_blocks": c.blocks}
+    top = max(o.index for o in openings)
+    x = sample(st.integers(0, 2 ** 16))
+    edit = sample(st.sampled_from(range(9)))
+    if edit == 1:
+        case["store_root"] = M._flip(c.binding, x)
+    elif edit == 2:
+        case["store_blocks"] = c.blocks + 1 + x % 3
+    elif edit == 3:
+        case["store_blocks"] = top
+        case["commitment"] = dataclasses.replace(c, blocks=top).to_json() if top else case["commitment"]
+    elif edit == 4:
+        case["store_blocks"] = top
+    elif edit == 5:
+        case["trusted"] = [bytes(80)]
+    elif edit == 6:
+        case["scheme"] = "test/x"
+    elif edit == 7:
+        case["openings"] = openings[:x % len(openings)] + openings[x % len(openings) + 1:]
+    elif edit == 8:
+        o = openings[x % len(openings)]
+        case["openings"] = [dataclasses.replace(o, salt=M._flip(o.salt, x)) if q is o else q for q in openings]
+        case["store_root"], case["trusted"] = M._flip(c.binding, x), []
+    return {**case, "openings": [o.to_json() for o in case["openings"]],
+            "public_key": case["public_key"].hex(), "trusted": [t.hex() for t in case["trusted"]],
+            "store_root": case["store_root"].hex()}
+
+
+def test_clear_reasons(server):
+    """The Lean's `clearReasons` against `clear_reasons`, word for word and in order, on the honest case and on each
+    refusal, `OTHER_STORE` and `PAST_STORE` among them."""
+    stats = D.run(port("clear_reasons", clear_reasons, with_malformed(clear_reasons_inputs())), examples=300, server=server)
+    assert stats.outputs > 100, stats
+

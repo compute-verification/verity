@@ -21,10 +21,14 @@
 #                      digits; unset, the key the run's configuration pins for the wipe (VERITY_PINS); set empty, none:
 #                      refused
 #   WIPE_NODE          the wiped server's id (this host's name)
-#   WIPE_CARD          the card's SKU the wipe is measured for (h200-sxm-141gb; `any` takes any), a cuda store's only
-# The Lean judge, wipe-protocol, is built here in a scratch copy of verity/ (never this tree's .lake), beside the lease
-# and the wipe, which waits for it only to answer (`wipe_served.built`); no other program judges in its place, and one
-# that doesn't build ends the piece after the wipe with its own error and exit 7.
+#   WIPE_CARD          the card's SKU the wipe is measured for (h200-sxm-141gb), a cuda store's only; `any` is refused
+#                      by name: the SKU is checked
+# The reads are the declaration's (`WIPE.settings`' reads, 0: the memory attester chooses them, wipe_party.READS on the
+# auditor's party), never this launcher's. The Lean judge, wipe-protocol, is the wipe's declared executable
+# (`Launch.executables`, declared.py), built here in a scratch copy of verity/ (never this tree's .lake) whose place
+# follows from DIR alone, beside the lease and the wipe, which waits for it only to answer (`wipe_served.built`); no
+# other program judges in its place, nothing a node sets names another (WIPE_OWN_LEASE says only that the launcher took
+# a card of its own), and one that doesn't build ends the piece after the wipe with its own error and exit 7.
 # Inside the serve's gpu-lease (GPU_LEASE_UUID) it wipes that card; outside one it takes a card of its own (`gpu-lease 1
 # --wait`, else the tree's gpu_lease.sh) and gives it back after. DIR gets period.json, wipe.json, summary.json,
 # answer.json (wipe.json's answer), served.json (the serve dir and window, the server, the card, the lease, the run, the
@@ -57,11 +61,12 @@ from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_served as WS
+from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.scheme import MEMORY_ATTESTER
 from verity.runtime.stream import Side
 from verity_vllm.messages import Exchange
 
-DEFAULT = {"host": "vy-auditor-2", "address": "10.96.0.36:47611", "reads": 5500,
+DEFAULT = {"host": "vy-auditor-2", "address": "10.96.0.36:47611",
            "command": ["ssh", "-i", "~/.ssh/vy-auditor2-wipe", "-o", "BatchMode=yes", "research@10.96.0.36"]}
 mode, d, serve_dir, window, given, node, trusted, judge, pins, configuration, app, lease, own, ctrl, stream = sys.argv[1:]
 d, wipe = Path(d), schemes.get("wipe")
@@ -140,9 +145,9 @@ card = lease.split(",")[0] or ran["card"]
     "run": os.environ.get("RESEARCH_RUN_ID"),
     "lease": "its own (gpu-lease 1 --wait), given back before the serve takes one" if own else
              "the serve's: its engine loads on this card after the wipe"}, indent=1, sort_keys=True) + "\n")
-(d / "answer.json").write_text(json.dumps(answer, sort_keys=True) + "\n")
+period.publish(d, answer, ran["development"])
 print("WIPE " + json.dumps({"verdict": answer["verdict"], "reason": answer["reason"], "protocol": answer["protocol"],
-                            "decided_by": s.get("decided_by"), "k": s.get("k"), "segments": s.get("segments"),
+                            "decided_by": s.get("decided_by"), "executables": s.get("executables"), "k": s.get("k"), "segments": s.get("segments"),
                             "fill_GBps": (s.get("challenger") or {}).get("fill_GBps"), "t0": s.get("t0"),
                             "t1": s.get("t1"), "server": mc.PROVER_MACHINE, "card": card, "key_pin": ran["key_pin"],
                             "exit": 0 if answer["verdict"] == "accept" else 1}, sort_keys=True), flush=True)
@@ -150,6 +155,14 @@ sys.exit(0 if answer["verdict"] == "accept" else 1)
 EOF
 }
 
+# the judge's scratch copy of verity/: one place for DIR, so the pass under the card's own lease finds it by DIR alone
+lean_root() { echo "/tmp/verity-wipe-lean.$(printf %s "$DIR" | sha256sum | cut -c1-16)"; }
+judge() {
+  PYTHONPATH=$ROOT "$PY" "$ROOT/benchmarks/pous/declared.py" --built wipe wipe-protocol "$(lean_root)" \
+    || { echo "WIPE FAILED: the wipe's declared executable doesn't read (declared.py)"; exit 7; }
+}
+[ "${WIPE_CARD:-}" != any ] || refuse "WIPE_CARD=any: the card's SKU is checked, and the wipe is measured for" \
+  "h200-sxm-141gb unless WIPE_CARD names another SKU"
 if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the node's link, the settings, the refusals, the judge
   rm -f "$DIR"/{answer,served,summary,wipe,period}.json "$DIR/refused.txt" "$DIR/stamps.txt" \
     "$SERVE_DIR"/private/wipe/{answer,case,wipe.case}.json
@@ -164,7 +177,7 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the node's link
     SETTINGS='{"run_keys": true}'
   elif [ -z "$SETTINGS" ] && [ -n "${WIPE_COMMAND:-}" ]; then
     SETTINGS=$(python3 -c 'import json, shlex, sys; h, a, c = sys.argv[1:]
-print(json.dumps({"host": h, "address": a, "command": shlex.split(c), "reads": 5500}))' \
+print(json.dumps({"host": h, "address": a, "command": shlex.split(c)}))' \
       "${WIPE_CHALLENGER:-vy-auditor-2}" "${WIPE_ADDRESS:-10.96.0.36:47611}" "$WIPE_COMMAND")
   fi
   [ "${WIPE_KEY_SHA512-unset}" != "" ] || refuse "no challenger key is pinned: WIPE_KEY_SHA512 is set empty, which" \
@@ -174,16 +187,16 @@ print(json.dumps({"host": h, "address": a, "command": shlex.split(c), "reads": 5
   export WIPE_CTRL=${DEV:+$DEV $SRC $(cat "/sys/class/net/$DEV/speed" 2>/dev/null || echo -)}
   CTRL=$WIPE_CTRL
   attach check > /dev/null || { [ $? != 3 ] || refused; exit 1; }
-  S=$(mktemp -d)
+  S=$(lean_root)
+  rm -rf "$S" && (umask 077 && mkdir -p "$S") || { echo "WIPE FAILED: $S can't hold wipe-protocol's build"; exit 7; }
   trap 'rm -rf "$S"' EXIT
-  L=verity/protocols/resource_accounting/memory/pous/attester/lean
   # tar's exit 1 is only a file that changed as it read it: a process importing the tree's Python writes __pycache__
   # beside it meanwhile, as a check's other suites do; 2 or more is a copy that failed
   { tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ --warning=no-file-changed verity || [ $? = 1 ]; } \
     | tar -C "$S" -x || { echo "WIPE FAILED: verity/ doesn't copy for wipe-protocol's build"; exit 7; }
   export PATH="$HOME/.elan/bin:$PATH"
-  JUDGE=$S/$L/.lake/build/bin/wipe-protocol
-  BUILT=${JUDGE%/*}
+  JUDGE=$(judge) || { echo "$JUDGE"; exit 7; }
+  BUILT=${JUDGE%/*} L=${JUDGE%/.lake/build/bin/*}
   mkdir -p "$BUILT"
   # the lock is taken before the build starts and held by the build alone, so the answer waits for its end
   exec {LOCK}>"$BUILT/wipe-protocol.lock"
@@ -191,8 +204,8 @@ print(json.dumps({"host": h, "address": a, "command": shlex.split(c), "reads": 5
   stamp "the Lean build starts"
   (
     command -v lake >/dev/null 2>&1 \
-      || (exec {LOCK}>&- && bash "$ROOT/tools/verity/lean/setup.sh" "$S/$L") > "$DIR/lake-setup.log" 2>&1
-    if (cd "$S/$L" && exec {LOCK}>&- && exec lake build wipe-protocol) > "$DIR/lake-build.log" 2>&1; then
+      || (exec {LOCK}>&- && bash "$ROOT/tools/verity/lean/setup.sh" "$L") > "$DIR/lake-setup.log" 2>&1
+    if (cd "$L" && exec {LOCK}>&- && exec lake build wipe-protocol) > "$DIR/lake-build.log" 2>&1; then
       : > "$BUILT/wipe-protocol.ok"
       stamp "built wipe-protocol"
     else
@@ -209,21 +222,24 @@ print(json.dumps({"host": h, "address": a, "command": shlex.split(c), "reads": 5
     command -v gpu-lease >/dev/null 2>&1 || LEASE=(bash "$ROOT/tools/research/src/research/pods/sh/gpu_lease.sh")
     rc=0
     stamp "asked for the card"
-    WIPE_OWN_LEASE=$JUDGE GPU_LEASE_WHO=memory-accounting "${LEASE[@]}" 1 --wait --max-min 30 -- \
+    WIPE_OWN_LEASE=1 GPU_LEASE_WHO=memory-accounting "${LEASE[@]}" 1 --wait --max-min 30 -- \
       bash "$SELF" "$SERVE_DIR" "$WINDOW" "$DIR" "$SETTINGS" || rc=$?
     exit "$rc"
   fi
 fi
 
 # under the lease: the card's SKU, then the wipe (the attach checks the card idle), then its piece
-# under its own lease, the judge is the one the pass before the lease started building (WIPE_OWN_LEASE)
-[ -z "${WIPE_OWN_LEASE:-}" ] || { JUDGE=$WIPE_OWN_LEASE; stamp "leased the card"; }
+# under its own lease, the judge is the declared one the pass before the lease started building, in its scratch copy
+if [ -n "${WIPE_OWN_LEASE:-}" ]; then
+  JUDGE=$(judge) || { echo "$JUDGE"; exit 7; }
+  stamp "leased the card"
+fi
 CTRL=${WIPE_CTRL:-}
 CARD=${GPU_LEASE_UUID%%,*}
 export CUDA_VISIBLE_DEVICES=${GPU_LEASE_UUID:-${CUDA_VISIBLE_DEVICES:-}}
 CHECKED=$(attach check) || { [ $? != 3 ] || refused; exit 1; }
 read -r STORE STREAMS <<< "$CHECKED"
-if [ "${WIPE_CARD:-h200-sxm-141gb}" != any ] && [ "$STORE" = cuda ]; then
+if [ "$STORE" = cuda ]; then
   NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader -i "$CARD" 2>&1 | head -1) \
     || refuse "nvidia-smi can't read the card $CARD: $NAME"
   SKU=$("$PY" "$ROOT/benchmarks/kernels/machine.py" sku "$NAME" 2>&1) || refuse "the card $CARD: $SKU"

@@ -477,7 +477,7 @@ def test_an_opening_of_a_rewritten_block_is_stale():
 
 
 def test_a_windows_openings_outlast_the_next_windows_start():
-    """The driver's openings coin for window t comes once window t + 1's first root is in, so window t's passes stay
+    """The driver's sample's coins for window t comes once window t + 1's first root is in, so window t's passes stay
     open through window t + 1 and go when window t + 2 begins."""
     s = NodeMemory()
     _, payload = weights(s)

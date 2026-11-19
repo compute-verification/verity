@@ -2,9 +2,13 @@
 # bandwidth audit's. `benchmarks/one_stage/served_verdicts.sh` and `served_composite.sh` source this file where
 # ONSITE_PIECES names it (an onsite run's launch sets it), with the tree as cwd, and call:
 #
-#   onsite_piece_commands   served_verdicts.sh's defaults, each kept where its variable is set (empty: none):
-#       WIPE_CMD       'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"' where the tree has it; that
-#                      piece trusts the one challenger key WIPE_KEY_SHA512 pins, by default vy-auditor-2's wipe party's
+#   onsite_piece_commands   served_verdicts.sh's defaults, each kept where its variable is set to it or empty (none); a
+#                           command of the caller's own in one is refused by name (PREFLIGHT, exit 3). The ONSITE_*
+#                           below are the one place that names them: `verity run`'s hooks read theirs from here
+#                           (`memory/pous/scheme.py`'s `onsite_command`), so a launch's own is the tree's by construction:
+#       WIPE_CMD       'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"' where the tree has it, or
+#                      that with ` --run-keys` (a development run's, its attester on this node); that piece trusts the
+#                      one challenger key WIPE_KEY_SHA512 pins, by default the configuration's (VERITY_PINS)
 #       POUS_CMD       'bash benchmarks/pous/served_piece.sh "$@"' where the tree has it and this node holds the memory
 #                      challenger's key (~/.ssh/vy-auditor2-pous); that piece runs the bandwidth session over the store it
 #                      holds and writes its answer where the bandwidth piece's goes, and each of the two cases is
@@ -39,17 +43,30 @@
 #                           (its Python's exit isn't 0, or onsite_cases.skip can't be read) does it say
 #                           `COMPOSITE: not run` and exit 1, before any product is composed.
 
+# shellcheck disable=SC2016
+ONSITE_WIPE_CMD='bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'
+# shellcheck disable=SC2016
+ONSITE_POUS_CMD='bash benchmarks/pous/served_piece.sh "$@"'
+# shellcheck disable=SC2016
+ONSITE_BANDWIDTH_CMD='"$PY" benchmarks/pous/served_piece.py collect-bandwidth --serve-dir "$1" --window "$2" --out "$3"'
+
 onsite_piece_commands() {
-  # shellcheck disable=SC2016
-  [ -f "$TREE/benchmarks/pous/streamed_wipe/served_wipe.sh" ] \
-    && WIPE_CMD=${WIPE_CMD-'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'}
-  # shellcheck disable=SC2016
+  local v own
+  for v in WIPE_CMD POUS_CMD BANDWIDTH_CMD; do
+    own=ONSITE_$v
+    if [ -n "${!v:-}" ] && [ "${!v}" != "${!own}" ] && { [ "$v" != WIPE_CMD ] || [ "${!v}" != "${!own} --run-keys" ]; }; then
+      echo "PREFLIGHT: $v names a command of its own: an onsite piece runs only the tree's ($own in" \
+        "benchmarks/pous/onsite_pieces.sh), whose answer its own Lean decides; unset it for the tree's, or set it" \
+        "empty for none" >&2
+      exit 3
+    fi
+  done
+  [ -f "$TREE/benchmarks/pous/streamed_wipe/served_wipe.sh" ] && WIPE_CMD=${WIPE_CMD-$ONSITE_WIPE_CMD}
   [ -f "$TREE/benchmarks/pous/served_piece.sh" ] && [ -f "$HOME/.ssh/vy-auditor2-pous" ] \
-    && POUS_CMD=${POUS_CMD-'bash benchmarks/pous/served_piece.sh "$@"'}
-  # shellcheck disable=SC2016
+    && POUS_CMD=${POUS_CMD-$ONSITE_POUS_CMD}
   if [ -n "${POUS_CMD:-}" ]; then
     export POUS_TIMEOUT=${POUS_TIMEOUT:-${PIECE_TIMEOUT:-120m}}
-    BANDWIDTH_CMD=${BANDWIDTH_CMD-'"$PY" benchmarks/pous/served_piece.py collect-bandwidth --serve-dir "$1" --window "$2" --out "$3"'}
+    BANDWIDTH_CMD=${BANDWIDTH_CMD-$ONSITE_BANDWIDTH_CMD}
   fi
   return 0
 }

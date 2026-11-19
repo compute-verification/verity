@@ -12,7 +12,6 @@ from verity_bench import kit, settings
 from verity_bench.kit_report import CHECKED_BY, NOT_RECORDED, PIECE
 from verity_bench.breakdown import AUDIT, AUDIT_SPANS, DECODE_ROWS, PLAIN, PLAIN_SPANS, ms_cell
 from verity_bench.served_table import CAVEAT_KEYS, LIVE_CAVEAT_KEYS, PER_DECODE, PER_OUTPUT, SERVED
-from verity_bench.vllm.presets import current_spec
 
 #: what a research run keeps of the table, relative to its directory (`record`)
 TABLE = "out/served-table.json"
@@ -53,13 +52,13 @@ def _sources(row: Mapping[str, Any]) -> list[str]:
 def _breakdown(points: Sequence[Mapping[str, Any]]) -> list[str]:
     lines = [
         "",
-        "## Where the bandwidth audit's time goes, by span (`verity-bench breakdown`)",
+        "## Where the bandwidth audit's time goes, by span",
         "",
         ("Each cell is ms an output token, a difference and not a ratio: the mean over the point's paired reps ± its "
          f"95% half-width (Student t). `{AUDIT_SPANS}` − `{PLAIN_SPANS}` is split into rows that sum to it: the "
          "top-up's contention from the arms with the top-up off, every other row a part of the spans arms with the "
          f"top-up off. `{AUDIT}` − `{PLAIN}` (spans off) is the audit's cost; the spans' marks add their own time to "
-         "the spans arms. Each spans arm's step by part: `verity-bench breakdown`."),
+         "the spans arms."),
     ]
     for protocol in dict.fromkeys(point["protocol"] for point in points):
         group = [point for point in points if point["protocol"] == protocol]
@@ -187,23 +186,21 @@ def measurements(table: Mapping[str, Any], metrics: Mapping[str, str]) -> list[d
     out = []
     for name, at in metrics.items():
         spec, point = at.rsplit("/", 1)
-        spec = current_spec(spec)
         protocol = next((row["protocol"] for row in table["rows"] if row["spec"] == spec), None)
         members = {(row["member"], row["spec"]): row.get("why") for row in table["rows"]
                    if row["protocol"] == protocol and row.get("member")}
         if spec not in {other for _, other in members}:
-            out.append(_measurement(name, at, rows, skipped, key=f"{spec}/{point}"))
+            out.append(_measurement(name, at, rows, skipped))
         out += [_measurement(name, f"{other}/{point}", rows, skipped, member, why or f"no timed {point} in its record")
                 for (member, other), why in members.items()]
     return out
 
 
 def _measurement(name: str, at: str, rows: Mapping[str, Any], skipped: Mapping[str, str], member: str | None = None,
-                 absent: str = "no row: no protocol in `PROTOCOLS` serves it", key: str | None = None) -> dict[str, Any]:
-    """`at`'s row (``SPEC/POINT``, the row's `key` where `at` names its spec by a former id) as a measurement."""
+                 absent: str = "no row: no protocol in `PROTOCOLS` serves it") -> dict[str, Any]:
+    """`at`'s row (``SPEC/POINT``) as a measurement."""
 
-    key = key or at
-    row = rows.get(key) or {}
+    row = rows.get(at) or {}
     ratio = (row.get("over_served") or {}).get(PER_OUTPUT)
     m: dict[str, Any] = {"name": name, "unit": OVERHEAD_UNIT, "mark": "measured",
                          "extra": {"protocol": row.get("protocol"), "arm": row.get("arm"), "stock": SERVED,
@@ -211,7 +208,7 @@ def _measurement(name: str, at: str, rows: Mapping[str, Any], skipped: Mapping[s
     if member is not None:
         m["member"] = member
     if ratio is None:
-        why = skipped.get(key) or (absent if not row else "no passing run of it in the store" if row["run"] is None else
+        why = skipped.get(at) or (absent if not row else "no passing run of it in the store" if row["run"] is None else
                                   f"a rep lacks {PER_OUTPUT} or stock's is zero")
         return m | {"value": None, "why": f"no served ratio at {at}: {why}"}
     ci = ratio.get("ci95")

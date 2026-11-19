@@ -95,13 +95,15 @@ def test_each_coin_goes_bare_and_the_commitment_only_with_the_end(ended) -> None
     assert kinds[0] == "hold" and kinds[-1] == "end" and kinds.count("end") == 1, kinds
     assert all(type(c[1]) is C.Released for c in prover.calls if c[0] == "run")
     _, commitment, openings = prover.calls[-1]
-    assert C.layout_reason(commitment, 0, 2) is None
+    assert C.layout_reason(commitment, 0, 2, samples=audit.SAMPLES) is None
     sent = prover.prover.received
     assert sorted(sent) == [0, 1] and C.received_reason(commitment, [sent[0], sent[1]], openings) is None
     labels = [(o.label, o.index) for o in openings]
-    assert labels == [(C.CHALLENGE, 0), (C.CHALLENGE, 1), (C.OPENINGS, 0), (C.OPENINGS, 1)]
+    m = C.sample_coins(audit.SAMPLES)
+    assert labels == [(C.CHALLENGE, 0), (C.CHALLENGE, 1)] + [(C.SAMPLE, j) for j in range(2 * m)]
     case = json.loads(bytes.fromhex(period.case["evidence"]))
-    assert [C.coin(o).hex() for o in openings] == case["coins"]
+    samples = [b"".join(o.coin for o in openings[2 + d * m:2 + (d + 1) * m]).hex() for d in range(2)]
+    assert [C.coin(o).hex() for o in openings[:2]] + samples == case["coins"]
 
 
 def test_a_session_left_undecided_discloses_nothing() -> None:
@@ -115,8 +117,8 @@ def test_the_disclosure_is_refused_until_the_session_has_its_outcome() -> None:
     params = audit.Params(blocks=reg.blocks, deadline_ns=500_000_000, windows=2, window_ns=100_000_000, codec=reg.codec,
                           receipt=reg.receipt, rows=reg.rows)
     clock = Clock()
-    s = audit.AuditRun(params, reg, None, C.local(reg.digest, 0, 2, Entropy(b"coins")), not_before_ns=clock.now,
-                       clock=clock)
+    s = audit.AuditRun(params, reg, None, C.local(reg.digest, 0, 2, Entropy(b"coins"), samples=params.samples),
+                       not_before_ns=clock.now, clock=clock)
     with pytest.raises(audit.SessionError, match="disclosed at its end"):
         s.disclose()
     sigma0 = s.start()
@@ -140,7 +142,7 @@ def test_the_end_refuses_a_coin_the_commitment_doesnt_open_as_it_was_sent(ended)
     forged = dataclasses.replace(openings[1], coin=flipped.coin)
     why = C.received_reason(commitment, [sent[0], flipped], (openings[0], forged) + openings[2:])
     assert why is not None and why.startswith("the poub/challenge coin 1 the prover was sent: ")
-    other = C.local(b"\x01" * 64, 0, 2, Entropy(b"other")).commitment
+    other = C.local(b"\x01" * 64, 0, 2, Entropy(b"other"), samples=audit.SAMPLES).commitment
     assert C.received_reason(other, sent, openings) is not None
     with pytest.raises(ValueError, match="has no opening"):
         prover.prover.end(commitment, openings[1:])
@@ -154,7 +156,7 @@ def test_a_prover_is_refused_a_second_coin_for_a_window(ended) -> None:
     with pytest.raises(ValueError, match="sent again, another coin"):
         again.run(dataclasses.replace(sent, coin=bytes(64)), 1, prover.prover.store.registration.digest)
     with pytest.raises(ValueError, match="not a window's challenge"):
-        again.run(dataclasses.replace(sent, label=C.OPENINGS), 0, prover.prover.store.registration.digest)
+        again.run(dataclasses.replace(sent, label=C.SAMPLE), 0, prover.prover.store.registration.digest)
 
 
 def test_a_released_coin_round_trips_its_json_and_nothing_else_reads_as_one(ended) -> None:
@@ -215,3 +217,18 @@ def test_across_the_connection_no_message_before_the_end_carries_the_commitment(
         assert all(word not in text for word in ('"commitment"', '"salt"', '"path"')), m
     assert sorted(last["end"]) == ["commitment", "openings"]
     assert prover.calls[-1][1] == C.LiveCommitment.from_json(last["end"]["commitment"])
+
+
+def test_the_session_verifier_refuses_a_step_that_read_a_coin_never_released_by_the_lean_s_name():
+    """`session.verifier.unset` mirrors `Verifier.unset`: a release or a close with its coin reads it, and without it is
+    refused in the Lean's words."""
+    from types import SimpleNamespace
+
+    from verity.protocols.resource_accounting.memory.poub.verifier.session.verifier import unset
+    released, drew = SimpleNamespace(index=1), [(0, 3)]
+    assert unset({"kind": "boundary"}, released, b"c" * C.COIN_BYTES) is None
+    assert unset({"kind": "close", "t": 0}, drew, b"s" * 64) is None
+    assert unset({"kind": "boundary"}, SimpleNamespace(index=None), None) is None
+    assert unset({"kind": "start"}, released, None) == "window 1's challenge left without the challenger's coin"
+    assert unset({"kind": "boundary"}, released, b"") == "window 1's challenge left without the challenger's coin"
+    assert unset({"kind": "close", "t": 0}, drew, None) == "window 0's openings were drawn without the challenger's coins"

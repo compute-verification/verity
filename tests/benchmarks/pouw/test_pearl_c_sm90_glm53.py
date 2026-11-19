@@ -183,7 +183,8 @@ def retained(tmp_path_factory):
     """A retained pass in glm53_passes' layout, as `prefill` and as `decode` (the same pass): two calls of a test instance of
     pearl-c-h100-v1-h3 (k = 128, 16 x 16 tiles), one with 12 filler rows, proved by the scheme's reference prover and written
     as the device run writes them, and each call's served y from the scheme over the whole call as one tile (U and α), its
-    two FP32 products numpy's and its BF16 rounding torch's."""
+    two FP32 products numpy's and its BF16 rounding torch's, committed in its manifest as the served path does
+    (`served_y.retain_y`: load refuses a credited call with no y root)."""
     import random
     import shutil
 
@@ -215,6 +216,7 @@ def retained(tmp_path_factory):
     from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
     from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape, Tile
     from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
     from verity.commitments.merkle import tree_levels
 
     scheme = "pearl-c-h100-v1-h3"
@@ -289,7 +291,9 @@ def retained(tmp_path_factory):
         ops = s.encode(ctx, noise, x, rows(wrows[u.weight]), Tile(tuple(range(m)), tuple(range(n))))
         uu = np.array(s.checked(ctx, ops).u, np.uint32)[:rec.real_rows].view(np.float32)
         y = torch.from_numpy((uu * inv(ops.a.alpha)[:rec.real_rows, None]) * inv(ops.b.alpha)[None, :]).to(torch.bfloat16)
-        (d / "y" / f"{u.index}.bf16").write_bytes(y.view(torch.int16).numpy().tobytes())
+        served = y.view(torch.int16).numpy().tobytes()
+        (d / "y" / f"{u.index}.bf16").write_bytes(served)
+        matmuls[-1]["y"] = SY.retain_y(d, u.index, served, n, epoch.salt)
         y_words += y.numel()
     count = tr.commitment.count
     leaves = [prover.digest(t) for t in range(count)]

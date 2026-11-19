@@ -20,14 +20,13 @@ from verity_bench.exfiltration_common import (
     MEASURED_WAYS,
     MODEL,
     NETWORK_CHECK_SHARE,
-    ON_CPUS,
+    NO_RUN,
     OUTPUT_COUNT,
     RECORD,
     RESPONSE_IDS,
     ROW,
     SCHEMA,
     SECURITY,
-    SERVING_GAP,
     SHARE,
     SHARED,
     SOURCES,
@@ -38,7 +37,6 @@ from verity_bench.exfiltration_common import (
     _same,
 )
 from verity_bench.exfiltration_planner import ON_A_CLONE, _label, at_share, rows_of_record
-from verity_bench.exfiltration_served import served_share
 from verity_bench.exfiltration_text import _n, _names, _on, _part, _pct, _plan
 from verity_bench.exfiltration_verdicts import (
     _by,
@@ -70,14 +68,13 @@ def _timed_alone(priced: Mapping, share: float) -> tuple[str, str]:
 
 
 def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, count: Mapping, share: float,
-            network_check: float, row: str, served: Mapping, stop: Mapping | None = None) -> list[dict]:
+            network_check: float, row: str, stop: Mapping | None = None) -> list[dict]:
     """Every input with its mark and source: the compute audit's from its rows of record, the network attester's
     as its calculator marks them, and those both read, among them the request the calculator counts and what it is.
     ``count`` is the world year's output count (`build`'s `output_count`), which the sums it names take at 0, on the
     execution phases the reader's answer holds (``term``'s `stop`); where it names none, no sum leaves the output
     count out and the inputs list none.
-    ``served`` is the share a served run measures (`served_share`): with a run's record, each of its fields with its
-    mark, a field the record lacks marked missing with its gap. ``stop`` is the stop class's verdicts of record
+    ``stop`` is the stop class's verdicts of record
     (`stop_class`): where it is complete the output count's 0 carries its mark and names each verdict, its run and
     its verifier; otherwise, and with none, the output count is as without it."""
 
@@ -103,8 +100,7 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
             f"{where}: the planner's row `{row}` at its step `{head['step']}`, each of {len(points)} scopes at "
             f"audit budgets pinned from {min(budgets):.3g} to {max(budgets):.3g}"),
         one(audit, "compute_share", share, "", "assumed", "the share of total compute the figure is read at (--share); "
-            + ("the share a served run measures is " + served["why"] if served["value"] is None else
-               f"the share {served['run']} measures is beside it (`served_compute_share`)")),
+            + "the share a served run measures is " + NO_RUN),
         one(audit, "delta", head["delta"], "", "assumed",
             f"{where} `delta_seen`: the audit's δ over the monitoring period, a stated parameter"),
         one(audit, "lambda", head["lambda"], "", "assumed",
@@ -143,20 +139,6 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
                        f"not counted in the sums under {under}: until a served audit has sampled a "
                        "stop block the server chooses a response's output count, which the network attester's row "
                        f"`{OUTPUT_COUNT}` charges {charged}"))
-    if served["run"] is not None:
-        gaps = {g["field"]: g for g in served["missing"]}
-        whose = f"{served['run']}'s record"
-        out += [one(audit, "served_serving_gpu_s", served["serving_gpu_s"], "GPU-second",
-                    "missing" if "serving" in gaps else "measured",
-                    f"{whose} `serving`: the window's serving, which the share is of"
-                    + (f"; it lacks {', '.join(gaps['serving']['lacks'])}: {SERVING_GAP}" if "serving" in gaps else "")),
-                *(one(audit, f"served_{name}_gpu_s", p["gpu_s"], "GPU-second", p["mark"],
-                      f"{whose}: {p['what']}, {p['source']}" + (f"; {ON_CPUS}" if p["on_cpus"] else "")
-                      + (f"; it lacks {', '.join(gaps[name]['lacks'])}: {gaps[name]['why']}" if name in gaps else ""))
-                  for name, p in served["parts"].items()),
-                one(audit, "served_compute_share", served["value"], "", served["mark"] or "missing",
-                    f"{whose}: the audit's GPU-seconds over the window's serving GPU-seconds"
-                    + ("" if served["value"] is not None else f", {served['why']}"))]
     for name, i in term["inputs"].items():
         out.append(one(both if name in SHARED else net, name, i["value"], i["unit"], i["mark"], i["source"]))
     for i in (head.get("binding") or {}).get("assumed", ()):
@@ -202,7 +184,7 @@ def at_assumed_prices(store: Any, head: Mapping, share: float, step: str, varian
 
 def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, row: str = ROW, step: str = STEP,
           variant: str | None = None, response_ids: int = RESPONSE_IDS, scan_delta: Fraction | None = None,
-          served: Mapping[str, Any] | None = None, store: Any = None, root: Path | None = None,
+          store: Any = None, root: Path | None = None,
           local_only: bool = False, record: Path | None = None) -> dict:
     """The two parts from the store's rows of record and the tree: the inputs with their marks, the compute audit's
     part at ``share`` of total compute for each scope of record, the network attester's rows at the world's year
@@ -237,11 +219,6 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     Beside a ``row`` other than `ASSUMED_ROW`, `at_assumed_prices` holds that row's world year at ``share``
     (`at_assumed_prices()`), which is never the figure; as ``row`` itself, the figure's `label` is its (`_row_label`).
 
-    ``served`` is a served two-stage run's record (`served_share`), from which the document's `compute_share` is the
-    share of compute that run measures, with each of its parts, and where it is claimed the compute audit's part over
-    the world's year at that share (`GB`, with its β), beside the figure at ``share``, which stays given and assumed
-    (`given`). Without a record, or where it lacks a field, the share is not claimed, and `why` says so.
-
     Where the store holds the stop class's verdicts (`stop_verdicts`), `stop_class` is their account (`stop_class`),
     and where it is complete the output count's input, where the inputs list one, carries its mark; the runs left
     out are among `refused`. With none the document holds no `stop_class`.
@@ -252,7 +229,8 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     if not (0 < share < 1 and 0 <= network_check < share):
         raise ValueError(f"the share of total compute is in (0, 1) and the network check's own below it, not {share!r} "
                          f"and {network_check!r}")
-    measured = served_share(served)
+    measured = {"run": None, "value": None, "mark": None, "why": NO_RUN, "serving_gpu_s": None, "parts": {},
+                "missing": []}
     root = root or jobs.repository_root()
     if record is None:
         completion = jobs.StoreCompletion(store, root=root, local_only=local_only)
@@ -281,12 +259,6 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     assumed = None if row == ASSUMED_ROW else at_assumed_prices(store, head, share, step, variant, record)
     measured["given"] = {"share": share, "mark": "assumed", "GB": head["GB"]}
     measured.update(GB=None, beta=None, inside=None, no_GB=None)
-    if measured["value"] is not None:
-        try:
-            there = at_share("world year", world_run, world_rows, measured["value"])
-            measured.update(GB=there["GB"], beta=there["beta"], inside=there["inside"])
-        except ValueError as e:
-            measured["no_GB"] = str(e)
 
     term = attester(root, response_ids, scan_delta, answer)
     charged = {k: term["stop"][k] for k in ("rows", "held_phases", "below", "why", "verdicts")} | {
@@ -352,7 +324,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
             "value": head["GB"], "unit": "GB", "status": "modeled", "share": share, "row": row, "variant": variant,
             "label": _row_label(head) if row == ASSUMED_ROW else None, "at_assumed_prices": assumed, "record": RECORD,
             "runs": runs, "refused": refused, "weights": {"bits": weights, "GB": weights / GB, "label": term["weights"]["label"]},
-            "inputs": _inputs(points, runs, term, year["output_count"], share, network_check, row, measured, stop),
+            "inputs": _inputs(points, runs, term, year["output_count"], share, network_check, row, stop),
             "compute_share": measured, **({} if stop is None else {"stop_class": stop}),
             "compute_audit": sorted(points.values(), key=lambda p: (p["scope"] not in order, order.get(p["scope"], 0))),
             "network_check": {"share": network_check, "beta": less["beta"], "inside": less["inside"], "GB": less["GB"]},

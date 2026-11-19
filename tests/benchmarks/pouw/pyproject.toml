@@ -67,6 +67,7 @@ untraced = [
 # and the H100's record of it in Proofs/Pouw/PearlC/Records.lean.
 # test_pearl_c_sm90_grouped imports verity_torch.pouw's packages and its Pearl-C device run (run_device, lanes_device,
 # served_y_device); Pearl-C4's tests import verity.protocols.experimental's package files above the modules named below.
+# test_salt_bind's served window reads vLLM's registered Definitions (verity_vllm.definitions) whole.
 inputs_only = true
 inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/resource_accounting/compute/pouw/verifier", "verity/protocols/proofs/spot",
@@ -165,7 +166,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/registration/__init__.py", "verity/protocols/registration/verifier/__init__.py",
           "verity/protocols/registration/verifier/registration.py", "verity/protocols/registration/verifier/site_log.py",
           "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/device.py",
-          "verity/channel.py", "adapters/vllm/verity_vllm/definitions/__init__.py",
+          "verity/channel.py", "adapters/vllm/verity_vllm/definitions",
           "benchmarks/harness/verity_bench/__init__.py", "verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_audit.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_work.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/clear/__init__.py",

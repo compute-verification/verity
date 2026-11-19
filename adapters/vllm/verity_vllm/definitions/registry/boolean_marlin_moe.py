@@ -8,7 +8,8 @@ so each one's word view is its `_v1` at the same statics (`elementwise.on_bits`)
     MarlinMxfp4Coordinate(W)_v2{K,TK,DOT}
     GatherE2m1Pairx{E}_v2, GatherE8m0x{E}_v2, MoeExpertE2m1Row_v2{E,K}, MoeExpertE8m0Row_v2{E,K}
     MarlinMoeExpertCoordinate(W)_v2{E,K,TK,DOT}, MarlinMoeExpertGemm(W)_v2{E,K,N,TK,TN,GRID,DOT}
-    I32Div_v2, I32Rem_v2                             (a, b: i32) -> i32                      word view: I32Div_v1, I32Rem_v1
+    I32Div_v2, I32Rem_v2, I32Mul_v2                  (a, b: i32) -> i32                      word view: their _v1
+    E2m1ToBf16_v2, E8m0DequantBf16_v2, E2m1x2Lo_v2, E2m1x2Hi_v2                              word view: their _v1
 
     MarlinMxfp4Step(FromZero)Activation_v1{DOT}      (x: bf16) -> 20 1-bit words             the step's gates that read only x[j]
     MarlinMxfp4Step(FromZero)Column_v1{DOT}          ([acc], x, q, s, xd: 32 of them) -> f32 the rest, from them
@@ -182,6 +183,27 @@ I32Div = definition("I32Div", 2, lambda C, a, b: divrem(C, a, b)[0], (("a", I32)
                     doc="div.s32 on bits: I32Div_v1, `divrem`'s quotient")
 I32Rem = definition("I32Rem", 2, lambda C, a, b: divrem(C, a, b)[1], (("a", I32), ("b", I32)), I32, word=MM.I32Rem,
                     doc="rem.s32 on bits: I32Rem_v1, `divrem`'s remainder")
+I32Mul = definition("I32Mul", 2, lambda C, a, b: multiply(C, a, b)[:32], (("a", I32), ("b", I32)), I32, word=MM.I32Mul,
+                    doc="mul.lo.s32 on bits: I32Mul_v1, the product's low 32 bits")
+
+
+def e2m1_to_bf16(C, q):
+    """`marlin_moe.e2m1_to_bf16` on bits: exponent 126 + e and mantissa bit 6 m (m only where e is nonzero), both zero on a zero
+    code, the sign kept."""
+    m, e0, e1, sign = q
+    nz = OR(C, OR(C, e0, e1), m)
+    exp = add(C, const_bits(126, 8), [e0, e1], width=8)
+    return [ZERO] * 6 + [C.AND(m, OR(C, e0, e1))] + [C.AND(nz, b) for b in exp] + [sign]
+
+
+E2m1ToBf16 = definition("E2m1ToBf16", 2, e2m1_to_bf16, (("q", E2M1),), BF16, word=MM.E2m1ToBf16,
+                        doc="an e2m1 code's bf16 word on bits: E2m1ToBf16_v1")
+E8m0DequantBf16 = definition("E8m0DequantBf16", 2, lambda C, s: [ZERO] * 7 + list(s) + [ZERO], (("s", E8M0),), BF16,
+                             word=MM.E8m0DequantBf16, doc="an e8m0 byte as the bf16 exponent field: E8m0DequantBf16_v1, wiring")
+E2m1x2Lo = definition("E2m1x2Lo", 2, lambda C, b: list(b[:4]), (("b", E2M1X2),), E2M1, word=MM.E2m1x2Lo,
+                      doc="a packed byte's low nibble: E2m1x2Lo_v1, wiring")
+E2m1x2Hi = definition("E2m1x2Hi", 2, lambda C, b: list(b[4:]), (("b", E2M1X2),), E2M1, word=MM.E2m1x2Hi,
+                      doc="a packed byte's high nibble: E2m1x2Hi_v1, wiring")
 
 
 class BitInt:

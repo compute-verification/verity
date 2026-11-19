@@ -24,15 +24,13 @@ And what is left of those parts where no test went: a compiled call shape off it
 (`pouw_h1.check_tiles`, `H1Run.check`), a linear of a window that commits nothing (`pouw_h1_hooks.traced`), a saved
 window's sampling coin (`pouw_h1_handoff.suspend`, `resume`), a call's rows of the Commit and a table a named record
 reuses (`pouw_h1_commit.CommitTap.arow`, `reused`), a value's rows in a host tensor (`pouw_h1_registered.commit`), the
-tables of a call that served no rows and a port that reads no row (`drawn.zy_value`, `a_value`, `call_rows`), the
 host's salts (`pouw_h1_registered_device.host_commit`), and records that say they are on a CUDA device
 (`pouw_h1_words.zy_words`, `pouw_h1_tables_device.take_z`).
 
 And what the GPU path does that a CPU reaches: a window hashed where that path says by the host's twins of the
 kernels (`pouw_h1_tables_device.flush`, `pouw_h1_registered.commit`, `public_salts`, `pouw_h1_served.Served.settle`),
 kernels that don't build and a library off `ZyArgs` (`pouw_h1_registered_device.available`, `zy_host_lib`). Beside
-it, a call off the Program's order (`pouw_h1_served.Served.commit`), a leaf's committed files, its staged table
-and its record's root (`drawn.leaf_stagers`, `prover.lowering.stagers`' `FileStager.stage`, `stage_leaves`), and a saved window's Program
+it, a call off the Program's order (`pouw_h1_served.Served.commit`) and a saved window's Program
 (`pouw_h1_handoff.resume`).
 
 And what a call's receipts are with no card: each lane's words, J10-R's from the call's one stream, a dead tile's
@@ -50,7 +48,6 @@ core samples nothing from or whose --circuits are another Program's (`drawn.stag
 from __future__ import annotations
 
 import dataclasses
-import gzip
 import hashlib
 import io
 import itertools
@@ -64,7 +61,6 @@ import threading
 import warnings
 from contextlib import contextmanager
 from fractions import Fraction
-from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -87,8 +83,6 @@ import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.prove
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.registered as NR
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.requests as RQ
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.sample as PHD
-import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sampled as DN
-import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sampled_rows as DR
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.served as SV
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.served_files as SF
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.static as ST
@@ -103,7 +97,6 @@ from verity.circuits.refs import Affine, Strided
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
-from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
@@ -119,7 +112,6 @@ from verity.commitments import registered_value as RV
 
 import verity_vllm.protocols.pouw.h1_hooks as PHK
 from tests.protocols import challenger_host as CH
-from tests.protocols import pouw_h1_circuits as PC
 from tests.protocols import test_pouw_h1_commit as TC
 from tests.protocols import test_pouw_h1_handoff as TH
 from tests.protocols import test_pouw_h1_served as TS
@@ -144,7 +136,6 @@ from tests.protocols.test_pouw_h1 import (
     _tap,
 )
 from verity_vllm import protocols as PO
-from verity_vllm.errors import Refused
 from verity_vllm.protocols import pouw
 from verity.commitments import docket_digest as DD
 
@@ -559,55 +550,6 @@ def test_round_0_admits_at_most_its_leaves_and_a_round_states_no_live_unit_befor
     assert unserved.round_log == []
     with pytest.raises(ValueError, match="^round 0 hasn't closed, so its slot table isn't committed$"):
         LV.statement(unserved, 0)
-
-
-def test_a_v1_leafs_statement_is_its_lane_or_its_combine_and_a_lanes_names_its_lane():
-    """A sampled v1 leaf has two kinds of statement, a lane's and the combine's; another kind has no rows, and a lane's
-    ok is asked of a lane."""
-    lane, combine = DR.leaf_rows(LL.LANE, K, (32, 32)), DR.leaf_rows(LL.COMBINE, K, (32, 32))
-    assert [port for port, *_ in lane][-4:] == [LL.ADMIT, LL.ZY, LL.PARTIALS, LL.PUB]
-    assert [port for port, *_ in combine][-1] == LL.RECEIPT and len(combine) == LL.lanes(32, 32) + 1
-    with pytest.raises(ValueError, match=f"^a v1 leaf's statement is its {LL.LANE} or its {LL.COMBINE}, not 'tile'$"):
-        DR.leaf_rows("tile", K, (32, 32))
-    with pytest.raises(TypeError, match="^a lane's statement names its lane$"):
-        DR.leaf_ok(LL.LANE, None, {}, {})
-
-
-def test_a_statements_port_reads_one_registered_value_and_each_position_as_one_row():
-    """`statement_tables` gives a port that reads no registered value its instances' rows as they are, and one that
-    does its distinct positions; it refuses a port whose instances read two values, or one position as two rows."""
-    z = {"units": [0, 1], "w_x": np.zeros((2, 3), np.uint16), "s_x": [b"a", b"b"]}
-    plain = DN.statement_tables(z, ["x"], [])
-    assert plain["refs"] == {"x": [0, 1]} and plain["salts"] == {"x": [b"a", b"b"]} and plain["registered"] == {}
-    assert plain["tables"]["x"].tolist() == [[0, 0, 0], [0, 0, 0]]
-    shared = {**z, "s_x": [b"a", b"a"], "r_x": [4, 4], "v_x": ["v", "v"], "p_x": ["p", "p"]}
-    one = DN.statement_tables(shared, ["x"], [])
-    assert one["registered"] == {"x": {"value": "v", "positions": [4], "paths": ["p"]}} and one["refs"] == {"x": [0, 0]}
-    assert one["tables"]["x"].tolist() == [[0, 0, 0]] and one["salts"] == {"x": [b"a"]}
-    for edit in ({"s_x": [b"a", b"b"]}, {"p_x": ["p", "q"]}, {"w_x": np.array([[0, 0, 0], [0, 0, 1]], np.uint16)}):
-        with pytest.raises(ValueError, match="^port x: instances 0 and 1 read position 4 as two rows$"):
-            DN.statement_tables({**shared, **edit}, ["x"], [])
-    with pytest.raises(ValueError) as refused:
-        DN.statement_tables({**shared, "v_x": ["v", "u"]}, ["x"], [])
-    assert str(refused.value) == ("port x: its instances read ['u', 'v'], and a port reads one registered value: one "
-                                  "call's units a statement")
-
-
-def test_the_samples_k_is_the_one_given_or_the_serve_dirs_periods(tmp_path):
-    """`draw_k` is ``--k`` when given, else the ``draw_k`` the serve dir's period file holds; with neither, a period
-    file without one, or one that is no integer, it refuses and says where a K comes from."""
-    period = tmp_path / DN.PERIOD
-    assert DN.draw_k(tmp_path, 7) == 7
-    for text, what in ((None, f"[Errno 2] No such file or directory: '{period}'"), ('{"other": 1}', "'draw_k'"),
-                       ('{"draw_k": "k"}', "invalid literal for int() with base 10: 'k'")):
-        if text is not None:
-            period.write_text(text)
-        with pytest.raises(Refused) as refused:
-            DN.draw_k(tmp_path, None)
-        assert str(refused.value) == (f"no draw K: give --k, or a serve dir whose {DN.PERIOD} has the open's draw_k "
-                                      f"({what})")
-    period.write_text('{"draw_k": 9}')
-    assert DN.draw_k(tmp_path, None) == 9 and DN.draw_k(tmp_path, 7) == 7
 
 
 @pytest.fixture
@@ -1471,121 +1413,6 @@ def test_a_calls_seeds_take_its_operands_registered_roots_or_the_roots_the_produ
     assert RC.Receipts(served, roots=lambda c: given if c is call else None).roots(call) is given
 
 
-def test_a_ks_weights_are_read_from_the_checkpoint_only_by_a_reader_the_caller_binds():
-    """With no ``--weights`` file, K's weights come from ``--checkpoint`` through the reader the caller binds.
-    `linear_weights` refuses without a checkpoint, and with one and no reader, and says what to give; with both it
-    hands the reader the checkpoint, the window's linears and K, and returns what it read."""
-    linears, checkpoint, asked = [("q", 4, 3), ("o", 6, 2), ("k", 4, 2)], Path("model.safetensors"), []
-
-    def read(*args):
-        asked.append(args)
-        return "the weights"
-    for reader in (None, read):
-        with pytest.raises(Refused) as refused:
-            DN.linear_weights(linears, 4, None, None, reader)
-        assert str(refused.value) == ("b/<K>'s rows are the served model's weights: give --checkpoint (its "
-                                      "safetensors) or --weights")
-    with pytest.raises(Refused) as refused:
-        DN.linear_weights(linears, 4, checkpoint, None, None)
-    assert str(refused.value) == ("--checkpoint is read by benchmarks/pouw/h1_prove/drawn.py's reader: run that CLI, or "
-                                  "give --weights")
-    assert asked == [] and DN.linear_weights(linears, 4, checkpoint, None, read) == "the weights"
-    assert asked == [(checkpoint, linears, 4)]
-
-
-def test_the_key_a_ks_weights_are_salted_under_is_the_gates_model_key_for_the_windows_circuit(monkeypatch):
-    """With ``--gate`` and no ``--weights-key``, `weights_key` asks the gate's ``model-key`` for ``--model`` under the
-    window's circuit and weights' root, as one word of the gate's command, and takes the key its answer holds in hex
-    when the answer's ``key_sha512`` names it. It refuses, and says which: a gate with no ``--model``, before the gate
-    is asked; an answer that holds no key in hex, with the gate's exit and the end of what it wrote; and a key its
-    ``key_sha512`` doesn't name."""
-    key, circuit, weights = bytes(range(32)), "ab" * 64, "cd" * 64
-    win = {"program": circuit, "record": {"commitment": {"weights_root": weights}}}
-    asked: list[tuple[list[str], dict[str, Any]]] = []
-
-    def gate(stdout=b"", stderr=b"", code=0, model="M"):
-        def run(argv, **kw):
-            asked.append((argv, kw))
-            return SimpleNamespace(stdout=stdout, stderr=stderr, returncode=code)
-        monkeypatch.setattr(DN.subprocess, "run", run)
-        return SimpleNamespace(weights_key=None, gate="ssh auditor gate", model=model)
-
-    def refusal(*answer, **kw):
-        with pytest.raises(Refused) as refused:
-            DN.weights_key(gate(*answer, **kw), win)
-        return str(refused.value)
-    assert refusal(model=None) == "--gate reads the auditor's key with model-key --model ROLE: give --model"
-    assert asked == []
-    answer = {"key": key.hex(), "key_sha512": hashlib.sha512(key).hexdigest()}
-    assert DN.weights_key(gate(json.dumps(answer).encode()), win) == (key, "the gate's model-key for M")
-    assert asked == [(["ssh", "auditor", "gate", f"model-key --model M --circuit {circuit} --weights-root {weights}"],
-                      {"capture_output": True, "check": False})]
-    for stdout in (b'{"key_sha512": "00"}', b'{"key": "zz"}', b'{"key": 7}', b"[1]", b"no JSON"):
-        assert refusal(stdout) == f"the gate's model-key answered no key (exit 0): {stdout.decode()}"
-    assert refusal(b"", b"x" * 300 + b"denied\n", 3) == f"the gate's model-key answered no key (exit 3): {'x' * 293}denied\n"
-    for named in ({"key_sha512": "00" * 64}, {"key_sha512": None}):
-        assert refusal(json.dumps({**answer, **named}).encode()) == (
-            "the gate's model-key key is not the one its key_sha512 names")
-
-
-def test_a_windows_record_is_read_under_its_declared_programs_layout_and_only_with_its_served_trees(tmp_path):
-    """`window_of` reads a window's record beside the declared Program. It refuses a Program file whose bytes have no
-    layout, with core's reason; a record that names no served trees, or holds what is no list of their entries; and
-    one whose served trees were refused, with their refusals."""
-    served = SV.Served(PH.TILE, TS._unit())
-    served.declare([(32, K), (32, K)], {0: "q", 1: "o"}, 32, 2)
-    declared = SV.descriptor(served.program)
-    (tmp_path / DN.RECORD.format(w=0)).parent.mkdir(parents=True)
-
-    def refusal(commitment, raw=declared):
-        (tmp_path / DN.PROGRAM).write_bytes(gzip.compress(raw))
-        (tmp_path / DN.RECORD.format(w=0)).write_text(json.dumps({"commitment": commitment}))
-        with pytest.raises(Refused) as refused:
-            DN.window_of(tmp_path, 0)
-        return str(refused.value)
-    _layout, why = CR.layout_of(b"no descriptor")
-    assert why is not None and CR.layout_of(declared)[1] is None
-    assert refusal({}, b"no descriptor") == f"the declared Program's layout: {why[1]}"
-    without: list[dict[str, Any]] = [{}, {"served": None}, {"served": [{"value": "v"}]}, {"served": {"refused": []}},
-                                     {"served": {"entries": {"value": "v"}}}]
-    for trees in without:
-        assert refusal(trees) == "the window's record names no served trees: drawn rebuilds the values they registered"
-    refused = ["call 0: its weight is not its 32 × 64 int8 codes and 32 scales"]
-    assert refusal({"served": {"entries": [], "refused": refused}}) == f"the window's served trees were refused: {refused}"
-
-
-def test_a_calls_statement_is_listed_with_the_one_session_that_proved_it_and_check_needs_credits_verification(tmp_path):
-    """`statements` lists each planned call's statement with the one session that proved it: a call whose directory
-    holds no session, or two, is refused by the call and the count, and with one the statement names it. `check` is
-    refused where the caller binds no verification of credit's."""
-    work, proved, out = tmp_path / "work", tmp_path / "work" / "c0", tmp_path / "statements.json"
-    work.mkdir()
-    (work / DN.PLAN).write_text(json.dumps({"calls": [{"call": 0, "circuit": "k64.circuit", "dir": str(proved)}]}))
-    a = SimpleNamespace(work=str(work), out=str(out))
-
-    def session(name):
-        (proved / "sessions" / name).mkdir(parents=True)
-        (proved / "sessions" / name / "session.json").write_text("{}")
-        return str(proved / "sessions" / name)
-
-    def refusal():
-        with pytest.raises(Refused) as refused:
-            DN.statements(a)
-        return str(refused.value)
-    once = "not one: a drawn statement is proved once, every instance drawn (session's subset:N)"
-    assert refusal() == f"call 0: 0 sessions in {proved}/sessions, {once}"
-    first = session("s1")
-    assert DN.statements(a) == 0
-    assert json.loads(out.read_text()) == [{"call": 0, "circuit": "k64.circuit", "public": str(proved / "pub.bin"),
-                                            "sessions": [first]}]
-    session("s2")
-    assert refusal() == f"call 0: 2 sessions in {proved}/sessions, {once}"
-    with pytest.raises(Refused) as refused:
-        DN.check(SimpleNamespace(verified=None))
-    assert str(refused.value) == ("check is credit's own verification, which benchmarks/pouw/h1_prove/drawn.py binds: "
-                                  "run that CLI")
-
-
 def test_a_window_that_committed_no_call_is_refused_at_its_close():
     """A window whose Program was never declared committed no call: its close refuses it by that, once, and a window
     already refused gains nothing at its close."""
@@ -1811,42 +1638,6 @@ def test_a_values_rows_in_a_host_tensor_are_committed_as_the_same_rows_in_an_arr
             NR.commit(circuit, "v", other, ys)
 
 
-def test_the_tables_of_a_call_that_served_no_rows_are_rebuilt_from_no_record_and_read_no_kept_file(tmp_path):
-    """`zy_value` and `a_value` rebuild a call's ``zy@<c>`` and its step's ``a/<K>@<s>`` from what the prover kept. A
-    call that served no rows kept nothing, so no file of it is read: its z table is the rows of no record over the
-    window's slots, under the run's salts at the call's zy nonce, and its A table zero codes of scale 0 over them, at its
-    a nonce, each bound to the window's root."""
-    circuit, root = hashlib.sha512(b"a declared Program").hexdigest(), "ab" * 64
-    layout = {"m": 32, "tile": PH.TILE, "linears": [("q", K, 32)], "calls": [("q",)]}
-    win = {"layout": layout, "shape": {"prefix": "h1/"}, "program": circuit, "root": root,
-           "record": {"calls": [{"index": 0, "n": 32, "k": K, "served": 0, "rows": 0}]}}
-    salts = PV.RunSalts()
-    value = DN.zy_value(win, tmp_path, salts, 0)
-    no_z: np.ndarray = np.zeros((0, 32), "<i4")
-    no_y: np.ndarray = np.zeros((0, 32), np.int16)
-    words = SV.record_words(no_z, no_y, 32, PH.TILE)
-    same = NR.commit(circuit, "h1/zy@0", words, salts.at(SV.nonce(0, "zy"), 1), keep_rows=True, window=root)
-    assert isinstance(same, RV.Registered) and (value.value, value.leaves, value.root) == ("h1/zy@0", 1, same.root)
-    assert value.root != NR.commit(circuit, "h1/zy@0", words, salts.at(SV.nonce(0, "zy"), 1)).root
-    assert not np.count_nonzero(words)
-    no_codes: np.ndarray = np.zeros((0, K), np.int8)
-    zero = SV.Served.a_words(SimpleNamespace(m=32), SimpleNamespace(k=K), no_codes, np.zeros(0, "<f4"))
-    table = DN.a_value(win, tmp_path, salts, 0)
-    same = NR.commit(circuit, f"h1/a/{K}@0", zero, salts.at(SV.nonce(0, "a"), len(zero)), keep_rows=True, window=root)
-    assert isinstance(same, RV.Registered) and (table.value, table.root) == (f"h1/a/{K}@0", same.root)
-    assert table.leaves == same.leaves == len(zero) and not np.count_nonzero(zero)
-    assert list(tmp_path.iterdir()) == []
-
-
-def test_a_statements_port_that_reads_no_row_at_a_sampled_proof_block_is_refused():
-    """`call_rows` takes each port's row at each sampled proof block from credit's file. A port whose reads begin
-    past a sampled proof block reads no row there: the call's rows are refused by the port and the call, before a
-    value is read."""
-    reg = {"ports": {CR.PUB_PORT: {RV.READS_FROM: 2, "reads": [0, 1], "value": "pub"}}}
-    with pytest.raises(Refused, match=f"^port {CR.PUB_PORT} reads no row at a drawn unit of call 3$"):
-        DN.call_rows({}, 3, [2, 1], reg, {}, None, None)
-
-
 def test_the_hosts_commit_of_a_value_takes_one_192_byte_salt_a_row():
     """`host_commit` takes a value's given salts as 192 bytes a row, and refuses any other length by its bytes and
     the value's rows, before the host's library is asked for."""
@@ -1997,63 +1788,6 @@ def test_a_zy_library_whose_args_are_not_the_bytes_of_zyargs_is_refused(monkeypa
     monkeypatch.setattr(RGD, "ZyArgs", Short)
     with pytest.raises(RuntimeError, match=f"^zy_commit.cuh's Args is {args} bytes, ZyArgs 4$"):
         RGD.zy_host_lib.__wrapped__()
-
-
-def test_a_leafs_committed_files_are_held_to_the_manifest_and_a_staged_table_to_its_instances_rows(tmp_path):
-    """`leaf_stagers` takes each of K's leaf statements from --circuits' committed files. A leaf with no file, no
-    leaf Program or no template id there is refused by what to build; a leaf Program that is not the one the
-    manifest commits, by its file; and a circuit file that is not the manifest's, by both digests. `FileStager.stage`
-    refuses a port's table whose rows at the instances' refs are not their rows, before anything is written."""
-    k = LL.LEAST_K
-    name = f"{LL.LANE}{k}"
-    circuit, program = tmp_path / f"{name}.circuit.txt", tmp_path / DR.LEAF_PROGRAM.format(name=name)
-    text = b"a circuit\nMETA " + json.dumps({"ports": []}).encode() + b"\n"
-    leaf = hashlib.sha512(b"a leaf Program").hexdigest()
-    manifest = {"files": {name: "00" * 64, CR.LEAF_PROGRAMS: {name: leaf}}, "templates": {name: "a template"}}
-
-    def refusal(manifest):
-        with pytest.raises(Refused) as refused:
-            DN.leaf_stagers(k, PH.TILE, tmp_path, manifest, PC.stagers().FileStager)
-        return str(refused.value)
-    absent = f"--circuits has no {name} file, leaf Program and template id: build them (pouw_h1_circuits --lanes {k})"
-    assert refusal({}) == refusal(manifest) == absent
-    circuit.write_bytes(text)
-    assert refusal(manifest) == absent
-    program.write_bytes(b"another leaf Program")
-    for short in ({"files": manifest["files"]}, {**manifest, "files": {CR.LEAF_PROGRAMS: {name: leaf}}}):
-        assert refusal(short) == absent
-    assert refusal(manifest) == (f"--circuits' {program.name} is not the leaf Program the manifest commits "
-                                 f"({CR.LEAF_PROGRAMS} {name})")
-    program.write_bytes(b"a leaf Program")
-    assert refusal(manifest) == (f"{name}'s circuit (SHA-512 {hashlib.sha512(text).hexdigest()[:16]}...) is not "
-                                 f"--circuits' {name} file ({'00' * 8}...), the one the period-open committed")
-    stager = PC.stagers().FileStager(circuit, "a template", [("p", 0, 0, ())], DR.LEAF_OUT_ROWS)
-    with pytest.raises(ValueError, match="^port p's table rows at the instances' refs are not their rows$"):
-        stager.stage({"p": [[1, 2]]}, tmp_path / "staged", {}, [0], "a set", {"p": [[1, 2], [3, 4]]}, {"p": [1]}, {})
-    assert sorted(p.name for p in tmp_path.iterdir()) == sorted([circuit.name, program.name])
-
-
-def test_a_windows_sampled_leaves_are_staged_only_in_a_lanes_shape_and_under_its_records_root(tmp_path):
-    """`stage_leaves` stages K's sampled leaves as their lanes only where credit's lanes theorem reaches
-    (`credit.lanes_shape`: refused by its reason), and commits each leaf's partials under the root the window's
-    record names for its sample: a record that names none is refused, before a file of --circuits is read."""
-    k = LL.LEAST_K
-    shape = {"tiles": {k: {"j10r": False}}}
-
-    def refusal(win):
-        with pytest.raises(Refused) as refused:
-            DN.stage_leaves(None, {"shape": shape, **win}, k, [0], {}, None, tmp_path, tmp_path, {}, {})
-        return str(refused.value)
-    off = {"tile": (16, 32)}
-    why = CR.lanes_shape(off, shape, k)
-    assert why is not None and refusal({"layout": off}) == f"K = {k}'s drawn leaves: {why}"
-    assert CR.lanes_shape({"tile": PH.TILE}, shape, k) is None
-    named: list[Any] = [None, "a root", {}, {"root": 7}]
-    records: list[dict[str, Any]] = [{}, *({"draw": sample} for sample in named)]
-    for record in records:
-        assert refusal({"layout": {"tile": PH.TILE}, **record}) == ("the window's record names no draw root, under "
-                                                                     "which a leaf's partials are committed")
-    assert list(tmp_path.iterdir()) == []
 
 
 def _stand_in(k):
@@ -2488,28 +2222,3 @@ def test_a_row_read_n_times_in_a_row_is_its_leaves_in_order_n_times_over(row, on
     assert list(got) == list(row) * 3 and len(got) == 3 * len(row)
     assert isinstance(got, Strided) is one_view
 
-
-def test_a_windows_calls_are_staged_only_on_cores_sample_and_its_programs_circuit_files(tmp_path, monkeypatch, capsys):
-    """`stage` reads core's sample of the window, then --circuits' manifest, before it stages a call. A window core
-    samples nothing from, here a record with no sampling coin, is refused with the part of the record core refused
-    and core's reason. With the coin, a manifest for another Program is refused by both digests, and nothing is
-    written. `window_of` is stood in for: the window is a declared Program's descriptor and layout and, of its
-    record, the sampling coin alone."""
-    raw = SV.descriptor(_declared().program)
-    layout, why = CR.layout_of(raw)
-    assert why is None
-    coin, root, registered, receipts = (hashlib.sha512(x).hexdigest() for x in (b"coin", b"window", b"sample", b"receipts"))
-    opening = LC.LiveOpening(0, Wd.DRAW, 0, bytes(64), bytes.fromhex(coin), bytes(16), ()).to_json()
-    win = {"record": {}, "root": root, "raw": raw, "layout": layout, "program": hashlib.sha512(raw).hexdigest()}
-    monkeypatch.setattr(DN, "window_of", lambda *a: win)
-    (tmp_path / DN.MANIFEST).write_text(json.dumps({"program": "00" * 64}))
-    a = SimpleNamespace(serve_dir=tmp_path, work=tmp_path / "work", prover=None, window=0, k=1, circuits=tmp_path)
-    assert DN.run("stage", a) == 1
-    said = capsys.readouterr().err
-    assert said.startswith("REFUSED: core ") and said.endswith(
-        f" nothing from the window: draw: the window's draw coin is malformed ({NO_OPENING})\n"), said
-    win["record"] = {"commitment": {"draw": {"coin": opening, "root": registered, "receipts": receipts}}}
-    assert DN.run("stage", a) == 1
-    assert capsys.readouterr().err == (f"REFUSED: --circuits' manifest is for Program {'00' * 8}..., not the window's "
-                                       f"{win['program'][:16]}...\n")
-    assert not (tmp_path / "work").exists()

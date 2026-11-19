@@ -6,8 +6,8 @@ public import Poub.Window
 # A session's bookkeeping: `audit.py`'s `Session`
 
 The verifier's side of one session as a state machine over the events it sees, on its own clock (each event carries the
-clock's reading where `Session` reads it) and with its own coins (the 2W committed coins, window t's challenge at t and
-its openings coin at W + t, and the append coins by slot, an empty entry one never released). Each event gives what the
+clock's reading where `Session` reads it) and with its own coins (window t's challenge at t and its sample's coins at
+W + t, `sampleBytes` of them whole, and the append coins by slot, an empty entry one never released). Each event gives what the
 Python call returns:
 
 * `start`, `boundary`: the coin released (`none` at the close after the last window);
@@ -42,9 +42,17 @@ namespace Poub.Session
 
 def STEP_LIMIT : Nat := 2 ^ 64
 
-/-- A window's receipts stay below this (`receive` rejects with `plan` a pass that would take them to it), so each
-sample's sampler word lies in its stream's first SHA-512 block (`Key._uniform` at `U < 2^448`). -/
+/-- `audit.RECEIPT_LIMIT`: a window's receipts stay below this (`receive` rejects with `plan` a pass that would take
+them to it), so a sample's coins have a size fixed before any pass (`sampleCoins`). -/
 def RECEIPT_LIMIT : Nat := 2 ^ 64
+
+/-- `coins.sample_coins`: the challenger's 64-byte coins a sample of `samples` receipts over `g` windows reserves, enough
+for the draw's first stream (`Flock.Draw.drawWith`'s `2k · width U + 64` bytes) at any `U < g · RECEIPT_LIMIT`. -/
+def sampleCoins (samples g : Nat) : Nat :=
+  (2 * samples * Flock.Draw.width (max 1 g * RECEIPT_LIMIT - 1) + 64 + 63) / 64
+
+/-- A sample's stream as the session holds it: its `sampleCoins` coins, whole, in order. -/
+def sampleBytes (samples g : Nat) : Nat := 64 * sampleCoins samples g
 
 /-- `audit.Pace`: a paced session's windows hold at most `k` roots each, and its γ is declared per `windowNs`. -/
 structure Pace where
@@ -414,8 +422,8 @@ def close (s : State) (t : Int) (now : Nat) : Except String (Result × State) :=
   let s := { s with windows := s.windows.modify t ({· with final := true}) }
   if w.roots.size < s.params.minPasses then return s.fail t .few
   if t + 1 == s.params.windows && s.joined.size < s.appends.size then return s.fail t .coin
-  let some sampled := receiptSample s.digest t s.coins[s.params.windows + t]! s.params.samples (w.plans.map (·.length))
-    | throw "the openings' draw ran past its reads"
+  let some sampled := receiptSample s.params.samples s.coins[s.params.windows + t]! (w.plans.map (·.length))
+    | throw Spot.Draw.RAN_OUT
   return (.sampled sampled, { s with windows := s.windows.modify t ({· with drawn := some sampled, openedNs := some now}) })
 
 def verify (s : State) (t : Int) (openings : Array Opening) : Result × State := Id.run do
@@ -480,7 +488,7 @@ def State.outcome (s : State) : Option String :=
 
 /-- What `Session.record` gives of an accepted session, which is all of it but the coin commitment's root, the block
 size and the registration's fields its digest binds: each window's passes' lengths, steps, post-seed reads, heads,
-stale bounds and arrivals, its challenge's release, its deadline, its openings coin's release and samples, and the
+stale bounds and arrivals, its challenge's release, its deadline, its sample's coins' release and samples, and the
 session's store size, appended and released blocks, lifetime cap, pace and chain over its appends. -/
 structure WindowSummary where
   lengths : Array Nat

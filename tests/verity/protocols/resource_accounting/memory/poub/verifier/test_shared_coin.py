@@ -1,8 +1,8 @@
-"""One openings coin over g consecutive windows (`Params.groups_per_coin`): at the default, g = 1, a session samples each
+"""One sample's coins over g consecutive windows (`Params.groups_per_coin`): at the default, g = 1, a session samples each
 window from its own coin, as it always has; at g = 4 an honest session is accepted, each sample closed at its last window
 and its windows verified on their shares; a prover that skips the reads of one window of a sample is refused there; a
 window short of passes fails `few` wherever it sits in its sample; and a session's coins through a challenger service
-hold to what it signed, with ⌈W/g⌉ openings coins, each released after its sample's last root."""
+hold to what it signed, with ⌈W/g⌉ samples' coins, each released after its sample's last root."""
 from __future__ import annotations
 
 import copy
@@ -30,7 +30,15 @@ SCHEDULE8 = timing.honest(1000, 8, 300, gap_ns=10, down_ns=20, up_ns=30, jitter_
 def shared(store, g: int, windows: int = 8, **kw) -> tuple[audit.Params, coins.SessionCoins]:
     """Parameters of `windows` windows sampled `g` a coin, and a challenger in this process committed to their coins."""
     p = params(windows=windows, groups_per_coin=g, **kw)
-    return p, coins.local(store.registration.digest, 0, windows, Entropy(b"coins"), appends=APPENDS, per_coin=g)
+    return p, coins.local(store.registration.digest, 0, windows, Entropy(b"coins"), samples=p.samples, appends=APPENDS,
+                          per_coin=g)
+
+
+def sampled_after(s: AuditRun) -> tuple[bytes, ...]:
+    """The roots each sample's m coins were opened after, one a sample, holding that all m were opened after it."""
+    m, afters = s.coins.m, s.coins.afters(coins.SAMPLE)
+    assert len(afters) % m == 0 and all(afters[j] == afters[j - j % m] for j in range(len(afters)))
+    return afters[::m]
 
 
 def finish_samples(s: AuditRun, prover: audit_prover.Prover, passes, clock, open_=None) -> list[audit.Verdict]:
@@ -62,13 +70,14 @@ def outcomes(verdicts: list[audit.Verdict]) -> list[tuple[int, bool, str | None]
 
 def test_a_coin_a_window_is_the_default_and_samples_each_window_alone(store) -> None:
     p = params()
-    assert p.groups_per_coin == 1 and p.coins == 2 * p.windows
+    m = coins.sample_coins(p.samples)
+    assert p.groups_per_coin == 1 and p.coins == p.windows + p.windows * m
     assert [list(p.sample_of(t)) for t in range(p.windows)] == [[0], [1], [2]]
-    assert coins.families(3, APPENDS) == coins.families(3, APPENDS, 1) == (
-        (coins.CHALLENGE, 3), (coins.OPENINGS, 3), (coins.APPEND, APPENDS))
+    assert coins.families(3, APPENDS, samples=p.samples) == coins.families(3, APPENDS, 1, samples=p.samples) == (
+        (coins.CHALLENGE, 3), (coins.SAMPLE, 3 * m), (coins.APPEND, APPENDS))
     s, prover, passes, clock = drive(store, p, SCHEDULE)
     assert all(v.accepted for v in finish_samples(s, prover, passes, clock))
-    assert s.coins.afters(coins.OPENINGS) == tuple(w.roots[-1] for w in s.windows)
+    assert sampled_after(s) == tuple(w.roots[-1] for w in s.windows)
     r = s.record()
     assert r.groups_per_coin == 1 and "groups_per_coin" not in r.public()
     assert audit.pooled_windows(r)[0] == [(w.receipts, len(v.draws)) for w, v in zip(r.windows, s.windows)]
@@ -79,31 +88,35 @@ def test_groups_per_coin_is_a_positive_integer_and_the_coins_are_the_sessions() 
         with pytest.raises(ValueError, match="groups_per_coin"):
             params(groups_per_coin=bad)
         with pytest.raises(ValueError, match="groups_per_coin"):
-            coins.openings_coins(3, bad)
-    assert [coins.openings_coins(w, g) for w, g in ((8, 4), (8, 3), (3, 2), (3, 8), (1, 1))] == [2, 3, 2, 1, 1]
+            coins.draws(3, bad)
+    assert [coins.draws(w, g) for w, g in ((8, 4), (8, 3), (3, 2), (3, 8), (1, 1))] == [2, 3, 2, 1, 1]
     p = params(windows=5, groups_per_coin=2)
-    assert p.coins == 5 + 3 and [list(p.sample_of(t)) for t in (0, 1, 2, 4)] == [[0, 1], [0, 1], [2, 3], [4]]
+    assert p.coins == 5 + 3 * coins.sample_coins(p.samples, 2) and [list(p.sample_of(t)) for t in (0, 1, 2, 4)] == [[0, 1], [0, 1], [2, 3], [4]]
 
 
 def test_a_session_refuses_coins_flipped_for_another_number_of_windows_a_coin(store) -> None:
     p, c = shared(store, 4)
     with pytest.raises(ValueError, match="4 a sample"):
         AuditRun(p, store.registration, None, coins.local(store.registration.digest, 0, 8, Entropy(b"coins"),
-                                                         appends=APPENDS), not_before_ns=0, clock=lambda: 0)
+                                                         samples=p.samples, appends=APPENDS),
+                 not_before_ns=0, clock=lambda: 0)
     with pytest.raises(ValueError, match="1 a sample"):
         AuditRun(params(windows=8), store.registration, None, c, not_before_ns=0, clock=lambda: 0)
-    assert coins.layout_reason(c.commitment, 0, 8, 4) is None
-    assert "openings 8" in coins.layout_reason(c.commitment, 0, 8)
-    with pytest.raises(coins.CoinError, match="openings 3"):
-        coins.SessionCoins(c.challenger, store.registration.digest, 0, 8, per_coin=3)
+    assert coins.layout_reason(c.commitment, 0, 8, 4, samples=p.samples) is None
+    assert f"sample {8 * coins.sample_coins(p.samples)}" in coins.layout_reason(c.commitment, 0, 8, samples=p.samples)
+    with pytest.raises(coins.CoinError, match=f"sample {3 * coins.sample_coins(p.samples, 3)}"):
+        coins.SessionCoins(c.challenger, store.registration.digest, 0, 8, samples=p.samples, per_coin=3)
+    with pytest.raises(coins.CoinError, match="not challenge"):
+        coins.SessionCoins(c.challenger, store.registration.digest, 0, 8, samples=p.samples + 2, per_coin=4)
 
 
 def test_an_honest_session_sampled_four_windows_a_coin_is_accepted(store) -> None:
     """Eight windows, two samples: windows 0 … 2 close with window 3, the sample's `samples` receipts uniform over its
-    windows' receipts together, each window verified on its share; the openings coins leave after windows 3's and 7's
+    windows' receipts together, each window verified on its share; the samples' coins leave after windows 3's and 7's
     last roots; the record names g, and the pooled bound reads each sample as one window."""
     p, c = shared(store, 4)
-    assert p.coins == 10 and c.commitment.families[:2] == ((coins.CHALLENGE, 8), (coins.OPENINGS, 2))
+    m = coins.sample_coins(p.samples, 4)
+    assert p.coins == 8 + 2 * m and c.commitment.families[:2] == ((coins.CHALLENGE, 8), (coins.SAMPLE, 2 * m))
     s, prover, passes, clock = drive(store, p, SCHEDULE8, coins_=c)
     clock.now = s.deadline(7) + 1
     for t in (0, 1, 2):
@@ -113,7 +126,7 @@ def test_an_honest_session_sampled_four_windows_a_coin_is_accepted(store) -> Non
         s.verify(0, [])
     verdicts = finish_samples(s, prover, passes, clock)
     assert outcomes(verdicts) == [(t, True, None) for t in range(8)] and s.outcome == "accepted"
-    assert s.coins.afters(coins.OPENINGS) == (s.windows[3].roots[-1], s.windows[7].roots[-1])
+    assert sampled_after(s) == (s.windows[3].roots[-1], s.windows[7].roots[-1])
     assert [sum(len(w.draws) for w in s.windows[a:a + 4]) for a in (0, 4)] == [p.samples, p.samples]
     assert len({w.opened_ns for w in s.windows[:4]}) == 1
     r = s.record()
@@ -156,7 +169,7 @@ def test_the_last_sample_may_hold_fewer_windows(store) -> None:
     p, c = shared(store, 2, windows=3)
     s, prover, passes, clock = drive(store, p, SCHEDULE, coins_=c)
     assert all(v.accepted for v in finish_samples(s, prover, passes, clock))
-    assert s.coins.afters(coins.OPENINGS) == (s.windows[1].roots[-1], s.windows[2].roots[-1])
+    assert sampled_after(s) == (s.windows[1].roots[-1], s.windows[2].roots[-1])
     assert len(s.windows[0].draws) + len(s.windows[1].draws) == len(s.windows[2].draws) == p.samples
     r = s.record()
     assert audit.pooled_windows(r)[0] == [(7 * N, p.samples), (3 * N, p.samples)]
@@ -209,6 +222,8 @@ def test_a_session_sampled_two_windows_a_coin_through_a_challenger_service_holds
     assert all(v.accepted for v in finish_samples(s, prover, passes, clock)) and service.close() is None
     signed, received = service.signed()
     assert signed == s.commitment and s.released_reason(signed, received) is None
-    assert [f for f in signed.families if f[0] != coins.APPEND] == [(coins.CHALLENGE, 3), (coins.OPENINGS, 2)]
-    assert received[coins.OPENINGS] == (s.windows[1].roots[-1], s.windows[2].roots[-1])
-    assert coins.layout_reason(signed, 0, p.windows, 2) is None and "openings 3" in coins.layout_reason(signed, 0, 3)
+    m = coins.sample_coins(p.samples, 2)
+    assert [f for f in signed.families if f[0] != coins.APPEND] == [(coins.CHALLENGE, 3), (coins.SAMPLE, 2 * m)]
+    assert received[coins.SAMPLE] == tuple(r for r in (s.windows[1].roots[-1], s.windows[2].roots[-1]) for _ in range(m))
+    assert coins.layout_reason(signed, 0, p.windows, 2, samples=p.samples) is None
+    assert f"sample {3 * coins.sample_coins(p.samples)}" in coins.layout_reason(signed, 0, 3, samples=p.samples)

@@ -161,7 +161,7 @@ structure LiveSpec (V : Vocab d α) (b : SessionBound) (θ : ByteArray) (R : Arr
     _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok p.base.verifier.program ∧
     A.qr = p.base.verifier.query
   lb : A.Lb 0 = _root_.Spot.Challenger.MAX_COINS * _root_.Spot.Challenger.COIN_BYTES
-  tags : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags
+  tags : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags
   count : A.I.count = 1
   work : A.I.work = none
   stratified : A.I.stratified = none

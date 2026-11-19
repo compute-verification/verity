@@ -120,6 +120,26 @@ def reference(protocol_id: str, schemes) -> Callable[[Any], dict]:
 answer = reference(ID, mc.SCHEMES)
 test_answer = reference(TEST_ID, M.ts.SCHEMES)
 
+#: `MemoryAttester.WipeProtocol.otherServer`'s refusal
+OTHER_SERVER = "the case is a wipe of another server than {}"
+
+
+def served_reference(protocol_id: str, schemes, served: bytes) -> Callable[[Any], dict]:
+    """`MemoryAttester.WipeProtocol.servedProtocol protocol_id schemes served` in Python: a case whose params name
+    another server than `served` refused by name (`OTHER_SERVER`) before anything else is checked."""
+
+    def check(p: Params, c: sw.WipeCommitment, e: Evidence) -> tuple:
+        if p.server != served:
+            return ("reject", OTHER_SERVER.format(served.decode()))
+        return WP.outcome(p.server, p.session, p.trusted, c, e.signed, schemes, egress_mib=e.egress_mib)
+
+    return lambda case: P.answer(protocol_id, case, params=decode_params, commitment=decode_commitment,
+                                 evidence=decode_evidence, check=check, digest=digest)
+
+
+#: `wipe-protocol --server server-4 serve`'s answer, the form the deployed command has
+served_answer = served_reference(ID, mc.SCHEMES, SERVER)
+
 
 def counted_reference(protocol_id: str, schemes) -> Callable[[Any], dict]:
     """`MemoryChallenger.WipeProtocol.mkCounted protocol_id schemes` in Python: the wipe's formats and digest, its

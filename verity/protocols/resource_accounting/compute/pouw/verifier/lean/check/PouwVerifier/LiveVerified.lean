@@ -15,12 +15,12 @@ the round, the paths of its circuit file and its public file, and its sessions' 
 Flock verifier runs outside this process, so `liveVerified` is asked twice, as `Verified.verified` is:
 
 * with no answers (`runs` null), it names each verifier run (`asks`): in statement order, up to the first statement a
-  check before the verifier refuses, the statement's index, the live template's circuit file's SHA-512 the period's open
-  committed (`CIRCUIT_FILES`' `live`), round s's `--registered` file (`readsFile`, `live_reads.reads_file`: its slot
+  check before the verifier refuses, the statement's index (the live template's circuit file committed in the period's
+  open, `CIRCUIT_FILES`' `live`), the draw of every round's unit, round s's `--registered` file (`readsFile`, `live_reads.reads_file`: its slot
   ports at round s's slot table, its header ports at round 0's request table, at the roots the window's entries
   register, `m` at the known `m@<s>` of the step's m_s, `s` at the known `round@<s>`, each `cap_<i>` at the known
   `caps` of the period's committed max_tokens and `o0` at the known `live-ok` rows) and the partition object (every
-  instance of the live template one unit). The caller runs the verifier on exactly those inputs, against the live
+  instance of the live template one unit, each its own proof block). The caller runs the verifier on exactly those inputs, against the live
   descriptor;
 * with the answers (`runs`, one a run in that order, as far as the caller ran them), it judges them (`judge`): a
   verifier that could not run, or a session it rejected, refuses the window (`live`), a refusal of the statement
@@ -119,16 +119,17 @@ def readsFile (program pre window session : String) (t steps s m : Nat) (roots :
 
 /-- `credit._live_asks`: the verifier runs in statement order up to the first statement a check before the verifier
 refuses, and that refusal (none when every statement passes them), each `Verified.Ask` (its `call` the statement's
-round). Over the period's committed circuit files `files`, the live descriptor `raw` (`liveOf` of it `got`), the live
+round, its draw every round's unit). Over the period's committed circuit files `files`, the live descriptor `raw` (`liveOf` of it `got`), the live
 tables' roots `roots` (`liveRoots`), each step's m_s `ms`, the window Program's digest `program`, its open root `window`
 its session `session` and the period's committed max_tokens `maxTokens`. -/
 def asks (files statements : Json) (got : Live) (roots : List (String × String)) (ms : List Nat)
     (program window session : String) (maxTokens : List Nat) : R (Array Verified.Ask × Option (String × String)) := do
   if let some why := Verified.filesRefusal files then throw why
-  let some (.str sha) := PouwWindow.field? files LIVE | throw ("circuit", noLiveFiles)
+  let some (.str _) := PouwWindow.field? files LIVE | throw ("circuit", noLiveFiles)
   let some ss := (match statements with
     | .arr xs => xs.toList.mapM round?
     | _ => none) | throw (LIVE, LIVE_STATEMENTS_FORM)
+  let draw := Json.mkObj [("units", toJson (List.range got.s))]
   let mut seen : List Nat := []
   let mut out : Array Verified.Ask := #[]
   let mut i := 0
@@ -139,15 +140,16 @@ def asks (files statements : Json) (got : Live) (roots : List (String × String)
         "rounds: each round's live@<s> is one statement, verified once"))
     seen := s :: seen
     let reg ← readsFile program got.pre window session got.t got.s s (ms.getD s 0) roots maxTokens
-    out := out.push ⟨i, s, sha, reg⟩
+    out := out.push ⟨i, s, reg, draw⟩
     i := i + 1
   return (out, none)
 
-/-- The live descriptor's partition object: every instance of its template `unit` one unit. -/
-def livePartition (digest unit : String) : Json :=
+/-- The live descriptor's partition object: every instance of its template `unit` one unit, each of its `rounds` units
+its own proof block. -/
+def livePartition (digest unit : String) (rounds : Nat) : Json :=
   Json.mkObj [("format", Json.str PARTITION_FORMAT), ("program", Json.str digest),
     ("query", Json.mkObj [("name", Json.str QUERY_NAME), ("version", toJson QUERY_VERSION),
-      ("params", Json.mkObj [("templates", Json.arr #[Json.str unit])])])]
+      ("params", Json.mkObj [("templates", Json.arr #[Json.str unit])])]), ("blocks", unitBlocks rounds)]
 
 /-- `credit._live_verified`'s judgment of the verifier's answers `runs` (one an `asks` run, in its order, as far as the
 caller ran them): each round's outcome `{unit, verdict, program, registered}`, else the refusal of the first answer
@@ -210,7 +212,7 @@ def liveVerified (j : Json) : R Json := do
     if as.isEmpty then
       if let some why := refused then throw why
       return Json.mkObj [("outcomes", Json.arr #[])]
-    let partition := livePartition (Flock.hexOf (Flock.Sha512.hash raw)) got.unit
+    let partition := livePartition (Flock.hexOf (Flock.Sha512.hash raw)) got.unit got.s
     return Json.mkObj [("run", Json.arr (as.map (·.toJson partition)))]
   | .arr runs =>
     let out ← judge files statements got roots ms program window session maxTokens runs

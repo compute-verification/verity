@@ -122,7 +122,7 @@ def test_an_honest_period_is_a_period_piece_that_accepts(tmp_path, period_exe, c
 
 
 def test_a_period_with_no_lean_executable_is_missing_not_the_python_references(tmp_path, capsys):
-    """No ``pouw-period`` (``--exe``; `served_pouw.sh` passes none where it doesn't build): the piece is MISSING, exit
+    """No ``pouw-period`` (``--exe``, which a launcher passes none of where it doesn't build): the piece is MISSING, exit
     2, holding only ``missing.json``, even over a case the Python reference accepts, and a stale case is removed."""
     case, args = _honest_period_args(tmp_path)
     assert PC.case_twin({k: case[k] for k in ("params", "commitment", "evidence")})["verdict"] == "accept"

@@ -26,8 +26,9 @@ def stand_in(monkeypatch) -> list[dict]:
         wipes.append(run(*args, **kw))
         return wipes[-1]
 
-    def serve(exe, cases):
+    def serve(exe, cases, *args):
         assert exe == "wipe-protocol" and list(cases) == [wipes[-1].case]
+        assert len(args) == 2 and args[0] == "--server"
         given.append(wipes[-1].answer)
         return [wipes[-1].answer]
 

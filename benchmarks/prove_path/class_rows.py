@@ -21,6 +21,8 @@ import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
+import class_size as CS
+
 
 def kinds_of(circuit, IF):
     """(tid, port) -> the kinds its rows are filled by."""
@@ -71,7 +73,7 @@ def census(circuit, IF) -> dict:
         fresh = sum(1 + blocks(128 + b) + FRESH_EXTRA - 1 for b in out_bytes)  # prefix block folded in blocks(128 + b)
         reused = REUSED * sum(v for k, v in row.items() if k != "out")
         comp = n * (fresh + reused)
-        lab = fn.id.split("{")[0] + "{" + ",".join(f"{k}={v}" for k, v in fn.bindings.items() if type(v) in (int, bool)) + "}"
+        lab = fn.id.split("{")[0] + "{" + ",".join(f"{k}={v}" for k, v in CS.keyed(fn).items()) + "}"
         while lab in out:
             lab += "'"
         out[lab] = {"units": n, "rows": dict(row), "bytes": dict(rb), "compressions_a_unit": fresh + reused}

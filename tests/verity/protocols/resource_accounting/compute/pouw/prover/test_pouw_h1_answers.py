@@ -47,7 +47,7 @@ def exe(tmp_path, monkeypatch) -> Path:
     exe = tmp_path / "verity-verify-proof"
     exe.write_text(kit().FAKE)
     exe.chmod(0o755)
-    monkeypatch.setattr(PF, "executable", lambda: exe)
+    kit().stand_in(monkeypatch, exe)
     return exe
 
 
@@ -142,7 +142,7 @@ def _flip(p: Path, at: int = -2) -> Path:
 
 
 #: each input of a run changed: its files in place (each keeping its size), its files at other paths, the verifier's
-#: executable, and each argument credit builds
+#: executable, the lowering's, and each argument credit builds
 CHANGES = {
     "a session file": lambda proof, kw, exe: (_flip(proof.sessions[0] / "session.json"), proof, kw),
     "a file added to a session": lambda proof, kw, exe: ((proof.sessions[0] / "extra").write_text("x"), proof, kw),
@@ -152,7 +152,9 @@ CHANGES = {
         shutil.copytree(proof.sessions[0], proof.sessions[0].with_name("moved")),
         PF.Proof(proof.circuit, proof.public, (proof.sessions[0].with_name("moved"),)), kw),
     "the executable": lambda proof, kw, exe: (exe.write_text(exe.read_text() + "# another build\n"), proof, kw),
-    "the circuit digest": lambda proof, kw, exe: (None, proof, {**kw, "circuit_sha512": "0" * 128}),
+    "the lowering executable": lambda proof, kw, exe: (
+        PF.lower_executable().write_text(PF.lower_executable().read_text() + "# another build\n"), proof, kw),
+    "the draw": lambda proof, kw, exe: (None, proof, {**kw, "draw": {"units": [*kw["draw"]["units"], 0]}}),
     "the program": lambda proof, kw, exe: (None, proof, {**kw, "program": kw["program"] + b" "}),
     "the partition": lambda proof, kw, exe: (None, proof, {**kw, "partition": {**kw["partition"], "format": "other"}}),
     "the registered file": lambda proof, kw, exe: (None, proof, {**kw, "registered": {**kw["registered"], "ports": {}}}),
@@ -166,10 +168,28 @@ def test_a_changed_input_is_another_key(change, exe, tmp_path):
     assert window_check(d, windows[0], asked)[1] is None
     first = windows[0]["statements"][0]["public"]
     proof, kw = next(c for c in asked.calls if str(c[0].public) == first)
-    before = A.key(proof, exe=exe, **kw)
-    assert A.key(proof, exe=exe, **kw) == before
+    lower = PF.lower_executable()
+    before = A.key(proof, exe=exe, lower=lower, **kw)
+    assert A.key(proof, exe=exe, lower=lower, **kw) == before
     _done, proof, kw = CHANGES[change](proof, kw, exe)
-    assert A.key(proof, exe=exe, **kw) != before
+    assert A.key(proof, exe=exe, lower=lower, **kw) != before
+
+
+def test_a_run_answered_before_a_lowering_rebuild_is_run_again(exe, tmp_path):
+    """An answer kept under one lowering executable is not taken under another: the memo misses, and the verifier
+    runs again on the rebuilt lowering's C_S."""
+    d, windows = kit()._period(0, tmp_path / "proofs")
+    scratch = tmp_path / "scratch"
+    ran = Counted()
+    assert window_check(d, windows[0], A.Answers(scratch, by="the challenger check", verify=ran, say=None))[1] is None
+    n = len(ran.runs)
+    again = A.Answers(scratch, by="the period check", verify=ran, say=None)
+    assert window_check(d, windows[0], again)[1] is None and again.ran == 0 and len(ran.runs) == n
+    lower = PF.lower_executable()
+    lower.write_text(lower.read_text() + "# another build\n")
+    rebuilt = A.Answers(scratch, by="the period check", verify=ran, say=None)
+    assert window_check(d, windows[0], rebuilt)[1] is None
+    assert (rebuilt.ran, rebuilt.taken, len(ran.runs)) == (n, {}, 2 * n)
 
 
 def test_a_statement_changed_between_the_steps_is_answered_afresh(record, exe, tmp_path):

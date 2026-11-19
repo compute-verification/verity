@@ -20,14 +20,14 @@ line on stdin, each answered by one line on stdout, `{"answer": JSON}` or `{"err
   whose registration would bind PoUW's tile outputs: receipts here are of a block alone);
 * `{"op": "session", "node", "params", "coins", "append_coins", "not_before_ns", "index"}`: the next session over the
   node's live registration sampled here (`Registry.session`), `{"session": k}`, or `{"refused": true}`, its windows in
-  flight and the windows a sample's openings coin covers (`groups_per_coin` g, `Shared`) its parameters', and an error
+  flight and the windows a sample's coins cover (`groups_per_coin` g, `Shared`) its parameters', and an error
   at one window in flight with g above 1, which no property covers (`Flight`); `coins` `null` takes its W + ⌈W/g⌉
   live, each with the event that releases it (`event`'s `coin`);
 * `{"op": "event", "node", "session", "event", "coin"}`: one event through session k at its windows in flight and its
   g (`eventOn`, refused as `Registry.step` refuses a session it isn't running), its result as the difftest writes it
   (`Difftest.resultJ`); `coin` (or `null`) is the coin the challenger released for the event,
   set first (`withCoin`): a start's or a boundary's the challenge of the window it releases, a close's window t's
-  sample's openings coin, `W + t / g`, which only the sample's last window's close releases, an append's the session's
+  sample's coins, `W + t / g`, which only the sample's last window's close releases, an append's the session's
   append coin of the append's slot. A coin set is never replaced by another, and an event that releases a challenge or
   samples a window's openings from a coin never set is an error (`unset`);
 * `{"op": "openings", "node", "session", "t", "bytes": n}` and then n bytes: one frame of window t's openings as the
@@ -85,7 +85,7 @@ A window's verdict is `checkWindowChunked`'s, which is `checkWindow`'s, on the w
 reads its frames: any frame that doesn't decode leaves it none, and the transcript records the frames so. A window
 with no samples is rejected `malformed` at its settle (`Session.verifyBy`), whatever its frames, so an undecodable frame
 is refused on every window, as the driver's Python refuses it. `Properties.Poub.LiveIsRun` states that what
-this loop accepts at two windows in flight and g windows a sample's openings coin, its coins arriving one an event and
+this loop accepts at two windows in flight and g windows a sample's coins, its coins arriving one an event and
 each verdict applied at its settle, is what `Shared.run g` accepts on the events it records (`Session.run` at g = 1);
 none yet covers one in flight (`Flight`), and the `session` request refuses one in flight at g above 1. Openings are
 checked in the clear.
@@ -154,10 +154,14 @@ private def runOf (r : Registry) (node : ByteArray) (k : Nat) : Option Registry.
   (r.live.find? (·.node == node)).bind (·.sessions[k]?)
 
 /-- Session `s`, sampled `g` windows a coin, with the coin `c` the challenger released for event `e` (module docstring),
-or why not: a close's is its sample's openings coin, `W + t / g`, and only the sample's last window's close releases it;
-an append's is the append coin of its slot (`Session.append`), the slots before it it skipped left empty. -/
+or why not: a close's is its sample's coins, `W + t / g`, `sampleBytes` of them, and only the sample's last window's close
+releases them; an append's is the append coin of its slot (`Session.append`), the slots before it it skipped left
+empty; every other coin is 32 bytes. -/
 def withCoin (g : Nat) (s : Session.State) (e : Session.Event) (c : ByteArray) : Except String Session.State := do
-  if c.size ≠ Codec.COIN_BYTES then throw "a coin is 32 bytes"
+  let size := match e with
+    | .close _ _ => Session.sampleBytes s.params.samples g
+    | _ => Codec.COIN_BYTES
+  if c.size ≠ size then throw s!"the coin is {size} bytes"
   let set (i : Nat) : Except String Session.State :=
     match s.coins[i]? with
     | none => throw s!"the session has no coin {i}"
@@ -171,7 +175,7 @@ def withCoin (g : Nat) (s : Session.State) (e : Session.Event) (c : ByteArray) :
   | .close t _ =>
     if !(0 ≤ t && t < s.params.windows) then throw s!"no window {t}"
     else if t.toNat + 1 ≠ min (t.toNat / g * g + g) s.params.windows then
-      throw s!"window {t} is not its draw's last: only that window's close releases the draw's openings coin"
+      throw s!"window {t} is not its draw's last: only that window's close releases the draw's coins"
     else set (s.params.windows + t.toNat / g)
   | .append _ _ _ slot =>
     let σ := slot.getD s.appends.size
@@ -186,17 +190,17 @@ def withCoin (g : Nat) (s : Session.State) (e : Session.Event) (c : ByteArray) :
 /-- Why event `e`'s result `res` read a coin of `s`, the session after it, sampled `g` windows a coin, that the
 challenger never sent; none when it read none. -/
 def unset (g : Nat) (s : Session.State) (e : Session.Event) (res : Option Session.Result) : Option String :=
-  let missing (i : Nat) : Bool := (s.coins[i]?.map (·.size != Codec.COIN_BYTES)).getD true
+  let missing (i : Nat) (size : Nat := Codec.COIN_BYTES) : Bool := (s.coins[i]?.map (·.size != size)).getD true
   match e, res with
   | .start _, some (.released (some t)) | .boundary _, some (.released (some t)) =>
     if missing t then some s!"window {t}'s challenge left without the challenger's coin" else none
   | .close t _, some (.sampled _) =>
-    if missing (s.params.windows + t.toNat / g) then
-      some s!"window {t}'s openings were drawn without the challenger's coin"
+    if missing (s.params.windows + t.toNat / g) (Session.sampleBytes s.params.samples g) then
+      some s!"window {t}'s openings were drawn without the challenger's coins"
     else none
   | _, _ => none
 
-/-- Event `e` through running session `s` at its `f` windows in flight and `g` windows a sample's openings coin
+/-- Event `e` through running session `s` at its `f` windows in flight and `g` windows a sample's coins
 (`Flight.step f g`, as `Registry.step` steps it), the challenger's coin for it set first (`withCoin`), refused as
 `unset` refuses an event that read a coin never sent. -/
 def eventOn (f g : Nat) (s : Session.State) (e : Session.Event) (coin : Option ByteArray) :
@@ -265,7 +269,7 @@ def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String →
     let (params, coins, appendCoins, notBeforeNs) ← ofV (Difftest.sessionOf req)
     let f ← ofV (Difftest.flightOf req)
     if f == 1 && g != 1 then
-      throwThe String ("at one window in flight the verifier draws a window an openings coin: groups_per_coin is 1 "
+      throwThe String ("at one window in flight the verifier draws each window its own sample: groups_per_coin is 1 "
         ++ "(no property covers one in flight at more)")
     let coins := if live then Array.replicate coins.size ByteArray.empty else coins
     let index ← match ← ofV (J.get req "index" "request") with

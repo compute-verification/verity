@@ -739,7 +739,7 @@ def policy_previous(commitment: bytes, evidence: bytes) -> list[bytes] | Excepti
         return [b""]
 
 
-#: `Core.Onsite.store`: PoUS's setup's root of `C*` and the root PoUB-P2's registration names (`p2_case.store_root`).
+#: `Core.Onsite.store`: PoUS's setup's root of `C*` and the root PoUB-P2's registration names.
 STORE = Tie("store", (("verity/pous/p2/v4/run", _commitment_hex("root")),
                       ("verity/remote-bandwidth/p2/v0", _commitment_hex("root"))))
 #: `Core.Remote.windows`: every window of PoUW's period on the policy's record, the tie of remote's development

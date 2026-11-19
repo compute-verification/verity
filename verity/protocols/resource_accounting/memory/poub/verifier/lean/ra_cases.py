@@ -253,16 +253,24 @@ class Clock:
 
 class Replay:
     """Session k's challenger replaying a case's coins: a `LiveChallenger` of the session's layout whose coins are the
-    case's 2W, then its append coins by slot, each the audit's 32 bytes padded to the challenger's 64 under a zero salt.
+    case's W challenges, each the audit's 32 bytes padded to the challenger's 64, then each sample's coins, its entry cut
+    into its m coins (m zero coins for an entry never released), then its append coins by slot, padded as the
+    challenges, each under a zero salt.
     Past the case's append coins, or at a slot whose coin was never released (b""), it refuses the case, as the Lean
     does."""
 
-    def __init__(self, k: int, windows: int, committed: list[bytes], appends: list[bytes], per_coin: int = 1) -> None:
-        a = max(coins.APPENDS, len(appends))
-        padded = [c + bytes(LIVE_COIN_BYTES - len(c)) for c in [*committed, *appends]]
+    def __init__(self, k: int, windows: int, committed: list[bytes], appends: list[bytes], per_coin: int = 1, *,
+                 samples: int) -> None:
+        a, m = max(coins.APPENDS, len(appends)), coins.sample_coins(samples, per_coin)
+        padded = [c + bytes(LIVE_COIN_BYTES - len(c)) for c in committed[:windows]]
+        for c in committed[windows:]:
+            c = c if len(c) == m * LIVE_COIN_BYTES else bytes(m * LIVE_COIN_BYTES)
+            padded += [c[j * LIVE_COIN_BYTES:(j + 1) * LIVE_COIN_BYTES] for j in range(m)]
+        padded += [c + bytes(LIVE_COIN_BYTES - len(c)) for c in appends]
         out = iter(x for c in padded + [bytes(LIVE_COIN_BYTES)] * (a - len(appends))
                    for x in (c, bytes(HM96.salt_bytes)))
-        self.live = LiveChallenger(coins.SCHEME, k, coins.families(windows, a, per_coin), lambda n: next(out))
+        self.live = LiveChallenger(coins.SCHEME, k, coins.families(windows, a, per_coin, samples=samples),
+                                   lambda n: next(out))
         self.commitment, self.appends = self.live.commitment, len(appends)
         self.empty = {i for i, c in enumerate(appends) if not c}
 
@@ -273,11 +281,14 @@ class Replay:
             raise D.Reject(f"append coin {index} was never released")
         return self.live.open(label, index, after)
 
+    def open_many(self, requests: list[tuple[str, int, bytes]]) -> list[coins.LiveOpening]:
+        return [self.open(label, index, after) for label, index, after in requests]
+
 
 def replayed(reg: audit.Registration, k: int, windows: int, committed: list[bytes], appends: list[bytes],
-             per_coin: int = 1) -> coins.SessionCoins:
-    return coins.SessionCoins(Replay(k, windows, committed, appends, per_coin), reg.digest, k, windows,
-                              per_coin=per_coin)
+             per_coin: int = 1, *, samples: int) -> coins.SessionCoins:
+    return coins.SessionCoins(Replay(k, windows, committed, appends, per_coin, samples=samples), reg.digest, k, windows,
+                              samples=samples, per_coin=per_coin)
 
 
 def verdict_json(v: audit.Verdict) -> dict:
@@ -357,7 +368,8 @@ def pace_of(v: Any) -> audit.Pace | None:
 
 def session_of(v: Any) -> tuple[dict, list[bytes], list[bytes], int]:
     """`sessionOf`: a session's parameters (`Params`' keywords less the registration's, refused as `Params` refuses
-    them), its W + ⌈W/g⌉ coins, its append coins and its `not_before_ns`. `groups_per_coin` (g) is 1 when absent."""
+    them), its W challenges and ⌈W/g⌉ samples' coins (each whole, or 32 bytes for one never released), its append coins
+    and its `not_before_ns`. `groups_per_coin` (g) is 1 when absent."""
     p = _get(v, "params")
     kw = {k: _positive(p, k) for k in ("deadline_ns", "windows", "samples", "min_passes", "window_ns", "lifetime")}
     kw["deferred"] = _bool(p, "deferred")
@@ -369,8 +381,12 @@ def session_of(v: Any) -> tuple[dict, list[bytes], list[bytes], int]:
         kw["fresh_slots"] = nat(p, "fresh_slots")
     Params(1, **kw)
     committed = hexes(v, "coins")
-    if len(committed) != Params(1, **kw).coins or any(len(c) != coins.COIN_BYTES for c in committed):
-        raise D.Reject("W + ⌈W/g⌉ coins of 32 bytes")
+    W, g = kw["windows"], kw["groups_per_coin"]
+    whole = coins.RAW_BYTES * coins.sample_coins(kw["samples"], g)
+    if (len(committed) != W + coins.draws(W, g) or any(len(c) != coins.COIN_BYTES for c in committed[:W])
+            or any(len(c) not in (whole, coins.COIN_BYTES) for c in committed[W:])):
+        raise D.Reject("W challenges of 32 bytes, then ⌈W/g⌉ samples' coins, each whole or 32 bytes for one never "
+                       "released")
     appends = hexes(v, "append_coins")
     if any(len(c) not in (0, coins.COIN_BYTES) for c in appends):
         raise D.Reject("append coins are 32 bytes, or empty for a slot whose coin was never released")
@@ -389,7 +405,8 @@ def session(v: Any) -> dict:
         events = [event_of(e) for e in _list(v, "events")]
         params = params_of(reg, kw)
     clock = Clock()
-    s = AuditRun(params, reg, None, replayed(reg, 0, params.windows, committed, appends, params.groups_per_coin),
+    s = AuditRun(params, reg, None, replayed(reg, 0, params.windows, committed, appends, params.groups_per_coin,
+                                             samples=params.samples),
                  not_before_ns=not_before, clock=clock)
     results = [apply(s, clock, e) for e in events]
     return {"outcome": s.outcome, "record": summary(s) if s.outcome == "accepted" else None, "results": results}
@@ -451,7 +468,8 @@ def _registry_call(r: audit.Registry, source: bytes, registered: list[audit.Regi
         which, kw, committed, appends, not_before, index = a
         reg = registered[which] if isinstance(which, int) else which
         s = r.session(params_of(reg, kw), reg, None, not_before_ns=not_before, clock=Clock(), index=index,
-                      challenger=lambda k: Replay(k, kw["windows"], committed, appends, kw["groups_per_coin"]))
+                      challenger=lambda k: Replay(k, kw["windows"], committed, appends, kw["groups_per_coin"],
+                                                  samples=kw["samples"]))
         return {"session": s.commitment.epoch}
     if op == "event":
         node, k, e = a
@@ -616,9 +634,9 @@ def _runs_json(runs) -> list | None:
 class Run:
     """One session over a world's store, the verifier's side (a real `AuditRun`) and the prover's (`audit_prover.Prover`, from
     `cheat` if given, else the store) in step, every call to the session kept as an event with the clock it read. The
-    clock moves one tick an event unless a call needs more. Every receipt is sampled unless `samples` says fewer."""
+    clock moves one tick an event unless a call needs more. Every receipt of a window of at most `samples` (1,024) is sampled."""
 
-    def __init__(self, world: World | None = None, *, windows: int = 2, samples: int = 10**6, min_passes: int = 1,
+    def __init__(self, world: World | None = None, *, windows: int = 2, samples: int = 1024, min_passes: int = 1,
                  lifetime: int | None = None, deferred: bool = False, deadline_ns: int = 100, window_ns: int = 10,
                  not_before_ns: int = 0, cheat: Callable[[audit_prover.Store], audit_prover.Store] | None = None,
                  pace: audit.Pace | None = None, groups_per_coin: int = 1, refresh: bool = False,
@@ -634,7 +652,7 @@ class Run:
         self.clock = Clock()
         self.clock.now = not_before_ns
         self.not_before_ns = not_before_ns
-        self.coins = coins.local(reg.digest, 0, windows, Entropy(b"coins"), per_coin=groups_per_coin,
+        self.coins = coins.local(reg.digest, 0, windows, Entropy(b"coins"), samples=samples, per_coin=groups_per_coin,
                                  **({"appends": self.params.schedule.total} if refresh else {}))
         self.s = AuditRun(self.params, reg, None, self.coins, not_before_ns=not_before_ns, clock=self.clock)
         self.prover = audit_prover.Prover(cheat(self.store) if cheat else self.store, None, entropy=Entropy(b"receipt salts"))
@@ -787,8 +805,10 @@ class Run:
 
     def case(self) -> dict:
         p = self.params
+        committed, W, m = [c for c, _ in self.coins.challenger._coins[:p.coins]], p.windows, self.coins.m
         return {"append_coins": [c.hex() for c in coins.by_slot(self.coins)],
-                "coins": [c[:coins.COIN_BYTES].hex() for c, _ in self.coins.challenger._coins[:p.coins]],
+                "coins": [c[:coins.COIN_BYTES].hex() for c in committed[:W]]
+                + [b"".join(committed[W + d * m:W + (d + 1) * m]).hex() for d in range(coins.draws(W, p.groups_per_coin))],
                 "events": self.events,
                 "not_before_ns": self.not_before_ns,
                 "params": {"deadline_ns": p.deadline_ns, "deferred": p.deferred, "lifetime": p.lifetime,
@@ -1061,6 +1081,16 @@ def order_after_final(r: Run) -> None:
     r.receive(0, 1, bytes(64), step=10)
 
 
+def order_after_sample(r: Run) -> None:
+    """A root for window 0 after its close drew its sample on the sample's coins: the close made the window final, so
+    the root comes after the coins it was to precede, and is out of turn."""
+    r.start()
+    r.run()
+    r.boundary()
+    r.close(0, at=r.s.deadline(0) + 1)
+    r.receive(0, 1, bytes(64), step=10)
+
+
 def late(r: Run) -> None:
     r.start()
     r.run()
@@ -1242,7 +1272,7 @@ def boundary_before_root(r: Run) -> None:
 
 
 def honest_shared(r: Run) -> None:
-    """One openings coin over g windows (`Params.groups_per_coin`): every window's passes, then each sample closed at its
+    """One sample's coins over g windows (`Params.groups_per_coin`): every window's passes, then each sample closed at its
     last window and its windows verified on their shares. A close at a window before its sample's last is refused, and
     a window whose share is none, accepted at its close, is refused a verify."""
     r.start()
@@ -1263,7 +1293,7 @@ SKIPPED = Plan(((0, 3), (4, 2)), 6)
 
 
 def skipper_shared(r: Run) -> None:
-    """Under one openings coin over four windows, the prover holds block 3 as zeros (`dropping`), which only window 2's
+    """Under one sample's coins over four windows, the prover holds block 3 as zeros (`dropping`), which only window 2's
     pass reads, so it skips that read and makes its receipt from what it holds; fetched again for the opening, the
     receipt isn't the committed one (`receipt`) at window 2, past the windows before it, which verify."""
     r.start()
@@ -1397,6 +1427,7 @@ SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
     "order-window": (World(), {}, lambda r: order(r, 1, 0), "order"),
     "order-negative": (World(), {}, lambda r: order(r, -1, 0), "order"),
     "order-after-final": (World(), {}, order_after_final, "order"),
+    "order-after-sample": (World(), {}, order_after_sample, "order"),
     "honest-paced": (World(), PACED, honest_paced, "accepted"),
     "honest-paced-drawn-at-k": (World(), PACED, honest_paced_sampled_at_k, "accepted"),
     "order-past-pace": (World(), PACED, lambda r: (r.start(), r.run(), r.run(), r.run()), "order"),

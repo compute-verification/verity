@@ -932,10 +932,11 @@ def public_ports(rec: Mapping[str, Any]) -> dict[str, Any]:
     own where no root's port holds a ``/``; else, where every root's port but the window's trees of a template's field
     (``<template>/<field>``, its template another port's name's template) is ``<member>/<port>`` of one member, whose
     own port names hold no ``/``, that member's roots with its name and the ``/`` taken off, with its template's fields'
-    trees at its fields. Raises `ValueError` with v2's refusal where the roots are two members' or more, or bare and a
+    trees at its fields; a run input node's tree ``input/n<w>`` is the window's, no public file's. Raises `ValueError`
+    with v2's refusal where the roots are two members' or more, or bare and a
     member's (`NOT_ONE_MEMBER`), or one is a row tables' (`ROW_TABLES`) or names no port, or the member holds a root of
     its own at a field its template has a tree of (`own_field`)."""
-    roots = rec["roots"]
+    roots = [r for r in rec["roots"] if not G.is_fresh_value(r.get("port"))]
     ports = [r["port"] for r in roots if isinstance(r.get("port"), str)]
     if all("/" not in p for p in ports):
         return {r["port"]: r for r in roots if isinstance(r.get("port"), str)}

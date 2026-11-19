@@ -11,9 +11,11 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from verity.circuits import edges as EG
 from verity.circuits import partition_object as PO
 from verity.circuits import restrict as R
-from verity.circuits.codec import definition_digest
+from verity.circuits.codec import DecodedProgram, definition_digest, descriptor_id
+from verity.circuits.program import input_id
 
 from .certified_rows import _fields
 
@@ -21,7 +23,7 @@ PREFIX = "one-circuit: not derived yet: "
 
 RESTRICT = "restrict : C -> Partition -> Block -> Circuit (C_S, the lowering of the block's Definition in C)"
 
-LOWER = "lower : C_S of a partition that names no one template (Q_template_instance) -> its Boolean block circuit"
+LOWER = "lower : C_S of a partition that is no template query (Q_template_instance, Q_template_instances) -> its Boolean block circuit"
 
 #: Lean's lowering of C_S (`Flock.Lower.lower`, `Flock.Compose.compose`), a Lake target of Flock's verifier.
 LOWER_EXE = "flock-lower-check"
@@ -39,10 +41,23 @@ class NotDerived(ValueError):
         super().__init__(PREFIX + what)
 
 
-def block(c: bytes, partition: Mapping[str, Any], k: int) -> list[tuple[int, int]]:
+class Decoded:
+    """C's bytes, decoded at most once (`restrict.program`) for the door's steps on that C."""
+
+    def __init__(self, c: bytes) -> None:
+        self.c, self._D = c, None
+
+    def get(self) -> DecodedProgram:
+        if self._D is None:
+            self._D = R.program(self.c)
+        return self._D
+
+
+def block(c: bytes, partition: Mapping[str, Any], k: int, decoded: Decoded | None = None) -> list[tuple[int, int]]:
     """Proof block ``k``'s units, the ``k``-th pair of the partition object's one level of ``blocks``, which cover every unit
     of C's population exactly once (`partition_object.blocks`); `Refused` where the object is not valid, names no blocks or
-    more than one level (`blocks-levels`), its blocks end short of or past the population, or has no block ``k``."""
+    more than one level (`blocks-levels`), its blocks end short of or past the population, or has no block ``k``.
+    ``decoded``: C's, when the caller holds it."""
     v = PO.validate(partition)
     if not v.ok:
         raise Refused("E_PARTITION", f"the partition object is not valid: {list(v.codes)}")
@@ -53,7 +68,7 @@ def block(c: bytes, partition: Mapping[str, Any], k: int) -> list[tuple[int, int
     if bs is None:
         raise Refused("E_BLOCKS", "the partition object names no blocks")
     try:
-        population = PO.TemplatePartition(R.program(c), partition["query"]).population
+        population = PO.TemplatePartition((decoded or Decoded(c)).get(), partition["query"]).population
     except PO.QueryInapplicable as e:
         raise Refused("E_QUERY", str(e)) from e
     if bs[-1][1] != population:
@@ -63,30 +78,72 @@ def block(c: bytes, partition: Mapping[str, Any], k: int) -> list[tuple[int, int
     return [bs[k]]
 
 
-def restrict(c: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, int]]) -> bytes:
+def restrict(c: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, int]],
+             decoded: Decoded | None = None) -> bytes:
     """C_S (`OneStageZk.restrict`): the descriptor bytes of C compacted to the block of ``units`` (ascending ``[lo, hi)``
     ranges of the partition's units), Core's `Circuit.restrict` (`restrict.restrict`); `Refused` where C, the partition
     or the units give no block."""
-    return R.restrict(c, partition, [tuple(u) for u in units]).descriptor
+    return R.restrict(c, partition, [tuple(u) for u in units], D=(decoded or Decoded(c)).get()).descriptor
 
 
-def lower(c_s: bytes, partition: Mapping[str, Any], exe: Callable[[], Path | str], layout: str = LAYOUT) -> bytes:
+def _listed(query: Mapping[str, Any]) -> list[Any] | None:
+    """The templates a template query lists; None for another query."""
+    params = query.get("params") or {}
+    if query.get("name") == "Q_template_instance":
+        return [params.get("template")]
+    if query.get("name") == "Q_template_instances" and isinstance(params.get("templates"), list):
+        return list(params["templates"])
+    return None
+
+
+def cuts(c: bytes, partition: Mapping[str, Any], decoded: Decoded | None = None) -> dict[str, dict[str, int]]:
+    """in(S)'s row cuts (`Spot.OneStageZk.cutsOf`, `edges.io_cuts`): ``{template: {port: k}}`` on C and the partition's
+    ranges; `NotDerived` (`LOWER`, as `lower`) before C is read where the partition is no template query, and at a scan
+    node of C's root; `Refused` where the query doesn't apply to C or C's root reads a port in rows that no writer field
+    divides."""
+    if _listed(partition.get("query") or {}) is None:
+        raise NotDerived(LOWER)
+    D = (decoded or Decoded(c)).get()
+    try:
+        ranges = PO.TemplatePartition(D, partition["query"]).ranges
+    except PO.QueryInapplicable as e:
+        raise Refused("E_QUERY", str(e)) from e
+    try:
+        return EG.io_cuts(D.desc, ranges)
+    except ValueError as e:
+        if str(e).startswith(PREFIX):
+            raise NotDerived(str(e)[len(PREFIX):]) from e
+        raise Refused("E_LOWER", f"in(S)'s cuts: {e}") from e
+
+
+def lower(c_s: bytes, partition: Mapping[str, Any], exe: Callable[[], Path | str], layout: str = LAYOUT,
+          cut: Mapping[str, Mapping[str, int]] | None = None) -> bytes:
     """C_S's Boolean block circuit: Lean's lowering (`Flock.Lower.lower`, then `Flock.Compose.compose`),
-    `flock-lower-check compose`, the executable ``exe()`` builds, on C_S's template (the partition's ``Q_template_instance`` template): its input ports
-    the template's parameters as bit rows, in order, and one output port a return field, ``o{j}``, its bits in whole u16
+    `flock-lower-check compose`, the executable ``exe()`` builds, on C_S's template (the one Definition its root calls, which
+    the partition's template query lists): its input ports
+    the template's parameters as bit rows, in order, each cut ``k`` ways into rows ``p#j`` where ``cut`` (`cuts`, C's)
+    gives the template's port ``p`` a ``k``, and one output port a return field, ``o{j}``, its bits in whole u16
     words, each a field's tree (`Flock.Registered.outReads`); META binds the partition, C's digest and the template's
-    `definition_digest`. `NotDerived` where the partition names no one template; `Refused` where C_S defines no
-    such template, or the lowering refuses."""
-    query = partition.get("query") or {}
-    key = (query.get("params") or {}).get("template") if query.get("name") == "Q_template_instance" else None
-    if not isinstance(key, str):
+    `definition_digest`. `NotDerived` where the partition is no template query; `Refused` where C_S's root calls other
+    than one Definition, one the query does not list, or the lowering refuses."""
+    listed = _listed(partition.get("query") or {})
+    if listed is None:
         raise NotDerived(LOWER)
     D = R.program(c_s)
+    called = sorted({descriptor_id(nd.fn) for nd in D.root.body.nodes if input_id(nd.fn.id) is None})
+    if len(called) != 1:
+        raise Refused("E_LOWER", f"C_S's root calls {called}, and a block's units are instances of one template")
+    key = called[0]
+    if key not in listed:
+        raise Refused("E_LOWER", f"C_S's template {key!r} is not one the partition's query lists")
     fn = D.defs.get(key)
     if fn is None:
-        raise Refused("E_LOWER", f"the partition's template {key!r} is no Definition of C_S")
+        raise Refused("E_LOWER", f"C_S's template {key!r} is no Definition of C_S")
     params, ret = fn.signature()
-    ins = ",".join(f"{name}:{sum(t.leaf_widths())}" for name, t in params)
+    ks = (cut or {}).get(key, {})
+    ins = ",".join(f"{name}:{bits}" if ks.get(name, 1) <= 1 else
+                   ",".join(f"{name}#{j}:{bits // ks[name]}" for j in range(ks[name]))
+                   for name, bits in ((name, sum(t.leaf_widths())) for name, t in params))
     outs = ",".join(f"o{j}:{-(-sum(f.leaf_widths()) // 16)}" for j, f in enumerate(_fields(ret)))
     digests = json.dumps({key: definition_digest(D.desc["definitions"][key], D.desc)})
     with tempfile.TemporaryDirectory(prefix="one-circuit-lower-") as d:

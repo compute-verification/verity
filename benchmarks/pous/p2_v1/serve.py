@@ -210,7 +210,8 @@ def serve(engine: Engine, store: p2_prover.Store, *, prompt: int, windows: int, 
                           delta=1e-6, window_ns=per_window * step_ns, codec=reg.codec, receipt=reg.receipt,
                           layout=reg.layout, rows=reg.rows)
     entropy = entropy or Entropy(b"verity-pous/p2-serve/entropy/v0")
-    session = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, windows, entropy), not_before_ns=0,
+    session = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, windows, entropy, samples=params.samples),
+                             not_before_ns=0,
                              clock=clock)
     prover = p2_prover.Prover(store, entropy=entropy)
     opener = (open_ or (lambda pr: pr.open))(prover)
