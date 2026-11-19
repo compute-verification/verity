@@ -27,17 +27,19 @@ timed() { local name=$1; shift; /usr/bin/time -o $O/time-$name.txt -f "TIME $nam
 
 LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier $REPO/tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean)
 LEAN_BIN=$L/lean-$LSHA/verity-verify-proof; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit; FW_BIN=$L/lean-$LSHA/flock-zk-server; LOW_BIN=$L/lean-$LSHA/flock-lower-check
+RT_BIN=$L/lean-$LSHA/flock-read-tmpl; CC_BIN=$L/lean-$LSHA/flock-compose-check
 (
   export PATH=$HOME/.elan/bin:$PATH
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   exec 9>$L/lean.lock; flock 9
-  if [ ! -x $LEAN_BIN ] || [ ! -x $UNIT_BIN ] || [ ! -x $FW_BIN ] || [ ! -x $LOW_BIN ]; then
+  if [ ! -x $LEAN_BIN ] || [ ! -x $UNIT_BIN ] || [ ! -x $FW_BIN ] || [ ! -x $LOW_BIN ] || [ ! -x $RT_BIN ] || [ ! -x $CC_BIN ]; then
     rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $L/lean-src) \
       && cp tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean $LEAN_SRC/ \
       && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> $LEAN_SRC/lakefile.toml \
-      && (cd $LEAN_SRC && lake build verity-verify-proof flock-tmpl-unit flock-zk-server flock-lower-check) && mkdir -p $L/lean-$LSHA \
+      && (cd $LEAN_SRC && lake build verity-verify-proof flock-tmpl-unit flock-zk-server flock-lower-check flock-read-tmpl flock-compose-check) && mkdir -p $L/lean-$LSHA \
       && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LEAN_BIN && cp $LEAN_SRC/.lake/build/bin/flock-tmpl-unit $UNIT_BIN \
-      && cp $LEAN_SRC/.lake/build/bin/flock-zk-server $FW_BIN && cp $LEAN_SRC/.lake/build/bin/flock-lower-check $LOW_BIN
+      && cp $LEAN_SRC/.lake/build/bin/flock-zk-server $FW_BIN && cp $LEAN_SRC/.lake/build/bin/flock-lower-check $LOW_BIN \
+      && cp $LEAN_SRC/.lake/build/bin/flock-read-tmpl $RT_BIN && cp $LEAN_SRC/.lake/build/bin/flock-compose-check $CC_BIN
   fi
 ) > $O/build-lean.log 2>&1 &
 LP=$!
@@ -66,8 +68,24 @@ CHALLENGER_PY=python3
 challenger_built || exit 1
 
 $UV sync -q --all-packages --extra torch-cpu || exit 4
-wait $LP; [ -x $LEAN_BIN ] && [ -x $UNIT_BIN ] && [ -x $FW_BIN ] && [ -x $LOW_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
+wait $LP; [ -x $LEAN_BIN ] && [ -x $UNIT_BIN ] && [ -x $FW_BIN ] && [ -x $LOW_BIN ] && [ -x $RT_BIN ] && [ -x $CC_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
 SD="$UV run -q python benchmarks/one_stage/served_door.py"
+if [ -n "${AUDIT_RULE:-}" ]; then  # the staged window on the audit's road: records_audit.py audit on a local challenger
+  ( unset PYTHONPATH; timed window $SD window --tree . --out $S/window ) > $O/window.txt 2>&1
+  r=$?; cat $O/time-window.txt; grep -h '^STEP' $O/window.txt | cut -c1-3000; [ $r = 0 ] || { tail -c 4000 $O/window.txt; exit 5; }
+  cp $S/window/registration.json $S/window/circuit.json $O/
+  git -C $REPO rev-list --first-parent HEAD > $S/main.txt 2>/dev/null || git -C $REPO rev-parse HEAD > $S/main.txt || echo 00 > $S/main.txt
+  M0=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
+  ( unset PYTHONPATH FC_COINS TU_PINNED; export PATH=$(dirname $RT_BIN):$PATH; RUST_MIN_STACK=$((64 << 20)) timed audit $UV run -q python benchmarks/prove_path/records_audit.py audit \
+      --window $S/window --sampling-design "$AUDIT_RULE" --circuit $(sha512sum $S/window/circuit.json | cut -c1-128) \
+      --run $(python3 -c 'print("ab" * 64)') --challenger local --deployed-key --registered $S/window/pins.json --main $S/main.txt --m0-pythonpath $M0 \
+      --bin $B --lean $LEAN_BIN --zk-server $FW_BIN --ports ${AUDIT_PORTS:-64} --out $S/audit ) > $O/audit.log 2> $O/audit.err
+  r=$?; echo "audit rc $r"; cat $O/time-audit.txt; grep -h '^RECORDS\|^REFUSED\|^DRAW\|^MEMBER\|^VERDICT\|^CHECK' $O/audit.log | cut -c1-3000
+  tail -c 3000 $O/audit.err
+  cp -r $S/audit/summary.json $S/audit/window/summary.json $S/audit/window/case-v2.json $O/ 2>/dev/null
+  mkdir -p $O/audit-logs && find $S/audit -name '*.log' -size -20M -exec cp --parents {} $O/audit-logs \; 2>/dev/null
+  exit $r
+fi
 ( unset PYTHONPATH; timed build $SD build --tree . --out $S ) > $O/build-C.txt 2>&1; cat $O/time-build.txt; grep -h '^STEP' $O/build-C.txt | cut -c1-600
 for s in lower stage; do
   ( unset PYTHONPATH; timed $s $SD step $s --dir $S --template "$TEMPLATE" --lower $LOW_BIN ) > $O/$s.txt 2>&1
