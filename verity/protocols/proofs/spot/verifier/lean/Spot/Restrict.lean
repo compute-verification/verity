@@ -171,13 +171,18 @@ def restrict (P : Prog) (units : Array Nat) : V Prog := do
 /-- `Q`'s root with its leading input nodes as its parameters, in order, each the node's type: a reference to input node
 `i` reads parameter `i`, one to a later node its index less the input nodes'. This is the block's Program as
 `Flock.Lower.lower` and `Prog.evalBool` read it, its parameters the input ports' bits in increasing C index. Refuses a
-root with parameters of its own. -/
+root with parameters of its own, and a registered input node: a parameter does not say it is registered, so the verifier
+would commit its rows afresh. -/
 def ported (Q : Prog) : V Prog := do
   let some root := Q.defs[Q.root]? | throw "ported: the root is not one of the Program's Definitions"
   if !root.params.isEmpty then throw "ported: the root has parameters already"
   let isIn := fun (x : Node) => ((Q.defs[x.fn]?).map fun d => d.prim && isInputId d.id).getD false
   let k := (root.body.nodes.toList.takeWhile isIn).length
   let ins := root.body.nodes.extract 0 k
+  let registered := fun (x : Node) => ((Q.defs[x.fn]?).map fun d => (inputId? d.id).map (·.1) == some REGISTRATION).getD false
+  if let some x := ins.find? registered then
+    throw s!"ported: the block reads a registered value ({(Q.defs[x.fn]!).id}), and a parameter does not carry that \
+      it is registered: its rows would be committed afresh"
   if root.body.nodes.toList.drop k |>.any isIn then throw "ported: an input node after a node that is not one"
   let re := fun (r : Ref) => if r.p then r else if r.i < k then { p := true, i := r.i, j := r.j } else { r with i := r.i - k }
   let move := fun (s : Seq) => BlockFront.runs (s.toArray.map re)

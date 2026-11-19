@@ -105,8 +105,17 @@ def blockAgrees (units : Array Nat) (ins outs : List Nat) : Bool :=
 
 -- a word primitive of a 16-bit parameter (`TWiden16_v1`, unit 3): its 16-bit input port and its 32-bit output port
 #guard blockAgrees #[3] [16] [32]
--- a word composite whose word primitive's Boolean body is decoded after it (`TCol_v1` calling `TAdd32_v1`, unit 5): the
--- lift appends its callees first, so the composite's callee is before it
-#guard blockAgrees #[5] [32, 32] [32]
+-- a word composite whose word primitive's Boolean body is decoded after it (`TPair_v1` calling `TAdd32_v1`, unit 0): the
+-- lift appends its callees first, so the composite's callee is before it; `TPair_v1 a b` is `(a ^^^ b, b)`, so a swap
+-- of its two ports fails
+#guard blockAgrees #[0] [32, 32] [32, 32]
+
+-- a block whose port is a registered value (`TPair_v1` on `RegisteredInput32_v1`): its Program is not ported
+#guard match Program.decode (WORD_DESC.replace "\"Input32_v1\"" "\"RegisteredInput32_v1\"").toUTF8 with
+  | .ok P => match Spot.Restrict.portedOf P #[0] with
+    | .error e => e == "ported: the block reads a registered value (RegisteredInput32_v1), and a parameter does not carry \
+        that it is registered: its rows would be committed afresh"
+    | .ok _ => false
+  | .error _ => false
 
 end FlockSoundness.EvalBool
