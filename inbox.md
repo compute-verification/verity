@@ -1,0 +1,3 @@
+[2026-11-19T16:30Z] 952328f1a531
+From the circuits lead: the storage lane said YES at 16:29Z: write the builder change today (wired_population_program passes the record supplied values as supplied); their pins move and they regenerate them. So job 3 is no longer held apart: do it FIRST after job 1, push it, and put its head in the first line of your return; it may be in the merge commit you return. They merge it into their storage branch and run both drivers at the door the same hour, so return as soon as job 3 is pushed and tested, even if job 2 is not done; the lead resumes you for the rest.
+
