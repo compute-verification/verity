@@ -2,7 +2,7 @@
 leaves (``verity.commitments.hm96`` §5, ``frame_v3`` PROTOCOL.md §6).
 
 * :func:`compression`: one SHA-512 compression, ``out = F(cv, msg)`` with the feed-forward: core's
-  ``verity.commitments.gates.sha512.compress_gadget`` (58,120 ANDs), whose reference, constants and padding this module re-exports.
+  ``verity.commitments.gates.sha512.compress_gadget`` (57,947 ANDs), whose reference, constants and padding this module re-exports.
 * :func:`compression3`: three independent compressions (a 2^18 slot, 99% full).
 * :func:`hm96_row`: a row's hiding commit string from its chaining value after the last row block and its salt ``y``: the
   padding block's compression gives the inner digest ``x`` (``sha512/row/v1``), ``c = SHA-512(salt_prefix || y)`` (two

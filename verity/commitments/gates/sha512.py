@@ -2,9 +2,9 @@
 circuits and imports this), with its plain-integer reference. Its constants and gates are `verity.circuits.boolean.sha512`'s.
 
 * `compress_ref`: one compression on word values (FIPS 180-4 §6.4.2), with the feed-forward.
-* `compress_gadget`: the same over words of circuit bits, 58,120 ANDs in the ripple-carry model (80 rounds of 7 additions, Ch
-  and Maj; 64 schedule words of 3 additions; 8 final additions), fewer where an operand is a constant (a constant message
-  block's schedule is free). On a `forms.Circuit` it also commits copies (`commit`) that keep every row's linear forms short;
+* `compress_gadget`: the same over words of circuit bits, 57,947 ANDs over variable words (`verity.circuits.count`'s count of
+  `lms.Sha512Compress_v1`), under the ripple-carry model's 58,120 (80 rounds of 7 additions, Ch and Maj; 64 schedule words of
+  3 additions; 8 final additions); fewer where an operand is a constant (a constant message block's schedule is free). On a `forms.Circuit` it also commits copies (`commit`) that keep every row's linear forms short;
   traced (`trace.TracingCircuit`) a copy is the form itself, so a Boolean Definition built on it has exactly the ANDs.
 * `Sha512CompressFolded`: `compress_gadget` as a Definition of its arguments' pattern (`trace.folded`), which a Definition
   traced with calls calls in place of each compression's gates.
