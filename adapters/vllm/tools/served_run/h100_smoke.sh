@@ -178,12 +178,12 @@ K=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" -
 (cd adapters/vllm && "$PY" -m verity_vllm.pipeline.cli advice "$D" --window "$K" --cap "$CAP" $CA --weights-of-record "$WREG" \
   --out "$D/advice/.w$K") > "$SR/advice.log" 2>&1 \
   || { say "$said; SMOKE FAILED advice of window $K ($SR/advice.log)"; exit 1; }
-if [ -d "$D/advice/w$K" ]; then  # the serve's close committed it: the advice of record is the one the close compiled
+if [ -d "$D/advice/w$K" ]; then  # the serve's close compiled its circuit from this advice; its docket binds no weights of record
   cmp -s "$D/advice/.w$K/w$K/private/advice.bin" "$D/advice/w$K/private/advice.bin" \
     || { say "$said; SMOKE FAILED advice of window $K: not the advice the serve's close committed ($D/advice)"; exit 1; }
-else
-  mv "$D/advice/.w$K/w$K" "$D/advice/w$K"
+  rm -rf "$D/advice/w$K"
 fi
+mv "$D/advice/.w$K/w$K" "$D/advice/w$K"
 window_commit_of "$K"
 timeout -k 1m "$WC_TIMEOUT" "$PY" "${WC[@]}" > "$SR/window-commit.json" 2> "$SR/window-commit.err" \
   || { say "$said; SMOKE FAILED window-commit of window $K, exit $? ($SR/window-commit.err)"; exit 1; }
@@ -199,4 +199,15 @@ print(f"WINDOW-COMMIT window {k} class {cls}: reads {o.get('reads')}, failed {o.
       f"units served {u['served']}, computed {u['computed']}, evaluated {u['evaluated']}; registration {DD.digest(json.load(open(reg)))}")
 EOF
 )" || { say "$said; SMOKE FAILED counts: no WINDOW-ROWS line or registration ($SR/window-commit.err)"; exit 1; }
+said+="; $("$PY" - "$D/plans.jsonl" "$K" <<'EOF'
+import json, sys
+from pathlib import Path
+from verity_vllm import messages as M
+f, k = Path(sys.argv[1]), int(sys.argv[2])
+got = [p for p in (json.loads(b) for b in (M.lines(f, "Run") if f.is_file() else [])) if p.get("window") == k]
+p = got[-1] if got else {"error": "no plan line"}
+why = p.get("refused") or p.get("error") or p.get("pending")
+print(f"WINDOW-PLAN window {k}: " + (f"none, {str(why)[:160]}" if why else f"units {p.get('units')}, feeds {p.get('feeds')}, fed rows {p.get('fed_rows')}"))
+EOF
+)"
 say "$said"
