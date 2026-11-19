@@ -135,10 +135,9 @@ class _Builder:
     programs: int = 1
     fns: dict[str, Any] = field(default_factory=dict)
     units: dict[str, int] = field(default_factory=dict)
-    #: the node being lowered, the slots ``[lo, hi)`` that lower it, and the first of them whose last position is its
+    #: the node being lowered and the slots ``[lo, hi)`` that lower it alike (`window_lowering._Program.kind`)
     node: int = 0
     among: tuple[int, int] | None = None
-    ending: int | None = None
     #: each slot's allocations of a template at a node so far, and each allocation's first unit and count
     seen: dict[tuple[int, str, int], int] = field(default_factory=dict)
     groups: dict[tuple[str, int, int, int, int], tuple[int, int]] = field(default_factory=dict)
@@ -191,6 +190,25 @@ class _Builder:
         self.spans.setdefault(tid, []).append((at, count, *self.label))
         self.starts.setdefault(tid, []).append(start)
         return tid, at
+
+    def allocation(self, fn: Any, labels: Sequence[tuple[int, int]]) -> tuple[str, int]:
+        """One allocation of ``fn``, unit i of the slot and step ``labels[i]``: its descriptor id and first unit."""
+        tid = descriptor_id(fn)
+        self.fns.setdefault(tid, fn)
+        start = self.units.get(tid, 0)
+        self.units[tid] = start + len(labels)
+        self.spans.setdefault(tid, []).extend((start + i, 1, *label) for i, label in enumerate(labels))
+        self.starts.setdefault(tid, []).append(start)
+        return tid, start
+
+    def allocation_wires(self) -> list[IF.Wire]:
+        """Each reader allocation's wires coalesced on their own: `interface.ordered` bounds what a range reads by a box over
+        a wire's digits, which a digit cut across allocations of other sizes widens past what the range reads, to a cycle."""
+        starts = {t: sorted(set(s)) for t, s in self.starts.items()}
+        by: dict[tuple[str, int], list[IF.Wire]] = {}
+        for w in self.wires:
+            by.setdefault((w.reader, bisect.bisect_right(starts[w.reader], w.at)), []).append(w)
+        return [x for g in by.values() for x in IF.coalesce(g)]
 
     def feed(self, tid: str, port: str, at: int, count: int, rows: Sequence[Row],
              lead: tuple[tuple[int, int], ...] = ()) -> None:
