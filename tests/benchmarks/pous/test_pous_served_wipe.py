@@ -553,13 +553,14 @@ def test_with_no_key_pinned_the_wipe_is_refused(node, tmp_path, pin, why) -> Non
     ("[1", "the wipe's settings are one JSON object, or a file holding one: "),
     ('{"host": "vy-auditor-2"}', "host, address and command bind the challenger together, not ['host'] alone"),
     ('{"run_keys": true, "simulated": true, "host": "h", "address": "h:1", "command": ["x"]}',
-     "run_keys and simulated run the challenger on this node, not on the bound host")])
+     "run_keys and simulated run the challenger on this node, not on the bound host"),
+    ({"WIPE_CARD": "any"}, "WIPE_CARD=any: the card's SKU is checked")])
 def test_settings_the_scheme_refuses_are_refused_by_name_before_any_lease(node, tmp_path, given, why) -> None:
     """The launcher's settings are the scheme's (`WIPE.settings`, `check_settings`), one JSON object: one it refuses,
-    by name, is refused before the judge's build and any lease."""
-    d = tmp_path / "wipe"
-    assert _refused(_wipe(node, d, given), d).startswith(why)
-    assert not (tmp_path / "lease.log").exists() and _beside(d) == ["start", "refused"]
+    by name, is refused before the judge's build and any lease; so is ``WIPE_CARD=any``, which skipped the SKU check."""
+    d, (env, args) = tmp_path / "wipe", (node | given, ()) if isinstance(given, dict) else (node, (given,))
+    assert _refused(_wipe(env, d, *args), d).startswith(why) and _beside(d)[-1:] == ["refused"]
+    assert not (tmp_path / "lease.log").exists() and not (tmp_path / "party.json").exists()
 
 
 def test_a_setting_the_application_states_is_the_applications(node, tmp_path) -> None:
@@ -679,13 +680,6 @@ def test_no_machine_name_reaches_a_refused_wipes_refusal(node, tmp_path) -> None
     why = _refused(r, d)
     assert f"on {mc.PROVER_MACHINE}" in why and mc.ATTESTER_MACHINE in why, why
     _no_name(_public_bytes(r, d))
-
-
-def test_wipe_card_any_is_refused_by_name(node, tmp_path) -> None:
-    """``WIPE_CARD=any``, which skipped the card's SKU check, is refused by name before anything runs."""
-    d = tmp_path / "wipe"
-    assert _refused(_wipe(node | {"WIPE_CARD": "any"}, d), d).startswith("WIPE_CARD=any: the card's SKU is checked")
-    assert not (tmp_path / "party.json").exists()
 
 
 def test_a_path_in_wipe_own_lease_names_no_judge(node, tmp_path) -> None:

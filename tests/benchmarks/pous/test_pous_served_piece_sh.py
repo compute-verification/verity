@@ -403,15 +403,15 @@ def test_the_scratch_copy_holds_every_package_the_two_leans_require():
             assert ROOT / "verity" in (ROOT / package / p["dir"]).resolve().parents, (package, p["name"], p["dir"])
 
 
-@pytest.mark.parametrize("given", ["--case-exe /tmp/mine", "--bw-case-exe=/tmp/mine", "--lean-root /tmp/tree"])
-def test_pous_args_naming_another_lean_executable_is_refused_by_name(node, tmp_path, given):
+@pytest.mark.parametrize("given, why", [
+    *((g, f"names {g[:g.index(c)]}: the Lean executables that answer are the declaration's (Launch.executables")
+      for g, c in (("--case-exe /tmp/mine", " "), ("--bw-case-exe=/tmp/mine", "="), ("--lean-root /tmp/tree", " "))),
+    ("--rounds 'unclosed", "is not shell words")])
+def test_pous_args_naming_another_lean_executable_or_not_words_is_refused_by_name(node, tmp_path, given, why):
     """The executables that answer are the declaration's (`Launch.executables`): POUS_ARGS naming one, or the tree
-    they are built in, is refused by name before anything is built or leased."""
-    d = tmp_path / "pieces" / "pous"
-    r = _piece(node | {"POUS_ARGS": given}, d)
-    flag = given.split()[0].split("=")[0]
-    assert r.returncode == 2 and f"POUS REFUSED: POUS_ARGS names {flag}:" in r.stdout, r.stdout + r.stderr
-    assert "Launch.executables" in r.stdout and not _events(node)
+    they are built in, or not shell words, is refused by name before anything is built or leased."""
+    r = _piece(node | {"POUS_ARGS": given}, tmp_path / "pieces" / "pous")
+    assert r.returncode == 2 and f"POUS REFUSED: POUS_ARGS {why}" in r.stdout and not _events(node), r.stdout + r.stderr
 
 
 def test_pous_args_are_split_as_shell_words_and_never_evaluated(node, tmp_path):
@@ -422,5 +422,3 @@ def test_pous_args_are_split_as_shell_words_and_never_evaluated(node, tmp_path):
     argv = _argv(node)
     assert not ran.exists() and _option(argv, "--rounds") == "9" and _option(argv, "--challenger-command") == "ssh -i k host"
     assert "$(touch" in argv and "`touch" in argv
-    r = _piece(node | {"POUS_ARGS": "--rounds 'unclosed"}, d)
-    assert r.returncode == 2 and "POUS REFUSED: POUS_ARGS is not shell words" in r.stdout, r.stdout + r.stderr
