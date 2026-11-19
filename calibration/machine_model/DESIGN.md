@@ -119,7 +119,6 @@ read on top of its `base` (the design it varies, if it names one) and of `data/d
 design shares: honest's profile, L, the proof block, the coins, the fold, ε_clock, the sampling budget, the baseline and
 the routes. Each top-level key a file sets replaces the inherited one whole, and `name`, `title`, `summary` and
 `aliases` are never inherited.
-`machine-model designs` prints the registry (`--json` too).
 `eps --json` carries a design's entry under `registry`.
 `machine-model render designs` prints the registry with the noise leaves (`NOISE` in `eps.py`) and the peel sums
 kernels (`SUMS`) as legends.
