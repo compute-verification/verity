@@ -833,7 +833,6 @@ KNOWN: dict[str, str] = {
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1device.py::Device":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: the card by digest (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1tile.py::Layout": "homonym, a tile shape: rename (compute-accounting)",
-    "verity/protocols/resource_accounting/compute/pouw/prover/circuit/plan.py::Layout": "homonym, the units a plan reads: rename (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/verifier/coins.py::Challenger":
         "duplicate of `parties.Challenger`: becomes it (deleted) (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/Inputs.lean::PouwVerifier.SamplingDesign":
