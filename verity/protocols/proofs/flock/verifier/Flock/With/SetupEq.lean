@@ -72,10 +72,8 @@ theorem parseTypedWith_std (tags : Tags) (bytes : ByteArray) (tables : List (Str
 
 set_option maxRecDepth 20000 in
 theorem deriveTemplateUnitsWith_std (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) :
-    HmRow.deriveTemplateUnitsWith std c obj program indices = HmRow.deriveTemplateUnits c obj program indices := by
-  unfold HmRow.deriveTemplateUnitsWith HmRow.deriveTemplateUnits
-  simp only [descParseWith_std]
-  try rfl
+    HmRow.deriveTemplateUnitsWith std c obj program indices = HmRow.deriveTemplateUnits c obj program indices :=
+  rfl
 
 set_option maxRecDepth 20000 in
 theorem deriveQwordUnitsWith_std (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) :
@@ -123,15 +121,13 @@ set_option maxRecDepth 20000 in
 theorem stratifiedSamplingDesignWith_std (obj : Json) (program : ByteArray) (k : Nat) :
     HmRow.stratifiedSamplingDesignWith std obj program k = HmRow.stratifiedSamplingDesign obj program k := by
   unfold HmRow.stratifiedSamplingDesignWith HmRow.templateStrataWith HmRow.stratifiedSamplingDesign
-  simp only [descParseWith_std]
-  try rfl
+  rfl
 
 set_option maxRecDepth 20000 in
 theorem workSamplingDesignWith_std (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
     HmRow.workSamplingDesignWith std obj program k table = HmRow.workSamplingDesign obj program k table := by
   unfold HmRow.workSamplingDesignWith HmRow.templateStrataWith HmRow.workSamplingDesign
-  simp only [descParseWith_std]
-  try rfl
+  rfl
 
 theorem treeLeafWith_std (bc : ByteArray) : Hm96.Default512.treeLeafWith std bc = pure (Hm96.Default512.treeLeaf bc) := rfl
 
