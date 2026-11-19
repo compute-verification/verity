@@ -16,7 +16,9 @@ body's return type.
 
 The decoder (`getDef`, `composite`, `staticFns`) is walked once, as Hoare triples proved by `mvcgen` and read back at an
 `.ok` result (`of_triple`). `composite_step` and `staticFns_step` hold of any property of the decoder's state that
-`getDef` and `staticFns` keep one fuel lower, so another fact about the state needs no second walk. `kept_fuel` is the
+`getDef` and `staticFns` keep one fuel lower, for one descriptor, so another fact about the state needs no second walk
+(`FlockSoundness.DecodeBoolean.src_fuel` is one). `decode_kept` reads `decode`'s steps from `BodiesOk.decode_steps`,
+through `go_kept`, `decodeAll_kept` and `decodeBodies_kept`. `kept_fuel` is the
 induction on the fuel for `Kept`: the keys (`Keys`), the return types (`Rets`) and the names that stay busy. A name is
 busy from `composite`'s mark to `getDef`'s push and a busy name has no index entry, so the push finds no earlier
 Definition with its key.
@@ -30,7 +32,7 @@ namespace InferenceOnlyVerifier.Properties.SecurityProofs.DecodeKeys
 open Flock.Program
 open Std.Do
 open BodiesOk (DM ex_throw_bind decode_root)
-open private getDef composite staticFns decodeAll DecState DecState.defs DecState.index DecState.busy Desc Desc.ddefs liftV
+open private getDef composite staticFns decodeAll decodeBodies DecState DecState.defs DecState.index DecState.busy Desc Desc.ddefs liftV
   from Circuits.Program
 
 /-! ## Reading the decoder's functions -/
@@ -79,10 +81,10 @@ theorem mapM_spec {α β : Type} (K : DecState → Prop) (f : α → DM β) (xs 
 /-! ## The walk, for any property of the state -/
 
 /-- **`staticFns` keeps what `getDef` and `staticFns` keep one fuel lower.** -/
-theorem staticFns_step (n : Nat) (K : DecState → Prop)
-    (hg : ∀ desc g, ⦃fun s => ⌜K s⌝⦄ (getDef n desc g : DM Nat) ⦃⇓? _ s => ⌜K s⌝⦄)
-    (hs : ∀ desc v, ⦃fun s => ⌜K s⌝⦄ (staticFns n desc v : DM Unit) ⦃⇓? _ s => ⌜K s⌝⦄)
-    (desc : Desc) (v : Lean.Json) :
+theorem staticFns_step (n : Nat) (K : DecState → Prop) (desc : Desc)
+    (hg : ∀ g, ⦃fun s => ⌜K s⌝⦄ (getDef n desc g : DM Nat) ⦃⇓? _ s => ⌜K s⌝⦄)
+    (hs : ∀ v, ⦃fun s => ⌜K s⌝⦄ (staticFns n desc v : DM Unit) ⦃⇓? _ s => ⌜K s⌝⦄)
+    (v : Lean.Json) :
     ⦃fun s => ⌜K s⌝⦄ (staticFns (n + 1) desc v : DM Unit) ⦃⇓? _ s => ⌜K s⌝⦄ := by
   unfold staticFns
   mvcgen [hg, hs, discard_eq, liftV_spec, throw_spec, -Spec.throw_Except] invariants
@@ -94,12 +96,12 @@ set_option maxHeartbeats 2000000 in
 /-- **`composite` keeps what `getDef` and `staticFns` keep one fuel lower**, for a property `K` of the state that does
 not read the reinterpretations walked (`hw`): from a state that has `K` once `fid` is busy, it ends in a state with `K`,
 and what it returns is a composite keyed `fid` that returns its body's return type. -/
-theorem composite_step (n : Nat) (K : DecState → Prop)
+theorem composite_step (n : Nat) (K : DecState → Prop) (desc : Desc)
     (hw : ∀ s s', DecState.defs s' = DecState.defs s → DecState.index s' = DecState.index s →
       DecState.busy s' = DecState.busy s → K s → K s')
-    (hg : ∀ desc g, ⦃fun s => ⌜K s⌝⦄ (getDef n desc g : DM Nat) ⦃⇓? _ s => ⌜K s⌝⦄)
-    (hs : ∀ desc v, ⦃fun s => ⌜K s⌝⦄ (staticFns n desc v : DM Unit) ⦃⇓? _ s => ⌜K s⌝⦄)
-    (desc : Desc) (fid : String) (d : Lean.Json) (form id : String) :
+    (hg : ∀ g, ⦃fun s => ⌜K s⌝⦄ (getDef n desc g : DM Nat) ⦃⇓? _ s => ⌜K s⌝⦄)
+    (hs : ∀ v, ⦃fun s => ⌜K s⌝⦄ (staticFns n desc v : DM Unit) ⦃⇓? _ s => ⌜K s⌝⦄)
+    (fid : String) (d : Lean.Json) (form id : String) :
     ⦃fun s => ⌜∀ s1, DecState.defs s1 = DecState.defs s → DecState.index s1 = DecState.index s →
         DecState.busy s1 = (DecState.busy s).insert fid → K s1⌝⦄
       (composite (n + 1) desc fid d form id : DM Defn)
@@ -302,9 +304,9 @@ theorem kept_fuel (n : Nat) :
   | succ n ih =>
     obtain ⟨hg, hs, hc⟩ := ih
     exact ⟨fun desc fid B => getDef_step n hc desc fid B,
-      fun desc v B => staticFns_step n (Kept B) (fun desc g => hg desc g B) (fun desc v => hs desc v B) desc v,
-      fun desc fid d form id B => composite_step n (Kept B) (kept_congr B) (fun desc g => hg desc g B)
-        (fun desc v => hs desc v B) desc fid d form id⟩
+      fun desc v B => staticFns_step n (Kept B) desc (fun g => hg desc g B) (fun v => hs desc v B) v,
+      fun desc fid d form id B => composite_step n (Kept B) desc (kept_congr B) (fun g => hg desc g B)
+        (fun v => hs desc v B) fid d form id⟩
 
 /-! ## What `decode` returns -/
 
@@ -333,65 +335,33 @@ theorem decodeAll_kept (desc : Desc) (fs : Array String) :
   mvcgen [hg, discard_eq] invariants
     · ⇓? _ s => ⌜Kept (fun _ => False) s⌝
 
+/-- `decodeBodies`, the decoding and checking of the Boolean map's bodies, keeps `Kept` with no name busy. -/
+theorem decodeBodies_kept (desc : Desc) (rootKey : String) (pairs : Array (String × String)) :
+    ⦃fun s => ⌜Kept (fun _ => False) s⌝⦄ (decodeBodies desc rootKey pairs : DM Unit)
+    ⦃⇓? _ s => ⌜Kept (fun _ => False) s⌝⦄ := by
+  have hg := fun f => (kept_fuel Flock.Steps.FUEL).1 desc f (fun _ => False)
+  unfold decodeBodies
+  mvcgen [hg, liftV_spec, throw_spec, -Spec.throw_Except] invariants
+    · ⇓? _ s => ⌜Kept (fun _ => False) s⌝
+
 /-- **What `decode` returns**: the Definitions and the index of a decoder state that has `Kept`. -/
 theorem decode_kept (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
     ∃ st, P.defs = DecState.defs st ∧ P.index = DecState.index st ∧ Kept (fun _ => False) st := by
-  unfold decode at h
-  extract_lets k1 at h
-  split at h
-  rotate_left; · exact absurd h (by intro h; injection h)
-  split at h
-  rotate_left; · exact (ex_throw_bind h).elim
-  obtain ⟨j, h1, h⟩ := Walk.except_bind_ok h
-  injection h1 with h1; subst h1
-  simp (config := { zeta := false }) only [k1] at h
-  split at h
-  rotate_left; · exact absurd h (by intro h; injection h)
-  extract_lets bare jpS at h
-  split at h
-  rotate_left; · exact (ex_throw_bind h).elim
-  split at h
-  · exact (ex_throw_bind h).elim
-  simp (config := { zeta := false }) only [jpS] at h
-  split at h
-  rotate_left; · exact absurd h (by intro h; injection h)
-  obtain ⟨u, h1, h⟩ := Walk.except_bind_ok h
-  clear h1
-  extract_lets freeDefs free jpD at h
-  split at h
-  · exact (ex_throw_bind h).elim
-  simp (config := { zeta := false }) only [jpD] at h
-  split at h
-  rotate_left; · exact absurd h (by intro h; injection h)
-  split at h
-  rotate_left; · exact absurd h (by intro h; injection h)
-  obtain ⟨types, h1, h⟩ := Walk.except_bind_ok h
-  clear h1
-  extract_lets desc at h
-  split at h
-  rotate_left; · exact absurd h (by intro h; injection h)
-  split at h
-  rotate_left; · exact absurd h (by intro h; injection h)
-  extract_lets go at h
-  obtain ⟨⟨root, st⟩, hgo, h⟩ := Walk.except_bind_ok h
-  extract_lets rd jpR at h
-  split at h
-  · exact (ex_throw_bind h).elim
-  simp (config := { zeta := false }) only [jpR] at h
-  obtain ⟨u, -, h⟩ := Walk.except_bind_ok h
-  obtain ⟨⟨⟨⟩, st'⟩, hall, h⟩ := Walk.except_bind_ok h
-  obtain ⟨bmap, -, h⟩ := Walk.except_bind_ok h
-  obtain ⟨c, -, h⟩ := Walk.except_bind_ok h
-  injection h with h
-  subst h
-  refine ⟨st', rfl, rfl, of_triple (decodeAll_kept _ _) hall (of_triple (go_kept _ _ _) hgo ⟨⟨?_, ?_, ?_⟩, ?_, ?_⟩)⟩
+  obtain ⟨_, _, _, _, _, _, _, _, _, st2, _, -, hgo, hd0, hi0, -, -, -, hall, -, hbod, hd, hi, -, -⟩ :=
+    BodiesOk.decode_steps bytes P h
+  refine ⟨st2, hd, hi, of_triple (decodeBodies_kept _ _ _) hbod
+    (of_triple (decodeAll_kept _ _) hall (of_triple (go_kept _ _ _) hgo ⟨⟨?_, ?_, ?_⟩, ?_, ?_⟩))⟩
   · intro k v h
+    rw [hi0] at h
     exact absurd h (by simp)
   · intro i h
+    rw [hd0] at h
     exact absurd h (Nat.not_lt_zero i)
   · intro k h
+    rw [hi0]
     simp
   · intro i h
+    rw [hd0] at h
     exact absurd h (Nat.not_lt_zero i)
   · intro k h
     exact h.elim
