@@ -365,7 +365,7 @@ def p2_session(v) -> dict:
         M.nat(v, "chunk")
         not_before = M.nat(v, "not_before_ns")
         events = [p2_event_of(e) for e in M._list(v, "events")]
-    b = p2_parties.Books(params, reg, M.replayed(reg, 0, params.windows, committed, []), plan, not_before)
+    b = p2_parties.Books(params, reg, M.replayed(reg, 0, params.windows, committed, [], samples=params.samples), plan, not_before)
     results = [p2_apply(b, e) for e in events]
     answer = json.loads(json.dumps(p2_parties.answer(b.s, plan=plan)))
     del answer["reason"]
@@ -432,7 +432,7 @@ def p2_events(store: p2_prover.Store, plan: Plan, params, committed: list[bytes]
     3 a unit's reads skipped (its receipt from zeros), 4 window t's openings line near its form (`p2_bad_openings`), 5
     window t's last pass missing, 6 the pass's root line near its form (`p2_bad_root`) and 7 the pass's root after
     window t's deadline. The events end once the session has its outcome."""
-    b = p2_parties.Books(params, store.registration, M.replayed(store.registration, 0, params.windows, committed, []),
+    b = p2_parties.Books(params, store.registration, M.replayed(store.registration, 0, params.windows, committed, [], samples=params.samples),
                        plan, not_before)
     prover = p2_prover.Prover(store, entropy=Entropy(b"p2 session"))
     events: list[dict] = []

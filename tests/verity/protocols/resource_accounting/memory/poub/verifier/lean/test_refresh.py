@@ -175,8 +175,8 @@ def test_a_coin_leaves_only_after_its_own_append_is_committed() -> None:
 def _session(blocks: int) -> audit.AuditRun:
     reg = audit.register(M.SOURCE, M.NODE, blocks, bytes(64), M.P512, nonce=bytes(32))
     params = audit.Params(blocks, 100, 2, window_ns=10, codec=M.P512, refresh=True, lifetime=2, fresh_slots=1)
-    s = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, 2, M.Entropy(b"coins")), not_before_ns=0,
-                       clock=M.Clock())
+    s = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, 2, M.Entropy(b"coins"), samples=params.samples),
+                       not_before_ns=0, clock=M.Clock())
     s.start()
     return s
 

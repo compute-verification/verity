@@ -382,7 +382,7 @@ def test_kv_pages_appended_and_released_mid_session_are_audited(monkeypatch):
 
 
 def test_a_session_reserves_append_coins_only_when_its_plan_appends_and_an_append_past_them_is_refused(monkeypatch):
-    """Each session's coins are W challenges, W openings coins and its append coins: none, and no append family, under
+    """Each session's coins are W challenges, each window's sample's coins and its append coins: none, and no append family, under
     a plan of honest sessions (the hello says so), and `coins.APPENDS` under one with a kv session, on which both are
     accepted.  At `appends=0` the kv session's first append has no coin: the books reject it as `coin` and the Lean,
     which takes only the append coins released, otherwise, so the session is refused there as `disagreement`, the
@@ -392,13 +392,13 @@ def test_a_session_reserves_append_coins_only_when_its_plan_appends_and_an_appen
 
     layouts, local = [], challengers.Local.open
 
-    def opened(self, registration, k, windows, appends):
-        c = local(self, registration, k, windows, appends)
+    def opened(self, registration, k, windows, appends, *, samples):
+        c = local(self, registration, k, windows, appends, samples=samples)
         layouts.append(c.commitment.families)
         return c
 
     monkeypatch.setattr(challengers.Local, "open", opened)
-    pair = ((coins.CHALLENGE, 3), (coins.OPENINGS, 3))
+    pair = ((coins.CHALLENGE, 3), (coins.SAMPLE, 3 * coins.sample_coins(8)))
     (r,), (p,) = run("honest", samples=8)
     assert r["accepted"] and p["accepted"] and layouts == [pair]
     layouts.clear()
@@ -811,7 +811,7 @@ def test_a_paced_session_puts_each_group_of_k_passes_under_a_live_coin_and_a_dro
 def test_a_paced_group_is_sampled_as_its_k_th_root_arrives(k):
     """A paced window takes at most k roots, so its k-th makes them final once its boundary has left
     (`audit.AuditRun.close`), which the loop sends before that root: each group's samples go out as that root arrives,
-    the last group's too, so the openings coin's request on the challenger's log names the group's last root when it
+    the last group's too, so the sample's coins' request on the challenger's log names the group's last root when it
     came, not one root or a deadline later."""
     (r,), _ = run("honest", paces=[verifier.pace_of(f"{k}:{4 * k}:40:2", 1.0)])
     assert r["accepted"]
@@ -820,10 +820,10 @@ def test_a_paced_group_is_sampled_as_its_k_th_root_arrives(k):
 
 @pytest.mark.parametrize("k", [1, 3])
 def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_trip(tmp_path, monkeypatch, k):
-    """At k = 1 a group's root closes it and the next boundary is due at once, so the group's openings coin and the
+    """At k = 1 a group's root closes it and the next boundary is due at once, so the group's sample's coins and the
     challenge the boundary releases, chal_(g+2), go to the challenger in one round trip, in that order, both after that
-    root (`coins.SessionCoins.ahead`); the last two groups' boundaries release no coin, so their openings coins go alone. At
-    k = 3 a coin leaves at the following group's second root, so every coin goes alone. The session's transcript
+    root (`coins.SessionCoins.ahead`); the last two groups' boundaries release no coin, so their samples' coins go alone. At
+    k = 3 a coin leaves at the following group's second root, so every challenge goes alone and a sample's coins together. The session's transcript
     replays to its verdict through both verifiers. The clock ticks as each pass starts as well as when it ends, so
     time passes between a coin leaving and the root after it, as on the verifier's own clock: at one tick a pass, a
     paced window's 1 ns is a whole pass and each boundary waits for the tick its next root comes at."""
@@ -851,21 +851,23 @@ def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_tri
             asked.append([(label, index, bytes(after)) for label, index, after in requests])
             return [C.LiveChallenger.open(self, *r) for r in requests]
 
-    monkeypatch.setattr(challengers.Local, "open", lambda self, registration, e, windows, appends: Asked(
-        coins.SCHEME, e, coins.families(windows, appends), os.urandom))
+    monkeypatch.setattr(challengers.Local, "open", lambda self, registration, e, windows, appends, *, samples: Asked(
+        coins.SCHEME, e, coins.families(windows, appends, samples=samples), os.urandom))
     (r,), _ = run("honest", paces=[verifier.pace_of(f"{k}:{4 * k}:40:2", 1.0)], transcript=tmp_path)
     assert r["accepted"] and r["challenger"]["reason"] is None
     case = json.loads(Path(r["transcript"]["path"]).read_bytes())
     roots = [bytes.fromhex(e["root"]) for e in case["events"] if e["kind"] == "receive"]
     n, last = r["windows"], [roots[k * g + k - 1] for g in range(r["windows"])]
     window = asked[0][0][2]
+    m = coins.sample_coins(6)
     if k == 1:
         assert asked == ([[("poub/challenge", 0, window)], [("poub/challenge", 1, window)]]
-                         + [[("poub/openings", g, last[g]), ("poub/challenge", g + 2, last[g])] for g in range(n - 2)]
-                         + [[("poub/openings", g, last[g])] for g in (n - 2, n - 1)])
+                         + [[*(("poub/sample", g * m + j, last[g]) for j in range(m)), ("poub/challenge", g + 2, last[g])]
+                            for g in range(n - 2)]
+                         + [[("poub/sample", g * m + j, last[g]) for j in range(m)] for g in (n - 2, n - 1)])
     else:
-        assert all(len(b) == 1 for b in asked) and len(asked) == 2 * n
-        assert [b[0][2] for b in asked if b[0][0] == "poub/openings"] == last
+        assert [len(b) for b in asked] == [1, m] * n
+        assert [q[2] for b in asked for q in b if q[0] == "poub/sample"] == [x for x in last for _ in range(m)]
     with replay.server() as s:
         row = replay.replay(case, s)
     assert row["agree"] and row["lean"]["outcome"] == "accepted" and row["lean"]["refused"] == 0, row
@@ -873,7 +875,7 @@ def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_tri
 
 def test_the_auditor_line_reads_each_groups_coin_and_last_root_off_the_challengers_log():
     """`auditor_line.auditor_seen`: group g's coin at challenge coin g's release, and its last root at the first request
-    on the challenger's log that names the root openings coin g was asked after. On a log that is the verifier's stamps
+    on the challenger's log that names the root sample g's coins were asked after. On a log that is the verifier's stamps
     shifted, the line's groups are the verifier's; a later openings request lengthens them by as much; and an earlier
     request naming that root, chal_(g+2)'s at k = 1, is the one read."""
     import json
@@ -890,7 +892,7 @@ def test_the_auditor_line_reads_each_groups_coin_and_last_root_off_the_challenge
         lines = [json.dumps({"event": "commitment", "root": "0" * 128})]
         for g in range(n):
             for label, after, at in (("poub/challenge", f"{g - 2:0128x}" if named and g >= 2 else "f" * 128, R[g] - 1),
-                                     ("poub/openings", f"{g:0128x}", A[g] + late)):
+                                     ("poub/sample", f"{g:0128x}", A[g] + late)):
                 lines.append(json.dumps({"event": "root", "label": label, "index": g, "root": after,
                                          "received_at": at + 100}))
                 lines.append(json.dumps({"event": "release", "label": label, "index": g, "after": after,
@@ -904,14 +906,14 @@ def test_the_auditor_line_reads_each_groups_coin_and_last_root_off_the_challenge
     shifted, how = al.auditor_seen(log(0, False), seen)
     assert [w["released_ns"] for w in shifted] == [x + 100 for x in R]
     assert [w["arrivals_ns"] for w in shifted] == [[x + 100] for x in A]
-    assert how == {"last_root_first_named_by": {"poub/openings": n}}
+    assert how == {"last_root_first_named_by": {"poub/sample": n}}
     assert al.group_l(shifted) == al.group_l(seen) and lmax({**r, "windows_seen": shifted}) == lmax(r)
     late, _ = al.auditor_seen(log(3, False), seen)
     assert al.group_l(late) == [max(A[g] + 103, R[g + 1] + 100) - R[g] - 100 for g in range(n - 1)]
     named, how = al.auditor_seen(log(3, True), seen)
     assert [w["arrivals_ns"] for w in named] == ([[R[g + 2] + 99] for g in range(n - 2)]
                                                  + [[A[g] + 103] for g in (n - 2, n - 1)])
-    assert how == {"last_root_first_named_by": {"poub/challenge": n - 2, "poub/openings": 2}}
+    assert how == {"last_root_first_named_by": {"poub/challenge": n - 2, "poub/sample": 2}}
     with pytest.raises(ValueError, match="not one of each for each of"):
         al.auditor_seen(log(0, False)[:-4], seen)
 
@@ -1001,13 +1003,13 @@ def test_the_auditor_line_reads_a_last_root_by_its_request_not_by_its_value():
     lines = [json.dumps({"event": "commitment", "root": "0" * 128})]
     for g in range(n):
         for label, after, at in (("poub/challenge", X if g == 3 else f"{2 * g:0128x}", 1000 * g + 999),
-                                 ("poub/openings", {2: X, 4: Y, 1: Y}.get(g, f"{2 * g + 1:0128x}"), 1000 * g + 2500)):
+                                 ("poub/sample", {2: X, 4: Y, 1: Y}.get(g, f"{2 * g + 1:0128x}"), 1000 * g + 2500)):
             lines.append(json.dumps({"event": "root", "label": label, "index": g, "root": after, "received_at": at}))
             lines.append(json.dumps({"event": "release", "label": label, "index": g, "after": after,
                                      "released_at": at + 1}))
     got, how = al.auditor_seen(lines, seen)
     assert [w["arrivals_ns"] for w in got] == [[1000 * g + 2500] for g in range(n)]
-    assert al.group_l(got) == [1500] * (n - 1) and how == {"last_root_first_named_by": {"poub/openings": n}}
+    assert al.group_l(got) == [1500] * (n - 1) and how == {"last_root_first_named_by": {"poub/sample": n}}
 
 
 def test_a_paced_session_whose_openings_come_beside_its_passes_gets_the_same_verdicts_from_both_verifiers():
@@ -1322,7 +1324,7 @@ def test_a_paced_sessions_transcript_names_its_pace_and_replays_paced(tmp_path, 
 def test_a_session_sampled_four_windows_a_coin_is_accepted_through_both_verifiers_and_a_skipper_is_not(
         tmp_path, monkeypatch):
     """`--groups-per-coin 4` over five windows: two samples, windows 0–3 and window 4, each sampled at its last window's
-    close on its own openings coin (`audit.Params.groups_per_coin`), the challenger reserving ⌈5/4⌉ = 2 of them. The
+    close on its own sample's coins (`audit.Params.groups_per_coin`), the challenger reserving ⌈5/4⌉ = 2 of them. The
     first sample's two receipts leave at least two of its windows a share of none, which the close accepts and no
     openings follow; the Lean verifier agrees at every event and on the record, which names g, and the session's
     transcript replays to the same verdict through both verifiers. A prover that dropped half its blocks is rejected
@@ -1370,7 +1372,7 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
     beside it or not, with the times seen on the verifier's clock the record's own. A kept record that isn't the run's,
     a record or transcript of another registration than the one given, a transcript cut short of its verdict,
     `samples` other than its parameters' and times seen off the record's are refused, and a transcript that names two
-    windows a coin beside one openings coin a window is malformed; on the challenger's clock the times aren't held to
+    windows a coin beside one sample a window is malformed; on the challenger's clock the times aren't held to
     the record."""
     import copy
     import json
@@ -1593,7 +1595,7 @@ def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_or
     params = audit.Params(8, 10 ** 9, 1, 2, 2.0 ** -40, window_ns=10, codec=P512, receipt=reg.receipt, rows=reg.rows)
 
     def session():
-        s = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, params.windows, os.urandom), clock=lambda: 0,
+        s = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, params.windows, os.urandom, samples=params.samples), clock=lambda: 0,
                            not_before_ns=0)
         s.start()
         return s
@@ -1657,7 +1659,7 @@ def test_a_root_message_names_the_withdrawn_blocks_among_its_releases():
     root = (b"\7" * 64).hex()
 
     def session():
-        s = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, params.windows, os.urandom), clock=lambda: 0,
+        s = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, params.windows, os.urandom, samples=params.samples), clock=lambda: 0,
                            not_before_ns=0)
         s.start()
         verifier.Verifier.append(s, {"type": "append", "root": root, "count": 3})

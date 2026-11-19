@@ -1,5 +1,5 @@
 """`sampling_inputs`' closed form for the paced line's sampling term is `paced_line`'s arithmetic on uniform sessions,
-with the wrong receipts spilling past one group and not, and with one openings coin over several groups; that arithmetic
+with the wrong receipts spilling past one group and not, and with one sample's coins over several groups; that arithmetic
 is a stretch worked by hand; a region's solution meets the constraints it was solved under; and the code's coin over g
 groups (`groups_per_coin`) is the model's shared samples, each plan at g agreeing with it."""
 from __future__ import annotations

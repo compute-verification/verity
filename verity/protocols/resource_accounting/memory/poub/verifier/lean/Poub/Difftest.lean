@@ -192,8 +192,8 @@ def flightOf (j : Json) : V Nat := do
 an appended block's residency to its encode (`deferred`), which `audit.Params` refuses at a lifetime of one window: a
 block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1; its pace (`null`, or
 `{"k", "window_ns"}`, with `"in_flight"` if it names it, `flightOf`), which `audit.Params` takes only with at least
-two windows; and, if they name it, the windows a sample's openings coin covers (`groups_per_coin`, `perCoinOf`,
-`Shared.run`). The coins are W challenges and ⌈W/g⌉ openings coins. -/
+two windows; and, if they name it, the windows a sample's coins cover (`groups_per_coin`, `perCoinOf`,
+`Shared.run`). The coins are W challenges and ⌈W/g⌉ samples' coins. -/
 def sessionOf (j : Json) : V (Session.Params × Array ByteArray × Array ByteArray × Nat) := do
   let p ← J.get j "params" "input"
   let pace ← match ← J.get p "pace" "params" with
@@ -221,8 +221,11 @@ def sessionOf (j : Json) : V (Session.Params × Array ByteArray × Array ByteArr
     throw "a paced session has at least one window and the closing window"
   let g ← perCoinOf j
   let coins ← hexes j "coins"
-  if coins.size ≠ params.windows + (params.windows + g - 1) / g || coins.any (·.size ≠ Codec.COIN_BYTES) then
-    throw "W + ⌈W/g⌉ coins of 32 bytes"
+  let sample := sampleBytes params.samples g
+  if coins.size ≠ params.windows + (params.windows + g - 1) / g
+      || (coins.extract 0 params.windows).any (·.size ≠ Codec.COIN_BYTES)
+      || (coins.extract params.windows coins.size).any fun c => c.size ≠ sample && c.size ≠ Codec.COIN_BYTES then
+    throw "W challenges of 32 bytes, then ⌈W/g⌉ samples' coins, each whole or 32 bytes for one never released"
   let appendCoins ← hexes j "append_coins"
   if appendCoins.any fun c => c.size != Codec.COIN_BYTES && !c.isEmpty then
     throw "append coins are 32 bytes, or empty for a slot whose coin was never released"
@@ -396,9 +399,9 @@ def leafReceiptFn (j : Json) : V Json := do
 def receiptSampleFn (j : Json) : V Json := do
   let lengths ← (← J.arr j "lengths" "input").mapM (J.asNat · "lengths")
   if lengths.isEmpty || lengths.any (· = 0) then throw "a window's passes are each one or more receipts"
-  let some ds := receiptSample (← hex j "registration") (← nat j "window") (← hex j "coin") (← nat j "samples") lengths
-    | throw "the draw ran past its reads"
-  pure (.arr (ds.map pairJ))
+  match receiptSample (← nat j "samples") (← hex j "src") lengths with
+  | some ds => pure (.arr (ds.map pairJ))
+  | none => pure .null
 
 private def refusedOr (x : Except String Json) : Json :=
   match x with

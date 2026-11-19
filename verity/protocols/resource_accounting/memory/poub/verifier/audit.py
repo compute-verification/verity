@@ -14,7 +14,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    second while one is live is refused and samples nothing, and a registration ends only when the verifier closes it,
    counting its sessions, an unended one as failed.
 2. Coins.  Before the session the proof system's challenger flips two live coins a window, its challenge `chal_t` and
-   its openings coin, and a coin an append, and commits to them (`coins.SessionCoins`: session k's epoch of the one
+   its sample's coins, and a coin an append, and commits to them (`coins.SessionCoins`: session k's epoch of the one
    challenger, on its own host when it is remote).  Each coin opens once, after the root the verifier recorded for it,
    which the challenger's signed log keeps (`AuditRun.released_reason`), and the prover is sent its value and that root
    (`coins.Released`).  The commitment, a function of every coin, reaches the prover only once the session has its
@@ -52,7 +52,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    A window with fewer than `min_passes` roots is rejected.
 6. Openings.  Once window t's roots are final (the next window's first root has arrived, `D_t` has passed, or, in a
    paced session, the window holds its k roots and its boundary has left), the
-   challenger releases the window's openings coin, and the verifier samples `s = samples` distinct receipts uniformly
+   challenger releases the window's sample's coins, and the verifier samples `s = samples` distinct receipts uniformly
    from the window's `U_t = Σ_i L_i` with it (`AuditRun.close`).  The prover opens each (`audit_prover.Prover.open`):
    the block, its receipt leaf with its salt and path to the pass's root, the payload's salt and path to the payload
    root, and, under a registration that binds z, PoUW's evidence for the tile before it; a block appended after the
@@ -64,7 +64,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    kind (under sketch-sha512, the block's sketch from the pass's signs first).  A window is accepted only if every opening checks,
    and a rejected window ends its session.
 8. The record (`AuditRun.record`): per window each pass's length and step, its challenge's release and its deadline on
-   the verifier's clock, its openings coin's release, an `IntegrityProfile` over its receipts with `Subset(s)` sampled,
+   the verifier's clock, its sample's coins' release, an `IntegrityProfile` over its receipts with `Subset(s)` sampled,
    and each pass's head (the append chain its seed binds) and stale bound (`WindowRecord.heads`, `WindowRecord.stale`);
    and the chain over the session's appends (`Record.appends`);
    `ledger` turns it, with the node's measured capacities and a squaring ceiling at its codec's width (`Rebuild`), into
@@ -111,6 +111,7 @@ from verity.commitments import (
 from verity.commitments import Opening as MerkleOpening
 from verity.commitments.randomness import derive, frame
 from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
+from verity.protocols.proofs.spot.verifier.challenger.coins import RAN_OUT, OwnRandomness, draw_first
 from verity.protocols.proofs.spot.verifier.profile import (
     IntegrityProfile,
     Subset,
@@ -125,7 +126,6 @@ from .rota import FRESH_SLOTS, REKEY_MAX, Origin, Schedule
 
 PROTOCOL_ID = "verity/remote-bandwidth/v0"
 CODEC_DOMAIN = "verity/remote-bandwidth/codec/v0"
-OPENINGS_DOMAIN = "verity/remote-bandwidth/openings/v0"
 PAYLOAD_DOMAIN = b"verity/remote-bandwidth/payload/v0\0"
 APPEND_DOMAIN = b"verity/remote-bandwidth/append/v0\0"
 APPENDS_DOMAIN = b"verity/remote-bandwidth/appends/v0\0"
@@ -153,10 +153,9 @@ of the audit's error of 2^-100.  SPOT's `WINDOW_DELTA` is another constant, and 
 
 FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "coin", "release", "few", "malformed",
             "receipt-path", "codec", "payload-path", "tile", "receipt", "probation", "origin-path", "origin")
-RECEIPT_LIMIT = 1 << 64
+RECEIPT_LIMIT = coins.RECEIPT_LIMIT
 """A window's receipts, its passes' lengths summed, stay below this: `AuditRun.receive` rejects with `plan` a pass that
-would take them to it, so each sample's sampler word lies in its stream's first SHA-512 block (`Key._uniform` at
-`U < 2^448`)."""
+would take them to it, so a sample's draw fits the coins it reserves (`coins.sample_coins`)."""
 STEP_LIMIT = 1 << 64
 """A step is an integer below this, memory-map/v1's."""
 LIFETIME_NS = 30 * 10**9
@@ -242,7 +241,7 @@ class Params:
     deferred: bool = False
     pace: Pace | None = None
     groups_per_coin: int = 1
-    """g (1 by default: an openings coin a window) samples the openings of g consecutive windows from one coin, released
+    """g (1 by default: a sample a window) samples the openings of g consecutive windows from one coin, released
     after the last root of the last of them: windows cg … min((c + 1)g, W) − 1 are group c, whose `samples` receipts
     are sampled uniformly over their receipts together (`AuditRun.close`), and the pooled bound reads each group as one
     window (`pooled_windows`)."""
@@ -307,8 +306,10 @@ class Params:
 
     @property
     def coins(self) -> int:
-        """W + ⌈W/g⌉: each window's challenge and each group's openings coin, 2W at g = 1."""
-        return self.windows + coins.openings_coins(self.windows, self.groups_per_coin)
+        """W + ⌈W/g⌉·m: each window's challenge and each group's sample's m coins (`coins.sample_coins`), the coins
+        committed before the append family."""
+        return self.windows + coins.draws(self.windows, self.groups_per_coin) * coins.sample_coins(
+            self.samples, self.groups_per_coin)
 
     def sample_of(self, t: int) -> range:
         """The windows window t is sampled with: its group's, t // g · g up to the group's last."""
@@ -588,7 +589,7 @@ class Verdict:
 class WindowRecord:
     """What an accepted window established: chained passes of `lengths` reads of distinct registered blocks each, made
     after its challenge left at `released_ns` and committed by `deadline_ns` on the verifier's clock, each pass's root
-    arriving at `arrived_ns` on that clock (one a pass, empty in a record no session made); its openings coin
+    arriving at `arrived_ns` on that clock (one a pass, empty in a record no session made); its sample's coins
     released at `opened_ns`; the openings' sampling design (`profile`); of each pass's reads, `post_seed` of blocks appended
     after the codec seed (none if empty), which the ledger credits only on the property's verdict; the step each
     pass covers, `steps`, strictly increasing; each pass's head, `heads`, the chain over every append received
@@ -784,6 +785,29 @@ class Record:
         return {"windows": [w.to_json() for w in self.windows]}
 
 
+def receipt_sample(samples: int, src: bytes, lengths: Sequence[int]) -> tuple[tuple[int, int], ...]:
+    """`AuditRun.close`'s draw (Lean `Poub.receiptSample`): min(s, U) distinct receipts (pass, position) uniform over the
+    U receipts of passes of `lengths`, in order, drawn by the proof system's draw (`draw_first`, a subset) from `src`,
+    the sample's coins as the challenger released them, read in order with no derivation.  ValueError `RAN_OUT` when
+    the draw runs out of them."""
+    ends = tuple(itertools.accumulate(lengths))
+    total = ends[-1] if ends else 0
+    k = min(samples, total)
+    if k == 0:
+        return ()
+    at = 0
+
+    def read(n: int) -> bytes:
+        nonlocal at
+        at += n
+        return src[at - n:at]
+    out = []
+    for u in draw_first(OwnRandomness(read), {"law": "subset", "k": k}, total)["units"]:
+        i = bisect.bisect_right(ends, u)
+        out.append((i, u - (ends[i - 1] if i else 0)))
+    return tuple(out)
+
+
 class SessionError(RuntimeError):
     """A call the session's state refuses: out of turn, after the session ended, or before a window's roots are final."""
 
@@ -843,7 +867,7 @@ class AuditRun:
     """The verifier's side of one session, driven by the coins it releases and the roots it receives, on its own clock.
     `coins` are the session's coins through the one challenger (`coins.SessionCoins`), committed before the session, each
     asked for after the root it follows: chal_0 after the session's window root, chal_t after the last root received,
-    window t's openings coin after its last root and an append's coin after its root.  `not_before_ns`, which
+    window t's sample's coins after its last root and an append's coin after its root.  `not_before_ns`, which
     every session names, is the earliest its first coin may leave on the verifier's clock: the previous session's
     `Record.end_ns` over the same store, less the trusted round-trip floor if there is one, or the clock at
     registration for the store's first session, so that no read serves receipts of two sessions.  `tiles` is PoUW's
@@ -1234,17 +1258,17 @@ class AuditRun:
         return None
 
     def close(self, t: int) -> tuple[tuple[int, int], ...] | Verdict:
-        """Window t's samples, from its openings coin released now: `s` distinct receipts (pass, position), uniform over
-        its `U_t = Σ_i L_i`, in order.  Refused until its roots are final: the next window's first root has arrived,
+        """Window t's samples, from its sample's coins released now (`receipt_sample`): `s` distinct receipts (pass,
+        position), uniform over its `U_t = Σ_i L_i`, in order; refused when the draw runs out of the coins (`RAN_OUT`).  Refused until its roots are final: the next window's first root has arrived,
         `D_t` has passed, or, in a paced session, the window holds its k roots, past which `receive` takes none, and
         its boundary has left, so its record has its deadline; the challenger's log fixes a paced window's end at its
         last root.  Its rejection when it has fewer than
         `min_passes` roots, and, at the last window, `coin` if an append's coin went unused: no root followed it.
 
-        At `groups_per_coin` g > 1 the openings coin is group c's, c = t // g (`Params.sample_of`): only the group's
+        At `groups_per_coin` g > 1 the coins are group c's, c = t // g (`Params.sample_of`): only the group's
         last window closes, and that makes every window of the group final (an earlier one's deadline is before t's),
         each rejected `few` in order; its `s` receipts are sampled over the group's passes in order, numbered across its
-        windows, under the key of window c, and each window keeps its own share, (pass, position) in it, which `verify`
+        windows, and each window keeps its own share, (pass, position) in it, which `verify`
         checks.  A window whose share is none has nothing to open: the close accepts it, and `verify` refuses it.  At
         g = 1 that is the window's own sample, never none."""
         self._live()
@@ -1270,14 +1294,11 @@ class AuditRun:
                 return self._fail(u, "few")
         if t == self.params.windows - 1 and len(self._joined) < len(self._appends):
             return self._fail(t, "coin")
-        c = t // self.params.groups_per_coin
-        coin = coins.coin(self.coins.openings(c, w.roots[-1]))
-        key = derive(coin, OPENINGS_DOMAIN, {"registration": self.registration.digest, "window": c})
-        ends = tuple(itertools.accumulate(plan.length for v in ws for plan in v.plans))
-        sampled = []
-        for u in key.subset(min(self.params.samples, ends[-1]), ends[-1], "openings"):
-            i = bisect.bisect_right(ends, u)
-            sampled.append((i, u - (ends[i - 1] if i else 0)))
+        src = self.coins.sample(t // self.params.groups_per_coin, w.roots[-1])
+        try:
+            sampled = receipt_sample(self.params.samples, src, [plan.length for v in ws for plan in v.plans])
+        except ValueError as e:
+            raise SessionError(str(e)) from None
         base = 0
         for u, v in zip(group, ws):
             n = len(v.plans)
@@ -1579,8 +1600,9 @@ class Registry:
         if index is not None and index != k:
             raise RegistryError(f"the registration's next session is {k}, not {index}")
         g = params.groups_per_coin
-        c = (coins.local(registration.digest, k, params.windows, entropy, per_coin=g) if challenger is None
-             else coins.SessionCoins(challenger(k), registration.digest, k, params.windows, per_coin=g))
+        c = (coins.local(registration.digest, k, params.windows, entropy, samples=params.samples, per_coin=g)
+             if challenger is None else coins.SessionCoins(challenger(k), registration.digest, k, params.windows,
+                                                           samples=params.samples, per_coin=g))
         session = AuditRun(params, registration, tiles, c, not_before_ns=not_before_ns, clock=clock)
         x.sessions.append(session)
         return session
@@ -1851,7 +1873,7 @@ def pooled(record: Record) -> tuple[float, float]:
     """The pooled reading of a record's openings: `(wrong, floor)`, at most `wrong` of the session's receipts wrong
     and at most a share `floor` of any window's, both except with probability δ together.
 
-    Window t samples s_t distinct receipts of its U_t from its own openings coin, released after its roots, so they all
+    Window t samples s_t distinct receipts of its U_t from its own sample's coins, released after its roots, so they all
     land on correct ones with probability at most g_t^(s_t), g_t its correct share, however the prover adapted to the
     windows before.  Over the session (`ResourceAccounting.Guarantees.PooledSampling`, `RateRunSample`), every sample lands
     on a correct receipt while Σ_t s_t·g_t ≤ (1 − d̄)·S, S = Σ_t s_t, with probability at most (1 − d̄)^S = δ.  So
@@ -2061,7 +2083,7 @@ def probation_share(record: Record) -> float | None:
 
 __all__ = ["AuditRun", "Closed", "DELTA", "FRESH_SLOTS", "LEDGER_SOURCES", "NODE_BYTES", "NoiseTiles", "Opening",
            "Origin", "PAYLOAD_SCHEMA", "PROTOCOL_ID", "Pace", "Params", "REGISTRY_SCHEMA", "REKEY_MAX", "Rebuild", "Record",
-           "Registration", "Registry", "RegistryError", "SLACK_LOG2", "STEP_LIMIT", "Scheduled", "SessionError",
+           "Registration", "Registry", "RegistryError", "SLACK_LOG2", "RAN_OUT", "STEP_LIMIT", "Scheduled", "SessionError",
            "Tiles", "UNENDED", "Verdict", "WINDOW_NS", "append_domain", "append_head", "append_tree",
            "chained", "floors", "ledger", "lifetime_windows", "linked_bits", "payload_domain", "payload_tree", "pooled",
-           "probation_share", "register", "rekey_root"]
+           "probation_share", "receipt_sample", "register", "rekey_root"]

@@ -31,7 +31,7 @@ so every stretch but the last ends at the next coin: L_max = k/r, the coin's per
 below, k/r ≥ k·t_pass + c (k passes, then the root's and the next coin's round trips). c there is each point's own,
 `--one-flight-c POINT=S` (measured), else modeled as the recorded f = 2 c.
 
-One openings coin over g groups is the code's (`audit.Params.groups_per_coin`): d = s/g at s flips a coin. The script
+One sample's coins over g groups is the code's (`audit.Params.groups_per_coin`): d = s/g at s flips a coin. The script
 solves each point's plan at g = 1, 2, 4, 8 and holds each to the code's reading (`coin_check`: `audit.pooled` on a
 record naming g), refusing to go on unless the closed form agrees.
 """
@@ -106,7 +106,7 @@ def span_line(g: SimpleNamespace, lo: int, hi: int, *, wrong: float, blocks: int
 
 
 def record_of(windows: list[tuple[int, int]], per_coin: int = 1) -> SimpleNamespace:
-    """What `audit.pooled` reads of a record: each window's receipts and samples, and the windows an openings coin
+    """What `audit.pooled` reads of a record: each window's receipts and samples, and the windows a sample's coins
     selects over (`groups_per_coin`)."""
     return SimpleNamespace(groups_per_coin=per_coin, windows=[SimpleNamespace(receipts=u, profile=SimpleNamespace(
         delta=audit.DELTA, drawn={"receipt": d})) for u, d in windows])
@@ -181,7 +181,7 @@ def reproduce(v: dict, ingress_bytes_per_s: float) -> list[dict]:
 
 def check_closed_form() -> list[dict]:
     """The closed form against `span_line` on uniform sessions, a group spilling into the rest (β > 1) and not, and
-    one openings coin sampling over m groups (d = s/m), at two groups in flight and at one (each root c after its coin,
+    one sample's coins sampling over m groups (d = s/m), at two groups in flight and at one (each root c after its coin,
     the next coin a period after it). It holds while the wrong receipts fit in the stretch (β < G)."""
     out = []
     for s, m, G, W, k, r, c, N, f in ((1, 1, 80, 3, 1, 8.0, 0.057, 10_000, 2), (2, 1, 40, 3, 2, 12.0, 0.03, 10_000, 2),
@@ -310,9 +310,9 @@ def solve(p: dict, prices: dict, eps: float, *, theta: float, line_rule: bool, f
     ε·Θ, and r is also at most k / `least_period`, the chain's.
 
     A group is a window of `audit.pooled`'s, and a window it samples nothing from may be wrong throughout, so d ≥ 1.
-    `shared` lets one openings coin select over m groups' receipts after all their roots (d = 1/m, m ≤ 512): no session
+    `shared` lets one sample's coins select over m groups' receipts after all their roots (d = 1/m, m ≤ 512): no session
     has run it, so it is modeled, with the same closed form. `per_coin` is the code's (`audit.Params.groups_per_coin`,
-    g): one openings coin over g groups, the pooled bound's window a sample of g groups, so d is s/g at s ≥ 1 flips a
+    g): one sample's coins over g groups, the pooled bound's window a sample of g groups, so d is s/g at s ≥ 1 flips a
     coin."""
     tau = eps * p["blocks"] / (2 * p["xi"]) if line_rule else math.inf
     t_s, c = pass_s(p), c_at(p, flight)
@@ -506,7 +506,7 @@ def main() -> None:
                      for x in rooms]))
 
     coin_plans, coin_fixed = [], []
-    md.append(f"\n## One openings coin over g groups (`groups_per_coin`): the cheapest plan at ε* = 1% held over time "
+    md.append(f"\n## One sample's coins over g groups (`groups_per_coin`): the cheapest plan at ε* = 1% held over time "
               f"pooled over {H:g} s, the line rule, two groups in flight and one (`in_flight`; c at one {c1}), each "
               f"plan read by the code (`coin_check`)\n")
     for flight in (2, 1):

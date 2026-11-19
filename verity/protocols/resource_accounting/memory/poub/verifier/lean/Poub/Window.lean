@@ -2,13 +2,14 @@ module
 
 public import CoreProtocol.Protocol
 public import Poub.Receipts
+public import Spot.Draw
 
 /-!
 # A window's receipt checks: `audit.py`'s `Session.close` sample and `Session.verify`
 
 `verifyWindow` takes what the verifier holds of window t once its roots are final (its challenge, each pass's root,
 plan and the appends' head received before it, the root before its first pass, the session's appends with their coins)
-and its openings coin, samples `s` distinct receipts uniformly from the window's `U_t = Σ_i L_i`, and checks the
+and its sample's coins, samples `s` distinct receipts uniformly from the window's `U_t = Σ_i L_i`, and checks the
 prover's openings of them, in the order sampled. Each opening, in `_check`'s order, fails with the first of:
 
 1. `malformed`: not the sampled (pass, position), a block not 4096 bytes, a tile (none is bound), a salt not 192 bytes, a
@@ -40,7 +41,6 @@ namespace Poub
 def REGISTRATION_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/registration/v0"
 def PAYLOAD_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/payload/v0"
 def APPEND_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/append/v0"
-def OPENINGS_DOMAIN : String := "verity/remote-bandwidth/openings/v0"
 def LAYOUT : String := "store-order/v0"
 
 /-- `audit.FAILURES`. -/
@@ -214,15 +214,33 @@ def Verdict.reject (failure : Failure) (at? : Option (Nat × Nat)) : Verdict :=
 none, which no check here gives. -/
 def Verdict.rejection (v : Verdict) : Rejection := v.1.getD ⟨.malformed, none⟩
 
-/-- `Session.close`'s samples: `min(s, U)` distinct receipts (pass, position) uniform over the window's U receipts, from
-its openings coin, in order. -/
-def receiptSample (registration : ByteArray) (t : Nat) (coin : ByteArray) (samples : Nat) (lengths : Array Nat) :
-    Option (Array (Nat × Nat)) := do
+/-- `audit.RECEIPT_LIMIT`: a window's receipts stay below it. -/
+def RECEIPT_LIMIT : Nat := 2 ^ 64
+
+/-- `coins.sample_coins`: the challenger's 64-byte coins a sample of `samples` receipts over `g` windows reserves, enough
+for the draw's first stream (`Flock.Draw.drawWith`'s `2k · width U + 64` bytes) at any `U < g · RECEIPT_LIMIT`. -/
+def sampleCoins (samples g : Nat) : Nat :=
+  (2 * samples * Flock.Draw.width (max 1 g * RECEIPT_LIMIT - 1) + 64 + 63) / 64
+
+/-- A sample's stream as the session holds it: its `sampleCoins` coins, whole, in order. -/
+def sampleBytes (samples g : Nat) : Nat := 64 * sampleCoins samples g
+
+/-- `Session.close`'s samples: `min(s, U)` distinct receipts (pass, position) uniform over the window's U receipts, in
+order, drawn by the proof system's draw (`Spot.Draw.sampleUnits`, a subset, as `coins.draw_first` draws it) from `src`,
+the sample's coins as the challenger released them, read in order with no derivation; with the bytes of `src` the draw
+read. `RAN_OUT` when the draw runs out of them, which refuses the close. -/
+def receiptSampleRead (samples : Nat) (src : ByteArray) (lengths : Array Nat) :
+    Except String (Array (Nat × Nat) × Nat) := do
   let ends := (lengths.foldl (fun (acc : Array Nat × Nat) n => (acc.1.push (acc.2 + n), acc.2 + n)) (#[], 0)).1
   let total := ends.back?.getD 0
-  let key := FlockSoundness.Randomness.derive coin OPENINGS_DOMAIN [("registration", .bytes registration), ("window", .int t)]
-  let us ← FlockSoundness.Randomness.subsetExact key (min samples total) total [.str "openings"]
-  pure (us.map fun u => let i := bisectRight ends u; (i, u - (if i = 0 then 0 else ends[i - 1]!)))
+  let k := min samples total
+  if k = 0 then return (#[], 0)
+  let (us, read) ← Spot.Draw.sampleUnits (.subset k) total src
+  pure (us.map (fun u => let i := bisectRight ends u; (i, u - (if i = 0 then 0 else ends[i - 1]!))), read)
+
+/-- `receiptSampleRead`'s samples; `none` when the draw runs out. -/
+def receiptSample (samples : Nat) (src : ByteArray) (lengths : Array Nat) : Option (Array (Nat × Nat)) :=
+  (receiptSampleRead samples src lengths).toOption.map (·.1)
 
 /-- The append holding store index `j ≥ N`: the last with `first ≤ j`. -/
 def appendOf (appends : Array Append) (j : Nat) : Option Append :=
@@ -303,12 +321,12 @@ def checkWindowChunked (size : Nat) (reg : Registration) (digest : ByteArray) (a
     if t.get ≠ .accept then return t.get
   return .accept
 
-/-- Window t's verdict: its samples from the openings coin, then each opening checked in the order sampled. `none` only
-if the sample runs past its doubled reads, which it does with probability below 2^-256. -/
-def verifyWindow (reg : Registration) (appends : Array Append) (w : WindowRecord) (openingsCoin : ByteArray)
+/-- Window t's verdict: its samples from its sample's coins `src` (`receiptSample`), then each opening checked in the
+order sampled. `none` when the draw runs out of the coins. -/
+def verifyWindow (reg : Registration) (appends : Array Append) (w : WindowRecord) (src : ByteArray)
     (samples : Nat) (openings : Array Opening) : Option Verdict := do
   let digest := reg.digest
-  let sampled ← receiptSample digest w.index openingsCoin samples (w.passes.map (·.plan.length))
+  let sampled ← receiptSample samples src (w.passes.map (·.plan.length))
   pure (checkWindow reg digest appends w sampled openings)
 
 end Poub
