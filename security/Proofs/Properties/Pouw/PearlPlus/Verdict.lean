@@ -216,6 +216,8 @@ theorem load_facts {coins : EpochCoins} {man : Lean.Json} {p : Pass} (h : load c
   · cases h
   rename_i hroot
   dsimp (config := { zeta := false }) only [jrr] at h
+  obtain ⟨-, -, h⟩ := bind_ok h
+  try dsimp (config := { zeta := false }) only at h
   obtain ⟨rootsA, hrootsA, h⟩ := bind_ok h
   obtain ⟨c, hc, h⟩ := bind_ok h
   obtain ⟨rootj, hrootj, h⟩ := bind_ok h
