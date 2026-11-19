@@ -21,9 +21,6 @@ from verity_vllm import settings as S
 PACKAGE = Path(__file__).resolve().parents[4] / "adapters" / "vllm" / "verity_vllm"
 #: Every copy, by its file and the function holding it: the record it fills.
 SITES = {
-    ("pipeline/tp/commit.py", "main"): "the TP Commit record (versions.json's env)",
-    ("pipeline/tp/match.py", "_engine_main"): "the TP Match record (topology.json's env)",
-    ("pipeline/tp/rank_worker.py", "_tp_facts"): "each rank's nccl_env, in both TP records' ranks",
     ("pipeline/row.py", "effective_config"): "the row's effective_config.json (engine_env), which drops a credential",
 }
 KEY, TOKEN = "dummy-not-a-real-key", "dummy-not-a-real-token"

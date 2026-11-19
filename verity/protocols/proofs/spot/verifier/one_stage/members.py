@@ -70,6 +70,7 @@ from verity.protocols.proofs.spot.verifier.challenger.coins import DRAW_FORM
 
 from . import closing as CL, docket as DK, one_circuit as OC, partition as P, proofs as PF
 from verity.commitments import registered_value as RV
+from verity.commitments.domains import REGISTERED_READS_V2
 from .proofs import V2_EXE, LeanError, v2_executable
 
 #: the exit of the v2 executable's ``check`` by its verdict (`Core.BlobProtocol.main`)
@@ -137,7 +138,7 @@ def unwired_why(port: str) -> str:
             "output field: a wired port reads its writer's output field's tree")
 
 
-#: `OneStageZk.provedHeld`'s refusal
+#: `OneStageZk.UNITS_HANDED`
 UNITS_HANDED = "units: a member's units are its block of the partition object's blocks, never the parameters' own"
 PROVED_UNITS = "the units the sessions proved are not the evidence's proved_units"
 #: the heads of the two refusals `Flock.KsScope.checkOf` and the scope (`Flock.ProvedScope.checkOf`) word alike, of
@@ -237,14 +238,24 @@ def _count(m: Mapping[str, Any]) -> int:
 
 
 def _block(name: str, m: Mapping[str, Any], descriptor: bytes, partition: Mapping[str, Any]) -> list[tuple[int, int]]:
-    """Member ``name``'s units, its block of the partition object's ``blocks`` (`one_circuit.block`); a member whose
-    parameters hand it units of its own is refused."""
+    """Member ``name``'s units, its block of the partition object's ``blocks`` (`one_circuit.block`). Lean's parse
+    refuses the parameters of a member handed units of its own or naming a block the object lacks
+    (`OneStageZk.membersOf`), so those raise `Outside` with Lean's ``params:`` reason."""
     if "units" in m:
-        raise _Refused(f"member {name}: {UNITS_HANDED}")
+        raise Outside(f"params: proofs: member {name}: {UNITS_HANDED}")
     try:
         return OC.block(descriptor, partition, m["block"])
     except OC.Refused as e:
-        raise _Refused(f"member {name}: partition: {e}") from None
+        raise Outside(f"params: proofs: member {name}: partition: {e}") from None
+
+
+def _apart(ms: Mapping[str, Any]) -> None:
+    """`OneStageZk.membersOf`'s last check: no unit in two members' units, the first overlap of the ranges sorted by
+    start refused as Lean's parse refuses the parameters."""
+    rs = sorted((u for m in ms.values() for u in m["units"]), key=lambda u: u[0])
+    for prev, r in zip(rs, rs[1:]):
+        if r[0] < prev[1]:
+            raise Outside(f"params: proofs: unit {r[0]} is in two members' units: a unit is one member's")
 
 
 def _parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tuple[dict[str, Any], list[Any]]:
@@ -376,7 +387,10 @@ def _sampled(ms: Mapping[str, Any], held: Sequence[str], want: Sequence[int]) ->
 
 def _ports(name: str, registered: Mapping[str, Any]) -> list[dict[str, Any]]:
     """A registered file's ports by the fields `classHeld` compares, in the file's order; `Outside` where one is not
-    read."""
+    read. A file of another format is refused by name, as `Flock.Registered.portsOf` refuses it."""
+    form = registered.get("format")
+    if type(form) is str and form != REGISTERED_READS_V2:
+        raise _Refused(f"member {name}: registered reads: not a {REGISTERED_READS_V2} file")
     ports = registered.get("ports")
     if not (isinstance(ports, dict) and ports):
         raise Outside(f"member {name}: its registered file names no ports")
@@ -770,8 +784,9 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
     if P.program_sha512(program) != params["partition"].get("program"):
         raise Outside("the program is not the one the parameters' partition object names")
     descriptor = json.dumps(params["program"], sort_keys=True, separators=(",", ":")).encode()
+    ms = {name: {**m, "units": _block(name, m, descriptor, params["partition"])} for name, m in ms.items()}
+    _apart(ms)
     try:
-        ms = {name: {**m, "units": _block(name, m, descriptor, params["partition"])} for name, m in ms.items()}
         held = _held(ms, sts)
         if [s["name"] for st in sts for s in st["sessions"]] != evidence["sessions"]:
             raise _Refused("the statements' sessions are not the evidence's sessions, in order")
