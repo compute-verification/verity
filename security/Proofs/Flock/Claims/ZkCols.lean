@@ -48,8 +48,7 @@ shape (`zkQueryRound`): the masked replay's `m + kLog − 6` rounds (`Zk.replay`
 `Proofs.Flock.Claims.ZkQueryRound` proves it from the verifier's transcript: in an accepted session
 (`Zk.verifyWithM`, any oracle) each rep's `zkRepColsOf` is the witness lanes of its proof's level-0 rows at the
 positions of that round's coins, on which level 0's Merkle check passed against the table's `root_B`
-(`zkQueryRound_verifyWithM`). The probe
-`Proofs.Flock.Claims.ZkColsSession` checks the same on recorded `--zk` sessions, by hand.
+(`zkQueryRound_verifyWithM`).
 
 A masked column is the row's first `2^k0` symbols, the witness lanes (`zkRepColsOf`): the extra lanes are the reps'
 own, and the masked code is the padded witness-lane code (`zkEncD`).

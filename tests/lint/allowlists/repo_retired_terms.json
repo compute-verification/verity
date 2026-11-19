@@ -986,7 +986,6 @@
     {"file": "security/Proofs/Flock/Claims/ZK/Refine.lean", "count": 4},
     {"file": "security/Proofs/Flock/Claims/ZK/Release.lean", "count": 9},
     {"file": "security/Proofs/Flock/Claims/ZK/SessionLean.lean", "count": 1},
-    {"file": "security/Proofs/Flock/Claims/ZkColsSession.lean", "count": 1},
     {"file": "security/Proofs/Flock/EndToEnd.lean", "count": 7},
     {"file": "security/Proofs/Flock/EndToEnd/Blocks.lean", "count": 9},
     {"file": "security/Proofs/Flock/EndToEnd/Blocks/Statement.lean", "count": 14},
