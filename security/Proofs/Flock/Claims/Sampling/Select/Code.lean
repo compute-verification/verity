@@ -127,7 +127,7 @@ theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
         (Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
       rule.samplingDesignOver n = .ok samplingDesign ∧
       i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable = .ok workTable ∧
-      ¬(!(Docket.check i.record { i.params.verifier with samplingDesign, workTable }).isEmpty) = true ∧
+      ¬(!(Docket.check i.record { i.params.verifier with samplingDesign, workTable, rate := none }).isEmpty) = true ∧
       ∃ derived, Draw.derive i.params.verifier.program i.params.verifier.query samplingDesign workTable = .ok derived ∧
         ∃ resolved, Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
         ∃ draw rest read, Select.select resolved i.params.verifier.program i.params.verifier.query
