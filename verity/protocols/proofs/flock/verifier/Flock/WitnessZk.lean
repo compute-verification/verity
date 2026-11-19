@@ -105,9 +105,12 @@ def readJson (path : String) : IO (Except String Json) := do
     return (JsonParse.parse t).mapError fun e => s!"{path}: not JSON: {e}"
   catch e => return .error s!"{path}: {e}"
 
+/-- `--registered F` as `verity-verify-proof verify` reads it: with `--rec-inner`, the recursive verifier's stated reads
+(`Registered.ofJsonStated`), else `Registered.ofJson`'s. -/
 def registeredOf (args : List String) : IO (Except String (Array Registered.Port)) := do
   let some f := argOf args "--registered" | return .ok #[]
-  return (← readJson f) >>= Registered.ofJson
+  let read := if (argOf args "--rec-inner").isSome then Registered.ofJsonStated else Registered.ofJson
+  return (← readJson f) >>= read
 
 /-- `--partition` and `--program`, each optional, as `verity-verify-proof` reads them. -/
 def bindingsOf (args : List String) : IO (Except String (Option Json × Option ByteArray)) := do

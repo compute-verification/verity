@@ -249,6 +249,51 @@ theorem buildSessionBy_read (read : ByteArray) (parsed : V Circuit) :
   unfold buildSessionOf buildSessionBy
   rw [Stmt.setupTablesOf_eq_by]
 
+/-- `buildStmt` on the recursive verifier's road (`--rec-inner`): the statement held to `registered`'s stated reads
+(`Registered.ofJsonStated`), which the V* checks hold to the reads they compute, in place of reads derived from C. -/
+def buildStmtStated (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
+    (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) (program : Option ByteArray := none)
+    (registered : Option (Array Registered.Port) := none) (publicInputs : Option ByteArray := none)
+    (identifier : Option String := none) : V Stmt :=
+  if publicInputs.isSome && !tags.hiddenOutputs then
+    throw s!"--public-inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
+  else if tags.hm96Rows then do
+    let st ← if tags.hiddenOutputs then Stmt.setupHidden tags circuitB pubB coins tables draw partition program publicInputs
+      else Stmt.setupH tags circuitB pubB coins tables draw partition program
+    if tags.plainLeaves then checkDescription st registered
+    else checkRegistered st registered
+    checkIdentifier st identifier
+    return st
+  else do
+    if registered.isSome then throw s!"{tags.name}: registered reads are an hm96-sha512 row statement's"
+    Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables
+
+/-- `buildSessionBy` on the recursive verifier's road (`--rec-inner`): every table's statement held to `registered`'s
+stated reads, as `buildStmtStated` holds one. -/
+def buildSessionByStated (readDesc : ByteArray → V TemplateQuery.Desc) (readProg : ByteArray → V Program.Prog)
+    (parsed : V Circuit) (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
+    (tables : List (String × ByteArray)) (count : Nat) (draw : Option Lean.Json := none) (partition : Option Lean.Json := none)
+    (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
+    (stratified : Option Nat := none) (closure : Option (Std.HashMap Nat (Array Nat)) := none)
+    (registered : Option (Array Registered.Port) := none) (publicInputs : Option ByteArray := none)
+    (identifier : Option String := none) : V (SessionSpec × Array Stmt) := do
+  let held := fun (r : SessionSpec × Array Stmt) => do
+    for st in r.2 do
+      checkRegistered st registered
+      checkIdentifier st identifier
+    Registered.checkFull registered draw
+    return r
+  if tags.hiddenOutputs && tags.hm96Rows then
+    held (← Stmt.setupTablesBy readDesc readProg parsed tags circuitB pubB coins count tables draw partition program work
+      stratified closure publicInputs)
+  else if tags.hm96Rows then
+    held (← Stmt.setupTables tags circuitB pubB coins count tables draw partition program work stratified closure
+      publicInputs)
+  else if count > 1 then throw s!"{tags.name}: one table per session"
+  else do
+    let st ← buildStmtStated tags circuitB pubB compB coins tables draw partition program registered publicInputs identifier
+    return (st.spec, #[st])
+
 /-- The SHA-512 of a JSON value's canonical JSON (`canon`), as `Spot.canonSha512` digests one. -/
 def sha512Of (j : Lean.Json) : V String := do return hexOf (Sha512.hash (← canon j).toUTF8)
 
@@ -324,8 +369,9 @@ def closureInput (args : List String) : IO (Except String (Option (Std.HashMap N
       | .ok j => return (Draw.closureMapOfJson j).map some
       | .error e => return .error s!"closure map: not JSON: {e}"
 
-/-- `--registered F`: the verifier's own registered reads (`Registered.ofJson`: per registered port, the value, its
-registered root, leaf count, row width and domain, and the position each unit reads), a path, or with `--archive` its
+/-- `--registered F`: the verifier's own registered reads (`read`: `Registered.ofJson`, per registered port the value, its
+registered root, leaf count, row width and domain; on the recursive verifier's road, which the caller takes under its own
+`--rec-inner`, `Registered.ofJsonStated`, which adds the position each unit reads), a path, or with `--archive` its
 SHA-512. With `flag` `--rec-rows`, the verifier's record of V*'s shared rows (`RecVStar.checkRows`), a file of the same
 form. A file naming a key twice in one object (a port, or a port's key) is refused (`JsonKeys.dupKey`): the parser
 would keep one of them. A port the file names at known content (`Registered.KNOWN_KEY`) is refused unless its root is
@@ -334,7 +380,8 @@ statement to: the known content (`Registered.knownOf`), whose input ports every 
 template parameter each port reads (`Registered.paramsOf`, which `Registered.checkCover` holds the program's registered
 reads to), the ports it binds to the window's committed values (`RegBound.ofJson`, which `RegBound.check` reads), and
 the file's digest, the SHA-512 of its canonical JSON (`sha512Of`), which a verdict names it by. -/
-def registeredFile (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
+def registeredFile (args : List String) (flag : String := "--registered") (ctx : String := "registered reads")
+    (read : Lean.Json → V (Array Registered.Port) := Registered.ofJson) :
     IO (Except String (Option (Array Registered.Port × Array (String × Array (Array Nat × ByteArray)) ×
       Array String × Array RegBound.Bound × String))) := do
   let some f := argOf args flag | return .ok none
@@ -354,7 +401,7 @@ def registeredFile (args : List String) (flag : String := "--registered") (ctx :
           let file := j
           let bound ← RegBound.ofJson j
           let j := RegBound.ownOf j
-          let own ← Registered.ofJson j
+          let own ← read j
           let known ← Registered.knownOf j
           Registered.checkKnownAll own known
           return (own, known, ← Registered.paramsOf j, bound,
@@ -363,9 +410,10 @@ def registeredFile (args : List String) (flag : String := "--registered") (ctx :
       | .error e, _ => return .error s!"{ctx}: not JSON: {e}"
 
 /-- `registeredFile`'s ports, of a file that binds none: its readers hold no port to a window's committed values. -/
-def registeredInput (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
+def registeredInput (args : List String) (flag : String := "--registered") (ctx : String := "registered reads")
+    (read : Lean.Json → V (Array Registered.Port) := Registered.ofJson) :
     IO (Except String (Option (Array Registered.Port))) :=
-  return (← registeredFile args flag ctx).bind fun
+  return (← registeredFile args flag ctx read).bind fun
     | some (own, _, _, bound, _) =>
       if bound.isEmpty then .ok (some own)
       else .error s!"{ctx}: the file binds ports ({RegBound.KEY}), which only a statement's `verify` and `statement` read"
@@ -699,7 +747,7 @@ def recStatementsCmd (args : List String) : IO UInt32 := do
     | .ok (some i) => pure i
     | .ok none => IO.eprintln usage; return 2
     | .error e => IO.eprintln e; return 2
-  let registered ← match ← registeredInput args with
+  let registered ← match ← registeredInput args (read := Registered.ofJsonStated) with
     | .ok r => pure r
     | .error e => IO.eprintln e; return 2
   let part ← match recPartInput args with
@@ -989,7 +1037,9 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
   let closure ← match ← closureInput args with
     | .ok c => pure c
     | .error e => IO.eprintln e; return 2
-  let (registered, known, params, bound, registeredSha) ← match ← registeredFile args with
+  let recStated := (argOf args "--rec-inner").isSome
+  let (registered, known, params, bound, registeredSha) ← match ← registeredFile args
+      (read := if recStated then Registered.ofJsonStated else Registered.ofJson) with
     | .ok r => pure (r.map Prod.fst, (r.map (·.2.1)).getD #[], (r.map (·.2.2.1)).getD #[],
         (r.map (·.2.2.2.1)).getD #[], r.map (·.2.2.2.2))
     | .error e => IO.eprintln e; return 2
@@ -1024,7 +1074,7 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
   let recLink ← match ← recLinkInput args (recCoins.map (·.record)) with
     | .ok l => pure l
     | .error e => IO.eprintln e; return 2
-  let recRows ← match ← registeredInput args "--rec-rows" "rec rows" with
+  let recRows ← match ← registeredInput args "--rec-rows" "rec rows" Registered.ofJsonStated with
     | .ok r => pure r
     | .error e => IO.eprintln e; return 2
   let recRowsSha ← match ← fileDigest args "--rec-rows" with
@@ -1074,8 +1124,12 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
         RecLinkPart.checkShape recInner recLinks
         RecBudget.regs recInner registered
         RecBudget.statements recInner
-        let r ← buildSessionBy read.desc read.prog parsed tags circuitB pubB compB coins tables count draw partition
-          program work stratified closure registered publicInputs (identifier.map Prod.snd)
+        let r ← if recStated then
+            buildSessionByStated read.desc read.prog parsed tags circuitB pubB compB coins tables count draw partition
+              program work stratified closure registered publicInputs (identifier.map Prod.snd)
+          else
+            buildSessionBy read.desc read.prog parsed tags circuitB pubB compB coins tables count draw partition
+              program work stratified closure registered publicInputs (identifier.map Prod.snd)
         if let some own := registered then r.2.forM fun (st : Stmt) => RegBound.check st.c st.pub program own bound declared
         r.2.forM fun (st : Stmt) => Registered.checkCoverBy read.prog st.c program partition registered params
         r.2.forM fun (st : Stmt) => KnownRead.check st.c known
@@ -1319,7 +1373,9 @@ def statementCmd (args : List String) : IO UInt32 := do
   let program ← match ← programInput args with
     | .ok p => pure p
     | .error e => IO.eprintln e; return 2
-  let (registered, known, bound) ← match ← registeredFile args with
+  let recStated := (argOf args "--rec-inner").isSome
+  let (registered, known, bound) ← match ← registeredFile args
+      (read := if recStated then Registered.ofJsonStated else Registered.ofJson) with
     | .ok r => pure (r.map Prod.fst, (r.map (·.2.1)).getD #[], (r.map (·.2.2.2.1)).getD #[])
     | .error e => IO.eprintln e; return 2
   let declared ← match ← interfaceInput args partition with
@@ -1343,7 +1399,7 @@ def statementCmd (args : List String) : IO UInt32 := do
   let recBindings ← match ← recBindingsInput args with
     | .ok b => pure b
     | .error e => IO.eprintln e; return 2
-  let recRows ← match ← registeredInput args "--rec-rows" "rec rows" with
+  let recRows ← match ← registeredInput args "--rec-rows" "rec rows" Registered.ofJsonStated with
     | .ok r => pure r
     | .error e => IO.eprintln e; return 2
   let recBound ← innerMetaDocket args
@@ -1364,8 +1420,12 @@ def statementCmd (args : List String) : IO UInt32 := do
       RecLinkPart.checkShape recInner recLinks
       RecBudget.regs recInner registered
       RecBudget.statements recInner
-      let st ← buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
-        (identifier.map Prod.snd)
+      let st ← if recStated then
+          buildStmtStated tags circuitB pubB compB coins tables none partition program registered publicInputs
+            (identifier.map Prod.snd)
+        else
+          buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
+            (identifier.map Prod.snd)
       RecBudget.table recInner #[st]
       if let some own := registered then RegBound.check st.c st.pub program own bound declared
       KnownRead.check st.c known

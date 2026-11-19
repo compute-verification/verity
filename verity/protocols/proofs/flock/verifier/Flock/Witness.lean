@@ -102,7 +102,7 @@ def acceptsDescription (st : Stmt) (own : Array Registered.Port) : V Unit := do
 
 /-- `--rec-inner F`, `--rec-part J`, `--rec-bindings F` and `--rec-rows F`, as `verity-verify-proof verify` reads them: the inner
 shape (`RecVStar.Inner.ofJson`), which of V*'s statements the sessions are, the verifier's own bindings
-(`RecVStar.ownBindingsOfJson`) and its shared rows (`Registered.ofJson`). -/
+(`RecVStar.ownBindingsOfJson`) and its shared rows (`Registered.ofJsonStated`). -/
 def vstarOf (args : List String) :
     IO (Except String (Option (RecVStar.Inner × Nat × VStar.Bindings × Option (Array Registered.Port)))) := do
   let some fi := argOf args "--rec-inner" | return .ok none
@@ -114,7 +114,7 @@ def vstarOf (args : List String) :
   return do
     let i ← ij >>= RecVStar.Inner.ofJson
     let f ← bj >>= RecVStar.ownBindingsOfJson
-    let rows ← rj.mapM (· >>= Registered.ofJson)
+    let rows ← rj.mapM (· >>= Registered.ofJsonStated)
     pure (some (i, j, f, rows))
 
 /-- A set-up statement's `m` and its `Zk.schedule`'s level 0. -/
