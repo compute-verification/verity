@@ -217,8 +217,6 @@ def test_one_logit_is_index_0() -> None:
     assert not BS.evaluate_words(bind(SB.TokenSelect, V=1), x).any()
 
 
-@pytest.mark.xfail(strict=True, reason="TokenSelect_v1{V=1} returns logits[0], not 0: its scan has no iterations, and "
-                   "verity.circuits.layout.resolve_gate reads a zero-length scan's carry from iteration n - 1 = -1 instead of from init")
 def test_word_view_at_one_logit() -> None:
     x = SPECIALS[:, None]
     assert not E.evaluate_batch(bind(b1.TokenSelect, V=1), x).any()
