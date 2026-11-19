@@ -27,7 +27,7 @@
 # existing shared filesystem at /workspace/fs, and NEBIUS_PREEMPTIBLE=1 makes the VM preemptible, at most at the per-GPU-hour limit of
 # the pricing policy NEBIUS_SPOT_POLICY_ID (else whatever the spot price is).  GPU clocks are locked only on gpu-rtx6000: its GPU is
 # the entry of tools/config's GPU registry (verity_config.gpus) whose nebius_platforms lists it, and that entry's `card` its card file
-# (calibration/hardware/cards/<card>.toml), whose clock.memory is the memory lock; the graphics lock is GPU_LOCK_MHZ below,
+# (calibration/hardware/cards/<card>.toml, read by verity.device.load_card), whose clock.memory is the memory lock; the graphics lock is GPU_LOCK_MHZ below,
 # refused above the card's clock.sm.
 # Billing starts when the VM is Running and is per second; --yes is required for anything that starts it.
 set -euo pipefail
@@ -61,7 +61,8 @@ lock_clocks=$([ "$PLATFORM_PREFIX" = gpu-rtx6000 ] && echo 1 || echo 0)
 clocks=""
 if [ "$lock_clocks" = 1 ]; then
   clocks=$(python3 - "$src/../../.." "$PLATFORM_PREFIX" "$GPU_LOCK_MHZ" <<'PY'
-import os, sys, tomllib
+import os, sys
+from pathlib import Path
 root, platform, gpu = os.path.normpath(sys.argv[1]), sys.argv[2], int(sys.argv[3])
 sys.path.insert(0, os.path.join(root, "tools/config"))
 from verity_config import ConfigError, gpus
@@ -74,13 +75,15 @@ if len(entries) != 1:
     sys.exit(f"launch.sh: {platform} locks its GPUs' clocks, and {len(entries)} entries of {REGISTRY / 'gpus.toml'} list it in "
              "nebius_platforms: list it in its GPU's entry alone")
 (entry,) = entries
-path = os.path.join(root, "calibration/hardware/cards", f"{entry.card}.toml")
+sys.path.insert(0, root)
+from verity.device import load_card
+from verity.errors import InvalidArtifact
+cards = Path(root) / "calibration/hardware/cards"
 try:
-    with open(path, "rb") as f:
-        clock = tomllib.load(f)["clock"]
+    clock = load_card(entry.card, directory=cards)["clock"]
     sm, memory = clock["sm"]["value"], clock["memory"]["value"]
-except (OSError, KeyError) as e:
-    sys.exit(f"launch.sh: {entry.id}'s card {entry.card}: {path} has no clock.sm and clock.memory to lock the GPUs to ({e!r})")
+except (KeyError, InvalidArtifact) as e:
+    sys.exit(f"launch.sh: {entry.id}'s card {entry.card}: {cards / (entry.card + '.toml')} has no clock.sm and clock.memory to lock the GPUs to ({e!r})")
 if gpu > sm:
     sys.exit(f"launch.sh: GPU_LOCK_MHZ={gpu} is above {entry.card}'s clock.sm, {sm} MHz: lower it beneath the card's ceiling")
 print(f"VY_GPU_CLOCK_MHZ={gpu}\nVY_MEM_CLOCK_MHZ={memory}")

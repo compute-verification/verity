@@ -4,12 +4,12 @@ import ast
 import dataclasses
 import hashlib
 import sys
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
+from verity.device import load_card
 from verity_config import Admission, ConfigError, dumps, gpus, load, sha256
 from verity_config.registry import REGISTRY
 
@@ -66,8 +66,7 @@ def test_a_gpus_card_is_a_gpu_card_file_no_other_entry_names():
     named = [gpu.card for gpu in gpus().values()]
     assert len(named) == len(set(named)), named
     for card in named:
-        doc = tomllib.loads((CARDS / f"{card}.toml").read_text())
-        assert (doc["kind"], doc["sku"]) == ("gpu", card), card
+        assert load_card(card, directory=CARDS)["kind"] == "gpu", card
 
 
 def test_a_gpu_entry_naming_no_card_is_refused_by_its_id(tmp_path):
