@@ -29,7 +29,7 @@ namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json)
 open Claims.Json (Wf)
-open InferenceOnlyVerifier.DefinitionDigest (isComposite flatParts written canonicalEntry definitionDigest closureDigest)
+open Flock.DefinitionDigest (isComposite flatParts written canonicalEntry definitionDigest closureDigest)
 
 /-- `canonicalEntry`'s field write: an object's field set, anything else as it is. -/
 def setJ (j : Json) (k : String) (v : Json) : Json := match j with

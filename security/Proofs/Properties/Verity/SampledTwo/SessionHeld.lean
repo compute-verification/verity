@@ -77,9 +77,9 @@ theorem membersRun_held {p : Spot.OneStageZk.Params} {ms : Array Spot.OneStageZk
 
 /-! ## What `membersTreesHeld` named -/
 
-/-- The session `Spot.OneStageZk.run` sets up has one table, the circuit statement's. -/
+/-- The session `Spot.OneStageZk.run` sets up has one table, the templated statement's. -/
 theorem sessionTables_circuit : Spot.OneStageZk.sessionTables = #[Flock.Tags.circuit.table] := by
-  have htag : Flock.Tags.find? Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
+  have htag : Flock.Tags.byName? Spot.OneStageZk.STATEMENT = some Flock.Tags.circuitTmpl := rfl
   simp only [Spot.OneStageZk.sessionTables, htag, Option.map_some, Option.getD_some]
   rfl
 
