@@ -356,9 +356,47 @@ def ofMark (coins : Array (String × ByteArray)) (v : String) (m : Mark) : V Row
     throw s!"supplied input {v}: {m.fn}'s value is {8 * n} bits, and the mark says {m.bits}"
   return #[(if m.layout == "le" then #[(LE, "")] else #[]) ++ ss]
 
+/-- A Python list of strings' repr, as `supplied.check_order` names the late commitments. -/
+private def pyNames (xs : List String) : String := "[" ++ ", ".intercalate (xs.map fun x => "'" ++ x ++ "'") ++ "]"
+
+/-- `registered.order`, §5.4's order rule at registration: every commitment C's marks read is registered before every
+coin they read, `E_SUPPLIED_ORDER` naming the late ones. A mark reads a coin where its function's value is one the
+verifier holds (`coins`), at its place in `released` (`{function: n}`: the coin was released after n records, this one
+the `records`-th, its commitments before any coin it reads); its rows' sources read the commitments: a `value`'s or
+`port`'s root this record's, at place `records`, and `position` the log's, at `records - 1`. Refused where `released`
+is not an object of a place by supplied function, or names no place of a coin read beside a commitment. -/
+def order (marked : Array (String × Mark)) (rows : Array (String × Rows)) (coins : Array (String × ByteArray))
+    (released : Json) (records : Nat) : V Unit := do
+  let places ← match released with
+    | .null => pure #[]
+    | .obj kvs => kvs.toArray.mapM fun (f, n) => match nat? n with
+      | some n => if FUNCTIONS.contains f then pure (f, n) else throw "released is an object of a place by supplied function"
+      | none => throw "released is an object of a place by supplied function"
+    | _ => throw "released is an object of a place by supplied function"
+  let reads := rows.foldl (fun acc (_, rs) => rs.foldl (fun acc r => r.foldl (fun acc (k, n) =>
+      let at? := if k == "value" || k == "port" then some records
+        else if k == "position" && records > 0 then some (records - 1) else none
+      match at? with
+      | none => acc
+      | some at =>
+        let name := if k == "position" then "log" else n
+        match acc.find? (·.1 == name) with
+        | some (_, b) => (acc.filter (·.1 != name)).push (name, max at b)
+        | none => acc.push (name, at)) acc) acc) (#[] : Array (String × Nat))
+  let fns := (marked.foldl (fun l (_, m) => if coins.any (·.1 == m.fn) && !l.contains m.fn then l ++ [m.fn] else l)
+    ([] : List String)).mergeSort (· ≤ ·)
+  for f in fns do
+    if reads.isEmpty then return
+    let some (_, at) := places.find? (·.1 == f)
+      | throw s!"released: the verifier names no place of {f}'s coin, which a supplied value reads beside commitments"
+    let late := ((reads.filter (·.2 ≥ at)).map (·.1)).toList.mergeSort (· ≤ ·)
+    unless late.isEmpty do
+      throw s!"E_SUPPLIED_ORDER: {pyNames late} registered after {f}, which a supplied value reads"
+
 /-- The difftest's `supplied_marks`: on `{program, coins, widths, record, log, binding}` (`coins`: `{function: hex}`;
 `widths`: `{input: w}`; `binding`: `{stream, prover}` or null), each supplied input's rows as leaves of its width
-(`marks`, `ofMark`, then `rows`' reading), cut where `cuts` names it (`{input: [n, k]}`, `cut`), or the refusal. -/
+(`marks`, `ofMark`, held to the order rule at `released`, `order`, then `rows`' reading), cut where `cuts` names it
+(`{input: [n, k]}`, `cut`), or the refusal. -/
 def piece (j : Json) : Except String Json := do
   let ms ← marks (getD j "program")
   let coins ← match getD j "coins" with
@@ -375,6 +413,8 @@ def piece (j : Json) : Except String Json := do
       | .str s, .str p => pure (some (s, p))
       | _, _ => throw "binding is not {stream, prover}"
   let rec_ := getD j "record"
+  let rows ← ms.mapM fun (v, m) => do pure (v, ← ofMark coins v m)
+  order ms rows coins (getD j "released") log.size
   let out ← ms.mapM fun (v, m) => do
     let some w := nat? (getD widths v) | throw s!"widths: no width of {v}"
     let rs ← ofMark coins v m
