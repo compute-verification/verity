@@ -126,3 +126,13 @@ def test_a_template_carrying_root_rows_is_refused(gemm, tmp_path):
     root, _ = gemm
     bad = _rewrite(root, tmp_path / "bad.circuit", extra="CIRCUIT root 1\nflock-ir-unit/v2 root 0 0 0 0\n")
     assert "carries no unit rows" in _statement(bad, root / "stage" / "pub-4.bin")
+
+
+@pytest.mark.slow
+def test_a_template_binding_unit_inputs_to_constants_is_refused(gemm, tmp_path):
+    """Owed until the verifier derives a unit's inputs bound to constants: META `unit_in` naming any is refused by its
+    text (`Flock.Typed`, `Setup.classOfWith`)."""
+    root, _ = gemm
+    bad = _rewrite(root, tmp_path / "bad.circuit", lambda m: m.__setitem__("unit_in", [[0, 0]]))
+    assert ("META: unit_in binds the unit's inputs to constants, which this verifier does not derive yet"
+            in _statement(bad, root / "stage" / "pub-4.bin"))
