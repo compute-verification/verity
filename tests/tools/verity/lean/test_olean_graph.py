@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import functools
 import importlib.util
+import json
 import os
 import shutil
 import struct
@@ -224,6 +225,62 @@ def test_the_replay_keys_walked_in_processes_are_the_keys_walked_here(tmp_path, 
     assert keys[1] == keys[2] == keys[64] == here
     assert len(set(here.values())) == len(here)
     A._GRAPHS.clear()
+
+
+def test_a_stored_walk_gives_the_key_its_walk_gives_and_only_for_the_same_bytes_and_walker(tmp_path, monkeypatch):
+    """With a replay cache's `graphs/`, a later process reads each walk from it and starts none; the keys are those of the
+    walks. Parts with other bytes, another `olean_graph.py` or an entry cut short are walked again, never read."""
+    facts, A, g = closure(tmp_path / "c"), check(), tmp_path / "graphs"
+    A._GRAPHS.clear()
+    walked: dict = {}
+    keys = A.replay_keys(facts, "t", walked=walked, graphs=g)
+    assert walked["modules"] == 4 and walked["stored"] == 0 and len(list(g.iterdir())) == 4
+    real, started = A.subprocess.run, []
+
+    def run(cmd, **kw):
+        started.append(cmd)
+        return real(cmd, **kw)
+
+    monkeypatch.setattr(A.subprocess, "run", run)
+    A._GRAPHS.clear()
+    walked = {}
+    assert A.replay_keys(facts, "t", walked=walked, graphs=g) == keys and not started and walked["stored"] == 4
+    module_data(tmp_path / "c" / "qn", path="/elsewhere/Q/N.lean", literal="other")
+    A._GRAPHS.clear()
+    walked = {}
+    changed = A.replay_keys(facts, "t", walked=walked, graphs=g)
+    assert {k: walked[k] for k in ("stored", "modules", "processes")} == {"stored": 3, "modules": 1, "processes": 1}
+    assert len(started) == 1
+    assert changed["Q.N"] != keys["Q.N"] and changed["P.M"] == keys["P.M"]
+    A._GRAPHS.clear()
+    assert A.replay_keys(facts, "t") == changed, "the stored walks give what walking gives"
+    A._GRAPHS.clear()
+    entry = next(f for f in g.iterdir() if json.loads(f.read_text())["module"] == "P.M")
+    entry.write_text(entry.read_text()[:20])
+    monkeypatch.setattr(A, "graph_tool", lambda: "another walker")
+    walked = {}
+    assert A.replay_keys(facts, "t", walked=walked, graphs=g) == changed and walked["stored"] == 0
+    monkeypatch.undo()
+    A._GRAPHS.clear()
+    walked = {}
+    assert A.replay_keys(facts, "t", walked=walked, graphs=g) == changed and walked["stored"] == 4 - 1
+    A._GRAPHS.clear()
+
+
+def test_a_stored_walk_is_found_only_under_everything_the_walk_reads(tmp_path, monkeypatch):
+    """An entry of `graphs/` is read only for the same module, parts' digests, set of parts, source path and walker: a
+    change of any one of them misses it, and the module is walked again."""
+    A, g, parts = check(), tmp_path / "graphs", module_data(tmp_path / "pm")
+    k, job = ("P.M", "d1,d2,d3"), ("P/M.lean", parts)
+    A.store_graphs(g, {k: "G"}, {k: job})
+    assert A.stored_graphs(g, {k: job}) == {k: "G"}
+    for why, jobs in {"another source path": {k: ("Q/M.lean", parts)},
+                      "another set of parts": {k: ("P/M.lean", {p: f for p, f in parts.items() if p != "olean.private"})},
+                      "other bytes": {("P.M", "d1,d2,d4"): job},
+                      "another module": {("P.N", "d1,d2,d3"): job}}.items():
+        assert A.stored_graphs(g, jobs) == {}, why
+    monkeypatch.setattr(A, "graph_tool", lambda: "another walker")
+    assert A.stored_graphs(g, {k: job}) == {}
 
 
 def test_a_failed_walk_fails_the_replay_keys_and_leaves_no_key(tmp_path, monkeypatch):

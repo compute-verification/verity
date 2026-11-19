@@ -59,7 +59,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as
 from verity.commitments import randomness as RND
 from verity.circuits.codec import canonical_json
 from verity.commitments import salt_file as SF
-from verity.commitments.periods import interface as IF, rows as CS
+from verity.commitments.periods import interface as IF, rows as CS, wiring as WI
 from verity_difftest import settings as opt
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
@@ -756,7 +756,7 @@ def test_a_partial_windows_charge_states_no_c_its_port_from_a_template_it_lacks_
     import records_audit as RA
 
     writer = CS.Member("W", (("a", 4),), (("o0", 8),), 2)
-    reader = CS.Member("R", (("x", 8), ("y", 2)), (("o0", 2),), 2, base=2, wired=(("x", "o0", (0, 1)),))
+    reader = CS.Member("R", (("x", 8), ("y", 2)), (("o0", 2),), 2, base=2, wired=(WI.Wired("x", "W", "o0", 0, (2,), 0, (1,)),))
     advice = 16 * 2 * (4 + 2)
     whole, partial = (RA.leak_count(w, (), advice) for w in ([writer, reader], [replace(reader, base=0, wired=())]))
     assert (whole["other_inputs"], whole["bound"]) == (advice, "within the charge")

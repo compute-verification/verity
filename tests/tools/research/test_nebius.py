@@ -30,6 +30,7 @@ from research import remote
 from research.pods import lease as L
 from research.pods import registry
 from research.store import custody as CU
+from research.store import private
 
 NEBIUS = Path(registry.__file__).resolve().parent / "nebius"
 GPU_LEASE = Path(registry.__file__).resolve().parent / "sh" / "gpu_lease.sh"
@@ -976,6 +977,32 @@ def test_the_first_boot_writes_and_applies_the_user_namespace_setting_on_the_nod
     assert "sysctl -q -e -p /etc/sysctl.d/61-vy-userns.conf" in (NEBIUS / "vm_setup.sh").read_text()
 
 
+def test_the_first_boot_keeps_bash_logout_from_setting_a_login_shells_exit_status(tmp_path):
+    """Ubuntu's stock ~/.bash_logout ends in `[ -x /usr/bin/clear_console ] && ...`, which fails with no console, so a job run as
+    `bash -lc` under set -e exited 1 whatever it did. vm_setup.sh's loop over skel's and every user's file, run here on copies,
+    appends `|| true` to that line once and leaves any other file as it is."""
+    loop = re.search(r"^for f in [^\n]*\.bash_logout; do\n.*?^done\n", (NEBIUS / "vm_setup.sh").read_text(), re.S | re.M)
+    assert loop and "/etc/skel/.bash_logout" in loop[0] and "/home/*/.bash_logout" in loop[0]
+    stock = ("# ~/.bash_logout: executed by bash(1) when login shell exits.\n\n"
+             "if [ \"$SHLVL\" = 1 ]; then\n    [ -x /usr/bin/clear_console ] && /usr/bin/clear_console -q\nfi\n")
+    files = {"stock": stock, "other": "echo bye\n", "mended": stock.replace(" -q\n", " -q || true\n")}
+    for name, text in files.items():
+        (tmp_path / name).write_text(text)
+    script = re.sub(r"^for f in [^;]*;", 'for f in "$@";', loop[0], flags=re.M)
+
+    def run() -> dict[str, str]:
+        r = subprocess.run(["bash", "-euc", script, "_", *(str(tmp_path / n) for n in files), str(tmp_path / "absent")],
+                           capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        return {n: (tmp_path / n).read_text() for n in files}
+
+    first = run()
+    assert first == {**files, "stock": files["mended"]}
+    assert run() == first
+    r = subprocess.run(["bash", "-c", f"set -e; SHLVL=1; . {tmp_path / 'stock'}"], capture_output=True, stdin=subprocess.DEVNULL)
+    assert r.returncode == 0, "with no console the mended file's last status is 0"
+
+
 def test_a_vm_can_boot_on_another_ones_kept_data_disk():
     """n1's replacement may boot on vy-nebius-1-data: launch.sh and teardown.sh look the data disk up by this name."""
     r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_VM_NAME="vy-nebius-cpu-4", NEBIUS_PLATFORM_PREFIX="cpu-d3",
@@ -1844,7 +1871,7 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     writable = n2.round_(UNTRUSTED="/n1/src/abc/tools/research/src/research/store")
     assert writable.returncode == 3 and "rsync" not in n2.calls()
     assert "refused: n1.invalid:/n1/src/abc/tools/research/src/research/store could be changed by a uid other than root" in writable.stdout
-    assert "find /n1/src/abc/tools/research /workspace/custody/python -path /workspace/custody/python/.lock -prune" in n2.calls()
+    assert f"find /n1/src/abc/tools/research /n1/src/abc/{private.TREE_NAMES} /workspace/custody/python -path /workspace/custody/python/.lock -prune" in n2.calls()
     unreached = n2.round_(UNREACHABLE="1")
     assert unreached.returncode == 3 and "refused: node 1 not reached (`ssh n1.invalid` exited 255)" in unreached.stdout
 
@@ -2157,6 +2184,8 @@ def _n1_custody(tmp_path: Path) -> types.SimpleNamespace:
     # the round runs only a tree and a Python that no other uid can change: copies, not links into the checkout
     shutil.copytree(src_root, base / "src" / "tools" / "research" / "src", ignore=shutil.ignore_patterns("__pycache__"))
     shutil.copy(src_root.parent / "store.pod.toml", base / "src" / "tools" / "research" / "store.pod.toml")
+    (base / "src" / private.TREE_NAMES).parent.mkdir(parents=True)          # as deploy.toml lays it beside the tree: custody's floor
+    shutil.copy(src_root.parents[2] / private.TREE_NAMES, base / "src" / private.TREE_NAMES)
     (base / "py" / "bin" / "python3").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
     (base / "py" / "bin" / "python3").chmod(0o755)
     for p in (base, base / "src", *(base / "src").rglob("*"), base / "py", *(base / "py").rglob("*")):
@@ -2533,7 +2562,8 @@ def test_n1_custody_runs_only_a_tree_and_a_python_no_other_uid_can_change(tmp_pa
     (node.pyhome / ".lock").write_text("")
     (node.pyhome / ".lock").chmod(0o666)
     said = []
-    for p, mode in ((tree, 0o777), (custody_py, 0o664), (node.src, 0o775), (node.py, 0o757)):
+    names = node.src / private.TREE_NAMES
+    for p, mode in ((tree, 0o777), (custody_py, 0o664), (node.src, 0o775), (node.py, 0o757), (names, 0o666)):
         was = p.stat().st_mode
         p.chmod(mode)
         out = node.round_()
@@ -2544,6 +2574,10 @@ def test_n1_custody_runs_only_a_tree_and_a_python_no_other_uid_can_change(tmp_pa
     assert "on this host and in Jobs with the Secret research-r2" in said[0]
     elsewhere = node.round_(VY_CUSTODY_PY=sys.executable)
     assert elsewhere.returncode == 3 and f"refused: {sys.executable} is no interpreter under {node.pyhome}" in elsewhere.stdout
+    names.rename(names.with_suffix(".gone"))
+    unlisted = node.round_()
+    names.with_suffix(".gone").rename(names)
+    assert unlisted.returncode == 3 and "no private names beside it" in unlisted.stdout, "a tree without its floor runs nothing"
     assert node.created() == [] and "sudo" not in (node.log.read_text() if node.log.exists() else ""), "a refused round runs nothing"
     ok = node.round_()
     assert ok.returncode == 0 and node.created()[0] == f"n1-custody-{rid}", ok.stdout + ok.stderr
