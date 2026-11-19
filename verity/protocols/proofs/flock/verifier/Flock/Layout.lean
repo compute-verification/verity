@@ -403,6 +403,16 @@ theorem check_ok {types : String → Option CircuitType} {ls : Array BlockLayout
   · assumption
   · cases h
 
+/-- **The unit's layout of an accepted set is derived**: `genOk` refuses a generated read at the unit. -/
+theorem check_unit_derive {types : String → Option CircuitType} {ls : Array BlockLayout} {unit : Nat}
+    {info : String → Option TableInfo} {sizes : Array Nat} (h : check types ls unit info = .ok sizes)
+    (hu : unit < ls.size) : (ls.getD unit default).own = .derive := by
+  have hg := ((check_ok h).2 unit hu).2.1
+  unfold genOk at hg
+  cases hown : (ls.getD unit default).own with
+  | derive => rfl
+  | gen sha n vb lo => simp [hown] at hg
+
 private def wordsBytes (ws : Array Nat) : ByteArray :=
   ws.foldl (fun b w => b ++ le32 w.toUInt32) ByteArray.empty
 
