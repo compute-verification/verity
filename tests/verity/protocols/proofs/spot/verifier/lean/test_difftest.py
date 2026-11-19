@@ -2828,8 +2828,8 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         "reject", f"proofs: session s's coins are not the challenger's: {NO_TREE}")
     assert run(base | {"proofs": proofs(["s", "t"]), "sessions": ["s", "t"]}) == (
         "reject", "proofs: the evidence names 2 sessions: the drawn units are proved in one session")
-    got = run(base | {"proofs": proofs(["s"]), "sessions": ["s"]}, blobs_=blobs[1:])
-    assert got[0] == "reject" and got[1].startswith("proofs: circuit: no blob has the SHA-512"), got
+    assert run(base | {"proofs": proofs(["s"]), "sessions": ["s"]}, blobs_=blobs[1:]) == \
+        run(base | {"proofs": proofs(["s"]), "sessions": ["s"]})
     got = run(base | {"proofs": proofs(["s"]), "sessions": ["s"]}, blobs_=blobs[:2])
     assert got[0] == "reject" and got[1].startswith("proofs: session s's record: no blob has the SHA-512"), got
     assert run(base | {"proofs": proofs(["s"]), "sessions": ["t"]}) == (

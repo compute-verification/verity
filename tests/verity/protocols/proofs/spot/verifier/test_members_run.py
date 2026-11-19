@@ -253,7 +253,7 @@ def test_every_members_files_are_held_in_the_members_order_before_any_session(tm
         w = Window(tmp_path, sessions=sessions)
         assert w.run(never, form=refusing) == (None, f"member {A}: refused: x")
         w.files = [f for f in w.files if PF.file_sha512(f) != w.circuit(A)]
-        assert w.run(never) == (None, f"member {A}: circuit: no blob has the SHA-512 {w.circuit(A)}")
+        assert w.run(never, form=refusing) == (None, f"member {A}: refused: x")
 
 
 def test_a_member_is_held_to_its_own_circuits_tables_among_the_blobs(tmp_path):

@@ -1087,7 +1087,7 @@ own set-up of one statement (`OneStageZk.sessionAt` under the statement `OneStag
 reads the verifier's files), null when it sets the session up, else its refusal. The files are hex, the tables
 `[name, hex]` pairs, the program hex, and the registered reads and the sample null for none. -/
 def sessionSetup (j : Json) : V Json := do
-  let some tags := Flock.Tags.find? OneStageZk.STATEMENT | throw s!"the statement {OneStageZk.STATEMENT} is not known"
+  let some tags := Flock.Tags.byName? OneStageZk.STATEMENT | throw s!"the statement {OneStageZk.STATEMENT} is not known"
   let circuitFile ← Flock.unhex (← Flock.J.str j "circuit" "the session's setup")
   let publicFile ← Flock.unhex (← Flock.J.str j "public" "the session's setup")
   let .arr ts := getD j "tables" | throw "tables is not a list"

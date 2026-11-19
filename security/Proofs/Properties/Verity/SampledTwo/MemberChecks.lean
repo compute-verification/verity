@@ -59,7 +59,7 @@ private theorem mapError_ok {ε α : Type} {x : Except ε α} {f : ε → ε} {a
   | ok a' => cases h; rfl
 
 private theorem statement_circuit :
-    Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
+    Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
 
 /-! ## The member's statement -/
 
@@ -388,7 +388,7 @@ theorem ins_of_fields {w : FlockDeploy.Raw} {m : _root_.Spot.OneStageZk.Member} 
   have hreg := registered_of_reads hR hRs hrd
   have hfind : Flock.Tags.byName? w.statement = some Flock.Tags.circuit := by
     rw [hf.statement]
-    exact Flock.Tags.byName?_of_find? statement_circuit
+    exact statement_circuit
   apply Exists.intro
   refine ⟨?hi, ?_, ?_⟩
   case hi =>
