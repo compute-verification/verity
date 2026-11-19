@@ -598,9 +598,10 @@ its. A refusal where no blob holds the circuit file or its META's `lookups` does
 def ownTables (p : Own) (bs : Core.Blobs) : V (List (String × ByteArray)) :=
   p.circuitFile >>= fun circuitB => lookupsOf circuitB >>= fun names => pure (tablesAmong names bs)
 
-/-- The case of the `tables_held` and `own_tables` pieces, `{"lookups": ..., "digests": [hex, ...]}`: the verifier's
-own files naming a circuit file whose META is `{"lookups": lookups}` (`{}` where `j` has no `lookups`), and blobs
-holding it and, under the digests `digests` (lowercase hex), whatever their bytes. -/
+/-- The case of the `tables_held` and `own_tables` pieces, `{"lookups": ..., "digests": [hex, ...], "program": C,
+"partition": ...}`: the verifier's own files, C and the partition object as the case names them (`.null` where it does
+not), and blobs holding a circuit file whose META is `{"lookups": lookups}` (`{}` where `j` has no `lookups`) and,
+under the digests `digests` (lowercase hex), whatever their bytes. -/
 def tablesCase (j : Json) : V (Own × Core.Blobs) := do
   let .arr ds := getD j "digests" | throw "digests is not a list"
   let entries ← ds.mapM fun
@@ -611,7 +612,9 @@ def tablesCase (j : Json) : V (Own × Core.Blobs) := do
     | .error _ => Json.mkObj []
   let c := s!"circuit\nMETA {m.compress}\n".toUTF8
   let d := Flock.Sha512.hash c
-  let own : Own := { programJ := Json.null, program := .empty, partition := Json.null, pub := "", registered := none }
+  let programJ := getD j "program"
+  let program ← if programJ == Json.null then pure ByteArray.empty else (·.toUTF8) <$> Flock.canon programJ
+  let own : Own := { programJ, program, partition := getD j "partition", pub := "", registered := none }
   return (own, ⟨#[(d, c)] ++ entries⟩)
 
 /-- `tablesHeld` on the case `j` names (`tablesCase`): the `tables_held` piece, to `{"why": refusal or null}`. -/

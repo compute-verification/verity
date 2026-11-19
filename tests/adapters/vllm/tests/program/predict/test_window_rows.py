@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
@@ -38,15 +38,15 @@ from tests.program.predict.test_window_circuit import (
     GRAIN,
     SPLIT,
     SPLIT_GRAIN,
+    entry_of,
     state_row,
 )
 from tests.program.predict.test_window_circuit import SLOTS as SLOTS_CLASS
-from tests.program.predict.test_window_circuit_fa3 import H200
+from tests.program.predict.test_window_circuit_fa3 import H200, _wired_in_slot_and_step
 from verity_vllm.check.replay.checks import check_rows
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.definitions.registry import io_shell as IO
-from verity_vllm.pipeline.tp.grain import GROUP
 from verity_vllm.program.instances_file import read_instances
 from verity_vllm.program.predict import inference_blocks as IB
 from verity_vllm.program.predict import scan_state as SS
@@ -56,6 +56,7 @@ from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.naming import write_build
 from verity_vllm.program.predict.steps import compile_steps
+from verity_vllm.program.predict.window_lowering import GROUP
 
 PROGRAM = "test/model"
 DESIGN = {"law": "stratified", "k": 2}
@@ -181,10 +182,10 @@ def test_a_slots_tokens_are_its_prompt_then_its_selects(window):
 def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
     """Every unit is filled: an embedding read's row is the table's at its token and its opening (row, salt and path, as
     `gates.embedding.arguments` encodes them) opens to the table's root, its verdict 1; each token select's group units, ``x0``
-    and combine give the node's token, every position's but the last's a row of its collector; each feed (every position
-    but the first below the prompt bound) holds its token and carried slot; each slot's scan read every lane's first token and
+    and combine give the node's token, a row of its collector; each feed (every position but the first below its prompt
+    length) holds its token and carried slot; each slot's scan read every lane's first token and
     carried slot, occupancy word and head of the state row at its anchor (`io_shell.scan_reference`), its last collector
-    (the next-to-last position's) the outputs so far from its prompt's last position on and its entry the read bit (its
+    (the last position's) its outputs from its prompt's last position on and its entry the read bit (its
     occupancy word's bit 0), the 2 outputs' count and ids; each head's first
     key block (`Attention_v20`'s cut) is evaluated, and its end's Definition on that block's state is the node's value, the
     row kernel's. With no served values every unit is computed or evaluated."""
@@ -208,7 +209,7 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
                 e = np.ascontiguousarray(ins[q]).view(f"<u{w // 8}").astype(np.uint64)
                 assert [(int(x) >> k) & 1 for x in e for k in range(w)] == bits
             feed = P.tokens[p]
-            assert (feed is None) == (p == 0 or p >= CLASS.prompt)
+            assert (feed is None) == (p == 0 or p >= P.L)
             if feed is not None:
                 f = rows.outs[feed[0]]
                 assert _i32(f[0][feed[1]]) == [t] and _i32(f[1][feed[1]]) == s.carried[p]
@@ -221,22 +222,19 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
                 for g, (best, idx) in enumerate(zip(bests, idxs)):
                     if _gt(best, run):
                         run, run_i = best, c * 64 + g * GROUP + idx
-            assert run_i == token and (j in P.outs) == (j != max(P.selects))
-            if j in P.outs:
-                (_, _, r), = P.outs[j]
-                assert _i32(rows.outs[r.tid][0][r.unit]) == [token]
+            (_, _, r), = P.outs[j]
+            assert run_i == token and _i32(rows.outs[r.tid][0][r.unit]) == [token]
         st, su = P.scan_unit
         lanes = [[[r[2]], s_.carried[0], r[:1], [r[1], 2]] for r, s_ in zip(SLOTS, slots)]
         assert [_i32(rows.outs[st][k][su]) for k in range(8)] == [v for lane in lanes for v in lane]
         assert lanes == [[[tok], slot, [occ], head] for tok, slot, occ, head in WR._lanes(P, STATE, IO.scan_reference)]
-        lp, picks = row[1], [int(s.values[j][0][0]) for j in P.selects]
-        outs, (ct, cu), (et, eu) = picks[lp - 1:lp + 1], P.collects[-1], P.entry_unit
-        assert len(P.collects) + 1 == len(picks) == P.positions and len(outs) == CLASS.outputs
-        n = min(CLASS.outputs, P.positions - lp)
-        assert _i32(rows.outs[ct][0][cu]) == [picks[-2]]
-        assert _i32(rows.outs[ct][1][cu]) == [(lp - P.positions) & 0xFFFFFFFF, 2, *[0] * (CLASS.outputs - n), *outs[:n]]
+        lp, outs = row[1], [int(s.values[j][0][0]) for j in P.selects]
+        (ct, cu), (et, eu) = P.collects[-1], P.entry_unit
+        assert len(P.collects) == lp - 1 + CLASS.outputs and len(outs) == P.positions - lp + 1 == CLASS.outputs
+        assert _i32(rows.outs[ct][0][cu]) == [outs[-1]]
+        assert _i32(rows.outs[ct][1][cu]) == [-CLASS.outputs & 0xFFFFFFFF, 2, *outs]
         assert sum(int(w) << 16 * k for k, w in enumerate(rows.outs[et][0][eu])) == 1 | 2 << 1 | outs[0] << 33 | outs[1] << 50
-        assert len(P.heads) == 2 * P.positions
+        assert len(P.heads) == 2 * P.positions - (lp - 1)
         for j, (plan, calls) in P.heads.items():
             (first, _), (end, _) = plan
             (ft, fu), (et, eu) = calls
@@ -353,6 +351,65 @@ def test_the_scans_state_value_gives_the_window_its_slots(window):
     v = WR.state_value(PROGRAM, CLASS, rows, window=RUN)
     assert WR.scan_slots(low, v.rows) == WR.scan_slots(low, STATE) == [(r, [r[1], 2]) for r in SLOTS]
     WR.Rows(low, slots, {**values, SS.SCAN_STATE: v})
+
+
+def test_a_full_windows_entry_j_is_the_request_the_scan_started_in_slot_j_whatever_the_programs_order():
+    """A full window of two requests of 4 and 2 prompt ids, in either lane order, through the network attester's scan:
+    TINY's window 1 starts the first in slot 0 and the second in slot 1. The served Programs are the longest first, and
+    entry j (unit j of the window's one `SlotEntry_v1`) is slot j's Program's: at slot j's certified prompt length it
+    counts the request's 2 outputs, and read as the other slot's, whose length differs, it is KO + 1, which the scan
+    refuses. Swapping the lanes swaps the Programs' order and the entries' prompt lengths, not the entries' slots."""
+    scan, prompts = IS.Class(**CLASS.scan.shape), ((17, 3, 250, 9), (5, 77))
+    for lanes in (prompts, prompts[::-1]):
+        ingress, outputs = _traffic(CLASS, lanes, (0, 0))
+        rows, starts = SR.scan_state(CLASS, ingress, outputs, CLASS.buckets)
+        assert starts == [1, 2]
+        slots = IS.token_row(scan, IS.decode(scan, rows[0]))
+        assert [s[:3] for s in slots] == [(1, len(p), p) for p in lanes]
+        low = WC.lower(S._registered(), CLASS, None, GRAIN, requests=tuple(WC.Request(0, j, len(p), 2)
+                                                                          for j, p in enumerate(lanes)))
+        assert [p.positions for p in low.programs] == [5, 3]
+        by_entry = sorted(range(2), key=lambda k: low.programs[k].entry_unit[1])
+        assert [low.programs[k].lane for k in by_entry] == [0, 1] and [low.programs[k].L for k in by_entry] == [len(p) for p in lanes]
+        for j, k in enumerate(by_entry):
+            assert entry_of(low, k, slots[j][1], 2)[1] == 2
+            assert entry_of(low, k, slots[1 - j][1], 2)[1] == CLASS.outputs + 1
+
+
+def test_a_window_of_lanes_1_and_3_of_four_has_an_entry_a_lane_and_the_scan_takes_them():
+    """Requests in lanes 1 and 3 of a class of four lanes: the window's one `SlotEntry_v1` has four units in lane order,
+    lanes 0 and 2 each on its occupancy word and a collector of its own (`OutCollect_v1{FIRST}`), both in lane 1's
+    Program's slot, so no wire crosses slots. Their entries read 0 and the occupied lanes' read 1 with their 2 outputs,
+    and the network attester's scan step takes that Programs' row at the lanes' anchor, where it refuses the two
+    occupied lanes' entries as the first two of the row."""
+    cls = WC.WindowClass(4, 4, 2)
+    lanes = [(0, 0, 0, [0] * 4), (1, 3, 2, [5, 77, 42, 0]), (0, 0, 0, [0] * 4), (1, 2, 2, [9, 8, 0, 0])]
+    requests = tuple(WC.Request(cls.anchor(k), cls.lane(k), lp, m) for k, (occ, lp, m, _ids) in enumerate(lanes) if occ)
+    reg = _registered()
+    low = WC.lower(reg, cls, None, GRAIN, requests=requests)
+    _wired_in_slot_and_step(low.circuit)
+    assert [(s, k) for s, k, _c, _e in low.empty] == [(0, 0), (2, 0)] and low.programs[0].lane == 1
+    rows_ = [state_row(cls.scan, lanes)] * cls.buckets
+    fields = _weights(low.fn)
+    state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, rows_, [hm96_salt(bytes(32), 0, j) for j in range(len(rows_))],
+                                 schema=CR.SCHEMA_V2)
+    values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
+    slots = [WR.Slot(P.fn, cls, row, lambda label, lo, hi: fields[label][lo:hi], Unserved(row[1], P.positions))
+             for P, (row, _) in zip(low.programs, WR.scan_slots(low, rows_))]
+    rows = WR.Rows(low, slots, values)
+    et = low.programs[0].entry_unit[0]
+    assert rows.n[et] == 4 and [P.entry_unit[1] for P in low.programs] == [1, 3]
+    scan = IS.Class(**cls.scan.shape)
+    bits = [w >> j & 1 for e in rows.outs[et][0] for w in e for j in range(16)]
+    got = IS.prog_decode(scan, bits)
+    assert [(x, n) for x, n, _ids in got] == [(0, 0), (1, 2), (0, 0), (1, 2)]
+    st = IS.decode(scan, [w >> j & 1 for w in rows_[0] for j in range(16)][:IS.state_bits(scan)])
+    for j in (1, 3):
+        st.slots[j] = replace(st.slots[j], live=1, done=1, q=j, anchor=st.now)
+    st.last = 3
+    row = bytes(scan.S * scan.B)
+    assert IS.step(scan, row, st, got) is not None
+    assert IS.step(scan, row, st, [got[1], got[3], IS.NONE, IS.NONE]) is None
 
 
 def test_a_chunks_best_is_its_first_maximum_above_minus_infinity():
@@ -817,7 +874,7 @@ def test_a_cut_norms_parts_hold_its_sum_and_its_tail_the_nodes_value():
             want = np.asarray(evaluate_batch(tail, np.concatenate(sums)[None], s.operand(nodes[j].args[2])[None])).reshape(-1)
             assert np.array_equal(want, WR._words(s.values[j])) and np.array_equal(rows.outs[r.tid][1][r.unit], want[64:])
             seen += 1
-    assert seen == 2 * sum(P.positions for P in low.programs) == 18
+    assert seen == sum(2 * P.positions - (P.L - 1) for P in low.programs) == 13
 
 
 @pytest.mark.slow
@@ -881,7 +938,8 @@ ONE = [(1, 3, 1, [5, 77, 42, 0]), (0, 0, 0, [0, 0, 0, 0])]
 def test_a_window_of_fewer_requests_than_slots_is_its_one_requests_rows():
     """A window serving one request in the class's two slots lowers to that request's Program alone, of its 3 positions,
     and its rows fill every unit of it once (`Rows` refuses otherwise) from that request's values: no slot for the lane
-    that served nothing and no position past the request's end. `record` hands the window every unit."""
+    that served nothing, whose collector and entry are in the request's slot, and no position past the request's end.
+    `record` hands the window every unit."""
     low, _values, rows = _rows((WC.Request(CLASS.anchor(0), CLASS.lane(0), 3, 1),), ONE)
     assert len(low.programs) == 1 and low.programs[0].positions == 3 and len(low.fn.body.nodes) == 3 * NODES
     assert low.circuit.blocks.slots == 1
