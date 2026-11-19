@@ -307,22 +307,35 @@ theorem setupAt_hidden {W : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.R
 
 /-! ## The session's descriptor -/
 
-/-- **Where `verify --zk`'s ports check passes at a flat untyped statement, the circuit file reads as a descriptor whose
-unit is `Built`** and the public file loads on its circuit: the check parses the circuit (`HmOut.parse`, the one
-`ProvedScope.circuitOf` reads there, `circuitOf_parse`) and loads the public file before it checks anything else
-(`PortRoots.checkWith`), and `Desc.parseStmt` of an untemplated statement is `Desc.parse` (`built_of_parseStmt`). -/
+/-- **`PortRoots`' check reads a circuit unrolled as the circuit**: its rows, names and public file read neither its nets
+nor its template. -/
+theorem checkWith_unrolled (H : ByteArray → ByteArray) (c : Flock.Circuit) (t : Flock.Tags) (f : ByteArray) :
+    Flock.PortRoots.checkWith H (.ok (Flock.HmOut.unrolled c)) t f = Flock.PortRoots.checkWith H (.ok c) t f := by
+  unfold Flock.HmOut.unrolled
+  split
+  · split
+    · rfl
+    · rfl
+  · rfl
+
+/-- **Where `verify --zk`'s ports check passes at a templated untyped statement, the circuit file reads as a templated
+descriptor whose unit is `Built`** and the public file loads on its circuit: the check parses the circuit
+(`HmOut.parseTmpl`, the one `ProvedScope.circuitOf` reads there, `circuitOf_tmpl`) and loads the public file before it
+checks anything else (`PortRoots.checkWith`); the descriptor unrolls to that circuit unrolled, on which the public file
+loads as on the circuit (`publicOf_unrolled`). -/
 theorem desc_of_ports {I : FlockSoundness.Discharge.Exec.Inputs}
-    (hflat : (FlockSoundness.Discharge.ZkExec.zkTags I).hiddenOutputs = true ∧
-      (FlockSoundness.Discharge.ZkExec.zkTags I).isTmpl = false)
+    (htm : (FlockSoundness.Discharge.ZkExec.zkTags I).hiddenOutputs = true ∧
+      (FlockSoundness.Discharge.ZkExec.zkTags I).isTmpl = true)
     (ht : (FlockSoundness.Discharge.ZkExec.zkTags I).typed = false)
     (h : Flock.PortRoots.checkOf
       (Flock.ProvedScope.circuitOf (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables)
       (FlockSoundness.Discharge.ZkExec.zkTags I) I.publicFile = .ok ()) :
-    ∃ D pubO, Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D ∧
+    ∃ D c pubO, Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D ∧
       FlockSoundness.Built D.unroll.unit ∧
       Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile = .ok pubO ∧
-      Flock.ProvedScope.circuitOf (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D.unroll := by
-  rw [circuitOf_parse hflat.1 hflat.2] at h ⊢
+      Flock.ProvedScope.circuitOf (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok c ∧
+      D.unroll = Flock.HmOut.unrolled c := by
+  rw [circuitOf_tmpl htm.1 htm.2] at h ⊢
   unfold Flock.PortRoots.checkOf Flock.PortRoots.checkWith at h
   split at h
   · cases h
@@ -334,21 +347,20 @@ theorem desc_of_ports {I : FlockSoundness.Discharge.Exec.Inputs}
   split at h
   · cases h
   rename_i pubO hl
-  have hD : Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok (.single c) := by
-    unfold Flock.Desc.parse
-    rw [hp]
-  refine ⟨.single c, pubO, hD, ?_, hl, hp⟩
-  refine FlockSoundness.Discharge.Hidden.built_of_parseStmt (cf := I.circuitFile) (tables := I.tables) (D := .single c) ?_ ht
-  unfold Flock.Desc.parseStmt
-  rw [if_neg (by simp [hflat.2])]
-  exact hD
+  have hD : Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok (.tmpl c) := by
+    unfold Flock.Desc.parseStmt
+    rw [if_pos htm.2, hp]
+  have e := FlockSoundness.Discharge.FailClosed.publicOf_unrolled (FlockSoundness.Discharge.ZkExec.zkTags I) c I.publicFile
+  simp only [Flock.ProvedScope.publicOf, htm.1, ↓reduceIte] at e
+  exact ⟨.tmpl c, c, pubO, hD, FlockSoundness.Discharge.Hidden.built_of_parseStmt hD ht, e.trans hl, hp, rfl⟩
 
-/-- **Where `verify --zk`'s form check passes at an untemplated statement, the circuit it parses is in
-`Layout.scopeOkH`**: `KsScope.unitWhy` refuses any other (`FailClosed.scopeOkH_eq`). -/
+/-- **Where `verify --zk`'s form check passes at a templated untyped statement, the circuit it parses, unrolled, is in
+`Layout.scopeOkH`**: `KsScope.unitWhy` refuses a templated circuit outside `scopeOkT`, whose unrolled circuit is in
+`Layout.scopeOkI` with wires that feed neither the unit nor the outputs (`unrolled_scope`, `scopeOkH_of_scopeOkI`). -/
 theorem scopeH_of_form {t : Flock.Tags} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : ℕ}
-    {draw : Option Json} {c : Flock.Circuit} (hc : Flock.ProvedScope.circuitOf t cf tables = .ok c)
-    (hi : t.isTmpl = false) (h : Flock.KsScope.checkOf (Flock.ProvedScope.circuitOf t cf tables) t pf count draw = .ok ()) :
-    FlockSoundness.Discharge.Layout.scopeOkH c = true := by
+    {draw : Option Json} {c : Flock.Circuit} (hty : t.typed = false) (hc : Flock.ProvedScope.circuitOf t cf tables = .ok c)
+    (hi : t.isTmpl = true) (h : Flock.KsScope.checkOf (Flock.ProvedScope.circuitOf t cf tables) t pf count draw = .ok ()) :
+    FlockSoundness.Discharge.Layout.scopeOkH (Flock.HmOut.unrolled c) = true := by
   rw [hc] at h
   unfold Flock.KsScope.checkOf at h
   cases htw : Flock.KsScope.tagsWhy t with
@@ -365,8 +377,14 @@ theorem scopeH_of_form {t : Flock.Tags} {cf pf : ByteArray} {tables : List (Stri
         | some _ => simp [hu] at hfw
         | none =>
           unfold Flock.KsScope.unitWhy at hu
-          rw [← FlockSoundness.Discharge.FailClosed.scopeOkH_eq]
-          cases hs : Flock.ProvedScope.scopeOkH c <;> simp [hi, hs] at hu ⊢
+          rw [if_pos hi] at hu
+          cases htu : c.tmpl with
+          | none => simp [htu] at hu
+          | some tu =>
+            have hs : Flock.ProvedScope.scopeOkT t.hiddenOutputs true count c tu = true := by
+              cases hs : Flock.ProvedScope.scopeOkT t.hiddenOutputs true count c tu <;> simp_all
+            obtain ⟨-, -, -, -, -, -, -, hI, hf⟩ := FlockSoundness.Discharge.FailClosed.unrolled_scope hty hc htu hs
+            exact FlockSoundness.Discharge.Layout.scopeOkH_of_scopeOkI hI hf
 
 /-! ## The record's sample -/
 
@@ -415,7 +433,7 @@ open FlockSoundness.Discharge.Composed (inputsJ nTab) in
 `mPtsOf g kd` points, since the print decodes to a sample proving its `kd` units (`proved_of_recordDrawn`). -/
 theorem y₀_of_setup (n : ℕ) {I : FlockSoundness.Discharge.Exec.Inputs} {D : Flock.Desc} {kd n' : ℕ} {recS : String}
     {units : Array ℕ} {st : Flock.Stmt} (hc1 : I.count = 1) (ht : I.tags.typed = false)
-    (hD : Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D)
+    (hD : Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D)
     (hrd : recordSampled (.subset units.size) n' units recS) (hsize : units.size = kd)
     (hst : Flock.Stmt.setupHidden (inputsJ I 0).tags (inputsJ I 0).circuitFile (inputsJ I 0).publicFile
       (inputsJ I 0).coins (inputsJ I 0).tables (FlockSoundness.Discharge.Exec.recordDraw recS)
@@ -441,7 +459,8 @@ theorem y₀_of_setup (n : ℕ) {I : FlockSoundness.Discharge.Exec.Inputs} {D : 
   rw [htJ] at hst'
   have hmPts : st.mPts = FlockSoundness.Discharge.Exec.mPtsOf D.unroll.g (kd / nTab I) := by
     rw [hn1, Nat.div_one, ← hsize]
-    exact FlockSoundness.Discharge.ZkHidden.setupHidden_mPts_of_proved (Flock.Desc.parse_flat hD)
+    exact FlockSoundness.Discharge.ZkHidden.setupHidden_mPts_of_provedSt
+      ((FlockSoundness.Discharge.ZkExec.zkTags_typed I).trans ht) (Flock.Desc.parseStmt_stmt hD)
       (fun D' hD' => by rw [proved_of_recordDrawn hrd hD']) hst'
   obtain ⟨pi', pop, -, -, hdr⟩ := FlockSoundness.Discharge.Hidden.setupHidden_sampledP hst
   obtain ⟨Dd, hDd, -⟩ := FlockSoundness.Discharge.Layout.sampled_spec
@@ -453,6 +472,24 @@ theorem y₀_of_setup (n : ℕ) {I : FlockSoundness.Discharge.Exec.Inputs} {D : 
     (sch := sch) (tPad := tPad) (by rw [hxx]; exact hz)
   exact ⟨∅, _, ⟨y⟩⟩
 
+/-- `HmIn` reads a circuit unrolled as the circuit: its ports, not its nets or template. -/
+theorem hmInParse_unrolled (c : Flock.Circuit) : Flock.HmIn.parse (Flock.HmOut.unrolled c) = Flock.HmIn.parse c := by
+  unfold Flock.HmOut.unrolled
+  split
+  · split
+    · rfl
+    · rfl
+  · rfl
+
+theorem hmInLoad_unrolled (t : Flock.Tags) (c : Flock.Circuit) (pi : Flock.HmIn.Ports) (f : ByteArray) :
+    Flock.HmIn.loadPublic t (Flock.HmOut.unrolled c) pi f = Flock.HmIn.loadPublic t c pi f := by
+  unfold Flock.HmOut.unrolled
+  split
+  · split
+    · rfl
+    · rfl
+  · rfl
+
 open FlockSoundness.Discharge.Composed (inputsJ) in
 /-- **The session's circuit names no public input port, and its public file loads with none**: the setup `verify --zk`
 makes without the verifier's public inputs refuses a circuit naming one (`checkOwn_none`), so its ports are the empty
@@ -460,8 +497,8 @@ makes without the verifier's public inputs refuses a circuit naming one (`checkO
 population the committed files' circuit reads (`loadPublic_inOut`), with no two ports of one published domain
 (`v5Files_of_checks`). -/
 theorem pub_of_setup {I : FlockSoundness.Discharge.Exec.Inputs} {D : Flock.Desc} {pubO : Flock.Public} {n : ℕ}
-    {d : Json} {st : Flock.Stmt} (hc1 : I.count = 1)
-    (hD : Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D)
+    {d : Json} {st : Flock.Stmt} (hc1 : I.count = 1) (ht : I.tags.typed = false)
+    (hD : Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D)
     (hst : Flock.Stmt.setupHidden (inputsJ I 0).tags (inputsJ I 0).circuitFile (inputsJ I 0).publicFile
       (inputsJ I 0).coins (inputsJ I 0).tables (some d) (inputsJ I 0).partition (inputsJ I 0).program none = .ok st)
     (hpubO : Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile = .ok pubO)
@@ -475,13 +512,17 @@ theorem pub_of_setup {I : FlockSoundness.Discharge.Exec.Inputs} {D : Flock.Desc}
     unfold FlockSoundness.Discharge.Exec.tagsAt
     exact ite_eq_left (by omega)
   rw [htJ] at hst
-  have hc := FlockSoundness.Discharge.HiddenExec.setupHidden_c_of_parse (Flock.Desc.parse_flat hD) hst
+  have hc : D.unroll = Flock.HmOut.unrolled st.c :=
+    FlockSoundness.Discharge.HiddenExec.stmt_of_setupHidden ((FlockSoundness.Discharge.ZkExec.zkTags_typed I).trans ht)
+      (Flock.Desc.parseStmt_stmt hD) hst
   obtain ⟨pi, s⟩ := FlockSoundness.Discharge.Hidden.setupHidden_specP hst
   obtain ⟨pop, hlp, hown, -⟩ := s.pub
   have hpi : pi = {} :=
     FlockSoundness.Discharge.Hidden.parse_empty s.ports (FlockSoundness.Discharge.Hidden.checkOwn_none hown)
   have hpp := s.ports
-  rw [hc, hpi] at hpp hlp
+  rw [hpi] at hpp hlp
+  rw [← hmInParse_unrolled, ← hc] at hpp
+  rw [← hmInLoad_unrolled, ← hc] at hlp
   have hn : pop.n = n := (Flock.Bridge.loadPublic_inOut hlp hpubO).1.symm.trans hnO
   exact ⟨hpp, pop, hlp, (Flock.Bridge.v5Files_of_checks hlp hn hports).1, hn⟩
 
@@ -600,7 +641,7 @@ theorem session_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD :
       I.publicFile = V.publicFile θ F ∧ I.tables = pinnedTables T (circuitFileOf θ) ∧
       I.partition = some p.own.partition ∧ I.program = some p.own.program ∧
       I.tags.typed = false ∧ FlockSoundness.Discharge.ZkHidden.TagsOkZHJ I ∧
-      Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D ∧
+      Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D ∧
       FlockSoundness.Built D.unroll.unit ∧
       Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile = .ok pubO ∧
       FlockSoundness.Discharge.Layout.scopeOkH D.unroll = true ∧
@@ -625,16 +666,24 @@ theorem session_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD :
     recS, units, rd, x, hrd, hsize, hsetup⟩ := accepted_parts hD hone hP hreach hv ht hT
   subst hpf
   obtain ⟨⟨-, htyp, hret, hleaf, -⟩, -⟩ := FlockSoundness.Discharge.FailClosed.check_ok hsc
-  obtain ⟨D, pubO, hDp, hU, hpubO, hcD⟩ := desc_of_ports hAc.flat htyp hAc.ports
-  have hports := hAc.ports
-  rw [hcD] at hports
+  obtain ⟨D, cT, pubO, hDp, hU, hpubO, hcD, hDu⟩ := desc_of_ports hAc.tmpl htyp hAc.ports
+  have hports : Flock.PortRoots.checkOf (.ok D.unroll) (FlockSoundness.Discharge.ZkExec.zkTags _) _ = .ok () := by
+    have h := hAc.ports
+    rw [hcD] at h
+    rw [hDu]
+    unfold Flock.PortRoots.checkOf at h ⊢
+    rw [checkWith_unrolled]
+    exact h
+  have hscD : FlockSoundness.Discharge.Layout.scopeOkH D.unroll = true := by
+    rw [hDu]
+    exact scopeH_of_form htyp hcD hAc.tmpl.2 hAc.form
   refine ⟨p, n, toExec (_root_.Spot.OneStageZk.inputsOf tags0 p.own (circuitFileOf θ) (V.publicFile θ F)
       (_root_.Core.Blobs.ofArray o.sent.blobs)), D, pubO, desc, hp, ht0, rfl, rfl, rfl, rfl, rfl, rfl, htab, rfl, rfl,
-    htyp, ⟨hAc.flat.1, hret, hleaf.resolve_right fun h => absurd h.1 (by decide)⟩, hDp, hU, hpubO,
-    scopeH_of_form hcD hAc.flat.2 hAc.form, hports, hAc.loads hpubO,
+    htyp, ⟨hAc.tmpl.1, hret, hleaf.resolve_right fun h => absurd h.1 (by decide)⟩, hDp, hU, hpubO,
+    hscD, hports, hAc.loads hpubO,
     hdesc, Flock.Bridge.popMatches_of_popOk hdesc hAc.pop, hlaw, recS, units, ?_⟩
   obtain ⟨st, hst, hshape⟩ := setupAt_hidden rfl
-    ((FlockSoundness.Discharge.ZkExec.zkTags_hiddenOutputs _).trans hAc.flat.1) hsetup
+    ((FlockSoundness.Discharge.ZkExec.zkTags_hiddenOutputs _).trans hAc.tmpl.1) hsetup
   exact ⟨st, hrd, hsize, hst, hshape⟩
 
 /-! ## The bound -/
@@ -709,7 +758,7 @@ theorem liveSpec_of_accepted {V : Vocab d α} {T : PinnedTables} {b : SessionBou
     exact h1
   have hst2 := hst
   rw [(exec_recordSample recS).trans hrd.2] at hst2
-  obtain ⟨hpiD, pub, hpub, hdup, hn⟩ := pub_of_setup hcount hDp hst2 hpubO hnO hports
+  obtain ⟨hpiD, pub, hpub, hdup, hn⟩ := pub_of_setup hcount htyp hDp hst2 hpubO hnO hports
   obtain ⟨S₀, d₀, hy⟩ := y₀_of_setup n hcount htyp hDp hrd hsize hst hshape
   have hn1 : nTab I = 1 := by
     unfold nTab
