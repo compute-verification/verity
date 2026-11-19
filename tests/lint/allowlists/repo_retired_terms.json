@@ -2458,7 +2458,6 @@
     {"file": "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/pouw_verified_cases.py", "count": 30},
     {"file": "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/pyproject.toml", "count": 1},
     {"file": "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/test_difftest.py", "count": 100},
-    {"file": "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/test_leaf_own.py", "count": 4},
     {"file": "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/test_period_difftest.py", "count": 3},
     {"file": "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/test_verified_difftest.py", "count": 19},
     {"file": "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit/test_pouw_commit_lean_difftest.py", "count": 14},
