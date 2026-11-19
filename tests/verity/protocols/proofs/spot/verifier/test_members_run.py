@@ -372,7 +372,7 @@ def test_a_members_own_output_port_reads_its_templates_field_tree():
     one statement's ports (`public_ports`): a wire from the field would read the window's tree, the member its own."""
     tree = {"domain": "cc" * 64, "leaves": 5, "port": "b/o0", "root": "33" * 64}
     got = M.slices(UNITS, RECORD | {"roots": [*RECORD["roots"], tree]})
-    assert got[B]["roots"][1] == {"domain": "cc" * 64, "leaves": 5, "port": "o0", "root": "33" * 64}
+    assert got[B]["roots"][1] == {"domain": "cc" * 64, "leaves": 5, "port": "o0", "root": "33" * 64, "tree": "b/o0"}
     assert got[A] == M.slices(UNITS, RECORD)[A]
     for roots in ([*RECORD["roots"], {**tree, "port": "a/out"}], [{**tree, "port": "a/out"}, *RECORD["roots"]]):
         with pytest.raises(ValueError) as e:
@@ -386,6 +386,28 @@ def test_a_members_own_output_port_reads_its_templates_field_tree():
     named = header(B, frame_v3={"domain_ids": {"out": ROOTS[B][1], "o0": "cc" * 64},
                                 "roots": {"out": ROOTS[B][0], "o0": "33" * 64}})
     assert M.population_why(UNITS[B], strata, named, got[B]) is None
+
+
+def test_a_members_rows_of_a_shared_tree_are_its_registered_reads_there():
+    """A member's port the slice holds at its template's field tree (``o0`` at ``b/o0``) is held by the member's
+    registered reads there, not by its header's own root (`OneStageZk.headerHeldAt`): with a read ``(o0, b/o0)`` the
+    header's own root at ``o0`` is not compared, and the header's other ports still are; with no read there, or a read
+    of ``o0`` at another tree, a header root not the registration's is refused by name (`shared_unread`), and one that
+    is the registration's still holds."""
+    tree = {"domain": "cc" * 64, "leaves": 5, "port": "b/o0", "root": "33" * 64}
+    got = M.slices(UNITS, RECORD | {"roots": [*RECORD["roots"], tree]})[B]
+    strata = P.strata(PROGRAM, QUERY)
+
+    def own(o0: str, out: str = ROOTS[B][0]) -> dict:
+        return header(B, frame_v3={"domain_ids": {"out": ROOTS[B][1], "o0": "dd" * 64}, "roots": {"out": out, "o0": o0}})
+    assert M.population_why(UNITS[B], strata, own("44" * 64), got, {("o0", "b/o0")}) is None
+    assert M.population_why(UNITS[B], strata, own("44" * 64), got) == M.shared_unread("o0", "b/o0")
+    assert M.population_why(UNITS[B], strata, own("44" * 64), got, {("o0", "a/o0")}) == M.shared_unread("o0", "b/o0")
+    assert M.population_why(UNITS[B], strata, own("44" * 64, out="55" * 64), got, {("o0", "b/o0")}) == (
+        "public file: not the registration's: roots")
+    named = header(B, frame_v3={"domain_ids": {"out": ROOTS[B][1], "o0": "cc" * 64},
+                                "roots": {"out": ROOTS[B][0], "o0": "33" * 64}})
+    assert M.population_why(UNITS[B], strata, named, got) is None
 
 
 def test_a_member_named_as_another_members_template_is_refused():
@@ -429,6 +451,29 @@ def test_a_registered_files_committed_trees_are_its_windows(tmp_path):
                                               or "")
     assert why(value=f"committed/{A}/out") == other(f"{A}/out", "root")
     assert why(value="a/o0") == M.wired_tree_why(B, "x")
+    assert why(value="b/o0") == M.wired_tree_why(B, "x")
+
+
+def test_a_members_own_output_opens_its_templates_field_tree(tmp_path):
+    """A member's registered output port ``o0`` whose value is its own template's field tree, ``b/o0``, is held to the
+    registration's root of that tree (`OneStageZk.portTreeHeld`): at the tree's root it passes this check, at another
+    root it is refused by name, and the same value at another member's template, or at a wired input, is still refused
+    by `wired_tree_why`."""
+    w = Window(tmp_path)
+    ms = w.params["proofs"]["members"]
+    tree = {"domain": "cc" * 64, "leaves": 5, "port": "b/o0", "root": "33" * 64}
+    record = RECORD | {"roots": [*RECORD["roots"], tree]}
+
+    def why(who: str = B, port: str = "o0", root: str = tree["root"]) -> str | None:
+        reg = {"format": "verity/registered-reads/v2",
+               "ports": {port: {"value": "b/o0", "root": root, "domain": tree["domain"], "leaves": 5}}}
+        return w.run(record=record, params=w.params | {"proofs": {"members": {**ms, who: ms[who] | {"registered": reg}}}})[1]
+    assert "b/o0" not in (why() or "") and M.wired_tree_why(B, "o0") != why()
+    assert why(root="44" * 64) == (f"registered: member {B}'s port o0 opens the committed tree b/o0 at another root "
+                                   "than the registration's: a statement opens its window's registered tree, never "
+                                   "another window's or another member's")
+    assert why(who=A) == M.wired_tree_why(A, "o0")
+    assert why(port="x") == M.wired_tree_why(B, "x")
 
 
 @lean

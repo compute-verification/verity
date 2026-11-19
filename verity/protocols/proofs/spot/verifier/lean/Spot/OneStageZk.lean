@@ -505,7 +505,7 @@ writer's field tree's name (`WIRED_TREE_WHY`).
 One pass over the record's roots and the members' registered files. -/
 def treePortsHeld (ms : Array Member) (rec : Json) : V Unit :=
   let byPort := rootsByPort rec
-  ms.forM fun m => registeredTreesHeld byPort s!"member {m.name}" m.own.registered
+  ms.forM fun m => registeredTreesHeld byPort s!"member {m.name}" m.own.registered ((templateOf m.name).map (·.1))
 
 /-- **The per-member form's structure**, held before its run on the parameters `p`, its members `ms`, the
 registration `c`, the evidence `e` and its statements `sts`: the statements' structure (`membersHeld`), their sessions
@@ -1400,6 +1400,23 @@ private def ownSliceT (roots : List (String × String)) (name : String) : Json :
 #guard refusal (headerHeld (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0") (headerT 2 [("x", "aa"), ("o0", "ff")]))
   == "public file: not the registration's: roots, domains"
 
+-- a member of a template of several members: its header's `o0` is its own tree's (Flock's `checkPublic`), held by its
+-- registered read at the template's tree, so its own root is not compared
+#guard refusal (headerHeldAt #[("o0", "t/o0")] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+  (headerT 2 [("x", "aa"), ("o0", "ff")])) == ""
+-- the old header, its own root and no registered read at the shared tree: refused by name
+#guard refusal (headerHeldAt #[] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+  (headerT 2 [("x", "aa"), ("o0", "ff")])) == SHARED_UNREAD "o0" "t/o0"
+-- a registered read of `o0` at another tree: not the shared tree's opening, refused by name
+#guard refusal (headerHeldAt #[("o0", "t/o1")] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+  (headerT 2 [("x", "aa"), ("o0", "ff")])) == SHARED_UNREAD "o0" "t/o0"
+-- a template's one member, its own tree the registration's: compared as before, no read needed
+#guard refusal (headerHeldAt #[] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+  (headerT 2 [("x", "aa"), ("o0", "ee")])) == ""
+-- the member's own input at another root: still compared, and refused as before
+#guard refusal (headerHeldAt #[("o0", "t/o0")] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+  (headerT 2 [("x", "ab"), ("o0", "ff")])) == "public file: not the registration's: roots, domains"
+
 /-- A root of the port given at the hex digit `c` repeated, its domain `d`'s, two leaves. -/
 private def hexRootT (port : String) (c : Char) : Json :=
   Json.mkObj [("domain", Json.str ("".pushn 'd' 128)), ("leaves", Lean.toJson (2 : Nat)), ("port", Json.str port),
@@ -1437,6 +1454,27 @@ private def treeRegT (c : Char) (leaves : Nat := 2) (value : String := "committe
 #guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'a' (value := "committed/W/o0"))] treeRecT) ==
   TREE_UNHELD "member R/c0" "x" "W/o0"
 #guard !fieldTreeName "o0" && !fieldTreeName "W/o" && !fieldTreeName "W/ox" && fieldTreeName "a/b/o12"
+
+/-- A registration of template `W`'s output field `o0`'s tree at `a`'s, shared by its members `W/c0` and `W/c1`. -/
+private def treeOutRecT : Json :=
+  Json.mkObj [("population", Lean.toJson (4 : Nat)), ("roots", Json.arr #[hexRootT "W/o0" 'a']),
+    ("scheme", Json.str "s")]
+
+/-- A registered file of one port `port` read as `value`, at the root of `c`s, `d`'s domain and 2 leaves. -/
+private def outRegT (port value : String) (c : Char) : Json :=
+  Json.mkObj [("format", Json.str Flock.Registered.FORMAT), ("ports", Json.mkObj [(port, Json.mkObj [
+      ("domain", Json.str ("".pushn 'd' 128)), ("leaves", Lean.toJson (2 : Nat)), ("root", Json.str ("".pushn c 128)),
+      ("value", Json.str value)])])]
+
+-- a member's own output, opened at its template's tree: held to the registration's root, domain and leaves
+#guard refusal (treePortsHeld #[readerT "W/c0" (outRegT "o0" "W/o0" 'a')] treeOutRecT) == ""
+-- its own output opened at another root than the registration's tree: refused
+#guard refusal (treePortsHeld #[readerT "W/c0" (outRegT "o0" "W/o0" 'c')] treeOutRecT) ==
+  TREE_OTHER "member W/c0" "o0" "W/o0" "root"
+-- another template's output tree named as its own output: refused as a wired read
+#guard refusal (treePortsHeld #[readerT "V/c0" (outRegT "o0" "W/o0" 'a')] treeOutRecT) == WIRED_TREE_WHY "member V/c0" "o0"
+-- a wired input (port `x`) reading `W`'s tree: still refused
+#guard refusal (treePortsHeld #[readerT "W/c0" (outRegT "x" "W/o0" 'a')] treeOutRecT) == WIRED_TREE_WHY "member W/c0" "x"
 
 /-- `treeRecT` with run input node 3's tree, `input/n3`, at the root of `f`s. -/
 private def treeFreshRecT : Json :=
