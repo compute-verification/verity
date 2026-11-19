@@ -266,6 +266,21 @@ def test_a_served_windows_identities_are_what_the_rows_programs_read(tmp_path):
     assert got == want, "every committed tensor is bound to the identity the Commit of record bound it to"
 
 
+def test_a_served_windows_shared_module_is_read_through_the_alias_table_it_sealed(tmp_path):
+    """The rotary embedding every layer shares binds as layer 0's k-th call: a store opened without the window's sealed table
+    (`deferred_rows.of_record`'s ``aliases``) misses layer 1's read by name, and layer 0's reads are the same either way."""
+    from verity_vllm.check.replay.opening import CommittedStore
+
+    _fx, d, s = _sealed_parts(tmp_path, with_plan=True)
+    r, bmap, store = _store(d, s)
+    bare = CommittedStore.of_record(bmap, lambda *_a: None)
+    l0, l1 = "model.layers.0.self_attn.rotary_emb", "model.layers.1.self_attn.rotary_emb"
+    assert r.aliases[l1] == [l0, 1]
+    assert store.has("b0-1", 1, l1, "query") and not bare.has("b0-1", 1, l1, "query")
+    assert bare.words("b0-1", 1, l1, "query", 0, 1) == (None, f"no committed identity for (b0-1, step 1, {l1}/query)")
+    assert bare.entries("b0-1", 1, l0, "query")[0] == store.entries("b0-1", 1, l0, "query")[0] != []
+
+
 def test_without_the_capture_plan_a_window_binds_raw_names(tmp_path):
     """A window sealed with no capture plan: so a name is its identity, and the Programs' reads miss by name."""
     _fx, d, s = _sealed_parts(tmp_path, with_plan=False)
