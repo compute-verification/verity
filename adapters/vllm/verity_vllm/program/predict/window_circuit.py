@@ -344,7 +344,8 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
         held = ()
     reg = IF.Registered(dict(sorted(params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
                         tuple(openings), values=(*held, *b.values, SS.SCAN_STATE),
-                        formats={v: ROW_FORMAT for v in held} if layout is not None else {}, supplied=b.supplied)
+                        formats={**({v: ROW_FORMAT for v in held} if layout is not None else {}), **b.formats},
+                        supplied=b.supplied)
     wires = tuple(IF.coalesce(b.wires if order is None else b.allocation_wires()))
     entry_units = {r.entry_unit[0] for r in progs if r.entry_unit is not None}
     if len(entry_units) != 1 or any(r.entry_unit is None for r in progs):

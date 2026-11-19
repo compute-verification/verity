@@ -733,6 +733,7 @@ def credit(b: _Builder, progs: Sequence[_Program], j: int, node: Any, credited: 
     _a, lo, n = rows[0][1]
     try:
         tiles = PC.tiles(credited.scheme, K, len(rows), N, credited.tile)
+        words, types = dict(IF.layout(tiles[0].core).rows), dict(tiles[0].core.signature()[0])
     except ValueError as e:
         raise Unexpressible(f"{node.fn.id}: credited at {len(rows)} rows under {credited.scheme}: {e}") from None
     TM, TN, step = len(tiles[0].rows), len(tiles[0].cols), rows[0][0].position - 1
@@ -744,14 +745,14 @@ def credit(b: _Builder, progs: Sequence[_Program], j: int, node: Any, credited: 
     b.params[salt], b.params[root] = 16, 32
     b.supplied[salt] = {"supplied": "pouw.pearlplus.salt/v1", "args": {}, "layout": "le", "bits": 256}
     b.supplied[root] = {"supplied": "registered.root/v1", "args": {"value": name}, "layout": "le", "bits": 512}
-    lay = IF.layout(tiles[0].core)
-    words = dict(lay.rows)
     first: dict[str, int] = {}
     for port, count in (("unit", 1), ("fa", 1), ("fb", 1), ("g", 1), ("eb", ct), ("rows", -(-len(rows) // TM))):
         v = f"pearlplus/{port}@{words[port]}"
         if v not in b.params:
             b.params[v] = 0
             b.values.append(v)
+            if (bits := types[port].homogeneous_width()) > 16:
+                b.formats[v] = {"row_schema": IF.V2, "word_bits": bits}
         first[port] = b.params[v] // words[port]
         b.params[v] += count * words[port]
     groups: list[tuple[Any, list[int]]] = []

@@ -161,10 +161,12 @@ class _Builder:
     #: the weights record's weights, ``(label, first word, words)`` in order, and the registered parameters read of them
     weights: tuple[tuple[str, int, int], ...] = ()
     params: dict[str, int] = field(default_factory=dict)
-    #: rows no wire or read fills (`interface.Free`), the supplied parameters' marks and the values the program takes
+    #: rows no wire or read fills (`interface.Free`), the supplied parameters' marks, the values the program takes and the
+    #: formats of those not of 16-bit leaves (`interface.Registered`)
     free: list[IF.Free] = field(default_factory=list)
     supplied: dict[str, dict[str, Any]] = field(default_factory=dict)
     values: list[str] = field(default_factory=list)
+    formats: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def unit(self, fn: Any, count: int = 1, among: tuple[int, int] | None = None) -> tuple[str, int]:
         """``count`` new units of ``fn`` at the current label: its descriptor id and the first one's index. The slots
