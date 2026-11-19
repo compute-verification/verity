@@ -1560,10 +1560,11 @@ def test_a_lean_that_answers_nothing_until_the_passes_end_delays_no_coin_root_or
 
 
 @pytest.mark.parametrize("held", [False, True])
-def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(monkeypatch, held_lean, held):
+def test_an_event_the_lean_answers_otherwise_than_the_books_ends_the_session_undecided(monkeypatch, held_lean, held):
     """Each event goes to both verifiers at one reading of the clock, and their results are compared: a root the Lean
-    reads without its step is its `step` rejection where `audit.AuditRun` takes the root, and the session is refused
-    at that window as `disagreement`, also when the Lean's answer comes only after the prover's last pass."""
+    reads without its step is its `step` rejection where `audit.AuditRun` takes the root, and the session ends
+    undecided at that window (`DIVERGED`), never rejected on the books' word, also when the Lean's answer comes only
+    after the prover's last pass."""
     if not held:
         monkeypatch.setattr(verifier.lv, "Lean", LEAN)
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
@@ -1576,10 +1577,10 @@ def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(mo
     monkeypatch.setattr(verifier.lv, "receive_event", stepless)
     closed = []
     (r,), _ = run("honest", then=lambda v: closed.append(v.close_registration(b"test-node")))
-    assert not r["accepted"] and r["failure"] == {"t": 1, "failure": "disagreement", "at": None}
+    assert not r["accepted"] and r["failure"] == {"t": 1, "failure": verifier.DIVERGED, "at": None}
     d = r["disagreement"]
     assert d["event"] == "receive" and d["lean"]["failure"] == "step" and d["python"] == {"ok": True}
-    assert closed[0]["sessions"] == ["disagreement"] and "python" not in closed[0]
+    assert closed[0]["sessions"] == [verifier.DIVERGED] and "python" not in closed[0]
 
 
 def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_order():
