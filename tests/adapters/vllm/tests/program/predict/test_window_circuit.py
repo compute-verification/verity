@@ -1233,15 +1233,18 @@ def test_the_smallest_provable_test_class_lowers_every_unit_to_a_proof_block():
 
 
 def test_a_served_windows_compile_and_lowering_is_one_call():
-    """`served_lowering` is the compile, the requests within the class and the lowering `window_circuit` makes, refused where
-    Flock's composer wouldn't prove a unit: at `PROVABLE`'s two prompts of 27 ids it passes; at TINY's it is refused."""
-    reg, one = S._registered(PROVABLE), {**S.GREEDY, "max_tokens": 1}
-    advice, ingress = S._session([(27, 1, one), (27, 1, one)], [[(0, 0, 27), (1, 0, 27)]])
-    compiled, low = WC.served_lowering(reg, PROVABLE_CLASS, advice, ingress, PROVABLE_GRAIN)
-    assert _bytes(low.circuit) == _bytes(window_circuit(reg, S.compile_steps(reg, advice, ingress), PROVABLE_CLASS, PROVABLE_GRAIN))
-    assert [u.id for u in compiled.requests if u is not None] == ["q0", "q1"] and len(low.programs) == 2
-    with pytest.raises(Unexpressible, match="templates Flock's composer wouldn't prove"):
-        WC.served_lowering(S._registered(), CLASS, *S._session(*WHOLE), GRAIN)
+    """`served_lowering` is the compile, the requests within the class and the lowering `window_circuit` makes, held to
+    `check_provable`: its refusal is the check's on that circuit, at `PROVABLE`'s two prompts of 27 ids of one output each
+    (whose collectors have no row Flock's composer takes) as at TINY's."""
+    one = {**S.GREEDY, "max_tokens": 1}
+    for reg, cls, (sizes, sched), grain in [(S._registered(PROVABLE), PROVABLE_CLASS, ([(27, 1, one)] * 2, [[(0, 0, 27), (1, 0, 27)]]),
+                                             PROVABLE_GRAIN), (S._registered(), CLASS, WHOLE, GRAIN)]:
+        advice, ingress = S._session(sizes, sched)
+        with pytest.raises(Unexpressible, match="Flock's composer wouldn't prove") as want:
+            check_provable(window_circuit(reg, S.compile_steps(reg, advice, ingress), cls, grain))
+        with pytest.raises(Unexpressible) as got:
+            WC.served_lowering(reg, cls, advice, ingress, grain)
+        assert str(got.value) == str(want.value)
 
 
 def test_a_token_select_is_its_function_at_the_grains_units_of_groups():

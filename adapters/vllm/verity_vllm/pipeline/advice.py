@@ -174,12 +174,14 @@ def bodies(run: str | Path, window: int) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     for line in M.lines(Path(run) / "requests.jsonl", "Request"):
         d = json.loads(line)
-        if int(window) not in (d.get("windows") or ()):
+        if d.get("windows") is None or int(window) not in d["windows"]:
             continue
         user = str(d.get("user") or d.get("http_id") or d.get("engine_id"))
         if user in out:
             raise ValueError(f"requests.jsonl: user {user!r} has two requests in window {window}")
-        out[user] = {**((d.get("ingress") or {}).get("brought") or {}), "prompt": list(d["prompt_ids"])}
+        ingress = d.get("ingress")
+        brought = ingress.get("brought") if isinstance(ingress, dict) else None
+        out[user] = {**(brought if brought is not None else {}), "prompt": list(d["prompt_ids"])}
     return out
 
 

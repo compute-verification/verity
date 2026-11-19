@@ -185,7 +185,7 @@ class CommitWindows:
     `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on. An arm with
     ``sealed`` hears each window's seal line, or why it has none. ``coins``
     (`engine.served_seed.SeedCoins`, which the engine loop reads as it admits) names the seed coin each window opens
-    under in its line (``seed_coin``). ``plan`` (`serve_plan.ClosePlan`) runs at each window's close once its line is
+    under in its line (``seed_coin``). ``plan`` (`close_plan.ClosePlan`) runs at each window's close once its line is
     written and before its seal: its outcome is ``plans``' entry for the window."""
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
@@ -206,7 +206,7 @@ class CommitWindows:
         self.arm, self._arm_out = arm, {}                # each window's arm outcome, until its line is written
         self.arm_key = getattr(arm, "outcome_key", "pouw_h1")   # the line's and the summary's key for it
         self.arm_failed: list[int] = []                  # the windows whose arm failed to open or close
-        self.plan, self.plans = plan, {}                 # `serve_plan.ClosePlan`, and each window's outcome
+        self.plan, self.plans = plan, {}                 # `close_plan.ClosePlan`, and each window's outcome
         self._arm_pending: set[int] = set()              # the windows whose arm is still closing off the loop
         self._arm_held = False                           # the open window's arm waits for its first step's users (`arm.users`)
         self._awaiting: dict[int, dict[str, Any]] = {}   # ... and their lines, held until it ends

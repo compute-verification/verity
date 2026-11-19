@@ -1,17 +1,17 @@
 """A served Commit window's circuit at its close, before its seal and any coin: its advice committed as `verity-vllm advice`
 commits it (`advice.write`), the class circuit compiled from that advice and the window's bodies in the one compile call
-(`window_circuit.served_lowering`), and the committer's units in order (`window_rows.Plan`): each template's units, each
+(`window_circuit.served_lowering`), and the committer's units in order (`window_plan.Plan`): each template's units, each
 port's source and the served rows each reads where they are committed."""
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
-from verity_vllm.program.predict import window_circuit as WC
-from verity_vllm.program.predict import window_rows as WR
-from verity_vllm.program.predict.build import Unexpressible
+from verity_vllm.pipeline import advice as ADV
 
-from . import advice as ADV
+from . import window_circuit as WC
+from .build import Unexpressible
+from .window_plan import Plan
 
 
 class ClosePlan:
@@ -28,7 +28,7 @@ class ClosePlan:
         self.out, self.registered, self.cls, self.compiler = Path(out), registered, cls, compiler
         self.grain = grain if grain is not None else WC._GRAIN
         self.flush, self.served, self.registered_roots = flush, served, registered_roots
-        self.held: dict[int, tuple[Any, Any, WR.Plan | None]] = {}
+        self.held: dict[int, tuple[Any, Any, Plan | None]] = {}
 
     def __call__(self, window: int) -> dict[str, Any]:
         if self.flush is not None:
@@ -47,6 +47,6 @@ class ClosePlan:
         if self.served is None:
             self.held[window] = (compiled, low, None)
             return {**got, "templates": len(low.circuit.templates), "units": sum(k for _, k in low.circuit.templates)}
-        plan = WR.Plan(low, self.served(low, window))
+        plan = Plan(low, self.served(low, window))
         self.held[window] = (compiled, low, plan)
         return {**got, **plan.describe()}

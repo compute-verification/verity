@@ -53,6 +53,7 @@ from verity_vllm.program.predict import inference_blocks as IB
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
+from verity_vllm.program.predict import window_plan as WP
 from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.naming import write_build
@@ -547,7 +548,7 @@ def test_a_plan_is_the_rows_sources_and_feeds_each_served_row_from_where_it_is_c
         served.append(WR.Served(rows, *_read(store), locate=_located(store, f"s{k}:")))
         got.append(WR.Slot(low.programs[k].fn, CLASS, SLOTS[k], weights, served[-1]))
     filled = WR.Rows(low, got, tables)
-    plan = WR.Plan(low, served)
+    plan = WP.Plan(low, served)
     assert all(np.array_equal(plan.source[t], filled.source[t]) for t in filled.source)
     assert plan.describe()["units"] == filled.counts()["units"] and filled.counts()["units"]["served"] > 0
     fed, blocks = 0, {key: torch.from_numpy(np.ascontiguousarray(a).view(np.uint8).reshape(-1)) for key, a in held.items()}
@@ -556,16 +557,16 @@ def test_a_plan_is_the_rows_sources_and_feeds_each_served_row_from_where_it_is_c
         words = np.concatenate([np.frombuffer(held[(x.step, x.name)].view(np.uint8)[x.lo:x.hi].tobytes(), f"<u{int(x.dtype[4:]) // 8}")
                                 .astype(f"<u{x.bits // 8}").view("<u2") for x in f.spans])
         assert np.array_equal(words, want.reshape(-1)), f
-        rows = WR.stage(f, lambda step, name: (blocks[(step, name)], 0)).numpy()
+        rows = WP.stage(f, lambda step, name: (blocks[(step, name)], 0)).numpy()
         assert rows.shape == (f.rows, -(-2 * f.words // 16) * 16) and not rows[:, 2 * f.words:].any()
         assert np.array_equal(np.ascontiguousarray(rows[:, :2 * f.words]).view("<u2"), want.reshape(f.rows, f.words)), f
         fed += f.rows
     assert fed == plan.describe()["fed_rows"] > 0
 
-    stand = WR.Plan(low, slots)
+    stand = WP.Plan(low, slots)
     assert not stand.feeds and all(np.array_equal(stand.source[t], WR.Rows(low, slots, tables).source[t]) for t in stand.source)
     with pytest.raises(ValueError, match="give its `locate`"):
-        WR.Plan(low, [WR.Served(rows, *_read(store)) for rows, store in [_served(low, slots[0], T=1)]] + [slots[1]])
+        WP.Plan(low, [WR.Served(rows, *_read(store)) for rows, store in [_served(low, slots[0], T=1)]] + [slots[1]])
 
 
 def test_a_served_prefill_is_read_by_op_however_its_rows_interleave(window):
