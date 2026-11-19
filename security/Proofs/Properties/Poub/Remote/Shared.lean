@@ -198,8 +198,8 @@ theorem sampleIsSubset : SampleIsSubset := by
   · cases hr
   · cases hr
   cases hr
-  obtain ⟨L, us, hs, h1, h2, h3, h4⟩ := Properties.Poub.sampleIsSubset _ _ _ _ _ _ hdraws
-  refine ⟨L, us, hs, h1, h2, h3, h4, fun u hu => ?_⟩
+  obtain ⟨us, hs, h1, h2, h3, h4⟩ := Properties.Poub.sampleIsSubset _ _ _ _ hdraws
+  refine ⟨us, hs, h1, h2, h3, h4, fun u hu => ?_⟩
   obtain ⟨j, hj, rfl⟩ := List.mem_map.1 hu
   rw [List.mem_range] at hj
   have hle : t.toNat / g * g ≤ t.toNat := Nat.div_mul_le_self _ _
@@ -285,8 +285,8 @@ theorem shareOf_mem (sampled : Array (Nat × Nat)) (base n k : Nat) (hk : k < sa
 
 theorem acceptSamplesOpenable : AcceptSamplesOpenable := by
   intro reg appends c coin samples ws sampled hd
-  obtain ⟨L, us, hs, hsz, -, hrange, -⟩ := Properties.Poub.sampleIsSubset _ _ _ _ _ _ hd
-  refine ⟨L, us, hs, fun openings hacc v hv => ?_⟩
+  obtain ⟨us, hs, hsz, -, hrange, -⟩ := Properties.Poub.sampleIsSubset _ _ _ _ hd
+  refine ⟨us, hs, fun openings hacc v hv => ?_⟩
   obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 hv
   have hjd : j < sampled.size := by omega
   obtain ⟨hi, hp, hidx⟩ := hrange j hjd
@@ -918,12 +918,12 @@ theorem acceptSamplesOpenable_one (h : AcceptSamplesOpenable) : Properties.Poub.
   intro reg appends w coin samples openings hv
   obtain ⟨sampled, hd, hc⟩ := verifyWindow_accept hv
   have hl : lengthsOf [w] = w.passes.map (·.plan.length) := by apply Array.ext'; simp [lengthsOf]
-  obtain ⟨_, _, _, _, _, hrange, _⟩ := Properties.Poub.sampleIsSubset _ _ _ _ _ _ hd
+  obtain ⟨_, _, _, _, hrange, _⟩ := Properties.Poub.sampleIsSubset _ _ _ _ hd
   have hsh : shareOf sampled 0 w.passes.size = sampled :=
     shareOf_all sampled _ fun k hk => by simpa using (hrange k hk).1
-  obtain ⟨L, us, hs, hus⟩ := h reg appends w.index coin samples [w] sampled (by rw [hl]; exact hd)
+  obtain ⟨us, hs, hus⟩ := h reg appends w.index coin samples [w] sampled (by rw [hl]; exact hd)
   rw [hl] at hs
-  refine ⟨L, us, hs, fun v hv => ?_⟩
+  refine ⟨us, hs, fun v hv => ?_⟩
   obtain ⟨k, hk, -, ho⟩ := hus (fun _ => openings) (fun k hk => by
       have : k = 0 := by simp at hk; omega
       subst this
