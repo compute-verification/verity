@@ -240,11 +240,9 @@ OWN_NAMES = {
          "vLLM's workload of record: retired_terms.md's row of \"row\" for a workload keeps \"row of record\" "
          "(`manifests/records.json`) in `adapters/vllm/` until vLLM's workloads move",
          tuple(_vllm(p) for p in (
-             "tests/pipeline/test_circuit_db.py", "tests/pipeline/test_done_source.py", "tests/pipeline/test_neutrality.py",
-             "tests/pipeline/test_row_chain.py", "tests/program/test_compact.py", "verity_vllm/config.py",
-             "verity_vllm/pipeline/circuit_db.py", "verity_vllm/pipeline/config_record.py",
-             "verity_vllm/pipeline/neutrality.py", "verity_vllm/pipeline/research.py", "verity_vllm/pipeline/row.py",
-             "verity_vllm/pipeline/row_config.py", "verity_vllm/pipeline/workload.py",
+             "tests/pipeline/test_circuit_db.py", "tests/pipeline/test_done_source.py", "tests/program/test_compact.py",
+             "verity_vllm/config.py", "verity_vllm/pipeline/circuit_db.py", "verity_vllm/pipeline/config_record.py",
+             "verity_vllm/pipeline/workload.py",
              "verity_vllm/program/gemm_target_correspondence.py"))),
     ),
 }

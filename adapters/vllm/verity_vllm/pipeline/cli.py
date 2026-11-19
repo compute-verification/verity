@@ -95,6 +95,14 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "workload-file": ("verity_vllm.pipeline.workload_file", "workload files fetched by their art ids and checked against SHA256SUMS"),
 }
 
+#: commands of the rows' route, refused by name: requests are committed through the window's circuit (`serve-openai --seal`)
+DELETED: dict[str, str] = {
+    "row": "the traced row driver and its Build are deleted; a workload's circuit is `predict row`'s",
+    "commit": "the Commit is deleted; `serve-openai --seal` commits what it serves",
+    "manifest": "the row manifest is deleted; the serve commits the window's circuit",
+    "neutrality": "the traced Build it compared a predicted one against is deleted",
+}
+
 def usage() -> str:
     w = max(map(len, COMMANDS))
     lines = [f"usage: {PROG} COMMAND [SUBCOMMAND] [options]", "", "commands:"]
@@ -204,6 +212,9 @@ def main(argv: list[str] | None = None) -> Any:
     if not argv or argv[0] in ("-h", "--help"):
         print(usage(), file=sys.stdout if argv else sys.stderr)
         return 0 if argv else 2
+    if argv[0] in DELETED:
+        print(f"{PROG} {argv[0]}: refused: {DELETED[argv[0]]}", file=sys.stderr)
+        return 2
     if argv[0] not in COMMANDS:
         print(f"{PROG}: unknown command {argv[0]!r}\n\n{usage()}", file=sys.stderr)
         return 2

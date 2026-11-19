@@ -20,7 +20,7 @@ import pytest
 DRIVER, ROUTE_PIN = "verity_vllm.check.replay.driver", "verity_vllm.check.cublas_route_pin"
 #: a module, and the modules its import leaves unloaded
 CASES = {"verity_vllm.pipeline.c2_replay": (DRIVER, ROUTE_PIN), "verity_vllm.pipeline.replay_bundle": (DRIVER, ROUTE_PIN),
-         "verity_vllm.pipeline.cpu_replay": (DRIVER, ROUTE_PIN), "verity_vllm.pipeline.commit": (DRIVER,)}
+         "verity_vllm.pipeline.cpu_replay": (DRIVER, ROUTE_PIN)}
 CHILD = """
 import importlib, json, sys
 importlib.import_module(sys.argv[1])

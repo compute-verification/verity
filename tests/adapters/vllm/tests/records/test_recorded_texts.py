@@ -36,12 +36,10 @@ SITES = {
     "c2_rules.rules": ("verity_vllm.check.c2_rules", "", "~^C_[A-Z0-9_]+$"),
     "static_schedule.RULE": ("verity_vllm.engine.static_schedule", "", "=RULE"),
     "run_facts.profile_id_method": ("verity_vllm.engine.run_facts", "profile_manifest", "=profile_id_method"),
-    "admission_bound.assumptions": ("verity_vllm.pipeline.admission_bound", "", ":assumptions"),
 }
 
 #: sha256 of each site's text as main's records carry it
 PINS = {
-    "admission_bound.assumptions": "6b144ea0d151798ce01343f6b66c60816522bb7fc069a9829ba548a28f94ded2",
     "c2_rules.rules": "69886fcd2109e1394a416e64425291fe47e492f8d7ecbc68eefda6e07439f96b",
     "checks.RULE": "7292bb22289d4388ff52cd1accb0971e219216b4fbeca124a9025bba12818cc9",
     "commit_rules.claims": "07bb035a8edc959bb14bbf48367e4f9afe926d89b7b1208d3fb5a0800815065e",

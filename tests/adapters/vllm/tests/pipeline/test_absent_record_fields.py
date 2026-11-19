@@ -1,10 +1,7 @@
 """What these readers make of a record that leaves an optional field out: the field absent, null and empty read alike.
 
-* `verity_vllm.pipeline.program_cache`: a workload without `sweep` or `requests` keys a derive by nulls and no requests.
 * `verity_vllm.pipeline.vu_store`: a unit that states no evaluations names no value; a replay record that states no evaluator kept
   no block on the device, and one that states no weights has no root for the export's provenance.
-* `verity_vllm.pipeline.manifest`: a Build's record without `program` has no recorded digest; an incomplete manifest that states
-  neither its unmodelled keys nor its peer binding is still refused, and says so.
 * `verity_vllm.pipeline.match`: the realized shape of a run counts a request's tokens only where its record states no count, reads
   the engine's steps at the record's top, else under its `timing`, and the steps kept under either of two names.
 * `verity_vllm.pipeline.match_fold`: the Program writer's request table and instance rows list nothing for a request with no

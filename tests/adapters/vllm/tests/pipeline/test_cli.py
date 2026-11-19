@@ -118,9 +118,10 @@ class NoCore:
             raise ModuleNotFoundError(f"No module named {name!r}", name=name)
 
 sys.meta_path.insert(0, NoCore())
-from verity_vllm.pipeline import cli, row
-row.main = lambda o: print(type(o).__name__)
-cli.main(["row", "stage", "build", "cov-gm128-r2", "GEMMA2_9B", "google/gemma-2-9b-it", "main"])
+from verity_vllm.acquire.fa2_tap_src import build_ext
+from verity_vllm.pipeline import cli
+build_ext.main = lambda o: print(type(o).__name__)
+cli.main(["fa2-tap-build", "--tree", "t", "--name", "n", "--build-dir", "b"])
 print(sorted(m for m in sys.modules if m.split(".")[0] == "verity"))
 """
 
@@ -129,4 +130,10 @@ def test_a_dense_threads_cap_needs_no_core():
     r = subprocess.run([sys.executable, "-c", _WITHOUT_CORE], env={**os.environ, "VERITY_DENSE_THREADS": "16", "CUDA_HOME": "/a/toolkit"},
                        capture_output=True, text=True, check=False)
     assert r.returncode == 0, r.stderr
-    assert r.stdout.split("\n")[:2] == ["Stage", "[]"]
+    assert r.stdout.split("\n")[:2] == ["Options", "[]"]
+
+
+def test_a_deleted_command_is_refused_by_name(capsys):
+    for name in cli.DELETED:
+        assert cli.main([name, "--help"]) == 2
+        assert capsys.readouterr().err.startswith(f"verity-vllm {name}: refused: ")

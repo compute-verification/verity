@@ -346,24 +346,3 @@ def test_a_shipped_tree_with_core_split_across_members_passes_and_a_foreign_port
     r = subprocess.run(argv, cwd=integ, env=_env(PYTHONPATH=f"{pp}{os.pathsep}{other}", RESEARCH_SOURCE_SHA="f" * 40), capture_output=True, text=True)
     assert r.returncode == 3 and r.stderr.startswith(gsid.FAIL_CLASS), (r.stdout, r.stderr)
     assert "namespace portion(s) outside the requested tree" in r.stderr and os.path.realpath(other / "verity") in r.stderr, r.stderr
-
-
-# ---- runners set VERITY_TREE from their own tree ---------------------------------------------------------------------------------------------------
-
-@pytest.mark.parametrize("argv", [[PY, "-m", "verity_vllm.pipeline.cli", "row", "run", "some-row", "ROLE", "org/repo", "rev"],
-                                  ["bash", "verity_vllm/ops/canary.sh", "r18-test"],
-                                  ["bash", "verity_vllm/ops/stoch_negatives.sh", "some-row", "ROLE", "unused-out"]])
-def test_runners_refuse_a_foreign_verity_tree_before_doing_anything(tmp_path, argv):
-    other = tmp_path / "other"
-    other.mkdir()
-    r = subprocess.run(argv, cwd=INTEGRATION, env=_env(VERITY_TREE=str(other), PATH=os.environ.get("PATH", ""), PYTHONPATH=PP, CUDA_HOME="/a/toolkit"),
-                       capture_output=True, text=True)
-    assert r.returncode == 3, (r.stdout, r.stderr)
-    assert "PRECHECK_FAIL_SOURCE_IDENTITY" in r.stderr and str(other) in r.stderr
-    assert not list(tmp_path.glob("**/stages.txt"))
-
-
-@pytest.mark.parametrize("script", ["canary.sh", "stoch_negatives.sh"])
-def test_runner_scripts_export_verity_tree_from_their_own_tree_and_have_no_default_path(script):
-    text = (INTEGRATION / "verity_vllm" / "ops" / script).read_text()
-    assert 'cd "${VERITY_TREE:-' not in text and 'export VERITY_TREE=$TREE_SELF' in text

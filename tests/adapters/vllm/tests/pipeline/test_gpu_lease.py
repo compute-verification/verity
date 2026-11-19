@@ -7,12 +7,10 @@ import ast
 import json
 import os
 import re
-import shutil
 import signal
 import socket
 import subprocess
 import sys
-from tests.row_paths import row_paths
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -305,33 +303,6 @@ def test_a_commit_whose_checks_after_its_last_run_read_host_memory_only_may_rele
     assert GL.kept_reason(_args(), [_com()], ENG, ONE, bundle=True) is None
     assert GL.kept_reason(_args(open_after_release=False), [_com(retain="none")], ENG, ONE, bundle=True) is None    # no openings after release
     assert GL.kept_reason(_args(), [_com(pool=SimpleNamespace(mode=None))], ENG, ONE, bundle=True) is None          # a pool that never allocated
-
-
-def test_the_commit_releases_its_lease_after_its_last_run_and_before_the_checks_that_follow():
-    """In `commit.main`, read with the text of each function that holds a part of it (`parts`) where `main` calls it: the release
-    follows the last run's records that read the device (the run, its openings, the replay bundle's device-resident tensors in
-    `RB.start`) and precedes every check that reads host memory; nothing after it calls CUDA."""
-    src = Path(GL.__file__).with_name("commit.py").read_text()
-    fns = {n.name: ast.get_source_segment(src, n) or "" for n in ast.parse(src).body if isinstance(n, ast.FunctionDef)}
-    parts = ("write_verdict", "challenged_openings", "binding_coverage", "manifest_coverage", "value_correspondence", "match_record_compare",
-             "weights_pin", "record_openings_after_release")
-    main = fns["main"]
-    for part in parts:                                    # a part may be called by one named before it
-        calls = re.findall(rf"\n +(?:\w+(?:, \w+)* = )?{part}\(", main)
-        assert main.count(f"{part}(") == len(calls) <= 1, f"read at one call of {part}, a statement of main's or of a part's"
-        if calls:
-            head, call, tail = main.partition(calls[0])
-            main = head + "\n" + fns[part] + call + tail
-    marks = ["GL.acquire(TL)", "TL.end(_wstage", '"gpu_mem"', 'TL.start("validate.openings"', "RB.start(out, pair", "GL.release(TL",
-             'TL.start("validate.binding_coverage"', 'TL.start("validate.manifest_coverage"', "RB.defer(", "TL.start(\"validate.weights_pin\"",
-             "openings_after_release(com", "for c in coms.values():\n        c.close()", 'TL.start("closure.summary")']
-    at = [main.index(m) for m in marks]
-    assert at == sorted(at) and main.count("GL.release(") == 1, dict(zip(marks, at))
-    call = main[at[5]:main.index("\n", at[5])]
-    assert "last=pair == args.pairs - 1 and k == len(order) - 1, after=_wstage" in call
-    assert "bundle=_rb_started is not None" in call
-    after = main[main.index("\n", at[5]):]
-    assert not re.search(r"torch\.cuda|\.cuda\(|nvidia_smi|synchronize\(|empty_cache", after)
 
 
 def test_the_lease_record_dates_the_release_and_names_its_stage_or_why_it_was_kept(tmp_path):

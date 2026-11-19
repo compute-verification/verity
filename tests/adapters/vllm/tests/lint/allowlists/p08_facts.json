@@ -35,7 +35,6 @@
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "layer-class", "symbol": "NativeHostCommitter.coverage_declaration", "detail": "RMSNorm", "count": 2},
     {"file": "verity_vllm/observe/fold/patterns/dsv4.py", "kind": "model", "symbol": "<module>", "detail": "deepseek"},
     {"file": "verity_vllm/observe/fold/patterns/fp8.py", "kind": "sm-arch", "symbol": "CutlassScaledMmFp8Block.match", "detail": "sm_90"},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "model", "symbol": "c2_programs_forecast", "detail": "qwen"},
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "layer-class", "symbol": "<module>", "detail": "GPT2Attention"},
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "layer-class", "symbol": "<module>", "detail": "HFDecoderLayer"},
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "layer-class", "symbol": "<module>", "detail": "RMSNorm"},

@@ -67,8 +67,7 @@ EXPORT = {
 #: one compiles the same way. Inductor's autotuning results (TORCHINDUCTOR_CACHE_DIR) stay shared.
 COMPILE_FRESH = {"VLLM_DISABLE_COMPILE_CACHE": "1", "TORCHINDUCTOR_FX_GRAPH_CACHE": "0", "TORCHINDUCTOR_AUTOGRAD_CACHE": "0"}
 
-#: Set by whoever gave this process its own TORCHINDUCTOR_CACHE_DIR (``prepare_compiled_process_cache``,
-#: ``ops/served_commit.sh``).
+#: Set by whoever gave this process its own TORCHINDUCTOR_CACHE_DIR (``prepare_compiled_process_cache``).
 INDUCTOR_DIR_MARK = "VERITY_INDUCTOR_DIR_PER_PROCESS"
 
 #: The switches a served engine leaves at vLLM's defaults; a capture of record runs with none of them set, so the kernels it compares
@@ -152,7 +151,7 @@ def own_inductor_dir() -> bool:
 
 def compile_dirs() -> dict[str, str] | None:
     """The Inductor output-code dir and vLLM cache root this process was given as its own (``own_compile_dirs``, or exported with
-    ``INDUCTOR_DIR_MARK`` by ``ops/served_commit.sh``), else None."""
+    ``INDUCTOR_DIR_MARK``), else None."""
     ind, root = os.environ.get("TORCHINDUCTOR_CACHE_DIR"), os.environ.get("VLLM_CACHE_ROOT")
     return {"inductor": ind, "vllm_cache": root} if own_inductor_dir() and ind and root else None
 
@@ -173,7 +172,7 @@ def disable_compile_cache() -> None:
 
 def prepare_compiled_process_cache() -> dict[str, Any]:
     """Before a COMPILED engine is built: make this process's Inductor output code identifiable.  (1) A fresh,
-    empty TORCHINDUCTOR_CACHE_DIR unless the caller already exported one it marks as per-process (ops/served_commit.sh) -- torch's default
+    empty TORCHINDUCTOR_CACHE_DIR unless the caller already exported one it marks as per-process -- torch's default
     /tmp/torchinductor_<user> is shared by every process on the pod, so a pin read from it would digest other workloads' kernels; (2)
     VLLM_DISABLE_COMPILE_CACHE=1 -- a vLLM compile-cache hit replays another process's artifacts and emits no output code here (the pin
     would be null: a compiled record without positive evidence of compilation).  Costs one Inductor compilation per process (~70 s for
