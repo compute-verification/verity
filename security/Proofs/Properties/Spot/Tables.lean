@@ -244,7 +244,8 @@ own files `witnessOwn`, whose circuit file does not derive, so a check that acce
 input does, does not have `TablesRegistered`'s conclusion. -/
 theorem tablesRegistered_nontrivial : ¬ HoldsRegisteredTables witnessOwn tableBlobs := by
   rintro ⟨c, hc, -⟩
-  unfold OneStageZk.Own.circuitFile OneStageZk.restrict at hc
-  cases hc
+  have h : (OneStageZk.Own.circuitFile witnessOwn).toOption.isNone = true := by decide +kernel
+  rw [hc] at h
+  simp [Except.toOption] at h
 
 end Properties.Spot.SecurityProofs
