@@ -384,7 +384,6 @@ def field_tree(program, outs: dict[int, np.ndarray], kw: int, f: int, words: int
     """Output field ``f`` of the template of root node ``kw`` as the one tree a reader opens (`Flock.Registered.fieldTree`,
     ``KEY/oJ``): one row a unit of the template, in the root body's order (`HmLinks.treeLeaf`), the field's bits in
     16-bit words, ``words`` of them."""
-    from verity.circuits import boolean as BL
     from verity.circuits.codec import descriptor_id
     from verity.circuits.types import RecordType, Tuple
     nodes = program.root.body.nodes
@@ -392,7 +391,7 @@ def field_tree(program, outs: dict[int, np.ndarray], kw: int, f: int, words: int
     ret = nodes[kw].fn.signature()[1]
     ft = (list(ret.fields) if isinstance(ret, Tuple) else [x for _, x in ret.fields] if isinstance(ret, RecordType)
           else [ret])[f]
-    starts, widths = _field_starts(ret), BL.elements(ft)
+    starts, widths = _field_starts(ret), ft.leaf_widths()
     rows = []
     for k, nd in enumerate(nodes):
         if k in outs and descriptor_id(nd.fn) == t:
