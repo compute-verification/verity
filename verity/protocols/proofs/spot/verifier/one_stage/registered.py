@@ -70,7 +70,10 @@ import re
 from typing import Any, Iterable, Mapping, Sequence
 
 from verity.commitments import hm96
-from verity.commitments.merkle import CommitmentDomain, merkle_depth
+from verity.commitments.crypto import lms
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.limits import VerificationLimits
+from verity.commitments.merkle import Commitment, CommitmentDomain, Opening, merkle_depth, verify_opening
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
 from verity.circuits import supplied as SU
 from verity.circuits.codec import canonical_json, descriptor_chunks, jcs_domain_error
@@ -108,6 +111,15 @@ LE = "le"
 SHORT_BITS = 65536
 _INST = hm96.SHA512
 _HEX = re.compile(r"[0-9a-f]+")
+_EVEN_HEX = re.compile(r"(?:[0-9a-f]{2})*")
+#: the memory attester's session formats (`memory_attester.COIN_TAG`, `COIN_BINDING`, `COIN_SCHEMA`, `PROTOCOL`,
+#: `COIN_TREE`, `RECORDS`), which its header and coin tree are written in
+_COIN_TAG = b"verity-pous/memory-challenger/coin/v1\0"
+_COIN_BINDING = b"verity-pous/memory-challenger/coin-tree/v1\0"
+_COIN_SCHEMA = "pous/coin/hm96-sha512/v1"
+_SESSION_PROTOCOL = "verity-pous/memory-challenger/v2"
+_COIN_TREE = "verity-pous/coin-tree/hm96-sha512/v1"
+_SESSION_RECORDS = "sha512/row/v2"
 _DEC = re.compile(r"0|[1-9][0-9]*")
 #: `Flock.Registered.freshValue`'s prefix: ``input/n<w>`` is run input node ``w``'s one tree
 FRESH = "input/n"
@@ -552,10 +564,144 @@ def _coin(coins: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> bytes:
     return bytes(coins[m["supplied"]])
 
 
+def _no_statement(name: str, f: str, why: str) -> ValueError:
+    return ValueError(f"supplied input {name}: no statement: {f}'s {why}")
+
+
+def _released(coins: Mapping[str, bytes], name: str, f: str) -> Mapping[str, Any]:
+    """What the memory attester released after the session, held under the function's name (`released_session`)."""
+    if f not in coins:
+        raise ValueError(f"supplied input {name}: no statement: the verifier holds no coin for {f}")
+
+    def not_json(c: str) -> Any:
+        raise ValueError(c)
+    try:
+        doc = json.loads(bytes(coins[f]).decode("utf-8"), parse_constant=not_json)
+    except ValueError:
+        raise _no_statement(name, f, "released session is no JSON") from None
+    if not isinstance(doc, dict):
+        raise _no_statement(name, f, "released session is no object")
+    return doc
+
+
+def _session_fields(name: str, f: str, rel: Mapping[str, Any], hexes: Sequence[str], nats: Sequence[str]) -> dict[str, Any]:
+    """The released session commitment's fields ``hexes`` (lowercase hex of whole bytes) and ``nats`` (naturals)."""
+    c = rel.get("commitment")
+    if not isinstance(c, dict):
+        raise _no_statement(name, f, "released session holds no commitment object")
+    out: dict[str, Any] = {}
+    for k in hexes:
+        v = c.get(k)
+        if not (isinstance(v, str) and _EVEN_HEX.fullmatch(v)):
+            raise _no_statement(name, f, f"commitment's {k} is no lowercase hex")
+        out[k] = bytes.fromhex(v)
+    for k in nats:
+        v = c.get(k)
+        if type(v) is not int or v < 0:
+            raise _no_statement(name, f, f"commitment's {k} is no natural")
+        out[k] = v
+    return out
+
+
+def _coin_opens(c: Mapping[str, Any], j: int, index: int, salt: bytes, path: Sequence[bytes]) -> bool:
+    """`memory_attester.verify_coin` past its range checks: round ``j``'s coin at ``index`` under ``salt`` opens at
+    position ``j`` of ``k`` under the coin tree's root; a malformed key, salt or path opens nothing."""
+    try:
+        h = hm96.SHA512
+        key = h.check_key(c["coin_key"])
+        if len(salt) != h.salt_bytes:
+            return False
+        x = hashlib.sha512(_COIN_TAG + c["session"] + j.to_bytes(4, "big") + index.to_bytes(8, "big")).digest()
+        leaf = h.tree_leaf(key, h.commit_string(key, x, salt))
+        domain = CommitmentDomain(hashlib.sha512(_COIN_BINDING + c["session"]).digest()[:32], -1,
+                                  RangeIndexedDomain(0, c["k"]), hash="sha512")
+        return verify_opening(domain, Commitment(c["coin_root"], c["k"]), Opening(j, leaf, tuple(path)), _COIN_SCHEMA,
+                              VerificationLimits())
+    except Exception:  # noqa: BLE001 - as `verify_coin`: a malformed opening opens nothing
+        return False
+
+
+def _round_coin(coins: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
+    f = m["supplied"]
+    j = _arg(name, m, "round", int)
+    rel = _released(coins, name, f)
+    c = _session_fields(name, f, rel, ("session", "coin_root", "coin_key"), ("blocks", "k"))
+    if j >= 1 << 32:
+        raise _no_statement(name, f, f"round {j} is no u32")
+    if j >= c["k"]:
+        raise _no_statement(name, f, f"round {j} is no round of the session's {c['k']}")
+    ops = rel.get("openings")
+    if not isinstance(ops, list):
+        raise _no_statement(name, f, "released session holds no openings list")
+    o = next((o for o in reversed(ops) if isinstance(o, dict) and type(o.get("j")) is int and o["j"] == j), None)
+    if o is None:
+        raise _no_statement(name, f, f"released session holds no opening of round {j}")
+    index, salt, path = o.get("index"), o.get("salt"), o.get("path")
+    if not (type(index) is int and index >= 0 and isinstance(salt, str) and _EVEN_HEX.fullmatch(salt)
+            and isinstance(path, list) and all(isinstance(p, str) and _EVEN_HEX.fullmatch(p) for p in path)):
+        raise _no_statement(name, f, f"opening of round {j} is malformed")
+    if index >= 1 << 64:
+        raise _no_statement(name, f, f"round {j}'s index {index} is no u64")
+    if index >= c["blocks"]:
+        raise _no_statement(name, f, f"round {j}'s index {index} is no block of the session's {c['blocks']}")
+    if not _coin_opens(c, j, index, bytes.fromhex(salt), [bytes.fromhex(p) for p in path]):
+        raise _no_statement(name, f, f"round {j}'s index {index} is not its committed coin")
+    return [("bytes", (j.to_bytes(4, "big") + index.to_bytes(8, "big")).hex())], 12
+
+
+def _header(coins: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
+    f = m["supplied"]
+    want = _arg(name, m, "head", int)
+    c = _session_fields(name, f, _released(coins, name, f), ("session", "coin_root", "coin_key", "binding"),
+                        ("blocks", "k", "limit_ns", "block_bytes"))
+    doc = {"protocol": _SESSION_PROTOCOL, "coin_tree": _COIN_TREE, "records": _SESSION_RECORDS,
+           "session": c["session"].hex(), "coin_root": c["coin_root"].hex(),
+           "coin_key_sha512": hashlib.sha512(c["coin_key"]).hexdigest(), "blocks": c["blocks"], "k": c["k"],
+           "limit_ns": c["limit_ns"], "block_bytes": c["block_bytes"], "binding": c["binding"].hex(),
+           "clock": "CLOCK_MONOTONIC ns", "ended": "complete", "rounds": c["k"]}
+    head = json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()
+    if len(head) != want:
+        raise _no_statement(name, f, f"header is {len(head)} bytes, not {want}")
+    row = head + bytes(len(head) % 2)
+    return [("bytes", row.hex())], len(row)
+
+
+def _context(coins: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
+    f = m["supplied"]
+    if m["args"]:
+        raise ValueError(f"supplied input {name}: {f} takes no args")
+    rel = _released(coins, name, f)
+    key = rel.get("key")
+    if not (isinstance(key, str) and _EVEN_HEX.fullmatch(key)):
+        raise _no_statement(name, f, "released key is no lowercase hex")
+    session = _session_fields(name, f, rel, ("session",), ())["session"]
+    ident = bytes.fromhex(key)[:16]
+    if len(ident) != 16:
+        raise _no_statement(name, f, f"key is {len(ident)} bytes, not an LMS identifier's 16")
+    if len(session) != 32:
+        raise _no_statement(name, f, f"session is {len(session)} bytes, not 32")
+    tag = lms.ROLES["memory-challenger-record"].encode()
+    framed = len(session).to_bytes(8, "big") + session
+    ctx = len(tag).to_bytes(8, "big") + tag + ident + len(framed).to_bytes(8, "big") + framed
+    return [("bytes", ctx.hex())], len(ctx)
+
+
 def body(coins: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
     """A supplied function's body (`Supplied.body`): its value's sources and its length in bytes; ValueError naming "no
-    statement" where the verifier can't compute it."""
+    statement" where the verifier can't compute it. The storage session's three functions read what the memory attester
+    released after the session, the JSON `{commitment, openings, key}` held under the function's name: the session
+    commitment (`SessionCommitment.to_json`), the round coins' openings (`CoinOpening.to_json`) and the registered LMS
+    public key's hex. `pous.session.round_coin/v1` is `u32be(round) ‖ u64be(index)` of the round's last opening, which
+    opens its committed coin below the commitment's blocks; `pous.session.header/v1` the header of a session that ended
+    complete with all its rounds (`"ended": "complete"`, `"rounds": k`) in `head` bytes, padded to whole u16 words; and
+    `pous.session.context/v1` the 106 bytes the signature's message hashes before the record."""
     f = m["supplied"]
+    if f == "pous.session.round_coin/v1":
+        return _round_coin(coins, name, m)
+    if f == "pous.session.header/v1":
+        return _header(coins, name, m)
+    if f == "pous.session.context/v1":
+        return _context(coins, name, m)
     if f == "const.u16/v1":
         x = _arg(name, m, "value", int)
         if x >= 1 << 16:

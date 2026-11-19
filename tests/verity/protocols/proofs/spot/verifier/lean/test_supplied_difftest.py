@@ -5,6 +5,10 @@ registry's closed list in Lean equal to the format's (`verity.circuits.supplied.
 
 from __future__ import annotations
 
+import copy
+import functools
+import hashlib
+import json
 import re
 import shutil
 from pathlib import Path
@@ -15,6 +19,7 @@ from hypothesis import strategies as st
 import verity_difftest as D
 from verity.circuits import supplied as SU
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as MA
 
 PACKAGE = (Path(__file__).resolve().parents[7] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean")
 PIECES = "spot-difftest"
@@ -214,3 +219,211 @@ def test_the_registrys_list_is_the_formats():
     body = re.search(r"def FUNCTIONS : List String :=\s*\[(.*?)\]", text, re.S)
     assert body is not None
     assert re.findall(r'"([^"]+)"', body[1]) == list(SU.FUNCTIONS)
+
+
+ROUND, HEADER, CONTEXT = "pous.session.round_coin/v1", "pous.session.header/v1", "pous.session.context/v1"
+#: the storage session's released material and each body's value for it (`tests/verity/circuits/pous_session_vectors.json`)
+VECTORS = json.loads((Path(__file__).parents[6] / "verity" / "circuits" / "pous_session_vectors.json").read_text())
+
+
+def fixed(label: str, n: int) -> bytes:
+    out, i = b"", 0
+    while len(out) < n:
+        out += hashlib.sha512(label.encode() + i.to_bytes(4, "big")).digest()
+        i += 1
+    return out[:n]
+
+
+def blob(doc) -> bytes:
+    return json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()
+
+
+def session_instance(fn: str, args: dict, bits: int, layout: str, coins: dict[str, bytes]) -> dict:
+    """One input marked ``fn`` read by ``layout`` at 16-bit leaves, the verifier holding ``coins``."""
+    mark = {"supplied": fn, "args": args, "layout": layout, "bits": bits}
+    return {"program": desc([["x0", 1, mark]], [2]), "coins": {f: c.hex() for f, c in coins.items()}, "widths": {"x0": 16},
+            "record": RECORD, "log": [], "binding": BINDING}
+
+
+def held(doc) -> dict[str, bytes]:
+    return {ROUND: blob(doc), HEADER: blob(doc), CONTEXT: blob(doc)}
+
+
+@functools.cache
+def honest(k: int, blocks: int, key_label: int, seed: int, picks: tuple[int, ...]) -> dict:
+    """A release the memory attester writes: ``k`` coins over ``blocks`` blocks, each at ``picks[j] % blocks``."""
+    session = fixed(f"session{seed}", 32)
+    key = MA.HM96.key_from_label(f"difftest-key{key_label}".encode())
+    salts = [fixed(f"salt{seed}/{j}", MA.HM96.salt_bytes) for j in range(k)]
+    tree = MA.CoinTree(session, blocks, [picks[j] % blocks for j in range(k)], key, salts)
+    c = MA.SessionCommitment(session, tree.root, key, blocks, k, 854_000 + seed, 2056, fixed(f"binding{seed}", 64))
+    return {"commitment": c.to_json(), "openings": [tree.opening(j).to_json() for j in range(k)],
+            "key": (fixed(f"lms-I{seed}", 16) + fixed("lms-root", 64)).hex()}
+
+
+def _flip(h: str, at: int = 0) -> str:
+    return h[:at] + ("1" if h[at] == "0" else "0") + h[at + 1:]
+
+
+def _op(d, j, **kw):
+    for o in d["openings"]:
+        if o["j"] == j:
+            o.update(kw)
+
+
+#: each a change to a release that leaves it honest or breaks it in one way a body reads
+MUTATIONS = {
+    "none": lambda d, j: None,
+    "index+1": lambda d, j: _op(d, j, index=d["openings"][j]["index"] + 1) if j < len(d["openings"]) else None,
+    "index at blocks": lambda d, j: _op(d, j, index=d["commitment"]["blocks"]),
+    "index 2^64": lambda d, j: _op(d, j, index=1 << 64),
+    "salt flipped": lambda d, j: _op(d, j, salt=_flip(d["openings"][j]["salt"])) if j < len(d["openings"]) else None,
+    "salt short": lambda d, j: _op(d, j, salt=d["openings"][j]["salt"][2:]) if j < len(d["openings"]) else None,
+    "path short": lambda d, j: _op(d, j, path=d["openings"][j]["path"][:-1]) if j < len(d["openings"]) else None,
+    "path long": lambda d, j: _op(d, j, path=d["openings"][j]["path"] + ["00" * 64]) if j < len(d["openings"]) else None,
+    "path flipped": lambda d, j: _op(d, j, path=[_flip(p) for p in d["openings"][j]["path"][:1]] + d["openings"][j]["path"][1:])
+    if j < len(d["openings"]) and d["openings"][j]["path"] else None,
+    "path no hex": lambda d, j: _op(d, j, path=["zz"]),
+    "no path": lambda d, j: [o.pop("path", None) for o in d["openings"]],
+    "root flipped": lambda d, j: d["commitment"].update(coin_root=_flip(d["commitment"]["coin_root"])),
+    "root short": lambda d, j: d["commitment"].update(coin_root=d["commitment"]["coin_root"][2:]),
+    "k+1": lambda d, j: d["commitment"].update(k=d["commitment"]["k"] + 1),
+    "k-1": lambda d, j: d["commitment"].update(k=max(0, d["commitment"]["k"] - 1)),
+    "blocks 0": lambda d, j: d["commitment"].update(blocks=0),
+    "session flipped": lambda d, j: d["commitment"].update(session=_flip(d["commitment"]["session"])),
+    "session short": lambda d, j: d["commitment"].update(session=d["commitment"]["session"][2:]),
+    "session upper": lambda d, j: d["commitment"].update(session=d["commitment"]["session"].upper()),
+    "key flipped": lambda d, j: d["commitment"].update(coin_key=_flip(d["commitment"]["coin_key"])),
+    "key short": lambda d, j: d["commitment"].update(coin_key=d["commitment"]["coin_key"][2:]),
+    "key top bit": lambda d, j: d["commitment"].update(coin_key=d["commitment"]["coin_key"][:-2] + "ff"),
+    "limit string": lambda d, j: d["commitment"].update(limit_ns="854000"),
+    "limit big": lambda d, j: d["commitment"].update(limit_ns=10 ** 30),
+    "limit 5 digits": lambda d, j: d["commitment"].update(limit_ns=85_400),
+    "block_bytes bool": lambda d, j: d["commitment"].update(block_bytes=True),
+    "blocks negative": lambda d, j: d["commitment"].update(blocks=-3),
+    "binding odd": lambda d, j: d["commitment"].update(binding=d["commitment"]["binding"][1:]),
+    "no commitment": lambda d, j: d.pop("commitment"),
+    "commitment list": lambda d, j: d.update(commitment=[]),
+    "no openings": lambda d, j: d.pop("openings"),
+    "openings object": lambda d, j: d.update(openings={}),
+    "openings dropped": lambda d, j: d.update(openings=[o for o in d["openings"] if o["j"] != j]),
+    "wrong opening last": lambda d, j: d["openings"].append({**d["openings"][0], "j": j, "index": 1}) if d["openings"] else None,
+    "wrong opening first": lambda d, j: d["openings"].insert(0, {**d["openings"][0], "j": j, "index": 1}) if d["openings"] else None,
+    "key short id": lambda d, j: d.update(key="ab" * 15),
+    "key 16": lambda d, j: d.update(key="ab" * 16),
+    "key upper": lambda d, j: d.update(key=d["key"].upper()),
+    "key number": lambda d, j: d.update(key=5),
+    "no key": lambda d, j: d.pop("key"),
+}
+
+
+@st.composite
+def sessions(draw) -> dict:
+    """A release, honest or broken by one to two of `MUTATIONS`, one of the three functions marked at its length, a width or
+    a length perhaps off, the release perhaps no JSON or no object."""
+    k = draw(st.integers(1, 5))
+    blocks = draw(st.sampled_from([1, 2, 5, 1 << 20, 1 << 40]))
+    doc = copy.deepcopy(honest(k, blocks, draw(st.integers(0, 1)), draw(st.integers(0, 2)),
+                               tuple(draw(st.integers(0, (1 << 40) - 1)) for _ in range(k))))
+    rnd = draw(st.one_of(st.integers(0, k - 1), st.integers(0, k + 1), st.sampled_from([1 << 32, (1 << 32) - 1])))
+    for name in draw(st.lists(st.sampled_from(sorted(MUTATIONS)), max_size=2)):
+        try:
+            MUTATIONS[name](doc, rnd if rnd < k else 0)
+        except (KeyError, IndexError, TypeError, AttributeError):
+            pass
+    coins = held(doc)
+    if draw(st.integers(0, 24)) == 0:
+        coins = {ROUND: draw(st.sampled_from([b"{", b"[]", b"\xff", b"null", b"", b'{"commitment": 5}']))} | {
+            f: coins[f] for f in (HEADER, CONTEXT)}
+    if draw(st.integers(0, 24)) == 0:
+        coins.pop(draw(st.sampled_from([ROUND, HEADER, CONTEXT])))
+    fn = draw(st.sampled_from([ROUND, ROUND, HEADER, HEADER, CONTEXT]))
+    if fn == ROUND:
+        return session_instance(fn, {"round": rnd}, draw(st.sampled_from([96, 96, 96, 64])), "halves", coins)
+    if fn == CONTEXT:
+        return session_instance(fn, {}, draw(st.sampled_from([848, 848, 848, 832])), "le", coins)
+    head = max(1, _head_of(coins) + draw(st.sampled_from([0, 0, 0, 0, 0, 0, -1, 1])))
+    return session_instance(fn, {"head": head}, 8 * (head + head % 2) if draw(st.integers(0, 9)) else 8 * head, "le", coins)
+
+
+def _head_of(coins: dict[str, bytes]) -> int:
+    """The length the release's header has, which the Python's refusal of a header of length 0 names; 754 where it has none."""
+    try:
+        G.body(coins, "x", {"supplied": HEADER, "args": {"head": 0}, "layout": "le", "bits": 8})
+    except ValueError as e:
+        m = re.search(r"header is (\d+) bytes, not 0$", str(e))
+        return int(m[1]) if m else 754
+    return 754
+
+
+SESSIONS = D.Port(PIECES, "supplied_marks", reference, st.one_of(sessions(), sessions(), sessions(), INPUTS), package=PACKAGE,
+                  of_record="lean")
+
+
+@needs_lake
+def test_the_storage_sessions_bodies_agree(pieces):
+    """Lean's three bodies against the Python's on honest releases the memory attester's own coin tree writes and on the same
+    releases broken one or two ways each body reads (the opening, the coin tree's root and key, the session, the numbers, the
+    key, the shape of the JSON), a few hundred seeded examples."""
+    stats = D.run(SESSIONS, examples=400, server=pieces)
+    assert stats.outputs > 100 and stats.rejects > 50, stats
+
+
+def vector_instance(fn: str, args: dict, value_hex: str, layout: str) -> dict:
+    return session_instance(fn, args, 4 * len(value_hex), layout,
+                            held({k: VECTORS[k] for k in ("commitment", "openings", "key")}))
+
+
+VECTOR_CASES = [(f"round {j}", ROUND, {"round": j}, VECTORS["round_coin"][j], "halves", 32) for j in range(3)] + [
+    ("the header", HEADER, {"head": VECTORS["head"]}, VECTORS["header"], "le", 16),
+    ("the context", CONTEXT, {}, VECTORS["context"], "le", 16)]
+
+
+@needs_lake
+@pytest.mark.parametrize("name, fn, args, value, layout, w", VECTOR_CASES, ids=[c[0] for c in VECTOR_CASES])
+def test_the_vectors_in_lean_and_python(pieces, name, fn, args, value, layout, w):
+    """The values the memory attester's formats give for its released session, in both, as the leaves their layout reads."""
+    j = {**vector_instance(fn, args, value, layout), "widths": {"x0": w}}
+    want = {"x0": [SU.leaves(layout, bytes.fromhex(value), w)]}
+    assert reference(j) == want
+    assert pieces.call("supplied_marks", j) == ("output", D.canonical(want))
+
+
+def _refusal_cases():
+    base = {k: VECTORS[k] for k in ("commitment", "openings", "key")}
+    mod = copy.deepcopy
+
+    def tampered(fn):
+        d = mod(base)
+        fn(d)
+        return held(d)
+    return [
+        ("round past k", ROUND, {"round": 3}, 96, "halves", held(base)),
+        ("round no u32", ROUND, {"round": 1 << 32}, 96, "halves", held(base)),
+        ("no opening of the round", ROUND, {"round": 1}, 96, "halves", tampered(lambda d: d["openings"].pop(1))),
+        ("index past the blocks", ROUND, {"round": 0}, 96, "halves", tampered(lambda d: d["commitment"].update(blocks=5))),
+        ("another coin", ROUND, {"round": 0}, 96, "halves", tampered(lambda d: _op(d, 0, index=6))),
+        ("another salt", ROUND, {"round": 2}, 96, "halves", tampered(lambda d: _op(d, 2, salt=_flip(d["openings"][2]["salt"])))),
+        ("a header of another length", HEADER, {"head": 752}, 6016, "le", held(base)),
+        ("a header of a late session's length", HEADER, {"head": 754}, 6032, "le", held(base)),
+        ("a key of 15 bytes", CONTEXT, {}, 848, "le", tampered(lambda d: d.update(key="ab" * 15))),
+        ("a session of 31 bytes", CONTEXT, {}, 848, "le", tampered(lambda d: d["commitment"].update(session="ab" * 31))),
+        ("no release held", ROUND, {"round": 0}, 96, "halves", {}),
+        ("a release that is no JSON", CONTEXT, {}, 848, "le", {CONTEXT: b"{"}),
+        ("a mark's bits not the value's", ROUND, {"round": 0}, 64, "halves", held(base)),
+    ]
+
+
+REFUSALS = _refusal_cases()
+
+
+@needs_lake
+@pytest.mark.parametrize("name, fn, args, bits, layout, coins", REFUSALS, ids=[c[0] for c in REFUSALS])
+def test_what_has_no_statement_is_refused_by_the_same_text(pieces, name, fn, args, bits, layout, coins):
+    """Lean refuses each, with the Python's text: `no statement`, naming the function and what the release lacks."""
+    j = session_instance(fn, args, bits, layout, coins)
+    with pytest.raises(D.Reject) as e:
+        reference(j)
+    kind, text = pieces.call("supplied_marks", j)
+    assert kind != "output" and text == str(e.value)
+    assert fn in text and ("no statement" in text or "mark says" in text), text
