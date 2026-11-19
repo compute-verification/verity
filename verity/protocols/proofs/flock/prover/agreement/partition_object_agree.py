@@ -16,7 +16,7 @@ MISSING = object()
 
 
 def code(error: str) -> str:
-    c = error.split(": ")[1] if error.startswith("partition: ") and error.count(": ") >= 2 else error
+    c = error.removeprefix("partition: ").split(": ")[0]
     return "keys" if c.startswith("the object's keys are not") else c
 
 
