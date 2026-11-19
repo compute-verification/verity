@@ -528,9 +528,6 @@ list names whose body is not there yet.
 | `registered.root/v1` (the verifier's pin, never a prover's row) | commitment | supplied | `value` | 512 |
 | `record.root/v1` (a port root the record names) | commitment | supplied | `port` | 512 |
 | `log.base/v1` (the first position after the log's records) | commitment | supplied | | 64 |
-| `pouw.pearlplus.eb/v1` (E_B's lines of column tile `col`) | coin, commitment | supplied | `col`, `tn` | 256 tn |
-| `pouw.pearlplus.fa/v1`, `pouw.pearlplus.fb/v1` (F_A's, F_B's lines) | coin, commitment | supplied | `k` (a multiple of 32) | 256 k |
-| `pouw.pearlplus.gram/v1` (32 by 32 FP32 words) | coin, commitment | supplied | `k` (a multiple of 32), `dev` | 32768 |
 | `const.uint/v1` | constant | supplied | `value`, `bits` (a multiple of 8, up to 64; `value` < 2^bits) | `bits` |
 
 **A supplied value is short.** No supplied input is as long as a population: where a unit's row is a function of its index
