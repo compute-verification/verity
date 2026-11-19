@@ -112,7 +112,7 @@
     "link/keys/ingress/*": "structure",
     "link/program": "structure",
     "link/partition": "structure",
-    "link/gates/*": "structure",
+    "link/pins/*": "structure",
     "link/pinned": "structure",
     "link/windows/*": "output",
     "link/planned_windows/*": "structure",

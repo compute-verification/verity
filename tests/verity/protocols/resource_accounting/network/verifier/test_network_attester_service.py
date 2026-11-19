@@ -379,10 +379,12 @@ def test_a_proof_of_another_circuit_with_the_same_interface_is_refused(tmp_path,
     assert not lw.proved([_finding(registered), _finding(registered, accepted=False)])
 
     for w, named in enumerate((program, GATED_PROGRAM, registered)):
-        opening = run.honest(w)
-        sample = run.stream.select(run.register(opening))
-        delivered = run.prove(opening, sample, program=named)
-        v = lw.verify(sample, [r.certificate for r in opening.records], SYNCS, delivered)
+        (tmp_path / str(w)).mkdir()
+        one = Run(tmp_path / str(w))
+        opening = one.honest(0)
+        sample = one.stream.select(one.register(opening))
+        delivered = one.prove(opening, sample, program=named)
+        v = one.lw.verify(sample, [r.certificate for r in opening.records], SYNCS, delivered)
         assert v["by"] == SVC.OF_RECORD == "lean" and v["decided_by"] == "proof", w
         assert v["accepted"] is (named == registered) and v["reference"] == {"accepted": named == registered}, w
 
