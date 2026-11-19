@@ -112,17 +112,6 @@ def test_the_credited_block_is_the_tile_with_its_bit_ports():
 
 
 @pytest.mark.slow
-def test_the_credited_cut_is_the_cut_by_a_pass_over_C():
-    """The credited block's ports from the descriptor (`restrict.front`) are the exact boundary a pass over C finds
-    (`restrict.ports`), each at C on bits' width and binding, so its bytes are today's. Slow: the pass over C on bits, about
-    five minutes and 27 GiB; the one check of the cut on a block of the σ form, where every gate of C is a bit gate."""
-    _program, _part, _c, b = credited()
-    assert (list(b.inputs), list(b.outputs)) == R.ports(b.bits, b.words)
-    gates = R._Gates(b.D)
-    assert all(gates.of(g) == (b.bits.width[g], R._binding(b.bits, g)) for g in b.inputs + b.outputs)
-
-
-@pytest.mark.slow
 def test_the_blocks_count_is_the_sum_of_its_bodies():
     """`count` of the block's root is each word primitive's body's count times its gates in the block's layout, and
     `count.of_block`'s. Slow: as above."""

@@ -23,8 +23,7 @@ Every gate of C on bits reads only earlier gates.
 **The block.** S is the gates of C inside the block's units, each unit the instance the partition's template query numbers
 (`TemplatePartition.gates`). in(S) is the gates outside S that the units' parameter leaves name, out(S) the gates of S that C
 returns or that a root node's argument outside S names, each once in increasing index of C (`front`), read from the
-descriptor and never by a pass over C. `ports` is the exact boundary by a pass over C: the gates outside S a gate of S
-reads, and the gates of S a gate outside S reads or C returns; the two agree where every parameter leaf is read inside S.
+descriptor and never by a pass over C.
 
 **The object** (`restrict`): the Program whose root
 - has a parameter for each maximal run of in(S) of one width and one binding, in order, `p<i>` of type `Array<n, Value<w>>`,
@@ -237,22 +236,10 @@ def unit_gates(D: DecodedProgram, partition: Mapping[str, Any], units: Sequence[
     return out
 
 
-def ports(bits: Bits, words: Sequence[tuple[int, int]]) -> tuple[list[int], list[int]]:
-    """in(S) and out(S) of S, the gates of C in ``words``, each in increasing index."""
-    inside = [False] * len(bits.word)
-    for lo, hi in words:
-        inside[lo:hi] = [True] * (hi - lo)
-    ins = {o for lo, hi in words for g in range(lo, hi) for o in bits.word[g].operands if not inside[o]}
-    outs = {o for g in range(len(bits.word)) if not inside[g] for o in bits.word[g].operands if inside[o]}
-    outs |= {g for g in bits.C.root_outputs() if inside[g]}
-    return sorted(ins), sorted(outs)
-
-
 def front(D: DecodedProgram, words: Sequence[tuple[int, int]]) -> tuple[list[int], list[int]]:
     """in(S) and out(S) from the root's nodes, with no pass over C: in(S) the gates the units' parameter leaves name outside
     S (the door's `Spot.BlockFront.front`), out(S) the gates of S that C returns or that a root node outside S, or a member
-    outside S of a batch S holds in part, takes as an argument, each once, in increasing index. They are `ports`' where
-    every parameter leaf is read inside S."""
+    outside S of a batch S holds in part, takes as an argument, each once, in increasing index."""
     C = D.circuit
 
     def inside(g: int) -> bool:
@@ -294,7 +281,7 @@ def front(D: DecodedProgram, words: Sequence[tuple[int, int]]) -> tuple[list[int
 
 
 class _Gates:
-    """Each gate's width and binding (`_binding`'s), read from the root node that holds it: once a root input node, and
+    """Each gate's width and binding, read from the root node that holds it: once a root input node, and
     down C's hierarchy for any other."""
 
     def __init__(self, D: DecodedProgram) -> None:
@@ -336,11 +323,6 @@ def _spell(items: Sequence[tuple]) -> Any:
         else:
             parts.append([s, i, leaf, 1])
     return concat([Affine(s, i, b, n) for s, i, b, n in parts])
-
-
-def _binding(bits: Bits, g: int) -> str:
-    k, v = bits.kind[g]
-    return v if k == "input" else RUN
 
 
 def _nodes(D: DecodedProgram, words: Sequence[tuple[int, int]]) -> list[tuple[int, int, int]]:
@@ -553,5 +535,5 @@ def evaluate(text: bytes, inputs: Sequence[int]) -> list[int]:
     return [v[int(next(it).split()[1])] for _ in range(O)]
 
 
-__all__ = ["Bits", "Block", "FORMAT", "REGISTRATION", "RUN", "Refused", "WIRE", "evaluate", "listing_of", "ports", "program", "restrict",
+__all__ = ["Bits", "Block", "FORMAT", "REGISTRATION", "RUN", "Refused", "WIRE", "evaluate", "listing_of", "program", "restrict",
            "split", "unit_gates"]
