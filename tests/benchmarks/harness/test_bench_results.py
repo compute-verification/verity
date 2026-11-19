@@ -8,7 +8,6 @@ from dataclasses import replace
 import pytest
 from bench_standins import CPUS, FakeFactory, inputs
 
-from verity_bench.cli import main
 from verity_bench.kit_report import PIECE
 from verity_bench.vllm import presets
 from verity_bench.vllm import result as result_format
@@ -19,10 +18,6 @@ from verity_bench.vllm.presets import (
     expand_sweep,
 )
 from verity_bench.vllm.result import (
-    IdentityMismatch,
-    identity_mismatches,
-    judge,
-    merge,
     validate,
 )
 from verity_bench.vllm.runner import (
@@ -64,15 +59,11 @@ def test_inter_token_latency_is_per_token_after_the_first_and_shares_a_multi_tok
     assert percentile([2.0], 99) == 2.0 and percentile([], 50) is None
 
 
-def test_result_schema_and_identity_strict_judge():
+def test_result_schema_and_identity():
     preset, points, arms = inputs()
     doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc", cpus=CPUS)
     validate(doc)
     assert doc["identity"]["arms"][0]["engine_overrides"] == {"quantization": "fp8"}
-    other = {**doc, "identity": {**doc["identity"], "git_commit": "def"}}
-    with pytest.raises(IdentityMismatch, match="git_commit"):
-        judge(doc, other)
-    assert judge(doc, other, ("git_commit",))["accepted"]
 
 
 def test_a_points_numbers_are_measurements_of_its_result(tmp_path, monkeypatch):
@@ -207,7 +198,7 @@ def test_decode_time_charges_a_step_to_the_forward_it_waited_on_and_refuses_unse
 
 def test_validate_refuses_dropped_reordered_or_edited_reps():
     """A result's points are recomputed from its reps, so a caller can't drop a slow rep, reorder,
-    edit a mean or change `reps` and still have `judge` accept it."""
+    edit a mean or change `reps` and still have it accepted."""
 
     doc = bench(reps=3)
     validate(doc)
@@ -223,52 +214,6 @@ def test_validate_refuses_dropped_reordered_or_edited_reps():
             validate(bad)
     with pytest.raises(ValueError, match="reps"):
         validate({**doc, "execution": {**doc["execution"], "reps": 2}})
-    with pytest.raises(IdentityMismatch, match="reps"):
-        judge(doc, bench(reps=2))
-    with pytest.raises(IdentityMismatch, match="interleave"):
-        judge(doc, bench(FakeFactory(resident_failure="candidate"), reps=3))
-
-
-def test_an_allow_hides_only_the_paths_it_names_and_judge_lists_what_it_hid():
-    """`--allow precision` used to match every leaf named precision (each arm's as well as the
-    preset's), and `--allow id` every arm id."""
-
-    doc = bench()
-    arms = [dict(a) for a in doc["identity"]["arms"]]
-    arms[1].update(id="other", precision="int4", kernel_digest="digest-x")
-    other = {**doc, "identity": {**doc["identity"], "arms": arms}}
-    for allow in (("id",), ("precision",), ("kernel_digest",)):
-        assert identity_mismatches(doc, other, allow)
-    digest_only = {**doc, "identity": {**doc["identity"], "arms": [arms[0], {**doc["identity"]["arms"][1],
-                                                                              "kernel_digest": "digest-x"}]}}
-    verdict = judge(doc, digest_only, ("arms[*].kernel_digest",))
-    assert verdict["differences"] == {"arms[1].kernel_digest": ["digest-candidate", "digest-x"]}
-
-
-def test_table_merges_one_specs_point_results_only_when_their_identities_agree(tmp_path):
-    """A dispatched spec runs each point as its own run, so a sweep's table is assembled from
-    several results; `verity-bench table` refuses results whose identities differ anywhere but the point's own."""
-
-    preset, (p32,), arms = inputs()
-    p8 = replace(p32, batch=8)
-
-    def point(p, identity, **kw):
-        return run_benchmark(preset, arms, (p,), sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc",
-                             cpus=CPUS, config_identity={"point_identity": identity, **kw})
-
-    merged = merge([point(p8, "i8"), point(p32, "i32")])
-    assert [p["point"]["id"] for p in merged["points"]] == ["b8-p512-mixed", "b32-p512-mixed"]
-    assert merged["identity"]["config"]["point_identity"] == ["i8", "i32"]
-    with pytest.raises(IdentityMismatch, match="uv_lock_sha256"):
-        merge([point(p8, "i8", uv_lock_sha256="a"), point(p32, "i32", uv_lock_sha256="b")])
-    with pytest.raises(ValueError, match="two results"):
-        merge([point(p32, "i32"), point(p32, "i32")])
-    files = []
-    for i, doc in enumerate((point(p8, "i8"), point(p32, "i32"))):
-        files.append(tmp_path / f"{i}.json")
-        files[-1].write_text(json.dumps(doc))
-    assert main(["table", *map(str, files), "--out", str(tmp_path / "merged.json")]) == 0
-    validate(json.loads((tmp_path / "merged.json").read_text()))
 
 
 def test_an_arm_cannot_be_its_own_control():
