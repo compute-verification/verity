@@ -21,11 +21,10 @@ the gates before g (`Bits.base`), and are, in place:
 Every gate of C on bits reads only earlier gates.
 
 **The block.** S is the gates of C inside the block's units, each unit the instance the partition's template query numbers
-(`TemplatePartition.gates`). in(S) is the gates outside S that the units' parameter leaves name, out(S) the gates inside S
-that their return leaves name, each once in increasing index of C (`front`, the door's `Spot.BlockFront.front`), read from
-the descriptor and never by a pass over C. `ports` is the exact boundary by a pass over C: the gates outside S a gate of S
-reads, and the gates of S a gate outside S reads or C returns; the two agree where every parameter leaf is read inside S
-and every return leaf outside S or returned.
+(`TemplatePartition.gates`). in(S) is the gates outside S that the units' parameter leaves name, out(S) the gates of S that C
+returns or that a root node's argument outside S names, each once in increasing index of C (`front`), read from the
+descriptor and never by a pass over C. `ports` is the exact boundary by a pass over C: the gates outside S a gate of S
+reads, and the gates of S a gate outside S reads or C returns; the two agree where every parameter leaf is read inside S.
 
 **The object** (`restrict`): the Program whose root
 - has a parameter for each maximal run of in(S) of one width and one binding, in order, `p<i>` of type `Array<n, Value<w>>`,
@@ -250,22 +249,47 @@ def ports(bits: Bits, words: Sequence[tuple[int, int]]) -> tuple[list[int], list
 
 
 def front(D: DecodedProgram, words: Sequence[tuple[int, int]]) -> tuple[list[int], list[int]]:
-    """in(S) and out(S) from the units' interface, as the door computes them (`Spot.BlockFront.front`), with no pass over C:
-    the gates the units' parameter leaves name outside S and the gates their return leaves name inside S, each once, in
-    increasing index. They are `ports`' where every parameter leaf is read inside S and every return leaf is read outside S
-    or returned."""
+    """in(S) and out(S) from the root's nodes, with no pass over C: in(S) the gates the units' parameter leaves name outside
+    S (the door's `Spot.BlockFront.front`), out(S) the gates of S that C returns or that a root node outside S, or a member
+    outside S of a batch S holds in part, takes as an argument, each once, in increasing index. They are `ports`' where
+    every parameter leaf is read inside S."""
     C = D.circuit
 
     def inside(g: int) -> bool:
         return any(lo <= g < hi for lo, hi in words)
 
+    body, scope = D.root.body, C.root_scope
+    kept = _nodes(D, words)
+    held = {k: (m0, m1) for k, m0, m1 in kept}
     ins: set[int] = set()
-    outs: set[int] = set()
-    for k, m0, m1 in _nodes(D, words):
+    for k, m0, m1 in kept:
         for m in range(m0, m1):
-            call = FunctionCall(C, C.root_scope, k, m)
-            ins.update(g for g in call.args if not inside(g))
-            outs.update(g for g in call.returns if inside(g))
+            ins.update(g for g in FunctionCall(C, scope, k, m).args if not inside(g))
+
+    def held_leaf(r) -> bool:
+        if r[0] != "n" or r[1] not in held:
+            return False
+        node = body.nodes[r[1]]
+        m0, m1 = held[r[1]]
+        return m0 <= r[2] // (node.out.leaves // (node.n if node.form == "batch" else 1)) < m1
+
+    reads = [body.ret]
+    for k, node in enumerate(body.nodes):
+        m0, m1 = held.get(k, (0, 0))
+        if node.form != "batch":
+            if k not in held:
+                reads += [x.refs for x in node.args]
+            continue
+        for m in [m for m in range(node.n) if not m0 <= m < m1]:
+            for x, ax in zip(node.args, node.axes):
+                if ax is None:
+                    reads.append(x.refs)
+                elif ax == 0:
+                    L = x.type.elem.leaves
+                    reads.append(x.refs.slice(m * L, (m + 1) * L))
+                else:
+                    reads.append(x.take(ax, m).refs)
+    outs = {resolve(scope, r) for rs in reads for r in rs if held_leaf(r)}
     return sorted(ins), sorted(outs)
 
 
