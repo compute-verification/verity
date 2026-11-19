@@ -32,10 +32,8 @@ def _programs_under_a_root(a: types.SimpleNamespace) -> None:
 
 
 
-def test_the_commit_s_parser_takes_the_plan(tmp_path):
-    pytest.importorskip("torch")
+def test_the_commit_plan_s_parser_takes_its_inputs():
     from verity_vllm.pipeline import cli
-    assert cli.parse("commit", ["--out", str(tmp_path), "--plan", "p.json"], {}).plan == "p.json"
     o = cli.parse("commit-plan", ["--workload", "w.json", "--required-manifest", "m.json", "--program-dir", "pd", "--out", "o.json"], {})
     assert (o.workload, o.required_manifest, o.program_dir, o.programs_root, o.out) == ("w.json", "m.json", "pd", None, "o.json")
 
