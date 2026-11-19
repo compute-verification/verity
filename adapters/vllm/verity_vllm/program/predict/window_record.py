@@ -79,7 +79,7 @@ def commit(low: Any, cls: Any, slots: Sequence[Any], values: Mapping[str, Any], 
     -> the rows and the window."""
     filled = WRS.Rows(low, slots, values)
     lap("rows")
-    win = IF.Window(low.circuit, run, dict(design), cap, advice=dict(advice), registered=dict(values), forms=WRS.FORMS)
+    win = IF.Window(low.circuit, run, design, cap, advice=advice, registered=values, forms=WRS.FORMS)
     win.supply()
     filled.record(win)
     lap("record")
