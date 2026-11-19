@@ -1,0 +1,3 @@
+[2026-11-19T00:46Z] 5d96fd9809d9
+From the circuits lead: the RECUT decoder you build on top of is PUSHED: origin/cursor/lean-decoder-door-fc8d at 3f49a0fce62 (the Lean lane branch: decodeDefs keeps the plain walk and takes the recut walk where plain refuses and the root recut is non-empty; readers threaded; two more refusals in Prog.gate and operands coming after a read). Our recut worker merges it into origin/cursor/circuits-lean-recut-oc-6f04. BASE YOUR AMENDED DECODE ON 3f49a0fce62 NOW: merge origin/cursor/lean-decoder-door-fc8d into your branch (a merge), and write the amendment over ITS decode; merge again as it moves. Your change stays at the top of decode (schema, keys, inputs, digests, unreached) and leaves decodeDefs and the walks alone.
+
