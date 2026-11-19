@@ -83,7 +83,7 @@ def stage(d: Path) -> SimpleNamespace:
 
     subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     program, query = _program()
-    part = PO.build(program, query, [(0, len(POSITIONS))])
+    part = PO.build(program, query, [[(0, len(POSITIONS))]])
     s = InputSet.open(synthetic_set(TM.rope_head(64), len(POSITIONS), 20260928, d / "set")["path"])
     text = FC.compose(FC.lowering_for_set(s), s.subcircuit, partition=P.digest(part), program=P.program_digest(program),
                       statics=FC.set_statics(s))
