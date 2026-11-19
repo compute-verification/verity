@@ -15,7 +15,6 @@ import faulthandler
 _st = open(OUT / f"stacks-{a.mode}.txt", "w")
 faulthandler.enable(file=_st, all_threads=True)
 faulthandler.dump_traceback_later(300, repeat=True, file=_st)
-sys.setrecursionlimit(100000)
 
 from verity.circuits import laying as LY
 from verity.circuits import partition_object as PO
@@ -42,7 +41,7 @@ def m_of(ins, outs, ands, units):
 
 
 def enough(ins, outs, ands, units):
-    return m_of(ins, outs, ands, units) >= a.floor
+    return units >= LY.zk_min_units(k_log(ins, outs, ands), a.group)
 
 
 def program():
