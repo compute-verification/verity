@@ -33,6 +33,7 @@ python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD
 | Decimal reads | A string is asked whether it is a number with `str.isdecimal`. |
 | vLLM's surface | Every vLLM module and name the library imports is listed, with why. |
 | Ruff, ruff with vLLM's rules, mypy | Each tool's findings, held to a list. |
+| The road off the fold (`test_road_off_fold.py`) | The served road's entry modules load no module of the fold, the match or the replay driver, and its functions import none but `HOLDERS`'. |
 | The ratchet | Every lint's list only shrinks, and every failure prints the exact entry lines. |
 
 - **Recorded outcomes** (`test_silent_excepts.py`, allowlist `allowlists/silent_excepts.json`): in `verity_vllm/check/` and
