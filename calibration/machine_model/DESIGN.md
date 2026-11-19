@@ -22,8 +22,7 @@ each a per-word price floor, and lists what is under each:
 - `loads16`: every load into registers at ≥ 16 MACs a word.
 - `copy16`, π_c ≥ 16: every copy route at ≥ 16 MACs a word. A copy route is MOV, any landed word, the UR fan-out, every
   SHFL mode, and any kind whose output can equal an input word; the claim reads every kind that writes registers, a
-  superset, so no route is missed, and a UR word at the 32 lanes it serves. `solve` lists each route's price a word
-  beside its measured cost.
+  superset, so no route is missed, and a UR word at the 32 lanes it serves.
 
 A UR word is one value, so the lanes it serves past the first are copies. No ε design needs `copy16`: only the LI and
 XOR-in folds' per-row keys did, and neither fold is an ε design ("ε in the tensor–scalar model").
@@ -90,8 +89,6 @@ A new measurement is lines of data and a vector file, not a script:
 3. **The epoch**: append the new vector's name to `epochs` in `data/model.toml`.
 4. **The vector**: copy the vector it builds on to `data/vectors/NAME.toml`, set `name` and `epoch`, add the row to
    `rows` (and any credit to `credits`), and drop `[published]` and `[legacy]`.
-5. `uv run machine-model --device sm_120 solve NAME`: it prints τ, U/F_low and the margin, and checks every price, credit and attack.
-   Record the printed numbers under `[published]` once you publish them; the tests then hold the vector to them.
 
 A new attack family is a new `data/attacks/FAMILY.jsonl` (`since` the epoch it joins); the check prices every attack of
 every vector's epoch. A new root-writing kind or register load also needs its line in `data/floors.csv`, and a new kind
@@ -165,7 +162,7 @@ census lines, vectors, designs and honest kernels. A device directory follows th
 - To price a design on the device, it gains the rest of `data/`'s files:
   - `model.toml`: its epoch, its vector and its CUDA lane classes, and optionally `uniform_forms`, the lane classes with
     a uniform-datapath form: a filler whose mix has another class has no uniform route. Without it every filler may move
-    there. The constants only `solve` reads stay out.
+    there.
   - `vectors/NAME.toml`: its rows.
   - `honest/`: its honest kernel at each L. `[mma] class` names the MMA's census class (sm_120's is `MMA`).
   - `designs.toml` and `designs/`: each design at each L, with the device's honest kernel, operand floor φ_del, clock

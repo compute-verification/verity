@@ -1,3 +1,2 @@
-"""The machine model's price vectors: the LP (`lp`), its data (`model`, read from `data/`), the attack families (`attacks`),
-re-solving a named vector (`resolve`) and the `machine-model` command (`cli`, which dispatches to `commands/`, one module
-a command)."""
+"""The machine model: its data (`model`, read from `data/`) and the `machine-model` command (`cli`, which dispatches to
+`commands/`, one module a command)."""

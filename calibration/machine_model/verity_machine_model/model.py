@@ -43,7 +43,7 @@ class Model:
     tie: float
     x_min: float
     epochs: tuple[str, ...]
-    current: str = ""                   # the vector `solve` re-solves by default
+    current: str = ""                   # the device's current vector
     uniform_forms: tuple[str, ...] | None = None   # the lane classes with a uniform-datapath form; None: every one
 
 
@@ -89,7 +89,7 @@ CLAIMS = {"pi32": "(π₃₂): every root-writing kind at ≥ 32 MACs a word",
           "loads16": "(π₃₂)'s load half: every load into registers at ≥ 16 MACs a word",
           "copy16": "π_c ≥ 16: every copy route (every kind that writes registers, a UR word at the 32 lanes it serves) "
                     "at ≥ 16 MACs a word"}
-COPIES = "copy16"   # the claim whose kinds `solve` lists with their prices: the copy routes
+COPIES = "copy16"   # the claim whose kinds are the copy routes
 
 
 @dataclass(frozen=True)
