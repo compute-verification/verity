@@ -48,16 +48,16 @@ def test_a_device_names_its_key_and_its_registered_figures():
 
 
 def test_stamp_reads_the_devices_clock_into_its_own_log_and_nowhere_else():
-    """The only reading made outside a test is `stamp`'s: in the device's own log, with what the device signs beside it;
-    a log signed under another key is refused, and so is a clock that runs backwards."""
+    """The only reading made outside a test is `stamp`'s: in the device's own log, with what the entry says beside it;
+    another key's log is refused, and so is a clock that runs backwards, by name."""
     now = Counter(40)
     d, log = device(now), C.Log("attester")
     t = C.stamp(d, log, {"coin": 3})
     assert t == C.Reading("attester", 40) and log.entries == [C.Entry({"coin": 3}, t)]
-    with pytest.raises(ValueError, match="only its own log, not the log signed under 'other'"):
+    with pytest.raises(ValueError, match="only its own log, not the log under 'other'"):
         C.stamp(d, C.Log("other"))
     now.ns = 39
-    with pytest.raises(ValueError, match="never run backwards"):
+    with pytest.raises(C.ClockBackwards, match="read 39 ns after it read 40 ns"):
         C.stamp(d, log)
     assert len(log.entries) == 1
 
@@ -101,11 +101,12 @@ def test_ticks_run_on_their_time_and_a_wait_that_ends_early_waits_again():
     d, log = device(now), C.Log("attester")
     origin = C.stamp(d, log)
     out = _run(C.ticks(d, origin, 100, sleep=short, log=log), 4)
-    assert [(t.k, t.late_ns, t.late) for t in out] == [(k, 0, None) for k in range(4)]
-    assert now.ns == 1_300 and len(log.entries) == 1
+    assert [(t.k, t.late_ns, t.late) for t in out] == [(k, 0, False) for k in range(4)]
+    assert now.ns == 1_300 and log.entries[1:] == [C.Entry({"tick": k}, t.reading) for k, t in enumerate(out)]
+    assert [t.reading.ns for t in out] == [1_000, 1_100, 1_200, 1_300]
 
 
-def test_a_tick_past_the_devices_lateness_is_an_entry_of_its_log_and_one_within_it_is_not():
+def test_every_tick_is_an_entry_of_its_log_and_its_reading_says_whether_it_is_past_the_devices_lateness():
     now = Counter(0)
     late = {2: 7, 3: 3}
 
@@ -118,9 +119,8 @@ def test_a_tick_past_the_devices_lateness_is_an_entry_of_its_log_and_one_within_
     d, log = device(now, lateness_ns=5), C.Log("attester")
     origin = C.stamp(d, log)
     out = _run(C.ticks(d, origin, 100, sleep=sleep, log=log), 4)
-    assert [t.late_ns for t in out] == [0, 0, 7, 3]
-    assert out[2].late == C.Reading("attester", 207) and out[3].late is None
-    assert log.entries[1:] == [C.Entry({"late_tick": 2}, C.Reading("attester", 207))]
+    assert [(t.late_ns, t.late) for t in out] == [(0, False), (0, False), (7, True), (3, False)]
+    assert log.entries[1:] == [C.Entry({"tick": k}, C.Reading("attester", ns)) for k, ns in enumerate((0, 100, 207, 303))]
 
 
 def test_ticks_start_only_from_the_devices_own_reading():

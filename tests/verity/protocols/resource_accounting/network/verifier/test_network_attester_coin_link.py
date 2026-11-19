@@ -5,7 +5,8 @@ counted by name, and the client's own reader (`remote._Wire`) reads the re-cut s
 forged, replayed, out-of-order, unrequested or non-canonical opening, and a frame of another type, are each counted and
 never exempt; the challenger's and the prover's timing within a bucket is re-clocked away, so the other side sees the same
 cells in the same buckets; and a prover that stops reading or hangs up, a queue past its bound, a frame `remote` refuses
-whole, cells queued when their connection is cut and a late tick each fail the execution phase closed."""
+whole, cells queued when their connection is cut, a late tick and a clock that runs backwards each fail the execution
+phase closed."""
 
 from __future__ import annotations
 
@@ -38,9 +39,19 @@ EOF = None
 KEY = "network-attester"
 
 
-def device_on(clock: VirtualClock) -> Device:
-    """The link's device on `clock` (seconds), read in whole nanoseconds, late past the runner's 25 ms."""
-    return Device(KEY, lambda: round(clock() * NS), 1, 25_000_000)
+def device_on(clock: VirtualClock, back: tuple[float, float] | None = None) -> Device:
+    """The link's device on `clock` (seconds), read in whole nanoseconds, late past the runner's 25 ms. With `back`
+    `(at, by)`, every read after the first that reaches `at` is `by` seconds behind `clock`: the clock runs backwards."""
+    seen = [False]
+
+    def read() -> int:
+        now = clock()
+        if back is not None and now >= back[0]:
+            if seen[0]:
+                now -= back[1]
+            seen[0] = True
+        return round(now * NS)
+    return Device(KEY, read, 1, 25_000_000)
 
 
 def sleep_on(clock: VirtualClock):
@@ -248,16 +259,18 @@ class ChallengerConn:
 
 
 def session(provers: list[dict], *, params: CoinLinkParams = PARAMS, seed: str = "coins", answers=None, delay=None,
-            refuse: bool = False, late: dict[int, float] | None = None, stop_at: int | None = None):
+            refuse: bool = False, late: dict[int, float] | None = None, stop_at: int | None = None,
+            back: tuple[float, float] | None = None):
     """A link over `seed`'s coins, its challenger as `Challenger` makes it, one prover connection a dict of `Prover`'s
     keywords (each opened once the one before it has), run until every connection has ended (or tick `stop_at`), then
-    stopped and run to its window's end; `late[t]` puts tick t that many seconds late. (link, provers, challenger)."""
+    stopped and run to its window's end; `late[t]` puts tick t that many seconds late, and `back` runs the device's clock
+    backwards (`device_on`). (link, provers, challenger)."""
     coins = live(seed)
 
     async def main():
         clock = VirtualClock()
         ch = Challenger(coins, clock, answers=answers, delay=delay, refuse=refuse)
-        link = CoinLink(params, coins.commitment, ch.connect, origin=Reading(KEY, 0), device=device_on(clock),
+        link = CoinLink(params, coins.commitment, ch.connect, origin=Reading(KEY, 0), device=device_on(clock, back),
                         sleep=sleep_on(clock))
         ch.link = link
         running = asyncio.create_task(link.run())
@@ -472,7 +485,7 @@ def test_the_links_ticks_are_its_devices_and_a_tick_whose_wait_ends_early_waits_
 
     link, before, after, clock = asyncio.run(go())
     assert before == list(range(PARAMS.window)) and after == list(range(1, PARAMS.window + 1))
-    assert (link.max_late, link.late, len(clock.waits)) == (0.0, 0, 2 * PARAMS.window)
+    assert (link.max_late, link.late, len(clock.waits)) == (0.0, [], 2 * PARAMS.window)
     assert statuses(link) == [(None, None)] and link.summary()["complete"]
 
 
@@ -509,17 +522,31 @@ def test_a_frame_remote_refuses_whole_or_a_flood_fails_closed():
 
 
 def test_a_late_tick_faults_the_window_and_an_unreachable_challenger_sends_nothing():
-    """A tick later than its device's lateness is `monitor-unavailable` on both grids and an entry of the device's log,
-    with its reading. A connection whose challenger doesn't answer the connect is closed at the next tick with nothing
-    sent either way."""
+    """Every tick is an entry of the device's log with its reading, and one later than its device's lateness is
+    `monitor-unavailable` on both grids, its reading in the summary. A connection whose challenger doesn't answer the
+    connect is closed at the next tick with nothing sent either way."""
     link, _, _ = session([{"frames": honest_frames(ASKS)}], late={3: 0.05})
-    assert statuses(link) == [(Reason.MONITOR_UNAVAILABLE.value,) * 2] and link.late == 1
-    assert [(e.data, e.reading) for e in link.clock_log.entries] == [({"late_tick": 3}, Reading(KEY, 350_000_000))]
-    assert link.summary()["late"] == {"ticks": 1, "max_s": 0.05, "slack_s": 0.025}
+    assert statuses(link) == [(Reason.MONITOR_UNAVAILABLE.value,) * 2] and link.late == [Reading(KEY, 350_000_000)]
+    assert [(e.data, e.reading) for e in link.clock_log.entries[:4]] == [
+        ({"tick": k}, Reading(KEY, ns)) for k, ns in enumerate((0, 100_000_000, 200_000_000, 350_000_000))]
+    assert len(link.clock_log.entries) == PARAMS.window
+    assert link.summary()["late"] == {"ticks": 1, "readings_ns": [350_000_000], "max_s": 0.05, "slack_s": 0.025}
+    assert link.summary()["backwards"] is None
 
     link, (prover,), ch = session([{"frames": honest_frames(ASKS)}], refuse=True)
     assert prover.writes == [] and prover.closed_at is not None and ch.conns == []
     assert link.log[0]["unreachable"].startswith("ConnectionRefusedError") and link.summary()["complete"]
+
+
+def test_a_clock_that_runs_backwards_faults_its_window_by_name_and_ends_the_link():
+    """A device clock that reads below its last reading at tick 5 is refused at that reading (`ClockBackwards`), not
+    raised out of the link: both grids are `monitor-unavailable`, the execution phase runs to its end untimed, the link
+    ends, and the summary names the refusal. The log holds the ticks before it."""
+    link, _, _ = session([{"frames": honest_frames(ASKS)}], back=(0.5, 0.2))
+    assert statuses(link) == [(Reason.MONITOR_UNAVAILABLE.value,) * 2] and link.ticks == PARAMS.window
+    s = link.summary()
+    assert "read 300000000 ns after it read 400000000 ns" in s["backwards"] and not s["complete"]
+    assert [e.data for e in link.clock_log.entries] == [{"tick": k} for k in range(5)]
 
 
 def test_a_connection_reset_ends_its_side_and_its_entry_names_it():

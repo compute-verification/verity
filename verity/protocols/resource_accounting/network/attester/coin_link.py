@@ -28,9 +28,10 @@ both ways, one connection at a time, in the challenger's order:
   counted.
 - **Fail closed.** A frame `remote` would refuse whole (a body, a head past `remote.MAX_HEAD`, a stream that ends inside
   one), a queue past `queue_cells`, a prover that leaves more than `backlog` bytes untaken, cells still queued when their
-  connection ends, and a tick later than the device's lateness (an entry of its log, `clock_log`) each fault a grid
-  (`grid.Reason`), which cuts the connection at that tick: nothing leaves the link unattested, and the fault is the
-  execution phase's status.
+  connection ends, a tick later than the device's lateness, and a clock that reads below its last reading
+  (`verity.clock.ClockBackwards`) each fault a grid (`grid.Reason`), which cuts the connection at that tick: nothing
+  leaves the link unattested, and the fault is the execution phase's status. Each tick is an entry of the device's log,
+  `clock_log`, with its reading; a backwards clock ends the link, its execution phase run to its end untimed.
 
 `CoinLink.summary` is what the link publishes for its window: its parameters, each execution phase's status, the coins'
 frames and bytes, every counted frame's name and bytes, and the charge. Each bucket's occupancy and every frame's content
@@ -53,7 +54,7 @@ from verity.protocols.resource_accounting.network.verifier.grid import Certifier
 from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
 from verity.protocols.proofs.spot.verifier.challenger.remote import HEADER, MAX_HEAD
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
-from verity.clock import NS, Device, Log, Reading, ticks
+from verity.clock import NS, ClockBackwards, Device, Log, Reading, ticks
 
 PARAMETERS_TAG = "verity-network-coin-link/parameters/v1"
 #: the link's two grids: the challenger's frames to the prover (ingress), the prover's to the challenger (egress)
@@ -255,7 +256,8 @@ class CoinLink:
         self.frame_bytes: Counter[str] = Counter()
         self.request_frames = self.request_bytes = 0
         self.cells = {COINS: 0, REQUESTS: 0}
-        self.late, self.max_late = 0, 0.0
+        self.late: list[Reading] = []
+        self.max_late, self.backwards = 0.0, None
         self.ticks = self.connections = 0
         self.current: _Connection | None = None
         self.stopping = self.closed = False
@@ -298,12 +300,20 @@ class CoinLink:
         t = 0
         try:
             while not ((self.stopping or (self.buckets is not None and t >= self.buckets)) and t % T == 0):
-                tick = await anext(source)
-                self.max_late = max(self.max_late, tick.late_ns / NS)
-                if tick.late is not None:
-                    self.late += 1
+                tick = None
+                try:
+                    if self.backwards is None:
+                        tick = await anext(source)
+                except ClockBackwards as e:
+                    self.backwards = str(e)
+                    self.stopping = True
+                if tick is None or tick.late:
                     for grid in (self.coins, self.requests):
                         grid.fault(Reason.MONITOR_UNAVAILABLE)
+                if tick is not None:
+                    self.max_late = max(self.max_late, tick.late_ns / NS)
+                    if tick.late:
+                        self.late.append(tick.reading)
                 self._tick(t)
                 t = self.ticks = t + 1
                 self._changed.set()
@@ -421,8 +431,9 @@ class CoinLink:
         """What the link publishes for its window: its parameters and their digest, the buckets it ticked, each
         execution phase's statuses, whether every one is complete with no cell dropped, the coins' frames and bytes,
         every counted challenger frame's count and bytes by name, the prover's frames and bytes, the cells each grid
-        released, each connection's entry, the late ticks, and the charge in bits: each grid's timing, T·log2(r + 1) an
-        execution phase, and its counted content, 8 bits a counted byte (the coins' content is 0)."""
+        released, each connection's entry, the late ticks with their readings, the clock's refusal if it ran backwards,
+        and the charge in bits: each grid's timing, T·log2(r + 1) an execution phase, and its counted content, 8 bits a
+        counted byte (the coins' content is 0)."""
         p = self.params
         counted = {name: {"frames": self.frames[name], "bytes": self.frame_bytes[name]}
                    for name in COUNTED if self.frames[name]}
@@ -432,7 +443,9 @@ class CoinLink:
                 "complete": complete, "coins": {"frames": self.frames[COIN], "bytes": self.frame_bytes[COIN]},
                 "counted": counted, "requests": {"frames": self.request_frames, "bytes": self.request_bytes},
                 "cells": dict(self.cells), "connections": self.log,
-                "late": {"ticks": self.late, "max_s": round(self.max_late, 6), "slack_s": self.device.lateness_ns / NS},
+                "late": {"ticks": len(self.late), "readings_ns": [r.ns for r in self.late],
+                         "max_s": round(self.max_late, 6), "slack_s": self.device.lateness_ns / NS},
+                "backwards": self.backwards,
                 "charge_bits": {COINS: {"timing": self.ticks * math.log2(p.coin_cells + 1),
                                         "content": 8 * sum(v["bytes"] for v in counted.values())},
                                 REQUESTS: {"timing": self.ticks * math.log2(p.request_cells + 1),

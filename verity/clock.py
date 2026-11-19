@@ -2,11 +2,12 @@
 
 It mirrors Core's clock in Lean (`Definitions/Core/Challenger.lean`, `Definitions/Assumptions/Clock.lean`):
 
-- A **reading** (`Reading`) is the count of one auditor's device's raw monotonic clock in nanoseconds, in an entry that
-  device signs. Its `key` is the key the device is registered under (`Site.Loc.key`), and two devices' readings are
-  never compared: `elapsed` refuses them by name. A value in no entry of its own device's log is not a reading, and
-  outside tests `stamp` is the only way to make one: it reads the device's clock as it appends the entry to the log the
-  device signs, and refuses a log signed under another key.
+- A **reading** (`Reading`) is the count of one auditor's device's raw monotonic clock in nanoseconds, in an entry of
+  the log that device keeps until its chain's close covers it. Its `key` is the key the device is registered under
+  (`Site.Loc.key`), and two devices' readings are never compared: `elapsed` refuses them by name. A value in no entry of
+  its own device's log is not a reading, and outside tests `stamp` is the only way to make one: it reads the device's
+  clock as it appends the entry to the device's log, refuses another key's log, and refuses a reading below the log's
+  last by name (`ClockBackwards`).
 - A **tick** (`tick`) is a view of a reading: the reading counted in a registered period.
 - A prover's entry has no time of its own; it has a **bracket** (`between`): by index in the device's log, after one of
   the device's readings and before another.
@@ -14,8 +15,8 @@ It mirrors Core's clock in Lean (`Definitions/Core/Challenger.lean`, `Definition
   for a deadline and a salt's age, `NotFast` for a bucket's period), which nothing here checks.
 
 The **tick source** (`ticks`) waits for tick `k` on a device's clock from an origin reading: a wait that ends early
-waits again, so no tick runs before its time, and a tick later than the device's registered lateness is itself an entry
-of the device's log, with its reading.
+waits again, so no tick runs before its time. Each tick is an entry of the device's log, and its one reading is the
+bucket boundary's: how late the tick ran is that reading less its time, late past the device's registered lateness.
 
 A `Device` is the key, the clock and the two figures registered with the key: the clock's resolution and how late the
 device may act on it. Its clock is given, so a test or a replay gives its own; `raw_ns` is the host's raw monotonic
@@ -35,6 +36,11 @@ NS = 10**9
 
 class ClockRefused(Exception):
     """The host gives no raw monotonic clock, so no device reads one here: a device runs on no other clock."""
+
+
+class ClockBackwards(ValueError):
+    """A device's clock read below the last reading in its log: the reading is refused, and its consumer ends what it was
+    timing with the fault by this name."""
 
 
 def raw_ns() -> int:
@@ -99,8 +105,8 @@ class Device:
 
 @dataclass(frozen=True, slots=True)
 class Entry:
-    """One entry of a device's log: what the device signs (`data`), with the reading it took as it wrote the entry, or
-    with none for an entry that carries no reading (a value it recorded, a coin it released)."""
+    """One entry of a device's log: what the entry says (`data`), with the reading the device took as it wrote the entry,
+    or with none for an entry that carries no reading (a value it recorded, a coin it released)."""
 
     data: Any
     reading: Reading | None = None
@@ -108,7 +114,7 @@ class Entry:
 
 @dataclass
 class Log:
-    """A device's own log, oldest first, which the device signs under `key`."""
+    """A device's own log, oldest first, under `key`, which the device keeps until its chain's close covers it."""
 
     key: str
     entries: list[Entry] = field(default_factory=list)
@@ -120,15 +126,15 @@ class Log:
 
 
 def stamp(device: Device, log: Log, data: Any = None) -> Reading:
-    """Read `device`'s clock and append the reading, with `data`, to `log`, the log the device signs; the
-    reading. Refuses a log signed under another key, and a reading below the last reading in the log."""
+    """Read `device`'s clock and append the reading, with `data`, to `log`, the device's own; the reading. Refuses a
+    log under another key, and a reading below the last reading in the log (`ClockBackwards`)."""
     if log.key != device.key:
-        raise ValueError(f"device {device.key!r} stamps only its own log, not the log signed under {log.key!r}")
+        raise ValueError(f"device {device.key!r} stamps only its own log, not the log under {log.key!r}")
     t = Reading(device.key, device.clock())
     last = next((e.reading for e in reversed(log.entries) if e.reading is not None), None)
     if last is not None and t.ns < last.ns:
-        raise ValueError(f"device {device.key!r}'s clock read {t.ns} ns after it read {last.ns} ns: a device's "
-                         "readings never run backwards")
+        raise ClockBackwards(f"device {device.key!r}'s clock read {t.ns} ns after it read {last.ns} ns: a device's "
+                             "readings never run backwards")
     log.entries.append(Entry(data, t))
     return t
 
@@ -144,19 +150,20 @@ def between(log: Log, i: int, a: int, b: int) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class Tick:
-    """Tick `k`: how late it ran on the device's clock, in nanoseconds, and the reading of its entry in the device's log
-    when that is past the device's lateness (None when it ran in time)."""
+    """Tick `k`: the reading of its entry in the device's log, how much later than its time that reading is, in
+    nanoseconds, and whether that is past the device's lateness."""
 
     k: int
+    reading: Reading
     late_ns: int
-    late: Reading | None = None
+    late: bool
 
 
 async def ticks(device: Device, origin: Reading, period_ns: int, *, sleep: Callable[[float], Awaitable[None]],
                 log: Log) -> AsyncIterator[Tick]:
     """Tick 0, 1, 2, ... of `device`'s clock from `origin`, `period_ns` apart, each once the clock reads its time: a
-    wait (`sleep`, in seconds) that ends early waits again. A tick later than the device's lateness is stamped in
-    `log`."""
+    wait (`sleep`, in seconds) that ends early waits again. Each tick is stamped in `log`, and its lateness is its
+    reading's."""
     if origin.key != device.key:
         raise ValueError(f"device {device.key!r} ticks from its own reading, not one of {origin.key!r}")
     tick(period_ns, origin)
@@ -164,11 +171,12 @@ async def ticks(device: Device, origin: Reading, period_ns: int, *, sleep: Calla
     while True:
         deadline = origin.ns + k * period_ns
         await sleep((deadline - device.clock()) / NS)
-        while (late := device.clock() - deadline) < 0:
-            await sleep(-late / NS)
-        yield Tick(k, late, stamp(device, log, {"late_tick": k}) if late > device.lateness_ns else None)
+        while (wait := deadline - device.clock()) > 0:
+            await sleep(wait / NS)
+        t = stamp(device, log, {"tick": k})
+        yield Tick(k, t, t.ns - deadline, t.ns - deadline > device.lateness_ns)
         k += 1
 
 
-__all__ = ["NS", "ClockRefused", "Device", "Entry", "Log", "Reading", "Tick", "between", "elapsed", "raw_ns",
+__all__ = ["NS", "ClockBackwards", "ClockRefused", "Device", "Entry", "Log", "Reading", "Tick", "between", "elapsed", "raw_ns",
            "raw_resolution_ns", "stamp", "tick", "ticks"]
