@@ -139,6 +139,10 @@ LENGTHS = [("const.uint/v1", {"value": 7, "bits": 32}, 32), ("const.uint/v1", {"
            ("const.uint/v1", {"value": 1, "bits": 8}, 8), ("const.uint/v1", {"value": 3, "bits": 64}, 64),
            ("const.uint/v1", {"value": 5, "bits": 12}, None), ("const.uint/v1", {"value": 0, "bits": 72}, None),
            ("const.uint/v1", {"value": 0, "bits": 0}, None),
+           ("pouw.pearlplus.eb/v1", {"col": 0, "tn": 3}, 768), ("pouw.pearlplus.eb/v1", {"col": 1, "tn": 0}, None),
+           ("pouw.pearlplus.fa/v1", {"k": 64}, 16384), ("pouw.pearlplus.fa/v1", {"k": 2}, None),
+           ("pouw.pearlplus.fb/v1", {"k": 32}, 8192), ("pouw.pearlplus.fb/v1", {"k": 0}, None),
+           ("pouw.pearlplus.gram/v1", {"k": 96, "dev": "a"}, 32768), ("pouw.pearlplus.gram/v1", {"k": 9, "dev": "a"}, None),
            ("pouw.pearlplus.salt/v1", {}, 256),
            ("registered.root/v1", {"value": "w"}, 512)]
 
