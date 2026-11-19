@@ -1,9 +1,15 @@
 module
 
 public import Flock.Canon
+public import Poub.Line
 public import Poub.P2
 public import Poub.Pooled
 public import Poub.Session
+meta import Flock.Canon
+meta import Poub.Line
+meta import Poub.P2
+meta import Poub.Pooled
+meta import Poub.Session
 
 /-!
 # A session over a P2 store, of record: `p2_parties.py`
@@ -19,7 +25,7 @@ it), read from the bytes it holds and the prover sends, and decided here:
   (`Verifier`'s `p2_hold`), so the prover chooses none of them;
 * each root's line (`receive`) and each window's openings line (`verify`), every opening checked on PoUS's vk root
   (`checkOpenings`, `P2.checkOpeningWith`);
-* the answer (`answer`, `p2_parties.answer`'s): the credited reads under the pooled bound at δ = 2^-40
+* the answer (`answer`, the tests' `p2_books.answer`'s): the credited reads under the pooled bound at δ = 2^-40
   (`Pooled.pooled`).
 
 The bookkeeping (seeds, plans, steps, deadlines, order, samples) is `Session`'s over the store's units: the registration
@@ -94,11 +100,61 @@ def Held.json (h : Held) : Json :=
     ("plan", .arr (h.plan.runs.map fun (f, c) => .arr #[toJson f, toJson c])), ("plan_units", toJson h.plan.length),
     ("units", toJson h.reg.units)]
 
+/-- The members of every object in `j`, counted. -/
+partial def members : Json → Nat
+  | .obj kvs => kvs.toArray.foldl (fun n (_, v) => n + 1 + members v) 0
+  | .arr xs => xs.foldl (fun n x => n + members x) 0
+  | _ => 0
+
+/-- What a JSON text `b` writes outside its strings: its keys (each string followed by `:`), and whether one of its
+numbers has a fraction or an exponent. -/
+def scan (b : ByteArray) : Nat × Bool := Id.run do
+  let mut keys := 0
+  let mut frac := false
+  let mut inStr := false
+  let mut esc := false
+  let mut afterStr := false
+  let mut inNum := false
+  for c in b.data do
+    if inStr then
+      if esc then esc := false
+      else if c == 92 then esc := true
+      else if c == 34 then inStr := false; afterStr := true
+    else if afterStr && (c == 32 || c == 9 || c == 10 || c == 13) then
+      pure ()
+    else
+      if afterStr && c == 58 then keys := keys + 1
+      afterStr := false
+      if c == 34 then inStr := true; inNum := false
+      else if (48 ≤ c && c ≤ 57) || c == 45 then inNum := true
+      else if inNum && (c == 46 || c == 101 || c == 69 || c == 43) then frac := true
+      else inNum := false
+  return (keys, frac)
+
+/-- Whether a string of `j`, a key or a value, holds U+FFFD: what Lean's reader makes of a lone surrogate escape, which
+Python's reader keeps as the surrogate. -/
+partial def replaced : Json → Bool
+  | .str s => s.contains '\ufffd'
+  | .obj kvs => kvs.toArray.any fun (k, v) => k.contains '\ufffd' || replaced v
+  | .arr xs => xs.any replaced
+  | _ => false
+
+/-- A line's JSON as the prover alone reads it, so no reader could read it otherwise: `jsonOf`'s, refused when an object
+in it names a key twice (Lean's reader keeps the last, another reader the first), a number in it has a fraction or an
+exponent (`1.0` or `1e2` for an integer, which Lean's reader takes as one where Python's reads a float), a string in it
+holds U+FFFD (`replaced`), or it isn't JSON (`NaN`, which Python's reader takes). `p2_parties.line_json` is its Python,
+held to it by `poub-difftest` (`p2_line_json`). -/
+def lineJsonOf (b : ByteArray) : Option Json := do
+  let j ← jsonOf b
+  let (keys, frac) := scan b
+  if frac || keys != members j || replaced j then none
+  pure j
+
 /-- `p2_parties.message(line, key)`: the value of a line's one key `key`; `none` for a line its sender didn't end (a
-newline, its last byte), one not UTF-8 JSON, or not an object of that one key. -/
+newline, its last byte), one not UTF-8 JSON as `lineJsonOf` reads it, or not an object of that one key. -/
 def messageOf (line : ByteArray) (key : String) : Option Json := do
   if line.size == 0 || line.get! (line.size - 1) != 10 then none
-  let j ← jsonOf (line.extract 0 (line.size - 1))
+  let j ← lineJsonOf (line.extract 0 (line.size - 1))
   let .obj kvs := j | none
   if kvs.toArray.size != 1 then none
   (j.getObjVal? key).toOption
@@ -307,7 +363,7 @@ def credit (sm : Session.Summary) : Credit :=
   { receipts := us, wrong, bound, draws := ws.map (·.2), qBytes := (us - wrong) * P2.UNIT_BYTES,
     spanNs := ((sm.windows.back?.map (·.deadlineNs)).getD 0) - ((sm.windows[0]?.map (·.releasedNs)).getD 0) }
 
-/-- `p2_parties.answer` less its `reason`: `accept` with the credited reads (`credit`), `reject` with the failure, its
+/-- The tests' `p2_books.answer` less its `reason`: `accept` with the credited reads (`credit`), `reject` with the failure, its
 window and the sample it failed at, or `undecided`; `units` are the store's and `plan_units` those each pass reads. -/
 def answer (held : Held) (s : Session.State) : Json :=
   let windows := s.windows.map fun w => Json.mkObj [("passes", toJson w.roots.size),
@@ -330,5 +386,37 @@ def answer (held : Held) (s : Session.State) : Json :=
       ("delta", ratJ DELTA), ("bound", c.bound), ("draws", toJson c.draws), ("q_bytes", toJson c.qBytes),
       ("span_ns", toJson c.spanNs),
       ("credited_bytes_per_s", if c.spanNs > 0 then toJson (c.qBytes * 10 ^ 9 / c.spanNs) else .null)])
+
+/-- Why an accepted session's record `sm` credits nothing at its `samples` `s`: a window that didn't draw exactly
+`min(s, U_t)` of its receipts, `Line.ofSummary`'s requirement, which the pooled bound `credit` reads rests on; none
+when each did. -/
+def drawsRefusal (sm : Session.Summary) (samples : Nat) : Option String :=
+  match Line.ofSummary sm samples (Array.replicate sm.windows.size default) with
+  | .error why => some why
+  | .ok _ => none
+
+private def window (lengths : Array Nat) (drawn : Nat) : Session.WindowSummary :=
+  { lengths, steps := #[], post := #[], heads := #[], stale := #[], arrivedNs := #[], releasedNs := 0,
+    deadlineNs := 0, openedNs := 0, drawn }
+
+private def summaryOf (ws : Array Session.WindowSummary) : Session.Summary :=
+  { windows := ws, blocks := 8, appended := 0, released := 0, lifetime := 1, pace := none, appends := none }
+
+#guard drawsRefusal (summaryOf #[window #[8, 8] 4, window #[2] 2]) 4 == none
+#guard drawsRefusal (summaryOf #[window #[8, 8] 4, window #[2] 1]) 4 ==
+  some "window 1 drew 1 of its 2 receipts, not min(4, 2)"
+#guard drawsRefusal (summaryOf #[window #[8, 8] 5]) 4 == some "window 0 drew 5 of its 16 receipts, not min(4, 16)"
+
+#guard (messageOf "{\"root\": \"ab\"}\n".toUTF8 "root") == some (.str "ab")
+#guard (messageOf "{\"root\": \"a:b\\\"c\"}\n".toUTF8 "root") == some (.str "a:b\"c")
+#guard (messageOf "{\"request\": {\"passes\": 4, \"t\": true, \"u\": false, \"v\": -1}}\n".toUTF8 "request").isSome
+#guard (messageOf "{\"root\": \"ab\", \"root\": \"cd\"}\n".toUTF8 "root").isNone
+#guard (messageOf "{\"openings\": [{\"pass\": 1, \"pass\": 2}]}\n".toUTF8 "openings").isNone
+#guard (messageOf "{\"root\": NaN}\n".toUTF8 "root").isNone
+#guard (messageOf "{\"request\": {\"passes\": 1.0}}\n".toUTF8 "request").isNone
+#guard (messageOf "{\"request\": {\"passes\": 1e2}}\n".toUTF8 "request").isNone
+#guard (messageOf "{\"root\": \"\\ud800\"}\n".toUTF8 "root").isNone
+#guard (messageOf "{\"root\": \"\\ufffd\"}\n".toUTF8 "root").isNone
+#guard (messageOf "{\"root\": \"\\ud83d\\ude00\"}\n".toUTF8 "root") == some (.str (String.singleton (Char.ofNat 0x1F600)))
 
 end Poub.P2Session
