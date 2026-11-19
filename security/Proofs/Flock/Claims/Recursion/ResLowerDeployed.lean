@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.DeployReads
 public import Proofs.Flock.Claims.Recursion.CopySiteDeployed
 public import Proofs.Flock.Claims.Recursion.DeployedR
 public import Proofs.Flock.Claims.Recursion.NonVacuous
@@ -1013,59 +1014,6 @@ theorem vBase_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x
 
 /-! ## The `out` slot -/
 
-/-- **Every output word is returned**: in an untyped circuit whose unit returns the outputs, `HmRow.check`'s `seen`
-loop marks each output word its copies' leaf maps return (`check_returned`'s invariant), and the check refuses a word
-left unmarked ("an output leaf no unit returns"). -/
-theorem check_complete {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = none) (ho : c.outNet = c.unitNet)
-    (h : HmRow.check c tags ls = .ok ()) {o : ℕ} (hoW : o < c.outWords) :
-    o ∈ FlockSoundness.Discharge.HiddenExec.returned c (List.range c.upv) := by
-  unfold HmRow.check at h
-  obtain ⟨spans, -, h⟩ := FlockSoundness.except_bind_ok h
-  obtain ⟨u, -, h⟩ := FlockSoundness.except_bind_ok h
-  obtain ⟨-, h⟩ := FlockSoundness.Discharge.Layout.ite_throw_cond h
-  obtain ⟨-, h⟩ := FlockSoundness.Discharge.Layout.ite_throw_cond h
-  obtain ⟨-, h⟩ := FlockSoundness.Discharge.Layout.ite_throw_cond h
-  simp only [ht] at h
-  obtain ⟨-, h⟩ := FlockSoundness.Discharge.Layout.ite_throw_cond h
-  obtain ⟨-, h⟩ := FlockSoundness.Discharge.Layout.ite_throw_cond h
-  replace h := FlockSoundness.ite_join h fun ha => (FlockSoundness.Discharge.Layout.ite_throw_cond ha).2
-  obtain ⟨u1, -, h⟩ := FlockSoundness.except_bind_ok h
-  obtain ⟨u2, -, h⟩ := FlockSoundness.except_bind_ok h
-  obtain ⟨wired, -, h⟩ := FlockSoundness.except_bind_ok h
-  obtain ⟨wired2, -, h⟩ := FlockSoundness.except_bind_ok h
-  obtain ⟨u3, -, h⟩ := FlockSoundness.except_bind_ok h
-  obtain ⟨-, h⟩ := FlockSoundness.Discharge.Layout.ite_throw_cond h
-  obtain ⟨seen, hseen, h⟩ := FlockSoundness.except_bind_ok h
-  obtain ⟨hany, -⟩ := FlockSoundness.Discharge.Layout.ite_throw_cond h
-  have hI := FlockSoundness.Discharge.HiddenExec.forIn_range_inv
-    (fun pre s => FlockSoundness.Discharge.HiddenExec.SeenInv c
-      (FlockSoundness.Discharge.HiddenExec.returned c pre) s)
-    (fun pre a s t hs hst => by
-      obtain ⟨-, hst⟩ := FlockSoundness.Discharge.Layout.ite_throw_cond hst
-      obtain ⟨s', hin, hst⟩ := FlockSoundness.except_bind_ok hst
-      cases hst
-      refine ⟨_, rfl, ?_⟩
-      have e0 : (default : Array ℕ) = #[] := rfl
-      rw [FlockSoundness.Discharge.Hidden.getElem!_eq_getD', e0, ← Array.forIn_toList] at hin
-      have := FlockSoundness.Discharge.HiddenExec.forIn_list_inv
-        (fun pre' s => FlockSoundness.Discharge.HiddenExec.SeenInv c
-          (FlockSoundness.Discharge.HiddenExec.returned c pre ++ pre') s) (fun pre' o s t hs hst => by
-          obtain ⟨hc, hst⟩ := FlockSoundness.Discharge.Layout.ite_throw_cond hst
-          cases hst
-          refine ⟨_, rfl, ?_⟩
-          rw [← List.append_assoc]
-          exact FlockSoundness.Discharge.HiddenExec.seenInv_step hs hc) _ [] s s' (by simpa using hs) hin
-      simpa [FlockSoundness.Discharge.HiddenExec.returned, List.flatMap_append] using this)
-    (by
-      refine ⟨Array.size_replicate, fun o h1 => ?_, List.nodup_nil, fun o h => by cases h⟩
-      rw [FlockSoundness.Discharge.HiddenExec.bool_get, Array.getElem?_replicate, ho, bne_self_eq_false] at h1
-      split at h1 <;> cases h1) hseen
-  have hlt : o < seen.size := by rw [hI.1]; exact hoW
-  refine hI.2.1 o ?_
-  by_contra hf
-  rw [getElem!_pos seen o hlt] at hf
-  exact hany (Array.any_eq_true.2 ⟨o, hlt, by simpa using hf⟩)
-
 /-- **An output word's column is in the block**: output word `o` is returned by some copy `u'`'s output `j`
 (`check_complete`), at the unit slot `g · upv + u'`, column `16 j` of the returned-output group (`outCol_leaf`), which
 lies in the slot wherever the group's bits do (`hin`). -/
@@ -1264,14 +1212,6 @@ theorem outRows_setupOne {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {ta
   simp only [↓reduceIte] at hd'
   have s := FlockSoundness.Discharge.Hidden.setupHidden_spec' hd'
   exact (FlockSoundness.Discharge.Hidden.committed_of_commit s.parse).outRows ht fun p hp => (hv1 p hp).1
-
-/-- `FlockDeploy.Raw.ins` reads its tags from `--statement`'s name, and C's are them. -/
-theorem raw_ins_tags {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) :
-    Tags.byName? w.statement = some s.stmtTags ∧ s.read.I.tags = s.stmtTags := by
-  unfold FlockDeploy.Raw.ins at h
-  simp only [bind, Except.bind, pure, Except.pure] at h
-  repeat' split at h
-  all_goals first | (cases h; done) | (cases h; exact ⟨by assumption, rfl⟩)
 
 /-- A recursive statement's tags are a known statement's, and C's are them. -/
 theorem insO_tags {x : Msg} {i : RecIns} (h : insO x = some i) :

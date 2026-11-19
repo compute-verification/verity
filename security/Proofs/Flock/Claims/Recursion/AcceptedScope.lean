@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.DeployReads
 public import Proofs.Flock.Claims.Recursion.DeployedBrings
 public import Proofs.Flock.Claims.Recursion.DeployedCounts
 public import Proofs.Flock.Claims.Recursion.LamDeployed
@@ -71,42 +72,11 @@ record's inner-verifier calls (`innerCalls`, `BitsLin2`'s `n`). The prover's que
 
 set_option Elab.async false
 
-namespace FlockDeploy
-
-theorem Raw.ins_publicInputs {w : Raw} {s : Ins} (h : w.ins = .ok s) : s.read.publicInputs = w.publicInputs := by
-  unfold Raw.ins at h
-  simp only [bind, Except.bind, pure, Except.pure] at h
-  repeat' split at h
-  all_goals first | (cases h; done) | (cases h; rfl)
-
-end FlockDeploy
-
 namespace RecDeploy
 
 open Flock
 open Claims (Msg Out Prover run)
 open FlockDeploy (Coin Ins)
-
-/-- **A session with no public inputs that sets up is in range**: one to `64` tables, two link points, and each
-table's `k_log`, regions and link points within `checkInRange`'s range. -/
-theorem read_setup_in {r : Flock.Readable.Read} {spec : SessionSpec} {sts : Array Stmt}
-    (h : r.setup = .ok (spec, sts)) (hpi : r.publicInputs = none) :
-    0 < sts.size ∧ sts.size ≤ 64 ∧ spec.points = 2 ∧ ∀ st ∈ sts.toList, (FlockDeploy.acct spec st).InRange := by
-  have hle := (FlockDeploy.setupTables_le h).1
-  have hmax : Flock.Tags.MAX_TABLES = 64 := rfl
-  unfold Flock.Readable.Read.setup at h
-  rw [hpi] at h
-  obtain ⟨h0, hall⟩ := FlockSoundness.Discharge.HiddenExec.setupTables_setupOne h
-  obtain ⟨hp2, hpts⟩ := FlockSoundness.Discharge.HiddenExec.setupTables_pointsAny h
-  refine ⟨h0, by omega, hp2, fun st hst => ?_⟩
-  obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 hst)
-  obtain ⟨d, hd, -⟩ := hall j hj
-  obtain ⟨hr, hwf⟩ := FlockDeploy.KS.setupOne_range hd
-  obtain ⟨hk, hreg, h64⟩ := (Flock.checkInRange_ok _ _ _).1 hr
-  have hm := hwf.mPts
-  have hpj := hpts j hj
-  show sts[j].c.kLog ≤ 27 ∧ sts[j].regions.size ≤ 1024 ∧ spec.mPts ≤ 64
-  exact ⟨hk, hreg, by omega⟩
 
 /-- **A V\* part that sets up with no public inputs is in scope** (`PartIn`). -/
 theorem partIn_of_setupO {xO : Msg} {i : RecIns} {spec : SessionSpec} {sts : Array Stmt}

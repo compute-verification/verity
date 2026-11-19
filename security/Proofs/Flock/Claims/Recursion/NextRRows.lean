@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.DeployReads
 public import Proofs.Flock.Claims.Recursion.NextRSession
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
@@ -69,55 +70,6 @@ The bounds' hypotheses hold together at the concrete honest rep `honest₀` (`ro
 namespace FlockDeploy
 
 open Flock
-
-section Walk
-
-open FlockSoundness.Refine FlockSoundness.Discharge.Exec
-
--- `walk_step` down `Stmt.setupTables`' unfolded do-block, a goal per branch
-set_option maxHeartbeats 4000000 in
-/-- **A session has at most `Tags.MAX_TABLES` tables, and its spec names one per statement**, at any public input
-words. -/
-theorem setupTables_le {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ}
-    {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray}
-    {work : Option (ℕ × Array (String × ℕ × ℕ))} {stratified : Option ℕ}
-    {closure : Option (Std.HashMap ℕ (Array ℕ))} {publicInputs : Option ByteArray} {spec : SessionSpec}
-    {sts : Array Stmt}
-    (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure publicInputs =
-      .ok (spec, sts)) :
-    sts.size ≤ Tags.MAX_TABLES ∧ spec.tables.size = sts.size := by
-  unfold Stmt.setupTables at h
-  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp0 at h
-  replace h : jp0 () = .ok (spec, sts) := by
-    repeat' walk_step
-    all_goals exact h
-  simp (config := { zeta := false }) only [jp0] at h
-  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp1 at h
-  replace h : jp1 () = .ok (spec, sts) := by
-    try dsimp only at h
-    repeat' walk_step
-    all_goals exact h
-  simp (config := { zeta := false }) only [jp1] at h
-  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp2 at h
-  replace h : jp2 () = .ok (spec, sts) := by
-    try dsimp only at h
-    repeat' walk_step
-    all_goals exact h
-  simp (config := { zeta := false }) only [jp2] at h
-  dsimp only at h
-  simp only [throw_bind', pure_bind] at h
-  repeat' walk_step
-  all_goals
-    simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
-    obtain ⟨rfl, rfl⟩ := h
-  all_goals
-    first
-    | (simp [Stmt.spec, Tags.MAX_TABLES]; done)
-    | (obtain ⟨hsz, -⟩ := range_mapM_ok (by assumption)
-       refine ⟨by omega, ?_⟩
-       simp [Tags.tableNames, show ¬ count ≤ 1 by omega, hsz])
-
-end Walk
 
 /-- **A statement that sets up has at most 64 tables, and its spec names one per statement.** -/
 theorem setup_tables {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}

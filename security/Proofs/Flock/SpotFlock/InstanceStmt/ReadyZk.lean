@@ -6,12 +6,7 @@ import Proofs.Flock.SessionLoop.Concrete.Fwd
 import Proofs.Flock.SessionLoop.FinPoints
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
-import Proofs.Flock.C3.Compose.HoloStreamSizes
-import Proofs.Flock.Claims.Complete.WalkPacked
-import Proofs.Flock.Claims.KS.PlainR
-import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
-import Proofs.Flock.Claims.Recursion.RowSlots
-import Proofs.Flock.Claims.Recursion.VStarPartsB
+import Proofs.Flock.Claims.DeployReads
 
 /-! # The two-instance statement before the masked verifier
 
