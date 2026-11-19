@@ -675,12 +675,16 @@ def test_a_bound_of_every_proof_block_reads_vacuous_and_another_subprotocol_says
 
 
 @pytest.mark.parametrize("node, said", [
-    ("auditor = true\nadmin = true\n", "composed on the auditor's device"),
+    ("auditor = true\nadmin = true\n", "not known: the deploy manifest marks h auditor = true, a line of the manifest, "
+                                       "no device's word"),
+    ("auditor = true\n", "not known: the deploy manifest marks h auditor = true, a line of the manifest, no device's word"),
     ("admin = true\n", "not known: the deploy manifest marks h admin = true, which it gives the control host too"),
     ("record = \"/r\"\n", "composed off the auditor's device"),
     (None, "not known: the deploy manifest lists no node h"),
-], ids=["auditor", "admin alone", "a lanes' node", "unlisted"])
+], ids=["auditor", "auditor alone", "admin alone", "a lanes' node", "unlisted"])
 def test_the_record_says_whether_it_was_composed_on_the_auditors_device_as_the_deploy_manifest_says(tmp_path, node, said):
+    """The manifest can say a record was composed off the auditor's device, never on it: its ``auditor = true`` is not
+    known."""
     manifest = tmp_path / "deploy.toml"
     manifest.write_text("[nodes.other]\nadmin = true\n" + (f"[nodes.h]\n{node}" if node is not None else ""))
     assert S.auditor_device("h", manifest) == said

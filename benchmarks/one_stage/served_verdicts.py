@@ -2452,10 +2452,9 @@ def keep(serve_dir: Path, line: str) -> None:
 def auditor_device(host: str, manifest: Path | None, served_node: bool = False) -> str:
     """Whether the record was composed on the auditor's device: off it on the served node, which is never the auditor's;
     elsewhere as infra's deploy manifest, where `research` reads the auditor devices (``manifest``:
-    ``tools/research/src/research/pods/nebius/deploy.toml``), says of ``host``: on it where the manifest marks the node
-    ``auditor = true``; off it where it lists the node with neither that nor ``admin = true``, a node the lanes' keys
-    reach; and not known where it marks the node ``admin = true`` alone, which it gives the control host too, lists no
-    such node, can't be read, or none is given."""
+    ``tools/research/src/research/pods/nebius/deploy.toml``), says of ``host``: off it where it lists the node with
+    neither ``auditor = true`` nor ``admin = true``, a node the lanes' keys reach; and not known where it marks the node
+    either, lists no such node, can't be read, or none is given. Never on it: a manifest line is no device's word."""
     if served_node:
         return "composed off the auditor's device: on the served node"
     if manifest is None:
@@ -2470,7 +2469,7 @@ def auditor_device(host: str, manifest: Path | None, served_node: bool = False) 
     if not isinstance(node, Mapping):
         return f"not known: the deploy manifest lists no node {host}"
     if node.get("auditor") is True:
-        return "composed on the auditor's device"
+        return f"not known: the deploy manifest marks {host} auditor = true, a line of the manifest, no device's word"
     if node.get("admin") is True:
         return f"not known: the deploy manifest marks {host} admin = true, which it gives the control host too"
     return "composed off the auditor's device"
