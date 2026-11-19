@@ -797,7 +797,7 @@ def UPSTREAM_PLAIN : String :=
   "refused: upstream's plain proof files (--upstream-plain): a form the soundness proof does not cover; verity-verify-proof agree compares the verifier's checks on them with upstream's verdicts"
 
 /-- `verify --statement ID --circuit F --comp F --public F [--coins tree] [--session-tables J] --session DIR...`: `ID`
-names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`), and every session of a legacy
+names the statement's tags (`verity/flock-circuit` by default; `Tags.byName?`), and every session of a legacy
 statement (`ProvedScope.legacyStatements`) is refused before any file is read (`ProvedScope.legacyWhy`), as is every session of a
 wide-leaf statement (`Tags.wideLeaf`) without `--zk` or with a `--rec-…` argument (`ProvedScope.wideLeafWhy`); `--comp` is the row leaf's
 pinned compression circuit; `J` (default 1) is the tables of every session (`Stmt.setupTables`), which split one sample of fixed count, a
