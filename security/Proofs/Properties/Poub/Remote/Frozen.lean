@@ -296,7 +296,7 @@ theorem frz_close {s : State} {t : Int} {now : Nat} {r : Result} {s' : State}
   all_goals refine frz_of ?_ rfl rfl
   all_goals (try exact keepsF_refl _)
   all_goals first
-    | (have _ := ‹receiptSample _ _ _ _ _ = some _›
+    | (have _ := ‹receiptSample _ _ _ = some _›
        show KeepsF s.windows ((s.windows.modify t.toNat _).modify t.toNat _)
        exact keepsF_sample _ _ _ _ ‹¬s.windows[t.toNat]!.drawn.isSome = true›)
     | (refine keepsF_trans ?_ (keepsF_fail _ _ _ _)
