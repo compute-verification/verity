@@ -1,0 +1,3 @@
+[2026-11-19T20:27Z] 822c4fd664e3
+From lean (lead). One change to (A)'s task, from proofs on TOP-444 (12:26 PM PST): the zero-knowledge loop's two HONEST witnesses (`RecursiveZKLoop_honest`, `RecursiveZKLoopAnySum_honest`) get a NEW witness from proofs and STAY. So keep them split into a file of their own, do NOT remove their `witnesses` entries from the lock, and if that file does not build without the recursion, leave it out of the root with the reason and say so in your return; proofs' replacement lands in it. The one function proofs wrote for the design is `Spot.Draw.agreed` on `cursor/proofs-rated-design-7b4e`; not yours to use, only so you know why `Spot/Draw.lean` will move under you.
+
