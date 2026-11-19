@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Claims.Complete.CostWalk
 public import Flock.With.Log
 public import Flock.With.Setup
+public import Proofs.Flock.Claims.Recursion.DigestCount
 
 /-!
 # The setup's hash calls, counted function by function, in any hash
@@ -244,15 +245,21 @@ theorem publicDigest_cost (header : Json) (pubs : ByteArray) :
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
-theorem descParse_cost (bytes : ByteArray) :
-    countC.P (TemplateQuery.Desc.parseWith (Hashes.counted h).sha512 bytes) 1 := by
+/-- `programDigestWith`'s calls: one per entry of the descriptor's `definitions` (`DigestCount.definitionDigests_calls`),
+at most `D`, and one more. -/
+theorem programDigest_cost (j : Json) (D : Nat)
+    (hD : ∀ kvs, j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ D) :
+    countC.P (Program.programDigestWith (Hashes.counted h).sha512 j) (D + 1) := by
+  have hp : countC.P (Program.definitionDigestsWith (Hashes.counted h).sha512 j) D :=
+    DigestCount.definitionDigests_calls h j D hD
   apply countC.mono
-  · unfold TemplateQuery.Desc.parseWith
+  · unfold Program.programDigestWith
     repeat (first
       | extract_lets
       | (with_reducible apply throwBind)
       | (with_reducible apply Cost.bind)
       | (with_reducible apply bindAny)
+      | (with_reducible exact hp)
       | (with_reducible apply sha_cost h)
       | (with_reducible intro _)
       | (with_reducible apply Cost.pure)
@@ -283,6 +290,7 @@ theorem descParse_cost (bytes : ByteArray) :
         | (with_reducible apply throwBind)
         | (with_reducible apply Cost.bind)
         | (with_reducible apply bindAny)
+        | (with_reducible exact hp)
         | (with_reducible apply sha_cost h)
         | (with_reducible intro _)
         | (with_reducible apply Cost.pure)
@@ -307,21 +315,31 @@ theorem descParse_cost (bytes : ByteArray) :
         | (with_reducible apply diteAny)
         | split)
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
-  · omega
+  · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); omega
 
--- a cost combinator per bind and loop of `Program.decodeWith`'s unfolded body (`repeat (first ...)`), `omega` at each
--- leaf
-set_option maxHeartbeats 2000000 in
-theorem decode_cost (bytes : ByteArray) : countC.P (Program.decodeWith (Hashes.counted h).sha512 bytes) 1 := by
+theorem descParse_cost (bytes : ByteArray) (D : Nat)
+    (hD : ∀ text j kvs, String.fromUTF8? bytes = some text → JsonParse.parse text = .ok j →
+      j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ D) :
+    countC.P (TemplateQuery.Desc.parseWith (Hashes.counted h).sha512 bytes) (D + 1) := by
+  unfold TemplateQuery.Desc.parseWith
+  rcases ht : String.fromUTF8? bytes with _ | text
+  · try dsimp only
+    exact countC.throw _ _
+  try dsimp only
+  rcases hj : JsonParse.parse text with e | j
+  · try dsimp only
+    exact throwBindAny _ _ _
+  try dsimp only
+  rw [pure_bind]
+  have hp := programDigest_cost h j D (fun kvs hk => hD text j kvs ht hj hk)
   apply countC.mono
-  · unfold Program.decodeWith
-    repeat (first
+  · repeat (first
       | extract_lets
+      | (with_reducible apply throwBind)
       | (with_reducible apply Cost.bind)
       | (with_reducible apply bindAny)
+      | (with_reducible exact hp)
       | (with_reducible apply sha_cost h)
-      | (with_reducible apply throw0)
-      | (with_reducible apply forIn_range0)
       | (with_reducible intro _)
       | (with_reducible apply Cost.pure)
       | (with_reducible apply pureAny)
@@ -348,11 +366,11 @@ theorem decode_cost (bytes : ByteArray) : countC.P (Program.decodeWith (Hashes.c
       all_goals try (dsimp +zetaDelta -zeta only)
       all_goals repeat (first
         | extract_lets
+        | (with_reducible apply throwBind)
         | (with_reducible apply Cost.bind)
         | (with_reducible apply bindAny)
+        | (with_reducible exact hp)
         | (with_reducible apply sha_cost h)
-        | (with_reducible apply throw0)
-        | (with_reducible apply forIn_range0)
         | (with_reducible intro _)
         | (with_reducible apply Cost.pure)
         | (with_reducible apply pureAny)
@@ -375,6 +393,86 @@ theorem decode_cost (bytes : ByteArray) : countC.P (Program.decodeWith (Hashes.c
         | (with_reducible apply diteMax)
         | (with_reducible apply diteAny)
         | split)
+    all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
+  · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); omega
+
+-- a cost combinator per bind and loop of `Program.decodeWith`'s unfolded body (`repeat (first ...)`), `omega` at each
+-- leaf
+set_option maxHeartbeats 2000000 in
+theorem decode_cost (bytes : ByteArray) (D : Nat)
+    (hD : ∀ text j kvs, String.fromUTF8? bytes = some text → JsonParse.parse text = .ok j →
+      j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ D) :
+    countC.P (Program.decodeWith (Hashes.counted h).sha512 bytes) (D + 1) := by
+  unfold Program.decodeWith
+  rcases ht : String.fromUTF8? bytes with _ | text
+  · try dsimp only
+    exact countC.throw _ _
+  try dsimp only
+  rcases hj : JsonParse.parse text with e | j
+  · try dsimp only
+    exact throwBindAny _ _ _
+  try dsimp only
+  rw [pure_bind]
+  have hp := programDigest_cost h j D (fun kvs hk => hD text j kvs ht hj hk)
+  apply countC.mono
+  · repeat (first
+      | extract_lets
+      | (with_reducible apply Cost.bind)
+      | (with_reducible apply bindAny)
+      | (with_reducible exact hp)
+      | (with_reducible apply sha_cost h)
+      | (with_reducible intro _)
+      | (with_reducible apply Cost.pure)
+      | (with_reducible apply pureAny)
+      | (with_reducible apply Cost.lift)
+      | (with_reducible apply liftAny)
+      | (with_reducible apply Cost.forIn_array)
+      | (with_reducible apply Cost.forIn_array0)
+      | (with_reducible apply forIn_array0Any)
+      | (with_reducible apply Cost.forIn_list)
+      | (with_reducible apply Cost.forIn_list0)
+      | (with_reducible apply forIn_list0Any)
+      | (with_reducible apply forIn_range0)
+      | (with_reducible apply forIn_range0Any)
+      | (with_reducible apply Cost.mapM_array)
+      | (with_reducible apply mapM_array0Any)
+      | (with_reducible apply Cost.ite)
+      | (with_reducible apply iteAny)
+      | (with_reducible apply diteMax)
+      | (with_reducible apply diteAny)
+      | split)
+    iterate 40
+      all_goals try (dsimp +zetaDelta -zeta only)
+      all_goals repeat (first
+        | extract_lets
+        | (with_reducible apply Cost.bind)
+        | (with_reducible apply bindAny)
+        | (with_reducible exact hp)
+        | (with_reducible apply sha_cost h)
+        | (with_reducible intro _)
+        | (with_reducible apply Cost.pure)
+        | (with_reducible apply pureAny)
+        | (with_reducible apply Cost.lift)
+        | (with_reducible apply liftAny)
+        | (with_reducible apply Cost.forIn_array)
+        | (with_reducible apply Cost.forIn_array0)
+        | (with_reducible apply forIn_array0Any)
+        | (with_reducible apply Cost.forIn_list)
+        | (with_reducible apply Cost.forIn_list0)
+        | (with_reducible apply forIn_list0Any)
+        | (with_reducible apply forIn_range0)
+        | (with_reducible apply forIn_range0Any)
+        | (with_reducible apply Cost.mapM_array)
+        | (with_reducible apply mapM_array0Any)
+        | (with_reducible apply Cost.ite)
+        | (with_reducible apply iteAny)
+        | (with_reducible apply diteMax)
+        | (with_reducible apply diteAny)
+        | split)
+    all_goals repeat (first
+      | (with_reducible apply throw0)
+      | (with_reducible apply throwBind)
+      | (with_reducible apply Cost.throw))
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); omega
 
@@ -1432,8 +1530,7 @@ theorem root_cost (dom : ByteArray) (leaves : Array ByteArray) :
       (fun lv : Array ByteArray => lv.size ≤ leaves.size + (nextPow2 leaves.size - leaves.size)) ?_ ?_ ?_)
       fun _ => countC.pure _
     · show (leaves ++ pads).size ≤ _
-      rw [Array.size_append, hp, Array.size_range]
-      exact Nat.le_refl _
+      rw [Array.size_append, hp, Array.size_range] <;> exact Nat.le_refl _
     · intro i s hs
       refine countC.mono (countC.bind (mapM_array_cost _ (c := 1) fun _ => hash_cost h _ _)
         fun _ => countC.pure _) ?_
