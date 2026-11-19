@@ -3,8 +3,9 @@ PROTOCOL.md §4.9: the body fixes C's bits; the word evaluator is a fast form of
 
 A word evaluator a verifier-side reference reads is held first, and says who reads it (`verifier_readers`): PoUW's Lean row
 primitives (their vector script) and Security's FP32, scalar and cast definitions (this suite's Lean vector tests). A body
-declared in the tree that the lookup does not reach fails; a primitive with no body anywhere is listed by name in `NO_BODY`,
-never skipped, and a listed primitive that has a body warns until it is struck off."""
+declared in the tree that the lookup does not reach fails; a primitive with no body anywhere is listed by name, in
+`VERIFIER_NO_BODY` when a verifier reads it and in `NO_BODY` otherwise, never skipped, and a listed primitive that has a body
+warns until it is struck off."""
 from __future__ import annotations
 
 import importlib
@@ -34,7 +35,9 @@ HERE = Path(__file__).resolve().parents[1]
 ROW_PRIMS = ROOT / "verity/protocols/resource_accounting/compute/pouw/verifier/lean/scripts/row_prims_vectors.py"
 N = 64
 
-#: word primitives with no Boolean Definition anywhere under `verity/` or the adapter's definitions (`DECLARING`)
+#: word primitives a verifier-side reference reads (`READERS`) with no Boolean Definition anywhere (`DECLARING`)
+VERIFIER_NO_BODY: set[str] = set()
+#: word primitives no verifier-side reference reads with no Boolean Definition anywhere (`DECLARING`)
 NO_BODY: set[str] = set()
 #: where a Boolean Definition of a word primitive may be declared (`definition(..., word=...)`)
 DECLARING = (ROOT / "verity", ROOT / "adapters/vllm/verity_vllm/definitions")
@@ -167,13 +170,16 @@ def test_every_word_primitive_has_a_body_the_lookup_reaches() -> None:
     unreached = {stems[s]: fs for s, fs in _declared(set(stems)).items()} if stems else {}
     assert not unreached, (f"word primitives whose Boolean body is declared but not reached by `versions.boolean_version` "
                            f"(`versions.load` imports its catalogs): {unreached}")
-    unlisted = [k for k in missing if k not in NO_BODY]
-    assert not unlisted, ("word primitives with no Boolean body anywhere, not in NO_BODY: "
-                          f"{ {k: READERS.get(k, 'no verifier reads it') for k in unlisted} }")
-    assert NO_BODY <= set(PRIMS), f"NO_BODY names ids that are no registered word primitive: {sorted(NO_BODY - set(PRIMS))}"
-    stale = sorted(NO_BODY - set(missing))
-    if stale:
-        warnings.warn(f"these NO_BODY primitives have a Boolean body now; strike them: {stale}", stacklevel=1)
+    for group, read, listed in (("VERIFIER_NO_BODY", True, VERIFIER_NO_BODY), ("NO_BODY", False, NO_BODY)):
+        unlisted = [k for k in missing if (k in READERS) == read and k not in listed]
+        assert not unlisted, (f"word primitives with no Boolean body anywhere, not in {group}: "
+                              f"{ {k: READERS.get(k, 'no verifier reads it') for k in unlisted} }")
+        misfiled = sorted(k for k in listed if (k in READERS) != read)
+        assert not misfiled, f"{group} names primitives {'no' if read else 'a'} verifier reads: {misfiled}"
+        assert listed <= set(PRIMS), f"{group} names ids that are no registered word primitive: {sorted(listed - set(PRIMS))}"
+        stale = sorted(listed - set(missing))
+        if stale:
+            warnings.warn(f"these {group} primitives have a Boolean body now; strike them: {stale}", stacklevel=1)
 
 
 def test_verifier_readers_name_registered_primitives() -> None:
