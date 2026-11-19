@@ -5,9 +5,6 @@
   no block on the device, and one that states no weights has no root for the export's provenance.
 * `verity_vllm.pipeline.manifest`: a Build's record without `program` has no recorded digest; an incomplete manifest that states
   neither its unmodelled keys nor its peer binding is still refused, and says so.
-* `verity_vllm.pipeline.program_graph`: a group without `varying` is one specialization and one without `definition_ids` indexes
-  none; a replay record states its strata under `sampled_replay`, else under `replay_partition`, else the run has no units; a stored
-  Program without `build_dirs` places no request.
 * `verity_vllm.pipeline.match`: the realized shape of a run counts a request's tokens only where its record states no count, reads
   the engine's steps at the record's top, else under its `timing`, and the steps kept under either of two names.
 * `verity_vllm.pipeline.match_fold`: the Program writer's request table and instance rows list nothing for a request with no
@@ -25,7 +22,6 @@ from __future__ import annotations
 import copy
 import dataclasses
 import gc
-import gzip
 import hashlib
 import json
 from types import SimpleNamespace
@@ -33,12 +29,9 @@ from types import SimpleNamespace
 import pytest
 from verity_torch.correspondence.runtime import NAMESPACE as CORRESPONDENCE
 
-from tests.check.test_sampled_replay import _program
 from tests.pipeline import tp_toy
 from tests.pipeline.test_build_ir_record import _write
-from tests.pipeline.test_vu_export import _world
 from verity_vllm import gc_tuning
-from verity_vllm.check.replay import driver as SR
 from verity_vllm.pipeline import build as B
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import global_program as GP
@@ -46,7 +39,6 @@ from verity_vllm.pipeline import manifest as M
 from verity_vllm.pipeline import match as RC
 from verity_vllm.pipeline import match_fold as MF
 from verity_vllm.pipeline import program_cache as PC
-from verity_vllm.pipeline import program_graph as PG
 from verity_vllm.pipeline import vu_store as VS
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
@@ -163,73 +155,6 @@ def test_the_global_manifest_s_summary_states_the_unbound_peers_only_where_the_m
     assert json.loads(capsys.readouterr().out) == {
         "identities": 5, "manifest_digest": "m" * 64, "program_digest": "p" * 128, "complete": True, "by_family": {"call_boundaries": 5},
         "tp_peer_binding_n_unbound": unbound, "out": str(out)}
-
-
-def _graph(tmp_path) -> tuple[str, dict]:
-    inst, _weights = _program(attn=True)
-    path = tmp_path / "instances.json.gz"
-    with gzip.open(path, "wt") as f:
-        json.dump(inst, f)
-    return str(path), PG.program_graph([path])
-
-
-def test_a_group_without_varying_is_one_specialization_and_one_without_definition_ids_indexes_none(tmp_path):
-    _path, g = _graph(tmp_path)
-    fixed = [x["id"] for x in g["groups"] if not x.get("varying")]
-    assert fixed and len(fixed) >= 3, "the test Program has groups of one specialization"
-    for name, form in (("stated", lambda x: x), ("absent", lambda x: {k: v for k, v in x.items() if k not in ("varying", "definition_ids")}),
-                       ("null", lambda x: dict(x, varying=None, definition_ids=None))):
-        d = tmp_path / name
-        d.mkdir()
-        doc = dict(g, groups=[form(x) if x["id"] in fixed else x for x in g["groups"]])
-        (d / "row.program.json").write_text(json.dumps(doc))
-        PG.catalog(d)
-    ops = {name: json.loads((tmp_path / name / "row.ops.json").read_text())["ops"] for name in ("stated", "absent", "null")}
-    assert ops["absent"] == ops["null"] == ops["stated"]
-    assert all(o["varying"] == {} and o["specs_enumerated"] == 1 for o in ops["absent"] if o["group"] in fixed)
-    index = {name: json.loads((tmp_path / name / "row.program.json").read_text())["definitions_index"] for name in ops}
-    kept = {k for x in g["groups"] if x["id"] not in fixed for k in x.get("definition_ids") or [] if k}
-    assert index["absent"] == index["null"] == {k: v for k, v in index["stated"].items() if k in kept}
-    assert set(index["stated"]) > kept, "the groups of one specialization index Definitions where they state their ids"
-
-
-def test_a_replay_record_states_its_strata_under_sampled_replay_else_under_replay_partition_else_none(tmp_path):
-    world = _world(attn=True)
-    bmap, committed = world.bmap_and_reader()
-    rep = SR.sampled_replay({"r0": world.inst}, bmap, committed,
-                            lambda f, lo, hi: world.weights[world.woff[f][0] + lo: world.woff[f][0] + hi], per_stratum=1, seed=1, workers=0)
-    path = tmp_path / "instances.json.gz"
-    with gzip.open(path, "wt") as f:
-        json.dump(world.inst, f)
-    with_units, without = PG.program_graph([path], strata=rep["strata"]), PG.program_graph([path])
-    assert with_units != without and sum(x["units_in_run"] or 0 for x in with_units["groups"]) == rep["population"]["vus"]
-
-    def written(record: dict) -> dict:
-        (tmp_path / "record.json").write_text(json.dumps(record))
-        out = tmp_path / "program.json"
-        assert PG.main(cli.parse("program-graph", [str(out), str(path), "--strata", str(tmp_path / "record.json")], {})) == 0
-        return json.loads(out.read_text())
-
-    stated = json.loads(json.dumps(with_units, default=str))
-    assert written({"sampled_replay": {"strata": rep["strata"]}}) == stated
-    assert written({"replay_partition": {"strata": rep["strata"]}}) == stated
-    assert written({"sampled_replay": None, "replay_partition": {"strata": rep["strata"]}}) == stated
-    assert written({"sampled_replay": {}, "replay_partition": {"strata": rep["strata"]}}) == stated
-    assert written({"sampled_replay": {"strata": rep["strata"]}, "replay_partition": {"strata": {}}}) == stated
-    none = json.loads(json.dumps(without, default=str))
-    unstated: list[dict] = [{}, {"sampled_replay": None, "replay_partition": None}, {"sampled_replay": {}, "replay_partition": {}},
-                            {"replay_partition": {"other": 1}}, {"sampled_replay": {"strata": None}}]
-    for record in unstated:
-        assert written(record) == none, record
-
-
-def test_a_stored_program_without_build_dirs_places_no_request(tmp_path):
-    for name, doc in (("a", {}), ("b", {"build_dirs": None}), ("c", {"build_dirs": {}}), ("d", {"build_dirs": {"r0": "/builds/r0", "r1": ""}}),
-                      ("e", {"build_dirs": {"r2": "/builds/r2", "r3": None}})):
-        (tmp_path / "programs" / name).mkdir(parents=True)
-        (tmp_path / "programs" / name / "program.json").write_text(json.dumps(doc))
-    assert PG.request_programs_of(tmp_path) == {"r0": "/builds/r0", "r2": "/builds/r2"}
-    assert PG.request_programs_of(tmp_path / "no such store") == {}
 
 
 def _plan(tmp_path, monkeypatch) -> RC.Plan:

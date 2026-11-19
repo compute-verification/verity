@@ -23,7 +23,7 @@ untraced = [
     "test_harm_bound.py",
     "test_history_difftest.py",
     "test_period_difftest.py", "test_members_check.py", "test_second_wires_difftest.py",
-    "test_members_twin.py", "test_wires_difftest.py", "test_wired_key_difftest.py",
+    "test_members_twin.py", "test_wires_difftest.py",
 ]
 # Test-only: `lake` builds this package and, through its path requires, the core protocol interface, the difftest
 # harness's Lean, Flock's verifier library and the LMS verifier; the tests import the harness's Python and the
