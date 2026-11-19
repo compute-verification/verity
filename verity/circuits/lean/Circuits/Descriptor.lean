@@ -1,11 +1,11 @@
 /-
 `Flock.Partition`: the program format `verity-ir/descriptor/v2` (`verity/circuits/PROTOCOL.md`), as the verifier
-reads its own copy of a Program: the canonical JSON domain and the program's SHA-512 (§1), types and leaves (§2), reference
+reads its own copy of a Program: the canonical JSON domain and the program digest (§1), types and leaves (§2), reference
 sequences (§3), the descriptor and what the decoder refuses (§4) and input nodes (§5), with each word primitive's
 one Boolean Definition (§4.9, `Prog.boolean`).
 
 The verifier evaluates no primitive, so it holds no registry: a primitive is taken as the descriptor declares it (its parameters
-and return type are under the program's SHA-512), and an input (`Input<w>_v1`, bound per run, or `RegisteredInput<w>_v1`,
+and return type are under the program digest), and an input (`Input<w>_v1`, bound per run, or `RegisteredInput<w>_v1`,
 bound at registration; §5.2) must declare no parameters and `Value<w>`. Definitions
 are decoded on demand from the root and from the functions `program_fn`'s record names, as core decodes them, and each callee
 gets a smaller index than its callers.
@@ -19,6 +19,11 @@ public import Base.Sizes
 public import Circuits.Steps
 public import Lean.Data.Json.FromToJson.Basic
 public import Std.Data.HashMap
+meta import Base.Canon
+meta import Base.Hash
+meta import Base.JsonParse
+meta import Base.Sizes
+meta import Circuits.Steps
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -538,7 +543,8 @@ structure Prog where
   index : Std.HashMap String Nat
   root : Nat
   programFn : String
-  /-- SHA-512 of the canonical descriptor without `annotations` (`partition_object.program_sha512`) -/
+  /-- the program digest (§1, `codec.program_digest`, `partition_object.program_sha512`), composed from the definitions'
+  digests (§4.8, `programDigestWith`) -/
   sha512 : ByteArray
   /-- §4.9: each word primitive's key to its one Boolean Definition's key, both in `defs` -/
   boolean : Std.HashMap String String := {}
@@ -1577,6 +1583,233 @@ private def decodeBodies (desc : Desc) (rootKey : String) (pairs : Array (String
     reach := extendReach s.defs reach
     liftV (checkBody s.defs s.index rootKey lo reach w b bi)
 
+/-! ### §4.1 The keys, §5.1 the inputs, §4.8 the definition digest and §1 the program digest -/
+
+/-- §4.1's top-level keys and `annotations` (`codec._TOP_KEYS`). -/
+def TOP_KEYS : List String :=
+  ["schema", "program_fn", "inputs", "root", "boolean", "callees", "types", "definitions", "annotations"]
+
+/-- `E_KEYS` (§4.6): a top-level key outside `TOP_KEYS`, which the program digest does not cover. `keys` in key order. -/
+def checkTopKeys (keys : Array String) : V Unit := do
+  let extra := keys.filter (!TOP_KEYS.contains ·)
+  if !extra.isEmpty then
+    throw s!"E_KEYS: the top-level keys {extra.toList.take 4} are not {SCHEMA}'s, and the program digest does not cover them"
+
+/-- §5.1's `inputs` against the root `defs[root]` (`codec._check_inputs`): `[name, node count]` per parameter (`E_INPUTS`),
+the names nonempty and distinct (`E_INPUTS_NAME`), the counts summing to the input nodes that lead the root's body, with no
+input node after them (`E_INPUTS_COUNT`), and each parameter's nodes all run or all registered inputs (`E_INPUTS_MIXED`). -/
+def checkInputs (defs : Array Defn) (root : Nat) (xs : Json) : V Unit := do
+  let bad := "E_INPUTS: `inputs` is not an array of [name, node count] pairs"
+  let .arr xs := xs | throw bad
+  let some ps := xs.mapM (fun x => match x with
+      | .arr #[.str s, n] => (natJ? n).map (s, ·)
+      | _ => none) | throw bad
+  let names := ps.map (·.1)
+  if names.contains "" || (names.foldl (·.insert ·) ({} : Std.HashSet String)).size != names.size then
+    throw s!"E_INPUTS_NAME: the parameter names {names.toList.take 8} hold an empty or a repeated name"
+  let nodes := defs[root]!.body.nodes
+  let isIn := fun (x : Node) => let c := defs[x.fn]!; c.prim && isInputId c.key
+  let lead := (nodes.findIdx? (!isIn ·)).getD nodes.size
+  let total := ps.foldl (· + ·.2) 0
+  if total != lead || (nodes.extract lead nodes.size).any isIn then
+    throw (s!"E_INPUTS_COUNT: `inputs` counts {total} input nodes, where the root's body leads with {lead} " ++
+      "and holds no input node after them")
+  let mut k := 0
+  for (name, n) in ps do
+    let reg := (nodes.extract k (k + n)).map fun x => (inputId? defs[x.fn]!.key).map (·.1) == some REGISTRATION
+    if reg.any id && reg.any (!·) then
+      throw s!"E_INPUTS_MIXED: parameter '{name}''s input nodes {k}..{k + n - 1} mix run and registered inputs"
+    k := k + n
+
+/-- Whether descriptor entry `e` is a composite's: its `form` the string `composite`, compared by a match. -/
+def isCompositeEntry (e : Json) : Bool := match e.getObjValD "form" with
+  | .str s => s == "composite"
+  | _ => false
+
+/-- The functions entry `e` references (`codec._references`): each node's callee, by id or (in a descriptor entry) by its
+index into `callees`, then each `{"fn": id}` of its binding record. -/
+def entryRefs (callees : Array Json) (e : Json) : Array String :=
+  let nodes := if isCompositeEntry e then
+      match (e.getObjValD "body").getObjValD "nodes" with
+      | .arr xs => xs
+      | _ => #[]
+    else #[]
+  let fns := nodes.filterMap fun n => match n.getObjValD "fn" with
+    | .str s => some s
+    | i => match i.getNat? with
+      | .ok i => match callees[i]? with
+        | some (.str s) => some s
+        | _ => none
+      | .error _ => none
+  fnRefs fns (e.getObjValD "bindings")
+
+/-- `E_UNREACHED` (§4.1): a definition of `defs` that none of `roots` (the root, the functions `program_fn`'s record names
+among `definitions`, the Boolean map's bodies) reaches through node callees and binding records (`codec._walk`). -/
+def checkReached (defs : Array (String × Json)) (callees : Array Json) (roots : Array String) : V Unit := do
+  let ddefs : Std.HashMap String Json := defs.foldl (fun m (k, v) => m.insert k v) {}
+  let fuel := defs.foldl (fun n (_, e) => n + (entryRefs callees e).size) (roots.size + 1)
+  let mut seen : Std.HashSet String := {}
+  let mut todo := roots.toList
+  for _ in [0:fuel] do
+    match todo with
+    | [] => break
+    | k :: rest =>
+      todo := rest
+      if seen.contains k then continue
+      seen := seen.insert k
+      todo := (entryRefs callees (ddefs.getD k .null)).toList ++ todo
+  let extra := (defs.map (·.1)).filter (!seen.contains ·)
+  if !extra.isEmpty then
+    throw s!"E_UNREACHED: {extra.toList.take 4} are reached from neither the root, `program_fn`'s record nor the Boolean map"
+
+/-- The parts reference sequence `j` stands for, flat (§4.8): an alias's are the parts of argument `a` of node `k` (`rows`,
+the nodes before the one `j` is in), a concatenation's its parts' spliced in, any other its one part. Concatenations nest
+at most `fuel` deep. -/
+def entryFlat (rows : Array (Array (Array Json))) : Nat → Json → V (Array Json)
+  | 0, _ => throw "program: references nest deeper than this verifier follows"
+  | fuel + 1, j => do
+    if let .ok a := j.getObjVal? "alias" then
+      let ps := match a with
+        | .arr #[k, x] => match k.getNat?, x.getNat? with
+          | .ok k, .ok x => rows[k]?.bind (·[x]?)
+          | _, _ => none
+        | _ => none
+      let some ps := ps | throw s!"program: alias {a.compress} names no argument of an earlier node"
+      return ps
+    if let .ok (.arr ps) := j.getObjVal? "concat" then
+      return (← ps.mapM (entryFlat rows fuel)).foldl (· ++ ·) #[]
+    return #[j]
+
+/-- A flat sequence as a canonical entry writes it: its one part, or `{"concat": parts}`. -/
+def entryWritten (ps : Array Json) : Json := match ps with
+  | #[p] => p
+  | ps => Json.mkObj [("concat", .arr ps)]
+
+/-- `j` with key `k` set to `v`, when `j` is an object. -/
+private def setKey (j : Json) (k : String) (v : Json) : Json := match j with
+  | .obj kvs => Json.obj (kvs.insert k v)
+  | j => j
+
+/-- A definition's canonical entry (§4.8, `codec.canonical_entry`) from its descriptor entry `e` and the descriptor's
+interning (`callees`, `types`): each node's callee id and types inline, every alias replaced by the parts it stands for and
+every reference sequence flat. Any entry but a composite's is itself. -/
+def canonEntry (callees types : Array Json) (e : Json) : V Json := do
+  let at_ := fun (xs : Array Json) (i : Json) => match i.getNat? with
+    | .ok i => xs.getD i .null
+    | .error _ => .null
+  unless isCompositeEntry e do return e
+  let body := e.getObjValD "body"
+  let .arr nodes := body.getObjValD "nodes" | return e
+  let mut rows : Array (Array (Array Json)) := #[]
+  let mut out : Array Json := #[]
+  for n in nodes do
+    let .arr args := n.getObjValD "args" | throw "program: a node's arguments are not a list"
+    let row ← args.mapM fun a => entryFlat rows Steps.FUEL (a.getObjValD "refs")
+    rows := rows.push row
+    let args := (args.zip row).map fun (a, ps) =>
+      setKey (setKey a "type" (at_ types (a.getObjValD "type"))) "refs" (entryWritten ps)
+    out := out.push (setKey (setKey (setKey n "fn" (at_ callees (n.getObjValD "fn"))) "out" (at_ types (n.getObjValD "out")))
+      "args" (.arr args))
+  let ret ← entryFlat rows Steps.FUEL (body.getObjValD "ret")
+  return setKey e "body" (setKey (setKey body "nodes" (.arr out)) "ret" (entryWritten ret))
+
+/-- `codec._composed`'s substitution in a binding record: each `{"fn": id}` (an object of that one key, a string) becomes
+`{"fn": d id}`. -/
+def subFns (d : String → Option String) : Json → V Json
+  | .obj kvs =>
+    let items := kvs.toArray
+    match (if items.size == 1 && items[0]!.1 == "fn" then items[0]!.2 else .null) with
+    | .str s => match d s with
+      | some x => pure (Json.mkObj [("fn", .str x)])
+      | none => throw s!"KeyError: no digest of {s}"
+    | _ => do pure (Json.mkObj (← items.attach.mapM fun x => do pure (x.1.1, ← subFns d x.1.2)).toList)
+  | .arr a => do pure (.arr (← a.attach.mapM fun x => subFns d x.1))
+  | x => pure x
+termination_by j => j
+decreasing_by
+  · exact sizeOf_lt_of_mem_obj x.2
+  · exact sizeOf_lt_of_mem_arr x.2
+
+/-- Canonical entry `e` composed (§4.8, `codec._composed`): each reference replaced by its digest in `d`, and `body`'s digest
+under `boolean` for a word primitive. -/
+def composeEntry (d : String → Option String) (e : Json) (body : Option String) : V Json := do
+  let need := fun (s : String) => match d s with
+    | some x => pure (Json.str x)
+    | none => (throw s!"KeyError: no digest of {s}" : V Json)
+  let mut out := e
+  if let .ok b := e.getObjVal? "bindings" then out := setKey out "bindings" (← subFns d b)
+  if isCompositeEntry e then
+    let body := e.getObjValD "body"
+    let .arr nodes := body.getObjValD "nodes" | throw "program: a composite without body nodes"
+    let nodes ← nodes.mapM fun n => match n.getObjValD "fn" with
+      | .str f => do pure (setKey n "fn" (← need f))
+      | _ => throw "program: a node's callee is not an id"
+    out := setKey out "body" (setKey body "nodes" (.arr nodes))
+  if let some b := body then out := setKey out "boolean" (← need b)
+  return out
+
+/-- Definition `fid`'s digest (§4.8), every definition it references first, each once (`memo`), the hash by `h`. A chain of
+references longer than `fuel` is refused, so a cycle ends. -/
+def digestGo {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (h : ByteArray → M ByteArray)
+    (ddefs : Std.HashMap String Json) (callees types : Array Json) (bm : Std.HashMap String String) :
+    Nat → String → StateT (Std.HashMap String String) M String
+  | 0, fid => throw s!"program: {fid}: definitions reference each other deeper than this descriptor holds definitions"
+  | n + 1, fid => do
+    if let some x := (← get)[fid]? then return x
+    let some raw := ddefs[fid]? | throw s!"KeyError: no definition {fid}"
+    let e ← (canonEntry callees types raw : V Json)
+    for r in entryRefs callees e ++ (bm[fid]?).toArray do
+      discard (digestGo h ddefs callees types bm n r)
+    let memo ← get
+    let c ← (composeEntry (memo[·]?) e bm[fid]? : V Json)
+    let x := hexOf (← h (← (canon c : V String)).toUTF8)
+    modify (·.insert fid x)
+    return x
+
+/-- Every definition's digest (§4.8, `codec.definition_digests`) of descriptor `j`, by descriptor id, the hash by `h`. -/
+def definitionDigestsWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
+    (h : ByteArray → M ByteArray) (j : Json) : M (Std.HashMap String String) := do
+  let defs := match j.getObjValD "definitions" with
+    | .obj kvs => kvs.toArray
+    | _ => #[]
+  let tab := fun (k : String) => match j.getObjValD k with
+    | .arr xs => xs
+    | _ => #[]
+  let bm : Std.HashMap String String := match j.getObjValD "boolean" with
+    | .obj kvs => kvs.toArray.foldl (fun m (k, v) => match v with | .str s => m.insert k s | _ => m) {}
+    | _ => {}
+  let ddefs : Std.HashMap String Json := defs.foldl (fun m (k, v) => m.insert k v) {}
+  let go : StateT (Std.HashMap String String) M Unit := do
+    for (k, _) in defs do discard (digestGo h ddefs (tab "callees") (tab "types") bm (defs.size + 1) k)
+  let ((), d) ← go.run {}
+  return d
+
+/-- `definitionDigestsWith` by SHA-512. -/
+def definitionDigests (j : Json) : V (Std.HashMap String String) := definitionDigestsWith (fun b => pure (Sha512.hash b)) j
+
+/-- The program digest (§1, `codec.program_digest`) of descriptor `j`, the hash by `h`: the hash of the canonical JSON of
+its schema, `program_fn`, `inputs`, its root's digest, the digests of the functions `program_fn`'s record names, and the
+Boolean map's bodies' digests, each a definition's digest (§4.8). `annotations` never enter it. -/
+def programDigestWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
+    (h : ByteArray → M ByteArray) (j : Json) : M ByteArray := do
+  let d ← definitionDigestsWith h j
+  let need := fun (s : String) => match d[s]? with
+    | some x => pure (Json.str x)
+    | none => (throw s!"KeyError: no definition {s}" : V Json)
+  let pfn := j.getObjValD "program_fn"
+  let root ← match j.getObjValD "root" with
+    | .str r => (need r : V Json)
+    | _ => throw "program: root"
+  let functions := (recordFunctionIds (match pfn with | .str s => s | _ => "")).filterMap fun f => d[f]?.map (f, Json.str ·)
+  let boolean ← match j.getObjValD "boolean" with
+    | .obj kvs => (kvs.toArray.mapM fun (k, v) => match v with
+        | .str b => do pure (k, ← need b)
+        | _ => throw "E_BODY_KEY: `boolean` is not an object of descriptor ids" : V _)
+    | _ => pure #[]
+  let obj := Json.mkObj [("schema", j.getObjValD "schema"), ("program_fn", pfn), ("inputs", j.getObjValD "inputs"),
+    ("root", root), ("functions", Json.mkObj functions.toList), ("boolean", Json.mkObj boolean.toList)]
+  h (← (canon obj : V String)).toUTF8
+
 /-- The primitive entries of `definitions`, in key order. -/
 private def primEntries (dkv : Array (String × Json)) : Array String :=
   dkv.filterMap fun (k, d) => if (d.getObjValAs? String "form").toOption == some "primitive" then some k else none
@@ -1652,7 +1885,8 @@ private theorem decodeDefs_plain {desc : Desc} {rootId programFn : String} {root
     next => cases h
 
 /-- `decode_program` on a descriptor's bytes: the refusals of PROTOCOL.md §4.6 (a primitive's signature is the descriptor's own,
-see the module docstring), then the program's SHA-512. -/
+see the module docstring), `E_KEYS` after `E_SCHEMA`, the Boolean map's, then §5.1's `inputs` and `E_UNREACHED`, and the
+program digest (`programDigestWith`). -/
 def decode (bytes : ByteArray) : V Prog := do
   let some text := String.fromUTF8? bytes | throw "program: not UTF-8"
   let j ← match JsonParse.parse text with
@@ -1662,6 +1896,7 @@ def decode (bytes : ByteArray) : V Prog := do
   match (j.getObjValAs? String "schema").toOption with
   | some s => if s != SCHEMA then throw s!"E_SCHEMA: unexpected descriptor schema '{s}' (this verifier reads {SCHEMA})"
   | none => throw s!"E_SCHEMA: unexpected descriptor schema (this verifier reads {SCHEMA})"
+  checkTopKeys (top.toArray.map (·.1))
   let .ok (.obj dkv) := j.getObjVal? "definitions" | throw "program: definitions"
   for (fid, d) in dkv.toArray do
     let .obj _ := d | throw s!"definition '{fid}': not an object"
@@ -1696,9 +1931,12 @@ def decode (bytes : ByteArray) : V Prog := do
   let ((), st) ← (decodeAll desc prims).run st
   let pairs ← booleanKeys st.defs st.index prims bm
   let ((), st) ← (decodeBodies desc rootId pairs).run st
+  checkInputs st.defs root (j.getObjValD "inputs")
+  checkReached dkv.toArray callees
+    (#[rootId] ++ (recordFunctionIds programFn).filter desc.ddefs.contains ++ pairs.map (·.2))
   let boolean := pairs.foldl (fun m p => m.insert p.1 p.2) {}
-  let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
-  return { defs := st.defs, index := st.index, root, programFn, sha512 := Sha512.hash (← canon bare).toUTF8, boolean }
+  return { defs := st.defs, index := st.index, root, programFn, sha512 := ← programDigestWith (fun b => pure (Sha512.hash b)) j,
+           boolean }
 
 
 /-- A descriptor's bytes read as JSON: none for bytes that are not UTF-8, else `JsonParse.parse`'s verdict on their text. Every
@@ -1715,6 +1953,7 @@ def decodeOf (read : Option (Except String Json)) : V Prog := do
   match (j.getObjValAs? String "schema").toOption with
   | some s => if s != SCHEMA then throw s!"E_SCHEMA: unexpected descriptor schema '{s}' (this verifier reads {SCHEMA})"
   | none => throw s!"E_SCHEMA: unexpected descriptor schema (this verifier reads {SCHEMA})"
+  checkTopKeys (top.toArray.map (·.1))
   let .ok (.obj dkv) := j.getObjVal? "definitions" | throw "program: definitions"
   for (fid, d) in dkv.toArray do
     let .obj _ := d | throw s!"definition '{fid}': not an object"
@@ -1749,9 +1988,12 @@ def decodeOf (read : Option (Except String Json)) : V Prog := do
   let ((), st) ← (decodeAll desc prims).run st
   let pairs ← booleanKeys st.defs st.index prims bm
   let ((), st) ← (decodeBodies desc rootId pairs).run st
+  checkInputs st.defs root (j.getObjValD "inputs")
+  checkReached dkv.toArray callees
+    (#[rootId] ++ (recordFunctionIds programFn).filter desc.ddefs.contains ++ pairs.map (·.2))
   let boolean := pairs.foldl (fun m p => m.insert p.1 p.2) {}
-  let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
-  return { defs := st.defs, index := st.index, root, programFn, sha512 := Sha512.hash (← canon bare).toUTF8, boolean }
+  return { defs := st.defs, index := st.index, root, programFn, sha512 := ← programDigestWith (fun b => pure (Sha512.hash b)) j,
+           boolean }
 
 set_option maxRecDepth 20000 in
 theorem decode_eq_of (bytes : ByteArray) : decode bytes = decodeOf (readJson bytes) := by
@@ -1759,7 +2001,7 @@ theorem decode_eq_of (bytes : ByteArray) : decode bytes = decodeOf (readJson byt
   generalize String.fromUTF8? bytes = o
   cases o <;> rfl
 
-/-- `decode` in a verdict monad `M`, the program's SHA-512 by `sha512` (`Flock.With.Setup`). It is here because `decode`'s
+/-- `decode` in a verdict monad `M`, each SHA-512 of the program digest by `sha512` (`Flock.With.Setup`). It is here because `decode`'s
 decoder state is this module's own. -/
 def decodeWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (sha512 : ByteArray → M ByteArray)
     (bytes : ByteArray) : M Prog := do
@@ -1771,6 +2013,7 @@ def decodeWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLift
   match (j.getObjValAs? String "schema").toOption with
   | some s => if s != SCHEMA then throw s!"E_SCHEMA: unexpected descriptor schema '{s}' (this verifier reads {SCHEMA})"
   | none => throw s!"E_SCHEMA: unexpected descriptor schema (this verifier reads {SCHEMA})"
+  (checkTopKeys (top.toArray.map (·.1)) : V _)
   let .ok (.obj dkv) := j.getObjVal? "definitions" | throw "program: definitions"
   for (fid, d) in dkv.toArray do
     let .obj _ := d | throw s!"definition '{fid}': not an object"
@@ -1802,8 +2045,45 @@ def decodeWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLift
   let ((), st) ← ((decodeAll desc prims).run st : V _)
   let pairs ← (booleanKeys st.defs st.index prims bm : V _)
   let ((), st) ← ((decodeBodies desc rootId pairs).run st : V _)
+  (checkInputs st.defs root (j.getObjValD "inputs") : V _)
+  (checkReached dkv.toArray callees
+    (#[rootId] ++ (recordFunctionIds programFn).filter desc.ddefs.contains ++ pairs.map (·.2)) : V _)
   let boolean := pairs.foldl (fun m p => m.insert p.1 p.2) {}
-  let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
-  return { defs := st.defs, index := st.index, root, programFn, sha512 := ← sha512 (← canon bare).toUTF8, boolean }
+  return { defs := st.defs, index := st.index, root, programFn, sha512 := ← programDigestWith sha512 j, boolean }
+
+/-- `NotAnd_v1(x: Value<1>) = Not(x)` as `codec.encode_program` writes it, `codec.decode_program`'s accept; its digests are
+`codec.definition_digests`' and `codec.program_digest`'s on these bytes. -/
+private def NOT_DESC : String :=
+  r#"{"boolean":{},"callees":["Input1_v1","Not_v1"],"definitions":{"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[NotAnd_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":1,"out":0},{"args":[{"refs":{"affine":["n",0,0,1]},"type":1}],"fn":1,"form":"primitive","out":1}],"params":[],"ret":{"affine":["n",1,0,1]},"ret_type":["Value",1]},"form":"composite","id":"Root[NotAnd_v1]_v1"}},"inputs":[["x",1]],"program_fn":"NotAnd_v1","root":"Root[NotAnd_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Array",1,["Value",1]],["Value",1]]}"#
+
+/-- `NOT_DESC` with a registered input node after the run input node, the parameters as `inputs` names them. -/
+private def mixedDesc (inputs : String) : String :=
+  ((((NOT_DESC.replace r#"["Input1_v1","Not_v1"]"# r#"["Input1_v1","Not_v1","RegisteredInput1_v1"]"#).replace
+    r#""Root[NotAnd_v1]_v1":{"# r#""RegisteredInput1_v1":{"form":"primitive","id":"RegisteredInput1_v1","params":[],"ret":["Value",1]},"Root[NotAnd_v1]_v1":{"#).replace
+    r#""form":"batch","n":1,"out":0},"# r#""form":"batch","n":1,"out":0},{"args":[],"axes":[],"fn":2,"form":"batch","n":1,"out":0},"#).replace
+    r#""ret":{"affine":["n",1,0,1]}"# r#""ret":{"affine":["n",2,0,1]}"#).replace r#""inputs":[["x",1]]"# inputs
+
+/-- `decode`'s verdict on `s`: the program digest of an accept, else the refusal's code. -/
+private def verdict (s : String) : String := match decode s.toUTF8 with
+  | .ok P => hexOf P.sha512
+  | .error e => (e.splitOn ":").head!
+
+#guard verdict NOT_DESC == "8793c3fbb20b66b520af8987be9dc885a37593a13e866a6795c0619a6800aa07aa66e141722a09da83e0a3c30cda5339dd430122db2de67ff3271fa01bba536e"
+#guard match (JsonParse.parse NOT_DESC).toOption.map definitionDigests with
+  | some (.ok d) => d.toList.mergeSort (fun a b => a.1 ≤ b.1) == [
+      ("Input1_v1", "01a1a9db691df5e9a51666f246f71239e9681d94750b07fa28e9ae24228055d112e38b257c0728673e6635057cad11565109279e2b71116867e38ae5d8fa18b7"),
+      ("Not_v1", "e53494d3815c1d18a5eb3a18aae5781f0dfea16eec4cb1263e08f7b875c358a06b6007f7bf6de72f2b65cf840da36e3c9c84f4752f3bb32c3373654987230214"),
+      ("Root[NotAnd_v1]_v1", "b5a3def87804c6f07a020e710c0b1349c1719870efedebc9028a4a98329b57ac49e1dcc7a8ccce3a64fb2583a35e4b1a99d812264c8f7935ba3be2a35aa68bd0")]
+  | _ => false
+#guard verdict (NOT_DESC.replace r#""boolean":{},"# r#""boolean":{},"word":{},"#) == "E_KEYS"
+#guard verdict (NOT_DESC.replace r#""schema":"verity-ir/descriptor/v2","# r#""schema":"verity-ir/descriptor/v1","#) == "E_SCHEMA"
+#guard verdict (NOT_DESC.replace r#""inputs":[["x",1]],"# "") == "E_INPUTS"
+#guard verdict (NOT_DESC.replace r#""inputs":[["x",1]]"# r#""inputs":[["x","1"]]"#) == "E_INPUTS"
+#guard verdict (NOT_DESC.replace r#""inputs":[["x",1]]"# r#""inputs":[["",1]]"#) == "E_INPUTS_NAME"
+#guard verdict (NOT_DESC.replace r#""inputs":[["x",1]]"# r#""inputs":[["x",1],["x",0]]"#) == "E_INPUTS_NAME"
+#guard verdict (NOT_DESC.replace r#""inputs":[["x",1]]"# r#""inputs":[["x",2]]"#) == "E_INPUTS_COUNT"
+#guard verdict (mixedDesc r#""inputs":[["x",2]]"#) == "E_INPUTS_MIXED"
+#guard (verdict (mixedDesc r#""inputs":[["x",1],["y",1]]"#)).length == 128
+#guard verdict (NOT_DESC.replace r#""definitions":{"# r#""definitions":{"Const1[0x1]_v1":{"form":"primitive","id":"Const1[0x1]_v1","params":[],"ret":["Value",1]},"#) == "E_UNREACHED"
 
 end Flock.Program

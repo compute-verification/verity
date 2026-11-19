@@ -332,6 +332,7 @@ def encode_program(program, schema: str = SCHEMA) -> dict:
         "boolean": {k: descriptor_id(v) for k, v in bmap.items()},
         "root": descriptor_id(program.root),
         "program_fn": getattr(program, "program_fn_id", None) or descriptor_id(program.fn),
+        "inputs": _inputs(program),
         "definitions": {fid: done[fid] for fid in seen},
         "annotations": dict(program.annotations),
     }
@@ -392,6 +393,12 @@ def _walk(program, done: Callable[[str, FunctionDefinition], None], bodies=()) -
         if _encode_definition(fn) != _encode_definition(seen[fid]):  # self-contained (v0) forms: no table side effects
             raise IdentityConflict(f"E_IDENTITY: two different definitions claim the specialization {fid!r}")
     return seen
+
+
+def _inputs(program) -> list[list]:
+    """``program``'s `inputs` (PROTOCOL.md §5.1): a `DecodedProgram`'s as its descriptor holds them, a `Program`'s from its root."""
+    got = getattr(program, "inputs", None)
+    return [list(x) for x in (got if got is not None else program.root.inputs)]
 
 
 def _boolean(program) -> dict[str, FunctionDefinition]:
@@ -461,7 +468,7 @@ def descriptor_chunks(program, schema: str = SCHEMA) -> Iterator[bytes]:
     seen = _walk(program, intern, bodies.values())
     skeleton = {"schema": schema, "boolean": bmap, "root": descriptor_id(program.root),
                 "program_fn": getattr(program, "program_fn_id", None) or descriptor_id(program.fn),
-                "definitions": {fid: heads[fid] for fid in seen}}
+                "inputs": _inputs(program), "definitions": {fid: heads[fid] for fid in seen}}
     if tables is not None:
         skeleton.update(tables.to_json())
         interned = (len(tables.callees), len(tables.type_json))
@@ -475,7 +482,7 @@ def descriptor_chunks(program, schema: str = SCHEMA) -> Iterator[bytes]:
             yield canonical_json(heads[fid])
         else:
             yield from _composite_chunks(fn, heads[fid], schema, tables)
-    yield (b'},"program_fn":' + canonical_json(skeleton["program_fn"]) + b',"root":' + canonical_json(skeleton["root"])
+    yield (b'},"inputs":' + canonical_json(skeleton["inputs"]) + b',"program_fn":' + canonical_json(skeleton["program_fn"]) + b',"root":' + canonical_json(skeleton["root"])
            + b',"schema":' + canonical_json(schema))
     if tables is not None:
         if (len(tables.callees), len(tables.type_json)) != interned:
@@ -552,21 +559,118 @@ def _check_domain(desc: dict) -> None:
 
 
 def program_digest(program_or_desc) -> str:
-    """SHA-512 of the descriptor's canonical JSON without ``annotations``; a program's is streamed (`descriptor_chunks`)."""
+    """The program digest (PROTOCOL.md §1): SHA-512 of the canonical JSON of the schema, `program_fn`, `inputs`, the root's
+    digest, the digests of the functions `program_fn`'s record names, and the Boolean map's body digests, each definition's
+    digest composed from its callees' (`definition_digests`).  ``annotations`` never enter it."""
     if isinstance(program_or_desc, dict):
-        return hashlib.sha512(canonical_json({k: v for k, v in program_or_desc.items() if k != "annotations"})).hexdigest()
-    # The cyclic collector stays off while streaming: encoding frees its pieces by reference counting, and the collector's
-    # passes over a big program's live bodies cost more than the encoding itself.
+        desc = program_or_desc
+        schema, pfn, inputs, root, bm = desc["schema"], desc["program_fn"], desc.get("inputs"), desc["root"], desc.get("boolean", {})
+    else:
+        bodies = _boolean(program_or_desc)
+        schema, pfn = SCHEMA, getattr(program_or_desc, "program_fn_id", None) or descriptor_id(program_or_desc.fn)
+        inputs, root = _inputs(program_or_desc), descriptor_id(program_or_desc.root)
+        bm = {k: descriptor_id(v) for k, v in bodies.items()}
     on = gc.isenabled()
-    gc.disable()
+    gc.disable()  # the collector's passes over a big program's live bodies cost more than the hashing itself
     try:
-        h = hashlib.sha512()
-        for chunk in descriptor_chunks(program_or_desc):
-            h.update(chunk)
-        return h.hexdigest()
+        d = definition_digests(program_or_desc)
     finally:
         if on:
             gc.enable()
+    return _sha512_json({"schema": schema, "program_fn": pfn, "inputs": inputs, "root": d[root],
+                         "functions": {f: d[f] for f in _record_function_ids(pfn) if f in d},
+                         "boolean": {k: d[v] for k, v in bm.items()}})
+
+
+def _sha512_json(obj: Any) -> str:
+    return hashlib.sha512(canonical_json(obj)).hexdigest()
+
+
+def definition_digests(program_or_desc) -> dict[str, str]:
+    """Each definition's digest (PROTOCOL.md §4.8), by descriptor id: SHA-512 of its canonical entry with every function it
+    references (a node's callee, a `{"fn": id}` of its binding record) replaced by that function's digest, and a word
+    primitive's with its Boolean body's digest under `boolean`.  Computed callees first, each once; a definition's digest is
+    the same in every program that holds it."""
+    if isinstance(program_or_desc, dict):
+        desc = program_or_desc
+        defs, bm = desc["definitions"], desc.get("boolean", {})
+
+        def entry(fid: str) -> dict:
+            return canonical_entry(defs[fid], desc)
+        order = list(defs)
+    else:
+        bodies = _boolean(program_or_desc)
+        heads: dict[str, dict] = {}
+
+        def head(fid: str, fn: FunctionDefinition) -> None:
+            heads[fid] = _encode_definition(fn) if isinstance(fn, PrimitiveDefinition) else _entry_head(fn)
+        seen = _walk(program_or_desc, head, bodies.values())
+        bm = {k: descriptor_id(v) for k, v in bodies.items()}
+        _check_domain({"boolean": bm, "inputs": _inputs(program_or_desc), "definitions": heads,
+                       "program_fn": getattr(program_or_desc, "program_fn_id", None) or descriptor_id(program_or_desc.fn)})
+
+        def entry(fid: str) -> dict:
+            return canonical_entry(_encode_definition(seen[fid]))
+        order = list(seen)
+    out: dict[str, str] = {}
+    for top in order:
+        stack: list[tuple[str, dict | None]] = [(top, None)]
+        while stack:
+            fid, e = stack.pop()
+            if fid in out:
+                continue
+            if e is None:
+                e = entry(fid)
+                todo = [f for f in _references(e) if f not in out]
+                if fid in bm and bm[fid] not in out:
+                    todo.append(bm[fid])
+                if todo:
+                    stack.append((fid, e))
+                    stack.extend((f, None) for f in todo)
+                    continue
+            out[fid] = _sha512_json(_composed(e, out, bm.get(fid)))
+    return out
+
+
+def _references(e: dict) -> list[str]:
+    """The functions canonical entry ``e`` references: its nodes' callees, then its binding record's `{"fn": id}`s."""
+    nodes = (e.get("body") or {}).get("nodes", []) if e.get("form") == "composite" else []
+    return [n["fn"] for n in nodes] + _record_fns(e.get("bindings", {}))
+
+
+def _record_fns(v: Any) -> list[str]:
+    out: list[str] = []
+    stack = [v]
+    while stack:
+        x = stack.pop()
+        if isinstance(x, dict):
+            if set(x) == {"fn"} and isinstance(x["fn"], str):
+                out.append(x["fn"])
+            else:
+                stack.extend(x.values())
+        elif isinstance(x, list):
+            stack.extend(x)
+    return out
+
+
+def _composed(e: dict, d: dict[str, str], body: str | None) -> dict:
+    """Canonical entry ``e`` with each reference replaced by its digest in ``d``, and ``body``'s digest under `boolean`."""
+    def sub(x: Any) -> Any:
+        if isinstance(x, dict):
+            if set(x) == {"fn"} and isinstance(x["fn"], str):
+                return {"fn": d[x["fn"]]}
+            return {k: sub(y) for k, y in x.items()}
+        if isinstance(x, list):
+            return [sub(y) for y in x]
+        return x
+    out = dict(e)
+    if "bindings" in e:
+        out["bindings"] = sub(e["bindings"])
+    if e.get("form") == "composite":
+        out["body"] = dict(e["body"], nodes=[dict(n, fn=d[n["fn"]]) for n in e["body"]["nodes"]])
+    if body is not None:
+        out["boolean"] = d[body]
+    return out
 
 
 def descriptor_size(program_or_desc) -> int:
@@ -743,6 +847,7 @@ class DecodedProgram:
         self.program_fn_id = desc["program_fn"]
         self.program_fn_functions = program_fn_functions  # the definitions `program_fn`'s record references
         self.boolean = dict(boolean or {})  # each word primitive's Boolean Definition, as the descriptor holds it
+        self.inputs = [list(x) for x in desc.get("inputs") or ()]
 
     @property
     def gates(self) -> int:
@@ -888,6 +993,9 @@ def _record_value(v: Any, fn: Callable[[str], Any]) -> Any:
     return v
 
 
+_TOP_KEYS = frozenset({"schema", "program_fn", "inputs", "root", "boolean", "callees", "types", "definitions", "annotations"})
+
+
 def definition_decoder(desc: dict, registry: DefinitionTable, built: dict[str, Any] | None = None) -> Callable[[str], Any]:
     """The per-definition reader `decode_program` uses: each definition of ``desc`` by its id, decoded into ``built``."""
     schema = desc.get("schema")
@@ -896,6 +1004,8 @@ def definition_decoder(desc: dict, registry: DefinitionTable, built: dict[str, A
                          "program again")
     if schema != SCHEMA:
         raise ValueError(f"E_SCHEMA: unexpected descriptor schema {schema!r}, only {SCHEMA} is read")
+    if extra := sorted(set(desc) - _TOP_KEYS):
+        raise ValueError(f"E_KEYS: the top-level keys {extra[:4]} are not {SCHEMA}'s, and the program digest does not cover them")
     _check_domain(desc)
     ddefs = desc["definitions"]
     built = {} if built is None else built
@@ -1005,7 +1115,33 @@ def decode_program(desc: dict, registry: DefinitionTable) -> DecodedProgram:
         raise ValueError(f"root {desc['root']!r}: the root is a composite without parameters")
     pfn_fns = tuple(get(fid) for fid in _record_function_ids(desc["program_fn"]) if fid in desc["definitions"])
     P.check(root)
-    return DecodedProgram(root, built, desc, pfn_fns, _decode_boolean(desc, get))
+    prog = DecodedProgram(root, built, desc, pfn_fns, _decode_boolean(desc, get))
+    _check_inputs(desc.get("inputs"), root)
+    if extra := sorted(set(desc["definitions"]) - set(_walk(prog, lambda fid, fn: None, prog.boolean.values()))):
+        raise ValueError(f"E_UNREACHED: {extra[:4]} are reached from neither the root, `program_fn`'s record nor the Boolean map")
+    return prog
+
+
+def _check_inputs(xs: Any, root: SpecializedDefinition) -> None:
+    """``xs``, a descriptor's `inputs` (PROTOCOL.md §5.1): [name, node count] per parameter (`E_INPUTS`), the names nonempty and
+    distinct (`E_INPUTS_NAME`), the counts summing to the root's input nodes, which lead its body (`E_INPUTS_COUNT`), and each
+    parameter's nodes all run or all registered inputs (`E_INPUTS_MIXED`)."""
+    from .program import is_registered
+    if not isinstance(xs, list) or not all(isinstance(x, list) and len(x) == 2 and isinstance(x[0], str) and _nat(x[1]) for x in xs):
+        raise ValueError("E_INPUTS: `inputs` is not an array of [name, node count] pairs")
+    names = [x[0] for x in xs]
+    if "" in names or len(set(names)) != len(names):
+        raise ValueError(f"E_INPUTS_NAME: the parameter names {names[:8]} hold an empty or a repeated name")
+    nodes = root.body.nodes
+    lead = next((k for k, n in enumerate(nodes) if not is_input(n.fn)), len(nodes))
+    if sum(n for _, n in xs) != lead or any(is_input(n.fn) for n in nodes[lead:]):
+        raise ValueError(f"E_INPUTS_COUNT: `inputs` counts {sum(n for _, n in xs)} input nodes, where the root's body leads with {lead} "
+                         "and holds no input node after them")
+    k = 0
+    for name, n in xs:
+        if len({is_registered(nd.fn) for nd in nodes[k:k + n]}) > 1:
+            raise ValueError(f"E_INPUTS_MIXED: parameter {name!r}'s input nodes {k}..{k + n - 1} mix run and registered inputs")
+        k += n
 
 
 def _decode_boolean(desc: dict, get: Callable[[str], Any]) -> dict[str, FunctionDefinition]:

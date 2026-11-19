@@ -210,6 +210,11 @@ class Program:
         return self.root.gates
 
     @property
+    def inputs(self) -> list[list]:
+        """Each parameter of the program function, in order, as [name, how many input nodes it lowers to] (PROTOCOL.md §5.1)."""
+        return self.root.inputs  # type: ignore[attr-defined]
+
+    @property
     def input_gates(self) -> int:
         return sum(n.gates for n in self.root.body.nodes if is_input(n.fn))
 
@@ -223,7 +228,11 @@ def _lower_root(fn: SpecializedDefinition, bindings: tuple[str, ...] | None = No
     params, ret = fn.signature()
     B = Builder((), ret)
     bindings = bindings or (RUN,) * len(params)
-    input_colls = [_lower_input(B, t, name, when) for (name, t), when in zip(params, bindings)]
+    input_colls, inputs = [], []
+    for (name, t), when in zip(params, bindings):
+        k = len(B.nodes)
+        input_colls.append(_lower_input(B, t, name, when))
+        inputs.append([name, len(B.nodes) - k])
     theta_nodes = frozenset(k for (name, _t), c in zip(params, input_colls) if name in theta for _s, k, _a, _b in ref_runs(c.refs))
     out = fn.defn.body(B, fn.S(), *input_colls)
     body = B.finish(out)
@@ -233,6 +242,7 @@ def _lower_root(fn: SpecializedDefinition, bindings: tuple[str, ...] | None = No
     root.theta = theta_nodes  # type: ignore[attr-defined]
     root.set_port_types(ports.root_ports(fn, input_colls, [b == REGISTRATION for b in bindings], [n.out for n in body.nodes]))
     root.program_fn = fn  # type: ignore[attr-defined]
+    root.inputs = inputs  # type: ignore[attr-defined]
     # Gate indices of the Input gates per parameter, as collections over refs ("g", 0, gate_index). Kept
     # affine (an Input batch is one contiguous interval) so weight tensors stay O(1).
     root.input_colls = [_gate_coll(c, body) for c in input_colls]  # type: ignore[attr-defined]

@@ -161,7 +161,7 @@ def test_a_declared_definition_carries_its_ports_and_a_pinned_digest():
 
 
 #: the typed descriptor's digest: a change to how ports are written changes it
-PINNED = "f5e05bdcf0d6b549cb1b27efc6d904aa409527b057c66d0838f230242525fe6faacd15c30ad3a626cc758d409bb19afa77735c2846d74624a29f37e3f02645a8"
+PINNED = "fb94fe71d235319dc10ced8400ad10e5966a05df20b256a6a4cf82bd21ffc2198fd8851579fd2c5e49b635104f870a282b0d59aa7a0a163fe0ae3af699b4b4ff"
 
 
 # --- rule 2: intervals --------------------------------------------------------------------------------------------------------

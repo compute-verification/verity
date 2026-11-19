@@ -18,8 +18,8 @@ from verity.circuits.private_circuits import universal as U
 
 #: (G, N_IN, N_OUT) -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    (16, 16, 8): (1066, 1586, 0, "e2b4dde3a31d65a1a7f5af2b50540a89f713efa296e8e42f0d7bced7d4a1065510c19d1b45a27023edeb5eef812eb4d62e8a20c99d4b3e5b9c46037a43b451dc"),
-    (64, 64, 32): (16674, 24898, 0, "39698ff01cb97b6998cb2da36bb14bc81e69acd724594cf2f9c2114770a9cee0181f964c9c9ba06f9beff51369ed6cab1496097afb2ca7b50e703b7f437a6241"),
+    (16, 16, 8): (1066, 1586, 0, "fee9e22be65d39180f16ff7e789dbc71d6641dc708932f7baa965fa8cc6f7ac1a213f0918dfe7df8af08baf566d6a976a54b6cf2737e60b4734453b2b1a25789"),
+    (64, 64, 32): (16674, 24898, 0, "7b18bb05e1b0b69f0795da642c61abe6d75f70066d4f5198f74776536bc34a4d8da244a11c3041764fd174db4f1052665bc6b87b93c858733582d7402de4363e"),
 }
 CLASSES = [(1, 1, 1), (3, 2, 2), (5, 1, 3), (16, 16, 8), (20, 13, 5), (64, 64, 32)]
 
