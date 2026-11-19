@@ -137,15 +137,25 @@ def main() -> int:
     dishonest, dref = flipped(honest, href)
     want = [reference(k, n, href), reference(k, n, dref)]
     hb, db = port_bits(core, honest), port_bits(core, dishonest)
-    fn = block_circuit(b.program.fn, boolean_table(b.program))
-    got = evaluate_bits(fn, np.asarray([sum((v for _p, v in hb), []), sum((v for _p, v in db), [])], dtype=np.uint8))
-    got = got.reshape(2, -1).tolist()
-    as_words = [[sum(g[8 * i + j] << j for j in range(8)) for i in range(64)] + [g[512]] for g in got]
-    rec["bits"] = {"honest_ok": as_words[0][-1], "dishonest_ok": as_words[1][-1],
-                   "honest_digest": bytes(as_words[0][:64]).hex(), "reference_agrees": as_words == want}
+
+    def words(g: list[int]) -> list[int]:
+        return [sum(g[8 * i + j] << j for j in range(8)) for i in range(64)] + [g[512]]
+
+    got = [evaluate_bits(core, *(np.asarray([v], dtype=np.uint8) for _p, v in pb)).reshape(-1).tolist() for pb in (hb, db)]
+    as_words = [words(g) for g in got]
+    rec["bits"] = {"of": "the core (the lowered unit) on the staged bits", "honest_ok": as_words[0][-1],
+                   "dishonest_ok": as_words[1][-1], "honest_digest": bytes(as_words[0][:64]).hex(),
+                   "reference_digest": bytes(want[0][:64]).hex(), "reference_agrees": as_words == want}
     phase("bits")
     print("BITS " + json.dumps(rec["bits"]), flush=True)
-    assert as_words == want, ("the block on bits is not the scheme's reference", as_words, want)
+    fn = block_circuit(b.program.fn, boolean_table(b.program))
+    root = evaluate_bits(fn, np.asarray([sum((v for _p, v in hb), []), sum((v for _p, v in db), [])], dtype=np.uint8))
+    root = [words(g) for g in root.reshape(2, -1).tolist()]
+    rec["block_root"] = {"of": "restrict's block root on the same bits, one port", "honest_ok": root[0][-1],
+                         "dishonest_ok": root[1][-1], "honest_digest": bytes(root[0][:64]).hex(), "agrees": root == as_words}
+    phase("block-root-bits")
+    print("BLOCK-ROOT " + json.dumps(rec["block_root"]), flush=True)
+    assert as_words == want, ("the core on bits is not the scheme's reference", as_words, want)
     assert as_words[0][-1] == 1 and as_words[1][-1] == 0
 
     part3 = {x: part[x] for x in ("format", "program", "query")}
