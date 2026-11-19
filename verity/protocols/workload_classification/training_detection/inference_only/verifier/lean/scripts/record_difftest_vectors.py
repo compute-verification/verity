@@ -965,7 +965,12 @@ def shaped() -> list[dict]:
     refuses is edited into the accepted record and refused with the declarations (`inputs`).
 
     Then `Norm`'s batch split into two root nodes (`SPLITS`, `split`): side by side and with `Gemm`'s between, each
-    taken with the served shape's verdict, and with the record one unit short of their sum, refused (`templates`)."""
+    taken with the served shape's verdict, and with the record one unit short of their sum, refused (`templates`).
+
+    Then `Norm`'s weights' input node shrunk to the one row every `Norm` unit reads, and declared in
+    `registered.nodes` (`NODES`, `declared`): read at outer stride 0 or unmapped, as `weights/norm` from its first
+    leaf, it is taken. Declared of two kinds, under another registered parameter, at a shifted offset, as a parameter
+    the log does not register, or with `Scan`'s state reading it under its own reads, it is refused (`nodes`)."""
     out = []
     first = None
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
@@ -1161,7 +1166,44 @@ def shaped() -> list[dict]:
               48 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + k,
               reroot=split(apart), broken="templates" if short else None,
               edit=(lambda d: d["templates"][2].__setitem__(1, d["templates"][2][1] - 1)) if short else None)
+    k = _norm_weights(lowered(2, 3))
+
+    def declared(shape: str):
+        """`Norm`'s weights' input node shrunk to the one row every `Norm` unit reads (four leaves under `scan`),
+        each `Norm` reading it at outer stride 0, or unmapped; under `scan`, `Scan`'s state reading the whole node
+        too."""
+        def edit(nodes: list, desc: dict) -> None:
+            size = 4 if shape == "scan" else 2
+            nodes[k]["n"], nodes[k]["out"] = size, _halved(desc, nodes[k]["out"], size)
+            for x in norms(nodes, desc):
+                if shape == "unmapped":
+                    x["axes"][1] = None
+                    x["args"][1].update(type=desc["types"].index(["Array", 2, ["Value", 16]]),
+                                        refs={"affine": ["n", k, 0, 2]})
+                else:
+                    x["args"][1]["refs"] = {"strided": ["n", k, 0, 2, 0, 1, 2 * x["n"]]}
+            if shape == "scan":
+                scan = [x for x in units(nodes) if desc["callees"][x["fn"]] == "LowScan_v1"][0]
+                scan["args"][0]["refs"] = {"strided": ["n", k, 0, 4, 0, 1, 4 * scan["n"]]}
+        return edit
+
+    for j, (what, (shape, decls, wide, held, stage)) in enumerate(NODES.items()):
+        c = lowered(2, 3)
+        if wide:
+            c.params["weights/norm"] = 4
+        first(f"2x3 {what}", c, 48 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS)
+              + len(ROW_ROLE) + len(SPLITS) + j, reroot=declared(shape), broken=stage,
+              held=tuple(p for p in WEIGHTS if held or p != "weights/norm"),
+              edit=lambda d, decls=decls: d["registered"].__setitem__("nodes", [{"node": k, **x} for x in decls]))
     return out
+
+
+def _norm_weights(c: Circuit) -> int:
+    """The root input node `Norm`'s weights' rows are leaves of."""
+    desc = json.loads(c.program()[0])
+    nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
+    norm = next(x for x in nodes if x["args"] and desc["callees"][x["fn"]] == "LowNorm_v1")
+    return _refs(nodes, norm["args"][1]["refs"]).idx
 
 
 def _registered(root: str, n: int, bits: int, stated: int | None = None) -> tuple:
@@ -1423,6 +1465,22 @@ def case(seed: int) -> dict:
     if stage in EARLY:
         made["case"]["spot"] = None
     return made | {"shape": "random", "broken": stage, "how": how}
+
+
+_NORM = {"param": "weights/norm", "offset": 0}
+#: `Norm`'s weights' input node declared in `registered.nodes` (`declared`): by its shape (every `Norm` reading it at
+#: outer stride 0, unmapped, or `Scan`'s state reading it too), its declarations, whether `weights/norm` is four
+#: leaves, whether the log registers it, and the stage that refuses it, None where the form takes it
+NODES: dict[str, tuple[str, list, bool, bool, str | None]] = {
+    "a row every unit reads at outer stride 0, declared": ("mapped", [_NORM], False, True, None),
+    "a row every unit reads unmapped, declared": ("unmapped", [_NORM], False, True, None),
+    "one stretch declared of two kinds": ("mapped", [_NORM, {"table": "table/weights/embed", "of": "root"}], False,
+                                          True, "nodes"),
+    "a node declared under another root": ("mapped", [{"param": "weights/query", "offset": 0}], False, True, "nodes"),
+    "a node declared at a shifted offset": ("mapped", [{**_NORM, "offset": 1}], True, True, "nodes"),
+    "a node declared registered, not in the log": ("mapped", [_NORM], False, False, "nodes"),
+    "a declared node a second port reads under another declaration": ("scan", [_NORM], True, True, "nodes"),
+}
 
 
 #: `Norm`'s batch split into two root nodes (`split`): by its shape, whether `Gemm`'s node lies between the two, and
@@ -2195,7 +2253,7 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones, `shaped()`'s and `edged()`'s."""
-    return len(EDGED) + COUNT + 32 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + 1 + len(SPLITS)
+    return len(EDGED) + COUNT + 32 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + 1 + len(SPLITS) + len(NODES)
 
 
 def results(case: dict) -> dict:
