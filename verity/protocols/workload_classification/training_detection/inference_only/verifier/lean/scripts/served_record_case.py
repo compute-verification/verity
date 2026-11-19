@@ -9,7 +9,7 @@ files as they are and writes the case, ``NAME.case.json`` (a line of the record 
 
     python served_record_case.py --program P --record C --log FIRST ... RUN --limits L --out DIR --name NAME
         [--count B] [--unregister smallest|largest|PARAMETER] [--drop registered.KEY] [--format P=JSON|P=-]
-        [--no-pins] [--case-only]
+        [--no-pins] [--nodes] [--case-only]
 
 - ``--program``: the Program's v1 descriptor. ``--record``: the circuit record, the bytes the run's record commits.
 - ``--log``: the registration log's records, the first first and the run's own last.
@@ -19,7 +19,7 @@ files as they are and writes the case, ``NAME.case.json`` (a line of the record 
   gives none.
 - ``--case-only``: the case alone, not the reference's verdicts.
 
-Three options make a case the run did not write, and the case's name should say so:
+Four options make a case the run did not write, and the case's name should say so:
 
 - ``--unregister``: the log's first record without one parameter's entry and each later record's ``previous``
   made again, so the deployment never registered it. ``smallest`` and ``largest`` choose by words among the
@@ -28,6 +28,10 @@ Three options make a case the run did not write, and the case's name should say 
   at the new text. The run committed no such text: a stand-in, to read what the form says past that key.
 - ``--format P=JSON``: the record with parameter P's row format (``registered.formats``) that JSON object, or with
   none where it is ``-``, and the run's own record pointed at the new text, as ``--drop`` does.
+- ``--nodes``: the record with ``registered.nodes`` declaring each root input node that two rows read (`shared`),
+  as what the record says of the first row that reads it: the registered parameter its read names, from the leaf
+  the read's source puts the node's first leaf at, or the table read's table and root or domain id. The run's own
+  record is pointed at the new text, as ``--drop`` does: a stand-in until the adapter writes the key.
 
 The reference runs form-only (`check_detail`'s ``form_only``): its leaf-by-leaf expansions of `own-rows` and
 `leaf-widths` visit every leaf of every row of every unit, more than a served class's circuit lets it walk, so on
@@ -40,6 +44,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -67,9 +72,67 @@ def rechained(log: list[dict]) -> list[dict]:
     return out
 
 
+def shared(program) -> dict[int, list[tuple]]:
+    """Each root input node two rows read, with the readers of it, `(root node, argument, b, os, e)` each
+    (`stretch_of`): one a batch reads at outer stride 0, or two readers' stretches that meet."""
+    body = program.root.body.nodes
+    reads: dict[int, list[tuple]] = {}
+    for k, node in enumerate(body):
+        if ref.is_input(node.fn):
+            continue
+        for i in range(len(node.args)):
+            got = ref.stretch_of(node, i)
+            if got is not None and ref.is_input(body[got[0]].fn):
+                reads.setdefault(got[0], []).append((k, i, *got[1:]))
+    out = {}
+    for n, rs in reads.items():
+        spans = sorted((b + min(0, (body[k].n - 1) * os), b + max(0, (body[k].n - 1) * os) + e)
+                       for k, _, b, os, e in rs)
+        if any(os == 0 and body[k].form == "batch" and body[k].n > 1 for k, _, _, os, _ in rs) or any(
+                a[1] > b[0] for a, b in zip(spans, spans[1:])):
+            out[n] = rs
+    return out
+
+
+def declared(program, desc: dict, doc: dict) -> list[dict]:
+    """`registered.nodes` for the nodes `shared` finds, each as the record fills its first reader's first row."""
+    from verity.circuits import codec
+    body = program.root.body.nodes
+    starts, at = {}, 0
+    first: dict[str, int] = {}
+    for k, node in enumerate(body):
+        if not ref.is_input(node.fn):
+            tid = codec.descriptor_id(node.fn)
+            starts[k] = first.get(tid, 0)
+            first[tid] = starts[k] + (node.n if node.form == "batch" else 1)
+    reg = doc.get("registered", {})
+    out = []
+    for n, rs in sorted(shared(program).items()):
+        k, i, b, _, _ = rs[0]
+        tid, port, u0 = codec.descriptor_id(body[k].fn), body[k].fn.signature()[0][i][0], starts[k]
+        w = ref._homo(body[n].out)
+        hit = None
+        for r in reg.get("reads", []):
+            if r["reader"] == tid and r["port"] == port:
+                C = int(r.get("cut", [0, 1])[1]) if isinstance(r.get("cut"), list) else 1
+                c0 = int(r.get("cut", [0, 1])[0]) if isinstance(r.get("cut"), list) else 0
+                idx = (u0 - r["at"]) * C - c0
+                if c0 == 0 and 0 <= idx < math.prod(r["radix"]):
+                    s = ref.source(r, idx)
+                    if (16 * s - w * b) % 16 == 0 and 16 * s >= w * b:
+                        hit = {"node": n, "param": r["param"], "offset": (16 * s - w * b) // 16}
+                    break
+        for r in reg.get("roots", []):
+            if hit is None and r["reader"] == tid and r["port"] == port and r["at"] <= u0 < r["at"] + r["units"]:
+                hit = {"node": n, "table": r["table"], "of": r["of"]}
+        if hit is not None:
+            out.append(hit)
+    return out
+
+
 def served_case(program: str, record: str, log: list[dict], limits: dict, count: dict | None = None, *,
                 unregister: str | None = None, drop: tuple[str, ...] = (), formats: tuple[str, ...] = (),
-                pins: bool = True) -> tuple[dict, list[str]]:
+                pins: bool = True, nodes: bool = False) -> tuple[dict, list[str]]:
     """The case the files make, and what of it the run did not write (empty for the run's own). `program` and
     `record` are the files' text, `log` their records in order, the run's own last."""
     doc, log = json.loads(record), list(log)
@@ -103,6 +166,10 @@ def served_case(program: str, record: str, log: list[dict], limits: dict, count:
         else:
             stated[p] = json.loads(f)
         restated(f"with {p}'s format {f}")
+    if nodes:
+        as_served("--nodes")
+        doc.setdefault("registered", {})["nodes"] = declared(reference.desc_program(program), json.loads(program), doc)
+        restated(f"with registered.nodes declaring {len(doc['registered']['nodes'])} root input nodes")
     if unregister:
         first = {e.get("value") for e in log[0]["registered"]}
         read = sorted((n, p) for p, n in doc["registered"]["params"].items() if p in first)
@@ -147,6 +214,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--drop", action="append", default=[])
     ap.add_argument("--format", action="append", default=[])
     ap.add_argument("--no-pins", action="store_true")
+    ap.add_argument("--nodes", action="store_true")
     ap.add_argument("--case-only", action="store_true", help="write the case and not the reference's verdicts")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--name", required=True)
@@ -157,7 +225,7 @@ def main(argv: list[str] | None = None) -> int:
         case, changed = served_case(
             a.program.read_text(), record, [json.loads(p.read_text()) for p in a.log], json.loads(a.limits.read_text()),
             json.loads(a.count.read_text()) if a.count else None,
-            unregister=a.unregister, drop=tuple(a.drop), formats=tuple(a.format), pins=not a.no_pins)
+            unregister=a.unregister, drop=tuple(a.drop), formats=tuple(a.format), pins=not a.no_pins, nodes=a.nodes)
     except ValueError as e:
         print(e, file=sys.stderr)
         return 2
