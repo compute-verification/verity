@@ -160,8 +160,9 @@ Each section, with the function of `check.py` whose docstring has its rule. A li
 keeps or drops from and never adds to.
 
 - `roots`: the modules the audit imports; every module under them is audited. `exempt`: the module prefixes nothing
-  imports, each with the reason; every other `.lean` file of the package is imported by a root, and an entry that
-  matches no file fails (`judge`).
+  imports, each with the reason, or, for a file left out of the roots until its issue ends, {why, owner, issue, due}
+  (`exempt_owed`); every other `.lean` file of the package is imported by a root, and an entry that matches no file, or
+  in neither form, fails (`judge`).
 - `proved_in` (optional): the packages, as paths relative to this one, that prove its guarantees (below).
 - `runs`: the package's tests, compiled evaluation that no proof reads (a bulk conformance check over more vectors
   than the kernel checks), each an exempt module that passes when it exits 0, on data used only with the SHA-256
