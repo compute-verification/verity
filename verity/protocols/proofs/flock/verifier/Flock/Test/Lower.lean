@@ -168,11 +168,16 @@ def permOk (ps : Array Program.Part) (calls : Nat) : Bool := match permTmpl ps w
   | .error e => e == "a batch argument stepping through strided or grid references"
   | .ok _ => false
 
--- a mapped argument whose members' leaves are not its parameter's is refused by name, before any member is bound
-#guard match Lower.lower { defs := #[xorDef, { permDef LISTED with body := { (permDef LISTED).body with
-    nodes := (permDef LISTED).body.nodes.map fun x => { x with args := x.args.map ({ · with dims := some (4, 0) }) } } }],
-    index := {}, root := 1, programFn := "", sha512 := ByteArray.empty } 1 #[16] #[16] with
-  | .error e => e == "Xor2_v1: a batch argument 0 of members of 0 leaves, its parameter's 2"
+-- a mapped argument in runs of no leaves, for a parameter with leaves, is refused by name before any member is bound
+def leaflessArgs : Program.Defn :=
+  { permDef LISTED with body := { (permDef LISTED).body with
+      nodes := (permDef LISTED).body.nodes.map fun x => { x with args := x.args.map ({ · with dims := some (4, 0) }) } } }
+
+def leaflessProg : Program.Prog :=
+  { defs := #[xorDef, leaflessArgs], index := {}, root := 1, programFn := "", sha512 := ByteArray.empty }
+
+#guard match Lower.lower leaflessProg 1 #[16] #[16] with
+  | .error e => e == "Xor2_v1: a batch argument 0 in runs of no leaves, its parameter's 2"
   | .ok _ => false
 
 /-! ## The lift's refusals
@@ -207,9 +212,12 @@ def mixDef : Program.Defn :=
   { key := "Mix_v1", id := "Mix_v1", prim := true, params := #[("x", .array 2 (.value 2))], ret := .value 2, gates := 1,
     paramLeaves := 2, outLeaves := 1 }
 
-#guard match Lift.lift { defs := #[mixDef, xorDef], index := ({} : Std.HashMap String Nat).insert "Mix_v1" 0 |>.insert "Xor2_v1" 1,
+def mixProg : Program.Prog :=
+  { defs := #[mixDef, xorDef], index := ({} : Std.HashMap String Nat).insert "Mix_v1" 0 |>.insert "Xor2_v1" 1,
     root := 0, programFn := "", sha512 := ByteArray.empty,
-    boolean := ({} : Std.HashMap String String).insert "Mix_v1" "Xor2_v1" } 0 with
+    boolean := ({} : Std.HashMap String String).insert "Mix_v1" "Xor2_v1" }
+
+#guard match Lift.lift mixProg 0 with
   | .error e => e == "the lift to bits: 'Mix_v1''s Boolean Definition 'Xor2_v1' has not its word primitive's bit signature"
   | .ok _ => false
 
