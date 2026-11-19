@@ -1085,7 +1085,7 @@ def kept_leaves(d, tree: MerkleTree, schema: str = ROW_SCHEMA) -> list[bytes]:
 def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), key: bytes | None = None,
                 live: int | None = None, seed: int = 11, spike: float | None = None, bad_b: int | None = None,
                 tile: tuple[int, int] = (16, 16), zero_a: int | None = None,
-                load: tuple[int, int] | None = None):
+                load: tuple[int, int] | None = None, k: int = 128):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
     salts the prover's, kept in the pass's salts files beside the rows; the unpromoted record's debit isn't stated, so
@@ -1104,11 +1104,11 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     keeping it a test instance.  With `zero_a`, that real row of the first call is all +0: it fails liveness and is
     excluded, its U is +0 and so is every word of its served y.  With `load` (rows, committed rows), both calls are of
     that many real rows in that many committed ones, as a round of a class's fixed load is (`verify_run.held_to_load`),
-    the first call's failing row its row 1."""
+    the first call's failing row its row 1.  `k` is the calls' depth."""
     if key is None:
         key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
     s = pouw_schemes.get(scheme, k_min=32, tile=tile)
-    rng, k = np.random.default_rng(seed), 128
+    rng = np.random.default_rng(seed)
     n0, n1 = max(16, tile[1]), max(32, tile[1])
     wrows = {0: bf16_words(rng, n0, k), 1: bf16_words(rng, n1, k)}
     (real, m0), m1, bad = (load, load[1], 1) if load else ((20, 32), 16, 5)
