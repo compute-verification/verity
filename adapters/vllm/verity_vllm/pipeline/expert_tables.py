@@ -296,6 +296,8 @@ def main(o: Options) -> int:
                          "weight in (B, N, K) order (--bnk FIELD)")
     if (o.program_dir is None) == (o.served is None) or (o.served is not None and (o.world is None or o.rank is None)):
         raise UsageError("give --program-dir, or --served with --world and --rank")
+    if o.served is not None and (o.world != 1 or o.rank != 0):
+        raise UsageError(f"the multi-GPU model is not served: --world {o.world} --rank {o.rank}; the tables are one GPU's")
     doc = register(o.program_dir, o.checkpoint_dir, blocks, salts_to=SF.beside(o.out), served=o.served, world=o.world, rank=o.rank,
                    stacks=o.stacks.split(",") if o.stacks else None, checkpoints_manifest=o.checkpoints_manifest,
                    model=o.model, revision=o.revision, verify_shards=not o.no_verify_shards, workers=o.workers, shards=o.shard,

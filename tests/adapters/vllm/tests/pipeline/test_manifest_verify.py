@@ -67,13 +67,13 @@ def test_a_program_with_no_workload_named_is_rebuilt_with_none(tmp_path, built):
 def test_a_batch_s_manifest_is_rebuilt_from_its_fixture_and_programs_under_the_policies_and_the_query_named(tmp_path, built):
     (tmp_path / "fixture.json").write_text(json.dumps({"requests": [{"request_id": "r0"}, {"request_id": "r1"}]}))
     given = ["manifest-verify", "--manifest", _used(tmp_path), "--fixture", str(tmp_path / "fixture.json"), "--programs-root", "D"]
-    assert cli.main([*given, "--workload-digest", "cd" * 64, "--rank", "1", "--ranks", "2", "--profile", "p", "--no-norm-scales",
+    assert cli.main([*given, "--workload-digest", "cd" * 64, "--profile", "p", "--no-norm-scales",
                      "--no-router-softmax", "--query", "Q_module_body_v1"]) == 0
     assert cli.main([*given, "--no-vocab-range"]) == 0
     assert cli.main([*given, "--no-router-softmax", "--no-vocab-range"]) == 0
     fixture = {"requests": [{"request_id": "r0"}, {"request_id": "r1"}]}
     assert built == [
-        ("build_global", (fixture, "D"), {"workload_digest": "cd" * 64, "rank": 1, "ranks": 2, "profile": "p", "norm_scales": False,
+        ("build_global", (fixture, "D"), {"workload_digest": "cd" * 64, "rank": 0, "ranks": 1, "profile": "p", "norm_scales": False,
                                           "taps": ("vocab_range",), "query": "Q_module_body_v1"}),
         ("build_global", (fixture, "D"), {"workload_digest": None, "rank": 0, "ranks": 1, "profile": None, "norm_scales": True,
                                           "taps": ("router_softmax",), "query": QUERY_OF_RECORD}),
@@ -108,3 +108,13 @@ def test_neither_a_program_nor_a_fixture_with_its_programs_directory_is_refused(
         MV.main(cli.parse("manifest-verify", ["--manifest", _used(tmp_path), *given], {}))
     assert str(refused.value) == "manifest_verify: give --program [--workload] (B=1) or --fixture --programs-root [--workload-digest] (B>=2)"
     assert built == []
+
+
+@pytest.mark.parametrize("argv", [["manifest-verify", "--manifest", "m.json", "--program", "D", "--rank", "1", "--ranks", "2"],
+                                  ["manifest", "build", "--program", "D", "--ranks", "2"],
+                                  ["manifest", "build-global", "--fixture", "f", "--programs-root", "a", "--programs-root", "b",
+                                   "--rank", "0", "--rank", "1", "--ranks", "2"]])
+def test_a_manifest_of_more_than_one_gpu_is_refused_by_name_before_it_reads_a_file(argv, capsys):
+    with pytest.raises(SystemExit):
+        cli.main(argv)
+    assert "the multi-GPU model is not served" in capsys.readouterr().err
