@@ -23,6 +23,9 @@ from types import SimpleNamespace as NS
 import numpy as np
 import pytest
 
+import stand_in
+from verity.circuits import boolean as BL
+
 from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.circuits.codec import definitions, descriptor_id
@@ -58,8 +61,10 @@ WRAP = bind(CompositeDefinition("TwoStageDriverTestWrap", 0, (),
                                 lambda S_: ((("x", Array(2, Array(2, Bits(8)))),), Array(2, Bits(8))),
                                 lambda B, S_, x: coll_concat(Array(2, Bits(8)), [B.call(PAIR, x[0]), B.call(PAIR, x[1])]),
                                 register=False))
-SAME8 = PrimitiveDefinition("TwoStageDriverTestSame8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(1), lambda a, b: int(a == b),
-                            register=False)
+SAME8 = stand_in.exact(PrimitiveDefinition("TwoStageDriverTestSame8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(1),
+                                            lambda a, b: int(a == b), register=False),
+                        lambda B, a, b: [B.call(BL.and_gate(8), BL.operands(*(B.call(BL.NOT, B.call(BL.XOR, BL.operands(x, y)))
+                                                                              for x, y in zip(a, b))))])
 #: a check template that returns a verdict, one bit
 SAME = bind(CompositeDefinition("TwoStageDriverTestSame", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(1)),
                                 lambda B, S_, x: B.call(SAME8, x[0], x[1]), register=False))
