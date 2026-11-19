@@ -373,19 +373,33 @@ def test_a_layer_past_k_max(exe, tmp_path):
 
 
 def test_calls_refused_before_anything_is_opened(exe, tmp_path):
+    """A call's index is its place, recomputed on both sides (`verify_run.passes_placed`, `Load.passesPlaced`, over
+    `protocol.call_place` and `Load.callPlace`): pass i, round ``rounds[i]`` (the coin record's, default i), holds its call c
+    at round * 2^16 + c.  The run is refused by name before anything is opened where a call holds another index
+    (``call-place``: past 2^32, an earlier position's, another round's, not an integer), where the rounds are not one a
+    pass (``call-place``), where two passes are one round (``repeated-call``), and where a round reaches 2^16
+    (``call-range``)."""
     path = T.proved_pass(tmp_path, H100)[0]
-    for index, code in ((T.C.CALL_RANGE, "call-range"), (0, "repeated-call")):
+    for index in (T.C.CALL_RANGE, 0, T.call_place(1, 1), "1"):
         edit(path, lambda m: m["matmuls"][1].update(index=index))
         got = same(exe, [path])
+        assert got["refused"][0] == VR.CALL_PLACE and got["verdicts"] == [] and f"call 1 holds index {index!r}," in got["refused"][1]
+    edit(path, lambda m: m["matmuls"][1].update(index=1))
+    record = tmp_path / "coin.json"
+    for passes, rounds, code in ((1, [1 << 16], "call-range"), (2, [0, 0], "repeated-call"), (1, [0, 1], VR.CALL_PLACE)):
+        record.write_text(json.dumps({"schema": VR.COIN_SCHEMA, "commitment": "00" * 64, "source": SOURCE.hex(),
+                                      "rounds": rounds, "dropped": []}))
+        got = same(exe, [path] * passes, record=record, rounds=rounds)
         assert got["refused"][0] == code and got["verdicts"] == []
 
 
 def test_an_epochs_passes(exe, tmp_path):
-    """Two passes of one epoch sharing a call are refused; numbered on, both are sampled over and each opens its excluded
-    row's tile."""
-    a, b = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("a", (0, 1)), ("b", (1, 2))))
-    assert same(exe, [a, b])["refused"][0] == "repeated-call"
-    c = T.proved_pass(tmp_path / "c", H100, (2, 3))[0]
+    """Two passes of one epoch at one place, each proved as round 0, are refused: the second is round 1, whose calls' places
+    are 2^16 and 2^16 + 1.  At their places, rounds 0 and 1, both are sampled over and each opens its excluded row's
+    tile."""
+    a, b = (T.proved_pass(tmp_path / n, H100)[0] for n in ("a", "b"))
+    assert same(exe, [a, b])["refused"][0] == VR.CALL_PLACE
+    c = T.proved_pass(tmp_path / "c", H100, 1)[0]
     got = same(exe, [a, c], 8)
     assert got["verdict"] == "accept" and {v["pass"] for v in got["verdicts"]} == {0, 1} and len(got["verdicts"]) == 10
 
@@ -415,7 +429,7 @@ def test_the_tiles_the_lean_draws_are_pearl_plus_credited_blocks_drawn(exe, tmp_
 def test_a_served_runs_tile_and_salt(exe, tmp_path):
     """Read as a served run's, a test instance's pass is refused before the coin: its instance is k_min 32 at 16 x 16 or
     64 x 64 tiles, not the served k_min 1,024 at 64 x 64. Passes of two salts (other fixed operands under the one coin), each
-    holding calls 0 and 1, are refused, test instance or not."""
+    at its place, are refused, test instance or not."""
     a = T.proved_pass(tmp_path / "a", H100)[0]
     wide = T.proved_pass(tmp_path / "wide", H100, tile=(64, 64))[0]
     for path, tile in ((a, 16), (wide, 64)):
@@ -424,7 +438,7 @@ def test_a_served_runs_tile_and_salt(exe, tmp_path):
         assert served["reason"] == (f"ValueError: pass 0's instance is k_min 32 at {tile} x {tile} tiles, not the served "
                                     "1024 at 64 x 64: a test instance is read only as one, crediting nothing")
     assert same(exe, [wide])["verdict"] == "accept"
-    b = T.proved_pass(tmp_path / "b", H100, seed=12)[0]
+    b = T.proved_pass(tmp_path / "b", H100, 1, seed=12)[0]
     for test_instance in (False, True):
         two = same(exe, [a, b], test_instance=test_instance)
         assert two["reason"] == "ValueError: the passes are not all of one salt" and two["refused"] is None
@@ -450,7 +464,7 @@ def test_a_live_epoch_and_a_challenger_draw(exe, tmp_path):
     """Passes salted by a live session (``coins.json`` of `window.LIVE_SCHEME`, each salt coin opened after its salt
     epoch's root) and a coin record whose sample is a sample session's coin on the run's commitment: the Lean's verdict is the
     Python's, of record or not, and reads a v2 record the Lean wrote itself on the node's sample."""
-    a, b = (T.proved_pass(tmp_path / n, H100, ix, live=0)[0] for n, ix in (("a", (0, 1)), ("b", (2, 3))))
+    a, b = (T.proved_pass(tmp_path / n, H100, ix, live=0)[0] for n, ix in (("a", 0), ("b", 1)))
     (b.parent / "coins.json").write_text((a.parent / "coins.json").read_text())
     rec = tmp_path / "coin.json"
     got = same(exe, [a, b], 8, None, rec, draw=challenger_sample())
@@ -462,8 +476,8 @@ def test_a_live_epoch_and_a_challenger_draw(exe, tmp_path):
     mine = lean(exe, [a, b], 8, SOURCE, lr, test_instance=True)
     assert mine["verdict"] == "accept" and json.loads(lr.read_text())["draw"] == {"from": "node", "claim": VR.NODE_CLAIM}
     assert lean(exe, [a, b], 8, None, lr, test_instance=True) == mine
-    edit(b, lambda m: m.update(pass_index=1))
-    late = same(exe, [b], 3, SOURCE)
+    edit(a, lambda m: m.update(pass_index=1))
+    late = same(exe, [a], 3, SOURCE)
     assert late["verdict"] == "reject" and "the salt's coin was not opened after what the verifier recorded" in late["reason"]
 
 
@@ -522,17 +536,17 @@ def test_a_run_tied_to_its_window_record(exe, tmp_path):
     prints the same tie, W's digest and its table count, also when W lists a round dropped before the coin (the coin
     record's rounds and dropped, which the Python wrote). A W that states no version (version 1, the run of record's,
     registering the calls alone) accepts in both on the calls' tables, the tie naming its fixed operands untied."""
-    warm, a, b = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("w", (0, 1)), ("a", (2, 3)), ("b", (4, 5))))
-    (w := tmp_path / "w.json").write_text(json.dumps(T.window_record(a, b)))
-    got = same(exe, [a, b], 8, tie=w, record=tmp_path / "coin.json")
+    warm, a, b = (T.proved_pass(tmp_path / n, H100, s)[0] for n, s in (("w", 0), ("a", 1), ("b", 2)))
+    (w := tmp_path / "w.json").write_text(json.dumps(T.window_record(warm, a)))
+    got = same(exe, [warm, a], 8, tie=w, record=tmp_path / "coin.json")
     assert got["verdict"] == "accept" and got["tie"] == {"record": DD.digest(json.loads(w.read_text())), "tables": 10}
     (w3 := tmp_path / "w3.json").write_text(json.dumps(T.window_record(warm, a, b)))
     got = same(exe, [a, b], 8, tie=w3, rounds=[1, 2], dropped=(0,), record=tmp_path / "coin3.json")
     assert got["verdict"] == "accept" and got["tie"]["tables"] == 10
     rec = json.loads((tmp_path / "coin3.json").read_text())
     assert (rec["rounds"], rec["dropped"]) == ([1, 2], [0])
-    (w1 := tmp_path / "w1.json").write_text(json.dumps(T.window_record(a, b, version=1)))
-    got = same(exe, [a, b], 8, tie=w1, record=tmp_path / "coin1.json")
+    (w1 := tmp_path / "w1.json").write_text(json.dumps(T.window_record(warm, a, version=1)))
+    got = same(exe, [warm, a], 8, tie=w1, record=tmp_path / "coin1.json")
     assert got["verdict"] == "accept" and got["tie"] == {"record": DD.digest(json.loads(w1.read_text())), "tables": 8,
                                                          "weights": VR.WEIGHTS_UNTIED}
 
@@ -548,9 +562,10 @@ def test_a_tied_run_held_to_its_classs_fixed_load(exe, tmp_path):
     words, the class's alone, also over a retention whose rounds a coin record names. The Lean takes ``--class`` only
     beside ``--tie``, and only as three positive integers."""
     cls = (2, 8, 2)
-    a = T.proved_pass(tmp_path / "a", H100, (0, 1), load=(16, 16))[0]
-    b = T.proved_pass(tmp_path / "b", H100, (2, 3), load=(2, 16))[0]
-    wide = T.proved_pass(tmp_path / "wide", H100, (4, 5), load=(2, 32))[0]
+    a = T.proved_pass(tmp_path / "a", H100, 0, load=(16, 16))[0]
+    b = T.proved_pass(tmp_path / "b", H100, 1, load=(2, 16))[0]
+    wide = T.proved_pass(tmp_path / "wide", H100, 1, load=(2, 32))[0]
+    b0, a1 = (T.proved_pass(tmp_path / n, H100, s, load=rows)[0] for n, s, rows in (("b0", 0, (2, 16)), ("a1", 1, (16, 16))))
 
     def w(*paths: Path) -> Path:
         (f := tmp_path / f"w{len(list(tmp_path.glob('w*.json')))}.json").write_text(json.dumps(T.window_record(*paths)))
@@ -573,7 +588,7 @@ def test_a_tied_run_held_to_its_classs_fixed_load(exe, tmp_path):
     assert got["verdict"] == "accept" and got["tie"]["load"] == [2, 8, 2]
     assert got["work"]["macs"] == VR.pass_macs(VR.whole_pass(passes[1])) > got["exact_work"]["macs"] == VR.pass_macs(passes[1])
     cases = [([a, b], wab, (2, 8, 3), {}), ([a, b], wab, (2, 8, 1), {}), ([a, b], wab, (4, 4, 2), {}),
-             ([a, b], wab, (2, 4, 2), {}), ([a, b], wab, (1, 16, 2), {}), ([b, a], w(b, a), cls, {}),
+             ([a, b], wab, (2, 4, 2), {}), ([a, b], wab, (1, 16, 2), {}), ([b0, a1], w(b0, a1), cls, {}),
              ([a, wide], w(a, wide), cls, {}),
              ([b], wab, (2, 8, 3), {"rounds": [1], "dropped": (0,), "record": tmp_path / "coin1.json"})]
     for paths, tie, c, kw in cases:
@@ -594,7 +609,7 @@ def test_a_pass_that_is_not_ws(exe, tmp_path):
     (every call's entry right: untied, not a tie), or states no version (version 1) and registers a fixed operand, or states a
     version other than 2, or isn't a v2 record: refused before the coin (Python's `ValueError`, in its words), as the
     Python does."""
-    a, b = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("a", (0, 1)), ("b", (2, 3))))
+    a, b = (T.proved_pass(tmp_path / n, H100, s)[0] for n, s in (("a", 0), ("b", 1)))
     good = T.window_record(a, b)
     reg = good["registered"]
     b0, b1 = (next(e for e in reg if e["value"] == f"pearl-b/{x}") for x in (0, 1))
