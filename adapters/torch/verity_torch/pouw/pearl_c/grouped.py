@@ -458,11 +458,11 @@ def _gemm_grouped(run: Any, ws: tuple[int, ...], x: Any, counts: tuple[int, ...]
     if not us:
         return x.new_zeros((0, n)) if bias is None else x.new_zeros((0, n)) + bias
     rows, tiles, pos, real = sum(u.seg for u in us), sum(u.tiles for u in us), len(cur.matmuls), len(x)
-    index = call_index(run, len(us))
     if run.hashing and (cur.tiles + tiles > run.capacity or pos + len(us) > CALL_CAPACITY
                         or cur.flag_rows + real > len(run.flag_buf)):
         raise RuntimeError(f"{run.entry}: the pass is over its capacity ({run.capacity} tiles, {CALL_CAPACITY} calls, "
                            f"{len(run.flag_buf)} screened rows); end it and begin another")
+    index = call_index(run, len(us))
     cuda = run.device.type == "cuda"
     if cuda and torch.cuda.is_current_stream_capturing():
         raise RuntimeError(f"{run.entry}: a grouped call's counts are the host's, so a CUDA graph capture can't take it")
