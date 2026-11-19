@@ -10,8 +10,19 @@ def run_id() -> str:
     return os.environ.get("RESEARCH_RUN_ID") or "local"
 
 
+#: ``1`` lifts the refusals that rest only on where coins are flipped or a composite made; a lifted run's record says so
+LIFT_PLACEMENT_HOLD = "VERITY_LIFT_PLACEMENT_HOLD"
+#: the hold's old switch, whose ``1`` held: refused while set, since unset now holds
+RETIRED_HOLD = "VERITY_HOLD_PLACEMENT"
+
+
 def hold_placement(env: Mapping[str, str] | None = None) -> bool:
-    """``VERITY_HOLD_PLACEMENT=1`` in ``env`` (this process's environment by default): the refusals that rest only on where
-    coins are flipped or a composite made hold. Unset, empty or any other value, they are lifted. The one reader:
-    `benchmarks/one_stage/placement.sh`'s `hold_placement` is the shell's, held to this one by a test."""
-    return (os.environ if env is None else env).get("VERITY_HOLD_PLACEMENT") == "1"
+    """Whether the refusals that rest only on where coins are flipped or a composite made hold, in ``env`` (this process's
+    environment by default): they do unless ``VERITY_LIFT_PLACEMENT_HOLD=1``. ValueError while the retired
+    ``VERITY_HOLD_PLACEMENT`` is set. The one reader: `benchmarks/one_stage/placement.sh`'s `hold_placement` is the
+    shell's, held to this one by a test."""
+    env = os.environ if env is None else env
+    if RETIRED_HOLD in env:
+        raise ValueError(f"{RETIRED_HOLD} is retired: the hold is the default, and {LIFT_PLACEMENT_HOLD}=1 lifts it; "
+                         f"unset {RETIRED_HOLD}")
+    return env.get(LIFT_PLACEMENT_HOLD) != "1"
