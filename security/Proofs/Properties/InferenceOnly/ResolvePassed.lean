@@ -293,6 +293,7 @@ theorem ret_passed_on_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.de
     (U.off ≤ b ∧ b < U.off + (P.defs[U.d]!).gates) ∨
       ∃ i j, i ∈ passOf P U.d ∧ i < (P.defs[U.d]!).body.params.size ∧
         j < ((P.defs[U.d]!).body.params[i]!).2.leaves ∧ resolve P U ⟨true, i, j⟩ = .ok b := by
+  have hrc := Flock.Program.resolve_recut h
   obtain ⟨hroot, hB, hL, -, hret, harg⟩ := decoded_walk bytes P hdec hov hlay
   exact ret_passed_on P hroot hB hL hret harg U hU t ht h
 
@@ -306,6 +307,7 @@ theorem param_returned_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.d
     (hb : resolve P U ⟨true, i, j⟩ = .ok b) (t : ℕ) (ht : t < (P.defs[U.d]!).body.ret.count)
     (h : resolve P U ((P.defs[U.d]!).body.ret.get t) = .ok b) :
     ∃ i' j', i' ∈ passOf P U.d ∧ resolve P U ⟨true, i', j'⟩ = .ok b := by
+  have hrc := Flock.Program.resolve_recut h
   obtain ⟨hroot, hB, hL, hprm, hret, harg⟩ := decoded_walk bytes P hdec hov hlay
   obtain ⟨hd, hpc⟩ := good_d P hroot hB U hU
   have hlt : b < U.off :=
