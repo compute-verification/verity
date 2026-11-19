@@ -12,7 +12,7 @@ check recomputes it from the transcript.
   RATES (each with its note), executed strips (two int8 limbs), epilogue and softmax included. Decode is memory-bound,
   the cheater's transcript is not, so decode's time ratio is a bandwidth gap no noise design closes.
 
-The designs are the registry's (`data/designs/`, `machine-model designs`): each product is noised as its design's
+The designs are the registry's (`data/designs/`): each product is noised as its design's
 `[noise]` names, a leaf of the registry's NOISE, and priced per component in executed int8 products and honest seconds,
 with γ (`products`, `parts`, `summary`). A checked leaf's vector work that only the served output needs is priced in
 checked_strip's tensor–scalar model (`TS_EPS`, `pv_ts`). The peel's P·V is priced at the checked kernels' measured

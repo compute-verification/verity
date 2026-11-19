@@ -152,6 +152,17 @@ def test_an_aborted_request_is_a_commit_windows_finish_and_a_whole_sessions_refu
         ADV.from_trace(recs, io, carry=())
 
 
+def test_a_sampled_request_is_a_whole_sessions_request_and_a_commit_windows_refusal(tmp_path):
+    """A served window's Program is greedy, so a Commit window's advice refuses a request the trace records sampling at a
+    temperature above 0, by name; a whole session's advice takes it (its Program reads the policy its body names)."""
+    _run(tmp_path, {0: [FakeRequest("e0", [5] * 4, [6] * 3, 3),
+                        FakeRequest("e1", [5] * 4, [6] * 3, 3, sampling_params=SimpleNamespace(temperature=0.7, max_tokens=3))]})
+    recs, io = ST.load(tmp_path / "step_trace.jsonl"), ADV.io_record(tmp_path / "requests.jsonl")
+    assert len(ADV.from_trace(recs, io).advice.requests) == 2
+    with pytest.raises(ValueError, match=r"^request e1 samples at temperature 0\.7, and a served window's Program is greedy"):
+        ADV.from_trace(recs, io, carry=())
+
+
 def _behind_a_long_prompt(tmp_path, abort_at: dict[int, str]) -> tuple[list[dict], dict]:
     """e0's 40-token prompt takes the 16-token budget for three steps: aborted after the first, it is mid-prefill; e1, waiting
     behind it, has never run."""

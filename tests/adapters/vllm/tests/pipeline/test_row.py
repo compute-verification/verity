@@ -831,8 +831,8 @@ def test_a_dense_tp1_row_attaches_the_norm_tap_only(tmp_path):
     taps = R.applicable_taps(man, r.ck_)
     assert taps == ["norm_tap"]
     cmd = r.commit_cmd(taps)
-    assert cmd[cmd.index("--norm-tap-so") + 1] == r.env.norm_tap_so and "--router-tap-so" not in cmd and "--vocab-range" not in cmd
-    assert R.missing_tap_build(taps, r.env).startswith("NORM_TAP=1 and the manifest names its family, but the tap .so is missing")
+    assert "--norm-tap-so" not in cmd and "--router-tap-so" not in cmd and "--vocab-range" not in cmd
+    assert R.missing_tap_build(taps, r.env) == ""
     assert R.applicable_taps(_tap_manifest(tmp_path / "bare.json"), r.ck_) == [] and R.missing_tap_build([], r.env) == ""
     assert R.applicable_taps(man, _opts(tmp_path, environ={"NORM_TAP": "0"}).commit) == []
 
@@ -865,10 +865,10 @@ def test_a_tp_row_runs_the_guarded_build_and_every_tap_its_manifest_names(tmp_pa
     taps = R.applicable_taps(_tap_manifest(tmp_path / "moe.json", "norm_scales", "router_softmax", "vocab_range"), t.ck_)
     cmd = t.commit_cmd(taps)
     assert cmd[cmd.index("--hidden-so") + 1] == t.env.hidden_so_fa2_guarded and "--vocab-range" in cmd
-    assert cmd[cmd.index("--norm-tap-so") + 1] == t.env.norm_tap_so and cmd[cmd.index("--router-tap-so") + 1] == t.env.router_tap_so
+    assert "--norm-tap-so" not in cmd and cmd[cmd.index("--router-tap-so") + 1] == t.env.router_tap_so
     dense = _tp_row(tmp_path, TP_DENSE)
     cmd = dense.commit_cmd(R.applicable_taps(_tap_manifest(tmp_path / "dense.json", "norm_scales", "vocab_range"), dense.ck_))
-    assert "--norm-tap-so" in cmd and "--vocab-range" in cmd and "--router-tap-so" not in cmd
+    assert "--norm-tap-so" not in cmd and "--vocab-range" in cmd and "--router-tap-so" not in cmd
 
 
 def test_a_tp_rows_commit_names_the_trees_checkpoint_pins_as_its_replay_does(tmp_path, monkeypatch):

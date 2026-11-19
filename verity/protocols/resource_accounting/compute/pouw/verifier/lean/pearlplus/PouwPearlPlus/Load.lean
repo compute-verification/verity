@@ -15,7 +15,8 @@ gives it (`TYPE: why`, the exception Python raises):
    against it after the fixed operands' root (a live session's after the salt epoch's open root, `Coins.liveSalt`), and the salt
    must be the manifest's;
 3. its records (`records_of`, `UnitRecord`): real rows, |K|, excluded and voluntary rows, held to V-EX's caps
-   (`checkRecords`) and to the records root the pass published;
+   (`checkRecords`) and to the records root the pass published; a call with a credited cell (`UnitRecord.credited`)
+   commits a y root, since `checkTile` ties a tile's U to y only where there is one;
 4. its domain (`PearlC.check`) and the commitment's tile count.
 
 `passesDistinct` refuses passes credited together whose call indices leave `[0, 2^32)` (`call-range`) or repeat under one
@@ -264,6 +265,10 @@ def load (coins : EpochCoins) (man : Json) : Except Refusal Pass := do
   let published ← hexOf (← key man "records_root") "the records root"
   if recordsRoot salt weightsRoot splits records != published then
     refuse "ValueError" "the records are not the ones whose root the pass published"
+  for (u, r) in us.zip records do
+    let (cr, cc) := r.credited (List.range r.matmul.m) (List.range r.matmul.n)
+    if (get? u "y").isNone && !cr.isEmpty && !cc.isEmpty then
+      refuse "ValueError" s!"matmul {r.matmul.index}: a credited call commits no y root"
   let rootsA ← us.mapM fun u => do hexOf (← key u "root_a") "an activation root"
   let c ← key man "commitment"
   let root ← hexOf (← key c "root") "the transcript root"

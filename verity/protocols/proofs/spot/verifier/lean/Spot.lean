@@ -65,5 +65,6 @@ public import Spot.Ranks
 public import Spot.SecondWindow
 public import Spot.BlockFront
 public import Spot.BlockFile
+public import Spot.Restrict
 
 @[expose] public section

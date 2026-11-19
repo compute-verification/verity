@@ -263,7 +263,7 @@ everything that can make a claim false or can't be undone still fail.
 ## Circuits
 
 A change that adds or modifies a circuit (a Definition, a subcircuit template, a Boolean lowering) passes
-`uv run circuit-check <definition|template|request>`, with its report in the PR. A new Definition gets a binding in its
+`uv run circuit-check <definition|template|sidecar>`, with its report in the PR. A new Definition gets a binding in its
 module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), which the suite enforces.
 
 ## Checking and merging

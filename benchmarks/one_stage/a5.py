@@ -840,9 +840,10 @@ def member_form(mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | s
     window ``mine`` and the docket ``rec``: the docket's strata and each member's slice of the record
     (`members.slices`, Lean's `OneStageZk.Member.slice`: its units, the roots the record names under its name, the
     scheme), or Lean's reason why there is none. A member's public file names a root for each of its ports, one that is
-    not its own tree (a wired port, a registered value's) at the tree over its table rows (`rows.Committed.frame_entry`),
-    which the record never names: the slices here read no wiring, so such a member is refused by name (`members.unwired_why`),
-    as Lean's is where the parameters name no wiring (`OneStageZk.membersRootsOf`). A window's row tables' root
+    not its own tree (a wired port, a registered value's) at the tree it is bound under (`rows.Committed.frame_entry`): a
+    wired port's is its writer's output field's tree, which Lean derives from C (`OneStageZk.membersRootsOf`,
+    `derivedWiring`) and the slices here do not mirror; a member naming a root the slice holds none of
+    is refused by name (`members.unwired_why`). A window's row tables' root
     (`rows.TABLE_PORT`) is the window's and no member's: the per-member form refuses such a window, and this audit, its
     stand-in there, holds that root by `tables.check_row_tables` and reads the slices of the record's other roots."""
     record = {**rec, "roots": [r for r in rec["roots"] if r.get("port") != CS.TABLE_PORT]} if mine.row_tables else rec
@@ -981,7 +982,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     leaf_layer = CS.leaf_layer(publics)
     hist = history(publics) if history is not None else None
     checks["registration"] = V.check(rec, program, query, sampling_design, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
-                                     history=hist, members=link_members(members) if per_member(members, not plain(a)) else (),
+                                     partition=part, history=hist, members=link_members(members) if per_member(members, not plain(a)) else (),
                                      **verifying(a), **declared(a)).to_json()
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
@@ -1335,12 +1336,14 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         taken = program_values(program)
 
         def registration(name: str, program_: Program, ports: dict, layer: str | None, **day: Any) -> dict[str, dict]:
-            v = V.check(rec, program_, query, sampling_design, CS.SCHEME, ports, leaf_layer=layer, work_table=table, **verifying(a), **day)
+            own = mine.partition if program_ is program else None
+            v = V.check(rec, program_, query, sampling_design, CS.SCHEME, ports, leaf_layer=layer, work_table=table,
+                        partition=own, **verifying(a), **day)
             return {name: a0.negative(v)}
 
         def history_root(name: str, wrong: dict) -> dict[str, dict]:
             v = V.check(rec, program, query, sampling_design, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, history=wrong,
-                        **verifying(a))
+                        partition=mine.partition, **verifying(a))
             return {name: a0.negative(v)}
 
         parts: list[dict[str, dict] | Negative] = []

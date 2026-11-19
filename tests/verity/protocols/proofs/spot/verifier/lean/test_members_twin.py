@@ -312,7 +312,7 @@ def test_the_twin_answers_leans_reason_on_the_logs_order_and_the_registrations_r
     why, (run, refused) = other.ask(tmp_path / "roots")
     assert run is None and why == M.run_reason(run, refused), (why, refused)
     assert why == ("proofs: roots: the registration's root zzz/out is no member's: a member's roots are named "
-                   "<member>/<port>")
+                   "<member>/<port>, and a window's tree of a template's field <template>/<field>")
 
 
 def test_the_twin_answers_leans_reason_on_each_refusal_of_the_sessions_trees(tmp_path):

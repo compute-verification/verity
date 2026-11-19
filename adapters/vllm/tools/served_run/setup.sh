@@ -57,22 +57,19 @@ mkdir -p "$BASE/predicted" "$KEPT" "$R/cache"
 (cd "$TREE" && PYTHONPATH=$paths "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW_ID" --out "$BASE/predicted") \
   > "$OUT/predict_row.json" 2> "$KEPT/predict_row.err" || { log "predict: refused: $(tail -n 2 "$KEPT/predict_row.err" | cut -c1-400)"; exit 3; }
 pin=$(python3 - "$TREE" "$ROW_ID" "$REPO" "$BASE/predicted/predicted.json" <<'EOF'
-import ast, json, re, sys
+import ast, json, sys
 tree, row, repo, got = sys.argv[1:]
 g = json.load(open(got))
+keys = ("workload_digest",)
 if repo.startswith("verity-int8/"):
     test = f"{tree}/tests/adapters/vllm/tests/program/predict/test_predict.py"
     pins = [ast.literal_eval(n.value) for n in ast.parse(open(test).read()).body if isinstance(n, ast.AnnAssign) and getattr(n.target, "id", "") == "H200_INT8"]
-    keys, of = ("program_digest", "workload_digest"), "test_predict.py's H200_INT8 pin"
-    want = [(pins[0].get(row) or {}).get("workload") if pins else None] * 2
+    of = "test_predict.py's H200_INT8 pin"
+    want = [(pins[0].get(row) or {}).get("workload") if pins else None]
 else:
-    keys, of = ("program_digest", "manifest_digest"), "served_verdicts.sh's BUILD_OF_RECORD"
-    m = re.search(rf"^\s*{re.escape(row)}\)\s*BUILD_OF_RECORD=\$\{{BUILD_OF_RECORD:-(\w+):(\w+)\}}",
-                  open(f"{tree}/benchmarks/one_stage/served_verdicts.sh").read(), re.M)
-    if m is None:
-        print(f"{row} has no {of}: its predicted {':'.join(str(g.get(k)) for k in keys)} is what a pin there names, once its traced Build agrees")
-        sys.exit(0)
-    want = list(m.groups())
+    # served_verdicts.sh's BUILD_OF_RECORD pins a Program and a manifest digest, which a predicted row's record (v2) holds neither of
+    print(f"{row}: its predicted workload {g.get('workload_digest')} is held to its traced Build by predict compare, below")
+    sys.exit(0)
 have = [g.get(k) for k in keys]
 print(f"{keys} {':'.join(map(str, have))} are {of}" if have == want else
       f"{keys} {':'.join(map(str, have))} are not {of}, {':'.join(map(str, want))}")

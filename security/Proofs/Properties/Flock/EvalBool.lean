@@ -3,8 +3,10 @@ module
 public import Properties.Flock.EvalBool
 public import Flock.Test.Lower
 public import Proofs.Properties.Flock.EvalBool.Fuel
+public import Properties.Flock.Circuit.Chain
 meta import Properties.Flock.EvalBool
 meta import Flock.Test.Lower
+meta import Properties.Flock.Circuit.Chain
 
 /-!
 # `Prog.evalBool` against the vectors
@@ -77,6 +79,53 @@ def wordAndBody (P : Program.Prog) (w : String) (x : List Bool) : Option (Nat ×
   | .ok P => match P.index["TAdd32_v1"]? with
     | some p => (P.evalBool p (bits 3 32 ++ bits 5 32).toList).length == 32
     | none => false
+  | .error _ => false
+
+/-- `BlockEval`'s two sides for the block of `units` of `P`, its only block, on the trace `X g = g · 2654435761 + 40503`:
+the block's Program (`Spot.Restrict.portedOf`) lifted to bits (`Flock.Lift.lift`) on the input ports' bits, and the
+block's local evaluation of C at the output ports; with the ports' widths. -/
+def blockSides (P : Program.Prog) (units : Array Nat) :
+    Option (List Nat × List Nat × List Bool × List Bool) :=
+  match Spot.BlockFront.front P units, Spot.Restrict.portedOf P units >>= fun Q => Flock.Lift.lift Q Q.root with
+  | .ok fr, .ok (L, e) =>
+    let X : (OfProgram.ofProgram P).Trace := fun g => BitVec.ofNat _ (g.val * 2654435761 + 40503)
+    let u : Fin (#[fr.ranges].size + 1) := ⟨0, Nat.succ_pos _⟩
+    some (fr.ins.toList.map (·.width), fr.outs.toList.map (·.width), L.evalBool e (Chain.portBits X fr.ins),
+      Chain.portBits ((OfProgram.partOf P #[fr.ranges]).localEval X u) fr.outs)
+  | _, _ => none
+
+/-- `BlockEval`'s two sides agree on block `units` of the format's descriptor vector, with these port widths, and are
+not all zero. -/
+def blockAgrees (units : Array Nat) (ins outs : List Nat) : Bool :=
+  match Program.decode WORD_DESC.toUTF8 with
+  | .ok P => match blockSides P units with
+    | some (i, o, l, r) => i == ins && o == outs && l == r && l.length == outs.sum && l.any id
+    | none => false
+  | .error _ => false
+
+-- a word primitive of a 16-bit parameter (`TWiden16_v1`, unit 3): its 16-bit input port and its 32-bit output port
+#guard blockAgrees #[3] [16] [32]
+-- a word composite whose word primitive's Boolean body is decoded after it (`TPair_v1` calling `TAdd32_v1`, unit 0): the
+-- lift appends its callees first, so the composite's callee is before it. `TPair_v1 a b` is `(a ^^^ b, b)`, so a swap of
+-- its two ports fails; the right side is that word, as C's local evaluation of a call unit is too slow for a guard
+#guard match Program.decode WORD_DESC.toUTF8 with
+  | .ok P => match Spot.BlockFront.front P #[0], Spot.Restrict.portedOf P #[0] >>= fun Q => Flock.Lift.lift Q Q.root with
+    | .ok fr, .ok (L, e) =>
+      let X : (OfProgram.ofProgram P).Trace := fun g => BitVec.ofNat _ (g.val * 2654435761 + 40503)
+      let x := Chain.portBits X fr.ins
+      let a := word (x.take 32).toArray
+      let b := word (x.drop 32).toArray
+      fr.ins.toList.map (·.width) == [32, 32] && fr.outs.toList.map (·.width) == [32, 32] && a != b &&
+        L.evalBool e x == (bits (a ^^^ b) 32 ++ bits b 32).toList
+    | _, _ => false
+  | .error _ => false
+
+-- a block whose port is a registered value (`TPair_v1` on `RegisteredInput32_v1`): its Program is not ported
+#guard match Program.decode (WORD_DESC.replace "\"Input32_v1\"" "\"RegisteredInput32_v1\"").toUTF8 with
+  | .ok P => match Spot.Restrict.portedOf P #[0] with
+    | .error e => e == "ported: the block reads a registered value (RegisteredInput32_v1), and a parameter does not carry \
+        that it is registered: its rows would be committed afresh"
+    | .ok _ => false
   | .error _ => false
 
 end FlockSoundness.EvalBool

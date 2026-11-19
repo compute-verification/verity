@@ -93,6 +93,8 @@
   "Properties.Verity.Idle",
   "Properties.Remote",
   "Properties.Flock.Circuit",
+  "Properties.Flock.Circuit.Chain",
+  "Properties.Flock.Circuit.OfProgramToy",
   "Properties.Pous.WipeSigned",
   "Properties.Pous.WipeCount",
   "Properties.Pous.InProofs",
@@ -2490,7 +2492,7 @@
   },
   "Properties.Flock": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Flock", "Flock", "Properties.Flock", "VStar.Unit"],
-   "except": ["Properties.Flock.Circuit.GateARow"],
+   "except": ["Properties.Flock.Circuit.GateARow", "Properties.Flock.Circuit.Chain", "Properties.Flock.Circuit.Inline"],
    "why": "the circuit a parsed C-Flock circuit file is built into (`Placed.keyProg`, `Layout.outsOf`, `Built`) is defined over the verifier's own types and checks (`Flock.Circuit`, `Flock.Net`) and C-Flock's circuit vocabulary (`Definitions.Flock.Circuit`), and is core's circuit and partition (`Definitions.Core`) at the parsed and the committed file (`Flock.Bridge.circuitOf`, `circuitOfFile`), never a proof; the verifier's fixed nets' lines are the circuit file's own text format (`VStar.header`, `VStar.rowLine`)"
   },
   "Properties.Verity": {
@@ -2934,6 +2936,11 @@
    "except": [],
    "why": "the read session proved in zero knowledge is stated against the verifier's span check (Poub.Span) and the read session's own statements (Properties.Poub.Remote), the circuits and live-coin interactions every proof system's claims read (Definitions.Core.Boolean, Definitions.Core.Interaction), and SHA-512 as the code computes it (Properties.Verity.Sha512) for the rows' collision event; never a proof"
   },
+  "Properties.Flock.Circuit.Inline": {
+   "imports": ["Definitions.Core", "Properties.Flock", "InferenceOnlyVerifier.Count"],
+   "except": [],
+   "why": "C's Boolean inlining is stated against C (`Properties.Flock.Circuit.OfProgram`) and core's Boolean circuits (`Definitions.Core.Boolean`), and its ANDs against the count's own pass over the Program (`InferenceOnlyVerifier.Count.boolGates`), never a proof"
+  },
   "Properties.Flock.Circuit.GateARow": {
    "imports": ["Properties.Flock.Circuit.CircuitOf", "Spot.FilePart"],
    "except": [],
@@ -2943,6 +2950,17 @@
    "imports": ["Spot.Edges"],
    "except": [],
    "why": "the wires the Program's root states are stated against the derivation's own functions (`Spot.Edges`) and the Program's references (`Flock.Program`), never a proof"
+  },
+  "Properties.Flock.Circuit.Chain": {
+   "imports": [
+    "Definitions.Core",
+    "Properties.Flock",
+    "Spot.Restrict",
+    "InferenceOnlyVerifier.Desc",
+    "Properties.InferenceOnly"
+   ],
+   "except": [],
+   "why": "the chain's open premises from an accepted templated statement to a correct block of the registered description's circuit (`Flock.OfProgram.ofProgram`) are stated against core's blocks and openings (`Definitions.Core`, `Rblk`) and the code they join: the key circuit and the lowering (`Properties.Flock`), the block's front and Program (`Spot.Restrict`, which reads `Spot.BlockFront`), and the inference-only check's verdict and instance (`InferenceOnlyVerifier.Desc`, `Properties.InferenceOnly`), never a proof"
   }
  },
  "reads_exempt": {
