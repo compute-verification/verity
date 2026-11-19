@@ -117,8 +117,8 @@ class Exchange:
         workload's model begins to load, so an attach that returns has run with none of the workload's bytes on the
         device; the exchange refuses an engine's attach once the model's registered values (`hooks.MemoryChanged`
         ``registered``) have been emitted on it (`RuntimeError`). That catches a late attach, not one during the load:
-        a scheme that needs an empty device checks the device itself (the wipe's idle-card check). An attach that names no engine process may come
-        after the load (`serve_openai.network_admission` attaches admission to the loaded engine's exchange)."""
+        a scheme that needs an empty device checks the device itself (the wipe's idle-card check). An attach that names
+        no engine process may come after the load (`serve_openai.network_admission` attaches admission to the loaded engine's exchange)."""
         if self.registered and launcher.get("process") == H.ENGINE:
             raise RuntimeError(f"{scheme.name} attached after the model's weights were registered: an attach in the "
                                "engine runs before the load")
@@ -185,9 +185,12 @@ class Exchange:
             return
         if self.declared is not None and isinstance(request, H.RequireProperty):
             raise Refused(name, f"files {kind} after the build was answered; file it before the engine is built")
-        if self._step is not None:
-            raise Refused(name, f"files {kind} after serving began (step {self._step}); file it before the first step")
+        self._unserved(name, f"files {kind}")
         self.requests.append((name, request))
+
+    def _unserved(self, name: str, what: str) -> None:
+        if self._step is not None:
+            raise Refused(name, f"{what} after serving began (step {self._step}); file it before the first step")
 
     def hold(self, name: str, gate: H.Gate) -> None:
         """Scheme ``name`` holds the inputs until ``gate`` starts each (`AdmitInput` ``hold``, filed with it), inside
@@ -199,16 +202,13 @@ class Exchange:
         """Scheme ``name`` has registered value ``value``'s storage released once it is resident, its kernels computing
         every block that reads it (`H.Kernel`), and restored to ``restore()``, the same bytes, when the workload's
         memory hook comes off."""
-        if self._step is not None:
-            raise Refused(name, f"releases {value} after serving began (step {self._step}); release it before the first "
-                          "step")
+        self._unserved(name, f"releases {value}")
         self.releases.append((name, value, restore))
 
     def compute_with(self, name: str, kernel: H.Kernel) -> None:
         """Scheme ``name`` computes every due block with ``kernel``, inside the kernels filed before it; filed before
         the first step."""
-        if self._step is not None:
-            raise Refused(name, f"files a kernel after serving began (step {self._step}); file it before the first step")
+        self._unserved(name, "files a kernel")
         self.kernels.append((name, kernel))
 
     def serve(self, name: str, path: str, route: H.Route) -> None:
@@ -216,9 +216,7 @@ class Exchange:
         first step, one scheme a path."""
         if (other := self.route(path)) is not None:
             raise Refused(name, f"serves route {path}, which {other[0]} serves")
-        if self._step is not None:
-            raise Refused(name, f"serves route {path} after serving began (step {self._step}); file it before the first "
-                          "step")
+        self._unserved(name, f"serves route {path}")
         self.routes[path] = (name, route)
 
     def start_beside(self, name: str, process: str, readers: tuple[str, ...] = ()) -> None:
@@ -329,12 +327,9 @@ class Exchange:
         return any(r.property == "reuse" and r.value == "oldest-freed" for _, r in self._filed(H.RequireProperty))
 
     def fixed_ranges(self) -> int | None:
-        """The ``ranges`` the schemes require the workload's memory to hold (`H.Declared`), None where none does;
-        `Refused` where two disagree."""
-        fixed = sorted({(n, r.value) for n, r in self._filed(H.RequireProperty) if r.property == "ranges"}, key=str)
-        if len({v for _, v in fixed}) > 1:
-            raise Refused(fixed[0][0], f"schemes require the memory to hold {sorted({v for _, v in fixed})} ranges: one")
-        return fixed[0][1] if fixed else None
+        """The ``ranges`` the first scheme requiring them requires the workload's memory to hold (`H.Declared`), None
+        where none does; `answer` refuses one that requires others."""
+        return next((r.value for _, r in self._filed(H.RequireProperty) if r.property == "ranges"), None)
 
     def beside(self) -> list[tuple[str, Callable[[], Any]]]:
         """The processes schemes asked to start beside the workload, each by its name and bound to the readers it

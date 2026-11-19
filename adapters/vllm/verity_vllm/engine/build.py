@@ -273,10 +273,7 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     if kw.get("enforce_eager") is False:
         prepare_compiled_process_cache()
     ex = messages.build()
-    if (fixed := ex.fixed_ranges()) is not None:
-        if kw.get("num_gpu_blocks_override") not in (None, fixed):
-            raise RuntimeError(f"schemes fix the KV pool at {fixed} blocks and the engine's arguments at "
-                               f"{kw.get('num_gpu_blocks_override')}: one size")
+    if kw.get("num_gpu_blocks_override") is None and (fixed := ex.fixed_ranges()) is not None:
         kw["num_gpu_blocks_override"] = fixed
     if kw.get("async_scheduling") is None and (want := {r.value for _, r in ex.requests if isinstance(r, H.RequireProperty)
                                                           and r.property == "async_steps"}):
