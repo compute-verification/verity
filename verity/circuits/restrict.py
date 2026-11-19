@@ -58,7 +58,7 @@ from .codec import DecodedProgram, decode_program, descriptor_chunks, lookup_pri
 from .defs import CompositeDefinition, DefinitionTable, PrimitiveDefinition, bind
 from .layout import Circuit, FunctionCall, resolve
 from .program import REGISTRATION, RUN, input_id, input_prim
-from .refs import Affine, Coll, concat
+from .refs import Affine, Coll, Concat, Grid, Strided, concat
 from .types import Array, Tuple, Value, remove_axis, type_from_json
 
 FORMAT = "verity/block-circuit/v1"
@@ -251,31 +251,60 @@ def front(D: DecodedProgram, words: Sequence[tuple[int, int]]) -> tuple[list[int
         for m in range(m0, m1):
             ins.update(g for g in FunctionCall(C, scope, k, m).args if not inside(g))
 
-    def held_leaf(r) -> bool:
-        if r[0] != "n" or r[1] not in held:
-            return False
-        node = body.nodes[r[1]]
-        m0, m1 = held[r[1]]
-        return m0 <= r[2] // (node.out.leaves // (node.n if node.form == "batch" else 1)) < m1
+    leaves = {}
+    for k, (m0, m1) in held.items():
+        per = body.nodes[k].out.leaves // (body.nodes[k].n if body.nodes[k].form == "batch" else 1)
+        leaves[k] = (m0 * per, m1 * per)
 
     reads = [body.ret]
     for k, node in enumerate(body.nodes):
-        m0, m1 = held.get(k, (0, 0))
-        if node.form != "batch":
-            if k not in held:
-                reads += [x.refs for x in node.args]
+        if k not in held:
+            reads += [x.refs for x in node.args]
             continue
-        for m in [m for m in range(node.n) if not m0 <= m < m1]:
-            for x, ax in zip(node.args, node.axes):
-                if ax is None:
-                    reads.append(x.refs)
-                elif ax == 0:
-                    L = x.type.elem.leaves
-                    reads.append(x.refs.slice(m * L, (m + 1) * L))
-                else:
-                    reads.append(x.take(ax, m).refs)
-    outs = {resolve(scope, r) for rs in reads for r in rs if held_leaf(r)}
+        m0, m1 = held[k]
+        if node.form != "batch" or (m0, m1) == (0, node.n):
+            continue
+        for x, ax in zip(node.args, node.axes):
+            if ax is None:
+                reads.append(x.refs)
+            elif ax == 0:
+                L = x.type.elem.leaves
+                reads += [x.refs.slice(0, m0 * L), x.refs.slice(m1 * L, node.n * L)]
+            else:
+                reads += [x.take(ax, m).refs for m in range(node.n) if not m0 <= m < m1]
+    outs = {resolve(scope, r) for rs in reads for r in _into(rs, leaves)}
     return sorted(ins), sorted(outs)
+
+
+def _into(refs: Any, leaves: Mapping[int, tuple[int, int]]) -> Any:
+    """The references of ``refs`` to the leaves ``leaves`` names of root nodes, part by part, each distinct one once a
+    part: a part that names no such node is not read leaf by leaf."""
+    todo = [refs]
+    while todo:
+        p = todo.pop()
+        if isinstance(p, Concat):
+            todo.extend(p.parts)
+        elif isinstance(p, Affine):
+            if p.space == "n" and p.idx in leaves:
+                lo, hi = leaves[p.idx]
+                yield from (("n", p.idx, j) for j in range(max(lo, p.base), min(hi, p.base + p.count)))
+        elif isinstance(p, Strided):
+            if p.space == "n" and p.idx in leaves:
+                lo, hi = leaves[p.idx]
+                rows = 1 if p.outer_stride == 0 else -(-p.count // p.inner)
+                for q in range(rows):
+                    n = min(p.inner, p.count - q * p.inner)
+                    for r in range(1 if p.inner_stride == 0 else n):
+                        j = p.base + q * p.outer_stride + r * p.inner_stride
+                        if lo <= j < hi:
+                            yield ("n", p.idx, j)
+        elif isinstance(p, Grid):
+            if any(s == "n" and i in leaves for s, i, *_x in p.lanes):
+                todo.extend(p.lane_parts())
+        else:
+            for r in p:
+                if r[0] == "n" and r[1] in leaves and leaves[r[1]][0] <= r[2] < leaves[r[1]][1]:
+                    yield r
 
 
 class _Gates:
@@ -496,9 +525,11 @@ def _build(D: DecodedProgram, words: Sequence[tuple[int, int]], ins: list[int], 
         P._BODY_LOOKUP[:] = saved
 
 
-def restrict(c: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, int]], bits: Bits | None = None) -> Block:
-    """`compact (restrict C S)` for S the gates of ``units`` (module docstring: the index, the block and the object)."""
-    D = program(c) if bits is None else bits.D
+def restrict(c: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, int]], bits: Bits | None = None,
+             D: DecodedProgram | None = None) -> Block:
+    """`compact (restrict C S)` for S the gates of ``units`` (module docstring: the index, the block and the object);
+    ``D``: C decoded, when the caller holds it."""
+    D = D if D is not None else program(c) if bits is None else bits.D
     words = unit_gates(D, partition, units)
     ins, outs = front(D, words)
     prog = _build(D, words, ins, outs)

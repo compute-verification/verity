@@ -323,8 +323,8 @@ def test_a_grouped_call_is_refused_past_its_passs_capacity_and_under_a_cuda_grap
     for tiles, calls, rows in overs:
         with pytest.raises(RuntimeError, match=f"^{re.escape(said)}$"):
             call(tiles, calls, rows)
-        with pytest.raises(Reached):
-            call(tiles, calls, rows, hashing=False)
+        with pytest.raises(RuntimeError, match="ROUND_CALLS") if calls else pytest.raises(Reached):
+            call(tiles, calls, rows, hashing=False)     # a round's position stays inside it, hashing or not
     with pytest.raises(Reached):
         call(6, last, 5)
     capturing = [True]

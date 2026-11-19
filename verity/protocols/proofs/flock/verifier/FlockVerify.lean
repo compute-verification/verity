@@ -330,8 +330,7 @@ SHA-512. With `flag` `--rec-rows`, the verifier's record of V*'s shared rows (`R
 form. A file naming a key twice in one object (a port, or a port's key) is refused (`JsonKeys.dupKey`): the parser
 would keep one of them. A port the file names at known content (`Registered.KNOWN_KEY`) is refused unless its root is
 the root of that content (`Registered.checkKnownAll`). Beside the ports, the rows `KnownRead.check` holds every
-statement to: the known content (`Registered.knownOf`), whose input ports every statement must read in every bit, then each port
-the file marks `read_in_full` (`KnownRead.readOf`) as one row of its registered row's words (`KnownRead.fullRows`), and the
+statement to: the known content (`Registered.knownOf`), whose input ports every statement must read in every bit, and the
 template parameter each port reads (`Registered.paramsOf`, which `Registered.checkCover` holds the program's registered
 reads to), the ports it binds to the window's committed values (`RegBound.ofJson`, which `RegBound.check` reads), and
 the file's digest, the SHA-512 of its canonical JSON (`sha512Of`), which a verdict names it by. -/
@@ -358,7 +357,7 @@ def registeredFile (args : List String) (flag : String := "--registered") (ctx :
           let own ← Registered.ofJson j
           let known ← Registered.knownOf j
           Registered.checkKnownAll own known
-          return (own, known ++ KnownRead.fullRows own (← KnownRead.readOf j), ← Registered.paramsOf j, bound,
+          return (own, known, ← Registered.paramsOf j, bound,
             ← sha512Of file)
         return (r.mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}").map some
       | .error e, _ => return .error s!"{ctx}: not JSON: {e}"
@@ -1754,8 +1753,8 @@ def templateQueryCmd (paths : List String) : IO UInt32 := do
   return 0
 
 /-- `partition-object FILE...`: a partition object's form (`HmRow.checkPartitionObject`) for each case `{"object"}`, and
-with `"descriptor"` (the program's bytes as a string) its `blocks` as a reader gets them (`HmRow.blocksOf`), or the
-refusal. One `PARTITIONOBJECT` line per file. -/
+with `"descriptor"` (the program's bytes as a string) its levels of `blocks` as a reader gets them (`HmRow.levelsOf`),
+or the refusal. One `PARTITIONOBJECT` line per file. -/
 def partitionObjectCmd (paths : List String) : IO UInt32 := do
   for path in paths do
     let text ← try IO.FS.readFile path catch _ => pure ""
@@ -1764,9 +1763,9 @@ def partitionObjectCmd (paths : List String) : IO UInt32 := do
       let obj := (j.getObjVal? "object").toOption.getD Lean.Json.null
       discard <| HmRow.checkPartitionObject obj
       let some d := (j.getObjValAs? String "descriptor").toOption | return Lean.Json.mkObj []
-      let bs ← HmRow.blocksOf obj d.toUTF8
-      return Lean.Json.mkObj [("blocks", match bs with
-        | some ps => Lean.Json.arr (ps.map fun (lo, hi) => Lean.toJson #[lo, hi])
+      let ls ← HmRow.levelsOf obj d.toUTF8
+      return Lean.Json.mkObj [("blocks", match ls with
+        | some ls => Lean.Json.arr (ls.map fun ps => Lean.Json.arr (ps.map fun (lo, hi) => Lean.toJson #[lo, hi]))
         | none => Lean.Json.null)]
     let line := match res with
       | .ok r => (r.setObjVal! "file" (Lean.Json.str path)).setObjVal! "ok" (Lean.Json.bool true)
