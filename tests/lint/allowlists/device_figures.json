@@ -27,7 +27,6 @@
     {"file": "benchmarks/one_stage/rehearsal.sh", "count": 1, "lane": "proofs"},
     {"file": "benchmarks/one_stage/served_util.py", "count": 2, "lane": "proofs"},
     {"file": "benchmarks/pouw/filler/arms.py", "count": 1, "lane": "compute-accounting"},
-    {"file": "benchmarks/pouw/filler/capacity_of.py", "count": 2, "lane": "compute-accounting"},
     {"file": "benchmarks/pouw/filler/share.py", "count": 1, "lane": "compute-accounting"},
     {"file": "benchmarks/poub_session/auditor_line.py", "count": 1, "lane": "memory-accounting"},
     {"file": "benchmarks/spot_figures/cards/proof_overhead.glm-5.3.json", "count": 1, "lane": "proofs"},
