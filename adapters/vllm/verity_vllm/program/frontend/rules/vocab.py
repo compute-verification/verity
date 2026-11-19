@@ -61,7 +61,7 @@ from verity_vllm.definitions.registry import (
 )
 from verity_vllm.definitions.registry import tp_allreduce as _tp_allreduce
 from verity_vllm.definitions.registry import value_inputs as _vi
-from verity_vllm.definitions.registry.dsv4_decode_indices import gather_i32
+from verity_vllm.definitions.registry.fp8_moe_experts import gather_i32
 from verity_vllm.program.frontend import targets as _targets
 
 
