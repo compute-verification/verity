@@ -44,10 +44,8 @@ theorem secondProblem_counts {sample ns ks : Array ℕ} (h : Select.secondProble
       · cases h
       · split at h
         · cases h
-        · split at h
-          · cases h
-          · rename_i hk
-            simpa using hk
+        · rename_i hk
+          simpa using hk
   have hlen : t < (ks.toList.zip ns.toList).length := by
     rw [List.length_zip, Array.length_toList, Array.length_toList, hsz]
     omega

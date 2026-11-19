@@ -278,15 +278,13 @@ def secondSamplingDesign (sample : Array Nat) (ns ks : Array Nat) : Json :=
 
 /-- Why the second stage refuses a replay sample `sample` with cells of `ns` proof blocks sampling `ks`, the first
 reason in the Python's order: a replay sample with a block twice or out of order, cells that aren't one or more
-templates' of at least one proof block each with a count each, a replay block of fewer than two proof blocks, a count
+templates' of at least one proof block each with a count each, a count
 not in `[1, n_t]`, or counts proving every cell whole (whole replay blocks). -/
 def secondProblem (sample : Array Nat) (ns ks : Array Nat) : Option String :=
   if sample.isEmpty || !(sample.toList.zip sample.toList.tail).all (fun (a, b) => a < b) then
     some "a replay sample is one or more replay blocks, ascending, each once"
   else if ns.isEmpty || ks.size != ns.size || ns.toList.any (· == 0) then
     some "a replay block's cells are one or more templates', each of at least one proof block, with a count each"
-  else if ns.toList.sum < 2 then
-    some s!"a replay block of {ns.toList.sum} proof blocks is a proof block: its rule is {pyRepr "law"}"
   else if !(ks.toList.zip ns.toList).all (fun (k, n) => 1 ≤ k && k ≤ n) then
     some s!"the second stage samples 1 to n_t of each cell's n_t proof blocks: counts {ks} over cells of {ns}"
   else if ks == ns then some s!"counts {ks} prove every cell of {ns} whole, and so whole replay blocks"

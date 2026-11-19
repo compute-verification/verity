@@ -1038,8 +1038,6 @@ def select_second(sample: Sequence[int], ns: Sequence[int], ks: Sequence[int], c
     if not (ns and len(ks) == len(ns) and all(type(n) is int and n >= 1 for n in ns)):
         raise ValueError("a replay block's cells are one or more templates', each of at least one proof block, with a "
                          "count each")
-    if sum(ns) < 2:
-        raise ValueError(f"a replay block of {sum(ns)} proof blocks is a proof block: its rule is 'law'")
     if not all(type(k) is int and 1 <= k <= n for k, n in zip(ks, ns)):
         raise ValueError(f"the second stage samples 1 to n_t of each cell's n_t proof blocks: counts {list(ks)} over "
                          f"cells of {list(ns)}")
@@ -1777,8 +1775,6 @@ class Stream:
             raise ValueError("the two-stage design's grain is not the template query over the challenger's replay block")
         program = Program(replay)
         ns = replay_cells(program, spec.check.query)
-        if sum(ns) < 2:
-            raise ValueError(f"a replay block of {sum(ns)} proof blocks is a proof block: its rule is 'law'")
         try:
             gates = P.unit_gates(program, spec.check.query)
         except (P.QueryRefused, ValueError) as e:
