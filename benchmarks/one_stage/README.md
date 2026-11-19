@@ -134,13 +134,6 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   byte run with any case's evidence. With `--exe`, it runs `onsite check` or `remote check` and exits with
   Lean's code. It decides nothing: a subprotocol with no case is left out, Lean's verdict on what remains stands (a
   rejection naming the missing case), and the run is labelled `NOT_ESTABLISHED` with what is missing.
-- `pouw_piece.py`: PoUW's `--cases` directory for `composite.py`, remote's `verity/pouw/v1` (`v1`: the verifier's params,
-  the window's one-stage docket and the proof system's answer to it) or onsite's `verity/pouw/period/v1`
-  (`period`: the key, main's first-parent history, the period's name, the auditor's ledger, the pins log and each
-  window's evidence), and its answer, `pouw-check`'s or `pouw-period`'s with `--exe`, written private as `composite.py`
-  reads it. From a served run (`--serve-run DIR --window K`) it names the piece MISSING with why and writes no case, so
-  `composite.py` leaves it out: an H1 window has no `v1` case, and no `period` case outside a period or without its sampled
-  proof blocks' proof outcomes.
 - `v2_case.py`: SPOT v2's `--cases` directory from a served window's kept files (`case_v2` of its v1 case,
   partition, public file, sessions and circuit file), with its own Lean answer with `--exe`. A circuit file the run didn't
   keep is rebuilt by the command its `m0/compose.log` records and used only at the log's pin. The case names the public
@@ -148,11 +141,6 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   leaving only `missing.json`; a window keeping none gets the kept file's own digest, so its case shows only that the
   kept files verify. `case.json` says which under `files`, and whether the audit staged the file before the sample or
   after one its caller handed it (the window's `summary.json`), or that the window cannot tell.
-- `kept_composite.sh SRC [K]`: remote's and onsite's Lean verdicts on a served run's kept records (`served_verdicts.sh`'s
-  `out/`, or a tarball of it) on a CPU node: it builds the products and the pieces' checks, writes PoUW's pieces
-  (`pouw_piece.py`; the period from the kept `pieces/pouw/`, `main.txt`, `H1_KEY_SHA512` and the sampled and live runs'
-  statements, `POUW_STATEMENTS` and `POUW_LIVE`), v2's (`v2_case.py`) and every kept piece holding a case beside its
-  answer, all private in scratch, and runs `composite.py remote` and `onsite`; `$OUT` gets only their public output.
 - `zk_cost.sh`: Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`zk_cost.py`, a GPU
   host job, or a preemptible guest job on a shared node). A6's W8A8 coordinates at K = 4096 and 14336 are
   staged in statements of 1 to 512 proof blocks, and sessions of 1 to 512 sampled proof blocks are proved by `flock-circuit prove --zk

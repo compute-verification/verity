@@ -114,7 +114,6 @@ writers = [
 readers = [
     { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "d / \"windows\\.jsonl\"" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.py", find = "serve_dir / \"windows\\.jsonl\"" },
-    { lane = "proofs", file = "benchmarks/one_stage/pouw_piece.py", find = "serve_dir / \"windows\\.jsonl\"" },
     { lane = "proofs", file = "benchmarks/one_stage/inference_only.py", find = "serve_dir / \"windows\\.jsonl\"" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "\"\\$D/windows\\.jsonl\"" },
     { lane = "proofs", file = "benchmarks/prove_path/run.sh", find = "REC_RUN/windows\\.jsonl" },
@@ -302,7 +301,6 @@ writers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "served_verdicts\\.py\\\" period open" },
 ]
 readers = [
-    { lane = "proofs", file = "benchmarks/one_stage/pouw_piece.py", find = "serve_dir / \"period\\.json\"" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "-f \"\\$D/period\\.json\"" },
 ]
 
@@ -315,7 +313,6 @@ writers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.py", find = "^def program\\(" },
 ]
 readers = [
-    { lane = "proofs", file = "benchmarks/one_stage/pouw_piece.py", find = "serve_dir / \"h1/window-program\\.json\\.gz\"" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.py", find = "PH\\.PROGRAM_META|\\\"window-program\\.json\\.gz\\\"" },
     { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "PH\\.PROGRAM_META" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "h1/window-program\\.json\\.gz" },
@@ -328,7 +325,6 @@ writers = [
     { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py", find = "CALLS_FILE = \"pouw-h1-calls\\.json\"" },
 ]
 readers = [
-    { lane = "proofs", file = "benchmarks/one_stage/pouw_piece.py", find = "pouw-h1-calls\\.json\\\"$|calls = serve_dir / f\\\"h1/w\\{k\\}/pouw-h1-calls\\.json\\\"" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.py", find = "H1_CALLS = \"h1/w\\{k\\}/pouw-h1-calls\\.json\"|serve_dir / H1_CALLS" },
 ]
 
