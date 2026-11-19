@@ -208,10 +208,15 @@ schedule it runs under, and the certificate the key signed for both once, before
   closure digest (`entryPins`: `slotEntryPins` and `selectEntryPins`; a template under either name with another body is
   refused), with one member a slot of the window (T / `every` · `lanes`). One-stage cuts a template into members of
   consecutive units, in order (`<descriptor id>/c<j>`), and a `SelectEntry_v1` template a member a lane, as its units
-  read their lane's occupancy from `ScanSlots_v2` a wire a lane; so chunk `j` is lane `j`'s slots, its leaf `b` slot
+  read their lane's occupancy from `ScanSlots_v3` a wire a lane; so chunk `j` is lane `j`'s slots, its leaf `b` slot
   `j · T / every + b`'s entry, the row the scan's lane `j` reads at boundary `b` (`scanOf`), and each due, occupied
   slot's entry, read bit included, is the one its Program computed, not the prover's word, which with read 1 and no
   outputs would pass for a request no Program reads (`Properties.NetworkPeriod.RowsProgWired`);
+* and each entry is its slot's (`slotted`, refused by its own name where `wired` holds): at every node of that
+  template, unit `j · T / every + b`'s `occ` is leaf `4j + 2`, lane `j`'s occupancy word, of a `ScanSlots_v3` member
+  whose `state` is row `b · every` of one input node, read off one part an argument and the scan slots' return type
+  (`slotRead`), so chunk `j`'s leaf `b` is the entry of a Program that read lane `j`'s slot of the state at boundary
+  `b`'s anchor, whatever order the Programs end in;
 * execution phase `w`'s scan's state is the `SCAN_STATE` of an audit its `prog` is wired to
   (`stateTied`): the scan's registration has an entry of its `roots` whose port is `scan/state` or of its `registered`
   whose value is `verity/certifier/scan-state/v1`, every such entry at one root and domain, and so has a `wired`
@@ -288,7 +293,7 @@ renders the audit's outputs, so the bits the prover chose of its inputs are the 
 block of such an audit reaches the scan only as the slot entries the scan reads: the scan reads the audit only through
 its `prog`, one input node of `E_w` entry bits an execution phase (`wired`, `scanOf`), and its state is the scan's own
 (`stateTied`). So an incorrect proof block of any template, a `SlotEntry_v1` or `SelectEntry_v1` one setting its
-slot's entry, a `ScanSlots_v2` one setting the `occ` and prompts its slots' Programs read, or any other its entries
+slot's entry, a `ScanSlots_v3` one setting the `occ` and prompts its slots' Programs read, or any other its entries
 read, changes at most those `E_w` bits; the scan reads an entry only where its own state has the slot due and occupied,
 and refuses one there whose `read` is 0, so no `occ` the audit computes drops a request. The check accepts a tied audit
 at any sample; sampled in part, the period reads its sample at its own `δ_i` = 2^-64 (`tiedDelta`, fixed before any
@@ -347,7 +352,7 @@ root, which `okChecks` holds to the constant), which one-stage's verifier checks
 answer, each connection's cap against its lane (the parameters' `cells`; the network attester holds a lane to
 `egress_cells`), and that the scan's answer carries every Input its registration check let through (`tiedInputWired`
 reads the names the answer's public outputs hold, and takes one with no `rests_on_period_check` to name none); that a
-tied audit's `SelectEntry_v1` units read their `occ` from its `ScanSlots_v2` units, which read
+tied audit's `SelectEntry_v1` units read their `occ` from its `ScanSlots_v3` units, which read
 its `SCAN_STATE` (the check reads no wires of an audit's Program, only its root templates' ids and closure digests);
 and that the audits' answers are the SPOT component's own,
 which the composition's theorem is to bind. Of a session's signed start: where the session before it stopped, which
@@ -529,7 +534,7 @@ def outputPort (port : String) : Bool :=
 /-- A `SlotEntry_v1` or `SelectEntry_v1` template's entry rows of chunk `j`, the public word of its `j`-th member's
 units: `<descriptor id>/c<j>/o0`. One-stage cuts a template into members of consecutive units, in order, named
 `<descriptor id>/c<j>`, at the ends of every wire its units read; `SelectEntry_v1`'s read their lane's occupancy from
-`ScanSlots_v2` a wire a lane, so its members are a lane each. -/
+`ScanSlots_v3` a wire a lane, so its members are a lane each. -/
 def entriesPort (key : String) (j : Nat) : String := s!"{key}/c{j}/o0"
 
 /-- Whether a port is some `SlotEntry_v1` or `SelectEntry_v1` template's entries port of some chunk (`entriesPort`,
@@ -572,20 +577,37 @@ and its leaf `b` is slot `j · T / every + b`'s entry: bucket `t`'s port `prog<j
 reused value is its port's leaves, one chunk's, and an audit's roots are the ports its Program's layout derives, each
 with its leaves. -/
 def wired (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : Json) : Bool :=
-  let entries := fun (j : Json) (k : String) => match j.getObjValD k with | .arr xs => xs | _ => #[]
-  let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
-  let leaves := fun (n : Nat) (e : Json) => match (e.getObjValD "leaves").getNat? with
-    | .ok l => l == n
-    | .error _ => false
-  let prog := fun (j : Nat) => (entries reg "roots").filter (named "port" (progName j)) ++
-    (entries reg "registered").filter (named "value" (progName j))
-  (audits.zip regs).any fun (a, r) => a.entries.any fun (k, n, d) => n == s.executionPhasePrograms &&
-    entryPins.contains d && (List.range s.programSlots).all fun j =>
+  (audits.zip regs).any fun (a, r) => a.entries.any (wiredTo s reg r)
+where
+  /-- `wired` at one audit's registration `r` and one of its entries templates `(k, n, d)`. -/
+  wiredTo (s : Schedule) (reg r : Json) : String × Nat × String → Bool := fun (k, n, d) =>
+    let entries := fun (j : Json) (k : String) => match j.getObjValD k with | .arr xs => xs | _ => #[]
+    let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
+    let leaves := fun (n : Nat) (e : Json) => match (e.getObjValD "leaves").getNat? with
+      | .ok l => l == n
+      | .error _ => false
+    let prog := fun (j : Nat) => (entries reg "roots").filter (named "port" (progName j)) ++
+      (entries reg "registered").filter (named "value" (progName j))
+    n == s.executionPhasePrograms && entryPins.contains d && (List.range s.programSlots).all fun j =>
       (prog j).any fun e => match e.getObjValD "root", e.getObjValD "domain" with
         | .str root, .str dom => (entries r "roots").any fun o =>
             named "port" (entriesPort k j) o && leaves (s.window / s.every) o && named "root" root o &&
               named "domain" dom o
         | _, _ => false
+
+/-- Each entry is its slot's: some audit and entries template `wired` holds the scan's `prog` to reads, at every node of
+that template, each unit's occupancy where its slot's is (`slotRead` at the schedule's `lanes`, `T / every` and `every`),
+every node's scan slots reading one input node. Chunk `j`'s leaf `b` is then the entry of a Program that read lane `j`'s
+occupancy word of the state row at boundary `b`'s anchor, the slot the scan's lane `j` reads it as, whatever order the
+Programs end in. -/
+def slotted (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : Json) : Bool :=
+  (audits.zip regs).any fun (a, r) => a.entries.any fun e =>
+    wired.wiredTo s reg r e &&
+      let xs := (a.entries.zip a.slots).filterMap fun ((k, _, _), f) =>
+        if k == e.1 then some (f s.programSlots (s.window / s.every) s.every) else none
+      match xs[0]? with
+      | some (some x) => xs.all (· == some x)
+      | _ => false
 
 /-- The scan's state in a registration: the entry of its `roots` whose port is `scan/state`. -/
 def stateName : String := "scan/state"
@@ -779,7 +801,13 @@ def auditChecks (p : Params) (c : Commitment) (e : Evidence) : Array (Found Fact
 audit's slot entries (`wired`). -/
 def wiredCheck (p : Params) (s : Schedule) (audits : Array Json) (w : Nat) (reg : Json) :
     Option (Core.Verdict × String) :=
-  if wired p.audits s audits reg then none else
+  if wired p.audits s audits reg then
+    if slotted p.audits s audits reg then none else
+      some (.reject, s!"window {w}: an entry is not its slot's: chunk j of the audit's entries template reads another \
+        lane's occupancy than lane j's, or another row than its boundary's anchor's: each unit j · {s.window / s.every} \
+        + b reads its occ from leaf 4j + 2 of a {scanSlotsId} member whose state is row b · {s.every} of one input \
+        node (slotRead), so its entry is the one slot j · {s.window / s.every} + b's Program computed")
+  else
     some (.reject, s!"window {w}: the scan's prog is no compute audit's slot entries: its scan/prog<j> entries' roots \
       and domains, j < {s.programSlots}, are not one audit's {slotEntryId} or {selectEntryId} entries ports \
       (<descriptor id>/c<j>/o0, {s.window / s.every} leaves each) of {s.executionPhasePrograms} members, one a slot, whose \
@@ -1450,7 +1478,7 @@ private def statedSample (size : Nat) (d : Core.SamplingDesign) : Json :=
 -- and the scan's lane-1 tree alone ties the audit
 #guard
   let s : Schedule := ⟨0, 0, 0, 0, 2, 0, 0, 2, 0, 0, 4, none, none, none, false⟩
-  let a : Audit := ⟨0, 0, "", 4, #[("SlotEntry_v1{KO=1}", 4, slotEntryPins[0]!)]⟩
+  let a : Audit := ⟨0, 0, "", 4, #[("SlotEntry_v1{KO=1}", 4, slotEntryPins[0]!)], #[]⟩
   let port := fun (q root : String) (l : Nat) =>
     Json.mkObj [("port", .str q), ("leaves", toJson l), ("root", .str root), ("domain", .str "d")]
   let reg := fun (os : Array Json) => Json.mkObj [("roots", Json.arr os)]
