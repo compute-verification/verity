@@ -50,13 +50,13 @@ def c():
 def test_a_tiles_laid_blocks_hold_all_its_ands_and_it_is_credited_its_macs(c) -> None:
     """Slow: only a laid C of real tiles shows the public rule places every block of a tile, its opened core's included,
     in that tile; one unit a tile (K = 256 under the composer's limit) never exercises it."""
-    ts, _program, laid, strata, tiles, _add = c
+    ts, program, laid, strata, tiles, _add = c
     assert not any(tid.startswith(PC.PearlPlusTileCoreWired.id) for tid, _rs in strata), "the laying opens the core"
-    per = count(laid)
+    per, whole = count(laid), count(program)
     of = {u: tid for tid, rs in strata for lo, hi in rs for u in range(lo, hi)}
     assert [t.index for t in tiles] == [0, 1]
     for t, tile in zip(tiles, ts):
-        assert sum(per[of[b]].ands for b in t.blocks) == ands(tile.core)
+        assert sum(per[of[b]].ands for b in t.blocks) == whole[descriptor_id(tile.core)].ands
         assert sum(t.kinds.values()) == len(t.blocks) and len(t.kinds) > 6
         assert t.amount == PS.tile_macs(tile.core.bindings) == tile.real * 1 * K
     assert tiles[0].kinds == tiles[1].kinds
