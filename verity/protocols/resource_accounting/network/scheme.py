@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import shlex
 from collections.abc import Callable, Mapping
+from dataclasses import asdict
 from fractions import Fraction
 from typing import Any
 
@@ -101,6 +102,13 @@ def _scan_state_layout(shape: Mapping[str, int]) -> Layout:
     return Layout(IS.state_bits(cls), IS.layout(cls), {"K0": cls.K0, "K": cls.K})
 
 
+def _released_layout(shape: Mapping[str, int]) -> Layout:
+    """The released row's layout at the scan's class: R cells of B bytes, its counts `EgressBucket`'s statics
+    (`ingress_scan.Class.egress`)."""
+    sh = IS.Class(**shape).egress
+    return Layout(8 * sh.R * sh.B, {}, asdict(sh))
+
+
 def _reading(row: Mapping[str, Any]) -> S.Reading:
     q = row["quantity"]
     return S.Reading(int(q["K"]), Fraction(str(q["eps"])), "quantity.eps", {"windows": int(q["windows"])})
@@ -138,7 +146,10 @@ NETWORK_ATTESTER = register(Scheme(
     hooks=("declared", "steps"),
     requires={"one-labelling": "the network attester's rows (`verifier.network_attester_rows`)",
               "one-design": "each scan's own sample at its δ (`prover.scan_zk`)"},
-    ports=(Port("scan-state", "input", IngressScanStart.id, "sin", layout=_scan_state_layout, value=SCAN_STATE), Port("released", "output", EgressBucket.id, "o1")),
+    ports=(Port("scan-state", "input", IngressScanStart.id, "sin", layout=_scan_state_layout, value=SCAN_STATE),
+           Port("ingress", "input", IngressScanBucket.id, "row", value="verity/certifier/ingress-rows/v1"),
+           Port("released", "output", EgressBucket.id, "o1", layout=_released_layout,
+                value="verity/certifier/egress-rows/v1")),
     requests=requests,
     attach=attach,
     processes={"id-relay": id_relay.process},

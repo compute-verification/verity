@@ -90,8 +90,8 @@ def test_the_charge_circuits_are_the_interfaces() -> None:
 
 def test_ports_are_its_blocks() -> None:
     ids = {b.definition for b in NS.NETWORK_ATTESTER.blocks}
-    assert {(p.direction, p.definition) for p in NS.NETWORK_ATTESTER.ports} == {
-        ("input", "IngressScanStart_v1"), ("output", "EgressBucket_v1")}
+    assert {(p.direction, p.definition, p.field) for p in NS.NETWORK_ATTESTER.ports} == {
+        ("input", "IngressScanStart_v1", "sin"), ("input", "IngressScanBucket_v3", "row"), ("output", "EgressBucket_v1", "o1")}
     assert {p.definition for p in NS.NETWORK_ATTESTER.ports} <= ids
 
 
@@ -177,3 +177,5 @@ def test_the_scan_states_port_lays_its_row_out_as_the_scan_does(lanes, outputs, 
     got = S.layout(NS.NETWORK_ATTESTER, "scan-state", shape)
     assert got.bits == IS.state_bits(cls) and dict(got.fields) == IS.layout(cls)
     assert dict(got.counts) == {"K0": cls.K0, "K": cls.K}
+    released = S.layout(NS.NETWORK_ATTESTER, "released", shape)
+    assert released.bits == 8 * cls.egress.R * cls.B and dict(released.counts) == vars(cls.egress)
