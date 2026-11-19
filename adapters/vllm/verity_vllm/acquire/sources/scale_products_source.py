@@ -140,7 +140,7 @@ def sites(plan: Sequence[Mapping[str, Any]], rows: Sequence[Mapping[str, Any]]) 
     `scale_products`, a module no row gives a geometry or rows give two, or a width that is not the geometry's product."""
     geometry: dict[str, set[tuple[int, int]]] = {}
     for r in rows:
-        if SCALE_PRODUCTS in (r.get("classes") or {}).values():
+        if SCALE_PRODUCTS in r["classes"].values():
             geometry.setdefault(str(r["op_path"]), set()).add(SP.blocks(r["statics"]))
     out: dict[str, tuple[int, int]] = {}
     for c in plan:
