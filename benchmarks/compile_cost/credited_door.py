@@ -55,13 +55,16 @@ def run(k: int, tm: int, tn: int, n: int, unit: int = 7) -> tuple[object, list]:
 
 
 def draw(k: int, tm: int, tn: int, n: int, coin: bytes) -> tuple[object, int]:
-    """The verifier's draw of one credited block on ``coin`` (`scheme.drawn_blocks`), and its index among the run's
-    credited blocks."""
+    """The verifier's draw of one credited block on ``coin`` (`scheme.drawn_blocks`), its public inputs from the run's
+    record (`scheme.drawn_inputs`, which refuses a block the core doesn't cover), and its index among the run's credited
+    blocks."""
     from verity.commitments.randomness import derive
     from verity.protocols.resource_accounting.compute.pouw import scheme as PS
     scheme, passes = run(k, tm, tn, n)
     (block,) = PS.drawn_blocks(scheme, passes, derive(coin, RUN_DRAW, {"run": bytes(64)}), 1)
     assert block.size == (k, tm, tn, n), block
+    inputs = PS.drawn_inputs(passes, block)
+    assert inputs == {"unit": block.unit, "rows": list(block.rows), "col": block.col}, (inputs, block)
     return block, PS.credited_blocks(scheme, passes).index(block)
 
 
