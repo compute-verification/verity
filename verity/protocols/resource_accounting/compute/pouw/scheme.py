@@ -2,9 +2,9 @@
 
 Its verifier is `verity/pouw/pearl-plus/v1` (`verifier/lean/pearlplus/PouwPearlPlus/Protocol.lean`). A tile that passes
 the tile rule costs its credited cells at the record's kept width |K| (`Credit.lean`'s `creditAtAssumption`), so a
-block's cost reads the record's kept width (``K_KEPT``, `UnitRecord.k_kept`) beside the tile's TM × TN, not the
-Definition's K, which is the unit's padded width. The cost is of a tile whose every cell is credited: filler, excluded and
-given-up rows credit none (`UnitRecord.credited`).
+block's cost reads the record's kept width (``K_KEPT``, `UnitRecord.k_kept`) beside the tile's real rows × TN (TR, the
+tile unit's static, where its shape has one, else TM), not the Definition's K, which is the unit's padded width. The cost
+is of a tile whose every real cell is credited: filler, excluded and given-up rows credit none (`UnitRecord.credited`).
 
 On a served run (`attach`) it computes every linear block with its device run (`verity.hooks.ComputeBlockWith`), the
 workload's `PearlCDeviceRun` (`serving.tensors.pearl_c_device`), over the weight operands the run registers
@@ -48,7 +48,7 @@ READS = ("bf16",)
 
 
 def tile_macs(shape: Mapping[str, int]) -> int:
-    return shape["TM"] * shape["TN"] * shape["K_KEPT"]
+    return shape.get("TR", shape["TM"]) * shape["TN"] * shape["K_KEPT"]
 
 
 @dataclass(frozen=True)
