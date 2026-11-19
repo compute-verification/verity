@@ -64,7 +64,7 @@ def test_its_credited_product_is_one_block_a_grid_tile_in_the_lean_verifiers_ord
     """`credited_blocks` on two passes of Pearl+'s test instance (k = 128) at 32 x 16 tiles: ids per pass in `Run.lean`'s
     `tile?` order (call by call, row-major, the last row block narrower), and each ticket `ticketWeight`'s, |credited rows|
     x |credited columns| x `wref`(1, |K|, n) / n (the H100 record's `wref`, written here as `Records.lean` states it), over the
-    lcm of every pass's denominators. Weight 1's excluded B row 20 takes its block of 64 columns, so its calls' tiles have
+    lcm of every pass's denominators; each block's real-row count is its rows below the call's ``real_rows``. Weight 1's excluded B row 20 takes its block of 64 columns, so its calls' tiles have
     ticket 0 and `drawn_blocks` never draws them."""
     from verity.commitments.randomness import derive
     from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
@@ -82,11 +82,11 @@ def test_its_credited_product_is_one_block_a_grid_tile_in_the_lean_verifiers_ord
     blocks = PS.credited_blocks(scheme, passes)
     r16, r32, r48 = tuple(range(16)), tuple(range(32)), tuple(range(32, 48))
     c0, c1 = tuple(range(16)), tuple(range(16, 32))
-    want = [((0, 0), 0, 0, r32, c0, 0, (k, 32, 16, 16), 19 * 16), ((0, 1), 1, 1, r16, c0, 0, (k, 16, 16, 32), 0),
-            ((0, 2), 1, 1, r16, c1, 1, (k, 16, 16, 32), 0), ((1, 0), 0, 2, r32, c0, 0, (k, 32, 16, 16), 32 * 16),
-            ((1, 1), 0, 2, r48, c0, 0, (k, 16, 16, 16), 8 * 16), ((1, 2), 1, 3, r16, c0, 0, (k, 16, 16, 32), 0),
-            ((1, 3), 1, 3, r16, c1, 1, (k, 16, 16, 32), 0)]
-    assert [(b.id, b.record, b.unit, b.rows, b.cols, b.col, b.size) for b in blocks] == [w[:7] for w in want]
+    want = [((0, 0), 0, 0, r32, c0, 0, (k, 32, 16, 16), 20, 19 * 16), ((0, 1), 1, 1, r16, c0, 0, (k, 16, 16, 32), 16, 0),
+            ((0, 2), 1, 1, r16, c1, 1, (k, 16, 16, 32), 16, 0), ((1, 0), 0, 2, r32, c0, 0, (k, 32, 16, 16), 32, 32 * 16),
+            ((1, 1), 0, 2, r48, c0, 0, (k, 16, 16, 16), 8, 8 * 16), ((1, 2), 1, 3, r16, c0, 0, (k, 16, 16, 32), 16, 0),
+            ((1, 3), 1, 3, r16, c1, 1, (k, 16, 16, 32), 16, 0)]
+    assert [(b.id, b.record, b.unit, b.rows, b.cols, b.col, b.size, b.real) for b in blocks] == [w[:8] for w in want]
 
     def wref(m: int, k: int, n: int) -> int:
         return m * n * (k + 32 * (k // 128)) - 32 * m * n + m * k * 32 + 2 * 64 * m * n + 68 * m * k

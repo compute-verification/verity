@@ -53,7 +53,8 @@ def tile_macs(shape: Mapping[str, int]) -> int:
 class CreditedBlock:
     """One credited block: tile ``id`` = (pass, tile id) of the run, the tile id its transcript leaf's position; ``record``
     its call's position in the pass, ``unit`` the call's index, ``rows`` and ``cols`` the tile's, ``col`` its column block
-    (``cols[0] // TN``), ``size`` its template's (K, TM, TN, N), and ``ticket`` its integer sample weight."""
+    (``cols[0] // TN``), ``size`` its template's (K, TM, TN, N), ``real`` its template's static real-row count TR (its
+    rows below the call's ``real_rows``; the rest are filler, held to zero), and ``ticket`` its integer sample weight."""
 
     id: tuple[int, int]
     record: int
@@ -62,6 +63,7 @@ class CreditedBlock:
     cols: tuple[int, ...]
     col: int
     size: tuple[int, int, int, int]
+    real: int
     ticket: int
 
 
@@ -79,10 +81,12 @@ def credited_blocks(scheme: Any, passes: Sequence[Sequence[Any]]) -> list[Credit
     for i, records in enumerate(passes):
         for ref in tile_refs(scheme, Workload(tuple(r.matmul for r in records))):
             _, tile, ticket = next(tickets)
-            u = records[ref.matmul].matmul
+            r = records[ref.matmul]
+            u = r.matmul
             assert tile == ref.tile, "clear_work.tickets and audit.tile_refs enumerate one grid"
             out.append(CreditedBlock((i, ref.id), ref.matmul, u.index, tile.rows, tile.cols, tile.cols[0] // tn,
-                                     (u.shape.k, len(tile.rows), tn, u.shape.n), ticket))
+                                     (u.shape.k, len(tile.rows), tn, u.shape.n),
+                                     sum(row < r.real_rows for row in tile.rows), ticket))
     return out
 
 
