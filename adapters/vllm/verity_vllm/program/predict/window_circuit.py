@@ -130,7 +130,8 @@ would read more than its prompt and the weights (a stochastic request's seed, a 
 peers), a request a Commit window carries in or out, byte ingress, a family this lowering doesn't know, a weight whose
 leaves aren't whole u16 words, a read that cuts a writer's row, and at `settle`, every one named at once, a template's port
 read at two row counts or as rows that aren't its outer elements cut that many ways and a unit of more than ``grain.rows``
-rows. A unit Flock's composer wouldn't prove is `check_provable`'s to refuse, after lowering. The circuit is completeness only:
+rows. A unit Flock's composer wouldn't prove is `check_provable`'s to refuse, after lowering; a served window's,
+which the door proves, `check_served`'s. The circuit is completeness only:
 that it computes what serving ran is held by the units' proofs on their committed rows, never by this lowering.
 
 Its weight reads, the embedding's table reads and its openings count registered (`interface.input_count`) only where the
@@ -157,7 +158,7 @@ from verity_vllm.program.frontend.stop_rule import stop_ids as of_config
 from . import scan_state as SS
 from .build import Unexpressible
 from .steps import RequestUnit, advice_of, request_program
-from .window_builder import WEIGHTS, Grain, Row, _Builder, check_provable, inference
+from .window_builder import WEIGHTS, Grain, Row, _Builder, check_provable, check_served, inference
 from .window_class import (
     CLASS_OF_RECORD,
     GREEDY,
@@ -414,5 +415,5 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
 
 
 __all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Request", "Row", "Scheduled", "Tables",
-           "WEIGHTS", "WindowClass", "WindowCompiler", "check_provable", "class_circuit", "class_program", "lower", "requests_of", "stop_ids",
+           "WEIGHTS", "WindowClass", "WindowCompiler", "check_provable", "check_served", "class_circuit", "class_program", "lower", "requests_of", "stop_ids",
            "takes", "window_circuit"]
