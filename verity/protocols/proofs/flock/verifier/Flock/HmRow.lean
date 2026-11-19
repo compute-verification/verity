@@ -1357,25 +1357,6 @@ private def templateStrata (samplingDesign : String) (obj : Json) (program : Byt
     V (Array (String × Array (Nat × Nat)) × Nat) :=
   templateStrataBy TemplateQuery.Desc.parse samplingDesign obj program
 
-/-- The partition object's levels of `blocks`, coarsest first, only once each covers the population the query derives
-from the verifier's own `program` (`templateStrata`); none where it has none. A reader of `blocks` takes them here or
-from `blocksOf`, never from the object. -/
-def levelsOf (obj : Json) (program : ByteArray) : V (Option (Array (Array (Nat × Nat)))) := do
-  let some b := (obj.getObjVal? "blocks").toOption | pure none
-  discard <| templateStrata "blocks" obj program
-  blocksIn (some b)
-
-/-- `blocks-levels`' refusal, at an object of `n` levels. -/
-def blocksLevels (n : Nat) : String :=
-  s!"partition: blocks-levels: the object has {n} levels of blocks; this reader takes one"
-
-/-- The partition object's proof blocks, its one level (`levelsOf`); an object of more than one level is refused
-(`blocksLevels`) until its reader takes levels. -/
-def blocksOf (obj : Json) (program : ByteArray) : V (Option (Array (Nat × Nat))) := do
-  let some ls ← levelsOf obj program | pure none
-  if ls.size != 1 then throw (blocksLevels ls.size)
-  pure (some ls[0]!)
-
 /-- `stratified:K` expanded over the verifier's own program and partition object (`draw.derive`), and the population. -/
 def stratifiedSamplingDesign (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.SamplingDesign × Nat) := do
   let (strata, population) ← templateStrata "stratified" obj program
