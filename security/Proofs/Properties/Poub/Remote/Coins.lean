@@ -35,8 +35,8 @@ namespace Properties.Poub
 theorem acceptSamplesOpenable : AcceptSamplesOpenable := by
   intro reg appends w coin samples openings h
   obtain ⟨sampled, hd, hsz, hk⟩ := acceptChecksOpenings reg appends w coin samples openings h
-  obtain ⟨L, us, hs, hsz', -, hrange, -⟩ := sampleIsSubset _ _ _ _ _ _ hd
-  refine ⟨L, us, hs, fun u hu => ?_⟩
+  obtain ⟨us, hs, hsz', -, hrange, -⟩ := sampleIsSubset _ _ _ _ hd
+  refine ⟨us, hs, fun u hu => ?_⟩
   obtain ⟨k, hk', rfl⟩ := Array.mem_iff_getElem.1 hu
   have hkd : k < sampled.size := by omega
   obtain ⟨hi, hp, hidx⟩ := hrange k hkd
