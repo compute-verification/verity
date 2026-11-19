@@ -411,7 +411,9 @@ theorem check_unit_derive {types : String → Option CircuitType} {ls : Array Bl
   unfold genOk at hg
   cases hown : (ls.getD unit default).own with
   | derive => rfl
-  | gen sha n vb lo => simp [hown] at hg
+  | gen sha n vb lo =>
+    rw [Array.getD_eq_getD_getElem?] at hown
+    simp [hown] at hg
 
 private def wordsBytes (ws : Array Nat) : ByteArray :=
   ws.foldl (fun b w => b ++ le32 w.toUInt32) ByteArray.empty
