@@ -305,7 +305,8 @@ noncomputable def below (L : CompiledLev Coin A) (x : Msg) (s : AuditStatement) 
 
 /-- **The sampling extractor at levels**, one wait per level: replay the judged run; if it accepted, rerun on fresh
 coins until `k_out` accepted runs are in hand (giving up after `K_out`); below each (`below`), one wait per middle level
-and the inner wait; and assemble. At one or two levels, `Compiled.E` on its coins rearranged. -/
+and the inner wait; and assemble. At one or two levels, `Compiled.E` on its coins rearranged: the same extraction,
+along the coins' equivalence `coinsLev` (`CompiledLev.Elev_ext_coinsLev`). -/
 noncomputable def Elev (L : CompiledLev Coin A) : Extractor Coin Sampling.Wit L.V where
   C x := (Fin (L.capOut x) → Fin (L.V.k x) → Coin) × (Fin (L.kOut x) → L.WaitC x (L.forks x).length)
   ext x r₀ c := .rerun r₀ fun v₀ =>
@@ -326,11 +327,12 @@ noncomputable def waitErr (L : CompiledLev Coin A) (x : Msg) : ℕ → ℝ → �
   | m + 1, a => (2 * L.kOut x / L.capOut x + Real.exp (-(L.kOut x : ℝ) / 8)) + slack * waitErr L x m a
 
 /-- **The knowledge error at levels at `δ`**: the outer wait's truncation plus its factor `c` times the error below a
-kept run (`waitErr`) at `δ + κ_s`; `Compiled.κ` at one or two levels. -/
+kept run (`waitErr`) at `δ + κ_s`; equal to `Compiled.κ` at one or two levels (`CompiledLev.κLev_eq`). -/
 noncomputable def κLev (L : CompiledLev Coin A) (δ : ℝ) (x : Msg) : ℝ :=
   (2 * L.kOut x / L.capOut x + Real.exp (-(L.kOut x : ℝ) / 8)) + slack * L.waitErr x (L.mid x) (δ + L.κs x)
 
-/-- **`γ` at levels**: `c^{2(m+2)}·k(x)·γ_s` at `m` middle levels; `Compiled.γ` at one or two levels. -/
+/-- **`γ` at levels**: `c^{2(m+2)}·k(x)·γ_s` at `m` middle levels; equal to `Compiled.γ`, `c^4·k(x)·γ_s`, at one or two
+levels (`CompiledLev.γLev_eq`). -/
 noncomputable def γLev (L : CompiledLev Coin A) (x : Msg) : ℝ := slack ^ (2 * (L.mid x + 2)) * (L.V.k x * L.γs x)
 
 /-! ## 8. The claims -/
