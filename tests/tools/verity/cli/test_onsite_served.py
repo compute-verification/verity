@@ -544,16 +544,30 @@ def test_the_live_challenger_is_bound_only_when_given(tmp_path, capsys):
     assert "PP_CHALLENGER_KEY" not in hooks and "DEVELOPMENT" not in hooks
 
 
-def test_a_runtime_party_raises_before_anything_starts_while_its_machine_hands_it_nothing(tmp_path, capsys,
-                                                                                         monkeypatch, runtime):
+def test_a_runtime_party_is_refused_by_name_before_anything_starts_while_its_machine_hands_it_nothing(
+        tmp_path, capsys, monkeypatch, runtime):
     """The prover node's runtime parties need what their protocol's start reads (the served store, the card, setup's
-    request), which doesn't reach the table yet: the run raises by the row's name before the served window starts."""
+    request), which doesn't reach the table yet: `live` turns the unwritten start into a refusal naming the party, its
+    piece and the goal, which `verity run` prints as a refusal and exits 2 on, before the served window starts."""
     monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", "touch \"$OUT.started\"\n"))
     state = tmp_path / T.PROVER_NODE
-    with pytest.raises(NotImplementedError) as e:
-        R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--bindings", bindings(tmp_path, RUNTIME_BINDINGS), "--state",
-                    str(state)], REG)
-    assert e.value.args == (T.NOT_YET,) and not (state / "out.started").exists()
+    rc = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--bindings", bindings(tmp_path, RUNTIME_BINDINGS), "--state",
+                     str(state)], REG)
+    err = capsys.readouterr().err
+    assert rc == 2 and not (state / "out.started").exists()
+    assert err.splitlines()[-1] == f"verity run: refused unwritten: prover's pous party start is not written ({T.NOT_YET})"
+
+
+def test_the_runs_registration_is_refused_by_name_where_every_party_prepared(tmp_path, monkeypatch, runtime):
+    """Once every runtime party is prepared, the registration the run needs before any coin raises its goal, which
+    `live` refuses as ``unwritten``, naming the goal."""
+    monkeypatch.setattr(T, "prepare", lambda cfg, state, bindings, x: lambda: {})
+    cfg = R.load(CONFIG, REG)
+    (tmp_path / T.BINDINGS).write_text(json.dumps(BINDINGS))
+    (tmp_path / "run.json").write_text(json.dumps({"configuration": K.digest(cfg)}))
+    with pytest.raises(T.Refused) as e:
+        T.live(cfg, tmp_path, [T.MEMORY_ATTESTER, T.VERIFIER])
+    assert (e.value.name, e.value.detail) == ("unwritten", "the run's registration is not written (proofs/architecture-on-branch)")
 
 
 def test_the_memory_attesters_key_is_refused_unless_this_configuration_pins_it_before_anything_else(tmp_path,

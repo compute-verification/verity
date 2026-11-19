@@ -79,8 +79,6 @@ DELETED: dict[str, str] = {
     "commit": "the Commit is deleted; `serve-openai --seal` commits what it serves",
     "manifest": "the row manifest is deleted; the serve commits the window's circuit",
     "neutrality": "the traced Build it compared a predicted one against is deleted",
-    "tp-serving-rows": "the tensor-parallel Commit's stand-in windows are deleted with it; the serve commits the window's circuit",
-    "advice-windows": "the tensor-parallel Commit's advice windows are deleted with it; `advice_windows` commits the advice alone",
     "tp-commit-replay": "the tensor-parallel Commit is deleted, and its replay with it",
     "boundary-plan": "the Commit's call-boundary plan is deleted with the Commit",
     "gate": "the row's acquisition gate is deleted with the row",

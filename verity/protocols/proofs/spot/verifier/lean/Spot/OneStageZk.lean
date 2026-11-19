@@ -561,50 +561,6 @@ def fieldRoots (W : Spot.Wires.Wiring) (rs : Array (String × Nat × Nat)) (ms :
         | none => got) own
     pure (acc.insert m.name mine)) roots
 
-/-- **in(S)'s row cuts**: `ioCuts : C -> Partition -> {template: {port: rows}}`, the rows each port of a block's
-circuit is cut into, from C and the partition (the ranges `rs`), in O(C's description). A port a part of a root node's argument reads from a non-input root node is cut into its leaves over the leaves of the
-writer's output field at the part's first reference (`Flock.Program.partLeafAt`, `fieldIx`); an uncut port is left out.
-`edgesOf` holds every row so cut to one whole writer field, so a cut here only decides which rows it checks. Its work
-is the root's nodes, arguments and parts. A scan at the root is refused by name (no closed form yet, `edgesOf`'s
-`edge-form`), and so is a port of one template read in rows of two lengths. -/
-def ioCuts (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) :
-    V (List (String × List (String × Nat))) := do
-  let fu := Spot.Edges.firstUnits rs
-  let nodes := ((P.defs[P.root]?).map (·.body.nodes)).getD #[]
-  let mut cs : List (String × List (String × Nat)) := []
-  for k in [0:nodes.size] do
-    if Spot.Edges.isInputNode P k then continue
-    let node := nodes[k]!
-    if node.form == .scan then
-      throw (Flock.OneCircuit.notDerived "ioCuts : a scan node of C's root (edge-form: no closed form yet)")
-    let some (rt, _) := fu[k]? | throw "edge-template"
-    let defn := P.defs[node.fn]!
-    for i in [0:node.args.size] do
-      let (port, ty) := defn.params[i]!
-      for q in node.args[i]!.seq.parts do
-        let (run, lanes) := Flock.Program.partLanes q
-        let some (false, w, l) := Flock.Program.partLeafAt run lanes 0 | continue
-        if l < 0 || w ≥ nodes.size || Spot.Edges.isInputNode P w then continue
-        let wd := P.defs[nodes[w]!.fn]!
-        if wd.outLeaves == 0 then continue
-        let some f := Flock.Program.fieldIx wd.ret (l.toNat % wd.outLeaves) | continue
-        let fl := ((Flock.Program.fieldsOf wd.ret)[f]?.map (·.leaves)).getD 0
-        if fl == 0 || ty.leaves % fl != 0 then throw "edge-rows"
-        let kc := ty.leaves / fl
-        let ports := (cs.lookup rt).getD []
-        match ports.lookup port with
-        | some k' =>
-          if k' != kc then
-            throw s!"ioCuts: template {rt}'s port {port} is read in rows of {ty.leaves / k'} and of {fl} leaves"
-        | none => cs := (rt, ports ++ [(port, kc)]) :: cs.filter (·.1 != rt)
-  return (cs.reverse.map fun (t, ps) => (t, ps.filter (·.2 > 1))).filter (!·.2.isEmpty)
-
-/-- Whether C's root has an edge: an argument part of a root node that reads a root node that is no input. Its work is
-the root's nodes, arguments and parts. -/
-def hasEdge (P : Flock.Program.Prog) : Bool :=
-  ((P.defs[P.root]?).map (·.body.nodes)).getD #[] |>.any fun n => n.args.any fun a =>
-    a.seq.parts.any fun q => (Flock.Registered.partNodes q).any fun k => !Spot.Edges.isInputNode P k
-
 /-- **C's wiring under the partition**: the templates of the partition's ranges `rs`, read off C
 (`Spot.RecordText.tmplAt`), in(S)'s row cuts (`ioCuts`), and the wires C's root states (`Spot.Edges.edgesOf`). -/
 def derivedWiring (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) : V Spot.Wires.Wiring := do
@@ -982,7 +938,9 @@ theorem evidenceEitherOf_one {b : ByteArray} {e : Evidence} (h : evidenceEitherO
 /-- `protocol.main`'s commands, and `verdicts OWN PROOFS [BLOB ...]`: the sessions' verdicts alone (`verdicts`, with no
 proved units to bind), from the verifier's own inputs (`ownOfJson`) and the evidence's `proofs` (`proofsOf`), each file
 canonical JSON; one line, `{"verdicts": [verdict, ...]}` in session order or `{"refused": why}`, exit 0 or 1. The
-difftest holds it to `verity-verify-proof verify --zk` (`one_stage.proofs.verify`). -/
+difftest holds it to `verity-verify-proof verify --zk` (`one_stage.proofs.verify`). `restrict C PARTITION BLOCK OUT`:
+the circuit file of the block whose first unit is `BLOCK` (`restrict`) written to `OUT`, `PARTITION` canonical JSON; exit
+0, or 1 on its refusal. -/
 def main (args : List String) : IO UInt32 := do
   match args with
   | "verdicts" :: own :: proofs :: blobs =>
@@ -997,6 +955,14 @@ def main (args : List String) : IO UInt32 := do
       | .error e => Json.mkObj [("refused", Json.str e)]
     IO.println ((Flock.canon line).toOption.getD line.compress)
     return if r.toBool then 0 else 1
+  | ["restrict", c, partition, block, out] =>
+    let cB ← IO.FS.readBinFile c
+    match Core.canonicalJson (← IO.FS.readBinFile partition), block.toNat? with
+    | .ok pj, some b => match restrict cB pj b with
+      | .ok bs => IO.FS.writeBinFile out bs; IO.println s!"RESTRICTED bytes={bs.size}"; return 0
+      | .error e => IO.eprintln s!"restrict: {e}"; return 1
+    | .error e, _ => IO.eprintln s!"restrict: the partition object: {e}"; return 2
+    | _, none => IO.eprintln "restrict: BLOCK is not a unit index"; return 2
   | _ => protocol.main args
 
 #guard registeredInputName "RegisteredInput96_v1"
@@ -1091,20 +1057,19 @@ private def withTables (c : ByteArray) (names : List String) : Core.Blobs :=
 private def held (lookups tables : List String) : String :=
   refusal (tablesHeld (ownOf (lookingUp lookups)) (withTables (lookingUp lookups) tables))
 
-/-- The refusal of every statement's circuit file while C_S is not derived (`restrict`): here, of a partition object
-with no blocks. -/
-private def HOLE_T : String := refusal ((fun _ => ()) <$> restrict .empty Json.null 0)
+/-- The refusal of a statement's circuit file (`restrict`) on a partition object with no blocks. -/
+private def NO_BLOCKS_T : String := refusal ((fun _ => ()) <$> restrict .empty Json.null 0)
 
-#guard HOLE_T == "restrict: the partition object has no blocks"
-#guard held [] [] == HOLE_T
-#guard held ["ex2", "rcp"] ["rcp", "ex2"] == HOLE_T
+#guard NO_BLOCKS_T == "restrict: the partition object has no blocks"
+#guard held [] [] == NO_BLOCKS_T
+#guard held ["ex2", "rcp"] ["rcp", "ex2"] == NO_BLOCKS_T
 #guard (lookupsOf "circuit\nMETA {\"lookups\":[]}\n".toUTF8).toOption == none
 #guard (lookupsOf "circuit\nMETA {\"lookups\":null}\n".toUTF8).toOption == some []
 #guard (lookupsOf "circuit\nMETA {\"lookups\":{\"foo\":{},\"ex2\":{}}}\n".toUTF8).toOption == some ["ex2"]
-#guard refusal ((fun _ => ()) <$> run (ownOf (lookingUp [])) #[] none (withTables (lookingUp []) ["rcp"])) == HOLE_T
+#guard refusal ((fun _ => ()) <$> run (ownOf (lookingUp [])) #[] none (withTables (lookingUp []) ["rcp"])) == NO_BLOCKS_T
 #guard (tablesPiece (Json.mkObj [("digests", Json.arr #[Json.str
   "8a317adbcc078bf70ae01959b679d49f97cd9c8a93d6f39b7325c93d0fd550fa4396a4c3a0568d2387c2ff2f33eb76453b33a7b8890d97752d86cc1d971aeacc"])])).toOption ==
-  some (Json.mkObj [("why", Json.str HOLE_T)])
+  some (Json.mkObj [("why", Json.str NO_BLOCKS_T)])
 #guard !(tablesPiece (Json.mkObj [("digests", Json.arr #[Json.str "0"])])).toBool
 
 #guard (rootBLen { (default : Flock.Setup) with m := 25, merkle := Flock.MerkleScheme.hm96Sha512 }).toOption == some 16384
@@ -1245,15 +1210,14 @@ private def unitsJ (us : Array Nat) : Json := Json.mkObj [("units", Json.mkObj [
 #guard (runMembers (fun _ => Json.null) #[] #[] #[] ⟨#[]⟩).toOption.map (·.all) == some true
 #guard whyT (runMembers (fun _ => Json.null) #[] #[] #[1] ⟨#[]⟩) ==
   "the units the sessions proved are not the evidence's proved_units"
-#guard (whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2"] #[2] ⟨#[]⟩)).startsWith
-  "member m2: restrict: "
+#guard whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2"] #[2] ⟨#[]⟩) == s!"member m2: {NO_BLOCKS_T}"
 #guard whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2"] #[] ⟨#[]⟩) == unsampled "m2"
 #guard whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2", statementT "m10"] #[10] ⟨#[]⟩) ==
   unsampled "m2"
-#guard whyT (runMembers (fun _ => Json.null) membersT #[] #[] ⟨#[]⟩) == s!"member m2: {HOLE_T}"
+#guard whyT (runMembers (fun _ => Json.null) membersT #[] #[] ⟨#[]⟩) == s!"member m2: {NO_BLOCKS_T}"
 #guard whyT (runMembers (fun _ => Json.null) #[memberT "m0" #[(0, 1)], memberT "m2" #[(2, 3)]] #[statementT "m2"]
-  #[2] ⟨#[]⟩) == s!"member m0: {HOLE_T}"
-#guard whyT (membersFiles (fun _ => Json.null) ⟨#[]⟩ membersT.toList) == s!"member m2: {HOLE_T}"
+  #[2] ⟨#[]⟩) == s!"member m0: {NO_BLOCKS_T}"
+#guard whyT (membersFiles (fun _ => Json.null) ⟨#[]⟩ membersT.toList) == s!"member m2: {NO_BLOCKS_T}"
 #guard ((membersFiles (fun _ => Json.null) ⟨#[]⟩ []).toOption.map (·.length)) == some 0
 #guard whyT (statementAt [] (memberT "m2" #[(2, 3)])) == "the parameters name no such member"
 
@@ -1267,15 +1231,15 @@ refusal, which these members name none of, where its tables pass. -/
 private def statedT (c : ByteArray) (bs : Core.Blobs) : String :=
   whyT (({ name := "m", units := #[], g := 1, own := ownOf c } : Member).statement Json.null bs)
 
-#guard statedT (lookingUp []) (twoT ["rcp"]) == HOLE_T
-#guard statedT (lookingUp ["rcp"]) (twoT []) == HOLE_T
+#guard statedT (lookingUp []) (twoT ["rcp"]) == NO_BLOCKS_T
+#guard statedT (lookingUp ["rcp"]) (twoT []) == NO_BLOCKS_T
 #guard (ownTables (ownOf (lookingUp [])) (twoT ["rcp", "ex2"])).toOption.isNone
 #guard refusal (tablesMatch [("rcp", .empty)] []) == s!"{NO_TABLES}: the circuit looks up none, the blobs hold rcp"
-#guard whyT (statementOf (ownOf (lookingUp [])) (fun _ => pure ()) [("rcp", .empty)] (twoT [])) == HOLE_T
+#guard whyT (statementOf (ownOf (lookingUp [])) (fun _ => pure ()) [("rcp", .empty)] (twoT [])) == NO_BLOCKS_T
 
 /-- A statement of no file whose scope, ports, form, header and population checks are the ones given. -/
 private def stepT (scope ksFiles ksForm header population : V Unit) : Option StepAt :=
-  (Flock.Tags.find? STATEMENT).map fun tags =>
+  (Flock.Tags.byName? STATEMENT).map fun tags =>
     { I := inputsOf tags sharedT .empty .empty ⟨#[]⟩, rd := { registered := none, known := #[], params := #[] }, scope,
       ksFiles, ksForm, header, g := none, population, programSha := none, want := Json.null }
 
@@ -1294,7 +1258,7 @@ private def stepT (scope ksFiles ksForm header population : V Unit) : Option Ste
 /-- The statement `StepAt.ofOwn` builds of no file: its form check is `Flock.KsScope.filesOf`'s refusal of a circuit
 that does not parse, and it names no units a proof block. -/
 private def ownT : Option StepAt :=
-  (Flock.Tags.find? STATEMENT).map fun tags =>
+  (Flock.Tags.byName? STATEMENT).map fun tags =>
     StepAt.ofOwn sharedT tags .empty .empty [] { registered := none, known := #[], params := #[] } (.ok ())
 
 #guard (ownT.map fun a => (refusal a.ksForm).startsWith "refused: ") == some true

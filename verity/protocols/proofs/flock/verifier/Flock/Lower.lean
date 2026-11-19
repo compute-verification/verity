@@ -404,7 +404,9 @@ one copy; an `xs` argument steps its element's leaves an iteration, a shared one
 def Work.scan (w : Work) (st : Array Nat) (callee : Defn) (x : Node) (e cols : Nat) (rets : Array Nat) : V Work := do
   let n := x.n
   if n == 0 then throw s!"{callee.id}: a scan of no iterations"
+  if x.args.size == 0 then throw s!"{callee.id}: a scan without its carry's init"
   let c := (callee.params[0]!.2).leaves
+  if rets.size < c then throw s!"{callee.id}: a scan whose callee returns fewer leaves than its carry"
   let mut w := w
   let mut first := #[]
   let mut rest := #[]
