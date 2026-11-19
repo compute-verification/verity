@@ -27,7 +27,10 @@ instance and input port, or a shared-row file's per table row, and a shared-row 
 says, which only the file's length bounds. So where the verifier holds the inner statement's files, `RecSetup.checkShape`
 refuses one of more than `MAX_INNER_ROWS` instances or with a shared-row table of more than `MAX_INNER_ROWS` rows
 (`innerRows`): over its at most `1024` ports (`checkInRange`'s regions) the inner setup's evaluations are then at most
-`12 + 1024 · 20 · 2^17 < 2^32`, and the inner verifier's, with its tables' and a decision's, below `2^32` too.
+`12 + 1024 · 20 · 2^17 < 2^32`, and the inner verifier's, with its tables' and a decision's, below `2^32` too. The inner
+setup digests its Program once a Definition, so `checkShape` also refuses files whose program names more than `defsCap`
+Definitions (`innerDefs`): the count grows with the Program's distinct templates and Boolean bodies, not
+with its layers or slots, and with `6 · defsCap` more the inner setup's evaluations stay below `2^32`.
 -/
 
 @[expose] public section
@@ -128,6 +131,24 @@ def innerRows (st : Stmt) : V Unit :=
     if t.counts.any (MAX_INNER_ROWS < ·) then
       throw s!"refused: the inner statement's public file has a shared-row table of more than {MAX_INNER_ROWS} rows: {tail}"
     else pure ()
+
+/-- The most Definitions the inner statement's Program names: the entries of its descriptor's `definitions`, which its
+digest hashes one a call. -/
+def defsCap : Nat := 2 ^ 20
+
+/-- **The inner statement's Program, where its files carry one, names at most `defsCap` Definitions**: the entries of
+its descriptor's `definitions`, one a key, a repeated key kept once as the parser keeps it. Files with no program have no
+Definition for the setup to digest; bytes that parse to no such object are the decoder's to refuse. -/
+def innerDefs (program : Option ByteArray) : V Unit := do
+  let some b := program | return
+  if let some text := String.fromUTF8? b then
+    if let .ok j := JsonParse.parse text then
+      if let .obj kvs := j.getObjValD "definitions" then
+        if defsCap < kvs.toArray.size then
+          throw (s!"refused: the inner statement's program names {kvs.toArray.size} Definitions, more than {defsCap}: " ++
+            tail)
+
+#guard (innerDefs none).toOption.isSome
 
 end RecBudget
 end Flock

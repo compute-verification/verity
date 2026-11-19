@@ -32,7 +32,8 @@ open Lean (Json)
 /-- A descriptor `TemplateQuery.Desc.parse` reads, with no callee: one primitive Definition, its root. -/
 def desc (root : String) : ByteArray :=
   ("{\"schema\":\"verity-ir/descriptor/v2\",\"callees\":[],\"definitions\":{\"" ++ root ++
-    "\":{\"form\":\"primitive\"}},\"root\":\"" ++ root ++ "\"}").toUTF8
+    "\":{\"form\":\"primitive\",\"id\":\"" ++ root ++ "\",\"params\":[],\"ret\":[\"Value\",1]}}," ++
+    "\"inputs\":[],\"program_fn\":\"" ++ root ++ "\",\"root\":\"" ++ root ++ "\",\"types\":[]}").toUTF8
 
 /-- The circuit's program. -/
 def mine : ByteArray := desc "Mine_v1"
@@ -75,6 +76,9 @@ def NOT_THE_OBJECTS : String := "partition: the verifier's program is not the on
 
 -- two descriptors of two digests, each read as `TemplateQuery.Desc.parse` reads it and naming no registered input
 #guard (sha mine).length == 128 && sha mine != sha other
+-- `codec.program_digest` of `mine`
+#guard sha mine ==
+  "92389af7722309ac3aa83ddbc49f09474b163fcf2e1033119bc9ce0f61306835fda03dc5e62cfc385a73a7c29629099fda6531e87489bba2c08f83b7c03a1ad5"
 #guard (TemplateQuery.Desc.parse other).toOption.map (hexOf ·.sha512) == some (sha other)
 #guard (Registered.checkProgram (some other) false).toBool
 #guard ProvedScope.metaRule (bound unread) == HmRow.PARTITION_V1

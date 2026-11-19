@@ -277,13 +277,10 @@ def buildSessionOf (parsed : V Flock.Circuit) (tags : Flock.Tags) (circuitB pubB
   Flock.Registered.checkFull registered draw
   return r
 
-/-- `verity-verify-proof`'s `programDigest`: SHA-512 of the canonical descriptor without `annotations`. -/
+/-- `verity-verify-proof`'s `programDigest`: the program digest (`Flock.Program.programDigestWith`). -/
 def programDigest (b : ByteArray) : Option String := do
   let j ← (Flock.JsonParse.parse (← String.fromUTF8? b)).toOption
-  let bare := match j with
-    | .obj kvs => Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
-    | x => x
-  return Flock.hexOf (Flock.Sha512.hash (← (Flock.canon bare).toOption).toUTF8)
+  return Flock.hexOf (← (Flock.Program.programDigestWith (M := Flock.V) (fun b => pure (Flock.Sha512.hash b)) j).toOption)
 
 /-- The refusal of a public file whose instances are not the registration's population units in order (`indicesHeld`). -/
 def INDICES_WHY : String :=

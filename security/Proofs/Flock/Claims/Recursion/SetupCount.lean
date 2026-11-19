@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Claims.Complete.CostWalk
 public import Flock.With.Log
 public import Flock.With.Setup
+public import Proofs.Flock.Claims.Recursion.DigestCount
 
 /-!
 # The setup's hash calls, counted function by function, in any hash
@@ -244,15 +245,21 @@ theorem publicDigest_cost (header : Json) (pubs : ByteArray) :
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
-theorem descParse_cost (bytes : ByteArray) :
-    countC.P (TemplateQuery.Desc.parseWith (Hashes.counted h).sha512 bytes) 1 := by
+/-- `programDigestWith`'s calls: one per entry of the descriptor's `definitions` (`DigestCount.definitionDigests_calls`),
+at most `D`, and one more. -/
+theorem programDigest_cost (j : Json) (D : Nat)
+    (hD : ∀ kvs, j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ D) :
+    countC.P (Program.programDigestWith (Hashes.counted h).sha512 j) (D + 1) := by
+  have hp : countC.P (Program.definitionDigestsWith (Hashes.counted h).sha512 j) D :=
+    DigestCount.definitionDigests_calls h j D hD
   apply countC.mono
-  · unfold TemplateQuery.Desc.parseWith
+  · unfold Program.programDigestWith
     repeat (first
       | extract_lets
       | (with_reducible apply throwBind)
       | (with_reducible apply Cost.bind)
       | (with_reducible apply bindAny)
+      | (with_reducible exact hp)
       | (with_reducible apply sha_cost h)
       | (with_reducible intro _)
       | (with_reducible apply Cost.pure)
@@ -283,6 +290,7 @@ theorem descParse_cost (bytes : ByteArray) :
         | (with_reducible apply throwBind)
         | (with_reducible apply Cost.bind)
         | (with_reducible apply bindAny)
+        | (with_reducible exact hp)
         | (with_reducible apply sha_cost h)
         | (with_reducible intro _)
         | (with_reducible apply Cost.pure)
@@ -307,21 +315,31 @@ theorem descParse_cost (bytes : ByteArray) :
         | (with_reducible apply diteAny)
         | split)
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
-  · omega
+  · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); omega
 
--- a cost combinator per bind and loop of `Program.decodeWith`'s unfolded body (`repeat (first ...)`), `omega` at each
--- leaf
-set_option maxHeartbeats 2000000 in
-theorem decode_cost (bytes : ByteArray) : countC.P (Program.decodeWith (Hashes.counted h).sha512 bytes) 1 := by
+theorem descParse_cost (bytes : ByteArray) (D : Nat)
+    (hD : ∀ text j kvs, String.fromUTF8? bytes = some text → JsonParse.parse text = .ok j →
+      j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ D) :
+    countC.P (TemplateQuery.Desc.parseWith (Hashes.counted h).sha512 bytes) (D + 1) := by
+  unfold TemplateQuery.Desc.parseWith
+  rcases ht : String.fromUTF8? bytes with _ | text
+  · try dsimp only
+    exact countC.throw _ _
+  try dsimp only
+  rcases hj : JsonParse.parse text with e | j
+  · try dsimp only
+    exact throwBindAny _ _ _
+  try dsimp only
+  rw [pure_bind]
+  have hp := programDigest_cost h j D (fun kvs hk => hD text j kvs ht hj hk)
   apply countC.mono
-  · unfold Program.decodeWith
-    repeat (first
+  · repeat (first
       | extract_lets
+      | (with_reducible apply throwBind)
       | (with_reducible apply Cost.bind)
       | (with_reducible apply bindAny)
+      | (with_reducible exact hp)
       | (with_reducible apply sha_cost h)
-      | (with_reducible apply throw0)
-      | (with_reducible apply forIn_range0)
       | (with_reducible intro _)
       | (with_reducible apply Cost.pure)
       | (with_reducible apply pureAny)
@@ -348,11 +366,11 @@ theorem decode_cost (bytes : ByteArray) : countC.P (Program.decodeWith (Hashes.c
       all_goals try (dsimp +zetaDelta -zeta only)
       all_goals repeat (first
         | extract_lets
+        | (with_reducible apply throwBind)
         | (with_reducible apply Cost.bind)
         | (with_reducible apply bindAny)
+        | (with_reducible exact hp)
         | (with_reducible apply sha_cost h)
-        | (with_reducible apply throw0)
-        | (with_reducible apply forIn_range0)
         | (with_reducible intro _)
         | (with_reducible apply Cost.pure)
         | (with_reducible apply pureAny)
@@ -375,6 +393,86 @@ theorem decode_cost (bytes : ByteArray) : countC.P (Program.decodeWith (Hashes.c
         | (with_reducible apply diteMax)
         | (with_reducible apply diteAny)
         | split)
+    all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
+  · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); omega
+
+-- a cost combinator per bind and loop of `Program.decodeWith`'s unfolded body (`repeat (first ...)`), `omega` at each
+-- leaf
+set_option maxHeartbeats 2000000 in
+theorem decode_cost (bytes : ByteArray) (D : Nat)
+    (hD : ∀ text j kvs, String.fromUTF8? bytes = some text → JsonParse.parse text = .ok j →
+      j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ D) :
+    countC.P (Program.decodeWith (Hashes.counted h).sha512 bytes) (D + 1) := by
+  unfold Program.decodeWith
+  rcases ht : String.fromUTF8? bytes with _ | text
+  · try dsimp only
+    exact countC.throw _ _
+  try dsimp only
+  rcases hj : JsonParse.parse text with e | j
+  · try dsimp only
+    exact throwBindAny _ _ _
+  try dsimp only
+  rw [pure_bind]
+  have hp := programDigest_cost h j D (fun kvs hk => hD text j kvs ht hj hk)
+  apply countC.mono
+  · repeat (first
+      | extract_lets
+      | (with_reducible apply Cost.bind)
+      | (with_reducible apply bindAny)
+      | (with_reducible exact hp)
+      | (with_reducible apply sha_cost h)
+      | (with_reducible intro _)
+      | (with_reducible apply Cost.pure)
+      | (with_reducible apply pureAny)
+      | (with_reducible apply Cost.lift)
+      | (with_reducible apply liftAny)
+      | (with_reducible apply Cost.forIn_array)
+      | (with_reducible apply Cost.forIn_array0)
+      | (with_reducible apply forIn_array0Any)
+      | (with_reducible apply Cost.forIn_list)
+      | (with_reducible apply Cost.forIn_list0)
+      | (with_reducible apply forIn_list0Any)
+      | (with_reducible apply forIn_range0)
+      | (with_reducible apply forIn_range0Any)
+      | (with_reducible apply Cost.mapM_array)
+      | (with_reducible apply mapM_array0Any)
+      | (with_reducible apply Cost.ite)
+      | (with_reducible apply iteAny)
+      | (with_reducible apply diteMax)
+      | (with_reducible apply diteAny)
+      | split)
+    iterate 40
+      all_goals try (dsimp +zetaDelta -zeta only)
+      all_goals repeat (first
+        | extract_lets
+        | (with_reducible apply Cost.bind)
+        | (with_reducible apply bindAny)
+        | (with_reducible exact hp)
+        | (with_reducible apply sha_cost h)
+        | (with_reducible intro _)
+        | (with_reducible apply Cost.pure)
+        | (with_reducible apply pureAny)
+        | (with_reducible apply Cost.lift)
+        | (with_reducible apply liftAny)
+        | (with_reducible apply Cost.forIn_array)
+        | (with_reducible apply Cost.forIn_array0)
+        | (with_reducible apply forIn_array0Any)
+        | (with_reducible apply Cost.forIn_list)
+        | (with_reducible apply Cost.forIn_list0)
+        | (with_reducible apply forIn_list0Any)
+        | (with_reducible apply forIn_range0)
+        | (with_reducible apply forIn_range0Any)
+        | (with_reducible apply Cost.mapM_array)
+        | (with_reducible apply mapM_array0Any)
+        | (with_reducible apply Cost.ite)
+        | (with_reducible apply iteAny)
+        | (with_reducible apply diteMax)
+        | (with_reducible apply diteAny)
+        | split)
+    all_goals repeat (first
+      | (with_reducible apply throw0)
+      | (with_reducible apply throwBind)
+      | (with_reducible apply Cost.throw))
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); omega
 
@@ -519,8 +617,10 @@ theorem checkPartition_cost (c : Circuit) (obj : Option Json) :
     | none => simp only; exact countC.mono (countC.pure _) (Nat.zero_le _)
     | some o => simp only; exact countC.throw _ _
 
-theorem templateStrata_cost (samplingDesign : String) (obj : Json) (program : ByteArray) :
-    countC.P (HmRow.templateStrataWith (Hashes.counted h) samplingDesign obj program) 1 := by
+theorem templateStrata_cost (samplingDesign : String) (obj : Json) (program : ByteArray) (D : Nat)
+    (hD : ∀ text j kvs, String.fromUTF8? program = some text → JsonParse.parse text = .ok j →
+      j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ D) :
+    countC.P (HmRow.templateStrataWith (Hashes.counted h) samplingDesign obj program) (D + 1) := by
   apply countC.mono
   · unfold HmRow.templateStrataWith HmRow.templateStrataBy HmRow.templateRangesBy
     repeat (first
@@ -528,7 +628,7 @@ theorem templateStrata_cost (samplingDesign : String) (obj : Json) (program : By
       | (with_reducible apply throwBind)
       | (with_reducible apply Cost.bind)
       | (with_reducible apply bindAny)
-      | (with_reducible apply descParse_cost h)
+      | (with_reducible apply descParse_cost h program D hD)
       | (with_reducible intro _)
       | (with_reducible apply Cost.pure)
       | (with_reducible apply pureAny)
@@ -558,7 +658,7 @@ theorem templateStrata_cost (samplingDesign : String) (obj : Json) (program : By
         | (with_reducible apply throwBind)
         | (with_reducible apply Cost.bind)
         | (with_reducible apply bindAny)
-        | (with_reducible apply descParse_cost h)
+        | (with_reducible apply descParse_cost h program D hD)
         | (with_reducible intro _)
         | (with_reducible apply Cost.pure)
         | (with_reducible apply pureAny)
@@ -584,8 +684,10 @@ theorem templateStrata_cost (samplingDesign : String) (obj : Json) (program : By
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
-theorem stratifiedSamplingDesign_cost (obj : Json) (program : ByteArray) (k : Nat) :
-    countC.P (HmRow.stratifiedSamplingDesignWith (Hashes.counted h) obj program k) 1 := by
+theorem stratifiedSamplingDesign_cost (obj : Json) (program : ByteArray) (k : Nat) (D : Nat)
+    (hD : ∀ text j kvs, String.fromUTF8? program = some text → JsonParse.parse text = .ok j →
+      j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ D) :
+    countC.P (HmRow.stratifiedSamplingDesignWith (Hashes.counted h) obj program k) (D + 1) := by
   apply countC.mono
   · unfold HmRow.stratifiedSamplingDesignWith
     repeat (first
@@ -593,7 +695,7 @@ theorem stratifiedSamplingDesign_cost (obj : Json) (program : ByteArray) (k : Na
       | (with_reducible apply throwBind)
       | (with_reducible apply Cost.bind)
       | (with_reducible apply bindAny)
-      | (with_reducible apply templateStrata_cost h)
+      | (with_reducible apply templateStrata_cost h _ _ program D hD)
       | (with_reducible intro _)
       | (with_reducible apply Cost.pure)
       | (with_reducible apply pureAny)
@@ -623,7 +725,7 @@ theorem stratifiedSamplingDesign_cost (obj : Json) (program : ByteArray) (k : Na
         | (with_reducible apply throwBind)
         | (with_reducible apply Cost.bind)
         | (with_reducible apply bindAny)
-        | (with_reducible apply templateStrata_cost h)
+        | (with_reducible apply templateStrata_cost h _ _ program D hD)
         | (with_reducible intro _)
         | (with_reducible apply Cost.pure)
         | (with_reducible apply pureAny)
@@ -649,8 +751,11 @@ theorem stratifiedSamplingDesign_cost (obj : Json) (program : ByteArray) (k : Na
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
-theorem workSamplingDesign_cost (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
-    countC.P (HmRow.workSamplingDesignWith (Hashes.counted h) obj program k table) 1 := by
+theorem workSamplingDesign_cost (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat))
+    (D : Nat)
+    (hD : ∀ text j kvs, String.fromUTF8? program = some text → JsonParse.parse text = .ok j →
+      j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ D) :
+    countC.P (HmRow.workSamplingDesignWith (Hashes.counted h) obj program k table) (D + 1) := by
   apply countC.mono
   · unfold HmRow.workSamplingDesignWith
     repeat (first
@@ -658,7 +763,7 @@ theorem workSamplingDesign_cost (obj : Json) (program : ByteArray) (k : Nat) (ta
       | (with_reducible apply throwBind)
       | (with_reducible apply Cost.bind)
       | (with_reducible apply bindAny)
-      | (with_reducible apply templateStrata_cost h)
+      | (with_reducible apply templateStrata_cost h _ _ program D hD)
       | (with_reducible intro _)
       | (with_reducible apply Cost.pure)
       | (with_reducible apply pureAny)
@@ -688,7 +793,7 @@ theorem workSamplingDesign_cost (obj : Json) (program : ByteArray) (k : Nat) (ta
         | (with_reducible apply throwBind)
         | (with_reducible apply Cost.bind)
         | (with_reducible apply bindAny)
-        | (with_reducible apply templateStrata_cost h)
+        | (with_reducible apply templateStrata_cost h _ _ program D hD)
         | (with_reducible intro _)
         | (with_reducible apply Cost.pure)
         | (with_reducible apply pureAny)
@@ -714,8 +819,10 @@ theorem workSamplingDesign_cost (obj : Json) (program : ByteArray) (k : Nat) (ta
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
-theorem deriveTemplate_cost (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) :
-    countC.P (HmRow.deriveTemplateUnitsWith (Hashes.counted h) c obj program indices) 1 := by
+theorem deriveTemplate_cost (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) (D : Nat)
+    (hD : ∀ text j kvs, String.fromUTF8? program = some text → JsonParse.parse text = .ok j →
+      j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ D) :
+    countC.P (HmRow.deriveTemplateUnitsWith (Hashes.counted h) c obj program indices) (D + 1) := by
   apply countC.mono
   · unfold HmRow.deriveTemplateUnitsWith HmRow.deriveTemplateUnitsBy HmRow.templateRangesBy
     repeat (first
@@ -723,7 +830,7 @@ theorem deriveTemplate_cost (c : Circuit) (obj : Json) (program : ByteArray) (in
       | (with_reducible apply throwBind)
       | (with_reducible apply Cost.bind)
       | (with_reducible apply bindAny)
-      | (with_reducible apply descParse_cost h)
+      | (with_reducible apply descParse_cost h program D hD)
       | (with_reducible intro _)
       | (with_reducible apply Cost.pure)
       | (with_reducible apply pureAny)
@@ -753,7 +860,7 @@ theorem deriveTemplate_cost (c : Circuit) (obj : Json) (program : ByteArray) (in
         | (with_reducible apply throwBind)
         | (with_reducible apply Cost.bind)
         | (with_reducible apply bindAny)
-        | (with_reducible apply descParse_cost h)
+        | (with_reducible apply descParse_cost h program D hD)
         | (with_reducible intro _)
         | (with_reducible apply Cost.pure)
         | (with_reducible apply pureAny)
@@ -779,8 +886,10 @@ theorem deriveTemplate_cost (c : Circuit) (obj : Json) (program : ByteArray) (in
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); omega
 
-theorem deriveQword_cost (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) :
-    countC.P (HmRow.deriveQwordUnitsWith (Hashes.counted h) c obj program indices) 1 := by
+theorem deriveQword_cost (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) (D : Nat)
+    (hD : ∀ text j kvs, String.fromUTF8? program = some text → JsonParse.parse text = .ok j →
+      j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ D) :
+    countC.P (HmRow.deriveQwordUnitsWith (Hashes.counted h) c obj program indices) (D + 1) := by
   apply countC.mono
   · unfold HmRow.deriveQwordUnitsWith
     repeat (first
@@ -788,7 +897,7 @@ theorem deriveQword_cost (c : Circuit) (obj : Json) (program : ByteArray) (indic
       | (with_reducible apply throwBind)
       | (with_reducible apply Cost.bind)
       | (with_reducible apply bindAny)
-      | (with_reducible apply decode_cost h)
+      | (with_reducible apply decode_cost h program D hD)
       | (with_reducible intro _)
       | (with_reducible apply Cost.pure)
       | (with_reducible apply pureAny)
@@ -818,7 +927,7 @@ theorem deriveQword_cost (c : Circuit) (obj : Json) (program : ByteArray) (indic
         | (with_reducible apply throwBind)
         | (with_reducible apply Cost.bind)
         | (with_reducible apply bindAny)
-        | (with_reducible apply decode_cost h)
+        | (with_reducible apply decode_cost h program D hD)
         | (with_reducible intro _)
         | (with_reducible apply Cost.pure)
         | (with_reducible apply pureAny)
@@ -844,8 +953,10 @@ theorem deriveQword_cost (c : Circuit) (obj : Json) (program : ByteArray) (indic
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
-theorem deriveQcall_cost (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) :
-    countC.P (HmRow.deriveQcallUnitsWith (Hashes.counted h) c obj program indices) 1 := by
+theorem deriveQcall_cost (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) (D : Nat)
+    (hD : ∀ text j kvs, String.fromUTF8? program = some text → JsonParse.parse text = .ok j →
+      j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ D) :
+    countC.P (HmRow.deriveQcallUnitsWith (Hashes.counted h) c obj program indices) (D + 1) := by
   apply countC.mono
   · unfold HmRow.deriveQcallUnitsWith
     repeat (first
@@ -853,7 +964,7 @@ theorem deriveQcall_cost (c : Circuit) (obj : Json) (program : ByteArray) (indic
       | (with_reducible apply throwBind)
       | (with_reducible apply Cost.bind)
       | (with_reducible apply bindAny)
-      | (with_reducible apply decode_cost h)
+      | (with_reducible apply decode_cost h program D hD)
       | (with_reducible intro _)
       | (with_reducible apply Cost.pure)
       | (with_reducible apply pureAny)
@@ -883,7 +994,7 @@ theorem deriveQcall_cost (c : Circuit) (obj : Json) (program : ByteArray) (indic
         | (with_reducible apply throwBind)
         | (with_reducible apply Cost.bind)
         | (with_reducible apply bindAny)
-        | (with_reducible apply decode_cost h)
+        | (with_reducible apply decode_cost h program D hD)
         | (with_reducible intro _)
         | (with_reducible apply Cost.pure)
         | (with_reducible apply pureAny)
@@ -909,8 +1020,11 @@ theorem deriveQcall_cost (c : Circuit) (obj : Json) (program : ByteArray) (indic
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); omega
 
-theorem qwordFinding_cost (c : Circuit) (pub : Public) (obj : Json) (program : ByteArray) (f : HmRow.PartitionFinding) :
-    countC.P (HmRow.qwordFindingWith (Hashes.counted h) c pub obj program f) 1 := by
+theorem qwordFinding_cost (c : Circuit) (pub : Public) (obj : Json) (program : ByteArray) (f : HmRow.PartitionFinding)
+    (D : Nat)
+    (hD : ∀ text j kvs, String.fromUTF8? program = some text → JsonParse.parse text = .ok j →
+      j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ D) :
+    countC.P (HmRow.qwordFindingWith (Hashes.counted h) c pub obj program f) (D + 1) := by
   apply countC.mono
   · unfold HmRow.qwordFindingWith
     repeat (first
@@ -918,8 +1032,8 @@ theorem qwordFinding_cost (c : Circuit) (pub : Public) (obj : Json) (program : B
       | (with_reducible apply throwBind)
       | (with_reducible apply Cost.bind)
       | (with_reducible apply bindAny)
-      | (with_reducible apply deriveQword_cost h)
-      | (with_reducible apply deriveQcall_cost h)
+      | (with_reducible apply deriveQword_cost h _ _ program _ D hD)
+      | (with_reducible apply deriveQcall_cost h _ _ program _ D hD)
       | (with_reducible intro _)
       | (with_reducible apply Cost.pure)
       | (with_reducible apply pureAny)
@@ -949,8 +1063,8 @@ theorem qwordFinding_cost (c : Circuit) (pub : Public) (obj : Json) (program : B
         | (with_reducible apply throwBind)
         | (with_reducible apply Cost.bind)
         | (with_reducible apply bindAny)
-        | (with_reducible apply deriveQword_cost h)
-        | (with_reducible apply deriveQcall_cost h)
+        | (with_reducible apply deriveQword_cost h _ _ program _ D hD)
+        | (with_reducible apply deriveQcall_cost h _ _ program _ D hD)
         | (with_reducible intro _)
         | (with_reducible apply Cost.pure)
         | (with_reducible apply pureAny)
@@ -979,8 +1093,10 @@ theorem qwordFinding_cost (c : Circuit) (pub : Public) (obj : Json) (program : B
 -- a cost combinator per bind and loop of `HmLinks.checkWith`'s unfolded body (`repeat (first ...)`), `omega` at each
 -- leaf
 set_option maxHeartbeats 4000000 in
-theorem linksCheck_cost (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) :
-    countC.P (HmLinks.checkWith (Hashes.counted h) c pop readers program) 1 := by
+theorem linksCheck_cost (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) (D : Nat)
+    (hD : ∀ text j kvs, String.fromUTF8? program = some text → JsonParse.parse text = .ok j →
+      j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ D) :
+    countC.P (HmLinks.checkWith (Hashes.counted h) c pop readers program) (D + 1) := by
   apply countC.mono
   · unfold HmLinks.checkWith
     repeat (first
@@ -988,7 +1104,7 @@ theorem linksCheck_cost (c : Circuit) (pop : Public) (readers : Option (Array Na
       | (with_reducible apply throwBind)
       | (with_reducible apply Cost.bind)
       | (with_reducible apply bindAny)
-      | (with_reducible apply decode_cost h)
+      | (with_reducible apply decode_cost h program D hD)
       | (with_reducible apply throw0)
       | (with_reducible apply forIn_range0)
       | (with_reducible intro _)
@@ -1020,7 +1136,7 @@ theorem linksCheck_cost (c : Circuit) (pop : Public) (readers : Option (Array Na
         | (with_reducible apply throwBind)
         | (with_reducible apply Cost.bind)
         | (with_reducible apply bindAny)
-        | (with_reducible apply decode_cost h)
+        | (with_reducible apply decode_cost h program D hD)
         | (with_reducible apply throw0)
         | (with_reducible apply forIn_range0)
         | (with_reducible intro _)
@@ -1432,8 +1548,7 @@ theorem root_cost (dom : ByteArray) (leaves : Array ByteArray) :
       (fun lv : Array ByteArray => lv.size ≤ leaves.size + (nextPow2 leaves.size - leaves.size)) ?_ ?_ ?_)
       fun _ => countC.pure _
     · show (leaves ++ pads).size ≤ _
-      rw [Array.size_append, hp, Array.size_range]
-      exact Nat.le_refl _
+      rw [Array.size_append, hp, Array.size_range] <;> exact Nat.le_refl _
     · intro i s hs
       refine countC.mono (countC.bind (mapM_array_cost _ (c := 1) fun _ => hash_cost h _ _)
         fun _ => countC.pure _) ?_
@@ -1727,15 +1842,19 @@ theorem outParseCommit_flat (tags : Tags) (bytes : ByteArray) (tables : List (St
 -- leaf
 set_option maxHeartbeats 8000000 in
 /-- **`Stmt.setupHiddenWith`'s calls**, at a sampled statement of an untyped, flat circuit: ten for its parse, partition,
-load, sample, sampling design, links or query and digests, and `checkPublic`'s, at the ports and rows its parse, load and sample return. -/
+load, sample, sampling design, links or query and digests, at most `D` more at each digest of a program of at most `D`
+Definitions (`hD`), and `checkPublic`'s, at the ports and rows its parse, load and sample return. -/
 theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
     (d : Json) (partition : Option Json) (program publicInputs : Option ByteArray) (PC : Circuit → Prop) (NP K : Nat)
+    (D : Nat)
+    (hD : ∀ b, program = some b → ∀ text j kvs, String.fromUTF8? b = some text → JsonParse.parse text = .ok j →
+      j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ D)
     (ht : tags.typed = false) (hi : tags.isTmpl = false) (hPC : ∀ c, PC c → c.ports.size ≤ NP)
     (H1 : okC (HmOut.parseWith (Hashes.counted h) tags cf tables) PC)
     (H2 : ∀ c pi, PC c → okC (HmIn.loadPublicWith (Hashes.counted h) tags c pi pf) (PT K))
     (H3 : ∀ c pi pop, PT K pop → okC (HmIn.sampledWith (Hashes.counted h) c pi pop d) (fun pub => PT K pub ∧ PN K pub)) :
     countC.P (Stmt.setupHiddenWith (Hashes.counted h) tags cf pf coins tables (some d) partition program publicInputs)
-      (10 + NP * perRow K) := by
+      (10 + 4 * D + NP * perRow K) := by
   have hParse : ∀ {β : Type} {f : Circuit → CountV β} {m N : Nat}, (∀ c, PC c → countC.P (f c) m) → 2 + m ≤ N →
       countC.P (HmOut.parseWith (Hashes.counted h) tags cf tables >>= f) N :=
     fun hf hN => bindQ (outParse_cost h tags cf tables ht hi) H1 hf hN
@@ -1768,6 +1887,7 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
   generalize Except.map (fun x => x.samplingDesign) (Draw.UnitSample.ofJson d) = s
   cases hb : tags.bindings <;> cases partition <;> cases program <;>
     rcases s with e | (k | ⟨num, den⟩ | ⟨k, strata⟩ | ⟨k, strata⟩)
+  all_goals try have hP := hD _ rfl
   all_goals
     (try simp -zeta only [eq_self, Bool.false_eq_true, Bool.true_eq_false, Option.isSome_none, Option.isSome_some,
       ↓reduceIte])
@@ -1787,10 +1907,10 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
         | (with_reducible apply hCP)
         | (with_reducible apply map_cost)
         | (with_reducible apply checkPartition_cost h)
-        | (with_reducible apply stratifiedSamplingDesign_cost h)
-        | (with_reducible apply deriveTemplate_cost h)
-        | (with_reducible apply linksCheck_cost h)
-        | (with_reducible apply qwordFinding_cost h)
+        | (with_reducible apply stratifiedSamplingDesign_cost h _ _ _ D hP)
+        | (with_reducible apply deriveTemplate_cost h _ _ _ _ D hP)
+        | (with_reducible apply linksCheck_cost h _ _ _ _ D hP)
+        | (with_reducible apply qwordFinding_cost h _ _ _ _ _ D hP)
         | (with_reducible apply sha_cost h)
         | (with_reducible intro _)
         | (with_reducible apply Cost.pure)
@@ -1831,10 +1951,10 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
           | (with_reducible apply hCP)
           | (with_reducible apply map_cost)
           | (with_reducible apply checkPartition_cost h)
-          | (with_reducible apply stratifiedSamplingDesign_cost h)
-          | (with_reducible apply deriveTemplate_cost h)
-          | (with_reducible apply linksCheck_cost h)
-          | (with_reducible apply qwordFinding_cost h)
+          | (with_reducible apply stratifiedSamplingDesign_cost h _ _ _ D hP)
+          | (with_reducible apply deriveTemplate_cost h _ _ _ _ D hP)
+          | (with_reducible apply linksCheck_cost h _ _ _ _ D hP)
+          | (with_reducible apply qwordFinding_cost h _ _ _ _ _ D hP)
           | (with_reducible apply sha_cost h)
           | (with_reducible intro _)
           | (with_reducible apply Cost.pure)
@@ -1863,8 +1983,12 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
     · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); first | omega
 
 
-theorem workSamplingDesign_cost' (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
-    countC.P (HmRow.workSamplingDesignWith (Hashes.counted h) obj program k table) 1 := workSamplingDesign_cost h obj program k table
+theorem workSamplingDesign_cost' (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat))
+    (D : Nat)
+    (hD : ∀ text j kvs, String.fromUTF8? program = some text → JsonParse.parse text = .ok j →
+      j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ D) :
+    countC.P (HmRow.workSamplingDesignWith (Hashes.counted h) obj program k table) (D + 1) :=
+  workSamplingDesign_cost h obj program k table D hD
 
 -- a cost combinator per bind and loop of `Stmt.setupTablesWith`'s unfolded body (`repeat (first ...)`), `omega` at each
 -- leaf
@@ -1874,20 +1998,98 @@ stratified or work sampling design, and the one statement's setup. -/
 theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray)) (d : Json) (partition : Option Json) (program : Option ByteArray)
     (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
-    (closure : Option (Std.HashMap Nat (Array Nat))) (publicInputs : Option ByteArray) (B : Nat)
+    (closure : Option (Std.HashMap Nat (Array Nat))) (publicInputs : Option ByteArray) (B : Nat) (D : Nat)
+    (hD : ∀ b, program = some b → ∀ text j kvs, String.fromUTF8? b = some text → JsonParse.parse text = .ok j →
+      j.getObjValD "definitions" = .obj kvs → kvs.toArray.size ≤ D)
     (hc : count ≤ 1) (hh : tags.hiddenOutputs = true)
     (hS : countC.P (Stmt.setupHiddenWith (Hashes.counted h) tags cf pf coins tables (some d) partition program
       publicInputs) B) :
     countC.P (Stmt.setupTablesWith (Hashes.counted h) tags cf pf coins count tables (some d) partition program work
-      stratified closure publicInputs) (2 + B) := by
-  unfold Stmt.setupTablesWith
-  simp -zeta only [hc, hh, ↓reduceIte, decide_true, Bool.not_true, Bool.and_false, Bool.false_eq_true]
-  generalize Draw.UnitSample.ofJson d = r
-  rcases r with e | ⟨samplingDesign, population, units, cl⟩
-  rotate_left
-  · cases samplingDesign
-    all_goals
-      dsimp -zeta only
+      stratified closure publicInputs) (2 + 2 * D + B) := by
+  rcases program with _ | prog
+  all_goals
+    try have hP := hD _ rfl
+    unfold Stmt.setupTablesWith
+    simp -zeta only [hc, hh, ↓reduceIte, decide_true, Bool.not_true, Bool.and_false, Bool.false_eq_true]
+    generalize Draw.UnitSample.ofJson d = r
+    rcases r with e | ⟨samplingDesign, population, units, cl⟩
+    rotate_left
+    · cases samplingDesign
+      all_goals
+        dsimp -zeta only [Except.map]
+        apply countC.mono
+        · repeat (first
+            | extract_lets
+            | (with_reducible apply throwBind)
+            | (with_reducible apply Cost.bind)
+            | (with_reducible apply bindAny)
+            | (with_reducible apply hS)
+            | (with_reducible apply stratifiedSamplingDesign_cost h _ _ _ D hP)
+            | (with_reducible apply workSamplingDesign_cost' h _ _ _ _ D hP)
+            | ((with_reducible apply stratifiedSamplingDesign_cost h _ _ _ D); (cases ‹(_, _, _) = (_, _, _)› <;> exact hP))
+            | ((with_reducible apply workSamplingDesign_cost' h _ _ _ _ D); (cases ‹(_, _, _) = (_, _, _)› <;> exact hP))
+            | (with_reducible apply sha_cost h)
+            | (with_reducible intro _)
+            | (with_reducible apply Cost.pure)
+            | (with_reducible apply pureAny)
+            | (with_reducible apply throw0)
+            | (with_reducible apply Cost.throw)
+            | (with_reducible apply Cost.lift)
+            | (with_reducible apply liftAny)
+            | (with_reducible apply Cost.forIn_array)
+            | (with_reducible apply Cost.forIn_array0)
+            | (with_reducible apply forIn_array0Any)
+            | (with_reducible apply Cost.forIn_list)
+            | (with_reducible apply Cost.forIn_list0)
+            | (with_reducible apply forIn_list0Any)
+            | (with_reducible apply forIn_range0)
+            | (with_reducible apply forIn_range0Any)
+            | (with_reducible apply Cost.mapM_array)
+            | (with_reducible apply mapM_array0Any)
+            | (with_reducible apply Cost.ite)
+            | (with_reducible apply iteAny)
+            | (with_reducible apply diteMax)
+            | (with_reducible apply diteAny)
+            | split)
+          iterate 40
+            all_goals try (dsimp +zetaDelta -zeta only [Except.map])
+            all_goals repeat (first
+              | extract_lets
+              | (with_reducible apply throwBind)
+              | (with_reducible apply Cost.bind)
+              | (with_reducible apply bindAny)
+              | (with_reducible apply hS)
+              | (with_reducible apply stratifiedSamplingDesign_cost h _ _ _ D hP)
+              | (with_reducible apply workSamplingDesign_cost' h _ _ _ _ D hP)
+              | ((with_reducible apply stratifiedSamplingDesign_cost h _ _ _ D); (cases ‹(_, _, _) = (_, _, _)› <;> exact hP))
+              | ((with_reducible apply workSamplingDesign_cost' h _ _ _ _ D); (cases ‹(_, _, _) = (_, _, _)› <;> exact hP))
+              | (with_reducible apply sha_cost h)
+              | (with_reducible intro _)
+              | (with_reducible apply Cost.pure)
+              | (with_reducible apply pureAny)
+              | (with_reducible apply throw0)
+              | (with_reducible apply Cost.throw)
+              | (with_reducible apply Cost.lift)
+              | (with_reducible apply liftAny)
+              | (with_reducible apply Cost.forIn_array)
+              | (with_reducible apply Cost.forIn_array0)
+              | (with_reducible apply forIn_array0Any)
+              | (with_reducible apply Cost.forIn_list)
+              | (with_reducible apply Cost.forIn_list0)
+              | (with_reducible apply forIn_list0Any)
+              | (with_reducible apply forIn_range0)
+              | (with_reducible apply forIn_range0Any)
+              | (with_reducible apply Cost.mapM_array)
+              | (with_reducible apply mapM_array0Any)
+              | (with_reducible apply Cost.ite)
+              | (with_reducible apply iteAny)
+              | (with_reducible apply diteMax)
+              | (with_reducible apply diteAny)
+              | split)
+          all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *)
+          all_goals first | omega
+        · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); first | omega
+    · dsimp -zeta only [Except.map]
       apply countC.mono
       · repeat (first
           | extract_lets
@@ -1895,8 +2097,10 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
           | (with_reducible apply Cost.bind)
           | (with_reducible apply bindAny)
           | (with_reducible apply hS)
-          | (with_reducible apply stratifiedSamplingDesign_cost h)
-          | (with_reducible apply workSamplingDesign_cost' h)
+          | (with_reducible apply stratifiedSamplingDesign_cost h _ _ _ D hP)
+          | (with_reducible apply workSamplingDesign_cost' h _ _ _ _ D hP)
+          | ((with_reducible apply stratifiedSamplingDesign_cost h _ _ _ D); (cases ‹(_, _, _) = (_, _, _)› <;> exact hP))
+          | ((with_reducible apply workSamplingDesign_cost' h _ _ _ _ D); (cases ‹(_, _, _) = (_, _, _)› <;> exact hP))
           | (with_reducible apply sha_cost h)
           | (with_reducible intro _)
           | (with_reducible apply Cost.pure)
@@ -1921,15 +2125,17 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
           | (with_reducible apply diteAny)
           | split)
         iterate 40
-          all_goals try (dsimp +zetaDelta -zeta only)
+          all_goals try (dsimp +zetaDelta -zeta only [Except.map])
           all_goals repeat (first
             | extract_lets
             | (with_reducible apply throwBind)
             | (with_reducible apply Cost.bind)
             | (with_reducible apply bindAny)
             | (with_reducible apply hS)
-            | (with_reducible apply stratifiedSamplingDesign_cost h)
-            | (with_reducible apply workSamplingDesign_cost' h)
+            | (with_reducible apply stratifiedSamplingDesign_cost h _ _ _ D hP)
+            | (with_reducible apply workSamplingDesign_cost' h _ _ _ _ D hP)
+            | ((with_reducible apply stratifiedSamplingDesign_cost h _ _ _ D); (cases ‹(_, _, _) = (_, _, _)› <;> exact hP))
+            | ((with_reducible apply workSamplingDesign_cost' h _ _ _ _ D); (cases ‹(_, _, _) = (_, _, _)› <;> exact hP))
             | (with_reducible apply sha_cost h)
             | (with_reducible intro _)
             | (with_reducible apply Cost.pure)
@@ -1956,74 +2162,5 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
         all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *)
         all_goals first | omega
       · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); first | omega
-  · dsimp -zeta only
-    apply countC.mono
-    · repeat (first
-        | extract_lets
-        | (with_reducible apply throwBind)
-        | (with_reducible apply Cost.bind)
-        | (with_reducible apply bindAny)
-        | (with_reducible apply hS)
-        | (with_reducible apply stratifiedSamplingDesign_cost h)
-        | (with_reducible apply workSamplingDesign_cost' h)
-        | (with_reducible apply sha_cost h)
-        | (with_reducible intro _)
-        | (with_reducible apply Cost.pure)
-        | (with_reducible apply pureAny)
-        | (with_reducible apply throw0)
-        | (with_reducible apply Cost.throw)
-        | (with_reducible apply Cost.lift)
-        | (with_reducible apply liftAny)
-        | (with_reducible apply Cost.forIn_array)
-        | (with_reducible apply Cost.forIn_array0)
-        | (with_reducible apply forIn_array0Any)
-        | (with_reducible apply Cost.forIn_list)
-        | (with_reducible apply Cost.forIn_list0)
-        | (with_reducible apply forIn_list0Any)
-        | (with_reducible apply forIn_range0)
-        | (with_reducible apply forIn_range0Any)
-        | (with_reducible apply Cost.mapM_array)
-        | (with_reducible apply mapM_array0Any)
-        | (with_reducible apply Cost.ite)
-        | (with_reducible apply iteAny)
-        | (with_reducible apply diteMax)
-        | (with_reducible apply diteAny)
-        | split)
-      iterate 40
-        all_goals try (dsimp +zetaDelta -zeta only)
-        all_goals repeat (first
-          | extract_lets
-          | (with_reducible apply throwBind)
-          | (with_reducible apply Cost.bind)
-          | (with_reducible apply bindAny)
-          | (with_reducible apply hS)
-          | (with_reducible apply stratifiedSamplingDesign_cost h)
-          | (with_reducible apply workSamplingDesign_cost' h)
-          | (with_reducible apply sha_cost h)
-          | (with_reducible intro _)
-          | (with_reducible apply Cost.pure)
-          | (with_reducible apply pureAny)
-          | (with_reducible apply throw0)
-          | (with_reducible apply Cost.throw)
-          | (with_reducible apply Cost.lift)
-          | (with_reducible apply liftAny)
-          | (with_reducible apply Cost.forIn_array)
-          | (with_reducible apply Cost.forIn_array0)
-          | (with_reducible apply forIn_array0Any)
-          | (with_reducible apply Cost.forIn_list)
-          | (with_reducible apply Cost.forIn_list0)
-          | (with_reducible apply forIn_list0Any)
-          | (with_reducible apply forIn_range0)
-          | (with_reducible apply forIn_range0Any)
-          | (with_reducible apply Cost.mapM_array)
-          | (with_reducible apply mapM_array0Any)
-          | (with_reducible apply Cost.ite)
-          | (with_reducible apply iteAny)
-          | (with_reducible apply diteMax)
-          | (with_reducible apply diteAny)
-          | split)
-      all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *)
-      all_goals first | omega
-    · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); first | omega
 
 end RecDeploy.SetupCount
