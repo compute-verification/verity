@@ -49,6 +49,7 @@ def blocksIn (b : Option Json) : V (Option (Array (Nat × Nat))) :=
 /-- `blocks` on a template query only, the first from unit 0 and each from where the one before ends, in `validate`'s order. -/
 def checkBlocks (template : Bool) (ps : Array (Nat × Nat)) : V Unit := do
   if !template then throw "partition: blocks-query: blocks on a query that is not a template query"
+  -- `ps` is non-empty: `blocksIn` refuses an empty list
   if ps[0]!.1 != 0 then throw s!"partition: blocks-gap: units 0..{ps[0]!.1} are in no block"
   for i in [1:ps.size] do
     let (prev, p) := (ps[i - 1]!, ps[i]!)
