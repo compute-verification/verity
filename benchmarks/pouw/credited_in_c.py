@@ -366,7 +366,10 @@ def stage(a) -> int:
     assert [tl.amount for tl in tiles] == [PS.tile_macs(tl.core.bindings) for tl in ln.tiles]
 
     coin = os.urandom(64)
-    (cores,) = [[u for lo, hi in rs for u in range(lo, hi)] for tid, rs in strata if tid == descriptor_id(core)]
+    cores = [u for tid, rs in strata if tid == descriptor_id(core) for lo, hi in rs for u in range(lo, hi)]
+    if not cores:
+        raise SystemExit(f"no-core-block: the laying opened {descriptor_id(core)}, so no block of the laid C is a wired "
+                         "core for this stage to stage")
     block_no = cores[int.from_bytes(hashlib.sha512(coin).digest(), "little") % len(cores)]
     (index,) = [tl.index for tl in tiles if block_no in tl.blocks]
     rec["draw"] = {"coin": coin.hex(), "block": block_no, "tile": index, "amount": tiles[index].amount,

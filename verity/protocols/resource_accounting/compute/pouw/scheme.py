@@ -4,9 +4,9 @@ Its verifier is `verity/pouw/pearl-plus/v1` (`verifier/lean/pearlplus/PouwPearlP
 linear is its grid's units of `PearlPlusTileCoreWords_v3` (`prover.circuit.pearl_plus_credited`), which write its y; its
 block (`TILE`) is the tile, which costs its credited MACs (`tile_macs`): its real rows × TN × K, its statics TR, TN and K,
 since the tile forms every word of the linear's depth K and holds its filler rows to zero. C's laying opens each tile into
-many proof blocks of many templates (its noise's units and its core, the core itself opened at the served K = 2048), and the
-credit is per tile (soundness's ruling, TOP-445): `laid_tiles` gives each laid block its tile by a public rule from the
-laying, and `credited_tiles` credits a tile its amount only when every one of its blocks is in a stratum whose draw passed.
+many proof blocks of many templates (its noise's units and its core, the core itself opened at the served K = 2048):
+`laid_tiles` gives each laid block its tile by a public rule from the laying, and `credited_tiles` credits the window's
+tiles all or none, on an audit that drew every stratum holding a tile's block at its registered count.
 
 On a served run (`attach`) it computes every linear block with its device run (`verity.hooks.ComputeBlockWith`), the
 workload's `PearlCDeviceRun` (`serving.tensors.pearl_c_device`), over the weight operands the run registers
@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
@@ -112,10 +112,16 @@ def drawn_blocks(scheme: Any, passes: Sequence[Sequence[Any]], key: Any, t: int,
 #: a credited tile's template in C before C is laid (`prover.circuit.pearl_plus_credited.PearlPlusTileCoreWords`): its
 #: statics are the tile's, and `tile_macs` of them is what the tile is credited
 TILE = "PearlPlusTileCoreWords_v3"
-#: `laid_tiles`' refusals: the laid C's strata number blocks other than its root units, one template each, on which the
-#: stratified bound rests; a root unit of the laid C lies partly inside a tile's gates, so the rule places it in no tile
+#: `laid_tiles`' refusals: C holds no tile, so there is nothing to credit and no stratum to hold to its draw; the laid C's
+#: strata number blocks other than its root units, one template each, on which the stratified bound rests; a root unit
+#: of the laid C lies partly inside a tile's gates, so the rule places it in no tile
+TILE_ABSENT = "tile-absent"
 BLOCK_NOT_UNIT = "tile-block-not-unit"
 TILE_STRADDLES = "tile-straddles"
+#: `credited_tiles`' refusals: a stratum holding a tile's block lacks its registered count of drawn blocks with a
+#: verdict, so the audit is not one that passed (an empty audit included); a verdict names a block of no stratum
+AUDIT_SHORT = "tile-audit-short"
+AUDIT_STRAY = "tile-audit-stray"
 
 
 @dataclass(frozen=True)
@@ -137,8 +143,8 @@ def laid_tiles(program: Any, laid: Any, strata: Sequence[tuple[str, Sequence[Seq
     `verity.circuits.laying.lay` lays it) that it holds, by a public rule from the laying: since laying keeps C's gates in
     C's order, a laid root unit is the tile's whose gates in C hold its gates, and no tile's where none do. ``strata`` are
     the laid C's (`verity.circuits.partition_query.strata` under its template-instance query): their blocks must be its
-    root units, each of the one template its stratum names (`BLOCK_NOT_UNIT`), and no unit may lie partly in a tile
-    (`TILE_STRADDLES`)."""
+    root units, each of the one template its stratum names (`BLOCK_NOT_UNIT`), no unit may lie partly in a tile
+    (`TILE_STRADDLES`), and C must hold a tile (`TILE_ABSENT`)."""
     import bisect
 
     from verity.circuits import laying as LY
@@ -158,6 +164,8 @@ def laid_tiles(program: Any, laid: Any, strata: Sequence[tuple[str, Sequence[Seq
     nodes = program.root.body.nodes
     tiles = [(a + m, nodes[k].fn) for k, tid, a, n in before.ranges if tid == TILE or tid.startswith(TILE + "{")
              for m in range(n)]
+    if not tiles:
+        raise ValueError(f"{TILE_ABSENT}: C has no root unit of {TILE}, so no tile to credit")
     spans = [before.gates(u) for u, _fn in tiles]
     starts, edges = [lo for lo, _hi in spans], {g for span in spans for g in span}
     held: list[list[int]] = [[] for _ in tiles]
@@ -183,12 +191,38 @@ def laid_tiles(program: Any, laid: Any, strata: Sequence[tuple[str, Sequence[Seq
 
 
 def credited_tiles(tiles: Sequence[LaidTile], strata: Sequence[tuple[str, Sequence[Sequence[int]]]],
-                   failed: Collection[int]) -> list[LaidTile]:
-    """The tiles credited (soundness's ruling, TOP-445): a tile is credited its whole ``amount``, declared before the coin,
-    only when every one of its blocks is in a stratum whose draw passed, ``failed`` the drawn blocks whose proofs
-    failed; a stratum with one failed block credits no tile holding a block of it, its other tiles included."""
-    spoiled = {tid for tid, rs in strata if any(lo <= b < hi for b in failed for lo, hi in rs)}
-    return [t for t in tiles if spoiled.isdisjoint(t.kinds)]
+                   verdicts: Mapping[int, bool], counts: Mapping[str, int]) -> list[LaidTile]:
+    """The window's tiles credited: all of them or none, each its ``amount``, which C fixes before any coin. A credited
+    unit is a public set of blocks with one amount, credited on one event; the shared interface
+    (`resource_accounting.scheme.Block`) does not yet express it, and this stands in.
+
+    S, the strata holding a block of any tile, is fixed by the laying. ``verdicts`` are the drawn blocks, each with
+    whether its proof verified, and ``counts`` each stratum's registered count of drawn blocks. Unless every stratum of
+    S has its registered count, at least one, of drawn blocks with a verdict, it refuses `AUDIT_SHORT`: an audit short of
+    its draw, an empty one included, is no evidence. Then every tile is credited when each of those verdicts passed, and
+    none when any failed: the bound on spoiled tiles counts bad blocks over all of S at the draw's rate, which holds for
+    the tiles together and clears no tile by the strata it holds alone. A stratum outside S neither credits nor spoils.
+    A verdict on a block of no stratum is refused (`AUDIT_STRAY`)."""
+    import bisect
+
+    if not tiles:
+        raise ValueError(f"{TILE_ABSENT}: no tile to credit")
+    held = set().union(*(t.kinds for t in tiles))
+    ranges = sorted((lo, hi, tid) for tid, rs in strata for lo, hi in rs)
+    starts = [lo for lo, _hi, _tid in ranges]
+    drawn, failed = dict.fromkeys(held, 0), False
+    for b, ok in verdicts.items():
+        i = bisect.bisect_right(starts, b) - 1
+        if i < 0 or not b < ranges[i][1]:
+            raise ValueError(f"{AUDIT_STRAY}: a verdict on block {b}, which is in no stratum")
+        if (tid := ranges[i][2]) in held:
+            drawn[tid] += 1
+            failed = failed or ok is not True
+    if short := sorted(s for s in held if counts.get(s, 0) < 1 or drawn[s] != counts[s]):
+        raise ValueError(f"{AUDIT_SHORT}: {len(short)} strata holding a tile's block lack their registered count of "
+                         f"drawn blocks with a verdict, first {short[0]}: {drawn[short[0]]} drawn of "
+                         f"{counts.get(short[0], 0)}")
+    return [] if failed else list(tiles)
 
 
 #: Its settings (`Scheme.settings`), each a default of its type: ``kernel`` the kernel's library (required on a served
