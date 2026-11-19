@@ -19,14 +19,13 @@ decode of the Program:
   by this digest takes no other body under its name: the digest a pin is computed with.
 
 Code: Lean core, the base package's bytes, canonical JSON and SHA-512 (`Base.Bytes`, `Base.Canon`, `Base.Hash`) and the
-circuit format's step bound (`Circuits.Steps`); nothing of the policy's check, whose package it shares so that every
-check requiring this package reads one definition. The period check takes its slot entries' Definitions by
-`closureDigest`.
+circuit format's step bound (`Circuits.Steps`). The period check takes its slot entries' Definitions by
+`closureDigest`, and SPOT's C_S (`Spot.OneStageZk.restrict`) names its template by `definitionDigest`.
 -/
 
 @[expose] public section
 
-namespace InferenceOnlyVerifier.DefinitionDigest
+namespace Flock.DefinitionDigest
 
 open Lean (Json)
 open Flock (V)
@@ -121,4 +120,4 @@ def closureDigest (j : Json) (key : String) : V String := do
   unless todo.isEmpty do throw s!"program: {key}'s callees outrun its descriptor's nodes"
   pure (Flock.hexOf (Flock.Sha512.hash (← Flock.canon (Json.mkObj seen.toList)).toUTF8))
 
-end InferenceOnlyVerifier.DefinitionDigest
+end Flock.DefinitionDigest

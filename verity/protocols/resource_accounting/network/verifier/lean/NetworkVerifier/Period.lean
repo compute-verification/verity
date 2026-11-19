@@ -8,7 +8,7 @@ public import Flock.Program
 public import Flock.Public
 public import Flock.WindowRecord
 public import InferenceOnlyVerifier.Desc
-public import InferenceOnlyVerifier.DefinitionDigest
+public import Circuits.DefinitionDigest
 public import NetworkVerifier.Period.ConnectionRows
 public import NetworkVerifier.Period.Start
 public import Spot.Record
@@ -20,7 +20,7 @@ meta import Flock.Program
 meta import Flock.Public
 meta import Flock.WindowRecord
 meta import InferenceOnlyVerifier.Desc
-meta import InferenceOnlyVerifier.DefinitionDigest
+meta import Circuits.DefinitionDigest
 meta import NetworkVerifier.Period.ConnectionRows
 meta import NetworkVerifier.Period.Start
 meta import Spot.Record
@@ -369,7 +369,7 @@ namespace NetworkVerifier.Period
 open Lean (Json toJson)
 open Flock (V)
 open NetworkVerifier.Check (Certificate)
-open InferenceOnlyVerifier.DefinitionDigest (closureDigest)
+open Flock.DefinitionDigest (closureDigest)
 
 /-! ## The check -/
 

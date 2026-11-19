@@ -211,7 +211,6 @@
   "Proofs.Properties.Verity.Sampled.Charge",
   "Proofs.Properties.Verity.Sampled.CouplingAt",
   "Proofs.Properties.Verity.Sampled.CountsLayout",
-  "Proofs.Properties.Verity.Sampled.Event",
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
   "Proofs.Properties.Verity.SampledRead",
@@ -682,7 +681,7 @@
   "Proofs.Properties.Verity.SampledTwo.JpWalk": "the two-level form is refused by name until the one check over levels (PRF-642)",
   "Proofs.Properties.Verity.SampledTwo.LogStrings": "the two-level form is refused by name until the one check over levels (PRF-642)",
   "Proofs.Properties.Verity.SampledTwo.Majority": "the two-level form is refused by name until the one check over levels (PRF-642)",
-  "Proofs.Properties.Verity.SampledTwo.MemberChecks": "the two-level form is refused by name until the one check over levels (PRF-642)",
+  "Proofs.Properties.Verity.SampledTwo.MemberChecks": "red until PRF-644 (owner proofs, due 2026-11-23): MemberChecks.statement_circuit and its use at line 87 reads the session statement's tags as the circuit statement's, which the template statement no longer is",
   "Proofs.Properties.Verity.SampledTwo.Messages": "the two-level form is refused by name until the one check over levels (PRF-642)",
   "Proofs.Properties.Verity.SampledTwo.MessagesOpen": "the two-level form is refused by name until the one check over levels (PRF-642)",
   "Proofs.Properties.Verity.SampledTwo.MessagesShown": "the two-level form is refused by name until the one check over levels (PRF-642)",
@@ -697,7 +696,7 @@
   "Proofs.Properties.Verity.SampledTwo.ReadsOnly": "the two-level form is refused by name until the one check over levels (PRF-642)",
   "Proofs.Properties.Verity.SampledTwo.RoundOne": "the two-level form is refused by name until the one check over levels (PRF-642)",
   "Proofs.Properties.Verity.SampledTwo.RoundPrefix": "the two-level form is refused by name until the one check over levels (PRF-642)",
-  "Proofs.Properties.Verity.SampledTwo.RoundsRise": "the two-level form is refused by name until the one check over levels (PRF-642)",
+  "Proofs.Properties.Verity.SampledTwo.RoundsRise": "red until PRF-644 (owner proofs, due 2026-11-23): RoundsRise at line 780 reads the session statement's tags as the circuit statement's, which the template statement no longer is",
   "Proofs.Properties.Verity.SampledTwo.RuleTwo": "the two-level form is refused by name until the one check over levels (PRF-642)",
   "Proofs.Properties.Verity.SampledTwo.SecondCoins": "the two-level form is refused by name until the one check over levels (PRF-642)",
   "Proofs.Properties.Verity.SampledTwo.SecondRead": "the two-level form is refused by name until the one check over levels (PRF-642)",
@@ -731,7 +730,9 @@
   "Proofs.Properties.Verity.SampledTwo.StmtsRound": "the two-level form is refused by name until the one check over levels (PRF-642)",
   "Proofs.Properties.Verity.SampledTwo.Subprotocol": "the two-level form is refused by name until the one check over levels (PRF-642)",
   "Proofs.Properties.Verity.SampledTwo.TableName": "the two-level form is refused by name until the one check over levels (PRF-642)",
-  "Proofs.Properties.Verity.SampledTwo.Within": "the two-level form is refused by name until the one check over levels (PRF-642)"
+  "Proofs.Properties.Verity.SampledTwo.Within": "the two-level form is refused by name until the one check over levels (PRF-642)",
+  "Proofs.Properties.Verity.Sampled.Record.Nums": "red until PRF-644 (owner proofs, due 2026-11-23): Record.Nums.stmtTags_sess reads the session statement's tags as the circuit statement's, which the template statement no longer is",
+  "Proofs.Properties.Verity.Sampled.Event": "red until PRF-644 (owner proofs, due 2026-11-23): Event.statement_zkTags reads the session statement's tags as the circuit statement's, which the template statement no longer is"
  },
  "runs": {
   "Proofs.Pouw.Bulk": {

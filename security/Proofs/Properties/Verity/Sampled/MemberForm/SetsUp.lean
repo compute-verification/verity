@@ -80,7 +80,7 @@ registered files `T` (`pinnedTables`) and `verify --zk`'s tags at the statement'
 (`zkTagsOf`). -/
 noncomputable def memberRead (T : PinnedTables) (R : Array ByteArray) (vm : _root_.Spot.OneStageZk.Member) :
     Verity.FileRead :=
-  ⟨zkTagsOf ((Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT).getD default)
+  ⟨zkTagsOf ((Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT).getD default)
       (Verity.namedFile (digestOf vm.own.circuit) R),
     Verity.namedFile (digestOf vm.own.circuit) R, pinnedTables T (Verity.namedFile (digestOf vm.own.circuit) R),
     Verity.namedFile (digestOf vm.own.pub) R⟩
@@ -114,7 +114,7 @@ verity-verify-proof's inputs; no work, stratified or closure input and no recomp
 its place of the window's population after `vm`'s first unit. -/
 structure MemberOn {nJ : ℕ} (T : PinnedTables) (F : Array ByteArray) (vm : _root_.Spot.OneStageZk.Member) (m : Member nJ) :
     Prop where
-  tags : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some m.I.tags
+  tags : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some m.I.tags
   circuit : m.I.circuitFile = Verity.namedFile (digestOf vm.own.circuit) F
   publicFile : m.I.publicFile = Verity.namedFile (digestOf vm.own.pub) F
   tables : m.I.tables = pinnedTables T m.I.circuitFile
@@ -131,7 +131,7 @@ structure MemberOn {nJ : ℕ} (T : PinnedTables) (F : Array ByteArray) (vm : _ro
 /-- **A member on the files is read as v2 reads its files there** (`memberRead`). -/
 theorem MemberOn.fileRead_eq {T : PinnedTables} {F : Array ByteArray} {vm : _root_.Spot.OneStageZk.Member} {nJ : ℕ} {m : Member nJ}
     (h : MemberOn T F vm m) : fileRead m = memberRead T F vm := by
-  have ht : (Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT).getD default = m.I.tags := by
+  have ht : (Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT).getD default = m.I.tags := by
     simp only [h.tags, Option.getD_some]
   rw [memberRead, ← h.circuit, ← h.publicFile, ← h.tables, ht]
   show (⟨Flock.Zk.tags m.I.tags (Flock.Zk.maskLogOf m.I.circuitFile) m.I.count, m.I.circuitFile, m.I.tables,
@@ -162,7 +162,7 @@ structure ExecutionPhaseOn (V : Vocab d α) (T : PinnedTables) (θ : ByteArray) 
 
 /-- Each member of a window on the files has the statement's tags. -/
 theorem ExecutionPhaseOn.tags {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase} (h : ExecutionPhaseOn V T θ F W)
-    (m : Member W.nJ) (hm : m ∈ W.ms) : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some m.I.tags := by
+    (m : Member W.nJ) (hm : m ∈ W.ms) : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some m.I.tags := by
   obtain ⟨_, _, _, -, -, -, -, hall, -⟩ := h.members
   obtain ⟨_, -, hon⟩ := forall₂_right hall m hm
   exact hon.tags

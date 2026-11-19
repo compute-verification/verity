@@ -1,38 +1,54 @@
-"""A credited linear of C as Pearl+'s product: its grid's units of `PearlPlusTileCoreWords_v2`, the core on C's words,
-which are the linear's nodes in C and write its y, and each unit's public row.
+"""A credited linear of C as Pearl+'s product: its grid's units of `PearlPlusTileCoreWords_v3`, the tile on C's words with
+its noise derived inside, which are the linear's nodes in C and write its y, and each unit's public row.
 
-    PearlPlusTileCoreWords_v2{K,TM,TR,TN,N,RHO,RHOR,DEV}   on words
+    PearlPlusTileCoreWords_v3{K,TM,TR,TN,N,RHO,RHOR,DEV}   on words
         (a: Array<TM, f32[K]>, b: Array<TN, bf16[K]>, cert, salt: u8[32], root: u8[64], unit: u32, rows: Array<TM, u32>,
-         eb: Array<TN, e4m3[32]>, fa, fb: Array<K, e4m3[32]>, g: Array<32, f32[32]>)
-        -> (digest: u8[64] as bits, y: Array<TR, bf16[TN]>, ok: bit)
-        `PearlPlusTileCore_v3` (`pearl_plus_tile`, on bits) behind `WordBits` batches, b's words widened to FP32 first
-        (`Bf16ToF32`), so each port is a row of the words C holds, and y's bits back to BF16 words (`BitsWord{16}`)
+         col: u32)
+        -> (digest: u8[64] as bits, y: Array<TR, bf16[TN]>, ok: u16)
+        maps of the noise (`pearl_plus_tile.noise`: eb, fa, fb, g of salt, root and col) and the wired core
+    PearlPlusTileCoreWired_v1{K,TM,TR,TN,N,RHO,RHOR,DEV}  on words, its noise on bits
+        (a, b, cert, salt, root, unit, rows as above, eb, fa, fb, g as `PearlPlusTileCore_v3`'s) -> as above
+        `PearlPlusTileCore_v3` behind `WordBits` batches, b's words widened to FP32 first (`Bf16ToF32`), so each port is a
+        row of the words C holds; y's bits back to BF16 words (`BitsWord{16}`), ok one word, bit 0 the core's ok and the
+        rest zero
+    cut(t)                                -> [(Definition, n)] the units C's laying makes of node t (`CUTS`)
     tiles(scheme, k, m, n, tile)          -> [Tile]          the linear's TM × TN grid, row-major: one unit of C a tile
-    public(scheme, k, t, unit, salt, root) -> {port: value}  tile t's public row (`PUBLIC`), in the core's port order
+    public(scheme, k, t, unit, salt, root) -> {port: value}  tile t's public row (`PUBLIC`), in the node's port order
     row_eb(salt, root_b, col, tn) / row_fa(salt, root_b, k) / row_fb(salt, root_b, k) / row_gram(salt, root_b, k, dev)
-                                          -> bytes           one supplied field's bytes as its port reads them (`SUPPLIED`)
+                                          -> bytes           the bytes of one noise value the node derives inside, on bytes:
+                                                             the references its tests hold it to
 
 At a credited linear of C, y = x · Wᵀ over M rows of x (K words) and the weight's N columns, each grid tile is one unit
-`PearlPlusTileCoreWords_v2{K, TM, TR, TN, N, RHO, RHOR, DEV}` (`credited_product`), TR its rows below M, the rest filler
+`PearlPlusTileCoreWords_v3{K, TM, TR, TN, N, RHO, RHOR, DEV}` (`credited_product`), TR its rows below M, the rest filler
 (rows a call's A is padded with to whole tiles, held to zero by the core). Its ports read:
 
   - ``a``: the tile's TM rows of A, the linear's x rows widened to FP32 as their writers hold them (a filler row zero);
   - ``b``: its TN rows of B, the weight's columns ``cols``, the registered read of the weights' record (BF16);
   - ``cert``: the prover's inert-work certificates, a committed value;
-  - ``salt``, ``root``, ``unit``, ``rows``, ``eb``, ``fa``, ``fb``, ``g`` (`PUBLIC`): its public row, which the verifier
-    fills itself: the epoch's live salt, the weights' registered root (B's root, which seeds the noise), the call's index
-    and the tile's rows (its place in C), and the noise anyone derives from seed_B = H_"seed-B"(salt ‖ root) (`public`):
-    E_B's lines are its column tile's. The core derives each row's E_A inside, from the row's own digest.
+  - ``salt``, ``root``, ``unit``, ``rows``, ``col`` (`PUBLIC`): its public row, which the verifier fills itself: the
+    epoch's live salt, the weights' registered root (B's root, which seeds the noise), the call's index and the tile's
+    place in C (its rows and its column tile).
 
-It writes ``y``, its TR real rows' TN words of the linear's y (Pearl+'s served product, `pearl_plus_tile.served`): the
-one y C holds, which every reader of the linear takes by wire, a row of y the concatenation of its column tiles' words
-in column order. Its ``ok`` is held to 1; its digest is a committed value no unit reads. A unit's amount is its credited MACs, TR · TN · K
-(`scheme.tile_macs` over the template's statics, `PEARL_PLUS.blocks`). The core is registered on bits only (its word body
-is unregistered), and C's values are words, so this is the core's one word form C names.
+The node derives its noise from seed_B = H_"seed-B"(salt ‖ root) inside: E_B's lines are its column tile's, F_A, F_B and G
+the call's; the core derives each row's E_A from the row's own digest.  Its top level is the noise's units and the core,
+each a Call or a map member: `PearlPlusTileSeed_v1` (the line key and each line's index), `PearlPlusTileLine_v2` mapped
+over eb's TN indices and over F's K for fa and for fb, `PearlPlusGramRow_v2` mapped over F_B's 32 columns, and
+`PearlPlusTileCoreWired_v1`, eb, fa, fb and g crossing as values C wires from each producer's output row to its consumer's
+input row.  No K that the core takes fits the node whole in one proof block (the noise alone is about 370k · K ANDs), so
+C's laying (`verity.circuits.laying.lay`) opens it into those units (`cut`), each its own block: a line is 73,459 ANDs and
+a Gram row 32 chains (about 7,000 · K), in range at every K up to the served 2048; the wired core is in range whole at
+K = 256 (about 16.6M ANDs) and is the credited block there, and at K = 2048 (about 5.1G ANDs at a 16 × 64 tile) laying
+opens it too.  It writes ``y``,
+its TR real rows' TN words of the linear's y (Pearl+'s served product, `pearl_plus_tile.served`): the one y C holds,
+which every reader of the linear takes by wire, a row of y the concatenation of its column tiles' words in column order.
+Its ``ok`` is one u16 word held to 1; its digest is a committed value no unit reads. A unit's amount is its credited
+MACs, TR · TN · K (`scheme.tile_macs` over the wired core's statics, `PEARL_PLUS.blocks`). The core and the noise's lines
+and Gram rows are registered on bits only (their word bodies are unregistered), and C's values are words, so this is the
+tile's one word form C names.
 
-The noise the verifier supplies is the reference below (`SUPPLIED`, by the supplied names ``pouw.pearlplus.eb/v1`` {col,
-tn}, ``.fa/v1`` {k}, ``.fb/v1`` {k}, ``.gram/v1`` {k, dev}), each field's bytes in the order and ``le`` layout its port
-reads; `public` reads its fields back from them. Paths are under ``pouw/prover/schemes/`` unless named.
+The noise the node derives is, on bytes, the references below (`row_eb`, `row_fa`, `row_fb`, `row_gram`), each value's
+bytes in the order and ``le`` layout its core port reads; no verifier reads them. Paths are under ``pouw/prover/schemes/``
+unless named.
 
   - H_ℓ(m) = SHA-512(L_ℓ ‖ m)[0:32], L_ℓ = ASCII ``pearl-c/h3s/<ℓ>`` then one 0x00, zero-padded to 128 bytes
     (`pearl_c.s512`, pearl_c.py:148; `S512_LABELS` :145).
@@ -72,53 +88,100 @@ from verity.circuits.refs import Coll, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.protocols.resource_accounting.compute.pouw.prover import schemes as PS
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import tile_units as U
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
 
-#: the core's ports the verifier fills itself, in its port order
-PUBLIC = PT.PUBLIC
+U32 = Value(32)
+
+#: the node's ports the verifier fills itself (its public row), in its port order
+PUBLIC = ("salt", "root", "unit", "rows", "col")
+_CORE_OWN = ("a", "b", "cert", "salt", "root", "unit", "rows")
 
 
-def _word_params(S) -> tuple:
-    params, _ret = bind(PT.PearlPlusTileCoreV3.sigma_of, **{s: getattr(S, s) for s in _STATICS}).signature()
-    return tuple((p, Array(S.TN, Array(S.K, BF16))) if p == "b" else (p, t) for p, t in params)
+_NOISE_PORTS = ("eb", "fa", "fb", "g")
 
 
 def _core(S) -> SpecializedDefinition:
     return bind(PT.PearlPlusTileCoreV3, **{s: getattr(S, s) for s in _STATICS})
 
 
+def _wired(S) -> SpecializedDefinition:
+    return bind(PearlPlusTileCoreWired, **{s: getattr(S, s) for s in _STATICS})
+
+
+def _bit_params(S) -> dict:
+    return dict(_core(S).signature()[0])
+
+
+def _word_params(S) -> tuple:
+    params = dict(bind(PT.PearlPlusTileCoreV3.sigma_of, **{s: getattr(S, s) for s in _STATICS}).signature()[0])
+    return tuple((p, Array(S.TN, Array(S.K, BF16)) if p == "b" else params[p]) for p in _CORE_OWN)
+
+
 def _word_ret(S):
-    digest, _y, ok = _core(S).signature()[1].fields
-    return Tuple(digest, Array(S.TR, Array(S.TN, BF16)), ok)
+    digest, _y, _ok = _core(S).signature()[1].fields
+    return Tuple(digest, Array(S.TR, Array(S.TN, BF16)), BF16)
 
 
-def _on_words(B, S, *xs):
-    core = _core(S)
-    bits = []
-    for (p, t), x, (_q, bt) in zip(_word_params(S), xs, core.signature()[0]):
+def _wired_body(B, S, *xs):
+    bits, bt = {}, _bit_params(S)
+    for (p, t), x in zip(_word_params(S), xs):
         if p == "b":
             x = B.batch(Bf16ToF32, Coll(Array(t.leaves, BF16), x.refs), axes=(0,))
         w = 32 if p == "b" else t.leaf_widths()[0]
         if w > 1:
-            x = Coll(bt, B.batch(bind(WordBits, W=w), Coll(Array(t.leaves, Value(w)), x.refs), axes=(0,)).refs)
-        bits.append(x)
-    out = B.call(core, *bits)
+            x = Coll(bt[p], B.batch(bind(WordBits, W=w), Coll(Array(t.leaves, Value(w)), x.refs), axes=(0,)).refs)
+        bits[p] = x
+    out = B.call(_core(S), *(bits[p] for p in _CORE_OWN), *xs[len(_CORE_OWN):])
     n = S.TR * S.TN
     y = B.batch(bind(BitsWord, W=16), Coll(Array(n, Array(16, Value(1))), out[1].refs), axes=(0,))
-    return tuple_of(out[0], Coll(Array(S.TR, Array(S.TN, BF16)), y.refs), out[2])
+    return tuple_of(out[0], Coll(Array(S.TR, Array(S.TN, BF16)), y.refs), U.ok_word(U._Emit(B), out[2]))
 
 
 _STATICS = tuple(PT.PearlPlusTileCoreV3.statics)
+PearlPlusTileCoreWired = CompositeDefinition(
+    "PearlPlusTileCoreWired", 1, _STATICS,
+    lambda S: (_word_params(S) + tuple((p, _bit_params(S)[p]) for p in _NOISE_PORTS), _word_ret(S)),
+    _wired_body, refuse=PT.PearlPlusTileCoreV3.refuse, conformance=PT.PearlPlusTileCoreV3.conformance,
+    doc="`PearlPlusTileCore_v3` on C's words with its noise on bits by wire: b's BF16 words widened (`Bf16ToF32`), then "
+        "each w-bit leaf, w > 1, its w bits by `WordBits{w}`; eb, fa, fb and g as the noise's units wrote them; y's 16-bit "
+        "leaves back to BF16 words by `BitsWord{16}`, and ok one 16-bit word, bit 0 the core's ok and bits 1-15 zero "
+        "(`tile_units.ok_word`)")
+
+
+def _node_params(S) -> tuple:
+    return _word_params(S) + (("col", U32),)
+
+
+def _on_words(B, S, a, b, cert, salt, root, unit, rows, col):
+    eb, fa, fb, g = PT.noise(B, S.K, S.TN, S.DEV, salt, root, col)
+    return B.call(_wired(S), a, b, cert, salt, root, unit, rows, eb, fa, fb, g)
+
+
 PearlPlusTileCoreWords = CompositeDefinition(
-    "PearlPlusTileCoreWords", 2, _STATICS, lambda S: (_word_params(S), _word_ret(S)),
+    "PearlPlusTileCoreWords", 3, _STATICS, lambda S: (_node_params(S), _word_ret(S)),
     _on_words, refuse=PT.PearlPlusTileCoreV3.refuse, conformance=PT.PearlPlusTileCoreV3.conformance,
-    doc="`PearlPlusTileCore_v3` on its parameters' words: b's BF16 words widened (`Bf16ToF32`), then each w-bit leaf, "
-        "w > 1, its w bits by `WordBits{w}`; y's 16-bit leaves back to BF16 words by `BitsWord{16}`")
+    doc="A -h3 tile on C's words, its noise derived inside as maps (`pearl_plus_tile.noise`): `PearlPlusTileSeed_v1`(salt, "
+        "root, col), `PearlPlusTileLine_v2` over eb's TN and F's K indices, `PearlPlusGramRow_v2` over F_B's 32 columns, and "
+        "`PearlPlusTileCoreWired_v1` on the tile's words and that noise by wire")
+
+
+def cut(t: SpecializedDefinition) -> list[tuple[SpecializedDefinition, int]]:
+    """The units C's laying (`verity.circuits.laying.lay`) makes of a binding of `PearlPlusTileCoreWords_v3`, which no
+    binding fits whole (its noise alone is about 370k · K ANDs), each Definition bound with how many of it: its body's
+    Calls and each map's members."""
+    s = t.bindings
+    return [(PT.seed(s["K"], s["TN"]), 1), (PT.line("eb"), s["TN"]), (PT.line("fa"), s["K"]), (PT.line("fb"), s["K"]),
+            (PT.gram_row(s["K"], s["DEV"]), PT.R), (bind(PearlPlusTileCoreWired, **s), 1)]
+
+
+#: staged as its cut (`circuit_check.checks.cut_of`)
+CUTS = {"PearlPlusTileCoreWords_v3": cut}
 
 
 def credited_product(scheme: str, k: int, tm: int, tn: int, n: int, real: int | None = None) -> SpecializedDefinition:
-    """`PearlPlusTileCoreWords_v2` for ``scheme`` at depth ``k`` over a TM × TN tile of a linear of ``n`` columns, its first
+    """`PearlPlusTileCoreWords_v3` for ``scheme`` at depth ``k`` over a TM × TN tile of a linear of ``n`` columns, its first
     ``real`` rows real (every row when None): the core's statics (`pearl_plus_tile.core`)."""
     core = PT.core(PS.get(scheme), k, tm, tn, n, real)
     return bind(PearlPlusTileCoreWords, **{s: core.bindings[s] for s in _STATICS})
@@ -155,56 +218,43 @@ def tiles(scheme: str, k: int, m: int, n: int, tile: tuple[int, int] | None = No
 
 def public(scheme: str, k: int, t: Tile, unit: int, salt: bytes, root: bytes) -> dict[str, Any]:
     """Tile ``t``'s public row (`PUBLIC`) for call ``unit`` under the epoch's ``salt`` and the weights' root ``root``, each
-    field as the core's port holds it: the place (``unit``, ``rows``) and the noise fields of `SUPPLIED`'s
-    functions read back from their bytes."""
+    field as the node's port holds it: the epoch's salt, the weights' root, and the tile's place (``unit``, ``rows``,
+    ``col``)."""
     s = PS.get(scheme, k_min=k, tile=(len(t.rows), len(t.cols)))
     if s.hashing != "h3":
-        raise ValueError(f"{scheme}: the public row's noise is -h3's (`SUPPLIED`), not {s.hashing}'s")
-    eb, fa, fb = (row_eb(salt, root, t.col, len(t.cols)), row_fa(salt, root, k), row_fb(salt, root, k))
-    g = row_gram(salt, root, k, s.device.name)
-    return {"salt": salt, "root": root, "unit": unit, "rows": list(t.rows),
-            "eb": _lines(eb), "fa": _lines(fa), "fb": _lines(fb),
-            "g": [[int.from_bytes(g[4 * (32 * p + q):4 * (32 * p + q) + 4], "little") for q in range(32)] for p in range(32)]}
-
-
-def _lines(b: bytes) -> list[list[int]]:
-    return [list(b[i:i + 32]) for i in range(0, len(b), 32)]
+        raise ValueError(f"{scheme}: the node derives -h3's noise, not {s.hashing}'s")
+    return {"salt": salt, "root": root, "unit": unit, "rows": list(t.rows), "col": t.col}
 
 
 def _seed(salt: bytes, root_b: bytes) -> bytes:
     if len(salt) != 32 or len(root_b) != 64:
-        raise ValueError(f"the public row reads a 32-byte salt and a 64-byte root_B, not {len(salt)} and {len(root_b)} bytes")
+        raise ValueError(f"the noise reads a 32-byte salt and a 64-byte root_B, not {len(salt)} and {len(root_b)} bytes")
     return C.seed_b(salt, root_b, "h3")
 
 
 def row_eb(salt: bytes, root_b: bytes, col: int, tn: int) -> bytes:
-    """``pouw.pearlplus.eb/v1`` {col, tn}: E_B's lines of columns col·TN … col·TN + TN − 1, 32 E4M3 bytes each, in column
-    order (32·TN bytes): line(seed_B, 1, 0, j, 256)."""
+    """The node's eb at column tile ``col`` of ``tn`` columns: E_B's lines of columns col·TN … col·TN + TN − 1, 32 E4M3
+    bytes each, in column order (32·TN bytes): line(seed_B, 1, 0, j, 256)."""
     sb = _seed(salt, root_b)
     return b"".join(bytes(C.sample_line(sb, 1, 0, j)) for j in range(col * tn, (col + 1) * tn))
 
 
 def row_fa(salt: bytes, root_b: bytes, k: int) -> bytes:
-    """``pouw.pearlplus.fa/v1`` {k}: F_A's k lines, line(seed_B, 0, 1, t, 16) for t < k, 32 E4M3 bytes each (32·k bytes)."""
+    """The node's fa at depth ``k``: F_A's k lines, line(seed_B, 0, 1, t, 16) for t < k, 32 E4M3 bytes each (32·k bytes)."""
     return b"".join(bytes(ln) for ln in C._basis(_seed(salt, root_b), 0, k, C.LINE_NORM_V1))
 
 
 def row_fb(salt: bytes, root_b: bytes, k: int) -> bytes:
-    """``pouw.pearlplus.fb/v1`` {k}: F_B's k lines, line(seed_B, 1, 1, t, 16) for t < k (32·k bytes)."""
+    """The node's fb at depth ``k``: F_B's k lines, line(seed_B, 1, 1, t, 16) for t < k (32·k bytes)."""
     return b"".join(bytes(ln) for ln in C._basis(_seed(salt, root_b), 1, k, C.LINE_NORM_V1))
 
 
 def row_gram(salt: bytes, root_b: bytes, k: int, dev: str) -> bytes:
-    """``pouw.pearlplus.gram/v1`` {k, dev}: G = F_Bᵀ·F_A on device ``dev``'s chain, G[p][q] = chain(F_B column p, F_A
+    """The node's g at depth ``k`` on device ``dev``: G = F_Bᵀ·F_A on device ``dev``'s chain, G[p][q] = chain(F_B column p, F_A
     column q) for p, q < 32, p-major, each FP32 word 4 bytes little-endian (4,096 bytes)."""
     return b"".join(w.to_bytes(4, "little")
                     for row in C.gram(_seed(salt, root_b), k, C.LINE_NORM_V1, DEVICES[dev]) for w in row)
 
 
-#: the supplied functions of the public row's noise, by the name C marks a supplied parameter with (`verity.circuits.supplied`)
-SUPPLIED = {"pouw.pearlplus.eb/v1": row_eb, "pouw.pearlplus.fa/v1": row_fa, "pouw.pearlplus.fb/v1": row_fb,
-            "pouw.pearlplus.gram/v1": row_gram}
-
-
-__all__ = ["PUBLIC", "PearlPlusTileCoreWords", "SUPPLIED", "Tile", "credited_product", "public", "row_eb", "row_fa",
+__all__ = ["CUTS", "PUBLIC", "PearlPlusTileCoreWired", "PearlPlusTileCoreWords", "Tile", "cut", "credited_product", "public", "row_eb", "row_fa",
            "row_fb", "row_gram", "tiles"]
