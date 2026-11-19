@@ -77,6 +77,7 @@ from verity_vllm.definitions.registry import act, b1
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.moe import (
     ArgmaxStepF32,
+    Ex2Approx,
     F32GtStrict,
     MoeRouterPick,
     _array,
@@ -85,7 +86,7 @@ from verity_vllm.definitions.registry.moe import (
 from verity_vllm.definitions.registry.prims import BF16, F32, I32
 from verity_vllm.definitions.registry.topp_word_gates import NvLogfV2
 
-__all__ = ["Dsv4HashWeight", "Dsv4SqrtSoftplus", "Ex2Approx", "LG2_COEFFS", "LG2_MEASURED", "MoeRouterHash", "MoeRouterSqrtSoftplus",
+__all__ = ["Dsv4HashWeight", "Dsv4SqrtSoftplus", "LG2_COEFFS", "LG2_MEASURED", "MoeRouterHash", "MoeRouterSqrtSoftplus",
            "MufuLg2Mantissa", "SiluMulClamp", "SiluMulClampBf16", "TOPK", "limit_bits", "lg2_interpolant", "mufu_lg2_mantissa_bits",
            "truncated_square"]
 
@@ -93,7 +94,7 @@ __all__ = ["Dsv4HashWeight", "Dsv4SqrtSoftplus", "Ex2Approx", "LG2_COEFFS", "LG2
 TOPK = 6
 
 LOG2E, NEG_LOG2E, LN2 = 0x3FB8AA3B, 0xBFB8AA3B, 0x3F317218
-MINUS_126, HALF, TWO, TWENTY = 0xC2FC0000, 0x3F000000, 0x40000000, 0x41A00000
+TWO, TWENTY = 0x40000000, 0x41A00000
 NAN_SCORE = 0xF149F2CA       # -1e30
 
 # --- MUFU.LG2 on [1, 2) ---------------------------------------------------------------------------------------------------------
@@ -172,7 +173,7 @@ def MufuLg2Mantissa(x: int) -> int:
 
 # --- the CUDA hash router (layers 0-2) -------------------------------------------------------------------------------------------
 
-C_MINUS_126, C_HALF, C_TWO, C_TWENTY = (b1.const(32, c) for c in (MINUS_126, HALF, TWO, TWENTY))
+C_TWO, C_TWENTY = (b1.const(32, c) for c in (TWO, TWENTY))
 C_LOG2E, C_NEG_LOG2E, C_LN2, C_NAN_SCORE = (b1.const(32, c) for c in (LOG2E, NEG_LOG2E, LN2, NAN_SCORE))
 ONE32 = b1.f32c(1.0)
 PTX_NAN = b1.const(32, F32_NAN_PTX)
@@ -185,16 +186,6 @@ _ROUTER_ROWS = "8,192 rows of _dsv4_topk_kernel at E=384, SCALE=2.5, both runs b
 _HASH_ROWS = "8,192 rows of dsv4HashTopkSoftplusSqrt<int, int> at E=384, SCALE=2.5, both runs bit-exact against this Program"
 _CLAMP_ROWS = ("act_and_mul_kernel with HAS_CLAMP at LIMIT=10, vectorised at I=384 (7,510 rows) and scalar at I=9 (1,024 rows), "
                "both runs bit-exact against this Program")
-
-
-@composite("Ex2Approx", 1, [], lambda S: ((("t", F32),), F32),
-           conformance=f"exact-model-tested: ex2.approx.f32 on every word of [-150, -125] and a sweep (2,883,585 words) is this "
-                       f"lowering, and inside both routers' rows {_CAPTURED}")
-def Ex2Approx(B, S, t):
-    """``ex2.approx.f32`` (not .ftz): ``t < -126`` (ordered) halves t before MUFU.EX2 and squares the result (FMUL)."""
-    small = B.call(F32GtStrict, B.call(C_MINUS_126), t)
-    y = B.call(P.MufuEx2Ftz, B.call(P.SelectF32, small, B.call(P.F32Mul, t, B.call(C_HALF)), t))
-    return B.call(P.SelectF32, small, B.call(P.F32Mul, y, y), y)
 
 
 @composite("Dsv4HashWeight", 1, [], lambda S: ((("x", F32),), F32),
