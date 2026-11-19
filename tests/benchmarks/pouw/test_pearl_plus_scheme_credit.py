@@ -32,7 +32,7 @@ def test_the_verifiers_protocol_and_assumption() -> None:
 
 
 def test_block_cost_is_the_credits_macs() -> None:
-    """A credited block, a tile's `PearlPlusTileCoreWired_v1`, costs what the verifier credits a whole-width tile: its TR real
+    """A credited tile, `PearlPlusTileCoreWords_v3`, costs what the verifier credits a whole-width tile: its TR real
     rows' MACs at K, filler rows crediting none."""
     vr = _verify_run()
     scheme = PearlC()
