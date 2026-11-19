@@ -412,9 +412,9 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
     node = node or socket.gethostname()
     party = party or Side(CHALLENGER_HOST, tuple(os.path.expanduser(a) for a in CHALLENGER_COMMAND),
                           _address(CHALLENGER_ADDRESS))
-    private = private or serve_dir / "private" / "pous" / f"w{window}"
-    bw_out = bw_out or out.parent / "bandwidth"
-    bw_private = bw_private or serve_dir / "private" / "bandwidth"
+    private = private or serve_dir / "private" / POUS.name / f"w{window}"
+    bw_out = bw_out or out.parent / BANDWIDTH.name
+    bw_private = bw_private or serve_dir / "private" / BANDWIDTH.name
     out.mkdir(parents=True, exist_ok=True)
     for name in (STORE, HELD):   # what an earlier run kept is never answered as this one's
         (private / name).unlink(missing_ok=True)
@@ -520,7 +520,7 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
             bandwidth = {"session_s": round(time.monotonic() - t, 3)}
             _stamp(out, "PoUB's session done")
         (private / HELD).write_text(json.dumps({"summary": summary | {"session_s": session_s},
-                                                "bandwidth": bandwidth}, indent=1, sort_keys=True, default=str)
+                                                BANDWIDTH.name: bandwidth}, indent=1, sort_keys=True, default=str)
                                     + "\n")
         return None
     finally:
@@ -548,9 +548,9 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | No
     (``serve_dir``'s model and registration, ``window``) and what setup published, never taken from what was kept.
     `Refusal`, before either answer, when ``private`` holds no sessions, or holds sessions kept under another binding
     or id than those."""
-    private = private or serve_dir / "private" / "pous" / f"w{window}"
-    bw_out = bw_out or out.parent / "bandwidth"
-    bw_private = bw_private or serve_dir / "private" / "bandwidth"
+    private = private or serve_dir / "private" / POUS.name / f"w{window}"
+    bw_out = bw_out or out.parent / BANDWIDTH.name
+    bw_private = bw_private or serve_dir / "private" / BANDWIDTH.name
     if not (private / HELD).is_file():
         raise Refusal(f"{private} holds no sessions to answer ({HELD}, which --sessions leaves)")
     repo, rev, _, bind = _window(serve_dir, window)
@@ -594,14 +594,14 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | No
 
     bandwidth = bw = None
     with pool or ThreadPoolExecutor(max_workers=3, thread_name_prefix="answer") as pool:
-        bw_f = pool.submit(bandwidth_answer) if held["bandwidth"] is not None else None
+        bw_f = pool.submit(bandwidth_answer) if held[BANDWIDTH.name] is not None else None
         case = period.case(point, sid, trusted, published, digests, session,
                            period.setup_case(point.params, published.commitment, published.salt,
                                              _kept(private, point.params)))
         lean_f = pool.submit(lean_answer, case) if case_exe is not None else None
         if bw_f is not None:
             bw = bw_f.result()
-            bandwidth = {"verdict": bw["verdict"], "out": str(bw_out)} | held["bandwidth"]
+            bandwidth = {"verdict": bw["verdict"], "out": str(bw_out)} | held[BANDWIDTH.name]
         digest = SC.digest(case)
         decided, lean, agreed = period.decided_by(None), {}, True
         if lean_f is not None:

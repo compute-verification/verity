@@ -47,12 +47,15 @@ import subprocess
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
 from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier import run as R
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period
+from verity.protocols.compose import schemes as registry
+from verity.protocols.resource_accounting import scheme as S
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
 
@@ -81,6 +84,16 @@ def _json(path: Path) -> Any:
 def digest(case: Mapping[str, Any]) -> str:
     """The component's digest of the case's commitment: SHA-512 of its bytes, for PoUS and the wipe alike."""
     return hashlib.sha512(bytes.fromhex(case["commitment"])).hexdigest()
+
+
+def _scheme(verifier: ModuleType) -> S.Scheme:
+    """The scheme declared in ``verifier``'s own protocol package whose protocol is ``verifier``'s ``PROTOCOL``; only
+    that package's declarations are loaded."""
+    package = verifier.__name__.rsplit(".verifier.", 1)[0] + "."
+    for name, module in registry.DECLARATIONS.items():
+        if module.startswith(package) and (scheme := registry.get(name)).protocol == verifier.PROTOCOL:
+            return scheme
+    raise Refused(f"no scheme declared in {package[:-1]} has the protocol {verifier.PROTOCOL}")
 
 
 def judged(case: Mapping[str, Any], answer: dict[str, Any], exe: str | os.PathLike | None, *args: str) -> dict[str, Any]:
@@ -250,7 +263,7 @@ def wipe_piece(window: Path, private: Path | None = None, *,
     served = _json(window / "served.json") if (window / "served.json").is_file() else {}
     if private is None:
         _need(bool(served.get("serve_dir")), f"{window} has no served.json naming the serve dir, so no private directory")
-        private = Path(served["serve_dir"]) / "private" / "wipe"
+        private = Path(served["serve_dir"]) / "private" / _scheme(wipe_period).name
     kept = private / WIPE_CASE if (private / WIPE_CASE).is_file() else window / WIPE_CASE
     case = _json(kept)
     prof = None if public.get("profile") is None else {k: v for k, v in public["profile"].items() if k != "placement"}

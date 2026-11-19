@@ -440,6 +440,33 @@ def test_a_pieces_party_is_a_declared_developer_party_and_its_development_one_of
                         ({"prover": S.Launch(optional=("address",), starts=("address", "host"))},
                          "start writes is among its binds or optional, not \\['host'\\]"),
                         ({"prover": S.Launch(optional=("address", "host"), starts=("address",), starts_optional=("host",))},
-                         "start may leave out is among what it writes, not \\['host'\\]")):
+                         "start may leave out is among what it writes, not \\['host'\\]"),
+                        ({"prover": S.Launch(entry="TOY_LAUNCHER")}, "prover's entry is a module:attribute"),
+                        ({"prover": S.Launch(executables=(("pkg", "exe"),))}, "executables are Executable records"),
+                        ({"prover": S.Launch(executables=(S.Executable("pkg", "exe"),) * 2)},
+                         "prover declares an executable twice")):
         with pytest.raises(ValueError, match=why):
             _toy(parties=parties, pieces=pieces)
+    assert isinstance(ok.pieces["prover"].entry, S.Lacks) and isinstance(ok.pieces["prover"].executables, S.Lacks)
+    exe = S.Executable("verity/x/lean", "toy-protocol")
+    said = _toy(parties=parties, pieces={"prover": S.Launch(entry="toy.launch:prover", executables=(exe,))}).pieces["prover"]
+    assert (said.entry, said.executables) == ("toy.launch:prover", (exe,))
+    assert exe.built("/t") == Path("/t/verity/x/lean/.lake/build/bin/toy-protocol")
+    for package, target, why in (("/abs", "t", "relative to the tree"), ("a/../b", "t", "relative to the tree"),
+                                 ("", "t", "relative to the tree"), ("a", "t/u", "a Lake target's name")):
+        with pytest.raises(ValueError, match=why):
+            S.Executable(package, target)
+
+
+def test_a_partys_start_reads_runs_only_of_its_depends_and_a_scheme_that_says_none_refuses_by_name() -> None:
+    from verity.protocol import Role
+    parties = (Role("prover", "developer"), Role("verifier", "auditor"))
+    ok = _toy(parties=parties, depends=("other",), reads={"verifier": {"key": ("other", "attester")}})
+    assert dict(ok.reads["verifier"]) == {"key": ("other", "attester")}
+    for reads, why in (({"oracle": {}}, "by its parties \\['prover', 'verifier'\\], not 'oracle'"),
+                       ({"verifier": {"key": ("third", "attester")}}, "reads runs of \\['third'\\], which are not among "
+                                                                       "its depends \\['other'\\]")):
+        with pytest.raises(ValueError, match=why):
+            _toy(parties=parties, depends=("other",), reads=reads)
+    with pytest.raises(LookupError, match="declares no reads"):
+        S.declared(_toy(parties=parties), "reads")

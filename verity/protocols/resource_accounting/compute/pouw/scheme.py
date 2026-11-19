@@ -31,8 +31,10 @@ from typing import Any
 from verity import hooks as H
 from verity.protocols.resource_accounting.compute.pouw.prover import serving, workload
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import runs_on
+from verity.config import COMPOSITES
 from verity.protocol import VERIFIER
-from verity.protocols.resource_accounting.scheme import Block, Charge, Lacks, Launch, Order, Scheme, Term, register
+from verity.protocols.resource_accounting.scheme import (Block, Charge, Executable, Lacks, Launch, LaunchRefused, Order,
+                                                             Scheme, Term, register)
 
 #: the kernel scheme it runs, on every card its row allows
 KERNEL = "pearl-c-h100-v1-h3"
@@ -525,7 +527,11 @@ PEARL_PLUS = register(Scheme(
     depends=(),
     pieces={"workers": Launch(optional=("gate", "peer", "key-sha512", "lane", "main-file"), development="gate",
                               starts=("gate", "peer", "lane", "key-sha512", "main-file"),
-                              starts_optional=("lane", "main-file"))},
+                              starts_optional=("lane", "main-file"),
+                              entry="verity.protocols.resource_accounting.compute.pouw.scheme:launch_pearlplus",
+                              executables=(Executable(
+                                  "verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus",
+                                  "pouw-pearlplus"),))},
     answers=Lacks("has no piece that answers outside an exchange"),
     # until the salt and sample sessions' signature pin is in Lean
     unchecked={"coins-signatures-checked-by-the-auditor":
@@ -554,3 +560,44 @@ PEARL_PLUS = register(Scheme(
                               "with Pearl+'s formed FP8 buffers as a third form, and storage's release of a weight frees "
                               "nothing.",
 ))
+
+SCRIPT = "benchmarks/one_stage/served_pearlplus.sh"
+#: served_verdicts.sh's variable for each binding of Pearl+'s live challenger, the party that sends its salt
+_LIVE = {"gate": "PEARLC_CHALLENGER_GATE", "peer": "PEARLC_CHALLENGER_PEER", "key-sha512": "H1_KEY_SHA512"}
+_CHALLENGER = workload.PEARL_CHANNELS[0].sender
+
+
+def _hooks(cfg, params, bound, pinned):
+    """Pearl+ on the workload's engine (POUW=pearlplus, PEARLPLUS_TIE=1): each engine step's passes retained under the
+    gate's salts, Pearl+'s window record tied to the execution phase, then its verdict and the Lean verifier
+    (served_pearlplus.sh). With no gate bound the gate variables are set empty, since unset served_verdicts.sh takes the
+    lane's gate: Pearl+'s epoch coins are then an in-process challenger's on the workload's machine, its verdict claims
+    none, and the run is a development one."""
+    product = "remote" if sorted(cfg["protocols"]) == sorted(COMPOSITES["verity/remote/v1"]) else "onsite"
+    hooks = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": product}
+    if given := [k for k in _LIVE if k in bound]:
+        if lacking := [k for k in _LIVE if k not in bound]:
+            raise LaunchRefused("unbound", f"Pearl+'s live challenger takes {', '.join(_LIVE)} together, and the "
+                                           f"deploy bindings bind {', '.join(given)} without "
+                                           f"{', '.join(f'{_CHALLENGER}.pearl-plus.{k}' for k in lacking)}: bind "
+                                           f"them, or none for coins flipped on the workload's machine")
+        hooks |= {v: bound[k] for k, v in _LIVE.items()}
+    else:
+        hooks |= {"PEARLC_CHALLENGER_GATE": "", "PEARLC_CHALLENGER_PEER": "", "DEVELOPMENT": "1"}
+    hooks |= {v: bound[k] for k, v in (("lane", "PEARLC_CHALLENGER_LANE"), ("main-file", "MAIN_FILE")) if k in bound}
+    if "class" in params:
+        w = cfg["workload"]["params"]
+        slots, _, outputs = (int(x) for x in params["class"].split(","))
+        if (slots, outputs) != (w["slots"], w["window-steps"]):
+            raise LaunchRefused("params", f"Pearl+'s class {params['class']} is {slots} requests of {outputs} output "
+                                          f"tokens, and the workload's slots and window-steps are {w['slots']} and "
+                                          f"{w['window-steps']}: state slots = {slots} and window-steps = {outputs}, "
+                                          "or a class that agrees")
+        hooks |= {"V3C_CLASS": params["class"], "CLASSES": params["class"]}
+    return hooks | ({"PEARLPLUS_TIE_UNIFORM": "1"} if params["tie-uniform"] else {})
+
+
+def launch_pearlplus(declaration: Scheme) -> tuple[Any, tuple[str, ...]]:
+    """Pearl+'s workers piece (its `Launch.entry`): its hooks and the script they run. It launches and collects, and
+    decides no verdict."""
+    return _hooks, (SCRIPT,)
