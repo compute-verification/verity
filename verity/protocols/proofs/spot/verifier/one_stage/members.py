@@ -567,7 +567,7 @@ def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descripto
     blobs do not hold refuses (`proofs.tables_match_why`); one only another member's circuit looks up is none of its."""
     try:
         try:
-            c = OC.lower(OC.restrict(descriptor, partition, m["units"]))
+            c = OC.lower(OC.restrict(descriptor, partition, m["units"]), partition, PF.lower_executable)
         except (OC.NotDerived, OC.Refused) as e:
             raise _Refused(f"circuit: {e}") from None
         circuit = _blob(blobs, hashlib.sha512(c).hexdigest(), "circuit")
