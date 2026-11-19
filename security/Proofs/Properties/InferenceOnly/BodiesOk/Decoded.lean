@@ -26,9 +26,10 @@ import Std.Data.HashMap.Lemmas
 /-!
 # What `decode` returns
 
-`decode_steps` walks `decode` once: on an accepted descriptor it names the run of `go` from the empty state, the root's
-check, `decodeAll` of the primitive entries, `booleanKeys`, `decodeBodies`, and the Program's fields from their last
-state; every fact about what `decode` returns reads it. `decode_spec`: a Program `Flock.Program.decode` returns holds
+`decode_walk` walks `decode` once: on an accepted descriptor it names `decodeDefs`' walk, the root's check, `decodeAll` of
+the primitive entries, `booleanKeys`, `decodeBodies`, and the Program's fields from their last state; every fact about
+what `decode` returns reads it. Where the root reads no input node at another width (`Body.recut`), `decode_steps` names
+the plain walk `go` from the empty state: the later passes only push (`Framed`), so the root's recut is the walk's. `decode_spec`: a Program `Flock.Program.decode` returns holds
 the Definitions of a decoder state that keeps `Inv` (`specs`, from the empty state through `go`, `decodeAll` and
 `decodeBodies`), and its root is a composite (`decode`'s own check). `decode_root`: the root is one of them
 (`getDef`'s index), a composite without parameters (`decode`'s check, `CalleeOk`).
@@ -40,9 +41,8 @@ set_option mvcgen.warning false
 
 namespace InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
 open Flock.Program
-open Std.Do
-open private getDef composite staticFns goOf decodeDefs decodeDefs_plain decodeDefs_walk DecState DecState.defs DecState.index
-  DecState.busy Desc Desc.types Desc.callees Desc.ddefs liftV at_ paramsOf buildNode natJ? decodeAll decodeBodies primEntries
+open private getDef composite staticFns goOf decodeDefs decodeDefs_plain DecState DecState.defs DecState.index DecState.busy
+  Desc Desc.types Desc.callees Desc.ddefs liftV at_ paramsOf buildNode natJ? decodeAll decodeBodies primEntries
   from Circuits.Program
 
 theorem ex_throw_bind {α β : Type} {e : String} {f : α → Flock.V β} {b : β}
@@ -78,47 +78,14 @@ theorem go_inv (desc : Desc) (rootId programFn : String) (root : ℕ) (s0 st : D
   · obtain ⟨-, rfl⟩ := st_pure hf
     exact grows_refl _
 
-/-- `decodeAll`: each primitive entry by `getDef`. -/
-theorem decodeAll_grows (desc : Desc) (fs : Array String) (s s' : DecState) (u : Unit)
-    (h : StateT.run (decodeAll desc fs : DM Unit) s = .ok (u, s')) : Grows s s' := by
-  unfold decodeAll at h
-  obtain ⟨r, s1, h1, h⟩ := st_bind h
-  obtain ⟨-, rfl⟩ := st_pure h
-  try rw [← Array.forIn_toList] at h1
-  refine forIn_grows _ _ (fun x b s t s' hf => ?_) _ _ _ _ h1
-  split at hf
-  · obtain ⟨u, s3, h3, h4⟩ := st_bind hf
-    obtain ⟨-, rfl⟩ := st_pure h4
-    obtain ⟨a, ha⟩ := st_discard h3
-    intro hs
-    obtain ⟨i1, p1, -⟩ := (specs _).1 _ _ _ _ _ ha hs
-    exact ⟨i1, p1⟩
-  · obtain ⟨-, rfl⟩ := st_pure hf
-    exact grows_refl _
+end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
 
-/-- `decodeBodies`: each body by `getDef`, then `checkBody`, which leaves the state alone. -/
-theorem decodeBodies_grows (desc : Desc) (rootKey : String) (pairs : Array (String × String)) (s s' : DecState)
-    (u : Unit) (h : StateT.run (decodeBodies desc rootKey pairs : DM Unit) s = .ok (u, s')) : Grows s s' := by
-  unfold decodeBodies at h
-  obtain ⟨r, s1, h1, h⟩ := st_bind h
-  obtain ⟨-, rfl⟩ := st_pure h
-  try rw [← Array.forIn_toList] at h1
-  refine forIn_grows _ _ (fun x b s t s' hf => ?_) _ _ _ _ h1
-  obtain ⟨w, bb⟩ := x
-  dsimp only at hf
-  split at hf
-  · exact absurd hf (by intro h; injection h)
-  obtain ⟨st0, s2, hg, hf⟩ := st_bind hf
-  obtain ⟨rfl, rfl⟩ := st_get hg
-  obtain ⟨bi, s3, hd, hf⟩ := st_bind hf
-  obtain ⟨st2, s4, hg, hf⟩ := st_bind hf
-  obtain ⟨rfl, rfl⟩ := st_get hg
-  obtain ⟨u, s5, hl, hf⟩ := st_bind hf
-  obtain ⟨-, rfl⟩ := st_liftV hl
-  obtain ⟨-, rfl⟩ := st_pure hf
-  intro hs
-  obtain ⟨i1, p1, -⟩ := (specs _).1 _ _ _ _ _ hd hs
-  exact ⟨i1, p1⟩
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.DecodeKeys
+open Flock.Program
+open Std.Do
+open BodiesOk (DM)
+open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy Desc Desc.ddefs liftV
+  from Circuits.Program
 
 /-! ## Reading the decoder's functions -/
 
@@ -207,24 +174,98 @@ theorem composite_step (n : Nat) (K : DecState → Prop) (desc : Desc) (recut : 
         DecState.busy s1 = (DecState.busy _).insert fid → K s1› _ ?_ ?_ ?_ <;> rfl)
     | (refine ⟨hw _ _ ?_ ?_ ?_ (by assumption), trivial, trivial, rfl⟩ <;> rfl)
 
-/-! ## The decoder only appends -/
+end InferenceOnlyVerifier.Properties.SecurityProofs.DecodeKeys
 
-theorem pre_push {a b : Array Defn} (d : Defn) (h : Pre a b) : Pre a (b.push d) :=
-  ⟨by rw [Array.size_push]; exact Nat.le_succ_of_le h.1,
-    fun i hi => by rw [getElem!_push_lt _ _ (Nat.lt_of_lt_of_le hi h.1)]; exact h.2 i hi⟩
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
+open Flock.Program
+open Std.Do
+open DecodeKeys (of_triple liftV_spec throw_spec discard_eq staticFns_step composite_step)
+open private getDef composite staticFns goOf decodeDefs decodeDefs_plain DecState DecState.defs DecState.index DecState.busy
+  Desc Desc.types Desc.callees Desc.ddefs liftV at_ paramsOf buildNode natJ? decodeAll decodeBodies primEntries
+  from Circuits.Program
 
-/-- **The decoder only appends Definitions**, at every fuel and either walk: `getDef`, `staticFns` and `composite` keep
-every state's Definitions extending `a`. -/
-theorem pre_fuel (n : Nat) (recut : Bool) (a : Array Defn) :
-    (∀ (desc : Desc) (fid : String), ⦃fun s => ⌜Pre a (DecState.defs s)⌝⦄ (getDef n desc fid recut : DM Nat)
-      ⦃⇓? _ s => ⌜Pre a (DecState.defs s)⌝⦄) ∧
-    (∀ (desc : Desc) (v : Lean.Json), ⦃fun s => ⌜Pre a (DecState.defs s)⌝⦄ (staticFns n desc v recut : DM Unit)
-      ⦃⇓? _ s => ⌜Pre a (DecState.defs s)⌝⦄) ∧
-    ∀ (desc : Desc) (fid : String) (d : Lean.Json) (form id : String),
-      ⦃fun s => ⌜∀ s1, DecState.defs s1 = DecState.defs s → DecState.index s1 = DecState.index s →
-          DecState.busy s1 = (DecState.busy s).insert fid → Pre a (DecState.defs s1)⌝⦄
-        (composite n desc fid d form id recut : DM Defn)
-      ⦃⇓? defn s => ⌜Pre a (DecState.defs s) ∧ defn.key = fid ∧ defn.prim = false ∧ defn.body.retType = defn.ret⌝⦄ := by
+/-- `decodeAll`: each primitive entry by `getDef`. -/
+theorem decodeAll_grows (desc : Desc) (fs : Array String) (s s' : DecState) (u : Unit)
+    (h : StateT.run (decodeAll desc fs : DM Unit) s = .ok (u, s')) : Grows s s' := by
+  unfold decodeAll at h
+  obtain ⟨r, s1, h1, h⟩ := st_bind h
+  obtain ⟨-, rfl⟩ := st_pure h
+  try rw [← Array.forIn_toList] at h1
+  refine forIn_grows _ _ (fun x b s t s' hf => ?_) _ _ _ _ h1
+  split at hf
+  · obtain ⟨u, s3, h3, h4⟩ := st_bind hf
+    obtain ⟨-, rfl⟩ := st_pure h4
+    obtain ⟨a, ha⟩ := st_discard h3
+    intro hs
+    obtain ⟨i1, p1, -⟩ := (specs _).1 _ _ _ _ _ ha hs
+    exact ⟨i1, p1⟩
+  · obtain ⟨-, rfl⟩ := st_pure hf
+    exact grows_refl _
+
+/-- `decodeBodies`: each body by `getDef`, then `checkBody`, which leaves the state alone. -/
+theorem decodeBodies_grows (desc : Desc) (rootKey : String) (pairs : Array (String × String)) (s s' : DecState)
+    (u : Unit) (h : StateT.run (decodeBodies desc rootKey pairs : DM Unit) s = .ok (u, s')) : Grows s s' := by
+  unfold decodeBodies at h
+  obtain ⟨r, s1, h1, h⟩ := st_bind h
+  obtain ⟨-, rfl⟩ := st_pure h
+  try rw [← Array.forIn_toList] at h1
+  refine forIn_grows _ _ (fun x b s t s' hf => ?_) _ _ _ _ h1
+  obtain ⟨w, bb⟩ := x
+  dsimp only at hf
+  split at hf
+  · exact absurd hf (by intro h; injection h)
+  obtain ⟨st0, s2, hg, hf⟩ := st_bind hf
+  obtain ⟨rfl, rfl⟩ := st_get hg
+  obtain ⟨bi, s3, hd, hf⟩ := st_bind hf
+  obtain ⟨st2, s4, hg, hf⟩ := st_bind hf
+  obtain ⟨rfl, rfl⟩ := st_get hg
+  obtain ⟨u, s5, hl, hf⟩ := st_bind hf
+  obtain ⟨-, rfl⟩ := st_liftV hl
+  obtain ⟨-, rfl⟩ := st_pure hf
+  intro hs
+  obtain ⟨i1, p1, -⟩ := (specs _).1 _ _ _ _ _ hd hs
+  exact ⟨i1, p1⟩
+
+/-! ## What every walk keeps -/
+
+/-- The Definitions `D0`, a prefix of the decoder state's: what `getDef` keeps on either walk, with no other fact about the
+state. -/
+def Framed (D0 : Array Defn) (s : DecState) : Prop := Pre D0 (DecState.defs s)
+
+private theorem framed_defs {D0 : Array Defn} {s s1 : DecState} (h : Framed D0 s)
+    (hd : DecState.defs s1 = DecState.defs s) : Framed D0 s1 := by
+  unfold Framed at *
+  rw [hd]
+  exact h
+
+private theorem framed_push {D0 : Array Defn} {s s' : DecState} {defn : Defn} (h : Framed D0 s)
+    (hd : DecState.defs s' = (DecState.defs s).push defn) : Framed D0 s' := by
+  unfold Framed Pre at *
+  rw [hd]
+  refine ⟨Nat.le_trans h.1 (by rw [Array.size_push]; exact Nat.le_succ _), fun i hi => ?_⟩
+  rw [getElem!_push_lt _ _ (Nat.lt_of_lt_of_le hi h.1)]
+  exact h.2 i hi
+
+private theorem framed_push_comp {D0 : Array Defn} {s s' : DecState} {defn : Defn} {X : Prop} (h : Framed D0 s ∧ X)
+    (hd : DecState.defs s' = (DecState.defs s).push defn) : Framed D0 s' :=
+  framed_push h.1 hd
+
+/-- `composite` at fuel `n` keeps `Framed D0`, from a state that has it once `fid` is busy. -/
+def CompositeFramed (D0 : Array Defn) (n : Nat) (recut : Bool) : Prop :=
+  ∀ (desc : Desc) (fid : String) (d : Lean.Json) (form id : String),
+    ⦃fun s => ⌜∀ s1, DecState.defs s1 = DecState.defs s → DecState.index s1 = DecState.index s →
+        DecState.busy s1 = (DecState.busy s).insert fid → Framed D0 s1⌝⦄
+      (composite n desc fid d form id recut : DM Defn)
+    ⦃⇓? defn s => ⌜Framed D0 s ∧ defn.key = fid ∧ defn.prim = false ∧ defn.body.retType = defn.ret⌝⦄
+
+/-- **The decoder keeps `Framed D0`** on either walk, at every fuel: `getDef` and `staticFns`, and `composite` as
+`CompositeFramed` says. -/
+theorem framed_fuel (D0 : Array Defn) (n : Nat) (recut : Bool) :
+    (∀ (desc : Desc) (fid : String),
+      ⦃fun s => ⌜Framed D0 s⌝⦄ (getDef n desc fid recut : DM Nat) ⦃⇓? _ s => ⌜Framed D0 s⌝⦄) ∧
+    (∀ (desc : Desc) (v : Lean.Json),
+      ⦃fun s => ⌜Framed D0 s⌝⦄ (staticFns n desc v recut : DM Unit) ⦃⇓? _ s => ⌜Framed D0 s⌝⦄) ∧
+    CompositeFramed D0 n recut := by
   induction n with
   | zero =>
     refine ⟨fun desc fid => ?_, fun desc v => ?_, fun desc fid d form id => ?_⟩
@@ -236,52 +277,42 @@ theorem pre_fuel (n : Nat) (recut : Bool) (a : Array Defn) :
       mvcgen [throw_spec, -Spec.throw_Except]
   | succ n ih =>
     obtain ⟨hg, hs, hc⟩ := ih
-    refine ⟨fun desc fid => ?_, fun desc v => staticFns_step n _ desc recut (hg desc) (hs desc) v,
-      fun desc fid d form id => composite_step n _ desc recut (fun _ _ hd _ _ h => hd ▸ h) (hg desc) (hs desc)
-        fid d form id⟩
-    have hc' := fun d form id => hc desc fid d form id
+    refine ⟨fun desc fid => ?_, fun desc v => staticFns_step n (Framed D0) desc recut (hg desc) (hs desc) v,
+      fun desc fid d form id => composite_step n (Framed D0) desc recut (fun _ _ hd _ _ h => framed_defs h hd) (hg desc)
+        (hs desc) fid d form id⟩
+    have hc' := fun desc d form id => hc desc fid d form id
     unfold getDef
     mvcgen [hc', liftV_spec, throw_spec, -Spec.throw_Except]
     all_goals first
-      | exact pre_push _ (by assumption)
-      | (intro s1 hd _ _; rw [hd]; assumption)
-      | exact pre_push _ (by assumption).1
+      | exact framed_push (by assumption) rfl
+      | exact fun _ hd _ _ => framed_defs (by assumption) hd
+      | exact framed_push_comp (by assumption) rfl
       | assumption
 
-/-- `decodeAll` only appends Definitions. -/
-theorem decodeAll_pre (desc : Desc) (fs : Array String) (a : Array Defn) :
-    ⦃fun s => ⌜Pre a (DecState.defs s)⌝⦄ (decodeAll desc fs : DM Unit) ⦃⇓? _ s => ⌜Pre a (DecState.defs s)⌝⦄ := by
-  have hg := fun f => (pre_fuel Flock.Steps.FUEL false a).1 desc f
+/-- `decodeAll` keeps `Framed D0`. -/
+theorem decodeAll_framed (D0 : Array Defn) (desc : Desc) (fs : Array String) :
+    ⦃fun s => ⌜Framed D0 s⌝⦄ (decodeAll desc fs : DM Unit) ⦃⇓? _ s => ⌜Framed D0 s⌝⦄ := by
+  have hg := fun f => (framed_fuel D0 Flock.Steps.FUEL false).1 desc f
   unfold decodeAll
   mvcgen [hg, discard_eq] invariants
-    · ⇓? _ s => ⌜Pre a (DecState.defs s)⌝
+    · ⇓? _ s => ⌜Framed D0 s⌝
 
-/-- `decodeBodies` only appends Definitions. -/
-theorem decodeBodies_pre (desc : Desc) (rootKey : String) (pairs : Array (String × String)) (a : Array Defn) :
-    ⦃fun s => ⌜Pre a (DecState.defs s)⌝⦄ (decodeBodies desc rootKey pairs : DM Unit)
-    ⦃⇓? _ s => ⌜Pre a (DecState.defs s)⌝⦄ := by
-  have hg := fun f => (pre_fuel Flock.Steps.FUEL false a).1 desc f
+/-- `decodeBodies` keeps `Framed D0`. -/
+theorem decodeBodies_framed (D0 : Array Defn) (desc : Desc) (rootKey : String) (pairs : Array (String × String)) :
+    ⦃fun s => ⌜Framed D0 s⌝⦄ (decodeBodies desc rootKey pairs : DM Unit) ⦃⇓? _ s => ⌜Framed D0 s⌝⦄ := by
+  have hg := fun f => (framed_fuel D0 Flock.Steps.FUEL false).1 desc f
   unfold decodeBodies
   mvcgen [hg, liftV_spec, throw_spec, -Spec.throw_Except] invariants
-    · ⇓? _ s => ⌜Pre a (DecState.defs s)⌝
+    · ⇓? _ s => ⌜Framed D0 s⌝
+  all_goals try assumption
 
-/-- **`decode`'s steps** on a descriptor it accepts, for the walk `decodeDefs` takes (`recut`, the plain one unless the
-root reads an input node at another width): `go` from the empty state, the root's check, `decodeAll` of the
-primitive entries, `booleanKeys` and `decodeBodies`, and the Program built from their last state. -/
-theorem decode_steps_walk (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
+/-- **`decode`'s steps** on a descriptor it accepts: `decodeDefs`, the root's check, `decodeAll` of the primitive
+entries, `booleanKeys` and `decodeBodies`, and the Program built from their last state. -/
+theorem decode_walk (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
     ∃ (kv : Array (String × Lean.Json)) (desc : Desc) (rootId programFn : String) (bm : Lean.Json) (root : ℕ)
-      (s0 st st1 st2 : DecState) (pairs : Array (String × String)) (recut : Bool),
+      (st st1 st2 : DecState) (pairs : Array (String × String)),
       Desc.ddefs desc = kv.foldl (fun m x => m.insert x.1 x.2) ∅ ∧
-      StateT.run (do
-          let r ← getDef Flock.Steps.FUEL desc rootId recut
-          forIn (recordFunctionIds programFn) PUnit.unit fun f __s =>
-              if (Desc.ddefs desc).contains f = true then do
-                discard (getDef Flock.Steps.FUEL desc f recut)
-                pure (ForInStep.yield PUnit.unit)
-              else pure (ForInStep.yield PUnit.unit)
-          pure r : DM ℕ) s0 = .ok (root, st) ∧
-      (recut = false ∨ ((DecState.defs st)[root]!).body.recut ≠ #[]) ∧
-      DecState.defs s0 = #[] ∧ DecState.index s0 = ∅ ∧ DecState.busy s0 = ∅ ∧
+      decodeDefs desc rootId programFn = .ok (root, st) ∧
       ((DecState.defs st)[root]!).prim = false ∧ ((DecState.defs st)[root]!).params.size = 0 ∧
       StateT.run (decodeAll desc (primEntries kv) : DM Unit) st = .ok ((), st1) ∧
       booleanKeys (DecState.defs st1) (DecState.index st1) (primEntries kv) bm = .ok pairs ∧
@@ -339,21 +370,13 @@ theorem decode_steps_walk (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok
   obtain ⟨c, -, h⟩ := Walk.except_bind_ok h
   injection h with h
   subst h
-  have hw : ∃ recut, (goOf desc rootId programFn recut).run {} = .ok (root, st) ∧
-      (recut = false ∨ ((DecState.defs st)[root]!).body.recut ≠ #[]) := by
-    by_cases hr : ((DecState.defs st)[root]!).body.recut = #[]
-    · exact ⟨false, decodeDefs_plain hgo hr, .inl rfl⟩
-    · obtain ⟨recut, hg⟩ := decodeDefs_walk hgo
-      exact ⟨recut, hg, .inr hr⟩
-  obtain ⟨recut, hgo', hrc⟩ := hw
-  unfold goOf at hgo'
   simp only [rd, Bool.or_eq_true, not_or] at hrd
-  refine ⟨_, _, _, _, _, root, _, st, st1, st2, pairs, recut, ?_, hgo', hrc, rfl, rfl, rfl, by simpa using hrd.1,
-    by simpa using hrd.2, hall, hbk, hbod, rfl, rfl, rfl, rfl⟩
+  refine ⟨_, _, _, _, _, root, st, st1, st2, pairs, ?_, hgo, by simpa using hrd.1, by simpa using hrd.2, hall, hbk,
+    hbod, rfl, rfl, rfl, rfl⟩
   rfl
 
-/-- **`decode`'s steps** on a descriptor it accepts whose root reads no input node at another width (`Body.recut`), the
-plain walk's: `go` from the empty state, the root's check, `decodeAll` of the
+/-- **`decode`'s steps** on a descriptor it accepts whose root reads no input node at another width: `decode_walk`'s,
+with `decodeDefs` the plain walk: `go` from the empty state, the root's check, `decodeAll` of the
 primitive entries, `booleanKeys` and `decodeBodies`, and the Program built from their last state. -/
 theorem decode_steps (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
     (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) :
@@ -374,22 +397,24 @@ theorem decode_steps (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
       booleanKeys (DecState.defs st1) (DecState.index st1) (primEntries kv) bm = .ok pairs ∧
       StateT.run (decodeBodies desc rootId pairs : DM Unit) st1 = .ok ((), st2) ∧
       P.defs = DecState.defs st2 ∧ P.index = DecState.index st2 ∧ P.root = root ∧
-      P.boolean = pairs.foldl (fun m p => m.insert p.1 p.2) ∅  := by
-  obtain ⟨kv, desc, rootId, programFn, bm, root, s0, st, st1, st2, pairs, recut, hdd, hgo, hrc, hd0, hi0, hb0, hp0, hpar,
-    hall, hbk, hbod, hd, hi, hroot, hbo⟩ := decode_steps_walk bytes P h
-  cases recut with
-  | false =>
-    exact ⟨kv, desc, rootId, programFn, bm, root, s0, st, st1, st2, pairs, hdd, hgo, hd0, hi0, hb0, hp0, hpar, hall, hbk,
-      hbod, hd, hi, hroot, hbo⟩
-  | true =>
-    have hne := hrc.resolve_left Bool.noConfusion
-    have hlt : root < (DecState.defs st).size := by
-      refine Nat.lt_of_not_le fun hn => hne ?_
-      rw [getElem!_neg _ _ (Nat.not_lt_of_le hn)]
-      rfl
-    have hp := of_triple (decodeBodies_pre _ _ _ _) hbod (of_triple (decodeAll_pre _ _ _) hall (pre_refl _))
-    rw [hd, hroot, hp.2 root hlt] at hr
-    exact absurd hr hne
+      P.boolean = pairs.foldl (fun m p => m.insert p.1 p.2) ∅ := by
+  obtain ⟨kv, desc, rootId, programFn, bm, root, st, st1, st2, pairs, hkv, hgo, hp, hpar, hall, hbk, hbod, hd, hi, hroot,
+    hb⟩ := decode_walk bytes P h
+  have hpre : Pre (DecState.defs st) (DecState.defs st2) :=
+    of_triple (decodeBodies_framed (DecState.defs st) _ _ _) hbod
+      (of_triple (decodeAll_framed (DecState.defs st) _ _) hall (pre_refl _))
+  have hr0 : ((DecState.defs st)[root]!).body.recut = #[] := by
+    rw [hd, hroot] at hr
+    by_cases hlt : root < (DecState.defs st).size
+    · rw [← hpre.2 root hlt]
+      exact hr
+    · first
+        | (rw [getElem!_neg (DecState.defs st) root hlt]; rfl)
+        | simp [getElem!_neg, hlt]
+  have hgo' := decodeDefs_plain hgo hr0
+  unfold goOf at hgo'
+  exact ⟨kv, desc, rootId, programFn, bm, root, {}, st, st1, st2, pairs, hkv, hgo', rfl, rfl, rfl, hp, hpar, hall, hbk,
+    hbod, hd, hi, hroot, hb⟩
 
 /-- **What `decode` returns**, where its root reads no input node at another width (`Body.recut`; every reader of a gate
 refuses one that does): the Definitions of a decoder state that keeps `Inv`, its root one of them, a composite without
@@ -398,7 +423,7 @@ theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
     (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∃ st, P.defs = DecState.defs st ∧ Inv st ∧ (P.defs[P.root]!).prim = false ∧ P.root < P.defs.size ∧
       (P.defs[P.root]!).params.size = 0 := by
-  obtain ⟨_, _, _, _, _, root, s0, st, st1, st2, _, -, hgo, hd0, hi0, -, hp0, hpar, hall, -, hbod, hd, -, hr, -⟩ :=
+  obtain ⟨_, _, _, _, _, root, s0, st, st1, st2, _, -, hgo, hd0, hi0, -, hp0, hpar, hall, -, hbod, hd, -, hroot, -⟩ :=
     decode_steps bytes P h hr
   obtain ⟨hinv, hlt⟩ := go_inv _ _ _ _ _ _ hgo
     ⟨fun i hi => absurd hi (by rw [hd0]; exact Nat.not_lt_zero i), fun k v hk => absurd hk (by rw [hi0]; simp)⟩
@@ -406,20 +431,22 @@ theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
   obtain ⟨hinv2, hp2⟩ := decodeBodies_grows _ _ _ _ _ _ hbod hinv1
   have hp := pre_trans hp1 hp2
   refine ⟨st2, hd, hinv2, ?_, ?_, ?_⟩
-  · rw [hd, hr, hp.2 root hlt]; exact hp0
-  · rw [hd, hr]; exact Nat.lt_of_lt_of_le hlt hp.1
-  · rw [hd, hr, hp.2 root hlt]; exact hpar
+  · rw [hd, hroot, hp.2 root hlt]; exact hp0
+  · rw [hd, hroot]; exact Nat.lt_of_lt_of_le hlt hp.1
+  · rw [hd, hroot, hp.2 root hlt]; exact hpar
 
-/-- **What `decode` returns**, where its root reads no input node at another width: the Definitions of a decoder state that
-keeps `Inv`, its root a composite. -/
-theorem decode_spec (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) :
+/-- **What `decode` returns**, where its root reads no input node at another width: the Definitions of a decoder state
+that keeps `Inv`, its root a composite. -/
+theorem decode_spec (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∃ st, P.defs = DecState.defs st ∧ Inv st ∧ (P.defs[P.root]!).prim = false := by
   obtain ⟨st, h1, h2, h3, -⟩ := decode_full bytes P h hr
   exact ⟨st, h1, h2, h3⟩
 
-/-- **The root of a decoded Program** that reads no input node at another width is one of its Definitions, a composite whose
-body has no parameters. -/
-theorem decode_root (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) :
+/-- **The root of a decoded Program** that reads no input node at another width is one of its Definitions, a composite
+whose body has no parameters. -/
+theorem decode_root (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false ∧ (P.defs[P.root]!).body.params.size = 0 := by
   obtain ⟨st, hP, hinv, hp, hlt, hp0⟩ := decode_full bytes P h hr
   have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1

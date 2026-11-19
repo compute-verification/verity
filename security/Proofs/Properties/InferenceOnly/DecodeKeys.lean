@@ -15,9 +15,9 @@ record's units read: no Definition before the root has the root's key. `decode_r
 body's return type.
 
 The decoder (`getDef`, `composite`, `staticFns`) is walked once, as Hoare triples proved by `mvcgen` and read back at an
-`.ok` result (`BodiesOk.of_triple`), for either walk. `BodiesOk.composite_step` and `BodiesOk.staticFns_step` hold of
+`.ok` result (`of_triple`), for either walk. `composite_step` and `staticFns_step` (beside `BodiesOk.decode_walk`) hold of
 any property of the decoder's state that `getDef` and `staticFns` keep one fuel lower, for one descriptor. `decode_kept`
-reads `decode`'s steps from `BodiesOk.decode_steps_walk`, through `go_kept`, `decodeAll_kept` and `decodeBodies_kept`. `kept_fuel` is the induction on
+reads `decode`'s steps from `BodiesOk.decode_walk`, through `go_kept`, `decodeAll_kept` and `decodeBodies_kept`. `kept_fuel` is the induction on
 the fuel for `Kept`: the keys (`Keys`), the return types (`Rets`), the names that stay busy, and each primitive's entry
 of `definitions` (`Src`, which `FlockSoundness.DecodeBoolean` reads). A name is busy from `composite`'s mark to
 `getDef`'s push and a busy name has no index entry, so the push finds no earlier Definition with its key.
@@ -30,8 +30,8 @@ set_option mvcgen.warning false
 namespace InferenceOnlyVerifier.Properties.SecurityProofs.DecodeKeys
 open Flock.Program
 open Std.Do
-open BodiesOk (DM ex_throw_bind decode_root of_triple liftV_spec throw_spec discard_eq staticFns_step composite_step)
-open private getDef composite staticFns decodeAll decodeBodies DecState DecState.defs DecState.index DecState.busy Desc Desc.ddefs liftV
+open BodiesOk (DM ex_throw_bind decode_root)
+open private getDef composite staticFns decodeAll decodeBodies goOf decodeDefs_walk DecState DecState.defs DecState.index DecState.busy Desc Desc.ddefs liftV
   from Circuits.Program
 
 /-! ## What the decoder keeps -/
@@ -316,10 +316,11 @@ theorem decodeBodies_kept (desc : Desc) (rootKey : String) (pairs : Array (Strin
 /-- **What `decode` returns**: the Definitions and the index of a decoder state that has `Kept`. -/
 theorem decode_kept (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
     ∃ desc st, P.defs = DecState.defs st ∧ P.index = DecState.index st ∧ Kept desc (fun _ => False) st := by
-  obtain ⟨_, desc, _, _, _, _, _, _, _, st2, _, recut, -, hgo, -, hd0, hi0, -, -, -, hall, -, hbod, hd, hi, -, -⟩ :=
-    BodiesOk.decode_steps_walk bytes P h
+  obtain ⟨_, desc, _, _, _, _, _, _, st2, _, -, hgo, -, -, hall, -, hbod, hd, hi, -, -⟩ := BodiesOk.decode_walk bytes P h
+  obtain ⟨recut, hgo'⟩ := decodeDefs_walk hgo
+  unfold goOf at hgo'
   exact ⟨desc, st2, hd, hi, of_triple (decodeBodies_kept _ _ _) hbod
-    (of_triple (decodeAll_kept _ _) hall (of_triple (go_kept _ _ _ recut) hgo (kept_empty desc hd0 hi0)))⟩
+    (of_triple (decodeAll_kept _ _) hall (of_triple (go_kept _ _ _ recut) hgo' (kept_empty desc rfl rfl)))⟩
 
 /-- **The keys of a decoded Program**: its index sends a key to the place of the Definition that has it, and each
 Definition's key to its own place. -/
