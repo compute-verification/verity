@@ -130,7 +130,8 @@ theorem bodyOk_reached (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.deco
 /-- **Every Definition `Desc.analyze` summarizes is `Resolve.BodyOk`**: `ReadsExact.memoOf` summarizes `d` exactly when
 `(Desc.reached P)[d]! && d != P.root`. -/
 theorem bodyOk_summarized (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
-    (hov : P.orderViolation = none) (d : ℕ) (hd : ((Desc.reached P)[d]! && d != P.root) = true) :
+    (hov : P.orderViolation = none) (d : ℕ) (hd : ((Desc.reached P)[d]! && d != P.root) = true)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     d < P.defs.size ∧ Resolve.BodyOk P d :=
   bodyOk_reached bytes P hdec hov d (by simp only [Bool.and_eq_true] at hd; exact hd.1)
 
