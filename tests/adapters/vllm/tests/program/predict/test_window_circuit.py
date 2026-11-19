@@ -1207,10 +1207,13 @@ def made_up(prog: Any, seed: int = 11) -> dict[str, np.ndarray]:
 
 def node_outputs(prog: Any, inputs: dict[str, np.ndarray]) -> list[np.ndarray]:
     vals: list[np.ndarray] = []
-    params = iter(inputs.values())
-    for node in prog.root.body.nodes:
+    params, recut = iter(prog.fn.signature()[0]), prog.root.body.recut
+    for k, node in enumerate(prog.root.body.nodes):
         if is_input(node.fn):
-            vals.append(next(params))
+            name, t = next(params)
+            v, q = inputs[name], recut.get(k, 1)
+            w = t.homogeneous_width() // q
+            vals.append(((v[:, None] >> (np.arange(q, dtype=np.uint64) * np.uint64(w))) & np.uint64((1 << w) - 1)).reshape(-1))
             continue
         args = [np.concatenate([vals[i][lo:hi] for _s, i, lo, hi in runs(a.refs)]) for a in node.args]
         vals.append(np.asarray(evaluate_batch(node.fn, *(x.reshape(node.n, -1) for x in args)), dtype=np.uint64).reshape(-1))
