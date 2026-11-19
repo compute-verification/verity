@@ -4,7 +4,7 @@
         [--protocol vllm|plain|ids [--id-payload 503]] [--no-commit] [--window-steps 64] [--no-learn-warmup]
         [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1] [--learn-host-budget-mb 4096]
         [--retain host|device [--retain-device-gb 32] [--release-after spot,pouw_h1 [--draws-dir DIR]]]
-        [--required-manifest PREDICTED/manifest.json --hidden-so SO --norm-tap-so SO] [--seal]
+        [--row-build PREDICTED --window-class S,P,O --hidden-so SO] [--seal]
         [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb GB (with --seal)]
         [--copy-records-to $OUT] [--switch-interval-ms 0.1] [--async-scheduling]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
@@ -79,9 +79,9 @@ under order ``tick`` is null, with why in its ``no_slice`` and once in ``serve.j
 body's ``user``, its release and its place among the engine's adds, the runner's ids, the prompt ids, the streamed ids, its
 ingress, its finish, its committed rows and seeds, and its check), ``request_users.jsonl`` (`serve_commit.REQUEST_USERS`) and
 `serve_loop.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``: hm96-sha512 rows in frame-v3-sha512 trees,
-64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's ``--required-manifest``
-and taps (the acquisition plan under ``acquisition/``): the manifest of the row's Build of record, which the ahead-of-time compiler
-writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them; `serve_seal.scheme_refusal`).
+64-byte roots), as the bench row's declared Commit commits, over the row's ``--row-build``,
+the row's Build of record, which the ahead-of-time compiler writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any
+other, a traced Build's among them; `serve_seal.scheme_refusal`), and taps.
 ``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
 commits the attention interiors without retaining them, and each seal's manifest names them (`serve_release.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
 device pool until every subprotocol named has sampled the window, then keeps on host, and seals, only the leaves their sampled
@@ -204,6 +204,9 @@ class Options:
                                  "CUSTOM); pin: the pin's engine profile; bfloat16: the pin's profile at dtype bfloat16, "
                                  "unquantized (Pearl+'s)")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
+    window_class: str | None = option("--window-class", default=None,
+                                      help="S,P,O: the window class the application declares (S slots, each of at most P prompt ids and O outputs); the "
+                                         "Commit's arena is sized from it alone, and the engine admits no more")
     max_model_len: int = option("--max-model-len", type=int, default=512)
     max_num_batched_tokens: int = option("--max-num-batched-tokens", type=int, default=2048, help="tokens a step schedules")
     prefix_caching: bool = option("--prefix-caching", action="boolean_optional", default=False, help="serve with vLLM's prefix cache")
@@ -220,7 +223,7 @@ class Options:
                                        "window closes before a step that would bring in one more (the running ones carry on)")
     scheme: str = option("--scheme", choices=SS.SCHEMES, default=SS.ROWS,
                          help="the Commit's scheme, rows-sha512 (the declared Commit's committer, hm96-sha512 rows, 64-byte roots; "
-                              "needs --required-manifest); its kernels are JIT-built with ninja, which must be on PATH")
+                              "needs --row-build); its kernels are JIT-built with ninja, which must be on PATH")
     seal: bool = option("--seal", action="boolean_optional", default=False,
                         help="seal each closed window as a deferred Commit's row dir, OUT/windows/w<k>/ (serve_seal.seal_window)")
     sealing: SP.SealingOptions = group(SP.SealingOptions)
@@ -245,14 +248,13 @@ class Options:
                                        help="the interpreter's switch interval while serving (Python's is 5 ms): how long the engine's "
                                             "thread may wait for the GIL after each torch call while the seal's thread runs Python "
                                             "(0: leave Python's)")
-    required_manifest: str | None = option("--required-manifest", default=None,
-                                           help="rows-sha512: the row's required manifest, DIR/manifest.json of its Build of record "
-                                                "(`verity-vllm predict row --out DIR`), which the Commit of record's committer parts, "
-                                                "the sealed binding map and the engine's scheduler are built from")
+    row_build: str | None = option("--row-build", default=None,
+                                   help="rows-sha512: the row's Build of record, the DIR of `verity-vllm predict row --out DIR`, "
+                                        "whose registered compiler every sealed window binds and whose workload Program the "
+                                        "engine's scheduler follows")
     hidden_so: str | None = option("--hidden-so", default=None, help="rows-sha512: the attention hidden tap (as the Commit's --hidden-so)")
     hidden_ns: str | None = option("--hidden-ns", default=None, help="its op namespace (default: the .so's stem)")
     tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="the hidden tap's bounded device buffer, MiB (as the Commit's)")
-    norm_tap_so: str | None = option("--norm-tap-so", default=None, help="rows-sha512: the norm-scale tap (as the Commit's --norm-tap-so)")
     served_rows_class: str | None = option("--served-rows-class", default=None,
                                            help="the compile slice's size class the served rows are committed under, as JSON "
                                                 "{R, W, A, IW, Q, D, P, K} (serve_commit.SERVED_CLASS; default R --max-num-seqs, "
@@ -624,8 +626,8 @@ def scheme_refusal(opts: Any, found: list[tuple[Any, dict[str, Any]]]) -> str | 
                 "output where each scheme keeps its salt epoch's number, as scheme_plugin's")
     if (pearl := any(s.option for s, _ in found)) and opts.precision != "bfloat16":
         return f"--protocols {opts.protocols} reads the BF16 checkpoint's linears: it needs --precision bfloat16"
-    if pearl and (not opts.commit or opts.scheme != "rows-sha512" or not opts.required_manifest):
-        return f"--protocols {opts.protocols} runs under --commit, --scheme rows-sha512 and the row's --required-manifest"
+    if pearl and (not opts.commit or opts.scheme != "rows-sha512" or not opts.row_build):
+        return f"--protocols {opts.protocols} runs under --commit, --scheme rows-sha512 and the row's --row-build"
     if "pouw" in (p.strip() for p in after.split(",")):
         return f"--release-after pouw waits for PoUW H1's draw of each window, and {opts.protocols} puts none"
     try:
@@ -881,8 +883,8 @@ def main(opts: Options) -> int:
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
               "window_requests": opts.window_requests or None, "protocols": arm.describe() if arm is not None else None,
               "remote_session": session.describe() if session is not None else None, "row_scheduling": row,
-              "committer_options": {k: getattr(opts, k) for k in ("required_manifest", "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
-              "required_manifest_path": getattr(com, "required_manifest_path", None), **RL.retention_record(opts, com),
+              "committer_options": {k: getattr(opts, k) for k in ("row_build", "hidden_so", "hidden_ns", "tap_cap_mb")},
+              "compiler": getattr(com, "compiler", None), **RL.retention_record(opts, com),
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
               "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model, opts.async_scheduling)}

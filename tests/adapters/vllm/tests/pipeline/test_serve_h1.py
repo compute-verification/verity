@@ -43,7 +43,7 @@ from tests.protocols.test_pouw_h1_commit import (
     Linear,
     Model,
     _ids,
-    _manifest_sites,
+    _plan_sites,
     _served_commit,
 )
 from tests.protocols.test_pouw_h1_served import StandInJ10R, _unit
@@ -67,7 +67,7 @@ class _Server:
         monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
         self.runner, self.model, self.com = Runner(), model or Model(), Committer()
         monkeypatch.setattr(handle, "model_runner", lambda llm: self.runner)
-        self.port, self.src = _served_commit(self.com, self.model, _manifest_sites(range(STEPS)) if quant is None else quant)
+        self.port, self.src = _served_commit(self.com, self.model, _plan_sites() if quant is None else quant)
         self.src.install()
 
     def serve(self, prompts, seed):
@@ -422,13 +422,12 @@ def test_a_window_whose_reserve_the_gate_refuses_installs_nothing(tmp_path, monk
     srv.src.uninstall()
 
 
-def test_a_commit_that_skips_a_linear_at_a_step_opens_no_h1_window(tmp_path, monkeypatch):
-    """The bench row's manifest names no int8 site of one linear at the window's last step: the arm refuses the window
-    before it installs anything, so the Commit serves on untouched, and the next window may open."""
-    sites = _manifest_sites(range(STEPS))
-    srv = _Server(monkeypatch, {k: v for k, v in sites.items() if k != (STEPS - 1, "model.layers.1")})
+def test_a_commit_that_skips_a_linear_opens_no_h1_window(tmp_path, monkeypatch):
+    """The bench row's capture plan names no int8 site of one linear: the arm refuses the window before it installs anything, so
+    the Commit serves on untouched, and the next window may open."""
+    srv = _Server(monkeypatch, _plan_sites(modules=("model.layers.0",)))
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit())
-    with pytest.raises(ValueError, match=r"acquires 1 of H1's \(engine step, linear\) sites nowhere"):
+    with pytest.raises(ValueError, match=r"acquires 1 of H1's linears nowhere"):
         arm.open(0)
     assert "_acquire" not in vars(srv.com) and "execute_model" not in vars(srv.runner) and arm.close(0) is None
     srv.src.uninstall()
@@ -747,7 +746,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_sampled_r
     stream = c["session"]["root"] if coins == "gate" else c["calls_root"]
     units, why = PHC.drawn_of(record, {"root": stream}, k, SV.descriptor(arm.program))
     assert why is None and 0 < len(units) < c["units"], (why, units)
-    sites, values = _manifest_sites(range(STEPS)), {(s, n): raw for s, v in acquired.items() for n, raw in v}
+    sites, values = _plan_sites(), {(s, n): raw for s, v in acquired.items() for n, raw in v}
     want = set()
     for u in units:
         call = next(r for r in record["calls"] if r["base"] <= u < r["base"] + r["units"])
@@ -911,8 +910,8 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
     man = predicted.row(tmp_path)
 
     def refusal(*more: str) -> str | None:
-        opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), "--out", str(tmp_path),
-                                          *more], environ={})
+        opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--row-build", str(man), "--out", str(tmp_path),
+                                          "--window-class", "8,256,256", *more], environ={})
         try:
             so.preflight(opts, which=lambda _: "/v/bin/ninja")
         except cli.UsageError as e:
@@ -935,7 +934,7 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
         assert refusal(*h1, "--max-num-batched-tokens", t) == refusal("--max-num-batched-tokens", t), t
         assert f"--max-num-batched-tokens a multiple of 512, not {t}" in refused("--max-num-batched-tokens", t)
     assert refusal(*h1, "--max-num-batched-tokens", "1536") is None
-    assert "multiple of 32" in SH.refusal(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest",
+    assert "multiple of 32" in SH.refusal(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--row-build",
                                                                      str(man), *h1, "--max-num-batched-tokens", "2050"], environ={}))
     assert refusal("--protocols-config", "{}") == "--protocols-config without --protocols or an admission order"
     assert "the server's own" in refused(*h1, "--protocols-config", json.dumps({"pouw": {"rows": 64}}))
@@ -952,7 +951,7 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
     assert "--protocols-config {" in refused(*h1, "--protocols-config", "{not json")
 
     def h1_refusal(*more: str) -> str | None:
-        return SH.refusal(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man),
+        return SH.refusal(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--row-build", str(man),
                                                      *more], environ={}))
 
     def h1_refused(*more: str) -> str:

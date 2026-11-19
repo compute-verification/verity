@@ -61,7 +61,9 @@ def runOwn (i : Spot.Run.Input) (it : Spot.Run.Interior) (sample : Array ℕ)
     returns := Spot.SecondStage.replayReturns i.params.verifier.program.prog it.replay.prog.programFn i.record,
     supplied := it.params.verifier.supplied,
     fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1), reads := it.reads,
-    tables := it.tables }
+    tables := it.tables,
+    held := some ⟨Flock.hexOf it.params.verifier.program.desc.sha512, it.params.verifier.windowRoot,
+      Spot.Docket.fixedOf it.params.verifier⟩ }
 
 /-- **No statement of the run is of only its part's sampled proof blocks** (`SecondStage.anySampled`), at every replay
 sample, strata and second-stage sample: where it holds, round 2's check (`SecondStage.checkAny`) is `SecondStage.check`
@@ -88,7 +90,8 @@ passes `Select.select` (the verifier's copies with the sampling design and work 
 map); the second stage's cells and counts are those `Run.run` computes; the design's links, wires and rows are the
 ones round 2 derives from the replay block's Definition; the templates' parts, at the replay sample the first stage
 selects on the run's bytes, are those the second stage's check reads; the reference
-headers and reads are the auditor's params'; and the second stage reads at most `stage` coins' bytes. Every other field
+headers and reads are the auditor's params'; the held registration's terms are the interior params' Program digest,
+window root and values held across windows (`Docket.fixedOf`); and the second stage reads at most `stage` coins' bytes. Every other field
 of `h` (the descriptor, the members' units, the reference statements, the frame) is the auditor's registered copy,
 which the run does not read. -/
 structure HeldMatches (i : Spot.Run.Input) (it : Spot.Run.Interior) (h : Held) : Prop where
@@ -112,6 +115,8 @@ structure HeldMatches (i : Spot.Run.Input) (it : Spot.Run.Interior) (h : Held) :
     Spot.SecondStage.parts rest.size strata = some (partsAt h rest.size)
   refs : refsOf h = it.circuits.map fun (t, _, hd, _) => (t, hd)
   refReads : refRegisteredOf h = it.circuits.map fun (t, _, _, r) => (t, r)
+  held : h.held = some ⟨Flock.hexOf it.params.verifier.program.desc.sha512, it.params.verifier.windowRoot,
+    Spot.Docket.fixedOf it.params.verifier⟩
 
 
 /-! ## The second stage's check: the hand-off

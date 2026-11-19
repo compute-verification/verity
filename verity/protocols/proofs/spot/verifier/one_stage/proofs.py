@@ -67,7 +67,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from verity.circuits.library import TABLES
 
-from verity.protocols.proofs.spot.verifier.challenger.challenger import SAMPLE_LINK_FIRST, sample_link_first
+from verity.protocols.proofs.spot.verifier.challenger.challenger import SAMPLE_LINK_FIRST, _nat, sample_link_first
 from verity.commitments.docket_digest import digest as registration_digest
 from . import one_circuit as OC
 from .verifier import BUILD_LOCK, ROOT
@@ -127,7 +127,9 @@ class Proof:
 class Finding:
     """One session's verdict from the verifier's own run: accepted or not and why, the program its verdict names, its
     registered finding (port -> {value, root}), the global proof blocks it proved (none unless accepted) and the rows it
-    opened (its verdict's ``openings``, which `produced.shared` reads; None when it reports none)."""
+    opened (its verdict's ``openings``, which `produced.shared` reads; None when it reports none), and the drawn block
+    its statement's units are exactly (`verify`'s match; None where no door matched one), by which a caller holds every
+    drawn block to exactly one proof."""
 
     session: str
     accepted: bool
@@ -136,6 +138,7 @@ class Finding:
     registered: dict
     units: tuple[int, ...]
     openings: Any = None
+    block: int | None = None
 
 
 def verifier_env(environ: Mapping[str, str] | None = None) -> dict[str, str]:
@@ -439,18 +442,59 @@ def units_exactly(units: Sequence[Sequence[int]], indices: Sequence[int]) -> boo
     return list(indices) == [u for lo, hi in sorted(map(tuple, units)) for u in range(lo, hi)]
 
 
-def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], block: int,
+def not_zk_why(line: Mapping[str, Any]) -> str | None:
+    """Why the verifier's verdict line is no zero-knowledge session's, or None: a line that does not say ``zk`` true
+    (Flock's verifier prints it on every line) is refused, accepted or not."""
+    if line.get("zk") is True:
+        return None
+    return f"session {line.get('session')}'s verdict line says zk {json.dumps(line.get('zk'))}, not true: no --zk session's"
+
+
+def drawn_block(program: bytes, partition: Mapping[str, Any], draw: Mapping[str, Any], public: Path,
+                ) -> tuple[int, list[tuple[int, int]]] | tuple[None, tuple[str, str]]:
+    """The proof block of the partition object a statement's proof is of, and its units, taken from the challenger's
+    `draw` (`service.select_draw`, `coins.draw_first`: its ``units`` and ``closure`` over the partition's blocks): the drawn
+    block whose units the proof's public file names exactly (`units_exactly`). None and the refusal otherwise
+    (``circuit``: a drawn block the partition object has not, `one_circuit.block`; ``proof``: a public file naming no
+    unit, or one that is no natural number, a float or a bool included; ``undrawn``: a draw that sampled no block
+    holding its first unit, or a drawn block holding it whose units are not exactly the file's)."""
+    ks = [*draw.get("units", ()), *draw.get("closure", ())] if isinstance(draw, Mapping) else []
+    try:
+        blocks = {k: OC.block(program, partition, k) for k in ks}
+    except OC.Refused as e:
+        return None, ("circuit", str(e))
+    try:
+        indices = list(_header(public)["units"]["indices"])
+        u = indices[0]
+    except (OSError, ValueError, LookupError, TypeError):
+        return None, ("proof", "the statement's public file names no unit")
+    if not all(map(_nat, indices)):
+        bad = next(x for x in indices if not _nat(x))
+        return None, ("proof", f"the statement's public file names unit {json.dumps(bad)}, which is no natural number")
+    k = next((k for k, units in sorted(blocks.items()) if any(lo <= u < hi for lo, hi in units)), None)
+    if k is None:
+        return None, ("undrawn", f"the proof is of the proof block holding unit {u}, which the draw did not sample "
+                                 f"(its blocks {sorted(blocks)})")
+    if not units_exactly(blocks[k], indices):
+        return None, ("undrawn", f"the statement's public file names units {indices}, not exactly drawn block {k}'s "
+                                 f"{[list(r) for r in blocks[k]]}")
+    return k, blocks[k]
+
+
+def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], draw: Mapping[str, Any],
            registered: Mapping[str, Any] | None = None,
            strata: Sequence[tuple[str, Sequence[Sequence[int]]]] | None = None,
            ) -> tuple[list[Finding] | None, tuple[str, str] | None]:
     """Each of `proof`'s sessions verified by Flock's Lean verifier against the verifier's own `program` (C, its
     descriptor's bytes), `partition` and `registered` file (theta's registration; None only for a program that reads no
     registered value, such as N2's, whose proof block opens the committed value inside its circuit), on the circuit file
-    of the drawn proof block, the partition object's block `block` (`one_circuit.block`), derived from C and the
-    partition (`one_circuit.restrict`), never `proof`'s own circuit file; the findings in session order and None, or None
-    and the refusal (``registered``: `registered` is None and the program reads registered values, `reads_registered`;
-    ``circuit``: C and the partition give no block `block` or no C_S of it, or its base circuit is not derived yet,
-    `one_circuit.lower`; ``proof``: a file is missing or the
+    of the drawn proof block, the block of the partition object `draw` sampled that the proof is of (`drawn_block`),
+    derived from C and the partition (`one_circuit.restrict`), never `proof`'s own circuit file; the findings in session
+    order, each naming that block (``block``), and None, or None and the refusal (``registered``: `registered` is None
+    and the program reads registered values, `reads_registered`; ``undrawn``: the proof is of a block `draw` did not
+    sample, or its public file's units are not exactly the drawn block's; ``circuit``: C and the
+    partition give no drawn block or no C_S of it, or its base circuit is not derived yet, `one_circuit.lower`;
+    ``proof``: a file is missing or the
     verifier's answer is not one verdict a session naming the
     partition object's program; ``form``: the verifier accepted a session whose files `ks_form_why` refuses). A session
     the verifier rejects is a finding, not a refusal, and so is one it accepts on a circuit `template_why` refuses,
@@ -472,8 +516,11 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], block:
     if registered is None and reads_registered(program):
         return None, ("registered", "the program reads registered values (a RegisteredInput among its definitions) and "
                                     "the verifier holds no registered reads: verify with its own registered file")
+    k, units = drawn_block(program, partition, draw, proof.public)
+    if k is None:
+        return None, units
     try:
-        derived = OC.restrict(program, partition, OC.block(program, partition, block))
+        derived = OC.restrict(program, partition, units)
     except (OC.NotDerived, OC.Refused) as e:
         return None, ("circuit", str(e))
     if not (proof.public.is_file() and proof.sessions and all((s / "session.json").is_file() for s in proof.sessions)):
@@ -500,14 +547,15 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], block:
                             "--public", str(proof.public), "--partition", str(files["partition"]),
                             "--program", str(files["program"]), *reads,
                             "--session", *map(str, proof.sessions)], capture_output=True, text=True, env=verifier_env())
-        accepted = any(json.loads(x[len("VERDICT "):]).get("accepted") is True
-                       for x in p.stdout.splitlines() if x.startswith("VERDICT "))
+        lines = [json.loads(x[len("VERDICT "):]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
+        accepted = any(v.get("accepted") is True for v in lines)
         form = ks_form_why(files["circuit"], proof.public) if accepted else None
         template = template_why(files["circuit"]) if accepted else None
-    lines = [json.loads(x[len("VERDICT "):]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
     if [v.get("session") for v in lines] != [str(s) for s in proof.sessions]:
         return None, ("proof", f"the verifier answered no verdict for each session in order (exit {p.returncode}): "
                                f"{(p.stderr or p.stdout)[-400:]}")
+    if (why := next(filter(None, map(not_zk_why, lines)), None)) is not None:
+        return None, ("proof", why)
     want = partition.get("program")
     population = (population_why(_header(proof.public)["units"]["indices"], strata)
                   if accepted and strata is not None else None)
@@ -525,7 +573,7 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], block:
             return None, ("proof", f"session {s}'s verdict names program {v.get('program_sha512')}, not the partition "
                                    f"object's {want}")
         out.append(Finding(str(s), ok, why, v.get("program_sha512"), v.get("registered") or {},
-                           proved_units(proof.public, s) if ok else (), v.get("openings")))
+                           proved_units(proof.public, s) if ok else (), v.get("openings"), k))
     return out, None
 
 
@@ -685,6 +733,7 @@ def verdicts_v2(proof: Proof, *, program: Mapping[str, Any], partition: Mapping[
 
 __all__ = ["EXE", "FITS", "MUFU_SHA512", "NO_ROW_WHY", "NO_TABLES", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY",
            "SIZE_CLASS_MAX", "V2", "V2_EXE", "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "circuit_lookups",
-           "draw_fits_why", "evidence_v2", "executable", "file_sha512", "fits_why", "ks_form_why", "lookups_of",
-           "order_why", "own_tables", "population_why", "printed", "printed_size", "proved_units", "reads_registered",
-           "tables_match_why", "tables_why", "template_why", "units_exactly", "v2_executable", "verdicts_v2", "verify"]
+           "draw_fits_why", "drawn_block", "evidence_v2", "executable", "file_sha512", "fits_why", "ks_form_why",
+           "lookups_of", "not_zk_why", "order_why", "own_tables", "population_why", "printed", "printed_size",
+           "proved_units", "reads_registered", "tables_match_why", "tables_why", "template_why", "units_exactly",
+           "v2_executable", "verdicts_v2", "verify"]

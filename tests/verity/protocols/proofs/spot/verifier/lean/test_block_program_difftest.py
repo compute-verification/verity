@@ -58,7 +58,6 @@ def _top(B, S, a, b, c, e, f):
 
 Top = _c("BTop", (("a", Array(2, I32)), ("b", Tuple(I32, V16)), ("c", Array(2, Array(2, I32))), ("e", Array(32, BIT)),
                   ("f", Array(32, BIT))), Tuple(Tuple(I32, I32), Array(2, I32), Array(32, BIT), I32), _top)
-BOOLEAN = {"I32Add_v1": descriptor_id(ADD)}
 
 
 @cache
@@ -109,7 +108,9 @@ def block_reference(pieces, units: list[int]) -> dict:
     units = sorted(units)
     S = [(body.offsets[calls[u][0]], body.offsets[calls[u][0]] + calls[u][1].gates) for u in units]
     inside = lambda g: any(lo <= g < hi for lo, hi in S)  # noqa: E731
-    leaves = lambda coll: [(resolve(lay.root_scope, r), w) for r, w in zip(coll.refs, coll.type.leaf_widths(), strict=True)]  # noqa: E731
+    def leaves(coll):
+        return [(resolve(lay.root_scope, r), w) for r, w in zip(coll.refs, coll.type.leaf_widths(), strict=True)]
+
     ops = [[leaves(a) for a in body.nodes[calls[u][0]].args] for u in units]
     ins = sorted({gw for unit in ops for arg in unit for gw in arg if not inside(gw[0])})
     idx = {g: i for i, (g, _w) in enumerate(ins)}
@@ -137,7 +138,8 @@ def block_reference(pieces, units: list[int]) -> dict:
                                                       "key": callee})[1])["gates"]
         nodes.append({"fn": callee, "form": "call", "refs": refs, "gates": gates})
     ret = [["n", made[g][0], made[g][1] + b] for g, w in sorted(outs) for b in range(w)]
-    return {"params": [tyj(bit_type(Value(w))) for _g, w in ins], "ret": ["Tuple", [tyj(bit_type(Value(w))) for _g, w in sorted(outs)]],
+    port = lambda w: tyj(bit_type(Value(w)))  # noqa: E731
+    return {"params": [port(w) for _g, w in ins], "ret": ["Tuple", [port(w) for _g, w in sorted(outs)]],
             "refs": ret, "gates": sum(n["gates"] for n in nodes), "nodes": nodes}
 
 
@@ -150,7 +152,7 @@ BLOCKS = [[0], [1], [2], [3], [0, 3], [3, 1], [0, 1, 2, 3]]
 @pytest.mark.parametrize("units", BLOCKS, ids=lambda us: "units-" + "-".join(map(str, us)))
 def test_the_block_program_agrees(pieces, units):
     _program, txt = top()
-    verdict, out = pieces.call("block_program", {"descriptor": txt, "units": units, "boolean": BOOLEAN})
+    verdict, out = pieces.call("block_program", {"descriptor": txt, "units": units})
     assert verdict == "output", out
     out = json.loads(out)
     block, want = out["block"], block_reference(pieces, units)
@@ -169,11 +171,17 @@ def test_the_block_program_agrees(pieces, units):
         assert ("output", D.canonical(out["lifted"][key])) == ref, key
 
 
-@pytest.mark.parametrize("name, boolean", [
-    ("a word primitive missing from the Boolean map", {}),
-    ("a Boolean map naming a word Definition", {"I32Add_v1": "BSum_v1"}),
-    ("a Boolean map naming a Definition C doesn't have", {"I32Add_v1": "I32Add_v9"}),
-], ids=lambda x: x if isinstance(x, str) else "")
-def test_the_lift_refuses(pieces, name, boolean):
+@pytest.mark.parametrize("name, units", [("no unit", []), ("a unit twice", [1, 1]), ("a unit past C's", [4])],
+                         ids=lambda x: x if isinstance(x, str) else "")
+def test_the_block_program_refuses(pieces, name, units):
     _program, txt = top()
-    assert pieces.call("block_program", {"descriptor": txt, "units": [0], "boolean": boolean})[0] == "reject", name
+    assert pieces.call("block_program", {"descriptor": txt, "units": units})[0] == "reject", name
+
+
+def test_the_lift_reads_cs_boolean_map(pieces):
+    """The word primitive's node calls the Boolean Definition C's own map names for it."""
+    _program, txt = top()
+    out = json.loads(pieces.call("block_program", {"descriptor": txt, "units": [3]})[1])
+    (lifted_sum,) = out["lifted"].values()
+    assert json.loads(txt)["boolean"]["I32Add_v1"] == descriptor_id(ADD)
+    assert [n["fn"] for n in lifted_sum["nodes"]] == [descriptor_id(ADD)]

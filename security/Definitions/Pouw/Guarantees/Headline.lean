@@ -148,8 +148,8 @@ enforce on every window:
   `q` calls `δ_fork = q²/2^513`, so the term is `48,000·q/2^256.5`, `2^-159.9` at `q = 2^81`.
 
 The sheet reading's ε rests on A2u (`SheetDispatch`: each uniform-datapath instruction takes an issue slot), which no
-vendor document states. DS-120 has no uniform-pipe row, so without A2u the machine model's LP gives 2.79% with a
-measured uniform-pipe row (0.766 a SMSP-cycle) and 100% with none, against its 0.585% with A2u.
+vendor document states. DS-120 has no uniform-pipe row, so without A2u the sheet charges a uniform instruction on no
+row, and the reading (`machine-model headline`'s, which takes A2u) says nothing.
 A probe on sm_120 reads A2u as holding: past
 an issue-bound stream's idle slots, at up to 0.954 of issue, each uniform instruction costs about one issue slot.
 With uniform chains beside a saturating vector stream, at 8, 2 and 1 warps a SMSP, no kernel's total rate
@@ -208,9 +208,9 @@ costs at least `(1 − 5.860%)·B_♭/(1 − 41/S) = 16.1094` a unit at `π*`, a
 ones (ALU64, CVT64, DMUL, IMADW, MOV64), so a run that heads vector words with IMAD.WIDE meets it.
 
 This ε rests on A2u and A5b. A2 (`SheetDispatch`) counts each uniform-datapath instruction in an issue slot, which no
-vendor document states, and DS-120 has no uniform-pipe row. Without A2u the machine model's LP gives 2.79% with a
-measured uniform-pipe row and 100% with none. Measured, it holds at saturation: beside a saturating vector stream no
-kernel's total rate exceeds 1 over 279 measurements. A2's catch-all counts an instruction the 122 classes don't name in
+vendor document states, and DS-120 has no uniform-pipe row: without A2u it charges a uniform instruction on no row.
+Measured, it holds at saturation: beside a saturating vector stream no kernel's total rate exceeds 1 over 279
+measurements. A2's catch-all counts an instruction the 122 classes don't name in
 `NOROW`, at its issue slot alone, so no instruction is free at `π*`: a count of any class costs at least 3564/3761
 there, and a bulk instruction is `S/99 KB` of a UTMABIG count. A5b (`SheetSmem`) holds a bulk or TMA instruction's size
 `S` in the banks at A5's 32 B an SMSP-cycle (above). -/
