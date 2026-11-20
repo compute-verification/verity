@@ -698,9 +698,10 @@ def _stand_in(w: int) -> str:
 def _wired(desc: dict) -> dict:
     """`desc` with each node's arguments, a batch's axes, each node's output and each body's return as Flock's decoder
     checks them (`Flock.Program.decode`), over its callees as they stand: each argument of its parameter's type, each
-    leaf naming the first leaf of its own width among the body's parameters and earlier nodes (in the root an input's;
-    a template's return of a width none of its parameters has, a `_stand_in` its body calls), so no word is read at
-    another width (`E_REINTERPRET`); a batch's arguments shared by its members, and the types table theirs. What
+    leaf naming the first leaf of its own width among the body's parameters and earlier nodes (in the root an input's),
+    and a template's return reading its nodes first: a `_stand_in` its body calls for each return width none of its
+    parameters has, and for its return's first width when it has no node, so every template has a gate
+    (`partition_query` refuses a template of none) and no word is read at another width (`E_REINTERPRET`); a batch's arguments shared by its members, and the types table theirs. What
     `credit.layout_of` reads of a node (its form, callee and count) and of a template (its parameters and return type)
     is unchanged."""
     types: list = []
@@ -732,12 +733,14 @@ def _wired(desc: dict) -> dict:
         for i, (_p, t) in enumerate(body["params"]):
             source("p", i, t)
         if key != desc["root"]:
-            for w, _n in _widths(body["ret_type"]):
-                if w not in first and _stand_in(w) not in (desc["callees"][x["fn"]] for x in body["nodes"]):
+            ret = [w for w, _n in _widths(body["ret_type"])]
+            for w in [w for w in ret if w not in first] or ([] if body["nodes"] else ret[:1]):
+                if _stand_in(w) not in (desc["callees"][x["fn"]] for x in body["nodes"]):
                     if _stand_in(w) not in desc["callees"]:
                         desc["callees"].append(_stand_in(w))
                     defs[_stand_in(w)] = {"form": "primitive", "id": _stand_in(w), "params": [], "ret": ["Value", w]}
                     body["nodes"].append({"form": "primitive", "fn": desc["callees"].index(_stand_in(w))})
+        made: dict = {}
         for k, x in enumerate(body["nodes"]):
             params, ret = sig(defs[desc["callees"][x["fn"]]])
             x["args"] = [{"type": ty(t), "refs": refs(t, first)} for _p, t in params]
@@ -746,7 +749,11 @@ def _wired(desc: dict) -> dict:
             else:
                 x["out"] = ty(ret)
             source("n", k, types[x["out"]])
-        body["ret"] = refs(body["ret_type"], first)
+            at = 0
+            for w, n in _widths(types[x["out"]]):
+                made.setdefault(w, ["n", k, at])
+                at += n
+        body["ret"] = refs(body["ret_type"], first if key == desc["root"] else {**first, **made})
     desc["types"] = types
     return _bodied(desc)
 
