@@ -226,10 +226,28 @@ def _v2(desc: dict) -> dict:
     return codec.encode_program(p)
 
 
+def _reads_v2(r: dict | None) -> dict | None:
+    """Registered reads at `verity/registered-reads/v2`, which hold no positions: C and the partition give them."""
+    if r is None:
+        return None
+    return {"format": "verity/registered-reads/v2",
+            "ports": {k: {f: v for f, v in e.items() if f not in ("reads", "reads_from")} for k, e in r["ports"].items()}}
+
+
 def _kept_params(j: dict) -> dict:
+    """The kept case's params in today's forms: its programs at descriptor v2, the interior's partition naming that
+    program and its members' units as its blocks, each member naming its block rather than handing its units."""
     j = copy.deepcopy(j)
     for at, k in ((j["boundary"], "program"), (j["interior"]["params"], "program"), (j["interior"], "replay")):
         at[k] = _v2(at[k])
+    ip, members = j["interior"]["params"], j["interior"]["members"]
+    blocks = sorted(tuple(u) for m in members.values() for u in m["units"])
+    ip["partition"] = {**ip["partition"], "program": codec.program_digest(ip["program"]),
+                       "blocks": [[list(b) for b in blocks]]}
+    j["interior"]["members"] = {
+        name: {"block": blocks.index(tuple(m["units"][0])), "public": m["public"],
+               "registered": _reads_v2(m["registered"]), "vus_per_block": m["vus_per_block"]}
+        for name, m in members.items()}
     return j
 
 
