@@ -115,6 +115,7 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
     end = _end(log)
     assert end.startswith("ROAD END (the window's record): ran ") and "pearl-plus" in end and rc == 20, log
     assert "no verdict stands for a step that did not run" in end
+    assert end.endswith("no sampled verdict, so no δ or ε: the sampled proofs did not run; the circuit digest is kept private and NO public value fixes it before the coins"), end
     secret = _secret(d)
     assert not [s for s in secret if s in end or s[:16] in end], end
     assert not [(f, s) for f, text in _published(out) for s in secret if s in f or s in text or s[:16] in text]

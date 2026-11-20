@@ -270,17 +270,20 @@ timeout -k 1m "$WC_TIMEOUT" "$PY" "${WC[@]}" > "$SR/window-commit.json" 2> "$SR/
   || { e=$?; say "$said"$'\n'"$(plan_lines)"$'\n'"SMOKE FAILED window-commit of window $K, exit $e ($SR/window-commit.err)"; exit 1; }
 mkdir -p "$OUT/window"
 cp "$VW/registration.json" "$VW/circuit.json" "$OUT/window/" && cp "$DREG" "$OUT/"
-said+="; $("$PY" - "$SR/window-commit.err" "$VW/registration.json" "$K" "$CLASS" "$SR" <<'EOF'
-import json, sys
+said+="; $("$PY" - "$SR/window-commit.err" "$VW/registration.json" "$K" "$CLASS" "$SR" "$MNBT" <<'EOF'
+import json, math, sys
 from verity.commitments import docket_digest as DD
-err, reg, k, cls, sr = sys.argv[1:]
+err, reg, k, cls, sr, mnbt = sys.argv[1:]
 rows = json.loads([x for x in open(err) if x.startswith("WINDOW-ROWS ")][-1].removeprefix("WINDOW-ROWS "))
 o, u = rows["opened"] or {}, rows["units"]
 print(f"WINDOW-COMMIT window {k} class {cls}: reads {o.get('reads')}, failed {o.get('failed')}, not retained {o.get('not_retained')}; "
       f"units served {u['served']}, computed {u['computed']}, evaluated {u['evaluated']}; registration written, its digest kept in SR (it binds the circuit's own digest)")
+s = int(cls.split(",")[0])
+print(f"CLASS {cls}: {math.log2(int(mnbt) // s):.2f} bits leave with it (its prompt length, one of the {int(mnbt) // s} "
+      f"that fit {s} slots in {mnbt} tokens a step; its slots and outputs are the application's)")
 open(f"{sr}/registration.digest", "w").write(DD.digest(json.load(open(reg))) + "\n")
 EOF
 )" || { say "$said; SMOKE FAILED counts: no WINDOW-ROWS line or registration ($SR/window-commit.err)"; exit 1; }
 said+=$'\n'"$(plan_lines)"
-said+=$'\n'"SMOKE DONE window $K: served, planned, its strings made on the card and its record written; no proof is made, and Lean verifies nothing"
+said+=$'\n'"SMOKE DONE window $K: served, planned, its strings made on the card and its record written; no proof is made, and Lean verifies nothing; no sampled verdict, so no δ or ε; the circuit digest is kept private and NO public value fixes it before the coins"
 say "$said"

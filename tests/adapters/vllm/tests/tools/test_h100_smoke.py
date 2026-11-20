@@ -113,6 +113,9 @@ def test_the_window_commit_is_the_applications_launchers_entry_off_the_card(tmp_
     assert commit[0] == "window-commit"
     assert [opt(commit, k) for k in ("--window", "--class", "--sampling-design")] == ["0", "4,27,2", "rate:1/3481648"]
     assert "rate:" not in p.stdout and "(the registered sampling design)" in p.stdout, p.stdout
+    done = next(x for x in p.stdout.splitlines() if x.startswith("SMOKE DONE"))
+    assert done.endswith("no sampled verdict, so no δ or ε; the circuit digest is kept private and NO public value fixes it before the coins"), done
+    assert "CLASS 4,27,2: 7.00 bits leave with it (its prompt length, one of the 128 that fit 4 slots in 512 tokens" in p.stdout
     d = opt(commit, "--serve-run")
     assert opt(commit, "--row-dir") == f"{d}/windows/w0"
     assert opt(commit, "--advice") == f"{d}/advice/w0/private/advice.bin"
