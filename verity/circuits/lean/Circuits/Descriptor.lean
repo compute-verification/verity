@@ -1664,9 +1664,9 @@ private def recutRefusal (e rootId : String) (r : Except String (Nat × DecState
         else none
     input.getD e
 
-/-- The first port of definition `fid`'s `ports` rows (§12) that is not a non-empty object of a port's keys
-(`ports._port_from_json`): a parameter's or an input node's from `bound`, `kind`, `receipt`, `word`, `certified`, the return's
-from `interval`, `sink`, `word`, `certified`. -/
+/-- One of the codec's port checks, the keys of a port (`ports.py` `_port_from_json`): the first port of definition `fid`'s
+`ports` rows (§12) that is not a non-empty object of a parameter's or an input node's keys (`bound`, `kind`, `receipt`,
+`word`, `certified`) or the return's (`interval`, `sink`, `word`, `certified`). Lean decodes no other part of a port row. -/
 def portKeysError (fid : String) (d : Json) : Option String := Id.run do
   let ports := (d.getObjVal? "ports").toOption.getD .null
   for (arr, keys, part) in [("params", ["bound", "kind", "receipt", "word", "certified"], "parameter"),
