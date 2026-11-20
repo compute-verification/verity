@@ -7,6 +7,7 @@ public import Properties.InferenceOnly
 public import InferenceOnlyVerifier.Desc
 public import Spot.Restrict
 public import Spot.OneStageZkStatement
+public import Spot.OneStageZk
 public import Properties.Flock.EvalBool
 public import Properties.Flock.DecodeBoolean
 public import Definitions.Core.Rblk
@@ -133,14 +134,48 @@ def argBits {P : Prog} (X : (ofProgram P).Trace) (g : ℕ) : List Bool := portBi
 /-- C's values at unit `g`'s return leaves, in order, as bits. -/
 def outBits {P : Prog} (X : (ofProgram P).Trace) (g : ℕ) : List Bool := portBits X (unitOuts P g)
 
-/-- **`LowerEvalDoor`, `LowerEval` at the door.** For a block `Spot.OneStageZk.admitted` admits, rows of the net its
-template (`Spot.OneStageZk.blockTmpl`) unrolls to, satisfied with the constant 1, force each output column the door's
+/-- The bits `portBits` lays port `q` at: its gate's width in C, or its own where it names no gate of C. -/
+def leafWidth (P : Prog) (q : Spot.BlockFront.Port) : ℕ :=
+  if h : q.gate < (ofProgram P).N then (ofProgram P).w ⟨q.gate, h⟩ else q.width
+
+/-- Where unit `g`'s return leaf `l` starts in `outBits`. -/
+def outOff (P : Prog) (g l : ℕ) : ℕ := ((unitOuts P g).toList.take l).foldl (· + leafWidth P ·) 0
+
+/-- Port `q` is a committed gate of the partition (`Partition.committed`): an input, an output of C, or read by a gate
+of another unit. -/
+def CommittedAt {P : Prog} {n : ℕ} (Pt : Verity.Partition (ofProgram P) n) (q : Spot.BlockFront.Port) : Prop :=
+  ∃ h : q.gate < (ofProgram P).N, ⟨q.gate, h⟩ ∈ Pt.committed
+
+/-- `bs`, the bits of a trace at unit `g`'s return leaves, is `z` at the door's output columns, at each leaf in
+`Pt.committed` alone: a return leaf no other unit reads and no output of C is no committed gate, so nothing opens it
+and `Partition.Correct` reads none of it. -/
+def OutsAgree {P : Prog} {n : ℕ} (Pt : Verity.Partition (ofProgram P) n) (a : Spot.OneStageZk.Admit) (t : Tmpl.Tmpl)
+    (g : ℕ) (bs : List Bool) (z : ℕ → Bool) : Prop :=
+  ∀ l (hl : l < (unitOuts P g).size), CommittedAt Pt (unitOuts P g)[l] →
+    ∀ b < leafWidth P (unitOuts P g)[l],
+      bs.getD (outOff P g l + b) false = z (Flock.Lower.outBit t (doorCol a.fields (outOff P g l + b)))
+
+/-- **`DoorLengths`**: at every unit of the block, the bits of a trace of C at its arguments are exactly the input
+rows' bits, and at its return leaves exactly the return fields', so `getD`'s default never stands for a bit. Lengths
+only: the order of the bits inside a word (`portBits`, low bit first) meets the lift's leaf order in `BlockEvalDoor`,
+which evaluates the lift on these bits. -/
+def DoorLengths : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
+    (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (fr : Spot.BlockFront.Front),
+    decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
+    Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
+    Spot.BlockFront.front P units = .ok fr →
+    ∀ (X : (ofProgram P).Trace), ∀ g ∈ units, (argBits X g).length = bitsOf a.ins ∧ (outBits X g).length = bitsOf a.fields
+
+/-- **`LowerEvalDoor`, `LowerEval` at the door.** For the block's Program `restrict P units` of a decoded C with no root
+recut, which `Spot.OneStageZk.admitted` admits, rows of the net its template (`Spot.OneStageZk.blockTmpl`) unrolls to, satisfied with the constant 1, force each output column the door's
 file lays (`doorCol` of the return fields) to the bit `Prog.evalBool` gives the template's lift to bits on the input
 columns (`doorCol` of the input rows), an evaluation of exactly the fields' bits. It states that satisfied rows force
 the outputs, not that every evaluation satisfies them. -/
 def LowerEvalDoor : Prop :=
-  ∀ {partition : Lean.Json} {cuts : List (String × List (String × ℕ))} {S : Prog} {a : Spot.OneStageZk.Admit}
-    {t : Tmpl.Tmpl} {n : Net} {Q : Prog} {e : ℕ},
+  ∀ {bytes : ByteArray} {P : Prog} {units : Array ℕ} {partition : Lean.Json} {cuts : List (String × List (String × ℕ))}
+    {S : Prog} {a : Spot.OneStageZk.Admit} {t : Tmpl.Tmpl} {n : Net} {Q : Prog} {e : ℕ},
+    decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S →
     Spot.OneStageZk.admitted partition cuts S = .ok a → Spot.OneStageZk.blockTmpl S a = .ok t →
     Flock.Lift.lift S a.d = .ok (Q, e) → Tmpl.unroll t = .ok n → n.unitLog ≤ 32 → ∀ (hb : Built n) {z : ℕ → Bool},
     (Rows.ofNet hb).Sat (fun c => z c.val) → z t.constPos = true →
@@ -177,7 +212,8 @@ def OperandsOutside (P : Prog) (units : Array ℕ) (fr : Spot.BlockFront.Front) 
 
 /-- **`BlockCorrectDoor`, the block is correct.** For a block `Spot.OneStageZk.admitted` admits: where, for every unit
 `g` of the block, rows of the net its template unrolls to hold at some `z` with the constant 1, and `z` at the door's
-input and output columns is a trace `X` of C at `g`'s arguments and return leaves, block `u` is correct in C. Its units
+input columns is a trace `X` of C at `g`'s arguments and its output columns `X` at `g`'s committed return leaves
+(`OutsAgree`), block `u` is correct in C (`Partition.Correct` reads committed gates alone). Its units
 read no gate of the block (`OperandsOutside`), so every input column is C's value at a port of the front. -/
 def BlockCorrectDoor : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
@@ -190,13 +226,14 @@ def BlockCorrectDoor : Prop :=
     ∀ X : (ofProgram P).Trace,
       (∀ g ∈ units, ∃ (hb : Built nt) (z : ℕ → Bool), (Rows.ofNet hb).Sat (fun c => z c.val) ∧ z t.constPos = true ∧
         (∀ i < bitsOf a.ins, (argBits X g).getD i false = z (Flock.Lower.inBit t (doorCol a.ins i))) ∧
-        (∀ k < bitsOf a.fields, (outBits X g).getD k false = z (Flock.Lower.outBit t (doorCol a.fields k)))) →
+        OutsAgree (partOf P blocks) a t g (outBits X g) z) →
       (partOf P blocks).Correct X u.castSucc
 
-/-- **The statement's openings at each copy**: copy `j` of the session is unit `units[j]`; `z j`'s input and output
-columns are a trace `Y` of C at that unit's arguments and return leaves, and `π' j` opens each of those gates at its
-position (`Partition.pos`) to `Y`'s value there. Under `partOf P blocks`, a gate read only inside its block is off the
-boundary and has no position, so these openings exist only where every argument of every copy is a committed gate. -/
+/-- **The statement's openings at each copy**: copy `j` of the session is unit `units[j]`; `z j`'s input columns are a
+trace `Y` of C at that unit's arguments and its output columns `Y` at its committed return leaves (`OutsAgree`), and
+`π' j` opens each argument and each committed return leaf at its position (`Partition.pos`) to `Y`'s value there. A
+gate off the boundary has no position: an argument read only inside its block (so `OperandsOutside`), or a return leaf
+no other unit reads and no output of C, which is not opened. -/
 def StatementOpens {P : Prog} {n : ℕ} {α : Type} (Sc : _root_.Hash.StringCommitment α)
     (H : _root_.Hash.Msg → Verity.Digest) (enc : (g : Fin (ofProgram P).N) → BitVec ((ofProgram P).w g) → α)
     (Pt : Verity.Partition (ofProgram P) n) (L : Verity.Layout (ofProgram P)) (c : Verity.Root → Sc.Com)
@@ -204,8 +241,10 @@ def StatementOpens {P : Prog} {n : ℕ} {α : Type} (Sc : _root_.Hash.StringComm
     (π' : ℕ → Fin (ofProgram P).N → Sc.Op) : Prop :=
   ∃ Y : (ofProgram P).Trace, ∀ j < units.size,
     (∀ i < bitsOf a.ins, (argBits Y units[j]!).getD i false = z j (Flock.Lower.inBit t (doorCol a.ins i))) ∧
-    (∀ k < bitsOf a.fields, (outBits Y units[j]!).getD k false = z j (Flock.Lower.outBit t (doorCol a.fields k))) ∧
-    ∀ q ∈ unitArgs P units[j]! ++ unitOuts P units[j]!, ∀ h : q.gate < (ofProgram P).N,
+    OutsAgree Pt a t units[j]! (outBits Y units[j]!) (z j) ∧
+    (∀ q ∈ unitArgs P units[j]!, ∀ h : q.gate < (ofProgram P).N,
+      ∃ p, Pt.pos L ⟨q.gate, h⟩ = some p ∧ Sc.Opens H (c p.1) p.2 (enc _ (Y ⟨q.gate, h⟩)) (π' j ⟨q.gate, h⟩)) ∧
+    ∀ q ∈ unitOuts P units[j]!, ∀ h : q.gate < (ofProgram P).N, ⟨q.gate, h⟩ ∈ Pt.committed →
       ∃ p, Pt.pos L ⟨q.gate, h⟩ = some p ∧ Sc.Opens H (c p.1) p.2 (enc _ (Y ⟨q.gate, h⟩)) (π' j ⟨q.gate, h⟩)
 
 /-- **`DoorJoin`, an accepted session to the block's rows at C's committed values.** The session's copies, one a unit
@@ -213,7 +252,9 @@ of the block, each satisfying its rows with the constant 1 (`V5Rows`'s conclusio
 copy's arguments and return leaves (`StatementOpens`) and block `u`'s own (`Partition.Rblk`), at one commitment, give
 `BlockCorrectDoor`'s hypothesis at `X`, or two messages the openings hashed collide. Its units read no gate of the block
 (`OperandsOutside`), so each copy's input columns are opened at the front's ports, gates of in(S) with a position; an
-argument inside the block would have none (`Partition.pos` is `none` off `Partition.boundary`). -/
+argument inside the block would have none (`Partition.pos` is `none` off `Partition.boundary`). The net is at most
+`2^32` rows: the verifier refuses a templated unit whose root has more columns (`Flock.ProvedScope.scopeOkT`), and
+`Tmpl.unroll` lays the net's `unitLog` from them. -/
 def DoorJoin : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
     (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (fr : Spot.BlockFront.Front) (t : Tmpl.Tmpl) (nt : Net)
@@ -224,15 +265,36 @@ def DoorJoin : Prop :=
     decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
     Spot.BlockFront.front P units = .ok fr → OperandsOutside P units fr →
-    Spot.OneStageZk.blockTmpl S a = .ok t → Tmpl.unroll t = .ok nt →
+    Spot.OneStageZk.blockTmpl S a = .ok t → Tmpl.unroll t = .ok nt → nt.unitLog ≤ 32 →
     BlockIs P blocks u fr → (∀ g, Function.Injective (enc g)) → Sc.Binds H →
     (partOf P blocks).Rblk Sc H enc L c u.castSucc X π →
     (∀ j < units.size, ∃ hb : Built nt, (Rows.ofNet hb).Sat (fun x => z j x.val) ∧ z j t.constPos = true) →
     StatementOpens Sc H enc (partOf P blocks) L c units a t z π' →
     (∀ g ∈ units, ∃ (hb : Built nt) (z' : ℕ → Bool), (Rows.ofNet hb).Sat (fun x => z' x.val) ∧ z' t.constPos = true ∧
         (∀ i < bitsOf a.ins, (argBits X g).getD i false = z' (Flock.Lower.inBit t (doorCol a.ins i))) ∧
-        (∀ k < bitsOf a.fields, (outBits X g).getD k false = z' (Flock.Lower.outBit t (doorCol a.fields k)))) ∨
+        OutsAgree (partOf P blocks) a t g (outBits X g) z') ∨
       ∃ xs, _root_.Hash.CollisionIn H xs
+
+/-- **`AcceptGivesDoorFile`, an accept to the door's file.** Where the per-member check accepts (`checkMembersAt`), every
+member's statement is read at its slice of the registration's roots, and the circuit its session was verified against
+is the file `lowerBlock` writes for its block's Program `restrict P units` (`Own.circuitFile`), admitted, whose parse
+carries the template `blockTmpl` gives, unrolling to a net of at most `2^32` rows (`Flock.ProvedScope.scopeOkT`). -/
+def AcceptGivesDoorFile : Prop :=
+  ∀ (p : Spot.OneStageZk.Params) (ms : Array Spot.OneStageZk.Member) (c : Spot.OneStage.Commitment) (ξ : ByteArray)
+    (e : Spot.OneStageZk.Evidence) (sts : Array Spot.OneStageZk.StatementFiles) (bs : Core.Blobs)
+    (pub : Spot.OneStage.Public) (prof : Core.Integrity),
+    Spot.OneStageZk.checkMembersAt p ms c ξ e sts bs = .accept pub prof →
+    ∃ roots, Spot.OneStageZk.membersRootsOf p ms c.record = .ok roots ∧
+    ∀ m ∈ ms, ∀ (P : Prog) (bl : Array (ℕ × ℕ)) (lo hi : ℕ) (cuts : List (String × List (String × ℕ))),
+      m.own.prog.get = .ok P → m.own.blocks.get = .ok (some bl) → bl.find? (·.1 == m.own.first) = some (lo, hi) →
+      m.own.cuts.get = .ok cuts →
+      ∃ (st : Spot.OneStageZk.StepAt) (S : Prog) (a : Spot.OneStageZk.Admit) (t : Tmpl.Tmpl) (file : ByteArray),
+        m.statement (m.slice c.record roots) bs = .ok st ∧
+        Spot.Restrict.restrict P (List.range' lo (hi - lo)).toArray = .ok S ∧
+        Spot.OneStageZk.admitted m.own.partition cuts S = .ok a ∧ Spot.OneStageZk.blockTmpl S a = .ok t ∧
+        Spot.OneStageZk.lowerBlock m.own.programJ m.own.partition cuts S = .ok file ∧ st.I.circuitFile = file ∧
+        ∀ cc, Flock.ProvedScope.circuitOf (Flock.Witness.zkTags st.I) st.I.circuitFile st.I.tables = .ok cc →
+          ∃ tu nt, cc.tmpl = some tu ∧ tu.t = t ∧ Tmpl.unroll t = .ok nt ∧ nt.unitLog ≤ 32
 
 /-- **The statement's own openings at the ports**: `z`'s port bits are the bits of a trace `Y` of C, and `π'` opens
 each port gate at its position (`Partition.pos`) to `Y`'s value there. -/
