@@ -2022,10 +2022,25 @@ def own_modules(facts: dict) -> set[str]:
             if "/.lake/build/" in (o := str(g.get("olean", ""))) and "/.lake/packages/" not in o}
 
 
+def exempt_owed(entry) -> bool:
+    """Whether an `exempt` entry is one that is owed: {why, owner, issue, due}, a file left out of the roots until its
+    issue ends, with the owner, issue and due date an `open` entry has.  A bare reason is a file no root is meant to
+    import."""
+    return (isinstance(entry, dict) and set(entry) == {"why", "owner", "issue", "due"}
+            and isinstance(entry["why"], str) and bool(entry["why"].strip()) and bool(OWNER.fullmatch(str(entry["owner"])))
+            and bool(OPEN_ISSUE.fullmatch(str(entry["issue"]))) and bool(OPEN_DUE.fullmatch(str(entry["due"]))))
+
+
 def orphan_failures(policy: dict, files: dict[str, str], modules: set[str]) -> list[Failure]:
     """`orphan.file` for each of the package's ``files`` that is neither one of ``modules`` (those its roots import) nor
-    under `exempt`, and `orphan.stale-exempt` for each `exempt` entry that matches no file."""
+    under `exempt`, `orphan.stale-exempt` for each `exempt` entry that matches no file, and `orphan.exempt-form` for an
+    entry that is neither a reason nor {why, owner, issue, due} (`exempt_owed`)."""
     fails, exempt = [], policy.get("exempt", {})
+    for p, entry in sorted(exempt.items()) if isinstance(exempt, dict) else ():
+        if not (isinstance(entry, str) and entry.strip()) and not exempt_owed(entry):
+            fails.append(Failure("orphan.exempt-form", p, f"orphan: exempt[{p}] is its reason, or {{why, owner, issue, due}} "
+                                 "for a file left out of the roots until its issue ends: an owner's handle (@lean), its "
+                                 "Linear issue (LEAN-12) and its due date (2026-11-30)"))
     for m, rel in sorted(files.items()):
         if m not in modules and not under(exempt, m):
             fails.append(Failure("orphan.file", rel, f"orphan: {rel} is not imported by the roots "
